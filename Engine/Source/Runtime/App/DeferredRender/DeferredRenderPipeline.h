@@ -163,7 +163,10 @@ struct DeferredRenderPipeline
     void               executeGBufferPass(const TickDesc& desc, const RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH);
     void               executeDepthCopyPass(ICommandBuffer* cmdBuf);
     void               executeViewportPass(const TickDesc& desc, RenderStageContext& stageCtx);
-    void               saveShadowSettingsToConfig(bool bEnableShadowMapping, bool bEnablePointLightShadow, uint32_t maxPointLightShadowCount) const;
+    void               saveShadowSettingsToConfig(bool bEnableShadowMapping,
+                                                  bool bEnablePointLightShadow,
+                                                  uint32_t maxPointLightShadowCount,
+                                                  const ShadowSettings& shadowSettings) const;
     void               rebuildShadowViews();
     void               initRenderTargets(Extent2D extent);
     void               initShadowResources();

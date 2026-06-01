@@ -6,6 +6,7 @@
 #include "Render/Material/PBRMaterial.h"
 #include "Render/Material/PhongMaterial.h"
 #include "Render/Material/UnlitMaterial.h"
+#include "Render/Shadow/ShadowSettings.h"
 #include "Render/Stage/IRenderStage.h"
 
 #include "DeferredRender.Unified_GBufferPass_PBR.slang.h"
@@ -59,6 +60,10 @@ struct GBufferStage : public IRenderStage
     PBRFrameData _frameData{};
     uint32_t     _maxShadowedPointLights  = 1;
     uint32_t     _lastShadowedPointLights = 0;
+    float        _shadowBias              = 0.0005f;
+    float        _shadowNormalBias        = 0.02f;
+    uint32_t     _shadowFilter            = static_cast<uint32_t>(EShadowFilter::Hard);
+    float        _shadowTexelSize         = 1.0f / 1024.0f;
 
     // ── Per-shading-model pipeline + material pool ───────────────
     struct ShadingPipeline
@@ -110,6 +115,14 @@ struct GBufferStage : public IRenderStage
     }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getFrameAndLightDSL() const { return _frameAndLightDSL; }
     void                                       setMaxShadowedPointLights(uint32_t count) { _maxShadowedPointLights = std::min(count, static_cast<uint32_t>(MAX_POINT_LIGHTS)); }
+    void                                       setShadowSettings(const ShadowSettings& settings, uint32_t shadowMapResolution)
+    {
+        _shadowBias       = settings.bias;
+        _shadowNormalBias = settings.normalBias;
+        _shadowFilter     = static_cast<uint32_t>(settings.filter);
+        const uint32_t resolution = shadowMapResolution > 0 ? shadowMapResolution : settings.resolution;
+        _shadowTexelSize          = resolution > 0 ? 1.0f / static_cast<float>(resolution) : 0.0f;
+    }
     [[nodiscard]] uint32_t                     getMaxShadowedPointLights() const { return _maxShadowedPointLights; }
     [[nodiscard]] uint32_t                     getLastShadowedPointLights() const { return _lastShadowedPointLights; }
     void                                       refreshPipelineFormats(const IRenderTarget* gBufferRT);

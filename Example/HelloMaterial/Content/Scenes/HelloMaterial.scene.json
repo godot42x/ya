@@ -848,7 +848,7 @@
                     "_skeletonIndex": 0,
                     "_sourceModelPath": "Engine/ThirdParty/LearnOpenGL/resources/objects/vampire/dancing_vampire.dae",
                     "_speed": 1.0,
-                    "_time": 352674.177206
+                    "_time": 11961.866722
                 },
                 "TransformComponent": {
                     "_position": [
@@ -862,9 +862,9 @@
                         0.0
                     ],
                     "_scale": [
-                        0.07,
-                        0.07,
-                        0.07
+                        1.0,
+                        1.0,
+                        1.0
                     ]
                 }
             },

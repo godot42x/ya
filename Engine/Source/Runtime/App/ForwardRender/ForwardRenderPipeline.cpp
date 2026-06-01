@@ -379,7 +379,7 @@ void ForwardRenderPipeline::renderGUI(bool bRenderTreeNode)
         if (ImGui::Checkbox("Shadow Mapping", &bEnabled)) {
             if (bEnabled) {
                 if (shadowSettings.quality == EShadowQuality::Off) {
-                    shadowSettings = ShadowSettings::fromQuality(EShadowQuality::Medium);
+                    shadowSettings.applyQualityPreset(EShadowQuality::Medium);
                 }
             }
             else {

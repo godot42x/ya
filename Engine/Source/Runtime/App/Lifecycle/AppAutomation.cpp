@@ -255,7 +255,7 @@ void loadShadowAutomationOverrides(AppDesc& appDesc)
 void applyShadowAutomationOverrides(const AppAutomationShadowOverrides& overrides, ShadowSettings& shadowSettings)
 {
     if (overrides.quality) {
-        shadowSettings = ShadowSettings::fromQuality(*overrides.quality);
+        shadowSettings.applyQualityPreset(*overrides.quality);
     }
     if (overrides.directionalEnabled) {
         shadowSettings.directionalEnabled = *overrides.directionalEnabled;

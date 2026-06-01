@@ -104,8 +104,12 @@ void PointShadowIndirectRenderer::beginFrame()
 
 void PointShadowIndirectRenderer::prepare(const BasicShadowFramePayload& payload)
 {
-    auto& flight = _perFlight[payload.flightIndex];
-    flight       = {}; // reset per-frame state
+    auto& flight            = _perFlight[payload.flightIndex];
+    flight.meshBatches.clear();
+    flight.totalInstances   = 0;
+    flight.activeFaceCount  = 0;
+    flight.useGpuCull       = false;
+    flight.ready            = false;
 
     if (!_bSupported || !payload.pointIndirectRequested() ||
         !payload.frameData || payload.pointLightCount == 0) {
@@ -204,12 +208,12 @@ void PointShadowIndirectRenderer::uploadInstances(uint32_t                      
 {
     ensureInstanceCapacity(static_cast<uint32_t>(instances.size()));
     auto& flight = _perFlight[flightIndex];
+    YA_CORE_ASSERT(flight.instanceBuffer, "Point shadow indirect instance buffer is missing for flight {}", flightIndex);
     flight.instanceBuffer->writeData(instances.data(), instances.size() * sizeof(PointShadowInstanceData), 0);
     flight.instanceBuffer->flush();
 }
 
-std::vector<PointShadowIndirectCommand>
-PointShadowIndirectRenderer::buildCmdTemplates(uint32_t flightIndex) const
+std::vector<PointShadowIndirectCommand> PointShadowIndirectRenderer::buildCmdTemplates(uint32_t flightIndex) const
 {
     const auto&    flight     = _perFlight[flightIndex];
     const uint32_t batchCount = static_cast<uint32_t>(flight.meshBatches.size());
@@ -357,6 +361,9 @@ void PointShadowIndirectRenderer::ensureInstanceCapacity(uint32_t requiredCount)
                 .size        = bufferSize,
                 .memoryUsage = EMemoryUsage::CpuToGpu,
             });
+        YA_CORE_ASSERT(_perFlight[i].instanceBuffer && _perFlight[i].instanceBuffer->getHandle(),
+                       "Failed to create point shadow indirect per-flight instance buffer {}",
+                       i);
     }
 }
 

@@ -49,6 +49,10 @@ struct DirectionalLight{
     vec3 color;
     float intensity;
     float4x4 shadowMatrix;
+    float bias;
+    float normalBias;
+    uint shadowFilter;
+    float shadowTexelSize;
 };
 
 struct PointLight{
@@ -125,12 +129,39 @@ vec3 F_fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
 
 // ── Shading functions ──
 
+float sampleDirectionalShadowCompare(float2 uv, float compareDepth, float bias)
+{
+    float closestDepth = uDirectionalLightShadowMap.Sample(uv).r;
+    return (compareDepth - bias) > closestDepth ? 1.0 : 0.0;
+}
+
+float filterDirectionalShadow(float2 uv, float compareDepth, float bias)
+{
+    if (uLight.dirLight.shadowFilter == 0 || uLight.dirLight.shadowTexelSize <= 0.0) {
+        return sampleDirectionalShadowCompare(uv, compareDepth, bias);
+    }
+
+    float shadow = 0.0;
+    int radius = uLight.dirLight.shadowFilter == 1 ? 1 : 2;
+    int sampleCount = 0;
+    for (int y = -radius; y <= radius; ++y) {
+        for (int x = -radius; x <= radius; ++x) {
+            float2 offset = float2(x, y) * uLight.dirLight.shadowTexelSize;
+            float2 sampleUv = clamp(uv + offset, float2(0.0), float2(1.0));
+            shadow += sampleDirectionalShadowCompare(sampleUv, compareDepth, bias);
+            sampleCount += 1;
+        }
+    }
+    return shadow / max(float(sampleCount), 1.0);
+}
+
 float calculateDirectionalShadow(vec3 worldPos, vec3 norm, vec3 lightDir)
 {
 #if !YA_DEFERRED_ENABLE_SHADOW_MAPPING
     return 0.0;
 #else
-    float4 fragLightSpacePos = mul(uLight.dirLight.shadowMatrix, float4(worldPos, 1.0));
+    vec3 biasedWorldPos = worldPos + normalize(norm) * uLight.dirLight.normalBias;
+    float4 fragLightSpacePos = mul(uLight.dirLight.shadowMatrix, float4(biasedWorldPos, 1.0));
     float w = fragLightSpacePos.w;
     if (abs(w) < 1e-6) {
         return 0.0;
@@ -151,9 +182,9 @@ float calculateDirectionalShadow(vec3 worldPos, vec3 norm, vec3 lightDir)
         return 0.0;
     }
 
-    float bias = max(0.05 * (1.0 - dot(norm, lightDir)), 0.005);
-    float closestDepth = uDirectionalLightShadowMap.Sample(uv).r;
-    return (curDepth - bias) > closestDepth ? 1.0 : 0.0;
+    float NdotL = clamp(dot(normalize(norm), lightDir), 0.0, 1.0);
+    float bias = uLight.dirLight.bias * lerp(3.0, 1.0, NdotL);
+    return filterDirectionalShadow(uv, curDepth, bias);
 #endif
 }
 
@@ -170,7 +201,7 @@ float calculatePointShadow(uint pointLightIndex, vec3 worldPos)
 
     float closestDepth = uPointLightCubeArray[pointLightIndex].Sample(sampleDir).x;
     closestDepth *= uLight.pointLights[pointLightIndex].farPlane;
-    float bias = 0.05;
+    float bias = clamp(uLight.dirLight.bias * uLight.pointLights[pointLightIndex].farPlane, 0.001, 0.02);
     return (currentDepth - bias) > closestDepth ? 1.0 : 0.0;
 #endif
 }

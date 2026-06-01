@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <format>
 
 namespace ya
 {
@@ -17,10 +18,21 @@ namespace ya
 namespace
 {
 
-constexpr const char* DEFERRED_PIPELINE_CONFIG_DOC_NAME                      = "editor";
-constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING     = "render.deferred.shadow.enableShadowMapping";
-constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW = "render.deferred.shadow.enablePointLightShadow";
-constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS   = "render.deferred.shadow.maxPointLightShadowCount";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_DOC_NAME                       = "editor";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING      = "render.deferred.shadow.enableShadowMapping";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW  = "render.deferred.shadow.enablePointLightShadow";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS    = "render.deferred.shadow.maxPointLightShadowCount";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_QUALITY             = "render.deferred.shadow.quality";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_ENABLED = "render.deferred.shadow.directionalEnabled";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_ENABLED       = "render.deferred.shadow.pointLightEnabled";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_INDIRECT      = "render.deferred.shadow.pointLightUseIndirect";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_CULL          = "render.deferred.shadow.pointLightIndirectCullEnabled";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_RESOLUTION          = "render.deferred.shadow.resolution";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_FILTER              = "render.deferred.shadow.filter";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_BIAS                = "render.deferred.shadow.bias";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_NORMAL_BIAS         = "render.deferred.shadow.normalBias";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_DIST    = "render.deferred.shadow.directionalDistance";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_CASCADE = "render.deferred.shadow.directionalCascades";
 
 void drawPerfLeaf(const char* label, float value, float parentValue = 0.0f)
 {
@@ -143,11 +155,14 @@ void DeferredRenderPipeline::initShadowResources()
         return;
     }
 
+    const auto& shadowSettings      = App::get()->getShadowSettings();
+    const uint32_t shadowResolution = std::max(shadowSettings.resolution, 1u);
+
     _shadowDepthRT = createRenderTarget(RenderTargetCreateInfo{
         .label            = "Deferred Shadow Map RenderTarget",
         .renderingMode    = ERenderingMode::DynamicRendering,
         .bSwapChainTarget = false,
-        .extent           = {.width = 512, .height = 512},
+        .extent           = {.width = shadowResolution, .height = shadowResolution},
         .frameBufferCount = 1,
         .layerCount       = 1 + MAX_POINT_LIGHTS * 6,
         .attachments      = {
@@ -243,7 +258,8 @@ void DeferredRenderPipeline::queueShadowSettingsChange(bool     bEnableShadowMap
     saveShadowSettingsToConfig(
         _pendingEnableShadowMapping,
         _pendingEnablePointLightShadow,
-        _pendingMaxPointLightShadowCount);
+        _pendingMaxPointLightShadowCount,
+        App::get()->getShadowSettings());
 
     if (_bShadowSettingsChangePending) {
         return;
@@ -289,7 +305,7 @@ void DeferredRenderPipeline::applyShadowSettings(bool bEnableShadowMapping, bool
         shadowSettings.quality = EShadowQuality::Off;
     }
     else if (shadowSettings.quality == EShadowQuality::Off) {
-        shadowSettings = ShadowSettings::fromQuality(EShadowQuality::Medium);
+        shadowSettings.applyQualityPreset(EShadowQuality::Medium);
     }
     shadowSettings.pointLightEnabled = bEnablePointLightShadow;
 
@@ -308,6 +324,10 @@ void DeferredRenderPipeline::applyShadowSettings(bool bEnableShadowMapping, bool
     }
 
     syncShadowSettings();
+    saveShadowSettingsToConfig(_bEnableShadowMapping,
+                               _bEnablePointLightShadow,
+                               shadowSettings.maxPointLightShadows,
+                               shadowSettings);
 }
 
 void DeferredRenderPipeline::loadPersistentSettings()
@@ -331,15 +351,68 @@ void DeferredRenderPipeline::loadPersistentSettings()
 
     // Sync loaded config to App-layer ShadowSettings
     auto& shadowSettings = App::get()->getShadowSettings();
-    if (!_bEnableShadowMapping) {
+    int qualityValue = cfgManager.getOr<int>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                                             DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_QUALITY,
+                                             static_cast<int>(shadowSettings.quality));
+    qualityValue = std::clamp(qualityValue,
+                              static_cast<int>(EShadowQuality::Off),
+                              static_cast<int>(EShadowQuality::Ultra));
+    shadowSettings.quality = static_cast<EShadowQuality::T>(qualityValue);
+    shadowSettings.directionalEnabled = cfgManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                                                               DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_ENABLED,
+                                                               shadowSettings.directionalEnabled);
+    shadowSettings.pointLightEnabled = cfgManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                                                              DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_ENABLED,
+                                                              _bEnablePointLightShadow);
+    shadowSettings.pointLightUseIndirect = cfgManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                                                                  DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_INDIRECT,
+                                                                  shadowSettings.pointLightUseIndirect);
+    shadowSettings.pointLightIndirectCullEnabled = cfgManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                                                                          DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_CULL,
+                                                                          shadowSettings.pointLightIndirectCullEnabled);
+    shadowSettings.maxPointLightShadows = static_cast<uint32_t>(std::clamp(
+        cfgManager.getOr<int>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                              DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS,
+                              static_cast<int>(shadowSettings.maxPointLightShadows)),
+        0,
+        static_cast<int>(MAX_POINT_LIGHTS)));
+    shadowSettings.resolution = static_cast<uint32_t>(std::clamp(
+        cfgManager.getOr<int>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                              DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_RESOLUTION,
+                              static_cast<int>(shadowSettings.resolution)),
+        128,
+        8192));
+    shadowSettings.filter = static_cast<EShadowFilter::T>(std::clamp(
+        cfgManager.getOr<int>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                              DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_FILTER,
+                              static_cast<int>(shadowSettings.filter)),
+        static_cast<int>(EShadowFilter::Hard),
+        static_cast<int>(EShadowFilter::PCF_High)));
+    shadowSettings.bias = cfgManager.getOr<float>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                                                  DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_BIAS,
+                                                  shadowSettings.bias);
+    shadowSettings.normalBias = cfgManager.getOr<float>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                                                        DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_NORMAL_BIAS,
+                                                        shadowSettings.normalBias);
+    shadowSettings.directionalDistance = cfgManager.getOr<float>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                                                                 DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_DIST,
+                                                                 shadowSettings.directionalDistance);
+    shadowSettings.directionalCascades = static_cast<uint32_t>(std::clamp(
+        cfgManager.getOr<int>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                              DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_CASCADE,
+                              static_cast<int>(shadowSettings.directionalCascades)),
+        0,
+        4));
+
+    if (!_bEnableShadowMapping || shadowSettings.quality == EShadowQuality::Off) {
         shadowSettings.quality = EShadowQuality::Off;
     }
-    shadowSettings.pointLightEnabled    = _bEnablePointLightShadow;
-    shadowSettings.maxPointLightShadows = _maxPointLightShadowCount;
+    shadowSettings.pointLightEnabled    = _bEnablePointLightShadow && shadowSettings.pointLightEnabled;
+    shadowSettings.maxPointLightShadows = std::min(shadowSettings.maxPointLightShadows, static_cast<uint32_t>(MAX_POINT_LIGHTS));
 
     const auto& automationShadowOverrides = App::get()->getDesc().automation.shadow;
     if (automationShadowOverrides.quality) {
-        shadowSettings = ShadowSettings::fromQuality(*automationShadowOverrides.quality);
+        shadowSettings.applyQualityPreset(*automationShadowOverrides.quality);
     }
     if (automationShadowOverrides.directionalEnabled) {
         shadowSettings.directionalEnabled = *automationShadowOverrides.directionalEnabled;
@@ -377,15 +450,27 @@ void DeferredRenderPipeline::loadPersistentSettings()
     _pendingMaxPointLightShadowCount = _maxPointLightShadowCount;
 }
 
-void DeferredRenderPipeline::saveShadowSettingsToConfig(bool     bEnableShadowMapping,
-                                                        bool     bEnablePointLightShadow,
-                                                        uint32_t maxPointLightShadowCount) const
+void DeferredRenderPipeline::saveShadowSettingsToConfig(bool                  bEnableShadowMapping,
+                                                        bool                  bEnablePointLightShadow,
+                                                        uint32_t              maxPointLightShadowCount,
+                                                        const ShadowSettings& shadowSettings) const
 {
     ConfigManager::Editor(DEFERRED_PIPELINE_CONFIG_DOC_NAME)
         .set(DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING, bEnableShadowMapping)
         .set(DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW, bEnablePointLightShadow)
         .set(DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS,
-             static_cast<int>(std::min(maxPointLightShadowCount, static_cast<uint32_t>(MAX_POINT_LIGHTS))));
+             static_cast<int>(std::min(maxPointLightShadowCount, static_cast<uint32_t>(MAX_POINT_LIGHTS))))
+        .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_QUALITY, static_cast<int>(shadowSettings.quality))
+        .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_ENABLED, shadowSettings.directionalEnabled)
+        .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_ENABLED, shadowSettings.pointLightEnabled)
+        .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_INDIRECT, shadowSettings.pointLightUseIndirect)
+        .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_CULL, shadowSettings.pointLightIndirectCullEnabled)
+        .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_RESOLUTION, static_cast<int>(shadowSettings.resolution))
+        .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_FILTER, static_cast<int>(shadowSettings.filter))
+        .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_BIAS, shadowSettings.bias)
+        .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_NORMAL_BIAS, shadowSettings.normalBias)
+        .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_DIST, shadowSettings.directionalDistance)
+        .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_CASCADE, static_cast<int>(shadowSettings.directionalCascades));
 }
 
 void DeferredRenderPipeline::rebuildShadowViews()
@@ -657,8 +742,30 @@ void DeferredRenderPipeline::syncFrameSettings(const TickDesc& desc)
 
     const auto&    shadowSettings           = App::get()->getShadowSettings();
     const uint32_t shadowedPointLightBudget = shadowSettings.getEffectivePointLightCount();
+    const uint32_t desiredShadowResolution  = std::max(shadowSettings.resolution, 1u);
+    if (_bEnableShadowMapping) {
+        const bool bShadowResolutionDirty = !_shadowDepthRT ||
+                                            _shadowDepthRT->getExtent().width != desiredShadowResolution ||
+                                            _shadowDepthRT->getExtent().height != desiredShadowResolution;
+        if (bShadowResolutionDirty) {
+            if (_render) {
+                _render->waitIdle();
+            }
+            destroyShadowResources();
+            initShadowResources();
+            if (!_shadowStage && _shadowDepthRT) {
+                _shadowStage = ya::makeShared<ShadowStage>();
+                _shadowStage->setRenderTarget(_shadowDepthRT);
+                _shadowStage->init(_render);
+            }
+            syncShadowSettings();
+        }
+    }
+
+    const uint32_t shadowMapResolution = _shadowDepthRT ? _shadowDepthRT->getExtent().width : desiredShadowResolution;
     if (_gBufferStage) {
         _gBufferStage->setMaxShadowedPointLights(shadowedPointLightBudget);
+        _gBufferStage->setShadowSettings(shadowSettings, shadowMapResolution);
     }
     if (_lightStage) {
         _lightStage->setShadowSettings(shadowSettings.isEnabled(), shadowSettings.pointLightEnabled);
@@ -907,11 +1014,14 @@ void DeferredRenderPipeline::renderGUI(bool bRenderTreeNode)
         ImGui::TextUnformatted("GBuffer ID + switch/case Light Pass");
 
         if (ImGui::TreeNode("Shadow")) {
-            auto& shadowSettings = App::get()->getShadowSettings();
+            auto& shadowSettings    = App::get()->getShadowSettings();
+            bool  bShadowSettingsDirty = false;
 
             bool bShadowEnabled = _bEnableShadowMapping;
             if (ImGui::Checkbox("Enable Shadow Mapping", &bShadowEnabled)) {
-                queueShadowSettingsChange(bShadowEnabled, _bEnablePointLightShadow, _maxPointLightShadowCount);
+                queueShadowSettingsChange(bShadowEnabled,
+                                          shadowSettings.pointLightEnabled,
+                                          shadowSettings.maxPointLightShadows);
             }
 
             if (_bEnableShadowMapping && _shadowStage) {
@@ -919,24 +1029,65 @@ void DeferredRenderPipeline::renderGUI(bool bRenderTreeNode)
                 int                qualityIdx     = std::max(0, static_cast<int>(shadowSettings.quality) - 1);
                 if (ImGui::Combo("Quality Preset", &qualityIdx, qualityNames, IM_ARRAYSIZE(qualityNames))) {
                     auto newQuality = static_cast<EShadowQuality::T>(qualityIdx + 1);
-                    shadowSettings  = ShadowSettings::fromQuality(newQuality);
+                    shadowSettings.applyQualityPreset(newQuality);
+                    bShadowSettingsDirty = true;
                 }
 
-                ImGui::Checkbox("Directional Shadow", &shadowSettings.directionalEnabled);
-                ImGui::Checkbox("Point Light Shadow", &shadowSettings.pointLightEnabled);
-                ImGui::Checkbox("Point Light Indirect Draw", &shadowSettings.pointLightUseIndirect);
-                ImGui::Checkbox("Point Light Indirect Cull", &shadowSettings.pointLightIndirectCullEnabled);
+                if (ImGui::Checkbox("Directional Shadow", &shadowSettings.directionalEnabled)) {
+                    bShadowSettingsDirty = true;
+                }
+                if (ImGui::Checkbox("Point Light Shadow", &shadowSettings.pointLightEnabled)) {
+                    bShadowSettingsDirty = true;
+                }
+                if (ImGui::Checkbox("Point Light Indirect Draw", &shadowSettings.pointLightUseIndirect)) {
+                    bShadowSettingsDirty = true;
+                }
+                if (ImGui::Checkbox("Point Light Indirect Cull", &shadowSettings.pointLightIndirectCullEnabled)) {
+                    bShadowSettingsDirty = true;
+                }
                 int maxPL = static_cast<int>(shadowSettings.maxPointLightShadows);
                 if (ImGui::SliderInt("Max Point Shadows", &maxPL, 0, MAX_POINT_LIGHTS)) {
                     shadowSettings.maxPointLightShadows = static_cast<uint32_t>(maxPL);
+                    bShadowSettingsDirty = true;
                 }
-                ImGui::DragFloat("Depth Bias", &shadowSettings.bias, 0.0001f, 0.0f, 0.1f, "%.5f");
-                ImGui::DragFloat("Normal Bias", &shadowSettings.normalBias, 0.0001f, 0.0f, 0.1f, "%.5f");
+
+                int shadowResolution = static_cast<int>(shadowSettings.resolution);
+                if (ImGui::DragInt("Shadow Resolution", &shadowResolution, 16.0f, 128, 8192, "%d")) {
+                    shadowSettings.resolution = static_cast<uint32_t>(std::clamp(shadowResolution, 128, 8192));
+                    bShadowSettingsDirty = true;
+                }
+
+                if (ImGui::DragFloat("Depth Bias", &shadowSettings.bias, 0.0001f, 0.0f, 0.1f, "%.5f")) {
+                    bShadowSettingsDirty = true;
+                }
+                if (ImGui::DragFloat("Normal Bias", &shadowSettings.normalBias, 0.0001f, 0.0f, 0.1f, "%.5f")) {
+                    bShadowSettingsDirty = true;
+                }
+                if (ImGui::DragFloat("Directional Distance", &shadowSettings.directionalDistance, 0.5f, 1.0f, 500.0f, "%.1f")) {
+                    bShadowSettingsDirty = true;
+                }
+                int directionalCascades = static_cast<int>(shadowSettings.directionalCascades);
+                if (ImGui::SliderInt("Directional Cascades", &directionalCascades, 0, 4)) {
+                    shadowSettings.directionalCascades = static_cast<uint32_t>(directionalCascades);
+                    bShadowSettingsDirty = true;
+                }
 
                 static const char* filterNames[] = {"Hard", "PCF Low", "PCF High"};
                 int                currentFilter = static_cast<int>(shadowSettings.filter);
                 if (ImGui::Combo("Shadow Filter", &currentFilter, filterNames, IM_ARRAYSIZE(filterNames))) {
                     shadowSettings.filter = static_cast<EShadowFilter::T>(currentFilter);
+                    bShadowSettingsDirty = true;
+                }
+
+                if (bShadowSettingsDirty) {
+                    _bEnablePointLightShadow         = shadowSettings.pointLightEnabled;
+                    _maxPointLightShadowCount        = shadowSettings.maxPointLightShadows;
+                    _pendingEnablePointLightShadow   = _bEnablePointLightShadow;
+                    _pendingMaxPointLightShadowCount = _maxPointLightShadowCount;
+                    saveShadowSettingsToConfig(_bEnableShadowMapping,
+                                               shadowSettings.pointLightEnabled,
+                                               shadowSettings.maxPointLightShadows,
+                                               shadowSettings);
                 }
             }
             ImGui::TreePop();

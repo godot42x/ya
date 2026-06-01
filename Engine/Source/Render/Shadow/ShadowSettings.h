@@ -55,17 +55,17 @@ struct ShadowSettings
     uint32_t directionalCascades = 1;     // cascade count (1 = no cascading, future: 2/4)
 
     // Point light shadow
-    bool     pointLightEnabled              = true;
-    bool     pointLightUseIndirect          = false;
-    bool     pointLightIndirectCullEnabled  = true;
-    uint32_t maxPointLightShadows           = 1; // how many point lights get shadows
+    bool     pointLightEnabled             = true;
+    bool     pointLightUseIndirect         = false;
+    bool     pointLightIndirectCullEnabled = true;
+    uint32_t maxPointLightShadows          = 1; // how many point lights get shadows
 
     // Filtering
     EShadowFilter::T filter = EShadowFilter::Hard;
 
     // Bias
-    float bias       = 0.005f;
-    float normalBias = 0.01f;
+    float bias       = 0.0005f;
+    float normalBias = 0.02f;
 
     // ─── Helpers ─────────────────────────────────────────────────────
 
@@ -75,6 +75,18 @@ struct ShadowSettings
     {
         if (!isEnabled() || !pointLightEnabled) return 0;
         return std::min(maxPointLightShadows, static_cast<uint32_t>(MAX_POINT_LIGHTS));
+    }
+
+    void applyQualityPreset(EShadowQuality::T q)
+    {
+        const ShadowSettings preset = fromQuality(q);
+        quality                     = q;
+        resolution                  = preset.resolution;
+        directionalEnabled          = preset.directionalEnabled;
+        directionalCascades         = preset.directionalCascades;
+        pointLightEnabled           = preset.pointLightEnabled;
+        maxPointLightShadows        = preset.maxPointLightShadows;
+        filter                      = preset.filter;
     }
 
     // ─── Presets ─────────────────────────────────────────────────────
