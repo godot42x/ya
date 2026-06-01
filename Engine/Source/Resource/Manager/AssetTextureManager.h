@@ -5,6 +5,8 @@
 
 #include "Core/Async/TaskQueue.h"
 #include "Resource/AssetManager.h"
+#include "Resource/Handle/ResourceTable.h"
+#include "Resource/Handle/ResourceTable.h"
 
 namespace ya
 {
@@ -14,7 +16,10 @@ class AssetTextureManager
   private:
     AssetManager& _owner;
 
-    std::unordered_map<std::string, std::shared_ptr<Texture>> _textureViews;
+    // Slot table owns the Texture objects; the cacheKey map is the index into it.
+    // A cacheKey is "path|importSettings", so one path can map to several handles.
+    ResourceTable<Texture>                                    _textures;
+    std::unordered_map<std::string, FResourceHandle<Texture>> _cacheKey2Handle;
     std::unordered_map<FName, std::string>                    _textureName2Path;
     std::unordered_map<std::string, TaskHandle<AssetManager::TextureMemoryBlock>> _pendingTextureLoads;
     std::unordered_map<std::string, std::string> _failedTextureLoads;
@@ -68,6 +73,15 @@ class AssetTextureManager
                                   const std::shared_ptr<Texture>&                        texture);
     void rememberTextureLoadFailure(const std::string& filepath, std::string reason = {});
     void clearTextureLoadFailure(const std::string& filepath);
+
+    // --- cacheKey <-> slot-table helpers (caller must hold _mutex) ---
+    // Look up the cached texture for a cacheKey, or nullptr if absent/stale.
+    std::shared_ptr<Texture> findCachedLocked(const std::string& cacheKey) const;
+    // Insert or hot-replace the texture for a cacheKey. frame==-1 inserts without
+    // retiring; otherwise the replaced object is retired via DeferredDeletionQueue.
+    void storeCachedLocked(const std::string& cacheKey, std::shared_ptr<Texture> texture);
+    // Drop a cacheKey, retiring its texture through DeferredDeletionQueue.
+    void eraseCachedLocked(const std::string& cacheKey, uint64_t frame);
 };
 
 } // namespace ya

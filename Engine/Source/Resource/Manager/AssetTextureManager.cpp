@@ -17,11 +17,47 @@ AssetTextureManager::AssetTextureManager(AssetManager& owner)
 {
 }
 
+std::shared_ptr<Texture> AssetTextureManager::findCachedLocked(const std::string& cacheKey) const
+{
+    auto it = _cacheKey2Handle.find(cacheKey);
+    if (it == _cacheKey2Handle.end()) {
+        return nullptr;
+    }
+    return _textures.getShared(it->second);
+}
+
+void AssetTextureManager::storeCachedLocked(const std::string& cacheKey, std::shared_ptr<Texture> texture)
+{
+    auto it = _cacheKey2Handle.find(cacheKey);
+    if (it != _cacheKey2Handle.end()) {
+        // RCU hot-replace in the same slot; retire the previous object so the
+        // GPU is done with it before destruction.
+        if (auto old = _textures.replace(it->second, std::move(texture))) {
+            DeferredDeletionQueue::get().retireResource(std::move(old));
+        }
+        return;
+    }
+    _cacheKey2Handle.emplace(cacheKey, _textures.allocate(std::move(texture)));
+}
+
+void AssetTextureManager::eraseCachedLocked(const std::string& cacheKey, uint64_t frame)
+{
+    auto it = _cacheKey2Handle.find(cacheKey);
+    if (it == _cacheKey2Handle.end()) {
+        return;
+    }
+    if (auto old = _textures.release(it->second)) {
+        DeferredDeletionQueue::get().enqueueResource(frame, std::move(old));
+    }
+    _cacheKey2Handle.erase(it);
+}
+
 void AssetTextureManager::clear()
 {
     std::lock_guard lock(_mutex);
     ++_clearGeneration;
-    _textureViews.clear();
+    _textures.clear();
+    _cacheKey2Handle.clear();
     _textureName2Path.clear();
     _pendingTextureLoads.clear();
     _failedTextureLoads.clear();
@@ -80,16 +116,15 @@ TextureFuture AssetTextureManager::loadTexture(const AssetManager::TextureLoadRe
 
     {
         std::lock_guard lock(_mutex);
-        const auto      it = _textureViews.find(cacheKey);
-        if (it != _textureViews.end()) {
+        if (auto cached = findCachedLocked(cacheKey)) {
             if (!request.name.empty()) {
                 _textureName2Path[normalized.name] = cacheKey;
             }
             if (normalized.onReady) {
-                AssetManager::dispatchToGameThread([onReady = normalized.onReady, texture = it->second]() mutable
+                AssetManager::dispatchToGameThread([onReady = normalized.onReady, texture = cached]() mutable
                                                    { onReady(texture); });
             }
-            return TextureFuture(it->second);
+            return TextureFuture(cached);
         }
     }
 
@@ -256,12 +291,11 @@ std::shared_ptr<Texture> AssetTextureManager::loadTextureSync(const std::string&
 
     {
         std::lock_guard lock(_mutex);
-        const auto      it = _textureViews.find(cacheKey);
-        if (it != _textureViews.end()) {
+        if (auto cached = findCachedLocked(cacheKey)) {
             if (!name.empty()) {
                 _textureName2Path[name] = cacheKey;
             }
-            return it->second;
+            return cached;
         }
     }
 
@@ -312,7 +346,7 @@ std::shared_ptr<Texture> AssetTextureManager::loadTextureSync(const std::string&
 
     {
         std::lock_guard lock(_mutex);
-        _textureViews[cacheKey] = texture;
+        storeCachedLocked(cacheKey, texture);
         if (!name.empty()) {
             _textureName2Path[name] = cacheKey;
         }
@@ -350,11 +384,10 @@ void AssetTextureManager::submitTextureLoad(const std::string&                  
                 if (clearGeneration != _clearGeneration) {
                     return;
                 }
-                auto existing = _textureViews.find(cacheKey);
-                if (existing != _textureViews.end()) {
+                if (auto existing = findCachedLocked(cacheKey)) {
                     _pendingTextureLoads.erase(cacheKey);
                     callbacks    = takeTextureCallbacks(cacheKey);
-                    readyTexture = existing->second;
+                    readyTexture = existing;
                 }
             }
 
@@ -414,7 +447,7 @@ void AssetTextureManager::submitTextureLoad(const std::string&                  
 
             {
                 std::lock_guard lock(_mutex);
-                _textureViews[cacheKey] = texture;
+                storeCachedLocked(cacheKey, texture);
                 if (!name.empty()) {
                     _textureName2Path[name] = cacheKey;
                 }
@@ -439,15 +472,16 @@ std::shared_ptr<Texture> AssetTextureManager::getTextureByPath(const std::string
     auto metaIt = _owner._metaCache.find(normalizedFilepath);
     if (metaIt != _owner._metaCache.end()) {
         const std::string cacheKey = AssetManager::makeCacheKey(normalizedFilepath, metaIt->second);
-        auto              it       = _textureViews.find(cacheKey);
-        if (it != _textureViews.end()) {
-            return it->second;
+        if (auto cached = findCachedLocked(cacheKey)) {
+            return cached;
         }
     }
 
-    for (const auto& [key, texture] : _textureViews) {
+    for (const auto& [key, handle] : _cacheKey2Handle) {
         if (key.starts_with(normalizedFilepath + "|")) {
-            return texture;
+            if (auto cached = _textures.getShared(handle)) {
+                return cached;
+            }
         }
     }
 
@@ -462,8 +496,7 @@ std::shared_ptr<Texture> AssetTextureManager::getTextureByName(const std::string
         return nullptr;
     }
 
-    auto texIt = _textureViews.find(nameIt->second);
-    return texIt != _textureViews.end() ? texIt->second : nullptr;
+    return findCachedLocked(nameIt->second);
 }
 
 bool AssetTextureManager::isTextureLoaded(const std::string& filepath) const
@@ -483,7 +516,7 @@ void AssetTextureManager::registerTexture(const std::string& name, const stdptr<
     }
 
     std::lock_guard lock(_mutex);
-    _textureViews[name]     = texture;
+    storeCachedLocked(name, texture);
     _textureName2Path[name] = name;
 }
 
@@ -506,10 +539,13 @@ size_t AssetTextureManager::collectUnused(uint64_t frame)
     size_t          released = 0;
     auto&           ddq      = DeferredDeletionQueue::get();
     std::lock_guard lock(_mutex);
-    for (auto it = _textureViews.begin(); it != _textureViews.end();) {
-        if (it->second && it->second.use_count() == 1) {
-            ddq.enqueueResource(frame, std::move(it->second));
-            it = _textureViews.erase(it);
+    for (auto it = _cacheKey2Handle.begin(); it != _cacheKey2Handle.end();) {
+        // useCount()==1 means the slot table holds the only reference.
+        if (_textures.useCount(it->second) == 1) {
+            if (auto old = _textures.release(it->second)) {
+                ddq.enqueueResource(frame, std::move(old));
+            }
+            it = _cacheKey2Handle.erase(it);
             ++released;
         }
         else {
@@ -523,13 +559,10 @@ bool AssetTextureManager::unload(const std::string& cacheKey, uint64_t frame)
 {
     const auto normalizedCacheKey = AssetManager::normalizeAssetPath(cacheKey);
     std::lock_guard lock(_mutex);
-    auto            it = _textureViews.find(normalizedCacheKey);
-    if (it == _textureViews.end()) {
+    if (!_cacheKey2Handle.contains(normalizedCacheKey)) {
         return false;
     }
-
-    DeferredDeletionQueue::get().enqueueResource(frame, std::move(it->second));
-    _textureViews.erase(it);
+    eraseCachedLocked(normalizedCacheKey, frame);
     return true;
 }
 
@@ -540,13 +573,15 @@ void AssetTextureManager::invalidate(const std::string& filepath, uint64_t frame
 
 void AssetTextureManager::evictCachedAsset(const std::string& assetPath, uint64_t frame)
 {
-    const auto normalizedAssetPath = AssetManager::normalizeAssetPath(assetPath);
-    auto&           ddq = DeferredDeletionQueue::get();
+    const auto      normalizedAssetPath = AssetManager::normalizeAssetPath(assetPath);
+    auto&           ddq                 = DeferredDeletionQueue::get();
     std::lock_guard lock(_mutex);
-    for (auto it = _textureViews.begin(); it != _textureViews.end();) {
+    for (auto it = _cacheKey2Handle.begin(); it != _cacheKey2Handle.end();) {
         if (it->first == normalizedAssetPath || it->first.starts_with(normalizedAssetPath + "|")) {
-            ddq.enqueueResource(frame, std::move(it->second));
-            it = _textureViews.erase(it);
+            if (auto old = _textures.release(it->second)) {
+                ddq.enqueueResource(frame, std::move(old));
+            }
+            it = _cacheKey2Handle.erase(it);
         }
         else {
             ++it;
@@ -557,9 +592,9 @@ void AssetTextureManager::evictCachedAsset(const std::string& assetPath, uint64_
 void AssetTextureManager::fillStats(AssetManager::CacheStats& stats) const
 {
     std::lock_guard lock(_mutex);
-    stats.textureCount += _textureViews.size();
-    for (const auto& [_, texture] : _textureViews) {
-        if (texture) {
+    stats.textureCount += _cacheKey2Handle.size();
+    for (const auto& [_, handle] : _cacheKey2Handle) {
+        if (auto texture = _textures.getShared(handle)) {
             stats.textureMemoryEstimate += static_cast<size_t>(texture->getWidth()) *
                                            texture->getHeight() *
                                            std::max(texture->getChannels(), 1u);
@@ -576,11 +611,8 @@ void AssetTextureManager::registerTextureCallback(const std::string& cacheKey, A
     std::shared_ptr<Texture> readyTexture;
     {
         std::lock_guard lock(_mutex);
-        auto            loadedIt = _textureViews.find(cacheKey);
-        if (loadedIt != _textureViews.end()) {
-            readyTexture = loadedIt->second;
-        }
-        else {
+        readyTexture = findCachedLocked(cacheKey);
+        if (!readyTexture) {
             _pendingTextureCallbacks[cacheKey].push_back(std::move(onReady));
             return;
         }

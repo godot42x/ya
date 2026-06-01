@@ -86,6 +86,22 @@ class ResourceTable
         return _slots[h.index].resource;
     }
 
+    /**
+     * @brief use_count of the slot's shared_ptr, or 0 if stale / empty.
+     *
+     * Lets owners reclaim unreferenced resources: when the table holds the only
+     * reference (count == 1) nobody else is using the object. Reads the slot's
+     * shared_ptr in place so it does NOT perturb the count (unlike getShared).
+     */
+    [[nodiscard]] long useCount(FResourceHandle<T> h) const
+    {
+        std::lock_guard lock(_mutex);
+        if (!isValidLocked(h) || !_slots[h.index].resource) {
+            return 0;
+        }
+        return _slots[h.index].resource.use_count();
+    }
+
     /// Current generation of the slot, or 0 if the handle is stale.
     [[nodiscard]] uint32_t generationOf(FResourceHandle<T> h) const
     {
@@ -134,6 +150,20 @@ class ResourceTable
         ++slot.generation;
         _freeList.push_back(h.index);
         return old;
+    }
+
+    /**
+     * @brief Drop every slot at once (scene reset / cache clear).
+     *
+     * All existing handles become invalid (their index falls outside the table
+     * or its generation no longer matches). shared_ptrs are released here, same
+     * as the previous map.clear() behaviour.
+     */
+    void clear()
+    {
+        std::lock_guard lock(_mutex);
+        _slots.clear();
+        _freeList.clear();
     }
 
   private:
