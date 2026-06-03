@@ -229,7 +229,7 @@ void LightStage::init(IRender* render)
         },
         .pipelineLayout = _pipelineLayout.get(),
         .shaderDesc     = ShaderDesc{
-                .shaderName        = "DeferredRender/Unified_LightPass.slang",
+                .shaderName        = "DeferredRender/LightPass.slang",
                 .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
                 .vertexAttributes  = _commonVertexAttributes,
                 .defines           = buildLightPassShaderDefines(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL, _bEnableShadowMapping, _bEnablePointLightShadow),

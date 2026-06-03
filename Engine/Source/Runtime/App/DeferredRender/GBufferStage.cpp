@@ -10,7 +10,7 @@
 
 #include "imgui.h"
 
-#include "DeferredRender.Unified_LightPass.slang.h"
+#include "DeferredRender.LightPass.slang.h"
 
 #include <algorithm>
 #include <vector>
@@ -105,7 +105,7 @@ void GBufferStage::initSharedResources()
         });
 
     // Create per-flight UBOs and descriptor sets
-    using LightPassLightData = slang_types::DeferredRender::Unified_LightPass::LightData;
+    using LightPassLightData = slang_types::DeferredRender::LightPass::LightData;
 
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
         _frameUBO[i] = IBuffer::create(_render, BufferCreateInfo{
@@ -165,7 +165,7 @@ void GBufferStage::initPBR()
         .pipelineRenderingInfo = {.label = "PBR GBuffer Pass", .colorAttachmentFormats = gBufferFormats, .depthAttachmentFormat = DEPTH_FORMAT},
         .pipelineLayout        = _pbr.pipelineLayout.get(),
         .shaderDesc            = ShaderDesc{
-            .shaderName        = "DeferredRender/Unified_GBufferPass_PBR.slang",
+            .shaderName        = "DeferredRender/GBufferPass_PBR.slang",
             .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
             .vertexAttributes  = _commonVertexAttributes,
         },
@@ -248,7 +248,7 @@ void GBufferStage::initPhong()
         .pipelineRenderingInfo = {.label = "Phong GBuffer Pass", .colorAttachmentFormats = gBufferFormats, .depthAttachmentFormat = DEPTH_FORMAT},
         .pipelineLayout        = _phong.pipelineLayout.get(),
         .shaderDesc            = ShaderDesc{
-            .shaderName        = "DeferredRender/Unified_GBufferPass_Phong.slang",
+            .shaderName        = "DeferredRender/GBufferPass_Phong.slang",
             .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
             .vertexAttributes  = _commonVertexAttributes,
         },
@@ -329,7 +329,7 @@ void GBufferStage::initUnlit()
         .pipelineRenderingInfo = {.label = "Unlit GBuffer Pass", .colorAttachmentFormats = gBufferFormats, .depthAttachmentFormat = DEPTH_FORMAT},
         .pipelineLayout        = _unlit.pipelineLayout.get(),
         .shaderDesc            = ShaderDesc{
-            .shaderName        = "DeferredRender/Unified_GBufferPass_Unlit.slang",
+            .shaderName        = "DeferredRender/GBufferPass_Unlit.slang",
             .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
             .vertexAttributes  = _commonVertexAttributes,
         },
@@ -516,7 +516,7 @@ void GBufferStage::prepare(const RenderStageContext& ctx)
 
 void GBufferStage::updateFrameUBOs(const RenderStageContext& ctx)
 {
-    using LightPassLightData = slang_types::DeferredRender::Unified_LightPass::LightData;
+    using LightPassLightData = slang_types::DeferredRender::LightPass::LightData;
 
     const auto& fd = *ctx.frameData;
     uint32_t    fi = ctx.flightIndex;

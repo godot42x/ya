@@ -6,7 +6,7 @@
 #include "Render/Core/Pipeline.h"
 #include "Render/Stage/IRenderStage.h"
 
-#include "DeferredRender.Unified_LightPass.slang.h"
+#include "DeferredRender.LightPass.slang.h"
 
 #include <array>
 
@@ -23,8 +23,8 @@ struct IImageView;
 /// and the environment lighting DS from RenderRuntime (set 2).
 struct LightStage : public IRenderStage
 {
-    using PushConstant = slang_types::DeferredRender::Unified_LightPass::PushConstants;
-    using LightData    = slang_types::DeferredRender::Unified_LightPass::LightData;
+    using PushConstant = slang_types::DeferredRender::LightPass::PushConstants;
+    using LightData    = slang_types::DeferredRender::LightPass::LightData;
 
     static constexpr EFormat::T LINEAR_FORMAT = EFormat::R16G16B16A16_SFLOAT;
     static constexpr EFormat::T DEPTH_FORMAT  = EFormat::D32_SFLOAT;

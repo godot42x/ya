@@ -5,7 +5,7 @@
 #include "Material.h"
 #include "Render/Core/Std140Types.h"
 
-#include "DeferredRender.Unified_GBufferPass_PBR.slang.h"
+#include "DeferredRender.GBufferPass_PBR.slang.h"
 
 namespace ya
 {
@@ -38,7 +38,7 @@ struct PBRMaterial : public Material
     };
 
     /// GPU UBO struct — sourced from shader, do NOT redefine in C++.
-    using ParamUBO = slang_types::DeferredRender::Unified_GBufferPass_PBR::PBRParamsData;
+    using ParamUBO = slang_types::DeferredRender::GBufferPass_PBR::PBRParamsData;
 
     // ========================================
     // Reflection Registration

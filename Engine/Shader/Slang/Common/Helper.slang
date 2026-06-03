@@ -9,6 +9,7 @@ typealias mat4 = float4x4;
 typealias vec2 = float2;
 typealias vec3 = float3;
 typealias vec4 = float4;
+typealias ivec2 = int32_t2;
 
 
 inline float3x3 inverse3x3(float3x3  m)

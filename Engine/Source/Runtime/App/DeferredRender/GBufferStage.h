@@ -9,9 +9,9 @@
 #include "Render/Shadow/ShadowSettings.h"
 #include "Render/Stage/IRenderStage.h"
 
-#include "DeferredRender.Unified_GBufferPass_PBR.slang.h"
-#include "DeferredRender.Unified_GBufferPass_Phong.slang.h"
-#include "DeferredRender.Unified_GBufferPass_Unlit.slang.h"
+#include "DeferredRender.GBufferPass_PBR.slang.h"
+#include "DeferredRender.GBufferPass_Phong.slang.h"
+#include "DeferredRender.GBufferPass_Unlit.slang.h"
 
 #include <algorithm>
 
@@ -30,17 +30,17 @@ struct IRenderTarget;
 struct GBufferStage : public IRenderStage
 {
     // ── Slang-generated type aliases ─────────────────────────────
-    using PBRPushConstant = slang_types::DeferredRender::Unified_GBufferPass_PBR::PushConstants;
-    using PBRFrameData    = slang_types::DeferredRender::Unified_GBufferPass_PBR::FrameData;
-    using PBRParamUBO     = slang_types::DeferredRender::Unified_GBufferPass_PBR::PBRParamsData;
+    using PBRPushConstant = slang_types::DeferredRender::GBufferPass_PBR::PushConstants;
+    using PBRFrameData    = slang_types::DeferredRender::GBufferPass_PBR::FrameData;
+    using PBRParamUBO     = slang_types::DeferredRender::GBufferPass_PBR::PBRParamsData;
 
-    using PhongPushConstant = slang_types::DeferredRender::Unified_GBufferPass_Phong::PushConstants;
-    using PhongFrameData    = slang_types::DeferredRender::Unified_GBufferPass_Phong::FrameData;
-    using PhongParamUBO     = slang_types::DeferredRender::Unified_GBufferPass_Phong::ParamsData;
+    using PhongPushConstant = slang_types::DeferredRender::GBufferPass_Phong::PushConstants;
+    using PhongFrameData    = slang_types::DeferredRender::GBufferPass_Phong::FrameData;
+    using PhongParamUBO     = slang_types::DeferredRender::GBufferPass_Phong::ParamsData;
 
-    using UnlitPushConstant = slang_types::DeferredRender::Unified_GBufferPass_Unlit::PushConstants;
-    using UnlitFrameData    = slang_types::DeferredRender::Unified_GBufferPass_Unlit::FrameData;
-    using UnlitParamUBO     = slang_types::DeferredRender::Unified_GBufferPass_Unlit::ParamsData;
+    using UnlitPushConstant = slang_types::DeferredRender::GBufferPass_Unlit::PushConstants;
+    using UnlitFrameData    = slang_types::DeferredRender::GBufferPass_Unlit::FrameData;
+    using UnlitParamUBO     = slang_types::DeferredRender::GBufferPass_Unlit::ParamsData;
 
     // ── GBuffer format constants ─────────────────────────────────
     static constexpr EFormat::T LINEAR_FORMAT        = EFormat::R8G8B8A8_UNORM;
