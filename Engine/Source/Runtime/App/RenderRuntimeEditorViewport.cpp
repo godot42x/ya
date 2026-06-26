@@ -253,6 +253,13 @@ void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
             .categoryIndex = CATEGORY_GBUFFER,
         },
         {
+            .label         = "ShadingModel",
+            .defaultView   = gbufferFb->getColorTexture(3)->getImageView(),
+            .ownedView     = nullptr,
+            .image         = gbufferFb->getColorTexture(3)->getImageShared(),
+            .categoryIndex = CATEGORY_GBUFFER,
+        },
+        {
             .label         = "Depth",
             .defaultView   = gbufferFb->getDepthTexture()->getImageView(),
             .ownedView     = nullptr,
@@ -262,6 +269,16 @@ void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
             .tint          = {1, 0, 0, 1},
         },
     };
+
+    if (auto* ssaoTexture = _deferredPipeline->getSSAOTexture(); ssaoTexture && ssaoTexture->getImageView()) {
+        ctx.debugSpec.slots.push_back({
+            .label         = "SSAO",
+            .defaultView   = ssaoTexture->getImageView(),
+            .ownedView     = nullptr,
+            .image         = ssaoTexture->getImageShared(),
+            .categoryIndex = CATEGORY_GBUFFER,
+        });
+    }
 
     ctx.debugSpec.slots.push_back({
         .label         = "ViewPortColor0",

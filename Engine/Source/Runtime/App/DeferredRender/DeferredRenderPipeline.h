@@ -10,6 +10,7 @@
 #include "Render/RenderFrameData.h"
 #include "Runtime/App/Common/PostProcessingStage.h"
 #include "Runtime/App/Common/Shadow/ShadowStage.h"
+#include "SSAOStage.h"
 #include "ViewportOverlayStage.h"
 
 
@@ -69,6 +70,7 @@ struct DeferredRenderPipeline
     stdptr<IRenderTarget> _gBufferRT;
     stdptr<IRenderTarget> _viewportRT;
     stdptr<IRenderTarget> _shadowDepthRT;
+    stdptr<Texture>       _ssaoTexture;
 
     static constexpr EFormat::T LINEAR_FORMAT            = EFormat::R8G8B8A8_UNORM;
     static constexpr EFormat::T SIGNED_LINEAR_FORMAT     = EFormat::R16G16B16A16_SFLOAT;
@@ -81,6 +83,7 @@ struct DeferredRenderPipeline
     // ── Render stages ─────────────────────────────────────────────────
     stdptr<ShadowStage>          _shadowStage;
     stdptr<GBufferStage>         _gBufferStage;
+    stdptr<SSAOStage>            _ssaoStage;
     stdptr<LightStage>           _lightStage;
     stdptr<ViewportOverlayStage> _overlayStage;
     PostProcessingStage          _postProcessStage;
@@ -94,6 +97,7 @@ struct DeferredRenderPipeline
     bool     _bViewportPassOpen    = false;
     bool     _bReverseViewportY    = true;
     bool     _bEnableShadowMapping = true;
+    bool     _bEnableSSAO          = true;
 
     bool     _bEnablePointLightShadow         = true;
     uint32_t _maxPointLightShadowCount        = 1;
@@ -135,6 +139,7 @@ struct DeferredRenderPipeline
 
     IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
+    Texture*    getSSAOTexture() const { return _ssaoTexture.get(); }
 
     // Access GBuffer RT for debug views
     IRenderTarget* getGBufferRT() const { return _gBufferRT.get(); }
@@ -161,6 +166,7 @@ struct DeferredRenderPipeline
     void               executeShadowPass(RenderStageContext& stageCtx);
     void               handoffShadowDepthForSampling(ICommandBuffer* cmdBuf);
     void               executeGBufferPass(const TickDesc& desc, const RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH);
+    void               executeSSAOPass(const RenderStageContext& stageCtx);
     void               executeDepthCopyPass(ICommandBuffer* cmdBuf);
     void               executeViewportPass(const TickDesc& desc, RenderStageContext& stageCtx);
     void               saveShadowSettingsToConfig(bool bEnableShadowMapping,

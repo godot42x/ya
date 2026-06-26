@@ -288,7 +288,7 @@ vec3 shadePBR(in vec3 worldPos,in vec3 N, in vec3 V, in vec3 albedo, float metal
 }
 
 // MARK: Phong
-vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity, float shininess , float reflectRatio)
+vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity, float shininess , float reflectRatio, float ao)
 {
     const float ambientFactor = 0.03;
     vec3 light = 0;
@@ -299,7 +299,7 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
         vec3 I = normalize(V);
         vec3 reflectDir = reflect(I, N);
         R = uTexSkyBoxMap.Sample(reflectDir).xyz;
-        R *= specIntensity;
+        R *= specIntensity * ao;
     }
 
     // Directional light — Blinn-Phong
@@ -311,7 +311,7 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
         float shadow    = calculateDirectionalShadow(worldPos, N, lightDir);
 
         vec3 radiance = uLight.dirLight.color * uLight.dirLight.intensity;
-        vec3 ambient  = albedo * radiance * ambientFactor;
+        vec3 ambient  = albedo * radiance * ambientFactor * ao;
         vec3 diffuse  = diff * albedo * radiance;
         vec3 specular = specIntensity * spec * radiance;
         light += ambient + (1.0 - shadow) * (diffuse + specular);
@@ -328,7 +328,7 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
         float dist = length(uLight.pointLights[i].pos - worldPos);
         vec3 radiance = uLight.pointLights[i].color * uLight.pointLights[i].intensity / (dist * dist);
 
-        vec3 ambient  = albedo * radiance * ambientFactor;
+        vec3 ambient  = albedo * radiance * ambientFactor * ao;
         vec3 diffuse  = diff * albedo * radiance;
         vec3 specular = specIntensity * spec * radiance;
         light += ambient + (1.0 - shadow) * (diffuse + specular);
@@ -348,6 +348,7 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
 [[vk::binding(1,1)]] Sampler2D uTexRT1; // RT1: (normal.xyz, ao/reflectRatio)
 [[vk::binding(2,1)]] Sampler2D uTexRT2; // RT2: (albedo.rgb, metallic/specIntensity)
 [[vk::binding(3,1)]] Sampler2D uTexRT3; // RT3: shadingModelID
+[[vk::binding(4,1)]] Sampler2D uTexSSAO; // SSAO factor in R
 
 [[vk::binding(0,2)]] SamplerCube uTexSkyBoxMap; // skybox -> preFilteredEnvironmentMap
 [[vk::binding(1,2)]] SamplerCube uTexPBRIrradianceCubemap; 
@@ -386,7 +387,7 @@ void fragMain(in VertexOutput IN, out FragmentOutput OUT)
 
         float metallic  = rt2.a;
         float roughness = rt0.a;
-        float ao        = rt1.a;
+        float ao        = rt1.a * uTexSSAO.Sample(IN.uv).r;
         color = shadePBR(worldPos, N, V, albedo, metallic, roughness, ao);
         break;
     }
@@ -400,7 +401,8 @@ void fragMain(in VertexOutput IN, out FragmentOutput OUT)
         float shininess     = rt0.a;
         float specIntensity = rt2.a;
         float reflectRatio  = rt1.a;
-        color = shadePhong(worldPos, N, V, albedo, specIntensity, shininess, reflectRatio);
+        float ao            = uTexSSAO.Sample(IN.uv).r;
+        color = shadePhong(worldPos, N, V, albedo, specIntensity, shininess, reflectRatio, ao);
         break;
     }
     case 3: // Unlit — direct albedo output, no lighting

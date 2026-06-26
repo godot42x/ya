@@ -10,6 +10,7 @@
 #include "Runtime/App/RenderRuntime.h"
 
 #include <string>
+#include <vector>
 
 
 namespace ya
@@ -83,6 +84,16 @@ void LightStage::setup(GBufferStage* gBufferStage, IRenderTarget* gBufferRT)
     }
 }
 
+void LightStage::setSSAOTexture(Texture* ssaoTexture)
+{
+    if (_ssaoTexture == ssaoTexture) {
+        return;
+    }
+
+    _ssaoTexture = ssaoTexture;
+    invalidateGBufferDescriptors();
+}
+
 void LightStage::setShadowResources(IImageView*                                      directionalDepthIV,
                                     const std::array<IImageView*, MAX_POINT_LIGHTS>& pointCubeDepthIVs,
                                     Sampler*                                         shadowSampler)
@@ -136,6 +147,7 @@ void LightStage::refreshPipelineFormats(const IRenderTarget* viewportRT)
 void LightStage::invalidateGBufferDescriptors()
 {
     _lastGBufferFrameBuffer          = nullptr;
+    _lastSSAOImageViewHandle         = nullptr;
     _bGBufferDescriptorsInitialized  = false;
     _lastGBufferDescriptorWriteCount = 0;
 }
@@ -192,6 +204,7 @@ void LightStage::init(IRender* render)
                 {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
                 {.binding = 2, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
                 {.binding = 3, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
+                {.binding = 4, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
             },
         }});
 
@@ -259,10 +272,10 @@ void LightStage::init(IRender* render)
                      .poolSizes = {
                          {
                              .type            = EPipelineDescriptorType::CombinedImageSampler,
-                             .descriptorCount = 4 + 1 + MAX_POINT_LIGHTS,
-                         },
-                     },
-                 });
+                             .descriptorCount = 5 + 1 + MAX_POINT_LIGHTS,
+                        },
+                    },
+                });
     _gBufferTextureDS = _dsp->allocateDescriptorSets(_gBufferTextureDSL);
     _shadowDS         = _dsp->allocateDescriptorSets(_shadowDSL);
 }
@@ -281,10 +294,12 @@ void LightStage::destroy()
     _render                   = nullptr;
     _gBufferStage             = nullptr;
     _gBufferRT                = nullptr;
+    _ssaoTexture              = nullptr;
     _shadowDirectionalDepthIV = nullptr;
     _shadowPointCubeIVs.fill(nullptr);
     _shadowSampler                   = nullptr;
     _lastGBufferFrameBuffer          = nullptr;
+    _lastSSAOImageViewHandle         = nullptr;
     _lastShadowDirectionalImageViewHandle = nullptr;
     _lastShadowPointCubeImageViewHandles.fill(nullptr);
     _bGBufferDescriptorsInitialized  = false;
@@ -310,16 +325,22 @@ void LightStage::prepare(const RenderStageContext& ctx)
         return;
     }
 
-    if (!_bGBufferDescriptorsInitialized || _lastGBufferFrameBuffer != fb) {
+    const auto ssaoImageViewHandle = _ssaoTexture && _ssaoTexture->getImageView() ? _ssaoTexture->getImageView()->getHandle() : ImageViewHandle{};
+    if (!_bGBufferDescriptorsInitialized || _lastGBufferFrameBuffer != fb || _lastSSAOImageViewHandle != ssaoImageViewHandle) {
+        auto ssaoBinding = _ssaoTexture
+            ? TextureBinding{.texture = ya::Ptr<Texture>(_ssaoTexture), .sampler = sampler}
+            : TextureBinding{.texture = TextureLibrary::get().getWhiteTexture(), .sampler = sampler};
         _render->getDescriptorHelper()->updateDescriptorSets({
             IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 0, fb->getColorTexture(0)->getImageView(), sampler.get()),
             IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 1, fb->getColorTexture(1)->getImageView(), sampler.get()),
             IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 2, fb->getColorTexture(2)->getImageView(), sampler.get()),
             IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 3, fb->getColorTexture(3)->getImageView(), sampler.get()),
+            IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 4, ssaoBinding),
         });
         _lastGBufferFrameBuffer          = fb;
+        _lastSSAOImageViewHandle         = ssaoImageViewHandle;
         _bGBufferDescriptorsInitialized  = true;
-        _lastGBufferDescriptorWriteCount = 4;
+        _lastGBufferDescriptorWriteCount = 5;
     }
     else {
         _lastGBufferDescriptorWriteCount = 0;

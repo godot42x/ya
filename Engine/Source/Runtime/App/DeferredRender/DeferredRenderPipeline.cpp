@@ -33,6 +33,7 @@ constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_BIAS                = 
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_NORMAL_BIAS         = "render.deferred.shadow.normalBias";
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_DIST    = "render.deferred.shadow.directionalDistance";
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_CASCADE = "render.deferred.shadow.directionalCascades";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SSAO                = "render.deferred.ssao.enabled";
 
 void drawPerfLeaf(const char* label, float value, float parentValue = 0.0f)
 {
@@ -337,6 +338,9 @@ void DeferredRenderPipeline::loadPersistentSettings()
     _bEnableShadowMapping        = cfgManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
                                                    DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING,
                                                    _bEnableShadowMapping);
+    _bEnableSSAO                 = cfgManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                                      DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SSAO,
+                                      _bEnableSSAO);
     _bEnablePointLightShadow     = cfgManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
                                                       DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW,
                                                       _bEnablePointLightShadow);
@@ -564,6 +568,15 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     };
 
     initRenderTargets(extent);
+    _ssaoTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
+        .label   = "DeferredSSAO",
+        .width   = extent.width,
+        .height  = extent.height,
+        .format  = SSAOStage::AO_FORMAT,
+        .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        .samples = ESampleCount::Sample_1,
+        .isDepth = false,
+    });
     if (_bEnableShadowMapping) {
         initShadowResources();
     }
@@ -587,8 +600,14 @@ void DeferredRenderPipeline::initStages()
     _gBufferStage = ya::makeShared<GBufferStage>();
     _gBufferStage->init(_render);
 
+    _ssaoStage = ya::makeShared<SSAOStage>();
+    _ssaoStage->setup(_gBufferRT.get(), _ssaoTexture.get());
+    _ssaoStage->setSettings(_ssaoStage->getRadius(), _ssaoStage->getBias(), _ssaoStage->getPower(), _ssaoStage->getIntensity(), _bReverseViewportY);
+    _ssaoStage->init(_render);
+
     _lightStage = ya::makeShared<LightStage>();
     _lightStage->setup(_gBufferStage.get(), _gBufferRT.get());
+    _lightStage->setSSAOTexture(_ssaoTexture.get());
     _lightStage->init(_render);
     syncShadowSettings();
 
@@ -614,11 +633,16 @@ void DeferredRenderPipeline::shutdown()
         _lightStage->destroy();
         _lightStage.reset();
     }
+    if (_ssaoStage) {
+        _ssaoStage->destroy();
+        _ssaoStage.reset();
+    }
     if (_gBufferStage) {
         _gBufferStage->destroy();
         _gBufferStage.reset();
     }
 
+    _ssaoTexture.reset();
     _viewportRT.reset();
     _gBufferRT.reset();
     destroyShadowResources();
@@ -649,6 +673,7 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
     syncFrameSettings(desc);
     executeShadowPass(stageCtx);
     executeGBufferPass(desc, stageCtx, vpW, vpH);
+    executeSSAOPass(stageCtx);
     executeDepthCopyPass(desc.cmdBuf);
 
     beginViewportRendering(desc);
@@ -710,11 +735,34 @@ void DeferredRenderPipeline::refreshDirtyResources()
         _cachedAlbedoSpecImageViewHandle = nullptr;
         _debugAlbedoRGBView.reset();
         _debugSpecularAlphaView.reset();
+        if (_ssaoStage) {
+            _ssaoStage->invalidateInputDescriptors();
+        }
         if (_lightStage) {
             _lightStage->invalidateGBufferDescriptors();
         }
         if (bGBufferPipelineDirty && _gBufferStage) {
             _gBufferStage->refreshPipelineFormats(_gBufferRT.get());
+        }
+    }
+
+    if (_ssaoTexture && _gBufferRT && _ssaoTexture->getExtent() != _gBufferRT->getExtent()) {
+        _render->waitIdle();
+        _ssaoTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
+            .label   = "DeferredSSAO",
+            .width   = _gBufferRT->getExtent().width,
+            .height  = _gBufferRT->getExtent().height,
+            .format  = SSAOStage::AO_FORMAT,
+            .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .samples = ESampleCount::Sample_1,
+            .isDepth = false,
+        });
+        if (_ssaoStage) {
+            _ssaoStage->setup(_gBufferRT.get(), _ssaoTexture.get());
+            _ssaoStage->refreshPipelineFormat();
+        }
+        if (_lightStage) {
+            _lightStage->setSSAOTexture(_ssaoTexture.get());
         }
     }
 
@@ -736,9 +784,31 @@ void DeferredRenderPipeline::refreshDirtyResources()
     }
 }
 
+void DeferredRenderPipeline::executeSSAOPass(const RenderStageContext& stageCtx)
+{
+    if (!_bEnableSSAO || !_ssaoStage) {
+        return;
+    }
+
+    _ssaoStage->prepare(stageCtx);
+    _ssaoStage->execute(stageCtx);
+}
+
 void DeferredRenderPipeline::syncFrameSettings(const TickDesc& desc)
 {
     (void)desc;
+
+    if (_lightStage) {
+        _lightStage->setSSAOTexture(_bEnableSSAO ? _ssaoTexture.get() : nullptr);
+    }
+
+    if (_ssaoStage) {
+        _ssaoStage->setSettings(_ssaoStage->getRadius(),
+                                _ssaoStage->getBias(),
+                                _ssaoStage->getPower(),
+                                _ssaoStage->getIntensity(),
+                                _bReverseViewportY);
+    }
 
     const auto&    shadowSettings           = App::get()->getShadowSettings();
     const uint32_t shadowedPointLightBudget = shadowSettings.getEffectivePointLightCount();
@@ -989,6 +1059,25 @@ void DeferredRenderPipeline::onViewportResized(Rect2D rect)
 
     if (_gBufferRT) _gBufferRT->setExtent(newExtent);
     if (_viewportRT) _viewportRT->setExtent(newExtent);
+    if (_ssaoTexture && (_ssaoTexture->getExtent().width != newExtent.width || _ssaoTexture->getExtent().height != newExtent.height)) {
+        _render->waitIdle();
+        _ssaoTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
+            .label   = "DeferredSSAO",
+            .width   = newExtent.width,
+            .height  = newExtent.height,
+            .format  = SSAOStage::AO_FORMAT,
+            .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .samples = ESampleCount::Sample_1,
+            .isDepth = false,
+        });
+        if (_ssaoStage) {
+            _ssaoStage->setup(_gBufferRT.get(), _ssaoTexture.get());
+            _ssaoStage->refreshPipelineFormat();
+        }
+        if (_lightStage) {
+            _lightStage->setSSAOTexture(_ssaoTexture.get());
+        }
+    }
 
     _cachedAlbedoSpecImageViewHandle = nullptr;
     _debugAlbedoRGBView.reset();
@@ -1007,6 +1096,10 @@ void DeferredRenderPipeline::renderGUI(bool bRenderTreeNode)
 
     if (ImGui::TreeNode("Settings")) {
         ImGui::Checkbox("GBuffer Reverse Viewport Y", &_bReverseViewportY);
+        if (ImGui::Checkbox("Enable SSAO", &_bEnableSSAO)) {
+            ConfigManager::Editor(DEFERRED_PIPELINE_CONFIG_DOC_NAME)
+                .set(DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SSAO, _bEnableSSAO);
+        }
         bool bEnablePerfStats = YA_PERF_IS_ENABLED();
         if (ImGui::Checkbox("Enable Perf Stats", &bEnablePerfStats)) {
             YA_PERF_SET_ENABLED(bEnablePerfStats);
@@ -1192,6 +1285,7 @@ void DeferredRenderPipeline::renderGUI(bool bRenderTreeNode)
     if (ImGui::TreeNode("Stages")) {
         if (_shadowStage) _shadowStage->renderGUI();
         if (_gBufferStage) _gBufferStage->renderGUI();
+        if (_ssaoStage) _ssaoStage->renderGUI();
         if (_lightStage) _lightStage->renderGUI();
         if (_overlayStage) _overlayStage->renderGUI();
         _postProcessStage.renderGUI();

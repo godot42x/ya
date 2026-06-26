@@ -91,6 +91,7 @@
         "spdlog",
         "SPIR",
         "SPIRV",
+        "SSAO",
         "SSBO",
         "stbi",
         "stdptr",

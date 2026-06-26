@@ -16,6 +16,7 @@ namespace ya
 struct GBufferStage;
 struct Sampler;
 struct IImageView;
+struct Texture;
 
 /// Deferred light pass — fullscreen quad that reads GBuffer textures and computes lighting.
 ///
@@ -32,6 +33,7 @@ struct LightStage : public IRenderStage
     IRender*       _render       = nullptr;
     GBufferStage*  _gBufferStage = nullptr; // borrows frame+light DS
     IRenderTarget* _gBufferRT    = nullptr; // borrows GBuffer textures
+    Texture*       _ssaoTexture  = nullptr;
 
     // Pipeline (shared across flights)
     stdptr<IGraphicsPipeline>    _pipeline;
@@ -53,6 +55,7 @@ struct LightStage : public IRenderStage
     std::array<IImageView*, MAX_POINT_LIGHTS> _shadowPointCubeIVs{};
     Sampler* _shadowSampler = nullptr;
     IFrameBuffer* _lastGBufferFrameBuffer = nullptr;
+    ImageViewHandle _lastSSAOImageViewHandle = nullptr;
     ImageViewHandle _lastShadowDirectionalImageViewHandle = nullptr;
     std::array<ImageViewHandle, MAX_POINT_LIGHTS> _lastShadowPointCubeImageViewHandles{};
     bool _bGBufferDescriptorsInitialized = false;
@@ -73,6 +76,7 @@ struct LightStage : public IRenderStage
     /// @param gBufferStage  Provides frame+light DSL and per-flight DS
     /// @param gBufferRT     Provides GBuffer color textures for sampling
     void setup(GBufferStage* gBufferStage, IRenderTarget* gBufferRT);
+    void setSSAOTexture(Texture* ssaoTexture);
     void setShadowResources(IImageView* directionalDepthIV,
                             const std::array<IImageView*, MAX_POINT_LIGHTS>& pointCubeDepthIVs,
                             Sampler* shadowSampler);
