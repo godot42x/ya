@@ -38,6 +38,8 @@ struct PostProcessingStage
     void     shutdown();
     void     beginFrame();
     void     renderGUI();
+    void     renderSettingsGUI();
+    void     renderTechnicalGUI();
     Texture* execute(ICommandBuffer* cmdBuf,
                      Texture*        inputTexture,
                      glm::vec2       viewportExtent,

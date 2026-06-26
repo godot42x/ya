@@ -85,7 +85,14 @@ struct ForwardRenderPipeline
     void init(const InitDesc& desc);
     void tick(const TickDesc& desc);
     void shutdown();
+
     void renderGUI(bool bRenderTreeNode);
+    void renderSettingsGUI();
+    void renderGeneralSettingsGUI();
+    void renderShadowSettingsGUI();
+    void renderPostProcessSettingsGUI();
+    void renderTechnicalGUI();
+    void renderStageInternalsGUI();
 
     void endViewportPass(ICommandBuffer* cmdBuf);
     bool hasOpenViewportPass() const { return _bViewportPassOpen; }

@@ -60,6 +60,8 @@ struct SSAOStage : public IRenderStage
     void prepare(const RenderStageContext& ctx) override;
     void execute(const RenderStageContext& ctx) override;
     void renderGUI() override;
+    void renderSettingsGUI() override;
+    void renderTechnicalGUI() override;
 
     [[nodiscard]] Texture* getOutputTexture() const { return _targetTexture; }
     [[nodiscard]] float getRadius() const { return _radius; }

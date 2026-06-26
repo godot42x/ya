@@ -369,42 +369,82 @@ void ForwardRenderPipeline::shutdown()
     _deleter.clear();
 }
 
+void ForwardRenderPipeline::renderSettingsGUI()
+{
+    renderGeneralSettingsGUI();
+
+    if (ImGui::TreeNode("Shadows")) {
+        renderShadowSettingsGUI();
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Post Process")) {
+        renderPostProcessSettingsGUI();
+        ImGui::TreePop();
+    }
+}
+
+void ForwardRenderPipeline::renderGeneralSettingsGUI()
+{
+}
+
+void ForwardRenderPipeline::renderShadowSettingsGUI()
+{
+    auto& shadowSettings = App::get()->getShadowSettings();
+    bool  bEnabled       = shadowSettings.isEnabled();
+    if (ImGui::Checkbox("Shadow Mapping", &bEnabled)) {
+        if (bEnabled) {
+            if (shadowSettings.quality == EShadowQuality::Off) {
+                shadowSettings.applyQualityPreset(EShadowQuality::Medium);
+            }
+        }
+        else {
+            shadowSettings.quality = EShadowQuality::Off;
+        }
+        bShadowMapping = bEnabled;
+        if (_viewportStage) {
+            _viewportStage->setShadowMappingEnabled(bEnabled);
+        }
+    }
+
+    if (shadowSettings.isEnabled()) {
+        ImGui::Checkbox("Point Light Indirect Draw", &shadowSettings.pointLightUseIndirect);
+        ImGui::Checkbox("Point Light Indirect Cull", &shadowSettings.pointLightIndirectCullEnabled);
+    }
+}
+
+void ForwardRenderPipeline::renderPostProcessSettingsGUI()
+{
+    _postProcessStage.renderSettingsGUI();
+}
+
+void ForwardRenderPipeline::renderTechnicalGUI()
+{
+    renderStageInternalsGUI();
+}
+
+void ForwardRenderPipeline::renderStageInternalsGUI()
+{
+    if (_shadowStage) {
+        _shadowStage->renderGUI();
+    }
+    if (_viewportStage) {
+        _viewportStage->renderGUI();
+    }
+    if (ImGui::TreeNode("Post Process")) {
+        _postProcessStage.renderTechnicalGUI();
+        ImGui::TreePop();
+    }
+}
+
 void ForwardRenderPipeline::renderGUI(bool bRenderTreeNode)
 {
     if (bRenderTreeNode && !ImGui::TreeNode("Forward Render Pipeline")) return;
 
-    if (ImGui::TreeNode("Settings")) {
-        auto& shadowSettings = App::get()->getShadowSettings();
-        bool  bEnabled       = shadowSettings.isEnabled();
-        if (ImGui::Checkbox("Shadow Mapping", &bEnabled)) {
-            if (bEnabled) {
-                if (shadowSettings.quality == EShadowQuality::Off) {
-                    shadowSettings.applyQualityPreset(EShadowQuality::Medium);
-                }
-            }
-            else {
-                shadowSettings.quality = EShadowQuality::Off;
-            }
-            bShadowMapping = bEnabled;
-            if (_viewportStage) {
-                _viewportStage->setShadowMappingEnabled(bEnabled);
-            }
-        }
-        if (shadowSettings.isEnabled()) {
-            ImGui::Checkbox("Point Light Indirect Draw", &shadowSettings.pointLightUseIndirect);
-            ImGui::Checkbox("Point Light Indirect Cull", &shadowSettings.pointLightIndirectCullEnabled);
-        }
-        ImGui::TreePop();
-    }
+    renderSettingsGUI();
 
-    if (ImGui::TreeNode("Stages")) {
-        if (_shadowStage) {
-            _shadowStage->renderGUI();
-        }
-        if (_viewportStage) {
-            _viewportStage->renderGUI();
-        }
-        _postProcessStage.renderGUI();
+    if (ImGui::TreeNode("Pipeline Internals")) {
+        renderTechnicalGUI();
         ImGui::TreePop();
     }
 

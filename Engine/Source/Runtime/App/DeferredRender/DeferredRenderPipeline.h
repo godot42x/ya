@@ -127,7 +127,16 @@ struct DeferredRenderPipeline
     void init(const InitDesc& desc);
     void tick(const TickDesc& desc);
     void shutdown();
+
     void renderGUI(bool bRenderTreeNode = true);
+    void renderSettingsGUI();
+    void renderGeneralSettingsGUI();
+    void renderLightingSettingsGUI();
+    void renderAOSettingsGUI();
+    void renderPostProcessSettingsGUI();
+    void renderShadowSettingsGUI();
+    void renderTechnicalGUI();
+    void renderStageInternalsGUI();
 
     void beginViewportRendering(const TickDesc& desc);
     void endViewportPass(ICommandBuffer* cmdBuf);

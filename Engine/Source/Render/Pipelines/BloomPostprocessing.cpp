@@ -335,25 +335,22 @@ void BloomPostprocessing::render(const RenderDesc& desc)
     desc.cmdBuf->debugEndLabel();
 }
 
-void BloomPostprocessing::renderGUI(PostProcessingState& state)
+void BloomPostprocessing::renderSettingsGUI(PostProcessingState& state)
 {
     bool bDirty = false;
-    if (ImGui::TreeNode("Bloom")) {
-        bDirty |= ImGui::Checkbox("Enable", &state.bEnableBloom);
-        ImGui::BeginDisabled(!state.bEnableBloom);
-        bDirty |= ImGui::DragFloat("Bloom Threshold", &state.bloomThreshold, 0.01f, 0.0f, 16.0f, "%.2f");
-        bDirty |= ImGui::DragFloat("Bloom Soft Knee", &state.bloomSoftKnee, 0.01f, 0.0f, 2.0f, "%.2f");
-        bDirty |= ImGui::DragFloat("Bloom Extract Intensity", &state.bloomExtractIntensity, 0.05f, 0.0f, 8.0f, "%.2f");
-        int blurPasses = static_cast<int>(state.bloomBlurPasses);
-        if (ImGui::DragInt("Bloom Blur Passes", &blurPasses, 1.0f, 1, 12)) {
-            state.bloomBlurPasses = static_cast<uint32_t>(std::max(1, blurPasses));
-            bDirty                = true;
-        }
-        bDirty |= ImGui::DragFloat("Bloom Strength", &state.bloomStrength, 0.05f, 0.0f, 4.0f, "%.2f");
-        ImGui::Text("Blur Passes (H+V): %u", _lastBlurPassCount);
-        ImGui::EndDisabled();
-        ImGui::TreePop();
+    bDirty |= ImGui::Checkbox("Enable Bloom", &state.bEnableBloom);
+    ImGui::BeginDisabled(!state.bEnableBloom);
+    bDirty |= ImGui::DragFloat("Bloom Threshold", &state.bloomThreshold, 0.01f, 0.0f, 16.0f, "%.2f");
+    bDirty |= ImGui::DragFloat("Bloom Soft Knee", &state.bloomSoftKnee, 0.01f, 0.0f, 2.0f, "%.2f");
+    bDirty |= ImGui::DragFloat("Bloom Extract Intensity", &state.bloomExtractIntensity, 0.05f, 0.0f, 8.0f, "%.2f");
+    int blurPasses = static_cast<int>(state.bloomBlurPasses);
+    if (ImGui::DragInt("Bloom Blur Passes", &blurPasses, 1.0f, 1, 12)) {
+        state.bloomBlurPasses = static_cast<uint32_t>(std::max(1, blurPasses));
+        bDirty                = true;
     }
+    bDirty |= ImGui::DragFloat("Bloom Strength", &state.bloomStrength, 0.05f, 0.0f, 4.0f, "%.2f");
+    ImGui::Text("Blur Passes (H+V): %u", _lastBlurPassCount);
+    ImGui::EndDisabled();
 
     if (bDirty) {
         ConfigManager::Editor(BLOOM_CONFIG_DOC_NAME)
@@ -365,6 +362,10 @@ void BloomPostprocessing::renderGUI(PostProcessingState& state)
             .set(BLOOM_CONFIG_KEY_STRENGTH, state.bloomStrength);
     }
 
+}
+
+void BloomPostprocessing::renderTechnicalGUI()
+{
     if (_extractPipeline && ImGui::TreeNode("Bloom Pipelines")) {
         if (ImGui::TreeNode("Extract")) {
             _extractPipeline->renderGUI();

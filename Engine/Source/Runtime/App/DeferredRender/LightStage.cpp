@@ -413,29 +413,24 @@ void LightStage::execute(const RenderStageContext& ctx)
     cmdBuf->debugEndLabel();
 }
 
-void LightStage::renderGUI()
+void LightStage::renderSettingsGUI()
 {
-    if (!ImGui::TreeNode("LightStage")) {
-        return;
+    bool bEnablePBRDiffuseIBL  = _bEnablePBRDiffuseIBL;
+    bool bEnablePBRSpecularIBL = _bEnablePBRSpecularIBL;
+    bool bDirty                = false;
+    bDirty |= ImGui::Checkbox("Enable PBR Diffuse IBL", &bEnablePBRDiffuseIBL);
+    bDirty |= ImGui::Checkbox("Enable PBR Specular IBL", &bEnablePBRSpecularIBL);
+    if (bDirty) {
+        setIBLSettings(bEnablePBRDiffuseIBL, bEnablePBRSpecularIBL);
+        ConfigManager::Editor(LIGHT_STAGE_CONFIG_DOC_NAME)
+            .set(LIGHT_STAGE_CONFIG_KEY_PBR_DIFFUSE_IBL, _bEnablePBRDiffuseIBL)
+            .set(LIGHT_STAGE_CONFIG_KEY_PBR_SPECULAR_IBL, _bEnablePBRSpecularIBL);
     }
+}
 
-    if (ImGui::TreeNode("Settings"))
-    {
-        bool bEnablePBRDiffuseIBL  = _bEnablePBRDiffuseIBL;
-        bool bEnablePBRSpecularIBL = _bEnablePBRSpecularIBL;
-        bool bDirty                = false;
-        bDirty |= ImGui::Checkbox("Enable PBR Diffuse IBL", &bEnablePBRDiffuseIBL);
-        bDirty |= ImGui::Checkbox("Enable PBR Specular IBL", &bEnablePBRSpecularIBL);
-        if (bDirty) {
-            setIBLSettings(bEnablePBRDiffuseIBL, bEnablePBRSpecularIBL);
-            ConfigManager::Editor(LIGHT_STAGE_CONFIG_DOC_NAME)
-                .set(LIGHT_STAGE_CONFIG_KEY_PBR_DIFFUSE_IBL, _bEnablePBRDiffuseIBL)
-                .set(LIGHT_STAGE_CONFIG_KEY_PBR_SPECULAR_IBL, _bEnablePBRSpecularIBL);
-        }
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("Performance"))
+void LightStage::renderTechnicalGUI()
+{
+    if (ImGui::TreeNode("Light Performance"))
     {
         auto& perf = PerfState::Get();
         ImGui::Text("Light prepare CPU: %.3f ms", perf.getLastValue(perf::sample::deferredLightPrepare(), perf::metric::cpuTimeMs()));
@@ -444,10 +439,21 @@ void LightStage::renderGUI()
         ImGui::TreePop();
     }
 
-    if (ImGui::TreeNode("Pipeline")) {
+    if (ImGui::TreeNode("Light Pipeline")) {
         _pipeline->renderGUI();
         ImGui::TreePop();
     }
+}
+
+void LightStage::renderGUI()
+{
+    if (!ImGui::TreeNode("Lighting")) {
+        return;
+    }
+
+    renderSettingsGUI();
+    renderTechnicalGUI();
+
     ImGui::TreePop();
 }
 

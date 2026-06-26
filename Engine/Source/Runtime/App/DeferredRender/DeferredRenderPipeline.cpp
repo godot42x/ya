@@ -1089,206 +1089,269 @@ void DeferredRenderPipeline::onViewportResized(Rect2D rect)
 // GUI
 // ═══════════════════════════════════════════════════════════════════════
 
-void DeferredRenderPipeline::renderGUI(bool bRenderTreeNode)
+void DeferredRenderPipeline::renderSettingsGUI()
 {
+    renderGeneralSettingsGUI();
 
-    if (bRenderTreeNode && !ImGui::TreeNode("Deferred Pipeline")) return;
-
-    if (ImGui::TreeNode("Settings")) {
-        ImGui::Checkbox("GBuffer Reverse Viewport Y", &_bReverseViewportY);
-        if (ImGui::Checkbox("Enable SSAO", &_bEnableSSAO)) {
-            ConfigManager::Editor(DEFERRED_PIPELINE_CONFIG_DOC_NAME)
-                .set(DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SSAO, _bEnableSSAO);
-        }
-        bool bEnablePerfStats = YA_PERF_IS_ENABLED();
-        if (ImGui::Checkbox("Enable Perf Stats", &bEnablePerfStats)) {
-            YA_PERF_SET_ENABLED(bEnablePerfStats);
-        }
-        ImGui::TextUnformatted("GBuffer ID + switch/case Light Pass");
-
-        if (ImGui::TreeNode("Shadow")) {
-            auto& shadowSettings    = App::get()->getShadowSettings();
-            bool  bShadowSettingsDirty = false;
-
-            bool bShadowEnabled = _bEnableShadowMapping;
-            if (ImGui::Checkbox("Enable Shadow Mapping", &bShadowEnabled)) {
-                queueShadowSettingsChange(bShadowEnabled,
-                                          shadowSettings.pointLightEnabled,
-                                          shadowSettings.maxPointLightShadows);
-            }
-
-            if (_bEnableShadowMapping && _shadowStage) {
-                static const char* qualityNames[] = {"Low", "Medium", "High", "Ultra"};
-                int                qualityIdx     = std::max(0, static_cast<int>(shadowSettings.quality) - 1);
-                if (ImGui::Combo("Quality Preset", &qualityIdx, qualityNames, IM_ARRAYSIZE(qualityNames))) {
-                    auto newQuality = static_cast<EShadowQuality::T>(qualityIdx + 1);
-                    shadowSettings.applyQualityPreset(newQuality);
-                    bShadowSettingsDirty = true;
-                }
-
-                if (ImGui::Checkbox("Directional Shadow", &shadowSettings.directionalEnabled)) {
-                    bShadowSettingsDirty = true;
-                }
-                if (ImGui::Checkbox("Point Light Shadow", &shadowSettings.pointLightEnabled)) {
-                    bShadowSettingsDirty = true;
-                }
-                if (ImGui::Checkbox("Point Light Indirect Draw", &shadowSettings.pointLightUseIndirect)) {
-                    bShadowSettingsDirty = true;
-                }
-                if (ImGui::Checkbox("Point Light Indirect Cull", &shadowSettings.pointLightIndirectCullEnabled)) {
-                    bShadowSettingsDirty = true;
-                }
-                int maxPL = static_cast<int>(shadowSettings.maxPointLightShadows);
-                if (ImGui::SliderInt("Max Point Shadows", &maxPL, 0, MAX_POINT_LIGHTS)) {
-                    shadowSettings.maxPointLightShadows = static_cast<uint32_t>(maxPL);
-                    bShadowSettingsDirty = true;
-                }
-
-                int shadowResolution = static_cast<int>(shadowSettings.resolution);
-                if (ImGui::DragInt("Shadow Resolution", &shadowResolution, 16.0f, 128, 8192, "%d")) {
-                    shadowSettings.resolution = static_cast<uint32_t>(std::clamp(shadowResolution, 128, 8192));
-                    bShadowSettingsDirty = true;
-                }
-
-                if (ImGui::DragFloat("Depth Bias", &shadowSettings.bias, 0.0001f, 0.0f, 0.1f, "%.5f")) {
-                    bShadowSettingsDirty = true;
-                }
-                if (ImGui::DragFloat("Normal Bias", &shadowSettings.normalBias, 0.0001f, 0.0f, 0.1f, "%.5f")) {
-                    bShadowSettingsDirty = true;
-                }
-                if (ImGui::DragFloat("Directional Distance", &shadowSettings.directionalDistance, 0.5f, 1.0f, 500.0f, "%.1f")) {
-                    bShadowSettingsDirty = true;
-                }
-                int directionalCascades = static_cast<int>(shadowSettings.directionalCascades);
-                if (ImGui::SliderInt("Directional Cascades", &directionalCascades, 0, 4)) {
-                    shadowSettings.directionalCascades = static_cast<uint32_t>(directionalCascades);
-                    bShadowSettingsDirty = true;
-                }
-
-                static const char* filterNames[] = {"Hard", "PCF Low", "PCF High"};
-                int                currentFilter = static_cast<int>(shadowSettings.filter);
-                if (ImGui::Combo("Shadow Filter", &currentFilter, filterNames, IM_ARRAYSIZE(filterNames))) {
-                    shadowSettings.filter = static_cast<EShadowFilter::T>(currentFilter);
-                    bShadowSettingsDirty = true;
-                }
-
-                if (bShadowSettingsDirty) {
-                    _bEnablePointLightShadow         = shadowSettings.pointLightEnabled;
-                    _maxPointLightShadowCount        = shadowSettings.maxPointLightShadows;
-                    _pendingEnablePointLightShadow   = _bEnablePointLightShadow;
-                    _pendingMaxPointLightShadowCount = _maxPointLightShadowCount;
-                    saveShadowSettingsToConfig(_bEnableShadowMapping,
-                                               shadowSettings.pointLightEnabled,
-                                               shadowSettings.maxPointLightShadows,
-                                               shadowSettings);
-                }
-            }
-            ImGui::TreePop();
-        }
+    if (ImGui::TreeNode("Lighting")) {
+        renderLightingSettingsGUI();
         ImGui::TreePop();
     }
 
-    if (YA_PERF_IS_ENABLED()) {
-        if (ImGui::TreeNode("Perf")) {
-            auto& perf = PerfState::Get();
-
-            static constexpr size_t WINDOW_SIZES[]       = {1, 10, 30, 60};
-            static constexpr const char* WINDOW_LABELS[] = {"Last", "10 frames", "30 frames", "60 frames"};
-            int currentWindowIndex = 0;
-            for (int i = 0; i < IM_ARRAYSIZE(WINDOW_SIZES); ++i) {
-                if (perf.getAverageWindowSize() == WINDOW_SIZES[i]) {
-                    currentWindowIndex = i;
-                    break;
-                }
-            }
-            if (ImGui::Combo("Average", &currentWindowIndex, WINDOW_LABELS, IM_ARRAYSIZE(WINDOW_LABELS))) {
-                perf.setAverageWindowSize(WINDOW_SIZES[currentWindowIndex]);
-            }
-
-            auto metric = [&perf](FName sampleKey, FName metricKey) {
-                return perf.getDisplayValue(sampleKey, metricKey);
-            };
-            auto cpu = [&metric](FName sampleKey) {
-                return metric(sampleKey, perf::metric::cpuTimeMs());
-            };
-
-            const float frameCpuMs      = cpu(perf::sample::renderFrame());
-            const float frameGpuMs      = metric(perf::sample::renderFrame(), perf::metric::gpuTimeMs());
-            const float logicMs         = cpu(perf::sample::frameLogic());
-            const float renderMs        = cpu(perf::sample::frameRender());
-            const float automationMs    = cpu(perf::sample::frameAutomation());
-            const float unaccountedMs   = cpu(perf::sample::frameUnaccounted());
-            const float extractMs       = cpu(perf::sample::renderExtract());
-            const float runtimeMs       = cpu(perf::sample::renderRuntime());
-            const float prepareFrameMs  = cpu(perf::sample::renderPrepareFrame());
-            const float waitIdleMs      = cpu(perf::sample::renderWaitIdle());
-            const float beginMs         = cpu(perf::sample::renderBegin());
-            const float waitFenceMs     = cpu(perf::sample::vulkanWaitFence());
-            const float acquireMs       = cpu(perf::sample::vulkanAcquire());
-            const float worldMs         = cpu(perf::sample::renderWorld());
-            const float deferredTickMs  = cpu(perf::sample::deferredTick());
-            const float shadowMs        = cpu(perf::sample::deferredShadow());
-            const float gbufferMs       = cpu(perf::sample::deferredGBuffer());
-            const float depthCopyMs     = cpu(perf::sample::deferredDepthCopy());
-            const float lightMs         = cpu(perf::sample::deferredLight());
-            const float overlayMs       = cpu(perf::sample::deferredOverlay());
-            const float viewportOverlayMs = cpu(perf::sample::renderViewportOverlay());
-            const float postProcessMs   = cpu(perf::sample::renderPostProcess());
-            const float presentationMs  = cpu(perf::sample::renderPresentation());
-            const float flushCallbacksMs = cpu(perf::sample::renderFlushCallbacks());
-            const float submitMs        = cpu(perf::sample::renderSubmit());
-            const float presentMs       = cpu(perf::sample::vulkanPresent());
-
-            ImGui::Text("CPU frame: %.3f ms", frameCpuMs);
-            ImGui::Text("GPU frame: %.3f ms", frameGpuMs);
-
-            drawPerfNode("Frame Cycle", frameCpuMs, [&]() {
-                drawPerfLeaf("Logic", logicMs, frameCpuMs);
-                drawPerfNode("Render", renderMs, [&]() {
-                    drawPerfLeaf("Extract", extractMs, renderMs);
-                    drawPerfNode("Runtime", runtimeMs, [&]() {
-                        drawPerfNode("PrepareFrame", prepareFrameMs, [&]() {
-                            drawPerfLeaf("WaitIdle", waitIdleMs, prepareFrameMs);
-                            drawPerfNode("Begin", beginMs, [&]() {
-                                drawPerfLeaf("WaitFence", waitFenceMs, beginMs);
-                                drawPerfLeaf("Acquire", acquireMs, beginMs);
-                            });
-                        });
-                        drawPerfNode("World", worldMs, [&]() {
-                            drawPerfNode("Deferred", deferredTickMs, [&]() {
-                                drawPerfLeaf("Shadow", shadowMs, deferredTickMs);
-                                drawPerfLeaf("GBuffer", gbufferMs, deferredTickMs);
-                                drawPerfLeaf("DepthCopy", depthCopyMs, deferredTickMs);
-                                drawPerfLeaf("Light", lightMs, deferredTickMs);
-                                drawPerfLeaf("Overlay", overlayMs, deferredTickMs);
-                            });
-                            drawPerfLeaf("ViewportOverlay", viewportOverlayMs, worldMs);
-                            drawPerfLeaf("PostProcess", postProcessMs, worldMs);
-                        });
-                        drawPerfLeaf("Presentation", presentationMs, runtimeMs);
-                        drawPerfLeaf("FlushCallbacks", flushCallbacksMs, runtimeMs);
-                        drawPerfNode("Submit", submitMs, [&]() {
-                            drawPerfLeaf("Present", presentMs, submitMs);
-                        });
-                    });
-                });
-                drawPerfLeaf("Automation", automationMs, frameCpuMs);
-                drawPerfLeaf("Unaccounted", unaccountedMs, frameCpuMs);
-            });
-
-            ImGui::Text("Draw items: %u", _lastDrawCount);
-            ImGui::Text("Point lights: %u", _lastPointLightCount);
-            ImGui::TreePop();
-        }
+    if (ImGui::TreeNode("Ambient Occlusion")) {
+        renderAOSettingsGUI();
+        ImGui::TreePop();
     }
 
-    if (ImGui::TreeNode("Stages")) {
-        if (_shadowStage) _shadowStage->renderGUI();
-        if (_gBufferStage) _gBufferStage->renderGUI();
-        if (_ssaoStage) _ssaoStage->renderGUI();
-        if (_lightStage) _lightStage->renderGUI();
-        if (_overlayStage) _overlayStage->renderGUI();
-        _postProcessStage.renderGUI();
+    if (ImGui::TreeNode("Post Process")) {
+        renderPostProcessSettingsGUI();
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Shadows")) {
+        renderShadowSettingsGUI();
+        ImGui::TreePop();
+    }
+}
+
+void DeferredRenderPipeline::renderGeneralSettingsGUI()
+{
+    ImGui::Checkbox("GBuffer Reverse Viewport Y", &_bReverseViewportY);
+    bool bEnablePerfStats = YA_PERF_IS_ENABLED();
+    if (ImGui::Checkbox("Enable Perf Stats", &bEnablePerfStats)) {
+        YA_PERF_SET_ENABLED(bEnablePerfStats);
+    }
+    ImGui::TextUnformatted("GBuffer ID + switch/case Light Pass");
+}
+
+void DeferredRenderPipeline::renderLightingSettingsGUI()
+{
+    if (_lightStage) {
+        _lightStage->renderSettingsGUI();
+    }
+}
+
+void DeferredRenderPipeline::renderAOSettingsGUI()
+{
+    if (ImGui::Checkbox("Enable SSAO", &_bEnableSSAO)) {
+        ConfigManager::Editor(DEFERRED_PIPELINE_CONFIG_DOC_NAME)
+            .set(DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SSAO, _bEnableSSAO);
+    }
+
+    if (_bEnableSSAO && _ssaoStage) {
+        _ssaoStage->renderSettingsGUI();
+    }
+}
+
+void DeferredRenderPipeline::renderPostProcessSettingsGUI()
+{
+    _postProcessStage.renderSettingsGUI();
+}
+
+void DeferredRenderPipeline::renderShadowSettingsGUI()
+{
+    auto& shadowSettings    = App::get()->getShadowSettings();
+    bool  bShadowSettingsDirty = false;
+
+    bool bShadowEnabled = _bEnableShadowMapping;
+    if (ImGui::Checkbox("Enable Shadow Mapping", &bShadowEnabled)) {
+        queueShadowSettingsChange(bShadowEnabled,
+                                  shadowSettings.pointLightEnabled,
+                                  shadowSettings.maxPointLightShadows);
+    }
+
+    if (_bEnableShadowMapping && _shadowStage) {
+        static const char* qualityNames[] = {"Low", "Medium", "High", "Ultra"};
+        int                qualityIdx     = std::max(0, static_cast<int>(shadowSettings.quality) - 1);
+        if (ImGui::Combo("Quality Preset", &qualityIdx, qualityNames, IM_ARRAYSIZE(qualityNames))) {
+            auto newQuality = static_cast<EShadowQuality::T>(qualityIdx + 1);
+            shadowSettings.applyQualityPreset(newQuality);
+            bShadowSettingsDirty = true;
+        }
+
+        if (ImGui::Checkbox("Directional Shadow", &shadowSettings.directionalEnabled)) {
+            bShadowSettingsDirty = true;
+        }
+        if (ImGui::Checkbox("Point Light Shadow", &shadowSettings.pointLightEnabled)) {
+            bShadowSettingsDirty = true;
+        }
+        if (ImGui::Checkbox("Point Light Indirect Draw", &shadowSettings.pointLightUseIndirect)) {
+            bShadowSettingsDirty = true;
+        }
+        if (ImGui::Checkbox("Point Light Indirect Cull", &shadowSettings.pointLightIndirectCullEnabled)) {
+            bShadowSettingsDirty = true;
+        }
+        int maxPL = static_cast<int>(shadowSettings.maxPointLightShadows);
+        if (ImGui::SliderInt("Max Point Shadows", &maxPL, 0, MAX_POINT_LIGHTS)) {
+            shadowSettings.maxPointLightShadows = static_cast<uint32_t>(maxPL);
+            bShadowSettingsDirty = true;
+        }
+
+        int shadowResolution = static_cast<int>(shadowSettings.resolution);
+        if (ImGui::DragInt("Shadow Resolution", &shadowResolution, 16.0f, 128, 8192, "%d")) {
+            shadowSettings.resolution = static_cast<uint32_t>(std::clamp(shadowResolution, 128, 8192));
+            bShadowSettingsDirty = true;
+        }
+
+        if (ImGui::DragFloat("Depth Bias", &shadowSettings.bias, 0.0001f, 0.0f, 0.1f, "%.5f")) {
+            bShadowSettingsDirty = true;
+        }
+        if (ImGui::DragFloat("Normal Bias", &shadowSettings.normalBias, 0.0001f, 0.0f, 0.1f, "%.5f")) {
+            bShadowSettingsDirty = true;
+        }
+        if (ImGui::DragFloat("Directional Distance", &shadowSettings.directionalDistance, 0.5f, 1.0f, 500.0f, "%.1f")) {
+            bShadowSettingsDirty = true;
+        }
+        int directionalCascades = static_cast<int>(shadowSettings.directionalCascades);
+        if (ImGui::SliderInt("Directional Cascades", &directionalCascades, 0, 4)) {
+            shadowSettings.directionalCascades = static_cast<uint32_t>(directionalCascades);
+            bShadowSettingsDirty = true;
+        }
+
+        static const char* filterNames[] = {"Hard", "PCF Low", "PCF High"};
+        int                currentFilter = static_cast<int>(shadowSettings.filter);
+        if (ImGui::Combo("Shadow Filter", &currentFilter, filterNames, IM_ARRAYSIZE(filterNames))) {
+            shadowSettings.filter = static_cast<EShadowFilter::T>(currentFilter);
+            bShadowSettingsDirty = true;
+        }
+
+        if (bShadowSettingsDirty) {
+            _bEnablePointLightShadow         = shadowSettings.pointLightEnabled;
+            _maxPointLightShadowCount        = shadowSettings.maxPointLightShadows;
+            _pendingEnablePointLightShadow   = _bEnablePointLightShadow;
+            _pendingMaxPointLightShadowCount = _maxPointLightShadowCount;
+            saveShadowSettingsToConfig(_bEnableShadowMapping,
+                                       shadowSettings.pointLightEnabled,
+                                       shadowSettings.maxPointLightShadows,
+                                       shadowSettings);
+        }
+    }
+}
+
+void DeferredRenderPipeline::renderTechnicalGUI()
+{
+    if (ImGui::TreeNode("Pipeline Timing")) {
+        auto& perf = PerfState::Get();
+
+        static constexpr size_t WINDOW_SIZES[]       = {1, 10, 30, 60};
+        static constexpr const char* WINDOW_LABELS[] = {"Last", "10 frames", "30 frames", "60 frames"};
+        int currentWindowIndex = 0;
+        for (int i = 0; i < IM_ARRAYSIZE(WINDOW_SIZES); ++i) {
+            if (perf.getAverageWindowSize() == WINDOW_SIZES[i]) {
+                currentWindowIndex = i;
+                break;
+            }
+        }
+        if (ImGui::Combo("Average", &currentWindowIndex, WINDOW_LABELS, IM_ARRAYSIZE(WINDOW_LABELS))) {
+            perf.setAverageWindowSize(WINDOW_SIZES[currentWindowIndex]);
+        }
+
+        auto metric = [&perf](FName sampleKey, FName metricKey) {
+            return perf.getDisplayValue(sampleKey, metricKey);
+        };
+        auto cpu = [&metric](FName sampleKey) {
+            return metric(sampleKey, perf::metric::cpuTimeMs());
+        };
+
+        const float frameCpuMs      = cpu(perf::sample::renderFrame());
+        const float frameGpuMs      = metric(perf::sample::renderFrame(), perf::metric::gpuTimeMs());
+        const float logicMs         = cpu(perf::sample::frameLogic());
+        const float renderMs        = cpu(perf::sample::frameRender());
+        const float automationMs    = cpu(perf::sample::frameAutomation());
+        const float unaccountedMs   = cpu(perf::sample::frameUnaccounted());
+        const float extractMs       = cpu(perf::sample::renderExtract());
+        const float runtimeMs       = cpu(perf::sample::renderRuntime());
+        const float prepareFrameMs  = cpu(perf::sample::renderPrepareFrame());
+        const float waitIdleMs      = cpu(perf::sample::renderWaitIdle());
+        const float beginMs         = cpu(perf::sample::renderBegin());
+        const float waitFenceMs     = cpu(perf::sample::vulkanWaitFence());
+        const float acquireMs       = cpu(perf::sample::vulkanAcquire());
+        const float worldMs         = cpu(perf::sample::renderWorld());
+        const float deferredTickMs  = cpu(perf::sample::deferredTick());
+        const float shadowMs        = cpu(perf::sample::deferredShadow());
+        const float gbufferMs       = cpu(perf::sample::deferredGBuffer());
+        const float depthCopyMs     = cpu(perf::sample::deferredDepthCopy());
+        const float lightMs         = cpu(perf::sample::deferredLight());
+        const float overlayMs       = cpu(perf::sample::deferredOverlay());
+        const float viewportOverlayMs = cpu(perf::sample::renderViewportOverlay());
+        const float postProcessMs   = cpu(perf::sample::renderPostProcess());
+        const float presentationMs  = cpu(perf::sample::renderPresentation());
+        const float flushCallbacksMs = cpu(perf::sample::renderFlushCallbacks());
+        const float submitMs        = cpu(perf::sample::renderSubmit());
+        const float presentMs       = cpu(perf::sample::vulkanPresent());
+
+        ImGui::Text("CPU frame: %.3f ms", frameCpuMs);
+        ImGui::Text("GPU frame: %.3f ms", frameGpuMs);
+
+        drawPerfNode("Frame Cycle", frameCpuMs, [&]() {
+            drawPerfLeaf("Logic", logicMs, frameCpuMs);
+            drawPerfNode("Render", renderMs, [&]() {
+                drawPerfLeaf("Extract", extractMs, renderMs);
+                drawPerfNode("Runtime", runtimeMs, [&]() {
+                    drawPerfNode("PrepareFrame", prepareFrameMs, [&]() {
+                        drawPerfLeaf("WaitIdle", waitIdleMs, prepareFrameMs);
+                        drawPerfNode("Begin", beginMs, [&]() {
+                            drawPerfLeaf("WaitFence", waitFenceMs, beginMs);
+                            drawPerfLeaf("Acquire", acquireMs, beginMs);
+                        });
+                    });
+                    drawPerfNode("World", worldMs, [&]() {
+                        drawPerfNode("Deferred", deferredTickMs, [&]() {
+                            drawPerfLeaf("Shadow", shadowMs, deferredTickMs);
+                            drawPerfLeaf("GBuffer", gbufferMs, deferredTickMs);
+                            drawPerfLeaf("DepthCopy", depthCopyMs, deferredTickMs);
+                            drawPerfLeaf("Light", lightMs, deferredTickMs);
+                            drawPerfLeaf("Overlay", overlayMs, deferredTickMs);
+                        });
+                        drawPerfLeaf("ViewportOverlay", viewportOverlayMs, worldMs);
+                        drawPerfLeaf("PostProcess", postProcessMs, worldMs);
+                    });
+                    drawPerfLeaf("Presentation", presentationMs, runtimeMs);
+                    drawPerfLeaf("FlushCallbacks", flushCallbacksMs, runtimeMs);
+                    drawPerfNode("Submit", submitMs, [&]() {
+                        drawPerfLeaf("Present", presentMs, submitMs);
+                    });
+                });
+            });
+            drawPerfLeaf("Automation", automationMs, frameCpuMs);
+            drawPerfLeaf("Unaccounted", unaccountedMs, frameCpuMs);
+        });
+
+        ImGui::Text("Draw items: %u", _lastDrawCount);
+        ImGui::Text("Point lights: %u", _lastPointLightCount);
+        ImGui::TreePop();
+    }
+
+    renderStageInternalsGUI();
+}
+
+void DeferredRenderPipeline::renderStageInternalsGUI()
+{
+    if (_shadowStage) _shadowStage->renderGUI();
+    if (_gBufferStage) _gBufferStage->renderGUI();
+    if (_ssaoStage && ImGui::TreeNode("SSAO")) {
+        _ssaoStage->renderTechnicalGUI();
+        ImGui::TreePop();
+    }
+    if (_lightStage && ImGui::TreeNode("Lighting")) {
+        _lightStage->renderTechnicalGUI();
+        ImGui::TreePop();
+    }
+    if (_overlayStage) _overlayStage->renderGUI();
+    if (ImGui::TreeNode("Post Process")) {
+        _postProcessStage.renderTechnicalGUI();
+        ImGui::TreePop();
+    }
+}
+
+void DeferredRenderPipeline::renderGUI(bool bRenderTreeNode)
+{
+    if (bRenderTreeNode && !ImGui::TreeNode("Deferred Pipeline")) return;
+
+    renderSettingsGUI();
+
+    if (ImGui::TreeNode("Pipeline Internals")) {
+        renderTechnicalGUI();
         ImGui::TreePop();
     }
 

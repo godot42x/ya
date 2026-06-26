@@ -21,6 +21,16 @@ constexpr const char* POSTPROCESS_CONFIG_KEY_BLOOM_SOFT_KNEE         = "render.p
 constexpr const char* POSTPROCESS_CONFIG_KEY_BLOOM_EXTRACT_INTENSITY = "render.postprocess.bloom.extractIntensity";
 constexpr const char* POSTPROCESS_CONFIG_KEY_BLOOM_BLUR_PASSES       = "render.postprocess.bloom.blurPasses";
 constexpr const char* POSTPROCESS_CONFIG_KEY_BLOOM_STRENGTH          = "render.postprocess.bloom.strength";
+constexpr const char* POSTPROCESS_CONFIG_KEY_INVERSION               = "render.postprocess.basic.inversion";
+constexpr const char* POSTPROCESS_CONFIG_KEY_GRAYSCALE               = "render.postprocess.basic.grayscale";
+constexpr const char* POSTPROCESS_CONFIG_KEY_KERNEL                  = "render.postprocess.basic.kernel";
+constexpr const char* POSTPROCESS_CONFIG_KEY_KERNEL_TEXEL_OFFSET     = "render.postprocess.basic.kernelTexelOffset";
+constexpr const char* POSTPROCESS_CONFIG_KEY_TONEMAPPING_ENABLE      = "render.postprocess.basic.tonemapping.enabled";
+constexpr const char* POSTPROCESS_CONFIG_KEY_TONEMAPPING_CURVE       = "render.postprocess.basic.tonemapping.curve";
+constexpr const char* POSTPROCESS_CONFIG_KEY_GAMMA_CORRECTION_ENABLE = "render.postprocess.basic.output.gammaCorrection";
+constexpr const char* POSTPROCESS_CONFIG_KEY_GAMMA                   = "render.postprocess.basic.output.gamma";
+constexpr const char* POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_ENABLE     = "render.postprocess.basic.output.randomGrain";
+constexpr const char* POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_STRENGTH   = "render.postprocess.basic.output.randomGrainStrength";
 
 } // namespace
 
@@ -93,6 +103,16 @@ void PostProcessingStage::init(const InitDesc& desc)
     _state.bloomExtractIntensity = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_BLOOM_EXTRACT_INTENSITY, _state.bloomExtractIntensity);
     _state.bloomBlurPasses     = static_cast<uint32_t>(std::max(1, config.getOr<int>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_BLOOM_BLUR_PASSES, static_cast<int>(_state.bloomBlurPasses))));
     _state.bloomStrength       = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_BLOOM_STRENGTH, _state.bloomStrength);
+    _state.bEnableInversion    = config.getOr<bool>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_INVERSION, _state.bEnableInversion);
+    _state.grayscaleMode       = static_cast<PostProcessingState::EGrayscaleMode>(config.getOr<int>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_GRAYSCALE, static_cast<int>(_state.grayscaleMode)));
+    _state.kernelMode          = static_cast<PostProcessingState::EKernelMode>(config.getOr<int>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_KERNEL, static_cast<int>(_state.kernelMode)));
+    _state.kernelTexelOffset   = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_KERNEL_TEXEL_OFFSET, _state.kernelTexelOffset);
+    _state.bEnableToneMapping  = config.getOr<bool>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_TONEMAPPING_ENABLE, _state.bEnableToneMapping);
+    _state.toneMappingCurve    = static_cast<PostProcessingState::EToneMappingCurve>(config.getOr<int>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_TONEMAPPING_CURVE, static_cast<int>(_state.toneMappingCurve)));
+    _state.bEnableGammaCorrection = config.getOr<bool>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_GAMMA_CORRECTION_ENABLE, _state.bEnableGammaCorrection);
+    _state.gamma               = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_GAMMA, _state.gamma);
+    _state.bEnableRandomGrain  = config.getOr<bool>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_ENABLE, _state.bEnableRandomGrain);
+    _state.randomGrainStrength = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_STRENGTH, _state.randomGrainStrength);
 
     recreateOutputTexture(Extent2D{.width = desc.width, .height = desc.height});
     recreateBloomTextures(Extent2D{.width = desc.width, .height = desc.height});
@@ -152,27 +172,42 @@ void PostProcessingStage::beginFrame()
     }
 }
 
+void PostProcessingStage::renderSettingsGUI()
+{
+    if (ImGui::Checkbox("Enable Post Process", &bEnabled)) {
+        ConfigManager::Editor(POSTPROCESS_CONFIG_DOC_NAME)
+            .set(POSTPROCESS_CONFIG_KEY_ENABLE, bEnabled);
+    }
+
+    if (_bloomProcessor) {
+        ImGui::SeparatorText("Bloom");
+        _bloomProcessor->renderSettingsGUI(_state);
+    }
+
+    if (_postProcessor) {
+        ImGui::SeparatorText("Image Effects");
+        _postProcessor->renderSettingsGUI(_state);
+    }
+}
+
+void PostProcessingStage::renderTechnicalGUI()
+{
+    if (_bloomProcessor) {
+        _bloomProcessor->renderTechnicalGUI();
+    }
+    if (_postProcessor) {
+        _postProcessor->renderTechnicalGUI();
+    }
+}
+
 void PostProcessingStage::renderGUI()
 {
-    if (!ImGui::TreeNode("PostProcessingStage")) {
+    if (!ImGui::TreeNode("Post Process")) {
         return;
     }
 
-    if (ImGui::TreeNode("Settings")) {
-        if (ImGui::Checkbox("Enabled", &bEnabled)) {
-            ConfigManager::Editor(POSTPROCESS_CONFIG_DOC_NAME)
-                .set(POSTPROCESS_CONFIG_KEY_ENABLE, bEnabled);
-        }
-        ImGui::TreePop();
-    }
-
-    if (_postProcessor && ImGui::TreeNode("Processor")) {
-        if (_bloomProcessor) {
-            _bloomProcessor->renderGUI(_state);
-        }
-        _postProcessor->renderGUI(_state);
-        ImGui::TreePop();
-    }
+    renderSettingsGUI();
+    renderTechnicalGUI();
 
     ImGui::TreePop();
 }

@@ -19,6 +19,16 @@ namespace ya
 namespace
 {
 
+template <typename Fn>
+void drawSettingsSection(const char* label, Fn&& body)
+{
+    if (!ImGui::TreeNode(label)) {
+        return;
+    }
+    body();
+    ImGui::TreePop();
+}
+
 struct RenderTargetFormatOption
 {
     std::string_view label;
@@ -146,6 +156,15 @@ void openCaptureDirectoryFromGUI(const std::string& filePath)
     }
 }
 
+template <typename Fn>
+void drawSectionIf(bool condition, const char* label, Fn&& body)
+{
+    if (!condition) {
+        return;
+    }
+    drawSettingsSection(label, std::forward<Fn>(body));
+}
+
 } // namespace
 
 void RenderRuntime::renderGUI(float dt)
@@ -153,28 +172,62 @@ void RenderRuntime::renderGUI(float dt)
     (void)dt;
 
     if (ImGui::TreeNode("World Rendering")) {
-        if (ImGui::TreeNode("Settings")) {
-            static const char* items[] = {"Forward", "Deferred"};
-            int                current = static_cast<int>(_pendingShadingModel);
-            if (ImGui::Combo("Shading Model", &current, items, IM_ARRAYSIZE(items))) {
-                _pendingShadingModel = static_cast<EShadingModel>(current);
-            }
-            if (_pendingShadingModel != _shadingModel) {
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(1, 1, 0, 1), "(switch pending)");
-            }
-            ImGui::TreePop();
+        static const char* items[] = {"Forward", "Deferred"};
+        int                current = static_cast<int>(_pendingShadingModel);
+        if (ImGui::Combo("Shading Model", &current, items, IM_ARRAYSIZE(items))) {
+            _pendingShadingModel = static_cast<EShadingModel>(current);
+        }
+        if (_pendingShadingModel != _shadingModel) {
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(1, 1, 0, 1), "(switch pending)");
         }
 
-        if (ImGui::TreeNode("Pipelines")) {
-            if (_forwardPipeline) {
-                _forwardPipeline->renderGUI(false);
-            }
-            if (_deferredPipeline) {
-                _deferredPipeline->renderGUI(false);
-            }
-            ImGui::TreePop();
+        if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
+            drawSettingsSection("General", [&]() {
+                _forwardPipeline->renderGeneralSettingsGUI();
+            });
+            drawSectionIf(_forwardPipeline->bShadowMapping, "Shadows", [&]() {
+                _forwardPipeline->renderShadowSettingsGUI();
+            });
+            drawSettingsSection("Post Process", [&]() {
+                _forwardPipeline->renderPostProcessSettingsGUI();
+            });
         }
+        else if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
+            drawSettingsSection("General", [&]() {
+                _deferredPipeline->renderGeneralSettingsGUI();
+            });
+            drawSettingsSection("Lighting", [&]() {
+                _deferredPipeline->renderLightingSettingsGUI();
+            });
+            drawSettingsSection("Ambient Occlusion", [&]() {
+                _deferredPipeline->renderAOSettingsGUI();
+            });
+            drawSettingsSection("Post Process", [&]() {
+                _deferredPipeline->renderPostProcessSettingsGUI();
+            });
+            drawSectionIf(_deferredPipeline->isShadowMappingEnabled(), "Shadows", [&]() {
+                _deferredPipeline->renderShadowSettingsGUI();
+            });
+        }
+
+        drawSettingsSection("Pipeline Internals", [&]() {
+            if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
+                _forwardPipeline->renderTechnicalGUI();
+            }
+            else if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
+                _deferredPipeline->renderTechnicalGUI();
+            }
+        });
+
+        drawSettingsSection("Stage Internals", [&]() {
+            if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
+                _forwardPipeline->renderStageInternalsGUI();
+            }
+            else if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
+                _deferredPipeline->renderStageInternalsGUI();
+            }
+        });
 
         ImGui::TreePop();
     }

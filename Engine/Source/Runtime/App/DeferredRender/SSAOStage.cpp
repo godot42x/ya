@@ -308,19 +308,13 @@ void SSAOStage::execute(const RenderStageContext& ctx)
     ctx.cmdBuf->debugEndLabel();
 }
 
-void SSAOStage::renderGUI()
+void SSAOStage::renderSettingsGUI()
 {
-    if (!ImGui::TreeNode("SSAOStage")) {
-        return;
-    }
-
-
     bool bDirty = false;
     bDirty |= ImGui::DragFloat("Radius", &_radius, 0.01f, 0.05f, 5.0f, "%.3f");
     bDirty |= ImGui::DragFloat("Bias", &_bias, 0.001f, 0.0f, 0.2f, "%.4f");
     bDirty |= ImGui::DragFloat("Power", &_power, 0.01f, 0.1f, 4.0f, "%.3f");
     bDirty |= ImGui::DragFloat("Intensity", &_intensity, 0.05f, 0.0f, 8.0f, "%.3f");
-    ImGui::Text("Descriptor writes: %u", _lastInputDescriptorWriteCount);
 
     if (bDirty) {
         ConfigManager::Editor(SSAO_CONFIG_DOC_NAME)
@@ -329,11 +323,27 @@ void SSAOStage::renderGUI()
             .set(SSAO_CONFIG_KEY_POWER, _power)
             .set(SSAO_CONFIG_KEY_INTENSITY, _intensity);
     }
+}
 
-    if (ImGui::TreeNode("Pipeline")) {
+void SSAOStage::renderTechnicalGUI()
+{
+    ImGui::Text("Descriptor writes: %u", _lastInputDescriptorWriteCount);
+
+    if (ImGui::TreeNode("SSAO Pipeline")) {
         _pipeline->renderGUI();
         ImGui::TreePop();
     }
+}
+
+void SSAOStage::renderGUI()
+{
+    if (!ImGui::TreeNode("Ambient Occlusion")) {
+        return;
+    }
+
+    renderSettingsGUI();
+
+    renderTechnicalGUI();
 
     ImGui::TreePop();
 }

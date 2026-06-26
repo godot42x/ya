@@ -858,17 +858,24 @@ void GBufferStage::drawFallback(const RenderStageContext& ctx)
 
 void GBufferStage::renderGUI()
 {
-    if (!ImGui::TreeNode("GBufferState")) {
+    if (!ImGui::TreeNode("GBuffer")) {
         return;
     }
 
-    if (ImGui::TreeNode("Stats")) {
+    renderTechnicalGUI();
+
+    ImGui::TreePop();
+}
+
+void GBufferStage::renderTechnicalGUI()
+{
+    if (ImGui::TreeNode("GBuffer Stats")) {
         ImGui::Text("Point shadow budget: %u", _maxShadowedPointLights);
         ImGui::Text("Shadowed point lights: %u", _lastShadowedPointLights);
         ImGui::TreePop();
     }
 
-    if (ImGui::TreeNode("Pipelines")) {
+    if (ImGui::TreeNode("GBuffer Pipelines")) {
         if (ImGui::TreeNode("PBR")) {
             _pbr.pipeline->renderGUI();
             _pbrSkinned.pipeline->renderGUI();
@@ -886,9 +893,6 @@ void GBufferStage::renderGUI()
         }
         ImGui::TreePop();
     }
-    // Future: material pool stats, per-pipeline toggle, etc.
-
-    ImGui::TreePop();
 }
 
 } // namespace ya

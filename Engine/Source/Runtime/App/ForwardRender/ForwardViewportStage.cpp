@@ -1516,7 +1516,7 @@ void ForwardViewportStage::drawDebug(const RenderStageContext& ctx)
 
 void ForwardViewportStage::renderGUI()
 {
-    if (!ImGui::TreeNode("ForwardViewportStage")) return;
+    if (!ImGui::TreeNode("Viewport Renderer")) return;
 
     if (ImGui::TreeNode("Settings")) {
         ImGui::Combo("Simple Color Type", &_simpleDefaultColorType, "Normal\0UV\0Fixed");

@@ -429,7 +429,7 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
 
 void ViewportOverlayStage::renderGUI()
 {
-    if (!ImGui::TreeNode("Viewport Overlay Stage")) {
+    if (!ImGui::TreeNode("Viewport Overlay")) {
         return;
     }
 

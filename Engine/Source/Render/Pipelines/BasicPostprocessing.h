@@ -69,7 +69,8 @@ struct BasicPostprocessing
     void shutdown();
     void beginFrame();
     void render(const RenderDesc& desc);
-    void renderGUI(PostProcessingState& state);
+    void renderSettingsGUI(PostProcessingState& state);
+    void renderTechnicalGUI();
 
   private:
     void rebuildPushConstants(const PostProcessingState& state, bool bOutputIsSRGB);
