@@ -215,6 +215,27 @@ Texture* RenderRuntime::getPostprocessOutputTexture() const
     return nullptr;
 }
 
+Texture* RenderRuntime::getBloomExtractTexture() const
+{
+    if (_forwardPipeline) return _forwardPipeline->_postProcessStage.getBloomExtractTexture();
+    if (_deferredPipeline) return _deferredPipeline->_postProcessStage.getBloomExtractTexture();
+    return nullptr;
+}
+
+Texture* RenderRuntime::getBloomBlurTexture() const
+{
+    if (_forwardPipeline) return _forwardPipeline->_postProcessStage.getBloomBlurTexture();
+    if (_deferredPipeline) return _deferredPipeline->_postProcessStage.getBloomBlurTexture();
+    return nullptr;
+}
+
+Texture* RenderRuntime::getBloomCompositeTexture() const
+{
+    if (_forwardPipeline) return _forwardPipeline->_postProcessStage.getBloomCompositeTexture();
+    if (_deferredPipeline) return _deferredPipeline->_postProcessStage.getBloomCompositeTexture();
+    return nullptr;
+}
+
 Texture* RenderRuntime::getPresentationTexture() const
 {
     if (!_screenRT) {

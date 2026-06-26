@@ -175,6 +175,9 @@ struct RenderRuntime
     [[nodiscard]] bool                           isOffscreenPending() const { return _offscreenPending; }
 
     [[nodiscard]] Texture* getPostprocessOutputTexture() const;
+    [[nodiscard]] Texture* getBloomExtractTexture() const;
+    [[nodiscard]] Texture* getBloomBlurTexture() const;
+    [[nodiscard]] Texture* getBloomCompositeTexture() const;
     [[nodiscard]] Texture* getActiveViewportTexture() const;
     [[nodiscard]] Texture* getPresentationTexture() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;

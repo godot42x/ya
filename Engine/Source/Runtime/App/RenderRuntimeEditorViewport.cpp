@@ -22,6 +22,7 @@ constexpr uint32_t CATEGORY_ENVIRONMENT = 2;
 constexpr uint32_t CATEGORY_GBUFFER     = 3;
 constexpr uint32_t CATEGORY_VIEWPORT    = 4;
 constexpr uint32_t CATEGORY_SHARED      = 5;
+constexpr uint32_t CATEGORY_POSTPROCESS = 6;
 
 template <typename TGetter>
 void appendShadowDebugSlots(EditorViewportContext& ctx,
@@ -91,6 +92,7 @@ void RenderRuntime::updateEditorViewportContext(const FrameInput& input)
         {.id = "gbuffer", .label = "GBuffer"},
         {.id = "viewport", .label = "Viewport"},
         {.id = "shared", .label = "Shared"},
+        {.id = "postprocess", .label = "PostFX"},
     };
 
     if (_shadingModel == EShadingModel::Forward) {
@@ -296,6 +298,46 @@ void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
         .aspectFlags   = EImageAspect::Depth,
         .tint          = {1, 0, 0, 1},
     });
+
+    if (auto* bloomExtract = getBloomExtractTexture(); bloomExtract && bloomExtract->getImageView()) {
+        ctx.debugSpec.slots.push_back({
+            .label         = "BloomExtract",
+            .defaultView   = bloomExtract->getImageView(),
+            .ownedView     = nullptr,
+            .image         = bloomExtract->getImageShared(),
+            .categoryIndex = CATEGORY_POSTPROCESS,
+        });
+    }
+
+    if (auto* bloomBlur = getBloomBlurTexture(); bloomBlur && bloomBlur->getImageView()) {
+        ctx.debugSpec.slots.push_back({
+            .label         = "BloomBlur",
+            .defaultView   = bloomBlur->getImageView(),
+            .ownedView     = nullptr,
+            .image         = bloomBlur->getImageShared(),
+            .categoryIndex = CATEGORY_POSTPROCESS,
+        });
+    }
+
+    if (auto* bloomComposite = getBloomCompositeTexture(); bloomComposite && bloomComposite->getImageView()) {
+        ctx.debugSpec.slots.push_back({
+            .label         = "BloomComposite",
+            .defaultView   = bloomComposite->getImageView(),
+            .ownedView     = nullptr,
+            .image         = bloomComposite->getImageShared(),
+            .categoryIndex = CATEGORY_POSTPROCESS,
+        });
+    }
+
+    if (auto* postprocessOutput = getPostprocessOutputTexture(); postprocessOutput && postprocessOutput->getImageView()) {
+        ctx.debugSpec.slots.push_back({
+            .label         = "PostprocessOutput",
+            .defaultView   = postprocessOutput->getImageView(),
+            .ownedView     = nullptr,
+            .image         = postprocessOutput->getImageShared(),
+            .categoryIndex = CATEGORY_POSTPROCESS,
+        });
+    }
 
     if (_deferredPipeline->getShadowDepthRT()) {
         Texture* shadowDepthTexture = nullptr;

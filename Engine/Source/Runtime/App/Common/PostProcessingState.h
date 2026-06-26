@@ -38,6 +38,13 @@ struct PostProcessingState
     bool              bEnableRandomGrain     = false;
     float             randomGrainStrength    = 0.05f;
     float             kernelTexelOffset      = 1.0f / 300.0f;
+
+    bool              bEnableBloom           = false;
+    float             bloomThreshold         = 1.0f;
+    float             bloomSoftKnee          = 0.25f;
+    float             bloomExtractIntensity  = 1.0f;
+    uint32_t          bloomBlurPasses        = 5;
+    float             bloomStrength          = 0.8f;
 };
 
 } // namespace ya
