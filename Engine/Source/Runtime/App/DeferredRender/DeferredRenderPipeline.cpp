@@ -33,6 +33,7 @@ constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_BIAS                = 
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_NORMAL_BIAS         = "render.deferred.shadow.normalBias";
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_DIST    = "render.deferred.shadow.directionalDistance";
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_CASCADE = "render.deferred.shadow.directionalCascades";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_STABLE  = "render.deferred.shadow.directionalStableFit";
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SSAO                = "render.deferred.ssao.enabled";
 
 void drawPerfLeaf(const char* label, float value, float parentValue = 0.0f)
@@ -401,6 +402,9 @@ void DeferredRenderPipeline::loadPersistentSettings()
     shadowSettings.directionalDistance = cfgManager.getOr<float>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
                                                                  DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_DIST,
                                                                  shadowSettings.directionalDistance);
+    shadowSettings.directionalStableFit = cfgManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
+                                                                 DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_STABLE,
+                                                                 shadowSettings.directionalStableFit);
     shadowSettings.directionalCascades = static_cast<uint32_t>(std::clamp(
         cfgManager.getOr<int>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
                               DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_CASCADE,
@@ -474,6 +478,7 @@ void DeferredRenderPipeline::saveShadowSettingsToConfig(bool                  bE
         .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_BIAS, shadowSettings.bias)
         .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_NORMAL_BIAS, shadowSettings.normalBias)
         .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_DIST, shadowSettings.directionalDistance)
+        .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_STABLE, shadowSettings.directionalStableFit)
         .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_CASCADE, static_cast<int>(shadowSettings.directionalCascades));
 }
 
@@ -1200,6 +1205,9 @@ void DeferredRenderPipeline::renderShadowSettingsGUI()
             bShadowSettingsDirty = true;
         }
         if (ImGui::DragFloat("Directional Distance", &shadowSettings.directionalDistance, 0.5f, 1.0f, 500.0f, "%.1f")) {
+            bShadowSettingsDirty = true;
+        }
+        if (ImGui::Checkbox("Stable Directional Fit", &shadowSettings.directionalStableFit)) {
             bShadowSettingsDirty = true;
         }
         int directionalCascades = static_cast<int>(shadowSettings.directionalCascades);

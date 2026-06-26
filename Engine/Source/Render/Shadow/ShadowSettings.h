@@ -53,6 +53,7 @@ struct ShadowSettings
     bool     directionalEnabled   = true;
     float    directionalDistance  = 50.0f; // max shadow distance from camera
     uint32_t directionalCascades = 1;     // cascade count (1 = no cascading, future: 2/4)
+    bool     directionalStableFit = true;
 
     // Point light shadow
     bool     pointLightEnabled             = true;
@@ -84,6 +85,7 @@ struct ShadowSettings
         resolution                  = preset.resolution;
         directionalEnabled          = preset.directionalEnabled;
         directionalCascades         = preset.directionalCascades;
+        directionalStableFit        = preset.directionalStableFit;
         pointLightEnabled           = preset.pointLightEnabled;
         maxPointLightShadows        = preset.maxPointLightShadows;
         filter                      = preset.filter;
@@ -100,6 +102,7 @@ struct ShadowSettings
             s.resolution           = 0;
             s.directionalEnabled   = false;
             s.directionalCascades  = 0;
+            s.directionalStableFit = true;
             s.pointLightEnabled    = false;
             s.maxPointLightShadows = 0;
             s.filter               = EShadowFilter::Hard;
@@ -107,6 +110,7 @@ struct ShadowSettings
         case EShadowQuality::Low:
             s.resolution           = 512;
             s.directionalCascades  = 1;
+            s.directionalStableFit = true;
             s.pointLightEnabled    = true;
             s.maxPointLightShadows = 1;
             s.filter               = EShadowFilter::Hard;
@@ -114,6 +118,7 @@ struct ShadowSettings
         case EShadowQuality::Medium:
             s.resolution           = 1024;
             s.directionalCascades  = 1;
+            s.directionalStableFit = true;
             s.pointLightEnabled    = true;
             s.maxPointLightShadows = 1;
             s.filter               = EShadowFilter::PCF_Low;
@@ -121,6 +126,7 @@ struct ShadowSettings
         case EShadowQuality::High:
             s.resolution           = 2048;
             s.directionalCascades  = 2;
+            s.directionalStableFit = true;
             s.pointLightEnabled    = true;
             s.maxPointLightShadows = 4;
             s.filter               = EShadowFilter::PCF_High;
@@ -128,6 +134,7 @@ struct ShadowSettings
         case EShadowQuality::Ultra:
             s.resolution           = 4096;
             s.directionalCascades  = 4;
+            s.directionalStableFit = true;
             s.pointLightEnabled    = true;
             s.maxPointLightShadows = MAX_POINT_LIGHTS;
             s.filter               = EShadowFilter::PCF_High;

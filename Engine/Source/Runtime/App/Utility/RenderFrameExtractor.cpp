@@ -17,10 +17,70 @@
 #include "Scene/Scene.h"
 
 #include <algorithm>
+#include <cmath>
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace ya
 {
+
+namespace
+{
+
+glm::mat4 buildStableDirectionalShadowViewProjection(const glm::vec3& lightDirection,
+                                                     const glm::vec3& cameraPosition,
+                                                     const glm::mat4& cameraView,
+                                                     float            shadowDistance,
+                                                     uint32_t         shadowResolution)
+{
+    const float distance     = std::max(shadowDistance, 1.0f);
+    const float radius       = distance;
+    const float nearPlane    = 0.1f;
+    const float farPlane     = std::max(distance * 4.0f, nearPlane + 1.0f);
+    const float texelWorld   = (radius * 2.0f) / static_cast<float>(std::max(1u, shadowResolution));
+
+    const glm::mat4 invView        = glm::inverse(cameraView);
+    const glm::vec3 cameraForward  = glm::normalize(glm::vec3(invView * glm::vec4(0, 0, -1, 0)));
+    const glm::vec3 focusCenter    = cameraPosition + cameraForward * (distance * 0.5f);
+    const glm::vec3 worldUp        = std::abs(glm::dot(lightDirection, glm::vec3(0, 1, 0))) > 0.98f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
+    const glm::vec3 lightPosition  = focusCenter - lightDirection * (distance * 2.0f);
+
+    glm::mat4 view = FMath::lookAt(lightPosition, focusCenter, worldUp);
+
+    // Snap the shadow anchor in light space to texel units so camera motion does not shimmer.
+    const glm::vec3 centerLightSpace = glm::vec3(view * glm::vec4(focusCenter, 1.0f));
+    const glm::vec2 snappedXY        = glm::floor(glm::vec2(centerLightSpace) / texelWorld) * texelWorld;
+    const glm::vec3 snapOffset       = glm::vec3(snappedXY - glm::vec2(centerLightSpace), 0.0f);
+    view                             = glm::translate(glm::mat4(1.0f), snapOffset) * view;
+
+    const glm::mat4 projection = FMath::orthographic(-radius, radius, -radius, radius, nearPlane, farPlane);
+    return projection * view;
+}
+
+glm::mat4 buildDirectionalShadowViewProjection(const glm::vec3& lightDirection,
+                                               const glm::vec3& cameraPosition,
+                                               const glm::mat4& cameraView,
+                                               const ShadowSettings& shadowSettings)
+{
+    if (shadowSettings.directionalStableFit) {
+        return buildStableDirectionalShadowViewProjection(lightDirection,
+                                                          cameraPosition,
+                                                          cameraView,
+                                                          shadowSettings.directionalDistance,
+                                                          shadowSettings.resolution);
+    }
+
+    const float distance         = std::max(shadowSettings.directionalDistance, 1.0f);
+    const glm::mat4 invView      = glm::inverse(cameraView);
+    const glm::vec3 cameraForward = glm::normalize(glm::vec3(invView * glm::vec4(0, 0, -1, 0)));
+    const glm::vec3 focusCenter  = cameraPosition + cameraForward * (distance * 0.5f);
+    const glm::vec3 worldUp      = std::abs(glm::dot(lightDirection, glm::vec3(0, 1, 0))) > 0.98f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
+    const glm::vec3 lightPosition = focusCenter - lightDirection * (distance * 2.0f);
+    const glm::mat4 view         = FMath::lookAt(lightPosition, focusCenter, worldUp);
+    const glm::mat4 projection   = FMath::orthographic(-distance, distance, -distance, distance, 0.1f, std::max(distance * 4.0f, 1.1f));
+    return projection * view;
+}
+
+} // namespace
 
 void RenderFrameExtractor::extract(const ExtractInput& input, RenderFrameData& outFrame)
 {
@@ -33,7 +93,7 @@ void RenderFrameExtractor::extract(const ExtractInput& input, RenderFrameData& o
     auto& reg = input.scene->getRegistry();
 
     extractCamera(input, outFrame);
-    extractLights(reg, outFrame);
+    extractLights(input, reg, outFrame);
     extractSkybox(input.scene, outFrame);
     auto drawCtx = DrawItemExtractionContext{
         .registry  = &reg,
@@ -55,16 +115,21 @@ void RenderFrameExtractor::extractCamera(const ExtractInput& input, RenderFrameD
     out.deltaTime      = input.deltaTime;
 }
 
-void RenderFrameExtractor::extractLights(entt::registry& reg, RenderFrameData& out)
+void RenderFrameExtractor::extractLights(const ExtractInput& input, entt::registry& reg, RenderFrameData& out)
 {
+    const ShadowSettings& shadowSettings = App::get()->getShadowSettings();
+
     // Directional light (take the first one with a transform)
     out.bHasDirectionalLight = false;
     for (const auto& [e, dlc, tc] : reg.view<DirectionalLightComponent, TransformComponent>().each()) {
         auto& dl                 = out.directionalLight;
         dl.direction             = glm::normalize(tc.getForward());
-        dl.view                  = FMath::lookAt(glm::vec3(0.0f) - dl.direction * 50.0f, glm::vec3(0.0f), glm::vec3(0, 1, 0));
-        dl.projection            = FMath::orthographic(-40.f, 40.f, -40.f, 40.f, 0.1f, 200.f);
-        dl.viewProjection        = dl.projection * dl.view;
+        dl.viewProjection        = buildDirectionalShadowViewProjection(dl.direction,
+                                                                        input.cameraPos,
+                                                                        input.view,
+                                                                        shadowSettings);
+        dl.projection            = glm::mat4(1.0f);
+        dl.view                  = dl.viewProjection;
         dl.color                 = dlc._color;
         dl.intensity             = dlc.intensity;
         out.bHasDirectionalLight = true;
@@ -76,9 +141,12 @@ void RenderFrameExtractor::extractLights(entt::registry& reg, RenderFrameData& o
         for (const auto& [e, dlc] : reg.view<DirectionalLightComponent>().each()) {
             auto& dl                 = out.directionalLight;
             dl.direction             = glm::normalize(dlc._direction);
-            dl.view                  = FMath::lookAt(glm::vec3(0.0f) - dl.direction * 50.0f, glm::vec3(0.0f), glm::vec3(0, 1, 0));
-            dl.projection            = FMath::orthographic(-40.f, 40.f, -40.f, 40.f, 0.1f, 200.f);
-            dl.viewProjection        = dl.projection * dl.view;
+            dl.viewProjection        = buildDirectionalShadowViewProjection(dl.direction,
+                                                                            input.cameraPos,
+                                                                            input.view,
+                                                                            shadowSettings);
+            dl.projection            = glm::mat4(1.0f);
+            dl.view                  = dl.viewProjection;
             dl.color                 = dlc._color;
             dl.intensity             = dlc.intensity;
             out.bHasDirectionalLight = true;
@@ -110,13 +178,8 @@ void RenderFrameExtractor::extractLights(entt::registry& reg, RenderFrameData& o
         ++out.numPointLights;
     }
 
-    std::sort(out.pointLights.begin(), out.pointLights.begin() + out.numPointLights, [&out](const FrameContext::PointLightData& lhs, const FrameContext::PointLightData& rhs)
-              {
-                  const glm::vec3 lhsDelta = lhs.position - out.cameraPos;
-                  const glm::vec3 rhsDelta = rhs.position - out.cameraPos;
-                  const float lhsDist2 = glm::dot(lhsDelta, lhsDelta);
-                  const float rhsDist2 = glm::dot(rhsDelta, rhsDelta);
-                  return lhsDist2 < rhsDist2; });
+    // Keep point-light order stable across camera motion so the shadow budget does not flicker
+    // between different lights while the editor camera moves.
 }
 
 void RenderFrameExtractor::extractSkybox(Scene* scene, RenderFrameData& out)
