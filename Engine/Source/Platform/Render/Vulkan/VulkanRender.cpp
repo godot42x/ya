@@ -866,6 +866,13 @@ void VulkanRender::allocateCommandBuffers(uint32_t size, std::vector<VkCommandBu
             YA_CORE_ERROR("Failed to allocate command buffer for index {}", i);
             return;
         }
+
+        setDebugObjectName(VK_OBJECT_TYPE_COMMAND_BUFFER,
+                           outCommandBuffers[i],
+                           std::format("PrimaryCommandBuffer_{}", i));
+        setDebugObjectSummary(VK_OBJECT_TYPE_COMMAND_BUFFER,
+                              outCommandBuffers[i],
+                              std::format("graphics primary command buffer index={} pool=graphics", i));
     }
 }
 
@@ -877,8 +884,10 @@ void VulkanRender::allocateCommandBuffers(uint32_t count, std::vector<std::share
 
     outBuffers.clear();
     outBuffers.reserve(count);
-    for (auto vkCmdBuf : vkCommandBuffers) {
-        outBuffers.push_back(std::make_shared<VulkanCommandBuffer>(this, vkCmdBuf));
+    for (uint32_t i = 0; i < count; ++i) {
+        auto wrapper = std::make_shared<VulkanCommandBuffer>(this, vkCommandBuffers[i]);
+        wrapper->setDebugName(std::format("PrimaryCommandBuffer_{}", i));
+        outBuffers.push_back(std::move(wrapper));
     }
 }
 

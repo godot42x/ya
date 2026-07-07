@@ -102,7 +102,8 @@ void BloomPostprocessing::shutdown()
     _compositePPL.reset();
     _render                        = nullptr;
     _extractInputImageViewHandle   = nullptr;
-    _blurInputImageViewHandle      = nullptr;
+    _blurDSs.clear();
+    _blurInputImageViewHandles.clear();
     _compositeSceneImageViewHandle = nullptr;
     _compositeBloomImageViewHandle = nullptr;
     _lastBlurPassCount             = 0;
@@ -153,10 +154,13 @@ void BloomPostprocessing::initBlurPipeline()
 
     _blurDSP = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
                                                     .label     = "BloomBlur_DSP",
-                                                    .maxSets   = 1,
-                                                    .poolSizes = {{.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1}},
+                                                    .maxSets   = MAX_BLOOM_BLUR_DESCRIPTOR_SETS,
+                                                    .poolSizes = {{.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = MAX_BLOOM_BLUR_DESCRIPTOR_SETS}},
                                                 });
-    _blurDS  = _blurDSP->allocateDescriptorSets(_blurDSL);
+    _blurDSs.resize(MAX_BLOOM_BLUR_DESCRIPTOR_SETS);
+    const bool ok = _blurDSP->allocateDescriptorSets(_blurDSL, MAX_BLOOM_BLUR_DESCRIPTOR_SETS, _blurDSs);
+    YA_CORE_ASSERT(ok, "Failed to allocate BloomBlur descriptor sets");
+    _blurInputImageViewHandles.assign(MAX_BLOOM_BLUR_DESCRIPTOR_SETS, ImageViewHandle{});
 }
 
 void BloomPostprocessing::initCompositePipeline()
@@ -192,18 +196,22 @@ void BloomPostprocessing::updateExtractDescriptor(Texture* inputTexture)
     });
 }
 
-void BloomPostprocessing::updateBlurDescriptor(Texture* inputTexture)
+DescriptorSetHandle BloomPostprocessing::updateBlurDescriptor(uint32_t passIndex, Texture* inputTexture)
 {
+    YA_CORE_ASSERT(passIndex < _blurDSs.size(), "Bloom blur pass index {} exceeds descriptor set pool size {}", passIndex, _blurDSs.size());
+
     const auto imageViewHandle = inputTexture && inputTexture->getImageView() ? inputTexture->getImageView()->getHandle() : ImageViewHandle{};
-    if (_blurInputImageViewHandle == imageViewHandle) {
-        return;
+    if (_blurInputImageViewHandles[passIndex] == imageViewHandle) {
+        return _blurDSs[passIndex];
     }
 
-    _blurInputImageViewHandle = imageViewHandle;
-    auto sampler              = TextureLibrary::get().getDefaultSampler();
+    _blurInputImageViewHandles[passIndex] = imageViewHandle;
+    auto sampler                          = TextureLibrary::get().getDefaultSampler();
     _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::writeOneImage(_blurDS, 0, inputTexture->getImageView(), sampler.get()),
+        IDescriptorSetHelper::writeOneImage(_blurDSs[passIndex], 0, inputTexture->getImageView(), sampler.get()),
     });
+
+    return _blurDSs[passIndex];
 }
 
 void BloomPostprocessing::updateCompositeDescriptor(Texture* sceneTexture, Texture* bloomTexture)
@@ -276,7 +284,7 @@ void BloomPostprocessing::render(const RenderDesc& desc)
             Texture*   blurTarget  = bHorizontal ? desc.blurPingTexture : desc.blurPongTexture;
 
             desc.cmdBuf->transitionImageLayoutAuto(blurTarget->getImage(), EImageLayout::ColorAttachmentOptimal);
-            updateBlurDescriptor(blurInput);
+            const DescriptorSetHandle blurDS = updateBlurDescriptor(passIndex, blurInput);
 
             RenderingInfo blurRI{
                 .label            = bHorizontal ? "BloomBlurHorizontal" : "BloomBlurVertical",
@@ -294,7 +302,7 @@ void BloomPostprocessing::render(const RenderDesc& desc)
             desc.cmdBuf->bindPipeline(_blurPipeline.get());
             desc.cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(desc.renderExtent.width), static_cast<float>(desc.renderExtent.height));
             desc.cmdBuf->setScissor(0, 0, desc.renderExtent.width, desc.renderExtent.height);
-            desc.cmdBuf->bindDescriptorSets(_blurPPL.get(), 0, {_blurDS});
+            desc.cmdBuf->bindDescriptorSets(_blurPPL.get(), 0, {blurDS});
             desc.cmdBuf->pushConstants(_blurPPL.get(), EShaderStage::Vertex | EShaderStage::Fragment, 0, sizeof(blurPC), &blurPC);
             desc.cmdBuf->draw(3, 1, 0, 0);
             desc.cmdBuf->endRendering(blurRI);

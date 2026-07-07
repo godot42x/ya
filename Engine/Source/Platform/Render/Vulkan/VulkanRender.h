@@ -405,6 +405,13 @@ struct VulkanRender : public IRender
         }
     }
 
+    void setDebugObjectSummary(VkObjectType objectType, void* objectHandle, std::string summary)
+    {
+        if (getDebugUtils()) {
+            getDebugUtils()->setObjectSummary(objectType, reinterpret_cast<uint64_t>(objectHandle), std::move(summary));
+        }
+    }
+
     [[nodiscard]] int32_t getMemoryIndex(VkMemoryPropertyFlags properties, uint32_t memoryTypeBits) const;
 
     std::unique_ptr<VulkanCommandPool>::pointer getGraphicsCommandPool() const { return _graphicsCommandPool.get(); }
@@ -418,11 +425,17 @@ struct VulkanRender : public IRender
     {
         VkCommandBuffer vkCmdBuf = VK_NULL_HANDLE;
         _graphicsCommandPool->allocateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, vkCmdBuf);
-        setDebugObjectName(VK_OBJECT_TYPE_COMMAND_BUFFER, vkCmdBuf, "IsolatedCommandBuffer_" + context);
+        const std::string debugName = "IsolatedCommandBuffer_" + context;
+        setDebugObjectName(VK_OBJECT_TYPE_COMMAND_BUFFER, vkCmdBuf, debugName);
+        setDebugObjectSummary(VK_OBJECT_TYPE_COMMAND_BUFFER,
+                              vkCmdBuf,
+                              std::format("isolated command buffer context='{}' queue=graphics oneTimeSubmit=true", context));
         VulkanCommandPool::begin(vkCmdBuf, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
         // Create a temporary VulkanCommandBuffer wrapper
         // Note: This is managed manually and will be deleted in endIsolateCommands
-        return new VulkanCommandBuffer(this, vkCmdBuf);
+        auto* cmdBuf = new VulkanCommandBuffer(this, vkCmdBuf);
+        cmdBuf->setDebugName(debugName);
+        return cmdBuf;
     }
 
     void endIsolateCommands(ICommandBuffer* commandBuffer) override

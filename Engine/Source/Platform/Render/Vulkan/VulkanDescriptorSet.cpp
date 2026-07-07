@@ -3,9 +3,37 @@
 #include "VulkanUtils.h"
 #include "utility.cc/ranges.h"
 
+#include <format>
+
 
 namespace ya
 {
+
+namespace
+{
+std::string buildDescriptorSetSummary(const DescriptorSetLayoutDesc& layoutInfo,
+                                      uint32_t                       setIndex,
+                                      uint32_t                       totalCount)
+{
+    std::string summary = std::format("layout='{}' setIndex={}/{} bindings=[",
+                                      layoutInfo.label,
+                                      setIndex,
+                                      totalCount);
+    for (size_t i = 0; i < layoutInfo.bindings.size(); ++i) {
+        const auto& binding = layoutInfo.bindings[i];
+        if (i > 0) {
+            summary += ", ";
+        }
+        summary += std::format("b{}:{}x{} stage={}",
+                               binding.binding,
+                               std::to_string(toVk(binding.descriptorType)),
+                               binding.descriptorCount,
+                               std::to_string(toVk(binding.stageFlags)));
+    }
+    summary += "]";
+    return summary;
+}
+} // namespace
 
 
 VulkanDescriptorSetLayout::VulkanDescriptorSetLayout(VulkanRender *render, ya::DescriptorSetLayoutDesc setLayout)
@@ -126,6 +154,15 @@ bool VulkanDescriptorPool::allocateDescriptorSets(
     // Convert VkDescriptorSet handles to DescriptorSetHandle
     for (size_t i = 0; i < count; ++i) {
         outSets[i] = ya::DescriptorSetHandle((void *)(uintptr_t)vkSets[i]);
+        const std::string debugName = std::format("DescriptorSet_{}_{}",
+                                                  vkLayout->_setLayoutInfo.label.empty() ? "unnamed" : vkLayout->_setLayoutInfo.label,
+                                                  i);
+        _render->setDebugObjectName(VK_OBJECT_TYPE_DESCRIPTOR_SET, vkSets[i], debugName);
+        _render->setDebugObjectSummary(VK_OBJECT_TYPE_DESCRIPTOR_SET,
+                                       vkSets[i],
+                                       buildDescriptorSetSummary(vkLayout->_setLayoutInfo,
+                                                                 static_cast<uint32_t>(i),
+                                                                 count));
     }
 
     return true;

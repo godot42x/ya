@@ -25,6 +25,7 @@ class VulkanCommandBuffer : public ICommandBuffer
     VkCommandBuffer _commandBuffer = VK_NULL_HANDLE;
     bool            _isRecording   = false;
     uint32_t        _debugLabelDepth = 0;
+    std::string     _debugName;
 
     // Track current rendering mode for proper endRendering() call
     ERenderingMode::T _currentRenderingMode = ERenderingMode::None;
@@ -124,6 +125,8 @@ class VulkanCommandBuffer : public ICommandBuffer
     }
 
     VkCommandBuffer getVkHandle() const { return _commandBuffer; }
+    void            setDebugName(std::string debugName) { _debugName = std::move(debugName); }
+    [[nodiscard]] const std::string& getDebugName() const { return _debugName; }
 
     bool begin(bool oneTimeSubmit = false) override;
     bool end() override;

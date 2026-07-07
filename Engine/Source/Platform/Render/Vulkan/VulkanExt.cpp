@@ -4,6 +4,14 @@
 namespace ya
 {
 
+namespace
+{
+const char* safeString(const char* text)
+{
+    return text ? text : "Unnamed";
+}
+} // namespace
+
 
 void VulkanDebugUtils::initInstanceLevel()
 {
@@ -45,7 +53,7 @@ void VulkanDebugUtils::rewriteDebugUtils()
     }
 
     // Create the debug utils messenger
-    const VkDebugUtilsMessengerCreateInfoEXT &createInfo = getDebugMessengerCreateInfoExt();
+    const VkDebugUtilsMessengerCreateInfoEXT& createInfo = getDebugMessengerCreateInfoExt();
     if (pfnCreateDebugUtilsMessengerEXT(_renderer->getInstance(), &createInfo, nullptr, &_debugUtilsMessenger) != VK_SUCCESS) {
         YA_CORE_ASSERT(false, "Failed to create debug utils messenger!");
     }
@@ -56,15 +64,20 @@ void VulkanDebugUtils::destroy()
     if (pfnDestroyDebugUtilsMessengerEXT && _debugUtilsMessenger) {
         pfnDestroyDebugUtilsMessengerEXT(_renderer->getInstance(), _debugUtilsMessenger, nullptr);
     }
+
+    std::scoped_lock lock(_metadataMutex);
+    _objectNames.clear();
+    _objectSummaries.clear();
 }
 
-const VkDebugUtilsMessengerCreateInfoEXT &VulkanDebugUtils::getDebugMessengerCreateInfoExt()
+const VkDebugUtilsMessengerCreateInfoEXT& VulkanDebugUtils::getDebugMessengerCreateInfoExt()
 {
 
     static auto callback = [](VkDebugUtilsMessageSeverityFlagBitsEXT      severity,
                               VkDebugUtilsMessageTypeFlagsEXT             type,
-                              const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-                              void                                       *pUserData) -> VkBool32 {
+                              const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+                              void*                                       pUserData) -> VkBool32
+    {
         // Build type string
         std::string typeString;
         if (type & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) {
@@ -96,12 +109,17 @@ const VkDebugUtilsMessengerCreateInfoEXT &VulkanDebugUtils::getDebugMessengerCre
         if (pCallbackData->objectCount > 0) {
             formattedMessage += std::format("\nObjects: {}", pCallbackData->objectCount);
             for (uint32_t i = 0; i < pCallbackData->objectCount; ++i) {
-                const auto &obj = pCallbackData->pObjects[i];
+                const auto& obj = pCallbackData->pObjects[i];
                 formattedMessage += std::format("\n    [{}] {} {} {:#x}",
                                                 i,
                                                 std::to_string(obj.objectType),
-                                                obj.pObjectName ? obj.pObjectName : "Unnamed",
+                                                safeString(obj.pObjectName),
                                                 obj.objectHandle);
+                if (auto* debugUtils = static_cast<VulkanDebugUtils*>(pUserData)) {
+                    if (const std::string summary = debugUtils->getObjectSummary(obj.objectType, obj.objectHandle); !summary.empty()) {
+                        formattedMessage += std::format("\n        summary: {}", summary);
+                    }
+                }
             }
         }
 
@@ -151,17 +169,22 @@ const VkDebugUtilsMessengerCreateInfoEXT &VulkanDebugUtils::getDebugMessengerCre
             VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
             VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
             VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-        .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                       VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                       VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+        .messageType     = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                           VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                           VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
         .pfnUserCallback = callback,
+        .pUserData       = this,
     };
 
     return ci;
 }
 
-void VulkanDebugUtils::setObjectName(VkObjectType objectType, uint64_t objectHandle, const char *name)
+void VulkanDebugUtils::setObjectName(VkObjectType objectType, uint64_t objectHandle, const char* name)
 {
+    if (objectHandle == 0) {
+        return;
+    }
+
     VkDebugUtilsObjectNameInfoEXT nameInfo{
         .sType        = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
         .pNext        = nullptr,
@@ -170,9 +193,42 @@ void VulkanDebugUtils::setObjectName(VkObjectType objectType, uint64_t objectHan
         .pObjectName  = name,
     };
 
+    {
+        std::scoped_lock lock(_metadataMutex);
+        _objectNames[{objectType, objectHandle}] = safeString(name);
+    }
+
     if (pfnSetDebugUtilsObjectNameEXT) {
         VK_CALL(pfnSetDebugUtilsObjectNameEXT(_renderer->getDevice(), &nameInfo));
     }
+}
+
+void VulkanDebugUtils::setObjectSummary(VkObjectType objectType, uint64_t objectHandle, std::string summary)
+{
+    if (objectHandle == 0) {
+        return;
+    }
+
+    std::scoped_lock lock(_metadataMutex);
+    _objectSummaries[{objectType, objectHandle}] = std::move(summary);
+}
+
+std::string VulkanDebugUtils::getObjectName(VkObjectType objectType, uint64_t objectHandle) const
+{
+    std::scoped_lock lock(_metadataMutex);
+    if (const auto it = _objectNames.find({.objectType = objectType, .objectHandle = objectHandle}); it != _objectNames.end()) {
+        return it->second;
+    }
+    return {};
+}
+
+std::string VulkanDebugUtils::getObjectSummary(VkObjectType objectType, uint64_t objectHandle) const
+{
+    std::scoped_lock lock(_metadataMutex);
+    if (const auto it = _objectSummaries.find({.objectType = objectType, .objectHandle = objectHandle}); it != _objectSummaries.end()) {
+        return it->second;
+    }
+    return {};
 }
 
 } // namespace ya

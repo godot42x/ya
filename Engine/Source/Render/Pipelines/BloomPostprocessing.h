@@ -12,6 +12,8 @@
 namespace ya
 {
 
+constexpr uint32_t MAX_BLOOM_BLUR_DESCRIPTOR_SETS = 64;
+
 struct BloomPostprocessing
 {
     struct InitDesc
@@ -46,8 +48,8 @@ struct BloomPostprocessing
     stdptr<IDescriptorPool>      _blurDSP;
     stdptr<IPipelineLayout>      _blurPPL;
     stdptr<IGraphicsPipeline>    _blurPipeline;
-    DescriptorSetHandle          _blurDS = nullptr;
-    ImageViewHandle              _blurInputImageViewHandle = nullptr;
+    std::vector<DescriptorSetHandle> _blurDSs;
+    std::vector<ImageViewHandle>     _blurInputImageViewHandles;
 
     stdptr<IDescriptorSetLayout> _compositeDSL;
     stdptr<IDescriptorPool>      _compositeDSP;
@@ -71,7 +73,7 @@ struct BloomPostprocessing
     void initBlurPipeline();
     void initCompositePipeline();
     void updateExtractDescriptor(Texture* inputTexture);
-    void updateBlurDescriptor(Texture* inputTexture);
+    DescriptorSetHandle updateBlurDescriptor(uint32_t passIndex, Texture* inputTexture);
     void updateCompositeDescriptor(Texture* sceneTexture, Texture* bloomTexture);
 };
 

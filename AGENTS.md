@@ -16,6 +16,7 @@ make b t=HelloMaterial             # 构建目标
 make r t=HelloMaterial             # 构建并运行目标
 make test                          # 运行默认测试目标
 make test t=ya r_args="Suite.Test" # 运行单个 GoogleTest case
+make cfg m=profile                 # 配置 profile 模式，用于产出 speedscope CPU trace
 ```
 
 需要精细控制时再直接用 XMake：
@@ -26,7 +27,18 @@ xmake b TargetName
 xmake run TargetName
 xmake project -k compile_commands
 xmake ya-shader
+xmake f -m profile -y              # 开启 profile 编译模式
 ```
+
+## Profiling Quick Start
+
+- `automation` 只用于自动化/冒烟/离线跑批模式，不作为编辑器人工操作的统一配置入口。
+- 编辑器人工操作下的 profiling runtime 开关继续走 `Engine/Saved/Config/Editor.json`。
+- speedscope CPU trace 需要 `profile` 编译模式；当前 `xmake.lua` 会定义 `YA_PROFILING_CONDITIONAL`，非 `profile` 模式则定义 `YA_PROFILING_DISABLED`。
+- 自动化模式若需要 CPU trace、RenderDoc、screenshot 等，配置放到 `Engine/Saved/Config/Automation.json`，或继续用 `--automation-config=<path>` 指向专用 automation 文件。
+- 推荐命令：`make cfg m=profile`，然后 `make r t=HelloMaterial r_args="--exit-after-frame=300"`。
+- 若未指定输出路径，默认写到 `Engine/Saved/Automation/Profile/<session>-<timestamp>.cpu.speedscope.json`。
+- 查看更完整规则时，进入 `./.agent/skills/ya-build/SKILL.md`。
 
 要求：`xmake`、C++20 编译器、Vulkan SDK。
 

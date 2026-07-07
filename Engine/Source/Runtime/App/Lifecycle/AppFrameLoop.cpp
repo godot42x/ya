@@ -4,6 +4,7 @@
 #include "Runtime/App/Lifecycle/AppAutomation.h"
 #include "Runtime/App/Utility/FPSCtrl.h"
 
+#include "Core/Async/TaskQueue.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Core/Manager/Facade.h"
@@ -128,6 +129,10 @@ int AppFrameLoop::iterate(App& app, float dt)
     {
         YA_PERF_SCOPE(perf::sample::frameRender(), perf::metric::cpuTimeMs(), perf::domain::render());
         tickRender(app, dt);
+    }
+    {
+        YA_PERF_SCOPE(perf::sample::renderFlushCallbacks(), perf::metric::cpuTimeMs(), perf::domain::render());
+        TaskQueue::get().processMainThreadCallbacks();
     }
     ++App::_frameIndex;
     {

@@ -92,10 +92,6 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     syncEditorFrame(input);
     renderPresentationPass(input, cmdBuf.get());
     {
-        YA_PERF_SCOPE(perf::sample::renderFlushCallbacks(), perf::metric::cpuTimeMs(), perf::domain::render());
-        flushMainThreadCallbacks();
-    }
-    {
         YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());
         submitFrame(imageIndex, cmdBuf.get());
     }

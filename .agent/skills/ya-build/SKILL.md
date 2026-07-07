@@ -41,6 +41,94 @@ xmake ya-shader
 xmake b ya-testing && xmake r ya-testing --gtest_filter=Suite.Test
 ```
 
+## Speedscope / CPU Profile
+
+### 模式边界
+
+1. `automation` 只用于自动化 / 冒烟 / 离线跑批。
+2. 编辑器人工操作下的 profiling runtime 开关继续走 `Engine/Saved/Config/Editor.json`。
+3. 不要把 editor runtime profiling 配置和 automation 产物配置混为同一个入口。
+
+### 编译模式
+
+1. 产出 speedscope CPU trace 需要用 `profile` 构建模式。
+2. 推荐先执行 `make cfg m=profile`，再执行 `make r t=<Target> ...`。
+3. 若直接用 XMake，则使用 `xmake f -m profile -y`，然后 `xmake b` / `xmake run`。
+
+### 对应宏
+
+1. `xmake.lua` 在 `profile` 模式下定义 `YA_PROFILING_CONDITIONAL`。
+2. 非 `profile` 模式下定义 `YA_PROFILING_DISABLED`。
+3. `Core/Profiling/Profiling.h` 会把它们统一映射为兼容宏：
+
+```cpp
+YA_PROFILING_CONDITIONAL -> YA_PROFILE_CONDITIONAL / YA_PERF_CONDITIONAL
+YA_PROFILING_DISABLED    -> YA_PROFILE_DISABLED / YA_PERF_DISABLED
+```
+
+### 配置入口
+
+1. 编辑器人工操作：`Engine/Saved/Config/Editor.json`
+   这里控制 `profile.runtime.cpuTrace`、`profile.runtime.perfMetrics`、`profile.runtime.staticInit`。
+2. 自动化模式：`Engine/Saved/Config/Automation.json` 或 `--automation-config=<path>`
+   这里控制 `profile.cpu.enabled`、`profile.cpu.output`、`profile.sessionName`、`profile.gpu.renderdoc`、`screenshot.*`、`shadow.*`。
+3. 命令行参数仍可用，但在 automation 模式下它们只是本次运行的直接覆盖，不是长期配置入口。
+
+### 自动化模式最小配置
+
+```json
+{
+  "profile": {
+    "cpu": {
+      "enabled": true,
+      "output": "Engine/Saved/Automation/Profile/custom.cpu.speedscope.json"
+    },
+    "sessionName": "MySession",
+    "gpu": {
+      "renderdoc": false,
+      "outputDir": "Engine/Saved/RenderDoc"
+    }
+  },
+  "automation": {
+    "exitAfterFrame": 300,
+    "screenshotWarmupFrames": 30,
+    "screenshotSettleFrames": 5
+  },
+  "startup": {
+    "scene": "Engine/Content/Scene/Test.scene"
+  },
+  "screenshot": {
+    "target": "viewport",
+    "output": "Engine/Saved/Screenshot/out.png"
+  }
+}
+```
+
+### 输出位置规则
+
+1. 若显式传 `--cpu-profile-output`，就直接写到该路径。
+2. 若 automation 配置里有 `profile.cpu.output`，且命令行没覆盖，则使用该路径。
+3. 若两者都没有：
+   默认目录是 `Engine/Saved/Automation/Profile/`
+   默认文件名是 `<sessionName>-<timestamp>.cpu.speedscope.json`
+4. 若同时启用了 RenderDoc automation，默认基础目录会优先跟随 `renderDocCaptureOutputDir`。
+5. 输出路径若不是 `.json`，代码会自动改成 `.json`。
+6. 目录不存在时会自动创建。
+
+### 最小可用命令
+
+```bash
+make cfg m=profile
+make r t=HelloMaterial r_args="--exit-after-frame=300"
+```
+
+### 查看结果
+
+1. 程序退出后会在日志打印实际输出绝对路径。
+2. 可直接把 `.speedscope.json` 拖到 https://www.speedscope.app/。
+3. 也可以本地安装 CLI：`npm install -g speedscope`。
+4. 旧的 `make profile` 目标仍写死到 `./Engine/Saved/Profiling/App.speedscope.json`，和当前 automation 默认输出规则不一致，使用时需要自己确认文件路径。
+
 ## 何时用哪种入口
 
 1. 日常构建 / 运行 / 刷新 compile commands，优先用 `make` 包装命令。
