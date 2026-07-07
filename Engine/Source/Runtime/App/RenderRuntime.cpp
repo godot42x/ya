@@ -4,7 +4,6 @@
 #include "DebugRenderSystem.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
-#include "Core/Debug/RenderDocCapture.h"
 #include "DeferredRender/DeferredRenderPipeline.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/2D/Render2D.h"
@@ -106,16 +105,12 @@ void RenderRuntime::runFramePrologue()
 
 void RenderRuntime::beginFrameCapture()
 {
-    if (_renderDoc.capture) {
-        _renderDoc.capture->onFrameBegin();
-    }
+    _diagnostics.onFrameBegin();
 }
 
 void RenderRuntime::endFrameCapture()
 {
-    if (_renderDoc.capture) {
-        _renderDoc.capture->onFrameEnd();
-    }
+    _diagnostics.onFrameEnd();
 }
 
 bool RenderRuntime::prepareFrame(const FrameInput& input, int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf)
@@ -263,51 +258,27 @@ DebugRenderSystem& RenderRuntime::getDebugRenderSystem() const
 
 bool RenderRuntime::requestAutomationRenderDocCapture()
 {
-    _renderDoc.bAutomationCaptureFinished    = false;
-    _renderDoc.bAutomationCaptureFailed      = false;
-    _renderDoc.bAutomationPostProcessPending = false;
-    _renderDoc.lastCapturePath.clear();
-    _renderDoc.automationPassSummaryPath.clear();
-
-    if (!_renderDoc.capture) {
-        YA_CORE_WARN("Automation requested RenderDoc capture but RenderDoc integration is disabled");
-        _renderDoc.bAutomationCaptureFailed = true;
-        return false;
-    }
-
-    if (!_renderDoc.capture->isAvailable()) {
-        YA_CORE_WARN("Automation requested RenderDoc capture but RenderDoc is unavailable: {}",
-                     _renderDoc.configuredDllPath.empty() ? "renderdoc.dll" : _renderDoc.configuredDllPath);
-        _renderDoc.bAutomationCaptureFailed = true;
-        return false;
-    }
-
-    if (!_renderDoc.capture->isCaptureEnabled()) {
-        YA_CORE_WARN("Automation requested RenderDoc capture but capture is disabled");
-        _renderDoc.bAutomationCaptureFailed = true;
-        return false;
-    }
-
-    if (_renderDoc.bAutomationCaptureRequested || _renderDoc.capture->isCapturing()) {
-        return true;
-    }
-
-    _renderDoc.bAutomationCaptureRequested = true;
-    _renderDoc.capture->requestNextFrame();
-    YA_CORE_INFO("Automation queued a single RenderDoc frame capture");
-    return true;
+    return _diagnostics.requestAutomationRenderDocCapture();
 }
 
 bool RenderRuntime::isAutomationRenderDocCapturePending() const
 {
-    return _renderDoc.bAutomationCaptureRequested ||
-           (_renderDoc.capture && _renderDoc.capture->isCapturing()) ||
-           _renderDoc.bAutomationPostProcessPending;
+    return _diagnostics.isAutomationRenderDocCapturePending();
 }
 
 bool RenderRuntime::isAutomationRenderDocCaptureTerminal() const
 {
-    return _renderDoc.bAutomationCaptureFinished || _renderDoc.bAutomationCaptureFailed;
+    return _diagnostics.isAutomationRenderDocCaptureTerminal();
+}
+
+const std::string& RenderRuntime::getAutomationRenderDocCapturePath() const
+{
+    return _diagnostics.getAutomationRenderDocCapturePath();
+}
+
+const std::string& RenderRuntime::getAutomationRenderDocPassSummaryPath() const
+{
+    return _diagnostics.getAutomationRenderDocPassSummaryPath();
 }
 
 void RenderRuntime::initActivePipeline()

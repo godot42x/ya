@@ -279,40 +279,41 @@ void RenderRuntime::renderGUI(float dt)
 
     if (ImGui::TreeNode("Diagnostics")) {
         if (ImGui::TreeNode("RenderDoc")) {
-            bool bAvailable = _renderDoc.capture && _renderDoc.capture->isAvailable();
-        ImGui::Text("Available: %s", bAvailable ? "Yes" : "No");
-        ImGui::TextWrapped("DLL Path: %s", _renderDoc.configuredDllPath.empty() ? "<default>" : _renderDoc.configuredDllPath.c_str());
-        ImGui::TextWrapped("Output Dir: %s", _renderDoc.configuredOutputDir.empty() ? "<default>" : _renderDoc.configuredOutputDir.c_str());
-        if (bAvailable) {
-            bool bCaptureEnabled = _renderDoc.capture->isCaptureEnabled();
-            if (ImGui::Checkbox("Capture Enabled", &bCaptureEnabled)) {
-                _renderDoc.capture->setCaptureEnabled(bCaptureEnabled);
-            }
+            auto& renderDoc = _diagnostics.getRenderDocState();
+            bool  bAvailable = renderDoc.capture && renderDoc.capture->isAvailable();
+            ImGui::Text("Available: %s", bAvailable ? "Yes" : "No");
+            ImGui::TextWrapped("DLL Path: %s", renderDoc.configuredDllPath.empty() ? "<default>" : renderDoc.configuredDllPath.c_str());
+            ImGui::TextWrapped("Output Dir: %s", renderDoc.configuredOutputDir.empty() ? "<default>" : renderDoc.configuredOutputDir.c_str());
+            if (bAvailable) {
+                bool bCaptureEnabled = renderDoc.capture->isCaptureEnabled();
+                if (ImGui::Checkbox("Capture Enabled", &bCaptureEnabled)) {
+                    renderDoc.capture->setCaptureEnabled(bCaptureEnabled);
+                }
 
-            bool bHudVisible = _renderDoc.capture->isHUDVisible();
-            if (ImGui::Checkbox("Show RenderDoc HUD", &bHudVisible)) {
-                _renderDoc.capture->setHUDVisible(bHudVisible);
-            }
+                bool bHudVisible = renderDoc.capture->isHUDVisible();
+                if (ImGui::Checkbox("Show RenderDoc HUD", &bHudVisible)) {
+                    renderDoc.capture->setHUDVisible(bHudVisible);
+                }
 
-            ImGui::Text("Capturing: %s", _renderDoc.capture->isCapturing() ? "Yes" : "No");
-            ImGui::Text("Delay Frames: %u", _renderDoc.capture->getDelayFrames());
-            ImGui::Combo("On Capture", &_renderDoc.onCaptureAction, "None\0Open Replay UI\0Open Capture Folder\0");
-            ImGui::TextWrapped("Last Capture: %s", _renderDoc.lastCapturePath.empty() ? "<none>" : _renderDoc.lastCapturePath.c_str());
+                ImGui::Text("Capturing: %s", renderDoc.capture->isCapturing() ? "Yes" : "No");
+                ImGui::Text("Delay Frames: %u", renderDoc.capture->getDelayFrames());
+                ImGui::Combo("On Capture", &renderDoc.onCaptureAction, "None\0Open Replay UI\0Open Capture Folder\0");
+                ImGui::TextWrapped("Last Capture: %s", renderDoc.lastCapturePath.empty() ? "<none>" : renderDoc.lastCapturePath.c_str());
 
-            bool bCanCapture = _renderDoc.capture->isCaptureEnabled();
-            ImGui::BeginDisabled(!bCanCapture);
-            if (ImGui::Button("Capture Next Frame (F9)")) {
-                _renderDoc.capture->requestNextFrame();
-            }
-            if (ImGui::Button("Capture After 120 Frames (Ctrl+F9)")) {
-                _renderDoc.capture->requestAfterFrames(120);
-            }
-            ImGui::EndDisabled();
+                bool bCanCapture = renderDoc.capture->isCaptureEnabled();
+                ImGui::BeginDisabled(!bCanCapture);
+                if (ImGui::Button("Capture Next Frame (F9)")) {
+                    renderDoc.capture->requestNextFrame();
+                }
+                if (ImGui::Button("Capture After 120 Frames (Ctrl+F9)")) {
+                    renderDoc.capture->requestAfterFrames(120);
+                }
+                ImGui::EndDisabled();
 
-            if (ImGui::Button("Open Last Capture Folder") && !_renderDoc.lastCapturePath.empty()) {
-                openCaptureDirectoryFromGUI(_renderDoc.lastCapturePath);
+                if (ImGui::Button("Open Last Capture Folder") && !renderDoc.lastCapturePath.empty()) {
+                    openCaptureDirectoryFromGUI(renderDoc.lastCapturePath);
+                }
             }
-        }
             ImGui::TreePop();
         }
         ImGui::TreePop();

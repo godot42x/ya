@@ -9,6 +9,7 @@
 #include "Render/Pipelines/PBRGenerateBrdfLUT.h"
 #include "Render/Render.h"
 #include "Render/Shader.h"
+#include "Runtime/App/RenderDiagnosticsService.h"
 
 #include <glm/glm.hpp>
 #include <memory>
@@ -28,7 +29,6 @@ struct IRenderTarget;
 struct IImageView;
 struct IRenderPass;
 struct DeferredRenderPipeline;
-struct RenderDocCapture;
 struct Sampler;
 struct EnvironmentLightingComponent;
 struct RenderFrameData;
@@ -118,24 +118,11 @@ struct RenderRuntime
         char formatSearch[64]        = {};
     };
 
-    struct RenderDocState
-    {
-        stdptr<RenderDocCapture> capture;
-        int                      onCaptureAction                = 0;
-        bool                     bAutomationCaptureRequested    = false;
-        bool                     bAutomationCaptureFinished     = false;
-        bool                     bAutomationCaptureFailed       = false;
-        bool                     bAutomationPostProcessPending  = false;
-        std::string              lastCapturePath;
-        std::string              automationPassSummaryPath;
-        std::string              configuredDllPath;
-        std::string              configuredOutputDir;
-    };
-
     SkyboxResources              _skybox{};
     EnvironmentLightingResources _environmentLighting{};
     SharedResources              _sharedResources{};
     stdptr<Sampler>              _cubemapSampler = nullptr;
+    RenderDiagnosticsService     _diagnostics{};
 
     // pipeline tool
     PBRGenerateBrdfLUT _pbrGenerateBrdfLUT{};
@@ -147,7 +134,6 @@ struct RenderRuntime
     std::shared_ptr<IRenderTarget> _screenRT         = nullptr;
 
     RenderTargetEditorState _rtEditor{};
-    RenderDocState          _renderDoc{};
 
     void init(const InitDesc& desc);
     void shutdown();
@@ -198,8 +184,8 @@ struct RenderRuntime
     [[nodiscard]] DebugRenderSystem&           getDebugRenderSystem() const;
     [[nodiscard]] bool                         isAutomationRenderDocCapturePending() const;
     [[nodiscard]] bool                         isAutomationRenderDocCaptureTerminal() const;
-    [[nodiscard]] const std::string&           getAutomationRenderDocCapturePath() const { return _renderDoc.lastCapturePath; }
-    [[nodiscard]] const std::string&           getAutomationRenderDocPassSummaryPath() const { return _renderDoc.automationPassSummaryPath; }
+    [[nodiscard]] const std::string&           getAutomationRenderDocCapturePath() const;
+    [[nodiscard]] const std::string&           getAutomationRenderDocPassSummaryPath() const;
 
 
     [[nodiscard]] const Rect2D& getViewportRect() const { return _viewportRect; }
