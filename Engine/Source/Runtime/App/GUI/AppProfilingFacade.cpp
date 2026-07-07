@@ -82,15 +82,7 @@ void AppProfilingFacade::renderContents(App& app)
     ImGui::Text("Frame GPU: %.3f ms", frameGpuMs);
 
     if (auto* renderRuntime = app.getRenderRuntime()) {
-        if (ImGui::TreeNode("Runtime Perf")) {
-            renderRuntime->renderPerformanceGUI();
-            ImGui::TreePop();
-        }
-
-        if (ImGui::TreeNode("Stage Internals")) {
-            renderRuntime->renderStageInternalsGUI();
-            ImGui::TreePop();
-        }
+        renderRuntime->renderProfilingDetailsGUI();
     }
 }
 

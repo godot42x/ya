@@ -164,26 +164,7 @@ void renderRenderingSettings(App& app)
     }
 
     ImGui::SeparatorText("World Rendering");
-    if (ImGui::TreeNode("General")) {
-        renderRuntime->renderGeneralSettingsGUI();
-        ImGui::TreePop();
-    }
-    if (renderRuntime->getShadingModel() == RenderRuntime::EShadingModel::Deferred && ImGui::TreeNode("Lighting")) {
-        renderRuntime->renderLightingSettingsGUI();
-        ImGui::TreePop();
-    }
-    if (renderRuntime->isAmbientOcclusionSettingsAvailable() && ImGui::TreeNode("Ambient Occlusion")) {
-        renderRuntime->renderAOSettingsGUI();
-        ImGui::TreePop();
-    }
-    if (renderRuntime->isShadowSettingsAvailable() && ImGui::TreeNode("Shadows")) {
-        renderRuntime->renderShadowSettingsGUI();
-        ImGui::TreePop();
-    }
-    if (renderRuntime->isPostProcessSettingsAvailable() && ImGui::TreeNode("Post Process")) {
-        renderRuntime->renderPostProcessSettingsGUI();
-        ImGui::TreePop();
-    }
+    renderRuntime->renderWorldSettingsGUI();
 }
 } // namespace
 

@@ -184,16 +184,8 @@ struct RenderRuntime
     [[nodiscard]] EShadingModel getShadingModel() const { return _shadingModel; }
     [[nodiscard]] EShadingModel getPendingShadingModel() const { return _pendingShadingModel; }
     void setPendingShadingModel(EShadingModel shadingModel) { _pendingShadingModel = shadingModel; }
-    [[nodiscard]] bool isShadowSettingsAvailable() const;
-    [[nodiscard]] bool isAmbientOcclusionSettingsAvailable() const;
-    [[nodiscard]] bool isPostProcessSettingsAvailable() const;
-    void renderGeneralSettingsGUI();
-    void renderLightingSettingsGUI();
-    void renderAOSettingsGUI();
-    void renderShadowSettingsGUI();
-    void renderPostProcessSettingsGUI();
-    void renderPerformanceGUI();
-    void renderStageInternalsGUI();
+    void renderWorldSettingsGUI();
+    void renderProfilingDetailsGUI();
     void renderRenderingInternalsGUI();
 
     [[nodiscard]] stdptr<IDescriptorPool>      getSkyboxDescriptorPool() const { return _skybox.dsp; }
