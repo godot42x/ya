@@ -129,9 +129,9 @@ Extent2D RenderRuntime::getActiveViewportExtent() const
 Texture* RenderRuntime::getActiveViewportTexture() const
 {
     if (_shadingModel == EShadingModel::Forward) {
-        return _forwardPipeline ? _forwardPipeline->viewportTexture : nullptr;
+        return _forwardPipeline ? _forwardPipeline->getViewportTexture() : nullptr;
     }
-    return _deferredPipeline ? _deferredPipeline->viewportTexture : nullptr;
+    return _deferredPipeline ? _deferredPipeline->getViewportTexture() : nullptr;
 }
 
 void RenderRuntime::renderViewportPassOverlays(const FrameInput& input, ICommandBuffer* cmdBuf)
@@ -221,12 +221,12 @@ void RenderRuntime::endViewportPass(ICommandBuffer* cmdBuf)
 
     if (_shadingModel == EShadingModel::Forward) {
         _forwardPipeline->endViewportPass(cmdBuf);
-        YA_CORE_ASSERT(_forwardPipeline->viewportTexture, "Failed to get viewport texture for postprocessing");
+        YA_CORE_ASSERT(_forwardPipeline->getViewportTexture(), "Failed to get viewport texture for postprocessing");
         return;
     }
 
     _deferredPipeline->endViewportPass(cmdBuf);
-    YA_CORE_ASSERT(_deferredPipeline->viewportTexture, "Failed to get deferred viewport texture");
+    YA_CORE_ASSERT(_deferredPipeline->getViewportTexture(), "Failed to get deferred viewport texture");
 }
 
 void RenderRuntime::renderPresentationPass(const FrameInput& input, ICommandBuffer* cmdBuf)

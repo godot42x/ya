@@ -101,12 +101,18 @@ struct ForwardRenderPipeline
     void                         onViewportResized(Rect2D rect);
     Extent2D                     getViewportExtent() const;
     [[nodiscard]] IRenderTarget* getViewportRT() const { return viewportRT.get(); }
+    [[nodiscard]] Texture*       getViewportTexture() const { return viewportTexture; }
 
     // Shadow query accessors (used by RenderRuntime for debug views)
     [[nodiscard]] bool           isShadowMappingEnabled() const { return bShadowMapping; }
     [[nodiscard]] IRenderTarget* getShadowDepthRT() const { return depthRT.get(); }
     [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const { return shadowDirectionalDepthIV.get(); }
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
+    [[nodiscard]] Texture*       getPostprocessOutputTexture() const { return _postProcessStage.getOutputTexture(); }
+    [[nodiscard]] Texture*       getBloomExtractTexture() const { return _postProcessStage.getBloomExtractTexture(); }
+    [[nodiscard]] Texture*       getBloomBlurTexture() const { return _postProcessStage.getBloomBlurTexture(); }
+    [[nodiscard]] Texture*       getBloomCompositeTexture() const { return _postProcessStage.getBloomCompositeTexture(); }
+    [[nodiscard]] bool           isPostprocessingEnabled() const { return _postProcessStage.isEnabled(); }
 
   private:
     void               initViewportResources(const InitDesc& desc);

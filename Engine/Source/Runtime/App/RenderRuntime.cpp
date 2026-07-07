@@ -205,29 +205,29 @@ IImageView* RenderRuntime::getShadowPointFaceDepthIV(uint32_t pointLightIndex, u
 
 Texture* RenderRuntime::getPostprocessOutputTexture() const
 {
-    if (_forwardPipeline) return _forwardPipeline->_postProcessStage.getOutputTexture();
-    if (_deferredPipeline) return _deferredPipeline->_postProcessStage.getOutputTexture();
+    if (_forwardPipeline) return _forwardPipeline->getPostprocessOutputTexture();
+    if (_deferredPipeline) return _deferredPipeline->getPostprocessOutputTexture();
     return nullptr;
 }
 
 Texture* RenderRuntime::getBloomExtractTexture() const
 {
-    if (_forwardPipeline) return _forwardPipeline->_postProcessStage.getBloomExtractTexture();
-    if (_deferredPipeline) return _deferredPipeline->_postProcessStage.getBloomExtractTexture();
+    if (_forwardPipeline) return _forwardPipeline->getBloomExtractTexture();
+    if (_deferredPipeline) return _deferredPipeline->getBloomExtractTexture();
     return nullptr;
 }
 
 Texture* RenderRuntime::getBloomBlurTexture() const
 {
-    if (_forwardPipeline) return _forwardPipeline->_postProcessStage.getBloomBlurTexture();
-    if (_deferredPipeline) return _deferredPipeline->_postProcessStage.getBloomBlurTexture();
+    if (_forwardPipeline) return _forwardPipeline->getBloomBlurTexture();
+    if (_deferredPipeline) return _deferredPipeline->getBloomBlurTexture();
     return nullptr;
 }
 
 Texture* RenderRuntime::getBloomCompositeTexture() const
 {
-    if (_forwardPipeline) return _forwardPipeline->_postProcessStage.getBloomCompositeTexture();
-    if (_deferredPipeline) return _deferredPipeline->_postProcessStage.getBloomCompositeTexture();
+    if (_forwardPipeline) return _forwardPipeline->getBloomCompositeTexture();
+    if (_deferredPipeline) return _deferredPipeline->getBloomCompositeTexture();
     return nullptr;
 }
 
@@ -243,8 +243,8 @@ Texture* RenderRuntime::getPresentationTexture() const
 
 bool RenderRuntime::isPostprocessingEnabled() const
 {
-    if (_forwardPipeline) return _forwardPipeline->_postProcessStage.isEnabled();
-    if (_deferredPipeline) return _deferredPipeline->_postProcessStage.isEnabled();
+    if (_forwardPipeline) return _forwardPipeline->isPostprocessingEnabled();
+    if (_deferredPipeline) return _deferredPipeline->isPostprocessingEnabled();
     return false;
 }
 

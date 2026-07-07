@@ -155,6 +155,7 @@ struct DeferredRenderPipeline
     IRenderTarget* getGBufferRT() const { return _gBufferRT.get(); }
     IRenderTarget* getViewportRT() const { return _viewportRT.get(); }
     IRenderTarget* getShadowDepthRT() const { return _shadowDepthRT.get(); }
+    Texture*       getViewportTexture() const { return viewportTexture; }
     bool           isShadowMappingEnabled() const { return _bEnableShadowMapping; }
     IImageView*    getShadowDirectionalDepthIV() const { return _shadowDirectionalDepthIV.get(); }
     IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
@@ -164,6 +165,11 @@ struct DeferredRenderPipeline
         }
         return _shadowPointFaceIVs[pointLightIndex][faceIndex].get();
     }
+    Texture* getPostprocessOutputTexture() const { return _postProcessStage.getOutputTexture(); }
+    Texture* getBloomExtractTexture() const { return _postProcessStage.getBloomExtractTexture(); }
+    Texture* getBloomBlurTexture() const { return _postProcessStage.getBloomBlurTexture(); }
+    Texture* getBloomCompositeTexture() const { return _postProcessStage.getBloomCompositeTexture(); }
+    bool     isPostprocessingEnabled() const { return _postProcessStage.isEnabled(); }
 
   private:
     void               loadPersistentSettings();
