@@ -1,5 +1,7 @@
 #include "UIManager.h"
 #include "Core/Profiling/Instrumentor.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
 
 namespace ya
 
@@ -21,6 +23,8 @@ void UIManager::render()
 
 void UIManager::onEvent(const Event &event, UIAppCtx &ctx)
 {
+    YA_PROFILE_FUNCTION()
+    YA_PERF_SCOPE(perf::sample::appUiEvent(), perf::metric::cpuTimeMs(), perf::domain::game());
     _rootCanvas->handleEvent(event, ctx);
 }
 

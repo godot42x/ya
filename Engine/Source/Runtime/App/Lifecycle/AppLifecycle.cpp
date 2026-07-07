@@ -202,6 +202,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
 
         FileWatcher::init();
         MaterialFactory::init();
+        TaskQueue::get().start(/*numThreads=*/2);
         profiling::beginRuntimeSession(app._ci);
         if (ConfigManager::get().hasDocument("automation")) {
             AppAutomation::applyRuntimeOverrides(app);

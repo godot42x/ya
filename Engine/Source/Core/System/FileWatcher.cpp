@@ -1,5 +1,6 @@
 #include "FileWatcher.h"
 #include "Core/Log.h"
+#include "Core/Profiling/Instrumentor.h"
 #include <chrono>
 #include <filesystem>
 
@@ -126,6 +127,7 @@ void FileWatcher::unwatchDirectory(const std::string& dirpath)
 
 void FileWatcher::poll()
 {
+    YA_PROFILE_FUNCTION()
     namespace fs = std::filesystem;
     
     // 轮询所有监视的文件

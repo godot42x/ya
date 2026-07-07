@@ -81,10 +81,31 @@ inline const FName& frameLogic()
     return key;
 }
 
+inline const FName& frameEventPump()
+{
+    using namespace ya::literals;
+    static const FName key = "Frame/EventPump"_name;
+    return key;
+}
+
+inline const FName& frameFpsControl()
+{
+    using namespace ya::literals;
+    static const FName key = "Frame/FpsControl"_name;
+    return key;
+}
+
 inline const FName& frameRender()
 {
     using namespace ya::literals;
     static const FName key = "Frame/Render"_name;
+    return key;
+}
+
+inline const FName& frameMainThreadCallbacks()
+{
+    using namespace ya::literals;
+    static const FName key = "Frame/MainThreadCallbacks"_name;
     return key;
 }
 
@@ -176,6 +197,41 @@ inline const FName& renderFlushCallbacks()
 {
     using namespace ya::literals;
     static const FName key = "Render/FlushCallbacks"_name;
+    return key;
+}
+
+inline const FName& appEventRoute()
+{
+    using namespace ya::literals;
+    static const FName key = "App/EventRoute"_name;
+    return key;
+}
+
+inline const FName& appInputEvent()
+{
+    using namespace ya::literals;
+    static const FName key = "App/InputEvent"_name;
+    return key;
+}
+
+inline const FName& appUiEvent()
+{
+    using namespace ya::literals;
+    static const FName key = "App/UIEvent"_name;
+    return key;
+}
+
+inline const FName& appEditorEvent()
+{
+    using namespace ya::literals;
+    static const FName key = "App/EditorEvent"_name;
+    return key;
+}
+
+inline const FName& appFileWatcher()
+{
+    using namespace ya::literals;
+    static const FName key = "App/FileWatcher"_name;
     return key;
 }
 

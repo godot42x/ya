@@ -25,7 +25,7 @@ clean_if_needed:
 	$(if $(filter true,$(force)), xmake c )
 
 cfg_if_needed:
-	$(if $(cfg), echo "set config=$(cfg)\" xmake f $(cfg))
+	$(if $(cfg), echo "set config=$(cfg)\n" && xmake f $(cfg) && xmake project -k compile_commands)
 
 basic:
 	# make imgui and imguizmo readonly

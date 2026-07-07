@@ -432,7 +432,19 @@ bool hasPendingAutomationWork(const App& app)
 
     return bScreenshotPending || bRenderDocPending;
 }
+
+bool hasFrameAutomationConfig(const AppAutomationOptions& automation)
+{
+    return automation.exitAfterFrame > 0 ||
+           hasScreenshotAutomation(automation) ||
+           hasRenderDocAutomation(automation);
+}
 } // namespace
+
+bool AppAutomation::isFrameAutomationEnabled(const App& app)
+{
+    return hasFrameAutomationConfig(app.getDesc().automation);
+}
 
 bool AppAutomation::shouldDeferQuit(const App& app)
 {
@@ -492,18 +504,33 @@ void AppAutomation::recordPresentationCapture(App& app, ICommandBuffer* cmdBuf)
 
 void AppAutomation::onFrameCompleted(App& app)
 {
+    YA_PROFILE_FUNCTION()
+
     auto&      runtimeState       = getAutomationRuntimeState();
-    const bool bStableFrameReady  = isAutomationStableFrameReady(app);
-    const bool bScreenshotPending = handleScreenshotAutomation(app, bStableFrameReady);
-    const bool bRenderDocPending  = handleRenderDocAutomation(app, bStableFrameReady);
+    bool       bStableFrameReady  = false;
+    bool       bScreenshotPending = false;
+    bool       bRenderDocPending  = false;
+
+    {
+        YA_PROFILE_SCOPE("Automation/Stability");
+        bStableFrameReady = isAutomationStableFrameReady(app);
+    }
+    {
+        YA_PROFILE_SCOPE("Automation/Screenshot");
+        bScreenshotPending = handleScreenshotAutomation(app, bStableFrameReady);
+    }
+    {
+        YA_PROFILE_SCOPE("Automation/RenderDoc");
+        bRenderDocPending = handleRenderDocAutomation(app, bStableFrameReady);
+    }
     const bool bAutomationPending = bScreenshotPending || bRenderDocPending;
 
     if (RenderRuntime* renderRuntime = app.getRenderRuntime()) {
+        YA_PROFILE_SCOPE("Automation/UpdateArtifacts");
         profiling::setGpuCapturePath(renderRuntime->getAutomationRenderDocCapturePath());
         profiling::setPassSummaryPath(renderRuntime->getAutomationRenderDocPassSummaryPath());
+        profiling::setScreenshotPath(runtimeState.screenshot.outputPath);
     }
-
-    profiling::setScreenshotPath(runtimeState.screenshot.outputPath);
     if (runtimeState.bQuitDeferred && !bAutomationPending) {
         runtimeState.bQuitDeferred = false;
         YA_CORE_INFO("Continuing deferred shutdown after automation work finished");
@@ -511,7 +538,10 @@ void AppAutomation::onFrameCompleted(App& app)
         return;
     }
 
-    profiling::flushRuntimeArtifacts();
+    {
+        YA_PROFILE_SCOPE("Automation/FlushArtifacts");
+        profiling::flushRuntimeArtifacts();
+    }
     if (bAutomationPending || !shouldRequestQuitAfterFrame(app)) {
         return;
     }

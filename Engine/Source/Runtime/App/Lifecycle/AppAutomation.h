@@ -11,6 +11,7 @@ struct ICommandBuffer;
 class AppAutomation
 {
   public:
+    static bool isFrameAutomationEnabled(const App& app);
     static void loadConfig(AppDesc& appDesc);
     static void applyStartupOverrides(AppDesc& appDesc);
     static void applyRuntimeOverrides(App& app);

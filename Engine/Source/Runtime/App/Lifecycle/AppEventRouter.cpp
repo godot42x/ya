@@ -4,6 +4,8 @@
 
 #include "ImGuiHelper.h"
 
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
 #include "Core/UI/UIManager.h"
 
 namespace ya
@@ -16,6 +18,9 @@ int App::onEvent(const Event& event)
 
 int AppEventRouter::onEvent(App& app, const Event& event)
 {
+    YA_PROFILE_FUNCTION()
+    YA_PERF_SCOPE(perf::sample::appEventRoute(), perf::metric::cpuTimeMs(), perf::domain::game());
+
     EventProcessState ret = ImGuiManager::get().processEvent(event);
     if (ret != EventProcessState::Continue) {
         return 0;
@@ -77,11 +82,16 @@ int AppEventRouter::onEvent(App& app, const Event& event)
         return 0;
     }
 
-    app.inputManager.processEvent(event);
+    {
+        YA_PROFILE_SCOPE("App/InputEvent");
+        YA_PERF_SCOPE(perf::sample::appInputEvent(), perf::metric::cpuTimeMs(), perf::domain::game());
+        app.inputManager.processEvent(event);
+    }
 
     Rect2D viewportRect = app._renderRuntime ? app._renderRuntime->getViewportRect() : Rect2D{};
     bool   bInViewport  = FUIHelper::isPointInRect(app._lastMousePos, viewportRect.pos, viewportRect.extent);
     if (bInViewport) {
+        YA_PROFILE_SCOPE("App/UIEvent");
         UIAppCtx ctx{
             .lastMousePos = app._lastMousePos,
             .bInViewport  = bInViewport,
@@ -91,7 +101,11 @@ int AppEventRouter::onEvent(App& app, const Event& event)
         UIManager::get()->onEvent(event, ctx);
     }
 
-    app._editorLayer->onEvent(event);
+    {
+        YA_PROFILE_SCOPE("App/EditorEvent");
+        YA_PERF_SCOPE(perf::sample::appEditorEvent(), perf::metric::cpuTimeMs(), perf::domain::game());
+        app._editorLayer->onEvent(event);
+    }
     return 0;
 }
 

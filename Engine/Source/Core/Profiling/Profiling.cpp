@@ -14,10 +14,14 @@
 #include <array>
 #include <cctype>
 #include <chrono>
+#include <condition_variable>
 #include <filesystem>
 #include <fstream>
 #include <format>
+#include <mutex>
+#include <optional>
 #include <string_view>
+#include <thread>
 
 namespace ya::profiling
 {
@@ -37,6 +41,127 @@ struct RuntimeArtifactState
     std::string         passSummaryPath;
     std::string         screenshotPath;
     bool                bManifestDirty = false;
+};
+
+void writeJsonFile(const std::string& outputPath, const nlohmann::json& json);
+nlohmann::json buildGpuSummaryJson(const RuntimeArtifactState& state);
+nlohmann::json buildProfileSummaryJson(const RuntimeArtifactState& state);
+
+enum class EArtifactFlushMode : uint8_t
+{
+    Async,
+    Sync,
+};
+
+class RuntimeArtifactWriter
+{
+  public:
+    void request(RuntimeArtifactState state)
+    {
+        std::unique_lock lock(_mutex);
+        startWorkerIfNeeded(lock);
+        _pendingState      = std::move(state);
+        _pendingGeneration = ++_requestedGeneration;
+        lock.unlock();
+        _condition.notify_one();
+    }
+
+    void flush(RuntimeArtifactState state)
+    {
+        uint64_t generation = 0;
+        {
+            std::unique_lock lock(_mutex);
+            startWorkerIfNeeded(lock);
+            _pendingState      = std::move(state);
+            generation         = ++_requestedGeneration;
+            _pendingGeneration = generation;
+        }
+        _condition.notify_one();
+
+        std::unique_lock lock(_mutex);
+        _flushCondition.wait(lock, [this, generation]() {
+            return _completedGeneration >= generation;
+        });
+    }
+
+    void shutdown()
+    {
+        std::thread worker;
+        {
+            std::lock_guard lock(_mutex);
+            _bStopping = true;
+            worker     = std::move(_worker);
+        }
+        _condition.notify_one();
+        if (worker.joinable()) {
+            worker.join();
+        }
+
+        std::lock_guard lock(_mutex);
+        _bStopping           = false;
+        _requestedGeneration = 0;
+        _completedGeneration = 0;
+        _pendingGeneration   = 0;
+        _pendingState.reset();
+    }
+
+  private:
+    void startWorkerIfNeeded(std::unique_lock<std::mutex>&)
+    {
+        if (_worker.joinable()) {
+            return;
+        }
+
+        _bStopping = false;
+        _worker    = std::thread([this]() {
+            workerLoop();
+        });
+    }
+
+    void workerLoop()
+    {
+        while (true) {
+            std::optional<RuntimeArtifactState> pendingState;
+            uint64_t                            generation = 0;
+
+            {
+                std::unique_lock lock(_mutex);
+                _condition.wait(lock, [this]() {
+                    return _bStopping || _pendingState.has_value();
+                });
+
+                if (_bStopping && !_pendingState.has_value()) {
+                    break;
+                }
+
+                pendingState      = std::move(_pendingState);
+                generation        = _pendingGeneration;
+                _pendingState.reset();
+                _pendingGeneration = 0;
+            }
+
+            if (pendingState.has_value()) {
+                writeJsonFile(pendingState->paths.gpuSummaryPath, buildGpuSummaryJson(*pendingState));
+                writeJsonFile(pendingState->paths.profileSummaryPath, buildProfileSummaryJson(*pendingState));
+            }
+
+            {
+                std::lock_guard lock(_mutex);
+                _completedGeneration = std::max(_completedGeneration, generation);
+            }
+            _flushCondition.notify_all();
+        }
+    }
+
+    std::mutex                        _mutex;
+    std::condition_variable           _condition;
+    std::condition_variable           _flushCondition;
+    std::thread                       _worker;
+    std::optional<RuntimeArtifactState> _pendingState;
+    uint64_t                          _requestedGeneration = 0;
+    uint64_t                          _completedGeneration = 0;
+    uint64_t                          _pendingGeneration   = 0;
+    bool                              _bStopping           = false;
 };
 
 RuntimeState& runtimeStateStorage()
@@ -61,6 +186,18 @@ RuntimeArtifactState& runtimeArtifactStateStorage()
 {
     static RuntimeArtifactState state;
     return state;
+}
+
+std::mutex& runtimeArtifactStateMutex()
+{
+    static std::mutex mutex;
+    return mutex;
+}
+
+RuntimeArtifactWriter& runtimeArtifactWriter()
+{
+    static RuntimeArtifactWriter writer;
+    return writer;
 }
 
 [[nodiscard]] bool normalizeRuntimeToggle(bool enabled)
@@ -176,8 +313,11 @@ nlohmann::json buildFrameCycleJson()
 {
     static const std::array metricDefs = {
         std::pair{perf::sample::renderFrame(), "frameCpuMs"},
+        std::pair{perf::sample::frameEventPump(), "eventPumpCpuMs"},
+        std::pair{perf::sample::frameFpsControl(), "fpsControlCpuMs"},
         std::pair{perf::sample::frameLogic(), "logicCpuMs"},
         std::pair{perf::sample::frameRender(), "renderCpuMs"},
+        std::pair{perf::sample::frameMainThreadCallbacks(), "mainThreadCallbacksCpuMs"},
         std::pair{perf::sample::frameAutomation(), "automationCpuMs"},
         std::pair{perf::sample::frameUnaccounted(), "unaccountedCpuMs"},
     };
@@ -202,6 +342,11 @@ nlohmann::json buildRenderStagesJson()
         std::pair{perf::sample::renderImgui(), "imguiCpuMs"},
         std::pair{perf::sample::renderFlushCallbacks(), "flushCallbacksCpuMs"},
         std::pair{perf::sample::renderSubmit(), "submitCpuMs"},
+        std::pair{perf::sample::appEventRoute(), "eventRouteCpuMs"},
+        std::pair{perf::sample::appInputEvent(), "inputEventCpuMs"},
+        std::pair{perf::sample::appUiEvent(), "uiEventCpuMs"},
+        std::pair{perf::sample::appEditorEvent(), "editorEventCpuMs"},
+        std::pair{perf::sample::appFileWatcher(), "fileWatcherCpuMs"},
         std::pair{perf::sample::shadowDirectional(), "shadowDirectionalCpuMs"},
         std::pair{perf::sample::shadowPoint(), "shadowPointCpuMs"},
         std::pair{perf::sample::shadowPointCull(), "shadowPointCullCpuMs"},
@@ -248,8 +393,11 @@ nlohmann::json buildGpuSummaryJson(const RuntimeArtifactState& state)
     auto metricJson = nlohmann::json::array();
     const std::array metricDefs = {
         std::pair{perf::sample::renderFrame(), "Render/Frame"},
+        std::pair{perf::sample::frameEventPump(), "Frame/EventPump"},
+        std::pair{perf::sample::frameFpsControl(), "Frame/FpsControl"},
         std::pair{perf::sample::frameLogic(), "Frame/Logic"},
         std::pair{perf::sample::frameRender(), "Frame/Render"},
+        std::pair{perf::sample::frameMainThreadCallbacks(), "Frame/MainThreadCallbacks"},
         std::pair{perf::sample::frameAutomation(), "Frame/Automation"},
         std::pair{perf::sample::frameUnaccounted(), "Frame/Unaccounted"},
         std::pair{perf::sample::renderExtract(), "Render/Extract"},
@@ -264,6 +412,11 @@ nlohmann::json buildGpuSummaryJson(const RuntimeArtifactState& state)
         std::pair{perf::sample::renderImgui(), "Render/ImGui"},
         std::pair{perf::sample::renderFlushCallbacks(), "Render/FlushCallbacks"},
         std::pair{perf::sample::renderSubmit(), "Render/Submit"},
+        std::pair{perf::sample::appEventRoute(), "App/EventRoute"},
+        std::pair{perf::sample::appInputEvent(), "App/InputEvent"},
+        std::pair{perf::sample::appUiEvent(), "App/UIEvent"},
+        std::pair{perf::sample::appEditorEvent(), "App/EditorEvent"},
+        std::pair{perf::sample::appFileWatcher(), "App/FileWatcher"},
         std::pair{perf::sample::vulkanWaitFence(), "Vulkan/WaitFence"},
         std::pair{perf::sample::vulkanAcquire(), "Vulkan/Acquire"},
         std::pair{perf::sample::vulkanPresent(), "Vulkan/Present"},
@@ -361,18 +514,40 @@ nlohmann::json buildProfileSummaryJson(const RuntimeArtifactState& state)
     };
 }
 
-void flushRuntimeArtifactsInternal()
+std::optional<RuntimeArtifactState> captureDirtyArtifactSnapshot()
 {
-    auto& state = runtimeArtifactStateStorage();
+    std::lock_guard lock(runtimeArtifactStateMutex());
+    auto&           state = runtimeArtifactStateStorage();
     if (!state.bManifestDirty || state.paths.outputDir.empty()) {
+        return std::nullopt;
+    }
+
+    RuntimeArtifactState snapshot = state;
+    snapshot.paths.gpuSummaryPath     = getGpuSummaryOutputPath(snapshot.paths);
+    snapshot.paths.profileSummaryPath = getProfileSummaryOutputPath(snapshot.paths);
+    state.paths.gpuSummaryPath        = snapshot.paths.gpuSummaryPath;
+    state.paths.profileSummaryPath    = snapshot.paths.profileSummaryPath;
+    state.bManifestDirty = false;
+    return snapshot;
+}
+
+void flushRuntimeArtifactsInternal(EArtifactFlushMode mode)
+{
+    auto snapshot = captureDirtyArtifactSnapshot();
+    if (!snapshot.has_value()) {
+        if (mode == EArtifactFlushMode::Sync) {
+            runtimeArtifactWriter().shutdown();
+        }
         return;
     }
 
-    state.paths.gpuSummaryPath     = getGpuSummaryOutputPath(state.paths);
-    state.paths.profileSummaryPath = getProfileSummaryOutputPath(state.paths);
-    writeJsonFile(state.paths.gpuSummaryPath, buildGpuSummaryJson(state));
-    writeJsonFile(state.paths.profileSummaryPath, buildProfileSummaryJson(state));
-    state.bManifestDirty = false;
+    if (mode == EArtifactFlushMode::Sync) {
+        runtimeArtifactWriter().flush(std::move(*snapshot));
+        runtimeArtifactWriter().shutdown();
+        return;
+    }
+
+    runtimeArtifactWriter().request(std::move(*snapshot));
 }
 
 } // namespace
@@ -501,7 +676,8 @@ void applyAppOverrides(AppDesc& appDesc)
 
 void beginRuntimeSession(const AppDesc& appDesc)
 {
-    auto& state                = runtimeArtifactStateStorage();
+    std::lock_guard lock(runtimeArtifactStateMutex());
+    auto&           state                = runtimeArtifactStateStorage();
     state.paths.runId          = makeRunId(appDesc.profiling);
     state.paths.sessionName    = appDesc.profiling.profileSessionName;
     state.paths.outputDir      = resolveOutputDir(appDesc);
@@ -521,7 +697,7 @@ void beginRuntimeSession(const AppDesc& appDesc)
     }
 
     if (!YA_PROFILE_IS_ENABLED()) {
-        flushRuntimeArtifactsInternal();
+        flushRuntimeArtifactsInternal(EArtifactFlushMode::Sync);
         return;
     }
 
@@ -534,39 +710,52 @@ void endRuntimeSession()
         cpuTrace().EndSession();
     }
 
-    flushRuntimeArtifactsInternal();
+    flushRuntimeArtifactsInternal(EArtifactFlushMode::Sync);
     YA_PROFILE_SET_ENABLED(false);
 }
 
 RuntimeSessionPaths getRuntimeSessionPaths()
 {
+    std::lock_guard lock(runtimeArtifactStateMutex());
     return runtimeArtifactStateStorage().paths;
 }
 
 void setGpuCapturePath(std::string path)
 {
-    auto& state         = runtimeArtifactStateStorage();
+    std::lock_guard lock(runtimeArtifactStateMutex());
+    auto&           state = runtimeArtifactStateStorage();
+    if (state.gpuCapturePath == path) {
+        return;
+    }
     state.gpuCapturePath = std::move(path);
     state.bManifestDirty = true;
 }
 
 void setPassSummaryPath(std::string path)
 {
-    auto& state          = runtimeArtifactStateStorage();
+    std::lock_guard lock(runtimeArtifactStateMutex());
+    auto&           state = runtimeArtifactStateStorage();
+    if (state.passSummaryPath == path) {
+        return;
+    }
     state.passSummaryPath = std::move(path);
     state.bManifestDirty  = true;
 }
 
 void setScreenshotPath(std::string path)
 {
-    auto& state        = runtimeArtifactStateStorage();
+    std::lock_guard lock(runtimeArtifactStateMutex());
+    auto&           state = runtimeArtifactStateStorage();
+    if (state.screenshotPath == path) {
+        return;
+    }
     state.screenshotPath = std::move(path);
     state.bManifestDirty = true;
 }
 
 void flushRuntimeArtifacts()
 {
-    flushRuntimeArtifactsInternal();
+    flushRuntimeArtifactsInternal(EArtifactFlushMode::Async);
 }
 
 Instrumentor& cpuTrace()

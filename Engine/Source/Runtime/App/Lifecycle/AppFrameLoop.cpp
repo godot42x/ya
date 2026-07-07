@@ -107,35 +107,51 @@ int AppFrameLoop::iterate(App& app, float dt)
         perf::metric::cpuTimeMs(),
         perf::domain::render(),
         perf::sample::frameUnaccounted(),
+        perf::sample::frameEventPump(),
+        perf::sample::frameFpsControl(),
         perf::sample::frameLogic(),
         perf::sample::frameRender(),
+        perf::sample::frameMainThreadCallbacks(),
         perf::sample::frameAutomation());
 
     SDL_Event evt;
-    if (SDL_PollEvent(&evt)) {
-        processEvent(app, evt);
+    {
+        YA_PROFILE_SCOPE("Frame/EventPump");
+        YA_PERF_SCOPE(perf::sample::frameEventPump(), perf::metric::cpuTimeMs(), perf::domain::game());
+        if (SDL_PollEvent(&evt)) {
+            processEvent(app, evt);
+        }
     }
 
-    dt += FPSControl::get()->update(dt);
+    {
+        YA_PROFILE_SCOPE("Frame/FpsControl");
+        YA_PERF_SCOPE(perf::sample::frameFpsControl(), perf::metric::cpuTimeMs(), perf::domain::game());
+        dt += FPSControl::get()->update(dt);
+    }
 
     if (app._bMinimized) {
         SDL_Delay(100);
         return 0;
     }
     if (!app._bPause) {
+        YA_PROFILE_SCOPE("Frame/Logic");
         YA_PERF_SCOPE(perf::sample::frameLogic(), perf::metric::cpuTimeMs(), perf::domain::game());
         tickLogic(app, dt);
     }
     {
+        YA_PROFILE_SCOPE("Frame/Render");
         YA_PERF_SCOPE(perf::sample::frameRender(), perf::metric::cpuTimeMs(), perf::domain::render());
         tickRender(app, dt);
     }
     {
+        YA_PROFILE_SCOPE("Frame/MainThreadCallbacks");
+        YA_PERF_SCOPE(perf::sample::frameMainThreadCallbacks(), perf::metric::cpuTimeMs(), perf::domain::game());
         YA_PERF_SCOPE(perf::sample::renderFlushCallbacks(), perf::metric::cpuTimeMs(), perf::domain::render());
         TaskQueue::get().processMainThreadCallbacks();
     }
     ++App::_frameIndex;
-    {
+    if (AppAutomation::isFrameAutomationEnabled(app)) {
+        YA_PROFILE_SCOPE("Frame/Automation");
         YA_PERF_SCOPE(perf::sample::frameAutomation(), perf::metric::cpuTimeMs(), perf::domain::render());
         AppAutomation::onFrameCompleted(app);
     }
@@ -145,6 +161,7 @@ int AppFrameLoop::iterate(App& app, float dt)
 
 int AppFrameLoop::processEvent(App& app, SDL_Event& event)
 {
+    YA_PROFILE_FUNCTION()
     processSDLEvent(
         event,
         [&app](const auto& e)
@@ -155,15 +172,30 @@ int AppFrameLoop::processEvent(App& app, SDL_Event& event)
 void AppFrameLoop::tickLogic(App& app, float dt)
 {
     YA_PROFILE_FUNCTION()
-    app.taskManager.update();
-    Facade.timerManager.onUpdate(dt);
-    syncViewportState(app);
-
-    for (auto& sys : app._systems) {
-        sys->onUpdate(dt);
+    {
+        YA_PROFILE_SCOPE("Logic/TaskManager");
+        app.taskManager.update();
+    }
+    {
+        YA_PROFILE_SCOPE("Logic/TimerManager");
+        Facade.timerManager.onUpdate(dt);
+    }
+    {
+        YA_PROFILE_SCOPE("Logic/ViewportSync");
+        syncViewportState(app);
     }
 
-    Render2D::onUpdate(dt);
+    {
+        YA_PROFILE_SCOPE("Logic/Systems");
+        for (auto& sys : app._systems) {
+            sys->onUpdate(dt);
+        }
+    }
+
+    {
+        YA_PROFILE_SCOPE("Logic/Render2DUpdate");
+        Render2D::onUpdate(dt);
+    }
 
     switch (app._appState) {
     case AppState::Editor:
@@ -171,19 +203,34 @@ void AppFrameLoop::tickLogic(App& app, float dt)
     case AppState::Simulation:
     case AppState::Runtime:
     {
+        YA_PROFILE_SCOPE("Logic/Lua");
         app._luaScriptingSystem->onUpdate(dt);
     } break;
     }
 
     if (auto* watcher = FileWatcher::get()) {
+        YA_PROFILE_SCOPE("Logic/FileWatcher");
+        YA_PERF_SCOPE(perf::sample::appFileWatcher(), perf::metric::cpuTimeMs(), perf::domain::game());
         watcher->poll();
     }
 
-    app._editorLayer->onUpdate(dt);
-    app.inputManager.postUpdate();
+    {
+        YA_PROFILE_SCOPE("Logic/EditorUpdate");
+        app._editorLayer->onUpdate(dt);
+    }
+    {
+        YA_PROFILE_SCOPE("Logic/InputPostUpdate");
+        app.inputManager.postUpdate();
+    }
 
-    app.inputManager.preUpdate();
-    app.cameraController.update(app.camera, app.inputManager, dt);
+    {
+        YA_PROFILE_SCOPE("Logic/InputPreUpdate");
+        app.inputManager.preUpdate();
+    }
+    {
+        YA_PROFILE_SCOPE("Logic/EditorCamera");
+        app.cameraController.update(app.camera, app.inputManager, dt);
+    }
 
     auto* render = app.getRender();
     if (!render) {
@@ -194,7 +241,10 @@ void AppFrameLoop::tickLogic(App& app, float dt)
     std::string title          = std::format("{}({})", app._ci.title, vkRender->_selectedDeviceInfo.deviceName);
     SDL_SetWindowTitle(windowProvider->getNativeWindowPtr<SDL_Window>(), title.c_str());
 
-    prepareRenderFrameState(app, dt);
+    {
+        YA_PROFILE_SCOPE("Logic/PrepareRenderFrameState");
+        prepareRenderFrameState(app, dt);
+    }
 }
 
 void AppFrameLoop::syncViewportState(App& app)

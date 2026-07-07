@@ -756,7 +756,6 @@ void RenderRuntime::initFrameServices()
     _render->waitIdle();
 
     DeferredDeletionQueue::get().init(/*framesInFlight=*/1);
-    TaskQueue::get().start(/*numThreads=*/2);
 }
 
 void RenderRuntime::shutdown()
@@ -775,7 +774,6 @@ void RenderRuntime::shutdownRuntimeServices()
     }
 
     ImGuiManager::get().shutdown();
-    TaskQueue::get().stop();
     ResourceRegistry::get().clearAll();
 }
 
