@@ -1,6 +1,6 @@
 #include "EditorLayer.h"
 #include "Config/ConfigManager.h"
-#include "Core/Debug/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 #include "Core/KeyCode.h"
 #include "Core/Manager/Facade.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"

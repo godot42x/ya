@@ -32,6 +32,8 @@ struct ShadowStage : public IRenderStage
     void renderGUI() override;
     void renderTechnicalGUI() override;
 
+    [[nodiscard]] BasicShadowMapTechnique* getTechnique() const { return _technique.get(); }
+
     // ─── Public API ──────────────────────────────────────────────────
     [[nodiscard]] IRenderTarget* getRenderTarget() const { return _shadowMapRT.get(); }
     void setRenderTarget(const stdptr<IRenderTarget>& rt);

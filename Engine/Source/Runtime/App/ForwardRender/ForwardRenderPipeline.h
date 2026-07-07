@@ -92,6 +92,7 @@ struct ForwardRenderPipeline
     void renderShadowSettingsGUI();
     void renderPostProcessSettingsGUI();
     void renderTechnicalGUI();
+    void renderPerformanceGUI();
     void renderStageInternalsGUI();
 
     void endViewportPass(ICommandBuffer* cmdBuf);

@@ -1,5 +1,6 @@
 #include "StaticInitProfiler.h"
 #include "Core/Log.h"
+#include "Core/Profiling/Profiling.h"
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
@@ -17,6 +18,8 @@ using std::localtime;
 
 std::atomic<uint64_t>                           StaticInitProfiler::_startTimeNs(0);
 std::atomic<uint64_t>                           StaticInitProfiler::_endTimeNs(0);
+std::atomic<bool>                               StaticInitProfiler::_hasStarted(false);
+std::atomic<bool>                               StaticInitProfiler::_hasEnded(false);
 std::vector<StaticInitProfiler::VariableRecord> StaticInitProfiler::_records;
 std::mutex                                      StaticInitProfiler::_recordsMutex;
 
@@ -24,20 +27,62 @@ std::mutex                                      StaticInitProfiler::_recordsMute
 // 总耗时统计
 // ============================================================================
 
+void StaticInitProfiler::reset()
+{
+    _startTimeNs.store(0, std::memory_order_relaxed);
+    _endTimeNs.store(0, std::memory_order_relaxed);
+    _hasStarted.store(false, std::memory_order_relaxed);
+    _hasEnded.store(false, std::memory_order_relaxed);
+
+    std::lock_guard<std::mutex> lock(_recordsMutex);
+    _records.clear();
+}
+
+void StaticInitProfiler::ensureStarted()
+{
+    if (_hasStarted.load(std::memory_order_acquire)) {
+        return;
+    }
+    recordStart();
+}
+
 void StaticInitProfiler::recordStart()
 {
+    if (!profiling::isStaticInitEnabled()) {
+        return;
+    }
+
+    bool expected = false;
+    if (!_hasStarted.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+        return;
+    }
+
+    _hasEnded.store(false, std::memory_order_release);
+    _endTimeNs.store(0, std::memory_order_relaxed);
+
     YA_CORE_TRACE_LZ("Static initialization started  {}, {}ns",
                      StaticInitProfiler::nowTimeString(),
-                     _startTimeNs.load());
-    _startTimeNs = getNowNanoseconds();
+                     _startTimeNs.load(std::memory_order_relaxed));
+    _startTimeNs.store(getNowNanoseconds(), std::memory_order_release);
 }
 
 void StaticInitProfiler::recordEnd()
 {
-    _endTimeNs = getNowNanoseconds();
+    if (!profiling::isStaticInitEnabled()) {
+        return;
+    }
+
+    ensureStarted();
+
+    bool expected = false;
+    if (!_hasEnded.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+        return;
+    }
+
+    _endTimeNs.store(getNowNanoseconds(), std::memory_order_release);
     YA_CORE_TRACE_LZ("Static initialization ended    {}, {}ns",
                      StaticInitProfiler::nowTimeString(),
-                     _endTimeNs.load());
+                     _endTimeNs.load(std::memory_order_relaxed));
 
     // 自动打印报告
     printReport();
@@ -45,8 +90,12 @@ void StaticInitProfiler::recordEnd()
 
 uint64_t StaticInitProfiler::getTotalNanoseconds()
 {
-    uint64_t start = _startTimeNs.load();
-    uint64_t end   = _endTimeNs.load();
+    if (!profiling::isStaticInitEnabled()) {
+        return 0;
+    }
+
+    uint64_t start = _startTimeNs.load(std::memory_order_acquire);
+    uint64_t end   = _endTimeNs.load(std::memory_order_acquire);
 
     if (start == 0) return 0; // 未开始
     if (end == 0) {
@@ -64,6 +113,10 @@ double StaticInitProfiler::getTotalMilliseconds()
 
 void StaticInitProfiler::printReport()
 {
+    if (!profiling::isStaticInitEnabled()) {
+        return;
+    }
+
     uint64_t totalNs = getTotalNanoseconds();
     double   totalMs = totalNs / 1000000.0;
 
@@ -111,6 +164,10 @@ void StaticInitProfiler::printReport()
 
 void StaticInitProfiler::recordVariable(const std::string &name, uint64_t nanoseconds)
 {
+    if (!profiling::isStaticInitEnabled()) {
+        return;
+    }
+
     std::lock_guard<std::mutex> lock(_recordsMutex);
     _records.push_back({
         .name         = name,
@@ -121,6 +178,10 @@ void StaticInitProfiler::recordVariable(const std::string &name, uint64_t nanose
 
 std::vector<StaticInitProfiler::VariableRecord> StaticInitProfiler::getVariableRecords()
 {
+    if (!profiling::isStaticInitEnabled()) {
+        return {};
+    }
+
     std::lock_guard<std::mutex> lock(_recordsMutex);
     return _records;
 }
@@ -145,10 +206,17 @@ std::string StaticInitProfiler::nowTimeString()
 StaticInitTimer::StaticInitTimer(const std::string &varName)
     : _varName(varName), _start(std::chrono::high_resolution_clock::now())
 {
+    if (!profiling::isStaticInitEnabled()) {
+        _varName.clear();
+    }
 }
 
 StaticInitTimer::~StaticInitTimer()
 {
+    if (_varName.empty() || !profiling::isStaticInitEnabled()) {
+        return;
+    }
+
     auto end      = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - _start);
 

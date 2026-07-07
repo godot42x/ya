@@ -3,7 +3,7 @@
 #include "ContainerPropertyRenderer.h"
 #include "Runtime/App/App.h"
 #include "Core/Common/AssetRef.h"
-#include "Core/Debug/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Core/TypeIndex.h"
 #include "ReflectionCache.h"

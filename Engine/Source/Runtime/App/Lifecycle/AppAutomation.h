@@ -11,8 +11,7 @@ struct ICommandBuffer;
 class AppAutomation
 {
   public:
-    static void beginRuntimeProfiling(const AppAutomationOptions& automation);
-    static void endRuntimeProfiling();
+    static void loadConfig(AppDesc& appDesc);
     static void applyStartupOverrides(AppDesc& appDesc);
     static void applyRuntimeOverrides(App& app);
     static bool shouldDeferQuit(const App& app);

@@ -5,8 +5,7 @@
 namespace ya::profiling::detail
 {
 
-
-void refEndMSVC()
+void refStaticInitEndTU()
 {
     // 空函数，只是为了让链接器不要优化掉这个文件
     volatile int dummy = 0;

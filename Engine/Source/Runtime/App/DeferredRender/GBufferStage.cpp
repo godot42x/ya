@@ -1,5 +1,7 @@
 #include "GBufferStage.h"
 
+#include "Core/Profiling/Instrumentor.h"
+
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/RenderFrameData.h"
@@ -487,6 +489,7 @@ void GBufferStage::destroy()
 
 void GBufferStage::prepare(const RenderStageContext& ctx)
 {
+    YA_PROFILE_FUNCTION();
     if (_pbr.pipeline) {
         _pbr.pipeline->beginFrame();
     }
@@ -516,6 +519,7 @@ void GBufferStage::prepare(const RenderStageContext& ctx)
 
 void GBufferStage::updateFrameUBOs(const RenderStageContext& ctx)
 {
+    YA_PROFILE_FUNCTION();
     using LightPassLightData = slang_types::DeferredRender::LightPass::LightData;
 
     const auto& fd = *ctx.frameData;
@@ -562,6 +566,7 @@ void GBufferStage::updateFrameUBOs(const RenderStageContext& ctx)
 
 void GBufferStage::preparePBR(const RenderFrameData& frameData)
 {
+    YA_PROFILE_FUNCTION();
     uint32_t         matCount = static_cast<uint32_t>(MaterialFactory::get()->getMaterialSize<PBRMaterial>());
     bool             force    = _pbrMatPool.ensureCapacity(matCount);
     std::vector<int> prepared(matCount, 0);
@@ -603,6 +608,7 @@ void GBufferStage::preparePBR(const RenderFrameData& frameData)
 
 void GBufferStage::preparePhong(const RenderFrameData& frameData)
 {
+    YA_PROFILE_FUNCTION();
     uint32_t         matCount = static_cast<uint32_t>(MaterialFactory::get()->getMaterialSize<PhongMaterial>());
     bool             force    = _phongMatPool.ensureCapacity(matCount);
     std::vector<int> prepared(matCount, 0);
@@ -647,6 +653,7 @@ void GBufferStage::preparePhong(const RenderFrameData& frameData)
 
 void GBufferStage::prepareUnlit(const RenderFrameData& frameData)
 {
+    YA_PROFILE_FUNCTION();
     uint32_t         matCount = static_cast<uint32_t>(MaterialFactory::get()->getMaterialSize<UnlitMaterial>());
     bool             force    = _unlitMatPool.ensureCapacity(matCount);
     std::vector<int> prepared(matCount, 0);
@@ -696,6 +703,7 @@ void GBufferStage::prepareUnlit(const RenderFrameData& frameData)
 
 void GBufferStage::execute(const RenderStageContext& ctx)
 {
+    YA_PROFILE_FUNCTION();
     if (!ctx.frameData || !ctx.cmdBuf) return;
 
     ctx.cmdBuf->debugBeginLabel("GBufferStage");

@@ -71,7 +71,7 @@ struct SkeletonMeshVertex
 
     auto fromVector(std::vector<int32_t> inBoneIDs, std::vector<float> inWeights)
     {
-        uint32_t size = inBoneIDs.size();
+        uint32_t size = static_cast<uint32_t>(inBoneIDs.size());
         if (size == 1) {
             boneIDs = {inBoneIDs[0], 0, 0, 0};
             weights = {inWeights[0], 0, 0, 0};

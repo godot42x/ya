@@ -1,5 +1,7 @@
 #include "SSAOStage.h"
 
+#include "Core/Profiling/Instrumentor.h"
+
 #include "Config/ConfigManager.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/FrameBuffer.h"
@@ -262,6 +264,7 @@ void SSAOStage::updateInputDescriptors()
 
 void SSAOStage::prepare(const RenderStageContext& ctx)
 {
+    YA_PROFILE_FUNCTION();
     if (_pipeline) {
         _pipeline->beginFrame();
     }
@@ -275,6 +278,7 @@ void SSAOStage::prepare(const RenderStageContext& ctx)
 
 void SSAOStage::execute(const RenderStageContext& ctx)
 {
+    YA_PROFILE_FUNCTION();
     if (!ctx.cmdBuf || !_pipeline || !_targetTexture) {
         return;
     }

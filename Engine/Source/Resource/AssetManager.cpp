@@ -3,7 +3,7 @@
 #include "Resource/Manager/AssetModelManager.h"
 #include "Resource/Manager/AssetTextureManager.h"
 
-#include "Core/Debug/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 #include "Core/Log.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Resource/DeferredDeletionQueue.h"

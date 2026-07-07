@@ -3,8 +3,8 @@
 #include "VulkanDescriptorSet.h"
 
 #include <Core/Base.h>
-#include <Core/Debug/PerfKeys.h>
-#include <Core/Debug/PerfState.h>
+#include <Core/Profiling/PerfKeys.h>
+#include <Core/Profiling/PerfState.h>
 #include <Core/Log.h>
 
 #include <algorithm>

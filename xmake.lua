@@ -14,10 +14,12 @@ end
 set_policy("build.warning", true)
 set_warnings("all", "extra")
 if is_plat("windows") then
+    add_cxxflags(
+        "/utf-8"    --  Enable UTF-8 source code support for Unicode characters
+    )
     if is_mode("debug") then
         add_cxflags(
-            "/utf-8"    --  Enable UTF-8 source code support for Unicode characters
-            , "/wd4251"   --  needs to have dll-interface to be used by clients of class
+             "/wd4251"   --  needs to have dll-interface to be used by clients of class
             , "/wd4100" --  unreferenced formal parameter
             , "/wd4267" --  conversion from 'size_t' to 'type', possible loss of data
             , "/wd4819" --  character that cannot be represented in the current code page
@@ -38,9 +40,9 @@ else
 end
 
 if is_mode("profile") then
-    add_defines("YA_PROFILE_CONDITIONAL")
+    add_defines("YA_PROFILING_CONDITIONAL")
 else
-    add_defines("YA_PROFILE_DISABLED")
+    add_defines("YA_PROFILING_DISABLED")
 end
 
 

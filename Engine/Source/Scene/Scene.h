@@ -3,7 +3,7 @@
 #include "Bus/SceneBus.h"
 #include "Core/Common/Types.h"
 #include "Core/Log.h"
-#include "Core/Debug/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 #include "Core/TypeIndex.h"
 #include "ECS/Component.h"
 #include "ECS/ComponentMutation.h"

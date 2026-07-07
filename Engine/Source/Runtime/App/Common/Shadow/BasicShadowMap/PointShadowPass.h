@@ -49,6 +49,7 @@ class PointShadowPass
     void refreshPipeline(EFormat::T depthFormat);
 
     [[nodiscard]] Texture* getFaceDepthTexture(uint32_t lightIndex, uint32_t faceIndex) const;
+    [[nodiscard]] PointShadowIndirectRenderer& getIndirectRenderer() { return _indirectRenderer; }
 
     void rebuildFaceTextures(std::shared_ptr<IImage> shadowImage);
 

@@ -1,6 +1,6 @@
 #include "ReflectionCache.h"
 
-#include "Core/Debug/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 #include "reflects-core/lib.h"
 
 #include "utility.cc/ranges.h"

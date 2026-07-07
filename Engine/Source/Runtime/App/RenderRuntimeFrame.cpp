@@ -1,8 +1,8 @@
 #include "RenderRuntime.h"
 
 #include "App.h"
-#include "Core/Debug/PerfKeys.h"
-#include "Core/Debug/PerfState.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
 #include "Core/UI/UIManager.h"
 #include "DeferredRender/DeferredRenderPipeline.h"
 #include "Editor/EditorLayer.h"
@@ -41,6 +41,7 @@ void RenderRuntime::ensureViewportRectInitialized(const FrameInput& input)
 
 bool RenderRuntime::beginFrameCommandBuffer(int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf)
 {
+    YA_PROFILE_SCOPE("RenderRuntime::beginFrameCommandBuffer");
     YA_PERF_SCOPE(perf::sample::renderPrepareFrame(), perf::metric::cpuTimeMs(), perf::domain::render());
 
     if (_render->getSwapchain()->getExtent().width <= 0 || _render->getSwapchain()->getExtent().height <= 0) {
@@ -139,7 +140,7 @@ void RenderRuntime::renderViewportPassOverlays(const FrameInput& input, ICommand
         return;
     }
 
-    YA_PROFILE_SCOPE("Render2D")
+    YA_PROFILE_SCOPE("Render2D");
     YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
 
     const Extent2D viewportExtent = getActiveViewportExtent();
@@ -230,7 +231,8 @@ void RenderRuntime::endViewportPass(ICommandBuffer* cmdBuf)
 
 void RenderRuntime::renderPresentationPass(const FrameInput& input, ICommandBuffer* cmdBuf)
 {
-    YA_PROFILE_SCOPE("Screen pass")
+    YA_PROFILE_SCOPE("Screen pass");
+    YA_PERF_SCOPE(perf::sample::renderPresentation(), perf::metric::cpuTimeMs(), perf::domain::render());
 
     RenderingInfo ri{
         .label      = "Screen",
@@ -248,6 +250,7 @@ void RenderRuntime::renderPresentationPass(const FrameInput& input, ICommandBuff
     auto& imManager = ImGuiManager::get();
     imManager.beginFrame();
     if (_app) {
+        YA_PERF_SCOPE(perf::sample::renderImgui(), perf::metric::cpuTimeMs(), perf::domain::render());
         _app->renderGUI(input.dt);
     }
     imManager.endFrame();

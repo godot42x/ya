@@ -8,6 +8,8 @@
 
 #include "Core/Async/TaskQueue.h"
 #include "Core/Log.h"
+#include "Core/Profiling/Profiling.h"
+#include "Core/Profiling/StaticInitProfiler.h"
 #include "Core/Reflection/DeferredInitializer.h"
 #include "Core/System/FileWatcher.h"
 #include "Core/System/VirtualFileSystem.h"
@@ -158,11 +160,13 @@ void AppLifecycle::init(App& app, AppDesc ci)
 
     handleSystemSignals(app);
     {
-        YA_PROFILE_SCOPE_LOG("App Init Subsystems");
+        YA_PROFILE_SCOPE_LOG("Init Config");
+
         {
             YA_PROFILE_SCOPE_LOG("Deferred Initializers");
             ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
         }
+
         VirtualFileSystem::init();
         ConfigManager::get().init();
         ConfigManager::get().openDocument(
@@ -173,36 +177,35 @@ void AppLifecycle::init(App& app, AppDesc ci)
                 .bReadOnly         = true,
             });
         ConfigManager::get().openDocument("editor", "Engine/Saved/Config/Editor.json");
+
+        profiling::StaticInitProfiler::ensureStarted();
+        profiling::StaticInitProfiler::refOBJ();
+        profiling::loadEditorConfig();
+        profiling::StaticInitProfiler::recordEnd();
+
+        AppAutomation::loadConfig(app._ci);
         Logger::init();
-        FileWatcher::init();
-        MaterialFactory::init();
+
+        auto& configManager           = ConfigManager::get();
+        app._ci.bEnableRenderDoc      = app._ci.bEnableRenderDoc || configManager.getOr<bool>("engine", "enableRenderDoc", false);
+        app._ci.disabledGraphicsCards = configManager.getOr<std::vector<std::string>>("engine", "disableGraphicsCards", app._ci.disabledGraphicsCards);
+        if (!app._ci.defaultScenePath) {
+            app._ci.defaultScenePath = configManager.getOr<std::string>("editor", "startup.defaultScenePath", "");
+        }
+
+        profiling::applyAppOverrides(app._ci);
+        AppAutomation::applyStartupOverrides(app._ci);
     }
 
-    auto& configManager          = ConfigManager::get();
-    app._ci.bEnableRenderDoc     = app._ci.bEnableRenderDoc || configManager.getOr<bool>("engine", "enableRenderDoc", false);
-    app._ci.disabledGraphicsCards = configManager.getOr<std::vector<std::string>>("engine", "disableGraphicsCards", app._ci.disabledGraphicsCards);
-    if (!app._ci.defaultScenePath) {
-        app._ci.defaultScenePath = configManager.getOr<std::string>("editor", "startup.defaultScenePath", "");
-    }
-    if (app._ci.automation.configPath && !app._ci.automation.configPath->empty()) {
-        if (auto* vfs = VirtualFileSystem::get(); vfs && vfs->isFileExists(*app._ci.automation.configPath)) {
-            configManager.openDocument(
-                "automation",
-                *app._ci.automation.configPath,
-                Config::OpenDocumentOptions{
-                    .bPersistIfMissing = false,
-                    .bReadOnly         = true,
-                });
-            YA_CORE_INFO("Loaded automation override config: {}", *app._ci.automation.configPath);
+    {
+        YA_PROFILE_SCOPE_LOG("Init Default");
+
+        FileWatcher::init();
+        MaterialFactory::init();
+        profiling::beginRuntimeSession(app._ci);
+        if (ConfigManager::get().hasDocument("automation")) {
+            AppAutomation::applyRuntimeOverrides(app);
         }
-        else {
-            YA_CORE_WARN("Automation override config not found, falling back to default settings: {}", *app._ci.automation.configPath);
-        }
-    }
-    AppAutomation::applyStartupOverrides(app._ci);
-    AppAutomation::beginRuntimeProfiling(app._ci.automation);
-    if (configManager.hasDocument("automation")) {
-        AppAutomation::applyRuntimeOverrides(app);
     }
 
     app._renderRuntime = std::make_unique<RenderRuntime>();
@@ -396,7 +399,7 @@ void AppLifecycle::quit(App& app)
     }
 
     MaterialFactory::get()->destroy();
-    AppAutomation::endRuntimeProfiling();
+    profiling::endRuntimeSession();
     ConfigManager::get().shutdown();
 }
 

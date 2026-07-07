@@ -1,5 +1,7 @@
 #include "BasicShadowMapTechnique.h"
 
+#include "Core/Profiling/Instrumentor.h"
+
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/Texture.h"
 #include "Render/Core/TextureFactory.h"
@@ -48,6 +50,7 @@ void BasicShadowMapTechnique::applySettings(const ShadowSettings& settings)
 
 void BasicShadowMapTechnique::prepare(uint32_t flightIndex, const RenderFrameData& frameData)
 {
+    YA_PROFILE_FUNCTION();
     if (!_settings.isEnabled()) return;
 
     const auto payload = buildFramePayload(flightIndex, frameData);
@@ -63,6 +66,7 @@ void BasicShadowMapTechnique::prepare(uint32_t flightIndex, const RenderFrameDat
 
 void BasicShadowMapTechnique::execute(ICommandBuffer* cmdBuf, uint32_t flightIndex, const RenderFrameData& frameData)
 {
+    YA_PROFILE_FUNCTION();
     if (!_settings.isEnabled()) return;
 
     auto payload = buildFramePayload(flightIndex, frameData);
@@ -194,6 +198,7 @@ void BasicShadowMapTechnique::renderGUI()
 
 BasicShadowFramePayload BasicShadowMapTechnique::buildFramePayload(uint32_t flightIndex, const RenderFrameData& frameData) const
 {
+    YA_PROFILE_FUNCTION();
     const uint32_t pointLightCount = std::min(
         frameData.numPointLights,
         _settings.getEffectivePointLightCount());
@@ -215,6 +220,7 @@ BasicShadowFramePayload BasicShadowMapTechnique::buildFramePayload(uint32_t flig
 
 void BasicShadowMapTechnique::populatePointShadowMatrices(const RenderFrameData& frameData, FrameUBO& frameDataUBO, uint32_t pointLightCount) const
 {
+    YA_PROFILE_FUNCTION();
     for (uint32_t i = 0; i < pointLightCount; ++i) {
         const auto&      pointLight = frameData.pointLights[i];
         const glm::vec3& pos        = pointLight.position;

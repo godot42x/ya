@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/Profiling/Profiling.h"
+
 #include "Core/FName.h"
 #include "Core/Macro/VariadicMacros.h"
 
@@ -138,17 +140,13 @@ struct PerfFrameScopeTimerConditional
 
 } // namespace ya
 
-#if !defined(YA_PERF_DISABLED) && !defined(YA_PERF_CONDITIONAL) && !defined(YA_PERF_ENABLED)
-    #define YA_PERF_CONDITIONAL
-#endif
-
 namespace ya::profile
 {
 using Metrics = ::ya::PerfState;
 
 inline Metrics& metrics()
 {
-    return Metrics::Get();
+    return ::ya::profiling::metrics();
 }
 } // namespace ya::profile
 
@@ -162,13 +160,13 @@ inline Metrics& metrics()
 
 #elif defined(YA_PERF_CONDITIONAL)
 
-    #define YA_PERF_SET_ENABLED(enabled) (::ya::PerfState::Get().setEnabled(enabled))
-    #define YA_PERF_IS_ENABLED() (::ya::PerfState::Get().isEnabled())
+    #define YA_PERF_SET_ENABLED(enabled) (::ya::profiling::setPerfMetricsEnabled(enabled))
+    #define YA_PERF_IS_ENABLED() (::ya::profiling::isPerfMetricsEnabled())
     #define YA_PERF_SCOPE(sampleKey, metricKey, domainKey) \
-        ::ya::PerfScopeTimerConditional YA_CONCAT(ya_perf_timer_, __LINE__)(::ya::PerfState::Get().isEnabled(), sampleKey, metricKey, domainKey);
+        ::ya::PerfScopeTimerConditional YA_CONCAT(ya_perf_timer_, __LINE__)(::ya::profiling::isPerfMetricsEnabled(), sampleKey, metricKey, domainKey);
     #define YA_PERF_FRAME_SCOPE(frameSampleKey, metricKey, domainKey, unaccountedSampleKey, ...) \
         ::ya::PerfFrameScopeTimerConditional YA_CONCAT(ya_perf_frame_timer_, __LINE__)( \
-            ::ya::PerfState::Get().isEnabled(), frameSampleKey, metricKey, domainKey, unaccountedSampleKey, {__VA_ARGS__});
+            ::ya::profiling::isPerfMetricsEnabled(), frameSampleKey, metricKey, domainKey, unaccountedSampleKey, {__VA_ARGS__});
     #define YA_PERF_FUNCTION(metricKey, domainKey) YA_PERF_SCOPE(YA_PRETTY_FUNCTION, metricKey, domainKey)
 
 #elif defined(YA_PERF_ENABLED)

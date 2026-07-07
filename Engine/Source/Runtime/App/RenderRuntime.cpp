@@ -3,8 +3,8 @@
 #include "App.h"
 #include "DebugRenderSystem.h"
 #include "Core/Async/TaskQueue.h"
-#include "Core/Debug/PerfKeys.h"
-#include "Core/Debug/PerfState.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
 #include "Core/Debug/RenderDocCapture.h"
 #include "DeferredRender/DeferredRenderPipeline.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
@@ -33,6 +33,7 @@ void RenderRuntime::finalizeCompletedOffscreenJobs()
 
 void RenderRuntime::offScreenRender()
 {
+    YA_PROFILE_FUNCTION()
     if (!_render || !_app || !_offscreenCmdBuf) {
         return;
     }
@@ -71,7 +72,7 @@ void RenderRuntime::offScreenRender()
 
 void RenderRuntime::renderFrame(const FrameInput& input)
 {
-    YA_PROFILE_FUNCTION()
+    YA_PROFILE_SCOPE("RenderRuntime::renderFrame");
     YA_PERF_SCOPE(perf::sample::renderRuntime(), perf::metric::cpuTimeMs(), perf::domain::render());
 
     runFramePrologue();
@@ -89,10 +90,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         renderWorldFrame(input, cmdBuf.get());
     }
     syncEditorFrame(input);
-    {
-        YA_PERF_SCOPE(perf::sample::renderPresentation(), perf::metric::cpuTimeMs(), perf::domain::render());
-        renderPresentationPass(input, cmdBuf.get());
-    }
+    renderPresentationPass(input, cmdBuf.get());
     {
         YA_PERF_SCOPE(perf::sample::renderFlushCallbacks(), perf::metric::cpuTimeMs(), perf::domain::render());
         flushMainThreadCallbacks();
@@ -127,6 +125,7 @@ void RenderRuntime::endFrameCapture()
 
 bool RenderRuntime::prepareFrame(const FrameInput& input, int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf)
 {
+    YA_PROFILE_FUNCTION()
     ensureViewportRectInitialized(input);
     _viewportFrameBufferScale = input.viewportFrameBufferScale;
     return beginFrameCommandBuffer(imageIndex, cmdBuf);

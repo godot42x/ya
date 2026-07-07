@@ -4,8 +4,8 @@
 #include "Runtime/App/Lifecycle/AppAutomation.h"
 #include "Runtime/App/Utility/FPSCtrl.h"
 
-#include "Core/Debug/PerfKeys.h"
-#include "Core/Debug/PerfState.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
 #include "Core/Manager/Facade.h"
 #include "Core/System/FileWatcher.h"
 
@@ -99,6 +99,7 @@ int AppFrameLoop::run(App& app)
 int AppFrameLoop::iterate(App& app, float dt)
 {
     YA_PROFILE_FUNCTION()
+    YA_PERF_FUNCTION(perf::metric::cpuTimeMs(), perf::domain::render())
 
     YA_PERF_FRAME_SCOPE(
         perf::sample::renderFrame(),

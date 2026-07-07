@@ -1,5 +1,7 @@
 #include "ViewportOverlayStage.h"
 
+#include "Core/Profiling/Instrumentor.h"
+
 #include "Core/Math/Math.h"
 #include "ECS/Component/DirectionComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
@@ -229,6 +231,7 @@ void ViewportOverlayStage::destroy()
 
 void ViewportOverlayStage::prepare(const RenderStageContext& ctx)
 {
+    YA_PROFILE_FUNCTION();
     if (_skyboxPipeline) {
         _skyboxPipeline->beginFrame();
     }
@@ -254,6 +257,7 @@ void ViewportOverlayStage::prepare(const RenderStageContext& ctx)
 
 void ViewportOverlayStage::execute(const RenderStageContext& ctx)
 {
+    YA_PROFILE_FUNCTION();
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
     drawSkybox(ctx);

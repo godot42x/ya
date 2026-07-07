@@ -57,6 +57,7 @@ class PointShadowIndirectRenderer
 
     [[nodiscard]] bool isSupported() const { return _bSupported; }
     [[nodiscard]] bool hasRenderableInstances(uint32_t flightIndex) const;
+    [[nodiscard]] PointShadowCullPass& getCullPass() { return _cullPass; }
 
   private:
     // ─── Per-frame state ─────────────────────────────────────────────

@@ -156,81 +156,108 @@ void openCaptureDirectoryFromGUI(const std::string& filePath)
     }
 }
 
-template <typename Fn>
-void drawSectionIf(bool condition, const char* label, Fn&& body)
-{
-    if (!condition) {
-        return;
-    }
-    drawSettingsSection(label, std::forward<Fn>(body));
-}
-
 } // namespace
 
-void RenderRuntime::renderGUI(float dt)
+bool RenderRuntime::isShadowSettingsAvailable() const
 {
-    (void)dt;
+    return (_shadingModel == EShadingModel::Forward && _forwardPipeline) ||
+           (_shadingModel == EShadingModel::Deferred && _deferredPipeline);
+}
 
-    if (ImGui::TreeNode("World Rendering")) {
-        static const char* items[] = {"Forward", "Deferred"};
-        int                current = static_cast<int>(_pendingShadingModel);
-        if (ImGui::Combo("Shading Model", &current, items, IM_ARRAYSIZE(items))) {
-            _pendingShadingModel = static_cast<EShadingModel>(current);
-        }
-        if (_pendingShadingModel != _shadingModel) {
-            ImGui::SameLine();
-            ImGui::TextColored(ImVec4(1, 1, 0, 1), "(switch pending)");
-        }
+bool RenderRuntime::isAmbientOcclusionSettingsAvailable() const
+{
+    return _shadingModel == EShadingModel::Deferred && _deferredPipeline;
+}
 
-        if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
-            drawSettingsSection("General", [&]() {
-                _forwardPipeline->renderGeneralSettingsGUI();
-            });
-            drawSectionIf(_forwardPipeline->bShadowMapping, "Shadows", [&]() {
-                _forwardPipeline->renderShadowSettingsGUI();
-            });
-            drawSettingsSection("Post Process", [&]() {
-                _forwardPipeline->renderPostProcessSettingsGUI();
-            });
-        }
-        else if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
-            drawSettingsSection("General", [&]() {
-                _deferredPipeline->renderGeneralSettingsGUI();
-            });
-            drawSettingsSection("Lighting", [&]() {
-                _deferredPipeline->renderLightingSettingsGUI();
-            });
-            drawSettingsSection("Ambient Occlusion", [&]() {
-                _deferredPipeline->renderAOSettingsGUI();
-            });
-            drawSettingsSection("Post Process", [&]() {
-                _deferredPipeline->renderPostProcessSettingsGUI();
-            });
-            drawSectionIf(_deferredPipeline->isShadowMappingEnabled(), "Shadows", [&]() {
-                _deferredPipeline->renderShadowSettingsGUI();
-            });
-        }
+bool RenderRuntime::isPostProcessSettingsAvailable() const
+{
+    return (_shadingModel == EShadingModel::Forward && _forwardPipeline) ||
+           (_shadingModel == EShadingModel::Deferred && _deferredPipeline);
+}
 
-        drawSettingsSection("Pipeline Internals", [&]() {
-            if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
-                _forwardPipeline->renderTechnicalGUI();
-            }
-            else if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
-                _deferredPipeline->renderTechnicalGUI();
-            }
-        });
+void RenderRuntime::renderGeneralSettingsGUI()
+{
+    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
+        _forwardPipeline->renderGeneralSettingsGUI();
+        return;
+    }
+    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
+        _deferredPipeline->renderGeneralSettingsGUI();
+    }
+}
 
+void RenderRuntime::renderLightingSettingsGUI()
+{
+    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
+        _deferredPipeline->renderLightingSettingsGUI();
+    }
+}
+
+void RenderRuntime::renderAOSettingsGUI()
+{
+    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
+        _deferredPipeline->renderAOSettingsGUI();
+    }
+}
+
+void RenderRuntime::renderShadowSettingsGUI()
+{
+    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
+        _forwardPipeline->renderShadowSettingsGUI();
+        return;
+    }
+    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
+        _deferredPipeline->renderShadowSettingsGUI();
+    }
+}
+
+void RenderRuntime::renderPostProcessSettingsGUI()
+{
+    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
+        _forwardPipeline->renderPostProcessSettingsGUI();
+        return;
+    }
+    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
+        _deferredPipeline->renderPostProcessSettingsGUI();
+    }
+}
+
+void RenderRuntime::renderPerformanceGUI()
+{
+    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
+        _forwardPipeline->renderPerformanceGUI();
+        return;
+    }
+    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
+        _deferredPipeline->renderPerformanceGUI();
+    }
+}
+
+void RenderRuntime::renderStageInternalsGUI()
+{
+    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
+        _forwardPipeline->renderStageInternalsGUI();
+        return;
+    }
+    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
+        _deferredPipeline->renderStageInternalsGUI();
+    }
+}
+
+void RenderRuntime::renderRenderingInternalsGUI()
+{
+    if (ImGui::TreeNode("Rendering Internals")) {
         drawSettingsSection("Stage Internals", [&]() {
-            if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
-                _forwardPipeline->renderStageInternalsGUI();
-            }
-            else if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
-                _deferredPipeline->renderStageInternalsGUI();
-            }
+            renderStageInternalsGUI();
         });
 
         ImGui::TreePop();
     }
+}
+
+void RenderRuntime::renderGUI(float dt)
+{
+    (void)dt;
 
     if (ImGui::TreeNode("Render Targets")) {
         renderRenderTargetEditor();

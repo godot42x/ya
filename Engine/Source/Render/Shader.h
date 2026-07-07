@@ -13,7 +13,7 @@
 
 #include "../Core/Log.h"
 
-#include "Core/Debug/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 #include "reflect.cc/enum"
 #include <spirv_cross/spirv_cross.hpp>
 #include <utility>

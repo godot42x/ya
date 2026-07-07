@@ -21,15 +21,11 @@ cfg: basic
 	xmake f -m $(m) -y
 	xmake project -k compile_commands
 
-profile:
-	npm install -g speedscope
-	speedscope "./Engine/Saved/Profiling/App.speedscope.json"
-
 clean_if_needed:
 	$(if $(filter true,$(force)), xmake c )
 
 cfg_if_needed:
-	$(if $(cfg), xmake f $(cfg))
+	$(if $(cfg), echo "set config=$(cfg)\" xmake f $(cfg))
 
 basic:
 	# make imgui and imguizmo readonly

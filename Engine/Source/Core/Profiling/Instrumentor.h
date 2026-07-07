@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include "Core/Profiling/Profiling.h"
+
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -475,7 +477,6 @@ struct InstrumentationTimer
     explicit InstrumentationTimer(const char          *name,
                                   std::source_location loc = std::source_location::current())
     {
-        // Record begin event
         m_FrameIndex = Instrumentor::Get().WriteBeginEvent(name, loc.file_name(), static_cast<int>(loc.line()));
     }
 
@@ -501,7 +502,6 @@ struct InstrumentationTimer
             return;
         }
 
-        // Record end event (no console output)
         Instrumentor::Get().WriteEndEvent(m_FrameIndex);
 
         m_Stopped = true;
@@ -550,7 +550,6 @@ struct InstrumentationTimerLog
                                      std::source_location loc = std::source_location::current())
         : m_Name(name), m_File(loc.file_name()), m_Line(static_cast<int>(loc.line())), m_StartTime(clock_t::now())
     {
-        // Record begin event
         m_FrameIndex = Instrumentor::Get().WriteBeginEvent(m_Name, m_File, m_Line);
     }
 
@@ -580,13 +579,11 @@ struct InstrumentationTimerLog
         auto      duration   = std::chrono::duration_cast<std::chrono::nanoseconds>(now - m_StartTime);
         long long durationNs = duration.count();
 
-        // Build display name
         std::string displayName = std::format("{}:{} ({})",
                                               std::filesystem::path(m_File).filename().string(),
                                               m_Line,
                                               m_Name);
 
-        // Record end event and always print to console
         Instrumentor::Get().WriteEndEventLog(m_FrameIndex, durationNs, displayName);
 
         m_Stopped = true;
@@ -763,29 +760,12 @@ struct InstrumentationSession
 // Profiling Macros
 //=============================================================================
 
-// Platform-specific pretty function name
-#if _WIN32
-    #define YA_PRETTY_FUNCTION __FUNCSIG__
-#elif __linux__
-    #define YA_PRETTY_FUNCTION __PRETTY_FUNCTION__
-#else
-    #define YA_PRETTY_FUNCTION __func__
-#endif
-
-// Helper macro for concatenation
-#define YA_CONCAT_IMPL(a, b) a##b
-#define YA_CONCAT(a, b) YA_CONCAT_IMPL(a, b)
-
 //=============================================================================
 // Profile Mode Configuration
 //
-// XMake selects the profile mode: profile builds define YA_PROFILE_CONDITIONAL,
-// other builds define YA_PROFILE_DISABLED.
+// XMake selects the unified profiling mode. Legacy YA_PROFILE_* defines are
+// normalized by Core/Profiling/Profiling.h.
 //=============================================================================
-
-#if !defined(YA_PROFILE_DISABLED) && !defined(YA_PROFILE_CONDITIONAL) && !defined(YA_PROFILE_ENABLED)
-    #define YA_PROFILE_DISABLED
-#endif
 
 //-----------------------------------------------------------------------------
 // Mode 1: YA_PROFILE_DISABLED - Zero overhead, no code compiled
@@ -804,27 +784,21 @@ struct InstrumentationSession
 //-----------------------------------------------------------------------------
 #elif defined(YA_PROFILE_CONDITIONAL)
 
-// Global runtime flag to enable/disable profiling
-namespace ya
-{
-inline bool g_ProfileEnabled = false;
-}
-
-    #define YA_PROFILE_SET_ENABLED(enabled) (::ya::g_ProfileEnabled = (enabled))
-    #define YA_PROFILE_IS_ENABLED() (::ya::g_ProfileEnabled)
+    #define YA_PROFILE_SET_ENABLED(enabled) (::ya::profiling::setCpuTraceEnabled(enabled))
+    #define YA_PROFILE_IS_ENABLED() (::ya::profiling::isCpuTraceEnabled())
 
     #define YA_PROFILE_BEGIN_SESSION_IMPL(session_name, filepath)                                        \
         do {                                                                                             \
-            if (::ya::g_ProfileEnabled) ::ya::Instrumentor::Get().BeginSession(session_name, filepath); \
+            if (::ya::profiling::isCpuTraceEnabled()) ::ya::Instrumentor::Get().BeginSession(session_name, filepath); \
         } while (0)
 
     #define YA_PROFILE_END_SESSION_IMPL()                                        \
         do {                                                                     \
-            if (::ya::g_ProfileEnabled) ::ya::Instrumentor::Get().EndSession();  \
+            if (::ya::profiling::isCpuTraceEnabled()) ::ya::Instrumentor::Get().EndSession();  \
         } while (0)
 
     #define YA_PROFILE_SCOPE_IMPL(name) \
-        ::ya::InstrumentationTimerConditional YA_CONCAT(ya_timer_, __LINE__)(::ya::g_ProfileEnabled, name);
+        ::ya::InstrumentationTimerConditional YA_CONCAT(ya_timer_, __LINE__)(::ya::profiling::isCpuTraceEnabled(), name);
 
 //-----------------------------------------------------------------------------
 // Mode 3: YA_PROFILE_ENABLED - Always active
@@ -875,16 +849,16 @@ using CpuTrace = ::ya::Instrumentor;
 
 inline CpuTrace& cpuTrace()
 {
-    return CpuTrace::Get();
+    return ::ya::profiling::cpuTrace();
 }
 
 inline bool isCpuTraceEnabled()
 {
-    return YA_PROFILE_IS_ENABLED();
+    return ::ya::profiling::isCpuTraceEnabled();
 }
 
 inline void setCpuTraceEnabled(bool enabled)
 {
-    YA_PROFILE_SET_ENABLED(enabled);
+    ::ya::profiling::setCpuTraceEnabled(enabled);
 }
 } // namespace ya::profile

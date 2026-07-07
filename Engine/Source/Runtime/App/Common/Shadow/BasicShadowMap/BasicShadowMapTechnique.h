@@ -33,6 +33,8 @@ class BasicShadowMapTechnique : public IShadowTechnique
 
     [[nodiscard]] Texture* getDirectionalDepthTexture() const override;
     [[nodiscard]] Texture* getPointFaceDepthTexture(uint32_t lightIndex, uint32_t faceIndex) const override;
+    [[nodiscard]] DirectionalShadowPass& getDirectionalPass() { return _directionalPass; }
+    [[nodiscard]] PointShadowPass&       getPointPass() { return _pointPass; }
 
     // ─── Render target management (called by ShadowStage) ────────────
     void setRenderTarget(IRenderTarget* rt);

@@ -1,5 +1,9 @@
 #include "DirectionalShadowPass.h"
 
+#include "Core/Profiling/Instrumentor.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
+
 #include "Runtime/App/Common/Shadow/Common/ShadowDrawHelper.h"
 
 #include "Render/Core/CommandBuffer.h"
@@ -154,29 +158,36 @@ void DirectionalShadowPass::destroy()
 
 void DirectionalShadowPass::prepare(const BasicShadowFramePayload& payload)
 {
+    YA_PROFILE_FUNCTION();
     if (!payload.frameData) return;
 
     auto& flight = _perFlight[payload.flightIndex];
 
-    // Write frame UBO with directional light matrix
-    FrameUBO uboData{
-        .directionalLightMatrix = payload.frameUBO.directionalLightMatrix,
-        .numPointLights         = 0,
-        .hasDirectionalLight    = 1u,
-    };
-    flight.frameUBO->writeData(&uboData, sizeof(FrameUBO), 0);
-
-    // Skinning
-    const auto& palettes = payload.frameData->skinningPalettes;
-    ensureSkinningCapacity(static_cast<uint32_t>(palettes.size()));
-    if (!palettes.empty()) {
-        flight.skinningSSBO->writeData(palettes.data(), palettes.size() * sizeof(RenderSkinningPalette), 0);
-        flight.skinningSSBO->flush();
+    {
+        YA_PROFILE_SCOPE("DirectionalShadowPass::FrameUBO");
+        FrameUBO uboData{
+            .directionalLightMatrix = payload.frameUBO.directionalLightMatrix,
+            .numPointLights         = 0,
+            .hasDirectionalLight    = 1u,
+        };
+        flight.frameUBO->writeData(&uboData, sizeof(FrameUBO), 0);
     }
 
-    // Begin frame for pipelines
-    if (_staticVariant.pipeline)  _staticVariant.pipeline->beginFrame();
-    if (_skinnedVariant.pipeline) _skinnedVariant.pipeline->beginFrame();
+    {
+        YA_PROFILE_SCOPE("DirectionalShadowPass::SkinningUpload");
+        const auto& palettes = payload.frameData->skinningPalettes;
+        ensureSkinningCapacity(static_cast<uint32_t>(palettes.size()));
+        if (!palettes.empty()) {
+            flight.skinningSSBO->writeData(palettes.data(), palettes.size() * sizeof(RenderSkinningPalette), 0);
+            flight.skinningSSBO->flush();
+        }
+    }
+
+    {
+        YA_PROFILE_SCOPE("DirectionalShadowPass::BeginFrame");
+        if (_staticVariant.pipeline)  _staticVariant.pipeline->beginFrame();
+        if (_skinnedVariant.pipeline) _skinnedVariant.pipeline->beginFrame();
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -185,6 +196,8 @@ void DirectionalShadowPass::prepare(const BasicShadowFramePayload& payload)
 
 void DirectionalShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload)
 {
+    YA_PROFILE_FUNCTION();
+    YA_PERF_SCOPE(perf::sample::shadowDirectional(), perf::metric::cpuTimeMs(), perf::domain::render());
     if (!_depthTexture || !payload.frameData) return;
 
     RenderingInfo::ImageSpec depthSpec{
@@ -219,8 +232,14 @@ void DirectionalShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFra
         .frameDS        = flight.frameDS,
         .skinningDS     = flight.skinningDS,
     };
-    ShadowDrawHelper::drawStaticBuckets(cmdBuf, staticRes, payload.frameData->drawBuckets.staticMeshes);
-    ShadowDrawHelper::drawSkinnedBuckets(cmdBuf, skinnedRes, payload.frameData->drawBuckets.skinnedMeshes);
+    {
+        YA_PROFILE_SCOPE("DirectionalShadowPass::DrawStatic");
+        ShadowDrawHelper::drawStaticBuckets(cmdBuf, staticRes, payload.frameData->drawBuckets.staticMeshes);
+    }
+    {
+        YA_PROFILE_SCOPE("DirectionalShadowPass::DrawSkinned");
+        ShadowDrawHelper::drawSkinnedBuckets(cmdBuf, skinnedRes, payload.frameData->drawBuckets.skinnedMeshes);
+    }
 
     cmdBuf->endRendering(renderInfo);
 }

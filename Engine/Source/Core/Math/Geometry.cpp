@@ -267,14 +267,14 @@ void PrimitiveGeometry::createCylinder(float radius, float height, uint32_t segm
     }
 
     // Caps (simplified - center vertex + ring)
-    uint32_t bottomCenterIdx = outVertices.size();
+    uint32_t bottomCenterIdx = static_cast<uint32_t>(outVertices.size());
     outVertices.push_back({
         .position  = {0.0f, -halfHeight, 0.0f},
         .texCoord0 = {0.5f, 0.5f},
         .normal    = {0.0f, -1.0f, 0.0f},
     });
 
-    uint32_t topCenterIdx = outVertices.size();
+    uint32_t topCenterIdx = static_cast<uint32_t>(outVertices.size());
     outVertices.push_back({
         .position  = {0.0f, halfHeight, 0.0f},
         .texCoord0 = {0.5f, 0.5f},
@@ -324,7 +324,7 @@ void PrimitiveGeometry::createCone(float radius, float height, uint32_t segments
     outVertices.push_back({{0.0f, height, 0.0f}, {0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}});
 
     // Base center
-    uint32_t baseCenterIdx = outVertices.size();
+    uint32_t baseCenterIdx = static_cast<uint32_t>(outVertices.size());
     outVertices.push_back({{0.0f, 0.0f, 0.0f}, {0.5f, 0.5f}, {0.0f, -1.0f, 0.0f}});
 
     // Base ring vertices

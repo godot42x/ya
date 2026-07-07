@@ -1,14 +1,18 @@
 #include "Runtime/App/GUI/AppGuiController.h"
 
 #include "Runtime/App/App.h"
+#include "Runtime/App/GUI/AppProfilingFacade.h"
 #include "Runtime/App/Utility/FPSCtrl.h"
 
 #include "ImGuiHelper.h"
 
 #include "Render/2D/Render2D.h"
 #include "Render/Core/Swapchain.h"
+#include "Runtime/App/RenderRuntime.h"
 
 #include <algorithm>
+#include <array>
+#include <cstdio>
 #include <format>
 
 namespace ya
@@ -18,6 +22,52 @@ extern ClearValue depthClearValue;
 
 namespace
 {
+struct DashboardMetric
+{
+    const char* label = "";
+    const char* value = "";
+};
+
+void beginDashboardCard(const char* label)
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 8.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 8.0f));
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.16f, 0.18f, 0.22f, 0.96f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.22f, 0.25f, 0.31f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.18f, 0.21f, 0.27f, 1.0f));
+    ImGui::SeparatorText(label);
+    ImGui::PopStyleColor(3);
+    ImGui::PopStyleVar(2);
+}
+
+void renderMetricStrip(const DashboardMetric* metrics, int count)
+{
+    if (count <= 0) {
+        return;
+    }
+
+    if (!ImGui::BeginTable("DashboardMetricStrip", count, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV)) {
+        return;
+    }
+
+    for (int index = 0; index < count; ++index) {
+        ImGui::TableNextColumn();
+        ya::ImGuiStyleScope style;
+        style.pushColor(ImGuiCol_ChildBg, ImVec4(0.12f, 0.13f, 0.16f, 0.92f));
+        style.pushColor(ImGuiCol_Border, ImVec4(0.24f, 0.28f, 0.34f, 0.9f));
+        style.pushVar(ImGuiStyleVar_ChildRounding, 6.0f);
+        style.pushVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+        style.pushVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+        ImGui::BeginChild(metrics[index].label, ImVec2(0.0f, 58.0f), true);
+        ImGui::TextDisabled("%s", metrics[index].label);
+        ImGui::Spacing();
+        ImGui::Text("%s", metrics[index].value);
+        ImGui::EndChild();
+    }
+
+    ImGui::EndTable();
+}
+
 void renderFpsControl(FPSControl& fpsCtrl)
 {
     if (ImGui::CollapsingHeader("FPS Control", 0)) {
@@ -78,6 +128,63 @@ void renderClearValues()
         }
     }
 }
+
+void renderRenderingSettings(App& app)
+{
+    auto* renderRuntime = app.getRenderRuntime();
+    if (!renderRuntime) {
+        return;
+    }
+
+    static const char* shadingModelNames[] = {"Forward", "Deferred"};
+    int                currentShadingModel = static_cast<int>(renderRuntime->getPendingShadingModel());
+    if (ImGui::Combo("Shading Model", &currentShadingModel, shadingModelNames, IM_ARRAYSIZE(shadingModelNames))) {
+        renderRuntime->setPendingShadingModel(static_cast<RenderRuntime::EShadingModel>(currentShadingModel));
+    }
+    if (renderRuntime->getPendingShadingModel() != renderRuntime->getShadingModel()) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1, 1, 0, 1), "(switch pending)");
+    }
+
+    auto* render = app.getRender();
+    YA_CORE_ASSERT(render, "Render is null");
+    auto* swapchain = render->getSwapchain();
+
+    ImGui::SeparatorText("Presentation");
+    bool bVsync = swapchain->getVsync();
+    if (ImGui::Checkbox("VSync", &bVsync)) {
+        swapchain->setVsync(bVsync);
+    }
+
+    EPresentMode::T presentMode  = swapchain->getPresentMode();
+    const char*     presentModes = "Immediate\0Mailbox\0FIFO\0FIFO Relaxed\0";
+    if (ImGui::Combo("Present Mode", reinterpret_cast<int*>(&presentMode), presentModes)) {
+        app.taskManager.registerFrameTask([swapchain, presentMode]()
+                                          { swapchain->setPresentMode(presentMode); });
+    }
+
+    ImGui::SeparatorText("World Rendering");
+    if (ImGui::TreeNode("General")) {
+        renderRuntime->renderGeneralSettingsGUI();
+        ImGui::TreePop();
+    }
+    if (renderRuntime->getShadingModel() == RenderRuntime::EShadingModel::Deferred && ImGui::TreeNode("Lighting")) {
+        renderRuntime->renderLightingSettingsGUI();
+        ImGui::TreePop();
+    }
+    if (renderRuntime->isAmbientOcclusionSettingsAvailable() && ImGui::TreeNode("Ambient Occlusion")) {
+        renderRuntime->renderAOSettingsGUI();
+        ImGui::TreePop();
+    }
+    if (renderRuntime->isShadowSettingsAvailable() && ImGui::TreeNode("Shadows")) {
+        renderRuntime->renderShadowSettingsGUI();
+        ImGui::TreePop();
+    }
+    if (renderRuntime->isPostProcessSettingsAvailable() && ImGui::TreeNode("Post Process")) {
+        renderRuntime->renderPostProcessSettingsGUI();
+        ImGui::TreePop();
+    }
+}
 } // namespace
 
 void App::onRenderGUI(float dt)
@@ -117,39 +224,30 @@ void AppGuiController::onRenderGUI(App& app, float dt)
         fpsRingFill = std::min(fpsRingFill + 1, ringBufSize);
 
         const float avgFps = fpsRingFill > 0 ? (fpsSum / static_cast<float>(fpsRingFill)) : 0.0f;
-        ImGui::Text("Frame: %d, DeltaTime: %6.2fms", App::_frameIndex, dt * 1000.f);
-        ImGui::Text("FPS: %6.1f   (avg %6.1f over %3d)", currentFps, avgFps, fpsRingFill);
-        renderFpsControl(*FPSControl::get());
 
-        auto* render = app.getRender();
-        YA_CORE_ASSERT(render, "Render is null");
-        auto* swapchain = render->getSwapchain();
-
-        ImGui::SeparatorText("Presentation");
-        bool bVsync = swapchain->getVsync();
-        if (ImGui::Checkbox("VSync", &bVsync)) {
-            swapchain->setVsync(bVsync);
-        }
-
-        EPresentMode::T presentMode  = swapchain->getPresentMode();
-        const char*     presentModes = "Immediate\0Mailbox\0FIFO\0FIFO Relaxed\0";
-        if (ImGui::Combo("Present Mode", reinterpret_cast<int*>(&presentMode), presentModes)) {
-            app.taskManager.registerFrameTask([swapchain, presentMode]()
-                                              { swapchain->setPresentMode(presentMode); });
-        }
+        char frameText[32]  = {};
+        char deltaText[32]  = {};
+        char fpsText[32]    = {};
+        char avgFpsText[32] = {};
+        std::snprintf(frameText, sizeof(frameText), "%d", App::_frameIndex);
+        std::snprintf(deltaText, sizeof(deltaText), "%.2f ms", dt * 1000.0f);
+        std::snprintf(fpsText, sizeof(fpsText), "%.1f", currentFps);
+        std::snprintf(avgFpsText, sizeof(avgFpsText), "%.1f / %d", avgFps, fpsRingFill);
+        const std::array<DashboardMetric, 4> overviewMetrics = {{
+            {.label = "Frame", .value = frameText},
+            {.label = "Delta", .value = deltaText},
+            {.label = "FPS", .value = fpsText},
+            {.label = "Avg FPS", .value = avgFpsText},
+        }};
+        renderMetricStrip(overviewMetrics.data(), static_cast<int>(overviewMetrics.size()));
 
         AppMode mode = app._appMode;
+
+        beginDashboardCard("Session");
         if (ImGui::Combo("App Mode", reinterpret_cast<int*>(&mode), "Control\0Drawing\0")) {
             app._appMode = mode;
         }
-
-        ImGui::SeparatorText("Interaction");
-        std::string clickedPoints;
-        for (const auto& p : app.clicked) {
-            clickedPoints += std::format("({}, {}) ", (int)p.x, (int)p.y);
-        }
-        ImGui::Text("Clicked Points: %s", clickedPoints.c_str());
-
+        renderFpsControl(*FPSControl::get());
         if (ImGui::Button("Deserialize Scene")) {
             auto sceneManager = App::get()->getSceneManager();
             YA_CORE_ASSERT(sceneManager, "SceneManager is null");
@@ -157,25 +255,44 @@ void AppGuiController::onRenderGUI(App& app, float dt)
                                           app.getSceneManager()->getActiveScene());
         }
 
-        ImGui::SeparatorText("Editor");
+        std::string clickedPoints;
+        for (const auto& p : app.clicked) {
+            clickedPoints += std::format("({}, {}) ", static_cast<int>(p.x), static_cast<int>(p.y));
+        }
+        if (clickedPoints.empty()) {
+            clickedPoints = "<none>";
+        }
+        ImGui::TextWrapped("Clicked Points: %s", clickedPoints.c_str());
+
+        beginDashboardCard("Editor Controls");
         renderEditorCamera(app, app.camera);
         renderClearValues();
 
-        if (ImGui::TreeNode("ImGUI")) {
+        beginDashboardCard("Rendering");
+        renderRenderingSettings(app);
+
+
+        beginDashboardCard("ImGui");
+        if (ImGui::TreeNode("Metrics / Debug")) {
             ImGuiManager::get().onRenderGUI();
             ImGui::TreePop();
         }
     };
 
     if (ImGui::Begin("Render Panel")) {
-        if (ImGui::TreeNode("Render 2D")) {
+        beginDashboardCard("Runtime Diagnostics");
+        if (ImGui::TreeNode("Render2D Debug")) {
             Render2D::onImGui();
             ImGui::TreePop();
         }
 
         if (app._renderRuntime) {
-            app._renderRuntime->renderGUI(dt);
+            if (ImGui::TreeNode("Render Runtime")) {
+                app._renderRuntime->renderGUI(dt);
+                ImGui::TreePop();
+            }
         }
+        AppProfilingFacade::render(app);
     }
     ImGui::End();
 

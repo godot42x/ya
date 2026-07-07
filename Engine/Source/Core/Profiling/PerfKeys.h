@@ -242,6 +242,62 @@ inline const FName& deferredOverlay()
     return key;
 }
 
+inline const FName& shadowDirectional()
+{
+    using namespace ya::literals;
+    static const FName key = "Shadow/Directional"_name;
+    return key;
+}
+
+inline const FName& shadowPoint()
+{
+    using namespace ya::literals;
+    static const FName key = "Shadow/Point"_name;
+    return key;
+}
+
+inline const FName& shadowPointCull()
+{
+    using namespace ya::literals;
+    static const FName key = "Shadow/Point/Cull"_name;
+    return key;
+}
+
+inline const FName& shadowPointFaceLoop()
+{
+    using namespace ya::literals;
+    static const FName key = "Shadow/Point/FaceLoop"_name;
+    return key;
+}
+
+inline const FName& shadowPointFaceDirect()
+{
+    using namespace ya::literals;
+    static const FName key = "Shadow/Point/FaceDirect"_name;
+    return key;
+}
+
+inline const FName& shadowPointFaceSkinned()
+{
+    using namespace ya::literals;
+    static const FName key = "Shadow/Point/FaceSkinned"_name;
+    return key;
+}
+
+inline const FName& shadowPointDirectDrawStatic()
+{
+    using namespace ya::literals;
+    static const FName key = "Shadow/Point/DirectDrawStatic"_name;
+    return key;
+}
+
+inline const FName& renderImgui()
+{
+    using namespace ya::literals;
+    static const FName key = "Render/ImGui"_name;
+    return key;
+}
+
 inline const FName& deferredLightPrepare()
 {
     using namespace ya::literals;

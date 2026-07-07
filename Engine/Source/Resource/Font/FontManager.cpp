@@ -1,5 +1,5 @@
 #include "FontManager.h"
-#include "Core/Debug/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "freetype/freetype.h"
 

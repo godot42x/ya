@@ -1,5 +1,7 @@
 #include "PointShadowCullPass.h"
 
+#include "Core/Profiling/Instrumentor.h"
+
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Render.h"
 
@@ -66,6 +68,7 @@ void PointShadowCullPass::destroy()
 
 void PointShadowCullPass::ensureCapacity(uint32_t bucketCount)
 {
+    YA_PROFILE_FUNCTION();
     if (bucketCount == 0 || bucketCount <= _allocatedBucketCount) return;
     _allocatedBucketCount = bucketCount;
 
@@ -117,6 +120,7 @@ void PointShadowCullPass::writeDrawCommandTemplate(uint32_t                     
                                                     const PointShadowIndirectCommand* cmds,
                                                     uint32_t                          bucketCount)
 {
+    YA_PROFILE_FUNCTION();
     if (bucketCount == 0) return;
     auto& flight = _perFlight[flightIndex];
     if (!flight.drawCommandBuffer) return;
@@ -128,6 +132,7 @@ void PointShadowCullPass::writeVisibleInstances(uint32_t        flightIndex,
                                                 const uint32_t* data,
                                                 uint32_t        count)
 {
+    YA_PROFILE_FUNCTION();
     if (count == 0) return;
     auto& flight = _perFlight[flightIndex];
     if (!flight.visibleInstancesBuf) return;
@@ -141,6 +146,7 @@ void PointShadowCullPass::prepareCompute(uint32_t                      flightInd
                                           uint32_t                      instanceCount,
                                           uint32_t                      batchCount)
 {
+    YA_PROFILE_FUNCTION();
     auto& flight            = _perFlight[flightIndex];
     flight.activeFaceCount  = activeFaceCount;
     flight.activeBatchCount = batchCount;
@@ -153,6 +159,7 @@ void PointShadowCullPass::prepareCompute(uint32_t                      flightInd
 
 void PointShadowCullPass::dispatch(ICommandBuffer* cmdBuf, uint32_t flightIndex) const
 {
+    YA_PROFILE_FUNCTION();
     const auto& flight = _perFlight[flightIndex];
     if (flight.activeFaceCount == 0 || flight.instanceCount == 0 || flight.activeBatchCount == 0) return;
 

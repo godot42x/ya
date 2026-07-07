@@ -33,6 +33,8 @@
 
 #include "Runtime/App/Utility/ClLIParams.h"
 
+#include "Core/Profiling/Profiling.h"
+
 // Forward declarations
 namespace ya
 {
@@ -90,6 +92,16 @@ struct AppAutomationShadowOverrides
     std::optional<float>             directionalDistance;
 };
 
+struct AppProfilingOptions
+{
+    bool                       bCpuProfileEnabled            = !profiling::isCompiledOut();
+    bool                       bCpuProfileOverridden         = false;
+    bool                       bCpuProfileOutputOverridden   = false;
+    bool                       bProfileSessionNameOverridden = false;
+    std::string                profileSessionName            = "App";
+    std::optional<std::string> cpuProfileOutputPath;
+};
+
 struct AppAutomationOptions
 {
     uint64_t                     exitAfterFrame                  = 0;
@@ -98,18 +110,10 @@ struct AppAutomationOptions
     bool                         renderDocCapture                = false;
     bool                         bRenderDocCaptureOverridden     = false;
     bool                         bScreenshotTargetOverridden     = false;
-    bool                         bProfileEnabled                 = true;
-    bool                         bProfileEnabledOverridden       = false;
-    bool                         bCpuProfileEnabled              = false;
-    bool                         bCpuProfileOverridden           = false;
-    bool                         bCpuProfileOutputOverridden     = false;
-    bool                         bProfileSessionNameOverridden   = false;
     EAutomationScreenshotTarget  screenshotTarget                = EAutomationScreenshotTarget::Viewport;
-    std::string                  profileSessionName              = "App";
     std::optional<std::string>   configPath;
     std::optional<std::string>   scenePath;
     std::optional<std::string>   screenshotPath;
-    std::optional<std::string>   cpuProfileOutputPath;
     std::optional<glm::vec3>     editorCameraPosition;
     std::optional<glm::vec3>     editorCameraRotation;
     AppAutomationShadowOverrides shadow;
@@ -166,6 +170,7 @@ struct AppDesc
     int                  width      = 1024;
     int                  height     = 768;
     bool                 fullscreen = false;
+    AppProfilingOptions  profiling;
     AppAutomationOptions automation;
 
     std::optional<std::string> defaultScenePath;
@@ -190,7 +195,8 @@ struct AppDesc
             .opt<std::string>("", {"scene"}, "Startup scene path override")
             .opt<std::string>("", {"screenshot"}, "Automation screenshot output PNG path")
             .opt<std::string>("", {"screenshot-target"}, "Automation screenshot target: viewport or editor")
-            .opt<bool>("", {"cpu-profile"}, "Enable runtime CPU trace profiling", "false")
+            .opt<bool>("", {"cpu-profile"}, "Enable runtime CPU trace profiling",
+                       !profiling::isCompiledOut() ? "true" : "false")
             .opt<std::string>("", {"cpu-profile-output"}, "Runtime CPU trace output path")
             .opt<std::string>("", {"profile-session"}, "Runtime profile session name")
             .opt<uint64_t>("", {"screenshot-warmup-frames"}, "Frames to wait before checking screenshot stability", "30")
@@ -217,17 +223,17 @@ struct AppDesc
             automation.bRenderDocCaptureOverridden = true;
         }
         if (bool bCpuProfileEnabled = false; params.tryGet<bool>("cpu-profile", bCpuProfileEnabled)) {
-            automation.bCpuProfileEnabled    = bCpuProfileEnabled;
-            automation.bCpuProfileOverridden = true;
+            profiling.bCpuProfileEnabled    = bCpuProfileEnabled;
+            profiling.bCpuProfileOverridden = true;
         }
         if (std::string cpuProfileOutputPath; params.tryGet<std::string>("cpu-profile-output", cpuProfileOutputPath)) {
-            automation.cpuProfileOutputPath        = std::move(cpuProfileOutputPath);
-            automation.bCpuProfileOutputOverridden = true;
+            profiling.cpuProfileOutputPath        = std::move(cpuProfileOutputPath);
+            profiling.bCpuProfileOutputOverridden = true;
         }
         if (std::string profileSessionName; params.tryGet<std::string>("profile-session", profileSessionName)) {
             if (!profileSessionName.empty()) {
-                automation.profileSessionName            = std::move(profileSessionName);
-                automation.bProfileSessionNameOverridden = true;
+                profiling.profileSessionName            = std::move(profileSessionName);
+                profiling.bProfileSessionNameOverridden = true;
             }
         }
         if (std::string scenePath; params.tryGet<std::string>("scene", scenePath)) {

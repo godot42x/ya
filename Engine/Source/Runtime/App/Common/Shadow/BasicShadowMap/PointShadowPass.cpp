@@ -1,5 +1,9 @@
 #include "PointShadowPass.h"
 
+#include "Core/Profiling/Instrumentor.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
+
 #include "Runtime/App/Common/Shadow/Common/ShadowDrawHelper.h"
 
 #include "Render/Core/CommandBuffer.h"
@@ -163,40 +167,50 @@ void PointShadowPass::destroy()
 
 void PointShadowPass::prepare(const BasicShadowFramePayload& payload)
 {
+    YA_PROFILE_FUNCTION();
     if (!payload.frameData) return;
 
     auto& flight = _perFlight[payload.flightIndex];
 
-    // Begin frame for pipelines
-    if (_directStaticVariant.pipeline)  _directStaticVariant.pipeline->beginFrame();
-    if (_directSkinnedVariant.pipeline) _directSkinnedVariant.pipeline->beginFrame();
-    _indirectRenderer.beginFrame();
+    {
+        YA_PROFILE_SCOPE("PointShadowPass::BeginFrame");
+        if (_directStaticVariant.pipeline)  _directStaticVariant.pipeline->beginFrame();
+        if (_directSkinnedVariant.pipeline) _directSkinnedVariant.pipeline->beginFrame();
+        _indirectRenderer.beginFrame();
+    }
 
     if (payload.pointLightCount == 0) return;
 
-    // ─── Write per-face UBOs ─────────────────────────────────────────
-    for (uint32_t lightIndex = 0; lightIndex < payload.pointLightCount; ++lightIndex) {
-        for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
-            PointFaceUBO faceData{
-                .viewProj  = payload.frameUBO.pointLights[lightIndex].matrix[faceIndex],
-                .lightPos  = payload.frameUBO.pointLights[lightIndex].pos,
-                .farPlane  = payload.frameUBO.pointLights[lightIndex].farPlane,
-            };
+    {
+        YA_PROFILE_SCOPE("PointShadowPass::FaceUBO");
+        for (uint32_t lightIndex = 0; lightIndex < payload.pointLightCount; ++lightIndex) {
+            for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
+                PointFaceUBO faceData{
+                    .viewProj  = payload.frameUBO.pointLights[lightIndex].matrix[faceIndex],
+                    .lightPos  = payload.frameUBO.pointLights[lightIndex].pos,
+                    .farPlane  = payload.frameUBO.pointLights[lightIndex].farPlane,
+                };
 
-            const uint32_t faceGlobal = lightIndex * 6 + faceIndex;
-            flight.faceUBO[faceGlobal]->writeData(&faceData, sizeof(PointFaceUBO), 0);
+                const uint32_t faceGlobal = lightIndex * 6 + faceIndex;
+                flight.faceUBO[faceGlobal]->writeData(&faceData, sizeof(PointFaceUBO), 0);
+            }
         }
     }
 
-    // ─── Skinning ────────────────────────────────────────────────────
-    const auto& palettes = payload.frameData->skinningPalettes;
-    ensureSkinningCapacity(static_cast<uint32_t>(palettes.size()));
-    if (!palettes.empty()) {
-        flight.skinningSSBO->writeData(palettes.data(), palettes.size() * sizeof(RenderSkinningPalette), 0);
-        flight.skinningSSBO->flush();
+    {
+        YA_PROFILE_SCOPE("PointShadowPass::SkinningUpload");
+        const auto& palettes = payload.frameData->skinningPalettes;
+        ensureSkinningCapacity(static_cast<uint32_t>(palettes.size()));
+        if (!palettes.empty()) {
+            flight.skinningSSBO->writeData(palettes.data(), palettes.size() * sizeof(RenderSkinningPalette), 0);
+            flight.skinningSSBO->flush();
+        }
     }
 
-    _indirectRenderer.prepare(payload);
+    {
+        YA_PROFILE_SCOPE("PointShadowPass::IndirectPrepare");
+        _indirectRenderer.prepare(payload);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -205,68 +219,79 @@ void PointShadowPass::prepare(const BasicShadowFramePayload& payload)
 
 void PointShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload)
 {
+    YA_PROFILE_FUNCTION();
+    YA_PERF_SCOPE(perf::sample::shadowPoint(), perf::metric::cpuTimeMs(), perf::domain::render());
     if (!payload.frameData || payload.pointLightCount == 0) return;
 
     auto& flight = _perFlight[payload.flightIndex];
     const bool useIndirect = payload.pointIndirectRequested() && _indirectRenderer.hasRenderableInstances(payload.flightIndex);
 
-    // Dispatch compute cull if using indirect
     if (useIndirect) {
+        YA_PROFILE_SCOPE("PointShadowPass::CullDispatch");
+        YA_PERF_SCOPE(perf::sample::shadowPointCull(), perf::metric::cpuTimeMs(), perf::domain::render());
         _indirectRenderer.dispatchCull(cmdBuf, payload.flightIndex);
     }
 
-    // Render each face
-    for (uint32_t lightIndex = 0; lightIndex < payload.pointLightCount; ++lightIndex) {
-        for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
-            PointShadowFacePayload facePayload{
-                .lightIndex      = lightIndex,
-                .faceIndex       = faceIndex,
-                .faceGlobalIndex = lightIndex * 6 + faceIndex,
-                .layerIndex      = 1 + lightIndex * 6 + faceIndex,
-            };
-            facePayload.faceDS = flight.faceDS[facePayload.faceGlobalIndex];
-            facePayload.depthTexture = _faceDepthTextures[lightIndex][faceIndex].get();
-            if (!facePayload.depthTexture) continue;
-
-            RenderingInfo::ImageSpec depthSpec{
-                .texture       = facePayload.depthTexture,
-                .loadOp        = EAttachmentLoadOp::Clear,
-                .storeOp       = EAttachmentStoreOp::Store,
-                .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
-                .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-            };
-            RenderingInfo renderInfo{
-                .label           = "PointShadowPass_Face",
-                .renderArea      = Rect2D{.pos = {0.0f, 0.0f}, .extent = _shadowExtent.toVec2()},
-                .layerCount      = 1,
-                .depthClearValue = ClearValue(1.0f, 0),
-                .depthAttachment = &depthSpec,
-            };
-
-            cmdBuf->beginRendering(renderInfo);
-            cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(_shadowExtent.width),
-                                static_cast<float>(_shadowExtent.height), 0.0f, 1.0f);
-            cmdBuf->setScissor(0, 0, _shadowExtent.width, _shadowExtent.height);
-
-            if (useIndirect) {
-                _indirectRenderer.renderFace(cmdBuf, payload, facePayload);
-            } else {
-                renderFaceDirect(cmdBuf, payload, facePayload);
-            }
-
-            // Always draw skinned meshes with direct draw (no indirect path for skinned yet)
-            {
-                const auto& flight = _perFlight[payload.flightIndex];
-                ShadowDrawHelper::PassResources skinnedRes{
-                    .pipeline       = _directSkinnedVariant.pipeline.get(),
-                    .pipelineLayout = _directSkinnedVariant.pipelineLayout.get(),
-                    .frameDS        = flight.faceDS[facePayload.faceGlobalIndex],
-                    .skinningDS     = flight.skinningDS,
+    {
+        YA_PROFILE_SCOPE("PointShadowPass::RenderFaces");
+        YA_PERF_SCOPE(perf::sample::shadowPointFaceLoop(), perf::metric::cpuTimeMs(), perf::domain::render());
+        for (uint32_t lightIndex = 0; lightIndex < payload.pointLightCount; ++lightIndex) {
+            for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
+                PointShadowFacePayload facePayload{
+                    .lightIndex      = lightIndex,
+                    .faceIndex       = faceIndex,
+                    .faceGlobalIndex = lightIndex * 6 + faceIndex,
+                    .layerIndex      = 1 + lightIndex * 6 + faceIndex,
                 };
-                ShadowDrawHelper::drawSkinnedBuckets(cmdBuf, skinnedRes, payload.frameData->drawBuckets.skinnedMeshes);
-            }
+                facePayload.faceDS = flight.faceDS[facePayload.faceGlobalIndex];
+                facePayload.depthTexture = _faceDepthTextures[lightIndex][faceIndex].get();
+                if (!facePayload.depthTexture) continue;
 
-            cmdBuf->endRendering(renderInfo);
+                RenderingInfo::ImageSpec depthSpec{
+                    .texture       = facePayload.depthTexture,
+                    .loadOp        = EAttachmentLoadOp::Clear,
+                    .storeOp       = EAttachmentStoreOp::Store,
+                    .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
+                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                };
+                RenderingInfo renderInfo{
+                    .label           = "PointShadowPass_Face",
+                    .renderArea      = Rect2D{.pos = {0.0f, 0.0f}, .extent = _shadowExtent.toVec2()},
+                    .layerCount      = 1,
+                    .depthClearValue = ClearValue(1.0f, 0),
+                    .depthAttachment = &depthSpec,
+                };
+
+                cmdBuf->beginRendering(renderInfo);
+                cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(_shadowExtent.width),
+                                    static_cast<float>(_shadowExtent.height), 0.0f, 1.0f);
+                cmdBuf->setScissor(0, 0, _shadowExtent.width, _shadowExtent.height);
+
+                if (useIndirect) {
+                    YA_PROFILE_SCOPE("PointShadowPass::DrawFaceIndirect");
+                    _indirectRenderer.renderFace(cmdBuf, payload, facePayload);
+                }
+                else {
+                    YA_PROFILE_SCOPE("PointShadowPass::DrawFaceDirect");
+                    YA_PERF_SCOPE(perf::sample::shadowPointFaceDirect(), perf::metric::cpuTimeMs(), perf::domain::render());
+                    renderFaceDirect(cmdBuf, payload, facePayload);
+                }
+
+                {
+                    YA_PROFILE_SCOPE("PointShadowPass::DrawFaceSkinned");
+                    YA_PERF_SCOPE(perf::sample::shadowPointFaceSkinned(), perf::metric::cpuTimeMs(), perf::domain::render());
+                    const auto& flight = _perFlight[payload.flightIndex];
+                    ShadowDrawHelper::PassResources skinnedRes{
+                        .pipeline       = _directSkinnedVariant.pipeline.get(),
+                        .pipelineLayout = _directSkinnedVariant.pipelineLayout.get(),
+                        .frameDS        = flight.faceDS[facePayload.faceGlobalIndex],
+                        .skinningDS     = flight.skinningDS,
+                    };
+                    ShadowDrawHelper::drawSkinnedBuckets(cmdBuf, skinnedRes, payload.frameData->drawBuckets.skinnedMeshes);
+                }
+
+                cmdBuf->endRendering(renderInfo);
+            }
         }
     }
 }
@@ -279,6 +304,7 @@ void PointShadowPass::renderFaceDirect(ICommandBuffer*                 cmdBuf,
                                         const BasicShadowFramePayload& payload,
                                         const PointShadowFacePayload&  facePayload) const
 {
+    YA_PROFILE_FUNCTION();
     const auto& flight = _perFlight[payload.flightIndex];
     ShadowDrawHelper::PassResources staticRes{
         .pipeline       = _directStaticVariant.pipeline.get(),

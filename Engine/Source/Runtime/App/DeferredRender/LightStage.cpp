@@ -1,8 +1,8 @@
 #include "LightStage.h"
 
 #include "Config/ConfigManager.h"
-#include "Core/Debug/PerfKeys.h"
-#include "Core/Debug/PerfState.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
 #include "GBufferStage.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Resource/Texture/TextureLibrary.h"

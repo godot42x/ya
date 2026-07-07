@@ -3,7 +3,7 @@
 //
 
 #include "Instrumentor.h"
-#include "Runtime/App/App.h"
+
 #include "Core/Log.h"
 #include <algorithm>
 #include <filesystem>
@@ -49,7 +49,7 @@ void Instrumentor::BeginSession(const std::string &name, const std::string &file
     m_DroppedEvents    = 0;
     m_Events.clear();
     m_Frames.clear();
-    // m_FrameIndexMap.clear();
+    m_FrameIndexMap.clear();
 
     // Reserve capacity to reduce allocations
     m_Events.reserve(10000);
@@ -76,6 +76,8 @@ void Instrumentor::EndSessionInternal()
     if (!m_SessionActive) {
         return;
     }
+
+    const std::string finishedSessionName = m_SessionName;
 
     // Write speedscope JSON format if file stream is open
     if (m_OutputStream.is_open()) {
@@ -113,7 +115,7 @@ void Instrumentor::EndSessionInternal()
     m_SessionActive = false;
 
     YA_CORE_INFO("Instrumentor: Session '{}' ended. {} events recorded, {} dropped",
-                 m_SessionName,
+                 finishedSessionName,
                  m_EventCount.load(),
                  m_DroppedEvents.load());
 }

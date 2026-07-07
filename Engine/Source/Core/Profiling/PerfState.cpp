@@ -1,5 +1,7 @@
 #include "PerfState.h"
 
+#include "Core/Profiling/Profiling.h"
+
 #include <algorithm>
 #include <iterator>
 

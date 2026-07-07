@@ -1,5 +1,5 @@
 #include "DetailsView.h"
-#include "Core/Debug/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "ECS/Component/2D/UIComponent.h"
 #include "ECS/Component/DirectionalLightComponent.h"

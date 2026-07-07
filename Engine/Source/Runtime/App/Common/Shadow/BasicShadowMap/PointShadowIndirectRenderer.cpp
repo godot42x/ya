@@ -1,5 +1,7 @@
 #include "PointShadowIndirectRenderer.h"
 
+#include "Core/Profiling/Instrumentor.h"
+
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Mesh.h"
 #include "Render/Render.h"
@@ -104,6 +106,7 @@ void PointShadowIndirectRenderer::beginFrame()
 
 void PointShadowIndirectRenderer::prepare(const BasicShadowFramePayload& payload)
 {
+    YA_PROFILE_FUNCTION();
     auto& flight            = _perFlight[payload.flightIndex];
     flight.meshBatches.clear();
     flight.totalInstances   = 0;
@@ -146,6 +149,7 @@ void PointShadowIndirectRenderer::prepare(const BasicShadowFramePayload& payload
 bool PointShadowIndirectRenderer::collectBatches(const BasicShadowFramePayload&        payload,
                                                  std::vector<PointShadowInstanceData>& outInstances)
 {
+    YA_PROFILE_FUNCTION();
     auto& flight = _perFlight[payload.flightIndex];
 
     // 1. Group draw items by mesh.
@@ -206,6 +210,7 @@ bool PointShadowIndirectRenderer::collectBatches(const BasicShadowFramePayload& 
 void PointShadowIndirectRenderer::uploadInstances(uint32_t                                    flightIndex,
                                                   const std::vector<PointShadowInstanceData>& instances)
 {
+    YA_PROFILE_FUNCTION();
     ensureInstanceCapacity(static_cast<uint32_t>(instances.size()));
     auto& flight = _perFlight[flightIndex];
     YA_CORE_ASSERT(flight.instanceBuffer, "Point shadow indirect instance buffer is missing for flight {}", flightIndex);
@@ -215,6 +220,7 @@ void PointShadowIndirectRenderer::uploadInstances(uint32_t                      
 
 std::vector<PointShadowIndirectCommand> PointShadowIndirectRenderer::buildCmdTemplates(uint32_t flightIndex) const
 {
+    YA_PROFILE_FUNCTION();
     const auto&    flight     = _perFlight[flightIndex];
     const uint32_t batchCount = static_cast<uint32_t>(flight.meshBatches.size());
     const uint32_t faceCount  = flight.activeFaceCount;
@@ -239,6 +245,7 @@ std::vector<PointShadowIndirectCommand> PointShadowIndirectRenderer::buildCmdTem
 void PointShadowIndirectRenderer::fillCullDataCompute(const BasicShadowFramePayload&                 payload,
                                                       const std::vector<PointShadowIndirectCommand>& cmdTemplates)
 {
+    YA_PROFILE_FUNCTION();
     auto&          flight     = _perFlight[payload.flightIndex];
     const uint32_t batchCount = static_cast<uint32_t>(flight.meshBatches.size());
     const uint32_t faceCount  = flight.activeFaceCount;
@@ -261,6 +268,7 @@ void PointShadowIndirectRenderer::fillCullDataCompute(const BasicShadowFramePayl
 void PointShadowIndirectRenderer::fillCullDataNoCull(uint32_t                                 flightIndex,
                                                      std::vector<PointShadowIndirectCommand>& cmdTemplates)
 {
+    YA_PROFILE_FUNCTION();
     auto&          flight     = _perFlight[flightIndex];
     const uint32_t batchCount = static_cast<uint32_t>(flight.meshBatches.size());
     const uint32_t faceCount  = flight.activeFaceCount;
@@ -291,6 +299,7 @@ void PointShadowIndirectRenderer::fillCullDataNoCull(uint32_t                   
 
 void PointShadowIndirectRenderer::dispatchCull(ICommandBuffer* cmdBuf, uint32_t flightIndex) const
 {
+    YA_PROFILE_FUNCTION();
     const auto& flight = _perFlight[flightIndex];
     if (!flight.ready || !flight.useGpuCull) return;
     _cullPass.dispatch(cmdBuf, flightIndex);
@@ -300,6 +309,7 @@ void PointShadowIndirectRenderer::renderFace(ICommandBuffer*                cmdB
                                              const BasicShadowFramePayload& payload,
                                              const PointShadowFacePayload&  facePayload) const
 {
+    YA_PROFILE_FUNCTION();
     const auto& flight = _perFlight[payload.flightIndex];
     if (!flight.ready) return;
 
@@ -369,6 +379,7 @@ void PointShadowIndirectRenderer::ensureInstanceCapacity(uint32_t requiredCount)
 
 void PointShadowIndirectRenderer::updateIndirectDescriptors(uint32_t flightIndex)
 {
+    YA_PROFILE_FUNCTION();
     auto&    flight        = _perFlight[flightIndex];
     IBuffer* visibleBuffer = _cullPass.getVisibleInstancesBuffer(flightIndex);
     if (!flight.instanceBuffer || !visibleBuffer) return;

@@ -1,25 +1,17 @@
-
-
 #pragma once
 
 #include "Runtime/App/App.h"
 
-extern ya::App *createApp();
+extern ya::App* createApp();
 
 
 #if defined YA_ENTRY_POINT
-#include "Core/Profiling/StaticInitProfiler.h"
-
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
-    // 静态初始化已完成，显示性能报告（如果未自动打印）
-    ya::profiling::StaticInitProfiler::refOBJ();
-    ya::profiling::StaticInitProfiler::recordEnd();
-
     // try {
         ya::AppDesc ci;
         ci.init(argc, argv);
-        auto *app = createApp();
+        auto* app = createApp();
         app->init(ci);
         app->run();
         app->quit();

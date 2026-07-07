@@ -136,6 +136,7 @@ struct DeferredRenderPipeline
     void renderPostProcessSettingsGUI();
     void renderShadowSettingsGUI();
     void renderTechnicalGUI();
+    void renderPerformanceGUI();
     void renderStageInternalsGUI();
 
     void beginViewportRendering(const TickDesc& desc);

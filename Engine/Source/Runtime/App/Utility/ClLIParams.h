@@ -36,7 +36,14 @@ struct CliParams
 
     void parse(int argc, char **argv)
     {
+        _argc      = argc;
+        _argv      = argv;
         _optResult = _opt.parse(argc, argv);
+    }
+
+    [[nodiscard]] bool hasExplicit(const std::string &name) const
+    {
+        return _optResult.count(name) > 0;
     }
 
     template <typename T>

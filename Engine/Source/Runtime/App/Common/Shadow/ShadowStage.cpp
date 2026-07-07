@@ -1,5 +1,7 @@
 #include "ShadowStage.h"
 
+#include "Core/Profiling/Instrumentor.h"
+
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
@@ -38,12 +40,14 @@ void ShadowStage::destroy()
 
 void ShadowStage::prepare(const RenderStageContext& ctx)
 {
+    YA_PROFILE_FUNCTION();
     if (!ctx.frameData || !_technique || !_settings.isEnabled()) return;
     _technique->prepare(ctx.flightIndex, *ctx.frameData);
 }
 
 void ShadowStage::execute(const RenderStageContext& ctx)
 {
+    YA_PROFILE_FUNCTION();
     if (!ctx.cmdBuf || !ctx.frameData || !_technique || !_settings.isEnabled()) return;
     _technique->execute(ctx.cmdBuf, ctx.flightIndex, *ctx.frameData);
 }

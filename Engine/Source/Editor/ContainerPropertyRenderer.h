@@ -13,7 +13,7 @@
 
 #pragma once
 
-#include "Core/Debug/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 #include "Core/Reflection/ContainerProperty.h"
 #include "Core/Reflection/PropertyExtensions.h"
 #include "Core/Reflection/ReflectionHelper.h"

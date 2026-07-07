@@ -420,7 +420,12 @@ void ForwardRenderPipeline::renderPostProcessSettingsGUI()
 
 void ForwardRenderPipeline::renderTechnicalGUI()
 {
+    renderPerformanceGUI();
     renderStageInternalsGUI();
+}
+
+void ForwardRenderPipeline::renderPerformanceGUI()
+{
 }
 
 void ForwardRenderPipeline::renderStageInternalsGUI()

@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include "Core/Profiling/Profiling.h"
 
 #include "Core/Common/FWD-std.h"
 namespace ya::profiling
@@ -19,7 +20,6 @@ namespace ya::profiling
 namespace detail
 {
 extern void refMStartMSVC();
-extern void refEndMSVC();
 } // namespace detail
 
 /**
@@ -33,15 +33,16 @@ extern void refEndMSVC();
 class StaticInitProfiler
 {
   public:
-    // MSVC: 使用单独的 .cpp 文件来实现（Start.cpp 和 End.cpp）
-    // 需要在入口点调用 refOBJ() 来确保链接
+    // MSVC: 使用单独的 .cpp 文件来确保起始标记翻译单元被链接进来。
     static void refOBJ()
     {
 #ifdef _MSC_VER
         detail::refMStartMSVC();
-        detail::refEndMSVC();
 #endif
     }
+
+    static void ensureStarted();
+    static void reset();
 
 
     // ========================================================================
@@ -83,6 +84,8 @@ class StaticInitProfiler
     // 原子变量存储时间戳（线程安全）
     static std::atomic<uint64_t> _startTimeNs;
     static std::atomic<uint64_t> _endTimeNs;
+    static std::atomic<bool>     _hasStarted;
+    static std::atomic<bool>     _hasEnded;
 
     // 单个变量记录（需要锁保护）
     static std::vector<VariableRecord> _records;
@@ -121,8 +124,12 @@ class StaticInitTimer
 
 
 /// 标记单个静态变量的初始化（自动计时）
-#define YA_PROFILE_STATIC_INIT(varName) \
-    ya::profiling::StaticInitTimer __static_init_timer_##__LINE__(varName)
+#if defined(YA_PROFILING_DISABLED)
+    #define YA_PROFILE_STATIC_INIT(varName) do { (void)sizeof(varName); } while (0)
+#else
+    #define YA_PROFILE_STATIC_INIT(varName) \
+        ya::profiling::StaticInitTimer __static_init_timer_##__LINE__(varName)
+#endif
 
 // ============================================================================
 // 编译器特定的宏定义
@@ -131,11 +138,7 @@ class StaticInitTimer
 // 但对于大多数情况已足够准确（误差通常在微秒级别）
 // ============================================================================
 
-#ifdef _MSC_VER
-
-
-
-#elif defined(__GNUC__) || defined(__clang__)
+#if defined(__GNUC__) || defined(__clang__)
   // GCC/Clang：使用 constructor 优先级（101 = 早，65535 = 晚）
 namespace ya::profiling::detail
 {
@@ -147,7 +150,7 @@ namespace ya::profiling::detail
 __attribute__((constructor(65535))) static void __static_init_end() { StaticInitProfiler::recordEnd(); }
 } // namespace ya::profiling::detail
 
-#else
+#elif !defined(_MSC_VER)
   // 标准 C++ 回退方案（使用全局对象构造顺序）
 namespace ya::profiling::detail
 {

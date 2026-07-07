@@ -1,5 +1,8 @@
 #include "ShadowDrawHelper.h"
 
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
+
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Mesh.h"
@@ -12,6 +15,8 @@ void drawStaticBuckets(ICommandBuffer* cmdBuf,
                        const PassResources& res,
                        const RenderShadingDrawBuckets& buckets)
 {
+    YA_PERF_SCOPE(perf::sample::shadowPointDirectDrawStatic(), perf::metric::cpuTimeMs(), perf::domain::render());
+
     auto drawItems = [&](const std::vector<RenderDrawItem>& items)
     {
         if (items.empty()) return;

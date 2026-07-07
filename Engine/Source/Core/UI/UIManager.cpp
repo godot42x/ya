@@ -1,5 +1,5 @@
 #include "UIManager.h"
-#include "Core/Debug/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 
 namespace ya
 

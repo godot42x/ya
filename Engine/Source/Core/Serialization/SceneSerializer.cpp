@@ -1,5 +1,5 @@
 #include "SceneSerializer.h"
-#include "Core/Debug/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 #include "Core/Log.h"
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "Core/System/VirtualFileSystem.h"

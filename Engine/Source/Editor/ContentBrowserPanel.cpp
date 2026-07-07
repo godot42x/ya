@@ -1,6 +1,6 @@
 #include "ContentBrowserPanel.h"
 #include "Core/System/PathUtils.h"
-#include "Core/Debug/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "ImGuiHelper.h"
 #include "Resource/AssetManager.h"
