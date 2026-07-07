@@ -162,6 +162,7 @@ struct RenderRuntime
     void resetSkyboxPool();
     void resetEnvironmentLightingPool();
     bool requestAutomationRenderDocCapture();
+    void flushMainThreadCallbacks();
 
     [[nodiscard]] IRender*                       getRender() const { return _render; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
@@ -227,7 +228,6 @@ struct RenderRuntime
     bool                   prepareFrame(const FrameInput& input, int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf);
     void                   syncEditorFrame(const FrameInput& input);
-    void                   flushMainThreadCallbacks();
     void                   ensureViewportRectInitialized(const FrameInput& input);
     bool                   beginFrameCommandBuffer(int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   beginViewportPassAndTickPipeline(const FrameInput& input, ICommandBuffer* cmdBuf);
