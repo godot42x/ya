@@ -162,7 +162,6 @@ struct RenderRuntime
     void resetSkyboxPool();
     void resetEnvironmentLightingPool();
     bool requestAutomationRenderDocCapture();
-    void flushMainThreadCallbacks();
 
     [[nodiscard]] IRender*                       getRender() const { return _render; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }

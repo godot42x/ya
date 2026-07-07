@@ -2,7 +2,6 @@
 
 #include "App.h"
 #include "DebugRenderSystem.h"
-#include "Core/Async/TaskQueue.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Core/Debug/RenderDocCapture.h"
@@ -137,11 +136,6 @@ void RenderRuntime::renderWorldFrame(const FrameInput& input, ICommandBuffer* cm
 void RenderRuntime::syncEditorFrame(const FrameInput& input)
 {
     updateEditorViewportContext(input);
-}
-
-void RenderRuntime::flushMainThreadCallbacks()
-{
-    TaskQueue::get().processMainThreadCallbacks();
 }
 
 ForwardRenderPipeline* RenderRuntime::getForwardPipeline() const
