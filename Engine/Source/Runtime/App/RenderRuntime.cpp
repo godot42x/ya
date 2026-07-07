@@ -24,50 +24,6 @@ void RenderRuntime::onViewportResized(Rect2D rect)
     }
 }
 
-void RenderRuntime::finalizeCompletedOffscreenJobs()
-{
-    ya::finalizeSubmittedOffscreenJobs(_submittedOffscreenJobs);
-}
-
-void RenderRuntime::offScreenRender()
-{
-    YA_PROFILE_FUNCTION()
-    if (!_render || !_app || !_offscreenCmdBuf) {
-        return;
-    }
-
-    if (_offscreenPending && _offscreenFence) {
-        auto*   vkRender = static_cast<VulkanRender*>(_render);
-        VkFence fence    = static_cast<VkFence>(_offscreenFence);
-        vkWaitForFences(vkRender->getDevice(), 1, &fence, VK_TRUE, UINT64_MAX);
-        vkResetFences(vkRender->getDevice(), 1, &fence);
-        _offscreenPending = false;
-        finalizeCompletedOffscreenJobs();
-    }
-
-    if (!_app->taskManager.hasOffscreenTasks()) {
-        return;
-    }
-
-    auto cmdBuf = _offscreenCmdBuf;
-    cmdBuf->reset();
-    if (!cmdBuf->begin()) {
-        YA_CORE_ERROR("Failed to begin offscreen command buffer");
-        return;
-    }
-
-    _submittedOffscreenJobs.clear();
-    _app->taskManager.updateOffscreenTasks(cmdBuf.get(), &_submittedOffscreenJobs);
-
-    if (!cmdBuf->end()) {
-        YA_CORE_ERROR("Failed to end offscreen command buffer");
-        return;
-    }
-
-    _render->submitToQueue({cmdBuf->getHandle()}, {}, {}, _offscreenFence);
-    _offscreenPending = true;
-}
-
 void RenderRuntime::renderFrame(const FrameInput& input)
 {
     YA_PROFILE_SCOPE("RenderRuntime::renderFrame");
@@ -100,7 +56,9 @@ void RenderRuntime::renderFrame(const FrameInput& input)
 void RenderRuntime::runFramePrologue()
 {
     applyPendingShadingModelSwitch();
-    offScreenRender();
+    if (_app) {
+        _offscreen.tick(*_app);
+    }
 }
 
 void RenderRuntime::beginFrameCapture()

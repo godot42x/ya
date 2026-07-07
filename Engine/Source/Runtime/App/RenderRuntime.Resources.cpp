@@ -3,7 +3,6 @@
 #include "App.h"
 #include "DebugRenderSystem.h"
 #include "ECS/System/ResourceResolveSystem.h"
-#include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Sampler.h"
 #include "Render/Core/Swapchain.h"
@@ -502,34 +501,15 @@ void RenderRuntime::initPresentationResources()
 void RenderRuntime::initCommandResources()
 {
     std::vector<stdptr<ICommandBuffer>> cmdBufs;
-    _render->allocateCommandBuffers(_render->getSwapchainImageCount() + 1, cmdBufs);
-    _commandBuffers.assign(cmdBufs.begin(), cmdBufs.begin() + _render->getSwapchainImageCount());
-    _offscreenCmdBuf = cmdBufs.back();
+    _render->allocateCommandBuffers(_render->getSwapchainImageCount(), cmdBufs);
+    _commandBuffers.assign(cmdBufs.begin(), cmdBufs.end());
     _deleter.push("CmdBufs", [this](void*)
                   {
-        _commandBuffers.clear();
-        _offscreenCmdBuf.reset(); });
+        _commandBuffers.clear(); });
 
-    auto*             vkRender = static_cast<VulkanRender*>(_render);
-    VkFenceCreateInfo fenceCI{
-        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-    };
-    VkFence  fence = VK_NULL_HANDLE;
-    VkResult ret   = vkCreateFence(vkRender->getDevice(), &fenceCI, nullptr, &fence);
-    YA_CORE_ASSERT(ret == VK_SUCCESS, "Failed to create offscreen fence");
-    vkRender->setDebugObjectName(VK_OBJECT_TYPE_FENCE, fence, "OffscreenFence");
-    _offscreenFence   = fence;
-    _offscreenPending = false;
-    _deleter.push("OffscreenFence", [this](void*)
-                  {
-        if (_offscreenFence) {
-            auto* vkR = static_cast<VulkanRender*>(_render);
-            vkDestroyFence(vkR->getDevice(), static_cast<VkFence>(_offscreenFence), nullptr);
-            _offscreenFence   = nullptr;
-            _offscreenPending = false;
-        } });
+    _offscreen.init(_render);
+    _deleter.push("OffscreenTaskService", [this](void*)
+                  { _offscreen.shutdown(); });
 }
 
 void RenderRuntime::initFrameServices()

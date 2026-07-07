@@ -4,11 +4,11 @@
 
 #include "Editor/EditorLayer.h"
 #include "Render/Core/DescriptorSet.h"
-#include "Render/Core/OffscreenJob.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Pipelines/PBRGenerateBrdfLUT.h"
 #include "Render/Render.h"
 #include "Render/Shader.h"
+#include "Runtime/App/OffscreenTaskService.h"
 #include "Runtime/App/RenderDiagnosticsService.h"
 
 #include <glm/glm.hpp>
@@ -68,13 +68,10 @@ struct RenderRuntime
 
     ut::StackDeleter _deleter;
 
-    IRender*                                        _render = nullptr;
-    stdptr<ICommandBuffer>                          _offscreenCmdBuf;
-    void*                                           _offscreenFence   = nullptr;
-    bool                                            _offscreenPending = false;
-    std::vector<std::shared_ptr<OffscreenJobState>> _submittedOffscreenJobs;
-    std::vector<std::shared_ptr<ICommandBuffer>>    _commandBuffers;
-    std::shared_ptr<ShaderStorage>                  _shaderStorage = nullptr;
+    IRender*                                     _render = nullptr;
+    OffscreenTaskService                         _offscreen{};
+    std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
+    std::shared_ptr<ShaderStorage>               _shaderStorage = nullptr;
 
     ERenderAPI::T currentRenderAPI     = ERenderAPI::None;
     EShadingModel _shadingModel        = EShadingModel::Deferred;
@@ -142,9 +139,6 @@ struct RenderRuntime
 
   public:
     void onViewportResized(Rect2D rect);
-    void offScreenRender();
-    void finalizeCompletedOffscreenJobs();
-
     void resetSkyboxPool();
     void resetEnvironmentLightingPool();
     bool requestAutomationRenderDocCapture();
@@ -158,7 +152,7 @@ struct RenderRuntime
     [[nodiscard]] IRenderTarget*                 getShadowDepthRT() const;
     [[nodiscard]] IImageView*                    getShadowDirectionalDepthIV() const;
     [[nodiscard]] IImageView*                    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
-    [[nodiscard]] bool                           isOffscreenPending() const { return _offscreenPending; }
+    [[nodiscard]] bool                           isOffscreenPending() const { return _offscreen.isPending(); }
 
     [[nodiscard]] Texture* getPostprocessOutputTexture() const;
     [[nodiscard]] Texture* getBloomExtractTexture() const;
