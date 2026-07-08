@@ -96,12 +96,28 @@ ForwardRenderPipeline* RenderRuntime::getForwardPipeline() const
     return _forwardPipeline.get();
 }
 
+IRenderPipeline* RenderRuntime::getActivePipeline() const
+{
+    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
+        return _forwardPipeline.get();
+    }
+    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
+        return _deferredPipeline.get();
+    }
+    if (_forwardPipeline) {
+        return _forwardPipeline.get();
+    }
+    if (_deferredPipeline) {
+        return _deferredPipeline.get();
+    }
+    return nullptr;
+}
+
 bool RenderRuntime::isShadowMappingEnabled() const
 {
-    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) return _forwardPipeline->isShadowMappingEnabled();
-    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) return _deferredPipeline->isShadowMappingEnabled();
-    if (_forwardPipeline) return _forwardPipeline->isShadowMappingEnabled();
-    if (_deferredPipeline) return _deferredPipeline->isShadowMappingEnabled();
+    if (auto* pipeline = getActivePipeline()) {
+        return pipeline->isShadowMappingEnabled();
+    }
     return false;
 }
 
@@ -117,64 +133,57 @@ bool RenderRuntime::hasMirrorRenderResult() const
 
 IRenderTarget* RenderRuntime::getShadowDepthRT() const
 {
-    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) return _forwardPipeline->getShadowDepthRT();
-    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) return _deferredPipeline->getShadowDepthRT();
-    if (_forwardPipeline) return _forwardPipeline->getShadowDepthRT();
-    if (_deferredPipeline) return _deferredPipeline->getShadowDepthRT();
+    if (auto* pipeline = getActivePipeline()) {
+        return pipeline->getShadowDepthRT();
+    }
     return nullptr;
 }
 
 IImageView* RenderRuntime::getShadowDirectionalDepthIV() const
 {
-    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) return _forwardPipeline->getShadowDirectionalDepthIV();
-    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) return _deferredPipeline->getShadowDirectionalDepthIV();
-    if (_forwardPipeline) return _forwardPipeline->getShadowDirectionalDepthIV();
-    if (_deferredPipeline) return _deferredPipeline->getShadowDirectionalDepthIV();
+    if (auto* pipeline = getActivePipeline()) {
+        return pipeline->getShadowDirectionalDepthIV();
+    }
     return nullptr;
 }
 
 IImageView* RenderRuntime::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
 {
-    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
-        return _forwardPipeline->getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
-    }
-    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
-        return _deferredPipeline->getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
-    }
-    if (_forwardPipeline) {
-        return _forwardPipeline->getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
-    }
-    if (_deferredPipeline) {
-        return _deferredPipeline->getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
+    if (auto* pipeline = getActivePipeline()) {
+        return pipeline->getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
     }
     return nullptr;
 }
 
 Texture* RenderRuntime::getPostprocessOutputTexture() const
 {
-    if (_forwardPipeline) return _forwardPipeline->getPostprocessOutputTexture();
-    if (_deferredPipeline) return _deferredPipeline->getPostprocessOutputTexture();
+    if (auto* pipeline = getActivePipeline()) {
+        return pipeline->getPostprocessOutputTexture();
+    }
     return nullptr;
 }
 
 Texture* RenderRuntime::getBloomExtractTexture() const
 {
-    if (_forwardPipeline) return _forwardPipeline->getBloomExtractTexture();
-    if (_deferredPipeline) return _deferredPipeline->getBloomExtractTexture();
+    if (auto* pipeline = getActivePipeline()) {
+        return pipeline->getBloomExtractTexture();
+    }
     return nullptr;
 }
 
 Texture* RenderRuntime::getBloomBlurTexture() const
 {
-    if (_forwardPipeline) return _forwardPipeline->getBloomBlurTexture();
-    if (_deferredPipeline) return _deferredPipeline->getBloomBlurTexture();
+    if (auto* pipeline = getActivePipeline()) {
+        return pipeline->getBloomBlurTexture();
+    }
     return nullptr;
 }
 
 Texture* RenderRuntime::getBloomCompositeTexture() const
 {
-    if (_forwardPipeline) return _forwardPipeline->getBloomCompositeTexture();
-    if (_deferredPipeline) return _deferredPipeline->getBloomCompositeTexture();
+    if (auto* pipeline = getActivePipeline()) {
+        return pipeline->getBloomCompositeTexture();
+    }
     return nullptr;
 }
 
@@ -190,23 +199,36 @@ Texture* RenderRuntime::getPresentationTexture() const
 
 bool RenderRuntime::isPostprocessingEnabled() const
 {
-    if (_forwardPipeline) return _forwardPipeline->isPostprocessingEnabled();
-    if (_deferredPipeline) return _deferredPipeline->isPostprocessingEnabled();
+    if (auto* pipeline = getActivePipeline()) {
+        return pipeline->isPostprocessingEnabled();
+    }
     return false;
 }
 
 Extent2D RenderRuntime::getViewportExtent() const
 {
-    if (_forwardPipeline) {
-        return _forwardPipeline->getViewportExtent();
-    }
-    if (_deferredPipeline) {
-        return _deferredPipeline->getViewportExtent();
+    if (auto* pipeline = getActivePipeline()) {
+        return pipeline->getViewportExtent();
     }
     if (_viewportRect.extent.x > 0 && _viewportRect.extent.y > 0) {
         return Extent2D::fromVec2(_viewportRect.extent);
     }
     return {};
+}
+
+RenderRuntime::PipelineDebugViews RenderRuntime::getPipelineDebugViews() const
+{
+    PipelineDebugViews views{};
+    if (_forwardPipeline) {
+        views.viewportRT = _forwardPipeline->getViewportRT();
+        return views;
+    }
+    if (_deferredPipeline) {
+        views.gBufferRT   = _deferredPipeline->getGBufferRT();
+        views.viewportRT  = _deferredPipeline->getViewportRT();
+        views.ssaoTexture = _deferredPipeline->getSSAOTexture();
+    }
+    return views;
 }
 
 DebugRenderSystem& RenderRuntime::getDebugRenderSystem() const
@@ -291,8 +313,7 @@ void RenderRuntime::applyPendingShadingModelSwitch()
     }
     YA_PROFILE_FUNCTION_LOG();
 
-    if ((_forwardPipeline && _forwardPipeline->hasOpenViewportPass()) ||
-        (_deferredPipeline && _deferredPipeline->hasOpenViewportPass())) {
+    if (auto* pipeline = getActivePipeline(); pipeline && pipeline->hasOpenViewportPass()) {
         YA_CORE_WARN("Skipping shading-model switch while a viewport pass is still open");
         return;
     }

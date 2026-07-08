@@ -222,12 +222,13 @@ void RenderRuntime::appendForwardDebugSlots(EditorViewportContext& ctx)
 
 void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
 {
-    if (!_deferredPipeline || !_deferredPipeline->getGBufferRT() || !_deferredPipeline->getViewportRT()) {
+    const auto views = getPipelineDebugViews();
+    if (!_deferredPipeline || !views.gBufferRT || !views.viewportRT) {
         return;
     }
 
-    auto* gbufferFb  = _deferredPipeline->getGBufferRT()->getCurFrameBuffer();
-    auto* viewportFb = _deferredPipeline->getViewportRT()->getCurFrameBuffer();
+    auto* gbufferFb  = views.gBufferRT->getCurFrameBuffer();
+    auto* viewportFb = views.viewportRT->getCurFrameBuffer();
     if (!gbufferFb || !viewportFb) {
         return;
     }
@@ -272,7 +273,7 @@ void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
         },
     };
 
-    if (auto* ssaoTexture = _deferredPipeline->getSSAOTexture(); ssaoTexture && ssaoTexture->getImageView()) {
+    if (auto* ssaoTexture = views.ssaoTexture; ssaoTexture && ssaoTexture->getImageView()) {
         ctx.debugSpec.slots.push_back({
             .label         = "SSAO",
             .defaultView   = ssaoTexture->getImageView(),

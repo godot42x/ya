@@ -160,94 +160,55 @@ void openCaptureDirectoryFromGUI(const std::string& filePath)
 
 void RenderRuntime::renderWorldSettingsGUI()
 {
-    if (ImGui::TreeNode("General")) {
-        if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
-            _forwardPipeline->renderGeneralSettingsGUI();
-        }
-        else if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
-            _deferredPipeline->renderGeneralSettingsGUI();
-        }
+    if (auto* pipeline = getActivePipeline(); pipeline && ImGui::TreeNode("General")) {
+        pipeline->renderGeneralSettingsGUI();
         ImGui::TreePop();
     }
 
-    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
-        if (ImGui::TreeNode("Lighting")) {
-            _deferredPipeline->renderLightingSettingsGUI();
-            ImGui::TreePop();
-        }
+    if (auto* pipeline = getActivePipeline(); pipeline == _deferredPipeline.get() && ImGui::TreeNode("Lighting")) {
+        pipeline->renderLightingSettingsGUI();
+        ImGui::TreePop();
     }
 
-    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
-        if (ImGui::TreeNode("Ambient Occlusion")) {
-            _deferredPipeline->renderAOSettingsGUI();
-            ImGui::TreePop();
-        }
+    if (auto* pipeline = getActivePipeline(); pipeline == _deferredPipeline.get() && ImGui::TreeNode("Ambient Occlusion")) {
+        pipeline->renderAOSettingsGUI();
+        ImGui::TreePop();
     }
 
-    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
-        if (ImGui::TreeNode("Shadows")) {
-            _forwardPipeline->renderShadowSettingsGUI();
-            ImGui::TreePop();
-        }
-    }
-    else if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
-        if (ImGui::TreeNode("Shadows")) {
-            _deferredPipeline->renderShadowSettingsGUI();
-            ImGui::TreePop();
-        }
+    if (auto* pipeline = getActivePipeline(); pipeline && ImGui::TreeNode("Shadows")) {
+        pipeline->renderShadowSettingsGUI();
+        ImGui::TreePop();
     }
 
-    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
-        if (ImGui::TreeNode("Post Process")) {
-            _forwardPipeline->renderPostProcessSettingsGUI();
-            ImGui::TreePop();
-        }
-    }
-    else if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
-        if (ImGui::TreeNode("Post Process")) {
-            _deferredPipeline->renderPostProcessSettingsGUI();
-            ImGui::TreePop();
-        }
+    if (auto* pipeline = getActivePipeline(); pipeline && ImGui::TreeNode("Post Process")) {
+        pipeline->renderPostProcessSettingsGUI();
+        ImGui::TreePop();
     }
 }
 
 void RenderRuntime::renderProfilingDetailsGUI()
 {
-    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
-        if (ImGui::TreeNode("Runtime Perf")) {
-            _forwardPipeline->renderPerformanceGUI();
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNode("Stage Internals")) {
-            _forwardPipeline->renderStageInternalsGUI();
-            ImGui::TreePop();
-        }
+    auto* pipeline = getActivePipeline();
+    if (!pipeline) {
         return;
     }
 
-    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
-        if (ImGui::TreeNode("Runtime Perf")) {
-            _deferredPipeline->renderPerformanceGUI();
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNode("Stage Internals")) {
-            _deferredPipeline->renderStageInternalsGUI();
-            ImGui::TreePop();
-        }
+    if (ImGui::TreeNode("Runtime Perf")) {
+        pipeline->renderPerformanceGUI();
+        ImGui::TreePop();
+    }
+    if (ImGui::TreeNode("Stage Internals")) {
+        pipeline->renderStageInternalsGUI();
+        ImGui::TreePop();
     }
 }
 
 void RenderRuntime::renderRenderingInternalsGUI()
 {
     if (ImGui::TreeNode("Rendering Internals")) {
-        if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
+        if (auto* pipeline = getActivePipeline()) {
             drawSettingsSection("Stage Internals", [&]() {
-                _forwardPipeline->renderStageInternalsGUI();
-            });
-        }
-        else if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
-            drawSettingsSection("Stage Internals", [&]() {
-                _deferredPipeline->renderStageInternalsGUI();
+                pipeline->renderStageInternalsGUI();
             });
         }
 

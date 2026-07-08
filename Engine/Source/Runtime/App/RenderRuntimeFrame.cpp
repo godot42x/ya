@@ -112,26 +112,26 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
 
 bool RenderRuntime::hasOpenViewportPass() const
 {
-    if (_shadingModel == EShadingModel::Forward) {
-        return _forwardPipeline && _forwardPipeline->hasOpenViewportPass();
+    if (auto* pipeline = getActivePipeline()) {
+        return pipeline->hasOpenViewportPass();
     }
-    return _deferredPipeline && _deferredPipeline->hasOpenViewportPass();
+    return false;
 }
 
 Extent2D RenderRuntime::getActiveViewportExtent() const
 {
-    if (_shadingModel == EShadingModel::Forward) {
-        return _forwardPipeline ? _forwardPipeline->getViewportExtent() : Extent2D{};
+    if (auto* pipeline = getActivePipeline()) {
+        return pipeline->getViewportExtent();
     }
-    return _deferredPipeline ? _deferredPipeline->getViewportExtent() : Extent2D{};
+    return {};
 }
 
 Texture* RenderRuntime::getActiveViewportTexture() const
 {
-    if (_shadingModel == EShadingModel::Forward) {
-        return _forwardPipeline ? _forwardPipeline->getViewportTexture() : nullptr;
+    if (auto* pipeline = getActivePipeline()) {
+        return pipeline->getViewportTexture();
     }
-    return _deferredPipeline ? _deferredPipeline->getViewportTexture() : nullptr;
+    return nullptr;
 }
 
 void RenderRuntime::renderViewportPassOverlays(const FrameInput& input, ICommandBuffer* cmdBuf)
@@ -219,14 +219,17 @@ void RenderRuntime::endViewportPass(ICommandBuffer* cmdBuf)
         return;
     }
 
-    if (_shadingModel == EShadingModel::Forward) {
-        _forwardPipeline->endViewportPass(cmdBuf);
-        YA_CORE_ASSERT(_forwardPipeline->getViewportTexture(), "Failed to get viewport texture for postprocessing");
-        return;
-    }
+    auto* pipeline = getActivePipeline();
+    YA_CORE_ASSERT(pipeline, "Active render pipeline is null while ending viewport pass");
 
-    _deferredPipeline->endViewportPass(cmdBuf);
-    YA_CORE_ASSERT(_deferredPipeline->getViewportTexture(), "Failed to get deferred viewport texture");
+    pipeline->endViewportPass(cmdBuf);
+
+    if (_shadingModel == EShadingModel::Forward) {
+        YA_CORE_ASSERT(pipeline->getViewportTexture(), "Failed to get viewport texture for postprocessing");
+    }
+    else {
+        YA_CORE_ASSERT(pipeline->getViewportTexture(), "Failed to get deferred viewport texture");
+    }
 }
 
 void RenderRuntime::renderPresentationPass(const FrameInput& input, ICommandBuffer* cmdBuf)

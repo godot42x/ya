@@ -8,6 +8,7 @@
 #include "Render/Core/Pipeline.h"
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
+#include "Runtime/App/Common/IRenderPipeline.h"
 #include "Runtime/App/Common/PostProcessingStage.h"
 #include "Runtime/App/Common/Shadow/ShadowStage.h"
 #include "SSAOStage.h"
@@ -59,7 +60,7 @@ struct DeferredRenderTickDesc
     RenderFrameData*        frameData                = nullptr;
 };
 
-struct DeferredRenderPipeline
+struct DeferredRenderPipeline : public IRenderPipeline
 {
     using InitDesc = DeferredRenderInitDesc;
     using TickDesc = DeferredRenderTickDesc;
@@ -130,22 +131,22 @@ struct DeferredRenderPipeline
 
     void renderGUI(bool bRenderTreeNode = true);
     void renderSettingsGUI();
-    void renderGeneralSettingsGUI();
-    void renderLightingSettingsGUI();
-    void renderAOSettingsGUI();
-    void renderPostProcessSettingsGUI();
-    void renderShadowSettingsGUI();
+    void renderGeneralSettingsGUI() override;
+    void renderLightingSettingsGUI() override;
+    void renderAOSettingsGUI() override;
+    void renderPostProcessSettingsGUI() override;
+    void renderShadowSettingsGUI() override;
     void renderTechnicalGUI();
-    void renderPerformanceGUI();
-    void renderStageInternalsGUI();
+    void renderPerformanceGUI() override;
+    void renderStageInternalsGUI() override;
 
     void beginViewportRendering(const TickDesc& desc);
-    void endViewportPass(ICommandBuffer* cmdBuf);
-    bool hasOpenViewportPass() const { return _bViewportPassOpen; }
+    void endViewportPass(ICommandBuffer* cmdBuf) override;
+    bool hasOpenViewportPass() const override { return _bViewportPassOpen; }
 
-    void onViewportResized(Rect2D rect);
+    void onViewportResized(Rect2D rect) override;
 
-    Extent2D getViewportExtent() const { return _viewportRT ? _viewportRT->getExtent() : Extent2D{}; }
+    Extent2D getViewportExtent() const override { return _viewportRT ? _viewportRT->getExtent() : Extent2D{}; }
 
     IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
@@ -153,23 +154,23 @@ struct DeferredRenderPipeline
 
     // Access GBuffer RT for debug views
     IRenderTarget* getGBufferRT() const { return _gBufferRT.get(); }
-    IRenderTarget* getViewportRT() const { return _viewportRT.get(); }
-    IRenderTarget* getShadowDepthRT() const { return _shadowDepthRT.get(); }
-    Texture*       getViewportTexture() const { return viewportTexture; }
-    bool           isShadowMappingEnabled() const { return _bEnableShadowMapping; }
-    IImageView*    getShadowDirectionalDepthIV() const { return _shadowDirectionalDepthIV.get(); }
-    IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
+    IRenderTarget* getViewportRT() const override { return _viewportRT.get(); }
+    IRenderTarget* getShadowDepthRT() const override { return _shadowDepthRT.get(); }
+    Texture*       getViewportTexture() const override { return viewportTexture; }
+    bool           isShadowMappingEnabled() const override { return _bEnableShadowMapping; }
+    IImageView*    getShadowDirectionalDepthIV() const override { return _shadowDirectionalDepthIV.get(); }
+    IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override
     {
         if (pointLightIndex >= MAX_POINT_LIGHTS || faceIndex >= 6) {
             return nullptr;
         }
         return _shadowPointFaceIVs[pointLightIndex][faceIndex].get();
     }
-    Texture* getPostprocessOutputTexture() const { return _postProcessStage.getOutputTexture(); }
-    Texture* getBloomExtractTexture() const { return _postProcessStage.getBloomExtractTexture(); }
-    Texture* getBloomBlurTexture() const { return _postProcessStage.getBloomBlurTexture(); }
-    Texture* getBloomCompositeTexture() const { return _postProcessStage.getBloomCompositeTexture(); }
-    bool     isPostprocessingEnabled() const { return _postProcessStage.isEnabled(); }
+    Texture* getPostprocessOutputTexture() const override { return _postProcessStage.getOutputTexture(); }
+    Texture* getBloomExtractTexture() const override { return _postProcessStage.getBloomExtractTexture(); }
+    Texture* getBloomBlurTexture() const override { return _postProcessStage.getBloomBlurTexture(); }
+    Texture* getBloomCompositeTexture() const override { return _postProcessStage.getBloomCompositeTexture(); }
+    bool     isPostprocessingEnabled() const override { return _postProcessStage.isEnabled(); }
 
   private:
     void               loadPersistentSettings();

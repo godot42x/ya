@@ -8,6 +8,7 @@
 #include "Render/Pipelines/PBRGenerateBrdfLUT.h"
 #include "Render/Render.h"
 #include "Render/Shader.h"
+#include "Runtime/App/Common/IRenderPipeline.h"
 #include "Runtime/App/OffscreenTaskService.h"
 #include "Runtime/App/RenderDiagnosticsService.h"
 
@@ -36,6 +37,13 @@ struct DebugRenderSystem;
 
 struct RenderRuntime
 {
+    struct PipelineDebugViews
+    {
+        IRenderTarget* gBufferRT  = nullptr;
+        IRenderTarget* viewportRT = nullptr;
+        Texture*       ssaoTexture = nullptr;
+    };
+
     enum class EShadingModel
     {
         Forward,
@@ -146,6 +154,7 @@ struct RenderRuntime
     [[nodiscard]] IRender*                       getRender() const { return _render; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
     [[nodiscard]] ForwardRenderPipeline*         getForwardPipeline() const;
+    [[nodiscard]] IRenderPipeline*               getActivePipeline() const;
     [[nodiscard]] bool                           isShadowMappingEnabled() const;
     [[nodiscard]] bool                           isMirrorRenderingEnabled() const;
     [[nodiscard]] bool                           hasMirrorRenderResult() const;
@@ -185,6 +194,7 @@ struct RenderRuntime
     [[nodiscard]] const Rect2D& getViewportRect() const { return _viewportRect; }
     [[nodiscard]] float         getViewportFrameBufferScale() const { return _viewportFrameBufferScale; }
     [[nodiscard]] Extent2D      getViewportExtent() const;
+    [[nodiscard]] PipelineDebugViews getPipelineDebugViews() const;
 
   private:
     void                   initRuntimeState(const InitDesc& desc);
