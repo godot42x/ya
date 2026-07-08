@@ -55,7 +55,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
 
 void RenderRuntime::runFramePrologue()
 {
-    applyPendingShadingModelSwitch();
+    applyPendingRenderPipelineSwitch();
     if (_app) {
         _offscreen.tick(*_app);
     }
@@ -98,10 +98,10 @@ ForwardRenderPipeline* RenderRuntime::getForwardPipeline() const
 
 IRenderPipeline* RenderRuntime::getActivePipeline() const
 {
-    if (_shadingModel == EShadingModel::Forward && _forwardPipeline) {
+    if (_renderPipeline == ERenderPipeline::Forward && _forwardPipeline) {
         return _forwardPipeline.get();
     }
-    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
+    if (_renderPipeline == ERenderPipeline::Deferred && _deferredPipeline) {
         return _deferredPipeline.get();
     }
     if (_forwardPipeline) {
@@ -227,7 +227,7 @@ IRenderTarget* RenderRuntime::getActiveViewportRT() const
 DeferredPipelineDebugViews RenderRuntime::getDeferredPipelineDebugViews() const
 {
     DeferredPipelineDebugViews views{};
-    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
+    if (_renderPipeline == ERenderPipeline::Deferred && _deferredPipeline) {
         views.gBufferRT   = _deferredPipeline->getGBufferRT();
         views.ssaoTexture = _deferredPipeline->getSSAOTexture();
     }
@@ -270,7 +270,7 @@ void RenderRuntime::initActivePipeline()
     int winH = 0;
     _render->getWindowSize(winW, winH);
 
-    if (_shadingModel == EShadingModel::Forward) {
+    if (_renderPipeline == ERenderPipeline::Forward) {
         _forwardPipeline = ya::makeShared<ForwardRenderPipeline>();
         _forwardPipeline->init(ForwardRenderPipeline::InitDesc{
             .render  = _render,
@@ -287,7 +287,7 @@ void RenderRuntime::initActivePipeline()
         });
     }
 
-    if (_shadingModel == EShadingModel::Forward) {
+    if (_renderPipeline == ERenderPipeline::Forward) {
         Render2D::init(_render, ForwardRenderPipeline::VIEWPORT_COLOR_FORMAT, ForwardRenderPipeline::DEPTH_FORMAT);
     }
     else {
@@ -309,26 +309,26 @@ void RenderRuntime::shutdownActivePipeline()
     }
 }
 
-void RenderRuntime::applyPendingShadingModelSwitch()
+void RenderRuntime::applyPendingRenderPipelineSwitch()
 {
-    if (_pendingShadingModel == _shadingModel) {
+    if (_pendingRenderPipeline == _renderPipeline) {
         return;
     }
     YA_PROFILE_FUNCTION_LOG();
 
     if (auto* pipeline = getActivePipeline(); pipeline && pipeline->hasOpenViewportPass()) {
-        YA_CORE_WARN("Skipping shading-model switch while a viewport pass is still open");
+        YA_CORE_WARN("Skipping render pipeline switch while a viewport pass is still open");
         return;
     }
 
-    YA_CORE_INFO("Switching shading model: {} -> {}",
-                 _shadingModel == EShadingModel::Forward ? "Forward" : "Deferred",
-                 _pendingShadingModel == EShadingModel::Forward ? "Forward" : "Deferred");
+    YA_CORE_INFO("Switching render pipeline: {} -> {}",
+                 _renderPipeline == ERenderPipeline::Forward ? "Forward" : "Deferred",
+                 _pendingRenderPipeline == ERenderPipeline::Forward ? "Forward" : "Deferred");
 
     _render->waitIdle();
 
     shutdownActivePipeline();
-    _shadingModel = _pendingShadingModel;
+    _renderPipeline = _pendingRenderPipeline;
     initActivePipeline();
 
     if (_viewportRect.extent.x > 0 && _viewportRect.extent.y > 0) {

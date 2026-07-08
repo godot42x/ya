@@ -81,7 +81,7 @@ void RenderRuntime::updateEditorViewportContext(const FrameInput& input)
     }
 
     EditorViewportContext ctx;
-    ctx.bForwardPipeline         = (_shadingModel == EShadingModel::Forward);
+    ctx.bForwardPipeline         = (_renderPipeline == ERenderPipeline::Forward);
     ctx.bPostprocessingEnabled   = isPostprocessingEnabled();
     ctx.postprocessOutputTexture = getPostprocessOutputTexture();
     ctx.viewportTexture          = getActiveViewportTexture();
@@ -95,7 +95,7 @@ void RenderRuntime::updateEditorViewportContext(const FrameInput& input)
         {.id = "postprocess", .label = "PostFX"},
     };
 
-    if (_shadingModel == EShadingModel::Forward) {
+    if (_renderPipeline == ERenderPipeline::Forward) {
         appendForwardDebugSlots(ctx);
     }
     else {

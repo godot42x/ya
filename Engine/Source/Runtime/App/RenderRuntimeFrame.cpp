@@ -77,7 +77,7 @@ bool RenderRuntime::beginFrameCommandBuffer(int32_t& imageIndex, std::shared_ptr
 
 void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, ICommandBuffer* cmdBuf)
 {
-    if (_shadingModel == EShadingModel::Forward) {
+    if (_renderPipeline == ERenderPipeline::Forward) {
         _forwardPipeline->tick(ForwardRenderPipeline::TickDesc{
             .flightIndex              = input.flightIndex,
             .cmdBuf                   = cmdBuf,
@@ -224,7 +224,7 @@ void RenderRuntime::endViewportPass(ICommandBuffer* cmdBuf)
 
     pipeline->endViewportPass(cmdBuf);
 
-    if (_shadingModel == EShadingModel::Forward) {
+    if (_renderPipeline == ERenderPipeline::Forward) {
         YA_CORE_ASSERT(pipeline->getViewportTexture(), "Failed to get viewport texture for postprocessing");
     }
     else {

@@ -43,7 +43,7 @@ struct DeferredPipelineDebugViews
 
 struct RenderRuntime
 {
-    enum class EShadingModel
+    enum class ERenderPipeline
     {
         Forward,
         Deferred
@@ -80,9 +80,9 @@ struct RenderRuntime
     std::vector<std::shared_ptr<ICommandBuffer>> _commandBuffers;
     std::shared_ptr<ShaderStorage>               _shaderStorage = nullptr;
 
-    ERenderAPI::T currentRenderAPI     = ERenderAPI::None;
-    EShadingModel _shadingModel        = EShadingModel::Deferred;
-    EShadingModel _pendingShadingModel = EShadingModel::Deferred;
+    ERenderAPI::T  currentRenderAPI      = ERenderAPI::None;
+    ERenderPipeline _renderPipeline      = ERenderPipeline::Deferred;
+    ERenderPipeline _pendingRenderPipeline = ERenderPipeline::Deferred;
 
     stdptr<ForwardRenderPipeline>  _forwardPipeline  = nullptr;
     stdptr<DeferredRenderPipeline> _deferredPipeline = nullptr;
@@ -169,9 +169,9 @@ struct RenderRuntime
     [[nodiscard]] Texture* getActiveViewportTexture() const;
     [[nodiscard]] Texture* getPresentationTexture() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;
-    [[nodiscard]] EShadingModel getShadingModel() const { return _shadingModel; }
-    [[nodiscard]] EShadingModel getPendingShadingModel() const { return _pendingShadingModel; }
-    void setPendingShadingModel(EShadingModel shadingModel) { _pendingShadingModel = shadingModel; }
+    [[nodiscard]] ERenderPipeline getRenderPipeline() const { return _renderPipeline; }
+    [[nodiscard]] ERenderPipeline getPendingRenderPipeline() const { return _pendingRenderPipeline; }
+    void setPendingRenderPipeline(ERenderPipeline renderPipeline) { _pendingRenderPipeline = renderPipeline; }
     void renderWorldSettingsGUI();
     void renderProfilingDetailsGUI();
     void renderRenderingInternalsGUI();
@@ -235,7 +235,7 @@ struct RenderRuntime
     void                   initActivePipeline();
     void                   shutdownActivePipeline();
     void                   releaseRenderOwnedResources();
-    void                   applyPendingShadingModelSwitch();
+    void                   applyPendingRenderPipelineSwitch();
     void                   renderRenderTargetEditor();
     void                   updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* texture);
     void                   updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds, Texture* cubemapTexture, Texture* irradianceTexture, Texture* prefilterTexture, Texture* brdfLutTexture);

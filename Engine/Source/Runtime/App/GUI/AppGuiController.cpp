@@ -136,12 +136,12 @@ void renderRenderingSettings(App& app)
         return;
     }
 
-    static const char* shadingModelNames[] = {"Forward", "Deferred"};
-    int                currentShadingModel = static_cast<int>(renderRuntime->getPendingShadingModel());
-    if (ImGui::Combo("Shading Model", &currentShadingModel, shadingModelNames, IM_ARRAYSIZE(shadingModelNames))) {
-        renderRuntime->setPendingShadingModel(static_cast<RenderRuntime::EShadingModel>(currentShadingModel));
+    static const char* renderPipelineNames[] = {"Forward", "Deferred"};
+    int                currentRenderPipeline = static_cast<int>(renderRuntime->getPendingRenderPipeline());
+    if (ImGui::Combo("Render Pipeline", &currentRenderPipeline, renderPipelineNames, IM_ARRAYSIZE(renderPipelineNames))) {
+        renderRuntime->setPendingRenderPipeline(static_cast<RenderRuntime::ERenderPipeline>(currentRenderPipeline));
     }
-    if (renderRuntime->getPendingShadingModel() != renderRuntime->getShadingModel()) {
+    if (renderRuntime->getPendingRenderPipeline() != renderRuntime->getRenderPipeline()) {
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(1, 1, 0, 1), "(switch pending)");
     }
