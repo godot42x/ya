@@ -7,6 +7,7 @@
 #include "Render/RenderFrameData.h"
 #include "Runtime/App/Common/IRenderPipeline.h"
 #include "Runtime/App/Common/PostProcessingStage.h"
+#include "Runtime/App/Common/Shadow/Common/ShadowMapResources.h"
 #include "Runtime/App/Common/Shadow/ShadowStage.h"
 
 
@@ -61,14 +62,8 @@ struct ForwardRenderPipeline : public IRenderPipeline
     // Shadow resources (owned here, shared to stages)
     stdptr<IDescriptorSetLayout> depthBufferDSL      = nullptr;
     DescriptorSetHandle          depthBufferShadowDS = nullptr;
-    stdptr<Sampler>              shadowSampler       = nullptr;
     bool                         bShadowMapping      = true;
-
-    stdptr<IRenderTarget> depthRT                  = nullptr;
-    stdptr<IImageView>    shadowDirectionalDepthIV = nullptr;
-
-    std::array<stdptr<IImageView>, MAX_POINT_LIGHTS>                shadowPointCubeIVs{};
-    std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS> shadowPointFaceIVs{};
+    ShadowMapResources           _shadowResources;
 
     // ── Render stages ─────────────────────────────────────────────
     stdptr<ShadowStage>          _shadowStage;
@@ -106,8 +101,8 @@ struct ForwardRenderPipeline : public IRenderPipeline
 
     // Shadow query accessors (used by RenderRuntime for debug views)
     [[nodiscard]] bool           isShadowMappingEnabled() const override { return bShadowMapping; }
-    [[nodiscard]] IRenderTarget* getShadowDepthRT() const override { return depthRT.get(); }
-    [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const override { return shadowDirectionalDepthIV.get(); }
+    [[nodiscard]] IRenderTarget* getShadowDepthRT() const override { return _shadowResources.renderTarget.get(); }
+    [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override;
     [[nodiscard]] Texture*       getPostprocessOutputTexture() const override { return _postProcessStage.getOutputTexture(); }
     [[nodiscard]] Texture*       getBloomExtractTexture() const override { return _postProcessStage.getBloomExtractTexture(); }

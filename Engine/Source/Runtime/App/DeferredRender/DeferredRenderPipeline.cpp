@@ -7,9 +7,6 @@
 #include "Render/Core/Sampler.h"
 #include "Render/Core/Texture.h"
 #include "Runtime/App/App.h"
-#include "Runtime/App/Common/Shadow/Common/ShadowViewBuilder.h"
-
-
 #include <algorithm>
 #include <chrono>
 #include <format>
@@ -155,48 +152,19 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
 
 void DeferredRenderPipeline::initShadowResources()
 {
-    if (!_render || _shadowDepthRT) {
+    if (!_render || _shadowResources.renderTarget) {
         return;
     }
 
     const auto& shadowSettings      = App::get()->getShadowSettings();
     const uint32_t shadowResolution = std::max(shadowSettings.resolution, 1u);
 
-    _shadowDepthRT = createRenderTarget(RenderTargetCreateInfo{
-        .label            = "Deferred Shadow Map RenderTarget",
-        .renderingMode    = ERenderingMode::DynamicRendering,
-        .bSwapChainTarget = false,
-        .extent           = {.width = shadowResolution, .height = shadowResolution},
-        .frameBufferCount = 1,
-        .layerCount       = 1 + MAX_POINT_LIGHTS * 6,
-        .attachments      = {
-
-            .depthAttach = AttachmentDescription{
-                .index            = 0,
-                .format           = _shadowDepthFormat,
-                .samples          = ESampleCount::Sample_1,
-                .loadOp           = EAttachmentLoadOp::Clear,
-                .storeOp          = EAttachmentStoreOp::Store,
-                .initialLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                .finalLayout      = EImageLayout::ShaderReadOnlyOptimal,
-                .usage            = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
-                .imageCreateFlags = EImageCreateFlag::CubeCompatible,
-            },
-        },
-    });
-    YA_CORE_ASSERT(_shadowDepthRT, "Failed to create deferred shadow render target");
-
-    rebuildShadowViews();
-
-    _shadowSampler = Sampler::create(SamplerDesc{
-        .label        = "deferred-shadow",
-        .minFilter    = EFilter::Linear,
-        .magFilter    = EFilter::Linear,
-        .mipmapMode   = ESamplerMipmapMode::Linear,
-        .addressModeU = ESamplerAddressMode::ClampToBorder,
-        .addressModeV = ESamplerAddressMode::ClampToBorder,
-        .addressModeW = ESamplerAddressMode::ClampToBorder,
-        .borderColor  = SamplerDesc::BorderColor{.type = SamplerDesc::EBorderColor::FloatOpaqueWhite, .color = {1, 1, 1, 1}},
+    _shadowResources.init(_render, ShadowMapResourceDesc{
+        .renderTargetLabel = "Deferred Shadow Map RenderTarget",
+        .samplerLabel      = "deferred-shadow",
+        .viewLabelPrefix   = "Deferred Shadow",
+        .extent            = {.width = shadowResolution, .height = shadowResolution},
+        .depthFormat       = _shadowDepthFormat,
     });
 }
 
@@ -207,17 +175,7 @@ void DeferredRenderPipeline::destroyShadowResources()
         _shadowStage.reset();
     }
 
-    _shadowDepthRT.reset();
-    _shadowDirectionalDepthIV.reset();
-    for (auto& imageView : _shadowPointCubeIVs) {
-        imageView.reset();
-    }
-    for (auto& faceViews : _shadowPointFaceIVs) {
-        for (auto& imageView : faceViews) {
-            imageView.reset();
-        }
-    }
-    _shadowSampler.reset();
+    _shadowResources.destroy();
 }
 
 void DeferredRenderPipeline::syncShadowSettings()
@@ -242,13 +200,13 @@ DeferredShadowState DeferredRenderPipeline::buildShadowState() const
         ? _maxPointLightShadowCount
         : 0;
     shadowState.settings = App::get()->getShadowSettings();
-    shadowState.shadowMapResolution = _shadowDepthRT ? _shadowDepthRT->getExtent().width : std::max(shadowState.settings.resolution, 1u);
+    shadowState.shadowMapResolution = _shadowResources.renderTarget ? _shadowResources.renderTarget->getExtent().width : std::max(shadowState.settings.resolution, 1u);
 
-    if (_bEnableShadowMapping && _shadowDirectionalDepthIV && _shadowSampler) {
-        shadowState.directionalDepthIV = _shadowDirectionalDepthIV.get();
-        shadowState.sampler            = _shadowSampler.get();
+    if (_bEnableShadowMapping && _shadowResources.directionalDepthIV && _shadowResources.sampler) {
+        shadowState.directionalDepthIV = _shadowResources.directionalDepthIV.get();
+        shadowState.sampler            = _shadowResources.sampler.get();
         for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
-            shadowState.pointCubeDepthIVs[lightIndex] = _shadowPointCubeIVs[lightIndex].get();
+            shadowState.pointCubeDepthIVs[lightIndex] = _shadowResources.pointCubeIVs[lightIndex].get();
         }
     }
 
@@ -318,12 +276,12 @@ void DeferredRenderPipeline::applyShadowSettings(bool bEnableShadowMapping, bool
     shadowSettings.pointLightEnabled = bEnablePointLightShadow;
 
     if (_bEnableShadowMapping) {
-        if (!_shadowDepthRT) {
+        if (!_shadowResources.renderTarget) {
             initShadowResources();
         }
-        if (!_shadowStage && _shadowDepthRT) {
+        if (!_shadowStage && _shadowResources.renderTarget) {
             _shadowStage = ya::makeShared<ShadowStage>();
-            _shadowStage->setRenderTarget(_shadowDepthRT);
+            _shadowStage->setRenderTarget(_shadowResources.renderTarget);
             _shadowStage->init(_render);
         }
     }
@@ -490,30 +448,7 @@ void DeferredRenderPipeline::saveShadowSettingsToConfig(bool                  bE
 
 void DeferredRenderPipeline::rebuildShadowViews()
 {
-    _shadowDirectionalDepthIV.reset();
-    for (auto& imageView : _shadowPointCubeIVs) {
-        imageView.reset();
-    }
-    for (auto& faceViews : _shadowPointFaceIVs) {
-        for (auto& imageView : faceViews) {
-            imageView.reset();
-        }
-    }
-
-    auto* shadowFrameBuffer = _shadowDepthRT->getCurFrameBuffer();
-    YA_CORE_ASSERT(shadowFrameBuffer, "Deferred shadow resources require a valid framebuffer");
-
-    auto* shadowDepthTexture = shadowFrameBuffer->getDepthTexture();
-    YA_CORE_ASSERT(shadowDepthTexture, "Deferred shadow resources require a valid depth texture");
-
-    auto* textureFactory = _render->getTextureFactory();
-    auto shadowImage     = shadowDepthTexture->getImageShared();
-    YA_CORE_ASSERT(textureFactory && shadowImage, "Deferred shadow resources require a valid image");
-
-    auto views                = ShadowViewBuilder::buildLayerViews(textureFactory, shadowImage, "Deferred Shadow");
-    _shadowDirectionalDepthIV = std::move(views.directionalDepthIV);
-    _shadowPointCubeIVs       = std::move(views.pointCubeIVs);
-    _shadowPointFaceIVs       = std::move(views.pointFaceIVs);
+    _shadowResources.rebuildViews(_render, "Deferred Shadow");
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -567,9 +502,9 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
 
 void DeferredRenderPipeline::initStages()
 {
-    if (_shadowDepthRT) {
+    if (_shadowResources.renderTarget) {
         _shadowStage = ya::makeShared<ShadowStage>();
-        _shadowStage->setRenderTarget(_shadowDepthRT);
+        _shadowStage->setRenderTarget(_shadowResources.renderTarget);
         _shadowStage->init(_render);
     }
 
@@ -701,10 +636,10 @@ void DeferredRenderPipeline::refreshDirtyResources()
     const bool bGBufferPipelineDirty  = _gBufferRT && _gBufferRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
     _viewportRT->flushDirty();
     _gBufferRT->flushDirty();
-    const bool bShadowResourcesDirty = _shadowDepthRT && _shadowDepthRT->bDirty;
-    const bool bShadowPipelineDirty  = _shadowDepthRT && _shadowDepthRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
-    if (_shadowDepthRT) {
-        _shadowDepthRT->flushDirty();
+    const bool bShadowResourcesDirty = _shadowResources.renderTarget && _shadowResources.renderTarget->bDirty;
+    const bool bShadowPipelineDirty  = _shadowResources.renderTarget && _shadowResources.renderTarget->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
+    if (_shadowResources.renderTarget) {
+        _shadowResources.renderTarget->flushDirty();
     }
 
     if (bGBufferDirty) {
@@ -790,18 +725,18 @@ void DeferredRenderPipeline::syncFrameSettings(const TickDesc& desc)
     const uint32_t shadowedPointLightBudget = shadowSettings.getEffectivePointLightCount();
     const uint32_t desiredShadowResolution  = std::max(shadowSettings.resolution, 1u);
     if (_bEnableShadowMapping) {
-        const bool bShadowResolutionDirty = !_shadowDepthRT ||
-                                            _shadowDepthRT->getExtent().width != desiredShadowResolution ||
-                                            _shadowDepthRT->getExtent().height != desiredShadowResolution;
+        const bool bShadowResolutionDirty = !_shadowResources.renderTarget ||
+                                            _shadowResources.renderTarget->getExtent().width != desiredShadowResolution ||
+                                            _shadowResources.renderTarget->getExtent().height != desiredShadowResolution;
         if (bShadowResolutionDirty) {
             if (_render) {
                 _render->waitIdle();
             }
             destroyShadowResources();
             initShadowResources();
-            if (!_shadowStage && _shadowDepthRT) {
+            if (!_shadowStage && _shadowResources.renderTarget) {
                 _shadowStage = ya::makeShared<ShadowStage>();
-                _shadowStage->setRenderTarget(_shadowDepthRT);
+                _shadowStage->setRenderTarget(_shadowResources.renderTarget);
                 _shadowStage->init(_render);
             }
             syncShadowSettings();
@@ -833,10 +768,10 @@ void DeferredRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)
 
 void DeferredRenderPipeline::handoffShadowDepthForSampling(ICommandBuffer* cmdBuf)
 {
-    auto* shadowFrameBuffer  = _shadowDepthRT ? _shadowDepthRT->getCurFrameBuffer() : nullptr;
+    auto* shadowFrameBuffer  = _shadowResources.renderTarget ? _shadowResources.renderTarget->getCurFrameBuffer() : nullptr;
     auto* shadowDepthTexture = shadowFrameBuffer ? shadowFrameBuffer->getDepthTexture() : nullptr;
     auto* shadowDepthImage   = shadowDepthTexture ? shadowDepthTexture->getImage() : nullptr;
-    if (!cmdBuf || !_shadowDepthRT || !shadowDepthImage) {
+    if (!cmdBuf || !_shadowResources.renderTarget || !shadowDepthImage) {
         return;
     }
 
@@ -845,7 +780,7 @@ void DeferredRenderPipeline::handoffShadowDepthForSampling(ICommandBuffer* cmdBu
         .baseMipLevel   = 0,
         .levelCount     = 1,
         .baseArrayLayer = 0,
-        .layerCount     = _shadowDepthRT->_layerCount,
+        .layerCount     = _shadowResources.renderTarget->_layerCount,
     };
     cmdBuf->transitionImageLayoutAuto(shadowDepthImage, EImageLayout::ShaderReadOnlyOptimal, &shadowDepthRange);
 }

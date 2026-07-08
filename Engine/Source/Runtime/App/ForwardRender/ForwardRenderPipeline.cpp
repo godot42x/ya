@@ -5,8 +5,6 @@
 #include "Render/Core/Sampler.h"
 #include "Render/Core/Texture.h"
 #include "Runtime/App/App.h"
-#include "Runtime/App/Common/Shadow/Common/ShadowViewBuilder.h"
-
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace ya
@@ -14,33 +12,19 @@ namespace ya
 
 void ForwardRenderPipeline::rebuildShadowViews()
 {
-    YA_CORE_ASSERT(_render, "ForwardRenderPipeline requires render device");
-    YA_CORE_ASSERT(depthRT, "ForwardRenderPipeline requires shadow render target");
-
-    auto* frameBuffer  = depthRT->getCurFrameBuffer();
-    auto* depthTexture = frameBuffer ? frameBuffer->getDepthTexture() : nullptr;
-    YA_CORE_ASSERT(depthTexture, "Shadow render target depth texture is null");
-
-    auto* tf       = _render->getTextureFactory();
-    auto shadowImg = depthTexture->getImageShared();
-    YA_CORE_ASSERT(shadowImg, "Shadow render target image is null");
-
-    auto views              = ShadowViewBuilder::buildLayerViews(tf, shadowImg, "Shadow Map");
-    shadowDirectionalDepthIV = std::move(views.directionalDepthIV);
-    shadowPointCubeIVs       = std::move(views.pointCubeIVs);
-    shadowPointFaceIVs       = std::move(views.pointFaceIVs);
+    _shadowResources.rebuildViews(_render, "Shadow Map");
 
     std::vector<DescriptorImageInfo> pointInfos(MAX_POINT_LIGHTS);
     for (uint32_t i = 0; i < MAX_POINT_LIGHTS; ++i) {
         pointInfos[i] = DescriptorImageInfo{
-            .imageView   = shadowPointCubeIVs[i] ? shadowPointCubeIVs[i]->getHandle() : ImageViewHandle{},
-            .sampler     = shadowSampler ? shadowSampler->getHandle() : SamplerHandle{},
+            .imageView   = _shadowResources.pointCubeIVs[i] ? _shadowResources.pointCubeIVs[i]->getHandle() : ImageViewHandle{},
+            .sampler     = _shadowResources.sampler ? _shadowResources.sampler->getHandle() : SamplerHandle{},
             .imageLayout = EImageLayout::ShaderReadOnlyOptimal,
         };
     }
 
     _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::writeOneImage(depthBufferShadowDS, 0, shadowDirectionalDepthIV.get(), shadowSampler.get()),
+        IDescriptorSetHelper::writeOneImage(depthBufferShadowDS, 0, _shadowResources.directionalDepthIV.get(), _shadowResources.sampler.get()),
         WriteDescriptorSet{
             .dstSet          = depthBufferShadowDS,
             .dstBinding      = 1,
@@ -118,29 +102,15 @@ void ForwardRenderPipeline::initPostProcessResources(const InitDesc& desc)
 
 void ForwardRenderPipeline::initShadowResources()
 {
-    depthRT = ya::createRenderTarget(RenderTargetCreateInfo{
-        .label            = "Shadow Map RenderTarget",
-        .renderingMode    = ERenderingMode::DynamicRendering,
-        .bSwapChainTarget = false,
-        .extent           = {.width = 512, .height = 512},
-        .frameBufferCount = 1,
-        .layerCount       = 1 + MAX_POINT_LIGHTS * 6,
-        .attachments      = {
-            .depthAttach = AttachmentDescription{
-                .index            = 0,
-                .format           = SHADOW_MAPPING_DEPTH_BUFFER_FORMAT,
-                .samples          = ESampleCount::Sample_1,
-                .loadOp           = EAttachmentLoadOp::Clear,
-                .storeOp          = EAttachmentStoreOp::Store,
-                .initialLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                .finalLayout      = EImageLayout::ShaderReadOnlyOptimal,
-                .usage            = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
-                .imageCreateFlags = EImageCreateFlag::CubeCompatible,
-            },
-        },
+    _shadowResources.init(_render, ShadowMapResourceDesc{
+        .renderTargetLabel = "Shadow Map RenderTarget",
+        .samplerLabel      = "shadow",
+        .viewLabelPrefix   = "Shadow Map",
+        .extent            = {.width = 512, .height = 512},
+        .depthFormat       = SHADOW_MAPPING_DEPTH_BUFFER_FORMAT,
     });
     _deleter.push("DepthRT", [this](void*)
-                  { depthRT.reset(); });
+                  { _shadowResources.renderTarget.reset(); });
 
     _descriptorPool = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
                                                            .label     = "ForwardPipeline Descriptor Pool",
@@ -162,33 +132,20 @@ void ForwardRenderPipeline::initShadowResources()
     _deleter.push("DepthBufferDSL", [this](void*)
                   { depthBufferDSL.reset(); });
 
-    shadowSampler = Sampler::create(SamplerDesc{
-        .label        = "shadow",
-        .minFilter    = EFilter::Linear,
-        .magFilter    = EFilter::Linear,
-        .mipmapMode   = ESamplerMipmapMode::Linear,
-        .addressModeU = ESamplerAddressMode::ClampToBorder,
-        .addressModeV = ESamplerAddressMode::ClampToBorder,
-        .addressModeW = ESamplerAddressMode::ClampToBorder,
-        .borderColor  = SamplerDesc::BorderColor{.type = SamplerDesc::EBorderColor::FloatOpaqueWhite, .color = {1, 1, 1, 1}},
-    });
     _deleter.push("ShadowSampler", [this](void*)
-                  { shadowSampler.reset(); });
+                  { _shadowResources.sampler.reset(); });
 
     _render->waitIdle();
     rebuildShadowViews();
 
     _deleter.push("Shadow ImageViews", [this](void*)
-                  {
-        shadowDirectionalDepthIV.reset();
-        for (auto& iv : shadowPointCubeIVs) iv.reset();
-        for (auto& faces : shadowPointFaceIVs) for (auto& iv : faces) iv.reset(); });
+                  { _shadowResources.destroy(); });
 }
 
 void ForwardRenderPipeline::initStageResources()
 {
     _shadowStage = ya::makeShared<ShadowStage>();
-    _shadowStage->setRenderTarget(depthRT);
+    _shadowStage->setRenderTarget(_shadowResources.renderTarget);
     _shadowStage->init(_render);
 
     PipelineRenderingInfo viewportPRI{
@@ -249,14 +206,14 @@ void ForwardRenderPipeline::beginTick(const TickDesc& desc, RenderStageContext& 
 void ForwardRenderPipeline::refreshDirtyResources()
 {
     const bool bViewportPipelineDirty = viewportRT && viewportRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
-    const bool bShadowDirty           = depthRT && depthRT->bDirty;
-    const bool bShadowPipelineDirty   = depthRT && depthRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
+    const bool bShadowDirty           = _shadowResources.renderTarget && _shadowResources.renderTarget->bDirty;
+    const bool bShadowPipelineDirty   = _shadowResources.renderTarget && _shadowResources.renderTarget->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
 
     if (viewportRT) {
         viewportRT->flushDirty();
     }
-    if (depthRT) {
-        depthRT->flushDirty();
+    if (_shadowResources.renderTarget) {
+        _shadowResources.renderTarget->flushDirty();
     }
 
     if (bViewportPipelineDirty && _viewportStage) {
@@ -441,7 +398,7 @@ Extent2D ForwardRenderPipeline::getViewportExtent() const
 IImageView* ForwardRenderPipeline::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
 {
     if (pointLightIndex >= MAX_POINT_LIGHTS || faceIndex >= 6) return nullptr;
-    return shadowPointFaceIVs[pointLightIndex][faceIndex].get();
+    return _shadowResources.pointFaceIVs[pointLightIndex][faceIndex].get();
 }
 
 } // namespace ya

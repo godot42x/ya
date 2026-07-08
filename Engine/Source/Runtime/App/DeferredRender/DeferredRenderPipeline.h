@@ -11,6 +11,7 @@
 #include "Render/RenderFrameData.h"
 #include "Runtime/App/Common/IRenderPipeline.h"
 #include "Runtime/App/Common/PostProcessingStage.h"
+#include "Runtime/App/Common/Shadow/Common/ShadowMapResources.h"
 #include "Runtime/App/Common/Shadow/ShadowStage.h"
 #include "SSAOStage.h"
 #include "ViewportOverlayStage.h"
@@ -71,7 +72,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     // ── Render targets ────────────────────────────────────────────────
     stdptr<IRenderTarget> _gBufferRT;
     stdptr<IRenderTarget> _viewportRT;
-    stdptr<IRenderTarget> _shadowDepthRT;
     stdptr<Texture>       _ssaoTexture;
 
     static constexpr EFormat::T LINEAR_FORMAT            = EFormat::R8G8B8A8_UNORM;
@@ -90,10 +90,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     stdptr<ViewportOverlayStage> _overlayStage;
     PostProcessingStage          _postProcessStage;
 
-    stdptr<Sampler>                                                 _shadowSampler            = nullptr;
-    stdptr<IImageView>                                              _shadowDirectionalDepthIV = nullptr;
-    std::array<stdptr<IImageView>, MAX_POINT_LIGHTS>                _shadowPointCubeIVs{};
-    std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS> _shadowPointFaceIVs{};
+    ShadowMapResources                                              _shadowResources;
 
     Texture* viewportTexture       = nullptr;
     bool     _bViewportPassOpen    = false;
@@ -156,16 +153,16 @@ struct DeferredRenderPipeline : public IRenderPipeline
     // Access GBuffer RT for debug views
     IRenderTarget* getGBufferRT() const { return _gBufferRT.get(); }
     IRenderTarget* getViewportRT() const override { return _viewportRT.get(); }
-    IRenderTarget* getShadowDepthRT() const override { return _shadowDepthRT.get(); }
+    IRenderTarget* getShadowDepthRT() const override { return _shadowResources.renderTarget.get(); }
     Texture*       getViewportTexture() const override { return viewportTexture; }
     bool           isShadowMappingEnabled() const override { return _bEnableShadowMapping; }
-    IImageView*    getShadowDirectionalDepthIV() const override { return _shadowDirectionalDepthIV.get(); }
+    IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override
     {
         if (pointLightIndex >= MAX_POINT_LIGHTS || faceIndex >= 6) {
             return nullptr;
         }
-        return _shadowPointFaceIVs[pointLightIndex][faceIndex].get();
+        return _shadowResources.pointFaceIVs[pointLightIndex][faceIndex].get();
     }
     Texture* getPostprocessOutputTexture() const override { return _postProcessStage.getOutputTexture(); }
     Texture* getBloomExtractTexture() const override { return _postProcessStage.getBloomExtractTexture(); }
