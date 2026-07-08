@@ -176,6 +176,7 @@ void ForwardRenderPipeline::tick(const TickDesc& desc)
     RenderStageContext stageCtx{};
     beginTick(desc, stageCtx);
     refreshDirtyResources();
+    syncShadowSettings();
     executeShadowPass(stageCtx);
     executeViewportPass(desc, stageCtx);
 }
@@ -223,9 +224,13 @@ void ForwardRenderPipeline::refreshDirtyResources()
         if (bShadowPipelineDirty && _shadowStage) {
             _shadowStage->refreshPipelineFromRenderTarget();
         }
-        if (_viewportStage) {
-            _viewportStage->applyShadowState(buildShadowState());
-        }
+    }
+}
+
+void ForwardRenderPipeline::syncShadowSettings()
+{
+    if (_viewportStage) {
+        _viewportStage->applyShadowState(buildShadowState());
     }
 }
 
@@ -349,14 +354,16 @@ void ForwardRenderPipeline::renderShadowSettingsGUI()
         else {
             shadowSettings.quality = EShadowQuality::Off;
         }
-        if (_viewportStage) {
-            _viewportStage->applyShadowState(buildShadowState());
-        }
+        syncShadowSettings();
     }
 
     if (shadowSettings.isEnabled()) {
-        ImGui::Checkbox("Point Light Indirect Draw", &shadowSettings.pointLightUseIndirect);
-        ImGui::Checkbox("Point Light Indirect Cull", &shadowSettings.pointLightIndirectCullEnabled);
+        bool bDirty = false;
+        bDirty |= ImGui::Checkbox("Point Light Indirect Draw", &shadowSettings.pointLightUseIndirect);
+        bDirty |= ImGui::Checkbox("Point Light Indirect Cull", &shadowSettings.pointLightIndirectCullEnabled);
+        if (bDirty) {
+            syncShadowSettings();
+        }
     }
 }
 

@@ -118,6 +118,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] bool shouldSkipTick(const TickDesc& desc) const;
     void               beginTick(const TickDesc& desc, RenderStageContext& stageCtx);
     void               refreshDirtyResources();
+    void               syncShadowSettings();
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               executeShadowPass(RenderStageContext& stageCtx);
     void               executeViewportPass(const TickDesc& desc, RenderStageContext& stageCtx);
