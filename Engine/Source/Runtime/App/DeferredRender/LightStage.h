@@ -1,5 +1,7 @@
 #pragma once
 
+#include "DeferredShadowState.h"
+
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/FrameBuffer.h"
 #include "Render/Core/IRenderTarget.h"
@@ -14,8 +16,6 @@ namespace ya
 {
 
 struct GBufferStage;
-struct Sampler;
-struct IImageView;
 struct Texture;
 
 /// Deferred light pass — fullscreen quad that reads GBuffer textures and computes lighting.
@@ -42,8 +42,7 @@ struct LightStage : public IRenderStage
     GraphicsPipelineCreateInfo   _pipelineCI{};
     bool                         _bEnablePBRDiffuseIBL  = true;
     bool                         _bEnablePBRSpecularIBL = true;
-    bool                         _bEnableShadowMapping  = true;
-    bool                         _bEnablePointLightShadow = true;
+    DeferredShadowState          _shadowState{};
 
     // GBuffer texture DS + pool (updated each frame from GBuffer RT)
     stdptr<IDescriptorPool> _dsp;
@@ -51,9 +50,6 @@ struct LightStage : public IRenderStage
     stdptr<IDescriptorSetLayout> _shadowDSL;
     DescriptorSetHandle          _shadowDS = nullptr;
 
-    IImageView* _shadowDirectionalDepthIV = nullptr;
-    std::array<IImageView*, MAX_POINT_LIGHTS> _shadowPointCubeIVs{};
-    Sampler* _shadowSampler = nullptr;
     IFrameBuffer* _lastGBufferFrameBuffer = nullptr;
     ImageViewHandle _lastSSAOImageViewHandle = nullptr;
     ImageViewHandle _lastShadowDirectionalImageViewHandle = nullptr;
@@ -77,11 +73,8 @@ struct LightStage : public IRenderStage
     /// @param gBufferRT     Provides GBuffer color textures for sampling
     void setup(GBufferStage* gBufferStage, IRenderTarget* gBufferRT);
     void setSSAOTexture(Texture* ssaoTexture);
-    void setShadowResources(IImageView* directionalDepthIV,
-                            const std::array<IImageView*, MAX_POINT_LIGHTS>& pointCubeDepthIVs,
-                            Sampler* shadowSampler);
+    void applyShadowState(const DeferredShadowState& shadowState);
     void setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecularIBL);
-    void setShadowSettings(bool bEnableShadowMapping, bool bEnablePointLightShadow);
     void refreshPipelineFormats(const IRenderTarget* viewportRT);
     void invalidateGBufferDescriptors();
     void invalidateShadowDescriptors();

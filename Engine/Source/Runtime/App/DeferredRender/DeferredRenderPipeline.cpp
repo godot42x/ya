@@ -222,33 +222,37 @@ void DeferredRenderPipeline::destroyShadowResources()
 
 void DeferredRenderPipeline::syncShadowSettings()
 {
-    // Use pipeline's own flags (loaded from config) as the source of truth for
-    // lightStage/gBufferStage. App::getShadowSettings() is the game-layer API
-    // but these local flags are what actually control resource creation/destruction.
-    const bool bShadowEnabled      = _bEnableShadowMapping;
-    const bool bPointShadowEnabled = _bEnablePointLightShadow;
+    const auto shadowState = buildShadowState();
 
     if (_lightStage) {
-        _lightStage->setShadowSettings(bShadowEnabled, bPointShadowEnabled);
-
-        std::array<IImageView*, MAX_POINT_LIGHTS> shadowPointCubeViews{};
-        if (bShadowEnabled && _shadowDirectionalDepthIV && _shadowSampler) {
-            for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
-                shadowPointCubeViews[lightIndex] = _shadowPointCubeIVs[lightIndex].get();
-            }
-            _lightStage->setShadowResources(_shadowDirectionalDepthIV.get(),
-                                            shadowPointCubeViews,
-                                            _shadowSampler.get());
-        }
-        else {
-            _lightStage->setShadowResources(nullptr, shadowPointCubeViews, nullptr);
-        }
+        _lightStage->applyShadowState(shadowState);
     }
 
     if (_gBufferStage) {
-        _gBufferStage->setMaxShadowedPointLights(
-            (bShadowEnabled && bPointShadowEnabled) ? _maxPointLightShadowCount : 0);
+        _gBufferStage->applyShadowState(shadowState);
     }
+}
+
+DeferredShadowState DeferredRenderPipeline::buildShadowState() const
+{
+    DeferredShadowState shadowState{};
+    shadowState.bEnableShadowMapping    = _bEnableShadowMapping;
+    shadowState.bEnablePointLightShadow = _bEnablePointLightShadow;
+    shadowState.maxShadowedPointLights  = (_bEnableShadowMapping && _bEnablePointLightShadow)
+        ? _maxPointLightShadowCount
+        : 0;
+    shadowState.settings = App::get()->getShadowSettings();
+    shadowState.shadowMapResolution = _shadowDepthRT ? _shadowDepthRT->getExtent().width : std::max(shadowState.settings.resolution, 1u);
+
+    if (_bEnableShadowMapping && _shadowDirectionalDepthIV && _shadowSampler) {
+        shadowState.directionalDepthIV = _shadowDirectionalDepthIV.get();
+        shadowState.sampler            = _shadowSampler.get();
+        for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
+            shadowState.pointCubeDepthIVs[lightIndex] = _shadowPointCubeIVs[lightIndex].get();
+        }
+    }
+
+    return shadowState;
 }
 
 void DeferredRenderPipeline::queueShadowSettingsChange(bool     bEnableShadowMapping,
@@ -804,14 +808,10 @@ void DeferredRenderPipeline::syncFrameSettings(const TickDesc& desc)
         }
     }
 
-    const uint32_t shadowMapResolution = _shadowDepthRT ? _shadowDepthRT->getExtent().width : desiredShadowResolution;
-    if (_gBufferStage) {
-        _gBufferStage->setMaxShadowedPointLights(shadowedPointLightBudget);
-        _gBufferStage->setShadowSettings(shadowSettings, shadowMapResolution);
-    }
-    if (_lightStage) {
-        _lightStage->setShadowSettings(shadowSettings.isEnabled(), shadowSettings.pointLightEnabled);
-    }
+    (void)shadowedPointLightBudget;
+    (void)shadowSettings;
+    (void)desiredShadowResolution;
+    syncShadowSettings();
 }
 
 void DeferredRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)

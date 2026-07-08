@@ -535,10 +535,10 @@ void GBufferStage::updateFrameUBOs(const RenderStageContext& ctx)
     // Light UBO
     LightPassLightData lightData{};
     lightData.hasDirLight              = false;
-    lightData.dirLight.bias            = _shadowBias;
-    lightData.dirLight.normalBias      = _shadowNormalBias;
-    lightData.dirLight.shadowFilter    = _shadowFilter;
-    lightData.dirLight.shadowTexelSize = _shadowTexelSize;
+    lightData.dirLight.bias            = _shadowState.settings.bias;
+    lightData.dirLight.normalBias      = _shadowState.settings.normalBias;
+    lightData.dirLight.shadowFilter    = static_cast<uint32_t>(_shadowState.settings.filter);
+    lightData.dirLight.shadowTexelSize = _shadowState.shadowMapResolution > 0 ? 1.0f / static_cast<float>(_shadowState.shadowMapResolution) : 0.0f;
     if (fd.bHasDirectionalLight) {
         lightData.dirLight.dir          = fd.directionalLight.direction;
         lightData.dirLight.color        = fd.directionalLight.color;
@@ -547,7 +547,7 @@ void GBufferStage::updateFrameUBOs(const RenderStageContext& ctx)
         lightData.hasDirLight           = true;
     }
     int            pli                      = 0;
-    const uint32_t shadowedPointLightBudget = std::min(_maxShadowedPointLights, fd.numPointLights);
+    const uint32_t shadowedPointLightBudget = std::min(_shadowState.maxShadowedPointLights, fd.numPointLights);
     for (uint32_t i = 0; i < fd.numPointLights && pli < static_cast<int>(MAX_POINT_LIGHTS); ++i) {
         const auto& src            = fd.pointLights[i];
         lightData.pointLights[pli] = {
@@ -878,7 +878,7 @@ void GBufferStage::renderGUI()
 void GBufferStage::renderTechnicalGUI()
 {
     if (ImGui::TreeNode("GBuffer Stats")) {
-        ImGui::Text("Point shadow budget: %u", _maxShadowedPointLights);
+        ImGui::Text("Point shadow budget: %u", _shadowState.maxShadowedPointLights);
         ImGui::Text("Shadowed point lights: %u", _lastShadowedPointLights);
         ImGui::TreePop();
     }

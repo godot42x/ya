@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Math/Geometry.h"
+#include "DeferredShadowState.h"
 #include "GBufferStage.h"
 #include "LightStage.h"
 #include "Render/Core/DescriptorSet.h"
@@ -190,6 +191,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
                                                   bool bEnablePointLightShadow,
                                                   uint32_t maxPointLightShadowCount,
                                                   const ShadowSettings& shadowSettings) const;
+    [[nodiscard]] DeferredShadowState buildShadowState() const;
     void               rebuildShadowViews();
     void               initRenderTargets(Extent2D extent);
     void               initShadowResources();

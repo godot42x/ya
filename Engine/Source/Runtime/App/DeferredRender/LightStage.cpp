@@ -61,8 +61,8 @@ void LightStage::setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecul
     ci.shaderDesc.defines = buildLightPassShaderDefines(
         _bEnablePBRDiffuseIBL,
         _bEnablePBRSpecularIBL,
-        _bEnableShadowMapping,
-        _bEnablePointLightShadow);
+        _shadowState.bEnableShadowMapping,
+        _shadowState.bEnablePointLightShadow);
     _pipeline->updateDesc(std::move(ci));
     _bShadowDescriptorsInitialized = false;
 }
@@ -94,25 +94,21 @@ void LightStage::setSSAOTexture(Texture* ssaoTexture)
     invalidateGBufferDescriptors();
 }
 
-void LightStage::setShadowResources(IImageView*                                      directionalDepthIV,
-                                    const std::array<IImageView*, MAX_POINT_LIGHTS>& pointCubeDepthIVs,
-                                    Sampler*                                         shadowSampler)
+void LightStage::applyShadowState(const DeferredShadowState& shadowState)
 {
-    _shadowDirectionalDepthIV = directionalDepthIV;
-    _shadowPointCubeIVs       = pointCubeDepthIVs;
-    _shadowSampler            = shadowSampler;
-    invalidateShadowDescriptors();
-}
+    const bool bDefinesChanged = _shadowState.bEnableShadowMapping != shadowState.bEnableShadowMapping ||
+                                 _shadowState.bEnablePointLightShadow != shadowState.bEnablePointLightShadow;
+    const bool bResourcesChanged = _shadowState.directionalDepthIV != shadowState.directionalDepthIV ||
+                                   _shadowState.sampler != shadowState.sampler ||
+                                   _shadowState.pointCubeDepthIVs != shadowState.pointCubeDepthIVs;
 
-void LightStage::setShadowSettings(bool bEnableShadowMapping, bool bEnablePointLightShadow)
-{
-    const bool bChanged = _bEnableShadowMapping != bEnableShadowMapping ||
-                          _bEnablePointLightShadow != bEnablePointLightShadow;
+    _shadowState = shadowState;
 
-    _bEnableShadowMapping   = bEnableShadowMapping;
-    _bEnablePointLightShadow = bEnablePointLightShadow;
+    if (bResourcesChanged) {
+        invalidateShadowDescriptors();
+    }
 
-    if (!bChanged || !_pipeline) {
+    if (!bDefinesChanged || !_pipeline) {
         return;
     }
 
@@ -120,8 +116,8 @@ void LightStage::setShadowSettings(bool bEnableShadowMapping, bool bEnablePointL
     ci.shaderDesc.defines = buildLightPassShaderDefines(
         _bEnablePBRDiffuseIBL,
         _bEnablePBRSpecularIBL,
-        _bEnableShadowMapping,
-        _bEnablePointLightShadow);
+        _shadowState.bEnableShadowMapping,
+        _shadowState.bEnablePointLightShadow);
     _pipeline->updateDesc(std::move(ci));
     _bShadowDescriptorsInitialized = false;
 }
@@ -162,16 +158,16 @@ void LightStage::invalidateShadowDescriptors()
 
 bool LightStage::shouldRefreshShadowDescriptors() const
 {
-    if (!_bShadowDescriptorsInitialized || !_shadowDirectionalDepthIV || !_shadowSampler) {
+    if (!_bShadowDescriptorsInitialized || !_shadowState.directionalDepthIV || !_shadowState.sampler) {
         return true;
     }
 
-    if (_lastShadowDirectionalImageViewHandle != _shadowDirectionalDepthIV->getHandle()) {
+    if (_lastShadowDirectionalImageViewHandle != _shadowState.directionalDepthIV->getHandle()) {
         return true;
     }
 
     for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
-        const auto currentHandle = _shadowPointCubeIVs[lightIndex] ? _shadowPointCubeIVs[lightIndex]->getHandle() : ImageViewHandle{};
+        const auto currentHandle = _shadowState.pointCubeDepthIVs[lightIndex] ? _shadowState.pointCubeDepthIVs[lightIndex]->getHandle() : ImageViewHandle{};
         if (_lastShadowPointCubeImageViewHandles[lightIndex] != currentHandle) {
             return true;
         }
@@ -245,7 +241,7 @@ void LightStage::init(IRender* render)
                 .shaderName        = "DeferredRender/LightPass.slang",
                 .vertexBufferDescs = {VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)}},
                 .vertexAttributes  = _commonVertexAttributes,
-                .defines           = buildLightPassShaderDefines(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL, _bEnableShadowMapping, _bEnablePointLightShadow),
+                .defines           = buildLightPassShaderDefines(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL, _shadowState.bEnableShadowMapping, _shadowState.bEnablePointLightShadow),
         },
         .dynamicFeatures    = {EPipelineDynamicFeature::Viewport, EPipelineDynamicFeature::Scissor},
         .primitiveType      = EPrimitiveType::TriangleList,
@@ -295,9 +291,7 @@ void LightStage::destroy()
     _gBufferStage             = nullptr;
     _gBufferRT                = nullptr;
     _ssaoTexture              = nullptr;
-    _shadowDirectionalDepthIV = nullptr;
-    _shadowPointCubeIVs.fill(nullptr);
-    _shadowSampler                   = nullptr;
+    _shadowState              = {};
     _lastGBufferFrameBuffer          = nullptr;
     _lastSSAOImageViewHandle         = nullptr;
     _lastShadowDirectionalImageViewHandle = nullptr;
@@ -346,18 +340,18 @@ void LightStage::prepare(const RenderStageContext& ctx)
         _lastGBufferDescriptorWriteCount = 0;
     }
 
-    if (_bEnableShadowMapping && _shadowDirectionalDepthIV && _shadowSampler && shouldRefreshShadowDescriptors()) {
+    if (_shadowState.bEnableShadowMapping && _shadowState.directionalDepthIV && _shadowState.sampler && shouldRefreshShadowDescriptors()) {
         std::vector<DescriptorImageInfo> pointShadowInfos(MAX_POINT_LIGHTS);
         for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
             pointShadowInfos[lightIndex] = DescriptorImageInfo{
-                .imageView   = _shadowPointCubeIVs[lightIndex] ? _shadowPointCubeIVs[lightIndex]->getHandle() : ImageViewHandle{},
-                .sampler     = _shadowSampler->getHandle(),
+                .imageView   = _shadowState.pointCubeDepthIVs[lightIndex] ? _shadowState.pointCubeDepthIVs[lightIndex]->getHandle() : ImageViewHandle{},
+                .sampler     = _shadowState.sampler->getHandle(),
                 .imageLayout = EImageLayout::ShaderReadOnlyOptimal,
             };
         }
 
         _render->getDescriptorHelper()->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneImage(_shadowDS, 0, _shadowDirectionalDepthIV, _shadowSampler),
+            IDescriptorSetHelper::writeOneImage(_shadowDS, 0, _shadowState.directionalDepthIV, _shadowState.sampler),
             WriteDescriptorSet{
                 .dstSet          = _shadowDS,
                 .dstBinding      = 1,
@@ -367,9 +361,9 @@ void LightStage::prepare(const RenderStageContext& ctx)
                 .imageInfos      = pointShadowInfos,
             },
         });
-        _lastShadowDirectionalImageViewHandle = _shadowDirectionalDepthIV->getHandle();
+        _lastShadowDirectionalImageViewHandle = _shadowState.directionalDepthIV->getHandle();
         for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
-            _lastShadowPointCubeImageViewHandles[lightIndex] = _shadowPointCubeIVs[lightIndex] ? _shadowPointCubeIVs[lightIndex]->getHandle() : ImageViewHandle{};
+            _lastShadowPointCubeImageViewHandles[lightIndex] = _shadowState.pointCubeDepthIVs[lightIndex] ? _shadowState.pointCubeDepthIVs[lightIndex]->getHandle() : ImageViewHandle{};
         }
         _bShadowDescriptorsInitialized  = true;
         _lastShadowDescriptorWriteCount = 1 + MAX_POINT_LIGHTS;
