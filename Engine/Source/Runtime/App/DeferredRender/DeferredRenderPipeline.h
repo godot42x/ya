@@ -95,15 +95,10 @@ struct DeferredRenderPipeline : public IRenderPipeline
     Texture* viewportTexture       = nullptr;
     bool     _bViewportPassOpen    = false;
     bool     _bReverseViewportY    = true;
-    bool     _bEnableShadowMapping = true;
     bool     _bEnableSSAO          = true;
 
-    bool     _bEnablePointLightShadow         = true;
-    uint32_t _maxPointLightShadowCount        = 1;
     bool     _bShadowSettingsChangePending    = false;
-    bool     _pendingEnableShadowMapping      = true;
-    bool     _pendingEnablePointLightShadow   = true;
-    uint32_t _pendingMaxPointLightShadowCount = 1;
+    ShadowSettings _pendingShadowSettings{};
 
     uint32_t   _lastPointLightCount = 0;
     uint32_t   _lastDrawCount       = 0;
@@ -155,7 +150,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     IRenderTarget* getViewportRT() const override { return _viewportRT.get(); }
     IRenderTarget* getShadowDepthRT() const override { return _shadowResources.renderTarget.get(); }
     Texture*       getViewportTexture() const override { return viewportTexture; }
-    bool           isShadowMappingEnabled() const override { return _bEnableShadowMapping; }
+    bool           isShadowMappingEnabled() const override { return App::get()->getShadowSettings().isEnabled(); }
     IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override
     {
@@ -194,8 +189,8 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               initShadowResources();
     void               destroyShadowResources();
     void               syncShadowSettings();
-    void               applyShadowSettings(bool bEnableShadowMapping, bool bEnablePointLightShadow);
-    void               queueShadowSettingsChange(bool bEnableShadowMapping, bool bEnablePointLightShadow, uint32_t maxPointLightShadowCount);
+    void               applyShadowSettings(const ShadowSettings& shadowSettings);
+    void               queueShadowSettingsChange(const ShadowSettings& shadowSettings);
     void               copyGBufferDepthToViewport(ICommandBuffer* cmdBuf);
 };
 
