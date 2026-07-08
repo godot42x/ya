@@ -7,6 +7,7 @@
 #include "Render/Core/Sampler.h"
 #include "Render/Core/Texture.h"
 #include "Runtime/App/App.h"
+#include "Runtime/App/Common/Shadow/Common/ShadowViewBuilder.h"
 
 
 #include <algorithm>
@@ -495,55 +496,20 @@ void DeferredRenderPipeline::rebuildShadowViews()
         }
     }
 
-    auto* textureFactory    = _render->getTextureFactory();
     auto* shadowFrameBuffer = _shadowDepthRT->getCurFrameBuffer();
     YA_CORE_ASSERT(shadowFrameBuffer, "Deferred shadow resources require a valid framebuffer");
 
     auto* shadowDepthTexture = shadowFrameBuffer->getDepthTexture();
     YA_CORE_ASSERT(shadowDepthTexture, "Deferred shadow resources require a valid depth texture");
 
-    auto shadowImage = shadowDepthTexture->getImageShared();
+    auto* textureFactory = _render->getTextureFactory();
+    auto shadowImage     = shadowDepthTexture->getImageShared();
     YA_CORE_ASSERT(textureFactory && shadowImage, "Deferred shadow resources require a valid image");
 
-    _shadowDirectionalDepthIV = textureFactory->createImageView(
-        shadowImage,
-        ImageViewCreateInfo{
-            .label          = "Deferred Shadow Directional Depth IV",
-            .viewType       = EImageViewType::View2D,
-            .aspectFlags    = EImageAspect::Depth,
-            .baseMipLevel   = 0,
-            .levelCount     = 1,
-            .baseArrayLayer = 0,
-            .layerCount     = 1,
-        });
-
-    for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
-        _shadowPointCubeIVs[lightIndex] = textureFactory->createImageView(
-            shadowImage,
-            ImageViewCreateInfo{
-                .label          = std::format("Deferred Shadow Point[{}] CubeIV", lightIndex),
-                .viewType       = EImageViewType::ViewCube,
-                .aspectFlags    = EImageAspect::Depth,
-                .baseMipLevel   = 0,
-                .levelCount     = 1,
-                .baseArrayLayer = 1 + lightIndex * 6,
-                .layerCount     = 6,
-            });
-
-        for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
-            _shadowPointFaceIVs[lightIndex][faceIndex] = textureFactory->createImageView(
-                shadowImage,
-                ImageViewCreateInfo{
-                    .label          = std::format("Deferred Shadow Point[{}] Face[{}]", lightIndex, faceIndex),
-                    .viewType       = EImageViewType::View2D,
-                    .aspectFlags    = EImageAspect::Depth,
-                    .baseMipLevel   = 0,
-                    .levelCount     = 1,
-                    .baseArrayLayer = 1 + lightIndex * 6 + faceIndex,
-                    .layerCount     = 1,
-                });
-        }
-    }
+    auto views                = ShadowViewBuilder::buildLayerViews(textureFactory, shadowImage, "Deferred Shadow");
+    _shadowDirectionalDepthIV = std::move(views.directionalDepthIV);
+    _shadowPointCubeIVs       = std::move(views.pointCubeIVs);
+    _shadowPointFaceIVs       = std::move(views.pointFaceIVs);
 }
 
 // ═══════════════════════════════════════════════════════════════════════

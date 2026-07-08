@@ -5,6 +5,7 @@
 #include "Render/Core/Sampler.h"
 #include "Render/Core/Texture.h"
 #include "Runtime/App/App.h"
+#include "Runtime/App/Common/Shadow/Common/ShadowViewBuilder.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -20,48 +21,14 @@ void ForwardRenderPipeline::rebuildShadowViews()
     auto* depthTexture = frameBuffer ? frameBuffer->getDepthTexture() : nullptr;
     YA_CORE_ASSERT(depthTexture, "Shadow render target depth texture is null");
 
-    auto tf        = _render->getTextureFactory();
+    auto* tf       = _render->getTextureFactory();
     auto shadowImg = depthTexture->getImageShared();
     YA_CORE_ASSERT(shadowImg, "Shadow render target image is null");
 
-    shadowDirectionalDepthIV = tf->createImageView(
-        shadowImg,
-        ImageViewCreateInfo{
-            .label          = "Shadow Map Directional Depth IV",
-            .viewType       = EImageViewType::View2D,
-            .aspectFlags    = EImageAspect::Depth,
-            .baseMipLevel   = 0,
-            .levelCount     = 1,
-            .baseArrayLayer = 0,
-            .layerCount     = 1,
-        });
-
-    for (uint32_t i = 0; i < MAX_POINT_LIGHTS; ++i) {
-        shadowPointCubeIVs[i] = tf->createImageView(
-            shadowImg,
-            ImageViewCreateInfo{
-                .label          = std::format("Shadow Point[{}] CubeIV", i),
-                .viewType       = EImageViewType::ViewCube,
-                .aspectFlags    = EImageAspect::Depth,
-                .baseMipLevel   = 0,
-                .levelCount     = 1,
-                .baseArrayLayer = 1 + i * 6,
-                .layerCount     = 6,
-            });
-
-        for (uint32_t f = 0; f < 6; ++f) {
-            shadowPointFaceIVs[i][f] = tf->createImageView(
-                shadowImg, ImageViewCreateInfo{
-                               .label          = std::format("Shadow Point[{}] Face[{}]", i, f),
-                               .viewType       = EImageViewType::View2D,
-                               .aspectFlags    = EImageAspect::Depth,
-                               .baseMipLevel   = 0,
-                               .levelCount     = 1,
-                               .baseArrayLayer = 1 + i * 6 + f,
-                               .layerCount     = 1,
-                           });
-        }
-    }
+    auto views              = ShadowViewBuilder::buildLayerViews(tf, shadowImg, "Shadow Map");
+    shadowDirectionalDepthIV = std::move(views.directionalDepthIV);
+    shadowPointCubeIVs       = std::move(views.pointCubeIVs);
+    shadowPointFaceIVs       = std::move(views.pointFaceIVs);
 
     std::vector<DescriptorImageInfo> pointInfos(MAX_POINT_LIGHTS);
     for (uint32_t i = 0; i < MAX_POINT_LIGHTS; ++i) {
