@@ -91,11 +91,6 @@ void RenderRuntime::syncEditorFrame(const FrameInput& input)
     updateEditorViewportContext(input);
 }
 
-ForwardRenderPipeline* RenderRuntime::getForwardPipeline() const
-{
-    return _forwardPipeline.get();
-}
-
 IRenderPipeline* RenderRuntime::getActivePipeline() const
 {
     if (_renderPipeline == ERenderPipeline::Forward && _forwardPipeline) {
@@ -232,6 +227,51 @@ DeferredPipelineDebugViews RenderRuntime::getDeferredPipelineDebugViews() const
         views.ssaoTexture = _deferredPipeline->getSSAOTexture();
     }
     return views;
+}
+
+RenderTargetEditorCatalog RenderRuntime::buildRenderTargetEditorCatalog() const
+{
+    RenderTargetEditorCatalog catalog{};
+
+    if (_screenRT) {
+        catalog.entries.push_back({
+            .label     = "Presentation",
+            .rt        = _screenRT.get(),
+            .owner     = RenderTargetEditorCatalog::Entry::EOwner::Presentation,
+            .bEditable = false,
+        });
+    }
+    if (_forwardPipeline) {
+        catalog.entries.push_back({
+            .label = "Forward Viewport",
+            .rt    = _forwardPipeline->getViewportRT(),
+            .owner = RenderTargetEditorCatalog::Entry::EOwner::ForwardViewport,
+        });
+        catalog.entries.push_back({
+            .label = "Forward Shadow",
+            .rt    = _forwardPipeline->getShadowDepthRT(),
+            .owner = RenderTargetEditorCatalog::Entry::EOwner::ForwardShadow,
+        });
+    }
+    if (_deferredPipeline) {
+        catalog.entries.push_back({
+            .label = "Deferred GBuffer",
+            .rt    = _deferredPipeline->getGBufferRT(),
+            .owner = RenderTargetEditorCatalog::Entry::EOwner::DeferredGBuffer,
+        });
+        catalog.entries.push_back({
+            .label = "Deferred Viewport",
+            .rt    = _deferredPipeline->getViewportRT(),
+            .owner = RenderTargetEditorCatalog::Entry::EOwner::DeferredViewport,
+        });
+        catalog.entries.push_back({
+            .label = "Deferred Shadow",
+            .rt    = _deferredPipeline->getShadowDepthRT(),
+            .owner = RenderTargetEditorCatalog::Entry::EOwner::DeferredShadow,
+        });
+    }
+
+    return catalog;
 }
 
 DebugRenderSystem& RenderRuntime::getDebugRenderSystem() const

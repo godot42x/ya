@@ -41,6 +41,27 @@ struct DeferredPipelineDebugViews
     Texture*       ssaoTexture = nullptr;
 };
 
+struct RenderTargetEditorCatalog
+{
+    struct Entry
+    {
+        const char*    label = "";
+        IRenderTarget* rt    = nullptr;
+        enum class EOwner
+        {
+            Presentation,
+            ForwardViewport,
+            ForwardShadow,
+            DeferredGBuffer,
+            DeferredViewport,
+            DeferredShadow,
+        } owner = EOwner::Presentation;
+        bool bEditable = true;
+    };
+
+    std::vector<Entry> entries;
+};
+
 struct RenderRuntime
 {
     enum class ERenderPipeline
@@ -152,7 +173,6 @@ struct RenderRuntime
 
     [[nodiscard]] IRender*                       getRender() const { return _render; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
-    [[nodiscard]] ForwardRenderPipeline*         getForwardPipeline() const;
     [[nodiscard]] IRenderPipeline*               getActivePipeline() const;
     [[nodiscard]] bool                           isShadowMappingEnabled() const;
     [[nodiscard]] bool                           isMirrorRenderingEnabled() const;
@@ -195,6 +215,7 @@ struct RenderRuntime
     [[nodiscard]] Extent2D      getViewportExtent() const;
     [[nodiscard]] IRenderTarget* getActiveViewportRT() const;
     [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews() const;
+    [[nodiscard]] RenderTargetEditorCatalog buildRenderTargetEditorCatalog() const;
 
   private:
     void                   initRuntimeState(const InitDesc& desc);

@@ -48,7 +48,6 @@ struct LuaScriptingSystem;
 struct Texture;
 struct Sampler;
 struct RenderDocCapture;
-struct ForwardRenderPipeline;
 struct DeferredRenderPipeline;
 struct DebugRenderSystem;
 class ResourceResolveSystem;
@@ -462,7 +461,7 @@ struct App
     [[nodiscard]] ShadowSettings&       getShadowSettings()       { return _shadowSettings; }
     [[nodiscard]] const ShadowSettings& getShadowSettings() const { return _shadowSettings; }
 
-    [[nodiscard]] ForwardRenderPipeline* getForwardPipeline() const;
+    [[nodiscard]] IRenderPipeline*       getRenderPipeline() const;
     [[nodiscard]] DebugRenderSystem&     getDebugRenderSystem() const;
     [[nodiscard]] bool                   isShadowMappingEnabled() const;
     [[nodiscard]] bool                   isMirrorRenderingEnabled() const;

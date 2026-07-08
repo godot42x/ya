@@ -35,24 +35,6 @@ struct RenderTargetFormatOption
     EFormat::T       format;
 };
 
-struct RuntimeRenderTargetEditorEntry
-{
-    enum class EOwner
-    {
-        Presentation,
-        ForwardViewport,
-        ForwardShadow,
-        DeferredGBuffer,
-        DeferredViewport,
-        DeferredShadow,
-    };
-
-    const char*    label     = "";
-    IRenderTarget* rt        = nullptr;
-    EOwner         owner     = EOwner::Presentation;
-    bool           bEditable = true;
-};
-
 constexpr std::array<RenderTargetFormatOption, 3> kShadowDepthFormats = {{
     {"D16_UNORM", EFormat::D16_UNORM},
     {"D24_UNORM_S8_UINT", EFormat::D24_UNORM_S8_UINT},
@@ -287,19 +269,8 @@ void RenderRuntime::renderRenderTargetEditor()
         return;
     }
 
-    std::vector<RuntimeRenderTargetEditorEntry> entries;
-    if (_screenRT) {
-        entries.push_back({.label = "Presentation", .rt = _screenRT.get(), .owner = RuntimeRenderTargetEditorEntry::EOwner::Presentation, .bEditable = false});
-    }
-    if (_forwardPipeline) {
-        entries.push_back({.label = "Forward Viewport", .rt = _forwardPipeline->getViewportRT(), .owner = RuntimeRenderTargetEditorEntry::EOwner::ForwardViewport});
-        entries.push_back({.label = "Forward Shadow", .rt = _forwardPipeline->getShadowDepthRT(), .owner = RuntimeRenderTargetEditorEntry::EOwner::ForwardShadow});
-    }
-    if (_deferredPipeline) {
-        entries.push_back({.label = "Deferred GBuffer", .rt = _deferredPipeline->getGBufferRT(), .owner = RuntimeRenderTargetEditorEntry::EOwner::DeferredGBuffer});
-        entries.push_back({.label = "Deferred Viewport", .rt = _deferredPipeline->getViewportRT(), .owner = RuntimeRenderTargetEditorEntry::EOwner::DeferredViewport});
-        entries.push_back({.label = "Deferred Shadow", .rt = _deferredPipeline->getShadowDepthRT(), .owner = RuntimeRenderTargetEditorEntry::EOwner::DeferredShadow});
-    }
+    auto catalog = buildRenderTargetEditorCatalog();
+    auto& entries = catalog.entries;
 
     if (entries.empty()) {
         ImGui::TextUnformatted("No render targets are available.");
@@ -426,8 +397,8 @@ void RenderRuntime::renderRenderTargetEditor()
                 const auto optionLabel = std::string(option.label);
                 if (ImGui::Selectable(optionLabel.c_str(), bSelected)) {
                     switch (selectedEntry.owner) {
-                    case RuntimeRenderTargetEditorEntry::EOwner::DeferredGBuffer:
-                    case RuntimeRenderTargetEditorEntry::EOwner::DeferredViewport:
+                    case RenderTargetEditorCatalog::Entry::EOwner::DeferredGBuffer:
+                    case RenderTargetEditorCatalog::Entry::EOwner::DeferredViewport:
                         if (_deferredPipeline) {
                             if (auto* gbufferRT = _deferredPipeline->getGBufferRT()) {
                                 gbufferRT->setDepthAttachmentFormat(option.format);
@@ -466,10 +437,10 @@ void RenderRuntime::renderRenderTargetEditor()
         ImGui::EndCombo();
     }
 
-    if (bEditingDepth && (selectedEntry.owner == RuntimeRenderTargetEditorEntry::EOwner::DeferredGBuffer || selectedEntry.owner == RuntimeRenderTargetEditorEntry::EOwner::DeferredViewport)) {
+    if (bEditingDepth && (selectedEntry.owner == RenderTargetEditorCatalog::Entry::EOwner::DeferredGBuffer || selectedEntry.owner == RenderTargetEditorCatalog::Entry::EOwner::DeferredViewport)) {
         ImGui::TextWrapped("Deferred GBuffer depth and Deferred Viewport depth are applied together so the current depth copy path stays format-compatible on the next frame.");
     }
-    else if (bEditingDepth && (selectedEntry.owner == RuntimeRenderTargetEditorEntry::EOwner::DeferredShadow || selectedEntry.owner == RuntimeRenderTargetEditorEntry::EOwner::ForwardShadow)) {
+    else if (bEditingDepth && (selectedEntry.owner == RenderTargetEditorCatalog::Entry::EOwner::DeferredShadow || selectedEntry.owner == RenderTargetEditorCatalog::Entry::EOwner::ForwardShadow)) {
         ImGui::TextWrapped("D16_UNORM usually reduces depth bandwidth and memory versus D24/D32, but actual gain depends on the GPU and driver. Test with shadow budgets on the target hardware.");
     }
 

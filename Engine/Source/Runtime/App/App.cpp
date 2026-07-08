@@ -23,9 +23,9 @@ std::shared_ptr<ShaderStorage> App::getShaderStorage() const
     return _renderRuntime ? _renderRuntime->getShaderStorage() : nullptr;
 }
 
-ForwardRenderPipeline* App::getForwardPipeline() const
+IRenderPipeline* App::getRenderPipeline() const
 {
-    return _renderRuntime ? _renderRuntime->getForwardPipeline() : nullptr;
+    return _renderRuntime ? _renderRuntime->getActivePipeline() : nullptr;
 }
 
 DebugRenderSystem& App::getDebugRenderSystem() const
