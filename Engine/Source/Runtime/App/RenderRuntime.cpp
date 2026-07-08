@@ -274,6 +274,20 @@ RenderTargetEditorCatalog RenderRuntime::buildRenderTargetEditorCatalog() const
     return catalog;
 }
 
+void RenderRuntime::setDeferredSharedDepthFormat(EFormat::T format)
+{
+    if (!_deferredPipeline) {
+        return;
+    }
+
+    if (auto* gbufferRT = _deferredPipeline->getGBufferRT()) {
+        gbufferRT->setDepthAttachmentFormat(format);
+    }
+    if (auto* viewportRT = _deferredPipeline->getViewportRT()) {
+        viewportRT->setDepthAttachmentFormat(format);
+    }
+}
+
 DebugRenderSystem& RenderRuntime::getDebugRenderSystem() const
 {
     return DebugRenderSystem::get();

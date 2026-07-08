@@ -399,14 +399,7 @@ void RenderRuntime::renderRenderTargetEditor()
                     switch (selectedEntry.owner) {
                     case RenderTargetEditorCatalog::Entry::EOwner::DeferredGBuffer:
                     case RenderTargetEditorCatalog::Entry::EOwner::DeferredViewport:
-                        if (_deferredPipeline) {
-                            if (auto* gbufferRT = _deferredPipeline->getGBufferRT()) {
-                                gbufferRT->setDepthAttachmentFormat(option.format);
-                            }
-                            if (auto* viewportRT = _deferredPipeline->getViewportRT()) {
-                                viewportRT->setDepthAttachmentFormat(option.format);
-                            }
-                        }
+                        setDeferredSharedDepthFormat(option.format);
                         break;
                     default:
                         selectedEntry.rt->setDepthAttachmentFormat(option.format);

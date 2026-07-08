@@ -216,6 +216,7 @@ struct RenderRuntime
     [[nodiscard]] IRenderTarget* getActiveViewportRT() const;
     [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews() const;
     [[nodiscard]] RenderTargetEditorCatalog buildRenderTargetEditorCatalog() const;
+    void                          setDeferredSharedDepthFormat(EFormat::T format);
 
   private:
     void                   initRuntimeState(const InitDesc& desc);

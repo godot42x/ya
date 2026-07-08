@@ -72,6 +72,16 @@ void appendShadowDebugSlots(EditorViewportContext& ctx,
     }
 }
 
+Texture* getShadowDepthTexture(IRenderTarget* shadowDepthRT)
+{
+    if (!shadowDepthRT) {
+        return nullptr;
+    }
+
+    auto* shadowFb = shadowDepthRT->getCurFrameBuffer();
+    return shadowFb ? shadowFb->getDepthTexture() : nullptr;
+}
+
 } // namespace
 
 void RenderRuntime::updateEditorViewportContext(const FrameInput& input)
@@ -341,17 +351,14 @@ void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
         });
     }
 
-    if (_deferredPipeline->getShadowDepthRT()) {
-        Texture* shadowDepthTexture = nullptr;
-        if (auto* shadowFb = _deferredPipeline->getShadowDepthRT()->getCurFrameBuffer()) {
-            shadowDepthTexture = shadowFb->getDepthTexture();
-        }
+    if (auto* shadowDepthRT = getShadowDepthRT()) {
+        Texture* shadowDepthTexture = getShadowDepthTexture(shadowDepthRT);
         appendShadowDebugSlots(
             ctx,
-            _deferredPipeline->getShadowDirectionalDepthIV(),
+            getShadowDirectionalDepthIV(),
             shadowDepthTexture,
             [this](uint32_t pointLightIndex, uint32_t faceIndex)
-            { return _deferredPipeline->getShadowPointFaceDepthIV(pointLightIndex, faceIndex); },
+            { return getShadowPointFaceDepthIV(pointLightIndex, faceIndex); },
             CATEGORY_SHADOW);
     }
 }
