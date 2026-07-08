@@ -217,6 +217,8 @@ struct RenderRuntime
     [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews() const;
     [[nodiscard]] RenderTargetEditorCatalog buildRenderTargetEditorCatalog() const;
     void                          setDeferredSharedDepthFormat(EFormat::T format);
+    [[nodiscard]] bool            isDeferredPipelineActive() const { return _renderPipeline == ERenderPipeline::Deferred; }
+    [[nodiscard]] ForwardRenderPipeline* getForwardPipelineImpl() const { return _forwardPipeline.get(); }
 
   private:
     void                   initRuntimeState(const InitDesc& desc);

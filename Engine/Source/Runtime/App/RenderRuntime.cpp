@@ -16,11 +16,8 @@ void RenderRuntime::onViewportResized(Rect2D rect)
 {
     _viewportRect = rect;
 
-    if (_forwardPipeline) {
-        _forwardPipeline->onViewportResized(rect);
-    }
-    if (_deferredPipeline) {
-        _deferredPipeline->onViewportResized(rect);
+    if (auto* pipeline = getActivePipeline()) {
+        pipeline->onViewportResized(rect);
     }
 }
 

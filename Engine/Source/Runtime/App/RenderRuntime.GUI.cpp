@@ -147,12 +147,12 @@ void RenderRuntime::renderWorldSettingsGUI()
         ImGui::TreePop();
     }
 
-    if (auto* pipeline = getActivePipeline(); pipeline == _deferredPipeline.get() && ImGui::TreeNode("Lighting")) {
+    if (auto* pipeline = getActivePipeline(); isDeferredPipelineActive() && pipeline && ImGui::TreeNode("Lighting")) {
         pipeline->renderLightingSettingsGUI();
         ImGui::TreePop();
     }
 
-    if (auto* pipeline = getActivePipeline(); pipeline == _deferredPipeline.get() && ImGui::TreeNode("Ambient Occlusion")) {
+    if (auto* pipeline = getActivePipeline(); isDeferredPipelineActive() && pipeline && ImGui::TreeNode("Ambient Occlusion")) {
         pipeline->renderAOSettingsGUI();
         ImGui::TreePop();
     }

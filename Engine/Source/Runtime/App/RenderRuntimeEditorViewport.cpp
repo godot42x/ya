@@ -214,17 +214,19 @@ void RenderRuntime::appendForwardDebugSlots(EditorViewportContext& ctx)
         }
     }
 
-    if (auto* viewportRT = _forwardPipeline->getViewportRT()) {
-        if (auto* viewportFb = viewportRT->getCurFrameBuffer()) {
-            if (auto* viewportDepth = viewportFb->getDepthTexture()) {
-                ctx.debugSpec.slots.push_back({
-                    .label         = "ViewportDepth",
-                    .defaultView   = viewportDepth->getImageView(),
-                    .ownedView     = nullptr,
-                    .image         = viewportDepth->getImageShared(),
-                    .categoryIndex = CATEGORY_VIEWPORT,
-                    .aspectFlags   = EImageAspect::Depth,
-                });
+    if (auto* forwardPipeline = getForwardPipelineImpl(); forwardPipeline) {
+        if (auto* viewportRT = forwardPipeline->getViewportRT()) {
+            if (auto* viewportFb = viewportRT->getCurFrameBuffer()) {
+                if (auto* viewportDepth = viewportFb->getDepthTexture()) {
+                    ctx.debugSpec.slots.push_back({
+                        .label         = "ViewportDepth",
+                        .defaultView   = viewportDepth->getImageView(),
+                        .ownedView     = nullptr,
+                        .image         = viewportDepth->getImageShared(),
+                        .categoryIndex = CATEGORY_VIEWPORT,
+                        .aspectFlags   = EImageAspect::Depth,
+                    });
+                }
             }
         }
     }
