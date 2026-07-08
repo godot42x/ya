@@ -35,15 +35,14 @@ struct EnvironmentLightingComponent;
 struct RenderFrameData;
 struct DebugRenderSystem;
 
+struct DeferredPipelineDebugViews
+{
+    IRenderTarget* gBufferRT  = nullptr;
+    Texture*       ssaoTexture = nullptr;
+};
+
 struct RenderRuntime
 {
-    struct PipelineDebugViews
-    {
-        IRenderTarget* gBufferRT  = nullptr;
-        IRenderTarget* viewportRT = nullptr;
-        Texture*       ssaoTexture = nullptr;
-    };
-
     enum class EShadingModel
     {
         Forward,
@@ -194,7 +193,8 @@ struct RenderRuntime
     [[nodiscard]] const Rect2D& getViewportRect() const { return _viewportRect; }
     [[nodiscard]] float         getViewportFrameBufferScale() const { return _viewportFrameBufferScale; }
     [[nodiscard]] Extent2D      getViewportExtent() const;
-    [[nodiscard]] PipelineDebugViews getPipelineDebugViews() const;
+    [[nodiscard]] IRenderTarget* getActiveViewportRT() const;
+    [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews() const;
 
   private:
     void                   initRuntimeState(const InitDesc& desc);

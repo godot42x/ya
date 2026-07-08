@@ -216,16 +216,19 @@ Extent2D RenderRuntime::getViewportExtent() const
     return {};
 }
 
-RenderRuntime::PipelineDebugViews RenderRuntime::getPipelineDebugViews() const
+IRenderTarget* RenderRuntime::getActiveViewportRT() const
 {
-    PipelineDebugViews views{};
-    if (_forwardPipeline) {
-        views.viewportRT = _forwardPipeline->getViewportRT();
-        return views;
+    if (auto* pipeline = getActivePipeline()) {
+        return pipeline->getViewportRT();
     }
-    if (_deferredPipeline) {
+    return nullptr;
+}
+
+DeferredPipelineDebugViews RenderRuntime::getDeferredPipelineDebugViews() const
+{
+    DeferredPipelineDebugViews views{};
+    if (_shadingModel == EShadingModel::Deferred && _deferredPipeline) {
         views.gBufferRT   = _deferredPipeline->getGBufferRT();
-        views.viewportRT  = _deferredPipeline->getViewportRT();
         views.ssaoTexture = _deferredPipeline->getSSAOTexture();
     }
     return views;
