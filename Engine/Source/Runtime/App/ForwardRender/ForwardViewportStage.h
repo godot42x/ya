@@ -8,6 +8,7 @@
 #include "Render/Material/UnlitMaterial.h"
 #include "Render/Material/SimpleMaterial.h"
 #include "Render/Stage/IRenderStage.h"
+#include "Runtime/App/Common/Shadow/Common/ShadowRuntimeState.h"
 
 #include "PBRForward.slang.h"
 #include "PhongLit.Types.glsl.h"
@@ -34,7 +35,7 @@ struct ForwardViewportStage : public IRenderStage
         IRenderPass*         renderPass            = nullptr;
         PipelineRenderingInfo pipelineRenderingInfo = {};
         DescriptorSetHandle  depthBufferShadowDS   = nullptr;
-        bool                 bShadowMapping        = true;
+        ShadowRuntimeState   shadowState           = {};
     };
 
     // ── PBR UBO type aliases (from shader-generated headers) ──
@@ -136,11 +137,10 @@ struct ForwardViewportStage : public IRenderStage
     MaterialDescPool<PBRMaterial, PBRParamUBO> _pbrMatPool;
     bool _pbrPoolRecreated = false;
 
-    PBRLightUBO _pbrLight{};
-    bool        _bEnablePBRDiffuseIBL   = true;
-    bool        _bEnablePBRSpecularIBL  = true;
-    bool        _bEnablePointLightShadow = false;
-    uint32_t    _maxShadowedPointLights = 1;
+    PBRLightUBO       _pbrLight{};
+    bool              _bEnablePBRDiffuseIBL  = true;
+    bool              _bEnablePBRSpecularIBL = true;
+    ShadowRuntimeState _shadowState{};
 
     // ── Phong pipeline ──────────────────────────────────────────
     stdptr<IDescriptorSetLayout> _phongFrameDSL;       // set 0: frame+light+debug
@@ -164,7 +164,6 @@ struct ForwardViewportStage : public IRenderStage
     PhongDebugUBO  _phongDebug{};
 
     DescriptorSetHandle _depthBufferShadowDS = nullptr;
-    bool                _bShadowMapping      = true;
 
     // ── Unlit pipeline ──────────────────────────────────────────
     stdptr<IDescriptorSetLayout> _unlitFrameDSL;
@@ -228,7 +227,7 @@ struct ForwardViewportStage : public IRenderStage
     void execute(const RenderStageContext& ctx) override;
     void renderGUI() override;
 
-    void setShadowMappingEnabled(bool enabled);
+    void applyShadowState(const ShadowRuntimeState& shadowState);
     void refreshPipelineFormats(const IRenderTarget* viewportRT);
 
   private:

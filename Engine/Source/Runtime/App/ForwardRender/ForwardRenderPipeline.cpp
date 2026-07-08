@@ -40,7 +40,6 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
 {
     _render            = desc.render;
     _bViewportPassOpen = false;
-    bShadowMapping     = App::get()->getShadowSettings().isEnabled();
 
     initViewportResources(desc);
     initPostProcessResources(desc);
@@ -159,7 +158,7 @@ void ForwardRenderPipeline::initStageResources()
         .renderPass            = nullptr,
         .pipelineRenderingInfo = viewportPRI,
         .depthBufferShadowDS   = depthBufferShadowDS,
-        .bShadowMapping        = bShadowMapping,
+        .shadowState           = buildShadowState(),
     });
 
     _deleter.push("Stages", [this](void*)
@@ -224,7 +223,32 @@ void ForwardRenderPipeline::refreshDirtyResources()
         if (bShadowPipelineDirty && _shadowStage) {
             _shadowStage->refreshPipelineFromRenderTarget();
         }
+        if (_viewportStage) {
+            _viewportStage->applyShadowState(buildShadowState());
+        }
     }
+}
+
+ShadowRuntimeState ForwardRenderPipeline::buildShadowState() const
+{
+    ShadowRuntimeState shadowState{};
+    shadowState.bEnableShadowMapping    = App::get()->getShadowSettings().isEnabled();
+    shadowState.settings                = App::get()->getShadowSettings();
+    shadowState.bEnablePointLightShadow = shadowState.settings.pointLightEnabled;
+    shadowState.maxShadowedPointLights  = shadowState.settings.getEffectivePointLightCount();
+    shadowState.shadowMapResolution     = _shadowResources.renderTarget
+        ? _shadowResources.renderTarget->getExtent().width
+        : std::max(shadowState.settings.resolution, 1u);
+
+    if (shadowState.bEnableShadowMapping && _shadowResources.directionalDepthIV && _shadowResources.sampler) {
+        shadowState.directionalDepthIV = _shadowResources.directionalDepthIV.get();
+        shadowState.sampler            = _shadowResources.sampler.get();
+        for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
+            shadowState.pointCubeDepthIVs[lightIndex] = _shadowResources.pointCubeIVs[lightIndex].get();
+        }
+    }
+
+    return shadowState;
 }
 
 void ForwardRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)
@@ -325,9 +349,8 @@ void ForwardRenderPipeline::renderShadowSettingsGUI()
         else {
             shadowSettings.quality = EShadowQuality::Off;
         }
-        bShadowMapping = bEnabled;
         if (_viewportStage) {
-            _viewportStage->setShadowMappingEnabled(bEnabled);
+            _viewportStage->applyShadowState(buildShadowState());
         }
     }
 

@@ -1,32 +1,10 @@
 #pragma once
 
-#include "Render/Shadow/ShadowSettings.h"
-
-#include <array>
+#include "Runtime/App/Common/Shadow/Common/ShadowRuntimeState.h"
 
 namespace ya
 {
 
-struct IImageView;
-struct Sampler;
-
-struct DeferredShadowState
-{
-    bool     bEnableShadowMapping   = true;
-    bool     bEnablePointLightShadow = true;
-    uint32_t maxShadowedPointLights = 1;
-    uint32_t shadowMapResolution    = 1024;
-
-    ShadowSettings settings{};
-
-    IImageView* directionalDepthIV = nullptr;
-    std::array<IImageView*, MAX_POINT_LIGHTS> pointCubeDepthIVs{};
-    Sampler*                                  sampler = nullptr;
-
-    [[nodiscard]] bool hasShadowResources() const
-    {
-        return directionalDepthIV && sampler;
-    }
-};
+using DeferredShadowState = ShadowRuntimeState;
 
 } // namespace ya

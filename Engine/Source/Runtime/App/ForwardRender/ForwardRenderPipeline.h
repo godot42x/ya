@@ -8,6 +8,7 @@
 #include "Runtime/App/Common/IRenderPipeline.h"
 #include "Runtime/App/Common/PostProcessingStage.h"
 #include "Runtime/App/Common/Shadow/Common/ShadowMapResources.h"
+#include "Runtime/App/Common/Shadow/Common/ShadowRuntimeState.h"
 #include "Runtime/App/Common/Shadow/ShadowStage.h"
 
 
@@ -62,7 +63,6 @@ struct ForwardRenderPipeline : public IRenderPipeline
     // Shadow resources (owned here, shared to stages)
     stdptr<IDescriptorSetLayout> depthBufferDSL      = nullptr;
     DescriptorSetHandle          depthBufferShadowDS = nullptr;
-    bool                         bShadowMapping      = true;
     ShadowMapResources           _shadowResources;
 
     // ── Render stages ─────────────────────────────────────────────
@@ -100,7 +100,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] Texture*       getViewportTexture() const override { return viewportTexture; }
 
     // Shadow query accessors (used by RenderRuntime for debug views)
-    [[nodiscard]] bool           isShadowMappingEnabled() const override { return bShadowMapping; }
+    [[nodiscard]] bool           isShadowMappingEnabled() const override { return App::get()->getShadowSettings().isEnabled(); }
     [[nodiscard]] IRenderTarget* getShadowDepthRT() const override { return _shadowResources.renderTarget.get(); }
     [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override;
@@ -118,6 +118,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] bool shouldSkipTick(const TickDesc& desc) const;
     void               beginTick(const TickDesc& desc, RenderStageContext& stageCtx);
     void               refreshDirtyResources();
+    [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               executeShadowPass(RenderStageContext& stageCtx);
     void               executeViewportPass(const TickDesc& desc, RenderStageContext& stageCtx);
     void rebuildShadowViews();

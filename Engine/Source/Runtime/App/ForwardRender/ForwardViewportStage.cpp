@@ -173,7 +173,7 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
 {
     _render              = desc.render;
     _depthBufferShadowDS = desc.depthBufferShadowDS;
-    _bShadowMapping      = desc.bShadowMapping;
+    _shadowState         = desc.shadowState;
 
     initSkinningResources();
     initPBR(desc);
@@ -320,7 +320,7 @@ void ForwardViewportStage::initPBR(const InitDesc& desc)
             .shaderName        = "PBRForward.slang",
             .vertexBufferDescs = {kVBDesc},
             .vertexAttributes  = kVertexAttributes4,
-            .defines           = buildPBRShaderDefines(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL, _bShadowMapping, _bEnablePointLightShadow),
+            .defines           = buildPBRShaderDefines(_bEnablePBRDiffuseIBL, _bEnablePBRSpecularIBL, _shadowState.bEnableShadowMapping, _shadowState.bEnablePointLightShadow),
         },
         .dynamicFeatures    = {EPipelineDynamicFeature::Scissor, EPipelineDynamicFeature::Viewport},
         .primitiveType      = EPrimitiveType::TriangleList,
@@ -471,7 +471,7 @@ void ForwardViewportStage::initPhong(const InitDesc& desc)
             .shaderName        = "PhongLit.slang",
             .vertexBufferDescs = {kVBDesc},
             .vertexAttributes  = kVertexAttributes4,
-            .defines           = buildPhongShaderDefines(_bShadowMapping),
+            .defines           = buildPhongShaderDefines(_shadowState.bEnableShadowMapping),
         },
         .dynamicFeatures    = {EPipelineDynamicFeature::Scissor, EPipelineDynamicFeature::Viewport},
         .primitiveType      = EPrimitiveType::TriangleList,
@@ -1598,17 +1598,39 @@ void ForwardViewportStage::renderGUI()
 // Shadow mapping toggle
 // ═══════════════════════════════════════════════════════════════════════
 
-void ForwardViewportStage::setShadowMappingEnabled(bool enabled)
+void ForwardViewportStage::applyShadowState(const ShadowRuntimeState& shadowState)
 {
-    if (_bShadowMapping == enabled) return;
-    _bShadowMapping = enabled;
+    const bool bShadowDefinesChanged = _shadowState.bEnableShadowMapping != shadowState.bEnableShadowMapping;
+    const bool bPbrDefinesChanged = bShadowDefinesChanged ||
+                                    _shadowState.bEnablePointLightShadow != shadowState.bEnablePointLightShadow;
 
-    _phongStatic.pipelineCI.shaderDesc.defines = buildPhongShaderDefines(_bShadowMapping);
-    _phongStatic.pipeline->updateDesc(_phongStatic.pipelineCI);
+    _shadowState = shadowState;
 
-    _phongSkinned.pipelineCI.shaderDesc.defines = buildPhongShaderDefines(_bShadowMapping);
-    _phongSkinned.pipelineCI.shaderDesc.defines.push_back("ENABLE_SKINNING 1");
-    _phongSkinned.pipeline->updateDesc(_phongSkinned.pipelineCI);
+    if (bShadowDefinesChanged) {
+        _phongStatic.pipelineCI.shaderDesc.defines = buildPhongShaderDefines(_shadowState.bEnableShadowMapping);
+        _phongStatic.pipeline->updateDesc(_phongStatic.pipelineCI);
+
+        _phongSkinned.pipelineCI.shaderDesc.defines = buildPhongShaderDefines(_shadowState.bEnableShadowMapping);
+        _phongSkinned.pipelineCI.shaderDesc.defines.push_back("ENABLE_SKINNING 1");
+        _phongSkinned.pipeline->updateDesc(_phongSkinned.pipelineCI);
+    }
+
+    if (bPbrDefinesChanged) {
+        _pbrStatic.pipelineCI.shaderDesc.defines = buildPBRShaderDefines(
+            _bEnablePBRDiffuseIBL,
+            _bEnablePBRSpecularIBL,
+            _shadowState.bEnableShadowMapping,
+            _shadowState.bEnablePointLightShadow);
+        _pbrStatic.pipeline->updateDesc(_pbrStatic.pipelineCI);
+
+        _pbrSkinned.pipelineCI.shaderDesc.defines = buildPBRShaderDefines(
+            _bEnablePBRDiffuseIBL,
+            _bEnablePBRSpecularIBL,
+            _shadowState.bEnableShadowMapping,
+            _shadowState.bEnablePointLightShadow);
+        _pbrSkinned.pipelineCI.shaderDesc.defines.push_back("ENABLE_SKINNING 1");
+        _pbrSkinned.pipeline->updateDesc(_pbrSkinned.pipelineCI);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1640,9 +1662,9 @@ void ForwardViewportStage::fillPBRLightFromFrameData(const RenderFrameData& fd)
     }
 
     _pbrLight.numPointLight                 = fd.numPointLights;
-    const uint32_t shadowedPointLightBudget = _bEnablePointLightShadow
-                                                ? std::min(_maxShadowedPointLights, fd.numPointLights)
-                                                : 0u;
+    const uint32_t shadowedPointLightBudget = _shadowState.bEnablePointLightShadow
+        ? std::min(_shadowState.maxShadowedPointLights, fd.numPointLights)
+        : 0u;
     for (uint32_t i = 0; i < fd.numPointLights; ++i) {
         const auto& src = fd.pointLights[i];
         auto&       dst = _pbrLight.pointLights[i];
