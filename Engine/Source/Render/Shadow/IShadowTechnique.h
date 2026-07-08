@@ -10,6 +10,7 @@ namespace ya
 struct IRender;
 struct ICommandBuffer;
 struct RenderFrameData;
+struct IRenderTarget;
 struct Texture;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -37,6 +38,12 @@ struct IShadowTechnique
     /// Apply updated settings (e.g., resolution change, cascade count change).
     /// May trigger resource recreation if resolution changed.
     virtual void applySettings(const ShadowSettings& settings) = 0;
+
+    /// Bind the shadow render target owned by the pipeline/runtime layer.
+    virtual void setRenderTarget(IRenderTarget* rt) = 0;
+
+    /// Rebuild technique-side resources/views derived from the current render target.
+    virtual void refreshFromRenderTarget() = 0;
 
     /// Per-frame data upload (UBOs, instance buffers, frustum data).
     virtual void prepare(uint32_t flightIndex, const RenderFrameData& frameData) = 0;

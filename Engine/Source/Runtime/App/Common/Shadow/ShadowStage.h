@@ -1,7 +1,5 @@
 #pragma once
 
-#include "BasicShadowMap/BasicShadowMapTechnique.h"
-
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Shadow/IShadowTechnique.h"
 #include "Render/Shadow/ShadowSettings.h"
@@ -32,7 +30,7 @@ struct ShadowStage : public IRenderStage
     void renderGUI() override;
     void renderTechnicalGUI() override;
 
-    [[nodiscard]] BasicShadowMapTechnique* getTechnique() const { return _technique.get(); }
+    [[nodiscard]] IShadowTechnique* getTechnique() const { return _technique.get(); }
 
     // ─── Public API ──────────────────────────────────────────────────
     [[nodiscard]] IRenderTarget* getRenderTarget() const { return _shadowMapRT.get(); }
@@ -52,7 +50,7 @@ struct ShadowStage : public IRenderStage
     stdptr<IRenderTarget> _shadowMapRT;
     ShadowSettings        _settings;
 
-    std::unique_ptr<BasicShadowMapTechnique> _technique;
+    std::unique_ptr<IShadowTechnique> _technique;
 };
 
 } // namespace ya

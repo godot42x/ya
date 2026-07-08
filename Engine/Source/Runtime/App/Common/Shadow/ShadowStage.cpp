@@ -1,5 +1,7 @@
 #include "ShadowStage.h"
 
+#include "BasicShadowMap/BasicShadowMapTechnique.h"
+
 #include "Core/Profiling/Instrumentor.h"
 
 #include "Render/Core/CommandBuffer.h"
