@@ -258,6 +258,15 @@ bool ForwardRenderPipeline::isShadowMappingEnabled() const
     return currentShadowSettings().isEnabled();
 }
 
+void ForwardRenderPipeline::applyShadowSettings(const ShadowSettings& shadowSettings)
+{
+    _frameShadowSettings = shadowSettings;
+    if (_shadowSettings) {
+        *_shadowSettings = shadowSettings;
+    }
+    syncShadowSettings();
+}
+
 ShadowRuntimeState ForwardRenderPipeline::buildShadowState() const
 {
     ShadowRuntimeState shadowState{};
@@ -371,32 +380,34 @@ void ForwardRenderPipeline::renderShadowSettingsGUI()
     if (!_shadowSettings) {
         return;
     }
-    auto& shadowSettings = *_shadowSettings;
-    bool  bEnabled       = shadowSettings.isEnabled();
+    const ShadowSettings currentShadowSettings = *_shadowSettings;
+    ShadowSettings       pendingShadowSettings = currentShadowSettings;
+
+    bool bEnabled = pendingShadowSettings.isEnabled();
     if (ImGui::Checkbox("Shadow Mapping", &bEnabled)) {
         if (bEnabled) {
-            if (shadowSettings.quality == EShadowQuality::Off) {
-                shadowSettings.applyQualityPreset(EShadowQuality::Medium);
+            if (pendingShadowSettings.quality == EShadowQuality::Off) {
+                pendingShadowSettings.applyQualityPreset(EShadowQuality::Medium);
             }
         }
         else {
-            shadowSettings.quality = EShadowQuality::Off;
+            pendingShadowSettings.quality = EShadowQuality::Off;
         }
-        syncShadowSettings();
+        applyShadowSettings(pendingShadowSettings);
     }
 
-    if (shadowSettings.isEnabled()) {
+    if (pendingShadowSettings.isEnabled()) {
         bool bDirty = false;
-        bDirty |= ImGui::Checkbox("Point Light Shadow", &shadowSettings.pointLightEnabled);
-        int maxPL = static_cast<int>(shadowSettings.maxPointLightShadows);
+        bDirty |= ImGui::Checkbox("Point Light Shadow", &pendingShadowSettings.pointLightEnabled);
+        int maxPL = static_cast<int>(pendingShadowSettings.maxPointLightShadows);
         if (ImGui::SliderInt("Max Point Shadows", &maxPL, 0, MAX_POINT_LIGHTS)) {
-            shadowSettings.maxPointLightShadows = static_cast<uint32_t>(maxPL);
+            pendingShadowSettings.maxPointLightShadows = static_cast<uint32_t>(maxPL);
             bDirty = true;
         }
-        bDirty |= ImGui::Checkbox("Point Light Indirect Draw", &shadowSettings.pointLightUseIndirect);
-        bDirty |= ImGui::Checkbox("Point Light Indirect Cull", &shadowSettings.pointLightIndirectCullEnabled);
+        bDirty |= ImGui::Checkbox("Point Light Indirect Draw", &pendingShadowSettings.pointLightUseIndirect);
+        bDirty |= ImGui::Checkbox("Point Light Indirect Cull", &pendingShadowSettings.pointLightIndirectCullEnabled);
         if (bDirty) {
-            syncShadowSettings();
+            applyShadowSettings(pendingShadowSettings);
         }
     }
 }

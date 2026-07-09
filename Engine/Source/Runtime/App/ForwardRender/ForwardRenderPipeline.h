@@ -113,6 +113,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     void               executeShadowPass(RenderStageContext& stageCtx);
     void               executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
     void               rebuildShadowViews();
+    void               applyShadowSettings(const ShadowSettings& shadowSettings);
 };
 
 } // namespace ya
