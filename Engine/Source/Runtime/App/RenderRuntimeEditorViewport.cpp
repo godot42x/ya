@@ -84,9 +84,9 @@ Texture* getShadowDepthTexture(IRenderTarget* shadowDepthRT)
 
 } // namespace
 
-void RenderRuntime::updateEditorViewportContext(const FrameInput& input)
+void RenderRuntime::updateEditorViewportContext(EditorLayer* editorLayer)
 {
-    if (!input.editorLayer) {
+    if (!editorLayer) {
         return;
     }
 
@@ -125,7 +125,7 @@ void RenderRuntime::updateEditorViewportContext(const FrameInput& input)
     }
 
     appendEnvironmentDebugSlots(ctx);
-    input.editorLayer->setViewportContext(ctx);
+    editorLayer->setViewportContext(ctx);
 }
 
 void RenderRuntime::appendForwardDebugSlots(EditorViewportContext& ctx)

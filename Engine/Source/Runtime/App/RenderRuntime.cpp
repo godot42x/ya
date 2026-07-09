@@ -40,8 +40,8 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         YA_PERF_SCOPE(perf::sample::renderWorld(), perf::metric::cpuTimeMs(), perf::domain::render());
         renderWorldFrame(input, cmdBuf.get());
     }
-    syncEditorFrame(input);
-    renderPresentationPass(input, cmdBuf.get());
+    syncEditorFrame(input.overlay.editorLayer);
+    renderPresentationPass(input.pipeline.deltaTime, cmdBuf.get());
     {
         YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());
         submitFrame(imageIndex, cmdBuf.get());
@@ -72,20 +72,20 @@ bool RenderRuntime::prepareFrame(const FrameInput& input, int32_t& imageIndex, s
 {
     YA_PROFILE_FUNCTION()
     ensureViewportRectInitialized(input);
-    _viewportFrameBufferScale = input.viewportFrameBufferScale;
+    _viewportFrameBufferScale = input.pipeline.viewportFrameBufferScale;
     return beginFrameCommandBuffer(imageIndex, cmdBuf);
 }
 
 void RenderRuntime::renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf)
 {
     beginViewportPassAndTickPipeline(input, cmdBuf);
-    renderViewportPassOverlays(input, cmdBuf);
+    renderViewportPassOverlays(input.pipeline, input.overlay, cmdBuf);
     endViewportPass(cmdBuf);
 }
 
-void RenderRuntime::syncEditorFrame(const FrameInput& input)
+void RenderRuntime::syncEditorFrame(EditorLayer* editorLayer)
 {
-    updateEditorViewportContext(input);
+    updateEditorViewportContext(editorLayer);
 }
 
 IRenderPipeline* RenderRuntime::getActivePipeline() const

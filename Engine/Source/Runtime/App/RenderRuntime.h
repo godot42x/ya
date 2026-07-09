@@ -90,18 +90,15 @@ struct RenderRuntime
 
     struct FrameInput
     {
-        uint32_t                flightIndex              = 0;
-        float                   dt                       = 0.0f;
-        SceneManager*           sceneManager             = nullptr;
-        EditorLayer*            editorLayer              = nullptr;
-        Rect2D                  viewportRect             = {};
-        float                   viewportFrameBufferScale = 1.0f;
-        AppMode                 appMode                  = {};
-        std::vector<glm::vec2>* clicked                  = nullptr;
-        glm::mat4               view                     = glm::mat4(1.0f);
-        glm::mat4               projection               = glm::mat4(1.0f);
-        glm::vec3               cameraPos                = glm::vec3(0.0f);
-        RenderFrameData*        frameData                = nullptr;
+        struct OverlayInput
+        {
+            Scene*                  scene       = nullptr;
+            EditorLayer*            editorLayer = nullptr;
+            AppMode                 appMode     = {};
+            std::vector<glm::vec2>* clicked     = nullptr;
+        } overlay{};
+
+        RenderPipelineFrameContext pipeline{};
     };
 
     App* _app = nullptr;
@@ -257,18 +254,18 @@ struct RenderRuntime
     void                   endFrameCapture();
     bool                   prepareFrame(const FrameInput& input, int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf);
-    void                   syncEditorFrame(const FrameInput& input);
+    void                   syncEditorFrame(EditorLayer* editorLayer);
     void                   ensureViewportRectInitialized(const FrameInput& input);
     bool                   beginFrameCommandBuffer(int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   beginViewportPassAndTickPipeline(const FrameInput& input, ICommandBuffer* cmdBuf);
     [[nodiscard]] bool     hasOpenViewportPass() const;
     [[nodiscard]] Extent2D getActiveViewportExtent() const;
-    void                   renderViewportPassOverlays(const FrameInput& input, ICommandBuffer* cmdBuf);
+    void                   renderViewportPassOverlays(const RenderPipelineFrameContext& pipelineFrame, const FrameInput::OverlayInput& overlay, ICommandBuffer* cmdBuf);
     void                   endViewportPass(ICommandBuffer* cmdBuf);
-    void                   renderPresentationPass(const FrameInput& input, ICommandBuffer* cmdBuf);
+    void                   renderPresentationPass(float deltaTime, ICommandBuffer* cmdBuf);
     void                   submitFrame(int32_t imageIndex, ICommandBuffer* cmdBuf);
 
-    void updateEditorViewportContext(const FrameInput& input);
+    void updateEditorViewportContext(EditorLayer* editorLayer);
     void appendForwardDebugSlots(EditorViewportContext& ctx);
     void appendDeferredDebugSlots(EditorViewportContext& ctx);
     void appendEnvironmentDebugSlots(EditorViewportContext& ctx);

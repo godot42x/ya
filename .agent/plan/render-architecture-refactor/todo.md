@@ -28,7 +28,7 @@
 - [x] 让 `RenderRuntime` 只向 active pipeline 传统一帧输入
 - [x] 删除 forward / deferred 两套重复 tick desc 中的公共重复字段
 - [x] 收敛 pipeline GUI/debug 查询接口，区分“执行协议”和“编辑器调试协议”
-- [ ] 评估并开始移除 `SceneManager*` / `EditorLayer*` 从渲染执行入口的直传
+- [-] 评估并开始移除 `SceneManager*` / `EditorLayer*` 从渲染执行入口的直传
 
 完成标准：
 

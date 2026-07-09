@@ -27,8 +27,8 @@ void RenderRuntime::ensureViewportRectInitialized(const FrameInput& input)
         return;
     }
 
-    if (input.viewportRect.extent.x > 0 && input.viewportRect.extent.y > 0) {
-        onViewportResized(input.viewportRect);
+    if (input.pipeline.viewportRect.extent.x > 0 && input.pipeline.viewportRect.extent.y > 0) {
+        onViewportResized(input.pipeline.viewportRect);
         return;
     }
 
@@ -81,15 +81,15 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
     YA_CORE_ASSERT(pipeline, "Active render pipeline is null while ticking viewport pass");
 
     pipeline->tick(RenderPipelineFrameContext{
-        .flightIndex              = input.flightIndex,
+        .flightIndex              = input.pipeline.flightIndex,
         .cmdBuf                   = cmdBuf,
-        .deltaTime                = input.dt,
-        .view                     = input.view,
-        .projection               = input.projection,
-        .cameraPos                = input.cameraPos,
+        .deltaTime                = input.pipeline.deltaTime,
+        .view                     = input.pipeline.view,
+        .projection               = input.pipeline.projection,
+        .cameraPos                = input.pipeline.cameraPos,
         .viewportRect             = _viewportRect,
         .viewportFrameBufferScale = _viewportFrameBufferScale,
-        .frameData                = input.frameData,
+        .frameData                = input.pipeline.frameData,
     });
 }
 
@@ -117,7 +117,7 @@ Texture* RenderRuntime::getActiveViewportTexture() const
     return nullptr;
 }
 
-void RenderRuntime::renderViewportPassOverlays(const FrameInput& input, ICommandBuffer* cmdBuf)
+void RenderRuntime::renderViewportPassOverlays(const RenderPipelineFrameContext& pipelineFrame, const FrameInput::OverlayInput& overlay, ICommandBuffer* cmdBuf)
 {
     if (!hasOpenViewportPass()) {
         return;
@@ -132,29 +132,28 @@ void RenderRuntime::renderViewportPassOverlays(const FrameInput& input, ICommand
         .windowWidth  = viewportExtent.width,
         .windowHeight = viewportExtent.height,
         .cam          = {
-            .position       = input.cameraPos,
-            .view           = input.view,
-            .projection     = input.projection,
-            .viewProjection = input.projection * input.view,
+            .position       = pipelineFrame.cameraPos,
+            .view           = pipelineFrame.view,
+            .projection     = pipelineFrame.projection,
+            .viewProjection = pipelineFrame.projection * pipelineFrame.view,
         },
     };
 
     Render2D::begin(render2dCtx);
 
-    if (input.appMode == AppMode::Drawing && input.editorLayer && input.clicked) {
-        for (const auto&& [idx, p] : ut::enumerate(*input.clicked)) {
+    if (overlay.appMode == AppMode::Drawing && overlay.editorLayer && overlay.clicked) {
+        for (const auto&& [idx, p] : ut::enumerate(*overlay.clicked)) {
             auto tex = idx % 2 == 0
                          ? AssetManager::get()->getTextureByName("uv1")
                          : AssetManager::get()->getTextureByName("face");
             YA_CORE_ASSERT(tex, "Texture not found");
             glm::vec2 pos;
-            input.editorLayer->screenToViewport(glm::vec2(p.x, p.y), pos);
+            overlay.editorLayer->screenToViewport(glm::vec2(p.x, p.y), pos);
             Render2D::makeSprite(glm::vec3(pos, 0.0f), {50, 50}, tex);
         }
     }
 
-    auto scene = input.sceneManager ? input.sceneManager->getActiveScene() : nullptr;
-    if (scene) {
+    if (auto* scene = overlay.scene) {
         const glm::vec2 screenSize(30, 30);
         const float     viewPortHeight = static_cast<float>(viewportExtent.height);
         const float     scaleFactor    = screenSize.x / viewPortHeight;
@@ -164,7 +163,7 @@ void RenderRuntime::renderViewportPassOverlays(const FrameInput& input, ICommand
             auto        texture = billboard.image.hasPath() ? billboard.image.textureRef.getShared() : nullptr;
             const auto& pos     = transfCompp.getWorldPosition();
 
-            glm::vec3 billboardToCamera = input.cameraPos - pos;
+            glm::vec3 billboardToCamera = pipelineFrame.cameraPos - pos;
             float     distance          = glm::length(billboardToCamera);
             billboardToCamera           = glm::normalize(billboardToCamera);
 
@@ -215,7 +214,7 @@ void RenderRuntime::endViewportPass(ICommandBuffer* cmdBuf)
     }
 }
 
-void RenderRuntime::renderPresentationPass(const FrameInput& input, ICommandBuffer* cmdBuf)
+void RenderRuntime::renderPresentationPass(float deltaTime, ICommandBuffer* cmdBuf)
 {
     YA_PROFILE_SCOPE("Screen pass");
     YA_PERF_SCOPE(perf::sample::renderPresentation(), perf::metric::cpuTimeMs(), perf::domain::render());
@@ -237,7 +236,7 @@ void RenderRuntime::renderPresentationPass(const FrameInput& input, ICommandBuff
     imManager.beginFrame();
     if (_app) {
         YA_PERF_SCOPE(perf::sample::renderImgui(), perf::metric::cpuTimeMs(), perf::domain::render());
-        _app->renderGUI(input.dt);
+        _app->renderGUI(deltaTime);
     }
     imManager.endFrame();
     imManager.render();

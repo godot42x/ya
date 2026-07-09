@@ -391,18 +391,22 @@ void AppFrameLoop::tickRender(App& app, float dt)
     }
 
     renderRuntime->renderFrame(RenderRuntime::FrameInput{
-        .flightIndex              = flightIndex,
-        .dt                       = dt,
-        .sceneManager             = app._sceneManager,
-        .editorLayer              = app._editorLayer,
-        .viewportRect             = app._renderFrameState.viewportRect,
-        .viewportFrameBufferScale = app._renderFrameState.viewportFrameBufferScale,
-        .appMode                  = app._appMode,
-        .clicked                  = &app.clicked,
-        .view                     = app._renderFrameState.view,
-        .projection               = app._renderFrameState.projection,
-        .cameraPos                = app._renderFrameState.cameraPos,
-        .frameData                = &app._renderFrameDataPerFlight[flightIndex],
+        .overlay = {
+            .scene       = scene,
+            .editorLayer = app._editorLayer,
+            .appMode     = app._appMode,
+            .clicked     = &app.clicked,
+        },
+        .pipeline = {
+            .flightIndex              = flightIndex,
+            .deltaTime                = dt,
+            .view                     = app._renderFrameState.view,
+            .projection               = app._renderFrameState.projection,
+            .cameraPos                = app._renderFrameState.cameraPos,
+            .viewportRect             = app._renderFrameState.viewportRect,
+            .viewportFrameBufferScale = app._renderFrameState.viewportFrameBufferScale,
+            .frameData                = &app._renderFrameDataPerFlight[flightIndex],
+        },
     });
 }
 
