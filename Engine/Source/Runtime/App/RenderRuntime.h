@@ -197,6 +197,8 @@ struct RenderRuntime
     void shutdown();
     void renderFrame(const FrameInput& input);
     void tickOffscreenTasks();
+    void beginFrameDiagnostics();
+    void endFrameDiagnostics();
     void renderGUI(float dt);
 
   public:
@@ -274,8 +276,6 @@ struct RenderRuntime
     void                   initFrameServices();
     void                   shutdownRuntimeServices();
     void                   destroyRenderBackend();
-    void                   beginFrameCapture();
-    void                   endFrameCapture();
     bool                   prepareFrame(const FrameInput& input, int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf);
     void                   syncEditorFrame(EditorLayer* editorLayer);

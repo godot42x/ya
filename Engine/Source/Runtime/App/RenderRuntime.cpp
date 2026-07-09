@@ -27,12 +27,10 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     YA_PERF_SCOPE(perf::sample::renderRuntime(), perf::metric::cpuTimeMs(), perf::domain::render());
 
     applyPendingRenderPipelineSwitch();
-    beginFrameCapture();
 
     int32_t                         imageIndex = -1;
     std::shared_ptr<ICommandBuffer> cmdBuf;
     if (!prepareFrame(input, imageIndex, cmdBuf)) {
-        endFrameCapture();
         return;
     }
 
@@ -48,8 +46,6 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());
         submitFrame(imageIndex, cmdBuf.get());
     }
-
-    endFrameCapture();
 }
 
 void RenderRuntime::tickOffscreenTasks()
@@ -59,12 +55,12 @@ void RenderRuntime::tickOffscreenTasks()
     }
 }
 
-void RenderRuntime::beginFrameCapture()
+void RenderRuntime::beginFrameDiagnostics()
 {
     _diagnostics.onFrameBegin();
 }
 
-void RenderRuntime::endFrameCapture()
+void RenderRuntime::endFrameDiagnostics()
 {
     _diagnostics.onFrameEnd();
 }

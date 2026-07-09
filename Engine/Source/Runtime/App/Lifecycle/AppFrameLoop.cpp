@@ -467,6 +467,20 @@ void AppFrameLoop::tickRender(App& app, float dt)
         return;
     }
 
+    renderRuntime->beginFrameDiagnostics();
+
+    struct DiagnosticsGuard
+    {
+        RenderRuntime* runtime = nullptr;
+
+        ~DiagnosticsGuard()
+        {
+            if (runtime) {
+                runtime->endFrameDiagnostics();
+            }
+        }
+    } diagnosticsGuard{.runtime = renderRuntime};
+
     renderRuntime->tickOffscreenTasks();
 
     const uint32_t flightIndex = resolveFlightIndex(app);
