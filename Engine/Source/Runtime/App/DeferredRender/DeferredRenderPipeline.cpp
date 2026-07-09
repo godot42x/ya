@@ -1040,12 +1040,12 @@ void DeferredRenderPipeline::renderShadowSettingsGUI()
     if (!_shadowSettings) {
         return;
     }
-    auto& shadowSettings    = *_shadowSettings;
-    bool  bShadowSettingsDirty = false;
+    const ShadowSettings currentShadowSettings = *_shadowSettings;
+    ShadowSettings       pendingShadowSettings = currentShadowSettings;
+    bool                 bShadowSettingsDirty  = false;
 
-    bool bShadowEnabled = shadowSettings.isEnabled();
+    bool bShadowEnabled = pendingShadowSettings.isEnabled();
     if (ImGui::Checkbox("Enable Shadow Mapping", &bShadowEnabled)) {
-        ShadowSettings pendingShadowSettings = shadowSettings;
         if (bShadowEnabled) {
             if (pendingShadowSettings.quality == EShadowQuality::Off) {
                 pendingShadowSettings.applyQualityPreset(EShadowQuality::Medium);
@@ -1054,71 +1054,70 @@ void DeferredRenderPipeline::renderShadowSettingsGUI()
         else {
             pendingShadowSettings.quality = EShadowQuality::Off;
         }
-        queueShadowSettingsChange(pendingShadowSettings);
+        bShadowSettingsDirty = true;
     }
 
-    if (shadowSettings.isEnabled() && _shadowStage) {
+    if (pendingShadowSettings.isEnabled()) {
         static const char* qualityNames[] = {"Low", "Medium", "High", "Ultra"};
-        int                qualityIdx     = std::max(0, static_cast<int>(shadowSettings.quality) - 1);
+        int                qualityIdx     = std::max(0, static_cast<int>(pendingShadowSettings.quality) - 1);
         if (ImGui::Combo("Quality Preset", &qualityIdx, qualityNames, IM_ARRAYSIZE(qualityNames))) {
             auto newQuality = static_cast<EShadowQuality::T>(qualityIdx + 1);
-            shadowSettings.applyQualityPreset(newQuality);
+            pendingShadowSettings.applyQualityPreset(newQuality);
             bShadowSettingsDirty = true;
         }
 
-        if (ImGui::Checkbox("Directional Shadow", &shadowSettings.directionalEnabled)) {
+        if (ImGui::Checkbox("Directional Shadow", &pendingShadowSettings.directionalEnabled)) {
             bShadowSettingsDirty = true;
         }
-        if (ImGui::Checkbox("Point Light Shadow", &shadowSettings.pointLightEnabled)) {
+        if (ImGui::Checkbox("Point Light Shadow", &pendingShadowSettings.pointLightEnabled)) {
             bShadowSettingsDirty = true;
         }
-        if (ImGui::Checkbox("Point Light Indirect Draw", &shadowSettings.pointLightUseIndirect)) {
+        if (ImGui::Checkbox("Point Light Indirect Draw", &pendingShadowSettings.pointLightUseIndirect)) {
             bShadowSettingsDirty = true;
         }
-        if (ImGui::Checkbox("Point Light Indirect Cull", &shadowSettings.pointLightIndirectCullEnabled)) {
+        if (ImGui::Checkbox("Point Light Indirect Cull", &pendingShadowSettings.pointLightIndirectCullEnabled)) {
             bShadowSettingsDirty = true;
         }
-        int maxPL = static_cast<int>(shadowSettings.maxPointLightShadows);
+        int maxPL = static_cast<int>(pendingShadowSettings.maxPointLightShadows);
         if (ImGui::SliderInt("Max Point Shadows", &maxPL, 0, MAX_POINT_LIGHTS)) {
-            shadowSettings.maxPointLightShadows = static_cast<uint32_t>(maxPL);
+            pendingShadowSettings.maxPointLightShadows = static_cast<uint32_t>(maxPL);
             bShadowSettingsDirty = true;
         }
 
-        int shadowResolution = static_cast<int>(shadowSettings.resolution);
+        int shadowResolution = static_cast<int>(pendingShadowSettings.resolution);
         if (ImGui::DragInt("Shadow Resolution", &shadowResolution, 16.0f, 128, 8192, "%d")) {
-            shadowSettings.resolution = static_cast<uint32_t>(std::clamp(shadowResolution, 128, 8192));
+            pendingShadowSettings.resolution = static_cast<uint32_t>(std::clamp(shadowResolution, 128, 8192));
             bShadowSettingsDirty = true;
         }
 
-        if (ImGui::DragFloat("Depth Bias", &shadowSettings.bias, 0.0001f, 0.0f, 0.1f, "%.5f")) {
+        if (ImGui::DragFloat("Depth Bias", &pendingShadowSettings.bias, 0.0001f, 0.0f, 0.1f, "%.5f")) {
             bShadowSettingsDirty = true;
         }
-        if (ImGui::DragFloat("Normal Bias", &shadowSettings.normalBias, 0.0001f, 0.0f, 0.1f, "%.5f")) {
+        if (ImGui::DragFloat("Normal Bias", &pendingShadowSettings.normalBias, 0.0001f, 0.0f, 0.1f, "%.5f")) {
             bShadowSettingsDirty = true;
         }
-        if (ImGui::DragFloat("Directional Distance", &shadowSettings.directionalDistance, 0.5f, 1.0f, 500.0f, "%.1f")) {
+        if (ImGui::DragFloat("Directional Distance", &pendingShadowSettings.directionalDistance, 0.5f, 1.0f, 500.0f, "%.1f")) {
             bShadowSettingsDirty = true;
         }
-        if (ImGui::Checkbox("Stable Directional Fit", &shadowSettings.directionalStableFit)) {
+        if (ImGui::Checkbox("Stable Directional Fit", &pendingShadowSettings.directionalStableFit)) {
             bShadowSettingsDirty = true;
         }
-        int directionalCascades = static_cast<int>(shadowSettings.directionalCascades);
+        int directionalCascades = static_cast<int>(pendingShadowSettings.directionalCascades);
         if (ImGui::SliderInt("Directional Cascades", &directionalCascades, 0, 4)) {
-            shadowSettings.directionalCascades = static_cast<uint32_t>(directionalCascades);
+            pendingShadowSettings.directionalCascades = static_cast<uint32_t>(directionalCascades);
             bShadowSettingsDirty = true;
         }
 
         static const char* filterNames[] = {"Hard", "PCF Low", "PCF High"};
-        int                currentFilter = static_cast<int>(shadowSettings.filter);
+        int                currentFilter = static_cast<int>(pendingShadowSettings.filter);
         if (ImGui::Combo("Shadow Filter", &currentFilter, filterNames, IM_ARRAYSIZE(filterNames))) {
-            shadowSettings.filter = static_cast<EShadowFilter::T>(currentFilter);
+            pendingShadowSettings.filter = static_cast<EShadowFilter::T>(currentFilter);
             bShadowSettingsDirty = true;
         }
+    }
 
-        if (bShadowSettingsDirty) {
-            _pendingShadowSettings = shadowSettings;
-            saveShadowSettingsToConfig(shadowSettings);
-        }
+    if (bShadowSettingsDirty) {
+        queueShadowSettingsChange(pendingShadowSettings);
     }
 }
 
