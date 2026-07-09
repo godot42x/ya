@@ -9,6 +9,7 @@
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/2D/Render2D.h"
 #include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
+#include <functional>
 #include "utility.cc/ranges.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -174,7 +175,9 @@ void RenderRuntime::endViewportPass(ICommandBuffer* cmdBuf)
     }
 }
 
-void RenderRuntime::renderPresentationPass(float deltaTime, ICommandBuffer* cmdBuf)
+void RenderRuntime::renderPresentationPass(float deltaTime,
+                                           const std::function<void(ICommandBuffer*)>& recordPresentationCapture,
+                                           ICommandBuffer* cmdBuf)
 {
     YA_PROFILE_SCOPE("Screen pass");
     YA_PERF_SCOPE(perf::sample::renderPresentation(), perf::metric::cpuTimeMs(), perf::domain::render());
@@ -206,8 +209,8 @@ void RenderRuntime::renderPresentationPass(float deltaTime, ICommandBuffer* cmdB
     }
 
     cmdBuf->endRendering(ri);
-    if (_app) {
-        AppAutomation::recordPresentationCapture(*_app, cmdBuf);
+    if (recordPresentationCapture) {
+        recordPresentationCapture(cmdBuf);
     }
 }
 

@@ -12,6 +12,7 @@
 #include "Runtime/App/OffscreenTaskService.h"
 #include "Runtime/App/RenderDiagnosticsService.h"
 
+#include <functional>
 #include <glm/glm.hpp>
 #include <memory>
 
@@ -115,6 +116,11 @@ struct RenderRuntime
         {
             EditorLayer* target = nullptr;
         } editor{};
+
+        struct AutomationInput
+        {
+            std::function<void(ICommandBuffer*)> recordPresentationCapture;
+        } automation{};
 
         RenderPipelineFrameContext pipeline{};
     };
@@ -280,7 +286,9 @@ struct RenderRuntime
     [[nodiscard]] Extent2D getActiveViewportExtent() const;
     void                   renderViewportPassOverlays(const RenderPipelineFrameContext& pipelineFrame, const FrameInput::OverlayInput& overlay, ICommandBuffer* cmdBuf);
     void                   endViewportPass(ICommandBuffer* cmdBuf);
-    void                   renderPresentationPass(float deltaTime, ICommandBuffer* cmdBuf);
+    void                   renderPresentationPass(float deltaTime,
+                                                  const std::function<void(ICommandBuffer*)>& recordPresentationCapture,
+                                                  ICommandBuffer* cmdBuf);
     void                   submitFrame(int32_t imageIndex, ICommandBuffer* cmdBuf);
 
     void updateEditorViewportContext(EditorLayer* editorLayer);

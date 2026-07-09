@@ -511,6 +511,12 @@ void AppFrameLoop::tickRender(App& app, float dt)
         .editor = {
             .target = app._editorLayer,
         },
+        .automation = {
+            .recordPresentationCapture = [&app](ICommandBuffer* cmdBuf)
+            {
+                AppAutomation::recordPresentationCapture(app, cmdBuf);
+            },
+        },
         .pipeline = pipelineFrame,
     });
 }

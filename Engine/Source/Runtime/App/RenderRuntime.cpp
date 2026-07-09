@@ -41,7 +41,9 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         renderWorldFrame(input, cmdBuf.get());
     }
     syncEditorFrame(input.editor.target);
-    renderPresentationPass(input.pipeline.deltaTime, cmdBuf.get());
+    renderPresentationPass(input.pipeline.deltaTime,
+                           input.automation.recordPresentationCapture,
+                           cmdBuf.get());
     {
         YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());
         submitFrame(imageIndex, cmdBuf.get());
