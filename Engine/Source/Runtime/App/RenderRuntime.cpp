@@ -26,7 +26,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     YA_PROFILE_SCOPE("RenderRuntime::renderFrame");
     YA_PERF_SCOPE(perf::sample::renderRuntime(), perf::metric::cpuTimeMs(), perf::domain::render());
 
-    runFramePrologue();
+    applyPendingRenderPipelineSwitch();
     beginFrameCapture();
 
     int32_t                         imageIndex = -1;
@@ -50,9 +50,8 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     endFrameCapture();
 }
 
-void RenderRuntime::runFramePrologue()
+void RenderRuntime::tickOffscreenTasks()
 {
-    applyPendingRenderPipelineSwitch();
     if (_app) {
         _offscreen.tick(*_app);
     }

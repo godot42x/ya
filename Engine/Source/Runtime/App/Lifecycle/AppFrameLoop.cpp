@@ -467,6 +467,8 @@ void AppFrameLoop::tickRender(App& app, float dt)
         return;
     }
 
+    renderRuntime->tickOffscreenTasks();
+
     const uint32_t flightIndex = resolveFlightIndex(app);
 
     auto* scene = app._sceneManager ? app._sceneManager->getActiveScene() : nullptr;

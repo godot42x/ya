@@ -190,6 +190,7 @@ struct RenderRuntime
     void init(const InitDesc& desc);
     void shutdown();
     void renderFrame(const FrameInput& input);
+    void tickOffscreenTasks();
     void renderGUI(float dt);
 
   public:
@@ -267,7 +268,6 @@ struct RenderRuntime
     void                   initFrameServices();
     void                   shutdownRuntimeServices();
     void                   destroyRenderBackend();
-    void                   runFramePrologue();
     void                   beginFrameCapture();
     void                   endFrameCapture();
     bool                   prepareFrame(const FrameInput& input, int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
