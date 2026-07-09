@@ -167,36 +167,36 @@ void ForwardRenderPipeline::initStageResources()
         if (_shadowStage) { _shadowStage->destroy(); _shadowStage.reset(); } });
 }
 
-void ForwardRenderPipeline::tick(const TickDesc& desc)
+void ForwardRenderPipeline::tick(const RenderPipelineFrameContext& frame)
 {
-    if (shouldSkipTick(desc)) {
+    if (shouldSkipTick(frame)) {
         return;
     }
 
     RenderStageContext stageCtx{};
-    beginTick(desc, stageCtx);
+    beginTick(frame, stageCtx);
     refreshDirtyResources();
     syncShadowSettings();
     executeShadowPass(stageCtx);
-    executeViewportPass(desc, stageCtx);
+    executeViewportPass(frame, stageCtx);
 }
 
-bool ForwardRenderPipeline::shouldSkipTick(const TickDesc& desc) const
+bool ForwardRenderPipeline::shouldSkipTick(const RenderPipelineFrameContext& frame) const
 {
-    YA_CORE_ASSERT(desc.cmdBuf, "ForwardRenderPipeline requires command buffer");
-    return desc.viewportRect.extent.x <= 0 || desc.viewportRect.extent.y <= 0;
+    YA_CORE_ASSERT(frame.cmdBuf, "ForwardRenderPipeline requires command buffer");
+    return frame.viewportRect.extent.x <= 0 || frame.viewportRect.extent.y <= 0;
 }
 
-void ForwardRenderPipeline::beginTick(const TickDesc& desc, RenderStageContext& stageCtx)
+void ForwardRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
 {
-    const uint32_t vpW = static_cast<uint32_t>(desc.viewportRect.extent.x);
-    const uint32_t vpH = static_cast<uint32_t>(desc.viewportRect.extent.y);
+    const uint32_t vpW = static_cast<uint32_t>(frame.viewportRect.extent.x);
+    const uint32_t vpH = static_cast<uint32_t>(frame.viewportRect.extent.y);
 
     stageCtx = RenderStageContext{
-        .cmdBuf         = desc.cmdBuf,
-        .frameData      = desc.frameData,
-        .flightIndex    = desc.flightIndex,
-        .deltaTime      = desc.dt,
+        .cmdBuf         = frame.cmdBuf,
+        .frameData      = frame.frameData,
+        .flightIndex    = frame.flightIndex,
+        .deltaTime      = frame.deltaTime,
         .viewportExtent = {.width = vpW, .height = vpH},
     };
 
@@ -268,11 +268,11 @@ void ForwardRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)
     _shadowStage->execute(stageCtx);
 }
 
-void ForwardRenderPipeline::executeViewportPass(const TickDesc& desc, RenderStageContext& stageCtx)
+void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
 {
     _viewportStage->prepare(stageCtx);
 
-    auto extent = Extent2D::fromVec2(desc.viewportRect.extent / desc.viewportFrameBufferScale);
+    auto extent = Extent2D::fromVec2(frame.viewportRect.extent / frame.viewportFrameBufferScale);
     viewportRT->setExtent(extent);
 
     RenderingInfo ri{
@@ -284,20 +284,20 @@ void ForwardRenderPipeline::executeViewportPass(const TickDesc& desc, RenderStag
         .renderTarget     = viewportRT.get(),
     };
 
-    desc.cmdBuf->beginRendering(ri);
+    frame.cmdBuf->beginRendering(ri);
     _bViewportPassOpen = true;
 
     stageCtx.viewportExtent = viewportRT->getExtent();
     _viewportStage->execute(stageCtx);
 
     _viewportRI         = ri;
-    _lastTickCtx        = desc.frameData ? desc.frameData->toFrameContext() : FrameContext{
-                                                                              .view       = desc.view,
-                                                                              .projection = desc.projection,
-                                                                              .cameraPos  = desc.cameraPos,
-                                                                          };
+    _lastTickCtx        = frame.frameData ? frame.frameData->toFrameContext() : FrameContext{
+                                                                                  .view       = frame.view,
+                                                                                  .projection = frame.projection,
+                                                                                  .cameraPos  = frame.cameraPos,
+                                                                              };
     _lastTickCtx.extent = viewportRT->getExtent();
-    _lastTickDesc       = desc;
+    _lastFrameInput     = frame;
 }
 
 void ForwardRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
@@ -311,7 +311,7 @@ void ForwardRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
     auto* inputTexture = bMSAA ? fb->getResolveTexture() : fb->getColorTexture(0);
 
     viewportTexture = _postProcessStage.execute(
-        cmdBuf, inputTexture, _lastTickDesc.viewportRect.extent, &_lastTickCtx);
+        cmdBuf, inputTexture, _lastFrameInput.viewportRect.extent, &_lastTickCtx);
 
     YA_CORE_ASSERT(viewportTexture, "Failed to get viewport texture for postprocessing");
 }

@@ -37,21 +37,6 @@ struct ForwardRenderPipeline : public IRenderPipeline
         int      windowH = 0;
     };
 
-    struct TickDesc
-    {
-        uint32_t                flightIndex              = 0;
-        ICommandBuffer*         cmdBuf                   = nullptr;
-        float                   dt                       = 0.0f;
-        glm::mat4               view                     = glm::mat4(1.0f);
-        glm::mat4               projection               = glm::mat4(1.0f);
-        glm::vec3               cameraPos                = glm::vec3(0.0f);
-        Rect2D                  viewportRect             = {};
-        float                   viewportFrameBufferScale = 1.0f;
-        int                     appMode                  = 0;
-        std::vector<glm::vec2>* clicked                  = nullptr;
-        RenderFrameData*        frameData                = nullptr;
-    };
-
     Deleter _deleter;
 
     IRender* _render = nullptr;
@@ -76,10 +61,10 @@ struct ForwardRenderPipeline : public IRenderPipeline
 
     RenderingInfo _viewportRI{};
     FrameContext  _lastTickCtx{};
-    TickDesc      _lastTickDesc{};
+    RenderPipelineFrameContext _lastFrameInput{};
 
     void init(const InitDesc& desc);
-    void tick(const TickDesc& desc);
+    void tick(const RenderPipelineFrameContext& frame) override;
     void shutdown();
 
     void renderGUI(bool bRenderTreeNode);
@@ -115,14 +100,14 @@ struct ForwardRenderPipeline : public IRenderPipeline
     void               initPostProcessResources(const InitDesc& desc);
     void               initShadowResources();
     void               initStageResources();
-    [[nodiscard]] bool shouldSkipTick(const TickDesc& desc) const;
-    void               beginTick(const TickDesc& desc, RenderStageContext& stageCtx);
+    [[nodiscard]] bool shouldSkipTick(const RenderPipelineFrameContext& frame) const;
+    void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
     void               refreshDirtyResources();
     void               syncShadowSettings();
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               executeShadowPass(RenderStageContext& stageCtx);
-    void               executeViewportPass(const TickDesc& desc, RenderStageContext& stageCtx);
-    void rebuildShadowViews();
+    void               executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
+    void               rebuildShadowViews();
 };
 
 } // namespace ya

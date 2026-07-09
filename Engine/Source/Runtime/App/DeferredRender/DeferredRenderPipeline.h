@@ -46,26 +46,9 @@ struct DeferredRenderInitDesc
     int      windowH = 0;
 };
 
-struct DeferredRenderTickDesc
-{
-    uint32_t                flightIndex              = 0;
-    ICommandBuffer*         cmdBuf                   = nullptr;
-    SceneManager*           sceneManager             = nullptr;
-    float                   dt                       = 0.0f;
-    glm::mat4               view                     = glm::mat4(1.0f);
-    glm::mat4               projection               = glm::mat4(1.0f);
-    glm::vec3               cameraPos                = glm::vec3(0.0f);
-    Rect2D                  viewportRect             = {};
-    float                   viewportFrameBufferScale = 1.0f;
-    int                     appMode                  = 0;
-    std::vector<glm::vec2>* clicked                  = nullptr;
-    RenderFrameData*        frameData                = nullptr;
-};
-
 struct DeferredRenderPipeline : public IRenderPipeline
 {
     using InitDesc = DeferredRenderInitDesc;
-    using TickDesc = DeferredRenderTickDesc;
 
     IRender* _render = nullptr;
 
@@ -113,13 +96,13 @@ struct DeferredRenderPipeline : public IRenderPipeline
     RenderingInfo            _viewportRI{};
     RenderingInfo::ImageSpec _viewportDepthSpec{};
     FrameContext             _lastTickCtx{};
-    TickDesc                 _lastTickDesc{};
+    RenderPipelineFrameContext _lastFrameInput{};
 
     DeferredRenderPipeline() = default;
     ~DeferredRenderPipeline();
 
     void init(const InitDesc& desc);
-    void tick(const TickDesc& desc);
+    void tick(const RenderPipelineFrameContext& frame) override;
     void shutdown();
 
     void renderGUI(bool bRenderTreeNode = true);
@@ -133,7 +116,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void renderPerformanceGUI() override;
     void renderStageInternalsGUI() override;
 
-    void beginViewportRendering(const TickDesc& desc);
+    void beginViewportRendering(const RenderPipelineFrameContext& frame);
     void endViewportPass(ICommandBuffer* cmdBuf) override;
     bool hasOpenViewportPass() const override { return _bViewportPassOpen; }
 
@@ -169,16 +152,16 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               loadPersistentSettings();
     void               initPipelineState(const InitDesc& desc);
     void               initStages();
-    [[nodiscard]] bool shouldSkipTick(const TickDesc& desc) const;
-    void               beginTick(const TickDesc& desc, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
+    [[nodiscard]] bool shouldSkipTick(const RenderPipelineFrameContext& frame) const;
+    void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
     void               refreshDirtyResources();
-    void               syncFrameSettings(const TickDesc& desc);
+    void               syncFrameSettings(const RenderPipelineFrameContext& frame);
     void               executeShadowPass(RenderStageContext& stageCtx);
     void               handoffShadowDepthForSampling(ICommandBuffer* cmdBuf);
-    void               executeGBufferPass(const TickDesc& desc, const RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH);
+    void               executeGBufferPass(const RenderPipelineFrameContext& frame, const RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH);
     void               executeSSAOPass(const RenderStageContext& stageCtx);
     void               executeDepthCopyPass(ICommandBuffer* cmdBuf);
-    void               executeViewportPass(const TickDesc& desc, RenderStageContext& stageCtx);
+    void               executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
     void               saveShadowSettingsToConfig(const ShadowSettings& shadowSettings) const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               rebuildShadowViews();

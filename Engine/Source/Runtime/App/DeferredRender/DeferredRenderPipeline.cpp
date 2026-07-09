@@ -514,11 +514,11 @@ void DeferredRenderPipeline::shutdown()
 // Tick
 // ═══════════════════════════════════════════════════════════════════════
 
-void DeferredRenderPipeline::tick(const TickDesc& desc)
+void DeferredRenderPipeline::tick(const RenderPipelineFrameContext& frame)
 {
-    desc.cmdBuf->debugBeginLabel("Deferred Pipeline");
+    frame.cmdBuf->debugBeginLabel("Deferred Pipeline");
 
-    if (shouldSkipTick(desc)) {
+    if (shouldSkipTick(frame)) {
         return;
     }
 
@@ -527,52 +527,52 @@ void DeferredRenderPipeline::tick(const TickDesc& desc)
     RenderStageContext stageCtx{};
     uint32_t           vpW = 0;
     uint32_t           vpH = 0;
-    beginTick(desc, stageCtx, vpW, vpH);
+    beginTick(frame, stageCtx, vpW, vpH);
     refreshDirtyResources();
-    syncFrameSettings(desc);
+    syncFrameSettings(frame);
     executeShadowPass(stageCtx);
-    executeGBufferPass(desc, stageCtx, vpW, vpH);
+    executeGBufferPass(frame, stageCtx, vpW, vpH);
     executeSSAOPass(stageCtx);
-    executeDepthCopyPass(desc.cmdBuf);
+    executeDepthCopyPass(frame.cmdBuf);
 
-    beginViewportRendering(desc);
-    executeViewportPass(desc, stageCtx);
+    beginViewportRendering(frame);
+    executeViewportPass(frame, stageCtx);
 
-    desc.cmdBuf->debugEndLabel();
+    frame.cmdBuf->debugEndLabel();
 }
 
-bool DeferredRenderPipeline::shouldSkipTick(const TickDesc& desc) const
+bool DeferredRenderPipeline::shouldSkipTick(const RenderPipelineFrameContext& frame) const
 {
-    YA_CORE_ASSERT(desc.cmdBuf, "DeferredRenderPipeline requires a command buffer");
+    YA_CORE_ASSERT(frame.cmdBuf, "DeferredRenderPipeline requires a command buffer");
 
-    if (desc.viewportRect.extent.x <= 0 || desc.viewportRect.extent.y <= 0) {
-        desc.cmdBuf->debugEndLabel();
+    if (frame.viewportRect.extent.x <= 0 || frame.viewportRect.extent.y <= 0) {
+        frame.cmdBuf->debugEndLabel();
         return true;
     }
 
-    if (!desc.frameData) {
-        desc.cmdBuf->debugEndLabel();
+    if (!frame.frameData) {
+        frame.cmdBuf->debugEndLabel();
         return true;
     }
 
     return false;
 }
 
-void DeferredRenderPipeline::beginTick(const TickDesc& desc, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH)
+void DeferredRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH)
 {
     _postProcessStage.beginFrame();
 
-    vpW = static_cast<uint32_t>(desc.viewportRect.extent.x);
-    vpH = static_cast<uint32_t>(desc.viewportRect.extent.y);
+    vpW = static_cast<uint32_t>(frame.viewportRect.extent.x);
+    vpH = static_cast<uint32_t>(frame.viewportRect.extent.y);
 
-    _lastPointLightCount = desc.frameData->numPointLights;
-    _lastDrawCount       = static_cast<uint32_t>(desc.frameData->totalDrawCount());
+    _lastPointLightCount = frame.frameData->numPointLights;
+    _lastDrawCount       = static_cast<uint32_t>(frame.frameData->totalDrawCount());
 
     stageCtx = RenderStageContext{
-        .cmdBuf         = desc.cmdBuf,
-        .frameData      = desc.frameData,
-        .flightIndex    = desc.flightIndex,
-        .deltaTime      = desc.dt,
+        .cmdBuf         = frame.cmdBuf,
+        .frameData      = frame.frameData,
+        .flightIndex    = frame.flightIndex,
+        .deltaTime      = frame.deltaTime,
         .viewportExtent = {.width = vpW, .height = vpH},
     };
 }
@@ -653,9 +653,9 @@ void DeferredRenderPipeline::executeSSAOPass(const RenderStageContext& stageCtx)
     _ssaoStage->execute(stageCtx);
 }
 
-void DeferredRenderPipeline::syncFrameSettings(const TickDesc& desc)
+void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
 {
-    (void)desc;
+    (void)frame;
 
     if (_lightStage) {
         _lightStage->setSSAOTexture(_bEnableSSAO ? _ssaoTexture.get() : nullptr);
@@ -733,7 +733,7 @@ void DeferredRenderPipeline::handoffShadowDepthForSampling(ICommandBuffer* cmdBu
     cmdBuf->transitionImageLayoutAuto(shadowDepthImage, EImageLayout::ShaderReadOnlyOptimal, &shadowDepthRange);
 }
 
-void DeferredRenderPipeline::executeGBufferPass(const TickDesc& desc, const RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH)
+void DeferredRenderPipeline::executeGBufferPass(const RenderPipelineFrameContext& frame, const RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH)
 {
     YA_PERF_SCOPE(perf::sample::deferredGBuffer(), perf::metric::cpuTimeMs(), perf::domain::render());
     _gBufferStage->prepare(stageCtx);
@@ -751,7 +751,7 @@ void DeferredRenderPipeline::executeGBufferPass(const TickDesc& desc, const Rend
         .depthClearValue = ClearValue(1.0f, 0),
         .renderTarget    = _gBufferRT.get(),
     };
-    desc.cmdBuf->beginRendering(gBufferRI);
+    frame.cmdBuf->beginRendering(gBufferRI);
 
     float gbVpY = 0.0f;
     float gbVpH = static_cast<float>(vpH);
@@ -759,12 +759,12 @@ void DeferredRenderPipeline::executeGBufferPass(const TickDesc& desc, const Rend
         gbVpY = static_cast<float>(vpH);
         gbVpH = -gbVpH;
     }
-    desc.cmdBuf->setViewport(0.0f, gbVpY, static_cast<float>(vpW), gbVpH);
-    desc.cmdBuf->setScissor(0, 0, vpW, vpH);
+    frame.cmdBuf->setViewport(0.0f, gbVpY, static_cast<float>(vpW), gbVpH);
+    frame.cmdBuf->setScissor(0, 0, vpW, vpH);
 
     _gBufferStage->execute(stageCtx);
 
-    desc.cmdBuf->endRendering(gBufferRI);
+    frame.cmdBuf->endRendering(gBufferRI);
 }
 
 void DeferredRenderPipeline::executeDepthCopyPass(ICommandBuffer* cmdBuf)
@@ -773,8 +773,9 @@ void DeferredRenderPipeline::executeDepthCopyPass(ICommandBuffer* cmdBuf)
     copyGBufferDepthToViewport(cmdBuf);
 }
 
-void DeferredRenderPipeline::executeViewportPass(const TickDesc& desc, RenderStageContext& stageCtx)
+void DeferredRenderPipeline::executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
 {
+    (void)frame;
 
     {
         YA_PERF_SCOPE(perf::sample::deferredLight(), perf::metric::cpuTimeMs(), perf::domain::render());
@@ -854,9 +855,9 @@ void DeferredRenderPipeline::copyGBufferDepthToViewport(ICommandBuffer* cmdBuf)
 // Viewport Pass
 // ═══════════════════════════════════════════════════════════════════════
 
-void DeferredRenderPipeline::beginViewportRendering(const TickDesc& desc)
+void DeferredRenderPipeline::beginViewportRendering(const RenderPipelineFrameContext& frame)
 {
-    auto cmdBuf = desc.cmdBuf;
+    auto cmdBuf = frame.cmdBuf;
 
     _viewportDepthSpec = RenderingInfo::ImageSpec{
         .texture       = _viewportRT->getCurFrameBuffer()->getDepthTexture(),
@@ -876,16 +877,16 @@ void DeferredRenderPipeline::beginViewportRendering(const TickDesc& desc)
     cmdBuf->beginRendering(_viewportRI);
     _bViewportPassOpen = true;
 
-    const uint32_t vpW = static_cast<uint32_t>(desc.viewportRect.extent.x);
-    const uint32_t vpH = static_cast<uint32_t>(desc.viewportRect.extent.y);
+    const uint32_t vpW = static_cast<uint32_t>(frame.viewportRect.extent.x);
+    const uint32_t vpH = static_cast<uint32_t>(frame.viewportRect.extent.y);
 
     _lastTickCtx = {
-        .view       = desc.view,
-        .projection = desc.projection,
-        .cameraPos  = desc.cameraPos,
+        .view       = frame.view,
+        .projection = frame.projection,
+        .cameraPos  = frame.cameraPos,
         .extent     = {.width = vpW, .height = vpH},
     };
-    _lastTickDesc = desc;
+    _lastFrameInput = frame;
 }
 
 void DeferredRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
@@ -901,7 +902,7 @@ void DeferredRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
     {
         YA_PERF_SCOPE(perf::sample::renderPostProcess(), perf::metric::cpuTimeMs(), perf::domain::render());
         viewportTexture = _postProcessStage.execute(
-            cmdBuf, inputTexture, _lastTickDesc.viewportRect.extent, &_lastTickCtx);
+            cmdBuf, inputTexture, _lastFrameInput.viewportRect.extent, &_lastTickCtx);
     }
 }
 

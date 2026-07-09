@@ -2,6 +2,8 @@
 
 #include "Render/RenderDefines.h"
 
+#include <glm/glm.hpp>
+
 #include <cstdint>
 
 namespace ya
@@ -11,12 +13,27 @@ struct ICommandBuffer;
 struct IRenderTarget;
 struct IImageView;
 struct Texture;
+struct RenderFrameData;
+
+struct RenderPipelineFrameContext
+{
+    uint32_t         flightIndex              = 0;
+    ICommandBuffer*  cmdBuf                   = nullptr;
+    float            deltaTime                = 0.0f;
+    glm::mat4        view                     = glm::mat4(1.0f);
+    glm::mat4        projection               = glm::mat4(1.0f);
+    glm::vec3        cameraPos                = glm::vec3(0.0f);
+    Rect2D           viewportRect             = {};
+    float            viewportFrameBufferScale = 1.0f;
+    RenderFrameData* frameData                = nullptr;
+};
 
 struct IRenderPipeline
 {
     virtual ~IRenderPipeline() = default;
 
     virtual void onViewportResized(Rect2D rect) = 0;
+    virtual void tick(const RenderPipelineFrameContext& frame) = 0;
 
     virtual void renderGeneralSettingsGUI()     = 0;
     virtual void renderLightingSettingsGUI()    {}

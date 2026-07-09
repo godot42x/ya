@@ -77,35 +77,18 @@ bool RenderRuntime::beginFrameCommandBuffer(int32_t& imageIndex, std::shared_ptr
 
 void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, ICommandBuffer* cmdBuf)
 {
-    if (_renderPipeline == ERenderPipeline::Forward) {
-        _forwardPipeline->tick(ForwardRenderPipeline::TickDesc{
-            .flightIndex              = input.flightIndex,
-            .cmdBuf                   = cmdBuf,
-            .dt                       = input.dt,
-            .view                     = input.view,
-            .projection               = input.projection,
-            .cameraPos                = input.cameraPos,
-            .viewportRect             = _viewportRect,
-            .viewportFrameBufferScale = _viewportFrameBufferScale,
-            .appMode                  = static_cast<int>(input.appMode),
-            .clicked                  = input.clicked,
-            .frameData                = input.frameData,
-        });
-        return;
-    }
+    auto* pipeline = getActivePipeline();
+    YA_CORE_ASSERT(pipeline, "Active render pipeline is null while ticking viewport pass");
 
-    _deferredPipeline->tick(DeferredRenderPipeline::TickDesc{
+    pipeline->tick(RenderPipelineFrameContext{
         .flightIndex              = input.flightIndex,
         .cmdBuf                   = cmdBuf,
-        .sceneManager             = input.sceneManager,
-        .dt                       = input.dt,
+        .deltaTime                = input.dt,
         .view                     = input.view,
         .projection               = input.projection,
         .cameraPos                = input.cameraPos,
         .viewportRect             = _viewportRect,
         .viewportFrameBufferScale = _viewportFrameBufferScale,
-        .appMode                  = static_cast<int>(input.appMode),
-        .clicked                  = input.clicked,
         .frameData                = input.frameData,
     });
 }
