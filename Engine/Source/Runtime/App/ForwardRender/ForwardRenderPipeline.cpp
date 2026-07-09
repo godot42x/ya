@@ -200,6 +200,7 @@ void ForwardRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, R
     };
 
     _postProcessStage.beginFrame();
+    captureShadowSettings(frame);
 }
 
 void ForwardRenderPipeline::refreshDirtyResources()
@@ -233,17 +234,19 @@ void ForwardRenderPipeline::syncShadowSettings()
     }
 }
 
+void ForwardRenderPipeline::captureShadowSettings(const RenderPipelineFrameContext& frame)
+{
+    if (frame.shadowSettings) {
+        _frameShadowSettings = *frame.shadowSettings;
+    }
+    else if (auto* app = App::get()) {
+        _frameShadowSettings = app->getShadowSettings();
+    }
+}
+
 ShadowSettings ForwardRenderPipeline::currentShadowSettings() const
 {
-    if (_lastFrameInput.shadowSettings) {
-        return *_lastFrameInput.shadowSettings;
-    }
-
-    if (auto* app = App::get()) {
-        return app->getShadowSettings();
-    }
-
-    return ShadowSettings::fromQuality(EShadowQuality::Off);
+    return _frameShadowSettings;
 }
 
 bool ForwardRenderPipeline::isShadowMappingEnabled() const

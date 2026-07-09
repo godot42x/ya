@@ -62,6 +62,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     RenderingInfo _viewportRI{};
     FrameContext  _lastTickCtx{};
     RenderPipelineFrameContext _lastFrameInput{};
+    ShadowSettings _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
 
     void init(const InitDesc& desc);
     void tick(const RenderPipelineFrameContext& frame) override;
@@ -104,6 +105,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
     void               refreshDirtyResources();
     void               syncShadowSettings();
+    void               captureShadowSettings(const RenderPipelineFrameContext& frame);
     [[nodiscard]] ShadowSettings currentShadowSettings() const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               executeShadowPass(RenderStageContext& stageCtx);

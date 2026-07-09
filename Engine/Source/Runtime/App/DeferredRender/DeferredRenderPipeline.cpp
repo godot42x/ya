@@ -193,15 +193,7 @@ void DeferredRenderPipeline::syncShadowSettings()
 
 ShadowSettings DeferredRenderPipeline::currentShadowSettings() const
 {
-    if (_lastFrameInput.shadowSettings) {
-        return *_lastFrameInput.shadowSettings;
-    }
-
-    if (auto* app = App::get()) {
-        return app->getShadowSettings();
-    }
-
-    return ShadowSettings::fromQuality(EShadowQuality::Off);
+    return _frameShadowSettings;
 }
 
 bool DeferredRenderPipeline::isShadowMappingEnabled() const
@@ -580,6 +572,7 @@ bool DeferredRenderPipeline::shouldSkipTick(const RenderPipelineFrameContext& fr
 void DeferredRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH)
 {
     _postProcessStage.beginFrame();
+    captureShadowSettings(frame);
 
     vpW = static_cast<uint32_t>(frame.viewportRect.extent.x);
     vpH = static_cast<uint32_t>(frame.viewportRect.extent.y);
@@ -594,6 +587,16 @@ void DeferredRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, 
         .deltaTime      = frame.deltaTime,
         .viewportExtent = {.width = vpW, .height = vpH},
     };
+}
+
+void DeferredRenderPipeline::captureShadowSettings(const RenderPipelineFrameContext& frame)
+{
+    if (frame.shadowSettings) {
+        _frameShadowSettings = *frame.shadowSettings;
+    }
+    else if (auto* app = App::get()) {
+        _frameShadowSettings = app->getShadowSettings();
+    }
 }
 
 void DeferredRenderPipeline::refreshDirtyResources()

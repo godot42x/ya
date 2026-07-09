@@ -97,6 +97,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     RenderingInfo::ImageSpec _viewportDepthSpec{};
     FrameContext             _lastTickCtx{};
     RenderPipelineFrameContext _lastFrameInput{};
+    ShadowSettings             _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
 
     DeferredRenderPipeline() = default;
     ~DeferredRenderPipeline();
@@ -155,6 +156,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     [[nodiscard]] bool shouldSkipTick(const RenderPipelineFrameContext& frame) const;
     void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
     void               refreshDirtyResources();
+    void               captureShadowSettings(const RenderPipelineFrameContext& frame);
     [[nodiscard]] ShadowSettings currentShadowSettings() const;
     void               syncFrameSettings(const RenderPipelineFrameContext& frame);
     void               executeShadowPass(RenderStageContext& stageCtx);
