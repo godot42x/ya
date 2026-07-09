@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Core/Math/Geometry.h"
-#include "DeferredShadowState.h"
 #include "GBufferStage.h"
 #include "LightStage.h"
 #include "Render/Core/DescriptorSet.h"
@@ -12,6 +11,7 @@
 #include "Runtime/App/Common/IRenderPipeline.h"
 #include "Runtime/App/Common/PostProcessingStage.h"
 #include "Runtime/App/Common/Shadow/Common/ShadowMapResources.h"
+#include "Runtime/App/Common/Shadow/Common/ShadowRuntimeState.h"
 #include "Runtime/App/Common/Shadow/ShadowStage.h"
 #include "SSAOStage.h"
 #include "ViewportOverlayStage.h"
@@ -183,7 +183,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
                                                   bool bEnablePointLightShadow,
                                                   uint32_t maxPointLightShadowCount,
                                                   const ShadowSettings& shadowSettings) const;
-    [[nodiscard]] DeferredShadowState buildShadowState() const;
+    [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               rebuildShadowViews();
     void               initRenderTargets(Extent2D extent);
     void               initShadowResources();

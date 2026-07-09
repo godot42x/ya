@@ -1,6 +1,6 @@
 #pragma once
 
-#include "DeferredShadowState.h"
+#include "Runtime/App/Common/Shadow/Common/ShadowRuntimeState.h"
 
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
@@ -60,7 +60,7 @@ struct GBufferStage : public IRenderStage
     std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _lightUBO{};
 
     PBRFrameData        _frameData{};
-    DeferredShadowState _shadowState{};
+    ShadowRuntimeState  _shadowState{};
     uint32_t            _lastShadowedPointLights = 0;
 
     // ── Per-shading-model pipeline + material pool ───────────────
@@ -113,7 +113,7 @@ struct GBufferStage : public IRenderStage
         return _frameAndLightDS[flightIndex];
     }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getFrameAndLightDSL() const { return _frameAndLightDSL; }
-    void                                       applyShadowState(const DeferredShadowState& shadowState) { _shadowState = shadowState; }
+    void                                       applyShadowState(const ShadowRuntimeState& shadowState) { _shadowState = shadowState; }
     [[nodiscard]] uint32_t                     getMaxShadowedPointLights() const { return _shadowState.maxShadowedPointLights; }
     [[nodiscard]] uint32_t                     getLastShadowedPointLights() const { return _lastShadowedPointLights; }
     void                                       refreshPipelineFormats(const IRenderTarget* gBufferRT);

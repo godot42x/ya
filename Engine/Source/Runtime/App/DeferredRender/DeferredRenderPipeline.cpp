@@ -191,9 +191,9 @@ void DeferredRenderPipeline::syncShadowSettings()
     }
 }
 
-DeferredShadowState DeferredRenderPipeline::buildShadowState() const
+ShadowRuntimeState DeferredRenderPipeline::buildShadowState() const
 {
-    DeferredShadowState shadowState{};
+    ShadowRuntimeState shadowState{};
     shadowState.settings = App::get()->getShadowSettings();
     shadowState.bEnableShadowMapping    = shadowState.settings.isEnabled();
     shadowState.bEnablePointLightShadow = shadowState.settings.pointLightEnabled;

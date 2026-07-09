@@ -1,6 +1,6 @@
 #pragma once
 
-#include "DeferredShadowState.h"
+#include "Runtime/App/Common/Shadow/Common/ShadowRuntimeState.h"
 
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/FrameBuffer.h"
@@ -42,7 +42,7 @@ struct LightStage : public IRenderStage
     GraphicsPipelineCreateInfo   _pipelineCI{};
     bool                         _bEnablePBRDiffuseIBL  = true;
     bool                         _bEnablePBRSpecularIBL = true;
-    DeferredShadowState          _shadowState{};
+    ShadowRuntimeState           _shadowState{};
 
     // GBuffer texture DS + pool (updated each frame from GBuffer RT)
     stdptr<IDescriptorPool> _dsp;
@@ -73,7 +73,7 @@ struct LightStage : public IRenderStage
     /// @param gBufferRT     Provides GBuffer color textures for sampling
     void setup(GBufferStage* gBufferStage, IRenderTarget* gBufferRT);
     void setSSAOTexture(Texture* ssaoTexture);
-    void applyShadowState(const DeferredShadowState& shadowState);
+    void applyShadowState(const ShadowRuntimeState& shadowState);
     void setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecularIBL);
     void refreshPipelineFormats(const IRenderTarget* viewportRT);
     void invalidateGBufferDescriptors();

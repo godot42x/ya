@@ -94,7 +94,7 @@ void LightStage::setSSAOTexture(Texture* ssaoTexture)
     invalidateGBufferDescriptors();
 }
 
-void LightStage::applyShadowState(const DeferredShadowState& shadowState)
+void LightStage::applyShadowState(const ShadowRuntimeState& shadowState)
 {
     const bool bDefinesChanged = _shadowState.bEnableShadowMapping != shadowState.bEnableShadowMapping ||
                                  _shadowState.bEnablePointLightShadow != shadowState.bEnablePointLightShadow;
