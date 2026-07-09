@@ -77,7 +77,7 @@ bool RenderRuntime::beginFrameCommandBuffer(int32_t& imageIndex, std::shared_ptr
 
 void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, ICommandBuffer* cmdBuf)
 {
-    auto* pipeline = getActivePipeline();
+    auto* pipeline = getActivePipelineExecution();
     YA_CORE_ASSERT(pipeline, "Active render pipeline is null while ticking viewport pass");
 
     pipeline->tick(RenderPipelineFrameContext{
@@ -95,7 +95,7 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
 
 bool RenderRuntime::hasOpenViewportPass() const
 {
-    if (auto* pipeline = getActivePipeline()) {
+    if (auto* pipeline = getActivePipelineExecution()) {
         return pipeline->hasOpenViewportPass();
     }
     return false;
@@ -103,7 +103,7 @@ bool RenderRuntime::hasOpenViewportPass() const
 
 Extent2D RenderRuntime::getActiveViewportExtent() const
 {
-    if (auto* pipeline = getActivePipeline()) {
+    if (auto* pipeline = getActivePipelineExecution()) {
         return pipeline->getViewportExtent();
     }
     return {};
@@ -111,7 +111,7 @@ Extent2D RenderRuntime::getActiveViewportExtent() const
 
 Texture* RenderRuntime::getActiveViewportTexture() const
 {
-    if (auto* pipeline = getActivePipeline()) {
+    if (auto* pipeline = getActivePipelineExecution()) {
         return pipeline->getViewportTexture();
     }
     return nullptr;
@@ -202,7 +202,7 @@ void RenderRuntime::endViewportPass(ICommandBuffer* cmdBuf)
         return;
     }
 
-    auto* pipeline = getActivePipeline();
+    auto* pipeline = getActivePipelineExecution();
     YA_CORE_ASSERT(pipeline, "Active render pipeline is null while ending viewport pass");
 
     pipeline->endViewportPass(cmdBuf);

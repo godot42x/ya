@@ -90,10 +90,12 @@ void RenderRuntime::updateEditorViewportContext(const FrameInput& input)
         return;
     }
 
+    const auto debugOutputs = buildPipelineDebugOutputCatalog();
+
     EditorViewportContext ctx;
     ctx.bForwardPipeline         = (_renderPipeline == ERenderPipeline::Forward);
-    ctx.bPostprocessingEnabled   = isPostprocessingEnabled();
-    ctx.postprocessOutputTexture = getPostprocessOutputTexture();
+    ctx.bPostprocessingEnabled   = debugOutputs.bPostprocessingEnabled;
+    ctx.postprocessOutputTexture = debugOutputs.postprocessOutput;
     ctx.viewportTexture          = getActiveViewportTexture();
     ctx.debugSpec.categories     = {
         {.id = "shadow", .label = "Shadow"},
@@ -132,8 +134,10 @@ void RenderRuntime::appendForwardDebugSlots(EditorViewportContext& ctx)
         return;
     }
 
-    if (isShadowMappingEnabled()) {
-        if (auto* directionalDepth = getShadowDirectionalDepthIV()) {
+    const auto debugOutputs = buildPipelineDebugOutputCatalog();
+
+    if (debugOutputs.bShadowMappingEnabled) {
+        if (auto* directionalDepth = debugOutputs.shadowDirectionalDepth) {
             ctx.debugSpec.slots.push_back({
                 .label         = "ShadowDirectionalDepth",
                 .defaultView   = directionalDepth,
@@ -234,6 +238,7 @@ void RenderRuntime::appendForwardDebugSlots(EditorViewportContext& ctx)
 
 void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
 {
+    const auto debugOutputs = buildPipelineDebugOutputCatalog();
     const auto deferredViews = getDeferredPipelineDebugViews();
     auto*      viewportRT    = getActiveViewportRT();
     if (!_deferredPipeline || !deferredViews.gBufferRT || !viewportRT) {
@@ -313,37 +318,37 @@ void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
         .tint          = {1, 0, 0, 1},
     });
 
-    if (auto* bloomExtract = getBloomExtractTexture(); bloomExtract && bloomExtract->getImageView()) {
+    if (debugOutputs.bloomExtract && debugOutputs.bloomExtract->getImageView()) {
         ctx.debugSpec.slots.push_back({
             .label         = "BloomExtract",
-            .defaultView   = bloomExtract->getImageView(),
+            .defaultView   = debugOutputs.bloomExtract->getImageView(),
             .ownedView     = nullptr,
-            .image         = bloomExtract->getImageShared(),
+            .image         = debugOutputs.bloomExtract->getImageShared(),
             .categoryIndex = CATEGORY_POSTPROCESS,
         });
     }
 
-    if (auto* bloomBlur = getBloomBlurTexture(); bloomBlur && bloomBlur->getImageView()) {
+    if (debugOutputs.bloomBlur && debugOutputs.bloomBlur->getImageView()) {
         ctx.debugSpec.slots.push_back({
             .label         = "BloomBlur",
-            .defaultView   = bloomBlur->getImageView(),
+            .defaultView   = debugOutputs.bloomBlur->getImageView(),
             .ownedView     = nullptr,
-            .image         = bloomBlur->getImageShared(),
+            .image         = debugOutputs.bloomBlur->getImageShared(),
             .categoryIndex = CATEGORY_POSTPROCESS,
         });
     }
 
-    if (auto* bloomComposite = getBloomCompositeTexture(); bloomComposite && bloomComposite->getImageView()) {
+    if (debugOutputs.bloomComposite && debugOutputs.bloomComposite->getImageView()) {
         ctx.debugSpec.slots.push_back({
             .label         = "BloomComposite",
-            .defaultView   = bloomComposite->getImageView(),
+            .defaultView   = debugOutputs.bloomComposite->getImageView(),
             .ownedView     = nullptr,
-            .image         = bloomComposite->getImageShared(),
+            .image         = debugOutputs.bloomComposite->getImageShared(),
             .categoryIndex = CATEGORY_POSTPROCESS,
         });
     }
 
-    if (auto* postprocessOutput = getPostprocessOutputTexture(); postprocessOutput && postprocessOutput->getImageView()) {
+    if (auto* postprocessOutput = debugOutputs.postprocessOutput; postprocessOutput && postprocessOutput->getImageView()) {
         ctx.debugSpec.slots.push_back({
             .label         = "PostprocessOutput",
             .defaultView   = postprocessOutput->getImageView(),
@@ -353,11 +358,11 @@ void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
         });
     }
 
-    if (auto* shadowDepthRT = getShadowDepthRT()) {
+    if (auto* shadowDepthRT = debugOutputs.shadowDepthRT) {
         Texture* shadowDepthTexture = getShadowDepthTexture(shadowDepthRT);
         appendShadowDebugSlots(
             ctx,
-            getShadowDirectionalDepthIV(),
+            debugOutputs.shadowDirectionalDepth,
             shadowDepthTexture,
             [this](uint32_t pointLightIndex, uint32_t faceIndex)
             { return getShadowPointFaceDepthIV(pointLightIndex, faceIndex); },

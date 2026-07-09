@@ -28,26 +28,42 @@ struct RenderPipelineFrameContext
     RenderFrameData* frameData                = nullptr;
 };
 
-struct IRenderPipeline
+struct IRenderPipelineExecution
 {
-    virtual ~IRenderPipeline() = default;
+    virtual ~IRenderPipelineExecution() = default;
 
     virtual void onViewportResized(Rect2D rect) = 0;
     virtual void tick(const RenderPipelineFrameContext& frame) = 0;
-
-    virtual void renderGeneralSettingsGUI()     = 0;
-    virtual void renderLightingSettingsGUI()    {}
-    virtual void renderAOSettingsGUI()          {}
-    virtual void renderShadowSettingsGUI()      = 0;
-    virtual void renderPostProcessSettingsGUI() = 0;
-    virtual void renderPerformanceGUI()         = 0;
-    virtual void renderStageInternalsGUI()      = 0;
 
     [[nodiscard]] virtual bool           hasOpenViewportPass() const = 0;
     [[nodiscard]] virtual Extent2D       getViewportExtent() const   = 0;
     [[nodiscard]] virtual IRenderTarget* getViewportRT() const       = 0;
     [[nodiscard]] virtual Texture*       getViewportTexture() const  = 0;
     virtual void                         endViewportPass(ICommandBuffer* cmdBuf) = 0;
+};
+
+struct IRenderPipelineSettingsUI
+{
+    virtual ~IRenderPipelineSettingsUI() = default;
+
+    virtual void renderGeneralSettingsGUI()     = 0;
+    virtual void renderLightingSettingsGUI()    {}
+    virtual void renderAOSettingsGUI()          {}
+    virtual void renderShadowSettingsGUI()      = 0;
+    virtual void renderPostProcessSettingsGUI() = 0;
+};
+
+struct IRenderPipelineDebugUI
+{
+    virtual ~IRenderPipelineDebugUI() = default;
+
+    virtual void renderPerformanceGUI()    = 0;
+    virtual void renderStageInternalsGUI() = 0;
+};
+
+struct IRenderPipelineDebugOutputs
+{
+    virtual ~IRenderPipelineDebugOutputs() = default;
 
     [[nodiscard]] virtual bool           isShadowMappingEnabled() const = 0;
     [[nodiscard]] virtual IRenderTarget* getShadowDepthRT() const       = 0;
@@ -59,6 +75,14 @@ struct IRenderPipeline
     [[nodiscard]] virtual Texture* getBloomBlurTexture() const         = 0;
     [[nodiscard]] virtual Texture* getBloomCompositeTexture() const    = 0;
     [[nodiscard]] virtual bool     isPostprocessingEnabled() const     = 0;
+};
+
+struct IRenderPipeline : IRenderPipelineExecution,
+                         IRenderPipelineSettingsUI,
+                         IRenderPipelineDebugUI,
+                         IRenderPipelineDebugOutputs
+{
+    ~IRenderPipeline() override = default;
 };
 
 } // namespace ya

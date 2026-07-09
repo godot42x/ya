@@ -105,9 +105,29 @@ IRenderPipeline* RenderRuntime::getActivePipeline() const
     return nullptr;
 }
 
+IRenderPipelineExecution* RenderRuntime::getActivePipelineExecution() const
+{
+    return getActivePipeline();
+}
+
+IRenderPipelineSettingsUI* RenderRuntime::getActivePipelineSettingsUI() const
+{
+    return getActivePipeline();
+}
+
+IRenderPipelineDebugUI* RenderRuntime::getActivePipelineDebugUI() const
+{
+    return getActivePipeline();
+}
+
+IRenderPipelineDebugOutputs* RenderRuntime::getActivePipelineDebugOutputs() const
+{
+    return getActivePipeline();
+}
+
 bool RenderRuntime::isShadowMappingEnabled() const
 {
-    if (auto* pipeline = getActivePipeline()) {
+    if (auto* pipeline = getActivePipelineDebugOutputs()) {
         return pipeline->isShadowMappingEnabled();
     }
     return false;
@@ -125,7 +145,7 @@ bool RenderRuntime::hasMirrorRenderResult() const
 
 IRenderTarget* RenderRuntime::getShadowDepthRT() const
 {
-    if (auto* pipeline = getActivePipeline()) {
+    if (auto* pipeline = getActivePipelineDebugOutputs()) {
         return pipeline->getShadowDepthRT();
     }
     return nullptr;
@@ -133,7 +153,7 @@ IRenderTarget* RenderRuntime::getShadowDepthRT() const
 
 IImageView* RenderRuntime::getShadowDirectionalDepthIV() const
 {
-    if (auto* pipeline = getActivePipeline()) {
+    if (auto* pipeline = getActivePipelineDebugOutputs()) {
         return pipeline->getShadowDirectionalDepthIV();
     }
     return nullptr;
@@ -141,7 +161,7 @@ IImageView* RenderRuntime::getShadowDirectionalDepthIV() const
 
 IImageView* RenderRuntime::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
 {
-    if (auto* pipeline = getActivePipeline()) {
+    if (auto* pipeline = getActivePipelineDebugOutputs()) {
         return pipeline->getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
     }
     return nullptr;
@@ -149,7 +169,7 @@ IImageView* RenderRuntime::getShadowPointFaceDepthIV(uint32_t pointLightIndex, u
 
 Texture* RenderRuntime::getPostprocessOutputTexture() const
 {
-    if (auto* pipeline = getActivePipeline()) {
+    if (auto* pipeline = getActivePipelineDebugOutputs()) {
         return pipeline->getPostprocessOutputTexture();
     }
     return nullptr;
@@ -157,7 +177,7 @@ Texture* RenderRuntime::getPostprocessOutputTexture() const
 
 Texture* RenderRuntime::getBloomExtractTexture() const
 {
-    if (auto* pipeline = getActivePipeline()) {
+    if (auto* pipeline = getActivePipelineDebugOutputs()) {
         return pipeline->getBloomExtractTexture();
     }
     return nullptr;
@@ -165,7 +185,7 @@ Texture* RenderRuntime::getBloomExtractTexture() const
 
 Texture* RenderRuntime::getBloomBlurTexture() const
 {
-    if (auto* pipeline = getActivePipeline()) {
+    if (auto* pipeline = getActivePipelineDebugOutputs()) {
         return pipeline->getBloomBlurTexture();
     }
     return nullptr;
@@ -173,7 +193,7 @@ Texture* RenderRuntime::getBloomBlurTexture() const
 
 Texture* RenderRuntime::getBloomCompositeTexture() const
 {
-    if (auto* pipeline = getActivePipeline()) {
+    if (auto* pipeline = getActivePipelineDebugOutputs()) {
         return pipeline->getBloomCompositeTexture();
     }
     return nullptr;
@@ -191,15 +211,34 @@ Texture* RenderRuntime::getPresentationTexture() const
 
 bool RenderRuntime::isPostprocessingEnabled() const
 {
-    if (auto* pipeline = getActivePipeline()) {
+    if (auto* pipeline = getActivePipelineDebugOutputs()) {
         return pipeline->isPostprocessingEnabled();
     }
     return false;
 }
 
+RenderPipelineDebugOutputCatalog RenderRuntime::buildPipelineDebugOutputCatalog() const
+{
+    RenderPipelineDebugOutputCatalog catalog{};
+    auto*                            pipeline = getActivePipelineDebugOutputs();
+    if (!pipeline) {
+        return catalog;
+    }
+
+    catalog.bShadowMappingEnabled  = pipeline->isShadowMappingEnabled();
+    catalog.shadowDepthRT          = pipeline->getShadowDepthRT();
+    catalog.shadowDirectionalDepth = pipeline->getShadowDirectionalDepthIV();
+    catalog.postprocessOutput      = pipeline->getPostprocessOutputTexture();
+    catalog.bloomExtract           = pipeline->getBloomExtractTexture();
+    catalog.bloomBlur              = pipeline->getBloomBlurTexture();
+    catalog.bloomComposite         = pipeline->getBloomCompositeTexture();
+    catalog.bPostprocessingEnabled = pipeline->isPostprocessingEnabled();
+    return catalog;
+}
+
 Extent2D RenderRuntime::getViewportExtent() const
 {
-    if (auto* pipeline = getActivePipeline()) {
+    if (auto* pipeline = getActivePipelineExecution()) {
         return pipeline->getViewportExtent();
     }
     if (_viewportRect.extent.x > 0 && _viewportRect.extent.y > 0) {
@@ -210,7 +249,7 @@ Extent2D RenderRuntime::getViewportExtent() const
 
 IRenderTarget* RenderRuntime::getActiveViewportRT() const
 {
-    if (auto* pipeline = getActivePipeline()) {
+    if (auto* pipeline = getActivePipelineExecution()) {
         return pipeline->getViewportRT();
     }
     return nullptr;
@@ -367,7 +406,7 @@ void RenderRuntime::applyPendingRenderPipelineSwitch()
     }
     YA_PROFILE_FUNCTION_LOG();
 
-    if (auto* pipeline = getActivePipeline(); pipeline && pipeline->hasOpenViewportPass()) {
+    if (auto* pipeline = getActivePipelineExecution(); pipeline && pipeline->hasOpenViewportPass()) {
         YA_CORE_WARN("Skipping render pipeline switch while a viewport pass is still open");
         return;
     }

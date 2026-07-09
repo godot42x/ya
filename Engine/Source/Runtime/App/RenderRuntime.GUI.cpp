@@ -142,27 +142,27 @@ void openCaptureDirectoryFromGUI(const std::string& filePath)
 
 void RenderRuntime::renderWorldSettingsGUI()
 {
-    if (auto* pipeline = getActivePipeline(); pipeline && ImGui::TreeNode("General")) {
+    if (auto* pipeline = getActivePipelineSettingsUI(); pipeline && ImGui::TreeNode("General")) {
         pipeline->renderGeneralSettingsGUI();
         ImGui::TreePop();
     }
 
-    if (auto* pipeline = getActivePipeline(); isDeferredPipelineActive() && pipeline && ImGui::TreeNode("Lighting")) {
+    if (auto* pipeline = getActivePipelineSettingsUI(); isDeferredPipelineActive() && pipeline && ImGui::TreeNode("Lighting")) {
         pipeline->renderLightingSettingsGUI();
         ImGui::TreePop();
     }
 
-    if (auto* pipeline = getActivePipeline(); isDeferredPipelineActive() && pipeline && ImGui::TreeNode("Ambient Occlusion")) {
+    if (auto* pipeline = getActivePipelineSettingsUI(); isDeferredPipelineActive() && pipeline && ImGui::TreeNode("Ambient Occlusion")) {
         pipeline->renderAOSettingsGUI();
         ImGui::TreePop();
     }
 
-    if (auto* pipeline = getActivePipeline(); pipeline && ImGui::TreeNode("Shadows")) {
+    if (auto* pipeline = getActivePipelineSettingsUI(); pipeline && ImGui::TreeNode("Shadows")) {
         pipeline->renderShadowSettingsGUI();
         ImGui::TreePop();
     }
 
-    if (auto* pipeline = getActivePipeline(); pipeline && ImGui::TreeNode("Post Process")) {
+    if (auto* pipeline = getActivePipelineSettingsUI(); pipeline && ImGui::TreeNode("Post Process")) {
         pipeline->renderPostProcessSettingsGUI();
         ImGui::TreePop();
     }
@@ -170,7 +170,7 @@ void RenderRuntime::renderWorldSettingsGUI()
 
 void RenderRuntime::renderProfilingDetailsGUI()
 {
-    auto* pipeline = getActivePipeline();
+    auto* pipeline = getActivePipelineDebugUI();
     if (!pipeline) {
         return;
     }
@@ -188,7 +188,7 @@ void RenderRuntime::renderProfilingDetailsGUI()
 void RenderRuntime::renderRenderingInternalsGUI()
 {
     if (ImGui::TreeNode("Rendering Internals")) {
-        if (auto* pipeline = getActivePipeline()) {
+        if (auto* pipeline = getActivePipelineDebugUI()) {
             drawSettingsSection("Stage Internals", [&]() {
                 pipeline->renderStageInternalsGUI();
             });

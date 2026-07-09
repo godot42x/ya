@@ -41,6 +41,18 @@ struct DeferredPipelineDebugViews
     Texture*       ssaoTexture = nullptr;
 };
 
+struct RenderPipelineDebugOutputCatalog
+{
+    bool           bShadowMappingEnabled  = false;
+    IRenderTarget* shadowDepthRT          = nullptr;
+    IImageView*    shadowDirectionalDepth = nullptr;
+    Texture*       postprocessOutput      = nullptr;
+    Texture*       bloomExtract           = nullptr;
+    Texture*       bloomBlur              = nullptr;
+    Texture*       bloomComposite         = nullptr;
+    bool           bPostprocessingEnabled = false;
+};
+
 struct RenderTargetEditorCatalog
 {
     struct Entry
@@ -174,6 +186,10 @@ struct RenderRuntime
     [[nodiscard]] IRender*                       getRender() const { return _render; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
     [[nodiscard]] IRenderPipeline*               getActivePipeline() const;
+    [[nodiscard]] IRenderPipelineExecution*      getActivePipelineExecution() const;
+    [[nodiscard]] IRenderPipelineSettingsUI*     getActivePipelineSettingsUI() const;
+    [[nodiscard]] IRenderPipelineDebugUI*        getActivePipelineDebugUI() const;
+    [[nodiscard]] IRenderPipelineDebugOutputs*   getActivePipelineDebugOutputs() const;
     [[nodiscard]] bool                           isShadowMappingEnabled() const;
     [[nodiscard]] bool                           isMirrorRenderingEnabled() const;
     [[nodiscard]] bool                           hasMirrorRenderResult() const;
@@ -189,6 +205,7 @@ struct RenderRuntime
     [[nodiscard]] Texture* getActiveViewportTexture() const;
     [[nodiscard]] Texture* getPresentationTexture() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;
+    [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog() const;
     [[nodiscard]] ERenderPipeline getRenderPipeline() const { return _renderPipeline; }
     [[nodiscard]] ERenderPipeline getPendingRenderPipeline() const { return _pendingRenderPipeline; }
     void setPendingRenderPipeline(ERenderPipeline renderPipeline) { _pendingRenderPipeline = renderPipeline; }
