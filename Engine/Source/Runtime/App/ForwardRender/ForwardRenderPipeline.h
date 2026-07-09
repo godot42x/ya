@@ -35,11 +35,13 @@ struct ForwardRenderPipeline : public IRenderPipeline
         IRender* render  = nullptr;
         int      windowW = 0;
         int      windowH = 0;
+        ShadowSettings* shadowSettings = nullptr;
     };
 
     Deleter _deleter;
 
     IRender* _render = nullptr;
+    ShadowSettings* _shadowSettings = nullptr;
 
     stdptr<IDescriptorPool> _descriptorPool = nullptr;
 

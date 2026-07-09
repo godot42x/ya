@@ -38,6 +38,10 @@ void ForwardRenderPipeline::rebuildShadowViews()
 void ForwardRenderPipeline::init(const InitDesc& desc)
 {
     _render            = desc.render;
+    _shadowSettings    = desc.shadowSettings;
+    if (_shadowSettings) {
+        _frameShadowSettings = *_shadowSettings;
+    }
     _bViewportPassOpen = false;
 
     initViewportResources(desc);
@@ -239,8 +243,8 @@ void ForwardRenderPipeline::captureShadowSettings(const RenderPipelineFrameConte
     if (frame.shadowSettings) {
         _frameShadowSettings = *frame.shadowSettings;
     }
-    else if (auto* app = App::get()) {
-        _frameShadowSettings = app->getShadowSettings();
+    else if (_shadowSettings) {
+        _frameShadowSettings = *_shadowSettings;
     }
 }
 
@@ -364,11 +368,10 @@ void ForwardRenderPipeline::renderGeneralSettingsGUI()
 
 void ForwardRenderPipeline::renderShadowSettingsGUI()
 {
-    auto* app = App::get();
-    if (!app) {
+    if (!_shadowSettings) {
         return;
     }
-    auto& shadowSettings = app->getShadowSettings();
+    auto& shadowSettings = *_shadowSettings;
     bool  bEnabled       = shadowSettings.isEnabled();
     if (ImGui::Checkbox("Shadow Mapping", &bEnabled)) {
         if (bEnabled) {

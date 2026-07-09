@@ -26,6 +26,8 @@
 namespace ya
 {
 
+struct AppAutomationShadowOverrides;
+struct TaskManager;
 struct SceneManager;
 struct Scene;
 struct Sampler;
@@ -44,6 +46,9 @@ struct DeferredRenderInitDesc
     IRender* render  = nullptr;
     int      windowW = 0;
     int      windowH = 0;
+    ShadowSettings* shadowSettings = nullptr;
+    const AppAutomationShadowOverrides* automationShadowOverrides = nullptr;
+    TaskManager* taskManager = nullptr;
 };
 
 struct DeferredRenderPipeline : public IRenderPipeline
@@ -51,6 +56,9 @@ struct DeferredRenderPipeline : public IRenderPipeline
     using InitDesc = DeferredRenderInitDesc;
 
     IRender* _render = nullptr;
+    ShadowSettings* _shadowSettings = nullptr;
+    const AppAutomationShadowOverrides* _automationShadowOverrides = nullptr;
+    TaskManager* _taskManager = nullptr;
 
     // ── Render targets ────────────────────────────────────────────────
     stdptr<IRenderTarget> _gBufferRT;

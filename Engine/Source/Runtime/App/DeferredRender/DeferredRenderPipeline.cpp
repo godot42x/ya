@@ -226,12 +226,15 @@ void DeferredRenderPipeline::queueShadowSettingsChange(const ShadowSettings& sha
     _pendingShadowSettings = shadowSettings;
     saveShadowSettingsToConfig(_pendingShadowSettings);
 
-    if (_bShadowSettingsChangePending) {
+    if (_bShadowSettingsChangePending || !_taskManager) {
+        if (!_taskManager) {
+            applyShadowSettings(_pendingShadowSettings);
+        }
         return;
     }
 
     _bShadowSettingsChangePending = true;
-    App::get()->taskManager.registerFrameTask(
+    _taskManager->registerFrameTask(
         [this]()
         {
             _bShadowSettingsChangePending = false;
@@ -242,18 +245,20 @@ void DeferredRenderPipeline::queueShadowSettingsChange(const ShadowSettings& sha
 
 void DeferredRenderPipeline::applyShadowSettings(const ShadowSettings& shadowSettings)
 {
-    auto& appShadowSettings = App::get()->getShadowSettings();
-    const bool bWasEnabled   = appShadowSettings.isEnabled();
-    const bool bWillEnable   = shadowSettings.isEnabled();
+    const bool bWasEnabled    = currentShadowSettings().isEnabled();
+    const bool bWillEnable    = shadowSettings.isEnabled();
     const bool bToggleChanged = bWasEnabled != bWillEnable;
 
     if (_render && bToggleChanged) {
         _render->waitIdle();
     }
 
-    appShadowSettings = shadowSettings;
+    _frameShadowSettings = shadowSettings;
+    if (_shadowSettings) {
+        *_shadowSettings = shadowSettings;
+    }
 
-    if (appShadowSettings.isEnabled()) {
+    if (shadowSettings.isEnabled()) {
         if (!_shadowResources.renderTarget) {
             initShadowResources();
         }
@@ -268,7 +273,7 @@ void DeferredRenderPipeline::applyShadowSettings(const ShadowSettings& shadowSet
     }
 
     syncShadowSettings();
-    saveShadowSettingsToConfig(appShadowSettings);
+    saveShadowSettingsToConfig(shadowSettings);
 }
 
 void DeferredRenderPipeline::loadPersistentSettings()
@@ -286,8 +291,7 @@ void DeferredRenderPipeline::loadPersistentSettings()
                                                                 DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW,
                                                                 baselineShadowSettings.pointLightEnabled);
 
-    // Sync loaded config to App-layer ShadowSettings
-    auto& shadowSettings = App::get()->getShadowSettings();
+    ShadowSettings shadowSettings = _shadowSettings ? *_shadowSettings : baselineShadowSettings;
     int qualityValue = cfgManager.getOr<int>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
                                              DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_QUALITY,
                                              static_cast<int>(shadowSettings.quality));
@@ -350,36 +354,40 @@ void DeferredRenderPipeline::loadPersistentSettings()
     shadowSettings.pointLightEnabled    = bEnablePointLightShadow && shadowSettings.pointLightEnabled;
     shadowSettings.maxPointLightShadows = std::min(shadowSettings.maxPointLightShadows, static_cast<uint32_t>(MAX_POINT_LIGHTS));
 
-    const auto& automationShadowOverrides = App::get()->getDesc().automation.shadow;
-    if (automationShadowOverrides.quality) {
-        shadowSettings.applyQualityPreset(*automationShadowOverrides.quality);
+    if (_automationShadowOverrides) {
+        if (_automationShadowOverrides->quality) {
+            shadowSettings.applyQualityPreset(*_automationShadowOverrides->quality);
+        }
+        if (_automationShadowOverrides->directionalEnabled) {
+            shadowSettings.directionalEnabled = *_automationShadowOverrides->directionalEnabled;
+        }
+        if (_automationShadowOverrides->pointLightEnabled) {
+            shadowSettings.pointLightEnabled = *_automationShadowOverrides->pointLightEnabled;
+        }
+        if (_automationShadowOverrides->pointLightUseIndirect) {
+            shadowSettings.pointLightUseIndirect = *_automationShadowOverrides->pointLightUseIndirect;
+        }
+        if (_automationShadowOverrides->pointLightIndirectCullEnabled) {
+            shadowSettings.pointLightIndirectCullEnabled = *_automationShadowOverrides->pointLightIndirectCullEnabled;
+        }
+        if (_automationShadowOverrides->maxPointLightShadows) {
+            shadowSettings.maxPointLightShadows = *_automationShadowOverrides->maxPointLightShadows;
+        }
+        if (_automationShadowOverrides->filter) {
+            shadowSettings.filter = *_automationShadowOverrides->filter;
+        }
+        if (_automationShadowOverrides->bias) {
+            shadowSettings.bias = *_automationShadowOverrides->bias;
+        }
+        if (_automationShadowOverrides->normalBias) {
+            shadowSettings.normalBias = *_automationShadowOverrides->normalBias;
+        }
+        if (_automationShadowOverrides->directionalDistance) {
+            shadowSettings.directionalDistance = *_automationShadowOverrides->directionalDistance;
+        }
     }
-    if (automationShadowOverrides.directionalEnabled) {
-        shadowSettings.directionalEnabled = *automationShadowOverrides.directionalEnabled;
-    }
-    if (automationShadowOverrides.pointLightEnabled) {
-        shadowSettings.pointLightEnabled = *automationShadowOverrides.pointLightEnabled;
-    }
-    if (automationShadowOverrides.pointLightUseIndirect) {
-        shadowSettings.pointLightUseIndirect = *automationShadowOverrides.pointLightUseIndirect;
-    }
-    if (automationShadowOverrides.pointLightIndirectCullEnabled) {
-        shadowSettings.pointLightIndirectCullEnabled = *automationShadowOverrides.pointLightIndirectCullEnabled;
-    }
-    if (automationShadowOverrides.maxPointLightShadows) {
-        shadowSettings.maxPointLightShadows = *automationShadowOverrides.maxPointLightShadows;
-    }
-    if (automationShadowOverrides.filter) {
-        shadowSettings.filter = *automationShadowOverrides.filter;
-    }
-    if (automationShadowOverrides.bias) {
-        shadowSettings.bias = *automationShadowOverrides.bias;
-    }
-    if (automationShadowOverrides.normalBias) {
-        shadowSettings.normalBias = *automationShadowOverrides.normalBias;
-    }
-    if (automationShadowOverrides.directionalDistance) {
-        shadowSettings.directionalDistance = *automationShadowOverrides.directionalDistance;
+    if (_shadowSettings) {
+        *_shadowSettings = shadowSettings;
     }
     _pendingShadowSettings = shadowSettings;
 }
@@ -427,8 +435,14 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
 void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
 {
     _render                       = desc.render;
+    _shadowSettings               = desc.shadowSettings;
+    _automationShadowOverrides    = desc.automationShadowOverrides;
+    _taskManager                  = desc.taskManager;
     _bViewportPassOpen            = false;
     _bShadowSettingsChangePending = false;
+    if (_shadowSettings) {
+        _frameShadowSettings = *_shadowSettings;
+    }
     loadPersistentSettings();
     YA_CORE_ASSERT(_render, "DeferredRenderPipeline requires a valid render backend");
 
@@ -594,8 +608,8 @@ void DeferredRenderPipeline::captureShadowSettings(const RenderPipelineFrameCont
     if (frame.shadowSettings) {
         _frameShadowSettings = *frame.shadowSettings;
     }
-    else if (auto* app = App::get()) {
-        _frameShadowSettings = app->getShadowSettings();
+    else if (_shadowSettings) {
+        _frameShadowSettings = *_shadowSettings;
     }
 }
 
@@ -1024,11 +1038,10 @@ void DeferredRenderPipeline::renderPostProcessSettingsGUI()
 
 void DeferredRenderPipeline::renderShadowSettingsGUI()
 {
-    auto* app = App::get();
-    if (!app) {
+    if (!_shadowSettings) {
         return;
     }
-    auto& shadowSettings    = app->getShadowSettings();
+    auto& shadowSettings    = *_shadowSettings;
     bool  bShadowSettingsDirty = false;
 
     bool bShadowEnabled = shadowSettings.isEnabled();

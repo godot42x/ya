@@ -363,17 +363,21 @@ void RenderRuntime::initActivePipeline()
     if (_renderPipeline == ERenderPipeline::Forward) {
         _forwardPipeline = ya::makeShared<ForwardRenderPipeline>();
         _forwardPipeline->init(ForwardRenderPipeline::InitDesc{
-            .render  = _render,
-            .windowW = winW,
-            .windowH = winH,
+            .render         = _render,
+            .windowW        = winW,
+            .windowH        = winH,
+            .shadowSettings = _app ? &_app->getShadowSettings() : nullptr,
         });
     }
     else {
         _deferredPipeline = ya::makeShared<DeferredRenderPipeline>();
         _deferredPipeline->init(DeferredRenderPipeline::InitDesc{
-            .render  = _render,
-            .windowW = winW,
-            .windowH = winH,
+            .render                   = _render,
+            .windowW                  = winW,
+            .windowH                  = winH,
+            .shadowSettings           = _app ? &_app->getShadowSettings() : nullptr,
+            .automationShadowOverrides = _app ? &_app->getDesc().automation.shadow : nullptr,
+            .taskManager              = _app ? &_app->taskManager : nullptr,
         });
     }
 
