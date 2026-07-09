@@ -20,6 +20,7 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <memory>
 
 
@@ -27,7 +28,6 @@ namespace ya
 {
 
 struct AppAutomationShadowOverrides;
-struct TaskManager;
 struct SceneManager;
 struct Scene;
 struct Sampler;
@@ -48,7 +48,7 @@ struct DeferredRenderInitDesc
     int      windowH = 0;
     ShadowSettings* shadowSettings = nullptr;
     const AppAutomationShadowOverrides* automationShadowOverrides = nullptr;
-    TaskManager* taskManager = nullptr;
+    std::function<void(std::function<void()>)> queueFrameTask;
 };
 
 struct DeferredRenderPipeline : public IRenderPipeline
@@ -58,7 +58,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     IRender* _render = nullptr;
     ShadowSettings* _shadowSettings = nullptr;
     const AppAutomationShadowOverrides* _automationShadowOverrides = nullptr;
-    TaskManager* _taskManager = nullptr;
+    std::function<void(std::function<void()>)> _queueFrameTask;
 
     // ── Render targets ────────────────────────────────────────────────
     stdptr<IRenderTarget> _gBufferRT;

@@ -226,21 +226,20 @@ void DeferredRenderPipeline::queueShadowSettingsChange(const ShadowSettings& sha
     _pendingShadowSettings = shadowSettings;
     saveShadowSettingsToConfig(_pendingShadowSettings);
 
-    if (_bShadowSettingsChangePending || !_taskManager) {
-        if (!_taskManager) {
+    if (_bShadowSettingsChangePending || !_queueFrameTask) {
+        if (!_queueFrameTask) {
             applyShadowSettings(_pendingShadowSettings);
         }
         return;
     }
 
     _bShadowSettingsChangePending = true;
-    _taskManager->registerFrameTask(
-        [this]()
-        {
-            _bShadowSettingsChangePending = false;
+    _queueFrameTask([this]()
+                    {
+                        _bShadowSettingsChangePending = false;
 
-            applyShadowSettings(_pendingShadowSettings);
-        });
+                        applyShadowSettings(_pendingShadowSettings);
+                    });
 }
 
 void DeferredRenderPipeline::applyShadowSettings(const ShadowSettings& shadowSettings)
@@ -437,7 +436,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     _render                       = desc.render;
     _shadowSettings               = desc.shadowSettings;
     _automationShadowOverrides    = desc.automationShadowOverrides;
-    _taskManager                  = desc.taskManager;
+    _queueFrameTask               = desc.queueFrameTask;
     _bViewportPassOpen            = false;
     _bShadowSettingsChangePending = false;
     if (_shadowSettings) {
