@@ -85,6 +85,7 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
         .viewportRect             = _viewportRect,
         .viewportFrameBufferScale = _viewportFrameBufferScale,
         .frameData                = input.pipeline.frameData,
+        .shadowSettings           = input.pipeline.shadowSettings,
     });
 }
 

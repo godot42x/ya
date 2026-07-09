@@ -133,7 +133,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     IRenderTarget* getViewportRT() const override { return _viewportRT.get(); }
     IRenderTarget* getShadowDepthRT() const override { return _shadowResources.renderTarget.get(); }
     Texture*       getViewportTexture() const override { return viewportTexture; }
-    bool           isShadowMappingEnabled() const override { return App::get()->getShadowSettings().isEnabled(); }
+    bool           isShadowMappingEnabled() const override;
     IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override
     {
@@ -155,6 +155,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     [[nodiscard]] bool shouldSkipTick(const RenderPipelineFrameContext& frame) const;
     void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
     void               refreshDirtyResources();
+    [[nodiscard]] ShadowSettings currentShadowSettings() const;
     void               syncFrameSettings(const RenderPipelineFrameContext& frame);
     void               executeShadowPass(RenderStageContext& stageCtx);
     void               handoffShadowDepthForSampling(ICommandBuffer* cmdBuf);

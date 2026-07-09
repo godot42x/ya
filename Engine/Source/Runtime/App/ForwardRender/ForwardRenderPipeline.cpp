@@ -4,7 +4,6 @@
 #include "Render/Core/Buffer.h"
 #include "Render/Core/Sampler.h"
 #include "Render/Core/Texture.h"
-#include "Runtime/App/App.h"
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace ya
@@ -234,11 +233,30 @@ void ForwardRenderPipeline::syncShadowSettings()
     }
 }
 
+ShadowSettings ForwardRenderPipeline::currentShadowSettings() const
+{
+    if (_lastFrameInput.shadowSettings) {
+        return *_lastFrameInput.shadowSettings;
+    }
+
+    if (auto* app = App::get()) {
+        return app->getShadowSettings();
+    }
+
+    return ShadowSettings::fromQuality(EShadowQuality::Off);
+}
+
+bool ForwardRenderPipeline::isShadowMappingEnabled() const
+{
+    return currentShadowSettings().isEnabled();
+}
+
 ShadowRuntimeState ForwardRenderPipeline::buildShadowState() const
 {
     ShadowRuntimeState shadowState{};
-    shadowState.bEnableShadowMapping    = App::get()->getShadowSettings().isEnabled();
-    shadowState.settings                = App::get()->getShadowSettings();
+    const ShadowSettings shadowSettings = currentShadowSettings();
+    shadowState.bEnableShadowMapping    = shadowSettings.isEnabled();
+    shadowState.settings                = shadowSettings;
     shadowState.bEnablePointLightShadow = shadowState.settings.pointLightEnabled;
     shadowState.maxShadowedPointLights  = shadowState.settings.getEffectivePointLightCount();
     shadowState.shadowMapResolution     = _shadowResources.renderTarget
@@ -258,7 +276,7 @@ ShadowRuntimeState ForwardRenderPipeline::buildShadowState() const
 
 void ForwardRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)
 {
-    const auto& shadowSettings = App::get()->getShadowSettings();
+    const ShadowSettings shadowSettings = currentShadowSettings();
     if (!shadowSettings.isEnabled() || !_shadowStage) {
         return;
     }
@@ -343,7 +361,11 @@ void ForwardRenderPipeline::renderGeneralSettingsGUI()
 
 void ForwardRenderPipeline::renderShadowSettingsGUI()
 {
-    auto& shadowSettings = App::get()->getShadowSettings();
+    auto* app = App::get();
+    if (!app) {
+        return;
+    }
+    auto& shadowSettings = app->getShadowSettings();
     bool  bEnabled       = shadowSettings.isEnabled();
     if (ImGui::Checkbox("Shadow Mapping", &bEnabled)) {
         if (bEnabled) {

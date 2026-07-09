@@ -41,7 +41,7 @@
 - [ ] 提取单一 `ShadowSettings` owner/service 或 helper
 - [ ] 合并 deferred 中的 config load / merge / persist 流程
 - [ ] 把 forward 中对 `App::get()->getShadowSettings()` 的直接读取迁移到统一入口
-- [ ] 把 `RenderFrameExtractor` 对全局 shadow settings 的直接依赖改成显式输入
+- [x] 把 `RenderFrameExtractor` 对全局 shadow settings 的直接依赖改成显式输入
 - [ ] 定义“配置态”和“运行态”的边界，避免 `ShadowRuntimeState` 继续兼容两种职责
 - [ ] 收敛 shadow GUI 的修改流程，统一走 queue/apply/sync 路径
 

@@ -85,7 +85,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] Texture*       getViewportTexture() const override { return viewportTexture; }
 
     // Shadow query accessors (used by RenderRuntime for debug views)
-    [[nodiscard]] bool           isShadowMappingEnabled() const override { return App::get()->getShadowSettings().isEnabled(); }
+    [[nodiscard]] bool           isShadowMappingEnabled() const override;
     [[nodiscard]] IRenderTarget* getShadowDepthRT() const override { return _shadowResources.renderTarget.get(); }
     [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override;
@@ -104,6 +104,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
     void               refreshDirtyResources();
     void               syncShadowSettings();
+    [[nodiscard]] ShadowSettings currentShadowSettings() const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               executeShadowPass(RenderStageContext& stageCtx);
     void               executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render/RenderFrameData.h"
+#include "Render/Shadow/ShadowSettings.h"
 
 #include <unordered_map>
 
@@ -32,6 +33,7 @@ struct RenderFrameExtractor
         entt::entity   viewOwner  = entt::null;
         uint64_t       frameIndex = 0;
         float          deltaTime  = 0.0f;
+        const ShadowSettings* shadowSettings = nullptr;
     };
 
     /// Extract a complete render frame snapshot from the scene.

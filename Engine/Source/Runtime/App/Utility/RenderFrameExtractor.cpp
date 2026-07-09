@@ -13,7 +13,6 @@
 #include "ECS/Component/SkeletonAnimatorComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/ResourceResolveSystem.h"
-#include "Runtime/App/App.h"
 #include "Scene/Scene.h"
 
 #include <algorithm>
@@ -117,7 +116,8 @@ void RenderFrameExtractor::extractCamera(const ExtractInput& input, RenderFrameD
 
 void RenderFrameExtractor::extractLights(const ExtractInput& input, entt::registry& reg, RenderFrameData& out)
 {
-    const ShadowSettings& shadowSettings = App::get()->getShadowSettings();
+    const ShadowSettings defaultShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Medium);
+    const ShadowSettings& shadowSettings = input.shadowSettings ? *input.shadowSettings : defaultShadowSettings;
 
     // Directional light (take the first one with a transform)
     out.bHasDirectionalLight = false;

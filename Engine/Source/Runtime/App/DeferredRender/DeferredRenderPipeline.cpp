@@ -156,7 +156,7 @@ void DeferredRenderPipeline::initShadowResources()
         return;
     }
 
-    const auto& shadowSettings      = App::get()->getShadowSettings();
+    const auto  shadowSettings      = currentShadowSettings();
     const uint32_t shadowResolution = std::max(shadowSettings.resolution, 1u);
 
     _shadowResources.init(_render, ShadowMapResourceDesc{
@@ -191,10 +191,28 @@ void DeferredRenderPipeline::syncShadowSettings()
     }
 }
 
+ShadowSettings DeferredRenderPipeline::currentShadowSettings() const
+{
+    if (_lastFrameInput.shadowSettings) {
+        return *_lastFrameInput.shadowSettings;
+    }
+
+    if (auto* app = App::get()) {
+        return app->getShadowSettings();
+    }
+
+    return ShadowSettings::fromQuality(EShadowQuality::Off);
+}
+
+bool DeferredRenderPipeline::isShadowMappingEnabled() const
+{
+    return currentShadowSettings().isEnabled();
+}
+
 ShadowRuntimeState DeferredRenderPipeline::buildShadowState() const
 {
     ShadowRuntimeState shadowState{};
-    shadowState.settings = App::get()->getShadowSettings();
+    shadowState.settings = currentShadowSettings();
     shadowState.bEnableShadowMapping    = shadowState.settings.isEnabled();
     shadowState.bEnablePointLightShadow = shadowState.settings.pointLightEnabled;
     shadowState.maxShadowedPointLights  = shadowState.settings.getEffectivePointLightCount();
@@ -264,16 +282,17 @@ void DeferredRenderPipeline::applyShadowSettings(const ShadowSettings& shadowSet
 void DeferredRenderPipeline::loadPersistentSettings()
 {
     auto& cfgManager = ConfigManager::get();
+    const ShadowSettings baselineShadowSettings = currentShadowSettings();
 
     const bool bEnableShadowMapping = cfgManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
                                                              DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING,
-                                                             App::get()->getShadowSettings().isEnabled());
+                                                             baselineShadowSettings.isEnabled());
     _bEnableSSAO                    = cfgManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
                                           DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SSAO,
                                           _bEnableSSAO);
     const bool bEnablePointLightShadow = cfgManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
                                                                 DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW,
-                                                                App::get()->getShadowSettings().pointLightEnabled);
+                                                                baselineShadowSettings.pointLightEnabled);
 
     // Sync loaded config to App-layer ShadowSettings
     auto& shadowSettings = App::get()->getShadowSettings();
@@ -436,7 +455,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
         .samples = ESampleCount::Sample_1,
         .isDepth = false,
     });
-    if (App::get()->getShadowSettings().isEnabled()) {
+    if (currentShadowSettings().isEnabled()) {
         initShadowResources();
     }
 
@@ -669,7 +688,7 @@ void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&
                                 _bReverseViewportY);
     }
 
-    const auto&    shadowSettings           = App::get()->getShadowSettings();
+    const auto     shadowSettings           = currentShadowSettings();
     const uint32_t shadowedPointLightBudget = shadowSettings.getEffectivePointLightCount();
     const uint32_t desiredShadowResolution  = std::max(shadowSettings.resolution, 1u);
     if (shadowSettings.isEnabled()) {
@@ -699,7 +718,7 @@ void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&
 
 void DeferredRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)
 {
-    const auto& shadowSettings = App::get()->getShadowSettings();
+    const auto shadowSettings = currentShadowSettings();
     if (_shadowStage && shadowSettings.isEnabled()) {
         _shadowStage->applySettings(shadowSettings);
         {
@@ -1002,7 +1021,11 @@ void DeferredRenderPipeline::renderPostProcessSettingsGUI()
 
 void DeferredRenderPipeline::renderShadowSettingsGUI()
 {
-    auto& shadowSettings    = App::get()->getShadowSettings();
+    auto* app = App::get();
+    if (!app) {
+        return;
+    }
+    auto& shadowSettings    = app->getShadowSettings();
     bool  bShadowSettingsDirty = false;
 
     bool bShadowEnabled = shadowSettings.isEnabled();

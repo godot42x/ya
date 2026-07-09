@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render/RenderDefines.h"
+#include "Render/Shadow/ShadowSettings.h"
 
 #include <glm/glm.hpp>
 
@@ -26,6 +27,7 @@ struct RenderPipelineFrameContext
     Rect2D           viewportRect             = {};
     float            viewportFrameBufferScale = 1.0f;
     RenderFrameData* frameData                = nullptr;
+    const ShadowSettings* shadowSettings      = nullptr;
 };
 
 struct IRenderPipelineExecution

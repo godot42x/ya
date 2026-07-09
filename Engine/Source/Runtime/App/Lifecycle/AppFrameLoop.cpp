@@ -481,6 +481,7 @@ void AppFrameLoop::tickRender(App& app, float dt)
                 .viewportExtent = renderRuntime->getViewportExtent(),
                 .frameIndex     = App::_frameIndex,
                 .deltaTime      = dt,
+                .shadowSettings = &app.getShadowSettings(),
             },
             app._renderFrameDataPerFlight[flightIndex]);
     }
@@ -494,6 +495,7 @@ void AppFrameLoop::tickRender(App& app, float dt)
         .viewportRect             = app._renderFrameState.viewportRect,
         .viewportFrameBufferScale = app._renderFrameState.viewportFrameBufferScale,
         .frameData                = &app._renderFrameDataPerFlight[flightIndex],
+        .shadowSettings           = &app.getShadowSettings(),
     };
 
     auto screenOverlaySprites = buildScreenOverlaySprites(app);
