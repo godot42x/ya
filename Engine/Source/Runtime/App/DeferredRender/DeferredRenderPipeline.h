@@ -179,10 +179,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               executeSSAOPass(const RenderStageContext& stageCtx);
     void               executeDepthCopyPass(ICommandBuffer* cmdBuf);
     void               executeViewportPass(const TickDesc& desc, RenderStageContext& stageCtx);
-    void               saveShadowSettingsToConfig(bool bEnableShadowMapping,
-                                                  bool bEnablePointLightShadow,
-                                                  uint32_t maxPointLightShadowCount,
-                                                  const ShadowSettings& shadowSettings) const;
+    void               saveShadowSettingsToConfig(const ShadowSettings& shadowSettings) const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               rebuildShadowViews();
     void               initRenderTargets(Extent2D extent);

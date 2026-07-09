@@ -214,11 +214,7 @@ ShadowRuntimeState DeferredRenderPipeline::buildShadowState() const
 void DeferredRenderPipeline::queueShadowSettingsChange(const ShadowSettings& shadowSettings)
 {
     _pendingShadowSettings = shadowSettings;
-    saveShadowSettingsToConfig(
-        _pendingShadowSettings.isEnabled(),
-        _pendingShadowSettings.pointLightEnabled,
-        _pendingShadowSettings.maxPointLightShadows,
-        _pendingShadowSettings);
+    saveShadowSettingsToConfig(_pendingShadowSettings);
 
     if (_bShadowSettingsChangePending) {
         return;
@@ -262,10 +258,7 @@ void DeferredRenderPipeline::applyShadowSettings(const ShadowSettings& shadowSet
     }
 
     syncShadowSettings();
-    saveShadowSettingsToConfig(appShadowSettings.isEnabled(),
-                               appShadowSettings.pointLightEnabled,
-                               appShadowSettings.maxPointLightShadows,
-                               appShadowSettings);
+    saveShadowSettingsToConfig(appShadowSettings);
 }
 
 void DeferredRenderPipeline::loadPersistentSettings()
@@ -380,16 +373,13 @@ void DeferredRenderPipeline::loadPersistentSettings()
     _pendingShadowSettings = shadowSettings;
 }
 
-void DeferredRenderPipeline::saveShadowSettingsToConfig(bool                  bEnableShadowMapping,
-                                                        bool                  bEnablePointLightShadow,
-                                                        uint32_t              maxPointLightShadowCount,
-                                                        const ShadowSettings& shadowSettings) const
+void DeferredRenderPipeline::saveShadowSettingsToConfig(const ShadowSettings& shadowSettings) const
 {
     ConfigManager::Editor(DEFERRED_PIPELINE_CONFIG_DOC_NAME)
-        .set(DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING, bEnableShadowMapping)
-        .set(DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW, bEnablePointLightShadow)
+        .set(DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING, shadowSettings.isEnabled())
+        .set(DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW, shadowSettings.pointLightEnabled)
         .set(DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS,
-             static_cast<int>(std::min(maxPointLightShadowCount, static_cast<uint32_t>(MAX_POINT_LIGHTS))))
+             static_cast<int>(std::min(shadowSettings.maxPointLightShadows, static_cast<uint32_t>(MAX_POINT_LIGHTS))))
         .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_QUALITY, static_cast<int>(shadowSettings.quality))
         .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_ENABLED, shadowSettings.directionalEnabled)
         .set(DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_ENABLED, shadowSettings.pointLightEnabled)
@@ -1088,10 +1078,7 @@ void DeferredRenderPipeline::renderShadowSettingsGUI()
 
         if (bShadowSettingsDirty) {
             _pendingShadowSettings = shadowSettings;
-            saveShadowSettingsToConfig(shadowSettings.isEnabled(),
-                                       shadowSettings.pointLightEnabled,
-                                       shadowSettings.maxPointLightShadows,
-                                       shadowSettings);
+            saveShadowSettingsToConfig(shadowSettings);
         }
     }
 }

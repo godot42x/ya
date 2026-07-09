@@ -359,6 +359,12 @@ void ForwardRenderPipeline::renderShadowSettingsGUI()
 
     if (shadowSettings.isEnabled()) {
         bool bDirty = false;
+        bDirty |= ImGui::Checkbox("Point Light Shadow", &shadowSettings.pointLightEnabled);
+        int maxPL = static_cast<int>(shadowSettings.maxPointLightShadows);
+        if (ImGui::SliderInt("Max Point Shadows", &maxPL, 0, MAX_POINT_LIGHTS)) {
+            shadowSettings.maxPointLightShadows = static_cast<uint32_t>(maxPL);
+            bDirty = true;
+        }
         bDirty |= ImGui::Checkbox("Point Light Indirect Draw", &shadowSettings.pointLightUseIndirect);
         bDirty |= ImGui::Checkbox("Point Light Indirect Cull", &shadowSettings.pointLightIndirectCullEnabled);
         if (bDirty) {
