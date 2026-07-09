@@ -5,15 +5,10 @@
 #include "Core/Profiling/PerfState.h"
 #include "Core/UI/UIManager.h"
 #include "DeferredRender/DeferredRenderPipeline.h"
-#include "Editor/EditorLayer.h"
-#include "ECS/Component/2D/BillboardComponent.h"
 #include "ImGuiHelper.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/2D/Render2D.h"
-#include "Resource/AssetManager.h"
 #include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
-#include "Scene/Scene.h"
-#include "Scene/SceneManager.h"
 #include "utility.cc/ranges.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -141,51 +136,15 @@ void RenderRuntime::renderViewportPassOverlays(const RenderPipelineFrameContext&
 
     Render2D::begin(render2dCtx);
 
-    if (overlay.appMode == AppMode::Drawing && overlay.editorLayer && overlay.clicked) {
-        for (const auto&& [idx, p] : ut::enumerate(*overlay.clicked)) {
-            auto tex = idx % 2 == 0
-                         ? AssetManager::get()->getTextureByName("uv1")
-                         : AssetManager::get()->getTextureByName("face");
-            YA_CORE_ASSERT(tex, "Texture not found");
-            glm::vec2 pos;
-            overlay.editorLayer->screenToViewport(glm::vec2(p.x, p.y), pos);
-            Render2D::makeSprite(glm::vec3(pos, 0.0f), {50, 50}, tex);
+    if (overlay.screenSprites) {
+        for (const auto& sprite : *overlay.screenSprites) {
+            Render2D::makeSprite(glm::vec3(sprite.viewportPos, 0.0f), sprite.size, sprite.texture, sprite.tint);
         }
     }
 
-    if (auto* scene = overlay.scene) {
-        const glm::vec2 screenSize(30, 30);
-        const float     viewPortHeight = static_cast<float>(viewportExtent.height);
-        const float     scaleFactor    = screenSize.x / viewPortHeight;
-
-        for (const auto& [entity, billboard, transfCompp] :
-             scene->getRegistry().view<BillboardComponent, TransformComponent>().each()) {
-            auto        texture = billboard.image.hasPath() ? billboard.image.textureRef.getShared() : nullptr;
-            const auto& pos     = transfCompp.getWorldPosition();
-
-            glm::vec3 billboardToCamera = pipelineFrame.cameraPos - pos;
-            float     distance          = glm::length(billboardToCamera);
-            billboardToCamera           = glm::normalize(billboardToCamera);
-
-            glm::vec3 forward = billboardToCamera;
-            glm::vec3 worldUp = glm::vec3(0, 1, 0);
-            glm::vec3 right   = glm::normalize(glm::cross(worldUp, forward));
-            glm::vec3 up      = glm::cross(forward, right);
-
-            glm::mat4 rot(1.0f);
-            rot[0] = glm::vec4(right, 0.0f);
-            rot[1] = glm::vec4(up, 0.0f);
-            rot[2] = glm::vec4(forward, 0.0f);
-
-            float     factor = scaleFactor * distance * 2.0f;
-            glm::vec3 scale  = glm::vec3(factor, factor, 1.0f);
-
-            glm::mat4 trans = glm::mat4(1.0);
-            trans           = glm::translate(trans, pos);
-            trans           = trans * rot;
-            trans           = glm::scale(trans, scale);
-
-            Render2D::makeWorldSprite(trans, texture);
+    if (overlay.worldSprites) {
+        for (const auto& sprite : *overlay.worldSprites) {
+            Render2D::makeWorldSprite(sprite.worldTransform, sprite.texture, sprite.tint);
         }
     }
 

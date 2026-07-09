@@ -28,11 +28,11 @@
 - [x] 让 `RenderRuntime` 只向 active pipeline 传统一帧输入
 - [x] 删除 forward / deferred 两套重复 tick desc 中的公共重复字段
 - [x] 收敛 pipeline GUI/debug 查询接口，区分“执行协议”和“编辑器调试协议”
-- [-] 评估并开始移除 `SceneManager*` / `EditorLayer*` 从渲染执行入口的直传
+- [x] 评估并开始移除 `SceneManager*` / `EditorLayer*` 从渲染执行入口的直传
 
 完成标准：
 
-- [ ] `RenderRuntime -> IRenderPipeline` 的运行期输入结构统一
+- [x] `RenderRuntime -> IRenderPipeline` 的运行期输入结构统一
 - [ ] Forward / Deferred 不再平行维护一大套重复 tick 协议
 
 ## Phase 2: 收敛 Shadow 配置与运行时状态

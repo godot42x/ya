@@ -53,6 +53,21 @@ struct RenderPipelineDebugOutputCatalog
     bool           bPostprocessingEnabled = false;
 };
 
+struct RenderOverlaySprite2D
+{
+    glm::vec2 viewportPos = glm::vec2(0.0f);
+    glm::vec2 size        = glm::vec2(50.0f);
+    Texture*  texture     = nullptr;
+    glm::vec4 tint        = glm::vec4(1.0f);
+};
+
+struct RenderOverlaySprite3D
+{
+    glm::mat4 worldTransform = glm::mat4(1.0f);
+    Texture*  texture        = nullptr;
+    glm::vec4 tint           = glm::vec4(1.0f);
+};
+
 struct RenderTargetEditorCatalog
 {
     struct Entry
@@ -92,11 +107,14 @@ struct RenderRuntime
     {
         struct OverlayInput
         {
-            Scene*                  scene       = nullptr;
-            EditorLayer*            editorLayer = nullptr;
-            AppMode                 appMode     = {};
-            std::vector<glm::vec2>* clicked     = nullptr;
+            const std::vector<RenderOverlaySprite2D>* screenSprites = nullptr;
+            const std::vector<RenderOverlaySprite3D>* worldSprites  = nullptr;
         } overlay{};
+
+        struct EditorInput
+        {
+            EditorLayer* target = nullptr;
+        } editor{};
 
         RenderPipelineFrameContext pipeline{};
     };

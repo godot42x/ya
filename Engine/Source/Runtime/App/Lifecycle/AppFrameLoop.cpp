@@ -10,6 +10,7 @@
 #include "Core/Manager/Facade.h"
 #include "Core/System/FileWatcher.h"
 
+#include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/PlayerComponent.h"
 #include "ECS/Component/TransformComponent.h"
@@ -365,6 +366,100 @@ uint32_t AppFrameLoop::resolveFlightIndex(const App& app)
     return render->getCurrentFrameIndex() % MAX_FLIGHTS_IN_FLIGHT;
 }
 
+namespace
+{
+
+std::vector<RenderOverlaySprite2D> buildScreenOverlaySprites(const App& app)
+{
+    std::vector<RenderOverlaySprite2D> sprites;
+    if (app._appMode != AppMode::Drawing || !app._editorLayer || app.clicked.empty()) {
+        return sprites;
+    }
+
+    sprites.reserve(app.clicked.size());
+    for (size_t idx = 0; idx < app.clicked.size(); ++idx) {
+        const auto& screenPos = app.clicked[idx];
+        auto textureHandle = idx % 2 == 0
+                               ? AssetManager::get()->getTextureByName("uv1")
+                               : AssetManager::get()->getTextureByName("face");
+        auto* texture = textureHandle.get();
+        YA_CORE_ASSERT(texture, "Texture not found");
+
+        glm::vec2 viewportPos;
+        if (!app._editorLayer->screenToViewport(screenPos, viewportPos)) {
+            continue;
+        }
+
+        RenderOverlaySprite2D sprite;
+        sprite.viewportPos = viewportPos;
+        sprite.size        = {50.0f, 50.0f};
+        sprite.texture     = texture;
+        sprites.push_back(sprite);
+    }
+
+    return sprites;
+}
+
+std::vector<RenderOverlaySprite3D> buildWorldOverlaySprites(const App& app, Scene* scene, const RenderPipelineFrameContext& pipelineFrame)
+{
+    (void)app;
+    std::vector<RenderOverlaySprite3D> sprites;
+    if (!scene) {
+        return sprites;
+    }
+
+    const auto view = scene->getRegistry().view<BillboardComponent, TransformComponent>();
+    sprites.reserve(view.size_hint());
+
+    const glm::vec2 screenSize(30.0f, 30.0f);
+    const float viewportHeight = pipelineFrame.viewportRect.extent.y;
+    if (viewportHeight <= 0.0f) {
+        return sprites;
+    }
+    const float scaleFactor = screenSize.x / viewportHeight;
+
+    for (const auto& [entity, billboard, transfCompp] : view.each()) {
+        (void)entity;
+
+        auto texture = billboard.image.hasPath() ? billboard.image.getResolvedTexture().get() : nullptr;
+        const auto& pos = transfCompp.getWorldPosition();
+
+        glm::vec3 billboardToCamera = pipelineFrame.cameraPos - pos;
+        float     distance          = glm::length(billboardToCamera);
+        if (distance <= 0.0f) {
+            continue;
+        }
+        billboardToCamera = glm::normalize(billboardToCamera);
+
+        glm::vec3 forward = billboardToCamera;
+        glm::vec3 worldUp = glm::vec3(0, 1, 0);
+        glm::vec3 right   = glm::normalize(glm::cross(worldUp, forward));
+        glm::vec3 up      = glm::cross(forward, right);
+
+        glm::mat4 rot(1.0f);
+        rot[0] = glm::vec4(right, 0.0f);
+        rot[1] = glm::vec4(up, 0.0f);
+        rot[2] = glm::vec4(forward, 0.0f);
+
+        float     factor = scaleFactor * distance * 2.0f;
+        glm::vec3 scale  = glm::vec3(factor, factor, 1.0f);
+
+        glm::mat4 trans = glm::mat4(1.0f);
+        trans           = glm::translate(trans, pos);
+        trans           = trans * rot;
+        trans           = glm::scale(trans, scale);
+
+        RenderOverlaySprite3D sprite;
+        sprite.worldTransform = trans;
+        sprite.texture        = texture;
+        sprites.push_back(sprite);
+    }
+
+    return sprites;
+}
+
+} // namespace
+
 void AppFrameLoop::tickRender(App& app, float dt)
 {
     auto* renderRuntime = app.getRenderRuntime();
@@ -390,23 +485,29 @@ void AppFrameLoop::tickRender(App& app, float dt)
             app._renderFrameDataPerFlight[flightIndex]);
     }
 
+    RenderPipelineFrameContext pipelineFrame{
+        .flightIndex              = flightIndex,
+        .deltaTime                = dt,
+        .view                     = app._renderFrameState.view,
+        .projection               = app._renderFrameState.projection,
+        .cameraPos                = app._renderFrameState.cameraPos,
+        .viewportRect             = app._renderFrameState.viewportRect,
+        .viewportFrameBufferScale = app._renderFrameState.viewportFrameBufferScale,
+        .frameData                = &app._renderFrameDataPerFlight[flightIndex],
+    };
+
+    auto screenOverlaySprites = buildScreenOverlaySprites(app);
+    auto worldOverlaySprites  = buildWorldOverlaySprites(app, scene, pipelineFrame);
+
     renderRuntime->renderFrame(RenderRuntime::FrameInput{
         .overlay = {
-            .scene       = scene,
-            .editorLayer = app._editorLayer,
-            .appMode     = app._appMode,
-            .clicked     = &app.clicked,
+            .screenSprites = &screenOverlaySprites,
+            .worldSprites  = &worldOverlaySprites,
         },
-        .pipeline = {
-            .flightIndex              = flightIndex,
-            .deltaTime                = dt,
-            .view                     = app._renderFrameState.view,
-            .projection               = app._renderFrameState.projection,
-            .cameraPos                = app._renderFrameState.cameraPos,
-            .viewportRect             = app._renderFrameState.viewportRect,
-            .viewportFrameBufferScale = app._renderFrameState.viewportFrameBufferScale,
-            .frameData                = &app._renderFrameDataPerFlight[flightIndex],
+        .editor = {
+            .target = app._editorLayer,
         },
+        .pipeline = pipelineFrame,
     });
 }
 

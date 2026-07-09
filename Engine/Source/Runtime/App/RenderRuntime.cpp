@@ -40,7 +40,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         YA_PERF_SCOPE(perf::sample::renderWorld(), perf::metric::cpuTimeMs(), perf::domain::render());
         renderWorldFrame(input, cmdBuf.get());
     }
-    syncEditorFrame(input.overlay.editorLayer);
+    syncEditorFrame(input.editor.target);
     renderPresentationPass(input.pipeline.deltaTime, cmdBuf.get());
     {
         YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());
