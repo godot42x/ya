@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <functional>
 #include <string>
 
 namespace ya
@@ -11,16 +13,20 @@ struct AppAutomationOptions;
 struct ICommandBuffer;
 struct IRender;
 struct OffscreenJobQueueService;
-struct RenderRuntimeFrameServices;
 struct Texture;
 
 struct AppAutomationFrameContext
 {
-    IRender*                        render              = nullptr;
-    Texture*                        postprocessTexture  = nullptr;
-    Texture*                        presentationTexture = nullptr;
-    const RenderRuntimeFrameServices* frameServices     = nullptr;
-    uint64_t                        frameIndex          = 0;
+    IRender*                                render                            = nullptr;
+    Texture*                                postprocessTexture                = nullptr;
+    Texture*                                viewportTexture                   = nullptr;
+    Texture*                                presentationTexture               = nullptr;
+    std::function<bool()>                   requestRenderDocCapture;
+    std::function<bool()>                   isRenderDocCapturePending;
+    std::function<bool()>                   isRenderDocCaptureTerminal;
+    std::function<const std::string&()>     getRenderDocCapturePath;
+    std::function<const std::string&()>     getRenderDocPassSummaryPath;
+    uint64_t                                frameIndex                        = 0;
 };
 
 class AppAutomation
@@ -31,13 +37,6 @@ class AppAutomation
     static void applyStartupOverrides(AppDesc& appDesc);
     static void applyRuntimeOverrides(App& app);
     static bool shouldDeferQuit(const App& app);
-    static bool requestRenderDocCapture(const RenderRuntimeFrameServices& services);
-    static bool isRenderDocCapturePending(const RenderRuntimeFrameServices& services);
-    static bool isRenderDocCaptureTerminal(const RenderRuntimeFrameServices& services);
-    static const std::string& getRenderDocCapturePath(const RenderRuntimeFrameServices& services);
-    static const std::string& getRenderDocPassSummaryPath(const RenderRuntimeFrameServices& services);
-    static Texture* getViewportScreenshotTexture(const RenderRuntimeFrameServices& services, Texture* postprocessTexture);
-    static Texture* getPresentationScreenshotTexture(const RenderRuntimeFrameServices& services);
     static OffscreenJobQueueService buildOffscreenJobQueueService(App& app);
     static void recordPresentationCapture(Texture* presentationSourceTexture,
                                           uint64_t frameIndex,

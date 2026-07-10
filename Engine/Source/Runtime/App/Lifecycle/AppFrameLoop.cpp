@@ -29,7 +29,6 @@
 
 #include <algorithm>
 #include <format>
-#include <optional>
 
 namespace ya
 {
@@ -156,18 +155,20 @@ int AppFrameLoop::iterate(App& app, float dt)
         YA_PROFILE_SCOPE("Frame/Automation");
         YA_PERF_SCOPE(perf::sample::frameAutomation(), perf::metric::cpuTimeMs(), perf::domain::render());
         auto* renderRuntime = app.getRenderRuntime();
-        std::optional<RenderRuntimeFrameServices> frameServices;
-        if (renderRuntime) {
-            frameServices = renderRuntime->buildFrameServices();
-        }
+        const RenderRuntimeFrameServices frameServices = renderRuntime ? renderRuntime->buildFrameServices() : RenderRuntimeFrameServices{};
 
         AppAutomation::onFrameCompleted(app,
                                         AppAutomationFrameContext{
-                                            .render              = app.getRender(),
-                                            .postprocessTexture  = app.getPostprocessOutputTexture(),
-                                            .presentationTexture = renderRuntime ? renderRuntime->getPresentationTexture() : nullptr,
-                                            .frameServices       = frameServices ? &*frameServices : nullptr,
-                                            .frameIndex          = App::_frameIndex,
+                                            .render                     = app.getRender(),
+                                            .postprocessTexture         = app.getPostprocessOutputTexture(),
+                                            .viewportTexture            = renderRuntime ? renderRuntime->getActiveViewportTexture() : nullptr,
+                                            .presentationTexture        = renderRuntime ? renderRuntime->getPresentationTexture() : nullptr,
+                                            .requestRenderDocCapture    = frameServices.requestAutomationRenderDocCapture,
+                                            .isRenderDocCapturePending  = frameServices.isAutomationRenderDocCapturePending,
+                                            .isRenderDocCaptureTerminal = frameServices.isAutomationRenderDocCaptureTerminal,
+                                            .getRenderDocCapturePath    = frameServices.getAutomationRenderDocCapturePath,
+                                            .getRenderDocPassSummaryPath = frameServices.getAutomationRenderDocPassSummaryPath,
+                                            .frameIndex                 = App::_frameIndex,
                                         });
     }
 

@@ -1,7 +1,6 @@
 #include "Runtime/App/Lifecycle/AppAutomation.h"
 
 #include "Runtime/App/App.h"
-#include "Runtime/App/RenderRuntime.h"
 #include "Runtime/App/Utility/AppScreenshotCapture.h"
 #include "Runtime/App/Utility/OffscreenJobRunner.h"
 
@@ -368,13 +367,13 @@ bool handleScreenshotAutomation(App& app, const AppAutomationFrameContext& frame
         return true;
     }
 
-    if (!frameContext.render || !frameContext.frameServices) {
+    if (!frameContext.render) {
         return false;
     }
 
     runtimeState.bScreenshotRequested = AppScreenshotCapture::request(frameContext.render,
                                                                       AppAutomation::buildOffscreenJobQueueService(app),
-                                                                      AppAutomation::getViewportScreenshotTexture(*frameContext.frameServices, frameContext.postprocessTexture),
+                                                                      frameContext.postprocessTexture ? frameContext.postprocessTexture : frameContext.viewportTexture,
                                                                       frameContext.presentationTexture,
                                                                       runtimeState.screenshot,
                                                                       *automation.screenshotPath,
@@ -394,7 +393,9 @@ bool handleRenderDocAutomation(const AppAutomationOptions& automation,
                                const AppAutomationFrameContext& frameContext,
                                bool bStableFrameReady)
 {
-    if (!frameContext.frameServices) {
+    if (!frameContext.isRenderDocCapturePending ||
+        !frameContext.isRenderDocCaptureTerminal ||
+        !frameContext.requestRenderDocCapture) {
         return false;
     }
 
@@ -402,11 +403,11 @@ bool handleRenderDocAutomation(const AppAutomationOptions& automation,
         return false;
     }
 
-    if (AppAutomation::isRenderDocCapturePending(*frameContext.frameServices)) {
+    if (frameContext.isRenderDocCapturePending()) {
         return true;
     }
 
-    if (AppAutomation::isRenderDocCaptureTerminal(*frameContext.frameServices)) {
+    if (frameContext.isRenderDocCaptureTerminal()) {
         return false;
     }
 
@@ -414,7 +415,7 @@ bool handleRenderDocAutomation(const AppAutomationOptions& automation,
         return true;
     }
 
-    const bool bRequested = AppAutomation::requestRenderDocCapture(*frameContext.frameServices);
+    const bool bRequested = frameContext.requestRenderDocCapture();
     if (bRequested) {
         const uint64_t settleFrames = automation.screenshotSettleFrames > 0 ? automation.screenshotSettleFrames : 1;
         YA_CORE_INFO("Automation requested a single RenderDoc capture after {} warmup frames and {} stable frames",
@@ -422,7 +423,25 @@ bool handleRenderDocAutomation(const AppAutomationOptions& automation,
                      settleFrames);
     }
 
-    return AppAutomation::isRenderDocCapturePending(*frameContext.frameServices);
+    return frameContext.isRenderDocCapturePending();
+}
+
+const std::string& getAutomationCapturePathFallback()
+{
+    static const std::string emptyPath;
+    return emptyPath;
+}
+
+std::string getAutomationCapturePath(const std::function<const std::string&()>& pathProvider)
+{
+    return pathProvider ? pathProvider() : getAutomationCapturePathFallback();
+}
+
+bool isRenderDocCaptureTerminal(const RenderRuntimeFrameServices& frameServices)
+{
+    return frameServices.isAutomationRenderDocCaptureTerminal
+             ? frameServices.isAutomationRenderDocCaptureTerminal()
+             : true;
 }
 
 bool hasPendingAutomationWork(const App& app, const AppAutomationFrameContext* frameContext = nullptr)
@@ -434,12 +453,12 @@ bool hasPendingAutomationWork(const App& app, const AppAutomationFrameContext* f
 
     bool bRenderDocPending = false;
     if (hasRenderDocAutomation(automation)) {
-        if (frameContext && frameContext->frameServices) {
-            bRenderDocPending = !AppAutomation::isRenderDocCaptureTerminal(*frameContext->frameServices);
+        if (frameContext && frameContext->isRenderDocCaptureTerminal) {
+            bRenderDocPending = !frameContext->isRenderDocCaptureTerminal();
         }
         else if (const RenderRuntime* renderRuntime = app.getRenderRuntime()) {
             const auto frameServices = renderRuntime->buildFrameServices();
-            bRenderDocPending = !AppAutomation::isRenderDocCaptureTerminal(frameServices);
+            bRenderDocPending = !isRenderDocCaptureTerminal(frameServices);
         }
     }
 
@@ -517,46 +536,6 @@ void AppAutomation::recordPresentationCapture(Texture* presentationSourceTexture
     AppScreenshotCapture::recordPresentationCapture(presentationSourceTexture, frameIndex, runtimeState.screenshot, cmdBuf);
 }
 
-bool AppAutomation::requestRenderDocCapture(const RenderRuntimeFrameServices& services)
-{
-    return services.requestAutomationRenderDocCapture ? services.requestAutomationRenderDocCapture() : false;
-}
-
-bool AppAutomation::isRenderDocCapturePending(const RenderRuntimeFrameServices& services)
-{
-    return services.isAutomationRenderDocCapturePending ? services.isAutomationRenderDocCapturePending() : false;
-}
-
-bool AppAutomation::isRenderDocCaptureTerminal(const RenderRuntimeFrameServices& services)
-{
-    return services.isAutomationRenderDocCaptureTerminal ? services.isAutomationRenderDocCaptureTerminal() : true;
-}
-
-const std::string& AppAutomation::getRenderDocCapturePath(const RenderRuntimeFrameServices& services)
-{
-    static const std::string emptyPath;
-    return services.getAutomationRenderDocCapturePath ? services.getAutomationRenderDocCapturePath() : emptyPath;
-}
-
-const std::string& AppAutomation::getRenderDocPassSummaryPath(const RenderRuntimeFrameServices& services)
-{
-    static const std::string emptyPath;
-    return services.getAutomationRenderDocPassSummaryPath ? services.getAutomationRenderDocPassSummaryPath() : emptyPath;
-}
-
-Texture* AppAutomation::getViewportScreenshotTexture(const RenderRuntimeFrameServices& services, Texture* postprocessTexture)
-{
-    if (postprocessTexture) {
-        return postprocessTexture;
-    }
-    return services.getActiveViewportTexture ? services.getActiveViewportTexture() : nullptr;
-}
-
-Texture* AppAutomation::getPresentationScreenshotTexture(const RenderRuntimeFrameServices& services)
-{
-    return services.getPresentationTexture ? services.getPresentationTexture() : nullptr;
-}
-
 OffscreenJobQueueService AppAutomation::buildOffscreenJobQueueService(App& app)
 {
     OffscreenJobQueueService queueService{};
@@ -590,10 +569,10 @@ void AppAutomation::onFrameCompleted(App& app, const AppAutomationFrameContext& 
     }
     const bool bAutomationPending = bScreenshotPending || bRenderDocPending;
 
-    if (frameContext.frameServices) {
+    if (frameContext.getRenderDocCapturePath && frameContext.getRenderDocPassSummaryPath) {
         YA_PROFILE_SCOPE("Automation/UpdateArtifacts");
-        profiling::setGpuCapturePath(AppAutomation::getRenderDocCapturePath(*frameContext.frameServices));
-        profiling::setPassSummaryPath(AppAutomation::getRenderDocPassSummaryPath(*frameContext.frameServices));
+        profiling::setGpuCapturePath(getAutomationCapturePath(frameContext.getRenderDocCapturePath));
+        profiling::setPassSummaryPath(getAutomationCapturePath(frameContext.getRenderDocPassSummaryPath));
         profiling::setScreenshotPath(runtimeState.screenshot.outputPath);
     }
     if (runtimeState.bQuitDeferred && !bAutomationPending) {
