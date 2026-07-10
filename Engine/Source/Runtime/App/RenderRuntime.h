@@ -218,7 +218,6 @@ struct RenderRuntime
     void onViewportResized(Rect2D rect);
     void resetSkyboxPool();
     void resetEnvironmentLightingPool();
-    bool requestAutomationRenderDocCapture();
 
     [[nodiscard]] IRender*                       getRender() const { return _render; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
@@ -258,10 +257,6 @@ struct RenderRuntime
     [[nodiscard]] stdptr<IDescriptorSetLayout> getEnvironmentLightingDescriptorSetLayout() const { return _environmentLighting.dsl; }
     [[nodiscard]] DescriptorSetHandle          getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr);
     [[nodiscard]] DebugRenderSystem&           getDebugRenderSystem() const;
-    [[nodiscard]] bool                         isAutomationRenderDocCapturePending() const;
-    [[nodiscard]] bool                         isAutomationRenderDocCaptureTerminal() const;
-    [[nodiscard]] const std::string&           getAutomationRenderDocCapturePath() const;
-    [[nodiscard]] const std::string&           getAutomationRenderDocPassSummaryPath() const;
 
 
     [[nodiscard]] const Rect2D& getViewportRect() const { return _viewportRect; }

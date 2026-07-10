@@ -326,31 +326,6 @@ DebugRenderSystem& RenderRuntime::getDebugRenderSystem() const
     return DebugRenderSystem::get();
 }
 
-bool RenderRuntime::requestAutomationRenderDocCapture()
-{
-    return _diagnostics.requestAutomationRenderDocCapture();
-}
-
-bool RenderRuntime::isAutomationRenderDocCapturePending() const
-{
-    return _diagnostics.isAutomationRenderDocCapturePending();
-}
-
-bool RenderRuntime::isAutomationRenderDocCaptureTerminal() const
-{
-    return _diagnostics.isAutomationRenderDocCaptureTerminal();
-}
-
-const std::string& RenderRuntime::getAutomationRenderDocCapturePath() const
-{
-    return _diagnostics.getAutomationRenderDocCapturePath();
-}
-
-const std::string& RenderRuntime::getAutomationRenderDocPassSummaryPath() const
-{
-    return _diagnostics.getAutomationRenderDocPassSummaryPath();
-}
-
 RenderRuntimeFrameServices RenderRuntime::buildFrameServices() const
 {
     RenderRuntimeFrameServices services{};
@@ -368,23 +343,23 @@ RenderRuntimeFrameServices RenderRuntime::buildFrameServices() const
     };
     services.requestAutomationRenderDocCapture = [this]()
     {
-        return const_cast<RenderRuntime*>(this)->requestAutomationRenderDocCapture();
+        return const_cast<RenderDiagnosticsService&>(_diagnostics).requestAutomationRenderDocCapture();
     };
     services.isAutomationRenderDocCapturePending = [this]()
     {
-        return isAutomationRenderDocCapturePending();
+        return _diagnostics.isAutomationRenderDocCapturePending();
     };
     services.isAutomationRenderDocCaptureTerminal = [this]()
     {
-        return isAutomationRenderDocCaptureTerminal();
+        return _diagnostics.isAutomationRenderDocCaptureTerminal();
     };
     services.getAutomationRenderDocCapturePath = [this]() -> const std::string&
     {
-        return getAutomationRenderDocCapturePath();
+        return _diagnostics.getAutomationRenderDocCapturePath();
     };
     services.getAutomationRenderDocPassSummaryPath = [this]() -> const std::string&
     {
-        return getAutomationRenderDocPassSummaryPath();
+        return _diagnostics.getAutomationRenderDocPassSummaryPath();
     };
     return services;
 }
