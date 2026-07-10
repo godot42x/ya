@@ -37,20 +37,6 @@ struct RenderFrameData;
 struct DebugRenderSystem;
 struct RenderDiagnosticsService;
 
-struct RenderRuntimeFrameServices
-{
-    std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet;
-    std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
-    std::function<DebugRenderSystem&()> getDebugRenderSystem;
-    std::function<bool()> requestAutomationRenderDocCapture;
-    std::function<bool()> isAutomationRenderDocCapturePending;
-    std::function<bool()> isAutomationRenderDocCaptureTerminal;
-    std::function<const std::string&()> getAutomationRenderDocCapturePath;
-    std::function<const std::string&()> getAutomationRenderDocPassSummaryPath;
-    std::function<Texture*()> getActiveViewportTexture;
-    std::function<Texture*()> getPresentationTexture;
-};
-
 struct DeferredPipelineDebugViews
 {
     IRenderTarget* gBufferRT  = nullptr;
@@ -211,9 +197,6 @@ struct RenderRuntime
     void init(const InitDesc& desc);
     void shutdown();
     void renderFrame(const FrameInput& input);
-    void tickOffscreenTasks();
-    void beginFrameDiagnostics();
-    void endFrameDiagnostics();
     void renderGUI(float dt);
 
   public:
@@ -235,6 +218,10 @@ struct RenderRuntime
     [[nodiscard]] IImageView*                    getShadowDirectionalDepthIV() const;
     [[nodiscard]] IImageView*                    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
     [[nodiscard]] bool                           isOffscreenPending() const { return _offscreen.isPending(); }
+    [[nodiscard]] OffscreenTaskService&          getOffscreenTaskService() { return _offscreen; }
+    [[nodiscard]] const OffscreenTaskService&    getOffscreenTaskService() const { return _offscreen; }
+    [[nodiscard]] RenderDiagnosticsService&      getDiagnosticsService() { return _diagnostics; }
+    [[nodiscard]] const RenderDiagnosticsService& getDiagnosticsService() const { return _diagnostics; }
 
     [[nodiscard]] Texture* getPostprocessOutputTexture() const;
     [[nodiscard]] Texture* getBloomExtractTexture() const;
@@ -270,7 +257,6 @@ struct RenderRuntime
     void                          setDeferredSharedDepthFormat(EFormat::T format);
     [[nodiscard]] bool            isDeferredPipelineActive() const { return _renderPipeline == ERenderPipeline::Deferred; }
     [[nodiscard]] ForwardRenderPipeline* getForwardPipelineImpl() const { return _forwardPipeline.get(); }
-    [[nodiscard]] RenderRuntimeFrameServices buildFrameServices() const;
 
   private:
     void                   initRuntimeState(const InitDesc& desc);

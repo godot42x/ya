@@ -48,23 +48,6 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     }
 }
 
-void RenderRuntime::tickOffscreenTasks()
-{
-    if (_app) {
-        _offscreen.tick(*_app);
-    }
-}
-
-void RenderRuntime::beginFrameDiagnostics()
-{
-    _diagnostics.onFrameBegin();
-}
-
-void RenderRuntime::endFrameDiagnostics()
-{
-    _diagnostics.onFrameEnd();
-}
-
 bool RenderRuntime::prepareFrame(const FrameInput& input, int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf)
 {
     YA_PROFILE_FUNCTION()
@@ -324,52 +307,6 @@ void RenderRuntime::setDeferredSharedDepthFormat(EFormat::T format)
 DebugRenderSystem& RenderRuntime::getDebugRenderSystem() const
 {
     return DebugRenderSystem::get();
-}
-
-RenderRuntimeFrameServices RenderRuntime::buildFrameServices() const
-{
-    RenderRuntimeFrameServices services{};
-    services.getSceneSkyboxDescriptorSet = [this](Scene* scene)
-    {
-        return const_cast<RenderRuntime*>(this)->getSceneSkyboxDescriptorSet(scene);
-    };
-    services.getSceneEnvironmentLightingDescriptorSet = [this](Scene* scene)
-    {
-        return const_cast<RenderRuntime*>(this)->getSceneEnvironmentLightingDescriptorSet(scene);
-    };
-    services.getDebugRenderSystem = [this]() -> DebugRenderSystem&
-    {
-        return const_cast<RenderRuntime*>(this)->getDebugRenderSystem();
-    };
-    services.requestAutomationRenderDocCapture = [this]()
-    {
-        return const_cast<RenderDiagnosticsService&>(_diagnostics).requestAutomationRenderDocCapture();
-    };
-    services.isAutomationRenderDocCapturePending = [this]()
-    {
-        return _diagnostics.isAutomationRenderDocCapturePending();
-    };
-    services.isAutomationRenderDocCaptureTerminal = [this]()
-    {
-        return _diagnostics.isAutomationRenderDocCaptureTerminal();
-    };
-    services.getAutomationRenderDocCapturePath = [this]() -> const std::string&
-    {
-        return _diagnostics.getAutomationRenderDocCapturePath();
-    };
-    services.getAutomationRenderDocPassSummaryPath = [this]() -> const std::string&
-    {
-        return _diagnostics.getAutomationRenderDocPassSummaryPath();
-    };
-    services.getActiveViewportTexture = [this]()
-    {
-        return getActiveViewportTexture();
-    };
-    services.getPresentationTexture = [this]()
-    {
-        return getPresentationTexture();
-    };
-    return services;
 }
 
 void RenderRuntime::initActivePipeline()

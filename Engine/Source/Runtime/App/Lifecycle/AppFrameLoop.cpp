@@ -2,6 +2,7 @@
 
 #include "Runtime/App/App.h"
 #include "Runtime/App/Lifecycle/AppAutomation.h"
+#include "Runtime/App/RenderDiagnosticsService.h"
 #include "Runtime/App/Utility/FPSCtrl.h"
 
 #include "Core/Async/TaskQueue.h"
@@ -155,7 +156,7 @@ int AppFrameLoop::iterate(App& app, float dt)
         YA_PROFILE_SCOPE("Frame/Automation");
         YA_PERF_SCOPE(perf::sample::frameAutomation(), perf::metric::cpuTimeMs(), perf::domain::render());
         auto* renderRuntime = app.getRenderRuntime();
-        const RenderRuntimeFrameServices frameServices = renderRuntime ? renderRuntime->buildFrameServices() : RenderRuntimeFrameServices{};
+        auto* diagnosticsService = renderRuntime ? &renderRuntime->getDiagnosticsService() : nullptr;
 
         AppAutomation::onFrameCompleted(app,
                                         AppAutomationFrameContext{
@@ -163,11 +164,21 @@ int AppFrameLoop::iterate(App& app, float dt)
                                             .postprocessTexture         = app.getPostprocessOutputTexture(),
                                             .viewportTexture            = renderRuntime ? renderRuntime->getActiveViewportTexture() : nullptr,
                                             .presentationTexture        = renderRuntime ? renderRuntime->getPresentationTexture() : nullptr,
-                                            .requestRenderDocCapture    = frameServices.requestAutomationRenderDocCapture,
-                                            .isRenderDocCapturePending  = frameServices.isAutomationRenderDocCapturePending,
-                                            .isRenderDocCaptureTerminal = frameServices.isAutomationRenderDocCaptureTerminal,
-                                            .getRenderDocCapturePath    = frameServices.getAutomationRenderDocCapturePath,
-                                            .getRenderDocPassSummaryPath = frameServices.getAutomationRenderDocPassSummaryPath,
+                                            .requestRenderDocCapture    = diagnosticsService
+                                                ? [diagnosticsService]() { return diagnosticsService->requestAutomationRenderDocCapture(); }
+                                                : std::function<bool()>{},
+                                            .isRenderDocCapturePending  = diagnosticsService
+                                                ? [diagnosticsService]() { return diagnosticsService->isAutomationRenderDocCapturePending(); }
+                                                : std::function<bool()>{},
+                                            .isRenderDocCaptureTerminal = diagnosticsService
+                                                ? [diagnosticsService]() { return diagnosticsService->isAutomationRenderDocCaptureTerminal(); }
+                                                : std::function<bool()>{},
+                                            .getRenderDocCapturePath    = diagnosticsService
+                                                ? [diagnosticsService]() -> const std::string& { return diagnosticsService->getAutomationRenderDocCapturePath(); }
+                                                : std::function<const std::string&()>{},
+                                            .getRenderDocPassSummaryPath = diagnosticsService
+                                                ? [diagnosticsService]() -> const std::string& { return diagnosticsService->getAutomationRenderDocPassSummaryPath(); }
+                                                : std::function<const std::string&()>{},
                                             .frameIndex                 = App::_frameIndex,
                                         });
     }
@@ -482,21 +493,22 @@ void AppFrameLoop::tickRender(App& app, float dt)
         return;
     }
 
-    renderRuntime->beginFrameDiagnostics();
+    auto& diagnostics = renderRuntime->getDiagnosticsService();
+    diagnostics.onFrameBegin();
 
     struct DiagnosticsGuard
     {
-        RenderRuntime* runtime = nullptr;
+        RenderDiagnosticsService* diagnostics = nullptr;
 
         ~DiagnosticsGuard()
         {
-            if (runtime) {
-                runtime->endFrameDiagnostics();
+            if (diagnostics) {
+                diagnostics->onFrameEnd();
             }
         }
-    } diagnosticsGuard{.runtime = renderRuntime};
+    } diagnosticsGuard{.diagnostics = &diagnostics};
 
-    renderRuntime->tickOffscreenTasks();
+    renderRuntime->getOffscreenTaskService().tick(app);
 
     const uint32_t flightIndex = resolveFlightIndex(app);
 

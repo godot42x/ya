@@ -1,6 +1,7 @@
 #include "Runtime/App/Lifecycle/AppAutomation.h"
 
 #include "Runtime/App/App.h"
+#include "Runtime/App/RenderRuntime.h"
 #include "Runtime/App/Utility/AppScreenshotCapture.h"
 #include "Runtime/App/Utility/OffscreenJobRunner.h"
 
@@ -437,13 +438,6 @@ std::string getAutomationCapturePath(const std::function<const std::string&()>& 
     return pathProvider ? pathProvider() : getAutomationCapturePathFallback();
 }
 
-bool isRenderDocCaptureTerminal(const RenderRuntimeFrameServices& frameServices)
-{
-    return frameServices.isAutomationRenderDocCaptureTerminal
-             ? frameServices.isAutomationRenderDocCaptureTerminal()
-             : true;
-}
-
 bool hasPendingAutomationWork(const App& app, const AppAutomationFrameContext* frameContext = nullptr)
 {
     auto&                       runtimeState = getAutomationRuntimeState();
@@ -457,8 +451,7 @@ bool hasPendingAutomationWork(const App& app, const AppAutomationFrameContext* f
             bRenderDocPending = !frameContext->isRenderDocCaptureTerminal();
         }
         else if (const RenderRuntime* renderRuntime = app.getRenderRuntime()) {
-            const auto frameServices = renderRuntime->buildFrameServices();
-            bRenderDocPending = !isRenderDocCaptureTerminal(frameServices);
+            bRenderDocPending = !renderRuntime->getDiagnosticsService().isAutomationRenderDocCaptureTerminal();
         }
     }
 
