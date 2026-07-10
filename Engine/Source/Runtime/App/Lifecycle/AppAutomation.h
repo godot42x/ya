@@ -29,7 +29,9 @@ class AppAutomation
     static Texture* getViewportScreenshotTexture(const RenderRuntimeFrameServices& services, Texture* postprocessTexture);
     static Texture* getPresentationScreenshotTexture(const RenderRuntimeFrameServices& services);
     static OffscreenJobQueueService buildOffscreenJobQueueService(App& app);
-    static void recordPresentationCapture(App& app, ICommandBuffer* cmdBuf);
+    static void recordPresentationCapture(Texture* presentationSourceTexture,
+                                          uint64_t frameIndex,
+                                          ICommandBuffer* cmdBuf);
     static void onFrameCompleted(App& app);
 };
 

@@ -1,7 +1,5 @@
 #include "Runtime/App/Utility/AppScreenshotCapture.h"
 
-#include "Runtime/App/App.h"
-#include "Runtime/App/Lifecycle/AppAutomation.h"
 #include "Runtime/App/Utility/OffscreenJobRunner.h"
 
 #include "Core/Log.h"
@@ -200,40 +198,10 @@ bool writePngFromReadback(const AppScreenshotCaptureState& state)
 }
 } // namespace
 
-bool AppScreenshotCapture::request(App&                           app,
-                                   AppScreenshotCaptureState&     state,
-                                   const std::string&             outputPath,
-                                   EAutomationScreenshotTarget    target)
-{
-    auto* render = app.getRender();
-    Texture* viewportSourceTexture = app.getPostprocessOutputTexture();
-    if (!viewportSourceTexture) {
-        auto* renderRuntime = app.getRenderRuntime();
-        viewportSourceTexture = renderRuntime ? renderRuntime->getActiveViewportTexture() : nullptr;
-    }
-    auto* renderRuntime = app.getRenderRuntime();
-    Texture* presentationSourceTexture = renderRuntime ? renderRuntime->getPresentationTexture() : nullptr;
-
-    return request(render,
-                   OffscreenJobQueueService{
-                       .enqueue = [&app](const std::shared_ptr<OffscreenJobState>& job, std::function<void(ICommandBuffer*)> task)
-                       {
-                           app.taskManager.enqueueOffscreenTask(job, std::move(task));
-                       },
-                   },
-                   viewportSourceTexture,
-                   presentationSourceTexture,
-                   app.getFrameIndex(),
-                   state,
-                   outputPath,
-                   target);
-}
-
 bool AppScreenshotCapture::request(IRender*                        render,
                                    const OffscreenJobQueueService& offscreenQueueService,
                                    Texture*                        viewportSourceTexture,
                                    Texture*                        presentationSourceTexture,
-                                   uint64_t                        frameIndex,
                                    AppScreenshotCaptureState&      state,
                                    const std::string&              outputPath,
                                    EAutomationScreenshotTarget     target)
@@ -349,36 +317,30 @@ bool AppScreenshotCapture::request(IRender*                        render,
     return true;
 }
 
-bool AppScreenshotCapture::recordPresentationCapture(App& app, AppScreenshotCaptureState& state, ICommandBuffer* cmdBuf)
+bool AppScreenshotCapture::recordPresentationCapture(Texture* presentationSourceTexture,
+                                                     uint64_t frameIndex,
+                                                     AppScreenshotCaptureState& state,
+                                                     ICommandBuffer* cmdBuf)
 {
     if (!cmdBuf || !state.bPendingPresentationCapture || state.target != EAutomationScreenshotTarget::Editor || !state.readbackBuffer) {
         return false;
     }
 
-    auto* renderRuntime = app.getRenderRuntime();
-    if (!renderRuntime) {
-        state.bFailed                     = true;
-        state.bPendingPresentationCapture = false;
-        return false;
-    }
-    const auto frameServices = renderRuntime->buildFrameServices();
-
-    Texture* sourceTexture = AppAutomation::getPresentationScreenshotTexture(frameServices);
-    if (!sourceTexture || !sourceTexture->getImage()) {
+    if (!presentationSourceTexture || !presentationSourceTexture->getImage()) {
         state.bFailed                     = true;
         state.bPendingPresentationCapture = false;
         return false;
     }
 
-    const std::shared_ptr<IImage> sourceImage = sourceTexture->getImageShared();
+    const std::shared_ptr<IImage> sourceImage = presentationSourceTexture->getImageShared();
     if (!sourceImage) {
         state.bFailed                     = true;
         state.bPendingPresentationCapture = false;
         return false;
     }
 
-    const Extent2D extent = sourceTexture->getExtent();
-    if (extent.width != state.width || extent.height != state.height || sourceTexture->getFormat() != state.sourceFormat) {
+    const Extent2D extent = presentationSourceTexture->getExtent();
+    if (extent.width != state.width || extent.height != state.height || presentationSourceTexture->getFormat() != state.sourceFormat) {
         YA_CORE_ERROR("Presentation screenshot source changed before capture recording");
         state.bFailed                     = true;
         state.bPendingPresentationCapture = false;
@@ -414,17 +376,17 @@ bool AppScreenshotCapture::recordPresentationCapture(App& app, AppScreenshotCapt
 
     state.width                       = extent.width;
     state.height                      = extent.height;
-    state.sourceFormat                = sourceTexture->getFormat();
-    state.recordedFrameIndex          = app.getFrameIndex() + 1;
+    state.sourceFormat                = presentationSourceTexture->getFormat();
+    state.recordedFrameIndex          = frameIndex + 1;
     state.bPendingPresentationCapture = false;
     state.bPresentationCopyRecorded   = true;
     return true;
 }
 
-bool AppScreenshotCapture::tryFinalize(App& app, AppScreenshotCaptureState& state)
+bool AppScreenshotCapture::tryFinalize(uint64_t currentFrameIndex, AppScreenshotCaptureState& state)
 {
     if (state.bPresentationCopyRecorded) {
-        if (app.getFrameIndex() <= state.recordedFrameIndex) {
+        if (currentFrameIndex <= state.recordedFrameIndex) {
             return false;
         }
 

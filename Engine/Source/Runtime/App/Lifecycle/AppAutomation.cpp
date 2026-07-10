@@ -359,7 +359,7 @@ bool handleScreenshotAutomation(App& app, bool bStableFrameReady)
         return false;
     }
 
-    AppScreenshotCapture::tryFinalize(app, runtimeState.screenshot);
+    AppScreenshotCapture::tryFinalize(app.getFrameIndex(), runtimeState.screenshot);
     if (runtimeState.bScreenshotRequested || isScreenshotTerminal(runtimeState)) {
         return !isScreenshotTerminal(runtimeState);
     }
@@ -379,7 +379,6 @@ bool handleScreenshotAutomation(App& app, bool bStableFrameReady)
                                                                       AppAutomation::buildOffscreenJobQueueService(app),
                                                                       AppAutomation::getViewportScreenshotTexture(frameServices, app.getPostprocessOutputTexture()),
                                                                       AppAutomation::getPresentationScreenshotTexture(frameServices),
-                                                                      app.getFrameIndex(),
                                                                       runtimeState.screenshot,
                                                                       *automation.screenshotPath,
                                                                       automation.screenshotTarget);
@@ -511,10 +510,12 @@ void AppAutomation::applyRuntimeOverrides(App& app)
     applyShadowAutomationOverrides(app.getDesc().automation.shadow, app.getShadowSettings());
 }
 
-void AppAutomation::recordPresentationCapture(App& app, ICommandBuffer* cmdBuf)
+void AppAutomation::recordPresentationCapture(Texture* presentationSourceTexture,
+                                              uint64_t frameIndex,
+                                              ICommandBuffer* cmdBuf)
 {
     auto& runtimeState = getAutomationRuntimeState();
-    AppScreenshotCapture::recordPresentationCapture(app, runtimeState.screenshot, cmdBuf);
+    AppScreenshotCapture::recordPresentationCapture(presentationSourceTexture, frameIndex, runtimeState.screenshot, cmdBuf);
 }
 
 bool AppAutomation::requestRenderDocCapture(const RenderRuntimeFrameServices& services)

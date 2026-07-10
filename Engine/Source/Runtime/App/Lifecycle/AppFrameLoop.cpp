@@ -528,7 +528,14 @@ void AppFrameLoop::tickRender(App& app, float dt)
         .automation = {
             .recordPresentationCapture = [&app](ICommandBuffer* cmdBuf)
             {
-                AppAutomation::recordPresentationCapture(app, cmdBuf);
+                auto* renderRuntime = app.getRenderRuntime();
+                if (!renderRuntime) {
+                    return;
+                }
+
+                AppAutomation::recordPresentationCapture(renderRuntime->getPresentationTexture(),
+                                                         app.getFrameIndex(),
+                                                         cmdBuf);
             },
         },
         .pipeline = pipelineFrame,
