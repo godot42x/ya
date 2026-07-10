@@ -676,18 +676,22 @@ void applyAppOverrides(AppDesc& appDesc)
 
 void beginRuntimeSession(const AppDesc& appDesc)
 {
-    std::lock_guard lock(runtimeArtifactStateMutex());
-    auto&           state                = runtimeArtifactStateStorage();
-    state.paths.runId          = makeRunId(appDesc.profiling);
-    state.paths.sessionName    = appDesc.profiling.profileSessionName;
-    state.paths.outputDir      = resolveOutputDir(appDesc);
-    state.paths.cpuProfilePath = resolveCpuProfilePath(appDesc, state.paths.runId);
-    state.paths.gpuSummaryPath.clear();
-    state.paths.profileSummaryPath.clear();
-    state.gpuCapturePath.clear();
-    state.passSummaryPath.clear();
-    state.screenshotPath.clear();
-    state.bManifestDirty = true;
+    std::string cpuProfilePath;
+    {
+        std::lock_guard lock(runtimeArtifactStateMutex());
+        auto&           state                = runtimeArtifactStateStorage();
+        state.paths.runId          = makeRunId(appDesc.profiling);
+        state.paths.sessionName    = appDesc.profiling.profileSessionName;
+        state.paths.outputDir      = resolveOutputDir(appDesc);
+        state.paths.cpuProfilePath = resolveCpuProfilePath(appDesc, state.paths.runId);
+        state.paths.gpuSummaryPath.clear();
+        state.paths.profileSummaryPath.clear();
+        state.gpuCapturePath.clear();
+        state.passSummaryPath.clear();
+        state.screenshotPath.clear();
+        state.bManifestDirty = true;
+        cpuProfilePath       = state.paths.cpuProfilePath;
+    }
 
     YA_PROFILE_SET_ENABLED(appDesc.profiling.bCpuProfileEnabled);
     YA_PERF_SET_ENABLED(true);
@@ -701,7 +705,7 @@ void beginRuntimeSession(const AppDesc& appDesc)
         return;
     }
 
-    cpuTrace().BeginSession(appDesc.profiling.profileSessionName, state.paths.cpuProfilePath);
+    cpuTrace().BeginSession(appDesc.profiling.profileSessionName, cpuProfilePath);
 }
 
 void endRuntimeSession()
