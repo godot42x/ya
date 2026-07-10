@@ -361,6 +361,14 @@ RenderRuntimeFrameServices RenderRuntime::buildFrameServices() const
     {
         return _diagnostics.getAutomationRenderDocPassSummaryPath();
     };
+    services.getActiveViewportTexture = [this]()
+    {
+        return getActiveViewportTexture();
+    };
+    services.getPresentationTexture = [this]()
+    {
+        return getPresentationTexture();
+    };
     return services;
 }
 

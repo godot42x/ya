@@ -11,9 +11,12 @@ namespace ya
 
 struct App;
 struct IBuffer;
+struct IRender;
 enum class EAutomationScreenshotTarget : uint8_t;
 struct ICommandBuffer;
+struct OffscreenJobQueueService;
 struct OffscreenJobState;
+struct Texture;
 
 struct AppScreenshotCaptureState
 {
@@ -35,6 +38,14 @@ class AppScreenshotCapture
 {
   public:
     static bool request(App& app,
+                        AppScreenshotCaptureState& state,
+                        const std::string& outputPath,
+                        EAutomationScreenshotTarget target);
+    static bool request(IRender* render,
+                        const OffscreenJobQueueService& offscreenQueueService,
+                        Texture* viewportSourceTexture,
+                        Texture* presentationSourceTexture,
+                        uint64_t frameIndex,
                         AppScreenshotCaptureState& state,
                         const std::string& outputPath,
                         EAutomationScreenshotTarget target);

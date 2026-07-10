@@ -1,7 +1,7 @@
 #include "Runtime/App/Utility/AppScreenshotCapture.h"
 
 #include "Runtime/App/App.h"
-#include "Runtime/App/RenderRuntime.h"
+#include "Runtime/App/Lifecycle/AppAutomation.h"
 #include "Runtime/App/Utility/OffscreenJobRunner.h"
 
 #include "Core/Log.h"
@@ -27,22 +27,6 @@ namespace
 {
 constexpr uint32_t PNG_CHANNELS         = 4;
 constexpr uint32_t BYTES_PER_PIXEL_RGBA = 4;
-
-Texture* resolveViewportScreenshotSourceTexture(App& app)
-{
-    if (Texture* texture = app.getPostprocessOutputTexture()) {
-        return texture;
-    }
-
-    auto* renderRuntime = app.getRenderRuntime();
-    return renderRuntime ? renderRuntime->getActiveViewportTexture() : nullptr;
-}
-
-Texture* resolvePresentationScreenshotSourceTexture(App& app)
-{
-    auto* renderRuntime = app.getRenderRuntime();
-    return renderRuntime ? renderRuntime->getPresentationTexture() : nullptr;
-}
 
 bool isSupportedScreenshotFormat(EFormat::T format)
 {
@@ -222,6 +206,38 @@ bool AppScreenshotCapture::request(App&                           app,
                                    EAutomationScreenshotTarget    target)
 {
     auto* render = app.getRender();
+    Texture* viewportSourceTexture = app.getPostprocessOutputTexture();
+    if (!viewportSourceTexture) {
+        auto* renderRuntime = app.getRenderRuntime();
+        viewportSourceTexture = renderRuntime ? renderRuntime->getActiveViewportTexture() : nullptr;
+    }
+    auto* renderRuntime = app.getRenderRuntime();
+    Texture* presentationSourceTexture = renderRuntime ? renderRuntime->getPresentationTexture() : nullptr;
+
+    return request(render,
+                   OffscreenJobQueueService{
+                       .enqueue = [&app](const std::shared_ptr<OffscreenJobState>& job, std::function<void(ICommandBuffer*)> task)
+                       {
+                           app.taskManager.enqueueOffscreenTask(job, std::move(task));
+                       },
+                   },
+                   viewportSourceTexture,
+                   presentationSourceTexture,
+                   app.getFrameIndex(),
+                   state,
+                   outputPath,
+                   target);
+}
+
+bool AppScreenshotCapture::request(IRender*                        render,
+                                   const OffscreenJobQueueService& offscreenQueueService,
+                                   Texture*                        viewportSourceTexture,
+                                   Texture*                        presentationSourceTexture,
+                                   uint64_t                        frameIndex,
+                                   AppScreenshotCaptureState&      state,
+                                   const std::string&              outputPath,
+                                   EAutomationScreenshotTarget     target)
+{
     if (!render || outputPath.empty()) {
         return false;
     }
@@ -234,8 +250,8 @@ bool AppScreenshotCapture::request(App&                           app,
     }
 
     Texture* sourceTexture = target == EAutomationScreenshotTarget::Editor
-                               ? resolvePresentationScreenshotSourceTexture(app)
-                               : resolveViewportScreenshotSourceTexture(app);
+                               ? presentationSourceTexture
+                               : viewportSourceTexture;
     if (!sourceTexture || !sourceTexture->getImage()) {
         return false;
     }
@@ -329,7 +345,7 @@ bool AppScreenshotCapture::request(App&                           app,
     };
 
     state.pendingJob = job;
-    queueOffscreenJob(&app, render, state.pendingJob);
+    queueOffscreenJob(offscreenQueueService, render, state.pendingJob);
     return true;
 }
 
@@ -339,7 +355,15 @@ bool AppScreenshotCapture::recordPresentationCapture(App& app, AppScreenshotCapt
         return false;
     }
 
-    Texture* sourceTexture = resolvePresentationScreenshotSourceTexture(app);
+    auto* renderRuntime = app.getRenderRuntime();
+    if (!renderRuntime) {
+        state.bFailed                     = true;
+        state.bPendingPresentationCapture = false;
+        return false;
+    }
+    const auto frameServices = renderRuntime->buildFrameServices();
+
+    Texture* sourceTexture = AppAutomation::getPresentationScreenshotTexture(frameServices);
     if (!sourceTexture || !sourceTexture->getImage()) {
         state.bFailed                     = true;
         state.bPendingPresentationCapture = false;

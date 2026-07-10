@@ -3,6 +3,7 @@
 #include "Runtime/App/App.h"
 #include "Runtime/App/RenderRuntime.h"
 #include "Runtime/App/Utility/AppScreenshotCapture.h"
+#include "Runtime/App/Utility/OffscreenJobRunner.h"
 
 #include "Config/ConfigManager.h"
 
@@ -367,7 +368,18 @@ bool handleScreenshotAutomation(App& app, bool bStableFrameReady)
         return true;
     }
 
-    runtimeState.bScreenshotRequested = AppScreenshotCapture::request(app,
+    auto* renderRuntime = app.getRenderRuntime();
+    auto* render        = app.getRender();
+    if (!renderRuntime || !render) {
+        return false;
+    }
+    const auto frameServices = renderRuntime->buildFrameServices();
+
+    runtimeState.bScreenshotRequested = AppScreenshotCapture::request(render,
+                                                                      AppAutomation::buildOffscreenJobQueueService(app),
+                                                                      AppAutomation::getViewportScreenshotTexture(frameServices, app.getPostprocessOutputTexture()),
+                                                                      AppAutomation::getPresentationScreenshotTexture(frameServices),
+                                                                      app.getFrameIndex(),
                                                                       runtimeState.screenshot,
                                                                       *automation.screenshotPath,
                                                                       automation.screenshotTarget);
@@ -530,6 +542,29 @@ const std::string& AppAutomation::getRenderDocPassSummaryPath(const RenderRuntim
 {
     static const std::string emptyPath;
     return services.getAutomationRenderDocPassSummaryPath ? services.getAutomationRenderDocPassSummaryPath() : emptyPath;
+}
+
+Texture* AppAutomation::getViewportScreenshotTexture(const RenderRuntimeFrameServices& services, Texture* postprocessTexture)
+{
+    if (postprocessTexture) {
+        return postprocessTexture;
+    }
+    return services.getActiveViewportTexture ? services.getActiveViewportTexture() : nullptr;
+}
+
+Texture* AppAutomation::getPresentationScreenshotTexture(const RenderRuntimeFrameServices& services)
+{
+    return services.getPresentationTexture ? services.getPresentationTexture() : nullptr;
+}
+
+OffscreenJobQueueService AppAutomation::buildOffscreenJobQueueService(App& app)
+{
+    OffscreenJobQueueService queueService{};
+    queueService.enqueue = [&app](const std::shared_ptr<OffscreenJobState>& job, std::function<void(ICommandBuffer*)> task)
+    {
+        app.taskManager.enqueueOffscreenTask(job, std::move(task));
+    };
+    return queueService;
 }
 
 void AppAutomation::onFrameCompleted(App& app)

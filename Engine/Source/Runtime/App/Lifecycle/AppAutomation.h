@@ -9,7 +9,9 @@ struct App;
 struct AppDesc;
 struct AppAutomationOptions;
 struct ICommandBuffer;
+struct OffscreenJobQueueService;
 struct RenderRuntimeFrameServices;
+struct Texture;
 
 class AppAutomation
 {
@@ -24,6 +26,9 @@ class AppAutomation
     static bool isRenderDocCaptureTerminal(const RenderRuntimeFrameServices& services);
     static const std::string& getRenderDocCapturePath(const RenderRuntimeFrameServices& services);
     static const std::string& getRenderDocPassSummaryPath(const RenderRuntimeFrameServices& services);
+    static Texture* getViewportScreenshotTexture(const RenderRuntimeFrameServices& services, Texture* postprocessTexture);
+    static Texture* getPresentationScreenshotTexture(const RenderRuntimeFrameServices& services);
+    static OffscreenJobQueueService buildOffscreenJobQueueService(App& app);
     static void recordPresentationCapture(App& app, ICommandBuffer* cmdBuf);
     static void onFrameCompleted(App& app);
 };

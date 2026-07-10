@@ -27,7 +27,20 @@ void failOffscreenJob(const std::shared_ptr<OffscreenJobState>& job)
 
 void queueOffscreenJob(App* app, IRender* render, const std::shared_ptr<OffscreenJobState>& job)
 {
-    if (!job || !app || !render || !job->isReadyToQueue()) {
+    OffscreenJobQueueService queueService{};
+    if (app) {
+        queueService.enqueue = [app](const std::shared_ptr<OffscreenJobState>& queuedJob, std::function<void(ICommandBuffer*)> task)
+        {
+            app->taskManager.enqueueOffscreenTask(queuedJob, std::move(task));
+        };
+    }
+
+    queueOffscreenJob(queueService, render, job);
+}
+
+void queueOffscreenJob(const OffscreenJobQueueService& queueService, IRender* render, const std::shared_ptr<OffscreenJobState>& job)
+{
+    if (!job || !queueService.enqueue || !render || !job->isReadyToQueue()) {
         failOffscreenJob(job);
         return;
     }
@@ -39,7 +52,7 @@ void queueOffscreenJob(App* app, IRender* render, const std::shared_ptr<Offscree
     }
 
     job->phase = EOffscreenJobPhase::Queued;
-    app->taskManager.enqueueOffscreenTask(
+    queueService.enqueue(
         job,
         [job, outputTexture = std::move(outputTexture)](ICommandBuffer* cmdBuf) mutable
         {

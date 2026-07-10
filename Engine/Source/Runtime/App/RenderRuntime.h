@@ -47,6 +47,8 @@ struct RenderRuntimeFrameServices
     std::function<bool()> isAutomationRenderDocCaptureTerminal;
     std::function<const std::string&()> getAutomationRenderDocCapturePath;
     std::function<const std::string&()> getAutomationRenderDocPassSummaryPath;
+    std::function<Texture*()> getActiveViewportTexture;
+    std::function<Texture*()> getPresentationTexture;
 };
 
 struct DeferredPipelineDebugViews
