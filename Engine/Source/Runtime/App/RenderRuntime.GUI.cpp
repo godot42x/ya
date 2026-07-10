@@ -1,16 +1,13 @@
 #include "RenderRuntime.h"
 
-#include "Core/Debug/RenderDocCapture.h"
 #include "DeferredRender/DeferredRenderPipeline.h"
 #include "ImGuiHelper.h"
 #include "Resource/Texture/TextureLibrary.h"
 #include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
 
-#include <SDL3/SDL.h>
 #include <algorithm>
 #include <array>
 #include <cctype>
-#include <filesystem>
 #include <string_view>
 
 namespace ya
@@ -118,26 +115,6 @@ IImageView* getAttachmentImageView(IRenderTarget* rt, int attachmentIndex)
     return depthTexture ? depthTexture->getImageView() : nullptr;
 }
 
-void openCaptureDirectoryFromGUI(const std::string& filePath)
-{
-    if (filePath.empty()) {
-        YA_CORE_WARN("File path is empty, cannot open directory");
-        return;
-    }
-
-    auto dir = std::filesystem::path(filePath).parent_path();
-    if (dir.empty()) {
-        YA_CORE_WARN("Directory path is empty for file: {}", filePath);
-        return;
-    }
-
-    dir            = std::filesystem::absolute(dir);
-    const auto url = std::format("file:///{}", dir.string());
-    if (!SDL_OpenURL(url.c_str())) {
-        YA_CORE_ERROR("Failed to open directory {}: {}", dir.string(), SDL_GetError());
-    }
-}
-
 } // namespace
 
 void RenderRuntime::renderWorldSettingsGUI()
@@ -221,44 +198,7 @@ void RenderRuntime::renderGUI(float dt)
     }
 
     if (ImGui::TreeNode("Diagnostics")) {
-        if (ImGui::TreeNode("RenderDoc")) {
-            auto& renderDoc = _diagnostics.getRenderDocState();
-            bool  bAvailable = renderDoc.capture && renderDoc.capture->isAvailable();
-            ImGui::Text("Available: %s", bAvailable ? "Yes" : "No");
-            ImGui::TextWrapped("DLL Path: %s", renderDoc.configuredDllPath.empty() ? "<default>" : renderDoc.configuredDllPath.c_str());
-            ImGui::TextWrapped("Output Dir: %s", renderDoc.configuredOutputDir.empty() ? "<default>" : renderDoc.configuredOutputDir.c_str());
-            if (bAvailable) {
-                bool bCaptureEnabled = renderDoc.capture->isCaptureEnabled();
-                if (ImGui::Checkbox("Capture Enabled", &bCaptureEnabled)) {
-                    renderDoc.capture->setCaptureEnabled(bCaptureEnabled);
-                }
-
-                bool bHudVisible = renderDoc.capture->isHUDVisible();
-                if (ImGui::Checkbox("Show RenderDoc HUD", &bHudVisible)) {
-                    renderDoc.capture->setHUDVisible(bHudVisible);
-                }
-
-                ImGui::Text("Capturing: %s", renderDoc.capture->isCapturing() ? "Yes" : "No");
-                ImGui::Text("Delay Frames: %u", renderDoc.capture->getDelayFrames());
-                ImGui::Combo("On Capture", &renderDoc.onCaptureAction, "None\0Open Replay UI\0Open Capture Folder\0");
-                ImGui::TextWrapped("Last Capture: %s", renderDoc.lastCapturePath.empty() ? "<none>" : renderDoc.lastCapturePath.c_str());
-
-                bool bCanCapture = renderDoc.capture->isCaptureEnabled();
-                ImGui::BeginDisabled(!bCanCapture);
-                if (ImGui::Button("Capture Next Frame (F9)")) {
-                    renderDoc.capture->requestNextFrame();
-                }
-                if (ImGui::Button("Capture After 120 Frames (Ctrl+F9)")) {
-                    renderDoc.capture->requestAfterFrames(120);
-                }
-                ImGui::EndDisabled();
-
-                if (ImGui::Button("Open Last Capture Folder") && !renderDoc.lastCapturePath.empty()) {
-                    openCaptureDirectoryFromGUI(renderDoc.lastCapturePath);
-                }
-            }
-            ImGui::TreePop();
-        }
+        _diagnostics.renderGUI();
         ImGui::TreePop();
     }
 }
