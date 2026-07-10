@@ -193,10 +193,10 @@ inline const FName& renderSubmit()
     return key;
 }
 
-inline const FName& renderFlushCallbacks()
+inline const FName& frameRenderCallbacks()
 {
     using namespace ya::literals;
-    static const FName key = "Render/FlushCallbacks"_name;
+    static const FName key = "Frame/RenderCallbacks"_name;
     return key;
 }
 

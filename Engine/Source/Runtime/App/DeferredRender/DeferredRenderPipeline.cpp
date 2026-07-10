@@ -1176,7 +1176,7 @@ void DeferredRenderPipeline::renderPerformanceGUI()
     const float viewportOverlayMs = cpu(perf::sample::renderViewportOverlay());
     const float postProcessMs     = cpu(perf::sample::renderPostProcess());
     const float presentationMs    = cpu(perf::sample::renderPresentation());
-    const float flushCallbacksMs  = cpu(perf::sample::renderFlushCallbacks());
+    const float renderCallbacksMs  = cpu(perf::sample::frameRenderCallbacks());
     const float submitMs          = cpu(perf::sample::renderSubmit());
     const float presentMs         = cpu(perf::sample::vulkanPresent());
 
@@ -1207,7 +1207,7 @@ void DeferredRenderPipeline::renderPerformanceGUI()
                     drawPerfLeaf("PostProcess", postProcessMs, worldMs);
                 });
                 drawPerfLeaf("Presentation", presentationMs, runtimeMs);
-                drawPerfLeaf("FlushCallbacks", flushCallbacksMs, runtimeMs);
+                drawPerfLeaf("RenderCallbacks", renderCallbacksMs, runtimeMs);
                 drawPerfNode("Submit", submitMs, [&]() {
                     drawPerfLeaf("Present", presentMs, submitMs);
                 });

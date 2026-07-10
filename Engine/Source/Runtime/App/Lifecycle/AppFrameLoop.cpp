@@ -147,7 +147,7 @@ int AppFrameLoop::iterate(App& app, float dt)
     {
         YA_PROFILE_SCOPE("Frame/MainThreadCallbacks");
         YA_PERF_SCOPE(perf::sample::frameMainThreadCallbacks(), perf::metric::cpuTimeMs(), perf::domain::game());
-        YA_PERF_SCOPE(perf::sample::renderFlushCallbacks(), perf::metric::cpuTimeMs(), perf::domain::render());
+        YA_PERF_SCOPE(perf::sample::frameRenderCallbacks(), perf::metric::cpuTimeMs(), perf::domain::render());
         TaskQueue::get().processMainThreadCallbacks();
     }
     ++App::_frameIndex;

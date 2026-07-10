@@ -40,10 +40,10 @@
 - [ ] 盘点 shadow 配置当前所有来源：App 默认值、editor config、automation override、GUI 修改、extractor 读取、pipeline apply
 - [ ] 提取单一 `ShadowSettings` owner/service 或 helper
 - [ ] 合并 deferred 中的 config load / merge / persist 流程
-- [-] 把 forward 中对 `App::get()->getShadowSettings()` 的直接读取迁移到统一入口
+- [x] 把 forward 中对 `App::get()->getShadowSettings()` 的直接读取迁移到统一入口
 - [x] 把 `RenderFrameExtractor` 对全局 shadow settings 的直接依赖改成显式输入
 - [ ] 定义“配置态”和“运行态”的边界，避免 `ShadowRuntimeState` 继续兼容两种职责
-- [ ] 收敛 shadow GUI 的修改流程，统一走 queue/apply/sync 路径
+- [x] 收敛 shadow GUI 的修改流程，统一走 queue/apply/sync 路径
 
 完成标准：
 
@@ -82,10 +82,10 @@
 
 - [ ] 盘点当前挂在 `RenderRuntime` 上的 side services：offscreen、diagnostics、automation capture hook、render target editor catalog
 - [ ] 明确 GPU frame 主链路的最小职责边界
-- [ ] 把 offscreen tick 从 `RenderRuntime::runFramePrologue()` 中拆出到独立 lifecycle service
-- [ ] 把 presentation capture 从 `RenderRuntime::renderPresentationPass()` 中拆成显式 hook/service
-- [ ] 明确 automation service 与 diagnostics service 的 owner
-- [ ] 检查主线程 callback 处理位置是否仍唯一，避免语义回流到 render runtime
+- [x] 把 offscreen tick 从 `RenderRuntime::runFramePrologue()` 中拆出到独立 lifecycle service
+- [x] 把 presentation capture 从 `RenderRuntime::renderPresentationPass()` 中拆成显式 hook/service
+- [x] 明确 automation service 与 diagnostics service 的 owner
+- [x] 检查主线程 callback 处理位置是否仍唯一，避免语义回流到 render runtime
 
 完成标准：
 
