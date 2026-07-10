@@ -6,8 +6,7 @@
 #include "GBufferStage.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Resource/Texture/TextureLibrary.h"
-#include "Runtime/App/App.h"
-#include "Runtime/App/RenderRuntime.h"
+
 
 #include <string>
 #include <vector>
@@ -82,6 +81,13 @@ void LightStage::setup(GBufferStage* gBufferStage, IRenderTarget* gBufferRT)
             invalidateGBufferDescriptors();
         });
     }
+}
+
+void LightStage::setEnvironmentLightingResources(stdptr<IDescriptorSetLayout> environmentLightingDSL,
+                                                 std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet)
+{
+    _environmentLightingDSL                 = std::move(environmentLightingDSL);
+    _getSceneEnvironmentLightingDescriptorSet = std::move(getSceneEnvironmentLightingDescriptorSet);
 }
 
 void LightStage::setSSAOTexture(Texture* ssaoTexture)
@@ -217,7 +223,6 @@ void LightStage::init(IRender* render)
 
     // Pipeline layout: set 0 = frame+light (from GBufferStage), set 1 = GBuffer textures,
     // set 2 = environment lighting, set 3 = shadow maps
-    auto* runtime   = App::get()->getRenderRuntime();
     _pipelineLayout = IPipelineLayout::create(
         _render,
         "Deferred_Light_PPL",
@@ -225,7 +230,7 @@ void LightStage::init(IRender* render)
         {
             _gBufferStage->getFrameAndLightDSL(),
             _gBufferTextureDSL,
-            runtime->getEnvironmentLightingDescriptorSetLayout(),
+            _environmentLightingDSL,
             _shadowDSL,
         });
 
@@ -291,6 +296,8 @@ void LightStage::destroy()
     _gBufferStage             = nullptr;
     _gBufferRT                = nullptr;
     _ssaoTexture              = nullptr;
+    _environmentLightingDSL.reset();
+    _getSceneEnvironmentLightingDescriptorSet = {};
     _shadowState              = {};
     _lastGBufferFrameBuffer          = nullptr;
     _lastSSAOImageViewHandle         = nullptr;
@@ -383,9 +390,9 @@ void LightStage::execute(const RenderStageContext& ctx)
     auto  vpW    = ctx.viewportExtent.width;
     auto  vpH    = ctx.viewportExtent.height;
 
-    // Get environment lighting DS from RenderRuntime
-    auto* runtime               = App::get()->getRenderRuntime();
-    auto  environmentLightingDS = runtime ? runtime->getSceneEnvironmentLightingDescriptorSet() : nullptr;
+    auto environmentLightingDS = _getSceneEnvironmentLightingDescriptorSet
+        ? _getSceneEnvironmentLightingDescriptorSet(nullptr)
+        : DescriptorSetHandle{};
 
     cmdBuf->debugBeginLabel("LightStage");
 

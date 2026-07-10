@@ -420,6 +420,30 @@ void RenderRuntime::initActivePipeline()
                       }
                   }
                 : std::function<void(std::function<void()>)>{},
+            .environmentLightingDSL = _environmentLighting.dsl,
+            .getSceneEnvironmentLightingDescriptorSet = [this](Scene* scene)
+            {
+                return getSceneEnvironmentLightingDescriptorSet(scene);
+            },
+            .getSceneSkyboxDescriptorSet = [this](Scene* scene)
+            {
+                return getSceneSkyboxDescriptorSet(scene);
+            },
+            .getDebugRenderSystem = [this]() -> DebugRenderSystem&
+            {
+                return getDebugRenderSystem();
+            },
+            .getActiveScene = [this]() -> Scene*
+            {
+                if (!_app || !_app->getSceneManager()) {
+                    return nullptr;
+                }
+                return _app->getSceneManager()->getActiveScene();
+            },
+            .getResourceResolveSystem = [this]() -> ResourceResolveSystem*
+            {
+                return _app ? _app->getResourceResolveSystem() : nullptr;
+            },
         });
     }
 

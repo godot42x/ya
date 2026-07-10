@@ -6,12 +6,15 @@
 #include "Render/Stage/IRenderStage.h"
 #include "Runtime/App/DebugRenderSystem.h"
 
+#include <functional>
 #include <glm/glm.hpp>
 
 namespace ya
 {
 
 struct IRenderTarget;
+class ResourceResolveSystem;
+struct Scene;
 
 /// Deferred viewport overlay stage — Skybox background + SimpleMaterial debug overlay.
 ///
@@ -58,6 +61,11 @@ struct ViewportOverlayStage : public IRenderStage
 
     DebugSkinning   _debugSkinning;
 
+    std::function<DescriptorSetHandle(Scene*)> _getSceneSkyboxDescriptorSet;
+    std::function<DebugRenderSystem&()>        _getDebugRenderSystem;
+    std::function<Scene*()>                    _getActiveScene;
+    std::function<ResourceResolveSystem*()>    _getResourceResolveSystem;
+
     // ── IRenderStage ─────────────────────────────────────────────
     ViewportOverlayStage() : IRenderStage("ViewportOverlay") {}
 
@@ -67,6 +75,10 @@ struct ViewportOverlayStage : public IRenderStage
     void execute(const RenderStageContext& ctx) override;
     void renderGUI() override;
     void refreshPipelineFormats(const IRenderTarget* viewportRT);
+    void setFrameServices(std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet,
+                          std::function<DebugRenderSystem&()> getDebugRenderSystem);
+    void setSceneServices(std::function<Scene*()> getActiveScene,
+                          std::function<ResourceResolveSystem*()> getResourceResolveSystem);
 
   private:
     void initSkybox();

@@ -11,11 +11,13 @@
 #include "DeferredRender.LightPass.slang.h"
 
 #include <array>
+#include <functional>
 
 namespace ya
 {
 
 struct GBufferStage;
+struct Scene;
 struct Texture;
 
 /// Deferred light pass — fullscreen quad that reads GBuffer textures and computes lighting.
@@ -59,6 +61,9 @@ struct LightStage : public IRenderStage
     uint32_t _lastGBufferDescriptorWriteCount = 0;
     uint32_t _lastShadowDescriptorWriteCount = 0;
 
+    stdptr<IDescriptorSetLayout> _environmentLightingDSL;
+    std::function<DescriptorSetHandle(Scene*)> _getSceneEnvironmentLightingDescriptorSet;
+
     // Vertex attributes (for fullscreen quad)
     std::vector<VertexAttribute> _commonVertexAttributes = {
         {.bufferSlot = 0, .location = 0, .format = EVertexAttributeFormat::Float3, .offset = offsetof(ya::Vertex, position)},
@@ -72,6 +77,8 @@ struct LightStage : public IRenderStage
     /// @param gBufferStage  Provides frame+light DSL and per-flight DS
     /// @param gBufferRT     Provides GBuffer color textures for sampling
     void setup(GBufferStage* gBufferStage, IRenderTarget* gBufferRT);
+    void setEnvironmentLightingResources(stdptr<IDescriptorSetLayout> environmentLightingDSL,
+                                         std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet);
     void setSSAOTexture(Texture* ssaoTexture);
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecularIBL);

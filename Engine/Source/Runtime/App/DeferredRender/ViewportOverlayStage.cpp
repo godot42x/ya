@@ -12,10 +12,8 @@
 #include "Render/Core/IRenderTarget.h"
 
 #include "Resource/Mesh/PrimitiveMeshCache.h"
-#include "Runtime/App/App.h"
-#include "Runtime/App/RenderRuntime.h"
 
-#include "Scene/SceneManager.h"
+#include "Scene/Scene.h"
 
 
 #include <algorithm>
@@ -54,6 +52,20 @@ void drawDebugSkinningItems(DebugSkinning&                     debugSkinning,
 
 } // namespace
 
+void ViewportOverlayStage::setFrameServices(std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet,
+                                            std::function<DebugRenderSystem&()> getDebugRenderSystem)
+{
+    _getSceneSkyboxDescriptorSet = std::move(getSceneSkyboxDescriptorSet);
+    _getDebugRenderSystem        = std::move(getDebugRenderSystem);
+}
+
+void ViewportOverlayStage::setSceneServices(std::function<Scene*()> getActiveScene,
+                                            std::function<ResourceResolveSystem*()> getResourceResolveSystem)
+{
+    _getActiveScene           = std::move(getActiveScene);
+    _getResourceResolveSystem = std::move(getResourceResolveSystem);
+}
+
 void ViewportOverlayStage::refreshPipelineFormats(const IRenderTarget* viewportRT)
 {
     if (!viewportRT) {
@@ -83,8 +95,8 @@ void ViewportOverlayStage::refreshPipelineFormats(const IRenderTarget* viewportR
         _overlayPipeline->updateDesc(std::move(ci));
     }
 
-    if (auto* runtime = App::get()->getRenderRuntime()) {
-        runtime->getDebugRenderSystem().refreshPipelineFormats(viewportRT);
+    if (_getDebugRenderSystem) {
+        _getDebugRenderSystem().refreshPipelineFormats(viewportRT);
     }
     _debugSkinning.refreshPipelineFormats(viewportRT);
 }
@@ -98,7 +110,8 @@ void ViewportOverlayStage::init(IRender* render)
     _render = render;
     initSkybox();
     initOverlay();
-    auto& debugSystem = App::get()->getDebugRenderSystem();
+    YA_CORE_ASSERT(_getDebugRenderSystem, "ViewportOverlayStage requires debug render system service");
+    auto& debugSystem = _getDebugRenderSystem();
     debugSystem.init(_render);
     debugSystem.primitives().bReverseViewportY = bReverseViewportY;
     _debugSkinning.init(_render);
@@ -222,6 +235,10 @@ void ViewportOverlayStage::destroy()
     _overlayPipeline.reset();
     _overlayPPL.reset();
     _debugSkinning.destroy();
+    _getSceneSkyboxDescriptorSet = {};
+    _getDebugRenderSystem        = {};
+    _getActiveScene              = {};
+    _getResourceResolveSystem    = {};
     _render = nullptr;
 }
 
@@ -238,7 +255,9 @@ void ViewportOverlayStage::prepare(const RenderStageContext& ctx)
     if (_overlayPipeline) {
         _overlayPipeline->beginFrame();
     }
-    App::get()->getDebugRenderSystem().beginFrame();
+    if (_getDebugRenderSystem) {
+        _getDebugRenderSystem().beginFrame();
+    }
     _debugSkinning.beginFrame();
 
     if (!ctx.frameData) return;
@@ -272,16 +291,20 @@ void ViewportOverlayStage::drawSkybox(const RenderStageContext& ctx)
     if (vpW == 0 || vpH == 0) return;
 
     // Check if skybox is available
-    auto* resolver = App::get()->getResourceResolveSystem();
-    auto* scene    = App::get()->getSceneManager()->getActiveScene();
+    if (!_getResourceResolveSystem || !_getActiveScene) {
+        return;
+    }
+    auto* resolver = _getResourceResolveSystem();
+    auto* scene    = _getActiveScene();
     if (!resolver || !scene) return;
 
     const auto* skyboxState = resolver->findFirstSceneSkyboxState(scene);
     if (!skyboxState || !skyboxState->hasRenderableCubemap()) return;
 
-    auto* runtime = App::get()->getRenderRuntime();
-    if (!runtime) return;
-    auto skyboxDS = runtime->getSceneSkyboxDescriptorSet(scene);
+    if (!_getSceneSkyboxDescriptorSet) {
+        return;
+    }
+    auto skyboxDS = _getSceneSkyboxDescriptorSet(scene);
 
     // Get a cube mesh from the scene's skybox entity, or use primitive cache
     Mesh* cubeMesh = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
@@ -320,11 +343,17 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
     auto  vpH    = ctx.viewportExtent.height;
     if (vpW == 0 || vpH == 0) return;
 
-    auto* scene = App::get()->getSceneManager()->getActiveScene();
+    if (!_getActiveScene) {
+        return;
+    }
+    auto* scene = _getActiveScene();
     if (!scene) return;
 
     const auto& fd                     = *ctx.frameData;
-    auto&       debugSystem            = App::get()->getDebugRenderSystem();
+    if (!_getDebugRenderSystem) {
+        return;
+    }
+    auto& debugSystem = _getDebugRenderSystem();
     debugSystem.primitives().bReverseViewportY = bReverseViewportY;
     _debugSkinning.bReverseViewportY   = bReverseViewportY;
 
@@ -444,7 +473,9 @@ void ViewportOverlayStage::renderGUI()
     }
 
     if (ImGui::TreeNode("Debug")) {
-        App::get()->getDebugRenderSystem().renderGUI();
+        if (_getDebugRenderSystem) {
+            _getDebugRenderSystem().renderGUI();
+        }
         _debugSkinning.renderGUI();
         ImGui::TreePop();
     }

@@ -31,6 +31,8 @@ struct AppAutomationShadowOverrides;
 struct SceneManager;
 struct Scene;
 struct Sampler;
+struct DebugRenderSystem;
+class ResourceResolveSystem;
 
 // Shading Model IDs written to GBuffer RT3 (encoded as id/255.0 in R8_UNORM)
 namespace EShadingModelID
@@ -49,6 +51,12 @@ struct DeferredRenderInitDesc
     ShadowSettings* shadowSettings = nullptr;
     const AppAutomationShadowOverrides* automationShadowOverrides = nullptr;
     std::function<void(std::function<void()>)> queueFrameTask;
+    stdptr<IDescriptorSetLayout> environmentLightingDSL = nullptr;
+    std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
+    std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet;
+    std::function<DebugRenderSystem&()> getDebugRenderSystem;
+    std::function<Scene*()> getActiveScene;
+    std::function<ResourceResolveSystem*()> getResourceResolveSystem;
 };
 
 struct DeferredRenderPipeline : public IRenderPipeline
@@ -59,6 +67,12 @@ struct DeferredRenderPipeline : public IRenderPipeline
     ShadowSettings* _shadowSettings = nullptr;
     const AppAutomationShadowOverrides* _automationShadowOverrides = nullptr;
     std::function<void(std::function<void()>)> _queueFrameTask;
+    stdptr<IDescriptorSetLayout> _environmentLightingDSL = nullptr;
+    std::function<DescriptorSetHandle(Scene*)> _getSceneEnvironmentLightingDescriptorSet;
+    std::function<DescriptorSetHandle(Scene*)> _getSceneSkyboxDescriptorSet;
+    std::function<DebugRenderSystem&()> _getDebugRenderSystem;
+    std::function<Scene*()> _getActiveScene;
+    std::function<ResourceResolveSystem*()> _getResourceResolveSystem;
 
     // ── Render targets ────────────────────────────────────────────────
     stdptr<IRenderTarget> _gBufferRT;

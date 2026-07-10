@@ -437,6 +437,12 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     _shadowSettings               = desc.shadowSettings;
     _automationShadowOverrides    = desc.automationShadowOverrides;
     _queueFrameTask               = desc.queueFrameTask;
+    _environmentLightingDSL       = desc.environmentLightingDSL;
+    _getSceneEnvironmentLightingDescriptorSet = desc.getSceneEnvironmentLightingDescriptorSet;
+    _getSceneSkyboxDescriptorSet  = desc.getSceneSkyboxDescriptorSet;
+    _getDebugRenderSystem         = desc.getDebugRenderSystem;
+    _getActiveScene               = desc.getActiveScene;
+    _getResourceResolveSystem     = desc.getResourceResolveSystem;
     _bViewportPassOpen            = false;
     _bShadowSettingsChangePending = false;
     if (_shadowSettings) {
@@ -490,11 +496,14 @@ void DeferredRenderPipeline::initStages()
 
     _lightStage = ya::makeShared<LightStage>();
     _lightStage->setup(_gBufferStage.get(), _gBufferRT.get());
+    _lightStage->setEnvironmentLightingResources(_environmentLightingDSL, _getSceneEnvironmentLightingDescriptorSet);
     _lightStage->setSSAOTexture(_ssaoTexture.get());
     _lightStage->init(_render);
     syncShadowSettings();
 
     _overlayStage = ya::makeShared<ViewportOverlayStage>();
+    _overlayStage->setFrameServices(_getSceneSkyboxDescriptorSet, _getDebugRenderSystem);
+    _overlayStage->setSceneServices(_getActiveScene, _getResourceResolveSystem);
     _overlayStage->init(_render);
 }
 
@@ -530,6 +539,12 @@ void DeferredRenderPipeline::shutdown()
     _gBufferRT.reset();
     destroyShadowResources();
     _bShadowSettingsChangePending = false;
+    _environmentLightingDSL.reset();
+    _getSceneEnvironmentLightingDescriptorSet = {};
+    _getSceneSkyboxDescriptorSet = {};
+    _getDebugRenderSystem = {};
+    _getActiveScene = {};
+    _getResourceResolveSystem = {};
     _render                       = nullptr;
 }
 
