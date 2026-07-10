@@ -9,9 +9,19 @@ struct App;
 struct AppDesc;
 struct AppAutomationOptions;
 struct ICommandBuffer;
+struct IRender;
 struct OffscreenJobQueueService;
 struct RenderRuntimeFrameServices;
 struct Texture;
+
+struct AppAutomationFrameContext
+{
+    IRender*                        render              = nullptr;
+    Texture*                        postprocessTexture  = nullptr;
+    Texture*                        presentationTexture = nullptr;
+    const RenderRuntimeFrameServices* frameServices     = nullptr;
+    uint64_t                        frameIndex          = 0;
+};
 
 class AppAutomation
 {
@@ -32,7 +42,7 @@ class AppAutomation
     static void recordPresentationCapture(Texture* presentationSourceTexture,
                                           uint64_t frameIndex,
                                           ICommandBuffer* cmdBuf);
-    static void onFrameCompleted(App& app);
+    static void onFrameCompleted(App& app, const AppAutomationFrameContext& frameContext);
 };
 
 } // namespace ya

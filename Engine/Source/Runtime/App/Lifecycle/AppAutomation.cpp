@@ -350,7 +350,7 @@ bool isAutomationStableFrameReady(App& app)
     return runtimeState.stableFrames >= settleFrames;
 }
 
-bool handleScreenshotAutomation(App& app, bool bStableFrameReady)
+bool handleScreenshotAutomation(App& app, const AppAutomationFrameContext& frameContext, bool bStableFrameReady)
 {
     auto& runtimeState = getAutomationRuntimeState();
 
@@ -359,7 +359,7 @@ bool handleScreenshotAutomation(App& app, bool bStableFrameReady)
         return false;
     }
 
-    AppScreenshotCapture::tryFinalize(app.getFrameIndex(), runtimeState.screenshot);
+    AppScreenshotCapture::tryFinalize(frameContext.frameIndex, runtimeState.screenshot);
     if (runtimeState.bScreenshotRequested || isScreenshotTerminal(runtimeState)) {
         return !isScreenshotTerminal(runtimeState);
     }
@@ -368,17 +368,14 @@ bool handleScreenshotAutomation(App& app, bool bStableFrameReady)
         return true;
     }
 
-    auto* renderRuntime = app.getRenderRuntime();
-    auto* render        = app.getRender();
-    if (!renderRuntime || !render) {
+    if (!frameContext.render || !frameContext.frameServices) {
         return false;
     }
-    const auto frameServices = renderRuntime->buildFrameServices();
 
-    runtimeState.bScreenshotRequested = AppScreenshotCapture::request(render,
+    runtimeState.bScreenshotRequested = AppScreenshotCapture::request(frameContext.render,
                                                                       AppAutomation::buildOffscreenJobQueueService(app),
-                                                                      AppAutomation::getViewportScreenshotTexture(frameServices, app.getPostprocessOutputTexture()),
-                                                                      AppAutomation::getPresentationScreenshotTexture(frameServices),
+                                                                      AppAutomation::getViewportScreenshotTexture(*frameContext.frameServices, frameContext.postprocessTexture),
+                                                                      frameContext.presentationTexture,
                                                                       runtimeState.screenshot,
                                                                       *automation.screenshotPath,
                                                                       automation.screenshotTarget);
@@ -393,24 +390,23 @@ bool handleScreenshotAutomation(App& app, bool bStableFrameReady)
     return !isScreenshotTerminal(runtimeState);
 }
 
-bool handleRenderDocAutomation(App& app, bool bStableFrameReady)
+bool handleRenderDocAutomation(const AppAutomationOptions& automation,
+                               const AppAutomationFrameContext& frameContext,
+                               bool bStableFrameReady)
 {
-    const AppAutomationOptions& automation = app.getDesc().automation;
+    if (!frameContext.frameServices) {
+        return false;
+    }
+
     if (!hasRenderDocAutomation(automation)) {
         return false;
     }
 
-    RenderRuntime* renderRuntime = app.getRenderRuntime();
-    if (!renderRuntime) {
-        return false;
-    }
-    const auto frameServices = renderRuntime->buildFrameServices();
-
-    if (AppAutomation::isRenderDocCapturePending(frameServices)) {
+    if (AppAutomation::isRenderDocCapturePending(*frameContext.frameServices)) {
         return true;
     }
 
-    if (AppAutomation::isRenderDocCaptureTerminal(frameServices)) {
+    if (AppAutomation::isRenderDocCaptureTerminal(*frameContext.frameServices)) {
         return false;
     }
 
@@ -418,7 +414,7 @@ bool handleRenderDocAutomation(App& app, bool bStableFrameReady)
         return true;
     }
 
-    const bool bRequested = AppAutomation::requestRenderDocCapture(frameServices);
+    const bool bRequested = AppAutomation::requestRenderDocCapture(*frameContext.frameServices);
     if (bRequested) {
         const uint64_t settleFrames = automation.screenshotSettleFrames > 0 ? automation.screenshotSettleFrames : 1;
         YA_CORE_INFO("Automation requested a single RenderDoc capture after {} warmup frames and {} stable frames",
@@ -426,10 +422,10 @@ bool handleRenderDocAutomation(App& app, bool bStableFrameReady)
                      settleFrames);
     }
 
-    return AppAutomation::isRenderDocCapturePending(frameServices);
+    return AppAutomation::isRenderDocCapturePending(*frameContext.frameServices);
 }
 
-bool hasPendingAutomationWork(const App& app)
+bool hasPendingAutomationWork(const App& app, const AppAutomationFrameContext* frameContext = nullptr)
 {
     auto&                       runtimeState = getAutomationRuntimeState();
     const AppAutomationOptions& automation   = app.getDesc().automation;
@@ -438,7 +434,10 @@ bool hasPendingAutomationWork(const App& app)
 
     bool bRenderDocPending = false;
     if (hasRenderDocAutomation(automation)) {
-        if (const RenderRuntime* renderRuntime = app.getRenderRuntime()) {
+        if (frameContext && frameContext->frameServices) {
+            bRenderDocPending = !AppAutomation::isRenderDocCaptureTerminal(*frameContext->frameServices);
+        }
+        else if (const RenderRuntime* renderRuntime = app.getRenderRuntime()) {
             const auto frameServices = renderRuntime->buildFrameServices();
             bRenderDocPending = !AppAutomation::isRenderDocCaptureTerminal(frameServices);
         }
@@ -568,7 +567,7 @@ OffscreenJobQueueService AppAutomation::buildOffscreenJobQueueService(App& app)
     return queueService;
 }
 
-void AppAutomation::onFrameCompleted(App& app)
+void AppAutomation::onFrameCompleted(App& app, const AppAutomationFrameContext& frameContext)
 {
     YA_PROFILE_FUNCTION()
 
@@ -583,19 +582,18 @@ void AppAutomation::onFrameCompleted(App& app)
     }
     {
         YA_PROFILE_SCOPE("Automation/Screenshot");
-        bScreenshotPending = handleScreenshotAutomation(app, bStableFrameReady);
+        bScreenshotPending = handleScreenshotAutomation(app, frameContext, bStableFrameReady);
     }
     {
         YA_PROFILE_SCOPE("Automation/RenderDoc");
-        bRenderDocPending = handleRenderDocAutomation(app, bStableFrameReady);
+        bRenderDocPending = handleRenderDocAutomation(app.getDesc().automation, frameContext, bStableFrameReady);
     }
     const bool bAutomationPending = bScreenshotPending || bRenderDocPending;
 
-    if (RenderRuntime* renderRuntime = app.getRenderRuntime()) {
+    if (frameContext.frameServices) {
         YA_PROFILE_SCOPE("Automation/UpdateArtifacts");
-        const auto frameServices = renderRuntime->buildFrameServices();
-        profiling::setGpuCapturePath(AppAutomation::getRenderDocCapturePath(frameServices));
-        profiling::setPassSummaryPath(AppAutomation::getRenderDocPassSummaryPath(frameServices));
+        profiling::setGpuCapturePath(AppAutomation::getRenderDocCapturePath(*frameContext.frameServices));
+        profiling::setPassSummaryPath(AppAutomation::getRenderDocPassSummaryPath(*frameContext.frameServices));
         profiling::setScreenshotPath(runtimeState.screenshot.outputPath);
     }
     if (runtimeState.bQuitDeferred && !bAutomationPending) {

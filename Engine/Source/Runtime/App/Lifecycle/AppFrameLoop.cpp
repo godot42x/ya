@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <format>
+#include <optional>
 
 namespace ya
 {
@@ -154,7 +155,20 @@ int AppFrameLoop::iterate(App& app, float dt)
     if (AppAutomation::isFrameAutomationEnabled(app)) {
         YA_PROFILE_SCOPE("Frame/Automation");
         YA_PERF_SCOPE(perf::sample::frameAutomation(), perf::metric::cpuTimeMs(), perf::domain::render());
-        AppAutomation::onFrameCompleted(app);
+        auto* renderRuntime = app.getRenderRuntime();
+        std::optional<RenderRuntimeFrameServices> frameServices;
+        if (renderRuntime) {
+            frameServices = renderRuntime->buildFrameServices();
+        }
+
+        AppAutomation::onFrameCompleted(app,
+                                        AppAutomationFrameContext{
+                                            .render              = app.getRender(),
+                                            .postprocessTexture  = app.getPostprocessOutputTexture(),
+                                            .presentationTexture = renderRuntime ? renderRuntime->getPresentationTexture() : nullptr,
+                                            .frameServices       = frameServices ? &*frameServices : nullptr,
+                                            .frameIndex          = App::_frameIndex,
+                                        });
     }
 
     return 0;
