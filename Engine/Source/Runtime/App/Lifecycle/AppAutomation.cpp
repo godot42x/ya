@@ -1,6 +1,7 @@
 #include "Runtime/App/Lifecycle/AppAutomation.h"
 
 #include "Runtime/App/App.h"
+#include "Runtime/App/RenderRuntime.h"
 #include "Runtime/App/Utility/AppScreenshotCapture.h"
 
 #include "Config/ConfigManager.h"
@@ -392,12 +393,13 @@ bool handleRenderDocAutomation(App& app, bool bStableFrameReady)
     if (!renderRuntime) {
         return false;
     }
+    const auto frameServices = renderRuntime->buildFrameServices();
 
-    if (renderRuntime->isAutomationRenderDocCapturePending()) {
+    if (AppAutomation::isRenderDocCapturePending(frameServices)) {
         return true;
     }
 
-    if (renderRuntime->isAutomationRenderDocCaptureTerminal()) {
+    if (AppAutomation::isRenderDocCaptureTerminal(frameServices)) {
         return false;
     }
 
@@ -405,7 +407,7 @@ bool handleRenderDocAutomation(App& app, bool bStableFrameReady)
         return true;
     }
 
-    const bool bRequested = renderRuntime->requestAutomationRenderDocCapture();
+    const bool bRequested = AppAutomation::requestRenderDocCapture(frameServices);
     if (bRequested) {
         const uint64_t settleFrames = automation.screenshotSettleFrames > 0 ? automation.screenshotSettleFrames : 1;
         YA_CORE_INFO("Automation requested a single RenderDoc capture after {} warmup frames and {} stable frames",
@@ -413,7 +415,7 @@ bool handleRenderDocAutomation(App& app, bool bStableFrameReady)
                      settleFrames);
     }
 
-    return renderRuntime->isAutomationRenderDocCapturePending();
+    return AppAutomation::isRenderDocCapturePending(frameServices);
 }
 
 bool hasPendingAutomationWork(const App& app)
@@ -426,7 +428,8 @@ bool hasPendingAutomationWork(const App& app)
     bool bRenderDocPending = false;
     if (hasRenderDocAutomation(automation)) {
         if (const RenderRuntime* renderRuntime = app.getRenderRuntime()) {
-            bRenderDocPending = !renderRuntime->isAutomationRenderDocCaptureTerminal();
+            const auto frameServices = renderRuntime->buildFrameServices();
+            bRenderDocPending = !AppAutomation::isRenderDocCaptureTerminal(frameServices);
         }
     }
 
@@ -502,6 +505,33 @@ void AppAutomation::recordPresentationCapture(App& app, ICommandBuffer* cmdBuf)
     AppScreenshotCapture::recordPresentationCapture(app, runtimeState.screenshot, cmdBuf);
 }
 
+bool AppAutomation::requestRenderDocCapture(const RenderRuntimeFrameServices& services)
+{
+    return services.requestAutomationRenderDocCapture ? services.requestAutomationRenderDocCapture() : false;
+}
+
+bool AppAutomation::isRenderDocCapturePending(const RenderRuntimeFrameServices& services)
+{
+    return services.isAutomationRenderDocCapturePending ? services.isAutomationRenderDocCapturePending() : false;
+}
+
+bool AppAutomation::isRenderDocCaptureTerminal(const RenderRuntimeFrameServices& services)
+{
+    return services.isAutomationRenderDocCaptureTerminal ? services.isAutomationRenderDocCaptureTerminal() : true;
+}
+
+const std::string& AppAutomation::getRenderDocCapturePath(const RenderRuntimeFrameServices& services)
+{
+    static const std::string emptyPath;
+    return services.getAutomationRenderDocCapturePath ? services.getAutomationRenderDocCapturePath() : emptyPath;
+}
+
+const std::string& AppAutomation::getRenderDocPassSummaryPath(const RenderRuntimeFrameServices& services)
+{
+    static const std::string emptyPath;
+    return services.getAutomationRenderDocPassSummaryPath ? services.getAutomationRenderDocPassSummaryPath() : emptyPath;
+}
+
 void AppAutomation::onFrameCompleted(App& app)
 {
     YA_PROFILE_FUNCTION()
@@ -527,8 +557,9 @@ void AppAutomation::onFrameCompleted(App& app)
 
     if (RenderRuntime* renderRuntime = app.getRenderRuntime()) {
         YA_PROFILE_SCOPE("Automation/UpdateArtifacts");
-        profiling::setGpuCapturePath(renderRuntime->getAutomationRenderDocCapturePath());
-        profiling::setPassSummaryPath(renderRuntime->getAutomationRenderDocPassSummaryPath());
+        const auto frameServices = renderRuntime->buildFrameServices();
+        profiling::setGpuCapturePath(AppAutomation::getRenderDocCapturePath(frameServices));
+        profiling::setPassSummaryPath(AppAutomation::getRenderDocPassSummaryPath(frameServices));
         profiling::setScreenshotPath(runtimeState.screenshot.outputPath);
     }
     if (runtimeState.bQuitDeferred && !bAutomationPending) {

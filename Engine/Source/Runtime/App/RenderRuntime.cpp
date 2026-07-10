@@ -351,6 +351,44 @@ const std::string& RenderRuntime::getAutomationRenderDocPassSummaryPath() const
     return _diagnostics.getAutomationRenderDocPassSummaryPath();
 }
 
+RenderRuntimeFrameServices RenderRuntime::buildFrameServices() const
+{
+    RenderRuntimeFrameServices services{};
+    services.getSceneSkyboxDescriptorSet = [this](Scene* scene)
+    {
+        return const_cast<RenderRuntime*>(this)->getSceneSkyboxDescriptorSet(scene);
+    };
+    services.getSceneEnvironmentLightingDescriptorSet = [this](Scene* scene)
+    {
+        return const_cast<RenderRuntime*>(this)->getSceneEnvironmentLightingDescriptorSet(scene);
+    };
+    services.getDebugRenderSystem = [this]() -> DebugRenderSystem&
+    {
+        return const_cast<RenderRuntime*>(this)->getDebugRenderSystem();
+    };
+    services.requestAutomationRenderDocCapture = [this]()
+    {
+        return const_cast<RenderRuntime*>(this)->requestAutomationRenderDocCapture();
+    };
+    services.isAutomationRenderDocCapturePending = [this]()
+    {
+        return isAutomationRenderDocCapturePending();
+    };
+    services.isAutomationRenderDocCaptureTerminal = [this]()
+    {
+        return isAutomationRenderDocCaptureTerminal();
+    };
+    services.getAutomationRenderDocCapturePath = [this]() -> const std::string&
+    {
+        return getAutomationRenderDocCapturePath();
+    };
+    services.getAutomationRenderDocPassSummaryPath = [this]() -> const std::string&
+    {
+        return getAutomationRenderDocPassSummaryPath();
+    };
+    return services;
+}
+
 void RenderRuntime::initActivePipeline()
 {
     int winW = 0;

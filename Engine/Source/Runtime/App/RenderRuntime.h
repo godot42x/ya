@@ -35,6 +35,19 @@ struct Sampler;
 struct EnvironmentLightingComponent;
 struct RenderFrameData;
 struct DebugRenderSystem;
+struct RenderDiagnosticsService;
+
+struct RenderRuntimeFrameServices
+{
+    std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet;
+    std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
+    std::function<DebugRenderSystem&()> getDebugRenderSystem;
+    std::function<bool()> requestAutomationRenderDocCapture;
+    std::function<bool()> isAutomationRenderDocCapturePending;
+    std::function<bool()> isAutomationRenderDocCaptureTerminal;
+    std::function<const std::string&()> getAutomationRenderDocCapturePath;
+    std::function<const std::string&()> getAutomationRenderDocPassSummaryPath;
+};
 
 struct DeferredPipelineDebugViews
 {
@@ -260,6 +273,7 @@ struct RenderRuntime
     void                          setDeferredSharedDepthFormat(EFormat::T format);
     [[nodiscard]] bool            isDeferredPipelineActive() const { return _renderPipeline == ERenderPipeline::Deferred; }
     [[nodiscard]] ForwardRenderPipeline* getForwardPipelineImpl() const { return _forwardPipeline.get(); }
+    [[nodiscard]] RenderRuntimeFrameServices buildFrameServices() const;
 
   private:
     void                   initRuntimeState(const InitDesc& desc);
