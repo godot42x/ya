@@ -1,15 +1,104 @@
+local function _shader_codegen_inputs()
+    local files = {
+        "Engine/Shader/slang_gen_header.py",
+        "Engine/Shader/glsl_gen_header.py",
+        "Engine/Shader/shader_config.py",
+        "requirements.txt",
+    }
+    table.join2(files, os.files("Engine/Shader/Slang/**.slang"))
+    table.join2(files, os.files("Engine/Shader/GLSL/**.glsl"))
+    table.sort(files)
+    return files
+end
+
+local function _run_shader_codegen(run_script)
+    local now    = os.mclock()
+
+    do
+        local script    = "Engine/Shader/slang_gen_header.py"
+        local outputDir = "Engine/Shader/Slang/Generated"
+        local args      = {
+            "--output-dir", outputDir,
+            "--include-dir", "Engine/Shader/Slang",
+            "--slang-root", "Engine/Shader/Slang",
+        }
+        for _, f in ipairs(os.files("Engine/Shader/Slang/**.slang")) do
+            table.insert(args, f)
+        end
+        run_script(script, args)
+    end
+
+    do
+        local script    = "Engine/Shader/glsl_gen_header.py"
+        local outputDir = "Engine/Shader/GLSL/Generated"
+        local args      = {
+            "--output-dir", outputDir,
+            "--namespace", "ya::glsl_types",
+            "--include-dir", "Engine/Shader/GLSL",
+        }
+        for _, f in ipairs(os.files("Engine/Shader/GLSL/**.glsl")) do
+            table.insert(args, f)
+        end
+        run_script(script, args)
+    end
+
+    local cost = os.mclock() - now
+    print("ya-shader cost: ", cost, "ms")
+end
+
+rule("ya.shader.codegen")
+do
+    on_prepare(function(target)
+        import("core.project.depend")
+        import("lib.detect.find_tool")
+        import("utils.progress")
+
+        local dependfile = path.join(target:autogendir(), "rules", "ya", "shader_codegen.d")
+        local uv = find_tool("uv")
+        local python = find_tool("python3") or find_tool("python")
+        assert(uv or python, "uv or python3/python not found for shader codegen")
+        os.mkdir(path.directory(dependfile))
+
+        depend.on_changed(function()
+            progress.show(0, "${color.build.object}generating.shader %s", target:name())
+            _run_shader_codegen(function(script, args)
+                if uv then
+                    local uvArgs = {
+                        "run",
+                        "--with-requirements",
+                        "./requirements.txt",
+                        "python",
+                        script,
+                    }
+                    table.join2(uvArgs, args)
+                    os.vrunv(uv.program, uvArgs)
+                    return
+                end
+
+                local pythonArgs = { script }
+                table.join2(pythonArgs, args)
+                os.vrunv(python.program, pythonArgs)
+            end)
+        end, {
+            files = _shader_codegen_inputs(),
+            dependfile = dependfile,
+        })
+    end)
+end
+
 task("ya-shader")
 do
     set_menu {
     }
 
     on_run(function()
-        local now    = os.mclock()
-        local python = "python"
-        local useUv  = os.execv("uv", { "--version" }, { stdout = os.nuldev(), stderr = os.nuldev() }) == 0
+        import("lib.detect.find_tool")
 
-        local function run_python(script, args)
-            if useUv then
+        local uv = find_tool("uv")
+        local python = find_tool("python3") or find_tool("python")
+        assert(uv or python, "uv or python3/python not found for shader codegen")
+        _run_shader_codegen(function(script, args)
+            if uv then
                 local uvArgs = {
                     "run",
                     "--with-requirements",
@@ -17,50 +106,14 @@ do
                     "python",
                     script,
                 }
-                for _, arg in ipairs(args) do
-                    table.insert(uvArgs, arg)
-                end
-                os.execv("uv", uvArgs)
+                table.join2(uvArgs, args)
+                os.execv(uv.program, uvArgs)
                 return
             end
 
             local pythonArgs = { script }
-            for _, arg in ipairs(args) do
-                table.insert(pythonArgs, arg)
-            end
-            os.execv(python, pythonArgs)
-        end
-
-        -- Step 1: slang -> C++ header (single Python process for all files)
-        do
-            local script    = "Engine/Shader/slang_gen_header.py"
-            local outputDir = "Engine/Shader/Slang/Generated"
-            local args      = {
-                "--output-dir", outputDir,
-                "--include-dir", "Engine/Shader/Slang",
-                "--slang-root", "Engine/Shader/Slang",
-            }
-            for _, f in ipairs(os.files("Engine/Shader/Slang/**.slang")) do
-                table.insert(args, f)
-            end
-            run_python(script, args)
-        end
-
-        -- Step 2: glsl -> C++ header (single Python process for all files)
-        do
-            local script    = "Engine/Shader/glsl_gen_header.py"
-            local outputDir = "Engine/Shader/GLSL/Generated"
-            local args      = {
-                "--output-dir", outputDir,
-                "--namespace", "ya::glsl_types",
-                "--include-dir", "Engine/Shader/GLSL",
-            }
-            for _, f in ipairs(os.files("Engine/Shader/GLSL/**.glsl")) do
-                table.insert(args, f)
-            end
-            run_python(script, args)
-        end
-        local cost = os.mclock() - now
-        print("ya-shader cost: ", cost, "ms")
+            table.join2(pythonArgs, args)
+            os.execv(python.program, pythonArgs)
+        end)
     end)
 end

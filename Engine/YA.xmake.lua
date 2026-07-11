@@ -74,6 +74,7 @@ end
 target("ya") --"Yet Another (Game) Engine"
 do
     set_kind("static")
+    add_rules("ya.shader.codegen")
     local bEnableUnity = get_config("ya_enable_unity-build")
     if  bEnableUnity then
         print("-- ENABLE UNITY BUILD")
@@ -168,11 +169,6 @@ do
             add_cxxflags("/O0")         -- disable optimization
         end
     end
-
-    before_build(function(target)
-        print(target:name())
-        os.exec("xmake ya-shader")
-    end)
 
     before_run(function(target)
         print("before run", target:name())
