@@ -33,6 +33,7 @@ struct PostProcessingState
     EKernelMode       kernelMode             = EKernelMode::None;
     bool              bEnableToneMapping     = true;
     EToneMappingCurve toneMappingCurve       = EToneMappingCurve::ACES;
+    float             exposure               = 0.6f;
     bool              bEnableGammaCorrection = true;
     float             gamma                  = 2.2f;
     bool              bEnableRandomGrain     = false;

@@ -163,6 +163,7 @@ float4 fragMain(VertexOutput input) : SV_Target
     }
 
     if ((pc.flags & EPostProcessingFlag::ToneMapping) != 0u) {
+        color *= pc.params0.w;
         if (pc.toneMappingCurve == EToneMappingCurve::Uncharted2) {
             color = uncharted2ToneMap(color);
         }

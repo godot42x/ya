@@ -27,6 +27,7 @@ constexpr const char* POSTPROCESS_CONFIG_KEY_KERNEL                  = "render.p
 constexpr const char* POSTPROCESS_CONFIG_KEY_KERNEL_TEXEL_OFFSET     = "render.postprocess.basic.kernelTexelOffset";
 constexpr const char* POSTPROCESS_CONFIG_KEY_TONEMAPPING_ENABLE      = "render.postprocess.basic.tonemapping.enabled";
 constexpr const char* POSTPROCESS_CONFIG_KEY_TONEMAPPING_CURVE       = "render.postprocess.basic.tonemapping.curve";
+constexpr const char* POSTPROCESS_CONFIG_KEY_TONEMAPPING_EXPOSURE    = "render.postprocess.basic.tonemapping.exposure";
 constexpr const char* POSTPROCESS_CONFIG_KEY_GAMMA_CORRECTION_ENABLE = "render.postprocess.basic.output.gammaCorrection";
 constexpr const char* POSTPROCESS_CONFIG_KEY_GAMMA                   = "render.postprocess.basic.output.gamma";
 constexpr const char* POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_ENABLE     = "render.postprocess.basic.output.randomGrain";
@@ -109,6 +110,7 @@ void PostProcessingStage::init(const InitDesc& desc)
     _state.kernelTexelOffset   = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_KERNEL_TEXEL_OFFSET, _state.kernelTexelOffset);
     _state.bEnableToneMapping  = config.getOr<bool>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_TONEMAPPING_ENABLE, _state.bEnableToneMapping);
     _state.toneMappingCurve    = static_cast<PostProcessingState::EToneMappingCurve>(config.getOr<int>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_TONEMAPPING_CURVE, static_cast<int>(_state.toneMappingCurve)));
+    _state.exposure            = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_TONEMAPPING_EXPOSURE, _state.exposure);
     _state.bEnableGammaCorrection = config.getOr<bool>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_GAMMA_CORRECTION_ENABLE, _state.bEnableGammaCorrection);
     _state.gamma               = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_GAMMA, _state.gamma);
     _state.bEnableRandomGrain  = config.getOr<bool>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_ENABLE, _state.bEnableRandomGrain);

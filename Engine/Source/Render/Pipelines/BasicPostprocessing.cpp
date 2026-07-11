@@ -47,6 +47,7 @@ constexpr const char* POSTPROCESS_CONFIG_KEY_KERNEL                       = "ren
 constexpr const char* POSTPROCESS_CONFIG_KEY_KERNEL_TEXEL_OFFSET          = "render.postprocess.basic.kernelTexelOffset";
 constexpr const char* POSTPROCESS_CONFIG_KEY_TONEMAPPING_ENABLE           = "render.postprocess.basic.tonemapping.enabled";
 constexpr const char* POSTPROCESS_CONFIG_KEY_TONEMAPPING_CURVE            = "render.postprocess.basic.tonemapping.curve";
+constexpr const char* POSTPROCESS_CONFIG_KEY_TONEMAPPING_EXPOSURE         = "render.postprocess.basic.tonemapping.exposure";
 constexpr const char* POSTPROCESS_CONFIG_KEY_GAMMA_CORRECTION_ENABLE      = "render.postprocess.basic.output.gammaCorrection";
 constexpr const char* POSTPROCESS_CONFIG_KEY_GAMMA                        = "render.postprocess.basic.output.gamma";
 constexpr const char* POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_ENABLE          = "render.postprocess.basic.output.randomGrain";
@@ -165,7 +166,7 @@ void BasicPostprocessing::rebuildPushConstants(const PostProcessingState& state,
         std::max(state.gamma, 0.001f),
         std::max(state.kernelTexelOffset, 0.000001f),
         std::max(state.randomGrainStrength, 0.0f),
-        0.0f);
+        std::max(state.exposure, 0.0f));
 }
 
 void BasicPostprocessing::render(const RenderDesc& desc)
@@ -245,6 +246,7 @@ void BasicPostprocessing::renderSettingsGUI(PostProcessingState& state)
         state.toneMappingCurve = static_cast<PostProcessingState::EToneMappingCurve>(toneMappingCurve);
         bDirty = true;
     }
+    bDirty |= ImGui::DragFloat("Exposure", &state.exposure, 0.01f, 0.0f, 8.0f, "%.2f");
     ImGui::EndDisabled();
 
     ImGui::SeparatorText("Output");
@@ -266,6 +268,7 @@ void BasicPostprocessing::renderSettingsGUI(PostProcessingState& state)
             .set(POSTPROCESS_CONFIG_KEY_KERNEL_TEXEL_OFFSET, state.kernelTexelOffset)
             .set(POSTPROCESS_CONFIG_KEY_TONEMAPPING_ENABLE, state.bEnableToneMapping)
             .set(POSTPROCESS_CONFIG_KEY_TONEMAPPING_CURVE, static_cast<int>(state.toneMappingCurve))
+            .set(POSTPROCESS_CONFIG_KEY_TONEMAPPING_EXPOSURE, state.exposure)
             .set(POSTPROCESS_CONFIG_KEY_GAMMA_CORRECTION_ENABLE, state.bEnableGammaCorrection)
             .set(POSTPROCESS_CONFIG_KEY_GAMMA, state.gamma)
             .set(POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_ENABLE, state.bEnableRandomGrain)
