@@ -7,6 +7,7 @@
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Resource/Texture/TextureLibrary.h"
 
+#include "imgui.h"
 
 #include <string>
 #include <vector>

@@ -102,7 +102,7 @@ int AppFrameLoop::run(App& app)
 int AppFrameLoop::iterate(App& app, float dt)
 {
     YA_PROFILE_FUNCTION()
-    YA_PERF_FUNCTION(perf::metric::cpuTimeMs(), perf::domain::render())
+    YA_PERF_FUNCTION(perf::metric::cpuTimeMs(), perf::domain::render());
 
     YA_PERF_FRAME_SCOPE(
         perf::sample::renderFrame(),
