@@ -6,6 +6,7 @@
 #include "reflect.cc/enum"
 
 #include <glm/glm.hpp>
+#include <type_traits>
 
 // Single source of truth: MAX_POINT_LIGHTS lives in Engine/Shader/GLSL/Common/Limits.glsl.
 // The code generator emits it to ya::glsl_types::Common::Limits::MAX_POINT_LIGHTS.
@@ -1292,9 +1293,9 @@ struct SwapchainCreateInfo
     bool            bVsync      = true;               // V-Sync enabled by default
 
     // Image configuration
-    uint32_t minImageCount       = 2; // Double buffering by default
-    uint32_t imageArrayLayers    = 1;
-    bool     bEnableTransferSrc  = false;
+    uint32_t minImageCount      = 2; // Double buffering by default
+    uint32_t imageArrayLayers   = 1;
+    bool     bEnableTransferSrc = false;
     // std::vector<EImageUsage::T> imageUsageFlags  = {EImageUsage::ColorAttachment}; // Default usage
 
     // Transform and composite

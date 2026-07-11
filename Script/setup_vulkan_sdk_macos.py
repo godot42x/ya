@@ -1,5 +1,5 @@
 """
-Download + install the LunarG Vulkan SDK for macOS into a repo-local directory.
+Install the LunarG Vulkan SDK for macOS into a repo-local directory.
 
 Why repo-local?
 - Keeps the toolchain reproducible per-checkout and avoids polluting the system.
@@ -8,9 +8,10 @@ Why repo-local?
 
 Usage
 -----
-    python3 Script/setup_vulkan_sdk_macos.py              # latest
+    python3 Script/setup_vulkan_sdk_macos.py              # reuse installed SDK, or install if missing
+    python3 Script/setup_vulkan_sdk_macos.py --latest     # query and install latest SDK
     python3 Script/setup_vulkan_sdk_macos.py --version 1.4.341.1
-    python3 Script/setup_vulkan_sdk_macos.py --force      # reinstall even if present
+    python3 Script/setup_vulkan_sdk_macos.py --force      # reinstall selected SDK even if present
 
 Requires: Python 3.8+, macOS, curl, unzip (ship with macOS).
 
@@ -30,6 +31,7 @@ import subprocess
 import sys
 import urllib.request
 from pathlib import Path
+from typing import Iterable
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -52,6 +54,13 @@ def ensure_macos() -> None:
 def fetch_latest_version() -> str:
     with urllib.request.urlopen(LATEST_VERSION_URL, timeout=30) as resp:
         return resp.read().decode("utf-8").strip()
+
+
+def version_key(version: str) -> tuple[int | str, ...]:
+    parts: list[int | str] = []
+    for token in version.split("."):
+        parts.append(int(token) if token.isdigit() else token)
+    return tuple(parts)
 
 
 def download_with_progress(url: str, dst: Path) -> None:
@@ -137,14 +146,51 @@ def validate_install(install_dest: Path) -> None:
         )
 
 
+def iter_installed_versions() -> Iterable[tuple[str, Path]]:
+    if not SDK_INSTALL_ROOT.exists():
+        return []
+
+    installs: list[tuple[str, Path]] = []
+    for child in SDK_INSTALL_ROOT.iterdir():
+        if not child.is_dir() or child.name.startswith("."):
+            continue
+        installs.append((child.name, child))
+
+    installs.sort(key=lambda item: version_key(item[0]), reverse=True)
+    return installs
+
+
+def find_latest_valid_install() -> tuple[str, Path] | None:
+    for version, install_dest in iter_installed_versions():
+        try:
+            validate_install(install_dest)
+            return version, install_dest
+        except RuntimeError:
+            continue
+    return None
+
+
+def print_update_hint() -> None:
+    print("-- To update the SDK explicitly, run one of:")
+    print("   make vulkan-sdk-macos")
+    print("   python3 Script/setup_vulkan_sdk_macos.py --latest")
+    print("   python3 Script/setup_vulkan_sdk_macos.py --version <version>")
+
+
 def main() -> int:
     ensure_macos()
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
-    parser.add_argument(
+    version_group = parser.add_mutually_exclusive_group()
+    version_group.add_argument(
         "--version",
         default=os.environ.get("VULKAN_SDK_VERSION") or None,
-        help="Pin a specific Vulkan SDK version (default: query latest).",
+        help="Pin a specific Vulkan SDK version.",
+    )
+    version_group.add_argument(
+        "--latest",
+        action="store_true",
+        help="Query and install the latest Vulkan SDK version explicitly.",
     )
     parser.add_argument(
         "--force",
@@ -158,7 +204,22 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    version = args.version or fetch_latest_version()
+    if not args.version and not args.latest:
+        existing = find_latest_valid_install()
+        if existing and not args.force:
+            version, install_dest = existing
+            print(f"-- Using installed Vulkan SDK: {version}")
+            print(f"-- SDK path: {install_dest}")
+            print_update_hint()
+            return 0
+
+    if args.latest:
+        version = fetch_latest_version()
+    elif args.version:
+        version = args.version
+    else:
+        version = fetch_latest_version()
+
     print(f"-- Vulkan SDK version: {version}")
 
     install_dest = SDK_INSTALL_ROOT / version
@@ -166,6 +227,8 @@ def main() -> int:
         try:
             validate_install(install_dest)
             print(f"-- SDK already installed at {install_dest} (use --force to redo)")
+            if args.latest:
+                print_update_hint()
             return 0
         except RuntimeError as e:
             print(f"-- Existing install is incomplete ({e}); reinstalling")
@@ -193,6 +256,7 @@ def main() -> int:
             shutil.rmtree(extract_dir, ignore_errors=True)
 
     print(f"-- SDK installed at: {install_dest}")
+    print_update_hint()
     print()
     print("Next steps:")
     print("  make cfg && make b t=ya")

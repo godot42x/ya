@@ -24,7 +24,7 @@ YA Engine 是一个 C++20 游戏引擎项目，重点放在实用渲染、运行
 - Python 3，用于 setup 和 shader 头文件生成脚本。
 - `make`，用于 README 中的快捷命令。
 
-在 macOS 上，`make cfg` 会运行仓库 setup 脚本，并在需要时检查和初始化 `Engine/ThirdParty/VulkanSDK/` 下的本地 Vulkan SDK。
+在 macOS 上，`make cfg` 会运行仓库 setup 脚本，优先复用 `Engine/ThirdParty/VulkanSDK/` 下已经安装的本地 Vulkan SDK；仅在缺失时才自动安装。升级到更新版本需要用户显式执行 `make vulkan-sdk-macos`。
 
 ## Quick Start
 
@@ -43,6 +43,8 @@ make r t=HelloMaterial
 
 ```bash
 make cfg                           # 配置依赖、debug 模式和 compile_commands.json
+make vulkan-sdk-macos              # macOS：显式安装/升级到最新的本地 Vulkan SDK
+make vulkan-sdk-macos v=1.4.341.1  # macOS：安装指定版本的 Vulkan SDK
 make b t=HelloMaterial             # 构建示例目标
 make r t=HelloMaterial             # 构建并运行示例目标
 make r t=GreedySnake               # 构建并运行另一个示例

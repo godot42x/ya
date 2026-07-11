@@ -24,7 +24,7 @@ The engine currently includes an EnTT-based ECS, ImGui editor layers, Lua script
 - Python 3 for setup and shader header generation scripts.
 - `make` for the documented shortcut commands.
 
-On macOS, `make cfg` also runs the repo setup script that checks and initializes the local Vulkan SDK under `Engine/ThirdParty/VulkanSDK/` when needed.
+On macOS, `make cfg` also runs the repo setup script that reuses the installed repo-local Vulkan SDK under `Engine/ThirdParty/VulkanSDK/`, and only installs one when missing. Updating to a newer SDK is an explicit step via `make vulkan-sdk-macos`.
 
 ## Quick Start
 
@@ -43,6 +43,8 @@ make r t=HelloMaterial
 
 ```bash
 make cfg                           # configure dependencies, debug mode, compile_commands.json
+make vulkan-sdk-macos              # macOS: explicitly update/install the latest repo-local Vulkan SDK
+make vulkan-sdk-macos v=1.4.341.1  # macOS: install a specific Vulkan SDK version
 make b t=HelloMaterial             # build an example target
 make r t=HelloMaterial             # build and run an example target
 make r t=GreedySnake               # build and run another example

@@ -4,6 +4,7 @@ b_args:=
 r_args:=
 force:=false
 m:=debug
+v:=
 
 .PHONY: test vulkan-sdk-macos basic
 
@@ -38,7 +39,7 @@ endif
 
 # macOS: manually (re-)install Vulkan SDK into Engine/ThirdParty/VulkanSDK/
 vulkan-sdk-macos:
-	python3 "./Script/setup_vulkan_sdk_macos.py"
+	python3 "./Script/setup_vulkan_sdk_macos.py" $(if $(v),--version $(v),--latest) $(if $(filter true,$(force)),--force)
 
 test:
 	xmake b $(t)-testing
