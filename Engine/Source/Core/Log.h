@@ -111,25 +111,17 @@ struct YaFormatterV2
     {
         using namespace logcc;
 
-        output.clear();
-        output.reserve(128 + msg.size() + category.size());
-
         std::string_view levelStr   = logcc::LogLevel::toString(level);
         auto             fileDetail = std::format("{}:{}",
                                       getFileNameDetail(location.file_name()),
                                       location.line());
-
-        auto outputIt = std::back_inserter(output);
-
-        std::format_to(outputIt,
-                       "[{}]\t{} "
-                       "{:<26} "
-                       "{}\n",
-                       levelStr,
-                       category,
-                       fileDetail,
-                       msg);
-
+        output = std::format("[{}]\t{} "
+                             "{:<26} "
+                             "{}\n",
+                             levelStr,
+                             category,
+                             fileDetail,
+                             msg);
 
         return true;
     }
