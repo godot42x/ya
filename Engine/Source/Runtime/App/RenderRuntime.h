@@ -5,12 +5,12 @@
 #include "Editor/EditorLayer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
-#include "Render/Pipelines/PBRGenerateBrdfLUT.h"
 #include "Render/Render.h"
 #include "Render/Shader.h"
 #include "Runtime/App/Common/IRenderPipeline.h"
 #include "Runtime/App/OffscreenTaskService.h"
 #include "Runtime/App/RenderDiagnosticsService.h"
+#include "Runtime/App/RenderSharedResourceProvider.h"
 
 #include <functional>
 #include <glm/glm.hpp>
@@ -142,33 +142,6 @@ struct RenderRuntime
     stdptr<ForwardRenderPipeline>  _forwardPipeline  = nullptr;
     stdptr<DeferredRenderPipeline> _deferredPipeline = nullptr;
 
-    struct SkyboxResources
-    {
-        stdptr<IDescriptorPool>      dsp               = nullptr;
-        stdptr<IDescriptorSetLayout> dsl               = nullptr;
-        stdptr<Texture>              fallbackTexture   = nullptr;
-        DescriptorSetHandle          fallbackDS        = nullptr;
-        DescriptorSetHandle          sceneDS           = nullptr;
-        Texture*                     boundSceneTexture = nullptr;
-    };
-
-    struct EnvironmentLightingResources
-    {
-        stdptr<IDescriptorPool>      dsp                       = nullptr;
-        stdptr<IDescriptorSetLayout> dsl                       = nullptr;
-        DescriptorSetHandle          fallbackDS                = nullptr;
-        DescriptorSetHandle          sceneDS                   = nullptr;
-        stdptr<Texture>              fallbackIrradianceTexture = nullptr;
-        stdptr<Texture>              fallbackPrefilterTexture  = nullptr;
-        Texture*                     boundCubemapTexture       = nullptr;
-        Texture*                     boundIrradianceTexture    = nullptr;
-        Texture*                     boundPrefilterTexture     = nullptr;
-    };
-    struct SharedResources
-    {
-        stdptr<Texture> pbrLUT = nullptr;
-    };
-
     struct RenderTargetEditorState
     {
         int  selectedTargetIndex     = 0;
@@ -177,14 +150,8 @@ struct RenderRuntime
         char formatSearch[64]        = {};
     };
 
-    SkyboxResources              _skybox{};
-    EnvironmentLightingResources _environmentLighting{};
-    SharedResources              _sharedResources{};
-    stdptr<Sampler>              _cubemapSampler = nullptr;
+    RenderSharedResourceProvider  _sharedResourceProvider{};
     RenderDiagnosticsService     _diagnostics{};
-
-    // pipeline tool
-    PBRGenerateBrdfLUT _pbrGenerateBrdfLUT{};
 
     Rect2D _viewportRect{};
     float  _viewportFrameBufferScale = 1.0f;
@@ -238,12 +205,12 @@ struct RenderRuntime
     void renderProfilingDetailsGUI();
     void renderRenderingInternalsGUI();
 
-    [[nodiscard]] stdptr<IDescriptorPool>      getSkyboxDescriptorPool() const { return _skybox.dsp; }
-    [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxDescriptorSetLayout() const { return _skybox.dsl; }
-    [[nodiscard]] Sampler*                     getSkyboxSampler() const { return _cubemapSampler.get(); }
-    [[nodiscard]] DescriptorSetHandle          getFallbackSkyboxDescriptorSet() const { return _skybox.fallbackDS; }
+    [[nodiscard]] stdptr<IDescriptorPool>      getSkyboxDescriptorPool() const { return _sharedResourceProvider.getSkyboxDescriptorPool(); }
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxDescriptorSetLayout() const { return _sharedResourceProvider.getSkyboxDescriptorSetLayout(); }
+    [[nodiscard]] Sampler*                     getSkyboxSampler() const { return _sharedResourceProvider.getSkyboxSampler(); }
+    [[nodiscard]] DescriptorSetHandle          getFallbackSkyboxDescriptorSet() const { return _sharedResourceProvider.getFallbackSkyboxDescriptorSet(); }
     [[nodiscard]] DescriptorSetHandle          getSceneSkyboxDescriptorSet(Scene* scene = nullptr);
-    [[nodiscard]] stdptr<IDescriptorSetLayout> getEnvironmentLightingDescriptorSetLayout() const { return _environmentLighting.dsl; }
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getEnvironmentLightingDescriptorSetLayout() const { return _sharedResourceProvider.getEnvironmentLightingDescriptorSetLayout(); }
     [[nodiscard]] DescriptorSetHandle          getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr);
     [[nodiscard]] DebugRenderSystem&           getDebugRenderSystem() const;
 
@@ -265,9 +232,6 @@ struct RenderRuntime
     void                   initRenderBackend(const AppDesc& appDesc);
     void                   initResourceCaches();
     void                   initSharedRenderResources();
-    void                   initSharedPipelineResources();
-    void                   initSkyboxResources();
-    void                   initEnvironmentLightingResources();
     void                   initPresentationResources();
     void                   initCommandResources();
     void                   initFrameServices();
@@ -295,15 +259,8 @@ struct RenderRuntime
 
     void                   initActivePipeline();
     void                   shutdownActivePipeline();
-    void                   releaseRenderOwnedResources();
     void                   applyPendingRenderPipelineSwitch();
     void                   renderRenderTargetEditor();
-    void                   updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* texture);
-    void                   updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds, Texture* cubemapTexture, Texture* irradianceTexture, Texture* prefilterTexture, Texture* brdfLutTexture);
-    [[nodiscard]] Texture* findSceneSkyboxTexture(Scene* scene) const;
-    [[nodiscard]] Texture* findSceneEnvironmentCubemapTexture(Scene* scene) const;
-    [[nodiscard]] Texture* findSceneEnvironmentIrradianceTexture(Scene* scene) const;
-    [[nodiscard]] Texture* findSceneEnvironmentPrefilterTexture(Scene* scene) const;
 };
 
 } // namespace ya

@@ -340,7 +340,7 @@ void RenderRuntime::initActivePipeline()
                       }
                   }
                 : std::function<void(std::function<void()>)>{},
-            .environmentLightingDSL = _environmentLighting.dsl,
+            .environmentLightingDSL = _sharedResourceProvider.getEnvironmentLightingDescriptorSetLayout(),
             .getSceneEnvironmentLightingDescriptorSet = [this](Scene* scene)
             {
                 return getSceneEnvironmentLightingDescriptorSet(scene);

@@ -52,11 +52,11 @@
 
 ## Phase 3: 拆 shared resources provider
 
-- [ ] 盘点 `RenderRuntime` 中共享资源 owner：BRDF LUT、skybox fallback、environment fallback、descriptor pool/layout、scene descriptor set cache
-- [ ] 设计 `RenderSharedResourceProvider` 或等价对象的最小职责面
-- [ ] 把 BRDF LUT 创建与持有从 runtime 主体中拆出
-- [ ] 把 skybox descriptor set 更新逻辑拆出
-- [ ] 把 environment lighting descriptor set 更新逻辑拆出
+- [x] 盘点 `RenderRuntime` 中共享资源 owner：BRDF LUT、skybox fallback、environment fallback、descriptor pool/layout、scene descriptor set cache
+- [x] 设计 `RenderSharedResourceProvider` 或等价对象的最小职责面
+- [x] 把 BRDF LUT 创建与持有从 runtime 主体中拆出
+- [x] 把 skybox descriptor set 更新逻辑拆出
+- [x] 把 environment lighting descriptor set 更新逻辑拆出
 - [ ] 明确 scene resource resolve 与 descriptor cache 的边界
 - [ ] 让 stage / pipeline 通过 provider 获取共享资源，而不是回调 runtime
 

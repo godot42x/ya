@@ -114,12 +114,12 @@ void RenderRuntime::updateEditorViewportContext(EditorLayer* editorLayer)
         appendDeferredDebugSlots(ctx);
     }
 
-    if (_sharedResources.pbrLUT && _sharedResources.pbrLUT->getImageView()) {
+    if (auto* pbrLut = _sharedResourceProvider.getBrdfLutTexture(); pbrLut && pbrLut->getImageView()) {
         ctx.debugSpec.slots.push_back({
             .label         = "PBR_BRDF_LUT",
-            .defaultView   = _sharedResources.pbrLUT->getImageView(),
+            .defaultView   = pbrLut->getImageView(),
             .ownedView     = nullptr,
-            .image         = _sharedResources.pbrLUT->getImageShared(),
+            .image         = pbrLut->getImageShared(),
             .categoryIndex = CATEGORY_SHARED,
         });
     }
