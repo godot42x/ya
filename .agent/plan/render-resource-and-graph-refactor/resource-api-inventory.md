@@ -33,7 +33,8 @@ The first render-intermediate migration also established these boundaries:
 - `RenderImage` is the temporary legacy owner for an image and its default view until the RenderGraph registry owns transient resources.
 - BRDF LUT, Deferred SSAO and bloom intermediates now use `RenderImage`.
 - The final postprocess output still crosses the pipeline/App/automation screenshot boundary as `Texture*`; migrate it together with screenshot capture ownership.
-- Shadow sampled views and screenshot scratch resources still use `Texture` wrappers and remain migration work.
+- Shared shadow sampled views are explicitly owned as `IImageView` resources. Shadow-pass-local `Texture::wrap()` attachment adapters remain Phase 8 RenderTarget cleanup.
+- Screenshot scratch resources still use `Texture` wrappers and remain migration work.
 
 ## Buffer Categories
 

@@ -125,7 +125,7 @@
 - [x] 将 bloom render texture 改为 GPU image/view owner
 - [ ] 将 postprocess output render texture 改为 GPU image/view owner
 - [x] 将 BRDF LUT 输出改为 GPU image/view owner
-- [ ] 将 shadow sampled view 改为显式 image/view owner
+- [x] 将 shadow sampled view 改为显式 image/view owner
 - [ ] 将 screenshot scratch texture 改为 GPU image/view owner
 - [ ] 删除 `Texture::createRenderTexture()`
 - [ ] 删除 `Texture::getTextureFactory()`
@@ -144,7 +144,8 @@
 - `RenderingInfo::ImageSpec` 已直接引用 image/view，dynamic rendering attachment 协议不再依赖 `Texture`
 - BRDF LUT、Deferred SSAO 与 bloom intermediates 已迁移
 - postprocess output 仍通过 `IRenderPipeline -> App -> automation screenshot` 的 `Texture*` 契约暴露，应与 screenshot scratch 生命周期一起迁移
-- shadow sampled view 和 screenshot scratch 仍待迁移
+- shadow sampled views 已由 `ShadowMapResources` 显式拥有；shadow pass 内残留的 `Texture::wrap()` attachment adapter 归入 Phase 8
+- screenshot scratch 仍待迁移
 
 ## Phase 5: Resource State Tracker
 
@@ -300,7 +301,57 @@
 - [ ] 所有主要 GPU image 工作流使用统一资源和状态模型
 - [ ] offscreen scheduler 仍在 graph 外，不与 graph owner 混合
 
-## Phase 11: 清理与 OpenGL 恢复评估
+## Phase 11: Editor Render Extension API
+
+### Draw Submission Foundation
+
+- [ ] 盘点 Deferred/Forward 现有 draw bucket、pipeline variant、material key、skinning 和 indirect 输入
+- [ ] 定义 frame/view-local `RenderItem`，包含 mesh/submesh、material、transform、bounds、visibility 和 editor tag
+- [ ] 定义 renderer-internal `DrawPacket`，包含稳定 pipeline/material/geometry key 和 per-draw data
+- [ ] 定义 frame/view-local `DrawList`，只保存或引用 packet，不拥有 mesh/material 资产
+- [ ] 将 visibility、LOD、queue 分类放在 packet/list 构建前
+- [ ] 实现 opaque/material/pipeline 排序 key 和 stable ordering
+- [ ] 保留 instancing/indirect grouping 边界，但首版继续使用 CPU list 和现有 draw path
+- [ ] 将 Deferred 与 Forward 至少一个主材质路径接入共同 DrawList，证明不是 extension-only facade
+- [ ] 为 gizmo、线框和 procedural geometry 保留独立 debug/primitive stream
+- [ ] 禁止公开立即执行式 `drawMesh(mesh, material, transform)`
+
+### Shader Parameter Foundation
+
+- [ ] 盘点现有 Slang 生成头、pipeline layout 和 descriptor write 的参数映射
+- [ ] 定义生成 parameter block 的资源字段、常量字段和 sampler policy
+- [ ] 实现 parameter block 到内部 pipeline/descriptor binding 的 binder
+- [ ] 保持 binder 为内部能力，公开类型不暴露 set/binding 和 push constant offset
+
+### Extension Facade
+
+- [ ] 定义 `IRenderExtension::build(RenderGraphBuilder&, const RenderView&)`
+- [ ] 定义 shadow 后、lighting 后、tone mapping 前、viewport composite 前四个固定扩展点
+- [ ] 定义 builtin texture/buffer identifier，并映射到当前 frame graph handle
+- [ ] 提供不暴露 execute callback 的受限 `RenderGraphBuilder` facade
+- [ ] 提供 `addFullscreenPass()`
+- [ ] 提供 `addRasterPass()`
+- [ ] 提供 `addComputePass()`
+- [ ] 提供 `copyTexture()` 和 `compositeToViewport()`
+- [ ] 由 Slang 反射/生成链产生强类型 shader parameter block
+- [ ] 编译期校验 parameter block 字段与 texture/sampler/buffer 类型
+- [ ] 禁止公开 API 使用 descriptor set/binding 和 push constant offset
+- [ ] 定义 `RenderView::queryDrawList()`
+- [ ] 支持按 render queue、材质域、可见性层和 editor selection tag 筛选 DrawList
+- [ ] 迁移 selection/debug overlay 作为首批 extension API 消费者
+- [ ] Render Diagnostics 展示 extension pass/resource/state dump
+- [ ] 验证 extension 注册、禁用、热重载、viewport resize、多视图和移除
+- [ ] 校验 extension 不跨帧保存 graph handle、resolved resource 或 frame-local DrawList
+
+完成标准：
+
+- [ ] 扩展作者可以添加 fullscreen、DrawList raster 和 compute pass
+- [ ] extension public headers 不 include `CommandBuffer.h`、Vulkan header 或 descriptor/pipeline-layout 类型
+- [ ] extension 不负责资源同步、transient 生命周期、descriptor allocation 或 pass 排序
+- [ ] 非法资源依赖和 shader 参数不匹配在 graph/shader 编译阶段失败
+- [ ] Deferred/Forward 和 extension 至少共享同一种 DrawList/DrawPacket 提交协议
+
+## Phase 12: 清理与 OpenGL 恢复评估
 
 - [ ] 删除旧 resource interfaces 和 factory
 - [ ] 删除旧 render target dirty/recreate helper
@@ -308,6 +359,8 @@
 - [ ] 检查没有 `App::get()` 资源创建路径
 - [ ] 检查没有 render attachment 使用资产 `Texture`
 - [ ] 检查没有 graph pass 内资源创建或 `waitIdle()`
+- [ ] 检查 Runtime/App 的非 executor/pass-internal 代码不直接调用 layout transition、descriptor binding 或 beginRendering
+- [ ] 检查 editor extension public headers 不依赖 RHI command recording 类型
 - [~] 实现 OpenGL resource factory
 - [~] 实现 OpenGL graph executor 降级语义
 - [~] 恢复 OpenGL 构建和运行测试
@@ -341,6 +394,16 @@
 - [ ] imported initial/final state
 - [ ] resize physical resource replacement
 - [ ] mip/layer subresource transition
+- [ ] extension pass dependency and invalid usage rejection
+- [ ] generated shader parameter block type mismatch rejection
+
+### Draw Submission Tests
+
+- [ ] DrawList queue/material/visibility/editor-tag filtering
+- [ ] opaque sort key stable ordering
+- [ ] RenderItem/DrawPacket 不拥有 mesh/material 资产
+- [ ] Deferred/Forward 共用 DrawList 后截图与 draw count 基线一致
+- [ ] debug/primitive stream 不进入普通 surface DrawList
 
 ### Runtime Tests
 
@@ -356,6 +419,8 @@
 - [ ] screenshot/readback
 - [ ] shutdown 无 validation/lifetime error
 - [ ] 关键截图基线对比
+- [ ] extension 注册、禁用、热重载和移除
+- [ ] extension viewport resize 和多视图
 
 ## 持续审查项
 
@@ -369,3 +434,5 @@
 - [ ] layout/barrier 是否只有 graph plan/tracker 一个状态来源
 - [ ] 是否引入了无实际迁移价值的 helper/provider facade
 - [ ] 是否把 OpenGL 冻结误解为允许公共接口泄漏 Vulkan 类型
+- [ ] editor extension API 是否泄漏 command buffer、layout/barrier、descriptor 或 native handle
+- [ ] extension 是否绕过 DrawList 直接提交逐 mesh 绘制

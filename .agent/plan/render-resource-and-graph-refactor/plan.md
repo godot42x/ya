@@ -6,10 +6,11 @@
 
 上一轮已经完成了 frame input、shadow settings、shared resource owner、side service 和部分 stage/pass 边界收敛。继续拆 helper、搬 callback 或扩张 `RenderSharedResourceProvider` 的收益已经很低；下一阶段应直接解决 RenderGraph 会依赖的资源模型、资源状态和执行图问题。
 
-本计划包含两条联合推进的主线：
+本计划包含三条联合推进的主线：
 
 - 重建 `Buffer / Image / ImageView / Sampler / Texture / RenderTarget` 的职责和所有权模型
 - 以新资源模型实现 RenderGraph，并依次迁移 Deferred、Forward 和外围 GPU 工作流
+- 在 RenderGraph 验证稳定后提供面向渲染扩展作者的声明式 Editor Render API，隔离 command buffer、同步和 descriptor
 
 这不是先完成一次全项目 RHI 重写、再开始 RenderGraph。新的资源模型先建立最小稳定核心，RenderGraph 作为第一个完整消费者，其余旧调用点按资源类型和渲染路径逐步迁移。
 
@@ -88,6 +89,17 @@ RenderGraph 需要分别控制逻辑资源、物理资源、attachment 使用和
 ### 3.5 所有权和非拥有引用缺乏统一规则
 
 现有代码混用 `shared_ptr`、裸指针、opaque handle 和由 view 间接持有 image 的方式。资源 owner、descriptor 引用、pass 临时引用和 imported native resource 没有明确分类，resize 和 shutdown 时容易发生悬空引用或过度共享。
+
+### 3.6 与成熟商业引擎的实际差距
+
+当前 RHI 作为 Vulkan/D3D12 风格的薄抽象并非明显落后一代；主要差距是 RHI 之上的中层能力尚未闭环：
+
+- 缺少统一 RenderGraph 编译、资源状态和 transient registry，导致 stage 手工管理 layout、resize 和 pass 顺序
+- 缺少 shader parameter block，导致业务渲染代码直接操作 descriptor set、pipeline layout 和 binding
+- 缺少跨 pipeline 的 DrawList/DrawPacket，导致 stage 直接遍历 mesh 并录制 bind/draw
+- 缺少受限 extension facade，导致自由度表现为“可以绕过规则”，而不是“可以安全声明自定义渲染”
+
+因此本轮先进性目标是补齐现代 renderer 中层闭环，而不是改写一套更厚的 RHI。transient aliasing、async compute、多 queue、bindless 和完整 GPU-driven rendering 必须排在 graph、parameter block 和 DrawList 稳定之后。
 
 ## 4. 目标资源模型
 
@@ -256,6 +268,36 @@ execute 中禁止：
 - subpass fusion
 - 自动 descriptor allocation
 
+### 5.5 Editor Render Extension API
+
+RenderGraph Core 和 executor 是引擎内部 API；面向编辑器渲染扩展作者再提供一层受限 facade：
+
+- `IRenderExtension::build(RenderGraphBuilder&, const RenderView&)` 在固定扩展点声明 pass
+- `RenderGraphBuilder` 提供 fullscreen、raster、compute、copy 和 viewport composite 操作
+- shader 参数使用 Slang 反射生成的强类型 parameter block，不暴露 descriptor set/binding
+- 几何提交通过 `RenderView::queryDrawList()` 筛选引擎构建的 DrawList，不开放逐 mesh 即时提交
+- extension 只使用 graph handle 和 builtin resource identifier，不接触 `ICommandBuffer`、image layout、barrier、pipeline layout、framebuffer 或 native handle
+
+首版固定扩展点为 shadow 后、lighting 后、tone mapping 前和 viewport composite 前。原生命令 callback 只允许引擎内部 pass 使用，不属于公开扩展 API。
+
+Graph 编译必须拒绝 extension 引入的 stale handle、read-before-write、重复 writer、usage/format 不匹配和 cycle。extension 不得跨帧保存 graph handle、resolved resource 或 frame-local DrawList。
+
+### 5.6 DrawList 与 Mesh 提交边界
+
+公开 API 不提供立即执行的 `drawMesh(mesh, material, transform)`。统一数据流为：
+
+```text
+ECS extraction -> RenderItem -> visibility/LOD -> DrawPacket -> sort/batch -> DrawList -> RHI draw/indirect draw
+```
+
+- `RenderItem` 保存场景对象、mesh/submesh、material、transform、bounds 和 visibility metadata
+- `DrawPacket` 是 renderer 内部可执行单元，固定 pipeline/material/geometry key 和 per-draw data，不拥有资产
+- `DrawList` 是 frame/view-local 的 packet 索引集合，按 queue、材质域、visibility layer 和 editor tag 查询
+- renderer 负责剔除、LOD、排序、instancing 和未来 indirect grouping；extension 只能筛选并提交 DrawList
+- gizmo、临时线框和 procedural geometry 使用独立 debug/primitive stream，不通过公开即时 mesh API 绕过 DrawList
+
+首版允许 CPU 构建和排序 DrawList，不要求 GPU-driven。数据结构必须保留稳定 key 和批处理边界，使后续 GPU culling/indirect draw 不需要改 extension API。
+
 ## 6. 迁移顺序
 
 ### Phase 0: 收口旧计划和行为基线
@@ -325,7 +367,16 @@ ECS extraction、material upload、ImGui 和 presentation orchestration 仍在 g
 - 再迁移 offscreen environment preprocess 和 screenshot copy
 - 删除剩余旧 factory、旧 resource type 和 compatibility adapter
 
-### Phase 8: OpenGL 恢复评估
+### Phase 8: Editor Render Extension API
+
+- 定义固定扩展点和 `IRenderExtension` 生命周期
+- 提供受限 `RenderGraphBuilder` facade、builtin resources 和 `RenderView`
+- 接入 Slang 强类型 parameter block 生成与校验
+- 先统一 `RenderItem -> DrawPacket -> DrawList`，再提供 DrawList 查询并迁移 selection/debug overlay 作为首批消费者
+- 在 Render Diagnostics 中展示 extension pass/resource/state dump
+- 验证注册、禁用、热重载、resize、多视图和移除流程
+
+### Phase 9: OpenGL 恢复评估
 
 本轮不实现 OpenGL。Vulkan 和公共接口稳定后，单独评估：
 
@@ -345,6 +396,7 @@ ECS extraction、material upload、ImGui 和 presentation orchestration 仍在 g
 - swapchain acquire、queue submit 和 present
 - automation orchestration 和 RenderDoc lifecycle
 - offscreen task queue scheduling
+- editor extension 注册和生命周期管理
 
 外围系统可通过 imported resource、graph setup input 或 graph 前后 hook 接入，但不能成为 pass 内部隐式 service 查询。
 
@@ -358,6 +410,7 @@ ECS extraction、material upload、ImGui 和 presentation orchestration 仍在 g
 - `[runtime/forward] ...`
 - `[vulkan] ...`
 - `[test/render] ...`
+- `[editor/render] ...`
 - `[plan/render] ...`
 
 避免在同一提交中同时包含：
@@ -410,6 +463,9 @@ RenderGraph 迁移阶段还必须覆盖：
 - pass 资源读写和 attachment 使用可由 graph 枚举
 - graph compiler 是 pass 间资源状态计划的单一事实源
 - Deferred 和 Forward 主链路都通过 RenderGraph 执行
+- Deferred、Forward 和 editor extension 共用 `RenderItem -> DrawPacket -> DrawList` 提交协议
+- editor render extension 可声明 pass、强类型 shader 参数和 DrawList 查询，且公开头不依赖 command buffer/Vulkan/descriptor 类型
+- `Runtime/App` 的非内部 pass/executor 代码不再直接操作 layout transition、descriptor binding 或 rendering scope
 - 旧 `ITextureFactory`、`Texture::createRenderTexture()`、`IBuffer::create()` 和 `IRenderTarget::flushDirty()` 已删除
 - Vulkan validation、功能冒烟和截图基线通过
 - compatibility adapter 已删除或有明确的剩余 owner 和删除任务
