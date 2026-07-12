@@ -107,7 +107,7 @@ Render Graph 优先级调整：
 - [-] 设计 stage 级显式输入结构，减少从 `App::get()` / `RenderRuntime` 全局反查
   进度：`ForwardViewportStage`、`LightStage`、`ViewportOverlayStage` 已收口为显式 services/input；仍需继续处理更重的 stage（尤其 forward 主 viewport）
 - [-] 把 stage 内部即时资源重建改成脏标记 + 安全边界重建模式
-  进度：`PostProcessingStage` 已改为 resize dirty -> `beginFrame()` 应用；Deferred SSAO / 其他重建点仍待清理
+  进度：`PostProcessingStage` 已改为 resize dirty -> `beginFrame()` 应用；Deferred SSAO resize 已改为 pipeline pending -> `beginTick()` 应用；shadow / 其他重建点仍待清理
 - [ ] 梳理哪些 stage 可以直接映射为未来 graph pass
 - [ ] 梳理哪些 stage 还需要继续拆分才适合 graph 化
 

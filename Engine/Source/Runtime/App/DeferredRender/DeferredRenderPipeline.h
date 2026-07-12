@@ -113,6 +113,8 @@ struct DeferredRenderPipeline : public IRenderPipeline
     stdptr<IImageView> _debugAlbedoRGBView;
     stdptr<IImageView> _debugSpecularAlphaView;
     ImageViewHandle    _cachedAlbedoSpecImageViewHandle = nullptr;
+    Extent2D           _pendingSSAOResizeExtent{};
+    bool               _bSSAOResizePending = false;
 
     // ── Frame state ───────────────────────────────────────────────────
     RenderingInfo            _viewportRI{};
@@ -190,6 +192,8 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               saveShadowSettingsToConfig(const ShadowSettings& shadowSettings) const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               rebuildShadowViews();
+    void               applyPendingSSAOResize();
+    void               requestSSAOResize(Extent2D extent);
     void               initRenderTargets(Extent2D extent);
     void               initShadowResources();
     void               destroyShadowResources();

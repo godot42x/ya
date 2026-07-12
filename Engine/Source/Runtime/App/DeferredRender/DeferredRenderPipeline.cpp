@@ -288,6 +288,42 @@ void DeferredRenderPipeline::rebuildShadowViews()
     _shadowResources.rebuildViews(_render, "Deferred Shadow");
 }
 
+void DeferredRenderPipeline::requestSSAOResize(Extent2D extent)
+{
+    if (extent.width == 0 || extent.height == 0) {
+        return;
+    }
+
+    _pendingSSAOResizeExtent = extent;
+    _bSSAOResizePending      = true;
+}
+
+void DeferredRenderPipeline::applyPendingSSAOResize()
+{
+    if (!_bSSAOResizePending || !_render || !_ssaoTexture) {
+        return;
+    }
+
+    _render->waitIdle();
+    _ssaoTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
+        .label   = "DeferredSSAO",
+        .width   = _pendingSSAOResizeExtent.width,
+        .height  = _pendingSSAOResizeExtent.height,
+        .format  = SSAOStage::AO_FORMAT,
+        .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        .samples = ESampleCount::Sample_1,
+        .isDepth = false,
+    });
+    if (_ssaoStage) {
+        _ssaoStage->setup(_gBufferRT.get(), _ssaoTexture.get());
+        _ssaoStage->refreshPipelineFormat();
+    }
+    if (_lightStage) {
+        _lightStage->setSSAOTexture(_ssaoTexture.get());
+    }
+    _bSSAOResizePending = false;
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // Init / Shutdown
 // ═══════════════════════════════════════════════════════════════════════
@@ -394,6 +430,8 @@ void DeferredRenderPipeline::shutdown()
     _debugAlbedoRGBView.reset();
     _debugSpecularAlphaView.reset();
     _cachedAlbedoSpecImageViewHandle = nullptr;
+    _pendingSSAOResizeExtent         = {};
+    _bSSAOResizePending              = false;
 
     if (_overlayStage) {
         _overlayStage->destroy();
@@ -477,6 +515,7 @@ bool DeferredRenderPipeline::shouldSkipTick(const RenderPipelineFrameContext& fr
 
 void DeferredRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH)
 {
+    applyPendingSSAOResize();
     _postProcessStage.beginFrame();
     captureShadowSettings(frame);
 
@@ -844,23 +883,7 @@ void DeferredRenderPipeline::onViewportResized(Rect2D rect)
     if (_gBufferRT) _gBufferRT->setExtent(newExtent);
     if (_viewportRT) _viewportRT->setExtent(newExtent);
     if (_ssaoTexture && (_ssaoTexture->getExtent().width != newExtent.width || _ssaoTexture->getExtent().height != newExtent.height)) {
-        _render->waitIdle();
-        _ssaoTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
-            .label   = "DeferredSSAO",
-            .width   = newExtent.width,
-            .height  = newExtent.height,
-            .format  = SSAOStage::AO_FORMAT,
-            .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .samples = ESampleCount::Sample_1,
-            .isDepth = false,
-        });
-        if (_ssaoStage) {
-            _ssaoStage->setup(_gBufferRT.get(), _ssaoTexture.get());
-            _ssaoStage->refreshPipelineFormat();
-        }
-        if (_lightStage) {
-            _lightStage->setSSAOTexture(_ssaoTexture.get());
-        }
+        requestSSAOResize(newExtent);
     }
 
     _cachedAlbedoSpecImageViewHandle = nullptr;
