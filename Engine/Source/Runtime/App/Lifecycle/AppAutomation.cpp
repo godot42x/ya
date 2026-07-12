@@ -1,6 +1,7 @@
 #include "Runtime/App/Lifecycle/AppAutomation.h"
 
 #include "Runtime/App/App.h"
+#include "Runtime/App/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "Runtime/App/RenderRuntime.h"
 #include "Runtime/App/Utility/AppScreenshotCapture.h"
 #include "Runtime/App/Utility/OffscreenJobRunner.h"
@@ -64,50 +65,6 @@ bool tryParseScreenshotTargetValue(std::string_view text, EAutomationScreenshotT
     return false;
 }
 
-bool tryParseShadowQualityValue(std::string_view text, EShadowQuality::T& outQuality)
-{
-    const std::string normalized = toLowerCopy(text);
-    if (normalized == "off") {
-        outQuality = EShadowQuality::Off;
-        return true;
-    }
-    if (normalized == "low") {
-        outQuality = EShadowQuality::Low;
-        return true;
-    }
-    if (normalized == "medium") {
-        outQuality = EShadowQuality::Medium;
-        return true;
-    }
-    if (normalized == "high") {
-        outQuality = EShadowQuality::High;
-        return true;
-    }
-    if (normalized == "ultra") {
-        outQuality = EShadowQuality::Ultra;
-        return true;
-    }
-    return false;
-}
-
-bool tryParseShadowFilterValue(std::string_view text, EShadowFilter::T& outFilter)
-{
-    const std::string normalized = toLowerCopy(text);
-    if (normalized == "hard") {
-        outFilter = EShadowFilter::Hard;
-        return true;
-    }
-    if (normalized == "pcf_low" || normalized == "pcflow" || normalized == "pcf-low") {
-        outFilter = EShadowFilter::PCF_Low;
-        return true;
-    }
-    if (normalized == "pcf_high" || normalized == "pcfhigh" || normalized == "pcf-high") {
-        outFilter = EShadowFilter::PCF_High;
-        return true;
-    }
-    return false;
-}
-
 void loadScreenshotAutomationOverrides(AppDesc& appDesc)
 {
     auto& configManager = ConfigManager::get();
@@ -146,110 +103,6 @@ void loadRenderDocAutomationOverrides(AppDesc& appDesc)
             configManager.tryGet<std::string>(AUTOMATION_CONFIG_DOC_NAME, "profile.gpu.outputDir", renderDocOutputPath) && !renderDocOutputPath.empty()) {
             appDesc.renderDocCaptureOutputDir = std::move(renderDocOutputPath);
         }
-    }
-}
-
-void loadShadowAutomationOverrides(AppDesc& appDesc)
-{
-    auto& configManager = ConfigManager::get();
-    if (!configManager.hasDocument(AUTOMATION_CONFIG_DOC_NAME)) {
-        return;
-    }
-
-    if (std::string qualityText; configManager.tryGet<std::string>(AUTOMATION_CONFIG_DOC_NAME, "shadow.quality", qualityText)) {
-        EShadowQuality::T quality = EShadowQuality::Medium;
-        if (tryParseShadowQualityValue(qualityText, quality)) {
-            appDesc.automation.shadow.quality = quality;
-        }
-        else {
-            YA_CORE_WARN("Ignoring invalid automation shadow quality override: {}", qualityText);
-        }
-    }
-    else if (uint32_t qualityValue = 0; configManager.tryGet<uint32_t>(AUTOMATION_CONFIG_DOC_NAME, "shadow.quality", qualityValue)) {
-        if (qualityValue <= static_cast<uint32_t>(EShadowQuality::Ultra)) {
-            appDesc.automation.shadow.quality = static_cast<EShadowQuality::T>(qualityValue);
-        }
-        else {
-            YA_CORE_WARN("Ignoring invalid automation shadow quality override value: {}", qualityValue);
-        }
-    }
-
-    if (bool directionalEnabled = false; configManager.tryGet<bool>(AUTOMATION_CONFIG_DOC_NAME, "shadow.directionalEnabled", directionalEnabled)) {
-        appDesc.automation.shadow.directionalEnabled = directionalEnabled;
-    }
-    if (bool pointLightEnabled = false; configManager.tryGet<bool>(AUTOMATION_CONFIG_DOC_NAME, "shadow.pointLightEnabled", pointLightEnabled)) {
-        appDesc.automation.shadow.pointLightEnabled = pointLightEnabled;
-    }
-    if (bool pointLightUseIndirect = false; configManager.tryGet<bool>(AUTOMATION_CONFIG_DOC_NAME, "shadow.pointLightUseIndirect", pointLightUseIndirect)) {
-        appDesc.automation.shadow.pointLightUseIndirect = pointLightUseIndirect;
-    }
-    if (bool pointLightIndirectCullEnabled = false; configManager.tryGet<bool>(AUTOMATION_CONFIG_DOC_NAME, "shadow.pointLightIndirectCullEnabled", pointLightIndirectCullEnabled)) {
-        appDesc.automation.shadow.pointLightIndirectCullEnabled = pointLightIndirectCullEnabled;
-    }
-    if (uint32_t maxPointLightShadows = 0; configManager.tryGet<uint32_t>(AUTOMATION_CONFIG_DOC_NAME, "shadow.maxPointLightShadows", maxPointLightShadows)) {
-        appDesc.automation.shadow.maxPointLightShadows = std::min(maxPointLightShadows, static_cast<uint32_t>(MAX_POINT_LIGHTS));
-    }
-
-    if (std::string filterText; configManager.tryGet<std::string>(AUTOMATION_CONFIG_DOC_NAME, "shadow.filter", filterText)) {
-        EShadowFilter::T filter = EShadowFilter::Hard;
-        if (tryParseShadowFilterValue(filterText, filter)) {
-            appDesc.automation.shadow.filter = filter;
-        }
-        else {
-            YA_CORE_WARN("Ignoring invalid automation shadow filter override: {}", filterText);
-        }
-    }
-    else if (uint32_t filterValue = 0; configManager.tryGet<uint32_t>(AUTOMATION_CONFIG_DOC_NAME, "shadow.filter", filterValue)) {
-        if (filterValue <= static_cast<uint32_t>(EShadowFilter::PCF_High)) {
-            appDesc.automation.shadow.filter = static_cast<EShadowFilter::T>(filterValue);
-        }
-        else {
-            YA_CORE_WARN("Ignoring invalid automation shadow filter override value: {}", filterValue);
-        }
-    }
-
-    if (float bias = 0.0f; configManager.tryGet<float>(AUTOMATION_CONFIG_DOC_NAME, "shadow.bias", bias)) {
-        appDesc.automation.shadow.bias = bias;
-    }
-    if (float normalBias = 0.0f; configManager.tryGet<float>(AUTOMATION_CONFIG_DOC_NAME, "shadow.normalBias", normalBias)) {
-        appDesc.automation.shadow.normalBias = normalBias;
-    }
-    if (float directionalDistance = 0.0f; configManager.tryGet<float>(AUTOMATION_CONFIG_DOC_NAME, "shadow.directionalDistance", directionalDistance)) {
-        appDesc.automation.shadow.directionalDistance = directionalDistance;
-    }
-}
-
-void applyShadowAutomationOverrides(const AppAutomationShadowOverrides& overrides, ShadowSettings& shadowSettings)
-{
-    if (overrides.quality) {
-        shadowSettings.applyQualityPreset(*overrides.quality);
-    }
-    if (overrides.directionalEnabled) {
-        shadowSettings.directionalEnabled = *overrides.directionalEnabled;
-    }
-    if (overrides.pointLightEnabled) {
-        shadowSettings.pointLightEnabled = *overrides.pointLightEnabled;
-    }
-    if (overrides.pointLightUseIndirect) {
-        shadowSettings.pointLightUseIndirect = *overrides.pointLightUseIndirect;
-    }
-    if (overrides.pointLightIndirectCullEnabled) {
-        shadowSettings.pointLightIndirectCullEnabled = *overrides.pointLightIndirectCullEnabled;
-    }
-    if (overrides.maxPointLightShadows) {
-        shadowSettings.maxPointLightShadows = std::min(*overrides.maxPointLightShadows, static_cast<uint32_t>(MAX_POINT_LIGHTS));
-    }
-    if (overrides.filter) {
-        shadowSettings.filter = *overrides.filter;
-    }
-    if (overrides.bias) {
-        shadowSettings.bias = *overrides.bias;
-    }
-    if (overrides.normalBias) {
-        shadowSettings.normalBias = *overrides.normalBias;
-    }
-    if (overrides.directionalDistance) {
-        shadowSettings.directionalDistance = *overrides.directionalDistance;
     }
 }
 
@@ -507,7 +360,7 @@ void AppAutomation::applyStartupOverrides(AppDesc& appDesc)
     getAutomationRuntimeState() = {};
     loadScreenshotAutomationOverrides(appDesc);
     loadRenderDocAutomationOverrides(appDesc);
-    loadShadowAutomationOverrides(appDesc);
+    shadow_settings::loadAutomationOverridesFromConfig(appDesc.automation.shadow);
     if (appDesc.automation.renderDocCapture) {
         appDesc.bEnableRenderDoc = true;
     }
@@ -518,7 +371,7 @@ void AppAutomation::applyStartupOverrides(AppDesc& appDesc)
 
 void AppAutomation::applyRuntimeOverrides(App& app)
 {
-    applyShadowAutomationOverrides(app.getDesc().automation.shadow, app.getShadowSettings());
+    shadow_settings::applyAutomationOverrides(app.getDesc().automation.shadow, app.getShadowSettings());
 }
 
 void AppAutomation::recordPresentationCapture(Texture* presentationSourceTexture,

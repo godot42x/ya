@@ -272,12 +272,14 @@ ShadowRuntimeState ForwardRenderPipeline::buildShadowState() const
     ShadowRuntimeState shadowState{};
     const ShadowSettings shadowSettings = currentShadowSettings();
     shadowState.bEnableShadowMapping    = shadowSettings.isEnabled();
-    shadowState.settings                = shadowSettings;
-    shadowState.bEnablePointLightShadow = shadowState.settings.pointLightEnabled;
-    shadowState.maxShadowedPointLights  = shadowState.settings.getEffectivePointLightCount();
+    shadowState.bEnablePointLightShadow = shadowSettings.pointLightEnabled;
+    shadowState.maxShadowedPointLights  = shadowSettings.getEffectivePointLightCount();
+    shadowState.filter                  = shadowSettings.filter;
+    shadowState.bias                    = shadowSettings.bias;
+    shadowState.normalBias              = shadowSettings.normalBias;
     shadowState.shadowMapResolution     = _shadowResources.renderTarget
         ? _shadowResources.renderTarget->getExtent().width
-        : std::max(shadowState.settings.resolution, 1u);
+        : std::max(shadowSettings.resolution, 1u);
 
     if (shadowState.bEnableShadowMapping && _shadowResources.directionalDepthIV && _shadowResources.sampler) {
         shadowState.directionalDepthIV = _shadowResources.directionalDepthIV.get();

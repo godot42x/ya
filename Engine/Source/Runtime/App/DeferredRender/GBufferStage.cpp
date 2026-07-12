@@ -535,9 +535,9 @@ void GBufferStage::updateFrameUBOs(const RenderStageContext& ctx)
     // Light UBO
     LightPassLightData lightData{};
     lightData.hasDirLight              = false;
-    lightData.dirLight.bias            = _shadowState.settings.bias;
-    lightData.dirLight.normalBias      = _shadowState.settings.normalBias;
-    lightData.dirLight.shadowFilter    = static_cast<uint32_t>(_shadowState.settings.filter);
+    lightData.dirLight.bias            = _shadowState.bias;
+    lightData.dirLight.normalBias      = _shadowState.normalBias;
+    lightData.dirLight.shadowFilter    = static_cast<uint32_t>(_shadowState.filter);
     lightData.dirLight.shadowTexelSize = _shadowState.shadowMapResolution > 0 ? 1.0f / static_cast<float>(_shadowState.shadowMapResolution) : 0.0f;
     if (fd.bHasDirectionalLight) {
         lightData.dirLight.dir          = fd.directionalLight.direction;

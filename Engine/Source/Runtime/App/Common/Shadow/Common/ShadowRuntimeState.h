@@ -16,8 +16,9 @@ struct ShadowRuntimeState
     bool     bEnablePointLightShadow = true;
     uint32_t maxShadowedPointLights  = 1;
     uint32_t shadowMapResolution     = 1024;
-
-    ShadowSettings settings{};
+    EShadowFilter::T filter          = EShadowFilter::Hard;
+    float            bias            = 0.0005f;
+    float            normalBias      = 0.02f;
 
     IImageView* directionalDepthIV = nullptr;
     std::array<IImageView*, MAX_POINT_LIGHTS> pointCubeDepthIVs{};
