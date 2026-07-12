@@ -1,5 +1,8 @@
 # 渲染架构重构 TODO
 
+> 本清单已停止执行。未完成项不能继续作为 agent 的工作来源；后续任务统一使用
+> `.agent/plan/render-resource-and-graph-refactor/todo.md`。
+
 ## 使用说明
 
 这份清单对应 `Docs/RenderArchitectureRefactorPlan.md`。
