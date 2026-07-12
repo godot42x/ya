@@ -105,7 +105,9 @@ Render Graph 优先级调整：
 - [x] 列出现有 stage 的资源输入输出清单：Shadow、GBuffer、SSAO、Light、ViewportOverlay、PostProcess、ForwardViewport
 - [x] 标记每个 stage 仍依赖的全局状态或隐式输入
 - [-] 设计 stage 级显式输入结构，减少从 `App::get()` / `RenderRuntime` 全局反查
-- [ ] 把 stage 内部即时资源重建改成脏标记 + 安全边界重建模式
+  进度：`ForwardViewportStage`、`LightStage`、`ViewportOverlayStage` 已收口为显式 services/input；仍需继续处理更重的 stage（尤其 forward 主 viewport）
+- [-] 把 stage 内部即时资源重建改成脏标记 + 安全边界重建模式
+  进度：`PostProcessingStage` 已改为 resize dirty -> `beginFrame()` 应用；Deferred SSAO / 其他重建点仍待清理
 - [ ] 梳理哪些 stage 可以直接映射为未来 graph pass
 - [ ] 梳理哪些 stage 还需要继续拆分才适合 graph 化
 

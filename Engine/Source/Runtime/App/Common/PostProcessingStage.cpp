@@ -35,6 +35,28 @@ constexpr const char* POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_STRENGTH   = "render.p
 
 } // namespace
 
+void PostProcessingStage::requestResize(Extent2D extent)
+{
+    if (extent.width == 0 || extent.height == 0) {
+        return;
+    }
+
+    _pendingResizeExtent = extent;
+    _bResizePending      = true;
+}
+
+void PostProcessingStage::applyPendingResize()
+{
+    if (!_bResizePending || !_render) {
+        return;
+    }
+
+    _render->waitIdle();
+    recreateOutputTexture(_pendingResizeExtent);
+    recreateBloomTextures(_pendingResizeExtent);
+    _bResizePending = false;
+}
+
 void PostProcessingStage::recreateOutputTexture(Extent2D extent)
 {
     if (!_render || extent.width == 0 || extent.height == 0) {
@@ -161,11 +183,15 @@ void PostProcessingStage::shutdown()
     _bloomBlurPongTexture.reset();
     _bloomCompositeTexture.reset();
     _postprocessTexture.reset();
+    _pendingResizeExtent = {};
+    _bResizePending      = false;
     _render = nullptr;
 }
 
 void PostProcessingStage::beginFrame()
 {
+    applyPendingResize();
+
     if (_bloomProcessor) {
         _bloomProcessor->beginFrame();
     }
@@ -234,9 +260,8 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
     }
 
     if (!_postprocessTexture || _postprocessTexture->getExtent() != inputExtent) {
-        _render->waitIdle();
-        recreateOutputTexture(inputExtent);
-        recreateBloomTextures(inputExtent);
+        requestResize(inputExtent);
+        return inputTexture;
     }
     if (!_postprocessTexture) {
         return inputTexture;
@@ -308,9 +333,7 @@ void PostProcessingStage::onViewportResized(Extent2D newExtent)
         return;
     }
 
-    _render->waitIdle();
-    recreateOutputTexture(newExtent);
-    recreateBloomTextures(newExtent);
+    requestResize(newExtent);
 }
 
 } // namespace ya

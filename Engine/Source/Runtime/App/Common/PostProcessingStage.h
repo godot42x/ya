@@ -33,6 +33,8 @@ struct PostProcessingStage
     stdptr<Texture>             _bloomBlurPongTexture = nullptr;
     stdptr<Texture>             _bloomCompositeTexture = nullptr;
     stdptr<Texture>             _postprocessTexture = nullptr;
+    Extent2D                    _pendingResizeExtent{};
+    bool                        _bResizePending      = false;
 
     void     init(const InitDesc& desc);
     void     shutdown();
@@ -55,6 +57,8 @@ struct PostProcessingStage
     [[nodiscard]] const PostProcessingState& getState() const { return _state; }
 
   private:
+    void applyPendingResize();
+    void requestResize(Extent2D extent);
     void recreateOutputTexture(Extent2D extent);
     void recreateBloomTextures(Extent2D extent);
 };
