@@ -318,10 +318,39 @@ void RenderRuntime::initActivePipeline()
     if (_renderPipeline == ERenderPipeline::Forward) {
         _forwardPipeline = ya::makeShared<ForwardRenderPipeline>();
         _forwardPipeline->init(ForwardRenderPipeline::InitDesc{
-            .render         = _render,
-            .windowW        = winW,
-            .windowH        = winH,
-            .shadowSettings = _app ? &_app->getShadowSettings() : nullptr,
+            .render                       = _render,
+            .windowW                      = winW,
+            .windowH                      = winH,
+            .shadowSettings               = _app ? &_app->getShadowSettings() : nullptr,
+            .getFrameIndex                = _app
+                ? [this]() -> uint64_t { return _app ? _app->getFrameIndex() : 0; }
+                : std::function<uint64_t()>{},
+            .getElapsedTimeSeconds        = _app
+                ? [this]() -> double { return _app ? static_cast<double>(_app->getElapsedTimeMS()) / 1000.0 : 0.0; }
+                : std::function<double()>{},
+            .getActiveScene               = _app
+                ? [this]() -> Scene*
+                  {
+                      if (!_app || !_app->getSceneManager()) {
+                          return nullptr;
+                      }
+                      return _app->getSceneManager()->getActiveScene();
+                  }
+                : std::function<Scene*()>{},
+            .getResourceResolveSystem     = _app
+                ? [this]() -> ResourceResolveSystem*
+                  {
+                      return _app ? _app->getResourceResolveSystem() : nullptr;
+                  }
+                : std::function<ResourceResolveSystem*()>{},
+            .getSceneSkyboxDescriptorSet  = [this](Scene* scene)
+            {
+                return getSceneSkyboxDescriptorSet(scene);
+            },
+            .getSceneEnvironmentLightingDescriptorSet = [this](Scene* scene)
+            {
+                return getSceneEnvironmentLightingDescriptorSet(scene);
+            },
         });
     }
     else {

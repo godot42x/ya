@@ -15,10 +15,14 @@
 #include "Test.Unlit.glsl.h"
 
 #include <array>
+#include <functional>
 #include <glm/glm.hpp>
 
 namespace ya
 {
+
+struct Scene;
+class ResourceResolveSystem;
 
 /// Forward viewport stage — renders PBR / Phong / Unlit / Simple / Skybox / Debug into the viewport.
 ///
@@ -31,11 +35,17 @@ struct ForwardViewportStage : public IRenderStage
 {
     struct InitDesc
     {
-        IRender*             render                = nullptr;
-        IRenderPass*         renderPass            = nullptr;
-        PipelineRenderingInfo pipelineRenderingInfo = {};
-        DescriptorSetHandle  depthBufferShadowDS   = nullptr;
-        ShadowRuntimeState   shadowState           = {};
+        IRender*                              render                               = nullptr;
+        IRenderPass*                          renderPass                           = nullptr;
+        PipelineRenderingInfo                pipelineRenderingInfo                = {};
+        DescriptorSetHandle                  depthBufferShadowDS                  = nullptr;
+        ShadowRuntimeState                   shadowState                          = {};
+        std::function<uint64_t()>            getFrameIndex;
+        std::function<double()>              getElapsedTimeSeconds;
+        std::function<Scene*()>              getActiveScene;
+        std::function<ResourceResolveSystem*()> getResourceResolveSystem;
+        std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet;
+        std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
     };
 
     // ── PBR UBO type aliases (from shader-generated headers) ──
@@ -164,6 +174,12 @@ struct ForwardViewportStage : public IRenderStage
     PhongDebugUBO  _phongDebug{};
 
     DescriptorSetHandle _depthBufferShadowDS = nullptr;
+    std::function<uint64_t()>            _getFrameIndex;
+    std::function<double()>              _getElapsedTimeSeconds;
+    std::function<Scene*()>              _getActiveScene;
+    std::function<ResourceResolveSystem*()> _getResourceResolveSystem;
+    std::function<DescriptorSetHandle(Scene*)> _getSceneSkyboxDescriptorSet;
+    std::function<DescriptorSetHandle(Scene*)> _getSceneEnvironmentLightingDescriptorSet;
 
     // ── Unlit pipeline ──────────────────────────────────────────
     stdptr<IDescriptorSetLayout> _unlitFrameDSL;

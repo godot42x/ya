@@ -15,9 +15,7 @@
 #include "Render/Render.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Resource/Texture/TextureLibrary.h"
-#include "Runtime/App/App.h"
-#include "Runtime/App/RenderRuntime.h"
-#include "Scene/SceneManager.h"
+#include "Scene/Scene.h"
 
 #include "glm/gtc/type_ptr.hpp"
 #include <glm/gtc/matrix_transform.hpp>
@@ -171,9 +169,15 @@ void ForwardViewportStage::init(IRender* render)
 
 void ForwardViewportStage::initWithDesc(const InitDesc& desc)
 {
-    _render              = desc.render;
-    _depthBufferShadowDS = desc.depthBufferShadowDS;
-    _shadowState         = desc.shadowState;
+    _render                                   = desc.render;
+    _depthBufferShadowDS                      = desc.depthBufferShadowDS;
+    _shadowState                              = desc.shadowState;
+    _getFrameIndex                            = desc.getFrameIndex;
+    _getElapsedTimeSeconds                    = desc.getElapsedTimeSeconds;
+    _getActiveScene                           = desc.getActiveScene;
+    _getResourceResolveSystem                 = desc.getResourceResolveSystem;
+    _getSceneSkyboxDescriptorSet              = desc.getSceneSkyboxDescriptorSet;
+    _getSceneEnvironmentLightingDescriptorSet = desc.getSceneEnvironmentLightingDescriptorSet;
 
     initSkinningResources();
     initPBR(desc);
@@ -888,6 +892,12 @@ void ForwardViewportStage::destroy()
     _debugDSL.reset();
     _debugDSP.reset();
     _debugUboBuffer.reset();
+    _getFrameIndex = {};
+    _getElapsedTimeSeconds = {};
+    _getActiveScene = {};
+    _getResourceResolveSystem = {};
+    _getSceneSkyboxDescriptorSet = {};
+    _getSceneEnvironmentLightingDescriptorSet = {};
 
     _render = nullptr;
 }
@@ -973,13 +983,12 @@ void ForwardViewportStage::preparePhong(const RenderStageContext& ctx)
     }
 
     // Update frame UBO
-    auto*         app = App::get();
     PhongFrameUBO frameUBO{};
     frameUBO.projMat    = fd.projection;
     frameUBO.viewMat    = fd.view;
     frameUBO.resolution = glm::ivec2(ctx.viewportExtent.width, ctx.viewportExtent.height);
-    frameUBO.frameIdx   = app->getFrameIndex();
-    frameUBO.time       = static_cast<float>(app->getElapsedTimeMS()) / 1000.0f;
+    frameUBO.frameIdx   = _getFrameIndex ? static_cast<int32_t>(_getFrameIndex()) : 0;
+    frameUBO.time       = _getElapsedTimeSeconds ? static_cast<float>(_getElapsedTimeSeconds()) : 0.0f;
     frameUBO.cameraPos  = fd.cameraPos;
     _phongFrameUBO[fi]->writeData(&frameUBO, sizeof(PhongFrameUBO), 0);
 
@@ -999,13 +1008,12 @@ void ForwardViewportStage::prepareUnlit(const RenderStageContext& ctx)
     }
 
     // Update current slot frame UBO
-    auto*         app = App::get();
     UnlitFrameUBO ubo{};
     ubo.projMat    = ctx.frameData->projection;
     ubo.viewMat    = ctx.frameData->view;
     ubo.resolution = glm::ivec2(ctx.viewportExtent.width, ctx.viewportExtent.height);
-    ubo.frameIdx   = app->getFrameIndex();
-    ubo.time       = static_cast<float>(app->getElapsedTimeMS()) / 1000.0f;
+    ubo.frameIdx   = _getFrameIndex ? static_cast<int32_t>(_getFrameIndex()) : 0;
+    ubo.time       = _getElapsedTimeSeconds ? static_cast<float>(_getElapsedTimeSeconds()) : 0.0f;
 
     uint32_t slot = _unlitFrameSlot;
     _unlitFrameUBOs[slot]->writeData(&ubo, sizeof(ubo), 0);
@@ -1043,16 +1051,15 @@ void ForwardViewportStage::drawSkybox(const RenderStageContext& ctx)
     if (vpW == 0 || vpH == 0) return;
 
     // Check if skybox is available
-    auto* resolver = App::get()->getResourceResolveSystem();
-    auto* scene    = App::get()->getSceneManager()->getActiveScene();
+    auto* resolver = _getResourceResolveSystem ? _getResourceResolveSystem() : nullptr;
+    auto* scene    = _getActiveScene ? _getActiveScene() : nullptr;
     if (!resolver || !scene) return;
 
     const auto* skyboxState = resolver->findFirstSceneSkyboxState(scene);
     if (!skyboxState || !skyboxState->hasRenderableCubemap()) return;
 
-    auto* runtime = App::get()->getRenderRuntime();
-    if (!runtime) return;
-    auto skyboxDS = runtime->getSceneSkyboxDescriptorSet(scene);
+    if (!_getSceneSkyboxDescriptorSet) return;
+    auto skyboxDS = _getSceneSkyboxDescriptorSet(scene);
 
     // Get cube mesh from scene's skybox entity, or use primitive cache
     Mesh* cubeMesh = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
@@ -1087,9 +1094,10 @@ void ForwardViewportStage::drawPBR(const RenderStageContext& ctx)
 
     if (staticItems.empty() && skinnedItems.empty()) return;
 
-    auto*               runtime       = App::get()->getRenderRuntime();
-    auto*               scene         = App::get()->getSceneManager()->getActiveScene();
-    DescriptorSetHandle environmentDS = (runtime && scene) ? runtime->getSceneEnvironmentLightingDescriptorSet(scene) : DescriptorSetHandle{};
+    auto*               scene         = _getActiveScene ? _getActiveScene() : nullptr;
+    DescriptorSetHandle environmentDS = (_getSceneEnvironmentLightingDescriptorSet && scene)
+        ? _getSceneEnvironmentLightingDescriptorSet(scene)
+        : DescriptorSetHandle{};
 
     cmdBuf->debugBeginLabel("ForwardPBR");
     setViewportAndScissor(cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height);
@@ -1193,9 +1201,10 @@ void ForwardViewportStage::drawPhong(const RenderStageContext& ctx)
 
     if (staticItems.empty() && skinnedItems.empty()) return;
 
-    auto*               runtime  = App::get()->getRenderRuntime();
-    auto*               scene    = App::get()->getSceneManager()->getActiveScene();
-    DescriptorSetHandle skyboxDS = (runtime && scene) ? runtime->getSceneSkyboxDescriptorSet(scene) : DescriptorSetHandle{};
+    auto*               scene    = _getActiveScene ? _getActiveScene() : nullptr;
+    DescriptorSetHandle skyboxDS = (_getSceneSkyboxDescriptorSet && scene)
+        ? _getSceneSkyboxDescriptorSet(scene)
+        : DescriptorSetHandle{};
 
     cmdBuf->debugBeginLabel("ForwardPhong");
     setViewportAndScissor(cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height);
@@ -1378,7 +1387,7 @@ void ForwardViewportStage::drawSimple(const RenderStageContext& ctx)
     const auto& skinnedItems = fd.drawBuckets.skinnedMeshes.simpleDrawItems;
     auto*       cmdBuf       = ctx.cmdBuf;
 
-    auto* scene = App::get()->getSceneManager()->getActiveScene();
+    auto* scene = _getActiveScene ? _getActiveScene() : nullptr;
     if (!scene) return;
 
     bool hasSimple = !staticItems.empty() || !skinnedItems.empty();
@@ -1469,11 +1478,10 @@ void ForwardViewportStage::drawDebug(const RenderStageContext& ctx)
     if (vpW == 0 || vpH == 0) return;
 
     // Update debug UBO
-    auto* app            = App::get();
     _debugUBO.projection = fd.projection;
     _debugUBO.view       = fd.view;
     _debugUBO.resolution = glm::ivec2(static_cast<int>(vpW), static_cast<int>(vpH));
-    _debugUBO.time       = static_cast<float>(app->getElapsedTimeMS()) / 1000.0f;
+    _debugUBO.time       = _getElapsedTimeSeconds ? static_cast<float>(_getElapsedTimeSeconds()) : 0.0f;
     _debugUboBuffer->writeData(&_debugUBO, sizeof(DebugUBO), 0);
 
     cmdBuf->debugBeginLabel("ForwardDebug");

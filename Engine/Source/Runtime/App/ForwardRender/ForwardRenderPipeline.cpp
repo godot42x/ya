@@ -37,8 +37,14 @@ void ForwardRenderPipeline::rebuildShadowViews()
 
 void ForwardRenderPipeline::init(const InitDesc& desc)
 {
-    _render            = desc.render;
-    _shadowSettings    = desc.shadowSettings;
+    _render                 = desc.render;
+    _shadowSettings         = desc.shadowSettings;
+    _getFrameIndex          = desc.getFrameIndex;
+    _getElapsedTimeSeconds  = desc.getElapsedTimeSeconds;
+    getActiveScene          = desc.getActiveScene;
+    getResourceResolveSystem = desc.getResourceResolveSystem;
+    getSceneSkyboxDescriptorSet = desc.getSceneSkyboxDescriptorSet;
+    getSceneEnvironmentLightingDescriptorSet = desc.getSceneEnvironmentLightingDescriptorSet;
     if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
     }
@@ -157,11 +163,17 @@ void ForwardRenderPipeline::initStageResources()
     };
     _viewportStage = ya::makeShared<ForwardViewportStage>();
     _viewportStage->initWithDesc(ForwardViewportStage::InitDesc{
-        .render                = _render,
-        .renderPass            = nullptr,
-        .pipelineRenderingInfo = viewportPRI,
-        .depthBufferShadowDS   = depthBufferShadowDS,
-        .shadowState           = buildShadowState(),
+        .render                             = _render,
+        .renderPass                         = nullptr,
+        .pipelineRenderingInfo              = viewportPRI,
+        .depthBufferShadowDS                = depthBufferShadowDS,
+        .shadowState                        = buildShadowState(),
+        .getFrameIndex                      = _getFrameIndex,
+        .getElapsedTimeSeconds              = _getElapsedTimeSeconds,
+        .getActiveScene                     = getActiveScene,
+        .getResourceResolveSystem           = getResourceResolveSystem,
+        .getSceneSkyboxDescriptorSet        = getSceneSkyboxDescriptorSet,
+        .getSceneEnvironmentLightingDescriptorSet = getSceneEnvironmentLightingDescriptorSet,
     });
 
     _deleter.push("Stages", [this](void*)
@@ -355,6 +367,12 @@ void ForwardRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
 void ForwardRenderPipeline::shutdown()
 {
     _bViewportPassOpen = false;
+    _getFrameIndex = {};
+    _getElapsedTimeSeconds = {};
+    getActiveScene = {};
+    getResourceResolveSystem = {};
+    getSceneSkyboxDescriptorSet = {};
+    getSceneEnvironmentLightingDescriptorSet = {};
     _deleter.clear();
 }
 

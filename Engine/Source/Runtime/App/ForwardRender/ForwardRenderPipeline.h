@@ -20,8 +20,10 @@ namespace ya
 {
 
 struct SceneManager;
+struct Scene;
 struct Texture;
 struct Sampler;
+class ResourceResolveSystem;
 
 struct ForwardRenderPipeline : public IRenderPipeline
 {
@@ -36,12 +38,24 @@ struct ForwardRenderPipeline : public IRenderPipeline
         int      windowW = 0;
         int      windowH = 0;
         ShadowSettings* shadowSettings = nullptr;
+        std::function<uint64_t()> getFrameIndex;
+        std::function<double()> getElapsedTimeSeconds;
+        std::function<Scene*()> getActiveScene;
+        std::function<ResourceResolveSystem*()> getResourceResolveSystem;
+        std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet;
+        std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
     };
 
     Deleter _deleter;
 
     IRender* _render = nullptr;
     ShadowSettings* _shadowSettings = nullptr;
+    std::function<uint64_t()> _getFrameIndex;
+    std::function<double()> _getElapsedTimeSeconds;
+    std::function<Scene*()> getActiveScene;
+    std::function<ResourceResolveSystem*()> getResourceResolveSystem;
+    std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet;
+    std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
 
     stdptr<IDescriptorPool> _descriptorPool = nullptr;
 
