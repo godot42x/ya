@@ -120,6 +120,47 @@ struct ForwardViewportStage : public IRenderStage
         DebugUV,
     };
 
+    enum class EPass : uint8_t
+    {
+        Skybox,
+        PBR,
+        Phong,
+        Unlit,
+        Simple,
+        DirectionOverlay,
+        Debug,
+    };
+
+    struct PassContext
+    {
+        struct SkyboxInput
+        {
+            bool                bAvailable     = false;
+            DescriptorSetHandle descriptorSet  = nullptr;
+            Mesh*               mesh           = nullptr;
+        };
+
+        struct DebugDrawInput
+        {
+            struct Bucket
+            {
+                const std::vector<RenderDrawItem>* items = nullptr;
+                bool                               bSkinned = false;
+            };
+
+            std::array<Bucket, 10> buckets{};
+            uint32_t               count     = 0;
+            bool                   bHasDraws = false;
+        };
+
+        const RenderStageContext& stageCtx;
+        Scene*                    activeScene             = nullptr;
+        ResourceResolveSystem*    resourceResolveSystem   = nullptr;
+        DescriptorSetHandle       sceneEnvironmentLightingDescriptorSet = nullptr;
+        SkyboxInput               skybox{};
+        DebugDrawInput            debugDraw{};
+    };
+
     struct DebugModelPC
     {
         glm::mat4 modelMat;
@@ -256,17 +297,24 @@ struct ForwardViewportStage : public IRenderStage
     void initSkinningResources();
     void ensureSkinningCapacity(uint32_t paletteCount);
 
-        void preparePBR(const RenderStageContext& ctx);
+    void preparePBR(const RenderStageContext& ctx);
     void preparePhong(const RenderStageContext& ctx);
     void prepareUnlit(const RenderStageContext& ctx);
+    void preparePBRMaterials(const RenderFrameData& fd);
+    void preparePhongMaterials(const RenderFrameData& fd);
+    void prepareUnlitMaterials(const RenderFrameData& fd);
     void updateSkinningBuffer(const RenderStageContext& ctx);
+    [[nodiscard]] PassContext buildPassContext(const RenderStageContext& ctx);
+    void                      executePasses(const PassContext& passCtx);
+    void                      executePass(EPass pass, const PassContext& passCtx);
 
-    void drawSkybox(const RenderStageContext& ctx);
-        void drawPBR(const RenderStageContext& ctx);
-    void drawPhong(const RenderStageContext& ctx);
-    void drawUnlit(const RenderStageContext& ctx);
-    void drawSimple(const RenderStageContext& ctx);
-    void drawDebug(const RenderStageContext& ctx);
+    void drawSkybox(const PassContext& passCtx);
+    void drawPBR(const PassContext& passCtx);
+    void drawPhong(const PassContext& passCtx);
+    void drawUnlit(const PassContext& passCtx);
+    void drawSimple(const PassContext& passCtx);
+    void drawDirectionOverlay(const PassContext& passCtx);
+    void drawDebug(const PassContext& passCtx);
 
     // Helpers
     void setViewportAndScissor(ICommandBuffer* cmdBuf, uint32_t w, uint32_t h);

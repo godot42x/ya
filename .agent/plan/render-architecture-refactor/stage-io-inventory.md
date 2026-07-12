@@ -103,8 +103,9 @@
   - GBuffer render target
   - optional SSAO texture
   - `ShadowRuntimeState`
-  - environment lighting DSL
-  - `getSceneEnvironmentLightingDescriptorSet` callback
+  - `EnvironmentLightingInput`
+    - environment lighting DSL
+    - `getSceneEnvironmentLightingDescriptorSet` callback
 - GPU 读取：
   - GBuffer RT0..RT3
   - SSAO texture
@@ -119,7 +120,7 @@
   - primitive quad mesh cache
 - Graph 化判断：
   - 可直接映射为 `DeferredLightPass`
-  - 需要把 environment lighting 从 callback 改成显式 resource input
+  - stage 初始化期依赖已收口为 `EnvironmentLightingInput`，但执行期仍通过 scene descriptor callback 取 environment resource
   - `GBufferStage*` 最终应降为显式 frame/light resource handle 输入
 
 ### ViewportOverlayStage
@@ -128,10 +129,11 @@
   deferred viewport 中的 skybox + debug overlay
 - 显式输入：
   - `RenderStageContext`
-  - skybox descriptor callback
-  - debug render system callback
-  - active scene callback
-  - resource resolve system callback
+  - `Services`
+    - skybox descriptor callback
+    - debug render system callback
+    - active scene callback
+    - resource resolve system callback
 - GPU 读取：
   - scene skybox cubemap descriptor set
   - primitive cube mesh
@@ -169,14 +171,14 @@
   - final postprocess texture
 - 隐式依赖：
   - config manager
-  - runtime `waitIdle()` on resize/recreate
+  - frame-boundary resize apply 中的 runtime `waitIdle()`
 - Graph 化判断：
   - 应拆成固定 pass 链：
     - BloomExtract
     - BloomBlurX/Y loop
     - BloomComposite
     - ToneMap/FinalPostProcess
-  - 当前 `execute()` 里带即时重建逻辑，需要先改成资源规格脏标记
+  - `execute()` 里的即时重建已去掉，当前是资源规格脏标记 + `beginFrame()` 应用
 
 ### ForwardViewportStage
 
@@ -207,6 +209,12 @@
   - `PrimitiveMeshCache`
 - Graph 化判断：
   - 目前不适合直接 graph 化
+  - 已经有显式 pass 顺序骨架和统一 `PassContext`，但 draw 级资源与 scene 依赖仍混在单个 stage 内
+  - `Simple` snapshot draw 与方向 gizmo/editor overlay 已拆成独立 pass，editor registry 依赖开始从材质 pass 中分离
+  - `PBR/Phong/Unlit` 的 material descriptor/param upload 已前移到 prepare 阶段，draw pass 只保留资源绑定与实际绘制
+  - `Skybox/PBR/Phong/Unlit/Simple/DirectionOverlay/Debug` 现在都经由统一 `PassContext` 入口调度，pass 接口形态已一致
+  - skybox 可用性、descriptor set、mesh 选择已经前移到 `PassContext::SkyboxInput`，`Skybox`/`Phong` 不再各自重建这部分 scene 状态
+  - debug draw bucket 集合已经前移到 `PassContext::DebugDrawInput`，`Debug` pass 不再自行扫描整套 draw buckets
   - 至少要先拆成：
     - `ForwardSkyboxPass`
     - `ForwardOpaquePBRPass`
@@ -220,8 +228,8 @@
 下面这些依赖仍是 Render Graph 前最值得清掉的：
 
 - `ForwardViewportStage` 虽然已去掉直接 `App::get()` 反查，但仍依赖多种 scene/service callback，尚未收敛成稳定 pass input
-- `LightStage` / `ViewportOverlayStage` 中的 scene-resource callback
-- `PostProcessingStage::execute()` 中的即时 `waitIdle() + recreate`
+- `LightStage` / `ViewportOverlayStage` 虽已收口成 input/services struct，但执行期仍依赖 scene-resource callback
+- deferred pipeline 中 SSAO / shadow 等资源规格变化仍由 pipeline owner 处理，还未沉到更声明式的 pass resource spec
 - deferred pipeline 中 `refreshDirtyResources()` 的即时 dirty flush + pipeline update
 
 ## Worth Doing Next
@@ -229,8 +237,8 @@
 按 Render Graph 价值排序，下一步最值得做的是：
 
 1. 先把 `ForwardViewportStage` 拆成更小的 pass-oriented stage
-2. 把 `LightStage`、`ViewportOverlayStage` 的 callback 输入改成显式 resource/service input struct
-3. 把 `PostProcessingStage` 的即时重建改成“规格脏标记 + frame boundary 重建”
+2. 把 `ForwardViewportStage` 内仍是 callback 形态的 scene/resource 依赖继续压成更稳定的 pass input
+3. 把 deferred 的 shadow / shared intermediate 规格变化继续改成 frame-boundary resource update
 4. 把 `GBufferStage` / `LightStage` 之间共享的 frame/light 资源从 stage owner 改成 frame resource owner
 
 ## Low Priority / Can Wait

@@ -969,6 +969,9 @@ void ForwardViewportStage::preparePBR(const RenderStageContext& ctx)
 
     fillPBRLightFromFrameData(fd);
     _pbrLightUBO[fi]->writeData(&_pbrLight, sizeof(PBRLightUBO), 0);
+
+    preparePBRMaterials(fd);
+    _pbrPoolRecreated = false;
 }
 
 void ForwardViewportStage::preparePhong(const RenderStageContext& ctx)
@@ -998,10 +1001,14 @@ void ForwardViewportStage::preparePhong(const RenderStageContext& ctx)
 
     // Update debug UBO
     _phongDebugUBO[fi]->writeData(&_phongDebug, sizeof(PhongDebugUBO), 0);
+
+    preparePhongMaterials(fd);
+    _phongPoolRecreated = false;
 }
 
 void ForwardViewportStage::prepareUnlit(const RenderStageContext& ctx)
 {
+    const auto& fd = *ctx.frameData;
     uint32_t materialCount = MaterialFactory::get()->getMaterialSize<UnlitMaterial>();
     if (_unlitMatPool.ensureCapacity(materialCount)) {
         _unlitPoolRecreated = true;
@@ -1023,6 +1030,149 @@ void ForwardViewportStage::prepareUnlit(const RenderStageContext& ctx)
                                                              IDescriptorSetHelper::genBufferWrite(_unlitFrameDSs[slot], 0, 0, EPipelineDescriptorType::UniformBuffer, {bufferInfo}),
                                                          },
                                                          {});
+
+    prepareUnlitMaterials(fd);
+    _unlitPoolRecreated = false;
+}
+
+void ForwardViewportStage::preparePBRMaterials(const RenderFrameData& fd)
+{
+    uint32_t         materialCount   = MaterialFactory::get()->getMaterialSize<PBRMaterial>();
+    std::vector<int> preparedMaterial(materialCount, 0);
+
+    auto prepareBucket = [&](const std::vector<RenderDrawItem>& items)
+    {
+        for (const auto& item : items) {
+            if (!item.material) continue;
+            auto* material = static_cast<PBRMaterial*>(item.material);
+            if (material->getIndex() < 0) continue;
+
+            uint32_t matIdx = material->getIndex();
+            if (preparedMaterial[matIdx]) continue;
+
+            _pbrMatPool.flushDirty(
+                material, _pbrPoolRecreated, [](IBuffer* ubo, PBRMaterial* mat)
+                {
+                    const auto& src = mat->getParams();
+                    PBRParamUBO  dst{};
+                    dst.albedo    = src.albedo;
+                    dst.metallic  = src.metallic;
+                    dst.roughness = src.roughness;
+                    dst.ao        = src.ao;
+                    for (int i = 0; i < PBRMaterial::EResource::Count; ++i) {
+                        dst.textures[i].bEnable        = src.textures[i].bEnable;
+                        dst.textures[i].rotationRadius = src.textures[i].rotationRadius;
+                        dst.textures[i].translation    = src.textures[i].translation;
+                        dst.textures[i].scale          = src.textures[i].scale;
+                    }
+                    ubo->writeData(&dst, sizeof(PBRParamUBO), 0);
+                },
+                [&](DescriptorSetHandle ds, PBRMaterial* mat)
+                {
+                    _render->getDescriptorHelper()->updateDescriptorSets(
+                        {
+                            IDescriptorSetHelper::writeOneImage(ds, 0, mat->getTextureBinding(PBRMaterial::EResource::AlbedoTexture)),
+                            IDescriptorSetHelper::writeOneImage(ds, 1, mat->getTextureBinding(PBRMaterial::EResource::NormalTexture)),
+                            IDescriptorSetHelper::writeOneImage(ds, 2, mat->getTextureBinding(PBRMaterial::EResource::MetallicTexture)),
+                            IDescriptorSetHelper::writeOneImage(ds, 3, mat->getTextureBinding(PBRMaterial::EResource::RoughnessTexture)),
+                            IDescriptorSetHelper::writeOneImage(ds, 4, mat->getTextureBinding(PBRMaterial::EResource::AOTexture)),
+                        },
+                        {});
+                });
+            preparedMaterial[matIdx] = 1;
+        }
+    };
+
+    prepareBucket(fd.drawBuckets.staticMeshes.pbrDrawItems);
+    prepareBucket(fd.drawBuckets.skinnedMeshes.pbrDrawItems);
+}
+
+void ForwardViewportStage::preparePhongMaterials(const RenderFrameData& fd)
+{
+    uint32_t         materialCount   = MaterialFactory::get()->getMaterialSize<PhongMaterial>();
+    std::vector<int> preparedMaterial(materialCount, 0);
+
+    auto prepareBucket = [&](const std::vector<RenderDrawItem>& items)
+    {
+        for (const auto& item : items) {
+            if (!item.material) continue;
+            auto* material = static_cast<PhongMaterial*>(item.material);
+            if (material->getIndex() < 0) continue;
+
+            uint32_t matIdx = material->getIndex();
+            if (preparedMaterial[matIdx]) continue;
+
+            _phongMatPool.flushDirty(
+                material, _phongPoolRecreated, [&](IBuffer* ubo, PhongMaterial* mat)
+                {
+                    const auto& params = mat->getParams();
+                    ubo->writeData(&params, sizeof(PhongMaterial::ParamUBO), 0);
+                },
+                [&](DescriptorSetHandle ds, PhongMaterial* mat)
+                {
+                    auto diffuse    = getDescriptorImageInfo(mat->getTextureBinding(PhongMaterial::EResource::DiffuseTexture));
+                    auto specular   = getDescriptorImageInfo(mat->getTextureBinding(PhongMaterial::EResource::SpecularTexture));
+                    auto reflection = getDescriptorImageInfo(mat->getTextureBinding(PhongMaterial::EResource::ReflectionTexture));
+                    auto normal     = getDescriptorImageInfo(mat->getTextureBinding(PhongMaterial::EResource::NormalTexture));
+
+                    _render->getDescriptorHelper()->updateDescriptorSets(
+                        {
+                            IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {diffuse}),
+                            IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {specular}),
+                            IDescriptorSetHelper::genImageWrite(ds, 2, 0, EPipelineDescriptorType::CombinedImageSampler, {reflection}),
+                            IDescriptorSetHelper::genImageWrite(ds, 3, 0, EPipelineDescriptorType::CombinedImageSampler, {normal}),
+                        },
+                        {});
+                });
+            preparedMaterial[matIdx] = 1;
+        }
+    };
+
+    prepareBucket(fd.drawBuckets.staticMeshes.phongDrawItems);
+    prepareBucket(fd.drawBuckets.skinnedMeshes.phongDrawItems);
+}
+
+void ForwardViewportStage::prepareUnlitMaterials(const RenderFrameData& fd)
+{
+    uint32_t          materialCount   = MaterialFactory::get()->getMaterialSize<UnlitMaterial>();
+    std::vector<bool> preparedMaterial(materialCount);
+
+    auto prepareBucket = [&](const std::vector<RenderDrawItem>& items)
+    {
+        for (const auto& item : items) {
+            if (!item.material) continue;
+            auto* material = static_cast<UnlitMaterial*>(item.material);
+            if (material->getIndex() < 0) continue;
+
+            uint32_t matIdx = material->getIndex();
+            if (preparedMaterial[matIdx]) continue;
+
+            _unlitMatPool.flushDirty(
+                material, _unlitPoolRecreated, [&](IBuffer* ubo, UnlitMaterial* mat)
+                {
+                    const auto& params = mat->getParams();
+                    ubo->writeData(&params, sizeof(UnlitMaterial::ParamUBO), 0);
+                },
+                [&](DescriptorSetHandle ds, UnlitMaterial* mat)
+                {
+                    DescriptorImageInfo img0(mat->getImageViewHandle(UnlitMaterial::BaseColor0),
+                                             mat->getSamplerHandle(UnlitMaterial::BaseColor0),
+                                             EImageLayout::ShaderReadOnlyOptimal);
+                    DescriptorImageInfo img1(mat->getImageViewHandle(UnlitMaterial::BaseColor1),
+                                             mat->getSamplerHandle(UnlitMaterial::BaseColor1),
+                                             EImageLayout::ShaderReadOnlyOptimal);
+                    _render->getDescriptorHelper()->updateDescriptorSets({
+                                                                             IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {img0}),
+                                                                             IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {img1}),
+                                                                         },
+                                                                         {});
+                });
+            preparedMaterial[matIdx] = true;
+        }
+    };
+
+    prepareBucket(fd.drawBuckets.staticMeshes.unlitDrawItems);
+    prepareBucket(fd.drawBuckets.skinnedMeshes.unlitDrawItems);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1033,59 +1183,140 @@ void ForwardViewportStage::execute(const RenderStageContext& ctx)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    drawSkybox(ctx);
-    drawPBR(ctx);
-    drawPhong(ctx);
-    drawUnlit(ctx);
-    drawSimple(ctx);
-    drawDebug(ctx);
+    executePasses(buildPassContext(ctx));
+}
+
+ForwardViewportStage::PassContext ForwardViewportStage::buildPassContext(const RenderStageContext& ctx)
+{
+    auto* activeScene           = _getActiveScene ? _getActiveScene() : nullptr;
+    auto* resourceResolveSystem = _getResourceResolveSystem ? _getResourceResolveSystem() : nullptr;
+    PassContext::SkyboxInput skybox{};
+    PassContext::DebugDrawInput debugDraw{};
+
+    if (activeScene && resourceResolveSystem && _getSceneSkyboxDescriptorSet) {
+        const auto* skyboxState = resourceResolveSystem->findFirstSceneSkyboxState(activeScene);
+        if (skyboxState && skyboxState->hasRenderableCubemap()) {
+            skybox.descriptorSet = _getSceneSkyboxDescriptorSet(activeScene);
+            skybox.mesh          = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
+            for (const auto& [entity, sc, mc] : activeScene->getRegistry().view<SkyboxComponent, StaticMeshComponent>().each()) {
+                if (mc.isResolved() && mc.getMesh()) {
+                    skybox.mesh = mc.getMesh();
+                }
+                break;
+            }
+            skybox.bAvailable = skybox.descriptorSet && skybox.mesh;
+        }
+    }
+
+    if (ctx.frameData) {
+        auto appendDebugBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
+        {
+            if (items.empty()) {
+                return;
+            }
+            YA_CORE_ASSERT(debugDraw.count < debugDraw.buckets.size(), "Forward debug bucket inventory overflow");
+            debugDraw.buckets[debugDraw.count++] = PassContext::DebugDrawInput::Bucket{
+                .items     = &items,
+                .bSkinned  = bSkinned,
+            };
+            debugDraw.bHasDraws = true;
+        };
+
+        appendDebugBucket(ctx.frameData->drawBuckets.staticMeshes.pbrDrawItems, false);
+        appendDebugBucket(ctx.frameData->drawBuckets.staticMeshes.phongDrawItems, false);
+        appendDebugBucket(ctx.frameData->drawBuckets.staticMeshes.unlitDrawItems, false);
+        appendDebugBucket(ctx.frameData->drawBuckets.staticMeshes.simpleDrawItems, false);
+        appendDebugBucket(ctx.frameData->drawBuckets.staticMeshes.fallbackDrawItems, false);
+        appendDebugBucket(ctx.frameData->drawBuckets.skinnedMeshes.pbrDrawItems, true);
+        appendDebugBucket(ctx.frameData->drawBuckets.skinnedMeshes.phongDrawItems, true);
+        appendDebugBucket(ctx.frameData->drawBuckets.skinnedMeshes.unlitDrawItems, true);
+        appendDebugBucket(ctx.frameData->drawBuckets.skinnedMeshes.simpleDrawItems, true);
+        appendDebugBucket(ctx.frameData->drawBuckets.skinnedMeshes.fallbackDrawItems, true);
+    }
+
+    return PassContext{
+        .stageCtx = ctx,
+        .activeScene = activeScene,
+        .resourceResolveSystem = resourceResolveSystem,
+        .sceneEnvironmentLightingDescriptorSet = (_getSceneEnvironmentLightingDescriptorSet && activeScene)
+            ? _getSceneEnvironmentLightingDescriptorSet(activeScene)
+            : DescriptorSetHandle{},
+        .skybox = skybox,
+        .debugDraw = debugDraw,
+    };
+}
+
+void ForwardViewportStage::executePasses(const PassContext& passCtx)
+{
+    static constexpr std::array<EPass, 7> PASS_ORDER = {
+        EPass::Skybox,
+        EPass::PBR,
+        EPass::Phong,
+        EPass::Unlit,
+        EPass::Simple,
+        EPass::DirectionOverlay,
+        EPass::Debug,
+    };
+
+    for (EPass pass : PASS_ORDER) {
+        executePass(pass, passCtx);
+    }
+}
+
+void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
+{
+    switch (pass) {
+        case EPass::Skybox:
+            drawSkybox(passCtx);
+            break;
+        case EPass::PBR:
+            drawPBR(passCtx);
+            break;
+        case EPass::Phong:
+            drawPhong(passCtx);
+            break;
+        case EPass::Unlit:
+            drawUnlit(passCtx);
+            break;
+        case EPass::Simple:
+            drawSimple(passCtx);
+            break;
+        case EPass::DirectionOverlay:
+            drawDirectionOverlay(passCtx);
+            break;
+        case EPass::Debug:
+            drawDebug(passCtx);
+            break;
+    }
 }
 
 // ── Skybox draw ─────────────────────────────────────────────────────
 
-void ForwardViewportStage::drawSkybox(const RenderStageContext& ctx)
+void ForwardViewportStage::drawSkybox(const PassContext& passCtx)
 {
+    const auto& ctx = passCtx.stageCtx;
     auto* cmdBuf = ctx.cmdBuf;
     auto  vpW    = ctx.viewportExtent.width;
     auto  vpH    = ctx.viewportExtent.height;
     if (vpW == 0 || vpH == 0) return;
-
-    // Check if skybox is available
-    auto* resolver = _getResourceResolveSystem ? _getResourceResolveSystem() : nullptr;
-    auto* scene    = _getActiveScene ? _getActiveScene() : nullptr;
-    if (!resolver || !scene) return;
-
-    const auto* skyboxState = resolver->findFirstSceneSkyboxState(scene);
-    if (!skyboxState || !skyboxState->hasRenderableCubemap()) return;
-
-    if (!_getSceneSkyboxDescriptorSet) return;
-    auto skyboxDS = _getSceneSkyboxDescriptorSet(scene);
-
-    // Get cube mesh from scene's skybox entity, or use primitive cache
-    Mesh* cubeMesh = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
-    for (const auto& [entity, sc, mc] : scene->getRegistry().view<SkyboxComponent, StaticMeshComponent>().each()) {
-        if (mc.isResolved() && mc.getMesh()) {
-            cubeMesh = mc.getMesh();
-        }
-        break;
-    }
-    if (!cubeMesh) return;
+    if (!passCtx.skybox.bAvailable) return;
 
     cmdBuf->debugBeginLabel("ForwardSkybox");
 
     cmdBuf->bindPipeline(_skyboxPipeline.get());
     setViewportAndScissor(cmdBuf, vpW, vpH);
 
-    cmdBuf->bindDescriptorSets(_skyboxPPL.get(), 0, {_skyboxFrameDS[ctx.flightIndex], skyboxDS});
-    cubeMesh->draw(cmdBuf);
+    cmdBuf->bindDescriptorSets(_skyboxPPL.get(), 0, {_skyboxFrameDS[ctx.flightIndex], passCtx.skybox.descriptorSet});
+    passCtx.skybox.mesh->draw(cmdBuf);
 
     cmdBuf->debugEndLabel();
 }
 
 // ── PBR draw ────────────────────────────────────────────────────────
 
-void ForwardViewportStage::drawPBR(const RenderStageContext& ctx)
+void ForwardViewportStage::drawPBR(const PassContext& passCtx)
 {
+    const auto& ctx = passCtx.stageCtx;
     const auto& fd           = *ctx.frameData;
     const auto& staticItems  = fd.drawBuckets.staticMeshes.pbrDrawItems;
     const auto& skinnedItems = fd.drawBuckets.skinnedMeshes.pbrDrawItems;
@@ -1094,16 +1325,10 @@ void ForwardViewportStage::drawPBR(const RenderStageContext& ctx)
 
     if (staticItems.empty() && skinnedItems.empty()) return;
 
-    auto*               scene         = _getActiveScene ? _getActiveScene() : nullptr;
-    DescriptorSetHandle environmentDS = (_getSceneEnvironmentLightingDescriptorSet && scene)
-        ? _getSceneEnvironmentLightingDescriptorSet(scene)
-        : DescriptorSetHandle{};
+    DescriptorSetHandle environmentDS = passCtx.sceneEnvironmentLightingDescriptorSet;
 
     cmdBuf->debugBeginLabel("ForwardPBR");
     setViewportAndScissor(cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height);
-
-    uint32_t         materialCount = MaterialFactory::get()->getMaterialSize<PBRMaterial>();
-    std::vector<int> updatedMaterial(materialCount, 0);
 
     auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
     {
@@ -1115,38 +1340,6 @@ void ForwardViewportStage::drawPBR(const RenderStageContext& ctx)
             uint32_t            matIdx     = material->getIndex();
             DescriptorSetHandle resourceDS = _pbrMatPool.resourceDS(matIdx);
             DescriptorSetHandle paramDS    = _pbrMatPool.paramDS(matIdx);
-
-            if (!updatedMaterial[matIdx]) {
-                _pbrMatPool.flushDirty(
-                    material, _pbrPoolRecreated, [](IBuffer* ubo, PBRMaterial* mat)
-                    {
-                        const auto& src = mat->getParams();
-                        PBRParamUBO  dst{};
-                        dst.albedo    = src.albedo;
-                        dst.metallic  = src.metallic;
-                        dst.roughness = src.roughness;
-                        dst.ao        = src.ao;
-                        for (int i = 0; i < PBRMaterial::EResource::Count; ++i) {
-                            dst.textures[i].bEnable        = src.textures[i].bEnable;
-                            dst.textures[i].rotationRadius = src.textures[i].rotationRadius;
-                            dst.textures[i].translation    = src.textures[i].translation;
-                            dst.textures[i].scale          = src.textures[i].scale;
-                        }
-                        ubo->writeData(&dst, sizeof(PBRParamUBO), 0); },
-                    [&](DescriptorSetHandle ds, PBRMaterial* mat)
-                    {
-                        _render->getDescriptorHelper()->updateDescriptorSets(
-                            {
-                                IDescriptorSetHelper::writeOneImage(ds, 0, mat->getTextureBinding(PBRMaterial::EResource::AlbedoTexture)),
-                                IDescriptorSetHelper::writeOneImage(ds, 1, mat->getTextureBinding(PBRMaterial::EResource::NormalTexture)),
-                                IDescriptorSetHelper::writeOneImage(ds, 2, mat->getTextureBinding(PBRMaterial::EResource::MetallicTexture)),
-                                IDescriptorSetHelper::writeOneImage(ds, 3, mat->getTextureBinding(PBRMaterial::EResource::RoughnessTexture)),
-                                IDescriptorSetHelper::writeOneImage(ds, 4, mat->getTextureBinding(PBRMaterial::EResource::AOTexture)),
-                            },
-                            {});
-                    });
-                updatedMaterial[matIdx] = 1;
-            }
 
             auto& pipelineVariant = bSkinned ? _pbrSkinned : _pbrStatic;
             auto* layout = pipelineVariant.pipelineLayout.get();
@@ -1184,15 +1377,14 @@ void ForwardViewportStage::drawPBR(const RenderStageContext& ctx)
 
     drawBucket(staticItems, false);
     drawBucket(skinnedItems, true);
-
-    _pbrPoolRecreated = false;
     cmdBuf->debugEndLabel();
 }
 
 // ── Phong draw ──────────────────────────────────────────────────────
 
-void ForwardViewportStage::drawPhong(const RenderStageContext& ctx)
+void ForwardViewportStage::drawPhong(const PassContext& passCtx)
 {
+    const auto& ctx = passCtx.stageCtx;
     const auto& fd           = *ctx.frameData;
     const auto& staticItems  = fd.drawBuckets.staticMeshes.phongDrawItems;
     const auto& skinnedItems = fd.drawBuckets.skinnedMeshes.phongDrawItems;
@@ -1201,17 +1393,10 @@ void ForwardViewportStage::drawPhong(const RenderStageContext& ctx)
 
     if (staticItems.empty() && skinnedItems.empty()) return;
 
-    auto*               scene    = _getActiveScene ? _getActiveScene() : nullptr;
-    DescriptorSetHandle skyboxDS = (_getSceneSkyboxDescriptorSet && scene)
-        ? _getSceneSkyboxDescriptorSet(scene)
-        : DescriptorSetHandle{};
+    DescriptorSetHandle skyboxDS = passCtx.skybox.descriptorSet;
 
     cmdBuf->debugBeginLabel("ForwardPhong");
     setViewportAndScissor(cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height);
-
-    // Material tracking
-    uint32_t         materialCount = MaterialFactory::get()->getMaterialSize<PhongMaterial>();
-    std::vector<int> updatedMaterial(materialCount, 0);
 
     auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
     {
@@ -1223,31 +1408,6 @@ void ForwardViewportStage::drawPhong(const RenderStageContext& ctx)
             uint32_t            matIdx     = material->getIndex();
             DescriptorSetHandle resourceDS = _phongMatPool.resourceDS(matIdx);
             DescriptorSetHandle paramDS    = _phongMatPool.paramDS(matIdx);
-
-            if (!updatedMaterial[matIdx]) {
-                _phongMatPool.flushDirty(
-                    material, _phongPoolRecreated, [&](IBuffer* ubo, PhongMaterial* mat)
-                    {
-                        const auto& params = mat->getParams();
-                        ubo->writeData(&params, sizeof(PhongMaterial::ParamUBO), 0); },
-                    [&](DescriptorSetHandle ds, PhongMaterial* mat)
-                    {
-                        auto diffuse    = getDescriptorImageInfo(mat->getTextureBinding(PhongMaterial::EResource::DiffuseTexture));
-                        auto specular   = getDescriptorImageInfo(mat->getTextureBinding(PhongMaterial::EResource::SpecularTexture));
-                        auto reflection = getDescriptorImageInfo(mat->getTextureBinding(PhongMaterial::EResource::ReflectionTexture));
-                        auto normal     = getDescriptorImageInfo(mat->getTextureBinding(PhongMaterial::EResource::NormalTexture));
-
-                        _render->getDescriptorHelper()->updateDescriptorSets(
-                            {
-                                IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {diffuse}),
-                                IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {specular}),
-                                IDescriptorSetHelper::genImageWrite(ds, 2, 0, EPipelineDescriptorType::CombinedImageSampler, {reflection}),
-                                IDescriptorSetHelper::genImageWrite(ds, 3, 0, EPipelineDescriptorType::CombinedImageSampler, {normal}),
-                            },
-                            {});
-                    });
-                updatedMaterial[matIdx] = 1;
-            }
 
             auto& pipelineVariant = bSkinned ? _phongSkinned : _phongStatic;
             auto* layout = pipelineVariant.pipelineLayout.get();
@@ -1290,15 +1450,14 @@ void ForwardViewportStage::drawPhong(const RenderStageContext& ctx)
 
     drawBucket(staticItems, false);
     drawBucket(skinnedItems, true);
-
-    _phongPoolRecreated = false;
     cmdBuf->debugEndLabel();
 }
 
 // ── Unlit draw ──────────────────────────────────────────────────────
 
-void ForwardViewportStage::drawUnlit(const RenderStageContext& ctx)
+void ForwardViewportStage::drawUnlit(const PassContext& passCtx)
 {
+    const auto& ctx = passCtx.stageCtx;
     const auto& fd           = *ctx.frameData;
     const auto& staticItems  = fd.drawBuckets.staticMeshes.unlitDrawItems;
     const auto& skinnedItems = fd.drawBuckets.skinnedMeshes.unlitDrawItems;
@@ -1310,9 +1469,6 @@ void ForwardViewportStage::drawUnlit(const RenderStageContext& ctx)
     cmdBuf->debugBeginLabel("ForwardUnlit");
     setViewportAndScissor(cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height);
 
-    uint32_t          materialCount = MaterialFactory::get()->getMaterialSize<UnlitMaterial>();
-    std::vector<bool> updatedMaterial(materialCount);
-
     auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
     {
         for (const auto& item : items) {
@@ -1323,29 +1479,6 @@ void ForwardViewportStage::drawUnlit(const RenderStageContext& ctx)
             uint32_t            matIdx     = material->getIndex();
             DescriptorSetHandle paramDS    = _unlitMatPool.paramDS(matIdx);
             DescriptorSetHandle resourceDS = _unlitMatPool.resourceDS(matIdx);
-
-            if (!updatedMaterial[matIdx]) {
-                _unlitMatPool.flushDirty(
-                    material, _unlitPoolRecreated, [&](IBuffer* ubo, UnlitMaterial* mat)
-                    {
-                        const auto& params = mat->getParams();
-                        ubo->writeData(&params, sizeof(UnlitMaterial::ParamUBO), 0); },
-                    [&](DescriptorSetHandle ds, UnlitMaterial* mat)
-                    {
-                        DescriptorImageInfo img0(mat->getImageViewHandle(UnlitMaterial::BaseColor0),
-                                                 mat->getSamplerHandle(UnlitMaterial::BaseColor0),
-                                                 EImageLayout::ShaderReadOnlyOptimal);
-                        DescriptorImageInfo img1(mat->getImageViewHandle(UnlitMaterial::BaseColor1),
-                                                 mat->getSamplerHandle(UnlitMaterial::BaseColor1),
-                                                 EImageLayout::ShaderReadOnlyOptimal);
-                        _render->getDescriptorHelper()->updateDescriptorSets({
-                                                                                 IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {img0}),
-                                                                                 IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {img1}),
-                                                                             },
-                                                                             {});
-                    });
-                updatedMaterial[matIdx] = true;
-            }
 
             auto& pipelineVariant = bSkinned ? _unlitSkinned : _unlitStatic;
             auto* layout = pipelineVariant.pipelineLayout.get();
@@ -1372,7 +1505,6 @@ void ForwardViewportStage::drawUnlit(const RenderStageContext& ctx)
     drawBucket(staticItems, false);
     drawBucket(skinnedItems, true);
 
-    _unlitPoolRecreated = false;
     _unlitFrameSlot     = (_unlitFrameSlot + 1) % UNLIT_FRAME_SLOTS;
 
     cmdBuf->debugEndLabel();
@@ -1380,23 +1512,16 @@ void ForwardViewportStage::drawUnlit(const RenderStageContext& ctx)
 
 // ── Simple draw ─────────────────────────────────────────────────────
 
-void ForwardViewportStage::drawSimple(const RenderStageContext& ctx)
+void ForwardViewportStage::drawSimple(const PassContext& passCtx)
 {
+    const auto& ctx = passCtx.stageCtx;
     const auto& fd           = *ctx.frameData;
     const auto& staticItems  = fd.drawBuckets.staticMeshes.simpleDrawItems;
     const auto& skinnedItems = fd.drawBuckets.skinnedMeshes.simpleDrawItems;
     auto*       cmdBuf       = ctx.cmdBuf;
 
-    auto* scene = _getActiveScene ? _getActiveScene() : nullptr;
-    if (!scene) return;
-
     bool hasSimple = !staticItems.empty() || !skinnedItems.empty();
-
-    // Direction components (editor visualization — still from registry, TODO: migrate to snapshot)
-    const auto& dirView      = scene->getRegistry().view<TransformComponent, DirectionComponent>();
-    bool        hasDirection = dirView.begin() != dirView.end();
-
-    if (!hasSimple && !hasDirection) return;
+    if (!hasSimple) return;
 
     cmdBuf->debugBeginLabel("ForwardSimple");
     cmdBuf->bindPipeline(_simplePipeline.get());
@@ -1426,6 +1551,27 @@ void ForwardViewportStage::drawSimple(const RenderStageContext& ctx)
 
     drawBucket(staticItems, false);
     drawBucket(skinnedItems, true);
+
+    cmdBuf->debugEndLabel();
+}
+
+void ForwardViewportStage::drawDirectionOverlay(const PassContext& passCtx)
+{
+    const auto& ctx = passCtx.stageCtx;
+    auto*       scene = passCtx.activeScene;
+    if (!scene) return;
+
+    const auto& dirView = scene->getRegistry().view<TransformComponent, DirectionComponent>();
+    if (dirView.begin() == dirView.end()) return;
+
+    auto* cmdBuf = ctx.cmdBuf;
+    cmdBuf->debugBeginLabel("ForwardDirectionOverlay");
+    cmdBuf->bindPipeline(_simplePipeline.get());
+    setViewportAndScissor(cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height);
+
+    SimplePC pc{};
+    pc.view       = ctx.frameData->view;
+    pc.projection = ctx.frameData->projection;
 
     // Direction component visualization (from registry)
     auto* cone     = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cone);
@@ -1459,19 +1605,15 @@ void ForwardViewportStage::drawSimple(const RenderStageContext& ctx)
 
 // ── Debug draw ──────────────────────────────────────────────────────
 
-void ForwardViewportStage::drawDebug(const RenderStageContext& ctx)
+void ForwardViewportStage::drawDebug(const PassContext& passCtx)
 {
+    const auto& ctx = passCtx.stageCtx;
     if (_debugMode == DebugNone) return;
 
     auto*       cmdBuf = ctx.cmdBuf;
     const auto& fd     = *ctx.frameData;
 
-    // Collect all meshes (from all draw item buckets)
-    auto collectMeshes = [&]() -> bool
-    {
-        return fd.drawBuckets.totalDrawCount() > 0;
-    };
-    if (!collectMeshes()) return;
+    if (!passCtx.debugDraw.bHasDraws) return;
 
     auto vpW = ctx.viewportExtent.width;
     auto vpH = ctx.viewportExtent.height;
@@ -1504,16 +1646,16 @@ void ForwardViewportStage::drawDebug(const RenderStageContext& ctx)
             }
         }
     };
-    auto drawBucketSet = [&](const RenderShadingDrawBuckets& buckets, bool bSkinned)
+    auto drawBucket = [&](const PassContext::DebugDrawInput::Bucket& bucket)
     {
-        drawItems(buckets.pbrDrawItems, bSkinned);
-        drawItems(buckets.phongDrawItems, bSkinned);
-        drawItems(buckets.unlitDrawItems, bSkinned);
-        drawItems(buckets.simpleDrawItems, bSkinned);
-        drawItems(buckets.fallbackDrawItems, bSkinned);
+        if (!bucket.items) {
+            return;
+        }
+        drawItems(*bucket.items, bucket.bSkinned);
     };
-    drawBucketSet(fd.drawBuckets.staticMeshes, false);
-    drawBucketSet(fd.drawBuckets.skinnedMeshes, true);
+    for (uint32_t bucketIndex = 0; bucketIndex < passCtx.debugDraw.count; ++bucketIndex) {
+        drawBucket(passCtx.debugDraw.buckets[bucketIndex]);
+    }
 
     cmdBuf->debugEndLabel();
 }
