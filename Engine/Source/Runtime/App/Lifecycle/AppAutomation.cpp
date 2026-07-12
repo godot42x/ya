@@ -340,19 +340,18 @@ bool AppAutomation::shouldDeferQuit(const App& app)
 
 void AppAutomation::loadConfig(AppDesc& appDesc)
 {
+    const std::string automationConfigPath = appDesc.automation.configPath && !appDesc.automation.configPath->empty()
+                                               ? *appDesc.automation.configPath
+                                               : AUTOMATION_CONFIG_PATH;
+
     auto& configManager = ConfigManager::get();
     configManager.openDocument(
         AUTOMATION_CONFIG_DOC_NAME,
-        AUTOMATION_CONFIG_PATH,
+        automationConfigPath,
         Config::OpenDocumentOptions{
             .bPersistIfMissing = true,
             .bReadOnly         = false,
         });
-
-    if (appDesc.automation.configPath && !appDesc.automation.configPath->empty() &&
-        *appDesc.automation.configPath != AUTOMATION_CONFIG_PATH) {
-        YA_CORE_WARN("Ignoring legacy automation-config override '{}'; use {} for automation mode", *appDesc.automation.configPath, AUTOMATION_CONFIG_PATH);
-    }
 }
 
 void AppAutomation::applyStartupOverrides(AppDesc& appDesc)
