@@ -2,8 +2,8 @@
 
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
-#include "Render/Material/SimpleMaterial.h"
 #include "Render/Stage/IRenderStage.h"
+#include "Runtime/App/ForwardRender/ForwardViewportAuxPasses.h"
 #include "Runtime/App/ForwardRender/ForwardViewportLitPasses.h"
 #include "Runtime/App/ForwardRender/ForwardViewportUnlitPass.h"
 #include "Runtime/App/Common/Shadow/Common/ShadowRuntimeState.h"
@@ -40,42 +40,6 @@ struct ForwardViewportStage : public IRenderStage
         std::function<ResourceResolveSystem*()> getResourceResolveSystem;
         std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet;
         std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
-    };
-
-    // ── Simple (push constant only) ──
-    struct SimplePC
-    {
-        glm::mat4 projection = glm::mat4(1.0f);
-        glm::mat4 view       = glm::mat4(1.0f);
-        glm::mat4 model      = glm::mat4(1.0f);
-        uint32_t  colorType  = 0;
-    };
-
-    // ── Skybox UBO ──
-    struct SkyboxFrameUBO
-    {
-        glm::mat4 projection;
-        glm::mat4 view;
-    };
-
-    // ── Debug UBO ──
-    struct DebugUBO
-    {
-        glm::mat4 projection{1.f};
-        glm::mat4 view{1.f};
-        alignas(8) glm::ivec2 resolution{0, 0};
-        alignas(4) int mode   = 0;
-        alignas(4) float time = 0.f;
-        glm::vec4 floatParam  = glm::vec4(0.0f);
-    };
-
-    enum EDebugMode
-    {
-        DebugNone = 0,
-        DebugNormalColor,
-        DebugNormalDir,
-        DebugDepth,
-        DebugUV,
     };
 
     enum class EPass : uint8_t
@@ -119,11 +83,6 @@ struct ForwardViewportStage : public IRenderStage
         DebugDrawInput            debugDraw{};
     };
 
-    struct DebugModelPC
-    {
-        glm::mat4 modelMat;
-    };
-
     // ═══════════════════════════════════════════════════════════════
     // State
     // ═══════════════════════════════════════════════════════════════
@@ -132,6 +91,7 @@ struct ForwardViewportStage : public IRenderStage
     bool     bReverseViewportY = true;
 
     ShadowRuntimeState _shadowState{};
+    ForwardViewportAuxPasses _auxPasses{};
     ForwardViewportLitPasses _litPasses{};
     ForwardViewportUnlitPass _unlitPass{};
 
@@ -148,33 +108,6 @@ struct ForwardViewportStage : public IRenderStage
     std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _skinningDS{};
     std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _skinningSSBO{};
     uint32_t                                           _skinningCapacity = 0;
-
-    // ── Simple pipeline (push constant only) ────────────────────
-    stdptr<IPipelineLayout>   _simplePPL;
-    stdptr<IGraphicsPipeline> _simplePipeline;
-    int                       _simpleDefaultColorType = 0;
-
-    // ── Skybox pipeline ─────────────────────────────────────────
-    stdptr<IDescriptorSetLayout> _skyboxFrameDSL;
-    stdptr<IDescriptorSetLayout> _skyboxResourceDSL;
-    stdptr<IPipelineLayout>      _skyboxPPL;
-    stdptr<IGraphicsPipeline>    _skyboxPipeline;
-    stdptr<IDescriptorPool>      _skyboxDSP;
-
-    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _skyboxFrameDS{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _skyboxFrameUBO{};
-
-    // ── Debug pipeline ──────────────────────────────────────────
-    stdptr<IDescriptorSetLayout> _debugDSL;
-    stdptr<IPipelineLayout>      _debugPPL;
-    stdptr<IGraphicsPipeline>    _debugPipeline;
-    GraphicsPipelineCreateInfo   _debugPipelineCI;
-    stdptr<IDescriptorPool>      _debugDSP;
-    DescriptorSetHandle          _debugUboDS = nullptr;
-    stdptr<IBuffer>              _debugUboBuffer;
-
-    DebugUBO   _debugUBO{};
-    EDebugMode _debugMode = DebugNone;
 
     // ═══════════════════════════════════════════════════════════════
     // IRenderStage interface
@@ -193,9 +126,6 @@ struct ForwardViewportStage : public IRenderStage
     void refreshPipelineFormats(const IRenderTarget* viewportRT);
 
   private:
-    void initSimple(const InitDesc& desc);
-    void initSkybox(const InitDesc& desc);
-    void initDebug(const InitDesc& desc);
     void initSkinningResources();
     void ensureSkinningCapacity(uint32_t paletteCount);
 
@@ -203,11 +133,6 @@ struct ForwardViewportStage : public IRenderStage
     [[nodiscard]] PassContext buildPassContext(const RenderStageContext& ctx);
     void                      executePasses(const PassContext& passCtx);
     void                      executePass(EPass pass, const PassContext& passCtx);
-
-    void drawSkybox(const PassContext& passCtx);
-    void drawSimple(const PassContext& passCtx);
-    void drawDirectionOverlay(const PassContext& passCtx);
-    void drawDebug(const PassContext& passCtx);
 
     // Helpers
     void setViewportAndScissor(ICommandBuffer* cmdBuf, uint32_t w, uint32_t h);

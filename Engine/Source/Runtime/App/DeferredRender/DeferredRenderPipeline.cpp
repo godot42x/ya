@@ -295,6 +295,12 @@ void DeferredRenderPipeline::applyPendingViewportResize()
     if (_viewportRT) {
         _viewportRT->setExtent(_pendingViewportExtent);
     }
+    if (_gBufferRT) {
+        _gBufferRT->flushDirty();
+    }
+    if (_viewportRT) {
+        _viewportRT->flushDirty();
+    }
 
     requestSSAOResize(_pendingViewportExtent);
     _postProcessStage.onViewportResized(_pendingViewportExtent);
@@ -302,6 +308,12 @@ void DeferredRenderPipeline::applyPendingViewportResize()
     _cachedAlbedoSpecImageViewHandle = nullptr;
     _debugAlbedoRGBView.reset();
     _debugSpecularAlphaView.reset();
+    if (_ssaoStage) {
+        _ssaoStage->invalidateInputDescriptors();
+    }
+    if (_lightStage) {
+        _lightStage->invalidateGBufferDescriptors();
+    }
     _bViewportResizePending = false;
 }
 
@@ -656,10 +668,6 @@ void DeferredRenderPipeline::refreshDirtyResources()
         if (bGBufferPipelineDirty && _gBufferStage) {
             _gBufferStage->refreshPipelineFormats(_gBufferRT.get());
         }
-    }
-
-    if (_ssaoTexture && _gBufferRT && _ssaoTexture->getExtent() != _gBufferRT->getExtent()) {
-        requestSSAOResize(_gBufferRT->getExtent());
     }
 
     if (bViewportPipelineDirty) {

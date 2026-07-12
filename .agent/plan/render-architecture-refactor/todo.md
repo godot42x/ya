@@ -105,7 +105,7 @@ Render Graph 优先级调整：
 - [x] 列出现有 stage 的资源输入输出清单：Shadow、GBuffer、SSAO、Light、ViewportOverlay、PostProcess、ForwardViewport
 - [x] 标记每个 stage 仍依赖的全局状态或隐式输入
 - [-] 设计 stage 级显式输入结构，减少从 `App::get()` / `RenderRuntime` 全局反查
-  进度：`ForwardViewportStage`、`LightStage`、`ViewportOverlayStage` 已收口为显式 services/input；`ForwardViewportStage` 执行期也已整理为显式 pass 顺序 + `PassContext`，`Simple`/方向 overlay 已拆开，`Skybox/Debug` 输入也已前移到 `PassContext`，`PBR/Phong` 已进一步从 stage facade 中拆到独立 `ForwardViewportLitPasses`，`Unlit` 也已拆到独立 `ForwardViewportUnlitPass`；deferred `LightStage` / `ViewportOverlayStage` 的执行期 scene-resource 查询也已前移到 pipeline 每帧 `FrameInputs`；仍需继续处理 auxiliary passes 和更细粒度 pass 输入
+  进度：`ForwardViewportStage`、`LightStage`、`ViewportOverlayStage` 已收口为显式 services/input；`ForwardViewportStage` 执行期也已整理为显式 pass 顺序 + `PassContext`，`PBR/Phong` 已进一步从 stage facade 中拆到独立 `ForwardViewportLitPasses`，`Unlit` 已拆到独立 `ForwardViewportUnlitPass`，`Skybox/Simple/DirectionOverlay/Debug` 也已收口到 `ForwardViewportAuxPasses`；deferred `LightStage` / `ViewportOverlayStage` 的执行期 scene-resource 查询也已前移到 pipeline 每帧 `FrameInputs`；仍需继续把 callback/service 依赖压成更稳定的 pass 输入
 - [-] 把 stage 内部即时资源重建改成脏标记 + 安全边界重建模式
   进度：`PostProcessingStage` 已改为 resize dirty -> `beginFrame()` 应用；Deferred SSAO resize 已改为 pipeline pending -> `beginTick()` 应用；Deferred shadow toggle/resolution refresh 也已改为 pending -> `beginTick()` 应用，shadow sampled-view rebuild 也已从每帧 `refreshDirtyResources()` 巡检分支移回 shadow resource apply 路径；Deferred viewport resize 入口也已收口成 pending -> `beginTick()` 应用；其他重建点仍待清理
 - [ ] 梳理哪些 stage 可以直接映射为未来 graph pass
