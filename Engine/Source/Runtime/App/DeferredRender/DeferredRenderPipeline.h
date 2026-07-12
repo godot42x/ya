@@ -195,7 +195,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
     void               saveShadowSettingsToConfig(const ShadowSettings& shadowSettings) const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
-    void               rebuildShadowViews();
     void               applyPendingViewportResize();
     void               applyPendingSSAOResize();
     void               applyPendingShadowResourceRefresh();

@@ -3,15 +3,12 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Material/MaterialDescPool.h"
-#include "Render/Material/PBRMaterial.h"
-#include "Render/Material/PhongMaterial.h"
 #include "Render/Material/UnlitMaterial.h"
 #include "Render/Material/SimpleMaterial.h"
 #include "Render/Stage/IRenderStage.h"
+#include "Runtime/App/ForwardRender/ForwardViewportLitPasses.h"
 #include "Runtime/App/Common/Shadow/Common/ShadowRuntimeState.h"
 
-#include "PBRForward.slang.h"
-#include "PhongLit.Types.glsl.h"
 #include "Test.Unlit.glsl.h"
 
 #include <array>
@@ -48,40 +45,15 @@ struct ForwardViewportStage : public IRenderStage
         std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
     };
 
-    // ── PBR UBO type aliases (from shader-generated headers) ──
-    using PBRPushConstant = slang_types::PBRForward::PushConstants;
-    using PBRFrameUBO     = slang_types::PBRForward::FrameData;
-    using PBRLightUBO     = slang_types::PBRForward::LightData;
-    using PBRParamUBO     = slang_types::PBRForward::PBRParamsData;
-
-    // ── Phong UBO type aliases (from shader-generated headers) ──
-    using PhongFrameUBO      = glsl_types::PhongLit::Types::FrameData;
-    using PhongLightUBO      = glsl_types::PhongLit::Types::LightData;
-    using PhongDebugUBO      = glsl_types::PhongLit::Types::DebugData;
-    using PhongDirLight      = glsl_types::PhongLit::Types::DirectionalLight;
-    using PhongPointLight    = glsl_types::PhongLit::Types::PointLight;
-
-    struct PhongModelPC
-    {
-        glm::mat4 modelMat;
-        int32_t   skinningPaletteIndex = -1;
-    };
-
     // ── Unlit UBO type aliases ──
     using UnlitFrameUBO = glsl_types::Test::Unlit::FrameUBO;
+    using ShadingPipelineVariant = ForwardViewportLitPasses::ShadingPipelineVariant;
 
     struct UnlitPC
     {
         alignas(16) glm::mat4 modelMatrix{1.0f};
         alignas(16) glm::mat3 normalMatrix{1.0f};
         alignas(4) int32_t    skinningPaletteIndex = -1;
-    };
-
-    struct ShadingPipelineVariant
-    {
-        stdptr<IPipelineLayout>    pipelineLayout;
-        stdptr<IGraphicsPipeline>  pipeline;
-        GraphicsPipelineCreateInfo pipelineCI{};
     };
 
     // ── Simple (push constant only) ──
@@ -173,46 +145,8 @@ struct ForwardViewportStage : public IRenderStage
     IRender* _render = nullptr;
     bool     bReverseViewportY = true;
 
-    // ── PBR pipeline ────────────────────────────────────────────
-    stdptr<IDescriptorSetLayout> _pbrFrameDSL;
-    stdptr<IDescriptorSetLayout> _pbrResourceDSL;
-    stdptr<IDescriptorSetLayout> _pbrParamDSL;
-    ShadingPipelineVariant       _pbrStatic;
-    ShadingPipelineVariant       _pbrSkinned;
-
-    stdptr<IDescriptorPool>      _pbrFrameDSP;
-    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _pbrFrameDS{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _pbrFrameUBO{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _pbrLightUBO{};
-
-    MaterialDescPool<PBRMaterial, PBRParamUBO> _pbrMatPool;
-    bool _pbrPoolRecreated = false;
-
-    PBRLightUBO       _pbrLight{};
-    bool              _bEnablePBRDiffuseIBL  = true;
-    bool              _bEnablePBRSpecularIBL = true;
     ShadowRuntimeState _shadowState{};
-
-    // ── Phong pipeline ──────────────────────────────────────────
-    stdptr<IDescriptorSetLayout> _phongFrameDSL;       // set 0: frame+light+debug
-    stdptr<IDescriptorSetLayout> _phongResourceDSL;    // set 1: textures
-    stdptr<IDescriptorSetLayout> _phongParamDSL;       // set 2: params
-    // set 3: skybox cubemap (reuse _skyboxResourceDSL)
-    // set 4: shadow map DS  (external, from ForwardRenderPipeline)
-    ShadingPipelineVariant       _phongStatic;
-    ShadingPipelineVariant       _phongSkinned;
-
-    stdptr<IDescriptorPool>      _phongFrameDSP;
-    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _phongFrameDS{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _phongFrameUBO{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _phongLightUBO{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _phongDebugUBO{};
-
-    MaterialDescPool<PhongMaterial, PhongMaterial::ParamUBO> _phongMatPool;
-    bool _phongPoolRecreated = false;
-
-    PhongLightUBO  _phongLight{};
-    PhongDebugUBO  _phongDebug{};
+    ForwardViewportLitPasses _litPasses{};
 
     DescriptorSetHandle _depthBufferShadowDS = nullptr;
     std::function<uint64_t()>            _getFrameIndex;
@@ -288,8 +222,6 @@ struct ForwardViewportStage : public IRenderStage
     void refreshPipelineFormats(const IRenderTarget* viewportRT);
 
   private:
-        void initPBR(const InitDesc& desc);
-    void initPhong(const InitDesc& desc);
     void initUnlit(const InitDesc& desc);
     void initSimple(const InitDesc& desc);
     void initSkybox(const InitDesc& desc);
@@ -297,11 +229,7 @@ struct ForwardViewportStage : public IRenderStage
     void initSkinningResources();
     void ensureSkinningCapacity(uint32_t paletteCount);
 
-    void preparePBR(const RenderStageContext& ctx);
-    void preparePhong(const RenderStageContext& ctx);
     void prepareUnlit(const RenderStageContext& ctx);
-    void preparePBRMaterials(const RenderFrameData& fd);
-    void preparePhongMaterials(const RenderFrameData& fd);
     void prepareUnlitMaterials(const RenderFrameData& fd);
     void updateSkinningBuffer(const RenderStageContext& ctx);
     [[nodiscard]] PassContext buildPassContext(const RenderStageContext& ctx);
@@ -309,8 +237,6 @@ struct ForwardViewportStage : public IRenderStage
     void                      executePass(EPass pass, const PassContext& passCtx);
 
     void drawSkybox(const PassContext& passCtx);
-    void drawPBR(const PassContext& passCtx);
-    void drawPhong(const PassContext& passCtx);
     void drawUnlit(const PassContext& passCtx);
     void drawSimple(const PassContext& passCtx);
     void drawDirectionOverlay(const PassContext& passCtx);
@@ -318,9 +244,6 @@ struct ForwardViewportStage : public IRenderStage
 
     // Helpers
     void setViewportAndScissor(ICommandBuffer* cmdBuf, uint32_t w, uint32_t h);
-        void fillPBRLightFromFrameData(const RenderFrameData& fd);
-    void fillPhongLightFromFrameData(const RenderFrameData& fd);
-    DescriptorImageInfo getDescriptorImageInfo(const TextureBinding& tb);
 };
 
 } // namespace ya

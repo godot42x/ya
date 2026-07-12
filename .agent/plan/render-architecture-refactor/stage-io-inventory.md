@@ -210,6 +210,7 @@
 - Graph 化判断：
   - 目前不适合直接 graph 化
   - 已经有显式 pass 顺序骨架和统一 `PassContext`，但 draw 级资源与 scene 依赖仍混在单个 stage 内
+  - `PBR/Phong` 已收口到独立 `ForwardViewportLitPasses` helper，`ForwardViewportStage` 开始退化为 pass 顺序与非 lit pass 的 facade
   - `Simple` snapshot draw 与方向 gizmo/editor overlay 已拆成独立 pass，editor registry 依赖开始从材质 pass 中分离
   - `PBR/Phong/Unlit` 的 material descriptor/param upload 已前移到 prepare 阶段，draw pass 只保留资源绑定与实际绘制
   - `Skybox/PBR/Phong/Unlit/Simple/DirectionOverlay/Debug` 现在都经由统一 `PassContext` 入口调度，pass 接口形态已一致
@@ -217,8 +218,8 @@
   - debug draw bucket 集合已经前移到 `PassContext::DebugDrawInput`，`Debug` pass 不再自行扫描整套 draw buckets
   - 至少要先拆成：
     - `ForwardSkyboxPass`
-    - `ForwardOpaquePBRPass`
-    - `ForwardOpaquePhongPass`
+    - `ForwardOpaquePBRPass`（已基本具备独立 owner 形态，但仍与 `Phong` 共享 lit helper）
+    - `ForwardOpaquePhongPass`（已基本具备独立 owner 形态，但仍与 `PBR` 共享 lit helper）
     - `ForwardOpaqueUnlitPass`
     - `ForwardDebugPass`
   - 并继续把 callback/service 依赖压成更稳定的 pass input

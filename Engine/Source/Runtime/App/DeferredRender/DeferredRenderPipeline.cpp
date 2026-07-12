@@ -273,11 +273,6 @@ void DeferredRenderPipeline::saveShadowSettingsToConfig(const ShadowSettings& sh
     shadow_settings::saveEditorSettings(shadowSettings);
 }
 
-void DeferredRenderPipeline::rebuildShadowViews()
-{
-    _shadowResources.rebuildViews(_render, "Deferred Shadow");
-}
-
 void DeferredRenderPipeline::requestViewportResize(Extent2D extent)
 {
     if (extent.width == 0 || extent.height == 0) {
@@ -332,6 +327,9 @@ void DeferredRenderPipeline::applyPendingShadowResourceRefresh()
             _shadowStage = ya::makeShared<ShadowStage>();
             _shadowStage->setRenderTarget(_shadowResources.renderTarget);
             _shadowStage->init(_render);
+        }
+        if (_shadowResources.renderTarget) {
+            _shadowResources.renderTarget->flushDirty();
         }
     }
 
@@ -644,11 +642,6 @@ void DeferredRenderPipeline::refreshDirtyResources()
     const bool bGBufferPipelineDirty  = _gBufferRT && _gBufferRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
     _viewportRT->flushDirty();
     _gBufferRT->flushDirty();
-    const bool bShadowResourcesDirty = _shadowResources.renderTarget && _shadowResources.renderTarget->bDirty;
-    const bool bShadowPipelineDirty  = _shadowResources.renderTarget && _shadowResources.renderTarget->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
-    if (_shadowResources.renderTarget) {
-        _shadowResources.renderTarget->flushDirty();
-    }
 
     if (bGBufferDirty) {
         _cachedAlbedoSpecImageViewHandle = nullptr;
@@ -676,14 +669,6 @@ void DeferredRenderPipeline::refreshDirtyResources()
         if (_overlayStage) {
             _overlayStage->refreshPipelineFormats(_viewportRT.get());
         }
-    }
-
-    if (bShadowResourcesDirty) {
-        rebuildShadowViews();
-        if (bShadowPipelineDirty && _shadowStage) {
-            _shadowStage->refreshPipelineFromRenderTarget();
-        }
-        syncShadowSettings();
     }
 }
 
