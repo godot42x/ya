@@ -142,7 +142,14 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
         .getFrameIndex = desc.getFrameIndex,
         .getElapsedTimeSeconds = desc.getElapsedTimeSeconds,
     });
-    initUnlit(desc);
+    _unlitPass.init(ForwardViewportUnlitPass::InitDesc{
+        .render = desc.render,
+        .renderPass = desc.renderPass,
+        .pipelineRenderingInfo = desc.pipelineRenderingInfo,
+        .skinningDSL = _skinningDSL,
+        .getFrameIndex = desc.getFrameIndex,
+        .getElapsedTimeSeconds = desc.getElapsedTimeSeconds,
+    });
     initSimple(desc);
     initSkybox(desc);
     initDebug(desc);
@@ -165,17 +172,7 @@ void ForwardViewportStage::refreshPipelineFormats(const IRenderTarget* viewportR
 
     _litPasses.refreshPipelineFormats(viewportRT);
 
-    if (_unlitStatic.pipeline) {
-        _unlitStatic.pipelineCI.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
-        _unlitStatic.pipelineCI.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
-        _unlitStatic.pipeline->updateDesc(_unlitStatic.pipelineCI);
-    }
-
-    if (_unlitSkinned.pipeline) {
-        _unlitSkinned.pipelineCI.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
-        _unlitSkinned.pipelineCI.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
-        _unlitSkinned.pipeline->updateDesc(_unlitSkinned.pipelineCI);
-    }
+    _unlitPass.refreshPipelineFormats(viewportRT);
 
     if (_simplePipeline) {
         auto ci                                         = _simplePipeline->getDesc();
@@ -196,112 +193,6 @@ void ForwardViewportStage::refreshPipelineFormats(const IRenderTarget* viewportR
         _debugPipelineCI.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
         _debugPipeline->updateDesc(_debugPipelineCI);
     }
-}
-
-// ── Unlit ───────────────────────────────────────────────────────────
-void ForwardViewportStage::initUnlit(const InitDesc& desc)
-{
-    auto dsls         = IDescriptorSetLayout::create(_render, {
-                                                                  DescriptorSetLayoutDesc{
-                                                                      .label    = "FwdUnlit_Frame_DSL",
-                                                                      .set      = 0,
-                                                                      .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment}},
-                                                                  },
-                                                                  DescriptorSetLayoutDesc{
-                                                                      .label    = "FwdUnlit_Param_DSL",
-                                                                      .set      = 1,
-                                                                      .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
-                                                                  },
-                                                                  DescriptorSetLayoutDesc{
-                                                                      .label    = "FwdUnlit_Resource_DSL",
-                                                                      .set      = 2,
-                                                                      .bindings = {
-                                                                          {.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-                                                                          {.binding = 1, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-                                                                      },
-                                                                  },
-                                                              });
-    _unlitFrameDSL    = dsls[0];
-    _unlitParamDSL    = dsls[1];
-    _unlitResourceDSL = dsls[2];
-
-    _unlitStatic.pipelineLayout = IPipelineLayout::create(
-        _render, "FwdUnlit_Static_PPL", {PushConstantRange{.offset = 0, .size = sizeof(UnlitPC), .stageFlags = EShaderStage::Vertex}}, dsls);
-
-    _unlitStatic.pipelineCI = GraphicsPipelineCreateInfo{
-        .renderPass            = desc.renderPass,
-        .pipelineRenderingInfo = desc.pipelineRenderingInfo,
-        .pipelineLayout        = _unlitStatic.pipelineLayout.get(),
-        .shaderDesc            = ShaderDesc{
-            .shaderName        = "Test/Unlit.glsl",
-            .vertexBufferDescs = {kVBDesc},
-            .vertexAttributes  = kVertexAttributes3,
-        },
-        .dynamicFeatures    = {EPipelineDynamicFeature::Scissor, EPipelineDynamicFeature::Viewport},
-        .primitiveType      = EPrimitiveType::TriangleList,
-        .rasterizationState = {.polygonMode = EPolygonMode::Fill, .frontFace = EFrontFaceType::CounterClockWise},
-        .multisampleState   = {.sampleCount = ESampleCount::Sample_1},
-        .depthStencilState  = {.bDepthTestEnable = true, .bDepthWriteEnable = true, .depthCompareOp = ECompareOp::Less},
-        .colorBlendState    = {.attachments = {{
-                                   .index               = 0,
-                                   .bBlendEnable        = false,
-                                   .srcColorBlendFactor = EBlendFactor::SrcAlpha,
-                                   .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
-                                   .colorBlendOp        = EBlendOp::Add,
-                                   .srcAlphaBlendFactor = EBlendFactor::One,
-                                   .dstAlphaBlendFactor = EBlendFactor::Zero,
-                                   .alphaBlendOp        = EBlendOp::Add,
-                                   .colorWriteMask      = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A,
-                               }}},
-        .viewportState      = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}},
-    };
-    _unlitStatic.pipeline = IGraphicsPipeline::create(_render);
-    _unlitStatic.pipeline->recreate(_unlitStatic.pipelineCI);
-
-    auto skinnedDsls = dsls;
-    skinnedDsls.push_back(_skinningDSL);
-    _unlitSkinned.pipelineLayout = IPipelineLayout::create(
-        _render, "FwdUnlit_Skinned_PPL", {PushConstantRange{.offset = 0, .size = sizeof(UnlitPC), .stageFlags = EShaderStage::Vertex}}, skinnedDsls);
-
-    _unlitSkinned.pipelineCI                         = _unlitStatic.pipelineCI;
-    _unlitSkinned.pipelineCI.pipelineLayout          = _unlitSkinned.pipelineLayout.get();
-    _unlitSkinned.pipelineCI.shaderDesc.vertexBufferDescs = {
-        VertexBufferDescription{.slot = 0, .pitch = sizeof(ya::Vertex)},
-        VertexBufferDescription{.slot = 1, .pitch = sizeof(ya::SkeletonMeshVertex)},
-    };
-    _unlitSkinned.pipelineCI.shaderDesc.vertexAttributes = kVertexAttributes3;
-    _unlitSkinned.pipelineCI.shaderDesc.vertexAttributes.insert(_unlitSkinned.pipelineCI.shaderDesc.vertexAttributes.end(), kSkinningVertexAttributes.begin(), kSkinningVertexAttributes.end());
-    _unlitSkinned.pipelineCI.shaderDesc.defines = {"ENABLE_SKINNING 1", "SKINNING_SET_INDEX 5"};
-    _unlitSkinned.pipeline = IGraphicsPipeline::create(_render);
-    _unlitSkinned.pipeline->recreate(_unlitSkinned.pipelineCI);
-
-    // Frame DS ring buffer
-    _unlitFrameDSP = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-                                                          .maxSets   = UNLIT_FRAME_SLOTS,
-                                                          .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = UNLIT_FRAME_SLOTS}},
-                                                      });
-    std::vector<DescriptorSetHandle> sets;
-    _unlitFrameDSP->allocateDescriptorSets(_unlitFrameDSL, UNLIT_FRAME_SLOTS, sets);
-    for (uint32_t i = 0; i < UNLIT_FRAME_SLOTS; ++i) {
-        _unlitFrameDSs[i]  = sets[i];
-        _unlitFrameUBOs[i] = IBuffer::create(_render, BufferCreateInfo{
-                                                          .label       = std::format("FwdUnlit_Frame_UBO_{}", i),
-                                                          .usage       = EBufferUsage::UniformBuffer,
-                                                          .size        = sizeof(UnlitFrameUBO),
-                                                          .memoryUsage = EMemoryUsage::CpuToGpu,
-                                                      });
-    }
-
-    // Material pool
-    constexpr uint32_t unlitTextureCount = 2;
-    _unlitMatPool.init(
-        _render, _unlitParamDSL, _unlitResourceDSL, [unlitTextureCount](uint32_t n) -> std::vector<DescriptorPoolSize>
-        { return {
-              {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = n},
-              {.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = n * unlitTextureCount},
-          }; },
-        16);
-    _unlitPoolRecreated = true;
 }
 
 // ── Simple ──────────────────────────────────────────────────────────
@@ -472,16 +363,7 @@ void ForwardViewportStage::initDebug(const InitDesc& desc)
 void ForwardViewportStage::destroy()
 {
     _litPasses.destroy();
-
-    // Unlit
-    _unlitMatPool = {};
-    _unlitStatic = {};
-    _unlitSkinned = {};
-    _unlitFrameDSL.reset();
-    _unlitParamDSL.reset();
-    _unlitResourceDSL.reset();
-    _unlitFrameDSP.reset();
-    for (auto& u : _unlitFrameUBOs) u.reset();
+    _unlitPass.destroy();
     for (auto& u : _skinningSSBO) u.reset();
     _skinningDSP.reset();
     _skinningDSL.reset();
@@ -522,12 +404,7 @@ void ForwardViewportStage::destroy()
 void ForwardViewportStage::prepare(const RenderStageContext& ctx)
 {
     _litPasses.beginFrame();
-    if (_unlitStatic.pipeline) {
-        _unlitStatic.pipeline->beginFrame();
-    }
-    if (_unlitSkinned.pipeline) {
-        _unlitSkinned.pipeline->beginFrame();
-    }
+    _unlitPass.beginFrame();
     if (_simplePipeline) {
         _simplePipeline->beginFrame();
     }
@@ -542,7 +419,7 @@ void ForwardViewportStage::prepare(const RenderStageContext& ctx)
 
     updateSkinningBuffer(ctx);
     _litPasses.prepare(ctx);
-    prepareUnlit(ctx);
+    _unlitPass.prepare(ctx);
 
     // Skybox: update per-flight UBO
     SkyboxFrameUBO skyboxUBO{
@@ -550,78 +427,6 @@ void ForwardViewportStage::prepare(const RenderStageContext& ctx)
         .view       = FMath::dropTranslation(ctx.frameData->view),
     };
     _skyboxFrameUBO[ctx.flightIndex]->writeData(&skyboxUBO, sizeof(SkyboxFrameUBO), 0);
-}
-
-void ForwardViewportStage::prepareUnlit(const RenderStageContext& ctx)
-{
-    const auto& fd = *ctx.frameData;
-    uint32_t materialCount = MaterialFactory::get()->getMaterialSize<UnlitMaterial>();
-    if (_unlitMatPool.ensureCapacity(materialCount)) {
-        _unlitPoolRecreated = true;
-    }
-
-    // Update current slot frame UBO
-    UnlitFrameUBO ubo{};
-    ubo.projMat    = ctx.frameData->projection;
-    ubo.viewMat    = ctx.frameData->view;
-    ubo.resolution = glm::ivec2(ctx.viewportExtent.width, ctx.viewportExtent.height);
-    ubo.frameIdx   = _getFrameIndex ? static_cast<int32_t>(_getFrameIndex()) : 0;
-    ubo.time       = _getElapsedTimeSeconds ? static_cast<float>(_getElapsedTimeSeconds()) : 0.0f;
-
-    uint32_t slot = _unlitFrameSlot;
-    _unlitFrameUBOs[slot]->writeData(&ubo, sizeof(ubo), 0);
-
-    DescriptorBufferInfo bufferInfo(BufferHandle(_unlitFrameUBOs[slot]->getHandle()), 0, sizeof(UnlitFrameUBO));
-    _render->getDescriptorHelper()->updateDescriptorSets({
-                                                             IDescriptorSetHelper::genBufferWrite(_unlitFrameDSs[slot], 0, 0, EPipelineDescriptorType::UniformBuffer, {bufferInfo}),
-                                                         },
-                                                         {});
-
-    prepareUnlitMaterials(fd);
-    _unlitPoolRecreated = false;
-}
-
-void ForwardViewportStage::prepareUnlitMaterials(const RenderFrameData& fd)
-{
-    uint32_t          materialCount   = MaterialFactory::get()->getMaterialSize<UnlitMaterial>();
-    std::vector<bool> preparedMaterial(materialCount);
-
-    auto prepareBucket = [&](const std::vector<RenderDrawItem>& items)
-    {
-        for (const auto& item : items) {
-            if (!item.material) continue;
-            auto* material = static_cast<UnlitMaterial*>(item.material);
-            if (material->getIndex() < 0) continue;
-
-            uint32_t matIdx = material->getIndex();
-            if (preparedMaterial[matIdx]) continue;
-
-            _unlitMatPool.flushDirty(
-                material, _unlitPoolRecreated, [&](IBuffer* ubo, UnlitMaterial* mat)
-                {
-                    const auto& params = mat->getParams();
-                    ubo->writeData(&params, sizeof(UnlitMaterial::ParamUBO), 0);
-                },
-                [&](DescriptorSetHandle ds, UnlitMaterial* mat)
-                {
-                    DescriptorImageInfo img0(mat->getImageViewHandle(UnlitMaterial::BaseColor0),
-                                             mat->getSamplerHandle(UnlitMaterial::BaseColor0),
-                                             EImageLayout::ShaderReadOnlyOptimal);
-                    DescriptorImageInfo img1(mat->getImageViewHandle(UnlitMaterial::BaseColor1),
-                                             mat->getSamplerHandle(UnlitMaterial::BaseColor1),
-                                             EImageLayout::ShaderReadOnlyOptimal);
-                    _render->getDescriptorHelper()->updateDescriptorSets({
-                                                                             IDescriptorSetHelper::genImageWrite(ds, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {img0}),
-                                                                             IDescriptorSetHelper::genImageWrite(ds, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {img1}),
-                                                                         },
-                                                                         {});
-                });
-            preparedMaterial[matIdx] = true;
-        }
-    };
-
-    prepareBucket(fd.drawBuckets.staticMeshes.unlitDrawItems);
-    prepareBucket(fd.drawBuckets.skinnedMeshes.unlitDrawItems);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -743,7 +548,14 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
             });
             break;
         case EPass::Unlit:
-            drawUnlit(passCtx);
+            _unlitPass.draw(ForwardViewportUnlitPass::DrawContext{
+                .stageCtx = passCtx.stageCtx,
+                .skinningDS = _skinningDS[passCtx.stageCtx.flightIndex],
+                .setViewportAndScissor = [this](ICommandBuffer* cmdBuf, uint32_t w, uint32_t h)
+                {
+                    setViewportAndScissor(cmdBuf, w, h);
+                },
+            });
             break;
         case EPass::Simple:
             drawSimple(passCtx);
@@ -775,63 +587,6 @@ void ForwardViewportStage::drawSkybox(const PassContext& passCtx)
 
     cmdBuf->bindDescriptorSets(_skyboxPPL.get(), 0, {_skyboxFrameDS[ctx.flightIndex], passCtx.skybox.descriptorSet});
     passCtx.skybox.mesh->draw(cmdBuf);
-
-    cmdBuf->debugEndLabel();
-}
-
-// ── Unlit draw ──────────────────────────────────────────────────────
-
-void ForwardViewportStage::drawUnlit(const PassContext& passCtx)
-{
-    const auto& ctx = passCtx.stageCtx;
-    const auto& fd           = *ctx.frameData;
-    const auto& staticItems  = fd.drawBuckets.staticMeshes.unlitDrawItems;
-    const auto& skinnedItems = fd.drawBuckets.skinnedMeshes.unlitDrawItems;
-    auto*       cmdBuf       = ctx.cmdBuf;
-    uint32_t    fi           = ctx.flightIndex;
-
-    if (staticItems.empty() && skinnedItems.empty()) return;
-
-    cmdBuf->debugBeginLabel("ForwardUnlit");
-    setViewportAndScissor(cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height);
-
-    auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
-    {
-        for (const auto& item : items) {
-            if (!item.mesh || !item.material) continue;
-            auto* material = static_cast<UnlitMaterial*>(item.material);
-            if (material->getIndex() < 0) continue;
-
-            uint32_t            matIdx     = material->getIndex();
-            DescriptorSetHandle paramDS    = _unlitMatPool.paramDS(matIdx);
-            DescriptorSetHandle resourceDS = _unlitMatPool.resourceDS(matIdx);
-
-            auto& pipelineVariant = bSkinned ? _unlitSkinned : _unlitStatic;
-            auto* layout = pipelineVariant.pipelineLayout.get();
-            cmdBuf->bindPipeline(pipelineVariant.pipeline.get());
-            if (bSkinned) {
-                cmdBuf->bindDescriptorSets(layout, 0, {_unlitFrameDSs[_unlitFrameSlot], paramDS, resourceDS, _skinningDS[fi]});
-            }
-            else {
-                cmdBuf->bindDescriptorSets(layout, 0, {_unlitFrameDSs[_unlitFrameSlot], paramDS, resourceDS});
-            }
-
-            UnlitPC pc{.modelMatrix = item.worldMatrix, .skinningPaletteIndex = item.skinningPaletteIndex};
-            cmdBuf->pushConstants(layout, EShaderStage::Vertex, 0, sizeof(UnlitPC), &pc);
-
-            if (bSkinned) {
-                item.mesh->drawSkinned(cmdBuf);
-            }
-            else {
-                item.mesh->drawStatic(cmdBuf);
-            }
-        }
-    };
-
-    drawBucket(staticItems, false);
-    drawBucket(skinnedItems, true);
-
-    _unlitFrameSlot     = (_unlitFrameSlot + 1) % UNLIT_FRAME_SLOTS;
 
     cmdBuf->debugEndLabel();
 }
@@ -1042,11 +797,7 @@ void ForwardViewportStage::renderGUI()
             _simplePipeline->renderGUI();
             ImGui::TreePop();
         }
-        if (ImGui::TreeNode("Unlit")) {
-            _unlitStatic.pipeline->renderGUI();
-            _unlitSkinned.pipeline->renderGUI();
-            ImGui::TreePop();
-        }
+        _unlitPass.renderGUIPipelines();
         _litPasses.renderGUIPipelines();
         if (ImGui::TreeNode("Skybox")) {
             _skyboxPipeline->renderGUI();

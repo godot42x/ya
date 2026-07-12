@@ -2,14 +2,11 @@
 
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
-#include "Render/Material/MaterialDescPool.h"
-#include "Render/Material/UnlitMaterial.h"
 #include "Render/Material/SimpleMaterial.h"
 #include "Render/Stage/IRenderStage.h"
 #include "Runtime/App/ForwardRender/ForwardViewportLitPasses.h"
+#include "Runtime/App/ForwardRender/ForwardViewportUnlitPass.h"
 #include "Runtime/App/Common/Shadow/Common/ShadowRuntimeState.h"
-
-#include "Test.Unlit.glsl.h"
 
 #include <array>
 #include <functional>
@@ -43,17 +40,6 @@ struct ForwardViewportStage : public IRenderStage
         std::function<ResourceResolveSystem*()> getResourceResolveSystem;
         std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet;
         std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
-    };
-
-    // ── Unlit UBO type aliases ──
-    using UnlitFrameUBO = glsl_types::Test::Unlit::FrameUBO;
-    using ShadingPipelineVariant = ForwardViewportLitPasses::ShadingPipelineVariant;
-
-    struct UnlitPC
-    {
-        alignas(16) glm::mat4 modelMatrix{1.0f};
-        alignas(16) glm::mat3 normalMatrix{1.0f};
-        alignas(4) int32_t    skinningPaletteIndex = -1;
     };
 
     // ── Simple (push constant only) ──
@@ -147,6 +133,7 @@ struct ForwardViewportStage : public IRenderStage
 
     ShadowRuntimeState _shadowState{};
     ForwardViewportLitPasses _litPasses{};
+    ForwardViewportUnlitPass _unlitPass{};
 
     DescriptorSetHandle _depthBufferShadowDS = nullptr;
     std::function<uint64_t()>            _getFrameIndex;
@@ -156,27 +143,11 @@ struct ForwardViewportStage : public IRenderStage
     std::function<DescriptorSetHandle(Scene*)> _getSceneSkyboxDescriptorSet;
     std::function<DescriptorSetHandle(Scene*)> _getSceneEnvironmentLightingDescriptorSet;
 
-    // ── Unlit pipeline ──────────────────────────────────────────
-    stdptr<IDescriptorSetLayout> _unlitFrameDSL;
-    stdptr<IDescriptorSetLayout> _unlitParamDSL;
-    stdptr<IDescriptorSetLayout> _unlitResourceDSL;
-    ShadingPipelineVariant       _unlitStatic;
-    ShadingPipelineVariant       _unlitSkinned;
-
     stdptr<IDescriptorSetLayout> _skinningDSL;
     stdptr<IDescriptorPool>      _skinningDSP;
     std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _skinningDS{};
     std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _skinningSSBO{};
     uint32_t                                           _skinningCapacity = 0;
-
-    static constexpr uint32_t UNLIT_FRAME_SLOTS = 8;
-    uint32_t                  _unlitFrameSlot = 0;
-    stdptr<IDescriptorPool>   _unlitFrameDSP;
-    DescriptorSetHandle       _unlitFrameDSs[UNLIT_FRAME_SLOTS]{};
-    stdptr<IBuffer>           _unlitFrameUBOs[UNLIT_FRAME_SLOTS]{};
-
-    MaterialDescPool<UnlitMaterial, UnlitMaterial::ParamUBO> _unlitMatPool;
-    bool _unlitPoolRecreated = false;
 
     // ── Simple pipeline (push constant only) ────────────────────
     stdptr<IPipelineLayout>   _simplePPL;
@@ -222,22 +193,18 @@ struct ForwardViewportStage : public IRenderStage
     void refreshPipelineFormats(const IRenderTarget* viewportRT);
 
   private:
-    void initUnlit(const InitDesc& desc);
     void initSimple(const InitDesc& desc);
     void initSkybox(const InitDesc& desc);
     void initDebug(const InitDesc& desc);
     void initSkinningResources();
     void ensureSkinningCapacity(uint32_t paletteCount);
 
-    void prepareUnlit(const RenderStageContext& ctx);
-    void prepareUnlitMaterials(const RenderFrameData& fd);
     void updateSkinningBuffer(const RenderStageContext& ctx);
     [[nodiscard]] PassContext buildPassContext(const RenderStageContext& ctx);
     void                      executePasses(const PassContext& passCtx);
     void                      executePass(EPass pass, const PassContext& passCtx);
 
     void drawSkybox(const PassContext& passCtx);
-    void drawUnlit(const PassContext& passCtx);
     void drawSimple(const PassContext& passCtx);
     void drawDirectionOverlay(const PassContext& passCtx);
     void drawDebug(const PassContext& passCtx);
