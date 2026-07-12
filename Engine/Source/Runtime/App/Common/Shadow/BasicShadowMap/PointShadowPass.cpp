@@ -9,7 +9,6 @@
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Core/Texture.h"
-#include "Render/Core/TextureFactory.h"
 #include "Render/Mesh.h"
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
@@ -382,12 +381,12 @@ void PointShadowPass::rebuildFaceTextures(std::shared_ptr<IImage> shadowImage)
 {
     if (!_render || !shadowImage) return;
 
-    auto textureFactory = _render->getTextureFactory();
+    auto* resourceFactory = _render->getResourceFactory();
 
     for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
         for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
             const uint32_t layerIndex = 1 + lightIndex * 6 + faceIndex; // offset by directional layer
-            auto view = textureFactory->createImageView(
+            auto view = resourceFactory->createImageView(
                 shadowImage,
                 ImageViewCreateInfo{
                     .label          = std::format("PointShadow_Face_{}_{}_{}", lightIndex, faceIndex, layerIndex),

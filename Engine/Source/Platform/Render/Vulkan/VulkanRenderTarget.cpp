@@ -1,4 +1,5 @@
 #include "VulkanRenderTarget.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Runtime/App/App.h"
 #include "imgui.h"
 
@@ -203,11 +204,13 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
                 YA_CORE_ASSERT(colorAttachments[attachIdx].samples == ESampleCount::Sample_1, "Swapchain color attachment must have 1 sample");
                 YA_CORE_ASSERT(_layerCount == 1, "Swapchain does not support layered rendering");
 
-                auto image    = VulkanImage::from(_vkRender,
-                                               swapchain->getVkImages()[frameBufferIndex],
-                                               swapchain->getSurfaceFormat(),
-                                               VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
-                image->bOwned = false; // manage by swapchain
+                auto image = _vkRender->getResourceFactory()->importImage(ImportedImageDesc{
+                    .label        = std::format("{}_Swapchain_{}", label, frameBufferIndex),
+                    .nativeHandle = static_cast<void*>(swapchain->getVkImages()[frameBufferIndex]),
+                    .format       = EFormat::fromVk(swapchain->getSurfaceFormat()),
+                    .usage        = EImageUsage::ColorAttachment,
+                    .extent       = {.width = _extent.width, .height = _extent.height, .depth = 1},
+                });
                 // cmdBuf->transitionImageLayout(image.get(), EImageLayout::PresentSrcKHR);
                 colorImages.push_back(image);
             }
@@ -229,8 +232,7 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
                     .initialLayout = colorAttachment.initialLayout,
                     .flags         = colorAttachment.imageCreateFlags,
                 };
-                auto image    = VulkanImage::create(_vkRender, imageCI);
-                image->bOwned = true;
+                auto image = _vkRender->getResourceFactory()->createImage(imageCI);
                 colorImages.push_back(image);
             }
         }
@@ -252,7 +254,7 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
                 .initialLayout = depthAttachment->initialLayout,
                 .flags         = depthAttachment->imageCreateFlags,
             };
-            depthImage = VulkanImage::create(_vkRender, depthCI);
+            depthImage = _vkRender->getResourceFactory()->createImage(depthCI);
         }
 
         if (resolveAttachment) {
@@ -270,7 +272,7 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
                 .usage         = resolveAttachment->usage,
                 .initialLayout = resolveAttachment->initialLayout,
             };
-            resolveImage = VulkanImage::create(_vkRender, resolveCI);
+            resolveImage = _vkRender->getResourceFactory()->createImage(resolveCI);
         }
 
         FrameBufferCreateInfo fbCI{

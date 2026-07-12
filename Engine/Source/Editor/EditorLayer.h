@@ -9,7 +9,6 @@
 #include "FilePicker.h"
 #include "ImGuiHelper.h"
 #include "Render/Core/Image.h"
-#include "Render/Core/TextureFactory.h"
 #include "SceneHierarchyPanel.h"
 #include <imgui.h>
 

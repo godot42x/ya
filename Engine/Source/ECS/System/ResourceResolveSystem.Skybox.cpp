@@ -1,6 +1,6 @@
 #include "ResourceResolveSystem.Detail.h"
 
-#include "Render/Core/TextureFactory.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Resource/DeferredDeletionQueue.h"
 #include "Runtime/App/App.h"
 #include "Runtime/App/Utility/OffscreenJobRunner.h"
@@ -39,13 +39,15 @@ void rebuildSkyboxViews(SkyboxRuntimeState& state)
         return;
     }
 
-    auto* textureFactory = ITextureFactory::get();
-    if (!textureFactory) {
+    auto* const app             = App::get();
+    auto* const render          = app ? app->getRender() : nullptr;
+    auto* const resourceFactory = render ? render->getResourceFactory() : nullptr;
+    if (!resourceFactory) {
         return;
     }
 
     for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
-        state.cubemapFacePreviewViews[faceIndex] = textureFactory->createImageView(
+        state.cubemapFacePreviewViews[faceIndex] = resourceFactory->createImageView(
             state.cubemapTexture->getImageShared(),
             ImageViewCreateInfo{
                 .label          = std::format("SkyboxPreviewFace{}", faceIndex),

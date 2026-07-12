@@ -5,13 +5,15 @@
 #include "Image.h"
 #include "Render/RenderDefines.h"
 #include "Sampler.h"
-#include "TextureFactory.h"
+#include "TextureCreateInfo.h"
 
 #include <array>
 #include <vector>
 
 namespace ya
 {
+
+struct IRenderResourceFactory;
 
 // Forward declaration
 template <typename ComponentType>
@@ -136,9 +138,6 @@ struct Texture
                                          const std::string&          label = "");
 
   private:
-    friend struct ITextureFactory;
-    friend class VulkanTextureFactory;
-
     // Default constructor for factory use
     Texture() = default;
 
@@ -183,12 +182,7 @@ struct Texture
     bool isValid() const { return image && imageView && _width > 0 && _height > 0; }
 
   private:
-    /**
-     * @brief Get texture factory
-     * @return ITextureFactory interface pointer
-     * @throw If factory is not available
-     */
-    static struct ITextureFactory* getTextureFactory();
+    static struct IRenderResourceFactory* getResourceFactory();
 };
 
 /**

@@ -5,17 +5,17 @@
 namespace ya::ShadowViewBuilder
 {
 
-LayerViews buildLayerViews(ITextureFactory* textureFactory,
+LayerViews buildLayerViews(IRenderResourceFactory* resourceFactory,
                            const std::shared_ptr<IImage>& shadowImage,
                            std::string_view               labelPrefix)
 {
-    YA_CORE_ASSERT(textureFactory, "Shadow view builder requires a texture factory");
+    YA_CORE_ASSERT(resourceFactory, "Shadow view builder requires a resource factory");
     YA_CORE_ASSERT(shadowImage, "Shadow view builder requires a shadow image");
 
     LayerViews views{};
     const std::string prefix(labelPrefix);
 
-    views.directionalDepthIV = textureFactory->createImageView(
+    views.directionalDepthIV = resourceFactory->createImageView(
         shadowImage,
         ImageViewCreateInfo{
             .label          = std::format("{} Directional Depth IV", prefix),
@@ -28,7 +28,7 @@ LayerViews buildLayerViews(ITextureFactory* textureFactory,
         });
 
     for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
-        views.pointCubeIVs[lightIndex] = textureFactory->createImageView(
+        views.pointCubeIVs[lightIndex] = resourceFactory->createImageView(
             shadowImage,
             ImageViewCreateInfo{
                 .label          = std::format("{} Point[{}] CubeIV", prefix, lightIndex),
@@ -41,7 +41,7 @@ LayerViews buildLayerViews(ITextureFactory* textureFactory,
             });
 
         for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
-            views.pointFaceIVs[lightIndex][faceIndex] = textureFactory->createImageView(
+            views.pointFaceIVs[lightIndex][faceIndex] = resourceFactory->createImageView(
                 shadowImage,
                 ImageViewCreateInfo{
                     .label          = std::format("{} Point[{}] Face[{}]", prefix, lightIndex, faceIndex),

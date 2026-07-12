@@ -3,8 +3,8 @@
 #include "Core/Profiling/Instrumentor.h"
 
 #include "Render/Core/CommandBuffer.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Core/Texture.h"
-#include "Render/Core/TextureFactory.h"
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
 
@@ -123,8 +123,8 @@ void BasicShadowMapTechnique::rebuildLayerTextures()
     if (!shadowImage) return;
 
     // Directional: layer 0
-    auto textureFactory = _render->getTextureFactory();
-    auto dirView = textureFactory->createImageView(
+    auto* resourceFactory = _render->getResourceFactory();
+    auto  dirView = resourceFactory->createImageView(
         shadowImage,
         ImageViewCreateInfo{
             .label          = "BasicShadowMap_DirectionalDepthView",

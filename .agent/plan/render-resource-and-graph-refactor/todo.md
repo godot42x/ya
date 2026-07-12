@@ -48,7 +48,7 @@
 - [x] 盘点 `Texture::from* / createCubeMap* / createRenderTexture()` 全部调用点（见 `resource-api-inventory.md`）
 - [x] 盘点 `Texture::wrap()` 并区分 existing image、subresource view 和 fake texture binding（见 `resource-api-inventory.md`）
 - [x] 盘点 cubemap/face/mip/layer 派生 view（见 `resource-api-inventory.md`）
-- [ ] 盘点 render target attachment、swapchain image 和 external image 创建路径
+- [x] 盘点 render target attachment、swapchain image 和 external image 创建路径（见 `resource-api-inventory.md`）
 - [x] 盘点 sampler 和 framebuffer 创建路径（见 `resource-api-inventory.md`）
 - [ ] 盘点 `beginIsolateCommands()` upload/init 路径，分离 allocation、upload 和 initial transition
 - [ ] 盘点 `Texture*` 作为 GPU 中间资源 descriptor 输入的使用点
@@ -58,7 +58,7 @@
 - [ ] 定义 `ImageDesc`
 - [ ] 定义 `ImageViewDesc`
 - [ ] 收敛现有 `SamplerDesc`
-- [ ] 定义 external/imported image descriptor
+- [x] 定义 external/imported image descriptor
 - [ ] 定义 imported image 的 native ownership、view ownership、debug name 和 initial/final state
 - [ ] 定义 derived image-view identity/cache key
 - [ ] 定义资产 `Texture` 与 transient/persistent GPU image 的绑定边界
@@ -77,15 +77,17 @@
 - [x] 定义 `IRenderResourceFactory` 的 Buffer/Sampler 最小职责
 - [x] 由 `IRender` 暴露 backend-owned factory
 - [x] Vulkan 实现 buffer 创建
-- [ ] Vulkan 实现 image 创建
-- [ ] Vulkan 实现 image view 创建
+- [x] Vulkan 实现 image 创建
+- [x] Vulkan 实现 image view 创建
 - [x] Vulkan 实现 sampler 创建
-- [ ] Vulkan 实现 external image wrapping
-- [ ] 统一 debug label 设置
+- [x] Vulkan 实现 external image wrapping
+- [x] 统一新 factory 路径的 debug label 设置
 - [ ] 为失败创建路径定义一致的 assert/error 行为
 - [x] 删除 `Sampler::create()` 全局静态入口
 - [x] 迁移并删除 `IBuffer::create()` 静态入口
 - [x] 禁止新代码调用 Buffer/Sampler 静态 resource factory
+- [x] 删除 `ITextureFactory` / `VulkanTextureFactory` 和专用 cubemap view API
+- [x] 将残留高层描述从 `TextureFactory.h` 移到 `TextureCreateInfo.h`
 
 完成标准：
 
@@ -133,7 +135,7 @@
 
 - [ ] `Texture` 只表示资产纹理
 - [ ] GPU 中间资源不再包装为资产 `Texture`
-- [ ] image/view 创建入口唯一
+- [x] image/view 创建入口唯一
 
 ## Phase 5: Resource State Tracker
 

@@ -30,7 +30,6 @@
 
 #include "EditorLayer.h"
 #include "ImGuiHelper.h"
-#include "Render/Core/TextureFactory.h"
 #include "Resource/Texture/TextureLibrary.h"
 #include "Runtime/App/App.h"
 #include "Scene/Node.h"

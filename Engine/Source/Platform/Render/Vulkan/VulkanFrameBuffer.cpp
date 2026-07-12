@@ -1,52 +1,9 @@
 #include "Platform/Render/Vulkan/VulkanFrameBuffer.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Core/Texture.h"
 
 namespace ya
 {
-
-// std::shared_ptr<Texture> VulkanFrameBuffer::createAttachmentTexture(
-//     const FrameBufferAttachmentInfo& attachInfo,
-//     const std::string&               label)
-// {
-//     // Convert FrameBufferAttachmentInfo to ImageCreateInfo
-//     ya::ImageCreateInfo imageCI{
-//         .label         = label,
-//         .format        = attachInfo.format,
-//         .extent        = {.width = _width, .height = _height, .depth = 1},
-//         .mipLevels     = 1,
-//         .samples       = attachInfo.msaaSamples.has_value()
-//                            ? static_cast<ESampleCount::T>(attachInfo.msaaSamples.value())
-//                            : ESampleCount::Sample_1,
-//         .usage         = attachInfo.usage,
-//         .initialLayout = EImageLayout::Undefined,
-//     };
-
-//     // Create VulkanImage
-//     auto vkImage = VulkanImage::create(render, imageCI);
-//     if (!vkImage) {
-//         YA_CORE_ERROR("Failed to create image for framebuffer attachment: {}", label);
-//         return nullptr;
-//     }
-
-//     // Create VulkanImageView
-//     VkImageAspectFlags aspect = attachInfo.isDepth
-//                                   ? VK_IMAGE_ASPECT_DEPTH_BIT
-//                                   : VK_IMAGE_ASPECT_COLOR_BIT;
-
-//     auto vkImageView = VulkanImageView::create(render, vkImage, aspect);
-//     if (!vkImageView) {
-//         YA_CORE_ERROR("Failed to create image view for framebuffer attachment: {}", label);
-//         return nullptr;
-//     }
-
-//     // Create Texture using wrap factory method (FrameBuffer owns the Texture)
-//     auto texture     = Texture::wrap(vkImage, vkImageView, label);
-//     texture->_width  = _width;
-//     texture->_height = _height;
-//     texture->_format = attachInfo.format;
-
-//     return texture;
-// }
 
 std::shared_ptr<Texture> VulkanFrameBuffer::createTexture(
     const stdptr<IImage>& image,
@@ -62,30 +19,31 @@ std::shared_ptr<Texture> VulkanFrameBuffer::createTexture(
     // Determine view type based on image properties
     uint32_t        layerCount = vkImage->getArrayLayers();
     uint32_t        mipLevels  = vkImage->getMipLevels();
-    VkImageViewType viewType   = VK_IMAGE_VIEW_TYPE_2D;
+    EImageViewType::T viewType = EImageViewType::View2D;
     if (layerCount == 6 && (vkImage->_ci.flags & EImageCreateFlag::CubeCompatible)) {
-        viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+        viewType = EImageViewType::ViewCube;
     }
     else if (layerCount > 1) {
-        viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        viewType = EImageViewType::View2DArray;
     }
 
-    VulkanImageView::CreateInfo viewCI{
+    ImageViewCreateInfo viewCI{
+        .label          = label,
         .viewType       = viewType,
-        .aspectFlags    = aspect,
+        .aspectFlags    = static_cast<EImageAspect::T>(aspect),
         .baseMipLevel   = 0,
         .levelCount     = mipLevels,
         .baseArrayLayer = 0,
         .layerCount     = layerCount,
     };
-    auto vkImageView = VulkanImageView::create(render, vkImage, viewCI);
-    if (!vkImageView) {
+    auto imageView = render->getResourceFactory()->createImageView(image, viewCI);
+    if (!imageView) {
         YA_CORE_ERROR("Failed to create image view for external image: {}", label);
         return nullptr;
     }
 
     // Create Texture using wrap factory method (FrameBuffer owns the Texture wrapper)
-    auto texture     = Texture::wrap(vkImage, vkImageView, label);
+    auto texture     = Texture::wrap(vkImage, imageView, label);
     texture->_width  = _width;
     texture->_height = _height;
     texture->_format = vkImage->getFormat();

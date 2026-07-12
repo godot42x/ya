@@ -11,7 +11,6 @@ struct ICommandBuffer;
 struct ISwapchain;
 struct IDescriptorSetHelper;
 struct IRenderResourceFactory;
-struct ITextureFactory; // 添加TextureFactory前向声明
 
 
 enum class ERenderObject : uint32_t
@@ -150,12 +149,6 @@ struct IRender : public plat_base<IRender>
      * @return Pointer to descriptor set helper interface
      */
     virtual IDescriptorSetHelper* getDescriptorHelper() = 0;
-
-    /**
-     * @brief Get the texture factory for creating image resources
-     * @return Pointer to texture factory interface
-     */
-    virtual ITextureFactory* getTextureFactory() = 0;
 
     virtual IRenderResourceFactory* getResourceFactory() { return nullptr; }
 

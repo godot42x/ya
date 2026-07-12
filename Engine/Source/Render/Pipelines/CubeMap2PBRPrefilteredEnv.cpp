@@ -246,7 +246,7 @@ CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(cons
     ctx.cmdBuf->transitionImageLayoutAuto(ctx.input->getImage(), EImageLayout::ShaderReadOnlyOptimal);
     ctx.cmdBuf->transitionImageLayoutAuto(ctx.output->getImage(), EImageLayout::ColorAttachmentOptimal, &cubeRange);
 
-    auto* const textureFactory   = _render->getTextureFactory();
+    auto* const resourceFactory  = _render->getResourceFactory();
     bool        bAllFacesSuccess = true;
     for (uint32_t mip = 0; mip < mipLevels; ++mip) {
         const uint32_t mipWidth  = std::max(1u, ctx.output->getWidth() >> mip);
@@ -254,7 +254,7 @@ CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(cons
         const float    roughness = mipLevels <= 1 ? 0.0f : static_cast<float>(mip) / static_cast<float>(mipLevels - 1);
 
         for (uint32_t face = 0; face < CubeFace_Count; ++face) {
-            const auto faceView = textureFactory->createImageView(
+            const auto faceView = resourceFactory->createImageView(
                 ctx.output->getImageShared(),
                 ImageViewCreateInfo{
                     .label          = std::format("{}_Mip_{}_Face_{}", ctx.output->getLabel(), mip, face),

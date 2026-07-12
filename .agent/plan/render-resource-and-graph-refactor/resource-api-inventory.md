@@ -15,6 +15,18 @@ The important issue is not the call count. Resource creation currently has four 
 - sampler static factory through `App::get()`
 - render-target/framebuffer backend-owned attachment creation
 
+## Migration Update
+
+The first two implementation batches completed the following changes:
+
+- Buffer, sampler, image, imported image and image-view creation now use `IRenderResourceFactory`.
+- `IBuffer::create()`, `Sampler::create()`, `ITextureFactory` and `VulkanTextureFactory` were removed.
+- Swapchain images enter the resource layer through `ImportedImageDesc`.
+- Cubemap views use the regular image-view descriptor instead of a specialized factory method.
+- The remaining high-level texture creation descriptors moved from `TextureFactory.h` to `TextureCreateInfo.h`.
+
+The factory still returns the existing shared resource types. Unique ownership and non-owning image-view semantics remain separate migration work and must not be inferred as complete from the unified creation entry.
+
 ## Buffer Categories
 
 Recommended migration order:
@@ -132,4 +144,3 @@ Moving allocation to the new factory without separating upload/state behavior wo
 - Legacy paths may continue using it during migration.
 - New graph passes must not allocate through it.
 - Delete or narrow it after Deferred and Forward graph migration establishes the physical-resource reuse policy.
-

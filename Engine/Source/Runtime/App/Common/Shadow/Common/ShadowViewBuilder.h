@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Render/Core/TextureFactory.h"
+#include "Render/Core/RenderResourceFactory.h"
 
 #include <array>
 #include <memory>
@@ -16,7 +16,7 @@ struct LayerViews
     std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS> pointFaceIVs{};
 };
 
-[[nodiscard]] LayerViews buildLayerViews(ITextureFactory* textureFactory,
+[[nodiscard]] LayerViews buildLayerViews(IRenderResourceFactory* resourceFactory,
                                          const std::shared_ptr<IImage>& shadowImage,
                                          std::string_view               labelPrefix);
 

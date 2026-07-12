@@ -1,6 +1,6 @@
 #include "ResourceResolveSystem.Detail.h"
 
-#include "Render/Core/TextureFactory.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Resource/DeferredDeletionQueue.h"
 #include "Runtime/App/App.h"
 #include "Runtime/App/Utility/OffscreenJobRunner.h"
@@ -366,13 +366,15 @@ void rebuildCubeFaceViews(const stdptr<Texture>&                          textur
         return;
     }
 
-    auto* textureFactory = ITextureFactory::get();
-    if (!textureFactory) {
+    auto* const app             = App::get();
+    auto* const render          = app ? app->getRender() : nullptr;
+    auto* const resourceFactory = render ? render->getResourceFactory() : nullptr;
+    if (!resourceFactory) {
         return;
     }
 
     for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
-        outViews[faceIndex] = textureFactory->createImageView(
+        outViews[faceIndex] = resourceFactory->createImageView(
             texture->getImageShared(),
             ImageViewCreateInfo{
                 .label          = std::format("{}_Face_{}", labelPrefix, faceIndex),
@@ -406,8 +408,10 @@ void rebuildPrefilterViews(EnvironmentLightingRuntimeState& state)
         return;
     }
 
-    auto* textureFactory = ITextureFactory::get();
-    if (!textureFactory) {
+    auto* const app             = App::get();
+    auto* const render          = app ? app->getRender() : nullptr;
+    auto* const resourceFactory = render ? render->getResourceFactory() : nullptr;
+    if (!resourceFactory) {
         return;
     }
 
@@ -417,7 +421,7 @@ void rebuildPrefilterViews(EnvironmentLightingRuntimeState& state)
 
     for (uint32_t mipIndex = 0; mipIndex < mipLevels; ++mipIndex) {
         for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
-            state.prefilterMipFacePreviewViews[mipIndex][faceIndex] = textureFactory->createImageView(
+            state.prefilterMipFacePreviewViews[mipIndex][faceIndex] = resourceFactory->createImageView(
                 prefilterImage,
                 ImageViewCreateInfo{
                     .label          = std::format("EnvironmentPrefilter_Mip_{}_Face_{}", mipIndex, faceIndex),

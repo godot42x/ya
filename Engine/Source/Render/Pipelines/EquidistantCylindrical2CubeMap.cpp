@@ -190,7 +190,7 @@ EquidistantCylindrical2CubeMap::ExecuteResult EquidistantCylindrical2CubeMap::ex
     }
 
     _transientFaceViews.clear();
-    auto* textureFactory = _render->getTextureFactory();
+    auto* resourceFactory = _render->getResourceFactory();
 
     _render->getDescriptorHelper()->updateDescriptorSets(
         {
@@ -217,7 +217,7 @@ EquidistantCylindrical2CubeMap::ExecuteResult EquidistantCylindrical2CubeMap::ex
 
     const auto extent = ctx.output->getExtent();
     for (uint32_t face = 0; face < CubeFace_Count; ++face) {
-        auto faceView = textureFactory->createImageView(
+        auto faceView = resourceFactory->createImageView(
             ctx.output->getImageShared(),
             ImageViewCreateInfo{
                 .label          = std::format("{}_Face_{}", ctx.output->getLabel(), face),

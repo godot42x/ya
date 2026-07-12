@@ -12,6 +12,7 @@
 #include "EditorCommon.h"
 #include "ImGuiHelper.h"
 #include "Render/Core/IRenderTarget.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Resource/AssetManager.h"
 #include "Resource/Texture/TextureLibrary.h"
 #include "Runtime/App/App.h"
@@ -858,7 +859,9 @@ void EditorLayer::updateDebugSlotImageView(const EditorViewportContext::ImageSlo
     ci.viewType      = EImageViewType::View2D;
     ci.aspectFlags   = slot.aspectFlags;
     ci.components    = ImGuiHelper::BuildRGBAChannelMaskMapping(state.channelEnabled);
-    state.maskedView = ITextureFactory::get()->createImageView(slot.image, ci);
+    auto* const render          = _app ? _app->getRender() : nullptr;
+    auto* const resourceFactory = render ? render->getResourceFactory() : nullptr;
+    state.maskedView            = resourceFactory ? resourceFactory->createImageView(slot.image, ci) : nullptr;
 }
 
 void EditorLayer::renderDebugSlotImage(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state, float width, float height, Sampler* sampler)

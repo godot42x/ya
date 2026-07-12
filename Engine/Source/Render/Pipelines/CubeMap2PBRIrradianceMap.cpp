@@ -226,13 +226,13 @@ CubeMap2PBRIrradianceMap::ExecuteResult CubeMap2PBRIrradianceMap::execute(const 
     ctx.cmdBuf->transitionImageLayoutAuto(ctx.input->getImage(), EImageLayout::ShaderReadOnlyOptimal);
     ctx.cmdBuf->transitionImageLayoutAuto(ctx.output->getImage(), EImageLayout::ColorAttachmentOptimal, &cubeRange);
 
-    auto*      textureFactory   = _render->getTextureFactory();
+    auto*      resourceFactory  = _render->getResourceFactory();
     const auto extent           = ctx.output->getExtent();
     bool       bAllFacesSuccess = true;
     for (uint32_t face = 0; face < CubeFace_Count; ++face) {
 
         // temp imageview to make sure a View2D
-        const auto faceView = textureFactory->createImageView(
+        const auto faceView = resourceFactory->createImageView(
             ctx.output->getImageShared(),
             ImageViewCreateInfo{
                 .label          = std::format("{}_Face_{}", ctx.output->getLabel(), face),

@@ -1,6 +1,7 @@
 #include "AssetInspectorPanel.h"
 
 #include "EditorLayer.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Resource/AssetManager.h"
 #include "Resource/Meta/AssetMeta.h"
 #include "Resource/Texture/TextureLibrary.h"
@@ -100,7 +101,10 @@ void AssetInspectorPanel::updatePreviewMaskView(bool bForceRefresh)
     ci.viewType    = EImageViewType::View2D;
     ci.aspectFlags = EImageAspect::Color;
     ci.components  = ImGuiHelper::BuildRGBAChannelMaskMapping(_previewChannelEnabled);
-    _previewMaskedView = ITextureFactory::get()->createImageView(_previewTexture->getImageShared(), ci);
+    auto* const app             = App::get();
+    auto* const render          = app ? app->getRender() : nullptr;
+    auto* const resourceFactory = render ? render->getResourceFactory() : nullptr;
+    _previewMaskedView          = resourceFactory ? resourceFactory->createImageView(_previewTexture->getImageShared(), ci) : nullptr;
 }
 
 void AssetInspectorPanel::onImGuiRender()

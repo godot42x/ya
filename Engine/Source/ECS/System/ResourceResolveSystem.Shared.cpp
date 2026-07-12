@@ -1,6 +1,6 @@
 #include "ResourceResolveSystem.Detail.h"
 
-#include "Render/Core/TextureFactory.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Resource/DeferredDeletionQueue.h"
 #include "Runtime/App/App.h"
 #include "Runtime/App/Utility/OffscreenJobRunner.h"
@@ -86,8 +86,8 @@ stdptr<Texture> createRenderableSkyboxCubemap(IRender*           render,
                                               EFormat::T         format,
                                               int                mips)
 {
-    auto* textureFactory = render ? render->getTextureFactory() : nullptr;
-    if (!textureFactory || faceSize == 0 || format == EFormat::Undefined) {
+    auto* resourceFactory = render ? render->getResourceFactory() : nullptr;
+    if (!resourceFactory || faceSize == 0 || format == EFormat::Undefined) {
         return nullptr;
     }
 
@@ -111,12 +111,22 @@ stdptr<Texture> createRenderableSkyboxCubemap(IRender*           render,
         ci.usage     = static_cast<EImageUsage::T>(ci.usage | EImageUsage::TransferDst | EImageUsage::TransferSrc);
     }
 
-    auto image = textureFactory->createImage(ci);
+    auto image = resourceFactory->createImage(ci);
     if (!image) {
         return nullptr;
     }
 
-    auto cubeView = textureFactory->createCubeMapImageView(image, EImageAspect::Color, 0, ci.mipLevels);
+    auto cubeView = resourceFactory->createImageView(
+        image,
+        ImageViewCreateInfo{
+            .label       = std::format("{}_CubeView", label),
+            .viewType    = EImageViewType::ViewCube,
+            .aspectFlags = EImageAspect::Color,
+            .baseMipLevel = 0,
+            .levelCount   = ci.mipLevels,
+            .baseArrayLayer = 0,
+            .layerCount     = CubeFace_Count,
+        });
     if (!cubeView) {
         return nullptr;
     }
