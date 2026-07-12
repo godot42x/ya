@@ -32,6 +32,11 @@ struct LightStage : public IRenderStage
         std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
     };
 
+    struct FrameInputs
+    {
+        DescriptorSetHandle environmentLightingDescriptorSet = nullptr;
+    };
+
     using PushConstant = slang_types::DeferredRender::LightPass::PushConstants;
     using LightData    = slang_types::DeferredRender::LightPass::LightData;
 
@@ -69,6 +74,7 @@ struct LightStage : public IRenderStage
 
     stdptr<IDescriptorSetLayout> _environmentLightingDSL;
     std::function<DescriptorSetHandle(Scene*)> _getSceneEnvironmentLightingDescriptorSet;
+    FrameInputs _frameInputs{};
 
     // Vertex attributes (for fullscreen quad)
     std::vector<VertexAttribute> _commonVertexAttributes = {
@@ -84,6 +90,7 @@ struct LightStage : public IRenderStage
     /// @param gBufferRT     Provides GBuffer color textures for sampling
     void setup(GBufferStage* gBufferStage, IRenderTarget* gBufferRT);
     void setEnvironmentLightingInput(EnvironmentLightingInput input);
+    void setFrameInputs(FrameInputs frameInputs);
     void setSSAOTexture(Texture* ssaoTexture);
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecularIBL);

@@ -15,6 +15,7 @@ namespace ya
 struct IRenderTarget;
 class ResourceResolveSystem;
 struct Scene;
+struct Mesh;
 
 /// Deferred viewport overlay stage — Skybox background + SimpleMaterial debug overlay.
 ///
@@ -28,6 +29,20 @@ struct ViewportOverlayStage : public IRenderStage
         std::function<DebugRenderSystem&()>        getDebugRenderSystem;
         std::function<Scene*()>                    getActiveScene;
         std::function<ResourceResolveSystem*()>    getResourceResolveSystem;
+    };
+
+    struct FrameInputs
+    {
+        struct SkyboxInput
+        {
+            bool                bAvailable    = false;
+            DescriptorSetHandle descriptorSet = nullptr;
+            Mesh*               mesh          = nullptr;
+        };
+
+        Scene*                 activeScene = nullptr;
+        ResourceResolveSystem* resourceResolveSystem = nullptr;
+        SkyboxInput            skybox{};
     };
 
     struct SkyboxFrameUBO
@@ -73,6 +88,7 @@ struct ViewportOverlayStage : public IRenderStage
     std::function<DebugRenderSystem&()>        _getDebugRenderSystem;
     std::function<Scene*()>                    _getActiveScene;
     std::function<ResourceResolveSystem*()>    _getResourceResolveSystem;
+    FrameInputs                                _frameInputs{};
 
     // ── IRenderStage ─────────────────────────────────────────────
     ViewportOverlayStage() : IRenderStage("ViewportOverlay") {}
@@ -84,6 +100,7 @@ struct ViewportOverlayStage : public IRenderStage
     void renderGUI() override;
     void refreshPipelineFormats(const IRenderTarget* viewportRT);
     void setServices(Services services);
+    void setFrameInputs(FrameInputs frameInputs);
 
   private:
     void initSkybox();

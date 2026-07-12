@@ -60,6 +60,11 @@ void ViewportOverlayStage::setServices(Services services)
     _getResourceResolveSystem    = std::move(services.getResourceResolveSystem);
 }
 
+void ViewportOverlayStage::setFrameInputs(FrameInputs frameInputs)
+{
+    _frameInputs = std::move(frameInputs);
+}
+
 void ViewportOverlayStage::refreshPipelineFormats(const IRenderTarget* viewportRT)
 {
     if (!viewportRT) {
@@ -233,6 +238,7 @@ void ViewportOverlayStage::destroy()
     _getDebugRenderSystem        = {};
     _getActiveScene              = {};
     _getResourceResolveSystem    = {};
+    _frameInputs                 = {};
     _render = nullptr;
 }
 
@@ -285,31 +291,7 @@ void ViewportOverlayStage::drawSkybox(const RenderStageContext& ctx)
     if (vpW == 0 || vpH == 0) return;
 
     // Check if skybox is available
-    if (!_getResourceResolveSystem || !_getActiveScene) {
-        return;
-    }
-    auto* resolver = _getResourceResolveSystem();
-    auto* scene    = _getActiveScene();
-    if (!resolver || !scene) return;
-
-    const auto* skyboxState = resolver->findFirstSceneSkyboxState(scene);
-    if (!skyboxState || !skyboxState->hasRenderableCubemap()) return;
-
-    if (!_getSceneSkyboxDescriptorSet) {
-        return;
-    }
-    auto skyboxDS = _getSceneSkyboxDescriptorSet(scene);
-
-    // Get a cube mesh from the scene's skybox entity, or use primitive cache
-    Mesh* cubeMesh = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
-    // Try scene mesh first
-    for (const auto& [entity, sc, mc] : scene->getRegistry().view<SkyboxComponent, StaticMeshComponent>().each()) {
-        if (mc.isResolved() && mc.getMesh()) {
-            cubeMesh = mc.getMesh();
-        }
-        break;
-    }
-    if (!cubeMesh) return;
+    if (!_frameInputs.skybox.bAvailable || !_frameInputs.skybox.mesh) return;
 
     cmdBuf->debugBeginLabel("Skybox");
 
@@ -324,8 +306,8 @@ void ViewportOverlayStage::drawSkybox(const RenderStageContext& ctx)
     cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(vpW), viewportHeight, 0.0f, 1.0f);
     cmdBuf->setScissor(0, 0, vpW, vpH);
 
-    cmdBuf->bindDescriptorSets(_skyboxPPL.get(), 0, {_skyboxFrameDS[ctx.flightIndex], skyboxDS});
-    cubeMesh->draw(cmdBuf);
+    cmdBuf->bindDescriptorSets(_skyboxPPL.get(), 0, {_skyboxFrameDS[ctx.flightIndex], _frameInputs.skybox.descriptorSet});
+    _frameInputs.skybox.mesh->draw(cmdBuf);
 
     cmdBuf->debugEndLabel();
 }
@@ -337,10 +319,7 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
     auto  vpH    = ctx.viewportExtent.height;
     if (vpW == 0 || vpH == 0) return;
 
-    if (!_getActiveScene) {
-        return;
-    }
-    auto* scene = _getActiveScene();
+    auto* scene = _frameInputs.activeScene;
     if (!scene) return;
 
     const auto& fd                     = *ctx.frameData;

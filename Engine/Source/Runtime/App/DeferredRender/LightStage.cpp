@@ -90,6 +90,11 @@ void LightStage::setEnvironmentLightingInput(EnvironmentLightingInput input)
     _getSceneEnvironmentLightingDescriptorSet = std::move(input.getSceneEnvironmentLightingDescriptorSet);
 }
 
+void LightStage::setFrameInputs(FrameInputs frameInputs)
+{
+    _frameInputs = frameInputs;
+}
+
 void LightStage::setSSAOTexture(Texture* ssaoTexture)
 {
     if (_ssaoTexture == ssaoTexture) {
@@ -298,6 +303,7 @@ void LightStage::destroy()
     _ssaoTexture              = nullptr;
     _environmentLightingDSL.reset();
     _getSceneEnvironmentLightingDescriptorSet = {};
+    _frameInputs = {};
     _shadowState              = {};
     _lastGBufferFrameBuffer          = nullptr;
     _lastSSAOImageViewHandle         = nullptr;
@@ -390,10 +396,6 @@ void LightStage::execute(const RenderStageContext& ctx)
     auto  vpW    = ctx.viewportExtent.width;
     auto  vpH    = ctx.viewportExtent.height;
 
-    auto environmentLightingDS = _getSceneEnvironmentLightingDescriptorSet
-        ? _getSceneEnvironmentLightingDescriptorSet(nullptr)
-        : DescriptorSetHandle{};
-
     cmdBuf->debugBeginLabel("LightStage");
 
     cmdBuf->bindPipeline(_pipeline.get());
@@ -405,7 +407,7 @@ void LightStage::execute(const RenderStageContext& ctx)
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {
                                                              frameAndLightDS,
                                                              _gBufferTextureDS,
-                                                             environmentLightingDS,
+                                                             _frameInputs.environmentLightingDescriptorSet,
                                                              _shadowDS,
                                                          });
 

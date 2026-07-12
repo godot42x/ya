@@ -120,7 +120,7 @@
   - primitive quad mesh cache
 - Graph 化判断：
   - 可直接映射为 `DeferredLightPass`
-  - stage 初始化期依赖已收口为 `EnvironmentLightingInput`，但执行期仍通过 scene descriptor callback 取 environment resource
+  - stage 初始化期依赖已收口为 `EnvironmentLightingInput`，执行期 environment descriptor 也已前移成每帧 `FrameInputs`
   - `GBufferStage*` 最终应降为显式 frame/light resource handle 输入
 
 ### ViewportOverlayStage
@@ -149,7 +149,7 @@
   - 需要拆成至少两个逻辑 pass：
     - `SkyboxPass`
     - `DebugOverlayPass`
-  - 当前 callback/service 依赖太多，不适合直接映射为单一稳定 graph node
+  - scene/skybox 执行期输入已前移成每帧 `FrameInputs`，但 stage 内仍混有 skybox/debug overlay 两类逻辑，不适合直接映射为单一稳定 graph node
 
 ### PostProcessingStage
 
@@ -228,8 +228,10 @@
 下面这些依赖仍是 Render Graph 前最值得清掉的：
 
 - `ForwardViewportStage` 虽然已去掉直接 `App::get()` 反查，但仍依赖多种 scene/service callback，尚未收敛成稳定 pass input
-- `LightStage` / `ViewportOverlayStage` 虽已收口成 input/services struct，但执行期仍依赖 scene-resource callback
+- `LightStage` / `ViewportOverlayStage` 虽已把主要执行期 scene-resource 查询前移成每帧输入，但 owner 还在 deferred pipeline，尚未形成更稳定的 pass resource bundle
 - deferred pipeline 中 SSAO / shadow 等资源规格变化仍由 pipeline owner 处理，还未沉到更声明式的 pass resource spec
+- deferred pipeline 中 SSAO / shadow 等资源规格变化虽仍由 pipeline owner 处理，但已改为 frame-boundary pending apply，而不是录制期即时重建
+- deferred viewport 规格变化入口也已收口为 pipeline-level pending apply，`onViewportResized()` 不再直接修改 RT/SSAO/postprocess
 - deferred pipeline 中 `refreshDirtyResources()` 的即时 dirty flush + pipeline update
 
 ## Worth Doing Next

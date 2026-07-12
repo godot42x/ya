@@ -4,8 +4,12 @@
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Core/Profiling/Profiling.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
+#include "ECS/System/ResourceResolveSystem.h"
 #include "Render/Core/Sampler.h"
 #include "Render/Core/Texture.h"
+#include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Runtime/App/App.h"
 #include "Runtime/App/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include <algorithm>
@@ -237,27 +241,13 @@ void DeferredRenderPipeline::applyShadowSettings(const ShadowSettings& shadowSet
     const bool bWillEnable    = shadowSettings.isEnabled();
     const bool bToggleChanged = bWasEnabled != bWillEnable;
 
-    if (_render && bToggleChanged) {
-        _render->waitIdle();
-    }
-
     _frameShadowSettings = shadowSettings;
     if (_shadowSettings) {
         *_shadowSettings = shadowSettings;
     }
 
-    if (shadowSettings.isEnabled()) {
-        if (!_shadowResources.renderTarget) {
-            initShadowResources();
-        }
-        if (!_shadowStage && _shadowResources.renderTarget) {
-            _shadowStage = ya::makeShared<ShadowStage>();
-            _shadowStage->setRenderTarget(_shadowResources.renderTarget);
-            _shadowStage->init(_render);
-        }
-    }
-    else {
-        destroyShadowResources();
+    if (bToggleChanged || (shadowSettings.isEnabled() && !_shadowResources.renderTarget)) {
+        requestShadowResourceRefresh();
     }
 
     syncShadowSettings();
@@ -286,6 +276,67 @@ void DeferredRenderPipeline::saveShadowSettingsToConfig(const ShadowSettings& sh
 void DeferredRenderPipeline::rebuildShadowViews()
 {
     _shadowResources.rebuildViews(_render, "Deferred Shadow");
+}
+
+void DeferredRenderPipeline::requestViewportResize(Extent2D extent)
+{
+    if (extent.width == 0 || extent.height == 0) {
+        return;
+    }
+
+    _pendingViewportExtent  = extent;
+    _bViewportResizePending = true;
+}
+
+void DeferredRenderPipeline::applyPendingViewportResize()
+{
+    if (!_bViewportResizePending) {
+        return;
+    }
+
+    if (_gBufferRT) {
+        _gBufferRT->setExtent(_pendingViewportExtent);
+    }
+    if (_viewportRT) {
+        _viewportRT->setExtent(_pendingViewportExtent);
+    }
+
+    requestSSAOResize(_pendingViewportExtent);
+    _postProcessStage.onViewportResized(_pendingViewportExtent);
+
+    _cachedAlbedoSpecImageViewHandle = nullptr;
+    _debugAlbedoRGBView.reset();
+    _debugSpecularAlphaView.reset();
+    _bViewportResizePending = false;
+}
+
+void DeferredRenderPipeline::requestShadowResourceRefresh()
+{
+    _bShadowResourceRefreshPending = true;
+}
+
+void DeferredRenderPipeline::applyPendingShadowResourceRefresh()
+{
+    if (!_bShadowResourceRefreshPending || !_render) {
+        return;
+    }
+
+    const auto shadowSettings = currentShadowSettings();
+    _render->waitIdle();
+
+    destroyShadowResources();
+
+    if (shadowSettings.isEnabled()) {
+        initShadowResources();
+        if (!_shadowStage && _shadowResources.renderTarget) {
+            _shadowStage = ya::makeShared<ShadowStage>();
+            _shadowStage->setRenderTarget(_shadowResources.renderTarget);
+            _shadowStage->init(_render);
+        }
+    }
+
+    _bShadowResourceRefreshPending = false;
+    syncShadowSettings();
 }
 
 void DeferredRenderPipeline::requestSSAOResize(Extent2D extent)
@@ -352,6 +403,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     _getResourceResolveSystem     = desc.getResourceResolveSystem;
     _bViewportPassOpen            = false;
     _bShadowSettingsChangePending = false;
+    _bShadowResourceRefreshPending = false;
     if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
     }
@@ -430,8 +482,11 @@ void DeferredRenderPipeline::shutdown()
     _debugAlbedoRGBView.reset();
     _debugSpecularAlphaView.reset();
     _cachedAlbedoSpecImageViewHandle = nullptr;
+    _pendingViewportExtent           = {};
+    _bViewportResizePending          = false;
     _pendingSSAOResizeExtent         = {};
     _bSSAOResizePending              = false;
+    _bShadowResourceRefreshPending   = false;
 
     if (_overlayStage) {
         _overlayStage->destroy();
@@ -515,6 +570,8 @@ bool DeferredRenderPipeline::shouldSkipTick(const RenderPipelineFrameContext& fr
 
 void DeferredRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH)
 {
+    applyPendingViewportResize();
+    applyPendingShadowResourceRefresh();
     applyPendingSSAOResize();
     _postProcessStage.beginFrame();
     captureShadowSettings(frame);
@@ -541,6 +598,42 @@ void DeferredRenderPipeline::captureShadowSettings(const RenderPipelineFrameCont
     }
     else if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
+    }
+}
+
+void DeferredRenderPipeline::updateStageFrameInputs()
+{
+    Scene* activeScene = _getActiveScene ? _getActiveScene() : nullptr;
+
+    if (_lightStage) {
+        _lightStage->setFrameInputs(LightStage::FrameInputs{
+            .environmentLightingDescriptorSet = (_getSceneEnvironmentLightingDescriptorSet && activeScene)
+                ? _getSceneEnvironmentLightingDescriptorSet(activeScene)
+                : DescriptorSetHandle{},
+        });
+    }
+
+    if (_overlayStage) {
+        ViewportOverlayStage::FrameInputs frameInputs{};
+        frameInputs.activeScene = activeScene;
+        frameInputs.resourceResolveSystem = _getResourceResolveSystem ? _getResourceResolveSystem() : nullptr;
+
+        if (frameInputs.activeScene && frameInputs.resourceResolveSystem && _getSceneSkyboxDescriptorSet) {
+            const auto* skyboxState = frameInputs.resourceResolveSystem->findFirstSceneSkyboxState(frameInputs.activeScene);
+            if (skyboxState && skyboxState->hasRenderableCubemap()) {
+                frameInputs.skybox.descriptorSet = _getSceneSkyboxDescriptorSet(frameInputs.activeScene);
+                frameInputs.skybox.mesh          = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
+                for (const auto& [entity, sc, mc] : frameInputs.activeScene->getRegistry().view<SkyboxComponent, StaticMeshComponent>().each()) {
+                    if (mc.isResolved() && mc.getMesh()) {
+                        frameInputs.skybox.mesh = mc.getMesh();
+                    }
+                    break;
+                }
+                frameInputs.skybox.bAvailable = frameInputs.skybox.descriptorSet && frameInputs.skybox.mesh;
+            }
+        }
+
+        _overlayStage->setFrameInputs(std::move(frameInputs));
     }
 }
 
@@ -573,23 +666,7 @@ void DeferredRenderPipeline::refreshDirtyResources()
     }
 
     if (_ssaoTexture && _gBufferRT && _ssaoTexture->getExtent() != _gBufferRT->getExtent()) {
-        _render->waitIdle();
-        _ssaoTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
-            .label   = "DeferredSSAO",
-            .width   = _gBufferRT->getExtent().width,
-            .height  = _gBufferRT->getExtent().height,
-            .format  = SSAOStage::AO_FORMAT,
-            .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .samples = ESampleCount::Sample_1,
-            .isDepth = false,
-        });
-        if (_ssaoStage) {
-            _ssaoStage->setup(_gBufferRT.get(), _ssaoTexture.get());
-            _ssaoStage->refreshPipelineFormat();
-        }
-        if (_lightStage) {
-            _lightStage->setSSAOTexture(_ssaoTexture.get());
-        }
+        requestSSAOResize(_gBufferRT->getExtent());
     }
 
     if (bViewportPipelineDirty) {
@@ -644,17 +721,7 @@ void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&
                                             _shadowResources.renderTarget->getExtent().width != desiredShadowResolution ||
                                             _shadowResources.renderTarget->getExtent().height != desiredShadowResolution;
         if (bShadowResolutionDirty) {
-            if (_render) {
-                _render->waitIdle();
-            }
-            destroyShadowResources();
-            initShadowResources();
-            if (!_shadowStage && _shadowResources.renderTarget) {
-                _shadowStage = ya::makeShared<ShadowStage>();
-                _shadowStage->setRenderTarget(_shadowResources.renderTarget);
-                _shadowStage->init(_render);
-            }
-            syncShadowSettings();
+            requestShadowResourceRefresh();
         }
     }
 
@@ -662,6 +729,7 @@ void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&
     (void)shadowSettings;
     (void)desiredShadowResolution;
     syncShadowSettings();
+    updateStageFrameInputs();
 }
 
 void DeferredRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)
@@ -880,16 +948,7 @@ void DeferredRenderPipeline::onViewportResized(Rect2D rect)
         .height = static_cast<uint32_t>(rect.extent.y),
     };
 
-    if (_gBufferRT) _gBufferRT->setExtent(newExtent);
-    if (_viewportRT) _viewportRT->setExtent(newExtent);
-    if (_ssaoTexture && (_ssaoTexture->getExtent().width != newExtent.width || _ssaoTexture->getExtent().height != newExtent.height)) {
-        requestSSAOResize(newExtent);
-    }
-
-    _cachedAlbedoSpecImageViewHandle = nullptr;
-    _debugAlbedoRGBView.reset();
-    _debugSpecularAlphaView.reset();
-    _postProcessStage.onViewportResized(newExtent);
+    requestViewportResize(newExtent);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
