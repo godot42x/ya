@@ -9,6 +9,13 @@
 - 先收口数据边界和 owner，再做目录/命名整理
 - 每完成一项都要回填状态，避免后续继续丢上下文
 
+Render Graph 优先级调整：
+
+- 当前最高优先级：`Phase 5 -> Phase 6`
+- 当前保留但降级：`Phase 3` 剩余项、`Phase 4`
+- 当前明确延后：`Phase 7`
+- 若某项只是在当前架构里“把依赖从 RenderRuntime 挪到另一个中间层”，但不会让 pass/stage 输入输出更显式，则不再优先推进
+
 状态约定：
 
 - `[ ]` 未开始
@@ -59,15 +66,16 @@
 - [x] 把 environment lighting descriptor set 更新逻辑拆出
 - [ ] 明确 scene resource resolve 与 descriptor cache 的边界
 - [ ] 让 stage / pipeline 通过 provider 获取共享资源，而不是回调 runtime
+  注：这项已降级。若后续 Render Graph 设计改为 graph blackboard/resource registry，则不再单独推进当前 provider 直连改造
 
 完成标准：
 
-- [ ] `RenderRuntime` 不再自己兼任共享资源缓存和 scene fallback 逻辑 owner
+- [x] `RenderRuntime` 不再自己兼任共享资源缓存和 scene fallback 逻辑 owner
 
 ## Phase 4: 收窄 Render API 泄漏
 
 - [ ] 盘点当前所有高层直接使用的 backend-style 接口：submit/present/semaphore/fence/layout transition
-- [ ] 设计 typed sync handle，替换高层 `void*` 同步对象
+- [ ] 评估 typed sync handle 是否真能直接服务 Render Graph scheduler；若不能，则不先做
 - [ ] 收口 offscreen job submit 协议，不再让服务层自己拼原始 submit 参数
 - [ ] 评估 `IRender::submitToQueue()` / `presentImage()` 的上层替代方案
 - [ ] 评估并制定 `ICommandBuffer` 单一语义方案
@@ -94,9 +102,9 @@
 
 ## Phase 6: 建立 Render Graph 前置接口
 
-- [ ] 列出现有 stage 的资源输入输出清单：Shadow、GBuffer、SSAO、Light、ViewportOverlay、PostProcess、ForwardViewport
-- [ ] 标记每个 stage 仍依赖的全局状态或隐式输入
-- [ ] 设计 stage 级显式输入结构，减少从 `App::get()` / `RenderRuntime` 全局反查
+- [x] 列出现有 stage 的资源输入输出清单：Shadow、GBuffer、SSAO、Light、ViewportOverlay、PostProcess、ForwardViewport
+- [x] 标记每个 stage 仍依赖的全局状态或隐式输入
+- [-] 设计 stage 级显式输入结构，减少从 `App::get()` / `RenderRuntime` 全局反查
 - [ ] 把 stage 内部即时资源重建改成脏标记 + 安全边界重建模式
 - [ ] 梳理哪些 stage 可以直接映射为未来 graph pass
 - [ ] 梳理哪些 stage 还需要继续拆分才适合 graph 化

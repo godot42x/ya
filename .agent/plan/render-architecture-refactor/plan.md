@@ -244,6 +244,20 @@ ImGui、screenshot capture、RenderDoc capture summary 这些可以接在 graph 
 
 ## 5. 分阶段实施计划
 
+在已经明确“下一步目标是 Render Graph”的前提下，这份计划需要调整优先级：
+
+- 值得继续做的，是那些能直接把 stage/pass 变成 graph-friendly 形态的工作
+- 不值得继续深挖的，是“只是把 owner 从 `RenderRuntime` 挪到另一个 facade/service”但不会改变 graph 输入输出边界的工作
+
+具体取舍如下：
+
+- `Phase 1`、`Phase 2`：继续保留。这两部分直接收敛 frame 输入和 shadow 配置边界，是 Render Graph 前置条件
+- `Phase 3`：做到“共享资源 owner 从 RenderRuntime 主体中拆出”即可，剩余“让各 stage/pipeline 直接依赖 provider”不再作为高优先级。因为 Render Graph 落地后，真正稳定的依赖对象更可能是 graph resource registry / blackboard，而不是当前这层 provider
+- `Phase 4`：保留，但只做高风险 API 泄漏盘点与边界收口，不做大规模 typed handle 改造。真正的 submit/sync 协议会和 Render Graph scheduler 一起重新定义
+- `Phase 5`：继续保留。automation / diagnostics / offscreen 从 frame 主链路中拆开，能直接减少 Render Graph 落地时的外围副作用
+- `Phase 6`：提升为当前最高优先级。这部分才是 Render Graph 真正的直接前置工作
+- `Phase 7`：降为最后处理。目录整理对 Render Graph 迁移帮助有限，放在结构稳定后再做
+
 ### Phase 0: 固化上下文与命名口径
 
 目标：先把本次重构的原则、问题清单和 TODO 固化，避免后续工作继续在上下文漂移中进行。
@@ -288,13 +302,14 @@ ImGui、screenshot capture、RenderDoc capture summary 这些可以接在 graph 
 
 ### Phase 3: 拆 shared resources provider
 
-目标：把 environment / skybox / BRDF LUT 等共享资源从 `RenderRuntime` 中拆出来。
+目标：把 environment / skybox / BRDF LUT 等共享资源从 `RenderRuntime` 中拆出来，并在这里停住，不继续把当前 provider 当成未来 graph 的长期抽象。
 
 建议动作：
 
 - 新建 `RenderSharedResourceProvider` 或等价 owner
 - 收口 fallback texture、descriptor pool/layout、scene DS 更新逻辑
-- pipeline/stage 改为依赖 provider，而不是直接回调 runtime
+- 不再继续扩张 provider 责任；它只作为过渡期 owner
+- 若某条调用链只是从 `RenderRuntime` 回调改成 provider 回调，但不会让资源输入输出更显式，则优先级降低
 
 完成标准：
 
@@ -303,14 +318,16 @@ ImGui、screenshot capture、RenderDoc capture summary 这些可以接在 graph 
 
 ### Phase 4: 收窄 Render API 泄漏
 
-目标：先把最危险的 backend 细节从 app/runtime 层退回 backend/service 层。
+目标：先盘清并收口最危险的 backend 细节泄漏，为后续 Render Graph scheduler 留出接口空间。
 
 建议动作：
 
-- 引入 engine typed sync handle
+- 先盘点 submit/present/fence/semaphore/layout transition 的真实上层使用面
+- 优先收掉会阻碍 Render Graph scheduler 的直接后端耦合点
 - 封装 offscreen submit 协议
 - 让 present / frame submit 走 frame service，而不是上层拼装原始同步参数
-- 评估 `ICommandBuffer` 中 record mode / execute mode 的双语义拆分路线
+- typed handle 改造只在它能直接服务 scheduler / graph compiler 设计时再做
+- `ICommandBuffer` 双语义问题先给出结论和迁移路线，不急于一次改完
 
 完成标准：
 
@@ -334,12 +351,13 @@ ImGui、screenshot capture、RenderDoc capture summary 这些可以接在 graph 
 
 ### Phase 6: 建立 Render Graph 前置接口
 
-目标：不直接上 Render Graph，但先把 stage 改成 graph-friendly 结构。
+目标：直接为 Render Graph 落地做前置接口准备。这是当前最高优先级。
 
 建议动作：
 
 - 为 stage 明确声明输入 / 输出资源
 - 把 stage 内的隐式依赖改为构造期或执行期显式注入
+- 明确哪些输入属于 draw extraction 结果，哪些属于 GPU resource handle，哪些属于 runtime service
 - 梳理哪些 stage 可直接演化为 graph pass，哪些需要继续拆分
 
 完成标准：
@@ -383,4 +401,3 @@ ImGui、screenshot capture、RenderDoc capture summary 这些可以接在 graph 
 - app/runtime 高层不再直接拼 Vulkan-style submit/sync 参数
 - stage 资源依赖显式化，至少可以手工列出输入输出图
 - 全局 `waitIdle()` 的使用明显下降，只保留在少数安全边界
-
