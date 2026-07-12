@@ -182,9 +182,9 @@ void BloomPostprocessing::initCompositePipeline()
     _compositeDS  = _compositeDSP->allocateDescriptorSets(_compositeDSL);
 }
 
-void BloomPostprocessing::updateExtractDescriptor(Texture* inputTexture)
+void BloomPostprocessing::updateExtractDescriptor(IImageView* inputImageView)
 {
-    const auto imageViewHandle = inputTexture && inputTexture->getImageView() ? inputTexture->getImageView()->getHandle() : ImageViewHandle{};
+    const auto imageViewHandle = inputImageView ? inputImageView->getHandle() : ImageViewHandle{};
     if (_extractInputImageViewHandle == imageViewHandle) {
         return;
     }
@@ -192,15 +192,15 @@ void BloomPostprocessing::updateExtractDescriptor(Texture* inputTexture)
     _extractInputImageViewHandle = imageViewHandle;
     auto sampler                 = TextureLibrary::get().getDefaultSampler();
     _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::writeOneImage(_extractDS, 0, inputTexture->getImageView(), sampler.get()),
+        IDescriptorSetHelper::writeOneImage(_extractDS, 0, inputImageView, sampler.get()),
     });
 }
 
-DescriptorSetHandle BloomPostprocessing::updateBlurDescriptor(uint32_t passIndex, Texture* inputTexture)
+DescriptorSetHandle BloomPostprocessing::updateBlurDescriptor(uint32_t passIndex, IImageView* inputImageView)
 {
     YA_CORE_ASSERT(passIndex < _blurDSs.size(), "Bloom blur pass index {} exceeds descriptor set pool size {}", passIndex, _blurDSs.size());
 
-    const auto imageViewHandle = inputTexture && inputTexture->getImageView() ? inputTexture->getImageView()->getHandle() : ImageViewHandle{};
+    const auto imageViewHandle = inputImageView ? inputImageView->getHandle() : ImageViewHandle{};
     if (_blurInputImageViewHandles[passIndex] == imageViewHandle) {
         return _blurDSs[passIndex];
     }
@@ -208,56 +208,59 @@ DescriptorSetHandle BloomPostprocessing::updateBlurDescriptor(uint32_t passIndex
     _blurInputImageViewHandles[passIndex] = imageViewHandle;
     auto sampler                          = TextureLibrary::get().getDefaultSampler();
     _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::writeOneImage(_blurDSs[passIndex], 0, inputTexture->getImageView(), sampler.get()),
+        IDescriptorSetHelper::writeOneImage(_blurDSs[passIndex], 0, inputImageView, sampler.get()),
     });
 
     return _blurDSs[passIndex];
 }
 
-void BloomPostprocessing::updateCompositeDescriptor(Texture* sceneTexture, Texture* bloomTexture)
+void BloomPostprocessing::updateCompositeDescriptor(IImageView* sceneImageView, IImageView* bloomImageView)
 {
-    const auto sceneHandle = sceneTexture && sceneTexture->getImageView() ? sceneTexture->getImageView()->getHandle() : ImageViewHandle{};
-    const auto bloomHandle = bloomTexture && bloomTexture->getImageView() ? bloomTexture->getImageView()->getHandle() : ImageViewHandle{};
+    auto*      resolvedBloomImageView = bloomImageView ? bloomImageView : TextureLibrary::get().getBlackTexture()->getImageView();
+    const auto sceneHandle            = sceneImageView ? sceneImageView->getHandle() : ImageViewHandle{};
+    const auto bloomHandle            = resolvedBloomImageView ? resolvedBloomImageView->getHandle() : ImageViewHandle{};
     if (_compositeSceneImageViewHandle == sceneHandle && _compositeBloomImageViewHandle == bloomHandle) {
         return;
     }
 
     _compositeSceneImageViewHandle = sceneHandle;
     _compositeBloomImageViewHandle = bloomHandle;
-    auto           sampler         = TextureLibrary::get().getDefaultSampler();
-    auto           bloomTexturePtr = bloomTexture ? ya::Ptr<Texture>(bloomTexture) : TextureLibrary::get().getBlackTexture();
-    TextureBinding bloomBinding{
-        .texture = bloomTexturePtr,
-        .sampler = sampler,
-    };
+    auto sampler = TextureLibrary::get().getDefaultSampler();
     _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::writeOneImage(_compositeDS, 0, sceneTexture->getImageView(), sampler.get()),
-        IDescriptorSetHelper::writeOneImage(_compositeDS, 1, bloomBinding),
+        IDescriptorSetHelper::writeOneImage(_compositeDS, 0, sceneImageView, sampler.get()),
+        IDescriptorSetHelper::writeOneImage(_compositeDS, 1, resolvedBloomImageView, sampler.get()),
     });
 }
 
 void BloomPostprocessing::render(const RenderDesc& desc)
 {
-    if (!desc.cmdBuf || !desc.sceneTexture || !desc.outputTexture || !desc.state) {
+    if (!desc.cmdBuf || !desc.sceneImageView || !desc.outputImage || !desc.state) {
         return;
     }
     if (desc.renderExtent.width == 0 || desc.renderExtent.height == 0) {
         return;
     }
 
-    const bool bBloomEnabled = desc.state->bEnableBloom && desc.bloomExtract && desc.blurPingTexture && desc.blurPongTexture;
+    const bool bBloomEnabled = desc.state->bEnableBloom && desc.bloomExtract && desc.blurPingImage && desc.blurPongImage;
 
     if (bBloomEnabled) {
         desc.cmdBuf->debugBeginLabel("BloomExtract");
         desc.cmdBuf->transitionImageLayoutAuto(desc.bloomExtract->getImage(), EImageLayout::ColorAttachmentOptimal);
-        updateExtractDescriptor(desc.sceneTexture);
+        updateExtractDescriptor(desc.sceneImageView);
 
         RenderingInfo extractRI{
             .label            = "BloomExtract",
             .renderArea       = Rect2D{.pos = {0, 0}, .extent = desc.renderExtent.toVec2()},
             .layerCount       = 1,
             .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
-            .colorAttachments = {RenderingInfo::ImageSpec{.texture = desc.bloomExtract, .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .initialLayout = EImageLayout::ColorAttachmentOptimal, .finalLayout = EImageLayout::ShaderReadOnlyOptimal}},
+            .colorAttachments = {RenderingInfo::ImageSpec{
+                .image         = desc.bloomExtract->getImage(),
+                .imageView     = desc.bloomExtract->getImageView(),
+                .loadOp        = EAttachmentLoadOp::Clear,
+                .storeOp       = EAttachmentStoreOp::Store,
+                .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+            }},
         };
 
         slang_types::Misc::BloomExtract::PushConstants extractPC{};
@@ -275,13 +278,13 @@ void BloomPostprocessing::render(const RenderDesc& desc)
         desc.cmdBuf->endRendering(extractRI);
         desc.cmdBuf->debugEndLabel();
 
-        Texture*       blurInput     = desc.bloomExtract;
+        IImageView*    blurInput     = desc.bloomExtract->getImageView();
         const uint32_t blurPassCount = std::max<uint32_t>(1, desc.state->bloomBlurPasses * 2);
         _lastBlurPassCount           = blurPassCount;
 
         for (uint32_t passIndex = 0; passIndex < blurPassCount; ++passIndex) {
             const bool bHorizontal = (passIndex % 2) == 0;
-            Texture*   blurTarget  = bHorizontal ? desc.blurPingTexture : desc.blurPongTexture;
+            RenderImage* blurTarget = bHorizontal ? desc.blurPingImage : desc.blurPongImage;
 
             desc.cmdBuf->transitionImageLayoutAuto(blurTarget->getImage(), EImageLayout::ColorAttachmentOptimal);
             const DescriptorSetHandle blurDS = updateBlurDescriptor(passIndex, blurInput);
@@ -291,7 +294,14 @@ void BloomPostprocessing::render(const RenderDesc& desc)
                 .renderArea       = Rect2D{.pos = {0, 0}, .extent = desc.renderExtent.toVec2()},
                 .layerCount       = 1,
                 .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
-                .colorAttachments = {RenderingInfo::ImageSpec{.texture = blurTarget, .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .initialLayout = EImageLayout::ColorAttachmentOptimal, .finalLayout = EImageLayout::ShaderReadOnlyOptimal}},
+                .colorAttachments = {RenderingInfo::ImageSpec{
+                    .image         = blurTarget->getImage(),
+                    .imageView     = blurTarget->getImageView(),
+                    .loadOp        = EAttachmentLoadOp::Clear,
+                    .storeOp       = EAttachmentStoreOp::Store,
+                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                }},
             };
 
             slang_types::Misc::BloomBlur::PushConstants blurPC{};
@@ -307,25 +317,32 @@ void BloomPostprocessing::render(const RenderDesc& desc)
             desc.cmdBuf->draw(3, 1, 0, 0);
             desc.cmdBuf->endRendering(blurRI);
 
-            blurInput = blurTarget;
+            blurInput = blurTarget->getImageView();
         }
 
-        updateCompositeDescriptor(desc.sceneTexture, blurInput);
+        updateCompositeDescriptor(desc.sceneImageView, blurInput);
     }
     else {
         _lastBlurPassCount = 0;
-        updateCompositeDescriptor(desc.sceneTexture, nullptr);
+        updateCompositeDescriptor(desc.sceneImageView, nullptr);
     }
 
     desc.cmdBuf->debugBeginLabel("BloomComposite");
-    desc.cmdBuf->transitionImageLayoutAuto(desc.outputTexture->getImage(), EImageLayout::ColorAttachmentOptimal);
+    desc.cmdBuf->transitionImageLayoutAuto(desc.outputImage->getImage(), EImageLayout::ColorAttachmentOptimal);
 
     RenderingInfo compositeRI{
         .label            = "BloomComposite",
         .renderArea       = Rect2D{.pos = {0, 0}, .extent = desc.renderExtent.toVec2()},
         .layerCount       = 1,
         .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
-        .colorAttachments = {RenderingInfo::ImageSpec{.texture = desc.outputTexture, .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .initialLayout = EImageLayout::ColorAttachmentOptimal, .finalLayout = EImageLayout::ShaderReadOnlyOptimal}},
+        .colorAttachments = {RenderingInfo::ImageSpec{
+            .image         = desc.outputImage->getImage(),
+            .imageView     = desc.outputImage->getImageView(),
+            .loadOp        = EAttachmentLoadOp::Clear,
+            .storeOp       = EAttachmentStoreOp::Store,
+            .initialLayout = EImageLayout::ColorAttachmentOptimal,
+            .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+        }},
     };
 
     slang_types::Misc::BloomComposite::PushConstants compositePC{};

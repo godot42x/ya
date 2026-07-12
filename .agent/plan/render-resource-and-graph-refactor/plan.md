@@ -162,6 +162,8 @@ std::unique_ptr<IGpuSampler> createSampler(const SamplerDesc& desc);
 - SSAO、GBuffer、bloom、shadow 等中间资源直接使用 GPU image/view 或 graph handle
 - 删除 `Texture::createRenderTexture()`
 
+迁移期间允许使用最小 `RenderImage` owner 组合 image 与 default view。它不包含资产、sampler、upload 或状态跟踪语义，RenderGraph resource registry 落地后由 registry 替代，不继续扩展为第二套 texture abstraction。
+
 ### 4.4 Attachment 与 RenderTarget
 
 将当前 `IRenderTarget` 拆为两个概念：
@@ -411,4 +413,3 @@ RenderGraph 迁移阶段还必须覆盖：
 - 旧 `ITextureFactory`、`Texture::createRenderTexture()`、`IBuffer::create()` 和 `IRenderTarget::flushDirty()` 已删除
 - Vulkan validation、功能冒烟和截图基线通过
 - compatibility adapter 已删除或有明确的剩余 owner 和删除任务
-

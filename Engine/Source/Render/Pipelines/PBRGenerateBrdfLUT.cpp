@@ -139,9 +139,10 @@ PBRGenerateBrdfLUT::ExecuteResult PBRGenerateBrdfLUT::execute(const ExecuteConte
         .depthClearValue  = ClearValue(1.0f, 0),
         .colorAttachments = {
             RenderingInfo::ImageSpec{
-                .texture = ctx.output,
-                .loadOp  = EAttachmentLoadOp::Clear,
-                .storeOp = EAttachmentStoreOp::Store,
+                .image     = ctx.output->getImage(),
+                .imageView = ctx.output->getImageView(),
+                .loadOp    = EAttachmentLoadOp::Clear,
+                .storeOp   = EAttachmentStoreOp::Store,
             },
         },
     };

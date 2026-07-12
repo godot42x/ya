@@ -51,7 +51,7 @@
 - [x] 盘点 render target attachment、swapchain image 和 external image 创建路径（见 `resource-api-inventory.md`）
 - [x] 盘点 sampler 和 framebuffer 创建路径（见 `resource-api-inventory.md`）
 - [ ] 盘点 `beginIsolateCommands()` upload/init 路径，分离 allocation、upload 和 initial transition
-- [ ] 盘点 `Texture*` 作为 GPU 中间资源 descriptor 输入的使用点
+- [x] 盘点 `Texture*` 作为 GPU 中间资源 descriptor 输入的使用点
 - [ ] 记录每类资源当前 owner、引用者和销毁顺序
 - [x] 记录当前 `Texture / IImage / IImageView / IRenderTarget / IFrameBuffer` 所有权链（见 `resource-api-inventory.md`）
 - [ ] 定义 `BufferDesc`
@@ -61,7 +61,7 @@
 - [x] 定义 external/imported image descriptor
 - [ ] 定义 imported image 的 native ownership、view ownership、debug name 和 initial/final state
 - [ ] 定义 derived image-view identity/cache key
-- [ ] 定义资产 `Texture` 与 transient/persistent GPU image 的绑定边界
+- [x] 定义资产 `Texture` 与 transient/persistent GPU image 的绑定边界（GPU 中间资源使用 `RenderImage`，后续由 graph registry 接管）
 - [ ] 明确 `RenderTargetPool` 与 graph resource registry 的停止线
 - [ ] 锁定 image view 不拥有 image 的生命周期规则
 - [ ] 锁定 resource desc 创建后不可变规则
@@ -121,9 +121,10 @@
 - [ ] 迁移 cubemap 资产纹理
 - [ ] 迁移 fallback texture
 - [ ] 让 `Texture` 显式拥有 image 和 default view
-- [ ] 将 SSAO render texture 改为 GPU image/view owner
-- [ ] 将 bloom/postprocess render texture 改为 GPU image/view owner
-- [ ] 将 BRDF LUT 输出改为 GPU image/view owner
+- [x] 将 SSAO render texture 改为 GPU image/view owner
+- [x] 将 bloom render texture 改为 GPU image/view owner
+- [ ] 将 postprocess output render texture 改为 GPU image/view owner
+- [x] 将 BRDF LUT 输出改为 GPU image/view owner
 - [ ] 将 shadow sampled view 改为显式 image/view owner
 - [ ] 将 screenshot scratch texture 改为 GPU image/view owner
 - [ ] 删除 `Texture::createRenderTexture()`
@@ -136,6 +137,14 @@
 - [ ] `Texture` 只表示资产纹理
 - [ ] GPU 中间资源不再包装为资产 `Texture`
 - [x] image/view 创建入口唯一
+
+迁移备注：
+
+- `RenderImage` 仅组合并拥有 `IImage` 与 default `IImageView`，不承载资产语义、采样器或资源状态
+- `RenderingInfo::ImageSpec` 已直接引用 image/view，dynamic rendering attachment 协议不再依赖 `Texture`
+- BRDF LUT、Deferred SSAO 与 bloom intermediates 已迁移
+- postprocess output 仍通过 `IRenderPipeline -> App -> automation screenshot` 的 `Texture*` 契约暴露，应与 screenshot scratch 生命周期一起迁移
+- shadow sampled view 和 screenshot scratch 仍待迁移
 
 ## Phase 5: Resource State Tracker
 

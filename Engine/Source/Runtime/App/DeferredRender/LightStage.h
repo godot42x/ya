@@ -19,6 +19,7 @@ namespace ya
 struct GBufferStage;
 struct Scene;
 struct Texture;
+struct RenderImage;
 
 /// Deferred light pass — fullscreen quad that reads GBuffer textures and computes lighting.
 ///
@@ -46,7 +47,7 @@ struct LightStage : public IRenderStage
     IRender*       _render       = nullptr;
     GBufferStage*  _gBufferStage = nullptr; // borrows frame+light DS
     IRenderTarget* _gBufferRT    = nullptr; // borrows GBuffer textures
-    Texture*       _ssaoTexture  = nullptr;
+    RenderImage*   _ssaoTexture  = nullptr;
 
     // Pipeline (shared across flights)
     stdptr<IGraphicsPipeline>    _pipeline;
@@ -91,7 +92,7 @@ struct LightStage : public IRenderStage
     void setup(GBufferStage* gBufferStage, IRenderTarget* gBufferRT);
     void setEnvironmentLightingInput(EnvironmentLightingInput input);
     void setFrameInputs(FrameInputs frameInputs);
-    void setSSAOTexture(Texture* ssaoTexture);
+    void setSSAOTexture(RenderImage* ssaoTexture);
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecularIBL);
     void refreshPipelineFormats(const IRenderTarget* viewportRT);

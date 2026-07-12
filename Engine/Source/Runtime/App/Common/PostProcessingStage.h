@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Render/Core/RenderImage.h"
 #include "Render/Core/Texture.h"
 #include "Render/Pipelines/BasicPostprocessing.h"
 #include "Render/Pipelines/BloomPostprocessing.h"
@@ -28,10 +29,10 @@ struct PostProcessingStage
     PostProcessingState         _state              = {};
     stdptr<BloomPostprocessing> _bloomProcessor     = nullptr;
     stdptr<BasicPostprocessing> _postProcessor      = nullptr;
-    stdptr<Texture>             _bloomExtractTexture = nullptr;
-    stdptr<Texture>             _bloomBlurPingTexture = nullptr;
-    stdptr<Texture>             _bloomBlurPongTexture = nullptr;
-    stdptr<Texture>             _bloomCompositeTexture = nullptr;
+    stdptr<RenderImage>         _bloomExtractImage = nullptr;
+    stdptr<RenderImage>         _bloomBlurPingImage = nullptr;
+    stdptr<RenderImage>         _bloomBlurPongImage = nullptr;
+    stdptr<RenderImage>         _bloomCompositeImage = nullptr;
     stdptr<Texture>             _postprocessTexture = nullptr;
     Extent2D                    _pendingResizeExtent{};
     bool                        _bResizePending      = false;
@@ -50,9 +51,9 @@ struct PostProcessingStage
 
     [[nodiscard]] bool                       isEnabled() const { return bEnabled; }
     [[nodiscard]] Texture*                   getOutputTexture() const { return _postprocessTexture.get(); }
-    [[nodiscard]] Texture*                   getBloomExtractTexture() const { return _bloomExtractTexture.get(); }
-    [[nodiscard]] Texture*                   getBloomBlurTexture() const { return _bloomBlurPongTexture ? _bloomBlurPongTexture.get() : _bloomBlurPingTexture.get(); }
-    [[nodiscard]] Texture*                   getBloomCompositeTexture() const { return _bloomCompositeTexture.get(); }
+    [[nodiscard]] RenderImage*               getBloomExtractImage() const { return _bloomExtractImage.get(); }
+    [[nodiscard]] RenderImage*               getBloomBlurImage() const { return _bloomBlurPongImage ? _bloomBlurPongImage.get() : _bloomBlurPingImage.get(); }
+    [[nodiscard]] RenderImage*               getBloomCompositeImage() const { return _bloomCompositeImage.get(); }
     [[nodiscard]] PostProcessingState&       getState() { return _state; }
     [[nodiscard]] const PostProcessingState& getState() const { return _state; }
 

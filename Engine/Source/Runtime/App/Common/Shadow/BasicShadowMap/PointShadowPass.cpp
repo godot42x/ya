@@ -248,7 +248,8 @@ void PointShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayl
                 if (!facePayload.depthTexture) continue;
 
                 RenderingInfo::ImageSpec depthSpec{
-                    .texture       = facePayload.depthTexture,
+                    .image         = facePayload.depthTexture ? facePayload.depthTexture->getImage() : nullptr,
+                    .imageView     = facePayload.depthTexture ? facePayload.depthTexture->getImageView() : nullptr,
                     .loadOp        = EAttachmentLoadOp::Clear,
                     .storeOp       = EAttachmentStoreOp::Store,
                     .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,

@@ -6,6 +6,7 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Pipeline.h"
+#include "Render/Core/RenderImage.h"
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
 #include "Runtime/App/Common/IRenderPipeline.h"
@@ -77,7 +78,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     // ── Render targets ────────────────────────────────────────────────
     stdptr<IRenderTarget> _gBufferRT;
     stdptr<IRenderTarget> _viewportRT;
-    stdptr<Texture>       _ssaoTexture;
+    stdptr<RenderImage>   _ssaoTexture;
 
     static constexpr EFormat::T LINEAR_FORMAT            = EFormat::R8G8B8A8_UNORM;
     static constexpr EFormat::T SIGNED_LINEAR_FORMAT     = EFormat::R16G16B16A16_SFLOAT;
@@ -154,7 +155,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
 
     IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
-    Texture*    getSSAOTexture() const { return _ssaoTexture.get(); }
+    RenderImage* getSSAOTexture() const { return _ssaoTexture.get(); }
 
     // Access GBuffer RT for debug views
     IRenderTarget* getGBufferRT() const { return _gBufferRT.get(); }
@@ -171,9 +172,9 @@ struct DeferredRenderPipeline : public IRenderPipeline
         return _shadowResources.pointFaceIVs[pointLightIndex][faceIndex].get();
     }
     Texture* getPostprocessOutputTexture() const override { return _postProcessStage.getOutputTexture(); }
-    Texture* getBloomExtractTexture() const override { return _postProcessStage.getBloomExtractTexture(); }
-    Texture* getBloomBlurTexture() const override { return _postProcessStage.getBloomBlurTexture(); }
-    Texture* getBloomCompositeTexture() const override { return _postProcessStage.getBloomCompositeTexture(); }
+    RenderImage* getBloomExtractImage() const override { return _postProcessStage.getBloomExtractImage(); }
+    RenderImage* getBloomBlurImage() const override { return _postProcessStage.getBloomBlurImage(); }
+    RenderImage* getBloomCompositeImage() const override { return _postProcessStage.getBloomCompositeImage(); }
     bool     isPostprocessingEnabled() const override { return _postProcessStage.isEnabled(); }
 
   private:

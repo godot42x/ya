@@ -1,4 +1,5 @@
 #include "RenderRuntime.h"
+#include "Render/Core/RenderImage.h"
 
 #include "App.h"
 #include "DeferredRender/DeferredRenderPipeline.h"

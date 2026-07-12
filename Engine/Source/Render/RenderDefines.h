@@ -1091,9 +1091,9 @@ struct DescriptorPoolCreateInfo
 };
 
 
+struct IImage;
 struct IImageView;
 struct IRenderPass;
-struct Texture; // Forward declaration for RenderingInfo::ImageSpec
 
 struct IRenderTarget; // Forward declaration
 
@@ -1114,7 +1114,8 @@ struct RenderingInfo
 
     struct ImageSpec
     {
-        Texture* texture = nullptr; // ← 使用高层 Texture 抽象，替代 IImageView*
+        IImage*     image     = nullptr;
+        IImageView* imageView = nullptr;
         // EResolveMode::T resolveMode      = EResolveMode::None;
         // IImageView     *resolveImageView = nullptr;
 

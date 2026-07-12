@@ -10,6 +10,7 @@ namespace ya
 struct App;
 struct Scene;
 struct Texture;
+struct RenderImage;
 struct Sampler;
 struct IRender;
 
@@ -43,7 +44,7 @@ struct RenderSharedResourceProvider
 
     struct SharedResources
     {
-        stdptr<Texture> pbrLUT = nullptr;
+        stdptr<RenderImage> pbrLUT = nullptr;
     };
 
     SkyboxResources              _skybox{};
@@ -63,7 +64,7 @@ struct RenderSharedResourceProvider
     [[nodiscard]] Sampler*                     getSkyboxSampler() const { return _cubemapSampler.get(); }
     [[nodiscard]] DescriptorSetHandle          getFallbackSkyboxDescriptorSet() const { return _skybox.fallbackDS; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getEnvironmentLightingDescriptorSetLayout() const { return _environmentLighting.dsl; }
-    [[nodiscard]] Texture*                     getBrdfLutTexture() const { return _sharedResources.pbrLUT.get(); }
+    [[nodiscard]] RenderImage*                 getBrdfLutTexture() const { return _sharedResources.pbrLUT.get(); }
     [[nodiscard]] DescriptorSetHandle          getSceneSkyboxDescriptorSet(Scene* scene = nullptr);
     [[nodiscard]] DescriptorSetHandle          getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr);
 
@@ -73,7 +74,7 @@ struct RenderSharedResourceProvider
     void                   initEnvironmentLightingResources();
     void                   releaseRenderOwnedResources();
     void                   updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* texture);
-    void                   updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds, Texture* cubemapTexture, Texture* irradianceTexture, Texture* prefilterTexture, Texture* brdfLutTexture);
+    void                   updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds, Texture* cubemapTexture, Texture* irradianceTexture, Texture* prefilterTexture, RenderImage* brdfLutTexture);
     [[nodiscard]] Texture* findSceneSkyboxTexture(Scene* scene) const;
     [[nodiscard]] Texture* findSceneEnvironmentCubemapTexture(Scene* scene) const;
     [[nodiscard]] Texture* findSceneEnvironmentIrradianceTexture(Scene* scene) const;

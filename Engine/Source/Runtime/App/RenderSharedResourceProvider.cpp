@@ -1,5 +1,6 @@
 #include "RenderSharedResourceProvider.h"
 #include "Render/Core/RenderResourceFactory.h"
+#include "Render/Core/RenderImage.h"
 
 #include "App.h"
 #include "ECS/System/ResourceResolveSystem.h"
@@ -72,7 +73,7 @@ void RenderSharedResourceProvider::updateEnvironmentLightingDescriptorSet(Descri
                                                                           Texture*            cubemapTexture,
                                                                           Texture*            irradianceTexture,
                                                                           Texture*            prefilterTexture,
-                                                                          Texture*            brdfLutTexture)
+                                                                          RenderImage*        brdfLutTexture)
 {
     if (!ds || !cubemapTexture || !irradianceTexture || !prefilterTexture || !brdfLutTexture ||
         !cubemapTexture->getImageView() || !irradianceTexture->getImageView() ||
@@ -225,14 +226,24 @@ void RenderSharedResourceProvider::initSharedPipelineResources()
     });
 
     _pbrGenerateBrdfLUT.init(_render);
-    _sharedResources.pbrLUT = Texture::createRenderTexture(RenderTextureCreateInfo{
-        .label     = "App_PBR_BRDF_LUT",
-        .width     = 512,
-        .height    = 512,
-        .format    = EFormat::R16G16B16A16_SFLOAT,
-        .usage     = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        .mipLevels = 1,
-    });
+    _sharedResources.pbrLUT = createRenderImage(
+        *_render->getResourceFactory(),
+        RenderImageDesc{
+            .image = ImageCreateInfo{
+                .label         = "App_PBR_BRDF_LUT",
+                .format        = EFormat::R16G16B16A16_SFLOAT,
+                .extent        = {.width = 512, .height = 512, .depth = 1},
+                .mipLevels     = 1,
+                .arrayLayers   = 1,
+                .samples       = ESampleCount::Sample_1,
+                .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                .initialLayout = EImageLayout::Undefined,
+            },
+            .defaultView = ImageViewCreateInfo{
+                .label       = "App_PBR_BRDF_LUT_DefaultView",
+                .aspectFlags = EImageAspect::Color,
+            },
+        });
     YA_CORE_ASSERT(_sharedResources.pbrLUT && _sharedResources.pbrLUT->getImageView(),
                    "Failed to create PBR BRDF LUT render texture");
     if (_sharedResources.pbrLUT) {

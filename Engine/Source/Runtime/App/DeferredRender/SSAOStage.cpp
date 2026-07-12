@@ -52,7 +52,7 @@ std::array<ColorRGBA<uint8_t>, 16> buildNoisePixels()
 
 } // namespace
 
-void SSAOStage::setup(IRenderTarget* gBufferRT, Texture* targetTexture)
+void SSAOStage::setup(IRenderTarget* gBufferRT, RenderImage* targetTexture)
 {
     if (_gBufferRT) {
         _gBufferRT->onFramebufferRecreated.removeAll(this);
@@ -294,7 +294,8 @@ void SSAOStage::execute(const RenderStageContext& ctx)
         .colorClearValues = {ClearValue(1.0f, 1.0f, 1.0f, 1.0f)},
         .colorAttachments = {
             RenderingInfo::ImageSpec{
-                .texture       = _targetTexture,
+                .image         = _targetTexture ? _targetTexture->getImage() : nullptr,
+                .imageView     = _targetTexture ? _targetTexture->getImageView() : nullptr,
                 .loadOp        = EAttachmentLoadOp::Clear,
                 .storeOp       = EAttachmentStoreOp::Store,
                 .initialLayout = EImageLayout::ColorAttachmentOptimal,

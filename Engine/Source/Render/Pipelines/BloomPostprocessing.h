@@ -3,6 +3,7 @@
 #include "Core/Base.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
+#include "Render/Core/RenderImage.h"
 #include "Runtime/App/Common/PostProcessingState.h"
 
 #include "Misc.BloomBlur.slang.h"
@@ -25,11 +26,11 @@ struct BloomPostprocessing
     struct RenderDesc
     {
         ICommandBuffer*            cmdBuf            = nullptr;
-        Texture*                   sceneTexture      = nullptr;
-        Texture*                   outputTexture     = nullptr;
-        Texture*                   bloomExtract      = nullptr;
-        Texture*                   blurPingTexture   = nullptr;
-        Texture*                   blurPongTexture   = nullptr;
+        IImageView*                sceneImageView    = nullptr;
+        RenderImage*               outputImage       = nullptr;
+        RenderImage*               bloomExtract      = nullptr;
+        RenderImage*               blurPingImage     = nullptr;
+        RenderImage*               blurPongImage     = nullptr;
         Extent2D                   renderExtent      = {};
         const PostProcessingState* state            = nullptr;
     };
@@ -72,9 +73,9 @@ struct BloomPostprocessing
     void initExtractPipeline();
     void initBlurPipeline();
     void initCompositePipeline();
-    void updateExtractDescriptor(Texture* inputTexture);
-    DescriptorSetHandle updateBlurDescriptor(uint32_t passIndex, Texture* inputTexture);
-    void updateCompositeDescriptor(Texture* sceneTexture, Texture* bloomTexture);
+    void updateExtractDescriptor(IImageView* inputImageView);
+    DescriptorSetHandle updateBlurDescriptor(uint32_t passIndex, IImageView* inputImageView);
+    void updateCompositeDescriptor(IImageView* sceneImageView, IImageView* bloomImageView);
 };
 
 } // namespace ya

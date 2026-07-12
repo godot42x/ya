@@ -362,21 +362,17 @@ void VulkanCommandBuffer::executeEndRendering(const RenderingInfo& info)
             // Final layout transitions for manual image path
             std::vector<VulkanImage::LayoutTransition> transitions;
             for (auto& spec : info.colorAttachments) {
-                if (spec.finalLayout != EImageLayout::Undefined && spec.texture) {
-                    if (auto* img = spec.texture->getImage()) {
-                        if (auto* vkImg = dynamic_cast<VulkanImage*>(img)) {
-                            transitions.emplace_back(vkImg, spec.finalLayout);
-                        }
+                if (spec.finalLayout != EImageLayout::Undefined && spec.image) {
+                    if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
+                        transitions.emplace_back(vkImg, spec.finalLayout);
                     }
                 }
             }
             if (info.depthAttachment) {
                 auto& spec = *info.depthAttachment;
-                if (spec.finalLayout != EImageLayout::Undefined && spec.texture) {
-                    if (auto* img = spec.texture->getImage()) {
-                        if (auto* vkImg = dynamic_cast<VulkanImage*>(img)) {
-                            transitions.emplace_back(vkImg, spec.finalLayout);
-                        }
+                if (spec.finalLayout != EImageLayout::Undefined && spec.image) {
+                    if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
+                        transitions.emplace_back(vkImg, spec.finalLayout);
                     }
                 }
             }
@@ -883,7 +879,7 @@ VkRenderingAttachmentInfo* VulkanCommandBuffer::buildDepthAttachmentInfo(const R
     outDepthAttach = {
         .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .pNext       = nullptr,
-        .imageView   = info.depthAttachment->texture->getImageView()->getHandle().as<VkImageView>(),
+        .imageView   = info.depthAttachment->imageView->getHandle().as<VkImageView>(),
         .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         .resolveMode = VK_RESOLVE_MODE_NONE,
         .loadOp      = EAttachmentLoadOp::toVk(info.depthAttachment->loadOp),
@@ -1029,11 +1025,9 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
     {
         std::vector<VulkanImage::LayoutTransition> transitions;
         for (auto& spec : info.colorAttachments) {
-            if (spec.initialLayout != EImageLayout::Undefined && spec.texture) {
-                if (auto* img = spec.texture->getImage()) {
-                    if (auto* vkImg = dynamic_cast<VulkanImage*>(img)) {
-                        transitions.emplace_back(vkImg, spec.initialLayout);
-                    }
+            if (spec.initialLayout != EImageLayout::Undefined && spec.image) {
+                if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
+                    transitions.emplace_back(vkImg, spec.initialLayout);
                 }
             }
         }
@@ -1043,11 +1037,9 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
             if (targetLayout == EImageLayout::Undefined) {
                 targetLayout = EImageLayout::DepthStencilAttachmentOptimal;
             }
-            if (spec.texture) {
-                if (auto* img = spec.texture->getImage()) {
-                    if (auto* vkImg = dynamic_cast<VulkanImage*>(img)) {
-                        transitions.emplace_back(vkImg, targetLayout);
-                    }
+            if (spec.image) {
+                if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
+                    transitions.emplace_back(vkImg, targetLayout);
                 }
             }
         }
@@ -1064,7 +1056,7 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
         VkRenderingAttachmentInfo vkAttach{
             .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .pNext       = nullptr,
-            .imageView   = info.colorAttachments[i].texture->getImageView()->getHandle().as<VkImageView>(),
+            .imageView   = info.colorAttachments[i].imageView->getHandle().as<VkImageView>(),
             .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             .resolveMode = VK_RESOLVE_MODE_NONE,
             .loadOp      = EAttachmentLoadOp::toVk(info.colorAttachments[i].loadOp),

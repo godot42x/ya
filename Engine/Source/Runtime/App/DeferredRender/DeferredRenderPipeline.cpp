@@ -8,6 +8,7 @@
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "Render/Core/Sampler.h"
+#include "Render/Core/RenderImage.h"
 #include "Render/Core/Texture.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Runtime/App/App.h"
@@ -24,6 +25,28 @@ namespace
 
 constexpr const char* DEFERRED_PIPELINE_CONFIG_DOC_NAME                       = "editor";
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SSAO                = "render.deferred.ssao.enabled";
+
+stdptr<RenderImage> createSSAOImage(IRender* render, Extent2D extent)
+{
+    return createRenderImage(
+        *render->getResourceFactory(),
+        RenderImageDesc{
+            .image = ImageCreateInfo{
+                .label         = "DeferredSSAO",
+                .format        = SSAOStage::AO_FORMAT,
+                .extent        = {.width = extent.width, .height = extent.height, .depth = 1},
+                .mipLevels     = 1,
+                .arrayLayers   = 1,
+                .samples       = ESampleCount::Sample_1,
+                .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                .initialLayout = EImageLayout::Undefined,
+            },
+            .defaultView = ImageViewCreateInfo{
+                .label       = "DeferredSSAO_DefaultView",
+                .aspectFlags = EImageAspect::Color,
+            },
+        });
+}
 
 void drawPerfLeaf(const char* label, float value, float parentValue = 0.0f)
 {
@@ -366,15 +389,7 @@ void DeferredRenderPipeline::applyPendingSSAOResize()
     }
 
     _render->waitIdle();
-    _ssaoTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
-        .label   = "DeferredSSAO",
-        .width   = _pendingSSAOResizeExtent.width,
-        .height  = _pendingSSAOResizeExtent.height,
-        .format  = SSAOStage::AO_FORMAT,
-        .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        .samples = ESampleCount::Sample_1,
-        .isDepth = false,
-    });
+    _ssaoTexture = createSSAOImage(_render, _pendingSSAOResizeExtent);
     if (_ssaoStage) {
         _ssaoStage->setup(_gBufferRT.get(), _ssaoTexture.get());
         _ssaoStage->refreshPipelineFormat();
@@ -426,15 +441,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     };
 
     initRenderTargets(extent);
-    _ssaoTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
-        .label   = "DeferredSSAO",
-        .width   = extent.width,
-        .height  = extent.height,
-        .format  = SSAOStage::AO_FORMAT,
-        .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        .samples = ESampleCount::Sample_1,
-        .isDepth = false,
-    });
+    _ssaoTexture = createSSAOImage(_render, extent);
     if (currentShadowSettings().isEnabled()) {
         initShadowResources();
     }
@@ -888,7 +895,12 @@ void DeferredRenderPipeline::beginViewportRendering(const RenderPipelineFrameCon
     auto cmdBuf = frame.cmdBuf;
 
     _viewportDepthSpec = RenderingInfo::ImageSpec{
-        .texture       = _viewportRT->getCurFrameBuffer()->getDepthTexture(),
+        .image         = _viewportRT->getCurFrameBuffer()->getDepthTexture()
+                             ? _viewportRT->getCurFrameBuffer()->getDepthTexture()->getImage()
+                             : nullptr,
+        .imageView     = _viewportRT->getCurFrameBuffer()->getDepthTexture()
+                             ? _viewportRT->getCurFrameBuffer()->getDepthTexture()->getImageView()
+                             : nullptr,
         .loadOp        = EAttachmentLoadOp::Load,
         .storeOp       = EAttachmentStoreOp::Store,
         .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,

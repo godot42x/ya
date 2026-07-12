@@ -155,30 +155,6 @@ Texture* RenderRuntime::getPostprocessOutputTexture() const
     return nullptr;
 }
 
-Texture* RenderRuntime::getBloomExtractTexture() const
-{
-    if (auto* pipeline = getActivePipelineDebugOutputs()) {
-        return pipeline->getBloomExtractTexture();
-    }
-    return nullptr;
-}
-
-Texture* RenderRuntime::getBloomBlurTexture() const
-{
-    if (auto* pipeline = getActivePipelineDebugOutputs()) {
-        return pipeline->getBloomBlurTexture();
-    }
-    return nullptr;
-}
-
-Texture* RenderRuntime::getBloomCompositeTexture() const
-{
-    if (auto* pipeline = getActivePipelineDebugOutputs()) {
-        return pipeline->getBloomCompositeTexture();
-    }
-    return nullptr;
-}
-
 Texture* RenderRuntime::getPresentationTexture() const
 {
     if (!_screenRT) {
@@ -209,9 +185,9 @@ RenderPipelineDebugOutputCatalog RenderRuntime::buildPipelineDebugOutputCatalog(
     catalog.shadowDepthRT          = pipeline->getShadowDepthRT();
     catalog.shadowDirectionalDepth = pipeline->getShadowDirectionalDepthIV();
     catalog.postprocessOutput      = pipeline->getPostprocessOutputTexture();
-    catalog.bloomExtract           = pipeline->getBloomExtractTexture();
-    catalog.bloomBlur              = pipeline->getBloomBlurTexture();
-    catalog.bloomComposite         = pipeline->getBloomCompositeTexture();
+    catalog.bloomExtract           = pipeline->getBloomExtractImage();
+    catalog.bloomBlur              = pipeline->getBloomBlurImage();
+    catalog.bloomComposite         = pipeline->getBloomCompositeImage();
     catalog.bPostprocessingEnabled = pipeline->isPostprocessingEnabled();
     return catalog;
 }

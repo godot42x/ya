@@ -27,6 +27,14 @@ The first two implementation batches completed the following changes:
 
 The factory still returns the existing shared resource types. Unique ownership and non-owning image-view semantics remain separate migration work and must not be inferred as complete from the unified creation entry.
 
+The first render-intermediate migration also established these boundaries:
+
+- `RenderingInfo::ImageSpec` consumes non-owning `IImage`/`IImageView` references instead of an asset `Texture`.
+- `RenderImage` is the temporary legacy owner for an image and its default view until the RenderGraph registry owns transient resources.
+- BRDF LUT, Deferred SSAO and bloom intermediates now use `RenderImage`.
+- The final postprocess output still crosses the pipeline/App/automation screenshot boundary as `Texture*`; migrate it together with screenshot capture ownership.
+- Shadow sampled views and screenshot scratch resources still use `Texture` wrappers and remain migration work.
+
 ## Buffer Categories
 
 Recommended migration order:

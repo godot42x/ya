@@ -267,9 +267,10 @@ CubeMap2PBRIrradianceMap::ExecuteResult CubeMap2PBRIrradianceMap::execute(const 
             .depthClearValue  = ClearValue(1.0f, 0),
             .colorAttachments = {
                 RenderingInfo::ImageSpec{
-                    .texture = faceTexture.get(),
-                    .loadOp  = EAttachmentLoadOp::Clear,
-                    .storeOp = EAttachmentStoreOp::Store,
+                    .image     = faceTexture->getImage(),
+                    .imageView = faceTexture->getImageView(),
+                    .loadOp    = EAttachmentLoadOp::Clear,
+                    .storeOp   = EAttachmentStoreOp::Store,
                 },
             },
         };

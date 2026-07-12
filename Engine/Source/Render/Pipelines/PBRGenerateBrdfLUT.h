@@ -2,7 +2,7 @@
 #pragma once
 
 #include "Render/Core/Pipeline.h"
-#include "Render/Core/Texture.h"
+#include "Render/Core/RenderImage.h"
 #include "Render/Render.h"
 
 namespace ya
@@ -31,7 +31,7 @@ struct PBRGenerateBrdfLUT
     struct ExecuteContext
     {
         ICommandBuffer* cmdBuf     = nullptr;
-        Texture*        output     = nullptr;
+        RenderImage*    output     = nullptr;
         ClearValue      clearColor = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);
     };
 

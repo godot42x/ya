@@ -33,6 +33,35 @@ constexpr const char* POSTPROCESS_CONFIG_KEY_GAMMA                   = "render.p
 constexpr const char* POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_ENABLE     = "render.postprocess.basic.output.randomGrain";
 constexpr const char* POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_STRENGTH   = "render.postprocess.basic.output.randomGrainStrength";
 
+stdptr<RenderImage> createPostprocessRenderImage(IRender* render,
+                                                 std::string_view label,
+                                                 Extent2D extent,
+                                                 EFormat::T format)
+{
+    if (!render || extent.width == 0 || extent.height == 0) {
+        return nullptr;
+    }
+
+    return createRenderImage(
+        *render->getResourceFactory(),
+        RenderImageDesc{
+            .image = ImageCreateInfo{
+                .label         = std::string(label),
+                .format        = format,
+                .extent        = {.width = extent.width, .height = extent.height, .depth = 1},
+                .mipLevels     = 1,
+                .arrayLayers   = 1,
+                .samples       = ESampleCount::Sample_1,
+                .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                .initialLayout = EImageLayout::Undefined,
+            },
+            .defaultView = ImageViewCreateInfo{
+                .label       = std::string(label) + "_DefaultView",
+                .aspectFlags = EImageAspect::Color,
+            },
+        });
+}
+
 } // namespace
 
 void PostProcessingStage::requestResize(Extent2D extent)
@@ -73,15 +102,7 @@ void PostProcessingStage::recreateOutputTexture(Extent2D extent)
         .isDepth = false,
     });
 
-    _bloomCompositeTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
-        .label   = "BloomCompositeRT",
-        .width   = extent.width,
-        .height  = extent.height,
-        .format  = EFormat::R16G16B16A16_SFLOAT,
-        .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        .samples = ESampleCount::Sample_1,
-        .isDepth = false,
-    });
+    _bloomCompositeImage = createPostprocessRenderImage(_render, "BloomCompositeRT", extent, EFormat::R16G16B16A16_SFLOAT);
 }
 
 void PostProcessingStage::recreateBloomTextures(Extent2D extent)
@@ -90,27 +111,9 @@ void PostProcessingStage::recreateBloomTextures(Extent2D extent)
         return;
     }
 
-    const RenderTextureCreateInfo ci{
-        .label = "BloomRT",
-        .width = extent.width,
-        .height = extent.height,
-        .format = EFormat::R16G16B16A16_SFLOAT,
-        .usage = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        .samples = ESampleCount::Sample_1,
-        .isDepth = false,
-    };
-
-    auto extractCI = ci;
-    extractCI.label = "BloomExtractRT";
-    _bloomExtractTexture = Texture::createRenderTexture(extractCI);
-
-    auto pingCI = ci;
-    pingCI.label = "BloomBlurPingRT";
-    _bloomBlurPingTexture = Texture::createRenderTexture(pingCI);
-
-    auto pongCI = ci;
-    pongCI.label = "BloomBlurPongRT";
-    _bloomBlurPongTexture = Texture::createRenderTexture(pongCI);
+    _bloomExtractImage  = createPostprocessRenderImage(_render, "BloomExtractRT", extent, EFormat::R16G16B16A16_SFLOAT);
+    _bloomBlurPingImage = createPostprocessRenderImage(_render, "BloomBlurPingRT", extent, EFormat::R16G16B16A16_SFLOAT);
+    _bloomBlurPongImage = createPostprocessRenderImage(_render, "BloomBlurPongRT", extent, EFormat::R16G16B16A16_SFLOAT);
 }
 
 void PostProcessingStage::init(const InitDesc& desc)
@@ -178,10 +181,10 @@ void PostProcessingStage::shutdown()
         _postProcessor.reset();
     }
 
-    _bloomExtractTexture.reset();
-    _bloomBlurPingTexture.reset();
-    _bloomBlurPongTexture.reset();
-    _bloomCompositeTexture.reset();
+    _bloomExtractImage.reset();
+    _bloomBlurPingImage.reset();
+    _bloomBlurPongImage.reset();
+    _bloomCompositeImage.reset();
     _postprocessTexture.reset();
     _pendingResizeExtent = {};
     _bResizePending      = false;
@@ -267,20 +270,20 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
         return inputTexture;
     }
 
-    Texture* compositeInput = inputTexture;
-    if (_state.bEnableBloom && _bloomProcessor && _bloomExtractTexture && _bloomBlurPingTexture && _bloomBlurPongTexture) {
-        YA_CORE_ASSERT(_bloomCompositeTexture, "Bloom composite texture should be created with postprocess output");
+    IImageView* compositeInputView = inputTexture->getImageView();
+    if (_state.bEnableBloom && _bloomProcessor && _bloomExtractImage && _bloomBlurPingImage && _bloomBlurPongImage) {
+        YA_CORE_ASSERT(_bloomCompositeImage, "Bloom composite image should be created with postprocess output");
         _bloomProcessor->render(BloomPostprocessing::RenderDesc{
             .cmdBuf = cmdBuf,
-            .sceneTexture = inputTexture,
-            .outputTexture = _bloomCompositeTexture.get(),
-            .bloomExtract = _bloomExtractTexture.get(),
-            .blurPingTexture = _bloomBlurPingTexture.get(),
-            .blurPongTexture = _bloomBlurPongTexture.get(),
+            .sceneImageView = inputTexture->getImageView(),
+            .outputImage = _bloomCompositeImage.get(),
+            .bloomExtract = _bloomExtractImage.get(),
+            .blurPingImage = _bloomBlurPingImage.get(),
+            .blurPongImage = _bloomBlurPongImage.get(),
             .renderExtent = inputExtent,
             .state = &_state,
         });
-        compositeInput = _bloomCompositeTexture.get();
+        compositeInputView = _bloomCompositeImage->getImageView();
     }
 
     cmdBuf->debugBeginLabel("Postprocessing");
@@ -297,9 +300,10 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
         .depthClearValue  = ClearValue(1.0f, 0),
         .colorAttachments = {
             RenderingInfo::ImageSpec{
-                .texture = _postprocessTexture.get(),
-                .loadOp  = EAttachmentLoadOp::Clear,
-                .storeOp = EAttachmentStoreOp::Store,
+                .image     = _postprocessTexture ? _postprocessTexture->getImage() : nullptr,
+                .imageView = _postprocessTexture ? _postprocessTexture->getImageView() : nullptr,
+                .loadOp    = EAttachmentLoadOp::Clear,
+                .storeOp   = EAttachmentStoreOp::Store,
             },
         },
     };
@@ -311,7 +315,7 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
     _postProcessor->render(BasicPostprocessing::RenderDesc{
         .cmdBuf         = cmdBuf,
         .ctx            = ctx,
-        .inputImageView = compositeInput->getImageView(),
+        .inputImageView = compositeInputView,
         .renderExtent   = inputExtent,
         .bOutputIsSRGB  = bOutputIsSRGB,
         .state          = &_state,

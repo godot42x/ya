@@ -107,9 +107,9 @@ struct ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override;
     [[nodiscard]] Texture*       getPostprocessOutputTexture() const override { return _postProcessStage.getOutputTexture(); }
-    [[nodiscard]] Texture*       getBloomExtractTexture() const override { return _postProcessStage.getBloomExtractTexture(); }
-    [[nodiscard]] Texture*       getBloomBlurTexture() const override { return _postProcessStage.getBloomBlurTexture(); }
-    [[nodiscard]] Texture*       getBloomCompositeTexture() const override { return _postProcessStage.getBloomCompositeTexture(); }
+    [[nodiscard]] RenderImage*   getBloomExtractImage() const override { return _postProcessStage.getBloomExtractImage(); }
+    [[nodiscard]] RenderImage*   getBloomBlurImage() const override { return _postProcessStage.getBloomBlurImage(); }
+    [[nodiscard]] RenderImage*   getBloomCompositeImage() const override { return _postProcessStage.getBloomCompositeImage(); }
     [[nodiscard]] bool           isPostprocessingEnabled() const override { return _postProcessStage.isEnabled(); }
 
   private:

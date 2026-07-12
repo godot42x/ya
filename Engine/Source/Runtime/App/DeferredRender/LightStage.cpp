@@ -1,4 +1,5 @@
 #include "LightStage.h"
+#include "Render/Core/RenderImage.h"
 
 #include "Config/ConfigManager.h"
 #include "Core/Profiling/PerfKeys.h"
@@ -95,7 +96,7 @@ void LightStage::setFrameInputs(FrameInputs frameInputs)
     _frameInputs = frameInputs;
 }
 
-void LightStage::setSSAOTexture(Texture* ssaoTexture)
+void LightStage::setSSAOTexture(RenderImage* ssaoTexture)
 {
     if (_ssaoTexture == ssaoTexture) {
         return;
@@ -334,15 +335,15 @@ void LightStage::prepare(const RenderStageContext& ctx)
 
     const auto ssaoImageViewHandle = _ssaoTexture && _ssaoTexture->getImageView() ? _ssaoTexture->getImageView()->getHandle() : ImageViewHandle{};
     if (!_bGBufferDescriptorsInitialized || _lastGBufferFrameBuffer != fb || _lastSSAOImageViewHandle != ssaoImageViewHandle) {
-        auto ssaoBinding = _ssaoTexture
-            ? TextureBinding{.texture = ya::Ptr<Texture>(_ssaoTexture), .sampler = sampler}
-            : TextureBinding{.texture = TextureLibrary::get().getWhiteTexture(), .sampler = sampler};
+        auto* ssaoImageView = _ssaoTexture
+            ? _ssaoTexture->getImageView()
+            : TextureLibrary::get().getWhiteTexture()->getImageView();
         _render->getDescriptorHelper()->updateDescriptorSets({
             IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 0, fb->getColorTexture(0)->getImageView(), sampler.get()),
             IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 1, fb->getColorTexture(1)->getImageView(), sampler.get()),
             IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 2, fb->getColorTexture(2)->getImageView(), sampler.get()),
             IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 3, fb->getColorTexture(3)->getImageView(), sampler.get()),
-            IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 4, ssaoBinding),
+            IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 4, ssaoImageView, sampler.get()),
         });
         _lastGBufferFrameBuffer          = fb;
         _lastSSAOImageViewHandle         = ssaoImageViewHandle;

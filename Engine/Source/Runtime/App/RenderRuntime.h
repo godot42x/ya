@@ -27,6 +27,7 @@ struct Scene;
 struct EditorLayer;
 struct ForwardRenderPipeline;
 struct Texture;
+struct RenderImage;
 struct IRenderTarget;
 struct IImageView;
 struct IRenderPass;
@@ -40,7 +41,7 @@ struct RenderDiagnosticsService;
 struct DeferredPipelineDebugViews
 {
     IRenderTarget* gBufferRT  = nullptr;
-    Texture*       ssaoTexture = nullptr;
+    RenderImage*   ssaoTexture = nullptr;
 };
 
 struct RenderPipelineDebugOutputCatalog
@@ -49,9 +50,9 @@ struct RenderPipelineDebugOutputCatalog
     IRenderTarget* shadowDepthRT          = nullptr;
     IImageView*    shadowDirectionalDepth = nullptr;
     Texture*       postprocessOutput      = nullptr;
-    Texture*       bloomExtract           = nullptr;
-    Texture*       bloomBlur              = nullptr;
-    Texture*       bloomComposite         = nullptr;
+    RenderImage*   bloomExtract           = nullptr;
+    RenderImage*   bloomBlur              = nullptr;
+    RenderImage*   bloomComposite         = nullptr;
     bool           bPostprocessingEnabled = false;
 };
 
@@ -191,9 +192,6 @@ struct RenderRuntime
     [[nodiscard]] const RenderDiagnosticsService& getDiagnosticsService() const { return _diagnostics; }
 
     [[nodiscard]] Texture* getPostprocessOutputTexture() const;
-    [[nodiscard]] Texture* getBloomExtractTexture() const;
-    [[nodiscard]] Texture* getBloomBlurTexture() const;
-    [[nodiscard]] Texture* getBloomCompositeTexture() const;
     [[nodiscard]] Texture* getActiveViewportTexture() const;
     [[nodiscard]] Texture* getPresentationTexture() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;

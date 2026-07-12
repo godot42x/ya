@@ -3,6 +3,7 @@
 #include "Render/Core/Buffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
+#include "Render/Core/RenderImage.h"
 #include "Render/Core/Texture.h"
 #include "Render/Stage/IRenderStage.h"
 
@@ -24,7 +25,7 @@ struct SSAOStage : public IRenderStage
 
     IRender*       _render       = nullptr;
     IRenderTarget* _gBufferRT    = nullptr;
-    Texture*       _targetTexture = nullptr;
+    RenderImage*   _targetTexture = nullptr;
 
     stdptr<IGraphicsPipeline>    _pipeline;
     stdptr<IPipelineLayout>      _pipelineLayout;
@@ -51,7 +52,7 @@ struct SSAOStage : public IRenderStage
 
     SSAOStage() : IRenderStage("SSAO") {}
 
-    void setup(IRenderTarget* gBufferRT, Texture* targetTexture);
+    void setup(IRenderTarget* gBufferRT, RenderImage* targetTexture);
     void refreshPipelineFormat();
     void invalidateInputDescriptors();
 
@@ -63,7 +64,7 @@ struct SSAOStage : public IRenderStage
     void renderSettingsGUI() override;
     void renderTechnicalGUI() override;
 
-    [[nodiscard]] Texture* getOutputTexture() const { return _targetTexture; }
+    [[nodiscard]] RenderImage* getOutputTexture() const { return _targetTexture; }
     [[nodiscard]] float getRadius() const { return _radius; }
     [[nodiscard]] float getBias() const { return _bias; }
     [[nodiscard]] float getPower() const { return _power; }

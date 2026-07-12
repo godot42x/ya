@@ -288,9 +288,10 @@ CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(cons
                 .depthClearValue  = ClearValue(1.0f, 0),
                 .colorAttachments = {
                     RenderingInfo::ImageSpec{
-                        .texture = faceTexture.get(),
-                        .loadOp  = EAttachmentLoadOp::Clear,
-                        .storeOp = EAttachmentStoreOp::Store,
+                        .image     = faceTexture->getImage(),
+                        .imageView = faceTexture->getImageView(),
+                        .loadOp    = EAttachmentLoadOp::Clear,
+                        .storeOp   = EAttachmentStoreOp::Store,
                     },
                 },
             };

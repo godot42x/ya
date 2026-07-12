@@ -13,6 +13,7 @@ namespace ya
 struct ICommandBuffer;
 struct IRenderTarget;
 struct IImageView;
+struct RenderImage;
 struct Texture;
 struct RenderFrameData;
 
@@ -73,9 +74,9 @@ struct IRenderPipelineDebugOutputs
     [[nodiscard]] virtual IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const = 0;
 
     [[nodiscard]] virtual Texture* getPostprocessOutputTexture() const = 0;
-    [[nodiscard]] virtual Texture* getBloomExtractTexture() const      = 0;
-    [[nodiscard]] virtual Texture* getBloomBlurTexture() const         = 0;
-    [[nodiscard]] virtual Texture* getBloomCompositeTexture() const    = 0;
+    [[nodiscard]] virtual RenderImage* getBloomExtractImage() const    = 0;
+    [[nodiscard]] virtual RenderImage* getBloomBlurImage() const       = 0;
+    [[nodiscard]] virtual RenderImage* getBloomCompositeImage() const  = 0;
     [[nodiscard]] virtual bool     isPostprocessingEnabled() const     = 0;
 };
 

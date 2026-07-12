@@ -202,7 +202,8 @@ void DirectionalShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFra
     if (!_depthTexture || !payload.frameData) return;
 
     RenderingInfo::ImageSpec depthSpec{
-        .texture       = _depthTexture.get(),
+        .image         = _depthTexture ? _depthTexture->getImage() : nullptr,
+        .imageView     = _depthTexture ? _depthTexture->getImageView() : nullptr,
         .loadOp        = EAttachmentLoadOp::Clear,
         .storeOp       = EAttachmentStoreOp::Store,
         .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
