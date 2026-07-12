@@ -367,14 +367,21 @@ void DeferredRenderPipeline::initStages()
 
     _lightStage = ya::makeShared<LightStage>();
     _lightStage->setup(_gBufferStage.get(), _gBufferRT.get());
-    _lightStage->setEnvironmentLightingResources(_environmentLightingDSL, _getSceneEnvironmentLightingDescriptorSet);
+    _lightStage->setEnvironmentLightingInput(LightStage::EnvironmentLightingInput{
+        .environmentLightingDSL = _environmentLightingDSL,
+        .getSceneEnvironmentLightingDescriptorSet = _getSceneEnvironmentLightingDescriptorSet,
+    });
     _lightStage->setSSAOTexture(_ssaoTexture.get());
     _lightStage->init(_render);
     syncShadowSettings();
 
     _overlayStage = ya::makeShared<ViewportOverlayStage>();
-    _overlayStage->setFrameServices(_getSceneSkyboxDescriptorSet, _getDebugRenderSystem);
-    _overlayStage->setSceneServices(_getActiveScene, _getResourceResolveSystem);
+    _overlayStage->setServices(ViewportOverlayStage::Services{
+        .getSceneSkyboxDescriptorSet = _getSceneSkyboxDescriptorSet,
+        .getDebugRenderSystem = _getDebugRenderSystem,
+        .getActiveScene = _getActiveScene,
+        .getResourceResolveSystem = _getResourceResolveSystem,
+    });
     _overlayStage->init(_render);
 }
 

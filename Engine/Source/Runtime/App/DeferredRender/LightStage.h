@@ -26,6 +26,12 @@ struct Texture;
 /// and the environment lighting DS from RenderRuntime (set 2).
 struct LightStage : public IRenderStage
 {
+    struct EnvironmentLightingInput
+    {
+        stdptr<IDescriptorSetLayout> environmentLightingDSL = nullptr;
+        std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
+    };
+
     using PushConstant = slang_types::DeferredRender::LightPass::PushConstants;
     using LightData    = slang_types::DeferredRender::LightPass::LightData;
 
@@ -77,8 +83,7 @@ struct LightStage : public IRenderStage
     /// @param gBufferStage  Provides frame+light DSL and per-flight DS
     /// @param gBufferRT     Provides GBuffer color textures for sampling
     void setup(GBufferStage* gBufferStage, IRenderTarget* gBufferRT);
-    void setEnvironmentLightingResources(stdptr<IDescriptorSetLayout> environmentLightingDSL,
-                                         std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet);
+    void setEnvironmentLightingInput(EnvironmentLightingInput input);
     void setSSAOTexture(Texture* ssaoTexture);
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecularIBL);

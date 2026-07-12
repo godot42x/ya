@@ -22,6 +22,14 @@ struct Scene;
 /// Overlay: push constant only (view/proj/model/colorType), no UBO/DS.
 struct ViewportOverlayStage : public IRenderStage
 {
+    struct Services
+    {
+        std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet;
+        std::function<DebugRenderSystem&()>        getDebugRenderSystem;
+        std::function<Scene*()>                    getActiveScene;
+        std::function<ResourceResolveSystem*()>    getResourceResolveSystem;
+    };
+
     struct SkyboxFrameUBO
     {
         glm::mat4 projection;
@@ -75,10 +83,7 @@ struct ViewportOverlayStage : public IRenderStage
     void execute(const RenderStageContext& ctx) override;
     void renderGUI() override;
     void refreshPipelineFormats(const IRenderTarget* viewportRT);
-    void setFrameServices(std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet,
-                          std::function<DebugRenderSystem&()> getDebugRenderSystem);
-    void setSceneServices(std::function<Scene*()> getActiveScene,
-                          std::function<ResourceResolveSystem*()> getResourceResolveSystem);
+    void setServices(Services services);
 
   private:
     void initSkybox();

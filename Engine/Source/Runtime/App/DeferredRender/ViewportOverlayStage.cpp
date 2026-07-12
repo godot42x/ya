@@ -52,18 +52,12 @@ void drawDebugSkinningItems(DebugSkinning&                     debugSkinning,
 
 } // namespace
 
-void ViewportOverlayStage::setFrameServices(std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet,
-                                            std::function<DebugRenderSystem&()> getDebugRenderSystem)
+void ViewportOverlayStage::setServices(Services services)
 {
-    _getSceneSkyboxDescriptorSet = std::move(getSceneSkyboxDescriptorSet);
-    _getDebugRenderSystem        = std::move(getDebugRenderSystem);
-}
-
-void ViewportOverlayStage::setSceneServices(std::function<Scene*()> getActiveScene,
-                                            std::function<ResourceResolveSystem*()> getResourceResolveSystem)
-{
-    _getActiveScene           = std::move(getActiveScene);
-    _getResourceResolveSystem = std::move(getResourceResolveSystem);
+    _getSceneSkyboxDescriptorSet = std::move(services.getSceneSkyboxDescriptorSet);
+    _getDebugRenderSystem        = std::move(services.getDebugRenderSystem);
+    _getActiveScene              = std::move(services.getActiveScene);
+    _getResourceResolveSystem    = std::move(services.getResourceResolveSystem);
 }
 
 void ViewportOverlayStage::refreshPipelineFormats(const IRenderTarget* viewportRT)

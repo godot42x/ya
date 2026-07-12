@@ -84,11 +84,10 @@ void LightStage::setup(GBufferStage* gBufferStage, IRenderTarget* gBufferRT)
     }
 }
 
-void LightStage::setEnvironmentLightingResources(stdptr<IDescriptorSetLayout> environmentLightingDSL,
-                                                 std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet)
+void LightStage::setEnvironmentLightingInput(EnvironmentLightingInput input)
 {
-    _environmentLightingDSL                 = std::move(environmentLightingDSL);
-    _getSceneEnvironmentLightingDescriptorSet = std::move(getSceneEnvironmentLightingDescriptorSet);
+    _environmentLightingDSL = std::move(input.environmentLightingDSL);
+    _getSceneEnvironmentLightingDescriptorSet = std::move(input.getSceneEnvironmentLightingDescriptorSet);
 }
 
 void LightStage::setSSAOTexture(Texture* ssaoTexture)
