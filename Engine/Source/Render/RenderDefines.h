@@ -3,7 +3,7 @@
 #include "Core/Base.h"
 
 #include "Core/Handle.h"
-#include "reflect.cc/enum"
+#include "reflects-core/enum.h"
 
 #include <glm/glm.hpp>
 #include <type_traits>
@@ -151,7 +151,13 @@ enum T
 
     ENUM_MAX,
 };
-GENERATED_ENUM_MISC(T);
+
+inline const std::string &toString(T value)
+{
+    auto *enumInfo = EnumRegistry::instance().getEnum(::ya::type_index_v<T>);
+    YA_CORE_ASSERT(enumInfo != nullptr, "EVertexAttributeFormat enum is not registered");
+    return enumInfo->valueToName.at(static_cast<int64_t>(value));
+}
 extern std::size_t T2Size(T type);
 }; // namespace EVertexAttributeFormat
 
@@ -198,7 +204,12 @@ inline T fromString(std::string_view str)
 }
 
 
-GENERATED_ENUM_MISC_WITH_RANGE(T, Mesh);
+inline const std::string &toString(T value)
+{
+    auto *enumInfo = EnumRegistry::instance().getEnum(::ya::type_index_v<T>);
+    YA_CORE_ASSERT(enumInfo != nullptr, "EShaderStage enum is not registered");
+    return enumInfo->valueToName.at(static_cast<int64_t>(value));
+}
 
 
 
@@ -1598,4 +1609,34 @@ YA_REFLECT_ENUM_VALUE(Repeat)
 YA_REFLECT_ENUM_VALUE(MirroredRepeat)
 YA_REFLECT_ENUM_VALUE(ClampToEdge)
 YA_REFLECT_ENUM_VALUE(ClampToBorder)
+YA_REFLECT_ENUM_END()
+
+YA_REFLECT_ENUM_BEGIN(ya::EVertexAttributeFormat::T)
+YA_REFLECT_ENUM_VALUE(Uint32)
+YA_REFLECT_ENUM_VALUE(Uint32x2)
+YA_REFLECT_ENUM_VALUE(Uint32x3)
+YA_REFLECT_ENUM_VALUE(Uint32x4)
+YA_REFLECT_ENUM_VALUE(Int32)
+YA_REFLECT_ENUM_VALUE(Int32x2)
+YA_REFLECT_ENUM_VALUE(Int32x3)
+YA_REFLECT_ENUM_VALUE(Int32x4)
+YA_REFLECT_ENUM_VALUE(Float16)
+YA_REFLECT_ENUM_VALUE(Float16x2)
+YA_REFLECT_ENUM_VALUE(Float16x3)
+YA_REFLECT_ENUM_VALUE(Float16x4)
+YA_REFLECT_ENUM_VALUE(Float32)
+YA_REFLECT_ENUM_VALUE(Float32x2)
+YA_REFLECT_ENUM_VALUE(Float32x3)
+YA_REFLECT_ENUM_VALUE(Float32x4)
+YA_REFLECT_ENUM_END()
+
+YA_REFLECT_ENUM_BEGIN(ya::EShaderStage::T)
+YA_REFLECT_ENUM_VALUE(Vertex)
+YA_REFLECT_ENUM_VALUE(Geometry)
+YA_REFLECT_ENUM_VALUE(Fragment)
+YA_REFLECT_ENUM_VALUE(Compute)
+YA_REFLECT_ENUM_VALUE(Task)
+YA_REFLECT_ENUM_VALUE(Mesh)
+YA_REFLECT_ENUM_VALUE(Count)
+YA_REFLECT_ENUM_VALUE(All)
 YA_REFLECT_ENUM_END()

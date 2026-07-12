@@ -114,7 +114,6 @@ do
 
     add_deps("utility.cc")
     add_deps("log.cc")
-    add_deps("reflect.cc")
     add_deps("reflects-core")
     add_deps("imgui-local")
     add_deps("imguizmo-local")

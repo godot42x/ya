@@ -592,7 +592,7 @@ bool VulkanPipeline::createPipelineInternal()
                 YA_CORE_ASSERT(format.has_value(),
                                "Unsupported reflected vertex input '{}': type={}, basetype={}, bitwidth={}, vecsize={}",
                                input.name,
-                               ShaderReflection::DataType2Strings[input.type],
+                               ShaderReflection::toString(input.type),
                                input.basetype,
                                input.bitwidth,
                                input.vecsize);

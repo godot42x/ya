@@ -14,7 +14,7 @@
 #include "../Core/Log.h"
 
 #include "Core/Profiling/Instrumentor.h"
-#include "reflect.cc/enum"
+#include "reflects-core/enum.h"
 #include <spirv_cross/spirv_cross.hpp>
 #include <utility>
 
@@ -64,7 +64,12 @@ enum class DataType
     ENUM_MAX,
 };
 
-GENERATED_ENUM_MISC(DataType);
+inline const std::string &toString(DataType value)
+{
+    auto *enumInfo = EnumRegistry::instance().getEnum(::ya::type_index_v<DataType>);
+    YA_CORE_ASSERT(enumInfo != nullptr, "ShaderReflection::DataType enum is not registered");
+    return enumInfo->valueToName.at(static_cast<int64_t>(value));
+}
 
 struct StageIOData
 {
@@ -475,3 +480,19 @@ class ShaderProcessorFactory
 };
 
 } // namespace ya
+
+YA_REFLECT_ENUM_BEGIN(ya::ShaderReflection::DataType)
+YA_REFLECT_ENUM_VALUE(Unknown)
+YA_REFLECT_ENUM_VALUE(Bool)
+YA_REFLECT_ENUM_VALUE(Int)
+YA_REFLECT_ENUM_VALUE(UInt)
+YA_REFLECT_ENUM_VALUE(Float)
+YA_REFLECT_ENUM_VALUE(Vec2)
+YA_REFLECT_ENUM_VALUE(Vec3)
+YA_REFLECT_ENUM_VALUE(Vec4)
+YA_REFLECT_ENUM_VALUE(Mat3)
+YA_REFLECT_ENUM_VALUE(Mat4)
+YA_REFLECT_ENUM_VALUE(Sampler2D)
+YA_REFLECT_ENUM_VALUE(SamplerCube)
+YA_REFLECT_ENUM_VALUE(Sampler3D)
+YA_REFLECT_ENUM_END()

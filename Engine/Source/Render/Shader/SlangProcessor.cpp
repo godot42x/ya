@@ -279,7 +279,7 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
 
         std::vector<ir_t> spv;
         if (!compileToSpv(source, stagePath, entryName, stage, ci.defines, spv)) {
-            YA_CORE_ERROR("[Slang] Failed to compile stage {} of: {}", EShaderStage::T2Strings[stage], stagePath);
+            YA_CORE_ERROR("[Slang] Failed to compile stage {} of: {}", EShaderStage::toString(stage), stagePath);
             return false;
         }
 
@@ -429,7 +429,7 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
 
             if (candidate.required) {
                 YA_CORE_ERROR("[Slang] Failed to compile required stage {} for: {}",
-                              EShaderStage::T2Strings[candidate.stage],
+                              EShaderStage::toString(candidate.stage),
                               shaderName);
                 return {};
             }
@@ -443,7 +443,7 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
 
     for (const auto& [stage, spirv] : ret) {
         if (!shader_internal::isValidSpirvModule(spirv)) {
-            YA_CORE_ERROR("[Slang] Invalid SPIR-V magic for stage {}: {}", EShaderStage::T2Strings[stage], cacheKey);
+            YA_CORE_ERROR("[Slang] Invalid SPIR-V magic for stage {}: {}", EShaderStage::toString(stage), cacheKey);
             YA_CORE_ASSERT(false, "SPIR-V validation failed");
         }
     }

@@ -1,7 +1,7 @@
 #pragma once
 #include "Core/Base.h"
 
-#include "reflect.cc/enum"
+#include "reflects-core/enum.h"
 
 #include "KeyCode.h"
 
@@ -68,7 +68,13 @@ enum T
 
     ENUM_MAX
 };
-GENERATED_ENUM_MISC(T);
+
+inline const std::string &toString(T value)
+{
+    auto *enumInfo = EnumRegistry::instance().getEnum(::ya::type_index_v<T>);
+    YA_CORE_ASSERT(enumInfo != nullptr, "EEvent enum is not registered");
+    return enumInfo->valueToName.at(static_cast<int64_t>(value));
+}
 } // namespace EEvent
 
 
@@ -412,3 +418,26 @@ class ENGINE_API MouseButtonReleasedEvent : public MouseButtonEvent
 } // namespace ya
 
 inline std::ostream &operator<<(std::ostream &os, const ya::Event &ev) { return os << ev.toString(); }
+
+YA_REFLECT_ENUM_BEGIN(ya::EEvent::T)
+YA_REFLECT_ENUM_VALUE(None)
+YA_REFLECT_ENUM_VALUE(WindowClose)
+YA_REFLECT_ENUM_VALUE(WindowResize)
+YA_REFLECT_ENUM_VALUE(WindowRestore)
+YA_REFLECT_ENUM_VALUE(WindowMinimize)
+YA_REFLECT_ENUM_VALUE(WindowFocus)
+YA_REFLECT_ENUM_VALUE(WindowFocusLost)
+YA_REFLECT_ENUM_VALUE(WindowMoved)
+YA_REFLECT_ENUM_VALUE(AppTick)
+YA_REFLECT_ENUM_VALUE(AppUpdate)
+YA_REFLECT_ENUM_VALUE(AppRender)
+YA_REFLECT_ENUM_VALUE(AppQuit)
+YA_REFLECT_ENUM_VALUE(KeyPressed)
+YA_REFLECT_ENUM_VALUE(KeyReleased)
+YA_REFLECT_ENUM_VALUE(KeyTyped)
+YA_REFLECT_ENUM_VALUE(MouseMoved)
+YA_REFLECT_ENUM_VALUE(MouseScrolled)
+YA_REFLECT_ENUM_VALUE(MouseButtonPressed)
+YA_REFLECT_ENUM_VALUE(MouseButtonReleased)
+YA_REFLECT_ENUM_VALUE(EventTypeCount)
+YA_REFLECT_ENUM_END()

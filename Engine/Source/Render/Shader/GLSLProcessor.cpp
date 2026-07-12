@@ -513,8 +513,8 @@ std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderD
 
     for (const auto& [stage, spirv] : ret) {
         if (!shader_internal::isValidSpirvModule(spirv)) {
-            YA_CORE_ERROR("Invalid SPIR-V module for stage {}: Missing or incorrect magic number.", EShaderStage::T2Strings[stage]);
-            YA_CORE_ASSERT(false, "SPIR-V validation failed for stage {}", EShaderStage::T2Strings[stage]);
+            YA_CORE_ERROR("Invalid SPIR-V module for stage {}: Missing or incorrect magic number.", EShaderStage::toString(stage));
+            YA_CORE_ASSERT(false, "SPIR-V validation failed for stage {}", EShaderStage::toString(stage));
         }
     }
 

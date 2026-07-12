@@ -129,7 +129,7 @@ ShaderResources reflectSpirvCross(EShaderStage::T stage, const std::vector<uint3
     resources.spirvResources = spirvResources;
 
     YA_CORE_TRACE("===============================================================================");
-    YA_CORE_TRACE("ShaderReflection:reflectSpirvCross {} -> {}", debugName, EShaderStage::T2Strings[stage]);
+    YA_CORE_TRACE("ShaderReflection:reflectSpirvCross {} -> {}", debugName, EShaderStage::toString(stage));
     YA_CORE_TRACE("\t {} uniform buffers ", spirvResources.uniform_buffers.size());
     YA_CORE_TRACE("\t {} storage buffers ", spirvResources.storage_buffers.size());
     YA_CORE_TRACE("\t {} stage inputs ", spirvResources.stage_inputs.size());
@@ -165,7 +165,7 @@ ShaderResources reflectSpirvCross(EShaderStage::T stage, const std::vector<uint3
                       offset,
                       alignedOffset,
                       typeSize,
-                      DataType2Strings[inputData.type],
+                      toString(inputData.type),
                       type);
     }
 
@@ -186,7 +186,7 @@ ShaderResources reflectSpirvCross(EShaderStage::T stage, const std::vector<uint3
         outputData.bitwidth = type.width;
         resources.outputs.push_back(outputData);
 
-        YA_CORE_TRACE("\t(name: {0}, location: {1}, offset: {2}, type: {3})", output.name, location, offset, DataType2Strings[outputData.type]);
+        YA_CORE_TRACE("\t(name: {0}, location: {1}, offset: {2}, type: {3})", output.name, location, offset, toString(outputData.type));
     }
 
     YA_CORE_TRACE("Uniform buffers:");
@@ -227,7 +227,7 @@ ShaderResources reflectSpirvCross(EShaderStage::T stage, const std::vector<uint3
                           memberName,
                           memberOffset,
                           memberSize,
-                          DataType2Strings[member.type]);
+                          toString(member.type));
         }
 
         resources.uniformBuffers.push_back(uniformBuffer);
@@ -255,7 +255,7 @@ ShaderResources reflectSpirvCross(EShaderStage::T stage, const std::vector<uint3
         sampledImage.arraySize = arraySize;
         resources.sampledImages.push_back(sampledImage);
 
-        YA_CORE_TRACE("\tSampled Image: {0} (binding: {1}, set: {2}, type: {3}, arraySize: {4})", resource.name, binding, set, DataType2Strings[sampledImage.type], arraySize);
+        YA_CORE_TRACE("\tSampled Image: {0} (binding: {1}, set: {2}, type: {3}, arraySize: {4})", resource.name, binding, set, toString(sampledImage.type), arraySize);
     }
 
     YA_CORE_TRACE("Push constant buffers:");
