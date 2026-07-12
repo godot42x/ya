@@ -6,6 +6,7 @@
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/FrameBuffer.h"
 #include "Render/Core/IRenderTarget.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
 #include "Resource/Texture/TextureLibrary.h"
 
@@ -167,7 +168,7 @@ void SSAOStage::init(IRender* render)
     });
 
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _frameUBO[i] = IBuffer::create(_render, BufferCreateInfo{
+        _frameUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
             .label       = std::format("Deferred_SSAO_Frame_UBO_{}", i),
             .usage       = EBufferUsage::UniformBuffer,
             .size        = sizeof(FrameData),

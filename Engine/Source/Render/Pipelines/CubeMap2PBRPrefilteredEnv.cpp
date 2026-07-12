@@ -1,4 +1,5 @@
 #include "CubeMap2PBRPrefilteredEnv.h"
+#include "Render/Core/RenderResourceFactory.h"
 
 #include "Core/Math/Math.h"
 #include "Render/Render.h"
@@ -87,7 +88,7 @@ void CubeMap2PBRPrefilteredEnv::init(IRender* render)
 
     _pipeline       = IGraphicsPipeline::create(_render);
     _descriptorPool = IDescriptorPool::create(_render, makePrefilterDescriptorPoolCreateInfo());
-    _inputSampler   = Sampler::create(
+    _inputSampler   = _render->getResourceFactory()->createSampler(
         SamplerDesc{
             .label        = "CubeMap2PBRPrefilterEnv_InputSampler",
             .addressModeU = ESamplerAddressMode::ClampToEdge,

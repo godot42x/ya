@@ -1,6 +1,7 @@
 #include "ShadowMapResources.h"
 
 #include "Render/Core/Texture.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
 #include "Runtime/App/Common/Shadow/Common/ShadowViewBuilder.h"
 
@@ -34,7 +35,7 @@ void ShadowMapResources::init(IRender* render, const ShadowMapResourceDesc& desc
     });
     YA_CORE_ASSERT(renderTarget, "Failed to create shadow render target");
 
-    sampler = Sampler::create(SamplerDesc{
+    sampler = render->getResourceFactory()->createSampler(SamplerDesc{
         .label        = std::string(desc.samplerLabel),
         .minFilter    = EFilter::Linear,
         .magFilter    = EFilter::Linear,

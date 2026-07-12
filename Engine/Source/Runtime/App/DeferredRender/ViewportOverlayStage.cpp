@@ -10,6 +10,7 @@
 #include "ECS/System/ResourceResolveSystem.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Core/IRenderTarget.h"
+#include "Render/Core/RenderResourceFactory.h"
 
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 
@@ -174,7 +175,7 @@ void ViewportOverlayStage::initSkybox()
 
     SkyboxFrameUBO initialData{};
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _skyboxFrameUBO[i] = IBuffer::create(_render, BufferCreateInfo{
+        _skyboxFrameUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
                                                           .label       = std::format("SkyboxOverlay_Frame_UBO_{}", i),
                                                           .usage       = EBufferUsage::UniformBuffer,
                                                           .size        = sizeof(SkyboxFrameUBO),

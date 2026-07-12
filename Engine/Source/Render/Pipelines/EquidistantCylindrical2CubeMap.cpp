@@ -1,4 +1,5 @@
 #include "EquidistantCylindrical2CubeMap.h"
+#include "Render/Core/RenderResourceFactory.h"
 
 #include "Render/Render.h"
 
@@ -75,7 +76,7 @@ void EquidistantCylindrical2CubeMap::init(IRender* render)
 
     _pipeline       = IGraphicsPipeline::create(_render);
     _descriptorPool = IDescriptorPool::create(_render, makeDescriptorPoolCreateInfo());
-    _inputSampler   = Sampler::create(
+    _inputSampler   = _render->getResourceFactory()->createSampler(
         SamplerDesc{
               .label        = "EquidistantCylindrical2CubeMap_InputSampler",
               .addressModeU = ESamplerAddressMode::Repeat,

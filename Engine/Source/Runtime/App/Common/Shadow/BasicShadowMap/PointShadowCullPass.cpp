@@ -3,6 +3,7 @@
 #include "Core/Profiling/Instrumentor.h"
 
 #include "Render/Core/CommandBuffer.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
 
 #include <format>
@@ -79,7 +80,7 @@ void PointShadowCullPass::ensureCapacity(uint32_t bucketCount)
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
         auto& flight = _perFlight[i];
 
-        flight.faceFrustumBuffer = IBuffer::create(_render, BufferCreateInfo{
+        flight.faceFrustumBuffer = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
             .label       = std::format("PointShadowCull_Frustum_{}", i),
             .usage       = EBufferUsage::StorageBuffer,
             .size        = frustumSize,
@@ -87,13 +88,13 @@ void PointShadowCullPass::ensureCapacity(uint32_t bucketCount)
         });
         // Host-visible: CPU writes the static fields once per frame; if the
         // compute path is active it atomically updates instanceCount on top.
-        flight.drawCommandBuffer = IBuffer::create(_render, BufferCreateInfo{
+        flight.drawCommandBuffer = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
             .label       = std::format("PointShadowCull_DrawCmd_{}", i),
             .usage       = EBufferUsage::StorageBuffer | EBufferUsage::IndirectBuffer,
             .size        = cmdSize,
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
-        flight.visibleInstancesBuf = IBuffer::create(_render, BufferCreateInfo{
+        flight.visibleInstancesBuf = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
             .label       = std::format("PointShadowCull_VisInst_{}", i),
             .usage       = EBufferUsage::StorageBuffer,
             .size        = visibleBytes,

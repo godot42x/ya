@@ -1,6 +1,7 @@
 #include "DebugPrimitives.h"
 
 #include "Core/Math/Math.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 
 #include "ImGuiHelper.h"
@@ -227,7 +228,7 @@ void DebugPrimitives::initFrameResources()
 
     FrameUBO initialData{};
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _frameUBO[i] = IBuffer::create(_render, BufferCreateInfo{
+        _frameUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
                                                    .label       = std::format("DebugPrimitive_Frame_UBO_{}", i),
                                                    .usage       = EBufferUsage::UniformBuffer,
                                                    .size        = sizeof(FrameUBO),
@@ -312,7 +313,7 @@ void DebugPrimitives::ensureLineBufferCapacity(uint32_t requiredVertexCount)
     }
 
     _lineVertexCapacity = std::max(requiredVertexCount, MAX_LINE_VERTICES);
-    _lineVertexBuffer   = IBuffer::create(_render, BufferCreateInfo{
+    _lineVertexBuffer   = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
         .label       = "DebugPrimitiveLineVertexBuffer",
         .usage       = EBufferUsage::VertexBuffer,
         .size        = static_cast<uint32_t>(sizeof(LineVertex) * _lineVertexCapacity),

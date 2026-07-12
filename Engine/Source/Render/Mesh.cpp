@@ -1,5 +1,6 @@
 #include "Mesh.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Runtime/App/App.h"
 
 namespace ya
@@ -22,8 +23,7 @@ Mesh::Mesh(const EngineMeshData& meshData)
     _vertexCount = static_cast<uint32_t>(meshData.vertices.size());
     _indexCount  = static_cast<uint32_t>(meshData.indices.size());
 
-    _vertexBuffer = IBuffer::create(
-        render,
+    _vertexBuffer = render->getResourceFactory()->createBuffer(
         {
             .label       = _name.empty() ? _name : std::format("{}_VertexBuffer", _name),
             .usage       = EBufferUsage::VertexBuffer,
@@ -32,8 +32,7 @@ Mesh::Mesh(const EngineMeshData& meshData)
             .memoryUsage = EMemoryUsage::GpuOnly,
         });
 
-    _indexBuffer = IBuffer::create(
-        render,
+    _indexBuffer = render->getResourceFactory()->createBuffer(
         {
             .label       = _name.empty() ? _name : std::format("{}_IndexBuffer", _name),
             .usage       = EBufferUsage::IndexBuffer,
@@ -43,8 +42,7 @@ Mesh::Mesh(const EngineMeshData& meshData)
         });
 
     if (!meshData.skeletonVertices.empty()) {
-        _optVertexBuffers.push_back(IBuffer::create(
-            render,
+        _optVertexBuffers.push_back(render->getResourceFactory()->createBuffer(
             {
                 .label       = _name.empty() ? _name : std::format("{}_VertexBuffer_Skeleton", _name),
                 .usage       = EBufferUsage::VertexBuffer,

@@ -11,8 +11,6 @@
 namespace ya
 {
 
-struct IRender;
-
 // Buffer usage flags (backend-agnostic)
 enum class EBufferUsage : uint32_t
 {
@@ -111,9 +109,6 @@ struct IBuffer
 
     // Get buffer name/label
     virtual const std::string &getName() const = 0;
-
-    // Factory method
-    static std::shared_ptr<IBuffer> create(IRender *render, const BufferCreateInfo &ci);
 
   protected:
     IBuffer()                            = default;

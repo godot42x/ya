@@ -7,6 +7,7 @@
 #include "Runtime/App/Common/Shadow/Common/ShadowDrawHelper.h"
 
 #include "Render/Core/CommandBuffer.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Mesh.h"
 #include "Render/RenderFrameData.h"
 #include "Render/Render.h"
@@ -118,7 +119,7 @@ void DirectionalShadowPass::init(IRender* render, Extent2D shadowExtent)
     FrameUBO initialData{};
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
         auto& flight = _perFlight[i];
-        flight.frameUBO = IBuffer::create(_render, BufferCreateInfo{
+        flight.frameUBO = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
             .label       = std::format("DirectionalShadow_Frame_UBO_{}", i),
             .usage       = EBufferUsage::UniformBuffer,
             .size        = sizeof(FrameUBO),
@@ -259,7 +260,7 @@ void DirectionalShadowPass::ensureSkinningCapacity(uint32_t paletteCount)
     const uint32_t bufferSize = _skinningCapacity * sizeof(RenderSkinningPalette);
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
         auto& flight = _perFlight[i];
-        flight.skinningSSBO = IBuffer::create(_render, BufferCreateInfo{
+        flight.skinningSSBO = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
             .label       = std::format("DirectionalShadow_Skinning_SSBO_{}", i),
             .usage       = EBufferUsage::StorageBuffer,
             .size        = bufferSize,

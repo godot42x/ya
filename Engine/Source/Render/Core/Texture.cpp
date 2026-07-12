@@ -11,6 +11,7 @@
 
 #include "Render/Core/Buffer.h"
 #include "Render/Core/Image.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Core/TextureFactory.h"
 #include "Render/Render.h"
 
@@ -294,8 +295,7 @@ std::shared_ptr<Texture> Texture::createSolidCubeMap(const ColorU8_t& color, con
         return nullptr;
     }
 
-    std::shared_ptr<IBuffer> stagingBuffer = IBuffer::create(
-        render,
+    std::shared_ptr<IBuffer> stagingBuffer = render->getResourceFactory()->createBuffer(
         BufferCreateInfo{
             .label       = std::format("StagingBuffer_CubeMap_{}", texture->_label),
             .usage       = EBufferUsage::TransferSrc,
@@ -488,8 +488,7 @@ void Texture::initFromData(const void* pixels,
         return;
     }
 
-    std::shared_ptr<IBuffer> stagingBuffer = IBuffer::create(
-        render,
+    std::shared_ptr<IBuffer> stagingBuffer = render->getResourceFactory()->createBuffer(
         ya::BufferCreateInfo{
             .label       = std::format("StagingBuffer_Texture_{}", _filepath.empty() ? _label : _filepath),
             .usage       = EBufferUsage::TransferSrc,
@@ -628,8 +627,7 @@ void Texture::initFallbackTexture(const void* pixels, size_t dataSize, uint32_t 
         return;
     }
 
-    std::shared_ptr<IBuffer> stagingBuffer = IBuffer::create(
-        render,
+    std::shared_ptr<IBuffer> stagingBuffer = render->getResourceFactory()->createBuffer(
         ya::BufferCreateInfo{
             .label       = std::format("StagingBuffer_Fallback_{}", _label),
             .usage       = EBufferUsage::TransferSrc,
@@ -740,8 +738,7 @@ void Texture::initCubeMapFromMemory(const CubeMapMemoryCreateInfo& ci)
         }
     }
 
-    std::shared_ptr<IBuffer> stagingBuffer = IBuffer::create(
-        render,
+    std::shared_ptr<IBuffer> stagingBuffer = render->getResourceFactory()->createBuffer(
         BufferCreateInfo{
             .label       = std::format("StagingBuffer_CubeMap_{}", _label),
             .usage       = EBufferUsage::TransferSrc,

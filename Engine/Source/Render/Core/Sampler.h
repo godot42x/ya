@@ -17,8 +17,6 @@ struct Sampler : public plat_base<Sampler>
 {
     SamplerDesc _desc;
 
-    static stdptr<Sampler> create(const SamplerDesc &desc);
-
     /**
      * @brief Get the platform-specific handle for this sampler
      * @return void* Platform handle (e.g., VkSampler for Vulkan)

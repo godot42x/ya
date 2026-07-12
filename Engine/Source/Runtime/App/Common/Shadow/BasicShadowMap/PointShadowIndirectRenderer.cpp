@@ -3,6 +3,7 @@
 #include "Core/Profiling/Instrumentor.h"
 
 #include "Render/Core/CommandBuffer.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Mesh.h"
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
@@ -363,8 +364,7 @@ void PointShadowIndirectRenderer::ensureInstanceCapacity(uint32_t requiredCount)
 
     const uint32_t bufferSize = _instanceCapacity * static_cast<uint32_t>(sizeof(PointShadowInstanceData));
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _perFlight[i].instanceBuffer = IBuffer::create(
-            _render,
+        _perFlight[i].instanceBuffer = _render->getResourceFactory()->createBuffer(
             BufferCreateInfo{
                 .label       = std::format("PointShadow_Instance_{}", i),
                 .usage       = EBufferUsage::StorageBuffer,

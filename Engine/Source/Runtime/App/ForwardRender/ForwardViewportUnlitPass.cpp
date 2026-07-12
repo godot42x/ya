@@ -2,6 +2,7 @@
 
 #include "Render/Core/Buffer.h"
 #include "Render/Core/IRenderTarget.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Render.h"
 
@@ -184,7 +185,7 @@ void ForwardViewportUnlitPass::initUnlit(const InitDesc& desc)
     _unlitFrameDSP->allocateDescriptorSets(_unlitFrameDSL, UNLIT_FRAME_SLOTS, sets);
     for (uint32_t i = 0; i < UNLIT_FRAME_SLOTS; ++i) {
         _unlitFrameDSs[i]  = sets[i];
-        _unlitFrameUBOs[i] = IBuffer::create(_render, BufferCreateInfo{
+        _unlitFrameUBOs[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
             .label       = std::format("FwdUnlit_Frame_UBO_{}", i),
             .usage       = EBufferUsage::UniformBuffer,
             .size        = sizeof(UnlitFrameUBO),

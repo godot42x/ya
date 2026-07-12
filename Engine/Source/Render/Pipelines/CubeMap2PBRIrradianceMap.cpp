@@ -1,4 +1,5 @@
 #include "CubeMap2PBRIrradianceMap.h"
+#include "Render/Core/RenderResourceFactory.h"
 
 #include "Core/Math/Math.h"
 #include "Render/Render.h"
@@ -68,7 +69,7 @@ void CubeMap2PBRIrradianceMap::init(IRender* render)
 
     _pipeline       = IGraphicsPipeline::create(_render);
     _descriptorPool = IDescriptorPool::create(_render, _dspCI);
-    _inputSampler   = Sampler::create(
+    _inputSampler   = _render->getResourceFactory()->createSampler(
         SamplerDesc{
             .label        = "CubeMap2PBRIrradianceMap_InputSampler",
             .addressModeU = ESamplerAddressMode::ClampToEdge,

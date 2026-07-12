@@ -3,6 +3,7 @@
 #include "Config/ConfigManager.h"
 #include "Render/Core/Buffer.h"
 #include "Render/Core/IRenderTarget.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Render.h"
 
@@ -283,13 +284,13 @@ void ForwardViewportLitPasses::initPBR(const InitDesc& desc)
                                                     });
 
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _pbrFrameUBO[i] = IBuffer::create(_render, BufferCreateInfo{
+        _pbrFrameUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
                                                        .label       = std::format("FwdPBR_Frame_UBO_{}", i),
                                                        .usage       = EBufferUsage::UniformBuffer,
                                                        .size        = sizeof(PBRFrameUBO),
                                                        .memoryUsage = EMemoryUsage::CpuToGpu,
                                                    });
-        _pbrLightUBO[i] = IBuffer::create(_render, BufferCreateInfo{
+        _pbrLightUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
                                                        .label       = std::format("FwdPBR_Light_UBO_{}", i),
                                                        .usage       = EBufferUsage::UniformBuffer,
                                                        .size        = sizeof(PBRLightUBO),
@@ -423,19 +424,19 @@ void ForwardViewportLitPasses::initPhong(const InitDesc& desc)
                                                       });
 
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _phongFrameUBO[i] = IBuffer::create(_render, BufferCreateInfo{
+        _phongFrameUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
                                                          .label       = std::format("FwdPhong_Frame_UBO_{}", i),
                                                          .usage       = EBufferUsage::UniformBuffer,
                                                          .size        = sizeof(PhongFrameUBO),
                                                          .memoryUsage = EMemoryUsage::CpuToGpu,
                                                      });
-        _phongLightUBO[i] = IBuffer::create(_render, BufferCreateInfo{
+        _phongLightUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
                                                          .label       = std::format("FwdPhong_Light_UBO_{}", i),
                                                          .usage       = EBufferUsage::UniformBuffer,
                                                          .size        = sizeof(PhongLightUBO),
                                                          .memoryUsage = EMemoryUsage::CpuToGpu,
                                                      });
-        _phongDebugUBO[i] = IBuffer::create(_render, BufferCreateInfo{
+        _phongDebugUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
                                                          .label       = std::format("FwdPhong_Debug_UBO_{}", i),
                                                          .usage       = EBufferUsage::UniformBuffer,
                                                          .size        = sizeof(PhongDebugUBO),

@@ -5,6 +5,7 @@
 #include "ECS/Component/TransformComponent.h"
 #include "Render/Core/Buffer.h"
 #include "Render/Core/IRenderTarget.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Scene/Scene.h"
@@ -205,7 +206,7 @@ void ForwardViewportAuxPasses::initSkybox(const InitDesc& desc)
 
     SkyboxFrameUBO initialData{};
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _skyboxFrameUBO[i] = IBuffer::create(_render, BufferCreateInfo{
+        _skyboxFrameUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
             .label       = std::format("FwdSkybox_Frame_UBO_{}", i),
             .usage       = EBufferUsage::UniformBuffer,
             .size        = sizeof(SkyboxFrameUBO),
@@ -268,7 +269,7 @@ void ForwardViewportAuxPasses::initDebug(const InitDesc& desc)
         .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1}},
     });
     _debugUboDS = _debugDSP->allocateDescriptorSets(_debugDSL);
-    _debugUboBuffer = IBuffer::create(_render, BufferCreateInfo{
+    _debugUboBuffer = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
         .label       = "FwdDebug_UBO",
         .usage       = EBufferUsage::UniformBuffer,
         .size        = sizeof(DebugUBO),

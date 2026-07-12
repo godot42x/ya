@@ -9,6 +9,7 @@
 #include "Render/Core/Buffer.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/OffscreenJob.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Core/Texture.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -129,7 +130,7 @@ std::shared_ptr<IBuffer> createReadbackBuffer(IRender* render, uint32_t width, u
 
     const uint32_t bytesPerPixel = format == EFormat::R16G16B16A16_SFLOAT ? 8u : 4u;
     const uint32_t bufferSize    = width * height * bytesPerPixel;
-    return IBuffer::create(render, BufferCreateInfo{
+    return render->getResourceFactory()->createBuffer(BufferCreateInfo{
         .label       = "AutomationScreenshotReadback",
         .usage       = EBufferUsage::TransferDst,
         .size        = bufferSize,

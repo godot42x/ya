@@ -122,7 +122,7 @@ void RenderRuntime::initRenderBackend(const AppDesc& appDesc)
 
 void RenderRuntime::initResourceCaches()
 {
-    TextureLibrary::get().init();
+    TextureLibrary::get().init(_render);
 
     ResourceRegistry::get().registerCache(&PrimitiveMeshCache::get(), 100);
     ResourceRegistry::get().registerCache(&TextureLibrary::get(), 90);

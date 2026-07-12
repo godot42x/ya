@@ -5,6 +5,7 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Core/RenderPass.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
 #include "Render/RenderDefines.h"
 #include "imgui.h"
@@ -141,8 +142,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
     std::vector<ya::DescriptorSetHandle> descriptorSets;
     _descriptorPool->allocateDescriptorSets(_frameUboDSL, 1, descriptorSets);
     _frameUboDS     = descriptorSets[0];
-    _frameUBOBuffer = IBuffer::create(
-        render,
+    _frameUBOBuffer = render->getResourceFactory()->createBuffer(
         ya::BufferCreateInfo{
             .label         = "Sprite2D_Screen_FrameUBO",
             .usage         = EBufferUsage::UniformBuffer,
@@ -154,8 +154,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
     descriptorSets.clear();
     _descriptorPool->allocateDescriptorSets(_frameUboDSL, 1, descriptorSets);
     _worldFrameUboDS     = descriptorSets[0];
-    _worldFrameUBOBuffer = IBuffer::create(
-        render,
+    _worldFrameUBOBuffer = render->getResourceFactory()->createBuffer(
         ya::BufferCreateInfo{
             .label         = "Sprite2D_World_FrameUBO",
             .usage         = EBufferUsage::UniformBuffer,
@@ -394,8 +393,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
     });
 
     // Screen-space vertex buffer
-    _vertexBuffer = IBuffer::create(
-        render,
+    _vertexBuffer = render->getResourceFactory()->createBuffer(
         ya::BufferCreateInfo{
             .label         = "Sprite2D_Screen_VertexBuffer",
             .usage         = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
@@ -407,8 +405,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
     vertexPtrHead = vertexPtr;
 
     // World-space vertex buffer
-    _worldVertexBuffer = IBuffer::create(
-        render,
+    _worldVertexBuffer = render->getResourceFactory()->createBuffer(
         ya::BufferCreateInfo{
             .label         = "Sprite2D_World_VertexBuffer",
             .usage         = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
@@ -440,8 +437,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
         indices[i + 5] = vertexIndex + 3;
     }
 
-    _indexBuffer = IBuffer::create(
-        render,
+    _indexBuffer = render->getResourceFactory()->createBuffer(
         ya::BufferCreateInfo{
             .label         = "Sprite2D_IndexBuffer",
             .usage         = EBufferUsage::IndexBuffer | EBufferUsage::TransferDst,

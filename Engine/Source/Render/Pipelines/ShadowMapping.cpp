@@ -2,6 +2,7 @@
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Core/Swapchain.h"
 #include "Render/Render.h"
 #include "Scene/Scene.h"
@@ -95,8 +96,7 @@ void ShadowMapping::onInitImpl(const InitParams& initParams)
 
     for (uint32_t i = 0; i < SHADOW_PER_FRAME_SET; ++i) {
         _dsPerFrame[i] = frameSets[i];
-        _frameUBO[i]   = IBuffer::create(
-            render,
+        _frameUBO[i]   = render->getResourceFactory()->createBuffer(
             BufferCreateInfo{
                   .label         = std::format("Shadow_Frame_UBO_{}", i),
                   .usage         = EBufferUsage::UniformBuffer,

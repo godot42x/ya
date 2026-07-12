@@ -7,6 +7,7 @@
 #include "Runtime/App/Common/Shadow/Common/ShadowDrawHelper.h"
 
 #include "Render/Core/CommandBuffer.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Core/Texture.h"
 #include "Render/Core/TextureFactory.h"
 #include "Render/Mesh.h"
@@ -121,7 +122,7 @@ void PointShadowPass::init(IRender* render, Extent2D shadowExtent)
     for (uint32_t fi = 0; fi < MAX_FLIGHTS_IN_FLIGHT; ++fi) {
         auto& flight = _perFlight[fi];
         for (uint32_t face = 0; face < faceCount; ++face) {
-            flight.faceUBO[face] = IBuffer::create(_render, BufferCreateInfo{
+            flight.faceUBO[face] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
                 .label       = std::format("PointShadow_FaceUBO_{}_{}", fi, face),
                 .usage       = EBufferUsage::UniformBuffer,
                 .size        = sizeof(PointFaceUBO),
@@ -329,7 +330,7 @@ void PointShadowPass::ensureSkinningCapacity(uint32_t paletteCount)
     const uint32_t bufferSize = _skinningCapacity * sizeof(RenderSkinningPalette);
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
         auto& flight = _perFlight[i];
-        flight.skinningSSBO = IBuffer::create(_render, BufferCreateInfo{
+        flight.skinningSSBO = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
             .label       = std::format("PointShadow_Skinning_SSBO_{}", i),
             .usage       = EBufferUsage::StorageBuffer,
             .size        = bufferSize,

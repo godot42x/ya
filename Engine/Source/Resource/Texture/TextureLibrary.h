@@ -11,6 +11,8 @@
 namespace ya
 {
 
+struct IRender;
+
 /**
  * @brief TextureLibrary - Manages common textures and samplers
  *
@@ -32,7 +34,7 @@ class TextureLibrary : public IResourceCache
      * @brief Initialize the texture library
      * Must be called before using any textures
      */
-    void init();
+    void init(IRender* render);
 
     // IResourceCache interface
     void  clearCache() override;
@@ -83,7 +85,7 @@ class TextureLibrary : public IResourceCache
     TextureLibrary(const TextureLibrary &)            = delete;
     TextureLibrary &operator=(const TextureLibrary &) = delete;
 
-    void createSamplers();
+    void createSamplers(IRender* render);
     void createTextures();
 
     // Textures

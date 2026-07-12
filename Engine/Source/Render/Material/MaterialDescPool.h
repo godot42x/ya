@@ -2,6 +2,7 @@
 #include "Core/Base.h"
 #include "Render/Core/Buffer.h"
 #include "Render/Core/DescriptorSet.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
 #include "Render/RenderDefines.h"
 #include <format>
@@ -124,8 +125,7 @@ struct MaterialDescPool
         // Create UBOs for any new slots
         uint32_t prevCount = static_cast<uint32_t>(_paramUBOs.size());
         for (uint32_t i = prevCount; i < capacity; i++) {
-            _paramUBOs.push_back(IBuffer::create(
-                _render,
+            _paramUBOs.push_back(_render->getResourceFactory()->createBuffer(
                 BufferCreateInfo{
                     .label         = std::format("MaterialPool_Param_UBO_{}", i),
                     .usage         = EBufferUsage::UniformBuffer,

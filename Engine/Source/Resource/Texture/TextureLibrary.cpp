@@ -1,5 +1,7 @@
 #include "TextureLibrary.h"
 #include "Core/Log.h"
+#include "Render/Core/RenderResourceFactory.h"
+#include "Render/Render.h"
 
 namespace ya
 {
@@ -10,14 +12,15 @@ TextureLibrary &TextureLibrary::get()
     return instance;
 }
 
-void TextureLibrary::init()
+void TextureLibrary::init(IRender* render)
 {
     if (_initialized) {
         YA_CORE_WARN("TextureLibrary already initialized");
         return;
     }
 
-    createSamplers();
+    YA_CORE_ASSERT(render && render->getResourceFactory(), "TextureLibrary requires a resource factory");
+    createSamplers(render);
     createTextures();
 
     _initialized = true;
@@ -45,9 +48,10 @@ void TextureLibrary::clearCache()
     YA_CORE_INFO("TextureLibrary cleared");
 }
 
-void TextureLibrary::createSamplers()
+void TextureLibrary::createSamplers(IRender* render)
 {
-    _linearSampler = Sampler::create(
+    auto* resourceFactory = render->getResourceFactory();
+    _linearSampler = resourceFactory->createSampler(
         SamplerDesc{
             .label         = "linear",
             .minFilter     = EFilter::Linear,
@@ -60,7 +64,7 @@ void TextureLibrary::createSamplers()
             .maxAnisotropy = 1.0f,
         });
 
-    _nearestSampler = Sampler::create(
+    _nearestSampler = resourceFactory->createSampler(
         SamplerDesc{
             .label         = "nearest",
             .minFilter     = EFilter::Nearest,

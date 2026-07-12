@@ -22,6 +22,7 @@
 #include "VulkanRenderPass.h"
 #include "VulkanSwapChain.h"
 #include "VulkanTextureFactory.h"
+#include "VulkanRenderResourceFactory.h"
 #include "VulkanUtils.h"
 
 
@@ -141,6 +142,7 @@ struct VulkanRender : public IRender
     std::unique_ptr<VulkanDebugUtils>     _debugUtils       = nullptr;
     VulkanDescriptorHelper*               _descriptorHelper = nullptr; // Raw pointer to avoid incomplete type issue
     std::unique_ptr<VulkanTextureFactory> _textureFactory   = nullptr; // 纹理工厂
+    std::unique_ptr<VulkanRenderResourceFactory> _resourceFactory = nullptr;
 
     PFN_vkQueueBeginDebugUtilsLabelEXT _pfnQueueBeginDebugUtilsLabelEXT = nullptr;
     PFN_vkQueueEndDebugUtilsLabelEXT   _pfnQueueEndDebugUtilsLabelEXT   = nullptr;
@@ -193,6 +195,7 @@ struct VulkanRender : public IRender
 
         // 初始化纹理工厂
         _textureFactory = std::make_unique<VulkanTextureFactory>(this);
+        _resourceFactory = std::make_unique<VulkanRenderResourceFactory>(this);
 
         return true;
     }
@@ -270,6 +273,7 @@ struct VulkanRender : public IRender
 
     // IRender interface: get texture factory
     ITextureFactory*         getTextureFactory() override { return _textureFactory.get(); }
+    IRenderResourceFactory*  getResourceFactory() override { return _resourceFactory.get(); }
     TextureFormatSupportInfo queryTextureFormatSupport(EFormat::T format) const override;
     bool                     isTextureFormatSupported(EFormat::T format, EImageUsage::T usage) const override;
 

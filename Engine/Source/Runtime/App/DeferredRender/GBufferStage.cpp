@@ -3,6 +3,7 @@
 #include "Core/Profiling/Instrumentor.h"
 
 #include "Render/Core/IRenderTarget.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/RenderFrameData.h"
 #include "Resource/Texture/TextureLibrary.h"
@@ -110,14 +111,14 @@ void GBufferStage::initSharedResources()
     using LightPassLightData = slang_types::DeferredRender::LightPass::LightData;
 
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _frameUBO[i] = IBuffer::create(_render, BufferCreateInfo{
+        _frameUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
                                                     .label       = std::format("GBuffer_Frame_UBO_{}", i),
                                                     .usage       = EBufferUsage::UniformBuffer,
                                                     .size        = sizeof(PBRFrameData),
                                                     .memoryUsage = EMemoryUsage::CpuToGpu,
                                                 });
 
-        _lightUBO[i] = IBuffer::create(_render, BufferCreateInfo{
+        _lightUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
                                                     .label       = std::format("GBuffer_Light_UBO_{}", i),
                                                     .usage       = EBufferUsage::UniformBuffer,
                                                     .size        = sizeof(LightPassLightData),
@@ -427,8 +428,7 @@ void GBufferStage::ensureSkinningCapacity(uint32_t paletteCount)
 
     const uint32_t bufferSize = static_cast<uint32_t>(static_cast<uint64_t>(_skinningCapacity) * sizeof(RenderSkinningPalette));
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _skinningSSBO[i] = IBuffer::create(
-            _render,
+        _skinningSSBO[i] = _render->getResourceFactory()->createBuffer(
             BufferCreateInfo{
                 .label       = std::format("GBuffer_Skinning_SSBO_{}", i),
                 .usage       = EBufferUsage::StorageBuffer,

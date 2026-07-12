@@ -1,4 +1,5 @@
 #include "RenderSharedResourceProvider.h"
+#include "Render/Core/RenderResourceFactory.h"
 
 #include "App.h"
 #include "ECS/System/ResourceResolveSystem.h"
@@ -216,7 +217,7 @@ void RenderSharedResourceProvider::shutdown()
 
 void RenderSharedResourceProvider::initSharedPipelineResources()
 {
-    _cubemapSampler = Sampler::create(SamplerDesc{
+    _cubemapSampler = _render->getResourceFactory()->createSampler(SamplerDesc{
         .label        = "App_SkyboxSampler",
         .addressModeU = ESamplerAddressMode::Repeat,
         .addressModeV = ESamplerAddressMode::Repeat,

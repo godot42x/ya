@@ -17,7 +17,7 @@ struct VulkanSampler : public ya::Sampler
     const VkAllocationCallbacks* _allocator = nullptr;
     VkSampler   _handle;
 
-    VulkanSampler(const ya::SamplerDesc &ci);
+    VulkanSampler(VulkanRender* render, const ya::SamplerDesc& ci);
     virtual ~VulkanSampler();
 
     // Override base class interface - returns void* for platform abstraction

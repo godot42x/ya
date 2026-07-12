@@ -1,14 +1,13 @@
 #include "VulkanSampler.h"
 #include "VulkanRender.h"
-#include "Runtime/App/App.h"
 
 namespace ya
 {
 
-VulkanSampler::VulkanSampler(const ya::SamplerDesc& ci)
+VulkanSampler::VulkanSampler(VulkanRender* vkRender, const ya::SamplerDesc& ci)
 {
-    auto vkRender = ya::App::get()->getRender<VulkanRender>();
-    vkRender      = static_cast<VulkanRender*>(ya::App::get()->getRender());
+    YA_CORE_ASSERT(vkRender, "VulkanSampler requires a valid render device");
+    _desc         = ci;
     _device       = vkRender->getDevice();
     _allocator    = vkRender->getAllocator();
 

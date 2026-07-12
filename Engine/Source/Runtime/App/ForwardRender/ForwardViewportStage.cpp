@@ -6,6 +6,7 @@
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Core/Buffer.h"
 #include "Render/Core/IRenderTarget.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Core/Swapchain.h"
 #include "Render/Render.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
@@ -63,8 +64,7 @@ void ForwardViewportStage::ensureSkinningCapacity(uint32_t paletteCount)
 
     const uint32_t bufferSize = static_cast<uint32_t>(static_cast<uint64_t>(_skinningCapacity) * sizeof(RenderSkinningPalette));
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _skinningSSBO[i] = IBuffer::create(
-            _render,
+        _skinningSSBO[i] = _render->getResourceFactory()->createBuffer(
             BufferCreateInfo{
                 .label       = std::format("Forward_Skinning_SSBO_{}", i),
                 .usage       = EBufferUsage::StorageBuffer,

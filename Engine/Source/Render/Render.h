@@ -10,6 +10,7 @@ namespace ya
 struct ICommandBuffer;
 struct ISwapchain;
 struct IDescriptorSetHelper;
+struct IRenderResourceFactory;
 struct ITextureFactory; // 添加TextureFactory前向声明
 
 
@@ -155,6 +156,8 @@ struct IRender : public plat_base<IRender>
      * @return Pointer to texture factory interface
      */
     virtual ITextureFactory* getTextureFactory() = 0;
+
+    virtual IRenderResourceFactory* getResourceFactory() { return nullptr; }
 
     virtual TextureFormatSupportInfo queryTextureFormatSupport(EFormat::T format) const
     {
