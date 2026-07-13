@@ -627,6 +627,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     _bShadowSettingsChangePending = false;
     _pendingResourceRefreshMask   = 0;
     _currentSSAOOutput            = nullptr;
+    _currentPostprocessOutput     = nullptr;
     _viewportTextureCompat.reset();
     if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
@@ -701,6 +702,7 @@ void DeferredRenderPipeline::shutdown()
     _pendingViewportExtent           = {};
     _pendingResourceRefreshMask      = 0;
     _currentSSAOOutput               = nullptr;
+    _currentPostprocessOutput        = nullptr;
     _currentGBufferResources         = {};
     _currentViewportResources        = {};
     _currentEnvironmentLightingTextures = {};
@@ -1036,6 +1038,8 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     if (_bEnableSSAO && _ssaoStage) {
         _ssaoStage->prepare(stageCtx);
     }
+    _currentSSAOOutput        = nullptr;
+    _currentPostprocessOutput = nullptr;
 
     auto* gbufferDepth = _currentGBufferResources.depth;
     if (!gbufferDepth) {
@@ -1112,6 +1116,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     auto* viewportColor = _currentViewportResources.color;
     auto* viewportDepth = _currentViewportResources.depth;
     if (!viewportColor || !viewportDepth) {
+        viewportTexture = nullptr;
         return;
     }
 
@@ -1302,6 +1307,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     RGCompiledGraph compiled{};
     if (!_graphExecutor->prepare(graph, compiled)) {
         _currentSSAOOutput = nullptr;
+        _currentPostprocessOutput = nullptr;
         if (_lightStage) {
             _lightStage->setSSAOTexture(nullptr);
         }
@@ -1334,6 +1340,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     [[maybe_unused]] const bool bExecuted = _graphExecutor->executeCompiled(graph, compiled, *frame.cmdBuf);
     if (!bExecuted) {
         _currentSSAOOutput = nullptr;
+        _currentPostprocessOutput = nullptr;
         if (_lightStage) {
             _lightStage->setSSAOTexture(nullptr);
         }
@@ -1343,12 +1350,14 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     }
 
     if (postprocessOutput.isValid()) {
-        if (RenderImage* outputImage = _postProcessStage.getOutputImage()) {
+        if (RenderImage* outputImage = const_cast<RenderImage*>(_graphExecutor->getRegistry().resolveTexture(postprocessOutput))) {
+            _currentPostprocessOutput = outputImage;
             refreshViewportTextureCompat(outputImage, "DeferredViewport_PostprocessOutput");
             return;
         }
     }
 
+    _currentPostprocessOutput = nullptr;
     _viewportTextureCompat.reset();
     viewportTexture = inputTexture;
 }

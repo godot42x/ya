@@ -489,9 +489,11 @@ void ForwardRenderPipeline::finalizeViewportPass(ICommandBuffer* cmdBuf)
     if (RenderImage* postprocessOutput = _postProcessStage.execute(
             cmdBuf, inputTexture, _lastFrameInput.viewportRect.extent, &_lastTickCtx))
     {
+        _currentPostprocessOutput = postprocessOutput;
         refreshViewportTextureCompat(postprocessOutput, "ForwardViewport_PostprocessOutput");
     }
     else {
+        _currentPostprocessOutput = nullptr;
         _viewportTextureCompat.reset();
         viewportTexture = inputTexture;
     }
@@ -507,6 +509,7 @@ void ForwardRenderPipeline::shutdown()
     getResourceResolveSystem = {};
     getSceneSkyboxDescriptorSet = {};
     getSceneEnvironmentLightingDescriptorSet = {};
+    _currentPostprocessOutput = nullptr;
     _viewportTextureCompat.reset();
     _deleter.clear();
 }

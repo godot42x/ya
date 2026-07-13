@@ -75,6 +75,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
 
     bool     bMSAA              = false;
     stdptr<Texture> _viewportTextureCompat = nullptr;
+    const RenderImage* _currentPostprocessOutput = nullptr;
     Texture* viewportTexture    = nullptr;
 
     RenderingInfo _viewportRI{};
@@ -113,7 +114,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] Texture*       getViewportDepthTexture() const override { return _viewportResources.depth; }
     [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override;
-    [[nodiscard]] RenderImage*   getPostprocessOutputImage() const override { return _postProcessStage.getOutputImage(); }
+    [[nodiscard]] RenderImage*   getPostprocessOutputImage() const override { return const_cast<RenderImage*>(_currentPostprocessOutput); }
     [[nodiscard]] RenderImage*   getBloomExtractImage() const override { return _postProcessStage.getBloomExtractImage(); }
     [[nodiscard]] RenderImage*   getBloomBlurImage() const override { return _postProcessStage.getBloomBlurImage(); }
     [[nodiscard]] RenderImage*   getBloomCompositeImage() const override { return _postProcessStage.getBloomCompositeImage(); }

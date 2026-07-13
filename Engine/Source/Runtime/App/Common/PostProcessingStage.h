@@ -36,7 +36,6 @@ struct PostProcessingStage
     PostProcessingState         _state              = {};
     stdptr<BloomPostprocessing> _bloomProcessor     = nullptr;
     stdptr<BasicPostprocessing> _postProcessor      = nullptr;
-    const RenderImage*          _postprocessOutputImage = nullptr;
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
     GraphBuildResult            _preparedGraphResources{};
 
@@ -58,7 +57,6 @@ struct PostProcessingStage
                          FrameContext*   ctx);
 
     [[nodiscard]] bool                       isEnabled() const { return bEnabled; }
-    [[nodiscard]] RenderImage*               getOutputImage() const { return const_cast<RenderImage*>(_postprocessOutputImage); }
     [[nodiscard]] RenderImage*               getBloomExtractImage() const { return _bloomProcessor ? _bloomProcessor->getExtractImage() : nullptr; }
     [[nodiscard]] RenderImage*               getBloomBlurImage() const { return _bloomProcessor ? _bloomProcessor->getBlurImage() : nullptr; }
     [[nodiscard]] RenderImage*               getBloomCompositeImage() const { return _bloomProcessor ? _bloomProcessor->getCompositeImage() : nullptr; }

@@ -133,6 +133,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     Extent2D           _pendingViewportExtent{};
     uint32_t           _pendingResourceRefreshMask = 0;
     const RenderImage* _currentSSAOOutput          = nullptr;
+    const RenderImage* _currentPostprocessOutput   = nullptr;
 
     // ── Frame state ───────────────────────────────────────────────────
     DeferredGBufferResources   _currentGBufferResources{};
@@ -206,7 +207,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     RenderImage* getBloomBlurImage() const override { return _postProcessStage.getBloomBlurImage(); }
     RenderImage* getBloomCompositeImage() const override { return _postProcessStage.getBloomCompositeImage(); }
     bool     isPostprocessingEnabled() const override { return _postProcessStage.isEnabled(); }
-    RenderImage* getPostprocessOutputImage() const override { return _postProcessStage.getOutputImage(); }
+    RenderImage* getPostprocessOutputImage() const override { return const_cast<RenderImage*>(_currentPostprocessOutput); }
 
   private:
     void               loadPersistentSettings();

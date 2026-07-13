@@ -161,8 +161,6 @@ void PostProcessingStage::init(const InitDesc& desc)
     _state.bEnableRandomGrain  = config.getOr<bool>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_ENABLE, _state.bEnableRandomGrain);
     _state.randomGrainStrength = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_STRENGTH, _state.randomGrainStrength);
 
-    _postprocessOutputImage = nullptr;
-
     _bloomProcessor = ya::makeShared<BloomPostprocessing>();
     _bloomProcessor->init(BloomPostprocessing::InitDesc{
         .render = _render,
@@ -218,7 +216,6 @@ void PostProcessingStage::beginFrame()
 void PostProcessingStage::clearPreparedResources()
 {
     _preparedGraphResources       = {};
-    _postprocessOutputImage       = nullptr;
     if (_bloomProcessor) {
         _bloomProcessor->clearPreparedResources();
     }
@@ -229,10 +226,6 @@ void PostProcessingStage::resolvePreparedResources(const RenderGraphResourceRegi
     if (_bloomProcessor) {
         _bloomProcessor->resolvePreparedResources(registry);
     }
-
-    _postprocessOutputImage = _preparedGraphResources.output.isValid()
-        ? registry.resolveTexture(_preparedGraphResources.output)
-        : nullptr;
 }
 
 void PostProcessingStage::renderSettingsGUI()
@@ -382,6 +375,8 @@ RenderImage* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
     }
 
     resolvePreparedResources(_graphExecutor->getRegistry());
-    return const_cast<RenderImage*>(_postprocessOutputImage);
+    return output.isValid()
+        ? const_cast<RenderImage*>(_graphExecutor->getRegistry().resolveTexture(output))
+        : nullptr;
 }
 } // namespace ya
