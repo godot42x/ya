@@ -243,6 +243,7 @@
 - Deferred viewport raster 外壳已切入 graph：viewport color/depth attachment、light pass、overlay pass 与 viewport overlay callback 现在由单个 graph-backed raster pass 包裹，postprocess 继续作为后续消费方读取 graph pass 输出
 - RenderGraph 已补最小 MRT raster helper，`RGRenderContext::beginRasterRendering()` 现在可绑定多个 color attachment；Deferred GBuffer 外壳已迁到 graph-backed raster pass，`GBufferStage` 保持只负责 draw 录制
 - Deferred 自身 stage 的格式刷新路径已开始去 `IRenderTarget` 化：`GBufferStage / LightStage / ViewportOverlayStage` 现改用显式 `DeferredAttachmentFormats`，把“为了拿格式而借整个 render target”收紧成更明确的格式描述输入
+- debug overlay 路径的格式刷新也已跟进切到显式 attachment format 描述：`DebugRenderSystem / DebugPrimitives / DebugSkinning` 不再为 pipeline format refresh 依赖 `IRenderTarget`，并复用下沉后的通用 `RenderAttachmentFormats`
 
 ## Phase 7: Deferred Graph 迁移
 

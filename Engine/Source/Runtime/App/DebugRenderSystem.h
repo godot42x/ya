@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Render/Core/RenderAttachmentFormats.h"
 #include "Render/Pipelines/DebugPrimitives.h"
 
 namespace ya
@@ -27,7 +28,7 @@ struct DebugRenderSystem
     void addConeImmediate(const glm::mat4& model, const glm::vec4& color = glm::vec4(1.0f));
 
     void beginFrame();
-    void refreshPipelineFormats(const IRenderTarget* viewportRT);
+    void refreshPipelineFormats(const RenderAttachmentFormats& formats);
     void draw(ICommandBuffer* cmdBuf,
               uint32_t viewportWidth,
               uint32_t viewportHeight,

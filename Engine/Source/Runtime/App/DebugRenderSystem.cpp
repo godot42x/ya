@@ -71,9 +71,9 @@ void DebugRenderSystem::beginFrame()
     _primitives.beginFrame();
 }
 
-void DebugRenderSystem::refreshPipelineFormats(const IRenderTarget* viewportRT)
+void DebugRenderSystem::refreshPipelineFormats(const RenderAttachmentFormats& formats)
 {
-    _primitives.refreshPipelineFormats(viewportRT);
+    _primitives.refreshPipelineFormats(formats);
 }
 
 void DebugRenderSystem::draw(ICommandBuffer*  cmdBuf,

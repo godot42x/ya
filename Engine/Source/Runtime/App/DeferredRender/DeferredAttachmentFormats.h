@@ -1,22 +1,10 @@
 #pragma once
 
-#include "Render/RenderDefines.h"
-
-#include <optional>
-#include <vector>
+#include "Render/Core/RenderAttachmentFormats.h"
 
 namespace ya
 {
 
-struct DeferredAttachmentFormats
-{
-    std::vector<EFormat::T>     colorFormats;
-    std::optional<EFormat::T>   depthFormat{};
-
-    [[nodiscard]] bool hasColor() const
-    {
-        return !colorFormats.empty();
-    }
-};
+using DeferredAttachmentFormats = RenderAttachmentFormats;
 
 } // namespace ya

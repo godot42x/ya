@@ -86,6 +86,11 @@ void ViewportOverlayStage::refreshPipelineFormats(const DeferredAttachmentFormat
         ci.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
         _overlayPipeline->updateDesc(std::move(ci));
     }
+
+    if (_getDebugRenderSystem) {
+        _getDebugRenderSystem().refreshPipelineFormats(formats);
+    }
+    _debugSkinning.refreshPipelineFormats(formats);
 }
 
 // ═══════════════════════════════════════════════════════════════════════

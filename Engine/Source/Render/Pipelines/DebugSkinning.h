@@ -2,7 +2,7 @@
 
 #include "Core/Math/Geometry.h"
 #include "Render/Core/CommandBuffer.h"
-#include "Render/Core/IRenderTarget.h"
+#include "Render/Core/RenderAttachmentFormats.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Mesh.h"
 
@@ -100,21 +100,15 @@ struct DebugSkinning
         }
     }
 
-    void refreshPipelineFormats(const IRenderTarget* viewportRT)
+    void refreshPipelineFormats(const RenderAttachmentFormats& formats)
     {
-        if (!_pipeline || !viewportRT) {
-            return;
-        }
-
-        const auto& colorDescs = viewportRT->getColorAttachmentDescs();
-        const auto& depthDesc  = viewportRT->getDepthAttachmentDesc();
-        if (colorDescs.empty()) {
+        if (!_pipeline || !formats.hasColor()) {
             return;
         }
 
         auto ci                                         = _pipeline->getDesc();
-        ci.pipelineRenderingInfo.colorAttachmentFormats = {colorDescs.front().format};
-        ci.pipelineRenderingInfo.depthAttachmentFormat  = depthDesc.has_value() ? depthDesc->format : EFormat::Undefined;
+        ci.pipelineRenderingInfo.colorAttachmentFormats = {formats.colorFormats.front()};
+        ci.pipelineRenderingInfo.depthAttachmentFormat  = formats.depthFormat.value_or(EFormat::Undefined);
         _pipeline->updateDesc(std::move(ci));
     }
 

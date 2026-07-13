@@ -74,10 +74,10 @@ void DebugPrimitives::clear()
     clearImmediate();
 }
 
-void DebugPrimitives::refreshPipelineFormats(const IRenderTarget* viewportRT)
+void DebugPrimitives::refreshPipelineFormats(const RenderAttachmentFormats& formats)
 {
-    applyPipelineFormats(_linePipeline, viewportRT);
-    applyPipelineFormats(_shapePipeline, viewportRT);
+    applyPipelineFormats(_linePipeline, formats);
+    applyPipelineFormats(_shapePipeline, formats);
     updateDepthState();
 }
 
@@ -334,21 +334,15 @@ void DebugPrimitives::updateFrameUBO()
     _frameUBO[flightIndex]->writeData(&_frameData, sizeof(FrameUBO), 0);
 }
 
-void DebugPrimitives::applyPipelineFormats(stdptr<IGraphicsPipeline>& pipeline, const IRenderTarget* viewportRT)
+void DebugPrimitives::applyPipelineFormats(stdptr<IGraphicsPipeline>& pipeline, const RenderAttachmentFormats& formats)
 {
-    if (!pipeline || !viewportRT) {
-        return;
-    }
-
-    const auto& colorDescs = viewportRT->getColorAttachmentDescs();
-    const auto& depthDesc  = viewportRT->getDepthAttachmentDesc();
-    if (colorDescs.empty()) {
+    if (!pipeline || !formats.hasColor()) {
         return;
     }
 
     auto ci                                         = pipeline->getDesc();
-    ci.pipelineRenderingInfo.colorAttachmentFormats = {colorDescs.front().format};
-    ci.pipelineRenderingInfo.depthAttachmentFormat  = depthDesc.has_value() ? depthDesc->format : EFormat::Undefined;
+    ci.pipelineRenderingInfo.colorAttachmentFormats = {formats.colorFormats.front()};
+    ci.pipelineRenderingInfo.depthAttachmentFormat  = formats.depthFormat.value_or(EFormat::Undefined);
     pipeline->updateDesc(std::move(ci));
 }
 

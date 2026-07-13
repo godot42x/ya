@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Core/Math/Geometry.h"
+#include "Render/Core/RenderAttachmentFormats.h"
 #include "Render/Core/Buffer.h"
 #include "Render/Core/CommandBuffer.h"
-#include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Stage/IRenderStage.h"
 
@@ -81,7 +81,7 @@ struct DebugPrimitives
     void destroy();
     void beginFrame();
     void clear();
-    void refreshPipelineFormats(const IRenderTarget* viewportRT);
+    void refreshPipelineFormats(const RenderAttachmentFormats& formats);
 
     // Game-thread submission path: consumed by render thread on next beginFrame().
     void addLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color = glm::vec4(1.0f));
@@ -109,7 +109,7 @@ struct DebugPrimitives
     void initShapePipeline();
     void updateFrameUBO();
     void ensureLineBufferCapacity(uint32_t requiredVertexCount);
-    void applyPipelineFormats(stdptr<IGraphicsPipeline>& pipeline, const IRenderTarget* viewportRT);
+    void applyPipelineFormats(stdptr<IGraphicsPipeline>& pipeline, const RenderAttachmentFormats& formats);
     void updateDepthState();
     void clearImmediate();
     void setViewportAndScissor(ICommandBuffer* cmdBuf, uint32_t viewportWidth, uint32_t viewportHeight) const;
