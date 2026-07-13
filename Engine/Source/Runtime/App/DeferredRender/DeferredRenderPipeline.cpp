@@ -325,18 +325,9 @@ void DeferredRenderPipeline::applyPendingViewportResize()
         _viewportRT->flushDirty();
     }
 
-    requestSSAOResize(_pendingViewportExtent);
+    _ssaoTexture = createSSAOImage(_render, _pendingViewportExtent);
     _postProcessStage.onViewportResized(_pendingViewportExtent);
-
-    _cachedAlbedoSpecImageViewHandle = nullptr;
-    _debugAlbedoRGBView.reset();
-    _debugSpecularAlphaView.reset();
-    if (_ssaoStage) {
-        _ssaoStage->invalidateInputDescriptors();
-    }
-    if (_lightStage) {
-        _lightStage->invalidateGBufferDescriptors();
-    }
+    refreshViewportSizedStageResources();
     _bViewportResizePending = false;
 }
 
@@ -370,34 +361,6 @@ void DeferredRenderPipeline::applyPendingShadowResourceRefresh()
 
     _bShadowResourceRefreshPending = false;
     syncShadowSettings();
-}
-
-void DeferredRenderPipeline::requestSSAOResize(Extent2D extent)
-{
-    if (extent.width == 0 || extent.height == 0) {
-        return;
-    }
-
-    _pendingSSAOResizeExtent = extent;
-    _bSSAOResizePending      = true;
-}
-
-void DeferredRenderPipeline::applyPendingSSAOResize()
-{
-    if (!_bSSAOResizePending || !_render || !_ssaoTexture) {
-        return;
-    }
-
-    _render->waitIdle();
-    _ssaoTexture = createSSAOImage(_render, _pendingSSAOResizeExtent);
-    if (_ssaoStage) {
-        _ssaoStage->setup(_gBufferRT.get(), _ssaoTexture.get());
-        _ssaoStage->refreshPipelineFormat();
-    }
-    if (_lightStage) {
-        _lightStage->setSSAOTexture(_ssaoTexture.get());
-    }
-    _bSSAOResizePending = false;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -499,8 +462,6 @@ void DeferredRenderPipeline::shutdown()
     _cachedAlbedoSpecImageViewHandle = nullptr;
     _pendingViewportExtent           = {};
     _bViewportResizePending          = false;
-    _pendingSSAOResizeExtent         = {};
-    _bSSAOResizePending              = false;
     _bShadowResourceRefreshPending   = false;
 
     if (_overlayStage) {
@@ -588,7 +549,6 @@ void DeferredRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, 
 {
     applyPendingViewportResize();
     applyPendingShadowResourceRefresh();
-    applyPendingSSAOResize();
     _postProcessStage.beginFrame();
     captureShadowSettings(frame);
 
@@ -683,6 +643,43 @@ void DeferredRenderPipeline::refreshDirtyResources()
         if (_overlayStage) {
             _overlayStage->refreshPipelineFormats(_viewportRT.get());
         }
+    }
+}
+
+void DeferredRenderPipeline::refreshViewportSizedStageResources()
+{
+    invalidateGBufferDependentViews();
+
+    if (_ssaoStage) {
+        _ssaoStage->setup(_gBufferRT.get(), _ssaoTexture.get());
+        _ssaoStage->refreshPipelineFormat();
+    }
+
+    if (_gBufferStage) {
+        _gBufferStage->refreshPipelineFormats(_gBufferRT.get());
+    }
+
+    if (_lightStage) {
+        _lightStage->setSSAOTexture(_ssaoTexture.get());
+        _lightStage->refreshPipelineFormats(_viewportRT.get());
+    }
+
+    if (_overlayStage) {
+        _overlayStage->refreshPipelineFormats(_viewportRT.get());
+    }
+}
+
+void DeferredRenderPipeline::invalidateGBufferDependentViews()
+{
+    _cachedAlbedoSpecImageViewHandle = nullptr;
+    _debugAlbedoRGBView.reset();
+    _debugSpecularAlphaView.reset();
+
+    if (_ssaoStage) {
+        _ssaoStage->invalidateInputDescriptors();
+    }
+    if (_lightStage) {
+        _lightStage->invalidateGBufferDescriptors();
     }
 }
 

@@ -115,8 +115,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     ImageViewHandle    _cachedAlbedoSpecImageViewHandle = nullptr;
     Extent2D           _pendingViewportExtent{};
     bool               _bViewportResizePending = false;
-    Extent2D           _pendingSSAOResizeExtent{};
-    bool               _bSSAOResizePending = false;
     bool               _bShadowResourceRefreshPending = false;
 
     // ── Frame state ───────────────────────────────────────────────────
@@ -180,6 +178,8 @@ struct DeferredRenderPipeline : public IRenderPipeline
     [[nodiscard]] bool shouldSkipTick(const RenderPipelineFrameContext& frame) const;
     void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
     void               refreshDirtyResources();
+    void               refreshViewportSizedStageResources();
+    void               invalidateGBufferDependentViews();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);
     void               updateStageFrameInputs();
     [[nodiscard]] ShadowSettings currentShadowSettings() const;
@@ -194,10 +194,8 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               saveShadowSettingsToConfig(const ShadowSettings& shadowSettings) const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               applyPendingViewportResize();
-    void               applyPendingSSAOResize();
     void               applyPendingShadowResourceRefresh();
     void               requestViewportResize(Extent2D extent);
-    void               requestSSAOResize(Extent2D extent);
     void               requestShadowResourceRefresh();
     void               initRenderTargets(Extent2D extent);
     void               initShadowResources();
