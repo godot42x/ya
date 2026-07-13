@@ -15,6 +15,8 @@
 namespace ya
 {
 
+struct RenderImage;
+
 template <typename Tag>
 struct RGHandle
 {

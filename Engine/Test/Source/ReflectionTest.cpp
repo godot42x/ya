@@ -237,7 +237,7 @@ struct TestT
         static constexpr bool has_base_class = !std ::is_same_v<base_t, void>;
         reflection_detail()
         {
-            ClassRegistry ::instance().addPostStaticInitializer([]() { reflection_detail ::real_init(); });
+            ::ya::reflection::deferStaticInit([]() { reflection_detail ::real_init(); });
         }
         static void real_init()
         {

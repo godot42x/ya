@@ -265,13 +265,42 @@ struct Visitor<void>
 // Macro for easy constructor registration
 // Usage: YA_REGISTER_CONSTRUCTOR(MyClass, int, float)
 //        YA_REGISTER_CONSTRUCTOR(MyClass)  // for default constructor (explicit)
-#define YA_REGISTER_CONSTRUCTOR(ClassName, ...)                                             \
-    namespace ya::reflection::detail                                                        \
-    {                                                                                       \
-    template <>                                                                             \
-    struct RegisterConstructor<ClassName> : RegisterConstructorBase<ClassName, __VA_ARGS__> \
-    {};                                                                                     \
+#define YA_REGISTER_CONSTRUCTOR(...) \
+    YA_EXPAND(YA_CALL_MACRO_N(___YA_REGISTER_CONSTRUCTOR_, __VA_ARGS__)(__VA_ARGS__))
+
+#define ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, ...)                  \
+    namespace ya::reflection::detail                                     \
+    {                                                                    \
+    template <>                                                          \
+    struct RegisterConstructor<ClassName>                                \
+        : RegisterConstructorBase<ClassName, __VA_ARGS__>                \
+    {};                                                                  \
     }
+
+#define ___YA_REGISTER_CONSTRUCTOR_1(ClassName)                          \
+    namespace ya::reflection::detail                                     \
+    {                                                                    \
+    template <>                                                          \
+    struct RegisterConstructor<ClassName>                                \
+        : RegisterConstructorBase<ClassName>                             \
+    {};                                                                  \
+    }
+
+#define ___YA_REGISTER_CONSTRUCTOR_2(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
+#define ___YA_REGISTER_CONSTRUCTOR_3(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
+#define ___YA_REGISTER_CONSTRUCTOR_4(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
+#define ___YA_REGISTER_CONSTRUCTOR_5(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
+#define ___YA_REGISTER_CONSTRUCTOR_6(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
+#define ___YA_REGISTER_CONSTRUCTOR_7(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
+#define ___YA_REGISTER_CONSTRUCTOR_8(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
+#define ___YA_REGISTER_CONSTRUCTOR_9(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
+#define ___YA_REGISTER_CONSTRUCTOR_10(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
+#define ___YA_REGISTER_CONSTRUCTOR_11(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
+#define ___YA_REGISTER_CONSTRUCTOR_12(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
+#define ___YA_REGISTER_CONSTRUCTOR_13(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
+#define ___YA_REGISTER_CONSTRUCTOR_14(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
+#define ___YA_REGISTER_CONSTRUCTOR_15(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
+#define ___YA_REGISTER_CONSTRUCTOR_16(ClassName, ...) ___YA_REGISTER_CONSTRUCTOR_IMPL(ClassName, __VA_ARGS__)
 
 // clang-format off
 #define YA_REFLECT_END()                                                                               \
