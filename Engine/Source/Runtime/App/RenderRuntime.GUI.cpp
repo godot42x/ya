@@ -96,14 +96,9 @@ IImageView* getAttachmentImageView(IRenderTarget* rt, int attachmentIndex)
         return nullptr;
     }
 
-    auto* frameBuffer = rt->getCurFrameBuffer();
-    if (!frameBuffer) {
-        return nullptr;
-    }
-
     const int colorCount = static_cast<int>(rt->getColorAttachmentDescs().size());
     if (attachmentIndex < colorCount) {
-        auto* colorTexture = frameBuffer->getColorTexture(static_cast<uint32_t>(attachmentIndex));
+        auto* colorTexture = rt->getCurrentColorTexture(static_cast<uint32_t>(attachmentIndex));
         return colorTexture ? colorTexture->getImageView() : nullptr;
     }
 
@@ -111,7 +106,7 @@ IImageView* getAttachmentImageView(IRenderTarget* rt, int attachmentIndex)
         return nullptr;
     }
 
-    auto* depthTexture = frameBuffer->getDepthTexture();
+    auto* depthTexture = rt->getCurrentDepthTexture();
     return depthTexture ? depthTexture->getImageView() : nullptr;
 }
 

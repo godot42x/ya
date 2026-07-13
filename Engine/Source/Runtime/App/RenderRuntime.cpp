@@ -159,8 +159,7 @@ Texture* RenderRuntime::getPresentationTexture() const
         return nullptr;
     }
 
-    auto* frameBuffer = const_cast<IRenderTarget*>(_screenRT.get())->getCurFrameBuffer();
-    return frameBuffer ? frameBuffer->getColorTexture(0) : nullptr;
+    return const_cast<IRenderTarget*>(_screenRT.get())->getCurrentColorTexture(0);
 }
 
 bool RenderRuntime::isPostprocessingEnabled() const

@@ -79,8 +79,7 @@ Texture* getShadowDepthTexture(IRenderTarget* shadowDepthRT)
         return nullptr;
     }
 
-    auto* shadowFb = shadowDepthRT->getCurFrameBuffer();
-    return shadowFb ? shadowFb->getDepthTexture() : nullptr;
+    return shadowDepthRT->getCurrentDepthTexture();
 }
 
 } // namespace
@@ -221,17 +220,15 @@ void RenderRuntime::appendForwardDebugSlots(EditorViewportContext& ctx)
 
     if (auto* forwardPipeline = getForwardPipelineImpl(); forwardPipeline) {
         if (auto* viewportRT = forwardPipeline->getViewportRT()) {
-            if (auto* viewportFb = viewportRT->getCurFrameBuffer()) {
-                if (auto* viewportDepth = viewportFb->getDepthTexture()) {
-                    ctx.debugSpec.slots.push_back({
-                        .label         = "ViewportDepth",
-                        .defaultView   = viewportDepth->getImageView(),
-                        .ownedView     = nullptr,
-                        .image         = viewportDepth->getImageShared(),
-                        .categoryIndex = CATEGORY_VIEWPORT,
-                        .aspectFlags   = EImageAspect::Depth,
-                    });
-                }
+            if (auto* viewportDepth = viewportRT->getCurrentDepthTexture()) {
+                ctx.debugSpec.slots.push_back({
+                    .label         = "ViewportDepth",
+                    .defaultView   = viewportDepth->getImageView(),
+                    .ownedView     = nullptr,
+                    .image         = viewportDepth->getImageShared(),
+                    .categoryIndex = CATEGORY_VIEWPORT,
+                    .aspectFlags   = EImageAspect::Depth,
+                });
             }
         }
     }
@@ -246,46 +243,52 @@ void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
         return;
     }
 
-    auto* gbufferFb  = deferredViews.gBufferRT->getCurFrameBuffer();
-    auto* viewportFb = viewportRT->getCurFrameBuffer();
-    if (!gbufferFb || !viewportFb) {
+    auto* positionTexture      = deferredViews.gBufferRT->getCurrentColorTexture(0);
+    auto* normalTexture        = deferredViews.gBufferRT->getCurrentColorTexture(1);
+    auto* albedoSpecTexture    = deferredViews.gBufferRT->getCurrentColorTexture(2);
+    auto* shadingModelTexture  = deferredViews.gBufferRT->getCurrentColorTexture(3);
+    auto* gbufferDepthTexture  = deferredViews.gBufferRT->getCurrentDepthTexture();
+    auto* viewportColorTexture = viewportRT->getCurrentColorTexture(0);
+    auto* viewportDepthTexture = viewportRT->getCurrentDepthTexture();
+    if (!positionTexture || !normalTexture || !albedoSpecTexture || !shadingModelTexture || !gbufferDepthTexture ||
+        !viewportColorTexture || !viewportDepthTexture) {
         return;
     }
 
     ctx.debugSpec.slots = {
         {
             .label         = "Position",
-            .defaultView   = gbufferFb->getColorTexture(0)->getImageView(),
+            .defaultView   = positionTexture->getImageView(),
             .ownedView     = nullptr,
-            .image         = gbufferFb->getColorTexture(0)->getImageShared(),
+            .image         = positionTexture->getImageShared(),
             .categoryIndex = CATEGORY_GBUFFER,
         },
         {
             .label         = "Normal",
-            .defaultView   = gbufferFb->getColorTexture(1)->getImageView(),
+            .defaultView   = normalTexture->getImageView(),
             .ownedView     = nullptr,
-            .image         = gbufferFb->getColorTexture(1)->getImageShared(),
+            .image         = normalTexture->getImageShared(),
             .categoryIndex = CATEGORY_GBUFFER,
         },
         {
             .label         = "AlbedoSpec",
-            .defaultView   = gbufferFb->getColorTexture(2)->getImageView(),
+            .defaultView   = albedoSpecTexture->getImageView(),
             .ownedView     = nullptr,
-            .image         = gbufferFb->getColorTexture(2)->getImageShared(),
+            .image         = albedoSpecTexture->getImageShared(),
             .categoryIndex = CATEGORY_GBUFFER,
         },
         {
             .label         = "ShadingModel",
-            .defaultView   = gbufferFb->getColorTexture(3)->getImageView(),
+            .defaultView   = shadingModelTexture->getImageView(),
             .ownedView     = nullptr,
-            .image         = gbufferFb->getColorTexture(3)->getImageShared(),
+            .image         = shadingModelTexture->getImageShared(),
             .categoryIndex = CATEGORY_GBUFFER,
         },
         {
             .label         = "Depth",
-            .defaultView   = gbufferFb->getDepthTexture()->getImageView(),
+            .defaultView   = gbufferDepthTexture->getImageView(),
             .ownedView     = nullptr,
-            .image         = gbufferFb->getDepthTexture()->getImageShared(),
+            .image         = gbufferDepthTexture->getImageShared(),
             .categoryIndex = CATEGORY_GBUFFER,
             .aspectFlags   = EImageAspect::Depth,
             .tint          = {1, 0, 0, 1},
@@ -304,16 +307,16 @@ void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
 
     ctx.debugSpec.slots.push_back({
         .label         = "ViewPortColor0",
-        .defaultView   = viewportFb->getColorTexture(0) ? viewportFb->getColorTexture(0)->getImageView() : nullptr,
+        .defaultView   = viewportColorTexture->getImageView(),
         .ownedView     = nullptr,
-        .image         = viewportFb->getColorTexture(0) ? viewportFb->getColorTexture(0)->getImageShared() : nullptr,
+        .image         = viewportColorTexture->getImageShared(),
         .categoryIndex = CATEGORY_VIEWPORT,
     });
     ctx.debugSpec.slots.push_back({
         .label         = "ViewportDepth",
-        .defaultView   = viewportFb->getDepthTexture() ? viewportFb->getDepthTexture()->getImageView() : nullptr,
+        .defaultView   = viewportDepthTexture->getImageView(),
         .ownedView     = nullptr,
-        .image         = viewportFb->getDepthTexture() ? viewportFb->getDepthTexture()->getImageShared() : nullptr,
+        .image         = viewportDepthTexture->getImageShared(),
         .categoryIndex = CATEGORY_VIEWPORT,
         .aspectFlags   = EImageAspect::Depth,
         .tint          = {1, 0, 0, 1},

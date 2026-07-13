@@ -260,6 +260,7 @@
 - Forward pipeline 自身对 viewport 执行期 attachment 读取也开始显式化：当前 viewport 的 `color/depth/resolve/extents` 已收成 `ForwardViewportResources` snapshot，viewport pass/finalize/postprocess 输入不再临时从 `viewportRT` 现查 attachment 与 extent
 - shadow technique 已不再保留 `IRenderTarget` 输入契约：`BasicShadowMapTechnique` 只通过显式 `depth image + format + extent` 刷新派生视图与 pipeline，Forward viewport extent 查询也优先复用 pipeline snapshot，而不是回查 legacy owner
 - `ShadowStage` 也已去掉仅作转发的 shadow render-target 持有；pipeline 只在资源替换点显式推送 `ShadowMapResources` 快照，shadow 链路继续从 legacy owner 句柄转向显式 frame state
+- 运行时调试/编辑器视图路径也已开始脱离 `FrameBuffer` 细节：presentation、viewport、gbuffer、shadow 调试预览优先走 `IRenderTarget::getCurrent*Texture()` facade，而不是直接扒开当前 framebuffer
 - Forward viewport extent 的应用点也已开始收口：`applyViewportExtent()` 统一承接 extent 变更与 snapshot 刷新，execute/onViewportResized 不再各自分散维护 `viewportRT` 与 `_viewportResources` 的同步
 
 ## Phase 7: Deferred Graph 迁移
