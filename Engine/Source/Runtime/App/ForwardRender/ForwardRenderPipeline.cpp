@@ -48,6 +48,20 @@ ForwardViewportResources buildForwardViewportResources(const IRenderTarget* rend
 
 } // namespace
 
+void ForwardRenderPipeline::appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const
+{
+    catalog.entries.push_back({
+        .label = "Forward Viewport",
+        .rt    = viewportRT.get(),
+        .owner = RenderTargetEditorCatalog::Entry::EOwner::ForwardViewport,
+    });
+    catalog.entries.push_back({
+        .label = "Forward Shadow",
+        .rt    = _shadowResources.renderTarget.get(),
+        .owner = RenderTargetEditorCatalog::Entry::EOwner::ForwardShadow,
+    });
+}
+
 void ForwardRenderPipeline::rebuildShadowViews()
 {
     _shadowResources.rebuildViews(_render, "Shadow Map");

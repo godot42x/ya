@@ -8,8 +8,7 @@
 #include "Render/Render.h"
 #include "Render/Shader.h"
 #include "Runtime/App/Common/IRenderPipeline.h"
-#include "Runtime/App/DeferredRender/DeferredGBufferResources.h"
-#include "Runtime/App/DeferredRender/DeferredViewportResources.h"
+#include "Runtime/App/DeferredRender/DeferredPipelineDebugViews.h"
 #include "Runtime/App/OffscreenTaskService.h"
 #include "Runtime/App/RenderDiagnosticsService.h"
 #include "Runtime/App/RenderSharedResourceProvider.h"
@@ -39,13 +38,6 @@ struct EnvironmentLightingComponent;
 struct RenderFrameData;
 struct DebugRenderSystem;
 struct RenderDiagnosticsService;
-
-struct DeferredPipelineDebugViews
-{
-    DeferredGBufferResources  gBufferResources{};
-    DeferredViewportResources viewportResources{};
-    RenderImage*              ssaoTexture = nullptr;
-};
 
 struct RenderPipelineDebugOutputCatalog
 {

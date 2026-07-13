@@ -101,6 +101,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] IRenderTarget* getViewportRT() const override { return viewportRT.get(); }
     [[nodiscard]] Texture*       getViewportTexture() const override { return viewportTexture; }
     [[nodiscard]] const ForwardViewportResources& getCurrentViewportResources() const { return _viewportResources; }
+    void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const;
 
     // Shadow query accessors (used by RenderRuntime for debug views)
     [[nodiscard]] bool           isShadowMappingEnabled() const override;

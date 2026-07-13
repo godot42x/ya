@@ -2,6 +2,7 @@
 
 #include "Core/Math/Geometry.h"
 #include "DeferredGBufferResources.h"
+#include "DeferredPipelineDebugViews.h"
 #include "DeferredViewportResources.h"
 #include "GBufferStage.h"
 #include "LightStage.h"
@@ -35,6 +36,7 @@ struct SceneManager;
 struct Scene;
 struct Sampler;
 struct DebugRenderSystem;
+struct RenderTargetEditorCatalog;
 class ResourceResolveSystem;
 
 // Shading Model IDs written to GBuffer RT3 (encoded as id/255.0 in R8_UNORM)
@@ -155,6 +157,9 @@ struct DeferredRenderPipeline : public IRenderPipeline
     RenderImage* getSSAOTexture() const { return _ssaoTexture.get(); }
     const DeferredGBufferResources& getCurrentGBufferResources() const { return _currentGBufferResources; }
     const DeferredViewportResources& getCurrentViewportResources() const { return _currentViewportResources; }
+    DeferredPipelineDebugViews buildDebugViews() const;
+    void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const;
+    void setSharedDepthFormat(EFormat::T format);
 
     // Access GBuffer RT for debug views
     IRenderTarget* getGBufferRT() const { return _gBufferRT.get(); }

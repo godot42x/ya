@@ -375,6 +375,44 @@ void DeferredRenderPipeline::saveShadowSettingsToConfig(const ShadowSettings& sh
     shadow_settings::saveEditorSettings(shadowSettings);
 }
 
+DeferredPipelineDebugViews DeferredRenderPipeline::buildDebugViews() const
+{
+    return DeferredPipelineDebugViews{
+        .gBufferResources  = _currentGBufferResources,
+        .viewportResources = _currentViewportResources,
+        .ssaoTexture       = _ssaoTexture.get(),
+    };
+}
+
+void DeferredRenderPipeline::appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const
+{
+    catalog.entries.push_back({
+        .label = "Deferred GBuffer",
+        .rt    = _gBufferRT.get(),
+        .owner = RenderTargetEditorCatalog::Entry::EOwner::DeferredGBuffer,
+    });
+    catalog.entries.push_back({
+        .label = "Deferred Viewport",
+        .rt    = _viewportRT.get(),
+        .owner = RenderTargetEditorCatalog::Entry::EOwner::DeferredViewport,
+    });
+    catalog.entries.push_back({
+        .label = "Deferred Shadow",
+        .rt    = _shadowResources.renderTarget.get(),
+        .owner = RenderTargetEditorCatalog::Entry::EOwner::DeferredShadow,
+    });
+}
+
+void DeferredRenderPipeline::setSharedDepthFormat(EFormat::T format)
+{
+    if (_gBufferRT) {
+        _gBufferRT->setDepthAttachmentFormat(format);
+    }
+    if (_viewportRT) {
+        _viewportRT->setDepthAttachmentFormat(format);
+    }
+}
+
 void DeferredRenderPipeline::requestViewportResize(Extent2D extent)
 {
     if (extent.width == 0 || extent.height == 0) {

@@ -212,13 +212,10 @@ IRenderTarget* RenderRuntime::getActiveViewportRT() const
 
 DeferredPipelineDebugViews RenderRuntime::getDeferredPipelineDebugViews() const
 {
-    DeferredPipelineDebugViews views{};
     if (_renderPipeline == ERenderPipeline::Deferred && _deferredPipeline) {
-        views.gBufferResources  = _deferredPipeline->getCurrentGBufferResources();
-        views.viewportResources = _deferredPipeline->getCurrentViewportResources();
-        views.ssaoTexture       = _deferredPipeline->getSSAOTexture();
+        return _deferredPipeline->buildDebugViews();
     }
-    return views;
+    return {};
 }
 
 RenderTargetEditorCatalog RenderRuntime::buildRenderTargetEditorCatalog() const
@@ -234,33 +231,10 @@ RenderTargetEditorCatalog RenderRuntime::buildRenderTargetEditorCatalog() const
         });
     }
     if (_forwardPipeline) {
-        catalog.entries.push_back({
-            .label = "Forward Viewport",
-            .rt    = _forwardPipeline->getViewportRT(),
-            .owner = RenderTargetEditorCatalog::Entry::EOwner::ForwardViewport,
-        });
-        catalog.entries.push_back({
-            .label = "Forward Shadow",
-            .rt    = _forwardPipeline->getShadowDepthRT(),
-            .owner = RenderTargetEditorCatalog::Entry::EOwner::ForwardShadow,
-        });
+        _forwardPipeline->appendRenderTargetEditorEntries(catalog);
     }
     if (_deferredPipeline) {
-        catalog.entries.push_back({
-            .label = "Deferred GBuffer",
-            .rt    = _deferredPipeline->getGBufferRT(),
-            .owner = RenderTargetEditorCatalog::Entry::EOwner::DeferredGBuffer,
-        });
-        catalog.entries.push_back({
-            .label = "Deferred Viewport",
-            .rt    = _deferredPipeline->getViewportRT(),
-            .owner = RenderTargetEditorCatalog::Entry::EOwner::DeferredViewport,
-        });
-        catalog.entries.push_back({
-            .label = "Deferred Shadow",
-            .rt    = _deferredPipeline->getShadowDepthRT(),
-            .owner = RenderTargetEditorCatalog::Entry::EOwner::DeferredShadow,
-        });
+        _deferredPipeline->appendRenderTargetEditorEntries(catalog);
     }
 
     return catalog;
@@ -272,12 +246,7 @@ void RenderRuntime::setDeferredSharedDepthFormat(EFormat::T format)
         return;
     }
 
-    if (auto* gbufferRT = _deferredPipeline->getGBufferRT()) {
-        gbufferRT->setDepthAttachmentFormat(format);
-    }
-    if (auto* viewportRT = _deferredPipeline->getViewportRT()) {
-        viewportRT->setDepthAttachmentFormat(format);
-    }
+    _deferredPipeline->setSharedDepthFormat(format);
 }
 
 DebugRenderSystem& RenderRuntime::getDebugRenderSystem() const

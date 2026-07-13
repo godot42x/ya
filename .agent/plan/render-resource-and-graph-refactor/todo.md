@@ -269,6 +269,9 @@
 - postprocess output 的内部 owner 已改为 `RenderImage`：`PostProcessingStage` 不再用 `Texture::createRenderTexture()` 持有主输出，graph import / resize 直接基于 `RenderImage`；现阶段仅保留一个 `Texture::wrap()` 兼容出口给 viewport / screenshot 链路，后续与 screenshot scratch 一起再去掉
 - pipeline/runtime 层已开始暴露显式 `postprocessOutputImage`：`IRenderPipelineDebugOutputs` 与 `RenderRuntime` 现同时提供 `RenderImage*` 输出，把 `Texture*` 兼容链进一步收窄到 automation / screenshot 一侧
 - automation screenshot 已开始优先消费 `RenderImage*` 的 postprocess 输出：`AppAutomationFrameContext` / `AppScreenshotCapture` 现在先用 `postprocessImage`，仅在缺失时回退 viewport `Texture*`
+- runtime 对 deferred concrete owner 的一部分直连也已开始回收：RT editor deferred entries 与 shared depth format 修改现通过 `DeferredRenderPipeline` helper 完成，`RenderRuntime` 不再直接摸 `_gBufferRT/_viewportRT`
+- forward 侧的 RT editor owner 暴露也已对齐成 pipeline helper：`RenderRuntime` 不再直接用 `getViewportRT()/getShadowDepthRT()` 组 forward catalog entries
+- deferred debug snapshot 也已从 runtime 自身的数据拼装回收到 pipeline：`DeferredPipelineDebugViews` 已移动到 deferred 模块，并由 `DeferredRenderPipeline::buildDebugViews()` 统一导出
 - Forward viewport extent 的应用点也已开始收口：`applyViewportExtent()` 统一承接 extent 变更与 snapshot 刷新，execute/onViewportResized 不再各自分散维护 `viewportRT` 与 `_viewportResources` 的同步
 
 ## Phase 7: Deferred Graph 迁移
