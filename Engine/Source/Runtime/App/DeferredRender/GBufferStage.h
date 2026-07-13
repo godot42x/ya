@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DeferredAttachmentFormats.h"
 #include "Runtime/App/Common/Shadow/Common/ShadowRuntimeState.h"
 
 #include "Render/Core/DescriptorSet.h"
@@ -19,8 +20,6 @@
 
 namespace ya
 {
-
-struct IRenderTarget;
 
 /// GBuffer stage for the Deferred pipeline.
 ///
@@ -116,7 +115,7 @@ struct GBufferStage : public IRenderStage
     void                                       applyShadowState(const ShadowRuntimeState& shadowState) { _shadowState = shadowState; }
     [[nodiscard]] uint32_t                     getMaxShadowedPointLights() const { return _shadowState.maxShadowedPointLights; }
     [[nodiscard]] uint32_t                     getLastShadowedPointLights() const { return _lastShadowedPointLights; }
-    void                                       refreshPipelineFormats(const IRenderTarget* gBufferRT);
+    void                                       refreshPipelineFormats(const DeferredAttachmentFormats& formats);
 
   private:
     void initSharedResources();

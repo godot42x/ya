@@ -5,6 +5,7 @@
 #include "Core/Profiling/PerfState.h"
 #include "Core/Profiling/Profiling.h"
 #include "DeferredViewportResources.h"
+#include "DeferredAttachmentFormats.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/System/ResourceResolveSystem.h"
@@ -62,6 +63,26 @@ DeferredViewportResources buildDeferredViewportResources(IRenderTarget* viewport
     resources.color = frameBuffer->getColorTexture(0);
     resources.depth = frameBuffer->getDepthTexture();
     return resources;
+}
+
+DeferredAttachmentFormats buildDeferredAttachmentFormats(const IRenderTarget* renderTarget)
+{
+    DeferredAttachmentFormats formats{};
+    if (!renderTarget) {
+        return formats;
+    }
+
+    const auto& colorDescs = renderTarget->getColorAttachmentDescs();
+    formats.colorFormats.reserve(colorDescs.size());
+    for (const auto& desc : colorDescs) {
+        formats.colorFormats.push_back(desc.format);
+    }
+
+    if (const auto depthDesc = renderTarget->getDepthAttachmentDesc(); depthDesc.has_value()) {
+        formats.depthFormat = depthDesc->format;
+    }
+
+    return formats;
 }
 
 RGImportedTextureDesc makeDeferredImportedTextureDesc(Texture& texture, std::string_view label, EImageLayout::T finalLayout)
@@ -694,17 +715,17 @@ void DeferredRenderPipeline::refreshDirtyResources()
         _gBufferRT->flushDirty();
         invalidateGBufferDependentViews();
         if (_gBufferStage) {
-            _gBufferStage->refreshPipelineFormats(_gBufferRT.get());
+            _gBufferStage->refreshPipelineFormats(buildDeferredAttachmentFormats(_gBufferRT.get()));
         }
     }
 
     if (bViewportPipelineDirty) {
         _viewportRT->flushDirty();
         if (_lightStage) {
-            _lightStage->refreshPipelineFormats(_viewportRT.get());
+            _lightStage->refreshPipelineFormats(buildDeferredAttachmentFormats(_viewportRT.get()));
         }
         if (_overlayStage) {
-            _overlayStage->refreshPipelineFormats(_viewportRT.get());
+            _overlayStage->refreshPipelineFormats(buildDeferredAttachmentFormats(_viewportRT.get()));
         }
     }
 }
@@ -719,17 +740,17 @@ void DeferredRenderPipeline::refreshViewportSizedStageResources()
     }
 
     if (_gBufferStage) {
-        _gBufferStage->refreshPipelineFormats(_gBufferRT.get());
+        _gBufferStage->refreshPipelineFormats(buildDeferredAttachmentFormats(_gBufferRT.get()));
     }
 
     if (_lightStage) {
         _lightStage->setup(_gBufferStage.get(), buildDeferredGBufferResources(_gBufferRT.get()));
         _lightStage->setSSAOTexture(_ssaoTexture.get());
-        _lightStage->refreshPipelineFormats(_viewportRT.get());
+        _lightStage->refreshPipelineFormats(buildDeferredAttachmentFormats(_viewportRT.get()));
     }
 
     if (_overlayStage) {
-        _overlayStage->refreshPipelineFormats(_viewportRT.get());
+        _overlayStage->refreshPipelineFormats(buildDeferredAttachmentFormats(_viewportRT.get()));
     }
 
     refreshCurrentFrameResources();

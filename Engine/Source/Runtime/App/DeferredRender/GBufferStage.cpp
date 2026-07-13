@@ -2,7 +2,6 @@
 
 #include "Core/Profiling/Instrumentor.h"
 
-#include "Render/Core/IRenderTarget.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/RenderFrameData.h"
@@ -24,27 +23,15 @@ namespace ya
 namespace
 {
 
-void refreshShadingPipelineFormats(IGraphicsPipeline* pipeline, const IRenderTarget* gBufferRT)
+void refreshShadingPipelineFormats(IGraphicsPipeline* pipeline, const DeferredAttachmentFormats& formats)
 {
-    if (!pipeline || !gBufferRT) {
+    if (!pipeline || !formats.hasColor() || !formats.depthFormat.has_value()) {
         return;
-    }
-
-    const auto& colorDescs = gBufferRT->getColorAttachmentDescs();
-    const auto& depthDesc  = gBufferRT->getDepthAttachmentDesc();
-    if (colorDescs.empty() || !depthDesc.has_value()) {
-        return;
-    }
-
-    std::vector<EFormat::T> colorFormats;
-    colorFormats.reserve(colorDescs.size());
-    for (const auto& desc : colorDescs) {
-        colorFormats.push_back(desc.format);
     }
 
     auto ci                                         = pipeline->getDesc();
-    ci.pipelineRenderingInfo.colorAttachmentFormats = std::move(colorFormats);
-    ci.pipelineRenderingInfo.depthAttachmentFormat  = depthDesc->format;
+    ci.pipelineRenderingInfo.colorAttachmentFormats = formats.colorFormats;
+    ci.pipelineRenderingInfo.depthAttachmentFormat  = *formats.depthFormat;
     pipeline->updateDesc(std::move(ci));
 }
 
@@ -64,14 +51,14 @@ void GBufferStage::init(IRender* render)
     initFallbackMaterial();
 }
 
-void GBufferStage::refreshPipelineFormats(const IRenderTarget* gBufferRT)
+void GBufferStage::refreshPipelineFormats(const DeferredAttachmentFormats& formats)
 {
-    refreshShadingPipelineFormats(_pbr.pipeline.get(), gBufferRT);
-    refreshShadingPipelineFormats(_pbrSkinned.pipeline.get(), gBufferRT);
-    refreshShadingPipelineFormats(_phong.pipeline.get(), gBufferRT);
-    refreshShadingPipelineFormats(_phongSkinned.pipeline.get(), gBufferRT);
-    refreshShadingPipelineFormats(_unlit.pipeline.get(), gBufferRT);
-    refreshShadingPipelineFormats(_unlitSkinned.pipeline.get(), gBufferRT);
+    refreshShadingPipelineFormats(_pbr.pipeline.get(), formats);
+    refreshShadingPipelineFormats(_pbrSkinned.pipeline.get(), formats);
+    refreshShadingPipelineFormats(_phong.pipeline.get(), formats);
+    refreshShadingPipelineFormats(_phongSkinned.pipeline.get(), formats);
+    refreshShadingPipelineFormats(_unlit.pipeline.get(), formats);
+    refreshShadingPipelineFormats(_unlitSkinned.pipeline.get(), formats);
 }
 
 void GBufferStage::initSharedResources()

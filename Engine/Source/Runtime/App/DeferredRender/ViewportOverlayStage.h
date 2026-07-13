@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DeferredAttachmentFormats.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Pipelines/DebugSkinning.h"
@@ -12,7 +13,6 @@
 namespace ya
 {
 
-struct IRenderTarget;
 class ResourceResolveSystem;
 struct Scene;
 struct Mesh;
@@ -98,7 +98,7 @@ struct ViewportOverlayStage : public IRenderStage
     void prepare(const RenderStageContext& ctx) override;
     void execute(const RenderStageContext& ctx) override;
     void renderGUI() override;
-    void refreshPipelineFormats(const IRenderTarget* viewportRT);
+    void refreshPipelineFormats(const DeferredAttachmentFormats& formats);
     void setServices(Services services);
     void setFrameInputs(FrameInputs frameInputs);
 

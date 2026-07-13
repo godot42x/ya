@@ -242,6 +242,7 @@
 - RenderGraph 已补最小 texture transfer 语义与 `RGRenderContext::copyTexture()` helper；Deferred depth copy 现已切成 graph-backed copy pass 壳，开始把“手写 barrier + copyImage”路径迁回 graph executor 管理
 - Deferred viewport raster 外壳已切入 graph：viewport color/depth attachment、light pass、overlay pass 与 viewport overlay callback 现在由单个 graph-backed raster pass 包裹，postprocess 继续作为后续消费方读取 graph pass 输出
 - RenderGraph 已补最小 MRT raster helper，`RGRenderContext::beginRasterRendering()` 现在可绑定多个 color attachment；Deferred GBuffer 外壳已迁到 graph-backed raster pass，`GBufferStage` 保持只负责 draw 录制
+- Deferred 自身 stage 的格式刷新路径已开始去 `IRenderTarget` 化：`GBufferStage / LightStage / ViewportOverlayStage` 现改用显式 `DeferredAttachmentFormats`，把“为了拿格式而借整个 render target”收紧成更明确的格式描述输入
 
 ## Phase 7: Deferred Graph 迁移
 

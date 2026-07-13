@@ -9,7 +9,6 @@
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
-#include "Render/Core/IRenderTarget.h"
 #include "Render/Core/RenderResourceFactory.h"
 
 #include "Resource/Mesh/PrimitiveMeshCache.h"
@@ -66,20 +65,13 @@ void ViewportOverlayStage::setFrameInputs(FrameInputs frameInputs)
     _frameInputs = std::move(frameInputs);
 }
 
-void ViewportOverlayStage::refreshPipelineFormats(const IRenderTarget* viewportRT)
+void ViewportOverlayStage::refreshPipelineFormats(const DeferredAttachmentFormats& formats)
 {
-    if (!viewportRT) {
+    if (!formats.hasColor()) {
         return;
     }
-
-    const auto& colorDescs = viewportRT->getColorAttachmentDescs();
-    const auto& depthDesc  = viewportRT->getDepthAttachmentDesc();
-    if (colorDescs.empty()) {
-        return;
-    }
-
-    const auto colorFormat = colorDescs.front().format;
-    const auto depthFormat = depthDesc.has_value() ? depthDesc->format : EFormat::Undefined;
+    const auto colorFormat = formats.colorFormats.front();
+    const auto depthFormat = formats.depthFormat.value_or(EFormat::Undefined);
 
     if (_skyboxPipeline) {
         auto ci                                         = _skyboxPipeline->getDesc();
@@ -94,11 +86,6 @@ void ViewportOverlayStage::refreshPipelineFormats(const IRenderTarget* viewportR
         ci.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
         _overlayPipeline->updateDesc(std::move(ci));
     }
-
-    if (_getDebugRenderSystem) {
-        _getDebugRenderSystem().refreshPipelineFormats(viewportRT);
-    }
-    _debugSkinning.refreshPipelineFormats(viewportRT);
 }
 
 // ═══════════════════════════════════════════════════════════════════════

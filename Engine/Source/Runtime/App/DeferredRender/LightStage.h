@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DeferredAttachmentFormats.h"
 #include "DeferredGBufferResources.h"
 #include "Runtime/App/Common/Shadow/Common/ShadowRuntimeState.h"
 
@@ -97,7 +98,7 @@ struct LightStage : public IRenderStage
     void setSSAOTexture(RenderImage* ssaoTexture);
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecularIBL);
-    void refreshPipelineFormats(const IRenderTarget* viewportRT);
+    void refreshPipelineFormats(const DeferredAttachmentFormats& formats);
     void invalidateGBufferDescriptors();
     void invalidateShadowDescriptors();
     [[nodiscard]] bool shouldRefreshShadowDescriptors() const;
