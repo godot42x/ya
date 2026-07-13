@@ -365,11 +365,6 @@ void ForwardRenderPipeline::finalizeViewportPass(ICommandBuffer* cmdBuf)
     YA_CORE_ASSERT(viewportTexture, "Failed to get viewport texture for postprocessing");
 }
 
-void ForwardRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
-{
-    (void)cmdBuf;
-}
-
 void ForwardRenderPipeline::shutdown()
 {
     _getFrameIndex = {};

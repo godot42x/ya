@@ -92,9 +92,6 @@ struct ForwardRenderPipeline : public IRenderPipeline
     void renderPerformanceGUI() override;
     void renderStageInternalsGUI() override;
 
-    void endViewportPass(ICommandBuffer* cmdBuf) override;
-    bool hasOpenViewportPass() const override { return false; }
-
     void                         onViewportResized(Rect2D rect) override;
     Extent2D                     getViewportExtent() const override;
     [[nodiscard]] IRenderTarget* getViewportRT() const override { return viewportRT.get(); }

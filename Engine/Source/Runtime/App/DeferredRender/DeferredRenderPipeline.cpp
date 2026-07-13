@@ -944,11 +944,6 @@ void DeferredRenderPipeline::finalizeViewportPass(ICommandBuffer* cmdBuf)
     }
 }
 
-void DeferredRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
-{
-    (void)cmdBuf;
-}
-
 void DeferredRenderPipeline::onViewportResized(Rect2D rect)
 {
     Extent2D newExtent{

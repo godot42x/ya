@@ -232,8 +232,8 @@
 - `SSAOStage::execute()` 已切到 graph-backed 执行壳：保留现有 GBuffer descriptor 更新、frame UBO 和 fullscreen draw 逻辑，只将 output attachment/rendering/barrier 交给 graph + executor，作为 Deferred 主链路首个 graph 化 stage 样板
 - `BloomPostprocessing::render()` 已切到 graph-backed 子链：extract / blur ping-pong / composite 三段都改为 graph pass，现有 descriptor cache、push constants 和 pipeline 逻辑保持不变，说明 graph 已可承接 runtime 内部多 pass 后处理工作流而不必一次性改写 shader/descriptor 层
 - `RGRenderContext` 已补最小 `beginRasterRendering(color + optional depth)` helper，并有核心测试覆盖 depth attachment 场景；这一步是后续 viewport/shadow 类 pass graph 化的前置接口补齐
-- viewport overlay 录制边界已向 pipeline 内回收一步：`RenderRuntime` 不再在 `renderWorldFrame()` 里直接插入 `Render2D/UI`，而是通过 `RenderPipelineFrameContext::recordViewportOverlays` 回调交给 pipeline 在 `endViewportPass()` 前调用；这一步暂未消除 open-pass 契约，但已经把 ownership 从 runtime 外层推进到 pipeline 内，便于后续继续收 deferred viewport graph 边界
-- Forward/Deferred viewport pass 现已在各自 `tick()` 内闭合完成，`RenderRuntime::renderWorldFrame()` 不再负责额外 `endViewportPass()` 收尾；目前保留 `hasOpenViewportPass()/endViewportPass()` 兼容接口与少量状态字段，仅作为后续接口清理前的过渡层
+- viewport overlay 录制边界已向 pipeline 内回收：`RenderRuntime` 不再在 `renderWorldFrame()` 里直接插入 `Render2D/UI`，而是通过 `RenderPipelineFrameContext::recordViewportOverlays` 回调交给 pipeline 在 viewport rendering 结束前调用；overlay ownership 现已从 runtime 外层推进到 pipeline 内，便于后续继续收 deferred viewport graph 边界
+- Forward/Deferred viewport pass 现已在各自 `tick()` 内闭合完成，`RenderRuntime::renderWorldFrame()` 不再负责额外收尾；`IRenderPipeline` 上的 `hasOpenViewportPass()/endViewportPass()` 旧契约已删除，viewport pass 生命周期正式收口到 pipeline 内部
 
 ## Phase 7: Deferred Graph 迁移
 

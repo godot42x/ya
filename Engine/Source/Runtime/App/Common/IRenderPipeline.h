@@ -40,11 +40,9 @@ struct IRenderPipelineExecution
     virtual void onViewportResized(Rect2D rect) = 0;
     virtual void tick(const RenderPipelineFrameContext& frame) = 0;
 
-    [[nodiscard]] virtual bool           hasOpenViewportPass() const = 0;
     [[nodiscard]] virtual Extent2D       getViewportExtent() const   = 0;
     [[nodiscard]] virtual IRenderTarget* getViewportRT() const       = 0;
     [[nodiscard]] virtual Texture*       getViewportTexture() const  = 0;
-    virtual void                         endViewportPass(ICommandBuffer* cmdBuf) = 0;
 };
 
 struct IRenderPipelineSettingsUI

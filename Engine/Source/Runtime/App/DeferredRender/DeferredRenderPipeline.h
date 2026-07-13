@@ -145,9 +145,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void renderStageInternalsGUI() override;
 
     void beginViewportRendering(const RenderPipelineFrameContext& frame);
-    void endViewportPass(ICommandBuffer* cmdBuf) override;
-    bool hasOpenViewportPass() const override { return false; }
-
     void onViewportResized(Rect2D rect) override;
 
     Extent2D getViewportExtent() const override { return _viewportRT ? _viewportRT->getExtent() : Extent2D{}; }
