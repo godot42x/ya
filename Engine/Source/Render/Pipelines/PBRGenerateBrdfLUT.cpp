@@ -1,47 +1,11 @@
 #include "PBRGenerateBrdfLUT.h"
 
 #include "Render/Core/CommandBuffer.h"
-#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Render.h"
+#include "Render/RenderDefines.h"
 
 namespace ya
 {
-
-namespace
-{
-
-RGImportedTextureDesc makeBrdfLutImportedTextureDesc(const RenderImage& image)
-{
-    YA_CORE_ASSERT(image.getImageShared() != nullptr, "PBR BRDF LUT graph import requires a backing image");
-
-    IImage* rawImage = image.getImage();
-    YA_CORE_ASSERT(rawImage != nullptr, "PBR BRDF LUT graph import requires a valid image");
-
-    return RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label       = "PBRGenerateBrdfLUT.Output",
-            .format      = image.getFormat(),
-            .extent      = Extent3D{image.getWidth(), image.getHeight(), 1},
-            .mipLevels   = rawImage->getMipLevels(),
-            .arrayLayers = rawImage->getArrayLayers(),
-            .usage       = rawImage->getUsage(),
-        },
-        .importDesc = ImportedImageDesc{
-            .label         = "PBRGenerateBrdfLUT.Output",
-            .nativeHandle  = static_cast<void*>(rawImage->getHandle()),
-            .format        = image.getFormat(),
-            .usage         = rawImage->getUsage(),
-            .extent        = Extent3D{image.getWidth(), image.getHeight(), 1},
-            .mipLevels     = rawImage->getMipLevels(),
-            .arrayLayers   = rawImage->getArrayLayers(),
-            .initialLayout = rawImage->getCompatibilityLayout(),
-            .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-        },
-        .image = image.getImageShared(),
-    };
-}
-
-} // namespace
 
 void PBRGenerateBrdfLUT::init(IRender* render)
 {
@@ -55,7 +19,6 @@ void PBRGenerateBrdfLUT::init(IRender* render)
         return;
     }
 
-    _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
     _pipelineLayout = IPipelineLayout::create(_render,
                                               _pipelineLayoutDesc.label,
                                               _pipelineLayoutDesc.pushConstants,
@@ -65,10 +28,6 @@ void PBRGenerateBrdfLUT::init(IRender* render)
 
 void PBRGenerateBrdfLUT::shutdown()
 {
-    if (_graphExecutor) {
-        _graphExecutor->clear();
-    }
-    _graphExecutor.reset();
     _pipeline.reset();
     _pipelineLayout.reset();
     _pipelineColorFormat = EFormat::Undefined;
@@ -148,8 +107,6 @@ PBRGenerateBrdfLUT::ExecuteResult PBRGenerateBrdfLUT::execute(const ExecuteConte
     if (!_render || !ctx.cmdBuf || !ctx.output) {
         return result;
     }
-    YA_CORE_ASSERT(_graphExecutor != nullptr, "PBRGenerateBrdfLUT graph executor is not initialized");
-
     YA_CORE_ASSERT(ctx.output->getImageShared() && ctx.output->getImageView(),
                    "PBRGenerateBrdfLUT output texture must own a valid image and image view");
     if (!ctx.output->getImageShared() || !ctx.output->getImageView()) {
@@ -162,37 +119,37 @@ PBRGenerateBrdfLUT::ExecuteResult PBRGenerateBrdfLUT::execute(const ExecuteConte
 
     ICommandBuffer::LabelScope labelScope(ctx.cmdBuf, "PBRGenerateBrdfLUT");
 
-    RenderGraph graph;
-    const auto  output = graph.importTexture(makeBrdfLutImportedTextureDesc(*ctx.output));
-
-    graph.addPass(
-        "PBRGenerateBrdfLUT",
-        [&](RGPassBuilder& pass) {
-            pass.useColorAttachment(output);
+    RenderingInfo::ImageSpec colorSpec{
+        .image         = ctx.output->getImage(),
+        .imageView     = ctx.output->getImageView(),
+        .loadOp        = EAttachmentLoadOp::Clear,
+        .storeOp       = EAttachmentStoreOp::Store,
+        .initialLayout = EImageLayout::ColorAttachmentOptimal,
+        .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+    };
+    RenderingInfo renderInfo{
+        .label            = "PBRGenerateBrdfLUT",
+        .renderArea       = Rect2D{
+                  .pos    = {0.0f, 0.0f},
+                  .extent = {static_cast<float>(ctx.output->getWidth()), static_cast<float>(ctx.output->getHeight())},
         },
-        [&](RGRenderContext& rgCtx) {
-            rgCtx.beginColorRendering({
-                .color      = output,
-                .renderArea = Rect2D{
-                    .pos    = {0.0f, 0.0f},
-                    .extent = {static_cast<float>(ctx.output->getWidth()), static_cast<float>(ctx.output->getHeight())},
-                },
-                .clearValue  = ctx.clearColor,
-                .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-            });
-            rgCtx.getCommandBuffer().bindPipeline(_pipeline.get());
-            rgCtx.getCommandBuffer().setViewport(0.0f,
-                                                0.0f,
-                                                static_cast<float>(ctx.output->getWidth()),
-                                                static_cast<float>(ctx.output->getHeight()),
-                                                0.0f,
-                                                1.0f);
-            rgCtx.getCommandBuffer().setScissor(0, 0, ctx.output->getWidth(), ctx.output->getHeight());
-            rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
-            rgCtx.endRendering();
-        });
+        .layerCount       = 1,
+        .colorClearValues = {ctx.clearColor},
+        .colorAttachments = {colorSpec},
+    };
 
-    result.bSuccess = _graphExecutor->execute(graph, *ctx.cmdBuf);
+    ctx.cmdBuf->beginRendering(renderInfo);
+    ctx.cmdBuf->bindPipeline(_pipeline.get());
+    ctx.cmdBuf->setViewport(0.0f,
+                            0.0f,
+                            static_cast<float>(ctx.output->getWidth()),
+                            static_cast<float>(ctx.output->getHeight()),
+                            0.0f,
+                            1.0f);
+    ctx.cmdBuf->setScissor(0, 0, ctx.output->getWidth(), ctx.output->getHeight());
+    ctx.cmdBuf->draw(3, 1, 0, 0);
+    ctx.cmdBuf->endRendering(renderInfo);
+    result.bSuccess = true;
     return result;
 }
 
