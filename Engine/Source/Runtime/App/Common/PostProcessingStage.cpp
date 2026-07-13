@@ -181,6 +181,7 @@ void PostProcessingStage::init(const InitDesc& desc)
 {
     _render      = desc.render;
     _colorFormat = desc.colorFormat;
+    _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
 
     auto& config               = ConfigManager::get();
     bEnabled                   = config.getOr<bool>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_ENABLE, bEnabled);
@@ -233,6 +234,7 @@ void PostProcessingStage::init(const InitDesc& desc)
 
 void PostProcessingStage::shutdown()
 {
+    _graphExecutor.reset();
     if (_bloomProcessor) {
         _bloomProcessor->shutdown();
         _bloomProcessor.reset();
@@ -382,8 +384,8 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
             rgCtx.endRendering();
         });
 
-    RenderGraphExecutor executor(*_render->getResourceFactory());
-    if (!executor.execute(graph, *cmdBuf)) {
+    YA_CORE_ASSERT(_graphExecutor != nullptr, "PostProcessingStage graph executor is not initialized");
+    if (!_graphExecutor->execute(graph, *cmdBuf)) {
         return inputTexture;
     }
 

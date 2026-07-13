@@ -7,6 +7,7 @@
 #include "GBufferStage.h"
 #include "LightStage.h"
 #include "Render/Core/DescriptorSet.h"
+#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Core/RenderImage.h"
@@ -82,7 +83,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     // ── Render targets ────────────────────────────────────────────────
     stdptr<IRenderTarget> _gBufferRT;
     stdptr<IRenderTarget> _viewportRT;
-    stdptr<RenderImage>   _ssaoTexture;
 
     static constexpr EFormat::T LINEAR_FORMAT            = EFormat::R8G8B8A8_UNORM;
     static constexpr EFormat::T SIGNED_LINEAR_FORMAT     = EFormat::R16G16B16A16_SFLOAT;
@@ -131,6 +131,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     FrameContext               _lastTickCtx{};
     RenderPipelineFrameContext _lastFrameInput{};
     ShadowSettings             _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
+    std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
     DeferredRenderPipeline() = default;
     ~DeferredRenderPipeline();
@@ -158,7 +159,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
 
     IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
-    RenderImage* getSSAOTexture() const { return _ssaoTexture.get(); }
+    RenderImage* getSSAOTexture() const { return _ssaoStage ? const_cast<RenderImage*>(_ssaoStage->getOutputTexture()) : nullptr; }
     const DeferredGBufferResources& getCurrentGBufferResources() const { return _currentGBufferResources; }
     const DeferredViewportResources& getCurrentViewportResources() const { return _currentViewportResources; }
     DeferredPipelineDebugViews buildDebugViews() const;

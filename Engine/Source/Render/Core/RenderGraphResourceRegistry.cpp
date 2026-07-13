@@ -1,7 +1,85 @@
 #include "RenderGraphResourceRegistry.h"
 
+#include <unordered_set>
+
 namespace ya
 {
+
+namespace
+{
+
+bool isSameImageViewDesc(const ImageViewCreateInfo& lhs, const ImageViewCreateInfo& rhs)
+{
+    return lhs.label == rhs.label &&
+           lhs.viewType == rhs.viewType &&
+           lhs.aspectFlags == rhs.aspectFlags &&
+           lhs.baseMipLevel == rhs.baseMipLevel &&
+           lhs.levelCount == rhs.levelCount &&
+           lhs.baseArrayLayer == rhs.baseArrayLayer &&
+           lhs.layerCount == rhs.layerCount &&
+           lhs.components.r == rhs.components.r &&
+           lhs.components.g == rhs.components.g &&
+           lhs.components.b == rhs.components.b &&
+           lhs.components.a == rhs.components.a;
+}
+
+bool isSameTextureDesc(const RGTextureDesc& lhs, const RGTextureDesc& rhs)
+{
+    return lhs.label == rhs.label &&
+           lhs.format == rhs.format &&
+           lhs.extent.width == rhs.extent.width &&
+           lhs.extent.height == rhs.extent.height &&
+           lhs.extent.depth == rhs.extent.depth &&
+           lhs.mipLevels == rhs.mipLevels &&
+           lhs.arrayLayers == rhs.arrayLayers &&
+           lhs.samples == rhs.samples &&
+           lhs.usage == rhs.usage &&
+           lhs.flags == rhs.flags;
+}
+
+bool isSameImportedImageDesc(const ImportedImageDesc& lhs, const ImportedImageDesc& rhs)
+{
+    return lhs.label == rhs.label &&
+           lhs.nativeHandle == rhs.nativeHandle &&
+           lhs.format == rhs.format &&
+           lhs.usage == rhs.usage &&
+           lhs.extent.width == rhs.extent.width &&
+           lhs.extent.height == rhs.extent.height &&
+           lhs.extent.depth == rhs.extent.depth &&
+           lhs.mipLevels == rhs.mipLevels &&
+           lhs.arrayLayers == rhs.arrayLayers &&
+           lhs.bOwnsNativeResource == rhs.bOwnsNativeResource &&
+           lhs.initialLayout == rhs.initialLayout &&
+           lhs.finalLayout == rhs.finalLayout;
+}
+
+bool isSameImportedTextureDesc(const RGImportedTextureDesc& lhs, const RGImportedTextureDesc& rhs)
+{
+    const bool bSameViewDesc =
+        lhs.viewDesc.has_value() == rhs.viewDesc.has_value() &&
+        (!lhs.viewDesc.has_value() || isSameImageViewDesc(*lhs.viewDesc, *rhs.viewDesc));
+
+    return isSameTextureDesc(lhs.desc, rhs.desc) &&
+           isSameImportedImageDesc(lhs.importDesc, rhs.importDesc) &&
+           lhs.image.get() == rhs.image.get() &&
+           bSameViewDesc;
+}
+
+bool isSameBufferDesc(const RGBufferDesc& lhs, const RGBufferDesc& rhs)
+{
+    return lhs.label == rhs.label &&
+           lhs.usage == rhs.usage &&
+           lhs.size == rhs.size &&
+           lhs.memoryUsage == rhs.memoryUsage;
+}
+
+bool isSameImportedBufferDesc(const RGImportedBufferDesc& lhs, const RGImportedBufferDesc& rhs)
+{
+    return isSameBufferDesc(lhs.desc, rhs.desc) &&
+           lhs.buffer == rhs.buffer;
+}
+
+} // namespace
 
 RenderImageDesc RenderGraphResourceRegistry::makeRenderImageDesc(const RGTextureDesc& desc)
 {
@@ -58,39 +136,136 @@ std::shared_ptr<RenderImage> RenderGraphResourceRegistry::createImportedTexture(
     return resource;
 }
 
+void RenderGraphResourceRegistry::pruneUnusedResources(const RenderGraph& graph)
+{
+    std::unordered_set<RGTextureHandle> liveTextures;
+    liveTextures.reserve(graph.getTextures().size());
+    for (const auto& texture : graph.getTextures()) {
+        liveTextures.insert(texture.handle);
+    }
+
+    for (auto it = _textures.begin(); it != _textures.end();) {
+        if (!liveTextures.contains(it->first)) {
+            it = _textures.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+
+    std::unordered_set<RGBufferHandle> liveBuffers;
+    liveBuffers.reserve(graph.getBuffers().size());
+    for (const auto& buffer : graph.getBuffers()) {
+        liveBuffers.insert(buffer.handle);
+    }
+
+    for (auto it = _ownedBuffers.begin(); it != _ownedBuffers.end();) {
+        if (!liveBuffers.contains(it->first)) {
+            it = _ownedBuffers.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+
+    for (auto it = _importedBuffers.begin(); it != _importedBuffers.end();) {
+        if (!liveBuffers.contains(it->first)) {
+            it = _importedBuffers.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+}
+
+bool RenderGraphResourceRegistry::needsTextureReplacement(const TextureEntry& entry, const RGTextureResource& resource)
+{
+    if (!isSameTextureDesc(entry.desc, resource.desc)) {
+        return true;
+    }
+
+    if (resource.lifetime == ERGResourceLifetime::Imported) {
+        if (!resource.imported.has_value() || !entry.imported.has_value()) {
+            return true;
+        }
+        return !isSameImportedTextureDesc(*entry.imported, *resource.imported);
+    }
+
+    return entry.imported.has_value();
+}
+
+bool RenderGraphResourceRegistry::needsOwnedBufferReplacement(const OwnedBufferEntry& entry, const RGBufferResource& resource)
+{
+    return !isSameBufferDesc(entry.desc, resource.desc);
+}
+
+bool RenderGraphResourceRegistry::needsImportedBufferReplacement(const ImportedBufferEntry& entry, const RGBufferResource& resource)
+{
+    if (resource.lifetime != ERGResourceLifetime::Imported || !resource.imported.has_value() || !entry.imported.has_value()) {
+        return true;
+    }
+    return !isSameImportedBufferDesc(*entry.imported, *resource.imported);
+}
+
 void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
 {
+    pruneUnusedResources(graph);
+
     for (const auto& texture : graph.getTextures()) {
-        if (_textures.contains(texture.handle)) {
+        const auto existing = _textures.find(texture.handle);
+        if (existing != _textures.end() && !needsTextureReplacement(existing->second, texture)) {
             continue;
         }
 
         if (texture.lifetime == ERGResourceLifetime::Imported) {
             YA_CORE_ASSERT(texture.imported.has_value(), "Imported render graph texture '{}' is missing import desc", texture.desc.label);
-            _textures[texture.handle] = createImportedTexture(*texture.imported);
+            _textures[texture.handle] = TextureEntry{
+                .resource = createImportedTexture(*texture.imported),
+                .desc = texture.desc,
+                .imported = texture.imported,
+            };
             continue;
         }
 
-        _textures[texture.handle] = createRenderImage(_factory, makeRenderImageDesc(texture.desc));
+        _textures[texture.handle] = TextureEntry{
+            .resource = createRenderImage(_factory, makeRenderImageDesc(texture.desc)),
+            .desc = texture.desc,
+        };
     }
 
     for (const auto& buffer : graph.getBuffers()) {
-        if (_ownedBuffers.contains(buffer.handle) || _importedBuffers.contains(buffer.handle)) {
-            continue;
-        }
-
         if (buffer.lifetime == ERGResourceLifetime::Imported) {
             YA_CORE_ASSERT(buffer.imported.has_value(), "Imported render graph buffer '{}' is missing import desc", buffer.desc.label);
-            _importedBuffers[buffer.handle] = buffer.imported->buffer;
+            _ownedBuffers.erase(buffer.handle);
+
+            const auto existing = _importedBuffers.find(buffer.handle);
+            if (existing != _importedBuffers.end() && !needsImportedBufferReplacement(existing->second, buffer)) {
+                continue;
+            }
+
+            _importedBuffers[buffer.handle] = ImportedBufferEntry{
+                .resource = buffer.imported->buffer,
+                .imported = buffer.imported,
+            };
             continue;
         }
 
-        _ownedBuffers[buffer.handle] = _factory.createBuffer(BufferCreateInfo{
-            .label       = buffer.desc.label,
-            .usage       = buffer.desc.usage,
-            .size        = buffer.desc.size,
-            .memoryUsage = buffer.desc.memoryUsage,
-        });
+        _importedBuffers.erase(buffer.handle);
+
+        const auto existing = _ownedBuffers.find(buffer.handle);
+        if (existing != _ownedBuffers.end() && !needsOwnedBufferReplacement(existing->second, buffer)) {
+            continue;
+        }
+
+        _ownedBuffers[buffer.handle] = OwnedBufferEntry{
+            .resource = _factory.createBuffer(BufferCreateInfo{
+                .label       = buffer.desc.label,
+                .usage       = buffer.desc.usage,
+                .size        = buffer.desc.size,
+                .memoryUsage = buffer.desc.memoryUsage,
+            }),
+            .desc = buffer.desc,
+        };
     }
 }
 
@@ -104,16 +279,16 @@ void RenderGraphResourceRegistry::clear()
 const RenderImage* RenderGraphResourceRegistry::resolveTexture(RGTextureHandle handle) const
 {
     const auto it = _textures.find(handle);
-    return it != _textures.end() ? it->second.get() : nullptr;
+    return it != _textures.end() ? it->second.resource.get() : nullptr;
 }
 
 IBuffer* RenderGraphResourceRegistry::resolveBuffer(RGBufferHandle handle) const
 {
     if (const auto it = _ownedBuffers.find(handle); it != _ownedBuffers.end()) {
-        return it->second.get();
+        return it->second.resource.get();
     }
     if (const auto it = _importedBuffers.find(handle); it != _importedBuffers.end()) {
-        return it->second;
+        return it->second.resource;
     }
     return nullptr;
 }

@@ -3,6 +3,7 @@
 #include "Core/Base.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
+#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderImage.h"
 #include "Runtime/App/Common/PostProcessingState.h"
 
@@ -62,6 +63,7 @@ struct BloomPostprocessing
     ImageViewHandle              _compositeBloomImageViewHandle = nullptr;
 
     uint32_t _lastBlurPassCount = 0;
+    std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
     void init(const InitDesc& initDesc);
     void shutdown();

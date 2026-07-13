@@ -119,21 +119,20 @@ RGImportedTextureDesc makeSSAOImportedTextureDesc(const RenderImage& image,
 
 } // namespace
 
-void SSAOStage::setup(const DeferredGBufferResources& gBufferResources, RenderImage* targetTexture)
+void SSAOStage::setup(const DeferredGBufferResources& gBufferResources)
 {
     _gBufferResources = gBufferResources;
-    _targetTexture    = targetTexture;
     invalidateInputDescriptors();
 }
 
 void SSAOStage::refreshPipelineFormat()
 {
-    if (!_pipeline || !_targetTexture) {
+    if (!_pipeline) {
         return;
     }
 
     auto ci                                         = _pipeline->getDesc();
-    ci.pipelineRenderingInfo.colorAttachmentFormats = {_targetTexture->getFormat()};
+    ci.pipelineRenderingInfo.colorAttachmentFormats = {AO_FORMAT};
     ci.pipelineRenderingInfo.depthAttachmentFormat  = EFormat::Undefined;
     _pipeline->updateDesc(std::move(ci));
 }
@@ -142,7 +141,6 @@ void SSAOStage::invalidateInputDescriptors()
 {
     _lastGBufferImageViewHandles.fill(nullptr);
     _lastGBufferDepthImageViewHandle = nullptr;
-    _lastTargetImageViewHandle       = _targetTexture && _targetTexture->getImageView() ? _targetTexture->getImageView()->getHandle() : ImageViewHandle{};
     _bInputDescriptorsInitialized    = false;
     _lastInputDescriptorWriteCount   = 0;
 }
@@ -165,6 +163,7 @@ void SSAOStage::initNoiseTexture()
 void SSAOStage::init(IRender* render)
 {
     _render = render;
+    _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
 
     auto& config = ConfigManager::get();
     _radius = config.getOr<float>(SSAO_CONFIG_DOC_NAME, SSAO_CONFIG_KEY_RADIUS, _radius);
@@ -245,6 +244,8 @@ void SSAOStage::init(IRender* render)
 
 void SSAOStage::destroy()
 {
+    _outputTexture = nullptr;
+    _graphExecutor.reset();
     _noiseTexture.reset();
     for (auto& buffer : _frameUBO) {
         buffer.reset();
@@ -257,10 +258,8 @@ void SSAOStage::destroy()
 
     _render                       = nullptr;
     _gBufferResources             = {};
-    _targetTexture                = nullptr;
     _lastGBufferImageViewHandles.fill(nullptr);
     _lastGBufferDepthImageViewHandle = nullptr;
-    _lastTargetImageViewHandle    = nullptr;
     _bInputDescriptorsInitialized = false;
     _lastInputDescriptorWriteCount = 0;
 }
@@ -289,7 +288,7 @@ void SSAOStage::updateFrameUBO(const RenderStageContext& ctx)
 
 void SSAOStage::updateInputDescriptors()
 {
-    if (!_gBufferResources.isComplete() || !_targetTexture || !_noiseTexture) {
+    if (!_gBufferResources.isComplete() || !_noiseTexture) {
         return;
     }
 
@@ -307,11 +306,9 @@ void SSAOStage::updateInputDescriptors()
         _gBufferResources.color[3] && _gBufferResources.color[3]->getImageView() ? _gBufferResources.color[3]->getImageView()->getHandle() : ImageViewHandle{},
     };
     const auto depthHandle = depth->getImageView() ? depth->getImageView()->getHandle() : ImageViewHandle{};
-    const auto targetHandle = _targetTexture->getImageView() ? _targetTexture->getImageView()->getHandle() : ImageViewHandle{};
     if (_bInputDescriptorsInitialized &&
         _lastGBufferImageViewHandles == gbufferImageViewHandles &&
-        _lastGBufferDepthImageViewHandle == depthHandle &&
-        _lastTargetImageViewHandle == targetHandle) {
+        _lastGBufferDepthImageViewHandle == depthHandle) {
         _lastInputDescriptorWriteCount = 0;
         return;
     }
@@ -326,7 +323,6 @@ void SSAOStage::updateInputDescriptors()
 
     _lastGBufferImageViewHandles     = gbufferImageViewHandles;
     _lastGBufferDepthImageViewHandle = depthHandle;
-    _lastTargetImageViewHandle       = targetHandle;
     _bInputDescriptorsInitialized    = true;
     _lastInputDescriptorWriteCount   = 4;
 }
@@ -337,7 +333,7 @@ void SSAOStage::prepare(const RenderStageContext& ctx)
     if (_pipeline) {
         _pipeline->beginFrame();
     }
-    if (!ctx.frameData || !_targetTexture || ctx.flightIndex >= MAX_FLIGHTS_IN_FLIGHT) {
+    if (!ctx.frameData || ctx.flightIndex >= MAX_FLIGHTS_IN_FLIGHT) {
         return;
     }
 
@@ -348,7 +344,7 @@ void SSAOStage::prepare(const RenderStageContext& ctx)
 void SSAOStage::execute(const RenderStageContext& ctx)
 {
     YA_PROFILE_FUNCTION();
-    if (!ctx.cmdBuf || !_pipeline || !_targetTexture || !_gBufferResources.isComplete()) {
+    if (!ctx.cmdBuf || !_pipeline || !_gBufferResources.isComplete()) {
         return;
     }
 
@@ -366,7 +362,12 @@ void SSAOStage::execute(const RenderStageContext& ctx)
     const auto  normal = graph.importTexture(makeSSAOImportedTextureDesc(*gbufferNormal, "SSAO.GBufferNormal", EImageLayout::ShaderReadOnlyOptimal));
     const auto  depth = graph.importTexture(makeSSAOImportedTextureDesc(*gbufferDepth, "SSAO.GBufferDepth", EImageLayout::ShaderReadOnlyOptimal));
     const auto  noise = graph.importTexture(makeSSAOImportedTextureDesc(*_noiseTexture, "SSAO.Noise", EImageLayout::ShaderReadOnlyOptimal));
-    const auto  output = graph.importTexture(makeSSAOImportedTextureDesc(*_targetTexture, "SSAO.Output", EImageLayout::ShaderReadOnlyOptimal));
+    const auto  output = graph.createTexture(RGTextureDesc{
+         .label  = "SSAO.Output",
+         .format = AO_FORMAT,
+         .extent = Extent3D{ctx.viewportExtent.width, ctx.viewportExtent.height, 1},
+         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    }, ERGResourceLifetime::Persistent);
 
     [[maybe_unused]] const auto pass = graph.addPass(
         "SSAO Pass",
@@ -380,7 +381,7 @@ void SSAOStage::execute(const RenderStageContext& ctx)
         [&](RGRenderContext& rgCtx) {
             rgCtx.beginColorRendering({
                 .color      = output,
-                .renderArea = Rect2D{.pos = {0.0f, 0.0f}, .extent = _targetTexture->getExtent().toVec2()},
+                .renderArea = Rect2D{.pos = {0.0f, 0.0f}, .extent = glm::vec2(ctx.viewportExtent.width, ctx.viewportExtent.height)},
                 .clearValue = ClearValue(1.0f, 1.0f, 1.0f, 1.0f),
                 .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
             });
@@ -393,8 +394,9 @@ void SSAOStage::execute(const RenderStageContext& ctx)
             rgCtx.endRendering();
         });
 
-    RenderGraphExecutor executor(*_render->getResourceFactory());
-    [[maybe_unused]] const bool bExecuted = executor.execute(graph, *ctx.cmdBuf);
+    YA_CORE_ASSERT(_graphExecutor != nullptr, "SSAOStage graph executor is not initialized");
+    [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *ctx.cmdBuf);
+    _outputTexture = bExecuted ? _graphExecutor->getRegistry().resolveTexture(output) : nullptr;
 }
 
 void SSAOStage::renderSettingsGUI()

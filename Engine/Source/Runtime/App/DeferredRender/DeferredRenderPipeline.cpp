@@ -105,28 +105,6 @@ RGImportedTextureDesc makeDeferredImportedTextureDesc(Texture& texture, std::str
     };
 }
 
-stdptr<RenderImage> createSSAOImage(IRender* render, Extent2D extent)
-{
-    return createRenderImage(
-        *render->getResourceFactory(),
-        RenderImageDesc{
-            .image = ImageCreateInfo{
-                .label         = "DeferredSSAO",
-                .format        = SSAOStage::AO_FORMAT,
-                .extent        = {.width = extent.width, .height = extent.height, .depth = 1},
-                .mipLevels     = 1,
-                .arrayLayers   = 1,
-                .samples       = ESampleCount::Sample_1,
-                .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                .initialLayout = EImageLayout::Undefined,
-            },
-            .defaultView = ImageViewCreateInfo{
-                .label       = "DeferredSSAO_DefaultView",
-                .aspectFlags = EImageAspect::Color,
-            },
-        });
-}
-
 void drawPerfLeaf(const char* label, float value, float parentValue = 0.0f)
 {
     constexpr ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Bullet;
@@ -380,7 +358,7 @@ DeferredPipelineDebugViews DeferredRenderPipeline::buildDebugViews() const
     return DeferredPipelineDebugViews{
         .gBufferResources  = _currentGBufferResources,
         .viewportResources = _currentViewportResources,
-        .ssaoTexture       = _ssaoTexture.get(),
+        .ssaoTexture       = _ssaoStage ? const_cast<RenderImage*>(_ssaoStage->getOutputTexture()) : nullptr,
     };
 }
 
@@ -468,7 +446,6 @@ void DeferredRenderPipeline::applyPendingViewportResize()
     flushGBufferResources();
     flushViewportResources();
 
-    _ssaoTexture = createSSAOImage(_render, _pendingViewportExtent);
     refreshCurrentFrameResources();
     _postProcessStage.resizeResources(_pendingViewportExtent);
     refreshViewportSizedStageResources();
@@ -558,6 +535,7 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
 void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
 {
     _render                       = desc.render;
+    _graphExecutor                = _render ? std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory()) : nullptr;
     _shadowSettings               = desc.shadowSettings;
     _automationShadowOverrides    = desc.automationShadowOverrides;
     _queueFrameTask               = desc.queueFrameTask;
@@ -582,7 +560,6 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
 
     initRenderTargets(extent);
     refreshCurrentFrameResources();
-    _ssaoTexture = createSSAOImage(_render, extent);
     if (currentShadowSettings().isEnabled()) {
         initShadowResources();
     }
@@ -609,7 +586,7 @@ void DeferredRenderPipeline::initStages()
     _gBufferStage->init(_render);
 
     _ssaoStage = ya::makeShared<SSAOStage>();
-    _ssaoStage->setup(_currentGBufferResources, _ssaoTexture.get());
+    _ssaoStage->setup(_currentGBufferResources);
     _ssaoStage->setSettings(_ssaoStage->getRadius(), _ssaoStage->getBias(), _ssaoStage->getPower(), _ssaoStage->getIntensity(), _bReverseViewportY);
     _ssaoStage->init(_render);
 
@@ -619,7 +596,7 @@ void DeferredRenderPipeline::initStages()
         .environmentLightingDSL = _environmentLightingDSL,
         .getSceneEnvironmentLightingDescriptorSet = _getSceneEnvironmentLightingDescriptorSet,
     });
-    _lightStage->setSSAOTexture(_ssaoTexture.get());
+    _lightStage->setSSAOTexture(_ssaoStage->getOutputTexture());
     _lightStage->init(_render);
     syncShadowSettings();
 
@@ -648,6 +625,7 @@ void DeferredRenderPipeline::shutdown()
     _currentViewportResources        = {};
     _currentGBufferFormats           = {};
     _currentViewportFormats          = {};
+    _graphExecutor.reset();
 
     if (_overlayStage) {
         _overlayStage->destroy();
@@ -666,7 +644,6 @@ void DeferredRenderPipeline::shutdown()
         _gBufferStage.reset();
     }
 
-    _ssaoTexture.reset();
     _viewportRT.reset();
     _gBufferRT.reset();
     destroyShadowResources();
@@ -863,7 +840,7 @@ void DeferredRenderPipeline::refreshGBufferStageState()
     invalidateGBufferDependentViews();
 
     if (_ssaoStage) {
-        _ssaoStage->setup(_currentGBufferResources, _ssaoTexture.get());
+        _ssaoStage->setup(_currentGBufferResources);
         _ssaoStage->refreshPipelineFormat();
     }
 
@@ -879,7 +856,7 @@ void DeferredRenderPipeline::refreshGBufferStageState()
 void DeferredRenderPipeline::refreshViewportStageState()
 {
     if (_lightStage) {
-        _lightStage->setSSAOTexture(_ssaoTexture.get());
+        _lightStage->setSSAOTexture(_ssaoStage ? _ssaoStage->getOutputTexture() : nullptr);
         _lightStage->refreshPipelineFormats(_currentViewportFormats);
     }
 
@@ -902,6 +879,9 @@ void DeferredRenderPipeline::executeSSAOPass(const RenderStageContext& stageCtx)
 
     _ssaoStage->prepare(stageCtx);
     _ssaoStage->execute(stageCtx);
+    if (_lightStage) {
+        _lightStage->setSSAOTexture(_ssaoStage->getOutputTexture());
+    }
 }
 
 void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
@@ -909,7 +889,7 @@ void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&
     (void)frame;
 
     if (_lightStage) {
-        _lightStage->setSSAOTexture(_bEnableSSAO ? _ssaoTexture.get() : nullptr);
+        _lightStage->setSSAOTexture(_bEnableSSAO && _ssaoStage ? _ssaoStage->getOutputTexture() : nullptr);
     }
 
     if (_ssaoStage) {
@@ -1042,8 +1022,8 @@ void DeferredRenderPipeline::executeGBufferPass(const RenderPipelineFrameContext
             rgCtx.endRendering();
         });
 
-    RenderGraphExecutor executor(*_render->getResourceFactory());
-    [[maybe_unused]] const bool bExecuted = executor.execute(graph, *frame.cmdBuf);
+    YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");
+    [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *frame.cmdBuf);
 }
 
 void DeferredRenderPipeline::executeDepthCopyPass(ICommandBuffer* cmdBuf)
@@ -1121,8 +1101,8 @@ void DeferredRenderPipeline::executeViewportPass(const RenderPipelineFrameContex
             rgCtx.endRendering();
         });
 
-    RenderGraphExecutor executor(*_render->getResourceFactory());
-    [[maybe_unused]] const bool bExecuted = executor.execute(graph, *frame.cmdBuf);
+    YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");
+    [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *frame.cmdBuf);
 
     auto* inputTexture = _currentViewportResources.color;
     {
@@ -1183,8 +1163,8 @@ void DeferredRenderPipeline::copyGBufferDepthToViewport(ICommandBuffer* cmdBuf)
                 });
         });
 
-    RenderGraphExecutor executor(*_render->getResourceFactory());
-    [[maybe_unused]] const bool bExecuted = executor.execute(graph, *cmdBuf);
+    YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");
+    [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *cmdBuf);
 }
 
 // ═══════════════════════════════════════════════════════════════════════

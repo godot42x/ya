@@ -86,7 +86,7 @@ void LightStage::setFrameInputs(FrameInputs frameInputs)
     _frameInputs = frameInputs;
 }
 
-void LightStage::setSSAOTexture(RenderImage* ssaoTexture)
+void LightStage::setSSAOTexture(const RenderImage* ssaoTexture)
 {
     if (_ssaoTexture == ssaoTexture) {
         return;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderImage.h"
 #include "Render/Core/Texture.h"
 #include "Render/Pipelines/BasicPostprocessing.h"
@@ -35,6 +36,7 @@ struct PostProcessingStage
     stdptr<RenderImage>         _bloomCompositeImage = nullptr;
     stdptr<RenderImage>         _postprocessOutputImage = nullptr;
     stdptr<Texture>             _postprocessOutputTextureCompat = nullptr;
+    std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
     void     init(const InitDesc& desc);
     void     shutdown();

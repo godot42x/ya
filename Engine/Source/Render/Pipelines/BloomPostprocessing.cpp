@@ -148,6 +148,7 @@ void BloomPostprocessing::init(const InitDesc& initDesc)
 {
     _render   = initDesc.render;
     _initDesc = initDesc;
+    _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
     initExtractPipeline();
     initBlurPipeline();
     initCompositePipeline();
@@ -155,6 +156,7 @@ void BloomPostprocessing::init(const InitDesc& initDesc)
 
 void BloomPostprocessing::shutdown()
 {
+    _graphExecutor.reset();
     _extractDSP.reset();
     _extractDSL.reset();
     _extractPipeline.reset();
@@ -432,8 +434,8 @@ void BloomPostprocessing::render(const RenderDesc& desc)
             rgCtx.endRendering();
         });
 
-    RenderGraphExecutor executor(*_render->getResourceFactory());
-    [[maybe_unused]] const bool bExecuted = executor.execute(graph, *desc.cmdBuf);
+    YA_CORE_ASSERT(_graphExecutor != nullptr, "BloomPostprocessing graph executor is not initialized");
+    [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *desc.cmdBuf);
 }
 
 void BloomPostprocessing::renderSettingsGUI(PostProcessingState& state)

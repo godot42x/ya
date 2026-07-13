@@ -620,6 +620,150 @@ TEST(RenderGraphCoreTest, ResourceRegistryCanImportExistingImageWithCustomViewDe
     EXPECT_EQ(factory.createdViews, 1u);
 }
 
+TEST(RenderGraphCoreTest, ResourceRegistryReusesStableResourcesAcrossSyncs)
+{
+    TestResourceFactory factory;
+    RenderGraphResourceRegistry registry(factory);
+
+    RenderGraph graphA;
+    const auto textureHandle = graphA.createTexture(RGTextureDesc{
+        .label  = "persistent.ao",
+        .format = EFormat::R8_UNORM,
+        .extent = Extent3D{320, 180, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    }, ERGResourceLifetime::Persistent);
+    const auto bufferHandle = graphA.createBuffer(RGBufferDesc{
+        .label = "persistent.constants",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 256,
+    }, ERGResourceLifetime::Persistent);
+
+    registry.sync(graphA);
+    const auto* firstTexture = registry.resolveTexture(textureHandle);
+    auto*       firstBuffer  = registry.resolveBuffer(bufferHandle);
+    ASSERT_NE(firstTexture, nullptr);
+    ASSERT_NE(firstBuffer, nullptr);
+    EXPECT_EQ(factory.createdImages, 1u);
+    EXPECT_EQ(factory.createdViews, 1u);
+    EXPECT_EQ(factory.createdBuffers, 1u);
+
+    RenderGraph graphB;
+    graphB.createTexture(RGTextureDesc{
+        .label  = "persistent.ao",
+        .format = EFormat::R8_UNORM,
+        .extent = Extent3D{320, 180, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    }, ERGResourceLifetime::Persistent);
+    graphB.createBuffer(RGBufferDesc{
+        .label = "persistent.constants",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 256,
+    }, ERGResourceLifetime::Persistent);
+
+    registry.sync(graphB);
+    EXPECT_EQ(registry.resolveTexture(textureHandle), firstTexture);
+    EXPECT_EQ(registry.resolveBuffer(bufferHandle), firstBuffer);
+    EXPECT_EQ(factory.createdImages, 1u);
+    EXPECT_EQ(factory.createdViews, 1u);
+    EXPECT_EQ(factory.createdBuffers, 1u);
+}
+
+TEST(RenderGraphCoreTest, ResourceRegistryReplacesResourcesWhenDescriptorsChange)
+{
+    TestResourceFactory factory;
+    RenderGraphResourceRegistry registry(factory);
+
+    RenderGraph graphA;
+    const auto textureHandle = graphA.createTexture(RGTextureDesc{
+        .label  = "persistent.history",
+        .format = EFormat::R16_SFLOAT,
+        .extent = Extent3D{160, 90, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    }, ERGResourceLifetime::Persistent);
+    const auto bufferHandle = graphA.createBuffer(RGBufferDesc{
+        .label = "persistent.history.buffer",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 128,
+    }, ERGResourceLifetime::Persistent);
+
+    registry.sync(graphA);
+    const auto* firstTexture = registry.resolveTexture(textureHandle);
+    auto*       firstBuffer  = registry.resolveBuffer(bufferHandle);
+    ASSERT_NE(firstTexture, nullptr);
+    ASSERT_NE(firstBuffer, nullptr);
+
+    RenderGraph graphB;
+    graphB.createTexture(RGTextureDesc{
+        .label  = "persistent.history",
+        .format = EFormat::R16_SFLOAT,
+        .extent = Extent3D{320, 180, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    }, ERGResourceLifetime::Persistent);
+    graphB.createBuffer(RGBufferDesc{
+        .label = "persistent.history.buffer",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 256,
+    }, ERGResourceLifetime::Persistent);
+
+    registry.sync(graphB);
+    EXPECT_NE(registry.resolveTexture(textureHandle), firstTexture);
+    EXPECT_NE(registry.resolveBuffer(bufferHandle), firstBuffer);
+    EXPECT_EQ(factory.createdImages, 2u);
+    EXPECT_EQ(factory.createdViews, 2u);
+    EXPECT_EQ(factory.createdBuffers, 2u);
+}
+
+TEST(RenderGraphCoreTest, ResourceRegistryReimportsTextureWhenImportedDescChanges)
+{
+    TestResourceFactory factory;
+    RenderGraphResourceRegistry registry(factory);
+
+    RenderGraph graphA;
+    const auto importedHandle = graphA.importTexture(RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label  = "history.imported",
+            .format = EFormat::R16G16B16A16_SFLOAT,
+            .extent = Extent3D{128, 128, 1},
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        },
+        .importDesc = ImportedImageDesc{
+            .label        = "history.imported",
+            .nativeHandle = reinterpret_cast<void*>(0x101),
+            .format       = EFormat::R16G16B16A16_SFLOAT,
+            .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .extent       = Extent3D{128, 128, 1},
+        },
+    });
+
+    registry.sync(graphA);
+    const auto* firstTexture = registry.resolveTexture(importedHandle);
+    ASSERT_NE(firstTexture, nullptr);
+    EXPECT_EQ(factory.importedImages, 1u);
+    EXPECT_EQ(factory.createdViews, 1u);
+
+    RenderGraph graphB;
+    graphB.importTexture(RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label  = "history.imported",
+            .format = EFormat::R16G16B16A16_SFLOAT,
+            .extent = Extent3D{128, 128, 1},
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        },
+        .importDesc = ImportedImageDesc{
+            .label        = "history.imported",
+            .nativeHandle = reinterpret_cast<void*>(0x202),
+            .format       = EFormat::R16G16B16A16_SFLOAT,
+            .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .extent       = Extent3D{128, 128, 1},
+        },
+    });
+
+    registry.sync(graphB);
+    EXPECT_NE(registry.resolveTexture(importedHandle), firstTexture);
+    EXPECT_EQ(factory.importedImages, 2u);
+    EXPECT_EQ(factory.createdViews, 2u);
+}
+
 TEST(RenderGraphCoreTest, ExecutorRunsPassesInCompiledOrderAndResolvesResources)
 {
     TestResourceFactory      factory;

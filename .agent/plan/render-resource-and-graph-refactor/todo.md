@@ -220,6 +220,8 @@
 - compiler 已补齐最小 usage 校验：texture read/sample、color/depth attachment 和基础 buffer usage 不匹配会在 compile 阶段失败
 - `debugDump()` 现可输出 pass 列表、拓扑序、依赖边和 compile issues，便于后续 graph/executor 集成期诊断
 - `RenderGraphResourceRegistry` 已能把 transient/persistent texture-buffer 与 imported texture-buffer 解析到最小物理资源 owner；当前不做 aliasing、frame recycle 和 view cache
+- `RenderGraphResourceRegistry` 现已补上最小 frame-to-frame replacement 语义：持久化 executor 复用同一 handle 时，若 texture/buffer desc 或 imported contract 变化，会在 `sync()` 中替换物理资源；描述未变时则保持复用
+- SSAO 已成为第一个 runtime-side `ERGResourceLifetime::Persistent` 落地点：输出 AO 图不再由 `DeferredRenderPipeline` 预先分配 `RenderImage`，而是在 stage graph 中声明为 persistent texture，并在执行后回传给 `LightStage` / debug 视图消费
 - `RenderGraphExecutor` 已起最小执行骨架：compile 校验、registry sync、按拓扑序驱动 pass execute callback；尚未接入 Vulkan barrier/state plan 和 rendering/copy helper
 - `RGRenderContext` 已补最小 helper：color rendering begin/end 与 buffer copy，pass callback 开始可以少直接拼 `RenderingInfo` / `copyBuffer` 样板
 - compiled graph 已开始产出最小 texture/buffer required state plan（read/storage/color/depth）；texture plan 已在 executor 中先接入 `ResourceStateTracker -> transitionImageLayout()`，buffer plan 已接入最小 `bufferMemoryBarrier()` 发射，后续仍需与统一 barrier backend 收敛
@@ -293,7 +295,9 @@
 
 - 当前 Deferred `GBuffer / Viewport` 的 attachment spec 变更入口已经基本收敛到 pipeline 内部显式路径：viewport resize、shared depth format、editor color format 都已有 pending refresh 承接；`refreshDirtyResources()` attachment fallback 已删除，并以断言约束残余隐式 mutation
 - 当前 `_ssaoTexture` 与 postprocess output 已是显式 `RenderImage` owner；它们下一次值得做的迁移应直接指向 `RenderGraphResourceRegistry` 接管 replacement/lifetime，而不是继续做 owner 搬移式小重构
-- 额外调查：当前 `RenderGraphResourceRegistry` 仍是“单次 execute 临时 sync”模型，缺少 frame-to-frame persistent replacement / lifetime 管理；因此 SSAO/postprocess 若要真正交给 registry 接管，下一批应先补 registry 生命周期能力，而不是继续在 pipeline/stage 间搬 owner
+- 额外调查已进一步落地：`RenderGraphResourceRegistry` 现在已有最小 frame-to-frame replacement / lifetime 语义，且 SSAO 已作为首个 runtime-side `ERGResourceLifetime::Persistent` 落地点成立；后续应沿同一模式继续评估 postprocess/bloom，而不是回到 pipeline/stage 间的 owner 搬移
+- runtime 中高频 graph 执行点也已开始为后续 registry 生命周期铺路：`RenderGraphResourceRegistry::sync()` 现会 prune 当前 graph 已不再使用的旧 handle，`SSAOStage / PostProcessingStage / BloomPostprocessing` 已改为持久化 `RenderGraphExecutor`，不再每次执行都丢弃 registry 状态
+- Deferred pipeline 自己的 graph 壳也已跟进同一策略：GBuffer / Viewport / DepthCopy 不再每帧临时构造 `RenderGraphExecutor`，而是复用 pipeline 持有的 executor，为后续把 imported graph 资源继续收向持久 registry 打基础
 - 因此继续追加 facade-only 收口的收益已经明显下降；Phase 7 后续优先做“删除 owner / graph 接管 replacement / 删除残余 dirty state”，不继续堆只改变接口表述的小提交
 - 现有 checklist 保持“删除 legacy path 后才勾选”的口径；已有 graph shell 或兼容层不单独视为完成
 
@@ -306,10 +310,10 @@
 
 ### SSAO
 
-- [ ] 声明 GBuffer read 和 AO write
-- [ ] 迁移 SSAO pass
-- [ ] 删除 SSAO resize 手工重建
-- [ ] 由 graph registry 按 extent replacement
+- [x] 声明 GBuffer read 和 AO write
+- [x] 迁移 SSAO pass
+- [x] 删除 SSAO resize 手工重建
+- [x] 由 graph registry 按 extent replacement
 
 ### Deferred Light
 

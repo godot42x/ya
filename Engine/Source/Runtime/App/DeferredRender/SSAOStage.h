@@ -4,6 +4,7 @@
 #include "Render/Core/Buffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
+#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderImage.h"
 #include "Render/Core/Texture.h"
 #include "Render/Stage/IRenderStage.h"
@@ -26,7 +27,7 @@ struct SSAOStage : public IRenderStage
 
     IRender*                 _render          = nullptr;
     DeferredGBufferResources _gBufferResources{};
-    RenderImage*             _targetTexture   = nullptr;
+    const RenderImage*       _outputTexture   = nullptr;
 
     stdptr<IGraphicsPipeline>    _pipeline;
     stdptr<IPipelineLayout>      _pipelineLayout;
@@ -42,9 +43,9 @@ struct SSAOStage : public IRenderStage
 
     std::array<ImageViewHandle, 4> _lastGBufferImageViewHandles{};
     ImageViewHandle                _lastGBufferDepthImageViewHandle = nullptr;
-    ImageViewHandle                _lastTargetImageViewHandle       = nullptr;
     bool                           _bInputDescriptorsInitialized    = false;
     uint32_t                       _lastInputDescriptorWriteCount   = 0;
+    std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
     float _radius = 0.6f;
     float _bias   = 0.025f;
@@ -54,7 +55,7 @@ struct SSAOStage : public IRenderStage
 
     SSAOStage() : IRenderStage("SSAO") {}
 
-    void setup(const DeferredGBufferResources& gBufferResources, RenderImage* targetTexture);
+    void setup(const DeferredGBufferResources& gBufferResources);
     void refreshPipelineFormat();
     void invalidateInputDescriptors();
 
@@ -66,7 +67,7 @@ struct SSAOStage : public IRenderStage
     void renderSettingsGUI() override;
     void renderTechnicalGUI() override;
 
-    [[nodiscard]] RenderImage* getOutputTexture() const { return _targetTexture; }
+    [[nodiscard]] const RenderImage* getOutputTexture() const { return _outputTexture; }
     [[nodiscard]] float getRadius() const { return _radius; }
     [[nodiscard]] float getBias() const { return _bias; }
     [[nodiscard]] float getPower() const { return _power; }
