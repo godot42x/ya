@@ -86,7 +86,6 @@ void RenderRuntime::updateEditorViewportContext(EditorLayer* editorLayer)
     EditorViewportContext ctx;
     ctx.bForwardPipeline         = (_renderPipeline == ERenderPipeline::Forward);
     ctx.bPostprocessingEnabled   = debugOutputs.bPostprocessingEnabled;
-    ctx.postprocessOutputTexture = debugOutputs.postprocessOutput;
     ctx.viewportTexture          = getActiveViewportTexture();
     ctx.debugSpec.categories     = {
         {.id = "shadow", .label = "Shadow"},
@@ -309,7 +308,7 @@ void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
         });
     }
 
-    if (auto* postprocessOutput = debugOutputs.postprocessOutput; postprocessOutput && postprocessOutput->getImageView()) {
+    if (auto* postprocessOutput = debugOutputs.postprocessOutputImage; postprocessOutput && postprocessOutput->getImageView()) {
         ctx.debugSpec.slots.push_back({
             .label         = "PostprocessOutput",
             .defaultView   = postprocessOutput->getImageView(),

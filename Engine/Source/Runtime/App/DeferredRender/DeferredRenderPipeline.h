@@ -105,6 +105,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
 
     ShadowMapResources                                              _shadowResources;
 
+    stdptr<Texture> _viewportTextureCompat = nullptr;
     Texture* viewportTexture       = nullptr;
     bool     _bReverseViewportY    = true;
     bool     _bEnableSSAO          = true;
@@ -194,7 +195,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
         }
         return _shadowResources.pointFaceIVs[pointLightIndex][faceIndex].get();
     }
-    Texture* getPostprocessOutputTexture() const override { return _postProcessStage.getOutputTexture(); }
     RenderImage* getBloomExtractImage() const override { return _postProcessStage.getBloomExtractImage(); }
     RenderImage* getBloomBlurImage() const override { return _postProcessStage.getBloomBlurImage(); }
     RenderImage* getBloomCompositeImage() const override { return _postProcessStage.getBloomCompositeImage(); }
@@ -216,6 +216,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               refreshViewportSnapshot();
     void               refreshGBufferStageState();
     void               refreshViewportStageState();
+    void               refreshViewportTextureCompat(const RenderImage* image, std::string_view label);
     void               refreshCurrentFrameResources();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);
     void               updateStageFrameInputs(const RenderPipelineFrameContext& frame);

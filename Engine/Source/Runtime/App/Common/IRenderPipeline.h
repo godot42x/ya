@@ -80,7 +80,6 @@ struct IRenderPipelineDebugOutputs
     [[nodiscard]] virtual IImageView*    getShadowDirectionalDepthIV() const = 0;
     [[nodiscard]] virtual IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const = 0;
 
-    [[nodiscard]] virtual Texture* getPostprocessOutputTexture() const = 0;
     [[nodiscard]] virtual RenderImage* getPostprocessOutputImage() const = 0;
     [[nodiscard]] virtual RenderImage* getBloomExtractImage() const    = 0;
     [[nodiscard]] virtual RenderImage* getBloomBlurImage() const       = 0;

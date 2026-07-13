@@ -468,7 +468,6 @@ struct App
     [[nodiscard]] bool                   hasMirrorRenderResult() const;
     [[nodiscard]] IImageView*            getShadowDirectionalDepthIV() const;
     [[nodiscard]] IImageView*            getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
-    [[nodiscard]] Texture*               getPostprocessOutputTexture() const;
     [[nodiscard]] bool                   isPostprocessingEnabled() const;
 
     // Getters for subsystems

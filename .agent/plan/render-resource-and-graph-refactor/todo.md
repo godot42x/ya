@@ -123,7 +123,7 @@
 - [ ] 让 `Texture` 显式拥有 image 和 default view
 - [x] 将 SSAO render texture 改为 GPU image/view owner
 - [x] 将 bloom render texture 改为 GPU image/view owner
-- [ ] 将 postprocess output render texture 改为 GPU image/view owner
+- [x] 将 postprocess output render texture 改为 GPU image/view owner
 - [x] 将 BRDF LUT 输出改为 GPU image/view owner
 - [x] 将 shadow sampled view 改为显式 image/view owner
 - [ ] 将 screenshot scratch texture 改为 GPU image/view owner
@@ -143,7 +143,7 @@
 - `RenderImage` 仅组合并拥有 `IImage` 与 default `IImageView`，不承载资产语义、采样器或资源状态
 - `RenderingInfo::ImageSpec` 已直接引用 image/view，dynamic rendering attachment 协议不再依赖 `Texture`
 - BRDF LUT、Deferred SSAO 与 bloom intermediates 已迁移
-- postprocess output 仍通过 `IRenderPipeline -> App -> automation screenshot` 的 `Texture*` 契约暴露，应与 screenshot scratch 生命周期一起迁移
+- postprocess output 已由 `PostProcessingStage` 以 `RenderImage` 形式持有；剩余 `Texture::wrap()` 兼容层只保留在 pipeline viewport 输出侧，供 editor viewport / screenshot fallback 复用
 - shadow sampled views 已由 `ShadowMapResources` 显式拥有；shadow pass 内残留的 `Texture::wrap()` attachment adapter 归入 Phase 8
 - screenshot scratch 仍待迁移
 
@@ -272,8 +272,8 @@
 - Forward debug preview 也已向同样方向对齐：shadow cubemap 预览复用显式 `shadowDepthTexture`，viewport depth 预览改读 `ForwardViewportResources` snapshot，而不是在 editor 里回查 `viewportRT`
 - `IRenderPipelineDebugOutputs` 已继续补齐显式 preview 输出：新增 `viewportDepthTexture`，让 `RenderRuntimeEditorViewport` 不再依赖具体 `ForwardRenderPipeline` 取 viewport depth
 - preview/debug 与 owner 语义的接口边界继续收口：`getShadowDepthRT()` 已从 `IRenderPipelineDebugOutputs` 和 `RenderRuntime/App` 的 preview 转发链移除，只在 concrete pipeline 上保留给 RT editor/catalog 使用
-- postprocess output 已进一步收口为 graph persistent texture：`PostProcessingStage` 不再预分配主输出 `RenderImage`，而是在 execute 时由 `RenderGraphResourceRegistry` 按 desc/extent 接管 replacement；现阶段仍保留一个 `Texture::wrap()` 兼容出口给 viewport / screenshot 链路，后续与 screenshot scratch 一起再去掉
-- pipeline/runtime 层已开始暴露显式 `postprocessOutputImage`：`IRenderPipelineDebugOutputs` 与 `RenderRuntime` 现同时提供 `RenderImage*` 输出，把 `Texture*` 兼容链进一步收窄到 automation / screenshot 一侧
+- postprocess output 已进一步收口为 graph persistent texture：`PostProcessingStage` 不再预分配主输出 `RenderImage`，而是在 execute 时由 `RenderGraphResourceRegistry` 按 desc/extent 接管 replacement；stage 内部也不再持有 compat `Texture`
+- pipeline/runtime 层已开始暴露显式 `postprocessOutputImage`：`IRenderPipelineDebugOutputs` 与 `RenderRuntime` 现同时提供 `RenderImage*` 输出，把 `Texture*` 兼容链进一步收窄到 pipeline viewport / screenshot fallback 一侧
 - automation screenshot 已开始优先消费 `RenderImage*` 的 postprocess 输出：`AppAutomationFrameContext` / `AppScreenshotCapture` 现在先用 `postprocessImage`，仅在缺失时回退 viewport `Texture*`
 - runtime 对 deferred concrete owner 的一部分直连也已开始回收：RT editor deferred entries 与 shared depth format 修改现通过 `DeferredRenderPipeline` helper 完成，`RenderRuntime` 不再直接摸 `_gBufferRT/_viewportRT`
 - Deferred light fullscreen pass 已迁入 graph：`executeViewportPass()` 现显式 import `GBuffer/AO/shadow/environment` 读取资源并声明 viewport HDR output；overlay 仍保留为后续独立 graph pass 壳，尚未迁移 stage 内部 draw/descriptor 逻辑

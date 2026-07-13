@@ -160,6 +160,23 @@ RGImportedTextureDesc makeDeferredImportedTextureDesc(const RenderImage& image, 
     };
 }
 
+Texture* wrapDeferredCompatRenderImage(stdptr<Texture>& compat, const RenderImage* image, std::string_view label)
+{
+    if (!image || !image->isValid()) {
+        compat.reset();
+        return nullptr;
+    }
+
+    const bool bNeedsWrapRefresh =
+        !compat ||
+        compat->getImage() != image->getImage() ||
+        compat->getImageView() != image->getImageView();
+    if (bNeedsWrapRefresh) {
+        compat = Texture::wrap(image->getImageShared(), image->getImageViewShared(), std::string(label));
+    }
+    return compat.get();
+}
+
 void drawPerfLeaf(const char* label, float value, float parentValue = 0.0f)
 {
     constexpr ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Bullet;
@@ -590,6 +607,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     _getResourceResolveSystem     = desc.getResourceResolveSystem;
     _bShadowSettingsChangePending = false;
     _bShadowResourceRefreshPending = false;
+    _viewportTextureCompat.reset();
     if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
     }
@@ -667,6 +685,7 @@ void DeferredRenderPipeline::shutdown()
     _currentViewportResources        = {};
     _currentEnvironmentLightingTextures = {};
     _graphExecutor.reset();
+    _viewportTextureCompat.reset();
 
     if (_overlayStage) {
         _overlayStage->destroy();
@@ -921,6 +940,11 @@ void DeferredRenderPipeline::refreshViewportStageState()
     if (_overlayStage) {
         _overlayStage->refreshPipelineFormats(_currentViewportResources.formats);
     }
+}
+
+void DeferredRenderPipeline::refreshViewportTextureCompat(const RenderImage* image, std::string_view label)
+{
+    viewportTexture = wrapDeferredCompatRenderImage(_viewportTextureCompat, image, label);
 }
 
 void DeferredRenderPipeline::refreshCurrentFrameResources()
@@ -1313,9 +1337,15 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         return;
     }
 
-    viewportTexture = postprocessOutput.isValid() && _postProcessStage.getOutputTexture()
-        ? _postProcessStage.getOutputTexture()
-        : inputTexture;
+    if (postprocessOutput.isValid()) {
+        if (RenderImage* outputImage = _postProcessStage.getOutputImage()) {
+            refreshViewportTextureCompat(outputImage, "DeferredViewport_PostprocessOutput");
+            return;
+        }
+    }
+
+    _viewportTextureCompat.reset();
+    viewportTexture = inputTexture;
 }
 
 // ═══════════════════════════════════════════════════════════════════════

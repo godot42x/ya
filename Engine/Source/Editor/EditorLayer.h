@@ -37,7 +37,6 @@ struct EditorViewportContext
 
     // Postprocessing
     bool     bPostprocessingEnabled   = false;
-    Texture* postprocessOutputTexture = nullptr;
 
     struct ImageSlot
     {

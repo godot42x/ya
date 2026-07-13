@@ -59,11 +59,6 @@ IImageView* App::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t fa
     return _renderRuntime ? _renderRuntime->getShadowPointFaceDepthIV(pointLightIndex, faceIndex) : nullptr;
 }
 
-Texture* App::getPostprocessOutputTexture() const
-{
-    return _renderRuntime ? _renderRuntime->getPostprocessOutputTexture() : nullptr;
-}
-
 bool App::isPostprocessingEnabled() const
 {
     return _renderRuntime && _renderRuntime->isPostprocessingEnabled();

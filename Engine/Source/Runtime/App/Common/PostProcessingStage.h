@@ -37,7 +37,6 @@ struct PostProcessingStage
     stdptr<BloomPostprocessing> _bloomProcessor     = nullptr;
     stdptr<BasicPostprocessing> _postProcessor      = nullptr;
     const RenderImage*          _postprocessOutputImage = nullptr;
-    stdptr<Texture>             _postprocessOutputTextureCompat = nullptr;
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
     GraphBuildResult            _preparedGraphResources{};
 
@@ -53,22 +52,18 @@ struct PostProcessingStage
                                       FrameContext* ctx);
     void     resolvePreparedResources(const RenderGraphResourceRegistry& registry);
     void     clearPreparedResources();
-    Texture* execute(ICommandBuffer* cmdBuf,
-                     Texture*        inputTexture,
-                     glm::vec2       viewportExtent,
-                     FrameContext*   ctx);
+    RenderImage* execute(ICommandBuffer* cmdBuf,
+                         Texture*        inputTexture,
+                         glm::vec2       viewportExtent,
+                         FrameContext*   ctx);
 
     [[nodiscard]] bool                       isEnabled() const { return bEnabled; }
-    [[nodiscard]] Texture*                   getOutputTexture() const { return _postprocessOutputTextureCompat.get(); }
     [[nodiscard]] RenderImage*               getOutputImage() const { return const_cast<RenderImage*>(_postprocessOutputImage); }
     [[nodiscard]] RenderImage*               getBloomExtractImage() const { return _bloomProcessor ? _bloomProcessor->getExtractImage() : nullptr; }
     [[nodiscard]] RenderImage*               getBloomBlurImage() const { return _bloomProcessor ? _bloomProcessor->getBlurImage() : nullptr; }
     [[nodiscard]] RenderImage*               getBloomCompositeImage() const { return _bloomProcessor ? _bloomProcessor->getCompositeImage() : nullptr; }
     [[nodiscard]] PostProcessingState&       getState() { return _state; }
     [[nodiscard]] const PostProcessingState& getState() const { return _state; }
-
-  private:
-    void refreshOutputTextureCompat();
 };
 
 } // namespace ya

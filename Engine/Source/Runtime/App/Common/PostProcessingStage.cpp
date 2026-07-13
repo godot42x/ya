@@ -135,26 +135,6 @@ RGImportedTextureDesc makePostprocessImportedTextureDesc(const RenderImage& imag
 
 } // namespace
 
-void PostProcessingStage::refreshOutputTextureCompat()
-{
-    if (!_postprocessOutputImage || !_postprocessOutputImage->isValid()) {
-        _postprocessOutputTextureCompat.reset();
-        return;
-    }
-
-    const bool bNeedsWrapRefresh =
-        !_postprocessOutputTextureCompat ||
-        _postprocessOutputTextureCompat->getImage() != _postprocessOutputImage->getImage() ||
-        _postprocessOutputTextureCompat->getImageView() != _postprocessOutputImage->getImageView();
-
-    if (bNeedsWrapRefresh) {
-        _postprocessOutputTextureCompat = Texture::wrap(
-            _postprocessOutputImage->getImageShared(),
-            _postprocessOutputImage->getImageViewShared(),
-            "PostprocessRT_Compat");
-    }
-}
-
 void PostProcessingStage::init(const InitDesc& desc)
 {
     _render      = desc.render;
@@ -182,7 +162,6 @@ void PostProcessingStage::init(const InitDesc& desc)
     _state.randomGrainStrength = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_STRENGTH, _state.randomGrainStrength);
 
     _postprocessOutputImage = nullptr;
-    _postprocessOutputTextureCompat.reset();
 
     _bloomProcessor = ya::makeShared<BloomPostprocessing>();
     _bloomProcessor->init(BloomPostprocessing::InitDesc{
@@ -240,7 +219,6 @@ void PostProcessingStage::clearPreparedResources()
 {
     _preparedGraphResources       = {};
     _postprocessOutputImage       = nullptr;
-    _postprocessOutputTextureCompat.reset();
     if (_bloomProcessor) {
         _bloomProcessor->clearPreparedResources();
     }
@@ -255,7 +233,6 @@ void PostProcessingStage::resolvePreparedResources(const RenderGraphResourceRegi
     _postprocessOutputImage = _preparedGraphResources.output.isValid()
         ? registry.resolveTexture(_preparedGraphResources.output)
         : nullptr;
-    refreshOutputTextureCompat();
 }
 
 void PostProcessingStage::renderSettingsGUI()
@@ -382,33 +359,29 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
     return output;
 }
 
-Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
-                                      Texture*        inputTexture,
-                                      glm::vec2       viewportExtent,
-                                      FrameContext*   ctx)
+RenderImage* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
+                                          Texture*        inputTexture,
+                                          glm::vec2       viewportExtent,
+                                          FrameContext*   ctx)
 {
     if (!cmdBuf || !inputTexture) {
-        return inputTexture;
+        return nullptr;
     }
 
     ICommandBuffer::LabelScope labelScope(cmdBuf, "Postprocessing");
     RenderGraph graph;
     const auto  output = appendGraphPasses(graph, inputTexture, viewportExtent, ctx);
     if (!output.isValid()) {
-        return inputTexture;
+        return nullptr;
     }
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "PostProcessingStage graph executor is not initialized");
     if (!_graphExecutor->execute(graph, *cmdBuf)) {
         clearPreparedResources();
-        return inputTexture;
+        return nullptr;
     }
 
     resolvePreparedResources(_graphExecutor->getRegistry());
-    if (!_postprocessOutputTextureCompat) {
-        return inputTexture;
-    }
-
-    return _postprocessOutputTextureCompat.get();
+    return const_cast<RenderImage*>(_postprocessOutputImage);
 }
 } // namespace ya

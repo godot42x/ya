@@ -137,14 +137,6 @@ IImageView* RenderRuntime::getShadowPointFaceDepthIV(uint32_t pointLightIndex, u
     return nullptr;
 }
 
-Texture* RenderRuntime::getPostprocessOutputTexture() const
-{
-    if (auto* pipeline = getActivePipelineDebugOutputs()) {
-        return pipeline->getPostprocessOutputTexture();
-    }
-    return nullptr;
-}
-
 RenderImage* RenderRuntime::getPostprocessOutputImage() const
 {
     if (auto* pipeline = getActivePipelineDebugOutputs()) {
@@ -182,7 +174,6 @@ RenderPipelineDebugOutputCatalog RenderRuntime::buildPipelineDebugOutputCatalog(
     catalog.shadowDepthTexture     = pipeline->getShadowDepthTexture();
     catalog.viewportDepthTexture   = pipeline->getViewportDepthTexture();
     catalog.shadowDirectionalDepth = pipeline->getShadowDirectionalDepthIV();
-    catalog.postprocessOutput      = pipeline->getPostprocessOutputTexture();
     catalog.postprocessOutputImage = pipeline->getPostprocessOutputImage();
     catalog.bloomExtract           = pipeline->getBloomExtractImage();
     catalog.bloomBlur              = pipeline->getBloomBlurImage();
