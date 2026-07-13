@@ -121,19 +121,9 @@ RGImportedTextureDesc makeSSAOImportedTextureDesc(const RenderImage& image,
 
 void SSAOStage::setup(IRenderTarget* gBufferRT, RenderImage* targetTexture)
 {
-    if (_gBufferRT) {
-        _gBufferRT->onFramebufferRecreated.removeAll(this);
-    }
-
     _gBufferRT      = gBufferRT;
     _targetTexture  = targetTexture;
     invalidateInputDescriptors();
-
-    if (_gBufferRT) {
-        _gBufferRT->onFramebufferRecreated.addLambda(this, [this]() {
-            invalidateInputDescriptors();
-        });
-    }
 }
 
 void SSAOStage::refreshPipelineFormat()
@@ -254,10 +244,6 @@ void SSAOStage::init(IRender* render)
 
 void SSAOStage::destroy()
 {
-    if (_gBufferRT) {
-        _gBufferRT->onFramebufferRecreated.removeAll(this);
-    }
-
     _noiseTexture.reset();
     for (auto& buffer : _frameUBO) {
         buffer.reset();

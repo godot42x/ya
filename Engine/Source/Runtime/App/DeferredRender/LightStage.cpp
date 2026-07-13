@@ -70,19 +70,9 @@ void LightStage::setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecul
 
 void LightStage::setup(GBufferStage* gBufferStage, IRenderTarget* gBufferRT)
 {
-    if (_gBufferRT) {
-        _gBufferRT->onFramebufferRecreated.removeAll(this);
-    }
-
     _gBufferStage = gBufferStage;
     _gBufferRT    = gBufferRT;
     invalidateGBufferDescriptors();
-
-    if (_gBufferRT) {
-        _gBufferRT->onFramebufferRecreated.addLambda(this, [this]() {
-            invalidateGBufferDescriptors();
-        });
-    }
 }
 
 void LightStage::setEnvironmentLightingInput(EnvironmentLightingInput input)
@@ -289,10 +279,6 @@ void LightStage::init(IRender* render)
 
 void LightStage::destroy()
 {
-    if (_gBufferRT) {
-        _gBufferRT->onFramebufferRecreated.removeAll(this);
-    }
-
     _pipeline.reset();
     _pipelineLayout.reset();
     _gBufferTextureDSL.reset();
