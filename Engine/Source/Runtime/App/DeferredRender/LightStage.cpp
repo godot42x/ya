@@ -1,10 +1,10 @@
 #include "LightStage.h"
 #include "Render/Core/RenderImage.h"
+#include "Render/Render.h"
 
 #include "Config/ConfigManager.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
-#include "GBufferStage.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Resource/Texture/TextureLibrary.h"
 
@@ -68,9 +68,9 @@ void LightStage::setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecul
     _bShadowDescriptorsInitialized = false;
 }
 
-void LightStage::setup(GBufferStage* gBufferStage, const DeferredGBufferResources& gBufferResources)
+void LightStage::setup(SharedInputs sharedInputs, const DeferredGBufferResources& gBufferResources)
 {
-    _gBufferStage     = gBufferStage;
+    _frameAndLightDSL = std::move(sharedInputs.frameAndLightDSL);
     _gBufferResources = gBufferResources;
     invalidateGBufferDescriptors();
 }
@@ -176,7 +176,7 @@ bool LightStage::shouldRefreshShadowDescriptors() const
 void LightStage::init(IRender* render)
 {
     _render = render;
-    YA_CORE_ASSERT(_gBufferStage, "LightStage requires GBufferStage (call setup() before init())");
+    YA_CORE_ASSERT(_frameAndLightDSL, "LightStage requires frame/light DSL (call setup() before init())");
 
     auto& configManager      = ConfigManager::get();
     _bEnablePBRDiffuseIBL    = configManager.getOr<bool>(LIGHT_STAGE_CONFIG_DOC_NAME,
@@ -219,7 +219,7 @@ void LightStage::init(IRender* render)
         "Deferred_Light_PPL",
         {PushConstantRange{.offset = 0, .size = sizeof(PushConstant), .stageFlags = EShaderStage::Vertex}},
         {
-            _gBufferStage->getFrameAndLightDSL(),
+            _frameAndLightDSL,
             _gBufferTextureDSL,
             _environmentLightingDSL,
             _shadowDSL,
@@ -280,7 +280,7 @@ void LightStage::destroy()
     _shadowDSL.reset();
     _dsp.reset();
     _render                   = nullptr;
-    _gBufferStage             = nullptr;
+    _frameAndLightDSL.reset();
     _gBufferResources         = {};
     _ssaoTexture              = nullptr;
     _environmentLightingDSL.reset();
@@ -388,7 +388,7 @@ void LightStage::prepare(const RenderStageContext& ctx)
 void LightStage::execute(const RenderStageContext& ctx)
 {
     YA_PERF_SCOPE(perf::sample::deferredLightExecute(), perf::metric::cpuTimeMs(), perf::domain::render());
-    if (!ctx.cmdBuf || !_gBufferStage) return;
+    if (!ctx.cmdBuf || !_frameInputs.frameAndLightDescriptorSet) return;
 
     auto* cmdBuf = ctx.cmdBuf;
     auto  vpW    = ctx.viewportExtent.width;
@@ -401,9 +401,8 @@ void LightStage::execute(const RenderStageContext& ctx)
     cmdBuf->setScissor(0, 0, vpW, vpH);
 
     // set 0 = frame+light (from GBufferStage), set 1 = GBuffer textures, set 2 = environment
-    auto frameAndLightDS = _gBufferStage->getFrameAndLightDS(ctx.flightIndex);
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {
-                                                             frameAndLightDS,
+                                                             _frameInputs.frameAndLightDescriptorSet,
                                                              _gBufferTextureDS,
                                                              _frameInputs.environmentLightingDescriptorSet,
                                                              _shadowDS,

@@ -18,7 +18,6 @@
 namespace ya
 {
 
-struct GBufferStage;
 struct Scene;
 struct Texture;
 struct RenderImage;
@@ -35,8 +34,14 @@ struct LightStage : public IRenderStage
         std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
     };
 
+    struct SharedInputs
+    {
+        stdptr<IDescriptorSetLayout> frameAndLightDSL = nullptr;
+    };
+
     struct FrameInputs
     {
+        DescriptorSetHandle frameAndLightDescriptorSet = nullptr;
         DescriptorSetHandle environmentLightingDescriptorSet = nullptr;
     };
 
@@ -47,7 +52,7 @@ struct LightStage : public IRenderStage
     static constexpr EFormat::T DEPTH_FORMAT  = EFormat::D32_SFLOAT;
 
     IRender*                  _render           = nullptr;
-    GBufferStage*             _gBufferStage     = nullptr; // borrows frame+light DS
+    stdptr<IDescriptorSetLayout> _frameAndLightDSL;
     DeferredGBufferResources  _gBufferResources{};
     const RenderImage*        _ssaoTexture      = nullptr;
 
@@ -90,9 +95,9 @@ struct LightStage : public IRenderStage
 
     LightStage() : IRenderStage("LightPass") {}
 
-    /// @param gBufferStage  Provides frame+light DSL and per-flight DS
+    /// @param sharedInputs  Provides frame+light descriptor layout for set 0
     /// @param gBufferResources Provides GBuffer textures for sampling
-    void setup(GBufferStage* gBufferStage, const DeferredGBufferResources& gBufferResources);
+    void setup(SharedInputs sharedInputs, const DeferredGBufferResources& gBufferResources);
     void setEnvironmentLightingInput(EnvironmentLightingInput input);
     void setFrameInputs(FrameInputs frameInputs);
     void setSSAOTexture(const RenderImage* ssaoTexture);

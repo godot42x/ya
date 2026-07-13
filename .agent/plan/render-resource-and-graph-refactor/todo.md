@@ -323,7 +323,7 @@
 - [ ] 声明 GBuffer、AO、shadow、environment reads
 - [ ] 声明 viewport HDR output
 - [ ] 迁移 fullscreen light pass
-- [ ] 移除 `GBufferStage*` 资源反查
+- [x] 移除 `GBufferStage*` 资源反查
 
 ### Overlay
 

@@ -591,7 +591,9 @@ void DeferredRenderPipeline::initStages()
     _ssaoStage->init(_render);
 
     _lightStage = ya::makeShared<LightStage>();
-    _lightStage->setup(_gBufferStage.get(), _currentGBufferResources);
+    _lightStage->setup(LightStage::SharedInputs{
+        .frameAndLightDSL = _gBufferStage->getFrameAndLightDSL(),
+    }, _currentGBufferResources);
     _lightStage->setEnvironmentLightingInput(LightStage::EnvironmentLightingInput{
         .environmentLightingDSL = _environmentLightingDSL,
         .getSceneEnvironmentLightingDescriptorSet = _getSceneEnvironmentLightingDescriptorSet,
@@ -742,12 +744,13 @@ void DeferredRenderPipeline::captureShadowSettings(const RenderPipelineFrameCont
     }
 }
 
-void DeferredRenderPipeline::updateStageFrameInputs()
+void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameContext& frame)
 {
     Scene* activeScene = _getActiveScene ? _getActiveScene() : nullptr;
 
     if (_lightStage) {
         _lightStage->setFrameInputs(LightStage::FrameInputs{
+            .frameAndLightDescriptorSet = _gBufferStage ? _gBufferStage->getFrameAndLightDS(frame.flightIndex) : DescriptorSetHandle{},
             .environmentLightingDescriptorSet = (_getSceneEnvironmentLightingDescriptorSet && activeScene)
                 ? _getSceneEnvironmentLightingDescriptorSet(activeScene)
                 : DescriptorSetHandle{},
@@ -849,7 +852,9 @@ void DeferredRenderPipeline::refreshGBufferStageState()
     }
 
     if (_lightStage) {
-        _lightStage->setup(_gBufferStage.get(), _currentGBufferResources);
+        _lightStage->setup(LightStage::SharedInputs{
+            .frameAndLightDSL = _gBufferStage ? _gBufferStage->getFrameAndLightDSL() : nullptr,
+        }, _currentGBufferResources);
     }
 }
 
@@ -916,7 +921,7 @@ void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&
     (void)shadowSettings;
     (void)desiredShadowResolution;
     syncShadowSettings();
-    updateStageFrameInputs();
+    updateStageFrameInputs(frame);
 }
 
 void DeferredRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)

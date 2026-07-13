@@ -207,7 +207,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               refreshViewportStageState();
     void               refreshCurrentFrameResources();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);
-    void               updateStageFrameInputs();
+    void               updateStageFrameInputs(const RenderPipelineFrameContext& frame);
     [[nodiscard]] ShadowSettings currentShadowSettings() const;
     void               syncFrameSettings(const RenderPipelineFrameContext& frame);
     void               executeShadowPass(RenderStageContext& stageCtx);
