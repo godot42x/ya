@@ -2,6 +2,7 @@
 
 #include "Render/RenderDefines.h"
 #include "Render/Shadow/ShadowSettings.h"
+#include "Runtime/App/Common/RenderTargetEditorCatalog.h"
 
 #include <functional>
 #include <glm/glm.hpp>
@@ -43,6 +44,8 @@ struct IRenderPipelineExecution
     [[nodiscard]] virtual Extent2D       getViewportExtent() const   = 0;
     [[nodiscard]] virtual IRenderTarget* getViewportRT() const       = 0;
     [[nodiscard]] virtual Texture*       getViewportTexture() const  = 0;
+    [[nodiscard]] virtual EFormat::T     getViewportColorFormat() const = 0;
+    [[nodiscard]] virtual EFormat::T     getViewportDepthFormat() const = 0;
 };
 
 struct IRenderPipelineSettingsUI
@@ -54,6 +57,7 @@ struct IRenderPipelineSettingsUI
     virtual void renderAOSettingsGUI()          {}
     virtual void renderShadowSettingsGUI()      = 0;
     virtual void renderPostProcessSettingsGUI() = 0;
+    virtual void setSharedDepthFormat(EFormat::T format) {}
 };
 
 struct IRenderPipelineDebugUI
@@ -62,6 +66,7 @@ struct IRenderPipelineDebugUI
 
     virtual void renderPerformanceGUI()    = 0;
     virtual void renderStageInternalsGUI() = 0;
+    virtual void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const {}
 };
 
 struct IRenderPipelineDebugOutputs

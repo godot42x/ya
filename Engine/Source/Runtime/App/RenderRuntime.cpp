@@ -230,23 +230,18 @@ RenderTargetEditorCatalog RenderRuntime::buildRenderTargetEditorCatalog() const
             .bEditable = false,
         });
     }
-    if (_forwardPipeline) {
-        _forwardPipeline->appendRenderTargetEditorEntries(catalog);
-    }
-    if (_deferredPipeline) {
-        _deferredPipeline->appendRenderTargetEditorEntries(catalog);
+    if (auto* pipeline = getActivePipelineDebugUI()) {
+        pipeline->appendRenderTargetEditorEntries(catalog);
     }
 
     return catalog;
 }
 
-void RenderRuntime::setDeferredSharedDepthFormat(EFormat::T format)
+void RenderRuntime::setActivePipelineSharedDepthFormat(EFormat::T format)
 {
-    if (!_deferredPipeline) {
-        return;
+    if (auto* pipeline = getActivePipelineSettingsUI()) {
+        pipeline->setSharedDepthFormat(format);
     }
-
-    _deferredPipeline->setSharedDepthFormat(format);
 }
 
 DebugRenderSystem& RenderRuntime::getDebugRenderSystem() const
@@ -341,11 +336,8 @@ void RenderRuntime::initActivePipeline()
         });
     }
 
-    if (_renderPipeline == ERenderPipeline::Forward) {
-        Render2D::init(_render, ForwardRenderPipeline::VIEWPORT_COLOR_FORMAT, ForwardRenderPipeline::DEPTH_FORMAT);
-    }
-    else {
-        Render2D::init(_render, _deferredPipeline->VIEWPORT_COLOR_FORMAT, _deferredPipeline->DEPTH_FORMAT);
+    if (auto* pipeline = getActivePipelineExecution()) {
+        Render2D::init(_render, pipeline->getViewportColorFormat(), pipeline->getViewportDepthFormat());
     }
 }
 

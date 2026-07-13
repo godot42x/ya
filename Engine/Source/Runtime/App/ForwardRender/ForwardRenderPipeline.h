@@ -100,8 +100,10 @@ struct ForwardRenderPipeline : public IRenderPipeline
     Extent2D                     getViewportExtent() const override;
     [[nodiscard]] IRenderTarget* getViewportRT() const override { return viewportRT.get(); }
     [[nodiscard]] Texture*       getViewportTexture() const override { return viewportTexture; }
+    [[nodiscard]] EFormat::T     getViewportColorFormat() const override { return VIEWPORT_COLOR_FORMAT; }
+    [[nodiscard]] EFormat::T     getViewportDepthFormat() const override { return DEPTH_FORMAT; }
     [[nodiscard]] const ForwardViewportResources& getCurrentViewportResources() const { return _viewportResources; }
-    void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const;
+    void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const override;
 
     // Shadow query accessors (used by RenderRuntime for debug views)
     [[nodiscard]] bool           isShadowMappingEnabled() const override;

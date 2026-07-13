@@ -288,9 +288,9 @@ void ForwardRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, R
 
 void ForwardRenderPipeline::refreshDirtyResources()
 {
-    const bool bViewportDirty         = viewportRT && viewportRT->isDirty();
-    const bool bViewportPipelineDirty = viewportRT && viewportRT->hasAttachmentDirty();
-    const bool bShadowDirty           = _shadowResources.isDirty();
+    const bool bViewportDirty         = viewportRT && viewportRT->needsRefresh();
+    const bool bViewportPipelineDirty = viewportRT && viewportRT->needsAttachmentRefresh();
+    const bool bShadowDirty           = _shadowResources.needsRefresh();
 
     if (bViewportDirty) {
         flushViewportResources();
@@ -312,13 +312,13 @@ void ForwardRenderPipeline::refreshDirtyResources()
 void ForwardRenderPipeline::flushViewportResources()
 {
     if (viewportRT) {
-        viewportRT->flushIfDirty();
+        viewportRT->refreshIfNeeded();
     }
 }
 
 void ForwardRenderPipeline::flushShadowResources()
 {
-    _shadowResources.flushIfDirty();
+    _shadowResources.refreshIfNeeded();
 }
 
 void ForwardRenderPipeline::refreshViewportSnapshot()

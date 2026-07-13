@@ -8,6 +8,7 @@
 #include "Render/Render.h"
 #include "Render/Shader.h"
 #include "Runtime/App/Common/IRenderPipeline.h"
+#include "Runtime/App/Common/RenderTargetEditorCatalog.h"
 #include "Runtime/App/DeferredRender/DeferredPipelineDebugViews.h"
 #include "Runtime/App/OffscreenTaskService.h"
 #include "Runtime/App/RenderDiagnosticsService.h"
@@ -66,27 +67,6 @@ struct RenderOverlaySprite3D
     glm::mat4 worldTransform = glm::mat4(1.0f);
     Texture*  texture        = nullptr;
     glm::vec4 tint           = glm::vec4(1.0f);
-};
-
-struct RenderTargetEditorCatalog
-{
-    struct Entry
-    {
-        const char*    label = "";
-        IRenderTarget* rt    = nullptr;
-        enum class EOwner
-        {
-            Presentation,
-            ForwardViewport,
-            ForwardShadow,
-            DeferredGBuffer,
-            DeferredViewport,
-            DeferredShadow,
-        } owner = EOwner::Presentation;
-        bool bEditable = true;
-    };
-
-    std::vector<Entry> entries;
 };
 
 struct RenderRuntime
@@ -216,9 +196,8 @@ struct RenderRuntime
     [[nodiscard]] IRenderTarget* getActiveViewportRT() const;
     [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews() const;
     [[nodiscard]] RenderTargetEditorCatalog buildRenderTargetEditorCatalog() const;
-    void                          setDeferredSharedDepthFormat(EFormat::T format);
+    void                          setActivePipelineSharedDepthFormat(EFormat::T format);
     [[nodiscard]] bool            isDeferredPipelineActive() const { return _renderPipeline == ERenderPipeline::Deferred; }
-    [[nodiscard]] ForwardRenderPipeline* getForwardPipelineImpl() const { return _forwardPipeline.get(); }
 
   private:
     void                   initRuntimeState(const InitDesc& desc);

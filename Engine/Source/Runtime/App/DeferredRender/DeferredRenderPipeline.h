@@ -151,6 +151,8 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void onViewportResized(Rect2D rect) override;
 
     Extent2D getViewportExtent() const override { return _currentViewportResources.depth ? _currentViewportResources.depth->getExtent() : Extent2D{}; }
+    EFormat::T getViewportColorFormat() const override { return VIEWPORT_COLOR_FORMAT; }
+    EFormat::T getViewportDepthFormat() const override { return DEPTH_FORMAT; }
 
     IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
@@ -158,8 +160,8 @@ struct DeferredRenderPipeline : public IRenderPipeline
     const DeferredGBufferResources& getCurrentGBufferResources() const { return _currentGBufferResources; }
     const DeferredViewportResources& getCurrentViewportResources() const { return _currentViewportResources; }
     DeferredPipelineDebugViews buildDebugViews() const;
-    void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const;
-    void setSharedDepthFormat(EFormat::T format);
+    void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const override;
+    void setSharedDepthFormat(EFormat::T format) override;
 
     // Access GBuffer RT for debug views
     IRenderTarget* getGBufferRT() const { return _gBufferRT.get(); }

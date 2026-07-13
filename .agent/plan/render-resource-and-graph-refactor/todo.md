@@ -273,6 +273,10 @@
 - forward 侧的 RT editor owner 暴露也已对齐成 pipeline helper：`RenderRuntime` 不再直接用 `getViewportRT()/getShadowDepthRT()` 组 forward catalog entries
 - deferred debug snapshot 也已从 runtime 自身的数据拼装回收到 pipeline：`DeferredPipelineDebugViews` 已移动到 deferred 模块，并由 `DeferredRenderPipeline::buildDebugViews()` 统一导出
 - Forward viewport extent 的应用点也已开始收口：`applyViewportExtent()` 统一承接 extent 变更与 snapshot 刷新，execute/onViewportResized 不再各自分散维护 `viewportRT` 与 `_viewportResources` 的同步
+- legacy dirty repair 的语义也继续往高层收口：`IRenderTarget` 与 `ShadowMapResources` 开始提供 `needsRefresh()/needsAttachmentRefresh()/refreshIfNeeded()` facade，Forward/Deferred dirty refresh 已不再直接暴露 `isDirty()/hasAttachmentDirty()/flushIfDirty()` 调用
+- RT editor catalog 的 concrete pipeline 分支也开始回收到公共接口：`RenderTargetEditorCatalog` 已下沉到 common 头，`appendRenderTargetEditorEntries()` 现通过 `IRenderPipeline` 暴露，`RenderRuntime` 不再自行分支调用 forward/deferred 的 catalog helper
+- runtime 对 viewport attachment format 的 concrete pipeline 依赖也继续缩减：`IRenderPipelineExecution` 新增 `getViewportColorFormat()/getViewportDepthFormat()`，`Render2D::init()` 已通过 active pipeline 接口读取格式，不再直接引用 forward/deferred 的 static 常量
+- editor RT depth-format 调整的 deferred 特判也继续回收到 active pipeline 接口：`setSharedDepthFormat()` 现通过 `IRenderPipelineSettingsUI` 暴露，`RenderRuntime` 与 RT editor GUI 不再保留 `setDeferredSharedDepthFormat()` 这类 concrete helper
 
 ## Phase 7: Deferred Graph 迁移
 

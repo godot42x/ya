@@ -35,19 +35,19 @@ struct ShadowMapResources
     void destroy();
     void rebuildViews(IRender* render, std::string_view viewLabelPrefix);
 
-    [[nodiscard]] bool isDirty() const
+    [[nodiscard]] bool needsRefresh() const
     {
-        return renderTarget && renderTarget->isDirty();
+        return renderTarget && renderTarget->needsRefresh();
     }
 
-    [[nodiscard]] bool hasAttachmentDirty() const
+    [[nodiscard]] bool needsAttachmentRefresh() const
     {
-        return renderTarget && renderTarget->hasAttachmentDirty();
+        return renderTarget && renderTarget->needsAttachmentRefresh();
     }
 
-    [[nodiscard]] bool flushIfDirty() const
+    [[nodiscard]] bool refreshIfNeeded() const
     {
-        return renderTarget && renderTarget->flushIfDirty();
+        return renderTarget && renderTarget->refreshIfNeeded();
     }
 };
 

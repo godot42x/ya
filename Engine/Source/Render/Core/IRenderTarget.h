@@ -169,13 +169,28 @@ struct IRenderTarget
     }
 
     [[nodiscard]] bool isDirty() const { return bDirty; }
+    [[nodiscard]] bool needsRefresh() const { return bDirty; }
 
     [[nodiscard]] bool hasAttachmentDirty() const
     {
         return hasDirtyReason(ERenderTargetDirtyReason::Attachments);
     }
 
+    [[nodiscard]] bool needsAttachmentRefresh() const
+    {
+        return hasDirtyReason(ERenderTargetDirtyReason::Attachments);
+    }
+
     [[nodiscard]] bool flushIfDirty()
+    {
+        if (!bDirty) {
+            return false;
+        }
+        flushDirty();
+        return true;
+    }
+
+    [[nodiscard]] bool refreshIfNeeded()
     {
         if (!bDirty) {
             return false;
