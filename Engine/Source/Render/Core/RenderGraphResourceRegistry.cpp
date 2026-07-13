@@ -1,5 +1,7 @@
 #include "RenderGraphResourceRegistry.h"
 
+#include "Resource/DeferredDeletionQueue.h"
+
 #include <unordered_set>
 
 namespace ya
@@ -79,6 +81,22 @@ bool isSameImportedBufferDesc(const RGImportedBufferDesc& lhs, const RGImportedB
            lhs.buffer == rhs.buffer;
 }
 
+template <typename T>
+void retireSharedResource(std::shared_ptr<T>& resource)
+{
+    if (!resource) {
+        return;
+    }
+
+    auto& deletionQueue = DeferredDeletionQueue::get();
+    if (deletionQueue.isInitialized()) {
+        deletionQueue.retireResource(std::move(resource));
+        return;
+    }
+
+    resource.reset();
+}
+
 } // namespace
 
 RenderImageDesc RenderGraphResourceRegistry::makeRenderImageDesc(const RGTextureDesc& desc)
@@ -146,6 +164,7 @@ void RenderGraphResourceRegistry::pruneUnusedResources(const RenderGraph& graph)
 
     for (auto it = _textures.begin(); it != _textures.end();) {
         if (!liveTextures.contains(it->first)) {
+            retireSharedResource(it->second.resource);
             it = _textures.erase(it);
         }
         else {
@@ -161,6 +180,7 @@ void RenderGraphResourceRegistry::pruneUnusedResources(const RenderGraph& graph)
 
     for (auto it = _ownedBuffers.begin(); it != _ownedBuffers.end();) {
         if (!liveBuffers.contains(it->first)) {
+            retireSharedResource(it->second.resource);
             it = _ownedBuffers.erase(it);
         }
         else {
@@ -216,6 +236,9 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
         if (existing != _textures.end() && !needsTextureReplacement(existing->second, texture)) {
             continue;
         }
+        if (existing != _textures.end()) {
+            retireSharedResource(existing->second.resource);
+        }
 
         if (texture.lifetime == ERGResourceLifetime::Imported) {
             YA_CORE_ASSERT(texture.imported.has_value(), "Imported render graph texture '{}' is missing import desc", texture.desc.label);
@@ -236,6 +259,9 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
     for (const auto& buffer : graph.getBuffers()) {
         if (buffer.lifetime == ERGResourceLifetime::Imported) {
             YA_CORE_ASSERT(buffer.imported.has_value(), "Imported render graph buffer '{}' is missing import desc", buffer.desc.label);
+            if (const auto owned = _ownedBuffers.find(buffer.handle); owned != _ownedBuffers.end()) {
+                retireSharedResource(owned->second.resource);
+            }
             _ownedBuffers.erase(buffer.handle);
 
             const auto existing = _importedBuffers.find(buffer.handle);
@@ -256,6 +282,9 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
         if (existing != _ownedBuffers.end() && !needsOwnedBufferReplacement(existing->second, buffer)) {
             continue;
         }
+        if (existing != _ownedBuffers.end()) {
+            retireSharedResource(existing->second.resource);
+        }
 
         _ownedBuffers[buffer.handle] = OwnedBufferEntry{
             .resource = _factory.createBuffer(BufferCreateInfo{
@@ -271,6 +300,14 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
 
 void RenderGraphResourceRegistry::clear()
 {
+    for (auto& [handle, texture] : _textures) {
+        (void)handle;
+        retireSharedResource(texture.resource);
+    }
+    for (auto& [handle, buffer] : _ownedBuffers) {
+        (void)handle;
+        retireSharedResource(buffer.resource);
+    }
     _textures.clear();
     _ownedBuffers.clear();
     _importedBuffers.clear();

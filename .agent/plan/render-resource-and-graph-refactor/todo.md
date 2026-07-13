@@ -223,6 +223,7 @@
 - `RenderGraphResourceRegistry` 现已补上最小 frame-to-frame replacement 语义：持久化 executor 复用同一 handle 时，若 texture/buffer desc 或 imported contract 变化，会在 `sync()` 中替换物理资源；描述未变时则保持复用
 - SSAO 已成为第一个 runtime-side `ERGResourceLifetime::Persistent` 落地点：输出 AO 图不再由 `DeferredRenderPipeline` 预先分配 `RenderImage`，而是在 stage graph 中声明为 persistent texture，并在执行后回传给 `LightStage` / debug 视图消费
 - Bloom extract / blur ping-pong / composite 与 postprocess output 也已沿同一模式改为 graph persistent texture；descriptor 更新已下沉到 pass execute 回调，避免在 graph execute 前依赖外部 intermediate owner
+- `RenderGraphResourceRegistry` 的 owned texture/buffer replacement / prune / clear 现在会优先通过 `DeferredDeletionQueue` 退休旧资源；未初始化删除队列的 core test / tool 场景才会立即释放
 - `RenderGraphExecutor` 已起最小执行骨架：compile 校验、registry sync、按拓扑序驱动 pass execute callback；尚未接入 Vulkan barrier/state plan 和 rendering/copy helper
 - `RGRenderContext` 已补最小 helper：color rendering begin/end 与 buffer copy，pass callback 开始可以少直接拼 `RenderingInfo` / `copyBuffer` 样板
 - compiled graph 已开始产出最小 texture/buffer required state plan（read/storage/color/depth）；texture plan 已在 executor 中先接入 `ResourceStateTracker -> transitionImageLayout()`，buffer plan 已接入最小 `bufferMemoryBarrier()` 发射，后续仍需与统一 barrier backend 收敛
@@ -298,7 +299,7 @@
 - SSAO 与 postprocess output 现在都已切到 graph persistent/resource-registry replacement 路径；后续更值得推进的是 bloom extract / blur ping-pong / composite 等残余 postprocess intermediates，而不是回到 owner 搬移式小重构
 - 额外调查已进一步落地：`RenderGraphResourceRegistry` 现在已有最小 frame-to-frame replacement / lifetime 语义，且 SSAO 已作为首个 runtime-side `ERGResourceLifetime::Persistent` 落地点成立；后续应沿同一模式继续评估 postprocess/bloom，而不是回到 pipeline/stage 间的 owner 搬移
 - runtime 中高频 graph 执行点也已开始为后续 registry 生命周期铺路：`RenderGraphResourceRegistry::sync()` 现会 prune 当前 graph 已不再使用的旧 handle，`SSAOStage / PostProcessingStage / BloomPostprocessing` 已改为持久化 `RenderGraphExecutor`，不再每次执行都丢弃 registry 状态
-- 进一步调查：当前 runtime 在 `RenderRuntime::beginFrameCommandBuffer()` 里仍会每帧 `waitIdle()`，因此现阶段 graph registry 的 immediate replacement/destroy 在运行时语义上暂时安全；但若后续推进“去 waitIdle 化”，则 registry replacement 必须先接入 `DeferredDeletionQueue` 或等价的按 flight 延迟退休协议
+- 进一步调查：当前 runtime 在 `RenderRuntime::beginFrameCommandBuffer()` 里仍会每帧 `waitIdle()`，因此现阶段 graph registry replacement 在运行时语义上仍然保守；同时 owned resource replacement 已开始接入 `DeferredDeletionQueue`，后续若继续推进“去 waitIdle 化”，应把 imported wrapper / view cache 等剩余路径也纳入同一延迟退休协议
 - Deferred pipeline 自己的 graph 壳也已跟进同一策略：GBuffer / Viewport / DepthCopy 不再每帧临时构造 `RenderGraphExecutor`，而是复用 pipeline 持有的 executor，为后续把 imported graph 资源继续收向持久 registry 打基础
 - 因此继续追加 facade-only 收口的收益已经明显下降；Phase 7 后续优先做“删除 owner / graph 接管 replacement / 删除残余 dirty state”，不继续堆只改变接口表述的小提交
 - 现有 checklist 保持“删除 legacy path 后才勾选”的口径；已有 graph shell 或兼容层不单独视为完成
