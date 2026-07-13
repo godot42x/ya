@@ -49,11 +49,6 @@ bool App::hasMirrorRenderResult() const
     return _renderRuntime && _renderRuntime->hasMirrorRenderResult();
 }
 
-IRenderTarget* App::getShadowDepthRT() const
-{
-    return _renderRuntime ? _renderRuntime->getShadowDepthRT() : nullptr;
-}
-
 IImageView* App::getShadowDirectionalDepthIV() const
 {
     return _renderRuntime ? _renderRuntime->getShadowDirectionalDepthIV() : nullptr;

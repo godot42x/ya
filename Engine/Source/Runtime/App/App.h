@@ -466,7 +466,6 @@ struct App
     [[nodiscard]] bool                   isShadowMappingEnabled() const;
     [[nodiscard]] bool                   isMirrorRenderingEnabled() const;
     [[nodiscard]] bool                   hasMirrorRenderResult() const;
-    [[nodiscard]] IRenderTarget*         getShadowDepthRT() const;
     [[nodiscard]] IImageView*            getShadowDirectionalDepthIV() const;
     [[nodiscard]] IImageView*            getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
     [[nodiscard]] Texture*               getPostprocessOutputTexture() const;

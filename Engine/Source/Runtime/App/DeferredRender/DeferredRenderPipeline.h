@@ -148,16 +148,20 @@ struct DeferredRenderPipeline : public IRenderPipeline
 
     void onViewportResized(Rect2D rect) override;
 
-    Extent2D getViewportExtent() const override { return _viewportRT ? _viewportRT->getExtent() : Extent2D{}; }
+    Extent2D getViewportExtent() const override { return _currentViewportResources.depth ? _currentViewportResources.depth->getExtent() : Extent2D{}; }
 
     IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
     RenderImage* getSSAOTexture() const { return _ssaoTexture.get(); }
+    const DeferredGBufferResources& getCurrentGBufferResources() const { return _currentGBufferResources; }
+    const DeferredViewportResources& getCurrentViewportResources() const { return _currentViewportResources; }
 
     // Access GBuffer RT for debug views
     IRenderTarget* getGBufferRT() const { return _gBufferRT.get(); }
     IRenderTarget* getViewportRT() const override { return _viewportRT.get(); }
-    IRenderTarget* getShadowDepthRT() const override { return _shadowResources.renderTarget.get(); }
+    IRenderTarget* getShadowDepthRT() const { return _shadowResources.renderTarget.get(); }
+    Texture*       getShadowDepthTexture() const override { return _shadowStage ? _shadowStage->getDirectionalDepthTexture() : nullptr; }
+    Texture*       getViewportDepthTexture() const override { return _currentViewportResources.depth; }
     Texture*       getViewportTexture() const override { return viewportTexture; }
     bool           isShadowMappingEnabled() const override;
     IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }

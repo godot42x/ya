@@ -69,7 +69,8 @@ struct IRenderPipelineDebugOutputs
     virtual ~IRenderPipelineDebugOutputs() = default;
 
     [[nodiscard]] virtual bool           isShadowMappingEnabled() const = 0;
-    [[nodiscard]] virtual IRenderTarget* getShadowDepthRT() const       = 0;
+    [[nodiscard]] virtual Texture*       getShadowDepthTexture() const  = 0;
+    [[nodiscard]] virtual Texture*       getViewportDepthTexture() const = 0;
     [[nodiscard]] virtual IImageView*    getShadowDirectionalDepthIV() const = 0;
     [[nodiscard]] virtual IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const = 0;
 

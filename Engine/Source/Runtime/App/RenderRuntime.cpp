@@ -121,14 +121,6 @@ bool RenderRuntime::hasMirrorRenderResult() const
     return false;
 }
 
-IRenderTarget* RenderRuntime::getShadowDepthRT() const
-{
-    if (auto* pipeline = getActivePipelineDebugOutputs()) {
-        return pipeline->getShadowDepthRT();
-    }
-    return nullptr;
-}
-
 IImageView* RenderRuntime::getShadowDirectionalDepthIV() const
 {
     if (auto* pipeline = getActivePipelineDebugOutputs()) {
@@ -179,7 +171,8 @@ RenderPipelineDebugOutputCatalog RenderRuntime::buildPipelineDebugOutputCatalog(
     }
 
     catalog.bShadowMappingEnabled  = pipeline->isShadowMappingEnabled();
-    catalog.shadowDepthRT          = pipeline->getShadowDepthRT();
+    catalog.shadowDepthTexture     = pipeline->getShadowDepthTexture();
+    catalog.viewportDepthTexture   = pipeline->getViewportDepthTexture();
     catalog.shadowDirectionalDepth = pipeline->getShadowDirectionalDepthIV();
     catalog.postprocessOutput      = pipeline->getPostprocessOutputTexture();
     catalog.bloomExtract           = pipeline->getBloomExtractImage();
@@ -212,8 +205,9 @@ DeferredPipelineDebugViews RenderRuntime::getDeferredPipelineDebugViews() const
 {
     DeferredPipelineDebugViews views{};
     if (_renderPipeline == ERenderPipeline::Deferred && _deferredPipeline) {
-        views.gBufferRT   = _deferredPipeline->getGBufferRT();
-        views.ssaoTexture = _deferredPipeline->getSSAOTexture();
+        views.gBufferResources  = _deferredPipeline->getCurrentGBufferResources();
+        views.viewportResources = _deferredPipeline->getCurrentViewportResources();
+        views.ssaoTexture       = _deferredPipeline->getSSAOTexture();
     }
     return views;
 }

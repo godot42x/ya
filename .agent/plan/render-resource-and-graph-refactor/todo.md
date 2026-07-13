@@ -261,6 +261,11 @@
 - shadow technique 已不再保留 `IRenderTarget` 输入契约：`BasicShadowMapTechnique` 只通过显式 `depth image + format + extent` 刷新派生视图与 pipeline，Forward viewport extent 查询也优先复用 pipeline snapshot，而不是回查 legacy owner
 - `ShadowStage` 也已去掉仅作转发的 shadow render-target 持有；pipeline 只在资源替换点显式推送 `ShadowMapResources` 快照，shadow 链路继续从 legacy owner 句柄转向显式 frame state
 - 运行时调试/编辑器视图路径也已开始脱离 `FrameBuffer` 细节：presentation、viewport、gbuffer、shadow 调试预览优先走 `IRenderTarget::getCurrent*Texture()` facade，而不是直接扒开当前 framebuffer
+- Deferred 调试预览输出已进一步从 legacy owner 转到显式 snapshot：`RenderRuntime` 读取 `DeferredGBufferResources / DeferredViewportResources` 做 editor preview，不再通过 `gBufferRT / viewportRT` 反查 attachment
+- shadow debug preview 也已开始与 legacy render target 分层：`IRenderPipelineDebugOutputs` 新增显式 `shadowDepthTexture` 输出，editor preview 不再靠 `shadowDepthRT -> depth texture` 间接拆图
+- Forward debug preview 也已向同样方向对齐：shadow cubemap 预览复用显式 `shadowDepthTexture`，viewport depth 预览改读 `ForwardViewportResources` snapshot，而不是在 editor 里回查 `viewportRT`
+- `IRenderPipelineDebugOutputs` 已继续补齐显式 preview 输出：新增 `viewportDepthTexture`，让 `RenderRuntimeEditorViewport` 不再依赖具体 `ForwardRenderPipeline` 取 viewport depth
+- preview/debug 与 owner 语义的接口边界继续收口：`getShadowDepthRT()` 已从 `IRenderPipelineDebugOutputs` 和 `RenderRuntime/App` 的 preview 转发链移除，只在 concrete pipeline 上保留给 RT editor/catalog 使用
 - Forward viewport extent 的应用点也已开始收口：`applyViewportExtent()` 统一承接 extent 变更与 snapshot 刷新，execute/onViewportResized 不再各自分散维护 `viewportRT` 与 `_viewportResources` 的同步
 
 ## Phase 7: Deferred Graph 迁移

@@ -8,6 +8,8 @@
 #include "Render/Render.h"
 #include "Render/Shader.h"
 #include "Runtime/App/Common/IRenderPipeline.h"
+#include "Runtime/App/DeferredRender/DeferredGBufferResources.h"
+#include "Runtime/App/DeferredRender/DeferredViewportResources.h"
 #include "Runtime/App/OffscreenTaskService.h"
 #include "Runtime/App/RenderDiagnosticsService.h"
 #include "Runtime/App/RenderSharedResourceProvider.h"
@@ -40,14 +42,16 @@ struct RenderDiagnosticsService;
 
 struct DeferredPipelineDebugViews
 {
-    IRenderTarget* gBufferRT  = nullptr;
-    RenderImage*   ssaoTexture = nullptr;
+    DeferredGBufferResources  gBufferResources{};
+    DeferredViewportResources viewportResources{};
+    RenderImage*              ssaoTexture = nullptr;
 };
 
 struct RenderPipelineDebugOutputCatalog
 {
     bool           bShadowMappingEnabled  = false;
-    IRenderTarget* shadowDepthRT          = nullptr;
+    Texture*       shadowDepthTexture     = nullptr;
+    Texture*       viewportDepthTexture   = nullptr;
     IImageView*    shadowDirectionalDepth = nullptr;
     Texture*       postprocessOutput      = nullptr;
     RenderImage*   bloomExtract           = nullptr;
@@ -182,7 +186,6 @@ struct RenderRuntime
     [[nodiscard]] bool                           isShadowMappingEnabled() const;
     [[nodiscard]] bool                           isMirrorRenderingEnabled() const;
     [[nodiscard]] bool                           hasMirrorRenderResult() const;
-    [[nodiscard]] IRenderTarget*                 getShadowDepthRT() const;
     [[nodiscard]] IImageView*                    getShadowDirectionalDepthIV() const;
     [[nodiscard]] IImageView*                    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
     [[nodiscard]] bool                           isOffscreenPending() const { return _offscreen.isPending(); }

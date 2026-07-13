@@ -73,15 +73,6 @@ void appendShadowDebugSlots(EditorViewportContext& ctx,
     }
 }
 
-Texture* getShadowDepthTexture(IRenderTarget* shadowDepthRT)
-{
-    if (!shadowDepthRT) {
-        return nullptr;
-    }
-
-    return shadowDepthRT->getCurrentDepthTexture();
-}
-
 } // namespace
 
 void RenderRuntime::updateEditorViewportContext(EditorLayer* editorLayer)
@@ -137,42 +128,13 @@ void RenderRuntime::appendForwardDebugSlots(EditorViewportContext& ctx)
     const auto debugOutputs = buildPipelineDebugOutputCatalog();
 
     if (debugOutputs.bShadowMappingEnabled) {
-        if (auto* directionalDepth = debugOutputs.shadowDirectionalDepth) {
-            ctx.debugSpec.slots.push_back({
-                .label         = "ShadowDirectionalDepth",
-                .defaultView   = directionalDepth,
-                .ownedView     = nullptr,
-                .image         = nullptr,
-                .categoryIndex = CATEGORY_SHADOW,
-            });
-        }
-
-        EditorViewportContext::DebugSpec::Group pointShadowGroup{
-            .label         = "Point Shadow Cubemap",
-            .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
-            .categoryIndex = CATEGORY_SHADOW,
-            .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
-            .groupSize     = 6,
-            .itemLabels    = {},
-        };
-        for (uint32_t pointLightIndex = 0; pointLightIndex < MAX_POINT_LIGHTS; ++pointLightIndex) {
-            for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
-                if (auto* faceIV = getShadowPointFaceDepthIV(pointLightIndex, faceIndex)) {
-                    ctx.debugSpec.slots.push_back({
-                        .label         = std::format("ShadowPoint{}_Face{}", pointLightIndex, faceIndex),
-                        .defaultView   = faceIV,
-                        .ownedView     = nullptr,
-                        .image         = nullptr,
-                        .categoryIndex = CATEGORY_SHADOW,
-                        .aspectFlags   = EImageAspect::Depth,
-                    });
-                }
-            }
-        }
-        pointShadowGroup.slotCount = static_cast<uint32_t>(ctx.debugSpec.slots.size()) - pointShadowGroup.beginIndex;
-        if (pointShadowGroup.slotCount >= pointShadowGroup.groupSize) {
-            ctx.debugSpec.groups.push_back(std::move(pointShadowGroup));
-        }
+        appendShadowDebugSlots(
+            ctx,
+            debugOutputs.shadowDirectionalDepth,
+            debugOutputs.shadowDepthTexture,
+            [this](uint32_t pointLightIndex, uint32_t faceIndex)
+            { return getShadowPointFaceDepthIV(pointLightIndex, faceIndex); },
+            CATEGORY_SHADOW);
     }
 
     if (auto* scene = _app->getSceneManager()->getActiveScene()) {
@@ -218,19 +180,15 @@ void RenderRuntime::appendForwardDebugSlots(EditorViewportContext& ctx)
         }
     }
 
-    if (auto* forwardPipeline = getForwardPipelineImpl(); forwardPipeline) {
-        if (auto* viewportRT = forwardPipeline->getViewportRT()) {
-            if (auto* viewportDepth = viewportRT->getCurrentDepthTexture()) {
-                ctx.debugSpec.slots.push_back({
-                    .label         = "ViewportDepth",
-                    .defaultView   = viewportDepth->getImageView(),
-                    .ownedView     = nullptr,
-                    .image         = viewportDepth->getImageShared(),
-                    .categoryIndex = CATEGORY_VIEWPORT,
-                    .aspectFlags   = EImageAspect::Depth,
-                });
-            }
-        }
+    if (auto* viewportDepth = debugOutputs.viewportDepthTexture) {
+        ctx.debugSpec.slots.push_back({
+            .label         = "ViewportDepth",
+            .defaultView   = viewportDepth->getImageView(),
+            .ownedView     = nullptr,
+            .image         = viewportDepth->getImageShared(),
+            .categoryIndex = CATEGORY_VIEWPORT,
+            .aspectFlags   = EImageAspect::Depth,
+        });
     }
 }
 
@@ -238,18 +196,17 @@ void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
 {
     const auto debugOutputs = buildPipelineDebugOutputCatalog();
     const auto deferredViews = getDeferredPipelineDebugViews();
-    auto*      viewportRT    = getActiveViewportRT();
-    if (!_deferredPipeline || !deferredViews.gBufferRT || !viewportRT) {
+    if (!_deferredPipeline) {
         return;
     }
 
-    auto* positionTexture      = deferredViews.gBufferRT->getCurrentColorTexture(0);
-    auto* normalTexture        = deferredViews.gBufferRT->getCurrentColorTexture(1);
-    auto* albedoSpecTexture    = deferredViews.gBufferRT->getCurrentColorTexture(2);
-    auto* shadingModelTexture  = deferredViews.gBufferRT->getCurrentColorTexture(3);
-    auto* gbufferDepthTexture  = deferredViews.gBufferRT->getCurrentDepthTexture();
-    auto* viewportColorTexture = viewportRT->getCurrentColorTexture(0);
-    auto* viewportDepthTexture = viewportRT->getCurrentDepthTexture();
+    auto* positionTexture      = deferredViews.gBufferResources.color[0];
+    auto* normalTexture        = deferredViews.gBufferResources.color[1];
+    auto* albedoSpecTexture    = deferredViews.gBufferResources.color[2];
+    auto* shadingModelTexture  = deferredViews.gBufferResources.color[3];
+    auto* gbufferDepthTexture  = deferredViews.gBufferResources.depth;
+    auto* viewportColorTexture = deferredViews.viewportResources.color;
+    auto* viewportDepthTexture = deferredViews.viewportResources.depth;
     if (!positionTexture || !normalTexture || !albedoSpecTexture || !shadingModelTexture || !gbufferDepthTexture ||
         !viewportColorTexture || !viewportDepthTexture) {
         return;
@@ -362,8 +319,7 @@ void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
         });
     }
 
-    if (auto* shadowDepthRT = debugOutputs.shadowDepthRT) {
-        Texture* shadowDepthTexture = getShadowDepthTexture(shadowDepthRT);
+    if (auto* shadowDepthTexture = debugOutputs.shadowDepthTexture) {
         appendShadowDebugSlots(
             ctx,
             debugOutputs.shadowDirectionalDepth,

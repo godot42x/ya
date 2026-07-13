@@ -100,10 +100,13 @@ struct ForwardRenderPipeline : public IRenderPipeline
     Extent2D                     getViewportExtent() const override;
     [[nodiscard]] IRenderTarget* getViewportRT() const override { return viewportRT.get(); }
     [[nodiscard]] Texture*       getViewportTexture() const override { return viewportTexture; }
+    [[nodiscard]] const ForwardViewportResources& getCurrentViewportResources() const { return _viewportResources; }
 
     // Shadow query accessors (used by RenderRuntime for debug views)
     [[nodiscard]] bool           isShadowMappingEnabled() const override;
-    [[nodiscard]] IRenderTarget* getShadowDepthRT() const override { return _shadowResources.renderTarget.get(); }
+    [[nodiscard]] IRenderTarget* getShadowDepthRT() const { return _shadowResources.renderTarget.get(); }
+    [[nodiscard]] Texture*       getShadowDepthTexture() const override { return _shadowStage ? _shadowStage->getDirectionalDepthTexture() : nullptr; }
+    [[nodiscard]] Texture*       getViewportDepthTexture() const override { return _viewportResources.depth; }
     [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override;
     [[nodiscard]] Texture*       getPostprocessOutputTexture() const override { return _postProcessStage.getOutputTexture(); }
