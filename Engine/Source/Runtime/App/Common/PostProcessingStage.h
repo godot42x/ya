@@ -35,12 +35,11 @@ struct PostProcessingStage
     stdptr<RenderImage>         _bloomCompositeImage = nullptr;
     stdptr<RenderImage>         _postprocessOutputImage = nullptr;
     stdptr<Texture>             _postprocessOutputTextureCompat = nullptr;
-    Extent2D                    _pendingResizeExtent{};
-    bool                        _bResizePending      = false;
 
     void     init(const InitDesc& desc);
     void     shutdown();
     void     beginFrame();
+    void     resizeResources(Extent2D newExtent);
     void     renderGUI();
     void     renderSettingsGUI();
     void     renderTechnicalGUI();
@@ -48,7 +47,6 @@ struct PostProcessingStage
                      Texture*        inputTexture,
                      glm::vec2       viewportExtent,
                      FrameContext*   ctx);
-    void     onViewportResized(Extent2D newExtent);
 
     [[nodiscard]] bool                       isEnabled() const { return bEnabled; }
     [[nodiscard]] Texture*                   getOutputTexture() const { return _postprocessOutputTextureCompat.get(); }
@@ -60,8 +58,6 @@ struct PostProcessingStage
     [[nodiscard]] const PostProcessingState& getState() const { return _state; }
 
   private:
-    void applyPendingResize();
-    void requestResize(Extent2D extent);
     void recreateOutputTexture(Extent2D extent);
     void recreateBloomTextures(Extent2D extent);
 };

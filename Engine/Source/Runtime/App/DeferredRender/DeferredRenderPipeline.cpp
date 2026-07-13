@@ -470,7 +470,7 @@ void DeferredRenderPipeline::applyPendingViewportResize()
 
     _ssaoTexture = createSSAOImage(_render, _pendingViewportExtent);
     refreshCurrentFrameResources();
-    _postProcessStage.onViewportResized(_pendingViewportExtent);
+    _postProcessStage.resizeResources(_pendingViewportExtent);
     refreshViewportSizedStageResources();
     _bViewportResizePending = false;
 }

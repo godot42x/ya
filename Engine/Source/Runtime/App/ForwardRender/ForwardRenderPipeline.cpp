@@ -591,8 +591,10 @@ void ForwardRenderPipeline::onViewportResized(Rect2D rect)
         .width  = static_cast<uint32_t>(rect.extent.x),
         .height = static_cast<uint32_t>(rect.extent.y),
     };
+    if (viewportRT && viewportRT->getExtent() != newExtent) {
+        _postProcessStage.resizeResources(newExtent);
+    }
     applyViewportExtent(newExtent);
-    _postProcessStage.onViewportResized(newExtent);
 }
 
 Extent2D ForwardRenderPipeline::getViewportExtent() const

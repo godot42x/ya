@@ -135,26 +135,15 @@ RGImportedTextureDesc makePostprocessImportedTextureDesc(const RenderImage& imag
 
 } // namespace
 
-void PostProcessingStage::requestResize(Extent2D extent)
+void PostProcessingStage::resizeResources(Extent2D extent)
 {
-    if (extent.width == 0 || extent.height == 0) {
-        return;
-    }
-
-    _pendingResizeExtent = extent;
-    _bResizePending      = true;
-}
-
-void PostProcessingStage::applyPendingResize()
-{
-    if (!_bResizePending || !_render) {
+    if (!_render || extent.width == 0 || extent.height == 0) {
         return;
     }
 
     _render->waitIdle();
-    recreateOutputTexture(_pendingResizeExtent);
-    recreateBloomTextures(_pendingResizeExtent);
-    _bResizePending = false;
+    recreateOutputTexture(extent);
+    recreateBloomTextures(extent);
 }
 
 void PostProcessingStage::recreateOutputTexture(Extent2D extent)
@@ -259,15 +248,11 @@ void PostProcessingStage::shutdown()
     _bloomCompositeImage.reset();
     _postprocessOutputImage.reset();
     _postprocessOutputTextureCompat.reset();
-    _pendingResizeExtent = {};
-    _bResizePending      = false;
     _render = nullptr;
 }
 
 void PostProcessingStage::beginFrame()
 {
-    applyPendingResize();
-
     if (_bloomProcessor) {
         _bloomProcessor->beginFrame();
     }
@@ -336,7 +321,6 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
     }
 
     if (!_postprocessOutputImage || _postprocessOutputImage->getExtent() != inputExtent) {
-        requestResize(inputExtent);
         return inputTexture;
     }
     if (!_postprocessOutputImage || !_postprocessOutputTextureCompat) {
@@ -405,18 +389,4 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
 
     return _postprocessOutputTextureCompat.get();
 }
-
-void PostProcessingStage::onViewportResized(Extent2D newExtent)
-{
-    if (!_render || !_postprocessOutputImage || newExtent.width == 0 || newExtent.height == 0) {
-        return;
-    }
-
-    if (_postprocessOutputImage->getExtent() == newExtent) {
-        return;
-    }
-
-    requestResize(newExtent);
-}
-
 } // namespace ya

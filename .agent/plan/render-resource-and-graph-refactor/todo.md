@@ -279,6 +279,7 @@
 - editor RT depth-format 调整的 deferred 特判也继续回收到 active pipeline 接口：`setSharedDepthFormat()` 现通过 `IRenderPipelineSettingsUI` 暴露，`RenderRuntime` 与 RT editor GUI 不再保留 `setDeferredSharedDepthFormat()` 这类 concrete helper
 - deferred shared-depth 编辑已开始脱离 attachment dirty fallback：`setSharedDepthFormat()` 现在只负责标记 pending refresh，`beginTick()` 会在安全点统一 flush GBuffer/Viewport depth attachment 并刷新 stage state，先把 editor 最常见的 depth 改动迁到显式路径
 - deferred color-format 编辑入口也已开始走同样的显式路径：`IRenderPipelineSettingsUI::setRenderTargetColorFormat()` 现由 deferred 实现，RT editor 对 deferred GBuffer/Viewport 的颜色格式修改会先标记 pending，再在 `beginTick()` 安全点统一刷新 attachment / snapshot / stage state，而不是仅依赖 `refreshDirtyResources()` fallback
+- postprocess resize 的 stage-local dirty state 也已开始删除：`PostProcessingStage` 不再保留 `_pendingResizeExtent/_bResizePending` 或在 `beginFrame()/execute()` 内隐式申请 resize，Forward/Deferred 现通过显式 `resizeResources(extent)` 在各自安全点触发 replacement
 
 ## Phase 7: Deferred Graph 迁移
 
