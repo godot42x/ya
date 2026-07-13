@@ -430,9 +430,7 @@ void DeferredRenderPipeline::applyPendingShadowResourceRefresh()
             _shadowStage->setRenderTarget(_shadowResources.renderTarget);
             _shadowStage->init(_render);
         }
-        if (_shadowResources.renderTarget) {
-            _shadowResources.renderTarget->flushDirty();
-        }
+        _shadowResources.flushIfDirty();
         if (_shadowStage && _shadowResources.depthImage) {
             _shadowStage->refreshShadowResources(_shadowResources.depthImage, _shadowResources.depthFormat, _shadowResources.extent);
         }
@@ -700,8 +698,8 @@ void DeferredRenderPipeline::updateStageFrameInputs()
 
 void DeferredRenderPipeline::refreshDirtyResources()
 {
-    const bool bViewportPipelineDirty = _viewportRT && _viewportRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
-    const bool bGBufferPipelineDirty  = _gBufferRT && _gBufferRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
+    const bool bViewportPipelineDirty = _viewportRT && _viewportRT->hasAttachmentDirty();
+    const bool bGBufferPipelineDirty  = _gBufferRT && _gBufferRT->hasAttachmentDirty();
 
     if (!bViewportPipelineDirty && !bGBufferPipelineDirty) {
         return;
@@ -743,14 +741,14 @@ void DeferredRenderPipeline::invalidateGBufferDependentViews()
 void DeferredRenderPipeline::flushGBufferResources()
 {
     if (_gBufferRT) {
-        _gBufferRT->flushDirty();
+        _gBufferRT->flushIfDirty();
     }
 }
 
 void DeferredRenderPipeline::flushViewportResources()
 {
     if (_viewportRT) {
-        _viewportRT->flushDirty();
+        _viewportRT->flushIfDirty();
     }
 }
 

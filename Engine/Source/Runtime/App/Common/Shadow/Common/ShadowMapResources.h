@@ -37,12 +37,17 @@ struct ShadowMapResources
 
     [[nodiscard]] bool isDirty() const
     {
-        return renderTarget && renderTarget->bDirty;
+        return renderTarget && renderTarget->isDirty();
     }
 
     [[nodiscard]] bool hasAttachmentDirty() const
     {
-        return renderTarget && renderTarget->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
+        return renderTarget && renderTarget->hasAttachmentDirty();
+    }
+
+    [[nodiscard]] bool flushIfDirty() const
+    {
+        return renderTarget && renderTarget->flushIfDirty();
     }
 };
 

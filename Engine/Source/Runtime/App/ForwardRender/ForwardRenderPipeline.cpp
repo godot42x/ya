@@ -234,8 +234,8 @@ void ForwardRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, R
 
 void ForwardRenderPipeline::refreshDirtyResources()
 {
-    const bool bViewportDirty         = viewportRT && viewportRT->bDirty;
-    const bool bViewportPipelineDirty = viewportRT && viewportRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
+    const bool bViewportDirty         = viewportRT && viewportRT->isDirty();
+    const bool bViewportPipelineDirty = viewportRT && viewportRT->hasAttachmentDirty();
     const bool bShadowDirty           = _shadowResources.isDirty();
 
     if (bViewportDirty) {
@@ -256,15 +256,13 @@ void ForwardRenderPipeline::refreshDirtyResources()
 void ForwardRenderPipeline::flushViewportResources()
 {
     if (viewportRT) {
-        viewportRT->flushDirty();
+        viewportRT->flushIfDirty();
     }
 }
 
 void ForwardRenderPipeline::flushShadowResources()
 {
-    if (_shadowResources.renderTarget) {
-        _shadowResources.renderTarget->flushDirty();
-    }
+    _shadowResources.flushIfDirty();
 }
 
 void ForwardRenderPipeline::refreshViewportStageState()

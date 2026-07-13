@@ -255,6 +255,7 @@
 - shadow 资源 facade 继续补齐显式元数据与最小状态查询：`ShadowMapResources` 现缓存 `depthFormat` 并提供 `isDirty()/hasAttachmentDirty()`，Forward/Deferred 对 shadow technique refresh 和 dirty 判定已减少直接摸内部 render-target 状态
 - Deferred attachment dirty repair 已开始收口成显式 helper 边界：`flushGBufferResources/flushViewportResources`、snapshot refresh、stage-state refresh 现分离成独立步骤，viewport resize 与 attachment dirty fallback 共享同一套刷新入口，后续删除 dirty repair path 时不必再拆散现有控制流
 - Forward dirty refresh 也已继续向同样的显式 helper 边界收口：viewport/shadow 的 flush 与 stage-state refresh 现在由独立 helper 承接，后续若要把 legacy dirty repair 替换成显式 replacement/refresh，不必再在 `refreshDirtyResources()` 内联拆控制流
+- `IRenderTarget` 兼容期 dirty 协议也已开始下沉成最小 facade：新增 `isDirty()/hasAttachmentDirty()/flushIfDirty()`，Forward/Deferred/Shadow facade 已优先走这些 helper，而不是直接读取 `bDirty` 或裸调 `flushDirty()`
 
 ## Phase 7: Deferred Graph 迁移
 

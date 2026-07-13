@@ -168,6 +168,22 @@ struct IRenderTarget
         }
     }
 
+    [[nodiscard]] bool isDirty() const { return bDirty; }
+
+    [[nodiscard]] bool hasAttachmentDirty() const
+    {
+        return hasDirtyReason(ERenderTargetDirtyReason::Attachments);
+    }
+
+    [[nodiscard]] bool flushIfDirty()
+    {
+        if (!bDirty) {
+            return false;
+        }
+        flushDirty();
+        return true;
+    }
+
     void setFrameBufferCount(uint32_t frameBufferCount)
     {
         if (frameBufferCount == 0) {
