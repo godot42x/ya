@@ -344,13 +344,13 @@ bool VulkanImage::allocate()
     if (_ci.flags & EImageCreateFlag::Disjoint)
         vkFlags |= VK_IMAGE_CREATE_DISJOINT_BIT;
 
-    bool     bSameQueueFamily     = _render->isGraphicsPresentSameQueueFamily();
-    auto     sharingMode          = bSameQueueFamily ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT;
-    uint32_t queueFamilyCont      = bSameQueueFamily ? 0 : 2;
-    uint32_t queueFamilyIndices[] = {
-        (uint32_t)_render->getGraphicsQueueFamilyInfo().queueFamilyIndex,
-        (uint32_t)_render->getPresentQueueFamilyInfo().queueFamilyIndex,
-    };
+    // Offscreen/owned images are consumed by the graphics queue only. Sharing
+    // them with the present queue is unnecessary, and on some drivers the
+    // extra concurrent-sharing constraint can make otherwise valid image
+    // descriptions fail creation during startup.
+    constexpr VkSharingMode sharingMode        = VK_SHARING_MODE_EXCLUSIVE;
+    constexpr uint32_t      queueFamilyCont    = 0;
+    const uint32_t*         queueFamilyIndices = nullptr;
 
 
     VkImageCreateInfo imageCreateInfo{
