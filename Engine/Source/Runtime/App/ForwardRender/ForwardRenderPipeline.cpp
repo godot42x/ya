@@ -48,7 +48,6 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
     if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
     }
-    _bViewportPassOpen = false;
 
     initViewportResources(desc);
     initPostProcessResources(desc);
@@ -194,6 +193,7 @@ void ForwardRenderPipeline::tick(const RenderPipelineFrameContext& frame)
     syncShadowSettings();
     executeShadowPass(stageCtx);
     executeViewportPass(frame, stageCtx);
+    finalizeViewportPass(frame.cmdBuf);
 }
 
 bool ForwardRenderPipeline::shouldSkipTick(const RenderPipelineFrameContext& frame) const
@@ -333,7 +333,6 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
     };
 
     frame.cmdBuf->beginRendering(ri);
-    _bViewportPassOpen = true;
 
     stageCtx.viewportExtent = viewportRT->getExtent();
     _viewportStage->execute(stageCtx);
@@ -348,12 +347,14 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
     _lastFrameInput     = frame;
 }
 
-void ForwardRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
+void ForwardRenderPipeline::finalizeViewportPass(ICommandBuffer* cmdBuf)
 {
-    if (!_bViewportPassOpen) return;
+    if (_lastFrameInput.recordViewportOverlays) {
+        YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
+        _lastFrameInput.recordViewportOverlays(cmdBuf, viewportRT->getExtent(), _lastTickCtx);
+    }
 
     cmdBuf->endRendering(_viewportRI);
-    _bViewportPassOpen = false;
 
     auto  fb           = viewportRT->getCurFrameBuffer();
     auto* inputTexture = bMSAA ? fb->getResolveTexture() : fb->getColorTexture(0);
@@ -364,9 +365,13 @@ void ForwardRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
     YA_CORE_ASSERT(viewportTexture, "Failed to get viewport texture for postprocessing");
 }
 
+void ForwardRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
+{
+    (void)cmdBuf;
+}
+
 void ForwardRenderPipeline::shutdown()
 {
-    _bViewportPassOpen = false;
     _getFrameIndex = {};
     _getElapsedTimeSeconds = {};
     getActiveScene = {};

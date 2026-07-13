@@ -73,7 +73,6 @@ struct ForwardRenderPipeline : public IRenderPipeline
 
     bool     bMSAA              = false;
     Texture* viewportTexture    = nullptr;
-    bool     _bViewportPassOpen = false;
 
     RenderingInfo _viewportRI{};
     FrameContext  _lastTickCtx{};
@@ -94,7 +93,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     void renderStageInternalsGUI() override;
 
     void endViewportPass(ICommandBuffer* cmdBuf) override;
-    bool hasOpenViewportPass() const override { return _bViewportPassOpen; }
+    bool hasOpenViewportPass() const override { return false; }
 
     void                         onViewportResized(Rect2D rect) override;
     Extent2D                     getViewportExtent() const override;
@@ -120,6 +119,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] bool shouldSkipTick(const RenderPipelineFrameContext& frame) const;
     void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
     void               refreshDirtyResources();
+    void               finalizeViewportPass(ICommandBuffer* cmdBuf);
     void               syncShadowSettings();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);
     [[nodiscard]] ShadowSettings currentShadowSettings() const;

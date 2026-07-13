@@ -59,8 +59,6 @@ bool RenderRuntime::prepareFrame(const FrameInput& input, int32_t& imageIndex, s
 void RenderRuntime::renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf)
 {
     beginViewportPassAndTickPipeline(input, cmdBuf);
-    renderViewportPassOverlays(input.pipeline, input.overlay, cmdBuf);
-    endViewportPass(cmdBuf);
 }
 
 void RenderRuntime::syncEditorFrame(EditorLayer* editorLayer)
@@ -400,11 +398,6 @@ void RenderRuntime::applyPendingRenderPipelineSwitch()
         return;
     }
     YA_PROFILE_FUNCTION_LOG();
-
-    if (auto* pipeline = getActivePipelineExecution(); pipeline && pipeline->hasOpenViewportPass()) {
-        YA_CORE_WARN("Skipping render pipeline switch while a viewport pass is still open");
-        return;
-    }
 
     YA_CORE_INFO("Switching render pipeline: {} -> {}",
                  _renderPipeline == ERenderPipeline::Forward ? "Forward" : "Deferred",

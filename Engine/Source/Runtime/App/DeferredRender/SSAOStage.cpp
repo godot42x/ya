@@ -6,6 +6,7 @@
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/FrameBuffer.h"
 #include "Render/Core/IRenderTarget.h"
+#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
 #include "Resource/Texture/TextureLibrary.h"
@@ -47,6 +48,72 @@ std::array<ColorRGBA<uint8_t>, 16> buildNoisePixels()
         ColorRGBA<uint8_t>{96,  223, 128, 255},
         ColorRGBA<uint8_t>{143, 80, 128, 255},
         ColorRGBA<uint8_t>{16,  159, 128, 255},
+    };
+}
+
+RGImportedTextureDesc makeSSAOImportedTextureDesc(const Texture& texture,
+                                                  std::string_view label,
+                                                  EImageLayout::T finalLayout)
+{
+    YA_CORE_ASSERT(texture.getImageShared() != nullptr, "Render graph import requires a backing image");
+
+    IImage* image = texture.getImage();
+    YA_CORE_ASSERT(image != nullptr, "Render graph import requires a valid image");
+
+    return RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label       = std::string(label),
+            .format      = texture.getFormat(),
+            .extent      = Extent3D{texture.getWidth(), texture.getHeight(), 1},
+            .mipLevels   = image->getMipLevels(),
+            .arrayLayers = image->getArrayLayers(),
+            .usage       = image->getUsage(),
+        },
+        .importDesc = ImportedImageDesc{
+            .label         = std::string(label),
+            .nativeHandle  = static_cast<void*>(image->getHandle()),
+            .format        = texture.getFormat(),
+            .usage         = image->getUsage(),
+            .extent        = Extent3D{texture.getWidth(), texture.getHeight(), 1},
+            .mipLevels     = image->getMipLevels(),
+            .arrayLayers   = image->getArrayLayers(),
+            .initialLayout = image->getCompatibilityLayout(),
+            .finalLayout   = finalLayout,
+        },
+        .image = texture.getImageShared(),
+    };
+}
+
+RGImportedTextureDesc makeSSAOImportedTextureDesc(const RenderImage& image,
+                                                  std::string_view label,
+                                                  EImageLayout::T finalLayout)
+{
+    YA_CORE_ASSERT(image.getImageShared() != nullptr, "Render graph import requires a backing image");
+
+    IImage* rawImage = image.getImage();
+    YA_CORE_ASSERT(rawImage != nullptr, "Render graph import requires a valid image");
+
+    return RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label       = std::string(label),
+            .format      = image.getFormat(),
+            .extent      = Extent3D{image.getWidth(), image.getHeight(), 1},
+            .mipLevels   = rawImage->getMipLevels(),
+            .arrayLayers = rawImage->getArrayLayers(),
+            .usage       = rawImage->getUsage(),
+        },
+        .importDesc = ImportedImageDesc{
+            .label         = std::string(label),
+            .nativeHandle  = static_cast<void*>(rawImage->getHandle()),
+            .format        = image.getFormat(),
+            .usage         = rawImage->getUsage(),
+            .extent        = Extent3D{image.getWidth(), image.getHeight(), 1},
+            .mipLevels     = rawImage->getMipLevels(),
+            .arrayLayers   = rawImage->getArrayLayers(),
+            .initialLayout = rawImage->getCompatibilityLayout(),
+            .finalLayout   = finalLayout,
+        },
+        .image = image.getImageShared(),
     };
 }
 
@@ -280,38 +347,58 @@ void SSAOStage::prepare(const RenderStageContext& ctx)
 void SSAOStage::execute(const RenderStageContext& ctx)
 {
     YA_PROFILE_FUNCTION();
-    if (!ctx.cmdBuf || !_pipeline || !_targetTexture) {
+    if (!ctx.cmdBuf || !_pipeline || !_targetTexture || !_gBufferRT) {
         return;
     }
 
-    ctx.cmdBuf->debugBeginLabel("SSAOStage");
-    ctx.cmdBuf->transitionImageLayoutAuto(_targetTexture->getImage(), EImageLayout::ColorAttachmentOptimal);
+    auto* frameBuffer = _gBufferRT->getCurFrameBuffer();
+    if (!frameBuffer) {
+        return;
+    }
 
-    RenderingInfo renderingInfo{
-        .label = "SSAO Pass",
-        .renderArea = Rect2D{.pos = {0, 0}, .extent = _targetTexture->getExtent().toVec2()},
-        .layerCount = 1,
-        .colorClearValues = {ClearValue(1.0f, 1.0f, 1.0f, 1.0f)},
-        .colorAttachments = {
-            RenderingInfo::ImageSpec{
-                .image         = _targetTexture ? _targetTexture->getImage() : nullptr,
-                .imageView     = _targetTexture ? _targetTexture->getImageView() : nullptr,
-                .loadOp        = EAttachmentLoadOp::Clear,
-                .storeOp       = EAttachmentStoreOp::Store,
-                .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-            },
+    auto* gbufferAlbedo = frameBuffer->getColorTexture(0);
+    auto* gbufferNormal = frameBuffer->getColorTexture(1);
+    auto* gbufferDepth  = frameBuffer->getDepthTexture();
+    if (!gbufferAlbedo || !gbufferNormal || !gbufferDepth || !_noiseTexture) {
+        return;
+    }
+
+    ICommandBuffer::LabelScope labelScope(ctx.cmdBuf, "SSAOStage");
+
+    RenderGraph graph;
+    const auto  albedo = graph.importTexture(makeSSAOImportedTextureDesc(*gbufferAlbedo, "SSAO.GBufferAlbedo", EImageLayout::ShaderReadOnlyOptimal));
+    const auto  normal = graph.importTexture(makeSSAOImportedTextureDesc(*gbufferNormal, "SSAO.GBufferNormal", EImageLayout::ShaderReadOnlyOptimal));
+    const auto  depth = graph.importTexture(makeSSAOImportedTextureDesc(*gbufferDepth, "SSAO.GBufferDepth", EImageLayout::ShaderReadOnlyOptimal));
+    const auto  noise = graph.importTexture(makeSSAOImportedTextureDesc(*_noiseTexture, "SSAO.Noise", EImageLayout::ShaderReadOnlyOptimal));
+    const auto  output = graph.importTexture(makeSSAOImportedTextureDesc(*_targetTexture, "SSAO.Output", EImageLayout::ShaderReadOnlyOptimal));
+
+    [[maybe_unused]] const auto pass = graph.addPass(
+        "SSAO Pass",
+        [&](RGPassBuilder& passBuilder) {
+            passBuilder.read(albedo);
+            passBuilder.read(normal);
+            passBuilder.read(depth);
+            passBuilder.read(noise);
+            passBuilder.useColorAttachment(output);
         },
-    };
+        [&](RGRenderContext& rgCtx) {
+            rgCtx.beginColorRendering({
+                .color      = output,
+                .renderArea = Rect2D{.pos = {0.0f, 0.0f}, .extent = _targetTexture->getExtent().toVec2()},
+                .clearValue = ClearValue(1.0f, 1.0f, 1.0f, 1.0f),
+                .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+            });
 
-    ctx.cmdBuf->beginRendering(renderingInfo);
-    ctx.cmdBuf->bindPipeline(_pipeline.get());
-    ctx.cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(ctx.viewportExtent.width), static_cast<float>(ctx.viewportExtent.height));
-    ctx.cmdBuf->setScissor(0, 0, ctx.viewportExtent.width, ctx.viewportExtent.height);
-    ctx.cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {_frameDS[ctx.flightIndex], _inputDS});
-    ctx.cmdBuf->draw(3, 1, 0, 0);
-    ctx.cmdBuf->endRendering(renderingInfo);
-    ctx.cmdBuf->debugEndLabel();
+            rgCtx.getCommandBuffer().bindPipeline(_pipeline.get());
+            rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(ctx.viewportExtent.width), static_cast<float>(ctx.viewportExtent.height));
+            rgCtx.getCommandBuffer().setScissor(0, 0, ctx.viewportExtent.width, ctx.viewportExtent.height);
+            rgCtx.getCommandBuffer().bindDescriptorSets(_pipelineLayout.get(), 0, {_frameDS[ctx.flightIndex], _inputDS});
+            rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
+            rgCtx.endRendering();
+        });
+
+    RenderGraphExecutor executor(*_render->getResourceFactory());
+    [[maybe_unused]] const bool bExecuted = executor.execute(graph, *ctx.cmdBuf);
 }
 
 void SSAOStage::renderSettingsGUI()

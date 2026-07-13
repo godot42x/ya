@@ -153,14 +153,14 @@
 - [x] 盘点 attachment initial/final layout 语义
 - [x] 盘点 swapchain acquire/present 状态
 - [x] 盘点 cubemap mip/layer transition
-- [ ] 定义 buffer/image resource state
+- [x] 定义 buffer/image resource state
 - [x] 定义 mip/layer/aspect subresource key
 - [x] 实现 command-buffer-local `ResourceStateTracker`
 - [x] 将 legacy image transition 和 dynamic-rendering attachment transition 接入 tracker
 - [x] 为冲突状态和遗漏 transition 增加 debug validation
 - [x] 定义 imported resource initial/final state
-- [ ] 停止以 `IImage::getLayout()` 作为执行状态真相
-- [ ] 删除或降级 image 全局 layout API
+- [x] 停止以 `IImage::getLayout()` 作为执行状态真相
+- [x] 删除或降级 image 全局 layout API
 
 完成标准：
 
@@ -171,37 +171,69 @@
 迁移备注：
 
 - tracker 首次接触 image 时按 aspect/mip/layer 快照兼容 layout，避免局部 transition 污染未触及 subresource
-- `VulkanImage::_layout` 暂时保留为跨 command buffer 初始状态；尚未成为 GPU 执行完成状态
+- `IImage` 已降级为 `getCompatibilityLayout()` seed 语义；`VulkanImage` 不再暴露“当前 layout”接口
+- `VulkanImage` compatibility layout 仅作为 tracker 首次接触 image/imported image 时的 seed；尚未表达 GPU 执行完成状态
+- `BufferResourceState` / `ImageResourceState` 已作为公共状态载体落地，供 legacy barrier path 与后续 graph compiled state plan 共享
+- `ResourceStateTracker` 内部已从裸 layout map 提升为 `ImageResourceState` map；现阶段对外仍保留 layout-oriented 兼容 API
+- Vulkan command buffer tracked transition 现已写入最小 `ImageResourceState{stages, access, layout}`，不再只回填 layout
+- `ImageLayoutTransition` 现已携带 `oldState/newState`，graph compiled state plan 后续可直接复用 transition 载体
+- `EPipelineStage` / `EResourceAccess` 已补齐 color/depth attachment 对应位，避免将 attachment layout 误记为 fragment shader write
 - imported swapchain initial/final state 已进入 `ImportedImageDesc`；graph compiled state plan 尚未接入
 - image allocation 已禁止隐式 isolate transition；buffer/texture upload command 与 graph compiled state plan 仍待显式化
 - legacy 显式 `transitionImageLayout(old,new)` 已接入 tracker 旧状态校验；dynamic rendering render-target begin transition 统一对齐 Vulkan attachment 实际布局
 
 ## Phase 6: RenderGraph Core
 
-- [ ] 定义带 generation 的 `RGTextureHandle`
-- [ ] 定义带 generation 的 `RGBufferHandle`
-- [ ] 定义 `RGTextureDesc` / `RGBufferDesc`
-- [ ] 实现 imported/transient/persistent resource declaration
-- [ ] 实现 `RGPassBuilder::read()`
-- [ ] 实现 `RGPassBuilder::write()`
-- [ ] 实现 color/depth attachment declaration
-- [ ] 实现 `RGPassContext` resource resolve
-- [ ] 实现 dependency graph 构建
-- [ ] 实现稳定拓扑排序
-- [ ] 实现 cycle 检测
-- [ ] 实现 read-before-write 校验
-- [ ] 实现非法 writer/usage 校验
-- [ ] 实现 compiled graph debug dump
-- [ ] 实现 `RenderGraphResourceRegistry`
-- [ ] 实现 Vulkan `RenderGraphExecutor`
-- [ ] 将 compiled state plan 接入 `ResourceStateTracker`
-- [ ] 建立最小 clear/copy graph 冒烟测试
+- [x] 定义带 generation 的 `RGTextureHandle`
+- [x] 定义带 generation 的 `RGBufferHandle`
+- [x] 定义 `RGTextureDesc` / `RGBufferDesc`
+- [x] 实现 imported/transient/persistent resource declaration
+- [x] 实现 `RGPassBuilder::read()`
+- [x] 实现 `RGPassBuilder::write()`
+- [x] 实现 color/depth attachment declaration
+- [x] 实现 `RGPassContext` resource resolve
+- [x] 实现 dependency graph 构建
+- [x] 实现稳定拓扑排序
+- [x] 实现 cycle 检测
+- [x] 实现 read-before-write 校验
+- [x] 实现非法 writer/usage 校验
+- [x] 实现 compiled graph debug dump
+- [x] 实现 `RenderGraphResourceRegistry`
+- [-] 实现 Vulkan `RenderGraphExecutor`
+- [-] 将 compiled state plan 接入 `ResourceStateTracker`
+- [x] 建立最小 clear/copy graph 冒烟测试
 
 完成标准：
 
 - [ ] graph core 单元测试不需要启动完整 App
 - [ ] Vulkan executor 可正确执行最小图
 - [ ] pass execute 无需访问 graph 内部结构
+
+迁移备注：
+
+- `RenderGraph` 最小资源声明层已落地：handle/desc/imported/transient/persistent declaration 先独立存在，不急于立刻接 pass/compiler
+- graph handle 采用独立 `RGHandle<Tag>{index,generation}` POD，而不是复用 backend native `Handle<void*>`
+- imported texture 直接复用 `ImportedImageDesc`，避免再平行定义一套 Vulkan import 协议
+- pass 声明层已落地 `RGPassBuilder`，当前支持 texture/buffer read/write 以及 color/depth attachment write
+- compiler 首版按 pass 插入顺序推导写后读/写后写依赖，并输出稳定拓扑序；资源未写先读会在 compile 阶段失败
+- `RGPassContext` 已提供按 handle 解析 texture/buffer declaration 的执行期只读入口，pass execute 不必回看 graph 存储细节
+- compiler 已补齐最小 usage 校验：texture read/sample、color/depth attachment 和基础 buffer usage 不匹配会在 compile 阶段失败
+- `debugDump()` 现可输出 pass 列表、拓扑序、依赖边和 compile issues，便于后续 graph/executor 集成期诊断
+- `RenderGraphResourceRegistry` 已能把 transient/persistent texture-buffer 与 imported texture-buffer 解析到最小物理资源 owner；当前不做 aliasing、frame recycle 和 view cache
+- `RenderGraphExecutor` 已起最小执行骨架：compile 校验、registry sync、按拓扑序驱动 pass execute callback；尚未接入 Vulkan barrier/state plan 和 rendering/copy helper
+- `RGRenderContext` 已补最小 helper：color rendering begin/end 与 buffer copy，pass callback 开始可以少直接拼 `RenderingInfo` / `copyBuffer` 样板
+- compiled graph 已开始产出最小 texture/buffer required state plan（read/storage/color/depth）；texture plan 已在 executor 中先接入 `ResourceStateTracker -> transitionImageLayout()`，buffer plan 已接入最小 `bufferMemoryBarrier()` 发射，后续仍需与统一 barrier backend 收敛
+- 已补最小 clear/copy smoke 测试：graph pass callback 可驱动 `beginRendering/endRendering` 与 `copyBuffer`，用于压实 executor/resource resolve/command buffer 调用链
+- `PBRGenerateBrdfLUT` 已作为首个真实 graph-backed utility pass 试点：执行路径改为 build graph -> import output RenderImage -> executor 驱动 draw pass，后续可按同模式迁移 irradiance/prefilter/cubemap conversion
+- `EquidistantCylindrical2CubeMap` 已接入第二个 graph-backed utility pass 试点：graph import 现支持复用现有 shared image 并指定 view desc，单 face 输出 attachment 不再依赖 `Texture::wrap()` 临时 adapter
+- `CubeMap2PBRIrradianceMap` 已按同模式接入 graph-backed 执行：input cubemap 与 output face view 都经由 imported graph resource + view desc 进入 executor，utility pass 迁移开始形成可复用模板
+- `CubeMap2PBRPrefilteredEnv` 已接入 graph-backed 执行：同一模板已覆盖 mip+face 双层 subresource 输出，说明 imported graph texture + view desc + state plan 已足以承接完整环境贴图 utility pipeline
+- `PostProcessingStage::execute()` 已成为首个 runtime-side graph-backed stage cut：保留 bloom 预处理与 `BasicPostprocessing::render()` 内部 draw 逻辑，只将外层 output pass/attachment transition/dynamic rendering 壳切到 graph + executor，验证 graph 已能承接主链路中的单 stage 渐进迁移
+- `SSAOStage::execute()` 已切到 graph-backed 执行壳：保留现有 GBuffer descriptor 更新、frame UBO 和 fullscreen draw 逻辑，只将 output attachment/rendering/barrier 交给 graph + executor，作为 Deferred 主链路首个 graph 化 stage 样板
+- `BloomPostprocessing::render()` 已切到 graph-backed 子链：extract / blur ping-pong / composite 三段都改为 graph pass，现有 descriptor cache、push constants 和 pipeline 逻辑保持不变，说明 graph 已可承接 runtime 内部多 pass 后处理工作流而不必一次性改写 shader/descriptor 层
+- `RGRenderContext` 已补最小 `beginRasterRendering(color + optional depth)` helper，并有核心测试覆盖 depth attachment 场景；这一步是后续 viewport/shadow 类 pass graph 化的前置接口补齐
+- viewport overlay 录制边界已向 pipeline 内回收一步：`RenderRuntime` 不再在 `renderWorldFrame()` 里直接插入 `Render2D/UI`，而是通过 `RenderPipelineFrameContext::recordViewportOverlays` 回调交给 pipeline 在 `endViewportPass()` 前调用；这一步暂未消除 open-pass 契约，但已经把 ownership 从 runtime 外层推进到 pipeline 内，便于后续继续收 deferred viewport graph 边界
+- Forward/Deferred viewport pass 现已在各自 `tick()` 内闭合完成，`RenderRuntime::renderWorldFrame()` 不再负责额外 `endViewportPass()` 收尾；目前保留 `hasOpenViewportPass()/endViewportPass()` 兼容接口与少量状态字段，仅作为后续接口清理前的过渡层
 
 ## Phase 7: Deferred Graph 迁移
 

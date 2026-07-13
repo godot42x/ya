@@ -426,7 +426,6 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     _getDebugRenderSystem         = desc.getDebugRenderSystem;
     _getActiveScene               = desc.getActiveScene;
     _getResourceResolveSystem     = desc.getResourceResolveSystem;
-    _bViewportPassOpen            = false;
     _bShadowSettingsChangePending = false;
     _bShadowResourceRefreshPending = false;
     if (_shadowSettings) {
@@ -492,7 +491,6 @@ void DeferredRenderPipeline::initStages()
 
 void DeferredRenderPipeline::shutdown()
 {
-    _bViewportPassOpen = false;
     _postProcessStage.shutdown();
     viewportTexture = nullptr;
 
@@ -564,6 +562,7 @@ void DeferredRenderPipeline::tick(const RenderPipelineFrameContext& frame)
 
     beginViewportRendering(frame);
     executeViewportPass(frame, stageCtx);
+    finalizeViewportPass(frame.cmdBuf);
 
     frame.cmdBuf->debugEndLabel();
 }
@@ -915,7 +914,6 @@ void DeferredRenderPipeline::beginViewportRendering(const RenderPipelineFrameCon
     };
 
     cmdBuf->beginRendering(_viewportRI);
-    _bViewportPassOpen = true;
 
     const uint32_t vpW = static_cast<uint32_t>(frame.viewportRect.extent.x);
     const uint32_t vpH = static_cast<uint32_t>(frame.viewportRect.extent.y);
@@ -929,14 +927,14 @@ void DeferredRenderPipeline::beginViewportRendering(const RenderPipelineFrameCon
     _lastFrameInput = frame;
 }
 
-void DeferredRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
+void DeferredRenderPipeline::finalizeViewportPass(ICommandBuffer* cmdBuf)
 {
-    if (!_bViewportPassOpen) {
-        return;
+    if (_lastFrameInput.recordViewportOverlays) {
+        YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
+        _lastFrameInput.recordViewportOverlays(cmdBuf, _viewportRT->getExtent(), _lastTickCtx);
     }
 
     cmdBuf->endRendering(_viewportRI);
-    _bViewportPassOpen = false;
 
     auto* inputTexture = _viewportRT->getCurFrameBuffer()->getColorTexture(0);
     {
@@ -944,6 +942,11 @@ void DeferredRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
         viewportTexture = _postProcessStage.execute(
             cmdBuf, inputTexture, _lastFrameInput.viewportRect.extent, &_lastTickCtx);
     }
+}
+
+void DeferredRenderPipeline::endViewportPass(ICommandBuffer* cmdBuf)
+{
+    (void)cmdBuf;
 }
 
 void DeferredRenderPipeline::onViewportResized(Rect2D rect)

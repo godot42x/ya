@@ -3,6 +3,7 @@
 #include "Render/RenderDefines.h"
 #include "Render/Shadow/ShadowSettings.h"
 
+#include <functional>
 #include <glm/glm.hpp>
 
 #include <cstdint>
@@ -29,6 +30,7 @@ struct RenderPipelineFrameContext
     float            viewportFrameBufferScale = 1.0f;
     RenderFrameData* frameData                = nullptr;
     const ShadowSettings* shadowSettings      = nullptr;
+    std::function<void(ICommandBuffer*, Extent2D, const struct FrameContext&)> recordViewportOverlays;
 };
 
 struct IRenderPipelineExecution

@@ -241,10 +241,7 @@ struct RenderRuntime
     void                   ensureViewportRectInitialized(const FrameInput& input);
     bool                   beginFrameCommandBuffer(int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   beginViewportPassAndTickPipeline(const FrameInput& input, ICommandBuffer* cmdBuf);
-    [[nodiscard]] bool     hasOpenViewportPass() const;
-    [[nodiscard]] Extent2D getActiveViewportExtent() const;
     void                   renderViewportPassOverlays(const RenderPipelineFrameContext& pipelineFrame, const FrameInput::OverlayInput& overlay, ICommandBuffer* cmdBuf);
-    void                   endViewportPass(ICommandBuffer* cmdBuf);
     void                   renderPresentationPass(float deltaTime,
                                                   const std::function<void(ICommandBuffer*)>& recordPresentationCapture,
                                                   ICommandBuffer* cmdBuf);

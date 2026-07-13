@@ -99,7 +99,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     ShadowMapResources                                              _shadowResources;
 
     Texture* viewportTexture       = nullptr;
-    bool     _bViewportPassOpen    = false;
     bool     _bReverseViewportY    = true;
     bool     _bEnableSSAO          = true;
 
@@ -147,7 +146,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
 
     void beginViewportRendering(const RenderPipelineFrameContext& frame);
     void endViewportPass(ICommandBuffer* cmdBuf) override;
-    bool hasOpenViewportPass() const override { return _bViewportPassOpen; }
+    bool hasOpenViewportPass() const override { return false; }
 
     void onViewportResized(Rect2D rect) override;
 
@@ -194,6 +193,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               executeSSAOPass(const RenderStageContext& stageCtx);
     void               executeDepthCopyPass(ICommandBuffer* cmdBuf);
     void               executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
+    void               finalizeViewportPass(ICommandBuffer* cmdBuf);
     void               saveShadowSettingsToConfig(const ShadowSettings& shadowSettings) const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               applyPendingViewportResize();

@@ -3,6 +3,7 @@
 #include "Config/ConfigManager.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/DescriptorSet.h"
+#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Render.h"
 #include "Resource/Texture/TextureLibrary.h"
 
@@ -24,6 +25,72 @@ constexpr const char* BLOOM_CONFIG_KEY_SOFT_KNEE         = "render.postprocess.b
 constexpr const char* BLOOM_CONFIG_KEY_EXTRACT_INTENSITY = "render.postprocess.bloom.extractIntensity";
 constexpr const char* BLOOM_CONFIG_KEY_BLUR_PASSES       = "render.postprocess.bloom.blurPasses";
 constexpr const char* BLOOM_CONFIG_KEY_STRENGTH          = "render.postprocess.bloom.strength";
+
+RGImportedTextureDesc makeBloomImportedTextureDesc(const Texture& texture,
+                                                   std::string_view label,
+                                                   EImageLayout::T finalLayout)
+{
+    YA_CORE_ASSERT(texture.getImageShared() != nullptr, "Bloom graph import requires a backing image");
+
+    IImage* image = texture.getImage();
+    YA_CORE_ASSERT(image != nullptr, "Bloom graph import requires a valid image");
+
+    return RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label       = std::string(label),
+            .format      = texture.getFormat(),
+            .extent      = Extent3D{texture.getWidth(), texture.getHeight(), 1},
+            .mipLevels   = image->getMipLevels(),
+            .arrayLayers = image->getArrayLayers(),
+            .usage       = image->getUsage(),
+        },
+        .importDesc = ImportedImageDesc{
+            .label         = std::string(label),
+            .nativeHandle  = static_cast<void*>(image->getHandle()),
+            .format        = texture.getFormat(),
+            .usage         = image->getUsage(),
+            .extent        = Extent3D{texture.getWidth(), texture.getHeight(), 1},
+            .mipLevels     = image->getMipLevels(),
+            .arrayLayers   = image->getArrayLayers(),
+            .initialLayout = image->getCompatibilityLayout(),
+            .finalLayout   = finalLayout,
+        },
+        .image = texture.getImageShared(),
+    };
+}
+
+RGImportedTextureDesc makeBloomImportedTextureDesc(const RenderImage& image,
+                                                   std::string_view label,
+                                                   EImageLayout::T finalLayout)
+{
+    YA_CORE_ASSERT(image.getImageShared() != nullptr, "Bloom graph import requires a backing image");
+
+    IImage* rawImage = image.getImage();
+    YA_CORE_ASSERT(rawImage != nullptr, "Bloom graph import requires a valid image");
+
+    return RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label       = std::string(label),
+            .format      = image.getFormat(),
+            .extent      = Extent3D{image.getWidth(), image.getHeight(), 1},
+            .mipLevels   = rawImage->getMipLevels(),
+            .arrayLayers = rawImage->getArrayLayers(),
+            .usage       = rawImage->getUsage(),
+        },
+        .importDesc = ImportedImageDesc{
+            .label         = std::string(label),
+            .nativeHandle  = static_cast<void*>(rawImage->getHandle()),
+            .format        = image.getFormat(),
+            .usage         = rawImage->getUsage(),
+            .extent        = Extent3D{image.getWidth(), image.getHeight(), 1},
+            .mipLevels     = rawImage->getMipLevels(),
+            .arrayLayers   = rawImage->getArrayLayers(),
+            .initialLayout = rawImage->getCompatibilityLayout(),
+            .finalLayout   = finalLayout,
+        },
+        .image = image.getImageShared(),
+    };
+}
 
 template <typename TPushConstants>
 PipelineLayoutDesc makePipelineLayoutDesc(const char* label, uint32_t descriptorCount)
@@ -234,7 +301,7 @@ void BloomPostprocessing::updateCompositeDescriptor(IImageView* sceneImageView, 
 
 void BloomPostprocessing::render(const RenderDesc& desc)
 {
-    if (!desc.cmdBuf || !desc.sceneImageView || !desc.outputImage || !desc.state) {
+    if (!desc.cmdBuf || !desc.sceneTexture || !desc.sceneImageView || !desc.outputImage || !desc.state) {
         return;
     }
     if (desc.renderExtent.width == 0 || desc.renderExtent.height == 0) {
@@ -242,41 +309,50 @@ void BloomPostprocessing::render(const RenderDesc& desc)
     }
 
     const bool bBloomEnabled = desc.state->bEnableBloom && desc.bloomExtract && desc.blurPingImage && desc.blurPongImage;
+    ICommandBuffer::LabelScope labelScope(desc.cmdBuf, "BloomPostprocessing");
+    RenderGraph                graph;
+
+    const auto scene = graph.importTexture(makeBloomImportedTextureDesc(*desc.sceneTexture, "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal));
+    const auto output = graph.importTexture(makeBloomImportedTextureDesc(*desc.outputImage, "Bloom.CompositeOutput", EImageLayout::ShaderReadOnlyOptimal));
+    std::optional<RGTextureHandle> bloomExtract{};
+    std::optional<RGTextureHandle> blurPing{};
+    std::optional<RGTextureHandle> blurPong{};
 
     if (bBloomEnabled) {
-        desc.cmdBuf->debugBeginLabel("BloomExtract");
-        desc.cmdBuf->transitionImageLayoutAuto(desc.bloomExtract->getImage(), EImageLayout::ColorAttachmentOptimal);
-        updateExtractDescriptor(desc.sceneImageView);
+        bloomExtract = graph.importTexture(makeBloomImportedTextureDesc(*desc.bloomExtract, "Bloom.Extract", EImageLayout::ShaderReadOnlyOptimal));
+        blurPing     = graph.importTexture(makeBloomImportedTextureDesc(*desc.blurPingImage, "Bloom.BlurPing", EImageLayout::ShaderReadOnlyOptimal));
+        blurPong     = graph.importTexture(makeBloomImportedTextureDesc(*desc.blurPongImage, "Bloom.BlurPong", EImageLayout::ShaderReadOnlyOptimal));
+    }
 
-        RenderingInfo extractRI{
-            .label            = "BloomExtract",
-            .renderArea       = Rect2D{.pos = {0, 0}, .extent = desc.renderExtent.toVec2()},
-            .layerCount       = 1,
-            .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
-            .colorAttachments = {RenderingInfo::ImageSpec{
-                .image         = desc.bloomExtract->getImage(),
-                .imageView     = desc.bloomExtract->getImageView(),
-                .loadOp        = EAttachmentLoadOp::Clear,
-                .storeOp       = EAttachmentStoreOp::Store,
-                .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-            }},
-        };
+    if (bBloomEnabled) {
+        updateExtractDescriptor(desc.sceneImageView);
 
         slang_types::Misc::BloomExtract::PushConstants extractPC{};
         extractPC.threshold = desc.state->bloomThreshold;
         extractPC.knee      = desc.state->bloomSoftKnee;
         extractPC.intensity = desc.state->bloomExtractIntensity;
 
-        desc.cmdBuf->beginRendering(extractRI);
-        desc.cmdBuf->bindPipeline(_extractPipeline.get());
-        desc.cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(desc.renderExtent.width), static_cast<float>(desc.renderExtent.height));
-        desc.cmdBuf->setScissor(0, 0, desc.renderExtent.width, desc.renderExtent.height);
-        desc.cmdBuf->bindDescriptorSets(_extractPPL.get(), 0, {_extractDS});
-        desc.cmdBuf->pushConstants(_extractPPL.get(), EShaderStage::Vertex | EShaderStage::Fragment, 0, sizeof(extractPC), &extractPC);
-        desc.cmdBuf->draw(3, 1, 0, 0);
-        desc.cmdBuf->endRendering(extractRI);
-        desc.cmdBuf->debugEndLabel();
+        [[maybe_unused]] const auto extractPass = graph.addPass(
+            "BloomExtract",
+            [&](RGPassBuilder& pass) {
+                pass.read(scene);
+                pass.useColorAttachment(*bloomExtract);
+            },
+            [&](RGRenderContext& rgCtx) {
+                rgCtx.beginColorRendering({
+                    .color      = *bloomExtract,
+                    .renderArea = Rect2D{.pos = {0.0f, 0.0f}, .extent = desc.renderExtent.toVec2()},
+                    .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                });
+                rgCtx.getCommandBuffer().bindPipeline(_extractPipeline.get());
+                rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(desc.renderExtent.width), static_cast<float>(desc.renderExtent.height));
+                rgCtx.getCommandBuffer().setScissor(0, 0, desc.renderExtent.width, desc.renderExtent.height);
+                rgCtx.getCommandBuffer().bindDescriptorSets(_extractPPL.get(), 0, {_extractDS});
+                rgCtx.getCommandBuffer().pushConstants(_extractPPL.get(), EShaderStage::Vertex | EShaderStage::Fragment, 0, sizeof(extractPC), &extractPC);
+                rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
+                rgCtx.endRendering();
+            });
 
         IImageView*    blurInput     = desc.bloomExtract->getImageView();
         const uint32_t blurPassCount = std::max<uint32_t>(1, desc.state->bloomBlurPasses * 2);
@@ -285,37 +361,37 @@ void BloomPostprocessing::render(const RenderDesc& desc)
         for (uint32_t passIndex = 0; passIndex < blurPassCount; ++passIndex) {
             const bool bHorizontal = (passIndex % 2) == 0;
             RenderImage* blurTarget = bHorizontal ? desc.blurPingImage : desc.blurPongImage;
-
-            desc.cmdBuf->transitionImageLayoutAuto(blurTarget->getImage(), EImageLayout::ColorAttachmentOptimal);
             const DescriptorSetHandle blurDS = updateBlurDescriptor(passIndex, blurInput);
-
-            RenderingInfo blurRI{
-                .label            = bHorizontal ? "BloomBlurHorizontal" : "BloomBlurVertical",
-                .renderArea       = Rect2D{.pos = {0, 0}, .extent = desc.renderExtent.toVec2()},
-                .layerCount       = 1,
-                .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
-                .colorAttachments = {RenderingInfo::ImageSpec{
-                    .image         = blurTarget->getImage(),
-                    .imageView     = blurTarget->getImageView(),
-                    .loadOp        = EAttachmentLoadOp::Clear,
-                    .storeOp       = EAttachmentStoreOp::Store,
-                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                }},
-            };
+            const RGTextureHandle     blurInputHandle = (passIndex == 0)
+                ? *bloomExtract
+                : ((passIndex - 1) % 2 == 0 ? *blurPing : *blurPong);
+            const RGTextureHandle     blurTargetHandle = bHorizontal ? *blurPing : *blurPong;
 
             slang_types::Misc::BloomBlur::PushConstants blurPC{};
             blurPC.texelSize  = glm::vec2(1.0f / static_cast<float>(desc.renderExtent.width), 1.0f / static_cast<float>(desc.renderExtent.height));
             blurPC.horizontal = bHorizontal ? 1u : 0u;
 
-            desc.cmdBuf->beginRendering(blurRI);
-            desc.cmdBuf->bindPipeline(_blurPipeline.get());
-            desc.cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(desc.renderExtent.width), static_cast<float>(desc.renderExtent.height));
-            desc.cmdBuf->setScissor(0, 0, desc.renderExtent.width, desc.renderExtent.height);
-            desc.cmdBuf->bindDescriptorSets(_blurPPL.get(), 0, {blurDS});
-            desc.cmdBuf->pushConstants(_blurPPL.get(), EShaderStage::Vertex | EShaderStage::Fragment, 0, sizeof(blurPC), &blurPC);
-            desc.cmdBuf->draw(3, 1, 0, 0);
-            desc.cmdBuf->endRendering(blurRI);
+            [[maybe_unused]] const auto blurPass = graph.addPass(
+                bHorizontal ? "BloomBlurHorizontal" : "BloomBlurVertical",
+                [&](RGPassBuilder& pass) {
+                    pass.read(blurInputHandle);
+                    pass.useColorAttachment(blurTargetHandle);
+                },
+                [&](RGRenderContext& rgCtx) {
+                    rgCtx.beginColorRendering({
+                        .color      = blurTargetHandle,
+                        .renderArea = Rect2D{.pos = {0.0f, 0.0f}, .extent = desc.renderExtent.toVec2()},
+                        .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
+                        .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                    });
+                    rgCtx.getCommandBuffer().bindPipeline(_blurPipeline.get());
+                    rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(desc.renderExtent.width), static_cast<float>(desc.renderExtent.height));
+                    rgCtx.getCommandBuffer().setScissor(0, 0, desc.renderExtent.width, desc.renderExtent.height);
+                    rgCtx.getCommandBuffer().bindDescriptorSets(_blurPPL.get(), 0, {blurDS});
+                    rgCtx.getCommandBuffer().pushConstants(_blurPPL.get(), EShaderStage::Vertex | EShaderStage::Fragment, 0, sizeof(blurPC), &blurPC);
+                    rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
+                    rgCtx.endRendering();
+                });
 
             blurInput = blurTarget->getImageView();
         }
@@ -327,37 +403,37 @@ void BloomPostprocessing::render(const RenderDesc& desc)
         updateCompositeDescriptor(desc.sceneImageView, nullptr);
     }
 
-    desc.cmdBuf->debugBeginLabel("BloomComposite");
-    desc.cmdBuf->transitionImageLayoutAuto(desc.outputImage->getImage(), EImageLayout::ColorAttachmentOptimal);
-
-    RenderingInfo compositeRI{
-        .label            = "BloomComposite",
-        .renderArea       = Rect2D{.pos = {0, 0}, .extent = desc.renderExtent.toVec2()},
-        .layerCount       = 1,
-        .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
-        .colorAttachments = {RenderingInfo::ImageSpec{
-            .image         = desc.outputImage->getImage(),
-            .imageView     = desc.outputImage->getImageView(),
-            .loadOp        = EAttachmentLoadOp::Clear,
-            .storeOp       = EAttachmentStoreOp::Store,
-            .initialLayout = EImageLayout::ColorAttachmentOptimal,
-            .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-        }},
-    };
-
     slang_types::Misc::BloomComposite::PushConstants compositePC{};
     compositePC.bloomStrength = desc.state->bloomStrength;
     compositePC.bloomEnabled  = bBloomEnabled ? 1u : 0u;
 
-    desc.cmdBuf->beginRendering(compositeRI);
-    desc.cmdBuf->bindPipeline(_compositePipeline.get());
-    desc.cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(desc.renderExtent.width), static_cast<float>(desc.renderExtent.height));
-    desc.cmdBuf->setScissor(0, 0, desc.renderExtent.width, desc.renderExtent.height);
-    desc.cmdBuf->bindDescriptorSets(_compositePPL.get(), 0, {_compositeDS});
-    desc.cmdBuf->pushConstants(_compositePPL.get(), EShaderStage::Vertex | EShaderStage::Fragment, 0, sizeof(compositePC), &compositePC);
-    desc.cmdBuf->draw(3, 1, 0, 0);
-    desc.cmdBuf->endRendering(compositeRI);
-    desc.cmdBuf->debugEndLabel();
+    [[maybe_unused]] const auto compositePass = graph.addPass(
+        "BloomComposite",
+        [&](RGPassBuilder& pass) {
+            pass.read(scene);
+            if (bBloomEnabled) {
+                pass.read((_lastBlurPassCount == 0 || (_lastBlurPassCount % 2) == 0) ? *blurPong : *blurPing);
+            }
+            pass.useColorAttachment(output);
+        },
+        [&](RGRenderContext& rgCtx) {
+            rgCtx.beginColorRendering({
+                .color      = output,
+                .renderArea = Rect2D{.pos = {0.0f, 0.0f}, .extent = desc.renderExtent.toVec2()},
+                .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
+                .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+            });
+            rgCtx.getCommandBuffer().bindPipeline(_compositePipeline.get());
+            rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(desc.renderExtent.width), static_cast<float>(desc.renderExtent.height));
+            rgCtx.getCommandBuffer().setScissor(0, 0, desc.renderExtent.width, desc.renderExtent.height);
+            rgCtx.getCommandBuffer().bindDescriptorSets(_compositePPL.get(), 0, {_compositeDS});
+            rgCtx.getCommandBuffer().pushConstants(_compositePPL.get(), EShaderStage::Vertex | EShaderStage::Fragment, 0, sizeof(compositePC), &compositePC);
+            rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
+            rgCtx.endRendering();
+        });
+
+    RenderGraphExecutor executor(*_render->getResourceFactory());
+    [[maybe_unused]] const bool bExecuted = executor.execute(graph, *desc.cmdBuf);
 }
 
 void BloomPostprocessing::renderSettingsGUI(PostProcessingState& state)

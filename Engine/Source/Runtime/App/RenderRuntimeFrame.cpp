@@ -76,6 +76,7 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
     auto* pipeline = getActivePipelineExecution();
     YA_CORE_ASSERT(pipeline, "Active render pipeline is null while ticking viewport pass");
 
+    const auto overlayInput = input.overlay;
     pipeline->tick(RenderPipelineFrameContext{
         .flightIndex              = input.pipeline.flightIndex,
         .cmdBuf                   = cmdBuf,
@@ -87,23 +88,19 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
         .viewportFrameBufferScale = _viewportFrameBufferScale,
         .frameData                = input.pipeline.frameData,
         .shadowSettings           = input.pipeline.shadowSettings,
+        .recordViewportOverlays   = [this, overlayInput, input](ICommandBuffer* overlayCmdBuf, Extent2D viewportExtent, const FrameContext& frameCtx) {
+            RenderPipelineFrameContext overlayFrame = input.pipeline;
+            overlayFrame.cmdBuf = overlayCmdBuf;
+            overlayFrame.view = frameCtx.view;
+            overlayFrame.projection = frameCtx.projection;
+            overlayFrame.cameraPos = frameCtx.cameraPos;
+            overlayFrame.viewportRect = Rect2D{
+                .pos    = {0.0f, 0.0f},
+                .extent = {static_cast<float>(viewportExtent.width), static_cast<float>(viewportExtent.height)},
+            };
+            renderViewportPassOverlays(overlayFrame, overlayInput, overlayCmdBuf);
+        },
     });
-}
-
-bool RenderRuntime::hasOpenViewportPass() const
-{
-    if (auto* pipeline = getActivePipelineExecution()) {
-        return pipeline->hasOpenViewportPass();
-    }
-    return false;
-}
-
-Extent2D RenderRuntime::getActiveViewportExtent() const
-{
-    if (auto* pipeline = getActivePipelineExecution()) {
-        return pipeline->getViewportExtent();
-    }
-    return {};
 }
 
 Texture* RenderRuntime::getActiveViewportTexture() const
@@ -116,14 +113,13 @@ Texture* RenderRuntime::getActiveViewportTexture() const
 
 void RenderRuntime::renderViewportPassOverlays(const RenderPipelineFrameContext& pipelineFrame, const FrameInput::OverlayInput& overlay, ICommandBuffer* cmdBuf)
 {
-    if (!hasOpenViewportPass()) {
-        return;
-    }
-
     YA_PROFILE_SCOPE("Render2D");
     YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
 
-    const Extent2D viewportExtent = getActiveViewportExtent();
+    const Extent2D viewportExtent = Extent2D{
+        .width  = static_cast<uint32_t>(pipelineFrame.viewportRect.extent.x),
+        .height = static_cast<uint32_t>(pipelineFrame.viewportRect.extent.y),
+    };
     FRender2dContext render2dCtx{
         .cmdBuf       = cmdBuf,
         .windowWidth  = viewportExtent.width,
@@ -154,25 +150,6 @@ void RenderRuntime::renderViewportPassOverlays(const RenderPipelineFrameContext&
     UIManager::get()->render();
     Render2D::onRenderGUI();
     Render2D::end();
-}
-
-void RenderRuntime::endViewportPass(ICommandBuffer* cmdBuf)
-{
-    if (!hasOpenViewportPass()) {
-        return;
-    }
-
-    auto* pipeline = getActivePipelineExecution();
-    YA_CORE_ASSERT(pipeline, "Active render pipeline is null while ending viewport pass");
-
-    pipeline->endViewportPass(cmdBuf);
-
-    if (_renderPipeline == ERenderPipeline::Forward) {
-        YA_CORE_ASSERT(pipeline->getViewportTexture(), "Failed to get viewport texture for postprocessing");
-    }
-    else {
-        YA_CORE_ASSERT(pipeline->getViewportTexture(), "Failed to get deferred viewport texture");
-    }
 }
 
 void RenderRuntime::renderPresentationPass(float deltaTime,

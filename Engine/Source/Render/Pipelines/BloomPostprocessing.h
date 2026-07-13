@@ -26,6 +26,7 @@ struct BloomPostprocessing
     struct RenderDesc
     {
         ICommandBuffer*            cmdBuf            = nullptr;
+        Texture*                   sceneTexture      = nullptr;
         IImageView*                sceneImageView    = nullptr;
         RenderImage*               outputImage       = nullptr;
         RenderImage*               bloomExtract      = nullptr;

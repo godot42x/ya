@@ -2,6 +2,7 @@
 
 #include "Config/ConfigManager.h"
 #include "Render/Core/CommandBuffer.h"
+#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/Swapchain.h"
 #include "imgui.h"
 
@@ -60,6 +61,39 @@ stdptr<RenderImage> createPostprocessRenderImage(IRender* render,
                 .aspectFlags = EImageAspect::Color,
             },
         });
+}
+
+RGImportedTextureDesc makePostprocessImportedTextureDesc(const Texture& texture,
+                                                         std::string_view label,
+                                                         EImageLayout::T finalLayout)
+{
+    YA_CORE_ASSERT(texture.getImageShared() != nullptr, "Render graph import requires a backing image");
+
+    IImage* image = texture.getImage();
+    YA_CORE_ASSERT(image != nullptr, "Render graph import requires a valid image");
+
+    return RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label       = std::string(label),
+            .format      = texture.getFormat(),
+            .extent      = Extent3D{texture.getWidth(), texture.getHeight(), 1},
+            .mipLevels   = image->getMipLevels(),
+            .arrayLayers = image->getArrayLayers(),
+            .usage       = image->getUsage(),
+        },
+        .importDesc = ImportedImageDesc{
+            .label         = std::string(label),
+            .nativeHandle  = static_cast<void*>(image->getHandle()),
+            .format        = texture.getFormat(),
+            .usage         = image->getUsage(),
+            .extent        = Extent3D{texture.getWidth(), texture.getHeight(), 1},
+            .mipLevels     = image->getMipLevels(),
+            .arrayLayers   = image->getArrayLayers(),
+            .initialLayout = image->getCompatibilityLayout(),
+            .finalLayout   = finalLayout,
+        },
+        .image = texture.getImageShared(),
+    };
 }
 
 } // namespace
@@ -275,6 +309,7 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
         YA_CORE_ASSERT(_bloomCompositeImage, "Bloom composite image should be created with postprocess output");
         _bloomProcessor->render(BloomPostprocessing::RenderDesc{
             .cmdBuf = cmdBuf,
+            .sceneTexture = inputTexture,
             .sceneImageView = inputTexture->getImageView(),
             .outputImage = _bloomCompositeImage.get(),
             .bloomExtract = _bloomExtractImage.get(),
@@ -286,44 +321,49 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
         compositeInputView = _bloomCompositeImage->getImageView();
     }
 
-    cmdBuf->debugBeginLabel("Postprocessing");
-    cmdBuf->transitionImageLayoutAuto(_postprocessTexture->image.get(), EImageLayout::ColorAttachmentOptimal);
-
-    RenderingInfo ri{
-        .label      = "Postprocessing",
-        .renderArea = Rect2D{
-            .pos    = {0, 0},
-            .extent = inputExtent.toVec2(),
-        },
-        .layerCount       = 1,
-        .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
-        .depthClearValue  = ClearValue(1.0f, 0),
-        .colorAttachments = {
-            RenderingInfo::ImageSpec{
-                .image     = _postprocessTexture ? _postprocessTexture->getImage() : nullptr,
-                .imageView = _postprocessTexture ? _postprocessTexture->getImageView() : nullptr,
-                .loadOp    = EAttachmentLoadOp::Clear,
-                .storeOp   = EAttachmentStoreOp::Store,
-            },
-        },
-    };
-
-    cmdBuf->beginRendering(ri);
-
     const auto swapchainFormat = _render->getSwapchain()->getFormat();
     const bool bOutputIsSRGB   = EFormat::isSRGB(swapchainFormat);
-    _postProcessor->render(BasicPostprocessing::RenderDesc{
-        .cmdBuf         = cmdBuf,
-        .ctx            = ctx,
-        .inputImageView = compositeInputView,
-        .renderExtent   = inputExtent,
-        .bOutputIsSRGB  = bOutputIsSRGB,
-        .state          = &_state,
-    });
 
-    cmdBuf->endRendering(ri);
-    cmdBuf->transitionImageLayoutAuto(_postprocessTexture->image.get(), EImageLayout::ShaderReadOnlyOptimal);
-    cmdBuf->debugEndLabel();
+    ICommandBuffer::LabelScope labelScope(cmdBuf, "Postprocessing");
+
+    RenderGraph graph;
+    const auto  input = graph.importTexture(makePostprocessImportedTextureDesc(*inputTexture, "Postprocessing.Input", EImageLayout::ShaderReadOnlyOptimal));
+    const auto  output = graph.importTexture(makePostprocessImportedTextureDesc(*_postprocessTexture, "Postprocessing.Output", EImageLayout::ShaderReadOnlyOptimal));
+
+    [[maybe_unused]] const auto pass = graph.addPass(
+        "Postprocessing",
+        [&](RGPassBuilder& pass) {
+            pass.read(input);
+            pass.useColorAttachment(output);
+        },
+        [&](RGRenderContext& rgCtx) {
+            rgCtx.beginColorRendering({
+                .color      = output,
+                .renderArea = Rect2D{
+                    .pos    = {0.0f, 0.0f},
+                    .extent = inputExtent.toVec2(),
+                },
+                .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
+                .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+            });
+
+            _postProcessor->render(BasicPostprocessing::RenderDesc{
+                .cmdBuf         = &rgCtx.getCommandBuffer(),
+                .ctx            = ctx,
+                .inputImageView = compositeInputView,
+                .renderExtent   = inputExtent,
+                .bOutputIsSRGB  = bOutputIsSRGB,
+                .state          = &_state,
+            });
+
+            rgCtx.endRendering();
+        });
+
+    RenderGraphExecutor executor(*_render->getResourceFactory());
+    if (!executor.execute(graph, *cmdBuf)) {
+        return inputTexture;
+    }
+
     return _postprocessTexture.get();
 }
 
