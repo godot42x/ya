@@ -277,8 +277,22 @@
 - RT editor catalog 的 concrete pipeline 分支也开始回收到公共接口：`RenderTargetEditorCatalog` 已下沉到 common 头，`appendRenderTargetEditorEntries()` 现通过 `IRenderPipeline` 暴露，`RenderRuntime` 不再自行分支调用 forward/deferred 的 catalog helper
 - runtime 对 viewport attachment format 的 concrete pipeline 依赖也继续缩减：`IRenderPipelineExecution` 新增 `getViewportColorFormat()/getViewportDepthFormat()`，`Render2D::init()` 已通过 active pipeline 接口读取格式，不再直接引用 forward/deferred 的 static 常量
 - editor RT depth-format 调整的 deferred 特判也继续回收到 active pipeline 接口：`setSharedDepthFormat()` 现通过 `IRenderPipelineSettingsUI` 暴露，`RenderRuntime` 与 RT editor GUI 不再保留 `setDeferredSharedDepthFormat()` 这类 concrete helper
+- deferred shared-depth 编辑已开始脱离 attachment dirty fallback：`setSharedDepthFormat()` 现在只负责标记 pending refresh，`beginTick()` 会在安全点统一 flush GBuffer/Viewport depth attachment 并刷新 stage state，先把 editor 最常见的 depth 改动迁到显式路径
+- deferred color-format 编辑入口也已开始走同样的显式路径：`IRenderPipelineSettingsUI::setRenderTargetColorFormat()` 现由 deferred 实现，RT editor 对 deferred GBuffer/Viewport 的颜色格式修改会先标记 pending，再在 `beginTick()` 安全点统一刷新 attachment / snapshot / stage state，而不是仅依赖 `refreshDirtyResources()` fallback
 
 ## Phase 7: Deferred Graph 迁移
+
+### 近期执行优先级
+
+1. 先处理 Deferred viewport / SSAO / postprocess 的 legacy intermediate owner，推进 graph registry 接管 replacement
+2. 再把 Deferred attachment/resource replacement 的残余 dirty state 从 stage/postprocess 侧彻底删除
+3. Forward graph、RenderTarget 大拆分、editor extension API 继续后置，除非前两项已经不再阻塞 Deferred 主链完成标准
+
+### 调查结论 / 停止线
+
+- 当前 Deferred `GBuffer / Viewport` 的 attachment spec 变更入口已经基本收敛到 pipeline 内部显式路径：viewport resize、shared depth format、editor color format 都已有 pending refresh 承接；`refreshDirtyResources()` attachment fallback 已删除，并以断言约束残余隐式 mutation
+- 因此继续追加 facade-only 收口的收益已经明显下降；Phase 7 后续优先做“删除 owner / graph 接管 replacement / 删除残余 dirty state”，不继续堆只改变接口表述的小提交
+- 现有 checklist 保持“删除 legacy path 后才勾选”的口径；已有 graph shell 或兼容层不单独视为完成
 
 ### GBuffer
 
@@ -321,7 +335,7 @@
 - [ ] RenderGraph 接管 Deferred pass 顺序
 - [ ] RenderGraph 接管 Deferred intermediate resource owner
 - [ ] RenderGraph 接管 pass 间 barrier
-- [ ] 删除 Deferred `refreshDirtyResources()` attachment 修复路径
+- [x] 删除 Deferred `refreshDirtyResources()` attachment 修复路径
 - [ ] 删除 Deferred viewport/SSAO/postprocess dirty resource state
 
 完成标准：

@@ -355,7 +355,18 @@ void RenderRuntime::renderRenderTargetEditor()
                 const bool bSelected   = option.format == currentFormat;
                 const auto optionLabel = std::string(option.label);
                 if (ImGui::Selectable(optionLabel.c_str(), bSelected)) {
-                    selectedEntry.rt->setColorAttachmentFormat(static_cast<uint32_t>(_rtEditor.selectedAttachmentIndex), option.format);
+                    const bool bHandledByPipeline = [&]() {
+                        if (auto* pipeline = getActivePipelineSettingsUI()) {
+                            return pipeline->setRenderTargetColorFormat(
+                                selectedEntry.owner,
+                                static_cast<uint32_t>(_rtEditor.selectedAttachmentIndex),
+                                option.format);
+                        }
+                        return false;
+                    }();
+                    if (!bHandledByPipeline) {
+                        selectedEntry.rt->setColorAttachmentFormat(static_cast<uint32_t>(_rtEditor.selectedAttachmentIndex), option.format);
+                    }
                 }
                 if (bSelected) {
                     ImGui::SetItemDefaultFocus();

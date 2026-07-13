@@ -120,6 +120,8 @@ struct DeferredRenderPipeline : public IRenderPipeline
     Extent2D           _pendingViewportExtent{};
     bool               _bViewportResizePending = false;
     bool               _bShadowResourceRefreshPending = false;
+    bool               _bSharedDepthFormatRefreshPending = false;
+    bool               _bAttachmentFormatRefreshPending = false;
 
     // ── Frame state ───────────────────────────────────────────────────
     DeferredGBufferResources   _currentGBufferResources{};
@@ -162,6 +164,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     DeferredPipelineDebugViews buildDebugViews() const;
     void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const override;
     void setSharedDepthFormat(EFormat::T format) override;
+    bool setRenderTargetColorFormat(RenderTargetEditorCatalog::Entry::EOwner owner, uint32_t attachmentIndex, EFormat::T format) override;
 
     // Access GBuffer RT for debug views
     IRenderTarget* getGBufferRT() const { return _gBufferRT.get(); }
@@ -192,7 +195,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               initStages();
     [[nodiscard]] bool shouldSkipTick(const RenderPipelineFrameContext& frame) const;
     void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
-    void               refreshDirtyResources();
+    void               validateNoPendingAttachmentRefresh() const;
     void               refreshViewportSizedStageResources();
     void               invalidateGBufferDependentViews();
     void               flushGBufferResources();
@@ -216,6 +219,8 @@ struct DeferredRenderPipeline : public IRenderPipeline
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               applyPendingViewportResize();
     void               applyPendingShadowResourceRefresh();
+    [[nodiscard]] bool applyPendingSharedDepthFormatRefresh();
+    [[nodiscard]] bool applyPendingAttachmentFormatRefresh();
     void               requestViewportResize(Extent2D extent);
     void               requestShadowResourceRefresh();
     void               initRenderTargets(Extent2D extent);
