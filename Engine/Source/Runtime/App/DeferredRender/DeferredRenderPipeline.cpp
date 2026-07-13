@@ -64,6 +64,36 @@ DeferredViewportResources buildDeferredViewportResources(IRenderTarget* viewport
     return resources;
 }
 
+RGImportedTextureDesc makeDeferredImportedTextureDesc(Texture& texture, std::string_view label, EImageLayout::T finalLayout)
+{
+    YA_CORE_ASSERT(texture.getImageShared() != nullptr, "Deferred graph import requires a backing image");
+    IImage* image = texture.getImage();
+    YA_CORE_ASSERT(image != nullptr, "Deferred graph import requires a valid image");
+
+    return RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label       = std::string(label),
+            .format      = texture.getFormat(),
+            .extent      = Extent3D{texture.getWidth(), texture.getHeight(), 1},
+            .mipLevels   = image->getMipLevels(),
+            .arrayLayers = image->getArrayLayers(),
+            .usage       = image->getUsage(),
+        },
+        .importDesc = ImportedImageDesc{
+            .label         = std::string(label),
+            .nativeHandle  = static_cast<void*>(image->getHandle()),
+            .format        = texture.getFormat(),
+            .usage         = image->getUsage(),
+            .extent        = Extent3D{texture.getWidth(), texture.getHeight(), 1},
+            .mipLevels     = image->getMipLevels(),
+            .arrayLayers   = image->getArrayLayers(),
+            .initialLayout = image->getCompatibilityLayout(),
+            .finalLayout   = finalLayout,
+        },
+        .image = texture.getImageShared(),
+    };
+}
+
 stdptr<RenderImage> createSSAOImage(IRender* render, Extent2D extent)
 {
     return createRenderImage(
@@ -560,10 +590,7 @@ void DeferredRenderPipeline::tick(const RenderPipelineFrameContext& frame)
     executeGBufferPass(frame, stageCtx, vpW, vpH);
     executeSSAOPass(stageCtx);
     executeDepthCopyPass(frame.cmdBuf);
-
-    beginViewportRendering(frame);
     executeViewportPass(frame, stageCtx);
-    finalizeViewportPass(frame.cmdBuf);
 
     frame.cmdBuf->debugEndLabel();
 }
@@ -851,18 +878,79 @@ void DeferredRenderPipeline::executeDepthCopyPass(ICommandBuffer* cmdBuf)
 
 void DeferredRenderPipeline::executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
 {
-    (void)frame;
+    const uint32_t vpW = static_cast<uint32_t>(frame.viewportRect.extent.x);
+    const uint32_t vpH = static_cast<uint32_t>(frame.viewportRect.extent.y);
 
-    {
-        YA_PERF_SCOPE(perf::sample::deferredLight(), perf::metric::cpuTimeMs(), perf::domain::render());
-        _lightStage->prepare(stageCtx);
-        _lightStage->execute(stageCtx);
+    _lastTickCtx = {
+        .view       = frame.view,
+        .projection = frame.projection,
+        .cameraPos  = frame.cameraPos,
+        .extent     = {.width = vpW, .height = vpH},
+    };
+    _lastFrameInput = frame;
+
+    auto* viewportColor = _currentViewportResources.color;
+    auto* viewportDepth = _currentViewportResources.depth;
+    if (!viewportColor || !viewportDepth) {
+        return;
     }
 
+    RenderGraph graph;
+    const auto  color = graph.importTexture(makeDeferredImportedTextureDesc(*viewportColor, "DeferredViewport.Color", EImageLayout::ShaderReadOnlyOptimal));
+    const auto  depth = graph.importTexture(makeDeferredImportedTextureDesc(*viewportDepth, "DeferredViewport.Depth", EImageLayout::ShaderReadOnlyOptimal));
+
+    [[maybe_unused]] const auto viewportPass = graph.addPass(
+        "Deferred Viewport",
+        [&](RGPassBuilder& passBuilder) {
+            passBuilder.useColorAttachment(color);
+            passBuilder.useDepthAttachment(depth);
+        },
+        [&](RGRenderContext& rgCtx) {
+            rgCtx.beginRasterRendering({
+                .color = {
+                    .color       = color,
+                    .renderArea  = {.pos = {0, 0}, .extent = _viewportRT->getExtent().toVec2()},
+                    .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
+                    .loadOp      = EAttachmentLoadOp::Clear,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                },
+                .depth = RGRenderContext::DepthRenderingDesc{
+                    .depth       = depth,
+                    .loadOp      = EAttachmentLoadOp::Load,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                },
+            });
+
+            {
+                YA_PERF_SCOPE(perf::sample::deferredLight(), perf::metric::cpuTimeMs(), perf::domain::render());
+                _lightStage->prepare(stageCtx);
+                _lightStage->execute(stageCtx);
+            }
+
+            {
+                YA_PERF_SCOPE(perf::sample::deferredOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
+                _overlayStage->prepare(stageCtx);
+                _overlayStage->execute(stageCtx);
+            }
+
+            if (_lastFrameInput.recordViewportOverlays) {
+                YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
+                _lastFrameInput.recordViewportOverlays(&rgCtx.getCommandBuffer(), _viewportRT->getExtent(), _lastTickCtx);
+            }
+
+            rgCtx.endRendering();
+        });
+
+    RenderGraphExecutor executor(*_render->getResourceFactory());
+    [[maybe_unused]] const bool bExecuted = executor.execute(graph, *frame.cmdBuf);
+
+    auto* inputTexture = _currentViewportResources.color;
     {
-        YA_PERF_SCOPE(perf::sample::deferredOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
-        _overlayStage->prepare(stageCtx);
-        _overlayStage->execute(stageCtx);
+        YA_PERF_SCOPE(perf::sample::renderPostProcess(), perf::metric::cpuTimeMs(), perf::domain::render());
+        viewportTexture = _postProcessStage.execute(
+            frame.cmdBuf, inputTexture, _lastFrameInput.viewportRect.extent, &_lastTickCtx);
     }
 }
 
@@ -884,38 +972,9 @@ void DeferredRenderPipeline::copyGBufferDepthToViewport(ICommandBuffer* cmdBuf)
         return;
     }
 
-    const auto makeImportedDepthDesc = [](Texture& texture, std::string_view label, EImageLayout::T finalLayout) {
-        YA_CORE_ASSERT(texture.getImageShared() != nullptr, "Deferred depth copy import requires a backing image");
-        IImage* image = texture.getImage();
-        YA_CORE_ASSERT(image != nullptr, "Deferred depth copy import requires a valid image");
-
-        return RGImportedTextureDesc{
-            .desc = RGTextureDesc{
-                .label       = std::string(label),
-                .format      = texture.getFormat(),
-                .extent      = Extent3D{texture.getWidth(), texture.getHeight(), 1},
-                .mipLevels   = image->getMipLevels(),
-                .arrayLayers = image->getArrayLayers(),
-                .usage       = image->getUsage(),
-            },
-            .importDesc = ImportedImageDesc{
-                .label         = std::string(label),
-                .nativeHandle  = static_cast<void*>(image->getHandle()),
-                .format        = texture.getFormat(),
-                .usage         = image->getUsage(),
-                .extent        = Extent3D{texture.getWidth(), texture.getHeight(), 1},
-                .mipLevels     = image->getMipLevels(),
-                .arrayLayers   = image->getArrayLayers(),
-                .initialLayout = image->getCompatibilityLayout(),
-                .finalLayout   = finalLayout,
-            },
-            .image = texture.getImageShared(),
-        };
-    };
-
     RenderGraph graph;
-    const auto  src = graph.importTexture(makeImportedDepthDesc(*gbufferDepth, "DeferredDepthCopy.Src", EImageLayout::ShaderReadOnlyOptimal));
-    const auto  dst = graph.importTexture(makeImportedDepthDesc(*viewportDepth, "DeferredDepthCopy.Dst", EImageLayout::ShaderReadOnlyOptimal));
+    const auto  src = graph.importTexture(makeDeferredImportedTextureDesc(*gbufferDepth, "DeferredDepthCopy.Src", EImageLayout::ShaderReadOnlyOptimal));
+    const auto  dst = graph.importTexture(makeDeferredImportedTextureDesc(*viewportDepth, "DeferredDepthCopy.Dst", EImageLayout::ShaderReadOnlyOptimal));
 
     [[maybe_unused]] const auto pass = graph.addPass(
         "Deferred Depth Copy",
@@ -953,48 +1012,6 @@ void DeferredRenderPipeline::copyGBufferDepthToViewport(ICommandBuffer* cmdBuf)
 // ═══════════════════════════════════════════════════════════════════════
 // Viewport Pass
 // ═══════════════════════════════════════════════════════════════════════
-
-void DeferredRenderPipeline::beginViewportRendering(const RenderPipelineFrameContext& frame)
-{
-    auto cmdBuf = frame.cmdBuf;
-
-    _viewportRI = RenderingInfo{
-        .label            = "Viewport Pass",
-        .renderArea       = {.pos = {0, 0}, .extent = _viewportRT->getExtent().toVec2()},
-        .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 0.0f)},
-        .renderTarget     = _viewportRT.get(),
-    };
-
-    cmdBuf->beginRendering(_viewportRI);
-
-    const uint32_t vpW = static_cast<uint32_t>(frame.viewportRect.extent.x);
-    const uint32_t vpH = static_cast<uint32_t>(frame.viewportRect.extent.y);
-
-    _lastTickCtx = {
-        .view       = frame.view,
-        .projection = frame.projection,
-        .cameraPos  = frame.cameraPos,
-        .extent     = {.width = vpW, .height = vpH},
-    };
-    _lastFrameInput = frame;
-}
-
-void DeferredRenderPipeline::finalizeViewportPass(ICommandBuffer* cmdBuf)
-{
-    if (_lastFrameInput.recordViewportOverlays) {
-        YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
-        _lastFrameInput.recordViewportOverlays(cmdBuf, _viewportRT->getExtent(), _lastTickCtx);
-    }
-
-    cmdBuf->endRendering(_viewportRI);
-
-    auto* inputTexture = _currentViewportResources.color;
-    {
-        YA_PERF_SCOPE(perf::sample::renderPostProcess(), perf::metric::cpuTimeMs(), perf::domain::render());
-        viewportTexture = _postProcessStage.execute(
-            cmdBuf, inputTexture, _lastFrameInput.viewportRect.extent, &_lastTickCtx);
-    }
-}
 
 void DeferredRenderPipeline::onViewportResized(Rect2D rect)
 {

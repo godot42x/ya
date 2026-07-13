@@ -122,7 +122,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     // ── Frame state ───────────────────────────────────────────────────
     DeferredGBufferResources   _currentGBufferResources{};
     DeferredViewportResources  _currentViewportResources{};
-    RenderingInfo              _viewportRI{};
     FrameContext               _lastTickCtx{};
     RenderPipelineFrameContext _lastFrameInput{};
     ShadowSettings             _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
@@ -145,7 +144,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void renderPerformanceGUI() override;
     void renderStageInternalsGUI() override;
 
-    void beginViewportRendering(const RenderPipelineFrameContext& frame);
     void onViewportResized(Rect2D rect) override;
 
     Extent2D getViewportExtent() const override { return _viewportRT ? _viewportRT->getExtent() : Extent2D{}; }
@@ -194,7 +192,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               executeSSAOPass(const RenderStageContext& stageCtx);
     void               executeDepthCopyPass(ICommandBuffer* cmdBuf);
     void               executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
-    void               finalizeViewportPass(ICommandBuffer* cmdBuf);
     void               saveShadowSettingsToConfig(const ShadowSettings& shadowSettings) const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               applyPendingViewportResize();
