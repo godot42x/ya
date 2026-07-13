@@ -136,6 +136,10 @@ RenderGraph 需要分别控制逻辑资源、物理资源、attachment 使用和
 - image 不保存 graph/executor 使用的全局 current layout
 - image view 明确记录 subresource range，但不拥有 image
 
+补充约束：
+
+- 运行时不得默认假设 `R16G16B16A16_SFLOAT`、`D32_SFLOAT` 等“理想 attachment 格式”在当前 Vulkan/MoltenVK 后端可直接用于 sampled render target；pipeline/resource owner 需要先按实际 image-format support 选择可创建规格，再驱动 render target 与 pipeline format refresh
+
 ### 4.2 统一资源工厂
 
 引入 backend-owned `IRenderResourceFactory`，由 `IRender` 提供：

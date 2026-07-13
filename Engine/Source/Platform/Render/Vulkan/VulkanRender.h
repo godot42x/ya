@@ -269,6 +269,10 @@ struct VulkanRender : public IRender
     IRenderResourceFactory*  getResourceFactory() override { return _resourceFactory.get(); }
     TextureFormatSupportInfo queryTextureFormatSupport(EFormat::T format) const override;
     bool                     isTextureFormatSupported(EFormat::T format, EImageUsage::T usage) const override;
+    bool                     isImageFormatSupported(EFormat::T format,
+                                                    EImageUsage::T usage,
+                                                    EImageCreateFlag::T flags = EImageCreateFlag::None,
+                                                    ESampleCount::T samples = ESampleCount::Sample_1) const override;
 
   private:
     void terminate()

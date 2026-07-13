@@ -28,6 +28,25 @@ namespace ya
 namespace
 {
 
+EFormat::T chooseSupportedAttachmentFormat(IRender* render,
+                                           std::string_view label,
+                                           EImageUsage::T usage,
+                                           std::initializer_list<EFormat::T> candidates,
+                                           EImageCreateFlag::T flags = EImageCreateFlag::None,
+                                           ESampleCount::T samples = ESampleCount::Sample_1)
+{
+    YA_CORE_ASSERT(render, "chooseSupportedAttachmentFormat requires render backend");
+    for (const auto format : candidates) {
+        if (render->isImageFormatSupported(format, usage, flags, samples)) {
+            return format;
+        }
+    }
+
+    const auto preferred = candidates.begin();
+    YA_CORE_WARN("No supported attachment format found for '{}', keeping preferred format {}", label, preferred != candidates.end() ? std::to_string(*preferred) : "Undefined");
+    return preferred != candidates.end() ? *preferred : EFormat::Undefined;
+}
+
 ViewportOverlayStage::FrameInputs::DirectionGizmoInput buildDirectionGizmoInput(const TransformComponent& tc)
 {
     const glm::mat4 worldTransform = glm::translate(glm::mat4(1.0f), tc.getWorldPosition()) *
@@ -199,14 +218,14 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
             .colorAttach = {
                 AttachmentDescription{
                     .index         = 0,
-                    .format        = SIGNED_LINEAR_FORMAT,
+                    .format        = _gBufferSignedLinearFormat,
                     .initialLayout = EImageLayout::ColorAttachmentOptimal,
                     .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
                     .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 },
                 AttachmentDescription{
                     .index         = 1,
-                    .format        = SIGNED_LINEAR_FORMAT,
+                    .format        = _gBufferSignedLinearFormat,
                     .initialLayout = EImageLayout::ColorAttachmentOptimal,
                     .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
                     .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
@@ -228,7 +247,7 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
             },
             .depthAttach = AttachmentDescription{
                 .index          = 4,
-                .format         = DEPTH_FORMAT,
+                .format         = _sharedDepthFormat,
                 .loadOp         = EAttachmentLoadOp::Clear,
                 .storeOp        = EAttachmentStoreOp::Store,
                 .stencilLoadOp  = EAttachmentLoadOp::Clear,
@@ -248,7 +267,7 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
                  .colorAttach = {
                 AttachmentDescription{
                          .index          = 0,
-                         .format         = VIEWPORT_COLOR_FORMAT,
+                         .format         = _viewportColorFormat,
                          .samples        = ESampleCount::Sample_1,
                          .loadOp         = EAttachmentLoadOp::Clear,
                          .storeOp        = EAttachmentStoreOp::Store,
@@ -279,6 +298,34 @@ void DeferredRenderPipeline::initShadowResources()
         .extent            = {.width = shadowResolution, .height = shadowResolution},
         .depthFormat       = _shadowDepthFormat,
     });
+}
+
+void DeferredRenderPipeline::resolveRuntimeFormats()
+{
+    constexpr auto sampledColorUsage = static_cast<EImageUsage::T>(EImageUsage::ColorAttachment | EImageUsage::Sampled);
+    constexpr auto sampledDepthUsage = static_cast<EImageUsage::T>(EImageUsage::DepthStencilAttachment | EImageUsage::Sampled);
+
+    _gBufferSignedLinearFormat = chooseSupportedAttachmentFormat(
+        _render,
+        "Deferred GBuffer HDR",
+        sampledColorUsage,
+        {SIGNED_LINEAR_FORMAT, EFormat::R8G8B8A8_UNORM});
+    _viewportColorFormat = chooseSupportedAttachmentFormat(
+        _render,
+        "Deferred Viewport Color",
+        static_cast<EImageUsage::T>(sampledColorUsage | EImageUsage::TransferSrc),
+        {VIEWPORT_COLOR_FORMAT, EFormat::R8G8B8A8_UNORM});
+    _sharedDepthFormat = chooseSupportedAttachmentFormat(
+        _render,
+        "Deferred Shared Depth",
+        sampledDepthUsage,
+        {DEPTH_FORMAT, EFormat::D32_SFLOAT_S8_UINT, EFormat::D24_UNORM_S8_UINT, EFormat::D16_UNORM});
+    _shadowDepthFormat = chooseSupportedAttachmentFormat(
+        _render,
+        "Deferred Shadow Depth",
+        sampledDepthUsage,
+        {SHADOW_DEPTH_FORMAT, EFormat::D32_SFLOAT_S8_UINT, EFormat::D24_UNORM_S8_UINT, EFormat::D16_UNORM},
+        EImageCreateFlag::CubeCompatible);
 }
 
 void DeferredRenderPipeline::destroyShadowResources()
@@ -616,6 +663,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     }
     loadPersistentSettings();
     YA_CORE_ASSERT(_render, "DeferredRenderPipeline requires a valid render backend");
+    resolveRuntimeFormats();
 
     Extent2D extent{
         .width  = static_cast<uint32_t>(desc.windowW),
@@ -671,6 +719,9 @@ void DeferredRenderPipeline::initStages()
         .getDebugRenderSystem = _getDebugRenderSystem,
     });
     _overlayStage->init(_render);
+
+    refreshGBufferStageState();
+    refreshViewportStageState();
 }
 
 void DeferredRenderPipeline::shutdown()

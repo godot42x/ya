@@ -109,6 +109,52 @@ bool VulkanRender::isTextureFormatSupported(EFormat::T format, EImageUsage::T us
     return false;
 }
 
+namespace
+{
+VkImageCreateFlags toVkImageCreateFlagsForSupportQuery(EImageCreateFlag::T flags)
+{
+    VkImageCreateFlags vkFlags = 0;
+    if (flags & EImageCreateFlag::CubeCompatible)
+        vkFlags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    if (flags & EImageCreateFlag::MutableFormat)
+        vkFlags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+    if (flags & EImageCreateFlag::Protected)
+        vkFlags |= VK_IMAGE_CREATE_PROTECTED_BIT;
+    if (flags & EImageCreateFlag::ExtendedUsage)
+        vkFlags |= VK_IMAGE_CREATE_EXTENDED_USAGE_BIT;
+    if (flags & EImageCreateFlag::Disjoint)
+        vkFlags |= VK_IMAGE_CREATE_DISJOINT_BIT;
+    return vkFlags;
+}
+} // namespace
+
+bool VulkanRender::isImageFormatSupported(EFormat::T format,
+                                          EImageUsage::T usage,
+                                          EImageCreateFlag::T flags,
+                                          ESampleCount::T samples) const
+{
+    VkPhysicalDeviceImageFormatInfo2 formatInfo{
+        .sType  = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
+        .pNext  = nullptr,
+        .format = toVk(format),
+        .type   = VK_IMAGE_TYPE_2D,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage  = toVk(usage),
+        .flags  = toVkImageCreateFlagsForSupportQuery(flags),
+    };
+
+    VkImageFormatProperties2 formatProperties{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2,
+    };
+
+    const VkResult result = vkGetPhysicalDeviceImageFormatProperties2(m_PhysicalDevice, &formatInfo, &formatProperties);
+    if (result != VK_SUCCESS) {
+        return false;
+    }
+
+    return (formatProperties.imageFormatProperties.sampleCounts & toVk(samples)) != 0;
+}
+
 VkObjectType toVk(ERenderObject type)
 {
     switch (type) {

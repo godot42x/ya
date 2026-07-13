@@ -170,6 +170,18 @@ struct IRender : public plat_base<IRender>
         return false;
     }
 
+    virtual bool isImageFormatSupported(EFormat::T format,
+                                        EImageUsage::T usage,
+                                        EImageCreateFlag::T flags = EImageCreateFlag::None,
+                                        ESampleCount::T samples = ESampleCount::Sample_1) const
+    {
+        (void)format;
+        (void)usage;
+        (void)flags;
+        (void)samples;
+        return false;
+    }
+
     virtual const RenderCapabilities& getCapabilities() const
     {
         static const RenderCapabilities caps{};

@@ -36,6 +36,10 @@
 - [ ] 建立 SSAO、bloom、postprocess、ACES 冒烟入口
 - [ ] 建立 Forward/Deferred switch 冒烟入口
 
+基线备注：
+
+- Codex 当前 macOS smoke 环境下，`HelloMaterial` 仍会更早失败在 `SDLWindowProvider::recreate()` / Vulkan portability window init，尚不能作为“成功进入编辑器”的最终验证环境；但 Deferred 启动阶段此前由不兼容 attachment 格式触发的 `VulkanImage::allocate()` 崩溃链路已单独修复，不再与该环境级窗口失败混淆
+
 完成标准：
 
 - [ ] 旧计划不会再误导 agent 继续低收益小改
@@ -258,6 +262,7 @@
 - Deferred pipeline 当前帧 snapshot 现同时缓存 `GBuffer / Viewport` 的 attachment resources 与 formats；stage refresh 不再在 resize/dirty repair 路径里零散回查 render target 描述，为后续把 legacy owner 替换成显式 attachment set 先收敛一层状态入口
 - Deferred stage setup 也已改为复用 pipeline 持有的 current-frame attachment snapshot：`SSAOStage / LightStage` 初始化与 viewport-sized refresh 不再现查 `IRenderTarget -> FrameBuffer`，stage 输入继续向“只吃显式 frame state”方向收口
 - Deferred graph execute 路径已开始直接用 current-frame attachment snapshot 推导 render area / overlay extent；`executeGBufferPass()` 与 `executeViewportPass()` 不再为这些元数据读取 `_gBufferRT/_viewportRT`
+- Deferred 启动阶段已补 runtime attachment format fallback：pipeline 会先按后端 `isImageFormatSupported()` 解析 HDR color / viewport color / shared depth / shadow depth 的可创建格式，再初始化 render target 与 stage format refresh，避免在 MoltenVK/portability 环境下因为硬编码 `R16G16B16A16_SFLOAT` 或 `D32_SFLOAT` 直接崩在 `VulkanImage::allocate()`
 - shadow 公共资源也开始显式化执行期元数据：`ShadowMapResources` 现在缓存 depth image 与 layer count，Deferred shadow handoff 不再现查 `renderTarget -> framebuffer -> texture`
 - common shadow technique/stage 契约也已跟进显式资源输入：`BasicShadowMapTechnique / ShadowStage` 现改吃 `depth image + format + extent` 做 shadow view/pipeline refresh，Forward/Deferred 两条路径都不再通过 `refreshFromRenderTarget()` 反查当前 framebuffer
 - shadow pass 内部录制路径也已开始脱离 `Texture` adapter：directional / point shadow depth attachment 现在直接使用 `IImage/IImageView`，`Texture::wrap()` 兼容对象仅保留给调试/预览输出，不再作为实际 beginRendering 输入

@@ -103,6 +103,9 @@ struct DeferredRenderPipeline : public IRenderPipeline
     static constexpr EFormat::T SHADING_MODEL_FORMAT     = EFormat::R8_UNORM;
     static constexpr EFormat::T DEPTH_FORMAT             = EFormat::D32_SFLOAT;
     static constexpr EFormat::T SHADOW_DEPTH_FORMAT      = EFormat::D32_SFLOAT;
+    EFormat::T _gBufferSignedLinearFormat                = SIGNED_LINEAR_FORMAT;
+    EFormat::T _viewportColorFormat                      = VIEWPORT_COLOR_FORMAT;
+    EFormat::T _sharedDepthFormat                        = DEPTH_FORMAT;
 
     // ── Render stages ─────────────────────────────────────────────────
     stdptr<ShadowStage>          _shadowStage;
@@ -173,8 +176,8 @@ struct DeferredRenderPipeline : public IRenderPipeline
         }
         return {};
     }
-    EFormat::T getViewportColorFormat() const override { return VIEWPORT_COLOR_FORMAT; }
-    EFormat::T getViewportDepthFormat() const override { return DEPTH_FORMAT; }
+    EFormat::T getViewportColorFormat() const override { return _viewportColorFormat; }
+    EFormat::T getViewportDepthFormat() const override { return _sharedDepthFormat; }
 
     IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
@@ -212,6 +215,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               loadPersistentSettings();
     void               initPipelineState(const InitDesc& desc);
     void               initStages();
+    void               resolveRuntimeFormats();
     [[nodiscard]] bool shouldSkipTick(const RenderPipelineFrameContext& frame) const;
     void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
     void               validateNoPendingAttachmentRefresh() const;
