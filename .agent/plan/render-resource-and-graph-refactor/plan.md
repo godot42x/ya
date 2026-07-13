@@ -69,9 +69,9 @@
 
 ### 3.3 Image layout 存在错误的全局状态语义
 
-`IImage::getLayout()` 暗示 image 在任意时刻只有一个当前 layout，但实际 layout 可能因 command buffer、queue、mip、layer 和 aspect 而不同。若 RenderGraph compiler 和 image 对象同时维护 layout，会出现两个状态真相。
+旧的 `IImage::getLayout()` 曾暗示 image 在任意时刻只有一个当前 layout，但实际 layout 可能因 command buffer、queue、mip、layer 和 aspect 而不同。若 RenderGraph compiler 和 image 对象同时维护 layout，会出现两个状态真相。
 
-资源状态应属于一次已排序的 GPU 执行计划，而不是 image 的永久属性。
+资源状态应属于一次已排序的 GPU 执行计划，而不是 image 的永久属性。image 对象最多只保留 compatibility seed layout，用于 imported image 或 tracker 首次接触前的兼容初始化。
 
 ### 3.4 RenderTarget 职责过重
 
@@ -325,7 +325,7 @@ ECS extraction -> RenderItem -> visibility/LOD -> DrawPacket -> sort/batch -> Dr
 - 为 legacy command recording 建立 tracker
 - 迁移现有 layout transition
 - 补齐 subresource 和 imported state 语义
-- 删除 graph 对 `IImage::getLayout()` 的依赖
+- 删除 graph 对 image 全局 layout API 的依赖，仅允许使用 compatibility seed
 
 ### Phase 4: RenderGraph Core
 

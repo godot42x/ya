@@ -37,7 +37,8 @@ std::shared_ptr<IImage> VulkanRenderResourceFactory::importImage(const ImportedI
         desc.extent.width,
         desc.extent.height,
         desc.mipLevels,
-        desc.arrayLayers);
+        desc.arrayLayers,
+        desc.initialLayout);
     if (!desc.label.empty()) {
         image->setDebugName(desc.label);
     }

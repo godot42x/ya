@@ -32,6 +32,8 @@ struct ImportedImageDesc
     uint32_t       mipLevels    = 1;
     uint32_t       arrayLayers  = 1;
     bool           bOwnsNativeResource = false;
+    EImageLayout::T initialLayout       = EImageLayout::Undefined;
+    EImageLayout::T finalLayout         = EImageLayout::Undefined;
 };
 
 struct IRenderResourceFactory

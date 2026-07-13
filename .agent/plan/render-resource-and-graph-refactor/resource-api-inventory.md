@@ -123,6 +123,24 @@ RGPassContext
   -> non-owning resolved references
 ```
 
+## Isolated Command Upload And Initialization
+
+`beginIsolateCommands()` historically served several different responsibilities:
+
+- `VulkanImage::allocate()` recorded the image's initial layout transition immediately after allocation; this hidden submission has been removed and allocation now requires `Undefined`.
+- `VulkanBuffer` records one-shot buffer transfers.
+- `Texture` records staging upload, copy and final shader-readable transitions for 2D, cubemap and fallback textures.
+- Offscreen preprocessing also uses isolated command submission, but is scheduled work rather than resource construction.
+
+The state-tracking boundary must separate these operations:
+
+1. Allocation creates a resource in `Undefined` without hidden submission. This boundary is implemented.
+2. Upload explicitly declares transfer source/destination usage and records copy commands.
+3. Initial/final transitions are recorded through the same command-buffer-local `ResourceStateTracker` used by legacy and graph execution.
+4. Imported resources provide initial/final state through their import contract rather than image construction.
+
+Do not move offscreen scheduling into the resource factory. It remains graph-external orchestration and may later use a shared graph executor.
+
 ## Imported Image Contract
 
 The implementation must decide explicitly for every imported image:
@@ -135,6 +153,12 @@ The implementation must decide explicitly for every imported image:
 - whether debug naming the native object is permitted
 
 Swapchain images are non-owning imports. Shadow and environment resources are initially persistent external resources and may later move into graph ownership.
+
+Migration update:
+
+- `ImportedImageDesc` now carries declarative `initialLayout` and `finalLayout`.
+- Swapchain images are imported with `PresentSrcKHR` as both initial and required final state.
+- The compatibility image layout is seeded from the import descriptor; graph registry/state-plan consumption is still pending.
 
 ## Isolated Upload Boundary
 

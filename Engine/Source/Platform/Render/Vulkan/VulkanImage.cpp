@@ -149,8 +149,6 @@ bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, VulkanImage* const im
     if (newLayout == oldLayout) {
         return true;
     }
-    YA_ASSERT(image->_layout == oldLayout, "VulkanImage::transitionImageLayout image layout is not equal to old layout");
-
     VkImageMemoryBarrier imb{
         .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .pNext               = nullptr,
@@ -195,7 +193,7 @@ bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, VulkanImage* const im
                          &imb);
 
     // BUG: this real format changed later  after cmd execution, now it's invalid
-    image->_layout = newLayout;
+    image->_compatibilityLayout = newLayout;
 
     return true;
 }
@@ -214,7 +212,7 @@ bool VulkanImage::transitionLayouts(VkCommandBuffer cmdBuf, const std::vector<La
         if (!transition.image) {
             continue;
         }
-        auto oldLayout = transition.image->getLayout();
+        auto oldLayout = transition.image->getCompatibilityLayout();
         auto newLayout = transition.newLayout;
         if (oldLayout == newLayout) {
             continue;
@@ -257,7 +255,7 @@ bool VulkanImage::transitionLayouts(VkCommandBuffer cmdBuf, const std::vector<La
         srcStages |= getStageMask(barrier.oldLayout, barrier.srcAccessMask, true);
         dstStages |= getStageMask(barrier.newLayout, barrier.dstAccessMask, false);
         barriers.push_back(barrier);
-        transition.image->setLayout(newLayout);
+        transition.image->setCompatibilityLayout(newLayout);
     }
 
     if (barriers.empty()) {
@@ -383,20 +381,10 @@ bool VulkanImage::allocate()
     VK_CALL(vmaCreateImage(_render->getVmaAllocator(), &imageCreateInfo, &allocCI, &_handle, &_allocation, nullptr));
 
 
-    _layout = VK_IMAGE_LAYOUT_UNDEFINED;
-    if (_ci.initialLayout != EImageLayout::Undefined) {
-        auto cmdBuf = _render->beginIsolateCommands(std::format(
-            "ImageInitialLayout:{}:{}x{}:layers{}:mips{}:{}/{}",
-            _ci.label,
-            _ci.extent.width,
-            _ci.extent.height,
-            _ci.arrayLayers,
-            _ci.mipLevels,
-            static_cast<int>(_layout),
-            static_cast<int>(_ci.initialLayout)));
-        cmdBuf->transitionImageLayout(this, EImageLayout::Undefined, _ci.initialLayout);
-        _render->endIsolateCommands(cmdBuf);
-    }
+    _compatibilityLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    // ImageCreateInfo::initialLayout describes the first intended use. The
+    // physical Vulkan image is still created in UNDEFINED and transitions are
+    // recorded by the command-buffer state tracker at first use.
     bOwned = true;
     return true;
 }

@@ -107,10 +107,11 @@ struct IImage : public plat_base<IImage>
     virtual EImageUsage::T getUsage() const = 0;
 
     /**
-     * @brief Get the current layout of the image
-     * @return EImageLayout::T Current image layout
+     * @brief Get the compatibility seed layout used before a command buffer has
+     *        tracked this image explicitly.
+     * @return EImageLayout::T Compatibility seed layout
      */
-    virtual EImageLayout::T getLayout() const = 0;
+    virtual EImageLayout::T getCompatibilityLayout() const = 0;
 
     /**
      * @brief Set the debug name for this image (for debugging tools)

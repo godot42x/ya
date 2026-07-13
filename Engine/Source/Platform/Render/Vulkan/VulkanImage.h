@@ -28,9 +28,8 @@ struct VulkanImage : public IImage
     VmaAllocation     _allocation  = VK_NULL_HANDLE;
     VkFormat          _format      = VK_FORMAT_UNDEFINED;
     VkImageUsageFlags _usageFlags  = 0;
-    bool              bOwned       = false;
-    // TODO: layout should be sync in: different queues, different cmdbuf...
-    VkImageLayout     _layout      = VK_IMAGE_LAYOUT_UNDEFINED;
+    bool              bOwned              = false;
+    VkImageLayout     _compatibilityLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
     ya::ImageCreateInfo _ci;
 
@@ -58,7 +57,8 @@ struct VulkanImage : public IImage
     }
     static std::shared_ptr<VulkanImage> from(VulkanRender *render, VkImage image, VkFormat format, VkImageUsageFlags usages,
                                               uint32_t width = 0, uint32_t height = 0,
-                                              uint32_t mipLevels = 1, uint32_t arrayLayers = 1)
+                                              uint32_t mipLevels = 1, uint32_t arrayLayers = 1,
+                                              EImageLayout::T initialLayout = EImageLayout::Undefined)
     {
         auto ret         = std::make_shared<VulkanImage>();
         ret->_render     = render;
@@ -69,6 +69,7 @@ struct VulkanImage : public IImage
         ret->_ci.extent      = {width, height, 1};
         ret->_ci.mipLevels   = mipLevels;
         ret->_ci.arrayLayers = arrayLayers;
+        ret->_compatibilityLayout = EImageLayout::toVk(initialLayout);
         return ret;
     }
 
@@ -80,7 +81,7 @@ struct VulkanImage : public IImage
     [[nodiscard]] EImageUsage::T getUsage() const override { return _ci.usage; }
     [[nodiscard]] uint32_t       getMipLevels() const override { return _ci.mipLevels; }
     [[nodiscard]] uint32_t       getArrayLayers() const override { return _ci.arrayLayers; }
-    EImageLayout::T              getLayout() const override { return EImageLayout::fromVk(_layout); }
+    EImageLayout::T              getCompatibilityLayout() const override { return EImageLayout::fromVk(_compatibilityLayout); }
 
     // Vulkan-specific accessors
     [[nodiscard]] VkImage  getVkImage() const { return _handle; }
@@ -88,9 +89,9 @@ struct VulkanImage : public IImage
 
     void setDebugName(const std::string &name) override;
 
-    void setLayout(EImageLayout::T layout)
+    void setCompatibilityLayout(EImageLayout::T layout)
     {
-      _layout = EImageLayout::toVk(layout);
+      _compatibilityLayout = EImageLayout::toVk(layout);
     }
 
     struct LayoutTransition

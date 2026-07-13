@@ -50,7 +50,7 @@
 - [x] 盘点 cubemap/face/mip/layer 派生 view（见 `resource-api-inventory.md`）
 - [x] 盘点 render target attachment、swapchain image 和 external image 创建路径（见 `resource-api-inventory.md`）
 - [x] 盘点 sampler 和 framebuffer 创建路径（见 `resource-api-inventory.md`）
-- [ ] 盘点 `beginIsolateCommands()` upload/init 路径，分离 allocation、upload 和 initial transition
+- [x] 盘点 `beginIsolateCommands()` upload/init 路径，分离 allocation、upload 和 initial transition（见 `resource-api-inventory.md`）
 - [x] 盘点 `Texture*` 作为 GPU 中间资源 descriptor 输入的使用点
 - [ ] 记录每类资源当前 owner、引用者和销毁顺序
 - [x] 记录当前 `Texture / IImage / IImageView / IRenderTarget / IFrameBuffer` 所有权链（见 `resource-api-inventory.md`）
@@ -149,16 +149,16 @@
 
 ## Phase 5: Resource State Tracker
 
-- [ ] 盘点所有 `transitionImageLayout*()` 调用点
-- [ ] 盘点 attachment initial/final layout 语义
-- [ ] 盘点 swapchain acquire/present 状态
-- [ ] 盘点 cubemap mip/layer transition
+- [x] 盘点所有 `transitionImageLayout*()` 调用点
+- [x] 盘点 attachment initial/final layout 语义
+- [x] 盘点 swapchain acquire/present 状态
+- [x] 盘点 cubemap mip/layer transition
 - [ ] 定义 buffer/image resource state
-- [ ] 定义 mip/layer/aspect subresource key
-- [ ] 实现 command-buffer-local `ResourceStateTracker`
-- [ ] 将 legacy transition API 接入 tracker
-- [ ] 为冲突状态和遗漏 transition 增加 debug validation
-- [ ] 定义 imported resource initial/final state
+- [x] 定义 mip/layer/aspect subresource key
+- [x] 实现 command-buffer-local `ResourceStateTracker`
+- [x] 将 legacy image transition 和 dynamic-rendering attachment transition 接入 tracker
+- [x] 为冲突状态和遗漏 transition 增加 debug validation
+- [x] 定义 imported resource initial/final state
 - [ ] 停止以 `IImage::getLayout()` 作为执行状态真相
 - [ ] 删除或降级 image 全局 layout API
 
@@ -167,6 +167,14 @@
 - [ ] 单个 command buffer 内状态变化可完整追踪
 - [ ] 多 layer/mip transition 不再依赖单一 image layout
 - [ ] graph 和 legacy 路径共用 barrier backend
+
+迁移备注：
+
+- tracker 首次接触 image 时按 aspect/mip/layer 快照兼容 layout，避免局部 transition 污染未触及 subresource
+- `VulkanImage::_layout` 暂时保留为跨 command buffer 初始状态；尚未成为 GPU 执行完成状态
+- imported swapchain initial/final state 已进入 `ImportedImageDesc`；graph compiled state plan 尚未接入
+- image allocation 已禁止隐式 isolate transition；buffer/texture upload command 与 graph compiled state plan 仍待显式化
+- legacy 显式 `transitionImageLayout(old,new)` 已接入 tracker 旧状态校验；dynamic rendering render-target begin transition 统一对齐 Vulkan attachment 实际布局
 
 ## Phase 6: RenderGraph Core
 

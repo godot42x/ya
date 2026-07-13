@@ -2,6 +2,7 @@
 #pragma once
 #include "Render/Core/Buffer.h"
 #include "Render/Core/CommandBuffer.h"
+#include "Render/Core/ResourceStateTracker.h"
 #include "VulkanUtils.h"
 
 
@@ -26,6 +27,7 @@ class VulkanCommandBuffer : public ICommandBuffer
     bool            _isRecording   = false;
     uint32_t        _debugLabelDepth = 0;
     std::string     _debugName;
+    ResourceStateTracker _resourceStateTracker;
 
     // Track current rendering mode for proper endRendering() call
     ERenderingMode::T _currentRenderingMode = ERenderingMode::None;
@@ -104,6 +106,9 @@ class VulkanCommandBuffer : public ICommandBuffer
     void executeCopyBuffer(IBuffer* src, IBuffer* dst, uint64_t size, uint64_t srcOffset, uint64_t dstOffset);
     void executeTransitionImageLayout(IImage* image, EImageLayout::T oldLayout, EImageLayout::T newLayout,
                                       const ImageSubresourceRange* subresourceRange);
+    void validateTrackedOldLayout(IImage* image, EImageLayout::T oldLayout, const ImageSubresourceRange* subresourceRange);
+    void executeTrackedTransition(IImage* image, EImageLayout::T newLayout,
+                                  const ImageSubresourceRange* subresourceRange = nullptr);
 
   public:
     VulkanCommandBuffer(VulkanRender* render, VkCommandBuffer commandBuffer)

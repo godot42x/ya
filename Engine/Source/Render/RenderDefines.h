@@ -219,14 +219,17 @@ namespace EPipelineStage
 {
 enum T : uint32_t
 {
-    None           = 0,
-    ComputeShader  = 1 << 0,
-    DrawIndirect   = 1 << 1,
-    VertexInput    = 1 << 2,
-    VertexShader   = 1 << 3,
-    FragmentShader = 1 << 4,
-    Transfer       = 1 << 5,
-    AllCommands    = 1 << 6,
+    None                  = 0,
+    ComputeShader         = 1 << 0,
+    DrawIndirect          = 1 << 1,
+    VertexInput           = 1 << 2,
+    VertexShader          = 1 << 3,
+    FragmentShader        = 1 << 4,
+    Transfer              = 1 << 5,
+    AllCommands           = 1 << 6,
+    ColorAttachmentOutput = 1 << 7,
+    EarlyFragmentTests    = 1 << 8,
+    LateFragmentTests     = 1 << 9,
 };
 }
 
@@ -234,14 +237,18 @@ namespace EResourceAccess
 {
 enum T : uint32_t
 {
-    None                = 0,
-    ShaderRead          = 1 << 0,
-    ShaderWrite         = 1 << 1,
-    IndirectCommandRead = 1 << 2,
-    VertexAttributeRead = 1 << 3,
-    IndexRead           = 1 << 4,
-    TransferRead        = 1 << 5,
-    TransferWrite       = 1 << 6,
+    None                       = 0,
+    ShaderRead                 = 1 << 0,
+    ShaderWrite                = 1 << 1,
+    IndirectCommandRead        = 1 << 2,
+    VertexAttributeRead        = 1 << 3,
+    IndexRead                  = 1 << 4,
+    TransferRead               = 1 << 5,
+    TransferWrite              = 1 << 6,
+    ColorAttachmentRead        = 1 << 7,
+    ColorAttachmentWrite       = 1 << 8,
+    DepthStencilAttachmentRead = 1 << 9,
+    DepthStencilAttachmentWrite = 1 << 10,
 };
 }
 
@@ -1247,6 +1254,32 @@ struct ImageSubresourceRange
     uint32_t levelCount     = 1; // Mip level count
     uint32_t baseArrayLayer = 0; // Base array layer
     uint32_t layerCount     = 1; // Layer count
+};
+
+struct BufferResourceState
+{
+    EPipelineStage::T  stages = EPipelineStage::None;
+    EResourceAccess::T access = EResourceAccess::None;
+    uint64_t           offset = 0;
+    uint64_t           size   = 0;
+
+    [[nodiscard]] bool isDefined() const
+    {
+        return stages != EPipelineStage::None || access != EResourceAccess::None || offset != 0 || size != 0;
+    }
+};
+
+struct ImageResourceState
+{
+    EPipelineStage::T    stages           = EPipelineStage::None;
+    EResourceAccess::T   access           = EResourceAccess::None;
+    EImageLayout::T      layout           = EImageLayout::Undefined;
+    ImageSubresourceRange subresourceRange = {};
+
+    [[nodiscard]] bool isDefined() const
+    {
+        return stages != EPipelineStage::None || access != EResourceAccess::None || layout != EImageLayout::Undefined;
+    }
 };
 
 /**

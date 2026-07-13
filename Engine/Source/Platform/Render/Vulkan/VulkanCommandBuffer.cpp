@@ -13,6 +13,94 @@
 namespace ya
 {
 
+namespace
+{
+
+const char* toDebugString(EImageLayout::T layout)
+{
+    switch (layout) {
+        case EImageLayout::Undefined:
+            return "Undefined";
+        case EImageLayout::ColorAttachmentOptimal:
+            return "ColorAttachmentOptimal";
+        case EImageLayout::DepthStencilAttachmentOptimal:
+            return "DepthStencilAttachmentOptimal";
+        case EImageLayout::ShaderReadOnlyOptimal:
+            return "ShaderReadOnlyOptimal";
+        case EImageLayout::TransferSrc:
+            return "TransferSrc";
+        case EImageLayout::TransferDst:
+            return "TransferDst";
+        case EImageLayout::PresentSrcKHR:
+            return "PresentSrcKHR";
+        case EImageLayout::General:
+            return "General";
+        default:
+            return "Unknown";
+    }
+}
+
+std::string formatSubresourceRange(const ImageSubresourceRange* range)
+{
+    if (!range) {
+        return "whole-image";
+    }
+
+    return std::format(
+        "aspect=0x{:x}, mip=[{}, {}), layer=[{}, {})",
+        range->aspectMask,
+        range->baseMipLevel,
+        range->baseMipLevel + range->levelCount,
+        range->baseArrayLayer,
+        range->baseArrayLayer + range->layerCount);
+}
+
+ImageResourceState inferTrackedImageState(EImageLayout::T layout)
+{
+    ImageResourceState state;
+    state.layout = layout;
+
+    switch (layout) {
+        case EImageLayout::Undefined:
+            break;
+        case EImageLayout::ColorAttachmentOptimal:
+            state.stages = EPipelineStage::ColorAttachmentOutput;
+            state.access = EResourceAccess::ColorAttachmentRead | EResourceAccess::ColorAttachmentWrite;
+            break;
+        case EImageLayout::DepthStencilAttachmentOptimal:
+            state.stages = EPipelineStage::EarlyFragmentTests | EPipelineStage::LateFragmentTests;
+            state.access = EResourceAccess::DepthStencilAttachmentRead | EResourceAccess::DepthStencilAttachmentWrite;
+            break;
+        case EImageLayout::ShaderReadOnlyOptimal:
+            state.stages = EPipelineStage::FragmentShader | EPipelineStage::ComputeShader;
+            state.access = EResourceAccess::ShaderRead;
+            break;
+        case EImageLayout::TransferSrc:
+            state.stages = EPipelineStage::Transfer;
+            state.access = EResourceAccess::TransferRead;
+            break;
+        case EImageLayout::TransferDst:
+            state.stages = EPipelineStage::Transfer;
+            state.access = EResourceAccess::TransferWrite;
+            break;
+        case EImageLayout::General:
+            state.stages = EPipelineStage::AllCommands;
+            state.access = EResourceAccess::ShaderRead | EResourceAccess::ShaderWrite;
+            break;
+        case EImageLayout::PresentSrcKHR:
+            state.stages = EPipelineStage::AllCommands;
+            state.access = EResourceAccess::None;
+            break;
+        default:
+            state.stages = EPipelineStage::AllCommands;
+            break;
+    }
+
+    return state;
+}
+
+} // namespace
+
 static void collectRenderTargetTransitions(
     IRenderTarget*                              renderTarget,
     bool                                        bInitial,
@@ -38,7 +126,12 @@ static void collectRenderTargetTransitions(
     const auto colorCount = std::min(colorTextures.size(), colorDescs.size());
     for (size_t i = 0; i < colorCount; ++i) {
         auto targetLayout = colorOverrideLayout;
-        if (targetLayout == EImageLayout::Undefined) {
+        if (bInitial) {
+            if (targetLayout == EImageLayout::Undefined) {
+                targetLayout = EImageLayout::ColorAttachmentOptimal;
+            }
+        }
+        else if (targetLayout == EImageLayout::Undefined) {
             targetLayout = bInitial ? colorDescs[i].initialLayout : colorDescs[i].finalLayout;
         }
         if (targetLayout == EImageLayout::Undefined) {
@@ -58,7 +151,12 @@ static void collectRenderTargetTransitions(
 
     if (depthDesc) {
         auto targetLayout = depthOverrideLayout;
-        if (targetLayout == EImageLayout::Undefined) {
+        if (bInitial) {
+            if (targetLayout == EImageLayout::Undefined) {
+                targetLayout = EImageLayout::DepthStencilAttachmentOptimal;
+            }
+        }
+        else if (targetLayout == EImageLayout::Undefined) {
             targetLayout = bInitial ? depthDesc->initialLayout : depthDesc->finalLayout;
         }
         if (targetLayout == EImageLayout::Undefined) {
@@ -77,7 +175,12 @@ static void collectRenderTargetTransitions(
 
     if (resolveDesc) {
         auto targetLayout = resolveOverrideLayout;
-        if (targetLayout == EImageLayout::Undefined) {
+        if (bInitial) {
+            if (targetLayout == EImageLayout::Undefined) {
+                targetLayout = EImageLayout::ColorAttachmentOptimal;
+            }
+        }
+        else if (targetLayout == EImageLayout::Undefined) {
             targetLayout = bInitial ? resolveDesc->initialLayout : resolveDesc->finalLayout;
         }
         if (targetLayout != EImageLayout::Undefined) {
@@ -142,6 +245,7 @@ bool VulkanCommandBuffer::begin(bool oneTimeSubmit)
     recordedCommands.clear();
 #endif
     _debugLabelDepth = 0;
+    _resourceStateTracker.reset();
     VkCommandBufferBeginInfo beginInfo{
         .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .pNext            = nullptr,
@@ -174,6 +278,7 @@ void VulkanCommandBuffer::reset()
     vkResetCommandBuffer(_commandBuffer, 0);
     _isRecording = false;
     _debugLabelDepth = 0;
+    _resourceStateTracker.reset();
 #if YA_CMDBUF_RECORD_MODE
     recordedCommands.clear();
 #endif
@@ -354,7 +459,9 @@ void VulkanCommandBuffer::executeEndRendering(const RenderingInfo& info)
             std::vector<VulkanImage::LayoutTransition> transitions;
             collectRenderTargetTransitions(info.renderTarget, false, transitions);
             if (!transitions.empty()) {
-                VulkanImage::transitionLayouts(_commandBuffer, transitions);
+                for (const auto& transition : transitions) {
+                    executeTrackedTransition(transition.image, transition.newLayout, transition.useRange ? &transition.range : nullptr);
+                }
             }
             info.renderTarget->endFrame(this);
         }
@@ -377,7 +484,9 @@ void VulkanCommandBuffer::executeEndRendering(const RenderingInfo& info)
                 }
             }
             if (!transitions.empty()) {
-                VulkanImage::transitionLayouts(_commandBuffer, transitions);
+                for (const auto& transition : transitions) {
+                    executeTrackedTransition(transition.image, transition.newLayout, transition.useRange ? &transition.range : nullptr);
+                }
             }
         }
     }
@@ -565,6 +674,36 @@ void VulkanCommandBuffer::executeTransitionImageLayout(IImage* image, EImageLayo
                                   toVk(oldLayout),
                                   toVk(newLayout),
                                   subresourceRange ? &range : nullptr);
+}
+
+void VulkanCommandBuffer::validateTrackedOldLayout(
+    IImage*                      image,
+    EImageLayout::T              oldLayout,
+    const ImageSubresourceRange* subresourceRange)
+{
+    if (!image) {
+        return;
+    }
+
+    const auto mismatches = _resourceStateTracker.validateLayout(*image, oldLayout, subresourceRange);
+    YA_CORE_ASSERT(
+        mismatches.empty(),
+        "Tracked image layout mismatch before explicit transition on image {}: expected {}, actual {} for {}",
+        reinterpret_cast<uintptr_t>(image),
+        toDebugString(oldLayout),
+        mismatches.empty() ? "n/a" : toDebugString(mismatches.front().actualLayout),
+        mismatches.empty() ? std::string{"unknown-range"} : formatSubresourceRange(&mismatches.front().range));
+}
+
+void VulkanCommandBuffer::executeTrackedTransition(IImage* image, EImageLayout::T newLayout,
+                                                   const ImageSubresourceRange* subresourceRange)
+{
+    if (!image) {
+        return;
+    }
+    for (const auto& transition : _resourceStateTracker.transition(*image, newLayout, subresourceRange)) {
+        executeTransitionImageLayout(transition.image, transition.oldState.layout, transition.newState.layout, &transition.range);
+    }
 }
 
 #if YA_CMDBUF_RECORD_MODE
@@ -778,7 +917,9 @@ void VulkanCommandBuffer::beginRendering(const RenderingInfo& info)
             std::vector<VulkanImage::LayoutTransition> transitions;
             collectRenderTargetTransitions(renderTarget, true, transitions);
             if (!transitions.empty()) {
-                VulkanImage::transitionLayouts(_commandBuffer, transitions);
+                for (const auto& transition : transitions) {
+                    executeTrackedTransition(transition.image, transition.newLayout, transition.useRange ? &transition.range : nullptr);
+                }
             }
             beginDynamicRenderingFromRenderTarget(renderTarget, info);
             return;
@@ -1044,7 +1185,9 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
             }
         }
         if (!transitions.empty()) {
-            VulkanImage::transitionLayouts(_commandBuffer, transitions);
+            for (const auto& transition : transitions) {
+                executeTrackedTransition(transition.image, transition.newLayout, transition.useRange ? &transition.range : nullptr);
+            }
         }
     }
 
@@ -1143,18 +1286,16 @@ void VulkanCommandBuffer::transitionImageLayout(
     EImageLayout::T              newLayout,
     const ImageSubresourceRange* subresourceRange)
 {
+    validateTrackedOldLayout(image, oldLayout, subresourceRange);
     executeTransitionImageLayout(image, oldLayout, newLayout, subresourceRange);
+    if (image) {
+        _resourceStateTracker.setState(*image, inferTrackedImageState(newLayout), subresourceRange);
+    }
 }
 
 void VulkanCommandBuffer::transitionImageLayoutAuto(IImage* image, EImageLayout::T newLayout, const ImageSubresourceRange* subresourceRange)
 {
-    // the layout changed in cmdbuf:
-    // may not really layout in gpu, but will be the layout at execution
-    auto curLayout = image->getLayout();
-    if (curLayout != newLayout) {
-        transitionImageLayout(image, curLayout, newLayout, subresourceRange);
-    }
-    // already in the layout after cmdbuf execute
+    executeTrackedTransition(image, newLayout, subresourceRange);
 }
 
 void VulkanCommandBuffer::debugBeginLabel(const char* labelName, const float* colorRGBA)
@@ -1201,7 +1342,9 @@ void VulkanCommandBuffer::transitionRenderTargetLayout(
     collectRenderTargetTransitions(renderTarget, true, transitions, colorLayout, depthLayout, resolveLayout);
 
     if (!transitions.empty()) {
-        VulkanImage::transitionLayouts(_commandBuffer, transitions);
+        for (const auto& transition : transitions) {
+            executeTrackedTransition(transition.image, transition.newLayout, transition.useRange ? &transition.range : nullptr);
+        }
     }
 }
 

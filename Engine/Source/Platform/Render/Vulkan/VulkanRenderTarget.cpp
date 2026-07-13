@@ -209,7 +209,9 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
                     .nativeHandle = static_cast<void*>(swapchain->getVkImages()[frameBufferIndex]),
                     .format       = EFormat::fromVk(swapchain->getSurfaceFormat()),
                     .usage        = EImageUsage::ColorAttachment,
-                    .extent       = {.width = _extent.width, .height = _extent.height, .depth = 1},
+                    .extent        = {.width = _extent.width, .height = _extent.height, .depth = 1},
+                    .initialLayout = EImageLayout::PresentSrcKHR,
+                    .finalLayout   = EImageLayout::PresentSrcKHR,
                 });
                 // cmdBuf->transitionImageLayout(image.get(), EImageLayout::PresentSrcKHR);
                 colorImages.push_back(image);

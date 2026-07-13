@@ -776,6 +776,9 @@ inline auto toVk(T stage) -> VkPipelineStageFlags
     if (stage & VertexShader) bits |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
     if (stage & FragmentShader) bits |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     if (stage & Transfer) bits |= VK_PIPELINE_STAGE_TRANSFER_BIT;
+    if (stage & ColorAttachmentOutput) bits |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    if (stage & EarlyFragmentTests) bits |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    if (stage & LateFragmentTests) bits |= VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
     if (stage & AllCommands) bits |= VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
     return bits ? bits : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 }
@@ -793,6 +796,10 @@ inline auto toVk(T access) -> VkAccessFlags
     if (access & IndexRead) bits |= VK_ACCESS_INDEX_READ_BIT;
     if (access & TransferRead) bits |= VK_ACCESS_TRANSFER_READ_BIT;
     if (access & TransferWrite) bits |= VK_ACCESS_TRANSFER_WRITE_BIT;
+    if (access & ColorAttachmentRead) bits |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+    if (access & ColorAttachmentWrite) bits |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    if (access & DepthStencilAttachmentRead) bits |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+    if (access & DepthStencilAttachmentWrite) bits |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     return bits;
 }
 } // namespace EResourceAccess
