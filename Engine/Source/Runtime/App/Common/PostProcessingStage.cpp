@@ -135,16 +135,6 @@ RGImportedTextureDesc makePostprocessImportedTextureDesc(const RenderImage& imag
 
 } // namespace
 
-void PostProcessingStage::resizeResources(Extent2D extent)
-{
-    if (!_render || extent.width == 0 || extent.height == 0) {
-        return;
-    }
-
-    _postprocessOutputImage = nullptr;
-    _postprocessOutputTextureCompat.reset();
-}
-
 void PostProcessingStage::refreshOutputTextureCompat()
 {
     if (!_postprocessOutputImage || !_postprocessOutputImage->isValid()) {
@@ -232,8 +222,7 @@ void PostProcessingStage::shutdown()
         _postProcessor.reset();
     }
 
-    _postprocessOutputImage = nullptr;
-    _postprocessOutputTextureCompat.reset();
+    clearPreparedResources();
     _render = nullptr;
 }
 
@@ -245,6 +234,28 @@ void PostProcessingStage::beginFrame()
     if (_postProcessor) {
         _postProcessor->beginFrame();
     }
+}
+
+void PostProcessingStage::clearPreparedResources()
+{
+    _preparedGraphResources       = {};
+    _postprocessOutputImage       = nullptr;
+    _postprocessOutputTextureCompat.reset();
+    if (_bloomProcessor) {
+        _bloomProcessor->clearPreparedResources();
+    }
+}
+
+void PostProcessingStage::resolvePreparedResources(const RenderGraphResourceRegistry& registry)
+{
+    if (_bloomProcessor) {
+        _bloomProcessor->resolvePreparedResources(registry);
+    }
+
+    _postprocessOutputImage = _preparedGraphResources.output.isValid()
+        ? registry.resolveTexture(_preparedGraphResources.output)
+        : nullptr;
+    refreshOutputTextureCompat();
 }
 
 void PostProcessingStage::renderSettingsGUI()
@@ -287,46 +298,46 @@ void PostProcessingStage::renderGUI()
     ImGui::TreePop();
 }
 
-Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
-                                      Texture*        inputTexture,
-                                      glm::vec2       viewportExtent,
-                                      FrameContext*   ctx)
+RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
+                                                       Texture*     inputTexture,
+                                                       glm::vec2    viewportExtent,
+                                                       FrameContext* ctx)
 {
     (void)viewportExtent;
 
     if (!bEnabled || !_postProcessor) {
-        return inputTexture;
+        clearPreparedResources();
+        return {};
     }
-    if (!cmdBuf || !inputTexture) {
-        return inputTexture;
+    if (!inputTexture) {
+        clearPreparedResources();
+        return {};
     }
 
     const Extent2D inputExtent = inputTexture->getExtent();
     if (inputExtent.width == 0 || inputExtent.height == 0) {
-        return inputTexture;
+        clearPreparedResources();
+        return {};
     }
 
-    IImageView* compositeInputView = inputTexture->getImageView();
+    clearPreparedResources();
+
+    const auto input = graph.importTexture(makePostprocessImportedTextureDesc(*inputTexture, "Postprocessing.Input", EImageLayout::ShaderReadOnlyOptimal));
+    RGTextureHandle compositeInput = input;
     if (_state.bEnableBloom && _bloomProcessor) {
-        _bloomProcessor->render(BloomPostprocessing::RenderDesc{
-            .cmdBuf = cmdBuf,
+        const auto bloomOutput = _bloomProcessor->appendGraphPasses(graph, BloomPostprocessing::RenderDesc{
             .sceneTexture = inputTexture,
             .sceneImageView = inputTexture->getImageView(),
             .renderExtent = inputExtent,
             .state = &_state,
         });
-        if (auto* compositeImage = _bloomProcessor->getCompositeImage(); compositeImage && compositeImage->getImageView()) {
-            compositeInputView = compositeImage->getImageView();
+        if (bloomOutput.isValid()) {
+            compositeInput = bloomOutput;
         }
     }
 
     const auto swapchainFormat = _render->getSwapchain()->getFormat();
     const bool bOutputIsSRGB   = EFormat::isSRGB(swapchainFormat);
-
-    ICommandBuffer::LabelScope labelScope(cmdBuf, "Postprocessing");
-
-    RenderGraph graph;
-    const auto  input = graph.importTexture(makePostprocessImportedTextureDesc(*inputTexture, "Postprocessing.Input", EImageLayout::ShaderReadOnlyOptimal));
     const auto  output = graph.createTexture(RGTextureDesc{
          .label  = "Postprocessing.Output",
          .format = _colorFormat,
@@ -337,7 +348,7 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
     [[maybe_unused]] const auto pass = graph.addPass(
         "Postprocessing",
         [&](RGPassBuilder& pass) {
-            pass.read(input);
+            pass.read(compositeInput);
             pass.useColorAttachment(output);
         },
         [&](RGRenderContext& rgCtx) {
@@ -351,10 +362,13 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
                 .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
             });
 
+            const auto* compositeInputImage = rgCtx.resolveTexture(compositeInput);
+            YA_CORE_ASSERT(compositeInputImage != nullptr && compositeInputImage->getImageView() != nullptr,
+                           "Postprocessing failed to resolve input texture {}", compositeInput.index);
             _postProcessor->render(BasicPostprocessing::RenderDesc{
                 .cmdBuf         = &rgCtx.getCommandBuffer(),
                 .ctx            = ctx,
-                .inputImageView = compositeInputView,
+                .inputImageView = compositeInputImage->getImageView(),
                 .renderExtent   = inputExtent,
                 .bOutputIsSRGB  = bOutputIsSRGB,
                 .state          = &_state,
@@ -363,15 +377,34 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
             rgCtx.endRendering();
         });
 
-    YA_CORE_ASSERT(_graphExecutor != nullptr, "PostProcessingStage graph executor is not initialized");
-    if (!_graphExecutor->execute(graph, *cmdBuf)) {
-        _postprocessOutputImage = nullptr;
-        _postprocessOutputTextureCompat.reset();
+    _preparedGraphResources.input  = compositeInput;
+    _preparedGraphResources.output = output;
+    return output;
+}
+
+Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
+                                      Texture*        inputTexture,
+                                      glm::vec2       viewportExtent,
+                                      FrameContext*   ctx)
+{
+    if (!cmdBuf || !inputTexture) {
         return inputTexture;
     }
 
-    _postprocessOutputImage = _graphExecutor->getRegistry().resolveTexture(output);
-    refreshOutputTextureCompat();
+    ICommandBuffer::LabelScope labelScope(cmdBuf, "Postprocessing");
+    RenderGraph graph;
+    const auto  output = appendGraphPasses(graph, inputTexture, viewportExtent, ctx);
+    if (!output.isValid()) {
+        return inputTexture;
+    }
+
+    YA_CORE_ASSERT(_graphExecutor != nullptr, "PostProcessingStage graph executor is not initialized");
+    if (!_graphExecutor->execute(graph, *cmdBuf)) {
+        clearPreparedResources();
+        return inputTexture;
+    }
+
+    resolvePreparedResources(_graphExecutor->getRegistry());
     if (!_postprocessOutputTextureCompat) {
         return inputTexture;
     }

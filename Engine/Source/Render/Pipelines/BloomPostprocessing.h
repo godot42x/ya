@@ -18,6 +18,15 @@ constexpr uint32_t MAX_BLOOM_BLUR_DESCRIPTOR_SETS = 64;
 
 struct BloomPostprocessing
 {
+    struct GraphBuildResult
+    {
+        RGTextureHandle output{};
+        RGTextureHandle extract{};
+        RGTextureHandle blurPing{};
+        RGTextureHandle blurPong{};
+        bool            bBloomEnabled = false;
+    };
+
     struct InitDesc
     {
         IRender*              render                = nullptr;
@@ -64,10 +73,14 @@ struct BloomPostprocessing
     const RenderImage* _blurPongImage = nullptr;
     const RenderImage* _compositeImage = nullptr;
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
+    GraphBuildResult _preparedGraphResources{};
 
     void init(const InitDesc& initDesc);
     void shutdown();
     void beginFrame();
+    RGTextureHandle appendGraphPasses(RenderGraph& graph, const RenderDesc& desc);
+    void resolvePreparedResources(const RenderGraphResourceRegistry& registry);
+    void clearPreparedResources();
     void render(const RenderDesc& desc);
     void renderSettingsGUI(PostProcessingState& state);
     void renderTechnicalGUI();

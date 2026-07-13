@@ -235,6 +235,7 @@
 - `PostProcessingStage::execute()` 已成为首个 runtime-side graph-backed stage cut：保留 bloom 预处理与 `BasicPostprocessing::render()` 内部 draw 逻辑，只将外层 output pass/attachment transition/dynamic rendering 壳切到 graph + executor，验证 graph 已能承接主链路中的单 stage 渐进迁移
 - `SSAOStage::execute()` 已切到 graph-backed 执行壳：保留现有 GBuffer descriptor 更新、frame UBO 和 fullscreen draw 逻辑，只将 output attachment/rendering/barrier 交给 graph + executor，作为 Deferred 主链路首个 graph 化 stage 样板
 - `BloomPostprocessing::render()` 已切到 graph-backed 子链：extract / blur ping-pong / composite 三段都改为 graph pass，现有 descriptor cache、push constants 和 pipeline 逻辑保持不变，说明 graph 已可承接 runtime 内部多 pass 后处理工作流而不必一次性改写 shader/descriptor 层
+- Deferred 主链现已进一步把 bloom/postprocess 并入 pipeline 自己的 graph prepare/execute：`BloomPostprocessing` 与 `PostProcessingStage` 新增 append-to-graph 路径，Deferred 不再为后处理单独起 executor；Forward 兼容 wrapper 暂时保留，等待后续统一 graph 接管时再收口
 - `RGRenderContext` 已补最小 `beginRasterRendering(color + optional depth)` helper，并有核心测试覆盖 depth attachment 场景；这一步是后续 viewport/shadow 类 pass graph 化的前置接口补齐
 - viewport overlay 录制边界已向 pipeline 内回收：`RenderRuntime` 不再在 `renderWorldFrame()` 里直接插入 `Render2D/UI`，而是通过 `RenderPipelineFrameContext::recordViewportOverlays` 回调交给 pipeline 在 viewport rendering 结束前调用；overlay ownership 现已从 runtime 外层推进到 pipeline 内，便于后续继续收 deferred viewport graph 边界
 - Forward/Deferred viewport pass 现已在各自 `tick()` 内闭合完成，`RenderRuntime::renderWorldFrame()` 不再负责额外收尾；`IRenderPipeline` 上的 `hasOpenViewportPass()/endViewportPass()` 旧契约已删除，viewport pass 生命周期正式收口到 pipeline 内部

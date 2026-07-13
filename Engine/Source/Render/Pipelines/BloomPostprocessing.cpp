@@ -180,6 +180,7 @@ void BloomPostprocessing::shutdown()
     _blurPingImage                 = nullptr;
     _blurPongImage                 = nullptr;
     _compositeImage                = nullptr;
+    _preparedGraphResources        = {};
 }
 
 void BloomPostprocessing::beginFrame()
@@ -193,6 +194,31 @@ void BloomPostprocessing::beginFrame()
     if (_compositePipeline) {
         _compositePipeline->beginFrame();
     }
+}
+
+void BloomPostprocessing::clearPreparedResources()
+{
+    _preparedGraphResources = {};
+    _extractImage           = nullptr;
+    _blurPingImage          = nullptr;
+    _blurPongImage          = nullptr;
+    _compositeImage         = nullptr;
+}
+
+void BloomPostprocessing::resolvePreparedResources(const RenderGraphResourceRegistry& registry)
+{
+    _extractImage = _preparedGraphResources.extract.isValid()
+        ? registry.resolveTexture(_preparedGraphResources.extract)
+        : nullptr;
+    _blurPingImage = _preparedGraphResources.blurPing.isValid()
+        ? registry.resolveTexture(_preparedGraphResources.blurPing)
+        : nullptr;
+    _blurPongImage = _preparedGraphResources.blurPong.isValid()
+        ? registry.resolveTexture(_preparedGraphResources.blurPong)
+        : nullptr;
+    _compositeImage = _preparedGraphResources.output.isValid()
+        ? registry.resolveTexture(_preparedGraphResources.output)
+        : nullptr;
 }
 
 void BloomPostprocessing::initExtractPipeline()
@@ -305,18 +331,17 @@ void BloomPostprocessing::updateCompositeDescriptor(IImageView* sceneImageView, 
     });
 }
 
-void BloomPostprocessing::render(const RenderDesc& desc)
+RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const RenderDesc& desc)
 {
-    if (!desc.cmdBuf || !desc.sceneTexture || !desc.sceneImageView || !desc.state) {
-        return;
+    clearPreparedResources();
+    if (!desc.sceneTexture || !desc.sceneImageView || !desc.state) {
+        return {};
     }
     if (desc.renderExtent.width == 0 || desc.renderExtent.height == 0) {
-        return;
+        return {};
     }
 
     const bool bBloomEnabled = desc.state->bEnableBloom;
-    ICommandBuffer::LabelScope labelScope(desc.cmdBuf, "BloomPostprocessing");
-    RenderGraph                graph;
 
     const auto scene = graph.importTexture(makeBloomImportedTextureDesc(*desc.sceneTexture, "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal));
     const auto output = graph.createTexture(RGTextureDesc{
@@ -349,6 +374,12 @@ void BloomPostprocessing::render(const RenderDesc& desc)
             .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
         }, ERGResourceLifetime::Persistent);
     }
+
+    _preparedGraphResources.output        = output;
+    _preparedGraphResources.bBloomEnabled = bBloomEnabled;
+    _preparedGraphResources.extract       = bloomExtract.value_or(RGTextureHandle{});
+    _preparedGraphResources.blurPing      = blurPing.value_or(RGTextureHandle{});
+    _preparedGraphResources.blurPong      = blurPong.value_or(RGTextureHandle{});
 
     if (bBloomEnabled) {
         updateExtractDescriptor(desc.sceneImageView);
@@ -418,7 +449,7 @@ void BloomPostprocessing::render(const RenderDesc& desc)
                     rgCtx.getCommandBuffer().pushConstants(_blurPPL.get(), EShaderStage::Vertex | EShaderStage::Fragment, 0, sizeof(blurPC), &blurPC);
                     rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
                     rgCtx.endRendering();
-                });
+            });
         }
     }
     else {
@@ -462,21 +493,31 @@ void BloomPostprocessing::render(const RenderDesc& desc)
             rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
             rgCtx.endRendering();
         });
+    return output;
+}
+
+void BloomPostprocessing::render(const RenderDesc& desc)
+{
+    if (!desc.cmdBuf) {
+        clearPreparedResources();
+        return;
+    }
+
+    ICommandBuffer::LabelScope labelScope(desc.cmdBuf, "BloomPostprocessing");
+    RenderGraph graph;
+    const auto  output = appendGraphPasses(graph, desc);
+    if (!output.isValid()) {
+        return;
+    }
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "BloomPostprocessing graph executor is not initialized");
     [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *desc.cmdBuf);
     if (!bExecuted) {
-        _extractImage = nullptr;
-        _blurPingImage = nullptr;
-        _blurPongImage = nullptr;
-        _compositeImage = nullptr;
+        clearPreparedResources();
         return;
     }
 
-    _extractImage   = bloomExtract ? _graphExecutor->getRegistry().resolveTexture(*bloomExtract) : nullptr;
-    _blurPingImage  = blurPing ? _graphExecutor->getRegistry().resolveTexture(*blurPing) : nullptr;
-    _blurPongImage  = blurPong ? _graphExecutor->getRegistry().resolveTexture(*blurPong) : nullptr;
-    _compositeImage = _graphExecutor->getRegistry().resolveTexture(output);
+    resolvePreparedResources(_graphExecutor->getRegistry());
 }
 
 void BloomPostprocessing::renderSettingsGUI(PostProcessingState& state)

@@ -16,6 +16,12 @@ namespace ya
 
 struct PostProcessingStage
 {
+    struct GraphBuildResult
+    {
+        RGTextureHandle input{};
+        RGTextureHandle output{};
+    };
+
     struct InitDesc
     {
         IRender*   render      = nullptr;
@@ -33,14 +39,20 @@ struct PostProcessingStage
     const RenderImage*          _postprocessOutputImage = nullptr;
     stdptr<Texture>             _postprocessOutputTextureCompat = nullptr;
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
+    GraphBuildResult            _preparedGraphResources{};
 
     void     init(const InitDesc& desc);
     void     shutdown();
     void     beginFrame();
-    void     resizeResources(Extent2D newExtent);
     void     renderGUI();
     void     renderSettingsGUI();
     void     renderTechnicalGUI();
+    RGTextureHandle appendGraphPasses(RenderGraph& graph,
+                                      Texture*      inputTexture,
+                                      glm::vec2     viewportExtent,
+                                      FrameContext* ctx);
+    void     resolvePreparedResources(const RenderGraphResourceRegistry& registry);
+    void     clearPreparedResources();
     Texture* execute(ICommandBuffer* cmdBuf,
                      Texture*        inputTexture,
                      glm::vec2       viewportExtent,

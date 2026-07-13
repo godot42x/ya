@@ -497,7 +497,6 @@ void DeferredRenderPipeline::applyPendingViewportResize()
     flushViewportResources();
 
     refreshCurrentFrameResources();
-    _postProcessStage.resizeResources(_pendingViewportExtent);
     refreshViewportSizedStageResources();
     _bViewportResizePending = false;
 }
@@ -1268,6 +1267,13 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             rgCtx.endRendering();
         });
 
+    auto* inputTexture = _currentViewportResources.color;
+    const auto postprocessOutput = _postProcessStage.appendGraphPasses(
+        graph,
+        inputTexture,
+        _lastFrameInput.viewportRect.extent,
+        &_lastTickCtx);
+
     YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");
     RGCompiledGraph compiled{};
     if (!_graphExecutor->prepare(graph, compiled)) {
@@ -1277,6 +1283,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         if (_lightStage) {
             _lightStage->setSSAOTexture(nullptr);
         }
+        _postProcessStage.clearPreparedResources();
         viewportTexture = _currentViewportResources.color;
         return;
     }
@@ -1305,15 +1312,18 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     if (_overlayStage) {
         _overlayStage->prepare(stageCtx);
     }
+    _postProcessStage.resolvePreparedResources(_graphExecutor->getRegistry());
 
     [[maybe_unused]] const bool bExecuted = _graphExecutor->executeCompiled(graph, compiled, *frame.cmdBuf);
-
-    auto* inputTexture = _currentViewportResources.color;
-    {
-        YA_PERF_SCOPE(perf::sample::renderPostProcess(), perf::metric::cpuTimeMs(), perf::domain::render());
-        viewportTexture = _postProcessStage.execute(
-            frame.cmdBuf, inputTexture, _lastFrameInput.viewportRect.extent, &_lastTickCtx);
+    if (!bExecuted) {
+        _postProcessStage.clearPreparedResources();
+        viewportTexture = inputTexture;
+        return;
     }
+
+    viewportTexture = postprocessOutput.isValid() && _postProcessStage.getOutputTexture()
+        ? _postProcessStage.getOutputTexture()
+        : inputTexture;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
