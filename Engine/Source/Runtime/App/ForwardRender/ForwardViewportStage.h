@@ -124,6 +124,7 @@ struct ForwardViewportStage : public IRenderStage
     void renderGUI() override;
 
     void applyShadowState(const ShadowRuntimeState& shadowState);
+    void setDepthBufferShadowDescriptorSet(DescriptorSetHandle depthBufferShadowDS);
     void refreshPipelineFormats(const RenderAttachmentFormats& formats);
 
   private:

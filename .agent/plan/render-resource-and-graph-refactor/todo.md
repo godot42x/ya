@@ -245,6 +245,7 @@
 - Deferred 对 graph 产物的帧内同步也已开始去 stage-local owner：SSAO 输出现在由 pipeline 的 frame state 统一持有并分发给 light pass / debug view，`SSAOStage` 不再额外缓存一份 graph 结果
 - postprocess 主输出也已跟进同一路径：`PostProcessingStage` 不再缓存 graph 主输出，Forward/Deferred pipeline 各自持有当前帧 postprocess image，并负责向 viewport compat 输出、debug output 与 automation/screenshot 链路分发
 - editor 主 viewport 也已开始脱离 `Texture::wrap()` 兼容出口：`EditorViewportContext` 现在直接消费 `IImageView*`，Forward/Deferred pipeline 不再为 editor 主视口维护 `_viewportTextureCompat`；剩余 `Texture* viewportTexture` 只保留给 automation screenshot fallback
+- Forward pipeline 的 viewport resize / shadow rebuild / viewport color-format 编辑现已对齐到显式 pending refresh：`onViewportResized()` 与 RT editor 只记录请求，实际 resource recreate / snapshot refresh / stage format refresh 统一在 frame boundary 批处理，不再依赖 `refreshDirtyResources()` 每帧轮询
 - Deferred `refreshDirtyResources()` 已从每帧无条件 `flushDirty()` 收紧为 attachment-spec 变化时的 fallback 修复；resize 主路径不再依赖 runtime tick 内的隐式自修复，后续可以继续朝“显式 replacement、删除 dirty repair path”推进
 - Deferred `SSAOStage` / `LightStage` 已不再订阅 `IRenderTarget::onFramebufferRecreated`；GBuffer/SSAO descriptor invalidation 现改回 pipeline 显式资源替换点统一触发，进一步减少 stage 对 legacy render-target 内部事件的依赖
 - Deferred `SSAOStage` / `LightStage` 的 GBuffer 读取路径已从 `IRenderTarget -> FrameBuffer -> Texture` 间接反查切到显式 `DeferredGBufferResources` 输入；这一步先把 attachment dependency 从隐式容器借用改成 pipeline 明确传入的资源绑定，后续更容易替换成 graph imported handles

@@ -256,8 +256,6 @@ void ForwardRenderPipeline::tick(const RenderPipelineFrameContext& frame)
 
     RenderStageContext stageCtx{};
     beginTick(frame, stageCtx);
-    refreshDirtyResources();
-    syncShadowSettings();
     executeShadowPass(stageCtx);
     executeViewportPass(frame, stageCtx);
     finalizeViewportPass(frame.cmdBuf);
@@ -271,42 +269,142 @@ bool ForwardRenderPipeline::shouldSkipTick(const RenderPipelineFrameContext& fra
 
 void ForwardRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
 {
-    const uint32_t vpW = static_cast<uint32_t>(frame.viewportRect.extent.x);
-    const uint32_t vpH = static_cast<uint32_t>(frame.viewportRect.extent.y);
+    _postProcessStage.beginFrame();
+    captureShadowSettings(frame);
+    syncFrameSettings(frame);
+    applyPendingResourceRefreshes();
 
     stageCtx = RenderStageContext{
         .cmdBuf         = frame.cmdBuf,
         .frameData      = frame.frameData,
         .flightIndex    = frame.flightIndex,
         .deltaTime      = frame.deltaTime,
-        .viewportExtent = {.width = vpW, .height = vpH},
+        .viewportExtent = _viewportResources.extent,
     };
-
-    _postProcessStage.beginFrame();
-    captureShadowSettings(frame);
 }
 
-void ForwardRenderPipeline::refreshDirtyResources()
+bool ForwardRenderPipeline::setRenderTargetColorFormat(RenderTargetEditorCatalog::Entry::EOwner owner,
+                                                       uint32_t                                 attachmentIndex,
+                                                       EFormat::T                               format)
 {
-    const bool bViewportDirty         = viewportRT && viewportRT->needsRefresh();
-    const bool bViewportPipelineDirty = viewportRT && viewportRT->needsAttachmentRefresh();
-    const bool bShadowDirty           = _shadowResources.needsRefresh();
+    bool bFormatChanged = false;
+    switch (owner) {
+    case RenderTargetEditorCatalog::Entry::EOwner::ForwardViewport:
+        if (viewportRT) {
+            bFormatChanged = viewportRT->setColorAttachmentFormat(attachmentIndex, format);
+        }
+        break;
+    default:
+        return false;
+    }
 
-    if (bViewportDirty) {
+    if (bFormatChanged) {
+        markPendingResourceRefresh(EForwardPendingResourceRefresh::AttachmentFormat);
+    }
+    return true;
+}
+
+void ForwardRenderPipeline::markPendingResourceRefresh(EForwardPendingResourceRefresh refresh)
+{
+    _pendingResourceRefreshMask |= static_cast<uint32_t>(refresh);
+}
+
+bool ForwardRenderPipeline::hasPendingResourceRefresh(EForwardPendingResourceRefresh refresh) const
+{
+    return (_pendingResourceRefreshMask & static_cast<uint32_t>(refresh)) != 0;
+}
+
+void ForwardRenderPipeline::clearPendingResourceRefresh(EForwardPendingResourceRefresh refresh)
+{
+    _pendingResourceRefreshMask &= ~static_cast<uint32_t>(refresh);
+}
+
+void ForwardRenderPipeline::requestViewportResize(Extent2D extent)
+{
+    if (extent.width == 0 || extent.height == 0) {
+        return;
+    }
+
+    _pendingViewportExtent = extent;
+    markPendingResourceRefresh(EForwardPendingResourceRefresh::ViewportResize);
+}
+
+void ForwardRenderPipeline::requestShadowResourceRefresh()
+{
+    markPendingResourceRefresh(EForwardPendingResourceRefresh::ShadowResources);
+}
+
+void ForwardRenderPipeline::applyPendingResourceRefreshes()
+{
+    bool bRefreshViewportSnapshot   = false;
+    bool bRefreshViewportResources  = false;
+    bool bRefreshViewportStageState = false;
+    bool bRefreshShadowStageState   = false;
+
+    if (hasPendingResourceRefresh(EForwardPendingResourceRefresh::ViewportResize)) {
+        if (viewportRT) {
+            viewportRT->setExtent(_pendingViewportExtent);
+        }
         flushViewportResources();
+        bRefreshViewportSnapshot   = true;
+        bRefreshViewportResources  = true;
+        bRefreshViewportStageState = true;
+        clearPendingResourceRefresh(EForwardPendingResourceRefresh::ViewportResize);
+    }
+
+    if (hasPendingResourceRefresh(EForwardPendingResourceRefresh::ShadowResources) && _render) {
+        _render->waitIdle();
+        _shadowResources.destroy();
+        if (currentShadowSettings().isEnabled()) {
+            initShadowResources();
+        }
+        bRefreshShadowStageState = true;
+        clearPendingResourceRefresh(EForwardPendingResourceRefresh::ShadowResources);
+    }
+
+    if (hasPendingResourceRefresh(EForwardPendingResourceRefresh::AttachmentFormat)) {
+        if (viewportRT && viewportRT->needsAttachmentRefresh()) {
+            flushViewportResources();
+            bRefreshViewportSnapshot   = true;
+            bRefreshViewportResources  = true;
+            bRefreshViewportStageState = true;
+        }
+        clearPendingResourceRefresh(EForwardPendingResourceRefresh::AttachmentFormat);
+    }
+
+    if (bRefreshViewportSnapshot) {
         refreshViewportSnapshot();
+    }
+    if (bRefreshViewportResources) {
         refreshViewportResources();
     }
-    if (bShadowDirty) {
-        flushShadowResources();
-    }
-
-    if (bViewportPipelineDirty && _viewportStage) {
+    if (bRefreshViewportStageState) {
         refreshViewportStageState();
     }
-    if (bShadowDirty) {
+    if (bRefreshShadowStageState) {
         refreshShadowStageState();
     }
+}
+
+void ForwardRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
+{
+    const auto desiredExtent = Extent2D::fromVec2(frame.viewportRect.extent / frame.viewportFrameBufferScale);
+    if (desiredExtent.width > 0 && desiredExtent.height > 0 && !(desiredExtent == _viewportResources.extent)) {
+        requestViewportResize(desiredExtent);
+    }
+
+    const ShadowSettings shadowSettings          = currentShadowSettings();
+    const uint32_t       desiredShadowResolution = std::max(shadowSettings.resolution, 1u);
+    if (shadowSettings.isEnabled()) {
+        const bool bShadowResolutionDirty = !_shadowResources.renderTarget ||
+                                            _shadowResources.extent.width != desiredShadowResolution ||
+                                            _shadowResources.extent.height != desiredShadowResolution;
+        if (bShadowResolutionDirty) {
+            requestShadowResourceRefresh();
+        }
+    }
+
+    syncShadowSettings();
 }
 
 void ForwardRenderPipeline::flushViewportResources()
@@ -331,17 +429,6 @@ void ForwardRenderPipeline::refreshViewportResources()
     _viewportResources = buildForwardViewportResources(viewportRT.get());
 }
 
-void ForwardRenderPipeline::applyViewportExtent(Extent2D extent)
-{
-    if (!viewportRT) {
-        _viewportResources.extent = extent;
-        return;
-    }
-
-    viewportRT->setExtent(extent);
-    refreshViewportResources();
-}
-
 void ForwardRenderPipeline::refreshViewportStageState()
 {
     if (_viewportStage) {
@@ -351,7 +438,13 @@ void ForwardRenderPipeline::refreshViewportStageState()
 
 void ForwardRenderPipeline::refreshShadowStageState()
 {
-    rebuildShadowViews();
+    if (_viewportStage) {
+        _viewportStage->setDepthBufferShadowDescriptorSet(depthBufferShadowDS);
+    }
+    if (currentShadowSettings().isEnabled() && _shadowResources.renderTarget) {
+        rebuildShadowViews();
+    }
+    syncShadowSettings();
 }
 
 void ForwardRenderPipeline::syncShadowSettings()
@@ -383,10 +476,19 @@ bool ForwardRenderPipeline::isShadowMappingEnabled() const
 
 void ForwardRenderPipeline::applyShadowSettings(const ShadowSettings& shadowSettings)
 {
+    const bool bWasEnabled    = currentShadowSettings().isEnabled();
+    const bool bWillEnable    = shadowSettings.isEnabled();
+    const bool bToggleChanged = bWasEnabled != bWillEnable;
+
     _frameShadowSettings = shadowSettings;
     if (_shadowSettings) {
         *_shadowSettings = shadowSettings;
     }
+
+    if (bToggleChanged || (shadowSettings.isEnabled() && !_shadowResources.renderTarget)) {
+        requestShadowResourceRefresh();
+    }
+
     syncShadowSettings();
 }
 
@@ -430,9 +532,6 @@ void ForwardRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)
 void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
 {
     _viewportStage->prepare(stageCtx);
-
-    auto extent = Extent2D::fromVec2(frame.viewportRect.extent / frame.viewportFrameBufferScale);
-    applyViewportExtent(extent);
 
     RenderingInfo ri{
         .label            = "ViewPort",
@@ -491,6 +590,11 @@ void ForwardRenderPipeline::shutdown()
     getSceneSkyboxDescriptorSet = {};
     getSceneEnvironmentLightingDescriptorSet = {};
     _currentPostprocessOutput = nullptr;
+    _pendingViewportExtent = {};
+    _pendingResourceRefreshMask = 0;
+    _viewportFormats = {};
+    _viewportResources = {};
+    viewportTexture = nullptr;
     _deleter.clear();
 }
 
@@ -599,7 +703,7 @@ void ForwardRenderPipeline::onViewportResized(Rect2D rect)
         .width  = static_cast<uint32_t>(rect.extent.x),
         .height = static_cast<uint32_t>(rect.extent.y),
     };
-    applyViewportExtent(newExtent);
+    requestViewportResize(newExtent);
 }
 
 Extent2D ForwardRenderPipeline::getViewportExtent() const

@@ -153,6 +153,11 @@ void ForwardViewportStage::refreshPipelineFormats(const RenderAttachmentFormats&
     _auxPasses.refreshPipelineFormats(formats);
 }
 
+void ForwardViewportStage::setDepthBufferShadowDescriptorSet(DescriptorSetHandle depthBufferShadowDS)
+{
+    _depthBufferShadowDS = depthBufferShadowDS;
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // Destroy
 // ═══════════════════════════════════════════════════════════════════════

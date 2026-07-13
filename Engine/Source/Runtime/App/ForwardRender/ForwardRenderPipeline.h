@@ -21,6 +21,14 @@
 namespace ya
 {
 
+enum class EForwardPendingResourceRefresh : uint32_t
+{
+    None             = 0,
+    ViewportResize   = 1 << 0,
+    ShadowResources  = 1 << 1,
+    AttachmentFormat = 1 << 2,
+};
+
 struct SceneManager;
 struct Scene;
 struct Texture;
@@ -77,6 +85,8 @@ struct ForwardRenderPipeline : public IRenderPipeline
     const RenderImage* _currentPostprocessOutput = nullptr;
     Texture* viewportTexture    = nullptr;
 
+    Extent2D      _pendingViewportExtent{};
+    uint32_t      _pendingResourceRefreshMask = 0;
     RenderingInfo _viewportRI{};
     RenderAttachmentFormats _viewportFormats{};
     ForwardViewportResources _viewportResources{};
@@ -96,6 +106,9 @@ struct ForwardRenderPipeline : public IRenderPipeline
     void renderTechnicalGUI();
     void renderPerformanceGUI() override;
     void renderStageInternalsGUI() override;
+    bool setRenderTargetColorFormat(RenderTargetEditorCatalog::Entry::EOwner owner,
+                                    uint32_t                                 attachmentIndex,
+                                    EFormat::T                               format) override;
 
     void                         onViewportResized(Rect2D rect) override;
     Extent2D                     getViewportExtent() const override;
@@ -126,12 +139,17 @@ struct ForwardRenderPipeline : public IRenderPipeline
     void               initStageResources();
     [[nodiscard]] bool shouldSkipTick(const RenderPipelineFrameContext& frame) const;
     void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
-    void               refreshDirtyResources();
+    void               markPendingResourceRefresh(EForwardPendingResourceRefresh refresh);
+    [[nodiscard]] bool hasPendingResourceRefresh(EForwardPendingResourceRefresh refresh) const;
+    void               clearPendingResourceRefresh(EForwardPendingResourceRefresh refresh);
+    void               requestViewportResize(Extent2D extent);
+    void               requestShadowResourceRefresh();
+    void               applyPendingResourceRefreshes();
+    void               syncFrameSettings(const RenderPipelineFrameContext& frame);
     void               flushViewportResources();
     void               flushShadowResources();
     void               refreshViewportSnapshot();
     void               refreshViewportResources();
-    void               applyViewportExtent(Extent2D extent);
     void               refreshViewportStageState();
     void               refreshShadowStageState();
     void               finalizeViewportPass(ICommandBuffer* cmdBuf);
