@@ -122,6 +122,8 @@ struct DeferredRenderPipeline : public IRenderPipeline
     // ── Frame state ───────────────────────────────────────────────────
     DeferredGBufferResources   _currentGBufferResources{};
     DeferredViewportResources  _currentViewportResources{};
+    DeferredAttachmentFormats  _currentGBufferFormats{};
+    DeferredAttachmentFormats  _currentViewportFormats{};
     FrameContext               _lastTickCtx{};
     RenderPipelineFrameContext _lastFrameInput{};
     ShadowSettings             _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);

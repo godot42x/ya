@@ -244,6 +244,9 @@
 - RenderGraph 已补最小 MRT raster helper，`RGRenderContext::beginRasterRendering()` 现在可绑定多个 color attachment；Deferred GBuffer 外壳已迁到 graph-backed raster pass，`GBufferStage` 保持只负责 draw 录制
 - Deferred 自身 stage 的格式刷新路径已开始去 `IRenderTarget` 化：`GBufferStage / LightStage / ViewportOverlayStage` 现改用显式 `DeferredAttachmentFormats`，把“为了拿格式而借整个 render target”收紧成更明确的格式描述输入
 - debug overlay 路径的格式刷新也已跟进切到显式 attachment format 描述：`DebugRenderSystem / DebugPrimitives / DebugSkinning` 不再为 pipeline format refresh 依赖 `IRenderTarget`，并复用下沉后的通用 `RenderAttachmentFormats`
+- Deferred pipeline 当前帧 snapshot 现同时缓存 `GBuffer / Viewport` 的 attachment resources 与 formats；stage refresh 不再在 resize/dirty repair 路径里零散回查 render target 描述，为后续把 legacy owner 替换成显式 attachment set 先收敛一层状态入口
+- Deferred stage setup 也已改为复用 pipeline 持有的 current-frame attachment snapshot：`SSAOStage / LightStage` 初始化与 viewport-sized refresh 不再现查 `IRenderTarget -> FrameBuffer`，stage 输入继续向“只吃显式 frame state”方向收口
+- Deferred graph execute 路径已开始直接用 current-frame attachment snapshot 推导 render area / overlay extent；`executeGBufferPass()` 与 `executeViewportPass()` 不再为这些元数据读取 `_gBufferRT/_viewportRT`
 
 ## Phase 7: Deferred Graph 迁移
 

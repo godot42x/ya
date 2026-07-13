@@ -415,6 +415,7 @@ void DeferredRenderPipeline::applyPendingViewportResize()
     }
 
     _ssaoTexture = createSSAOImage(_render, _pendingViewportExtent);
+    refreshCurrentFrameResources();
     _postProcessStage.onViewportResized(_pendingViewportExtent);
     refreshViewportSizedStageResources();
     _bViewportResizePending = false;
@@ -492,6 +493,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     };
 
     initRenderTargets(extent);
+    refreshCurrentFrameResources();
     _ssaoTexture = createSSAOImage(_render, extent);
     if (currentShadowSettings().isEnabled()) {
         initShadowResources();
@@ -517,12 +519,12 @@ void DeferredRenderPipeline::initStages()
     _gBufferStage->init(_render);
 
     _ssaoStage = ya::makeShared<SSAOStage>();
-    _ssaoStage->setup(buildDeferredGBufferResources(_gBufferRT.get()), _ssaoTexture.get());
+    _ssaoStage->setup(_currentGBufferResources, _ssaoTexture.get());
     _ssaoStage->setSettings(_ssaoStage->getRadius(), _ssaoStage->getBias(), _ssaoStage->getPower(), _ssaoStage->getIntensity(), _bReverseViewportY);
     _ssaoStage->init(_render);
 
     _lightStage = ya::makeShared<LightStage>();
-    _lightStage->setup(_gBufferStage.get(), buildDeferredGBufferResources(_gBufferRT.get()));
+    _lightStage->setup(_gBufferStage.get(), _currentGBufferResources);
     _lightStage->setEnvironmentLightingInput(LightStage::EnvironmentLightingInput{
         .environmentLightingDSL = _environmentLightingDSL,
         .getSceneEnvironmentLightingDescriptorSet = _getSceneEnvironmentLightingDescriptorSet,
@@ -554,6 +556,8 @@ void DeferredRenderPipeline::shutdown()
     _bShadowResourceRefreshPending   = false;
     _currentGBufferResources         = {};
     _currentViewportResources        = {};
+    _currentGBufferFormats           = {};
+    _currentViewportFormats          = {};
 
     if (_overlayStage) {
         _overlayStage->destroy();
@@ -715,17 +719,19 @@ void DeferredRenderPipeline::refreshDirtyResources()
         _gBufferRT->flushDirty();
         invalidateGBufferDependentViews();
         if (_gBufferStage) {
-            _gBufferStage->refreshPipelineFormats(buildDeferredAttachmentFormats(_gBufferRT.get()));
+            _currentGBufferFormats = buildDeferredAttachmentFormats(_gBufferRT.get());
+            _gBufferStage->refreshPipelineFormats(_currentGBufferFormats);
         }
     }
 
     if (bViewportPipelineDirty) {
         _viewportRT->flushDirty();
+        _currentViewportFormats = buildDeferredAttachmentFormats(_viewportRT.get());
         if (_lightStage) {
-            _lightStage->refreshPipelineFormats(buildDeferredAttachmentFormats(_viewportRT.get()));
+            _lightStage->refreshPipelineFormats(_currentViewportFormats);
         }
         if (_overlayStage) {
-            _overlayStage->refreshPipelineFormats(buildDeferredAttachmentFormats(_viewportRT.get()));
+            _overlayStage->refreshPipelineFormats(_currentViewportFormats);
         }
     }
 }
@@ -735,25 +741,24 @@ void DeferredRenderPipeline::refreshViewportSizedStageResources()
     invalidateGBufferDependentViews();
 
     if (_ssaoStage) {
-        _ssaoStage->setup(buildDeferredGBufferResources(_gBufferRT.get()), _ssaoTexture.get());
+        _ssaoStage->setup(_currentGBufferResources, _ssaoTexture.get());
         _ssaoStage->refreshPipelineFormat();
     }
 
     if (_gBufferStage) {
-        _gBufferStage->refreshPipelineFormats(buildDeferredAttachmentFormats(_gBufferRT.get()));
+        _gBufferStage->refreshPipelineFormats(_currentGBufferFormats);
     }
 
     if (_lightStage) {
-        _lightStage->setup(_gBufferStage.get(), buildDeferredGBufferResources(_gBufferRT.get()));
+        _lightStage->setup(_gBufferStage.get(), _currentGBufferResources);
         _lightStage->setSSAOTexture(_ssaoTexture.get());
-        _lightStage->refreshPipelineFormats(buildDeferredAttachmentFormats(_viewportRT.get()));
+        _lightStage->refreshPipelineFormats(_currentViewportFormats);
     }
 
     if (_overlayStage) {
-        _overlayStage->refreshPipelineFormats(buildDeferredAttachmentFormats(_viewportRT.get()));
+        _overlayStage->refreshPipelineFormats(_currentViewportFormats);
     }
 
-    refreshCurrentFrameResources();
 }
 
 void DeferredRenderPipeline::invalidateGBufferDependentViews()
@@ -774,6 +779,8 @@ void DeferredRenderPipeline::refreshCurrentFrameResources()
 {
     _currentGBufferResources  = buildDeferredGBufferResources(_gBufferRT.get());
     _currentViewportResources = buildDeferredViewportResources(_viewportRT.get());
+    _currentGBufferFormats    = buildDeferredAttachmentFormats(_gBufferRT.get());
+    _currentViewportFormats   = buildDeferredAttachmentFormats(_viewportRT.get());
 }
 
 void DeferredRenderPipeline::executeSSAOPass(const RenderStageContext& stageCtx)
@@ -884,6 +891,7 @@ void DeferredRenderPipeline::executeGBufferPass(const RenderPipelineFrameContext
     }
     const auto depth = graph.importTexture(
         makeDeferredImportedTextureDesc(*gbufferDepth, "DeferredGBuffer.Depth", EImageLayout::ShaderReadOnlyOptimal));
+    const Extent2D gbufferExtent = gbufferDepth->getExtent();
 
     [[maybe_unused]] const auto gbufferPass = graph.addPass(
         "Deferred GBuffer",
@@ -895,7 +903,7 @@ void DeferredRenderPipeline::executeGBufferPass(const RenderPipelineFrameContext
         },
         [&](RGRenderContext& rgCtx) {
             rgCtx.beginRasterRendering({
-                .renderArea = Rect2D{.pos = {0, 0}, .extent = _gBufferRT->getExtent().toVec2()},
+                .renderArea = Rect2D{.pos = {0, 0}, .extent = gbufferExtent.toVec2()},
                 .layerCount = 1,
                 .colors = {
                     {.color = gbufferColors[0], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
@@ -957,6 +965,7 @@ void DeferredRenderPipeline::executeViewportPass(const RenderPipelineFrameContex
     RenderGraph graph;
     const auto  color = graph.importTexture(makeDeferredImportedTextureDesc(*viewportColor, "DeferredViewport.Color", EImageLayout::ShaderReadOnlyOptimal));
     const auto  depth = graph.importTexture(makeDeferredImportedTextureDesc(*viewportDepth, "DeferredViewport.Depth", EImageLayout::ShaderReadOnlyOptimal));
+    const Extent2D viewportExtent = viewportColor->getExtent();
 
     [[maybe_unused]] const auto viewportPass = graph.addPass(
         "Deferred Viewport",
@@ -966,7 +975,7 @@ void DeferredRenderPipeline::executeViewportPass(const RenderPipelineFrameContex
         },
         [&](RGRenderContext& rgCtx) {
             rgCtx.beginRasterRendering({
-                .renderArea = {.pos = {0, 0}, .extent = _viewportRT->getExtent().toVec2()},
+                .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
                 .layerCount = 1,
                 .colors = {{
                     .color       = color,
@@ -997,7 +1006,7 @@ void DeferredRenderPipeline::executeViewportPass(const RenderPipelineFrameContex
 
             if (_lastFrameInput.recordViewportOverlays) {
                 YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
-                _lastFrameInput.recordViewportOverlays(&rgCtx.getCommandBuffer(), _viewportRT->getExtent(), _lastTickCtx);
+                _lastFrameInput.recordViewportOverlays(&rgCtx.getCommandBuffer(), viewportExtent, _lastTickCtx);
             }
 
             rgCtx.endRendering();
