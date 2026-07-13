@@ -32,6 +32,20 @@ RenderAttachmentFormats buildForwardViewportFormats(const IRenderTarget* renderT
     return formats;
 }
 
+ForwardViewportResources buildForwardViewportResources(const IRenderTarget* renderTarget)
+{
+    ForwardViewportResources resources{};
+    if (!renderTarget) {
+        return resources;
+    }
+
+    resources.color   = renderTarget->getCurrentColorTexture(0);
+    resources.depth   = renderTarget->getCurrentDepthTexture();
+    resources.resolve = renderTarget->getCurrentResolveTexture();
+    resources.extent  = renderTarget->getExtent();
+    return resources;
+}
+
 } // namespace
 
 void ForwardRenderPipeline::rebuildShadowViews()
@@ -126,6 +140,7 @@ void ForwardRenderPipeline::initViewportResources(const InitDesc& desc)
     });
     YA_CORE_ASSERT(viewportRT, "Failed to create viewport render target");
     refreshViewportSnapshot();
+    refreshViewportResources();
 }
 
 void ForwardRenderPipeline::initPostProcessResources(const InitDesc& desc)
@@ -267,6 +282,7 @@ void ForwardRenderPipeline::refreshDirtyResources()
     if (bViewportDirty) {
         flushViewportResources();
         refreshViewportSnapshot();
+        refreshViewportResources();
     }
     if (bShadowDirty) {
         flushShadowResources();
@@ -295,6 +311,22 @@ void ForwardRenderPipeline::flushShadowResources()
 void ForwardRenderPipeline::refreshViewportSnapshot()
 {
     _viewportFormats = buildForwardViewportFormats(viewportRT.get());
+}
+
+void ForwardRenderPipeline::refreshViewportResources()
+{
+    _viewportResources = buildForwardViewportResources(viewportRT.get());
+}
+
+void ForwardRenderPipeline::applyViewportExtent(Extent2D extent)
+{
+    if (!viewportRT) {
+        _viewportResources.extent = extent;
+        return;
+    }
+
+    viewportRT->setExtent(extent);
+    refreshViewportResources();
 }
 
 void ForwardRenderPipeline::refreshViewportStageState()
@@ -387,11 +419,11 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
     _viewportStage->prepare(stageCtx);
 
     auto extent = Extent2D::fromVec2(frame.viewportRect.extent / frame.viewportFrameBufferScale);
-    viewportRT->setExtent(extent);
+    applyViewportExtent(extent);
 
     RenderingInfo ri{
         .label            = "ViewPort",
-        .renderArea       = Rect2D{.pos = {0, 0}, .extent = viewportRT->getExtent().toVec2()},
+        .renderArea       = Rect2D{.pos = {0, 0}, .extent = _viewportResources.extent.toVec2()},
         .layerCount       = 1,
         .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
         .depthClearValue  = ClearValue(1.0f, 0),
@@ -400,7 +432,7 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
 
     frame.cmdBuf->beginRendering(ri);
 
-    stageCtx.viewportExtent = viewportRT->getExtent();
+    stageCtx.viewportExtent = _viewportResources.extent;
     _viewportStage->execute(stageCtx);
 
     _viewportRI         = ri;
@@ -409,7 +441,7 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
                                                                                   .projection = frame.projection,
                                                                                   .cameraPos  = frame.cameraPos,
                                                                               };
-    _lastTickCtx.extent = viewportRT->getExtent();
+    _lastTickCtx.extent = _viewportResources.extent;
     _lastFrameInput     = frame;
 }
 
@@ -417,12 +449,12 @@ void ForwardRenderPipeline::finalizeViewportPass(ICommandBuffer* cmdBuf)
 {
     if (_lastFrameInput.recordViewportOverlays) {
         YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
-        _lastFrameInput.recordViewportOverlays(cmdBuf, viewportRT->getExtent(), _lastTickCtx);
+        _lastFrameInput.recordViewportOverlays(cmdBuf, _viewportResources.extent, _lastTickCtx);
     }
 
     cmdBuf->endRendering(_viewportRI);
 
-    auto* inputTexture = bMSAA ? viewportRT->getCurrentResolveTexture() : viewportRT->getCurrentColorTexture(0);
+    auto* inputTexture = bMSAA ? _viewportResources.resolve : _viewportResources.color;
 
     viewportTexture = _postProcessStage.execute(
         cmdBuf, inputTexture, _lastFrameInput.viewportRect.extent, &_lastTickCtx);
@@ -546,7 +578,7 @@ void ForwardRenderPipeline::onViewportResized(Rect2D rect)
         .width  = static_cast<uint32_t>(rect.extent.x),
         .height = static_cast<uint32_t>(rect.extent.y),
     };
-    if (viewportRT) viewportRT->setExtent(newExtent);
+    applyViewportExtent(newExtent);
     _postProcessStage.onViewportResized(newExtent);
 }
 

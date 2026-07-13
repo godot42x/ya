@@ -257,6 +257,8 @@
 - Forward dirty refresh 也已继续向同样的显式 helper 边界收口：viewport/shadow 的 flush 与 stage-state refresh 现在由独立 helper 承接，后续若要把 legacy dirty repair 替换成显式 replacement/refresh，不必再在 `refreshDirtyResources()` 内联拆控制流
 - `IRenderTarget` 兼容期 dirty 协议也已开始下沉成最小 facade：新增 `isDirty()/hasAttachmentDirty()/flushIfDirty()`，Forward/Deferred/Shadow facade 已优先走这些 helper，而不是直接读取 `bDirty` 或裸调 `flushDirty()`
 - Forward 的 pipeline format refresh 也已开始去 `IRenderTarget` 化：`ForwardViewportStage / LitPasses / UnlitPass / AuxPasses` 现改吃显式 `RenderAttachmentFormats`，把“为了拿格式而借整个 viewport render target”收紧成 pipeline 维护的最小格式 snapshot
+- Forward pipeline 自身对 viewport 执行期 attachment 读取也开始显式化：当前 viewport 的 `color/depth/resolve/extents` 已收成 `ForwardViewportResources` snapshot，viewport pass/finalize/postprocess 输入不再临时从 `viewportRT` 现查 attachment 与 extent
+- Forward viewport extent 的应用点也已开始收口：`applyViewportExtent()` 统一承接 extent 变更与 snapshot 刷新，execute/onViewportResized 不再各自分散维护 `viewportRT` 与 `_viewportResources` 的同步
 
 ## Phase 7: Deferred Graph 迁移
 

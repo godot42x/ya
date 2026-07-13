@@ -2,6 +2,7 @@
 
 #include "Core/Base.h"
 #include "ForwardViewportStage.h"
+#include "ForwardViewportResources.h"
 #include "Render/Core/RenderAttachmentFormats.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Render.h"
@@ -77,6 +78,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
 
     RenderingInfo _viewportRI{};
     RenderAttachmentFormats _viewportFormats{};
+    ForwardViewportResources _viewportResources{};
     FrameContext  _lastTickCtx{};
     RenderPipelineFrameContext _lastFrameInput{};
     ShadowSettings _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
@@ -121,6 +123,8 @@ struct ForwardRenderPipeline : public IRenderPipeline
     void               flushViewportResources();
     void               flushShadowResources();
     void               refreshViewportSnapshot();
+    void               refreshViewportResources();
+    void               applyViewportExtent(Extent2D extent);
     void               refreshViewportStageState();
     void               refreshShadowStageState();
     void               finalizeViewportPass(ICommandBuffer* cmdBuf);
