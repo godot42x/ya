@@ -13,6 +13,7 @@ void ShadowMapResources::init(IRender* render, const ShadowMapResourceDesc& desc
     YA_CORE_ASSERT(render, "ShadowMapResources requires render device");
 
     extent = desc.extent;
+    depthFormat = desc.depthFormat;
 
     renderTarget = createRenderTarget(RenderTargetCreateInfo{
         .label            = std::string(desc.renderTargetLabel),
@@ -56,6 +57,7 @@ void ShadowMapResources::destroy()
 {
     depthImage.reset();
     extent = {};
+    depthFormat = EFormat::Undefined;
     layerCount = 0;
     directionalDepthIV.reset();
     for (auto& imageView : pointCubeIVs) {

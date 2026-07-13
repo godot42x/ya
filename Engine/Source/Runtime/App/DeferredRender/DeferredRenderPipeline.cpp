@@ -438,7 +438,7 @@ void DeferredRenderPipeline::applyPendingShadowResourceRefresh()
             _shadowResources.renderTarget->flushDirty();
         }
         if (_shadowStage && _shadowResources.depthImage) {
-            _shadowStage->refreshShadowResources(_shadowResources.depthImage, _shadowDepthFormat, _shadowResources.extent);
+            _shadowStage->refreshShadowResources(_shadowResources.depthImage, _shadowResources.depthFormat, _shadowResources.extent);
         }
     }
 
@@ -507,7 +507,7 @@ void DeferredRenderPipeline::initStages()
         _shadowStage->setRenderTarget(_shadowResources.renderTarget);
         _shadowStage->init(_render);
         if (_shadowResources.depthImage) {
-            _shadowStage->refreshShadowResources(_shadowResources.depthImage, _shadowDepthFormat, _shadowResources.extent);
+            _shadowStage->refreshShadowResources(_shadowResources.depthImage, _shadowResources.depthFormat, _shadowResources.extent);
         }
     }
 

@@ -37,7 +37,7 @@ void ForwardRenderPipeline::rebuildShadowViews()
     if (_shadowStage && _shadowResources.depthImage) {
         _shadowStage->refreshShadowResources(
             _shadowResources.depthImage,
-            SHADOW_MAPPING_DEPTH_BUFFER_FORMAT,
+            _shadowResources.depthFormat,
             _shadowResources.extent);
     }
 }
@@ -164,7 +164,7 @@ void ForwardRenderPipeline::initStageResources()
     if (_shadowResources.depthImage) {
         _shadowStage->refreshShadowResources(
             _shadowResources.depthImage,
-            SHADOW_MAPPING_DEPTH_BUFFER_FORMAT,
+            _shadowResources.depthFormat,
             _shadowResources.extent);
     }
 
@@ -236,7 +236,7 @@ void ForwardRenderPipeline::refreshDirtyResources()
 {
     const bool bViewportDirty         = viewportRT && viewportRT->bDirty;
     const bool bViewportPipelineDirty = viewportRT && viewportRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
-    const bool bShadowDirty           = _shadowResources.renderTarget && _shadowResources.renderTarget->bDirty;
+    const bool bShadowDirty           = _shadowResources.isDirty();
 
     if (bViewportDirty) {
         viewportRT->flushDirty();
