@@ -244,7 +244,6 @@ void SSAOStage::init(IRender* render)
 
 void SSAOStage::destroy()
 {
-    _outputTexture = nullptr;
     _graphExecutor.reset();
     _noiseTexture.reset();
     for (auto& buffer : _frameUBO) {
@@ -365,7 +364,8 @@ void SSAOStage::execute(const RenderStageContext& ctx)
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "SSAOStage graph executor is not initialized");
     [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *ctx.cmdBuf);
-    _outputTexture = bExecuted ? _graphExecutor->getRegistry().resolveTexture(output) : nullptr;
+    (void)output;
+    (void)bExecuted;
 }
 
 RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,

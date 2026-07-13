@@ -418,7 +418,7 @@ DeferredPipelineDebugViews DeferredRenderPipeline::buildDebugViews() const
     return DeferredPipelineDebugViews{
         .gBufferResources  = _currentGBufferResources,
         .viewportResources = _currentViewportResources,
-        .ssaoTexture       = _ssaoStage ? const_cast<RenderImage*>(_ssaoStage->getOutputTexture()) : nullptr,
+        .ssaoTexture       = const_cast<RenderImage*>(_currentSSAOOutput),
     };
 }
 
@@ -626,6 +626,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     _getResourceResolveSystem     = desc.getResourceResolveSystem;
     _bShadowSettingsChangePending = false;
     _pendingResourceRefreshMask   = 0;
+    _currentSSAOOutput            = nullptr;
     _viewportTextureCompat.reset();
     if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
@@ -678,7 +679,7 @@ void DeferredRenderPipeline::initStages()
         .environmentLightingDSL = _environmentLightingDSL,
         .getSceneEnvironmentLightingDescriptorSet = _getSceneEnvironmentLightingDescriptorSet,
     });
-    _lightStage->setSSAOTexture(_ssaoStage->getOutputTexture());
+    _lightStage->setSSAOTexture(_currentSSAOOutput);
     _lightStage->init(_render);
     syncShadowSettings();
 
@@ -699,6 +700,7 @@ void DeferredRenderPipeline::shutdown()
     _cachedAlbedoSpecImageViewHandle = nullptr;
     _pendingViewportExtent           = {};
     _pendingResourceRefreshMask      = 0;
+    _currentSSAOOutput               = nullptr;
     _currentGBufferResources         = {};
     _currentViewportResources        = {};
     _currentEnvironmentLightingTextures = {};
@@ -939,7 +941,7 @@ void DeferredRenderPipeline::refreshGBufferStageState()
 void DeferredRenderPipeline::refreshViewportStageState()
 {
     if (_lightStage) {
-        _lightStage->setSSAOTexture(_ssaoStage ? _ssaoStage->getOutputTexture() : nullptr);
+        _lightStage->setSSAOTexture(_currentSSAOOutput);
         _lightStage->refreshPipelineFormats(_currentViewportResources.formats);
     }
 
@@ -964,7 +966,7 @@ void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&
     (void)frame;
 
     if (_lightStage) {
-        _lightStage->setSSAOTexture(_bEnableSSAO && _ssaoStage ? _ssaoStage->getOutputTexture() : nullptr);
+        _lightStage->setSSAOTexture(_bEnableSSAO ? _currentSSAOOutput : nullptr);
     }
 
     if (_ssaoStage) {
@@ -1299,9 +1301,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");
     RGCompiledGraph compiled{};
     if (!_graphExecutor->prepare(graph, compiled)) {
-        if (_ssaoStage) {
-            _ssaoStage->setOutputTexture(nullptr);
-        }
+        _currentSSAOOutput = nullptr;
         if (_lightStage) {
             _lightStage->setSSAOTexture(nullptr);
         }
@@ -1311,18 +1311,13 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     }
 
     if (ssao.has_value()) {
-        const RenderImage* ssaoOutput = _graphExecutor->getRegistry().resolveTexture(*ssao);
-        if (_ssaoStage) {
-            _ssaoStage->setOutputTexture(ssaoOutput);
-        }
+        _currentSSAOOutput = _graphExecutor->getRegistry().resolveTexture(*ssao);
         if (_lightStage) {
-            _lightStage->setSSAOTexture(ssaoOutput);
+            _lightStage->setSSAOTexture(_currentSSAOOutput);
         }
     }
     else {
-        if (_ssaoStage) {
-            _ssaoStage->setOutputTexture(nullptr);
-        }
+        _currentSSAOOutput = nullptr;
         if (_lightStage) {
             _lightStage->setSSAOTexture(nullptr);
         }
@@ -1338,6 +1333,10 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
 
     [[maybe_unused]] const bool bExecuted = _graphExecutor->executeCompiled(graph, compiled, *frame.cmdBuf);
     if (!bExecuted) {
+        _currentSSAOOutput = nullptr;
+        if (_lightStage) {
+            _lightStage->setSSAOTexture(nullptr);
+        }
         _postProcessStage.clearPreparedResources();
         viewportTexture = inputTexture;
         return;

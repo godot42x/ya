@@ -132,6 +132,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     ImageViewHandle    _cachedAlbedoSpecImageViewHandle = nullptr;
     Extent2D           _pendingViewportExtent{};
     uint32_t           _pendingResourceRefreshMask = 0;
+    const RenderImage* _currentSSAOOutput          = nullptr;
 
     // ── Frame state ───────────────────────────────────────────────────
     DeferredGBufferResources   _currentGBufferResources{};
@@ -177,7 +178,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
 
     IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
-    RenderImage* getSSAOTexture() const { return _ssaoStage ? const_cast<RenderImage*>(_ssaoStage->getOutputTexture()) : nullptr; }
+    RenderImage* getSSAOTexture() const { return const_cast<RenderImage*>(_currentSSAOOutput); }
     const DeferredGBufferResources& getCurrentGBufferResources() const { return _currentGBufferResources; }
     const DeferredViewportResources& getCurrentViewportResources() const { return _currentViewportResources; }
     DeferredPipelineDebugViews buildDebugViews() const;

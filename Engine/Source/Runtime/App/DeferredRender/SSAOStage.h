@@ -27,8 +27,6 @@ struct SSAOStage : public IRenderStage
 
     IRender*                 _render          = nullptr;
     DeferredGBufferResources _gBufferResources{};
-    const RenderImage*       _outputTexture   = nullptr;
-
     stdptr<IGraphicsPipeline>    _pipeline;
     stdptr<IPipelineLayout>      _pipelineLayout;
     stdptr<IDescriptorSetLayout> _frameDSL;
@@ -67,8 +65,6 @@ struct SSAOStage : public IRenderStage
     void renderSettingsGUI() override;
     void renderTechnicalGUI() override;
 
-    [[nodiscard]] const RenderImage* getOutputTexture() const { return _outputTexture; }
-    void setOutputTexture(const RenderImage* outputTexture) { _outputTexture = outputTexture; }
     RGTextureHandle appendGraphPass(RenderGraph& graph,
                                     const RenderStageContext& ctx,
                                     RGTextureHandle albedo,
