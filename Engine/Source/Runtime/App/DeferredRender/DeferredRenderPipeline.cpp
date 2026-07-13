@@ -841,33 +841,71 @@ void DeferredRenderPipeline::executeGBufferPass(const RenderPipelineFrameContext
     YA_PERF_SCOPE(perf::sample::deferredGBuffer(), perf::metric::cpuTimeMs(), perf::domain::render());
     _gBufferStage->prepare(stageCtx);
 
-    RenderingInfo gBufferRI{
-        .label            = "GBuffer Pass",
-        .renderArea       = Rect2D{.pos = {0, 0}, .extent = _gBufferRT->getExtent().toVec2()},
-        .layerCount       = 1,
-        .colorClearValues = {
-            ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
-            ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
-            ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
-            ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
-        },
-        .depthClearValue = ClearValue(1.0f, 0),
-        .renderTarget    = _gBufferRT.get(),
-    };
-    frame.cmdBuf->beginRendering(gBufferRI);
-
-    float gbVpY = 0.0f;
-    float gbVpH = static_cast<float>(vpH);
-    if (_bReverseViewportY) {
-        gbVpY = static_cast<float>(vpH);
-        gbVpH = -gbVpH;
+    auto* gbufferDepth = _currentGBufferResources.depth;
+    if (!gbufferDepth) {
+        return;
     }
-    frame.cmdBuf->setViewport(0.0f, gbVpY, static_cast<float>(vpW), gbVpH);
-    frame.cmdBuf->setScissor(0, 0, vpW, vpH);
+    bool bHasAllColorAttachments = std::ranges::all_of(_currentGBufferResources.color, [](Texture* texture) {
+        return texture != nullptr;
+    });
+    if (!bHasAllColorAttachments) {
+        return;
+    }
 
-    _gBufferStage->execute(stageCtx);
+    RenderGraph graph;
+    std::array<RGTextureHandle, 4> gbufferColors{};
+    for (uint32_t attachmentIndex = 0; attachmentIndex < gbufferColors.size(); ++attachmentIndex) {
+        gbufferColors[attachmentIndex] = graph.importTexture(
+            makeDeferredImportedTextureDesc(
+                *_currentGBufferResources.color[attachmentIndex],
+                std::format("DeferredGBuffer.Color{}", attachmentIndex),
+                EImageLayout::ShaderReadOnlyOptimal));
+    }
+    const auto depth = graph.importTexture(
+        makeDeferredImportedTextureDesc(*gbufferDepth, "DeferredGBuffer.Depth", EImageLayout::ShaderReadOnlyOptimal));
 
-    frame.cmdBuf->endRendering(gBufferRI);
+    [[maybe_unused]] const auto gbufferPass = graph.addPass(
+        "Deferred GBuffer",
+        [&](RGPassBuilder& passBuilder) {
+            for (const auto handle : gbufferColors) {
+                passBuilder.useColorAttachment(handle);
+            }
+            passBuilder.useDepthAttachment(depth);
+        },
+        [&](RGRenderContext& rgCtx) {
+            rgCtx.beginRasterRendering({
+                .renderArea = Rect2D{.pos = {0, 0}, .extent = _gBufferRT->getExtent().toVec2()},
+                .layerCount = 1,
+                .colors = {
+                    {.color = gbufferColors[0], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
+                    {.color = gbufferColors[1], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
+                    {.color = gbufferColors[2], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
+                    {.color = gbufferColors[3], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
+                },
+                .depth = RGRenderContext::DepthRenderingDesc{
+                    .depth       = depth,
+                    .clearValue  = ClearValue(1.0f, 0),
+                    .loadOp      = EAttachmentLoadOp::Clear,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                },
+            });
+
+            float gbVpY = 0.0f;
+            float gbVpH = static_cast<float>(vpH);
+            if (_bReverseViewportY) {
+                gbVpY = static_cast<float>(vpH);
+                gbVpH = -gbVpH;
+            }
+            rgCtx.getCommandBuffer().setViewport(0.0f, gbVpY, static_cast<float>(vpW), gbVpH);
+            rgCtx.getCommandBuffer().setScissor(0, 0, vpW, vpH);
+
+            _gBufferStage->execute(stageCtx);
+            rgCtx.endRendering();
+        });
+
+    RenderGraphExecutor executor(*_render->getResourceFactory());
+    [[maybe_unused]] const bool bExecuted = executor.execute(graph, *frame.cmdBuf);
 }
 
 void DeferredRenderPipeline::executeDepthCopyPass(ICommandBuffer* cmdBuf)
@@ -907,14 +945,15 @@ void DeferredRenderPipeline::executeViewportPass(const RenderPipelineFrameContex
         },
         [&](RGRenderContext& rgCtx) {
             rgCtx.beginRasterRendering({
-                .color = {
+                .renderArea = {.pos = {0, 0}, .extent = _viewportRT->getExtent().toVec2()},
+                .layerCount = 1,
+                .colors = {{
                     .color       = color,
-                    .renderArea  = {.pos = {0, 0}, .extent = _viewportRT->getExtent().toVec2()},
                     .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
                     .loadOp      = EAttachmentLoadOp::Clear,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-                },
+                }},
                 .depth = RGRenderContext::DepthRenderingDesc{
                     .depth       = depth,
                     .loadOp      = EAttachmentLoadOp::Load,

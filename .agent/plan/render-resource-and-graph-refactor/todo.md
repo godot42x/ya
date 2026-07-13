@@ -241,6 +241,7 @@
 - Deferred pipeline 自身对 viewport/depth 的即时访问也开始显式化：当前 frame 的 GBuffer / Viewport attachment 已收成 `DeferredGBufferResources` 与 `DeferredViewportResources` 快照，depth copy、viewport postprocess 输入不再临时扒开 render target/framebuffer 读取资源
 - RenderGraph 已补最小 texture transfer 语义与 `RGRenderContext::copyTexture()` helper；Deferred depth copy 现已切成 graph-backed copy pass 壳，开始把“手写 barrier + copyImage”路径迁回 graph executor 管理
 - Deferred viewport raster 外壳已切入 graph：viewport color/depth attachment、light pass、overlay pass 与 viewport overlay callback 现在由单个 graph-backed raster pass 包裹，postprocess 继续作为后续消费方读取 graph pass 输出
+- RenderGraph 已补最小 MRT raster helper，`RGRenderContext::beginRasterRendering()` 现在可绑定多个 color attachment；Deferred GBuffer 外壳已迁到 graph-backed raster pass，`GBufferStage` 保持只负责 draw 录制
 
 ## Phase 7: Deferred Graph 迁移
 

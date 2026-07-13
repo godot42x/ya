@@ -194,16 +194,43 @@ IBuffer* RGRenderContext::resolveBuffer(RGBufferHandle handle) const
 void RGRenderContext::beginColorRendering(const ColorRenderingDesc& desc) const
 {
     beginRasterRendering(RasterRenderingDesc{
-        .color = desc,
+        .renderArea = desc.renderArea,
+        .layerCount = desc.layerCount,
+        .colors = {{
+            .color       = desc.color,
+            .clearValue  = desc.clearValue,
+            .loadOp      = desc.loadOp,
+            .storeOp     = desc.storeOp,
+            .finalLayout = desc.finalLayout,
+        }},
     });
 }
 
 void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) const
 {
-    const auto* color = resolveTexture(desc.color.color);
-    YA_CORE_ASSERT(color != nullptr, "RGRenderContext pass {} failed to resolve color target {}", _pass.name, desc.color.color.index);
-    YA_CORE_ASSERT(color->getImage() != nullptr && color->getImageView() != nullptr,
-                   "RGRenderContext pass {} color target {} is missing image/view", _pass.name, desc.color.color.index);
+    YA_CORE_ASSERT(!desc.colors.empty(), "RGRenderContext pass {} requires at least one color attachment", _pass.name);
+
+    std::vector<RenderingInfo::ImageSpec> colorAttachments;
+    std::vector<ClearValue>               colorClearValues;
+    colorAttachments.reserve(desc.colors.size());
+    colorClearValues.reserve(desc.colors.size());
+
+    for (const auto& colorDesc : desc.colors) {
+        const auto* color = resolveTexture(colorDesc.color);
+        YA_CORE_ASSERT(color != nullptr, "RGRenderContext pass {} failed to resolve color target {}", _pass.name, colorDesc.color.index);
+        YA_CORE_ASSERT(color->getImage() != nullptr && color->getImageView() != nullptr,
+                       "RGRenderContext pass {} color target {} is missing image/view", _pass.name, colorDesc.color.index);
+
+        colorAttachments.push_back(RenderingInfo::ImageSpec{
+            .image         = color->getImage(),
+            .imageView     = color->getImageView(),
+            .loadOp        = colorDesc.loadOp,
+            .storeOp       = colorDesc.storeOp,
+            .initialLayout = EImageLayout::ColorAttachmentOptimal,
+            .finalLayout   = colorDesc.finalLayout,
+        });
+        colorClearValues.push_back(colorDesc.clearValue);
+    }
 
     _activeDepthAttachment.reset();
     if (desc.depth.has_value()) {
@@ -224,18 +251,11 @@ void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) cons
 
     _activeRenderingInfo = RenderingInfo{
         .label = _pass.name,
-        .renderArea = desc.color.renderArea,
-        .layerCount = desc.color.layerCount,
-        .colorClearValues = {desc.color.clearValue},
+        .renderArea = desc.renderArea,
+        .layerCount = desc.layerCount,
+        .colorClearValues = std::move(colorClearValues),
         .depthClearValue = desc.depth.has_value() ? desc.depth->clearValue : ClearValue{},
-        .colorAttachments = {{
-            .image = color->getImage(),
-            .imageView = color->getImageView(),
-            .loadOp = desc.color.loadOp,
-            .storeOp = desc.color.storeOp,
-            .initialLayout = EImageLayout::ColorAttachmentOptimal,
-            .finalLayout = desc.color.finalLayout,
-        }},
+        .colorAttachments = std::move(colorAttachments),
         .depthAttachment = _activeDepthAttachment ? &*_activeDepthAttachment : nullptr,
     };
     _cmdBuf.beginRendering(*_activeRenderingInfo);

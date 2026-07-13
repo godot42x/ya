@@ -206,6 +206,15 @@ class RGPassContext
 class RGRenderContext
 {
   public:
+    struct ColorAttachmentRenderingDesc
+    {
+        RGTextureHandle          color;
+        ClearValue               clearValue = ClearValue::Black();
+        EAttachmentLoadOp::T     loadOp     = EAttachmentLoadOp::Clear;
+        EAttachmentStoreOp::T    storeOp    = EAttachmentStoreOp::Store;
+        EImageLayout::T          finalLayout = EImageLayout::ColorAttachmentOptimal;
+    };
+
     struct ColorRenderingDesc
     {
         RGTextureHandle          color;
@@ -228,7 +237,9 @@ class RGRenderContext
 
     struct RasterRenderingDesc
     {
-        ColorRenderingDesc              color{};
+        Rect2D                               renderArea{};
+        uint32_t                             layerCount = 1;
+        std::vector<ColorAttachmentRenderingDesc> colors{};
         std::optional<DepthRenderingDesc> depth{};
     };
 
