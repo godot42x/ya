@@ -253,6 +253,7 @@
 - 兼容期 attachment 读取也开始从 framebuffer owner 下沉到 render-target facade：Deferred/Forward/shadow 公共路径现改用 `IRenderTarget::getCurrent*Texture()` 访问当前 attachment，减少高层对 `getCurFrameBuffer()` 的直接依赖，为后续收敛成 `RenderAttachmentSet` 先铺一层兼容接口
 - Forward dirty refresh 也已开始对齐 Deferred 的收口方向：`ForwardRenderPipeline::refreshDirtyResources()` 不再每帧无条件 `flushDirty()` viewport/shadow render target，而是按真实 dirty 状态触发刷新
 - shadow 资源 facade 继续补齐显式元数据与最小状态查询：`ShadowMapResources` 现缓存 `depthFormat` 并提供 `isDirty()/hasAttachmentDirty()`，Forward/Deferred 对 shadow technique refresh 和 dirty 判定已减少直接摸内部 render-target 状态
+- Deferred attachment dirty repair 已开始收口成显式 helper 边界：`flushGBufferResources/flushViewportResources`、snapshot refresh、stage-state refresh 现分离成独立步骤，viewport resize 与 attachment dirty fallback 共享同一套刷新入口，后续删除 dirty repair path 时不必再拆散现有控制流
 
 ## Phase 7: Deferred Graph 迁移
 

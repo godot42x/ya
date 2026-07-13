@@ -183,6 +183,12 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               refreshDirtyResources();
     void               refreshViewportSizedStageResources();
     void               invalidateGBufferDependentViews();
+    void               flushGBufferResources();
+    void               flushViewportResources();
+    void               refreshGBufferSnapshot();
+    void               refreshViewportSnapshot();
+    void               refreshGBufferStageState();
+    void               refreshViewportStageState();
     void               refreshCurrentFrameResources();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);
     void               updateStageFrameInputs();

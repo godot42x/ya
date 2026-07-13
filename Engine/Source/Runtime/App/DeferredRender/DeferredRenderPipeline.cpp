@@ -397,12 +397,8 @@ void DeferredRenderPipeline::applyPendingViewportResize()
     if (_viewportRT) {
         _viewportRT->setExtent(_pendingViewportExtent);
     }
-    if (_gBufferRT) {
-        _gBufferRT->flushDirty();
-    }
-    if (_viewportRT) {
-        _viewportRT->flushDirty();
-    }
+    flushGBufferResources();
+    flushViewportResources();
 
     _ssaoTexture = createSSAOImage(_render, _pendingViewportExtent);
     refreshCurrentFrameResources();
@@ -712,49 +708,22 @@ void DeferredRenderPipeline::refreshDirtyResources()
     }
 
     if (bGBufferPipelineDirty) {
-        _gBufferRT->flushDirty();
-        invalidateGBufferDependentViews();
-        if (_gBufferStage) {
-            _currentGBufferFormats = buildDeferredAttachmentFormats(_gBufferRT.get());
-            _gBufferStage->refreshPipelineFormats(_currentGBufferFormats);
-        }
+        flushGBufferResources();
+        refreshGBufferSnapshot();
+        refreshGBufferStageState();
     }
 
     if (bViewportPipelineDirty) {
-        _viewportRT->flushDirty();
-        _currentViewportFormats = buildDeferredAttachmentFormats(_viewportRT.get());
-        if (_lightStage) {
-            _lightStage->refreshPipelineFormats(_currentViewportFormats);
-        }
-        if (_overlayStage) {
-            _overlayStage->refreshPipelineFormats(_currentViewportFormats);
-        }
+        flushViewportResources();
+        refreshViewportSnapshot();
+        refreshViewportStageState();
     }
 }
 
 void DeferredRenderPipeline::refreshViewportSizedStageResources()
 {
-    invalidateGBufferDependentViews();
-
-    if (_ssaoStage) {
-        _ssaoStage->setup(_currentGBufferResources, _ssaoTexture.get());
-        _ssaoStage->refreshPipelineFormat();
-    }
-
-    if (_gBufferStage) {
-        _gBufferStage->refreshPipelineFormats(_currentGBufferFormats);
-    }
-
-    if (_lightStage) {
-        _lightStage->setup(_gBufferStage.get(), _currentGBufferResources);
-        _lightStage->setSSAOTexture(_ssaoTexture.get());
-        _lightStage->refreshPipelineFormats(_currentViewportFormats);
-    }
-
-    if (_overlayStage) {
-        _overlayStage->refreshPipelineFormats(_currentViewportFormats);
-    }
-
+    refreshGBufferStageState();
+    refreshViewportStageState();
 }
 
 void DeferredRenderPipeline::invalidateGBufferDependentViews()
@@ -771,12 +740,66 @@ void DeferredRenderPipeline::invalidateGBufferDependentViews()
     }
 }
 
+void DeferredRenderPipeline::flushGBufferResources()
+{
+    if (_gBufferRT) {
+        _gBufferRT->flushDirty();
+    }
+}
+
+void DeferredRenderPipeline::flushViewportResources()
+{
+    if (_viewportRT) {
+        _viewportRT->flushDirty();
+    }
+}
+
+void DeferredRenderPipeline::refreshGBufferSnapshot()
+{
+    _currentGBufferResources = buildDeferredGBufferResources(_gBufferRT.get());
+    _currentGBufferFormats   = buildDeferredAttachmentFormats(_gBufferRT.get());
+}
+
+void DeferredRenderPipeline::refreshViewportSnapshot()
+{
+    _currentViewportResources = buildDeferredViewportResources(_viewportRT.get());
+    _currentViewportFormats   = buildDeferredAttachmentFormats(_viewportRT.get());
+}
+
+void DeferredRenderPipeline::refreshGBufferStageState()
+{
+    invalidateGBufferDependentViews();
+
+    if (_ssaoStage) {
+        _ssaoStage->setup(_currentGBufferResources, _ssaoTexture.get());
+        _ssaoStage->refreshPipelineFormat();
+    }
+
+    if (_gBufferStage) {
+        _gBufferStage->refreshPipelineFormats(_currentGBufferFormats);
+    }
+
+    if (_lightStage) {
+        _lightStage->setup(_gBufferStage.get(), _currentGBufferResources);
+    }
+}
+
+void DeferredRenderPipeline::refreshViewportStageState()
+{
+    if (_lightStage) {
+        _lightStage->setSSAOTexture(_ssaoTexture.get());
+        _lightStage->refreshPipelineFormats(_currentViewportFormats);
+    }
+
+    if (_overlayStage) {
+        _overlayStage->refreshPipelineFormats(_currentViewportFormats);
+    }
+}
+
 void DeferredRenderPipeline::refreshCurrentFrameResources()
 {
-    _currentGBufferResources  = buildDeferredGBufferResources(_gBufferRT.get());
-    _currentViewportResources = buildDeferredViewportResources(_viewportRT.get());
-    _currentGBufferFormats    = buildDeferredAttachmentFormats(_gBufferRT.get());
-    _currentViewportFormats   = buildDeferredAttachmentFormats(_viewportRT.get());
+    refreshGBufferSnapshot();
+    refreshViewportSnapshot();
 }
 
 void DeferredRenderPipeline::executeSSAOPass(const RenderStageContext& stageCtx)
