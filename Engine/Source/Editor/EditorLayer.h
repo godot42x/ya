@@ -22,7 +22,6 @@ namespace ya
 {
 
 struct App;
-struct Texture;
 struct IImageView;
 struct IImage;
 
@@ -33,7 +32,7 @@ struct EditorViewportContext
     bool bForwardPipeline = false;
 
     // Viewport output
-    Texture* viewportTexture = nullptr;
+    IImageView* viewportImageView = nullptr;
 
     // Postprocessing
     bool     bPostprocessingEnabled   = false;

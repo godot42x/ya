@@ -606,9 +606,9 @@ void EditorLayer::viewportWindow()
         Sampler* sampler         = _viewPortSamplerType == Linear
                                      ? TextureLibrary::get().getLinearSampler()
                                      : TextureLibrary::get().getNearestSampler();
-        auto*    viewportTexture = _viewportCtx.viewportTexture;
-        if (viewportTexture && viewportTexture->getImageView()) {
-            if (ImGuiHelper::Image(viewportTexture->getImageView(),
+        auto*    viewportImageView = _viewportCtx.viewportImageView;
+        if (viewportImageView) {
+            if (ImGuiHelper::Image(viewportImageView,
                                    sampler,
                                    "Viewport Texture ",
                                    viewportPanelSize,

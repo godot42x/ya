@@ -46,23 +46,6 @@ ForwardViewportResources buildForwardViewportResources(const IRenderTarget* rend
     return resources;
 }
 
-Texture* wrapForwardCompatRenderImage(stdptr<Texture>& compat, const RenderImage* image, std::string_view label)
-{
-    if (!image || !image->isValid()) {
-        compat.reset();
-        return nullptr;
-    }
-
-    const bool bNeedsWrapRefresh =
-        !compat ||
-        compat->getImage() != image->getImage() ||
-        compat->getImageView() != image->getImageView();
-    if (bNeedsWrapRefresh) {
-        compat = Texture::wrap(image->getImageShared(), image->getImageViewShared(), std::string(label));
-    }
-    return compat.get();
-}
-
 } // namespace
 
 void ForwardRenderPipeline::appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const
@@ -485,17 +468,15 @@ void ForwardRenderPipeline::finalizeViewportPass(ICommandBuffer* cmdBuf)
     cmdBuf->endRendering(_viewportRI);
 
     auto* inputTexture = bMSAA ? _viewportResources.resolve : _viewportResources.color;
+    viewportTexture = inputTexture;
 
     if (RenderImage* postprocessOutput = _postProcessStage.execute(
             cmdBuf, inputTexture, _lastFrameInput.viewportRect.extent, &_lastTickCtx))
     {
         _currentPostprocessOutput = postprocessOutput;
-        refreshViewportTextureCompat(postprocessOutput, "ForwardViewport_PostprocessOutput");
     }
     else {
         _currentPostprocessOutput = nullptr;
-        _viewportTextureCompat.reset();
-        viewportTexture = inputTexture;
     }
 
     YA_CORE_ASSERT(viewportTexture, "Failed to get viewport texture for postprocessing");
@@ -510,13 +491,7 @@ void ForwardRenderPipeline::shutdown()
     getSceneSkyboxDescriptorSet = {};
     getSceneEnvironmentLightingDescriptorSet = {};
     _currentPostprocessOutput = nullptr;
-    _viewportTextureCompat.reset();
     _deleter.clear();
-}
-
-void ForwardRenderPipeline::refreshViewportTextureCompat(const RenderImage* image, std::string_view label)
-{
-    viewportTexture = wrapForwardCompatRenderImage(_viewportTextureCompat, image, label);
 }
 
 void ForwardRenderPipeline::renderSettingsGUI()

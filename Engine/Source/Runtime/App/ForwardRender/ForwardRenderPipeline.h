@@ -74,7 +74,6 @@ struct ForwardRenderPipeline : public IRenderPipeline
     PostProcessingStage          _postProcessStage;
 
     bool     bMSAA              = false;
-    stdptr<Texture> _viewportTextureCompat = nullptr;
     const RenderImage* _currentPostprocessOutput = nullptr;
     Texture* viewportTexture    = nullptr;
 
@@ -125,7 +124,6 @@ struct ForwardRenderPipeline : public IRenderPipeline
     void               initPostProcessResources(const InitDesc& desc);
     void               initShadowResources();
     void               initStageResources();
-    void               refreshViewportTextureCompat(const RenderImage* image, std::string_view label);
     [[nodiscard]] bool shouldSkipTick(const RenderPipelineFrameContext& frame) const;
     void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
     void               refreshDirtyResources();

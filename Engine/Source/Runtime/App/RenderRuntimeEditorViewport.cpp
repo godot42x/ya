@@ -86,7 +86,9 @@ void RenderRuntime::updateEditorViewportContext(EditorLayer* editorLayer)
     EditorViewportContext ctx;
     ctx.bForwardPipeline         = (_renderPipeline == ERenderPipeline::Forward);
     ctx.bPostprocessingEnabled   = debugOutputs.bPostprocessingEnabled;
-    ctx.viewportTexture          = getActiveViewportTexture();
+    ctx.viewportImageView        = debugOutputs.postprocessOutputImage && debugOutputs.postprocessOutputImage->getImageView()
+        ? debugOutputs.postprocessOutputImage->getImageView()
+        : (getActiveViewportTexture() ? getActiveViewportTexture()->getImageView() : nullptr);
     ctx.debugSpec.categories     = {
         {.id = "shadow", .label = "Shadow"},
         {.id = "skybox", .label = "Skybox"},

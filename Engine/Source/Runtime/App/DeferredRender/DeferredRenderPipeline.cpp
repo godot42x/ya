@@ -160,23 +160,6 @@ RGImportedTextureDesc makeDeferredImportedTextureDesc(const RenderImage& image, 
     };
 }
 
-Texture* wrapDeferredCompatRenderImage(stdptr<Texture>& compat, const RenderImage* image, std::string_view label)
-{
-    if (!image || !image->isValid()) {
-        compat.reset();
-        return nullptr;
-    }
-
-    const bool bNeedsWrapRefresh =
-        !compat ||
-        compat->getImage() != image->getImage() ||
-        compat->getImageView() != image->getImageView();
-    if (bNeedsWrapRefresh) {
-        compat = Texture::wrap(image->getImageShared(), image->getImageViewShared(), std::string(label));
-    }
-    return compat.get();
-}
-
 void drawPerfLeaf(const char* label, float value, float parentValue = 0.0f)
 {
     constexpr ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Bullet;
@@ -628,7 +611,6 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     _pendingResourceRefreshMask   = 0;
     _currentSSAOOutput            = nullptr;
     _currentPostprocessOutput     = nullptr;
-    _viewportTextureCompat.reset();
     if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
     }
@@ -707,7 +689,6 @@ void DeferredRenderPipeline::shutdown()
     _currentViewportResources        = {};
     _currentEnvironmentLightingTextures = {};
     _graphExecutor.reset();
-    _viewportTextureCompat.reset();
 
     if (_overlayStage) {
         _overlayStage->destroy();
@@ -952,11 +933,6 @@ void DeferredRenderPipeline::refreshViewportStageState()
     }
 }
 
-void DeferredRenderPipeline::refreshViewportTextureCompat(const RenderImage* image, std::string_view label)
-{
-    viewportTexture = wrapDeferredCompatRenderImage(_viewportTextureCompat, image, label);
-}
-
 void DeferredRenderPipeline::refreshCurrentFrameResources()
 {
     refreshGBufferSnapshot();
@@ -1119,6 +1095,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         viewportTexture = nullptr;
         return;
     }
+    viewportTexture = viewportColor;
 
     const auto  color = graph.importTexture(makeDeferredImportedTextureDesc(*viewportColor, "DeferredViewport.Color", EImageLayout::ShaderReadOnlyOptimal));
     const auto  viewportDepthHandle = graph.importTexture(makeDeferredImportedTextureDesc(*viewportDepth, "DeferredViewport.Depth", EImageLayout::ShaderReadOnlyOptimal));
@@ -1352,13 +1329,11 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     if (postprocessOutput.isValid()) {
         if (RenderImage* outputImage = const_cast<RenderImage*>(_graphExecutor->getRegistry().resolveTexture(postprocessOutput))) {
             _currentPostprocessOutput = outputImage;
-            refreshViewportTextureCompat(outputImage, "DeferredViewport_PostprocessOutput");
             return;
         }
     }
 
     _currentPostprocessOutput = nullptr;
-    _viewportTextureCompat.reset();
     viewportTexture = inputTexture;
 }
 
