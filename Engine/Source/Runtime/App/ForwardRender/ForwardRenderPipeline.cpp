@@ -239,18 +239,44 @@ void ForwardRenderPipeline::refreshDirtyResources()
     const bool bShadowDirty           = _shadowResources.isDirty();
 
     if (bViewportDirty) {
-        viewportRT->flushDirty();
+        flushViewportResources();
     }
     if (bShadowDirty) {
-        _shadowResources.renderTarget->flushDirty();
+        flushShadowResources();
     }
 
     if (bViewportPipelineDirty && _viewportStage) {
-        _viewportStage->refreshPipelineFormats(viewportRT.get());
+        refreshViewportStageState();
     }
     if (bShadowDirty) {
-        rebuildShadowViews();
+        refreshShadowStageState();
     }
+}
+
+void ForwardRenderPipeline::flushViewportResources()
+{
+    if (viewportRT) {
+        viewportRT->flushDirty();
+    }
+}
+
+void ForwardRenderPipeline::flushShadowResources()
+{
+    if (_shadowResources.renderTarget) {
+        _shadowResources.renderTarget->flushDirty();
+    }
+}
+
+void ForwardRenderPipeline::refreshViewportStageState()
+{
+    if (_viewportStage) {
+        _viewportStage->refreshPipelineFormats(viewportRT.get());
+    }
+}
+
+void ForwardRenderPipeline::refreshShadowStageState()
+{
+    rebuildShadowViews();
 }
 
 void ForwardRenderPipeline::syncShadowSettings()
