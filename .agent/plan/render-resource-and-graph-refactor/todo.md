@@ -235,6 +235,7 @@
 - viewport overlay 录制边界已向 pipeline 内回收：`RenderRuntime` 不再在 `renderWorldFrame()` 里直接插入 `Render2D/UI`，而是通过 `RenderPipelineFrameContext::recordViewportOverlays` 回调交给 pipeline 在 viewport rendering 结束前调用；overlay ownership 现已从 runtime 外层推进到 pipeline 内，便于后续继续收 deferred viewport graph 边界
 - Forward/Deferred viewport pass 现已在各自 `tick()` 内闭合完成，`RenderRuntime::renderWorldFrame()` 不再负责额外收尾；`IRenderPipeline` 上的 `hasOpenViewportPass()/endViewportPass()` 旧契约已删除，viewport pass 生命周期正式收口到 pipeline 内部
 - Deferred viewport-sized intermediate resources 已开始按单一 frame-boundary 批次刷新：viewport resize 现在会一起完成 `GBuffer RT / Viewport RT / SSAO image / postprocess` 替换和 stage 重绑，不再额外挂一条 SSAO resize 队列；这一步先把 ownership 从分散 pending path 收成统一更新点，后续更容易替换成 graph registry
+- Deferred `refreshDirtyResources()` 已从每帧无条件 `flushDirty()` 收紧为 attachment-spec 变化时的 fallback 修复；resize 主路径不再依赖 runtime tick 内的隐式自修复，后续可以继续朝“显式 replacement、删除 dirty repair path”推进
 
 ## Phase 7: Deferred Graph 迁移
 

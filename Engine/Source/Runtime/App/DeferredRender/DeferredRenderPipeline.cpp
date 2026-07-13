@@ -616,27 +616,22 @@ void DeferredRenderPipeline::updateStageFrameInputs()
 void DeferredRenderPipeline::refreshDirtyResources()
 {
     const bool bViewportPipelineDirty = _viewportRT && _viewportRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
-    const bool bGBufferDirty          = _gBufferRT && _gBufferRT->bDirty;
     const bool bGBufferPipelineDirty  = _gBufferRT && _gBufferRT->hasDirtyReason(ERenderTargetDirtyReason::Attachments);
-    _viewportRT->flushDirty();
-    _gBufferRT->flushDirty();
 
-    if (bGBufferDirty) {
-        _cachedAlbedoSpecImageViewHandle = nullptr;
-        _debugAlbedoRGBView.reset();
-        _debugSpecularAlphaView.reset();
-        if (_ssaoStage) {
-            _ssaoStage->invalidateInputDescriptors();
-        }
-        if (_lightStage) {
-            _lightStage->invalidateGBufferDescriptors();
-        }
-        if (bGBufferPipelineDirty && _gBufferStage) {
+    if (!bViewportPipelineDirty && !bGBufferPipelineDirty) {
+        return;
+    }
+
+    if (bGBufferPipelineDirty) {
+        _gBufferRT->flushDirty();
+        invalidateGBufferDependentViews();
+        if (_gBufferStage) {
             _gBufferStage->refreshPipelineFormats(_gBufferRT.get());
         }
     }
 
     if (bViewportPipelineDirty) {
+        _viewportRT->flushDirty();
         if (_lightStage) {
             _lightStage->refreshPipelineFormats(_viewportRT.get());
         }
