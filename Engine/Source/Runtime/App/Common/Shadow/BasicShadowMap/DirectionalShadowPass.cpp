@@ -143,6 +143,7 @@ void DirectionalShadowPass::destroy()
         flight.skinningDS = nullptr;
     }
     _dsp.reset();
+    _depthImage.reset();
     _depthTexture.reset();
     _depthView.reset();
     _staticVariant  = {};
@@ -199,11 +200,11 @@ void DirectionalShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFra
 {
     YA_PROFILE_FUNCTION();
     YA_PERF_SCOPE(perf::sample::shadowDirectional(), perf::metric::cpuTimeMs(), perf::domain::render());
-    if (!_depthTexture || !payload.frameData) return;
+    if (!_depthImage || !_depthView || !payload.frameData) return;
 
     RenderingInfo::ImageSpec depthSpec{
-        .image         = _depthTexture ? _depthTexture->getImage() : nullptr,
-        .imageView     = _depthTexture ? _depthTexture->getImageView() : nullptr,
+        .image         = _depthImage.get(),
+        .imageView     = _depthView.get(),
         .loadOp        = EAttachmentLoadOp::Clear,
         .storeOp       = EAttachmentStoreOp::Store,
         .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
@@ -316,10 +317,11 @@ void DirectionalShadowPass::renderGUI()
     // Directional shadow has no runtime-tweakable params currently
 }
 
-void DirectionalShadowPass::setDepthTexture(stdptr<Texture> texture, stdptr<IImageView> view)
+void DirectionalShadowPass::setDepthAttachment(stdptr<IImage> image, stdptr<IImageView> view, stdptr<Texture> textureCompat)
 {
-    _depthTexture = std::move(texture);
+    _depthImage   = std::move(image);
     _depthView    = std::move(view);
+    _depthTexture = std::move(textureCompat);
 }
 
 } // namespace ya

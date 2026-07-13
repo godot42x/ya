@@ -13,7 +13,8 @@ namespace ya
 {
 
 struct RenderFrameData;
-struct Texture;
+struct IImage;
+struct IImageView;
 
 struct BasicShadowFramePayload
 {
@@ -54,8 +55,9 @@ struct PointShadowFacePayload
     uint32_t faceGlobalIndex  = 0;
     uint32_t layerIndex       = 0;
 
-    DescriptorSetHandle faceDS = nullptr;
-    Texture*            depthTexture = nullptr;
+    DescriptorSetHandle faceDS     = nullptr;
+    IImage*             depthImage = nullptr;
+    IImageView*         depthView  = nullptr;
 };
 
 } // namespace ya

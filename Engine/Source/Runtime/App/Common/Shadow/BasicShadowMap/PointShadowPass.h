@@ -93,6 +93,8 @@ class PointShadowPass
 
     GraphicsPipelineCreateInfo _directPipelineCI{};
 
+    stdptr<IImage> _shadowImage;
+
     // Per-face depth textures
     std::array<std::array<stdptr<Texture>, 6>, MAX_POINT_LIGHTS>    _faceDepthTextures{};
     std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS> _faceDepthViews{};

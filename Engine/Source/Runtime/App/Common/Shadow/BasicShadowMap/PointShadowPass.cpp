@@ -147,6 +147,7 @@ void PointShadowPass::destroy()
         flight.skinningDS  = nullptr;
     }
     _dsp.reset();
+    _shadowImage.reset();
     for (auto& faceTexArr : _faceDepthTextures) {
         for (auto& tex : faceTexArr) tex.reset();
     }
@@ -244,12 +245,13 @@ void PointShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayl
                     .layerIndex      = 1 + lightIndex * 6 + faceIndex,
                 };
                 facePayload.faceDS = flight.faceDS[facePayload.faceGlobalIndex];
-                facePayload.depthTexture = _faceDepthTextures[lightIndex][faceIndex].get();
-                if (!facePayload.depthTexture) continue;
+                facePayload.depthImage = _shadowImage.get();
+                facePayload.depthView  = _faceDepthViews[lightIndex][faceIndex].get();
+                if (!facePayload.depthImage || !facePayload.depthView) continue;
 
                 RenderingInfo::ImageSpec depthSpec{
-                    .image         = facePayload.depthTexture ? facePayload.depthTexture->getImage() : nullptr,
-                    .imageView     = facePayload.depthTexture ? facePayload.depthTexture->getImageView() : nullptr,
+                    .image         = facePayload.depthImage,
+                    .imageView     = facePayload.depthView,
                     .loadOp        = EAttachmentLoadOp::Clear,
                     .storeOp       = EAttachmentStoreOp::Store,
                     .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
@@ -382,6 +384,7 @@ void PointShadowPass::rebuildFaceTextures(std::shared_ptr<IImage> shadowImage)
 {
     if (!_render || !shadowImage) return;
 
+    _shadowImage = shadowImage;
     auto* resourceFactory = _render->getResourceFactory();
 
     for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {

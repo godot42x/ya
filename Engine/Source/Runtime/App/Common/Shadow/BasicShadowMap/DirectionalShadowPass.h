@@ -6,6 +6,7 @@
 #include "Render/Core/Buffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
+#include "Render/Core/Image.h"
 #include "Render/Core/Texture.h"
 #include "Render/Stage/IRenderStage.h"
 
@@ -42,7 +43,7 @@ class DirectionalShadowPass
 
     void setShadowExtent(Extent2D extent) { _shadowExtent = extent; }
     void refreshPipeline(EFormat::T depthFormat);
-    void setDepthTexture(stdptr<Texture> texture, stdptr<IImageView> view);
+    void setDepthAttachment(stdptr<IImage> image, stdptr<IImageView> view, stdptr<Texture> textureCompat);
 
     [[nodiscard]] Texture*    getDepthTexture() const { return _depthTexture.get(); }
     [[nodiscard]] IImageView* getDepthView() const { return _depthView.get(); }
@@ -74,8 +75,9 @@ class DirectionalShadowPass
     stdptr<IDescriptorPool>      _dsp;
     GraphicsPipelineCreateInfo   _pipelineCI{};
 
-    stdptr<Texture>    _depthTexture;
+    stdptr<IImage>     _depthImage;
     stdptr<IImageView> _depthView;
+    stdptr<Texture>    _depthTexture;
 
     std::array<PerFlightResources, MAX_FLIGHTS_IN_FLIGHT> _perFlight{};
     uint32_t _skinningCapacity = 0;

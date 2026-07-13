@@ -119,7 +119,7 @@ void BasicShadowMapTechnique::rebuildLayerTextures(const std::shared_ptr<IImage>
         });
     if (dirView) {
         auto dirTexture = Texture::wrap(shadowImage, dirView, "BasicShadowMap_DirectionalDepthTexture");
-        _directionalPass.setDepthTexture(dirTexture, dirView);
+        _directionalPass.setDepthAttachment(shadowImage, dirView, dirTexture);
     }
 
     // Point faces: layers 1..36
