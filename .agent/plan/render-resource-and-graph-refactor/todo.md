@@ -222,6 +222,7 @@
 - `RenderGraphResourceRegistry` 已能把 transient/persistent texture-buffer 与 imported texture-buffer 解析到最小物理资源 owner；当前不做 aliasing、frame recycle 和 view cache
 - `RenderGraphResourceRegistry` 现已补上最小 frame-to-frame replacement 语义：持久化 executor 复用同一 handle 时，若 texture/buffer desc 或 imported contract 变化，会在 `sync()` 中替换物理资源；描述未变时则保持复用
 - SSAO 已成为第一个 runtime-side `ERGResourceLifetime::Persistent` 落地点：输出 AO 图不再由 `DeferredRenderPipeline` 预先分配 `RenderImage`，而是在 stage graph 中声明为 persistent texture，并在执行后回传给 `LightStage` / debug 视图消费
+- Bloom extract / blur ping-pong / composite 与 postprocess output 也已沿同一模式改为 graph persistent texture；descriptor 更新已下沉到 pass execute 回调，避免在 graph execute 前依赖外部 intermediate owner
 - `RenderGraphExecutor` 已起最小执行骨架：compile 校验、registry sync、按拓扑序驱动 pass execute callback；尚未接入 Vulkan barrier/state plan 和 rendering/copy helper
 - `RGRenderContext` 已补最小 helper：color rendering begin/end 与 buffer copy，pass callback 开始可以少直接拼 `RenderingInfo` / `copyBuffer` 样板
 - compiled graph 已开始产出最小 texture/buffer required state plan（read/storage/color/depth）；texture plan 已在 executor 中先接入 `ResourceStateTracker -> transitionImageLayout()`，buffer plan 已接入最小 `bufferMemoryBarrier()` 发射，后续仍需与统一 barrier backend 收敛
@@ -268,7 +269,7 @@
 - Forward debug preview 也已向同样方向对齐：shadow cubemap 预览复用显式 `shadowDepthTexture`，viewport depth 预览改读 `ForwardViewportResources` snapshot，而不是在 editor 里回查 `viewportRT`
 - `IRenderPipelineDebugOutputs` 已继续补齐显式 preview 输出：新增 `viewportDepthTexture`，让 `RenderRuntimeEditorViewport` 不再依赖具体 `ForwardRenderPipeline` 取 viewport depth
 - preview/debug 与 owner 语义的接口边界继续收口：`getShadowDepthRT()` 已从 `IRenderPipelineDebugOutputs` 和 `RenderRuntime/App` 的 preview 转发链移除，只在 concrete pipeline 上保留给 RT editor/catalog 使用
-- postprocess output 的内部 owner 已改为 `RenderImage`：`PostProcessingStage` 不再用 `Texture::createRenderTexture()` 持有主输出，graph import / resize 直接基于 `RenderImage`；现阶段仅保留一个 `Texture::wrap()` 兼容出口给 viewport / screenshot 链路，后续与 screenshot scratch 一起再去掉
+- postprocess output 已进一步收口为 graph persistent texture：`PostProcessingStage` 不再预分配主输出 `RenderImage`，而是在 execute 时由 `RenderGraphResourceRegistry` 按 desc/extent 接管 replacement；现阶段仍保留一个 `Texture::wrap()` 兼容出口给 viewport / screenshot 链路，后续与 screenshot scratch 一起再去掉
 - pipeline/runtime 层已开始暴露显式 `postprocessOutputImage`：`IRenderPipelineDebugOutputs` 与 `RenderRuntime` 现同时提供 `RenderImage*` 输出，把 `Texture*` 兼容链进一步收窄到 automation / screenshot 一侧
 - automation screenshot 已开始优先消费 `RenderImage*` 的 postprocess 输出：`AppAutomationFrameContext` / `AppScreenshotCapture` 现在先用 `postprocessImage`，仅在缺失时回退 viewport `Texture*`
 - runtime 对 deferred concrete owner 的一部分直连也已开始回收：RT editor deferred entries 与 shared depth format 修改现通过 `DeferredRenderPipeline` helper 完成，`RenderRuntime` 不再直接摸 `_gBufferRT/_viewportRT`
@@ -294,9 +295,10 @@
 ### 调查结论 / 停止线
 
 - 当前 Deferred `GBuffer / Viewport` 的 attachment spec 变更入口已经基本收敛到 pipeline 内部显式路径：viewport resize、shared depth format、editor color format 都已有 pending refresh 承接；`refreshDirtyResources()` attachment fallback 已删除，并以断言约束残余隐式 mutation
-- 当前 `_ssaoTexture` 与 postprocess output 已是显式 `RenderImage` owner；它们下一次值得做的迁移应直接指向 `RenderGraphResourceRegistry` 接管 replacement/lifetime，而不是继续做 owner 搬移式小重构
+- SSAO 与 postprocess output 现在都已切到 graph persistent/resource-registry replacement 路径；后续更值得推进的是 bloom extract / blur ping-pong / composite 等残余 postprocess intermediates，而不是回到 owner 搬移式小重构
 - 额外调查已进一步落地：`RenderGraphResourceRegistry` 现在已有最小 frame-to-frame replacement / lifetime 语义，且 SSAO 已作为首个 runtime-side `ERGResourceLifetime::Persistent` 落地点成立；后续应沿同一模式继续评估 postprocess/bloom，而不是回到 pipeline/stage 间的 owner 搬移
 - runtime 中高频 graph 执行点也已开始为后续 registry 生命周期铺路：`RenderGraphResourceRegistry::sync()` 现会 prune 当前 graph 已不再使用的旧 handle，`SSAOStage / PostProcessingStage / BloomPostprocessing` 已改为持久化 `RenderGraphExecutor`，不再每次执行都丢弃 registry 状态
+- 进一步调查：当前 runtime 在 `RenderRuntime::beginFrameCommandBuffer()` 里仍会每帧 `waitIdle()`，因此现阶段 graph registry 的 immediate replacement/destroy 在运行时语义上暂时安全；但若后续推进“去 waitIdle 化”，则 registry replacement 必须先接入 `DeferredDeletionQueue` 或等价的按 flight 延迟退休协议
 - Deferred pipeline 自己的 graph 壳也已跟进同一策略：GBuffer / Viewport / DepthCopy 不再每帧临时构造 `RenderGraphExecutor`，而是复用 pipeline 持有的 executor，为后续把 imported graph 资源继续收向持久 registry 打基础
 - 因此继续追加 facade-only 收口的收益已经明显下降；Phase 7 后续优先做“删除 owner / graph 接管 replacement / 删除残余 dirty state”，不继续堆只改变接口表述的小提交
 - 现有 checklist 保持“删除 legacy path 后才勾选”的口径；已有 graph shell 或兼容层不单独视为完成
@@ -330,12 +332,12 @@
 
 ### Postprocess
 
-- [ ] 迁移 bloom extract
-- [ ] 迁移 bloom blur ping/pong
-- [ ] 迁移 bloom composite
-- [ ] 迁移 ACES/tone map
+- [x] 迁移 bloom extract
+- [x] 迁移 bloom blur ping/pong
+- [x] 迁移 bloom composite
+- [x] 迁移 ACES/tone map
 - [ ] 声明 presentation output
-- [ ] 删除 postprocess 手工 resize owner
+- [x] 删除 postprocess 手工 resize owner
 
 ### Pipeline 收口
 

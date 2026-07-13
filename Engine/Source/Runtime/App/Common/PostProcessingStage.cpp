@@ -141,40 +141,28 @@ void PostProcessingStage::resizeResources(Extent2D extent)
         return;
     }
 
-    _render->waitIdle();
-    recreateOutputTexture(extent);
-    recreateBloomTextures(extent);
+    _postprocessOutputImage = nullptr;
+    _postprocessOutputTextureCompat.reset();
 }
 
-void PostProcessingStage::recreateOutputTexture(Extent2D extent)
+void PostProcessingStage::refreshOutputTextureCompat()
 {
-    if (!_render || extent.width == 0 || extent.height == 0) {
+    if (!_postprocessOutputImage || !_postprocessOutputImage->isValid()) {
+        _postprocessOutputTextureCompat.reset();
         return;
     }
 
-    _postprocessOutputImage = createPostprocessRenderImage(_render, "PostprocessRT", extent, _colorFormat);
-    if (_postprocessOutputImage && _postprocessOutputImage->isValid()) {
+    const bool bNeedsWrapRefresh =
+        !_postprocessOutputTextureCompat ||
+        _postprocessOutputTextureCompat->getImage() != _postprocessOutputImage->getImage() ||
+        _postprocessOutputTextureCompat->getImageView() != _postprocessOutputImage->getImageView();
+
+    if (bNeedsWrapRefresh) {
         _postprocessOutputTextureCompat = Texture::wrap(
             _postprocessOutputImage->getImageShared(),
             _postprocessOutputImage->getImageViewShared(),
             "PostprocessRT_Compat");
     }
-    else {
-        _postprocessOutputTextureCompat.reset();
-    }
-
-    _bloomCompositeImage = createPostprocessRenderImage(_render, "BloomCompositeRT", extent, EFormat::R16G16B16A16_SFLOAT);
-}
-
-void PostProcessingStage::recreateBloomTextures(Extent2D extent)
-{
-    if (!_render || extent.width == 0 || extent.height == 0) {
-        return;
-    }
-
-    _bloomExtractImage  = createPostprocessRenderImage(_render, "BloomExtractRT", extent, EFormat::R16G16B16A16_SFLOAT);
-    _bloomBlurPingImage = createPostprocessRenderImage(_render, "BloomBlurPingRT", extent, EFormat::R16G16B16A16_SFLOAT);
-    _bloomBlurPongImage = createPostprocessRenderImage(_render, "BloomBlurPongRT", extent, EFormat::R16G16B16A16_SFLOAT);
 }
 
 void PostProcessingStage::init(const InitDesc& desc)
@@ -203,8 +191,8 @@ void PostProcessingStage::init(const InitDesc& desc)
     _state.bEnableRandomGrain  = config.getOr<bool>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_ENABLE, _state.bEnableRandomGrain);
     _state.randomGrainStrength = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_STRENGTH, _state.randomGrainStrength);
 
-    recreateOutputTexture(Extent2D{.width = desc.width, .height = desc.height});
-    recreateBloomTextures(Extent2D{.width = desc.width, .height = desc.height});
+    _postprocessOutputImage = nullptr;
+    _postprocessOutputTextureCompat.reset();
 
     _bloomProcessor = ya::makeShared<BloomPostprocessing>();
     _bloomProcessor->init(BloomPostprocessing::InitDesc{
@@ -244,11 +232,7 @@ void PostProcessingStage::shutdown()
         _postProcessor.reset();
     }
 
-    _bloomExtractImage.reset();
-    _bloomBlurPingImage.reset();
-    _bloomBlurPongImage.reset();
-    _bloomCompositeImage.reset();
-    _postprocessOutputImage.reset();
+    _postprocessOutputImage = nullptr;
     _postprocessOutputTextureCompat.reset();
     _render = nullptr;
 }
@@ -322,28 +306,18 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
         return inputTexture;
     }
 
-    if (!_postprocessOutputImage || _postprocessOutputImage->getExtent() != inputExtent) {
-        return inputTexture;
-    }
-    if (!_postprocessOutputImage || !_postprocessOutputTextureCompat) {
-        return inputTexture;
-    }
-
     IImageView* compositeInputView = inputTexture->getImageView();
-    if (_state.bEnableBloom && _bloomProcessor && _bloomExtractImage && _bloomBlurPingImage && _bloomBlurPongImage) {
-        YA_CORE_ASSERT(_bloomCompositeImage, "Bloom composite image should be created with postprocess output");
+    if (_state.bEnableBloom && _bloomProcessor) {
         _bloomProcessor->render(BloomPostprocessing::RenderDesc{
             .cmdBuf = cmdBuf,
             .sceneTexture = inputTexture,
             .sceneImageView = inputTexture->getImageView(),
-            .outputImage = _bloomCompositeImage.get(),
-            .bloomExtract = _bloomExtractImage.get(),
-            .blurPingImage = _bloomBlurPingImage.get(),
-            .blurPongImage = _bloomBlurPongImage.get(),
             .renderExtent = inputExtent,
             .state = &_state,
         });
-        compositeInputView = _bloomCompositeImage->getImageView();
+        if (auto* compositeImage = _bloomProcessor->getCompositeImage(); compositeImage && compositeImage->getImageView()) {
+            compositeInputView = compositeImage->getImageView();
+        }
     }
 
     const auto swapchainFormat = _render->getSwapchain()->getFormat();
@@ -353,7 +327,12 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
 
     RenderGraph graph;
     const auto  input = graph.importTexture(makePostprocessImportedTextureDesc(*inputTexture, "Postprocessing.Input", EImageLayout::ShaderReadOnlyOptimal));
-    const auto  output = graph.importTexture(makePostprocessImportedTextureDesc(*_postprocessOutputImage, "Postprocessing.Output", EImageLayout::ShaderReadOnlyOptimal));
+    const auto  output = graph.createTexture(RGTextureDesc{
+         .label  = "Postprocessing.Output",
+         .format = _colorFormat,
+         .extent = Extent3D{inputExtent.width, inputExtent.height, 1},
+         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    }, ERGResourceLifetime::Persistent);
 
     [[maybe_unused]] const auto pass = graph.addPass(
         "Postprocessing",
@@ -386,6 +365,14 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "PostProcessingStage graph executor is not initialized");
     if (!_graphExecutor->execute(graph, *cmdBuf)) {
+        _postprocessOutputImage = nullptr;
+        _postprocessOutputTextureCompat.reset();
+        return inputTexture;
+    }
+
+    _postprocessOutputImage = _graphExecutor->getRegistry().resolveTexture(output);
+    refreshOutputTextureCompat();
+    if (!_postprocessOutputTextureCompat) {
         return inputTexture;
     }
 

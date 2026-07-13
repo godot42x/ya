@@ -176,6 +176,10 @@ void BloomPostprocessing::shutdown()
     _compositeSceneImageViewHandle = nullptr;
     _compositeBloomImageViewHandle = nullptr;
     _lastBlurPassCount             = 0;
+    _extractImage                  = nullptr;
+    _blurPingImage                 = nullptr;
+    _blurPongImage                 = nullptr;
+    _compositeImage                = nullptr;
 }
 
 void BloomPostprocessing::beginFrame()
@@ -303,27 +307,47 @@ void BloomPostprocessing::updateCompositeDescriptor(IImageView* sceneImageView, 
 
 void BloomPostprocessing::render(const RenderDesc& desc)
 {
-    if (!desc.cmdBuf || !desc.sceneTexture || !desc.sceneImageView || !desc.outputImage || !desc.state) {
+    if (!desc.cmdBuf || !desc.sceneTexture || !desc.sceneImageView || !desc.state) {
         return;
     }
     if (desc.renderExtent.width == 0 || desc.renderExtent.height == 0) {
         return;
     }
 
-    const bool bBloomEnabled = desc.state->bEnableBloom && desc.bloomExtract && desc.blurPingImage && desc.blurPongImage;
+    const bool bBloomEnabled = desc.state->bEnableBloom;
     ICommandBuffer::LabelScope labelScope(desc.cmdBuf, "BloomPostprocessing");
     RenderGraph                graph;
 
     const auto scene = graph.importTexture(makeBloomImportedTextureDesc(*desc.sceneTexture, "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal));
-    const auto output = graph.importTexture(makeBloomImportedTextureDesc(*desc.outputImage, "Bloom.CompositeOutput", EImageLayout::ShaderReadOnlyOptimal));
+    const auto output = graph.createTexture(RGTextureDesc{
+         .label  = "Bloom.CompositeOutput",
+         .format = EFormat::R16G16B16A16_SFLOAT,
+         .extent = Extent3D{desc.renderExtent.width, desc.renderExtent.height, 1},
+         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    }, ERGResourceLifetime::Persistent);
     std::optional<RGTextureHandle> bloomExtract{};
     std::optional<RGTextureHandle> blurPing{};
     std::optional<RGTextureHandle> blurPong{};
 
     if (bBloomEnabled) {
-        bloomExtract = graph.importTexture(makeBloomImportedTextureDesc(*desc.bloomExtract, "Bloom.Extract", EImageLayout::ShaderReadOnlyOptimal));
-        blurPing     = graph.importTexture(makeBloomImportedTextureDesc(*desc.blurPingImage, "Bloom.BlurPing", EImageLayout::ShaderReadOnlyOptimal));
-        blurPong     = graph.importTexture(makeBloomImportedTextureDesc(*desc.blurPongImage, "Bloom.BlurPong", EImageLayout::ShaderReadOnlyOptimal));
+        bloomExtract = graph.createTexture(RGTextureDesc{
+            .label  = "Bloom.Extract",
+            .format = EFormat::R16G16B16A16_SFLOAT,
+            .extent = Extent3D{desc.renderExtent.width, desc.renderExtent.height, 1},
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        }, ERGResourceLifetime::Persistent);
+        blurPing = graph.createTexture(RGTextureDesc{
+            .label  = "Bloom.BlurPing",
+            .format = EFormat::R16G16B16A16_SFLOAT,
+            .extent = Extent3D{desc.renderExtent.width, desc.renderExtent.height, 1},
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        }, ERGResourceLifetime::Persistent);
+        blurPong = graph.createTexture(RGTextureDesc{
+            .label  = "Bloom.BlurPong",
+            .format = EFormat::R16G16B16A16_SFLOAT,
+            .extent = Extent3D{desc.renderExtent.width, desc.renderExtent.height, 1},
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        }, ERGResourceLifetime::Persistent);
     }
 
     if (bBloomEnabled) {
@@ -356,14 +380,11 @@ void BloomPostprocessing::render(const RenderDesc& desc)
                 rgCtx.endRendering();
             });
 
-        IImageView*    blurInput     = desc.bloomExtract->getImageView();
         const uint32_t blurPassCount = std::max<uint32_t>(1, desc.state->bloomBlurPasses * 2);
         _lastBlurPassCount           = blurPassCount;
 
         for (uint32_t passIndex = 0; passIndex < blurPassCount; ++passIndex) {
             const bool bHorizontal = (passIndex % 2) == 0;
-            RenderImage* blurTarget = bHorizontal ? desc.blurPingImage : desc.blurPongImage;
-            const DescriptorSetHandle blurDS = updateBlurDescriptor(passIndex, blurInput);
             const RGTextureHandle     blurInputHandle = (passIndex == 0)
                 ? *bloomExtract
                 : ((passIndex - 1) % 2 == 0 ? *blurPing : *blurPong);
@@ -386,6 +407,10 @@ void BloomPostprocessing::render(const RenderDesc& desc)
                         .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
                         .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                     });
+                    const auto* blurInputImage = rgCtx.resolveTexture(blurInputHandle);
+                    YA_CORE_ASSERT(blurInputImage != nullptr && blurInputImage->getImageView() != nullptr,
+                                   "Bloom blur pass failed to resolve input texture {}", blurInputHandle.index);
+                    const DescriptorSetHandle blurDS = updateBlurDescriptor(passIndex, blurInputImage->getImageView());
                     rgCtx.getCommandBuffer().bindPipeline(_blurPipeline.get());
                     rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(desc.renderExtent.width), static_cast<float>(desc.renderExtent.height));
                     rgCtx.getCommandBuffer().setScissor(0, 0, desc.renderExtent.width, desc.renderExtent.height);
@@ -394,15 +419,10 @@ void BloomPostprocessing::render(const RenderDesc& desc)
                     rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
                     rgCtx.endRendering();
                 });
-
-            blurInput = blurTarget->getImageView();
         }
-
-        updateCompositeDescriptor(desc.sceneImageView, blurInput);
     }
     else {
         _lastBlurPassCount = 0;
-        updateCompositeDescriptor(desc.sceneImageView, nullptr);
     }
 
     slang_types::Misc::BloomComposite::PushConstants compositePC{};
@@ -425,6 +445,15 @@ void BloomPostprocessing::render(const RenderDesc& desc)
                 .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
                 .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
             });
+            IImageView* compositeBloomImageView = nullptr;
+            if (bBloomEnabled) {
+                const RGTextureHandle finalBloomHandle = (_lastBlurPassCount == 0 || (_lastBlurPassCount % 2) == 0) ? *blurPong : *blurPing;
+                const auto* finalBloomImage = rgCtx.resolveTexture(finalBloomHandle);
+                YA_CORE_ASSERT(finalBloomImage != nullptr && finalBloomImage->getImageView() != nullptr,
+                               "Bloom composite pass failed to resolve bloom texture {}", finalBloomHandle.index);
+                compositeBloomImageView = finalBloomImage->getImageView();
+            }
+            updateCompositeDescriptor(desc.sceneImageView, compositeBloomImageView);
             rgCtx.getCommandBuffer().bindPipeline(_compositePipeline.get());
             rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(desc.renderExtent.width), static_cast<float>(desc.renderExtent.height));
             rgCtx.getCommandBuffer().setScissor(0, 0, desc.renderExtent.width, desc.renderExtent.height);
@@ -436,6 +465,18 @@ void BloomPostprocessing::render(const RenderDesc& desc)
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "BloomPostprocessing graph executor is not initialized");
     [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *desc.cmdBuf);
+    if (!bExecuted) {
+        _extractImage = nullptr;
+        _blurPingImage = nullptr;
+        _blurPongImage = nullptr;
+        _compositeImage = nullptr;
+        return;
+    }
+
+    _extractImage   = bloomExtract ? _graphExecutor->getRegistry().resolveTexture(*bloomExtract) : nullptr;
+    _blurPingImage  = blurPing ? _graphExecutor->getRegistry().resolveTexture(*blurPing) : nullptr;
+    _blurPongImage  = blurPong ? _graphExecutor->getRegistry().resolveTexture(*blurPong) : nullptr;
+    _compositeImage = _graphExecutor->getRegistry().resolveTexture(output);
 }
 
 void BloomPostprocessing::renderSettingsGUI(PostProcessingState& state)

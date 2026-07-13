@@ -30,11 +30,7 @@ struct PostProcessingStage
     PostProcessingState         _state              = {};
     stdptr<BloomPostprocessing> _bloomProcessor     = nullptr;
     stdptr<BasicPostprocessing> _postProcessor      = nullptr;
-    stdptr<RenderImage>         _bloomExtractImage = nullptr;
-    stdptr<RenderImage>         _bloomBlurPingImage = nullptr;
-    stdptr<RenderImage>         _bloomBlurPongImage = nullptr;
-    stdptr<RenderImage>         _bloomCompositeImage = nullptr;
-    stdptr<RenderImage>         _postprocessOutputImage = nullptr;
+    const RenderImage*          _postprocessOutputImage = nullptr;
     stdptr<Texture>             _postprocessOutputTextureCompat = nullptr;
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
@@ -52,16 +48,15 @@ struct PostProcessingStage
 
     [[nodiscard]] bool                       isEnabled() const { return bEnabled; }
     [[nodiscard]] Texture*                   getOutputTexture() const { return _postprocessOutputTextureCompat.get(); }
-    [[nodiscard]] RenderImage*               getOutputImage() const { return _postprocessOutputImage.get(); }
-    [[nodiscard]] RenderImage*               getBloomExtractImage() const { return _bloomExtractImage.get(); }
-    [[nodiscard]] RenderImage*               getBloomBlurImage() const { return _bloomBlurPongImage ? _bloomBlurPongImage.get() : _bloomBlurPingImage.get(); }
-    [[nodiscard]] RenderImage*               getBloomCompositeImage() const { return _bloomCompositeImage.get(); }
+    [[nodiscard]] RenderImage*               getOutputImage() const { return const_cast<RenderImage*>(_postprocessOutputImage); }
+    [[nodiscard]] RenderImage*               getBloomExtractImage() const { return _bloomProcessor ? _bloomProcessor->getExtractImage() : nullptr; }
+    [[nodiscard]] RenderImage*               getBloomBlurImage() const { return _bloomProcessor ? _bloomProcessor->getBlurImage() : nullptr; }
+    [[nodiscard]] RenderImage*               getBloomCompositeImage() const { return _bloomProcessor ? _bloomProcessor->getCompositeImage() : nullptr; }
     [[nodiscard]] PostProcessingState&       getState() { return _state; }
     [[nodiscard]] const PostProcessingState& getState() const { return _state; }
 
   private:
-    void recreateOutputTexture(Extent2D extent);
-    void recreateBloomTextures(Extent2D extent);
+    void refreshOutputTextureCompat();
 };
 
 } // namespace ya

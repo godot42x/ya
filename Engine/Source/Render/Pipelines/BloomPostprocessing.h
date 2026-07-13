@@ -29,10 +29,6 @@ struct BloomPostprocessing
         ICommandBuffer*            cmdBuf            = nullptr;
         Texture*                   sceneTexture      = nullptr;
         IImageView*                sceneImageView    = nullptr;
-        RenderImage*               outputImage       = nullptr;
-        RenderImage*               bloomExtract      = nullptr;
-        RenderImage*               blurPingImage     = nullptr;
-        RenderImage*               blurPongImage     = nullptr;
         Extent2D                   renderExtent      = {};
         const PostProcessingState* state            = nullptr;
     };
@@ -63,6 +59,10 @@ struct BloomPostprocessing
     ImageViewHandle              _compositeBloomImageViewHandle = nullptr;
 
     uint32_t _lastBlurPassCount = 0;
+    const RenderImage* _extractImage = nullptr;
+    const RenderImage* _blurPingImage = nullptr;
+    const RenderImage* _blurPongImage = nullptr;
+    const RenderImage* _compositeImage = nullptr;
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
     void init(const InitDesc& initDesc);
@@ -71,6 +71,9 @@ struct BloomPostprocessing
     void render(const RenderDesc& desc);
     void renderSettingsGUI(PostProcessingState& state);
     void renderTechnicalGUI();
+    [[nodiscard]] RenderImage* getExtractImage() const { return const_cast<RenderImage*>(_extractImage); }
+    [[nodiscard]] RenderImage* getBlurImage() const { return const_cast<RenderImage*>(_blurPongImage ? _blurPongImage : _blurPingImage); }
+    [[nodiscard]] RenderImage* getCompositeImage() const { return const_cast<RenderImage*>(_compositeImage); }
 
   private:
     void initExtractPipeline();
