@@ -12,28 +12,32 @@ namespace
 
 RGImportedTextureDesc makeBrdfLutImportedTextureDesc(const RenderImage& image)
 {
-    YA_CORE_ASSERT(image.getImage() != nullptr, "PBR BRDF LUT graph import requires a backing image");
+    YA_CORE_ASSERT(image.getImageShared() != nullptr, "PBR BRDF LUT graph import requires a backing image");
+
+    IImage* rawImage = image.getImage();
+    YA_CORE_ASSERT(rawImage != nullptr, "PBR BRDF LUT graph import requires a valid image");
 
     return RGImportedTextureDesc{
         .desc = RGTextureDesc{
             .label       = "PBRGenerateBrdfLUT.Output",
             .format      = image.getFormat(),
             .extent      = Extent3D{image.getWidth(), image.getHeight(), 1},
-            .mipLevels   = image.getImage()->getMipLevels(),
-            .arrayLayers = image.getImage()->getArrayLayers(),
-            .usage       = image.getImage()->getUsage(),
+            .mipLevels   = rawImage->getMipLevels(),
+            .arrayLayers = rawImage->getArrayLayers(),
+            .usage       = rawImage->getUsage(),
         },
         .importDesc = ImportedImageDesc{
             .label         = "PBRGenerateBrdfLUT.Output",
-            .nativeHandle  = static_cast<void*>(image.getImage()->getHandle()),
+            .nativeHandle  = static_cast<void*>(rawImage->getHandle()),
             .format        = image.getFormat(),
-            .usage         = image.getImage()->getUsage(),
+            .usage         = rawImage->getUsage(),
             .extent        = Extent3D{image.getWidth(), image.getHeight(), 1},
-            .mipLevels     = image.getImage()->getMipLevels(),
-            .arrayLayers   = image.getImage()->getArrayLayers(),
-            .initialLayout = image.getImage()->getCompatibilityLayout(),
+            .mipLevels     = rawImage->getMipLevels(),
+            .arrayLayers   = rawImage->getArrayLayers(),
+            .initialLayout = rawImage->getCompatibilityLayout(),
             .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
         },
+        .image = image.getImageShared(),
     };
 }
 
@@ -51,6 +55,7 @@ void PBRGenerateBrdfLUT::init(IRender* render)
         return;
     }
 
+    _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
     _pipelineLayout = IPipelineLayout::create(_render,
                                               _pipelineLayoutDesc.label,
                                               _pipelineLayoutDesc.pushConstants,
@@ -60,6 +65,10 @@ void PBRGenerateBrdfLUT::init(IRender* render)
 
 void PBRGenerateBrdfLUT::shutdown()
 {
+    if (_graphExecutor) {
+        _graphExecutor->clear();
+    }
+    _graphExecutor.reset();
     _pipeline.reset();
     _pipelineLayout.reset();
     _pipelineColorFormat = EFormat::Undefined;
@@ -139,6 +148,7 @@ PBRGenerateBrdfLUT::ExecuteResult PBRGenerateBrdfLUT::execute(const ExecuteConte
     if (!_render || !ctx.cmdBuf || !ctx.output) {
         return result;
     }
+    YA_CORE_ASSERT(_graphExecutor != nullptr, "PBRGenerateBrdfLUT graph executor is not initialized");
 
     YA_CORE_ASSERT(ctx.output->getImageShared() && ctx.output->getImageView(),
                    "PBRGenerateBrdfLUT output texture must own a valid image and image view");
@@ -182,8 +192,7 @@ PBRGenerateBrdfLUT::ExecuteResult PBRGenerateBrdfLUT::execute(const ExecuteConte
             rgCtx.endRendering();
         });
 
-    RenderGraphExecutor executor(*_render->getResourceFactory());
-    result.bSuccess = executor.execute(graph, *ctx.cmdBuf);
+    result.bSuccess = _graphExecutor->execute(graph, *ctx.cmdBuf);
     return result;
 }
 

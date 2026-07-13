@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Core/RenderImage.h"
 #include "Render/Render.h"
@@ -22,6 +23,7 @@ struct PBRGenerateBrdfLUT
     stdptr<IPipelineLayout>   _pipelineLayout      = nullptr;
     stdptr<IGraphicsPipeline> _pipeline            = nullptr;
     EFormat::T                _pipelineColorFormat = EFormat::Undefined;
+    std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
     struct ExecuteResult
     {

@@ -16,6 +16,17 @@ namespace ya
 namespace
 {
 
+ImageSubresourceRange makeSpecSubresourceRange(const RenderingInfo::ImageSpec& spec)
+{
+    return ImageSubresourceRange{
+        .aspectMask     = static_cast<EImageAspect::T>(spec.subresourceAspectMask),
+        .baseMipLevel   = spec.subresourceBaseMipLevel,
+        .levelCount     = spec.subresourceLevelCount,
+        .baseArrayLayer = spec.subresourceBaseArrayLayer,
+        .layerCount     = spec.subresourceLayerCount,
+    };
+}
+
 const char* toDebugString(EImageLayout::T layout)
 {
     switch (layout) {
@@ -470,16 +481,26 @@ void VulkanCommandBuffer::executeEndRendering(const RenderingInfo& info)
             std::vector<VulkanImage::LayoutTransition> transitions;
             for (auto& spec : info.colorAttachments) {
                 if (spec.finalLayout != EImageLayout::Undefined && spec.image) {
-                    if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
-                        transitions.emplace_back(vkImg, spec.finalLayout);
+                if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
+                    VulkanImage::LayoutTransition transition{vkImg, spec.finalLayout};
+                    if (spec.bHasSubresourceRange) {
+                        transition.range    = makeSpecSubresourceRange(spec);
+                        transition.useRange = true;
+                    }
+                    transitions.push_back(transition);
                     }
                 }
             }
             if (info.depthAttachment) {
                 auto& spec = *info.depthAttachment;
                 if (spec.finalLayout != EImageLayout::Undefined && spec.image) {
-                    if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
-                        transitions.emplace_back(vkImg, spec.finalLayout);
+                if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
+                    VulkanImage::LayoutTransition transition{vkImg, spec.finalLayout};
+                    if (spec.bHasSubresourceRange) {
+                        transition.range    = makeSpecSubresourceRange(spec);
+                        transition.useRange = true;
+                    }
+                    transitions.push_back(transition);
                     }
                 }
             }
@@ -1168,7 +1189,12 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
         for (auto& spec : info.colorAttachments) {
             if (spec.initialLayout != EImageLayout::Undefined && spec.image) {
                 if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
-                    transitions.emplace_back(vkImg, spec.initialLayout);
+                    VulkanImage::LayoutTransition transition{vkImg, spec.initialLayout};
+                    if (spec.bHasSubresourceRange) {
+                        transition.range    = makeSpecSubresourceRange(spec);
+                        transition.useRange = true;
+                    }
+                    transitions.push_back(transition);
                 }
             }
         }
@@ -1180,7 +1206,12 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
             }
             if (spec.image) {
                 if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
-                    transitions.emplace_back(vkImg, targetLayout);
+                    VulkanImage::LayoutTransition transition{vkImg, targetLayout};
+                    if (spec.bHasSubresourceRange) {
+                        transition.range    = makeSpecSubresourceRange(spec);
+                        transition.useRange = true;
+                    }
+                    transitions.push_back(transition);
                 }
             }
         }

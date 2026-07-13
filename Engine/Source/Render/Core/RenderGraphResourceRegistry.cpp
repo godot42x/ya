@@ -118,10 +118,11 @@ RenderImageDesc RenderGraphResourceRegistry::makeRenderImageDesc(const RGTexture
 
 ImageViewCreateInfo RenderGraphResourceRegistry::makeDefaultViewDesc(const RGTextureDesc& desc)
 {
-    const bool bCube = desc.arrayLayers == 6;
+    const bool bCube    = desc.arrayLayers == 6;
+    const bool bArray2D = desc.arrayLayers > 1 && !bCube;
     return ImageViewCreateInfo{
         .label          = std::format("{}.defaultView", desc.label),
-        .viewType       = bCube ? EImageViewType::ViewCube : EImageViewType::View2D,
+        .viewType       = bCube ? EImageViewType::ViewCube : bArray2D ? EImageViewType::View2DArray : EImageViewType::View2D,
         .aspectFlags    = EFormat::isDepthStencilFormat(desc.format) ? EImageAspect::DepthStencil :
                           EFormat::isDepthFormat(desc.format) ? EImageAspect::Depth : EImageAspect::Color,
         .baseMipLevel   = 0,

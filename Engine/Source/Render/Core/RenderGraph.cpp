@@ -217,7 +217,9 @@ void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) cons
 
     for (const auto& colorDesc : desc.colors) {
         const auto* color = resolveTexture(colorDesc.color);
+        const auto* colorResource = _graph.getTexture(colorDesc.color);
         YA_CORE_ASSERT(color != nullptr, "RGRenderContext pass {} failed to resolve color target {}", _pass.name, colorDesc.color.index);
+        YA_CORE_ASSERT(colorResource != nullptr, "RGRenderContext pass {} failed to resolve color resource {}", _pass.name, colorDesc.color.index);
         YA_CORE_ASSERT(color->getImage() != nullptr && color->getImageView() != nullptr,
                        "RGRenderContext pass {} color target {} is missing image/view", _pass.name, colorDesc.color.index);
 
@@ -228,6 +230,12 @@ void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) cons
             .storeOp       = colorDesc.storeOp,
             .initialLayout = EImageLayout::ColorAttachmentOptimal,
             .finalLayout   = colorDesc.finalLayout,
+            .subresourceAspectMask = makeImportedViewRange(*colorResource).aspectMask,
+            .subresourceBaseMipLevel = makeImportedViewRange(*colorResource).baseMipLevel,
+            .subresourceLevelCount = makeImportedViewRange(*colorResource).levelCount,
+            .subresourceBaseArrayLayer = makeImportedViewRange(*colorResource).baseArrayLayer,
+            .subresourceLayerCount = makeImportedViewRange(*colorResource).layerCount,
+            .bHasSubresourceRange = true,
         });
         colorClearValues.push_back(colorDesc.clearValue);
     }
@@ -235,7 +243,9 @@ void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) cons
     _activeDepthAttachment.reset();
     if (desc.depth.has_value()) {
         const auto* depth = resolveTexture(desc.depth->depth);
+        const auto* depthResource = _graph.getTexture(desc.depth->depth);
         YA_CORE_ASSERT(depth != nullptr, "RGRenderContext pass {} failed to resolve depth target {}", _pass.name, desc.depth->depth.index);
+        YA_CORE_ASSERT(depthResource != nullptr, "RGRenderContext pass {} failed to resolve depth resource {}", _pass.name, desc.depth->depth.index);
         YA_CORE_ASSERT(depth->getImage() != nullptr && depth->getImageView() != nullptr,
                        "RGRenderContext pass {} depth target {} is missing image/view", _pass.name, desc.depth->depth.index);
 
@@ -246,6 +256,12 @@ void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) cons
             .storeOp       = desc.depth->storeOp,
             .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
             .finalLayout   = desc.depth->finalLayout,
+            .subresourceAspectMask = makeImportedViewRange(*depthResource).aspectMask,
+            .subresourceBaseMipLevel = makeImportedViewRange(*depthResource).baseMipLevel,
+            .subresourceLevelCount = makeImportedViewRange(*depthResource).levelCount,
+            .subresourceBaseArrayLayer = makeImportedViewRange(*depthResource).baseArrayLayer,
+            .subresourceLayerCount = makeImportedViewRange(*depthResource).layerCount,
+            .bHasSubresourceRange = true,
         };
     }
 

@@ -1139,6 +1139,12 @@ struct RenderingInfo
         // endRendering  will transition from current layout → finalLayout
         EImageLayout::T initialLayout = EImageLayout::Undefined; // Undefined = no transition
         EImageLayout::T finalLayout   = EImageLayout::Undefined; // Undefined = no transition
+        uint32_t        subresourceAspectMask     = 0;
+        uint32_t        subresourceBaseMipLevel   = 0;
+        uint32_t        subresourceLevelCount     = 0;
+        uint32_t        subresourceBaseArrayLayer = 0;
+        uint32_t        subresourceLayerCount     = 0;
+        bool            bHasSubresourceRange      = false;
     };
 
     // use render target spec
