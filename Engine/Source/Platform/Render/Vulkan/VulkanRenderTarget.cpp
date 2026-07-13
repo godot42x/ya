@@ -235,6 +235,10 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
                     .flags         = colorAttachment.imageCreateFlags,
                 };
                 auto image = _vkRender->getResourceFactory()->createImage(imageCI);
+                YA_CORE_ASSERT(image != nullptr,
+                               "Failed to create color attachment image '{}' for render target '{}'",
+                               imageCI.label,
+                               label);
                 colorImages.push_back(image);
             }
         }
@@ -257,6 +261,10 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
                 .flags         = depthAttachment->imageCreateFlags,
             };
             depthImage = _vkRender->getResourceFactory()->createImage(depthCI);
+            YA_CORE_ASSERT(depthImage != nullptr,
+                           "Failed to create depth attachment image '{}' for render target '{}'",
+                           depthCI.label,
+                           label);
         }
 
         if (resolveAttachment) {
@@ -275,6 +283,10 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
                 .initialLayout = resolveAttachment->initialLayout,
             };
             resolveImage = _vkRender->getResourceFactory()->createImage(resolveCI);
+            YA_CORE_ASSERT(resolveImage != nullptr,
+                           "Failed to create resolve attachment image '{}' for render target '{}'",
+                           resolveCI.label,
+                           label);
         }
 
         FrameBufferCreateInfo fbCI{

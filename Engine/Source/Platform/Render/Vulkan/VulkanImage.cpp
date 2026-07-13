@@ -378,7 +378,24 @@ bool VulkanImage::allocate()
     VmaAllocationCreateInfo allocCI{};
     allocCI.usage = VMA_MEMORY_USAGE_AUTO;
 
-    VK_CALL(vmaCreateImage(_render->getVmaAllocator(), &imageCreateInfo, &allocCI, &_handle, &_allocation, nullptr));
+    const VkResult createResult = vmaCreateImage(_render->getVmaAllocator(), &imageCreateInfo, &allocCI, &_handle, &_allocation, nullptr);
+    if (createResult != VK_SUCCESS) {
+        YA_CORE_ERROR(
+            "VulkanImage::allocate failed for '{}' (result={}, format={}, extent={}x{}x{}, mips={}, layers={}, samples={}, usage={}, flags={}, initialLayout={})",
+            _ci.label,
+            static_cast<int32_t>(createResult),
+            std::to_string(_format),
+            _ci.extent.width,
+            _ci.extent.height,
+            _ci.extent.depth,
+            _ci.mipLevels,
+            _ci.arrayLayers,
+            static_cast<uint32_t>(_ci.samples),
+            static_cast<uint32_t>(_ci.usage),
+            static_cast<uint32_t>(_ci.flags),
+            static_cast<uint32_t>(_ci.initialLayout));
+        return false;
+    }
 
 
     _compatibilityLayout = VK_IMAGE_LAYOUT_UNDEFINED;
