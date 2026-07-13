@@ -1,5 +1,7 @@
 #pragma once
 
+#include "DeferredAttachmentFormats.h"
+
 namespace ya
 {
 
@@ -9,6 +11,7 @@ struct DeferredViewportResources
 {
     Texture* color = nullptr;
     Texture* depth = nullptr;
+    DeferredAttachmentFormats formats{};
 
     [[nodiscard]] bool isComplete() const
     {

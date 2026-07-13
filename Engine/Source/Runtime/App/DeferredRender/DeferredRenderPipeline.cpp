@@ -50,6 +50,8 @@ ViewportOverlayStage::FrameInputs::DirectionGizmoInput buildDirectionGizmoInput(
 constexpr const char* DEFERRED_PIPELINE_CONFIG_DOC_NAME                       = "editor";
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SSAO                = "render.deferred.ssao.enabled";
 
+DeferredAttachmentFormats buildDeferredAttachmentFormats(const IRenderTarget* renderTarget);
+
 DeferredGBufferResources buildDeferredGBufferResources(IRenderTarget* gBufferRT)
 {
     DeferredGBufferResources resources{};
@@ -61,6 +63,7 @@ DeferredGBufferResources buildDeferredGBufferResources(IRenderTarget* gBufferRT)
         resources.color[attachmentIndex] = gBufferRT->getCurrentColorTexture(attachmentIndex);
     }
     resources.depth = gBufferRT->getCurrentDepthTexture();
+    resources.formats = buildDeferredAttachmentFormats(gBufferRT);
     return resources;
 }
 
@@ -73,6 +76,7 @@ DeferredViewportResources buildDeferredViewportResources(IRenderTarget* viewport
 
     resources.color = viewportRT->getCurrentColorTexture(0);
     resources.depth = viewportRT->getCurrentDepthTexture();
+    resources.formats = buildDeferredAttachmentFormats(viewportRT);
     return resources;
 }
 
@@ -93,17 +97,6 @@ DeferredAttachmentFormats buildDeferredAttachmentFormats(const IRenderTarget* re
         formats.depthFormat = depthDesc->format;
     }
 
-    return formats;
-}
-
-DeferredAttachmentFormats buildDeferredViewportFormats(const IRenderTarget* viewportRT, const IRenderTarget* gBufferRT)
-{
-    DeferredAttachmentFormats formats = buildDeferredAttachmentFormats(viewportRT);
-    if (!formats.depthFormat.has_value() && gBufferRT) {
-        if (const auto depthDesc = gBufferRT->getDepthAttachmentDesc(); depthDesc.has_value()) {
-            formats.depthFormat = depthDesc->format;
-        }
-    }
     return formats;
 }
 
@@ -672,8 +665,6 @@ void DeferredRenderPipeline::shutdown()
     _bShadowResourceRefreshPending   = false;
     _currentGBufferResources         = {};
     _currentViewportResources        = {};
-    _currentGBufferFormats           = {};
-    _currentViewportFormats          = {};
     _currentEnvironmentLightingTextures = {};
     _graphExecutor.reset();
 
@@ -887,7 +878,6 @@ void DeferredRenderPipeline::flushViewportResources()
 void DeferredRenderPipeline::refreshGBufferSnapshot()
 {
     _currentGBufferResources = buildDeferredGBufferResources(_gBufferRT.get());
-    _currentGBufferFormats   = buildDeferredAttachmentFormats(_gBufferRT.get());
 }
 
 void DeferredRenderPipeline::refreshViewportSnapshot()
@@ -896,7 +886,9 @@ void DeferredRenderPipeline::refreshViewportSnapshot()
     if (_currentViewportResources.depth == nullptr) {
         _currentViewportResources.depth = _currentGBufferResources.depth;
     }
-    _currentViewportFormats = buildDeferredViewportFormats(_viewportRT.get(), _gBufferRT.get());
+    if (!_currentViewportResources.formats.depthFormat.has_value()) {
+        _currentViewportResources.formats.depthFormat = _currentGBufferResources.formats.depthFormat;
+    }
 }
 
 void DeferredRenderPipeline::refreshGBufferStageState()
@@ -909,7 +901,7 @@ void DeferredRenderPipeline::refreshGBufferStageState()
     }
 
     if (_gBufferStage) {
-        _gBufferStage->refreshPipelineFormats(_currentGBufferFormats);
+        _gBufferStage->refreshPipelineFormats(_currentGBufferResources.formats);
     }
 
     if (_lightStage) {
@@ -923,11 +915,11 @@ void DeferredRenderPipeline::refreshViewportStageState()
 {
     if (_lightStage) {
         _lightStage->setSSAOTexture(_ssaoStage ? _ssaoStage->getOutputTexture() : nullptr);
-        _lightStage->refreshPipelineFormats(_currentViewportFormats);
+        _lightStage->refreshPipelineFormats(_currentViewportResources.formats);
     }
 
     if (_overlayStage) {
-        _overlayStage->refreshPipelineFormats(_currentViewportFormats);
+        _overlayStage->refreshPipelineFormats(_currentViewportResources.formats);
     }
 }
 

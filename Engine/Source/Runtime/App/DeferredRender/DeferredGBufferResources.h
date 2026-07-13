@@ -1,5 +1,7 @@
 #pragma once
 
+#include "DeferredAttachmentFormats.h"
+
 #include <array>
 
 namespace ya
@@ -11,6 +13,7 @@ struct DeferredGBufferResources
 {
     std::array<Texture*, 4> color{};
     Texture*                depth = nullptr;
+    DeferredAttachmentFormats formats{};
 
     [[nodiscard]] bool isComplete() const
     {
