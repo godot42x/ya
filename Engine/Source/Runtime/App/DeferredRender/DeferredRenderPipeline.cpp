@@ -427,7 +427,6 @@ void DeferredRenderPipeline::applyPendingShadowResourceRefresh()
         initShadowResources();
         if (!_shadowStage && _shadowResources.renderTarget) {
             _shadowStage = ya::makeShared<ShadowStage>();
-            _shadowStage->setRenderTarget(_shadowResources.renderTarget);
             _shadowStage->init(_render);
         }
         _shadowResources.flushIfDirty();
@@ -498,7 +497,6 @@ void DeferredRenderPipeline::initStages()
 {
     if (_shadowResources.renderTarget) {
         _shadowStage = ya::makeShared<ShadowStage>();
-        _shadowStage->setRenderTarget(_shadowResources.renderTarget);
         _shadowStage->init(_render);
         if (_shadowResources.depthImage) {
             _shadowStage->refreshShadowResources(_shadowResources.depthImage, _shadowResources.depthFormat, _shadowResources.extent);

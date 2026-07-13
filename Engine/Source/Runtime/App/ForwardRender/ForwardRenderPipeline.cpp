@@ -200,7 +200,6 @@ void ForwardRenderPipeline::initShadowResources()
 void ForwardRenderPipeline::initStageResources()
 {
     _shadowStage = ya::makeShared<ShadowStage>();
-    _shadowStage->setRenderTarget(_shadowResources.renderTarget);
     _shadowStage->init(_render);
     if (_shadowResources.depthImage) {
         _shadowStage->refreshShadowResources(
@@ -584,7 +583,7 @@ void ForwardRenderPipeline::onViewportResized(Rect2D rect)
 
 Extent2D ForwardRenderPipeline::getViewportExtent() const
 {
-    return viewportRT ? viewportRT->getExtent() : Extent2D{};
+    return _viewportResources.extent;
 }
 
 IImageView* ForwardRenderPipeline::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const

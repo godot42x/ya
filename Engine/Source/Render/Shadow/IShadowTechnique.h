@@ -13,7 +13,6 @@ namespace ya
 struct IRender;
 struct ICommandBuffer;
 struct RenderFrameData;
-struct IRenderTarget;
 struct IImage;
 struct Texture;
 
@@ -42,9 +41,6 @@ struct IShadowTechnique
     /// Apply updated settings (e.g., resolution change, cascade count change).
     /// May trigger resource recreation if resolution changed.
     virtual void applySettings(const ShadowSettings& settings) = 0;
-
-    /// Bind the shadow render target owned by the pipeline/runtime layer.
-    virtual void setRenderTarget(IRenderTarget* rt) = 0;
 
     /// Rebuild technique-side resources/views derived from the current shadow image.
     virtual void refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent) = 0;

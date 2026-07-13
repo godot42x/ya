@@ -22,9 +22,6 @@ void ShadowStage::init(IRender* render)
     _render = render;
     _technique = std::make_unique<BasicShadowMapTechnique>();
     _technique->init(render, _settings);
-    if (_shadowMapRT) {
-        _technique->setRenderTarget(_shadowMapRT.get());
-    }
 }
 
 void ShadowStage::destroy()
@@ -33,7 +30,6 @@ void ShadowStage::destroy()
         _technique->destroy();
         _technique.reset();
     }
-    _shadowMapRT.reset();
     _render = nullptr;
 }
 
@@ -84,14 +80,6 @@ void ShadowStage::applySettings(const ShadowSettings& settings)
 // ═══════════════════════════════════════════════════════════════════════════
 // Render target management
 // ═══════════════════════════════════════════════════════════════════════════
-
-void ShadowStage::setRenderTarget(const stdptr<IRenderTarget>& rt)
-{
-    _shadowMapRT = rt;
-    if (_technique && _shadowMapRT) {
-        _technique->setRenderTarget(_shadowMapRT.get());
-    }
-}
 
 void ShadowStage::refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent)
 {

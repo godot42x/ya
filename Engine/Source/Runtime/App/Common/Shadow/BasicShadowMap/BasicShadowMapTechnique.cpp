@@ -34,7 +34,6 @@ void BasicShadowMapTechnique::destroy()
 {
     _directionalPass.destroy();
     _pointPass.destroy();
-    _shadowMapRT = nullptr;
     _render      = nullptr;
 }
 
@@ -87,16 +86,6 @@ void BasicShadowMapTechnique::execute(ICommandBuffer* cmdBuf, uint32_t flightInd
 // ═══════════════════════════════════════════════════════════════════════════
 // Render target / texture management
 // ═══════════════════════════════════════════════════════════════════════════
-
-void BasicShadowMapTechnique::setRenderTarget(IRenderTarget* rt)
-{
-    _shadowMapRT = rt;
-    if (_shadowMapRT) {
-        _shadowExtent = _shadowMapRT->getExtent();
-        _directionalPass.setShadowExtent(_shadowExtent);
-        _pointPass.setShadowExtent(_shadowExtent);
-    }
-}
 
 void BasicShadowMapTechnique::refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent)
 {

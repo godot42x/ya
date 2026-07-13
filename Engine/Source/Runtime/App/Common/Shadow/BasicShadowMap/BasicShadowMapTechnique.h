@@ -6,7 +6,6 @@
 #include "Runtime/App/Common/Shadow/ShadowTypes.h"
 
 #include "Render/Core/Image.h"
-#include "Render/Core/IRenderTarget.h"
 #include "Render/Shadow/IShadowTechnique.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
@@ -37,8 +36,6 @@ class BasicShadowMapTechnique : public IShadowTechnique
     [[nodiscard]] DirectionalShadowPass& getDirectionalPass() { return _directionalPass; }
     [[nodiscard]] PointShadowPass&       getPointPass() { return _pointPass; }
 
-    // ─── Render target management (called by ShadowStage) ────────────
-    void setRenderTarget(IRenderTarget* rt);
     void refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent);
 
   private:
@@ -46,9 +43,8 @@ class BasicShadowMapTechnique : public IShadowTechnique
     BasicShadowFramePayload buildFramePayload(uint32_t flightIndex, const RenderFrameData& frameData) const;
     void                    populatePointShadowMatrices(const RenderFrameData& frameData, FrameUBO& ubo, uint32_t count) const;
 
-    IRender*       _render       = nullptr;
-    IRenderTarget* _shadowMapRT  = nullptr;
-    Extent2D       _shadowExtent = {.width = 1024, .height = 1024};
+    IRender* _render       = nullptr;
+    Extent2D _shadowExtent = {.width = 1024, .height = 1024};
 
     ShadowSettings _settings;
     uint32_t       _lastPreparedPointLightCount = 0;
