@@ -1,8 +1,11 @@
 #pragma once
 
+#include "Core/Math/Geometry.h"
+#include "Render/RenderDefines.h"
 #include "ShadowSettings.h"
 
 #include <cstdint>
+#include <memory>
 
 namespace ya
 {
@@ -11,6 +14,7 @@ struct IRender;
 struct ICommandBuffer;
 struct RenderFrameData;
 struct IRenderTarget;
+struct IImage;
 struct Texture;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -42,8 +46,8 @@ struct IShadowTechnique
     /// Bind the shadow render target owned by the pipeline/runtime layer.
     virtual void setRenderTarget(IRenderTarget* rt) = 0;
 
-    /// Rebuild technique-side resources/views derived from the current render target.
-    virtual void refreshFromRenderTarget() = 0;
+    /// Rebuild technique-side resources/views derived from the current shadow image.
+    virtual void refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent) = 0;
 
     /// Per-frame data upload (UBOs, instance buffers, frustum data).
     virtual void prepare(uint32_t flightIndex, const RenderFrameData& frameData) = 0;

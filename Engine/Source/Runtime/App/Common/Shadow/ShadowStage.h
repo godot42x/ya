@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Render/Core/Image.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Shadow/IShadowTechnique.h"
 #include "Render/Shadow/ShadowSettings.h"
@@ -35,7 +36,7 @@ struct ShadowStage : public IRenderStage
     // ─── Public API ──────────────────────────────────────────────────
     [[nodiscard]] IRenderTarget* getRenderTarget() const { return _shadowMapRT.get(); }
     void setRenderTarget(const stdptr<IRenderTarget>& rt);
-    void refreshPipelineFromRenderTarget();
+    void refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent);
 
     /// Apply shadow settings from App layer. Call each frame before prepare/execute.
     void applySettings(const ShadowSettings& settings);

@@ -12,6 +12,8 @@ void ShadowMapResources::init(IRender* render, const ShadowMapResourceDesc& desc
 {
     YA_CORE_ASSERT(render, "ShadowMapResources requires render device");
 
+    extent = desc.extent;
+
     renderTarget = createRenderTarget(RenderTargetCreateInfo{
         .label            = std::string(desc.renderTargetLabel),
         .renderingMode    = ERenderingMode::DynamicRendering,
@@ -46,11 +48,15 @@ void ShadowMapResources::init(IRender* render, const ShadowMapResourceDesc& desc
         .borderColor  = SamplerDesc::BorderColor{.type = SamplerDesc::EBorderColor::FloatOpaqueWhite, .color = {1, 1, 1, 1}},
     });
 
+    layerCount = 1 + MAX_POINT_LIGHTS * 6;
     rebuildViews(render, desc.viewLabelPrefix);
 }
 
 void ShadowMapResources::destroy()
 {
+    depthImage.reset();
+    extent = {};
+    layerCount = 0;
     directionalDepthIV.reset();
     for (auto& imageView : pointCubeIVs) {
         imageView.reset();
@@ -84,10 +90,10 @@ void ShadowMapResources::rebuildViews(IRender* render, std::string_view viewLabe
     YA_CORE_ASSERT(depthTexture, "Shadow render target depth texture is null");
 
     auto* resourceFactory = render->getResourceFactory();
-    auto  shadowImage     = depthTexture->getImageShared();
-    YA_CORE_ASSERT(shadowImage, "Shadow render target image is null");
+    depthImage            = depthTexture->getImageShared();
+    YA_CORE_ASSERT(depthImage, "Shadow render target image is null");
 
-    auto views         = ShadowViewBuilder::buildLayerViews(resourceFactory, shadowImage, viewLabelPrefix);
+    auto views         = ShadowViewBuilder::buildLayerViews(resourceFactory, depthImage, viewLabelPrefix);
     directionalDepthIV = std::move(views.directionalDepthIV);
     pointCubeIVs       = std::move(views.pointCubeIVs);
     pointFaceIVs       = std::move(views.pointFaceIVs);

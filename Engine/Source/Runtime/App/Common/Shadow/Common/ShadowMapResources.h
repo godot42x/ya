@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render/Core/IRenderTarget.h"
+#include "Render/Core/Image.h"
 #include "Render/Core/Sampler.h"
 
 #include <array>
@@ -22,6 +23,9 @@ struct ShadowMapResources
 {
     stdptr<IRenderTarget>                                           renderTarget;
     stdptr<Sampler>                                                 sampler;
+    stdptr<IImage>                                                  depthImage;
+    Extent2D                                                        extent{};
+    uint32_t                                                        layerCount = 0;
     stdptr<IImageView>                                              directionalDepthIV;
     std::array<stdptr<IImageView>, MAX_POINT_LIGHTS>                pointCubeIVs{};
     std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS> pointFaceIVs{};

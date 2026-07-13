@@ -96,31 +96,24 @@ void BasicShadowMapTechnique::setRenderTarget(IRenderTarget* rt)
         _directionalPass.setShadowExtent(_shadowExtent);
         _pointPass.setShadowExtent(_shadowExtent);
     }
-    refreshFromRenderTarget();
 }
 
-void BasicShadowMapTechnique::refreshFromRenderTarget()
+void BasicShadowMapTechnique::refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent)
 {
-    if (!_shadowMapRT || !_render) return;
+    if (!_render || !depthImage) return;
 
-    const auto& depthDesc = _shadowMapRT->getDepthAttachmentDesc();
-    if (!depthDesc.has_value()) return;
+    _shadowExtent = shadowExtent;
+    _directionalPass.setShadowExtent(_shadowExtent);
+    _pointPass.setShadowExtent(_shadowExtent);
 
-    rebuildLayerTextures();
-    _directionalPass.refreshPipeline(depthDesc->format);
-    _pointPass.refreshPipeline(depthDesc->format);
+    rebuildLayerTextures(depthImage);
+    _directionalPass.refreshPipeline(depthFormat);
+    _pointPass.refreshPipeline(depthFormat);
 }
 
-void BasicShadowMapTechnique::rebuildLayerTextures()
+void BasicShadowMapTechnique::rebuildLayerTextures(const std::shared_ptr<IImage>& shadowImage)
 {
-    if (!_render || !_shadowMapRT) return;
-
-    auto* frameBuffer  = _shadowMapRT->getCurFrameBuffer();
-    auto* depthTexture = frameBuffer ? frameBuffer->getDepthTexture() : nullptr;
-    if (!depthTexture) return;
-
-    auto shadowImage = depthTexture->getImageShared();
-    if (!shadowImage) return;
+    if (!_render || !shadowImage) return;
 
     // Directional: layer 0
     auto* resourceFactory = _render->getResourceFactory();

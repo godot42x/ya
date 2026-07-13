@@ -33,6 +33,13 @@ void ForwardRenderPipeline::rebuildShadowViews()
             .imageInfos      = pointInfos,
         },
     });
+
+    if (_shadowStage && _shadowResources.depthImage) {
+        _shadowStage->refreshShadowResources(
+            _shadowResources.depthImage,
+            SHADOW_MAPPING_DEPTH_BUFFER_FORMAT,
+            _shadowResources.extent);
+    }
 }
 
 void ForwardRenderPipeline::init(const InitDesc& desc)
@@ -154,6 +161,12 @@ void ForwardRenderPipeline::initStageResources()
     _shadowStage = ya::makeShared<ShadowStage>();
     _shadowStage->setRenderTarget(_shadowResources.renderTarget);
     _shadowStage->init(_render);
+    if (_shadowResources.depthImage) {
+        _shadowStage->refreshShadowResources(
+            _shadowResources.depthImage,
+            SHADOW_MAPPING_DEPTH_BUFFER_FORMAT,
+            _shadowResources.extent);
+    }
 
     PipelineRenderingInfo viewportPRI{
         .label                  = "Forward Viewport",
@@ -237,9 +250,7 @@ void ForwardRenderPipeline::refreshDirtyResources()
     }
     if (bShadowDirty) {
         rebuildShadowViews();
-        if (bShadowPipelineDirty && _shadowStage) {
-            _shadowStage->refreshPipelineFromRenderTarget();
-        }
+        (void)bShadowPipelineDirty;
     }
 }
 
@@ -289,8 +300,8 @@ ShadowRuntimeState ForwardRenderPipeline::buildShadowState() const
     shadowState.filter                  = shadowSettings.filter;
     shadowState.bias                    = shadowSettings.bias;
     shadowState.normalBias              = shadowSettings.normalBias;
-    shadowState.shadowMapResolution     = _shadowResources.renderTarget
-        ? _shadowResources.renderTarget->getExtent().width
+    shadowState.shadowMapResolution     = _shadowResources.extent.width > 0
+        ? _shadowResources.extent.width
         : std::max(shadowSettings.resolution, 1u);
 
     if (shadowState.bEnableShadowMapping && _shadowResources.directionalDepthIV && _shadowResources.sampler) {

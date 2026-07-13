@@ -310,7 +310,7 @@ ShadowRuntimeState DeferredRenderPipeline::buildShadowState() const
     shadowState.bEnableShadowMapping    = shadowSettings.isEnabled();
     shadowState.bEnablePointLightShadow = shadowSettings.pointLightEnabled;
     shadowState.maxShadowedPointLights  = shadowSettings.getEffectivePointLightCount();
-    shadowState.shadowMapResolution     = _shadowResources.renderTarget ? _shadowResources.renderTarget->getExtent().width : std::max(shadowSettings.resolution, 1u);
+    shadowState.shadowMapResolution     = _shadowResources.extent.width > 0 ? _shadowResources.extent.width : std::max(shadowSettings.resolution, 1u);
     shadowState.filter                  = shadowSettings.filter;
     shadowState.bias                    = shadowSettings.bias;
     shadowState.normalBias              = shadowSettings.normalBias;
@@ -447,6 +447,9 @@ void DeferredRenderPipeline::applyPendingShadowResourceRefresh()
         if (_shadowResources.renderTarget) {
             _shadowResources.renderTarget->flushDirty();
         }
+        if (_shadowStage && _shadowResources.depthImage) {
+            _shadowStage->refreshShadowResources(_shadowResources.depthImage, _shadowDepthFormat, _shadowResources.extent);
+        }
     }
 
     _bShadowResourceRefreshPending = false;
@@ -513,6 +516,9 @@ void DeferredRenderPipeline::initStages()
         _shadowStage = ya::makeShared<ShadowStage>();
         _shadowStage->setRenderTarget(_shadowResources.renderTarget);
         _shadowStage->init(_render);
+        if (_shadowResources.depthImage) {
+            _shadowStage->refreshShadowResources(_shadowResources.depthImage, _shadowDepthFormat, _shadowResources.extent);
+        }
     }
 
     _gBufferStage = ya::makeShared<GBufferStage>();
@@ -814,8 +820,8 @@ void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&
     const uint32_t desiredShadowResolution  = std::max(shadowSettings.resolution, 1u);
     if (shadowSettings.isEnabled()) {
         const bool bShadowResolutionDirty = !_shadowResources.renderTarget ||
-                                            _shadowResources.renderTarget->getExtent().width != desiredShadowResolution ||
-                                            _shadowResources.renderTarget->getExtent().height != desiredShadowResolution;
+                                            _shadowResources.extent.width != desiredShadowResolution ||
+                                            _shadowResources.extent.height != desiredShadowResolution;
         if (bShadowResolutionDirty) {
             requestShadowResourceRefresh();
         }
@@ -847,9 +853,7 @@ void DeferredRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)
 
 void DeferredRenderPipeline::handoffShadowDepthForSampling(ICommandBuffer* cmdBuf)
 {
-    auto* shadowFrameBuffer  = _shadowResources.renderTarget ? _shadowResources.renderTarget->getCurFrameBuffer() : nullptr;
-    auto* shadowDepthTexture = shadowFrameBuffer ? shadowFrameBuffer->getDepthTexture() : nullptr;
-    auto* shadowDepthImage   = shadowDepthTexture ? shadowDepthTexture->getImage() : nullptr;
+    auto* shadowDepthImage = _shadowResources.depthImage.get();
     if (!cmdBuf || !_shadowResources.renderTarget || !shadowDepthImage) {
         return;
     }
@@ -859,7 +863,7 @@ void DeferredRenderPipeline::handoffShadowDepthForSampling(ICommandBuffer* cmdBu
         .baseMipLevel   = 0,
         .levelCount     = 1,
         .baseArrayLayer = 0,
-        .layerCount     = _shadowResources.renderTarget->_layerCount,
+        .layerCount     = _shadowResources.layerCount,
     };
     cmdBuf->transitionImageLayoutAuto(shadowDepthImage, EImageLayout::ShaderReadOnlyOptimal, &shadowDepthRange);
 }

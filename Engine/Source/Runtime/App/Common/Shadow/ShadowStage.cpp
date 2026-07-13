@@ -22,11 +22,8 @@ void ShadowStage::init(IRender* render)
     _render = render;
     _technique = std::make_unique<BasicShadowMapTechnique>();
     _technique->init(render, _settings);
-
-    // If setRenderTarget was called before init, rebuild textures now
     if (_shadowMapRT) {
         _technique->setRenderTarget(_shadowMapRT.get());
-        _technique->refreshFromRenderTarget();
     }
 }
 
@@ -96,10 +93,11 @@ void ShadowStage::setRenderTarget(const stdptr<IRenderTarget>& rt)
     }
 }
 
-void ShadowStage::refreshPipelineFromRenderTarget()
+void ShadowStage::refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent)
 {
-    if (_technique) {
-        _technique->refreshFromRenderTarget();
+    auto* basicShadowMapTechnique = dynamic_cast<BasicShadowMapTechnique*>(_technique.get());
+    if (basicShadowMapTechnique) {
+        basicShadowMapTechnique->refreshShadowResources(depthImage, depthFormat, shadowExtent);
     }
 }
 
