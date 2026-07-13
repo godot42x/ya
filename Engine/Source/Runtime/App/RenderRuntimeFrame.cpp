@@ -17,6 +17,44 @@
 namespace ya
 {
 
+namespace
+{
+
+RGImportedTextureDesc makePresentationImportedTextureDesc(const Texture& texture,
+                                                          std::string_view label,
+                                                          EImageLayout::T finalLayout)
+{
+    YA_CORE_ASSERT(texture.getImageShared() != nullptr, "Presentation graph import requires a backing image");
+
+    IImage* image = texture.getImage();
+    YA_CORE_ASSERT(image != nullptr, "Presentation graph import requires a valid image");
+
+    return RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label       = std::string(label),
+            .format      = texture.getFormat(),
+            .extent      = Extent3D{texture.getWidth(), texture.getHeight(), 1},
+            .mipLevels   = image->getMipLevels(),
+            .arrayLayers = image->getArrayLayers(),
+            .usage       = image->getUsage(),
+        },
+        .importDesc = ImportedImageDesc{
+            .label         = std::string(label),
+            .nativeHandle  = static_cast<void*>(image->getHandle()),
+            .format        = texture.getFormat(),
+            .usage         = image->getUsage(),
+            .extent        = Extent3D{texture.getWidth(), texture.getHeight(), 1},
+            .mipLevels     = image->getMipLevels(),
+            .arrayLayers   = image->getArrayLayers(),
+            .initialLayout = image->getCompatibilityLayout(),
+            .finalLayout   = finalLayout,
+        },
+        .image = texture.getImageShared(),
+    };
+}
+
+} // namespace
+
 void RenderRuntime::ensureViewportRectInitialized(const FrameInput& input)
 {
     if (_viewportRect.extent.x > 0 && _viewportRect.extent.y > 0) {
@@ -159,33 +197,52 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
     YA_PROFILE_SCOPE("Screen pass");
     YA_PERF_SCOPE(perf::sample::renderPresentation(), perf::metric::cpuTimeMs(), perf::domain::render());
 
-    RenderingInfo ri{
-        .label      = "Screen",
-        .renderArea = Rect2D{
-            .pos    = {0, 0},
-            .extent = _screenRT->getExtent().toVec2(),
+    Texture* presentationTexture = getPresentationTexture();
+    if (!cmdBuf || !_presentationGraphExecutor || !presentationTexture) {
+        return;
+    }
+
+    const Extent2D presentationExtent = presentationTexture->getExtent();
+    RenderGraph    graph;
+    const auto     output = graph.importTexture(
+        makePresentationImportedTextureDesc(*presentationTexture,
+                                            "Presentation.Output",
+                                            EImageLayout::PresentSrcKHR));
+
+    [[maybe_unused]] const auto pass = graph.addPass(
+        "Presentation",
+        [&](RGPassBuilder& passBuilder) {
+            passBuilder.useColorAttachment(output);
         },
-        .layerCount       = 1,
-        .colorClearValues = {ClearValue::Black()},
-        .renderTarget     = _screenRT.get(),
-    };
+        [&](RGRenderContext& rgCtx) {
+            rgCtx.beginColorRendering({
+                .color       = output,
+                .renderArea  = Rect2D{
+                    .pos    = {0.0f, 0.0f},
+                    .extent = presentationExtent.toVec2(),
+                },
+                .clearValue  = ClearValue::Black(),
+                .finalLayout = EImageLayout::PresentSrcKHR,
+            });
 
-    cmdBuf->beginRendering(ri);
+            auto& imManager = ImGuiManager::get();
+            imManager.beginFrame();
+            if (_app) {
+                YA_PERF_SCOPE(perf::sample::renderImgui(), perf::metric::cpuTimeMs(), perf::domain::render());
+                _app->renderGUI(deltaTime);
+            }
+            imManager.endFrame();
+            imManager.render();
 
-    auto& imManager = ImGuiManager::get();
-    imManager.beginFrame();
-    if (_app) {
-        YA_PERF_SCOPE(perf::sample::renderImgui(), perf::metric::cpuTimeMs(), perf::domain::render());
-        _app->renderGUI(deltaTime);
-    }
-    imManager.endFrame();
-    imManager.render();
+            if (_render->getAPI() == ERenderAPI::Vulkan) {
+                imManager.submitVulkan(rgCtx.getCommandBuffer().getHandleAs<VkCommandBuffer>());
+            }
 
-    if (_render->getAPI() == ERenderAPI::Vulkan) {
-        imManager.submitVulkan(cmdBuf->getHandleAs<VkCommandBuffer>());
-    }
+            rgCtx.endRendering();
+        });
 
-    cmdBuf->endRendering(ri);
+    YA_CORE_ASSERT(_presentationGraphExecutor != nullptr, "RenderRuntime presentation graph executor is not initialized");
+    [[maybe_unused]] const bool bExecuted = _presentationGraphExecutor->execute(graph, *cmdBuf);
     if (recordPresentationCapture) {
         recordPresentationCapture(cmdBuf);
     }

@@ -274,6 +274,8 @@
 - pipeline/runtime 层已开始暴露显式 `postprocessOutputImage`：`IRenderPipelineDebugOutputs` 与 `RenderRuntime` 现同时提供 `RenderImage*` 输出，把 `Texture*` 兼容链进一步收窄到 automation / screenshot 一侧
 - automation screenshot 已开始优先消费 `RenderImage*` 的 postprocess 输出：`AppAutomationFrameContext` / `AppScreenshotCapture` 现在先用 `postprocessImage`，仅在缺失时回退 viewport `Texture*`
 - runtime 对 deferred concrete owner 的一部分直连也已开始回收：RT editor deferred entries 与 shared depth format 修改现通过 `DeferredRenderPipeline` helper 完成，`RenderRuntime` 不再直接摸 `_gBufferRT/_viewportRT`
+- Deferred light fullscreen pass 已迁入 graph：`executeViewportPass()` 现显式 import `GBuffer/AO/shadow/environment` 读取资源并声明 viewport HDR output；overlay 仍保留为后续独立 graph pass 壳，尚未迁移 stage 内部 draw/descriptor 逻辑
+- Deferred overlay 的 scene 查询也已继续向 setup snapshot 收口：Direction gizmo 现在在 `updateStageFrameInputs()` 里生成 frame input，`ViewportOverlayStage::executeOverlay()` 不再直接查询 scene registry
 - forward 侧的 RT editor owner 暴露也已对齐成 pipeline helper：`RenderRuntime` 不再直接用 `getViewportRT()/getShadowDepthRT()` 组 forward catalog entries
 - deferred debug snapshot 也已从 runtime 自身的数据拼装回收到 pipeline：`DeferredPipelineDebugViews` 已移动到 deferred 模块，并由 `DeferredRenderPipeline::buildDebugViews()` 统一导出
 - Forward viewport extent 的应用点也已开始收口：`applyViewportExtent()` 统一承接 extent 变更与 snapshot 刷新，execute/onViewportResized 不再各自分散维护 `viewportRT` 与 `_viewportResources` 的同步
@@ -320,16 +322,16 @@
 
 ### Deferred Light
 
-- [ ] 声明 GBuffer、AO、shadow、environment reads
-- [ ] 声明 viewport HDR output
-- [ ] 迁移 fullscreen light pass
+- [x] 声明 GBuffer、AO、shadow、environment reads
+- [x] 声明 viewport HDR output
+- [x] 迁移 fullscreen light pass
 - [x] 移除 `GBufferStage*` 资源反查
 
 ### Overlay
 
-- [ ] 迁移 skybox pass
-- [ ] 迁移 debug overlay pass
-- [ ] 将 scene descriptor 作为 graph setup 输入/imported resource
+- [x] 迁移 skybox pass
+- [x] 迁移 debug overlay pass
+- [x] 将 scene-derived overlay 输入作为 graph setup 输入（descriptor set 保持执行期参数，不建模为 imported resource）
 
 ### Postprocess
 
@@ -337,7 +339,7 @@
 - [x] 迁移 bloom blur ping/pong
 - [x] 迁移 bloom composite
 - [x] 迁移 ACES/tone map
-- [ ] 声明 presentation output
+- [x] 声明 presentation output
 - [x] 删除 postprocess 手工 resize owner
 
 ### Pipeline 收口

@@ -5,6 +5,7 @@
 #include "Editor/EditorLayer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
+#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Render.h"
 #include "Render/Shader.h"
 #include "Runtime/App/Common/IRenderPipeline.h"
@@ -136,6 +137,7 @@ struct RenderRuntime
 
     std::shared_ptr<IRenderPass>   _screenRenderPass = nullptr;
     std::shared_ptr<IRenderTarget> _screenRT         = nullptr;
+    std::unique_ptr<RenderGraphExecutor> _presentationGraphExecutor;
 
     RenderTargetEditorState _rtEditor{};
 
@@ -187,6 +189,7 @@ struct RenderRuntime
     [[nodiscard]] DescriptorSetHandle          getSceneSkyboxDescriptorSet(Scene* scene = nullptr);
     [[nodiscard]] stdptr<IDescriptorSetLayout> getEnvironmentLightingDescriptorSetLayout() const { return _sharedResourceProvider.getEnvironmentLightingDescriptorSetLayout(); }
     [[nodiscard]] DescriptorSetHandle          getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr);
+    [[nodiscard]] RenderSharedResourceProvider::EnvironmentLightingTextureSet resolveSceneEnvironmentLightingTextures(Scene* scene = nullptr) const;
     [[nodiscard]] DebugRenderSystem&           getDebugRenderSystem() const;
 
 

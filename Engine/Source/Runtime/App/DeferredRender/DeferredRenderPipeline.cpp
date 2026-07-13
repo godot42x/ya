@@ -7,7 +7,9 @@
 #include "DeferredViewportResources.h"
 #include "DeferredAttachmentFormats.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
+#include "ECS/Component/DirectionComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
+#include "ECS/Component/TransformComponent.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "Render/Core/Sampler.h"
 #include "Render/Core/RenderImage.h"
@@ -25,6 +27,25 @@ namespace ya
 
 namespace
 {
+
+ViewportOverlayStage::FrameInputs::DirectionGizmoInput buildDirectionGizmoInput(const TransformComponent& tc)
+{
+    const glm::mat4 worldTransform = glm::translate(glm::mat4(1.0f), tc.getWorldPosition()) *
+                                     glm::mat4_cast(glm::quat(glm::radians(tc.getRotation())));
+    const glm::mat4 coneLocalTransf =
+        glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1, 0, 0)) *
+        glm::scale(glm::mat4(1.0f), glm::vec3(0.3f, 1.0f, 0.3f));
+    const glm::mat4 cylinderLocalTransf =
+        glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1, 0, 0)) *
+        glm::scale(glm::mat4(1.0f), glm::vec3(0.1f, 1.0f, 0.1f));
+
+    return ViewportOverlayStage::FrameInputs::DirectionGizmoInput{
+        .coneModel     = glm::translate(glm::mat4(1.0f), -tc.getForward()) * coneLocalTransf * worldTransform,
+        .cylinderModel = worldTransform * cylinderLocalTransf,
+        .lineStart     = tc.getWorldPosition(),
+        .lineEnd       = tc.getWorldPosition() + tc.getForward(),
+    };
+}
 
 constexpr const char* DEFERRED_PIPELINE_CONFIG_DOC_NAME                       = "editor";
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SSAO                = "render.deferred.ssao.enabled";
@@ -75,6 +96,17 @@ DeferredAttachmentFormats buildDeferredAttachmentFormats(const IRenderTarget* re
     return formats;
 }
 
+DeferredAttachmentFormats buildDeferredViewportFormats(const IRenderTarget* viewportRT, const IRenderTarget* gBufferRT)
+{
+    DeferredAttachmentFormats formats = buildDeferredAttachmentFormats(viewportRT);
+    if (!formats.depthFormat.has_value() && gBufferRT) {
+        if (const auto depthDesc = gBufferRT->getDepthAttachmentDesc(); depthDesc.has_value()) {
+            formats.depthFormat = depthDesc->format;
+        }
+    }
+    return formats;
+}
+
 RGImportedTextureDesc makeDeferredImportedTextureDesc(Texture& texture, std::string_view label, EImageLayout::T finalLayout)
 {
     YA_CORE_ASSERT(texture.getImageShared() != nullptr, "Deferred graph import requires a backing image");
@@ -102,6 +134,36 @@ RGImportedTextureDesc makeDeferredImportedTextureDesc(Texture& texture, std::str
             .finalLayout   = finalLayout,
         },
         .image = texture.getImageShared(),
+    };
+}
+
+RGImportedTextureDesc makeDeferredImportedTextureDesc(const RenderImage& image, std::string_view label, EImageLayout::T finalLayout)
+{
+    YA_CORE_ASSERT(image.getImageShared() != nullptr, "Deferred graph import requires a backing image");
+    IImage* rawImage = image.getImage();
+    YA_CORE_ASSERT(rawImage != nullptr, "Deferred graph import requires a valid image");
+
+    return RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label       = std::string(label),
+            .format      = image.getFormat(),
+            .extent      = Extent3D{image.getWidth(), image.getHeight(), 1},
+            .mipLevels   = rawImage->getMipLevels(),
+            .arrayLayers = rawImage->getArrayLayers(),
+            .usage       = rawImage->getUsage(),
+        },
+        .importDesc = ImportedImageDesc{
+            .label         = std::string(label),
+            .nativeHandle  = static_cast<void*>(rawImage->getHandle()),
+            .format        = image.getFormat(),
+            .usage         = rawImage->getUsage(),
+            .extent        = Extent3D{image.getWidth(), image.getHeight(), 1},
+            .mipLevels     = rawImage->getMipLevels(),
+            .arrayLayers   = rawImage->getArrayLayers(),
+            .initialLayout = rawImage->getCompatibilityLayout(),
+            .finalLayout   = finalLayout,
+        },
+        .image = image.getImageShared(),
     };
 }
 
@@ -203,18 +265,6 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
                          .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
                          .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
                 },
-            },
-                 .depthAttach = AttachmentDescription{
-                     .index          = 1,
-                     .format         = DEPTH_FORMAT,
-                     .samples        = ESampleCount::Sample_1,
-                     .loadOp         = EAttachmentLoadOp::Load,
-                     .storeOp        = EAttachmentStoreOp::Store,
-                     .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                     .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                     .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
-                     .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                     .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled | EImageUsage::TransferDst,
             },
         },
     });
@@ -541,6 +591,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     _queueFrameTask               = desc.queueFrameTask;
     _environmentLightingDSL       = desc.environmentLightingDSL;
     _getSceneEnvironmentLightingDescriptorSet = desc.getSceneEnvironmentLightingDescriptorSet;
+    _resolveSceneEnvironmentLightingTextures  = desc.resolveSceneEnvironmentLightingTextures;
     _getSceneSkyboxDescriptorSet  = desc.getSceneSkyboxDescriptorSet;
     _getDebugRenderSystem         = desc.getDebugRenderSystem;
     _getActiveScene               = desc.getActiveScene;
@@ -604,10 +655,7 @@ void DeferredRenderPipeline::initStages()
 
     _overlayStage = ya::makeShared<ViewportOverlayStage>();
     _overlayStage->setServices(ViewportOverlayStage::Services{
-        .getSceneSkyboxDescriptorSet = _getSceneSkyboxDescriptorSet,
         .getDebugRenderSystem = _getDebugRenderSystem,
-        .getActiveScene = _getActiveScene,
-        .getResourceResolveSystem = _getResourceResolveSystem,
     });
     _overlayStage->init(_render);
 }
@@ -627,6 +675,7 @@ void DeferredRenderPipeline::shutdown()
     _currentViewportResources        = {};
     _currentGBufferFormats           = {};
     _currentViewportFormats          = {};
+    _currentEnvironmentLightingTextures = {};
     _graphExecutor.reset();
 
     if (_overlayStage) {
@@ -652,6 +701,7 @@ void DeferredRenderPipeline::shutdown()
     _bShadowSettingsChangePending = false;
     _environmentLightingDSL.reset();
     _getSceneEnvironmentLightingDescriptorSet = {};
+    _resolveSceneEnvironmentLightingTextures = {};
     _getSceneSkyboxDescriptorSet = {};
     _getDebugRenderSystem = {};
     _getActiveScene = {};
@@ -680,10 +730,7 @@ void DeferredRenderPipeline::tick(const RenderPipelineFrameContext& frame)
     beginTick(frame, stageCtx, vpW, vpH);
     syncFrameSettings(frame);
     executeShadowPass(stageCtx);
-    executeGBufferPass(frame, stageCtx, vpW, vpH);
-    executeSSAOPass(stageCtx);
-    executeDepthCopyPass(frame.cmdBuf);
-    executeViewportPass(frame, stageCtx);
+    executeDeferredMainGraph(frame, stageCtx, vpW, vpH);
 
     frame.cmdBuf->debugEndLabel();
 }
@@ -747,11 +794,15 @@ void DeferredRenderPipeline::captureShadowSettings(const RenderPipelineFrameCont
 void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameContext& frame)
 {
     Scene* activeScene = _getActiveScene ? _getActiveScene() : nullptr;
+    _currentEnvironmentLightingTextures =
+        _resolveSceneEnvironmentLightingTextures
+        ? _resolveSceneEnvironmentLightingTextures(activeScene)
+        : RenderSharedResourceProvider::EnvironmentLightingTextureSet{};
 
     if (_lightStage) {
         _lightStage->setFrameInputs(LightStage::FrameInputs{
             .frameAndLightDescriptorSet = _gBufferStage ? _gBufferStage->getFrameAndLightDS(frame.flightIndex) : DescriptorSetHandle{},
-            .environmentLightingDescriptorSet = (_getSceneEnvironmentLightingDescriptorSet && activeScene)
+            .environmentLightingDescriptorSet = _getSceneEnvironmentLightingDescriptorSet
                 ? _getSceneEnvironmentLightingDescriptorSet(activeScene)
                 : DescriptorSetHandle{},
         });
@@ -759,15 +810,23 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
 
     if (_overlayStage) {
         ViewportOverlayStage::FrameInputs frameInputs{};
-        frameInputs.activeScene = activeScene;
-        frameInputs.resourceResolveSystem = _getResourceResolveSystem ? _getResourceResolveSystem() : nullptr;
+        auto* resourceResolveSystem = _getResourceResolveSystem ? _getResourceResolveSystem() : nullptr;
 
-        if (frameInputs.activeScene && frameInputs.resourceResolveSystem && _getSceneSkyboxDescriptorSet) {
-            const auto* skyboxState = frameInputs.resourceResolveSystem->findFirstSceneSkyboxState(frameInputs.activeScene);
+        if (activeScene) {
+            const auto& dirView = activeScene->getRegistry().view<TransformComponent, DirectionComponent>();
+            for (auto entity : dirView) {
+                const auto& [tc, direction] = dirView.get(entity);
+                (void)direction;
+                frameInputs.directionGizmos.push_back(buildDirectionGizmoInput(tc));
+            }
+        }
+
+        if (activeScene && resourceResolveSystem && _getSceneSkyboxDescriptorSet) {
+            const auto* skyboxState = resourceResolveSystem->findFirstSceneSkyboxState(activeScene);
             if (skyboxState && skyboxState->hasRenderableCubemap()) {
-                frameInputs.skybox.descriptorSet = _getSceneSkyboxDescriptorSet(frameInputs.activeScene);
+                frameInputs.skybox.descriptorSet = _getSceneSkyboxDescriptorSet(activeScene);
                 frameInputs.skybox.mesh          = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
-                for (const auto& [entity, sc, mc] : frameInputs.activeScene->getRegistry().view<SkyboxComponent, StaticMeshComponent>().each()) {
+                for (const auto& [entity, sc, mc] : activeScene->getRegistry().view<SkyboxComponent, StaticMeshComponent>().each()) {
                     if (mc.isResolved() && mc.getMesh()) {
                         frameInputs.skybox.mesh = mc.getMesh();
                     }
@@ -835,7 +894,10 @@ void DeferredRenderPipeline::refreshGBufferSnapshot()
 void DeferredRenderPipeline::refreshViewportSnapshot()
 {
     _currentViewportResources = buildDeferredViewportResources(_viewportRT.get());
-    _currentViewportFormats   = buildDeferredAttachmentFormats(_viewportRT.get());
+    if (_currentViewportResources.depth == nullptr) {
+        _currentViewportResources.depth = _currentGBufferResources.depth;
+    }
+    _currentViewportFormats = buildDeferredViewportFormats(_viewportRT.get(), _gBufferRT.get());
 }
 
 void DeferredRenderPipeline::refreshGBufferStageState()
@@ -874,19 +936,6 @@ void DeferredRenderPipeline::refreshCurrentFrameResources()
 {
     refreshGBufferSnapshot();
     refreshViewportSnapshot();
-}
-
-void DeferredRenderPipeline::executeSSAOPass(const RenderStageContext& stageCtx)
-{
-    if (!_bEnableSSAO || !_ssaoStage) {
-        return;
-    }
-
-    _ssaoStage->prepare(stageCtx);
-    _ssaoStage->execute(stageCtx);
-    if (_lightStage) {
-        _lightStage->setSSAOTexture(_ssaoStage->getOutputTexture());
-    }
 }
 
 void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
@@ -958,10 +1007,12 @@ void DeferredRenderPipeline::handoffShadowDepthForSampling(ICommandBuffer* cmdBu
     cmdBuf->transitionImageLayoutAuto(shadowDepthImage, EImageLayout::ShaderReadOnlyOptimal, &shadowDepthRange);
 }
 
-void DeferredRenderPipeline::executeGBufferPass(const RenderPipelineFrameContext& frame, const RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH)
+void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH)
 {
-    YA_PERF_SCOPE(perf::sample::deferredGBuffer(), perf::metric::cpuTimeMs(), perf::domain::render());
     _gBufferStage->prepare(stageCtx);
+    if (_bEnableSSAO && _ssaoStage) {
+        _ssaoStage->prepare(stageCtx);
+    }
 
     auto* gbufferDepth = _currentGBufferResources.depth;
     if (!gbufferDepth) {
@@ -983,7 +1034,7 @@ void DeferredRenderPipeline::executeGBufferPass(const RenderPipelineFrameContext
                 std::format("DeferredGBuffer.Color{}", attachmentIndex),
                 EImageLayout::ShaderReadOnlyOptimal));
     }
-    const auto depth = graph.importTexture(
+    const auto gbufferDepthHandle = graph.importTexture(
         makeDeferredImportedTextureDesc(*gbufferDepth, "DeferredGBuffer.Depth", EImageLayout::ShaderReadOnlyOptimal));
     const Extent2D gbufferExtent = gbufferDepth->getExtent();
 
@@ -993,7 +1044,7 @@ void DeferredRenderPipeline::executeGBufferPass(const RenderPipelineFrameContext
             for (const auto handle : gbufferColors) {
                 passBuilder.useColorAttachment(handle);
             }
-            passBuilder.useDepthAttachment(depth);
+            passBuilder.useDepthAttachment(gbufferDepthHandle);
         },
         [&](RGRenderContext& rgCtx) {
             rgCtx.beginRasterRendering({
@@ -1006,7 +1057,7 @@ void DeferredRenderPipeline::executeGBufferPass(const RenderPipelineFrameContext
                     {.color = gbufferColors[3], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
                 },
                 .depth = RGRenderContext::DepthRenderingDesc{
-                    .depth       = depth,
+                    .depth       = gbufferDepthHandle,
                     .clearValue  = ClearValue(1.0f, 0),
                     .loadOp      = EAttachmentLoadOp::Clear,
                     .storeOp     = EAttachmentStoreOp::Store,
@@ -1027,21 +1078,6 @@ void DeferredRenderPipeline::executeGBufferPass(const RenderPipelineFrameContext
             rgCtx.endRendering();
         });
 
-    YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");
-    [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *frame.cmdBuf);
-}
-
-void DeferredRenderPipeline::executeDepthCopyPass(ICommandBuffer* cmdBuf)
-{
-    YA_PERF_SCOPE(perf::sample::deferredDepthCopy(), perf::metric::cpuTimeMs(), perf::domain::render());
-    copyGBufferDepthToViewport(cmdBuf);
-}
-
-void DeferredRenderPipeline::executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
-{
-    const uint32_t vpW = static_cast<uint32_t>(frame.viewportRect.extent.x);
-    const uint32_t vpH = static_cast<uint32_t>(frame.viewportRect.extent.y);
-
     _lastTickCtx = {
         .view       = frame.view,
         .projection = frame.projection,
@@ -1056,16 +1092,92 @@ void DeferredRenderPipeline::executeViewportPass(const RenderPipelineFrameContex
         return;
     }
 
-    RenderGraph graph;
     const auto  color = graph.importTexture(makeDeferredImportedTextureDesc(*viewportColor, "DeferredViewport.Color", EImageLayout::ShaderReadOnlyOptimal));
-    const auto  depth = graph.importTexture(makeDeferredImportedTextureDesc(*viewportDepth, "DeferredViewport.Depth", EImageLayout::ShaderReadOnlyOptimal));
+    const auto  viewportDepthHandle = graph.importTexture(makeDeferredImportedTextureDesc(*viewportDepth, "DeferredViewport.Depth", EImageLayout::ShaderReadOnlyOptimal));
     const Extent2D viewportExtent = viewportColor->getExtent();
 
-    [[maybe_unused]] const auto viewportPass = graph.addPass(
-        "Deferred Viewport",
+    std::optional<RGTextureHandle> ssao;
+    if (_bEnableSSAO && _ssaoStage) {
+        ssao = _ssaoStage->appendGraphPass(graph, stageCtx, gbufferColors[0], gbufferColors[1], gbufferDepthHandle);
+    }
+
+    std::optional<RGTextureHandle> environmentCubemap;
+    std::optional<RGTextureHandle> environmentIrradiance;
+    std::optional<RGTextureHandle> environmentPrefilter;
+    std::optional<RGTextureHandle> environmentBrdfLut;
+    if (_currentEnvironmentLightingTextures.isComplete()) {
+        environmentCubemap = graph.importTexture(
+            makeDeferredImportedTextureDesc(*_currentEnvironmentLightingTextures.cubemapTexture,
+                                            "DeferredLight.Environment.Cubemap",
+                                            EImageLayout::ShaderReadOnlyOptimal));
+        environmentIrradiance = graph.importTexture(
+            makeDeferredImportedTextureDesc(*_currentEnvironmentLightingTextures.irradianceTexture,
+                                            "DeferredLight.Environment.Irradiance",
+                                            EImageLayout::ShaderReadOnlyOptimal));
+        environmentPrefilter = graph.importTexture(
+            makeDeferredImportedTextureDesc(*_currentEnvironmentLightingTextures.prefilterTexture,
+                                            "DeferredLight.Environment.Prefilter",
+                                            EImageLayout::ShaderReadOnlyOptimal));
+        environmentBrdfLut = graph.importTexture(
+            makeDeferredImportedTextureDesc(*_currentEnvironmentLightingTextures.brdfLutTexture,
+                                            "DeferredLight.Environment.BrdfLut",
+                                            EImageLayout::ShaderReadOnlyOptimal));
+    }
+
+    std::optional<RGTextureHandle> shadowDepth;
+    if (auto* shadowDepthTexture = getShadowDepthTexture(); shadowDepthTexture && isShadowMappingEnabled()) {
+        shadowDepth = graph.importTexture(
+            makeDeferredImportedTextureDesc(*shadowDepthTexture,
+                                            "DeferredLight.ShadowDepth",
+                                            EImageLayout::ShaderReadOnlyOptimal));
+    }
+
+    [[maybe_unused]] const auto lightPass = graph.addPass(
+        "Deferred Light",
+        [&](RGPassBuilder& passBuilder) {
+            for (const auto handle : gbufferColors) {
+                passBuilder.read(handle);
+            }
+            if (ssao.has_value()) {
+                passBuilder.read(*ssao);
+            }
+            if (shadowDepth.has_value()) {
+                passBuilder.read(*shadowDepth);
+            }
+            if (environmentCubemap.has_value()) {
+                passBuilder.read(*environmentCubemap);
+            }
+            if (environmentIrradiance.has_value()) {
+                passBuilder.read(*environmentIrradiance);
+            }
+            if (environmentPrefilter.has_value()) {
+                passBuilder.read(*environmentPrefilter);
+            }
+            if (environmentBrdfLut.has_value()) {
+                passBuilder.read(*environmentBrdfLut);
+            }
+            passBuilder.useColorAttachment(color);
+        },
+        [&](RGRenderContext& rgCtx) {
+            rgCtx.beginColorRendering({
+                .color       = color,
+                .renderArea  = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
+                .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
+                .loadOp      = EAttachmentLoadOp::Clear,
+                .storeOp     = EAttachmentStoreOp::Store,
+                .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+            });
+
+            YA_PERF_SCOPE(perf::sample::deferredLight(), perf::metric::cpuTimeMs(), perf::domain::render());
+            _lightStage->execute(stageCtx);
+            rgCtx.endRendering();
+        });
+
+    [[maybe_unused]] const auto skyboxPass = graph.addPass(
+            "Deferred Skybox",
         [&](RGPassBuilder& passBuilder) {
             passBuilder.useColorAttachment(color);
-            passBuilder.useDepthAttachment(depth);
+            passBuilder.useDepthAttachment(viewportDepthHandle);
         },
         [&](RGRenderContext& rgCtx) {
             rgCtx.beginRasterRendering({
@@ -1073,13 +1185,12 @@ void DeferredRenderPipeline::executeViewportPass(const RenderPipelineFrameContex
                 .layerCount = 1,
                 .colors = {{
                     .color       = color,
-                    .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
-                    .loadOp      = EAttachmentLoadOp::Clear,
+                    .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 }},
                 .depth = RGRenderContext::DepthRenderingDesc{
-                    .depth       = depth,
+                    .depth       = viewportDepthHandle,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
@@ -1087,16 +1198,67 @@ void DeferredRenderPipeline::executeViewportPass(const RenderPipelineFrameContex
             });
 
             {
-                YA_PERF_SCOPE(perf::sample::deferredLight(), perf::metric::cpuTimeMs(), perf::domain::render());
-                _lightStage->prepare(stageCtx);
-                _lightStage->execute(stageCtx);
+                _overlayStage->executeSkybox(stageCtx);
             }
+
+            rgCtx.endRendering();
+        });
+
+    [[maybe_unused]] const auto overlayPass = graph.addPass(
+        "Deferred Scene Overlay",
+        [&](RGPassBuilder& passBuilder) {
+            passBuilder.useColorAttachment(color);
+            passBuilder.useDepthAttachment(viewportDepthHandle);
+        },
+        [&](RGRenderContext& rgCtx) {
+            rgCtx.beginRasterRendering({
+                .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
+                .layerCount = 1,
+                .colors = {{
+                    .color       = color,
+                    .loadOp      = EAttachmentLoadOp::Load,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                }},
+                .depth = RGRenderContext::DepthRenderingDesc{
+                    .depth       = viewportDepthHandle,
+                    .loadOp      = EAttachmentLoadOp::Load,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                },
+            });
 
             {
                 YA_PERF_SCOPE(perf::sample::deferredOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
-                _overlayStage->prepare(stageCtx);
-                _overlayStage->execute(stageCtx);
+                _overlayStage->executeOverlay(stageCtx);
             }
+
+            rgCtx.endRendering();
+        });
+
+    [[maybe_unused]] const auto viewportOverlayPass = graph.addPass(
+        "Deferred Viewport Overlay",
+        [&](RGPassBuilder& passBuilder) {
+            passBuilder.useColorAttachment(color);
+            passBuilder.useDepthAttachment(viewportDepthHandle);
+        },
+        [&](RGRenderContext& rgCtx) {
+            rgCtx.beginRasterRendering({
+                .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
+                .layerCount = 1,
+                .colors = {{
+                    .color       = color,
+                    .loadOp      = EAttachmentLoadOp::Load,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                }},
+                .depth = RGRenderContext::DepthRenderingDesc{
+                    .depth       = viewportDepthHandle,
+                    .loadOp      = EAttachmentLoadOp::Load,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                },
+            });
 
             if (_lastFrameInput.recordViewportOverlays) {
                 YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
@@ -1107,7 +1269,44 @@ void DeferredRenderPipeline::executeViewportPass(const RenderPipelineFrameContex
         });
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");
-    [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *frame.cmdBuf);
+    RGCompiledGraph compiled{};
+    if (!_graphExecutor->prepare(graph, compiled)) {
+        if (_ssaoStage) {
+            _ssaoStage->setOutputTexture(nullptr);
+        }
+        if (_lightStage) {
+            _lightStage->setSSAOTexture(nullptr);
+        }
+        viewportTexture = _currentViewportResources.color;
+        return;
+    }
+
+    if (ssao.has_value()) {
+        const RenderImage* ssaoOutput = _graphExecutor->getRegistry().resolveTexture(*ssao);
+        if (_ssaoStage) {
+            _ssaoStage->setOutputTexture(ssaoOutput);
+        }
+        if (_lightStage) {
+            _lightStage->setSSAOTexture(ssaoOutput);
+        }
+    }
+    else {
+        if (_ssaoStage) {
+            _ssaoStage->setOutputTexture(nullptr);
+        }
+        if (_lightStage) {
+            _lightStage->setSSAOTexture(nullptr);
+        }
+    }
+
+    if (_lightStage) {
+        _lightStage->prepare(stageCtx);
+    }
+    if (_overlayStage) {
+        _overlayStage->prepare(stageCtx);
+    }
+
+    [[maybe_unused]] const bool bExecuted = _graphExecutor->executeCompiled(graph, compiled, *frame.cmdBuf);
 
     auto* inputTexture = _currentViewportResources.color;
     {
@@ -1120,57 +1319,6 @@ void DeferredRenderPipeline::executeViewportPass(const RenderPipelineFrameContex
 // ═══════════════════════════════════════════════════════════════════════
 // Depth Copy
 // ═══════════════════════════════════════════════════════════════════════
-
-void DeferredRenderPipeline::copyGBufferDepthToViewport(ICommandBuffer* cmdBuf)
-{
-    auto* gbufferDepth  = _currentGBufferResources.depth;
-    auto* viewportDepth = _currentViewportResources.depth;
-    if (!cmdBuf || !gbufferDepth || !viewportDepth) {
-        return;
-    }
-
-    auto* srcImage = gbufferDepth->getImage();
-    auto* dstImage = viewportDepth->getImage();
-    if (!srcImage || !dstImage) {
-        return;
-    }
-
-    RenderGraph graph;
-    const auto  src = graph.importTexture(makeDeferredImportedTextureDesc(*gbufferDepth, "DeferredDepthCopy.Src", EImageLayout::ShaderReadOnlyOptimal));
-    const auto  dst = graph.importTexture(makeDeferredImportedTextureDesc(*viewportDepth, "DeferredDepthCopy.Dst", EImageLayout::ShaderReadOnlyOptimal));
-
-    [[maybe_unused]] const auto pass = graph.addPass(
-        "Deferred Depth Copy",
-        [&](RGPassBuilder& passBuilder) {
-            passBuilder.transferSrc(src);
-            passBuilder.transferDst(dst);
-        },
-        [&](RGRenderContext& rgCtx) {
-            rgCtx.copyTexture(
-                src,
-                dst,
-                ImageCopy{
-                    .srcSubresource = ImageSubresourceLayers{
-                        .aspectMask     = EImageAspect::Depth,
-                        .mipLevel       = 0,
-                        .baseArrayLayer = 0,
-                        .layerCount     = 1,
-                    },
-                    .dstSubresource = ImageSubresourceLayers{
-                        .aspectMask     = EImageAspect::Depth,
-                        .mipLevel       = 0,
-                        .baseArrayLayer = 0,
-                        .layerCount     = 1,
-                    },
-                    .extentWidth  = gbufferDepth->getWidth(),
-                    .extentHeight = gbufferDepth->getHeight(),
-                    .extentDepth  = 1,
-                });
-        });
-
-    YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");
-    [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *cmdBuf);
-}
 
 // ═══════════════════════════════════════════════════════════════════════
 // Viewport Pass

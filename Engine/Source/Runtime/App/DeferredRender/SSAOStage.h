@@ -68,6 +68,12 @@ struct SSAOStage : public IRenderStage
     void renderTechnicalGUI() override;
 
     [[nodiscard]] const RenderImage* getOutputTexture() const { return _outputTexture; }
+    void setOutputTexture(const RenderImage* outputTexture) { _outputTexture = outputTexture; }
+    RGTextureHandle appendGraphPass(RenderGraph& graph,
+                                    const RenderStageContext& ctx,
+                                    RGTextureHandle albedo,
+                                    RGTextureHandle normal,
+                                    RGTextureHandle depth);
     [[nodiscard]] float getRadius() const { return _radius; }
     [[nodiscard]] float getBias() const { return _bias; }
     [[nodiscard]] float getPower() const { return _power; }

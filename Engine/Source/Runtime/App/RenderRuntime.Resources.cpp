@@ -24,6 +24,11 @@ DescriptorSetHandle RenderRuntime::getSceneEnvironmentLightingDescriptorSet(Scen
     return _sharedResourceProvider.getSceneEnvironmentLightingDescriptorSet(scene);
 }
 
+RenderSharedResourceProvider::EnvironmentLightingTextureSet RenderRuntime::resolveSceneEnvironmentLightingTextures(Scene* scene) const
+{
+    return _sharedResourceProvider.resolveSceneEnvironmentLightingTextures(scene);
+}
+
 void RenderRuntime::init(const InitDesc& desc)
 {
     YA_PROFILE_FUNCTION_LOG();
@@ -145,6 +150,7 @@ void RenderRuntime::initSharedRenderResources()
 
 void RenderRuntime::initPresentationResources()
 {
+    _presentationGraphExecutor = _render ? std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory()) : nullptr;
     _screenRenderPass = nullptr;
     _screenRT         = ya::createRenderTarget(RenderTargetCreateInfo{
         .label            = "Final RenderTarget",
@@ -190,6 +196,7 @@ void RenderRuntime::initPresentationResources()
 
     _deleter.push("ScreenRT", [this](void*)
                   {
+        _presentationGraphExecutor.reset();
         if (_screenRT) {
             _screenRT->destroy();
             _screenRT.reset();

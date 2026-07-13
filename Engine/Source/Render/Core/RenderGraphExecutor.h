@@ -21,6 +21,15 @@ class RenderGraphExecutor
         : _registry(factory)
     {}
 
+    [[nodiscard]] bool prepare(
+        const RenderGraph& graph,
+        RGCompiledGraph&   outCompiled);
+
+    [[nodiscard]] bool executeCompiled(
+        const RenderGraph&  graph,
+        const RGCompiledGraph& compiled,
+        ICommandBuffer&     cmdBuf);
+
     [[nodiscard]] bool execute(
         const RenderGraph& graph,
         ICommandBuffer& cmdBuf,

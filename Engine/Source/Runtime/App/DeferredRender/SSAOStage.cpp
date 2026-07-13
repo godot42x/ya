@@ -361,6 +361,21 @@ void SSAOStage::execute(const RenderStageContext& ctx)
     const auto  albedo = graph.importTexture(makeSSAOImportedTextureDesc(*gbufferAlbedo, "SSAO.GBufferAlbedo", EImageLayout::ShaderReadOnlyOptimal));
     const auto  normal = graph.importTexture(makeSSAOImportedTextureDesc(*gbufferNormal, "SSAO.GBufferNormal", EImageLayout::ShaderReadOnlyOptimal));
     const auto  depth = graph.importTexture(makeSSAOImportedTextureDesc(*gbufferDepth, "SSAO.GBufferDepth", EImageLayout::ShaderReadOnlyOptimal));
+    const auto  output = appendGraphPass(graph, ctx, albedo, normal, depth);
+
+    YA_CORE_ASSERT(_graphExecutor != nullptr, "SSAOStage graph executor is not initialized");
+    [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *ctx.cmdBuf);
+    _outputTexture = bExecuted ? _graphExecutor->getRegistry().resolveTexture(output) : nullptr;
+}
+
+RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
+                                           const RenderStageContext& ctx,
+                                           RGTextureHandle albedo,
+                                           RGTextureHandle normal,
+                                           RGTextureHandle depth)
+{
+    YA_CORE_ASSERT(_noiseTexture != nullptr, "SSAOStage requires initialized noise texture before graph pass append");
+
     const auto  noise = graph.importTexture(makeSSAOImportedTextureDesc(*_noiseTexture, "SSAO.Noise", EImageLayout::ShaderReadOnlyOptimal));
     const auto  output = graph.createTexture(RGTextureDesc{
          .label  = "SSAO.Output",
@@ -394,9 +409,7 @@ void SSAOStage::execute(const RenderStageContext& ctx)
             rgCtx.endRendering();
         });
 
-    YA_CORE_ASSERT(_graphExecutor != nullptr, "SSAOStage graph executor is not initialized");
-    [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *ctx.cmdBuf);
-    _outputTexture = bExecuted ? _graphExecutor->getRegistry().resolveTexture(output) : nullptr;
+    return output;
 }
 
 void SSAOStage::renderSettingsGUI()

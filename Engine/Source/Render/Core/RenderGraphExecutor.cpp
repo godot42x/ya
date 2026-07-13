@@ -17,25 +17,28 @@ BufferResourceState normalizeBufferState(const BufferResourceState& state, const
 
 } // namespace
 
-bool RenderGraphExecutor::execute(
+bool RenderGraphExecutor::prepare(
     const RenderGraph& graph,
-    ICommandBuffer& cmdBuf,
-    RGCompiledGraph* outCompiled)
+    RGCompiledGraph&   outCompiled)
 {
     _bufferStates.clear();
     _resourceStateTracker.reset();
 
-    auto compiled = graph.compile();
-    if (outCompiled) {
-        *outCompiled = compiled;
-    }
-    if (!compiled.isValid()) {
-        YA_CORE_ERROR("RenderGraph compile failed:\n{}", graph.debugDump(compiled));
+    outCompiled = graph.compile();
+    if (!outCompiled.isValid()) {
+        YA_CORE_ERROR("RenderGraph compile failed:\n{}", graph.debugDump(outCompiled));
         return false;
     }
 
     _registry.sync(graph);
+    return true;
+}
 
+bool RenderGraphExecutor::executeCompiled(
+    const RenderGraph&    graph,
+    const RGCompiledGraph& compiled,
+    ICommandBuffer&       cmdBuf)
+{
     for (const auto& passHandle : compiled.order) {
         const auto* pass = graph.getPass(passHandle);
         YA_CORE_ASSERT(pass != nullptr, "RenderGraphExecutor encountered invalid pass handle {}", passHandle.index);
@@ -103,6 +106,24 @@ bool RenderGraphExecutor::execute(
     }
 
     return true;
+}
+
+bool RenderGraphExecutor::execute(
+    const RenderGraph& graph,
+    ICommandBuffer& cmdBuf,
+    RGCompiledGraph* outCompiled)
+{
+    RGCompiledGraph compiled{};
+    if (!prepare(graph, compiled)) {
+        if (outCompiled) {
+            *outCompiled = compiled;
+        }
+        return false;
+    }
+    if (outCompiled) {
+        *outCompiled = compiled;
+    }
+    return executeCompiled(graph, compiled, cmdBuf);
 }
 
 void RenderGraphExecutor::clear()

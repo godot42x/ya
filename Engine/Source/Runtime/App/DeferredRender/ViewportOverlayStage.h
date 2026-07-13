@@ -13,8 +13,6 @@
 namespace ya
 {
 
-class ResourceResolveSystem;
-struct Scene;
 struct Mesh;
 
 /// Deferred viewport overlay stage — Skybox background + SimpleMaterial debug overlay.
@@ -25,14 +23,19 @@ struct ViewportOverlayStage : public IRenderStage
 {
     struct Services
     {
-        std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet;
         std::function<DebugRenderSystem&()>        getDebugRenderSystem;
-        std::function<Scene*()>                    getActiveScene;
-        std::function<ResourceResolveSystem*()>    getResourceResolveSystem;
     };
 
     struct FrameInputs
     {
+        struct DirectionGizmoInput
+        {
+            glm::mat4 coneModel     = glm::mat4(1.0f);
+            glm::mat4 cylinderModel = glm::mat4(1.0f);
+            glm::vec3 lineStart     = glm::vec3(0.0f);
+            glm::vec3 lineEnd       = glm::vec3(0.0f);
+        };
+
         struct SkyboxInput
         {
             bool                bAvailable    = false;
@@ -40,8 +43,7 @@ struct ViewportOverlayStage : public IRenderStage
             Mesh*               mesh          = nullptr;
         };
 
-        Scene*                 activeScene = nullptr;
-        ResourceResolveSystem* resourceResolveSystem = nullptr;
+        std::vector<DirectionGizmoInput> directionGizmos{};
         SkyboxInput            skybox{};
     };
 
@@ -84,10 +86,7 @@ struct ViewportOverlayStage : public IRenderStage
 
     DebugSkinning   _debugSkinning;
 
-    std::function<DescriptorSetHandle(Scene*)> _getSceneSkyboxDescriptorSet;
     std::function<DebugRenderSystem&()>        _getDebugRenderSystem;
-    std::function<Scene*()>                    _getActiveScene;
-    std::function<ResourceResolveSystem*()>    _getResourceResolveSystem;
     FrameInputs                                _frameInputs{};
 
     // ── IRenderStage ─────────────────────────────────────────────
@@ -97,6 +96,8 @@ struct ViewportOverlayStage : public IRenderStage
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
     void execute(const RenderStageContext& ctx) override;
+    void executeSkybox(const RenderStageContext& ctx);
+    void executeOverlay(const RenderStageContext& ctx);
     void renderGUI() override;
     void refreshPipelineFormats(const DeferredAttachmentFormats& formats);
     void setServices(Services services);

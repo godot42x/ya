@@ -16,6 +16,19 @@ struct IRender;
 
 struct RenderSharedResourceProvider
 {
+    struct EnvironmentLightingTextureSet
+    {
+        Texture*     cubemapTexture    = nullptr;
+        Texture*     irradianceTexture = nullptr;
+        Texture*     prefilterTexture  = nullptr;
+        RenderImage* brdfLutTexture    = nullptr;
+
+        [[nodiscard]] bool isComplete() const
+        {
+            return cubemapTexture && irradianceTexture && prefilterTexture && brdfLutTexture;
+        }
+    };
+
     IRender* _render = nullptr;
     App*     _app    = nullptr;
 
@@ -67,6 +80,7 @@ struct RenderSharedResourceProvider
     [[nodiscard]] RenderImage*                 getBrdfLutTexture() const { return _sharedResources.pbrLUT.get(); }
     [[nodiscard]] DescriptorSetHandle          getSceneSkyboxDescriptorSet(Scene* scene = nullptr);
     [[nodiscard]] DescriptorSetHandle          getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr);
+    [[nodiscard]] EnvironmentLightingTextureSet resolveSceneEnvironmentLightingTextures(Scene* scene = nullptr) const;
 
   private:
     void                   initSharedPipelineResources();

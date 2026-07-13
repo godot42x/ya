@@ -54,10 +54,7 @@ void drawDebugSkinningItems(DebugSkinning&                     debugSkinning,
 
 void ViewportOverlayStage::setServices(Services services)
 {
-    _getSceneSkyboxDescriptorSet = std::move(services.getSceneSkyboxDescriptorSet);
     _getDebugRenderSystem        = std::move(services.getDebugRenderSystem);
-    _getActiveScene              = std::move(services.getActiveScene);
-    _getResourceResolveSystem    = std::move(services.getResourceResolveSystem);
 }
 
 void ViewportOverlayStage::setFrameInputs(FrameInputs frameInputs)
@@ -227,10 +224,7 @@ void ViewportOverlayStage::destroy()
     _overlayPipeline.reset();
     _overlayPPL.reset();
     _debugSkinning.destroy();
-    _getSceneSkyboxDescriptorSet = {};
     _getDebugRenderSystem        = {};
-    _getActiveScene              = {};
-    _getResourceResolveSystem    = {};
     _frameInputs                 = {};
     _render = nullptr;
 }
@@ -272,7 +266,21 @@ void ViewportOverlayStage::execute(const RenderStageContext& ctx)
     YA_PROFILE_FUNCTION();
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
+    executeSkybox(ctx);
+    executeOverlay(ctx);
+}
+
+void ViewportOverlayStage::executeSkybox(const RenderStageContext& ctx)
+{
+    if (!ctx.cmdBuf || !ctx.frameData) return;
+
     drawSkybox(ctx);
+}
+
+void ViewportOverlayStage::executeOverlay(const RenderStageContext& ctx)
+{
+    if (!ctx.cmdBuf || !ctx.frameData) return;
+
     drawOverlay(ctx);
 }
 
@@ -312,9 +320,6 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
     auto  vpH    = ctx.viewportExtent.height;
     if (vpW == 0 || vpH == 0) return;
 
-    auto* scene = _frameInputs.activeScene;
-    if (!scene) return;
-
     const auto& fd                     = *ctx.frameData;
     if (!_getDebugRenderSystem) {
         return;
@@ -334,9 +339,7 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
                              hasDebugSkinningDrawItem(skinnedBuckets.fallbackDrawItems) ||
                              hasDebugSkinningDrawItem(skinnedBuckets.pbrDrawItems));
 
-    // Direction components (still from registry — editor visualization, TODO: migrate to snapshot)
-    const auto& dirView      = scene->getRegistry().view<TransformComponent, DirectionComponent>();
-    bool        hasDirection = dirView.begin() != dirView.end();
+    const bool hasDirection = !_frameInputs.directionGizmos.empty();
 
     if (!hasSimple && !hasDirection && !hasDebugSkinning) return;
 
@@ -383,38 +386,25 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
         drawDebugSkinningItems(_debugSkinning, cmdBuf, skinnedBuckets.pbrDrawItems, vpW, vpH, fd);
     }
 
-    // Draw direction cones/cylinders (from registry — editor debug vis)
-    // TODO: migrate DirectionComponent visualization to RenderFrameData
+    // Draw direction cones/cylinders from setup snapshot
     auto* cone     = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cone);
     auto* cylinder = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cylinder);
 
-    glm::mat4 coneLocalTransf =
-        glm::rotate(glm::mat4(1.0), glm::radians(90.0f), glm::vec3(1, 0, 0)) *
-        glm::scale(glm::mat4(1.0), glm::vec3(0.3f, 1.0f, 0.3f));
-    glm::mat4 cylinderLocalTransf =
-        glm::rotate(glm::mat4(1.0), glm::radians(90.0f), glm::vec3(1, 0, 0)) *
-        glm::scale(glm::mat4(1.0), glm::vec3(0.1f, 1.0f, 0.1f));
-
     _overlayPC.colorType = _defaultColorType;
-    for (auto entity : dirView) {
-        const auto& [tc, dc] = dirView.get(entity);
-
-        glm::mat4 worldTransform = glm::translate(glm::mat4(1.0), tc.getWorldPosition()) *
-                                   glm::mat4_cast(glm::quat(glm::radians(tc.getRotation())));
-
-        _overlayPC.model = glm::translate(glm::mat4(1.0), -tc.getForward()) * coneLocalTransf * worldTransform;
+    for (const auto& gizmo : _frameInputs.directionGizmos) {
+        _overlayPC.model = gizmo.coneModel;
         cmdBuf->pushConstants(_overlayPPL.get(), EShaderStage::Vertex, 0, sizeof(OverlayPushConstant), &_overlayPC);
         cone->draw(cmdBuf);
 
-        _overlayPC.model = worldTransform * cylinderLocalTransf;
+        _overlayPC.model = gizmo.cylinderModel;
         cmdBuf->pushConstants(_overlayPPL.get(), EShaderStage::Vertex, 0, sizeof(OverlayPushConstant), &_overlayPC);
         cylinder->draw(cmdBuf);
 
-        debugSystem.addConeImmediate(glm::translate(glm::mat4(1.0f), -tc.getForward()) * coneLocalTransf * worldTransform,
+        debugSystem.addConeImmediate(gizmo.coneModel,
                                      glm::vec4(0.9f, 0.6f, 0.1f, 1.0f));
-        debugSystem.addCylinderImmediate(worldTransform * cylinderLocalTransf,
+        debugSystem.addCylinderImmediate(gizmo.cylinderModel,
                                          glm::vec4(0.1f, 0.9f, 0.9f, 1.0f));
-        debugSystem.addLineImmediate(tc.getWorldPosition(), tc.getWorldPosition() + tc.getForward(), glm::vec4(1.0f, 0.2f, 0.2f, 1.0f));
+        debugSystem.addLineImmediate(gizmo.lineStart, gizmo.lineEnd, glm::vec4(1.0f, 0.2f, 0.2f, 1.0f));
     }
 
     debugSystem.draw(cmdBuf, vpW, vpH, fd.projection, fd.view);

@@ -18,6 +18,7 @@
 #include "Runtime/App/Common/Shadow/Common/ShadowMapResources.h"
 #include "Runtime/App/Common/Shadow/Common/ShadowRuntimeState.h"
 #include "Runtime/App/Common/Shadow/ShadowStage.h"
+#include "Runtime/App/RenderSharedResourceProvider.h"
 #include "SSAOStage.h"
 #include "ViewportOverlayStage.h"
 
@@ -59,6 +60,7 @@ struct DeferredRenderInitDesc
     std::function<void(std::function<void()>)> queueFrameTask;
     stdptr<IDescriptorSetLayout> environmentLightingDSL = nullptr;
     std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
+    std::function<RenderSharedResourceProvider::EnvironmentLightingTextureSet(Scene*)> resolveSceneEnvironmentLightingTextures;
     std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet;
     std::function<DebugRenderSystem&()> getDebugRenderSystem;
     std::function<Scene*()> getActiveScene;
@@ -75,6 +77,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     std::function<void(std::function<void()>)> _queueFrameTask;
     stdptr<IDescriptorSetLayout> _environmentLightingDSL = nullptr;
     std::function<DescriptorSetHandle(Scene*)> _getSceneEnvironmentLightingDescriptorSet;
+    std::function<RenderSharedResourceProvider::EnvironmentLightingTextureSet(Scene*)> _resolveSceneEnvironmentLightingTextures;
     std::function<DescriptorSetHandle(Scene*)> _getSceneSkyboxDescriptorSet;
     std::function<DebugRenderSystem&()> _getDebugRenderSystem;
     std::function<Scene*()> _getActiveScene;
@@ -131,6 +134,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     FrameContext               _lastTickCtx{};
     RenderPipelineFrameContext _lastFrameInput{};
     ShadowSettings             _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
+    RenderSharedResourceProvider::EnvironmentLightingTextureSet _currentEnvironmentLightingTextures{};
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
     DeferredRenderPipeline() = default;
@@ -153,7 +157,16 @@ struct DeferredRenderPipeline : public IRenderPipeline
 
     void onViewportResized(Rect2D rect) override;
 
-    Extent2D getViewportExtent() const override { return _currentViewportResources.depth ? _currentViewportResources.depth->getExtent() : Extent2D{}; }
+    Extent2D getViewportExtent() const override
+    {
+        if (_currentViewportResources.color) {
+            return _currentViewportResources.color->getExtent();
+        }
+        if (_currentViewportResources.depth) {
+            return _currentViewportResources.depth->getExtent();
+        }
+        return {};
+    }
     EFormat::T getViewportColorFormat() const override { return VIEWPORT_COLOR_FORMAT; }
     EFormat::T getViewportDepthFormat() const override { return DEPTH_FORMAT; }
 
@@ -212,10 +225,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               syncFrameSettings(const RenderPipelineFrameContext& frame);
     void               executeShadowPass(RenderStageContext& stageCtx);
     void               handoffShadowDepthForSampling(ICommandBuffer* cmdBuf);
-    void               executeGBufferPass(const RenderPipelineFrameContext& frame, const RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH);
-    void               executeSSAOPass(const RenderStageContext& stageCtx);
-    void               executeDepthCopyPass(ICommandBuffer* cmdBuf);
-    void               executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
+    void               executeDeferredMainGraph(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH);
     void               saveShadowSettingsToConfig(const ShadowSettings& shadowSettings) const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               applyPendingViewportResize();
@@ -230,7 +240,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               syncShadowSettings();
     void               applyShadowSettings(const ShadowSettings& shadowSettings);
     void               queueShadowSettingsChange(const ShadowSettings& shadowSettings);
-    void               copyGBufferDepthToViewport(ICommandBuffer* cmdBuf);
 };
 
 } // namespace ya
