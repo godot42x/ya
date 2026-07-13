@@ -77,9 +77,16 @@ enum class EAutomationScreenshotTarget : uint8_t
     Editor,
 };
 
+enum class EAutomationRenderPipeline : uint8_t
+{
+    Forward = 0,
+    Deferred,
+};
+
 struct AppAutomationShadowOverrides
 {
     std::optional<EShadowQuality::T> quality;
+    std::optional<uint32_t>          resolution;
     std::optional<bool>              directionalEnabled;
     std::optional<bool>              pointLightEnabled;
     std::optional<bool>              pointLightUseIndirect;
@@ -89,6 +96,19 @@ struct AppAutomationShadowOverrides
     std::optional<float>             bias;
     std::optional<float>             normalBias;
     std::optional<float>             directionalDistance;
+};
+
+struct AppAutomationViewportResize
+{
+    uint32_t width      = 0;
+    uint32_t height     = 0;
+    uint64_t frameIndex = 1;
+};
+
+struct AppAutomationPipelineSwitch
+{
+    EAutomationRenderPipeline target     = EAutomationRenderPipeline::Deferred;
+    uint64_t                  frameIndex = 1;
 };
 
 struct AppProfilingOptions
@@ -115,6 +135,8 @@ struct AppAutomationOptions
     std::optional<std::string>   screenshotPath;
     std::optional<glm::vec3>     editorCameraPosition;
     std::optional<glm::vec3>     editorCameraRotation;
+    std::optional<AppAutomationViewportResize> viewportResize;
+    std::optional<AppAutomationPipelineSwitch> pipelineSwitch;
     AppAutomationShadowOverrides shadow;
 };
 
@@ -130,6 +152,23 @@ inline bool tryParseAutomationScreenshotTarget(const std::string& text, EAutomat
     }
     if (normalized == "editor") {
         outValue = EAutomationScreenshotTarget::Editor;
+        return true;
+    }
+    return false;
+}
+
+inline bool tryParseAutomationRenderPipeline(const std::string& text, EAutomationRenderPipeline& outValue)
+{
+    std::string normalized = text;
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch)
+                   { return static_cast<char>(std::tolower(ch)); });
+
+    if (normalized == "forward") {
+        outValue = EAutomationRenderPipeline::Forward;
+        return true;
+    }
+    if (normalized == "deferred") {
+        outValue = EAutomationRenderPipeline::Deferred;
         return true;
     }
     return false;

@@ -148,5 +148,54 @@ TEST_F(AppAutomationConfigTest, LoadConfigDefaultsToStandardAutomationConfigPath
     EXPECT_TRUE(*appDesc.automation.shadow.directionalEnabled);
 }
 
+TEST_F(AppAutomationConfigTest, LoadConfigReadsSmokeViewportResizeAndPipelineSwitch)
+{
+    writeAutomationConfig(DEFAULT_AUTOMATION_CONFIG_PATH,
+                          R"({
+  "smoke": {
+    "viewportResize": { "width": 1600, "height": 900, "frame": 4 },
+    "renderPipeline": { "target": "forward", "frame": 7 }
+  }
+})");
+
+    AppDesc appDesc;
+
+    AppAutomation::loadConfig(appDesc);
+    AppAutomation::applyStartupOverrides(appDesc);
+
+    ASSERT_TRUE(appDesc.automation.viewportResize.has_value());
+    EXPECT_EQ(appDesc.automation.viewportResize->width, 1600u);
+    EXPECT_EQ(appDesc.automation.viewportResize->height, 900u);
+    EXPECT_EQ(appDesc.automation.viewportResize->frameIndex, 4u);
+
+    ASSERT_TRUE(appDesc.automation.pipelineSwitch.has_value());
+    EXPECT_EQ(appDesc.automation.pipelineSwitch->target, EAutomationRenderPipeline::Forward);
+    EXPECT_EQ(appDesc.automation.pipelineSwitch->frameIndex, 7u);
+}
+
+TEST_F(AppAutomationConfigTest, LoadConfigReadsShadowResolutionAutomationOverride)
+{
+    writeAutomationConfig(DEFAULT_AUTOMATION_CONFIG_PATH,
+                          R"({
+  "shadow": {
+    "quality": "high",
+    "directionalEnabled": false,
+    "resolution": 3072
+  }
+})");
+
+    AppDesc appDesc;
+
+    AppAutomation::loadConfig(appDesc);
+    AppAutomation::applyStartupOverrides(appDesc);
+
+    ASSERT_TRUE(appDesc.automation.shadow.quality.has_value());
+    EXPECT_EQ(*appDesc.automation.shadow.quality, EShadowQuality::High);
+    ASSERT_TRUE(appDesc.automation.shadow.directionalEnabled.has_value());
+    EXPECT_FALSE(*appDesc.automation.shadow.directionalEnabled);
+    ASSERT_TRUE(appDesc.automation.shadow.resolution.has_value());
+    EXPECT_EQ(*appDesc.automation.shadow.resolution, 3072u);
+}
+
 } // namespace
 } // namespace ya

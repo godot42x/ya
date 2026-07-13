@@ -31,14 +31,16 @@
 - [x] 建立固定帧数运行入口（`--exit-after-frame=120`）
 - [x] 修复 `--automation-config=<path>` 被解析但未生效的问题
 - [ ] 运行 `AppAutomationConfigTest`（当前被既有 `ConstructorReflectionTest.cpp:46` 编译错误阻塞）
-- [ ] 建立 viewport resize 冒烟入口
-- [ ] 建立 shadow 开关/分辨率冒烟入口
+- [x] 建立 viewport resize 冒烟入口
+- [x] 建立 shadow 开关/分辨率冒烟入口
 - [ ] 建立 SSAO、bloom、postprocess、ACES 冒烟入口
-- [ ] 建立 Forward/Deferred switch 冒烟入口
+- [x] 建立 Forward/Deferred switch 冒烟入口
 
 基线备注：
 
 - Codex 当前 macOS smoke 环境下，`HelloMaterial` 仍会更早失败在 `SDLWindowProvider::recreate()` / Vulkan portability window init，尚不能作为“成功进入编辑器”的最终验证环境；但 Deferred 启动阶段此前由不兼容 attachment 格式触发的 `VulkanImage::allocate()` 崩溃链路已单独修复，不再与该环境级窗口失败混淆
+- `smoke.viewportResize.{width,height,frame}` 与 `smoke.renderPipeline.{target,frame}` 现已接入 automation config，并在 `AppAutomationConfigTest` 中覆盖解析；运行期动作通过现有 editor pending viewport resize 与 `RenderRuntime::setPendingRenderPipeline()` 路径触发
+- `shadow.resolution` 现已补入 automation overrides，并与已有 `shadow.quality / directionalEnabled / pointLightEnabled / filter ...` 一起通过 `ShadowSettingsConfig` 进入 runtime shadow settings；`AppAutomationConfigTest` 已覆盖解析
 
 完成标准：
 

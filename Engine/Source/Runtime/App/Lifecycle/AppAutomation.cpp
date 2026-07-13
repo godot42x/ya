@@ -32,6 +32,8 @@ struct AppAutomationRuntimeState
     uint64_t                  stableFrames         = 0;
     bool                      bScreenshotRequested = false;
     bool                      bQuitDeferred        = false;
+    bool                      bViewportResizeApplied = false;
+    bool                      bPipelineSwitchApplied = false;
 };
 
 constexpr const char* AUTOMATION_CONFIG_DOC_NAME = "automation";
@@ -104,6 +106,60 @@ void loadRenderDocAutomationOverrides(AppDesc& appDesc)
             appDesc.renderDocCaptureOutputDir = std::move(renderDocOutputPath);
         }
     }
+}
+
+void loadViewportResizeAutomationOverrides(AppDesc& appDesc)
+{
+    auto& configManager = ConfigManager::get();
+    if (!configManager.hasDocument(AUTOMATION_CONFIG_DOC_NAME)) {
+        return;
+    }
+
+    uint32_t width  = 0;
+    uint32_t height = 0;
+    const bool bHasWidth  = configManager.tryGet<uint32_t>(AUTOMATION_CONFIG_DOC_NAME, "smoke.viewportResize.width", width);
+    const bool bHasHeight = configManager.tryGet<uint32_t>(AUTOMATION_CONFIG_DOC_NAME, "smoke.viewportResize.height", height);
+    if (!bHasWidth && !bHasHeight) {
+        return;
+    }
+
+    if (width == 0 || height == 0) {
+        YA_CORE_WARN("Ignoring invalid automation viewport resize override: {}x{}", width, height);
+        return;
+    }
+
+    AppAutomationViewportResize resize{
+        .width  = width,
+        .height = height,
+    };
+    configManager.tryGet<uint64_t>(AUTOMATION_CONFIG_DOC_NAME, "smoke.viewportResize.frame", resize.frameIndex);
+    appDesc.automation.viewportResize = resize;
+}
+
+void loadPipelineSwitchAutomationOverrides(AppDesc& appDesc)
+{
+    auto& configManager = ConfigManager::get();
+    if (!configManager.hasDocument(AUTOMATION_CONFIG_DOC_NAME)) {
+        return;
+    }
+
+    std::string pipelineText;
+    if (!configManager.tryGet<std::string>(AUTOMATION_CONFIG_DOC_NAME, "smoke.renderPipeline.target", pipelineText) ||
+        pipelineText.empty()) {
+        return;
+    }
+
+    EAutomationRenderPipeline target = EAutomationRenderPipeline::Deferred;
+    if (!tryParseAutomationRenderPipeline(pipelineText, target)) {
+        YA_CORE_WARN("Ignoring invalid automation render pipeline override: {}", pipelineText);
+        return;
+    }
+
+    AppAutomationPipelineSwitch pipelineSwitch{
+        .target = target,
+    };
+    configManager.tryGet<uint64_t>(AUTOMATION_CONFIG_DOC_NAME, "smoke.renderPipeline.frame", pipelineSwitch.frameIndex);
+    appDesc.automation.pipelineSwitch = pipelineSwitch;
 }
 
 bool hasScreenshotAutomation(const AppAutomationOptions& automation)
@@ -315,8 +371,65 @@ bool hasPendingAutomationWork(const App& app, const AppAutomationFrameContext* f
 bool hasFrameAutomationConfig(const AppAutomationOptions& automation)
 {
     return automation.exitAfterFrame > 0 ||
+           automation.viewportResize.has_value() ||
+           automation.pipelineSwitch.has_value() ||
            hasScreenshotAutomation(automation) ||
            hasRenderDocAutomation(automation);
+}
+
+RenderRuntime::ERenderPipeline toRuntimeRenderPipeline(EAutomationRenderPipeline pipeline)
+{
+    switch (pipeline) {
+    case EAutomationRenderPipeline::Forward:
+        return RenderRuntime::ERenderPipeline::Forward;
+    case EAutomationRenderPipeline::Deferred:
+        return RenderRuntime::ERenderPipeline::Deferred;
+    }
+    return RenderRuntime::ERenderPipeline::Deferred;
+}
+
+void applyScheduledSmokeActions(App& app, uint64_t frameIndex)
+{
+    auto&                       runtimeState = getAutomationRuntimeState();
+    const AppAutomationOptions& automation   = app.getDesc().automation;
+    auto*                       renderRuntime = app.getRenderRuntime();
+    if (!renderRuntime) {
+        return;
+    }
+
+    if (automation.pipelineSwitch &&
+        !runtimeState.bPipelineSwitchApplied &&
+        frameIndex >= automation.pipelineSwitch->frameIndex) {
+        renderRuntime->setPendingRenderPipeline(toRuntimeRenderPipeline(automation.pipelineSwitch->target));
+        runtimeState.bPipelineSwitchApplied = true;
+        YA_CORE_INFO("Automation queued render pipeline switch to {} at frame {}",
+                     automation.pipelineSwitch->target == EAutomationRenderPipeline::Forward ? "Forward" : "Deferred",
+                     frameIndex);
+    }
+
+    if (automation.viewportResize &&
+        !runtimeState.bViewportResizeApplied &&
+        frameIndex >= automation.viewportResize->frameIndex) {
+        Rect2D resizeRect = renderRuntime->getViewportRect();
+        resizeRect.extent = glm::vec2(static_cast<float>(automation.viewportResize->width),
+                                      static_cast<float>(automation.viewportResize->height));
+
+        if (app._editorLayer) {
+            app._editorLayer->queueViewportResize(resizeRect);
+        }
+        else {
+            renderRuntime->onViewportResized(resizeRect);
+            if (resizeRect.extent.y > 0.0f) {
+                app.camera.setAspectRatio(resizeRect.extent.x / resizeRect.extent.y);
+            }
+        }
+
+        runtimeState.bViewportResizeApplied = true;
+        YA_CORE_INFO("Automation queued viewport resize to {}x{} at frame {}",
+                     automation.viewportResize->width,
+                     automation.viewportResize->height,
+                     frameIndex);
+    }
 }
 } // namespace
 
@@ -360,6 +473,8 @@ void AppAutomation::applyStartupOverrides(AppDesc& appDesc)
     getAutomationRuntimeState() = {};
     loadScreenshotAutomationOverrides(appDesc);
     loadRenderDocAutomationOverrides(appDesc);
+    loadViewportResizeAutomationOverrides(appDesc);
+    loadPipelineSwitchAutomationOverrides(appDesc);
     shadow_settings::loadAutomationOverridesFromConfig(appDesc.automation.shadow);
     if (appDesc.automation.renderDocCapture) {
         appDesc.bEnableRenderDoc = true;
@@ -395,6 +510,11 @@ OffscreenJobQueueService AppAutomation::buildOffscreenJobQueueService(App& app)
 void AppAutomation::onFrameCompleted(App& app, const AppAutomationFrameContext& frameContext)
 {
     YA_PROFILE_FUNCTION()
+
+    {
+        YA_PROFILE_SCOPE("Automation/SmokeActions");
+        applyScheduledSmokeActions(app, frameContext.frameIndex);
+    }
 
     auto&      runtimeState       = getAutomationRuntimeState();
     bool       bStableFrameReady  = false;

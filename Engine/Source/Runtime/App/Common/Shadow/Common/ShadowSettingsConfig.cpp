@@ -118,6 +118,9 @@ void loadAutomationOverridesFromConfig(AppAutomationShadowOverrides& overrides)
     if (bool directionalEnabled = false; configManager.tryGet<bool>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.directionalEnabled", directionalEnabled)) {
         overrides.directionalEnabled = directionalEnabled;
     }
+    if (uint32_t resolution = 0; configManager.tryGet<uint32_t>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.resolution", resolution)) {
+        overrides.resolution = std::clamp(resolution, 128u, 8192u);
+    }
     if (bool pointLightEnabled = false; configManager.tryGet<bool>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.pointLightEnabled", pointLightEnabled)) {
         overrides.pointLightEnabled = pointLightEnabled;
     }
@@ -167,6 +170,9 @@ void applyAutomationOverrides(const AppAutomationShadowOverrides& overrides, Sha
     }
     if (overrides.directionalEnabled) {
         shadowSettings.directionalEnabled = *overrides.directionalEnabled;
+    }
+    if (overrides.resolution) {
+        shadowSettings.resolution = std::clamp(*overrides.resolution, 128u, 8192u);
     }
     if (overrides.pointLightEnabled) {
         shadowSettings.pointLightEnabled = *overrides.pointLightEnabled;

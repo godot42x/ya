@@ -231,6 +231,11 @@ struct EditorLayer
 
     bool screenToViewport(float screenX, float screenY, float& outX, float& outY) const;
     bool screenToViewport(const glm::vec2 in, glm::vec2& out) const;
+    void queueViewportResize(Rect2D rect)
+    {
+        _pendingViewportRect    = rect;
+        _bViewportResizePending = true;
+    }
 
     void onImGuiRender(auto content)
     {
