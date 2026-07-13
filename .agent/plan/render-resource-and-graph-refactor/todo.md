@@ -251,6 +251,7 @@
 - common shadow technique/stage 契约也已跟进显式资源输入：`BasicShadowMapTechnique / ShadowStage` 现改吃 `depth image + format + extent` 做 shadow view/pipeline refresh，Forward/Deferred 两条路径都不再通过 `refreshFromRenderTarget()` 反查当前 framebuffer
 - shadow extent / resolution 读取也开始从 legacy render-target 元数据收口回 `ShadowMapResources`：Forward/Deferred 对 shadow 分辨率、extent 和 technique refresh 的查询已优先复用显式缓存状态
 - 兼容期 attachment 读取也开始从 framebuffer owner 下沉到 render-target facade：Deferred/Forward/shadow 公共路径现改用 `IRenderTarget::getCurrent*Texture()` 访问当前 attachment，减少高层对 `getCurFrameBuffer()` 的直接依赖，为后续收敛成 `RenderAttachmentSet` 先铺一层兼容接口
+- Forward dirty refresh 也已开始对齐 Deferred 的收口方向：`ForwardRenderPipeline::refreshDirtyResources()` 不再每帧无条件 `flushDirty()` viewport/shadow render target，而是按真实 dirty 状态触发刷新
 
 ## Phase 7: Deferred Graph 迁移
 
