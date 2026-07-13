@@ -451,7 +451,7 @@ void DeferredRenderPipeline::setSharedDepthFormat(EFormat::T format)
         bDepthFormatChanged = _viewportRT->setDepthAttachmentFormat(format) || bDepthFormatChanged;
     }
     if (bDepthFormatChanged) {
-        _bSharedDepthFormatRefreshPending = true;
+        markPendingResourceRefresh(EDeferredPendingResourceRefresh::SharedDepth);
     }
 }
 
@@ -476,9 +476,24 @@ bool DeferredRenderPipeline::setRenderTargetColorFormat(RenderTargetEditorCatalo
     }
 
     if (bFormatChanged) {
-        _bAttachmentFormatRefreshPending = true;
+        markPendingResourceRefresh(EDeferredPendingResourceRefresh::AttachmentFormat);
     }
     return true;
+}
+
+void DeferredRenderPipeline::markPendingResourceRefresh(EDeferredPendingResourceRefresh refresh)
+{
+    _pendingResourceRefreshMask |= static_cast<uint32_t>(refresh);
+}
+
+bool DeferredRenderPipeline::hasPendingResourceRefresh(EDeferredPendingResourceRefresh refresh) const
+{
+    return (_pendingResourceRefreshMask & static_cast<uint32_t>(refresh)) != 0;
+}
+
+void DeferredRenderPipeline::clearPendingResourceRefresh(EDeferredPendingResourceRefresh refresh)
+{
+    _pendingResourceRefreshMask &= ~static_cast<uint32_t>(refresh);
 }
 
 void DeferredRenderPipeline::requestViewportResize(Extent2D extent)
@@ -488,93 +503,97 @@ void DeferredRenderPipeline::requestViewportResize(Extent2D extent)
     }
 
     _pendingViewportExtent  = extent;
-    _bViewportResizePending = true;
-}
-
-void DeferredRenderPipeline::applyPendingViewportResize()
-{
-    if (!_bViewportResizePending) {
-        return;
-    }
-
-    if (_gBufferRT) {
-        _gBufferRT->setExtent(_pendingViewportExtent);
-    }
-    if (_viewportRT) {
-        _viewportRT->setExtent(_pendingViewportExtent);
-    }
-    flushGBufferResources();
-    flushViewportResources();
-
-    refreshCurrentFrameResources();
-    refreshViewportSizedStageResources();
-    _bViewportResizePending = false;
+    markPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewportResize);
 }
 
 void DeferredRenderPipeline::requestShadowResourceRefresh()
 {
-    _bShadowResourceRefreshPending = true;
+    markPendingResourceRefresh(EDeferredPendingResourceRefresh::ShadowResources);
 }
 
-void DeferredRenderPipeline::applyPendingShadowResourceRefresh()
+void DeferredRenderPipeline::applyPendingResourceRefreshes()
 {
-    if (!_bShadowResourceRefreshPending || !_render) {
-        return;
-    }
+    bool bRefreshGBufferSnapshot = false;
+    bool bRefreshViewportSnapshot = false;
+    bool bRefreshGBufferStageState = false;
+    bool bRefreshViewportStageState = false;
 
-    const auto shadowSettings = currentShadowSettings();
-    _render->waitIdle();
-
-    destroyShadowResources();
-
-    if (shadowSettings.isEnabled()) {
-        initShadowResources();
-        if (!_shadowStage && _shadowResources.renderTarget) {
-            _shadowStage = ya::makeShared<ShadowStage>();
-            _shadowStage->init(_render);
+    if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewportResize)) {
+        if (_gBufferRT) {
+            _gBufferRT->setExtent(_pendingViewportExtent);
         }
-        _shadowResources.refreshIfNeeded();
-        if (_shadowStage && _shadowResources.depthImage) {
-            _shadowStage->refreshShadowResources(_shadowResources.depthImage, _shadowResources.depthFormat, _shadowResources.extent);
+        if (_viewportRT) {
+            _viewportRT->setExtent(_pendingViewportExtent);
         }
-    }
-
-    _bShadowResourceRefreshPending = false;
-    syncShadowSettings();
-}
-
-bool DeferredRenderPipeline::applyPendingSharedDepthFormatRefresh()
-{
-    if (!_bSharedDepthFormatRefreshPending) {
-        return false;
-    }
-
-    flushGBufferResources();
-    flushViewportResources();
-    _bSharedDepthFormatRefreshPending = false;
-    return true;
-}
-
-bool DeferredRenderPipeline::applyPendingAttachmentFormatRefresh()
-{
-    if (!_bAttachmentFormatRefreshPending) {
-        return false;
-    }
-
-    if (_gBufferRT && _gBufferRT->needsAttachmentRefresh()) {
         flushGBufferResources();
+        flushViewportResources();
+        bRefreshGBufferSnapshot    = true;
+        bRefreshViewportSnapshot   = true;
+        bRefreshGBufferStageState  = true;
+        bRefreshViewportStageState = true;
+        clearPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewportResize);
+    }
+
+    if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::ShadowResources) && _render) {
+        const auto shadowSettings = currentShadowSettings();
+        _render->waitIdle();
+
+        destroyShadowResources();
+
+        if (shadowSettings.isEnabled()) {
+            initShadowResources();
+            if (!_shadowStage && _shadowResources.renderTarget) {
+                _shadowStage = ya::makeShared<ShadowStage>();
+                _shadowStage->init(_render);
+            }
+            _shadowResources.refreshIfNeeded();
+            if (_shadowStage && _shadowResources.depthImage) {
+                _shadowStage->refreshShadowResources(_shadowResources.depthImage, _shadowResources.depthFormat, _shadowResources.extent);
+            }
+        }
+
+        clearPendingResourceRefresh(EDeferredPendingResourceRefresh::ShadowResources);
+        syncShadowSettings();
+    }
+
+    if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::SharedDepth)) {
+        flushGBufferResources();
+        flushViewportResources();
+        bRefreshGBufferSnapshot    = true;
+        bRefreshViewportSnapshot   = true;
+        bRefreshGBufferStageState  = true;
+        bRefreshViewportStageState = true;
+        clearPendingResourceRefresh(EDeferredPendingResourceRefresh::SharedDepth);
+    }
+
+    if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::AttachmentFormat)) {
+        if (_gBufferRT && _gBufferRT->needsAttachmentRefresh()) {
+            flushGBufferResources();
+            bRefreshGBufferSnapshot   = true;
+            bRefreshGBufferStageState = true;
+        }
+
+        if (_viewportRT && _viewportRT->needsAttachmentRefresh()) {
+            flushViewportResources();
+            bRefreshViewportSnapshot   = true;
+            bRefreshViewportStageState = true;
+        }
+
+        clearPendingResourceRefresh(EDeferredPendingResourceRefresh::AttachmentFormat);
+    }
+
+    if (bRefreshGBufferSnapshot) {
         refreshGBufferSnapshot();
+    }
+    if (bRefreshViewportSnapshot) {
+        refreshViewportSnapshot();
+    }
+    if (bRefreshGBufferStageState) {
         refreshGBufferStageState();
     }
-
-    if (_viewportRT && _viewportRT->needsAttachmentRefresh()) {
-        flushViewportResources();
-        refreshViewportSnapshot();
+    if (bRefreshViewportStageState) {
         refreshViewportStageState();
     }
-
-    _bAttachmentFormatRefreshPending = false;
-    return true;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -606,7 +625,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     _getActiveScene               = desc.getActiveScene;
     _getResourceResolveSystem     = desc.getResourceResolveSystem;
     _bShadowSettingsChangePending = false;
-    _bShadowResourceRefreshPending = false;
+    _pendingResourceRefreshMask   = 0;
     _viewportTextureCompat.reset();
     if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
@@ -679,8 +698,7 @@ void DeferredRenderPipeline::shutdown()
     _debugSpecularAlphaView.reset();
     _cachedAlbedoSpecImageViewHandle = nullptr;
     _pendingViewportExtent           = {};
-    _bViewportResizePending          = false;
-    _bShadowResourceRefreshPending   = false;
+    _pendingResourceRefreshMask      = 0;
     _currentGBufferResources         = {};
     _currentViewportResources        = {};
     _currentEnvironmentLightingTextures = {};
@@ -763,16 +781,10 @@ bool DeferredRenderPipeline::shouldSkipTick(const RenderPipelineFrameContext& fr
 
 void DeferredRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH)
 {
-    applyPendingViewportResize();
-    applyPendingShadowResourceRefresh();
-    const bool bSharedDepthFormatRefreshed = applyPendingSharedDepthFormatRefresh();
-    applyPendingAttachmentFormatRefresh();
+    applyPendingResourceRefreshes();
     _postProcessStage.beginFrame();
     captureShadowSettings(frame);
     refreshCurrentFrameResources();
-    if (bSharedDepthFormatRefreshed) {
-        refreshViewportSizedStageResources();
-    }
     validateNoPendingAttachmentRefresh();
 
     vpW = static_cast<uint32_t>(frame.viewportRect.extent.x);
@@ -858,12 +870,6 @@ void DeferredRenderPipeline::validateNoPendingAttachmentRefresh() const
                    "Deferred viewport attachment mutations must go through explicit pending refresh paths");
     YA_CORE_ASSERT(!bGBufferPipelineDirty,
                    "Deferred GBuffer attachment mutations must go through explicit pending refresh paths");
-}
-
-void DeferredRenderPipeline::refreshViewportSizedStageResources()
-{
-    refreshGBufferStageState();
-    refreshViewportStageState();
 }
 
 void DeferredRenderPipeline::invalidateGBufferDependentViews()

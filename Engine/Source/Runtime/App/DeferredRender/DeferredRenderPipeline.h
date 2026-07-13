@@ -41,6 +41,15 @@ struct DebugRenderSystem;
 struct RenderTargetEditorCatalog;
 class ResourceResolveSystem;
 
+enum class EDeferredPendingResourceRefresh : uint32_t
+{
+    None             = 0,
+    ViewportResize   = 1 << 0,
+    ShadowResources  = 1 << 1,
+    SharedDepth      = 1 << 2,
+    AttachmentFormat = 1 << 3,
+};
+
 // Shading Model IDs written to GBuffer RT3 (encoded as id/255.0 in R8_UNORM)
 namespace EShadingModelID
 {
@@ -122,10 +131,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     stdptr<IImageView> _debugSpecularAlphaView;
     ImageViewHandle    _cachedAlbedoSpecImageViewHandle = nullptr;
     Extent2D           _pendingViewportExtent{};
-    bool               _bViewportResizePending = false;
-    bool               _bShadowResourceRefreshPending = false;
-    bool               _bSharedDepthFormatRefreshPending = false;
-    bool               _bAttachmentFormatRefreshPending = false;
+    uint32_t           _pendingResourceRefreshMask = 0;
 
     // ── Frame state ───────────────────────────────────────────────────
     DeferredGBufferResources   _currentGBufferResources{};
@@ -208,7 +214,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     [[nodiscard]] bool shouldSkipTick(const RenderPipelineFrameContext& frame) const;
     void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
     void               validateNoPendingAttachmentRefresh() const;
-    void               refreshViewportSizedStageResources();
     void               invalidateGBufferDependentViews();
     void               flushGBufferResources();
     void               flushViewportResources();
@@ -227,10 +232,10 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               executeDeferredMainGraph(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH);
     void               saveShadowSettingsToConfig(const ShadowSettings& shadowSettings) const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
-    void               applyPendingViewportResize();
-    void               applyPendingShadowResourceRefresh();
-    [[nodiscard]] bool applyPendingSharedDepthFormatRefresh();
-    [[nodiscard]] bool applyPendingAttachmentFormatRefresh();
+    void               markPendingResourceRefresh(EDeferredPendingResourceRefresh refresh);
+    [[nodiscard]] bool hasPendingResourceRefresh(EDeferredPendingResourceRefresh refresh) const;
+    void               clearPendingResourceRefresh(EDeferredPendingResourceRefresh refresh);
+    void               applyPendingResourceRefreshes();
     void               requestViewportResize(Extent2D extent);
     void               requestShadowResourceRefresh();
     void               initRenderTargets(Extent2D extent);
