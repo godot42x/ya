@@ -177,6 +177,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     RenderImage* getBloomBlurImage() const override { return _postProcessStage.getBloomBlurImage(); }
     RenderImage* getBloomCompositeImage() const override { return _postProcessStage.getBloomCompositeImage(); }
     bool     isPostprocessingEnabled() const override { return _postProcessStage.isEnabled(); }
+    RenderImage* getPostprocessOutputImage() const override { return _postProcessStage.getOutputImage(); }
 
   private:
     void               loadPersistentSettings();

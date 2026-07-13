@@ -161,7 +161,7 @@ int AppFrameLoop::iterate(App& app, float dt)
         AppAutomation::onFrameCompleted(app,
                                         AppAutomationFrameContext{
                                             .render                     = app.getRender(),
-                                            .postprocessTexture         = app.getPostprocessOutputTexture(),
+                                            .postprocessImage           = renderRuntime ? renderRuntime->getPostprocessOutputImage() : nullptr,
                                             .viewportTexture            = renderRuntime ? renderRuntime->getActiveViewportTexture() : nullptr,
                                             .presentationTexture        = renderRuntime ? renderRuntime->getPresentationTexture() : nullptr,
                                             .requestRenderDocCapture    = diagnosticsService

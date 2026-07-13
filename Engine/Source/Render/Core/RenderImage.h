@@ -19,6 +19,7 @@ struct RenderImage
     [[nodiscard]] IImage* getImage() const { return image.get(); }
     [[nodiscard]] IImageView* getImageView() const { return defaultView.get(); }
     [[nodiscard]] std::shared_ptr<IImage> getImageShared() const { return image; }
+    [[nodiscard]] std::shared_ptr<IImageView> getImageViewShared() const { return defaultView; }
     [[nodiscard]] uint32_t getWidth() const { return image ? image->getWidth() : 0; }
     [[nodiscard]] uint32_t getHeight() const { return image ? image->getHeight() : 0; }
     [[nodiscard]] EFormat::T getFormat() const { return image ? image->getFormat() : EFormat::Undefined; }

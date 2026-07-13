@@ -9,6 +9,7 @@
 #include "Render/Core/Buffer.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/OffscreenJob.h"
+#include "Render/Core/RenderImage.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Core/Texture.h"
 
@@ -138,6 +139,44 @@ std::shared_ptr<IBuffer> createReadbackBuffer(IRender* render, uint32_t width, u
     });
 }
 
+struct ScreenshotSourceInfo
+{
+    std::shared_ptr<IImage> image;
+    Extent2D                extent{};
+    EFormat::T              format = EFormat::Undefined;
+
+    [[nodiscard]] bool isValid() const
+    {
+        return image != nullptr && extent.width > 0 && extent.height > 0 && format != EFormat::Undefined;
+    }
+};
+
+ScreenshotSourceInfo makeScreenshotSourceInfo(Texture* texture)
+{
+    if (!texture || !texture->getImage()) {
+        return {};
+    }
+
+    return ScreenshotSourceInfo{
+        .image  = texture->getImageShared(),
+        .extent = texture->getExtent(),
+        .format = texture->getFormat(),
+    };
+}
+
+ScreenshotSourceInfo makeScreenshotSourceInfo(RenderImage* image)
+{
+    if (!image || !image->getImage()) {
+        return {};
+    }
+
+    return ScreenshotSourceInfo{
+        .image  = image->getImageShared(),
+        .extent = image->getExtent(),
+        .format = image->getFormat(),
+    };
+}
+
 bool writePngFromReadback(const AppScreenshotCaptureState& state)
 {
     if (!state.readbackBuffer || state.width == 0 || state.height == 0) {
@@ -201,6 +240,7 @@ bool writePngFromReadback(const AppScreenshotCaptureState& state)
 
 bool AppScreenshotCapture::request(IRender*                        render,
                                    const OffscreenJobQueueService& offscreenQueueService,
+                                   RenderImage*                    postprocessSourceImage,
                                    Texture*                        viewportSourceTexture,
                                    Texture*                        presentationSourceTexture,
                                    AppScreenshotCaptureState&      state,
@@ -218,24 +258,25 @@ bool AppScreenshotCapture::request(IRender*                        render,
         return false;
     }
 
-    Texture* sourceTexture = target == EAutomationScreenshotTarget::Editor
-                               ? presentationSourceTexture
-                               : viewportSourceTexture;
-    if (!sourceTexture || !sourceTexture->getImage()) {
+    const ScreenshotSourceInfo source = target == EAutomationScreenshotTarget::Editor
+        ? makeScreenshotSourceInfo(presentationSourceTexture)
+        : (postprocessSourceImage ? makeScreenshotSourceInfo(postprocessSourceImage)
+                                  : makeScreenshotSourceInfo(viewportSourceTexture));
+    if (!source.isValid()) {
         return false;
     }
 
-    const Extent2D extent = sourceTexture->getExtent();
+    const Extent2D extent = source.extent;
     if (extent.width == 0 || extent.height == 0) {
         return false;
     }
-    if (!isSupportedScreenshotFormat(sourceTexture->getFormat())) {
-        YA_CORE_WARN("Unsupported screenshot source format {}", static_cast<int>(sourceTexture->getFormat()));
+    if (!isSupportedScreenshotFormat(source.format)) {
+        YA_CORE_WARN("Unsupported screenshot source format {}", static_cast<int>(source.format));
         state.bFailed = true;
         return false;
     }
 
-    auto readbackBuffer = createReadbackBuffer(render, extent.width, extent.height, sourceTexture->getFormat());
+    auto readbackBuffer = createReadbackBuffer(render, extent.width, extent.height, source.format);
     if (!readbackBuffer) {
         YA_CORE_ERROR("Failed to create screenshot readback buffer");
         state.bFailed = true;
@@ -246,7 +287,7 @@ bool AppScreenshotCapture::request(IRender*                        render,
     state.readbackBuffer               = std::move(readbackBuffer);
     state.width                        = extent.width;
     state.height                       = extent.height;
-    state.sourceFormat                 = sourceTexture->getFormat();
+    state.sourceFormat                 = source.format;
     state.target                       = target;
     state.recordedFrameIndex           = 0;
     state.bCompleted                   = false;
@@ -257,12 +298,6 @@ bool AppScreenshotCapture::request(IRender*                        render,
     if (target == EAutomationScreenshotTarget::Editor) {
         state.bPendingPresentationCapture = true;
         return true;
-    }
-
-    const std::shared_ptr<IImage> sourceImage = sourceTexture->getImageShared();
-    if (!sourceImage) {
-        state.bFailed = true;
-        return false;
     }
 
     auto job       = std::make_shared<OffscreenJobState>();
@@ -279,7 +314,7 @@ bool AppScreenshotCapture::request(IRender*                        render,
             .isDepth = false,
         });
     };
-    job->executeFn = [sourceImage, readbackBuffer = state.readbackBuffer, extent](ICommandBuffer* cmdBuf, Texture*) -> bool
+    job->executeFn = [sourceImage = source.image, readbackBuffer = state.readbackBuffer, extent](ICommandBuffer* cmdBuf, Texture*) -> bool
     {
         if (!cmdBuf || !sourceImage || !readbackBuffer) {
             return false;

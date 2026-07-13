@@ -145,6 +145,14 @@ Texture* RenderRuntime::getPostprocessOutputTexture() const
     return nullptr;
 }
 
+RenderImage* RenderRuntime::getPostprocessOutputImage() const
+{
+    if (auto* pipeline = getActivePipelineDebugOutputs()) {
+        return pipeline->getPostprocessOutputImage();
+    }
+    return nullptr;
+}
+
 Texture* RenderRuntime::getPresentationTexture() const
 {
     if (!_screenRT) {
@@ -175,6 +183,7 @@ RenderPipelineDebugOutputCatalog RenderRuntime::buildPipelineDebugOutputCatalog(
     catalog.viewportDepthTexture   = pipeline->getViewportDepthTexture();
     catalog.shadowDirectionalDepth = pipeline->getShadowDirectionalDepthIV();
     catalog.postprocessOutput      = pipeline->getPostprocessOutputTexture();
+    catalog.postprocessOutputImage = pipeline->getPostprocessOutputImage();
     catalog.bloomExtract           = pipeline->getBloomExtractImage();
     catalog.bloomBlur              = pipeline->getBloomBlurImage();
     catalog.bloomComposite         = pipeline->getBloomCompositeImage();

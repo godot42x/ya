@@ -15,6 +15,7 @@ enum class EAutomationScreenshotTarget : uint8_t;
 struct ICommandBuffer;
 struct OffscreenJobQueueService;
 struct OffscreenJobState;
+struct RenderImage;
 struct Texture;
 
 struct AppScreenshotCaptureState
@@ -38,6 +39,7 @@ class AppScreenshotCapture
   public:
     static bool request(IRender* render,
                         const OffscreenJobQueueService& offscreenQueueService,
+                        RenderImage* postprocessSourceImage,
                         Texture* viewportSourceTexture,
                         Texture* presentationSourceTexture,
                         AppScreenshotCaptureState& state,

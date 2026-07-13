@@ -36,7 +36,7 @@ class BasicShadowMapTechnique : public IShadowTechnique
     [[nodiscard]] DirectionalShadowPass& getDirectionalPass() { return _directionalPass; }
     [[nodiscard]] PointShadowPass&       getPointPass() { return _pointPass; }
 
-    void refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent);
+    void refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent) override;
 
   private:
     void                    rebuildLayerTextures(const std::shared_ptr<IImage>& shadowImage);

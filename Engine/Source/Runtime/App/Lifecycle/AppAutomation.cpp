@@ -227,7 +227,8 @@ bool handleScreenshotAutomation(App& app, const AppAutomationFrameContext& frame
 
     runtimeState.bScreenshotRequested = AppScreenshotCapture::request(frameContext.render,
                                                                       AppAutomation::buildOffscreenJobQueueService(app),
-                                                                      frameContext.postprocessTexture ? frameContext.postprocessTexture : frameContext.viewportTexture,
+                                                                      frameContext.postprocessImage,
+                                                                      frameContext.viewportTexture,
                                                                       frameContext.presentationTexture,
                                                                       runtimeState.screenshot,
                                                                       *automation.screenshotPath,

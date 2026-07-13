@@ -54,6 +54,7 @@ struct RenderPipelineDebugOutputCatalog
     Texture*       viewportDepthTexture   = nullptr;
     IImageView*    shadowDirectionalDepth = nullptr;
     Texture*       postprocessOutput      = nullptr;
+    RenderImage*   postprocessOutputImage = nullptr;
     RenderImage*   bloomExtract           = nullptr;
     RenderImage*   bloomBlur              = nullptr;
     RenderImage*   bloomComposite         = nullptr;
@@ -195,6 +196,7 @@ struct RenderRuntime
     [[nodiscard]] const RenderDiagnosticsService& getDiagnosticsService() const { return _diagnostics; }
 
     [[nodiscard]] Texture* getPostprocessOutputTexture() const;
+    [[nodiscard]] RenderImage* getPostprocessOutputImage() const;
     [[nodiscard]] Texture* getActiveViewportTexture() const;
     [[nodiscard]] Texture* getPresentationTexture() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;

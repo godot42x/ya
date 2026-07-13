@@ -96,6 +96,43 @@ RGImportedTextureDesc makePostprocessImportedTextureDesc(const Texture& texture,
     };
 }
 
+RGImportedTextureDesc makePostprocessImportedTextureDesc(const RenderImage& image,
+                                                         std::string_view   label,
+                                                         EImageLayout::T    finalLayout)
+{
+    YA_CORE_ASSERT(image.getImageShared() != nullptr, "Render graph import requires a backing image");
+
+    IImage* rawImage = image.getImage();
+    YA_CORE_ASSERT(rawImage != nullptr, "Render graph import requires a valid image");
+
+    return RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label       = std::string(label),
+            .format      = image.getFormat(),
+            .extent      = Extent3D{image.getWidth(), image.getHeight(), 1},
+            .mipLevels   = rawImage->getMipLevels(),
+            .arrayLayers = rawImage->getArrayLayers(),
+            .usage       = rawImage->getUsage(),
+        },
+        .importDesc = ImportedImageDesc{
+            .label         = std::string(label),
+            .nativeHandle  = static_cast<void*>(rawImage->getHandle()),
+            .format        = image.getFormat(),
+            .usage         = rawImage->getUsage(),
+            .extent        = Extent3D{image.getWidth(), image.getHeight(), 1},
+            .mipLevels     = rawImage->getMipLevels(),
+            .arrayLayers   = rawImage->getArrayLayers(),
+            .initialLayout = rawImage->getCompatibilityLayout(),
+            .finalLayout   = finalLayout,
+        },
+        .image = image.getImageShared(),
+        .viewDesc = ImageViewCreateInfo{
+            .label       = std::string(label) + "_ImportedView",
+            .aspectFlags = EImageAspect::Color,
+        },
+    };
+}
+
 } // namespace
 
 void PostProcessingStage::requestResize(Extent2D extent)
@@ -126,15 +163,16 @@ void PostProcessingStage::recreateOutputTexture(Extent2D extent)
         return;
     }
 
-    _postprocessTexture = Texture::createRenderTexture(RenderTextureCreateInfo{
-        .label   = "PostprocessRT",
-        .width   = extent.width,
-        .height  = extent.height,
-        .format  = _colorFormat,
-        .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
-        .samples = ESampleCount::Sample_1,
-        .isDepth = false,
-    });
+    _postprocessOutputImage = createPostprocessRenderImage(_render, "PostprocessRT", extent, _colorFormat);
+    if (_postprocessOutputImage && _postprocessOutputImage->isValid()) {
+        _postprocessOutputTextureCompat = Texture::wrap(
+            _postprocessOutputImage->getImageShared(),
+            _postprocessOutputImage->getImageViewShared(),
+            "PostprocessRT_Compat");
+    }
+    else {
+        _postprocessOutputTextureCompat.reset();
+    }
 
     _bloomCompositeImage = createPostprocessRenderImage(_render, "BloomCompositeRT", extent, EFormat::R16G16B16A16_SFLOAT);
 }
@@ -219,7 +257,8 @@ void PostProcessingStage::shutdown()
     _bloomBlurPingImage.reset();
     _bloomBlurPongImage.reset();
     _bloomCompositeImage.reset();
-    _postprocessTexture.reset();
+    _postprocessOutputImage.reset();
+    _postprocessOutputTextureCompat.reset();
     _pendingResizeExtent = {};
     _bResizePending      = false;
     _render = nullptr;
@@ -296,11 +335,11 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
         return inputTexture;
     }
 
-    if (!_postprocessTexture || _postprocessTexture->getExtent() != inputExtent) {
+    if (!_postprocessOutputImage || _postprocessOutputImage->getExtent() != inputExtent) {
         requestResize(inputExtent);
         return inputTexture;
     }
-    if (!_postprocessTexture) {
+    if (!_postprocessOutputImage || !_postprocessOutputTextureCompat) {
         return inputTexture;
     }
 
@@ -328,7 +367,7 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
 
     RenderGraph graph;
     const auto  input = graph.importTexture(makePostprocessImportedTextureDesc(*inputTexture, "Postprocessing.Input", EImageLayout::ShaderReadOnlyOptimal));
-    const auto  output = graph.importTexture(makePostprocessImportedTextureDesc(*_postprocessTexture, "Postprocessing.Output", EImageLayout::ShaderReadOnlyOptimal));
+    const auto  output = graph.importTexture(makePostprocessImportedTextureDesc(*_postprocessOutputImage, "Postprocessing.Output", EImageLayout::ShaderReadOnlyOptimal));
 
     [[maybe_unused]] const auto pass = graph.addPass(
         "Postprocessing",
@@ -364,16 +403,16 @@ Texture* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
         return inputTexture;
     }
 
-    return _postprocessTexture.get();
+    return _postprocessOutputTextureCompat.get();
 }
 
 void PostProcessingStage::onViewportResized(Extent2D newExtent)
 {
-    if (!_render || !_postprocessTexture || newExtent.width == 0 || newExtent.height == 0) {
+    if (!_render || !_postprocessOutputImage || newExtent.width == 0 || newExtent.height == 0) {
         return;
     }
 
-    if (_postprocessTexture->getExtent() == newExtent) {
+    if (_postprocessOutputImage->getExtent() == newExtent) {
         return;
     }
 

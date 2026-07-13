@@ -13,12 +13,13 @@ struct AppAutomationOptions;
 struct ICommandBuffer;
 struct IRender;
 struct OffscreenJobQueueService;
+struct RenderImage;
 struct Texture;
 
 struct AppAutomationFrameContext
 {
     IRender*                                render                            = nullptr;
-    Texture*                                postprocessTexture                = nullptr;
+    RenderImage*                            postprocessImage                  = nullptr;
     Texture*                                viewportTexture                   = nullptr;
     Texture*                                presentationTexture               = nullptr;
     std::function<bool()>                   requestRenderDocCapture;

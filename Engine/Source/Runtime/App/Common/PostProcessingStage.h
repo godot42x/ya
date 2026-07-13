@@ -33,7 +33,8 @@ struct PostProcessingStage
     stdptr<RenderImage>         _bloomBlurPingImage = nullptr;
     stdptr<RenderImage>         _bloomBlurPongImage = nullptr;
     stdptr<RenderImage>         _bloomCompositeImage = nullptr;
-    stdptr<Texture>             _postprocessTexture = nullptr;
+    stdptr<RenderImage>         _postprocessOutputImage = nullptr;
+    stdptr<Texture>             _postprocessOutputTextureCompat = nullptr;
     Extent2D                    _pendingResizeExtent{};
     bool                        _bResizePending      = false;
 
@@ -50,7 +51,8 @@ struct PostProcessingStage
     void     onViewportResized(Extent2D newExtent);
 
     [[nodiscard]] bool                       isEnabled() const { return bEnabled; }
-    [[nodiscard]] Texture*                   getOutputTexture() const { return _postprocessTexture.get(); }
+    [[nodiscard]] Texture*                   getOutputTexture() const { return _postprocessOutputTextureCompat.get(); }
+    [[nodiscard]] RenderImage*               getOutputImage() const { return _postprocessOutputImage.get(); }
     [[nodiscard]] RenderImage*               getBloomExtractImage() const { return _bloomExtractImage.get(); }
     [[nodiscard]] RenderImage*               getBloomBlurImage() const { return _bloomBlurPongImage ? _bloomBlurPongImage.get() : _bloomBlurPingImage.get(); }
     [[nodiscard]] RenderImage*               getBloomCompositeImage() const { return _bloomCompositeImage.get(); }
