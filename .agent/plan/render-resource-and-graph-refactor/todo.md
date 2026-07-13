@@ -229,6 +229,7 @@
 - compiled graph 已开始产出最小 texture/buffer required state plan（read/storage/color/depth）；texture plan 已在 executor 中先接入 `ResourceStateTracker -> transitionImageLayout()`，buffer plan 已接入最小 `bufferMemoryBarrier()` 发射，后续仍需与统一 barrier backend 收敛
 - 已补最小 clear/copy smoke 测试：graph pass callback 可驱动 `beginRendering/endRendering` 与 `copyBuffer`，用于压实 executor/resource resolve/command buffer 调用链
 - `PBRGenerateBrdfLUT` 已作为首个真实 graph-backed utility pass 试点：执行路径改为 build graph -> import output RenderImage -> executor 驱动 draw pass，后续可按同模式迁移 irradiance/prefilter/cubemap conversion
+- `PBRGenerateBrdfLUT` 不再回退到手写 dynamic rendering 初始化路径：该路径在 MoltenVK 启动阶段曾触发 attachment 构造崩溃，当前保持 graph-backed execute 作为稳定基线
 - `EquidistantCylindrical2CubeMap` 已接入第二个 graph-backed utility pass 试点：graph import 现支持复用现有 shared image 并指定 view desc，单 face 输出 attachment 不再依赖 `Texture::wrap()` 临时 adapter
 - `CubeMap2PBRIrradianceMap` 已按同模式接入 graph-backed 执行：input cubemap 与 output face view 都经由 imported graph resource + view desc 进入 executor，utility pass 迁移开始形成可复用模板
 - `CubeMap2PBRPrefilteredEnv` 已接入 graph-backed 执行：同一模板已覆盖 mip+face 双层 subresource 输出，说明 imported graph texture + view desc + state plan 已足以承接完整环境贴图 utility pipeline
