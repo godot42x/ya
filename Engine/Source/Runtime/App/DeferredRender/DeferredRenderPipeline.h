@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Core/Math/Geometry.h"
+#include "DeferredGBufferResources.h"
+#include "DeferredViewportResources.h"
 #include "GBufferStage.h"
 #include "LightStage.h"
 #include "Render/Core/DescriptorSet.h"
@@ -118,9 +120,10 @@ struct DeferredRenderPipeline : public IRenderPipeline
     bool               _bShadowResourceRefreshPending = false;
 
     // ── Frame state ───────────────────────────────────────────────────
-    RenderingInfo            _viewportRI{};
-    RenderingInfo::ImageSpec _viewportDepthSpec{};
-    FrameContext             _lastTickCtx{};
+    DeferredGBufferResources   _currentGBufferResources{};
+    DeferredViewportResources  _currentViewportResources{};
+    RenderingInfo              _viewportRI{};
+    FrameContext               _lastTickCtx{};
     RenderPipelineFrameContext _lastFrameInput{};
     ShadowSettings             _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
 
@@ -180,6 +183,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               refreshDirtyResources();
     void               refreshViewportSizedStageResources();
     void               invalidateGBufferDependentViews();
+    void               refreshCurrentFrameResources();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);
     void               updateStageFrameInputs();
     [[nodiscard]] ShadowSettings currentShadowSettings() const;

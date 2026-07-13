@@ -4,6 +4,7 @@
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Core/Profiling/Profiling.h"
+#include "DeferredViewportResources.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/System/ResourceResolveSystem.h"
@@ -41,6 +42,23 @@ DeferredGBufferResources buildDeferredGBufferResources(IRenderTarget* gBufferRT)
     for (uint32_t attachmentIndex = 0; attachmentIndex < resources.color.size(); ++attachmentIndex) {
         resources.color[attachmentIndex] = frameBuffer->getColorTexture(attachmentIndex);
     }
+    resources.depth = frameBuffer->getDepthTexture();
+    return resources;
+}
+
+DeferredViewportResources buildDeferredViewportResources(IRenderTarget* viewportRT)
+{
+    DeferredViewportResources resources{};
+    if (!viewportRT) {
+        return resources;
+    }
+
+    auto* frameBuffer = viewportRT->getCurFrameBuffer();
+    if (!frameBuffer) {
+        return resources;
+    }
+
+    resources.color = frameBuffer->getColorTexture(0);
     resources.depth = frameBuffer->getDepthTexture();
     return resources;
 }
@@ -482,6 +500,8 @@ void DeferredRenderPipeline::shutdown()
     _pendingViewportExtent           = {};
     _bViewportResizePending          = false;
     _bShadowResourceRefreshPending   = false;
+    _currentGBufferResources         = {};
+    _currentViewportResources        = {};
 
     if (_overlayStage) {
         _overlayStage->destroy();
@@ -570,6 +590,7 @@ void DeferredRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, 
     applyPendingShadowResourceRefresh();
     _postProcessStage.beginFrame();
     captureShadowSettings(frame);
+    refreshCurrentFrameResources();
 
     vpW = static_cast<uint32_t>(frame.viewportRect.extent.x);
     vpH = static_cast<uint32_t>(frame.viewportRect.extent.y);
@@ -682,6 +703,8 @@ void DeferredRenderPipeline::refreshViewportSizedStageResources()
     if (_overlayStage) {
         _overlayStage->refreshPipelineFormats(_viewportRT.get());
     }
+
+    refreshCurrentFrameResources();
 }
 
 void DeferredRenderPipeline::invalidateGBufferDependentViews()
@@ -696,6 +719,12 @@ void DeferredRenderPipeline::invalidateGBufferDependentViews()
     if (_lightStage) {
         _lightStage->invalidateGBufferDescriptors();
     }
+}
+
+void DeferredRenderPipeline::refreshCurrentFrameResources()
+{
+    _currentGBufferResources  = buildDeferredGBufferResources(_gBufferRT.get());
+    _currentViewportResources = buildDeferredViewportResources(_viewportRT.get());
 }
 
 void DeferredRenderPipeline::executeSSAOPass(const RenderStageContext& stageCtx)
@@ -842,8 +871,8 @@ void DeferredRenderPipeline::executeViewportPass(const RenderPipelineFrameContex
 
 void DeferredRenderPipeline::copyGBufferDepthToViewport(ICommandBuffer* cmdBuf)
 {
-    auto* gbufferDepth  = _gBufferRT ? _gBufferRT->getCurFrameBuffer()->getDepthTexture() : nullptr;
-    auto* viewportDepth = _viewportRT ? _viewportRT->getCurFrameBuffer()->getDepthTexture() : nullptr;
+    auto* gbufferDepth  = _currentGBufferResources.depth;
+    auto* viewportDepth = _currentViewportResources.depth;
     if (!cmdBuf || !gbufferDepth || !viewportDepth) {
         return;
     }
@@ -886,8 +915,8 @@ void DeferredRenderPipeline::copyGBufferDepthToViewport(ICommandBuffer* cmdBuf)
                     .baseArrayLayer = 0,
                     .layerCount     = 1,
                 },
-                .extentWidth  = _gBufferRT->getExtent().width,
-                .extentHeight = _gBufferRT->getExtent().height,
+                .extentWidth  = gbufferDepth->getWidth(),
+                .extentHeight = gbufferDepth->getHeight(),
                 .extentDepth  = 1,
             },
         });
@@ -904,19 +933,6 @@ void DeferredRenderPipeline::copyGBufferDepthToViewport(ICommandBuffer* cmdBuf)
 void DeferredRenderPipeline::beginViewportRendering(const RenderPipelineFrameContext& frame)
 {
     auto cmdBuf = frame.cmdBuf;
-
-    _viewportDepthSpec = RenderingInfo::ImageSpec{
-        .image         = _viewportRT->getCurFrameBuffer()->getDepthTexture()
-                             ? _viewportRT->getCurFrameBuffer()->getDepthTexture()->getImage()
-                             : nullptr,
-        .imageView     = _viewportRT->getCurFrameBuffer()->getDepthTexture()
-                             ? _viewportRT->getCurFrameBuffer()->getDepthTexture()->getImageView()
-                             : nullptr,
-        .loadOp        = EAttachmentLoadOp::Load,
-        .storeOp       = EAttachmentStoreOp::Store,
-        .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
-        .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-    };
 
     _viewportRI = RenderingInfo{
         .label            = "Viewport Pass",
@@ -948,7 +964,7 @@ void DeferredRenderPipeline::finalizeViewportPass(ICommandBuffer* cmdBuf)
 
     cmdBuf->endRendering(_viewportRI);
 
-    auto* inputTexture = _viewportRT->getCurFrameBuffer()->getColorTexture(0);
+    auto* inputTexture = _currentViewportResources.color;
     {
         YA_PERF_SCOPE(perf::sample::renderPostProcess(), perf::metric::cpuTimeMs(), perf::domain::render());
         viewportTexture = _postProcessStage.execute(
