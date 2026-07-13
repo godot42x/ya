@@ -48,6 +48,8 @@
 - 在 Deferred 主链路仍保留 `refreshDirtyResources()` / attachment-owning `IRenderTarget` 兼容路径期间，不继续做纯 facade/接口美化类收口，除非它能直接减少 dirty fallback、资源 owner 或 graph 外显式依赖
 - 在 Deferred 主链路完全 graph 化前，不把精力转向 Forward graph、OpenGL 恢复或 editor extension API 细化
 - 若 todo 中某项只在“最终完全删除 legacy path”时才算完成，就不要因为已有 graph shell 或兼容过渡层而过早勾选
+- 对 `_ssaoTexture`、postprocess output 这类已经显式化为 `RenderImage` owner 的 intermediate，不再做“owner 从 A 挪到 B”的局部整理；下一次变更应直接以 `RenderGraphResourceRegistry` 接管 replacement / lifetime 为目标
+- 但在当前代码状态下，`RenderGraphResourceRegistry` 仍只在单次 graph execute 内 `sync()` transient/persistent/imported 资源，并不承担 frame-to-frame replacement / lifetime；因此把 Deferred intermediate owner 交给 registry 之前，应先补 registry 的持久化策略与 replacement 约束
 
 ## 3. 当前资源模型问题
 

@@ -292,6 +292,8 @@
 ### 调查结论 / 停止线
 
 - 当前 Deferred `GBuffer / Viewport` 的 attachment spec 变更入口已经基本收敛到 pipeline 内部显式路径：viewport resize、shared depth format、editor color format 都已有 pending refresh 承接；`refreshDirtyResources()` attachment fallback 已删除，并以断言约束残余隐式 mutation
+- 当前 `_ssaoTexture` 与 postprocess output 已是显式 `RenderImage` owner；它们下一次值得做的迁移应直接指向 `RenderGraphResourceRegistry` 接管 replacement/lifetime，而不是继续做 owner 搬移式小重构
+- 额外调查：当前 `RenderGraphResourceRegistry` 仍是“单次 execute 临时 sync”模型，缺少 frame-to-frame persistent replacement / lifetime 管理；因此 SSAO/postprocess 若要真正交给 registry 接管，下一批应先补 registry 生命周期能力，而不是继续在 pipeline/stage 间搬 owner
 - 因此继续追加 facade-only 收口的收益已经明显下降；Phase 7 后续优先做“删除 owner / graph 接管 replacement / 删除残余 dirty state”，不继续堆只改变接口表述的小提交
 - 现有 checklist 保持“删除 legacy path 后才勾选”的口径；已有 graph shell 或兼容层不单独视为完成
 
