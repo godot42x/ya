@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DeferredGBufferResources.h"
 #include "Runtime/App/Common/Shadow/Common/ShadowRuntimeState.h"
 
 #include "Render/Core/DescriptorSet.h"
@@ -44,10 +45,10 @@ struct LightStage : public IRenderStage
     static constexpr EFormat::T LINEAR_FORMAT = EFormat::R16G16B16A16_SFLOAT;
     static constexpr EFormat::T DEPTH_FORMAT  = EFormat::D32_SFLOAT;
 
-    IRender*       _render       = nullptr;
-    GBufferStage*  _gBufferStage = nullptr; // borrows frame+light DS
-    IRenderTarget* _gBufferRT    = nullptr; // borrows GBuffer textures
-    RenderImage*   _ssaoTexture  = nullptr;
+    IRender*                  _render           = nullptr;
+    GBufferStage*             _gBufferStage     = nullptr; // borrows frame+light DS
+    DeferredGBufferResources  _gBufferResources{};
+    RenderImage*              _ssaoTexture      = nullptr;
 
     // Pipeline (shared across flights)
     stdptr<IGraphicsPipeline>    _pipeline;
@@ -64,7 +65,8 @@ struct LightStage : public IRenderStage
     stdptr<IDescriptorSetLayout> _shadowDSL;
     DescriptorSetHandle          _shadowDS = nullptr;
 
-    IFrameBuffer* _lastGBufferFrameBuffer = nullptr;
+    std::array<ImageViewHandle, 4> _lastGBufferImageViewHandles{};
+    ImageViewHandle                _lastGBufferDepthImageViewHandle = nullptr;
     ImageViewHandle _lastSSAOImageViewHandle = nullptr;
     ImageViewHandle _lastShadowDirectionalImageViewHandle = nullptr;
     std::array<ImageViewHandle, MAX_POINT_LIGHTS> _lastShadowPointCubeImageViewHandles{};
@@ -88,8 +90,8 @@ struct LightStage : public IRenderStage
     LightStage() : IRenderStage("LightPass") {}
 
     /// @param gBufferStage  Provides frame+light DSL and per-flight DS
-    /// @param gBufferRT     Provides GBuffer color textures for sampling
-    void setup(GBufferStage* gBufferStage, IRenderTarget* gBufferRT);
+    /// @param gBufferResources Provides GBuffer textures for sampling
+    void setup(GBufferStage* gBufferStage, const DeferredGBufferResources& gBufferResources);
     void setEnvironmentLightingInput(EnvironmentLightingInput input);
     void setFrameInputs(FrameInputs frameInputs);
     void setSSAOTexture(RenderImage* ssaoTexture);

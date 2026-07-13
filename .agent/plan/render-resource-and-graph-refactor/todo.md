@@ -237,6 +237,7 @@
 - Deferred viewport-sized intermediate resources 已开始按单一 frame-boundary 批次刷新：viewport resize 现在会一起完成 `GBuffer RT / Viewport RT / SSAO image / postprocess` 替换和 stage 重绑，不再额外挂一条 SSAO resize 队列；这一步先把 ownership 从分散 pending path 收成统一更新点，后续更容易替换成 graph registry
 - Deferred `refreshDirtyResources()` 已从每帧无条件 `flushDirty()` 收紧为 attachment-spec 变化时的 fallback 修复；resize 主路径不再依赖 runtime tick 内的隐式自修复，后续可以继续朝“显式 replacement、删除 dirty repair path”推进
 - Deferred `SSAOStage` / `LightStage` 已不再订阅 `IRenderTarget::onFramebufferRecreated`；GBuffer/SSAO descriptor invalidation 现改回 pipeline 显式资源替换点统一触发，进一步减少 stage 对 legacy render-target 内部事件的依赖
+- Deferred `SSAOStage` / `LightStage` 的 GBuffer 读取路径已从 `IRenderTarget -> FrameBuffer -> Texture` 间接反查切到显式 `DeferredGBufferResources` 输入；这一步先把 attachment dependency 从隐式容器借用改成 pipeline 明确传入的资源绑定，后续更容易替换成 graph imported handles
 
 ## Phase 7: Deferred Graph 迁移
 

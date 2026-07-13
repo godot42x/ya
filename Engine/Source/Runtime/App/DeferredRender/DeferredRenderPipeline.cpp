@@ -26,6 +26,25 @@ namespace
 constexpr const char* DEFERRED_PIPELINE_CONFIG_DOC_NAME                       = "editor";
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SSAO                = "render.deferred.ssao.enabled";
 
+DeferredGBufferResources buildDeferredGBufferResources(IRenderTarget* gBufferRT)
+{
+    DeferredGBufferResources resources{};
+    if (!gBufferRT) {
+        return resources;
+    }
+
+    auto* frameBuffer = gBufferRT->getCurFrameBuffer();
+    if (!frameBuffer) {
+        return resources;
+    }
+
+    for (uint32_t attachmentIndex = 0; attachmentIndex < resources.color.size(); ++attachmentIndex) {
+        resources.color[attachmentIndex] = frameBuffer->getColorTexture(attachmentIndex);
+    }
+    resources.depth = frameBuffer->getDepthTexture();
+    return resources;
+}
+
 stdptr<RenderImage> createSSAOImage(IRender* render, Extent2D extent)
 {
     return createRenderImage(
@@ -428,12 +447,12 @@ void DeferredRenderPipeline::initStages()
     _gBufferStage->init(_render);
 
     _ssaoStage = ya::makeShared<SSAOStage>();
-    _ssaoStage->setup(_gBufferRT.get(), _ssaoTexture.get());
+    _ssaoStage->setup(buildDeferredGBufferResources(_gBufferRT.get()), _ssaoTexture.get());
     _ssaoStage->setSettings(_ssaoStage->getRadius(), _ssaoStage->getBias(), _ssaoStage->getPower(), _ssaoStage->getIntensity(), _bReverseViewportY);
     _ssaoStage->init(_render);
 
     _lightStage = ya::makeShared<LightStage>();
-    _lightStage->setup(_gBufferStage.get(), _gBufferRT.get());
+    _lightStage->setup(_gBufferStage.get(), buildDeferredGBufferResources(_gBufferRT.get()));
     _lightStage->setEnvironmentLightingInput(LightStage::EnvironmentLightingInput{
         .environmentLightingDSL = _environmentLightingDSL,
         .getSceneEnvironmentLightingDescriptorSet = _getSceneEnvironmentLightingDescriptorSet,
@@ -646,7 +665,7 @@ void DeferredRenderPipeline::refreshViewportSizedStageResources()
     invalidateGBufferDependentViews();
 
     if (_ssaoStage) {
-        _ssaoStage->setup(_gBufferRT.get(), _ssaoTexture.get());
+        _ssaoStage->setup(buildDeferredGBufferResources(_gBufferRT.get()), _ssaoTexture.get());
         _ssaoStage->refreshPipelineFormat();
     }
 
@@ -655,6 +674,7 @@ void DeferredRenderPipeline::refreshViewportSizedStageResources()
     }
 
     if (_lightStage) {
+        _lightStage->setup(_gBufferStage.get(), buildDeferredGBufferResources(_gBufferRT.get()));
         _lightStage->setSSAOTexture(_ssaoTexture.get());
         _lightStage->refreshPipelineFormats(_viewportRT.get());
     }

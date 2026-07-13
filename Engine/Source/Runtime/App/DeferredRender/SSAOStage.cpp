@@ -119,10 +119,10 @@ RGImportedTextureDesc makeSSAOImportedTextureDesc(const RenderImage& image,
 
 } // namespace
 
-void SSAOStage::setup(IRenderTarget* gBufferRT, RenderImage* targetTexture)
+void SSAOStage::setup(const DeferredGBufferResources& gBufferResources, RenderImage* targetTexture)
 {
-    _gBufferRT      = gBufferRT;
-    _targetTexture  = targetTexture;
+    _gBufferResources = gBufferResources;
+    _targetTexture    = targetTexture;
     invalidateInputDescriptors();
 }
 
@@ -140,7 +140,8 @@ void SSAOStage::refreshPipelineFormat()
 
 void SSAOStage::invalidateInputDescriptors()
 {
-    _lastGBufferFrameBuffer          = nullptr;
+    _lastGBufferImageViewHandles.fill(nullptr);
+    _lastGBufferDepthImageViewHandle = nullptr;
     _lastTargetImageViewHandle       = _targetTexture && _targetTexture->getImageView() ? _targetTexture->getImageView()->getHandle() : ImageViewHandle{};
     _bInputDescriptorsInitialized    = false;
     _lastInputDescriptorWriteCount   = 0;
@@ -254,11 +255,12 @@ void SSAOStage::destroy()
     _pipeline.reset();
     _pipelineLayout.reset();
 
-    _render        = nullptr;
-    _gBufferRT     = nullptr;
-    _targetTexture = nullptr;
-    _lastGBufferFrameBuffer = nullptr;
-    _lastTargetImageViewHandle = nullptr;
+    _render                       = nullptr;
+    _gBufferResources             = {};
+    _targetTexture                = nullptr;
+    _lastGBufferImageViewHandles.fill(nullptr);
+    _lastGBufferDepthImageViewHandle = nullptr;
+    _lastTargetImageViewHandle    = nullptr;
     _bInputDescriptorsInitialized = false;
     _lastInputDescriptorWriteCount = 0;
 }
@@ -287,33 +289,46 @@ void SSAOStage::updateFrameUBO(const RenderStageContext& ctx)
 
 void SSAOStage::updateInputDescriptors()
 {
-    if (!_gBufferRT || !_targetTexture || !_noiseTexture) {
+    if (!_gBufferResources.isComplete() || !_targetTexture || !_noiseTexture) {
         return;
     }
 
-    auto* frameBuffer = _gBufferRT->getCurFrameBuffer();
-    if (!frameBuffer) {
+    auto* albedo = _gBufferResources.color[0];
+    auto* normal = _gBufferResources.color[1];
+    auto* depth  = _gBufferResources.depth;
+    if (!albedo || !normal || !depth) {
         return;
     }
 
+    const std::array<ImageViewHandle, 4> gbufferImageViewHandles = {
+        albedo->getImageView() ? albedo->getImageView()->getHandle() : ImageViewHandle{},
+        normal->getImageView() ? normal->getImageView()->getHandle() : ImageViewHandle{},
+        _gBufferResources.color[2] && _gBufferResources.color[2]->getImageView() ? _gBufferResources.color[2]->getImageView()->getHandle() : ImageViewHandle{},
+        _gBufferResources.color[3] && _gBufferResources.color[3]->getImageView() ? _gBufferResources.color[3]->getImageView()->getHandle() : ImageViewHandle{},
+    };
+    const auto depthHandle = depth->getImageView() ? depth->getImageView()->getHandle() : ImageViewHandle{};
     const auto targetHandle = _targetTexture->getImageView() ? _targetTexture->getImageView()->getHandle() : ImageViewHandle{};
-    if (_bInputDescriptorsInitialized && _lastGBufferFrameBuffer == frameBuffer && _lastTargetImageViewHandle == targetHandle) {
+    if (_bInputDescriptorsInitialized &&
+        _lastGBufferImageViewHandles == gbufferImageViewHandles &&
+        _lastGBufferDepthImageViewHandle == depthHandle &&
+        _lastTargetImageViewHandle == targetHandle) {
         _lastInputDescriptorWriteCount = 0;
         return;
     }
 
     auto sampler = TextureLibrary::get().getDefaultSampler();
     _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::writeOneImage(_inputDS, 0, frameBuffer->getColorTexture(0)->getImageView(), sampler.get()),
-        IDescriptorSetHelper::writeOneImage(_inputDS, 1, frameBuffer->getColorTexture(1)->getImageView(), sampler.get()),
-        IDescriptorSetHelper::writeOneImage(_inputDS, 2, frameBuffer->getDepthTexture()->getImageView(), sampler.get()),
+        IDescriptorSetHelper::writeOneImage(_inputDS, 0, albedo->getImageView(), sampler.get()),
+        IDescriptorSetHelper::writeOneImage(_inputDS, 1, normal->getImageView(), sampler.get()),
+        IDescriptorSetHelper::writeOneImage(_inputDS, 2, depth->getImageView(), sampler.get()),
         IDescriptorSetHelper::writeOneImage(_inputDS, 3, _noiseTexture->getImageView(), sampler.get()),
     });
 
-    _lastGBufferFrameBuffer        = frameBuffer;
-    _lastTargetImageViewHandle     = targetHandle;
-    _bInputDescriptorsInitialized  = true;
-    _lastInputDescriptorWriteCount = 4;
+    _lastGBufferImageViewHandles     = gbufferImageViewHandles;
+    _lastGBufferDepthImageViewHandle = depthHandle;
+    _lastTargetImageViewHandle       = targetHandle;
+    _bInputDescriptorsInitialized    = true;
+    _lastInputDescriptorWriteCount   = 4;
 }
 
 void SSAOStage::prepare(const RenderStageContext& ctx)
@@ -333,18 +348,13 @@ void SSAOStage::prepare(const RenderStageContext& ctx)
 void SSAOStage::execute(const RenderStageContext& ctx)
 {
     YA_PROFILE_FUNCTION();
-    if (!ctx.cmdBuf || !_pipeline || !_targetTexture || !_gBufferRT) {
+    if (!ctx.cmdBuf || !_pipeline || !_targetTexture || !_gBufferResources.isComplete()) {
         return;
     }
 
-    auto* frameBuffer = _gBufferRT->getCurFrameBuffer();
-    if (!frameBuffer) {
-        return;
-    }
-
-    auto* gbufferAlbedo = frameBuffer->getColorTexture(0);
-    auto* gbufferNormal = frameBuffer->getColorTexture(1);
-    auto* gbufferDepth  = frameBuffer->getDepthTexture();
+    auto* gbufferAlbedo = _gBufferResources.color[0];
+    auto* gbufferNormal = _gBufferResources.color[1];
+    auto* gbufferDepth  = _gBufferResources.depth;
     if (!gbufferAlbedo || !gbufferNormal || !gbufferDepth || !_noiseTexture) {
         return;
     }

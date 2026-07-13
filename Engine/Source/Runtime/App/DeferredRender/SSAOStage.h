@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DeferredGBufferResources.h"
 #include "Render/Core/Buffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
@@ -23,9 +24,9 @@ struct SSAOStage : public IRenderStage
 
     static constexpr EFormat::T AO_FORMAT = EFormat::R8_UNORM;
 
-    IRender*       _render       = nullptr;
-    IRenderTarget* _gBufferRT    = nullptr;
-    RenderImage*   _targetTexture = nullptr;
+    IRender*                 _render          = nullptr;
+    DeferredGBufferResources _gBufferResources{};
+    RenderImage*             _targetTexture   = nullptr;
 
     stdptr<IGraphicsPipeline>    _pipeline;
     stdptr<IPipelineLayout>      _pipelineLayout;
@@ -39,10 +40,11 @@ struct SSAOStage : public IRenderStage
 
     stdptr<Texture> _noiseTexture;
 
-    IFrameBuffer*    _lastGBufferFrameBuffer = nullptr;
-    ImageViewHandle  _lastTargetImageViewHandle = nullptr;
-    bool             _bInputDescriptorsInitialized = false;
-    uint32_t         _lastInputDescriptorWriteCount = 0;
+    std::array<ImageViewHandle, 4> _lastGBufferImageViewHandles{};
+    ImageViewHandle                _lastGBufferDepthImageViewHandle = nullptr;
+    ImageViewHandle                _lastTargetImageViewHandle       = nullptr;
+    bool                           _bInputDescriptorsInitialized    = false;
+    uint32_t                       _lastInputDescriptorWriteCount   = 0;
 
     float _radius = 0.6f;
     float _bias   = 0.025f;
@@ -52,7 +54,7 @@ struct SSAOStage : public IRenderStage
 
     SSAOStage() : IRenderStage("SSAO") {}
 
-    void setup(IRenderTarget* gBufferRT, RenderImage* targetTexture);
+    void setup(const DeferredGBufferResources& gBufferResources, RenderImage* targetTexture);
     void refreshPipelineFormat();
     void invalidateInputDescriptors();
 
