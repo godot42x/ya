@@ -92,6 +92,16 @@ ImageResourceState makeTextureState(const RGTextureResource& resource, ERGPassRe
                 EResourceAccess::DepthStencilAttachmentRead | EResourceAccess::DepthStencilAttachmentWrite);
             state.layout = EImageLayout::DepthStencilAttachmentOptimal;
             break;
+        case ERGPassResourceAccess::TransferSrc:
+            state.stages = EPipelineStage::Transfer;
+            state.access = EResourceAccess::TransferRead;
+            state.layout = EImageLayout::TransferSrc;
+            break;
+        case ERGPassResourceAccess::TransferDst:
+            state.stages = EPipelineStage::Transfer;
+            state.access = EResourceAccess::TransferWrite;
+            state.layout = EImageLayout::TransferDst;
+            break;
     }
 
     return state;
@@ -247,6 +257,23 @@ void RGRenderContext::copyBuffer(RGBufferHandle src, RGBufferHandle dst, uint64_
     _cmdBuf.copyBuffer(srcBuffer, dstBuffer, size, srcOffset, dstOffset);
 }
 
+void RGRenderContext::copyTexture(RGTextureHandle src, RGTextureHandle dst, const ImageCopy& region) const
+{
+    const auto* srcTexture = resolveTexture(src);
+    const auto* dstTexture = resolveTexture(dst);
+    YA_CORE_ASSERT(srcTexture != nullptr, "RGRenderContext pass {} failed to resolve src texture {}", _pass.name, src.index);
+    YA_CORE_ASSERT(dstTexture != nullptr, "RGRenderContext pass {} failed to resolve dst texture {}", _pass.name, dst.index);
+    YA_CORE_ASSERT(srcTexture->getImage() != nullptr, "RGRenderContext pass {} src texture {} is missing image", _pass.name, src.index);
+    YA_CORE_ASSERT(dstTexture->getImage() != nullptr, "RGRenderContext pass {} dst texture {} is missing image", _pass.name, dst.index);
+
+    _cmdBuf.copyImage(
+        srcTexture->getImage(),
+        EImageLayout::TransferSrc,
+        dstTexture->getImage(),
+        EImageLayout::TransferDst,
+        {region});
+}
+
 RGPass& RGPassBuilder::pass()
 {
     return const_cast<RGPass&>(_graph.getPasses()[_passIndex]);
@@ -280,6 +307,16 @@ void RGPassBuilder::useColorAttachment(RGTextureHandle handle)
 void RGPassBuilder::useDepthAttachment(RGTextureHandle handle)
 {
     pass().textures.push_back({.handle = handle, .access = ERGPassResourceAccess::DepthAttachment});
+}
+
+void RGPassBuilder::transferSrc(RGTextureHandle handle)
+{
+    pass().textures.push_back({.handle = handle, .access = ERGPassResourceAccess::TransferSrc});
+}
+
+void RGPassBuilder::transferDst(RGTextureHandle handle)
+{
+    pass().textures.push_back({.handle = handle, .access = ERGPassResourceAccess::TransferDst});
 }
 
 RGTextureHandle RenderGraph::createTexture(const RGTextureDesc& desc, ERGResourceLifetime lifetime)
@@ -451,6 +488,10 @@ RGCompiledGraph RenderGraph::compile() const
                         return EImageUsage::ColorAttachment;
                     case ERGPassResourceAccess::DepthAttachment:
                         return EImageUsage::DepthStencilAttachment;
+                    case ERGPassResourceAccess::TransferSrc:
+                        return EImageUsage::TransferSrc;
+                    case ERGPassResourceAccess::TransferDst:
+                        return EImageUsage::TransferDst;
                 }
                 return EImageUsage::None;
             }();
@@ -469,7 +510,8 @@ RGCompiledGraph RenderGraph::compile() const
             const bool bWrite =
                 usage.access == ERGPassResourceAccess::Write ||
                 usage.access == ERGPassResourceAccess::ColorAttachment ||
-                usage.access == ERGPassResourceAccess::DepthAttachment;
+                usage.access == ERGPassResourceAccess::DepthAttachment ||
+                usage.access == ERGPassResourceAccess::TransferDst;
 
             if (!bWrite) {
                 const auto writerIt = textureWriters.find(usage.handle);

@@ -106,6 +106,8 @@ enum class ERGPassResourceAccess : uint8_t
     Write,
     ColorAttachment,
     DepthAttachment,
+    TransferSrc,
+    TransferDst,
 };
 
 struct RGTextureUsage
@@ -259,6 +261,7 @@ class RGRenderContext
     void beginColorRendering(const ColorRenderingDesc& desc) const;
     void endRendering() const;
     void copyBuffer(RGBufferHandle src, RGBufferHandle dst, uint64_t size, uint64_t srcOffset = 0, uint64_t dstOffset = 0) const;
+    void copyTexture(RGTextureHandle src, RGTextureHandle dst, const ImageCopy& region) const;
 };
 
 class RGPassBuilder
@@ -280,6 +283,8 @@ class RGPassBuilder
     void write(RGBufferHandle handle);
     void useColorAttachment(RGTextureHandle handle);
     void useDepthAttachment(RGTextureHandle handle);
+    void transferSrc(RGTextureHandle handle);
+    void transferDst(RGTextureHandle handle);
 };
 
 class RenderGraph

@@ -14,6 +14,7 @@
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Runtime/App/App.h"
 #include "Runtime/App/Common/Shadow/Common/ShadowSettingsConfig.h"
+#include "Render/Core/RenderGraphExecutor.h"
 #include <algorithm>
 #include <chrono>
 #include <format>
@@ -883,47 +884,70 @@ void DeferredRenderPipeline::copyGBufferDepthToViewport(ICommandBuffer* cmdBuf)
         return;
     }
 
-    ImageSubresourceRange depthRange{
-        .aspectMask     = EImageAspect::Depth,
-        .baseMipLevel   = 0,
-        .levelCount     = 1,
-        .baseArrayLayer = 0,
-        .layerCount     = 1,
+    const auto makeImportedDepthDesc = [](Texture& texture, std::string_view label, EImageLayout::T finalLayout) {
+        YA_CORE_ASSERT(texture.getImageShared() != nullptr, "Deferred depth copy import requires a backing image");
+        IImage* image = texture.getImage();
+        YA_CORE_ASSERT(image != nullptr, "Deferred depth copy import requires a valid image");
+
+        return RGImportedTextureDesc{
+            .desc = RGTextureDesc{
+                .label       = std::string(label),
+                .format      = texture.getFormat(),
+                .extent      = Extent3D{texture.getWidth(), texture.getHeight(), 1},
+                .mipLevels   = image->getMipLevels(),
+                .arrayLayers = image->getArrayLayers(),
+                .usage       = image->getUsage(),
+            },
+            .importDesc = ImportedImageDesc{
+                .label         = std::string(label),
+                .nativeHandle  = static_cast<void*>(image->getHandle()),
+                .format        = texture.getFormat(),
+                .usage         = image->getUsage(),
+                .extent        = Extent3D{texture.getWidth(), texture.getHeight(), 1},
+                .mipLevels     = image->getMipLevels(),
+                .arrayLayers   = image->getArrayLayers(),
+                .initialLayout = image->getCompatibilityLayout(),
+                .finalLayout   = finalLayout,
+            },
+            .image = texture.getImageShared(),
+        };
     };
 
-    cmdBuf->debugBeginLabel("Copy GBuffer Depth → Viewport");
+    RenderGraph graph;
+    const auto  src = graph.importTexture(makeImportedDepthDesc(*gbufferDepth, "DeferredDepthCopy.Src", EImageLayout::ShaderReadOnlyOptimal));
+    const auto  dst = graph.importTexture(makeImportedDepthDesc(*viewportDepth, "DeferredDepthCopy.Dst", EImageLayout::ShaderReadOnlyOptimal));
 
-    cmdBuf->transitionImageLayoutAuto(srcImage, EImageLayout::TransferSrc, &depthRange);
-    cmdBuf->transitionImageLayoutAuto(dstImage, EImageLayout::TransferDst, &depthRange);
-
-    cmdBuf->copyImage(
-        srcImage,
-        EImageLayout::TransferSrc,
-        dstImage,
-        EImageLayout::TransferDst,
-        {
-            ImageCopy{
-                .srcSubresource = ImageSubresourceLayers{
-                    .aspectMask     = EImageAspect::Depth,
-                    .mipLevel       = 0,
-                    .baseArrayLayer = 0,
-                    .layerCount     = 1,
-                },
-                .dstSubresource = ImageSubresourceLayers{
-                    .aspectMask     = EImageAspect::Depth,
-                    .mipLevel       = 0,
-                    .baseArrayLayer = 0,
-                    .layerCount     = 1,
-                },
-                .extentWidth  = gbufferDepth->getWidth(),
-                .extentHeight = gbufferDepth->getHeight(),
-                .extentDepth  = 1,
-            },
+    [[maybe_unused]] const auto pass = graph.addPass(
+        "Deferred Depth Copy",
+        [&](RGPassBuilder& passBuilder) {
+            passBuilder.transferSrc(src);
+            passBuilder.transferDst(dst);
+        },
+        [&](RGRenderContext& rgCtx) {
+            rgCtx.copyTexture(
+                src,
+                dst,
+                ImageCopy{
+                    .srcSubresource = ImageSubresourceLayers{
+                        .aspectMask     = EImageAspect::Depth,
+                        .mipLevel       = 0,
+                        .baseArrayLayer = 0,
+                        .layerCount     = 1,
+                    },
+                    .dstSubresource = ImageSubresourceLayers{
+                        .aspectMask     = EImageAspect::Depth,
+                        .mipLevel       = 0,
+                        .baseArrayLayer = 0,
+                        .layerCount     = 1,
+                    },
+                    .extentWidth  = gbufferDepth->getWidth(),
+                    .extentHeight = gbufferDepth->getHeight(),
+                    .extentDepth  = 1,
+                });
         });
 
-    cmdBuf->transitionImageLayoutAuto(srcImage, EImageLayout::ShaderReadOnlyOptimal, &depthRange);
-    cmdBuf->transitionImageLayoutAuto(dstImage, EImageLayout::ShaderReadOnlyOptimal, &depthRange);
-    cmdBuf->debugEndLabel();
+    RenderGraphExecutor executor(*_render->getResourceFactory());
+    [[maybe_unused]] const bool bExecuted = executor.execute(graph, *cmdBuf);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
