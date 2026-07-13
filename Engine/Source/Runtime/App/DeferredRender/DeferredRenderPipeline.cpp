@@ -242,7 +242,7 @@ void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
                 .stencilStoreOp = EAttachmentStoreOp::Store,
                 .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
                 .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
+                .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
             },
         },
     });

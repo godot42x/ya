@@ -284,7 +284,25 @@ bool VulkanImage::transitionLayouts(VkCommandBuffer cmdBuf, const std::vector<La
 }
 
 // Helper function to check if a format is supported by the device
-static bool isFormatSupported(VulkanRender* vkRender, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage)
+static VkImageCreateFlags toVkImageCreateFlags(EImageCreateFlag::T flags)
+{
+    VkImageCreateFlags vkFlags = 0;
+    if (flags & EImageCreateFlag::CubeCompatible)
+        vkFlags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    if (flags & EImageCreateFlag::MutableFormat)
+        vkFlags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+    // Sparse flags are intentionally not mapped here because they require
+    // separate feature / sparse-binding support handling.
+    if (flags & EImageCreateFlag::Protected)
+        vkFlags |= VK_IMAGE_CREATE_PROTECTED_BIT;
+    if (flags & EImageCreateFlag::ExtendedUsage)
+        vkFlags |= VK_IMAGE_CREATE_EXTENDED_USAGE_BIT;
+    if (flags & EImageCreateFlag::Disjoint)
+        vkFlags |= VK_IMAGE_CREATE_DISJOINT_BIT;
+    return vkFlags;
+}
+
+static bool isFormatSupported(VulkanRender* vkRender, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkImageCreateFlags flags)
 {
     VkPhysicalDevice physicalDevice = vkRender->getPhysicalDevice();
 
@@ -297,7 +315,7 @@ static bool isFormatSupported(VulkanRender* vkRender, VkFormat format, VkImageTi
     formatInfo.type                             = VK_IMAGE_TYPE_2D;
     formatInfo.tiling                           = tiling;
     formatInfo.usage                            = usage;
-    formatInfo.flags                            = 0;
+    formatInfo.flags                            = flags;
 
     VkResult result = vkGetPhysicalDeviceImageFormatProperties2(physicalDevice, &formatInfo, &formatProperties);
     return result == VK_SUCCESS;
@@ -307,17 +325,28 @@ bool VulkanImage::allocate()
 {
     _format     = toVk(_ci.format);
     _usageFlags = toVk(_ci.usage);
+    const VkImageCreateFlags vkFlags = toVkImageCreateFlags(_ci.flags);
 
     // Check format support: prefer OPTIMAL tiling (better performance and wider support)
-    bool bSupportsOptimal = isFormatSupported(_render, _format, VK_IMAGE_TILING_OPTIMAL, _usageFlags);
+    bool bSupportsOptimal = isFormatSupported(_render, _format, VK_IMAGE_TILING_OPTIMAL, _usageFlags, vkFlags);
     bool bSupportsLinear  = false;
 
     VkImageTiling selectedTiling = VK_IMAGE_TILING_OPTIMAL;
 
     if (!bSupportsOptimal)
     {
-        // Fallback to LINEAR if OPTIMAL is not supported
-        bSupportsLinear = isFormatSupported(_render, _format, VK_IMAGE_TILING_LINEAR, _usageFlags);
+        const bool bNeedsOptimalTiling =
+            (_usageFlags & (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                            VK_IMAGE_USAGE_STORAGE_BIT |
+                            VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT)) != 0;
+
+        // Render targets / storage images should fail fast here instead of
+        // silently falling back to LINEAR and then exploding later during view
+        // creation or rendering on stricter drivers such as MoltenVK.
+        if (!bNeedsOptimalTiling) {
+            bSupportsLinear = isFormatSupported(_render, _format, VK_IMAGE_TILING_LINEAR, _usageFlags, vkFlags);
+        }
         if (bSupportsLinear)
         {
             selectedTiling = VK_IMAGE_TILING_LINEAR;
@@ -325,24 +354,15 @@ bool VulkanImage::allocate()
         }
         else
         {
-            YA_CORE_ERROR("VulkanImage::allocate format {} is not supported by the device (neither OPTIMAL nor LINEAR)", std::to_string(_format));
+            YA_CORE_ERROR("VulkanImage::allocate format {} is not supported by the device (optimal={}, linear={}, usage={}, flags={})",
+                          std::to_string(_format),
+                          bSupportsOptimal,
+                          bSupportsLinear,
+                          static_cast<uint32_t>(_ci.usage),
+                          static_cast<uint32_t>(_ci.flags));
             return false;
         }
     }
-
-    // Convert EImageCreateFlag to VkImageCreateFlags, excluding sparse flags
-    VkImageCreateFlags vkFlags = 0;
-    if (_ci.flags & EImageCreateFlag::CubeCompatible)
-        vkFlags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-    if (_ci.flags & EImageCreateFlag::MutableFormat)
-        vkFlags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
-    // Note: Sparse flags are intentionally not mapped as they require device feature support
-    if (_ci.flags & EImageCreateFlag::Protected)
-        vkFlags |= VK_IMAGE_CREATE_PROTECTED_BIT;
-    if (_ci.flags & EImageCreateFlag::ExtendedUsage)
-        vkFlags |= VK_IMAGE_CREATE_EXTENDED_USAGE_BIT;
-    if (_ci.flags & EImageCreateFlag::Disjoint)
-        vkFlags |= VK_IMAGE_CREATE_DISJOINT_BIT;
 
     // Offscreen/owned images are consumed by the graphics queue only. Sharing
     // them with the present queue is unnecessary, and on some drivers the
