@@ -367,8 +367,7 @@ void ForwardRenderPipeline::finalizeViewportPass(ICommandBuffer* cmdBuf)
 
     cmdBuf->endRendering(_viewportRI);
 
-    auto  fb           = viewportRT->getCurFrameBuffer();
-    auto* inputTexture = bMSAA ? fb->getResolveTexture() : fb->getColorTexture(0);
+    auto* inputTexture = bMSAA ? viewportRT->getCurrentResolveTexture() : viewportRT->getCurrentColorTexture(0);
 
     viewportTexture = _postProcessStage.execute(
         cmdBuf, inputTexture, _lastFrameInput.viewportRect.extent, &_lastTickCtx);

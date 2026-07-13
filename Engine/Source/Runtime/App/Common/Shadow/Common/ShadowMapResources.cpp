@@ -85,8 +85,7 @@ void ShadowMapResources::rebuildViews(IRender* render, std::string_view viewLabe
         }
     }
 
-    auto* frameBuffer  = renderTarget->getCurFrameBuffer();
-    auto* depthTexture = frameBuffer ? frameBuffer->getDepthTexture() : nullptr;
+    auto* depthTexture = renderTarget->getCurrentDepthTexture();
     YA_CORE_ASSERT(depthTexture, "Shadow render target depth texture is null");
 
     auto* resourceFactory = render->getResourceFactory();

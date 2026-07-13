@@ -36,15 +36,10 @@ DeferredGBufferResources buildDeferredGBufferResources(IRenderTarget* gBufferRT)
         return resources;
     }
 
-    auto* frameBuffer = gBufferRT->getCurFrameBuffer();
-    if (!frameBuffer) {
-        return resources;
-    }
-
     for (uint32_t attachmentIndex = 0; attachmentIndex < resources.color.size(); ++attachmentIndex) {
-        resources.color[attachmentIndex] = frameBuffer->getColorTexture(attachmentIndex);
+        resources.color[attachmentIndex] = gBufferRT->getCurrentColorTexture(attachmentIndex);
     }
-    resources.depth = frameBuffer->getDepthTexture();
+    resources.depth = gBufferRT->getCurrentDepthTexture();
     return resources;
 }
 
@@ -55,13 +50,8 @@ DeferredViewportResources buildDeferredViewportResources(IRenderTarget* viewport
         return resources;
     }
 
-    auto* frameBuffer = viewportRT->getCurFrameBuffer();
-    if (!frameBuffer) {
-        return resources;
-    }
-
-    resources.color = frameBuffer->getColorTexture(0);
-    resources.depth = frameBuffer->getDepthTexture();
+    resources.color = viewportRT->getCurrentColorTexture(0);
+    resources.depth = viewportRT->getCurrentDepthTexture();
     return resources;
 }
 
