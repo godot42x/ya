@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render/Core/DescriptorSet.h"
+#include "Render/Core/RenderAttachmentFormats.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Stage/IRenderStage.h"
 #include "Runtime/App/ForwardRender/ForwardViewportAuxPasses.h"
@@ -123,7 +124,7 @@ struct ForwardViewportStage : public IRenderStage
     void renderGUI() override;
 
     void applyShadowState(const ShadowRuntimeState& shadowState);
-    void refreshPipelineFormats(const IRenderTarget* viewportRT);
+    void refreshPipelineFormats(const RenderAttachmentFormats& formats);
 
   private:
     void initSkinningResources();

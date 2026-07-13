@@ -5,7 +5,6 @@
 #include "ECS/System/ResourceResolveSystem.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Core/Buffer.h"
-#include "Render/Core/IRenderTarget.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Core/Swapchain.h"
 #include "Render/Render.h"
@@ -143,26 +142,15 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
     });
 }
 
-void ForwardViewportStage::refreshPipelineFormats(const IRenderTarget* viewportRT)
+void ForwardViewportStage::refreshPipelineFormats(const RenderAttachmentFormats& formats)
 {
-    if (!viewportRT) {
+    if (!formats.hasColor()) {
         return;
     }
 
-    const auto& colorDescs = viewportRT->getColorAttachmentDescs();
-    const auto& depthDesc  = viewportRT->getDepthAttachmentDesc();
-    if (colorDescs.empty()) {
-        return;
-    }
-
-    const auto colorFormat = colorDescs.front().format;
-    const auto depthFormat = depthDesc.has_value() ? depthDesc->format : EFormat::Undefined;
-
-    _litPasses.refreshPipelineFormats(viewportRT);
-
-    _unlitPass.refreshPipelineFormats(viewportRT);
-
-    _auxPasses.refreshPipelineFormats(viewportRT);
+    _litPasses.refreshPipelineFormats(formats);
+    _unlitPass.refreshPipelineFormats(formats);
+    _auxPasses.refreshPipelineFormats(formats);
 }
 
 // ═══════════════════════════════════════════════════════════════════════

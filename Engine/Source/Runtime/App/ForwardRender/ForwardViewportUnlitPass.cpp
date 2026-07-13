@@ -1,7 +1,6 @@
 #include "ForwardViewportUnlitPass.h"
 
 #include "Render/Core/Buffer.h"
-#include "Render/Core/IRenderTarget.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Render.h"
@@ -65,30 +64,21 @@ void ForwardViewportUnlitPass::beginFrame()
     }
 }
 
-void ForwardViewportUnlitPass::refreshPipelineFormats(const IRenderTarget* viewportRT)
+void ForwardViewportUnlitPass::refreshPipelineFormats(const RenderAttachmentFormats& formats)
 {
-    if (!viewportRT) {
+    if (!formats.hasColor()) {
         return;
     }
-
-    const auto& colorDescs = viewportRT->getColorAttachmentDescs();
-    const auto& depthDesc  = viewportRT->getDepthAttachmentDesc();
-    if (colorDescs.empty()) {
-        return;
-    }
-
-    const auto colorFormat = colorDescs.front().format;
-    const auto depthFormat = depthDesc.has_value() ? depthDesc->format : EFormat::Undefined;
 
     if (_unlitStatic.pipeline) {
-        _unlitStatic.pipelineCI.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
-        _unlitStatic.pipelineCI.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
+        _unlitStatic.pipelineCI.pipelineRenderingInfo.colorAttachmentFormats = {formats.colorFormats.front()};
+        _unlitStatic.pipelineCI.pipelineRenderingInfo.depthAttachmentFormat  = formats.depthFormat.value_or(EFormat::Undefined);
         _unlitStatic.pipeline->updateDesc(_unlitStatic.pipelineCI);
     }
 
     if (_unlitSkinned.pipeline) {
-        _unlitSkinned.pipelineCI.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
-        _unlitSkinned.pipelineCI.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
+        _unlitSkinned.pipelineCI.pipelineRenderingInfo.colorAttachmentFormats = {formats.colorFormats.front()};
+        _unlitSkinned.pipelineCI.pipelineRenderingInfo.depthAttachmentFormat  = formats.depthFormat.value_or(EFormat::Undefined);
         _unlitSkinned.pipeline->updateDesc(_unlitSkinned.pipelineCI);
     }
 }

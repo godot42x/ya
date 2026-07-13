@@ -2,7 +2,6 @@
 
 #include "Config/ConfigManager.h"
 #include "Render/Core/Buffer.h"
-#include "Render/Core/IRenderTarget.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Render.h"
@@ -121,28 +120,19 @@ void ForwardViewportLitPasses::beginFrame()
     }
 }
 
-void ForwardViewportLitPasses::refreshPipelineFormats(const IRenderTarget* viewportRT)
+void ForwardViewportLitPasses::refreshPipelineFormats(const RenderAttachmentFormats& formats)
 {
-    if (!viewportRT) {
+    if (!formats.hasColor()) {
         return;
     }
-
-    const auto& colorDescs = viewportRT->getColorAttachmentDescs();
-    const auto& depthDesc  = viewportRT->getDepthAttachmentDesc();
-    if (colorDescs.empty()) {
-        return;
-    }
-
-    const auto colorFormat = colorDescs.front().format;
-    const auto depthFormat = depthDesc.has_value() ? depthDesc->format : EFormat::Undefined;
 
     auto refreshVariant = [&](ShadingPipelineVariant& variant)
     {
         if (!variant.pipeline) {
             return;
         }
-        variant.pipelineCI.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
-        variant.pipelineCI.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
+        variant.pipelineCI.pipelineRenderingInfo.colorAttachmentFormats = {formats.colorFormats.front()};
+        variant.pipelineCI.pipelineRenderingInfo.depthAttachmentFormat  = formats.depthFormat.value_or(EFormat::Undefined);
         variant.pipeline->updateDesc(variant.pipelineCI);
     };
 

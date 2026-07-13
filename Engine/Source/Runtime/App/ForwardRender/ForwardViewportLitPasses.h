@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render/Core/DescriptorSet.h"
+#include "Render/Core/RenderAttachmentFormats.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Material/MaterialDescPool.h"
 #include "Render/Material/PBRMaterial.h"
@@ -19,7 +20,6 @@ namespace ya
 
 struct RenderStageContext;
 struct RenderFrameData;
-class IRenderTarget;
 class ICommandBuffer;
 class IRenderPass;
 class IBuffer;
@@ -77,7 +77,7 @@ class ForwardViewportLitPasses
     void destroy();
     void beginFrame();
     void prepare(const RenderStageContext& ctx);
-    void refreshPipelineFormats(const IRenderTarget* viewportRT);
+    void refreshPipelineFormats(const RenderAttachmentFormats& formats);
     void applyShadowState(const ShadowRuntimeState& shadowState);
 
     void drawPBR(const DrawContext& ctx);

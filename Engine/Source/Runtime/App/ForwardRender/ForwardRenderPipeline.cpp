@@ -9,6 +9,31 @@
 namespace ya
 {
 
+namespace
+{
+
+RenderAttachmentFormats buildForwardViewportFormats(const IRenderTarget* renderTarget)
+{
+    RenderAttachmentFormats formats{};
+    if (!renderTarget) {
+        return formats;
+    }
+
+    const auto& colorDescs = renderTarget->getColorAttachmentDescs();
+    formats.colorFormats.reserve(colorDescs.size());
+    for (const auto& desc : colorDescs) {
+        formats.colorFormats.push_back(desc.format);
+    }
+
+    if (const auto depthDesc = renderTarget->getDepthAttachmentDesc(); depthDesc.has_value()) {
+        formats.depthFormat = depthDesc->format;
+    }
+
+    return formats;
+}
+
+} // namespace
+
 void ForwardRenderPipeline::rebuildShadowViews()
 {
     _shadowResources.rebuildViews(_render, "Shadow Map");
@@ -100,6 +125,7 @@ void ForwardRenderPipeline::initViewportResources(const InitDesc& desc)
         },
     });
     YA_CORE_ASSERT(viewportRT, "Failed to create viewport render target");
+    refreshViewportSnapshot();
 }
 
 void ForwardRenderPipeline::initPostProcessResources(const InitDesc& desc)
@@ -240,6 +266,7 @@ void ForwardRenderPipeline::refreshDirtyResources()
 
     if (bViewportDirty) {
         flushViewportResources();
+        refreshViewportSnapshot();
     }
     if (bShadowDirty) {
         flushShadowResources();
@@ -265,10 +292,15 @@ void ForwardRenderPipeline::flushShadowResources()
     _shadowResources.flushIfDirty();
 }
 
+void ForwardRenderPipeline::refreshViewportSnapshot()
+{
+    _viewportFormats = buildForwardViewportFormats(viewportRT.get());
+}
+
 void ForwardRenderPipeline::refreshViewportStageState()
 {
     if (_viewportStage) {
-        _viewportStage->refreshPipelineFormats(viewportRT.get());
+        _viewportStage->refreshPipelineFormats(_viewportFormats);
     }
 }
 

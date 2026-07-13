@@ -4,7 +4,6 @@
 #include "ECS/Component/DirectionComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Render/Core/Buffer.h"
-#include "Render/Core/IRenderTarget.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
@@ -75,38 +74,29 @@ void ForwardViewportAuxPasses::beginFrame()
     }
 }
 
-void ForwardViewportAuxPasses::refreshPipelineFormats(const IRenderTarget* viewportRT)
+void ForwardViewportAuxPasses::refreshPipelineFormats(const RenderAttachmentFormats& formats)
 {
-    if (!viewportRT) {
+    if (!formats.hasColor()) {
         return;
     }
-
-    const auto& colorDescs = viewportRT->getColorAttachmentDescs();
-    const auto& depthDesc  = viewportRT->getDepthAttachmentDesc();
-    if (colorDescs.empty()) {
-        return;
-    }
-
-    const auto colorFormat = colorDescs.front().format;
-    const auto depthFormat = depthDesc.has_value() ? depthDesc->format : EFormat::Undefined;
 
     if (_simplePipeline) {
         auto ci                                         = _simplePipeline->getDesc();
-        ci.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
-        ci.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
+        ci.pipelineRenderingInfo.colorAttachmentFormats = {formats.colorFormats.front()};
+        ci.pipelineRenderingInfo.depthAttachmentFormat  = formats.depthFormat.value_or(EFormat::Undefined);
         _simplePipeline->updateDesc(std::move(ci));
     }
 
     if (_skyboxPipeline) {
         auto ci                                         = _skyboxPipeline->getDesc();
-        ci.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
-        ci.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
+        ci.pipelineRenderingInfo.colorAttachmentFormats = {formats.colorFormats.front()};
+        ci.pipelineRenderingInfo.depthAttachmentFormat  = formats.depthFormat.value_or(EFormat::Undefined);
         _skyboxPipeline->updateDesc(std::move(ci));
     }
 
     if (_debugPipeline) {
-        _debugPipelineCI.pipelineRenderingInfo.colorAttachmentFormats = {colorFormat};
-        _debugPipelineCI.pipelineRenderingInfo.depthAttachmentFormat  = depthFormat;
+        _debugPipelineCI.pipelineRenderingInfo.colorAttachmentFormats = {formats.colorFormats.front()};
+        _debugPipelineCI.pipelineRenderingInfo.depthAttachmentFormat  = formats.depthFormat.value_or(EFormat::Undefined);
         _debugPipeline->updateDesc(_debugPipelineCI);
     }
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render/Core/DescriptorSet.h"
+#include "Render/Core/RenderAttachmentFormats.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Material/SimpleMaterial.h"
 
@@ -20,7 +21,6 @@ class IBuffer;
 class IDescriptorSetLayout;
 class IDescriptorPool;
 class IRenderPass;
-class IRenderTarget;
 class IRender;
 
 class ForwardViewportAuxPasses
@@ -104,7 +104,7 @@ class ForwardViewportAuxPasses
     void init(const InitDesc& desc);
     void destroy();
     void beginFrame();
-    void refreshPipelineFormats(const IRenderTarget* viewportRT);
+    void refreshPipelineFormats(const RenderAttachmentFormats& formats);
     void prepare(const RenderStageContext& ctx);
 
     void drawSkybox(const DrawContext& ctx);
