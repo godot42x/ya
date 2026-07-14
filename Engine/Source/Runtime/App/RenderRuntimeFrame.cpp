@@ -8,6 +8,7 @@
 #include "ImGuiHelper.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/2D/Render2D.h"
+#include "Render/Core/RenderGraphImportUtils.h"
 #include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
 #include <functional>
 #include "utility.cc/ranges.h"
@@ -20,42 +21,11 @@ namespace ya
 namespace
 {
 
-EImageUsage::T ensurePresentationUsage(EImageUsage::T usage)
-{
-    return static_cast<EImageUsage::T>(usage | EImageUsage::ColorAttachment);
-}
-
 RGImportedTextureDesc makePresentationImportedTextureDesc(const Texture& texture,
                                                           std::string_view label,
                                                           EImageLayout::T finalLayout)
 {
-    YA_CORE_ASSERT(texture.getImageShared() != nullptr, "Presentation graph import requires a backing image");
-
-    IImage* image = texture.getImage();
-    YA_CORE_ASSERT(image != nullptr, "Presentation graph import requires a valid image");
-
-    return RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label       = std::string(label),
-            .format      = texture.getFormat(),
-            .extent      = Extent3D{texture.getWidth(), texture.getHeight(), 1},
-            .mipLevels   = image->getMipLevels(),
-            .arrayLayers = image->getArrayLayers(),
-            .usage       = ensurePresentationUsage(image->getUsage()),
-        },
-        .importDesc = ImportedImageDesc{
-            .label         = std::string(label),
-            .nativeHandle  = static_cast<void*>(image->getHandle()),
-            .format        = texture.getFormat(),
-            .usage         = ensurePresentationUsage(image->getUsage()),
-            .extent        = Extent3D{texture.getWidth(), texture.getHeight(), 1},
-            .mipLevels     = image->getMipLevels(),
-            .arrayLayers   = image->getArrayLayers(),
-            .initialLayout = image->getCompatibilityLayout(),
-            .finalLayout   = finalLayout,
-        },
-        .image = texture.getImageShared(),
-    };
+    return makeImportedTextureDesc(texture, label, finalLayout, EImageUsage::ColorAttachment);
 }
 
 } // namespace

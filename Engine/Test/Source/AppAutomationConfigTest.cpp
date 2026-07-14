@@ -153,6 +153,7 @@ TEST_F(AppAutomationConfigTest, LoadConfigReadsSmokeViewportResizeAndPipelineSwi
     writeAutomationConfig(DEFAULT_AUTOMATION_CONFIG_PATH,
                           R"({
   "smoke": {
+    "log": { "level": "warn", "detailLevel": "error" },
     "viewportResize": { "width": 1600, "height": 900, "frame": 4 },
     "renderPipeline": { "target": "forward", "frame": 7 }
   }
@@ -162,6 +163,11 @@ TEST_F(AppAutomationConfigTest, LoadConfigReadsSmokeViewportResizeAndPipelineSwi
 
     AppAutomation::loadConfig(appDesc);
     AppAutomation::applyStartupOverrides(appDesc);
+
+    ASSERT_TRUE(appDesc.automation.logLevel.has_value());
+    EXPECT_EQ(*appDesc.automation.logLevel, logcc::LogLevel::Warn);
+    ASSERT_TRUE(appDesc.automation.logDetailLevel.has_value());
+    EXPECT_EQ(*appDesc.automation.logDetailLevel, logcc::LogLevel::Error);
 
     ASSERT_TRUE(appDesc.automation.viewportResize.has_value());
     EXPECT_EQ(appDesc.automation.viewportResize->width, 1600u);

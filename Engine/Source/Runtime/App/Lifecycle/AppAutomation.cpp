@@ -67,6 +67,40 @@ bool tryParseScreenshotTargetValue(std::string_view text, EAutomationScreenshotT
     return false;
 }
 
+void loadSmokeLogAutomationOverrides(AppDesc& appDesc)
+{
+    auto& configManager = ConfigManager::get();
+    if (!configManager.hasDocument(AUTOMATION_CONFIG_DOC_NAME)) {
+        return;
+    }
+
+    if (!appDesc.automation.logLevel.has_value()) {
+        if (std::string logLevelText;
+            configManager.tryGet<std::string>(AUTOMATION_CONFIG_DOC_NAME, "smoke.log.level", logLevelText) && !logLevelText.empty()) {
+            logcc::LogLevel::T parsedLogLevel = logcc::LogLevel::Info;
+            if (tryParseLogLevel(logLevelText, parsedLogLevel)) {
+                appDesc.automation.logLevel = parsedLogLevel;
+            }
+            else {
+                YA_CORE_WARN("Ignoring invalid automation smoke log level override: {}", logLevelText);
+            }
+        }
+    }
+
+    if (!appDesc.automation.logDetailLevel.has_value()) {
+        if (std::string logDetailLevelText;
+            configManager.tryGet<std::string>(AUTOMATION_CONFIG_DOC_NAME, "smoke.log.detailLevel", logDetailLevelText) && !logDetailLevelText.empty()) {
+            logcc::LogLevel::T parsedLogDetailLevel = logcc::LogLevel::Warn;
+            if (tryParseLogLevel(logDetailLevelText, parsedLogDetailLevel)) {
+                appDesc.automation.logDetailLevel = parsedLogDetailLevel;
+            }
+            else {
+                YA_CORE_WARN("Ignoring invalid automation smoke log detail level override: {}", logDetailLevelText);
+            }
+        }
+    }
+}
+
 void loadScreenshotAutomationOverrides(AppDesc& appDesc)
 {
     auto& configManager = ConfigManager::get();
@@ -473,6 +507,7 @@ void AppAutomation::applyStartupOverrides(AppDesc& appDesc)
     getAutomationRuntimeState() = {};
     loadScreenshotAutomationOverrides(appDesc);
     loadRenderDocAutomationOverrides(appDesc);
+    loadSmokeLogAutomationOverrides(appDesc);
     loadViewportResizeAutomationOverrides(appDesc);
     loadPipelineSwitchAutomationOverrides(appDesc);
     shadow_settings::loadAutomationOverridesFromConfig(appDesc.automation.shadow);
@@ -481,6 +516,27 @@ void AppAutomation::applyStartupOverrides(AppDesc& appDesc)
     }
     if (appDesc.automation.scenePath) {
         appDesc.defaultScenePath = appDesc.automation.scenePath;
+    }
+}
+
+void AppAutomation::applyLogOverrides(const AppDesc& appDesc)
+{
+    const auto& automation = appDesc.automation;
+    if (automation.logLevel) {
+        Logger::CoreLogger.config.setLogLevel(*automation.logLevel);
+        Logger::AppLogger.config.setLogLevel(*automation.logLevel);
+    }
+    if (automation.logDetailLevel) {
+        Logger::CoreLogger.config.setLogDetailLevel(*automation.logDetailLevel);
+        Logger::AppLogger.config.setLogDetailLevel(*automation.logDetailLevel);
+    }
+
+    if (automation.logLevel || automation.logDetailLevel) {
+        const auto effectiveLogLevel = automation.logLevel.value_or(Logger::CoreLogger.config.logLevel);
+        const auto effectiveLogDetailLevel = automation.logDetailLevel.value_or(Logger::CoreLogger.config.logDetailLevel);
+        YA_CORE_INFO("Automation log overrides applied: level={}, detailLevel={}",
+                     logcc::LogLevel::toString(effectiveLogLevel),
+                     logcc::LogLevel::toString(effectiveLogDetailLevel));
     }
 }
 

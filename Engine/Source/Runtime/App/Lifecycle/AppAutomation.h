@@ -36,6 +36,7 @@ class AppAutomation
     static bool isFrameAutomationEnabled(const App& app);
     static void loadConfig(AppDesc& appDesc);
     static void applyStartupOverrides(AppDesc& appDesc);
+    static void applyLogOverrides(const AppDesc& appDesc);
     static void applyRuntimeOverrides(App& app);
     static bool shouldDeferQuit(const App& app);
     static OffscreenJobQueueService buildOffscreenJobQueueService(App& app);

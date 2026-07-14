@@ -195,6 +195,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
 
         profiling::applyAppOverrides(app._ci);
         AppAutomation::applyStartupOverrides(app._ci);
+        AppAutomation::applyLogOverrides(app._ci);
     }
 
     {

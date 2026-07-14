@@ -137,6 +137,8 @@ struct AppAutomationOptions
     std::optional<glm::vec3>     editorCameraRotation;
     std::optional<AppAutomationViewportResize> viewportResize;
     std::optional<AppAutomationPipelineSwitch> pipelineSwitch;
+    std::optional<logcc::LogLevel::T> logLevel;
+    std::optional<logcc::LogLevel::T> logDetailLevel;
     AppAutomationShadowOverrides shadow;
 };
 
@@ -200,6 +202,39 @@ inline bool tryParseAutomationVec3(const std::string& text, glm::vec3& outValue)
     return true;
 }
 
+inline bool tryParseLogLevel(const std::string& text, logcc::LogLevel::T& outValue)
+{
+    std::string normalized = text;
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch)
+                   { return static_cast<char>(std::tolower(ch)); });
+
+    if (normalized == "debug" || normalized == "d") {
+        outValue = logcc::LogLevel::Debug;
+        return true;
+    }
+    if (normalized == "trace" || normalized == "t") {
+        outValue = logcc::LogLevel::Trace;
+        return true;
+    }
+    if (normalized == "info" || normalized == "i") {
+        outValue = logcc::LogLevel::Info;
+        return true;
+    }
+    if (normalized == "warn" || normalized == "warning" || normalized == "w") {
+        outValue = logcc::LogLevel::Warn;
+        return true;
+    }
+    if (normalized == "error" || normalized == "e") {
+        outValue = logcc::LogLevel::Error;
+        return true;
+    }
+    if (normalized == "fatal" || normalized == "f") {
+        outValue = logcc::LogLevel::Fatal;
+        return true;
+    }
+    return false;
+}
+
 struct AppDesc
 {
     CliParams params = CliParams("Yet Another Game Engine", "Command line options");
@@ -223,7 +258,6 @@ struct AppDesc
 
     void init(int argc, char** argv)
     {
-        YA_CORE_INFO(FUNCTION_SIG);
         params
             .opt<int>("w", {"width"}, "Window width")
             .opt<int>("h", {"height"}, "Window height")
@@ -242,6 +276,8 @@ struct AppDesc
             .opt<bool>("", {"renderdoc-capture"}, "Automation trigger one RenderDoc frame capture after warmup and settle", "false")
             .opt<std::string>("", {"editor-camera-pos"}, "Editor camera position override as x,y,z")
             .opt<std::string>("", {"editor-camera-rot"}, "Editor camera rotation override as pitch,yaw,roll")
+            .opt<std::string>("", {"log-level"}, "Runtime log level: debug/trace/info/warn/error/fatal")
+            .opt<std::string>("", {"log-detail-level"}, "Runtime source-detail log level: debug/trace/info/warn/error/fatal")
             .opt<std::string>("", {"renderdoc-dll"}, "RenderDoc dll path", renderDocDllPath)
             .opt<std::string>("", {"renderdoc-output"}, "RenderDoc capture output directory", renderDocCaptureOutputDir)
             .parse(argc, argv);
@@ -302,6 +338,19 @@ struct AppDesc
                 automation.editorCameraRotation = parsedRotation;
             }
         }
+        if (std::string logLevelText; params.tryGet<std::string>("log-level", logLevelText)) {
+            logcc::LogLevel::T parsedLogLevel = logcc::LogLevel::Info;
+            if (tryParseLogLevel(logLevelText, parsedLogLevel)) {
+                automation.logLevel = parsedLogLevel;
+            }
+        }
+        if (std::string logDetailLevelText; params.tryGet<std::string>("log-detail-level", logDetailLevelText)) {
+            logcc::LogLevel::T parsedLogDetailLevel = logcc::LogLevel::Warn;
+            if (tryParseLogLevel(logDetailLevelText, parsedLogDetailLevel)) {
+                automation.logDetailLevel = parsedLogDetailLevel;
+            }
+        }
+        YA_CORE_INFO(FUNCTION_SIG);
         params.tryGet<std::string>("renderdoc-dll", renderDocDllPath);
         if (std::string renderDocOutputPath; params.tryGet<std::string>("renderdoc-output", renderDocOutputPath)) {
             renderDocCaptureOutputDir      = std::move(renderDocOutputPath);
