@@ -7,15 +7,16 @@ namespace ya::detail
 
 void        retireTexture(stdptr<Texture>& texture);
 void        retireTextureNow(stdptr<Texture>& texture);
+stdptr<Texture> wrapRenderImageAsTexture(const std::shared_ptr<RenderImage>& image, std::string_view label);
 EFormat::T  chooseSkyboxCubemapFormat(EFormat::T sourceFormat);
 EFormat::T  chooseEnvironmentIrradianceFormat(EFormat::T sourceFormat);
 uint32_t    computeSkyboxFaceSize(const Texture* sourceTexture);
 uint32_t    computeEnvironmentIrradianceFaceSize(const Texture* sourceTexture, uint32_t requestedFaceSize);
-stdptr<Texture> createRenderableSkyboxCubemap(IRender*           render,
-                                              const std::string& label,
-                                              uint32_t           faceSize,
-                                              EFormat::T         format,
-                                              int                mips = -1);
+std::shared_ptr<RenderImage> createRenderableSkyboxCubemap(IRender*           render,
+                                                           const std::string& label,
+                                                           uint32_t           faceSize,
+                                                           EFormat::T         format,
+                                                           int                mips = -1);
 OffscreenJobState::CreateOutputFn makeCubemapOutputFn(const std::string& label,
                                                       uint32_t           faceSize,
                                                       EFormat::T         format,

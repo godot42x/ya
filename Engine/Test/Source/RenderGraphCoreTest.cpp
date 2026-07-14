@@ -66,7 +66,7 @@ class TestImageView final : public IImageView
     TestImageView(std::shared_ptr<IImage> image, const ImageViewCreateInfo& desc)
         : _desc(desc)
     {
-        _image = std::move(image);
+        _image = image.get();
     }
 
     ImageViewHandle getHandle() const override { return ImageViewHandle{reinterpret_cast<void*>(static_cast<uintptr_t>(_desc.levelCount + 1))}; }
@@ -803,6 +803,172 @@ TEST(RenderGraphCoreTest, ResourceRegistryReimportsTextureWhenImportedDescChange
     EXPECT_EQ(factory.createdViews, 2u);
     ASSERT_EQ(factory.importedImageDescs.size(), 2u);
     EXPECT_EQ(factory.importedImageDescs[1].nativeHandle, reinterpret_cast<void*>(0x202));
+}
+
+TEST(RenderGraphCoreTest, ImageViewDescKeyIgnoresDebugLabel)
+{
+    const ImageViewCreateInfo base{
+        .label          = "view.a",
+        .viewType       = EImageViewType::View2DArray,
+        .aspectFlags    = EImageAspect::Color,
+        .baseMipLevel   = 1,
+        .levelCount     = 2,
+        .baseArrayLayer = 3,
+        .layerCount     = 4,
+    };
+    auto relabeled = base;
+    relabeled.label = "view.b";
+
+    EXPECT_NE(base.label, relabeled.label);
+    EXPECT_TRUE(isSameImageViewDescKey(makeImageViewDescKey(base), makeImageViewDescKey(relabeled)));
+    EXPECT_FALSE(isSameImageViewCreateInfo(base, relabeled));
+}
+
+TEST(RenderGraphCoreTest, ResourceRegistryKeepsImportedTextureWhenOnlyViewLabelChanges)
+{
+    TestResourceFactory factory;
+    RenderGraphResourceRegistry registry(factory);
+
+    const auto buildGraph = [](std::string_view viewLabel) {
+        RenderGraph graph;
+        graph.importTexture(RGImportedTextureDesc{
+            .desc = RGTextureDesc{
+                .label       = "history.imported.face",
+                .format      = EFormat::R16G16B16A16_SFLOAT,
+                .extent      = Extent3D{128, 128, 1},
+                .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                .mipLevels   = 1,
+                .arrayLayers = 1,
+            },
+            .importDesc = ImportedImageDesc{
+                .label        = "history.imported.face",
+                .nativeHandle = reinterpret_cast<void*>(0x303),
+                .format       = EFormat::R16G16B16A16_SFLOAT,
+                .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                .extent       = Extent3D{128, 128, 1},
+                .mipLevels    = 4,
+                .arrayLayers  = 6,
+            },
+            .viewDesc = ImageViewCreateInfo{
+                .label          = std::string(viewLabel),
+                .viewType       = EImageViewType::View2D,
+                .aspectFlags    = EImageAspect::Color,
+                .baseMipLevel   = 2,
+                .levelCount     = 1,
+                .baseArrayLayer = 5,
+                .layerCount     = 1,
+            },
+        });
+        return graph;
+    };
+
+    auto graphA = buildGraph("history.imported.face.view.a");
+    registry.sync(graphA);
+    EXPECT_EQ(factory.importedImages, 1u);
+    EXPECT_EQ(factory.createdViews, 1u);
+
+    auto graphB = buildGraph("history.imported.face.view.b");
+    registry.sync(graphB);
+    EXPECT_EQ(factory.importedImages, 1u);
+    EXPECT_EQ(factory.createdViews, 1u);
+}
+
+TEST(RenderGraphCoreTest, ResourceRegistryReimportsTextureWhenViewIdentityChanges)
+{
+    TestResourceFactory factory;
+    RenderGraphResourceRegistry registry(factory);
+
+    RenderGraph graphA;
+    graphA.importTexture(RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label       = "history.imported.face",
+            .format      = EFormat::R16G16B16A16_SFLOAT,
+            .extent      = Extent3D{128, 128, 1},
+            .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .mipLevels   = 1,
+            .arrayLayers = 1,
+        },
+        .importDesc = ImportedImageDesc{
+            .label        = "history.imported.face",
+            .nativeHandle = reinterpret_cast<void*>(0x404),
+            .format       = EFormat::R16G16B16A16_SFLOAT,
+            .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .extent       = Extent3D{128, 128, 1},
+            .mipLevels    = 4,
+            .arrayLayers  = 6,
+        },
+        .viewDesc = ImageViewCreateInfo{
+            .label          = "history.imported.face.view",
+            .viewType       = EImageViewType::View2D,
+            .aspectFlags    = EImageAspect::Color,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1,
+        },
+    });
+
+    registry.sync(graphA);
+    EXPECT_EQ(factory.importedImages, 1u);
+    EXPECT_EQ(factory.createdViews, 1u);
+
+    RenderGraph graphB;
+    graphB.importTexture(RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label       = "history.imported.face",
+            .format      = EFormat::R16G16B16A16_SFLOAT,
+            .extent      = Extent3D{128, 128, 1},
+            .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .mipLevels   = 1,
+            .arrayLayers = 1,
+        },
+        .importDesc = ImportedImageDesc{
+            .label        = "history.imported.face",
+            .nativeHandle = reinterpret_cast<void*>(0x404),
+            .format       = EFormat::R16G16B16A16_SFLOAT,
+            .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .extent       = Extent3D{128, 128, 1},
+            .mipLevels    = 4,
+            .arrayLayers  = 6,
+        },
+        .viewDesc = ImageViewCreateInfo{
+            .label          = "history.imported.face.view",
+            .viewType       = EImageViewType::View2D,
+            .aspectFlags    = EImageAspect::Color,
+            .baseMipLevel   = 1,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1,
+        },
+    });
+
+    registry.sync(graphB);
+    EXPECT_EQ(factory.importedImages, 2u);
+    EXPECT_EQ(factory.createdViews, 2u);
+}
+
+TEST(RenderGraphCoreTest, ImageViewDoesNotOwnImageLifetime)
+{
+    TestResourceFactory factory;
+    auto image = std::make_shared<TestImage>(ImageCreateInfo{
+        .label       = "ownership.test",
+        .format      = EFormat::R8G8B8A8_UNORM,
+        .extent      = {.width = 32, .height = 32, .depth = 1},
+        .mipLevels   = 1,
+        .arrayLayers = 1,
+        .usage       = EImageUsage::Sampled,
+    });
+    ASSERT_EQ(image.use_count(), 1);
+
+    auto view = factory.createImageView(image, ImageViewCreateInfo{
+        .label       = "ownership.test.view",
+        .viewType    = EImageViewType::View2D,
+        .aspectFlags = EImageAspect::Color,
+    });
+
+    ASSERT_NE(view, nullptr);
+    EXPECT_EQ(view->getImage(), image.get());
+    EXPECT_EQ(image.use_count(), 1);
 }
 
 TEST(RenderGraphCoreTest, ExecutorRunsPassesInCompiledOrderAndResolvesResources)

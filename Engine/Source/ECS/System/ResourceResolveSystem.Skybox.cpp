@@ -222,7 +222,7 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
                 job->executeFn = [&pipeline = getCylindrical2CubePipeline(),
                                   src       = sourceTexture,
                                   flipV     = sc.cylindricalSource.flipVertical](
-                                     ICommandBuffer* cmdBuf, Texture* output) -> bool {
+                                     ICommandBuffer* cmdBuf, RenderImage* output) -> bool {
                     auto result = pipeline.execute({
                         .cmdBuf        = cmdBuf,
                         .input         = src.get(),
@@ -268,7 +268,7 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
 
             if (pendingState.pendingOffscreenProcess->hasFailed() ||
                 !pendingState.pendingOffscreenProcess->result ||
-                !pendingState.pendingOffscreenProcess->result->outputTexture) {
+                !pendingState.pendingOffscreenProcess->result->outputImage) {
                 pendingState.pendingOffscreenProcess.reset();
                 detail::retireSkyboxResources(pendingState);
                 transition.fail("preprocess failed");
@@ -279,8 +279,15 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
                 break;
             }
 
-            pendingState.cubemapTexture = std::move(pendingState.pendingOffscreenProcess->result->outputTexture);
+            pendingState.cubemapTexture = detail::wrapRenderImageAsTexture(
+                pendingState.pendingOffscreenProcess->result->outputImage,
+                pendingState.pendingOffscreenProcess->debugName);
             pendingState.pendingOffscreenProcess.reset();
+            if (!pendingState.cubemapTexture) {
+                detail::retireSkyboxResources(pendingState);
+                transition.fail("preprocess wrap failed");
+                break;
+            }
             detail::rebuildSkyboxViews(pendingState);
             ++pendingState.resultVersion;
             makeTransition(sc.resolveState, "Skybox")

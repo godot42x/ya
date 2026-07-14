@@ -45,8 +45,8 @@ void queueOffscreenJob(const OffscreenJobQueueService& queueService, IRender* re
         return;
     }
 
-    auto outputTexture = job->createOutputFn ? job->createOutputFn(render) : nullptr;
-    if (job->createOutputFn && !outputTexture) {
+    auto outputImage = job->createOutputFn ? job->createOutputFn(render) : nullptr;
+    if (job->createOutputFn && !outputImage) {
         failOffscreenJob(job);
         return;
     }
@@ -54,29 +54,29 @@ void queueOffscreenJob(const OffscreenJobQueueService& queueService, IRender* re
     job->phase = EOffscreenJobPhase::Queued;
     queueService.enqueue(
         job,
-        [job, outputTexture = std::move(outputTexture)](ICommandBuffer* cmdBuf) mutable
+        [job, outputImage = std::move(outputImage)](ICommandBuffer* cmdBuf) mutable
         {
             if (!job || job->bCancelled || !cmdBuf || !job->executeFn) {
-                if (outputTexture) {
-                    DeferredDeletionQueue::get().retireResource(outputTexture);
-                    outputTexture = nullptr;
+                if (outputImage) {
+                    DeferredDeletionQueue::get().retireResource(outputImage);
+                    outputImage = nullptr;
                 }
                 failOffscreenJob(job);
                 return;
             }
 
-            const bool bSuccess = job->executeFn(cmdBuf, outputTexture.get());
+            const bool bSuccess = job->executeFn(cmdBuf, outputImage.get());
             if (!bSuccess || job->bCancelled) {
-                if (outputTexture) {
-                    DeferredDeletionQueue::get().retireResource(outputTexture);
-                    outputTexture = nullptr;
+                if (outputImage) {
+                    DeferredDeletionQueue::get().retireResource(outputImage);
+                    outputImage = nullptr;
                 }
                 failOffscreenJob(job);
                 return;
             }
 
             if (job->result) {
-                job->result->outputTexture = std::move(outputTexture);
+                job->result->outputImage = std::move(outputImage);
             }
             job->phase = EOffscreenJobPhase::Recorded;
         });
@@ -90,9 +90,9 @@ void cancelOffscreenJob(std::shared_ptr<OffscreenJobState>& job)
 
     job->bCancelled = true;
     job->phase      = EOffscreenJobPhase::Cancelled;
-    if (job->result && job->result->outputTexture) {
-        DeferredDeletionQueue::get().retireResource(job->result->outputTexture);
-        job->result->outputTexture = nullptr;
+    if (job->result && job->result->outputImage) {
+        DeferredDeletionQueue::get().retireResource(job->result->outputImage);
+        job->result->outputImage = nullptr;
     }
     job.reset();
 }

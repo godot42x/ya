@@ -13,9 +13,11 @@ struct RenderImageDesc
 
 struct RenderImage
 {
+    std::string                 label;
     std::shared_ptr<IImage>     image;
     std::shared_ptr<IImageView> defaultView;
 
+    [[nodiscard]] const std::string& getLabel() const { return label; }
     [[nodiscard]] IImage* getImage() const { return image.get(); }
     [[nodiscard]] IImageView* getImageView() const { return defaultView.get(); }
     [[nodiscard]] std::shared_ptr<IImage> getImageShared() const { return image; }

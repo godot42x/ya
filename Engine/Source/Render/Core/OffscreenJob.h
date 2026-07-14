@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Render/Core/Texture.h"
+#include "Render/Core/RenderImage.h"
 
 #include <functional>
 #include <memory>
@@ -15,7 +15,7 @@ struct ICommandBuffer;
 
 struct OffscreenJobResult
 {
-    stdptr<Texture> outputTexture = nullptr;
+    std::shared_ptr<RenderImage> outputImage = nullptr;
 };
 
 enum class EOffscreenJobPhase : uint8_t
@@ -30,8 +30,8 @@ enum class EOffscreenJobPhase : uint8_t
 
 struct OffscreenJobState
 {
-    using CreateOutputFn = std::function<stdptr<Texture>(IRender* render)>;
-    using ExecuteFn      = std::function<bool(ICommandBuffer* cmdBuf, Texture* output)>;
+    using CreateOutputFn = std::function<std::shared_ptr<RenderImage>(IRender* render)>;
+    using ExecuteFn      = std::function<bool(ICommandBuffer* cmdBuf, RenderImage* output)>;
 
     std::string    debugName;
     CreateOutputFn createOutputFn;

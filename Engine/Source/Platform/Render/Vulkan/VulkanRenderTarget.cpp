@@ -341,25 +341,25 @@ void VulkanRenderTarget::onRenderGUI()
             ImGui::Indent();
 
             // Show all color attachments
-            auto colorTextures = frame->getColorTextures();
-            for (size_t colorIdx = 0; colorIdx < colorTextures.size(); ++colorIdx) {
-                if (colorTextures[colorIdx]) {
-                    auto tex = colorTextures[colorIdx];
-                    ImGui::Text("  Color[%zu] Texture: %p", colorIdx, (void*)tex.get());
-                    ImGui::Text("    Image: %p", (void*)tex->image->getHandle().as<void*>());
+            const auto& colorAttachments = frame->getColorAttachments();
+            for (size_t colorIdx = 0; colorIdx < colorAttachments.size(); ++colorIdx) {
+                if (const auto& attachment = colorAttachments[colorIdx]) {
+                    ImGui::Text("  Color[%zu] Attachment: %p", colorIdx, (void*)attachment.get());
+                    ImGui::Text("    Image: %p", (void*)attachment->getImage()->getHandle().as<void*>());
                 }
-                auto imageView = frame->getColorTexture(colorIdx)->getImageView();
+                auto* imageView = frame->getColorAttachment(static_cast<uint32_t>(colorIdx))
+                    ? frame->getColorAttachment(static_cast<uint32_t>(colorIdx))->getImageView()
+                    : nullptr;
                 if (imageView) {
                     ImGui::Text("  Color[%zu] View: %p", colorIdx, (void*)imageView->getHandle().as<void*>());
                 }
             }
 
-            if (frame->getDepthTexture()) {
-                auto depthTex = frame->getDepthTexture();
-                ImGui::Text("  Depth Texture: %p", (void*)depthTex);
-                ImGui::Text("    Image: %p", (void*)depthTex->image->getHandle().as<void*>());
+            if (auto* depthAttachment = frame->getDepthAttachment()) {
+                ImGui::Text("  Depth Attachment: %p", (void*)depthAttachment);
+                ImGui::Text("    Image: %p", (void*)depthAttachment->getImage()->getHandle().as<void*>());
             }
-            auto depthImageView = frame->getDepthTexture()->getImageView();
+            auto* depthImageView = frame->getDepthAttachment() ? frame->getDepthAttachment()->getImageView() : nullptr;
             if (depthImageView) {
                 ImGui::Text("  Depth View: %p", (void*)depthImageView->getHandle().as<void*>());
             }

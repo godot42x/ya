@@ -3,6 +3,7 @@
 #include "Config/ConfigManager.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/RenderGraphExecutor.h"
+#include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/Swapchain.h"
 #include "imgui.h"
 
@@ -67,70 +68,14 @@ RGImportedTextureDesc makePostprocessImportedTextureDesc(const Texture& texture,
                                                          std::string_view label,
                                                          EImageLayout::T finalLayout)
 {
-    YA_CORE_ASSERT(texture.getImageShared() != nullptr, "Render graph import requires a backing image");
-
-    IImage* image = texture.getImage();
-    YA_CORE_ASSERT(image != nullptr, "Render graph import requires a valid image");
-
-    return RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label       = std::string(label),
-            .format      = texture.getFormat(),
-            .extent      = Extent3D{texture.getWidth(), texture.getHeight(), 1},
-            .mipLevels   = image->getMipLevels(),
-            .arrayLayers = image->getArrayLayers(),
-            .usage       = image->getUsage(),
-        },
-        .importDesc = ImportedImageDesc{
-            .label         = std::string(label),
-            .nativeHandle  = static_cast<void*>(image->getHandle()),
-            .format        = texture.getFormat(),
-            .usage         = image->getUsage(),
-            .extent        = Extent3D{texture.getWidth(), texture.getHeight(), 1},
-            .mipLevels     = image->getMipLevels(),
-            .arrayLayers   = image->getArrayLayers(),
-            .initialLayout = image->getCompatibilityLayout(),
-            .finalLayout   = finalLayout,
-        },
-        .image = texture.getImageShared(),
-    };
+    return makeImportedTextureDesc(texture, label, finalLayout);
 }
 
 RGImportedTextureDesc makePostprocessImportedTextureDesc(const RenderImage& image,
                                                          std::string_view   label,
                                                          EImageLayout::T    finalLayout)
 {
-    YA_CORE_ASSERT(image.getImageShared() != nullptr, "Render graph import requires a backing image");
-
-    IImage* rawImage = image.getImage();
-    YA_CORE_ASSERT(rawImage != nullptr, "Render graph import requires a valid image");
-
-    return RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label       = std::string(label),
-            .format      = image.getFormat(),
-            .extent      = Extent3D{image.getWidth(), image.getHeight(), 1},
-            .mipLevels   = rawImage->getMipLevels(),
-            .arrayLayers = rawImage->getArrayLayers(),
-            .usage       = rawImage->getUsage(),
-        },
-        .importDesc = ImportedImageDesc{
-            .label         = std::string(label),
-            .nativeHandle  = static_cast<void*>(rawImage->getHandle()),
-            .format        = image.getFormat(),
-            .usage         = rawImage->getUsage(),
-            .extent        = Extent3D{image.getWidth(), image.getHeight(), 1},
-            .mipLevels     = rawImage->getMipLevels(),
-            .arrayLayers   = rawImage->getArrayLayers(),
-            .initialLayout = rawImage->getCompatibilityLayout(),
-            .finalLayout   = finalLayout,
-        },
-        .image = image.getImageShared(),
-        .viewDesc = ImageViewCreateInfo{
-            .label       = std::string(label) + "_ImportedView",
-            .aspectFlags = EImageAspect::Color,
-        },
-    };
+    return makeImportedTextureDesc(image, label, finalLayout);
 }
 
 } // namespace
@@ -279,7 +224,7 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
         clearPreparedResources();
         return {};
     }
-    if (!inputTexture) {
+    if (!inputTexture || !inputTexture->isValid()) {
         clearPreparedResources();
         return {};
     }
@@ -296,10 +241,9 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
     RGTextureHandle compositeInput = input;
     if (_state.bEnableBloom && _bloomProcessor) {
         const auto bloomOutput = _bloomProcessor->appendGraphPasses(graph, BloomPostprocessing::RenderDesc{
-            .sceneTexture = inputTexture,
-            .sceneImageView = inputTexture->getImageView(),
-            .renderExtent = inputExtent,
-            .state = &_state,
+            .sceneTexture   = inputTexture,
+            .renderExtent   = inputExtent,
+            .state          = &_state,
         });
         if (bloomOutput.isValid()) {
             compositeInput = bloomOutput;
@@ -308,11 +252,95 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
 
     const auto swapchainFormat = _render->getSwapchain()->getFormat();
     const bool bOutputIsSRGB   = EFormat::isSRGB(swapchainFormat);
-    const auto  output = graph.createTexture(RGTextureDesc{
-         .label  = "Postprocessing.Output",
-         .format = _colorFormat,
-         .extent = Extent3D{inputExtent.width, inputExtent.height, 1},
-         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    const auto output = graph.createTexture(RGTextureDesc{
+        .label  = "Postprocessing.Output",
+        .format = _colorFormat,
+        .extent = Extent3D{inputExtent.width, inputExtent.height, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    }, ERGResourceLifetime::Persistent);
+    const Rect2D outputRenderArea{
+        .pos    = {0.0f, 0.0f},
+        .extent = inputExtent.toVec2(),
+    };
+
+    [[maybe_unused]] const auto pass = graph.addPass(
+        "Postprocessing",
+        [compositeInput, output](RGPassBuilder& pass) {
+            pass.read(compositeInput);
+            pass.useColorAttachment(output);
+        },
+        [this, compositeInput, output, outputRenderArea, inputExtent, bOutputIsSRGB, state = &_state, postContext = ctx](RGRenderContext& rgCtx) {
+            rgCtx.beginColorRendering({
+                .color       = output,
+                .renderArea  = outputRenderArea,
+                .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
+                .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+            });
+
+            const auto* compositeInputImage = rgCtx.resolveTexture(compositeInput);
+            YA_CORE_ASSERT(compositeInputImage != nullptr && compositeInputImage->getImageView() != nullptr,
+                           "Postprocessing failed to resolve input texture {}", compositeInput.index);
+            _postProcessor->render(BasicPostprocessing::RenderDesc{
+                .cmdBuf         = &rgCtx.getCommandBuffer(),
+                .ctx            = postContext,
+                .inputImageView = compositeInputImage->getImageView(),
+                .renderExtent   = inputExtent,
+                .bOutputIsSRGB  = bOutputIsSRGB,
+                .state          = state,
+            });
+
+            rgCtx.endRendering();
+        });
+
+    _preparedGraphResources.input  = compositeInput;
+    _preparedGraphResources.output = output;
+    return output;
+}
+
+RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
+                                                       RenderImage* inputImage,
+                                                       glm::vec2    viewportExtent,
+                                                       FrameContext* ctx)
+{
+    (void)viewportExtent;
+
+    if (!bEnabled || !_postProcessor) {
+        clearPreparedResources();
+        return {};
+    }
+    if (!inputImage || !inputImage->isValid()) {
+        clearPreparedResources();
+        return {};
+    }
+
+    const Extent2D inputExtent = inputImage->getExtent();
+    if (inputExtent.width == 0 || inputExtent.height == 0) {
+        clearPreparedResources();
+        return {};
+    }
+
+    clearPreparedResources();
+
+    const auto input = graph.importTexture(makePostprocessImportedTextureDesc(*inputImage, "Postprocessing.Input", EImageLayout::ShaderReadOnlyOptimal));
+    RGTextureHandle compositeInput = input;
+    if (_state.bEnableBloom && _bloomProcessor) {
+        const auto bloomOutput = _bloomProcessor->appendGraphPasses(graph, BloomPostprocessing::RenderDesc{
+            .sceneImage   = inputImage,
+            .renderExtent = inputExtent,
+            .state        = &_state,
+        });
+        if (bloomOutput.isValid()) {
+            compositeInput = bloomOutput;
+        }
+    }
+
+    const auto swapchainFormat = _render->getSwapchain()->getFormat();
+    const bool bOutputIsSRGB   = EFormat::isSRGB(swapchainFormat);
+    const auto output = graph.createTexture(RGTextureDesc{
+        .label  = "Postprocessing.Output",
+        .format = _colorFormat,
+        .extent = Extent3D{inputExtent.width, inputExtent.height, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
     }, ERGResourceLifetime::Persistent);
     const Rect2D outputRenderArea{
         .pos    = {0.0f, 0.0f},
@@ -365,6 +393,34 @@ RenderImage* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
     ICommandBuffer::LabelScope labelScope(cmdBuf, "Postprocessing");
     RenderGraph graph;
     const auto  output = appendGraphPasses(graph, inputTexture, viewportExtent, ctx);
+    if (!output.isValid()) {
+        return nullptr;
+    }
+
+    YA_CORE_ASSERT(_graphExecutor != nullptr, "PostProcessingStage graph executor is not initialized");
+    if (!_graphExecutor->execute(graph, *cmdBuf)) {
+        clearPreparedResources();
+        return nullptr;
+    }
+
+    resolvePreparedResources(_graphExecutor->getRegistry());
+    return output.isValid()
+        ? const_cast<RenderImage*>(_graphExecutor->getRegistry().resolveTexture(output))
+        : nullptr;
+}
+
+RenderImage* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
+                                          RenderImage*    inputImage,
+                                          glm::vec2       viewportExtent,
+                                          FrameContext*   ctx)
+{
+    if (!cmdBuf || !inputImage) {
+        return nullptr;
+    }
+
+    ICommandBuffer::LabelScope labelScope(cmdBuf, "Postprocessing");
+    RenderGraph graph;
+    const auto  output = appendGraphPasses(graph, inputImage, viewportExtent, ctx);
     if (!output.isValid()) {
         return nullptr;
     }

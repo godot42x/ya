@@ -7,7 +7,7 @@ namespace ya
 bool VulkanImageView::init(VulkanRender *render, stdptr<VulkanImage> image, const CreateInfo &ci)
 {
     _render      = render;
-    _image       = image;
+    _image       = image.get();
     _format      = image->getVkFormat();
     _aspectFlags = ci.aspectFlags;
     VkImageViewCreateInfo viewCI{
@@ -49,7 +49,8 @@ bool VulkanImageView::init(VulkanRender *render, stdptr<VulkanImage> image, cons
 
 VulkanImageView::~VulkanImageView()
 {
-    // Note: image view is destroyed along with the image
+    // The underlying image is owned elsewhere; this object only releases the
+    // native view handle.
     VK_DESTROY(ImageView, _render->getDevice(), _handle);
 }
 

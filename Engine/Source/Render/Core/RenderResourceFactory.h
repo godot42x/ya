@@ -22,19 +22,85 @@ struct ImageViewCreateInfo
     ComponentMapping  components     = {};
 };
 
+struct ImageViewDescKey
+{
+    EImageViewType::T viewType       = EImageViewType::View2D;
+    EImageAspect::T   aspectFlags    = EImageAspect::None;
+    uint32_t          baseMipLevel   = 0;
+    uint32_t          levelCount     = 1;
+    uint32_t          baseArrayLayer = 0;
+    uint32_t          layerCount     = 1;
+    ComponentMapping  components     = {};
+};
+
+inline ImageViewDescKey makeImageViewDescKey(const ImageViewCreateInfo& desc)
+{
+    return ImageViewDescKey{
+        .viewType       = desc.viewType,
+        .aspectFlags    = desc.aspectFlags,
+        .baseMipLevel   = desc.baseMipLevel,
+        .levelCount     = desc.levelCount,
+        .baseArrayLayer = desc.baseArrayLayer,
+        .layerCount     = desc.layerCount,
+        .components     = desc.components,
+    };
+}
+
+inline bool isSameImageViewDescKey(const ImageViewDescKey& lhs, const ImageViewDescKey& rhs)
+{
+    return lhs.viewType == rhs.viewType &&
+           lhs.aspectFlags == rhs.aspectFlags &&
+           lhs.baseMipLevel == rhs.baseMipLevel &&
+           lhs.levelCount == rhs.levelCount &&
+           lhs.baseArrayLayer == rhs.baseArrayLayer &&
+           lhs.layerCount == rhs.layerCount &&
+           lhs.components.r == rhs.components.r &&
+           lhs.components.g == rhs.components.g &&
+           lhs.components.b == rhs.components.b &&
+           lhs.components.a == rhs.components.a;
+}
+
+inline bool isSameImageViewCreateInfo(const ImageViewCreateInfo& lhs, const ImageViewCreateInfo& rhs)
+{
+    return lhs.label == rhs.label &&
+           isSameImageViewDescKey(makeImageViewDescKey(lhs), makeImageViewDescKey(rhs));
+}
+
+enum class EImportedImageOwnership : uint8_t
+{
+    BorrowedNative = 0,
+    OwnedNative,
+};
+
 struct ImportedImageDesc
 {
-    std::string    label;
-    void*          nativeHandle = nullptr;
-    EFormat::T     format       = EFormat::Undefined;
-    EImageUsage::T usage        = EImageUsage::None;
-    Extent3D       extent       = {};
-    uint32_t       mipLevels    = 1;
-    uint32_t       arrayLayers  = 1;
-    bool           bOwnsNativeResource = false;
-    EImageLayout::T initialLayout       = EImageLayout::Undefined;
-    EImageLayout::T finalLayout         = EImageLayout::Undefined;
+    std::string             label;
+    void*                   nativeHandle = nullptr;
+    EFormat::T              format       = EFormat::Undefined;
+    EImageUsage::T          usage        = EImageUsage::None;
+    Extent3D                extent       = {};
+    uint32_t                mipLevels    = 1;
+    uint32_t                arrayLayers  = 1;
+    EImportedImageOwnership ownership    = EImportedImageOwnership::BorrowedNative;
+    EImageLayout::T         initialLayout = EImageLayout::Undefined;
+    EImageLayout::T         finalLayout   = EImageLayout::Undefined;
 };
+
+inline bool isSameImportedImageDesc(const ImportedImageDesc& lhs, const ImportedImageDesc& rhs)
+{
+    return lhs.label == rhs.label &&
+           lhs.nativeHandle == rhs.nativeHandle &&
+           lhs.format == rhs.format &&
+           lhs.usage == rhs.usage &&
+           lhs.extent.width == rhs.extent.width &&
+           lhs.extent.height == rhs.extent.height &&
+           lhs.extent.depth == rhs.extent.depth &&
+           lhs.mipLevels == rhs.mipLevels &&
+           lhs.arrayLayers == rhs.arrayLayers &&
+           lhs.ownership == rhs.ownership &&
+           lhs.initialLayout == rhs.initialLayout &&
+           lhs.finalLayout == rhs.finalLayout;
+}
 
 struct IRenderResourceFactory
 {

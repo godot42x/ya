@@ -37,7 +37,7 @@ struct BloomPostprocessing
     {
         ICommandBuffer*            cmdBuf            = nullptr;
         Texture*                   sceneTexture      = nullptr;
-        IImageView*                sceneImageView    = nullptr;
+        RenderImage*               sceneImage        = nullptr;
         Extent2D                   renderExtent      = {};
         const PostProcessingState* state            = nullptr;
     };

@@ -143,7 +143,7 @@ std::shared_ptr<OffscreenJobState> createEnvironmentCubemapJob(ResourceResolveSy
     // TODO(user): this is the single cubemap-preprocess job hook. Replace or extend executeFn here.
     job->executeFn = [&pipeline = system.getCylindrical2CubePipeline(),
                       src       = sourceTexture,
-                      flipV     = component.cylindricalSource.flipVertical](ICommandBuffer* cmdBuf, Texture* output) -> bool
+                      flipV     = component.cylindricalSource.flipVertical](ICommandBuffer* cmdBuf, RenderImage* output) -> bool
     {
         auto result = pipeline.execute({
             .cmdBuf        = cmdBuf,
@@ -171,7 +171,7 @@ std::shared_ptr<OffscreenJobState> createEnvironmentIrradianceJob(ResourceResolv
     job->debugName = std::format("EnvironmentIrradiance_{}", static_cast<uint32_t>(entity));
 
     // TODO(user): this is the single irradiance job hook. Replace or extend executeFn here.
-    job->executeFn = [src = sourceCubemap, &system](ICommandBuffer* cmdBuf, Texture* output) -> bool
+    job->executeFn = [src = sourceCubemap, &system](ICommandBuffer* cmdBuf, RenderImage* output) -> bool
     {
         auto result =
             system
@@ -208,7 +208,7 @@ std::shared_ptr<OffscreenJobState> createEnvironmentPrefilterJob(ResourceResolve
 
     // TODO(user): this is the single prefilter job hook. Replace or extend executeFn here.
     job->executeFn = [&pipeline = system.getCube2PrefilterPipeline(),
-                      src       = sourceCubemap](ICommandBuffer* cmdBuf, Texture* output) -> bool
+                      src       = sourceCubemap](ICommandBuffer* cmdBuf, RenderImage* output) -> bool
     {
         auto result = pipeline.execute({
             .cmdBuf = cmdBuf,
@@ -641,7 +641,7 @@ void handleEnvironmentSourceBuildingCubemap(EnvironmentLightingComponent&    com
     }
 
     if (state.pendingEnvironmentOffscreen->hasFailed() || !state.pendingEnvironmentOffscreen->result ||
-        !state.pendingEnvironmentOffscreen->result->outputTexture) {
+        !state.pendingEnvironmentOffscreen->result->outputImage) {
         state.pendingEnvironmentOffscreen.reset();
         detail::retireEnvTextures(state);
         transition.fail("preprocess failed");
@@ -653,8 +653,16 @@ void handleEnvironmentSourceBuildingCubemap(EnvironmentLightingComponent&    com
         return;
     }
 
-    state.cubemapTexture = std::move(state.pendingEnvironmentOffscreen->result->outputTexture);
+    state.cubemapTexture = detail::wrapRenderImageAsTexture(
+        state.pendingEnvironmentOffscreen->result->outputImage,
+        state.pendingEnvironmentOffscreen->debugName);
     state.pendingEnvironmentOffscreen.reset();
+    if (!state.cubemapTexture) {
+        detail::retireEnvTextures(state);
+        transition.fail("preprocess wrap failed");
+        failEnvironmentDerivedBranches(component, "preprocess wrap failed");
+        return;
+    }
     completeEnvironmentSource(component, state, "environment cubemap preprocess completed");
 }
 
@@ -690,7 +698,7 @@ void handleEnvironmentIrradianceBuilding(EnvironmentLightingComponent&    compon
 
     if (state.pendingIrradianceOffscreen->hasFailed() ||
         !state.pendingIrradianceOffscreen->result ||
-        !state.pendingIrradianceOffscreen->result->outputTexture) {
+        !state.pendingIrradianceOffscreen->result->outputImage) {
         state.pendingIrradianceOffscreen.reset();
         detail::retireTextureNow(state.irradianceTexture);
         makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance").fail("preprocess failed");
@@ -702,7 +710,15 @@ void handleEnvironmentIrradianceBuilding(EnvironmentLightingComponent&    compon
     }
 
     // ok
-    state.irradianceTexture = std::move(state.pendingIrradianceOffscreen->result->outputTexture);
+    state.irradianceTexture = detail::wrapRenderImageAsTexture(
+        state.pendingIrradianceOffscreen->result->outputImage,
+        state.pendingIrradianceOffscreen->debugName);
+    if (!state.irradianceTexture) {
+        state.pendingIrradianceOffscreen.reset();
+        detail::retireTextureNow(state.irradianceTexture);
+        makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance").fail("preprocess wrap failed");
+        return;
+    }
     detail::rebuildEnvironmentIrradianceViews(state);
     state.pendingIrradianceOffscreen.reset();
     ++state.resultVersion;
@@ -741,7 +757,7 @@ void handleEnvironmentPrefilterBuilding(EnvironmentLightingComponent&    compone
     }
 
     if (state.pendingPrefilterOffscreen->hasFailed() || !state.pendingPrefilterOffscreen->result ||
-        !state.pendingPrefilterOffscreen->result->outputTexture) {
+        !state.pendingPrefilterOffscreen->result->outputImage) {
         state.pendingPrefilterOffscreen.reset();
         detail::retireTextureNow(state.prefilterTexture);
         detail::rebuildPrefilterViews(state);
@@ -753,7 +769,16 @@ void handleEnvironmentPrefilterBuilding(EnvironmentLightingComponent&    compone
         return;
     }
 
-    state.prefilterTexture = std::move(state.pendingPrefilterOffscreen->result->outputTexture);
+    state.prefilterTexture = detail::wrapRenderImageAsTexture(
+        state.pendingPrefilterOffscreen->result->outputImage,
+        state.pendingPrefilterOffscreen->debugName);
+    if (!state.prefilterTexture) {
+        state.pendingPrefilterOffscreen.reset();
+        detail::retireTextureNow(state.prefilterTexture);
+        detail::rebuildPrefilterViews(state);
+        makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter").fail("preprocess wrap failed");
+        return;
+    }
     detail::rebuildPrefilterViews(state);
     state.pendingPrefilterOffscreen.reset();
     ++state.resultVersion;

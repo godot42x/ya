@@ -125,7 +125,9 @@ struct IImage : public plat_base<IImage>
 struct IImageView : public plat_base<IImageView>
 {
   protected:
-    std::shared_ptr<IImage> _image;
+    // ImageView is a non-owning subresource projection of an image. The image
+    // lifetime must be owned explicitly by Texture/RenderImage/runtime state.
+    IImage* _image = nullptr;
 
   public:
     IImageView()                              = default;
@@ -144,7 +146,7 @@ struct IImageView : public plat_base<IImageView>
     /**
      * @brief Get the underlying image
      */
-    const IImage *getImage() const { return _image.get(); }
+    const IImage *getImage() const { return _image; }
 
     virtual EFormat::T getFormat() const { return EFormat::Undefined; }
 

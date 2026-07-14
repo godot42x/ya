@@ -15,6 +15,7 @@ struct IImageView;
 struct ICommandBuffer;
 struct IRenderPass;
 struct Texture;
+struct RenderImage;
 
 
 
@@ -321,16 +322,34 @@ struct IRenderTarget
         return frameBuffer ? frameBuffer->getColorTexture(attachmentIdx) : nullptr;
     }
 
+    RenderImage* getCurrentColorAttachment(uint32_t attachmentIdx) const
+    {
+        auto* frameBuffer = getCurFrameBuffer();
+        return frameBuffer ? frameBuffer->getColorAttachment(attachmentIdx) : nullptr;
+    }
+
     Texture* getCurrentDepthTexture() const
     {
         auto* frameBuffer = getCurFrameBuffer();
         return frameBuffer ? frameBuffer->getDepthTexture() : nullptr;
     }
 
+    RenderImage* getCurrentDepthAttachment() const
+    {
+        auto* frameBuffer = getCurFrameBuffer();
+        return frameBuffer ? frameBuffer->getDepthAttachment() : nullptr;
+    }
+
     Texture* getCurrentResolveTexture() const
     {
         auto* frameBuffer = getCurFrameBuffer();
         return frameBuffer ? frameBuffer->getResolveTexture() : nullptr;
+    }
+
+    RenderImage* getCurrentResolveAttachment() const
+    {
+        auto* frameBuffer = getCurFrameBuffer();
+        return frameBuffer ? frameBuffer->getResolveAttachment() : nullptr;
     }
 
     bool isSwapChainTarget() const { return bSwapChainTarget; }

@@ -31,9 +31,9 @@ struct PlannedAsyncStep
     int                  delayMs = 0;
 };
 
-stdptr<Texture> makeFakeTexture()
+std::shared_ptr<RenderImage> makeFakeRenderImage()
 {
-    return stdptr<Texture>(reinterpret_cast<Texture*>(0x1), [](Texture*) {});
+    return std::shared_ptr<RenderImage>(reinterpret_cast<RenderImage*>(0x1), [](RenderImage*) {});
 }
 
 std::shared_ptr<OffscreenJobState> makeJob(EOffscreenJobPhase phase = EOffscreenJobPhase::Pending)
@@ -152,8 +152,8 @@ void runSeededAsyncPlan(uint32_t seed, int jobCount)
 TEST(OffscreenAsyncTest, PhaseHelpersReflectTerminalStates)
 {
     auto pending = makeJob();
-    pending->createOutputFn = [](IRender*) -> stdptr<Texture> { return nullptr; };
-    pending->executeFn      = [](ICommandBuffer*, Texture*) -> bool { return true; };
+    pending->createOutputFn = [](IRender*) -> std::shared_ptr<RenderImage> { return nullptr; };
+    pending->executeFn      = [](ICommandBuffer*, RenderImage*) -> bool { return true; };
 
     EXPECT_TRUE(pending->isReadyToQueue());
     EXPECT_FALSE(pending->isGpuCompleted());
@@ -262,8 +262,8 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobRecordsAndPublishesSuccessfulTask)
     App  app;
     auto job = makeJob();
 
-    job->createOutputFn = [](IRender*) -> stdptr<Texture> { return makeFakeTexture(); };
-    job->executeFn      = [](ICommandBuffer*, Texture* output) -> bool { return output != nullptr; };
+    job->createOutputFn = [](IRender*) -> std::shared_ptr<RenderImage> { return makeFakeRenderImage(); };
+    job->executeFn      = [](ICommandBuffer*, RenderImage* output) -> bool { return output != nullptr; };
 
     queueOffscreenJob(&app, reinterpret_cast<IRender*>(0x1), job);
 
@@ -275,7 +275,7 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobRecordsAndPublishesSuccessfulTask)
 
     ASSERT_EQ(job->phase, EOffscreenJobPhase::Recorded);
     ASSERT_NE(job->result, nullptr);
-    ASSERT_NE(job->result->outputTexture, nullptr);
+    ASSERT_NE(job->result->outputImage, nullptr);
     ASSERT_EQ(submittedJobs.size(), 1u);
 
     finalizeSubmittedOffscreenJobs(submittedJobs);
@@ -287,8 +287,8 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobMarksExecutionFailure)
     App  app;
     auto job = makeJob();
 
-    job->createOutputFn = [](IRender*) -> stdptr<Texture> { return makeFakeTexture(); };
-    job->executeFn      = [](ICommandBuffer*, Texture*) -> bool { return false; };
+    job->createOutputFn = [](IRender*) -> std::shared_ptr<RenderImage> { return makeFakeRenderImage(); };
+    job->executeFn      = [](ICommandBuffer*, RenderImage*) -> bool { return false; };
 
     queueOffscreenJob(&app, reinterpret_cast<IRender*>(0x1), job);
     ASSERT_EQ(job->phase, EOffscreenJobPhase::Queued);
@@ -297,7 +297,7 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobMarksExecutionFailure)
 
     EXPECT_EQ(job->phase, EOffscreenJobPhase::Failed);
     ASSERT_NE(job->result, nullptr);
-    EXPECT_EQ(job->result->outputTexture, nullptr);
+    EXPECT_EQ(job->result->outputImage, nullptr);
 }
 
 TEST(OffscreenAsyncTest, CancelledQueuedJobRemainsCancelledWhenQueuedWorkerRuns)
@@ -305,8 +305,8 @@ TEST(OffscreenAsyncTest, CancelledQueuedJobRemainsCancelledWhenQueuedWorkerRuns)
     App  app;
     auto job = makeJob();
 
-    job->createOutputFn = [](IRender*) -> stdptr<Texture> { return makeFakeTexture(); };
-    job->executeFn      = [](ICommandBuffer*, Texture*) -> bool { return true; };
+    job->createOutputFn = [](IRender*) -> std::shared_ptr<RenderImage> { return makeFakeRenderImage(); };
+    job->executeFn      = [](ICommandBuffer*, RenderImage*) -> bool { return true; };
 
     queueOffscreenJob(&app, reinterpret_cast<IRender*>(0x1), job);
     ASSERT_EQ(job->phase, EOffscreenJobPhase::Queued);
@@ -323,7 +323,7 @@ TEST(OffscreenAsyncTest, CancelledQueuedJobRemainsCancelledWhenQueuedWorkerRuns)
 
     EXPECT_EQ(queuedJob->phase, EOffscreenJobPhase::Cancelled);
     ASSERT_NE(queuedJob->result, nullptr);
-    EXPECT_EQ(queuedJob->result->outputTexture, nullptr);
+    EXPECT_EQ(queuedJob->result->outputImage, nullptr);
 }
 
 TEST(OffscreenAsyncTest, MultithreadedWorkersSimulateAsyncSuccessFailureAndCancellation)

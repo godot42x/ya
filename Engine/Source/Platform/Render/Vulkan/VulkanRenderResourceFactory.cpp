@@ -27,7 +27,8 @@ std::shared_ptr<IImage> VulkanRenderResourceFactory::createImage(const ImageCrea
 std::shared_ptr<IImage> VulkanRenderResourceFactory::importImage(const ImportedImageDesc& desc)
 {
     YA_CORE_ASSERT(desc.nativeHandle, "Cannot import an image with a null native handle");
-    YA_CORE_ASSERT(!desc.bOwnsNativeResource, "Owned native image import is not implemented");
+    YA_CORE_ASSERT(desc.ownership == EImportedImageOwnership::BorrowedNative,
+                   "Owned native image import is not implemented");
 
     auto image = VulkanImage::from(
         _render,

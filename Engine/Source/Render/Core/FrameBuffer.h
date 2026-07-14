@@ -3,6 +3,7 @@
 
 #include "CommandBuffer.h"
 #include "Core/Base.h"
+#include "Render/Core/RenderImage.h"
 #include "Render/Core/Texture.h"
 #include "Render/RenderDefines.h"
 
@@ -54,10 +55,15 @@ struct IFrameBuffer
 {
     std::string _label = "None";
 
-    // FrameBuffer directly owns Textures for all attachments
-    std::vector<std::shared_ptr<Texture>> _colorTextures;
-    std::shared_ptr<Texture>              _depthTexture;
-    std::shared_ptr<Texture>              _resolveTexture;
+    // FrameBuffer directly owns attachment images/views.
+    std::vector<std::shared_ptr<RenderImage>> _colorAttachments;
+    std::shared_ptr<RenderImage>              _depthAttachment;
+    std::shared_ptr<RenderImage>              _resolveAttachment;
+
+    // Legacy compatibility views for callers that still consume Texture.
+    mutable std::vector<std::shared_ptr<Texture>> _colorTextures;
+    mutable std::shared_ptr<Texture>              _depthTexture;
+    mutable std::shared_ptr<Texture>              _resolveTexture;
 
     IRenderPass* _renderPass = nullptr;
 
@@ -87,14 +93,26 @@ struct IFrameBuffer
 
     // ===== Direct Texture Access =====
 
-    const std::vector<std::shared_ptr<Texture>>& getColorTextures() const { return _colorTextures; }
+    const std::vector<std::shared_ptr<RenderImage>>& getColorAttachments() const { return _colorAttachments; }
+    RenderImage*                                     getColorAttachment(uint32_t attachmentIdx) const;
+    RenderImage*                                     getDepthAttachment() const { return _depthAttachment.get(); }
+    RenderImage*                                     getResolveAttachment() const { return _resolveAttachment.get(); }
+
+    const std::vector<std::shared_ptr<Texture>>& getColorTextures() const
+    {
+        if (_colorTextures.size() != _colorAttachments.size()) {
+            rebuildTextureCompatCache();
+        }
+        return _colorTextures;
+    }
     Texture*                                     getColorTexture(uint32_t attachmentIdx) const;
-    Texture*                                     getDepthTexture() const { return _depthTexture.get(); }
-    Texture*                                     getResolveTexture() const { return _resolveTexture.get(); }
+    Texture*                                     getDepthTexture() const;
+    Texture*                                     getResolveTexture() const;
 
 
   protected:
     void clearAttachments();
+    void rebuildTextureCompatCache() const;
 };
 
 } // namespace ya

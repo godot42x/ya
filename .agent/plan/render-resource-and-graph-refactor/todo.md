@@ -66,10 +66,10 @@
 - [ ] 收敛现有 `SamplerDesc`
 - [x] 定义 external/imported image descriptor
 - [ ] 定义 imported image 的 native ownership、view ownership、debug name 和 initial/final state
-- [ ] 定义 derived image-view identity/cache key
+- [x] 定义 derived image-view identity/cache key
 - [x] 定义资产 `Texture` 与 transient/persistent GPU image 的绑定边界（GPU 中间资源使用 `RenderImage`，后续由 graph registry 接管）
 - [ ] 明确 `RenderTargetPool` 与 graph resource registry 的停止线
-- [ ] 锁定 image view 不拥有 image 的生命周期规则
+- [x] 锁定 image view 不拥有 image 的生命周期规则
 - [ ] 锁定 resource desc 创建后不可变规则
 
 完成标准：
@@ -133,6 +133,7 @@
 - [x] 将 BRDF LUT 输出改为 GPU image/view owner
 - [x] 将 shadow sampled view 改为显式 image/view owner
 - [x] 将 screenshot scratch texture 改为 GPU image/view owner
+- [x] 将 framebuffer/render-target attachment owner 改为 `RenderImage`
 - [ ] 删除 `Texture::createRenderTexture()`
 - [ ] 删除 `Texture::getTextureFactory()`
 - [ ] 删除 `ITextureFactory`
@@ -152,6 +153,10 @@
 - postprocess output 已由 `PostProcessingStage` 以 `RenderImage` 形式持有；剩余 `Texture::wrap()` 兼容层只保留在 pipeline viewport 输出侧，供 editor viewport / screenshot fallback 复用
 - shadow sampled views 已由 `ShadowMapResources` 显式拥有；shadow pass 内残留的 `Texture::wrap()` attachment adapter 归入 Phase 8
 - screenshot offscreen capture 已不再分配 scratch `Texture`；该链路现在直接从 source image copy 到 readback buffer，仅保留 viewport `Texture*` 作为 fallback 输入源，而不再作为中间 owner
+- framebuffer/render-target backend 路径现已直接持有 `RenderImage` attachments；`Texture` 仅在 `IFrameBuffer` 兼容 getter 中按需懒创建，backend attachment 创建与 dynamic rendering 录制已不再直接依赖 `Texture::wrap()`
+- `ImageViewCreateInfo` / `ImportedImageDesc` 已开始共享公共 identity/ownership 比较语义：registry 不再私有维护一套 image-view / imported-image 比较逻辑；`ImageViewDescKey` 已落到公共层并用于 imported texture replacement 判定，debug label 不再参与 view identity；显式 view-owner contract 仍待补齐
+- `IImageView` 现已改为仅保存 non-owning `IImage*`；`Texture`、`RenderImage`、shadow/editor runtime state 等显式 owner 继续负责 image 生命周期，新增 `RenderGraphCoreTest.ImageViewDoesNotOwnImageLifetime` 锁住该契约
+- offscreen cubemap preprocess 链现已改为 `OffscreenJob -> RenderImage` 中间 owner：`EquidistantCylindrical2CubeMap` / `CubeMap2PBRIrradianceMap` / `CubeMap2PBRPrefilterEnv` 直接写 `RenderImage`，`ResourceResolveSystem` 仅在接管最终 skybox/environment 结果时再 `Texture::wrap()` 成可采样资产语义对象
 
 ## Phase 5: Resource State Tracker
 

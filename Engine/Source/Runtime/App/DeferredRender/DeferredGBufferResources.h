@@ -7,12 +7,12 @@
 namespace ya
 {
 
-struct Texture;
+struct RenderImage;
 
 struct DeferredGBufferResources
 {
-    std::array<Texture*, 4> color{};
-    Texture*                depth = nullptr;
+    std::array<RenderImage*, 4> color{};
+    RenderImage*                depth = nullptr;
     DeferredAttachmentFormats formats{};
 
     [[nodiscard]] bool isComplete() const

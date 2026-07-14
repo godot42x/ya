@@ -5,12 +5,12 @@
 namespace ya
 {
 
-struct Texture;
+struct RenderImage;
 
 struct DeferredViewportResources
 {
-    Texture* color = nullptr;
-    Texture* depth = nullptr;
+    RenderImage* color = nullptr;
+    RenderImage* depth = nullptr;
     DeferredAttachmentFormats formats{};
 
     [[nodiscard]] bool isComplete() const

@@ -4,6 +4,7 @@
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/RenderGraphExecutor.h"
+#include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Render.h"
 #include "Resource/Texture/TextureLibrary.h"
 
@@ -30,66 +31,14 @@ RGImportedTextureDesc makeBloomImportedTextureDesc(const Texture& texture,
                                                    std::string_view label,
                                                    EImageLayout::T finalLayout)
 {
-    YA_CORE_ASSERT(texture.getImageShared() != nullptr, "Bloom graph import requires a backing image");
-
-    IImage* image = texture.getImage();
-    YA_CORE_ASSERT(image != nullptr, "Bloom graph import requires a valid image");
-
-    return RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label       = std::string(label),
-            .format      = texture.getFormat(),
-            .extent      = Extent3D{texture.getWidth(), texture.getHeight(), 1},
-            .mipLevels   = image->getMipLevels(),
-            .arrayLayers = image->getArrayLayers(),
-            .usage       = image->getUsage(),
-        },
-        .importDesc = ImportedImageDesc{
-            .label         = std::string(label),
-            .nativeHandle  = static_cast<void*>(image->getHandle()),
-            .format        = texture.getFormat(),
-            .usage         = image->getUsage(),
-            .extent        = Extent3D{texture.getWidth(), texture.getHeight(), 1},
-            .mipLevels     = image->getMipLevels(),
-            .arrayLayers   = image->getArrayLayers(),
-            .initialLayout = image->getCompatibilityLayout(),
-            .finalLayout   = finalLayout,
-        },
-        .image = texture.getImageShared(),
-    };
+    return makeImportedTextureDesc(texture, label, finalLayout);
 }
 
 RGImportedTextureDesc makeBloomImportedTextureDesc(const RenderImage& image,
                                                    std::string_view label,
                                                    EImageLayout::T finalLayout)
 {
-    YA_CORE_ASSERT(image.getImageShared() != nullptr, "Bloom graph import requires a backing image");
-
-    IImage* rawImage = image.getImage();
-    YA_CORE_ASSERT(rawImage != nullptr, "Bloom graph import requires a valid image");
-
-    return RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label       = std::string(label),
-            .format      = image.getFormat(),
-            .extent      = Extent3D{image.getWidth(), image.getHeight(), 1},
-            .mipLevels   = rawImage->getMipLevels(),
-            .arrayLayers = rawImage->getArrayLayers(),
-            .usage       = rawImage->getUsage(),
-        },
-        .importDesc = ImportedImageDesc{
-            .label         = std::string(label),
-            .nativeHandle  = static_cast<void*>(rawImage->getHandle()),
-            .format        = image.getFormat(),
-            .usage         = rawImage->getUsage(),
-            .extent        = Extent3D{image.getWidth(), image.getHeight(), 1},
-            .mipLevels     = rawImage->getMipLevels(),
-            .arrayLayers   = rawImage->getArrayLayers(),
-            .initialLayout = rawImage->getCompatibilityLayout(),
-            .finalLayout   = finalLayout,
-        },
-        .image = image.getImageShared(),
-    };
+    return makeImportedTextureDesc(image, label, finalLayout);
 }
 
 template <typename TPushConstants>
@@ -334,7 +283,7 @@ void BloomPostprocessing::updateCompositeDescriptor(IImageView* sceneImageView, 
 RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const RenderDesc& desc)
 {
     clearPreparedResources();
-    if (!desc.sceneTexture || !desc.sceneImageView || !desc.state) {
+    if ((!desc.sceneTexture && !desc.sceneImage) || !desc.state) {
         return {};
     }
     if (desc.renderExtent.width == 0 || desc.renderExtent.height == 0) {
@@ -343,7 +292,9 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
 
     const bool bBloomEnabled = desc.state->bEnableBloom;
 
-    const auto scene = graph.importTexture(makeBloomImportedTextureDesc(*desc.sceneTexture, "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal));
+    const auto scene = desc.sceneImage
+        ? graph.importTexture(makeBloomImportedTextureDesc(*desc.sceneImage, "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal))
+        : graph.importTexture(makeBloomImportedTextureDesc(*desc.sceneTexture, "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal));
     const auto output = graph.createTexture(RGTextureDesc{
          .label  = "Bloom.CompositeOutput",
          .format = EFormat::R16G16B16A16_SFLOAT,
@@ -382,8 +333,6 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
     _preparedGraphResources.blurPong      = blurPong.value_or(RGTextureHandle{});
 
     if (bBloomEnabled) {
-        updateExtractDescriptor(desc.sceneImageView);
-
         slang_types::Misc::BloomExtract::PushConstants extractPC{};
         extractPC.threshold = desc.state->bloomThreshold;
         extractPC.knee      = desc.state->bloomSoftKnee;
@@ -400,13 +349,17 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
                 pass.read(scene);
                 pass.useColorAttachment(bloomExtractHandle);
             },
-            [this, bloomExtractHandle, extractRenderArea, extractPC, renderExtent = desc.renderExtent](RGRenderContext& rgCtx) {
+            [this, scene, bloomExtractHandle, extractRenderArea, extractPC, renderExtent = desc.renderExtent](RGRenderContext& rgCtx) {
                 rgCtx.beginColorRendering({
                     .color       = bloomExtractHandle,
                     .renderArea  = extractRenderArea,
                     .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 });
+                const auto* sceneImage = rgCtx.resolveTexture(scene);
+                YA_CORE_ASSERT(sceneImage != nullptr && sceneImage->getImageView() != nullptr,
+                               "Bloom extract pass failed to resolve scene texture {}", scene.index);
+                updateExtractDescriptor(sceneImage->getImageView());
                 rgCtx.getCommandBuffer().bindPipeline(_extractPipeline.get());
                 rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(renderExtent.width), static_cast<float>(renderExtent.height));
                 rgCtx.getCommandBuffer().setScissor(0, 0, renderExtent.width, renderExtent.height);
@@ -472,7 +425,6 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
         .pos    = {0.0f, 0.0f},
         .extent = desc.renderExtent.toVec2(),
     };
-    IImageView* sceneImageView = desc.sceneImageView;
 
     [[maybe_unused]] const auto compositePass = graph.addPass(
         "BloomComposite",
@@ -483,13 +435,16 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
             }
             pass.useColorAttachment(output);
         },
-        [this, bBloomEnabled, compositePC, compositeRenderArea, sceneImageView, renderExtent = desc.renderExtent, output, finalBloomHandle = (_lastBlurPassCount == 0 || (_lastBlurPassCount % 2) == 0) ? blurPong.value_or(RGTextureHandle{}) : blurPing.value_or(RGTextureHandle{})](RGRenderContext& rgCtx) {
+        [this, scene, bBloomEnabled, compositePC, compositeRenderArea, renderExtent = desc.renderExtent, output, finalBloomHandle = (_lastBlurPassCount == 0 || (_lastBlurPassCount % 2) == 0) ? blurPong.value_or(RGTextureHandle{}) : blurPing.value_or(RGTextureHandle{})](RGRenderContext& rgCtx) {
             rgCtx.beginColorRendering({
                 .color       = output,
                 .renderArea  = compositeRenderArea,
                 .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
                 .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
             });
+            const auto* sceneImage = rgCtx.resolveTexture(scene);
+            YA_CORE_ASSERT(sceneImage != nullptr && sceneImage->getImageView() != nullptr,
+                           "Bloom composite pass failed to resolve scene texture {}", scene.index);
             IImageView* compositeBloomImageView = nullptr;
             if (bBloomEnabled) {
                 const auto* finalBloomImage = rgCtx.resolveTexture(finalBloomHandle);
@@ -497,7 +452,7 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
                                "Bloom composite pass failed to resolve bloom texture {}", finalBloomHandle.index);
                 compositeBloomImageView = finalBloomImage->getImageView();
             }
-            updateCompositeDescriptor(sceneImageView, compositeBloomImageView);
+            updateCompositeDescriptor(sceneImage->getImageView(), compositeBloomImageView);
             rgCtx.getCommandBuffer().bindPipeline(_compositePipeline.get());
             rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(renderExtent.width), static_cast<float>(renderExtent.height));
             rgCtx.getCommandBuffer().setScissor(0, 0, renderExtent.width, renderExtent.height);

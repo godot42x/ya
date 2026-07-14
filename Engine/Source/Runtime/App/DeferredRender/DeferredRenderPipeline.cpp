@@ -12,6 +12,7 @@
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "Render/Core/Sampler.h"
+#include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/RenderImage.h"
 #include "Render/Core/Texture.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
@@ -79,9 +80,9 @@ DeferredGBufferResources buildDeferredGBufferResources(IRenderTarget* gBufferRT)
     }
 
     for (uint32_t attachmentIndex = 0; attachmentIndex < resources.color.size(); ++attachmentIndex) {
-        resources.color[attachmentIndex] = gBufferRT->getCurrentColorTexture(attachmentIndex);
+        resources.color[attachmentIndex] = gBufferRT->getCurrentColorAttachment(attachmentIndex);
     }
-    resources.depth = gBufferRT->getCurrentDepthTexture();
+    resources.depth = gBufferRT->getCurrentDepthAttachment();
     resources.formats = buildDeferredAttachmentFormats(gBufferRT);
     return resources;
 }
@@ -93,8 +94,8 @@ DeferredViewportResources buildDeferredViewportResources(IRenderTarget* viewport
         return resources;
     }
 
-    resources.color = viewportRT->getCurrentColorTexture(0);
-    resources.depth = viewportRT->getCurrentDepthTexture();
+    resources.color = viewportRT->getCurrentColorAttachment(0);
+    resources.depth = viewportRT->getCurrentDepthAttachment();
     resources.formats = buildDeferredAttachmentFormats(viewportRT);
     return resources;
 }
@@ -117,107 +118,6 @@ DeferredAttachmentFormats buildDeferredAttachmentFormats(const IRenderTarget* re
     }
 
     return formats;
-}
-
-RGImportedTextureDesc makeDeferredImportedTextureDesc(Texture& texture, std::string_view label, EImageLayout::T finalLayout)
-{
-    YA_CORE_ASSERT(texture.getImageShared() != nullptr, "Deferred graph import requires a backing image");
-    IImage* image = texture.getImage();
-    YA_CORE_ASSERT(image != nullptr, "Deferred graph import requires a valid image");
-
-    return RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label       = std::string(label),
-            .format      = texture.getFormat(),
-            .extent      = Extent3D{texture.getWidth(), texture.getHeight(), 1},
-            .mipLevels   = image->getMipLevels(),
-            .arrayLayers = image->getArrayLayers(),
-            .usage       = image->getUsage(),
-        },
-        .importDesc = ImportedImageDesc{
-            .label         = std::string(label),
-            .nativeHandle  = static_cast<void*>(image->getHandle()),
-            .format        = texture.getFormat(),
-            .usage         = image->getUsage(),
-            .extent        = Extent3D{texture.getWidth(), texture.getHeight(), 1},
-            .mipLevels     = image->getMipLevels(),
-            .arrayLayers   = image->getArrayLayers(),
-            .initialLayout = image->getCompatibilityLayout(),
-            .finalLayout   = finalLayout,
-        },
-        .image = texture.getImageShared(),
-    };
-}
-
-RGImportedTextureDesc makeDeferredImportedTextureDesc(const std::shared_ptr<IImage>& image,
-                                                      IImageView* imageView,
-                                                      std::string_view label,
-                                                      EImageLayout::T finalLayout)
-{
-    YA_CORE_ASSERT(image != nullptr, "Deferred graph import requires a backing image");
-    YA_CORE_ASSERT(imageView != nullptr, "Deferred graph import requires a valid image view");
-
-    return RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label       = std::string(label),
-            .format      = image->getFormat(),
-            .extent      = Extent3D{image->getWidth(), image->getHeight(), 1},
-            .mipLevels   = image->getMipLevels(),
-            .arrayLayers = image->getArrayLayers(),
-            .usage       = image->getUsage(),
-        },
-        .importDesc = ImportedImageDesc{
-            .label         = std::string(label),
-            .nativeHandle  = static_cast<void*>(image->getHandle()),
-            .format        = image->getFormat(),
-            .usage         = image->getUsage(),
-            .extent        = Extent3D{image->getWidth(), image->getHeight(), 1},
-            .mipLevels     = image->getMipLevels(),
-            .arrayLayers   = image->getArrayLayers(),
-            .initialLayout = image->getCompatibilityLayout(),
-            .finalLayout   = finalLayout,
-        },
-        .image = image,
-        .viewDesc = ImageViewCreateInfo{
-            .label          = std::format("{}.ImportedView", label),
-            .viewType       = EImageViewType::View2D,
-            .aspectFlags    = EImageAspect::Depth,
-            .baseMipLevel   = 0,
-            .levelCount     = 1,
-            .baseArrayLayer = SHADOW_DIRECTIONAL_LAYER_INDEX,
-            .layerCount     = 1,
-        },
-    };
-}
-
-RGImportedTextureDesc makeDeferredImportedTextureDesc(const RenderImage& image, std::string_view label, EImageLayout::T finalLayout)
-{
-    YA_CORE_ASSERT(image.getImageShared() != nullptr, "Deferred graph import requires a backing image");
-    IImage* rawImage = image.getImage();
-    YA_CORE_ASSERT(rawImage != nullptr, "Deferred graph import requires a valid image");
-
-    return RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label       = std::string(label),
-            .format      = image.getFormat(),
-            .extent      = Extent3D{image.getWidth(), image.getHeight(), 1},
-            .mipLevels   = rawImage->getMipLevels(),
-            .arrayLayers = rawImage->getArrayLayers(),
-            .usage       = rawImage->getUsage(),
-        },
-        .importDesc = ImportedImageDesc{
-            .label         = std::string(label),
-            .nativeHandle  = static_cast<void*>(rawImage->getHandle()),
-            .format        = image.getFormat(),
-            .usage         = rawImage->getUsage(),
-            .extent        = Extent3D{image.getWidth(), image.getHeight(), 1},
-            .mipLevels     = rawImage->getMipLevels(),
-            .arrayLayers   = rawImage->getArrayLayers(),
-            .initialLayout = rawImage->getCompatibilityLayout(),
-            .finalLayout   = finalLayout,
-        },
-        .image = image.getImageShared(),
-    };
 }
 
 void drawPerfLeaf(const char* label, float value, float parentValue = 0.0f)
@@ -1113,8 +1013,8 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     if (!gbufferDepth) {
         return;
     }
-    bool bHasAllColorAttachments = std::ranges::all_of(_currentGBufferResources.color, [](Texture* texture) {
-        return texture != nullptr;
+    bool bHasAllColorAttachments = std::ranges::all_of(_currentGBufferResources.color, [](RenderImage* image) {
+        return image != nullptr;
     });
     if (!bHasAllColorAttachments) {
         return;
@@ -1124,13 +1024,13 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     std::array<RGTextureHandle, 4> gbufferColors{};
     for (uint32_t attachmentIndex = 0; attachmentIndex < gbufferColors.size(); ++attachmentIndex) {
         gbufferColors[attachmentIndex] = graph.importTexture(
-            makeDeferredImportedTextureDesc(
+            makeImportedTextureDesc(
                 *_currentGBufferResources.color[attachmentIndex],
                 std::format("DeferredGBuffer.Color{}", attachmentIndex),
                 EImageLayout::ShaderReadOnlyOptimal));
     }
     const auto gbufferDepthHandle = graph.importTexture(
-        makeDeferredImportedTextureDesc(*gbufferDepth, "DeferredGBuffer.Depth", EImageLayout::ShaderReadOnlyOptimal));
+        makeImportedTextureDesc(*gbufferDepth, "DeferredGBuffer.Depth", EImageLayout::ShaderReadOnlyOptimal));
     const Extent2D gbufferExtent = gbufferDepth->getExtent();
 
     [[maybe_unused]] const auto gbufferPass = graph.addPass(
@@ -1187,10 +1087,10 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         viewportTexture = nullptr;
         return;
     }
-    viewportTexture = viewportColor;
+    viewportTexture = _viewportRT ? _viewportRT->getCurrentColorTexture(0) : nullptr;
 
-    const auto  color = graph.importTexture(makeDeferredImportedTextureDesc(*viewportColor, "DeferredViewport.Color", EImageLayout::ShaderReadOnlyOptimal));
-    const auto  viewportDepthHandle = graph.importTexture(makeDeferredImportedTextureDesc(*viewportDepth, "DeferredViewport.Depth", EImageLayout::ShaderReadOnlyOptimal));
+    const auto  color = graph.importTexture(makeImportedTextureDesc(*viewportColor, "DeferredViewport.Color", EImageLayout::ShaderReadOnlyOptimal));
+    const auto  viewportDepthHandle = graph.importTexture(makeImportedTextureDesc(*viewportDepth, "DeferredViewport.Depth", EImageLayout::ShaderReadOnlyOptimal));
     const Extent2D viewportExtent = viewportColor->getExtent();
 
     std::optional<RGTextureHandle> ssao;
@@ -1204,31 +1104,31 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     std::optional<RGTextureHandle> environmentBrdfLut;
     if (_currentEnvironmentLightingTextures.isComplete()) {
         environmentCubemap = graph.importTexture(
-            makeDeferredImportedTextureDesc(*_currentEnvironmentLightingTextures.cubemapTexture,
-                                            "DeferredLight.Environment.Cubemap",
-                                            EImageLayout::ShaderReadOnlyOptimal));
+            makeImportedTextureDesc(*_currentEnvironmentLightingTextures.cubemapTexture,
+                                    "DeferredLight.Environment.Cubemap",
+                                    EImageLayout::ShaderReadOnlyOptimal));
         environmentIrradiance = graph.importTexture(
-            makeDeferredImportedTextureDesc(*_currentEnvironmentLightingTextures.irradianceTexture,
-                                            "DeferredLight.Environment.Irradiance",
-                                            EImageLayout::ShaderReadOnlyOptimal));
+            makeImportedTextureDesc(*_currentEnvironmentLightingTextures.irradianceTexture,
+                                    "DeferredLight.Environment.Irradiance",
+                                    EImageLayout::ShaderReadOnlyOptimal));
         environmentPrefilter = graph.importTexture(
-            makeDeferredImportedTextureDesc(*_currentEnvironmentLightingTextures.prefilterTexture,
-                                            "DeferredLight.Environment.Prefilter",
-                                            EImageLayout::ShaderReadOnlyOptimal));
+            makeImportedTextureDesc(*_currentEnvironmentLightingTextures.prefilterTexture,
+                                    "DeferredLight.Environment.Prefilter",
+                                    EImageLayout::ShaderReadOnlyOptimal));
         environmentBrdfLut = graph.importTexture(
-            makeDeferredImportedTextureDesc(*_currentEnvironmentLightingTextures.brdfLutTexture,
-                                            "DeferredLight.Environment.BrdfLut",
-                                            EImageLayout::ShaderReadOnlyOptimal));
+            makeImportedTextureDesc(*_currentEnvironmentLightingTextures.brdfLutTexture,
+                                    "DeferredLight.Environment.BrdfLut",
+                                    EImageLayout::ShaderReadOnlyOptimal));
     }
 
     std::optional<RGTextureHandle> shadowDepth;
     if (auto shadowDepthImage = getShadowDepthImage();
-        shadowDepthImage && getShadowDirectionalDepthIV() && isShadowMappingEnabled()) {
+        shadowDepthImage && _shadowResources.directionalDepthIV && isShadowMappingEnabled()) {
         shadowDepth = graph.importTexture(
-            makeDeferredImportedTextureDesc(shadowDepthImage,
-                                            getShadowDirectionalDepthIV(),
-                                            "DeferredLight.ShadowDepth",
-                                            EImageLayout::ShaderReadOnlyOptimal));
+            makeImportedTextureDesc(shadowDepthImage,
+                                    _shadowResources.directionalDepthIV,
+                                    "DeferredLight.ShadowDepth",
+                                    EImageLayout::ShaderReadOnlyOptimal));
     }
 
     [[maybe_unused]] const auto lightPass = graph.addPass(
@@ -1367,10 +1267,11 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             rgCtx.endRendering();
         });
 
-    auto* inputTexture = _currentViewportResources.color;
+    auto* inputTexture = _viewportRT ? _viewportRT->getCurrentColorTexture(0) : nullptr;
+    auto* inputImage   = _currentViewportResources.color;
     const auto postprocessOutput = _postProcessStage.appendGraphPasses(
         graph,
-        inputTexture,
+        inputImage,
         _lastFrameInput.viewportRect.extent,
         &_lastTickCtx);
 
@@ -1383,7 +1284,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             _lightStage->setSSAOTexture(nullptr);
         }
         _postProcessStage.clearPreparedResources();
-        viewportTexture = _currentViewportResources.color;
+        viewportTexture = inputTexture;
         return;
     }
 

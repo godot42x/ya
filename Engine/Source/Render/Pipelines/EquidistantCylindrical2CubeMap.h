@@ -4,6 +4,7 @@
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Image.h"
+#include "Render/Core/RenderImage.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Core/Sampler.h"
 #include "Render/Core/Texture.h"
@@ -41,9 +42,9 @@ struct EquidistantCylindrical2CubeMap
     struct ExecuteContext
     {
         ICommandBuffer* cmdBuf     = nullptr;
-        Texture*        input      = nullptr;
-        Texture*        output     = nullptr;
-      bool            bFlipVertical = false;
+        Texture*      input         = nullptr;
+        RenderImage*  output        = nullptr;
+        bool          bFlipVertical = false;
         ClearValue      clearColor = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);
     };
 

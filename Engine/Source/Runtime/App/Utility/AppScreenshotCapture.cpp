@@ -300,7 +300,7 @@ bool AppScreenshotCapture::request(IRender*                        render,
 
     auto job       = std::make_shared<OffscreenJobState>();
     job->debugName = "AutomationScreenshotCapture";
-    job->executeFn = [sourceImage = source.image, readbackBuffer = state.readbackBuffer, extent](ICommandBuffer* cmdBuf, Texture*) -> bool
+    job->executeFn = [sourceImage = source.image, readbackBuffer = state.readbackBuffer, extent](ICommandBuffer* cmdBuf, RenderImage*) -> bool
     {
         if (!cmdBuf || !sourceImage || !readbackBuffer) {
             return false;
@@ -436,7 +436,7 @@ bool AppScreenshotCapture::tryFinalize(uint64_t currentFrameIndex, AppScreenshot
         YA_CORE_ERROR("Screenshot capture job did not complete successfully (phase={})",
                       static_cast<int>(state.pendingJob->phase));
         if (state.pendingJob->result) {
-            state.pendingJob->result->outputTexture = nullptr;
+            state.pendingJob->result->outputImage = nullptr;
         }
         state.bFailed       = true;
         state.readbackBuffer.reset();
@@ -451,7 +451,7 @@ bool AppScreenshotCapture::tryFinalize(uint64_t currentFrameIndex, AppScreenshot
     state.bCompleted = writePngFromReadback(state);
     state.bFailed    = !state.bCompleted;
     if (state.pendingJob->result) {
-        state.pendingJob->result->outputTexture = nullptr;
+        state.pendingJob->result->outputImage = nullptr;
     }
     state.readbackBuffer.reset();
     state.pendingJob = nullptr;

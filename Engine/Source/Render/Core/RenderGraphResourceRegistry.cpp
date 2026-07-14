@@ -10,21 +10,6 @@ namespace ya
 namespace
 {
 
-bool isSameImageViewDesc(const ImageViewCreateInfo& lhs, const ImageViewCreateInfo& rhs)
-{
-    return lhs.label == rhs.label &&
-           lhs.viewType == rhs.viewType &&
-           lhs.aspectFlags == rhs.aspectFlags &&
-           lhs.baseMipLevel == rhs.baseMipLevel &&
-           lhs.levelCount == rhs.levelCount &&
-           lhs.baseArrayLayer == rhs.baseArrayLayer &&
-           lhs.layerCount == rhs.layerCount &&
-           lhs.components.r == rhs.components.r &&
-           lhs.components.g == rhs.components.g &&
-           lhs.components.b == rhs.components.b &&
-           lhs.components.a == rhs.components.a;
-}
-
 bool isSameTextureDesc(const RGTextureDesc& lhs, const RGTextureDesc& rhs)
 {
     return lhs.label == rhs.label &&
@@ -39,27 +24,14 @@ bool isSameTextureDesc(const RGTextureDesc& lhs, const RGTextureDesc& rhs)
            lhs.flags == rhs.flags;
 }
 
-bool isSameImportedImageDesc(const ImportedImageDesc& lhs, const ImportedImageDesc& rhs)
-{
-    return lhs.label == rhs.label &&
-           lhs.nativeHandle == rhs.nativeHandle &&
-           lhs.format == rhs.format &&
-           lhs.usage == rhs.usage &&
-           lhs.extent.width == rhs.extent.width &&
-           lhs.extent.height == rhs.extent.height &&
-           lhs.extent.depth == rhs.extent.depth &&
-           lhs.mipLevels == rhs.mipLevels &&
-           lhs.arrayLayers == rhs.arrayLayers &&
-           lhs.bOwnsNativeResource == rhs.bOwnsNativeResource &&
-           lhs.initialLayout == rhs.initialLayout &&
-           lhs.finalLayout == rhs.finalLayout;
-}
-
 bool isSameImportedTextureDesc(const RGImportedTextureDesc& lhs, const RGImportedTextureDesc& rhs)
 {
     const bool bSameViewDesc =
         lhs.viewDesc.has_value() == rhs.viewDesc.has_value() &&
-        (!lhs.viewDesc.has_value() || isSameImageViewDesc(*lhs.viewDesc, *rhs.viewDesc));
+        (!lhs.viewDesc.has_value() ||
+         isSameImageViewDescKey(
+             makeImageViewDescKey(*lhs.viewDesc),
+             makeImageViewDescKey(*rhs.viewDesc)));
 
     return isSameTextureDesc(lhs.desc, rhs.desc) &&
            isSameImportedImageDesc(lhs.importDesc, rhs.importDesc) &&

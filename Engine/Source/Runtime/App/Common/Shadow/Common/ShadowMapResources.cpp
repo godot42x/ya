@@ -87,11 +87,11 @@ void ShadowMapResources::rebuildViews(IRender* render, std::string_view viewLabe
         }
     }
 
-    auto* depthTexture = renderTarget->getCurrentDepthTexture();
-    YA_CORE_ASSERT(depthTexture, "Shadow render target depth texture is null");
+    auto* depthAttachment = renderTarget->getCurrentDepthAttachment();
+    YA_CORE_ASSERT(depthAttachment, "Shadow render target depth attachment is null");
 
     auto* resourceFactory = render->getResourceFactory();
-    depthImage            = depthTexture->getImageShared();
+    depthImage            = depthAttachment->getImageShared();
     YA_CORE_ASSERT(depthImage, "Shadow render target image is null");
 
     auto views         = ShadowViewBuilder::buildLayerViews(resourceFactory, depthImage, viewLabelPrefix);

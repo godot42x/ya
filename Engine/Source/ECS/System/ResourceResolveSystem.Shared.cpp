@@ -33,6 +33,17 @@ void retireTextureNow(stdptr<Texture>& texture)
     texture.reset();
 }
 
+stdptr<Texture> wrapRenderImageAsTexture(const std::shared_ptr<RenderImage>& image, std::string_view label)
+{
+    if (!image || !image->getImageShared() || !image->getImageViewShared()) {
+        return nullptr;
+    }
+
+    return Texture::wrap(image->getImageShared(),
+                         image->getImageViewShared(),
+                         label.empty() ? image->getLabel() : std::string(label));
+}
+
 EFormat::T chooseSkyboxCubemapFormat(EFormat::T sourceFormat)
 {
     switch (sourceFormat) {
@@ -80,11 +91,11 @@ uint32_t computeEnvironmentIrradianceFaceSize(const Texture* sourceTexture, uint
     return std::max(4u, std::min(sourceFaceSize, maxFaceSize));
 }
 
-stdptr<Texture> createRenderableSkyboxCubemap(IRender*           render,
-                                              const std::string& label,
-                                              uint32_t           faceSize,
-                                              EFormat::T         format,
-                                              int                mips)
+std::shared_ptr<RenderImage> createRenderableSkyboxCubemap(IRender*           render,
+                                                           const std::string& label,
+                                                           uint32_t           faceSize,
+                                                           EFormat::T         format,
+                                                           int                mips)
 {
     auto* resourceFactory = render ? render->getResourceFactory() : nullptr;
     if (!resourceFactory || faceSize == 0 || format == EFormat::Undefined) {
@@ -131,7 +142,11 @@ stdptr<Texture> createRenderableSkyboxCubemap(IRender*           render,
         return nullptr;
     }
 
-    return Texture::wrap(image, cubeView, label);
+    auto renderImage       = std::make_shared<RenderImage>();
+    renderImage->label     = label;
+    renderImage->image     = std::move(image);
+    renderImage->defaultView = std::move(cubeView);
+    return renderImage;
 }
 
 OffscreenJobState::CreateOutputFn makeCubemapOutputFn(const std::string& label,
@@ -139,7 +154,7 @@ OffscreenJobState::CreateOutputFn makeCubemapOutputFn(const std::string& label,
                                                       EFormat::T         format,
                                                       int                mipLevels)
 {
-    return [label, faceSize, format, mipLevels](IRender* render) -> stdptr<Texture>
+    return [label, faceSize, format, mipLevels](IRender* render) -> std::shared_ptr<RenderImage>
     {
         if (!render || label.empty() || faceSize == 0 || format == EFormat::Undefined || mipLevels <= 0) {
             return nullptr;

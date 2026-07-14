@@ -20,6 +20,7 @@ std::shared_ptr<RenderImage> createRenderImage(
     }
 
     auto resource         = std::make_shared<RenderImage>();
+    resource->label       = desc.image.label;
     resource->image       = std::move(image);
     resource->defaultView = std::move(view);
     return resource;
