@@ -8,6 +8,7 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Image.h"
 #include "Render/Core/Pipeline.h"
+#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Stage/IRenderStage.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
@@ -42,6 +43,10 @@ class PointShadowPass
     void destroy();
     void prepare(const BasicShadowFramePayload& payload);
     void execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload);
+    [[nodiscard]] std::optional<RGPassHandle> appendGraphPasses(
+        RenderGraph& graph,
+        const BasicShadowFramePayload& payload,
+        std::optional<RGPassHandle> dependency = std::nullopt);
 
     void renderGUI();
 
@@ -92,6 +97,7 @@ class PointShadowPass
     GraphicsPipelineCreateInfo _directPipelineCI{};
 
     stdptr<IImage> _shadowImage;
+    std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
     std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS> _faceDepthViews{};
 

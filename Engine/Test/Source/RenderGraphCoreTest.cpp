@@ -371,6 +371,24 @@ TEST(RenderGraphCoreTest, CompileBuildsStableDependencyOrder)
     EXPECT_EQ(compiled.textureStates[1].requiredState.layout, EImageLayout::ShaderReadOnlyOptimal);
 }
 
+TEST(RenderGraphCoreTest, CompileIncludesExplicitPassDependency)
+{
+    RenderGraph graph;
+    const auto producer = graph.addPass("producer", [](RGPassBuilder&) {});
+    const auto consumer = graph.addPass("consumer", [producer](RGPassBuilder& pass) {
+        pass.dependsOn(producer);
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid());
+    EXPECT_NE(std::find(compiled.dependencies.begin(), compiled.dependencies.end(),
+                        RGDependencyEdge{producer, consumer}),
+              compiled.dependencies.end());
+    ASSERT_EQ(compiled.order.size(), 2u);
+    EXPECT_EQ(compiled.order[0], producer);
+    EXPECT_EQ(compiled.order[1], consumer);
+}
+
 TEST(RenderGraphCoreTest, CompileRejectsReadBeforeWriteForTransientTexture)
 {
     RenderGraph graph;
@@ -551,6 +569,55 @@ TEST(RenderGraphCoreTest, CompileUsesImportedViewRangeForTextureStatePlan)
     EXPECT_EQ(compiled.textureStates[0].requiredState.subresourceRange.baseMipLevel, 1u);
     EXPECT_EQ(compiled.textureStates[0].requiredState.subresourceRange.baseArrayLayer, 3u);
     EXPECT_EQ(compiled.textureStates[0].requiredState.subresourceRange.layerCount, 1u);
+}
+
+TEST(RenderGraphCoreTest, CompileModelsComputeReadWriteToIndirectReadDependency)
+{
+    RenderGraph graph;
+    const auto commands = graph.createBuffer(RGBufferDesc{
+        .label = "shadow.commands",
+        .usage = EBufferUsage::StorageBuffer | EBufferUsage::IndirectBuffer,
+        .size  = 512,
+    });
+
+    const auto cullPass = graph.addPass("cull", [&](RGPassBuilder& pass) {
+        pass.readWrite(commands);
+    });
+    const auto drawPass = graph.addPass("draw", [&](RGPassBuilder& pass) {
+        pass.indirectRead(commands);
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid());
+    ASSERT_EQ(compiled.bufferStates.size(), 2u);
+    EXPECT_EQ(compiled.bufferStates[0].requiredState.stages, EPipelineStage::ComputeShader);
+    EXPECT_EQ(compiled.bufferStates[0].requiredState.access,
+              static_cast<EResourceAccess::T>(EResourceAccess::ShaderRead | EResourceAccess::ShaderWrite));
+    EXPECT_EQ(compiled.bufferStates[1].requiredState.stages, EPipelineStage::DrawIndirect);
+    EXPECT_EQ(compiled.bufferStates[1].requiredState.access, EResourceAccess::IndirectCommandRead);
+    EXPECT_NE(std::find(compiled.dependencies.begin(), compiled.dependencies.end(), RGDependencyEdge{cullPass, drawPass}),
+              compiled.dependencies.end());
+}
+
+TEST(RenderGraphCoreTest, CompileRejectsIndirectReadWithoutIndirectUsage)
+{
+    RenderGraph graph;
+    const auto commands = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "storage-only.commands",
+            .usage = EBufferUsage::StorageBuffer,
+            .size  = 128,
+        },
+        .buffer = reinterpret_cast<IBuffer*>(0x1),
+    });
+    graph.addPass("draw", [&](RGPassBuilder& pass) {
+        pass.indirectRead(commands);
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_FALSE(compiled.isValid());
+    ASSERT_EQ(compiled.issues.size(), 1u);
+    EXPECT_EQ(compiled.issues.front().kind, RGCompileIssue::EKind::InvalidUsage);
 }
 
 TEST(RenderGraphCoreTest, ImportedSubresourceHelperKeepsProvidedViewAndCompileRange)
@@ -795,8 +862,11 @@ TEST(RenderGraphCoreTest, ResourceRegistryReusesStableResourcesAcrossSyncs)
 
     registry.sync(graphA);
     const auto* firstTexture = registry.resolveTexture(textureHandle);
+    auto        firstTextureOwner = registry.resolveTextureShared(textureHandle);
     auto*       firstBuffer  = registry.resolveBuffer(bufferHandle);
     ASSERT_NE(firstTexture, nullptr);
+    ASSERT_NE(firstTextureOwner, nullptr);
+    EXPECT_EQ(firstTextureOwner.get(), firstTexture);
     ASSERT_NE(firstBuffer, nullptr);
     EXPECT_EQ(factory.createdImages, 1u);
     EXPECT_EQ(factory.createdViews, 1u);
@@ -1403,6 +1473,45 @@ TEST(RenderGraphCoreTest, ExecutorRejectsInvalidGraphWithoutRunningPasses)
     EXPECT_EQ(factory.createdBuffers, 0u);
 }
 
+TEST(RenderGraphCoreTest, ExecutorSeedsImportedBufferBarrierFromDeclaredInitialState)
+{
+    TestResourceFactory factory;
+    TestCommandBuffer   cmdBuf;
+    RenderGraphExecutor executor(factory);
+    RenderGraph         graph;
+    TestBuffer          uniformBuffer(BufferCreateInfo{
+        .label = "frame.uniform",
+        .usage = EBufferUsage::UniformBuffer,
+        .size  = 256,
+    });
+
+    const auto imported = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "frame.uniform",
+            .usage = EBufferUsage::UniformBuffer,
+            .size  = 256,
+        },
+        .buffer = &uniformBuffer,
+        .initialState = BufferResourceState{
+            .stages = EPipelineStage::Host,
+            .access = EResourceAccess::HostWrite,
+            .size   = 256,
+        },
+    });
+    graph.addPass(
+        "uniform-reader",
+        [=](RGPassBuilder& pass) { pass.read(imported); },
+        [](RGRenderContext&) {});
+
+    ASSERT_TRUE(executor.execute(graph, cmdBuf));
+    ASSERT_EQ(cmdBuf.bufferBarriers.size(), 1u);
+    EXPECT_EQ(cmdBuf.bufferBarriers[0].srcStage, EPipelineStage::Host);
+    EXPECT_EQ(cmdBuf.bufferBarriers[0].dstStage, EPipelineStage::AllCommands);
+    EXPECT_EQ(cmdBuf.bufferBarriers[0].srcAccess, EResourceAccess::HostWrite);
+    EXPECT_EQ(cmdBuf.bufferBarriers[0].dstAccess, EResourceAccess::ShaderRead);
+    EXPECT_EQ(cmdBuf.bufferBarriers[0].size, 256u);
+}
+
 TEST(RenderGraphCoreTest, ExecutorSmokeRunsClearAndCopyCallbacks)
 {
     TestResourceFactory      factory;
@@ -1458,8 +1567,8 @@ TEST(RenderGraphCoreTest, ExecutorSmokeRunsClearAndCopyCallbacks)
     graph.addPass(
         "copy",
         [&](RGPassBuilder& pass) {
-            pass.read(srcBuffer);
-            pass.write(dstBuffer);
+            pass.transferSrc(srcBuffer);
+            pass.transferDst(dstBuffer);
         },
         [&](RGRenderContext& ctx) {
             executionOrder.push_back(ctx.getPass().name);
@@ -1477,8 +1586,8 @@ TEST(RenderGraphCoreTest, ExecutorSmokeRunsClearAndCopyCallbacks)
     ASSERT_EQ(cmdBuf.transitions.size(), 1u);
     EXPECT_EQ(cmdBuf.transitions[0].newLayout, EImageLayout::ColorAttachmentOptimal);
     ASSERT_EQ(cmdBuf.bufferBarriers.size(), 2u);
-    EXPECT_EQ(cmdBuf.bufferBarriers[0].dstAccess, EResourceAccess::ShaderRead);
-    EXPECT_EQ(cmdBuf.bufferBarriers[1].dstAccess, EResourceAccess::ShaderWrite);
+    EXPECT_EQ(cmdBuf.bufferBarriers[0].dstAccess, EResourceAccess::TransferRead);
+    EXPECT_EQ(cmdBuf.bufferBarriers[1].dstAccess, EResourceAccess::TransferWrite);
 }
 
 TEST(RenderGraphCoreTest, RenderContextHelpersDriveRenderingAndCopyCommands)
@@ -1517,8 +1626,8 @@ TEST(RenderGraphCoreTest, RenderContextHelpersDriveRenderingAndCopyCommands)
         "helper-pass",
         [&](RGPassBuilder& pass) {
             pass.useColorAttachment(colorTarget);
-            pass.read(srcBuffer);
-            pass.write(dstBuffer);
+            pass.transferSrc(srcBuffer);
+            pass.transferDst(dstBuffer);
         },
         [&](RGRenderContext& ctx) {
             ctx.beginColorRendering({
@@ -1580,6 +1689,48 @@ TEST(RenderGraphCoreTest, RasterRenderingHelperSupportsOptionalDepthAttachment)
                     .depth = depthTarget,
                     .loadOp = EAttachmentLoadOp::Load,
                     .storeOp = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                },
+            });
+            ctx.endRendering();
+        });
+
+    ASSERT_TRUE(executor.execute(graph, cmdBuf));
+    EXPECT_EQ(cmdBuf.beginRenderingCount, 1u);
+    EXPECT_EQ(cmdBuf.endRenderingCount, 1u);
+    EXPECT_TRUE(cmdBuf.lastBeginRenderingHadDepth);
+    EXPECT_EQ(cmdBuf.lastDepthFinalLayout, EImageLayout::ShaderReadOnlyOptimal);
+}
+
+TEST(RenderGraphCoreTest, RasterRenderingHelperSupportsDepthOnlyPass)
+{
+    TestResourceFactory factory;
+    TestCommandBuffer   cmdBuf;
+    RenderGraphExecutor executor(factory);
+    RenderGraph         graph;
+
+    const auto depthTarget = graph.createTexture(RGTextureDesc{
+        .label  = "shadow.depth",
+        .format = EFormat::D32_SFLOAT,
+        .extent = Extent3D{256, 256, 1},
+        .usage  = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
+    });
+
+    graph.addPass(
+        "shadow-depth-only",
+        [&](RGPassBuilder& pass) {
+            pass.useDepthAttachment(depthTarget);
+        },
+        [&](RGRenderContext& ctx) {
+            ctx.beginRasterRendering({
+                .renderArea = Rect2D{
+                    .offset = glm::vec2{0.0f, 0.0f},
+                    .extent = glm::vec2{256.0f, 256.0f},
+                },
+                .depth = RGRenderContext::DepthRenderingDesc{
+                    .depth       = depthTarget,
+                    .loadOp      = EAttachmentLoadOp::Clear,
+                    .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 },
             });

@@ -112,6 +112,9 @@ struct GBufferStage : public IRenderStage
         return _frameAndLightDS[flightIndex];
     }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getFrameAndLightDSL() const { return _frameAndLightDSL; }
+    [[nodiscard]] IBuffer* getFrameBuffer(uint32_t flightIndex) const { return _frameUBO[flightIndex].get(); }
+    [[nodiscard]] IBuffer* getLightBuffer(uint32_t flightIndex) const { return _lightUBO[flightIndex].get(); }
+    [[nodiscard]] IBuffer* getSkinningBuffer(uint32_t flightIndex) const { return _skinningSSBO[flightIndex].get(); }
     void                                       applyShadowState(const ShadowRuntimeState& shadowState) { _shadowState = shadowState; }
     [[nodiscard]] uint32_t                     getMaxShadowedPointLights() const { return _shadowState.maxShadowedPointLights; }
     [[nodiscard]] uint32_t                     getLastShadowedPointLights() const { return _lastShadowedPointLights; }

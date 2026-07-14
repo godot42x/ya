@@ -283,7 +283,7 @@ void BloomPostprocessing::updateCompositeDescriptor(IImageView* sceneImageView, 
 RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const RenderDesc& desc)
 {
     clearPreparedResources();
-    if ((!desc.sceneTexture && !desc.sceneImage) || !desc.state) {
+    if ((!desc.sceneTexture && !desc.sceneImage && !desc.sceneHandle.isValid()) || !desc.state) {
         return {};
     }
     if (desc.renderExtent.width == 0 || desc.renderExtent.height == 0) {
@@ -292,9 +292,11 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
 
     const bool bBloomEnabled = desc.state->bEnableBloom;
 
-    const auto scene = desc.sceneImage
-        ? graph.importTexture(makeBloomImportedTextureDesc(*desc.sceneImage, "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal))
-        : graph.importTexture(makeBloomImportedTextureDesc(*desc.sceneTexture, "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal));
+    const auto scene = desc.sceneHandle.isValid()
+        ? desc.sceneHandle
+        : desc.sceneImage
+            ? graph.importTexture(makeBloomImportedTextureDesc(*desc.sceneImage, "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal))
+            : graph.importTexture(makeBloomImportedTextureDesc(*desc.sceneTexture, "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal));
     const auto output = graph.createTexture(RGTextureDesc{
          .label  = "Bloom.CompositeOutput",
          .format = EFormat::R16G16B16A16_SFLOAT,

@@ -85,8 +85,9 @@ struct RGImportedTextureDesc
 
 struct RGImportedBufferDesc
 {
-    RGBufferDesc desc;
-    IBuffer*     buffer = nullptr;
+    RGBufferDesc       desc;
+    IBuffer*           buffer = nullptr;
+    BufferResourceState initialState{};
 };
 
 struct RGTextureResource
@@ -121,10 +122,20 @@ struct RGTextureUsage
     ERGPassResourceAccess   access = ERGPassResourceAccess::Read;
 };
 
+enum class ERGBufferAccess : uint8_t
+{
+    ShaderRead,
+    ShaderWrite,
+    ShaderReadWrite,
+    IndirectRead,
+    TransferRead,
+    TransferWrite,
+};
+
 struct RGBufferUsage
 {
-    RGBufferHandle          handle{};
-    ERGPassResourceAccess   access = ERGPassResourceAccess::Read;
+    RGBufferHandle handle{};
+    ERGBufferAccess access = ERGBufferAccess::ShaderRead;
 };
 
 struct RGPass
@@ -133,6 +144,7 @@ struct RGPass
     std::string                 name;
     std::vector<RGTextureUsage> textures;
     std::vector<RGBufferUsage>  buffers;
+    std::vector<RGPassHandle>   dependencies;
     std::function<void(class RGRenderContext&)> execute;
 };
 
@@ -296,6 +308,11 @@ class RGPassBuilder
     void write(RGTextureHandle handle);
     void read(RGBufferHandle handle);
     void write(RGBufferHandle handle);
+    void readWrite(RGBufferHandle handle);
+    void indirectRead(RGBufferHandle handle);
+    void transferSrc(RGBufferHandle handle);
+    void transferDst(RGBufferHandle handle);
+    void dependsOn(RGPassHandle handle);
     void useColorAttachment(RGTextureHandle handle);
     void useDepthAttachment(RGTextureHandle handle);
     void transferSrc(RGTextureHandle handle);

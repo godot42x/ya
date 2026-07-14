@@ -220,10 +220,10 @@
 
 ### GBuffer
 
-- [ ] 声明 GBuffer color/depth transient resources
-- [ ] 迁移 GBuffer pass setup/execute
-- [ ] 明确 frame/light/skinning buffer 为 imported 或 graph buffer
-- [ ] 移除 GBuffer attachment 的 `IRenderTarget` ownership
+- [x] 声明 GBuffer color/depth graph-owned persistent resources（editor/debug/automation 需要跨帧稳定身份，不采用 transient）
+- [x] 迁移 GBuffer pass setup/execute
+- [x] 明确 frame/light/skinning buffer 为 imported buffer，并声明 HostWrite initial state
+- [x] 移除 GBuffer attachment 的 `IRenderTarget` ownership
 
 ### SSAO
 
@@ -257,18 +257,20 @@
 
 ### Pipeline 收口
 
-- [-] RenderGraph 接管 Deferred pass 顺序
-- [ ] RenderGraph 接管 Deferred intermediate resource owner
-- [ ] RenderGraph 接管 pass 间 barrier
+- [x] RenderGraph 接管 Deferred pass 顺序
+- [x] RenderGraph 接管 Deferred intermediate resource owner
+- [x] RenderGraph 接管 Deferred 主链与 point-shadow cull 的 pass 间 barrier
+- [x] Directional/point shadow depth-only raster recording 改为 graph-backed executor
+- [x] 通过显式 pass dependency 将 shadow 子图统一并入 Deferred 主图
 - [x] 删除 Deferred `refreshDirtyResources()` attachment 修复路径
-- [ ] 删除 Deferred viewport/SSAO/postprocess dirty resource state
+- [x] 删除 Deferred viewport/SSAO/postprocess dirty resource state
 
 完成标准：
 
-- [ ] Deferred 主链路完全由 RenderGraph 执行
-- [ ] resize 不调用 attachment `flushDirty()`
+- [x] Deferred 主链路完全由 RenderGraph 执行
+- [x] resize 不调用 attachment `flushDirty()`
 - [ ] 截图与迁移前基线一致
-- [ ] Vulkan validation 无新增 error
+- [x] Vulkan validation 无新增 error（默认 Deferred 400 帧与 Deferred viewport resize smoke）
 
 ## Phase 8: RenderTarget 收敛
 

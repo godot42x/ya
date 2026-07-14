@@ -53,6 +53,10 @@ struct PostProcessingStage
                                       RenderImage*  inputImage,
                                       glm::vec2     viewportExtent,
                                       FrameContext* ctx);
+    RGTextureHandle appendGraphPasses(RenderGraph& graph,
+                                      RGTextureHandle input,
+                                      Extent2D        inputExtent,
+                                      FrameContext*   ctx);
     void     resolvePreparedResources(const RenderGraphResourceRegistry& registry);
     void     clearPreparedResources();
     RenderImage* execute(ICommandBuffer* cmdBuf,

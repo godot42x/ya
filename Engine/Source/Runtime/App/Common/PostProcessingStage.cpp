@@ -219,11 +219,6 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
                                                        FrameContext* ctx)
 {
     (void)viewportExtent;
-
-    if (!bEnabled || !_postProcessor) {
-        clearPreparedResources();
-        return {};
-    }
     if (!inputTexture || !inputTexture->isValid()) {
         clearPreparedResources();
         return {};
@@ -235,66 +230,8 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
         return {};
     }
 
-    clearPreparedResources();
-
     const auto input = graph.importTexture(makePostprocessImportedTextureDesc(*inputTexture, "Postprocessing.Input", EImageLayout::ShaderReadOnlyOptimal));
-    RGTextureHandle compositeInput = input;
-    if (_state.bEnableBloom && _bloomProcessor) {
-        const auto bloomOutput = _bloomProcessor->appendGraphPasses(graph, BloomPostprocessing::RenderDesc{
-            .sceneTexture   = inputTexture,
-            .renderExtent   = inputExtent,
-            .state          = &_state,
-        });
-        if (bloomOutput.isValid()) {
-            compositeInput = bloomOutput;
-        }
-    }
-
-    const auto swapchainFormat = _render->getSwapchain()->getFormat();
-    const bool bOutputIsSRGB   = EFormat::isSRGB(swapchainFormat);
-    const auto output = graph.createTexture(RGTextureDesc{
-        .label  = "Postprocessing.Output",
-        .format = _colorFormat,
-        .extent = Extent3D{inputExtent.width, inputExtent.height, 1},
-        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, ERGResourceLifetime::Persistent);
-    const Rect2D outputRenderArea{
-        .pos    = {0.0f, 0.0f},
-        .extent = inputExtent.toVec2(),
-    };
-
-    [[maybe_unused]] const auto pass = graph.addPass(
-        "Postprocessing",
-        [compositeInput, output](RGPassBuilder& pass) {
-            pass.read(compositeInput);
-            pass.useColorAttachment(output);
-        },
-        [this, compositeInput, output, outputRenderArea, inputExtent, bOutputIsSRGB, state = &_state, postContext = ctx](RGRenderContext& rgCtx) {
-            rgCtx.beginColorRendering({
-                .color       = output,
-                .renderArea  = outputRenderArea,
-                .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
-                .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-            });
-
-            const auto* compositeInputImage = rgCtx.resolveTexture(compositeInput);
-            YA_CORE_ASSERT(compositeInputImage != nullptr && compositeInputImage->getImageView() != nullptr,
-                           "Postprocessing failed to resolve input texture {}", compositeInput.index);
-            _postProcessor->render(BasicPostprocessing::RenderDesc{
-                .cmdBuf         = &rgCtx.getCommandBuffer(),
-                .ctx            = postContext,
-                .inputImageView = compositeInputImage->getImageView(),
-                .renderExtent   = inputExtent,
-                .bOutputIsSRGB  = bOutputIsSRGB,
-                .state          = state,
-            });
-
-            rgCtx.endRendering();
-        });
-
-    _preparedGraphResources.input  = compositeInput;
-    _preparedGraphResources.output = output;
-    return output;
+    return appendGraphPasses(graph, input, inputExtent, ctx);
 }
 
 RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
@@ -304,10 +241,6 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
 {
     (void)viewportExtent;
 
-    if (!bEnabled || !_postProcessor) {
-        clearPreparedResources();
-        return {};
-    }
     if (!inputImage || !inputImage->isValid()) {
         clearPreparedResources();
         return {};
@@ -319,13 +252,26 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
         return {};
     }
 
+    const auto input = graph.importTexture(makePostprocessImportedTextureDesc(*inputImage, "Postprocessing.Input", EImageLayout::ShaderReadOnlyOptimal));
+    return appendGraphPasses(graph, input, inputExtent, ctx);
+}
+
+RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
+                                                       RGTextureHandle input,
+                                                       Extent2D        inputExtent,
+                                                       FrameContext*   ctx)
+{
+    if (!bEnabled || !_postProcessor || !input.isValid() || inputExtent.width == 0 || inputExtent.height == 0) {
+        clearPreparedResources();
+        return {};
+    }
+
     clearPreparedResources();
 
-    const auto input = graph.importTexture(makePostprocessImportedTextureDesc(*inputImage, "Postprocessing.Input", EImageLayout::ShaderReadOnlyOptimal));
     RGTextureHandle compositeInput = input;
     if (_state.bEnableBloom && _bloomProcessor) {
         const auto bloomOutput = _bloomProcessor->appendGraphPasses(graph, BloomPostprocessing::RenderDesc{
-            .sceneImage   = inputImage,
+            .sceneHandle  = input,
             .renderExtent = inputExtent,
             .state        = &_state,
         });

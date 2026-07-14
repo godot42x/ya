@@ -231,6 +231,7 @@ enum T : uint32_t
     ColorAttachmentOutput = 1 << 7,
     EarlyFragmentTests    = 1 << 8,
     LateFragmentTests     = 1 << 9,
+    Host                  = 1 << 10,
 };
 }
 
@@ -250,6 +251,8 @@ enum T : uint32_t
     ColorAttachmentWrite       = 1 << 8,
     DepthStencilAttachmentRead = 1 << 9,
     DepthStencilAttachmentWrite = 1 << 10,
+    HostRead                   = 1 << 11,
+    HostWrite                  = 1 << 12,
 };
 }
 

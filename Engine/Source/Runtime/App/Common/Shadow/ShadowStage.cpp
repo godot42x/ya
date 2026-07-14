@@ -47,6 +47,16 @@ void ShadowStage::execute(const RenderStageContext& ctx)
     _technique->execute(ctx.cmdBuf, ctx.flightIndex, *ctx.frameData);
 }
 
+std::optional<RGPassHandle> ShadowStage::appendGraphPasses(
+    RenderGraph& graph,
+    const RenderStageContext& ctx)
+{
+    if (!ctx.frameData || !_technique || !_settings.isEnabled()) return std::nullopt;
+    auto* basicShadowMapTechnique = dynamic_cast<BasicShadowMapTechnique*>(_technique.get());
+    if (!basicShadowMapTechnique) return std::nullopt;
+    return basicShadowMapTechnique->appendGraphPasses(graph, ctx.flightIndex, *ctx.frameData);
+}
+
 void ShadowStage::renderGUI()
 {
     if (!ImGui::TreeNode("Shadow Maps")) {

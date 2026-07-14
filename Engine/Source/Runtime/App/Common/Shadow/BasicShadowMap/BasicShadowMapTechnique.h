@@ -35,6 +35,10 @@ class BasicShadowMapTechnique : public IShadowTechnique
     [[nodiscard]] PointShadowPass&       getPointPass() { return _pointPass; }
 
     void refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent) override;
+    [[nodiscard]] std::optional<RGPassHandle> appendGraphPasses(
+        RenderGraph& graph,
+        uint32_t flightIndex,
+        const RenderFrameData& frameData);
 
   private:
     void                    rebuildLayerTextures(const std::shared_ptr<IImage>& shadowImage);

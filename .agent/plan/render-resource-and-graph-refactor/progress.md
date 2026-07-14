@@ -7,21 +7,20 @@
 - 资源模型层：buffer factory 迁移已基本完成，image/view/sampler 新工厂与 ownership 规则已成型
 - 状态跟踪层：`ResourceStateTracker` 已成为统一收口方向，legacy layout 真相已开始退场
 - graph core：已有 declaration/compiler/registry/executor 骨架，并已能承接真实 utility/runtime pass
-- runtime 主线：Deferred 已进入 graph 主导的渐进迁移阶段，但仍残留 legacy attachment owner、dirty state 与部分 graph 外语义
+- runtime 主线：Deferred attachment/intermediate owner、shadow image handoff、共享 buffer、point-shadow cull 与 directional/point raster recording 已统一进入主图/state plan
 - 当前风险：startup/runtime 暴露的问题已经从“简单崩溃”转向“submit-time lifetime、imported subresource state、replacement 边界”这类真实主路径约束
 
 ## 当前阻塞
 
-- Deferred 主链尚未完全由 graph 接管 pass 顺序、intermediate owner 与 barrier/state
-- `IRenderTarget` 仍兼具 attachment owner 和 compatibility facade 的双重职责
+- `IRenderTarget` 在 Forward/shadow/presentation 路径仍兼具 attachment owner 和 compatibility facade 的双重职责
 - offscreen/environment preprocess 虽已 graph-backed，但仍需继续验证 imported subresource range、executor 生命周期和 final state 契约
 - graph registry replacement 已可用，但还需要继续压实与 runtime frame boundary、deferred deletion 和 startup/shutdown 的一致性
 
 ## 下一步
 
 1. 以启动链和 `HelloMaterial` smoke 为主，继续清掉 runtime 中暴露的 graph/resource-state/lifetime 问题
-2. 完成 Deferred GBuffer/viewport/pipeline 收口，让 graph 成为主链单一事实源
-3. 再推进 `IRenderTarget` 收敛、Forward graph 和外围 GPU 工作流迁移
+2. 收敛 `IRenderTarget` owner/rebuild 职责，优先删除 Deferred/shadow 已不再需要的 compatibility 路径
+3. 再推进 Forward graph 和外围 GPU 工作流迁移
 
 ## 最新验证
 
@@ -124,6 +123,28 @@
   - `HelloMaterial --exit-after-frame=220 --log-level=warn --log-detail-level=error` 退出码 0，日志未再出现 `Validation Error|ERROR|ASSERT|SIGTRAP|EXC_`
   - `HelloMaterial --exit-after-frame=400 --log-level=warn --log-detail-level=error` 退出码 0，日志未再出现 `Validation Error|ERROR|ASSERT|SIGTRAP|EXC_`
 
+- 2026-07-14：Deferred GBuffer 四个 color attachment、shared depth 与 viewport color 已从 `_gBufferRT/_viewportRT` owner 迁到统一主图的 `ERGResourceLifetime::Persistent` 资源。`RenderGraphResourceRegistry` 现在按 graph desc 负责初始创建、viewport resize 和 editor format change 的 replacement，pipeline snapshot 通过 shared resolve 保留当前 physical resource，并继续向 stage/debug/editor/automation 导出稳定 `RenderImage`。
+- 直接收益：Deferred 主链不再依赖 `IRenderTarget` 创建、dirty/recreate 或 framebuffer attachment 回读；GBuffer、shared depth、viewport、SSAO、bloom 与 postprocess output 的 intermediate owner 已统一落在同一个 graph registry。shared depth 也只保留一个逻辑 handle，GBuffer 写入与后续 skybox/overlay depth load 的依赖和 barrier 不再被两个 imported alias 隔断。
+- RT Editor catalog 已可直接消费 attachment snapshot（format、extent、owner/image view），Deferred 不再为了 editor preview 保留重复的 `IRenderTarget` owner；Forward/presentation 仍继续使用 legacy RT fallback，未提前扩大 Phase 8 范围。
+- postprocess/bloom 增加 graph-handle 输入路径，Deferred viewport color 不再在同一张 graph 中被二次 import；Texture/RenderImage 兼容入口仍保留给 Forward 和独立 execute 路径。
+- registry replacement/prune 增加 texture label + handle trace，调查确认 Deferred physical resources 只在初始化和显式 viewport resize 时 replacement；运行中持续 replacement 的 `Presentation.Output` 是独立既有 imported-wrapper 行为，不属于本批。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*:OffscreenAsyncTest.*'` 57/57 通过
+  - 默认 Deferred `HelloMaterial --exit-after-frame=400 --log-level=warn --log-detail-level=error` 退出码 0，关键错误过滤为空
+  - Deferred viewport resize automation 在 frame 50 应用 `960x540`，frame 220 正常退出，关键错误过滤为空
+- Forward switch 调查：frame 200 切换可执行，但当前 Apple M5/Vulkan 基线会暴露 Forward 自身的 skinned descriptor layout、Unlit push constant/GLSL、geometry shader capability 与 shadow 未写 layer validation error。它们在 Forward pipeline 初始化/执行后出现，默认 Deferred 与 resize smoke 均不出现；按当前停止线记录为 Forward 基线问题，不混入本次 Deferred owner 迁移。
+- 2026-07-14：Deferred shadow sampling handoff 已从 graph 外 `transitionImageLayoutAuto()` 迁入主图。主图以 full-array `View2DArray` subresource descriptor 导入 shadow depth，并在 Deferred Light pass 声明 sampled read；compiler/state tracker 因此会覆盖 directional reserved layers 与全部 point-light cube layers，同时 registry 保活 graph 创建的 full-array view。
+- 直接收益：shadow pass 仍可只写本帧需要的 layer，但 lighting descriptor 可能覆盖的更宽 layer 集会由同一份 graph state plan 统一进入 `ShaderReadOnlyOptimal`，不再依赖 pipeline 手写 barrier。默认 Deferred 400 帧 smoke 退出码 0，未出现此前的 `VUID-vkCmdDraw-None-09600` 或其他 validation/error。
+- 2026-07-14：RenderGraph imported buffer descriptor 已补 `initialState`，公共 resource state 增加 Host stage/access 到 Vulkan 映射；executor 首次接触 imported buffer 时会从声明状态 seed barrier，而不是默认从空状态推断。Deferred GBuffer 在 graph declaration 前完成当前 flight 的 CPU upload，并把 frame UBO、light UBO、skinning SSBO 以 `HostWrite -> ShaderRead` 契约导入；GBuffer/Deferred Light pass 分别声明实际读取集合。
+- 直接收益：frame/light/skinning descriptor 背后的 buffer 首次成为 graph 可见依赖，而且没有用“未知 -> ShaderRead”的虚假 barrier 掩盖 CPU 写入来源。新增 core test 精确校验 Host/HostWrite 到 AllCommands/ShaderRead 的 barrier，相关测试 58/58 通过，默认 Deferred 400 帧 smoke validation/error 为空。
+- 2026-07-15：RenderGraph buffer access 已从复用 texture access 拆为独立 `ERGBufferAccess`，新增 compute `ShaderReadWrite`、`IndirectRead` 与 buffer transfer 状态/usage/dependency 语义。`PointShadowCullPass` 现在持有持久 executor，将 instance/frustum reads、draw-command read-write、visible-instance write，以及后续 indirect/vertex reads 编译为两段 cull 子图；原有三条手工 `bufferMemoryBarrier()` 已删除。
+- 直接收益：point-shadow compute -> indirect draw/vertex shader 的 barrier 由 graph compiler/executor 生成，draw-command 的 `StorageBuffer | IndirectBuffer` usage 也会被精确校验；既有 copy pass 也改为显式声明 `TransferSrc/TransferDst`，不再借用 shader read/write。新增 core test 覆盖 compute read-write 到 indirect-read dependency；相关测试 60/60 通过，默认启用 point indirect+cull 的 Editor 配置下 400 帧 smoke 正常退出且无 graph/Vulkan validation error。
+- 2026-07-15：Directional shadow 与每个 point-light cube face 的 depth-only raster recording 已改由各自持久 `RenderGraphExecutor` 执行；depth layer view、frame/face UBO、skinning SSBO 以及 indirect draw/visible-instance buffer 都在 pass setup 中显式声明，pass callback 不再手工构造 `RenderingInfo` 或调用 command-buffer begin/end rendering。为此补齐了 `RGRenderContext` 的 depth-only raster 支持及 core test。
+- 调查结论：这些 shadow pass 暂时保持独立子图。当前 compiler 以 handle 建依赖，不能识别同一 array image 的 per-layer imported view 与 full-array sampled view alias；因此不能在没有显式依赖/alias 语义的情况下宣称 shadow 已统一并入 Deferred 主图。相关测试 61/61 通过，默认 Editor 400 帧 smoke 正常退出且 graph/Vulkan validation/error 过滤为空。
+- 2026-07-15：RenderGraph 新增显式 pass dependency；`ShadowStage`/`BasicShadowMapTechnique` 现在把 directional、optional point cull 与 point face raster pass append 到 Deferred 主图，Deferred Light 显式依赖最后一个 shadow pass。per-layer view 与 full-array sampled view 不再靠插入顺序维持先后，Deferred 路径也不再单独调用 legacy shadow `execute()`。
+- 直接收益：Deferred shadow/main/postprocess GPU recording 已由同一主图调度，现阶段无需为单一路径引入通用 imported-view alias 推断。新增 core test 覆盖显式依赖边与拓扑顺序；相关测试 62/62 通过，默认 Editor 400 帧 smoke 正常退出且 graph/Vulkan validation/error 过滤为空。
+
 ## 代码对账快照
 
 本节基于当前主路径代码抽样复核，用于校正文档对现状的判断，不替代 `todo.md`。
@@ -144,7 +165,7 @@
 
 - Deferred 已经不是“少量试点 pass”，而是存在一个统一的 `executeDeferredMainGraph()`，将 GBuffer、SSAO、Deferred Light、Skybox、Scene Overlay、Viewport Overlay、Postprocess 串进同一张 graph
 - `SSAOStage`、`BloomPostprocessing`、`PostProcessingStage` 都已改为持久化 `RenderGraphExecutor` + persistent graph texture 的真实 runtime 路径
-- 但 Deferred 仍依赖 `_gBufferRT/_viewportRT` 提供 imported attachment，shadow handoff 也仍在 graph 外手动 `transitionImageLayoutAuto()`；这说明“graph 接管主链顺序”基本成立，但“graph 接管 intermediate owner / 外围 barrier 真相”尚未完成
+- GBuffer、shared depth、viewport、SSAO、bloom 与 postprocess output 已由同一个 registry 持有并按 desc replacement；shadow image 的全 layer sampling handoff 也已由 graph state plan 生成，剩余缺口是 frame/light/skinning 与 point-shadow compute/indirect buffer 尚未形成完整 graph 声明
 
 ### Forward / RenderTarget
 

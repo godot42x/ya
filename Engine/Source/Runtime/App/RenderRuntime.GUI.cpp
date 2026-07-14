@@ -144,6 +144,38 @@ IImageView* getAttachmentImageView(IRenderTarget* rt, int attachmentIndex)
     return depthTexture ? depthTexture->getImageView() : nullptr;
 }
 
+bool isEntryInitialized(const RenderTargetEditorCatalog::Entry& entry)
+{
+    return entry.rt || !entry.colorAttachments.empty() || entry.depthAttachment;
+}
+
+bool isSwapChainEntry(const RenderTargetEditorCatalog::Entry& entry)
+{
+    return entry.rt ? entry.rt->isSwapChainTarget() : entry.bSwapChainTarget;
+}
+
+Extent2D getEntryExtent(const RenderTargetEditorCatalog::Entry& entry)
+{
+    return entry.rt ? entry.rt->getExtent() : entry.extent;
+}
+
+uint32_t getEntryFrameBufferCount(const RenderTargetEditorCatalog::Entry& entry)
+{
+    return entry.rt ? entry.rt->getFrameBufferCount() : entry.frameBufferCount;
+}
+
+IImageView* getAttachmentImageView(const RenderTargetEditorCatalog::Entry& entry, int attachmentIndex)
+{
+    if (attachmentIndex >= 0 && attachmentIndex < static_cast<int>(entry.colorAttachments.size())) {
+        const auto& attachment = entry.colorAttachments[attachmentIndex];
+        return attachment ? attachment->getImageView() : nullptr;
+    }
+    if (attachmentIndex >= static_cast<int>(entry.colorAttachments.size()) && entry.depthAttachment) {
+        return entry.depthAttachment->getImageView();
+    }
+    return getAttachmentImageView(entry.rt, attachmentIndex);
+}
+
 } // namespace
 
 void RenderRuntime::renderWorldSettingsGUI()
@@ -266,7 +298,7 @@ void RenderRuntime::renderRenderTargetEditor()
     if (_rtEditor.selectedTargetIndex < 0 || _rtEditor.selectedTargetIndex >= static_cast<int>(entries.size()) || std::find(filteredIndices.begin(), filteredIndices.end(), _rtEditor.selectedTargetIndex) == filteredIndices.end()) {
         auto preferredIndex = filteredIndices.front();
         for (int index : filteredIndices) {
-            if (!entries[index].rt || entries[index].rt->isSwapChainTarget()) {
+            if (!isEntryInitialized(entries[index]) || isSwapChainEntry(entries[index])) {
                 continue;
             }
             preferredIndex = index;
@@ -292,7 +324,7 @@ void RenderRuntime::renderRenderTargetEditor()
         ImGui::EndCombo();
     }
 
-    if (!selectedEntry.rt) {
+    if (!isEntryInitialized(selectedEntry)) {
         ImGui::TextUnformatted("Selected RT is not initialized.");
         ImGui::TreePop();
         return;
@@ -320,8 +352,9 @@ void RenderRuntime::renderRenderTargetEditor()
         ImGui::EndCombo();
     }
 
-    ImGui::Text("Extent: %u x %u", selectedEntry.rt->getExtent().width, selectedEntry.rt->getExtent().height);
-    ImGui::Text("Frame Buffers: %u", selectedEntry.rt->getFrameBufferCount());
+    const Extent2D selectedExtent = getEntryExtent(selectedEntry);
+    ImGui::Text("Extent: %u x %u", selectedExtent.width, selectedExtent.height);
+    ImGui::Text("Frame Buffers: %u", getEntryFrameBufferCount(selectedEntry));
 
     EFormat::T currentFormat = attachmentCount > 0
         ? getEntryAttachmentFormat(selectedEntry, _rtEditor.selectedAttachmentIndex)
@@ -329,11 +362,11 @@ void RenderRuntime::renderRenderTargetEditor()
     ImGui::Text("Format: %s", formatLabel(currentFormat));
 
     auto*      sampler     = TextureLibrary::get().getDefaultSampler().get();
-    const bool bCanPreview = !selectedEntry.rt->isSwapChainTarget();
+    const bool bCanPreview = !isSwapChainEntry(selectedEntry);
     if (!bCanPreview) {
         ImGui::TextWrapped("Preview is disabled for the presentation target because this UI is rendered into the same swapchain image during the screen pass.");
     }
-    else if (auto* imageView = getAttachmentImageView(selectedEntry.rt, _rtEditor.selectedAttachmentIndex)) {
+    else if (auto* imageView = getAttachmentImageView(selectedEntry, _rtEditor.selectedAttachmentIndex)) {
         ImGuiHelper::Image(imageView, sampler, "RT Preview", ImVec2(256.0f, 256.0f));
     }
 
@@ -367,7 +400,9 @@ void RenderRuntime::renderRenderTargetEditor()
                         setActivePipelineSharedDepthFormat(option.format);
                         break;
                     default:
-                        selectedEntry.rt->setDepthAttachmentFormat(option.format);
+                        if (selectedEntry.rt) {
+                            selectedEntry.rt->setDepthAttachmentFormat(option.format);
+                        }
                         break;
                     }
                 }
@@ -394,7 +429,7 @@ void RenderRuntime::renderRenderTargetEditor()
                         }
                         return false;
                     }();
-                    if (!bHandledByPipeline) {
+                    if (!bHandledByPipeline && selectedEntry.rt) {
                         selectedEntry.rt->setColorAttachmentFormat(static_cast<uint32_t>(_rtEditor.selectedAttachmentIndex), option.format);
                     }
                 }

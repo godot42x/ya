@@ -7,6 +7,7 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Core/Image.h"
+#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Stage/IRenderStage.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
@@ -37,6 +38,10 @@ class DirectionalShadowPass
     void prepare(const BasicShadowFramePayload& payload);
 
     void execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload);
+    [[nodiscard]] std::optional<RGPassHandle> appendGraphPass(
+        RenderGraph& graph,
+        const BasicShadowFramePayload& payload,
+        std::optional<RGPassHandle> dependency = std::nullopt);
 
     void renderGUI();
 
@@ -74,6 +79,7 @@ class DirectionalShadowPass
 
     stdptr<IImage>     _depthImage;
     stdptr<IImageView> _depthView;
+    std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
     std::array<PerFlightResources, MAX_FLIGHTS_IN_FLIGHT> _perFlight{};
     uint32_t _skinningCapacity = 0;

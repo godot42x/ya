@@ -94,8 +94,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     std::function<ResourceResolveSystem*()> _getResourceResolveSystem;
 
     // ── Render targets ────────────────────────────────────────────────
-    stdptr<IRenderTarget> _gBufferRT;
-    stdptr<IRenderTarget> _viewportRT;
     RenderTargetCreateInfo _gBufferRTSpec;
     RenderTargetCreateInfo _viewportRTSpec;
 
@@ -224,22 +222,20 @@ struct DeferredRenderPipeline : public IRenderPipeline
     [[nodiscard]] DeferredAttachmentFormats buildViewportSnapshotFormats() const;
     [[nodiscard]] bool shouldSkipTick(const RenderPipelineFrameContext& frame) const;
     void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
-    void               validateNoPendingAttachmentRefresh() const;
     void               invalidateGBufferDependentViews();
-    void               recreateGBufferRenderTarget();
-    void               recreateViewportRenderTarget();
-    void               refreshGBufferSnapshot();
-    void               refreshViewportSnapshot();
+    void               syncGraphAttachmentSnapshots(
+                           const RenderGraphResourceRegistry& registry,
+                           const std::array<RGTextureHandle, 4>& gbufferColors,
+                           RGTextureHandle gbufferDepth,
+                           RGTextureHandle viewportColor);
     void               refreshViewportCompatTextures();
     void               refreshGBufferStageState();
     void               refreshViewportStageState();
-    void               refreshAttachmentSnapshots();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);
     void               updateStageFrameInputs(const RenderPipelineFrameContext& frame);
     [[nodiscard]] ShadowSettings currentShadowSettings() const;
     void               syncFrameSettings(const RenderPipelineFrameContext& frame);
-    void               executeShadowPass(RenderStageContext& stageCtx);
-    void               handoffShadowDepthForSampling(ICommandBuffer* cmdBuf);
+    void               prepareShadowPass(RenderStageContext& stageCtx);
     void               executeDeferredMainGraph(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH);
     void               saveShadowSettingsToConfig(const ShadowSettings& shadowSettings) const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
@@ -249,7 +245,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               applyPendingResourceRefreshes();
     void               requestViewportResize(Extent2D extent);
     void               requestShadowResourceRefresh();
-    void               initRenderTargets(Extent2D extent);
     void               initShadowResources();
     void               destroyShadowResources();
     void               syncShadowSettings();

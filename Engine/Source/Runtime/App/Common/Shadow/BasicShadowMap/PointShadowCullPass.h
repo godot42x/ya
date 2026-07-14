@@ -5,6 +5,7 @@
 #include "Render/Core/Buffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
+#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Stage/IRenderStage.h"
 
 namespace ya
@@ -34,6 +35,13 @@ struct ICommandBuffer;
 class PointShadowCullPass
 {
   public:
+    struct GraphResources
+    {
+        RGBufferHandle             drawCommands{};
+        RGBufferHandle             visibleInstances{};
+        std::optional<RGPassHandle> cullPass{};
+    };
+
     void init(IRender* render);
     void destroy();
 
@@ -64,8 +72,13 @@ class PointShadowCullPass
                                const uint32_t* data,
                                uint32_t count);
 
-    /// Compute path — record dispatch + barriers.
-    void dispatch(ICommandBuffer* cmdBuf, uint32_t flightIndex) const;
+    /// Compute path - record dispatch and buffer state transitions through RenderGraph.
+    void dispatch(ICommandBuffer* cmdBuf, uint32_t flightIndex);
+    [[nodiscard]] std::optional<GraphResources> appendGraphPass(
+        RenderGraph& graph,
+        uint32_t flightIndex,
+        bool bDispatchCull,
+        std::optional<RGPassHandle> dependency = std::nullopt);
 
     [[nodiscard]] IBuffer* getDrawCommandBuffer(uint32_t flightIndex) const;
     [[nodiscard]] IBuffer* getVisibleInstancesBuffer(uint32_t flightIndex) const;
@@ -78,6 +91,7 @@ class PointShadowCullPass
         stdptr<IBuffer>     faceFrustumBuffer;
         stdptr<IBuffer>     drawCommandBuffer;
         stdptr<IBuffer>     visibleInstancesBuf;
+        IBuffer*            instanceBuffer = nullptr;
         DescriptorSetHandle cullDS = nullptr;
         // Compute-path dispatch shape
         uint32_t            activeFaceCount  = 0;
@@ -90,6 +104,7 @@ class PointShadowCullPass
     stdptr<IPipelineLayout>      _pipelineLayout;
     stdptr<IDescriptorSetLayout> _cullDSL;
     stdptr<IDescriptorPool>      _dsp;
+    std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
     std::array<PerFlightResources, MAX_FLIGHTS_IN_FLIGHT> _perFlight{};
     uint32_t _allocatedBucketCount = 0;

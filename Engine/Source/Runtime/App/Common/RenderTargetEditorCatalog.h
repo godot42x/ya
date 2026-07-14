@@ -2,6 +2,7 @@
 
 #include "Render/RenderDefines.h"
 
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -9,6 +10,7 @@ namespace ya
 {
 
 struct IRenderTarget;
+struct RenderImage;
 
 struct RenderTargetEditorCatalog
 {
@@ -27,6 +29,11 @@ struct RenderTargetEditorCatalog
         } owner = EOwner::Presentation;
         std::vector<EFormat::T>          colorFormats{};
         std::optional<EFormat::T>        depthFormat{};
+        std::vector<std::shared_ptr<RenderImage>> colorAttachments{};
+        std::shared_ptr<RenderImage>              depthAttachment = nullptr;
+        Extent2D                                  extent{};
+        uint32_t                                  frameBufferCount = 0;
+        bool                                      bSwapChainTarget = false;
         bool bEditable = true;
     };
 

@@ -24,14 +24,14 @@
 - image/view/sampler 的新 factory 路径已建立，`ITextureFactory` 已停止扩张
 - `ResourceStateTracker` 已成为 image layout / barrier 的唯一收口方向，`IImage::getLayout()` 已降级为兼容 seed 语义
 - `RenderGraph` 已具备最小 declaration、compile、registry 和 executor 骨架，具备 clear/copy 级别 smoke 能力
-- Deferred 主链已有多段 graph shell 落地，SSAO、bloom、tone map、部分 viewport/GBuffer/depth copy 已开始进入 graph execution
+- Deferred GBuffer、shared depth、viewport、SSAO、bloom 和 tone map 已由统一主图执行并由 registry 持有 physical resource
 - BRDF LUT、cylindrical-to-cubemap、irradiance、prefiltered env 等 utility/offscreen 路径已验证 graph-backed execute 可行
 
 当前主要阻塞不再是“有没有 graph”，而是：
 
-- Deferred 主链仍残留 legacy attachment owner、dirty repair 和 `IRenderTarget` 兼容边界
+- Deferred shadow image handoff、frame/light/skinning buffer、point-shadow compute/indirect buffer 与 shadow raster recording 已统一进入 Deferred 主图/state plan
 - startup/runtime 仍在暴露 submit-time 生命周期与 imported subresource state 的真实约束
-- `RenderGraphResourceRegistry` 虽已具备最小 replacement 语义，但距离完全接管 runtime intermediate owner 还有最后一段收口
+- screenshot 基线和 Forward 基线仍不完整，不能把 pipeline switch 后的既有 validation 问题误归因到 Deferred graph
 - Forward、RenderTarget 全面收敛、extension API 和 OpenGL 恢复都必须后置，避免打断 Deferred 主链闭环
 
 因此当前阶段目标不是继续做 facade 美化，而是：
@@ -45,9 +45,11 @@
 当前迭代默认按以下优先级推进：
 
 1. 修复启动链和 runtime 中暴露的真实 graph/resource-state/lifetime 问题
-2. 删除 Deferred 主链剩余的 legacy resource owner、dirty repair 和 graph 外 barrier 语义
-3. 收敛 `IRenderTarget` 到 attachment facade，而不是继续扩展其 owner/rebuild 职责
+2. 收敛 `IRenderTarget` 到 attachment facade，而不是继续扩展其 owner/rebuild 职责
+3. 继续验证 imported subresource、submit-time lifetime 与 registry replacement 边界
 4. 仅在 Deferred 主链闭环后再推进 Forward、offscreen、extension 和 OpenGL 相关工作
+
+Shadow raster 的 per-layer imported view 与 Deferred Light 的 full-array sampled view 会成为不同 handle，compiler 不推断它们互相 alias。当前主图通过显式 pass dependency 表达 shadow completion -> light sampling 契约，不依赖隐式插入顺序；通用 alias 推断保留为未来能力，不再作为本阶段主线阻塞。
 
 ## 2. 已有工作与停止线
 

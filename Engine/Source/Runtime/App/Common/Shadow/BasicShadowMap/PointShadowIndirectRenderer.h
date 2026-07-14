@@ -49,7 +49,7 @@ class PointShadowIndirectRenderer
 
     void beginFrame();
     void prepare(const BasicShadowFramePayload& payload);
-    void dispatchCull(ICommandBuffer* cmdBuf, uint32_t flightIndex) const;
+    void dispatchCull(ICommandBuffer* cmdBuf, uint32_t flightIndex);
     void renderFace(ICommandBuffer*                cmdBuf,
                     const BasicShadowFramePayload& payload,
                     const PointShadowFacePayload&  facePayload) const;

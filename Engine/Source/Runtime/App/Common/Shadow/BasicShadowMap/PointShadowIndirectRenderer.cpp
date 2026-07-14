@@ -298,7 +298,7 @@ void PointShadowIndirectRenderer::fillCullDataNoCull(uint32_t                   
 // GPU recording
 // ════════════════════════════════════════════════════════════════════════
 
-void PointShadowIndirectRenderer::dispatchCull(ICommandBuffer* cmdBuf, uint32_t flightIndex) const
+void PointShadowIndirectRenderer::dispatchCull(ICommandBuffer* cmdBuf, uint32_t flightIndex)
 {
     YA_PROFILE_FUNCTION();
     const auto& flight = _perFlight[flightIndex];

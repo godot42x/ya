@@ -66,8 +66,15 @@ bool RenderGraphExecutor::executeCompiled(
             YA_CORE_ASSERT(buffer != nullptr, "RenderGraphExecutor failed to resolve buffer {}", statePlan.buffer.index);
 
             const auto newState = normalizeBufferState(statePlan.requiredState, *buffer);
-            const auto oldIt    = _bufferStates.find(buffer);
-            const auto oldState = oldIt != _bufferStates.end() ? oldIt->second : BufferResourceState{};
+            const auto oldIt = _bufferStates.find(buffer);
+            BufferResourceState oldState{};
+            if (oldIt != _bufferStates.end()) {
+                oldState = oldIt->second;
+            }
+            else if (const auto* resource = graph.getBuffer(statePlan.buffer);
+                     resource && resource->imported.has_value()) {
+                oldState = normalizeBufferState(resource->imported->initialState, *buffer);
+            }
 
             const bool bNeedsBarrier =
                 oldState.stages != newState.stages ||

@@ -92,36 +92,20 @@ stdptr<Texture> makeCompatTextureFromRenderImage(RenderImage* image, std::string
     return Texture::wrap(image->getImageShared(), image->getImageViewShared(), std::string(label));
 }
 
-DeferredGBufferResources buildDeferredGBufferResources(IRenderTarget* gBufferRT, const DeferredAttachmentFormats& formats)
+RGTextureDesc makeGraphAttachmentDesc(const RenderTargetCreateInfo& spec,
+                                      const AttachmentDescription&  attachment,
+                                      std::string                    label)
 {
-    DeferredGBufferResources resources{};
-    if (!gBufferRT) {
-        return resources;
-    }
-
-    for (uint32_t attachmentIndex = 0; attachmentIndex < resources.color.size(); ++attachmentIndex) {
-        resources.colorOwners[attachmentIndex] = gBufferRT->getCurrentColorAttachmentShared(attachmentIndex);
-    }
-    resources.depthOwner = gBufferRT->getCurrentDepthAttachmentShared();
-    resources.formats = formats;
-    resources.syncRawViews();
-    return resources;
-}
-
-DeferredViewportResources buildDeferredViewportResources(IRenderTarget* viewportRT,
-                                                         const DeferredGBufferResources& gBufferResources,
-                                                         const DeferredAttachmentFormats& formats)
-{
-    DeferredViewportResources resources{};
-    if (!viewportRT) {
-        return resources;
-    }
-
-    resources.colorOwner = viewportRT->getCurrentColorAttachmentShared(0);
-    resources.formats = formats;
-    resources.depthOwner = gBufferResources.depthOwner;
-    resources.syncRawViews();
-    return resources;
+    return RGTextureDesc{
+        .label       = std::move(label),
+        .format      = attachment.format,
+        .extent      = Extent3D{spec.extent.width, spec.extent.height, 1},
+        .mipLevels   = 1,
+        .arrayLayers = spec.layerCount,
+        .samples     = attachment.samples,
+        .usage       = attachment.usage,
+        .flags       = attachment.imageCreateFlags,
+    };
 }
 
 DeferredAttachmentFormats buildDeferredGBufferFormats(EFormat::T signedLinearFormat,
@@ -268,14 +252,6 @@ void drawPerfNode(const char* label, float value, Fn&& drawChildren)
 DeferredRenderPipeline::~DeferredRenderPipeline()
 {
     shutdown();
-}
-
-void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
-{
-    _gBufferRTSpec.extent  = extent;
-    _viewportRTSpec.extent = extent;
-    _gBufferRT             = createRenderTarget(_gBufferRTSpec);
-    _viewportRT            = createRenderTarget(_viewportRTSpec);
 }
 
 void DeferredRenderPipeline::initShadowResources()
@@ -465,17 +441,28 @@ void DeferredRenderPipeline::appendRenderTargetEditorEntries(RenderTargetEditorC
     const DeferredAttachmentFormats viewportFormats = buildViewportSnapshotFormats();
     catalog.entries.push_back({
         .label        = "Deferred GBuffer",
-        .rt           = _gBufferRT.get(),
         .owner        = RenderTargetEditorCatalog::Entry::EOwner::DeferredGBuffer,
         .colorFormats = gbufferFormats.colorFormats,
         .depthFormat  = gbufferFormats.depthFormat,
+        .colorAttachments = {
+            _currentGBufferResources.colorOwners[0],
+            _currentGBufferResources.colorOwners[1],
+            _currentGBufferResources.colorOwners[2],
+            _currentGBufferResources.colorOwners[3],
+        },
+        .depthAttachment = _currentGBufferResources.depthOwner,
+        .extent           = _gBufferRTSpec.extent,
+        .frameBufferCount = 1,
     });
     catalog.entries.push_back({
         .label        = "Deferred Viewport",
-        .rt           = _viewportRT.get(),
         .owner        = RenderTargetEditorCatalog::Entry::EOwner::DeferredViewport,
         .colorFormats = viewportFormats.colorFormats,
         .depthFormat  = viewportFormats.depthFormat,
+        .colorAttachments = {_currentViewportResources.colorOwner},
+        .depthAttachment  = _currentViewportResources.depthOwner,
+        .extent           = _viewportRTSpec.extent,
+        .frameBufferCount = 1,
     });
     catalog.entries.push_back({
         .label = "Deferred Shadow",
@@ -566,20 +553,9 @@ void DeferredRenderPipeline::requestShadowResourceRefresh()
 
 void DeferredRenderPipeline::applyPendingResourceRefreshes()
 {
-    bool bRefreshGBufferSnapshot = false;
-    bool bRefreshViewportSnapshot = false;
-    bool bRefreshGBufferStageState = false;
-    bool bRefreshViewportStageState = false;
-
     if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewportResize)) {
         _gBufferRTSpec.extent  = _pendingViewportExtent;
         _viewportRTSpec.extent = _pendingViewportExtent;
-        recreateGBufferRenderTarget();
-        recreateViewportRenderTarget();
-        bRefreshGBufferSnapshot    = true;
-        bRefreshViewportSnapshot   = true;
-        bRefreshGBufferStageState  = true;
-        bRefreshViewportStageState = true;
         clearPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewportResize);
     }
 
@@ -605,39 +581,15 @@ void DeferredRenderPipeline::applyPendingResourceRefreshes()
     }
 
     if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::SharedDepth)) {
-        recreateGBufferRenderTarget();
-        bRefreshGBufferSnapshot    = true;
-        bRefreshViewportSnapshot   = true;
-        bRefreshGBufferStageState  = true;
-        bRefreshViewportStageState = true;
         clearPendingResourceRefresh(EDeferredPendingResourceRefresh::SharedDepth);
     }
 
     if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::GBufferAttachments)) {
-        recreateGBufferRenderTarget();
-        bRefreshGBufferSnapshot   = true;
-        bRefreshGBufferStageState = true;
         clearPendingResourceRefresh(EDeferredPendingResourceRefresh::GBufferAttachments);
     }
 
     if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewportAttachments)) {
-        recreateViewportRenderTarget();
-        bRefreshViewportSnapshot   = true;
-        bRefreshViewportStageState = true;
         clearPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewportAttachments);
-    }
-
-    if (bRefreshGBufferSnapshot) {
-        refreshGBufferSnapshot();
-    }
-    if (bRefreshViewportSnapshot) {
-        refreshViewportSnapshot();
-    }
-    if (bRefreshGBufferStageState) {
-        refreshGBufferStageState();
-    }
-    if (bRefreshViewportStageState) {
-        refreshViewportStageState();
     }
 }
 
@@ -686,8 +638,8 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     };
 
     initRenderTargetSpecs(extent);
-    initRenderTargets(extent);
-    refreshAttachmentSnapshots();
+    _currentGBufferResources.formats  = buildGBufferSnapshotFormats();
+    _currentViewportResources.formats = buildViewportSnapshotFormats();
     if (currentShadowSettings().isEnabled()) {
         initShadowResources();
     }
@@ -775,8 +727,6 @@ void DeferredRenderPipeline::shutdown()
         _gBufferStage.reset();
     }
 
-    _viewportRT.reset();
-    _gBufferRT.reset();
     destroyShadowResources();
     _bShadowSettingsChangePending = false;
     _environmentLightingDSL.reset();
@@ -809,7 +759,7 @@ void DeferredRenderPipeline::tick(const RenderPipelineFrameContext& frame)
     uint32_t           vpH = 0;
     beginTick(frame, stageCtx, vpW, vpH);
     syncFrameSettings(frame);
-    executeShadowPass(stageCtx);
+    prepareShadowPass(stageCtx);
     executeDeferredMainGraph(frame, stageCtx, vpW, vpH);
 
     frame.cmdBuf->debugEndLabel();
@@ -837,7 +787,6 @@ void DeferredRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, 
     applyPendingResourceRefreshes();
     _postProcessStage.beginFrame();
     captureShadowSettings(frame);
-    validateNoPendingAttachmentRefresh();
 
     vpW = static_cast<uint32_t>(frame.viewportRect.extent.x);
     vpH = static_cast<uint32_t>(frame.viewportRect.extent.y);
@@ -913,17 +862,6 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
     }
 }
 
-void DeferredRenderPipeline::validateNoPendingAttachmentRefresh() const
-{
-    const bool bViewportPipelineDirty = _viewportRT && _viewportRT->needsRefresh();
-    const bool bGBufferPipelineDirty  = _gBufferRT && _gBufferRT->needsRefresh();
-
-    YA_CORE_ASSERT(!bViewportPipelineDirty,
-                   "Deferred viewport attachment mutations must go through explicit pending refresh paths");
-    YA_CORE_ASSERT(!bGBufferPipelineDirty,
-                   "Deferred GBuffer attachment mutations must go through explicit pending refresh paths");
-}
-
 void DeferredRenderPipeline::invalidateGBufferDependentViews()
 {
     _cachedAlbedoSpecImageViewHandle = nullptr;
@@ -938,32 +876,45 @@ void DeferredRenderPipeline::invalidateGBufferDependentViews()
     }
 }
 
-void DeferredRenderPipeline::recreateGBufferRenderTarget()
+void DeferredRenderPipeline::syncGraphAttachmentSnapshots(
+    const RenderGraphResourceRegistry& registry,
+    const std::array<RGTextureHandle, 4>& gbufferColors,
+    RGTextureHandle gbufferDepth,
+    RGTextureHandle viewportColor)
 {
-    _gBufferRT = createRenderTarget(_gBufferRTSpec);
-    YA_CORE_ASSERT(_gBufferRT, "Failed to recreate deferred GBuffer render target");
-}
+    DeferredGBufferResources nextGBuffer{};
+    for (uint32_t attachmentIndex = 0; attachmentIndex < gbufferColors.size(); ++attachmentIndex) {
+        nextGBuffer.colorOwners[attachmentIndex] = registry.resolveTextureShared(gbufferColors[attachmentIndex]);
+    }
+    nextGBuffer.depthOwner = registry.resolveTextureShared(gbufferDepth);
+    nextGBuffer.formats    = buildGBufferSnapshotFormats();
+    nextGBuffer.syncRawViews();
 
-void DeferredRenderPipeline::recreateViewportRenderTarget()
-{
-    _viewportRT = createRenderTarget(_viewportRTSpec);
-    YA_CORE_ASSERT(_viewportRT, "Failed to recreate deferred viewport render target");
-}
+    DeferredViewportResources nextViewport{};
+    nextViewport.colorOwner = registry.resolveTextureShared(viewportColor);
+    nextViewport.depthOwner = nextGBuffer.depthOwner;
+    nextViewport.formats    = buildViewportSnapshotFormats();
+    nextViewport.syncRawViews();
 
-void DeferredRenderPipeline::refreshGBufferSnapshot()
-{
-    _currentGBufferResources = buildDeferredGBufferResources(
-        _gBufferRT.get(),
-        buildGBufferSnapshotFormats());
-}
+    const bool bGBufferChanged = _currentGBufferResources.colorOwners != nextGBuffer.colorOwners ||
+                                 _currentGBufferResources.depthOwner != nextGBuffer.depthOwner ||
+                                 _currentGBufferResources.formats.colorFormats != nextGBuffer.formats.colorFormats ||
+                                 _currentGBufferResources.formats.depthFormat != nextGBuffer.formats.depthFormat;
+    const bool bViewportChanged = _currentViewportResources.colorOwner != nextViewport.colorOwner ||
+                                  _currentViewportResources.depthOwner != nextViewport.depthOwner ||
+                                  _currentViewportResources.formats.colorFormats != nextViewport.formats.colorFormats ||
+                                  _currentViewportResources.formats.depthFormat != nextViewport.formats.depthFormat;
 
-void DeferredRenderPipeline::refreshViewportSnapshot()
-{
-    _currentViewportResources = buildDeferredViewportResources(
-        _viewportRT.get(),
-        _currentGBufferResources,
-        buildViewportSnapshotFormats());
-    refreshViewportCompatTextures();
+    _currentGBufferResources  = std::move(nextGBuffer);
+    _currentViewportResources = std::move(nextViewport);
+
+    if (bGBufferChanged) {
+        refreshGBufferStageState();
+    }
+    if (bViewportChanged) {
+        refreshViewportCompatTextures();
+        refreshViewportStageState();
+    }
 }
 
 DeferredAttachmentFormats DeferredRenderPipeline::buildGBufferSnapshotFormats() const
@@ -1029,12 +980,6 @@ void DeferredRenderPipeline::refreshViewportStageState()
     }
 }
 
-void DeferredRenderPipeline::refreshAttachmentSnapshots()
-{
-    refreshGBufferSnapshot();
-    refreshViewportSnapshot();
-}
-
 void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
 {
     (void)frame;
@@ -1070,7 +1015,7 @@ void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&
     updateStageFrameInputs(frame);
 }
 
-void DeferredRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)
+void DeferredRenderPipeline::prepareShadowPass(RenderStageContext& stageCtx)
 {
     const auto shadowSettings = currentShadowSettings();
     if (_shadowStage && shadowSettings.isEnabled()) {
@@ -1078,72 +1023,75 @@ void DeferredRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)
         {
             YA_PERF_SCOPE(perf::sample::deferredShadow(), perf::metric::cpuTimeMs(), perf::domain::render());
             _shadowStage->prepare(stageCtx);
-            _shadowStage->execute(stageCtx);
         }
-        handoffShadowDepthForSampling(stageCtx.cmdBuf);
         return;
     }
 
     PerfState::Get().clearMetric(perf::sample::deferredShadow(), perf::metric::cpuTimeMs());
 }
 
-void DeferredRenderPipeline::handoffShadowDepthForSampling(ICommandBuffer* cmdBuf)
-{
-    auto* shadowDepthImage = _shadowResources.depthImage.get();
-    if (!cmdBuf || !_shadowResources.renderTarget || !shadowDepthImage) {
-        return;
-    }
-
-    // The shadow passes only render the layers needed this frame, but the lighting
-    // descriptors can still sample a wider layer span. Keep the whole shadow image
-    // in sampling layout until shadow resource ownership and descriptor ranges are
-    // modelled explicitly by the graph.
-    ImageSubresourceRange shadowDepthRange{
-        .aspectMask     = EImageAspect::Depth,
-        .baseMipLevel   = 0,
-        .levelCount     = 1,
-        .baseArrayLayer = 0,
-        .layerCount     = _shadowResources.layerCount,
-    };
-    cmdBuf->transitionImageLayoutAuto(shadowDepthImage, EImageLayout::ShaderReadOnlyOptimal, &shadowDepthRange);
-}
-
 void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH)
 {
-    _gBufferStage->prepare(stageCtx);
-    if (_bEnableSSAO && _ssaoStage) {
-        _ssaoStage->prepare(stageCtx);
-    }
     _currentSSAOOutput        = nullptr;
     _currentPostprocessOutput = nullptr;
-
-    auto* gbufferDepth = _currentGBufferResources.depth;
-    if (!gbufferDepth) {
-        return;
-    }
-    bool bHasAllColorAttachments = std::ranges::all_of(_currentGBufferResources.color, [](RenderImage* image) {
-        return image != nullptr;
-    });
-    if (!bHasAllColorAttachments) {
-        return;
-    }
+    _gBufferStage->prepare(stageCtx);
 
     RenderGraph graph;
+    std::optional<RGPassHandle> shadowPass;
+    if (_shadowStage && currentShadowSettings().isEnabled()) {
+        shadowPass = _shadowStage->appendGraphPasses(graph, stageCtx);
+    }
+    auto importHostWrittenBuffer = [&](IBuffer* buffer, std::string label, EBufferUsage usage) {
+        YA_CORE_ASSERT(buffer != nullptr, "Deferred graph requires imported buffer '{}'", label);
+        return graph.importBuffer(RGImportedBufferDesc{
+            .desc = RGBufferDesc{
+                .label = std::move(label),
+                .usage = usage,
+                .size  = buffer->getSize(),
+            },
+            .buffer = buffer,
+            .initialState = BufferResourceState{
+                .stages = EPipelineStage::Host,
+                .access = EResourceAccess::HostWrite,
+                .offset = 0,
+                .size   = buffer->getSize(),
+            },
+        });
+    };
+    const auto frameBuffer = importHostWrittenBuffer(
+        _gBufferStage->getFrameBuffer(frame.flightIndex),
+        "Deferred.FrameUBO",
+        EBufferUsage::UniformBuffer);
+    const auto lightBuffer = importHostWrittenBuffer(
+        _gBufferStage->getLightBuffer(frame.flightIndex),
+        "Deferred.LightUBO",
+        EBufferUsage::UniformBuffer);
+    const auto skinningBuffer = importHostWrittenBuffer(
+        _gBufferStage->getSkinningBuffer(frame.flightIndex),
+        "Deferred.SkinningSSBO",
+        EBufferUsage::StorageBuffer);
+
     std::array<RGTextureHandle, 4> gbufferColors{};
     for (uint32_t attachmentIndex = 0; attachmentIndex < gbufferColors.size(); ++attachmentIndex) {
-        gbufferColors[attachmentIndex] = graph.importTexture(
-            makeImportedTextureDesc(
-                *_currentGBufferResources.color[attachmentIndex],
-                std::format("DeferredGBuffer.Color{}", attachmentIndex),
-                EImageLayout::ShaderReadOnlyOptimal));
+        gbufferColors[attachmentIndex] = graph.createTexture(
+            makeGraphAttachmentDesc(
+                _gBufferRTSpec,
+                _gBufferRTSpec.attachments.colorAttach[attachmentIndex],
+                std::format("DeferredGBuffer.Color{}", attachmentIndex)),
+            ERGResourceLifetime::Persistent);
     }
-    const auto gbufferDepthHandle = graph.importTexture(
-        makeImportedTextureDesc(*gbufferDepth, "DeferredGBuffer.Depth", EImageLayout::ShaderReadOnlyOptimal));
-    const Extent2D gbufferExtent = gbufferDepth->getExtent();
+    YA_CORE_ASSERT(_gBufferRTSpec.attachments.depthAttach.has_value(), "Deferred GBuffer graph requires a depth attachment spec");
+    const auto gbufferDepthHandle = graph.createTexture(
+        makeGraphAttachmentDesc(_gBufferRTSpec, *_gBufferRTSpec.attachments.depthAttach, "DeferredGBuffer.Depth"),
+        ERGResourceLifetime::Persistent);
+    const Extent2D gbufferExtent = _gBufferRTSpec.extent;
 
     [[maybe_unused]] const auto gbufferPass = graph.addPass(
         "Deferred GBuffer",
         [&](RGPassBuilder& passBuilder) {
+            passBuilder.read(frameBuffer);
+            passBuilder.read(lightBuffer);
+            passBuilder.read(skinningBuffer);
             for (const auto handle : gbufferColors) {
                 passBuilder.useColorAttachment(handle);
             }
@@ -1189,15 +1137,12 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     };
     _lastFrameInput = frame;
 
-    auto* viewportColor = _currentViewportResources.color;
-    auto* viewportDepth = _currentViewportResources.depth;
-    if (!viewportColor || !viewportDepth) {
-        return;
-    }
-
-    const auto  color = graph.importTexture(makeImportedTextureDesc(*viewportColor, "DeferredViewport.Color", EImageLayout::ShaderReadOnlyOptimal));
-    const auto  viewportDepthHandle = graph.importTexture(makeImportedTextureDesc(*viewportDepth, "DeferredViewport.Depth", EImageLayout::ShaderReadOnlyOptimal));
-    const Extent2D viewportExtent = viewportColor->getExtent();
+    YA_CORE_ASSERT(!_viewportRTSpec.attachments.colorAttach.empty(), "Deferred viewport graph requires a color attachment spec");
+    const auto color = graph.createTexture(
+        makeGraphAttachmentDesc(_viewportRTSpec, _viewportRTSpec.attachments.colorAttach.front(), "DeferredViewport.Color"),
+        ERGResourceLifetime::Persistent);
+    const auto viewportDepthHandle = gbufferDepthHandle;
+    const Extent2D viewportExtent = _viewportRTSpec.extent;
 
     std::optional<RGTextureHandle> ssao;
     if (_bEnableSSAO && _ssaoStage) {
@@ -1231,15 +1176,31 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     if (auto shadowDepthImage = getShadowDepthImage();
         shadowDepthImage && _shadowResources.directionalDepthIV && isShadowMappingEnabled()) {
         shadowDepth = graph.importTexture(
-            makeImportedTextureDesc(shadowDepthImage,
-                                    _shadowResources.directionalDepthIV,
-                                    "DeferredLight.ShadowDepth",
-                                    EImageLayout::ShaderReadOnlyOptimal));
+            makeImportedSubresourceTextureDesc(
+                shadowDepthImage,
+                ImageViewCreateInfo{
+                    .label          = "DeferredLight.ShadowDepth.FullArrayView",
+                    .viewType       = EImageViewType::View2DArray,
+                    .aspectFlags    = EImageAspect::Depth,
+                    .baseMipLevel   = 0,
+                    .levelCount     = 1,
+                    .baseArrayLayer = 0,
+                    .layerCount     = _shadowResources.layerCount,
+                },
+                Extent3D{_shadowResources.extent.width, _shadowResources.extent.height, 1},
+                "DeferredLight.ShadowDepth",
+                EImageLayout::ShaderReadOnlyOptimal,
+                EImageUsage::Sampled));
     }
 
     [[maybe_unused]] const auto lightPass = graph.addPass(
         "Deferred Light",
         [&](RGPassBuilder& passBuilder) {
+            if (shadowPass.has_value()) {
+                passBuilder.dependsOn(*shadowPass);
+            }
+            passBuilder.read(frameBuffer);
+            passBuilder.read(lightBuffer);
             for (const auto handle : gbufferColors) {
                 passBuilder.read(handle);
             }
@@ -1373,11 +1334,10 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             rgCtx.endRendering();
         });
 
-    auto* inputImage   = _currentViewportResources.color;
     const auto postprocessOutput = _postProcessStage.appendGraphPasses(
         graph,
-        inputImage,
-        _lastFrameInput.viewportRect.extent,
+        color,
+        viewportExtent,
         &_lastTickCtx);
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");
@@ -1390,6 +1350,16 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         }
         _postProcessStage.clearPreparedResources();
         return;
+    }
+
+    syncGraphAttachmentSnapshots(
+        _graphExecutor->getRegistry(),
+        gbufferColors,
+        gbufferDepthHandle,
+        color);
+
+    if (_bEnableSSAO && _ssaoStage) {
+        _ssaoStage->prepare(stageCtx);
     }
 
     if (ssao.has_value()) {

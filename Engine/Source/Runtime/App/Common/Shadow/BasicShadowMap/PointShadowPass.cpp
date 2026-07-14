@@ -1,6 +1,6 @@
 #include "PointShadowPass.h"
 
-#include "Render/Core/RenderingInfoUtils.h"
+#include "Render/Core/RenderGraphImportUtils.h"
 
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Profiling/PerfKeys.h"
@@ -32,6 +32,7 @@ void PointShadowPass::init(IRender* render, Extent2D shadowExtent)
 {
     _render       = render;
     _shadowExtent = shadowExtent;
+    _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
 
     // ─── Descriptor set layouts ──────────────────────────────────────
     _frameDSL = IDescriptorSetLayout::create(_render, DescriptorSetLayoutDesc{
@@ -151,6 +152,7 @@ void PointShadowPass::destroy()
     }
     _dsp.reset();
     _shadowImage.reset();
+    _graphExecutor.reset();
     for (auto& faceViewArr : _faceDepthViews) {
         for (auto& view : faceViewArr) view.reset();
     }
@@ -221,81 +223,178 @@ void PointShadowPass::prepare(const BasicShadowFramePayload& payload)
 void PointShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload)
 {
     YA_PROFILE_FUNCTION();
-    YA_PERF_SCOPE(perf::sample::shadowPoint(), perf::metric::cpuTimeMs(), perf::domain::render());
-    if (!payload.frameData || payload.pointLightCount == 0) return;
+    if (!cmdBuf || !_graphExecutor) return;
+
+    RenderGraph graph;
+    if (!appendGraphPasses(graph, payload).has_value()) return;
+    YA_CORE_ASSERT(_graphExecutor->execute(graph, *cmdBuf),
+                   "Failed to execute point shadow graph");
+}
+
+std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
+    RenderGraph& graph,
+    const BasicShadowFramePayload& payload,
+    std::optional<RGPassHandle> dependency)
+{
+    if (!payload.frameData || payload.pointLightCount == 0 || !_shadowImage) return std::nullopt;
 
     auto& flight = _perFlight[payload.flightIndex];
     const bool useIndirect = payload.pointIndirectRequested() && _indirectRenderer.hasRenderableInstances(payload.flightIndex);
 
+    std::optional<RGPassHandle> rasterDependency = dependency;
+
+    YA_CORE_ASSERT(flight.skinningSSBO, "Point shadow graph requires a skinning buffer");
+
+    const auto importBuffer = [&](IBuffer* buffer,
+                                  std::string label,
+                                  EBufferUsage usage,
+                                  BufferResourceState initialState) {
+        return graph.importBuffer(RGImportedBufferDesc{
+            .desc = RGBufferDesc{
+                .label = std::move(label),
+                .usage = usage,
+                .size  = buffer->getSize(),
+            },
+            .buffer       = buffer,
+            .initialState = initialState,
+        });
+    };
+    const BufferResourceState hostWriteState{
+        .stages = EPipelineStage::Host,
+        .access = EResourceAccess::HostWrite,
+    };
+    const auto skinningBuffer = importBuffer(
+        flight.skinningSSBO.get(), "PointShadow.SkinningSSBO", EBufferUsage::StorageBuffer, hostWriteState);
+
+    std::optional<RGBufferHandle> drawCommands;
+    std::optional<RGBufferHandle> visibleInstances;
     if (useIndirect) {
-        YA_PROFILE_SCOPE("PointShadowPass::CullDispatch");
-        YA_PERF_SCOPE(perf::sample::shadowPointCull(), perf::metric::cpuTimeMs(), perf::domain::render());
-        _indirectRenderer.dispatchCull(cmdBuf, payload.flightIndex);
+        auto& cullPass = _indirectRenderer.getCullPass();
+        const bool gpuCullEnabled = payload.pointIndirectCullEnabled();
+        const auto cullResources = cullPass.appendGraphPass(
+            graph, payload.flightIndex, gpuCullEnabled, dependency);
+        YA_CORE_ASSERT(cullResources.has_value(),
+                       "Point shadow graph requires cull resources");
+        drawCommands     = cullResources->drawCommands;
+        visibleInstances = cullResources->visibleInstances;
+        if (cullResources->cullPass.has_value()) {
+            rasterDependency = cullResources->cullPass;
+        }
     }
 
+    struct GraphFace
     {
-        YA_PROFILE_SCOPE("PointShadowPass::RenderFaces");
-        YA_PERF_SCOPE(perf::sample::shadowPointFaceLoop(), perf::metric::cpuTimeMs(), perf::domain::render());
-        for (uint32_t lightIndex = 0; lightIndex < payload.pointLightCount; ++lightIndex) {
-            for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
-                PointShadowFacePayload facePayload{
-                    .lightIndex      = lightIndex,
-                    .faceIndex       = faceIndex,
-                    .faceGlobalIndex = lightIndex * 6 + faceIndex,
-                    .layerIndex      = getShadowPointLightBaseLayer(lightIndex) + faceIndex,
-                };
-                facePayload.faceDS = flight.faceDS[facePayload.faceGlobalIndex];
-                facePayload.depthImage = _shadowImage.get();
-                facePayload.depthView  = _faceDepthViews[lightIndex][faceIndex].get();
-                if (!facePayload.depthImage || !facePayload.depthView) continue;
+        PointShadowFacePayload payload{};
+        RGTextureHandle        depth{};
+        RGBufferHandle         faceBuffer{};
+    };
+    auto graphFaces = std::make_shared<std::vector<GraphFace>>();
+    graphFaces->reserve(payload.pointLightCount * 6);
 
-                RenderingInfo::ImageSpec depthSpec = makeAttachmentImageSpec(
-                    _shadowImage,
-                    _faceDepthViews[lightIndex][faceIndex],
-                    EAttachmentLoadOp::Clear,
-                    EAttachmentStoreOp::Store,
-                    EImageLayout::DepthStencilAttachmentOptimal,
-                    EImageLayout::ShaderReadOnlyOptimal);
-                RenderingInfo renderInfo{
-                    .label           = "PointShadowPass_Face",
-                    .renderArea      = Rect2D{.pos = {0.0f, 0.0f}, .extent = _shadowExtent.toVec2()},
-                    .layerCount      = 1,
-                    .depthClearValue = ClearValue(1.0f, 0),
-                    .depthAttachment = depthSpec,
-                };
+    for (uint32_t lightIndex = 0; lightIndex < payload.pointLightCount; ++lightIndex) {
+        for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
+            PointShadowFacePayload facePayload{
+                .lightIndex      = lightIndex,
+                .faceIndex       = faceIndex,
+                .faceGlobalIndex = lightIndex * 6 + faceIndex,
+                .layerIndex      = getShadowPointLightBaseLayer(lightIndex) + faceIndex,
+            };
+            facePayload.faceDS = flight.faceDS[facePayload.faceGlobalIndex];
+            facePayload.depthImage = _shadowImage.get();
+            facePayload.depthView  = _faceDepthViews[lightIndex][faceIndex].get();
+            auto faceDepthView = _faceDepthViews[lightIndex][faceIndex];
+            auto* faceUBO = flight.faceUBO[facePayload.faceGlobalIndex].get();
+            if (!facePayload.depthView || !faceDepthView || !faceUBO) continue;
 
-                cmdBuf->beginRendering(renderInfo);
-                cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(_shadowExtent.width),
-                                    static_cast<float>(_shadowExtent.height), 0.0f, 1.0f);
-                cmdBuf->setScissor(0, 0, _shadowExtent.width, _shadowExtent.height);
+            const auto depth = graph.importTexture(makeImportedTextureDesc(
+                _shadowImage,
+                faceDepthView,
+                std::format("PointShadow.Depth.{}.{}", lightIndex, faceIndex),
+                EImageLayout::ShaderReadOnlyOptimal,
+                EImageUsage::DepthStencilAttachment,
+                Extent3D{_shadowExtent.width, _shadowExtent.height, 1}));
+            const auto faceBuffer = importBuffer(
+                faceUBO,
+                std::format("PointShadow.FaceUBO.{}.{}", lightIndex, faceIndex),
+                EBufferUsage::UniformBuffer,
+                hostWriteState);
+
+            graphFaces->push_back({
+                .payload    = facePayload,
+                .depth      = depth,
+                .faceBuffer = faceBuffer,
+            });
+        }
+    }
+
+    if (graphFaces->empty()) return rasterDependency;
+
+    const auto rasterPass = graph.addPass(
+        "Point Shadow Faces",
+        [graphFaces, skinningBuffer, drawCommands, visibleInstances, rasterDependency](RGPassBuilder& pass) {
+            if (rasterDependency.has_value()) pass.dependsOn(*rasterDependency);
+            pass.read(skinningBuffer);
+            if (drawCommands.has_value()) pass.indirectRead(*drawCommands);
+            if (visibleInstances.has_value()) pass.read(*visibleInstances);
+            for (const auto& face : *graphFaces) {
+                pass.read(face.faceBuffer);
+                pass.useDepthAttachment(face.depth);
+            }
+        },
+        [this, payload, useIndirect, graphFaces](RGRenderContext& ctx) {
+            YA_PERF_SCOPE(perf::sample::shadowPoint(), perf::metric::cpuTimeMs(), perf::domain::render());
+            YA_PROFILE_SCOPE("PointShadowPass::RenderFaces");
+            YA_PERF_SCOPE(perf::sample::shadowPointFaceLoop(), perf::metric::cpuTimeMs(), perf::domain::render());
+
+            auto& commandBuffer = ctx.getCommandBuffer();
+            for (const auto& face : *graphFaces) {
+                const auto& facePayload = face.payload;
+                const auto  depth       = face.depth;
+
+                ctx.beginRasterRendering({
+                    .renderArea = Rect2D{.pos = {0.0f, 0.0f}, .extent = _shadowExtent.toVec2()},
+                    .layerCount = 1,
+                    .depth = RGRenderContext::DepthRenderingDesc{
+                        .depth       = depth,
+                        .clearValue  = ClearValue(1.0f, 0),
+                        .loadOp      = EAttachmentLoadOp::Clear,
+                        .storeOp     = EAttachmentStoreOp::Store,
+                        .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                    },
+                });
+
+                commandBuffer.setViewport(0.0f, 0.0f, static_cast<float>(_shadowExtent.width),
+                                          static_cast<float>(_shadowExtent.height), 0.0f, 1.0f);
+                commandBuffer.setScissor(0, 0, _shadowExtent.width, _shadowExtent.height);
 
                 if (useIndirect) {
                     YA_PROFILE_SCOPE("PointShadowPass::DrawFaceIndirect");
-                    _indirectRenderer.renderFace(cmdBuf, payload, facePayload);
+                    _indirectRenderer.renderFace(&commandBuffer, payload, facePayload);
                 }
                 else {
                     YA_PROFILE_SCOPE("PointShadowPass::DrawFaceDirect");
                     YA_PERF_SCOPE(perf::sample::shadowPointFaceDirect(), perf::metric::cpuTimeMs(), perf::domain::render());
-                    renderFaceDirect(cmdBuf, payload, facePayload);
+                    renderFaceDirect(&commandBuffer, payload, facePayload);
                 }
 
                 {
                     YA_PROFILE_SCOPE("PointShadowPass::DrawFaceSkinned");
                     YA_PERF_SCOPE(perf::sample::shadowPointFaceSkinned(), perf::metric::cpuTimeMs(), perf::domain::render());
-                    const auto& flight = _perFlight[payload.flightIndex];
+                    const auto& passFlight = _perFlight[payload.flightIndex];
                     ShadowDrawHelper::PassResources skinnedRes{
                         .pipeline       = _directSkinnedVariant.pipeline.get(),
                         .pipelineLayout = _directSkinnedVariant.pipelineLayout.get(),
-                        .frameDS        = flight.faceDS[facePayload.faceGlobalIndex],
-                        .skinningDS     = flight.skinningDS,
+                        .frameDS        = passFlight.faceDS[facePayload.faceGlobalIndex],
+                        .skinningDS     = passFlight.skinningDS,
                     };
-                    ShadowDrawHelper::drawSkinnedBuckets(cmdBuf, skinnedRes, payload.frameData->drawBuckets.skinnedMeshes);
+                    ShadowDrawHelper::drawSkinnedBuckets(
+                        &commandBuffer, skinnedRes, payload.frameData->drawBuckets.skinnedMeshes);
                 }
-
-                cmdBuf->endRendering(renderInfo);
+                ctx.endRendering();
             }
-        }
-    }
+        });
+
+    return rasterPass;
 }
 
 // ═══════════════════════════════════════════════════════════════════════

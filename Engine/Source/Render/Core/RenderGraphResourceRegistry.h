@@ -53,6 +53,7 @@ class RenderGraphResourceRegistry
     void clear();
 
     [[nodiscard]] const RenderImage* resolveTexture(RGTextureHandle handle) const;
+    [[nodiscard]] std::shared_ptr<RenderImage> resolveTextureShared(RGTextureHandle handle) const;
     [[nodiscard]] IBuffer* resolveBuffer(RGBufferHandle handle) const;
 
     [[nodiscard]] const std::unordered_map<RGTextureHandle, TextureEntry>& getTextures() const { return _textures; }

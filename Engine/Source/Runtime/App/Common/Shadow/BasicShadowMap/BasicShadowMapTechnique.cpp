@@ -82,6 +82,26 @@ void BasicShadowMapTechnique::execute(ICommandBuffer* cmdBuf, uint32_t flightInd
     cmdBuf->debugEndLabel();
 }
 
+std::optional<RGPassHandle> BasicShadowMapTechnique::appendGraphPasses(
+    RenderGraph& graph,
+    uint32_t flightIndex,
+    const RenderFrameData& frameData)
+{
+    if (!_settings.isEnabled()) return std::nullopt;
+
+    auto payload = buildFramePayload(flightIndex, frameData);
+    payload.pointLightCount = std::min(_lastPreparedPointLightCount, static_cast<uint32_t>(MAX_POINT_LIGHTS));
+
+    std::optional<RGPassHandle> lastPass;
+    if (payload.directionalEnabled()) {
+        lastPass = _directionalPass.appendGraphPass(graph, payload, lastPass);
+    }
+    if (payload.pointEnabled()) {
+        lastPass = _pointPass.appendGraphPasses(graph, payload, lastPass);
+    }
+    return lastPass;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Render target / texture management
 // ═══════════════════════════════════════════════════════════════════════════

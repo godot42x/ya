@@ -161,6 +161,10 @@ void RenderGraphResourceRegistry::pruneUnusedResources(const RenderGraph& graph)
 
     for (auto it = _textures.begin(); it != _textures.end();) {
         if (!liveTextures.contains(it->first)) {
+            YA_CORE_TRACE("RenderGraph registry pruning texture '{}' (handle={}:{})",
+                          it->second.desc.label,
+                          it->first.index,
+                          it->first.generation);
             retireSharedResource(it->second.resource);
             it = _textures.erase(it);
         }
@@ -241,6 +245,10 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
             continue;
         }
         if (existing != _textures.end()) {
+            YA_CORE_TRACE("RenderGraph registry replacing texture '{}' (handle={}:{})",
+                          texture.desc.label,
+                          texture.handle.index,
+                          texture.handle.generation);
             retireSharedResource(existing->second.resource);
         }
 
@@ -321,6 +329,12 @@ const RenderImage* RenderGraphResourceRegistry::resolveTexture(RGTextureHandle h
 {
     const auto it = _textures.find(handle);
     return it != _textures.end() ? it->second.resource.get() : nullptr;
+}
+
+std::shared_ptr<RenderImage> RenderGraphResourceRegistry::resolveTextureShared(RGTextureHandle handle) const
+{
+    const auto it = _textures.find(handle);
+    return it != _textures.end() ? it->second.resource : nullptr;
 }
 
 IBuffer* RenderGraphResourceRegistry::resolveBuffer(RGBufferHandle handle) const

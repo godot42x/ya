@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render/Core/Image.h"
+#include "Render/Core/RenderGraph.h"
 #include "Render/Shadow/IShadowTechnique.h"
 #include "Render/Shadow/ShadowSettings.h"
 #include "Render/Stage/IRenderStage.h"
@@ -34,6 +35,9 @@ struct ShadowStage : public IRenderStage
 
     // ─── Public API ──────────────────────────────────────────────────
     void refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent);
+    [[nodiscard]] std::optional<RGPassHandle> appendGraphPasses(
+        RenderGraph& graph,
+        const RenderStageContext& ctx);
 
     /// Apply shadow settings from App layer. Call each frame before prepare/execute.
     void applySettings(const ShadowSettings& settings);

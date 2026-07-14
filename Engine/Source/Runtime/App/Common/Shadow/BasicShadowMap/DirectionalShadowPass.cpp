@@ -1,6 +1,6 @@
 #include "DirectionalShadowPass.h"
 
-#include "Render/Core/RenderingInfoUtils.h"
+#include "Render/Core/RenderGraphImportUtils.h"
 
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Profiling/PerfKeys.h"
@@ -27,6 +27,7 @@ void DirectionalShadowPass::init(IRender* render, Extent2D shadowExtent)
 {
     _render       = render;
     _shadowExtent = shadowExtent;
+    _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
 
     // Frame UBO descriptor set layout (set 0: one UBO binding)
     _frameDSL = IDescriptorSetLayout::create(
@@ -147,6 +148,7 @@ void DirectionalShadowPass::destroy()
     _dsp.reset();
     _depthImage.reset();
     _depthView.reset();
+    _graphExecutor.reset();
     _staticVariant  = {};
     _skinnedVariant = {};
     _skinningDSL.reset();
@@ -200,51 +202,102 @@ void DirectionalShadowPass::prepare(const BasicShadowFramePayload& payload)
 void DirectionalShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload)
 {
     YA_PROFILE_FUNCTION();
-    YA_PERF_SCOPE(perf::sample::shadowDirectional(), perf::metric::cpuTimeMs(), perf::domain::render());
-    if (!_depthImage || !_depthView || !payload.frameData) return;
+    if (!cmdBuf || !_graphExecutor) return;
 
-    RenderingInfo::ImageSpec depthSpec = makeAttachmentImageSpec(
-        _depthImage,
-        _depthView,
-        EAttachmentLoadOp::Clear,
-        EAttachmentStoreOp::Store,
-        EImageLayout::DepthStencilAttachmentOptimal,
-        EImageLayout::ShaderReadOnlyOptimal);
-    RenderingInfo renderInfo{
-        .label           = "DirectionalShadowPass",
-        .renderArea      = Rect2D{.pos = {0.0f, 0.0f}, .extent = _shadowExtent.toVec2()},
-        .layerCount      = 1,
-        .depthClearValue = ClearValue(1.0f, 0),
-        .depthAttachment = depthSpec,
-    };
+    RenderGraph graph;
+    if (!appendGraphPass(graph, payload).has_value()) return;
+    YA_CORE_ASSERT(_graphExecutor->execute(graph, *cmdBuf),
+                   "Failed to execute directional shadow graph");
+}
 
-    cmdBuf->beginRendering(renderInfo);
-    cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(_shadowExtent.width),
-                         static_cast<float>(_shadowExtent.height), 0.0f, 1.0f);
-    cmdBuf->setScissor(0, 0, _shadowExtent.width, _shadowExtent.height);
+std::optional<RGPassHandle> DirectionalShadowPass::appendGraphPass(
+    RenderGraph& graph,
+    const BasicShadowFramePayload& payload,
+    std::optional<RGPassHandle> dependency)
+{
+    if (!_depthImage || !_depthView || !payload.frameData) return std::nullopt;
 
     const auto& flight = _perFlight[payload.flightIndex];
-    ShadowDrawHelper::PassResources staticRes{
-        .pipeline       = _staticVariant.pipeline.get(),
-        .pipelineLayout = _staticVariant.pipelineLayout.get(),
-        .frameDS        = flight.frameDS,
-    };
-    ShadowDrawHelper::PassResources skinnedRes{
-        .pipeline       = _skinnedVariant.pipeline.get(),
-        .pipelineLayout = _skinnedVariant.pipelineLayout.get(),
-        .frameDS        = flight.frameDS,
-        .skinningDS     = flight.skinningDS,
-    };
-    {
-        YA_PROFILE_SCOPE("DirectionalShadowPass::DrawStatic");
-        ShadowDrawHelper::drawStaticBuckets(cmdBuf, staticRes, payload.frameData->drawBuckets.staticMeshes);
-    }
-    {
-        YA_PROFILE_SCOPE("DirectionalShadowPass::DrawSkinned");
-        ShadowDrawHelper::drawSkinnedBuckets(cmdBuf, skinnedRes, payload.frameData->drawBuckets.skinnedMeshes);
-    }
+    YA_CORE_ASSERT(flight.frameUBO && flight.skinningSSBO,
+                   "Directional shadow graph requires frame and skinning buffers");
 
-    cmdBuf->endRendering(renderInfo);
+    const auto depth = graph.importTexture(makeImportedTextureDesc(
+        _depthImage,
+        _depthView,
+        "DirectionalShadow.Depth",
+        EImageLayout::ShaderReadOnlyOptimal,
+        EImageUsage::DepthStencilAttachment,
+        Extent3D{_shadowExtent.width, _shadowExtent.height, 1}));
+    const auto importHostWrittenBuffer = [&](IBuffer* buffer, std::string label, EBufferUsage usage) {
+        return graph.importBuffer(RGImportedBufferDesc{
+            .desc = RGBufferDesc{
+                .label = std::move(label),
+                .usage = usage,
+                .size  = buffer->getSize(),
+            },
+            .buffer = buffer,
+            .initialState = BufferResourceState{
+                .stages = EPipelineStage::Host,
+                .access = EResourceAccess::HostWrite,
+                .size   = buffer->getSize(),
+            },
+        });
+    };
+    const auto frameBuffer = importHostWrittenBuffer(
+        flight.frameUBO.get(), "DirectionalShadow.FrameUBO", EBufferUsage::UniformBuffer);
+    const auto skinningBuffer = importHostWrittenBuffer(
+        flight.skinningSSBO.get(), "DirectionalShadow.SkinningSSBO", EBufferUsage::StorageBuffer);
+
+    const auto shadowPass = graph.addPass(
+        "Directional Shadow",
+        [frameBuffer, skinningBuffer, depth, dependency](RGPassBuilder& pass) {
+            if (dependency.has_value()) pass.dependsOn(*dependency);
+            pass.read(frameBuffer);
+            pass.read(skinningBuffer);
+            pass.useDepthAttachment(depth);
+        },
+        [this, payload, depth](RGRenderContext& ctx) {
+            YA_PERF_SCOPE(perf::sample::shadowDirectional(), perf::metric::cpuTimeMs(), perf::domain::render());
+            ctx.beginRasterRendering({
+                .renderArea = Rect2D{.pos = {0.0f, 0.0f}, .extent = _shadowExtent.toVec2()},
+                .layerCount = 1,
+                .depth = RGRenderContext::DepthRenderingDesc{
+                    .depth       = depth,
+                    .clearValue  = ClearValue(1.0f, 0),
+                    .loadOp      = EAttachmentLoadOp::Clear,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                },
+            });
+
+            auto& commandBuffer = ctx.getCommandBuffer();
+            commandBuffer.setViewport(0.0f, 0.0f, static_cast<float>(_shadowExtent.width),
+                                      static_cast<float>(_shadowExtent.height), 0.0f, 1.0f);
+            commandBuffer.setScissor(0, 0, _shadowExtent.width, _shadowExtent.height);
+
+            const auto& passFlight = _perFlight[payload.flightIndex];
+            ShadowDrawHelper::PassResources staticRes{
+                .pipeline       = _staticVariant.pipeline.get(),
+                .pipelineLayout = _staticVariant.pipelineLayout.get(),
+                .frameDS        = passFlight.frameDS,
+            };
+            ShadowDrawHelper::PassResources skinnedRes{
+                .pipeline       = _skinnedVariant.pipeline.get(),
+                .pipelineLayout = _skinnedVariant.pipelineLayout.get(),
+                .frameDS        = passFlight.frameDS,
+                .skinningDS     = passFlight.skinningDS,
+            };
+            {
+                YA_PROFILE_SCOPE("DirectionalShadowPass::DrawStatic");
+                ShadowDrawHelper::drawStaticBuckets(&commandBuffer, staticRes, payload.frameData->drawBuckets.staticMeshes);
+            }
+            {
+                YA_PROFILE_SCOPE("DirectionalShadowPass::DrawSkinned");
+                ShadowDrawHelper::drawSkinnedBuckets(&commandBuffer, skinnedRes, payload.frameData->drawBuckets.skinnedMeshes);
+            }
+            ctx.endRendering();
+        });
+    return shadowPass;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
