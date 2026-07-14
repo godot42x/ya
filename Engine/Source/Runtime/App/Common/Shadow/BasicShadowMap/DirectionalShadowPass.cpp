@@ -1,5 +1,7 @@
 #include "DirectionalShadowPass.h"
 
+#include "Render/Core/RenderingInfoUtils.h"
+
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
@@ -201,20 +203,18 @@ void DirectionalShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFra
     YA_PERF_SCOPE(perf::sample::shadowDirectional(), perf::metric::cpuTimeMs(), perf::domain::render());
     if (!_depthImage || !_depthView || !payload.frameData) return;
 
-    RenderingInfo::ImageSpec depthSpec{
-        .image         = _depthImage.get(),
-        .imageView     = _depthView.get(),
-        .loadOp        = EAttachmentLoadOp::Clear,
-        .storeOp       = EAttachmentStoreOp::Store,
-        .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
-        .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-    };
+    RenderingInfo::ImageSpec depthSpec = makeAttachmentImageSpec(
+        _depthView.get(),
+        EAttachmentLoadOp::Clear,
+        EAttachmentStoreOp::Store,
+        EImageLayout::DepthStencilAttachmentOptimal,
+        EImageLayout::ShaderReadOnlyOptimal);
     RenderingInfo renderInfo{
         .label           = "DirectionalShadowPass",
         .renderArea      = Rect2D{.pos = {0.0f, 0.0f}, .extent = _shadowExtent.toVec2()},
         .layerCount      = 1,
         .depthClearValue = ClearValue(1.0f, 0),
-        .depthAttachment = &depthSpec,
+        .depthAttachment = depthSpec,
     };
 
     cmdBuf->beginRendering(renderInfo);

@@ -1,5 +1,7 @@
 #include "PointShadowPass.h"
 
+#include "Render/Core/RenderingInfoUtils.h"
+
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
@@ -247,20 +249,18 @@ void PointShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayl
                 facePayload.depthView  = _faceDepthViews[lightIndex][faceIndex].get();
                 if (!facePayload.depthImage || !facePayload.depthView) continue;
 
-                RenderingInfo::ImageSpec depthSpec{
-                    .image         = facePayload.depthImage,
-                    .imageView     = facePayload.depthView,
-                    .loadOp        = EAttachmentLoadOp::Clear,
-                    .storeOp       = EAttachmentStoreOp::Store,
-                    .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
-                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                };
+                RenderingInfo::ImageSpec depthSpec = makeAttachmentImageSpec(
+                    facePayload.depthView,
+                    EAttachmentLoadOp::Clear,
+                    EAttachmentStoreOp::Store,
+                    EImageLayout::DepthStencilAttachmentOptimal,
+                    EImageLayout::ShaderReadOnlyOptimal);
                 RenderingInfo renderInfo{
                     .label           = "PointShadowPass_Face",
                     .renderArea      = Rect2D{.pos = {0.0f, 0.0f}, .extent = _shadowExtent.toVec2()},
                     .layerCount      = 1,
                     .depthClearValue = ClearValue(1.0f, 0),
-                    .depthAttachment = &depthSpec,
+                    .depthAttachment = depthSpec,
                 };
 
                 cmdBuf->beginRendering(renderInfo);

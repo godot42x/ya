@@ -1152,8 +1152,8 @@ struct RenderingInfo
     IRenderTarget* renderTarget = nullptr;
 
     // or manual combined image spec
-    std::vector<ImageSpec> colorAttachments = {};
-    ImageSpec*             depthAttachment  = nullptr;
+    std::vector<ImageSpec>   colorAttachments = {};
+    std::optional<ImageSpec> depthAttachment  = std::nullopt;
 };
 
 

@@ -1,5 +1,6 @@
 #include "RenderGraph.h"
 #include "RenderGraphResourceRegistry.h"
+#include "RenderingInfoUtils.h"
 
 #include <algorithm>
 #include <deque>
@@ -51,6 +52,9 @@ ImageSubresourceRange makeFullRange(const RGTextureDesc& desc)
 
 ImageSubresourceRange makeImportedViewRange(const RGTextureResource& resource)
 {
+    if (resource.imported && resource.imported->subresourceRange.has_value()) {
+        return *resource.imported->subresourceRange;
+    }
     if (resource.imported && resource.imported->viewDesc.has_value()) {
         const auto& viewDesc = *resource.imported->viewDesc;
         return ImageSubresourceRange{
@@ -62,6 +66,58 @@ ImageSubresourceRange makeImportedViewRange(const RGTextureResource& resource)
         };
     }
     return makeFullRange(resource.desc);
+}
+
+void normalizeImportedTextureDesc(RGImportedTextureDesc& importedDesc)
+{
+    if (importedDesc.image) {
+        const IImage& image = *importedDesc.image;
+        const auto    nativeHandle = static_cast<void*>(image.getHandle());
+
+        YA_CORE_ASSERT(importedDesc.importDesc.nativeHandle == nullptr || importedDesc.importDesc.nativeHandle == nativeHandle,
+                       "Imported texture image/native handle mismatch for '{}'",
+                       importedDesc.importDesc.label.empty() ? importedDesc.desc.label : importedDesc.importDesc.label);
+        YA_CORE_ASSERT(importedDesc.importDesc.format == EFormat::Undefined || importedDesc.importDesc.format == image.getFormat(),
+                       "Imported texture image/format mismatch");
+        YA_CORE_ASSERT(importedDesc.importDesc.usage == EImageUsage::None || hasImageUsage(image.getUsage(), importedDesc.importDesc.usage),
+                       "Imported texture image/usage mismatch");
+        YA_CORE_ASSERT((importedDesc.importDesc.extent.width == 0 && importedDesc.importDesc.extent.height == 0 && importedDesc.importDesc.extent.depth == 0) ||
+                           (importedDesc.importDesc.extent.width == image.getWidth() &&
+                            importedDesc.importDesc.extent.height == image.getHeight() &&
+                            importedDesc.importDesc.extent.depth == 1),
+                       "Imported texture image/extent mismatch");
+        YA_CORE_ASSERT(importedDesc.importDesc.mipLevels == 1 || importedDesc.importDesc.mipLevels == image.getMipLevels(),
+                       "Imported texture image/mip mismatch");
+        YA_CORE_ASSERT(importedDesc.importDesc.arrayLayers == 1 || importedDesc.importDesc.arrayLayers == image.getArrayLayers(),
+                       "Imported texture image/array-layer mismatch");
+
+        importedDesc.importDesc.nativeHandle = nativeHandle;
+        importedDesc.importDesc.format       = image.getFormat();
+        importedDesc.importDesc.usage        = image.getUsage();
+        importedDesc.importDesc.extent       = Extent3D{image.getWidth(), image.getHeight(), 1};
+        importedDesc.importDesc.mipLevels    = image.getMipLevels();
+        importedDesc.importDesc.arrayLayers  = image.getArrayLayers();
+    }
+
+    auto& desc = importedDesc.desc;
+    if (desc.format == EFormat::Undefined) {
+        desc.format = importedDesc.importDesc.format;
+    }
+    if (desc.extent.width == 0 || desc.extent.height == 0 || desc.extent.depth == 0) {
+        desc.extent = importedDesc.importDesc.extent;
+    }
+    if (desc.usage == EImageUsage::None) {
+        desc.usage = importedDesc.importDesc.usage;
+    }
+    if (desc.label.empty()) {
+        desc.label = importedDesc.importDesc.label;
+    }
+    if (desc.mipLevels == 1 && importedDesc.importDesc.mipLevels != 1) {
+        desc.mipLevels = importedDesc.importDesc.mipLevels;
+    }
+    if (desc.arrayLayers == 1 && importedDesc.importDesc.arrayLayers != 1) {
+        desc.arrayLayers = importedDesc.importDesc.arrayLayers;
+    }
 }
 
 ImageResourceState makeTextureState(const RGTextureResource& resource, ERGPassResourceAccess access)
@@ -129,6 +185,13 @@ BufferResourceState makeBufferState(const RGBufferResource& resource, ERGPassRes
     }
 
     return state;
+}
+
+void retainResolvedRenderImage(ICommandBuffer& cmdBuf, const RenderImage& image)
+{
+    cmdBuf.retainResource(image.getImageShared());
+    cmdBuf.retainResource(image.getImageViewShared());
+    cmdBuf.retainResources(image.getRetainedResources());
 }
 
 } // namespace
@@ -217,52 +280,34 @@ void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) cons
 
     for (const auto& colorDesc : desc.colors) {
         const auto* color = resolveTexture(colorDesc.color);
-        const auto* colorResource = _graph.getTexture(colorDesc.color);
         YA_CORE_ASSERT(color != nullptr, "RGRenderContext pass {} failed to resolve color target {}", _pass.name, colorDesc.color.index);
-        YA_CORE_ASSERT(colorResource != nullptr, "RGRenderContext pass {} failed to resolve color resource {}", _pass.name, colorDesc.color.index);
         YA_CORE_ASSERT(color->getImage() != nullptr && color->getImageView() != nullptr,
                        "RGRenderContext pass {} color target {} is missing image/view", _pass.name, colorDesc.color.index);
+        retainResolvedRenderImage(_cmdBuf, *color);
 
-        colorAttachments.push_back(RenderingInfo::ImageSpec{
-            .image         = color->getImage(),
-            .imageView     = color->getImageView(),
-            .loadOp        = colorDesc.loadOp,
-            .storeOp       = colorDesc.storeOp,
-            .initialLayout = EImageLayout::ColorAttachmentOptimal,
-            .finalLayout   = colorDesc.finalLayout,
-            .subresourceAspectMask = makeImportedViewRange(*colorResource).aspectMask,
-            .subresourceBaseMipLevel = makeImportedViewRange(*colorResource).baseMipLevel,
-            .subresourceLevelCount = makeImportedViewRange(*colorResource).levelCount,
-            .subresourceBaseArrayLayer = makeImportedViewRange(*colorResource).baseArrayLayer,
-            .subresourceLayerCount = makeImportedViewRange(*colorResource).layerCount,
-            .bHasSubresourceRange = true,
-        });
+        colorAttachments.push_back(makeAttachmentImageSpec(
+            color->getImageView(),
+            colorDesc.loadOp,
+            colorDesc.storeOp,
+            EImageLayout::ColorAttachmentOptimal,
+            colorDesc.finalLayout));
         colorClearValues.push_back(colorDesc.clearValue);
     }
 
-    _activeDepthAttachment.reset();
+    std::optional<RenderingInfo::ImageSpec> depthAttachment = std::nullopt;
     if (desc.depth.has_value()) {
         const auto* depth = resolveTexture(desc.depth->depth);
-        const auto* depthResource = _graph.getTexture(desc.depth->depth);
         YA_CORE_ASSERT(depth != nullptr, "RGRenderContext pass {} failed to resolve depth target {}", _pass.name, desc.depth->depth.index);
-        YA_CORE_ASSERT(depthResource != nullptr, "RGRenderContext pass {} failed to resolve depth resource {}", _pass.name, desc.depth->depth.index);
         YA_CORE_ASSERT(depth->getImage() != nullptr && depth->getImageView() != nullptr,
                        "RGRenderContext pass {} depth target {} is missing image/view", _pass.name, desc.depth->depth.index);
+        retainResolvedRenderImage(_cmdBuf, *depth);
 
-        _activeDepthAttachment = RenderingInfo::ImageSpec{
-            .image         = depth->getImage(),
-            .imageView     = depth->getImageView(),
-            .loadOp        = desc.depth->loadOp,
-            .storeOp       = desc.depth->storeOp,
-            .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
-            .finalLayout   = desc.depth->finalLayout,
-            .subresourceAspectMask = makeImportedViewRange(*depthResource).aspectMask,
-            .subresourceBaseMipLevel = makeImportedViewRange(*depthResource).baseMipLevel,
-            .subresourceLevelCount = makeImportedViewRange(*depthResource).levelCount,
-            .subresourceBaseArrayLayer = makeImportedViewRange(*depthResource).baseArrayLayer,
-            .subresourceLayerCount = makeImportedViewRange(*depthResource).layerCount,
-            .bHasSubresourceRange = true,
-        };
+        depthAttachment = makeAttachmentImageSpec(
+            depth->getImageView(),
+            desc.depth->loadOp,
+            desc.depth->storeOp,
+            EImageLayout::DepthStencilAttachmentOptimal,
+            desc.depth->finalLayout);
     }
 
     _activeRenderingInfo = RenderingInfo{
@@ -272,7 +317,7 @@ void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) cons
         .colorClearValues = std::move(colorClearValues),
         .depthClearValue = desc.depth.has_value() ? desc.depth->clearValue : ClearValue{},
         .colorAttachments = std::move(colorAttachments),
-        .depthAttachment = _activeDepthAttachment ? &*_activeDepthAttachment : nullptr,
+        .depthAttachment = std::move(depthAttachment),
     };
     _cmdBuf.beginRendering(*_activeRenderingInfo);
 }
@@ -281,7 +326,6 @@ void RGRenderContext::endRendering() const
 {
     _cmdBuf.endRendering(_activeRenderingInfo.value_or(RenderingInfo{}));
     _activeRenderingInfo.reset();
-    _activeDepthAttachment.reset();
 }
 
 void RGRenderContext::copyBuffer(RGBufferHandle src, RGBufferHandle dst, uint64_t size, uint64_t srcOffset, uint64_t dstOffset) const
@@ -301,6 +345,8 @@ void RGRenderContext::copyTexture(RGTextureHandle src, RGTextureHandle dst, cons
     YA_CORE_ASSERT(dstTexture != nullptr, "RGRenderContext pass {} failed to resolve dst texture {}", _pass.name, dst.index);
     YA_CORE_ASSERT(srcTexture->getImage() != nullptr, "RGRenderContext pass {} src texture {} is missing image", _pass.name, src.index);
     YA_CORE_ASSERT(dstTexture->getImage() != nullptr, "RGRenderContext pass {} dst texture {} is missing image", _pass.name, dst.index);
+    retainResolvedRenderImage(_cmdBuf, *srcTexture);
+    retainResolvedRenderImage(_cmdBuf, *dstTexture);
 
     _cmdBuf.copyImage(
         srcTexture->getImage(),
@@ -379,19 +425,8 @@ RGTextureHandle RenderGraph::importTexture(const RGImportedTextureDesc& imported
     YA_CORE_ASSERT(importedDesc.image || importedDesc.importDesc.nativeHandle != nullptr,
                    "Imported texture requires either shared image or native handle");
 
-    auto desc        = importedDesc.desc;
-    if (desc.format == EFormat::Undefined) {
-        desc.format = importedDesc.importDesc.format;
-    }
-    if (desc.extent.width == 0 || desc.extent.height == 0 || desc.extent.depth == 0) {
-        desc.extent = importedDesc.importDesc.extent;
-    }
-    if (desc.usage == EImageUsage::None) {
-        desc.usage = importedDesc.importDesc.usage;
-    }
-    if (desc.label.empty()) {
-        desc.label = importedDesc.importDesc.label;
-    }
+    auto normalizedImported = importedDesc;
+    normalizeImportedTextureDesc(normalizedImported);
 
     RGTextureHandle handle{
         .index      = static_cast<uint32_t>(_textures.size()),
@@ -400,8 +435,8 @@ RGTextureHandle RenderGraph::importTexture(const RGImportedTextureDesc& imported
     _textures.push_back(RGTextureResource{
         .handle   = handle,
         .lifetime = ERGResourceLifetime::Imported,
-        .desc     = desc,
-        .imported = importedDesc,
+        .desc     = normalizedImported.desc,
+        .imported = normalizedImported,
     });
     return handle;
 }

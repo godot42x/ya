@@ -3,6 +3,7 @@
 #include "Render/Core/FrameBuffer.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/RenderPass.h"
+#include "Render/Core/RenderingInfoUtils.h"
 #include "Render/Core/Texture.h" // For ImageSpec::texture access
 #include "VulkanImageView.h"
 #include "VulkanQueue.h"
@@ -15,17 +16,6 @@ namespace ya
 
 namespace
 {
-
-ImageSubresourceRange makeSpecSubresourceRange(const RenderingInfo::ImageSpec& spec)
-{
-    return ImageSubresourceRange{
-        .aspectMask     = static_cast<EImageAspect::T>(spec.subresourceAspectMask),
-        .baseMipLevel   = spec.subresourceBaseMipLevel,
-        .levelCount     = spec.subresourceLevelCount,
-        .baseArrayLayer = spec.subresourceBaseArrayLayer,
-        .layerCount     = spec.subresourceLayerCount,
-    };
-}
 
 const char* toDebugString(EImageLayout::T layout)
 {
@@ -64,6 +54,25 @@ std::string formatSubresourceRange(const ImageSubresourceRange* range)
         range->baseMipLevel + range->levelCount,
         range->baseArrayLayer,
         range->baseArrayLayer + range->layerCount);
+}
+
+void validateRenderingImageSpec(const RenderingInfo::ImageSpec& spec, const std::string& renderingLabel, const std::string& attachmentLabel)
+{
+    YA_CORE_ASSERT(spec.image != nullptr,
+                   "RenderingInfo '{}' {} attachment is missing image",
+                   renderingLabel,
+                   attachmentLabel);
+    YA_CORE_ASSERT(spec.imageView != nullptr,
+                   "RenderingInfo '{}' {} attachment is missing image view",
+                   renderingLabel,
+                   attachmentLabel);
+    YA_CORE_ASSERT(imageSpecMatchesImageViewImage(spec),
+                   "RenderingInfo '{}' {} attachment image/view mismatch: image={}, imageViewImage={}, imageView={}",
+                   renderingLabel,
+                   attachmentLabel,
+                   reinterpret_cast<uintptr_t>(spec.image),
+                   reinterpret_cast<uintptr_t>(spec.imageView ? spec.imageView->getImage() : nullptr),
+                   reinterpret_cast<uintptr_t>(spec.imageView));
 }
 
 ImageResourceState inferTrackedImageState(EImageLayout::T layout)
@@ -253,6 +262,7 @@ void VulkanCommandPool::cleanup()
 
 bool VulkanCommandBuffer::begin(bool oneTimeSubmit)
 {
+    clearRetainedResources();
 #if YA_CMDBUF_RECORD_MODE
     recordedCommands.clear();
 #endif
@@ -291,6 +301,7 @@ void VulkanCommandBuffer::reset()
     _isRecording = false;
     _debugLabelDepth = 0;
     _resourceStateTracker.reset();
+    clearRetainedResources();
 #if YA_CMDBUF_RECORD_MODE
     recordedCommands.clear();
 #endif
@@ -482,26 +493,24 @@ void VulkanCommandBuffer::executeEndRendering(const RenderingInfo& info)
             std::vector<VulkanImage::LayoutTransition> transitions;
             for (auto& spec : info.colorAttachments) {
                 if (spec.finalLayout != EImageLayout::Undefined && spec.image) {
-                if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
-                    VulkanImage::LayoutTransition transition{vkImg, spec.finalLayout};
-                    if (spec.bHasSubresourceRange) {
-                        transition.range    = makeSpecSubresourceRange(spec);
-                        transition.useRange = true;
-                    }
-                    transitions.push_back(transition);
+                    if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
+                        VulkanImage::LayoutTransition transition{vkImg, spec.finalLayout};
+                        if (tryResolveImageSpecSubresourceRange(spec, transition.range)) {
+                            transition.useRange = true;
+                        }
+                        transitions.push_back(transition);
                     }
                 }
             }
             if (info.depthAttachment) {
                 auto& spec = *info.depthAttachment;
                 if (spec.finalLayout != EImageLayout::Undefined && spec.image) {
-                if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
-                    VulkanImage::LayoutTransition transition{vkImg, spec.finalLayout};
-                    if (spec.bHasSubresourceRange) {
-                        transition.range    = makeSpecSubresourceRange(spec);
-                        transition.useRange = true;
-                    }
-                    transitions.push_back(transition);
+                    if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
+                        VulkanImage::LayoutTransition transition{vkImg, spec.finalLayout};
+                        if (tryResolveImageSpecSubresourceRange(spec, transition.range)) {
+                            transition.useRange = true;
+                        }
+                        transitions.push_back(transition);
                     }
                 }
             }
@@ -1035,7 +1044,7 @@ void VulkanCommandBuffer::beginRenderingWithRenderPass(IRenderTarget* renderTarg
 VkRenderingAttachmentInfo* VulkanCommandBuffer::buildDepthAttachmentInfo(const RenderingInfo&       info,
                                                                          VkRenderingAttachmentInfo& outDepthAttach)
 {
-    if (!info.depthAttachment) {
+    if (!info.depthAttachment.has_value()) {
         return nullptr;
     }
 
@@ -1196,8 +1205,7 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
             if (spec.initialLayout != EImageLayout::Undefined && spec.image) {
                 if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
                     VulkanImage::LayoutTransition transition{vkImg, spec.initialLayout};
-                    if (spec.bHasSubresourceRange) {
-                        transition.range    = makeSpecSubresourceRange(spec);
+                    if (tryResolveImageSpecSubresourceRange(spec, transition.range)) {
                         transition.useRange = true;
                     }
                     transitions.push_back(transition);
@@ -1213,8 +1221,7 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
             if (spec.image) {
                 if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
                     VulkanImage::LayoutTransition transition{vkImg, targetLayout};
-                    if (spec.bHasSubresourceRange) {
-                        transition.range    = makeSpecSubresourceRange(spec);
+                    if (tryResolveImageSpecSubresourceRange(spec, transition.range)) {
                         transition.useRange = true;
                     }
                     transitions.push_back(transition);
@@ -1233,6 +1240,7 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
     vkColorAttachments.reserve(info.colorAttachments.size());
 
     for (size_t i = 0; i < info.colorAttachments.size(); ++i) {
+        validateRenderingImageSpec(info.colorAttachments[i], info.label, std::format("color[{}]", i));
         VkRenderingAttachmentInfo vkAttach{
             .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .pNext       = nullptr,
@@ -1255,6 +1263,9 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
 
     // Build depth attachment using shared helper
     VkRenderingAttachmentInfo  vkDepthAttach{};
+    if (info.depthAttachment.has_value()) {
+        validateRenderingImageSpec(*info.depthAttachment, info.label, "depth");
+    }
     VkRenderingAttachmentInfo* pVkDepthAttach = buildDepthAttachmentInfo(info, vkDepthAttach);
 
     // Stencil is currently not modelled explicitly for manual dynamic rendering either.

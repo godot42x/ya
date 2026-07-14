@@ -6,6 +6,7 @@
 #include "Render/Core/Pipeline.h"
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -224,6 +225,7 @@ struct ICommandBuffer
 #if YA_CMDBUF_RECORD_MODE
     std::vector<RenderCommand> recordedCommands;
 #endif
+    std::vector<std::shared_ptr<void>> retainedResources;
 
   public:
     virtual ~ICommandBuffer() = default;
@@ -264,6 +266,25 @@ struct ICommandBuffer
      * @brief Reset the command buffer
      */
     virtual void reset() = 0;
+
+    void retainResource(std::shared_ptr<void> resource)
+    {
+        if (resource) {
+            retainedResources.push_back(std::move(resource));
+        }
+    }
+
+    void retainResources(const std::vector<std::shared_ptr<void>>& resources)
+    {
+        for (const auto& resource : resources) {
+            retainResource(resource);
+        }
+    }
+
+    void clearRetainedResources()
+    {
+        retainedResources.clear();
+    }
 
 #if YA_CMDBUF_RECORD_MODE
     // ========== Recording Mode: Push commands to vector ==========
