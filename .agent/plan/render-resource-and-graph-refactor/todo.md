@@ -58,7 +58,7 @@
 - [x] 盘点 sampler 和 framebuffer 创建路径（见 `resource-api-inventory.md`）
 - [x] 盘点 `beginIsolateCommands()` upload/init 路径，分离 allocation、upload 和 initial transition（见 `resource-api-inventory.md`）
 - [x] 盘点 `Texture*` 作为 GPU 中间资源 descriptor 输入的使用点
-- [ ] 记录每类资源当前 owner、引用者和销毁顺序
+- [x] 记录每类资源当前 owner、引用者和销毁顺序（见 `resource-ownership-inventory.md`）
 - [x] 记录当前 `Texture / IImage / IImageView / IRenderTarget / IFrameBuffer` 所有权链（见 `resource-api-inventory.md`）
 - [ ] 定义 `BufferDesc`
 - [ ] 定义 `ImageDesc`
@@ -132,7 +132,7 @@
 - [x] 将 postprocess output render texture 改为 GPU image/view owner
 - [x] 将 BRDF LUT 输出改为 GPU image/view owner
 - [x] 将 shadow sampled view 改为显式 image/view owner
-- [ ] 将 screenshot scratch texture 改为 GPU image/view owner
+- [x] 将 screenshot scratch texture 改为 GPU image/view owner
 - [ ] 删除 `Texture::createRenderTexture()`
 - [ ] 删除 `Texture::getTextureFactory()`
 - [ ] 删除 `ITextureFactory`
@@ -151,7 +151,7 @@
 - BRDF LUT、Deferred SSAO 与 bloom intermediates 已迁移
 - postprocess output 已由 `PostProcessingStage` 以 `RenderImage` 形式持有；剩余 `Texture::wrap()` 兼容层只保留在 pipeline viewport 输出侧，供 editor viewport / screenshot fallback 复用
 - shadow sampled views 已由 `ShadowMapResources` 显式拥有；shadow pass 内残留的 `Texture::wrap()` attachment adapter 归入 Phase 8
-- screenshot scratch 仍待迁移
+- screenshot offscreen capture 已不再分配 scratch `Texture`；该链路现在直接从 source image copy 到 readback buffer，仅保留 viewport `Texture*` 作为 fallback 输入源，而不再作为中间 owner
 
 ## Phase 5: Resource State Tracker
 

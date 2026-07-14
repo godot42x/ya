@@ -11,8 +11,6 @@
 #include "Render/Core/OffscreenJob.h"
 #include "Render/Core/RenderImage.h"
 #include "Render/Core/RenderResourceFactory.h"
-#include "Render/Core/Texture.h"
-
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
@@ -302,18 +300,6 @@ bool AppScreenshotCapture::request(IRender*                        render,
 
     auto job       = std::make_shared<OffscreenJobState>();
     job->debugName = "AutomationScreenshotCapture";
-    job->createOutputFn = [](IRender*) -> stdptr<Texture>
-    {
-        return Texture::createRenderTexture(RenderTextureCreateInfo{
-            .label   = "AutomationScreenshotScratch",
-            .width   = 1,
-            .height  = 1,
-            .format  = EFormat::R8G8B8A8_UNORM,
-            .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-            .samples = ESampleCount::Sample_1,
-            .isDepth = false,
-        });
-    };
     job->executeFn = [sourceImage = source.image, readbackBuffer = state.readbackBuffer, extent](ICommandBuffer* cmdBuf, Texture*) -> bool
     {
         if (!cmdBuf || !sourceImage || !readbackBuffer) {

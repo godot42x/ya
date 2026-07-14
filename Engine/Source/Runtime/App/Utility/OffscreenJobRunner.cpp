@@ -46,7 +46,7 @@ void queueOffscreenJob(const OffscreenJobQueueService& queueService, IRender* re
     }
 
     auto outputTexture = job->createOutputFn ? job->createOutputFn(render) : nullptr;
-    if (!outputTexture) {
+    if (job->createOutputFn && !outputTexture) {
         failOffscreenJob(job);
         return;
     }

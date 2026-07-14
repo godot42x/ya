@@ -43,7 +43,7 @@ struct OffscreenJobState
 
     [[nodiscard]] bool isReadyToQueue() const
     {
-        return createOutputFn && executeFn && phase == EOffscreenJobPhase::Pending;
+        return executeFn && phase == EOffscreenJobPhase::Pending;
     }
 
     [[nodiscard]] bool isGpuCompleted() const { return phase == EOffscreenJobPhase::GpuCompleted; }
