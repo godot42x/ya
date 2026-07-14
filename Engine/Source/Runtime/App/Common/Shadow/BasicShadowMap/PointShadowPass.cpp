@@ -149,9 +149,6 @@ void PointShadowPass::destroy()
     }
     _dsp.reset();
     _shadowImage.reset();
-    for (auto& faceTexArr : _faceDepthTextures) {
-        for (auto& tex : faceTexArr) tex.reset();
-    }
     for (auto& faceViewArr : _faceDepthViews) {
         for (auto& view : faceViewArr) view.reset();
     }
@@ -403,19 +400,8 @@ void PointShadowPass::rebuildFaceTextures(std::shared_ptr<IImage> shadowImage)
                     .layerCount     = 1,
                 });
             _faceDepthViews[lightIndex][faceIndex] = view;
-            if (view) {
-                _faceDepthTextures[lightIndex][faceIndex] = Texture::wrap(
-                    shadowImage, view,
-                    std::format("PointShadow_Face_{}_{}_Texture", lightIndex, faceIndex));
-            }
         }
     }
-}
-
-Texture* PointShadowPass::getFaceDepthTexture(uint32_t lightIndex, uint32_t faceIndex) const
-{
-    if (lightIndex >= MAX_POINT_LIGHTS || faceIndex >= 6) return nullptr;
-    return _faceDepthTextures[lightIndex][faceIndex].get();
 }
 
 void PointShadowPass::renderGUI()

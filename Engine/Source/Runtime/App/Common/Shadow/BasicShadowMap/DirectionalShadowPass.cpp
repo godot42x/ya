@@ -144,7 +144,6 @@ void DirectionalShadowPass::destroy()
     }
     _dsp.reset();
     _depthImage.reset();
-    _depthTexture.reset();
     _depthView.reset();
     _staticVariant  = {};
     _skinnedVariant = {};
@@ -317,11 +316,10 @@ void DirectionalShadowPass::renderGUI()
     // Directional shadow has no runtime-tweakable params currently
 }
 
-void DirectionalShadowPass::setDepthAttachment(stdptr<IImage> image, stdptr<IImageView> view, stdptr<Texture> textureCompat)
+void DirectionalShadowPass::setDepthAttachment(stdptr<IImage> image, stdptr<IImageView> view)
 {
-    _depthImage   = std::move(image);
-    _depthView    = std::move(view);
-    _depthTexture = std::move(textureCompat);
+    _depthImage = std::move(image);
+    _depthView  = std::move(view);
 }
 
 } // namespace ya

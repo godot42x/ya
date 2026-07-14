@@ -6,6 +6,7 @@
 
 #include <functional>
 #include <glm/glm.hpp>
+#include <memory>
 
 #include <cstdint>
 
@@ -15,6 +16,7 @@ namespace ya
 struct ICommandBuffer;
 struct IRenderTarget;
 struct IImageView;
+struct IImage;
 struct RenderImage;
 struct Texture;
 struct RenderFrameData;
@@ -75,7 +77,7 @@ struct IRenderPipelineDebugOutputs
     virtual ~IRenderPipelineDebugOutputs() = default;
 
     [[nodiscard]] virtual bool           isShadowMappingEnabled() const = 0;
-    [[nodiscard]] virtual Texture*       getShadowDepthTexture() const  = 0;
+    [[nodiscard]] virtual std::shared_ptr<IImage> getShadowDepthImage() const = 0;
     [[nodiscard]] virtual Texture*       getViewportDepthTexture() const = 0;
     [[nodiscard]] virtual IImageView*    getShadowDirectionalDepthIV() const = 0;
     [[nodiscard]] virtual IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const = 0;

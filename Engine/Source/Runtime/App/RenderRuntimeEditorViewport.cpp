@@ -28,7 +28,7 @@ constexpr uint32_t CATEGORY_POSTPROCESS = 6;
 template <typename TGetter>
 void appendShadowDebugSlots(EditorViewportContext& ctx,
                             IImageView*            directionalDepth,
-                            Texture*               shadowDepthTexture,
+                            const std::shared_ptr<IImage>& shadowDepthImage,
                             TGetter&&              pointFaceGetter,
                             uint32_t               categoryIndex)
 {
@@ -37,7 +37,7 @@ void appendShadowDebugSlots(EditorViewportContext& ctx,
             .label         = "ShadowDirectionalDepth",
             .defaultView   = directionalDepth,
             .ownedView     = nullptr,
-            .image         = shadowDepthTexture ? shadowDepthTexture->getImageShared() : nullptr,
+            .image         = shadowDepthImage,
             .categoryIndex = categoryIndex,
             .aspectFlags   = EImageAspect::Depth,
         });
@@ -59,7 +59,7 @@ void appendShadowDebugSlots(EditorViewportContext& ctx,
                     .label         = std::format("ShadowPoint{}_Face{}", pointLightIndex, faceIndex),
                     .defaultView   = faceIV,
                     .ownedView     = nullptr,
-                    .image         = shadowDepthTexture ? shadowDepthTexture->getImageShared() : nullptr,
+                    .image         = shadowDepthImage,
                     .categoryIndex = categoryIndex,
                     .aspectFlags   = EImageAspect::Depth,
                 });
@@ -132,7 +132,7 @@ void RenderRuntime::appendForwardDebugSlots(EditorViewportContext& ctx)
         appendShadowDebugSlots(
             ctx,
             debugOutputs.shadowDirectionalDepth,
-            debugOutputs.shadowDepthTexture,
+            debugOutputs.shadowDepthImage,
             [this](uint32_t pointLightIndex, uint32_t faceIndex)
             { return getShadowPointFaceDepthIV(pointLightIndex, faceIndex); },
             CATEGORY_SHADOW);
@@ -320,11 +320,11 @@ void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
         });
     }
 
-    if (auto* shadowDepthTexture = debugOutputs.shadowDepthTexture) {
+    if (debugOutputs.shadowDepthImage) {
         appendShadowDebugSlots(
             ctx,
             debugOutputs.shadowDirectionalDepth,
-            shadowDepthTexture,
+            debugOutputs.shadowDepthImage,
             [this](uint32_t pointLightIndex, uint32_t faceIndex)
             { return getShadowPointFaceDepthIV(pointLightIndex, faceIndex); },
             CATEGORY_SHADOW);

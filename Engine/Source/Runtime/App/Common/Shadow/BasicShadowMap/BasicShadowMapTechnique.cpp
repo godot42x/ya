@@ -4,7 +4,6 @@
 
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/RenderResourceFactory.h"
-#include "Render/Core/Texture.h"
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
 
@@ -118,26 +117,11 @@ void BasicShadowMapTechnique::rebuildLayerTextures(const std::shared_ptr<IImage>
             .layerCount     = 1,
         });
     if (dirView) {
-        auto dirTexture = Texture::wrap(shadowImage, dirView, "BasicShadowMap_DirectionalDepthTexture");
-        _directionalPass.setDepthAttachment(shadowImage, dirView, dirTexture);
+        _directionalPass.setDepthAttachment(shadowImage, dirView);
     }
 
     // Point faces: layers 1..36
     _pointPass.rebuildFaceTextures(shadowImage);
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Output accessors
-// ═══════════════════════════════════════════════════════════════════════════
-
-Texture* BasicShadowMapTechnique::getDirectionalDepthTexture() const
-{
-    return _directionalPass.getDepthTexture();
-}
-
-Texture* BasicShadowMapTechnique::getPointFaceDepthTexture(uint32_t lightIndex, uint32_t faceIndex) const
-{
-    return _pointPass.getFaceDepthTexture(lightIndex, faceIndex);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

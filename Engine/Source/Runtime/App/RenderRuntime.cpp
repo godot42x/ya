@@ -171,7 +171,7 @@ RenderPipelineDebugOutputCatalog RenderRuntime::buildPipelineDebugOutputCatalog(
     }
 
     catalog.bShadowMappingEnabled  = pipeline->isShadowMappingEnabled();
-    catalog.shadowDepthTexture     = pipeline->getShadowDepthTexture();
+    catalog.shadowDepthImage       = pipeline->getShadowDepthImage();
     catalog.viewportDepthTexture   = pipeline->getViewportDepthTexture();
     catalog.shadowDirectionalDepth = pipeline->getShadowDirectionalDepthIV();
     catalog.postprocessOutputImage = pipeline->getPostprocessOutputImage();

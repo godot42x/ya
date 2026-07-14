@@ -193,7 +193,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     IRenderTarget* getGBufferRT() const { return _gBufferRT.get(); }
     IRenderTarget* getViewportRT() const override { return _viewportRT.get(); }
     IRenderTarget* getShadowDepthRT() const { return _shadowResources.renderTarget.get(); }
-    Texture*       getShadowDepthTexture() const override { return _shadowStage ? _shadowStage->getDirectionalDepthTexture() : nullptr; }
+    std::shared_ptr<IImage> getShadowDepthImage() const override { return _shadowResources.depthImage; }
     Texture*       getViewportDepthTexture() const override { return _currentViewportResources.depth; }
     Texture*       getViewportTexture() const override { return viewportTexture; }
     bool           isShadowMappingEnabled() const override;

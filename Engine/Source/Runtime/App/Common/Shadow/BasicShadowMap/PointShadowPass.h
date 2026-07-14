@@ -6,8 +6,8 @@
 
 #include "Render/Core/Buffer.h"
 #include "Render/Core/DescriptorSet.h"
+#include "Render/Core/Image.h"
 #include "Render/Core/Pipeline.h"
-#include "Render/Core/Texture.h"
 #include "Render/Stage/IRenderStage.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
@@ -47,8 +47,6 @@ class PointShadowPass
 
     void setShadowExtent(Extent2D extent) { _shadowExtent = extent; }
     void refreshPipeline(EFormat::T depthFormat);
-
-    [[nodiscard]] Texture* getFaceDepthTexture(uint32_t lightIndex, uint32_t faceIndex) const;
     [[nodiscard]] PointShadowIndirectRenderer& getIndirectRenderer() { return _indirectRenderer; }
 
     void rebuildFaceTextures(std::shared_ptr<IImage> shadowImage);
@@ -95,8 +93,6 @@ class PointShadowPass
 
     stdptr<IImage> _shadowImage;
 
-    // Per-face depth textures
-    std::array<std::array<stdptr<Texture>, 6>, MAX_POINT_LIGHTS>    _faceDepthTextures{};
     std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS> _faceDepthViews{};
 
     PointShadowIndirectRenderer _indirectRenderer;

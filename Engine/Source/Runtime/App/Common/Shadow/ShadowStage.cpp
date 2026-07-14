@@ -89,18 +89,4 @@ void ShadowStage::refreshShadowResources(const std::shared_ptr<IImage>& depthIma
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Output accessors
-// ═══════════════════════════════════════════════════════════════════════════
-
-Texture* ShadowStage::getDirectionalDepthTexture() const
-{
-    return _technique ? _technique->getDirectionalDepthTexture() : nullptr;
-}
-
-Texture* ShadowStage::getPointFaceDepthTexture(uint32_t lightIndex, uint32_t faceIndex) const
-{
-    return _technique ? _technique->getPointFaceDepthTexture(lightIndex, faceIndex) : nullptr;
-}
-
 } // namespace ya

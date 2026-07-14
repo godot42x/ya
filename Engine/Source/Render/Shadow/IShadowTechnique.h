@@ -14,7 +14,6 @@ struct IRender;
 struct ICommandBuffer;
 struct RenderFrameData;
 struct IImage;
-struct Texture;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // IShadowTechnique — Strategy interface for shadow rendering algorithms
@@ -53,14 +52,6 @@ struct IShadowTechnique
 
     /// ImGui debug panel for this technique.
     virtual void renderGUI() = 0;
-
-    // ─── Output accessors (for LightStage to sample) ─────────────────
-
-    /// Directional light depth texture (layer 0).
-    [[nodiscard]] virtual Texture* getDirectionalDepthTexture() const = 0;
-
-    /// Point light cubemap face depth texture.
-    [[nodiscard]] virtual Texture* getPointFaceDepthTexture(uint32_t lightIndex, uint32_t faceIndex) const = 0;
 };
 
 } // namespace ya

@@ -149,6 +149,47 @@ RGImportedTextureDesc makeDeferredImportedTextureDesc(Texture& texture, std::str
     };
 }
 
+RGImportedTextureDesc makeDeferredImportedTextureDesc(const std::shared_ptr<IImage>& image,
+                                                      IImageView* imageView,
+                                                      std::string_view label,
+                                                      EImageLayout::T finalLayout)
+{
+    YA_CORE_ASSERT(image != nullptr, "Deferred graph import requires a backing image");
+    YA_CORE_ASSERT(imageView != nullptr, "Deferred graph import requires a valid image view");
+
+    return RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label       = std::string(label),
+            .format      = image->getFormat(),
+            .extent      = Extent3D{image->getWidth(), image->getHeight(), 1},
+            .mipLevels   = image->getMipLevels(),
+            .arrayLayers = image->getArrayLayers(),
+            .usage       = image->getUsage(),
+        },
+        .importDesc = ImportedImageDesc{
+            .label         = std::string(label),
+            .nativeHandle  = static_cast<void*>(image->getHandle()),
+            .format        = image->getFormat(),
+            .usage         = image->getUsage(),
+            .extent        = Extent3D{image->getWidth(), image->getHeight(), 1},
+            .mipLevels     = image->getMipLevels(),
+            .arrayLayers   = image->getArrayLayers(),
+            .initialLayout = image->getCompatibilityLayout(),
+            .finalLayout   = finalLayout,
+        },
+        .image = image,
+        .viewDesc = ImageViewCreateInfo{
+            .label          = std::format("{}.ImportedView", label),
+            .viewType       = EImageViewType::View2D,
+            .aspectFlags    = EImageAspect::Depth,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = SHADOW_DIRECTIONAL_LAYER_INDEX,
+            .layerCount     = 1,
+        },
+    };
+}
+
 RGImportedTextureDesc makeDeferredImportedTextureDesc(const RenderImage& image, std::string_view label, EImageLayout::T finalLayout)
 {
     YA_CORE_ASSERT(image.getImageShared() != nullptr, "Deferred graph import requires a backing image");
@@ -1181,9 +1222,11 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     }
 
     std::optional<RGTextureHandle> shadowDepth;
-    if (auto* shadowDepthTexture = getShadowDepthTexture(); shadowDepthTexture && isShadowMappingEnabled()) {
+    if (auto shadowDepthImage = getShadowDepthImage();
+        shadowDepthImage && getShadowDirectionalDepthIV() && isShadowMappingEnabled()) {
         shadowDepth = graph.importTexture(
-            makeDeferredImportedTextureDesc(*shadowDepthTexture,
+            makeDeferredImportedTextureDesc(shadowDepthImage,
+                                            getShadowDirectionalDepthIV(),
                                             "DeferredLight.ShadowDepth",
                                             EImageLayout::ShaderReadOnlyOptimal));
     }

@@ -31,8 +31,6 @@ class BasicShadowMapTechnique : public IShadowTechnique
     void execute(ICommandBuffer* cmdBuf, uint32_t flightIndex, const RenderFrameData& frameData) override;
     void renderGUI() override;
 
-    [[nodiscard]] Texture* getDirectionalDepthTexture() const override;
-    [[nodiscard]] Texture* getPointFaceDepthTexture(uint32_t lightIndex, uint32_t faceIndex) const override;
     [[nodiscard]] DirectionalShadowPass& getDirectionalPass() { return _directionalPass; }
     [[nodiscard]] PointShadowPass&       getPointPass() { return _pointPass; }
 

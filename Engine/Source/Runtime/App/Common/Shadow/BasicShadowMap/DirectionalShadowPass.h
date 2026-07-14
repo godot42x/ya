@@ -7,7 +7,6 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Core/Image.h"
-#include "Render/Core/Texture.h"
 #include "Render/Stage/IRenderStage.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
@@ -43,9 +42,7 @@ class DirectionalShadowPass
 
     void setShadowExtent(Extent2D extent) { _shadowExtent = extent; }
     void refreshPipeline(EFormat::T depthFormat);
-    void setDepthAttachment(stdptr<IImage> image, stdptr<IImageView> view, stdptr<Texture> textureCompat);
-
-    [[nodiscard]] Texture*    getDepthTexture() const { return _depthTexture.get(); }
+    void setDepthAttachment(stdptr<IImage> image, stdptr<IImageView> view);
     [[nodiscard]] IImageView* getDepthView() const { return _depthView.get(); }
 
   private:
@@ -77,7 +74,6 @@ class DirectionalShadowPass
 
     stdptr<IImage>     _depthImage;
     stdptr<IImageView> _depthView;
-    stdptr<Texture>    _depthTexture;
 
     std::array<PerFlightResources, MAX_FLIGHTS_IN_FLIGHT> _perFlight{};
     uint32_t _skinningCapacity = 0;

@@ -32,6 +32,7 @@ struct ForwardRenderPipeline;
 struct Texture;
 struct RenderImage;
 struct IRenderTarget;
+struct IImage;
 struct IImageView;
 struct IRenderPass;
 struct DeferredRenderPipeline;
@@ -44,7 +45,7 @@ struct RenderDiagnosticsService;
 struct RenderPipelineDebugOutputCatalog
 {
     bool           bShadowMappingEnabled  = false;
-    Texture*       shadowDepthTexture     = nullptr;
+    std::shared_ptr<IImage> shadowDepthImage = nullptr;
     Texture*       viewportDepthTexture   = nullptr;
     IImageView*    shadowDirectionalDepth = nullptr;
     RenderImage*   postprocessOutputImage = nullptr;

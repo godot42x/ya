@@ -122,7 +122,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     // Shadow query accessors (used by RenderRuntime for debug views)
     [[nodiscard]] bool           isShadowMappingEnabled() const override;
     [[nodiscard]] IRenderTarget* getShadowDepthRT() const { return _shadowResources.renderTarget.get(); }
-    [[nodiscard]] Texture*       getShadowDepthTexture() const override { return _shadowStage ? _shadowStage->getDirectionalDepthTexture() : nullptr; }
+    [[nodiscard]] std::shared_ptr<IImage> getShadowDepthImage() const override { return _shadowResources.depthImage; }
     [[nodiscard]] Texture*       getViewportDepthTexture() const override { return _viewportResources.depth; }
     [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override;

@@ -269,7 +269,7 @@
 - Deferred 启动阶段已补 runtime attachment format fallback：pipeline 会先按后端 `isImageFormatSupported()` 解析 HDR color / viewport color / shared depth / shadow depth 的可创建格式，再初始化 render target 与 stage format refresh，避免在 MoltenVK/portability 环境下因为硬编码 `R16G16B16A16_SFLOAT` 或 `D32_SFLOAT` 直接崩在 `VulkanImage::allocate()`
 - shadow 公共资源也开始显式化执行期元数据：`ShadowMapResources` 现在缓存 depth image 与 layer count，Deferred shadow handoff 不再现查 `renderTarget -> framebuffer -> texture`
 - common shadow technique/stage 契约也已跟进显式资源输入：`BasicShadowMapTechnique / ShadowStage` 现改吃 `depth image + format + extent` 做 shadow view/pipeline refresh，Forward/Deferred 两条路径都不再通过 `refreshFromRenderTarget()` 反查当前 framebuffer
-- shadow pass 内部录制路径也已开始脱离 `Texture` adapter：directional / point shadow depth attachment 现在直接使用 `IImage/IImageView`，`Texture::wrap()` 兼容对象仅保留给调试/预览输出，不再作为实际 beginRendering 输入
+- shadow pass / debug / graph import 路径都已脱离 `Texture` adapter：directional / point shadow depth attachment、editor preview 与 deferred light graph import 现在统一直接使用 `depth image + image view`
 - shadow extent / resolution 读取也开始从 legacy render-target 元数据收口回 `ShadowMapResources`：Forward/Deferred 对 shadow 分辨率、extent 和 technique refresh 的查询已优先复用显式缓存状态
 - 兼容期 attachment 读取也开始从 framebuffer owner 下沉到 render-target facade：Deferred/Forward/shadow 公共路径现改用 `IRenderTarget::getCurrent*Texture()` 访问当前 attachment，减少高层对 `getCurFrameBuffer()` 的直接依赖，为后续收敛成 `RenderAttachmentSet` 先铺一层兼容接口
 - Forward dirty refresh 也已开始对齐 Deferred 的收口方向：`ForwardRenderPipeline::refreshDirtyResources()` 不再每帧无条件 `flushDirty()` viewport/shadow render target，而是按真实 dirty 状态触发刷新
