@@ -147,20 +147,27 @@ RenderImage* RenderRuntime::getPostprocessOutputImage() const
 
 RenderImage* RenderRuntime::getPresentationImage() const
 {
-    if (!_screenRT) {
-        return nullptr;
-    }
-
-    return const_cast<IRenderTarget*>(_screenRT.get())->getCurrentColorAttachment(0);
+    auto presentationImage = getCurrentPresentationImageShared();
+    return presentationImage.get();
 }
 
-Texture* RenderRuntime::getPresentationTexture() const
+std::shared_ptr<RenderImage> RenderRuntime::getCurrentPresentationImageShared() const
 {
-    if (!_screenRT) {
+    if (!_render || _presentationImages.empty()) {
         return nullptr;
     }
 
-    return const_cast<IRenderTarget*>(_screenRT.get())->getCurrentColorTexture(0);
+    auto* swapchain = _render->getSwapchain();
+    if (!swapchain) {
+        return nullptr;
+    }
+
+    const auto imageIndex = swapchain->getCurImageIndex();
+    if (imageIndex >= _presentationImages.size()) {
+        return nullptr;
+    }
+
+    return _presentationImages[imageIndex];
 }
 
 bool RenderRuntime::isPostprocessingEnabled() const
@@ -215,12 +222,16 @@ RenderTargetEditorCatalog RenderRuntime::buildRenderTargetEditorCatalog() const
 {
     RenderTargetEditorCatalog catalog{};
 
-    if (_screenRT) {
+    if (auto presentationImage = getCurrentPresentationImageShared()) {
         catalog.entries.push_back({
-            .label     = "Presentation",
-            .rt        = _screenRT.get(),
-            .owner     = RenderTargetEditorCatalog::Entry::EOwner::Presentation,
-            .bEditable = false,
+            .label            = "Presentation",
+            .owner            = RenderTargetEditorCatalog::Entry::EOwner::Presentation,
+            .colorFormats     = {_render->getSwapchain()->getFormat()},
+            .colorAttachments = {presentationImage},
+            .extent           = presentationImage->getExtent(),
+            .frameBufferCount = _render->getSwapchain()->getImageCount(),
+            .bSwapChainTarget = true,
+            .bEditable        = false,
         });
     }
     if (auto* pipeline = getActivePipelineDebugUI()) {
@@ -228,13 +239,6 @@ RenderTargetEditorCatalog RenderRuntime::buildRenderTargetEditorCatalog() const
     }
 
     return catalog;
-}
-
-void RenderRuntime::setActivePipelineSharedDepthFormat(EFormat::T format)
-{
-    if (auto* pipeline = getActivePipelineSettingsUI()) {
-        pipeline->setSharedDepthFormat(format);
-    }
 }
 
 DebugRenderSystem& RenderRuntime::getDebugRenderSystem() const

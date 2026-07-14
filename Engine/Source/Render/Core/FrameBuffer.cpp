@@ -1,6 +1,5 @@
 
 #include "FrameBuffer.h"
-#include "Runtime/App/App.h"
 #include "Platform/Render/Vulkan/VulkanFrameBuffer.h"
 
 #include <format>
@@ -32,7 +31,9 @@ std::shared_ptr<Texture> makeTextureCompat(const std::shared_ptr<RenderImage>& a
 
 stdptr<IFrameBuffer> IFrameBuffer::create(IRender *render, const FrameBufferCreateInfo &ci)
 {
-    auto api = App::get()->getRender()->getAPI();
+    YA_CORE_ASSERT(render != nullptr, "IFrameBuffer::create requires a valid render backend");
+
+    auto api = render->getAPI();
     switch (api) {
     case ERenderAPI::None:
     case ERenderAPI::OpenGL:

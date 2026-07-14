@@ -256,7 +256,7 @@ DeferredRenderPipeline::~DeferredRenderPipeline()
 
 void DeferredRenderPipeline::initShadowResources()
 {
-    if (!_render || _shadowResources.renderTarget) {
+    if (!_render || _shadowResources.depthImage) {
         return;
     }
 
@@ -264,7 +264,7 @@ void DeferredRenderPipeline::initShadowResources()
     const uint32_t shadowResolution = std::max(shadowSettings.resolution, 1u);
 
     _shadowResources.init(_render, ShadowMapResourceDesc{
-        .renderTargetLabel = "Deferred Shadow Map RenderTarget",
+        .imageLabel        = "Deferred Shadow Depth",
         .samplerLabel      = "deferred-shadow",
         .viewLabelPrefix   = "Deferred Shadow",
         .extent            = {.width = shadowResolution, .height = shadowResolution},
@@ -399,7 +399,7 @@ void DeferredRenderPipeline::applyShadowSettings(const ShadowSettings& shadowSet
         *_shadowSettings = shadowSettings;
     }
 
-    if (bToggleChanged || (shadowSettings.isEnabled() && !_shadowResources.renderTarget)) {
+    if (bToggleChanged || (shadowSettings.isEnabled() && !_shadowResources.depthImage)) {
         requestShadowResourceRefresh();
     }
 
@@ -465,13 +465,16 @@ void DeferredRenderPipeline::appendRenderTargetEditorEntries(RenderTargetEditorC
         .frameBufferCount = 1,
     });
     catalog.entries.push_back({
-        .label = "Deferred Shadow",
-        .rt    = _shadowResources.renderTarget.get(),
-        .owner = RenderTargetEditorCatalog::Entry::EOwner::DeferredShadow,
+        .label               = "Deferred Shadow",
+        .owner               = RenderTargetEditorCatalog::Entry::EOwner::DeferredShadow,
+        .depthFormat         = _shadowResources.depthFormat,
+        .depthAttachmentView = _shadowResources.directionalDepthIV,
+        .extent              = _shadowResources.extent,
+        .frameBufferCount    = 1,
     });
 }
 
-void DeferredRenderPipeline::setSharedDepthFormat(EFormat::T format)
+void DeferredRenderPipeline::setDeferredSharedDepthFormat(EFormat::T format)
 {
     bool bDepthFormatChanged = false;
     if (_gBufferRTSpec.attachments.depthAttach.has_value() && _gBufferRTSpec.attachments.depthAttach->format != format) {
@@ -481,6 +484,26 @@ void DeferredRenderPipeline::setSharedDepthFormat(EFormat::T format)
     if (bDepthFormatChanged) {
         _sharedDepthFormat = format;
         markPendingResourceRefresh(EDeferredPendingResourceRefresh::SharedDepth);
+    }
+}
+
+bool DeferredRenderPipeline::setRenderTargetDepthFormat(
+    RenderTargetEditorCatalog::Entry::EOwner owner,
+    EFormat::T format)
+{
+    switch (owner) {
+    case RenderTargetEditorCatalog::Entry::EOwner::DeferredGBuffer:
+    case RenderTargetEditorCatalog::Entry::EOwner::DeferredViewport:
+        setDeferredSharedDepthFormat(format);
+        return true;
+    case RenderTargetEditorCatalog::Entry::EOwner::DeferredShadow:
+        if (_shadowDepthFormat != format) {
+            _shadowDepthFormat = format;
+            requestShadowResourceRefresh();
+        }
+        return true;
+    default:
+        return false;
     }
 }
 
@@ -567,7 +590,7 @@ void DeferredRenderPipeline::applyPendingResourceRefreshes()
 
         if (shadowSettings.isEnabled()) {
             initShadowResources();
-            if (!_shadowStage && _shadowResources.renderTarget) {
+            if (!_shadowStage && _shadowResources.depthImage) {
                 _shadowStage = ya::makeShared<ShadowStage>();
                 _shadowStage->init(_render);
             }
@@ -654,7 +677,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
 
 void DeferredRenderPipeline::initStages()
 {
-    if (_shadowResources.renderTarget) {
+    if (_shadowResources.depthImage) {
         _shadowStage = ya::makeShared<ShadowStage>();
         _shadowStage->init(_render);
         if (_shadowResources.depthImage) {
@@ -1000,7 +1023,7 @@ void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&
     const uint32_t shadowedPointLightBudget = shadowSettings.getEffectivePointLightCount();
     const uint32_t desiredShadowResolution  = std::max(shadowSettings.resolution, 1u);
     if (shadowSettings.isEnabled()) {
-        const bool bShadowResolutionDirty = !_shadowResources.renderTarget ||
+        const bool bShadowResolutionDirty = !_shadowResources.depthImage ||
                                             _shadowResources.extent.width != desiredShadowResolution ||
                                             _shadowResources.extent.height != desiredShadowResolution;
         if (bShadowResolutionDirty) {

@@ -1,6 +1,5 @@
 #include "ShadowMapResources.h"
 
-#include "Render/Core/Texture.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
 #include "Runtime/App/Common/Shadow/Common/ShadowViewBuilder.h"
@@ -14,31 +13,23 @@ void ShadowMapResources::init(IRender* render, const ShadowMapResourceDesc& desc
 
     extent = desc.extent;
     depthFormat = desc.depthFormat;
+    layerCount = getShadowTotalLayerCount();
 
-    renderTarget = createRenderTarget(RenderTargetCreateInfo{
-        .label            = std::string(desc.renderTargetLabel),
-        .renderingMode    = ERenderingMode::DynamicRendering,
-        .bSwapChainTarget = false,
-        .extent           = desc.extent,
-        .frameBufferCount = 1,
-        .layerCount       = getShadowTotalLayerCount(),
-        .attachments      = {
-            .depthAttach = AttachmentDescription{
-                .index            = 0,
-                .format           = desc.depthFormat,
-                .samples          = ESampleCount::Sample_1,
-                .loadOp           = EAttachmentLoadOp::Clear,
-                .storeOp          = EAttachmentStoreOp::Store,
-                .initialLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                .finalLayout      = EImageLayout::ShaderReadOnlyOptimal,
-                .usage            = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
-                .imageCreateFlags = EImageCreateFlag::CubeCompatible,
-            },
-        },
+    auto* resourceFactory = render->getResourceFactory();
+    depthImage = resourceFactory->createImage(ImageCreateInfo{
+        .label       = std::string(desc.imageLabel),
+        .format      = desc.depthFormat,
+        .extent      = {.width = desc.extent.width, .height = desc.extent.height, .depth = 1},
+        .mipLevels   = 1,
+        .arrayLayers = layerCount,
+        .samples     = ESampleCount::Sample_1,
+        .usage       = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
+        .initialLayout = EImageLayout::Undefined,
+        .flags         = EImageCreateFlag::CubeCompatible,
     });
-    YA_CORE_ASSERT(renderTarget, "Failed to create shadow render target");
+    YA_CORE_ASSERT(depthImage, "Failed to create shadow depth image");
 
-    sampler = render->getResourceFactory()->createSampler(SamplerDesc{
+    sampler = resourceFactory->createSampler(SamplerDesc{
         .label        = std::string(desc.samplerLabel),
         .minFilter    = EFilter::Linear,
         .magFilter    = EFilter::Linear,
@@ -49,16 +40,11 @@ void ShadowMapResources::init(IRender* render, const ShadowMapResourceDesc& desc
         .borderColor  = SamplerDesc::BorderColor{.type = SamplerDesc::EBorderColor::FloatOpaqueWhite, .color = {1, 1, 1, 1}},
     });
 
-    layerCount = getShadowTotalLayerCount();
     rebuildViews(render, desc.viewLabelPrefix);
 }
 
 void ShadowMapResources::destroy()
 {
-    depthImage.reset();
-    extent = {};
-    depthFormat = EFormat::Undefined;
-    layerCount = 0;
     directionalDepthIV.reset();
     for (auto& imageView : pointCubeIVs) {
         imageView.reset();
@@ -68,14 +54,17 @@ void ShadowMapResources::destroy()
             imageView.reset();
         }
     }
+    depthImage.reset();
     sampler.reset();
-    renderTarget.reset();
+    extent = {};
+    depthFormat = EFormat::Undefined;
+    layerCount = 0;
 }
 
 void ShadowMapResources::rebuildViews(IRender* render, std::string_view viewLabelPrefix)
 {
     YA_CORE_ASSERT(render, "ShadowMapResources requires render device");
-    YA_CORE_ASSERT(renderTarget, "ShadowMapResources requires shadow render target");
+    YA_CORE_ASSERT(depthImage, "ShadowMapResources requires shadow depth image");
 
     directionalDepthIV.reset();
     for (auto& imageView : pointCubeIVs) {
@@ -87,13 +76,7 @@ void ShadowMapResources::rebuildViews(IRender* render, std::string_view viewLabe
         }
     }
 
-    auto* depthAttachment = renderTarget->getCurrentDepthAttachment();
-    YA_CORE_ASSERT(depthAttachment, "Shadow render target depth attachment is null");
-
     auto* resourceFactory = render->getResourceFactory();
-    depthImage            = depthAttachment->getImageShared();
-    YA_CORE_ASSERT(depthImage, "Shadow render target image is null");
-
     auto views         = ShadowViewBuilder::buildLayerViews(resourceFactory, depthImage, viewLabelPrefix);
     directionalDepthIV = std::move(views.directionalDepthIV);
     pointCubeIVs       = std::move(views.pointCubeIVs);

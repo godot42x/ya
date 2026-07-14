@@ -82,6 +82,12 @@ struct OpenGLRender : public IRender
     void                  endIsolateCommands(ICommandBuffer *commandBuffer) override;
     ISwapchain           *getSwapchain() override { return _swapChain; }
     IDescriptorSetHelper *getDescriptorHelper() override;
+    std::shared_ptr<IRenderTarget> createRenderTarget(const RenderTargetCreateInfo& ci) override
+    {
+        (void)ci;
+        UNIMPLEMENTED();
+        return nullptr;
+    }
 
     // OpenGL-specific methods
     IWindowProvider *getWindowProvider() const { return _windowProvider; }

@@ -138,7 +138,7 @@ std::shared_ptr<IRenderTarget> RenderTargetPool::createRenderTarget(const Render
     }
 
     // Create the render target
-    auto rt = ya::createRenderTarget({
+    auto rt = _render->createRenderTarget({
         .label            = spec.label,
         .renderingMode    = ERenderingMode::DynamicRendering, // Pool always uses dynamic rendering
         .bSwapChainTarget = false,

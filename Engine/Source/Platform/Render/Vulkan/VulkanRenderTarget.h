@@ -50,7 +50,9 @@ struct VulkanRenderTarget : public IRenderTarget
     VulkanRenderTarget(VulkanRenderTarget&&)                 = delete;
     VulkanRenderTarget& operator=(VulkanRenderTarget&&)      = delete;
 
-    VulkanRenderTarget() = default;
+    explicit VulkanRenderTarget(VulkanRender* render)
+        : _vkRender(render)
+    {}
     virtual ~VulkanRenderTarget() override;
 
     // ===== IRenderTarget interface implementation =====

@@ -12,6 +12,9 @@ struct Texture;
 
 struct ForwardViewportResources
 {
+    std::shared_ptr<Texture>     colorCompat   = nullptr;
+    std::shared_ptr<Texture>     depthCompat   = nullptr;
+    std::shared_ptr<Texture>     resolveCompat = nullptr;
     Texture*                    color        = nullptr;
     Texture*                    depth        = nullptr;
     Texture*                    resolve      = nullptr;
@@ -40,6 +43,9 @@ struct ForwardViewportResources
 
     void syncRawViews()
     {
+        color       = colorCompat.get();
+        depth       = depthCompat.get();
+        resolve     = resolveCompat.get();
         colorImage   = colorOwner.get();
         depthImage   = depthOwner.get();
         resolveImage = resolveOwner.get();

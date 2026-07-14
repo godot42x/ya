@@ -57,7 +57,7 @@ struct IRenderPipelineSettingsUI
     virtual void renderAOSettingsGUI()          {}
     virtual void renderShadowSettingsGUI()      = 0;
     virtual void renderPostProcessSettingsGUI() = 0;
-    virtual void setSharedDepthFormat(EFormat::T format) {}
+    virtual bool setRenderTargetDepthFormat(RenderTargetEditorCatalog::Entry::EOwner owner, EFormat::T format) { return false; }
     virtual bool setRenderTargetColorFormat(RenderTargetEditorCatalog::Entry::EOwner owner, uint32_t attachmentIndex, EFormat::T format) { return false; }
 };
 

@@ -81,8 +81,8 @@ class VulkanCommandBuffer : public ICommandBuffer
     void beginDynamicRenderingFromManualImages(const RenderingInfo& info);
 
     // Helper: Build depth attachment info for dynamic rendering
-    VkRenderingAttachmentInfo* buildDepthAttachmentInfo(const RenderingInfo&       info,
-                                                        VkRenderingAttachmentInfo& outDepthAttach);
+    VkRenderingAttachmentInfo* buildDepthAttachmentInfo(const RenderAttachment*     attachment,
+                                                        VkRenderingAttachmentInfo&  outDepthAttach);
 
     // Helper: Execute dynamic rendering with prepared attachments
     void executeDynamicRendering(std::vector<VkRenderingAttachmentInfo>& colorAttachments,

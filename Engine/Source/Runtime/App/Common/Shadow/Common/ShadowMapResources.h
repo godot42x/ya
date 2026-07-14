@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Image.h"
 #include "Render/Core/Sampler.h"
 
@@ -27,7 +26,7 @@ constexpr uint32_t getShadowTotalLayerCount()
 
 struct ShadowMapResourceDesc
 {
-    std::string_view renderTargetLabel;
+    std::string_view imageLabel;
     std::string_view samplerLabel;
     std::string_view viewLabelPrefix;
     Extent2D         extent{};
@@ -36,7 +35,6 @@ struct ShadowMapResourceDesc
 
 struct ShadowMapResources
 {
-    stdptr<IRenderTarget>                                           renderTarget;
     stdptr<Sampler>                                                 sampler;
     stdptr<IImage>                                                  depthImage;
     Extent2D                                                        extent{};

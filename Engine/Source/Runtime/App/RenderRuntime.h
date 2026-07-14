@@ -31,10 +31,8 @@ struct EditorLayer;
 struct ForwardRenderPipeline;
 struct Texture;
 struct RenderImage;
-struct IRenderTarget;
 struct IImage;
 struct IImageView;
-struct IRenderPass;
 struct DeferredRenderPipeline;
 struct Sampler;
 struct EnvironmentLightingComponent;
@@ -136,9 +134,8 @@ struct RenderRuntime
     Rect2D _viewportRect{};
     float  _viewportFrameBufferScale = 1.0f;
 
-    std::shared_ptr<IRenderPass>   _screenRenderPass = nullptr;
-    std::shared_ptr<IRenderTarget> _screenRT         = nullptr;
     std::unique_ptr<RenderGraphExecutor> _presentationGraphExecutor;
+    std::vector<std::shared_ptr<RenderImage>> _presentationImages;
 
     RenderTargetEditorState _rtEditor{};
 
@@ -173,7 +170,6 @@ struct RenderRuntime
     [[nodiscard]] RenderImage* getPostprocessOutputImage() const;
     [[nodiscard]] RenderImage* getActiveViewportImage() const;
     [[nodiscard]] RenderImage* getPresentationImage() const;
-    [[nodiscard]] Texture* getPresentationTexture() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;
     [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog() const;
     [[nodiscard]] ERenderPipeline getRenderPipeline() const { return _renderPipeline; }
@@ -199,7 +195,6 @@ struct RenderRuntime
     [[nodiscard]] Extent2D      getViewportExtent() const;
     [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews() const;
     [[nodiscard]] RenderTargetEditorCatalog buildRenderTargetEditorCatalog() const;
-    void                          setActivePipelineSharedDepthFormat(EFormat::T format);
     [[nodiscard]] bool            isDeferredPipelineActive() const { return _renderPipeline == ERenderPipeline::Deferred; }
 
   private:
@@ -210,6 +205,7 @@ struct RenderRuntime
     void                   initResourceCaches();
     void                   initSharedRenderResources();
     void                   initPresentationResources();
+    void                   rebuildPresentationImages();
     void                   initCommandResources();
     void                   initFrameServices();
     void                   shutdownRuntimeServices();
@@ -235,6 +231,7 @@ struct RenderRuntime
     void                   shutdownActivePipeline();
     void                   applyPendingRenderPipelineSwitch();
     void                   renderRenderTargetEditor();
+    [[nodiscard]] std::shared_ptr<RenderImage> getCurrentPresentationImageShared() const;
 };
 
 } // namespace ya

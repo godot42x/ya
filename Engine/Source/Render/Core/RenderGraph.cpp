@@ -287,10 +287,11 @@ void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) cons
     YA_CORE_ASSERT(!desc.colors.empty() || desc.depth.has_value(),
                    "RGRenderContext pass {} requires at least one attachment", _pass.name);
 
-    std::vector<RenderingInfo::ImageSpec> colorAttachments;
-    std::vector<ClearValue>               colorClearValues;
-    colorAttachments.reserve(desc.colors.size());
-    colorClearValues.reserve(desc.colors.size());
+    RenderAttachmentSet attachments{
+        .renderArea = desc.renderArea,
+        .layerCount = desc.layerCount,
+    };
+    attachments.colors.reserve(desc.colors.size());
 
     for (const auto& colorDesc : desc.colors) {
         const auto* color = resolveTexture(colorDesc.color);
@@ -299,16 +300,15 @@ void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) cons
                        "RGRenderContext pass {} color target {} is missing image/view", _pass.name, colorDesc.color.index);
         retainResolvedRenderImage(_cmdBuf, *color);
 
-        colorAttachments.push_back(makeAttachmentImageSpec(
+        attachments.colors.push_back(makeRenderAttachment(
             color->getImageView(),
             colorDesc.loadOp,
             colorDesc.storeOp,
             EImageLayout::ColorAttachmentOptimal,
-            colorDesc.finalLayout));
-        colorClearValues.push_back(colorDesc.clearValue);
+            colorDesc.finalLayout,
+            colorDesc.clearValue));
     }
 
-    std::optional<RenderingInfo::ImageSpec> depthAttachment = std::nullopt;
     if (desc.depth.has_value()) {
         const auto* depth = resolveTexture(desc.depth->depth);
         YA_CORE_ASSERT(depth != nullptr, "RGRenderContext pass {} failed to resolve depth target {}", _pass.name, desc.depth->depth.index);
@@ -316,22 +316,18 @@ void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) cons
                        "RGRenderContext pass {} depth target {} is missing image/view", _pass.name, desc.depth->depth.index);
         retainResolvedRenderImage(_cmdBuf, *depth);
 
-        depthAttachment = makeAttachmentImageSpec(
+        attachments.depth = makeRenderAttachment(
             depth->getImageView(),
             desc.depth->loadOp,
             desc.depth->storeOp,
             EImageLayout::DepthStencilAttachmentOptimal,
-            desc.depth->finalLayout);
+            desc.depth->finalLayout,
+            desc.depth->clearValue);
     }
 
     _activeRenderingInfo = RenderingInfo{
-        .label = _pass.name,
-        .renderArea = desc.renderArea,
-        .layerCount = desc.layerCount,
-        .colorClearValues = std::move(colorClearValues),
-        .depthClearValue = desc.depth.has_value() ? desc.depth->clearValue : ClearValue{},
-        .colorAttachments = std::move(colorAttachments),
-        .depthAttachment = std::move(depthAttachment),
+        .label       = _pass.name,
+        .attachments = std::move(attachments),
     };
     _cmdBuf.beginRendering(*_activeRenderingInfo);
 }

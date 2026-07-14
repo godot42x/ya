@@ -1108,6 +1108,37 @@ struct IRenderPass;
 
 struct IRenderTarget; // Forward declaration
 
+struct RenderAttachment
+{
+    IImage*     image     = nullptr;
+    IImageView* imageView = nullptr;
+
+    IImage*          resolveImage     = nullptr;
+    IImageView*      resolveImageView = nullptr;
+    EResolveMode::T  resolveMode      = EResolveMode::None;
+
+    EAttachmentLoadOp::T  loadOp  = EAttachmentLoadOp::Clear;
+    EAttachmentStoreOp::T storeOp = EAttachmentStoreOp::Store;
+    ClearValue             clearValue{};
+
+    EImageLayout::T initialLayout = EImageLayout::Undefined;
+    EImageLayout::T finalLayout   = EImageLayout::Undefined;
+    uint32_t        subresourceAspectMask     = 0;
+    uint32_t        subresourceBaseMipLevel   = 0;
+    uint32_t        subresourceLevelCount     = 0;
+    uint32_t        subresourceBaseArrayLayer = 0;
+    uint32_t        subresourceLayerCount     = 0;
+    bool            bHasSubresourceRange      = false;
+};
+
+struct RenderAttachmentSet
+{
+    Rect2D                          renderArea{};
+    uint32_t                        layerCount = 1;
+    std::vector<RenderAttachment>   colors{};
+    std::optional<RenderAttachment> depth = std::nullopt;
+};
+
 /**
  * @brief Pure data structure for rendering info (supports both RenderPass and Dynamic Rendering modes)
  * Use RenderingInfoBuilder to construct instances
@@ -1117,50 +1148,11 @@ struct RenderingInfo
     std::string label = "None";
     bool        bExternalTransitionManagement = false;
 
-    Rect2D   renderArea;     // Render area (offset + extent)
-    uint32_t layerCount = 1; // For layered rendering
-
-    std::vector<ClearValue> colorClearValues;
-    ClearValue              depthClearValue = {};
-    // ClearValue                stencilClearValue;
-
-    struct ImageSpec
-    {
-        IImage*     image     = nullptr;
-        IImageView* imageView = nullptr;
-        std::shared_ptr<IImage>     retainedImage     = nullptr;
-        std::shared_ptr<IImageView> retainedImageView = nullptr;
-        std::vector<std::shared_ptr<void>> retainedResources{};
-        // EResolveMode::T resolveMode      = EResolveMode::None;
-        // IImageView     *resolveImageView = nullptr;
-
-        // ESampleCount::T sampleCount;
-        [[deprecated("Unimplemented")]]
-        uint32_t viewMask = 0;
-        // bool            bResolveTarget = false;
-
-        EAttachmentLoadOp::T  loadOp  = EAttachmentLoadOp::Clear;  // Load operation
-        EAttachmentStoreOp::T storeOp = EAttachmentStoreOp::Store; // Store operation
-
-        // Layout transitions for manual image path when bExternalTransitionManagement == false.
-        // beginRendering will transition from current layout -> initialLayout
-        // endRendering  will transition from current layout -> finalLayout
-        EImageLayout::T initialLayout = EImageLayout::Undefined; // Undefined = no transition
-        EImageLayout::T finalLayout   = EImageLayout::Undefined; // Undefined = no transition
-        uint32_t        subresourceAspectMask     = 0;
-        uint32_t        subresourceBaseMipLevel   = 0;
-        uint32_t        subresourceLevelCount     = 0;
-        uint32_t        subresourceBaseArrayLayer = 0;
-        uint32_t        subresourceLayerCount     = 0;
-        bool            bHasSubresourceRange      = false;
-    };
-
     // use render target spec
     IRenderTarget* renderTarget = nullptr;
 
-    // or manual combined image spec
-    std::vector<ImageSpec>   colorAttachments = {};
-    std::optional<ImageSpec> depthAttachment  = std::nullopt;
+    // or an explicit non-owning attachment set
+    RenderAttachmentSet attachments{};
 };
 
 

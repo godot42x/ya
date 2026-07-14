@@ -1,6 +1,5 @@
 #include "VulkanRenderTarget.h"
 #include "Render/Core/RenderResourceFactory.h"
-#include "Runtime/App/App.h"
 #include "imgui.h"
 
 // Vulkan-specific includes
@@ -46,9 +45,8 @@ void VulkanRenderTarget::getAttachmentsFromRenderPass(const IRenderPass* pass, u
 bool VulkanRenderTarget::onInit(const RenderTargetCreateInfo& ci)
 {
     YA_CORE_ASSERT(ci.renderingMode != ERenderingMode::None, "Rendering mode must be specified");
+    YA_CORE_ASSERT(_vkRender != nullptr, "VulkanRenderTarget requires a valid VulkanRender");
 
-    // Get renderer reference
-    _vkRender         = App::get()->getRender()->as<VulkanRender>();
     _frameBufferCount = ci.frameBufferCount;
     if (bSwapChainTarget) {
         auto swapchain    = _vkRender->getSwapchain();
@@ -329,7 +327,6 @@ void VulkanRenderTarget::onRenderGUI()
     ImGui::Text("Current Frame: %u", _currentFrameIndex);
     ImGui::Text("Is Swapchain Target: %s", bSwapChainTarget ? "Yes" : "No");
     ImGui::Text("Has FrameBuffer: %s", _renderPass ? "Yes (Legacy RenderPass)" : "No (Dynamic Rendering)");
-    ImGui::Text("Dirty: %s", bDirty ? "Yes" : "No");
 
     // Show image handles for debugging
     if (ImGui::TreeNode("Frame Buffers")) {

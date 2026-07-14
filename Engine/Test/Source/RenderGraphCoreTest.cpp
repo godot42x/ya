@@ -233,8 +233,8 @@ class TestCommandBuffer final : public ICommandBuffer
     void beginRendering(const RenderingInfo& info) override
     {
         ++beginRenderingCount;
-        lastBeginRenderingHadDepth = info.depthAttachment.has_value();
-        lastDepthFinalLayout = info.depthAttachment ? info.depthAttachment->finalLayout : EImageLayout::Undefined;
+        lastBeginRenderingHadDepth = info.attachments.depth.has_value();
+        lastDepthFinalLayout = info.attachments.depth ? info.attachments.depth->finalLayout : EImageLayout::Undefined;
     }
     void endRendering(const RenderingInfo& = {}) override { ++endRenderingCount; }
     void transitionImageLayout(IImage*, EImageLayout::T oldLayout, EImageLayout::T newLayout, const ImageSubresourceRange* = nullptr) override
@@ -1271,9 +1271,8 @@ TEST(RenderGraphCoreTest, AttachmentImageSpecRetainsSharedOwnersAndSubresourceRa
         .layerCount     = 2,
     });
 
-    const auto spec = makeAttachmentImageSpec(
-        image,
-        view,
+    const auto spec = makeRenderAttachment(
+        view.get(),
         EAttachmentLoadOp::Load,
         EAttachmentStoreOp::Store,
         EImageLayout::ColorAttachmentOptimal,
@@ -1281,8 +1280,6 @@ TEST(RenderGraphCoreTest, AttachmentImageSpecRetainsSharedOwnersAndSubresourceRa
 
     ASSERT_EQ(spec.image, image.get());
     ASSERT_EQ(spec.imageView, view.get());
-    EXPECT_EQ(spec.retainedImage.get(), image.get());
-    EXPECT_EQ(spec.retainedImageView.get(), view.get());
     ASSERT_TRUE(spec.bHasSubresourceRange);
     EXPECT_EQ(spec.subresourceAspectMask, EImageAspect::Color);
     EXPECT_EQ(spec.subresourceBaseMipLevel, 2u);

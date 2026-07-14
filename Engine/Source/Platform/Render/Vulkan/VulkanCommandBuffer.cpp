@@ -4,7 +4,6 @@
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/RenderPass.h"
 #include "Render/Core/RenderingInfoUtils.h"
-#include "Render/Core/Texture.h" // For ImageSpec::texture access
 #include "VulkanImageView.h"
 #include "VulkanQueue.h"
 #include "VulkanRender.h"
@@ -41,6 +40,22 @@ const char* toDebugString(EImageLayout::T layout)
     }
 }
 
+VkResolveModeFlagBits toVkResolveMode(EResolveMode::T mode)
+{
+    switch (mode) {
+        case EResolveMode::None:
+            return VK_RESOLVE_MODE_NONE;
+        case EResolveMode::Average:
+            return VK_RESOLVE_MODE_AVERAGE_BIT;
+        case EResolveMode::Min:
+            return VK_RESOLVE_MODE_MIN_BIT;
+        case EResolveMode::Max:
+            return VK_RESOLVE_MODE_MAX_BIT;
+        default:
+            return VK_RESOLVE_MODE_NONE;
+    }
+}
+
 std::string formatSubresourceRange(const ImageSubresourceRange* range)
 {
     if (!range) {
@@ -63,67 +78,220 @@ void retainRenderImageResources(ICommandBuffer& cmdBuf, const RenderImage& image
     cmdBuf.retainResources(image.getRetainedResources());
 }
 
-void retainRenderingImageSpec(ICommandBuffer& cmdBuf, const RenderingInfo::ImageSpec& spec)
+bool hasExplicitRenderAttachments(const RenderAttachmentSet& attachments)
 {
-    cmdBuf.retainResource(spec.retainedImage);
-    cmdBuf.retainResource(spec.retainedImageView);
-    cmdBuf.retainResources(spec.retainedResources);
+    return !attachments.colors.empty() || attachments.depth.has_value();
 }
 
-void validateRenderingImageSpec(const RenderingInfo::ImageSpec& spec, const std::string& renderingLabel, const std::string& attachmentLabel)
+void validateRenderAttachment(const RenderAttachment& attachment, const std::string& renderingLabel, const std::string& attachmentLabel)
 {
-    YA_CORE_ASSERT(spec.image != nullptr,
+    YA_CORE_ASSERT(attachment.image != nullptr,
                    "RenderingInfo '{}' {} attachment is missing image",
                    renderingLabel,
                    attachmentLabel);
-    YA_CORE_ASSERT(spec.imageView != nullptr,
+    YA_CORE_ASSERT(attachment.imageView != nullptr,
                    "RenderingInfo '{}' {} attachment is missing image view",
                    renderingLabel,
                    attachmentLabel);
-    YA_CORE_ASSERT(imageSpecMatchesImageViewImage(spec),
+    YA_CORE_ASSERT(renderAttachmentMatchesImageViewImage(attachment),
                    "RenderingInfo '{}' {} attachment image/view mismatch: image={}, imageViewImage={}, imageView={}",
                    renderingLabel,
                    attachmentLabel,
-                   reinterpret_cast<uintptr_t>(spec.image),
-                   reinterpret_cast<uintptr_t>(spec.imageView ? spec.imageView->getImage() : nullptr),
-                   reinterpret_cast<uintptr_t>(spec.imageView));
+                   reinterpret_cast<uintptr_t>(attachment.image),
+                   reinterpret_cast<uintptr_t>(attachment.imageView ? attachment.imageView->getImage() : nullptr),
+                   reinterpret_cast<uintptr_t>(attachment.imageView));
 
-    if (spec.retainedImage) {
-        YA_CORE_ASSERT(spec.retainedImage.get() == spec.image,
-                       "RenderingInfo '{}' {} retained image mismatch: retained={}, image={}",
+    if (attachment.resolveImage || attachment.resolveImageView) {
+        YA_CORE_ASSERT(attachment.resolveImage != nullptr && attachment.resolveImageView != nullptr,
+                       "RenderingInfo '{}' {} resolve attachment must provide both image and image view",
+                       renderingLabel,
+                       attachmentLabel);
+        YA_CORE_ASSERT(attachment.resolveImageView->getImage() == attachment.resolveImage,
+                       "RenderingInfo '{}' {} resolve attachment image/view mismatch: image={}, imageViewImage={}, imageView={}",
                        renderingLabel,
                        attachmentLabel,
-                       reinterpret_cast<uintptr_t>(spec.retainedImage.get()),
-                       reinterpret_cast<uintptr_t>(spec.image));
-    }
-    if (spec.retainedImageView) {
-        YA_CORE_ASSERT(spec.retainedImageView.get() == spec.imageView,
-                       "RenderingInfo '{}' {} retained imageView mismatch: retained={}, imageView={}",
-                       renderingLabel,
-                       attachmentLabel,
-                       reinterpret_cast<uintptr_t>(spec.retainedImageView.get()),
-                       reinterpret_cast<uintptr_t>(spec.imageView));
+                       reinterpret_cast<uintptr_t>(attachment.resolveImage),
+                       reinterpret_cast<uintptr_t>(attachment.resolveImageView ? attachment.resolveImageView->getImage() : nullptr),
+                       reinterpret_cast<uintptr_t>(attachment.resolveImageView));
     }
 
-    if (spec.bHasSubresourceRange) {
-        const auto& viewRange = spec.imageView->getSubresourceRange();
-        const ImageSubresourceRange specRange{
-            .aspectMask     = spec.subresourceAspectMask,
-            .baseMipLevel   = spec.subresourceBaseMipLevel,
-            .levelCount     = spec.subresourceLevelCount,
-            .baseArrayLayer = spec.subresourceBaseArrayLayer,
-            .layerCount     = spec.subresourceLayerCount,
+    if (attachment.bHasSubresourceRange) {
+        const auto& viewRange = attachment.imageView->getSubresourceRange();
+        const ImageSubresourceRange attachmentRange{
+            .aspectMask     = static_cast<EImageAspect::T>(attachment.subresourceAspectMask),
+            .baseMipLevel   = attachment.subresourceBaseMipLevel,
+            .levelCount     = attachment.subresourceLevelCount,
+            .baseArrayLayer = attachment.subresourceBaseArrayLayer,
+            .layerCount     = attachment.subresourceLayerCount,
         };
-        YA_CORE_ASSERT(viewRange.aspectMask == static_cast<EImageAspect::T>(spec.subresourceAspectMask) &&
-                           viewRange.baseMipLevel == spec.subresourceBaseMipLevel &&
-                           viewRange.levelCount == spec.subresourceLevelCount &&
-                           viewRange.baseArrayLayer == spec.subresourceBaseArrayLayer &&
-                           viewRange.layerCount == spec.subresourceLayerCount,
+        YA_CORE_ASSERT(viewRange.aspectMask == static_cast<EImageAspect::T>(attachment.subresourceAspectMask) &&
+                           viewRange.baseMipLevel == attachment.subresourceBaseMipLevel &&
+                           viewRange.levelCount == attachment.subresourceLevelCount &&
+                           viewRange.baseArrayLayer == attachment.subresourceBaseArrayLayer &&
+                           viewRange.layerCount == attachment.subresourceLayerCount,
                        "RenderingInfo '{}' {} attachment subresource mismatch: spec={}, view={}",
                        renderingLabel,
                        attachmentLabel,
-                       formatSubresourceRange(&specRange),
+                       formatSubresourceRange(&attachmentRange),
                        formatSubresourceRange(&viewRange));
+    }
+}
+
+void validateRenderAttachmentAgainstRenderImage(const RenderAttachment& attachment, const RenderImage& image, const std::string& renderingLabel, const std::string& attachmentLabel)
+{
+    validateRenderAttachment(attachment, renderingLabel, attachmentLabel);
+    YA_CORE_ASSERT(attachment.image == image.getImage(),
+                   "RenderingInfo '{}' {} attachment image does not match current framebuffer attachment",
+                   renderingLabel,
+                   attachmentLabel);
+    YA_CORE_ASSERT(attachment.imageView == image.getImageView(),
+                   "RenderingInfo '{}' {} attachment image view does not match current framebuffer attachment",
+                   renderingLabel,
+                   attachmentLabel);
+}
+
+RenderAttachmentSet buildRenderTargetAttachmentSet(IRenderTarget* renderTarget, const RenderingInfo& info)
+{
+    YA_CORE_ASSERT(renderTarget != nullptr, "RenderTarget attachment set requires a render target");
+
+    auto* curFrameBuffer = renderTarget->getCurFrameBuffer();
+    YA_CORE_ASSERT(curFrameBuffer != nullptr, "RenderTarget '{}' is missing current framebuffer", renderTarget->label);
+
+    RenderAttachmentSet attachments = info.attachments;
+    if (!hasExplicitRenderAttachments(attachments)) {
+        attachments.renderArea = Rect2D{
+            .pos    = {0, 0},
+            .extent = renderTarget->getExtent().toVec2(),
+        };
+        attachments.layerCount = renderTarget->_layerCount;
+
+        const auto& colorAttachmentDescs = renderTarget->getColorAttachmentDescs();
+        const auto& colorAttachments     = curFrameBuffer->getColorAttachments();
+        const auto  colorCount           = std::min(colorAttachmentDescs.size(), colorAttachments.size());
+
+        attachments.colors.clear();
+        attachments.colors.reserve(colorCount);
+        for (size_t i = 0; i < colorCount; ++i) {
+            const auto& attachmentOwner = colorAttachments[i];
+            YA_CORE_ASSERT(attachmentOwner && attachmentOwner->getImageView(),
+                           "RenderTarget '{}' color attachment {} is missing image/view",
+                           renderTarget->label,
+                           i);
+            auto attachment = makeRenderAttachment(
+                attachmentOwner->getImageView(),
+                colorAttachmentDescs[i].loadOp,
+                colorAttachmentDescs[i].storeOp,
+                colorAttachmentDescs[i].initialLayout,
+                colorAttachmentDescs[i].finalLayout,
+                ClearValue::Black());
+            if (auto* resolveAttachment = curFrameBuffer->getResolveAttachment()) {
+                attachment.resolveImage     = resolveAttachment->getImage();
+                attachment.resolveImageView = resolveAttachment->getImageView();
+                attachment.resolveMode      = EResolveMode::Average;
+            }
+            attachments.colors.push_back(std::move(attachment));
+        }
+
+        attachments.depth.reset();
+        if (const auto& depthAttachmentDesc = renderTarget->getDepthAttachmentDesc(); depthAttachmentDesc.has_value()) {
+            auto* depthAttachment = curFrameBuffer->getDepthAttachment();
+            YA_CORE_ASSERT(depthAttachment && depthAttachment->getImageView(),
+                           "RenderTarget '{}' depth attachment is missing image/view",
+                           renderTarget->label);
+            attachments.depth = makeRenderAttachment(
+                depthAttachment->getImageView(),
+                depthAttachmentDesc->loadOp,
+                depthAttachmentDesc->storeOp,
+                depthAttachmentDesc->initialLayout,
+                depthAttachmentDesc->finalLayout,
+                ClearValue(1.0f, 0));
+        }
+        return attachments;
+    }
+
+    if (attachments.renderArea.extent.x <= 0.0f || attachments.renderArea.extent.y <= 0.0f) {
+        attachments.renderArea = Rect2D{
+            .pos    = {0, 0},
+            .extent = renderTarget->getExtent().toVec2(),
+        };
+    }
+    if (attachments.layerCount == 0) {
+        attachments.layerCount = renderTarget->_layerCount;
+    }
+
+    const auto& colorAttachments = curFrameBuffer->getColorAttachments();
+    YA_CORE_ASSERT(attachments.colors.size() <= colorAttachments.size(),
+                   "RenderingInfo '{}' specifies {} color attachments but framebuffer only exposes {}",
+                   info.label,
+                   attachments.colors.size(),
+                   colorAttachments.size());
+    for (size_t i = 0; i < attachments.colors.size(); ++i) {
+        YA_CORE_ASSERT(colorAttachments[i] != nullptr,
+                       "RenderTarget '{}' color attachment {} is missing current framebuffer owner",
+                       renderTarget->label,
+                       i);
+        validateRenderAttachmentAgainstRenderImage(
+            attachments.colors[i],
+            *colorAttachments[i],
+            info.label,
+            std::format("color[{}]", i));
+    }
+
+    if (attachments.depth) {
+        auto* depthAttachment = curFrameBuffer->getDepthAttachment();
+        YA_CORE_ASSERT(depthAttachment != nullptr,
+                       "RenderTarget '{}' depth attachment is missing current framebuffer owner",
+                       renderTarget->label);
+        validateRenderAttachmentAgainstRenderImage(*attachments.depth, *depthAttachment, info.label, "depth");
+    }
+
+    return attachments;
+}
+
+void collectAttachmentTransitions(
+    const RenderAttachmentSet&                    attachments,
+    bool                                          bInitial,
+    std::vector<VulkanImage::LayoutTransition>&   outTransitions)
+{
+    for (const auto& attachment : attachments.colors) {
+        auto targetLayout = bInitial ? attachment.initialLayout : attachment.finalLayout;
+        if (targetLayout == EImageLayout::Undefined && bInitial) {
+            targetLayout = EImageLayout::ColorAttachmentOptimal;
+        }
+        if (targetLayout != EImageLayout::Undefined && attachment.image) {
+            if (auto* vkImage = dynamic_cast<VulkanImage*>(attachment.image)) {
+                VulkanImage::LayoutTransition transition{vkImage, targetLayout};
+                if (tryResolveRenderAttachmentSubresourceRange(attachment, transition.range)) {
+                    transition.useRange = true;
+                }
+                outTransitions.push_back(transition);
+            }
+        }
+        if (targetLayout != EImageLayout::Undefined && attachment.resolveImage) {
+            if (auto* vkImage = dynamic_cast<VulkanImage*>(attachment.resolveImage)) {
+                outTransitions.push_back(VulkanImage::LayoutTransition{vkImage, targetLayout});
+            }
+        }
+    }
+
+    if (!attachments.depth) {
+        return;
+    }
+
+    const auto& attachment = *attachments.depth;
+    auto        targetLayout = bInitial ? attachment.initialLayout : attachment.finalLayout;
+    if (targetLayout == EImageLayout::Undefined && bInitial) {
+        targetLayout = EImageLayout::DepthStencilAttachmentOptimal;
+    }
+    if (targetLayout == EImageLayout::Undefined || !attachment.image) {
+        return;
+    }
+    if (auto* vkImage = dynamic_cast<VulkanImage*>(attachment.image)) {
+        VulkanImage::LayoutTransition transition{vkImage, targetLayout};
+        if (tryResolveRenderAttachmentSubresourceRange(attachment, transition.range)) {
+            transition.useRange = true;
+        }
+        outTransitions.push_back(transition);
     }
 }
 
@@ -531,8 +699,9 @@ void VulkanCommandBuffer::executeEndRendering(const RenderingInfo& info)
         }
 
         if (info.renderTarget) {
+            const auto effectiveAttachments = buildRenderTargetAttachmentSet(info.renderTarget, info);
             std::vector<VulkanImage::LayoutTransition> transitions;
-            collectRenderTargetTransitions(info.renderTarget, false, transitions);
+            collectAttachmentTransitions(effectiveAttachments, false, transitions);
             if (!transitions.empty()) {
                 for (const auto& transition : transitions) {
                     executeTrackedTransition(transition.image, transition.newLayout, transition.useRange ? &transition.range : nullptr);
@@ -543,23 +712,29 @@ void VulkanCommandBuffer::executeEndRendering(const RenderingInfo& info)
         else if (!info.bExternalTransitionManagement) {
             // Final layout transitions for manual image path
             std::vector<VulkanImage::LayoutTransition> transitions;
-            for (auto& spec : info.colorAttachments) {
-                if (spec.finalLayout != EImageLayout::Undefined && spec.image) {
-                    if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
-                        VulkanImage::LayoutTransition transition{vkImg, spec.finalLayout};
-                        if (tryResolveImageSpecSubresourceRange(spec, transition.range)) {
+            for (auto& attachment : info.attachments.colors) {
+                if (attachment.finalLayout != EImageLayout::Undefined && attachment.image) {
+                    if (auto* vkImg = dynamic_cast<VulkanImage*>(attachment.image)) {
+                        VulkanImage::LayoutTransition transition{vkImg, attachment.finalLayout};
+                        if (tryResolveRenderAttachmentSubresourceRange(attachment, transition.range)) {
                             transition.useRange = true;
                         }
                         transitions.push_back(transition);
                     }
                 }
+
+                if (attachment.finalLayout != EImageLayout::Undefined && attachment.resolveImage) {
+                    if (auto* vkImg = dynamic_cast<VulkanImage*>(attachment.resolveImage)) {
+                        transitions.push_back(VulkanImage::LayoutTransition{vkImg, attachment.finalLayout});
+                    }
+                }
             }
-            if (info.depthAttachment) {
-                auto& spec = *info.depthAttachment;
-                if (spec.finalLayout != EImageLayout::Undefined && spec.image) {
-                    if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
-                        VulkanImage::LayoutTransition transition{vkImg, spec.finalLayout};
-                        if (tryResolveImageSpecSubresourceRange(spec, transition.range)) {
+            if (info.attachments.depth) {
+                auto& attachment = *info.attachments.depth;
+                if (attachment.finalLayout != EImageLayout::Undefined && attachment.image) {
+                    if (auto* vkImg = dynamic_cast<VulkanImage*>(attachment.image)) {
+                        VulkanImage::LayoutTransition transition{vkImg, attachment.finalLayout};
+                        if (tryResolveRenderAttachmentSubresourceRange(attachment, transition.range)) {
                             transition.useRange = true;
                         }
                         transitions.push_back(transition);
@@ -989,22 +1164,30 @@ void VulkanCommandBuffer::beginRendering(const RenderingInfo& info)
 
         auto renderingMode = renderTarget->getRenderingMode();
 
-        renderTarget->flushDirty();
         renderTarget->beginFrame(this);
+        auto effectiveAttachments = buildRenderTargetAttachmentSet(renderTarget, info);
 
         if (renderingMode == ERenderingMode::RenderPass) {
-            beginRenderingWithRenderPass(renderTarget, info);
+            beginRenderingWithRenderPass(renderTarget, RenderingInfo{
+                .label       = info.label,
+                .renderTarget = renderTarget,
+                .attachments = std::move(effectiveAttachments),
+            });
             return;
         }
         else if (renderingMode == ERenderingMode::DynamicRendering) {
             std::vector<VulkanImage::LayoutTransition> transitions;
-            collectRenderTargetTransitions(renderTarget, true, transitions);
+            collectAttachmentTransitions(effectiveAttachments, true, transitions);
             if (!transitions.empty()) {
                 for (const auto& transition : transitions) {
                     executeTrackedTransition(transition.image, transition.newLayout, transition.useRange ? &transition.range : nullptr);
                 }
             }
-            beginDynamicRenderingFromRenderTarget(renderTarget, info);
+            beginDynamicRenderingFromRenderTarget(renderTarget, RenderingInfo{
+                .label       = info.label,
+                .renderTarget = renderTarget,
+                .attachments = std::move(effectiveAttachments),
+            });
             return;
         }
         else {
@@ -1038,34 +1221,34 @@ void VulkanCommandBuffer::beginRenderingWithRenderPass(IRenderTarget* renderTarg
         .framebuffer = framebuffer->getHandleAs<VkFramebuffer>(),
         .renderArea  = {
              .offset = {
-                 .x = 0,
-                 .y = 0,
+                 .x = static_cast<int32_t>(info.attachments.renderArea.pos.x),
+                 .y = static_cast<int32_t>(info.attachments.renderArea.pos.y),
             },
              .extent = {
-                 .width  = renderTarget->getExtent().width,
-                 .height = renderTarget->getExtent().height,
+                 .width  = static_cast<uint32_t>(info.attachments.renderArea.extent.x),
+                 .height = static_cast<uint32_t>(info.attachments.renderArea.extent.y),
             },
         },
     };
 
     // Setup clear values
     std::vector<VkClearValue> vkClearValues;
-    vkClearValues.reserve(info.colorClearValues.size() + 1);
-    for (const auto& clearValue : info.colorClearValues) {
+    vkClearValues.reserve(info.attachments.colors.size() + (info.attachments.depth ? 1u : 0u));
+    for (const auto& attachment : info.attachments.colors) {
         VkClearValue vkClear;
         vkClear.color = {
             {
-                clearValue.color.r,
-                clearValue.color.g,
-                clearValue.color.b,
-                clearValue.color.a,
+                attachment.clearValue.color.r,
+                attachment.clearValue.color.g,
+                attachment.clearValue.color.b,
+                attachment.clearValue.color.a,
             },
         };
         vkClearValues.push_back(vkClear);
     }
     auto passColorAttachmentSize = renderPass->getSubPass(subpass).colorAttachments.size();
-    if (info.colorAttachments.size() < passColorAttachmentSize) {
-        for (uint32_t i = info.colorClearValues.size(); i < passColorAttachmentSize; ++i) {
+    if (info.attachments.colors.size() < passColorAttachmentSize) {
+        for (uint32_t i = info.attachments.colors.size(); i < passColorAttachmentSize; ++i) {
             VkClearValue vkClear;
             vkClear.color = {
                 .float32 = {0.0f, 0.0f, 0.0f, 0.0f},
@@ -1076,10 +1259,12 @@ void VulkanCommandBuffer::beginRenderingWithRenderPass(IRenderTarget* renderTarg
 
     if (renderPass->hasDepthAttachment()) {
         VkClearValue vkClear;
-        vkClear.depthStencil = {
-            .depth   = info.depthClearValue.depthStencil.depth,
-            .stencil = info.depthClearValue.depthStencil.stencil,
-        };
+        if (info.attachments.depth && info.attachments.depth->clearValue.isDepthStencil) {
+            vkClear.depthStencil = {
+                .depth   = info.attachments.depth->clearValue.depthStencil.depth,
+                .stencil = info.attachments.depth->clearValue.depthStencil.stencil,
+            };
+        }
         vkClearValues.push_back(vkClear);
     }
 
@@ -1093,28 +1278,28 @@ void VulkanCommandBuffer::beginRenderingWithRenderPass(IRenderTarget* renderTarg
     _currentRenderingMode = ERenderingMode::RenderPass;
 }
 
-VkRenderingAttachmentInfo* VulkanCommandBuffer::buildDepthAttachmentInfo(const RenderingInfo&       info,
+VkRenderingAttachmentInfo* VulkanCommandBuffer::buildDepthAttachmentInfo(const RenderAttachment*    attachment,
                                                                          VkRenderingAttachmentInfo& outDepthAttach)
 {
-    if (!info.depthAttachment.has_value()) {
+    if (attachment == nullptr) {
         return nullptr;
     }
 
     outDepthAttach = {
         .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .pNext       = nullptr,
-        .imageView   = info.depthAttachment->imageView->getHandle().as<VkImageView>(),
+        .imageView   = attachment->imageView->getHandle().as<VkImageView>(),
         .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
         .resolveMode = VK_RESOLVE_MODE_NONE,
-        .loadOp      = EAttachmentLoadOp::toVk(info.depthAttachment->loadOp),
-        .storeOp     = EAttachmentStoreOp::toVk(info.depthAttachment->storeOp),
+        .loadOp      = EAttachmentLoadOp::toVk(attachment->loadOp),
+        .storeOp     = EAttachmentStoreOp::toVk(attachment->storeOp),
         .clearValue  = {},
     };
 
-    if (info.depthClearValue.isDepthStencil) {
+    if (attachment->clearValue.isDepthStencil) {
         outDepthAttach.clearValue.depthStencil = {
-            .depth   = info.depthClearValue.depthStencil.depth,
-            .stencil = info.depthClearValue.depthStencil.stencil,
+            .depth   = attachment->clearValue.depthStencil.depth,
+            .stencil = attachment->clearValue.depthStencil.stencil,
         };
     }
 
@@ -1167,40 +1352,30 @@ void VulkanCommandBuffer::beginDynamicRenderingFromRenderTarget(IRenderTarget* r
         retainRenderImageResources(*this, *resolveAttachment);
     }
 
-    // Build color attachments from framebuffer
-    const auto&                            colorAttachments = curFrameBuffer->getColorAttachments();
+    // Build color attachments from the effective attachment set.
     std::vector<VkRenderingAttachmentInfo> vkColorAttachments;
-    vkColorAttachments.reserve(colorAttachments.size());
+    vkColorAttachments.reserve(info.attachments.colors.size());
 
-    auto colorAttachmentDescs = renderTarget->getColorAttachmentDescs();
-
-    auto* resolveAttachment = curFrameBuffer->getResolveAttachment();
-
-
-    for (uint32_t i = 0; i < colorAttachments.size(); ++i) {
-        auto* colorAttachment = colorAttachments[i].get();
-        YA_CORE_ASSERT(colorAttachment && colorAttachment->getImageView(),
-                       "Color attachment {} missing image view in framebuffer {}", i, curFrameBuffer->_label);
+    for (uint32_t i = 0; i < info.attachments.colors.size(); ++i) {
+        const auto& attachment = info.attachments.colors[i];
         VkRenderingAttachmentInfo vkAttach{
             .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .pNext       = nullptr,
-            .imageView   = colorAttachment->getImageView()->getHandle().as<VkImageView>(),
+            .imageView   = attachment.imageView->getHandle().as<VkImageView>(),
             .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            // resolv ?
-            .resolveMode        = resolveAttachment ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE,
-            .resolveImageView   = resolveAttachment
-                                    ? resolveAttachment->getImageView()->getHandle().as<VkImageView>()
+            .resolveMode        = toVkResolveMode(attachment.resolveMode),
+            .resolveImageView   = attachment.resolveImageView
+                                    ? attachment.resolveImageView->getHandle().as<VkImageView>()
                                     : VK_NULL_HANDLE,
-            .resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-
-            .loadOp     = EAttachmentLoadOp::toVk(colorAttachmentDescs[i].loadOp),
-            .storeOp    = EAttachmentStoreOp::toVk(colorAttachmentDescs[i].storeOp),
+            .resolveImageLayout = attachment.resolveImageView ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
+            .loadOp     = EAttachmentLoadOp::toVk(attachment.loadOp),
+            .storeOp    = EAttachmentStoreOp::toVk(attachment.storeOp),
             .clearValue = {
                 .color = {{
-                    info.colorClearValues[i].color.r,
-                    info.colorClearValues[i].color.g,
-                    info.colorClearValues[i].color.b,
-                    info.colorClearValues[i].color.a,
+                    attachment.clearValue.color.r,
+                    attachment.clearValue.color.g,
+                    attachment.clearValue.color.b,
+                    attachment.clearValue.color.a,
                 }},
             },
         };
@@ -1209,33 +1384,9 @@ void VulkanCommandBuffer::beginDynamicRenderingFromRenderTarget(IRenderTarget* r
 
     // Build depth attachment
     VkRenderingAttachmentInfo  vkDepthAttach{};
-    auto                       depthAttachmentDesc = renderTarget->getDepthAttachmentDesc();
-    VkRenderingAttachmentInfo* pVkDepthAttach      = nullptr;
-    if (depthAttachmentDesc) {
-        vkDepthAttach = VkRenderingAttachmentInfo{
-            .sType     = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-            .pNext     = nullptr,
-            .imageView = curFrameBuffer->getDepthAttachment()->getImageView()->getHandle().as<VkImageView>(),
-            // TODO: depth or depth-stencil?
-            .imageLayout        = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            .resolveMode        = VK_RESOLVE_MODE_NONE,
-            .resolveImageView   = VK_NULL_HANDLE,
-            .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            .loadOp             = EAttachmentLoadOp::toVk(depthAttachmentDesc->loadOp),
-            .storeOp            = EAttachmentStoreOp::toVk(depthAttachmentDesc->storeOp),
-            .clearValue         = {
-                info.depthClearValue.isDepthStencil
-                            ? VkClearValue{
-                                  .depthStencil = {
-                                      .depth   = info.depthClearValue.depthStencil.depth,
-                                      .stencil = info.depthClearValue.depthStencil.stencil,
-                          },
-                      }
-                            : VkClearValue{},
-            },
-        };
-        pVkDepthAttach = &vkDepthAttach;
-    }
+    VkRenderingAttachmentInfo* pVkDepthAttach = buildDepthAttachmentInfo(
+        info.attachments.depth ? &*info.attachments.depth : nullptr,
+        vkDepthAttach);
 
 
 
@@ -1246,10 +1397,10 @@ void VulkanCommandBuffer::beginDynamicRenderingFromRenderTarget(IRenderTarget* r
 
     // Execute dynamic rendering
     VkRect2D renderArea = {
-        .offset = {0, 0},
-        .extent = {renderTarget->getExtent().width, renderTarget->getExtent().height},
+        .offset = {static_cast<int32_t>(info.attachments.renderArea.pos.x), static_cast<int32_t>(info.attachments.renderArea.pos.y)},
+        .extent = {static_cast<uint32_t>(info.attachments.renderArea.extent.x), static_cast<uint32_t>(info.attachments.renderArea.extent.y)},
     };
-    executeDynamicRendering(vkColorAttachments, pVkDepthAttach, pVkStencilAttach, renderArea, renderTarget->_layerCount);
+    executeDynamicRendering(vkColorAttachments, pVkDepthAttach, pVkStencilAttach, renderArea, info.attachments.layerCount);
 }
 
 void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingInfo& info)
@@ -1264,38 +1415,43 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
     // Initial layout transitions for manual images (mirrors RT branch).
     // RenderGraph-managed passes pre-plan transitions externally and must not
     // compete with the command buffer's local tracker here.
-    for (size_t i = 0; i < info.colorAttachments.size(); ++i) {
-        validateRenderingImageSpec(info.colorAttachments[i], info.label, std::format("color[{}]", i));
-        retainRenderingImageSpec(*this, info.colorAttachments[i]);
+    for (size_t i = 0; i < info.attachments.colors.size(); ++i) {
+        const auto& attachment = info.attachments.colors[i];
+        validateRenderAttachment(attachment, info.label, std::format("color[{}]", i));
     }
-    if (info.depthAttachment.has_value()) {
-        validateRenderingImageSpec(*info.depthAttachment, info.label, "depth");
-        retainRenderingImageSpec(*this, *info.depthAttachment);
+    if (info.attachments.depth.has_value()) {
+        validateRenderAttachment(*info.attachments.depth, info.label, "depth");
     }
 
     if (!info.bExternalTransitionManagement) {
         std::vector<VulkanImage::LayoutTransition> transitions;
-        for (auto& spec : info.colorAttachments) {
-            if (spec.initialLayout != EImageLayout::Undefined && spec.image) {
-                if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
-                    VulkanImage::LayoutTransition transition{vkImg, spec.initialLayout};
-                    if (tryResolveImageSpecSubresourceRange(spec, transition.range)) {
+        for (auto& attachment : info.attachments.colors) {
+            if (attachment.initialLayout != EImageLayout::Undefined && attachment.image) {
+                if (auto* vkImg = dynamic_cast<VulkanImage*>(attachment.image)) {
+                    VulkanImage::LayoutTransition transition{vkImg, attachment.initialLayout};
+                    if (tryResolveRenderAttachmentSubresourceRange(attachment, transition.range)) {
                         transition.useRange = true;
                     }
                     transitions.push_back(transition);
                 }
             }
+
+            if (attachment.initialLayout != EImageLayout::Undefined && attachment.resolveImage) {
+                if (auto* vkImg = dynamic_cast<VulkanImage*>(attachment.resolveImage)) {
+                    transitions.push_back(VulkanImage::LayoutTransition{vkImg, attachment.initialLayout});
+                }
+            }
         }
-        if (info.depthAttachment) {
-            auto& spec         = *info.depthAttachment;
-            auto  targetLayout = spec.initialLayout;
+        if (info.attachments.depth) {
+            auto& attachment   = *info.attachments.depth;
+            auto  targetLayout = attachment.initialLayout;
             if (targetLayout == EImageLayout::Undefined) {
                 targetLayout = EImageLayout::DepthStencilAttachmentOptimal;
             }
-            if (spec.image) {
-                if (auto* vkImg = dynamic_cast<VulkanImage*>(spec.image)) {
+            if (attachment.image) {
+                if (auto* vkImg = dynamic_cast<VulkanImage*>(attachment.image)) {
                     VulkanImage::LayoutTransition transition{vkImg, targetLayout};
-                    if (tryResolveImageSpecSubresourceRange(spec, transition.range)) {
+                    if (tryResolveRenderAttachmentSubresourceRange(attachment, transition.range)) {
                         transition.useRange = true;
                     }
                     transitions.push_back(transition);
@@ -1311,23 +1467,30 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
 
     // Build color attachments from manual images
     std::vector<VkRenderingAttachmentInfo> vkColorAttachments;
-    vkColorAttachments.reserve(info.colorAttachments.size());
+    vkColorAttachments.reserve(info.attachments.colors.size());
 
-    for (size_t i = 0; i < info.colorAttachments.size(); ++i) {
+    for (size_t i = 0; i < info.attachments.colors.size(); ++i) {
+        const auto& attachment = info.attachments.colors[i];
         VkRenderingAttachmentInfo vkAttach{
             .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .pNext       = nullptr,
-            .imageView   = info.colorAttachments[i].imageView->getHandle().as<VkImageView>(),
+            .imageView   = attachment.imageView->getHandle().as<VkImageView>(),
             .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .resolveMode = VK_RESOLVE_MODE_NONE,
-            .loadOp      = EAttachmentLoadOp::toVk(info.colorAttachments[i].loadOp),
-            .storeOp     = EAttachmentStoreOp::toVk(info.colorAttachments[i].storeOp),
+            .resolveMode = toVkResolveMode(attachment.resolveMode),
+            .resolveImageView = attachment.resolveImageView
+                ? attachment.resolveImageView->getHandle().as<VkImageView>()
+                : VK_NULL_HANDLE,
+            .resolveImageLayout = attachment.resolveImageView
+                ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                : VK_IMAGE_LAYOUT_UNDEFINED,
+            .loadOp      = EAttachmentLoadOp::toVk(attachment.loadOp),
+            .storeOp     = EAttachmentStoreOp::toVk(attachment.storeOp),
             .clearValue  = {
                  .color = {{
-                    info.colorClearValues[i].color.r,
-                    info.colorClearValues[i].color.g,
-                    info.colorClearValues[i].color.b,
-                    info.colorClearValues[i].color.a,
+                    attachment.clearValue.color.r,
+                    attachment.clearValue.color.g,
+                    attachment.clearValue.color.b,
+                    attachment.clearValue.color.a,
                 }},
             },
         };
@@ -1336,17 +1499,19 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
 
     // Build depth attachment using shared helper
     VkRenderingAttachmentInfo  vkDepthAttach{};
-    VkRenderingAttachmentInfo* pVkDepthAttach = buildDepthAttachmentInfo(info, vkDepthAttach);
+    VkRenderingAttachmentInfo* pVkDepthAttach = buildDepthAttachmentInfo(
+        info.attachments.depth ? &*info.attachments.depth : nullptr,
+        vkDepthAttach);
 
     // Stencil is currently not modelled explicitly for manual dynamic rendering either.
     VkRenderingAttachmentInfo* pVkStencilAttach = nullptr;
 
     // Execute dynamic rendering
     VkRect2D renderArea = {
-        .offset = {static_cast<int32_t>(info.renderArea.pos.x), static_cast<int32_t>(info.renderArea.pos.y)},
-        .extent = {static_cast<uint32_t>(info.renderArea.extent.x), static_cast<uint32_t>(info.renderArea.extent.y)},
+        .offset = {static_cast<int32_t>(info.attachments.renderArea.pos.x), static_cast<int32_t>(info.attachments.renderArea.pos.y)},
+        .extent = {static_cast<uint32_t>(info.attachments.renderArea.extent.x), static_cast<uint32_t>(info.attachments.renderArea.extent.y)},
     };
-    executeDynamicRendering(vkColorAttachments, pVkDepthAttach, pVkStencilAttach, renderArea, info.layerCount);
+    executeDynamicRendering(vkColorAttachments, pVkDepthAttach, pVkStencilAttach, renderArea, info.attachments.layerCount);
 }
 
 void VulkanCommandBuffer::endRendering(const RenderingInfo& info)

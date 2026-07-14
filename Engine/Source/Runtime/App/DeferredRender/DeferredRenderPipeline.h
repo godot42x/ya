@@ -188,7 +188,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     const DeferredViewportResources& getCurrentViewportResources() const { return _currentViewportResources; }
     DeferredPipelineDebugViews buildDebugViews() const;
     void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const override;
-    void setSharedDepthFormat(EFormat::T format) override;
+    bool setRenderTargetDepthFormat(RenderTargetEditorCatalog::Entry::EOwner owner, EFormat::T format) override;
     bool setRenderTargetColorFormat(RenderTargetEditorCatalog::Entry::EOwner owner, uint32_t attachmentIndex, EFormat::T format) override;
 
     std::shared_ptr<IImage> getShadowDepthImage() const override { return _shadowResources.depthImage; }
@@ -245,6 +245,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               applyPendingResourceRefreshes();
     void               requestViewportResize(Extent2D extent);
     void               requestShadowResourceRefresh();
+    void               setDeferredSharedDepthFormat(EFormat::T format);
     void               initShadowResources();
     void               destroyShadowResources();
     void               syncShadowSettings();

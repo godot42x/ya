@@ -10,6 +10,7 @@ namespace ya
 {
 
 struct IRenderTarget;
+struct IImageView;
 struct RenderImage;
 
 struct RenderTargetEditorCatalog
@@ -31,6 +32,7 @@ struct RenderTargetEditorCatalog
         std::optional<EFormat::T>        depthFormat{};
         std::vector<std::shared_ptr<RenderImage>> colorAttachments{};
         std::shared_ptr<RenderImage>              depthAttachment = nullptr;
+        std::shared_ptr<IImageView>               depthAttachmentView = nullptr;
         Extent2D                                  extent{};
         uint32_t                                  frameBufferCount = 0;
         bool                                      bSwapChainTarget = false;

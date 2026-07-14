@@ -146,7 +146,7 @@ IImageView* getAttachmentImageView(IRenderTarget* rt, int attachmentIndex)
 
 bool isEntryInitialized(const RenderTargetEditorCatalog::Entry& entry)
 {
-    return entry.rt || !entry.colorAttachments.empty() || entry.depthAttachment;
+    return entry.rt || !entry.colorAttachments.empty() || entry.depthAttachment || entry.depthAttachmentView;
 }
 
 bool isSwapChainEntry(const RenderTargetEditorCatalog::Entry& entry)
@@ -172,6 +172,9 @@ IImageView* getAttachmentImageView(const RenderTargetEditorCatalog::Entry& entry
     }
     if (attachmentIndex >= static_cast<int>(entry.colorAttachments.size()) && entry.depthAttachment) {
         return entry.depthAttachment->getImageView();
+    }
+    if (attachmentIndex >= static_cast<int>(entry.colorAttachments.size()) && entry.depthAttachmentView) {
+        return entry.depthAttachmentView.get();
     }
     return getAttachmentImageView(entry.rt, attachmentIndex);
 }
@@ -244,8 +247,14 @@ void RenderRuntime::renderGUI(float dt)
         renderRenderTargetEditor();
 
         if (ImGui::TreeNode("Final Render Target")) {
-            if (_screenRT) {
-                _screenRT->onRenderGUI();
+            if (auto presentationImage = getCurrentPresentationImageShared()) {
+                const auto extent = presentationImage->getExtent();
+                ImGui::Text("Extent: %u x %u", extent.width, extent.height);
+                ImGui::Text("Format: %d", static_cast<int>(presentationImage->getFormat()));
+                ImGui::Text("Swapchain images: %u", _render && _render->getSwapchain() ? _render->getSwapchain()->getImageCount() : 0);
+                ImGui::Text("Current image index: %u", _render && _render->getSwapchain() ? _render->getSwapchain()->getCurImageIndex() : 0);
+                ImGui::Text("Image: %p", presentationImage->getImage() ? presentationImage->getImage()->getHandle().as<void*>() : nullptr);
+                ImGui::Text("View: %p", presentationImage->getImageView() ? presentationImage->getImageView()->getHandle().as<void*>() : nullptr);
             }
             ImGui::TreePop();
         }
@@ -370,10 +379,17 @@ void RenderRuntime::renderRenderTargetEditor()
         ImGuiHelper::Image(imageView, sampler, "RT Preview", ImVec2(256.0f, 256.0f));
     }
 
+    auto*      pipeline      = getActivePipelineSettingsUI();
     const bool bEditingDepth = _rtEditor.selectedAttachmentIndex >= colorCount && bHasDepth;
     if (!selectedEntry.bEditable) {
         ImGui::SeparatorText("Attachment Format");
         ImGui::TextWrapped("Presentation target format is owned by the swapchain and is currently read-only here.");
+        ImGui::TreePop();
+        return;
+    }
+    if (!pipeline) {
+        ImGui::SeparatorText("Attachment Format");
+        ImGui::TextWrapped("Attachment format editing is currently owned by the active render pipeline and is unavailable because no pipeline settings UI is active.");
         ImGui::TreePop();
         return;
     }
@@ -394,17 +410,7 @@ void RenderRuntime::renderRenderTargetEditor()
                 const bool bSelected   = option.format == currentFormat;
                 const auto optionLabel = std::string(option.label);
                 if (ImGui::Selectable(optionLabel.c_str(), bSelected)) {
-                    switch (selectedEntry.owner) {
-                    case RenderTargetEditorCatalog::Entry::EOwner::DeferredGBuffer:
-                    case RenderTargetEditorCatalog::Entry::EOwner::DeferredViewport:
-                        setActivePipelineSharedDepthFormat(option.format);
-                        break;
-                    default:
-                        if (selectedEntry.rt) {
-                            selectedEntry.rt->setDepthAttachmentFormat(option.format);
-                        }
-                        break;
-                    }
+                    pipeline->setRenderTargetDepthFormat(selectedEntry.owner, option.format);
                 }
                 if (bSelected) {
                     ImGui::SetItemDefaultFocus();
@@ -420,18 +426,10 @@ void RenderRuntime::renderRenderTargetEditor()
                 const bool bSelected   = option.format == currentFormat;
                 const auto optionLabel = std::string(option.label);
                 if (ImGui::Selectable(optionLabel.c_str(), bSelected)) {
-                    const bool bHandledByPipeline = [&]() {
-                        if (auto* pipeline = getActivePipelineSettingsUI()) {
-                            return pipeline->setRenderTargetColorFormat(
-                                selectedEntry.owner,
-                                static_cast<uint32_t>(_rtEditor.selectedAttachmentIndex),
-                                option.format);
-                        }
-                        return false;
-                    }();
-                    if (!bHandledByPipeline && selectedEntry.rt) {
-                        selectedEntry.rt->setColorAttachmentFormat(static_cast<uint32_t>(_rtEditor.selectedAttachmentIndex), option.format);
-                    }
+                    pipeline->setRenderTargetColorFormat(
+                        selectedEntry.owner,
+                        static_cast<uint32_t>(_rtEditor.selectedAttachmentIndex),
+                        option.format);
                 }
                 if (bSelected) {
                     ImGui::SetItemDefaultFocus();

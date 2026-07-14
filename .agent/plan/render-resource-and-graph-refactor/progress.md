@@ -12,18 +12,67 @@
 
 ## 当前阻塞
 
-- `IRenderTarget` 在 Forward/shadow/presentation 路径仍兼具 attachment owner 和 compatibility facade 的双重职责
+- `IRenderTarget` 的真实 attachment owner 职责现在主要收缩在 `RenderTargetPool` 与 Vulkan framebuffer compatibility 路径，Phase 8 仍未真正删除 `VulkanRenderTarget::recreateImagesAndFrameBuffer()` 这条 image/view/framebuffer 创建链
 - offscreen/environment preprocess 虽已 graph-backed，但仍需继续验证 imported subresource range、executor 生命周期和 final state 契约
 - graph registry replacement 已可用，但还需要继续压实与 runtime frame boundary、deferred deletion 和 startup/shutdown 的一致性
 
 ## 下一步
 
 1. 以启动链和 `HelloMaterial` smoke 为主，继续清掉 runtime 中暴露的 graph/resource-state/lifetime 问题
-2. 收敛 `IRenderTarget` owner/rebuild 职责，优先删除 Deferred/shadow 已不再需要的 compatibility 路径
+2. 沿着 `RenderTargetPool` / Vulkan framebuffer compatibility 路径继续收敛 `IRenderTarget` owner/rebuild 职责，明确它和 graph registry 的停止线
 3. 再推进 Forward graph 和外围 GPU 工作流迁移
 
 ## 最新验证
 
+- 2026-07-16：Forward viewport 已不再通过 `viewportRT` 这个 legacy `IRenderTarget` bundle 创建和持有 color/depth attachment。`ForwardRenderPipeline` 现在直接按 `_viewportRTSpec` 通过 resource factory 创建显式 `RenderImage` owner，并只为少量兼容消费者保留 `Texture::wrap()` 得到的 depth/color compat 视图；RT Editor 的 Forward Viewport 条目也改成直接消费 attachment snapshot，而不是再把一个 concrete RT 暴露给 GUI 兜底读取。
+- 直接收益：Phase 8 又少掉了一个真实的 `IRenderTarget` physical owner 用例，而且这次不是 presentation 外圈，而是 Forward 主 viewport 本身。Forward viewport 的 render pass 录制、当前帧 owner 保活、postprocess 输入和 editor 预览现在都统一回到了显式 `RenderImage` snapshot 语义，`IRenderTarget` 在 runtime 主路径里的 owner 角色进一步缩到 `RenderTargetPool` 和 Vulkan framebuffer compatibility 支线。
+- 当前停止线：这一步仍然没有触及 `VulkanRenderTarget::recreateImagesAndFrameBuffer()` 负责 image/view/framebuffer physical owner 的 backend 兼容实现，也还没有定义 `RenderTargetPool` 与 graph registry 的最终停止线；因此 `todo.md` 里“删除 `IRenderTarget` 的 image/view 创建职责”暂时还不能勾掉，只是 Forward viewport 已经先脱离这条链。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*:OffscreenAsyncTest.*'` 62/62 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=400 --log-level=info --log-detail-level=error"` 退出码 0，日志未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|RenderGraph compile failed|VUID`
+- 2026-07-16：presentation 路径已不再通过 `_screenRT` 这个 legacy `IRenderTarget` owner 包装 swapchain image。`RenderRuntime` 现在直接为 swapchain 每个 backbuffer 建立显式 `RenderImage` owner，presentation graph import、editor RT catalog、GUI inspection 和 presentation screenshot 都统一改为消费当前帧 `RenderImage`；`_screenRT` / `_screenRenderPass` 与对应的 `getPresentationTexture()` compat 出口已删除。
+- 直接收益：Phase 8 少掉了一个真实的 `IRenderTarget` physical owner 用例，而不是只收 facade 表层。presentation 这条链现在和 deferred viewport/export 一样回到了显式 image owner + current-frame snapshot 语义，后续继续删除 `IRenderTarget` 的 image/view 创建职责时，范围可以更专注地落在 Forward viewport 和 RenderTargetPool，而不必再顾虑 swapchain/presentation 这条最外圈路径。
+- 当前停止线：这一步还没有触及 `VulkanRenderTarget::recreateImagesAndFrameBuffer()` 负责创建 attachment image/view/framebuffer 的核心 owner 逻辑；Forward viewport 和 `RenderTargetPool` 仍通过 backend `createRenderTarget()` 获得 legacy owner bundle，所以 `IRenderTarget` 的 image/view 创建职责还没有真正删除，只是 presentation 已经先脱离。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*:OffscreenAsyncTest.*'` 62/62 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=400 --log-level=info --log-detail-level=error"` 退出码 0，日志未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|RenderGraph compile failed|VUID`
+- 2026-07-16：`VulkanRenderTarget` 与 `IFrameBuffer::create()` 内部残留的 `App::get()` 依赖已继续收口到显式 backend 参数。`VulkanRender::createRenderTarget()` 现在把当前 `VulkanRender*` 直接传给 `VulkanRenderTarget`；`VulkanRenderTarget::onInit()` 与 `IFrameBuffer::create()` 则只消费调用方已提供的 render backend，不再自己回看全局 `App` 决定 API 或 renderer。
+- 直接收益：Phase 8 的 owner/create 链边界更干净了。`createRenderTarget() -> VulkanRenderTarget -> IFrameBuffer::create()` 这条路径现在已经是纯 backend-owned 调用链，为下一步继续把 image/view/framebuffer physical owner 从 `IRenderTarget` 本体剥离，先清掉了一层全局状态耦合。
+- 当前停止线：这一步仍然没有改变 `VulkanRenderTarget::recreateImagesAndFrameBuffer()` 负责分配 attachment image，并通过 framebuffer 派生默认 image view 的事实；也就是说，`IRenderTarget` 的 image/view 创建职责还在，只是创建链不再偷偷依赖 `App::get()`。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*:OffscreenAsyncTest.*'` 62/62 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=400 --log-level=info --log-detail-level=error"` 退出码 0，日志未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|RenderGraph compile failed|VUID`
+- 2026-07-16：obsolete `ya::createRenderTarget()` 全局工厂已删除，render target 创建职责收口到 backend-owned `IRender::createRenderTarget()`。`RenderRuntime` presentation、`ForwardRenderPipeline` viewport rebuild 和 `RenderTargetPool` 现都改由当前 render backend 直接创建 `IRenderTarget`；Vulkan 后端在 `VulkanRender` 内部实例化 `VulkanRenderTarget`，OpenGL 暂以 `UNIMPLEMENTED()` stub 保持编译边界，`IRenderTarget.cpp` 这条 `App::get() -> switch(api)` 的旧全局工厂路径已完全移除。
+- 直接收益：render target 创建现在和 buffer/image/view/sampler 一样回到 backend owner 边界，Phase 8 又少了一条“抽象层静态入口偷偷回看全局 App 状态”的 legacy 逃生口。后续继续删除 `IRenderTarget` 的 image/view 创建职责时，可以直接把 replacement/owner 逻辑从 `IRender` 向更小的 runtime bundle 下沉，而不用再先清一轮全局 factory facade。
+- 当前停止线：这一步只删除了废弃工厂路径，还没有删除 `IRenderTarget` 自己的 image/view/framebuffer 创建职责；Forward viewport 与 presentation 仍然通过 backend `createRenderTarget()` 拿到 legacy owner bundle，所以 Phase 8 下一优先级仍是把 physical resource owner 从 `IRenderTarget` 本体继续剥离。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*:OffscreenAsyncTest.*'` 62/62 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=400 --log-level=info --log-detail-level=error"` 退出码 0，日志未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|RenderGraph compile failed|VUID`
+- 2026-07-15：runtime/editor 对 `IRenderTarget` 的“改内部 desc，等 beginRendering 时 flushDirty()/refreshIfNeeded() 被动修复”协议已进一步删除。RT Editor 现在只通过 active pipeline 的 owner-aware format API 改 pipeline-owned spec，不再回退写 `IRenderTarget::set*AttachmentFormat()`；presentation resize 也改为在 swapchain 回调里显式 `recreate()`，不再先 `setExtent()` 再依赖 Vulkan command buffer beginRendering 时兜底刷新。配套地，`IRenderTarget` 上那组 dead dirty helper / dirty reason facade 与 `VulkanCommandBuffer::beginRendering()` 里的 `flushDirty()` 兜底一起删除。
+- 直接收益：这一步把“runtime 外部可随时 mutate render target 内部状态，再由 backend 在录制时偷偷修复”的旧协议收掉了。当前剩余的 `IRenderTarget` 语义更接近一个显式 owner + framebuffer bundle，而不是半个 mutable spec 容器；这让后续继续删除 RT 的 image/view 创建职责时，不必再额外顾虑 editor / presentation 仍在依赖 lazy dirty repair。
+- 当前停止线：`IRenderTarget` 仍然负责创建并持有 framebuffer/image owner，`createRenderTarget()` / `VulkanRenderTarget::recreateImagesAndFrameBuffer()` 这条 factory/owner 路径还在；本批没有把 presentation/viewport owner 完全替换成更小的 bundle 类型，也还没触及 Forward graph 主链。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*:OffscreenAsyncTest.*'` 62/62 通过
+  - `HelloMaterial --exit-after-frame=400 --log-level=info --log-detail-level=error` 退出码 0，日志过滤未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|RenderGraph compile failed|VUID`
+- 2026-07-15：`RenderingInfo` 已从嵌套 `ImageSpec`/外置 clear value 改为 non-owning `RenderAttachmentSet`。`RGRenderContext` 现在会把 renderArea、layerCount、clear/load/store/finalLayout 与 color/depth image view 一起快照成 attachment set；Vulkan manual dynamic rendering 路径直接消费这些 attachment，并在显式 resolve 情况下记录 resolve image/view/mode。Forward viewport pass 也同步切到显式 attachment snapshot，只把 `viewportRT` 暂留为 legacy resource bundle owner。
+- 直接收益：Phase 8 终于有了真正可执行的 attachment 数据面，而不是继续围绕 facade 做无行为变化的小重构。submit-time 生命周期仍留在 command buffer retain 机制里，attachment set 自身不持有 owner；这让 Deferred graph、Forward viewport 和 Vulkan dynamic rendering 三条链第一次对齐到同一种 non-owning attachment 契约，同时没有把范围扩大到 render-pass/framebuffer 兼容路径。
+- 当前停止线：Vulkan framebuffer/render-pass 路径还没消费 attachment set，`viewportRT` 也还保留 image/view owner 与 compatibility facade 职责；这两项继续留在 Phase 8 后续，而不是在本批里提前做全局 `IRenderTarget` 拆除。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*:OffscreenAsyncTest.*'` 62/62 通过
+  - `HelloMaterial --exit-after-frame=400 --log-level=info --log-detail-level=error` 退出码 0，日志过滤未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|RenderGraph compile failed|VUID`
+- 2026-07-15：Vulkan `renderTarget` 兼容分支现在也会先解析成同一种 effective `RenderAttachmentSet`，再分别驱动 render-pass begin info、dynamic-rendering attachment info，以及 begin/end rendering 的 initial/final layout transition。显式 attachment set 路径会校验它与当前 framebuffer snapshot 一致；老的 `renderTarget`-only 调用则按当前 framebuffer + attachment desc 自动补出 non-owning attachment set。
+- 直接收益：Phase 8 里 “manual image path 是 attachment set，render-target path 还是旧并行协议” 的分叉被收掉了。现在 Vulkan backend 的两条 graphics beginRendering 录制路径都会消费同一份 attachment 语义，后续继续削减 `IRenderTarget` 时，不必再先改一遍 render-pass / framebuffer 兼容层的数据面。
+- 当前停止线：这一步仍然保留 `IRenderTarget` 负责 physical owner、framebuffer 切换与 compatibility begin/end frame；并没有在本批里提前删除 `flushDirty()`、dirty reason 或 factory 路径。下一批应继续围绕这些 owner/facade 职责收敛，而不是回到 attachment helper 层做无行为变化的小拆分。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*:OffscreenAsyncTest.*'` 62/62 通过
+  - `HelloMaterial --exit-after-frame=400 --log-level=info --log-detail-level=error` 退出码 0，日志过滤未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|RenderGraph compile failed|VUID`
 - 2026-07-14：Forward viewport 的 extent / attachment format 控制面已开始从 `IRenderTarget` dirty protocol 回收到 pipeline-owned spec。`ForwardRenderPipeline` 新增 `_viewportRTSpec`，viewport resize 和 RT editor color-format 变更现在都会先更新 spec，再在 frame boundary 显式 `recreateViewportRenderTarget()`；`refreshViewportSnapshot()` 也改为直接从 spec 取格式真相，而不是回读 RT desc。
 - 直接收益：Forward 不再依赖 `viewportRT->setExtent()/setColorAttachmentFormat()/needsAttachmentRefresh()/refreshIfNeeded()` 这套 legacy 自修复协议来维持 viewport 资源一致性。当前帧 snapshot format、stage pipeline format 和实际 RT replacement 开始重新对齐，这和 Deferred 之前已经走过的收口方向一致。
 - 验证结果：
@@ -144,6 +193,8 @@
 - 调查结论：这些 shadow pass 暂时保持独立子图。当前 compiler 以 handle 建依赖，不能识别同一 array image 的 per-layer imported view 与 full-array sampled view alias；因此不能在没有显式依赖/alias 语义的情况下宣称 shadow 已统一并入 Deferred 主图。相关测试 61/61 通过，默认 Editor 400 帧 smoke 正常退出且 graph/Vulkan validation/error 过滤为空。
 - 2026-07-15：RenderGraph 新增显式 pass dependency；`ShadowStage`/`BasicShadowMapTechnique` 现在把 directional、optional point cull 与 point face raster pass append 到 Deferred 主图，Deferred Light 显式依赖最后一个 shadow pass。per-layer view 与 full-array sampled view 不再靠插入顺序维持先后，Deferred 路径也不再单独调用 legacy shadow `execute()`。
 - 直接收益：Deferred shadow/main/postprocess GPU recording 已由同一主图调度，现阶段无需为单一路径引入通用 imported-view alias 推断。新增 core test 覆盖显式依赖边与拓扑顺序；相关测试 62/62 通过，默认 Editor 400 帧 smoke 正常退出且 graph/Vulkan validation/error 过滤为空。
+- 2026-07-15：公共 `ShadowMapResources` 已删除 attachment-owning `IRenderTarget`，改为通过 resource factory 直接持有 cube-compatible depth array image 与派生 views；销毁顺序也固定为先 views、后 image。Deferred/Forward 的 shadow existence/refresh 判断统一改查显式 image owner。
+- RT editor 的 shadow 条目同步改为消费显式 depth view/format/extent，depth format 修改通过 owner-aware pipeline API 推迟到安全 refresh 点，不再修改一个不会被 flush 的 legacy RT dirty state。旧的 `IRenderPipeline::setSharedDepthFormat()` facade 与 RenderRuntime 转发已删除。相关测试 62/62 通过，默认 Editor 400 帧 smoke 正常退出且 graph/Vulkan validation/error 过滤为空。
 
 ## 代码对账快照
 
@@ -153,7 +204,8 @@
 
 - `IRenderResourceFactory` 已成为 buffer/image/view/sampler 的真实创建入口，buffer 迁移基本完成
 - `RenderImage` 已作为中间 GPU image owner 稳定落地，`IImageView` 也已明确为 non-owning image projection
-- 但 `Texture.cpp`、`IRenderTarget.cpp`、`FrameBuffer.cpp`、`Swapchain.cpp` 仍残留 `App::get()` 或 legacy factory 路径，说明“资源创建不依赖全局应用状态”尚未完成
+- `IRenderTarget.cpp` 这条全局 render target factory 已删除，`IRenderTarget` 创建职责现已回收到 backend-owned `IRender::createRenderTarget()`
+- 但 `Texture.cpp`、`Swapchain.cpp` 等处仍残留 `App::get()` 或 legacy factory 依赖，说明“资源创建不依赖全局应用状态”尚未完成
 
 ### Resource State / Graph Core
 

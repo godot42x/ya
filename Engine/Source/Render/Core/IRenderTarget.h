@@ -52,26 +52,6 @@ struct RenderTargetCreateInfo
     RenderPassSpec subpass     = {};
 };
 
-enum class ERenderTargetDirtyReason : uint32_t
-{
-    None             = 0,
-    Resize           = 1 << 0,
-    FrameBufferCount = 1 << 1,
-    Attachments      = 1 << 2,
-    All              = 0xFFFFFFFFu,
-};
-
-inline ERenderTargetDirtyReason operator|(ERenderTargetDirtyReason lhs, ERenderTargetDirtyReason rhs)
-{
-    return static_cast<ERenderTargetDirtyReason>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
-}
-
-inline ERenderTargetDirtyReason& operator|=(ERenderTargetDirtyReason& lhs, ERenderTargetDirtyReason rhs)
-{
-    lhs = lhs | rhs;
-    return lhs;
-}
-
 struct IRenderTarget
 {
     std::string       label          = "None";
@@ -86,10 +66,6 @@ struct IRenderTarget
     uint32_t                          _currentFrameIndex = 0;
     uint32_t                          _frameBufferCount  = 1;
     uint32_t                          _layerCount        = 1; // for array textures or cubemaps
-
-
-    bool                     bDirty        = false;
-    ERenderTargetDirtyReason _dirtyReason  = ERenderTargetDirtyReason::None;
 
     // opt
     bool         bSwapChainTarget              = false;
@@ -113,27 +89,21 @@ struct IRenderTarget
     bool init(const RenderTargetCreateInfo& ci)
     {
         label                         = ci.label;
-        bDirty                        = true;
-        _dirtyReason                  = ERenderTargetDirtyReason::All;
         bSwapChainTarget              = ci.bSwapChainTarget;
         swapChianColorAttachmentIndex = ci.swapChianColorAttachmentIndex;
         _renderingMode                = ci.renderingMode;
-        _frameBufferCount             = ci.frameBufferCount;
+        _frameBufferCount             = ci.frameBufferCount == 0 ? 1 : ci.frameBufferCount;
         _layerCount                   = ci.layerCount;
+        _extent                       = ci.extent;
 
-        if (_renderingMode == ERenderingMode::RenderPass)
-        {
+        if (_renderingMode == ERenderingMode::RenderPass) {
             _renderpass   = ci.subpass.renderPass;
             _subpassIndex = ci.subpass.index;
         }
-        setExtent(ci.extent);
         bool ok = onInit(ci);
         if (ok) {
-            bDirty       = false;
-            _dirtyReason = ERenderTargetDirtyReason::None;
             if (_renderingMode == ERenderingMode::RenderPass) {
-                for (auto fb : _frameBuffers)
-                {
+                for (auto fb : _frameBuffers) {
                     YA_CORE_ASSERT(fb->getHandle() != nullptr, "Frame buffer handle is null");
                 }
             }
@@ -148,158 +118,6 @@ struct IRenderTarget
     // advance buffer index and execute begin render pass if needed
     virtual void beginFrame(ICommandBuffer* cmdBuf) = 0;
     virtual void endFrame(ICommandBuffer* cmdBuf)   = 0;
-
-    void setExtent(Extent2D extent)
-    {
-        if (_extent.width != extent.width || _extent.height != extent.height)
-        {
-            _extent = extent;
-            markDirty(ERenderTargetDirtyReason::Resize);
-        }
-    }
-
-    // Flush dirty state: recreate images/framebuffers if needed.
-    // Call this before using any RT images to ensure they match the current extent.
-    void flushDirty()
-    {
-        if (bDirty) {
-            recreate();
-            bDirty       = false;
-            _dirtyReason = ERenderTargetDirtyReason::None;
-        }
-    }
-
-    [[nodiscard]] bool isDirty() const { return bDirty; }
-    [[nodiscard]] bool needsRefresh() const { return bDirty; }
-
-    [[nodiscard]] bool hasAttachmentDirty() const
-    {
-        return hasDirtyReason(ERenderTargetDirtyReason::Attachments);
-    }
-
-    [[nodiscard]] bool needsAttachmentRefresh() const
-    {
-        return hasDirtyReason(ERenderTargetDirtyReason::Attachments);
-    }
-
-    [[nodiscard]] bool flushIfDirty()
-    {
-        if (!bDirty) {
-            return false;
-        }
-        flushDirty();
-        return true;
-    }
-
-    [[nodiscard]] bool refreshIfNeeded()
-    {
-        if (!bDirty) {
-            return false;
-        }
-        flushDirty();
-        return true;
-    }
-
-    void setFrameBufferCount(uint32_t frameBufferCount)
-    {
-        if (frameBufferCount == 0) {
-            frameBufferCount = 1;
-        }
-        if (_frameBufferCount != frameBufferCount) {
-            _frameBufferCount = frameBufferCount;
-            markDirty(ERenderTargetDirtyReason::FrameBufferCount);
-        }
-    }
-
-    bool setColorAttachmentSampleCount(uint32_t attachmentIndex, ESampleCount::T sampleCount)
-    {
-        if (attachmentIndex >= _colorAttachmentDescs.size()) {
-            return false;
-        }
-        auto& desc = _colorAttachmentDescs[attachmentIndex];
-        if (desc.samples != sampleCount) {
-            desc.samples = sampleCount;
-            markDirty(ERenderTargetDirtyReason::Attachments);
-        }
-        return true;
-    }
-
-    bool setColorAttachmentFormat(uint32_t attachmentIndex, EFormat::T format)
-    {
-        if (attachmentIndex >= _colorAttachmentDescs.size()) {
-            return false;
-        }
-        auto& desc = _colorAttachmentDescs[attachmentIndex];
-        if (desc.format != format) {
-            desc.format = format;
-            markDirty(ERenderTargetDirtyReason::Attachments);
-        }
-        return true;
-    }
-
-    bool setDepthAttachmentSampleCount(ESampleCount::T sampleCount)
-    {
-        if (!_depthAttachmentDesc.has_value()) {
-            return false;
-        }
-        if (_depthAttachmentDesc->samples != sampleCount) {
-            _depthAttachmentDesc->samples = sampleCount;
-            markDirty(ERenderTargetDirtyReason::Attachments);
-        }
-        return true;
-    }
-
-    bool setDepthAttachmentFormat(EFormat::T format)
-    {
-        if (!_depthAttachmentDesc.has_value()) {
-            return false;
-        }
-        if (_depthAttachmentDesc->format != format) {
-            _depthAttachmentDesc->format = format;
-            markDirty(ERenderTargetDirtyReason::Attachments);
-        }
-        return true;
-    }
-
-    bool setResolveAttachmentSampleCount(ESampleCount::T sampleCount)
-    {
-        if (!_resolveAttachmentDesc.has_value()) {
-            return false;
-        }
-        if (_resolveAttachmentDesc->samples != sampleCount) {
-            _resolveAttachmentDesc->samples = sampleCount;
-            markDirty(ERenderTargetDirtyReason::Attachments);
-        }
-        return true;
-    }
-
-    /// Set (or replace) the resolve attachment description. Marks dirty.
-    void setResolveAttachment(const AttachmentDescription& desc)
-    {
-        _resolveAttachmentDesc = desc;
-        markDirty(ERenderTargetDirtyReason::Attachments);
-    }
-
-    /// Remove the resolve attachment entirely. Marks dirty only if one existed.
-    void clearResolveAttachment()
-    {
-        if (_resolveAttachmentDesc.has_value()) {
-            _resolveAttachmentDesc.reset();
-            markDirty(ERenderTargetDirtyReason::Attachments);
-        }
-    }
-
-    void markDirty(ERenderTargetDirtyReason reason)
-    {
-        bDirty = true;
-        _dirtyReason |= reason;
-    }
-
-    [[nodiscard]] ERenderTargetDirtyReason getDirtyReason() const { return _dirtyReason; }
-    [[nodiscard]] bool hasDirtyReason(ERenderTargetDirtyReason reason) const
-    {
-        return (static_cast<uint32_t>(_dirtyReason) & static_cast<uint32_t>(reason)) != 0;
-    }
 
     const Extent2D& getExtent() const { return _extent; }
 
@@ -388,10 +206,5 @@ struct IRenderTarget
     const std::optional<AttachmentDescription>& getDepthAttachmentDesc() const { return _depthAttachmentDesc; }
     const std::optional<AttachmentDescription>& getResolveAttachmentDesc() const { return _resolveAttachmentDesc; }
 }; // namespace ya
-
-/**
- * @brief Factory function to create a platform-specific render target
- */
-std::shared_ptr<IRenderTarget> createRenderTarget(const RenderTargetCreateInfo& ci);
 
 } // namespace ya

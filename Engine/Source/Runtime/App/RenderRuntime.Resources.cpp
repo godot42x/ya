@@ -2,7 +2,8 @@
 
 #include "App.h"
 #include "DebugRenderSystem.h"
-#include "Render/Core/IRenderTarget.h"
+#include "Platform/Render/Vulkan/VulkanSwapChain.h"
+#include "Render/Core/RenderResourceFactory.h"
 #include "Render/Core/Swapchain.h"
 #include "Resource/AssetManager.h"
 #include "Resource/DeferredDeletionQueue.h"
@@ -13,6 +14,46 @@
 
 namespace ya
 {
+
+namespace
+{
+
+std::shared_ptr<RenderImage> createPresentationRenderImage(IRender& render, VulkanSwapChain& swapchain, uint32_t imageIndex)
+{
+    const auto& swapchainCI = swapchain.getCreateInfo();
+    auto importedImage = render.getResourceFactory()->importImage(ImportedImageDesc{
+        .label         = std::format("Presentation_{}", imageIndex),
+        .nativeHandle  = static_cast<void*>(swapchain.getVkImages().at(imageIndex)),
+        .format        = swapchain.getFormat(),
+        .usage         = static_cast<EImageUsage::T>(EImageUsage::ColorAttachment |
+                    (swapchainCI.bEnableTransferSrc ? EImageUsage::TransferSrc : EImageUsage::None)),
+        .extent        = {.width = swapchain.getExtent().width, .height = swapchain.getExtent().height, .depth = 1},
+        .initialLayout = EImageLayout::Undefined,
+        .finalLayout   = EImageLayout::PresentSrcKHR,
+    });
+    YA_CORE_ASSERT(importedImage != nullptr, "Failed to import presentation image {}", imageIndex);
+
+    auto imageView = render.getResourceFactory()->createImageView(
+        importedImage,
+        ImageViewCreateInfo{
+            .label          = std::format("Presentation_{}_View", imageIndex),
+            .viewType       = EImageViewType::View2D,
+            .aspectFlags    = EImageAspect::Color,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1,
+        });
+    YA_CORE_ASSERT(imageView != nullptr, "Failed to create presentation image view {}", imageIndex);
+
+    auto renderImage      = std::make_shared<RenderImage>();
+    renderImage->label    = std::format("Presentation_{}", imageIndex);
+    renderImage->image    = std::move(importedImage);
+    renderImage->defaultView = std::move(imageView);
+    return renderImage;
+}
+
+} // namespace
 
 DescriptorSetHandle RenderRuntime::getSceneSkyboxDescriptorSet(Scene* scene)
 {
@@ -151,28 +192,7 @@ void RenderRuntime::initSharedRenderResources()
 void RenderRuntime::initPresentationResources()
 {
     _presentationGraphExecutor = _render ? std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory()) : nullptr;
-    _screenRenderPass = nullptr;
-    _screenRT         = ya::createRenderTarget(RenderTargetCreateInfo{
-        .label            = "Final RenderTarget",
-        .renderingMode    = ERenderingMode::DynamicRendering,
-        .bSwapChainTarget = true,
-        .attachments      = {
-            .colorAttach = {
-                AttachmentDescription{
-                    .index          = 0,
-                    .format         = _render->getSwapchain()->getFormat(),
-                    .samples        = ESampleCount::Sample_1,
-                    .loadOp         = EAttachmentLoadOp::Clear,
-                    .storeOp        = EAttachmentStoreOp::Store,
-                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                    .initialLayout  = EImageLayout::Undefined,
-                    .finalLayout    = EImageLayout::PresentSrcKHR,
-                    .usage          = EImageUsage::ColorAttachment,
-                },
-            },
-        },
-    });
+    rebuildPresentationImages();
 
     _render->getSwapchain()->onRecreate.addLambda(
         this,
@@ -182,26 +202,31 @@ void RenderRuntime::initPresentationResources()
                                          now.extent.height != old.extent.height);
             const bool bPresentModeChanged = (old.presentMode != now.presentMode);
 
-            if (bExtentChanged) {
-                _screenRT->setExtent(Extent2D{
-                    .width  = now.extent.width,
-                    .height = now.extent.height,
-                });
-            }
-
-            if (bImageRecreated || bPresentModeChanged) {
-                _screenRT->recreate();
+            if (bExtentChanged || bImageRecreated || bPresentModeChanged) {
+                rebuildPresentationImages();
             }
         });
 
     _deleter.push("ScreenRT", [this](void*)
                   {
         _presentationGraphExecutor.reset();
-        if (_screenRT) {
-            _screenRT->destroy();
-            _screenRT.reset();
-        }
-        _screenRenderPass.reset(); });
+        _presentationImages.clear(); });
+}
+
+void RenderRuntime::rebuildPresentationImages()
+{
+    _presentationImages.clear();
+    if (!_render) {
+        return;
+    }
+
+    auto* swapchain = _render->getSwapchain() ? _render->getSwapchain()->as<VulkanSwapChain>() : nullptr;
+    YA_CORE_ASSERT(swapchain != nullptr, "Presentation resources currently require VulkanSwapChain");
+
+    _presentationImages.reserve(swapchain->getImageCount());
+    for (uint32_t imageIndex = 0; imageIndex < swapchain->getImageCount(); ++imageIndex) {
+        _presentationImages.push_back(createPresentationRenderImage(*_render, *swapchain, imageIndex));
+    }
 }
 
 void RenderRuntime::initCommandResources()

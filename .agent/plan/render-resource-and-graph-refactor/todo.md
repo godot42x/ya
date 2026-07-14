@@ -274,19 +274,20 @@
 
 ## Phase 8: RenderTarget 收敛
 
-- [ ] 定义 `RenderAttachmentSet`
-- [ ] 将 load/store/clear value 从 resource owner 中分离
-- [ ] Vulkan dynamic rendering 消费 attachment set
-- [ ] Vulkan framebuffer/render pass 路径消费 attachment set
-- [ ] legacy Forward 使用临时 resource bundle adapter
+- [x] `ShadowMapResources` 删除 `IRenderTarget` owner，直接持有 depth image/views
+- [x] 定义 `RenderAttachmentSet`
+- [x] 将 load/store/clear value 从 resource owner 中分离
+- [x] Vulkan dynamic rendering 消费 attachment set
+- [x] Vulkan framebuffer/render pass 路径消费 attachment set
+- [x] legacy Forward 使用临时 resource bundle adapter
 - [ ] 删除 `IRenderTarget` 的 image/view 创建职责
-- [ ] 删除 `IRenderTarget::flushDirty()`
-- [ ] 删除 dirty reason 通用重建协议
-- [ ] 删除废弃 render target factory 路径
+- [x] 删除 `IRenderTarget::flushDirty()`
+- [x] 删除 dirty reason 通用重建协议
+- [x] 删除废弃 render target factory 路径
 
 完成标准：
 
-- [ ] attachment set 只引用资源，不拥有资源
+- [x] attachment set 只引用资源，不拥有资源
 - [ ] physical resource owner 唯一
 - [ ] resize 表示资源规格变化和替换，不是对象内部突变
 

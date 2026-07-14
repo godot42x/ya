@@ -2,6 +2,7 @@
 
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Core/Buffer.h"
+#include "Render/Core/RenderingInfoUtils.h"
 #include "Render/Core/Sampler.h"
 #include "Render/Core/Texture.h"
 #include <glm/gtc/matrix_transform.hpp>
@@ -64,21 +65,93 @@ RenderTargetCreateInfo buildForwardViewportRenderTargetSpec(Extent2D extent, EFo
     };
 }
 
-ForwardViewportResources buildForwardViewportResources(const IRenderTarget* renderTarget)
+stdptr<Texture> makeForwardViewportCompatTexture(RenderImage* image, std::string_view label)
 {
-    ForwardViewportResources resources{};
-    if (!renderTarget) {
-        return resources;
+    if (!image || !image->getImageShared() || !image->getImageViewShared()) {
+        return nullptr;
     }
 
-    resources.color        = renderTarget->getCurrentColorTexture(0);
-    resources.depth        = renderTarget->getCurrentDepthTexture();
-    resources.resolve      = renderTarget->getCurrentResolveTexture();
-    resources.colorOwner   = renderTarget->getCurrentColorAttachmentShared(0);
-    resources.depthOwner   = renderTarget->getCurrentDepthAttachmentShared();
-    resources.resolveOwner = renderTarget->getCurrentResolveAttachmentShared();
+    return Texture::wrap(image->getImageShared(), image->getImageViewShared(), std::string(label));
+}
+
+ImageViewCreateInfo makeForwardViewportViewDesc(std::string_view label,
+                                                EFormat::T       format,
+                                                uint32_t         layerCount)
+{
+    const bool bCube    = layerCount == 6;
+    const bool bArray2D = layerCount > 1 && !bCube;
+    return ImageViewCreateInfo{
+        .label          = std::string(label),
+        .viewType       = bCube ? EImageViewType::ViewCube : bArray2D ? EImageViewType::View2DArray : EImageViewType::View2D,
+        .aspectFlags    = EFormat::isDepthStencilFormat(format) ? EImageAspect::DepthStencil :
+                          EFormat::isDepthFormat(format) ? EImageAspect::Depth : EImageAspect::Color,
+        .baseMipLevel   = 0,
+        .levelCount     = 1,
+        .baseArrayLayer = 0,
+        .layerCount     = layerCount,
+    };
+}
+
+std::shared_ptr<RenderImage> createForwardViewportAttachment(IRender& render,
+                                                             const AttachmentDescription& attachment,
+                                                             Extent2D extent,
+                                                             uint32_t layerCount,
+                                                             std::string label)
+{
+    return createRenderImage(
+        *render.getResourceFactory(),
+        RenderImageDesc{
+            .image = ImageCreateInfo{
+                .label       = label,
+                .format      = attachment.format,
+                .extent      = {.width = extent.width, .height = extent.height, .depth = 1},
+                .mipLevels   = 1,
+                .arrayLayers = layerCount,
+                .samples     = attachment.samples,
+                .usage       = attachment.usage,
+                .initialLayout = attachment.initialLayout,
+                .flags       = attachment.imageCreateFlags,
+            },
+            .defaultView = makeForwardViewportViewDesc(std::format("{}.DefaultView", label), attachment.format, layerCount),
+        });
+}
+
+ForwardViewportResources buildForwardViewportResources(IRender& render, const RenderTargetCreateInfo& spec)
+{
+    ForwardViewportResources resources{};
+    resources.extent = spec.extent;
+
+    if (!spec.attachments.colorAttach.empty()) {
+        resources.colorOwner = createForwardViewportAttachment(
+            render,
+            spec.attachments.colorAttach[0],
+            spec.extent,
+            spec.layerCount,
+            std::format("{}.Color0", spec.label));
+        resources.colorCompat = makeForwardViewportCompatTexture(resources.colorOwner.get(), std::format("{}.Color0Compat", spec.label));
+    }
+
+    if (spec.attachments.depthAttach.has_value()) {
+        resources.depthOwner = createForwardViewportAttachment(
+            render,
+            *spec.attachments.depthAttach,
+            spec.extent,
+            spec.layerCount,
+            std::format("{}.Depth", spec.label));
+        resources.depthCompat = makeForwardViewportCompatTexture(resources.depthOwner.get(), std::format("{}.DepthCompat", spec.label));
+    }
+
+    if (spec.attachments.resolveAttach.has_value()) {
+        resources.resolveOwner = createForwardViewportAttachment(
+            render,
+            *spec.attachments.resolveAttach,
+            spec.extent,
+            spec.layerCount,
+            std::format("{}.Resolve", spec.label));
+        resources.resolveCompat = makeForwardViewportCompatTexture(resources.resolveOwner.get(), std::format("{}.ResolveCompat", spec.label));
+    }
+
     resources.syncRawViews();
-    resources.extent = renderTarget->getExtent();
     return resources;
 }
 
@@ -87,14 +160,22 @@ ForwardViewportResources buildForwardViewportResources(const IRenderTarget* rend
 void ForwardRenderPipeline::appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const
 {
     catalog.entries.push_back({
-        .label = "Forward Viewport",
-        .rt    = viewportRT.get(),
-        .owner = RenderTargetEditorCatalog::Entry::EOwner::ForwardViewport,
+        .label            = "Forward Viewport",
+        .owner            = RenderTargetEditorCatalog::Entry::EOwner::ForwardViewport,
+        .colorFormats     = _viewportFormats.colorFormats,
+        .depthFormat      = _viewportFormats.depthFormat,
+        .colorAttachments = {_viewportResources.colorOwner},
+        .depthAttachment  = _viewportResources.depthOwner,
+        .extent           = _viewportResources.extent,
+        .frameBufferCount = 1,
     });
     catalog.entries.push_back({
-        .label = "Forward Shadow",
-        .rt    = _shadowResources.renderTarget.get(),
-        .owner = RenderTargetEditorCatalog::Entry::EOwner::ForwardShadow,
+        .label               = "Forward Shadow",
+        .owner               = RenderTargetEditorCatalog::Entry::EOwner::ForwardShadow,
+        .depthFormat         = _shadowResources.depthFormat,
+        .depthAttachmentView = _shadowResources.directionalDepthIV,
+        .extent              = _shadowResources.extent,
+        .frameBufferCount    = 1,
     });
 }
 
@@ -159,9 +240,8 @@ void ForwardRenderPipeline::initViewportResources(const InitDesc& desc)
         {.width = static_cast<uint32_t>(desc.windowW), .height = static_cast<uint32_t>(desc.windowH)},
         VIEWPORT_COLOR_FORMAT,
         DEPTH_FORMAT);
-    recreateViewportRenderTarget();
+    recreateViewportResources();
     refreshViewportSnapshot();
-    refreshViewportResources();
 }
 
 void ForwardRenderPipeline::initPostProcessResources(const InitDesc& desc)
@@ -178,15 +258,15 @@ void ForwardRenderPipeline::initPostProcessResources(const InitDesc& desc)
 
 void ForwardRenderPipeline::initShadowResources()
 {
+    const uint32_t shadowResolution = std::max(currentShadowSettings().resolution, 1u);
+
     _shadowResources.init(_render, ShadowMapResourceDesc{
-        .renderTargetLabel = "Shadow Map RenderTarget",
-        .samplerLabel      = "shadow",
-        .viewLabelPrefix   = "Shadow Map",
-        .extent            = {.width = 512, .height = 512},
-        .depthFormat       = SHADOW_MAPPING_DEPTH_BUFFER_FORMAT,
+        .imageLabel      = "Shadow Map Depth",
+        .samplerLabel    = "shadow",
+        .viewLabelPrefix = "Shadow Map",
+        .extent          = {.width = shadowResolution, .height = shadowResolution},
+        .depthFormat     = _shadowDepthFormat,
     });
-    _deleter.push("DepthRT", [this](void*)
-                  { _shadowResources.renderTarget.reset(); });
 
     _descriptorPool = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
                                                            .label     = "ForwardPipeline Descriptor Pool",
@@ -313,6 +393,20 @@ bool ForwardRenderPipeline::setRenderTargetColorFormat(RenderTargetEditorCatalog
     return true;
 }
 
+bool ForwardRenderPipeline::setRenderTargetDepthFormat(
+    RenderTargetEditorCatalog::Entry::EOwner owner,
+    EFormat::T format)
+{
+    if (owner != RenderTargetEditorCatalog::Entry::EOwner::ForwardShadow) {
+        return false;
+    }
+    if (_shadowDepthFormat != format) {
+        _shadowDepthFormat = format;
+        requestShadowResourceRefresh();
+    }
+    return true;
+}
+
 void ForwardRenderPipeline::markPendingResourceRefresh(EForwardPendingResourceRefresh refresh)
 {
     _pendingResourceRefreshMask |= static_cast<uint32_t>(refresh);
@@ -346,15 +440,13 @@ void ForwardRenderPipeline::requestShadowResourceRefresh()
 void ForwardRenderPipeline::applyPendingResourceRefreshes()
 {
     bool bRefreshViewportSnapshot   = false;
-    bool bRefreshViewportResources  = false;
     bool bRefreshViewportStageState = false;
     bool bRefreshShadowStageState   = false;
 
     if (hasPendingResourceRefresh(EForwardPendingResourceRefresh::ViewportResize)) {
         _viewportRTSpec.extent = _pendingViewportExtent;
-        recreateViewportRenderTarget();
+        recreateViewportResources();
         bRefreshViewportSnapshot   = true;
-        bRefreshViewportResources  = true;
         bRefreshViewportStageState = true;
         clearPendingResourceRefresh(EForwardPendingResourceRefresh::ViewportResize);
     }
@@ -370,18 +462,14 @@ void ForwardRenderPipeline::applyPendingResourceRefreshes()
     }
 
     if (hasPendingResourceRefresh(EForwardPendingResourceRefresh::AttachmentFormat)) {
-        recreateViewportRenderTarget();
+        recreateViewportResources();
         bRefreshViewportSnapshot   = true;
-        bRefreshViewportResources  = true;
         bRefreshViewportStageState = true;
         clearPendingResourceRefresh(EForwardPendingResourceRefresh::AttachmentFormat);
     }
 
     if (bRefreshViewportSnapshot) {
         refreshViewportSnapshot();
-    }
-    if (bRefreshViewportResources) {
-        refreshViewportResources();
     }
     if (bRefreshViewportStageState) {
         refreshViewportStageState();
@@ -401,7 +489,7 @@ void ForwardRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& 
     const ShadowSettings shadowSettings          = currentShadowSettings();
     const uint32_t       desiredShadowResolution = std::max(shadowSettings.resolution, 1u);
     if (shadowSettings.isEnabled()) {
-        const bool bShadowResolutionDirty = !_shadowResources.renderTarget ||
+        const bool bShadowResolutionDirty = !_shadowResources.depthImage ||
                                             _shadowResources.extent.width != desiredShadowResolution ||
                                             _shadowResources.extent.height != desiredShadowResolution;
         if (bShadowResolutionDirty) {
@@ -412,20 +500,17 @@ void ForwardRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& 
     syncShadowSettings();
 }
 
-void ForwardRenderPipeline::recreateViewportRenderTarget()
+void ForwardRenderPipeline::recreateViewportResources()
 {
-    viewportRT = ya::createRenderTarget(_viewportRTSpec);
-    YA_CORE_ASSERT(viewportRT, "Failed to recreate viewport render target");
+    YA_CORE_ASSERT(_render != nullptr, "ForwardRenderPipeline requires a valid render backend to create viewport resources");
+    _viewportResources = buildForwardViewportResources(*_render, _viewportRTSpec);
+    YA_CORE_ASSERT(_viewportResources.colorOwner && _viewportResources.depthOwner,
+                   "Failed to recreate forward viewport attachment owners");
 }
 
 void ForwardRenderPipeline::refreshViewportSnapshot()
 {
     _viewportFormats = buildForwardViewportFormats(_viewportRTSpec);
-}
-
-void ForwardRenderPipeline::refreshViewportResources()
-{
-    _viewportResources = buildForwardViewportResources(viewportRT.get());
 }
 
 void ForwardRenderPipeline::refreshViewportStageState()
@@ -440,7 +525,7 @@ void ForwardRenderPipeline::refreshShadowStageState()
     if (_viewportStage) {
         _viewportStage->setDepthBufferShadowDescriptorSet(depthBufferShadowDS);
     }
-    if (currentShadowSettings().isEnabled() && _shadowResources.renderTarget) {
+    if (currentShadowSettings().isEnabled() && _shadowResources.depthImage) {
         rebuildShadowViews();
     }
     syncShadowSettings();
@@ -484,7 +569,7 @@ void ForwardRenderPipeline::applyShadowSettings(const ShadowSettings& shadowSett
         *_shadowSettings = shadowSettings;
     }
 
-    if (bToggleChanged || (shadowSettings.isEnabled() && !_shadowResources.renderTarget)) {
+    if (bToggleChanged || (shadowSettings.isEnabled() && !_shadowResources.depthImage)) {
         requestShadowResourceRefresh();
     }
 
@@ -542,13 +627,50 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
 {
     _viewportStage->prepare(stageCtx);
 
+    YA_CORE_ASSERT(_viewportResources.colorOwner && _viewportResources.colorImage,
+                   "Forward viewport pass requires a color attachment snapshot");
+    YA_CORE_ASSERT(_viewportResources.depthOwner && _viewportResources.depthImage,
+                   "Forward viewport pass requires a depth attachment snapshot");
+    YA_CORE_ASSERT(!_viewportRTSpec.attachments.colorAttach.empty(),
+                   "Forward viewport pass requires a color attachment spec");
+    YA_CORE_ASSERT(_viewportRTSpec.attachments.depthAttach.has_value(),
+                   "Forward viewport pass requires a depth attachment spec");
+
+    frame.cmdBuf->retainResource(_viewportResources.colorOwner);
+    frame.cmdBuf->retainResource(_viewportResources.depthOwner);
+    if (_viewportResources.resolveOwner) {
+        frame.cmdBuf->retainResource(_viewportResources.resolveOwner);
+    }
+
+    auto colorAttachment = makeRenderAttachment(
+        _viewportResources.colorImage->getImageView(),
+        _viewportRTSpec.attachments.colorAttach[0].loadOp,
+        _viewportRTSpec.attachments.colorAttach[0].storeOp,
+        _viewportRTSpec.attachments.colorAttach[0].initialLayout,
+        _viewportRTSpec.attachments.colorAttach[0].finalLayout,
+        ClearValue::Black());
+    if (_viewportResources.resolveImage) {
+        colorAttachment.resolveImage     = _viewportResources.resolveImage->getImage();
+        colorAttachment.resolveImageView = _viewportResources.resolveImage->getImageView();
+        colorAttachment.resolveMode      = EResolveMode::Average;
+    }
+
+    auto depthAttachment = makeRenderAttachment(
+        _viewportResources.depthImage->getImageView(),
+        _viewportRTSpec.attachments.depthAttach->loadOp,
+        _viewportRTSpec.attachments.depthAttach->storeOp,
+        _viewportRTSpec.attachments.depthAttach->initialLayout,
+        _viewportRTSpec.attachments.depthAttach->finalLayout,
+        ClearValue(1.0f, 0));
+
     RenderingInfo ri{
-        .label            = "ViewPort",
-        .renderArea       = Rect2D{.pos = {0, 0}, .extent = _viewportResources.extent.toVec2()},
-        .layerCount       = 1,
-        .colorClearValues = {ClearValue(0.0f, 0.0f, 0.0f, 1.0f)},
-        .depthClearValue  = ClearValue(1.0f, 0),
-        .renderTarget     = viewportRT.get(),
+        .label       = "ViewPort",
+        .attachments = RenderAttachmentSet{
+            .renderArea = Rect2D{.pos = {0, 0}, .extent = _viewportResources.extent.toVec2()},
+            .layerCount = 1,
+            .colors     = {std::move(colorAttachment)},
+            .depth      = std::move(depthAttachment),
+        },
     };
 
     frame.cmdBuf->beginRendering(ri);
@@ -575,10 +697,10 @@ void ForwardRenderPipeline::finalizeViewportPass(ICommandBuffer* cmdBuf)
 
     cmdBuf->endRendering(_viewportRI);
 
-    auto* inputTexture = bMSAA ? _viewportResources.resolve : _viewportResources.color;
+    auto* inputImage = bMSAA ? _viewportResources.resolveImage : _viewportResources.colorImage;
 
     if (RenderImage* postprocessOutput = _postProcessStage.execute(
-            cmdBuf, inputTexture, _lastFrameInput.viewportRect.extent, &_lastTickCtx))
+            cmdBuf, inputImage, _lastFrameInput.viewportRect.extent, &_lastTickCtx))
     {
         _currentPostprocessOutput = postprocessOutput;
     }
@@ -586,7 +708,7 @@ void ForwardRenderPipeline::finalizeViewportPass(ICommandBuffer* cmdBuf)
         _currentPostprocessOutput = nullptr;
     }
 
-    YA_CORE_ASSERT(inputTexture, "Failed to get viewport texture for postprocessing");
+    YA_CORE_ASSERT(inputImage, "Failed to get viewport image for postprocessing");
 }
 
 void ForwardRenderPipeline::shutdown()

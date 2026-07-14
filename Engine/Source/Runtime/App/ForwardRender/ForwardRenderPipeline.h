@@ -69,12 +69,11 @@ struct ForwardRenderPipeline : public IRenderPipeline
 
     stdptr<IDescriptorPool> _descriptorPool = nullptr;
 
-    std::shared_ptr<IRenderTarget> viewportRT = nullptr;
-
     // Shadow resources (owned here, shared to stages)
     stdptr<IDescriptorSetLayout> depthBufferDSL      = nullptr;
     DescriptorSetHandle          depthBufferShadowDS = nullptr;
     ShadowMapResources           _shadowResources;
+    EFormat::T                   _shadowDepthFormat = SHADOW_MAPPING_DEPTH_BUFFER_FORMAT;
 
     // ── Render stages ─────────────────────────────────────────────
     stdptr<ShadowStage>          _shadowStage;
@@ -108,6 +107,8 @@ struct ForwardRenderPipeline : public IRenderPipeline
     void renderStageInternalsGUI() override;
     bool setRenderTargetColorFormat(RenderTargetEditorCatalog::Entry::EOwner owner,
                                     uint32_t                                 attachmentIndex,
+                                    EFormat::T                               format) override;
+    bool setRenderTargetDepthFormat(RenderTargetEditorCatalog::Entry::EOwner owner,
                                     EFormat::T                               format) override;
 
     void                         onViewportResized(Rect2D rect) override;
@@ -143,9 +144,8 @@ struct ForwardRenderPipeline : public IRenderPipeline
     void               requestShadowResourceRefresh();
     void               applyPendingResourceRefreshes();
     void               syncFrameSettings(const RenderPipelineFrameContext& frame);
-    void               recreateViewportRenderTarget();
+    void               recreateViewportResources();
     void               refreshViewportSnapshot();
-    void               refreshViewportResources();
     void               refreshViewportStageState();
     void               refreshShadowStageState();
     void               finalizeViewportPass(ICommandBuffer* cmdBuf);

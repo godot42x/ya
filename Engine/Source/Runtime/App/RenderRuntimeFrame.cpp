@@ -21,11 +21,11 @@ namespace ya
 namespace
 {
 
-RGImportedTextureDesc makePresentationImportedTextureDesc(const Texture& texture,
+RGImportedTextureDesc makePresentationImportedTextureDesc(const RenderImage& image,
                                                           std::string_view label,
                                                           EImageLayout::T finalLayout)
 {
-    return makeImportedTextureDesc(texture, label, finalLayout, EImageUsage::ColorAttachment);
+    return makeImportedTextureDesc(image, label, finalLayout, EImageUsage::ColorAttachment);
 }
 
 } // namespace
@@ -172,21 +172,19 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
     YA_PROFILE_SCOPE("Screen pass");
     YA_PERF_SCOPE(perf::sample::renderPresentation(), perf::metric::cpuTimeMs(), perf::domain::render());
 
-    if (!cmdBuf || !_presentationGraphExecutor || !_screenRT) {
+    if (!cmdBuf || !_presentationGraphExecutor) {
         return;
     }
 
-    _screenRT->beginFrame(cmdBuf);
-    Texture* presentationTexture = getPresentationTexture();
-    if (!presentationTexture) {
-        _screenRT->endFrame(cmdBuf);
+    auto presentationImage = getCurrentPresentationImageShared();
+    if (!presentationImage) {
         return;
     }
 
-    const Extent2D presentationExtent = presentationTexture->getExtent();
+    const Extent2D presentationExtent = presentationImage->getExtent();
     RenderGraph    graph;
     const auto     output = graph.importTexture(
-        makePresentationImportedTextureDesc(*presentationTexture,
+        makePresentationImportedTextureDesc(*presentationImage,
                                             "Presentation.Output",
                                             EImageLayout::PresentSrcKHR));
 
@@ -227,7 +225,6 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
     if (recordPresentationCapture) {
         recordPresentationCapture(cmdBuf);
     }
-    _screenRT->endFrame(cmdBuf);
 }
 
 void RenderRuntime::submitFrame(int32_t imageIndex, ICommandBuffer* cmdBuf)

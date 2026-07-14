@@ -11,6 +11,8 @@ struct ICommandBuffer;
 struct ISwapchain;
 struct IDescriptorSetHelper;
 struct IRenderResourceFactory;
+struct IRenderTarget;
+struct RenderTargetCreateInfo;
 
 
 enum class ERenderObject : uint32_t
@@ -151,6 +153,7 @@ struct IRender : public plat_base<IRender>
     virtual IDescriptorSetHelper* getDescriptorHelper() = 0;
 
     virtual IRenderResourceFactory* getResourceFactory() { return nullptr; }
+    virtual std::shared_ptr<IRenderTarget> createRenderTarget(const RenderTargetCreateInfo& ci) = 0;
 
     virtual TextureFormatSupportInfo queryTextureFormatSupport(EFormat::T format) const
     {
