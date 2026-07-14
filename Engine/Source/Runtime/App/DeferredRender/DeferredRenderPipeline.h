@@ -199,7 +199,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     {
         return _viewportDepthTextureCompat.get();
     }
-    Texture*       getViewportTexture() const override { return _viewportTextureCompat.get(); }
     bool           isShadowMappingEnabled() const override;
     IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override

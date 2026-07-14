@@ -21,8 +21,7 @@ struct AppAutomationFrameContext
     IRender*                                render                            = nullptr;
     RenderImage*                            postprocessImage                  = nullptr;
     RenderImage*                            viewportImage                     = nullptr;
-    Texture*                                viewportTexture                   = nullptr;
-    Texture*                                presentationTexture               = nullptr;
+    RenderImage*                            presentationImage                 = nullptr;
     std::function<bool()>                   requestRenderDocCapture;
     std::function<bool()>                   isRenderDocCapturePending;
     std::function<bool()>                   isRenderDocCaptureTerminal;
@@ -41,7 +40,7 @@ class AppAutomation
     static void applyRuntimeOverrides(App& app);
     static bool shouldDeferQuit(const App& app);
     static OffscreenJobQueueService buildOffscreenJobQueueService(App& app);
-    static void recordPresentationCapture(Texture* presentationSourceTexture,
+    static void recordPresentationCapture(RenderImage* presentationSourceImage,
                                           uint64_t frameIndex,
                                           ICommandBuffer* cmdBuf);
     static void onFrameCompleted(App& app, const AppAutomationFrameContext& frameContext);

@@ -81,9 +81,8 @@ struct ForwardRenderPipeline : public IRenderPipeline
     stdptr<ForwardViewportStage> _viewportStage;
     PostProcessingStage          _postProcessStage;
 
-    bool     bMSAA              = false;
+    bool               bMSAA                    = false;
     const RenderImage* _currentPostprocessOutput = nullptr;
-    Texture* viewportTexture    = nullptr;
 
     Extent2D      _pendingViewportExtent{};
     uint32_t      _pendingResourceRefreshMask = 0;
@@ -112,7 +111,6 @@ struct ForwardRenderPipeline : public IRenderPipeline
 
     void                         onViewportResized(Rect2D rect) override;
     Extent2D                     getViewportExtent() const override;
-    [[nodiscard]] Texture*       getViewportTexture() const override { return viewportTexture; }
     [[nodiscard]] EFormat::T     getViewportColorFormat() const override { return VIEWPORT_COLOR_FORMAT; }
     [[nodiscard]] EFormat::T     getViewportDepthFormat() const override { return DEPTH_FORMAT; }
     [[nodiscard]] const ForwardViewportResources& getCurrentViewportResources() const { return _viewportResources; }
@@ -120,7 +118,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
 
     [[nodiscard]] bool           isShadowMappingEnabled() const override;
     [[nodiscard]] std::shared_ptr<IImage> getShadowDepthImage() const override { return _shadowResources.depthImage; }
-    [[nodiscard]] RenderImage*   getViewportOutputImage() const override { return nullptr; }
+    [[nodiscard]] RenderImage*   getViewportOutputImage() const override { return bMSAA ? _viewportResources.resolveImage : _viewportResources.colorImage; }
     [[nodiscard]] Texture*       getViewportDepthTexture() const override { return _viewportResources.depth; }
     [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override;

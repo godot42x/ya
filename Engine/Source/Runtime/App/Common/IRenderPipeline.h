@@ -43,10 +43,9 @@ struct IRenderPipelineExecution
     virtual void onViewportResized(Rect2D rect) = 0;
     virtual void tick(const RenderPipelineFrameContext& frame) = 0;
 
-    [[nodiscard]] virtual Extent2D   getViewportExtent() const      = 0;
-    [[nodiscard]] virtual Texture*   getViewportTexture() const     = 0;
-    [[nodiscard]] virtual EFormat::T     getViewportColorFormat() const = 0;
-    [[nodiscard]] virtual EFormat::T     getViewportDepthFormat() const = 0;
+    [[nodiscard]] virtual Extent2D   getViewportExtent() const          = 0;
+    [[nodiscard]] virtual EFormat::T getViewportColorFormat() const     = 0;
+    [[nodiscard]] virtual EFormat::T getViewportDepthFormat() const     = 0;
 };
 
 struct IRenderPipelineSettingsUI

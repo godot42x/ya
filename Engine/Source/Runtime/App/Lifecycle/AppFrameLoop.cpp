@@ -163,10 +163,7 @@ int AppFrameLoop::iterate(App& app, float dt)
                                             .render                     = app.getRender(),
                                             .postprocessImage           = renderRuntime ? renderRuntime->getPostprocessOutputImage() : nullptr,
                                             .viewportImage              = renderRuntime ? renderRuntime->getActiveViewportImage() : nullptr,
-                                            .viewportTexture            = (renderRuntime && !renderRuntime->getActiveViewportImage())
-                                                ? renderRuntime->getActiveViewportTexture()
-                                                : nullptr,
-                                            .presentationTexture        = renderRuntime ? renderRuntime->getPresentationTexture() : nullptr,
+                                            .presentationImage          = renderRuntime ? renderRuntime->getPresentationImage() : nullptr,
                                             .requestRenderDocCapture    = diagnosticsService
                                                 ? [diagnosticsService]() { return diagnosticsService->requestAutomationRenderDocCapture(); }
                                                 : std::function<bool()>{},
@@ -563,7 +560,7 @@ void AppFrameLoop::tickRender(App& app, float dt)
                     return;
                 }
 
-                AppAutomation::recordPresentationCapture(renderRuntime->getPresentationTexture(),
+                AppAutomation::recordPresentationCapture(renderRuntime->getPresentationImage(),
                                                          app.getFrameIndex(),
                                                          cmdBuf);
             },

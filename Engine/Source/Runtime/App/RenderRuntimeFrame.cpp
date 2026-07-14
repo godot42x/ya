@@ -116,14 +116,6 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
     });
 }
 
-Texture* RenderRuntime::getActiveViewportTexture() const
-{
-    if (auto* pipeline = getActivePipelineExecution()) {
-        return pipeline->getViewportTexture();
-    }
-    return nullptr;
-}
-
 RenderImage* RenderRuntime::getActiveViewportImage() const
 {
     if (auto* pipeline = getActivePipelineDebugOutputs()) {

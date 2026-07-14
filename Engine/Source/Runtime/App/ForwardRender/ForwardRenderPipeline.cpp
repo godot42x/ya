@@ -39,10 +39,14 @@ ForwardViewportResources buildForwardViewportResources(const IRenderTarget* rend
         return resources;
     }
 
-    resources.color   = renderTarget->getCurrentColorTexture(0);
-    resources.depth   = renderTarget->getCurrentDepthTexture();
-    resources.resolve = renderTarget->getCurrentResolveTexture();
-    resources.extent  = renderTarget->getExtent();
+    resources.color        = renderTarget->getCurrentColorTexture(0);
+    resources.depth        = renderTarget->getCurrentDepthTexture();
+    resources.resolve      = renderTarget->getCurrentResolveTexture();
+    resources.colorOwner   = renderTarget->getCurrentColorAttachmentShared(0);
+    resources.depthOwner   = renderTarget->getCurrentDepthAttachmentShared();
+    resources.resolveOwner = renderTarget->getCurrentResolveAttachmentShared();
+    resources.syncRawViews();
+    resources.extent = renderTarget->getExtent();
     return resources;
 }
 
@@ -567,7 +571,6 @@ void ForwardRenderPipeline::finalizeViewportPass(ICommandBuffer* cmdBuf)
     cmdBuf->endRendering(_viewportRI);
 
     auto* inputTexture = bMSAA ? _viewportResources.resolve : _viewportResources.color;
-    viewportTexture = inputTexture;
 
     if (RenderImage* postprocessOutput = _postProcessStage.execute(
             cmdBuf, inputTexture, _lastFrameInput.viewportRect.extent, &_lastTickCtx))
@@ -578,7 +581,7 @@ void ForwardRenderPipeline::finalizeViewportPass(ICommandBuffer* cmdBuf)
         _currentPostprocessOutput = nullptr;
     }
 
-    YA_CORE_ASSERT(viewportTexture, "Failed to get viewport texture for postprocessing");
+    YA_CORE_ASSERT(inputTexture, "Failed to get viewport texture for postprocessing");
 }
 
 void ForwardRenderPipeline::shutdown()
@@ -594,7 +597,6 @@ void ForwardRenderPipeline::shutdown()
     _pendingResourceRefreshMask = 0;
     _viewportFormats = {};
     _viewportResources = {};
-    viewportTexture = nullptr;
     _deleter.clear();
 }
 

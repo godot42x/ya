@@ -319,8 +319,7 @@ bool handleScreenshotAutomation(App& app, const AppAutomationFrameContext& frame
                                                                       AppAutomation::buildOffscreenJobQueueService(app),
                                                                       frameContext.postprocessImage,
                                                                       frameContext.viewportImage,
-                                                                      frameContext.viewportTexture,
-                                                                      frameContext.presentationTexture,
+                                                                      frameContext.presentationImage,
                                                                       runtimeState.screenshot,
                                                                       *automation.screenshotPath,
                                                                       automation.screenshotTarget);
@@ -546,12 +545,12 @@ void AppAutomation::applyRuntimeOverrides(App& app)
     shadow_settings::applyAutomationOverrides(app.getDesc().automation.shadow, app.getShadowSettings());
 }
 
-void AppAutomation::recordPresentationCapture(Texture* presentationSourceTexture,
+void AppAutomation::recordPresentationCapture(RenderImage* presentationSourceImage,
                                               uint64_t frameIndex,
                                               ICommandBuffer* cmdBuf)
 {
     auto& runtimeState = getAutomationRuntimeState();
-    AppScreenshotCapture::recordPresentationCapture(presentationSourceTexture, frameIndex, runtimeState.screenshot, cmdBuf);
+    AppScreenshotCapture::recordPresentationCapture(presentationSourceImage, frameIndex, runtimeState.screenshot, cmdBuf);
 }
 
 OffscreenJobQueueService AppAutomation::buildOffscreenJobQueueService(App& app)

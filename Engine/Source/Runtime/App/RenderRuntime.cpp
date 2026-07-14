@@ -145,6 +145,15 @@ RenderImage* RenderRuntime::getPostprocessOutputImage() const
     return nullptr;
 }
 
+RenderImage* RenderRuntime::getPresentationImage() const
+{
+    if (!_screenRT) {
+        return nullptr;
+    }
+
+    return const_cast<IRenderTarget*>(_screenRT.get())->getCurrentColorAttachment(0);
+}
+
 Texture* RenderRuntime::getPresentationTexture() const
 {
     if (!_screenRT) {

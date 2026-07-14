@@ -41,12 +41,11 @@ class AppScreenshotCapture
                         const OffscreenJobQueueService& offscreenQueueService,
                         RenderImage* postprocessSourceImage,
                         RenderImage* viewportSourceImage,
-                        Texture* viewportSourceTexture,
-                        Texture* presentationSourceTexture,
+                        RenderImage* presentationSourceImage,
                         AppScreenshotCaptureState& state,
                         const std::string& outputPath,
                         EAutomationScreenshotTarget target);
-    static bool recordPresentationCapture(Texture* presentationSourceTexture,
+    static bool recordPresentationCapture(RenderImage* presentationSourceImage,
                                           uint64_t frameIndex,
                                           AppScreenshotCaptureState& state,
                                           ICommandBuffer* cmdBuf);

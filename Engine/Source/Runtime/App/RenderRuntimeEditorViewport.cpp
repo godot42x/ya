@@ -90,7 +90,7 @@ void RenderRuntime::updateEditorViewportContext(EditorLayer* editorLayer)
         ? debugOutputs.postprocessOutputImage->getImageView()
         : (debugOutputs.viewportOutputImage && debugOutputs.viewportOutputImage->getImageView()
             ? debugOutputs.viewportOutputImage->getImageView()
-            : (getActiveViewportTexture() ? getActiveViewportTexture()->getImageView() : nullptr));
+            : nullptr);
     ctx.debugSpec.categories     = {
         {.id = "shadow", .label = "Shadow"},
         {.id = "skybox", .label = "Skybox"},

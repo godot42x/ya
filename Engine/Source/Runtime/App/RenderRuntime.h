@@ -172,7 +172,7 @@ struct RenderRuntime
 
     [[nodiscard]] RenderImage* getPostprocessOutputImage() const;
     [[nodiscard]] RenderImage* getActiveViewportImage() const;
-    [[nodiscard]] Texture* getActiveViewportTexture() const;
+    [[nodiscard]] RenderImage* getPresentationImage() const;
     [[nodiscard]] Texture* getPresentationTexture() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;
     [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog() const;

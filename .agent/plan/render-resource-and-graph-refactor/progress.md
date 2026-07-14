@@ -25,6 +25,12 @@
 
 ## 最新验证
 
+- 2026-07-14：editor/presentation screenshot automation 链现在也改为优先消费 `RenderImage*`，不再把 presentation source 当成 `Texture*` 在 automation/request/record 边界上传递。`AppAutomationFrameContext`、`AppScreenshotCapture::{request,recordPresentationCapture}`、`AppFrameLoop` 与 `RenderRuntime` 新增的 `getPresentationImage()` 已统一收口到 presentation color attachment image。
+- 直接收益：automation/editor screenshot 这条链的 presentation source 和 viewport/postprocess 主路径终于回到同一种 owner 语义，不再额外依赖 compat `Texture::wrap()` 作为截图输入真相；后续若继续削减 `_screenRT` 的 facade 职责，也不用再先补这一段生命周期桥接。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*'` 45/45 通过
+  - `HelloMaterial --exit-after-frame=400 --log-level=warn --log-detail-level=error` 退出码 0，过滤后未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|AddressSanitizer`
 - 2026-07-14：Deferred/Forward 上没有消费者的 concrete RT accessor 已继续删除。`DeferredRenderPipeline::getGBufferRT()`、`DeferredRenderPipeline::getShadowDepthRT()` 和 `ForwardRenderPipeline::getShadowDepthRT()` 这类只暴露 legacy owner、但当前 runtime/debug 路径已不再使用的逃生口已移除。
 - 直接收益：这一步不改行为，但继续压缩了 concrete pipeline 直接把 `IRenderTarget` 暴露给外层的面积，减少后续 agent 或新调用点再次绕开 pipeline frame state / debug outputs 的机会。
 - 验证结果：
@@ -57,6 +63,24 @@
 - 当前结论：这条 handoff 还不能直接删除。要彻底移除，至少需要先收紧 shadow descriptor 的实际 layer 覆盖范围，或把 shadow image 的未写子资源初始化/维持到可采样布局，并把这一契约显式纳入 graph/resource-state 模型。
 - 2026-07-14：runtime/editor/automation 对 Deferred viewport 主输出的消费链开始脱离 `IRenderTarget -> Texture` 兼容出口。`IRenderPipelineDebugOutputs` 新增 `getViewportOutputImage()`，Deferred 通过 `_currentViewportResources.color` 直接导出 viewport scene color；editor viewport 与 automation screenshot 现在都会优先消费 `RenderImage*`，只有 Forward 或遗留路径缺失时才回退到 `Texture*`。
 - 直接收益：`_viewportRT` 不再继续被 runtime 侧默认为“最终 viewport 输出身份”，Deferred viewport color 的 snapshot/export 语义比过去更接近 graph/imported resource 真相；同时 automation/editor 对 compat `Texture::wrap()` 的依赖进一步缩小，为后续继续削减 `_viewportRT` 的 legacy facade 职责留出了更清晰的边界。
+- 2026-07-14：Forward viewport snapshot 现在也开始同步导出 `RenderImage*`。`ForwardViewportResources` 除了 compat `Texture*` 之外，会一并缓存 color/depth/resolve attachment 的 `RenderImage*`；`ForwardRenderPipeline::getViewportOutputImage()` 直接返回当前 scene viewport image，旧的每帧赋值 `viewportTexture` 成员已删除。
+- 直接收益：automation/editor 获取 active viewport 输出时，不再因为 Forward 缺少 `RenderImage*` 导出而被迫退回 `Texture*`；与此同时 Forward 也少了一份容易与当前 RT snapshot 脱节的 raw texture 状态，继续向“snapshot 才是真相，compat texture 只是 facade”收口。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*'` 45/45 通过
+  - `HelloMaterial --exit-after-frame=400 --log-level=warn --log-detail-level=error` 退出码 0，过滤后未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|AddressSanitizer`
+- 2026-07-14：Forward viewport snapshot 继续补齐显式 attachment owner。`ForwardViewportResources` 现会缓存 `color/depth/resolve` 的 shared `RenderImage` owner，并统一 `syncRawViews()` 生成 raw image 指针；这让 Forward 在导出 viewport image 的同时，也把当前帧 attachment 的保活边界一起前移到 pipeline snapshot。
+- 直接收益：Forward 不再只是在 RT 还活着时“碰巧能拿到 raw image 指针”，而是显式持有当前帧 viewport attachment owner。后续如果继续削弱 `viewportRT` 的 legacy owner/facade 职责，viewport image/debug/automation 这条链不需要再倒回去补生命周期。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*'` 45/45 通过
+  - `HelloMaterial --exit-after-frame=400 --log-level=warn --log-detail-level=error` 退出码 0，过滤后未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|AddressSanitizer`
+- 2026-07-14：non-editor automation viewport 截图链已不再保留 `Texture*` fallback。`AppAutomationFrameContext`、`AppFrameLoop`、`AppScreenshotCapture::request()` 和 `RenderRuntime` 的公共 viewport 接口中，`viewportTexture/getViewportTexture()/getActiveViewportTexture()` 已移除；runtime/editor/automation 现在统一优先消费 `RenderImage*` viewport/postprocess 输出，editor screenshot 仍单独保留 `presentationTexture`。
+- 直接收益：这条热路径不再同时维护 `RenderImage*` 与 `Texture*` 两套 viewport 输出契约，Forward/Deferred 既然都已经能稳定导出 viewport image，就不需要再让 automation 为兼容接口兜底。剩余 `Texture*` 主要收缩到 presentation/editor screenshot 与少量 debug depth/compat facade。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*'` 45/45 通过
+  - `HelloMaterial --exit-after-frame=400 --log-level=warn --log-detail-level=error` 退出码 0，过滤后未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|AddressSanitizer`
 - 2026-07-14：Deferred attachment snapshot 现在不再在 `beginTick()` 每帧无条件从 `_gBufferRT/_viewportRT` 回读。`_currentGBufferResources/_currentViewportResources` 改为只在初始化和显式 pending refresh / replacement 路径里更新，`beginTick()` 只消费已有 snapshot 并断言 legacy attachment dirty 没有越过 pipeline-local refresh 边界。
 - 直接收益：Deferred 的 frame state 更接近“pipeline-local owner/replacement/snapshot”协议，而不是“每帧再向 legacy RT 重新询问当前资源”；后续若继续把 `_gBufferRT/_viewportRT` 收缩成纯 owner/replacement facade，stage/graph 侧已经更少依赖它们作为实时真相来源。
 - 2026-07-14：Deferred 对外仍需提供的 compat viewport/depth `Texture*` 现在也开始从 snapshot 派生，而不是再通过 `_viewportRT->getCurrent*Texture()` 回查 framebuffer/RT。pipeline 在 `refreshViewportSnapshot()` 时同步重建 `_viewportTextureCompat/_viewportDepthTextureCompat`，editor fallback、automation fallback 和 debug depth 兼容出口都改为消费这组 snapshot-backed compat texture。
