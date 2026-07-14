@@ -55,17 +55,16 @@ struct CubeMap2PBRIrradianceMap
     };
 
     stdptr<IDescriptorSetLayout> _descriptorSetLayout = nullptr;
-    stdptr<IDescriptorPool>      _descriptorPool      = nullptr;
     stdptr<Sampler>              _inputSampler        = nullptr;
     stdptr<IPipelineLayout>      _pipelineLayout      = nullptr;
     stdptr<IGraphicsPipeline>    _pipeline            = nullptr;
-    DescriptorSetHandle          _descriptorSet       = nullptr;
     EFormat::T                   _pipelineColorFormat = EFormat::Undefined;
     std::vector<stdptr<IImageView>> _transientFaceViews;
 
     struct ExecuteResult
     {
-        bool bSuccess = false;
+        bool                               bSuccess = false;
+        std::vector<std::shared_ptr<void>> keepAliveResources;
     };
 
     struct ExecuteContext

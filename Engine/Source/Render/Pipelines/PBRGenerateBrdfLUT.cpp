@@ -2,6 +2,7 @@
 
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/RenderGraphExecutor.h"
+#include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Render.h"
 
 namespace ya
@@ -12,33 +13,7 @@ namespace
 
 RGImportedTextureDesc makeBrdfLutImportedTextureDesc(const RenderImage& image)
 {
-    YA_CORE_ASSERT(image.getImageShared() != nullptr, "PBR BRDF LUT graph import requires a backing image");
-
-    IImage* rawImage = image.getImage();
-    YA_CORE_ASSERT(rawImage != nullptr, "PBR BRDF LUT graph import requires a valid image");
-
-    return RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label       = "PBRGenerateBrdfLUT.Output",
-            .format      = image.getFormat(),
-            .extent      = Extent3D{image.getWidth(), image.getHeight(), 1},
-            .mipLevels   = rawImage->getMipLevels(),
-            .arrayLayers = rawImage->getArrayLayers(),
-            .usage       = rawImage->getUsage(),
-        },
-        .importDesc = ImportedImageDesc{
-            .label         = "PBRGenerateBrdfLUT.Output",
-            .nativeHandle  = static_cast<void*>(rawImage->getHandle()),
-            .format        = image.getFormat(),
-            .usage         = rawImage->getUsage(),
-            .extent        = Extent3D{image.getWidth(), image.getHeight(), 1},
-            .mipLevels     = rawImage->getMipLevels(),
-            .arrayLayers   = rawImage->getArrayLayers(),
-            .initialLayout = rawImage->getCompatibilityLayout(),
-            .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-        },
-        .image = image.getImageShared(),
-    };
+    return makeImportedTextureDesc(image, "PBRGenerateBrdfLUT.Output", EImageLayout::ShaderReadOnlyOptimal);
 }
 
 } // namespace

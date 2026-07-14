@@ -1,5 +1,6 @@
 #include "EquidistantCylindrical2CubeMap.h"
 #include "Render/Core/RenderGraphExecutor.h"
+#include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/RenderResourceFactory.h"
 
 #include "Render/Render.h"
@@ -54,7 +55,7 @@ DescriptorPoolCreateInfo makeDescriptorPoolCreateInfo()
 
 void EquidistantCylindrical2CubeMap::init(IRender* render)
 {
-    if (_render == render && _pipelineLayout && _descriptorPool && _inputSampler) {
+    if (_render == render && _pipelineLayout && _inputSampler) {
         return;
     }
 
@@ -76,7 +77,6 @@ void EquidistantCylindrical2CubeMap::init(IRender* render)
                                               descriptorSetLayouts);
 
     _pipeline       = IGraphicsPipeline::create(_render);
-    _descriptorPool = IDescriptorPool::create(_render, makeDescriptorPoolCreateInfo());
     _inputSampler   = _render->getResourceFactory()->createSampler(
         SamplerDesc{
               .label        = "EquidistantCylindrical2CubeMap_InputSampler",
@@ -84,22 +84,14 @@ void EquidistantCylindrical2CubeMap::init(IRender* render)
               .addressModeV = ESamplerAddressMode::ClampToEdge,
               .addressModeW = ESamplerAddressMode::ClampToEdge,
         });
-
-    std::vector<DescriptorSetHandle> descriptorSets;
-    const bool                       bAllocateOK = _descriptorPool->allocateDescriptorSets(_descriptorSetLayout, 1, descriptorSets);
-    YA_CORE_ASSERT(bAllocateOK && descriptorSets.size() == 1,
-                   "Failed to allocate EquidistantCylindrical2CubeMap descriptor set");
-    _descriptorSet = descriptorSets[0];
 }
 
 void EquidistantCylindrical2CubeMap::shutdown()
 {
-    _descriptorSet = nullptr;
     _pipeline.reset();
     _pipelineLayout.reset();
     _inputSampler.reset();
     _transientFaceViews.clear();
-    _descriptorPool.reset();
     _descriptorSetLayout.reset();
     _pipelineColorFormat = EFormat::Undefined;
     _render              = nullptr;
@@ -192,10 +184,26 @@ EquidistantCylindrical2CubeMap::ExecuteResult EquidistantCylindrical2CubeMap::ex
 
     _transientFaceViews.clear();
 
+    auto transientDescriptorPool = IDescriptorPool::create(_render, makeDescriptorPoolCreateInfo());
+    YA_CORE_ASSERT(transientDescriptorPool, "Failed to create transient EquidistantCylindrical2CubeMap descriptor pool");
+    if (!transientDescriptorPool) {
+        return result;
+    }
+
+    std::vector<DescriptorSetHandle> descriptorSets;
+    const bool bAllocateOK = transientDescriptorPool->allocateDescriptorSets(_descriptorSetLayout, 1, descriptorSets);
+    YA_CORE_ASSERT(bAllocateOK && descriptorSets.size() == 1,
+                   "Failed to allocate transient EquidistantCylindrical2CubeMap descriptor set");
+    if (!bAllocateOK || descriptorSets.size() != 1) {
+        return result;
+    }
+    const DescriptorSetHandle descriptorSet = descriptorSets[0];
+    result.keepAliveResources.push_back(transientDescriptorPool);
+
     _render->getDescriptorHelper()->updateDescriptorSets(
         {
             IDescriptorSetHelper::genImageWrite(
-                _descriptorSet,
+                descriptorSet,
                 0,
                 0,
                 EPipelineDescriptorType::CombinedImageSampler,
@@ -207,61 +215,25 @@ EquidistantCylindrical2CubeMap::ExecuteResult EquidistantCylindrical2CubeMap::ex
 
     const auto extent = ctx.output->getExtent();
     RenderGraph graph;
-    const auto importedInput = graph.importTexture(RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label       = ctx.input->getLabel(),
-            .format      = ctx.input->getFormat(),
-            .extent      = Extent3D{ctx.input->getWidth(), ctx.input->getHeight(), 1},
-            .mipLevels   = ctx.input->getImage()->getMipLevels(),
-            .arrayLayers = ctx.input->getImage()->getArrayLayers(),
-            .usage       = ctx.input->getImage()->getUsage(),
-        },
-        .importDesc = ImportedImageDesc{
-            .label         = ctx.input->getLabel(),
-            .nativeHandle  = static_cast<void*>(ctx.input->getImage()->getHandle()),
-            .format        = ctx.input->getFormat(),
-            .usage         = ctx.input->getImage()->getUsage(),
-            .extent        = Extent3D{ctx.input->getWidth(), ctx.input->getHeight(), 1},
-            .mipLevels     = ctx.input->getImage()->getMipLevels(),
-            .arrayLayers   = ctx.input->getImage()->getArrayLayers(),
-            .initialLayout = ctx.input->getImage()->getCompatibilityLayout(),
-            .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-        },
-        .image = ctx.input->getImageShared(),
-    });
+    const auto importedInput = graph.importTexture(
+        makeImportedTextureDesc(*ctx.input, ctx.input->getLabel(), EImageLayout::ShaderReadOnlyOptimal));
 
     for (uint32_t face = 0; face < CubeFace_Count; ++face) {
-        const auto faceHandle = graph.importTexture(RGImportedTextureDesc{
-            .desc = RGTextureDesc{
-                .label       = std::format("{}_Face_{}", ctx.output->getLabel(), face),
-                .format      = ctx.output->getFormat(),
-                .extent      = Extent3D{extent.width, extent.height, 1},
-                .mipLevels   = 1,
-                .arrayLayers = 1,
-                .usage       = ctx.output->getImage()->getUsage(),
-            },
-            .importDesc = ImportedImageDesc{
-                .label         = std::format("{}_Face_{}", ctx.output->getLabel(), face),
-                .nativeHandle  = static_cast<void*>(ctx.output->getImage()->getHandle()),
-                .format        = ctx.output->getFormat(),
-                .usage         = ctx.output->getImage()->getUsage(),
-                .extent        = Extent3D{ctx.output->getWidth(), ctx.output->getHeight(), 1},
-                .mipLevels     = ctx.output->getImage()->getMipLevels(),
-                .arrayLayers   = ctx.output->getImage()->getArrayLayers(),
-                .initialLayout = ctx.output->getImage()->getCompatibilityLayout(),
-                .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-            },
-            .image = ctx.output->getImageShared(),
-            .viewDesc = ImageViewCreateInfo{
-                .label          = std::format("{}_Face_{}", ctx.output->getLabel(), face),
-                .viewType       = EImageViewType::View2D,
-                .aspectFlags    = EImageAspect::Color,
-                .baseMipLevel   = 0,
-                .levelCount     = 1,
-                .baseArrayLayer = face,
-                .layerCount     = 1,
-            },
-        });
+        const auto faceHandle = graph.importTexture(
+            makeImportedSubresourceTextureDesc(
+                ctx.output->getImageShared(),
+                ImageViewCreateInfo{
+                    .label          = std::format("{}_Face_{}", ctx.output->getLabel(), face),
+                    .viewType       = EImageViewType::View2D,
+                    .aspectFlags    = EImageAspect::Color,
+                    .baseMipLevel   = 0,
+                    .levelCount     = 1,
+                    .baseArrayLayer = face,
+                    .layerCount     = 1,
+                },
+                Extent3D{extent.width, extent.height, 1},
+                std::format("{}_Face_{}", ctx.output->getLabel(), face),
+                EImageLayout::ShaderReadOnlyOptimal));
 
         const auto pushConstant = buildPushConstant(face, ctx.bFlipVertical);
         graph.addPass(
@@ -281,17 +253,17 @@ EquidistantCylindrical2CubeMap::ExecuteResult EquidistantCylindrical2CubeMap::ex
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 });
                 rgCtx.getCommandBuffer().bindPipeline(_pipeline.get());
-                rgCtx.getCommandBuffer().setViewport(0.0f,
+                    rgCtx.getCommandBuffer().setViewport(0.0f,
                                                     0.0f,
                                                     static_cast<float>(extent.width),
                                                     static_cast<float>(extent.height),
                                                     0.0f,
                                                     1.0f);
-                rgCtx.getCommandBuffer().setScissor(0, 0, extent.width, extent.height);
-                rgCtx.getCommandBuffer().bindDescriptorSets(_pipelineLayout.get(), 0, {_descriptorSet});
-                rgCtx.getCommandBuffer().pushConstants(_pipelineLayout.get(),
-                                                       EShaderStage::Vertex | EShaderStage::Fragment,
-                                                       0,
+                    rgCtx.getCommandBuffer().setScissor(0, 0, extent.width, extent.height);
+                    rgCtx.getCommandBuffer().bindDescriptorSets(_pipelineLayout.get(), 0, {descriptorSet});
+                    rgCtx.getCommandBuffer().pushConstants(_pipelineLayout.get(),
+                                                           EShaderStage::Vertex | EShaderStage::Fragment,
+                                                           0,
                                                        sizeof(PushConstant),
                                                        &pushConstant);
                 rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
@@ -299,8 +271,11 @@ EquidistantCylindrical2CubeMap::ExecuteResult EquidistantCylindrical2CubeMap::ex
             });
     }
 
-    RenderGraphExecutor executor(*_render->getResourceFactory());
-    result.bSuccess = executor.execute(graph, *ctx.cmdBuf);
+    auto executor   = std::make_shared<RenderGraphExecutor>(*_render->getResourceFactory());
+    result.bSuccess = executor->execute(graph, *ctx.cmdBuf);
+    if (result.bSuccess) {
+        result.keepAliveResources.push_back(std::move(executor));
+    }
     return result;
 }
 

@@ -1,5 +1,6 @@
 #include "CubeMap2PBRPrefilteredEnv.h"
 #include "Render/Core/RenderGraphExecutor.h"
+#include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/RenderResourceFactory.h"
 
 #include "Core/Math/Math.h"
@@ -67,7 +68,7 @@ glm::mat4 buildCaptureProjection()
 void CubeMap2PBRPrefilteredEnv::init(IRender* render)
 {
 
-    if (_render == render && _pipelineLayout && _descriptorPool && _inputSampler) {
+    if (_render == render && _pipelineLayout && _inputSampler) {
         return;
     }
 
@@ -88,7 +89,6 @@ void CubeMap2PBRPrefilteredEnv::init(IRender* render)
                                                    descriptorSetLayouts);
 
     _pipeline       = IGraphicsPipeline::create(_render);
-    _descriptorPool = IDescriptorPool::create(_render, makePrefilterDescriptorPoolCreateInfo());
     _inputSampler   = _render->getResourceFactory()->createSampler(
         SamplerDesc{
             .label        = "CubeMap2PBRPrefilterEnv_InputSampler",
@@ -96,22 +96,14 @@ void CubeMap2PBRPrefilteredEnv::init(IRender* render)
             .addressModeV = ESamplerAddressMode::ClampToEdge,
             .addressModeW = ESamplerAddressMode::ClampToEdge,
         });
-
-    std::vector<DescriptorSetHandle> descriptorSets;
-    const bool                       bAllocateOK = _descriptorPool->allocateDescriptorSets(_descriptorSetLayout, 1, descriptorSets);
-    YA_CORE_ASSERT(bAllocateOK && descriptorSets.size() == 1,
-                   "Failed to allocate CubeMap2PBRPrefilterEnv descriptor set");
-    _descriptorSet = descriptorSets[0];
 }
 
 void CubeMap2PBRPrefilteredEnv::shutdown()
 {
-    _descriptorSet = nullptr;
     _pipeline.reset();
     _pipelineLayout.reset();
     _inputSampler.reset();
     _transientFaceViews.clear();
-    _descriptorPool.reset();
     _descriptorSetLayout.reset();
     _pipelineColorFormat = EFormat::Undefined;
     _render              = nullptr;
@@ -222,10 +214,26 @@ CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(cons
         return result;
     }
 
+    auto transientDescriptorPool = IDescriptorPool::create(_render, makePrefilterDescriptorPoolCreateInfo());
+    YA_CORE_ASSERT(transientDescriptorPool, "Failed to create transient CubeMap2PBRPrefilterEnv descriptor pool");
+    if (!transientDescriptorPool) {
+        return result;
+    }
+
+    std::vector<DescriptorSetHandle> descriptorSets;
+    const bool bAllocateOK = transientDescriptorPool->allocateDescriptorSets(_descriptorSetLayout, 1, descriptorSets);
+    YA_CORE_ASSERT(bAllocateOK && descriptorSets.size() == 1,
+                   "Failed to allocate transient CubeMap2PBRPrefilterEnv descriptor set");
+    if (!bAllocateOK || descriptorSets.size() != 1) {
+        return result;
+    }
+    const DescriptorSetHandle descriptorSet = descriptorSets[0];
+    result.keepAliveResources.push_back(transientDescriptorPool);
+
     _render->getDescriptorHelper()->updateDescriptorSets(
         {
             IDescriptorSetHelper::genImageWrite(
-                _descriptorSet,
+                descriptorSet,
                 0,
                 0,
                 EPipelineDescriptorType::CombinedImageSampler,
@@ -237,28 +245,8 @@ CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(cons
 
     const uint32_t        mipLevels = std::max(1u, ctx.output->getImage()->getMipLevels());
     RenderGraph graph;
-    const auto importedInput = graph.importTexture(RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label       = ctx.input->getLabel(),
-            .format      = ctx.input->getFormat(),
-            .extent      = Extent3D{ctx.input->getWidth(), ctx.input->getHeight(), 1},
-            .mipLevels   = ctx.input->getImage()->getMipLevels(),
-            .arrayLayers = ctx.input->getImage()->getArrayLayers(),
-            .usage       = ctx.input->getImage()->getUsage(),
-        },
-        .importDesc = ImportedImageDesc{
-            .label         = ctx.input->getLabel(),
-            .nativeHandle  = static_cast<void*>(ctx.input->getImage()->getHandle()),
-            .format        = ctx.input->getFormat(),
-            .usage         = ctx.input->getImage()->getUsage(),
-            .extent        = Extent3D{ctx.input->getWidth(), ctx.input->getHeight(), 1},
-            .mipLevels     = ctx.input->getImage()->getMipLevels(),
-            .arrayLayers   = ctx.input->getImage()->getArrayLayers(),
-            .initialLayout = ctx.input->getImage()->getCompatibilityLayout(),
-            .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-        },
-        .image = ctx.input->getImageShared(),
-    });
+    const auto importedInput = graph.importTexture(
+        makeImportedTextureDesc(*ctx.input, ctx.input->getLabel(), EImageLayout::ShaderReadOnlyOptimal));
 
     for (uint32_t mip = 0; mip < mipLevels; ++mip) {
         const uint32_t mipWidth  = std::max(1u, ctx.output->getWidth() >> mip);
@@ -266,37 +254,21 @@ CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(cons
         const float    roughness = mipLevels <= 1 ? 0.0f : static_cast<float>(mip) / static_cast<float>(mipLevels - 1);
 
         for (uint32_t face = 0; face < CubeFace_Count; ++face) {
-            const auto faceHandle = graph.importTexture(RGImportedTextureDesc{
-                .desc = RGTextureDesc{
-                    .label       = std::format("{}_Mip_{}_Face_{}", ctx.output->getLabel(), mip, face),
-                    .format      = ctx.output->getFormat(),
-                    .extent      = Extent3D{mipWidth, mipHeight, 1},
-                    .mipLevels   = 1,
-                    .arrayLayers = 1,
-                    .usage       = ctx.output->getImage()->getUsage(),
-                },
-                .importDesc = ImportedImageDesc{
-                    .label         = std::format("{}_Mip_{}_Face_{}", ctx.output->getLabel(), mip, face),
-                    .nativeHandle  = static_cast<void*>(ctx.output->getImage()->getHandle()),
-                    .format        = ctx.output->getFormat(),
-                    .usage         = ctx.output->getImage()->getUsage(),
-                    .extent        = Extent3D{ctx.output->getWidth(), ctx.output->getHeight(), 1},
-                    .mipLevels     = ctx.output->getImage()->getMipLevels(),
-                    .arrayLayers   = ctx.output->getImage()->getArrayLayers(),
-                    .initialLayout = ctx.output->getImage()->getCompatibilityLayout(),
-                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                },
-                .image = ctx.output->getImageShared(),
-                .viewDesc = ImageViewCreateInfo{
-                    .label          = std::format("{}_Mip_{}_Face_{}", ctx.output->getLabel(), mip, face),
-                    .viewType       = EImageViewType::View2D,
-                    .aspectFlags    = EImageAspect::Color,
-                    .baseMipLevel   = mip,
-                    .levelCount     = 1,
-                    .baseArrayLayer = face,
-                    .layerCount     = 1,
-                },
-            });
+            const auto faceHandle = graph.importTexture(
+                makeImportedSubresourceTextureDesc(
+                    ctx.output->getImageShared(),
+                    ImageViewCreateInfo{
+                        .label          = std::format("{}_Mip_{}_Face_{}", ctx.output->getLabel(), mip, face),
+                        .viewType       = EImageViewType::View2D,
+                        .aspectFlags    = EImageAspect::Color,
+                        .baseMipLevel   = mip,
+                        .levelCount     = 1,
+                        .baseArrayLayer = face,
+                        .layerCount     = 1,
+                    },
+                    Extent3D{mipWidth, mipHeight, 1},
+                    std::format("{}_Mip_{}_Face_{}", ctx.output->getLabel(), mip, face),
+                    EImageLayout::ShaderReadOnlyOptimal));
             const auto pushConstant = buildPushConstant(face, roughness);
             graph.addPass(
                 std::format("CubeMap2PBRPrefilterEnv_Mip_{}_Face_{}", mip, face),
@@ -317,7 +289,7 @@ CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(cons
                     rgCtx.getCommandBuffer().bindPipeline(_pipeline.get());
                     rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(mipWidth), static_cast<float>(mipHeight), 0.0f, 1.0f);
                     rgCtx.getCommandBuffer().setScissor(0, 0, mipWidth, mipHeight);
-                    rgCtx.getCommandBuffer().bindDescriptorSets(_pipelineLayout.get(), 0, {_descriptorSet});
+                    rgCtx.getCommandBuffer().bindDescriptorSets(_pipelineLayout.get(), 0, {descriptorSet});
                     rgCtx.getCommandBuffer().pushConstants(_pipelineLayout.get(),
                                                            EShaderStage::Vertex | EShaderStage::Fragment,
                                                            0,
@@ -329,8 +301,11 @@ CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(cons
         }
     }
 
-    RenderGraphExecutor executor(*_render->getResourceFactory());
-    result.bSuccess = executor.execute(graph, *ctx.cmdBuf);
+    auto executor   = std::make_shared<RenderGraphExecutor>(*_render->getResourceFactory());
+    result.bSuccess = executor->execute(graph, *ctx.cmdBuf);
+    if (result.bSuccess) {
+        result.keepAliveResources.push_back(std::move(executor));
+    }
     return result;
 }
 

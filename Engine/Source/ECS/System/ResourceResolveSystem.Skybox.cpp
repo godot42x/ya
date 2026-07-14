@@ -219,9 +219,11 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
                 // do the convert job
                 auto job       = ya::makeShared<OffscreenJobState>();
                 job->debugName = std::format("SkyboxCubemap_{}", static_cast<uint32_t>(entity));
+                auto jobResult = job->result;
                 job->executeFn = [&pipeline = getCylindrical2CubePipeline(),
                                   src       = sourceTexture,
-                                  flipV     = sc.cylindricalSource.flipVertical](
+                                  flipV     = sc.cylindricalSource.flipVertical,
+                                  jobResult](
                                      ICommandBuffer* cmdBuf, RenderImage* output) -> bool {
                     auto result = pipeline.execute({
                         .cmdBuf        = cmdBuf,
@@ -229,6 +231,12 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
                         .output        = output,
                         .bFlipVertical = flipV,
                     });
+                    if (jobResult && !result.keepAliveResources.empty()) {
+                        auto& retained = jobResult->retainedResources;
+                        retained.insert(retained.end(),
+                                        std::make_move_iterator(result.keepAliveResources.begin()),
+                                        std::make_move_iterator(result.keepAliveResources.end()));
+                    }
                     if (result.transientOutputArrayView) {
                         DeferredDeletionQueue::get().retireResource(
                             result.transientOutputArrayView);

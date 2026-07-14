@@ -15,7 +15,8 @@ struct ICommandBuffer;
 
 struct OffscreenJobResult
 {
-    std::shared_ptr<RenderImage> outputImage = nullptr;
+    std::shared_ptr<RenderImage>        outputImage        = nullptr;
+    std::vector<std::shared_ptr<void>>  retainedResources;
 };
 
 enum class EOffscreenJobPhase : uint8_t

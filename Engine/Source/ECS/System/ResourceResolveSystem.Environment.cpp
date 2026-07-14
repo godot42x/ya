@@ -139,11 +139,13 @@ std::shared_ptr<OffscreenJobState> createEnvironmentCubemapJob(ResourceResolveSy
 {
     auto job       = std::make_shared<OffscreenJobState>();
     job->debugName = std::format("EnvironmentCubemap_{}", static_cast<uint32_t>(entity));
+    auto jobResult = job->result;
 
     // TODO(user): this is the single cubemap-preprocess job hook. Replace or extend executeFn here.
     job->executeFn = [&pipeline = system.getCylindrical2CubePipeline(),
                       src       = sourceTexture,
-                      flipV     = component.cylindricalSource.flipVertical](ICommandBuffer* cmdBuf, RenderImage* output) -> bool
+                      flipV     = component.cylindricalSource.flipVertical,
+                      jobResult](ICommandBuffer* cmdBuf, RenderImage* output) -> bool
     {
         auto result = pipeline.execute({
             .cmdBuf        = cmdBuf,
@@ -151,6 +153,12 @@ std::shared_ptr<OffscreenJobState> createEnvironmentCubemapJob(ResourceResolveSy
             .output        = output,
             .bFlipVertical = flipV,
         });
+        if (jobResult && !result.keepAliveResources.empty()) {
+            auto& retained = jobResult->retainedResources;
+            retained.insert(retained.end(),
+                            std::make_move_iterator(result.keepAliveResources.begin()),
+                            std::make_move_iterator(result.keepAliveResources.end()));
+        }
         if (result.transientOutputArrayView) {
             DeferredDeletionQueue::get().retireResource(result.transientOutputArrayView);
         }
@@ -169,9 +177,10 @@ std::shared_ptr<OffscreenJobState> createEnvironmentIrradianceJob(ResourceResolv
 {
     auto job       = std::make_shared<OffscreenJobState>();
     job->debugName = std::format("EnvironmentIrradiance_{}", static_cast<uint32_t>(entity));
+    auto jobResult = job->result;
 
     // TODO(user): this is the single irradiance job hook. Replace or extend executeFn here.
-    job->executeFn = [src = sourceCubemap, &system](ICommandBuffer* cmdBuf, RenderImage* output) -> bool
+    job->executeFn = [src = sourceCubemap, &system, jobResult](ICommandBuffer* cmdBuf, RenderImage* output) -> bool
     {
         auto result =
             system
@@ -181,6 +190,12 @@ std::shared_ptr<OffscreenJobState> createEnvironmentIrradianceJob(ResourceResolv
                     .input  = src.get(),
                     .output = output,
                 });
+        if (jobResult && !result.keepAliveResources.empty()) {
+            auto& retained = jobResult->retainedResources;
+            retained.insert(retained.end(),
+                            std::make_move_iterator(result.keepAliveResources.begin()),
+                            std::make_move_iterator(result.keepAliveResources.end()));
+        }
         return result.bSuccess;
     };
     job->createOutputFn = detail::makeCubemapOutputFn(
@@ -205,16 +220,24 @@ std::shared_ptr<OffscreenJobState> createEnvironmentPrefilterJob(ResourceResolve
 
     auto job       = std::make_shared<OffscreenJobState>();
     job->debugName = std::format("EnvironmentPrefilter_{}", static_cast<uint32_t>(entity));
+    auto jobResult = job->result;
 
     // TODO(user): this is the single prefilter job hook. Replace or extend executeFn here.
     job->executeFn = [&pipeline = system.getCube2PrefilterPipeline(),
-                      src       = sourceCubemap](ICommandBuffer* cmdBuf, RenderImage* output) -> bool
+                      src       = sourceCubemap,
+                      jobResult](ICommandBuffer* cmdBuf, RenderImage* output) -> bool
     {
         auto result = pipeline.execute({
             .cmdBuf = cmdBuf,
             .input  = src.get(),
             .output = output,
         });
+        if (jobResult && !result.keepAliveResources.empty()) {
+            auto& retained = jobResult->retainedResources;
+            retained.insert(retained.end(),
+                            std::make_move_iterator(result.keepAliveResources.begin()),
+                            std::make_move_iterator(result.keepAliveResources.end()));
+        }
         if (result.transientOutputArrayView) {
             DeferredDeletionQueue::get().retireResource(result.transientOutputArrayView);
         }
