@@ -22,7 +22,6 @@ bool RenderGraphExecutor::prepare(
     RGCompiledGraph&   outCompiled)
 {
     _bufferStates.clear();
-    _resourceStateTracker.reset();
 
     outCompiled = graph.compile();
     if (!outCompiled.isValid()) {
@@ -52,17 +51,10 @@ bool RenderGraphExecutor::executeCompiled(
             YA_CORE_ASSERT(texture != nullptr, "RenderGraphExecutor failed to resolve texture {}", statePlan.texture.index);
             YA_CORE_ASSERT(texture->getImage() != nullptr, "RenderGraphExecutor texture {} has no backing image", statePlan.texture.index);
 
-            const auto transitions = _resourceStateTracker.transition(
-                *texture->getImage(),
-                statePlan.requiredState,
+            cmdBuf.transitionImageLayoutAuto(
+                texture->getImage(),
+                statePlan.requiredState.layout,
                 &statePlan.requiredState.subresourceRange);
-            for (const auto& transition : transitions) {
-                cmdBuf.transitionImageLayout(
-                    transition.image,
-                    transition.oldState.layout,
-                    transition.newState.layout,
-                    &transition.range);
-            }
         }
 
         for (const auto& statePlan : compiled.bufferStates) {

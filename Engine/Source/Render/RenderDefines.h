@@ -1111,6 +1111,7 @@ struct IRenderTarget; // Forward declaration
 struct RenderingInfo
 {
     std::string label = "None";
+    bool        bExternalTransitionManagement = false;
 
     Rect2D   renderArea;     // Render area (offset + extent)
     uint32_t layerCount = 1; // For layered rendering
@@ -1134,9 +1135,9 @@ struct RenderingInfo
         EAttachmentLoadOp::T  loadOp  = EAttachmentLoadOp::Clear;  // Load operation
         EAttachmentStoreOp::T storeOp = EAttachmentStoreOp::Store; // Store operation
 
-        // Layout transitions (mirroring AttachmentDescription for manual image path)
-        // beginRendering will transition from current layout → initialLayout
-        // endRendering  will transition from current layout → finalLayout
+        // Layout transitions for manual image path when bExternalTransitionManagement == false.
+        // beginRendering will transition from current layout -> initialLayout
+        // endRendering  will transition from current layout -> finalLayout
         EImageLayout::T initialLayout = EImageLayout::Undefined; // Undefined = no transition
         EImageLayout::T finalLayout   = EImageLayout::Undefined; // Undefined = no transition
         uint32_t        subresourceAspectMask     = 0;

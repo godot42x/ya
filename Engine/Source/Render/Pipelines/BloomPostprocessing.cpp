@@ -388,23 +388,28 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
         extractPC.threshold = desc.state->bloomThreshold;
         extractPC.knee      = desc.state->bloomSoftKnee;
         extractPC.intensity = desc.state->bloomExtractIntensity;
+        const RGTextureHandle bloomExtractHandle = *bloomExtract;
+        const Rect2D extractRenderArea{
+            .pos    = {0.0f, 0.0f},
+            .extent = desc.renderExtent.toVec2(),
+        };
 
         [[maybe_unused]] const auto extractPass = graph.addPass(
             "BloomExtract",
-            [&](RGPassBuilder& pass) {
+            [scene, bloomExtractHandle](RGPassBuilder& pass) {
                 pass.read(scene);
-                pass.useColorAttachment(*bloomExtract);
+                pass.useColorAttachment(bloomExtractHandle);
             },
-            [&](RGRenderContext& rgCtx) {
+            [this, bloomExtractHandle, extractRenderArea, extractPC, renderExtent = desc.renderExtent](RGRenderContext& rgCtx) {
                 rgCtx.beginColorRendering({
-                    .color      = *bloomExtract,
-                    .renderArea = Rect2D{.pos = {0.0f, 0.0f}, .extent = desc.renderExtent.toVec2()},
+                    .color       = bloomExtractHandle,
+                    .renderArea  = extractRenderArea,
                     .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 });
                 rgCtx.getCommandBuffer().bindPipeline(_extractPipeline.get());
-                rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(desc.renderExtent.width), static_cast<float>(desc.renderExtent.height));
-                rgCtx.getCommandBuffer().setScissor(0, 0, desc.renderExtent.width, desc.renderExtent.height);
+                rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(renderExtent.width), static_cast<float>(renderExtent.height));
+                rgCtx.getCommandBuffer().setScissor(0, 0, renderExtent.width, renderExtent.height);
                 rgCtx.getCommandBuffer().bindDescriptorSets(_extractPPL.get(), 0, {_extractDS});
                 rgCtx.getCommandBuffer().pushConstants(_extractPPL.get(), EShaderStage::Vertex | EShaderStage::Fragment, 0, sizeof(extractPC), &extractPC);
                 rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
@@ -417,24 +422,28 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
         for (uint32_t passIndex = 0; passIndex < blurPassCount; ++passIndex) {
             const bool bHorizontal = (passIndex % 2) == 0;
             const RGTextureHandle     blurInputHandle = (passIndex == 0)
-                ? *bloomExtract
+                ? bloomExtractHandle
                 : ((passIndex - 1) % 2 == 0 ? *blurPing : *blurPong);
             const RGTextureHandle     blurTargetHandle = bHorizontal ? *blurPing : *blurPong;
 
             slang_types::Misc::BloomBlur::PushConstants blurPC{};
             blurPC.texelSize  = glm::vec2(1.0f / static_cast<float>(desc.renderExtent.width), 1.0f / static_cast<float>(desc.renderExtent.height));
             blurPC.horizontal = bHorizontal ? 1u : 0u;
+            const Rect2D blurRenderArea{
+                .pos    = {0.0f, 0.0f},
+                .extent = desc.renderExtent.toVec2(),
+            };
 
             [[maybe_unused]] const auto blurPass = graph.addPass(
                 bHorizontal ? "BloomBlurHorizontal" : "BloomBlurVertical",
-                [&](RGPassBuilder& pass) {
+                [blurInputHandle, blurTargetHandle](RGPassBuilder& pass) {
                     pass.read(blurInputHandle);
                     pass.useColorAttachment(blurTargetHandle);
                 },
-                [&](RGRenderContext& rgCtx) {
+                [this, passIndex, blurInputHandle, blurTargetHandle, blurRenderArea, blurPC, renderExtent = desc.renderExtent](RGRenderContext& rgCtx) {
                     rgCtx.beginColorRendering({
-                        .color      = blurTargetHandle,
-                        .renderArea = Rect2D{.pos = {0.0f, 0.0f}, .extent = desc.renderExtent.toVec2()},
+                        .color       = blurTargetHandle,
+                        .renderArea  = blurRenderArea,
                         .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
                         .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                     });
@@ -443,8 +452,8 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
                                    "Bloom blur pass failed to resolve input texture {}", blurInputHandle.index);
                     const DescriptorSetHandle blurDS = updateBlurDescriptor(passIndex, blurInputImage->getImageView());
                     rgCtx.getCommandBuffer().bindPipeline(_blurPipeline.get());
-                    rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(desc.renderExtent.width), static_cast<float>(desc.renderExtent.height));
-                    rgCtx.getCommandBuffer().setScissor(0, 0, desc.renderExtent.width, desc.renderExtent.height);
+                    rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(renderExtent.width), static_cast<float>(renderExtent.height));
+                    rgCtx.getCommandBuffer().setScissor(0, 0, renderExtent.width, renderExtent.height);
                     rgCtx.getCommandBuffer().bindDescriptorSets(_blurPPL.get(), 0, {blurDS});
                     rgCtx.getCommandBuffer().pushConstants(_blurPPL.get(), EShaderStage::Vertex | EShaderStage::Fragment, 0, sizeof(blurPC), &blurPC);
                     rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
@@ -459,35 +468,39 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
     slang_types::Misc::BloomComposite::PushConstants compositePC{};
     compositePC.bloomStrength = desc.state->bloomStrength;
     compositePC.bloomEnabled  = bBloomEnabled ? 1u : 0u;
+    const Rect2D compositeRenderArea{
+        .pos    = {0.0f, 0.0f},
+        .extent = desc.renderExtent.toVec2(),
+    };
+    IImageView* sceneImageView = desc.sceneImageView;
 
     [[maybe_unused]] const auto compositePass = graph.addPass(
         "BloomComposite",
-        [&](RGPassBuilder& pass) {
+        [scene, bBloomEnabled, finalBloomHandle = (_lastBlurPassCount == 0 || (_lastBlurPassCount % 2) == 0) ? blurPong.value_or(RGTextureHandle{}) : blurPing.value_or(RGTextureHandle{}), output](RGPassBuilder& pass) {
             pass.read(scene);
             if (bBloomEnabled) {
-                pass.read((_lastBlurPassCount == 0 || (_lastBlurPassCount % 2) == 0) ? *blurPong : *blurPing);
+                pass.read(finalBloomHandle);
             }
             pass.useColorAttachment(output);
         },
-        [&](RGRenderContext& rgCtx) {
+        [this, bBloomEnabled, compositePC, compositeRenderArea, sceneImageView, renderExtent = desc.renderExtent, output, finalBloomHandle = (_lastBlurPassCount == 0 || (_lastBlurPassCount % 2) == 0) ? blurPong.value_or(RGTextureHandle{}) : blurPing.value_or(RGTextureHandle{})](RGRenderContext& rgCtx) {
             rgCtx.beginColorRendering({
-                .color      = output,
-                .renderArea = Rect2D{.pos = {0.0f, 0.0f}, .extent = desc.renderExtent.toVec2()},
+                .color       = output,
+                .renderArea  = compositeRenderArea,
                 .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
                 .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
             });
             IImageView* compositeBloomImageView = nullptr;
             if (bBloomEnabled) {
-                const RGTextureHandle finalBloomHandle = (_lastBlurPassCount == 0 || (_lastBlurPassCount % 2) == 0) ? *blurPong : *blurPing;
                 const auto* finalBloomImage = rgCtx.resolveTexture(finalBloomHandle);
                 YA_CORE_ASSERT(finalBloomImage != nullptr && finalBloomImage->getImageView() != nullptr,
                                "Bloom composite pass failed to resolve bloom texture {}", finalBloomHandle.index);
                 compositeBloomImageView = finalBloomImage->getImageView();
             }
-            updateCompositeDescriptor(desc.sceneImageView, compositeBloomImageView);
+            updateCompositeDescriptor(sceneImageView, compositeBloomImageView);
             rgCtx.getCommandBuffer().bindPipeline(_compositePipeline.get());
-            rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(desc.renderExtent.width), static_cast<float>(desc.renderExtent.height));
-            rgCtx.getCommandBuffer().setScissor(0, 0, desc.renderExtent.width, desc.renderExtent.height);
+            rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(renderExtent.width), static_cast<float>(renderExtent.height));
+            rgCtx.getCommandBuffer().setScissor(0, 0, renderExtent.width, renderExtent.height);
             rgCtx.getCommandBuffer().bindDescriptorSets(_compositePPL.get(), 0, {_compositeDS});
             rgCtx.getCommandBuffer().pushConstants(_compositePPL.get(), EShaderStage::Vertex | EShaderStage::Fragment, 0, sizeof(compositePC), &compositePC);
             rgCtx.getCommandBuffer().draw(3, 1, 0, 0);

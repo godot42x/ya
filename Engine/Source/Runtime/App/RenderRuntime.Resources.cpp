@@ -166,7 +166,7 @@ void RenderRuntime::initPresentationResources()
                     .storeOp        = EAttachmentStoreOp::Store,
                     .stencilLoadOp  = EAttachmentLoadOp::DontCare,
                     .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                    .initialLayout  = EImageLayout::PresentSrcKHR,
+                    .initialLayout  = EImageLayout::Undefined,
                     .finalLayout    = EImageLayout::PresentSrcKHR,
                     .usage          = EImageUsage::ColorAttachment,
                 },

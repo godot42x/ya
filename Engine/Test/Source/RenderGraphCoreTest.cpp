@@ -171,6 +171,9 @@ class TestCommandBuffer final : public ICommandBuffer
     bool lastBeginRenderingHadDepth = false;
     EImageLayout::T lastDepthFinalLayout = EImageLayout::Undefined;
 
+  private:
+    ResourceStateTracker _imageStateTracker;
+
   public:
     CommandBufferHandle getHandle() const override { return {}; }
     CommandBufferHandle getTypedHandle() const override { return {}; }
@@ -229,7 +232,18 @@ class TestCommandBuffer final : public ICommandBuffer
     {
         transitions.push_back({.oldLayout = oldLayout, .newLayout = newLayout});
     }
-    void transitionImageLayoutAuto(IImage*, EImageLayout::T, const ImageSubresourceRange* = nullptr) override {}
+    void transitionImageLayoutAuto(IImage* image, EImageLayout::T newLayout, const ImageSubresourceRange* range = nullptr) override
+    {
+        if (!image) {
+            return;
+        }
+        for (const auto& transition : _imageStateTracker.transition(*image, newLayout, range)) {
+            transitions.push_back({
+                .oldLayout = transition.oldState.layout,
+                .newLayout = transition.newState.layout,
+            });
+        }
+    }
     void transitionRenderTargetLayout(IRenderTarget*, EImageLayout::T, EImageLayout::T = EImageLayout::Undefined, EImageLayout::T = EImageLayout::Undefined) override {}
     void debugBeginLabel(const char*, const float* = nullptr) override {}
     void debugEndLabel() override {}

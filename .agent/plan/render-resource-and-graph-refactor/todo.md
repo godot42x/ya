@@ -38,7 +38,7 @@
 
 基线备注：
 
-- Codex 当前 macOS smoke 环境下，`HelloMaterial` 仍会更早失败在 `SDLWindowProvider::recreate()` / Vulkan portability window init，尚不能作为“成功进入编辑器”的最终验证环境；但 Deferred 启动阶段此前由不兼容 attachment 格式触发的 `VulkanImage::allocate()` 崩溃链路已单独修复，不再与该环境级窗口失败混淆
+- Codex 当前 macOS smoke 环境下，`HelloMaterial` 已可在补齐 Vulkan runtime env 后完成 `--exit-after-frame=3` 冒烟并正常退出；启动链上此前的 shadow cube layer 分配崩溃、Bloom/Postprocess/SSAO graph 悬空 handle 和 presentation graph layout/present 错误已被修复
 - `smoke.viewportResize.{width,height,frame}` 与 `smoke.renderPipeline.{target,frame}` 现已接入 automation config，并在 `AppAutomationConfigTest` 中覆盖解析；运行期动作通过现有 editor pending viewport resize 与 `RenderRuntime::setPendingRenderPipeline()` 路径触发
 - `shadow.resolution` 现已补入 automation overrides，并与已有 `shadow.quality / directionalEnabled / pointLightEnabled / filter ...` 一起通过 `ShadowSettingsConfig` 进入 runtime shadow settings；`AppAutomationConfigTest` 已覆盖解析
 
@@ -231,6 +231,7 @@
 - Bloom extract / blur ping-pong / composite 与 postprocess output 也已沿同一模式改为 graph persistent texture；descriptor 更新已下沉到 pass execute 回调，避免在 graph execute 前依赖外部 intermediate owner
 - `RenderGraphResourceRegistry` 的 owned texture/buffer replacement / prune / clear 现在会优先通过 `DeferredDeletionQueue` 退休旧资源；未初始化删除队列的 core test / tool 场景才会立即释放
 - `RenderGraphExecutor` 已起最小执行骨架：compile 校验、registry sync、按拓扑序驱动 pass execute callback；尚未接入 Vulkan barrier/state plan 和 rendering/copy helper
+- `RenderGraphExecutor` 的 image transition 已改为直接走 command buffer 的 tracked auto transition，避免 executor 与 Vulkan command buffer 各自维护一份 layout 真相
 - `RGRenderContext` 已补最小 helper：color rendering begin/end 与 buffer copy，pass callback 开始可以少直接拼 `RenderingInfo` / `copyBuffer` 样板
 - compiled graph 已开始产出最小 texture/buffer required state plan（read/storage/color/depth）；texture plan 已在 executor 中先接入 `ResourceStateTracker -> transitionImageLayout()`，buffer plan 已接入最小 `bufferMemoryBarrier()` 发射，后续仍需与统一 barrier backend 收敛
 - 已补最小 clear/copy smoke 测试：graph pass callback 可驱动 `beginRendering/endRendering` 与 `copyBuffer`，用于压实 executor/resource resolve/command buffer 调用链
@@ -238,6 +239,7 @@
 - `PBRGenerateBrdfLUT` 不再回退到手写 dynamic rendering 初始化路径：该路径在 MoltenVK 启动阶段曾触发 attachment 构造崩溃，当前保持 graph-backed execute 作为稳定基线
 - `EquidistantCylindrical2CubeMap` 已接入第二个 graph-backed utility pass 试点：graph import 现支持复用现有 shared image 并指定 view desc，单 face 输出 attachment 不再依赖 `Texture::wrap()` 临时 adapter
 - `CubeMap2PBRIrradianceMap` 已按同模式接入 graph-backed 执行：input cubemap 与 output face view 都经由 imported graph resource + view desc 进入 executor，utility pass 迁移开始形成可复用模板
+- runtime 启动链已额外压实 graph execute 的两个现实约束：延迟执行 pass callback 不允许引用捕获局部 graph handle；swapchain-backed presentation target 必须先同步当前 image index，再按实际 acquired image 录制 presentation pass
 - `CubeMap2PBRPrefilteredEnv` 已接入 graph-backed 执行：同一模板已覆盖 mip+face 双层 subresource 输出，说明 imported graph texture + view desc + state plan 已足以承接完整环境贴图 utility pipeline
 - `PostProcessingStage::execute()` 已成为首个 runtime-side graph-backed stage cut：保留 bloom 预处理与 `BasicPostprocessing::render()` 内部 draw 逻辑，只将外层 output pass/attachment transition/dynamic rendering 壳切到 graph + executor，验证 graph 已能承接主链路中的单 stage 渐进迁移
 - `SSAOStage::execute()` 已切到 graph-backed 执行壳：保留现有 GBuffer descriptor 更新、frame UBO 和 fullscreen draw 逻辑，只将 output attachment/rendering/barrier 交给 graph + executor，作为 Deferred 主链路首个 graph 化 stage 样板

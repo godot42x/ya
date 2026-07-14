@@ -314,20 +314,21 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
          .extent = Extent3D{inputExtent.width, inputExtent.height, 1},
          .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
     }, ERGResourceLifetime::Persistent);
+    const Rect2D outputRenderArea{
+        .pos    = {0.0f, 0.0f},
+        .extent = inputExtent.toVec2(),
+    };
 
     [[maybe_unused]] const auto pass = graph.addPass(
         "Postprocessing",
-        [&](RGPassBuilder& pass) {
+        [compositeInput, output](RGPassBuilder& pass) {
             pass.read(compositeInput);
             pass.useColorAttachment(output);
         },
-        [&](RGRenderContext& rgCtx) {
+        [this, compositeInput, output, outputRenderArea, inputExtent, bOutputIsSRGB, state = &_state, postContext = ctx](RGRenderContext& rgCtx) {
             rgCtx.beginColorRendering({
-                .color      = output,
-                .renderArea = Rect2D{
-                    .pos    = {0.0f, 0.0f},
-                    .extent = inputExtent.toVec2(),
-                },
+                .color       = output,
+                .renderArea  = outputRenderArea,
                 .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
                 .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
             });
@@ -337,11 +338,11 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
                            "Postprocessing failed to resolve input texture {}", compositeInput.index);
             _postProcessor->render(BasicPostprocessing::RenderDesc{
                 .cmdBuf         = &rgCtx.getCommandBuffer(),
-                .ctx            = ctx,
+                .ctx            = postContext,
                 .inputImageView = compositeInputImage->getImageView(),
                 .renderExtent   = inputExtent,
                 .bOutputIsSRGB  = bOutputIsSRGB,
-                .state          = &_state,
+                .state          = state,
             });
 
             rgCtx.endRendering();

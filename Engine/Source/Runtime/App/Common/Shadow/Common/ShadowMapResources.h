@@ -10,6 +10,21 @@
 namespace ya
 {
 
+constexpr uint32_t SHADOW_DIRECTIONAL_LAYER_INDEX      = 0;
+constexpr uint32_t SHADOW_RESERVED_DIRECTIONAL_LAYERS  = 6;
+constexpr uint32_t SHADOW_POINT_LIGHT_LAYER_STRIDE     = 6;
+constexpr uint32_t SHADOW_POINT_LIGHT_BASE_LAYER_INDEX = SHADOW_RESERVED_DIRECTIONAL_LAYERS;
+
+constexpr uint32_t getShadowPointLightBaseLayer(uint32_t lightIndex)
+{
+    return SHADOW_POINT_LIGHT_BASE_LAYER_INDEX + lightIndex * SHADOW_POINT_LIGHT_LAYER_STRIDE;
+}
+
+constexpr uint32_t getShadowTotalLayerCount()
+{
+    return SHADOW_RESERVED_DIRECTIONAL_LAYERS + MAX_POINT_LIGHTS * SHADOW_POINT_LIGHT_LAYER_STRIDE;
+}
+
 struct ShadowMapResourceDesc
 {
     std::string_view renderTargetLabel;

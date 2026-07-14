@@ -1,4 +1,5 @@
 #include "ShadowViewBuilder.h"
+#include "ShadowMapResources.h"
 
 #include <format>
 
@@ -23,11 +24,12 @@ LayerViews buildLayerViews(IRenderResourceFactory* resourceFactory,
             .aspectFlags    = EImageAspect::Depth,
             .baseMipLevel   = 0,
             .levelCount     = 1,
-            .baseArrayLayer = 0,
+            .baseArrayLayer = SHADOW_DIRECTIONAL_LAYER_INDEX,
             .layerCount     = 1,
         });
 
     for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
+        const uint32_t pointBaseLayer = getShadowPointLightBaseLayer(lightIndex);
         views.pointCubeIVs[lightIndex] = resourceFactory->createImageView(
             shadowImage,
             ImageViewCreateInfo{
@@ -36,8 +38,8 @@ LayerViews buildLayerViews(IRenderResourceFactory* resourceFactory,
                 .aspectFlags    = EImageAspect::Depth,
                 .baseMipLevel   = 0,
                 .levelCount     = 1,
-                .baseArrayLayer = 1 + lightIndex * 6,
-                .layerCount     = 6,
+                .baseArrayLayer = pointBaseLayer,
+                .layerCount     = SHADOW_POINT_LIGHT_LAYER_STRIDE,
             });
 
         for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
@@ -49,7 +51,7 @@ LayerViews buildLayerViews(IRenderResourceFactory* resourceFactory,
                     .aspectFlags    = EImageAspect::Depth,
                     .baseMipLevel   = 0,
                     .levelCount     = 1,
-                    .baseArrayLayer = 1 + lightIndex * 6 + faceIndex,
+                    .baseArrayLayer = pointBaseLayer + faceIndex,
                     .layerCount     = 1,
                 });
         }

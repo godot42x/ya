@@ -384,27 +384,35 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
          .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
     }, ERGResourceLifetime::Persistent);
 
+    const auto renderArea = Rect2D{
+        .pos    = {0.0f, 0.0f},
+        .extent = glm::vec2(ctx.viewportExtent.width, ctx.viewportExtent.height),
+    };
+    const auto viewportWidth  = ctx.viewportExtent.width;
+    const auto viewportHeight = ctx.viewportExtent.height;
+    const auto flightIndex    = ctx.flightIndex;
+
     [[maybe_unused]] const auto pass = graph.addPass(
         "SSAO Pass",
-        [&](RGPassBuilder& passBuilder) {
+        [albedo, normal, depth, noise, output](RGPassBuilder& passBuilder) {
             passBuilder.read(albedo);
             passBuilder.read(normal);
             passBuilder.read(depth);
             passBuilder.read(noise);
             passBuilder.useColorAttachment(output);
         },
-        [&](RGRenderContext& rgCtx) {
+        [this, output, renderArea, viewportWidth, viewportHeight, flightIndex](RGRenderContext& rgCtx) {
             rgCtx.beginColorRendering({
                 .color      = output,
-                .renderArea = Rect2D{.pos = {0.0f, 0.0f}, .extent = glm::vec2(ctx.viewportExtent.width, ctx.viewportExtent.height)},
+                .renderArea = renderArea,
                 .clearValue = ClearValue(1.0f, 1.0f, 1.0f, 1.0f),
                 .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
             });
 
             rgCtx.getCommandBuffer().bindPipeline(_pipeline.get());
-            rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(ctx.viewportExtent.width), static_cast<float>(ctx.viewportExtent.height));
-            rgCtx.getCommandBuffer().setScissor(0, 0, ctx.viewportExtent.width, ctx.viewportExtent.height);
-            rgCtx.getCommandBuffer().bindDescriptorSets(_pipelineLayout.get(), 0, {_frameDS[ctx.flightIndex], _inputDS});
+            rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
+            rgCtx.getCommandBuffer().setScissor(0, 0, viewportWidth, viewportHeight);
+            rgCtx.getCommandBuffer().bindDescriptorSets(_pipelineLayout.get(), 0, {_frameDS[flightIndex], _inputDS});
             rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
             rgCtx.endRendering();
         });

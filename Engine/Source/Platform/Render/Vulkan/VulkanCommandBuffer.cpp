@@ -476,7 +476,7 @@ void VulkanCommandBuffer::executeEndRendering(const RenderingInfo& info)
             }
             info.renderTarget->endFrame(this);
         }
-        else {
+        else if (!info.bExternalTransitionManagement) {
             // Final layout transitions for manual image path
             std::vector<VulkanImage::LayoutTransition> transitions;
             for (auto& spec : info.colorAttachments) {
@@ -1183,8 +1183,10 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
         return;
     }
 
-    // Initial layout transitions for manual images (mirrors RT branch)
-    {
+    // Initial layout transitions for manual images (mirrors RT branch).
+    // RenderGraph-managed passes pre-plan transitions externally and must not
+    // compete with the command buffer's local tracker here.
+    if (!info.bExternalTransitionManagement) {
         std::vector<VulkanImage::LayoutTransition> transitions;
         for (auto& spec : info.colorAttachments) {
             if (spec.initialLayout != EImageLayout::Undefined && spec.image) {

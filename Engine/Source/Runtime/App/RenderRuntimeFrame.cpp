@@ -20,6 +20,11 @@ namespace ya
 namespace
 {
 
+EImageUsage::T ensurePresentationUsage(EImageUsage::T usage)
+{
+    return static_cast<EImageUsage::T>(usage | EImageUsage::ColorAttachment);
+}
+
 RGImportedTextureDesc makePresentationImportedTextureDesc(const Texture& texture,
                                                           std::string_view label,
                                                           EImageLayout::T finalLayout)
@@ -36,13 +41,13 @@ RGImportedTextureDesc makePresentationImportedTextureDesc(const Texture& texture
             .extent      = Extent3D{texture.getWidth(), texture.getHeight(), 1},
             .mipLevels   = image->getMipLevels(),
             .arrayLayers = image->getArrayLayers(),
-            .usage       = image->getUsage(),
+            .usage       = ensurePresentationUsage(image->getUsage()),
         },
         .importDesc = ImportedImageDesc{
             .label         = std::string(label),
             .nativeHandle  = static_cast<void*>(image->getHandle()),
             .format        = texture.getFormat(),
-            .usage         = image->getUsage(),
+            .usage         = ensurePresentationUsage(image->getUsage()),
             .extent        = Extent3D{texture.getWidth(), texture.getHeight(), 1},
             .mipLevels     = image->getMipLevels(),
             .arrayLayers   = image->getArrayLayers(),
@@ -197,8 +202,14 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
     YA_PROFILE_SCOPE("Screen pass");
     YA_PERF_SCOPE(perf::sample::renderPresentation(), perf::metric::cpuTimeMs(), perf::domain::render());
 
+    if (!cmdBuf || !_presentationGraphExecutor || !_screenRT) {
+        return;
+    }
+
+    _screenRT->beginFrame(cmdBuf);
     Texture* presentationTexture = getPresentationTexture();
-    if (!cmdBuf || !_presentationGraphExecutor || !presentationTexture) {
+    if (!presentationTexture) {
+        _screenRT->endFrame(cmdBuf);
         return;
     }
 
@@ -211,13 +222,13 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
 
     [[maybe_unused]] const auto pass = graph.addPass(
         "Presentation",
-        [&](RGPassBuilder& passBuilder) {
+        [output](RGPassBuilder& passBuilder) {
             passBuilder.useColorAttachment(output);
         },
-        [&](RGRenderContext& rgCtx) {
+        [this, output, presentationExtent, deltaTime](RGRenderContext& rgCtx) {
             rgCtx.beginColorRendering({
-                .color       = output,
-                .renderArea  = Rect2D{
+                .color = output,
+                .renderArea = Rect2D{
                     .pos    = {0.0f, 0.0f},
                     .extent = presentationExtent.toVec2(),
                 },
@@ -246,6 +257,7 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
     if (recordPresentationCapture) {
         recordPresentationCapture(cmdBuf);
     }
+    _screenRT->endFrame(cmdBuf);
 }
 
 void RenderRuntime::submitFrame(int32_t imageIndex, ICommandBuffer* cmdBuf)

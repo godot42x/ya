@@ -210,7 +210,7 @@ bool VulkanRenderTarget::recreateImagesAndFrameBuffer(uint32_t frameBufferCount)
                     .format       = EFormat::fromVk(swapchain->getSurfaceFormat()),
                     .usage        = EImageUsage::ColorAttachment,
                     .extent        = {.width = _extent.width, .height = _extent.height, .depth = 1},
-                    .initialLayout = EImageLayout::PresentSrcKHR,
+                    .initialLayout = EImageLayout::Undefined,
                     .finalLayout   = EImageLayout::PresentSrcKHR,
                 });
                 // cmdBuf->transitionImageLayout(image.get(), EImageLayout::PresentSrcKHR);

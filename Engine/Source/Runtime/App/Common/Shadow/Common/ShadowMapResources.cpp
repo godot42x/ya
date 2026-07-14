@@ -21,7 +21,7 @@ void ShadowMapResources::init(IRender* render, const ShadowMapResourceDesc& desc
         .bSwapChainTarget = false,
         .extent           = desc.extent,
         .frameBufferCount = 1,
-        .layerCount       = 1 + MAX_POINT_LIGHTS * 6,
+        .layerCount       = getShadowTotalLayerCount(),
         .attachments      = {
             .depthAttach = AttachmentDescription{
                 .index            = 0,
@@ -49,7 +49,7 @@ void ShadowMapResources::init(IRender* render, const ShadowMapResourceDesc& desc
         .borderColor  = SamplerDesc::BorderColor{.type = SamplerDesc::EBorderColor::FloatOpaqueWhite, .color = {1, 1, 1, 1}},
     });
 
-    layerCount = 1 + MAX_POINT_LIGHTS * 6;
+    layerCount = getShadowTotalLayerCount();
     rebuildViews(render, desc.viewLabelPrefix);
 }
 

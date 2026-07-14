@@ -5,6 +5,7 @@
 #include "Core/Profiling/PerfState.h"
 
 #include "Runtime/App/Common/Shadow/Common/ShadowDrawHelper.h"
+#include "Runtime/App/Common/Shadow/Common/ShadowMapResources.h"
 
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/RenderResourceFactory.h"
@@ -242,7 +243,7 @@ void PointShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayl
                     .lightIndex      = lightIndex,
                     .faceIndex       = faceIndex,
                     .faceGlobalIndex = lightIndex * 6 + faceIndex,
-                    .layerIndex      = 1 + lightIndex * 6 + faceIndex,
+                    .layerIndex      = getShadowPointLightBaseLayer(lightIndex) + faceIndex,
                 };
                 facePayload.faceDS = flight.faceDS[facePayload.faceGlobalIndex];
                 facePayload.depthImage = _shadowImage.get();
@@ -389,7 +390,7 @@ void PointShadowPass::rebuildFaceTextures(std::shared_ptr<IImage> shadowImage)
 
     for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {
         for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
-            const uint32_t layerIndex = 1 + lightIndex * 6 + faceIndex; // offset by directional layer
+            const uint32_t layerIndex = getShadowPointLightBaseLayer(lightIndex) + faceIndex;
             auto view = resourceFactory->createImageView(
                 shadowImage,
                 ImageViewCreateInfo{
