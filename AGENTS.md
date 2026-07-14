@@ -87,11 +87,12 @@ xmake f -m profile -y              # 开启 profile 编译模式
 4. 保持最小改动，不混入无关重构。
 5. 遵循现有抽象，不平行造新接口。
 6. 不在帧录制中途重建 GPU 资源；延迟到安全时机。
-7. `Render2D` 使用左上角原点坐标系。
-8. 文件命名按类名或稳定职责，不用 `module.part.cpp` 这类命名。
-9. 目录按稳定职责分层；facade/owner 与 helper/importer 分开收敛。
-10. 日志只用 `YA_CORE_TRACE/DEBUG/INFO/WARN/ERROR/ASSERT`。
-11. 非明确要求时，不生成多余文档或显而易见的注释。
+7. 命令录制期引用到的 GPU 资源、image view、descriptor 数据必须至少活到 queue submit 完成；若后端在 submit/encode 阶段才消费它们，不能只保活到 `record` 或局部函数返回。
+8. `Render2D` 使用左上角原点坐标系。
+9. 文件命名按类名或稳定职责，不用 `module.part.cpp` 这类命名。
+10. 目录按稳定职责分层；facade/owner 与 helper/importer 分开收敛。
+11. 日志只用 `YA_CORE_TRACE/DEBUG/INFO/WARN/ERROR/ASSERT`。
+12. 非明确要求时，不生成多余文档或显而易见的注释。
 
 ## Code Style
 

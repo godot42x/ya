@@ -71,7 +71,7 @@ YA_PROFILING_DISABLED    -> YA_PROFILE_DISABLED / YA_PERF_DISABLED
 1. 编辑器人工操作：`Engine/Saved/Config/Editor.json`
    这里控制 `profile.runtime.cpuTrace`、`profile.runtime.perfMetrics`、`profile.runtime.staticInit`。
 2. 自动化模式：`Engine/Saved/Config/Automation.json` 或 `--automation-config=<path>`
-   这里控制 `profile.cpu.enabled`、`profile.cpu.output`、`profile.sessionName`、`profile.gpu.renderdoc`、`screenshot.*`、`shadow.*`。
+   这里控制 `profile.cpu.enabled`、`profile.cpu.output`、`profile.sessionName`、`profile.gpu.renderdoc`、`screenshot.*`、`shadow.*`、`smoke.log.*`。
 3. 命令行参数仍可用，但在 automation 模式下它们只是本次运行的直接覆盖，不是长期配置入口。
 
 ### 自动化模式最小配置
@@ -87,6 +87,12 @@ YA_PROFILING_DISABLED    -> YA_PROFILE_DISABLED / YA_PERF_DISABLED
     "gpu": {
       "renderdoc": false,
       "outputDir": "Engine/Saved/RenderDoc"
+    }
+  },
+  "smoke": {
+    "log": {
+      "level": "warn",
+      "detailLevel": "error"
     }
   },
   "automation": {
@@ -119,8 +125,14 @@ YA_PROFILING_DISABLED    -> YA_PROFILE_DISABLED / YA_PERF_DISABLED
 
 ```bash
 make cfg m=profile
-make r t=HelloMaterial r_args="--exit-after-frame=300"
+make r t=HelloMaterial r_args="--exit-after-frame=300 --log-level=warn --log-detail-level=error"
 ```
+
+### 低噪音 smoke 建议
+
+1. 默认用 `--log-level=warn --log-detail-level=error` 跑 smoke。
+2. 若需要更多线索，优先升到 `info`，只在明确缺证据时再开 `debug/trace`。
+3. 查看日志时先 `rg` 过滤模块/关键词，再决定是否打开整段上下文。
 
 ### 查看结果
 

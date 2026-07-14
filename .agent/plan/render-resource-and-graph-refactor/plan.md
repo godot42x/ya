@@ -14,6 +14,41 @@
 
 这不是先完成一次全项目 RHI 重写、再开始 RenderGraph。新的资源模型先建立最小稳定核心，RenderGraph 作为第一个完整消费者，其余旧调用点按资源类型和渲染路径逐步迁移。
 
+## 1.1 当前项目概况
+
+当前工程已从“为 stage/facade 继续做局部收口”转入“以资源模型和 RenderGraph 为主轴的运行时重构”阶段。
+
+已落地的关键事实：
+
+- Buffer 创建已经统一到 `IRenderResourceFactory`
+- image/view/sampler 的新 factory 路径已建立，`ITextureFactory` 已停止扩张
+- `ResourceStateTracker` 已成为 image layout / barrier 的唯一收口方向，`IImage::getLayout()` 已降级为兼容 seed 语义
+- `RenderGraph` 已具备最小 declaration、compile、registry 和 executor 骨架，具备 clear/copy 级别 smoke 能力
+- Deferred 主链已有多段 graph shell 落地，SSAO、bloom、tone map、部分 viewport/GBuffer/depth copy 已开始进入 graph execution
+- BRDF LUT、cylindrical-to-cubemap、irradiance、prefiltered env 等 utility/offscreen 路径已验证 graph-backed execute 可行
+
+当前主要阻塞不再是“有没有 graph”，而是：
+
+- Deferred 主链仍残留 legacy attachment owner、dirty repair 和 `IRenderTarget` 兼容边界
+- startup/runtime 仍在暴露 submit-time 生命周期与 imported subresource state 的真实约束
+- `RenderGraphResourceRegistry` 虽已具备最小 replacement 语义，但距离完全接管 runtime intermediate owner 还有最后一段收口
+- Forward、RenderTarget 全面收敛、extension API 和 OpenGL 恢复都必须后置，避免打断 Deferred 主链闭环
+
+因此当前阶段目标不是继续做 facade 美化，而是：
+
+1. 完成 Deferred 主链 graph 化闭环
+2. 让 RenderGraph/registry/tracker 成为主路径的单一事实源
+3. 在此基础上再推进 Forward、外围 GPU 工作流与 extension API
+
+## 1.2 当前迭代焦点
+
+当前迭代默认按以下优先级推进：
+
+1. 修复启动链和 runtime 中暴露的真实 graph/resource-state/lifetime 问题
+2. 删除 Deferred 主链剩余的 legacy resource owner、dirty repair 和 graph 外 barrier 语义
+3. 收敛 `IRenderTarget` 到 attachment facade，而不是继续扩展其 owner/rebuild 职责
+4. 仅在 Deferred 主链闭环后再推进 Forward、offscreen、extension 和 OpenGL 相关工作
+
 ## 2. 已有工作与停止线
 
 ### 2.1 从上一轮继承的有效成果
@@ -97,6 +132,8 @@ RenderGraph 需要分别控制逻辑资源、物理资源、attachment 使用和
 ### 3.5 所有权和非拥有引用缺乏统一规则
 
 现有代码混用 `shared_ptr`、裸指针、opaque handle 和由 view 间接持有 image 的方式。资源 owner、descriptor 引用、pass 临时引用和 imported native resource 没有明确分类，resize 和 shutdown 时容易发生悬空引用或过度共享。
+
+近期已验证的真实故障表明，仅仅“record 阶段对象还活着”并不够：dynamic rendering attachment、descriptor 引用、graph executor/imported view 和 offscreen job 中间资源，常常会在 `vkQueueSubmit` / MoltenVK encode 阶段才被真正消费。后续资源模型与 graph 设计必须把这类对象统一归入 submit-time lifecycle 约束，而不是继续依赖局部栈对象、成员临时缓存或“view 可能顺手保活 image”的隐式假设。
 
 ### 3.6 与成熟商业引擎的实际差距
 
@@ -186,6 +223,11 @@ std::unique_ptr<IGpuSampler> createSampler(const SamplerDesc& desc);
 - SSAO、GBuffer、bloom、shadow 等中间资源直接使用 GPU image/view 或 graph handle
 - 删除 `Texture::createRenderTexture()`
 
+过渡期约束：
+
+- Texture / RenderImage 的“默认 view imported texture”一律走公共 helper 组装 `RGImportedTextureDesc`，把 shared image/view、usage 扩展和 final layout 规则收敛到一处
+- face/mip/layer 级别的子资源导入继续显式传递 owned view 与 view range；若复用已有 shared subresource view，优先由 `IImageView` 自带 subresource range 元数据供 graph 直接消费，必要时才额外显式补 range。在子资源 view owner/identity 完整建模前，不把这类路径伪装成默认 imported texture
+
 迁移期间允许使用最小 `RenderImage` owner 组合 image 与 default view。它不包含资产、sampler、upload 或状态跟踪语义，RenderGraph resource registry 落地后由 registry 替代，不继续扩展为第二套 texture abstraction。
 
 ### 4.4 Attachment 与 RenderTarget
@@ -259,6 +301,12 @@ execute 中禁止：
 - 修改 graph 结构
 - 未声明资源的 transition/copy/read/write
 
+补充生命周期约束：
+
+- execute callback、offscreen job execute 和 graph utility pass 中，不允许把 attachment spec、image view、imported graph resource 或 descriptor 引用仅保活到局部函数返回
+- 若后端在 submit/encode 阶段消费 attachment/descriptors，则 owner 必须挂到 frame、job result、submission context 或等价的 GPU completion 边界
+- graph helper API 优先返回值语义或稳定 owner，不再鼓励用裸指针指向临时 attachment 描述
+
 ### 5.4 Compiler 和 Executor 首版能力
 
 必须实现：
@@ -312,40 +360,51 @@ ECS extraction -> RenderItem -> visibility/LOD -> DrawPacket -> sort/batch -> Dr
 
 ## 6. 迁移顺序
 
-### Phase 0: 收口旧计划和行为基线
+阶段编号以 `todo.md` 为准；本节给出高层意图与当前收口顺序。
 
-- 回退无行为价值的当前 dirty 提取改动
-- 标记旧计划停止执行
-- 固化 Forward/Deferred 截图、validation 和功能冒烟基线
+### Phase 0: 旧计划收口与行为基线
 
-### Phase 1: 统一资源描述与 Factory
+- 停止旧计划继续吸引低收益改动
+- 固化 Forward/Deferred 冒烟、validation、截图和 automation 基线
+- 明确 submit-time 生命周期与 non-owning view 规则
 
-- 建立新 desc、接口和 `IRenderResourceFactory`
-- 先迁移 buffer 创建路径
-- 再迁移 sampler、image 和 image view
-- Vulkan 完整实现；OpenGL 暂时冻结
+### Phase 1: 资源 API 盘点与契约
 
-### Phase 2: 拆 Texture 与 GPU Image
+- 固化 buffer/image/view/sampler/texture/render-target 的职责边界
+- 明确 owner、非拥有引用、imported ownership 与销毁顺序
+- 锁定 desc 不可变、subresource range 和 imported state 契约
 
-- 分离 decode、upload 和 GPU resource ownership
-- 迁移资产纹理和 cubemap
-- 将 render texture 调用点迁移为显式 GPU image owner
-- 删除全局 texture factory 入口
+### Phase 2: 统一 Resource Factory
 
-### Phase 3: Resource State Tracker
+- 以 `IRenderResourceFactory` 接管基础 GPU 资源创建
+- 删除静态 factory 与 `App::get()` 资源创建路径
+- 将 Vulkan native handle 约束在平台实现层
 
-- 为 legacy command recording 建立 tracker
-- 迁移现有 layout transition
-- 补齐 subresource 和 imported state 语义
-- 删除 graph 对 image 全局 layout API 的依赖，仅允许使用 compatibility seed
+### Phase 3: Buffer 迁移
 
-### Phase 4: RenderGraph Core
+- 完成 staging/readback、vertex/index、uniform/storage、indirect 等 buffer 统一迁移
+- 统一 map/write/flush 范围与错误行为
+- 让 buffer 生命周期和 memory usage 能从 desc 直接判断
+
+### Phase 4: Texture / Image / ImageView 分层
+
+- 分离 texture decode/import、upload 与 GPU owner
+- 将中间 GPU image 从资产 `Texture` 语义中剥离
+- 只保留 `Texture` 的资产与采样语义
+
+### Phase 5: Resource State Tracker
+
+- 为 legacy command recording 建立统一 tracker
+- 让 legacy transition 和 graph compiled state plan 汇入同一 barrier backend
+- 删除 image 永久对象上的“当前 layout 真相”
+
+### Phase 6: RenderGraph Core
 
 - 实现 logical resource、pass builder、compiler、registry 和 executor
-- 添加纯 CPU graph 单元测试
-- 使用最小 clear/copy graph 验证 Vulkan executor
+- 补齐最小 state plan、replacement、imported resource 与 core tests
+- 先验证 clear/copy，再承接真实 runtime/offscreen pass
 
-### Phase 5: Deferred RenderGraph
+### Phase 7: Deferred Graph 迁移
 
 首批固定迁移链路：
 
@@ -366,20 +425,26 @@ GBuffer -> SSAO -> DeferredLight -> Skybox -> DebugOverlay
 
 ECS extraction、material upload、ImGui 和 presentation orchestration 仍在 graph 外。
 
-### Phase 6: 收敛旧 RenderTarget
+### Phase 8: RenderTarget 收敛
 
-- Deferred 不再依赖 attachment-owning `IRenderTarget`
+- 将 `IRenderTarget` 从 owner/rebuild 对象收敛为 attachment facade
 - 拆除 `flushDirty()` 和 dirty-rebuild 协议
 - legacy Forward 暂时使用 resource bundle + attachment set adapter
-- 删除不再使用的 render target factory 职责
+- 删除多余 render target factory / framebuffer owner 职责
 
-### Phase 7: Forward 与外围迁移
+### Phase 9: Forward Graph 迁移
 
 - 迁移 Forward shadow、opaque、skybox、overlay、postprocess
-- 再迁移 offscreen environment preprocess 和 screenshot copy
-- 删除剩余旧 factory、旧 resource type 和 compatibility adapter
+- 删除 Forward dirty render-target refresh 与 legacy attachment adapter
+- 让 Forward/Deferred switch 在统一 graph 主路径上稳定通过
 
-### Phase 8: Editor Render Extension API
+### Phase 10: 外围 GPU 工作流迁移
+
+- 迁移 offscreen environment preprocess、BRDF LUT 与 screenshot copy/readback
+- 明确 swapchain acquire/present 与 offscreen scheduler 的 graph 外边界
+- 删除剩余 compatibility adapter
+
+### Phase 11: Editor Render Extension API
 
 - 定义固定扩展点和 `IRenderExtension` 生命周期
 - 提供受限 `RenderGraphBuilder` facade、builtin resources 和 `RenderView`
@@ -388,9 +453,9 @@ ECS extraction、material upload、ImGui 和 presentation orchestration 仍在 g
 - 在 Render Diagnostics 中展示 extension pass/resource/state dump
 - 验证注册、禁用、热重载、resize、多视图和移除流程
 
-### Phase 9: OpenGL 恢复评估
+### Phase 12: 清理与 OpenGL 恢复评估
 
-本轮不实现 OpenGL。Vulkan 和公共接口稳定后，单独评估：
+本轮 Vulkan 主路径收口后，再单独评估：
 
 - 新资源 factory 的 OpenGL 实现
 - graph state/barrier 在 OpenGL 下的降级语义

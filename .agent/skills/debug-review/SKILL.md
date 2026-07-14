@@ -15,6 +15,7 @@ description: YA Engine 崩溃排查、变更自检与提交前 review 清单。
 2. 初始化顺序：确认 `RenderRuntime`、`IRender`、system、component resolve 顺序正确。
 3. 资源生命周期：检查 `shared_ptr` / runtime state 持有链与释放时机。
 4. Vulkan 问题：优先检查 frame 内资源重建、layout transition、descriptor / imageView 是否失效。
+5. 若栈落在 `vkQueueSubmit`、MoltenVK encode、dynamic rendering、render pass / attachment 构造：优先怀疑“record 时合法、submit 时失效”的生命周期问题，而不是先怀疑 shader 或业务逻辑。
 
 ## 日志与观测
 
@@ -27,6 +28,40 @@ description: YA Engine 崩溃排查、变更自检与提交前 review 清单。
 - `YA_CORE_ASSERT`
 
 不要用 `std::cout` / `printf` 临时打日志。
+
+高优先级观测点：
+- job / future / async resolve 的 phase 变迁
+- queue submit 前后的 resource label、image view label、render target label
+- `DeferredDeletionQueue` flush 时机
+- imported image / imageView 的创建与 retire 路径
+
+冒烟默认先降噪：
+- 优先用 `--log-level=warn --log-detail-level=error`，除非本次问题明确需要 `info/debug/trace`
+- 如果需要保留更多上下文，先提到 `info`，不要直接放开 `trace`
+- 读日志和读代码时先过滤到目标模块、目标帧段、目标关键字，再决定是否扩大范围
+
+## Vulkan / MoltenVK 提交期崩溃排查顺序
+
+1. 先确认崩溃发生在 record、submit、还是 fence wait 后。
+2. 若栈里出现 `MVKAttachmentDescription`、`MVKRenderPass`、`beginRendering`、`vkQueueSubmit`：
+   - 先查 color/depth attachment 的 `IImageView*` 是否仍然存活。
+   - 先查该 view 是不是在 record 后、submit 前就被 `DeferredDeletionQueue` / 临时 owner / 局部 `shared_ptr` 释放了。
+   - 再查 `RenderingInfo` / attachment struct 里的指针是否指向栈对象或已 reset 容器。
+   - 再查 imported `RenderImage` / `RenderGraphExecutor` / transient view 是否只活到局部 `execute()` 返回。
+   - 再查 `RenderingInfo::ImageSpec.image` 与 `imageView->getImage()` 是否还是同一个对象，subresource range 是否来自同一个 view，而不是手抄第二份元数据。
+3. 对异步加载或 offscreen 任务，短帧 smoke 不算验证；至少跑到会触发 resolve / preprocess / submit 的帧数。
+4. 若日志看不出原因，优先用 `lldb --batch ... -k 'bt' -k 'thread backtrace all'` 抓真实崩溃栈，而不是只看引擎日志。
+5. Codex/agent 跑大体量日志文件时，先用 `rg` / `sed` / `tail` 按模块、关键词、时间段过滤，避免整文件直读。
+
+## 生命周期专项检查单
+
+1. 非 owning 类型是否被误当成 owning 使用。
+2. 录入 command buffer 的 attachment / descriptor / view 是否跨 submit 存活。
+3. 若后端在 submit/encode 阶段消费 attachment（MoltenVK 常见），就把保活边界按 `vkQueueSubmit -> fence signal` 算，不按 `cmdBuf->end()` 算。
+4. `shared_ptr` 持有链是否真的覆盖到 `GpuCompleted` / fence signal，而不是只覆盖到 `Recorded`。
+5. 将 owning 改 non-owning 后，是否给每条调用链补了新的 keepalive owner。
+6. `RenderGraph` imported 资源是否由外层 frame/job/submission 对象保活。
+7. imported resource 若引用的是已有 subresource view，确认 graph compile 看到的 mip/layer/aspect range 与实际 view 一致；优先检查 view 自身是否携带 range 元数据，避免 helper/调用点又手写出第二份不一致的 range。
 
 ## 相关 skills
 
@@ -45,6 +80,7 @@ description: YA Engine 崩溃排查、变更自检与提交前 review 清单。
 4. 对状态流、resolve 流程、渲染编排，优先保持清晰分支，不做提前抽象。
 5. 临时调试代码、一次性文件、无效分支在提交前清理掉。
 6. 若改到 Vulkan 资源，确认没有在 frame recording 中途重建正在使用的对象。
+7. 若改到 image view、descriptor、render graph import、offscreen job，确认保活边界覆盖到 queue submit / GPU completion。
 
 ## 常见高风险点
 

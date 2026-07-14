@@ -87,6 +87,19 @@ description: YA Engine C++ 编码约定、生命周期规则与热路径风格�
 3. 项目约定别名：`stdptr<T>` = `std::shared_ptr<T>`。
 4. 构造辅助优先使用 `makeShared<T>(...)` / `makeUnique<T>(...)`，不要写错成 `makeshared`。
 5. 单例若使用 Meyers' Singleton，`instance()` 实现放 `.cpp`，头文件只保留声明，避免跨模块多实例。
+6. `IImageView`、descriptor write、rendering attachment 这类“引用 GPU 对象的轻量包装”默认按 non-owning 看待；除非类型本身明确声明 owning，否则必须由 `Texture`、`RenderImage`、job result、frame context 或 submission context 显式保活。
+7. 只要资源句柄被录进 `ICommandBuffer`，就不要假设“函数返回后即可释放”；先确认后端是在 record 时还是 submit/encode 时消费这些对象，再决定保活边界。
+8. 对 offscreen job、render graph、异步加载后的提交链路，保活粒度优先挂在 `frame/job/submission result` 上，不要挂在一次 `execute()` 的局部栈对象上。
+9. `RenderingInfo::ImageSpec` 这类同时带 `image` 和 `imageView` 的结构，优先从 `imageView` 派生 `image + subresourceRange`，不要在调用点手抄第二份 range 或混搭另一张 image。
+
+## 渲染生命周期红线
+
+1. `beginRendering()`、descriptor 更新、imported image view 创建后，如果对象稍后还会被 command buffer / queue submit 使用，就必须跨过该次 GPU 提交完成。
+2. `RenderGraphExecutor`、transient `RenderImage`、per-face/per-mip imported view 这类辅助对象，若其内部持有 attachment/view 资源，不能只活到本地函数返回。
+3. `RenderingInfo`、attachment 数组、depth/color attachment 指针进入 record 模式后，不允许再引用栈上临时对象或随后会 reset 的成员缓存。
+4. 将 owning 改成 non-owning 时，必须反查所有调用点，把保活责任补到外层；这类改动默认视为高风险，不是“纯重构”。
+5. imported graph resource 若复用“已有 owner 的 subresource image view”，必须保证 graph 能看到该 view 的 subresource range；优先让 `IImageView` 自带 range 元数据，必要时再显式补充，不能只传 `shared_ptr<IImageView>` 而让 compiler 退回整张 image 的状态范围。
+6. 任何会进入 dynamic rendering / render pass attachment 的 `IImageView`，默认按“可能到 queue submit 才被后端真正消费”处理；不要在同一帧局部作用域里 retire、reset 或覆盖它的 owner。
 
 ## 相关 skills
 
