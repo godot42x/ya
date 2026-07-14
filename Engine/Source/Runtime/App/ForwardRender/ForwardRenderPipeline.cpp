@@ -12,24 +12,56 @@ namespace ya
 namespace
 {
 
-RenderAttachmentFormats buildForwardViewportFormats(const IRenderTarget* renderTarget)
+RenderAttachmentFormats buildForwardViewportFormats(const RenderTargetCreateInfo& spec)
 {
     RenderAttachmentFormats formats{};
-    if (!renderTarget) {
-        return formats;
-    }
-
-    const auto& colorDescs = renderTarget->getColorAttachmentDescs();
-    formats.colorFormats.reserve(colorDescs.size());
-    for (const auto& desc : colorDescs) {
+    formats.colorFormats.reserve(spec.attachments.colorAttach.size());
+    for (const auto& desc : spec.attachments.colorAttach) {
         formats.colorFormats.push_back(desc.format);
     }
 
-    if (const auto depthDesc = renderTarget->getDepthAttachmentDesc(); depthDesc.has_value()) {
-        formats.depthFormat = depthDesc->format;
+    if (spec.attachments.depthAttach.has_value()) {
+        formats.depthFormat = spec.attachments.depthAttach->format;
     }
 
     return formats;
+}
+
+RenderTargetCreateInfo buildForwardViewportRenderTargetSpec(Extent2D extent, EFormat::T colorFormat, EFormat::T depthFormat)
+{
+    return RenderTargetCreateInfo{
+        .label            = "Viewport RenderTarget",
+        .renderingMode    = ERenderingMode::DynamicRendering,
+        .bSwapChainTarget = false,
+        .extent           = extent,
+        .frameBufferCount = 1,
+        .attachments      = {
+            .colorAttach = {
+                AttachmentDescription{
+                    .index         = 0,
+                    .format        = colorFormat,
+                    .samples       = ESampleCount::Sample_1,
+                    .loadOp        = EAttachmentLoadOp::Clear,
+                    .storeOp       = EAttachmentStoreOp::Store,
+                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
+                },
+            },
+            .depthAttach = AttachmentDescription{
+                .index          = 1,
+                .format         = depthFormat,
+                .samples        = ESampleCount::Sample_1,
+                .loadOp         = EAttachmentLoadOp::Clear,
+                .storeOp        = EAttachmentStoreOp::Store,
+                .stencilLoadOp  = EAttachmentLoadOp::Clear,
+                .stencilStoreOp = EAttachmentStoreOp::Store,
+                .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
+                .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
+                .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
+            },
+        },
+    };
 }
 
 ForwardViewportResources buildForwardViewportResources(const IRenderTarget* renderTarget)
@@ -123,40 +155,11 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
 
 void ForwardRenderPipeline::initViewportResources(const InitDesc& desc)
 {
-    viewportRT = ya::createRenderTarget(RenderTargetCreateInfo{
-        .label            = "Viewport RenderTarget",
-        .renderingMode    = ERenderingMode::DynamicRendering,
-        .bSwapChainTarget = false,
-        .extent           = {.width = static_cast<uint32_t>(desc.windowW), .height = static_cast<uint32_t>(desc.windowH)},
-        .frameBufferCount = 1,
-        .attachments      = {
-            .colorAttach = {
-                AttachmentDescription{
-                    .index         = 0,
-                    .format        = VIEWPORT_COLOR_FORMAT,
-                    .samples       = ESampleCount::Sample_1,
-                    .loadOp        = EAttachmentLoadOp::Clear,
-                    .storeOp       = EAttachmentStoreOp::Store,
-                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
-                },
-            },
-            .depthAttach = AttachmentDescription{
-                .index          = 1,
-                .format         = DEPTH_FORMAT,
-                .samples        = ESampleCount::Sample_1,
-                .loadOp         = EAttachmentLoadOp::Clear,
-                .storeOp        = EAttachmentStoreOp::Store,
-                .stencilLoadOp  = EAttachmentLoadOp::Clear,
-                .stencilStoreOp = EAttachmentStoreOp::Store,
-                .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
-                .finalLayout    = EImageLayout::DepthStencilAttachmentOptimal,
-                .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
-            },
-        },
-    });
-    YA_CORE_ASSERT(viewportRT, "Failed to create viewport render target");
+    _viewportRTSpec = buildForwardViewportRenderTargetSpec(
+        {.width = static_cast<uint32_t>(desc.windowW), .height = static_cast<uint32_t>(desc.windowH)},
+        VIEWPORT_COLOR_FORMAT,
+        DEPTH_FORMAT);
+    recreateViewportRenderTarget();
     refreshViewportSnapshot();
     refreshViewportResources();
 }
@@ -228,8 +231,8 @@ void ForwardRenderPipeline::initStageResources()
 
     PipelineRenderingInfo viewportPRI{
         .label                  = "Forward Viewport",
-        .colorAttachmentFormats = {VIEWPORT_COLOR_FORMAT},
-        .depthAttachmentFormat  = DEPTH_FORMAT,
+        .colorAttachmentFormats = _viewportFormats.colorFormats,
+        .depthAttachmentFormat  = _viewportFormats.depthFormat.value_or(EFormat::Undefined),
     };
     _viewportStage = ya::makeShared<ForwardViewportStage>();
     _viewportStage->initWithDesc(ForwardViewportStage::InitDesc{
@@ -294,8 +297,10 @@ bool ForwardRenderPipeline::setRenderTargetColorFormat(RenderTargetEditorCatalog
     bool bFormatChanged = false;
     switch (owner) {
     case RenderTargetEditorCatalog::Entry::EOwner::ForwardViewport:
-        if (viewportRT) {
-            bFormatChanged = viewportRT->setColorAttachmentFormat(attachmentIndex, format);
+        if (attachmentIndex < _viewportRTSpec.attachments.colorAttach.size()) {
+            auto& colorDesc = _viewportRTSpec.attachments.colorAttach[attachmentIndex];
+            bFormatChanged  = colorDesc.format != format;
+            colorDesc.format = format;
         }
         break;
     default:
@@ -346,10 +351,8 @@ void ForwardRenderPipeline::applyPendingResourceRefreshes()
     bool bRefreshShadowStageState   = false;
 
     if (hasPendingResourceRefresh(EForwardPendingResourceRefresh::ViewportResize)) {
-        if (viewportRT) {
-            viewportRT->setExtent(_pendingViewportExtent);
-        }
-        flushViewportResources();
+        _viewportRTSpec.extent = _pendingViewportExtent;
+        recreateViewportRenderTarget();
         bRefreshViewportSnapshot   = true;
         bRefreshViewportResources  = true;
         bRefreshViewportStageState = true;
@@ -367,12 +370,10 @@ void ForwardRenderPipeline::applyPendingResourceRefreshes()
     }
 
     if (hasPendingResourceRefresh(EForwardPendingResourceRefresh::AttachmentFormat)) {
-        if (viewportRT && viewportRT->needsAttachmentRefresh()) {
-            flushViewportResources();
-            bRefreshViewportSnapshot   = true;
-            bRefreshViewportResources  = true;
-            bRefreshViewportStageState = true;
-        }
+        recreateViewportRenderTarget();
+        bRefreshViewportSnapshot   = true;
+        bRefreshViewportResources  = true;
+        bRefreshViewportStageState = true;
         clearPendingResourceRefresh(EForwardPendingResourceRefresh::AttachmentFormat);
     }
 
@@ -411,16 +412,15 @@ void ForwardRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& 
     syncShadowSettings();
 }
 
-void ForwardRenderPipeline::flushViewportResources()
+void ForwardRenderPipeline::recreateViewportRenderTarget()
 {
-    if (viewportRT) {
-        viewportRT->refreshIfNeeded();
-    }
+    viewportRT = ya::createRenderTarget(_viewportRTSpec);
+    YA_CORE_ASSERT(viewportRT, "Failed to recreate viewport render target");
 }
 
 void ForwardRenderPipeline::refreshViewportSnapshot()
 {
-    _viewportFormats = buildForwardViewportFormats(viewportRT.get());
+    _viewportFormats = buildForwardViewportFormats(_viewportRTSpec);
 }
 
 void ForwardRenderPipeline::refreshViewportResources()
@@ -514,6 +514,16 @@ ShadowRuntimeState ForwardRenderPipeline::buildShadowState() const
     }
 
     return shadowState;
+}
+
+EFormat::T ForwardRenderPipeline::getViewportColorFormat() const
+{
+    return !_viewportFormats.colorFormats.empty() ? _viewportFormats.colorFormats.front() : EFormat::Undefined;
+}
+
+EFormat::T ForwardRenderPipeline::getViewportDepthFormat() const
+{
+    return _viewportFormats.depthFormat.value_or(EFormat::Undefined);
 }
 
 void ForwardRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)

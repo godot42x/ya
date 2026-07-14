@@ -25,6 +25,12 @@
 
 ## 最新验证
 
+- 2026-07-14：Forward viewport 的 extent / attachment format 控制面已开始从 `IRenderTarget` dirty protocol 回收到 pipeline-owned spec。`ForwardRenderPipeline` 新增 `_viewportRTSpec`，viewport resize 和 RT editor color-format 变更现在都会先更新 spec，再在 frame boundary 显式 `recreateViewportRenderTarget()`；`refreshViewportSnapshot()` 也改为直接从 spec 取格式真相，而不是回读 RT desc。
+- 直接收益：Forward 不再依赖 `viewportRT->setExtent()/setColorAttachmentFormat()/needsAttachmentRefresh()/refreshIfNeeded()` 这套 legacy 自修复协议来维持 viewport 资源一致性。当前帧 snapshot format、stage pipeline format 和实际 RT replacement 开始重新对齐，这和 Deferred 之前已经走过的收口方向一致。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*'` 45/45 通过
+  - `HelloMaterial --exit-after-frame=400 --log-level=warn --log-detail-level=error` 退出码 0，过滤后未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|AddressSanitizer`
 - 2026-07-14：`ShadowMapResources` 不再继续向 Forward / Deferred 暴露 `IRenderTarget` 的 dirty-repair 包装。shadow 资源现在只保留 render target owner、depth image owner 和 sampled view rebuild 职责；Forward 删除了无意义的 `flushShadowResources()`，Deferred 在 shadow 整套 destroy/init 后也不再额外调用 `refreshIfNeeded()`。
 - 直接收益：shadow 生命周期边界与当前真实实现重新对齐了。两条 pipeline 的 shadow 刷新本来就是整套 replacement，这一步把 legacy RT “脏了就自修复”的旧协议从 shadow facade 里收掉，后续继续压缩 `IRenderTarget` 职责时，不会再被这层包装重新扩散。
 - 验证结果：

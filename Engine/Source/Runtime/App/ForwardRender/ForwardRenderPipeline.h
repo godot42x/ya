@@ -87,6 +87,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     Extent2D      _pendingViewportExtent{};
     uint32_t      _pendingResourceRefreshMask = 0;
     RenderingInfo _viewportRI{};
+    RenderTargetCreateInfo _viewportRTSpec{};
     RenderAttachmentFormats _viewportFormats{};
     ForwardViewportResources _viewportResources{};
     FrameContext  _lastTickCtx{};
@@ -111,8 +112,8 @@ struct ForwardRenderPipeline : public IRenderPipeline
 
     void                         onViewportResized(Rect2D rect) override;
     Extent2D                     getViewportExtent() const override;
-    [[nodiscard]] EFormat::T     getViewportColorFormat() const override { return VIEWPORT_COLOR_FORMAT; }
-    [[nodiscard]] EFormat::T     getViewportDepthFormat() const override { return DEPTH_FORMAT; }
+    [[nodiscard]] EFormat::T     getViewportColorFormat() const override;
+    [[nodiscard]] EFormat::T     getViewportDepthFormat() const override;
     [[nodiscard]] const ForwardViewportResources& getCurrentViewportResources() const { return _viewportResources; }
     void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const override;
 
@@ -142,7 +143,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     void               requestShadowResourceRefresh();
     void               applyPendingResourceRefreshes();
     void               syncFrameSettings(const RenderPipelineFrameContext& frame);
-    void               flushViewportResources();
+    void               recreateViewportRenderTarget();
     void               refreshViewportSnapshot();
     void               refreshViewportResources();
     void               refreshViewportStageState();
