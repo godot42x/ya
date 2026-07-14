@@ -10,6 +10,13 @@ bool VulkanImageView::init(VulkanRender *render, stdptr<VulkanImage> image, cons
     _image       = image.get();
     _format      = image->getVkFormat();
     _aspectFlags = ci.aspectFlags;
+    _subresourceRange = ImageSubresourceRange{
+        .aspectMask     = static_cast<uint32_t>(ci.aspectFlags),
+        .baseMipLevel   = ci.baseMipLevel,
+        .levelCount     = ci.levelCount,
+        .baseArrayLayer = ci.baseArrayLayer,
+        .layerCount     = ci.layerCount,
+    };
     VkImageViewCreateInfo viewCI{
         .sType      = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .pNext      = nullptr,

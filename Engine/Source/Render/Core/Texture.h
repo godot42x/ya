@@ -168,6 +168,7 @@ struct Texture
     IImage*                 getImage() const { return image.get(); }
     std::shared_ptr<IImage> getImageShared() const { return image; }
     IImageView*             getImageView() const { return imageView.get(); }
+    std::shared_ptr<IImageView> getImageViewShared() const { return imageView; }
 
     uint32_t   getWidth() const { return _width; }
     uint32_t   getHeight() const { return _height; }

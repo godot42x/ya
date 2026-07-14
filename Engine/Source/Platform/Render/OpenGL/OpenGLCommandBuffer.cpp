@@ -15,6 +15,7 @@ bool OpenGLCommandBuffer::begin(bool oneTimeSubmit)
         return false;
     }
 
+    clearRetainedResources();
     _isRecording = true;
 #if YA_CMDBUF_RECORD_MODE
     recordedCommands.clear();
@@ -35,6 +36,7 @@ bool OpenGLCommandBuffer::end()
 
 void OpenGLCommandBuffer::reset()
 {
+    clearRetainedResources();
 #if YA_CMDBUF_RECORD_MODE
     recordedCommands.clear();
 #endif
