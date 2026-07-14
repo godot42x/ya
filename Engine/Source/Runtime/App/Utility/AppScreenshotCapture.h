@@ -40,6 +40,7 @@ class AppScreenshotCapture
     static bool request(IRender* render,
                         const OffscreenJobQueueService& offscreenQueueService,
                         RenderImage* postprocessSourceImage,
+                        RenderImage* viewportSourceImage,
                         Texture* viewportSourceTexture,
                         Texture* presentationSourceTexture,
                         AppScreenshotCaptureState& state,

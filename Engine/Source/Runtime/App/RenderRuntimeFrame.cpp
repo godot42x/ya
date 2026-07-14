@@ -124,6 +124,14 @@ Texture* RenderRuntime::getActiveViewportTexture() const
     return nullptr;
 }
 
+RenderImage* RenderRuntime::getActiveViewportImage() const
+{
+    if (auto* pipeline = getActivePipelineDebugOutputs()) {
+        return pipeline->getViewportOutputImage();
+    }
+    return nullptr;
+}
+
 void RenderRuntime::renderViewportPassOverlays(const RenderPipelineFrameContext& pipelineFrame, const FrameInput::OverlayInput& overlay, ICommandBuffer* cmdBuf)
 {
     YA_PROFILE_SCOPE("Render2D");

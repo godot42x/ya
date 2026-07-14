@@ -257,7 +257,7 @@
 
 ### Pipeline 收口
 
-- [ ] RenderGraph 接管 Deferred pass 顺序
+- [-] RenderGraph 接管 Deferred pass 顺序
 - [ ] RenderGraph 接管 Deferred intermediate resource owner
 - [ ] RenderGraph 接管 pass 间 barrier
 - [x] 删除 Deferred `refreshDirtyResources()` attachment 修复路径

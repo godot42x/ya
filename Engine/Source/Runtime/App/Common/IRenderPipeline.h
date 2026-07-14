@@ -43,9 +43,8 @@ struct IRenderPipelineExecution
     virtual void onViewportResized(Rect2D rect) = 0;
     virtual void tick(const RenderPipelineFrameContext& frame) = 0;
 
-    [[nodiscard]] virtual Extent2D       getViewportExtent() const   = 0;
-    [[nodiscard]] virtual IRenderTarget* getViewportRT() const       = 0;
-    [[nodiscard]] virtual Texture*       getViewportTexture() const  = 0;
+    [[nodiscard]] virtual Extent2D   getViewportExtent() const      = 0;
+    [[nodiscard]] virtual Texture*   getViewportTexture() const     = 0;
     [[nodiscard]] virtual EFormat::T     getViewportColorFormat() const = 0;
     [[nodiscard]] virtual EFormat::T     getViewportDepthFormat() const = 0;
 };
@@ -78,6 +77,7 @@ struct IRenderPipelineDebugOutputs
 
     [[nodiscard]] virtual bool           isShadowMappingEnabled() const = 0;
     [[nodiscard]] virtual std::shared_ptr<IImage> getShadowDepthImage() const = 0;
+    [[nodiscard]] virtual RenderImage*   getViewportOutputImage() const = 0;
     [[nodiscard]] virtual Texture*       getViewportDepthTexture() const = 0;
     [[nodiscard]] virtual IImageView*    getShadowDirectionalDepthIV() const = 0;
     [[nodiscard]] virtual IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const = 0;

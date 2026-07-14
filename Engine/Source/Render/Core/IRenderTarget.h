@@ -328,6 +328,12 @@ struct IRenderTarget
         return frameBuffer ? frameBuffer->getColorAttachment(attachmentIdx) : nullptr;
     }
 
+    std::shared_ptr<RenderImage> getCurrentColorAttachmentShared(uint32_t attachmentIdx) const
+    {
+        auto* frameBuffer = getCurFrameBuffer();
+        return frameBuffer ? frameBuffer->getColorAttachmentShared(attachmentIdx) : nullptr;
+    }
+
     Texture* getCurrentDepthTexture() const
     {
         auto* frameBuffer = getCurFrameBuffer();
@@ -340,6 +346,12 @@ struct IRenderTarget
         return frameBuffer ? frameBuffer->getDepthAttachment() : nullptr;
     }
 
+    std::shared_ptr<RenderImage> getCurrentDepthAttachmentShared() const
+    {
+        auto* frameBuffer = getCurFrameBuffer();
+        return frameBuffer ? frameBuffer->getDepthAttachmentShared() : nullptr;
+    }
+
     Texture* getCurrentResolveTexture() const
     {
         auto* frameBuffer = getCurFrameBuffer();
@@ -350,6 +362,12 @@ struct IRenderTarget
     {
         auto* frameBuffer = getCurFrameBuffer();
         return frameBuffer ? frameBuffer->getResolveAttachment() : nullptr;
+    }
+
+    std::shared_ptr<RenderImage> getCurrentResolveAttachmentShared() const
+    {
+        auto* frameBuffer = getCurFrameBuffer();
+        return frameBuffer ? frameBuffer->getResolveAttachmentShared() : nullptr;
     }
 
     bool isSwapChainTarget() const { return bSwapChainTarget; }

@@ -112,17 +112,15 @@ struct ForwardRenderPipeline : public IRenderPipeline
 
     void                         onViewportResized(Rect2D rect) override;
     Extent2D                     getViewportExtent() const override;
-    [[nodiscard]] IRenderTarget* getViewportRT() const override { return viewportRT.get(); }
     [[nodiscard]] Texture*       getViewportTexture() const override { return viewportTexture; }
     [[nodiscard]] EFormat::T     getViewportColorFormat() const override { return VIEWPORT_COLOR_FORMAT; }
     [[nodiscard]] EFormat::T     getViewportDepthFormat() const override { return DEPTH_FORMAT; }
     [[nodiscard]] const ForwardViewportResources& getCurrentViewportResources() const { return _viewportResources; }
     void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const override;
 
-    // Shadow query accessors (used by RenderRuntime for debug views)
     [[nodiscard]] bool           isShadowMappingEnabled() const override;
-    [[nodiscard]] IRenderTarget* getShadowDepthRT() const { return _shadowResources.renderTarget.get(); }
     [[nodiscard]] std::shared_ptr<IImage> getShadowDepthImage() const override { return _shadowResources.depthImage; }
+    [[nodiscard]] RenderImage*   getViewportOutputImage() const override { return nullptr; }
     [[nodiscard]] Texture*       getViewportDepthTexture() const override { return _viewportResources.depth; }
     [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override;

@@ -20,6 +20,7 @@ struct AppAutomationFrameContext
 {
     IRender*                                render                            = nullptr;
     RenderImage*                            postprocessImage                  = nullptr;
+    RenderImage*                            viewportImage                     = nullptr;
     Texture*                                viewportTexture                   = nullptr;
     Texture*                                presentationTexture               = nullptr;
     std::function<bool()>                   requestRenderDocCapture;

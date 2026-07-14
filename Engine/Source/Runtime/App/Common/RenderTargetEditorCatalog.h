@@ -1,5 +1,8 @@
 #pragma once
 
+#include "Render/RenderDefines.h"
+
+#include <optional>
 #include <vector>
 
 namespace ya
@@ -22,6 +25,8 @@ struct RenderTargetEditorCatalog
             DeferredViewport,
             DeferredShadow,
         } owner = EOwner::Presentation;
+        std::vector<EFormat::T>          colorFormats{};
+        std::optional<EFormat::T>        depthFormat{};
         bool bEditable = true;
     };
 

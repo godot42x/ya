@@ -70,9 +70,29 @@ ViewportOverlayStage::FrameInputs::DirectionGizmoInput buildDirectionGizmoInput(
 constexpr const char* DEFERRED_PIPELINE_CONFIG_DOC_NAME                       = "editor";
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SSAO                = "render.deferred.ssao.enabled";
 
-DeferredAttachmentFormats buildDeferredAttachmentFormats(const IRenderTarget* renderTarget);
+DeferredAttachmentFormats buildDeferredGBufferFormats(EFormat::T signedLinearFormat,
+                                                      EFormat::T linearFormat,
+                                                      EFormat::T shadingModelFormat,
+                                                      EFormat::T depthFormat);
+DeferredAttachmentFormats buildDeferredViewportFormats(EFormat::T colorFormat, EFormat::T depthFormat);
+RenderTargetCreateInfo buildDeferredGBufferRenderTargetSpec(Extent2D extent,
+                                                            EFormat::T signedLinearFormat,
+                                                            EFormat::T linearFormat,
+                                                            EFormat::T shadingModelFormat,
+                                                            EFormat::T depthFormat);
+RenderTargetCreateInfo buildDeferredViewportRenderTargetSpec(Extent2D extent, EFormat::T colorFormat);
+DeferredAttachmentFormats buildDeferredFormatsFromSpec(const RenderTargetCreateInfo& spec);
 
-DeferredGBufferResources buildDeferredGBufferResources(IRenderTarget* gBufferRT)
+stdptr<Texture> makeCompatTextureFromRenderImage(RenderImage* image, std::string_view label)
+{
+    if (!image || !image->getImageShared() || !image->getImageViewShared()) {
+        return nullptr;
+    }
+
+    return Texture::wrap(image->getImageShared(), image->getImageViewShared(), std::string(label));
+}
+
+DeferredGBufferResources buildDeferredGBufferResources(IRenderTarget* gBufferRT, const DeferredAttachmentFormats& formats)
 {
     DeferredGBufferResources resources{};
     if (!gBufferRT) {
@@ -80,43 +100,147 @@ DeferredGBufferResources buildDeferredGBufferResources(IRenderTarget* gBufferRT)
     }
 
     for (uint32_t attachmentIndex = 0; attachmentIndex < resources.color.size(); ++attachmentIndex) {
-        resources.color[attachmentIndex] = gBufferRT->getCurrentColorAttachment(attachmentIndex);
+        resources.colorOwners[attachmentIndex] = gBufferRT->getCurrentColorAttachmentShared(attachmentIndex);
     }
-    resources.depth = gBufferRT->getCurrentDepthAttachment();
-    resources.formats = buildDeferredAttachmentFormats(gBufferRT);
+    resources.depthOwner = gBufferRT->getCurrentDepthAttachmentShared();
+    resources.formats = formats;
+    resources.syncRawViews();
     return resources;
 }
 
-DeferredViewportResources buildDeferredViewportResources(IRenderTarget* viewportRT)
+DeferredViewportResources buildDeferredViewportResources(IRenderTarget* viewportRT,
+                                                         const DeferredGBufferResources& gBufferResources,
+                                                         const DeferredAttachmentFormats& formats)
 {
     DeferredViewportResources resources{};
     if (!viewportRT) {
         return resources;
     }
 
-    resources.color = viewportRT->getCurrentColorAttachment(0);
-    resources.depth = viewportRT->getCurrentDepthAttachment();
-    resources.formats = buildDeferredAttachmentFormats(viewportRT);
+    resources.colorOwner = viewportRT->getCurrentColorAttachmentShared(0);
+    resources.formats = formats;
+    resources.depthOwner = gBufferResources.depthOwner;
+    resources.syncRawViews();
     return resources;
 }
 
-DeferredAttachmentFormats buildDeferredAttachmentFormats(const IRenderTarget* renderTarget)
+DeferredAttachmentFormats buildDeferredGBufferFormats(EFormat::T signedLinearFormat,
+                                                      EFormat::T linearFormat,
+                                                      EFormat::T shadingModelFormat,
+                                                      EFormat::T depthFormat)
 {
     DeferredAttachmentFormats formats{};
-    if (!renderTarget) {
-        return formats;
-    }
+    formats.colorFormats = {
+        signedLinearFormat,
+        signedLinearFormat,
+        linearFormat,
+        shadingModelFormat,
+    };
+    formats.depthFormat = depthFormat;
+    return formats;
+}
 
-    const auto& colorDescs = renderTarget->getColorAttachmentDescs();
-    formats.colorFormats.reserve(colorDescs.size());
-    for (const auto& desc : colorDescs) {
-        formats.colorFormats.push_back(desc.format);
-    }
+DeferredAttachmentFormats buildDeferredViewportFormats(EFormat::T colorFormat, EFormat::T depthFormat)
+{
+    DeferredAttachmentFormats formats{};
+    formats.colorFormats = {colorFormat};
+    formats.depthFormat  = depthFormat;
+    return formats;
+}
 
-    if (const auto depthDesc = renderTarget->getDepthAttachmentDesc(); depthDesc.has_value()) {
-        formats.depthFormat = depthDesc->format;
-    }
+RenderTargetCreateInfo buildDeferredGBufferRenderTargetSpec(Extent2D extent,
+                                                            EFormat::T signedLinearFormat,
+                                                            EFormat::T linearFormat,
+                                                            EFormat::T shadingModelFormat,
+                                                            EFormat::T depthFormat)
+{
+    return RenderTargetCreateInfo{
+        .label            = "GBuffer RenderTarget",
+        .renderingMode    = ERenderingMode::DynamicRendering,
+        .bSwapChainTarget = false,
+        .extent           = extent,
+        .frameBufferCount = 1,
+        .attachments      = {
+            .colorAttach = {
+                AttachmentDescription{
+                    .index         = 0,
+                    .format        = signedLinearFormat,
+                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                },
+                AttachmentDescription{
+                    .index         = 1,
+                    .format        = signedLinearFormat,
+                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                },
+                AttachmentDescription{
+                    .index         = 2,
+                    .format        = linearFormat,
+                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                },
+                AttachmentDescription{
+                    .index         = 3,
+                    .format        = shadingModelFormat,
+                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                },
+            },
+            .depthAttach = AttachmentDescription{
+                .index          = 4,
+                .format         = depthFormat,
+                .loadOp         = EAttachmentLoadOp::Clear,
+                .storeOp        = EAttachmentStoreOp::Store,
+                .stencilLoadOp  = EAttachmentLoadOp::Clear,
+                .stencilStoreOp = EAttachmentStoreOp::Store,
+                .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
+                .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+                .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
+            },
+        },
+    };
+}
 
+RenderTargetCreateInfo buildDeferredViewportRenderTargetSpec(Extent2D extent, EFormat::T colorFormat)
+{
+    return RenderTargetCreateInfo{
+        .label            = "Deferred Viewport RT",
+        .bSwapChainTarget = false,
+        .extent           = extent,
+        .attachments      = {
+            .colorAttach = {
+                AttachmentDescription{
+                    .index          = 0,
+                    .format         = colorFormat,
+                    .samples        = ESampleCount::Sample_1,
+                    .loadOp         = EAttachmentLoadOp::Clear,
+                    .storeOp        = EAttachmentStoreOp::Store,
+                    .stencilLoadOp  = EAttachmentLoadOp::DontCare,
+                    .stencilStoreOp = EAttachmentStoreOp::DontCare,
+                    .initialLayout  = EImageLayout::ColorAttachmentOptimal,
+                    .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
+                    .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
+                },
+            },
+        },
+    };
+}
+
+DeferredAttachmentFormats buildDeferredFormatsFromSpec(const RenderTargetCreateInfo& spec)
+{
+    DeferredAttachmentFormats formats{};
+    formats.colorFormats.reserve(spec.attachments.colorAttach.size());
+    for (const auto& colorDesc : spec.attachments.colorAttach) {
+        formats.colorFormats.push_back(colorDesc.format);
+    }
+    if (spec.attachments.depthAttach.has_value()) {
+        formats.depthFormat = spec.attachments.depthAttach->format;
+    }
     return formats;
 }
 
@@ -148,79 +272,10 @@ DeferredRenderPipeline::~DeferredRenderPipeline()
 
 void DeferredRenderPipeline::initRenderTargets(Extent2D extent)
 {
-    _gBufferRT = createRenderTarget(RenderTargetCreateInfo{
-        .label            = "GBuffer RenderTarget",
-        .renderingMode    = ERenderingMode::DynamicRendering,
-        .bSwapChainTarget = false,
-        .extent           = extent,
-        .frameBufferCount = 1,
-        .attachments      = {
-
-            .colorAttach = {
-                AttachmentDescription{
-                    .index         = 0,
-                    .format        = _gBufferSignedLinearFormat,
-                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                },
-                AttachmentDescription{
-                    .index         = 1,
-                    .format        = _gBufferSignedLinearFormat,
-                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                },
-                AttachmentDescription{
-                    .index         = 2,
-                    .format        = LINEAR_FORMAT,
-                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                },
-                AttachmentDescription{
-                    .index         = 3,
-                    .format        = SHADING_MODEL_FORMAT,
-                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                    .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
-                    .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                },
-            },
-            .depthAttach = AttachmentDescription{
-                .index          = 4,
-                .format         = _sharedDepthFormat,
-                .loadOp         = EAttachmentLoadOp::Clear,
-                .storeOp        = EAttachmentStoreOp::Store,
-                .stencilLoadOp  = EAttachmentLoadOp::Clear,
-                .stencilStoreOp = EAttachmentStoreOp::Store,
-                .initialLayout  = EImageLayout::DepthStencilAttachmentOptimal,
-                .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                .usage          = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
-            },
-        },
-    });
-
-    _viewportRT = createRenderTarget(RenderTargetCreateInfo{
-        .label            = "Deferred Viewport RT",
-        .bSwapChainTarget = false,
-        .extent           = extent,
-        .attachments      = {
-                 .colorAttach = {
-                AttachmentDescription{
-                         .index          = 0,
-                         .format         = _viewportColorFormat,
-                         .samples        = ESampleCount::Sample_1,
-                         .loadOp         = EAttachmentLoadOp::Clear,
-                         .storeOp        = EAttachmentStoreOp::Store,
-                         .stencilLoadOp  = EAttachmentLoadOp::DontCare,
-                         .stencilStoreOp = EAttachmentStoreOp::DontCare,
-                         .initialLayout  = EImageLayout::ColorAttachmentOptimal,
-                         .finalLayout    = EImageLayout::ShaderReadOnlyOptimal,
-                         .usage          = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
-                },
-            },
-        },
-    });
+    _gBufferRTSpec.extent  = extent;
+    _viewportRTSpec.extent = extent;
+    _gBufferRT             = createRenderTarget(_gBufferRTSpec);
+    _viewportRT            = createRenderTarget(_viewportRTSpec);
 }
 
 void DeferredRenderPipeline::initShadowResources()
@@ -267,6 +322,17 @@ void DeferredRenderPipeline::resolveRuntimeFormats()
         sampledDepthUsage,
         {SHADOW_DEPTH_FORMAT, EFormat::D32_SFLOAT_S8_UINT, EFormat::D24_UNORM_S8_UINT, EFormat::D16_UNORM},
         EImageCreateFlag::CubeCompatible);
+}
+
+void DeferredRenderPipeline::initRenderTargetSpecs(Extent2D extent)
+{
+    _gBufferRTSpec = buildDeferredGBufferRenderTargetSpec(
+        extent,
+        _gBufferSignedLinearFormat,
+        LINEAR_FORMAT,
+        SHADING_MODEL_FORMAT,
+        _sharedDepthFormat);
+    _viewportRTSpec = buildDeferredViewportRenderTargetSpec(extent, _viewportColorFormat);
 }
 
 void DeferredRenderPipeline::destroyShadowResources()
@@ -395,15 +461,21 @@ DeferredPipelineDebugViews DeferredRenderPipeline::buildDebugViews() const
 
 void DeferredRenderPipeline::appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const
 {
+    const DeferredAttachmentFormats gbufferFormats  = buildGBufferSnapshotFormats();
+    const DeferredAttachmentFormats viewportFormats = buildViewportSnapshotFormats();
     catalog.entries.push_back({
-        .label = "Deferred GBuffer",
-        .rt    = _gBufferRT.get(),
-        .owner = RenderTargetEditorCatalog::Entry::EOwner::DeferredGBuffer,
+        .label        = "Deferred GBuffer",
+        .rt           = _gBufferRT.get(),
+        .owner        = RenderTargetEditorCatalog::Entry::EOwner::DeferredGBuffer,
+        .colorFormats = gbufferFormats.colorFormats,
+        .depthFormat  = gbufferFormats.depthFormat,
     });
     catalog.entries.push_back({
-        .label = "Deferred Viewport",
-        .rt    = _viewportRT.get(),
-        .owner = RenderTargetEditorCatalog::Entry::EOwner::DeferredViewport,
+        .label        = "Deferred Viewport",
+        .rt           = _viewportRT.get(),
+        .owner        = RenderTargetEditorCatalog::Entry::EOwner::DeferredViewport,
+        .colorFormats = viewportFormats.colorFormats,
+        .depthFormat  = viewportFormats.depthFormat,
     });
     catalog.entries.push_back({
         .label = "Deferred Shadow",
@@ -415,13 +487,12 @@ void DeferredRenderPipeline::appendRenderTargetEditorEntries(RenderTargetEditorC
 void DeferredRenderPipeline::setSharedDepthFormat(EFormat::T format)
 {
     bool bDepthFormatChanged = false;
-    if (_gBufferRT) {
-        bDepthFormatChanged = _gBufferRT->setDepthAttachmentFormat(format) || bDepthFormatChanged;
-    }
-    if (_viewportRT) {
-        bDepthFormatChanged = _viewportRT->setDepthAttachmentFormat(format) || bDepthFormatChanged;
+    if (_gBufferRTSpec.attachments.depthAttach.has_value() && _gBufferRTSpec.attachments.depthAttach->format != format) {
+        _gBufferRTSpec.attachments.depthAttach->format = format;
+        bDepthFormatChanged                            = true;
     }
     if (bDepthFormatChanged) {
+        _sharedDepthFormat = format;
         markPendingResourceRefresh(EDeferredPendingResourceRefresh::SharedDepth);
     }
 }
@@ -433,21 +504,32 @@ bool DeferredRenderPipeline::setRenderTargetColorFormat(RenderTargetEditorCatalo
     bool bFormatChanged = false;
     switch (owner) {
     case RenderTargetEditorCatalog::Entry::EOwner::DeferredGBuffer:
-        if (_gBufferRT) {
-            bFormatChanged = _gBufferRT->setColorAttachmentFormat(attachmentIndex, format);
+        if (attachmentIndex >= _gBufferRTSpec.attachments.colorAttach.size()) {
+            return false;
+        }
+        if (_gBufferRTSpec.attachments.colorAttach[attachmentIndex].format != format) {
+            _gBufferRTSpec.attachments.colorAttach[attachmentIndex].format = format;
+            bFormatChanged                                                 = true;
+        }
+        if (bFormatChanged) {
+            markPendingResourceRefresh(EDeferredPendingResourceRefresh::GBufferAttachments);
         }
         break;
     case RenderTargetEditorCatalog::Entry::EOwner::DeferredViewport:
-        if (_viewportRT) {
-            bFormatChanged = _viewportRT->setColorAttachmentFormat(attachmentIndex, format);
+        if (attachmentIndex >= _viewportRTSpec.attachments.colorAttach.size()) {
+            return false;
+        }
+        if (_viewportRTSpec.attachments.colorAttach[attachmentIndex].format != format) {
+            _viewportRTSpec.attachments.colorAttach[attachmentIndex].format = format;
+            bFormatChanged                                                  = true;
+        }
+        if (bFormatChanged) {
+            _viewportColorFormat = _viewportRTSpec.attachments.colorAttach[0].format;
+            markPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewportAttachments);
         }
         break;
     default:
         return false;
-    }
-
-    if (bFormatChanged) {
-        markPendingResourceRefresh(EDeferredPendingResourceRefresh::AttachmentFormat);
     }
     return true;
 }
@@ -490,14 +572,10 @@ void DeferredRenderPipeline::applyPendingResourceRefreshes()
     bool bRefreshViewportStageState = false;
 
     if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewportResize)) {
-        if (_gBufferRT) {
-            _gBufferRT->setExtent(_pendingViewportExtent);
-        }
-        if (_viewportRT) {
-            _viewportRT->setExtent(_pendingViewportExtent);
-        }
-        flushGBufferResources();
-        flushViewportResources();
+        _gBufferRTSpec.extent  = _pendingViewportExtent;
+        _viewportRTSpec.extent = _pendingViewportExtent;
+        recreateGBufferRenderTarget();
+        recreateViewportRenderTarget();
         bRefreshGBufferSnapshot    = true;
         bRefreshViewportSnapshot   = true;
         bRefreshGBufferStageState  = true;
@@ -528,8 +606,7 @@ void DeferredRenderPipeline::applyPendingResourceRefreshes()
     }
 
     if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::SharedDepth)) {
-        flushGBufferResources();
-        flushViewportResources();
+        recreateGBufferRenderTarget();
         bRefreshGBufferSnapshot    = true;
         bRefreshViewportSnapshot   = true;
         bRefreshGBufferStageState  = true;
@@ -537,20 +614,18 @@ void DeferredRenderPipeline::applyPendingResourceRefreshes()
         clearPendingResourceRefresh(EDeferredPendingResourceRefresh::SharedDepth);
     }
 
-    if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::AttachmentFormat)) {
-        if (_gBufferRT && _gBufferRT->needsAttachmentRefresh()) {
-            flushGBufferResources();
-            bRefreshGBufferSnapshot   = true;
-            bRefreshGBufferStageState = true;
-        }
+    if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::GBufferAttachments)) {
+        recreateGBufferRenderTarget();
+        bRefreshGBufferSnapshot   = true;
+        bRefreshGBufferStageState = true;
+        clearPendingResourceRefresh(EDeferredPendingResourceRefresh::GBufferAttachments);
+    }
 
-        if (_viewportRT && _viewportRT->needsAttachmentRefresh()) {
-            flushViewportResources();
-            bRefreshViewportSnapshot   = true;
-            bRefreshViewportStageState = true;
-        }
-
-        clearPendingResourceRefresh(EDeferredPendingResourceRefresh::AttachmentFormat);
+    if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewportAttachments)) {
+        recreateViewportRenderTarget();
+        bRefreshViewportSnapshot   = true;
+        bRefreshViewportStageState = true;
+        clearPendingResourceRefresh(EDeferredPendingResourceRefresh::ViewportAttachments);
     }
 
     if (bRefreshGBufferSnapshot) {
@@ -611,8 +686,9 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
         .height = static_cast<uint32_t>(desc.windowH),
     };
 
+    initRenderTargetSpecs(extent);
     initRenderTargets(extent);
-    refreshCurrentFrameResources();
+    refreshAttachmentSnapshots();
     if (currentShadowSettings().isEnabled()) {
         initShadowResources();
     }
@@ -668,13 +744,14 @@ void DeferredRenderPipeline::initStages()
 void DeferredRenderPipeline::shutdown()
 {
     _postProcessStage.shutdown();
-    viewportTexture = nullptr;
 
     _debugAlbedoRGBView.reset();
     _debugSpecularAlphaView.reset();
     _cachedAlbedoSpecImageViewHandle = nullptr;
     _pendingViewportExtent           = {};
     _pendingResourceRefreshMask      = 0;
+    _viewportTextureCompat.reset();
+    _viewportDepthTextureCompat.reset();
     _currentSSAOOutput               = nullptr;
     _currentPostprocessOutput        = nullptr;
     _currentGBufferResources         = {};
@@ -761,7 +838,6 @@ void DeferredRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, 
     applyPendingResourceRefreshes();
     _postProcessStage.beginFrame();
     captureShadowSettings(frame);
-    refreshCurrentFrameResources();
     validateNoPendingAttachmentRefresh();
 
     vpW = static_cast<uint32_t>(frame.viewportRect.extent.x);
@@ -840,8 +916,8 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
 
 void DeferredRenderPipeline::validateNoPendingAttachmentRefresh() const
 {
-    const bool bViewportPipelineDirty = _viewportRT && _viewportRT->needsAttachmentRefresh();
-    const bool bGBufferPipelineDirty  = _gBufferRT && _gBufferRT->needsAttachmentRefresh();
+    const bool bViewportPipelineDirty = _viewportRT && _viewportRT->needsRefresh();
+    const bool bGBufferPipelineDirty  = _gBufferRT && _gBufferRT->needsRefresh();
 
     YA_CORE_ASSERT(!bViewportPipelineDirty,
                    "Deferred viewport attachment mutations must go through explicit pending refresh paths");
@@ -863,34 +939,63 @@ void DeferredRenderPipeline::invalidateGBufferDependentViews()
     }
 }
 
-void DeferredRenderPipeline::flushGBufferResources()
+void DeferredRenderPipeline::recreateGBufferRenderTarget()
 {
-    if (_gBufferRT) {
-        _gBufferRT->refreshIfNeeded();
-    }
+    _gBufferRT = createRenderTarget(_gBufferRTSpec);
+    YA_CORE_ASSERT(_gBufferRT, "Failed to recreate deferred GBuffer render target");
 }
 
-void DeferredRenderPipeline::flushViewportResources()
+void DeferredRenderPipeline::recreateViewportRenderTarget()
 {
-    if (_viewportRT) {
-        _viewportRT->refreshIfNeeded();
-    }
+    _viewportRT = createRenderTarget(_viewportRTSpec);
+    YA_CORE_ASSERT(_viewportRT, "Failed to recreate deferred viewport render target");
 }
 
 void DeferredRenderPipeline::refreshGBufferSnapshot()
 {
-    _currentGBufferResources = buildDeferredGBufferResources(_gBufferRT.get());
+    _currentGBufferResources = buildDeferredGBufferResources(
+        _gBufferRT.get(),
+        buildGBufferSnapshotFormats());
 }
 
 void DeferredRenderPipeline::refreshViewportSnapshot()
 {
-    _currentViewportResources = buildDeferredViewportResources(_viewportRT.get());
-    if (_currentViewportResources.depth == nullptr) {
-        _currentViewportResources.depth = _currentGBufferResources.depth;
+    _currentViewportResources = buildDeferredViewportResources(
+        _viewportRT.get(),
+        _currentGBufferResources,
+        buildViewportSnapshotFormats());
+    refreshViewportCompatTextures();
+}
+
+DeferredAttachmentFormats DeferredRenderPipeline::buildGBufferSnapshotFormats() const
+{
+    return buildDeferredFormatsFromSpec(_gBufferRTSpec);
+}
+
+DeferredAttachmentFormats DeferredRenderPipeline::buildViewportSnapshotFormats() const
+{
+    DeferredAttachmentFormats formats = buildDeferredFormatsFromSpec(_viewportRTSpec);
+    formats.depthFormat               = buildGBufferSnapshotFormats().depthFormat;
+    return formats;
+}
+
+EFormat::T DeferredRenderPipeline::getViewportColorFormat() const
+{
+    if (_viewportRTSpec.attachments.colorAttach.empty()) {
+        return EFormat::Undefined;
     }
-    if (!_currentViewportResources.formats.depthFormat.has_value()) {
-        _currentViewportResources.formats.depthFormat = _currentGBufferResources.formats.depthFormat;
-    }
+    return _viewportRTSpec.attachments.colorAttach.front().format;
+}
+
+EFormat::T DeferredRenderPipeline::getViewportDepthFormat() const
+{
+    return buildGBufferSnapshotFormats().depthFormat.value_or(EFormat::Undefined);
+}
+
+void DeferredRenderPipeline::refreshViewportCompatTextures()
+{
+    _viewportTextureCompat      = makeCompatTextureFromRenderImage(_currentViewportResources.color, "DeferredViewportCompatColor");
+    _viewportDepthTextureCompat = makeCompatTextureFromRenderImage(_currentViewportResources.depth, "DeferredViewportCompatDepth");
 }
 
 void DeferredRenderPipeline::refreshGBufferStageState()
@@ -925,7 +1030,7 @@ void DeferredRenderPipeline::refreshViewportStageState()
     }
 }
 
-void DeferredRenderPipeline::refreshCurrentFrameResources()
+void DeferredRenderPipeline::refreshAttachmentSnapshots()
 {
     refreshGBufferSnapshot();
     refreshViewportSnapshot();
@@ -990,6 +1095,10 @@ void DeferredRenderPipeline::handoffShadowDepthForSampling(ICommandBuffer* cmdBu
         return;
     }
 
+    // The shadow passes only render the layers needed this frame, but the lighting
+    // descriptors can still sample a wider layer span. Keep the whole shadow image
+    // in sampling layout until shadow resource ownership and descriptor ranges are
+    // modelled explicitly by the graph.
     ImageSubresourceRange shadowDepthRange{
         .aspectMask     = EImageAspect::Depth,
         .baseMipLevel   = 0,
@@ -1084,10 +1193,8 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     auto* viewportColor = _currentViewportResources.color;
     auto* viewportDepth = _currentViewportResources.depth;
     if (!viewportColor || !viewportDepth) {
-        viewportTexture = nullptr;
         return;
     }
-    viewportTexture = _viewportRT ? _viewportRT->getCurrentColorTexture(0) : nullptr;
 
     const auto  color = graph.importTexture(makeImportedTextureDesc(*viewportColor, "DeferredViewport.Color", EImageLayout::ShaderReadOnlyOptimal));
     const auto  viewportDepthHandle = graph.importTexture(makeImportedTextureDesc(*viewportDepth, "DeferredViewport.Depth", EImageLayout::ShaderReadOnlyOptimal));
@@ -1267,7 +1374,6 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             rgCtx.endRendering();
         });
 
-    auto* inputTexture = _viewportRT ? _viewportRT->getCurrentColorTexture(0) : nullptr;
     auto* inputImage   = _currentViewportResources.color;
     const auto postprocessOutput = _postProcessStage.appendGraphPasses(
         graph,
@@ -1284,7 +1390,6 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             _lightStage->setSSAOTexture(nullptr);
         }
         _postProcessStage.clearPreparedResources();
-        viewportTexture = inputTexture;
         return;
     }
 
@@ -1317,7 +1422,6 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             _lightStage->setSSAOTexture(nullptr);
         }
         _postProcessStage.clearPreparedResources();
-        viewportTexture = inputTexture;
         return;
     }
 
@@ -1329,7 +1433,6 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     }
 
     _currentPostprocessOutput = nullptr;
-    viewportTexture = inputTexture;
 }
 
 // ═══════════════════════════════════════════════════════════════════════

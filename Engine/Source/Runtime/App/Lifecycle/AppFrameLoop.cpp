@@ -162,7 +162,10 @@ int AppFrameLoop::iterate(App& app, float dt)
                                         AppAutomationFrameContext{
                                             .render                     = app.getRender(),
                                             .postprocessImage           = renderRuntime ? renderRuntime->getPostprocessOutputImage() : nullptr,
-                                            .viewportTexture            = renderRuntime ? renderRuntime->getActiveViewportTexture() : nullptr,
+                                            .viewportImage              = renderRuntime ? renderRuntime->getActiveViewportImage() : nullptr,
+                                            .viewportTexture            = (renderRuntime && !renderRuntime->getActiveViewportImage())
+                                                ? renderRuntime->getActiveViewportTexture()
+                                                : nullptr,
                                             .presentationTexture        = renderRuntime ? renderRuntime->getPresentationTexture() : nullptr,
                                             .requestRenderDocCapture    = diagnosticsService
                                                 ? [diagnosticsService]() { return diagnosticsService->requestAutomationRenderDocCapture(); }

@@ -46,14 +46,48 @@ constexpr std::array<RenderTargetFormatOption, 5> kColorFormats = {{
     {"B8G8R8A8_UNORM", EFormat::B8G8R8A8_UNORM},
 }};
 
-bool isDepthAttachmentSelection(const IRenderTarget* rt, int attachmentIndex)
+int getEntryColorAttachmentCount(const RenderTargetEditorCatalog::Entry& entry)
 {
-    if (!rt) {
+    if (!entry.colorFormats.empty()) {
+        return static_cast<int>(entry.colorFormats.size());
+    }
+    if (!entry.rt) {
+        return 0;
+    }
+    return static_cast<int>(entry.rt->getColorAttachmentDescs().size());
+}
+
+bool entryHasDepthAttachment(const RenderTargetEditorCatalog::Entry& entry)
+{
+    if (entry.depthFormat.has_value()) {
+        return true;
+    }
+    if (!entry.rt) {
         return false;
     }
+    return entry.rt->getDepthAttachmentDesc().has_value();
+}
 
-    const int colorCount = static_cast<int>(rt->getColorAttachmentDescs().size());
-    return attachmentIndex >= colorCount && rt->getDepthAttachmentDesc().has_value();
+EFormat::T getEntryAttachmentFormat(const RenderTargetEditorCatalog::Entry& entry, int attachmentIndex)
+{
+    const int colorCount = getEntryColorAttachmentCount(entry);
+    if (attachmentIndex < colorCount) {
+        if (attachmentIndex >= 0 && attachmentIndex < static_cast<int>(entry.colorFormats.size())) {
+            return entry.colorFormats[attachmentIndex];
+        }
+        if (entry.rt && attachmentIndex < static_cast<int>(entry.rt->getColorAttachmentDescs().size())) {
+            return entry.rt->getColorAttachmentDescs()[attachmentIndex].format;
+        }
+        return EFormat::Undefined;
+    }
+
+    if (entry.depthFormat.has_value()) {
+        return *entry.depthFormat;
+    }
+    if (entry.rt && entry.rt->getDepthAttachmentDesc().has_value()) {
+        return entry.rt->getDepthAttachmentDesc()->format;
+    }
+    return EFormat::Undefined;
 }
 
 bool containsInsensitive(std::string_view haystack, std::string_view needle)
@@ -264,8 +298,8 @@ void RenderRuntime::renderRenderTargetEditor()
         return;
     }
 
-    const int  colorCount             = static_cast<int>(selectedEntry.rt->getColorAttachmentDescs().size());
-    const bool bHasDepth              = selectedEntry.rt->getDepthAttachmentDesc().has_value();
+    const int  colorCount             = getEntryColorAttachmentCount(selectedEntry);
+    const bool bHasDepth              = entryHasDepthAttachment(selectedEntry);
     const int  attachmentCount        = colorCount + (bHasDepth ? 1 : 0);
     _rtEditor.selectedAttachmentIndex = std::clamp(_rtEditor.selectedAttachmentIndex, 0, std::max(attachmentCount - 1, 0));
 
@@ -289,13 +323,9 @@ void RenderRuntime::renderRenderTargetEditor()
     ImGui::Text("Extent: %u x %u", selectedEntry.rt->getExtent().width, selectedEntry.rt->getExtent().height);
     ImGui::Text("Frame Buffers: %u", selectedEntry.rt->getFrameBufferCount());
 
-    EFormat::T currentFormat = EFormat::Undefined;
-    if (_rtEditor.selectedAttachmentIndex < colorCount) {
-        currentFormat = selectedEntry.rt->getColorAttachmentDescs()[_rtEditor.selectedAttachmentIndex].format;
-    }
-    else if (bHasDepth) {
-        currentFormat = selectedEntry.rt->getDepthAttachmentDesc()->format;
-    }
+    EFormat::T currentFormat = attachmentCount > 0
+        ? getEntryAttachmentFormat(selectedEntry, _rtEditor.selectedAttachmentIndex)
+        : EFormat::Undefined;
     ImGui::Text("Format: %s", formatLabel(currentFormat));
 
     auto*      sampler     = TextureLibrary::get().getDefaultSampler().get();
@@ -307,7 +337,7 @@ void RenderRuntime::renderRenderTargetEditor()
         ImGuiHelper::Image(imageView, sampler, "RT Preview", ImVec2(256.0f, 256.0f));
     }
 
-    const bool bEditingDepth = isDepthAttachmentSelection(selectedEntry.rt, _rtEditor.selectedAttachmentIndex);
+    const bool bEditingDepth = _rtEditor.selectedAttachmentIndex >= colorCount && bHasDepth;
     if (!selectedEntry.bEditable) {
         ImGui::SeparatorText("Attachment Format");
         ImGui::TextWrapped("Presentation target format is owned by the swapchain and is currently read-only here.");

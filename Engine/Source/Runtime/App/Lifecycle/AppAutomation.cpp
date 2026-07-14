@@ -318,6 +318,7 @@ bool handleScreenshotAutomation(App& app, const AppAutomationFrameContext& frame
     runtimeState.bScreenshotRequested = AppScreenshotCapture::request(frameContext.render,
                                                                       AppAutomation::buildOffscreenJobQueueService(app),
                                                                       frameContext.postprocessImage,
+                                                                      frameContext.viewportImage,
                                                                       frameContext.viewportTexture,
                                                                       frameContext.presentationTexture,
                                                                       runtimeState.screenshot,

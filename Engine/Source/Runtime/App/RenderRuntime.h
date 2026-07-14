@@ -46,6 +46,7 @@ struct RenderPipelineDebugOutputCatalog
 {
     bool           bShadowMappingEnabled  = false;
     std::shared_ptr<IImage> shadowDepthImage = nullptr;
+    RenderImage*   viewportOutputImage    = nullptr;
     Texture*       viewportDepthTexture   = nullptr;
     IImageView*    shadowDirectionalDepth = nullptr;
     RenderImage*   postprocessOutputImage = nullptr;
@@ -170,6 +171,7 @@ struct RenderRuntime
     [[nodiscard]] const RenderDiagnosticsService& getDiagnosticsService() const { return _diagnostics; }
 
     [[nodiscard]] RenderImage* getPostprocessOutputImage() const;
+    [[nodiscard]] RenderImage* getActiveViewportImage() const;
     [[nodiscard]] Texture* getActiveViewportTexture() const;
     [[nodiscard]] Texture* getPresentationTexture() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;
@@ -195,7 +197,6 @@ struct RenderRuntime
     [[nodiscard]] const Rect2D& getViewportRect() const { return _viewportRect; }
     [[nodiscard]] float         getViewportFrameBufferScale() const { return _viewportFrameBufferScale; }
     [[nodiscard]] Extent2D      getViewportExtent() const;
-    [[nodiscard]] IRenderTarget* getActiveViewportRT() const;
     [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews() const;
     [[nodiscard]] RenderTargetEditorCatalog buildRenderTargetEditorCatalog() const;
     void                          setActivePipelineSharedDepthFormat(EFormat::T format);

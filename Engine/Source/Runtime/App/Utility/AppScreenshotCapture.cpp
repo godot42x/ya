@@ -239,6 +239,7 @@ bool writePngFromReadback(const AppScreenshotCaptureState& state)
 bool AppScreenshotCapture::request(IRender*                        render,
                                    const OffscreenJobQueueService& offscreenQueueService,
                                    RenderImage*                    postprocessSourceImage,
+                                   RenderImage*                    viewportSourceImage,
                                    Texture*                        viewportSourceTexture,
                                    Texture*                        presentationSourceTexture,
                                    AppScreenshotCaptureState&      state,
@@ -259,7 +260,8 @@ bool AppScreenshotCapture::request(IRender*                        render,
     const ScreenshotSourceInfo source = target == EAutomationScreenshotTarget::Editor
         ? makeScreenshotSourceInfo(presentationSourceTexture)
         : (postprocessSourceImage ? makeScreenshotSourceInfo(postprocessSourceImage)
-                                  : makeScreenshotSourceInfo(viewportSourceTexture));
+                                  : (viewportSourceImage ? makeScreenshotSourceInfo(viewportSourceImage)
+                                                         : makeScreenshotSourceInfo(viewportSourceTexture)));
     if (!source.isValid()) {
         return false;
     }

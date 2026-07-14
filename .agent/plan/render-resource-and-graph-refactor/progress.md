@@ -25,12 +25,58 @@
 
 ## 最新验证
 
+- 2026-07-14：Deferred/Forward 上没有消费者的 concrete RT accessor 已继续删除。`DeferredRenderPipeline::getGBufferRT()`、`DeferredRenderPipeline::getShadowDepthRT()` 和 `ForwardRenderPipeline::getShadowDepthRT()` 这类只暴露 legacy owner、但当前 runtime/debug 路径已不再使用的逃生口已移除。
+- 直接收益：这一步不改行为，但继续压缩了 concrete pipeline 直接把 `IRenderTarget` 暴露给外层的面积，减少后续 agent 或新调用点再次绕开 pipeline frame state / debug outputs 的机会。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*'` 45/45 通过
+  - `HelloMaterial --exit-after-frame=400 --log-level=warn --log-detail-level=error` 退出码 0，过滤后未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|AddressSanitizer`
+- 2026-07-14：Deferred 的 RT Editor 现在也开始优先消费 pipeline/export 的 attachment format 元数据，而不是直接回读 `_gBufferRT/_viewportRT` 的 attachment desc。`RenderTargetEditorCatalog::Entry` 新增可选 `colorFormats/depthFormat`，Deferred catalog 会用 pipeline-owned spec 填充它们，GUI 仅把 RT 保留给 preview/extent/framebuffer-count 这类兼容展示。
+- 直接收益：Deferred 的 editor/debug 路径也开始遵守“pipeline spec 才是真相”的规则，避免把刚收口的 attachment format truth 又从 GUI 层绕回 legacy RT desc；同时 Forward / Presentation / Shadow 仍可继续走默认 RT 回退，不会把这一步扩大成全局 UI 重构。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*'` 45/45 通过
+  - `HelloMaterial --exit-after-frame=400 --log-level=warn --log-detail-level=error` 退出码 0，过滤后未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|AddressSanitizer`
+- 2026-07-14：Deferred attachment refresh 主路径现在不再走 `IRenderTarget` 的 dirty/mutation 自修复协议。viewport resize、shared depth format 和 RT editor attachment format 修改在 frame boundary 会直接按 `_gBufferRTSpec/_viewportRTSpec` 显式重建 `_gBufferRT/_viewportRT`，而不是先改 RT 内部 desc、再依赖 `refreshIfNeeded()` 追认。
+- 直接收益：Deferred 主流程对 legacy `needsRefresh()/refreshIfNeeded()/set*AttachmentFormat()/setExtent()` 的依赖进一步缩小，pipeline-local spec 和 frame-boundary replacement 开始成为真正的控制面；这比继续做 facade 小收口更接近后续“RT 只剩 owner/replacement compatibility 层”的目标。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*'` 45/45 通过
+  - `HelloMaterial --exit-after-frame=400 --log-level=warn --log-detail-level=error` 退出码 0，过滤后未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|AddressSanitizer`
+- 2026-07-14：Deferred 的 attachment specification 现在开始由 pipeline 自己持有，而不是继续散落在 `initRenderTargets()` 内联描述和 `IRenderTarget` 的运行时 mutation 里。`DeferredRenderPipeline` 新增 `_gBufferRTSpec/_viewportRTSpec`，初始化、viewport resize、shared depth format 和 RT editor color-format 修改都会先更新 pipeline-owned spec，再同步到 legacy RT 并在 frame boundary 刷新 snapshot / stage state。
+- 直接收益：当前帧 snapshot formats、`getViewportColorFormat()/getViewportDepthFormat()` 与 RT editor 改动终于回到了同一份事实源；之前“RT desc 已改、pipeline snapshot 仍看旧的 `_gBufferSignedLinearFormat/_viewportColorFormat/_sharedDepthFormat`”这类分叉路径被收掉了，也为后续继续把 `_gBufferRT/_viewportRT` 压缩成 owner/replacement facade 留出了更明确的边界。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*'` 45/45 通过
+  - `HelloMaterial --exit-after-frame=400 --log-level=warn --log-detail-level=error` 退出码 0，过滤后未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|AddressSanitizer`
 - 2026-07-14：`VulkanImageView` 现在在创建时持久记录自身 `ImageSubresourceRange` 元数据；复用已有 shared subresource view 的 imported graph 资源不再需要在 helper/调用点额外手抄第二份 range。OpenGL command buffer 也同步在 `begin()/reset()` 清理 retained resources，保证跨后端的提交期保活契约一致。
 - 直接收益：graph compiler、registry 和 runtime helper 在“已有 image view 直接导入”路径上能稳定看到真实 mip/layer/aspect 范围；同时 retained-resource 生命周期规则不再只在 Vulkan 后端成立。
 - 2026-07-14：dynamic rendering attachment 现在开始显式携带 owner token。`RenderingInfo::ImageSpec` 可随 attachment 一起保留 shared `image/imageView` 和额外 retained resources，Vulkan command buffer 在 `beginRendering()` 时统一保活这些 owner；render-target 路径也会把当前 framebuffer 的 `RenderImage` attachments 保活到 submit 完成。
 - 直接收益：类似 `MVKAttachmentDescription -> vkQueueSubmit` 这类“record 时合法、submit 时 attachment/view 已失效”的问题，不再只能依赖外层调用者自己记得保活；同时 `validateRenderingImageSpec()` 现在会额外校验 retained owner 与 subresource range 是否和实际 view 一致，崩溃时能更快打到具体 attachment。
 - 2026-07-14：尝试移除 Deferred shadow pass 后的全图 depth handoff 时，400 帧 smoke 暴露了新的真实约束：shadow pass 只会写当帧需要的 layer，但 lighting descriptors 仍可能采样更宽的 point-shadow layer 集。未写 layer 若没有被显式 handoff 到 `ShaderReadOnlyOptimal`，validation 会在 `vkQueueSubmit` 报 `VUID-vkCmdDraw-None-09600`，指出 sampled descriptor 命中的 layer 仍是 `Undefined`。
 - 当前结论：这条 handoff 还不能直接删除。要彻底移除，至少需要先收紧 shadow descriptor 的实际 layer 覆盖范围，或把 shadow image 的未写子资源初始化/维持到可采样布局，并把这一契约显式纳入 graph/resource-state 模型。
+- 2026-07-14：runtime/editor/automation 对 Deferred viewport 主输出的消费链开始脱离 `IRenderTarget -> Texture` 兼容出口。`IRenderPipelineDebugOutputs` 新增 `getViewportOutputImage()`，Deferred 通过 `_currentViewportResources.color` 直接导出 viewport scene color；editor viewport 与 automation screenshot 现在都会优先消费 `RenderImage*`，只有 Forward 或遗留路径缺失时才回退到 `Texture*`。
+- 直接收益：`_viewportRT` 不再继续被 runtime 侧默认为“最终 viewport 输出身份”，Deferred viewport color 的 snapshot/export 语义比过去更接近 graph/imported resource 真相；同时 automation/editor 对 compat `Texture::wrap()` 的依赖进一步缩小，为后续继续削减 `_viewportRT` 的 legacy facade 职责留出了更清晰的边界。
+- 2026-07-14：Deferred attachment snapshot 现在不再在 `beginTick()` 每帧无条件从 `_gBufferRT/_viewportRT` 回读。`_currentGBufferResources/_currentViewportResources` 改为只在初始化和显式 pending refresh / replacement 路径里更新，`beginTick()` 只消费已有 snapshot 并断言 legacy attachment dirty 没有越过 pipeline-local refresh 边界。
+- 直接收益：Deferred 的 frame state 更接近“pipeline-local owner/replacement/snapshot”协议，而不是“每帧再向 legacy RT 重新询问当前资源”；后续若继续把 `_gBufferRT/_viewportRT` 收缩成纯 owner/replacement facade，stage/graph 侧已经更少依赖它们作为实时真相来源。
+- 2026-07-14：Deferred 对外仍需提供的 compat viewport/depth `Texture*` 现在也开始从 snapshot 派生，而不是再通过 `_viewportRT->getCurrent*Texture()` 回查 framebuffer/RT。pipeline 在 `refreshViewportSnapshot()` 时同步重建 `_viewportTextureCompat/_viewportDepthTextureCompat`，editor fallback、automation fallback 和 debug depth 兼容出口都改为消费这组 snapshot-backed compat texture。
+- 直接收益：Deferred 的 compat 输出也开始与 `_currentViewportResources` 保持同一事实源，`_viewportRT` 继续向“只负责 owner/replacement”收缩；即使后续继续削弱 RT facade，高层仍然可以通过同一份 snapshot 维持 `RenderImage*` 主路径和 `Texture*` 兼容路径的一致性。
+- 2026-07-14：Deferred pipeline 内部残留的裸 `viewportTexture` 成员已删除，`getViewportTexture()` 直接回退到 `_viewportTextureCompat`；同时 automation 帧上下文只会在 active pipeline 缺失 `viewportImage` 时才再填充 `viewportTexture`。这让 Deferred 的 `Texture*` 输出明确退化为 compat fallback，而不是再和 `RenderImage*` 主路径并行维护两份 viewport 真相。
+- 直接收益：Deferred 不再额外保存一份可能与 snapshot 脱节的 raw texture 指针，automation/screenshot 也不会在已经拿到 `RenderImage*` 时继续把 compat `Texture*` 当成同级输入。当前主路径的 viewport 输出语义因此更接近“RenderImage first, Texture fallback only”。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*'` 45/45 通过
+  - `HelloMaterial --exit-after-frame=400 --log-level=warn --log-detail-level=error` 退出码 0，过滤后未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|AddressSanitizer`
+- 2026-07-14：Deferred viewport depth snapshot 现在明确声明为“借用 GBuffer shared depth”，而不是继续假装由 `_viewportRT` 自己拥有。`buildDeferredViewportResources()` 改为显式接收 `DeferredGBufferResources`，`setSharedDepthFormat()` 不再修改 `_viewportRT` depth format，shared-depth refresh 也不再触发 viewport RT attachment flush。
+- 直接收益：Deferred pipeline 内部的 depth owner 边界与当前实现真相终于对齐了。viewport RT 现在更接近“只拥有 color attachment 的 compat facade”，而 pipeline snapshot 会稳定从 GBuffer depth 继承 depth image 和 depth format，减少 shared-depth 变更时再次把 `_viewportRT` 当成真实 depth owner 的回退路径。
+- 2026-07-14：`IRenderPipelineExecution::getViewportRT()` 和 `RenderRuntime::getActiveViewportRT()` 已移除。当前 runtime/debug/editor 主链已经分别走 `appendRenderTargetEditorEntries()`、`getViewportOutputImage()`、`getViewportDepthTexture()` 和 compat `getViewportTexture()`，不再需要通过公共 pipeline 执行接口继续暴露 viewport render target。
+- 直接收益：pipeline 公共执行接口少了一条纯 legacy 的 `IRenderTarget` 逃生口，后续继续收口 RT owner / replacement 语义时，runtime 层不会再被旧的 viewport RT 转发链牵回去。
+- 2026-07-14：Deferred pending refresh 现在开始显式区分 `GBufferAttachments` 和 `ViewportAttachments`。pipeline 在 `setRenderTargetColorFormat()` 时直接记录“下一帧要刷新哪一侧”，`applyPendingResourceRefreshes()` 不再通过 `needsAttachmentRefresh()` 反查 RT 内部 dirty 状态来决定是否刷新。
+- 直接收益：Deferred 主流程对 legacy RT dirty 协议的依赖又缩了一层。RT 仍然负责具体重建，但“刷新目标是谁”已经先回收到 pipeline 自己的 frame-boundary refresh mask，后续继续把 replacement 从 RT 内部状态迁到显式 owner/bundle 时，控制流不需要再反向依赖 RT 自报脏。
+- 2026-07-14：Deferred 当前帧 `GBuffer / Viewport` snapshot 现在开始显式保留 attachment owner。`DeferredGBufferResources` / `DeferredViewportResources` 除了原有 raw `RenderImage*` 视图，还会缓存 `shared_ptr<RenderImage>` owner；pipeline 从 `IRenderTarget` / `IFrameBuffer` 刷新 snapshot 时同步保存 shared owner，再派生 raw view 给现有 stage/graph 调用面继续消费。
+- 直接收益：Deferred graph import、debug snapshot 和 stage frame state 看到的不再只是“从 RT 临时借来的裸指针”，而是一份由 pipeline 在 frame-boundary 持有的 attachment owner 快照。即使后续继续削弱 RT facade 或推进 replacement，当前帧资源的保活边界也已经先向 pipeline-local truth 靠了一步。
+- 2026-07-14：Deferred snapshot 的 attachment formats 也开始直接取自 pipeline 自己的格式选择结果，而不再从 `_gBufferRT/_viewportRT` 的 attachment desc 回读。`refreshGBufferSnapshot()` / `refreshViewportSnapshot()` 现在分别用 `_gBufferSignedLinearFormat`、`LINEAR_FORMAT`、`SHADING_MODEL_FORMAT`、`_viewportColorFormat` 与 `_sharedDepthFormat` 组装当前帧 format snapshot。
+- 直接收益：当前帧 snapshot 在“owner + format”两个维度上都更接近 pipeline-local truth，而不是继续把 RT desc 当成运行时事实源。后续若要把 snapshot 构建彻底切到 pipeline-owned attachment bundle，格式侧已经不再被 legacy RT 描述绑定。
 - 2026-07-14：修复 imported/offscreen 图像的 compatibility seed 仍按“整张 image 单一 layout”推断的问题。`VulkanImage` 现在会持久记录按 aspect/mip/layer 的 compatibility layout，`ResourceStateTracker` 首次 seed 也会按 subresource 读取该状态。
 - 直接收益：environment prefilter 这类“逐个 mip/face 离屏写入，随后整张 cubemap 再被导入采样”的路径，不会再因为 compatibility seed 丢失 mixed subresource state 而漏发 barrier。
 - 2026-07-14：Deferred 当前帧 GBuffer / viewport snapshot 已从 `Texture*` 切到 `RenderImage*`。这让 deferred 主链 graph import 与 debug snapshot 直接使用 attachment owner，而不是经由 `Texture::wrap()` 兼容层回读当前附件；postprocess 输入暂时仍保留 `viewportRT -> Texture*` 兼容入口，避免把本次变更扩大成后处理接口重构。

@@ -172,6 +172,7 @@ RenderPipelineDebugOutputCatalog RenderRuntime::buildPipelineDebugOutputCatalog(
 
     catalog.bShadowMappingEnabled  = pipeline->isShadowMappingEnabled();
     catalog.shadowDepthImage       = pipeline->getShadowDepthImage();
+    catalog.viewportOutputImage    = pipeline->getViewportOutputImage();
     catalog.viewportDepthTexture   = pipeline->getViewportDepthTexture();
     catalog.shadowDirectionalDepth = pipeline->getShadowDirectionalDepthIV();
     catalog.postprocessOutputImage = pipeline->getPostprocessOutputImage();
@@ -191,14 +192,6 @@ Extent2D RenderRuntime::getViewportExtent() const
         return Extent2D::fromVec2(_viewportRect.extent);
     }
     return {};
-}
-
-IRenderTarget* RenderRuntime::getActiveViewportRT() const
-{
-    if (auto* pipeline = getActivePipelineExecution()) {
-        return pipeline->getViewportRT();
-    }
-    return nullptr;
 }
 
 DeferredPipelineDebugViews RenderRuntime::getDeferredPipelineDebugViews() const

@@ -43,11 +43,12 @@ class ResourceResolveSystem;
 
 enum class EDeferredPendingResourceRefresh : uint32_t
 {
-    None             = 0,
-    ViewportResize   = 1 << 0,
-    ShadowResources  = 1 << 1,
-    SharedDepth      = 1 << 2,
-    AttachmentFormat = 1 << 3,
+    None                = 0,
+    ViewportResize      = 1 << 0,
+    ShadowResources     = 1 << 1,
+    SharedDepth         = 1 << 2,
+    GBufferAttachments  = 1 << 3,
+    ViewportAttachments = 1 << 4,
 };
 
 // Shading Model IDs written to GBuffer RT3 (encoded as id/255.0 in R8_UNORM)
@@ -95,6 +96,8 @@ struct DeferredRenderPipeline : public IRenderPipeline
     // ── Render targets ────────────────────────────────────────────────
     stdptr<IRenderTarget> _gBufferRT;
     stdptr<IRenderTarget> _viewportRT;
+    RenderTargetCreateInfo _gBufferRTSpec;
+    RenderTargetCreateInfo _viewportRTSpec;
 
     static constexpr EFormat::T LINEAR_FORMAT            = EFormat::R8G8B8A8_UNORM;
     static constexpr EFormat::T SIGNED_LINEAR_FORMAT     = EFormat::R16G16B16A16_SFLOAT;
@@ -117,7 +120,8 @@ struct DeferredRenderPipeline : public IRenderPipeline
 
     ShadowMapResources                                              _shadowResources;
 
-    Texture* viewportTexture       = nullptr;
+    stdptr<Texture> _viewportTextureCompat;
+    stdptr<Texture> _viewportDepthTextureCompat;
     bool     _bReverseViewportY    = true;
     bool     _bEnableSSAO          = true;
 
@@ -176,8 +180,8 @@ struct DeferredRenderPipeline : public IRenderPipeline
         }
         return {};
     }
-    EFormat::T getViewportColorFormat() const override { return _viewportColorFormat; }
-    EFormat::T getViewportDepthFormat() const override { return _sharedDepthFormat; }
+    EFormat::T getViewportColorFormat() const override;
+    EFormat::T getViewportDepthFormat() const override;
 
     IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
@@ -189,16 +193,13 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void setSharedDepthFormat(EFormat::T format) override;
     bool setRenderTargetColorFormat(RenderTargetEditorCatalog::Entry::EOwner owner, uint32_t attachmentIndex, EFormat::T format) override;
 
-    // Access GBuffer RT for debug views
-    IRenderTarget* getGBufferRT() const { return _gBufferRT.get(); }
-    IRenderTarget* getViewportRT() const override { return _viewportRT.get(); }
-    IRenderTarget* getShadowDepthRT() const { return _shadowResources.renderTarget.get(); }
     std::shared_ptr<IImage> getShadowDepthImage() const override { return _shadowResources.depthImage; }
+    RenderImage*   getViewportOutputImage() const override { return _currentViewportResources.color; }
     Texture*       getViewportDepthTexture() const override
     {
-        return _viewportRT ? _viewportRT->getCurrentDepthTexture() : nullptr;
+        return _viewportDepthTextureCompat.get();
     }
-    Texture*       getViewportTexture() const override { return viewportTexture; }
+    Texture*       getViewportTexture() const override { return _viewportTextureCompat.get(); }
     bool           isShadowMappingEnabled() const override;
     IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override
@@ -216,20 +217,24 @@ struct DeferredRenderPipeline : public IRenderPipeline
 
   private:
     void               loadPersistentSettings();
+    void               initRenderTargetSpecs(Extent2D extent);
     void               initPipelineState(const InitDesc& desc);
     void               initStages();
     void               resolveRuntimeFormats();
+    [[nodiscard]] DeferredAttachmentFormats buildGBufferSnapshotFormats() const;
+    [[nodiscard]] DeferredAttachmentFormats buildViewportSnapshotFormats() const;
     [[nodiscard]] bool shouldSkipTick(const RenderPipelineFrameContext& frame) const;
     void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
     void               validateNoPendingAttachmentRefresh() const;
     void               invalidateGBufferDependentViews();
-    void               flushGBufferResources();
-    void               flushViewportResources();
+    void               recreateGBufferRenderTarget();
+    void               recreateViewportRenderTarget();
     void               refreshGBufferSnapshot();
     void               refreshViewportSnapshot();
+    void               refreshViewportCompatTextures();
     void               refreshGBufferStageState();
     void               refreshViewportStageState();
-    void               refreshCurrentFrameResources();
+    void               refreshAttachmentSnapshots();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);
     void               updateStageFrameInputs(const RenderPipelineFrameContext& frame);
     [[nodiscard]] ShadowSettings currentShadowSettings() const;
