@@ -114,6 +114,20 @@ struct IImage : public plat_base<IImage>
     virtual EImageLayout::T getCompatibilityLayout() const = 0;
 
     /**
+     * @brief Get the compatibility seed layout for a specific subresource.
+     *
+     * Most backends only track a single compatibility seed and can return the
+     * image-wide layout. Vulkan overrides this for mixed mip/layer state.
+     */
+    virtual EImageLayout::T getCompatibilityLayout(uint32_t aspect, uint32_t mip, uint32_t layer) const
+    {
+        (void)aspect;
+        (void)mip;
+        (void)layer;
+        return getCompatibilityLayout();
+    }
+
+    /**
      * @brief Set the debug name for this image (for debugging tools)
      * @param name Debug name string
      */
@@ -127,7 +141,8 @@ struct IImageView : public plat_base<IImageView>
   protected:
     // ImageView is a non-owning subresource projection of an image. The image
     // lifetime must be owned explicitly by Texture/RenderImage/runtime state.
-    IImage* _image = nullptr;
+    IImage*               _image = nullptr;
+    ImageSubresourceRange _subresourceRange{};
 
   public:
     IImageView()                              = default;
@@ -147,6 +162,11 @@ struct IImageView : public plat_base<IImageView>
      * @brief Get the underlying image
      */
     const IImage *getImage() const { return _image; }
+
+    /**
+     * @brief Get the subresource range represented by this view.
+     */
+    const ImageSubresourceRange& getSubresourceRange() const { return _subresourceRange; }
 
     virtual EFormat::T getFormat() const { return EFormat::Undefined; }
 

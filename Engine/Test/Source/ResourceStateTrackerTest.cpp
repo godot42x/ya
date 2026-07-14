@@ -3,6 +3,7 @@
 #include "Platform/Render/Vulkan/VulkanUtils.h"
 
 #include <gtest/gtest.h>
+#include <unordered_map>
 
 namespace ya
 {
@@ -16,6 +17,14 @@ class TestImage final : public IImage
     EImageLayout::T _compatibilityLayout;
     uint32_t        _mipLevels;
     uint32_t        _arrayLayers;
+    std::unordered_map<uint64_t, EImageLayout::T> _subresourceLayouts;
+
+    static uint64_t makeSubresourceKey(uint32_t aspect, uint32_t mip, uint32_t layer)
+    {
+        return (static_cast<uint64_t>(aspect) << 42u) |
+               (static_cast<uint64_t>(mip) << 21u) |
+               static_cast<uint64_t>(layer);
+    }
 
   public:
     TestImage(EImageLayout::T layout, uint32_t mipLevels, uint32_t arrayLayers)
@@ -30,8 +39,19 @@ class TestImage final : public IImage
     uint32_t getArrayLayers() const override { return _arrayLayers; }
     EImageUsage::T getUsage() const override { return EImageUsage::Sampled; }
     EImageLayout::T getCompatibilityLayout() const override { return _compatibilityLayout; }
+    EImageLayout::T getCompatibilityLayout(uint32_t aspect, uint32_t mip, uint32_t layer) const override
+    {
+        if (const auto it = _subresourceLayouts.find(makeSubresourceKey(aspect, mip, layer)); it != _subresourceLayouts.end()) {
+            return it->second;
+        }
+        return _compatibilityLayout;
+    }
     void setDebugName(const std::string&) override {}
     void setCompatibilityLayout(EImageLayout::T layout) { _compatibilityLayout = layout; }
+    void setCompatibilityLayout(uint32_t aspect, uint32_t mip, uint32_t layer, EImageLayout::T layout)
+    {
+        _subresourceLayouts[makeSubresourceKey(aspect, mip, layer)] = layout;
+    }
 };
 
 } // namespace
@@ -93,6 +113,30 @@ TEST(ResourceStateTrackerTest, ResetFallsBackToImageCompatibilityLayout)
     const auto transitions = tracker.transition(image, EImageLayout::TransferSrc);
     ASSERT_EQ(transitions.size(), 1u);
     EXPECT_EQ(transitions[0].oldState.layout, EImageLayout::PresentSrcKHR);
+}
+
+TEST(ResourceStateTrackerTest, ResetUsesPerSubresourceCompatibilitySeedWhenAvailable)
+{
+    TestImage            image(EImageLayout::ShaderReadOnlyOptimal, 2, 4);
+    ResourceStateTracker tracker;
+
+    image.setCompatibilityLayout(EImageAspect::Color, 1, 2, EImageLayout::ColorAttachmentOptimal);
+
+    const auto transitions = tracker.transition(image, EImageLayout::TransferSrc);
+    ASSERT_EQ(transitions.size(), 4u);
+
+    bool bFoundOverriddenSubresource = false;
+    bool bFoundDefaultSeedSubresource = false;
+    for (const auto& transition : transitions) {
+        bFoundOverriddenSubresource |=
+            transition.oldState.layout == EImageLayout::ColorAttachmentOptimal &&
+            transition.range.baseMipLevel == 1u &&
+            transition.range.baseArrayLayer == 2u;
+        bFoundDefaultSeedSubresource |= transition.oldState.layout == EImageLayout::ShaderReadOnlyOptimal;
+    }
+
+    EXPECT_TRUE(bFoundOverriddenSubresource);
+    EXPECT_TRUE(bFoundDefaultSeedSubresource);
 }
 
 TEST(ResourceStateTrackerTest, ValidateLayoutReportsChangedSubresourceRange)

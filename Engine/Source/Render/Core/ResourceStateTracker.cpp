@@ -65,7 +65,7 @@ ImageSubresourceRange ResourceStateTracker::normalizeRange(const IImage& image, 
 ImageResourceState ResourceStateTracker::makeSeedState(const IImage& image, uint32_t aspect, uint32_t mip, uint32_t layer)
 {
     ImageResourceState state;
-    state.layout = image.getCompatibilityLayout();
+    state.layout = image.getCompatibilityLayout(aspect, mip, layer);
     state.subresourceRange = ImageSubresourceRange{
         .aspectMask     = aspect,
         .baseMipLevel   = mip,

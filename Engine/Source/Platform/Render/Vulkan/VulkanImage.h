@@ -10,6 +10,8 @@
 
 #include "VulkanUtils.h"
 
+#include <unordered_map>
+
 // VMA forward declaration (full definition comes from vk_mem_alloc.h via VulkanRender.h)
 struct VmaAllocation_T;
 typedef struct VmaAllocation_T* VmaAllocation;
@@ -30,6 +32,19 @@ struct VulkanImage : public IImage
     VkImageUsageFlags _usageFlags  = 0;
     bool              bOwned              = false;
     VkImageLayout     _compatibilityLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    struct SubresourceLayoutKey
+    {
+        uint32_t aspect = 0;
+        uint32_t mip    = 0;
+        uint32_t layer  = 0;
+
+        bool operator==(const SubresourceLayoutKey&) const = default;
+    };
+    struct SubresourceLayoutKeyHash
+    {
+        size_t operator()(const SubresourceLayoutKey& key) const;
+    };
+    std::unordered_map<SubresourceLayoutKey, VkImageLayout, SubresourceLayoutKeyHash> _compatibilitySubresourceLayouts;
 
     ya::ImageCreateInfo _ci;
 
@@ -69,6 +84,23 @@ struct VulkanImage : public IImage
         ret->_ci.extent      = {width, height, 1};
         ret->_ci.mipLevels   = mipLevels;
         ret->_ci.arrayLayers = arrayLayers;
+        ret->_ci.usage       = static_cast<EImageUsage::T>(0);
+        if ((usages & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0)
+            ret->_ci.usage = static_cast<EImageUsage::T>(ret->_ci.usage | EImageUsage::TransferSrc);
+        if ((usages & VK_IMAGE_USAGE_TRANSFER_DST_BIT) != 0)
+            ret->_ci.usage = static_cast<EImageUsage::T>(ret->_ci.usage | EImageUsage::TransferDst);
+        if ((usages & VK_IMAGE_USAGE_SAMPLED_BIT) != 0)
+            ret->_ci.usage = static_cast<EImageUsage::T>(ret->_ci.usage | EImageUsage::Sampled);
+        if ((usages & VK_IMAGE_USAGE_STORAGE_BIT) != 0)
+            ret->_ci.usage = static_cast<EImageUsage::T>(ret->_ci.usage | EImageUsage::Storage);
+        if ((usages & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) != 0)
+            ret->_ci.usage = static_cast<EImageUsage::T>(ret->_ci.usage | EImageUsage::ColorAttachment);
+        if ((usages & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0)
+            ret->_ci.usage = static_cast<EImageUsage::T>(ret->_ci.usage | EImageUsage::DepthStencilAttachment);
+        if ((usages & VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT) != 0)
+            ret->_ci.usage = static_cast<EImageUsage::T>(ret->_ci.usage | EImageUsage::TransientAttachment);
+        if ((usages & VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT) != 0)
+            ret->_ci.usage = static_cast<EImageUsage::T>(ret->_ci.usage | EImageUsage::InputAttachment);
         ret->_compatibilityLayout = EImageLayout::toVk(initialLayout);
         return ret;
     }
@@ -82,6 +114,7 @@ struct VulkanImage : public IImage
     [[nodiscard]] uint32_t       getMipLevels() const override { return _ci.mipLevels; }
     [[nodiscard]] uint32_t       getArrayLayers() const override { return _ci.arrayLayers; }
     EImageLayout::T              getCompatibilityLayout() const override { return EImageLayout::fromVk(_compatibilityLayout); }
+    EImageLayout::T              getCompatibilityLayout(uint32_t aspect, uint32_t mip, uint32_t layer) const override;
 
     // Vulkan-specific accessors
     [[nodiscard]] VkImage  getVkImage() const { return _handle; }
@@ -92,7 +125,10 @@ struct VulkanImage : public IImage
     void setCompatibilityLayout(EImageLayout::T layout)
     {
       _compatibilityLayout = EImageLayout::toVk(layout);
+      _compatibilitySubresourceLayouts.clear();
     }
+
+    void setCompatibilityLayout(EImageLayout::T layout, const ImageSubresourceRange* range);
 
     struct LayoutTransition
     {
@@ -129,5 +165,6 @@ struct VulkanImage : public IImage
 
   protected:
     bool allocate();
+    [[nodiscard]] bool isFullSubresourceRange(const ImageSubresourceRange& range) const;
 };
 } // namespace ya

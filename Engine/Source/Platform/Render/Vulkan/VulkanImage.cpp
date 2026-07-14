@@ -8,6 +8,14 @@
 namespace ya
 {
 
+size_t VulkanImage::SubresourceLayoutKeyHash::operator()(const SubresourceLayoutKey& key) const
+{
+    size_t seed = std::hash<uint32_t>{}(key.aspect);
+    seed ^= std::hash<uint32_t>{}(key.mip) + 0x9e3779b9u + (seed << 6u) + (seed >> 2u);
+    seed ^= std::hash<uint32_t>{}(key.layer) + 0x9e3779b9u + (seed << 6u) + (seed >> 2u);
+    return seed;
+}
+
 // Helper function to get the correct aspect mask based on image format
 static VkImageAspectFlags getAspectMask(VkFormat format)
 {
@@ -89,6 +97,69 @@ static VkPipelineStageFlags getStageMask(VkImageLayout layout, VkAccessFlags acc
         return isSrc ? VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
     }
     return stages;
+}
+
+namespace
+{
+
+template <typename Fn>
+void forEachAspectFlag(uint32_t aspectMask, Fn&& fn)
+{
+    for (uint32_t bit = 1; bit != 0; bit <<= 1) {
+        if ((aspectMask & bit) != 0) {
+            fn(bit);
+        }
+    }
+}
+
+} // namespace
+
+EImageLayout::T VulkanImage::getCompatibilityLayout(uint32_t aspect, uint32_t mip, uint32_t layer) const
+{
+    if (const auto it = _compatibilitySubresourceLayouts.find(SubresourceLayoutKey{
+            .aspect = aspect,
+            .mip    = mip,
+            .layer  = layer,
+        });
+        it != _compatibilitySubresourceLayouts.end()) {
+        return EImageLayout::fromVk(it->second);
+    }
+    return getCompatibilityLayout();
+}
+
+bool VulkanImage::isFullSubresourceRange(const ImageSubresourceRange& range) const
+{
+    return range.aspectMask == getAspectMask(_format) &&
+           range.baseMipLevel == 0 &&
+           range.levelCount == _ci.mipLevels &&
+           range.baseArrayLayer == 0 &&
+           range.layerCount == _ci.arrayLayers;
+}
+
+void VulkanImage::setCompatibilityLayout(EImageLayout::T layout, const ImageSubresourceRange* range)
+{
+    const VkImageLayout vkLayout = EImageLayout::toVk(layout);
+    if (!range) {
+        setCompatibilityLayout(layout);
+        return;
+    }
+
+    if (isFullSubresourceRange(*range)) {
+        setCompatibilityLayout(layout);
+        return;
+    }
+
+    forEachAspectFlag(range->aspectMask, [&](uint32_t aspect) {
+        for (uint32_t mip = range->baseMipLevel; mip < range->baseMipLevel + range->levelCount; ++mip) {
+            for (uint32_t layer = range->baseArrayLayer; layer < range->baseArrayLayer + range->layerCount; ++layer) {
+                _compatibilitySubresourceLayouts[SubresourceLayoutKey{
+                    .aspect = aspect,
+                    .mip    = mip,
+                    .layer  = layer,
+                }] = vkLayout;
+            }
+        }
+    });
 }
 
 VulkanImage::~VulkanImage()
@@ -193,7 +264,19 @@ bool VulkanImage::transitionLayout(VkCommandBuffer cmdBuf, VulkanImage* const im
                          &imb);
 
     // BUG: this real format changed later  after cmd execution, now it's invalid
-    image->_compatibilityLayout = newLayout;
+    if (subresourceRange) {
+        ImageSubresourceRange range{
+            .aspectMask     = subresourceRange->aspectMask,
+            .baseMipLevel   = subresourceRange->baseMipLevel,
+            .levelCount     = subresourceRange->levelCount,
+            .baseArrayLayer = subresourceRange->baseArrayLayer,
+            .layerCount     = subresourceRange->layerCount,
+        };
+        image->setCompatibilityLayout(EImageLayout::fromVk(newLayout), &range);
+    }
+    else {
+        image->setCompatibilityLayout(EImageLayout::fromVk(newLayout));
+    }
 
     return true;
 }
@@ -212,7 +295,12 @@ bool VulkanImage::transitionLayouts(VkCommandBuffer cmdBuf, const std::vector<La
         if (!transition.image) {
             continue;
         }
-        auto oldLayout = transition.image->getCompatibilityLayout();
+        auto oldLayout = transition.useRange
+                             ? transition.image->getCompatibilityLayout(
+                                   transition.range.aspectMask & (~transition.range.aspectMask + 1u),
+                                   transition.range.baseMipLevel,
+                                   transition.range.baseArrayLayer)
+                             : transition.image->getCompatibilityLayout();
         auto newLayout = transition.newLayout;
         if (oldLayout == newLayout) {
             continue;
@@ -255,7 +343,7 @@ bool VulkanImage::transitionLayouts(VkCommandBuffer cmdBuf, const std::vector<La
         srcStages |= getStageMask(barrier.oldLayout, barrier.srcAccessMask, true);
         dstStages |= getStageMask(barrier.newLayout, barrier.dstAccessMask, false);
         barriers.push_back(barrier);
-        transition.image->setCompatibilityLayout(newLayout);
+        transition.image->setCompatibilityLayout(newLayout, transition.useRange ? &transition.range : nullptr);
     }
 
     if (barriers.empty()) {
@@ -419,6 +507,7 @@ bool VulkanImage::allocate()
 
 
     _compatibilityLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    _compatibilitySubresourceLayouts.clear();
     // ImageCreateInfo::initialLayout describes the first intended use. The
     // physical Vulkan image is still created in UNDEFINED and transitions are
     // recorded by the command-buffer state tracker at first use.
