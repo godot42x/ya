@@ -204,7 +204,8 @@ void DirectionalShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFra
     if (!_depthImage || !_depthView || !payload.frameData) return;
 
     RenderingInfo::ImageSpec depthSpec = makeAttachmentImageSpec(
-        _depthView.get(),
+        _depthImage,
+        _depthView,
         EAttachmentLoadOp::Clear,
         EAttachmentStoreOp::Store,
         EImageLayout::DepthStencilAttachmentOptimal,

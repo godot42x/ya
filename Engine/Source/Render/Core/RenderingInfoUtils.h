@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render/Core/Image.h"
+#include "Render/Core/RenderImage.h"
 #include "Render/RenderDefines.h"
 
 namespace ya
@@ -53,6 +54,38 @@ inline RenderingInfo::ImageSpec makeAttachmentImageSpec(
         spec.bHasSubresourceRange      = true;
     }
 
+    return spec;
+}
+
+inline RenderingInfo::ImageSpec makeAttachmentImageSpec(
+    const std::shared_ptr<IImage>&     image,
+    const std::shared_ptr<IImageView>& imageView,
+    EAttachmentLoadOp::T               loadOp,
+    EAttachmentStoreOp::T              storeOp,
+    EImageLayout::T                    initialLayout,
+    EImageLayout::T                    finalLayout)
+{
+    RenderingInfo::ImageSpec spec = makeAttachmentImageSpec(imageView.get(), loadOp, storeOp, initialLayout, finalLayout);
+    spec.retainedImage            = image;
+    spec.retainedImageView        = imageView;
+    return spec;
+}
+
+inline RenderingInfo::ImageSpec makeAttachmentImageSpec(
+    const RenderImage&       image,
+    EAttachmentLoadOp::T     loadOp,
+    EAttachmentStoreOp::T    storeOp,
+    EImageLayout::T          initialLayout,
+    EImageLayout::T          finalLayout)
+{
+    RenderingInfo::ImageSpec spec = makeAttachmentImageSpec(
+        image.getImageShared(),
+        image.getImageViewShared(),
+        loadOp,
+        storeOp,
+        initialLayout,
+        finalLayout);
+    spec.retainedResources        = image.getRetainedResources();
     return spec;
 }
 

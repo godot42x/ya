@@ -27,6 +27,10 @@
 
 - 2026-07-14：`VulkanImageView` 现在在创建时持久记录自身 `ImageSubresourceRange` 元数据；复用已有 shared subresource view 的 imported graph 资源不再需要在 helper/调用点额外手抄第二份 range。OpenGL command buffer 也同步在 `begin()/reset()` 清理 retained resources，保证跨后端的提交期保活契约一致。
 - 直接收益：graph compiler、registry 和 runtime helper 在“已有 image view 直接导入”路径上能稳定看到真实 mip/layer/aspect 范围；同时 retained-resource 生命周期规则不再只在 Vulkan 后端成立。
+- 2026-07-14：dynamic rendering attachment 现在开始显式携带 owner token。`RenderingInfo::ImageSpec` 可随 attachment 一起保留 shared `image/imageView` 和额外 retained resources，Vulkan command buffer 在 `beginRendering()` 时统一保活这些 owner；render-target 路径也会把当前 framebuffer 的 `RenderImage` attachments 保活到 submit 完成。
+- 直接收益：类似 `MVKAttachmentDescription -> vkQueueSubmit` 这类“record 时合法、submit 时 attachment/view 已失效”的问题，不再只能依赖外层调用者自己记得保活；同时 `validateRenderingImageSpec()` 现在会额外校验 retained owner 与 subresource range 是否和实际 view 一致，崩溃时能更快打到具体 attachment。
+- 2026-07-14：尝试移除 Deferred shadow pass 后的全图 depth handoff 时，400 帧 smoke 暴露了新的真实约束：shadow pass 只会写当帧需要的 layer，但 lighting descriptors 仍可能采样更宽的 point-shadow layer 集。未写 layer 若没有被显式 handoff 到 `ShaderReadOnlyOptimal`，validation 会在 `vkQueueSubmit` 报 `VUID-vkCmdDraw-None-09600`，指出 sampled descriptor 命中的 layer 仍是 `Undefined`。
+- 当前结论：这条 handoff 还不能直接删除。要彻底移除，至少需要先收紧 shadow descriptor 的实际 layer 覆盖范围，或把 shadow image 的未写子资源初始化/维持到可采样布局，并把这一契约显式纳入 graph/resource-state 模型。
 - 2026-07-14：修复 imported/offscreen 图像的 compatibility seed 仍按“整张 image 单一 layout”推断的问题。`VulkanImage` 现在会持久记录按 aspect/mip/layer 的 compatibility layout，`ResourceStateTracker` 首次 seed 也会按 subresource 读取该状态。
 - 直接收益：environment prefilter 这类“逐个 mip/face 离屏写入，随后整张 cubemap 再被导入采样”的路径，不会再因为 compatibility seed 丢失 mixed subresource state 而漏发 barrier。
 - 2026-07-14：Deferred 当前帧 GBuffer / viewport snapshot 已从 `Texture*` 切到 `RenderImage*`。这让 deferred 主链 graph import 与 debug snapshot 直接使用 attachment owner，而不是经由 `Texture::wrap()` 兼容层回读当前附件；postprocess 输入暂时仍保留 `viewportRT -> Texture*` 兼容入口，避免把本次变更扩大成后处理接口重构。

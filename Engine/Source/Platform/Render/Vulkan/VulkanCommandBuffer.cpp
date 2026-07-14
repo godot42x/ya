@@ -56,6 +56,20 @@ std::string formatSubresourceRange(const ImageSubresourceRange* range)
         range->baseArrayLayer + range->layerCount);
 }
 
+void retainRenderImageResources(ICommandBuffer& cmdBuf, const RenderImage& image)
+{
+    cmdBuf.retainResource(image.getImageShared());
+    cmdBuf.retainResource(image.getImageViewShared());
+    cmdBuf.retainResources(image.getRetainedResources());
+}
+
+void retainRenderingImageSpec(ICommandBuffer& cmdBuf, const RenderingInfo::ImageSpec& spec)
+{
+    cmdBuf.retainResource(spec.retainedImage);
+    cmdBuf.retainResource(spec.retainedImageView);
+    cmdBuf.retainResources(spec.retainedResources);
+}
+
 void validateRenderingImageSpec(const RenderingInfo::ImageSpec& spec, const std::string& renderingLabel, const std::string& attachmentLabel)
 {
     YA_CORE_ASSERT(spec.image != nullptr,
@@ -73,6 +87,44 @@ void validateRenderingImageSpec(const RenderingInfo::ImageSpec& spec, const std:
                    reinterpret_cast<uintptr_t>(spec.image),
                    reinterpret_cast<uintptr_t>(spec.imageView ? spec.imageView->getImage() : nullptr),
                    reinterpret_cast<uintptr_t>(spec.imageView));
+
+    if (spec.retainedImage) {
+        YA_CORE_ASSERT(spec.retainedImage.get() == spec.image,
+                       "RenderingInfo '{}' {} retained image mismatch: retained={}, image={}",
+                       renderingLabel,
+                       attachmentLabel,
+                       reinterpret_cast<uintptr_t>(spec.retainedImage.get()),
+                       reinterpret_cast<uintptr_t>(spec.image));
+    }
+    if (spec.retainedImageView) {
+        YA_CORE_ASSERT(spec.retainedImageView.get() == spec.imageView,
+                       "RenderingInfo '{}' {} retained imageView mismatch: retained={}, imageView={}",
+                       renderingLabel,
+                       attachmentLabel,
+                       reinterpret_cast<uintptr_t>(spec.retainedImageView.get()),
+                       reinterpret_cast<uintptr_t>(spec.imageView));
+    }
+
+    if (spec.bHasSubresourceRange) {
+        const auto& viewRange = spec.imageView->getSubresourceRange();
+        const ImageSubresourceRange specRange{
+            .aspectMask     = spec.subresourceAspectMask,
+            .baseMipLevel   = spec.subresourceBaseMipLevel,
+            .levelCount     = spec.subresourceLevelCount,
+            .baseArrayLayer = spec.subresourceBaseArrayLayer,
+            .layerCount     = spec.subresourceLayerCount,
+        };
+        YA_CORE_ASSERT(viewRange.aspectMask == static_cast<EImageAspect::T>(spec.subresourceAspectMask) &&
+                           viewRange.baseMipLevel == spec.subresourceBaseMipLevel &&
+                           viewRange.levelCount == spec.subresourceLevelCount &&
+                           viewRange.baseArrayLayer == spec.subresourceBaseArrayLayer &&
+                           viewRange.layerCount == spec.subresourceLayerCount,
+                       "RenderingInfo '{}' {} attachment subresource mismatch: spec={}, view={}",
+                       renderingLabel,
+                       attachmentLabel,
+                       formatSubresourceRange(&specRange),
+                       formatSubresourceRange(&viewRange));
+    }
 }
 
 ImageResourceState inferTrackedImageState(EImageLayout::T layout)
@@ -1101,6 +1153,19 @@ void VulkanCommandBuffer::beginDynamicRenderingFromRenderTarget(IRenderTarget* r
     // }
 
     auto curFrameBuffer = renderTarget->getCurFrameBuffer();
+    YA_CORE_ASSERT(curFrameBuffer != nullptr, "Dynamic rendering render target '{}' is missing current framebuffer", renderTarget->label);
+
+    for (const auto& attachment : curFrameBuffer->getColorAttachments()) {
+        if (attachment) {
+            retainRenderImageResources(*this, *attachment);
+        }
+    }
+    if (const auto& depthAttachment = curFrameBuffer->getDepthAttachmentShared(); depthAttachment) {
+        retainRenderImageResources(*this, *depthAttachment);
+    }
+    if (const auto& resolveAttachment = curFrameBuffer->getResolveAttachmentShared(); resolveAttachment) {
+        retainRenderImageResources(*this, *resolveAttachment);
+    }
 
     // Build color attachments from framebuffer
     const auto&                            colorAttachments = curFrameBuffer->getColorAttachments();
@@ -1199,6 +1264,15 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
     // Initial layout transitions for manual images (mirrors RT branch).
     // RenderGraph-managed passes pre-plan transitions externally and must not
     // compete with the command buffer's local tracker here.
+    for (size_t i = 0; i < info.colorAttachments.size(); ++i) {
+        validateRenderingImageSpec(info.colorAttachments[i], info.label, std::format("color[{}]", i));
+        retainRenderingImageSpec(*this, info.colorAttachments[i]);
+    }
+    if (info.depthAttachment.has_value()) {
+        validateRenderingImageSpec(*info.depthAttachment, info.label, "depth");
+        retainRenderingImageSpec(*this, *info.depthAttachment);
+    }
+
     if (!info.bExternalTransitionManagement) {
         std::vector<VulkanImage::LayoutTransition> transitions;
         for (auto& spec : info.colorAttachments) {
@@ -1240,7 +1314,6 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
     vkColorAttachments.reserve(info.colorAttachments.size());
 
     for (size_t i = 0; i < info.colorAttachments.size(); ++i) {
-        validateRenderingImageSpec(info.colorAttachments[i], info.label, std::format("color[{}]", i));
         VkRenderingAttachmentInfo vkAttach{
             .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
             .pNext       = nullptr,
@@ -1263,9 +1336,6 @@ void VulkanCommandBuffer::beginDynamicRenderingFromManualImages(const RenderingI
 
     // Build depth attachment using shared helper
     VkRenderingAttachmentInfo  vkDepthAttach{};
-    if (info.depthAttachment.has_value()) {
-        validateRenderingImageSpec(*info.depthAttachment, info.label, "depth");
-    }
     VkRenderingAttachmentInfo* pVkDepthAttach = buildDepthAttachmentInfo(info, vkDepthAttach);
 
     // Stencil is currently not modelled explicitly for manual dynamic rendering either.

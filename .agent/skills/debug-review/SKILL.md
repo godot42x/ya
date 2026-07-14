@@ -46,9 +46,11 @@ description: YA Engine 崩溃排查、变更自检与提交前 review 清单。
 2. 若栈里出现 `MVKAttachmentDescription`、`MVKRenderPass`、`beginRendering`、`vkQueueSubmit`：
    - 先查 color/depth attachment 的 `IImageView*` 是否仍然存活。
    - 先查该 view 是不是在 record 后、submit 前就被 `DeferredDeletionQueue` / 临时 owner / 局部 `shared_ptr` 释放了。
+   - 先查 `RenderingInfo::ImageSpec` 是否同时携带了 attachment owner token（shared image / imageView / retained resources）；manual dynamic rendering 路径不要只传裸指针。
    - 再查 `RenderingInfo` / attachment struct 里的指针是否指向栈对象或已 reset 容器。
    - 再查 imported `RenderImage` / `RenderGraphExecutor` / transient view 是否只活到局部 `execute()` 返回。
    - 再查 `RenderingInfo::ImageSpec.image` 与 `imageView->getImage()` 是否还是同一个对象，subresource range 是否来自同一个 view，而不是手抄第二份元数据。
+   - 若问题出在 shadow / cubemap / layered depth，额外检查“本帧实际写入的 layer 集”和“descriptor 可能采样的 layer 集”是否一致；只渲染了部分 layer、却把更大 layer 范围按 sampled descriptor 暴露出去时，未写 layer 很容易仍停留在 `Undefined`。
 3. 对异步加载或 offscreen 任务，短帧 smoke 不算验证；至少跑到会触发 resolve / preprocess / submit 的帧数。
 4. 若日志看不出原因，优先用 `lldb --batch ... -k 'bt' -k 'thread backtrace all'` 抓真实崩溃栈，而不是只看引擎日志。
 5. Codex/agent 跑大体量日志文件时，先用 `rg` / `sed` / `tail` 按模块、关键词、时间段过滤，避免整文件直读。
@@ -62,6 +64,7 @@ description: YA Engine 崩溃排查、变更自检与提交前 review 清单。
 5. 将 owning 改 non-owning 后，是否给每条调用链补了新的 keepalive owner。
 6. `RenderGraph` imported 资源是否由外层 frame/job/submission 对象保活。
 7. imported resource 若引用的是已有 subresource view，确认 graph compile 看到的 mip/layer/aspect range 与实际 view 一致；优先检查 view 自身是否携带 range 元数据，避免 helper/调用点又手写出第二份不一致的 range。
+8. 手写 `RenderingInfo::ImageSpec` 时，优先走能携带 shared owner 的 helper；不要在 manual attachment path 上只保留 `IImage* / IImageView*` 裸指针。
 
 ## 相关 skills
 

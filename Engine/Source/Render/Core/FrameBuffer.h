@@ -97,6 +97,8 @@ struct IFrameBuffer
     RenderImage*                                     getColorAttachment(uint32_t attachmentIdx) const;
     RenderImage*                                     getDepthAttachment() const { return _depthAttachment.get(); }
     RenderImage*                                     getResolveAttachment() const { return _resolveAttachment.get(); }
+    const std::shared_ptr<RenderImage>&              getDepthAttachmentShared() const { return _depthAttachment; }
+    const std::shared_ptr<RenderImage>&              getResolveAttachmentShared() const { return _resolveAttachment; }
 
     const std::vector<std::shared_ptr<Texture>>& getColorTextures() const
     {

@@ -2,6 +2,7 @@
 #include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/RenderGraphResourceRegistry.h"
+#include "Render/Core/RenderingInfoUtils.h"
 
 #include <gtest/gtest.h>
 
@@ -1176,6 +1177,48 @@ TEST(RenderGraphCoreTest, ImageViewDoesNotOwnImageLifetime)
     ASSERT_NE(view, nullptr);
     EXPECT_EQ(view->getImage(), image.get());
     EXPECT_EQ(image.use_count(), 1);
+}
+
+TEST(RenderGraphCoreTest, AttachmentImageSpecRetainsSharedOwnersAndSubresourceRange)
+{
+    TestResourceFactory factory;
+    auto image = factory.createImage(ImageCreateInfo{
+        .label       = "AttachmentImage",
+        .format      = EFormat::R16G16B16A16_SFLOAT,
+        .extent      = {.width = 64, .height = 64, .depth = 1},
+        .mipLevels   = 4,
+        .arrayLayers = 6,
+        .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        .initialLayout = EImageLayout::ShaderReadOnlyOptimal,
+    });
+    auto view = factory.createImageView(image, ImageViewCreateInfo{
+        .label          = "AttachmentView",
+        .viewType       = EImageViewType::View2DArray,
+        .aspectFlags    = EImageAspect::Color,
+        .baseMipLevel   = 2,
+        .levelCount     = 1,
+        .baseArrayLayer = 3,
+        .layerCount     = 2,
+    });
+
+    const auto spec = makeAttachmentImageSpec(
+        image,
+        view,
+        EAttachmentLoadOp::Load,
+        EAttachmentStoreOp::Store,
+        EImageLayout::ColorAttachmentOptimal,
+        EImageLayout::ShaderReadOnlyOptimal);
+
+    ASSERT_EQ(spec.image, image.get());
+    ASSERT_EQ(spec.imageView, view.get());
+    EXPECT_EQ(spec.retainedImage.get(), image.get());
+    EXPECT_EQ(spec.retainedImageView.get(), view.get());
+    ASSERT_TRUE(spec.bHasSubresourceRange);
+    EXPECT_EQ(spec.subresourceAspectMask, EImageAspect::Color);
+    EXPECT_EQ(spec.subresourceBaseMipLevel, 2u);
+    EXPECT_EQ(spec.subresourceLevelCount, 1u);
+    EXPECT_EQ(spec.subresourceBaseArrayLayer, 3u);
+    EXPECT_EQ(spec.subresourceLayerCount, 2u);
 }
 
 TEST(RenderGraphCoreTest, ImportTextureNormalizesSharedImageBackedDescriptors)

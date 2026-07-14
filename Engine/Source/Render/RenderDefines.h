@@ -6,6 +6,7 @@
 #include "reflects-core/enum.h"
 
 #include <glm/glm.hpp>
+#include <memory>
 #include <type_traits>
 
 // Single source of truth: MAX_POINT_LIGHTS lives in Engine/Shader/GLSL/Common/Limits.glsl.
@@ -1124,6 +1125,9 @@ struct RenderingInfo
     {
         IImage*     image     = nullptr;
         IImageView* imageView = nullptr;
+        std::shared_ptr<IImage>     retainedImage     = nullptr;
+        std::shared_ptr<IImageView> retainedImageView = nullptr;
+        std::vector<std::shared_ptr<void>> retainedResources{};
         // EResolveMode::T resolveMode      = EResolveMode::None;
         // IImageView     *resolveImageView = nullptr;
 

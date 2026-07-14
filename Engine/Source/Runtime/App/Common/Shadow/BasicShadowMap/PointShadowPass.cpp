@@ -250,7 +250,8 @@ void PointShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayl
                 if (!facePayload.depthImage || !facePayload.depthView) continue;
 
                 RenderingInfo::ImageSpec depthSpec = makeAttachmentImageSpec(
-                    facePayload.depthView,
+                    _shadowImage,
+                    _faceDepthViews[lightIndex][faceIndex],
                     EAttachmentLoadOp::Clear,
                     EAttachmentStoreOp::Store,
                     EImageLayout::DepthStencilAttachmentOptimal,
