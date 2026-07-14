@@ -77,7 +77,10 @@ struct RGImportedTextureDesc
     RGTextureDesc     desc;
     ImportedImageDesc importDesc;
     std::shared_ptr<IImage> image = nullptr;
+    std::shared_ptr<IImageView> imageView = nullptr;
+    std::optional<ImageSubresourceRange> subresourceRange{};
     std::optional<ImageViewCreateInfo> viewDesc{};
+    std::vector<std::shared_ptr<void>> retainedResources{};
 };
 
 struct RGImportedBufferDesc
@@ -251,7 +254,6 @@ class RGRenderContext
     const RenderGraphResourceRegistry& _registry;
     ICommandBuffer&                    _cmdBuf;
     mutable std::optional<RenderingInfo> _activeRenderingInfo;
-    mutable std::optional<RenderingInfo::ImageSpec> _activeDepthAttachment;
 
   public:
     RGRenderContext(

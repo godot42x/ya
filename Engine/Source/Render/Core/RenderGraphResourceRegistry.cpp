@@ -24,8 +24,21 @@ bool isSameTextureDesc(const RGTextureDesc& lhs, const RGTextureDesc& rhs)
            lhs.flags == rhs.flags;
 }
 
+bool isSameSubresourceRange(const ImageSubresourceRange& lhs, const ImageSubresourceRange& rhs)
+{
+    return lhs.aspectMask == rhs.aspectMask &&
+           lhs.baseMipLevel == rhs.baseMipLevel &&
+           lhs.levelCount == rhs.levelCount &&
+           lhs.baseArrayLayer == rhs.baseArrayLayer &&
+           lhs.layerCount == rhs.layerCount;
+}
+
 bool isSameImportedTextureDesc(const RGImportedTextureDesc& lhs, const RGImportedTextureDesc& rhs)
 {
+    const bool bSameSubresourceRange =
+        lhs.subresourceRange.has_value() == rhs.subresourceRange.has_value() &&
+        (!lhs.subresourceRange.has_value() || isSameSubresourceRange(*lhs.subresourceRange, *rhs.subresourceRange));
+
     const bool bSameViewDesc =
         lhs.viewDesc.has_value() == rhs.viewDesc.has_value() &&
         (!lhs.viewDesc.has_value() ||
@@ -36,6 +49,8 @@ bool isSameImportedTextureDesc(const RGImportedTextureDesc& lhs, const RGImporte
     return isSameTextureDesc(lhs.desc, rhs.desc) &&
            isSameImportedImageDesc(lhs.importDesc, rhs.importDesc) &&
            lhs.image.get() == rhs.image.get() &&
+           lhs.imageView.get() == rhs.imageView.get() &&
+           bSameSubresourceRange &&
            bSameViewDesc;
 }
 
@@ -115,7 +130,15 @@ std::shared_ptr<RenderImage> RenderGraphResourceRegistry::createImportedTexture(
         return nullptr;
     }
 
-    auto view = _factory.createImageView(image, desc.viewDesc.value_or(makeDefaultViewDesc(desc.desc)));
+    auto view = desc.imageView;
+    if (view) {
+        YA_CORE_ASSERT(view->getImage() == image.get(),
+                       "Imported render graph texture '{}' provided an image view that does not reference the imported image",
+                       desc.importDesc.label);
+    }
+    else {
+        view = _factory.createImageView(image, desc.viewDesc.value_or(makeDefaultViewDesc(desc.desc)));
+    }
     if (!view) {
         YA_CORE_ERROR("Failed to create imported render graph texture view '{}'", desc.importDesc.label);
         return nullptr;
@@ -124,6 +147,7 @@ std::shared_ptr<RenderImage> RenderGraphResourceRegistry::createImportedTexture(
     auto resource         = std::make_shared<RenderImage>();
     resource->image       = std::move(image);
     resource->defaultView = std::move(view);
+    resource->retainedResources = desc.retainedResources;
     return resource;
 }
 
@@ -207,6 +231,13 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
     for (const auto& texture : graph.getTextures()) {
         const auto existing = _textures.find(texture.handle);
         if (existing != _textures.end() && !needsTextureReplacement(existing->second, texture)) {
+            if (texture.lifetime == ERGResourceLifetime::Imported) {
+                existing->second.imported = texture.imported;
+                if (existing->second.resource) {
+                    existing->second.resource->retainedResources =
+                        texture.imported ? texture.imported->retainedResources : std::vector<std::shared_ptr<void>>{};
+                }
+            }
             continue;
         }
         if (existing != _textures.end()) {

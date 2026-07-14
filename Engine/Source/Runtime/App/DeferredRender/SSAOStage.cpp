@@ -7,6 +7,7 @@
 #include "Render/Core/FrameBuffer.h"
 #include "Render/Core/IRenderTarget.h"
 #include "Render/Core/RenderGraphExecutor.h"
+#include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
 #include "Resource/Texture/TextureLibrary.h"
@@ -55,66 +56,14 @@ RGImportedTextureDesc makeSSAOImportedTextureDesc(const Texture& texture,
                                                   std::string_view label,
                                                   EImageLayout::T finalLayout)
 {
-    YA_CORE_ASSERT(texture.getImageShared() != nullptr, "Render graph import requires a backing image");
-
-    IImage* image = texture.getImage();
-    YA_CORE_ASSERT(image != nullptr, "Render graph import requires a valid image");
-
-    return RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label       = std::string(label),
-            .format      = texture.getFormat(),
-            .extent      = Extent3D{texture.getWidth(), texture.getHeight(), 1},
-            .mipLevels   = image->getMipLevels(),
-            .arrayLayers = image->getArrayLayers(),
-            .usage       = image->getUsage(),
-        },
-        .importDesc = ImportedImageDesc{
-            .label         = std::string(label),
-            .nativeHandle  = static_cast<void*>(image->getHandle()),
-            .format        = texture.getFormat(),
-            .usage         = image->getUsage(),
-            .extent        = Extent3D{texture.getWidth(), texture.getHeight(), 1},
-            .mipLevels     = image->getMipLevels(),
-            .arrayLayers   = image->getArrayLayers(),
-            .initialLayout = image->getCompatibilityLayout(),
-            .finalLayout   = finalLayout,
-        },
-        .image = texture.getImageShared(),
-    };
+    return makeImportedTextureDesc(texture, label, finalLayout);
 }
 
 RGImportedTextureDesc makeSSAOImportedTextureDesc(const RenderImage& image,
                                                   std::string_view label,
                                                   EImageLayout::T finalLayout)
 {
-    YA_CORE_ASSERT(image.getImageShared() != nullptr, "Render graph import requires a backing image");
-
-    IImage* rawImage = image.getImage();
-    YA_CORE_ASSERT(rawImage != nullptr, "Render graph import requires a valid image");
-
-    return RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label       = std::string(label),
-            .format      = image.getFormat(),
-            .extent      = Extent3D{image.getWidth(), image.getHeight(), 1},
-            .mipLevels   = rawImage->getMipLevels(),
-            .arrayLayers = rawImage->getArrayLayers(),
-            .usage       = rawImage->getUsage(),
-        },
-        .importDesc = ImportedImageDesc{
-            .label         = std::string(label),
-            .nativeHandle  = static_cast<void*>(rawImage->getHandle()),
-            .format        = image.getFormat(),
-            .usage         = rawImage->getUsage(),
-            .extent        = Extent3D{image.getWidth(), image.getHeight(), 1},
-            .mipLevels     = rawImage->getMipLevels(),
-            .arrayLayers   = rawImage->getArrayLayers(),
-            .initialLayout = rawImage->getCompatibilityLayout(),
-            .finalLayout   = finalLayout,
-        },
-        .image = image.getImageShared(),
-    };
+    return makeImportedTextureDesc(image, label, finalLayout);
 }
 
 } // namespace
