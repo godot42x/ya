@@ -49,21 +49,6 @@ struct ShadowMapResources
     void init(IRender* render, const ShadowMapResourceDesc& desc);
     void destroy();
     void rebuildViews(IRender* render, std::string_view viewLabelPrefix);
-
-    [[nodiscard]] bool needsRefresh() const
-    {
-        return renderTarget && renderTarget->needsRefresh();
-    }
-
-    [[nodiscard]] bool needsAttachmentRefresh() const
-    {
-        return renderTarget && renderTarget->needsAttachmentRefresh();
-    }
-
-    [[nodiscard]] bool refreshIfNeeded() const
-    {
-        return renderTarget && renderTarget->refreshIfNeeded();
-    }
 };
 
 } // namespace ya

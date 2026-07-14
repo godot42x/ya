@@ -595,7 +595,6 @@ void DeferredRenderPipeline::applyPendingResourceRefreshes()
                 _shadowStage = ya::makeShared<ShadowStage>();
                 _shadowStage->init(_render);
             }
-            _shadowResources.refreshIfNeeded();
             if (_shadowStage && _shadowResources.depthImage) {
                 _shadowStage->refreshShadowResources(_shadowResources.depthImage, _shadowResources.depthFormat, _shadowResources.extent);
             }

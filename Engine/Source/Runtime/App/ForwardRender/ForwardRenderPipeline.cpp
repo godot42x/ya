@@ -418,11 +418,6 @@ void ForwardRenderPipeline::flushViewportResources()
     }
 }
 
-void ForwardRenderPipeline::flushShadowResources()
-{
-    _shadowResources.refreshIfNeeded();
-}
-
 void ForwardRenderPipeline::refreshViewportSnapshot()
 {
     _viewportFormats = buildForwardViewportFormats(viewportRT.get());

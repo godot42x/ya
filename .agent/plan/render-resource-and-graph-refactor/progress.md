@@ -25,6 +25,12 @@
 
 ## 最新验证
 
+- 2026-07-14：`ShadowMapResources` 不再继续向 Forward / Deferred 暴露 `IRenderTarget` 的 dirty-repair 包装。shadow 资源现在只保留 render target owner、depth image owner 和 sampled view rebuild 职责；Forward 删除了无意义的 `flushShadowResources()`，Deferred 在 shadow 整套 destroy/init 后也不再额外调用 `refreshIfNeeded()`。
+- 直接收益：shadow 生命周期边界与当前真实实现重新对齐了。两条 pipeline 的 shadow 刷新本来就是整套 replacement，这一步把 legacy RT “脏了就自修复”的旧协议从 shadow facade 里收掉，后续继续压缩 `IRenderTarget` 职责时，不会再被这层包装重新扩散。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*'` 45/45 通过
+  - `HelloMaterial --exit-after-frame=400 --log-level=warn --log-detail-level=error` 退出码 0，过滤后未见 `Validation Error|[ERROR]|ASSERT|SIGTRAP|EXC_|stack buffer overflow|vkCreateImageView failed|Fatal|abort|AddressSanitizer`
 - 2026-07-14：editor/presentation screenshot automation 链现在也改为优先消费 `RenderImage*`，不再把 presentation source 当成 `Texture*` 在 automation/request/record 边界上传递。`AppAutomationFrameContext`、`AppScreenshotCapture::{request,recordPresentationCapture}`、`AppFrameLoop` 与 `RenderRuntime` 新增的 `getPresentationImage()` 已统一收口到 presentation color attachment image。
 - 直接收益：automation/editor screenshot 这条链的 presentation source 和 viewport/postprocess 主路径终于回到同一种 owner 语义，不再额外依赖 compat `Texture::wrap()` 作为截图输入真相；后续若继续削减 `_screenRT` 的 facade 职责，也不用再先补这一段生命周期桥接。
 - 验证结果：

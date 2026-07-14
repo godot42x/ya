@@ -143,7 +143,6 @@ struct ForwardRenderPipeline : public IRenderPipeline
     void               applyPendingResourceRefreshes();
     void               syncFrameSettings(const RenderPipelineFrameContext& frame);
     void               flushViewportResources();
-    void               flushShadowResources();
     void               refreshViewportSnapshot();
     void               refreshViewportResources();
     void               refreshViewportStageState();
