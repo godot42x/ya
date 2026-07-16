@@ -23,6 +23,10 @@
 
 ## 最新验证
 
+- 2026-07-16：app 退出链上的 render-idle 前提又补实了一步。此前 `AppLifecycle::quit()` 会先调用 `unloadScene(app)`，然后无条件走 `RenderRuntime::shutdown(/*bRenderAlreadyIdle=*/true)`；但我们前面已经把 `AppLifecycle::unloadScene()` 收紧成“仅当前确实有 scene 时才 `waitIdle()`”。这意味着在“当前根本没有 scene”的退出路径上，quit 仍会假定 render 已经 idle，并跳过 runtime shutdown 自己的等待。现在 quit 会先记录退出前是否真的持有 scene；若没有 scene，便在清理 app-level deleter 与 runtime shutdown fast-path 之前显式 `waitIdle()`，从而把 `shutdown(true)` 的前提重新补回代码现实。
+- 直接收益：这一步继续命中 `shutdown 无 validation/lifetime error` 和 runtime/shutdown consistency 主线，而不是去做一层外围整理。退出路径现在不再依赖“unloadScene 总会先 quiesce render”这个已经失效的旧前提；无 scene 退出也会在销毁 editor/system/runtime 相关 owner 前先把 GPU 工作停稳。
+- 当前停止线：这次没有改 `RenderRuntime::shutdownRuntimeServices()` 的默认等待语义，也没有扩大到 scene load / pipeline switch / play-mode teardown 的更细 fence/retirement contract；它只修正了 quit fast-path 对上游 idle 前提的错误复用。
+
 - 2026-07-16：`RenderGraphResourceRegistry` 的 imported keepalive 刷新路径又收紧了一步：当 imported texture / buffer 继续指向同一组 `retainedResources` 时，registry 现在不再把“完全没变的 keepalive vector”先退休再重新挂回。之前这条路径即使 owner 集合完全相同，也会在每次 `sync()` 时把旧 vector 送进 `DeferredDeletionQueue`，下一帧再 flush 掉一批实际上没有任何生命周期变化的空退休；现在仅在 keepalive 集合真的变化时才退休旧引用，同时补了 `RenderGraphCoreTest.ResourceRegistryDoesNotRetireImportedBufferKeepAliveWhenOwnerIsUnchanged` 和 `RenderGraphCoreTest.ResourceRegistryDoesNotRetireImportedTextureKeepAliveWhenOwnerIsUnchanged` 锁住这个 no-op refresh contract。
 - 直接收益：这一步命中的不是 execute-path 小清理，而是 plan 当前高优先级的 registry/lifetime 边界。像 Deferred frame/light/skinning UBO、shadow graph imported buffer、以及其他每帧重复 import 同一 owner 的路径，不再平白制造 `DeferredDeletionQueue` 噪音；真正的 replacement / owner 变更仍保持原有安全退休语义。
 - 当前停止线：这次没有改 imported resource 的 replacement 判定，也没有把 shutdown / pipeline switch / scene teardown 这些更高层 owner 边界一并收掉；它只消除了“keepalive 完全未变却仍反复退休”的 registry no-op 生命周期 churn。

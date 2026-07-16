@@ -391,7 +391,14 @@ void AppLifecycle::quit(App& app)
     for (auto& frameData : app._renderFrameDataPerFlight) {
         frameData.clear();
     }
+    const bool bHadSceneBeforeUnload = app._sceneManager && app._sceneManager->hasScene();
     unloadScene(app);
+
+    if (!bHadSceneBeforeUnload) {
+        if (auto* render = app.getRender()) {
+            render->waitIdle();
+        }
+    }
 
     app._deleter.clear();
 
