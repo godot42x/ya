@@ -17,12 +17,22 @@
 
 ## 下一步
 
-1. `Phase 10 / 删除剩余 compatibility adapter` 先不要再机械删 `cubemapTexture` 字段；当前代码调查显示，scene query contract、provider compat wrapper cache、derived preprocess 输入、derived output compat texture、scene skybox 依赖路径下的重复 source cache 已经收掉，而剩余 `cubemapTexture` 主要承载 cubemap asset source / scene skybox texture source / cylindrical source preview 等真实 texture 语义
-2. 下一优先级应改为判断 skybox/environment 是否需要再拆一层明确的 source/result state 边界；只有当这层边界能带来真实 owner/adapter 收缩时，才继续动 `cubemapTexture`，否则就应把 `Phase 10` 的停止线视为已接近收口
-3. 若后续继续动 environment preprocess，本轮优先级应放在 job 内部资源/状态 contract 或 dedicated graph execute 收口，而不是把 `OffscreenTaskService` 并进 Deferred/Postprocess 共用的 shared executor
+1. `Phase 10 / 删除剩余 compatibility adapter` 现在应视为已到停止线：当前代码审计没有再发现值得做 source/result state 拆分的高收益切口，继续动 `cubemapTexture` 大概率只会围绕字段名做低收益清理
+2. 若后续继续动 environment preprocess，本轮优先级应放在 job 内部资源/状态 contract 或 dedicated graph execute 收口，而不是把 `OffscreenTaskService` 并进 Deferred/Postprocess 共用的 shared executor
+3. 在 `Phase 10` 两个开放调查都收口后，下一优先级应回到真正能推进主路径的实现项，而不是继续在 environment/skybox compat 表面做机械清扫
 
 ## 最新验证
 
+- 2026-07-16：`Phase 10 / 删除剩余 compatibility adapter` 又做了一轮代码审计，结论是这项已经到自然停止线，不再继续扩成 source/result state 拆分实现。额外证据包括：
+  - `SkyboxRuntimeState::cubemapTexture` 仍直接承载 cubemap-from-files source；`sourcePreviewTexture` 仍是 cylindrical source 的 editor/debug 预览输入，不是 preprocess result 的兼容缓存。
+  - `EnvironmentLightingRuntimeState::cubemapTexture` 仍直接承载本地 cubemap asset source；当 source 来自 `SceneSkybox` 时，真正的 source 解析已经通过 `resolveEnvironmentSourceCubemap()` 回到 scene skybox state，而不是再在 environment state 内复制一份本地真相。
+  - 对外 query/preview 面现在已经基本按语义分层：`EnvironmentLightingSceneResources` 用 `ImageResourceRef` 暴露渲染可消费资源，preview 面直接给 `RenderImage/IImage/IImageView`，provider 边界只在 fallback/descriptor 最后一跳继续容纳 texture 语义。
+  - 这轮同时删除了一个已经没有任何调用点的 compat 死 helper：`detail::wrapRenderImageAsTexture()`。它曾经代表“把 owner-backed result 再包回 `Texture`”的旧适配方向；现在定义与声明都已去掉，说明这一层至少在 `ResourceResolveSystem` 内部已经不再有真实消费者。
+- 直接收益：`Phase 10` 的两个调查项现在都已经有代码支持的结论，后续不会再在 environment/skybox 这条线上反复犹豫“是不是还该继续清 texture 字段”。这让下一步可以更专注地回到真正推进主路径的切口，而不是继续做表层 compat 清扫。
+- 当前停止线：这并不声称整个仓库已经完全没有 texture-facing 边界；fallback texture、descriptor 最后一跳、以及 preprocess pipeline 内部局部 `Texture::wrap(faceView)` 这种局部使用仍然存在。但这些要么是明确的 source/fallback 语义，要么是更底层的 pipeline 内部局部实现，不再属于 `Phase 10 / 删除剩余 compatibility adapter` 这项的高价值清理范围。
+- 对应计划：
+  - `todo.md`：`Phase 10 -> 删除剩余 compatibility adapter`
+  - `plan.md`：`Phase 10 -> 外围 GPU 工作流迁移`
 - 2026-07-16：`Phase 10 / 评估 environment preprocess 使用独立 graph 还是 shared executor` 已完成一轮代码核查。当前结论是：environment preprocess 继续保留独立 offscreen scheduler 更符合现有执行模型，不并入 Deferred/Postprocess/BRDF LUT 那类 caller-owned shared `RenderGraphExecutor`。
 - 代码依据：
   - `AppFrameLoop::tickRender()` 会在主渲染提取前先调用 `renderRuntime->getOffscreenTaskService().tick(app)`；`OffscreenTaskService` 自己持有独立 command buffer、独立 fence，并在每帧先等待上一次 offscreen submit 完成，再录制/提交本帧队列中的 offscreen job。

@@ -320,8 +320,8 @@
 - [x] 迁移 BRDF LUT generation
 - [x] 迁移 screenshot copy/readback
 - [x] 明确 swapchain acquire/present graph 外边界
-- [ ] 删除剩余 compatibility adapter
-  - 2026-07-16 调查停止线：scene query contract、provider compat wrapper cache、derived preprocess 输入、derived output compat texture、scene skybox 依赖路径下的重复 source cache 已清理；剩余 `cubemapTexture` 主要承载 cubemap asset source / scene skybox texture source / cylindrical source preview 等真实 texture 语义。继续推进前应优先判断是否需要 source/result state 拆分，而不是机械删字段。
+- [-x] 删除剩余 compatibility adapter
+  - 2026-07-16 调查停止线：scene query contract、provider compat wrapper cache、derived preprocess 输入、derived output compat texture、scene skybox 依赖路径下的重复 source cache 已清理；额外代码审计确认 `SkyboxRuntimeState::cubemapTexture / sourcePreviewTexture` 与 `EnvironmentLightingRuntimeState::cubemapTexture` 剩余承担的都是 cubemap asset source、scene-skybox texture source、cylindrical source preview/fallback 等真实 source 语义，而不是纯 compat cache。当前未再发现值得做 source/result state 拆分的高收益切口；继续推进大概率会变成围绕字段名的低收益清理。本项停止在这里，仅顺手删除了已无调用点的 `wrapRenderImageAsTexture()` 死 compat helper。
 
 完成标准：
 

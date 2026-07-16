@@ -54,23 +54,6 @@ void retireRenderImageNow(std::shared_ptr<RenderImage>& image)
     image.reset();
 }
 
-stdptr<Texture> wrapRenderImageAsTexture(const std::shared_ptr<RenderImage>& image, std::string_view label)
-{
-    if (!image || !image->getImageShared() || !image->getImageViewShared()) {
-        return nullptr;
-    }
-
-    auto texture = Texture::wrap(image->getImageShared(),
-                                 image->getImageViewShared(),
-                                 label.empty() ? image->getLabel() : std::string(label));
-    if (!texture) {
-        return nullptr;
-    }
-
-    texture->retainedResources = image->getRetainedResources();
-    return texture;
-}
-
 std::shared_ptr<IImage> getImageShared(const std::shared_ptr<RenderImage>& image, const stdptr<Texture>& texture)
 {
     if (image && image->getImageShared()) {

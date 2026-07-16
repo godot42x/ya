@@ -446,6 +446,7 @@ ECS extraction、material upload、ImGui 和 presentation orchestration 仍在 g
 - 删除剩余 compatibility adapter
 
 2026-07-16 调查结论：environment preprocess 当前应继续保留独立 offscreen scheduler；它与 Deferred/Postprocess 使用的 shared `RenderGraphExecutor` 在 submit 边界、跨帧 job 生命周期和 `ICommandBuffer` 录制模型上并不相同，本阶段不把两者混成一套 owner/executor 语义。
+同日补充停止线：skybox / environment 剩余 `cubemapTexture` 类字段经代码审计后主要承载真实 source/fallback 语义，而非纯 compatibility cache；本阶段不再为了形式统一继续做 source/result state 拆分。
 
 ### Phase 11: Editor Render Extension API
 
