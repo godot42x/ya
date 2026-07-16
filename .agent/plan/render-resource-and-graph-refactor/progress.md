@@ -695,13 +695,13 @@
 ### Runtime / Automation / Screenshot
 
 - automation config、viewport resize、pipeline switch、shadow resolution 等 smoke 入口已有测试覆盖
-- `RenderRuntime` presentation pass 已 graph-backed，但 `RenderRuntime::beginFrameCommandBuffer()` 仍然每帧 `waitIdle()`
+- `RenderRuntime` presentation pass 已 graph-backed；`beginFrameCommandBuffer()` 这条旧的 per-frame `waitIdle()` 已经删除，当前剩余全局等待主要落在 pipeline switch、runtime shutdown、scene/mode transition 与 Forward/Deferred 的显式 resource rebuild 边界
 - screenshot/readback 已迁到统一 graph copy/readback 工作流；剩余未明确的是 swapchain acquire/present 边界，而不是截图拷贝本身
 
 ### 当前最可信的结论
 
 - 计划对 Deferred 主链、graph core、offscreen utility pass 的判断基本可信，且不少地方代码已比旧计划写得更靠前
-- 计划对 Forward、RenderTarget、`App::get()` 残留、per-frame `waitIdle()` 和 screenshot 路径仍偏乐观，后续推进应优先把这些作为“未完成现实”而不是默认已接近收尾
+- 计划对 Forward、RenderTarget、`App::get()` 残留和 runtime/shutdown/resource-refresh 边界仍偏乐观；后续推进应优先把 pipeline switch、shadow/resource rebuild、scene/play-mode teardown 这些仍保留 `waitIdle()` 的真实 owner 边界当作“未完成现实”，而不是继续沿用旧的 per-frame wait 叙事
 
 ## Phase 0 基线备注
 
@@ -848,7 +848,7 @@
 - SSAO 与 postprocess output 现在都已切到 graph persistent/resource-registry replacement 路径；后续更值得推进的是 bloom extract / blur ping-pong / composite 等残余 postprocess intermediates，而不是回到 owner 搬移式小重构
 - 额外调查已进一步落地：`RenderGraphResourceRegistry` 现在已有最小 frame-to-frame replacement / lifetime 语义，且 SSAO 已作为首个 runtime-side `ERGResourceLifetime::Persistent` 落地点成立；后续应沿同一模式继续评估 postprocess/bloom，而不是回到 pipeline/stage 间的 owner 搬移
 - runtime 中高频 graph 执行点也已开始为后续 registry 生命周期铺路：`RenderGraphResourceRegistry::sync()` 现会 prune 当前 graph 已不再使用的旧 handle，`SSAOStage / PostProcessingStage / BloomPostprocessing` 已改为持久化 `RenderGraphExecutor`，不再每次执行都丢弃 registry 状态
-- 进一步调查：当前 runtime 在 `RenderRuntime::beginFrameCommandBuffer()` 里仍会每帧 `waitIdle()`，因此现阶段 graph registry replacement 在运行时语义上仍然保守；同时 owned resource replacement 已开始接入 `DeferredDeletionQueue`，后续若继续推进“去 waitIdle 化”，应把 imported wrapper / view cache 等剩余路径也纳入同一延迟退休协议
+- 进一步调查：当前 runtime 已不再在 `RenderRuntime::beginFrameCommandBuffer()` 里每帧 `waitIdle()`；现阶段更保守的同步边界主要收敛在 `RenderRuntime::applyPendingRenderPipelineSwitch()`、`RenderRuntime::shutdownRuntimeServices()`、`AppLifecycle` 的 scene/play-mode 切换，以及 Forward/Deferred 的显式 shadow/resource rebuild。与此同时，owned resource replacement 已开始接入 `DeferredDeletionQueue`；后续若继续推进“去 waitIdle 化”，应围绕这些仍承担真实 owner 切换的边界逐条审，而不是继续按旧印象假设 runtime 热路径还在每帧整机 idle。
 - Deferred pipeline 自己的 graph 壳也已跟进同一策略：GBuffer / Viewport / DepthCopy 不再每帧临时构造 `RenderGraphExecutor`，而是复用 pipeline 持有的 executor，为后续把 imported graph 资源继续收向持久 registry 打基础
 - 因此继续追加 facade-only 收口的收益已经明显下降；Phase 7 后续优先做“删除 owner / graph 接管 replacement / 删除残余 dirty state”，不继续堆只改变接口表述的小提交
 - 现有 checklist 保持“删除 legacy path 后才勾选”的口径；已有 graph shell 或兼容层不单独视为完成
