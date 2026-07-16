@@ -23,6 +23,8 @@
 
 ## 最新验证
 
+- 2026-07-16：`RenderRuntime` 启动链里还有一处真实的 startup 一致性缺口也已修掉：`initDiagnostics(appDesc)` 之前放在 `initRenderBackend(appDesc)` 前面，导致 `RenderDiagnosticsService::init()` 首次执行时拿到的 `_render` 仍是空指针。这样 `configureRenderContext()` 会直接早退，连 swapchain recreate listener 也不会挂上去；如果打开 RenderDoc，capture 集成的首次上下文绑定会落空。现在初始化顺序已调整为先创建 render backend，再初始化 diagnostics，使 RenderDoc context 与 swapchain recreate 回调从第一次 init 起就绑定在真实 backend 上。
+- 直接收益：这一步补的是 runtime startup/shutdown 一致性里一块真实的初始化顺序问题，而不是单纯挪调用位置。它让 diagnostics/RenderDoc 这类 graph 外外围能力，不再成为“backend 已有，但服务仍以 null backend 完成 init”的特殊例外。
 - 2026-07-16：`RenderGraphResourceRegistry` 的 imported keepalive refresh 也开始对齐延迟退休语义。此前 imported texture / buffer 在“handle 不变、image/view/buffer 也不需要 replacement，但 retained keepalive 集合发生变化”时，会直接覆盖旧的 retained owner；这意味着旧 keepalive 的释放没有走 `DeferredDeletionQueue`，只是在当前 runtime 因为每帧 `waitIdle()` 而暂时没暴露成明显问题。现在 texture/buffer 这两条 refresh 路径都会先把旧 retained 集合移交给 `retireRetainedResources()`，再接上新的 retained 集合，使 imported keepalive refresh、replacement、prune 和 clear 四种出口终于统一到同一套 deferred-retirement 语义。
 - 直接收益：这一步补齐的是 `graph registry replacement / keepalive refresh / deferred deletion` 之间一块真实的不一致，而不是又一层接口整理。后续如果继续推进“减少每帧 `waitIdle()` 依赖”或压实 submit-time lifetime，imported 资源在 refresh-but-no-replacement 情况下不再是一个语义特例。
 - 验证结果：

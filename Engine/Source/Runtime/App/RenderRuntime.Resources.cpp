@@ -79,8 +79,8 @@ void RenderRuntime::init(const InitDesc& desc)
 
     initRuntimeState(desc);
     initShaderSystems();
-    initDiagnostics(appDesc);
     initRenderBackend(appDesc);
+    initDiagnostics(appDesc);
     initResourceCaches();
     initSharedRenderResources();
     initPresentationResources();
