@@ -317,8 +317,8 @@
 - [x] 迁移 irradiance map
 - [x] 迁移 prefiltered environment map
 - [x] 迁移 BRDF LUT generation
-- [ ] 迁移 screenshot copy/readback
-- [ ] 明确 swapchain acquire/present graph 外边界
+- [x] 迁移 screenshot copy/readback
+- [x] 明确 swapchain acquire/present graph 外边界
 - [ ] 删除剩余 compatibility adapter
 
 完成标准：

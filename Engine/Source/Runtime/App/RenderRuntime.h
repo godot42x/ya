@@ -134,8 +134,8 @@ struct RenderRuntime
     Rect2D _viewportRect{};
     float  _viewportFrameBufferScale = 1.0f;
 
-    std::unique_ptr<RenderGraphExecutor> _presentationGraphExecutor;
-    std::vector<std::shared_ptr<RenderImage>> _presentationImages;
+    std::vector<std::unique_ptr<RenderGraphExecutor>> _presentationGraphExecutors;
+    std::vector<std::shared_ptr<RenderImage>>         _presentationImages;
 
     RenderTargetEditorState _rtEditor{};
 
@@ -234,6 +234,7 @@ struct RenderRuntime
     void                   applyPendingRenderPipelineSwitch();
     void                   renderRenderTargetEditor();
     [[nodiscard]] std::shared_ptr<RenderImage> getCurrentPresentationImageShared() const;
+    [[nodiscard]] uint32_t                     getCurrentPresentationImageIndex() const;
 };
 
 } // namespace ya

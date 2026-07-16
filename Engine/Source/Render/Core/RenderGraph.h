@@ -289,6 +289,10 @@ class RGRenderContext
     void beginColorRendering(const ColorRenderingDesc& desc) const;
     void endRendering() const;
     void copyBuffer(RGBufferHandle src, RGBufferHandle dst, uint64_t size, uint64_t srcOffset = 0, uint64_t dstOffset = 0) const;
+    void copyTextureToBuffer(
+        RGTextureHandle src,
+        RGBufferHandle  dst,
+        const std::vector<BufferImageCopy>& regions) const;
     void copyTexture(RGTextureHandle src, RGTextureHandle dst, const ImageCopy& region) const;
 };
 

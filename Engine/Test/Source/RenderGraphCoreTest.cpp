@@ -172,12 +172,18 @@ class TestCommandBuffer final : public ICommandBuffer
         uint64_t srcOffset = 0;
         uint64_t dstOffset = 0;
     };
+    struct CopyImageToBufferRecord
+    {
+        EImageLayout::T              srcLayout = EImageLayout::Undefined;
+        std::vector<BufferImageCopy> regions;
+    };
 
     std::vector<TransitionRecord> transitions;
     std::vector<BufferBarrierRecord> bufferBarriers;
     uint32_t beginRenderingCount = 0;
     uint32_t endRenderingCount   = 0;
     std::vector<CopyBufferRecord> copyBuffers;
+    std::vector<CopyImageToBufferRecord> copyImageToBuffers;
     bool lastBeginRenderingHadDepth = false;
     EImageLayout::T lastDepthFinalLayout = EImageLayout::Undefined;
 
@@ -230,6 +236,13 @@ class TestCommandBuffer final : public ICommandBuffer
     void dispatch(uint32_t, uint32_t, uint32_t) override {}
     void dispatchIndirect(IBuffer*, uint64_t = 0) override {}
     void copyBufferToImage(IBuffer*, IImage*, EImageLayout::T, const std::vector<BufferImageCopy>&) override {}
+    void copyImageToBuffer(IImage*, EImageLayout::T srcImageLayout, IBuffer*, const std::vector<BufferImageCopy>& regions) override
+    {
+        copyImageToBuffers.push_back({
+            .srcLayout = srcImageLayout,
+            .regions = regions,
+        });
+    }
     void copyImage(IImage*, EImageLayout::T, IImage*, EImageLayout::T, const std::vector<ImageCopy>&) override {}
     void beginRendering(const RenderingInfo& info) override
     {
@@ -2046,6 +2059,96 @@ TEST(RenderGraphCoreTest, ExecutorRestoresImportedTextureFinalLayoutAfterTransfe
     EXPECT_EQ(cmdBuf.transitions[0].newLayout, EImageLayout::TransferDst);
     EXPECT_EQ(cmdBuf.transitions[1].oldLayout, EImageLayout::TransferDst);
     EXPECT_EQ(cmdBuf.transitions[1].newLayout, EImageLayout::PresentSrcKHR);
+}
+
+TEST(RenderGraphCoreTest, RenderContextCanCopyTextureToBuffer)
+{
+    TestResourceFactory factory;
+    TestCommandBuffer   cmdBuf;
+    RenderGraphExecutor executor(factory);
+    RenderGraph         graph;
+
+    auto sharedImage = std::make_shared<TestImage>(ImageCreateInfo{
+        .label         = "readback.src",
+        .format        = EFormat::R8G8B8A8_UNORM,
+        .extent        = {.width = 128, .height = 64, .depth = 1},
+        .usage         = static_cast<EImageUsage::T>(EImageUsage::TransferSrc | EImageUsage::Sampled),
+        .initialLayout = EImageLayout::ShaderReadOnlyOptimal,
+    });
+    auto sharedView = std::make_shared<TestImageView>(sharedImage, ImageViewCreateInfo{
+        .label       = "readback.src.view",
+        .aspectFlags = EImageAspect::Color,
+        .levelCount  = 1,
+        .layerCount  = 1,
+    });
+    const auto srcTexture = graph.importTexture(RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label  = "readback.src",
+            .format = EFormat::R8G8B8A8_UNORM,
+            .extent = Extent3D{128, 64, 1},
+            .usage  = static_cast<EImageUsage::T>(EImageUsage::TransferSrc | EImageUsage::Sampled),
+        },
+        .importDesc = ImportedImageDesc{
+            .label         = "readback.src",
+            .nativeHandle  = static_cast<void*>(sharedImage->getHandle()),
+            .format        = EFormat::R8G8B8A8_UNORM,
+            .usage         = static_cast<EImageUsage::T>(EImageUsage::TransferSrc | EImageUsage::Sampled),
+            .extent        = Extent3D{128, 64, 1},
+            .initialLayout = EImageLayout::ShaderReadOnlyOptimal,
+            .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+        },
+        .image     = sharedImage,
+        .imageView = sharedView,
+    });
+
+    TestBuffer importedDst(BufferCreateInfo{
+        .label = "readback.dst",
+        .usage = EBufferUsage::TransferDst,
+        .size  = 128u * 64u * 4u,
+    });
+    const auto dstBuffer = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "readback.dst",
+            .usage = EBufferUsage::TransferDst,
+            .size  = 128u * 64u * 4u,
+        },
+        .buffer = &importedDst,
+    });
+
+    graph.addPass(
+        "readback-copy",
+        [&](RGPassBuilder& pass) {
+            pass.transferSrc(srcTexture);
+            pass.transferDst(dstBuffer);
+        },
+        [&](RGRenderContext& ctx) {
+            ctx.copyTextureToBuffer(srcTexture,
+                                    dstBuffer,
+                                    {BufferImageCopy{
+                                        .bufferOffset      = 0,
+                                        .bufferRowLength   = 0,
+                                        .bufferImageHeight = 0,
+                                        .imageSubresource  = {
+                                            .aspectMask     = EImageAspect::Color,
+                                            .mipLevel       = 0,
+                                            .baseArrayLayer = 0,
+                                            .layerCount     = 1,
+                                        },
+                                        .imageOffsetX      = 0,
+                                        .imageOffsetY      = 0,
+                                        .imageOffsetZ      = 0,
+                                        .imageExtentWidth  = 128,
+                                        .imageExtentHeight = 64,
+                                        .imageExtentDepth  = 1,
+                                    }});
+        });
+
+    ASSERT_TRUE(executor.execute(graph, cmdBuf));
+    ASSERT_EQ(cmdBuf.copyImageToBuffers.size(), 1u);
+    EXPECT_EQ(cmdBuf.copyImageToBuffers.front().srcLayout, EImageLayout::TransferSrc);
+    ASSERT_EQ(cmdBuf.copyImageToBuffers.front().regions.size(), 1u);
+    EXPECT_EQ(cmdBuf.copyImageToBuffers.front().regions.front().imageExtentWidth, 128u);
+    EXPECT_EQ(cmdBuf.copyImageToBuffers.front().regions.front().imageExtentHeight, 64u);
 }
 
 TEST(RenderGraphCoreTest, RenderContextHelpersDriveRenderingAndCopyCommands)

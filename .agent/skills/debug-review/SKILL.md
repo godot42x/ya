@@ -67,12 +67,22 @@ description: YA Engine 崩溃排查、变更自检与提交前 review 清单。
 2. 对环境反射类问题，优先选能稳定暴露 skybox 倒影的 PBR 物体；不要先拿 Phong 样例代替。
 3. 若自动化截图与人工编辑器观察冲突，先把“验证口径是否可信”当成一等问题排。
 
+### 先固定四件事
+
+1. 场景：明确是哪一个 scene asset，不要只说“HelloMaterial 那个场景”。
+2. 观察物：明确是哪一个实体/材质，不要混用 PBR 球体和 Phong 立方体。
+3. 相机：明确位置和旋转；环境反射问题里，机位本身就是诊断输入，不是附带信息。
+4. 截图时机：明确抓图帧号；晚帧问题不能只写 `exit-after-frame`。
+
+缺任何一项，都容易把“验证结果不一致”误判成“修复无效”。
+
 ### 本仓库 IBL 回归的已验证观察点
 
 - target：`HelloMaterial`
 - 目标场景：`Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json`
 - 目标物体：`PBR_Sphere_5_0`
 - 用它观察 PBR 球体表面的天空盒/环境反射是否存在
+- 不要把 `Cube_2_0` 这类 Phong 物体当成主观察点；它不适合拿来判断这次 IBL 反射是否恢复
 
 已验证过可复用的编辑器相机参数：
 
@@ -83,17 +93,27 @@ description: YA Engine 崩溃排查、变更自检与提交前 review 清单。
 
 这组机位用于把 PBR 球体和环境反射区稳定放进视野。类似回归里，优先复用已有“能看到症状”的机位，不要每次重新找角度。
 
+建议把这组信息当作一个“观察基线”整体复用：
+
+```text
+scene   = Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json
+target  = PBR_Sphere_5_0
+camera  = pos(12,12,10) rot(-9,-39,0)
+signal  = 球体表面是否能看到天空盒/环境倒影
+```
+
 ### 推荐验证顺序
 
 1. 先用低噪音 smoke 跑目标场景。
 2. 再用固定机位观察目标物体。
 3. 先做人工编辑器冒烟，确认肉眼是否能看到目标症状。
 4. 再决定自动化截图是否能作为同一问题的可信证据。
+5. 若要和 `origin/main` 对比，必须保持同一 scene / 同一 target / 同一 camera / 同一 frame gate。
 
 推荐命令模板：
 
 ```bash
-make r t=HelloMaterial r_args="--exit-after-frame=1500 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"
+make r t=HelloMaterial r_args="--exit-after-frame=1500 --screenshot-frame=1500 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"
 ```
 
 若需要落盘截图，再补：
@@ -102,11 +122,15 @@ make r t=HelloMaterial r_args="--exit-after-frame=1500 --screenshot-target=edito
 --screenshot=/tmp/ibl-check.png
 ```
 
+若要和 `origin/main` 做同口径对照，直接复用同一套参数，只切换代码版本；不要一边换提交，一边换观察点或机位。
+
 ### 帧数规则
 
 1. 对 environment preprocess / offscreen resolve / 异步资源完成有依赖的问题，短帧 smoke 不算验证通过。
 2. 这类问题至少跑到“确实完成环境预处理”的帧数，再下结论。
 3. 本次 IBL 反射回归里，`1500` 帧量级比 `300` 帧更接近真实可见结果；不要只拿早期帧截图判死刑。
+4. `--exit-after-frame=1500` 只控制退出时机，不会自动把截图推迟到 1500 帧；若要在晚帧抓图，必须同步设置 `--screenshot-frame=1500` 或 automation 配置里的 `screenshot.frame`。
+5. 一旦显式设置 `screenshot.frame`，它会优先于默认 warmup 语义；不要再把“1500 帧 gate”理解成“1500 + warmup 再截图”。
 
 ### 常见误判
 
@@ -114,6 +138,19 @@ make r t=HelloMaterial r_args="--exit-after-frame=1500 --screenshot-target=edito
 2. 自动化截图路径和人工编辑器看到的状态不一致，却继续把自动化结果当唯一真相。
 3. 只看“资源 ready / descriptor 已更新”的日志，就默认最终视觉一定正确。
 4. 看到画面仍不对，就直接怀疑 light pass；环境贴图生成内容、导入视图元数据、keepalive 链都要一起看。
+
+### 最小复用模板
+
+遇到同类视觉回归，先把下面四行补全，再开始跑：
+
+```text
+scene:
+target entity/material:
+camera pos/rot:
+expected visual signal:
+```
+
+若这四项写不清，就先不要急着比较截图或下结论。
 
 ### 这类问题的高价值对照项
 

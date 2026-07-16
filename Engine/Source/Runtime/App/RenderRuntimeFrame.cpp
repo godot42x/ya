@@ -25,7 +25,9 @@ RGImportedTextureDesc makePresentationImportedTextureDesc(const RenderImage& ima
                                                           std::string_view label,
                                                           EImageLayout::T finalLayout)
 {
-    return makeImportedTextureDesc(image, label, finalLayout, EImageUsage::ColorAttachment);
+    auto desc = makeImportedTextureDesc(image, label, finalLayout, EImageUsage::ColorAttachment);
+    desc.importDesc.initialLayout = EImageLayout::PresentSrcKHR;
+    return desc;
 }
 
 } // namespace
@@ -175,7 +177,16 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
     YA_PROFILE_SCOPE("Screen pass");
     YA_PERF_SCOPE(perf::sample::renderPresentation(), perf::metric::cpuTimeMs(), perf::domain::render());
 
-    if (!cmdBuf || !_presentationGraphExecutor) {
+    if (!cmdBuf) {
+        return;
+    }
+
+    const uint32_t presentationImageIndex = getCurrentPresentationImageIndex();
+    if (presentationImageIndex >= _presentationGraphExecutors.size()) {
+        return;
+    }
+    auto* presentationExecutor = _presentationGraphExecutors[presentationImageIndex].get();
+    if (!presentationExecutor) {
         return;
     }
 
@@ -223,8 +234,7 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
             rgCtx.endRendering();
         });
 
-    YA_CORE_ASSERT(_presentationGraphExecutor != nullptr, "RenderRuntime presentation graph executor is not initialized");
-    [[maybe_unused]] const bool bExecuted = _presentationGraphExecutor->execute(graph, *cmdBuf);
+    [[maybe_unused]] const bool bExecuted = presentationExecutor->execute(graph, *cmdBuf);
     if (recordPresentationCapture) {
         recordPresentationCapture(cmdBuf);
     }

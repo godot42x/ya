@@ -113,6 +113,13 @@ struct RenderCommand
         uint64_t srcOffset = 0;
         uint64_t dstOffset = 0;
     };
+    struct CopyImageToBuffer
+    {
+        IImage* srcImage = nullptr;
+        EImageLayout::T srcImageLayout = EImageLayout::Undefined;
+        IBuffer* dstBuffer = nullptr;
+        std::vector<BufferImageCopy> regions;
+    };
     struct BeginRendering
     {
         RenderingInfo info;
@@ -196,6 +203,7 @@ struct RenderCommand
         BindDescriptorSets,
         PushConstants,
         CopyBuffer,
+        CopyImageToBuffer,
         BeginRendering,
         EndRendering,
         TransitionImageLayout,
@@ -412,6 +420,20 @@ struct ICommandBuffer
         recordedCommands.push_back(RenderCommand{RenderCommand::CopyBuffer{src, dst, size, srcOffset, dstOffset}});
     }
 
+    void copyImageToBuffer(
+        IImage*                             srcImage,
+        EImageLayout::T                     srcImageLayout,
+        IBuffer*                            dstBuffer,
+        const std::vector<BufferImageCopy>& regions)
+    {
+        recordedCommands.push_back(RenderCommand{RenderCommand::CopyImageToBuffer{
+            .srcImage = srcImage,
+            .srcImageLayout = srcImageLayout,
+            .dstBuffer = dstBuffer,
+            .regions = regions,
+        }});
+    }
+
     void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ)
     {
         recordedCommands.push_back(RenderCommand{RenderCommand::Dispatch{groupCountX, groupCountY, groupCountZ}});
@@ -556,6 +578,19 @@ struct ICommandBuffer
         IImage*                       dstImage,
         EImageLayout::T               dstImageLayout,
         const std::vector<ImageCopy>& regions) = 0;
+
+    /**
+     * @brief Copy data from image to buffer
+     * @param srcImage Source image
+     * @param srcImageLayout Current layout of source image (must be TransferSrc)
+     * @param dstBuffer Destination buffer
+     * @param regions Copy regions
+     */
+    virtual void copyImageToBuffer(
+        IImage*                             srcImage,
+        EImageLayout::T                     srcImageLayout,
+        IBuffer*                            dstBuffer,
+        const std::vector<BufferImageCopy>& regions) = 0;
 
     virtual void beginRendering(const RenderingInfo& info) = 0;
 

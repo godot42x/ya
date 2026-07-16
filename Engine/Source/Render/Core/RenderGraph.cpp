@@ -356,6 +356,25 @@ void RGRenderContext::copyBuffer(RGBufferHandle src, RGBufferHandle dst, uint64_
     _cmdBuf.copyBuffer(srcBuffer, dstBuffer, size, srcOffset, dstOffset);
 }
 
+void RGRenderContext::copyTextureToBuffer(
+    RGTextureHandle src,
+    RGBufferHandle  dst,
+    const std::vector<BufferImageCopy>& regions) const
+{
+    const auto* srcTexture = resolveTexture(src);
+    auto*       dstBuffer  = resolveBuffer(dst);
+    YA_CORE_ASSERT(srcTexture != nullptr, "RGRenderContext pass {} failed to resolve src texture {}", _pass.name, src.index);
+    YA_CORE_ASSERT(dstBuffer != nullptr, "RGRenderContext pass {} failed to resolve dst buffer {}", _pass.name, dst.index);
+    YA_CORE_ASSERT(srcTexture->getImage() != nullptr, "RGRenderContext pass {} src texture {} is missing image", _pass.name, src.index);
+    retainResolvedRenderImage(_cmdBuf, *srcTexture);
+
+    _cmdBuf.copyImageToBuffer(
+        srcTexture->getImage(),
+        EImageLayout::TransferSrc,
+        dstBuffer,
+        regions);
+}
+
 void RGRenderContext::copyTexture(RGTextureHandle src, RGTextureHandle dst, const ImageCopy& region) const
 {
     const auto* srcTexture = resolveTexture(src);

@@ -639,6 +639,50 @@ void VulkanCommandBuffer::copyBufferToImage(IBuffer* srcBuffer,
         vkRegions.data());
 }
 
+void VulkanCommandBuffer::copyImageToBuffer(IImage* srcImage,
+                                            EImageLayout::T srcImageLayout,
+                                            IBuffer* dstBuffer,
+                                            const std::vector<BufferImageCopy>& regions)
+{
+    if (!srcImage || !dstBuffer || regions.empty()) return;
+
+    std::vector<VkBufferImageCopy> vkRegions;
+    vkRegions.reserve(regions.size());
+
+    for (const auto& region : regions) {
+        VkBufferImageCopy vkRegion{
+            .bufferOffset      = region.bufferOffset,
+            .bufferRowLength   = region.bufferRowLength,
+            .bufferImageHeight = region.bufferImageHeight,
+            .imageSubresource  = {
+                 .aspectMask     = region.imageSubresource.aspectMask,
+                 .mipLevel       = region.imageSubresource.mipLevel,
+                 .baseArrayLayer = region.imageSubresource.baseArrayLayer,
+                 .layerCount     = region.imageSubresource.layerCount,
+            },
+            .imageOffset = {
+                region.imageOffsetX,
+                region.imageOffsetY,
+                region.imageOffsetZ,
+            },
+            .imageExtent = {
+                region.imageExtentWidth,
+                region.imageExtentHeight,
+                region.imageExtentDepth,
+            },
+        };
+        vkRegions.push_back(vkRegion);
+    }
+
+    vkCmdCopyImageToBuffer(
+        _commandBuffer,
+        srcImage->getHandle().as<VkImage>(),
+        EImageLayout::toVk(srcImageLayout),
+        dstBuffer->getHandleAs<VkBuffer>(),
+        static_cast<uint32_t>(vkRegions.size()),
+        vkRegions.data());
+}
+
 void VulkanCommandBuffer::copyImage(IImage*                       srcImage,
                                     EImageLayout::T               srcImageLayout,
                                     IImage*                       dstImage,
@@ -802,6 +846,9 @@ void VulkanCommandBuffer::executeAll()
                 }
                 else if constexpr (std::is_same_v<T, RenderCommand::CopyBuffer>) {
                     executeCopyBuffer(arg.src, arg.dst, arg.size, arg.srcOffset, arg.dstOffset);
+                }
+                else if constexpr (std::is_same_v<T, RenderCommand::CopyImageToBuffer>) {
+                    copyImageToBuffer(arg.srcImage, arg.srcImageLayout, arg.dstBuffer, arg.regions);
                 }
                 else if constexpr (std::is_same_v<T, RenderCommand::TransitionImageLayout>) {
                     (void)arg; // TODO: implement dynamic layout transitions

@@ -123,6 +123,7 @@ struct AppProfilingOptions
 struct AppAutomationOptions
 {
     uint64_t                     exitAfterFrame                  = 0;
+    uint64_t                     screenshotFrameIndex            = 0;
     uint64_t                     screenshotWarmupFrames          = 30;
     uint64_t                     screenshotSettleFrames          = 5;
     bool                         renderDocCapture                = false;
@@ -266,6 +267,7 @@ struct AppDesc
             .opt<std::string>("", {"scene"}, "Startup scene path override")
             .opt<std::string>("", {"screenshot"}, "Automation screenshot output PNG path")
             .opt<std::string>("", {"screenshot-target"}, "Automation screenshot target: viewport or editor")
+            .opt<uint64_t>("", {"screenshot-frame"}, "Earliest frame index allowed to request automation screenshot", "0")
             .opt<bool>("", {"cpu-profile"}, "Enable runtime CPU trace profiling",
                        !profiling::isCompiledOut() ? "true" : "false")
             .opt<std::string>("", {"cpu-profile-output"}, "Runtime CPU trace output path")
@@ -289,6 +291,7 @@ struct AppDesc
         if (std::string automationConfigPath; params.tryGet<std::string>("automation-config", automationConfigPath)) {
             automation.configPath = std::move(automationConfigPath);
         }
+        params.tryGet<uint64_t>("screenshot-frame", automation.screenshotFrameIndex);
         params.tryGet<uint64_t>("screenshot-warmup-frames", automation.screenshotWarmupFrames);
         params.tryGet<uint64_t>("screenshot-settle-frames", automation.screenshotSettleFrames);
         if (bool bRenderDocCapture = false; params.tryGet<bool>("renderdoc-capture", bRenderDocCapture)) {

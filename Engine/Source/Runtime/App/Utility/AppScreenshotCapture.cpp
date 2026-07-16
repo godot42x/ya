@@ -3,6 +3,8 @@
 #include "Runtime/App/Utility/OffscreenJobRunner.h"
 
 #include "Core/Log.h"
+#include "Render/Core/RenderGraphExecutor.h"
+#include "Render/Core/RenderGraphImportUtils.h"
 #include "Platform/Render/Vulkan/VulkanBuffer.h"
 #include "Platform/Render/Vulkan/VulkanMemoryAllocator.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
@@ -175,6 +177,77 @@ ScreenshotSourceInfo makeScreenshotSourceInfo(RenderImage* image)
     };
 }
 
+BufferImageCopy makeScreenshotReadbackRegion(Extent2D extent)
+{
+    return BufferImageCopy{
+        .bufferOffset      = 0,
+        .bufferRowLength   = 0,
+        .bufferImageHeight = 0,
+        .imageSubresource  = {
+            .aspectMask     = EImageAspect::Color,
+            .mipLevel       = 0,
+            .baseArrayLayer = 0,
+            .layerCount     = 1,
+        },
+        .imageOffsetX      = 0,
+        .imageOffsetY      = 0,
+        .imageOffsetZ      = 0,
+        .imageExtentWidth  = extent.width,
+        .imageExtentHeight = extent.height,
+        .imageExtentDepth  = 1,
+    };
+}
+
+RGImportedBufferDesc makeImportedReadbackBufferDesc(const std::shared_ptr<IBuffer>& buffer)
+{
+    YA_CORE_ASSERT(buffer != nullptr, "Screenshot readback buffer must not be null");
+    return RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = buffer->getName(),
+            .usage = EBufferUsage::TransferDst,
+            .size  = buffer->getSize(),
+        },
+        .buffer = buffer.get(),
+        .retainedResources = {buffer},
+    };
+}
+
+bool executeScreenshotCopyGraph(RenderGraphExecutor& executor,
+                                ICommandBuffer&      cmdBuf,
+                                const RenderImage&   sourceImage,
+                                EImageLayout::T      initialLayout,
+                                EImageLayout::T      finalLayout,
+                                const std::shared_ptr<IBuffer>& readbackBuffer,
+                                std::string_view     graphLabel)
+{
+    if (!sourceImage.getImage() || !sourceImage.getImageView() || !readbackBuffer) {
+        return false;
+    }
+
+    const Extent2D extent = sourceImage.getExtent();
+    RenderGraph graph;
+    auto importedSource = makeImportedTextureDesc(
+        sourceImage,
+        graphLabel,
+        finalLayout,
+        EImageUsage::TransferSrc);
+    importedSource.importDesc.initialLayout = initialLayout;
+    const auto src = graph.importTexture(importedSource);
+    const auto dst = graph.importBuffer(makeImportedReadbackBufferDesc(readbackBuffer));
+
+    [[maybe_unused]] const auto pass = graph.addPass(
+        std::string(graphLabel),
+        [src, dst](RGPassBuilder& pass) {
+            pass.transferSrc(src);
+            pass.transferDst(dst);
+        },
+        [src, dst, extent](RGRenderContext& ctx) {
+            ctx.copyTextureToBuffer(src, dst, {makeScreenshotReadbackRegion(extent)});
+        });
+
+    return executor.execute(graph, cmdBuf);
+}
+
 bool writePngFromReadback(const AppScreenshotCaptureState& state)
 {
     if (!state.readbackBuffer || state.width == 0 || state.height == 0) {
@@ -256,6 +329,10 @@ bool AppScreenshotCapture::request(IRender*                        render,
         return false;
     }
 
+    const std::shared_ptr<RenderImage> selectedRenderImage =
+        target == EAutomationScreenshotTarget::Editor
+            ? presentationSourceImage
+            : (postprocessSourceImage ? postprocessSourceImage : viewportSourceImage);
     const ScreenshotSourceInfo source = target == EAutomationScreenshotTarget::Editor
         ? makeScreenshotSourceInfo(presentationSourceImage.get())
         : (postprocessSourceImage ? makeScreenshotSourceInfo(postprocessSourceImage.get())
@@ -283,6 +360,7 @@ bool AppScreenshotCapture::request(IRender*                        render,
 
     state.outputPath                   = outputPath;
     state.readbackBuffer               = std::move(readbackBuffer);
+    state.copyExecutor                 = std::make_shared<RenderGraphExecutor>(*render->getResourceFactory());
     state.presentationSourceImage      = nullptr;
     state.width                        = extent.width;
     state.height                       = extent.height;
@@ -302,38 +380,20 @@ bool AppScreenshotCapture::request(IRender*                        render,
 
     auto job       = std::make_shared<OffscreenJobState>();
     job->debugName = "AutomationScreenshotCapture";
-    job->executeFn = [capturedSourceImage = source.image, readbackBuffer = state.readbackBuffer, extent](ICommandBuffer* cmdBuf, RenderImage*) -> bool
+    job->executeFn = [capturedSource = selectedRenderImage,
+                      copyExecutor = state.copyExecutor,
+                      readbackBuffer = state.readbackBuffer](ICommandBuffer* cmdBuf, RenderImage*) -> bool
     {
-        if (!cmdBuf || !capturedSourceImage || !readbackBuffer) {
+        if (!cmdBuf || !capturedSource || !copyExecutor || !readbackBuffer) {
             return false;
         }
-
-        cmdBuf->transitionImageLayoutAuto(capturedSourceImage.get(), EImageLayout::TransferSrc);
-        VkBufferImageCopy region{};
-        region.bufferOffset                    = 0;
-        region.bufferRowLength                 = 0;
-        region.bufferImageHeight               = 0;
-        region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-        region.imageSubresource.mipLevel       = 0;
-        region.imageSubresource.baseArrayLayer = 0;
-        region.imageSubresource.layerCount     = 1;
-        region.imageOffset                     = {0, 0, 0};
-        region.imageExtent                     = {extent.width, extent.height, 1};
-        vkCmdCopyImageToBuffer(cmdBuf->getHandleAs<VkCommandBuffer>(),
-                               capturedSourceImage->getHandle().as<VkImage>(),
-                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                               readbackBuffer->getHandleAs<VkBuffer>(),
-                               1,
-                               &region);
-        cmdBuf->bufferMemoryBarrier(readbackBuffer.get(),
-                                    EPipelineStage::Transfer,
-                                    EPipelineStage::AllCommands,
-                                    EResourceAccess::TransferWrite,
-                                    EResourceAccess::TransferRead,
-                                    0,
-                                    readbackBuffer->getSize());
-        cmdBuf->transitionImageLayoutAuto(capturedSourceImage.get(), EImageLayout::ShaderReadOnlyOptimal);
-        return true;
+        return executeScreenshotCopyGraph(*copyExecutor,
+                                          *cmdBuf,
+                                          *capturedSource,
+                                          EImageLayout::ShaderReadOnlyOptimal,
+                                          EImageLayout::ShaderReadOnlyOptimal,
+                                          readbackBuffer,
+                                          "AutomationScreenshot.ViewportCopy");
     };
 
     state.pendingJob = job;
@@ -356,8 +416,7 @@ bool AppScreenshotCapture::recordPresentationCapture(uint64_t frameIndex,
     }
 
     const auto& sourceRenderImage = state.presentationSourceImage;
-    const std::shared_ptr<IImage> sourceImage = sourceRenderImage->getImageShared();
-    if (!sourceImage) {
+    if (!sourceRenderImage->getImageShared()) {
         state.bFailed                     = true;
         state.bPendingPresentationCapture = false;
         return false;
@@ -371,32 +430,18 @@ bool AppScreenshotCapture::recordPresentationCapture(uint64_t frameIndex,
         return false;
     }
 
-    VkBufferImageCopy region{};
-    region.bufferOffset                    = 0;
-    region.bufferRowLength                 = 0;
-    region.bufferImageHeight               = 0;
-    region.imageSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-    region.imageSubresource.mipLevel       = 0;
-    region.imageSubresource.baseArrayLayer = 0;
-    region.imageSubresource.layerCount     = 1;
-    region.imageOffset                     = {0, 0, 0};
-    region.imageExtent                     = {extent.width, extent.height, 1};
-
-    cmdBuf->transitionImageLayoutAuto(sourceImage.get(), EImageLayout::TransferSrc);
-    vkCmdCopyImageToBuffer(cmdBuf->getHandleAs<VkCommandBuffer>(),
-                           sourceImage->getHandle().as<VkImage>(),
-                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                           state.readbackBuffer->getHandleAs<VkBuffer>(),
-                           1,
-                           &region);
-    cmdBuf->bufferMemoryBarrier(state.readbackBuffer.get(),
-                                EPipelineStage::Transfer,
-                                EPipelineStage::AllCommands,
-                                EResourceAccess::TransferWrite,
-                                EResourceAccess::TransferRead,
-                                0,
-                                state.readbackBuffer->getSize());
-    cmdBuf->transitionImageLayoutAuto(sourceImage.get(), EImageLayout::PresentSrcKHR);
+    if (!state.copyExecutor ||
+        !executeScreenshotCopyGraph(*state.copyExecutor,
+                                    *cmdBuf,
+                                    *sourceRenderImage,
+                                    EImageLayout::PresentSrcKHR,
+                                    EImageLayout::PresentSrcKHR,
+                                    state.readbackBuffer,
+                                    "AutomationScreenshot.PresentationCopy")) {
+        state.bFailed                     = true;
+        state.bPendingPresentationCapture = false;
+        return false;
+    }
 
     state.width                       = extent.width;
     state.height                      = extent.height;
@@ -422,6 +467,7 @@ bool AppScreenshotCapture::tryFinalize(uint64_t currentFrameIndex, AppScreenshot
         state.bCompleted = writePngFromReadback(state);
         state.bFailed    = !state.bCompleted;
         state.readbackBuffer.reset();
+        state.copyExecutor.reset();
         state.presentationSourceImage.reset();
         state.bPresentationCopyRecorded = false;
         return true;
@@ -445,6 +491,7 @@ bool AppScreenshotCapture::tryFinalize(uint64_t currentFrameIndex, AppScreenshot
         state.bFailed       = true;
         state.presentationSourceImage.reset();
         state.readbackBuffer.reset();
+        state.copyExecutor.reset();
         state.pendingJob    = nullptr;
         return true;
     }
@@ -460,6 +507,7 @@ bool AppScreenshotCapture::tryFinalize(uint64_t currentFrameIndex, AppScreenshot
     }
     state.presentationSourceImage.reset();
     state.readbackBuffer.reset();
+    state.copyExecutor.reset();
     state.pendingJob = nullptr;
     return true;
 }

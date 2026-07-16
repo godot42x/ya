@@ -12,18 +12,46 @@
 
 ## 当前阻塞
 
-- imported image 的 final state 之前只在部分 raster 路径里被 attachment `finalLayout` 偶然覆盖；非 raster 末次使用后仍缺少统一 executor 收口
-- offscreen/environment preprocess 虽已 graph-backed，但仍需继续验证 imported subresource range 与 submit-time 生命周期契约
+- offscreen/environment preprocess 已恢复到稳定的 direct dynamic-rendering execute 路径，但 imported subresource range、submit-time 生命周期与后续是否重新 shared-executor 化，仍需继续验证
 - graph registry replacement 已可用，但还需要继续压实与 runtime frame boundary、deferred deletion 和 startup/shutdown 的一致性
 
 ## 下一步
 
-1. 以启动链和 `HelloMaterial` smoke 为主，继续清掉 runtime 中暴露的 graph/resource-state/lifetime 问题
-2. 补齐 imported resource 的 final-state / replacement / shutdown contract，并用 core test 锁住
-3. 再推进 Forward graph 和外围 GPU 工作流迁移
+1. 继续压实 graph registry replacement / shutdown / deferred deletion 一致性，重点转向 Deferred/environment replacement，而不是已收口的 presentation imported contract
+2. 在外围验证链可信之后，再推进 Forward graph 和剩余 compatibility adapter 清理
+3. 若 replacement/ownership 信号继续稳定，再回头评估 environment preprocess 是独立 graph 还是 shared executor
 
 ## 最新验证
 
+- 2026-07-16：swapchain acquire/present 现在明确作为 graph 外边界保留在 runtime/backend 层，而 presentation graph 与 presentation screenshot graph 都改为显式遵守同一份 imported-image contract。`RenderRuntimeFrame` 在导入当前 swapchain image 作为 `Presentation.Output` 时，不再继承 mutable compatibility seed，而是固定声明 `initialLayout = PresentSrcKHR`；`AppScreenshotCapture` 也同步把 screenshot copy graph 的 imported source layout 参数显式化，viewport/postprocess 走 `ShaderReadOnlyOptimal -> ShaderReadOnlyOptimal`，presentation 则走 `PresentSrcKHR -> PresentSrcKHR`。
+- 直接收益：presentation pass、presentation screenshot 与 acquire/present lifecycle 不再靠“当前 image compatibility layout 恰好是什么”这种隐式状态耦合。此前 per-backbuffer executor 已经消掉持续性的 `Presentation.Output` replacement churn，但每个 backbuffer 首帧仍会因为 imported desc 的 initial-layout 从 `Undefined` 漂到 `PresentSrcKHR` 而触发一次 replacement；现在这层漂移也被收掉了。最新 trace smoke 日志里已不再出现 `Presentation.Output` replacement，说明 presentation imported identity 和 graph 外 contract 已经稳定下来。
+- 当前停止线：这一步定义清楚的是 swapchain image 进入 / 离开 graph 的 contract，不代表 acquire/present 本身要迁进 graph，也不代表所有 imported image 都已经有同样明确的 graph 外边界。下一优先级仍然应该放在 Deferred/environment replacement 与剩余 compatibility adapter，而不是继续把 acquire/present 过度 graph 化。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/present-boundary.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=trace --log-detail-level=error"`：日志确认 `Automation requested screenshot...`、`Saved screenshot: /tmp/present-boundary.png`，且未再出现 `Presentation.Output` replacement；输出文件 `/tmp/present-boundary.png` 已生成（sha1 `b083648ce32e2ecf430ceb66c3546c6b8bcf9420`）
+
+- 2026-07-16：`AppScreenshotCapture` 的 copy/readback 已不再手写 `vkCmdCopyImageToBuffer + transitionImageLayoutAuto() + bufferMemoryBarrier()`，而是改为复用统一的 RenderGraph copy/readback contract。具体做法是：先补齐 `ICommandBuffer::copyImageToBuffer()` 与 `RGRenderContext::copyTextureToBuffer()`，再让 screenshot request/record 两条链都通过 imported texture + imported readback buffer 的单 pass graph 执行拷贝，并继续依赖 imported texture final-layout contract 把 viewport/postprocess source 恢复到 `ShaderReadOnlyOptimal`、presentation source 恢复到 `PresentSrcKHR`。
+- 直接收益：Phase 10 里 screenshot 终于不再是外围 GPU 工作流里的手写 Vulkan 例外。当前 editor screenshot 与非-editor/offscreen screenshot 都开始站到同一条 graph/executor/resource-state 语义上，后续若继续查 screenshot 与 postprocess replacement、presentation rebuild、submit-time lifetime 的交界，不需要再先绕回一段私有 `vkCmdCopyImageToBuffer` 逻辑。
+- 当前停止线：这一步收的是 screenshot copy/readback 本身，不代表 swapchain acquire/present 的 graph 外边界已经完全定义清楚；presentation capture 虽然已经走 graph copy，但 acquire/present 仍由 runtime/present backend 驱动。下一步更值得继续的是把这层边界写清，而不是继续在 screenshot 内部加更多特例。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/graph-screenshot-editor.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=info --log-detail-level=error"`：日志确认 `Automation requested screenshot...` 与 `Saved screenshot: /tmp/graph-screenshot-editor.png`
+- 2026-07-16：presentation pass 不再让单个持久 `RenderGraphExecutor` 在多个 swapchain backbuffer 之间来回复用同一个 imported handle。此前 `_presentationGraphExecutor` 只有一份，而 `Presentation.Output` 在运行时会随着当前 swapchain image 在 0/1/2 号 backbuffer 间轮转；这会让 registry 每帧都把“同一个 graph handle 指向了另一张 native image”判成 replacement，并持续打印 `RenderGraph registry replacing texture 'Presentation.Output'` 与对应的 deferred-deletion flush。现在 presentation executor 改为按 swapchain image 一一对应持有：每个 backbuffer 都有自己的 `RenderGraphExecutor` / registry，presentation graph 只在当前 image 对应的 executor 上执行。
+- 直接收益：`Presentation.Output` 的 replacement churn 不再是持续性噪音。60 帧 trace smoke 下，replacement 只会出现在各个 backbuffer 第一次从 `Undefined` 稳定到 `PresentSrcKHR` 的早期复用窗口，之后不再每帧刷 `Presentation.Output` replacement，也不再伴随每帧 1 次的 DDQ flush。这样后续再看 registry replacement / deferred deletion 日志时，presentation 不会继续淹没真正异常的 replacement 信号。
+- 当前停止线：这一步收的是 “per-backbuffer executor identity” 这层持续 replacement 问题，还没有继续改 imported image 的 initial-layout contract；因此前几帧每个 backbuffer 首次稳定时仍可能有一次性 replacement。若后续要把 presentation replacement 收到完全静默，应该继续调查 imported `initialLayout` 是否需要从 replacement identity 中剥离，或在 swapchain image 建立时就显式种下更稳定的 seed layout。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*"` 59/59 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=60 --log-level=trace --log-detail-level=error"`：`Presentation.Output` replacement 只出现在 frame 3-5，之后 60 帧内未再持续出现
+- 2026-07-16：automation screenshot 现在新增了显式的最早触发帧配置：`--screenshot-frame=<N>` / `screenshot.frame`。这次 IBL 回归排查里暴露出的最大误判，其实不是“当前修复没生效”，而是 automation 一直按 `screenshotWarmupFrames + screenshotSettleFrames` 在早期帧抓图，而 `--exit-after-frame=1500` 只决定进程什么时候退出，不会自动把截图延迟到 1500 帧。现在 `AppAutomationOptions`、CLI 和 automation config 都有单独的 screenshot frame gate；当显式设置该 gate 时，它会优先于默认 warmup 语义，日志也会打印真正请求截图的帧号，因此像 environment preprocess、late-frame reflection、pipeline switch settle 这类问题，不再需要靠猜 warmup 语义来判断自动化图是不是可信。
+- 直接收益：固定场景/固定机位的视觉回归验证终于多了一条“截图实际发生在第几帧”的显式证据。后续再做 IBL、skybox、postprocess 或类似需要晚帧稳定的基线时，不会继续把“退出帧已很晚”和“截图也一定在晚帧”混为一谈。
+- 当前停止线：这一步先收的是 screenshot trigger timing contract，还没有把 screenshot copy/readback 本身吸收到 RenderGraph，也没有解决 editor screenshot 与 manual viewport 观察在所有 case 下都必然一致的问题；它只是先把最容易误导调试判断的时间语义收口。
+- 验证结果：
+  - `make b t=HelloMaterial` 待本批统一验证
+  - `make test t=ya r_args="RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*"` 待本批统一验证
+  - `make r t=HelloMaterial r_args="--exit-after-frame=1500 --screenshot-frame=1500 --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"` 待本批统一验证
 - 2026-07-16：`RenderRuntime` 上两条已经没有实际消费者的 raw frame-output getter 也已删除：`getPostprocessOutputImage()` 与 `getActiveViewportImage()`。在前几批把 automation frame context、debug catalog 和 editor viewport 都切到 shared-owner 之后，这两个 raw getter 只剩 declaration/definition，本身不再提供任何独立价值，继续保留只会给后续调用点留下“还能从 runtime 再拿一份裸当前帧输出”的旧逃生口。现在 runtime 对外只保留 shared 版本作为当前帧输出 owner 真相；如果外层真要 raw view，必须在自己持有 owner 的前提下显式派生，而不是再从 runtime 取一份无 owner 背书的裸结果。
 - 直接收益：这一步不改运行时行为，但把 runtime public API 面继续收紧到了我们最近几批已经建立起来的 owner-aware 语义上。后续再审 editor/automation/debug 之外的调用方时，不需要继续区分“shared getter 是新真相，但 runtime 里还有一对历史 raw getter 可以偷偷绕回去”。
 - 当前停止线：这一步只删了当前确认为无消费者的 runtime raw getter，没有扩大到 `IRenderPipelineDebugOutputs` 这类仍承担兼容职责的接口层；后续若要继续删 raw 接口，仍然需要先证明调用面已经真正清空。
@@ -356,7 +384,7 @@
 
 - automation config、viewport resize、pipeline switch、shadow resolution 等 smoke 入口已有测试覆盖
 - `RenderRuntime` presentation pass 已 graph-backed，但 `RenderRuntime::beginFrameCommandBuffer()` 仍然每帧 `waitIdle()`
-- screenshot/readback 仍以手写 `transitionImageLayoutAuto()` + `bufferMemoryBarrier()` 为主，尚未迁到统一 graph copy/readback 工作流
+- screenshot/readback 已迁到统一 graph copy/readback 工作流；剩余未明确的是 swapchain acquire/present 边界，而不是截图拷贝本身
 
 ### 当前最可信的结论
 

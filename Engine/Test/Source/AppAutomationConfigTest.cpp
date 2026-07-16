@@ -114,7 +114,7 @@ TEST_F(AppAutomationConfigTest, LoadConfigDefaultsToStandardAutomationConfigPath
 {
     writeAutomationConfig(DEFAULT_AUTOMATION_CONFIG_PATH,
                           R"({
-  "screenshot": { "target": "editor" },
+  "screenshot": { "target": "editor", "frame": 1500 },
   "profile": {
     "cpu": { "enabled": true, "output": "default.cpu.json" },
     "sessionName": "DefaultSession",
@@ -142,6 +142,7 @@ TEST_F(AppAutomationConfigTest, LoadConfigDefaultsToStandardAutomationConfigPath
     EXPECT_TRUE(appDesc.automation.renderDocCapture);
     EXPECT_EQ(appDesc.renderDocCaptureOutputDir, "Engine/Saved/RenderDocDefault");
     EXPECT_EQ(appDesc.automation.screenshotTarget, EAutomationScreenshotTarget::Editor);
+    EXPECT_EQ(appDesc.automation.screenshotFrameIndex, 1500u);
     ASSERT_TRUE(appDesc.automation.shadow.quality.has_value());
     EXPECT_EQ(*appDesc.automation.shadow.quality, EShadowQuality::High);
     ASSERT_TRUE(appDesc.automation.shadow.directionalEnabled.has_value());

@@ -191,7 +191,6 @@ void RenderRuntime::initSharedRenderResources()
 
 void RenderRuntime::initPresentationResources()
 {
-    _presentationGraphExecutor = _render ? std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory()) : nullptr;
     rebuildPresentationImages();
 
     _render->getSwapchain()->onRecreate.addLambda(
@@ -209,15 +208,18 @@ void RenderRuntime::initPresentationResources()
 
     _deleter.push("ScreenRT", [this](void*)
                   {
-        _presentationGraphExecutor.reset();
+        _presentationGraphExecutors.clear();
         _presentationImages.clear(); });
 }
 
 void RenderRuntime::rebuildPresentationImages()
 {
-    if (_presentationGraphExecutor) {
-        _presentationGraphExecutor->clear();
+    for (auto& executor : _presentationGraphExecutors) {
+        if (executor) {
+            executor->clear();
+        }
     }
+    _presentationGraphExecutors.clear();
 
     _presentationImages.clear();
     if (!_render) {
@@ -227,8 +229,10 @@ void RenderRuntime::rebuildPresentationImages()
     auto* swapchain = _render->getSwapchain() ? _render->getSwapchain()->as<VulkanSwapChain>() : nullptr;
     YA_CORE_ASSERT(swapchain != nullptr, "Presentation resources currently require VulkanSwapChain");
 
+    _presentationGraphExecutors.reserve(swapchain->getImageCount());
     _presentationImages.reserve(swapchain->getImageCount());
     for (uint32_t imageIndex = 0; imageIndex < swapchain->getImageCount(); ++imageIndex) {
+        _presentationGraphExecutors.push_back(std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory()));
         _presentationImages.push_back(createPresentationRenderImage(*_render, *swapchain, imageIndex));
     }
 }

@@ -9,6 +9,8 @@
 #include "Render/2D/Render2D.h"
 #include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
 
+#include <limits>
+
 namespace ya
 {
 
@@ -161,21 +163,26 @@ std::shared_ptr<RenderImage> RenderRuntime::getPresentationImageShared() const
 
 std::shared_ptr<RenderImage> RenderRuntime::getCurrentPresentationImageShared() const
 {
-    if (!_render || _presentationImages.empty()) {
-        return nullptr;
-    }
-
-    auto* swapchain = _render->getSwapchain();
-    if (!swapchain) {
-        return nullptr;
-    }
-
-    const auto imageIndex = swapchain->getCurImageIndex();
+    const auto imageIndex = getCurrentPresentationImageIndex();
     if (imageIndex >= _presentationImages.size()) {
         return nullptr;
     }
 
     return _presentationImages[imageIndex];
+}
+
+uint32_t RenderRuntime::getCurrentPresentationImageIndex() const
+{
+    if (!_render) {
+        return std::numeric_limits<uint32_t>::max();
+    }
+
+    auto* swapchain = _render->getSwapchain();
+    if (!swapchain) {
+        return std::numeric_limits<uint32_t>::max();
+    }
+
+    return swapchain->getCurImageIndex();
 }
 
 bool RenderRuntime::isPostprocessingEnabled() const

@@ -63,6 +63,7 @@ class TestCommandBuffer final : public ICommandBuffer
     void fillBuffer(IBuffer*, uint64_t, uint64_t, uint32_t) override {}
     void bufferMemoryBarrier(IBuffer*, EPipelineStage::T, EPipelineStage::T, EResourceAccess::T, EResourceAccess::T, uint64_t = 0, uint64_t = 0) override {}
     void copyBufferToImage(IBuffer*, IImage*, EImageLayout::T, const std::vector<BufferImageCopy>&) override {}
+    void copyImageToBuffer(IImage*, EImageLayout::T, IBuffer*, const std::vector<BufferImageCopy>&) override {}
     void copyImage(IImage*, EImageLayout::T, IImage*, EImageLayout::T, const std::vector<ImageCopy>&) override {}
     void beginRendering(const RenderingInfo&) override {}
     void endRendering(const RenderingInfo& = {}) override {}

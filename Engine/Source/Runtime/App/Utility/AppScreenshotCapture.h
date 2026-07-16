@@ -15,6 +15,7 @@ enum class EAutomationScreenshotTarget : uint8_t;
 struct ICommandBuffer;
 struct OffscreenJobQueueService;
 struct OffscreenJobState;
+struct RenderGraphExecutor;
 struct RenderImage;
 struct Texture;
 
@@ -23,6 +24,7 @@ struct AppScreenshotCaptureState
     std::string                        outputPath;
     std::shared_ptr<IBuffer>           readbackBuffer;
     std::shared_ptr<OffscreenJobState> pendingJob;
+    std::shared_ptr<RenderGraphExecutor> copyExecutor;
     std::shared_ptr<RenderImage>       presentationSourceImage;
     uint32_t                           width                         = 0;
     uint32_t                           height                        = 0;

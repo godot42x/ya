@@ -118,6 +118,8 @@ void loadScreenshotAutomationOverrides(AppDesc& appDesc)
             YA_CORE_WARN("Ignoring invalid automation screenshot target override: {}", screenshotTargetText);
         }
     }
+
+    configManager.tryGet<uint64_t>(AUTOMATION_CONFIG_DOC_NAME, "screenshot.frame", appDesc.automation.screenshotFrameIndex);
 }
 
 void loadRenderDocAutomationOverrides(AppDesc& appDesc)
@@ -278,9 +280,16 @@ bool isAutomationStableFrameReady(App& app)
     }
 
     const AppAutomationOptions& automation = app.getDesc().automation;
-    ++runtimeState.warmupFrames;
-    if (runtimeState.warmupFrames <= automation.screenshotWarmupFrames) {
+    if (automation.screenshotFrameIndex > 0 && app.getFrameIndex() < automation.screenshotFrameIndex) {
+        runtimeState.stableFrames = 0;
         return false;
+    }
+
+    if (automation.screenshotFrameIndex == 0) {
+        ++runtimeState.warmupFrames;
+        if (runtimeState.warmupFrames <= automation.screenshotWarmupFrames) {
+            return false;
+        }
     }
 
     if (!isSceneStableForAutomation(*activeScene)) {
@@ -325,7 +334,8 @@ bool handleScreenshotAutomation(App& app, const AppAutomationFrameContext& frame
                                                                       automation.screenshotTarget);
     if (runtimeState.bScreenshotRequested) {
         const uint64_t settleFrames = automation.screenshotSettleFrames > 0 ? automation.screenshotSettleFrames : 1;
-        YA_CORE_INFO("Automation requested screenshot after {} warmup frames and {} stable frames: {}",
+        YA_CORE_INFO("Automation requested screenshot at frame {} after {} warmup frames and {} stable frames: {}",
+                     frameContext.frameIndex,
                      automation.screenshotWarmupFrames,
                      settleFrames,
                      *automation.screenshotPath);

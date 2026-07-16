@@ -187,6 +187,9 @@ class VulkanCommandBuffer : public ICommandBuffer
     void dispatchIndirect(IBuffer* buffer, uint64_t offset = 0) override;
     void copyBufferToImage(IBuffer* srcBuffer, IImage* dstImage, EImageLayout::T dstImageLayout,
                            const std::vector<BufferImageCopy>& regions) override;
+    void copyImageToBuffer(IImage* srcImage, EImageLayout::T srcImageLayout,
+                           IBuffer* dstBuffer,
+                           const std::vector<BufferImageCopy>& regions) override;
     void copyImage(IImage* srcImage, EImageLayout::T srcImageLayout,
                    IImage* dstImage, EImageLayout::T dstImageLayout,
                    const std::vector<ImageCopy>& regions) override;
