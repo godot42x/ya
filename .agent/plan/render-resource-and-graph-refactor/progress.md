@@ -23,6 +23,10 @@
 
 ## 最新验证
 
+- 2026-07-16：editor 的 “New Scene” 路径也补上了和 lifecycle 同步的 owner 边界语义。此前 `EditorLayer` 里 File -> New Scene 会在 frame task 中无条件 `render->waitIdle()`，然后直接 `SceneManager::setEditorScene(scene)`；这和前面已经收紧过的 `AppLifecycle::loadScene()/unloadScene()` 不一致，意味着当当前根本没有 scene 时，编辑器里新建空场景仍会先做一次空转全局等待。现在这条路径只在 `SceneManager::hasScene()` 为真时才 quiesce render；真正替换现有 editor scene 的 New Scene 仍保留等待，而“当前没有 scene”的新建请求则不再多等一次。
+- 直接收益：这一步继续沿着当前高优先级的 lifecycle / runtime owner 边界往下压，而不是扩散到新的系统设计。editor 侧最常见的一条 scene replacement 入口现在终于和 app lifecycle 主路径对齐，不再因为旁路实现而把已经收掉的空转等待重新带回来。
+- 当前停止线：这次没有把 editor 所有 scene 操作都重写成统一走 `AppLifecycle`，也没有改 `SceneManager::setEditorScene()` 本身的生命周期协议；它只修正了 New Scene 这一条显式旁路入口上的无条件等待。
+
 - 2026-07-16：startup scene 入口也顺手补掉了一处会污染 runtime/shutdown 验证的空路径缝隙。此前 `AppLifecycle::init()` 会无条件 `loadScene(app, resolveStartupScenePath(app._ci))`，而 `AppLifecycle::loadScene()` 对空字符串没有特殊处理，于是 `--scene=` 或空默认 scene 配置会先尝试读取空路径，再由 `SceneManager` 打出 load failure 并 fallback 到 empty scene。现在 init 只在 startup scene path 非空时才触发加载，同时 `AppLifecycle::loadScene()` 也会把空路径视为 no-op；并补了 `AppLifecycleTest.LoadSceneIgnoresEmptyPathWithoutCreatingFallbackScene` 锁住“无 scene 启动/切换”不应制造伪失败日志或隐式空场景替换。
 - 直接收益：这一步虽然很小，但它直接服务于当前高优先级的 startup/runtime/shutdown 主线。后续再验证 “无 scene 退出是否保持正确 idle contract” 时，不需要先吞一段和真正问题无关的 scene parse 错误；automation / smoke 里显式要求空 scene 也终于有了干净语义。
 - 当前停止线：这次没有改 `SceneManager::loadScene()` 自己对非法非空路径的 fallback 行为，也没有把 scene startup policy 扩展成新的配置选项；它只把“空路径就是不加载 scene”这个最低限度 contract 补回入口层。

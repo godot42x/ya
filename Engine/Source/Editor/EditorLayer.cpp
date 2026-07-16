@@ -365,11 +365,21 @@ void EditorLayer::menuBar()
         {
             // TODO: New scene
             App::get()->taskManager.registerFrameTask([]() {
-                if (auto* render = App::get()->getRender()) {
-                    render->waitIdle();
+                auto* app = App::get();
+                if (!app) {
+                    return;
+                }
+
+                auto* sceneManager = app->getSceneManager();
+                if (sceneManager && sceneManager->hasScene()) {
+                    if (auto* render = app->getRender()) {
+                        render->waitIdle();
+                    }
                 }
                 auto scene = makeShared<Scene>();
-                App::get()->getSceneManager()->setEditorScene(scene);
+                if (sceneManager) {
+                    sceneManager->setEditorScene(scene);
+                }
             });
         }
         if (ImGui::MenuItem("Open Scene", "Ctrl+O"))
