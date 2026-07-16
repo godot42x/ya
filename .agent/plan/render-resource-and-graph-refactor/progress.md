@@ -23,6 +23,10 @@
 
 ## 最新验证
 
+- 2026-07-16：startup scene 入口也顺手补掉了一处会污染 runtime/shutdown 验证的空路径缝隙。此前 `AppLifecycle::init()` 会无条件 `loadScene(app, resolveStartupScenePath(app._ci))`，而 `AppLifecycle::loadScene()` 对空字符串没有特殊处理，于是 `--scene=` 或空默认 scene 配置会先尝试读取空路径，再由 `SceneManager` 打出 load failure 并 fallback 到 empty scene。现在 init 只在 startup scene path 非空时才触发加载，同时 `AppLifecycle::loadScene()` 也会把空路径视为 no-op；并补了 `AppLifecycleTest.LoadSceneIgnoresEmptyPathWithoutCreatingFallbackScene` 锁住“无 scene 启动/切换”不应制造伪失败日志或隐式空场景替换。
+- 直接收益：这一步虽然很小，但它直接服务于当前高优先级的 startup/runtime/shutdown 主线。后续再验证 “无 scene 退出是否保持正确 idle contract” 时，不需要先吞一段和真正问题无关的 scene parse 错误；automation / smoke 里显式要求空 scene 也终于有了干净语义。
+- 当前停止线：这次没有改 `SceneManager::loadScene()` 自己对非法非空路径的 fallback 行为，也没有把 scene startup policy 扩展成新的配置选项；它只把“空路径就是不加载 scene”这个最低限度 contract 补回入口层。
+
 - 2026-07-16：app 退出链上的 render-idle 前提又补实了一步。此前 `AppLifecycle::quit()` 会先调用 `unloadScene(app)`，然后无条件走 `RenderRuntime::shutdown(/*bRenderAlreadyIdle=*/true)`；但我们前面已经把 `AppLifecycle::unloadScene()` 收紧成“仅当前确实有 scene 时才 `waitIdle()`”。这意味着在“当前根本没有 scene”的退出路径上，quit 仍会假定 render 已经 idle，并跳过 runtime shutdown 自己的等待。现在 quit 会先记录退出前是否真的持有 scene；若没有 scene，便在清理 app-level deleter 与 runtime shutdown fast-path 之前显式 `waitIdle()`，从而把 `shutdown(true)` 的前提重新补回代码现实。
 - 直接收益：这一步继续命中 `shutdown 无 validation/lifetime error` 和 runtime/shutdown consistency 主线，而不是去做一层外围整理。退出路径现在不再依赖“unloadScene 总会先 quiesce render”这个已经失效的旧前提；无 scene 退出也会在销毁 editor/system/runtime 相关 owner 前先把 GPU 工作停稳。
 - 当前停止线：这次没有改 `RenderRuntime::shutdownRuntimeServices()` 的默认等待语义，也没有扩大到 scene load / pipeline switch / play-mode teardown 的更细 fence/retirement contract；它只修正了 quit fast-path 对上游 idle 前提的错误复用。

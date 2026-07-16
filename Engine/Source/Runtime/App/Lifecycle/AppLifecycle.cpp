@@ -293,7 +293,10 @@ void AppLifecycle::init(App& app, AppDesc ci)
         app.onPostInit();
     }
 
-    loadScene(app, resolveStartupScenePath(app._ci));
+    const std::string startupScenePath = resolveStartupScenePath(app._ci);
+    if (!startupScenePath.empty()) {
+        loadScene(app, startupScenePath);
+    }
 
     glm::vec3 editorCameraPosition = glm::vec3(0.0f, 0.0f, 5.0f);
     glm::vec3 editorCameraRotation = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -414,6 +417,10 @@ void AppLifecycle::quit(App& app)
 
 bool AppLifecycle::loadScene(App& app, const std::string& path)
 {
+    if (path.empty()) {
+        return false;
+    }
+
     const bool bHasCurrentScene = app._sceneManager && app._sceneManager->hasScene();
     bool bWaitedForModeTransition = false;
     switch (app._appState) {
