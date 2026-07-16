@@ -12,17 +12,58 @@
 
 ## 当前阻塞
 
-- offscreen/environment preprocess 已恢复到稳定的 direct dynamic-rendering execute 路径，但 imported subresource range、submit-time 生命周期与后续是否重新 shared-executor 化，仍需继续验证
+- offscreen/environment preprocess 的执行模型已经做过代码核查：当前保持独立 offscreen scheduler + direct execute 更合理；剩余风险集中在 imported subresource range、submit-time 生命周期与 runtime state/source-result 边界，而不是“要不要并进 shared executor”
 - graph registry replacement 已可用，但还需要继续压实与 runtime frame boundary、deferred deletion 和 startup/shutdown 的一致性
 
 ## 下一步
 
-1. 继续压实 graph registry replacement / shutdown / deferred deletion 一致性，重点转向 Deferred/environment replacement，而不是已收口的 presentation imported contract
-2. 在外围验证链可信之后，再推进 Forward graph 和剩余 compatibility adapter 清理；其中 `删除 Forward dirty render target refresh` 目前不要按“空 compat 清理”思路硬切，因为现状调查显示它仍真实承担 viewport resize、RT Editor 格式修改、shadow 资源重建后的 stage pipeline format 刷新与 owner 重建
-3. 若 replacement/ownership 信号继续稳定，再回头评估 environment preprocess 是独立 graph 还是 shared executor
+1. `Phase 10 / 删除剩余 compatibility adapter` 先不要再机械删 `cubemapTexture` 字段；当前代码调查显示，scene query contract、provider compat wrapper cache、derived preprocess 输入、derived output compat texture、scene skybox 依赖路径下的重复 source cache 已经收掉，而剩余 `cubemapTexture` 主要承载 cubemap asset source / scene skybox texture source / cylindrical source preview 等真实 texture 语义
+2. 下一优先级应改为判断 skybox/environment 是否需要再拆一层明确的 source/result state 边界；只有当这层边界能带来真实 owner/adapter 收缩时，才继续动 `cubemapTexture`，否则就应把 `Phase 10` 的停止线视为已接近收口
+3. 若后续继续动 environment preprocess，本轮优先级应放在 job 内部资源/状态 contract 或 dedicated graph execute 收口，而不是把 `OffscreenTaskService` 并进 Deferred/Postprocess 共用的 shared executor
 
 ## 最新验证
 
+- 2026-07-16：`Phase 10 / 评估 environment preprocess 使用独立 graph 还是 shared executor` 已完成一轮代码核查。当前结论是：environment preprocess 继续保留独立 offscreen scheduler 更符合现有执行模型，不并入 Deferred/Postprocess/BRDF LUT 那类 caller-owned shared `RenderGraphExecutor`。
+- 代码依据：
+  - `AppFrameLoop::tickRender()` 会在主渲染提取前先调用 `renderRuntime->getOffscreenTaskService().tick(app)`；`OffscreenTaskService` 自己持有独立 command buffer、独立 fence，并在每帧先等待上一次 offscreen submit 完成，再录制/提交本帧队列中的 offscreen job。
+  - `ResourceResolveSystem` 的 skybox/environment source、irradiance、prefilter 分支都只是在状态机里创建 `OffscreenJobState`，并在 `Pending` 阶段通过 `detail::tryQueueJob()` 交给 `OffscreenJobRunner`；真正 GPU 完成、失败与结果接管都按 job phase 跨帧回收，不是调用点同步 `prepare/execute` 一次 graph 就立刻得到结果。
+  - 三条 preprocess pipeline `EquidistantCylindrical2CubeMap`、`CubeMap2PBRIrradianceMap`、`CubeMap2PBRPrefilteredEnv` 当前仍直接面向 `ICommandBuffer` 录制：它们自己创建 transient descriptor pool / subresource view，手工做 `transitionImageLayoutAuto()`，并直接 `beginRendering()/endRendering()`；文件虽 include 了 `RenderGraphExecutor`，但当前执行路径并没有真正构图并走 executor。
+  - 对比之下，`DeferredRenderPipeline`、`PostProcessingStage`、`PBRGenerateBrdfLUT` 的 shared executor 都是调用点同步构建 graph、立即 `prepare/execute`、随后直接从 executor registry 解析结果；它们不承担 offscreen job queue、独立 fence 和跨帧 phase 跟踪。
+- 直接收益：这次把 `Phase 10` 里“评估 environment preprocess 使用独立 graph 还是 shared executor”从开放问题收成了有代码依据的结论，后面不会再为了“是不是应该统一成 shared executor”反复绕回调度层。现在更合理的下一步，是继续判断 source/result state 是否还值得再拆，或只在 job 内部逐步收敛 dedicated graph execute，而不是把 offscreen scheduler 的 owner/submit 边界和主渲染 executor 混成一层。
+- 当前停止线：这不是说 environment preprocess 永远不能 graph 化；只是当前最合理的 graph 化粒度是“保留 graph 外 offscreen scheduler，再看单个 job 内部是否值得 dedicated graph execute”，而不是现在就把 `OffscreenTaskService`、job queue 和 Deferred/Postprocess 的 shared executor 合并成同一种运行时语义。
+- 对应计划：
+  - `todo.md`：`Phase 10 -> 评估 environment preprocess 使用独立 graph 还是 shared executor`
+  - `plan.md`：`Phase 10 -> 外围 GPU 工作流迁移`
+- 2026-07-16：`Phase 10 / 删除剩余 compatibility adapter` 继续往 scene-skybox 依赖路径里收了一层重复缓存：当 environment source 使用 `SceneSkybox` 时，environment runtime state 不再把 skybox 的 cubemap owner/texture 再复制进自己的 `cubemapRenderImage/cubemapTexture` 作为一份本地真相，而是直接把 scene skybox 当作 source dependency 来消费。derived preprocess dirty 分支现在会按 `usesSceneSkybox()` 直接解析 source resource；preview 查询也会在这个路径下直接回到 scene skybox 的 preview/image/view，而不是先要求 environment state 里再维护一份镜像缓存。
+- 直接收益：这一步删掉的是 `SceneSkybox -> EnvironmentLighting` 之间一块真正的重复 owner/compat cache，而不是改字段名字。现在 environment 在依赖 scene skybox 时，不再同时维护“scene skybox 真相 + environment 本地拷贝真相”两份 source cubemap 语义；这让剩下的 `cubemapTexture` 更清楚地收敛到本地 cubemap asset source 这类真实 source 场景。
+- 当前停止线：这一步没有删除 `cubemapTexture` 本身，因为 cubemap asset source 和本地 cubemap-from-files 这类路径仍真实需要 texture 语义；它删掉的是 scene skybox 依赖路径下的重复缓存，而不是把所有 source cubemap 表达统一硬改成单类型。
+- 对应计划：
+  - `todo.md`：`Phase 10 -> 删除剩余 compatibility adapter`
+  - `plan.md`：`Phase 10 -> 删除剩余 compatibility adapter`
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/drop-scene-skybox-env-duplication.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/drop-scene-skybox-env-duplication.png` 已生成
+- 2026-07-16：`Phase 10 / 删除剩余 compatibility adapter` 又删掉了一块已经变成纯残留的 runtime-state compat surface：`EnvironmentLightingRuntimeState::irradianceTexture` 和 `prefilterTexture` 已经不再承担真实数据来源，它们既没有新的赋值路径，也不会在 derived preprocess 完成后继续作为 owner 真相存在；现在这两个字段及其对应的判空、retire、preview/view rebuild fallback 都已经移除，irradiance / prefilter 的 runtime state 明确只以 owner-backed `RenderImage` 作为结果真相。
+- 直接收益：这一步不是 helper 整理，而是把 environment derived outputs 在 runtime state 里的双轨表达进一步缩成单轨 owner 真相。结合前一刀 owner-first preprocess 输入，这条链从 source ready -> queue derived preprocess -> derived result ready，已经不再需要靠 `irradianceTexture/prefilterTexture` 这类 state-level compat 字段来兜底。
+- 当前停止线：这一步没有删除 `cubemapTexture`，因为 environment source 仍然需要覆盖 cubemap asset source 与 scene skybox texture source 两类真实 texture 语义；当前删除的是已经失去赋值与消费必要性的 derived-output compat 字段，而不是把所有 environment runtime texture 成员一刀切掉。
+- 对应计划：
+  - `todo.md`：`Phase 10 -> 删除剩余 compatibility adapter`
+  - `plan.md`：`Phase 10 -> 删除剩余 compatibility adapter`
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/remove-env-derived-compat-textures.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/remove-env-derived-compat-textures.png` 已生成
+- 2026-07-16：`Phase 10 / 删除剩余 compatibility adapter` 继续往 environment preprocess 内部推进了一刀：irradiance / prefilter job 的输入不再把 `state.cubemapTexture` 当成默认主入口，而是统一走 image-backed `ImageResourceRef`。这意味着 source cubemap 一旦已经 owner-backed 落成 `RenderImage`，后续 derived preprocess job 会优先沿 owner 语义继续消费；只有确实来自 texture 资产语义的路径，才通过同一个 resource ref 落到 texture fallback。这样 preprocess 内部不再要求调用方自己拆开 `renderImage + texture` 再传两套参数，而是让 job 边界直接接受统一资源语义。
+- 直接收益：这一步删掉的是 environment derived preprocess 这条链内部还残留的一块 compat-style 输入 contract，而不是只改 scene query 或 descriptor consumer。现在从 source cubemap ready 到 irradiance / prefilter queue 之间，owner-first 语义终于能继续往下传，不需要先判断“这里是不是必须从 `cubemapTexture` 进入 job”。
+- 当前停止线：这一步没有删除 `EnvironmentLightingRuntimeState` / `SkyboxRuntimeState` 里仍保留的 texture 成员，因为它们对 cubemap asset source、source preview 和某些 pending 状态仍有真实语义；它只把 derived preprocess job 的输入 contract 从 texture-first 收紧成统一 image-backed resource。
+- 对应计划：
+  - `todo.md`：`Phase 10 -> 删除剩余 compatibility adapter`
+  - `plan.md`：`Phase 10 -> 删除剩余 compatibility adapter`
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/owner-first-env-preprocess-input.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/owner-first-env-preprocess-input.png` 已生成
 - 2026-07-16：`Phase 10 / 删除剩余 compatibility adapter` 又继续往 scene query contract 里收了一层：resolver / provider / Deferred graph import 之间关于 skybox / environment cubemap、irradiance、prefilter 的传递，不再使用并行的 `renderImage + texture` 裸字段约定，而是统一收成一份 image-backed resource contract。新的 `ImageResourceRef` 明确表达“这是一份渲染可消费的 image 资源，背后可以是 owner-backed `RenderImage`，也可以是资产语义的 `Texture`”；provider 直接取 view 写 descriptor，Deferred graph import 则通过新的 import helper 重载继续保住 retained resource 语义，不再让每一层 consumer 自己重复分辨两套字段。
 - 直接收益：这一步删掉的是 resolver -> provider -> Deferred 之间还残留的一整块 compatibility-style query surface，而不是再做一层局部 helper。现在同一类 scene lighting 资源跨 query / descriptor / graph import 的主语义已经统一成“image-backed resource”，后面继续评估还剩哪些 compat adapter 时，不需要再反复处理 skybox/environment 这条链上的平行字段 contract。
 - 当前停止线：这一步没有删除 runtime state 内部仍保留的 `Texture` 成员——那些对 cubemap asset source、cylindrical source preview 或 offscreen job 输入仍然有真实语义；它删掉的是 scene query 和 render consumer 边界上的 compat contract，而不是强行把所有 environment/s​​kybox 运行时状态一次性全改成单类型。

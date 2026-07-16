@@ -62,10 +62,8 @@ struct EnvironmentLightingRuntimeState
     stdptr<Texture>                                           cubemapTexture               = nullptr;
     std::array<stdptr<IImageView>, CubeFace_Count>            cubemapFacePreviewViews{};
     std::shared_ptr<RenderImage>                              irradianceRenderImage        = nullptr;
-    stdptr<Texture>                                           irradianceTexture            = nullptr;
     std::array<stdptr<IImageView>, CubeFace_Count>            irradianceFacePreviewViews{};
     std::shared_ptr<RenderImage>                              prefilterRenderImage         = nullptr;
-    stdptr<Texture>                                           prefilterTexture             = nullptr;
     std::array<std::array<stdptr<IImageView>, CubeFace_Count>, MAX_PREFILTER_PREVIEW_MIPS> prefilterMipFacePreviewViews{};
     uint32_t                                                  prefilterPreviewMipCount     = 0;
     std::shared_ptr<EnvironmentLightingPendingBatchLoadState> pendingBatchLoad;
@@ -82,14 +80,12 @@ struct EnvironmentLightingRuntimeState
 
     [[nodiscard]] bool hasIrradianceMap() const
     {
-        return (irradianceRenderImage && irradianceRenderImage->isValid()) ||
-               (irradianceTexture && irradianceTexture->getImageView());
+        return irradianceRenderImage && irradianceRenderImage->isValid();
     }
 
     [[nodiscard]] bool hasPrefilterMap() const
     {
-        return (prefilterRenderImage && prefilterRenderImage->isValid()) ||
-               (prefilterTexture && prefilterTexture->getImageView());
+        return prefilterRenderImage && prefilterRenderImage->isValid();
     }
 };
 

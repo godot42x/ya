@@ -312,7 +312,8 @@
 
 ## Phase 10: 外围 GPU 工作流迁移
 
-- [ ] 评估 environment preprocess 使用独立 graph 还是 shared executor
+- [x] 评估 environment preprocess 使用独立 graph 还是 shared executor
+  - 2026-07-16 代码结论：当前保持 `ResourceResolveSystem -> OffscreenJobRunner -> OffscreenTaskService` 的独立 offscreen 调度更合理，不并入 Deferred/Postprocess 那类 caller-owned shared `RenderGraphExecutor`。原因是 offscreen preprocess 现在由 `AppFrameLoop` 在主渲染前单独 `tick()`、单独 fence/submit、按 job 生命周期跨帧完成；其三条 preprocess pipeline 仍直接面向 `ICommandBuffer` 录制 dynamic rendering 与手工 subresource transition，而不是像 Deferred/BRDF LUT/postprocess 那样在调用点同步构图并立即执行 graph。后续若继续推进，应优先考虑 source/result state 边界或把 offscreen job 内部收成 dedicated graph execute，而不是把 scheduler/owner 语义混进现有 shared executor。
 - [x] 迁移 cylindrical-to-cubemap
 - [x] 迁移 irradiance map
 - [x] 迁移 prefiltered environment map
@@ -320,6 +321,7 @@
 - [x] 迁移 screenshot copy/readback
 - [x] 明确 swapchain acquire/present graph 外边界
 - [ ] 删除剩余 compatibility adapter
+  - 2026-07-16 调查停止线：scene query contract、provider compat wrapper cache、derived preprocess 输入、derived output compat texture、scene skybox 依赖路径下的重复 source cache 已清理；剩余 `cubemapTexture` 主要承载 cubemap asset source / scene skybox texture source / cylindrical source preview 等真实 texture 语义。继续推进前应优先判断是否需要 source/result state 拆分，而不是机械删字段。
 
 完成标准：
 

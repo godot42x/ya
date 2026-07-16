@@ -229,12 +229,10 @@ EnvironmentLightingSceneResources ResourceResolveSystem::resolveSceneEnvironment
 
         if (!resources.irradiance.isValid() && elc.hasReadyIrradiance() && state->hasIrradianceMap()) {
             resources.irradiance.renderImage = state->irradianceRenderImage;
-            resources.irradiance.texture     = state->irradianceTexture;
         }
 
         if (!resources.prefilter.isValid() && elc.hasReadyPrefilter() && state->hasPrefilterMap()) {
             resources.prefilter.renderImage = state->prefilterRenderImage;
-            resources.prefilter.texture     = state->prefilterTexture;
         }
 
         if (resources.cubemap.isValid() && resources.irradiance.isValid() && resources.prefilter.isValid()) {
@@ -275,19 +273,40 @@ EnvironmentLightingPreviewInfo ResourceResolveSystem::getEnvironmentLightingPrev
         return info;
     }
 
-    info.cubemapRenderImage    = state->cubemapRenderImage;
-    info.cubemapImage          = detail::getImageShared(state->cubemapRenderImage, state->cubemapTexture);
+    const EnvironmentLightingComponent* component = nullptr;
+    const SkyboxRuntimeState*           sceneSkyboxState = nullptr;
+    if (_pendingStateScene) {
+        auto& registry = _pendingStateScene->getRegistry();
+        if (registry.valid(entity) && registry.all_of<EnvironmentLightingComponent>(entity)) {
+            component = &registry.get<EnvironmentLightingComponent>(entity);
+            if (component->usesSceneSkybox()) {
+                sceneSkyboxState = findFirstSceneSkyboxState(_pendingStateScene);
+            }
+        }
+    }
+
+    const bool bUseSceneSkyboxSource = component && component->usesSceneSkybox() &&
+                                       sceneSkyboxState && sceneSkyboxState->hasRenderableCubemap();
+    const auto cubemapRenderImage = bUseSceneSkyboxSource ? sceneSkyboxState->cubemapRenderImage : state->cubemapRenderImage;
+    const auto cubemapImage = bUseSceneSkyboxSource
+        ? detail::getImageShared(sceneSkyboxState->cubemapRenderImage, sceneSkyboxState->cubemapTexture)
+        : detail::getImageShared(state->cubemapRenderImage, state->cubemapTexture);
+
+    info.cubemapRenderImage    = cubemapRenderImage;
+    info.cubemapImage          = cubemapImage;
     info.irradianceRenderImage = state->irradianceRenderImage;
-    info.irradianceImage       = detail::getImageShared(state->irradianceRenderImage, state->irradianceTexture);
+    info.irradianceImage       = state->irradianceRenderImage ? state->irradianceRenderImage->getImageShared() : nullptr;
     info.prefilterRenderImage  = state->prefilterRenderImage;
-    info.prefilterImage        = detail::getImageShared(state->prefilterRenderImage, state->prefilterTexture);
+    info.prefilterImage        = state->prefilterRenderImage ? state->prefilterRenderImage->getImageShared() : nullptr;
     info.prefilterMipCount     = state->prefilterPreviewMipCount;
-    info.bHasRenderableCubemap = state->hasRenderableCubemap();
+    info.bHasRenderableCubemap = bUseSceneSkyboxSource ? sceneSkyboxState->hasRenderableCubemap() : state->hasRenderableCubemap();
     info.bHasIrradianceMap     = state->hasIrradianceMap();
     info.bHasPrefilterMap      = state->hasPrefilterMap();
 
     for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
-        info.cubemapFaceViews[faceIndex]    = state->cubemapFacePreviewViews[faceIndex].get();
+        info.cubemapFaceViews[faceIndex]    = bUseSceneSkyboxSource
+            ? sceneSkyboxState->cubemapFacePreviewViews[faceIndex].get()
+            : state->cubemapFacePreviewViews[faceIndex].get();
         info.irradianceFaceViews[faceIndex] = state->irradianceFacePreviewViews[faceIndex].get();
     }
 

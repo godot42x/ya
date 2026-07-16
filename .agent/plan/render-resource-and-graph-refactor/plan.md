@@ -445,6 +445,8 @@ ECS extraction、material upload、ImGui 和 presentation orchestration 仍在 g
 - 明确 swapchain acquire/present 与 offscreen scheduler 的 graph 外边界
 - 删除剩余 compatibility adapter
 
+2026-07-16 调查结论：environment preprocess 当前应继续保留独立 offscreen scheduler；它与 Deferred/Postprocess 使用的 shared `RenderGraphExecutor` 在 submit 边界、跨帧 job 生命周期和 `ICommandBuffer` 录制模型上并不相同，本阶段不把两者混成一套 owner/executor 语义。
+
 ### Phase 11: Editor Render Extension API
 
 - 定义固定扩展点和 `IRenderExtension` 生命周期
