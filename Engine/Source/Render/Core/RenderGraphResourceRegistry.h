@@ -48,6 +48,7 @@ class RenderGraphResourceRegistry
     explicit RenderGraphResourceRegistry(IRenderResourceFactory& factory)
         : _factory(factory)
     {}
+    ~RenderGraphResourceRegistry();
 
     void sync(const RenderGraph& graph);
     void clear();

@@ -86,6 +86,11 @@ void retireSharedResource(std::shared_ptr<T>& resource)
 
 } // namespace
 
+RenderGraphResourceRegistry::~RenderGraphResourceRegistry()
+{
+    clear();
+}
+
 RenderImageDesc RenderGraphResourceRegistry::makeRenderImageDesc(const RGTextureDesc& desc)
 {
     return RenderImageDesc{

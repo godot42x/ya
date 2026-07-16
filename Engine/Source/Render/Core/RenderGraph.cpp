@@ -259,7 +259,11 @@ const RGBufferDesc& RGRenderContext::getBufferDesc(RGBufferHandle handle) const
 
 const RenderImage* RGRenderContext::resolveTexture(RGTextureHandle handle) const
 {
-    return _registry.resolveTexture(handle);
+    const auto* texture = _registry.resolveTexture(handle);
+    if (texture) {
+        retainResolvedRenderImage(_cmdBuf, *texture);
+    }
+    return texture;
 }
 
 IBuffer* RGRenderContext::resolveBuffer(RGBufferHandle handle) const
