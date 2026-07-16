@@ -260,18 +260,21 @@ void RenderRuntime::initFrameServices()
 
 void RenderRuntime::shutdown(bool bRenderAlreadyIdle)
 {
-    shutdownRuntimeServices(bRenderAlreadyIdle);
+    if (_render && !bRenderAlreadyIdle) {
+        _render->waitIdle();
+    }
+
     shutdownActivePipeline();
     getDebugRenderSystem().destroy();
+    shutdownRuntimeServices();
     _deleter.clear();
     destroyRenderBackend();
 }
 
-void RenderRuntime::shutdownRuntimeServices(bool bRenderAlreadyIdle)
+void RenderRuntime::shutdownRuntimeServices()
 {
-    if (_render && !bRenderAlreadyIdle) {
-        _render->waitIdle();
-    }
+    YA_CORE_ASSERT(_forwardPipeline == nullptr && _deferredPipeline == nullptr,
+                   "shutdownRuntimeServices requires active pipelines to be torn down first");
 
     ImGuiManager::get().shutdown();
     ResourceRegistry::get().clearAll();

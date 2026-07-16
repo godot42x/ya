@@ -208,7 +208,7 @@ struct RenderRuntime
     void                   rebuildPresentationImages();
     void                   initCommandResources();
     void                   initFrameServices();
-    void                   shutdownRuntimeServices(bool bRenderAlreadyIdle = false);
+    void                   shutdownRuntimeServices();
     void                   destroyRenderBackend();
     bool                   prepareFrame(const FrameInput& input, int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf);

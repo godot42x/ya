@@ -28,13 +28,13 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     YA_PROFILE_SCOPE("RenderRuntime::renderFrame");
     YA_PERF_SCOPE(perf::sample::renderRuntime(), perf::metric::cpuTimeMs(), perf::domain::render());
 
-    applyPendingRenderPipelineSwitch();
-
     int32_t                         imageIndex = -1;
     std::shared_ptr<ICommandBuffer> cmdBuf;
     if (!prepareFrame(input, imageIndex, cmdBuf)) {
         return;
     }
+
+    applyPendingRenderPipelineSwitch();
 
     {
         YA_PERF_SCOPE(perf::sample::renderWorld(), perf::metric::cpuTimeMs(), perf::domain::render());
@@ -388,8 +388,6 @@ void RenderRuntime::applyPendingRenderPipelineSwitch()
     YA_CORE_INFO("Switching render pipeline: {} -> {}",
                  _renderPipeline == ERenderPipeline::Forward ? "Forward" : "Deferred",
                  _pendingRenderPipeline == ERenderPipeline::Forward ? "Forward" : "Deferred");
-
-    _render->waitIdle();
 
     shutdownActivePipeline();
     _renderPipeline = _pendingRenderPipeline;
