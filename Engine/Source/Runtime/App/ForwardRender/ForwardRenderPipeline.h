@@ -140,7 +140,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
 
     [[nodiscard]] bool           isShadowMappingEnabled() const override;
     [[nodiscard]] std::shared_ptr<IImage> getShadowDepthImage() const override { return _shadowResources.depthImage; }
-    [[nodiscard]] Texture*       getViewportDepthTexture() const override { return _viewportResources.depth; }
+    [[nodiscard]] std::shared_ptr<RenderImage> getViewportDepthImageShared() const override { return _viewportResources.depthOwner; }
     [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override;
     [[nodiscard]] bool           isPostprocessingEnabled() const override { return _postProcessStage.isEnabled(); }

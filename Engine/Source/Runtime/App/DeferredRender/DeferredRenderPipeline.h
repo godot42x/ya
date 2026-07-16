@@ -119,7 +119,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     ShadowMapResources                                              _shadowResources;
 
     stdptr<Texture> _viewportTextureCompat;
-    stdptr<Texture> _viewportDepthTextureCompat;
     bool     _bReverseViewportY    = true;
     bool     _bEnableSSAO          = true;
 
@@ -196,10 +195,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     bool setRenderTargetColorFormat(RenderTargetEditorCatalog::Entry::EOwner owner, uint32_t attachmentIndex, EFormat::T format) override;
 
     std::shared_ptr<IImage> getShadowDepthImage() const override { return _shadowResources.depthImage; }
-    Texture*       getViewportDepthTexture() const override
-    {
-        return _viewportDepthTextureCompat.get();
-    }
+    std::shared_ptr<RenderImage> getViewportDepthImageShared() const override { return _currentViewportResources.depthOwner; }
     bool           isShadowMappingEnabled() const override;
     IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override

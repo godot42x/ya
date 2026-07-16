@@ -23,6 +23,13 @@
 
 ## 最新验证
 
+- 2026-07-16：viewport depth debug 输出这条公共观察链现在也开始直接携带 shared owner，而不再通过 `Texture*` compat 暴露。此前 `IRenderPipelineDebugOutputs` / `RenderPipelineDebugOutputCatalog` 仍把 viewport depth 定义成 `Texture*`，Forward 从 `depthCompat`、Deferred 从 `_viewportDepthTextureCompat` 往外给 editor debug；这让主路径里已经存在的 `depthOwner` / `DeferredViewportResources.depthOwner` 在 debug export 边界又掉回了一次 compat texture。现在公共 debug 输出协议统一改成 `getViewportDepthImageShared()`，Forward / Deferred 都直接返回 depth owner，`RenderRuntimeEditorViewport` 也直接消费 `viewportDepthImageOwner`；同时 Deferred 那个只为旧 debug depth getter 服务的 `_viewportDepthTextureCompat` 已随之删除。
+- 直接收益：viewport depth debug/export 终于和 viewport color、postprocess、bloom、SSAO、BRDF LUT 等前几批已经收过的链路站到同一份 owner 语义上。后续继续审 editor debug 观察面或 RenderRuntime debug catalog 时，不需要再把“depth 是唯一还靠 compat Texture 的视口输出”当作特例维护。
+- 当前停止线：这一步只收了公共 debug 输出里的 viewport depth 边界，没有去改 `ForwardViewportResources` 仍保留的 color/depth/resolve compat texture 结构，也没有扩大到 editor preview fallback 或 render-target editor 其他协议；因此它是一个 debug/export owner-aware 收口，不是 viewport 资源模型全链重写。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/viewport-depth-owner-aware.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/viewport-depth-owner-aware.png` 已生成
 - 2026-07-16：`RenderRuntime` 上一条已经没有真实 consumer 的 raw presentation getter 也已删除：`getPresentationImage()`。此前 runtime 对外已经同时提供了 `getPresentationImageShared()`，而 screenshot、editor/runtime 观察链与后续 presentation source 使用都已转向 shared owner；全仓复核后，确认 raw getter 只剩 declaration/definition，本身不再提供任何独立价值。
 - 直接收益：presentation 这条当前帧输出链又少掉了一层“shared owner 已经是真相，但 runtime 还额外保留一个 raw 同义口”的旧出口。后续继续审 screenshot/presentation/export 边界时，不需要再维护一对 shared/raw presentation current-image getter。
 - 当前停止线：这一步只删除确认无 consumer 的 runtime raw presentation getter，没有改 acquire/present graph 外 contract，也没有扩大到 editor viewport 或 screenshot request 的接口重设计；因此它是 dead contract 清理，而不是 presentation 生命周期逻辑改造。

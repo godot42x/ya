@@ -737,7 +737,6 @@ void DeferredRenderPipeline::shutdown()
     _pendingViewportExtent           = {};
     _pendingResourceRefreshMask      = 0;
     _viewportTextureCompat.reset();
-    _viewportDepthTextureCompat.reset();
     _currentSSAOOutput.reset();
     _currentPostprocessOutput.reset();
     _currentGBufferResources         = {};
@@ -979,8 +978,7 @@ EFormat::T DeferredRenderPipeline::getViewportDepthFormat() const
 
 void DeferredRenderPipeline::refreshViewportCompatTextures()
 {
-    _viewportTextureCompat      = makeCompatTextureFromRenderImage(_currentViewportResources.color, "DeferredViewportCompatColor");
-    _viewportDepthTextureCompat = makeCompatTextureFromRenderImage(_currentViewportResources.depth, "DeferredViewportCompatDepth");
+    _viewportTextureCompat = makeCompatTextureFromRenderImage(_currentViewportResources.color, "DeferredViewportCompatColor");
 }
 
 void DeferredRenderPipeline::refreshGBufferStageState()

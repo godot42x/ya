@@ -45,7 +45,7 @@ struct RenderPipelineDebugOutputCatalog
     bool                     bShadowMappingEnabled  = false;
     std::shared_ptr<IImage> shadowDepthImage = nullptr;
     std::shared_ptr<RenderImage> viewportOutputImageOwner    = nullptr;
-    Texture*                     viewportDepthTexture        = nullptr;
+    std::shared_ptr<RenderImage> viewportDepthImageOwner     = nullptr;
     IImageView*                  shadowDirectionalDepth      = nullptr;
     std::shared_ptr<RenderImage> postprocessOutputImageOwner = nullptr;
     std::shared_ptr<RenderImage> bloomExtractOwner           = nullptr;

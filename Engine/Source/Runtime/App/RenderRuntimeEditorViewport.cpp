@@ -226,7 +226,7 @@ void RenderRuntime::appendForwardDebugSlots(EditorViewportContext& ctx)
         }
     }
 
-    if (auto* viewportDepth = debugOutputs.viewportDepthTexture) {
+    if (auto viewportDepth = debugOutputs.viewportDepthImageOwner; viewportDepth && viewportDepth->getImageView()) {
         ctx.debugSpec.slots.push_back({
             .label         = "ViewportDepth",
             .defaultView   = viewportDepth->getImageView(),
