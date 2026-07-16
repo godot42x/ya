@@ -186,6 +186,8 @@ class TestCommandBuffer final : public ICommandBuffer
     std::vector<CopyImageToBufferRecord> copyImageToBuffers;
     bool lastBeginRenderingHadDepth = false;
     EImageLayout::T lastDepthFinalLayout = EImageLayout::Undefined;
+    bool lastBeginRenderingHadResolve = false;
+    EResolveMode::T lastResolveMode = EResolveMode::None;
 
   private:
     ResourceStateTracker _imageStateTracker;
@@ -249,6 +251,12 @@ class TestCommandBuffer final : public ICommandBuffer
         ++beginRenderingCount;
         lastBeginRenderingHadDepth = info.attachments.depth.has_value();
         lastDepthFinalLayout = info.attachments.depth ? info.attachments.depth->finalLayout : EImageLayout::Undefined;
+        lastBeginRenderingHadResolve = !info.attachments.colors.empty() &&
+                                       info.attachments.colors.front().resolveImage != nullptr &&
+                                       info.attachments.colors.front().resolveImageView != nullptr;
+        lastResolveMode = !info.attachments.colors.empty()
+            ? info.attachments.colors.front().resolveMode
+            : EResolveMode::None;
     }
     void endRendering(const RenderingInfo& = {}) override { ++endRenderingCount; }
     void transitionImageLayout(IImage*, EImageLayout::T oldLayout, EImageLayout::T newLayout, const ImageSubresourceRange* = nullptr) override
@@ -2270,6 +2278,56 @@ TEST(RenderGraphCoreTest, RasterRenderingHelperSupportsOptionalDepthAttachment)
     EXPECT_EQ(cmdBuf.endRenderingCount, 1u);
     EXPECT_TRUE(cmdBuf.lastBeginRenderingHadDepth);
     EXPECT_EQ(cmdBuf.lastDepthFinalLayout, EImageLayout::ShaderReadOnlyOptimal);
+}
+
+TEST(RenderGraphCoreTest, RasterRenderingHelperSupportsResolveAttachment)
+{
+    TestResourceFactory factory;
+    TestCommandBuffer   cmdBuf;
+    RenderGraphExecutor executor(factory);
+    RenderGraph         graph;
+
+    const auto colorTarget = graph.createTexture(RGTextureDesc{
+        .label   = "helper.msaa.color",
+        .format  = EFormat::R16G16B16A16_SFLOAT,
+        .extent  = Extent3D{128, 128, 1},
+        .samples = ESampleCount::Sample_4,
+        .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    });
+    const auto resolveTarget = graph.createTexture(RGTextureDesc{
+        .label  = "helper.resolve",
+        .format = EFormat::R16G16B16A16_SFLOAT,
+        .extent = Extent3D{128, 128, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    });
+
+    graph.addPass(
+        "helper-resolve-pass",
+        [&](RGPassBuilder& pass) {
+            pass.useColorAttachment(colorTarget);
+            pass.useColorAttachment(resolveTarget);
+        },
+        [&](RGRenderContext& ctx) {
+            ctx.beginRasterRendering({
+                .renderArea = Rect2D{
+                    .offset = glm::vec2{0.0f, 0.0f},
+                    .extent = glm::vec2{128.0f, 128.0f},
+                },
+                .colors = {{
+                    .color       = colorTarget,
+                    .resolve     = resolveTarget,
+                    .resolveMode = EResolveMode::Average,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                }},
+            });
+            ctx.endRendering();
+        });
+
+    ASSERT_TRUE(executor.execute(graph, cmdBuf));
+    EXPECT_EQ(cmdBuf.beginRenderingCount, 1u);
+    EXPECT_EQ(cmdBuf.endRenderingCount, 1u);
+    EXPECT_TRUE(cmdBuf.lastBeginRenderingHadResolve);
+    EXPECT_EQ(cmdBuf.lastResolveMode, EResolveMode::Average);
 }
 
 TEST(RenderGraphCoreTest, RasterRenderingHelperSupportsDepthOnlyPass)

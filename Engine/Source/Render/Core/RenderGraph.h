@@ -227,6 +227,8 @@ class RGRenderContext
     struct ColorAttachmentRenderingDesc
     {
         RGTextureHandle          color;
+        RGTextureHandle          resolve{};
+        EResolveMode::T          resolveMode = EResolveMode::None;
         ClearValue               clearValue = ClearValue::Black();
         EAttachmentLoadOp::T     loadOp     = EAttachmentLoadOp::Clear;
         EAttachmentStoreOp::T    storeOp    = EAttachmentStoreOp::Store;

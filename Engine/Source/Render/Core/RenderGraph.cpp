@@ -308,14 +308,29 @@ void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) cons
         YA_CORE_ASSERT(color->getImage() != nullptr && color->getImageView() != nullptr,
                        "RGRenderContext pass {} color target {} is missing image/view", _pass.name, colorDesc.color.index);
         retainResolvedRenderImage(_cmdBuf, *color);
-
-        attachments.colors.push_back(makeRenderAttachment(
+        auto attachment = makeRenderAttachment(
             color->getImageView(),
             colorDesc.loadOp,
             colorDesc.storeOp,
             EImageLayout::ColorAttachmentOptimal,
             colorDesc.finalLayout,
-            colorDesc.clearValue));
+            colorDesc.clearValue);
+        if (colorDesc.resolve.isValid()) {
+            const auto* resolve = resolveTexture(colorDesc.resolve);
+            YA_CORE_ASSERT(resolve != nullptr,
+                           "RGRenderContext pass {} failed to resolve color-resolve target {}",
+                           _pass.name,
+                           colorDesc.resolve.index);
+            YA_CORE_ASSERT(resolve->getImage() != nullptr && resolve->getImageView() != nullptr,
+                           "RGRenderContext pass {} color-resolve target {} is missing image/view",
+                           _pass.name,
+                           colorDesc.resolve.index);
+            retainResolvedRenderImage(_cmdBuf, *resolve);
+            attachment.resolveImage     = resolve->getImage();
+            attachment.resolveImageView = resolve->getImageView();
+            attachment.resolveMode      = colorDesc.resolveMode;
+        }
+        attachments.colors.push_back(std::move(attachment));
     }
 
     if (desc.depth.has_value()) {

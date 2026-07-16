@@ -3,6 +3,7 @@
 #include "Core/Base.h"
 #include "ForwardViewportStage.h"
 #include "ForwardViewportResources.h"
+#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderAttachmentFormats.h"
 #include "Render/Core/RenderTargetCreateInfo.h"
 #include "Render/Render.h"
@@ -79,6 +80,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     stdptr<ShadowStage>          _shadowStage;
     stdptr<ForwardViewportStage> _viewportStage;
     PostProcessingStage          _postProcessStage;
+    std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
     bool                    bMSAA                    = false;
     std::shared_ptr<RenderImage> _currentPostprocessOutput = nullptr;
@@ -164,6 +166,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     void               refreshViewportStageState();
     void               refreshShadowStageState();
     void               finalizeViewportPass(ICommandBuffer* cmdBuf);
+    bool               executeViewportPassGraph(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
     void               syncShadowSettings();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);
     [[nodiscard]] ShadowSettings currentShadowSettings() const;

@@ -2,6 +2,7 @@
 
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Core/Buffer.h"
+#include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/RenderingInfoUtils.h"
 #include "Render/Core/Sampler.h"
 #include <glm/gtc/matrix_transform.hpp>
@@ -142,6 +143,13 @@ ForwardViewportResources buildForwardViewportResources(IRender& render, const Re
     return resources;
 }
 
+RGImportedTextureDesc makeForwardViewportImportedDesc(const RenderImage& image,
+                                                      std::string_view   label,
+                                                      EImageLayout::T    finalLayout)
+{
+    return makeImportedTextureDesc(image, label, finalLayout);
+}
+
 } // namespace
 
 void ForwardRenderPipeline::appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const
@@ -202,6 +210,7 @@ void ForwardRenderPipeline::rebuildShadowViews()
 void ForwardRenderPipeline::init(const InitDesc& desc)
 {
     _render                 = desc.render;
+    _graphExecutor          = _render ? std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory()) : nullptr;
     _shadowSettings         = desc.shadowSettings;
     _getFrameIndex          = desc.getFrameIndex;
     _getElapsedTimeSeconds  = desc.getElapsedTimeSeconds;
@@ -604,7 +613,6 @@ void ForwardRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)
 
     _shadowStage->applySettings(shadowSettings);
     _shadowStage->prepare(stageCtx);
-    _shadowStage->execute(stageCtx);
 }
 
 void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
@@ -620,49 +628,6 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
     YA_CORE_ASSERT(_viewportRTSpec.attachments.depthAttach.has_value(),
                    "Forward viewport pass requires a depth attachment spec");
 
-    frame.cmdBuf->retainResource(_viewportResources.colorOwner);
-    frame.cmdBuf->retainResource(_viewportResources.depthOwner);
-    if (_viewportResources.resolveOwner) {
-        frame.cmdBuf->retainResource(_viewportResources.resolveOwner);
-    }
-
-    auto colorAttachment = makeRenderAttachment(
-        _viewportResources.colorImage->getImageView(),
-        _viewportRTSpec.attachments.colorAttach[0].loadOp,
-        _viewportRTSpec.attachments.colorAttach[0].storeOp,
-        _viewportRTSpec.attachments.colorAttach[0].initialLayout,
-        _viewportRTSpec.attachments.colorAttach[0].finalLayout,
-        ClearValue::Black());
-    if (_viewportResources.resolveImage) {
-        colorAttachment.resolveImage     = _viewportResources.resolveImage->getImage();
-        colorAttachment.resolveImageView = _viewportResources.resolveImage->getImageView();
-        colorAttachment.resolveMode      = EResolveMode::Average;
-    }
-
-    auto depthAttachment = makeRenderAttachment(
-        _viewportResources.depthImage->getImageView(),
-        _viewportRTSpec.attachments.depthAttach->loadOp,
-        _viewportRTSpec.attachments.depthAttach->storeOp,
-        _viewportRTSpec.attachments.depthAttach->initialLayout,
-        _viewportRTSpec.attachments.depthAttach->finalLayout,
-        ClearValue(1.0f, 0));
-
-    RenderingInfo ri{
-        .label       = "ViewPort",
-        .attachments = RenderAttachmentSet{
-            .renderArea = Rect2D{.pos = {0, 0}, .extent = _viewportResources.extent.toVec2()},
-            .layerCount = 1,
-            .colors     = {std::move(colorAttachment)},
-            .depth      = std::move(depthAttachment),
-        },
-    };
-
-    frame.cmdBuf->beginRendering(ri);
-
-    stageCtx.viewportExtent = _viewportResources.extent;
-    _viewportStage->execute(stageCtx);
-
-    _viewportRI         = ri;
     _lastTickCtx        = frame.frameData ? frame.frameData->toFrameContext() : FrameContext{
                                                                                   .view       = frame.view,
                                                                                   .projection = frame.projection,
@@ -670,17 +635,13 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
                                                                               };
     _lastTickCtx.extent = _viewportResources.extent;
     _lastFrameInput     = frame;
+
+    [[maybe_unused]] const bool bExecuted = executeViewportPassGraph(frame, stageCtx);
+    YA_CORE_ASSERT(bExecuted, "Forward viewport graph execution failed");
 }
 
 void ForwardRenderPipeline::finalizeViewportPass(ICommandBuffer* cmdBuf)
 {
-    if (_lastFrameInput.recordViewportOverlays) {
-        YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
-        _lastFrameInput.recordViewportOverlays(cmdBuf, _viewportResources.extent, _lastTickCtx);
-    }
-
-    cmdBuf->endRendering(_viewportRI);
-
     auto* inputImage = bMSAA ? _viewportResources.resolveImage : _viewportResources.colorImage;
 
     if (_postProcessStage.execute(cmdBuf, inputImage, _lastFrameInput.viewportRect.extent, &_lastTickCtx)) {
@@ -702,11 +663,85 @@ void ForwardRenderPipeline::shutdown()
     getSceneSkyboxDescriptorSet = {};
     getSceneEnvironmentLightingDescriptorSet = {};
     _currentPostprocessOutput.reset();
+    _graphExecutor.reset();
     _pendingViewportExtent = {};
     _pendingResourceRefreshMask = 0;
     _viewportFormats = {};
     _viewportResources = {};
     _deleter.clear();
+}
+
+bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
+{
+    YA_CORE_ASSERT(_graphExecutor != nullptr, "ForwardRenderPipeline graph executor is not initialized");
+
+    RenderGraph graph;
+    std::optional<RGPassHandle> shadowPass;
+    if (_shadowStage && currentShadowSettings().isEnabled()) {
+        shadowPass = _shadowStage->appendGraphPasses(graph, stageCtx);
+    }
+    const auto  color = graph.importTexture(
+        makeForwardViewportImportedDesc(*_viewportResources.colorImage,
+                                        "ForwardViewport.Color",
+                                        _viewportRTSpec.attachments.colorAttach[0].finalLayout));
+    const RGTextureHandle resolve = _viewportResources.resolveImage
+        ? graph.importTexture(
+              makeForwardViewportImportedDesc(*_viewportResources.resolveImage,
+                                              "ForwardViewport.Resolve",
+                                              _viewportRTSpec.attachments.colorAttach[0].finalLayout))
+        : RGTextureHandle{};
+    const auto  depth = graph.importTexture(
+        makeForwardViewportImportedDesc(*_viewportResources.depthImage,
+                                        "ForwardViewport.Depth",
+                                        _viewportRTSpec.attachments.depthAttach->finalLayout));
+    const auto viewportExtent = _viewportResources.extent;
+    const auto colorAttachment = _viewportRTSpec.attachments.colorAttach[0];
+    const auto depthAttachment = *_viewportRTSpec.attachments.depthAttach;
+
+    [[maybe_unused]] const auto pass = graph.addPass(
+        "Forward Viewport",
+        [color, resolve, depth, shadowPass](RGPassBuilder& passBuilder) {
+            if (shadowPass.has_value()) {
+                passBuilder.dependsOn(*shadowPass);
+            }
+            passBuilder.useColorAttachment(color);
+            if (resolve.isValid()) {
+                passBuilder.useColorAttachment(resolve);
+            }
+            passBuilder.useDepthAttachment(depth);
+        },
+        [this, &stageCtx, color, resolve, depth, viewportExtent, colorAttachment, depthAttachment](RGRenderContext& rgCtx) {
+            rgCtx.beginRasterRendering({
+                .renderArea = Rect2D{.pos = {0, 0}, .extent = viewportExtent.toVec2()},
+                .layerCount = 1,
+                .colors = {{
+                    .color       = color,
+                    .resolve     = resolve,
+                    .resolveMode = resolve.isValid() ? EResolveMode::Average : EResolveMode::None,
+                    .clearValue  = ClearValue::Black(),
+                    .loadOp      = colorAttachment.loadOp,
+                    .storeOp     = colorAttachment.storeOp,
+                    .finalLayout = colorAttachment.finalLayout,
+                }},
+                .depth = RGRenderContext::DepthRenderingDesc{
+                    .depth       = depth,
+                    .clearValue  = ClearValue(1.0f, 0),
+                    .loadOp      = depthAttachment.loadOp,
+                    .storeOp     = depthAttachment.storeOp,
+                    .finalLayout = depthAttachment.finalLayout,
+                },
+            });
+
+            stageCtx.viewportExtent = viewportExtent;
+            _viewportStage->execute(stageCtx);
+            if (_lastFrameInput.recordViewportOverlays) {
+                YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
+                _lastFrameInput.recordViewportOverlays(&rgCtx.getCommandBuffer(), viewportExtent, _lastTickCtx);
+            }
+            rgCtx.endRendering();
+        });
+
+    return _graphExecutor->execute(graph, *frame.cmdBuf);
 }
 
 void ForwardRenderPipeline::renderSettingsGUI()

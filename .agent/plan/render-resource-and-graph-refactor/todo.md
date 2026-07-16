@@ -293,7 +293,7 @@
 
 ## Phase 9: Forward Graph 迁移
 
-- [ ] 迁移 Forward shadow pass group
+- [x] 迁移 Forward shadow pass group
 - [ ] 迁移 skybox pass
 - [ ] 迁移 PBR pass
 - [ ] 迁移 Phong pass
