@@ -23,6 +23,20 @@
 
 ## 最新验证
 
+- 2026-07-16：Forward viewport 这组 legacy attachment adapter 也已经收掉了。此前 `ForwardViewportResources` 虽然主链早已以 `colorOwner/depthOwner/resolveOwner` 和对应 `RenderImage*` snapshot 驱动 viewport pass、postprocess 输入、editor/runtime debug 与 screenshot，但仍额外为每个 attachment 构造 `Texture::wrap()` compat 壳，并把 `color/depth/resolve` raw `Texture*` 一起挂在 snapshot 上。全仓复核后确认这组三份 compat texture 已没有任何真实 consumer；现在 `ForwardViewportResources` 只保留 attachment owner 与 raw `RenderImage*` snapshot，`buildForwardViewportResources()` 也不再为 color/depth/resolve 生成 compat wrapper。
+- 直接收益：Forward viewport 终于和 Deferred 最近几批一样，把“当前帧 attachment 真相”进一步收口回 owner/image snapshot，而不是继续维护一套没人读的 `Texture` facade。这直接对应 `todo.md` 里的 `删除 ForwardViewport legacy attachment adapter`，后续继续推进 Forward graph 时，不需要再先判断这些 compat texture 是否还承担隐性 consumer。
+- 当前停止线：这一步只删除确认无 consumer 的 Forward viewport compat attachment adapter，没有改 `ForwardRenderPipeline` 当前仍保留的 `waitIdle() + recreateViewportResources()` 刷新策略，也没有提前把 Forward pass 迁进 RenderGraph；因此它是一个 owner/adapter 清理批次，不是 Forward 主链迁移。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/remove-forward-viewport-legacy-adapter.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/remove-forward-viewport-legacy-adapter.png` 已生成
+- 2026-07-16：Deferred viewport color 这条已经没有真实 consumer 的 compat texture 壳也已删除。此前 `_currentViewportResources.colorOwner` 早就是 runtime / editor / screenshot / debug output 真正使用的事实源，但 Deferred 仍额外保留 `_viewportTextureCompat`，并在 viewport snapshot 更新时继续构造 `DeferredViewportCompatColor`；全仓复核后，这个 compat texture 已只剩“创建 + reset”，没有任何真实调用面。现在 `_viewportTextureCompat`、对应的 `refreshViewportCompatTextures()`，以及仅为它服务的 `makeCompatTextureFromRenderImage()` helper 一起移除。
+- 直接收益：Deferred viewport 主输出又少掉了一层已经空掉的 compat 外壳。后续继续审 Deferred viewport / postprocess / screenshot 边界时，不需要再分心判断这份 compat color texture 是否仍承担某个隐藏 consumer。
+- 当前停止线：这一步只删除确认无 consumer 的 Deferred viewport color compat 壳，没有去动 Forward `ForwardViewportResources` 仍保留的 compat texture 结构，也没有扩大到 preview fallback、render-target editor 或 screenshot 接口重设计；因此它是 Deferred 专项 dead compat 清理，不是 viewport 兼容层全链改造。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/remove-deferred-viewport-color-compat.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/remove-deferred-viewport-color-compat.png` 已生成
 - 2026-07-16：viewport depth debug 输出这条公共观察链现在也开始直接携带 shared owner，而不再通过 `Texture*` compat 暴露。此前 `IRenderPipelineDebugOutputs` / `RenderPipelineDebugOutputCatalog` 仍把 viewport depth 定义成 `Texture*`，Forward 从 `depthCompat`、Deferred 从 `_viewportDepthTextureCompat` 往外给 editor debug；这让主路径里已经存在的 `depthOwner` / `DeferredViewportResources.depthOwner` 在 debug export 边界又掉回了一次 compat texture。现在公共 debug 输出协议统一改成 `getViewportDepthImageShared()`，Forward / Deferred 都直接返回 depth owner，`RenderRuntimeEditorViewport` 也直接消费 `viewportDepthImageOwner`；同时 Deferred 那个只为旧 debug depth getter 服务的 `_viewportDepthTextureCompat` 已随之删除。
 - 直接收益：viewport depth debug/export 终于和 viewport color、postprocess、bloom、SSAO、BRDF LUT 等前几批已经收过的链路站到同一份 owner 语义上。后续继续审 editor debug 观察面或 RenderRuntime debug catalog 时，不需要再把“depth 是唯一还靠 compat Texture 的视口输出”当作特例维护。
 - 当前停止线：这一步只收了公共 debug 输出里的 viewport depth 边界，没有去改 `ForwardViewportResources` 仍保留的 color/depth/resolve compat texture 结构，也没有扩大到 editor preview fallback 或 render-target editor 其他协议；因此它是一个 debug/export owner-aware 收口，不是 viewport 资源模型全链重写。

@@ -118,7 +118,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
 
     ShadowMapResources                                              _shadowResources;
 
-    stdptr<Texture> _viewportTextureCompat;
     bool     _bReverseViewportY    = true;
     bool     _bEnableSSAO          = true;
 
@@ -223,7 +222,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
                            const std::array<RGTextureHandle, 4>& gbufferColors,
                            RGTextureHandle gbufferDepth,
                            RGTextureHandle viewportColor);
-    void               refreshViewportCompatTextures();
     void               refreshGBufferStageState();
     void               refreshViewportStageState();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);

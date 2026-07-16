@@ -83,15 +83,6 @@ RenderTargetCreateInfo buildDeferredGBufferRenderTargetSpec(Extent2D extent,
 RenderTargetCreateInfo buildDeferredViewportRenderTargetSpec(Extent2D extent, EFormat::T colorFormat);
 DeferredAttachmentFormats buildDeferredFormatsFromSpec(const RenderTargetCreateInfo& spec);
 
-stdptr<Texture> makeCompatTextureFromRenderImage(RenderImage* image, std::string_view label)
-{
-    if (!image || !image->getImageShared() || !image->getImageViewShared()) {
-        return nullptr;
-    }
-
-    return Texture::wrap(image->getImageShared(), image->getImageViewShared(), std::string(label));
-}
-
 RGImportedTextureDesc makeDeferredEnvironmentImportedDesc(const std::shared_ptr<RenderImage>& renderImage,
                                                           const std::shared_ptr<Texture>&     texture,
                                                           std::string_view                    label)
@@ -736,7 +727,6 @@ void DeferredRenderPipeline::shutdown()
     _cachedAlbedoSpecImageViewHandle = nullptr;
     _pendingViewportExtent           = {};
     _pendingResourceRefreshMask      = 0;
-    _viewportTextureCompat.reset();
     _currentSSAOOutput.reset();
     _currentPostprocessOutput.reset();
     _currentGBufferResources         = {};
@@ -946,7 +936,6 @@ void DeferredRenderPipeline::syncGraphAttachmentSnapshots(
         refreshGBufferStageState();
     }
     if (bViewportChanged) {
-        refreshViewportCompatTextures();
         refreshViewportStageState();
     }
 }
@@ -974,11 +963,6 @@ EFormat::T DeferredRenderPipeline::getViewportColorFormat() const
 EFormat::T DeferredRenderPipeline::getViewportDepthFormat() const
 {
     return buildGBufferSnapshotFormats().depthFormat.value_or(EFormat::Undefined);
-}
-
-void DeferredRenderPipeline::refreshViewportCompatTextures()
-{
-    _viewportTextureCompat = makeCompatTextureFromRenderImage(_currentViewportResources.color, "DeferredViewportCompatColor");
 }
 
 void DeferredRenderPipeline::refreshGBufferStageState()

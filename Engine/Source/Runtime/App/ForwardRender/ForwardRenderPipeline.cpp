@@ -4,7 +4,6 @@
 #include "Render/Core/Buffer.h"
 #include "Render/Core/RenderingInfoUtils.h"
 #include "Render/Core/Sampler.h"
-#include "Render/Core/Texture.h"
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace ya
@@ -65,15 +64,6 @@ RenderTargetCreateInfo buildForwardViewportRenderTargetSpec(Extent2D extent, EFo
     };
 }
 
-stdptr<Texture> makeForwardViewportCompatTexture(RenderImage* image, std::string_view label)
-{
-    if (!image || !image->getImageShared() || !image->getImageViewShared()) {
-        return nullptr;
-    }
-
-    return Texture::wrap(image->getImageShared(), image->getImageViewShared(), std::string(label));
-}
-
 ImageViewCreateInfo makeForwardViewportViewDesc(std::string_view label,
                                                 EFormat::T       format,
                                                 uint32_t         layerCount)
@@ -128,7 +118,6 @@ ForwardViewportResources buildForwardViewportResources(IRender& render, const Re
             spec.extent,
             spec.layerCount,
             std::format("{}.Color0", spec.label));
-        resources.colorCompat = makeForwardViewportCompatTexture(resources.colorOwner.get(), std::format("{}.Color0Compat", spec.label));
     }
 
     if (spec.attachments.depthAttach.has_value()) {
@@ -138,7 +127,6 @@ ForwardViewportResources buildForwardViewportResources(IRender& render, const Re
             spec.extent,
             spec.layerCount,
             std::format("{}.Depth", spec.label));
-        resources.depthCompat = makeForwardViewportCompatTexture(resources.depthOwner.get(), std::format("{}.DepthCompat", spec.label));
     }
 
     if (spec.attachments.resolveAttach.has_value()) {
@@ -148,7 +136,6 @@ ForwardViewportResources buildForwardViewportResources(IRender& render, const Re
             spec.extent,
             spec.layerCount,
             std::format("{}.Resolve", spec.label));
-        resources.resolveCompat = makeForwardViewportCompatTexture(resources.resolveOwner.get(), std::format("{}.ResolveCompat", spec.label));
     }
 
     resources.syncRawViews();

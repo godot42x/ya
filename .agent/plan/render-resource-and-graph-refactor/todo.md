@@ -301,7 +301,7 @@
 - [ ] 迁移 Simple/direction overlay pass
 - [ ] 迁移 debug pass
 - [ ] 迁移 Forward postprocess
-- [ ] 删除 ForwardViewport legacy attachment adapter
+- [x] 删除 ForwardViewport legacy attachment adapter
 - [ ] 删除 Forward dirty render target refresh
 
 完成标准：
