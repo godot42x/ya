@@ -25,6 +25,24 @@ constexpr uint32_t CATEGORY_VIEWPORT    = 4;
 constexpr uint32_t CATEGORY_SHARED      = 5;
 constexpr uint32_t CATEGORY_POSTPROCESS = 6;
 
+std::shared_ptr<IImage> getPreviewImage(const std::shared_ptr<RenderImage>& renderImage, Texture* texture)
+{
+    if (renderImage && renderImage->getImageShared()) {
+        return renderImage->getImageShared();
+    }
+
+    return texture ? texture->getImageShared() : nullptr;
+}
+
+IImageView* getPreviewImageView(const std::shared_ptr<RenderImage>& renderImage, Texture* texture)
+{
+    if (renderImage && renderImage->getImageView()) {
+        return renderImage->getImageView();
+    }
+
+    return texture ? texture->getImageView() : nullptr;
+}
+
 template <typename TGetter>
 void appendShadowDebugSlots(EditorViewportContext& ctx,
                             IImageView*            directionalDepth,
@@ -169,8 +187,9 @@ void RenderRuntime::appendForwardDebugSlots(EditorViewportContext& ctx)
         if (resolver) {
             for (auto&& [entity, sc] : scene->getRegistry().view<SkyboxComponent>().each()) {
                 auto preview = resolver->getSkyboxPreview(entity);
-                if (!preview.bHasRenderableCubemap || !preview.cubemapTexture ||
-                    !preview.cubemapTexture->getImageShared() || !preview.cubemapTexture->getImageView()) {
+                const auto cubemapImage = getPreviewImage(preview.cubemapRenderImage, preview.cubemapTexture);
+                if (!preview.bHasRenderableCubemap || !cubemapImage ||
+                    !getPreviewImageView(preview.cubemapRenderImage, preview.cubemapTexture)) {
                     continue;
                 }
 
@@ -193,7 +212,7 @@ void RenderRuntime::appendForwardDebugSlots(EditorViewportContext& ctx)
                         .label         = std::format("SkyboxFace{}", faceIndex),
                         .defaultView   = faceView,
                         .ownedView     = nullptr,
-                        .image         = preview.cubemapTexture->getImageShared(),
+                        .image         = cubemapImage,
                         .categoryIndex = CATEGORY_SKYBOX,
                     });
                 }
@@ -372,9 +391,12 @@ void RenderRuntime::appendEnvironmentDebugSlots(EditorViewportContext& ctx)
         for (auto&& [entity, elc] : scene->getRegistry().view<EnvironmentLightingComponent>().each()) {
             (void)elc;
             auto preview = resolver->getEnvironmentLightingPreview(entity);
+            const auto cubemapImage    = getPreviewImage(preview.cubemapRenderImage, preview.cubemapTexture);
+            const auto irradianceImage = getPreviewImage(preview.irradianceRenderImage, preview.irradianceTexture);
+            const auto prefilterImage  = getPreviewImage(preview.prefilterRenderImage, preview.prefilterTexture);
 
-            if (preview.bHasRenderableCubemap && preview.cubemapTexture &&
-                preview.cubemapTexture->getImageShared() && preview.cubemapTexture->getImageView()) {
+            if (preview.bHasRenderableCubemap && cubemapImage &&
+                getPreviewImageView(preview.cubemapRenderImage, preview.cubemapTexture)) {
                 EditorViewportContext::DebugSpec::Group cubemapGroup{
                     .label         = "Environment Cubemap",
                     .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
@@ -394,7 +416,7 @@ void RenderRuntime::appendEnvironmentDebugSlots(EditorViewportContext& ctx)
                         .label         = std::format("EnvironmentFace{}", faceIndex),
                         .defaultView   = faceView,
                         .ownedView     = nullptr,
-                        .image         = preview.cubemapTexture->getImageShared(),
+                        .image         = cubemapImage,
                         .categoryIndex = CATEGORY_ENVIRONMENT,
                     });
                 }
@@ -405,8 +427,8 @@ void RenderRuntime::appendEnvironmentDebugSlots(EditorViewportContext& ctx)
                 }
             }
 
-            if (preview.bHasIrradianceMap && preview.irradianceTexture &&
-                preview.irradianceTexture->getImageShared() && preview.irradianceTexture->getImageView()) {
+            if (preview.bHasIrradianceMap && irradianceImage &&
+                getPreviewImageView(preview.irradianceRenderImage, preview.irradianceTexture)) {
                 EditorViewportContext::DebugSpec::Group irradianceGroup{
                     .label         = "Environment Irradiance Cubemap",
                     .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
@@ -426,7 +448,7 @@ void RenderRuntime::appendEnvironmentDebugSlots(EditorViewportContext& ctx)
                         .label         = std::format("IrradianceFace{}", faceIndex),
                         .defaultView   = faceView,
                         .ownedView     = nullptr,
-                        .image         = preview.irradianceTexture->getImageShared(),
+                        .image         = irradianceImage,
                         .categoryIndex = CATEGORY_ENVIRONMENT,
                     });
                 }
@@ -437,9 +459,8 @@ void RenderRuntime::appendEnvironmentDebugSlots(EditorViewportContext& ctx)
                 }
             }
 
-            if (preview.bHasPrefilterMap && preview.prefilterTexture && preview.prefilterMipCount > 0 &&
-                preview.prefilterTexture->getImageShared() && preview.prefilterTexture->getImageView()) {
-                auto prefilterImage = preview.prefilterTexture->getImageShared();
+            if (preview.bHasPrefilterMap && prefilterImage && preview.prefilterMipCount > 0 &&
+                getPreviewImageView(preview.prefilterRenderImage, preview.prefilterTexture)) {
                 if (prefilterImage) {
                     const uint32_t                          mipLevels = preview.prefilterMipCount;
                     EditorViewportContext::DebugSpec::Group prefilterGroup{

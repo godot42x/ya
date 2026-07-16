@@ -33,6 +33,27 @@ void retireTextureNow(stdptr<Texture>& texture)
     texture.reset();
 }
 
+void retireRenderImage(std::shared_ptr<RenderImage>& image)
+{
+    if (!image) {
+        return;
+    }
+
+    auto& ddq = DeferredDeletionQueue::get();
+    ddq.enqueueResource(ddq.currentFrame(), std::move(image));
+    image = nullptr;
+}
+
+void retireRenderImageNow(std::shared_ptr<RenderImage>& image)
+{
+    if (!image) {
+        return;
+    }
+
+    DeferredDeletionQueue::get().retireResource(image);
+    image.reset();
+}
+
 stdptr<Texture> wrapRenderImageAsTexture(const std::shared_ptr<RenderImage>& image, std::string_view label)
 {
     if (!image || !image->getImageShared() || !image->getImageViewShared()) {
@@ -48,6 +69,33 @@ stdptr<Texture> wrapRenderImageAsTexture(const std::shared_ptr<RenderImage>& ima
 
     texture->retainedResources = image->getRetainedResources();
     return texture;
+}
+
+std::shared_ptr<IImage> getImageShared(const std::shared_ptr<RenderImage>& image, const stdptr<Texture>& texture)
+{
+    if (image && image->getImageShared()) {
+        return image->getImageShared();
+    }
+
+    return texture ? texture->getImageShared() : nullptr;
+}
+
+IImageView* getImageView(const std::shared_ptr<RenderImage>& image, const stdptr<Texture>& texture)
+{
+    if (image && image->getImageView()) {
+        return image->getImageView();
+    }
+
+    return texture ? texture->getImageView() : nullptr;
+}
+
+std::shared_ptr<IImageView> getImageViewShared(const std::shared_ptr<RenderImage>& image, const stdptr<Texture>& texture)
+{
+    if (image && image->getImageViewShared()) {
+        return image->getImageViewShared();
+    }
+
+    return texture ? texture->getImageViewShared() : nullptr;
 }
 
 EFormat::T chooseSkyboxCubemapFormat(EFormat::T sourceFormat)

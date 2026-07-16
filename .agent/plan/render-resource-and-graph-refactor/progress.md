@@ -23,6 +23,47 @@
 
 ## 最新验证
 
+- 2026-07-16：Deferred light pass 导入 environment cubemap / irradiance / prefilter 时，开始优先使用 `RenderImage` owner，而不再默认绕回 compat `Texture`。这次在 `ResourceResolveSystem` 补上了 scene skybox / environment render-image shared query，`RenderSharedResourceProvider::EnvironmentLightingTextureSet` 也同时携带 render-image owner 与 texture snapshot；Deferred 主图导入 `DeferredLight.Environment.Cubemap/Irradiance/Prefilter` 时，若 owner 已存在就直接按 `RenderImage` import，只在资产 fallback / descriptor 兼容路径上继续保留 `Texture`。
+- 直接收益：main render path 不再把 preprocess/runtime state 中已经明确的 owner 真相重新降级成 compat texture 再导入 graph。这样 environment lighting 这条链从 runtime state -> provider snapshot -> Deferred graph import 的 owner 语义终于连成一条线，后续继续清剩余 compatibility adapter 时，不需要再先分辨“当前 light pass 拿到的是 owner 还是 wrapper”。
+- 当前停止线：这一步只收了 Deferred graph import 的资源导入边界，没有改 descriptor set、材质采样或 asset-only fallback 仍然依赖 `Texture` 的协议；也没有扩大到 Forward 或更高层环境资源消费面。下一步仍应该继续沿 environment/skybox 的 shared query 与 runtime consumer 清 compat，而不是现在就强推材质/descriptor 全链切类型。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/environment-deferred-import-owner.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=trace --log-detail-level=error"`：日志确认 `Saved screenshot: /tmp/environment-deferred-import-owner.png`，且 `DeferredLight.Environment.Irradiance/Prefilter` 只在 preprocess 完成时各出现一次合法 replacement，未观察到持续 churn
+
+- 2026-07-16：editor 的 skybox / environment debug preview 也开始优先消费 `RenderImage` owner，而不再把 `Texture` compat 当成唯一观察面。此前 `ResourceResolveSystem` 虽然已经在 runtime state 中补回了 preprocess 结果的 `RenderImage` owner，但 `getSkyboxPreview()` / `getEnvironmentLightingPreview()` 暴露给 editor 的仍然主要是 `Texture*`，`RenderRuntimeEditorViewport` 也会从这份 compat texture 再回取 `image/view` 组装 debug slot。现在 preview info 会显式带出 cubemap / irradiance / prefilter 的 `RenderImage` owner；editor 组装 skybox/environment preview 槽位时优先从 owner 取 image，再只把 face/mip view 作为显示视图，资产 cubemap 路径则继续 fallback 到 `Texture`。
+- 直接收益：这条 debug/观察面不再把“state 内已有的 owner 真相”重新降回 compat texture 再往外传。对于 environment preprocess 这类我们已经高度依赖 editor 观察面的回归排查，preview consumer 本身终于和前面的 runtime state 收口到同一套 owner 语义，后续继续压缩 compat 面时也少了一层 editor 特例。
+- 当前停止线：这一步没有改 descriptor set、材质采样、light pass graph import 等仍然真实依赖 `Texture` 的消费面；它只收了 editor preview 这条观察链。如果继续推进，下一优先级仍应放在 shared query / runtime consumer 的逐步收口，而不是为了形式统一去重写材质/descriptor 协议。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/environment-preview-owner.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=trace --log-detail-level=error"`：日志确认 `Saved screenshot: /tmp/environment-preview-owner.png`，environment preprocess 完成后仍只出现单次合法 replacement
+
+- 2026-07-16：skybox / environment offscreen preprocess 的最终 owner 真相开始回收到 `ResourceResolveSystem` runtime state 内的 `RenderImage`，而不是继续把 compat `Texture::wrap()` 当作唯一事实源。此前 cylindrical->cubemap、cubemap->irradiance、cubemap->prefilter 在 GPU 完成后都会先拿到 `RenderImage` 输出，但 `ResourceResolveSystem` 会立刻只保留一份 `Texture` wrapper，导致 preview/building/后续收口都继续围着 compat 语义转。现在 `SkyboxRuntimeState` 与 `EnvironmentLightingRuntimeState` 都会显式缓存 preprocess 产物的 `RenderImage` owner；preview face/mip view 重建与 `has*Map()` 判断优先消费这份 owner，兼容 `Texture` 仍保留给现有 descriptor / shared query consumer。
+- 直接收益：offscreen preprocess 结果的 owner truth 和 plan 里 Phase 4/7 的目标终于更一致了——state 不再只有“一份由 `Texture::wrap()` 代持的 image/view”，而是先记住真正的 `RenderImage` owner，再按需给旧消费面保留 compat texture。这让后续继续收 environment/skybox shared query 或 preview consumer 时，不需要再先把 state 本身从 compat 语义里解开。
+- 当前停止线：这一步没有删除 public/shared `Texture` 查询，也没有改动 `RenderSharedResourceProvider`、`RenderFrameExtractor`、editor preview 对 `Texture` 的消费协议；它只是先把 runtime state 的 owner truth 从 compat texture 中剥出来。下一步若继续推进，应优先考虑把 shared query / preview consumer 逐步切到 `RenderImage` 或 image/view 语义，而不是在 state 内再新增平行真相。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - 编辑器 smoke 待本批提交前完成
+
+- 2026-07-16：scene skybox / environment 在 provider 层残留的 raw texture 查询旁路也已删除。此前 `RenderSharedResourceProvider` 虽然已经能返回 shared-owner 的 `EnvironmentLightingTextureSet`，但 `getSceneSkyboxDescriptorSet()` 以及一组私有 `findScene*Texture()` helper 仍会回头经 `ResourceResolveSystem` 走一遍 `Texture*` 查询，再把结果立刻喂回 descriptor update；这让 shared-owner 真相已经建立后，provider 内部却还保留一条 raw 旁路。现在这组 raw helper 已删除，provider 直接消费 `ResourceResolveSystem` 的 shared skybox/environment 查询，再在真正需要写 descriptor 的最后一跳显式 `.get()`。
+- 直接收益：environment / skybox 这条链又少掉了一层“shared snapshot 已经是事实源，但中间层还保留 raw 同义出口”的 compatibility 数据面。后续如果继续清理 `Texture::wrap()` 或进一步压缩 environment preprocess 最终接管边界时，不需要再分心判断 provider 私有 raw helper 是否还藏着另一条旧路径。
+- 当前停止线：这一步删掉的是 provider 内部的 raw query compatibility，并没有动 `ResourceResolveSystem` 在最终接管 offscreen 结果时仍保留的 `Texture::wrap()` 语义对象，也没有改变 descriptor set 最终仍需绑定 `Texture` / `ImageView` 这一事实；所以下一优先级依然是继续收剩余 compatibility adapter，而不是把 environment 直接硬改成另一套资源类型。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/environment-compat-cleanup.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=trace --log-detail-level=error"`：日志确认 `Saved screenshot: /tmp/environment-compat-cleanup.png`，environment preprocess 完成后仍只出现单次合法 replacement
+
+- 2026-07-16：environment lighting 的 runtime/provider/pipeline snapshot 现在也开始保留 shared owner，而不再只在 `RenderSharedResourceProvider::EnvironmentLightingTextureSet` 与 `DeferredRenderPipeline::_currentEnvironmentLightingTextures` 里缓存 raw `Texture*` / `RenderImage*`。这次补齐了 `ResourceResolveSystem` 的 cubemap/prefilter shared 查询，并把 scene environment texture set 改成 shared-owner snapshot：provider 解析 scene/fallback environment 资源时直接返回 `shared_ptr<Texture>` / `shared_ptr<RenderImage>`，Deferred 则继续在当前帧快照里保留这份 owner，再从快照导入 light pass graph。
+- 直接收益：environment lighting 这条链终于和 viewport、postprocess、debug catalog、automation screenshot 等前几批已经收过的路径对齐到同一份 owner 语义。后续如果 environment cubemap / irradiance / prefilter 在 frame boundary 发生 preprocess 完成、replacement 或 clear，runtime 到 Deferred graph import 之间不再额外依赖“raw texture 指针此刻刚好还活着”这个隐含前提。
+- 调查结论：最新 trace smoke 里 `DeferredLight.Environment.Irradiance` 与 `DeferredLight.Environment.Prefilter` 仍会在 preprocess 完成时各出现一次 replacement；这次确认它们是从 fallback environment 资源切到真实 offscreen preprocess 产物的单次合法 replacement，而不是像之前 `Presentation.Output` 那样的持续性 imported-contract 漂移。因此这批不再试图为了“把日志压到 0”去掩盖这类真实资源替换，而是把优先级放在 owner snapshot 一致性上。
+- 当前停止线：这一步只收了 environment lighting snapshot 的 owner 边界，并没有删除 `ResourceResolveSystem` 在最终接管 skybox/environment 结果时仍保留的 `Texture::wrap()` compatibility 层；那部分属于后续 `剩余 compatibility adapter` 的继续清理，而不是本批强行扩成 environment 全链重写。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/environment-owner-snapshot.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=trace --log-detail-level=error"`：日志确认 `Saved screenshot: /tmp/environment-owner-snapshot.png`；`DeferredLight.Environment.Irradiance/Prefilter` 只在真实 preprocess 完成时各出现一次 replacement，未观察到持续性 churn
+
 - 2026-07-16：swapchain acquire/present 现在明确作为 graph 外边界保留在 runtime/backend 层，而 presentation graph 与 presentation screenshot graph 都改为显式遵守同一份 imported-image contract。`RenderRuntimeFrame` 在导入当前 swapchain image 作为 `Presentation.Output` 时，不再继承 mutable compatibility seed，而是固定声明 `initialLayout = PresentSrcKHR`；`AppScreenshotCapture` 也同步把 screenshot copy graph 的 imported source layout 参数显式化，viewport/postprocess 走 `ShaderReadOnlyOptimal -> ShaderReadOnlyOptimal`，presentation 则走 `PresentSrcKHR -> PresentSrcKHR`。
 - 直接收益：presentation pass、presentation screenshot 与 acquire/present lifecycle 不再靠“当前 image compatibility layout 恰好是什么”这种隐式状态耦合。此前 per-backbuffer executor 已经消掉持续性的 `Presentation.Output` replacement churn，但每个 backbuffer 首帧仍会因为 imported desc 的 initial-layout 从 `Undefined` 漂到 `PresentSrcKHR` 而触发一次 replacement；现在这层漂移也被收掉了。最新 trace smoke 日志里已不再出现 `Presentation.Output` replacement，说明 presentation imported identity 和 graph 外 contract 已经稳定下来。
 - 当前停止线：这一步定义清楚的是 swapchain image 进入 / 离开 graph 的 contract，不代表 acquire/present 本身要迁进 graph，也不代表所有 imported image 都已经有同样明确的 graph 外边界。下一优先级仍然应该放在 Deferred/environment replacement 与剩余 compatibility adapter，而不是继续把 acquire/present 过度 graph 化。

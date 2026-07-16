@@ -34,8 +34,8 @@ namespace detail
 void rebuildSkyboxViews(SkyboxRuntimeState& state)
 {
     clearSkyboxViews(state);
-    if (!state.cubemapTexture || !state.cubemapTexture->getImageShared() ||
-        !state.cubemapTexture->getImageView()) {
+    const auto cubemapImage = getImageShared(state.cubemapRenderImage, state.cubemapTexture);
+    if (!cubemapImage || !getImageView(state.cubemapRenderImage, state.cubemapTexture)) {
         return;
     }
 
@@ -48,7 +48,7 @@ void rebuildSkyboxViews(SkyboxRuntimeState& state)
 
     for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
         state.cubemapFacePreviewViews[faceIndex] = resourceFactory->createImageView(
-            state.cubemapTexture->getImageShared(),
+            cubemapImage,
             ImageViewCreateInfo{
                 .label          = std::format("SkyboxPreviewFace{}", faceIndex),
                 .viewType       = EImageViewType::View2D,
@@ -64,6 +64,7 @@ void rebuildSkyboxViews(SkyboxRuntimeState& state)
 void retireSkyboxResources(SkyboxRuntimeState& state)
 {
     retireTexture(state.cubemapTexture);
+    retireRenderImage(state.cubemapRenderImage);
     retireTexture(state.sourcePreviewTexture);
     clearSkyboxViews(state);
 }
@@ -185,6 +186,7 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
                 }
 
                 pendingState.cubemapTexture = std::move(cubemap);
+                pendingState.cubemapRenderImage.reset();
                 detail::rebuildSkyboxViews(pendingState);
                 ++pendingState.resultVersion;
                 transition.to(ESkyboxResolveState::Ready, "cubemap source resolved");
@@ -287,8 +289,9 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
                 break;
             }
 
+            pendingState.cubemapRenderImage = pendingState.pendingOffscreenProcess->result->outputImage;
             pendingState.cubemapTexture = detail::wrapRenderImageAsTexture(
-                pendingState.pendingOffscreenProcess->result->outputImage,
+                pendingState.cubemapRenderImage,
                 pendingState.pendingOffscreenProcess->debugName);
             pendingState.pendingOffscreenProcess.reset();
             if (!pendingState.cubemapTexture) {

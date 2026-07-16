@@ -87,6 +87,7 @@ void syncEnvironmentDerivedBranchEnablement(EnvironmentLightingComponent&    com
     if (!component.bEnableIrradiance) {
         cancelOffscreenJob(state.pendingIrradianceOffscreen);
         detail::retireTextureNow(state.irradianceTexture);
+        detail::retireRenderImageNow(state.irradianceRenderImage);
         detail::rebuildEnvironmentIrradianceViews(state);
         if (component.irradianceState != EEnvironmentLightingIrradianceResolveState::Disabled) {
             makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance")
@@ -101,6 +102,7 @@ void syncEnvironmentDerivedBranchEnablement(EnvironmentLightingComponent&    com
     if (!component.bEnablePrefilter) {
         cancelOffscreenJob(state.pendingPrefilterOffscreen);
         detail::retireTextureNow(state.prefilterTexture);
+        detail::retireRenderImageNow(state.prefilterRenderImage);
         detail::rebuildPrefilterViews(state);
         if (component.prefilterState != EEnvironmentLightingPrefilterResolveState::Disabled) {
             makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter")
@@ -271,6 +273,7 @@ void tryBeginEnvIrradianceJob(ResourceResolveSystem&           system,
     }
 
     detail::retireTextureNow(state.irradianceTexture);
+    detail::retireRenderImageNow(state.irradianceRenderImage);
 
     auto job = createEnvironmentIrradianceJob(system, entity, component, sourceCubemap);
     if (!job) {
@@ -302,6 +305,7 @@ void tryBeginEnvPrefilterJob(ResourceResolveSystem&           system,
     }
 
     detail::retireTextureNow(state.prefilterTexture);
+    detail::retireRenderImageNow(state.prefilterRenderImage);
 
     auto job = createEnvironmentPrefilterJob(system, entity, component, sourceCubemap);
     if (!job) {
@@ -381,11 +385,13 @@ void clearPrefilterViews(EnvironmentLightingRuntimeState& state)
 }
 
 void rebuildCubeFaceViews(const stdptr<Texture>&                          texture,
+                          const std::shared_ptr<RenderImage>&             renderImage,
                           std::array<stdptr<IImageView>, CubeFace_Count>& outViews,
                           const std::string&                              labelPrefix)
 {
     clearCubeFaceViews(outViews);
-    if (!texture || !texture->getImageShared() || !texture->getImageView()) {
+    const auto image = getImageShared(renderImage, texture);
+    if (!image || !getImageView(renderImage, texture)) {
         return;
     }
 
@@ -398,7 +404,7 @@ void rebuildCubeFaceViews(const stdptr<Texture>&                          textur
 
     for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
         outViews[faceIndex] = resourceFactory->createImageView(
-            texture->getImageShared(),
+            image,
             ImageViewCreateInfo{
                 .label          = std::format("{}_Face_{}", labelPrefix, faceIndex),
                 .viewType       = EImageViewType::View2D,
@@ -415,19 +421,19 @@ void rebuildCubeFaceViews(const stdptr<Texture>&                          textur
 
 void rebuildEnvironmentCubemapViews(EnvironmentLightingRuntimeState& state)
 {
-    rebuildCubeFaceViews(state.cubemapTexture, state.cubemapFacePreviewViews, "EnvironmentCubemap");
+    rebuildCubeFaceViews(state.cubemapTexture, state.cubemapRenderImage, state.cubemapFacePreviewViews, "EnvironmentCubemap");
 }
 
 void rebuildEnvironmentIrradianceViews(EnvironmentLightingRuntimeState& state)
 {
-    rebuildCubeFaceViews(state.irradianceTexture, state.irradianceFacePreviewViews, "EnvironmentIrradiance");
+    rebuildCubeFaceViews(state.irradianceTexture, state.irradianceRenderImage, state.irradianceFacePreviewViews, "EnvironmentIrradiance");
 }
 
 void rebuildPrefilterViews(EnvironmentLightingRuntimeState& state)
 {
     clearPrefilterViews(state);
-    if (!state.prefilterTexture || !state.prefilterTexture->getImageShared() ||
-        !state.prefilterTexture->getImageView()) {
+    const auto prefilterImage = getImageShared(state.prefilterRenderImage, state.prefilterTexture);
+    if (!prefilterImage || !getImageView(state.prefilterRenderImage, state.prefilterTexture)) {
         return;
     }
 
@@ -438,7 +444,6 @@ void rebuildPrefilterViews(EnvironmentLightingRuntimeState& state)
         return;
     }
 
-    const auto     prefilterImage  = state.prefilterTexture->getImageShared();
     const uint32_t mipLevels       = std::min(prefilterImage->getMipLevels(), EnvironmentLightingRuntimeState::MAX_PREFILTER_PREVIEW_MIPS);
     state.prefilterPreviewMipCount = mipLevels;
 
@@ -465,8 +470,11 @@ void retireEnvTextures(EnvironmentLightingRuntimeState& state)
     clearCubeFaceViews(state.irradianceFacePreviewViews);
     clearPrefilterViews(state);
     retireTexture(state.cubemapTexture);
+    retireRenderImage(state.cubemapRenderImage);
     retireTexture(state.irradianceTexture);
+    retireRenderImage(state.irradianceRenderImage);
     retireTexture(state.prefilterTexture);
+    retireRenderImage(state.prefilterRenderImage);
 }
 
 void resetEnvPending(EnvironmentLightingRuntimeState& state)
@@ -591,6 +599,7 @@ void handleEnvironmentSourceResolving(ResourceResolveSystem&           system,
         }
 
         state.cubemapTexture = std::move(cubemap);
+        state.cubemapRenderImage.reset();
         completeEnvironmentSource(component, state, "cubemap source resolved");
         return;
     }
@@ -676,8 +685,9 @@ void handleEnvironmentSourceBuildingCubemap(EnvironmentLightingComponent&    com
         return;
     }
 
+    state.cubemapRenderImage = state.pendingEnvironmentOffscreen->result->outputImage;
     state.cubemapTexture = detail::wrapRenderImageAsTexture(
-        state.pendingEnvironmentOffscreen->result->outputImage,
+        state.cubemapRenderImage,
         state.pendingEnvironmentOffscreen->debugName);
     state.pendingEnvironmentOffscreen.reset();
     if (!state.cubemapTexture) {
@@ -724,6 +734,7 @@ void handleEnvironmentIrradianceBuilding(EnvironmentLightingComponent&    compon
         !state.pendingIrradianceOffscreen->result->outputImage) {
         state.pendingIrradianceOffscreen.reset();
         detail::retireTextureNow(state.irradianceTexture);
+        detail::retireRenderImageNow(state.irradianceRenderImage);
         makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance").fail("preprocess failed");
         return;
     }
@@ -733,12 +744,14 @@ void handleEnvironmentIrradianceBuilding(EnvironmentLightingComponent&    compon
     }
 
     // ok
+    state.irradianceRenderImage = state.pendingIrradianceOffscreen->result->outputImage;
     state.irradianceTexture = detail::wrapRenderImageAsTexture(
-        state.pendingIrradianceOffscreen->result->outputImage,
+        state.irradianceRenderImage,
         state.pendingIrradianceOffscreen->debugName);
     if (!state.irradianceTexture) {
         state.pendingIrradianceOffscreen.reset();
         detail::retireTextureNow(state.irradianceTexture);
+        detail::retireRenderImageNow(state.irradianceRenderImage);
         makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance").fail("preprocess wrap failed");
         return;
     }
@@ -783,6 +796,7 @@ void handleEnvironmentPrefilterBuilding(EnvironmentLightingComponent&    compone
         !state.pendingPrefilterOffscreen->result->outputImage) {
         state.pendingPrefilterOffscreen.reset();
         detail::retireTextureNow(state.prefilterTexture);
+        detail::retireRenderImageNow(state.prefilterRenderImage);
         detail::rebuildPrefilterViews(state);
         makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter").fail("preprocess failed");
         return;
@@ -792,12 +806,14 @@ void handleEnvironmentPrefilterBuilding(EnvironmentLightingComponent&    compone
         return;
     }
 
+    state.prefilterRenderImage = state.pendingPrefilterOffscreen->result->outputImage;
     state.prefilterTexture = detail::wrapRenderImageAsTexture(
-        state.pendingPrefilterOffscreen->result->outputImage,
+        state.prefilterRenderImage,
         state.pendingPrefilterOffscreen->debugName);
     if (!state.prefilterTexture) {
         state.pendingPrefilterOffscreen.reset();
         detail::retireTextureNow(state.prefilterTexture);
+        detail::retireRenderImageNow(state.prefilterRenderImage);
         detail::rebuildPrefilterViews(state);
         makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter").fail("preprocess wrap failed");
         return;
@@ -912,6 +928,7 @@ void ResourceResolveSystem::resolvePendingEnvironmentLighting(Scene* scene)
         syncEnvironmentDerivedBranchEnablement(elc, pendingState);
 
         if (const auto sourceCubemap = syncEnvSkybox(elc, pendingState, sceneSkyboxState)) {
+            pendingState.cubemapRenderImage = sceneSkyboxState ? sceneSkyboxState->cubemapRenderImage : nullptr;
             pendingState.cubemapTexture = sourceCubemap;
             completeEnvironmentSource(elc, pendingState, "scene skybox source resolved");
         }

@@ -92,6 +92,18 @@ stdptr<Texture> makeCompatTextureFromRenderImage(RenderImage* image, std::string
     return Texture::wrap(image->getImageShared(), image->getImageViewShared(), std::string(label));
 }
 
+RGImportedTextureDesc makeDeferredEnvironmentImportedDesc(const std::shared_ptr<RenderImage>& renderImage,
+                                                          const std::shared_ptr<Texture>&     texture,
+                                                          std::string_view                    label)
+{
+    if (renderImage) {
+        return makeImportedTextureDesc(*renderImage, label, EImageLayout::ShaderReadOnlyOptimal);
+    }
+
+    YA_CORE_ASSERT(texture != nullptr, "Deferred environment import '{}' requires a texture or render-image owner", label);
+    return makeImportedTextureDesc(*texture, label, EImageLayout::ShaderReadOnlyOptimal);
+}
+
 RGTextureDesc makeGraphAttachmentDesc(const RenderTargetCreateInfo& spec,
                                       const AttachmentDescription&  attachment,
                                       std::string                    label)
@@ -1179,17 +1191,17 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     std::optional<RGTextureHandle> environmentBrdfLut;
     if (_currentEnvironmentLightingTextures.isComplete()) {
         environmentCubemap = graph.importTexture(
-            makeImportedTextureDesc(*_currentEnvironmentLightingTextures.cubemapTexture,
-                                    "DeferredLight.Environment.Cubemap",
-                                    EImageLayout::ShaderReadOnlyOptimal));
+            makeDeferredEnvironmentImportedDesc(_currentEnvironmentLightingTextures.cubemapRenderImage,
+                                                _currentEnvironmentLightingTextures.cubemapTexture,
+                                                "DeferredLight.Environment.Cubemap"));
         environmentIrradiance = graph.importTexture(
-            makeImportedTextureDesc(*_currentEnvironmentLightingTextures.irradianceTexture,
-                                    "DeferredLight.Environment.Irradiance",
-                                    EImageLayout::ShaderReadOnlyOptimal));
+            makeDeferredEnvironmentImportedDesc(_currentEnvironmentLightingTextures.irradianceRenderImage,
+                                                _currentEnvironmentLightingTextures.irradianceTexture,
+                                                "DeferredLight.Environment.Irradiance"));
         environmentPrefilter = graph.importTexture(
-            makeImportedTextureDesc(*_currentEnvironmentLightingTextures.prefilterTexture,
-                                    "DeferredLight.Environment.Prefilter",
-                                    EImageLayout::ShaderReadOnlyOptimal));
+            makeDeferredEnvironmentImportedDesc(_currentEnvironmentLightingTextures.prefilterRenderImage,
+                                                _currentEnvironmentLightingTextures.prefilterTexture,
+                                                "DeferredLight.Environment.Prefilter"));
         environmentBrdfLut = graph.importTexture(
             makeImportedTextureDesc(*_currentEnvironmentLightingTextures.brdfLutTexture,
                                     "DeferredLight.Environment.BrdfLut",

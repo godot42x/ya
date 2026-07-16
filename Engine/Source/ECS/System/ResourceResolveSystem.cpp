@@ -184,13 +184,19 @@ const EnvironmentLightingRuntimeState* ResourceResolveSystem::findFirstSceneEnvi
     return nullptr;
 }
 
-Texture* ResourceResolveSystem::findSceneSkyboxTexture(Scene* scene) const
+stdptr<Texture> ResourceResolveSystem::findSceneSkyboxTextureShared(Scene* scene) const
 {
     const auto* state = findFirstSceneSkyboxState(scene);
-    return state ? state->cubemapTexture.get() : nullptr;
+    return state ? state->cubemapTexture : nullptr;
 }
 
-Texture* ResourceResolveSystem::findSceneEnvironmentCubemapTexture(Scene* scene) const
+std::shared_ptr<RenderImage> ResourceResolveSystem::findSceneSkyboxRenderImageShared(Scene* scene) const
+{
+    const auto* state = findFirstSceneSkyboxState(scene);
+    return state ? state->cubemapRenderImage : nullptr;
+}
+
+std::shared_ptr<RenderImage> ResourceResolveSystem::findSceneEnvironmentCubemapRenderImageShared(Scene* scene) const
 {
     if (!scene) {
         return nullptr;
@@ -204,39 +210,65 @@ Texture* ResourceResolveSystem::findSceneEnvironmentCubemapTexture(Scene* scene)
         }
 
         if (elc.usesSceneSkybox()) {
-            return skyboxState ? skyboxState->cubemapTexture.get() : nullptr;
+            return skyboxState ? skyboxState->cubemapRenderImage : nullptr;
         }
 
         if (state->hasRenderableCubemap()) {
-            return state->cubemapTexture.get();
+            return state->cubemapRenderImage;
         }
     }
 
-    return skyboxState ? skyboxState->cubemapTexture.get() : nullptr;
+    return skyboxState ? skyboxState->cubemapRenderImage : nullptr;
 }
 
-Texture* ResourceResolveSystem::findSceneEnvironmentIrradianceTexture(Scene* scene) const
+stdptr<Texture> ResourceResolveSystem::findSceneEnvironmentCubemapTextureShared(Scene* scene) const
+{
+    if (!scene) {
+        return nullptr;
+    }
+
+    const auto* skyboxState = findFirstSceneSkyboxState(scene);
+    for (auto&& [entity, elc] : scene->getRegistry().view<EnvironmentLightingComponent>().each()) {
+        (void)entity;
+        const auto* state = findEnvironmentLightingState(entity);
+        if (!state || !elc.hasReadySource()) {
+            continue;
+        }
+
+        if (elc.usesSceneSkybox()) {
+            return skyboxState ? skyboxState->cubemapTexture : nullptr;
+        }
+
+        if (state->hasRenderableCubemap()) {
+            return state->cubemapTexture;
+        }
+    }
+
+    return skyboxState ? skyboxState->cubemapTexture : nullptr;
+}
+
+std::shared_ptr<RenderImage> ResourceResolveSystem::findSceneEnvironmentIrradianceRenderImageShared(Scene* scene) const
 {
     const auto* state = findFirstSceneEnvironmentLightingState(scene);
-    return state ? state->irradianceTexture.get() : nullptr;
-}
-
-Texture* ResourceResolveSystem::findSceneEnvironmentPrefilterTexture(Scene* scene) const
-{
-    const auto* state = findFirstSceneEnvironmentLightingState(scene);
-    return state ? state->prefilterTexture.get() : nullptr;
-}
-
-stdptr<Texture> ResourceResolveSystem::findSceneSkyboxTextureShared(Scene* scene) const
-{
-    const auto* state = findFirstSceneSkyboxState(scene);
-    return state ? state->cubemapTexture : nullptr;
+    return state ? state->irradianceRenderImage : nullptr;
 }
 
 stdptr<Texture> ResourceResolveSystem::findSceneEnvironmentIrradianceTextureShared(Scene* scene) const
 {
     const auto* state = findFirstSceneEnvironmentLightingState(scene);
     return state ? state->irradianceTexture : nullptr;
+}
+
+std::shared_ptr<RenderImage> ResourceResolveSystem::findSceneEnvironmentPrefilterRenderImageShared(Scene* scene) const
+{
+    const auto* state = findFirstSceneEnvironmentLightingState(scene);
+    return state ? state->prefilterRenderImage : nullptr;
+}
+
+stdptr<Texture> ResourceResolveSystem::findSceneEnvironmentPrefilterTextureShared(Scene* scene) const
+{
+    const auto* state = findFirstSceneEnvironmentLightingState(scene);
+    return state ? state->prefilterTexture : nullptr;
 }
 
 SkyboxPreviewInfo ResourceResolveSystem::getSkyboxPreview(entt::entity entity) const
@@ -249,6 +281,7 @@ SkyboxPreviewInfo ResourceResolveSystem::getSkyboxPreview(entt::entity entity) c
     }
 
     info.sourcePreviewTexture  = state->sourcePreviewTexture.get();
+    info.cubemapRenderImage    = state->cubemapRenderImage;
     info.cubemapTexture        = state->cubemapTexture.get();
     info.bHasRenderableCubemap = state->hasRenderableCubemap();
 
@@ -268,8 +301,11 @@ EnvironmentLightingPreviewInfo ResourceResolveSystem::getEnvironmentLightingPrev
         return info;
     }
 
+    info.cubemapRenderImage    = state->cubemapRenderImage;
     info.cubemapTexture        = state->cubemapTexture.get();
+    info.irradianceRenderImage = state->irradianceRenderImage;
     info.irradianceTexture     = state->irradianceTexture.get();
+    info.prefilterRenderImage  = state->prefilterRenderImage;
     info.prefilterTexture      = state->prefilterTexture.get();
     info.prefilterMipCount     = state->prefilterPreviewMipCount;
     info.bHasRenderableCubemap = state->hasRenderableCubemap();

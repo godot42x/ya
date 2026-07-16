@@ -34,42 +34,6 @@ const char* getRenderImageLabel(const RenderImage* image)
 
 } // namespace
 
-Texture* RenderSharedResourceProvider::findSceneSkyboxTexture(Scene* scene) const
-{
-    if (!scene || !_app || !_app->getResourceResolveSystem()) {
-        return nullptr;
-    }
-
-    return _app->getResourceResolveSystem()->findSceneSkyboxTexture(scene);
-}
-
-Texture* RenderSharedResourceProvider::findSceneEnvironmentCubemapTexture(Scene* scene) const
-{
-    if (!scene || !_app || !_app->getResourceResolveSystem()) {
-        return nullptr;
-    }
-
-    return _app->getResourceResolveSystem()->findSceneEnvironmentCubemapTexture(scene);
-}
-
-Texture* RenderSharedResourceProvider::findSceneEnvironmentIrradianceTexture(Scene* scene) const
-{
-    if (!scene || !_app || !_app->getResourceResolveSystem()) {
-        return nullptr;
-    }
-
-    return _app->getResourceResolveSystem()->findSceneEnvironmentIrradianceTexture(scene);
-}
-
-Texture* RenderSharedResourceProvider::findSceneEnvironmentPrefilterTexture(Scene* scene) const
-{
-    if (!scene || !_app || !_app->getResourceResolveSystem()) {
-        return nullptr;
-    }
-
-    return _app->getResourceResolveSystem()->findSceneEnvironmentPrefilterTexture(scene);
-}
-
 void RenderSharedResourceProvider::updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* texture)
 {
     if (!ds || !texture || !texture->getImageView() || !_cubemapSampler) {
@@ -165,15 +129,17 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneSkyboxDescriptorSet(Sc
         scene = _app->getSceneManager()->getActiveScene();
     }
 
-    auto* texture = findSceneSkyboxTexture(scene);
+    auto texture = (_app && _app->getResourceResolveSystem())
+        ? _app->getResourceResolveSystem()->findSceneSkyboxTextureShared(scene)
+        : nullptr;
     if (!texture) {
         _skybox.boundSceneTexture = nullptr;
         return _skybox.fallbackDS;
     }
 
-    if (texture != _skybox.boundSceneTexture) {
-        updateSkyboxDescriptorSet(_skybox.sceneDS, texture);
-        _skybox.boundSceneTexture = texture;
+    if (texture.get() != _skybox.boundSceneTexture) {
+        updateSkyboxDescriptorSet(_skybox.sceneDS, texture.get());
+        _skybox.boundSceneTexture = texture.get();
     }
 
     return _skybox.sceneDS;
@@ -188,17 +154,17 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneEnvironmentLightingDes
     auto resources = resolveSceneEnvironmentLightingTextures(scene);
     if (!resources.isComplete()) {
         YA_CORE_WARN("Environment lighting DS fallback: incomplete resources cubemap='{}' irradiance='{}' prefilter='{}' brdf='{}'",
-                     getTextureLabel(resources.cubemapTexture),
-                     getTextureLabel(resources.irradianceTexture),
-                     getTextureLabel(resources.prefilterTexture),
-                     getRenderImageLabel(resources.brdfLutTexture));
+                     getTextureLabel(resources.cubemapTexture.get()),
+                     getTextureLabel(resources.irradianceTexture.get()),
+                     getTextureLabel(resources.prefilterTexture.get()),
+                     getRenderImageLabel(resources.brdfLutTexture.get()));
         return _environmentLighting.fallbackDS;
     }
 
-    auto* cubemapTexture    = resources.cubemapTexture;
-    auto* irradianceTexture = resources.irradianceTexture;
-    auto* prefilterTexture  = resources.prefilterTexture;
-    auto* brdfLutTexture    = resources.brdfLutTexture;
+    auto* cubemapTexture    = resources.cubemapTexture.get();
+    auto* irradianceTexture = resources.irradianceTexture.get();
+    auto* prefilterTexture  = resources.prefilterTexture.get();
+    auto* brdfLutTexture    = resources.brdfLutTexture.get();
     const auto cubemapImageViewHandle    = getTextureImageViewHandle(cubemapTexture);
     const auto irradianceImageViewHandle = getTextureImageViewHandle(irradianceTexture);
     const auto prefilterImageViewHandle  = getTextureImageViewHandle(prefilterTexture);
@@ -243,18 +209,24 @@ RenderSharedResourceProvider::EnvironmentLightingTextureSet RenderSharedResource
         scene = _app->getSceneManager()->getActiveScene();
     }
 
-    resources.cubemapTexture    = findSceneEnvironmentCubemapTexture(scene);
-    resources.irradianceTexture = findSceneEnvironmentIrradianceTexture(scene);
-    resources.prefilterTexture  = findSceneEnvironmentPrefilterTexture(scene);
-    resources.brdfLutTexture    = _sharedResources.pbrLUT.get();
+    if (_app && _app->getResourceResolveSystem()) {
+        auto* resolver = _app->getResourceResolveSystem();
+        resources.cubemapRenderImage    = resolver->findSceneEnvironmentCubemapRenderImageShared(scene);
+        resources.cubemapTexture        = resolver->findSceneEnvironmentCubemapTextureShared(scene);
+        resources.irradianceRenderImage = resolver->findSceneEnvironmentIrradianceRenderImageShared(scene);
+        resources.irradianceTexture     = resolver->findSceneEnvironmentIrradianceTextureShared(scene);
+        resources.prefilterRenderImage  = resolver->findSceneEnvironmentPrefilterRenderImageShared(scene);
+        resources.prefilterTexture      = resolver->findSceneEnvironmentPrefilterTextureShared(scene);
+    }
+    resources.brdfLutTexture = _sharedResources.pbrLUT;
     if (!resources.cubemapTexture) {
-        resources.cubemapTexture = _skybox.fallbackTexture.get();
+        resources.cubemapTexture = _skybox.fallbackTexture;
     }
     if (!resources.irradianceTexture) {
-        resources.irradianceTexture = _environmentLighting.fallbackIrradianceTexture.get();
+        resources.irradianceTexture = _environmentLighting.fallbackIrradianceTexture;
     }
     if (!resources.prefilterTexture) {
-        resources.prefilterTexture = _environmentLighting.fallbackPrefilterTexture.get();
+        resources.prefilterTexture = _environmentLighting.fallbackPrefilterTexture;
     }
 
     return resources;

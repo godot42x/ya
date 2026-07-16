@@ -18,10 +18,13 @@ struct RenderSharedResourceProvider
 {
     struct EnvironmentLightingTextureSet
     {
-        Texture*     cubemapTexture    = nullptr;
-        Texture*     irradianceTexture = nullptr;
-        Texture*     prefilterTexture  = nullptr;
-        RenderImage* brdfLutTexture    = nullptr;
+        stdptr<RenderImage> cubemapRenderImage   = nullptr;
+        stdptr<Texture>     cubemapTexture    = nullptr;
+        stdptr<RenderImage> irradianceRenderImage = nullptr;
+        stdptr<Texture>     irradianceTexture = nullptr;
+        stdptr<RenderImage> prefilterRenderImage  = nullptr;
+        stdptr<Texture>     prefilterTexture  = nullptr;
+        stdptr<RenderImage> brdfLutTexture    = nullptr;
 
         [[nodiscard]] bool isComplete() const
         {
@@ -94,10 +97,6 @@ struct RenderSharedResourceProvider
     void                   releaseRenderOwnedResources();
     void                   updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* texture);
     void                   updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds, Texture* cubemapTexture, Texture* irradianceTexture, Texture* prefilterTexture, RenderImage* brdfLutTexture);
-    [[nodiscard]] Texture* findSceneSkyboxTexture(Scene* scene) const;
-    [[nodiscard]] Texture* findSceneEnvironmentCubemapTexture(Scene* scene) const;
-    [[nodiscard]] Texture* findSceneEnvironmentIrradianceTexture(Scene* scene) const;
-    [[nodiscard]] Texture* findSceneEnvironmentPrefilterTexture(Scene* scene) const;
 };
 
 } // namespace ya

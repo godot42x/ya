@@ -7,7 +7,12 @@ namespace ya::detail
 
 void        retireTexture(stdptr<Texture>& texture);
 void        retireTextureNow(stdptr<Texture>& texture);
+void        retireRenderImage(std::shared_ptr<RenderImage>& image);
+void        retireRenderImageNow(std::shared_ptr<RenderImage>& image);
 stdptr<Texture> wrapRenderImageAsTexture(const std::shared_ptr<RenderImage>& image, std::string_view label);
+[[nodiscard]] std::shared_ptr<IImage> getImageShared(const std::shared_ptr<RenderImage>& image, const stdptr<Texture>& texture);
+[[nodiscard]] IImageView*             getImageView(const std::shared_ptr<RenderImage>& image, const stdptr<Texture>& texture);
+[[nodiscard]] std::shared_ptr<IImageView> getImageViewShared(const std::shared_ptr<RenderImage>& image, const stdptr<Texture>& texture);
 EFormat::T  chooseSkyboxCubemapFormat(EFormat::T sourceFormat);
 EFormat::T  chooseEnvironmentIrradianceFormat(EFormat::T sourceFormat);
 uint32_t    computeSkyboxFaceSize(const Texture* sourceTexture);

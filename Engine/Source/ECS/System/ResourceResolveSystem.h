@@ -18,6 +18,7 @@ namespace ya
 // Forward declarations
 struct PhongMaterialComponent;
 struct PBRMaterialComponent;
+struct RenderImage;
 struct Scene;
 
 struct SkyboxPendingBatchLoadState
@@ -29,6 +30,7 @@ struct SkyboxRuntimeState
 {
     uint64_t                                       authoringVersion     = 0;
     uint64_t                                       resultVersion        = 0;
+    std::shared_ptr<RenderImage>                   cubemapRenderImage   = nullptr;
     stdptr<Texture>                                cubemapTexture       = nullptr;
     stdptr<Texture>                                sourcePreviewTexture = nullptr;
     std::array<stdptr<IImageView>, CubeFace_Count> cubemapFacePreviewViews{};
@@ -38,7 +40,8 @@ struct SkyboxRuntimeState
 
     [[nodiscard]] bool hasRenderableCubemap() const
     {
-        return cubemapTexture && cubemapTexture->getImageView();
+        return (cubemapRenderImage && cubemapRenderImage->isValid()) ||
+               (cubemapTexture && cubemapTexture->getImageView());
     }
 };
 
@@ -54,10 +57,13 @@ struct EnvironmentLightingRuntimeState
     uint64_t                                                  authoringVersion             = 0;
     uint64_t                                                  resultVersion                = 0;
     uint64_t                                                  lastSceneSkyboxResultVersion = 0;
+    std::shared_ptr<RenderImage>                              cubemapRenderImage           = nullptr;
     stdptr<Texture>                                           cubemapTexture               = nullptr;
     std::array<stdptr<IImageView>, CubeFace_Count>            cubemapFacePreviewViews{};
+    std::shared_ptr<RenderImage>                              irradianceRenderImage        = nullptr;
     stdptr<Texture>                                           irradianceTexture            = nullptr;
     std::array<stdptr<IImageView>, CubeFace_Count>            irradianceFacePreviewViews{};
+    std::shared_ptr<RenderImage>                              prefilterRenderImage         = nullptr;
     stdptr<Texture>                                           prefilterTexture             = nullptr;
     std::array<std::array<stdptr<IImageView>, CubeFace_Count>, MAX_PREFILTER_PREVIEW_MIPS> prefilterMipFacePreviewViews{};
     uint32_t                                                  prefilterPreviewMipCount     = 0;
@@ -69,17 +75,20 @@ struct EnvironmentLightingRuntimeState
 
     [[nodiscard]] bool hasRenderableCubemap() const
     {
-        return cubemapTexture && cubemapTexture->getImageView();
+        return (cubemapRenderImage && cubemapRenderImage->isValid()) ||
+               (cubemapTexture && cubemapTexture->getImageView());
     }
 
     [[nodiscard]] bool hasIrradianceMap() const
     {
-        return irradianceTexture && irradianceTexture->getImageView();
+        return (irradianceRenderImage && irradianceRenderImage->isValid()) ||
+               (irradianceTexture && irradianceTexture->getImageView());
     }
 
     [[nodiscard]] bool hasPrefilterMap() const
     {
-        return prefilterTexture && prefilterTexture->getImageView();
+        return (prefilterRenderImage && prefilterRenderImage->isValid()) ||
+               (prefilterTexture && prefilterTexture->getImageView());
     }
 };
 
@@ -87,6 +96,7 @@ struct EnvironmentLightingRuntimeState
 
 struct SkyboxPreviewInfo
 {
+    std::shared_ptr<RenderImage>             cubemapRenderImage   = nullptr;
     Texture*                                sourcePreviewTexture = nullptr;
     Texture*                                cubemapTexture       = nullptr;
     std::array<IImageView*, CubeFace_Count> cubemapFaceViews{};
@@ -95,10 +105,13 @@ struct SkyboxPreviewInfo
 
 struct EnvironmentLightingPreviewInfo
 {
+    std::shared_ptr<RenderImage>             cubemapRenderImage        = nullptr;
     Texture*                                cubemapTexture        = nullptr;
     std::array<IImageView*, CubeFace_Count> cubemapFaceViews{};
+    std::shared_ptr<RenderImage>             irradianceRenderImage     = nullptr;
     Texture*                                irradianceTexture     = nullptr;
     std::array<IImageView*, CubeFace_Count> irradianceFaceViews{};
+    std::shared_ptr<RenderImage>             prefilterRenderImage      = nullptr;
     Texture*                                prefilterTexture      = nullptr;
     std::array<std::array<IImageView*, CubeFace_Count>, EnvironmentLightingRuntimeState::MAX_PREFILTER_PREVIEW_MIPS> prefilterMipFaceViews{};
     uint32_t                                prefilterMipCount     = 0;
@@ -150,14 +163,14 @@ struct ResourceResolveSystem : public ISystem
     [[nodiscard]] const SkyboxRuntimeState*              findFirstSceneSkyboxState(Scene* scene) const;
     [[nodiscard]] const EnvironmentLightingRuntimeState* findEnvironmentLightingState(entt::entity entity) const;
     [[nodiscard]] const EnvironmentLightingRuntimeState* findFirstSceneEnvironmentLightingState(Scene* scene) const;
-    [[nodiscard]] Texture*                               findSceneSkyboxTexture(Scene* scene) const;
-    [[nodiscard]] Texture*                               findSceneEnvironmentCubemapTexture(Scene* scene) const;
-    [[nodiscard]] Texture*                               findSceneEnvironmentIrradianceTexture(Scene* scene) const;
-    [[nodiscard]] Texture*                               findSceneEnvironmentPrefilterTexture(Scene* scene) const;
-
-    // Shared-ownership texture queries (for snapshot lifetime safety)
+    [[nodiscard]] std::shared_ptr<RenderImage> findSceneSkyboxRenderImageShared(Scene* scene) const;
     [[nodiscard]] stdptr<Texture> findSceneSkyboxTextureShared(Scene* scene) const;
+    [[nodiscard]] std::shared_ptr<RenderImage> findSceneEnvironmentCubemapRenderImageShared(Scene* scene) const;
+    [[nodiscard]] stdptr<Texture> findSceneEnvironmentCubemapTextureShared(Scene* scene) const;
+    [[nodiscard]] std::shared_ptr<RenderImage> findSceneEnvironmentIrradianceRenderImageShared(Scene* scene) const;
     [[nodiscard]] stdptr<Texture> findSceneEnvironmentIrradianceTextureShared(Scene* scene) const;
+    [[nodiscard]] std::shared_ptr<RenderImage> findSceneEnvironmentPrefilterRenderImageShared(Scene* scene) const;
+    [[nodiscard]] stdptr<Texture> findSceneEnvironmentPrefilterTextureShared(Scene* scene) const;
 
     // ── Read-only preview queries (Editor / debug) ────────────────────
     [[nodiscard]] SkyboxPreviewInfo              getSkyboxPreview(entt::entity entity) const;
