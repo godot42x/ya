@@ -3,7 +3,6 @@
 #include "Runtime/App/App.h"
 #include "ECS/Component/CameraComponent.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
-#include "Render/Core/IRenderTarget.h"
 #include "Render/Render.h"
 #include "Scene/SceneManager.h"
 

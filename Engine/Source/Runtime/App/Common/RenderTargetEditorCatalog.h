@@ -9,7 +9,6 @@
 namespace ya
 {
 
-struct IRenderTarget;
 struct IImageView;
 struct RenderImage;
 
@@ -18,7 +17,6 @@ struct RenderTargetEditorCatalog
     struct Entry
     {
         const char*    label = "";
-        IRenderTarget* rt    = nullptr;
         enum class EOwner
         {
             Presentation,

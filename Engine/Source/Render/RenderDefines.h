@@ -1106,8 +1106,6 @@ struct IImage;
 struct IImageView;
 struct IRenderPass;
 
-struct IRenderTarget; // Forward declaration
-
 struct RenderAttachment
 {
     IImage*     image     = nullptr;
@@ -1147,9 +1145,6 @@ struct RenderingInfo
 {
     std::string label = "None";
     bool        bExternalTransitionManagement = false;
-
-    // use render target spec
-    IRenderTarget* renderTarget = nullptr;
 
     // or an explicit non-owning attachment set
     RenderAttachmentSet attachments{};

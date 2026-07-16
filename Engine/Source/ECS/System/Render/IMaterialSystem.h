@@ -17,7 +17,6 @@ struct IRender;
 struct IRenderPass;
 struct VulkanRender;
 struct App;
-struct IRenderTarget;
 struct Scene;
 struct FrameContext;
 

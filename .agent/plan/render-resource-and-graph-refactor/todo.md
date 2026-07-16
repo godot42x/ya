@@ -74,7 +74,7 @@
 - [ ] 定义 imported image 的 native ownership、view ownership、debug name 和 initial/final state
 - [x] 定义 derived image-view identity/cache key
 - [x] 定义资产 `Texture` 与 transient/persistent GPU image 的绑定边界（GPU 中间资源使用 `RenderImage`，后续由 graph registry 接管）
-- [ ] 明确 `RenderTargetPool` 与 graph resource registry 的停止线
+- [x] 明确 `RenderTargetPool` 与 graph resource registry 的停止线
 - [x] 锁定 image view 不拥有 image 的生命周期规则
 - [x] 锁定 command-buffer / queue-submit 相关 attachment、descriptor、imported view 的最小保活边界
 - [ ] 锁定 resource desc 创建后不可变规则

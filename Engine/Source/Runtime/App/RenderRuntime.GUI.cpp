@@ -48,24 +48,12 @@ constexpr std::array<RenderTargetFormatOption, 5> kColorFormats = {{
 
 int getEntryColorAttachmentCount(const RenderTargetEditorCatalog::Entry& entry)
 {
-    if (!entry.colorFormats.empty()) {
-        return static_cast<int>(entry.colorFormats.size());
-    }
-    if (!entry.rt) {
-        return 0;
-    }
-    return static_cast<int>(entry.rt->getColorAttachmentDescs().size());
+    return static_cast<int>(entry.colorFormats.size());
 }
 
 bool entryHasDepthAttachment(const RenderTargetEditorCatalog::Entry& entry)
 {
-    if (entry.depthFormat.has_value()) {
-        return true;
-    }
-    if (!entry.rt) {
-        return false;
-    }
-    return entry.rt->getDepthAttachmentDesc().has_value();
+    return entry.depthFormat.has_value();
 }
 
 EFormat::T getEntryAttachmentFormat(const RenderTargetEditorCatalog::Entry& entry, int attachmentIndex)
@@ -75,17 +63,11 @@ EFormat::T getEntryAttachmentFormat(const RenderTargetEditorCatalog::Entry& entr
         if (attachmentIndex >= 0 && attachmentIndex < static_cast<int>(entry.colorFormats.size())) {
             return entry.colorFormats[attachmentIndex];
         }
-        if (entry.rt && attachmentIndex < static_cast<int>(entry.rt->getColorAttachmentDescs().size())) {
-            return entry.rt->getColorAttachmentDescs()[attachmentIndex].format;
-        }
         return EFormat::Undefined;
     }
 
     if (entry.depthFormat.has_value()) {
         return *entry.depthFormat;
-    }
-    if (entry.rt && entry.rt->getDepthAttachmentDesc().has_value()) {
-        return entry.rt->getDepthAttachmentDesc()->format;
     }
     return EFormat::Undefined;
 }
@@ -124,44 +106,24 @@ const char* formatLabel(EFormat::T format)
     return "Unknown";
 }
 
-IImageView* getAttachmentImageView(IRenderTarget* rt, int attachmentIndex)
-{
-    if (!rt) {
-        return nullptr;
-    }
-
-    const int colorCount = static_cast<int>(rt->getColorAttachmentDescs().size());
-    if (attachmentIndex < colorCount) {
-        auto* colorTexture = rt->getCurrentColorTexture(static_cast<uint32_t>(attachmentIndex));
-        return colorTexture ? colorTexture->getImageView() : nullptr;
-    }
-
-    if (!rt->getDepthAttachmentDesc().has_value()) {
-        return nullptr;
-    }
-
-    auto* depthTexture = rt->getCurrentDepthTexture();
-    return depthTexture ? depthTexture->getImageView() : nullptr;
-}
-
 bool isEntryInitialized(const RenderTargetEditorCatalog::Entry& entry)
 {
-    return entry.rt || !entry.colorAttachments.empty() || entry.depthAttachment || entry.depthAttachmentView;
+    return !entry.colorAttachments.empty() || entry.depthAttachment || entry.depthAttachmentView;
 }
 
 bool isSwapChainEntry(const RenderTargetEditorCatalog::Entry& entry)
 {
-    return entry.rt ? entry.rt->isSwapChainTarget() : entry.bSwapChainTarget;
+    return entry.bSwapChainTarget;
 }
 
 Extent2D getEntryExtent(const RenderTargetEditorCatalog::Entry& entry)
 {
-    return entry.rt ? entry.rt->getExtent() : entry.extent;
+    return entry.extent;
 }
 
 uint32_t getEntryFrameBufferCount(const RenderTargetEditorCatalog::Entry& entry)
 {
-    return entry.rt ? entry.rt->getFrameBufferCount() : entry.frameBufferCount;
+    return entry.frameBufferCount;
 }
 
 IImageView* getAttachmentImageView(const RenderTargetEditorCatalog::Entry& entry, int attachmentIndex)
@@ -176,7 +138,7 @@ IImageView* getAttachmentImageView(const RenderTargetEditorCatalog::Entry& entry
     if (attachmentIndex >= static_cast<int>(entry.colorAttachments.size()) && entry.depthAttachmentView) {
         return entry.depthAttachmentView.get();
     }
-    return getAttachmentImageView(entry.rt, attachmentIndex);
+    return nullptr;
 }
 
 } // namespace

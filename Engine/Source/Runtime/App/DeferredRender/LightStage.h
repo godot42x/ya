@@ -6,7 +6,6 @@
 
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/FrameBuffer.h"
-#include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Stage/IRenderStage.h"
 

@@ -4,7 +4,6 @@
 
 #include "App.h"
 #include "ECS/System/ResourceResolveSystem.h"
-#include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Sampler.h"
 
 namespace ya

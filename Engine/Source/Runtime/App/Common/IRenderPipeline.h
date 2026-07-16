@@ -14,7 +14,6 @@ namespace ya
 {
 
 struct ICommandBuffer;
-struct IRenderTarget;
 struct IImageView;
 struct IImage;
 struct RenderImage;

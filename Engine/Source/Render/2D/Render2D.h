@@ -7,7 +7,6 @@
 
 #include "Render/Core/Buffer.h"
 #include "Render/Core/DescriptorSet.h"
-#include "Render/Core/IRenderTarget.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Core/Texture.h"
 #include "Render/Render.h"

@@ -1,7 +1,6 @@
 #include "VulkanRender.h"
 #include "VulkanCommandBuffer.h"
 #include "VulkanDescriptorSet.h"
-#include "VulkanRenderTarget.h"
 
 #include <Core/Base.h>
 #include <Core/Profiling/PerfKeys.h>
@@ -877,15 +876,6 @@ void VulkanRender::createPipelineCache()
 IDescriptorSetHelper* VulkanRender::getDescriptorHelper()
 {
     return _descriptorHelper;
-}
-
-std::shared_ptr<IRenderTarget> VulkanRender::createRenderTarget(const RenderTargetCreateInfo& ci)
-{
-    auto ret = makeShared<VulkanRenderTarget>(this);
-    if (!ret->init(ci)) {
-        return nullptr;
-    }
-    return ret;
 }
 
 void VulkanRender::initExtensionFunctions()

@@ -42,7 +42,6 @@ struct SceneManager;
 struct Scene;
 struct Material;
 struct IRenderPass;
-struct IRenderTarget;
 struct IImageView;
 struct LuaScriptingSystem;
 struct Texture;

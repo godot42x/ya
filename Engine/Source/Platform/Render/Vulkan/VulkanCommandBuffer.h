@@ -76,8 +76,6 @@ class VulkanCommandBuffer : public ICommandBuffer
     void executeSetDepthBias(float constantFactor, float clamp, float slopeFactor);
 
     // === Rendering helpers ===
-    void beginRenderingWithRenderPass(IRenderTarget* renderTarget, const RenderingInfo& info);
-    void beginDynamicRenderingFromRenderTarget(IRenderTarget* renderTarget, const RenderingInfo& info);
     void beginDynamicRenderingFromManualImages(const RenderingInfo& info);
 
     // Helper: Build depth attachment info for dynamic rendering
@@ -200,12 +198,6 @@ class VulkanCommandBuffer : public ICommandBuffer
     void debugBeginLabel(const char* labelName, const float* colorRGBA = nullptr) override;
     void debugEndLabel() override;
 
-    // Helper: Transition all attachments of a RenderTarget to specified layouts
-    void transitionRenderTargetLayout(
-        IRenderTarget*  renderTarget,
-        EImageLayout::T colorLayout,
-        EImageLayout::T depthLayout   = EImageLayout::Undefined,
-        EImageLayout::T stencilLayout = EImageLayout::Undefined) override;
 };
 
 

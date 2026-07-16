@@ -16,7 +16,6 @@
 namespace ya
 {
 
-struct IRenderTarget;
 struct IFrameBuffer;
 
 struct SSAOStage : public IRenderStage

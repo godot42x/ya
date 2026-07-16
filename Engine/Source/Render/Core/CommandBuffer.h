@@ -31,7 +31,6 @@ struct IComputePipeline;
 struct IRenderPass;
 struct IBuffer;
 struct IImage;
-struct IRenderTarget;
 
 
 #if YA_CMDBUF_RECORD_MODE
@@ -576,13 +575,6 @@ struct ICommandBuffer
         IImage*                      image,
         EImageLayout::T              newLayout,
         const ImageSubresourceRange* subresourceRange = nullptr) = 0;
-
-    // Helper: Transition all attachments of a RenderTarget to specified layouts
-    virtual void transitionRenderTargetLayout(
-        IRenderTarget*  renderTarget,
-        EImageLayout::T colorLayout,
-        EImageLayout::T depthLayout   = EImageLayout::Undefined,
-        EImageLayout::T stencilLayout = EImageLayout::Undefined) = 0;
 
     virtual void debugBeginLabel(const char* labelName, const float* colorRGBA = nullptr) = 0;
     virtual void debugEndLabel()                                                          = 0;

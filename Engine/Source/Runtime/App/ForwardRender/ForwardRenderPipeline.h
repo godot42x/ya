@@ -4,7 +4,7 @@
 #include "ForwardViewportStage.h"
 #include "ForwardViewportResources.h"
 #include "Render/Core/RenderAttachmentFormats.h"
-#include "Render/Core/IRenderTarget.h"
+#include "Render/Core/RenderTargetCreateInfo.h"
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
 #include "Runtime/App/Common/IRenderPipeline.h"

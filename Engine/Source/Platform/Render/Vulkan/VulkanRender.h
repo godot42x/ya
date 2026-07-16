@@ -454,7 +454,6 @@ struct VulkanRender : public IRender
 
     // IRender interface: get swapchain
     ISwapchain* getSwapchain() override { return _swapChain; }
-    std::shared_ptr<IRenderTarget> createRenderTarget(const RenderTargetCreateInfo& ci) override;
 
     // IRender interface: get descriptor helper
     IDescriptorSetHelper* getDescriptorHelper() override;

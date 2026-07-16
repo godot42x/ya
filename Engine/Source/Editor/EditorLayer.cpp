@@ -11,7 +11,6 @@
 #include "ECS/System/TransformSystem.h"
 #include "EditorCommon.h"
 #include "ImGuiHelper.h"
-#include "Render/Core/IRenderTarget.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Resource/AssetManager.h"
 #include "Resource/Texture/TextureLibrary.h"

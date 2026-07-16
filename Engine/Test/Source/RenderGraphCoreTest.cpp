@@ -253,7 +253,6 @@ class TestCommandBuffer final : public ICommandBuffer
             });
         }
     }
-    void transitionRenderTargetLayout(IRenderTarget*, EImageLayout::T, EImageLayout::T = EImageLayout::Undefined, EImageLayout::T = EImageLayout::Undefined) override {}
     void debugBeginLabel(const char*, const float* = nullptr) override {}
     void debugEndLabel() override {}
 };
