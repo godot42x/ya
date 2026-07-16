@@ -452,8 +452,13 @@ void DetailsView::drawSkyboxSourcePreview(const SkyboxPreviewInfo& preview, cons
 
 void DetailsView::drawSkyboxCubemapPreviewGrid(const SkyboxPreviewInfo& preview)
 {
-    if (!preview.bHasRenderableCubemap || !preview.cubemapTexture ||
-        !preview.cubemapTexture->getImageShared() || !preview.cubemapTexture->getImageView()) {
+    const bool bHasAnyFacePreview = std::any_of(
+        preview.cubemapFaceViews.begin(),
+        preview.cubemapFaceViews.end(),
+        [](IImageView* view)
+        { return view != nullptr; });
+
+    if (!preview.bHasRenderableCubemap || !bHasAnyFacePreview) {
         ImGui::Spacing();
         ImGui::TextDisabled("Cubemap face previews unavailable until preprocessing completes.");
         return;

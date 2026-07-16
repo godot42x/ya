@@ -23,6 +23,14 @@
 
 ## 最新验证
 
+- 2026-07-16：`DetailsView` 的 skybox cubemap face preview 也开始脱离 “必须先有 compat `Texture` 才能显示” 的旧 gate。此前这块 UI 虽然实际展示的是 `ResourceResolveSystem` 预先构建好的 face preview views，但入口判断仍然写死要求 `preview.cubemapTexture`、`getImageShared()` 和 `getImageView()` 全都存在；这会把 editor 详情面重新绑回 compat texture 语义。现在它改为按 `bHasRenderableCubemap + 至少一个 face preview view 可用` 决定是否显示，从而和已经完成的 preview-owner/state-owner 收口保持一致。
+- 直接收益：editor 详情面这条真实观察链不再把 “state 已有 renderable cubemap / owner 真相” 再次降级成 compat texture 才允许可视化。后续如果 skybox preprocess 结果主要以 `RenderImage` owner 语义继续推进，这个 UI consumer 不会再因为 compat wrapper 缺失而把本来可用的 face preview 错判成 unavailable。
+- 当前停止线：这一步只收了 `DetailsView` skybox preview 的显示 gate，没有新增 environment details preview，也没有改 descriptor、runtime consumer 或 preview view 的生成逻辑；因此它是一个活跃 editor consumer 的 compat 清理，而不是新的 UI 功能扩展。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/detailsview-skybox-preview-owner-gate.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/detailsview-skybox-preview-owner-gate.png` 已生成
+
 - 2026-07-16：`RenderFrameExtractor` / `RenderFrameData` 上一条只写不读的 skybox/environment compat 快照出口已删除。此前 extractor 每帧仍会把 scene skybox cubemap 与 environment irradiance 填进 `RenderFrameData::skybox`，但全仓搜索确认这份 snapshot 没有任何真实 consumer；真正的 Deferred / Forward skybox 消费都已经走各自 runtime/provider/descriptor 链。现在 `RenderSkyboxData`、`RenderFrameData::skybox` 与 `RenderFrameExtractor::extractSkybox()` 一起移除，extractor 也顺带不再为了这条死出口依赖 `ResourceResolveSystem`。
 - 直接收益：这批不是“继续给旧 compat 面补 owner 语义”，而是直接删掉一个已经没有消费方的旧数据面。这样后续继续收 environment/skybox compat 时，注意力会更集中在真实 runtime consumer，而不是被 `RenderFrameData` 上一个看起来还活着、实际上没人读的旧出口分散掉。
 - 当前停止线：这一步没有改 Forward/Deferred 的 skybox descriptor 或 environment 绑定主链；也没有去动真正仍在运行时使用的 preview/provider/query 路径。它只删除确认无下游的 frame snapshot compat 数据，因此属于低风险清理，而不是新一轮环境资源协议迁移。
