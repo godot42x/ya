@@ -908,6 +908,10 @@ TEST(RenderGraphCoreTest, ResourceRegistryReusesStableResourcesAcrossSyncs)
 
 TEST(RenderGraphCoreTest, ResourceRegistryRefreshesImportedKeepAliveWithoutRecreatingView)
 {
+    auto& deletionQueue = DeferredDeletionQueue::get();
+    deletionQueue.flushAll();
+    deletionQueue.init(/*framesInFlight=*/1);
+
     TestResourceFactory factory;
     RenderGraphResourceRegistry registry(factory);
 
@@ -982,12 +986,16 @@ TEST(RenderGraphCoreTest, ResourceRegistryRefreshesImportedKeepAliveWithoutRecre
         ownerB.reset();
     }
 
-    EXPECT_TRUE(ownerAWeak.expired());
+    EXPECT_FALSE(ownerAWeak.expired());
     EXPECT_FALSE(ownerBWeak.expired());
     EXPECT_EQ(factory.importedImages, 0u);
     EXPECT_EQ(factory.createdViews, createdViewsBeforeSync);
 
     registry.clear();
+    EXPECT_FALSE(ownerAWeak.expired());
+    EXPECT_FALSE(ownerBWeak.expired());
+    deletionQueue.flushAll();
+    EXPECT_TRUE(ownerAWeak.expired());
     EXPECT_TRUE(ownerBWeak.expired());
 }
 
@@ -1740,6 +1748,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryRefreshesImportedBufferKeepAliveWithou
 {
     auto& deletionQueue = DeferredDeletionQueue::get();
     deletionQueue.flushAll();
+    deletionQueue.init(/*framesInFlight=*/1);
 
     TestResourceFactory factory;
     RenderGraphResourceRegistry registry(factory);
@@ -1790,16 +1799,16 @@ TEST(RenderGraphCoreTest, ResourceRegistryRefreshesImportedBufferKeepAliveWithou
         ownerB.reset();
     }
 
-    EXPECT_TRUE(ownerAWeak.expired());
+    EXPECT_FALSE(ownerAWeak.expired());
     EXPECT_FALSE(ownerBWeak.expired());
     EXPECT_EQ(registry.resolveBuffer(handle), &importedBacking);
     EXPECT_EQ(factory.createdBuffers, 0u);
 
     registry.clear();
-    if (deletionQueue.isInitialized()) {
-        EXPECT_FALSE(ownerBWeak.expired());
-        deletionQueue.flushAll();
-    }
+    EXPECT_FALSE(ownerAWeak.expired());
+    EXPECT_FALSE(ownerBWeak.expired());
+    deletionQueue.flushAll();
+    EXPECT_TRUE(ownerAWeak.expired());
     EXPECT_TRUE(ownerBWeak.expired());
 }
 

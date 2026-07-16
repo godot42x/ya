@@ -23,6 +23,12 @@
 
 ## 最新验证
 
+- 2026-07-16：`RenderGraphResourceRegistry` 的 imported keepalive refresh 也开始对齐延迟退休语义。此前 imported texture / buffer 在“handle 不变、image/view/buffer 也不需要 replacement，但 retained keepalive 集合发生变化”时，会直接覆盖旧的 retained owner；这意味着旧 keepalive 的释放没有走 `DeferredDeletionQueue`，只是在当前 runtime 因为每帧 `waitIdle()` 而暂时没暴露成明显问题。现在 texture/buffer 这两条 refresh 路径都会先把旧 retained 集合移交给 `retireRetainedResources()`，再接上新的 retained 集合，使 imported keepalive refresh、replacement、prune 和 clear 四种出口终于统一到同一套 deferred-retirement 语义。
+- 直接收益：这一步补齐的是 `graph registry replacement / keepalive refresh / deferred deletion` 之间一块真实的不一致，而不是又一层接口整理。后续如果继续推进“减少每帧 `waitIdle()` 依赖”或压实 submit-time lifetime，imported 资源在 refresh-but-no-replacement 情况下不再是一个语义特例。
+- 验证结果：
+  - 新增/收紧 `RenderGraphCoreTest.ResourceRegistryRefreshesImportedKeepAliveWithoutRecreatingView`
+  - 新增/收紧 `RenderGraphCoreTest.ResourceRegistryRefreshesImportedBufferKeepAliveWithoutReplacingBuffer`
+  - 两个用例现在都明确要求：refresh 后旧 keepalive 仍存活，直到 `DeferredDeletionQueue::flushAll()` 才释放
 - 2026-07-16：`Phase 10 / 删除剩余 compatibility adapter` 又做了一轮代码审计，结论是这项已经到自然停止线，不再继续扩成 source/result state 拆分实现。额外证据包括：
   - `SkyboxRuntimeState::cubemapTexture` 仍直接承载 cubemap-from-files source；`sourcePreviewTexture` 仍是 cylindrical source 的 editor/debug 预览输入，不是 preprocess result 的兼容缓存。
   - `EnvironmentLightingRuntimeState::cubemapTexture` 仍直接承载本地 cubemap asset source；当 source 来自 `SceneSkybox` 时，真正的 source 解析已经通过 `resolveEnvironmentSourceCubemap()` 回到 scene skybox state，而不是再在 environment state 内复制一份本地真相。

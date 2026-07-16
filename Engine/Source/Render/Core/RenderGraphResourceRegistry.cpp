@@ -101,6 +101,14 @@ void retireRetainedResources(std::vector<std::shared_ptr<void>>& retainedResourc
     retainedResources.clear();
 }
 
+void refreshRetainedResources(std::vector<std::shared_ptr<void>>& currentRetainedResources,
+                              const std::vector<std::shared_ptr<void>>& nextRetainedResources)
+{
+    auto retiredResources = std::move(currentRetainedResources);
+    currentRetainedResources = nextRetainedResources;
+    retireRetainedResources(retiredResources);
+}
+
 } // namespace
 
 RenderGraphResourceRegistry::~RenderGraphResourceRegistry()
@@ -261,10 +269,14 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
         const auto existing = _textures.find(texture.handle);
         if (existing != _textures.end() && !needsTextureReplacement(existing->second, texture)) {
             if (texture.lifetime == ERGResourceLifetime::Imported) {
+                if (existing->second.imported.has_value()) {
+                    refreshRetainedResources(existing->second.imported->retainedResources,
+                                             texture.imported ? texture.imported->retainedResources : std::vector<std::shared_ptr<void>>{});
+                }
                 existing->second.imported = texture.imported;
                 if (existing->second.resource) {
-                    existing->second.resource->retainedResources =
-                        texture.imported ? texture.imported->retainedResources : std::vector<std::shared_ptr<void>>{};
+                    refreshRetainedResources(existing->second.resource->retainedResources,
+                                             texture.imported ? texture.imported->retainedResources : std::vector<std::shared_ptr<void>>{});
                 }
             }
             continue;
@@ -303,6 +315,10 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
 
             const auto existing = _importedBuffers.find(buffer.handle);
             if (existing != _importedBuffers.end() && !needsImportedBufferReplacement(existing->second, buffer)) {
+                if (existing->second.imported.has_value()) {
+                    refreshRetainedResources(existing->second.imported->retainedResources,
+                                             buffer.imported ? buffer.imported->retainedResources : std::vector<std::shared_ptr<void>>{});
+                }
                 existing->second.imported = buffer.imported;
                 continue;
             }
