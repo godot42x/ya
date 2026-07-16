@@ -53,6 +53,11 @@ struct RenderSharedResourceProvider
         Texture*                     boundCubemapTexture       = nullptr;
         Texture*                     boundIrradianceTexture    = nullptr;
         Texture*                     boundPrefilterTexture     = nullptr;
+        RenderImage*                 boundBrdfLutTexture       = nullptr;
+        ImageViewHandle              boundCubemapImageView     = nullptr;
+        ImageViewHandle              boundIrradianceImageView  = nullptr;
+        ImageViewHandle              boundPrefilterImageView   = nullptr;
+        ImageViewHandle              boundBrdfLutImageView     = nullptr;
     };
 
     struct SharedResources

@@ -9,6 +9,21 @@
 namespace ya
 {
 
+namespace
+{
+
+ImageViewHandle getTextureImageViewHandle(const Texture* texture)
+{
+    return texture && texture->getImageView() ? texture->getImageView()->getHandle() : ImageViewHandle{};
+}
+
+ImageViewHandle getRenderImageViewHandle(const RenderImage* image)
+{
+    return image && image->getImageView() ? image->getImageView()->getHandle() : ImageViewHandle{};
+}
+
+} // namespace
+
 Texture* RenderSharedResourceProvider::findSceneSkyboxTexture(Scene* scene) const
 {
     if (!scene || !_app || !_app->getResourceResolveSystem()) {
@@ -169,10 +184,19 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneEnvironmentLightingDes
     auto* irradianceTexture = resources.irradianceTexture;
     auto* prefilterTexture  = resources.prefilterTexture;
     auto* brdfLutTexture    = resources.brdfLutTexture;
+    const auto cubemapImageViewHandle    = getTextureImageViewHandle(cubemapTexture);
+    const auto irradianceImageViewHandle = getTextureImageViewHandle(irradianceTexture);
+    const auto prefilterImageViewHandle  = getTextureImageViewHandle(prefilterTexture);
+    const auto brdfLutImageViewHandle    = getRenderImageViewHandle(brdfLutTexture);
 
     if (cubemapTexture != _environmentLighting.boundCubemapTexture ||
         irradianceTexture != _environmentLighting.boundIrradianceTexture ||
-        prefilterTexture != _environmentLighting.boundPrefilterTexture) {
+        prefilterTexture != _environmentLighting.boundPrefilterTexture ||
+        brdfLutTexture != _environmentLighting.boundBrdfLutTexture ||
+        cubemapImageViewHandle != _environmentLighting.boundCubemapImageView ||
+        irradianceImageViewHandle != _environmentLighting.boundIrradianceImageView ||
+        prefilterImageViewHandle != _environmentLighting.boundPrefilterImageView ||
+        brdfLutImageViewHandle != _environmentLighting.boundBrdfLutImageView) {
         updateEnvironmentLightingDescriptorSet(_environmentLighting.sceneDS,
                                                cubemapTexture,
                                                irradianceTexture,
@@ -181,6 +205,11 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneEnvironmentLightingDes
         _environmentLighting.boundCubemapTexture    = cubemapTexture;
         _environmentLighting.boundIrradianceTexture = irradianceTexture;
         _environmentLighting.boundPrefilterTexture  = prefilterTexture;
+        _environmentLighting.boundBrdfLutTexture    = brdfLutTexture;
+        _environmentLighting.boundCubemapImageView  = cubemapImageViewHandle;
+        _environmentLighting.boundIrradianceImageView = irradianceImageViewHandle;
+        _environmentLighting.boundPrefilterImageView  = prefilterImageViewHandle;
+        _environmentLighting.boundBrdfLutImageView    = brdfLutImageViewHandle;
     }
 
     return _environmentLighting.sceneDS;
@@ -370,6 +399,11 @@ void RenderSharedResourceProvider::releaseRenderOwnedResources()
     _environmentLighting.boundCubemapTexture    = nullptr;
     _environmentLighting.boundIrradianceTexture = nullptr;
     _environmentLighting.boundPrefilterTexture  = nullptr;
+    _environmentLighting.boundBrdfLutTexture    = nullptr;
+    _environmentLighting.boundCubemapImageView  = nullptr;
+    _environmentLighting.boundIrradianceImageView = nullptr;
+    _environmentLighting.boundPrefilterImageView  = nullptr;
+    _environmentLighting.boundBrdfLutImageView    = nullptr;
     _environmentLighting.sceneDS                = nullptr;
     _environmentLighting.fallbackDS             = nullptr;
     _environmentLighting.dsp.reset();
@@ -414,6 +448,11 @@ void RenderSharedResourceProvider::resetEnvironmentLightingPool()
     _environmentLighting.boundCubemapTexture    = nullptr;
     _environmentLighting.boundIrradianceTexture = nullptr;
     _environmentLighting.boundPrefilterTexture  = nullptr;
+    _environmentLighting.boundBrdfLutTexture    = nullptr;
+    _environmentLighting.boundCubemapImageView  = nullptr;
+    _environmentLighting.boundIrradianceImageView = nullptr;
+    _environmentLighting.boundPrefilterImageView  = nullptr;
+    _environmentLighting.boundBrdfLutImageView    = nullptr;
 
     _environmentLighting.fallbackDS = _environmentLighting.dsp->allocateDescriptorSets(_environmentLighting.dsl);
     _environmentLighting.sceneDS    = _environmentLighting.dsp->allocateDescriptorSets(_environmentLighting.dsl);
