@@ -83,8 +83,11 @@ struct ViewportOverlayStage : public IRenderStage
     stdptr<IPipelineLayout>   _overlayPPL;
     int                       _defaultColorType = 0;
     OverlayPushConstant       _overlayPC{};
+    Mesh*                     _directionCone = nullptr;
+    Mesh*                     _directionCylinder = nullptr;
 
-    DebugSkinning   _debugSkinning;
+    DebugRenderSystem*                     _debugRenderSystem = nullptr;
+    DebugSkinning                          _debugSkinning;
 
     std::function<DebugRenderSystem&()>        _getDebugRenderSystem;
     FrameInputs                                _frameInputs{};

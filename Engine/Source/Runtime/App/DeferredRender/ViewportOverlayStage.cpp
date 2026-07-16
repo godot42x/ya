@@ -84,8 +84,8 @@ void ViewportOverlayStage::refreshPipelineFormats(const DeferredAttachmentFormat
         _overlayPipeline->updateDesc(std::move(ci));
     }
 
-    if (_getDebugRenderSystem) {
-        _getDebugRenderSystem().refreshPipelineFormats(formats);
+    if (_debugRenderSystem) {
+        _debugRenderSystem->refreshPipelineFormats(formats);
     }
     _debugSkinning.refreshPipelineFormats(formats);
 }
@@ -97,12 +97,17 @@ void ViewportOverlayStage::refreshPipelineFormats(const DeferredAttachmentFormat
 void ViewportOverlayStage::init(IRender* render)
 {
     _render = render;
+    _directionCone = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cone);
+    _directionCylinder = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cylinder);
+    YA_CORE_ASSERT(_directionCone != nullptr, "ViewportOverlayStage requires direction cone mesh");
+    YA_CORE_ASSERT(_directionCylinder != nullptr, "ViewportOverlayStage requires direction cylinder mesh");
     initSkybox();
     initOverlay();
     YA_CORE_ASSERT(_getDebugRenderSystem, "ViewportOverlayStage requires debug render system service");
-    auto& debugSystem = _getDebugRenderSystem();
-    debugSystem.init(_render);
-    debugSystem.primitives().bReverseViewportY = bReverseViewportY;
+    _debugRenderSystem = &_getDebugRenderSystem();
+    YA_CORE_ASSERT(_debugRenderSystem != nullptr, "ViewportOverlayStage requires debug render system instance");
+    _debugRenderSystem->init(_render);
+    _debugRenderSystem->primitives().bReverseViewportY = bReverseViewportY;
     _debugSkinning.init(_render);
     _debugSkinning.bReverseViewportY = bReverseViewportY;
 }
@@ -223,6 +228,9 @@ void ViewportOverlayStage::destroy()
 
     _overlayPipeline.reset();
     _overlayPPL.reset();
+    _directionCone = nullptr;
+    _directionCylinder = nullptr;
+    _debugRenderSystem = nullptr;
     _debugSkinning.destroy();
     _getDebugRenderSystem        = {};
     _frameInputs                 = {};
@@ -242,8 +250,8 @@ void ViewportOverlayStage::prepare(const RenderStageContext& ctx)
     if (_overlayPipeline) {
         _overlayPipeline->beginFrame();
     }
-    if (_getDebugRenderSystem) {
-        _getDebugRenderSystem().beginFrame();
+    if (_debugRenderSystem) {
+        _debugRenderSystem->beginFrame();
     }
     _debugSkinning.beginFrame();
 
@@ -321,10 +329,10 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
     if (vpW == 0 || vpH == 0) return;
 
     const auto& fd                     = *ctx.frameData;
-    if (!_getDebugRenderSystem) {
+    if (!_debugRenderSystem) {
         return;
     }
-    auto& debugSystem = _getDebugRenderSystem();
+    auto& debugSystem = *_debugRenderSystem;
     debugSystem.primitives().bReverseViewportY = bReverseViewportY;
     _debugSkinning.bReverseViewportY   = bReverseViewportY;
 
@@ -387,18 +395,17 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
     }
 
     // Draw direction cones/cylinders from setup snapshot
-    auto* cone     = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cone);
-    auto* cylinder = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cylinder);
+    if (hasDirection && (!_directionCone || !_directionCylinder)) return;
 
     _overlayPC.colorType = _defaultColorType;
     for (const auto& gizmo : _frameInputs.directionGizmos) {
         _overlayPC.model = gizmo.coneModel;
         cmdBuf->pushConstants(_overlayPPL.get(), EShaderStage::Vertex, 0, sizeof(OverlayPushConstant), &_overlayPC);
-        cone->draw(cmdBuf);
+        _directionCone->draw(cmdBuf);
 
         _overlayPC.model = gizmo.cylinderModel;
         cmdBuf->pushConstants(_overlayPPL.get(), EShaderStage::Vertex, 0, sizeof(OverlayPushConstant), &_overlayPC);
-        cylinder->draw(cmdBuf);
+        _directionCylinder->draw(cmdBuf);
 
         debugSystem.addConeImmediate(gizmo.coneModel,
                                      glm::vec4(0.9f, 0.6f, 0.1f, 1.0f));
@@ -429,8 +436,8 @@ void ViewportOverlayStage::renderGUI()
     }
 
     if (ImGui::TreeNode("Debug")) {
-        if (_getDebugRenderSystem) {
-            _getDebugRenderSystem().renderGUI();
+        if (_debugRenderSystem) {
+            _debugRenderSystem->renderGUI();
         }
         _debugSkinning.renderGUI();
         ImGui::TreePop();

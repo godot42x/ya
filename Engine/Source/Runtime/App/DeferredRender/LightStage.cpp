@@ -177,6 +177,8 @@ void LightStage::init(IRender* render)
 {
     _render = render;
     YA_CORE_ASSERT(_frameAndLightDSL, "LightStage requires frame/light DSL (call setup() before init())");
+    _fullscreenQuad = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Quad);
+    YA_CORE_ASSERT(_fullscreenQuad != nullptr, "LightStage requires fullscreen quad mesh");
 
     auto& configManager      = ConfigManager::get();
     _bEnablePBRDiffuseIBL    = configManager.getOr<bool>(LIGHT_STAGE_CONFIG_DOC_NAME,
@@ -283,6 +285,7 @@ void LightStage::destroy()
     _frameAndLightDSL.reset();
     _gBufferResources         = {};
     _ssaoTextureOwner.reset();
+    _fullscreenQuad           = nullptr;
     _environmentLightingDSL.reset();
     _getSceneEnvironmentLightingDescriptorSet = {};
     _frameInputs = {};
@@ -390,7 +393,7 @@ void LightStage::prepare(const RenderStageContext& ctx)
 void LightStage::execute(const RenderStageContext& ctx)
 {
     YA_PERF_SCOPE(perf::sample::deferredLightExecute(), perf::metric::cpuTimeMs(), perf::domain::render());
-    if (!ctx.cmdBuf || !_frameInputs.frameAndLightDescriptorSet) return;
+    if (!ctx.cmdBuf || !_frameInputs.frameAndLightDescriptorSet || !_fullscreenQuad) return;
 
     auto* cmdBuf = ctx.cmdBuf;
     auto  vpW    = ctx.viewportExtent.width;
@@ -410,7 +413,7 @@ void LightStage::execute(const RenderStageContext& ctx)
                                                              _shadowDS,
                                                          });
 
-    PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Quad)->draw(cmdBuf);
+    _fullscreenQuad->draw(cmdBuf);
 
     cmdBuf->debugEndLabel();
 }

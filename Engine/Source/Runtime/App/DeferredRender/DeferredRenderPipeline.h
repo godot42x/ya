@@ -38,6 +38,7 @@ struct SceneManager;
 struct Scene;
 struct Sampler;
 struct DebugRenderSystem;
+struct Mesh;
 struct RenderTargetEditorCatalog;
 class ResourceResolveSystem;
 
@@ -117,6 +118,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     PostProcessingStage          _postProcessStage;
 
     ShadowMapResources                                              _shadowResources;
+    Mesh*                                                           _defaultSkyboxMesh = nullptr;
 
     bool     _bReverseViewportY    = true;
     bool     _bEnableSSAO          = true;

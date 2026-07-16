@@ -20,6 +20,7 @@ namespace ya
 struct Scene;
 struct Texture;
 struct RenderImage;
+struct Mesh;
 
 /// Deferred light pass — fullscreen quad that reads GBuffer textures and computes lighting.
 ///
@@ -69,6 +70,7 @@ struct LightStage : public IRenderStage
     DescriptorSetHandle     _gBufferTextureDS = nullptr;
     stdptr<IDescriptorSetLayout> _shadowDSL;
     DescriptorSetHandle          _shadowDS = nullptr;
+    Mesh*                        _fullscreenQuad = nullptr;
 
     std::array<ImageViewHandle, 4> _lastGBufferImageViewHandles{};
     ImageViewHandle                _lastGBufferDepthImageViewHandle = nullptr;

@@ -648,6 +648,8 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     }
     loadPersistentSettings();
     YA_CORE_ASSERT(_render, "DeferredRenderPipeline requires a valid render backend");
+    _defaultSkyboxMesh = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
+    YA_CORE_ASSERT(_defaultSkyboxMesh != nullptr, "DeferredRenderPipeline requires default skybox cube mesh");
     resolveRuntimeFormats();
 
     Extent2D extent{
@@ -744,6 +746,7 @@ void DeferredRenderPipeline::shutdown()
     }
 
     destroyShadowResources();
+    _defaultSkyboxMesh = nullptr;
     _bShadowSettingsChangePending = false;
     _environmentLightingDSL.reset();
     _getSceneEnvironmentLightingDescriptorSet = {};
@@ -863,7 +866,7 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
             const auto* skyboxState = resourceResolveSystem->findFirstSceneSkyboxState(activeScene);
             if (skyboxState && skyboxState->hasRenderableCubemap()) {
                 frameInputs.skybox.descriptorSet = _getSceneSkyboxDescriptorSet(activeScene);
-                frameInputs.skybox.mesh          = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
+                frameInputs.skybox.mesh          = _defaultSkyboxMesh;
                 for (const auto& [entity, sc, mc] : activeScene->getRegistry().view<SkyboxComponent, StaticMeshComponent>().each()) {
                     if (mc.isResolved() && mc.getMesh()) {
                         frameInputs.skybox.mesh = mc.getMesh();
