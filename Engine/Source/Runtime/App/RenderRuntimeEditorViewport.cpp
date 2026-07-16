@@ -75,6 +75,31 @@ void appendShadowDebugSlots(EditorViewportContext& ctx,
 
 } // namespace
 
+std::shared_ptr<RenderImage> RenderRuntime::getEditorViewportImageShared() const
+{
+    if (_renderPipeline == ERenderPipeline::Forward) {
+        if (!_forwardPipeline) {
+            return nullptr;
+        }
+        if (auto postprocessOutput = _forwardPipeline->getPostprocessOutputImageShared()) {
+            return postprocessOutput;
+        }
+        return _forwardPipeline->getViewportOutputImageShared();
+    }
+
+    if (_renderPipeline == ERenderPipeline::Deferred) {
+        if (!_deferredPipeline) {
+            return nullptr;
+        }
+        if (auto postprocessOutput = _deferredPipeline->getPostprocessOutputImageShared()) {
+            return postprocessOutput;
+        }
+        return _deferredPipeline->getViewportOutputImageShared();
+    }
+
+    return nullptr;
+}
+
 void RenderRuntime::updateEditorViewportContext(EditorLayer* editorLayer)
 {
     if (!editorLayer) {
@@ -84,14 +109,13 @@ void RenderRuntime::updateEditorViewportContext(EditorLayer* editorLayer)
     const auto debugOutputs = buildPipelineDebugOutputCatalog();
 
     EditorViewportContext ctx;
-    ctx.bForwardPipeline         = (_renderPipeline == ERenderPipeline::Forward);
-    ctx.bPostprocessingEnabled   = debugOutputs.bPostprocessingEnabled;
-    ctx.viewportImageView        = debugOutputs.postprocessOutputImage && debugOutputs.postprocessOutputImage->getImageView()
-        ? debugOutputs.postprocessOutputImage->getImageView()
-        : (debugOutputs.viewportOutputImage && debugOutputs.viewportOutputImage->getImageView()
-            ? debugOutputs.viewportOutputImage->getImageView()
-            : nullptr);
-    ctx.debugSpec.categories     = {
+    ctx.bForwardPipeline       = (_renderPipeline == ERenderPipeline::Forward);
+    ctx.bPostprocessingEnabled = debugOutputs.bPostprocessingEnabled;
+    ctx.viewportImageOwner     = getEditorViewportImageShared();
+    ctx.viewportImageView      = ctx.viewportImageOwner && ctx.viewportImageOwner->getImageView()
+        ? ctx.viewportImageOwner->getImageView()
+        : nullptr;
+    ctx.debugSpec.categories   = {
         {.id = "shadow", .label = "Shadow"},
         {.id = "skybox", .label = "Skybox"},
         {.id = "environment", .label = "Environment"},
@@ -255,11 +279,11 @@ void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
         },
     };
 
-    if (auto* ssaoTexture = deferredViews.ssaoTexture; ssaoTexture && ssaoTexture->getImageView()) {
+    if (auto ssaoTexture = deferredViews.ssaoTextureOwner; ssaoTexture && ssaoTexture->getImageView()) {
         ctx.debugSpec.slots.push_back({
             .label         = "SSAO",
             .defaultView   = ssaoTexture->getImageView(),
-            .ownedView     = nullptr,
+            .ownedView     = ssaoTexture->getImageViewShared(),
             .image         = ssaoTexture->getImageShared(),
             .categoryIndex = CATEGORY_GBUFFER,
         });
@@ -282,37 +306,37 @@ void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
         .tint          = {1, 0, 0, 1},
     });
 
-    if (debugOutputs.bloomExtract && debugOutputs.bloomExtract->getImageView()) {
+    if (auto bloomExtract = debugOutputs.bloomExtractOwner; bloomExtract && bloomExtract->getImageView()) {
         ctx.debugSpec.slots.push_back({
             .label         = "BloomExtract",
-            .defaultView   = debugOutputs.bloomExtract->getImageView(),
+            .defaultView   = bloomExtract->getImageView(),
             .ownedView     = nullptr,
-            .image         = debugOutputs.bloomExtract->getImageShared(),
+            .image         = bloomExtract->getImageShared(),
             .categoryIndex = CATEGORY_POSTPROCESS,
         });
     }
 
-    if (debugOutputs.bloomBlur && debugOutputs.bloomBlur->getImageView()) {
+    if (auto bloomBlur = debugOutputs.bloomBlurOwner; bloomBlur && bloomBlur->getImageView()) {
         ctx.debugSpec.slots.push_back({
             .label         = "BloomBlur",
-            .defaultView   = debugOutputs.bloomBlur->getImageView(),
+            .defaultView   = bloomBlur->getImageView(),
             .ownedView     = nullptr,
-            .image         = debugOutputs.bloomBlur->getImageShared(),
+            .image         = bloomBlur->getImageShared(),
             .categoryIndex = CATEGORY_POSTPROCESS,
         });
     }
 
-    if (debugOutputs.bloomComposite && debugOutputs.bloomComposite->getImageView()) {
+    if (auto bloomComposite = debugOutputs.bloomCompositeOwner; bloomComposite && bloomComposite->getImageView()) {
         ctx.debugSpec.slots.push_back({
             .label         = "BloomComposite",
-            .defaultView   = debugOutputs.bloomComposite->getImageView(),
+            .defaultView   = bloomComposite->getImageView(),
             .ownedView     = nullptr,
-            .image         = debugOutputs.bloomComposite->getImageShared(),
+            .image         = bloomComposite->getImageShared(),
             .categoryIndex = CATEGORY_POSTPROCESS,
         });
     }
 
-    if (auto* postprocessOutput = debugOutputs.postprocessOutputImage; postprocessOutput && postprocessOutput->getImageView()) {
+    if (auto postprocessOutput = debugOutputs.postprocessOutputImageOwner; postprocessOutput && postprocessOutput->getImageView()) {
         ctx.debugSpec.slots.push_back({
             .label         = "PostprocessOutput",
             .defaultView   = postprocessOutput->getImageView(),

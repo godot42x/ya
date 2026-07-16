@@ -215,6 +215,10 @@ void RenderRuntime::initPresentationResources()
 
 void RenderRuntime::rebuildPresentationImages()
 {
+    if (_presentationGraphExecutor) {
+        _presentationGraphExecutor->clear();
+    }
+
     _presentationImages.clear();
     if (!_render) {
         return;

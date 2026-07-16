@@ -145,10 +145,26 @@ RenderImage* RenderRuntime::getPostprocessOutputImage() const
     return nullptr;
 }
 
+std::shared_ptr<RenderImage> RenderRuntime::getPostprocessOutputImageShared() const
+{
+    if (_renderPipeline == ERenderPipeline::Forward && _forwardPipeline) {
+        return _forwardPipeline->getPostprocessOutputImageShared();
+    }
+    if (_renderPipeline == ERenderPipeline::Deferred && _deferredPipeline) {
+        return _deferredPipeline->getPostprocessOutputImageShared();
+    }
+    return nullptr;
+}
+
 RenderImage* RenderRuntime::getPresentationImage() const
 {
     auto presentationImage = getCurrentPresentationImageShared();
     return presentationImage.get();
+}
+
+std::shared_ptr<RenderImage> RenderRuntime::getPresentationImageShared() const
+{
+    return getCurrentPresentationImageShared();
 }
 
 std::shared_ptr<RenderImage> RenderRuntime::getCurrentPresentationImageShared() const
@@ -181,21 +197,34 @@ bool RenderRuntime::isPostprocessingEnabled() const
 RenderPipelineDebugOutputCatalog RenderRuntime::buildPipelineDebugOutputCatalog() const
 {
     RenderPipelineDebugOutputCatalog catalog{};
-    auto*                            pipeline = getActivePipelineDebugOutputs();
+    auto* pipeline = getActivePipelineDebugOutputs();
     if (!pipeline) {
         return catalog;
     }
 
     catalog.bShadowMappingEnabled  = pipeline->isShadowMappingEnabled();
     catalog.shadowDepthImage       = pipeline->getShadowDepthImage();
-    catalog.viewportOutputImage    = pipeline->getViewportOutputImage();
     catalog.viewportDepthTexture   = pipeline->getViewportDepthTexture();
     catalog.shadowDirectionalDepth = pipeline->getShadowDirectionalDepthIV();
-    catalog.postprocessOutputImage = pipeline->getPostprocessOutputImage();
-    catalog.bloomExtract           = pipeline->getBloomExtractImage();
-    catalog.bloomBlur              = pipeline->getBloomBlurImage();
-    catalog.bloomComposite         = pipeline->getBloomCompositeImage();
     catalog.bPostprocessingEnabled = pipeline->isPostprocessingEnabled();
+
+    if (_renderPipeline == ERenderPipeline::Forward && _forwardPipeline) {
+        catalog.viewportOutputImageOwner    = _forwardPipeline->getViewportOutputImageShared();
+        catalog.postprocessOutputImageOwner = _forwardPipeline->getPostprocessOutputImageShared();
+        catalog.bloomExtractOwner           = _forwardPipeline->getBloomExtractImageShared();
+        catalog.bloomBlurOwner              = _forwardPipeline->getBloomBlurImageShared();
+        catalog.bloomCompositeOwner         = _forwardPipeline->getBloomCompositeImageShared();
+        return catalog;
+    }
+
+    if (_renderPipeline == ERenderPipeline::Deferred && _deferredPipeline) {
+        catalog.viewportOutputImageOwner    = _deferredPipeline->getViewportOutputImageShared();
+        catalog.postprocessOutputImageOwner = _deferredPipeline->getPostprocessOutputImageShared();
+        catalog.bloomExtractOwner           = _deferredPipeline->getBloomExtractImageShared();
+        catalog.bloomBlurOwner              = _deferredPipeline->getBloomBlurImageShared();
+        catalog.bloomCompositeOwner         = _deferredPipeline->getBloomCompositeImageShared();
+    }
+
     return catalog;
 }
 

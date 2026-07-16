@@ -84,6 +84,23 @@ void retireSharedResource(std::shared_ptr<T>& resource)
     resource.reset();
 }
 
+void retireRetainedResources(std::vector<std::shared_ptr<void>>& retainedResources)
+{
+    if (retainedResources.empty()) {
+        return;
+    }
+
+    auto& deletionQueue = DeferredDeletionQueue::get();
+    if (deletionQueue.isInitialized()) {
+        deletionQueue.enqueue(deletionQueue.currentFrame(), [captured = std::move(retainedResources)]() mutable {
+            captured.clear();
+        });
+        return;
+    }
+
+    retainedResources.clear();
+}
+
 } // namespace
 
 RenderGraphResourceRegistry::~RenderGraphResourceRegistry()
@@ -196,6 +213,9 @@ void RenderGraphResourceRegistry::pruneUnusedResources(const RenderGraph& graph)
 
     for (auto it = _importedBuffers.begin(); it != _importedBuffers.end();) {
         if (!liveBuffers.contains(it->first)) {
+            if (it->second.imported.has_value()) {
+                retireRetainedResources(it->second.imported->retainedResources);
+            }
             it = _importedBuffers.erase(it);
         }
         else {
@@ -286,6 +306,9 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
                 existing->second.imported = buffer.imported;
                 continue;
             }
+            if (existing != _importedBuffers.end() && existing->second.imported.has_value()) {
+                retireRetainedResources(existing->second.imported->retainedResources);
+            }
 
             _importedBuffers[buffer.handle] = ImportedBufferEntry{
                 .resource = buffer.imported->buffer,
@@ -294,6 +317,10 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
             continue;
         }
 
+        if (const auto imported = _importedBuffers.find(buffer.handle);
+            imported != _importedBuffers.end() && imported->second.imported.has_value()) {
+            retireRetainedResources(imported->second.imported->retainedResources);
+        }
         _importedBuffers.erase(buffer.handle);
 
         const auto existing = _ownedBuffers.find(buffer.handle);
@@ -328,6 +355,12 @@ void RenderGraphResourceRegistry::clear()
     }
     _textures.clear();
     _ownedBuffers.clear();
+    for (auto& [handle, buffer] : _importedBuffers) {
+        (void)handle;
+        if (buffer.imported.has_value()) {
+            retireRetainedResources(buffer.imported->retainedResources);
+        }
+    }
     _importedBuffers.clear();
 }
 

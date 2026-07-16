@@ -80,8 +80,8 @@ struct ForwardRenderPipeline : public IRenderPipeline
     stdptr<ForwardViewportStage> _viewportStage;
     PostProcessingStage          _postProcessStage;
 
-    bool               bMSAA                    = false;
-    const RenderImage* _currentPostprocessOutput = nullptr;
+    bool                    bMSAA                    = false;
+    std::shared_ptr<RenderImage> _currentPostprocessOutput = nullptr;
 
     Extent2D      _pendingViewportExtent{};
     uint32_t      _pendingResourceRefreshMask = 0;
@@ -116,6 +116,26 @@ struct ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] EFormat::T     getViewportColorFormat() const override;
     [[nodiscard]] EFormat::T     getViewportDepthFormat() const override;
     [[nodiscard]] const ForwardViewportResources& getCurrentViewportResources() const { return _viewportResources; }
+    [[nodiscard]] std::shared_ptr<RenderImage>    getViewportOutputImageShared() const
+    {
+        return bMSAA ? _viewportResources.resolveOwner : _viewportResources.colorOwner;
+    }
+    [[nodiscard]] std::shared_ptr<RenderImage> getPostprocessOutputImageShared() const
+    {
+        return _currentPostprocessOutput;
+    }
+    [[nodiscard]] std::shared_ptr<RenderImage> getBloomExtractImageShared() const
+    {
+        return _postProcessStage.getBloomExtractImageShared();
+    }
+    [[nodiscard]] std::shared_ptr<RenderImage> getBloomBlurImageShared() const
+    {
+        return _postProcessStage.getBloomBlurImageShared();
+    }
+    [[nodiscard]] std::shared_ptr<RenderImage> getBloomCompositeImageShared() const
+    {
+        return _postProcessStage.getBloomCompositeImageShared();
+    }
     void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const override;
 
     [[nodiscard]] bool           isShadowMappingEnabled() const override;
@@ -124,7 +144,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] Texture*       getViewportDepthTexture() const override { return _viewportResources.depth; }
     [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override;
-    [[nodiscard]] RenderImage*   getPostprocessOutputImage() const override { return const_cast<RenderImage*>(_currentPostprocessOutput); }
+    [[nodiscard]] RenderImage*   getPostprocessOutputImage() const override { return _currentPostprocessOutput.get(); }
     [[nodiscard]] RenderImage*   getBloomExtractImage() const override { return _postProcessStage.getBloomExtractImage(); }
     [[nodiscard]] RenderImage*   getBloomBlurImage() const override { return _postProcessStage.getBloomBlurImage(); }
     [[nodiscard]] RenderImage*   getBloomCompositeImage() const override { return _postProcessStage.getBloomCompositeImage(); }

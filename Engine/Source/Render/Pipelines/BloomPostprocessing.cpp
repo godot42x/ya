@@ -125,10 +125,10 @@ void BloomPostprocessing::shutdown()
     _compositeSceneImageViewHandle = nullptr;
     _compositeBloomImageViewHandle = nullptr;
     _lastBlurPassCount             = 0;
-    _extractImage                  = nullptr;
-    _blurPingImage                 = nullptr;
-    _blurPongImage                 = nullptr;
-    _compositeImage                = nullptr;
+    _extractImage.reset();
+    _blurPingImage.reset();
+    _blurPongImage.reset();
+    _compositeImage.reset();
     _preparedGraphResources        = {};
 }
 
@@ -148,25 +148,25 @@ void BloomPostprocessing::beginFrame()
 void BloomPostprocessing::clearPreparedResources()
 {
     _preparedGraphResources = {};
-    _extractImage           = nullptr;
-    _blurPingImage          = nullptr;
-    _blurPongImage          = nullptr;
-    _compositeImage         = nullptr;
+    _extractImage.reset();
+    _blurPingImage.reset();
+    _blurPongImage.reset();
+    _compositeImage.reset();
 }
 
 void BloomPostprocessing::resolvePreparedResources(const RenderGraphResourceRegistry& registry)
 {
     _extractImage = _preparedGraphResources.extract.isValid()
-        ? registry.resolveTexture(_preparedGraphResources.extract)
+        ? registry.resolveTextureShared(_preparedGraphResources.extract)
         : nullptr;
     _blurPingImage = _preparedGraphResources.blurPing.isValid()
-        ? registry.resolveTexture(_preparedGraphResources.blurPing)
+        ? registry.resolveTextureShared(_preparedGraphResources.blurPing)
         : nullptr;
     _blurPongImage = _preparedGraphResources.blurPong.isValid()
-        ? registry.resolveTexture(_preparedGraphResources.blurPong)
+        ? registry.resolveTextureShared(_preparedGraphResources.blurPong)
         : nullptr;
     _compositeImage = _preparedGraphResources.output.isValid()
-        ? registry.resolveTexture(_preparedGraphResources.output)
+        ? registry.resolveTextureShared(_preparedGraphResources.output)
         : nullptr;
 }
 

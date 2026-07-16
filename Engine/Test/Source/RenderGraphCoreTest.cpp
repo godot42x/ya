@@ -1035,6 +1035,69 @@ TEST(RenderGraphCoreTest, ResourceRegistryDestructorDefersImportedKeepAliveRelea
     EXPECT_TRUE(retainedOwner.expired());
 }
 
+TEST(RenderGraphCoreTest, ExecutorClearDefersImportedTextureKeepAliveReleaseThroughDeletionQueue)
+{
+    auto& deletionQueue = DeferredDeletionQueue::get();
+    deletionQueue.flushAll();
+    deletionQueue.init(/*framesInFlight=*/1);
+
+    TestResourceFactory factory;
+    TestCommandBuffer   cmdBuf;
+    RenderGraphExecutor executor(factory);
+    auto existingImage = std::make_shared<TestImage>(ImageCreateInfo{
+        .label       = "presentation.imported",
+        .format      = EFormat::R16G16B16A16_SFLOAT,
+        .extent      = {.width = 64, .height = 64, .depth = 1},
+        .mipLevels   = 1,
+        .arrayLayers = 1,
+        .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    });
+    auto existingView = factory.createImageView(existingImage, ImageViewCreateInfo{
+        .label       = "presentation.imported.view",
+        .viewType    = EImageViewType::View2D,
+        .aspectFlags = EImageAspect::Color,
+    });
+
+    std::weak_ptr<int> retainedOwner;
+    {
+        RenderGraph graph;
+        auto owner = std::make_shared<int>(99);
+        retainedOwner = owner;
+        const auto imported = graph.importTexture(RGImportedTextureDesc{
+            .desc = RGTextureDesc{
+                .label  = "presentation.imported",
+                .format = EFormat::R16G16B16A16_SFLOAT,
+                .extent = Extent3D{64, 64, 1},
+                .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            },
+            .importDesc = ImportedImageDesc{
+                .label        = "presentation.imported",
+                .nativeHandle = static_cast<void*>(existingImage->getHandle()),
+                .format       = EFormat::R16G16B16A16_SFLOAT,
+                .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                .extent       = Extent3D{64, 64, 1},
+            },
+            .image = existingImage,
+            .imageView = existingView,
+            .retainedResources = {owner},
+        });
+        graph.addPass(
+            "presentation-reader",
+            [=](RGPassBuilder& pass) { pass.read(imported); },
+            [](RGRenderContext&) {});
+
+        ASSERT_TRUE(executor.execute(graph, cmdBuf));
+        owner.reset();
+        EXPECT_FALSE(retainedOwner.expired());
+    }
+
+    executor.clear();
+    EXPECT_FALSE(retainedOwner.expired());
+
+    deletionQueue.flushAll();
+    EXPECT_TRUE(retainedOwner.expired());
+}
+
 TEST(RenderGraphCoreTest, ResourceRegistryReplacesResourcesWhenDescriptorsChange)
 {
     TestResourceFactory factory;
@@ -1662,6 +1725,9 @@ TEST(RenderGraphCoreTest, ResolveTextureRetainsImportedTextureKeepAliveResources
 
 TEST(RenderGraphCoreTest, ResourceRegistryRefreshesImportedBufferKeepAliveWithoutReplacingBuffer)
 {
+    auto& deletionQueue = DeferredDeletionQueue::get();
+    deletionQueue.flushAll();
+
     TestResourceFactory factory;
     RenderGraphResourceRegistry registry(factory);
     TestBuffer importedBacking(BufferCreateInfo{
@@ -1717,11 +1783,18 @@ TEST(RenderGraphCoreTest, ResourceRegistryRefreshesImportedBufferKeepAliveWithou
     EXPECT_EQ(factory.createdBuffers, 0u);
 
     registry.clear();
+    if (deletionQueue.isInitialized()) {
+        EXPECT_FALSE(ownerBWeak.expired());
+        deletionQueue.flushAll();
+    }
     EXPECT_TRUE(ownerBWeak.expired());
 }
 
 TEST(RenderGraphCoreTest, ResourceRegistryPrunesImportedBufferKeepAliveWhenBufferIsRemoved)
 {
+    auto& deletionQueue = DeferredDeletionQueue::get();
+    deletionQueue.flushAll();
+
     TestResourceFactory factory;
     RenderGraphResourceRegistry registry(factory);
     TestBuffer importedBacking(BufferCreateInfo{
@@ -1752,6 +1825,93 @@ TEST(RenderGraphCoreTest, ResourceRegistryPrunesImportedBufferKeepAliveWhenBuffe
 
     RenderGraph emptyGraph;
     registry.sync(emptyGraph);
+    if (deletionQueue.isInitialized()) {
+        EXPECT_FALSE(ownerWeak.expired());
+        deletionQueue.flushAll();
+    }
+    EXPECT_TRUE(ownerWeak.expired());
+}
+
+TEST(RenderGraphCoreTest, ResourceRegistryPruneDefersImportedBufferKeepAliveReleaseThroughDeletionQueue)
+{
+    auto& deletionQueue = DeferredDeletionQueue::get();
+    deletionQueue.flushAll();
+    deletionQueue.init(/*framesInFlight=*/1);
+
+    TestResourceFactory factory;
+    RenderGraphResourceRegistry registry(factory);
+    TestBuffer importedBacking(BufferCreateInfo{
+        .label = "external.async.instances",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 256,
+    });
+
+    std::weak_ptr<int> ownerWeak;
+    {
+        RenderGraph graph;
+        auto owner = std::make_shared<int>(11);
+        ownerWeak = owner;
+        graph.importBuffer(RGImportedBufferDesc{
+            .desc = RGBufferDesc{
+                .label = "external.async.instances",
+                .usage = EBufferUsage::StorageBuffer,
+                .size  = 256,
+            },
+            .buffer = &importedBacking,
+            .retainedResources = {owner},
+        });
+        registry.sync(graph);
+        owner.reset();
+    }
+
+    EXPECT_FALSE(ownerWeak.expired());
+
+    RenderGraph emptyGraph;
+    registry.sync(emptyGraph);
+    EXPECT_FALSE(ownerWeak.expired());
+
+    deletionQueue.flushAll();
+    EXPECT_TRUE(ownerWeak.expired());
+}
+
+TEST(RenderGraphCoreTest, ResourceRegistryClearDefersImportedBufferKeepAliveReleaseThroughDeletionQueue)
+{
+    auto& deletionQueue = DeferredDeletionQueue::get();
+    deletionQueue.flushAll();
+    deletionQueue.init(/*framesInFlight=*/1);
+
+    TestResourceFactory factory;
+    RenderGraphResourceRegistry registry(factory);
+    TestBuffer importedBacking(BufferCreateInfo{
+        .label = "external.deferred.visible",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 512,
+    });
+
+    std::weak_ptr<int> ownerWeak;
+    {
+        RenderGraph graph;
+        auto owner = std::make_shared<int>(29);
+        ownerWeak = owner;
+        graph.importBuffer(RGImportedBufferDesc{
+            .desc = RGBufferDesc{
+                .label = "external.deferred.visible",
+                .usage = EBufferUsage::StorageBuffer,
+                .size  = 512,
+            },
+            .buffer = &importedBacking,
+            .retainedResources = {owner},
+        });
+        registry.sync(graph);
+        owner.reset();
+    }
+
+    EXPECT_FALSE(ownerWeak.expired());
+
+    registry.clear();
+    EXPECT_FALSE(ownerWeak.expired());
+
+    deletionQueue.flushAll();
     EXPECT_TRUE(ownerWeak.expired());
 }
 

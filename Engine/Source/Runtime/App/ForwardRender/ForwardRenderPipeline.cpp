@@ -699,13 +699,11 @@ void ForwardRenderPipeline::finalizeViewportPass(ICommandBuffer* cmdBuf)
 
     auto* inputImage = bMSAA ? _viewportResources.resolveImage : _viewportResources.colorImage;
 
-    if (RenderImage* postprocessOutput = _postProcessStage.execute(
-            cmdBuf, inputImage, _lastFrameInput.viewportRect.extent, &_lastTickCtx))
-    {
-        _currentPostprocessOutput = postprocessOutput;
+    if (_postProcessStage.execute(cmdBuf, inputImage, _lastFrameInput.viewportRect.extent, &_lastTickCtx)) {
+        _currentPostprocessOutput = _postProcessStage.getPreparedOutputImageShared();
     }
     else {
-        _currentPostprocessOutput = nullptr;
+        _currentPostprocessOutput.reset();
     }
 
     YA_CORE_ASSERT(inputImage, "Failed to get viewport image for postprocessing");
@@ -719,7 +717,7 @@ void ForwardRenderPipeline::shutdown()
     getResourceResolveSystem = {};
     getSceneSkyboxDescriptorSet = {};
     getSceneEnvironmentLightingDescriptorSet = {};
-    _currentPostprocessOutput = nullptr;
+    _currentPostprocessOutput.reset();
     _pendingViewportExtent = {};
     _pendingResourceRefreshMask = 0;
     _viewportFormats = {};

@@ -42,16 +42,16 @@ struct RenderDiagnosticsService;
 
 struct RenderPipelineDebugOutputCatalog
 {
-    bool           bShadowMappingEnabled  = false;
+    bool                     bShadowMappingEnabled  = false;
     std::shared_ptr<IImage> shadowDepthImage = nullptr;
-    RenderImage*   viewportOutputImage    = nullptr;
-    Texture*       viewportDepthTexture   = nullptr;
-    IImageView*    shadowDirectionalDepth = nullptr;
-    RenderImage*   postprocessOutputImage = nullptr;
-    RenderImage*   bloomExtract           = nullptr;
-    RenderImage*   bloomBlur              = nullptr;
-    RenderImage*   bloomComposite         = nullptr;
-    bool           bPostprocessingEnabled = false;
+    std::shared_ptr<RenderImage> viewportOutputImageOwner    = nullptr;
+    Texture*                     viewportDepthTexture        = nullptr;
+    IImageView*                  shadowDirectionalDepth      = nullptr;
+    std::shared_ptr<RenderImage> postprocessOutputImageOwner = nullptr;
+    std::shared_ptr<RenderImage> bloomExtractOwner           = nullptr;
+    std::shared_ptr<RenderImage> bloomBlurOwner              = nullptr;
+    std::shared_ptr<RenderImage> bloomCompositeOwner         = nullptr;
+    bool                         bPostprocessingEnabled      = false;
 };
 
 struct RenderOverlaySprite2D
@@ -169,7 +169,10 @@ struct RenderRuntime
 
     [[nodiscard]] RenderImage* getPostprocessOutputImage() const;
     [[nodiscard]] RenderImage* getActiveViewportImage() const;
+    [[nodiscard]] std::shared_ptr<RenderImage> getPostprocessOutputImageShared() const;
+    [[nodiscard]] std::shared_ptr<RenderImage> getActiveViewportImageShared() const;
     [[nodiscard]] RenderImage* getPresentationImage() const;
+    [[nodiscard]] std::shared_ptr<RenderImage> getPresentationImageShared() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;
     [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog() const;
     [[nodiscard]] ERenderPipeline getRenderPipeline() const { return _renderPipeline; }
@@ -226,6 +229,7 @@ struct RenderRuntime
     void appendForwardDebugSlots(EditorViewportContext& ctx);
     void appendDeferredDebugSlots(EditorViewportContext& ctx);
     void appendEnvironmentDebugSlots(EditorViewportContext& ctx);
+    [[nodiscard]] std::shared_ptr<RenderImage> getEditorViewportImageShared() const;
 
     void                   initActivePipeline();
     void                   shutdownActivePipeline();

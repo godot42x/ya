@@ -11,7 +11,7 @@ struct DeferredPipelineDebugViews
 {
     DeferredGBufferResources  gBufferResources{};
     DeferredViewportResources viewportResources{};
-    RenderImage*              ssaoTexture = nullptr;
+    std::shared_ptr<RenderImage> ssaoTextureOwner = nullptr;
 };
 
 } // namespace ya

@@ -124,6 +124,17 @@ RenderImage* RenderRuntime::getActiveViewportImage() const
     return nullptr;
 }
 
+std::shared_ptr<RenderImage> RenderRuntime::getActiveViewportImageShared() const
+{
+    if (_renderPipeline == ERenderPipeline::Forward && _forwardPipeline) {
+        return _forwardPipeline->getViewportOutputImageShared();
+    }
+    if (_renderPipeline == ERenderPipeline::Deferred && _deferredPipeline) {
+        return _deferredPipeline->getViewportOutputImageShared();
+    }
+    return nullptr;
+}
+
 void RenderRuntime::renderViewportPassOverlays(const RenderPipelineFrameContext& pipelineFrame, const FrameInput::OverlayInput& overlay, ICommandBuffer* cmdBuf)
 {
     YA_PROFILE_SCOPE("Render2D");

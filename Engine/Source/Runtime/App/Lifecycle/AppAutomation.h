@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 
 namespace ya
@@ -19,9 +20,9 @@ struct Texture;
 struct AppAutomationFrameContext
 {
     IRender*                                render                            = nullptr;
-    RenderImage*                            postprocessImage                  = nullptr;
-    RenderImage*                            viewportImage                     = nullptr;
-    RenderImage*                            presentationImage                 = nullptr;
+    std::shared_ptr<RenderImage>            postprocessImage                  = nullptr;
+    std::shared_ptr<RenderImage>            viewportImage                     = nullptr;
+    std::shared_ptr<RenderImage>            presentationImage                 = nullptr;
     std::function<bool()>                   requestRenderDocCapture;
     std::function<bool()>                   isRenderDocCapturePending;
     std::function<bool()>                   isRenderDocCaptureTerminal;
@@ -40,8 +41,7 @@ class AppAutomation
     static void applyRuntimeOverrides(App& app);
     static bool shouldDeferQuit(const App& app);
     static OffscreenJobQueueService buildOffscreenJobQueueService(App& app);
-    static void recordPresentationCapture(RenderImage* presentationSourceImage,
-                                          uint64_t frameIndex,
+    static void recordPresentationCapture(uint64_t frameIndex,
                                           ICommandBuffer* cmdBuf);
     static void onFrameCompleted(App& app, const AppAutomationFrameContext& frameContext);
 };

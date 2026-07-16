@@ -545,12 +545,11 @@ void AppAutomation::applyRuntimeOverrides(App& app)
     shadow_settings::applyAutomationOverrides(app.getDesc().automation.shadow, app.getShadowSettings());
 }
 
-void AppAutomation::recordPresentationCapture(RenderImage* presentationSourceImage,
-                                              uint64_t frameIndex,
+void AppAutomation::recordPresentationCapture(uint64_t frameIndex,
                                               ICommandBuffer* cmdBuf)
 {
     auto& runtimeState = getAutomationRuntimeState();
-    AppScreenshotCapture::recordPresentationCapture(presentationSourceImage, frameIndex, runtimeState.screenshot, cmdBuf);
+    AppScreenshotCapture::recordPresentationCapture(frameIndex, runtimeState.screenshot, cmdBuf);
 }
 
 OffscreenJobQueueService AppAutomation::buildOffscreenJobQueueService(App& app)

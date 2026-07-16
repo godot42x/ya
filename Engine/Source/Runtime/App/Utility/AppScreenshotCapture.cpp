@@ -238,9 +238,9 @@ bool writePngFromReadback(const AppScreenshotCaptureState& state)
 
 bool AppScreenshotCapture::request(IRender*                        render,
                                    const OffscreenJobQueueService& offscreenQueueService,
-                                   RenderImage*                    postprocessSourceImage,
-                                   RenderImage*                    viewportSourceImage,
-                                   RenderImage*                    presentationSourceImage,
+                                   std::shared_ptr<RenderImage>    postprocessSourceImage,
+                                   std::shared_ptr<RenderImage>    viewportSourceImage,
+                                   std::shared_ptr<RenderImage>    presentationSourceImage,
                                    AppScreenshotCaptureState&      state,
                                    const std::string&              outputPath,
                                    EAutomationScreenshotTarget     target)
@@ -257,9 +257,9 @@ bool AppScreenshotCapture::request(IRender*                        render,
     }
 
     const ScreenshotSourceInfo source = target == EAutomationScreenshotTarget::Editor
-        ? makeScreenshotSourceInfo(presentationSourceImage)
-        : (postprocessSourceImage ? makeScreenshotSourceInfo(postprocessSourceImage)
-                                  : makeScreenshotSourceInfo(viewportSourceImage));
+        ? makeScreenshotSourceInfo(presentationSourceImage.get())
+        : (postprocessSourceImage ? makeScreenshotSourceInfo(postprocessSourceImage.get())
+                                  : makeScreenshotSourceInfo(viewportSourceImage.get()));
     if (!source.isValid()) {
         return false;
     }
@@ -283,6 +283,7 @@ bool AppScreenshotCapture::request(IRender*                        render,
 
     state.outputPath                   = outputPath;
     state.readbackBuffer               = std::move(readbackBuffer);
+    state.presentationSourceImage      = nullptr;
     state.width                        = extent.width;
     state.height                       = extent.height;
     state.sourceFormat                 = source.format;
@@ -294,19 +295,20 @@ bool AppScreenshotCapture::request(IRender*                        render,
     state.bPresentationCopyRecorded    = false;
 
     if (target == EAutomationScreenshotTarget::Editor) {
+        state.presentationSourceImage      = std::move(presentationSourceImage);
         state.bPendingPresentationCapture = true;
         return true;
     }
 
     auto job       = std::make_shared<OffscreenJobState>();
     job->debugName = "AutomationScreenshotCapture";
-    job->executeFn = [sourceImage = source.image, readbackBuffer = state.readbackBuffer, extent](ICommandBuffer* cmdBuf, RenderImage*) -> bool
+    job->executeFn = [capturedSourceImage = source.image, readbackBuffer = state.readbackBuffer, extent](ICommandBuffer* cmdBuf, RenderImage*) -> bool
     {
-        if (!cmdBuf || !sourceImage || !readbackBuffer) {
+        if (!cmdBuf || !capturedSourceImage || !readbackBuffer) {
             return false;
         }
 
-        cmdBuf->transitionImageLayoutAuto(sourceImage.get(), EImageLayout::TransferSrc);
+        cmdBuf->transitionImageLayoutAuto(capturedSourceImage.get(), EImageLayout::TransferSrc);
         VkBufferImageCopy region{};
         region.bufferOffset                    = 0;
         region.bufferRowLength                 = 0;
@@ -318,7 +320,7 @@ bool AppScreenshotCapture::request(IRender*                        render,
         region.imageOffset                     = {0, 0, 0};
         region.imageExtent                     = {extent.width, extent.height, 1};
         vkCmdCopyImageToBuffer(cmdBuf->getHandleAs<VkCommandBuffer>(),
-                               sourceImage->getHandle().as<VkImage>(),
+                               capturedSourceImage->getHandle().as<VkImage>(),
                                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                readbackBuffer->getHandleAs<VkBuffer>(),
                                1,
@@ -330,7 +332,7 @@ bool AppScreenshotCapture::request(IRender*                        render,
                                     EResourceAccess::TransferRead,
                                     0,
                                     readbackBuffer->getSize());
-        cmdBuf->transitionImageLayoutAuto(sourceImage.get(), EImageLayout::ShaderReadOnlyOptimal);
+        cmdBuf->transitionImageLayoutAuto(capturedSourceImage.get(), EImageLayout::ShaderReadOnlyOptimal);
         return true;
     };
 
@@ -339,8 +341,7 @@ bool AppScreenshotCapture::request(IRender*                        render,
     return true;
 }
 
-bool AppScreenshotCapture::recordPresentationCapture(RenderImage* presentationSourceImage,
-                                                     uint64_t frameIndex,
+bool AppScreenshotCapture::recordPresentationCapture(uint64_t frameIndex,
                                                      AppScreenshotCaptureState& state,
                                                      ICommandBuffer* cmdBuf)
 {
@@ -348,21 +349,22 @@ bool AppScreenshotCapture::recordPresentationCapture(RenderImage* presentationSo
         return false;
     }
 
-    if (!presentationSourceImage || !presentationSourceImage->getImage()) {
+    if (!state.presentationSourceImage || !state.presentationSourceImage->getImage()) {
         state.bFailed                     = true;
         state.bPendingPresentationCapture = false;
         return false;
     }
 
-    const std::shared_ptr<IImage> sourceImage = presentationSourceImage->getImageShared();
+    const auto& sourceRenderImage = state.presentationSourceImage;
+    const std::shared_ptr<IImage> sourceImage = sourceRenderImage->getImageShared();
     if (!sourceImage) {
         state.bFailed                     = true;
         state.bPendingPresentationCapture = false;
         return false;
     }
 
-    const Extent2D extent = presentationSourceImage->getExtent();
-    if (extent.width != state.width || extent.height != state.height || presentationSourceImage->getFormat() != state.sourceFormat) {
+    const Extent2D extent = sourceRenderImage->getExtent();
+    if (extent.width != state.width || extent.height != state.height || sourceRenderImage->getFormat() != state.sourceFormat) {
         YA_CORE_ERROR("Presentation screenshot source changed before capture recording");
         state.bFailed                     = true;
         state.bPendingPresentationCapture = false;
@@ -398,8 +400,9 @@ bool AppScreenshotCapture::recordPresentationCapture(RenderImage* presentationSo
 
     state.width                       = extent.width;
     state.height                      = extent.height;
-    state.sourceFormat                = presentationSourceImage->getFormat();
+    state.sourceFormat                = sourceRenderImage->getFormat();
     state.recordedFrameIndex          = frameIndex + 1;
+    state.presentationSourceImage.reset();
     state.bPendingPresentationCapture = false;
     state.bPresentationCopyRecorded   = true;
     return true;
@@ -419,6 +422,7 @@ bool AppScreenshotCapture::tryFinalize(uint64_t currentFrameIndex, AppScreenshot
         state.bCompleted = writePngFromReadback(state);
         state.bFailed    = !state.bCompleted;
         state.readbackBuffer.reset();
+        state.presentationSourceImage.reset();
         state.bPresentationCopyRecorded = false;
         return true;
     }
@@ -439,6 +443,7 @@ bool AppScreenshotCapture::tryFinalize(uint64_t currentFrameIndex, AppScreenshot
             state.pendingJob->result->outputImage = nullptr;
         }
         state.bFailed       = true;
+        state.presentationSourceImage.reset();
         state.readbackBuffer.reset();
         state.pendingJob    = nullptr;
         return true;
@@ -453,6 +458,7 @@ bool AppScreenshotCapture::tryFinalize(uint64_t currentFrameIndex, AppScreenshot
     if (state.pendingJob->result) {
         state.pendingJob->result->outputImage = nullptr;
     }
+    state.presentationSourceImage.reset();
     state.readbackBuffer.reset();
     state.pendingJob = nullptr;
     return true;

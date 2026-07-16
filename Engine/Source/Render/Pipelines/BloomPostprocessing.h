@@ -69,10 +69,10 @@ struct BloomPostprocessing
     ImageViewHandle              _compositeBloomImageViewHandle = nullptr;
 
     uint32_t _lastBlurPassCount = 0;
-    const RenderImage* _extractImage = nullptr;
-    const RenderImage* _blurPingImage = nullptr;
-    const RenderImage* _blurPongImage = nullptr;
-    const RenderImage* _compositeImage = nullptr;
+    stdptr<RenderImage> _extractImage;
+    stdptr<RenderImage> _blurPingImage;
+    stdptr<RenderImage> _blurPongImage;
+    stdptr<RenderImage> _compositeImage;
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
     GraphBuildResult _preparedGraphResources{};
 
@@ -85,9 +85,12 @@ struct BloomPostprocessing
     void render(const RenderDesc& desc);
     void renderSettingsGUI(PostProcessingState& state);
     void renderTechnicalGUI();
-    [[nodiscard]] RenderImage* getExtractImage() const { return const_cast<RenderImage*>(_extractImage); }
-    [[nodiscard]] RenderImage* getBlurImage() const { return const_cast<RenderImage*>(_blurPongImage ? _blurPongImage : _blurPingImage); }
-    [[nodiscard]] RenderImage* getCompositeImage() const { return const_cast<RenderImage*>(_compositeImage); }
+    [[nodiscard]] RenderImage* getExtractImage() const { return _extractImage.get(); }
+    [[nodiscard]] stdptr<RenderImage> getExtractImageShared() const { return _extractImage; }
+    [[nodiscard]] RenderImage* getBlurImage() const { return (_blurPongImage ? _blurPongImage : _blurPingImage).get(); }
+    [[nodiscard]] stdptr<RenderImage> getBlurImageShared() const { return _blurPongImage ? _blurPongImage : _blurPingImage; }
+    [[nodiscard]] RenderImage* getCompositeImage() const { return _compositeImage.get(); }
+    [[nodiscard]] stdptr<RenderImage> getCompositeImageShared() const { return _compositeImage; }
 
   private:
     void initExtractPipeline();

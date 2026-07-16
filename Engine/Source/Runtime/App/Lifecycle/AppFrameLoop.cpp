@@ -161,9 +161,9 @@ int AppFrameLoop::iterate(App& app, float dt)
         AppAutomation::onFrameCompleted(app,
                                         AppAutomationFrameContext{
                                             .render                     = app.getRender(),
-                                            .postprocessImage           = renderRuntime ? renderRuntime->getPostprocessOutputImage() : nullptr,
-                                            .viewportImage              = renderRuntime ? renderRuntime->getActiveViewportImage() : nullptr,
-                                            .presentationImage          = renderRuntime ? renderRuntime->getPresentationImage() : nullptr,
+                                            .postprocessImage           = renderRuntime ? renderRuntime->getPostprocessOutputImageShared() : nullptr,
+                                            .viewportImage              = renderRuntime ? renderRuntime->getActiveViewportImageShared() : nullptr,
+                                            .presentationImage          = renderRuntime ? renderRuntime->getPresentationImageShared() : nullptr,
                                             .requestRenderDocCapture    = diagnosticsService
                                                 ? [diagnosticsService]() { return diagnosticsService->requestAutomationRenderDocCapture(); }
                                                 : std::function<bool()>{},
@@ -560,8 +560,7 @@ void AppFrameLoop::tickRender(App& app, float dt)
                     return;
                 }
 
-                AppAutomation::recordPresentationCapture(renderRuntime->getPresentationImage(),
-                                                         app.getFrameIndex(),
+                AppAutomation::recordPresentationCapture(app.getFrameIndex(),
                                                          cmdBuf);
             },
         },

@@ -24,6 +24,7 @@ namespace ya
 struct App;
 struct IImageView;
 struct IImage;
+struct RenderImage;
 
 // All render resources that the editor viewport needs, explicitly passed in from App
 struct EditorViewportContext
@@ -32,7 +33,8 @@ struct EditorViewportContext
     bool bForwardPipeline = false;
 
     // Viewport output
-    IImageView* viewportImageView = nullptr;
+    std::shared_ptr<RenderImage> viewportImageOwner = nullptr;
+    IImageView*                  viewportImageView  = nullptr;
 
     // Postprocessing
     bool     bPostprocessingEnabled   = false;

@@ -23,6 +23,7 @@ struct AppScreenshotCaptureState
     std::string                        outputPath;
     std::shared_ptr<IBuffer>           readbackBuffer;
     std::shared_ptr<OffscreenJobState> pendingJob;
+    std::shared_ptr<RenderImage>       presentationSourceImage;
     uint32_t                           width                         = 0;
     uint32_t                           height                        = 0;
     uint64_t                           recordedFrameIndex            = 0;
@@ -39,14 +40,13 @@ class AppScreenshotCapture
   public:
     static bool request(IRender* render,
                         const OffscreenJobQueueService& offscreenQueueService,
-                        RenderImage* postprocessSourceImage,
-                        RenderImage* viewportSourceImage,
-                        RenderImage* presentationSourceImage,
+                        std::shared_ptr<RenderImage> postprocessSourceImage,
+                        std::shared_ptr<RenderImage> viewportSourceImage,
+                        std::shared_ptr<RenderImage> presentationSourceImage,
                         AppScreenshotCaptureState& state,
                         const std::string& outputPath,
                         EAutomationScreenshotTarget target);
-    static bool recordPresentationCapture(RenderImage* presentationSourceImage,
-                                          uint64_t frameIndex,
+    static bool recordPresentationCapture(uint64_t frameIndex,
                                           AppScreenshotCaptureState& state,
                                           ICommandBuffer* cmdBuf);
     static bool tryFinalize(uint64_t currentFrameIndex, AppScreenshotCaptureState& state);

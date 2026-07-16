@@ -160,7 +160,8 @@ void PostProcessingStage::beginFrame()
 
 void PostProcessingStage::clearPreparedResources()
 {
-    _preparedGraphResources       = {};
+    _preparedGraphResources = {};
+    _preparedOutputImage.reset();
     if (_bloomProcessor) {
         _bloomProcessor->clearPreparedResources();
     }
@@ -168,6 +169,9 @@ void PostProcessingStage::clearPreparedResources()
 
 void PostProcessingStage::resolvePreparedResources(const RenderGraphResourceRegistry& registry)
 {
+    _preparedOutputImage = _preparedGraphResources.output.isValid()
+        ? registry.resolveTextureShared(_preparedGraphResources.output)
+        : nullptr;
     if (_bloomProcessor) {
         _bloomProcessor->resolvePreparedResources(registry);
     }
@@ -350,9 +354,7 @@ RenderImage* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
     }
 
     resolvePreparedResources(_graphExecutor->getRegistry());
-    return output.isValid()
-        ? const_cast<RenderImage*>(_graphExecutor->getRegistry().resolveTexture(output))
-        : nullptr;
+    return output.isValid() ? _preparedOutputImage.get() : nullptr;
 }
 
 RenderImage* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
@@ -378,8 +380,6 @@ RenderImage* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
     }
 
     resolvePreparedResources(_graphExecutor->getRegistry());
-    return output.isValid()
-        ? const_cast<RenderImage*>(_graphExecutor->getRegistry().resolveTexture(output))
-        : nullptr;
+    return output.isValid() ? _preparedOutputImage.get() : nullptr;
 }
 } // namespace ya

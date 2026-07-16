@@ -136,8 +136,8 @@ struct DeferredRenderPipeline : public IRenderPipeline
     ImageViewHandle    _cachedAlbedoSpecImageViewHandle = nullptr;
     Extent2D           _pendingViewportExtent{};
     uint32_t           _pendingResourceRefreshMask = 0;
-    const RenderImage* _currentSSAOOutput          = nullptr;
-    const RenderImage* _currentPostprocessOutput   = nullptr;
+    stdptr<RenderImage> _currentSSAOOutput;
+    stdptr<RenderImage> _currentPostprocessOutput;
 
     // ── Frame state ───────────────────────────────────────────────────
     DeferredGBufferResources   _currentGBufferResources{};
@@ -183,9 +183,14 @@ struct DeferredRenderPipeline : public IRenderPipeline
 
     IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
-    RenderImage* getSSAOTexture() const { return const_cast<RenderImage*>(_currentSSAOOutput); }
+    RenderImage* getSSAOTexture() const { return _currentSSAOOutput.get(); }
     const DeferredGBufferResources& getCurrentGBufferResources() const { return _currentGBufferResources; }
     const DeferredViewportResources& getCurrentViewportResources() const { return _currentViewportResources; }
+    std::shared_ptr<RenderImage> getViewportOutputImageShared() const { return _currentViewportResources.colorOwner; }
+    std::shared_ptr<RenderImage> getPostprocessOutputImageShared() const { return _currentPostprocessOutput; }
+    std::shared_ptr<RenderImage> getBloomExtractImageShared() const { return _postProcessStage.getBloomExtractImageShared(); }
+    std::shared_ptr<RenderImage> getBloomBlurImageShared() const { return _postProcessStage.getBloomBlurImageShared(); }
+    std::shared_ptr<RenderImage> getBloomCompositeImageShared() const { return _postProcessStage.getBloomCompositeImageShared(); }
     DeferredPipelineDebugViews buildDebugViews() const;
     void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const override;
     bool setRenderTargetDepthFormat(RenderTargetEditorCatalog::Entry::EOwner owner, EFormat::T format) override;
@@ -210,7 +215,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     RenderImage* getBloomBlurImage() const override { return _postProcessStage.getBloomBlurImage(); }
     RenderImage* getBloomCompositeImage() const override { return _postProcessStage.getBloomCompositeImage(); }
     bool     isPostprocessingEnabled() const override { return _postProcessStage.isEnabled(); }
-    RenderImage* getPostprocessOutputImage() const override { return const_cast<RenderImage*>(_currentPostprocessOutput); }
+    RenderImage* getPostprocessOutputImage() const override { return _currentPostprocessOutput.get(); }
 
   private:
     void               loadPersistentSettings();

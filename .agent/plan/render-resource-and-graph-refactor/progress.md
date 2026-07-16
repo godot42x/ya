@@ -24,6 +24,59 @@
 
 ## 最新验证
 
+- 2026-07-16：automation screenshot 的 frame-context/render-image 传递现在也改成了 owner-aware，不再把当前帧 postprocess / viewport 输出先降成裸 `RenderImage*` 再交给 `AppScreenshotCapture::request()`。此前 `AppFrameLoop -> AppAutomation::onFrameCompleted() -> handleScreenshotAutomation()` 这段链路虽然最终会在 request 内把 source image 抓成 `shared_ptr<IImage>` 放进 offscreen job，但在 runtime 到 automation 的边界上，owner 真相已经先掉成 raw 了。现在 `AppAutomationFrameContext`、`RenderRuntime` shared getter 与 screenshot request 签名统一改成直接传 `shared_ptr<RenderImage>`；这样 request 选择 source 的窗口内不再依赖“当前帧 render-image wrapper 还恰好活着”，owner 真相会一路带到真正开始排队 screenshot job 的地方。
+- 直接收益：automation screenshot 这条链终于和 editor viewport、debug catalog、presentation screenshot 一样，开始在跨层边界保留当前帧 render-image owner，而不是只在更深一层 job lambda 里补救性地抓 `IImage`。后续如果继续排查 automation screenshot 与 pipeline switch / postprocess replacement / frame-boundary rebuild 的交界，这里不再是一个 runtime 外围仍然用 raw render-image 的例外。
+- 当前停止线：这一步只收了 automation frame-context 到 screenshot request 的 owner 传递，不代表所有 automation artifact 路径都已经 shared-owner 化；像 RenderDoc capture 相关状态本来就不是 render-image owner 模型，不应为了写法统一硬混进来。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*:OffscreenAsyncTest.*:AppScreenshotCaptureTest.*'` 74/74 通过
+  - 新增 `AppScreenshotCaptureTest.ViewportRequestRetainsSourceImageAfterCallerDropsRenderImageOwner`
+  - `make r t=HelloMaterial r_args="--exit-after-frame=400 --log-level=info --log-detail-level=error"` 退出码 0
+- 2026-07-16：`RenderPipelineDebugOutputCatalog` 里的 render-image 输出现在也开始直接携带 shared owner，而不再把 viewport/postprocess/bloom 这些当前帧图像统一降成裸 `RenderImage*`。此前 runtime 在组装 debug catalog 时只保留 raw pointer，editor viewport/debug 再立刻从这些 raw 输出回取 `getImageShared()`；这让 owner 真相明明已经存在于 Forward/Deferred pipeline 与 postprocess/bloom stage 当前帧 snapshot 里，却又在 runtime/export 边界掉了一次。现在 catalog 会直接保存 viewport/postprocess/bloom extract/blur/composite 的 shared owner，Bloom/PostProcessing/Forward/Deferred 只补最小 shared getter，editor debug slot 直接消费这些 owner，而不是再从 raw image 反查。
+- 直接收益：runtime debug/export 这一层终于和前面已经收过的 editor 主 viewport、Deferred SSAO debug slot、pipeline postprocess output 一样，开始把 owner 真相带到真正的消费边界。后续如果继续排查 postprocess graph replacement、viewport rebuild 或 debug UI 刷新时的生命周期问题，不需要再把 debug catalog 当成一个“中间层又把 shared owner 降成 raw”的例外。
+- 当前停止线：这一步只收了 debug catalog 里的 render-image 输出，`viewportDepthTexture`、shadow view 这些非 `RenderImage` 导出仍然保持原语义；如果后续继续收口，要先确认它们的 owner 真相是否同样清晰存在，避免把不同资源模型硬揉成一类。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*:OffscreenAsyncTest.*:AppScreenshotCaptureTest.*'` 73/73 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=400 --log-level=info --log-detail-level=error"` 退出码 0
+- 2026-07-16：Deferred debug views 导出的 SSAO 槽位现在也不再把当前帧输出降成一根裸 `RenderImage*`。此前 `DeferredRenderPipeline::buildDebugViews()` 把 `_currentSSAOOutput` 退化成 raw pointer，`RenderRuntime::appendDeferredDebugSlots()` 再立刻从这根裸指针回取 `getImageShared()` / `getImageView()` 组装 editor debug slot；也就是说 owner 真相明明还在 pipeline 当前帧 snapshot 里，却在 debug/export 边界又掉了一次。现在 `DeferredPipelineDebugViews` 会直接带出 SSAO 的 shared owner，editor 侧则显式保存对应的 `ownedView` 和 `image`，不再隐含依赖这份 raw `RenderImage*` 在 slot 消费期间“刚好还活着”。
+- 直接收益：Deferred debug/export 链和前面已经收过的主 viewport、postprocess prepared output、screenshot presentation source 一样，开始把 owner 真相保留到真正消费 debug slot 的边界。后续继续排查 editor debug 面与 graph replacement / viewport rebuild 的交界时，SSAO 不再是一个额外的裸指针例外。
+- 当前停止线：这一步只收了 Deferred debug views 里的 SSAO slot，不代表所有 debug slot 都已经逐条切成 owner-aware；剩余输出仍然要按价值继续审，但不混进本批。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*:OffscreenAsyncTest.*:AppScreenshotCaptureTest.*'` 73/73 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=400 --log-level=info --log-detail-level=error"` 退出码 0
+- 2026-07-16：editor 主 viewport 输出现在也改成了 owner-aware snapshot，而不再只把当前帧最终图像降成一份裸 `IImageView*` 塞进 `EditorViewportContext`。此前 `RenderRuntime::updateEditorViewportContext()` 会根据 postprocess / viewport output 只挑一个 raw view 传给 editor；一旦 pipeline 当前帧输出在 graph replacement、postprocess replacement 或 frame-boundary rebuild 后发生 owner 变更，editor 侧这条主显示链仍然依赖“底层 `RenderImage` 恰好还没被释放”的隐含前提。现在 `EditorViewportContext` 会显式保存选中的 `RenderImage` shared owner，raw `viewportImageView` 只作为从 owner 派生出的便捷视图；Forward / Deferred 也各自补了最小 shared getter，把“最终 editor viewport 应该显示哪张图”的 owner 真相保持在 runtime/pipeline 边界，而不是再让 editor 缓存一根裸 view 指针充当事实源。
+- 直接收益：editor 主 viewport 终于和前面已经收过的 presentation screenshot、Deferred/Forward postprocess output、viewport attachment snapshot 站到同一条生命周期语义上。后续如果继续排查 graph registry replacement、pipeline switch 或 viewport rebuild 时的 editor 观察面，这里不再是一个“主链都拿 owner，只有 editor 主图还靠裸 view”的例外。
+- 当前停止线：这一步只收了 editor 主 viewport 的 owner retention，不代表所有 editor/debug 输出都已完全 shared-owner 化；像 Deferred debug views 里仍有少数 raw export，可继续按价值再逐条审，但不混进本批。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*:OffscreenAsyncTest.*:AppScreenshotCaptureTest.*'` 73/73 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=400 --log-level=info --log-detail-level=error"` 退出码 0
+- 2026-07-16：Forward pipeline 当前 postprocess 输出现在也改成了 owner-aware snapshot，而不再只缓存一份裸 `RenderImage*`。此前 `ForwardRenderPipeline::finalizeViewportPass()` 在 `_postProcessStage.execute()` 成功后，只把返回的 raw `RenderImage*` 填进 `_currentPostprocessOutput`；这和 Deferred 已经持有 shared output owner、`PostProcessingStage` 也已经提供 `getPreparedOutputImageShared()` 的现状不一致，等于把 graph-backed postprocess 的 owner 真相又在 Forward 边界降回了裸指针。现在 Forward 直接缓存 `PostProcessingStage` 的 prepared output shared owner，对外 raw getter 维持不变，但生命周期真相已前移到 pipeline 当前帧 snapshot。
+- 直接收益：Forward 与 Deferred 在“graph 外缓存最终后处理输出”这件事上终于采用同一种 ownership 语义。后续如果继续排查 pipeline switch、shutdown 或 postprocess graph executor replacement，Forward 不再是一个额外依赖“裸指针此刻刚好还有效”的例外面。
+- 当前停止线：这一步只收了 Forward 当前 postprocess 输出 owner，不代表 Forward 所有 debug/export 面都已逐条 owner-aware 审完；后续仍可继续看 viewport/depth/shadow 之外是否还有类似的 raw snapshot 残留。
+- 验证结果：
+  - `xmake b ya-testing` 通过
+- 2026-07-16：editor/presentation screenshot automation 现在会把当前 presentation `RenderImage` 的 shared owner 一起带进 screenshot state，而不是只在 request/record 边界上传裸 `RenderImage*`。此前 non-editor/offscreen 截图已经会在 job lambda 中捕获 `shared_ptr<IImage>`，但 editor 路径仍然是 `AppFrameLoop -> AppAutomation -> AppScreenshotCapture::recordPresentationCapture()` 逐层传裸指针；如果 screenshot request 和真正录制之间发生 swapchain rebuild / presentation wrapper replacement，这条链没有自己的 owner snapshot，只能隐含依赖 runtime 当前帧对象“还没被换掉”。现在 `AppAutomationFrameContext` 改为携带 shared presentation image，`AppScreenshotCaptureState` 在 pending presentation capture 窗口内保存这份 owner，录制函数直接从 state 取图，不再要求调用侧重新传 raw image。新增 `AppScreenshotCaptureTest.EditorRequestRetainsPresentationOwnerUntilReset`，锁住“editor screenshot request 之后，即使外部局部 shared_ptr 已释放，state 仍会保活 presentation source，直到 capture reset/完成”为止。
+- 直接收益：automation/editor screenshot 这条链终于和最近几批 graph/offscreen keepalive 修复站到同一边——需要跨帧/跨录制窗口保活的 imported/presentation source，不再只靠外层调用时机碰巧正确。后续如果继续排查 presentation rebuild、editor screenshot 与 runtime replacement 的交界，这里不再是一个裸指针例外。
+- 当前停止线：这一步补的是 editor screenshot 在“request 到 record”窗口内的 source owner 保活，不代表 presentation screenshot 的 copy/transition 全链已经完全 graph 化；后续仍可继续看是否需要把 presentation capture 本身进一步吸收到更统一的 imported-resource 生命周期合同里。
+- 验证结果：
+  - `xmake b ya-testing` 通过
+  - `ya-testing --gtest_filter='AppScreenshotCaptureTest.*'` 1/1 通过
+- 2026-07-16：`RenderGraphResourceRegistry` 现在也会把 imported buffer 的 retained owner 通过 `DeferredDeletionQueue` 退休，而不是只在 texture 侧有 GPU-safe release contract。此前 imported buffer 在 registry `prune/switch-to-owned/replace/clear` 这些出口上都会直接销毁 `RGImportedBufferDesc::retainedResources`；这和 imported texture 已经走 DDQ 的行为不对称，也让 shutdown / replacement / graph 清理边界继续依赖“buffer owner 立刻释放也没事”的隐含前提。现在 registry 新增统一的 retained-owner 退役 helper，并补上 `RenderGraphCoreTest.ResourceRegistryPruneDefersImportedBufferKeepAliveReleaseThroughDeletionQueue` 与 `RenderGraphCoreTest.ResourceRegistryClearDefersImportedBufferKeepAliveReleaseThroughDeletionQueue`；原有 imported buffer refresh/prune tests 也改成对全局 DDQ 单例状态稳健，不再把“队列尚未初始化”当作隐藏假设。
+- 直接收益：imported buffer 与 imported texture 在 registry replacement/prune/clear 这层终于对齐到同一条 deferred-deletion contract。后续继续查 startup/shutdown、一帧外 replacement 或 runtime 常驻 executor 清理问题时，不需要再把 buffer 侧当成一个语义例外。
+- 当前停止线：这一步补的是 imported buffer retained owner 的 registry 退役语义，不代表所有 imported buffer callsite 都已经逐条审完；后续仍可继续看是否还存在 graph 外缓存 raw buffer 但 owner 真相没有同步前移的路径。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*:OffscreenAsyncTest.*'` 72/72 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=400 --log-level=info --log-detail-level=error"` 退出码 0
+- 2026-07-16：presentation swapchain image 重建时，现在会主动 `clear()` 掉 `_presentationGraphExecutor`，不再把旧 imported wrapper 留到“下一次 presentation execute 时再顺手 replacement”。此前 `rebuildPresentationImages()` 只清 `_presentationImages` 并重建新的 swapchain `RenderImage`，但持久 presentation executor 的 registry 仍会保留上一次 graph import 的 wrapper/keepalive；这在正常下一帧会被替换掉，可是 replacement 边界并不显式。现在重建前先清 executor，并新增 `RenderGraphCoreTest.ExecutorClearDefersImportedTextureKeepAliveReleaseThroughDeletionQueue`，锁住“executor.clear() 释放 imported texture 时同样走 DDQ，而不是立即掉 owner”。
+- 直接收益：presentation 这条 runtime 常驻 graph 的 imported wrapper 生命周期，现在和 swapchain recreate 边界对齐得更明确。后续如果继续查 viewport resize、present target capture 或 shutdown 时的 imported-resource replacement，就不用再把“旧 presentation wrapper 还挂在 executor registry 里”等到下一帧自动替换视作隐含前提。
+- 当前停止线：这一步收的是 runtime 常驻 presentation graph executor 的 replacement 边界，不代表所有长期存活 executor 都已经逐个审完；后续仍可继续看 SSAO、postprocess 之外还有没有类似“registry 会最终自愈，但 frame-boundary 没有显式 clear”的点。
+- 2026-07-16：Deferred 当前帧的 SSAO / postprocess / bloom debug 输出现在也开始缓存 shared owner snapshot，而不再只留 registry 解析出来的裸 `RenderImage*`。此前 `_currentSSAOOutput`、`_currentPostprocessOutput` 以及 `BloomPostprocessing::_extract/_blur/_compositeImage` 都只是 frame-local raw view；这和已经 owner-aware 的 `DeferredGBufferResources` / `DeferredViewportResources` 不一致，也会让 graph registry replacement / clear 之后的调试输出继续依赖“registry 恰好还没换掉物理资源”的隐含前提。现在 `resolvePreparedResources()` 与 Deferred 主图同步改用 `resolveTextureShared()`，内部继续对外暴露原有 raw getter，但 owner 真相已回收到 stage/pipeline 的当前帧 snapshot。
+- 直接收益：postprocess/bloom/ssao 调试输出与主 attachment snapshot 终于采用同一种 ownership 语义。后续继续排查 resize、shutdown 或 graph registry replacement 时，debug/editor 观察面不会再是“主资源有 owner、后处理输出只有裸指针”这一块例外。
+- 当前停止线：这一步收的是 Deferred 主线和 postprocess/bloom 内部 prepared output owner，不代表 Forward pipeline 的当前帧输出也已经完全对齐；Forward 仍按计划后置，不把它混进本批。
 - 2026-07-16：`RGRenderContext::resolveTexture()` 现在也会像 buffer/attachment helper 一样，把解析到的 `RenderImage` 的 image、image view 以及 imported keepalive 一起 retain 到 command buffer。此前只有 `beginRasterRendering()` 和 `copyTexture()` 这类显式 helper 会调用 `retainResolvedRenderImage()`；如果某个 graph pass 只是 `pass.read(texture)`，然后在 execute callback 里通过 `resolveTexture()` 取出 image view 去更新 descriptor（`PostProcessingStage` 就是当前真实调用点），submit/encode 阶段仍可能晚于这份局部引用的生命周期边界。新增 `RenderGraphCoreTest.ResolveTextureRetainsImportedTextureKeepAliveResources` 后，这条 sampled-read 路径也被锁进 submit-time contract。
 - 直接收益：RenderGraph 对 imported texture 的 submit-time 保活不再只覆盖 attachment/copy 路径，纯 sampled-read 的 runtime pass 也能拿到同一条合同。后续继续排查 descriptor/cache 与 graph imported texture 的交界问题时，可以把“resolveTexture 拿到 view 但没 retain”排除掉。
 - 当前停止线：这一步补的是 graph execute callback 内部的 texture resolve 保活，不等于所有 graph 外 descriptor cache 都自动安全；像 `LightStage::prepare()` 这类 frame-boundary descriptor 更新，仍然要靠 stage/pipeline 自己持有当前帧 attachment owner，不能误把 graph command-buffer keepalive 当成更上层缓存生命周期的通用解。
