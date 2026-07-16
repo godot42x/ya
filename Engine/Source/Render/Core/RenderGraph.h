@@ -88,6 +88,7 @@ struct RGImportedBufferDesc
     RGBufferDesc       desc;
     IBuffer*           buffer = nullptr;
     BufferResourceState initialState{};
+    std::vector<std::shared_ptr<void>> retainedResources{};
 };
 
 struct RGTextureResource

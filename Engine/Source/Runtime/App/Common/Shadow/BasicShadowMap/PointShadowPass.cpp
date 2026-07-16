@@ -245,18 +245,20 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
 
     YA_CORE_ASSERT(flight.skinningSSBO, "Point shadow graph requires a skinning buffer");
 
-    const auto importBuffer = [&](IBuffer* buffer,
+    const auto importBuffer = [&](const std::shared_ptr<IBuffer>& buffer,
                                   std::string label,
                                   EBufferUsage usage,
                                   BufferResourceState initialState) {
+        YA_CORE_ASSERT(buffer != nullptr, "Point shadow graph requires imported buffer '{}'", label);
         return graph.importBuffer(RGImportedBufferDesc{
             .desc = RGBufferDesc{
                 .label = std::move(label),
                 .usage = usage,
                 .size  = buffer->getSize(),
             },
-            .buffer       = buffer,
-            .initialState = initialState,
+            .buffer            = buffer.get(),
+            .initialState      = initialState,
+            .retainedResources = {buffer},
         });
     };
     const BufferResourceState hostWriteState{
@@ -264,7 +266,7 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
         .access = EResourceAccess::HostWrite,
     };
     const auto skinningBuffer = importBuffer(
-        flight.skinningSSBO.get(), "PointShadow.SkinningSSBO", EBufferUsage::StorageBuffer, hostWriteState);
+        flight.skinningSSBO, "PointShadow.SkinningSSBO", EBufferUsage::StorageBuffer, hostWriteState);
 
     std::optional<RGBufferHandle> drawCommands;
     std::optional<RGBufferHandle> visibleInstances;
@@ -314,7 +316,7 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
                 EImageUsage::DepthStencilAttachment,
                 Extent3D{_shadowExtent.width, _shadowExtent.height, 1}));
             const auto faceBuffer = importBuffer(
-                faceUBO,
+                flight.faceUBO[facePayload.faceGlobalIndex],
                 std::format("PointShadow.FaceUBO.{}.{}", lightIndex, faceIndex),
                 EBufferUsage::UniformBuffer,
                 hostWriteState);

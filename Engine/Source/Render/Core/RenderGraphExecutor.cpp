@@ -64,6 +64,10 @@ bool RenderGraphExecutor::executeCompiled(
 
             auto* buffer = _registry.resolveBuffer(statePlan.buffer);
             YA_CORE_ASSERT(buffer != nullptr, "RenderGraphExecutor failed to resolve buffer {}", statePlan.buffer.index);
+            if (const auto* resource = graph.getBuffer(statePlan.buffer);
+                resource && resource->imported.has_value()) {
+                cmdBuf.retainResources(resource->imported->retainedResources);
+            }
 
             const auto newState = normalizeBufferState(statePlan.requiredState, *buffer);
             const auto oldIt = _bufferStates.find(buffer);

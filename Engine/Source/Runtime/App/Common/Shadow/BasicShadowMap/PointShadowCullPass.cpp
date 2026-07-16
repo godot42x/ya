@@ -60,7 +60,7 @@ void PointShadowCullPass::destroy()
         flight.faceFrustumBuffer.reset();
         flight.drawCommandBuffer.reset();
         flight.visibleInstancesBuf.reset();
-        flight.instanceBuffer = nullptr;
+        flight.instanceBuffer.reset();
         flight.cullDS = nullptr;
     }
     _dsp.reset();
@@ -114,12 +114,12 @@ void PointShadowCullPass::ensureCapacity(uint32_t bucketCount)
     }
 }
 
-void PointShadowCullPass::bindInstanceBuffer(uint32_t flightIndex, IBuffer* instanceBuffer)
+void PointShadowCullPass::bindInstanceBuffer(uint32_t flightIndex, const stdptr<IBuffer>& instanceBuffer)
 {
     if (!instanceBuffer || !_render) return;
     _perFlight[flightIndex].instanceBuffer = instanceBuffer;
     _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::writeOneStorageBuffer(_perFlight[flightIndex].cullDS, 0, instanceBuffer),
+        IDescriptorSetHelper::writeOneStorageBuffer(_perFlight[flightIndex].cullDS, 0, instanceBuffer.get()),
     });
 }
 
@@ -201,10 +201,28 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
     }
 
     auto importBuffer = [](RenderGraph& graph,
-                           IBuffer* buffer,
+                           const std::shared_ptr<IBuffer>& buffer,
                            std::string label,
                            EBufferUsage usage,
                            BufferResourceState initialState) {
+        YA_CORE_ASSERT(buffer != nullptr, "Point shadow cull graph requires imported buffer '{}'", label);
+        return graph.importBuffer(RGImportedBufferDesc{
+            .desc = RGBufferDesc{
+                .label = std::move(label),
+                .usage = usage,
+                .size  = buffer->getSize(),
+            },
+            .buffer            = buffer.get(),
+            .initialState      = initialState,
+            .retainedResources = {buffer},
+        });
+    };
+    auto importRawBuffer = [](RenderGraph& graph,
+                              IBuffer* buffer,
+                              std::string label,
+                              EBufferUsage usage,
+                              BufferResourceState initialState) {
+        YA_CORE_ASSERT(buffer != nullptr, "Point shadow cull graph requires imported buffer '{}'", label);
         return graph.importBuffer(RGImportedBufferDesc{
             .desc = RGBufferDesc{
                 .label = std::move(label),
@@ -222,13 +240,13 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
     };
     const auto drawCommandBuffer = importBuffer(
         graph,
-        flight.drawCommandBuffer.get(),
+        flight.drawCommandBuffer,
         "PointShadowCull.DrawCommands",
         EBufferUsage::StorageBuffer | EBufferUsage::IndirectBuffer,
         hostWriteState);
     const auto visibleInstances = importBuffer(
         graph,
-        flight.visibleInstancesBuf.get(),
+        flight.visibleInstancesBuf,
         "PointShadowCull.VisibleInstances",
         EBufferUsage::StorageBuffer,
         bDispatchCull ? BufferResourceState{} : hostWriteState);
@@ -242,7 +260,7 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
     const auto instanceBuffer = importBuffer(
         graph, flight.instanceBuffer, "PointShadowCull.Instances", EBufferUsage::StorageBuffer, hostWriteState);
     const auto frustumBuffer = importBuffer(
-        graph, flight.faceFrustumBuffer.get(), "PointShadowCull.Frustums", EBufferUsage::StorageBuffer, hostWriteState);
+        graph, flight.faceFrustumBuffer, "PointShadowCull.Frustums", EBufferUsage::StorageBuffer, hostWriteState);
 
     PushConstants pc{
         .instanceCount = flight.instanceCount,

@@ -1064,7 +1064,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     if (_shadowStage && currentShadowSettings().isEnabled()) {
         shadowPass = _shadowStage->appendGraphPasses(graph, stageCtx);
     }
-    auto importHostWrittenBuffer = [&](IBuffer* buffer, std::string label, EBufferUsage usage) {
+    auto importHostWrittenBuffer = [&](const stdptr<IBuffer>& buffer, std::string label, EBufferUsage usage) {
         YA_CORE_ASSERT(buffer != nullptr, "Deferred graph requires imported buffer '{}'", label);
         return graph.importBuffer(RGImportedBufferDesc{
             .desc = RGBufferDesc{
@@ -1072,25 +1072,26 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
                 .usage = usage,
                 .size  = buffer->getSize(),
             },
-            .buffer = buffer,
+            .buffer = buffer.get(),
             .initialState = BufferResourceState{
                 .stages = EPipelineStage::Host,
                 .access = EResourceAccess::HostWrite,
                 .offset = 0,
                 .size   = buffer->getSize(),
             },
+            .retainedResources = {buffer},
         });
     };
     const auto frameBuffer = importHostWrittenBuffer(
-        _gBufferStage->getFrameBuffer(frame.flightIndex),
+        _gBufferStage->getFrameBufferOwner(frame.flightIndex),
         "Deferred.FrameUBO",
         EBufferUsage::UniformBuffer);
     const auto lightBuffer = importHostWrittenBuffer(
-        _gBufferStage->getLightBuffer(frame.flightIndex),
+        _gBufferStage->getLightBufferOwner(frame.flightIndex),
         "Deferred.LightUBO",
         EBufferUsage::UniformBuffer);
     const auto skinningBuffer = importHostWrittenBuffer(
-        _gBufferStage->getSkinningBuffer(frame.flightIndex),
+        _gBufferStage->getSkinningBufferOwner(frame.flightIndex),
         "Deferred.SkinningSSBO",
         EBufferUsage::StorageBuffer);
 

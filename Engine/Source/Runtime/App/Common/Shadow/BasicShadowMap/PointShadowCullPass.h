@@ -50,7 +50,7 @@ class PointShadowCullPass
 
     /// Bind the external instance buffer to the cull DS (binding 0).
     /// Required only for the compute path; harmless to call always.
-    void bindInstanceBuffer(uint32_t flightIndex, IBuffer* instanceBuffer);
+    void bindInstanceBuffer(uint32_t flightIndex, const stdptr<IBuffer>& instanceBuffer);
 
     /// Compute path — step 1: upload frustums + remember dispatch shape.
     void prepareCompute(uint32_t flightIndex,
@@ -91,7 +91,7 @@ class PointShadowCullPass
         stdptr<IBuffer>     faceFrustumBuffer;
         stdptr<IBuffer>     drawCommandBuffer;
         stdptr<IBuffer>     visibleInstancesBuf;
-        IBuffer*            instanceBuffer = nullptr;
+        stdptr<IBuffer>     instanceBuffer;
         DescriptorSetHandle cullDS = nullptr;
         // Compute-path dispatch shape
         uint32_t            activeFaceCount  = 0;

@@ -278,6 +278,7 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
 
             const auto existing = _importedBuffers.find(buffer.handle);
             if (existing != _importedBuffers.end() && !needsImportedBufferReplacement(existing->second, buffer)) {
+                existing->second.imported = buffer.imported;
                 continue;
             }
 

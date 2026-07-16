@@ -264,6 +264,11 @@ const RenderImage* RGRenderContext::resolveTexture(RGTextureHandle handle) const
 
 IBuffer* RGRenderContext::resolveBuffer(RGBufferHandle handle) const
 {
+    const auto* resource = _graph.getBuffer(handle);
+    YA_CORE_ASSERT(resource != nullptr, "RGRenderContext pass {} references invalid buffer handle {}", _pass.name, handle.index);
+    if (resource->imported.has_value()) {
+        _cmdBuf.retainResources(resource->imported->retainedResources);
+    }
     return _registry.resolveBuffer(handle);
 }
 

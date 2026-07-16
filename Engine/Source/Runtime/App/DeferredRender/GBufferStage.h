@@ -112,6 +112,9 @@ struct GBufferStage : public IRenderStage
         return _frameAndLightDS[flightIndex];
     }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getFrameAndLightDSL() const { return _frameAndLightDSL; }
+    [[nodiscard]] const stdptr<IBuffer>&       getFrameBufferOwner(uint32_t flightIndex) const { return _frameUBO[flightIndex]; }
+    [[nodiscard]] const stdptr<IBuffer>&       getLightBufferOwner(uint32_t flightIndex) const { return _lightUBO[flightIndex]; }
+    [[nodiscard]] const stdptr<IBuffer>& getSkinningBufferOwner(uint32_t flightIndex) const { return _skinningSSBO[flightIndex]; }
     [[nodiscard]] IBuffer* getFrameBuffer(uint32_t flightIndex) const { return _frameUBO[flightIndex].get(); }
     [[nodiscard]] IBuffer* getLightBuffer(uint32_t flightIndex) const { return _lightUBO[flightIndex].get(); }
     [[nodiscard]] IBuffer* getSkinningBuffer(uint32_t flightIndex) const { return _skinningSSBO[flightIndex].get(); }

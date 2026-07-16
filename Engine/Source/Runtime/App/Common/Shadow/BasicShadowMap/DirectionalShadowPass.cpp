@@ -228,25 +228,27 @@ std::optional<RGPassHandle> DirectionalShadowPass::appendGraphPass(
         EImageLayout::ShaderReadOnlyOptimal,
         EImageUsage::DepthStencilAttachment,
         Extent3D{_shadowExtent.width, _shadowExtent.height, 1}));
-    const auto importHostWrittenBuffer = [&](IBuffer* buffer, std::string label, EBufferUsage usage) {
+    const auto importHostWrittenBuffer = [&](const std::shared_ptr<IBuffer>& buffer, std::string label, EBufferUsage usage) {
+        YA_CORE_ASSERT(buffer != nullptr, "Directional shadow graph requires imported buffer '{}'", label);
         return graph.importBuffer(RGImportedBufferDesc{
             .desc = RGBufferDesc{
                 .label = std::move(label),
                 .usage = usage,
                 .size  = buffer->getSize(),
             },
-            .buffer = buffer,
+            .buffer = buffer.get(),
             .initialState = BufferResourceState{
                 .stages = EPipelineStage::Host,
                 .access = EResourceAccess::HostWrite,
                 .size   = buffer->getSize(),
             },
+            .retainedResources = {buffer},
         });
     };
     const auto frameBuffer = importHostWrittenBuffer(
-        flight.frameUBO.get(), "DirectionalShadow.FrameUBO", EBufferUsage::UniformBuffer);
+        flight.frameUBO, "DirectionalShadow.FrameUBO", EBufferUsage::UniformBuffer);
     const auto skinningBuffer = importHostWrittenBuffer(
-        flight.skinningSSBO.get(), "DirectionalShadow.SkinningSSBO", EBufferUsage::StorageBuffer);
+        flight.skinningSSBO, "DirectionalShadow.SkinningSSBO", EBufferUsage::StorageBuffer);
 
     const auto shadowPass = graph.addPass(
         "Directional Shadow",

@@ -251,7 +251,7 @@ void PointShadowIndirectRenderer::fillCullDataCompute(const BasicShadowFramePayl
     const uint32_t batchCount = static_cast<uint32_t>(flight.meshBatches.size());
     const uint32_t faceCount  = flight.activeFaceCount;
 
-    _cullPass.bindInstanceBuffer(payload.flightIndex, flight.instanceBuffer.get());
+    _cullPass.bindInstanceBuffer(payload.flightIndex, flight.instanceBuffer);
     _cullPass.writeDrawCommandTemplate(payload.flightIndex, cmdTemplates.data(), static_cast<uint32_t>(cmdTemplates.size()));
 
     // Build face frustums (light × 6).

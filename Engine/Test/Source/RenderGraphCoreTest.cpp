@@ -1508,6 +1508,43 @@ TEST(RenderGraphCoreTest, ExecutorSeedsImportedBufferBarrierFromDeclaredInitialS
     EXPECT_EQ(cmdBuf.bufferBarriers[0].size, 256u);
 }
 
+TEST(RenderGraphCoreTest, ExecutorRetainsImportedBufferKeepAliveResources)
+{
+    TestResourceFactory factory;
+    TestCommandBuffer   cmdBuf;
+    RenderGraphExecutor executor(factory);
+    RenderGraph         graph;
+    TestBuffer          storageBuffer(BufferCreateInfo{
+        .label = "point.visible",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 512,
+    });
+    auto owner = std::make_shared<int>(42);
+
+    const auto imported = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "point.visible",
+            .usage = EBufferUsage::StorageBuffer,
+            .size  = 512,
+        },
+        .buffer = &storageBuffer,
+        .initialState = BufferResourceState{
+            .stages = EPipelineStage::Host,
+            .access = EResourceAccess::HostWrite,
+            .size   = 512,
+        },
+        .retainedResources = {owner},
+    });
+    graph.addPass(
+        "storage-reader",
+        [=](RGPassBuilder& pass) { pass.read(imported); },
+        [](RGRenderContext&) {});
+
+    ASSERT_TRUE(executor.execute(graph, cmdBuf));
+    ASSERT_EQ(cmdBuf.retainedResources.size(), 1u);
+    EXPECT_EQ(cmdBuf.retainedResources[0].get(), owner.get());
+}
+
 TEST(RenderGraphCoreTest, ExecutorSmokeRunsClearAndCopyCallbacks)
 {
     TestResourceFactory      factory;

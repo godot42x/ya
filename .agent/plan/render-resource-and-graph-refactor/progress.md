@@ -24,6 +24,18 @@
 
 ## 最新验证
 
+- 2026-07-16：`PointShadowCullPass` 里最后一个“owner 已存在但 graph import 只拿到裸指针”的 buffer 也已接上显式 keepalive。此前 cull pass 持有 `instanceBuffer` 时只保存 `IBuffer*`，虽然真实 owner 一直在 `PointShadowIndirectRenderer::_perFlight[].instanceBuffer`，但这份 owner 信息在 `bindInstanceBuffer()` 时被丢掉，graph import 只能走 raw path；现在 cull pass 会直接保存这份 `shared_ptr<IBuffer>`，并在 append graph 时把实例 buffer 也作为 retained imported buffer 导入。
+- 直接收益：point-shadow compute cull 的四类 imported buffer（instance/frustum/draw-command/visible-instance）现在都走同一条 submit-time keepalive contract，不再只剩实例数据这一个特例依赖“renderer owner 应该还在”的隐式前提。
+- 当前停止线：这一步补的是 owner 已清晰存在、但在 pass 边界被降成裸指针的路径。后续如果再遇到 raw `IBuffer*` import，需要先确认 owner 真相是不是同样明确，避免为了统一写法而把真正的所有权问题藏起来。
+- 2026-07-16：Deferred 主图里的 frame/light/skinning imported buffer 现在也不再只以裸 `IBuffer*` 进入 graph。`GBufferStage` 新增 shared owner getter，`DeferredRenderPipeline::executeDeferredMainGraph()` 改为把这些 per-flight `shared_ptr<IBuffer>` 连同 `retainedResources` 一起传入 `RGImportedBufferDesc`，因此 Deferred GBuffer / light 主链与前面 shadow 路径的 imported-buffer keepalive contract 已对齐。
+- 直接收益：Deferred 默认主链上最核心的 host-written UBO / SSBO 不再只靠 stage 成员“通常会活得足够久”这个隐含前提；graph executor / command buffer 现在可以把这些 owner 显式 retain 到 submit-time 生命周期边界。
+- 当前停止线：这一步只补齐了 Deferred 主图里 owner 本就明确存在的 imported buffer。像 point-shadow cull 的 `instanceBuffer` 这类仍只有裸指针输入、暂时没有显式 shared owner 的路径，后续仍需结合上游 owner 结构再决定怎么收口，避免为了统一接口而虚构所有权。
+- 2026-07-16：RenderGraph imported buffer 现在也具备了和 imported texture 对齐的 keepalive contract。`RGImportedBufferDesc` 新增 `retainedResources`，executor 在发射 imported buffer barrier 时会把这些 keepalive retain 到 command buffer，`RGRenderContext::resolveBuffer()` 也会在执行期补同样的 retain；另外 point-shadow / directional-shadow 这些 graph 路径里原本以 `shared_ptr<IBuffer>::get()` 导入的 UBO / SSBO / indirect buffers，现在会把 shared owner 一并传进 graph import，而不是只留下裸 `IBuffer*`。配套新增 `RenderGraphCoreTest.ExecutorRetainsImportedBufferKeepAliveResources`，锁住“imported buffer 的 submit-time owner 会随 graph execution 进入 command buffer keepalive”的行为。
+- 直接收益：frame/light/skinning、point-shadow indirect/cull 等 imported buffer 不再完全依赖“外层 owner 恰好一直活着”这个隐含前提。graph 对 imported resource 的 submit-time 生命周期契约因此不再只覆盖 texture/image view，buffer 侧也有了同一条 keepalive 通路。
+- 当前停止线：这一步补的是 imported buffer keepalive 与几条高价值 runtime import callsite；更广义的 registry replacement / startup-shutdown 一致性仍需继续压实，尤其是那些还只能传裸 `IBuffer*` 而没有显式 owner 的路径。
+- 验证结果：
+  - `xmake b ya-testing` 通过
+  - `ya-testing --gtest_filter='RenderGraphCoreTest.ExecutorRetainsImportedBufferKeepAliveResources:RenderGraphCoreTest.ExecutorSeedsImportedBufferBarrierFromDeclaredInitialState'` 通过
 - 2026-07-16：offscreen job 现在会把录制期 command buffer retain 的 keepalive 资源显式转交到 `OffscreenJobResult::retainedResources`，而不是只保活到当前录制结束。此前 graph/imported view 若在 offscreen utility pass 中通过 command buffer retain 才满足 submit-time 生命周期，job 完成后结果对象并不会继续持有这些 owner；这次在 `queueOffscreenJob()` 的成功路径中补上了 retained-resource 转交，并让 `OffscreenTaskService::shutdown()` 在存在 pending fence / submitted jobs 时先等待并 finalize，再销毁 fence 与清空提交列表。配套新增 `OffscreenAsyncTest.QueueOffscreenJobPublishesRecordedKeepAliveResources`，并把原来依赖假 `ICommandBuffer*` 的 queue tests 一并升级为真实 test command buffer。
 - 直接收益：offscreen output 不再只是“有一张结果图”，而是把录制期真正依赖的 keepalive 一起带出，shutdown 时也不会跳过最后一批 recorded jobs 的 finalize。后续继续推进 environment preprocess、screenshot copy 或 graph-backed utility output 时，submit-time 生命周期证据会更完整。
 - 当前停止线：这一步补的是 offscreen 结果 keepalive 与 shutdown finalize；更广义的 graph registry replacement / startup-shutdown 一致性，以及 imported buffer 的 final-state contract 仍需继续推进。
