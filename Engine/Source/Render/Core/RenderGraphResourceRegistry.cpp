@@ -46,12 +46,34 @@ bool isSameImportedTextureDesc(const RGImportedTextureDesc& lhs, const RGImporte
              makeImageViewDescKey(*lhs.viewDesc),
              makeImageViewDescKey(*rhs.viewDesc)));
 
+    const bool bSameImportedImageIdentitySansLayout =
+        lhs.importDesc.label == rhs.importDesc.label &&
+        lhs.importDesc.nativeHandle == rhs.importDesc.nativeHandle &&
+        lhs.importDesc.format == rhs.importDesc.format &&
+        lhs.importDesc.usage == rhs.importDesc.usage &&
+        lhs.importDesc.extent.width == rhs.importDesc.extent.width &&
+        lhs.importDesc.extent.height == rhs.importDesc.extent.height &&
+        lhs.importDesc.extent.depth == rhs.importDesc.extent.depth &&
+        lhs.importDesc.mipLevels == rhs.importDesc.mipLevels &&
+        lhs.importDesc.arrayLayers == rhs.importDesc.arrayLayers &&
+        lhs.importDesc.ownership == rhs.importDesc.ownership;
+
+    const bool bSameLayoutContract =
+        lhs.importDesc.initialLayout == rhs.importDesc.initialLayout &&
+        lhs.importDesc.finalLayout == rhs.importDesc.finalLayout;
+
+    const bool bSameSharedImageBackedImport =
+        lhs.image != nullptr &&
+        rhs.image != nullptr &&
+        lhs.image.get() == rhs.image.get();
+
     return isSameTextureDesc(lhs.desc, rhs.desc) &&
-           isSameImportedImageDesc(lhs.importDesc, rhs.importDesc) &&
+           bSameImportedImageIdentitySansLayout &&
            lhs.image.get() == rhs.image.get() &&
            lhs.imageView.get() == rhs.imageView.get() &&
            bSameSubresourceRange &&
-           bSameViewDesc;
+           bSameViewDesc &&
+           (bSameSharedImageBackedImport || bSameLayoutContract);
 }
 
 bool isSameBufferDesc(const RGBufferDesc& lhs, const RGBufferDesc& rhs)

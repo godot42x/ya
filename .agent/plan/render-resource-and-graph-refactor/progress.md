@@ -23,6 +23,9 @@
 
 ## 最新验证
 
+- 2026-07-16：`RenderGraphResourceRegistry` 这条当前主线又补上了一层更符合资源/状态分层的 imported-texture contract：当 graph import 明确绑定到同一份 shared `IImage` owner 时，仅 `initialLayout/finalLayout` 变化不再触发 texture entry replacement。之前 registry 会把 imported image 的 layout contract 也当成“物理资源身份”的一部分比较，这会让同一份 shared imported image 在只变更 layout seed/final contract 时也重新构造 `RenderImage` 壳；现在 replacement 判定改成“shared image-backed import 只要 image/view/view-range/view-desc/非 layout 身份字段不变，就复用现有 registry entry”，同时补了一条 `RenderGraphCoreTest.ResourceRegistryKeepsSharedImportedTextureWhenOnlyLayoutContractChanges` 来锁住这个行为。
+- 直接收益：这一步收的不是某个单独 runtime case，而是 plan 当前反复提到的 imported initial/final state 与 registry replacement 边界。后续像 presentation、postprocess input、viewport snapshot、shared environment 这类已经以 shared image owner 作为真相的 import 路径，即使 layout contract 需要调整，也不会再平白触发一次 registry resource replacement。
+- 当前停止线：这次没有去扩大成“所有 imported image 的 layout 变化都绝不 replacement”。对于没有 shared image owner、完全依赖 `ImportedImageDesc` 自己导入 native handle 的路径，layout 仍然保留在 replacement 判定里，避免把一条更宽的语义改动混进这一批。
 - 2026-07-16：Phase 0 里最后缺着的 Forward 默认场景截图基线现在已经正式落档。沿用 `.agent/plan/render-resource-and-graph-refactor/forward-baseline.automation.json` 这条版本化命令，在 `HelloMaterial + PBR 球体观察机位 + screenshot.frame=1500` 口径下，本地成功产出 `/tmp/forward-baseline.png`（sha1 `5f69831a3228c6fd752fdc5893457bf529f82c49`），截图里可以直接看到 PBR 球体表面的天空盒反射，因此这次 capture 已满足此前用来对齐 IBL / environment reflection 的验证目标。
 - 直接收益：这一步补完的是 `todo.md` Phase 0 明确缺失的 Forward baseline，而不是把工作继续扩成 Forward 主链迁移。到这里，Deferred / Forward 两条默认场景截图基线都已经有了固定 automation config、固定机位和固定帧号，后续再看主路径视觉回归时，不需要先区分“是 Deferred graph 改坏了”，还是“Forward 自己原本就没有稳定基线”。
 - 当前停止线：这不代表 Forward 主路径已经达到 Deferred 的 graph 化程度，也不代表 `todo.md` 里更后的 `关键截图基线对比` 已经完成。当前只完成了“Forward 默认场景截图基线存在且可复现”这一项；下一优先级应回到真正推动主线的实现项，而不是继续在 Forward 上做与主计划无关的顺手清理。

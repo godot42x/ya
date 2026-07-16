@@ -1374,6 +1374,75 @@ TEST(RenderGraphCoreTest, ResourceRegistryReimportsTextureWhenViewIdentityChange
     EXPECT_EQ(factory.createdViews, 2u);
 }
 
+TEST(RenderGraphCoreTest, ResourceRegistryKeepsSharedImportedTextureWhenOnlyLayoutContractChanges)
+{
+    TestResourceFactory factory;
+    RenderGraphResourceRegistry registry(factory);
+
+    auto image = factory.createImage(ImageCreateInfo{
+        .label         = "shared.imported.layout.test",
+        .format        = EFormat::B8G8R8A8_UNORM,
+        .extent        = {.width = 256, .height = 144, .depth = 1},
+        .mipLevels     = 1,
+        .arrayLayers   = 1,
+        .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        .initialLayout = EImageLayout::Undefined,
+    });
+
+    RenderGraph graphA;
+    const auto importedHandle = graphA.importTexture(RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label  = "shared.imported.layout.test",
+            .format = EFormat::B8G8R8A8_UNORM,
+            .extent = Extent3D{256, 144, 1},
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        },
+        .importDesc = ImportedImageDesc{
+            .label         = "shared.imported.layout.test",
+            .nativeHandle  = static_cast<void*>(image->getHandle()),
+            .format        = EFormat::B8G8R8A8_UNORM,
+            .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .extent        = Extent3D{256, 144, 1},
+            .initialLayout = EImageLayout::Undefined,
+            .finalLayout   = EImageLayout::ColorAttachmentOptimal,
+        },
+        .image = image,
+    });
+
+    registry.sync(graphA);
+    auto firstResource = registry.resolveTextureShared(importedHandle);
+    ASSERT_NE(firstResource, nullptr);
+    EXPECT_EQ(factory.importedImages, 0u);
+    EXPECT_EQ(factory.createdViews, 1u);
+
+    RenderGraph graphB;
+    graphB.importTexture(RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label  = "shared.imported.layout.test",
+            .format = EFormat::B8G8R8A8_UNORM,
+            .extent = Extent3D{256, 144, 1},
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        },
+        .importDesc = ImportedImageDesc{
+            .label         = "shared.imported.layout.test",
+            .nativeHandle  = static_cast<void*>(image->getHandle()),
+            .format        = EFormat::B8G8R8A8_UNORM,
+            .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .extent        = Extent3D{256, 144, 1},
+            .initialLayout = EImageLayout::PresentSrcKHR,
+            .finalLayout   = EImageLayout::PresentSrcKHR,
+        },
+        .image = image,
+    });
+
+    registry.sync(graphB);
+    auto secondResource = registry.resolveTextureShared(importedHandle);
+    ASSERT_NE(secondResource, nullptr);
+    EXPECT_EQ(factory.importedImages, 0u);
+    EXPECT_EQ(factory.createdViews, 1u);
+    EXPECT_EQ(secondResource, firstResource);
+}
+
 TEST(RenderGraphCoreTest, ImageViewDoesNotOwnImageLifetime)
 {
     TestResourceFactory factory;
