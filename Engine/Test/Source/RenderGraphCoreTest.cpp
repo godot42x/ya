@@ -1764,6 +1764,47 @@ TEST(RenderGraphCoreTest, ExecutorRetainsImportedBufferKeepAliveResources)
     EXPECT_EQ(cmdBuf.retainedResources[0].get(), owner.get());
 }
 
+TEST(RenderGraphCoreTest, ExecutorRestoresImportedBufferFinalStateAfterTransferPass)
+{
+    TestResourceFactory factory;
+    TestCommandBuffer   cmdBuf;
+    RenderGraphExecutor executor(factory);
+    RenderGraph         graph;
+    TestBuffer          readbackBuffer(BufferCreateInfo{
+        .label = "readback.dst",
+        .usage = EBufferUsage::TransferDst,
+        .size  = 512,
+    });
+
+    const auto imported = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "readback.dst",
+            .usage = EBufferUsage::TransferDst,
+            .size  = 512,
+        },
+        .buffer = &readbackBuffer,
+        .finalState = BufferResourceState{
+            .stages = EPipelineStage::Host,
+            .access = EResourceAccess::HostRead,
+            .size   = 512,
+        },
+    });
+    graph.addPass(
+        "copy-readback",
+        [=](RGPassBuilder& pass) { pass.transferDst(imported); },
+        [](RGRenderContext&) {});
+
+    ASSERT_TRUE(executor.execute(graph, cmdBuf));
+    ASSERT_EQ(cmdBuf.bufferBarriers.size(), 2u);
+    EXPECT_EQ(cmdBuf.bufferBarriers[0].dstStage, EPipelineStage::Transfer);
+    EXPECT_EQ(cmdBuf.bufferBarriers[0].dstAccess, EResourceAccess::TransferWrite);
+    EXPECT_EQ(cmdBuf.bufferBarriers[1].srcStage, EPipelineStage::Transfer);
+    EXPECT_EQ(cmdBuf.bufferBarriers[1].dstStage, EPipelineStage::Host);
+    EXPECT_EQ(cmdBuf.bufferBarriers[1].srcAccess, EResourceAccess::TransferWrite);
+    EXPECT_EQ(cmdBuf.bufferBarriers[1].dstAccess, EResourceAccess::HostRead);
+    EXPECT_EQ(cmdBuf.bufferBarriers[1].size, 512u);
+}
+
 TEST(RenderGraphCoreTest, ResolveTextureRetainsImportedTextureKeepAliveResources)
 {
     TestResourceFactory factory;

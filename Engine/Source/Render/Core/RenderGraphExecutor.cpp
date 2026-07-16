@@ -111,6 +111,48 @@ bool RenderGraphExecutor::executeCompiled(
     return true;
 }
 
+void RenderGraphExecutor::finalizeImportedBufferStates(const RenderGraph& graph, ICommandBuffer& cmdBuf)
+{
+    for (const auto& bufferResource : graph.getBuffers()) {
+        if (bufferResource.lifetime != ERGResourceLifetime::Imported || !bufferResource.imported.has_value() ||
+            !bufferResource.imported->finalState.has_value()) {
+            continue;
+        }
+
+        auto* buffer = _registry.resolveBuffer(bufferResource.handle);
+        YA_CORE_ASSERT(buffer != nullptr, "RenderGraphExecutor failed to resolve imported buffer {}", bufferResource.handle.index);
+
+        const auto newState = normalizeBufferState(*bufferResource.imported->finalState, *buffer);
+        const auto oldIt    = _bufferStates.find(buffer);
+        BufferResourceState oldState{};
+        if (oldIt != _bufferStates.end()) {
+            oldState = oldIt->second;
+        }
+        else {
+            oldState = normalizeBufferState(bufferResource.imported->initialState, *buffer);
+        }
+
+        const bool bNeedsBarrier =
+            oldState.stages != newState.stages ||
+            oldState.access != newState.access ||
+            oldState.offset != newState.offset ||
+            oldState.size != newState.size;
+
+        if (bNeedsBarrier) {
+            cmdBuf.bufferMemoryBarrier(
+                buffer,
+                oldState.stages,
+                newState.stages,
+                oldState.access,
+                newState.access,
+                newState.offset,
+                newState.size);
+        }
+
+        _bufferStates[buffer] = newState;
+    }
+}
+
 void RenderGraphExecutor::finalizeImportedTextureStates(const RenderGraph& graph, ICommandBuffer& cmdBuf)
 {
     for (const auto& textureResource : graph.getTextures()) {
@@ -152,6 +194,7 @@ bool RenderGraphExecutor::execute(
         return false;
     }
 
+    finalizeImportedBufferStates(graph, cmdBuf);
     finalizeImportedTextureStates(graph, cmdBuf);
     return true;
 }

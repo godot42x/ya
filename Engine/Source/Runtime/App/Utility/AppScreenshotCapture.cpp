@@ -208,6 +208,11 @@ RGImportedBufferDesc makeImportedReadbackBufferDesc(const std::shared_ptr<IBuffe
             .size  = buffer->getSize(),
         },
         .buffer = buffer.get(),
+        .finalState = BufferResourceState{
+            .stages = EPipelineStage::Host,
+            .access = EResourceAccess::HostRead,
+            .size   = buffer->getSize(),
+        },
         .retainedResources = {buffer},
     };
 }

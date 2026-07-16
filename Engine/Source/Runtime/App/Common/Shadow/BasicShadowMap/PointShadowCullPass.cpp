@@ -170,17 +170,7 @@ void PointShadowCullPass::dispatch(ICommandBuffer* cmdBuf, uint32_t flightIndex)
     if (!cmdBuf || !_graphExecutor) return;
 
     RenderGraph graph;
-    const auto resources = appendGraphPass(graph, flightIndex, true);
-    if (!resources.has_value() || !resources->cullPass.has_value()) return;
-
-    graph.addPass(
-        "Point Shadow Draw Inputs",
-        [resources](RGPassBuilder& pass) {
-            pass.dependsOn(*resources->cullPass);
-            pass.indirectRead(resources->drawCommands);
-            pass.read(resources->visibleInstances);
-        },
-        [](RGRenderContext&) {});
+    if (!appendGraphPass(graph, flightIndex, true).has_value()) return;
 
     YA_CORE_ASSERT(_graphExecutor->execute(graph, *cmdBuf),
                    "Failed to execute point shadow cull graph");
@@ -204,7 +194,8 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
                            const std::shared_ptr<IBuffer>& buffer,
                            std::string label,
                            EBufferUsage usage,
-                           BufferResourceState initialState) {
+                           BufferResourceState initialState,
+                           std::optional<BufferResourceState> finalState = std::nullopt) {
         YA_CORE_ASSERT(buffer != nullptr, "Point shadow cull graph requires imported buffer '{}'", label);
         return graph.importBuffer(RGImportedBufferDesc{
             .desc = RGBufferDesc{
@@ -214,23 +205,8 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
             },
             .buffer            = buffer.get(),
             .initialState      = initialState,
+            .finalState        = finalState,
             .retainedResources = {buffer},
-        });
-    };
-    auto importRawBuffer = [](RenderGraph& graph,
-                              IBuffer* buffer,
-                              std::string label,
-                              EBufferUsage usage,
-                              BufferResourceState initialState) {
-        YA_CORE_ASSERT(buffer != nullptr, "Point shadow cull graph requires imported buffer '{}'", label);
-        return graph.importBuffer(RGImportedBufferDesc{
-            .desc = RGBufferDesc{
-                .label = std::move(label),
-                .usage = usage,
-                .size  = buffer->getSize(),
-            },
-            .buffer       = buffer,
-            .initialState = initialState,
         });
     };
 
@@ -238,18 +214,28 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
         .stages = EPipelineStage::Host,
         .access = EResourceAccess::HostWrite,
     };
+    const BufferResourceState indirectReadState{
+        .stages = EPipelineStage::DrawIndirect,
+        .access = EResourceAccess::IndirectCommandRead,
+    };
+    const BufferResourceState shaderReadState{
+        .stages = EPipelineStage::AllCommands,
+        .access = EResourceAccess::ShaderRead,
+    };
     const auto drawCommandBuffer = importBuffer(
         graph,
         flight.drawCommandBuffer,
         "PointShadowCull.DrawCommands",
         EBufferUsage::StorageBuffer | EBufferUsage::IndirectBuffer,
-        hostWriteState);
+        hostWriteState,
+        indirectReadState);
     const auto visibleInstances = importBuffer(
         graph,
         flight.visibleInstancesBuf,
         "PointShadowCull.VisibleInstances",
         EBufferUsage::StorageBuffer,
-        bDispatchCull ? BufferResourceState{} : hostWriteState);
+        bDispatchCull ? BufferResourceState{} : hostWriteState,
+        shaderReadState);
 
     GraphResources resources{
         .drawCommands     = drawCommandBuffer,
