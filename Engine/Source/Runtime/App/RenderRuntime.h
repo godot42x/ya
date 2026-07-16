@@ -140,7 +140,7 @@ struct RenderRuntime
     RenderTargetEditorState _rtEditor{};
 
     void init(const InitDesc& desc);
-    void shutdown();
+    void shutdown(bool bRenderAlreadyIdle = false);
     void renderFrame(const FrameInput& input);
     void renderGUI(float dt);
 
@@ -208,7 +208,7 @@ struct RenderRuntime
     void                   rebuildPresentationImages();
     void                   initCommandResources();
     void                   initFrameServices();
-    void                   shutdownRuntimeServices();
+    void                   shutdownRuntimeServices(bool bRenderAlreadyIdle = false);
     void                   destroyRenderBackend();
     bool                   prepareFrame(const FrameInput& input, int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf);

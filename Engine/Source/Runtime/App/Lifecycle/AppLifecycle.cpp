@@ -396,7 +396,7 @@ void AppLifecycle::quit(App& app)
     app._deleter.clear();
 
     if (app._renderRuntime) {
-        app._renderRuntime->shutdown();
+        app._renderRuntime->shutdown(/*bRenderAlreadyIdle=*/true);
         app._renderRuntime.reset();
     }
 

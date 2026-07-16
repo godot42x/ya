@@ -258,18 +258,18 @@ void RenderRuntime::initFrameServices()
     DeferredDeletionQueue::get().init(/*framesInFlight=*/1);
 }
 
-void RenderRuntime::shutdown()
+void RenderRuntime::shutdown(bool bRenderAlreadyIdle)
 {
-    shutdownRuntimeServices();
+    shutdownRuntimeServices(bRenderAlreadyIdle);
     shutdownActivePipeline();
     getDebugRenderSystem().destroy();
     _deleter.clear();
     destroyRenderBackend();
 }
 
-void RenderRuntime::shutdownRuntimeServices()
+void RenderRuntime::shutdownRuntimeServices(bool bRenderAlreadyIdle)
 {
-    if (_render) {
+    if (_render && !bRenderAlreadyIdle) {
         _render->waitIdle();
     }
 

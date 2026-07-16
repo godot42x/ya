@@ -23,6 +23,9 @@
 
 ## 最新验证
 
+- 2026-07-16：shutdown 主链里又补掉了一层已经被上游 owner 切换边界覆盖的全局 `waitIdle()`。当前 `AppLifecycle::shutdown()` 会先 `unloadScene(app)`，而这条路径本身已经在 `AppLifecycle::unloadScene()` 内对 render 做过一次全局 idle；随后它紧接着调用 `RenderRuntime::shutdown()`，旧实现又会在 `shutdownRuntimeServices()` 里再做一次全局 idle，期间没有新的 GPU submit。现在 `RenderRuntime::shutdown()` / `shutdownRuntimeServices()` 新增了显式 `bRenderAlreadyIdle` 入口，并让 `AppLifecycle::shutdown()` 在 scene 已 quiesced 的这条调用链上走 `shutdown(true)`，从而保留默认安全语义，同时避免退出路径上的第二次无效全局等待。
+- 直接收益：这一步继续压的是 plan 里点名的 startup/shutdown consistency，而不是再去做一刀 owner 字段整理。现在 app 退出这条链上的 render quiesce 语义更清楚：scene unload 负责把当前场景相关 GPU 工作先停稳，runtime shutdown 则继续负责服务/pipeline/backend 的销毁，不再把同一批已静止的工作再等第二次。
+- 当前停止线：这次没有把 `RenderRuntime::shutdownRuntimeServices()` 的等待直接全删掉；默认调用仍然会等待，只有当前这条已经由上游证明 idle 的退出链显式选择 fast path。这样不会把别的未来调用点默认带入“必须事先已经 idle”这个隐含前提。
 - 2026-07-16：`RenderGraphResourceRegistry` 这条当前主线又补上了一层更符合资源/状态分层的 imported-texture contract：当 graph import 明确绑定到同一份 shared `IImage` owner 时，仅 `initialLayout/finalLayout` 变化不再触发 texture entry replacement。之前 registry 会把 imported image 的 layout contract 也当成“物理资源身份”的一部分比较，这会让同一份 shared imported image 在只变更 layout seed/final contract 时也重新构造 `RenderImage` 壳；现在 replacement 判定改成“shared image-backed import 只要 image/view/view-range/view-desc/非 layout 身份字段不变，就复用现有 registry entry”，同时补了一条 `RenderGraphCoreTest.ResourceRegistryKeepsSharedImportedTextureWhenOnlyLayoutContractChanges` 来锁住这个行为。
 - 直接收益：这一步收的不是某个单独 runtime case，而是 plan 当前反复提到的 imported initial/final state 与 registry replacement 边界。后续像 presentation、postprocess input、viewport snapshot、shared environment 这类已经以 shared image owner 作为真相的 import 路径，即使 layout contract 需要调整，也不会再平白触发一次 registry resource replacement。
 - 当前停止线：这次没有去扩大成“所有 imported image 的 layout 变化都绝不 replacement”。对于没有 shared image owner、完全依赖 `ImportedImageDesc` 自己导入 native handle 的路径，layout 仍然保留在 replacement 判定里，避免把一条更宽的语义改动混进这一批。
