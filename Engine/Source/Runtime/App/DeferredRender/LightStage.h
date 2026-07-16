@@ -52,8 +52,8 @@ struct LightStage : public IRenderStage
 
     IRender*                  _render           = nullptr;
     stdptr<IDescriptorSetLayout> _frameAndLightDSL;
-    DeferredGBufferResources  _gBufferResources{};
-    const RenderImage*        _ssaoTexture      = nullptr;
+    DeferredGBufferResources     _gBufferResources{};
+    std::shared_ptr<RenderImage> _ssaoTextureOwner = nullptr;
 
     // Pipeline (shared across flights)
     stdptr<IGraphicsPipeline>    _pipeline;
@@ -99,7 +99,7 @@ struct LightStage : public IRenderStage
     void setup(SharedInputs sharedInputs, const DeferredGBufferResources& gBufferResources);
     void setEnvironmentLightingInput(EnvironmentLightingInput input);
     void setFrameInputs(FrameInputs frameInputs);
-    void setSSAOTexture(const RenderImage* ssaoTexture);
+    void setSSAOTexture(std::shared_ptr<RenderImage> ssaoTexture);
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecularIBL);
     void refreshPipelineFormats(const DeferredAttachmentFormats& formats);

@@ -713,7 +713,7 @@ void DeferredRenderPipeline::initStages()
         .environmentLightingDSL = _environmentLightingDSL,
         .getSceneEnvironmentLightingDescriptorSet = _getSceneEnvironmentLightingDescriptorSet,
     });
-    _lightStage->setSSAOTexture(_currentSSAOOutput.get());
+    _lightStage->setSSAOTexture(_currentSSAOOutput);
     _lightStage->init(_render);
     syncShadowSettings();
 
@@ -1006,7 +1006,7 @@ void DeferredRenderPipeline::refreshGBufferStageState()
 void DeferredRenderPipeline::refreshViewportStageState()
 {
     if (_lightStage) {
-        _lightStage->setSSAOTexture(_currentSSAOOutput.get());
+        _lightStage->setSSAOTexture(_currentSSAOOutput);
         _lightStage->refreshPipelineFormats(_currentViewportResources.formats);
     }
 
@@ -1020,7 +1020,7 @@ void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext&
     (void)frame;
 
     if (_lightStage) {
-        _lightStage->setSSAOTexture(_bEnableSSAO ? _currentSSAOOutput.get() : nullptr);
+        _lightStage->setSSAOTexture(_bEnableSSAO ? _currentSSAOOutput : nullptr);
     }
 
     if (_ssaoStage) {
@@ -1382,7 +1382,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         _currentSSAOOutput.reset();
         _currentPostprocessOutput.reset();
         if (_lightStage) {
-            _lightStage->setSSAOTexture(nullptr);
+            _lightStage->setSSAOTexture({});
         }
         _postProcessStage.clearPreparedResources();
         return;
@@ -1401,13 +1401,13 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     if (ssao.has_value()) {
         _currentSSAOOutput = _graphExecutor->getRegistry().resolveTextureShared(*ssao);
         if (_lightStage) {
-            _lightStage->setSSAOTexture(_currentSSAOOutput.get());
+            _lightStage->setSSAOTexture(_currentSSAOOutput);
         }
     }
     else {
         _currentSSAOOutput.reset();
         if (_lightStage) {
-            _lightStage->setSSAOTexture(nullptr);
+            _lightStage->setSSAOTexture({});
         }
     }
 
@@ -1424,7 +1424,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         _currentSSAOOutput.reset();
         _currentPostprocessOutput.reset();
         if (_lightStage) {
-            _lightStage->setSSAOTexture(nullptr);
+            _lightStage->setSSAOTexture({});
         }
         _postProcessStage.clearPreparedResources();
         return;

@@ -86,13 +86,13 @@ void LightStage::setFrameInputs(FrameInputs frameInputs)
     _frameInputs = frameInputs;
 }
 
-void LightStage::setSSAOTexture(const RenderImage* ssaoTexture)
+void LightStage::setSSAOTexture(std::shared_ptr<RenderImage> ssaoTexture)
 {
-    if (_ssaoTexture == ssaoTexture) {
+    if (_ssaoTextureOwner == ssaoTexture) {
         return;
     }
 
-    _ssaoTexture = ssaoTexture;
+    _ssaoTextureOwner = std::move(ssaoTexture);
     invalidateGBufferDescriptors();
 }
 
@@ -282,7 +282,7 @@ void LightStage::destroy()
     _render                   = nullptr;
     _frameAndLightDSL.reset();
     _gBufferResources         = {};
-    _ssaoTexture              = nullptr;
+    _ssaoTextureOwner.reset();
     _environmentLightingDSL.reset();
     _getSceneEnvironmentLightingDescriptorSet = {};
     _frameInputs = {};
@@ -326,13 +326,15 @@ void LightStage::prepare(const RenderStageContext& ctx)
     const auto gbufferDepthImageViewHandle = _gBufferResources.depth && _gBufferResources.depth->getImageView()
         ? _gBufferResources.depth->getImageView()->getHandle()
         : ImageViewHandle{};
-    const auto ssaoImageViewHandle = _ssaoTexture && _ssaoTexture->getImageView() ? _ssaoTexture->getImageView()->getHandle() : ImageViewHandle{};
+    const auto ssaoImageViewHandle = _ssaoTextureOwner && _ssaoTextureOwner->getImageView()
+        ? _ssaoTextureOwner->getImageView()->getHandle()
+        : ImageViewHandle{};
     if (!_bGBufferDescriptorsInitialized ||
         _lastGBufferImageViewHandles != gbufferImageViewHandles ||
         _lastGBufferDepthImageViewHandle != gbufferDepthImageViewHandle ||
         _lastSSAOImageViewHandle != ssaoImageViewHandle) {
-        auto* ssaoImageView = _ssaoTexture
-            ? _ssaoTexture->getImageView()
+        auto* ssaoImageView = _ssaoTextureOwner
+            ? _ssaoTextureOwner->getImageView()
             : TextureLibrary::get().getWhiteTexture()->getImageView();
         _render->getDescriptorHelper()->updateDescriptorSets({
             IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 0, albedo->getImageView(), sampler.get()),

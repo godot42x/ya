@@ -23,6 +23,14 @@
 
 ## 最新验证
 
+- 2026-07-16：Deferred 主链里 `RenderGraphRegistry -> DeferredRenderPipeline -> LightStage` 之间的 SSAO 输出传递，开始保持 shared owner 语义而不再在 stage 边界掉回 raw `RenderImage*`。此前 `_currentSSAOOutput` 虽然已经由 graph registry 以 `shared_ptr<RenderImage>` 形式解析出来，但 `LightStage::setSSAOTexture()` 仍只接收裸指针，导致主图 stage 边界这一步又回到了“descriptor 刷新阶段假定 owner 还在别处活着”的旧前提。现在 `LightStage` 直接持有 `std::shared_ptr<RenderImage>`，Deferred 在 init / frame sync / graph execute / failure reset 这些切换点都把 shared owner 直接传进去。
+- 直接收益：这批把 Deferred 主链上一条真实在用的 graph output -> stage consumer 边界，从 raw 引用重新收回到 owner-aware 语义。后续如果继续收 `_currentPostprocessOutput` 或其他 graph 输出 consumer，就不需要再先解释“pipeline state 已经是 shared owner，但 stage 内部又只留了一根裸指针”这层不对称。
+- 当前停止线：这一步只收了 SSAO 输出进入 `LightStage` 的边界，没有扩大到 `IRenderPipelineDebugOutputs`、postprocess 输出接口或更高层 editor/runtime catalog；也没有改 `LightStage` 最终写 descriptor 时仍只消费 image view 的事实。因此它是 Deferred 主图 owner 对齐的一刀，而不是整套 debug/output API 重写。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/deferred-ssao-owner-alignment.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/deferred-ssao-owner-alignment.png` 已生成
+
 - 2026-07-16：`DetailsView` 的 skybox cubemap face preview 也开始脱离 “必须先有 compat `Texture` 才能显示” 的旧 gate。此前这块 UI 虽然实际展示的是 `ResourceResolveSystem` 预先构建好的 face preview views，但入口判断仍然写死要求 `preview.cubemapTexture`、`getImageShared()` 和 `getImageView()` 全都存在；这会把 editor 详情面重新绑回 compat texture 语义。现在它改为按 `bHasRenderableCubemap + 至少一个 face preview view 可用` 决定是否显示，从而和已经完成的 preview-owner/state-owner 收口保持一致。
 - 直接收益：editor 详情面这条真实观察链不再把 “state 已有 renderable cubemap / owner 真相” 再次降级成 compat texture 才允许可视化。后续如果 skybox preprocess 结果主要以 `RenderImage` owner 语义继续推进，这个 UI consumer 不会再因为 compat wrapper 缺失而把本来可用的 face preview 错判成 unavailable。
 - 当前停止线：这一步只收了 `DetailsView` skybox preview 的显示 gate，没有新增 environment details preview，也没有改 descriptor、runtime consumer 或 preview view 的生成逻辑；因此它是一个活跃 editor consumer 的 compat 清理，而不是新的 UI 功能扩展。
