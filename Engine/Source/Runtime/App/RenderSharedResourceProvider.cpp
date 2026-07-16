@@ -61,7 +61,7 @@ void RenderSharedResourceProvider::updateEnvironmentLightingDescriptorSet(Descri
                                                                           Texture*            cubemapTexture,
                                                                           Texture*            irradianceTexture,
                                                                           Texture*            prefilterTexture,
-                                                                          RenderImage*        brdfLutTexture)
+                                                                          const stdptr<RenderImage>& brdfLutTexture)
 {
     if (!ds || !cubemapTexture || !irradianceTexture || !prefilterTexture || !brdfLutTexture ||
         !cubemapTexture->getImageView() || !irradianceTexture->getImageView() ||
@@ -164,11 +164,11 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneEnvironmentLightingDes
     auto* cubemapTexture    = resources.cubemapTexture.get();
     auto* irradianceTexture = resources.irradianceTexture.get();
     auto* prefilterTexture  = resources.prefilterTexture.get();
-    auto* brdfLutTexture    = resources.brdfLutTexture.get();
+    const auto& brdfLutTexture = resources.brdfLutTexture;
     const auto cubemapImageViewHandle    = getTextureImageViewHandle(cubemapTexture);
     const auto irradianceImageViewHandle = getTextureImageViewHandle(irradianceTexture);
     const auto prefilterImageViewHandle  = getTextureImageViewHandle(prefilterTexture);
-    const auto brdfLutImageViewHandle    = getRenderImageViewHandle(brdfLutTexture);
+    const auto brdfLutImageViewHandle    = getRenderImageViewHandle(brdfLutTexture.get());
 
     if (cubemapTexture != _environmentLighting.boundCubemapTexture ||
         irradianceTexture != _environmentLighting.boundIrradianceTexture ||
@@ -195,7 +195,7 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneEnvironmentLightingDes
                      getTextureLabel(cubemapTexture),
                      getTextureLabel(irradianceTexture),
                      getTextureLabel(prefilterTexture),
-                     getRenderImageLabel(brdfLutTexture));
+                     getRenderImageLabel(brdfLutTexture.get()));
     }
 
     return _environmentLighting.sceneDS;
@@ -369,12 +369,12 @@ void RenderSharedResourceProvider::initEnvironmentLightingResources()
                                            _skybox.fallbackTexture.get(),
                                            _environmentLighting.fallbackIrradianceTexture.get(),
                                            _environmentLighting.fallbackPrefilterTexture.get(),
-                                           _sharedResources.pbrLUT.get());
+                                           _sharedResources.pbrLUT);
     updateEnvironmentLightingDescriptorSet(_environmentLighting.sceneDS,
                                            _skybox.fallbackTexture.get(),
                                            _environmentLighting.fallbackIrradianceTexture.get(),
                                            _environmentLighting.fallbackPrefilterTexture.get(),
-                                           _sharedResources.pbrLUT.get());
+                                           _sharedResources.pbrLUT);
 }
 
 void RenderSharedResourceProvider::releaseRenderOwnedResources()
@@ -459,12 +459,12 @@ void RenderSharedResourceProvider::resetEnvironmentLightingPool()
                                                _skybox.fallbackTexture.get(),
                                                _environmentLighting.fallbackIrradianceTexture.get(),
                                                _environmentLighting.fallbackPrefilterTexture.get(),
-                                               _sharedResources.pbrLUT.get());
+                                               _sharedResources.pbrLUT);
         updateEnvironmentLightingDescriptorSet(_environmentLighting.sceneDS,
                                                _skybox.fallbackTexture.get(),
                                                _environmentLighting.fallbackIrradianceTexture.get(),
                                                _environmentLighting.fallbackPrefilterTexture.get(),
-                                               _sharedResources.pbrLUT.get());
+                                               _sharedResources.pbrLUT);
     }
 }
 

@@ -23,6 +23,13 @@
 
 ## 最新验证
 
+- 2026-07-16：`RenderSharedResourceProvider` / editor viewport 这条 BRDF LUT 观察与绑定链也开始直接沿用 shared owner 真相，而不再在 provider 边界公开一条 raw `RenderImage*` 同义出口。此前 `_sharedResources.pbrLUT` 明明已经是稳定的 `shared_ptr<RenderImage>`，但 provider 仍然通过 `getBrdfLutTexture()` 向外暴露裸指针，environment lighting descriptor set update 也会在内部把这份 owner 再降成 raw 缓存；editor debug 槽位随后又从这根 raw 指针反查 image/view。现在 provider 对外只保留 `getBrdfLutTextureShared()`，editor viewport 直接消费 shared owner；environment lighting descriptor update 与绑定缓存也同步按 shared owner 比较/传递 BRDF LUT，再只在真正写 descriptor 的最后一跳取 image view。
+- 直接收益：BRDF LUT 这条共享环境资源链终于和前面已经收过的 viewport、postprocess、SSAO、environment snapshot/debug preview 一样，在 runtime/provider/editor 边界保留 owner 真相。后续继续审 shared resource provider 或 editor debug 观察面时，不需要再解释“PBR LUT 明明已经是 shared owner 资源，但 provider 还另外开了一条 raw getter”这层不对称。
+- 当前停止线：这一步只收了 BRDF LUT 在 provider/export 与 editor debug 观察面的 shared-owner 边界，没有去改 environment descriptor set 仍然需要 `Texture` 的 cubemap/irradiance/prefilter 协议，也没有扩大到 light pass 或材质采样类型重设计；因此它是剩余 compatibility adapter 的一小刀，不是 environment 资源全链重写。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/brdf-lut-owner-boundary.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/brdf-lut-owner-boundary.png` 已生成
 - 2026-07-16：`PostProcessingStage` 和 `DeferredRenderPipeline` 上一组已经没有真实 consumer 的 raw graph-output getter 也已继续删除，包括 bloom extract / blur / composite、prepared postprocess output，以及 `DeferredRenderPipeline::getSSAOTexture()`。前面几批已经把 bloom/postprocess prepared output、Deferred SSAO snapshot 和 runtime/debug/export 链都切到 shared owner 当前帧真相；这次回查调用面后，确认剩余 raw getter 只剩 stage 内 declaration 和 Deferred 末端一处“先判 raw，再取 shared”的旧分支。现在 Deferred 主图末端直接以 `getPreparedOutputImageShared()` 作为唯一判断与缓存依据，死掉的 `getSSAOTexture()` 也随之移除。
 - 直接收益：这一批把 postprocess/SSAO 这组 graph 输出的最后一层“名义上还能拿 raw、实际上已经没人该这样用”的旧逃生口收掉了。后续继续审 Deferred 当前帧输出或 postprocess 边界时，不需要再区分“shared owner 才是真相，但 stage/pipeline 里还藏着几条零散 raw getter”。
 - 当前停止线：这一步只删掉确认无 consumer 的 raw getter，并把 Deferred 末端判断改成 shared owner，不扩大成 `PostProcessingStage`/pipeline 对外接口重设计；像仍然真实消费 `IImageView*` 的 debug slot、descriptor 绑定和其他兼容层没有被混进本批。

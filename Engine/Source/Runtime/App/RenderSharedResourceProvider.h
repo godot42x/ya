@@ -56,7 +56,7 @@ struct RenderSharedResourceProvider
         Texture*                     boundCubemapTexture       = nullptr;
         Texture*                     boundIrradianceTexture    = nullptr;
         Texture*                     boundPrefilterTexture     = nullptr;
-        RenderImage*                 boundBrdfLutTexture       = nullptr;
+        stdptr<RenderImage>          boundBrdfLutTexture       = nullptr;
         ImageViewHandle              boundCubemapImageView     = nullptr;
         ImageViewHandle              boundIrradianceImageView  = nullptr;
         ImageViewHandle              boundPrefilterImageView   = nullptr;
@@ -85,7 +85,7 @@ struct RenderSharedResourceProvider
     [[nodiscard]] Sampler*                     getSkyboxSampler() const { return _cubemapSampler.get(); }
     [[nodiscard]] DescriptorSetHandle          getFallbackSkyboxDescriptorSet() const { return _skybox.fallbackDS; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getEnvironmentLightingDescriptorSetLayout() const { return _environmentLighting.dsl; }
-    [[nodiscard]] RenderImage*                 getBrdfLutTexture() const { return _sharedResources.pbrLUT.get(); }
+    [[nodiscard]] stdptr<RenderImage>          getBrdfLutTextureShared() const { return _sharedResources.pbrLUT; }
     [[nodiscard]] DescriptorSetHandle          getSceneSkyboxDescriptorSet(Scene* scene = nullptr);
     [[nodiscard]] DescriptorSetHandle          getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr);
     [[nodiscard]] EnvironmentLightingTextureSet resolveSceneEnvironmentLightingTextures(Scene* scene = nullptr) const;
@@ -96,7 +96,11 @@ struct RenderSharedResourceProvider
     void                   initEnvironmentLightingResources();
     void                   releaseRenderOwnedResources();
     void                   updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* texture);
-    void                   updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds, Texture* cubemapTexture, Texture* irradianceTexture, Texture* prefilterTexture, RenderImage* brdfLutTexture);
+    void                   updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds,
+                                                                  Texture*            cubemapTexture,
+                                                                  Texture*            irradianceTexture,
+                                                                  Texture*            prefilterTexture,
+                                                                  const stdptr<RenderImage>& brdfLutTexture);
 };
 
 } // namespace ya

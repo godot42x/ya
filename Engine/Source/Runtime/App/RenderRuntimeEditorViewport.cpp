@@ -150,7 +150,7 @@ void RenderRuntime::updateEditorViewportContext(EditorLayer* editorLayer)
         appendDeferredDebugSlots(ctx);
     }
 
-    if (auto* pbrLut = _sharedResourceProvider.getBrdfLutTexture(); pbrLut && pbrLut->getImageView()) {
+    if (auto pbrLut = _sharedResourceProvider.getBrdfLutTextureShared(); pbrLut && pbrLut->getImageView()) {
         ctx.debugSpec.slots.push_back({
             .label         = "PBR_BRDF_LUT",
             .defaultView   = pbrLut->getImageView(),
