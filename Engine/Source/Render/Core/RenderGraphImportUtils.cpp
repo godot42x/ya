@@ -145,7 +145,7 @@ RGImportedTextureDesc makeImportedTextureDesc(const Texture& texture,
                                               EImageLayout::T finalLayout,
                                               EImageUsage::T requiredUsage)
 {
-    return makeImportedTextureDesc(
+    auto desc = makeImportedTextureDesc(
         texture.getImageShared(),
         texture.getImageViewShared(),
         texture.getFormat(),
@@ -153,6 +153,8 @@ RGImportedTextureDesc makeImportedTextureDesc(const Texture& texture,
         label,
         finalLayout,
         requiredUsage);
+    desc.retainedResources = texture.getRetainedResources();
+    return desc;
 }
 
 RGImportedTextureDesc makeImportedTextureDesc(const RenderImage& image,
@@ -160,7 +162,7 @@ RGImportedTextureDesc makeImportedTextureDesc(const RenderImage& image,
                                               EImageLayout::T finalLayout,
                                               EImageUsage::T requiredUsage)
 {
-    return makeImportedTextureDesc(
+    auto desc = makeImportedTextureDesc(
         image.getImageShared(),
         image.getImageViewShared(),
         image.getFormat(),
@@ -168,6 +170,8 @@ RGImportedTextureDesc makeImportedTextureDesc(const RenderImage& image,
         label,
         finalLayout,
         requiredUsage);
+    desc.retainedResources = image.getRetainedResources();
+    return desc;
 }
 
 RGImportedTextureDesc makeImportedTextureDesc(const std::shared_ptr<IImage>& image,

@@ -148,7 +148,12 @@ bool RenderGraphExecutor::execute(
     if (outCompiled) {
         *outCompiled = compiled;
     }
-    return executeCompiled(graph, compiled, cmdBuf);
+    if (!executeCompiled(graph, compiled, cmdBuf)) {
+        return false;
+    }
+
+    finalizeImportedTextureStates(graph, cmdBuf);
+    return true;
 }
 
 void RenderGraphExecutor::clear()

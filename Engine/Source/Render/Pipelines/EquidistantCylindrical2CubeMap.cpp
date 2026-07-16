@@ -1,7 +1,6 @@
 #include "EquidistantCylindrical2CubeMap.h"
-#include "Render/Core/RenderGraphExecutor.h"
-#include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/RenderResourceFactory.h"
+#include "Render/Core/RenderingInfoUtils.h"
 
 #include "Render/Render.h"
 
@@ -213,69 +212,85 @@ EquidistantCylindrical2CubeMap::ExecuteResult EquidistantCylindrical2CubeMap::ex
         },
         {});
 
+    ImageSubresourceRange cubeRange{
+        .aspectMask     = EImageAspect::Color,
+        .baseMipLevel   = 0,
+        .levelCount     = 1,
+        .baseArrayLayer = 0,
+        .layerCount     = CubeFace_Count,
+    };
+    ctx.cmdBuf->transitionImageLayoutAuto(ctx.input->getImage(), EImageLayout::ShaderReadOnlyOptimal);
+    ctx.cmdBuf->transitionImageLayoutAuto(ctx.output->getImage(), EImageLayout::ColorAttachmentOptimal, &cubeRange);
+
     const auto extent = ctx.output->getExtent();
-    RenderGraph graph;
-    const auto importedInput = graph.importTexture(
-        makeImportedTextureDesc(*ctx.input, ctx.input->getLabel(), EImageLayout::ShaderReadOnlyOptimal));
+    auto* const resourceFactory = _render->getResourceFactory();
+    bool bAllFacesSuccess = true;
 
     for (uint32_t face = 0; face < CubeFace_Count; ++face) {
-        const auto faceHandle = graph.importTexture(
-            makeImportedSubresourceTextureDesc(
-                ctx.output->getImageShared(),
-                ImageViewCreateInfo{
-                    .label          = std::format("{}_Face_{}", ctx.output->getLabel(), face),
-                    .viewType       = EImageViewType::View2D,
-                    .aspectFlags    = EImageAspect::Color,
-                    .baseMipLevel   = 0,
-                    .levelCount     = 1,
-                    .baseArrayLayer = face,
-                    .layerCount     = 1,
-                },
-                Extent3D{extent.width, extent.height, 1},
-                std::format("{}_Face_{}", ctx.output->getLabel(), face),
-                EImageLayout::ShaderReadOnlyOptimal));
+        const auto faceView = resourceFactory->createImageView(
+            ctx.output->getImageShared(),
+            ImageViewCreateInfo{
+                .label          = std::format("{}_Face_{}", ctx.output->getLabel(), face),
+                .viewType       = EImageViewType::View2D,
+                .aspectFlags    = EImageAspect::Color,
+                .baseMipLevel   = 0,
+                .levelCount     = 1,
+                .baseArrayLayer = face,
+                .layerCount     = 1,
+            });
+        YA_CORE_ASSERT(faceView, "Failed to create EquidistantCylindrical2CubeMap output face view");
+        if (!faceView) {
+            bAllFacesSuccess = false;
+            break;
+        }
+
+        const auto faceTexture = Texture::wrap(
+            ctx.output->getImageShared(),
+            faceView,
+            std::format("{}_Face_{}", ctx.output->getLabel(), face));
+        _transientFaceViews.push_back(faceView);
 
         const auto pushConstant = buildPushConstant(face, ctx.bFlipVertical);
-        graph.addPass(
-            std::format("EquidistantCylindrical2CubeMap_Face_{}", face),
-            [&](RGPassBuilder& pass) {
-                pass.read(importedInput);
-                pass.useColorAttachment(faceHandle);
+        auto colorAttachment = makeRenderAttachment(
+            faceTexture->getImageView(),
+            EAttachmentLoadOp::Clear,
+            EAttachmentStoreOp::Store,
+            EImageLayout::ColorAttachmentOptimal,
+            EImageLayout::ShaderReadOnlyOptimal,
+            ctx.clearColor);
+        RenderingInfo renderInfo{
+            .label       = std::format("EquidistantCylindrical2CubeMap_Face_{}", face),
+            .attachments = RenderAttachmentSet{
+                .renderArea = Rect2D{
+                    .pos    = {0.0f, 0.0f},
+                    .extent = {static_cast<float>(extent.width), static_cast<float>(extent.height)},
+                },
+                .layerCount = 1,
+                .colors     = {std::move(colorAttachment)},
             },
-            [&](RGRenderContext& rgCtx) {
-                rgCtx.beginColorRendering({
-                    .color      = faceHandle,
-                    .renderArea = Rect2D{
-                        .pos    = {0.0f, 0.0f},
-                        .extent = {static_cast<float>(extent.width), static_cast<float>(extent.height)},
-                    },
-                    .clearValue  = ctx.clearColor,
-                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-                });
-                rgCtx.getCommandBuffer().bindPipeline(_pipeline.get());
-                    rgCtx.getCommandBuffer().setViewport(0.0f,
-                                                    0.0f,
-                                                    static_cast<float>(extent.width),
-                                                    static_cast<float>(extent.height),
-                                                    0.0f,
-                                                    1.0f);
-                    rgCtx.getCommandBuffer().setScissor(0, 0, extent.width, extent.height);
-                    rgCtx.getCommandBuffer().bindDescriptorSets(_pipelineLayout.get(), 0, {descriptorSet});
-                    rgCtx.getCommandBuffer().pushConstants(_pipelineLayout.get(),
-                                                           EShaderStage::Vertex | EShaderStage::Fragment,
-                                                           0,
-                                                       sizeof(PushConstant),
-                                                       &pushConstant);
-                rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
-                rgCtx.endRendering();
-            });
+        };
+
+        ctx.cmdBuf->beginRendering(renderInfo);
+        ctx.cmdBuf->bindPipeline(_pipeline.get());
+        ctx.cmdBuf->setViewport(0.0f,
+                                0.0f,
+                                static_cast<float>(extent.width),
+                                static_cast<float>(extent.height),
+                                0.0f,
+                                1.0f);
+        ctx.cmdBuf->setScissor(0, 0, extent.width, extent.height);
+        ctx.cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {descriptorSet});
+        ctx.cmdBuf->pushConstants(_pipelineLayout.get(),
+                                  EShaderStage::Vertex | EShaderStage::Fragment,
+                                  0,
+                                  sizeof(PushConstant),
+                                  &pushConstant);
+        ctx.cmdBuf->draw(3, 1, 0, 0);
+        ctx.cmdBuf->endRendering(renderInfo);
     }
 
-    auto executor   = std::make_shared<RenderGraphExecutor>(*_render->getResourceFactory());
-    result.bSuccess = executor->execute(graph, *ctx.cmdBuf);
-    if (result.bSuccess) {
-        result.keepAliveResources.push_back(std::move(executor));
-    }
+    ctx.cmdBuf->transitionImageLayoutAuto(ctx.output->getImage(), EImageLayout::ShaderReadOnlyOptimal, &cubeRange);
+    result.bSuccess = bAllFacesSuccess;
     return result;
 }
 

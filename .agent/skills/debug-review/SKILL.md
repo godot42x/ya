@@ -55,6 +55,73 @@ description: YA Engine 崩溃排查、变更自检与提交前 review 清单。
 4. 若日志看不出原因，优先用 `lldb --batch ... -k 'bt' -k 'thread backtrace all'` 抓真实崩溃栈，而不是只看引擎日志。
 5. Codex/agent 跑大体量日志文件时，先用 `rg` / `sed` / `tail` 按模块、关键词、时间段过滤，避免整文件直读。
 
+## 渲染视觉回归排查：固定场景 + 固定机位
+
+适用于：
+- IBL / skybox / environment prefilter / irradiance / BRDF LUT 一类视觉回归
+- “资源看起来 ready 了，但画面不对”
+- 想区分“真正没修好”与“验证路径本身不可靠”
+
+优先原则：
+1. 先固定场景、固定观察物、固定机位，再谈 diff。
+2. 对环境反射类问题，优先选能稳定暴露 skybox 倒影的 PBR 物体；不要先拿 Phong 样例代替。
+3. 若自动化截图与人工编辑器观察冲突，先把“验证口径是否可信”当成一等问题排。
+
+### 本仓库 IBL 回归的已验证观察点
+
+- target：`HelloMaterial`
+- 目标场景：`Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json`
+- 目标物体：`PBR_Sphere_5_0`
+- 用它观察 PBR 球体表面的天空盒/环境反射是否存在
+
+已验证过可复用的编辑器相机参数：
+
+```bash
+--editor-camera-pos=12,12,10
+--editor-camera-rot=-9,-39,0
+```
+
+这组机位用于把 PBR 球体和环境反射区稳定放进视野。类似回归里，优先复用已有“能看到症状”的机位，不要每次重新找角度。
+
+### 推荐验证顺序
+
+1. 先用低噪音 smoke 跑目标场景。
+2. 再用固定机位观察目标物体。
+3. 先做人工编辑器冒烟，确认肉眼是否能看到目标症状。
+4. 再决定自动化截图是否能作为同一问题的可信证据。
+
+推荐命令模板：
+
+```bash
+make r t=HelloMaterial r_args="--exit-after-frame=1500 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"
+```
+
+若需要落盘截图，再补：
+
+```bash
+--screenshot=/tmp/ibl-check.png
+```
+
+### 帧数规则
+
+1. 对 environment preprocess / offscreen resolve / 异步资源完成有依赖的问题，短帧 smoke 不算验证通过。
+2. 这类问题至少跑到“确实完成环境预处理”的帧数，再下结论。
+3. 本次 IBL 反射回归里，`1500` 帧量级比 `300` 帧更接近真实可见结果；不要只拿早期帧截图判死刑。
+
+### 常见误判
+
+1. 把 Phong 物体当成 PBR 环境反射的主观察点，导致判断失焦。
+2. 自动化截图路径和人工编辑器看到的状态不一致，却继续把自动化结果当唯一真相。
+3. 只看“资源 ready / descriptor 已更新”的日志，就默认最终视觉一定正确。
+4. 看到画面仍不对，就直接怀疑 light pass；环境贴图生成内容、导入视图元数据、keepalive 链都要一起看。
+
+### 这类问题的高价值对照项
+
+1. `origin/main` 是否在同一场景、同一机位、同一观察物上能稳定看到症状差异。
+2. PBR 球体是否真的是 `PBRMaterialComponent`，不要靠肉眼猜材质类型。
+3. skybox cubemap、irradiance、prefilter、BRDF LUT 是“未生成”，还是“生成了但内容错/生命周期错”。
+4. 若工作区人工冒烟已恢复，而自动化截图仍显示失败，优先调查截图路径、触发时机、目标 source image，而不是立刻推翻修复本身。
+
 ## 生命周期专项检查单
 
 1. 非 owning 类型是否被误当成 owning 使用。

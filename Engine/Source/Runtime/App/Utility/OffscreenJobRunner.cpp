@@ -84,6 +84,13 @@ void queueOffscreenJob(const OffscreenJobQueueService& queueService, IRender* re
                         cmdBuf->retainedResources.begin() + static_cast<std::ptrdiff_t>(retainedBegin),
                         cmdBuf->retainedResources.end());
                 }
+                if (job->result->outputImage && !job->result->retainedResources.empty()) {
+                    auto& imageRetained = job->result->outputImage->retainedResources;
+                    imageRetained.insert(
+                        imageRetained.end(),
+                        job->result->retainedResources.begin(),
+                        job->result->retainedResources.end());
+                }
             }
             job->phase = EOffscreenJobPhase::Recorded;
         });

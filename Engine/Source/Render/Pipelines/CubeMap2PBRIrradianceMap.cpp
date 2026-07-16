@@ -2,6 +2,7 @@
 #include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/RenderResourceFactory.h"
+#include "Render/Core/RenderingInfoUtils.h"
 
 #include "Core/Math/Math.h"
 #include "Render/Render.h"
@@ -223,69 +224,87 @@ CubeMap2PBRIrradianceMap::ExecuteResult CubeMap2PBRIrradianceMap::execute(const 
                 }),
         },
         {});
+    _transientFaceViews.clear();
+
+    ImageSubresourceRange cubeRange{
+        .aspectMask     = EImageAspect::Color,
+        .baseMipLevel   = 0,
+        .levelCount     = 1,
+        .baseArrayLayer = 0,
+        .layerCount     = CubeFace_Count,
+    };
+    ctx.cmdBuf->transitionImageLayoutAuto(ctx.input->getImage(), EImageLayout::ShaderReadOnlyOptimal);
+    ctx.cmdBuf->transitionImageLayoutAuto(ctx.output->getImage(), EImageLayout::ColorAttachmentOptimal, &cubeRange);
+
+    auto*      resourceFactory  = _render->getResourceFactory();
     const auto extent           = ctx.output->getExtent();
-    RenderGraph graph;
-    const auto importedInput = graph.importTexture(
-        makeImportedTextureDesc(*ctx.input, ctx.input->getLabel(), EImageLayout::ShaderReadOnlyOptimal));
+    bool       bAllFacesSuccess = true;
 
     for (uint32_t face = 0; face < CubeFace_Count; ++face) {
-        const auto faceHandle = graph.importTexture(
-            makeImportedSubresourceTextureDesc(
-                ctx.output->getImageShared(),
-                ImageViewCreateInfo{
-                    .label          = std::format("{}_Face_{}", ctx.output->getLabel(), face),
-                    .viewType       = EImageViewType::View2D,
-                    .aspectFlags    = EImageAspect::Color,
-                    .baseMipLevel   = 0,
-                    .levelCount     = 1,
-                    .baseArrayLayer = face,
-                    .layerCount     = 1,
-                },
-                Extent3D{extent.width, extent.height, 1},
-                std::format("{}_Face_{}", ctx.output->getLabel(), face),
-                EImageLayout::ShaderReadOnlyOptimal));
+        const auto faceView = resourceFactory->createImageView(
+            ctx.output->getImageShared(),
+            ImageViewCreateInfo{
+                .label          = std::format("{}_Face_{}", ctx.output->getLabel(), face),
+                .viewType       = EImageViewType::View2D,
+                .aspectFlags    = EImageAspect::Color,
+                .baseMipLevel   = 0,
+                .levelCount     = 1,
+                .baseArrayLayer = face,
+                .layerCount     = 1,
+            });
+        YA_CORE_ASSERT(faceView, "Failed to create CubeMap2PBRIrradianceMap output face view");
+        if (!faceView) {
+            bAllFacesSuccess = false;
+            break;
+        }
+
+        const auto faceTexture = Texture::wrap(
+            ctx.output->getImageShared(),
+            faceView,
+            std::format("{}_Face_{}", ctx.output->getLabel(), face));
+        _transientFaceViews.push_back(faceView);
 
         const auto pushConstant = buildPushConstant(face);
-        graph.addPass(
-            std::format("CubeMap2PBRIrradianceMap_Face_{}", face),
-            [&](RGPassBuilder& pass) {
-                pass.read(importedInput);
-                pass.useColorAttachment(faceHandle);
+        auto colorAttachment = makeRenderAttachment(
+            faceTexture->getImageView(),
+            EAttachmentLoadOp::Clear,
+            EAttachmentStoreOp::Store,
+            EImageLayout::ColorAttachmentOptimal,
+            EImageLayout::ShaderReadOnlyOptimal,
+            ctx.clearColor);
+        RenderingInfo renderInfo{
+            .label       = std::format("CubeMap2PBRIrradianceMap_Face_{}", face),
+            .attachments = RenderAttachmentSet{
+                .renderArea = Rect2D{
+                    .pos    = {0.0f, 0.0f},
+                    .extent = {static_cast<float>(extent.width), static_cast<float>(extent.height)},
+                },
+                .layerCount = 1,
+                .colors     = {std::move(colorAttachment)},
             },
-            [&](RGRenderContext& rgCtx) {
-                rgCtx.beginColorRendering({
-                    .color      = faceHandle,
-                    .renderArea = Rect2D{
-                        .pos    = {0.0f, 0.0f},
-                        .extent = {static_cast<float>(extent.width), static_cast<float>(extent.height)},
-                    },
-                    .clearValue  = ctx.clearColor,
-                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-                });
-                rgCtx.getCommandBuffer().bindPipeline(_pipeline.get());
-                rgCtx.getCommandBuffer().setViewport(0.0f,
-                                                    0.0f,
-                                                    static_cast<float>(extent.width),
-                                                    static_cast<float>(extent.height),
-                                                    0.0f,
-                                                    1.0f);
-                rgCtx.getCommandBuffer().setScissor(0, 0, extent.width, extent.height);
-                rgCtx.getCommandBuffer().bindDescriptorSets(_pipelineLayout.get(), 0, {descriptorSet});
-                rgCtx.getCommandBuffer().pushConstants(_pipelineLayout.get(),
-                                                       EShaderStage::Vertex | EShaderStage::Fragment,
-                                                       0,
-                                                       sizeof(PushConstant),
-                                                       &pushConstant);
-                cubeMesh->draw(&rgCtx.getCommandBuffer());
-                rgCtx.endRendering();
-            });
+        };
+
+        ctx.cmdBuf->beginRendering(renderInfo);
+        ctx.cmdBuf->bindPipeline(_pipeline.get());
+        ctx.cmdBuf->setViewport(0.0f,
+                                0.0f,
+                                static_cast<float>(extent.width),
+                                static_cast<float>(extent.height),
+                                0.0f,
+                                1.0f);
+        ctx.cmdBuf->setScissor(0, 0, extent.width, extent.height);
+        ctx.cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {descriptorSet});
+        ctx.cmdBuf->pushConstants(_pipelineLayout.get(),
+                                  EShaderStage::Vertex | EShaderStage::Fragment,
+                                  0,
+                                  sizeof(PushConstant),
+                                  &pushConstant);
+        cubeMesh->draw(ctx.cmdBuf);
+        ctx.cmdBuf->endRendering(renderInfo);
     }
 
-    auto executor   = std::make_shared<RenderGraphExecutor>(*_render->getResourceFactory());
-    result.bSuccess = executor->execute(graph, *ctx.cmdBuf);
-    if (result.bSuccess) {
-        result.keepAliveResources.push_back(std::move(executor));
-    }
+    ctx.cmdBuf->transitionImageLayoutAuto(ctx.output->getImage(), EImageLayout::ShaderReadOnlyOptimal, &cubeRange);
+    result.bSuccess = bAllFacesSuccess;
     return result;
 }
 

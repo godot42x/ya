@@ -2,6 +2,7 @@
 #include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/RenderResourceFactory.h"
+#include "Render/Core/RenderingInfoUtils.h"
 
 #include "Core/Math/Math.h"
 #include "Render/Render.h"
@@ -243,10 +244,21 @@ CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(cons
         },
         {});
 
-    const uint32_t        mipLevels = std::max(1u, ctx.output->getImage()->getMipLevels());
-    RenderGraph graph;
-    const auto importedInput = graph.importTexture(
-        makeImportedTextureDesc(*ctx.input, ctx.input->getLabel(), EImageLayout::ShaderReadOnlyOptimal));
+    _transientFaceViews.clear();
+
+    const uint32_t mipLevels = std::max(1u, ctx.output->getImage()->getMipLevels());
+    ImageSubresourceRange cubeRange{
+        .aspectMask     = EImageAspect::Color,
+        .baseMipLevel   = 0,
+        .levelCount     = mipLevels,
+        .baseArrayLayer = 0,
+        .layerCount     = CubeFace_Count,
+    };
+    ctx.cmdBuf->transitionImageLayoutAuto(ctx.input->getImage(), EImageLayout::ShaderReadOnlyOptimal);
+    ctx.cmdBuf->transitionImageLayoutAuto(ctx.output->getImage(), EImageLayout::ColorAttachmentOptimal, &cubeRange);
+
+    auto* const resourceFactory = _render->getResourceFactory();
+    bool        bAllFacesSuccess = true;
 
     for (uint32_t mip = 0; mip < mipLevels; ++mip) {
         const uint32_t mipWidth  = std::max(1u, ctx.output->getWidth() >> mip);
@@ -254,58 +266,69 @@ CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(cons
         const float    roughness = mipLevels <= 1 ? 0.0f : static_cast<float>(mip) / static_cast<float>(mipLevels - 1);
 
         for (uint32_t face = 0; face < CubeFace_Count; ++face) {
-            const auto faceHandle = graph.importTexture(
-                makeImportedSubresourceTextureDesc(
-                    ctx.output->getImageShared(),
-                    ImageViewCreateInfo{
-                        .label          = std::format("{}_Mip_{}_Face_{}", ctx.output->getLabel(), mip, face),
-                        .viewType       = EImageViewType::View2D,
-                        .aspectFlags    = EImageAspect::Color,
-                        .baseMipLevel   = mip,
-                        .levelCount     = 1,
-                        .baseArrayLayer = face,
-                        .layerCount     = 1,
-                    },
-                    Extent3D{mipWidth, mipHeight, 1},
-                    std::format("{}_Mip_{}_Face_{}", ctx.output->getLabel(), mip, face),
-                    EImageLayout::ShaderReadOnlyOptimal));
-            const auto pushConstant = buildPushConstant(face, roughness);
-            graph.addPass(
-                std::format("CubeMap2PBRPrefilterEnv_Mip_{}_Face_{}", mip, face),
-                [&](RGPassBuilder& pass) {
-                    pass.read(importedInput);
-                    pass.useColorAttachment(faceHandle);
-                },
-                [&](RGRenderContext& rgCtx) {
-                    rgCtx.beginColorRendering({
-                        .color      = faceHandle,
-                        .renderArea = Rect2D{
-                            .pos    = {0.0f, 0.0f},
-                            .extent = {static_cast<float>(mipWidth), static_cast<float>(mipHeight)},
-                        },
-                        .clearValue  = ctx.clearColor,
-                        .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-                    });
-                    rgCtx.getCommandBuffer().bindPipeline(_pipeline.get());
-                    rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(mipWidth), static_cast<float>(mipHeight), 0.0f, 1.0f);
-                    rgCtx.getCommandBuffer().setScissor(0, 0, mipWidth, mipHeight);
-                    rgCtx.getCommandBuffer().bindDescriptorSets(_pipelineLayout.get(), 0, {descriptorSet});
-                    rgCtx.getCommandBuffer().pushConstants(_pipelineLayout.get(),
-                                                           EShaderStage::Vertex | EShaderStage::Fragment,
-                                                           0,
-                                                           sizeof(PushConstant),
-                                                           &pushConstant);
-                    cubeMesh->draw(&rgCtx.getCommandBuffer());
-                    rgCtx.endRendering();
+            const auto faceView = resourceFactory->createImageView(
+                ctx.output->getImageShared(),
+                ImageViewCreateInfo{
+                    .label          = std::format("{}_Mip_{}_Face_{}", ctx.output->getLabel(), mip, face),
+                    .viewType       = EImageViewType::View2D,
+                    .aspectFlags    = EImageAspect::Color,
+                    .baseMipLevel   = mip,
+                    .levelCount     = 1,
+                    .baseArrayLayer = face,
+                    .layerCount     = 1,
                 });
+            YA_CORE_ASSERT(faceView, "Failed to create CubeMap2PBRPrefilterEnv output face view");
+            if (!faceView) {
+                bAllFacesSuccess = false;
+                break;
+            }
+
+            const auto faceTexture = Texture::wrap(
+                ctx.output->getImageShared(),
+                faceView,
+                std::format("{}_Mip_{}_Face_{}", ctx.output->getLabel(), mip, face));
+            _transientFaceViews.push_back(faceView);
+            const auto pushConstant = buildPushConstant(face, roughness);
+            auto colorAttachment = makeRenderAttachment(
+                faceTexture->getImageView(),
+                EAttachmentLoadOp::Clear,
+                EAttachmentStoreOp::Store,
+                EImageLayout::ColorAttachmentOptimal,
+                EImageLayout::ShaderReadOnlyOptimal,
+                ctx.clearColor);
+            RenderingInfo renderInfo{
+                .label       = std::format("CubeMap2PBRPrefilterEnv_Mip_{}_Face_{}", mip, face),
+                .attachments = RenderAttachmentSet{
+                    .renderArea = Rect2D{
+                        .pos    = {0.0f, 0.0f},
+                        .extent = {static_cast<float>(mipWidth), static_cast<float>(mipHeight)},
+                    },
+                    .layerCount = 1,
+                    .colors     = {std::move(colorAttachment)},
+                },
+            };
+
+            ctx.cmdBuf->beginRendering(renderInfo);
+            ctx.cmdBuf->bindPipeline(_pipeline.get());
+            ctx.cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(mipWidth), static_cast<float>(mipHeight), 0.0f, 1.0f);
+            ctx.cmdBuf->setScissor(0, 0, mipWidth, mipHeight);
+            ctx.cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {descriptorSet});
+            ctx.cmdBuf->pushConstants(_pipelineLayout.get(),
+                                      EShaderStage::Vertex | EShaderStage::Fragment,
+                                      0,
+                                      sizeof(PushConstant),
+                                      &pushConstant);
+            cubeMesh->draw(ctx.cmdBuf);
+            ctx.cmdBuf->endRendering(renderInfo);
+        }
+
+        if (!bAllFacesSuccess) {
+            break;
         }
     }
 
-    auto executor   = std::make_shared<RenderGraphExecutor>(*_render->getResourceFactory());
-    result.bSuccess = executor->execute(graph, *ctx.cmdBuf);
-    if (result.bSuccess) {
-        result.keepAliveResources.push_back(std::move(executor));
-    }
+    ctx.cmdBuf->transitionImageLayoutAuto(ctx.output->getImage(), EImageLayout::ShaderReadOnlyOptimal, &cubeRange);
+    result.bSuccess = bAllFacesSuccess;
     return result;
 }
 

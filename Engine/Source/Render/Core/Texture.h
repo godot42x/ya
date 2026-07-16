@@ -100,6 +100,7 @@ struct Texture
 
     std::shared_ptr<IImage>     image;
     std::shared_ptr<IImageView> imageView;
+    std::vector<std::shared_ptr<void>> retainedResources;
 
   public:
 
@@ -169,6 +170,7 @@ struct Texture
     std::shared_ptr<IImage> getImageShared() const { return image; }
     IImageView*             getImageView() const { return imageView.get(); }
     std::shared_ptr<IImageView> getImageViewShared() const { return imageView; }
+    const std::vector<std::shared_ptr<void>>& getRetainedResources() const { return retainedResources; }
 
     uint32_t   getWidth() const { return _width; }
     uint32_t   getHeight() const { return _height; }

@@ -39,9 +39,15 @@ stdptr<Texture> wrapRenderImageAsTexture(const std::shared_ptr<RenderImage>& ima
         return nullptr;
     }
 
-    return Texture::wrap(image->getImageShared(),
-                         image->getImageViewShared(),
-                         label.empty() ? image->getLabel() : std::string(label));
+    auto texture = Texture::wrap(image->getImageShared(),
+                                 image->getImageViewShared(),
+                                 label.empty() ? image->getLabel() : std::string(label));
+    if (!texture) {
+        return nullptr;
+    }
+
+    texture->retainedResources = image->getRetainedResources();
+    return texture;
 }
 
 EFormat::T chooseSkyboxCubemapFormat(EFormat::T sourceFormat)
