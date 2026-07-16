@@ -124,6 +124,39 @@ make r t=HelloMaterial r_args="--exit-after-frame=1500 --screenshot-frame=1500 -
 
 若要和 `origin/main` 做同口径对照，直接复用同一套参数，只切换代码版本；不要一边换提交，一边换观察点或机位。
 
+推荐把“对照参数”直接记成一段可复制模板，避免比较到一半才发现口径漂了：
+
+```text
+scene      = Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json
+target     = PBR_Sphere_5_0
+camera     = --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0
+frame gate = --exit-after-frame=1500 --screenshot-frame=1500
+signal     = 球体表面是否能看到天空盒/环境倒影
+```
+
+### `origin/main` 对照执行模板
+
+当目标是确认“回归是最近提交带来的，还是验证口径变了”时，优先按下面顺序执行：
+
+1. 先在当前工作区跑一遍固定观察基线。
+2. 再切到 `origin/main` 跑完全相同的命令。
+3. 只比较同一场景、同一球体、同一机位、同一抓图帧。
+4. 若两边结果冲突，先查截图是否真发生在 1500 帧，再查渲染逻辑。
+
+推荐把输出文件名也固定下来，减少人工比对时的混乱：
+
+```bash
+make r t=HelloMaterial r_args="--exit-after-frame=1500 --screenshot-frame=1500 --screenshot-target=editor --screenshot=/tmp/ibl-current.png --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"
+```
+
+切到 `origin/main` 后，只改输出文件名：
+
+```bash
+make r t=HelloMaterial r_args="--exit-after-frame=1500 --screenshot-frame=1500 --screenshot-target=editor --screenshot=/tmp/ibl-origin-main.png --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"
+```
+
+若这两条命令不能原样复用，优先说明为什么不能复用，而不是默默改观察条件。
+
 ### 帧数规则
 
 1. 对 environment preprocess / offscreen resolve / 异步资源完成有依赖的问题，短帧 smoke 不算验证通过。
