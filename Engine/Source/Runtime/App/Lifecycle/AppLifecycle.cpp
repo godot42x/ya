@@ -379,9 +379,6 @@ void AppLifecycle::onPostInit(App& app)
 
 void AppLifecycle::quit(App& app)
 {
-    if (auto* render = app.getRender()) {
-        render->waitIdle();
-    }
     TaskQueue::get().stop();
     {
         YA_PROFILE_SCOPE_LOG("Inheritance Quit");
@@ -407,19 +404,24 @@ void AppLifecycle::quit(App& app)
 
 bool AppLifecycle::loadScene(App& app, const std::string& path)
 {
+    bool bWaitedForModeTransition = false;
     switch (app._appState) {
     case AppState::Runtime:
         stopRuntime(app);
+        bWaitedForModeTransition = true;
         break;
     case AppState::Simulation:
         stopSimulation(app);
+        bWaitedForModeTransition = true;
         break;
     case AppState::Editor:
         break;
     }
 
-    if (auto* render = app.getRender()) {
-        render->waitIdle();
+    if (!bWaitedForModeTransition) {
+        if (auto* render = app.getRender()) {
+            render->waitIdle();
+        }
     }
 
     if (app._sceneManager) {

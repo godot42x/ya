@@ -23,6 +23,9 @@
 
 ## 最新验证
 
+- 2026-07-16：`AppLifecycle` 里又收掉了一组同一调用链上的重复 `waitIdle()`。此前 `quit()` 入口会先全局等待一次，随后 `unloadScene()` 又会再次等待，而 `RenderRuntime::shutdownRuntimeServices()` 里在真正销毁 runtime service 前还会再等一次；这让退出路径上同一批未完成 GPU 工作被连续等待了多次。`loadScene()` 也有类似重复：当它先通过 `stopRuntime()` 或 `stopSimulation()` 切回 editor 时，这两个模式切换函数已经先做过一次 render idle，紧接着 `loadScene()` 自己又无条件再等一次，然后才交给 `SceneManager::loadScene()`。
+- 直接收益：这一步没有动 scene unload、runtime shutdown 或 play-mode exit 本身真正需要的生命周期边界，而是把“同一条退出/切场景链路里重复等待同一批 GPU 工作”的冗余层次削掉。现在 quit 仍然会在 unload scene 与 runtime shutdown 的真实边界等待；runtime/simulation -> loadScene 也仍然先经过 play-mode exit 的等待，只是不再立刻重复等第二次。
+- 当前停止线：`unloadScene()`、`stopRuntime()`、`stopSimulation()` 和 `RenderRuntime::shutdownRuntimeServices()` 里的 `waitIdle()` 这轮继续保留；它们分别对应 scene teardown、play-mode exit 和 runtime service shutdown 这些仍有真实 owner/lifetime 切换的边界，不在“重复等待”清理范围内。
 - 2026-07-16：startup / pipeline init 路径里又清掉了一组冗余 `waitIdle()`。代码审计确认 `RenderRuntime::initFrameServices()` 里的 ImGui 初始化只做 backend/context 初始化，并不会在这里提交一次性 GPU 命令；`ForwardRenderPipeline::init()` / `DeferredRenderPipeline::init()` 自己也只是在组装 viewport/postprocess/shadow/stage 资源，不承担 frame submit。与此同时，pipeline switch 路径本来就在 `RenderRuntime::applyPendingRenderPipelineSwitch()` 外层先做了一次全局 `waitIdle()`，Forward 的 shadow refresh 也早已在 `applyPendingResourceRefreshes()` 外层等待后才进入 `initShadowResources()`。这些内层 init `waitIdle()` 因此既没有新的同步对象可等，也只是把启动/切管线路径重新拉回“层层全局 idle”的保守模式。
 - 直接收益：这一步继续把同步语义往真正的 owner 切换边界上收，而不是让每个 init helper 都顺手做一次 device idle。现在 startup、pipeline init 和 shadow refresh 这几条路径更明确地依赖外层已存在的生命周期边界：启动期尚未 submit、pipeline switch 已先全局等待、shadow refresh 已先等待后销毁/重建。
 - 当前停止线：pipeline switch、shutdown、显式 shadow/resource rebuild 入口上的外层 `waitIdle()` 仍然保留；它们现在仍承担真实的 owner 切换与全局生命周期保护，不在这次“初始化期冗余同步”清理范围内。
