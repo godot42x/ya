@@ -23,6 +23,12 @@
 
 ## 最新验证
 
+- 2026-07-16：`RenderGraphResourceRegistry` 的 imported keepalive 刷新路径又收紧了一步：当 imported texture / buffer 继续指向同一组 `retainedResources` 时，registry 现在不再把“完全没变的 keepalive vector”先退休再重新挂回。之前这条路径即使 owner 集合完全相同，也会在每次 `sync()` 时把旧 vector 送进 `DeferredDeletionQueue`，下一帧再 flush 掉一批实际上没有任何生命周期变化的空退休；现在仅在 keepalive 集合真的变化时才退休旧引用，同时补了 `RenderGraphCoreTest.ResourceRegistryDoesNotRetireImportedBufferKeepAliveWhenOwnerIsUnchanged` 和 `RenderGraphCoreTest.ResourceRegistryDoesNotRetireImportedTextureKeepAliveWhenOwnerIsUnchanged` 锁住这个 no-op refresh contract。
+- 直接收益：这一步命中的不是 execute-path 小清理，而是 plan 当前高优先级的 registry/lifetime 边界。像 Deferred frame/light/skinning UBO、shadow graph imported buffer、以及其他每帧重复 import 同一 owner 的路径，不再平白制造 `DeferredDeletionQueue` 噪音；真正的 replacement / owner 变更仍保持原有安全退休语义。
+- 当前停止线：这次没有改 imported resource 的 replacement 判定，也没有把 shutdown / pipeline switch / scene teardown 这些更高层 owner 边界一并收掉；它只消除了“keepalive 完全未变却仍反复退休”的 registry no-op 生命周期 churn。
+- 2026-07-16：`todo.md` 里挂着的 `resize physical resource replacement` 现在也按代码现实勾正了。当前 `RenderGraphCoreTest.ResourceRegistryReplacesResourcesWhenDescriptorsChange` 已直接覆盖 persistent texture extent 变化和 persistent buffer size 变化的 registry replacement 行为，和这条待办想验证的“desc change 驱动物理资源替换”是一回事；继续把它保留成未完成，只会误导后续优先级判断。
+- 直接收益：计划文件重新和当前 test reality 对齐，后续如果继续补 replacement 方向，应把精力放在 runtime resize/shutdown 的真实边界，而不是重复追一个 core contract 已经落地的 checkbox。
+
 - 2026-07-16：对剩余 runtime `waitIdle()` 边界又做了一轮代码级复盘，目前没有继续发现像前几批那样可直接证实的“无旧 owner 仍先整机等待”子场景。具体看下来，`RenderRuntime::applyPendingRenderPipelineSwitch()` 只会在 runtime 已经初始化、且当前 active pipeline 已存在时由 GUI/automation 改写 `_pendingRenderPipeline` 后触发；它随后马上 `shutdownActivePipeline()` 并重建另一条 pipeline，确实处在旧 pipeline owner 切换边界上。`RenderRuntime::shutdownRuntimeServices()` 也同样仍位于 runtime service/backend 生命周期销毁链上，不是一个“当前没有任何服务对象却误等一次”的空路径。换句话说，当前剩下这些 `waitIdle()` 更多是还没细化 submit/fence 退休语义的真实生命周期边界，而不是像 shadow refresh / 空场景 load-unload / inactive play-mode stop 那样的明显空转等待。
 - 直接收益：这一步没有新增代码改动，但它把我们接下来该做什么说清楚了：当前主线不该再机械扫 `waitIdle()` 调用点本身，而应把注意力放回“这些真实边界是否能被更细的 owner / submission completion contract 替代”。这能避免继续为了删除 `waitIdle()` 而删除 `waitIdle()`，也让后续优先级重新回到 runtime/shutdown/registry 语义本身。
 - 当前停止线：这次结论并不声称 pipeline switch、runtime shutdown 或 scene/play-mode teardown 已经是最终形态；只是基于当前代码现实，尚未找到新的低风险空转子场景可以像前几批那样直接收掉。后续若继续推进，需要新的证据来证明某个等待已经被上游 quiesce 覆盖，或者先补更细的 fence/retirement 语义，否则不应为了“表面减少 `waitIdle()`”去硬改真实 owner 边界。

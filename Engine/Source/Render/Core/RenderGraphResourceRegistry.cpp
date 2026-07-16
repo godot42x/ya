@@ -123,9 +123,20 @@ void retireRetainedResources(std::vector<std::shared_ptr<void>>& retainedResourc
     retainedResources.clear();
 }
 
+bool isSameRetainedResources(const std::vector<std::shared_ptr<void>>& lhs,
+                             const std::vector<std::shared_ptr<void>>& rhs)
+{
+    return lhs.size() == rhs.size() &&
+           std::equal(lhs.begin(), lhs.end(), rhs.begin());
+}
+
 void refreshRetainedResources(std::vector<std::shared_ptr<void>>& currentRetainedResources,
                               const std::vector<std::shared_ptr<void>>& nextRetainedResources)
 {
+    if (isSameRetainedResources(currentRetainedResources, nextRetainedResources)) {
+        return;
+    }
+
     auto retiredResources = std::move(currentRetainedResources);
     currentRetainedResources = nextRetainedResources;
     retireRetainedResources(retiredResources);

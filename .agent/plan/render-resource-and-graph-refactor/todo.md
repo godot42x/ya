@@ -419,7 +419,7 @@
 - [ ] read-before-write rejection
 - [ ] stale generation handle rejection
 - [x] imported initial/final state
-- [ ] resize physical resource replacement
+- [x] resize physical resource replacement
 - [ ] mip/layer subresource transition
 - [ ] extension pass dependency and invalid usage rejection
 - [ ] generated shader parameter block type mismatch rejection

@@ -1930,6 +1930,60 @@ TEST(RenderGraphCoreTest, ResourceRegistryRefreshesImportedBufferKeepAliveWithou
     EXPECT_TRUE(ownerBWeak.expired());
 }
 
+TEST(RenderGraphCoreTest, ResourceRegistryDoesNotRetireImportedBufferKeepAliveWhenOwnerIsUnchanged)
+{
+    auto& deletionQueue = DeferredDeletionQueue::get();
+    deletionQueue.flushAll();
+    deletionQueue.init(/*framesInFlight=*/1);
+
+    TestResourceFactory factory;
+    RenderGraphResourceRegistry registry(factory);
+    TestBuffer importedBacking(BufferCreateInfo{
+        .label = "external.stable.visible",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 512,
+    });
+
+    auto owner = std::make_shared<int>(5);
+    std::weak_ptr<int> ownerWeak = owner;
+
+    {
+        RenderGraph graphA;
+        graphA.importBuffer(RGImportedBufferDesc{
+            .desc = RGBufferDesc{
+                .label = "external.stable.visible",
+                .usage = EBufferUsage::StorageBuffer,
+                .size  = 512,
+            },
+            .buffer = &importedBacking,
+            .retainedResources = {owner},
+        });
+        registry.sync(graphA);
+        EXPECT_EQ(deletionQueue.pendingCount(), 0u);
+
+        RenderGraph graphB;
+        graphB.importBuffer(RGImportedBufferDesc{
+            .desc = RGBufferDesc{
+                .label = "external.stable.visible",
+                .usage = EBufferUsage::StorageBuffer,
+                .size  = 512,
+            },
+            .buffer = &importedBacking,
+            .retainedResources = {owner},
+        });
+        registry.sync(graphB);
+        EXPECT_EQ(deletionQueue.pendingCount(), 0u);
+    }
+
+    owner.reset();
+    EXPECT_FALSE(ownerWeak.expired());
+
+    registry.clear();
+    EXPECT_EQ(deletionQueue.pendingCount(), 1u);
+    deletionQueue.flushAll();
+    EXPECT_TRUE(ownerWeak.expired());
+}
+
 TEST(RenderGraphCoreTest, ResourceRegistryPrunesImportedBufferKeepAliveWhenBufferIsRemoved)
 {
     auto& deletionQueue = DeferredDeletionQueue::get();
@@ -2010,6 +2064,86 @@ TEST(RenderGraphCoreTest, ResourceRegistryPruneDefersImportedBufferKeepAliveRele
     registry.sync(emptyGraph);
     EXPECT_FALSE(ownerWeak.expired());
 
+    deletionQueue.flushAll();
+    EXPECT_TRUE(ownerWeak.expired());
+}
+
+TEST(RenderGraphCoreTest, ResourceRegistryDoesNotRetireImportedTextureKeepAliveWhenOwnerIsUnchanged)
+{
+    auto& deletionQueue = DeferredDeletionQueue::get();
+    deletionQueue.flushAll();
+    deletionQueue.init(/*framesInFlight=*/1);
+
+    TestResourceFactory factory;
+    RenderGraphResourceRegistry registry(factory);
+    auto existingImage = std::make_shared<TestImage>(ImageCreateInfo{
+        .label       = "existing.stable.color",
+        .format      = EFormat::R8G8B8A8_UNORM,
+        .extent      = {.width = 128, .height = 128, .depth = 1},
+        .mipLevels   = 1,
+        .arrayLayers = 1,
+        .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    });
+    auto existingView = factory.createImageView(existingImage, ImageViewCreateInfo{
+        .label       = "existing.stable.color.view",
+        .viewType    = EImageViewType::View2D,
+        .aspectFlags = EImageAspect::Color,
+    });
+
+    auto owner = std::make_shared<int>(9);
+    std::weak_ptr<int> ownerWeak = owner;
+
+    {
+        RenderGraph graphA;
+        graphA.importTexture(RGImportedTextureDesc{
+            .desc = RGTextureDesc{
+                .label  = "existing.stable.color.import",
+                .format = EFormat::R8G8B8A8_UNORM,
+                .extent = Extent3D{128, 128, 1},
+                .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            },
+            .importDesc = ImportedImageDesc{
+                .label        = "existing.stable.color.import",
+                .nativeHandle = static_cast<void*>(existingImage->getHandle()),
+                .format       = EFormat::R8G8B8A8_UNORM,
+                .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                .extent       = Extent3D{128, 128, 1},
+            },
+            .image = existingImage,
+            .imageView = existingView,
+            .retainedResources = {owner},
+        });
+        registry.sync(graphA);
+        EXPECT_EQ(deletionQueue.pendingCount(), 0u);
+
+        RenderGraph graphB;
+        graphB.importTexture(RGImportedTextureDesc{
+            .desc = RGTextureDesc{
+                .label  = "existing.stable.color.import",
+                .format = EFormat::R8G8B8A8_UNORM,
+                .extent = Extent3D{128, 128, 1},
+                .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            },
+            .importDesc = ImportedImageDesc{
+                .label        = "existing.stable.color.import",
+                .nativeHandle = static_cast<void*>(existingImage->getHandle()),
+                .format       = EFormat::R8G8B8A8_UNORM,
+                .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                .extent       = Extent3D{128, 128, 1},
+            },
+            .image = existingImage,
+            .imageView = existingView,
+            .retainedResources = {owner},
+        });
+        registry.sync(graphB);
+        EXPECT_EQ(deletionQueue.pendingCount(), 0u);
+    }
+
+    owner.reset();
+    EXPECT_FALSE(ownerWeak.expired());
+
+    registry.clear();
+    EXPECT_EQ(deletionQueue.pendingCount(), 1u);
     deletionQueue.flushAll();
     EXPECT_TRUE(ownerWeak.expired());
 }
