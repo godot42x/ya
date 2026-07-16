@@ -538,8 +538,10 @@ void AppLifecycle::stopRuntime(App& app)
     }
 
     YA_CORE_INFO("Stopping runtime");
-    if (auto* render = app.getRender()) {
-        render->waitIdle();
+    if (app._sceneManager && app._sceneManager->isInPlayMode()) {
+        if (auto* render = app.getRender()) {
+            render->waitIdle();
+        }
     }
     if (app._sceneManager) {
         app._sceneManager->exitPlayMode();
@@ -561,8 +563,10 @@ void AppLifecycle::stopSimulation(App& app)
     }
 
     YA_CORE_INFO("Stopping simulation");
-    if (auto* render = app.getRender()) {
-        render->waitIdle();
+    if (app._sceneManager && app._sceneManager->isInPlayMode()) {
+        if (auto* render = app.getRender()) {
+            render->waitIdle();
+        }
     }
     if (app._sceneManager) {
         app._sceneManager->exitPlayMode();
