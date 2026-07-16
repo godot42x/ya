@@ -93,10 +93,9 @@ struct FMath
         float c   = glm::cos(rad);
         float s   = glm::sin(rad);
         return glm::mat3{
-            {scale.x * c, scale.x * -s, 0.0f},   // 列0
-            {scale.y * s, scale.y * c, 0.0f},    // 列1
-            {translation.x, translation.y, 1.0f} // 列2
-        };
+            scale.x * c, -scale.y * s, translation.x,
+            scale.x * s, scale.y * c, translation.y,
+            0.0f, 0.0f, 1.0f};
     }
 
     static glm::mat4 build_transform_mat4(glm::vec3 translation, glm::vec3 rotationDeg, glm::vec3 scale)

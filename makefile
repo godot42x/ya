@@ -43,4 +43,4 @@ vulkan-sdk-macos:
 
 test:
 	xmake b $(t)-testing
-	xmake r $(t)-testing --gtest_filter=$(r_args)
+	$(if $(strip $(r_args)),xmake r $(t)-testing --gtest_filter=$(r_args),xmake r $(t)-testing)

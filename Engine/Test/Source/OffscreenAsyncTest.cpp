@@ -75,7 +75,7 @@ class TestCommandBuffer final : public ICommandBuffer
 
 std::shared_ptr<RenderImage> makeFakeRenderImage()
 {
-    return std::shared_ptr<RenderImage>(reinterpret_cast<RenderImage*>(0x1), [](RenderImage*) {});
+    return std::make_shared<RenderImage>();
 }
 
 std::shared_ptr<OffscreenJobState> makeJob(EOffscreenJobPhase phase = EOffscreenJobPhase::Pending)

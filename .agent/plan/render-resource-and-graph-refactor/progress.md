@@ -23,6 +23,18 @@
 
 ## 最新验证
 
+- 2026-07-16：`make test` 这条默认单元测试门禁现在已经重新回到真实可用状态，并且当前代码下是全绿的。修正 Makefile 空 `--gtest_filter=` 伪成功之后，本轮继续清掉了三个会阻塞默认测试集的真实问题：其一是 `FMath::build_transform_mat3()` 与现有 2D helper/test 约定不一致，导致 `MathTest.BuildTransformMatrix3x3` 失败；其二是 standalone `Scene` 在没有 `App/SceneManager` 的测试环境里会把自身误判为 invalid，导致 `SceneSerializerTest.SkyboxCubemapPathsRoundtrip` 在 `getRootNode()/createNode3D()` 阶段异常退出；其三是 `OffscreenAsyncTest.QueueOffscreenJobPublishesRecordedKeepAliveResources` 使用 `0x1` 假 `RenderImage`，在 offscreen 结果回写 keepalive 时踩穿了 `retainedResources` 成员访问。现在这三处都已修正，`make test` 已通过 164 tests / 21 suites。
+- 直接收益：提交前“至少跑真实单元测试”这条基础门禁终于恢复可信，而且不用再靠人工记忆避开几个已知假失败点。后续如果继续按计划推进 runtime/registry/shutdown 主线，`make test` 至少不会再因为空 filter、standalone scene 无效语义或 offscreen 测试替身问题给出误导性结果。
+- 当前停止线：这一步只恢复了默认单元测试门禁，没有替代 `make b t=HelloMaterial`、固定帧 smoke、editor 冒烟这些提交前剩余验证项；如果要形成提交，还需要继续补构建和运行侧证据。
+
+- 2026-07-16：`make test` 入口修正后的第二轮现实也已经补齐了。之前默认 `make test` 因为空 `--gtest_filter=` 实际会跑 0 tests；修正 Makefile 后，当前它会真正执行 `ya-testing` 默认测试集。随后暴露出的首个数学回归 `MathTest.BuildTransformMatrix3x3` 已修复：`FMath::build_transform_mat3()` 现在按现有 2D helper/test 约定直接生成组合矩阵，`MathTest.BuildScaleMatrix3x3:MathTest.BuildRotateMatrix3x3:MathTest.BuildTranslateMatrix3x3:MathTest.BuildTransformMatrix3x3` 已 4/4 通过。
+- 直接收益：默认测试入口不再是假阳性，而且当前至少已经去掉了一个会污染后续验证的基础数学红灯。后续继续以 `make test` 作为提交前门禁时，不会再被 `build_transform_mat3()` 这类低层错误干扰更高层渲染/序列化问题的判断。
+- 当前停止线：这条记录只对应第二轮调查时的中间状态；随后 `SceneSerializerTest.SkyboxCubemapPathsRoundtrip`、`OffscreenAsyncTest.QueueOffscreenJobPublishesRecordedKeepAliveResources` 也都已修复，当前完整结论以上面的最新验证为准。
+
+- 2026-07-16：`make test` 这条 runtime/test 入口也按代码现实补正了。此前 Makefile 的 `test` 目标会无条件展开成 `xmake r $(t)-testing --gtest_filter=$(r_args)`；当 `r_args` 为空时，GoogleTest 实际收到的是 `--gtest_filter=`，结果表现成“构建成功、运行成功，但 0 tests”。现在 `make test` 只在显式提供 `r_args` 时才追加 `--gtest_filter=...`，默认会直接运行 `xmake r $(t)-testing`；因此 `make test` 终于重新代表“运行该 testing target 的默认测试集”，而不是一个悄悄吞掉所有测试的伪成功入口。
+- 直接收益：这一步直接命中 `todo.md` 里还挂着的 `make test` 证据项，也顺手修掉了一条会误导提交前验证的基础工作流问题。后续无论是 agent 按要求跑单元测试，还是人工在本地用最短命令验证当前工作树，都不会再因为空 filter 得到“0 tests passed”的假阳性。
+- 当前停止线：这次只修了 Makefile 包装入口，没有改 `xmake test` task、测试分组策略或 CI 结构；如果后续要细化“默认全量测试”与“快速回归子集”的分层，还应在构建工作流层单独设计，而不是再把空 filter 行为当作默认入口。
+
 - 2026-07-16：editor 的 “New Scene” 路径也补上了和 lifecycle 同步的 owner 边界语义。此前 `EditorLayer` 里 File -> New Scene 会在 frame task 中无条件 `render->waitIdle()`，然后直接 `SceneManager::setEditorScene(scene)`；这和前面已经收紧过的 `AppLifecycle::loadScene()/unloadScene()` 不一致，意味着当当前根本没有 scene 时，编辑器里新建空场景仍会先做一次空转全局等待。现在这条路径只在 `SceneManager::hasScene()` 为真时才 quiesce render；真正替换现有 editor scene 的 New Scene 仍保留等待，而“当前没有 scene”的新建请求则不再多等一次。
 - 直接收益：这一步继续沿着当前高优先级的 lifecycle / runtime owner 边界往下压，而不是扩散到新的系统设计。editor 侧最常见的一条 scene replacement 入口现在终于和 app lifecycle 主路径对齐，不再因为旁路实现而把已经收掉的空转等待重新带回来。
 - 当前停止线：这次没有把 editor 所有 scene 操作都重写成统一走 `AppLifecycle`，也没有改 `SceneManager::setEditorScene()` 本身的生命周期协议；它只修正了 New Scene 这一条显式旁路入口上的无条件等待。

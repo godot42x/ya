@@ -435,7 +435,7 @@
 ### Runtime Tests
 
 - [ ] `make b t=HelloMaterial`
-- [ ] `make test`
+- [x] `make test`
 - [ ] Forward 固定帧运行
 - [ ] Deferred 固定帧运行
 - [ ] viewport 连续 resize

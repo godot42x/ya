@@ -213,20 +213,14 @@ bool Scene::isValidEntity(const Entity *entity) const
 // Check if Scene pointer is safe to access
 bool Scene::isValid() const
 {
-    // if (_magic != SCENE_MAGIC) {
-    //     return false;
-    // }
-
     auto *app = App::get();
     if (!app) {
-        YA_CORE_ASSERT(false, "App instance not found");
-        return false;
+        return true;
     }
 
     auto *sceneManager = app->getSceneManager();
     if (!sceneManager) {
-        YA_CORE_ASSERT(false, "SceneManager instance not found");
-        return false;
+        return true;
     }
 
     return sceneManager->isSceneValid(this);
