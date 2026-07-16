@@ -92,7 +92,12 @@
             "program": "${workspaceFolder}/build/macosx/arm64/debug/${input:debug.target}",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "xmake build"
+            "preLaunchTask": "xmake build",
+            "env": {
+                "DYLD_LIBRARY_PATH": "${workspaceFolder}/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/lib:${env:DYLD_LIBRARY_PATH}",
+                "VK_ICD_FILENAMES": "${workspaceFolder}/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/share/vulkan/icd.d/MoltenVK_icd.json",
+                "VK_LAYER_PATH": "${workspaceFolder}/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/share/vulkan/explicit_layer.d"
+            }
 
         },
     ]

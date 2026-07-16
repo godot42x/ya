@@ -22,6 +22,16 @@ ImageViewHandle getRenderImageViewHandle(const RenderImage* image)
     return image && image->getImageView() ? image->getImageView()->getHandle() : ImageViewHandle{};
 }
 
+const char* getTextureLabel(const Texture* texture)
+{
+    return texture ? texture->getLabel().c_str() : "<null>";
+}
+
+const char* getRenderImageLabel(const RenderImage* image)
+{
+    return image ? image->getLabel().c_str() : "<null>";
+}
+
 } // namespace
 
 Texture* RenderSharedResourceProvider::findSceneSkyboxTexture(Scene* scene) const
@@ -177,6 +187,11 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneEnvironmentLightingDes
 
     auto resources = resolveSceneEnvironmentLightingTextures(scene);
     if (!resources.isComplete()) {
+        YA_CORE_WARN("Environment lighting DS fallback: incomplete resources cubemap='{}' irradiance='{}' prefilter='{}' brdf='{}'",
+                     getTextureLabel(resources.cubemapTexture),
+                     getTextureLabel(resources.irradianceTexture),
+                     getTextureLabel(resources.prefilterTexture),
+                     getRenderImageLabel(resources.brdfLutTexture));
         return _environmentLighting.fallbackDS;
     }
 
@@ -210,6 +225,11 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneEnvironmentLightingDes
         _environmentLighting.boundIrradianceImageView = irradianceImageViewHandle;
         _environmentLighting.boundPrefilterImageView  = prefilterImageViewHandle;
         _environmentLighting.boundBrdfLutImageView    = brdfLutImageViewHandle;
+        YA_CORE_INFO("Environment lighting DS update: cubemap='{}' irradiance='{}' prefilter='{}' brdf='{}'",
+                     getTextureLabel(cubemapTexture),
+                     getTextureLabel(irradianceTexture),
+                     getTextureLabel(prefilterTexture),
+                     getRenderImageLabel(brdfLutTexture));
     }
 
     return _environmentLighting.sceneDS;

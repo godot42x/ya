@@ -108,8 +108,6 @@ bool RenderGraphExecutor::executeCompiled(
         pass->execute(ctx);
     }
 
-    finalizeImportedTextureStates(graph, cmdBuf);
-
     return true;
 }
 
