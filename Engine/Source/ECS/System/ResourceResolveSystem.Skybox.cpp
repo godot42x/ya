@@ -290,15 +290,8 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
             }
 
             pendingState.cubemapRenderImage = pendingState.pendingOffscreenProcess->result->outputImage;
-            pendingState.cubemapTexture = detail::wrapRenderImageAsTexture(
-                pendingState.cubemapRenderImage,
-                pendingState.pendingOffscreenProcess->debugName);
+            detail::retireTextureNow(pendingState.cubemapTexture);
             pendingState.pendingOffscreenProcess.reset();
-            if (!pendingState.cubemapTexture) {
-                detail::retireSkyboxResources(pendingState);
-                transition.fail("preprocess wrap failed");
-                break;
-            }
             detail::rebuildSkyboxViews(pendingState);
             ++pendingState.resultVersion;
             makeTransition(sc.resolveState, "Skybox")

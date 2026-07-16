@@ -97,8 +97,8 @@ struct EnvironmentLightingRuntimeState
 struct SkyboxPreviewInfo
 {
     std::shared_ptr<RenderImage>             cubemapRenderImage   = nullptr;
+    std::shared_ptr<IImage>                  cubemapImage         = nullptr;
     Texture*                                sourcePreviewTexture = nullptr;
-    Texture*                                cubemapTexture       = nullptr;
     std::array<IImageView*, CubeFace_Count> cubemapFaceViews{};
     bool                                    bHasRenderableCubemap = false;
 };
@@ -106,13 +106,13 @@ struct SkyboxPreviewInfo
 struct EnvironmentLightingPreviewInfo
 {
     std::shared_ptr<RenderImage>             cubemapRenderImage        = nullptr;
-    Texture*                                cubemapTexture        = nullptr;
+    std::shared_ptr<IImage>                  cubemapImage              = nullptr;
     std::array<IImageView*, CubeFace_Count> cubemapFaceViews{};
     std::shared_ptr<RenderImage>             irradianceRenderImage     = nullptr;
-    Texture*                                irradianceTexture     = nullptr;
+    std::shared_ptr<IImage>                  irradianceImage           = nullptr;
     std::array<IImageView*, CubeFace_Count> irradianceFaceViews{};
     std::shared_ptr<RenderImage>             prefilterRenderImage      = nullptr;
-    Texture*                                prefilterTexture      = nullptr;
+    std::shared_ptr<IImage>                  prefilterImage            = nullptr;
     std::array<std::array<IImageView*, CubeFace_Count>, EnvironmentLightingRuntimeState::MAX_PREFILTER_PREVIEW_MIPS> prefilterMipFaceViews{};
     uint32_t                                prefilterMipCount     = 0;
     bool                                    bHasRenderableCubemap = false;

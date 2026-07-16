@@ -13,6 +13,7 @@ struct Texture;
 struct RenderImage;
 struct Sampler;
 struct IRender;
+struct IImageView;
 
 struct RenderSharedResourceProvider
 {
@@ -28,7 +29,10 @@ struct RenderSharedResourceProvider
 
         [[nodiscard]] bool isComplete() const
         {
-            return cubemapTexture && irradianceTexture && prefilterTexture && brdfLutTexture;
+            return (cubemapTexture || cubemapRenderImage) &&
+                   (irradianceTexture || irradianceRenderImage) &&
+                   (prefilterTexture || prefilterRenderImage) &&
+                   brdfLutTexture;
         }
     };
 
@@ -42,7 +46,7 @@ struct RenderSharedResourceProvider
         stdptr<Texture>              fallbackTexture   = nullptr;
         DescriptorSetHandle          fallbackDS        = nullptr;
         DescriptorSetHandle          sceneDS           = nullptr;
-        Texture*                     boundSceneTexture = nullptr;
+        ImageViewHandle              boundSceneImageView = nullptr;
     };
 
     struct EnvironmentLightingResources
@@ -53,10 +57,6 @@ struct RenderSharedResourceProvider
         DescriptorSetHandle          sceneDS                   = nullptr;
         stdptr<Texture>              fallbackIrradianceTexture = nullptr;
         stdptr<Texture>              fallbackPrefilterTexture  = nullptr;
-        Texture*                     boundCubemapTexture       = nullptr;
-        Texture*                     boundIrradianceTexture    = nullptr;
-        Texture*                     boundPrefilterTexture     = nullptr;
-        stdptr<RenderImage>          boundBrdfLutTexture       = nullptr;
         ImageViewHandle              boundCubemapImageView     = nullptr;
         ImageViewHandle              boundIrradianceImageView  = nullptr;
         ImageViewHandle              boundPrefilterImageView   = nullptr;
@@ -95,12 +95,12 @@ struct RenderSharedResourceProvider
     void                   initSkyboxResources();
     void                   initEnvironmentLightingResources();
     void                   releaseRenderOwnedResources();
-    void                   updateSkyboxDescriptorSet(DescriptorSetHandle ds, Texture* texture);
+    void                   updateSkyboxDescriptorSet(DescriptorSetHandle ds, IImageView* imageView);
     void                   updateEnvironmentLightingDescriptorSet(DescriptorSetHandle ds,
-                                                                  Texture*            cubemapTexture,
-                                                                  Texture*            irradianceTexture,
-                                                                  Texture*            prefilterTexture,
-                                                                  const stdptr<RenderImage>& brdfLutTexture);
+                                                                  IImageView*         cubemapImageView,
+                                                                  IImageView*         irradianceImageView,
+                                                                  IImageView*         prefilterImageView,
+                                                                  IImageView*         brdfLutImageView);
 };
 
 } // namespace ya

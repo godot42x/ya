@@ -335,9 +335,9 @@ void tryBeginEnvPrefilterJob(ResourceResolveSystem&           system,
         .to(EEnvironmentLightingPrefilterResolveState::Building, "queue prefilter preprocess");
 }
 
-stdptr<Texture> syncEnvSkybox(EnvironmentLightingComponent&    component,
-                              EnvironmentLightingRuntimeState& state,
-                              const SkyboxRuntimeState*        sceneSkyboxState)
+const SkyboxRuntimeState* syncEnvSkybox(EnvironmentLightingComponent&    component,
+                                        EnvironmentLightingRuntimeState& state,
+                                        const SkyboxRuntimeState*        sceneSkyboxState)
 {
     if (!component.usesSceneSkybox()) {
         return nullptr;
@@ -367,7 +367,7 @@ stdptr<Texture> syncEnvSkybox(EnvironmentLightingComponent&    component,
 
     if (sceneSkyboxState && sceneSkyboxState->hasRenderableCubemap() &&
         component.sourceState == EEnvironmentLightingSourceResolveState::Dirty) {
-        return sceneSkyboxState->cubemapTexture;
+        return sceneSkyboxState;
     }
 
     return nullptr;
@@ -703,16 +703,8 @@ void handleEnvironmentSourceBuildingCubemap(EnvironmentLightingComponent&    com
     }
 
     state.cubemapRenderImage = state.pendingEnvironmentOffscreen->result->outputImage;
-    state.cubemapTexture = detail::wrapRenderImageAsTexture(
-        state.cubemapRenderImage,
-        state.pendingEnvironmentOffscreen->debugName);
+    detail::retireTextureNow(state.cubemapTexture);
     state.pendingEnvironmentOffscreen.reset();
-    if (!state.cubemapTexture) {
-        detail::retireEnvTextures(state);
-        transition.fail("preprocess wrap failed");
-        failEnvironmentDerivedBranches(component, "preprocess wrap failed");
-        return;
-    }
     completeEnvironmentSource(component, state, "environment cubemap preprocess completed");
 }
 
@@ -762,16 +754,7 @@ void handleEnvironmentIrradianceBuilding(EnvironmentLightingComponent&    compon
 
     // ok
     state.irradianceRenderImage = state.pendingIrradianceOffscreen->result->outputImage;
-    state.irradianceTexture = detail::wrapRenderImageAsTexture(
-        state.irradianceRenderImage,
-        state.pendingIrradianceOffscreen->debugName);
-    if (!state.irradianceTexture) {
-        state.pendingIrradianceOffscreen.reset();
-        detail::retireTextureNow(state.irradianceTexture);
-        detail::retireRenderImageNow(state.irradianceRenderImage);
-        makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance").fail("preprocess wrap failed");
-        return;
-    }
+    detail::retireTextureNow(state.irradianceTexture);
     detail::rebuildEnvironmentIrradianceViews(state);
     state.pendingIrradianceOffscreen.reset();
     ++state.resultVersion;
@@ -824,17 +807,7 @@ void handleEnvironmentPrefilterBuilding(EnvironmentLightingComponent&    compone
     }
 
     state.prefilterRenderImage = state.pendingPrefilterOffscreen->result->outputImage;
-    state.prefilterTexture = detail::wrapRenderImageAsTexture(
-        state.prefilterRenderImage,
-        state.pendingPrefilterOffscreen->debugName);
-    if (!state.prefilterTexture) {
-        state.pendingPrefilterOffscreen.reset();
-        detail::retireTextureNow(state.prefilterTexture);
-        detail::retireRenderImageNow(state.prefilterRenderImage);
-        detail::rebuildPrefilterViews(state);
-        makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter").fail("preprocess wrap failed");
-        return;
-    }
+    detail::retireTextureNow(state.prefilterTexture);
     detail::rebuildPrefilterViews(state);
     state.pendingPrefilterOffscreen.reset();
     ++state.resultVersion;
@@ -944,9 +917,9 @@ void ResourceResolveSystem::resolvePendingEnvironmentLighting(Scene* scene)
 
         syncEnvironmentDerivedBranchEnablement(elc, pendingState);
 
-        if (const auto sourceCubemap = syncEnvSkybox(elc, pendingState, sceneSkyboxState)) {
-            pendingState.cubemapRenderImage = sceneSkyboxState ? sceneSkyboxState->cubemapRenderImage : nullptr;
-            pendingState.cubemapTexture = sourceCubemap;
+        if (const auto* sourceSkyboxState = syncEnvSkybox(elc, pendingState, sceneSkyboxState)) {
+            pendingState.cubemapRenderImage = sourceSkyboxState->cubemapRenderImage;
+            pendingState.cubemapTexture = sourceSkyboxState->cubemapTexture;
             completeEnvironmentSource(elc, pendingState, "scene skybox source resolved");
         }
 

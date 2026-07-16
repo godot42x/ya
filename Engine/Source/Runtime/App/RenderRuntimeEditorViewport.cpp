@@ -25,24 +25,6 @@ constexpr uint32_t CATEGORY_VIEWPORT    = 4;
 constexpr uint32_t CATEGORY_SHARED      = 5;
 constexpr uint32_t CATEGORY_POSTPROCESS = 6;
 
-std::shared_ptr<IImage> getPreviewImage(const std::shared_ptr<RenderImage>& renderImage, Texture* texture)
-{
-    if (renderImage && renderImage->getImageShared()) {
-        return renderImage->getImageShared();
-    }
-
-    return texture ? texture->getImageShared() : nullptr;
-}
-
-IImageView* getPreviewImageView(const std::shared_ptr<RenderImage>& renderImage, Texture* texture)
-{
-    if (renderImage && renderImage->getImageView()) {
-        return renderImage->getImageView();
-    }
-
-    return texture ? texture->getImageView() : nullptr;
-}
-
 template <typename TGetter>
 void appendShadowDebugSlots(EditorViewportContext& ctx,
                             IImageView*            directionalDepth,
@@ -187,9 +169,7 @@ void RenderRuntime::appendForwardDebugSlots(EditorViewportContext& ctx)
         if (resolver) {
             for (auto&& [entity, sc] : scene->getRegistry().view<SkyboxComponent>().each()) {
                 auto preview = resolver->getSkyboxPreview(entity);
-                const auto cubemapImage = getPreviewImage(preview.cubemapRenderImage, preview.cubemapTexture);
-                if (!preview.bHasRenderableCubemap || !cubemapImage ||
-                    !getPreviewImageView(preview.cubemapRenderImage, preview.cubemapTexture)) {
+                if (!preview.bHasRenderableCubemap || !preview.cubemapImage) {
                     continue;
                 }
 
@@ -212,7 +192,7 @@ void RenderRuntime::appendForwardDebugSlots(EditorViewportContext& ctx)
                         .label         = std::format("SkyboxFace{}", faceIndex),
                         .defaultView   = faceView,
                         .ownedView     = nullptr,
-                        .image         = cubemapImage,
+                        .image         = preview.cubemapImage,
                         .categoryIndex = CATEGORY_SKYBOX,
                     });
                 }
@@ -391,12 +371,8 @@ void RenderRuntime::appendEnvironmentDebugSlots(EditorViewportContext& ctx)
         for (auto&& [entity, elc] : scene->getRegistry().view<EnvironmentLightingComponent>().each()) {
             (void)elc;
             auto preview = resolver->getEnvironmentLightingPreview(entity);
-            const auto cubemapImage    = getPreviewImage(preview.cubemapRenderImage, preview.cubemapTexture);
-            const auto irradianceImage = getPreviewImage(preview.irradianceRenderImage, preview.irradianceTexture);
-            const auto prefilterImage  = getPreviewImage(preview.prefilterRenderImage, preview.prefilterTexture);
 
-            if (preview.bHasRenderableCubemap && cubemapImage &&
-                getPreviewImageView(preview.cubemapRenderImage, preview.cubemapTexture)) {
+            if (preview.bHasRenderableCubemap && preview.cubemapImage) {
                 EditorViewportContext::DebugSpec::Group cubemapGroup{
                     .label         = "Environment Cubemap",
                     .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
@@ -416,7 +392,7 @@ void RenderRuntime::appendEnvironmentDebugSlots(EditorViewportContext& ctx)
                         .label         = std::format("EnvironmentFace{}", faceIndex),
                         .defaultView   = faceView,
                         .ownedView     = nullptr,
-                        .image         = cubemapImage,
+                        .image         = preview.cubemapImage,
                         .categoryIndex = CATEGORY_ENVIRONMENT,
                     });
                 }
@@ -427,8 +403,7 @@ void RenderRuntime::appendEnvironmentDebugSlots(EditorViewportContext& ctx)
                 }
             }
 
-            if (preview.bHasIrradianceMap && irradianceImage &&
-                getPreviewImageView(preview.irradianceRenderImage, preview.irradianceTexture)) {
+            if (preview.bHasIrradianceMap && preview.irradianceImage) {
                 EditorViewportContext::DebugSpec::Group irradianceGroup{
                     .label         = "Environment Irradiance Cubemap",
                     .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
@@ -448,7 +423,7 @@ void RenderRuntime::appendEnvironmentDebugSlots(EditorViewportContext& ctx)
                         .label         = std::format("IrradianceFace{}", faceIndex),
                         .defaultView   = faceView,
                         .ownedView     = nullptr,
-                        .image         = irradianceImage,
+                        .image         = preview.irradianceImage,
                         .categoryIndex = CATEGORY_ENVIRONMENT,
                     });
                 }
@@ -459,44 +434,41 @@ void RenderRuntime::appendEnvironmentDebugSlots(EditorViewportContext& ctx)
                 }
             }
 
-            if (preview.bHasPrefilterMap && prefilterImage && preview.prefilterMipCount > 0 &&
-                getPreviewImageView(preview.prefilterRenderImage, preview.prefilterTexture)) {
-                if (prefilterImage) {
-                    const uint32_t                          mipLevels = preview.prefilterMipCount;
-                    EditorViewportContext::DebugSpec::Group prefilterGroup{
-                        .label         = "Environment Prefilter Cubemap",
-                        .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapMipFaces,
-                        .categoryIndex = CATEGORY_ENVIRONMENT,
-                        .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
-                        .groupSize     = CubeFace_Count,
-                        .itemLabels    = {},
-                    };
-                    prefilterGroup.itemLabels.reserve(mipLevels);
+            if (preview.bHasPrefilterMap && preview.prefilterImage && preview.prefilterMipCount > 0) {
+                const uint32_t                          mipLevels = preview.prefilterMipCount;
+                EditorViewportContext::DebugSpec::Group prefilterGroup{
+                    .label         = "Environment Prefilter Cubemap",
+                    .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapMipFaces,
+                    .categoryIndex = CATEGORY_ENVIRONMENT,
+                    .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
+                    .groupSize     = CubeFace_Count,
+                    .itemLabels    = {},
+                };
+                prefilterGroup.itemLabels.reserve(mipLevels);
 
-                    for (uint32_t mipIndex = 0; mipIndex < mipLevels; ++mipIndex) {
-                        const float roughness = mipLevels <= 1 ? 0.0f : static_cast<float>(mipIndex) / static_cast<float>(mipLevels - 1);
-                        prefilterGroup.itemLabels.push_back(std::format("Mip {} (Roughness {:.2f})", mipIndex, roughness));
+                for (uint32_t mipIndex = 0; mipIndex < mipLevels; ++mipIndex) {
+                    const float roughness = mipLevels <= 1 ? 0.0f : static_cast<float>(mipIndex) / static_cast<float>(mipLevels - 1);
+                    prefilterGroup.itemLabels.push_back(std::format("Mip {} (Roughness {:.2f})", mipIndex, roughness));
 
-                        for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
-                            auto* faceView = preview.prefilterMipFaceViews[mipIndex][faceIndex];
-                            if (!faceView) {
-                                continue;
-                            }
-
-                            ctx.debugSpec.slots.push_back({
-                                .label         = std::format("Prefilter_Mip{}_Face{}", mipIndex, faceIndex),
-                                .defaultView   = faceView,
-                                .ownedView     = nullptr,
-                                .image         = prefilterImage,
-                                .categoryIndex = CATEGORY_ENVIRONMENT,
-                            });
+                    for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+                        auto* faceView = preview.prefilterMipFaceViews[mipIndex][faceIndex];
+                        if (!faceView) {
+                            continue;
                         }
-                    }
 
-                    prefilterGroup.slotCount = static_cast<uint32_t>(ctx.debugSpec.slots.size()) - prefilterGroup.beginIndex;
-                    if (prefilterGroup.slotCount >= prefilterGroup.groupSize) {
-                        ctx.debugSpec.groups.push_back(std::move(prefilterGroup));
+                        ctx.debugSpec.slots.push_back({
+                            .label         = std::format("Prefilter_Mip{}_Face{}", mipIndex, faceIndex),
+                            .defaultView   = faceView,
+                            .ownedView     = nullptr,
+                            .image         = preview.prefilterImage,
+                            .categoryIndex = CATEGORY_ENVIRONMENT,
+                        });
                     }
+                }
+
+                prefilterGroup.slotCount = static_cast<uint32_t>(ctx.debugSpec.slots.size()) - prefilterGroup.beginIndex;
+                if (prefilterGroup.slotCount >= prefilterGroup.groupSize) {
+                    ctx.debugSpec.groups.push_back(std::move(prefilterGroup));
                 }
             }
 

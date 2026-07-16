@@ -236,7 +236,10 @@ EnvironmentLightingSceneResources ResourceResolveSystem::resolveSceneEnvironment
             resources.prefilterTexture     = state->prefilterTexture;
         }
 
-        if (resources.cubemapTexture && resources.irradianceTexture && resources.prefilterTexture) {
+        const bool bHasCubemap = resources.cubemapTexture || resources.cubemapRenderImage;
+        const bool bHasIrradiance = resources.irradianceTexture || resources.irradianceRenderImage;
+        const bool bHasPrefilter = resources.prefilterTexture || resources.prefilterRenderImage;
+        if (bHasCubemap && bHasIrradiance && bHasPrefilter) {
             break;
         }
     }
@@ -255,7 +258,7 @@ SkyboxPreviewInfo ResourceResolveSystem::getSkyboxPreview(entt::entity entity) c
 
     info.sourcePreviewTexture  = state->sourcePreviewTexture.get();
     info.cubemapRenderImage    = state->cubemapRenderImage;
-    info.cubemapTexture        = state->cubemapTexture.get();
+    info.cubemapImage          = detail::getImageShared(state->cubemapRenderImage, state->cubemapTexture);
     info.bHasRenderableCubemap = state->hasRenderableCubemap();
 
     for (uint32_t index = 0; index < CubeFace_Count; ++index) {
@@ -275,11 +278,11 @@ EnvironmentLightingPreviewInfo ResourceResolveSystem::getEnvironmentLightingPrev
     }
 
     info.cubemapRenderImage    = state->cubemapRenderImage;
-    info.cubemapTexture        = state->cubemapTexture.get();
+    info.cubemapImage          = detail::getImageShared(state->cubemapRenderImage, state->cubemapTexture);
     info.irradianceRenderImage = state->irradianceRenderImage;
-    info.irradianceTexture     = state->irradianceTexture.get();
+    info.irradianceImage       = detail::getImageShared(state->irradianceRenderImage, state->irradianceTexture);
     info.prefilterRenderImage  = state->prefilterRenderImage;
-    info.prefilterTexture      = state->prefilterTexture.get();
+    info.prefilterImage        = detail::getImageShared(state->prefilterRenderImage, state->prefilterTexture);
     info.prefilterMipCount     = state->prefilterPreviewMipCount;
     info.bHasRenderableCubemap = state->hasRenderableCubemap();
     info.bHasIrradianceMap     = state->hasIrradianceMap();

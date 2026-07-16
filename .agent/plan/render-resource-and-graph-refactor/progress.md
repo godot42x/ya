@@ -23,6 +23,56 @@
 
 ## 最新验证
 
+- 2026-07-16：`Phase 10 / 删除剩余 compatibility adapter` 又往 provider 边界里收了一层：scene skybox / environment lighting descriptor set 更新不再为了 `RenderImage` 结果额外维护 `sceneCompatTexture` 这类 provider-side compat wrapper cache，而是直接按 owner-first 语义取 `IImageView` 写 descriptor。现在 provider 对 scene cubemap / irradiance / prefilter / BRDF LUT 的消费已经是“能直接拿 view 就直接拿 view；天然 asset texture 仍走 texture 自带 view”，不再把 owner-backed 输出再包回一层运行时 `Texture`。
+- 直接收益：这一步删掉的是一整块真实在运行时参与状态缓存和 descriptor 更新的 compat adapter，而不是只改 API 外形。后续继续收 resolver -> provider scene query contract 时，provider 自己已经不用再背着 `sceneCompatTexture` / `scene*CompatTexture` 这些 wrapper cache 继续存在。
+- 当前停止线：这一步没有删除 resolver 查询里仍然同时返回 `RenderImage` / `Texture` 的 scene resource contract，也没有动材质/descriptor 协议天然仍以 `Texture` 资产为输入的路径；因此它依然属于 `Phase 10` 的 adapter 删除，而不是 environment/skybox 查询模型的最终收口。
+- 对应计划：
+  - `todo.md`：`Phase 10 -> 删除剩余 compatibility adapter`
+  - `plan.md`：`Phase 10 -> 删除剩余 compatibility adapter`
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/remove-provider-compat-wrappers.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/remove-provider-compat-wrappers.png` 已生成
+- 2026-07-16：`Phase 10 / 删除剩余 compatibility adapter` 继续收掉了一层对外 compat contract：`ResourceResolveSystem` 的 skybox / environment preview API 不再把 preprocess 结果作为 `Texture*` 暴露给 editor debug consumer，而是改为直接导出 shared `IImage` + face/mip preview views。这样 debug / preview 观察面不再把 owner-backed preprocess 输出重新包装成“预览也必须先拿 compat texture”的旧协议；真正还需要 `Texture` 的 compat wrapper 继续只保留在 descriptor/provider 边界和 cylindrical source preview 这类天然 texture 语义的路径。
+- 直接收益：`Phase 10` 里“删除剩余 compatibility adapter”这项又少掉了一块明确的 consumer contract，而不是只在内部 state 上做准备。后续继续清 scene/resource query、provider snapshot 或 environment preprocess graph 归属时，不需要再把 editor preview 这条链也当成 `Texture*` 兼容面一起背着走。
+- 当前停止线：这一步没有删除 `findSceneSkyboxTextureShared()`、`EnvironmentLightingSceneResources` 这类仍服务于 scene/provider/descriptor 消费的 texture-facing 查询，也没有改 cubemap asset source 或 source preview 天然以 `Texture` 表达的路径；因此它仍然是 `Phase 10` 的一刀 adapter 删除，不是把 environment/skybox 全链 API 一次性翻掉。
+- 对应计划：
+  - `todo.md`：`Phase 10 -> 删除剩余 compatibility adapter`
+  - `plan.md`：`Phase 10 -> 删除剩余 compatibility adapter`
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/preview-image-view-contract.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/preview-image-view-contract.png` 已生成
+- 2026-07-16：`Phase 10 / 删除剩余 compatibility adapter` 这条继续往前推进了一步：owner-backed preprocess 输出已经不再通过 `ResourceResolveSystem` 的 scene/resource query 对外再携带一份 state-level compat `Texture` 真相。上一批已经先把 skybox/environment preprocess 结果从 runtime state 的长期 compat cache 里拿掉；这一步进一步让相关完成态和对外查询都更明确地站在 owner-first 语义上：对于 cylindrical preprocess、environment cubemap、irradiance、prefilter 这几类 offscreen 结果，resolver 主体只保留 `RenderImage` owner + preview views，compat wrapper 继续只留在真正需要 `Texture` 的 provider / descriptor 边界按需生成。
+- 直接收益：`Phase 10` 里“删除剩余 compatibility adapter”不再只是内部准备工作，而是已经把 preprocess 结果对外暴露语义进一步收紧成 owner-first。后续无论是继续评估 environment preprocess 属于独立 graph 还是 shared executor，还是继续清理剩余 compat surface，这条 offscreen 输出链都更接近统一资源/状态模型。
+- 当前停止线：这一步没有去动 cubemap asset source 本身天然以 `Texture` 表达的路径，也没有改 editor preview / descriptor 最终可能仍通过 compat wrapper 取 view 的事实；它只收紧了 preprocess 结果在 resolver/query 边界上的 compat 暴露，因此仍然属于 `Phase 10` 的 adapter 删除，而不是把 environment/skybox 的所有 API 一次性重写。
+- 对应计划：
+  - `todo.md`：`Phase 10 -> 删除剩余 compatibility adapter`
+  - `plan.md`：`Phase 10 -> 删除剩余 compatibility adapter`
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/remove-preprocess-state-compat-cache.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/remove-preprocess-state-compat-cache.png` 已生成
+- 2026-07-16：`Phase 10 / 删除剩余 compatibility adapter` 这条又往前挪了一刀：owner-backed preprocess 输出已经不再在 `ResourceResolveSystem` runtime state 里长期缓存 compat `Texture`。此前 skybox cylindrical preprocess、environment cubemap、irradiance、prefilter 这些 offscreen job 一旦完成，resolver 都会立刻把产出的 `RenderImage` 再 `wrapRenderImageAsTexture()` 回写进 `cubemapTexture/irradianceTexture/prefilterTexture`，让 runtime state 同时维护 owner 真相和一份 state-level compat cache。现在对于这些 preprocess 产物，resolver 只保留 `RenderImage` owner 与 preview views；旧的 compat texture 若存在则立即退休，descriptor 侧需要的 compat wrapper 继续只在 provider 边界按需生成。
+- 直接收益：这一步不只是“允许 owner-ready completion”，而是进一步把 `Phase 10` 要删除的 compatibility adapter 从 runtime state 真相里实质性拿掉一部分。后续继续评估 environment preprocess 是独立 graph 还是 shared executor 时，offscreen 结果进入 state 的语义会更接近统一资源/状态模型，而不是先落成 owner 再立刻回写一份 compat texture 缓存。
+- 当前停止线：这一步没有删除 cubemap-from-files 这类资产语义路径天然持有的 `Texture`，也没有改 editor preview / descriptor consumer 最终仍可能通过 compat wrapper 取 `IImageView` 的事实；它只删除了 preprocess 结果在 resolver state 内的长期 compat cache，因此属于 `Phase 10` 的 adapter 收缩，不是 environment 全链类型重写。
+- 对应计划：
+  - `todo.md`：`Phase 10 -> 删除剩余 compatibility adapter`
+  - `plan.md`：`Phase 10 -> 删除剩余 compatibility adapter`
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/remove-preprocess-state-compat-cache.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/remove-preprocess-state-compat-cache.png` 已生成
+- 2026-07-16：skybox / environment preprocess 完成态也开始摆脱“必须先 wrap 成 compat `Texture` 才算成功”的旧门槛了。此前 cylindrical->cubemap、environment cubemap、irradiance、prefilter 这几条 offscreen job 即便已经拿到了合法的 `RenderImage` 输出，只要最后一步 `wrapRenderImageAsTexture()` 失败，就会把整条状态机直接打回 failed；同时 environment 复用 scene skybox 时，也只会把 `cubemapTexture` 当成唯一可同步来源。现在这些分支都会把 owner-backed `RenderImage` 视为 preprocess 完成的真实结果：wrap 只作为可选 compat 缓存保留；scene skybox -> environment source 同步也直接复制 skybox state 上的 owner+texture snapshot，而不是再把 `cubemapTexture` 当成唯一入口。
+- 直接收益：runtime state 终于不再把 compat wrapper 失败等同于 preprocess 失败。这样 owner-first 主线从 offscreen job 输出进入 skybox/environment state 的这一步就更连续了；后续若继续清理 `cubemapTexture/irradianceTexture/prefilterTexture` 在 resolver state 里的长期真相地位，状态机本身已经先不再依赖 wrapper 成功与否。
+- 当前停止线：这一步没有删除 runtime state 里的 compat texture 字段，也没有改 descriptor/material consumer 最终仍可能读取 `Texture` / `IImageView` 的事实；它只是把 preprocess 完成态与 scene-skybox 同步的判断改成 owner-first，因此仍属于 resolver runtime state 收口，而不是 environment 全链类型重写。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+- 2026-07-16：scene skybox / environment descriptor 这层最后的 `Texture` compat 需求，也开始从 `ResourceResolveSystem` 运行时状态往 `RenderSharedResourceProvider` 边界收口了。此前 provider 在更新 scene skybox descriptor 与 environment lighting descriptor 时，仍把 `Texture*` 当成唯一可信输入；即便 resolver snapshot 已经同时带出 `cubemap/irradiance/prefilter` 的 `RenderImage` owner，provider 也会先把“缺 texture 但 owner 已就绪”的情况直接判成 fallback，导致 runtime state 这边很难继续向 owner-first 推进。现在 provider 会在真正写 descriptor 的最后一跳，按需把 owner-backed `RenderImage` 临时包成 compat `Texture`，并缓存这层 wrapper 只服务 descriptor update；同时 scene environment snapshot 的完成判断也改为 owner/texture 二者择一，不再只盯 `Texture*`。
+- 直接收益：`Texture::wrap()` 这层 compat 语义终于更接近“descriptor 边界的最后一跳适配”，而不是继续绑在 `ResourceResolveSystem` runtime state 的长期真相上。后续如果继续削 environment / skybox state 里的 compat texture、放宽 preprocess 完成态对 wrapper 的依赖，这一层 provider 已经先接住 owner-backed 输入，不需要再把 descriptor consumer 当成阻碍。
+- 当前停止线：这一步没有删除 resolver state 里的 `cubemapTexture/irradianceTexture/prefilterTexture`，也没有改材质/descriptor 协议最终仍以 `Texture` / `IImageView` 写入的事实；它只是把 scene skybox 与 environment lighting descriptor 的 compat 生成时机推迟到 provider 边界，因此仍属于 runtime consumer 边界收口，而不是 environment 全链类型重写。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
 - 2026-07-16：environment derived preprocess 这条输入边界也开始支持 owner-first 了。此前 `CubeMap2PBRIrradianceMap` / `CubeMap2PBRPrefilteredEnv` 和 `ResourceResolveSystem` 的 offscreen job 仍把 `Texture*` 当成唯一有效的 cubemap 输入契约；即便 runtime state 里已经有 `cubemapRenderImage` owner，irradiance/prefilter 这两条派生 job 也必须先等 compat texture 就位，才能继续执行与写 descriptor。现在两个 pipeline 的 execute context 都改为同时接受 `RenderImage* inputImage` 和 `Texture* inputTexture`，执行时优先从 owner 取 image/view，只在兼容路径上回退到 texture；`ResourceResolveSystem` 也同步允许基于 `cubemapRenderImage` 启动 irradiance/prefilter job，并用 owner 的尺寸/format 生成输出 cubemap。
 - 直接收益：environment preprocess 这条“cubemap -> irradiance/prefilter” 的真实运行路径，不再被旧的 `Texture*` 单一输入边界卡住。后续继续压 Deferred/environment replacement、shutdown 与 deferred deletion 一致性时，这两条派生 job 已经能直接跟随 runtime state 里的 owner 真相推进，而不是每次都先补一层 compat texture 才能开工。
 - 当前停止线：这一步没有删除 `EnvironmentLightingRuntimeState` 里的 compat texture，也没有改 environment descriptor set、材质采样或最终资产语义对象仍依赖 `Texture` 的事实；它只把 derived preprocess 的输入边界放宽为 owner-first，因此仍属于 environment runtime / offscreen job 边界收口，不是 environment 全链类型重写。
