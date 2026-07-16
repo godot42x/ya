@@ -42,7 +42,6 @@ struct RenderFrameExtractor
   private:
     static void extractCamera(const ExtractInput& input, RenderFrameData& out);
     static void extractLights(const ExtractInput& input, entt::registry& reg, RenderFrameData& out);
-    static void extractSkybox(Scene* scene, RenderFrameData& out);
     static int32_t registerSkinningPalette(DrawItemExtractionContext& ctx, entt::entity entity, Mesh* mesh);
     static void extractDrawItems(DrawItemExtractionContext& ctx);
     static void sortDrawItems(const glm::vec3& cameraPos, RenderFrameData& out);

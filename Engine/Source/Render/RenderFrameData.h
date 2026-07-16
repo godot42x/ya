@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Render/Core/Texture.h"
 #include "Render/Material/Material.h"
 #include "Render/Mesh.h"
 #include "Render/RenderDefines.h"
@@ -78,13 +77,6 @@ struct RenderMeshClassDrawBuckets
     }
 };
 
-/// Skybox / Environment snapshot — textures only, no descriptor sets.
-struct RenderSkyboxData
-{
-    stdptr<Texture> cubemapTexture;
-    stdptr<Texture> irradianceTexture;
-};
-
 /// All data a render pipeline needs for one frame.
 /// Built once per frame from the ECS registry, then consumed read-only by every pipeline / system.
 struct RenderFrameData
@@ -107,11 +99,6 @@ struct RenderFrameData
     std::array<FrameContext::PointLightData, MAX_POINT_LIGHTS> pointLights;
 
     // ═══════════════════════════════════════════════════════════════
-    // Skybox / Environment
-    // ═══════════════════════════════════════════════════════════════
-    RenderSkyboxData skybox;
-
-    // ═══════════════════════════════════════════════════════════════
     // Draw lists (bucketed by mesh class, then shading model)
     // ═══════════════════════════════════════════════════════════════
     RenderMeshClassDrawBuckets drawBuckets;
@@ -132,7 +119,6 @@ struct RenderFrameData
     {
         drawBuckets.clear();
         skinningPalettes.clear();
-        skybox = {};
     }
 
     /// Build a backward-compatible FrameContext for systems that haven't migrated yet.

@@ -1,7 +1,5 @@
 #include "RenderFrameExtractor.h"
 
-#include "ECS/Component/3D/EnvironmentLightingComponent.h"
-#include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/DirectionalLightComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
@@ -12,7 +10,6 @@
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/SkeletonAnimatorComponent.h"
 #include "ECS/Component/TransformComponent.h"
-#include "ECS/System/ResourceResolveSystem.h"
 #include "Scene/Scene.h"
 
 #include <algorithm>
@@ -93,7 +90,6 @@ void RenderFrameExtractor::extract(const ExtractInput& input, RenderFrameData& o
 
     extractCamera(input, outFrame);
     extractLights(input, reg, outFrame);
-    extractSkybox(input.scene, outFrame);
     auto drawCtx = DrawItemExtractionContext{
         .registry  = &reg,
         .frameData = &outFrame,
@@ -180,17 +176,6 @@ void RenderFrameExtractor::extractLights(const ExtractInput& input, entt::regist
 
     // Keep point-light order stable across camera motion so the shadow budget does not flicker
     // between different lights while the editor camera moves.
-}
-
-void RenderFrameExtractor::extractSkybox(Scene* scene, RenderFrameData& out)
-{
-    auto* resolver = App::get()->getResourceResolveSystem();
-    if (!resolver) {
-        return;
-    }
-
-    out.skybox.cubemapTexture    = resolver->findSceneSkyboxTextureShared(scene);
-    out.skybox.irradianceTexture = resolver->findSceneEnvironmentIrradianceTextureShared(scene);
 }
 
 int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext& ctx,

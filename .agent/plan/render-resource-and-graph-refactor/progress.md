@@ -23,6 +23,14 @@
 
 ## 最新验证
 
+- 2026-07-16：`RenderFrameExtractor` / `RenderFrameData` 上一条只写不读的 skybox/environment compat 快照出口已删除。此前 extractor 每帧仍会把 scene skybox cubemap 与 environment irradiance 填进 `RenderFrameData::skybox`，但全仓搜索确认这份 snapshot 没有任何真实 consumer；真正的 Deferred / Forward skybox 消费都已经走各自 runtime/provider/descriptor 链。现在 `RenderSkyboxData`、`RenderFrameData::skybox` 与 `RenderFrameExtractor::extractSkybox()` 一起移除，extractor 也顺带不再为了这条死出口依赖 `ResourceResolveSystem`。
+- 直接收益：这批不是“继续给旧 compat 面补 owner 语义”，而是直接删掉一个已经没有消费方的旧数据面。这样后续继续收 environment/skybox compat 时，注意力会更集中在真实 runtime consumer，而不是被 `RenderFrameData` 上一个看起来还活着、实际上没人读的旧出口分散掉。
+- 当前停止线：这一步没有改 Forward/Deferred 的 skybox descriptor 或 environment 绑定主链；也没有去动真正仍在运行时使用的 preview/provider/query 路径。它只删除确认无下游的 frame snapshot compat 数据，因此属于低风险清理，而不是新一轮环境资源协议迁移。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/render-frame-extractor-no-skybox-snapshot.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/render-frame-extractor-no-skybox-snapshot.png` 已生成
+
 - 2026-07-16：Deferred light pass 导入 environment cubemap / irradiance / prefilter 时，开始优先使用 `RenderImage` owner，而不再默认绕回 compat `Texture`。这次在 `ResourceResolveSystem` 补上了 scene skybox / environment render-image shared query，`RenderSharedResourceProvider::EnvironmentLightingTextureSet` 也同时携带 render-image owner 与 texture snapshot；Deferred 主图导入 `DeferredLight.Environment.Cubemap/Irradiance/Prefilter` 时，若 owner 已存在就直接按 `RenderImage` import，只在资产 fallback / descriptor 兼容路径上继续保留 `Texture`。
 - 直接收益：main render path 不再把 preprocess/runtime state 中已经明确的 owner 真相重新降级成 compat texture 再导入 graph。这样 environment lighting 这条链从 runtime state -> provider snapshot -> Deferred graph import 的 owner 语义终于连成一条线，后续继续清剩余 compatibility adapter 时，不需要再先分辨“当前 light pass 拿到的是 owner 还是 wrapper”。
 - 当前停止线：这一步只收了 Deferred graph import 的资源导入边界，没有改 descriptor set、材质采样或 asset-only fallback 仍然依赖 `Texture` 的协议；也没有扩大到 Forward 或更高层环境资源消费面。下一步仍应该继续沿 environment/skybox 的 shared query 与 runtime consumer 清 compat，而不是现在就强推材质/descriptor 全链切类型。
