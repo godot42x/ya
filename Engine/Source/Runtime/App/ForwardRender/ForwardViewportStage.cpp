@@ -217,10 +217,13 @@ ForwardViewportStage::PassContext ForwardViewportStage::buildPassContext(const R
     PassContext::SkyboxInput skybox{};
     PassContext::DebugDrawInput debugDraw{};
 
+    if (activeScene && _getSceneSkyboxDescriptorSet) {
+        skybox.descriptorSet = _getSceneSkyboxDescriptorSet(activeScene);
+    }
+
     if (activeScene && resourceResolveSystem && _getSceneSkyboxDescriptorSet) {
         const auto* skyboxState = resourceResolveSystem->findFirstSceneSkyboxState(activeScene);
         if (skyboxState && skyboxState->hasRenderableCubemap()) {
-            skybox.descriptorSet = _getSceneSkyboxDescriptorSet(activeScene);
             skybox.mesh          = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
             for (const auto& [entity, sc, mc] : activeScene->getRegistry().view<SkyboxComponent, StaticMeshComponent>().each()) {
                 if (mc.isResolved() && mc.getMesh()) {

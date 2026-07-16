@@ -11,6 +11,7 @@
 
 #include "Runtime/App/AppState.h"
 #include "Runtime/App/Lifecycle/AppAutomation.h"
+#include "Runtime/App/Common/PostProcessingState.h"
 #include "Runtime/App/RenderRuntime.h"
 
 #include "Render/RenderFrameData.h"
@@ -110,6 +111,19 @@ struct AppAutomationPipelineSwitch
     uint64_t                  frameIndex = 1;
 };
 
+struct AppAutomationDeferredOverrides
+{
+    std::optional<bool> ssaoEnabled;
+};
+
+struct AppAutomationPostProcessOverrides
+{
+    std::optional<bool>                                 enabled;
+    std::optional<bool>                                 bloomEnabled;
+    std::optional<bool>                                 toneMappingEnabled;
+    std::optional<PostProcessingState::EToneMappingCurve> toneMappingCurve;
+};
+
 struct AppProfilingOptions
 {
     bool                       bCpuProfileEnabled            = !profiling::isCompiledOut();
@@ -140,6 +154,8 @@ struct AppAutomationOptions
     std::optional<logcc::LogLevel::T> logLevel;
     std::optional<logcc::LogLevel::T> logDetailLevel;
     AppAutomationShadowOverrides shadow;
+    AppAutomationDeferredOverrides deferred;
+    AppAutomationPostProcessOverrides postprocess;
 };
 
 inline bool tryParseAutomationScreenshotTarget(const std::string& text, EAutomationScreenshotTarget& outValue)
@@ -171,6 +187,23 @@ inline bool tryParseAutomationRenderPipeline(const std::string& text, EAutomatio
     }
     if (normalized == "deferred") {
         outValue = EAutomationRenderPipeline::Deferred;
+        return true;
+    }
+    return false;
+}
+
+inline bool tryParseAutomationToneMappingCurve(const std::string& text, PostProcessingState::EToneMappingCurve& outValue)
+{
+    std::string normalized = text;
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch)
+                   { return static_cast<char>(std::tolower(ch)); });
+
+    if (normalized == "aces") {
+        outValue = PostProcessingState::EToneMappingCurve::ACES;
+        return true;
+    }
+    if (normalized == "uncharted2" || normalized == "uncharted") {
+        outValue = PostProcessingState::EToneMappingCurve::Uncharted2;
         return true;
     }
     return false;

@@ -1,0 +1,16 @@
+{
+  "smoke": {
+    "log": {
+      "level": "warn",
+      "detailLevel": "error"
+    },
+    "renderPipeline": {
+      "target": "forward",
+      "frame": 1
+    }
+  },
+  "screenshot": {
+    "target": "editor",
+    "frame": 1500
+  }
+}

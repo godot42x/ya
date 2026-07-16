@@ -213,6 +213,11 @@ void ForwardViewportAuxPasses::initSkybox(const InitDesc& desc)
 
 void ForwardViewportAuxPasses::initDebug(const InitDesc& desc)
 {
+    if (!_render->supportsGeometryShader()) {
+        _debugMode = DebugNone;
+        return;
+    }
+
     _debugDSL = IDescriptorSetLayout::create(_render,
                                              DescriptorSetLayoutDesc{
                                                  .label    = "FwdDebug_DSL",
@@ -375,7 +380,7 @@ void ForwardViewportAuxPasses::drawDirectionOverlay(const DrawContext& drawCtx)
 
 void ForwardViewportAuxPasses::drawDebug(const DrawContext& drawCtx)
 {
-    if (_debugMode == DebugNone || !drawCtx.debugDraw.bHasDraws) return;
+    if (_debugMode == DebugNone || !_debugPipeline || !_debugUboBuffer || !drawCtx.debugDraw.bHasDraws) return;
 
     const auto& ctx = drawCtx.stageCtx;
     auto*       cmdBuf = ctx.cmdBuf;
@@ -427,6 +432,11 @@ void ForwardViewportAuxPasses::renderSettingsGUI()
 
 void ForwardViewportAuxPasses::renderDebugGUI()
 {
+    if (!_debugPipeline) {
+        ImGui::TextUnformatted("Debug geometry pipeline is unavailable on this backend/device.");
+        return;
+    }
+
     const char* modeNames[] = {"None", "NormalColor", "NormalDir", "Depth", "UV"};
     int         mode        = static_cast<int>(_debugMode);
     if (ImGui::Combo("Mode", &mode, modeNames, IM_ARRAYSIZE(modeNames))) {
@@ -458,7 +468,12 @@ void ForwardViewportAuxPasses::renderGUIPipelines()
         ImGui::TreePop();
     }
     if (ImGui::TreeNode("Debug Pipeline")) {
-        _debugPipeline->renderGUI();
+        if (_debugPipeline) {
+            _debugPipeline->renderGUI();
+        }
+        else {
+            ImGui::TextUnformatted("Unavailable on this backend/device.");
+        }
         ImGui::TreePop();
     }
 }

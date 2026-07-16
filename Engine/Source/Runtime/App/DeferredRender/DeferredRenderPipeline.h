@@ -188,6 +188,13 @@ struct DeferredRenderPipeline : public IRenderPipeline
     std::shared_ptr<RenderImage> getBloomExtractImageShared() const { return _postProcessStage.getBloomExtractImageShared(); }
     std::shared_ptr<RenderImage> getBloomBlurImageShared() const { return _postProcessStage.getBloomBlurImageShared(); }
     std::shared_ptr<RenderImage> getBloomCompositeImageShared() const { return _postProcessStage.getBloomCompositeImageShared(); }
+    void setSSAOEnabled(bool enabled)
+    {
+        _bEnableSSAO = enabled;
+        if (_lightStage) {
+            _lightStage->setSSAOTexture(_bEnableSSAO ? _currentSSAOOutput : std::shared_ptr<RenderImage>{});
+        }
+    }
     DeferredPipelineDebugViews buildDebugViews() const;
     void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const override;
     bool setRenderTargetDepthFormat(RenderTargetEditorCatalog::Entry::EOwner owner, EFormat::T format) override;

@@ -1,0 +1,19 @@
+{
+  "smoke": {
+    "deferred": {
+      "ssao": {
+        "enabled": true
+      }
+    },
+    "postprocess": {
+      "enabled": true,
+      "bloom": {
+        "enabled": true
+      },
+      "toneMapping": {
+        "enabled": true,
+        "curve": "uncharted2"
+      }
+    }
+  }
+}

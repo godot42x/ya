@@ -198,6 +198,42 @@ void loadPipelineSwitchAutomationOverrides(AppDesc& appDesc)
     appDesc.automation.pipelineSwitch = pipelineSwitch;
 }
 
+void loadPostprocessAutomationOverrides(AppDesc& appDesc)
+{
+    auto& configManager = ConfigManager::get();
+    if (!configManager.hasDocument(AUTOMATION_CONFIG_DOC_NAME)) {
+        return;
+    }
+
+    if (bool ssaoEnabled = false;
+        configManager.tryGet<bool>(AUTOMATION_CONFIG_DOC_NAME, "smoke.deferred.ssao.enabled", ssaoEnabled)) {
+        appDesc.automation.deferred.ssaoEnabled = ssaoEnabled;
+    }
+    if (bool postprocessEnabled = false;
+        configManager.tryGet<bool>(AUTOMATION_CONFIG_DOC_NAME, "smoke.postprocess.enabled", postprocessEnabled)) {
+        appDesc.automation.postprocess.enabled = postprocessEnabled;
+    }
+    if (bool bloomEnabled = false;
+        configManager.tryGet<bool>(AUTOMATION_CONFIG_DOC_NAME, "smoke.postprocess.bloom.enabled", bloomEnabled)) {
+        appDesc.automation.postprocess.bloomEnabled = bloomEnabled;
+    }
+    if (bool toneMappingEnabled = false;
+        configManager.tryGet<bool>(AUTOMATION_CONFIG_DOC_NAME, "smoke.postprocess.toneMapping.enabled", toneMappingEnabled)) {
+        appDesc.automation.postprocess.toneMappingEnabled = toneMappingEnabled;
+    }
+
+    if (std::string curveText;
+        configManager.tryGet<std::string>(AUTOMATION_CONFIG_DOC_NAME, "smoke.postprocess.toneMapping.curve", curveText) && !curveText.empty()) {
+        PostProcessingState::EToneMappingCurve curve = PostProcessingState::EToneMappingCurve::ACES;
+        if (tryParseAutomationToneMappingCurve(curveText, curve)) {
+            appDesc.automation.postprocess.toneMappingCurve = curve;
+        }
+        else {
+            YA_CORE_WARN("Ignoring invalid automation tone mapping curve override: {}", curveText);
+        }
+    }
+}
+
 bool hasScreenshotAutomation(const AppAutomationOptions& automation)
 {
     return automation.screenshotPath && !automation.screenshotPath->empty();
@@ -421,6 +457,22 @@ bool hasFrameAutomationConfig(const AppAutomationOptions& automation)
            hasRenderDocAutomation(automation);
 }
 
+void applyPostprocessAutomationOverrides(PostProcessingStage& stage, const AppAutomationPostProcessOverrides& overrides)
+{
+    if (overrides.enabled.has_value()) {
+        stage.setEnabled(*overrides.enabled);
+    }
+    if (overrides.bloomEnabled.has_value()) {
+        stage.setBloomEnabled(*overrides.bloomEnabled);
+    }
+    if (overrides.toneMappingEnabled.has_value()) {
+        stage.setToneMappingEnabled(*overrides.toneMappingEnabled);
+    }
+    if (overrides.toneMappingCurve.has_value()) {
+        stage.setToneMappingCurve(*overrides.toneMappingCurve);
+    }
+}
+
 RenderRuntime::ERenderPipeline toRuntimeRenderPipeline(EAutomationRenderPipeline pipeline)
 {
     switch (pipeline) {
@@ -520,6 +572,7 @@ void AppAutomation::applyStartupOverrides(AppDesc& appDesc)
     loadSmokeLogAutomationOverrides(appDesc);
     loadViewportResizeAutomationOverrides(appDesc);
     loadPipelineSwitchAutomationOverrides(appDesc);
+    loadPostprocessAutomationOverrides(appDesc);
     shadow_settings::loadAutomationOverridesFromConfig(appDesc.automation.shadow);
     if (appDesc.automation.renderDocCapture) {
         appDesc.bEnableRenderDoc = true;
@@ -553,6 +606,22 @@ void AppAutomation::applyLogOverrides(const AppDesc& appDesc)
 void AppAutomation::applyRuntimeOverrides(App& app)
 {
     shadow_settings::applyAutomationOverrides(app.getDesc().automation.shadow, app.getShadowSettings());
+
+    auto* renderRuntime = app.getRenderRuntime();
+    if (!renderRuntime) {
+        return;
+    }
+
+    const auto& automation = app.getDesc().automation;
+    if (renderRuntime->_forwardPipeline) {
+        applyPostprocessAutomationOverrides(renderRuntime->_forwardPipeline->_postProcessStage, automation.postprocess);
+    }
+    if (renderRuntime->_deferredPipeline) {
+        if (automation.deferred.ssaoEnabled.has_value()) {
+            renderRuntime->_deferredPipeline->setSSAOEnabled(*automation.deferred.ssaoEnabled);
+        }
+        applyPostprocessAutomationOverrides(renderRuntime->_deferredPipeline->_postProcessStage, automation.postprocess);
+    }
 }
 
 void AppAutomation::recordPresentationCapture(uint64_t frameIndex,

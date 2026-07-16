@@ -163,7 +163,7 @@ void ForwardViewportUnlitPass::initUnlit(const InitDesc& desc)
     };
     _unlitSkinned.pipelineCI.shaderDesc.vertexAttributes = kUnlitVertexAttributes3;
     _unlitSkinned.pipelineCI.shaderDesc.vertexAttributes.insert(_unlitSkinned.pipelineCI.shaderDesc.vertexAttributes.end(), kUnlitSkinningVertexAttributes.begin(), kUnlitSkinningVertexAttributes.end());
-    _unlitSkinned.pipelineCI.shaderDesc.defines = {"ENABLE_SKINNING 1", "SKINNING_SET_INDEX 5"};
+    _unlitSkinned.pipelineCI.shaderDesc.defines = {"ENABLE_SKINNING 1", "SKINNING_SET_INDEX 3"};
     _unlitSkinned.pipeline = IGraphicsPipeline::create(_render);
     _unlitSkinned.pipeline->recreate(_unlitSkinned.pipelineCI);
 

@@ -215,6 +215,9 @@ void AppLifecycle::init(App& app, AppDesc ci)
         .app     = &app,
         .appDesc = &app._ci,
     });
+    if (ConfigManager::get().hasDocument("automation")) {
+        AppAutomation::applyRuntimeOverrides(app);
+    }
     if (auto* render = app.getRender()) {
         int winW = 0, winH = 0;
         render->getWindowSize(winW, winH);

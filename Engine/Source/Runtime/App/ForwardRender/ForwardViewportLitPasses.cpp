@@ -264,6 +264,7 @@ void ForwardViewportLitPasses::initPBR(const InitDesc& desc)
     _pbrSkinned.pipelineCI.shaderDesc.vertexAttributes = kLitVertexAttributes4;
     _pbrSkinned.pipelineCI.shaderDesc.vertexAttributes.insert(_pbrSkinned.pipelineCI.shaderDesc.vertexAttributes.end(), kLitSkinningVertexAttributes.begin(), kLitSkinningVertexAttributes.end());
     _pbrSkinned.pipelineCI.shaderDesc.defines.push_back("ENABLE_SKINNING 1");
+    _pbrSkinned.pipelineCI.shaderDesc.defines.push_back("SKINNING_SET_INDEX 5");
     _pbrSkinned.pipeline = IGraphicsPipeline::create(_render);
     _pbrSkinned.pipeline->recreate(_pbrSkinned.pipelineCI);
 
@@ -404,6 +405,7 @@ void ForwardViewportLitPasses::initPhong(const InitDesc& desc)
     _phongSkinned.pipelineCI.shaderDesc.vertexAttributes = kLitVertexAttributes4;
     _phongSkinned.pipelineCI.shaderDesc.vertexAttributes.insert(_phongSkinned.pipelineCI.shaderDesc.vertexAttributes.end(), kLitSkinningVertexAttributes.begin(), kLitSkinningVertexAttributes.end());
     _phongSkinned.pipelineCI.shaderDesc.defines.push_back("ENABLE_SKINNING 1");
+    _phongSkinned.pipelineCI.shaderDesc.defines.push_back("SKINNING_SET_INDEX 5");
     _phongSkinned.pipeline = IGraphicsPipeline::create(_render);
     _phongSkinned.pipeline->recreate(_phongSkinned.pipelineCI);
 

@@ -25,7 +25,6 @@ layout(set =0, binding =0, std140) uniform FrameUBO {
 //every draw call once (3d mesh with material)
 layout(push_constant) uniform PushConstants {
     mat4 modelMat;
-    mat3 normalMat;
     int skinningPaletteIndex;
 } pc;
 

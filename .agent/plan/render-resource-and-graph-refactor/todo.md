@@ -32,15 +32,15 @@
 - [x] 回退当前 `DeferredRenderPipeline::applyExternalGBufferMutation()` / `applyExternalViewportMutation()` 纯提取改动
 - [x] 确认工作区没有其他仅格式化或无行为价值的残留修改
 - [x] 记录当前 Vulkan validation 基线（见 `baseline.md`）
-- [ ] 记录 Forward 默认场景截图基线
-- [ ] 记录 Deferred 默认场景截图基线
+- [x] 记录 Forward 默认场景截图基线
+- [x] 记录 Deferred 默认场景截图基线
 - [x] 建立固定帧数运行入口（`--exit-after-frame=120`）
 - [x] 修复 `--automation-config=<path>` 被解析但未生效的问题
 - [x] 运行 `AppAutomationConfigTest`
 - [x] 建立 viewport resize 冒烟入口
 - [x] 建立 shadow 开关/分辨率冒烟入口
 - [x] 建立低噪音 smoke 日志入口（`--log-level` / `--log-detail-level` 与 `smoke.log.*`）
-- [ ] 建立 SSAO、bloom、postprocess、ACES 冒烟入口
+- [x] 建立 SSAO、bloom、postprocess、ACES 冒烟入口
 - [x] 建立 Forward/Deferred switch 冒烟入口
 - [x] 将 submit-time 生命周期 / non-owning view 规则沉淀到 `AGENTS.md`、`cpp-style`、`debug-review`
 

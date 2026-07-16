@@ -204,5 +204,42 @@ TEST_F(AppAutomationConfigTest, LoadConfigReadsShadowResolutionAutomationOverrid
     EXPECT_EQ(*appDesc.automation.shadow.resolution, 3072u);
 }
 
+TEST_F(AppAutomationConfigTest, LoadConfigReadsDeferredSsaoAndPostprocessAutomationOverrides)
+{
+    writeAutomationConfig(DEFAULT_AUTOMATION_CONFIG_PATH,
+                          R"({
+  "smoke": {
+    "deferred": {
+      "ssao": { "enabled": false }
+    },
+    "postprocess": {
+      "enabled": true,
+      "bloom": { "enabled": true },
+      "toneMapping": { "enabled": true, "curve": "uncharted2" }
+    }
+  }
+})");
+
+    AppDesc appDesc;
+
+    AppAutomation::loadConfig(appDesc);
+    AppAutomation::applyStartupOverrides(appDesc);
+
+    ASSERT_TRUE(appDesc.automation.deferred.ssaoEnabled.has_value());
+    EXPECT_FALSE(*appDesc.automation.deferred.ssaoEnabled);
+
+    ASSERT_TRUE(appDesc.automation.postprocess.enabled.has_value());
+    EXPECT_TRUE(*appDesc.automation.postprocess.enabled);
+
+    ASSERT_TRUE(appDesc.automation.postprocess.bloomEnabled.has_value());
+    EXPECT_TRUE(*appDesc.automation.postprocess.bloomEnabled);
+
+    ASSERT_TRUE(appDesc.automation.postprocess.toneMappingEnabled.has_value());
+    EXPECT_TRUE(*appDesc.automation.postprocess.toneMappingEnabled);
+
+    ASSERT_TRUE(appDesc.automation.postprocess.toneMappingCurve.has_value());
+    EXPECT_EQ(*appDesc.automation.postprocess.toneMappingCurve, PostProcessingState::EToneMappingCurve::Uncharted2);
+}
+
 } // namespace
 } // namespace ya

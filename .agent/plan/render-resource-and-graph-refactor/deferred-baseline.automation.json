@@ -1,0 +1,12 @@
+{
+  "smoke": {
+    "log": {
+      "level": "warn",
+      "detailLevel": "error"
+    }
+  },
+  "screenshot": {
+    "target": "editor",
+    "frame": 1500
+  }
+}
