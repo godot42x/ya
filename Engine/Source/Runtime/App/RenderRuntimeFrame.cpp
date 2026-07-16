@@ -59,11 +59,6 @@ bool RenderRuntime::beginFrameCommandBuffer(int32_t& imageIndex, std::shared_ptr
         return false;
     }
 
-    {
-        YA_PERF_SCOPE(perf::sample::renderWaitIdle(), perf::metric::cpuTimeMs(), perf::domain::render());
-        _render->waitIdle();
-    }
-
     imageIndex = -1;
     {
         YA_PERF_SCOPE(perf::sample::renderBegin(), perf::metric::cpuTimeMs(), perf::domain::render());

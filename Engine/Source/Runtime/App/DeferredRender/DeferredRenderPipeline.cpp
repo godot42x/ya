@@ -623,8 +623,6 @@ void DeferredRenderPipeline::init(const InitDesc& desc)
 
     initPipelineState(desc);
     initStages();
-
-    _render->waitIdle();
 }
 
 void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)

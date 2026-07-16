@@ -254,7 +254,6 @@ void RenderRuntime::initCommandResources()
 void RenderRuntime::initFrameServices()
 {
     ImGuiManager::get().init(_render, nullptr);
-    _render->waitIdle();
 
     DeferredDeletionQueue::get().init(/*framesInFlight=*/1);
 }

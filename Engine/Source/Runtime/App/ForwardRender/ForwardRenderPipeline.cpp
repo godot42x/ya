@@ -217,8 +217,6 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
     initPostProcessResources(desc);
     initShadowResources();
     initStageResources();
-
-    _render->waitIdle();
 }
 
 void ForwardRenderPipeline::initViewportResources(const InitDesc& desc)
@@ -278,7 +276,6 @@ void ForwardRenderPipeline::initShadowResources()
     _deleter.push("ShadowSampler", [this](void*)
                   { _shadowResources.sampler.reset(); });
 
-    _render->waitIdle();
     rebuildShadowViews();
 
     _deleter.push("Shadow ImageViews", [this](void*)
