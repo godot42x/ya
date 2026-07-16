@@ -445,7 +445,9 @@ void ForwardRenderPipeline::applyPendingResourceRefreshes()
     }
 
     if (hasPendingResourceRefresh(EForwardPendingResourceRefresh::ShadowResources) && _render) {
-        _render->waitIdle();
+        if (_shadowResources.depthImage) {
+            _render->waitIdle();
+        }
         _shadowResources.destroy();
         if (currentShadowSettings().isEnabled()) {
             initShadowResources();

@@ -581,7 +581,9 @@ void DeferredRenderPipeline::applyPendingResourceRefreshes()
 
     if (hasPendingResourceRefresh(EDeferredPendingResourceRefresh::ShadowResources) && _render) {
         const auto shadowSettings = currentShadowSettings();
-        _render->waitIdle();
+        if (_shadowResources.depthImage) {
+            _render->waitIdle();
+        }
 
         destroyShadowResources();
 
