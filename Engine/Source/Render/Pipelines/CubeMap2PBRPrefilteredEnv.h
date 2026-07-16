@@ -65,7 +65,8 @@ struct CubeMap2PBRPrefilteredEnv
     struct ExecuteContext
     {
         ICommandBuffer* cmdBuf     = nullptr;
-        Texture*        input      = nullptr;
+        RenderImage*    inputImage = nullptr;
+        Texture*        inputTexture = nullptr;
         RenderImage*    output     = nullptr;
         ClearValue      clearColor = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);
     };

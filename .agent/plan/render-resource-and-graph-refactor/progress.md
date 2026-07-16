@@ -18,11 +18,28 @@
 ## 下一步
 
 1. 继续压实 graph registry replacement / shutdown / deferred deletion 一致性，重点转向 Deferred/environment replacement，而不是已收口的 presentation imported contract
-2. 在外围验证链可信之后，再推进 Forward graph 和剩余 compatibility adapter 清理
+2. 在外围验证链可信之后，再推进 Forward graph 和剩余 compatibility adapter 清理；其中 `删除 Forward dirty render target refresh` 目前不要按“空 compat 清理”思路硬切，因为现状调查显示它仍真实承担 viewport resize、RT Editor 格式修改、shadow 资源重建后的 stage pipeline format 刷新与 owner 重建
 3. 若 replacement/ownership 信号继续稳定，再回头评估 environment preprocess 是独立 graph 还是 shared executor
 
 ## 最新验证
 
+- 2026-07-16：environment derived preprocess 这条输入边界也开始支持 owner-first 了。此前 `CubeMap2PBRIrradianceMap` / `CubeMap2PBRPrefilteredEnv` 和 `ResourceResolveSystem` 的 offscreen job 仍把 `Texture*` 当成唯一有效的 cubemap 输入契约；即便 runtime state 里已经有 `cubemapRenderImage` owner，irradiance/prefilter 这两条派生 job 也必须先等 compat texture 就位，才能继续执行与写 descriptor。现在两个 pipeline 的 execute context 都改为同时接受 `RenderImage* inputImage` 和 `Texture* inputTexture`，执行时优先从 owner 取 image/view，只在兼容路径上回退到 texture；`ResourceResolveSystem` 也同步允许基于 `cubemapRenderImage` 启动 irradiance/prefilter job，并用 owner 的尺寸/format 生成输出 cubemap。
+- 直接收益：environment preprocess 这条“cubemap -> irradiance/prefilter” 的真实运行路径，不再被旧的 `Texture*` 单一输入边界卡住。后续继续压 Deferred/environment replacement、shutdown 与 deferred deletion 一致性时，这两条派生 job 已经能直接跟随 runtime state 里的 owner 真相推进，而不是每次都先补一层 compat texture 才能开工。
+- 当前停止线：这一步没有删除 `EnvironmentLightingRuntimeState` 里的 compat texture，也没有改 environment descriptor set、材质采样或最终资产语义对象仍依赖 `Texture` 的事实；它只把 derived preprocess 的输入边界放宽为 owner-first，因此仍属于 environment runtime / offscreen job 边界收口，不是 environment 全链类型重写。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/environment-derived-owner-first.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/environment-derived-owner-first.png` 已生成
+- 2026-07-16：scene environment 这条 owner-first 查询也开始从分散 helper 收成单一 snapshot 了。此前 `RenderSharedResourceProvider::resolveSceneEnvironmentLightingTextures()` 每次都要分别向 `ResourceResolveSystem` 取 cubemap / irradiance / prefilter 的 render-image 与 texture 六个 scene query；这些 helper 内部各自再重复遍历 scene/environment state、重复处理 `usesSceneSkybox()` fallback，provider 再把它们二次组装成 `EnvironmentLightingTextureSet`。现在 `ResourceResolveSystem` 直接提供一份 `EnvironmentLightingSceneResources` snapshot，把 scene skybox fallback、ready-state 判定与 cubemap/irradiance/prefilter owner truth 一次性收好；provider 只负责在此基础上补 fallback texture 与 BRDF LUT。
+- 直接收益：Deferred / environment 这条链在 resolver -> provider 边界少了一层“同一个 scene state 被拆成六个 query 再重新拼回去”的分叉。后续继续压 replacement / shutdown / deferred deletion 一致性时，scene environment 资源选择逻辑会更集中，不容易再出现 owner / texture fallback 在不同 helper 里各自漂移。
+- 当前停止线：这一步没有改 Deferred light pass 的 graph import 协议，也没有删除 environment descriptor set 最终仍需 `Texture` / `ImageView` 的事实；它只是把 scene environment 资源查询收口成单一 owner-first snapshot，属于 provider/resolver 边界的整理，而不是 environment 全链类型重写。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/environment-scene-resource-snapshot.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/environment-scene-resource-snapshot.png` 已生成
+- 2026-07-16：对 `todo.md` 里剩下的 `删除 Forward dirty render target refresh` 做了代码现实复核，结论是它当前还不是一个值得直接开做的独立小切片。`ForwardRenderPipeline` 里 `_pendingResourceRefreshMask` / `requestViewportResize()` / `applyPendingResourceRefreshes()` 仍真实驱动三类活跃路径：其一是 viewport resize 后通过 `_viewportRTSpec.extent -> recreateViewportResources()` 重建 attachment owner；其二是 RT Editor 的 `setRenderTargetColorFormat()` 触发 attachment format 变更，再向 `_viewportStage->refreshPipelineFormats()` 级联到 PBR/Phong/Unlit/Aux 多套 Forward pipeline；其三是 shadow 资源刷新时还会同步重建 depth image、descriptor 与 stage shadow state。也就是说，这条“dirty refresh” 现在仍是 Forward 非-graph 主链的真实 orchestration，而不是上一批那种已无 consumer 的 compat 外壳。
+- 直接收益：这次调查避免了把一个仍在承担主链职责的运行时刷新协议，误当作低风险 dead code 清理去硬删。接下来排优先级时，Forward 这项应视为“需要伴随 Forward graph / resource replacement 编排一起收”的工作，而不是继续在当前 owner-aware 清理序列里零敲碎打。
+- 当前停止线：这一步只更新了计划和优先级判断，没有改动 `ForwardRenderPipeline` 的刷新实现，也没有在本批里尝试拆掉 `_pendingResourceRefreshMask`、`waitIdle()` 或 stage format refresh；下一优先级因此仍回到 Deferred / environment replacement、shutdown 与 deferred deletion 一致性。
 - 2026-07-16：Forward viewport 这组 legacy attachment adapter 也已经收掉了。此前 `ForwardViewportResources` 虽然主链早已以 `colorOwner/depthOwner/resolveOwner` 和对应 `RenderImage*` snapshot 驱动 viewport pass、postprocess 输入、editor/runtime debug 与 screenshot，但仍额外为每个 attachment 构造 `Texture::wrap()` compat 壳，并把 `color/depth/resolve` raw `Texture*` 一起挂在 snapshot 上。全仓复核后确认这组三份 compat texture 已没有任何真实 consumer；现在 `ForwardViewportResources` 只保留 attachment owner 与 raw `RenderImage*` snapshot，`buildForwardViewportResources()` 也不再为 color/depth/resolve 生成 compat wrapper。
 - 直接收益：Forward viewport 终于和 Deferred 最近几批一样，把“当前帧 attachment 真相”进一步收口回 owner/image snapshot，而不是继续维护一套没人读的 `Texture` facade。这直接对应 `todo.md` 里的 `删除 ForwardViewport legacy attachment adapter`，后续继续推进 Forward graph 时，不需要再先判断这些 compat texture 是否还承担隐性 consumer。
 - 当前停止线：这一步只删除确认无 consumer 的 Forward viewport compat attachment adapter，没有改 `ForwardRenderPipeline` 当前仍保留的 `waitIdle() + recreateViewportResources()` 刷新策略，也没有提前把 Forward pass 迁进 RenderGraph；因此它是一个 owner/adapter 清理批次，不是 Forward 主链迁移。

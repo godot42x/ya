@@ -120,6 +120,16 @@ struct EnvironmentLightingPreviewInfo
     bool                                    bHasPrefilterMap      = false;
 };
 
+struct EnvironmentLightingSceneResources
+{
+    std::shared_ptr<RenderImage> cubemapRenderImage    = nullptr;
+    stdptr<Texture>              cubemapTexture        = nullptr;
+    std::shared_ptr<RenderImage> irradianceRenderImage = nullptr;
+    stdptr<Texture>              irradianceTexture     = nullptr;
+    std::shared_ptr<RenderImage> prefilterRenderImage  = nullptr;
+    stdptr<Texture>              prefilterTexture      = nullptr;
+};
+
 
 struct ResourceResolveSystem : public ISystem
 {
@@ -165,12 +175,7 @@ struct ResourceResolveSystem : public ISystem
     [[nodiscard]] const EnvironmentLightingRuntimeState* findFirstSceneEnvironmentLightingState(Scene* scene) const;
     [[nodiscard]] std::shared_ptr<RenderImage> findSceneSkyboxRenderImageShared(Scene* scene) const;
     [[nodiscard]] stdptr<Texture> findSceneSkyboxTextureShared(Scene* scene) const;
-    [[nodiscard]] std::shared_ptr<RenderImage> findSceneEnvironmentCubemapRenderImageShared(Scene* scene) const;
-    [[nodiscard]] stdptr<Texture> findSceneEnvironmentCubemapTextureShared(Scene* scene) const;
-    [[nodiscard]] std::shared_ptr<RenderImage> findSceneEnvironmentIrradianceRenderImageShared(Scene* scene) const;
-    [[nodiscard]] stdptr<Texture> findSceneEnvironmentIrradianceTextureShared(Scene* scene) const;
-    [[nodiscard]] std::shared_ptr<RenderImage> findSceneEnvironmentPrefilterRenderImageShared(Scene* scene) const;
-    [[nodiscard]] stdptr<Texture> findSceneEnvironmentPrefilterTextureShared(Scene* scene) const;
+    [[nodiscard]] EnvironmentLightingSceneResources resolveSceneEnvironmentLightingResources(Scene* scene) const;
 
     // ── Read-only preview queries (Editor / debug) ────────────────────
     [[nodiscard]] SkyboxPreviewInfo              getSkyboxPreview(entt::entity entity) const;

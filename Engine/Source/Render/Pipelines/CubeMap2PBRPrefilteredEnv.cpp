@@ -193,11 +193,14 @@ bool CubeMap2PBRPrefilteredEnv::ensurePipeline(EFormat::T colorFormat)
 CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(const ExecuteContext& ctx)
 {
     ExecuteResult result{};
-    if (!_render || !ctx.cmdBuf || !ctx.input || !ctx.output) {
+    if (!_render || !ctx.cmdBuf || (!ctx.inputImage && !ctx.inputTexture) || !ctx.output) {
         return result;
     }
 
-    YA_CORE_ASSERT(ctx.input->getImageView(), "CubeMap2PBRPrefilterEnv input texture must have a valid image view");
+    auto* const inputImage = ctx.inputImage ? ctx.inputImage->getImage() : (ctx.inputTexture ? ctx.inputTexture->getImage() : nullptr);
+    auto* const inputView  = ctx.inputImage ? ctx.inputImage->getImageView() : (ctx.inputTexture ? ctx.inputTexture->getImageView() : nullptr);
+
+    YA_CORE_ASSERT(inputView, "CubeMap2PBRPrefilterEnv input cubemap must have a valid image view");
     YA_CORE_ASSERT(ctx.output->getImageShared() && ctx.output->getImageView(),
                    "CubeMap2PBRPrefilterEnv output texture must own a valid image and cube view");
     YA_CORE_ASSERT(ctx.output->getImage()->getArrayLayers() >= CubeFace_Count,
@@ -239,7 +242,7 @@ CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(cons
                 0,
                 EPipelineDescriptorType::CombinedImageSampler,
                 {
-                    DescriptorImageInfo(ctx.input->getImageView()->getHandle(), _inputSampler->getHandle(), EImageLayout::ShaderReadOnlyOptimal),
+                    DescriptorImageInfo(inputView->getHandle(), _inputSampler->getHandle(), EImageLayout::ShaderReadOnlyOptimal),
                 }),
         },
         {});
@@ -254,7 +257,7 @@ CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(cons
         .baseArrayLayer = 0,
         .layerCount     = CubeFace_Count,
     };
-    ctx.cmdBuf->transitionImageLayoutAuto(ctx.input->getImage(), EImageLayout::ShaderReadOnlyOptimal);
+    ctx.cmdBuf->transitionImageLayoutAuto(inputImage, EImageLayout::ShaderReadOnlyOptimal);
     ctx.cmdBuf->transitionImageLayoutAuto(ctx.output->getImage(), EImageLayout::ColorAttachmentOptimal, &cubeRange);
 
     auto* const resourceFactory = _render->getResourceFactory();

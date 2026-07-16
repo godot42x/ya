@@ -211,12 +211,13 @@ RenderSharedResourceProvider::EnvironmentLightingTextureSet RenderSharedResource
 
     if (_app && _app->getResourceResolveSystem()) {
         auto* resolver = _app->getResourceResolveSystem();
-        resources.cubemapRenderImage    = resolver->findSceneEnvironmentCubemapRenderImageShared(scene);
-        resources.cubemapTexture        = resolver->findSceneEnvironmentCubemapTextureShared(scene);
-        resources.irradianceRenderImage = resolver->findSceneEnvironmentIrradianceRenderImageShared(scene);
-        resources.irradianceTexture     = resolver->findSceneEnvironmentIrradianceTextureShared(scene);
-        resources.prefilterRenderImage  = resolver->findSceneEnvironmentPrefilterRenderImageShared(scene);
-        resources.prefilterTexture      = resolver->findSceneEnvironmentPrefilterTextureShared(scene);
+        const auto resolved = resolver->resolveSceneEnvironmentLightingResources(scene);
+        resources.cubemapRenderImage    = resolved.cubemapRenderImage;
+        resources.cubemapTexture        = resolved.cubemapTexture;
+        resources.irradianceRenderImage = resolved.irradianceRenderImage;
+        resources.irradianceTexture     = resolved.irradianceTexture;
+        resources.prefilterRenderImage  = resolved.prefilterRenderImage;
+        resources.prefilterTexture      = resolved.prefilterTexture;
     }
     resources.brdfLutTexture = _sharedResources.pbrLUT;
     if (!resources.cubemapTexture) {
