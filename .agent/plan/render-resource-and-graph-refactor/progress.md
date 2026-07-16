@@ -23,6 +23,9 @@
 
 ## 最新验证
 
+- 2026-07-16：scene load/unload 这条生命周期边界上，也精确收掉了一层“根本没有 scene 可替换/销毁时”的空转全局等待。此前 `AppLifecycle::loadScene()` 在 editor 态下只要不是刚从 runtime/simulation 切回，就会先无条件 `render->waitIdle()`；`unloadScene()` 也同样在调用 `SceneManager::unloadScene()` 前先等待一次，即便当前 `SceneManager` 根本没有 active scene。这样首次加载场景、或已经卸空场景后再次 unload/load 这类路径，也会先让整台 device 全局 idle，但实际上并没有旧 scene 资源需要 quiesce 后再替换/销毁。现在两条路径都只在 `SceneManager::hasScene()` 为真时才等待；真正涉及当前 scene teardown/replacement 的 load/unload 仍保留等待，而“当前没有 scene”的空路径则不再先做一次全局 idle。
+- 直接收益：这一步继续压的是 runtime/scene lifecycle 边界，而不是回到 execute-path 或 facade 清理。scene 切换的同步语义现在更贴近真实 owner contract：只有当前 scene 确实存在、即将被 unload/replace 时才 quiesce GPU；空场景下的 load/unload 请求不再被一刀切地按“先全局等一次”处理。
+- 当前停止线：这次没有删除 scene replacement / teardown 边界本身的 `waitIdle()`，也没有声称 play-mode exit、pipeline switch 或 runtime shutdown 已具备更细的 submit/fence 退休语义；只是在“当前没有 scene”这个可证实的子场景下去掉空转等待。后续若继续推进，仍应围绕真正持有旧 scene / render owner 的 mode transition 与 shutdown 边界逐条审。
 - 2026-07-16：Forward / Deferred 的 shadow resource refresh 这条边界上，又精确收掉了一层“没有旧资源可退休时”的空转全局等待。此前两条 pipeline 在 `applyPendingResourceRefreshes()` 里只要命中 `ShadowResources` refresh，就会先无条件 `_render->waitIdle()`，哪怕当前根本还没有任何 shadow depth image 存在；这意味着第一次启用 shadow、或“尚未创建过 shadow 资源但设置路径先请求 refresh”这类场景，也会先把整台 device 全局停住一次，但实际上并没有旧的 shadow image / view 需要 quiesce 后再销毁。现在两条路径都只在 `_shadowResources.depthImage` 已存在时才等待；真正涉及旧 shadow owner 退休的 disable / resolution rebuild / enabled-state replacement 仍然保留等待，而“首次创建前没有旧资源”的 refresh 则不再先做一次空转全局 idle。
 - 直接收益：这一步继续压的是 runtime/shadow resource rebuild 边界，而不是回到 execute-path 的碎清理。shadow refresh 的同步语义现在更接近我们真正要的 owner contract：只有在旧 shadow image 确实存在、即将被 destroy/recreate 时才 quiesce GPU；纯首次创建路径不再被一刀切地按“先全局等一次”处理。
 - 当前停止线：这次没有删除 shadow rebuild 边界本身的 `waitIdle()`，也没有声称 Forward/Deferred 的 shadow refresh 已经彻底 graph 化或具备更细的 submit/fence 退休语义；只是在“无旧资源可销毁”这个可证实的子场景下去掉空转等待。后续若继续推进，仍应围绕真正持有旧 shadow owner 的 resolution change / disable / pipeline switch 边界逐条审。

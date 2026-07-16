@@ -407,6 +407,7 @@ void AppLifecycle::quit(App& app)
 
 bool AppLifecycle::loadScene(App& app, const std::string& path)
 {
+    const bool bHasCurrentScene = app._sceneManager && app._sceneManager->hasScene();
     bool bWaitedForModeTransition = false;
     switch (app._appState) {
     case AppState::Runtime:
@@ -421,7 +422,7 @@ bool AppLifecycle::loadScene(App& app, const std::string& path)
         break;
     }
 
-    if (!bWaitedForModeTransition) {
+    if (!bWaitedForModeTransition && bHasCurrentScene) {
         if (auto* render = app.getRender()) {
             render->waitIdle();
         }
@@ -435,8 +436,10 @@ bool AppLifecycle::loadScene(App& app, const std::string& path)
 
 bool AppLifecycle::unloadScene(App& app)
 {
-    if (auto* render = app.getRender()) {
-        render->waitIdle();
+    if (app._sceneManager && app._sceneManager->hasScene()) {
+        if (auto* render = app.getRender()) {
+            render->waitIdle();
+        }
     }
 
     if (app._sceneManager) {
