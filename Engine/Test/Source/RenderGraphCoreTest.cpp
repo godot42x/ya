@@ -1586,6 +1586,61 @@ TEST(RenderGraphCoreTest, ExecutorSmokeRunsClearAndCopyCallbacks)
     EXPECT_EQ(cmdBuf.bufferBarriers[1].dstAccess, EResourceAccess::TransferWrite);
 }
 
+TEST(RenderGraphCoreTest, ExecutorRestoresImportedTextureFinalLayoutAfterTransferPass)
+{
+    TestResourceFactory factory;
+    TestCommandBuffer   cmdBuf;
+    RenderGraphExecutor executor(factory);
+    RenderGraph         graph;
+
+    auto sharedImage = std::make_shared<TestImage>(ImageCreateInfo{
+        .label         = "swapchain",
+        .format        = EFormat::B8G8R8A8_UNORM,
+        .extent        = {.width = 1280, .height = 720, .depth = 1},
+        .usage         = EImageUsage::ColorAttachment | EImageUsage::TransferDst,
+        .initialLayout = EImageLayout::Undefined,
+    });
+    auto sharedView = std::make_shared<TestImageView>(sharedImage, ImageViewCreateInfo{
+        .label       = "swapchain.view",
+        .aspectFlags = EImageAspect::Color,
+        .levelCount  = 1,
+        .layerCount  = 1,
+    });
+
+    const auto imported = graph.importTexture(RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label  = "swapchain",
+            .format = EFormat::B8G8R8A8_UNORM,
+            .extent = Extent3D{1280, 720, 1},
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::TransferDst,
+        },
+        .importDesc = ImportedImageDesc{
+            .label         = "swapchain",
+            .nativeHandle  = static_cast<void*>(sharedImage->getHandle()),
+            .format        = EFormat::B8G8R8A8_UNORM,
+            .usage         = EImageUsage::ColorAttachment | EImageUsage::TransferDst,
+            .extent        = Extent3D{1280, 720, 1},
+            .initialLayout = EImageLayout::Undefined,
+            .finalLayout   = EImageLayout::PresentSrcKHR,
+        },
+        .image     = sharedImage,
+        .imageView = sharedView,
+    });
+
+    graph.addPass(
+        "copy-to-swapchain",
+        [&](RGPassBuilder& pass) {
+            pass.transferDst(imported);
+        },
+        [](RGRenderContext&) {});
+
+    ASSERT_TRUE(executor.execute(graph, cmdBuf));
+    ASSERT_EQ(cmdBuf.transitions.size(), 2u);
+    EXPECT_EQ(cmdBuf.transitions[0].newLayout, EImageLayout::TransferDst);
+    EXPECT_EQ(cmdBuf.transitions[1].oldLayout, EImageLayout::TransferDst);
+    EXPECT_EQ(cmdBuf.transitions[1].newLayout, EImageLayout::PresentSrcKHR);
+}
+
 TEST(RenderGraphCoreTest, RenderContextHelpersDriveRenderingAndCopyCommands)
 {
     TestResourceFactory factory;

@@ -280,7 +280,7 @@
 - [x] Vulkan dynamic rendering 消费 attachment set
 - [x] Vulkan framebuffer/render pass 路径消费 attachment set
 - [x] legacy Forward 使用临时 resource bundle adapter
-- [ ] 删除 `IRenderTarget` 的 image/view 创建职责
+- [x] 删除 `IRenderTarget` 的 image/view 创建职责
 - [x] 删除 `IRenderTarget::flushDirty()`
 - [x] 删除 dirty reason 通用重建协议
 - [x] 删除废弃 render target factory 路径
@@ -416,7 +416,7 @@
 - [ ] cycle rejection
 - [ ] read-before-write rejection
 - [ ] stale generation handle rejection
-- [ ] imported initial/final state
+- [x] imported initial/final state
 - [ ] resize physical resource replacement
 - [ ] mip/layer subresource transition
 - [ ] extension pass dependency and invalid usage rejection

@@ -12,18 +12,24 @@
 
 ## 当前阻塞
 
-- `IRenderTarget` 的真实 attachment owner 职责现在主要收缩在 Vulkan framebuffer compatibility 路径，Phase 8 仍未真正删除 `VulkanRenderTarget::recreateImagesAndFrameBuffer()` 这条 image/view/framebuffer 创建链
-- offscreen/environment preprocess 虽已 graph-backed，但仍需继续验证 imported subresource range、executor 生命周期和 final state 契约
+- imported image 的 final state 之前只在部分 raster 路径里被 attachment `finalLayout` 偶然覆盖；非 raster 末次使用后仍缺少统一 executor 收口
+- offscreen/environment preprocess 虽已 graph-backed，但仍需继续验证 imported subresource range 与 submit-time 生命周期契约
 - graph registry replacement 已可用，但还需要继续压实与 runtime frame boundary、deferred deletion 和 startup/shutdown 的一致性
 
 ## 下一步
 
 1. 以启动链和 `HelloMaterial` smoke 为主，继续清掉 runtime 中暴露的 graph/resource-state/lifetime 问题
-2. 沿着 Vulkan framebuffer compatibility 路径继续收敛 `IRenderTarget` owner/rebuild 职责
+2. 补齐 imported resource 的 final-state / replacement / shutdown contract，并用 core test 锁住
 3. 再推进 Forward graph 和外围 GPU 工作流迁移
 
 ## 最新验证
 
+- 2026-07-16：`RenderGraphExecutor` 现在会在 pass 执行完成后统一收口 imported texture 的声明 `finalLayout`。此前 swapchain / presentation 这类 imported image 若最后一次使用落在 transfer 等非 raster 路径，只会被迁到 pass 所需 layout，而不会在 graph 结束后自动回到 import contract；这次新增 `finalizeImportedTextureStates()` 后，executor 会遍历 imported texture，并按声明的 subresource range 追加最终 layout transition。配套新增 `RenderGraphCoreTest.ExecutorRestoresImportedTextureFinalLayoutAfterTransferPass`，锁住“transfer 写入 imported swapchain image 后仍会回到 `PresentSrcKHR`”的行为。
+- 直接收益：imported image 的 final-state contract 不再依赖“最后一个 pass 恰好是 raster 且底层 begin/end rendering 会处理 finalLayout”这种偶然路径。startup/runtime 后续若继续把 presentation、copy、offscreen output 等路径迁到 graph，就不会再把 imported final layout 丢在 executor 外部手写 barrier 或隐式 side effect 上。
+- 当前停止线：这一步只补齐了 imported texture 的 graph 结束 final layout 收口；imported buffer 仍只有 initial state，registry replacement / shutdown 与 submit-time lifecycle 也还需要继续压实。
+- 验证结果：
+  - `xmake b ya-testing` 通过
+  - `ya-testing --gtest_filter='RenderGraphCoreTest.ExecutorRestoresImportedTextureFinalLayoutAfterTransferPass'` 通过
 - 2026-07-16：`IRenderTarget` / `VulkanRenderTarget` / backend `IRender::createRenderTarget()` 已从代码面整体删除。前一批把 `RenderTargetCreateInfo` 脱离 legacy owner 接口并清掉 runtime 假依赖后，重新全局核查确认源码中已经不存在任何 runtime/editor/test 调用面；因此这次直接移除了 `Render/Core/IRenderTarget.h`、Vulkan backend 的 `VulkanRenderTarget.{h,cpp}`，以及 `Render.h`、`VulkanRender.h/.cpp`、`OpenGLRender.h` 上对应的 dead factory API。
 - 直接收益：Phase 8 终于不再只是“缩小 `IRenderTarget` 面”，而是把这套已经失去真实调用面的 legacy owner/create API 真删掉了。当前 runtime 对 attachment/image owner 的主路径已经完全建立在显式 `RenderImage` / graph import / attachment snapshot 上，后续剩余工作会更集中到资源生命周期与 graph/runtime 契约本身，而不是继续围绕一个死掉的 render-target abstraction 收尾。
 - 当前停止线：虽然 `IRenderTarget` 这层 dead API 已删除，但这并不等于所有 framebuffer compatibility 语义都自然消失；后续仍需继续关注 startup/smoke 暴露的 imported subresource state、final state 与 runtime owner 生命周期问题，避免把“删掉旧抽象”误当成资源模型迁移已经完成。

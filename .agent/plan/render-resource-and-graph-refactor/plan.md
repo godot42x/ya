@@ -45,9 +45,8 @@
 当前迭代默认按以下优先级推进：
 
 1. 修复启动链和 runtime 中暴露的真实 graph/resource-state/lifetime 问题
-2. 收敛 `IRenderTarget` 到 attachment facade，而不是继续扩展其 owner/rebuild 职责
-3. 继续验证 imported subresource、submit-time lifetime 与 registry replacement 边界
-4. 仅在 Deferred 主链闭环后再推进 Forward、offscreen、extension 和 OpenGL 相关工作
+2. 继续压实 imported initial/final state、submit-time lifetime 与 registry replacement/shutdown 边界
+3. 仅在主路径 contract 稳定后，再回头处理 Forward、offscreen 调度细化与 extension/OpenGL 后续工作
 
 Shadow raster 的 per-layer imported view 与 Deferred Light 的 full-array sampled view 会成为不同 handle，compiler 不推断它们互相 alias。当前主图通过显式 pass dependency 表达 shadow completion -> light sampling 契约，不依赖隐式插入顺序；通用 alias 推断保留为未来能力，不再作为本阶段主线阻塞。
 

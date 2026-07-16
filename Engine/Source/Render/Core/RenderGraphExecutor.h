@@ -16,6 +16,8 @@ class RenderGraphExecutor
     RenderGraphResourceRegistry _registry;
     ResourceStateTracker        _resourceStateTracker;
 
+    void finalizeImportedTextureStates(const RenderGraph& graph, ICommandBuffer& cmdBuf);
+
   public:
     explicit RenderGraphExecutor(IRenderResourceFactory& factory)
         : _registry(factory)

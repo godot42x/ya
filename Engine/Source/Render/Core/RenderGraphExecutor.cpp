@@ -104,7 +104,31 @@ bool RenderGraphExecutor::executeCompiled(
         pass->execute(ctx);
     }
 
+    finalizeImportedTextureStates(graph, cmdBuf);
+
     return true;
+}
+
+void RenderGraphExecutor::finalizeImportedTextureStates(const RenderGraph& graph, ICommandBuffer& cmdBuf)
+{
+    for (const auto& textureResource : graph.getTextures()) {
+        if (textureResource.lifetime != ERGResourceLifetime::Imported || !textureResource.imported.has_value()) {
+            continue;
+        }
+
+        const auto finalLayout = textureResource.imported->importDesc.finalLayout;
+        if (finalLayout == EImageLayout::Undefined) {
+            continue;
+        }
+
+        const auto* texture = _registry.resolveTexture(textureResource.handle);
+        YA_CORE_ASSERT(texture != nullptr, "RenderGraphExecutor failed to resolve imported texture {}", textureResource.handle.index);
+        YA_CORE_ASSERT(texture->getImage() != nullptr, "RenderGraphExecutor imported texture {} has no backing image", textureResource.handle.index);
+
+        const ImageSubresourceRange* subresourceRange =
+            textureResource.imported->subresourceRange ? &*textureResource.imported->subresourceRange : nullptr;
+        cmdBuf.transitionImageLayoutAuto(texture->getImage(), finalLayout, subresourceRange);
+    }
 }
 
 bool RenderGraphExecutor::execute(
