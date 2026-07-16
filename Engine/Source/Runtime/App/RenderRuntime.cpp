@@ -150,12 +150,6 @@ std::shared_ptr<RenderImage> RenderRuntime::getPostprocessOutputImageShared() co
     return nullptr;
 }
 
-RenderImage* RenderRuntime::getPresentationImage() const
-{
-    auto presentationImage = getCurrentPresentationImageShared();
-    return presentationImage.get();
-}
-
 std::shared_ptr<RenderImage> RenderRuntime::getPresentationImageShared() const
 {
     return getCurrentPresentationImageShared();

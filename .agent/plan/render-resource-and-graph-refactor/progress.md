@@ -23,6 +23,20 @@
 
 ## 最新验证
 
+- 2026-07-16：`RenderRuntime` 上一条已经没有真实 consumer 的 raw presentation getter 也已删除：`getPresentationImage()`。此前 runtime 对外已经同时提供了 `getPresentationImageShared()`，而 screenshot、editor/runtime 观察链与后续 presentation source 使用都已转向 shared owner；全仓复核后，确认 raw getter 只剩 declaration/definition，本身不再提供任何独立价值。
+- 直接收益：presentation 这条当前帧输出链又少掉了一层“shared owner 已经是真相，但 runtime 还额外保留一个 raw 同义口”的旧出口。后续继续审 screenshot/presentation/export 边界时，不需要再维护一对 shared/raw presentation current-image getter。
+- 当前停止线：这一步只删除确认无 consumer 的 runtime raw presentation getter，没有改 acquire/present graph 外 contract，也没有扩大到 editor viewport 或 screenshot request 的接口重设计；因此它是 dead contract 清理，而不是 presentation 生命周期逻辑改造。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/remove-dead-presentation-raw-getter.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/remove-dead-presentation-raw-getter.png` 已生成
+- 2026-07-16：`BloomPostprocessing` 上三条已经没有真实 consumer 的 raw 输出 getter 也已删除：`getExtractImage()`、`getBlurImage()`、`getCompositeImage()`。前面几批已经把 bloom debug/export/runtime 观察链统一切到 shared owner，`PostProcessingStage` 与 Forward/Deferred pipeline 对外也都只继续暴露 shared 版本；全仓复核后，确认 Bloom 自身这组三个 raw getter 已只剩 declaration，没有任何真实调用面。
+- 直接收益：这一步把 bloom 这组 graph 输出又少掉了一层“内部还留着 raw 同义口”的死契约。后续继续审 postprocess/bloom 边界时，不需要再额外区分“外层都按 shared owner 走了，但 Bloom 类本身还保留一组没人用的 raw getter”。
+- 当前停止线：这一步只删除确认无 consumer 的 Bloom raw getter，没有改 `PostProcessingStage` execute 仍可返回 raw `RenderImage*` 的兼容签名，也没有扩大到 bloom descriptor/update 或 postprocess graph 接口重设计；因此它是 dead contract 清理，不是新一轮 bloom API 改造。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/remove-dead-bloom-raw-getters.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/remove-dead-bloom-raw-getters.png` 已生成
 - 2026-07-16：`RenderSharedResourceProvider` / editor viewport 这条 BRDF LUT 观察与绑定链也开始直接沿用 shared owner 真相，而不再在 provider 边界公开一条 raw `RenderImage*` 同义出口。此前 `_sharedResources.pbrLUT` 明明已经是稳定的 `shared_ptr<RenderImage>`，但 provider 仍然通过 `getBrdfLutTexture()` 向外暴露裸指针，environment lighting descriptor set update 也会在内部把这份 owner 再降成 raw 缓存；editor debug 槽位随后又从这根 raw 指针反查 image/view。现在 provider 对外只保留 `getBrdfLutTextureShared()`，editor viewport 直接消费 shared owner；environment lighting descriptor update 与绑定缓存也同步按 shared owner 比较/传递 BRDF LUT，再只在真正写 descriptor 的最后一跳取 image view。
 - 直接收益：BRDF LUT 这条共享环境资源链终于和前面已经收过的 viewport、postprocess、SSAO、environment snapshot/debug preview 一样，在 runtime/provider/editor 边界保留 owner 真相。后续继续审 shared resource provider 或 editor debug 观察面时，不需要再解释“PBR LUT 明明已经是 shared owner 资源，但 provider 还另外开了一条 raw getter”这层不对称。
 - 当前停止线：这一步只收了 BRDF LUT 在 provider/export 与 editor debug 观察面的 shared-owner 边界，没有去改 environment descriptor set 仍然需要 `Texture` 的 cubemap/irradiance/prefilter 协议，也没有扩大到 light pass 或材质采样类型重设计；因此它是剩余 compatibility adapter 的一小刀，不是 environment 资源全链重写。

@@ -85,11 +85,8 @@ struct BloomPostprocessing
     void render(const RenderDesc& desc);
     void renderSettingsGUI(PostProcessingState& state);
     void renderTechnicalGUI();
-    [[nodiscard]] RenderImage* getExtractImage() const { return _extractImage.get(); }
     [[nodiscard]] stdptr<RenderImage> getExtractImageShared() const { return _extractImage; }
-    [[nodiscard]] RenderImage* getBlurImage() const { return (_blurPongImage ? _blurPongImage : _blurPingImage).get(); }
     [[nodiscard]] stdptr<RenderImage> getBlurImageShared() const { return _blurPongImage ? _blurPongImage : _blurPingImage; }
-    [[nodiscard]] RenderImage* getCompositeImage() const { return _compositeImage.get(); }
     [[nodiscard]] stdptr<RenderImage> getCompositeImageShared() const { return _compositeImage; }
 
   private:

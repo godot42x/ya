@@ -169,7 +169,6 @@ struct RenderRuntime
 
     [[nodiscard]] std::shared_ptr<RenderImage> getPostprocessOutputImageShared() const;
     [[nodiscard]] std::shared_ptr<RenderImage> getActiveViewportImageShared() const;
-    [[nodiscard]] RenderImage* getPresentationImage() const;
     [[nodiscard]] std::shared_ptr<RenderImage> getPresentationImageShared() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;
     [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog() const;
