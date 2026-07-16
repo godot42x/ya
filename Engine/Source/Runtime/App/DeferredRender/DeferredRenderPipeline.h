@@ -70,7 +70,7 @@ struct DeferredRenderInitDesc
     std::function<void(std::function<void()>)> queueFrameTask;
     stdptr<IDescriptorSetLayout> environmentLightingDSL = nullptr;
     std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
-    std::function<RenderSharedResourceProvider::EnvironmentLightingTextureSet(Scene*)> resolveSceneEnvironmentLightingTextures;
+    std::function<EnvironmentLightingSceneResources(Scene*)> resolveSceneEnvironmentLightingResources;
     std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet;
     std::function<DebugRenderSystem&()> getDebugRenderSystem;
     std::function<Scene*()> getActiveScene;
@@ -87,7 +87,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     std::function<void(std::function<void()>)> _queueFrameTask;
     stdptr<IDescriptorSetLayout> _environmentLightingDSL = nullptr;
     std::function<DescriptorSetHandle(Scene*)> _getSceneEnvironmentLightingDescriptorSet;
-    std::function<RenderSharedResourceProvider::EnvironmentLightingTextureSet(Scene*)> _resolveSceneEnvironmentLightingTextures;
+    std::function<EnvironmentLightingSceneResources(Scene*)> _resolveSceneEnvironmentLightingResources;
     std::function<DescriptorSetHandle(Scene*)> _getSceneSkyboxDescriptorSet;
     std::function<DebugRenderSystem&()> _getDebugRenderSystem;
     std::function<Scene*()> _getActiveScene;
@@ -143,7 +143,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     FrameContext               _lastTickCtx{};
     RenderPipelineFrameContext _lastFrameInput{};
     ShadowSettings             _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
-    RenderSharedResourceProvider::EnvironmentLightingTextureSet _currentEnvironmentLightingTextures{};
+    EnvironmentLightingSceneResources _currentEnvironmentLightingTextures{};
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
     DeferredRenderPipeline() = default;

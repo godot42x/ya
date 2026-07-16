@@ -65,9 +65,9 @@ DescriptorSetHandle RenderRuntime::getSceneEnvironmentLightingDescriptorSet(Scen
     return _sharedResourceProvider.getSceneEnvironmentLightingDescriptorSet(scene);
 }
 
-RenderSharedResourceProvider::EnvironmentLightingTextureSet RenderRuntime::resolveSceneEnvironmentLightingTextures(Scene* scene) const
+EnvironmentLightingSceneResources RenderRuntime::resolveSceneEnvironmentLightingResources(Scene* scene) const
 {
-    return _sharedResourceProvider.resolveSceneEnvironmentLightingTextures(scene);
+    return _sharedResourceProvider.resolveSceneEnvironmentLightingResources(scene);
 }
 
 void RenderRuntime::init(const InitDesc& desc)

@@ -2,6 +2,7 @@
 
 #include "Core/Base.h"
 #include "Render/Core/DescriptorSet.h"
+#include "ECS/System/ResourceResolveSystem.h"
 #include "Render/Pipelines/PBRGenerateBrdfLUT.h"
 
 namespace ya
@@ -17,25 +18,6 @@ struct IImageView;
 
 struct RenderSharedResourceProvider
 {
-    struct EnvironmentLightingTextureSet
-    {
-        stdptr<RenderImage> cubemapRenderImage   = nullptr;
-        stdptr<Texture>     cubemapTexture    = nullptr;
-        stdptr<RenderImage> irradianceRenderImage = nullptr;
-        stdptr<Texture>     irradianceTexture = nullptr;
-        stdptr<RenderImage> prefilterRenderImage  = nullptr;
-        stdptr<Texture>     prefilterTexture  = nullptr;
-        stdptr<RenderImage> brdfLutTexture    = nullptr;
-
-        [[nodiscard]] bool isComplete() const
-        {
-            return (cubemapTexture || cubemapRenderImage) &&
-                   (irradianceTexture || irradianceRenderImage) &&
-                   (prefilterTexture || prefilterRenderImage) &&
-                   brdfLutTexture;
-        }
-    };
-
     IRender* _render = nullptr;
     App*     _app    = nullptr;
 
@@ -88,7 +70,7 @@ struct RenderSharedResourceProvider
     [[nodiscard]] stdptr<RenderImage>          getBrdfLutTextureShared() const { return _sharedResources.pbrLUT; }
     [[nodiscard]] DescriptorSetHandle          getSceneSkyboxDescriptorSet(Scene* scene = nullptr);
     [[nodiscard]] DescriptorSetHandle          getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr);
-    [[nodiscard]] EnvironmentLightingTextureSet resolveSceneEnvironmentLightingTextures(Scene* scene = nullptr) const;
+    [[nodiscard]] EnvironmentLightingSceneResources resolveSceneEnvironmentLightingResources(Scene* scene = nullptr) const;
 
   private:
     void                   initSharedPipelineResources();

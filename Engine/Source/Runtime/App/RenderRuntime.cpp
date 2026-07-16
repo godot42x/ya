@@ -333,9 +333,9 @@ void RenderRuntime::initActivePipeline()
             {
                 return getSceneEnvironmentLightingDescriptorSet(scene);
             },
-            .resolveSceneEnvironmentLightingTextures = [this](Scene* scene)
+            .resolveSceneEnvironmentLightingResources = [this](Scene* scene)
             {
-                return resolveSceneEnvironmentLightingTextures(scene);
+                return resolveSceneEnvironmentLightingResources(scene);
             },
             .getSceneSkyboxDescriptorSet = [this](Scene* scene)
             {

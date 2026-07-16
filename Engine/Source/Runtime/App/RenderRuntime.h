@@ -186,7 +186,7 @@ struct RenderRuntime
     [[nodiscard]] DescriptorSetHandle          getSceneSkyboxDescriptorSet(Scene* scene = nullptr);
     [[nodiscard]] stdptr<IDescriptorSetLayout> getEnvironmentLightingDescriptorSetLayout() const { return _sharedResourceProvider.getEnvironmentLightingDescriptorSetLayout(); }
     [[nodiscard]] DescriptorSetHandle          getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr);
-    [[nodiscard]] RenderSharedResourceProvider::EnvironmentLightingTextureSet resolveSceneEnvironmentLightingTextures(Scene* scene = nullptr) const;
+    [[nodiscard]] EnvironmentLightingSceneResources resolveSceneEnvironmentLightingResources(Scene* scene = nullptr) const;
     [[nodiscard]] DebugRenderSystem&           getDebugRenderSystem() const;
 
 

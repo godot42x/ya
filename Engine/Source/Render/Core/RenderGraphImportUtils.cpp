@@ -174,6 +174,21 @@ RGImportedTextureDesc makeImportedTextureDesc(const RenderImage& image,
     return desc;
 }
 
+RGImportedTextureDesc makeImportedTextureDesc(const ImageResourceRef& resource,
+                                              std::string_view label,
+                                              EImageLayout::T finalLayout,
+                                              EImageUsage::T requiredUsage)
+{
+    if (resource.renderImage) {
+        return makeImportedTextureDesc(*resource.renderImage, label, finalLayout, requiredUsage);
+    }
+
+    YA_CORE_ASSERT(resource.texture != nullptr,
+                   "Render graph import '{}' requires a texture or render-image owner",
+                   label);
+    return makeImportedTextureDesc(*resource.texture, label, finalLayout, requiredUsage);
+}
+
 RGImportedTextureDesc makeImportedTextureDesc(const std::shared_ptr<IImage>& image,
                                               const std::shared_ptr<IImageView>& imageView,
                                               std::string_view label,

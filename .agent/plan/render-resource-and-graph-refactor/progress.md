@@ -23,6 +23,16 @@
 
 ## 最新验证
 
+- 2026-07-16：`Phase 10 / 删除剩余 compatibility adapter` 又继续往 scene query contract 里收了一层：resolver / provider / Deferred graph import 之间关于 skybox / environment cubemap、irradiance、prefilter 的传递，不再使用并行的 `renderImage + texture` 裸字段约定，而是统一收成一份 image-backed resource contract。新的 `ImageResourceRef` 明确表达“这是一份渲染可消费的 image 资源，背后可以是 owner-backed `RenderImage`，也可以是资产语义的 `Texture`”；provider 直接取 view 写 descriptor，Deferred graph import 则通过新的 import helper 重载继续保住 retained resource 语义，不再让每一层 consumer 自己重复分辨两套字段。
+- 直接收益：这一步删掉的是 resolver -> provider -> Deferred 之间还残留的一整块 compatibility-style query surface，而不是再做一层局部 helper。现在同一类 scene lighting 资源跨 query / descriptor / graph import 的主语义已经统一成“image-backed resource”，后面继续评估还剩哪些 compat adapter 时，不需要再反复处理 skybox/environment 这条链上的平行字段 contract。
+- 当前停止线：这一步没有删除 runtime state 内部仍保留的 `Texture` 成员——那些对 cubemap asset source、cylindrical source preview 或 offscreen job 输入仍然有真实语义；它删掉的是 scene query 和 render consumer 边界上的 compat contract，而不是强行把所有 environment/s​​kybox 运行时状态一次性全改成单类型。
+- 对应计划：
+  - `todo.md`：`Phase 10 -> 删除剩余 compatibility adapter`
+  - `plan.md`：`Phase 10 -> 删除剩余 compatibility adapter`
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/unify-scene-image-resource-contract.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/unify-scene-image-resource-contract.png` 已生成
 - 2026-07-16：`Phase 10 / 删除剩余 compatibility adapter` 又往 provider 边界里收了一层：scene skybox / environment lighting descriptor set 更新不再为了 `RenderImage` 结果额外维护 `sceneCompatTexture` 这类 provider-side compat wrapper cache，而是直接按 owner-first 语义取 `IImageView` 写 descriptor。现在 provider 对 scene cubemap / irradiance / prefilter / BRDF LUT 的消费已经是“能直接拿 view 就直接拿 view；天然 asset texture 仍走 texture 自带 view”，不再把 owner-backed 输出再包回一层运行时 `Texture`。
 - 直接收益：这一步删掉的是一整块真实在运行时参与状态缓存和 descriptor 更新的 compat adapter，而不是只改 API 外形。后续继续收 resolver -> provider scene query contract 时，provider 自己已经不用再背着 `sceneCompatTexture` / `scene*CompatTexture` 这些 wrapper cache 继续存在。
 - 当前停止线：这一步没有删除 resolver 查询里仍然同时返回 `RenderImage` / `Texture` 的 scene resource contract，也没有动材质/descriptor 协议天然仍以 `Texture` 资产为输入的路径；因此它依然属于 `Phase 10` 的 adapter 删除，而不是 environment/skybox 查询模型的最终收口。

@@ -141,9 +141,8 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneSkyboxDescriptorSet(Sc
     }
 
     auto* resolver = (_app ? _app->getResourceResolveSystem() : nullptr);
-    auto  texture = resolver ? resolver->findSceneSkyboxTextureShared(scene) : nullptr;
-    auto  renderImage = resolver ? resolver->findSceneSkyboxRenderImageShared(scene) : nullptr;
-    auto* descriptorImageView = resolveDescriptorImageView(texture, renderImage);
+    auto  skyboxResource = resolver ? resolver->resolveSceneSkyboxResource(scene) : ImageResourceRef{};
+    auto* descriptorImageView = skyboxResource.getImageView();
     if (!descriptorImageView) {
         _skybox.boundSceneImageView = nullptr;
         return _skybox.fallbackDS;
@@ -164,26 +163,26 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneEnvironmentLightingDes
         return _environmentLighting.fallbackDS;
     }
 
-    auto resources = resolveSceneEnvironmentLightingTextures(scene);
+    auto resources = resolveSceneEnvironmentLightingResources(scene);
     if (!resources.isComplete()) {
         YA_CORE_WARN("Environment lighting DS fallback: incomplete resources cubemapImage='{}' irradianceImage='{}' prefilterImage='{}' brdf='{}'",
-                     getRenderImageLabel(resources.cubemapRenderImage.get()),
-                     getRenderImageLabel(resources.irradianceRenderImage.get()),
-                     getRenderImageLabel(resources.prefilterRenderImage.get()),
-                     getRenderImageLabel(resources.brdfLutTexture.get()));
+                     getRenderImageLabel(resources.cubemap.renderImage.get()),
+                     getRenderImageLabel(resources.irradiance.renderImage.get()),
+                     getRenderImageLabel(resources.prefilter.renderImage.get()),
+                     getRenderImageLabel(resources.brdfLut.get()));
         return _environmentLighting.fallbackDS;
     }
 
-    auto* cubemapImageView = resolveDescriptorImageView(resources.cubemapTexture, resources.cubemapRenderImage);
-    auto* irradianceImageView = resolveDescriptorImageView(resources.irradianceTexture, resources.irradianceRenderImage);
-    auto* prefilterImageView = resolveDescriptorImageView(resources.prefilterTexture, resources.prefilterRenderImage);
-    const auto& brdfLutTexture = resources.brdfLutTexture;
+    auto* cubemapImageView = resources.cubemap.getImageView();
+    auto* irradianceImageView = resources.irradiance.getImageView();
+    auto* prefilterImageView = resources.prefilter.getImageView();
+    const auto& brdfLutTexture = resources.brdfLut;
     auto*       brdfLutImageView = brdfLutTexture ? brdfLutTexture->getImageView() : nullptr;
     if (!cubemapImageView || !irradianceImageView || !prefilterImageView || !brdfLutImageView) {
         YA_CORE_WARN("Environment lighting DS fallback after compat resolve: cubemap='{}' irradiance='{}' prefilter='{}' brdf='{}'",
-                     getTextureLabel(resources.cubemapTexture.get()),
-                     getTextureLabel(resources.irradianceTexture.get()),
-                     getTextureLabel(resources.prefilterTexture.get()),
+                     getTextureLabel(resources.cubemap.texture.get()),
+                     getTextureLabel(resources.irradiance.texture.get()),
+                     getTextureLabel(resources.prefilter.texture.get()),
                      getRenderImageLabel(brdfLutTexture.get()));
         return _environmentLighting.fallbackDS;
     }
@@ -207,18 +206,18 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneEnvironmentLightingDes
         _environmentLighting.boundPrefilterImageView  = prefilterImageViewHandle;
         _environmentLighting.boundBrdfLutImageView    = brdfLutImageViewHandle;
         YA_CORE_INFO("Environment lighting DS update: cubemap='{}' irradiance='{}' prefilter='{}' brdf='{}'",
-                     getTextureLabel(resources.cubemapTexture.get()),
-                     getTextureLabel(resources.irradianceTexture.get()),
-                     getTextureLabel(resources.prefilterTexture.get()),
+                     getTextureLabel(resources.cubemap.texture.get()),
+                     getTextureLabel(resources.irradiance.texture.get()),
+                     getTextureLabel(resources.prefilter.texture.get()),
                      getRenderImageLabel(brdfLutTexture.get()));
     }
 
     return _environmentLighting.sceneDS;
 }
 
-RenderSharedResourceProvider::EnvironmentLightingTextureSet RenderSharedResourceProvider::resolveSceneEnvironmentLightingTextures(Scene* scene) const
+EnvironmentLightingSceneResources RenderSharedResourceProvider::resolveSceneEnvironmentLightingResources(Scene* scene) const
 {
-    EnvironmentLightingTextureSet resources{};
+    EnvironmentLightingSceneResources resources{};
 
     if (!scene && _app && _app->getSceneManager()) {
         scene = _app->getSceneManager()->getActiveScene();
@@ -226,23 +225,17 @@ RenderSharedResourceProvider::EnvironmentLightingTextureSet RenderSharedResource
 
     if (_app && _app->getResourceResolveSystem()) {
         auto* resolver = _app->getResourceResolveSystem();
-        const auto resolved = resolver->resolveSceneEnvironmentLightingResources(scene);
-        resources.cubemapRenderImage    = resolved.cubemapRenderImage;
-        resources.cubemapTexture        = resolved.cubemapTexture;
-        resources.irradianceRenderImage = resolved.irradianceRenderImage;
-        resources.irradianceTexture     = resolved.irradianceTexture;
-        resources.prefilterRenderImage  = resolved.prefilterRenderImage;
-        resources.prefilterTexture      = resolved.prefilterTexture;
+        resources = resolver->resolveSceneEnvironmentLightingResources(scene);
     }
-    resources.brdfLutTexture = _sharedResources.pbrLUT;
-    if (!resources.cubemapTexture && !resources.cubemapRenderImage) {
-        resources.cubemapTexture = _skybox.fallbackTexture;
+    resources.brdfLut = _sharedResources.pbrLUT;
+    if (!resources.cubemap.isValid()) {
+        resources.cubemap.texture = _skybox.fallbackTexture;
     }
-    if (!resources.irradianceTexture && !resources.irradianceRenderImage) {
-        resources.irradianceTexture = _environmentLighting.fallbackIrradianceTexture;
+    if (!resources.irradiance.isValid()) {
+        resources.irradiance.texture = _environmentLighting.fallbackIrradianceTexture;
     }
-    if (!resources.prefilterTexture && !resources.prefilterRenderImage) {
-        resources.prefilterTexture = _environmentLighting.fallbackPrefilterTexture;
+    if (!resources.prefilter.isValid()) {
+        resources.prefilter.texture = _environmentLighting.fallbackPrefilterTexture;
     }
 
     return resources;

@@ -5,6 +5,7 @@
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "Render/Core/OffscreenJob.h"
+#include "Render/Core/ImageResourceRef.h"
 #include "Render/Pipelines/CubeMap2PBRIrradianceMap.h"
 #include "Render/Pipelines/CubeMap2PBRPrefilteredEnv.h"
 #include "Render/Pipelines/EquidistantCylindrical2CubeMap.h"
@@ -122,12 +123,16 @@ struct EnvironmentLightingPreviewInfo
 
 struct EnvironmentLightingSceneResources
 {
-    std::shared_ptr<RenderImage> cubemapRenderImage    = nullptr;
-    stdptr<Texture>              cubemapTexture        = nullptr;
-    std::shared_ptr<RenderImage> irradianceRenderImage = nullptr;
-    stdptr<Texture>              irradianceTexture     = nullptr;
-    std::shared_ptr<RenderImage> prefilterRenderImage  = nullptr;
-    stdptr<Texture>              prefilterTexture      = nullptr;
+    ImageResourceRef           cubemap{};
+    ImageResourceRef           irradiance{};
+    ImageResourceRef           prefilter{};
+    std::shared_ptr<RenderImage> brdfLut = nullptr;
+
+    [[nodiscard]] bool isComplete() const
+    {
+        return cubemap.isValid() && irradiance.isValid() && prefilter.isValid() &&
+               brdfLut && brdfLut->getImageView();
+    }
 };
 
 
@@ -173,8 +178,7 @@ struct ResourceResolveSystem : public ISystem
     [[nodiscard]] const SkyboxRuntimeState*              findFirstSceneSkyboxState(Scene* scene) const;
     [[nodiscard]] const EnvironmentLightingRuntimeState* findEnvironmentLightingState(entt::entity entity) const;
     [[nodiscard]] const EnvironmentLightingRuntimeState* findFirstSceneEnvironmentLightingState(Scene* scene) const;
-    [[nodiscard]] std::shared_ptr<RenderImage> findSceneSkyboxRenderImageShared(Scene* scene) const;
-    [[nodiscard]] stdptr<Texture> findSceneSkyboxTextureShared(Scene* scene) const;
+    [[nodiscard]] ImageResourceRef resolveSceneSkyboxResource(Scene* scene) const;
     [[nodiscard]] EnvironmentLightingSceneResources resolveSceneEnvironmentLightingResources(Scene* scene) const;
 
     // ── Read-only preview queries (Editor / debug) ────────────────────

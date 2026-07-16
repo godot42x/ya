@@ -184,16 +184,17 @@ const EnvironmentLightingRuntimeState* ResourceResolveSystem::findFirstSceneEnvi
     return nullptr;
 }
 
-stdptr<Texture> ResourceResolveSystem::findSceneSkyboxTextureShared(Scene* scene) const
+ImageResourceRef ResourceResolveSystem::resolveSceneSkyboxResource(Scene* scene) const
 {
+    ImageResourceRef resource{};
     const auto* state = findFirstSceneSkyboxState(scene);
-    return state ? state->cubemapTexture : nullptr;
-}
+    if (!state) {
+        return resource;
+    }
 
-std::shared_ptr<RenderImage> ResourceResolveSystem::findSceneSkyboxRenderImageShared(Scene* scene) const
-{
-    const auto* state = findFirstSceneSkyboxState(scene);
-    return state ? state->cubemapRenderImage : nullptr;
+    resource.renderImage = state->cubemapRenderImage;
+    resource.texture     = state->cubemapTexture;
+    return resource;
 }
 
 EnvironmentLightingSceneResources ResourceResolveSystem::resolveSceneEnvironmentLightingResources(Scene* scene) const
@@ -205,8 +206,8 @@ EnvironmentLightingSceneResources ResourceResolveSystem::resolveSceneEnvironment
 
     const auto* skyboxState = findFirstSceneSkyboxState(scene);
     if (skyboxState) {
-        resources.cubemapRenderImage = skyboxState->cubemapRenderImage;
-        resources.cubemapTexture     = skyboxState->cubemapTexture;
+        resources.cubemap.renderImage = skyboxState->cubemapRenderImage;
+        resources.cubemap.texture     = skyboxState->cubemapTexture;
     }
 
     for (auto&& [entity, elc] : scene->getRegistry().view<EnvironmentLightingComponent>().each()) {
@@ -217,29 +218,26 @@ EnvironmentLightingSceneResources ResourceResolveSystem::resolveSceneEnvironment
 
         if (elc.hasReadySource()) {
             if (elc.usesSceneSkybox()) {
-                resources.cubemapRenderImage = skyboxState ? skyboxState->cubemapRenderImage : nullptr;
-                resources.cubemapTexture     = skyboxState ? skyboxState->cubemapTexture : nullptr;
+                resources.cubemap.renderImage = skyboxState ? skyboxState->cubemapRenderImage : nullptr;
+                resources.cubemap.texture     = skyboxState ? skyboxState->cubemapTexture : nullptr;
             }
             else if (state->hasRenderableCubemap()) {
-                resources.cubemapRenderImage = state->cubemapRenderImage;
-                resources.cubemapTexture     = state->cubemapTexture;
+                resources.cubemap.renderImage = state->cubemapRenderImage;
+                resources.cubemap.texture     = state->cubemapTexture;
             }
         }
 
-        if (!resources.irradianceTexture && elc.hasReadyIrradiance() && state->hasIrradianceMap()) {
-            resources.irradianceRenderImage = state->irradianceRenderImage;
-            resources.irradianceTexture     = state->irradianceTexture;
+        if (!resources.irradiance.isValid() && elc.hasReadyIrradiance() && state->hasIrradianceMap()) {
+            resources.irradiance.renderImage = state->irradianceRenderImage;
+            resources.irradiance.texture     = state->irradianceTexture;
         }
 
-        if (!resources.prefilterTexture && elc.hasReadyPrefilter() && state->hasPrefilterMap()) {
-            resources.prefilterRenderImage = state->prefilterRenderImage;
-            resources.prefilterTexture     = state->prefilterTexture;
+        if (!resources.prefilter.isValid() && elc.hasReadyPrefilter() && state->hasPrefilterMap()) {
+            resources.prefilter.renderImage = state->prefilterRenderImage;
+            resources.prefilter.texture     = state->prefilterTexture;
         }
 
-        const bool bHasCubemap = resources.cubemapTexture || resources.cubemapRenderImage;
-        const bool bHasIrradiance = resources.irradianceTexture || resources.irradianceRenderImage;
-        const bool bHasPrefilter = resources.prefilterTexture || resources.prefilterRenderImage;
-        if (bHasCubemap && bHasIrradiance && bHasPrefilter) {
+        if (resources.cubemap.isValid() && resources.irradiance.isValid() && resources.prefilter.isValid()) {
             break;
         }
     }
