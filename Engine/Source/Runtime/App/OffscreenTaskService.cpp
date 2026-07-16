@@ -35,6 +35,18 @@ void OffscreenTaskService::init(IRender* render)
 
 void OffscreenTaskService::shutdown()
 {
+    if (_pending && _fence && _render) {
+        auto*   vkRender = static_cast<VulkanRender*>(_render);
+        VkFence fence    = static_cast<VkFence>(_fence);
+        vkWaitForFences(vkRender->getDevice(), 1, &fence, VK_TRUE, UINT64_MAX);
+        vkResetFences(vkRender->getDevice(), 1, &fence);
+        _pending = false;
+    }
+
+    if (!_submittedJobs.empty()) {
+        finalizeCompletedJobs();
+    }
+
     if (_fence && _render) {
         auto* vkRender = static_cast<VulkanRender*>(_render);
         vkDestroyFence(vkRender->getDevice(), static_cast<VkFence>(_fence), nullptr);

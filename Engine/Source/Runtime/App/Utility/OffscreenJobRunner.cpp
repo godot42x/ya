@@ -65,6 +65,7 @@ void queueOffscreenJob(const OffscreenJobQueueService& queueService, IRender* re
                 return;
             }
 
+            const size_t retainedBegin = cmdBuf->retainedResources.size();
             const bool bSuccess = job->executeFn(cmdBuf, outputImage.get());
             if (!bSuccess || job->bCancelled) {
                 if (outputImage) {
@@ -77,6 +78,12 @@ void queueOffscreenJob(const OffscreenJobQueueService& queueService, IRender* re
 
             if (job->result) {
                 job->result->outputImage = std::move(outputImage);
+                if (retainedBegin < cmdBuf->retainedResources.size()) {
+                    job->result->retainedResources.insert(
+                        job->result->retainedResources.end(),
+                        cmdBuf->retainedResources.begin() + static_cast<std::ptrdiff_t>(retainedBegin),
+                        cmdBuf->retainedResources.end());
+                }
             }
             job->phase = EOffscreenJobPhase::Recorded;
         });

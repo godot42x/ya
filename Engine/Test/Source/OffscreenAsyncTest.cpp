@@ -1,4 +1,5 @@
 #include "Render/Core/OffscreenJob.h"
+#include "Render/Core/CommandBuffer.h"
 #include "Runtime/App/Utility/OffscreenJobRunner.h"
 #include "Runtime/App/App.h"
 
@@ -29,6 +30,46 @@ struct PlannedAsyncStep
 {
     EPlannedAsyncOutcome outcome = EPlannedAsyncOutcome::Recorded;
     int                  delayMs = 0;
+};
+
+class TestCommandBuffer final : public ICommandBuffer
+{
+  public:
+    CommandBufferHandle getHandle() const override { return {}; }
+    CommandBufferHandle getTypedHandle() const override { return {}; }
+    bool begin(bool = false) override { return true; }
+    bool end() override { return true; }
+    void reset() override { clearRetainedResources(); }
+    void bindPipeline(IGraphicsPipeline*) override {}
+    void bindComputePipeline(IComputePipeline*) override {}
+    void bindVertexBuffer(uint32_t, const IBuffer*, uint64_t = 0) override {}
+    void bindIndexBuffer(IBuffer*, uint64_t = 0, bool = false) override {}
+    void draw(uint32_t, uint32_t = 1, uint32_t = 0, uint32_t = 0) override {}
+    void drawIndexed(uint32_t, uint32_t = 1, uint32_t = 0, int32_t = 0, uint32_t = 0) override {}
+    void setViewport(float, float, float, float, float = 0.0f, float = 1.0f) override {}
+    void setScissor(int32_t, int32_t, uint32_t, uint32_t) override {}
+    void setCullMode(ECullMode::T) override {}
+    void setPolygonMode(EPolygonMode::T) override {}
+    void setDepthBias(float, float, float) override {}
+    void bindDescriptorSets(IPipelineLayout*, uint32_t, const std::vector<DescriptorSetHandle>&, const std::vector<uint32_t>& = {}) override {}
+    void bindComputeDescriptorSets(IPipelineLayout*, uint32_t, const std::vector<DescriptorSetHandle>&, const std::vector<uint32_t>& = {}) override {}
+    void pushConstants(IPipelineLayout*, EShaderStage::T, uint32_t, uint32_t, const void*) override {}
+    void copyBuffer(IBuffer*, IBuffer*, uint64_t, uint64_t = 0, uint64_t = 0) override {}
+    void dispatch(uint32_t, uint32_t, uint32_t) override {}
+    void dispatchIndirect(IBuffer*, uint64_t = 0) override {}
+    void drawIndirect(IBuffer*, uint64_t, uint32_t, uint32_t) override {}
+    void drawIndexedIndirect(IBuffer*, uint64_t, uint32_t, uint32_t) override {}
+    void drawIndexedIndirectCount(IBuffer*, uint64_t, IBuffer*, uint64_t, uint32_t, uint32_t) override {}
+    void fillBuffer(IBuffer*, uint64_t, uint64_t, uint32_t) override {}
+    void bufferMemoryBarrier(IBuffer*, EPipelineStage::T, EPipelineStage::T, EResourceAccess::T, EResourceAccess::T, uint64_t = 0, uint64_t = 0) override {}
+    void copyBufferToImage(IBuffer*, IImage*, EImageLayout::T, const std::vector<BufferImageCopy>&) override {}
+    void copyImage(IImage*, EImageLayout::T, IImage*, EImageLayout::T, const std::vector<ImageCopy>&) override {}
+    void beginRendering(const RenderingInfo&) override {}
+    void endRendering(const RenderingInfo& = {}) override {}
+    void transitionImageLayout(IImage*, EImageLayout::T, EImageLayout::T, const ImageSubresourceRange* = nullptr) override {}
+    void transitionImageLayoutAuto(IImage*, EImageLayout::T, const ImageSubresourceRange* = nullptr) override {}
+    void debugBeginLabel(const char*, const float* = nullptr) override {}
+    void debugEndLabel() override {}
 };
 
 std::shared_ptr<RenderImage> makeFakeRenderImage()
@@ -259,8 +300,9 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobRejectsInvalidInputs)
 
 TEST(OffscreenAsyncTest, QueueOffscreenJobRecordsAndPublishesSuccessfulTask)
 {
-    App  app;
-    auto job = makeJob();
+    App               app;
+    TestCommandBuffer cmdBuf;
+    auto              job = makeJob();
 
     job->createOutputFn = [](IRender*) -> std::shared_ptr<RenderImage> { return makeFakeRenderImage(); };
     job->executeFn      = [](ICommandBuffer*, RenderImage* output) -> bool { return output != nullptr; };
@@ -271,7 +313,7 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobRecordsAndPublishesSuccessfulTask)
     ASSERT_EQ(app.taskManager.offscreenTasks.size(), 1u);
 
     std::vector<std::shared_ptr<OffscreenJobState>> submittedJobs;
-    app.taskManager.updateOffscreenTasks(reinterpret_cast<ICommandBuffer*>(0x1), &submittedJobs);
+    app.taskManager.updateOffscreenTasks(&cmdBuf, &submittedJobs);
 
     ASSERT_EQ(job->phase, EOffscreenJobPhase::Recorded);
     ASSERT_NE(job->result, nullptr);
@@ -282,10 +324,40 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobRecordsAndPublishesSuccessfulTask)
     EXPECT_EQ(job->phase, EOffscreenJobPhase::GpuCompleted);
 }
 
+TEST(OffscreenAsyncTest, QueueOffscreenJobPublishesRecordedKeepAliveResources)
+{
+    App               app;
+    TestCommandBuffer cmdBuf;
+    auto              job       = makeJob();
+    auto              keepAlive = std::make_shared<int>(7);
+
+    job->createOutputFn = [](IRender*) -> std::shared_ptr<RenderImage> { return makeFakeRenderImage(); };
+    job->executeFn      = [keepAlive](ICommandBuffer* cmdBuf, RenderImage* output) -> bool {
+        if (!cmdBuf || !output) {
+            return false;
+        }
+        cmdBuf->retainResource(keepAlive);
+        return true;
+    };
+
+    queueOffscreenJob(&app, reinterpret_cast<IRender*>(0x1), job);
+
+    ASSERT_EQ(job->phase, EOffscreenJobPhase::Queued);
+
+    std::vector<std::shared_ptr<OffscreenJobState>> submittedJobs;
+    app.taskManager.updateOffscreenTasks(&cmdBuf, &submittedJobs);
+
+    ASSERT_EQ(job->phase, EOffscreenJobPhase::Recorded);
+    ASSERT_NE(job->result, nullptr);
+    ASSERT_EQ(job->result->retainedResources.size(), 1u);
+    EXPECT_EQ(job->result->retainedResources[0].get(), keepAlive.get());
+}
+
 TEST(OffscreenAsyncTest, QueueOffscreenJobMarksExecutionFailure)
 {
-    App  app;
-    auto job = makeJob();
+    App               app;
+    TestCommandBuffer cmdBuf;
+    auto              job = makeJob();
 
     job->createOutputFn = [](IRender*) -> std::shared_ptr<RenderImage> { return makeFakeRenderImage(); };
     job->executeFn      = [](ICommandBuffer*, RenderImage*) -> bool { return false; };
@@ -293,7 +365,7 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobMarksExecutionFailure)
     queueOffscreenJob(&app, reinterpret_cast<IRender*>(0x1), job);
     ASSERT_EQ(job->phase, EOffscreenJobPhase::Queued);
 
-    app.taskManager.updateOffscreenTasks(reinterpret_cast<ICommandBuffer*>(0x1));
+    app.taskManager.updateOffscreenTasks(&cmdBuf);
 
     EXPECT_EQ(job->phase, EOffscreenJobPhase::Failed);
     ASSERT_NE(job->result, nullptr);
@@ -302,8 +374,9 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobMarksExecutionFailure)
 
 TEST(OffscreenAsyncTest, CancelledQueuedJobRemainsCancelledWhenQueuedWorkerRuns)
 {
-    App  app;
-    auto job = makeJob();
+    App               app;
+    TestCommandBuffer cmdBuf;
+    auto              job = makeJob();
 
     job->createOutputFn = [](IRender*) -> std::shared_ptr<RenderImage> { return makeFakeRenderImage(); };
     job->executeFn      = [](ICommandBuffer*, RenderImage*) -> bool { return true; };
@@ -319,7 +392,7 @@ TEST(OffscreenAsyncTest, CancelledQueuedJobRemainsCancelledWhenQueuedWorkerRuns)
     EXPECT_TRUE(queuedJob->bCancelled);
     EXPECT_EQ(queuedJob->phase, EOffscreenJobPhase::Cancelled);
 
-    app.taskManager.updateOffscreenTasks(reinterpret_cast<ICommandBuffer*>(0x1));
+    app.taskManager.updateOffscreenTasks(&cmdBuf);
 
     EXPECT_EQ(queuedJob->phase, EOffscreenJobPhase::Cancelled);
     ASSERT_NE(queuedJob->result, nullptr);

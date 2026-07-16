@@ -24,6 +24,12 @@
 
 ## 最新验证
 
+- 2026-07-16：offscreen job 现在会把录制期 command buffer retain 的 keepalive 资源显式转交到 `OffscreenJobResult::retainedResources`，而不是只保活到当前录制结束。此前 graph/imported view 若在 offscreen utility pass 中通过 command buffer retain 才满足 submit-time 生命周期，job 完成后结果对象并不会继续持有这些 owner；这次在 `queueOffscreenJob()` 的成功路径中补上了 retained-resource 转交，并让 `OffscreenTaskService::shutdown()` 在存在 pending fence / submitted jobs 时先等待并 finalize，再销毁 fence 与清空提交列表。配套新增 `OffscreenAsyncTest.QueueOffscreenJobPublishesRecordedKeepAliveResources`，并把原来依赖假 `ICommandBuffer*` 的 queue tests 一并升级为真实 test command buffer。
+- 直接收益：offscreen output 不再只是“有一张结果图”，而是把录制期真正依赖的 keepalive 一起带出，shutdown 时也不会跳过最后一批 recorded jobs 的 finalize。后续继续推进 environment preprocess、screenshot copy 或 graph-backed utility output 时，submit-time 生命周期证据会更完整。
+- 当前停止线：这一步补的是 offscreen 结果 keepalive 与 shutdown finalize；更广义的 graph registry replacement / startup-shutdown 一致性，以及 imported buffer 的 final-state contract 仍需继续推进。
+- 验证结果：
+  - `xmake b ya-testing` 通过
+  - `ya-testing --gtest_filter='OffscreenAsyncTest.QueueOffscreenJobPublishesRecordedKeepAliveResources:OffscreenAsyncTest.QueueOffscreenJobRecordsAndPublishesSuccessfulTask:OffscreenAsyncTest.QueueOffscreenJobMarksExecutionFailure:OffscreenAsyncTest.CancelledQueuedJobRemainsCancelledWhenQueuedWorkerRuns:OffscreenAsyncTest.FinalizeSubmittedJobsPromotesOnlyRecordedJobs'` 通过
 - 2026-07-16：`RenderGraphExecutor` 现在会在 pass 执行完成后统一收口 imported texture 的声明 `finalLayout`。此前 swapchain / presentation 这类 imported image 若最后一次使用落在 transfer 等非 raster 路径，只会被迁到 pass 所需 layout，而不会在 graph 结束后自动回到 import contract；这次新增 `finalizeImportedTextureStates()` 后，executor 会遍历 imported texture，并按声明的 subresource range 追加最终 layout transition。配套新增 `RenderGraphCoreTest.ExecutorRestoresImportedTextureFinalLayoutAfterTransferPass`，锁住“transfer 写入 imported swapchain image 后仍会回到 `PresentSrcKHR`”的行为。
 - 直接收益：imported image 的 final-state contract 不再依赖“最后一个 pass 恰好是 raster 且底层 begin/end rendering 会处理 finalLayout”这种偶然路径。startup/runtime 后续若继续把 presentation、copy、offscreen output 等路径迁到 graph，就不会再把 imported final layout 丢在 executor 外部手写 barrier 或隐式 side effect 上。
 - 当前停止线：这一步只补齐了 imported texture 的 graph 结束 final layout 收口；imported buffer 仍只有 initial state，registry replacement / shutdown 与 submit-time lifecycle 也还需要继续压实。
