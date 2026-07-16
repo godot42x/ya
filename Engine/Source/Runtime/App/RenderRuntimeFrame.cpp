@@ -190,6 +190,9 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
         return;
     }
 
+    auto*          imguiManager         = &ImGuiManager::get();
+    App*           app                  = _app;
+    const bool     bSubmitImguiToVulkan = _render && _render->getAPI() == ERenderAPI::Vulkan;
     const Extent2D presentationExtent = presentationImage->getExtent();
     RenderGraph    graph;
     const auto     output = graph.importTexture(
@@ -202,7 +205,7 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
         [output](RGPassBuilder& passBuilder) {
             passBuilder.useColorAttachment(output);
         },
-        [this, output, presentationExtent, deltaTime](RGRenderContext& rgCtx) {
+        [output, presentationExtent, deltaTime, imguiManager, app, bSubmitImguiToVulkan](RGRenderContext& rgCtx) {
             rgCtx.beginColorRendering({
                 .color = output,
                 .renderArea = Rect2D{
@@ -213,17 +216,17 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
                 .finalLayout = EImageLayout::PresentSrcKHR,
             });
 
-            auto& imManager = ImGuiManager::get();
-            imManager.beginFrame();
-            if (_app) {
+            YA_CORE_ASSERT(imguiManager != nullptr, "Presentation pass requires ImGuiManager");
+            imguiManager->beginFrame();
+            if (app) {
                 YA_PERF_SCOPE(perf::sample::renderImgui(), perf::metric::cpuTimeMs(), perf::domain::render());
-                _app->renderGUI(deltaTime);
+                app->renderGUI(deltaTime);
             }
-            imManager.endFrame();
-            imManager.render();
+            imguiManager->endFrame();
+            imguiManager->render();
 
-            if (_render->getAPI() == ERenderAPI::Vulkan) {
-                imManager.submitVulkan(rgCtx.getCommandBuffer().getHandleAs<VkCommandBuffer>());
+            if (bSubmitImguiToVulkan) {
+                imguiManager->submitVulkan(rgCtx.getCommandBuffer().getHandleAs<VkCommandBuffer>());
             }
 
             rgCtx.endRendering();

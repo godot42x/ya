@@ -23,6 +23,9 @@
 
 ## 最新验证
 
+- 2026-07-16：presentation graph execute 这条路径里残留的 singleton / 外层 render 查询也已开始前移到 execute 边界之外。此前 `RenderRuntime::renderPresentationPass()` 的 graph execute 回调会在 pass 内直接做 `ImGuiManager::get()`，并再次查询 `_render->getAPI()` 来决定是否提交 Vulkan ImGui draw data；这让 presentation pass 虽然已经 graph-backed，但 execute callback 仍在自己摸全局/外层状态。现在这些查询在建图前就准备成显式上下文：execute callback 只消费已捕获的 `ImGuiManager*`、`App*` 和 `bSubmitImguiToVulkan`，不再在回调内部重新取 singleton 或 render API。
+- 直接收益：这一步继续压的是 `todo.md` 里 “graph execute 是否还有全局查询” 这条现实 contract，而不是再去做一刀 owner 字段整理。presentation 这条 runtime 常驻 graph 执行边界现在更接近我们想要的形态：pass callback 只录制当前帧工作，不再顺手从全局环境拉状态。
+- 当前停止线：这次只收了 presentation pass 这条明确存在 singleton / render 查询的 execute callback；它不代表所有 graph execute 都已经完全不依赖外层对象，像 stage/pipeline 仍通过预先同步好的成员状态录制 draw 的路径仍会继续存在，后续需要按真实 contract 逐条审。
 - 2026-07-16：point-shadow cull 这条真实主链也开始直接消费 imported buffer final-state，而不再额外插一个只为“把 draw inputs 先转到图外可读状态”的空 graph pass。此前 `PointShadowCullPass::dispatch()` 会在 compute cull pass 后追加一个无 execute 内容的 `Point Shadow Draw Inputs` pass，只是为了把 `drawCommands` 收成 indirect-read、把 `visibleInstances` 收成 shader-read，然后再回到 graph 外的 `drawIndexedIndirect()` / descriptor consumer。现在这两个 imported buffer 直接在 import 时声明最终状态：draw-command buffer 收到 `IndirectCommandRead`，visible-instance buffer 收到 `ShaderRead`；空 pass 与死掉的 raw-import helper 一起删除。
 - 直接收益：上一批 imported buffer final-state contract 不再只停留在 screenshot readback 这种外围 consumer，而是立刻落到 point-shadow compute cull 这条运行时主路径上。graph 的结束边界现在能直接表达“cull pass 写完以后，图外下一段录制需要什么 buffer state”，不必再靠一个伪 pass 把状态计划拐回去。
 - 当前停止线：这一步只把 point-shadow cull 这条已经明确存在图外 buffer consumer 的路径改成 final-state 驱动；它没有把所有 imported buffer callsite 都统一成显式 final state，也没有声称 point-shadow 之外已经不存在类似的 graph 外 buffer state seam，后续仍需继续按真实 consumer 逐条审。
