@@ -1,0 +1,17 @@
+{
+  "smoke": {
+    "log": {
+      "level": "warn",
+      "detailLevel": "error"
+    },
+    "viewportResize": {
+      "width": 960,
+      "height": 540,
+      "frame": 50
+    }
+  },
+  "screenshot": {
+    "target": "editor",
+    "frame": 180
+  }
+}

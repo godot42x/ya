@@ -51,7 +51,7 @@
 完成标准：
 
 - [ ] 旧计划不会再误导 agent 继续低收益小改
-- [ ] 后续资源或 graph 迁移有可重复行为基线
+- [x] 后续资源或 graph 迁移有可重复行为基线
 
 ## Phase 1: 资源 API 盘点与契约
 
@@ -434,17 +434,17 @@
 
 ### Runtime Tests
 
-- [ ] `make b t=HelloMaterial`
+- [x] `make b t=HelloMaterial`
 - [x] `make test`
-- [ ] Forward 固定帧运行
-- [ ] Deferred 固定帧运行
-- [ ] viewport 连续 resize
-- [ ] shadow 开关和分辨率变化
-- [ ] SSAO 开关
-- [ ] bloom/postprocess/ACES 开关
-- [ ] Forward/Deferred switch
-- [ ] screenshot/readback
-- [ ] shutdown 无 validation/lifetime error
+- [x] Forward 固定帧运行
+- [x] Deferred 固定帧运行
+- [x] viewport 连续 resize
+- [x] shadow 开关和分辨率变化
+- [x] SSAO 开关
+- [x] bloom/postprocess/ACES 开关
+- [x] Forward/Deferred switch
+- [x] screenshot/readback
+- [x] shutdown 无 validation/lifetime error
 - [ ] 关键截图基线对比
 - [ ] extension 注册、禁用、热重载和移除
 - [ ] extension viewport resize 和多视图

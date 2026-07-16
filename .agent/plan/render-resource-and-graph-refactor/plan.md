@@ -31,7 +31,7 @@
 
 - Deferred shadow image handoff、frame/light/skinning buffer、point-shadow compute/indirect buffer 与 shadow raster recording 已统一进入 Deferred 主图/state plan
 - startup/runtime 仍在暴露 submit-time 生命周期与 imported subresource state 的真实约束
-- screenshot 基线和 Forward 基线仍不完整，不能把 pipeline switch 后的既有 validation 问题误归因到 Deferred graph
+- Deferred / Forward 默认截图基线现已具备固定 automation config、固定机位和固定帧号；当前剩余的视觉验证缺口主要是 viewport resize / pipeline switch 等行为型 smoke 与后续关键截图基线对比，而不是“有没有默认基线”
 - Forward、RenderTarget 全面收敛、extension API 和 OpenGL 恢复都必须后置，避免打断 Deferred 主链闭环
 
 因此当前阶段目标不是继续做 facade 美化，而是：

@@ -1,0 +1,17 @@
+{
+  "smoke": {
+    "log": {
+      "level": "warn",
+      "detailLevel": "error"
+    },
+    "deferred": {
+      "ssao": {
+        "enabled": false
+      }
+    }
+  },
+  "screenshot": {
+    "target": "editor",
+    "frame": 180
+  }
+}

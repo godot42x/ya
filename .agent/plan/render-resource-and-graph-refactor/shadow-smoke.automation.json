@@ -1,0 +1,17 @@
+{
+  "shadow": {
+    "quality": "high",
+    "directionalEnabled": false,
+    "resolution": 3072
+  },
+  "smoke": {
+    "log": {
+      "level": "warn",
+      "detailLevel": "error"
+    }
+  },
+  "screenshot": {
+    "target": "editor",
+    "frame": 180
+  }
+}
