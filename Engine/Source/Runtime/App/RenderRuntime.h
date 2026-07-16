@@ -167,8 +167,6 @@ struct RenderRuntime
     [[nodiscard]] RenderDiagnosticsService&      getDiagnosticsService() { return _diagnostics; }
     [[nodiscard]] const RenderDiagnosticsService& getDiagnosticsService() const { return _diagnostics; }
 
-    [[nodiscard]] RenderImage* getPostprocessOutputImage() const;
-    [[nodiscard]] RenderImage* getActiveViewportImage() const;
     [[nodiscard]] std::shared_ptr<RenderImage> getPostprocessOutputImageShared() const;
     [[nodiscard]] std::shared_ptr<RenderImage> getActiveViewportImageShared() const;
     [[nodiscard]] RenderImage* getPresentationImage() const;

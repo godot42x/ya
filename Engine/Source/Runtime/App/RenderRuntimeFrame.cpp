@@ -116,14 +116,6 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
     });
 }
 
-RenderImage* RenderRuntime::getActiveViewportImage() const
-{
-    if (auto* pipeline = getActivePipelineDebugOutputs()) {
-        return pipeline->getViewportOutputImage();
-    }
-    return nullptr;
-}
-
 std::shared_ptr<RenderImage> RenderRuntime::getActiveViewportImageShared() const
 {
     if (_renderPipeline == ERenderPipeline::Forward && _forwardPipeline) {

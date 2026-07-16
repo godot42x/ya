@@ -137,14 +137,6 @@ IImageView* RenderRuntime::getShadowPointFaceDepthIV(uint32_t pointLightIndex, u
     return nullptr;
 }
 
-RenderImage* RenderRuntime::getPostprocessOutputImage() const
-{
-    if (auto* pipeline = getActivePipelineDebugOutputs()) {
-        return pipeline->getPostprocessOutputImage();
-    }
-    return nullptr;
-}
-
 std::shared_ptr<RenderImage> RenderRuntime::getPostprocessOutputImageShared() const
 {
     if (_renderPipeline == ERenderPipeline::Forward && _forwardPipeline) {

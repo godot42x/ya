@@ -24,6 +24,13 @@
 
 ## 最新验证
 
+- 2026-07-16：`RenderRuntime` 上两条已经没有实际消费者的 raw frame-output getter 也已删除：`getPostprocessOutputImage()` 与 `getActiveViewportImage()`。在前几批把 automation frame context、debug catalog 和 editor viewport 都切到 shared-owner 之后，这两个 raw getter 只剩 declaration/definition，本身不再提供任何独立价值，继续保留只会给后续调用点留下“还能从 runtime 再拿一份裸当前帧输出”的旧逃生口。现在 runtime 对外只保留 shared 版本作为当前帧输出 owner 真相；如果外层真要 raw view，必须在自己持有 owner 的前提下显式派生，而不是再从 runtime 取一份无 owner 背书的裸结果。
+- 直接收益：这一步不改运行时行为，但把 runtime public API 面继续收紧到了我们最近几批已经建立起来的 owner-aware 语义上。后续再审 editor/automation/debug 之外的调用方时，不需要继续区分“shared getter 是新真相，但 runtime 里还有一对历史 raw getter 可以偷偷绕回去”。
+- 当前停止线：这一步只删了当前确认为无消费者的 runtime raw getter，没有扩大到 `IRenderPipelineDebugOutputs` 这类仍承担兼容职责的接口层；后续若要继续删 raw 接口，仍然需要先证明调用面已经真正清空。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `xmake run ya-testing -- --gtest_filter='RenderGraphCoreTest.*:ResourceStateTrackerTest.*:AppAutomationConfigTest.*:OffscreenAsyncTest.*:AppScreenshotCaptureTest.*'` 74/74 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=400 --log-level=info --log-detail-level=error"` 退出码 0
 - 2026-07-16：automation screenshot 的 frame-context/render-image 传递现在也改成了 owner-aware，不再把当前帧 postprocess / viewport 输出先降成裸 `RenderImage*` 再交给 `AppScreenshotCapture::request()`。此前 `AppFrameLoop -> AppAutomation::onFrameCompleted() -> handleScreenshotAutomation()` 这段链路虽然最终会在 request 内把 source image 抓成 `shared_ptr<IImage>` 放进 offscreen job，但在 runtime 到 automation 的边界上，owner 真相已经先掉成 raw 了。现在 `AppAutomationFrameContext`、`RenderRuntime` shared getter 与 screenshot request 签名统一改成直接传 `shared_ptr<RenderImage>`；这样 request 选择 source 的窗口内不再依赖“当前帧 render-image wrapper 还恰好活着”，owner 真相会一路带到真正开始排队 screenshot job 的地方。
 - 直接收益：automation screenshot 这条链终于和 editor viewport、debug catalog、presentation screenshot 一样，开始在跨层边界保留当前帧 render-image owner，而不是只在更深一层 job lambda 里补救性地抓 `IImage`。后续如果继续排查 automation screenshot 与 pipeline switch / postprocess replacement / frame-boundary rebuild 的交界，这里不再是一个 runtime 外围仍然用 raw render-image 的例外。
 - 当前停止线：这一步只收了 automation frame-context 到 screenshot request 的 owner 传递，不代表所有 automation artifact 路径都已经 shared-owner 化；像 RenderDoc capture 相关状态本来就不是 render-image owner 模型，不应为了写法统一硬混进来。
