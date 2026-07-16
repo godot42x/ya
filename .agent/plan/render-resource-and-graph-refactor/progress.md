@@ -23,6 +23,21 @@
 
 ## 最新验证
 
+- 2026-07-16：`PostProcessingStage` 和 `DeferredRenderPipeline` 上一组已经没有真实 consumer 的 raw graph-output getter 也已继续删除，包括 bloom extract / blur / composite、prepared postprocess output，以及 `DeferredRenderPipeline::getSSAOTexture()`。前面几批已经把 bloom/postprocess prepared output、Deferred SSAO snapshot 和 runtime/debug/export 链都切到 shared owner 当前帧真相；这次回查调用面后，确认剩余 raw getter 只剩 stage 内 declaration 和 Deferred 末端一处“先判 raw，再取 shared”的旧分支。现在 Deferred 主图末端直接以 `getPreparedOutputImageShared()` 作为唯一判断与缓存依据，死掉的 `getSSAOTexture()` 也随之移除。
+- 直接收益：这一批把 postprocess/SSAO 这组 graph 输出的最后一层“名义上还能拿 raw、实际上已经没人该这样用”的旧逃生口收掉了。后续继续审 Deferred 当前帧输出或 postprocess 边界时，不需要再区分“shared owner 才是真相，但 stage/pipeline 里还藏着几条零散 raw getter”。
+- 当前停止线：这一步只删掉确认无 consumer 的 raw getter，并把 Deferred 末端判断改成 shared owner，不扩大成 `PostProcessingStage`/pipeline 对外接口重设计；像仍然真实消费 `IImageView*` 的 debug slot、descriptor 绑定和其他兼容层没有被混进本批。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/remove-dead-postprocess-raw-getters.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/remove-dead-postprocess-raw-getters.png` 已生成
+- 2026-07-16：`IRenderPipelineDebugOutputs` 上一组已经没有真实 consumer 的 raw `RenderImage*` 输出接口已删除，包括 viewport output、postprocess output、bloom extract/blur/composite 这几类 getter。前面几批把 runtime/editor 的调试观察链逐步切到 shared owner catalog 后，`RenderRuntime::buildPipelineDebugOutputCatalog()` 实际已经直接从 Forward/Deferred pipeline 取 shared owner；全仓复核确认这组 raw debug getter 只剩接口声明和 override，自身不再承载独立调用价值。现在它们从 `IRenderPipelineDebugOutputs` 以及 Forward/Deferred override 一起移除。
+- 直接收益：这批把一组“看起来还是公共调试输出协议、实际上没有真实下游”的 raw image 出口清掉了。这样后续继续收 graph output / debug output 边界时，不需要再把 shared owner 主路径和一套空壳 raw 接口同时维护，也更不容易误导后续工作又从 `RenderImage*` 方向补回一层兼容面。
+- 当前停止线：这一步只删除确认无 consumer 的 raw debug 输出接口，没有动 `PostProcessingStage` 内部仍在本地使用的 raw getter，也没有把 `IRenderPipelineDebugOutputs` 整体替换成一套新的 shared-owner interface；因此它是 dead contract 清理，不是一次更大范围的调试 API 重构。
+- 验证结果：
+  - `make b t=HelloMaterial` 通过
+  - `make test t=ya r_args="RenderGraphCoreTest.*:AppScreenshotCaptureTest.*:AppAutomationConfigTest.*"` 53/53 通过
+  - `make r t=HelloMaterial r_args="--exit-after-frame=80 --screenshot=/tmp/remove-dead-raw-debug-outputs.png --screenshot-frame=60 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"`：进程正常退出，输出文件 `/tmp/remove-dead-raw-debug-outputs.png` 已生成
+
 - 2026-07-16：Deferred 主链里 `RenderGraphRegistry -> DeferredRenderPipeline -> LightStage` 之间的 SSAO 输出传递，开始保持 shared owner 语义而不再在 stage 边界掉回 raw `RenderImage*`。此前 `_currentSSAOOutput` 虽然已经由 graph registry 以 `shared_ptr<RenderImage>` 形式解析出来，但 `LightStage::setSSAOTexture()` 仍只接收裸指针，导致主图 stage 边界这一步又回到了“descriptor 刷新阶段假定 owner 还在别处活着”的旧前提。现在 `LightStage` 直接持有 `std::shared_ptr<RenderImage>`，Deferred 在 init / frame sync / graph execute / failure reset 这些切换点都把 shared owner 直接传进去。
 - 直接收益：这批把 Deferred 主链上一条真实在用的 graph output -> stage consumer 边界，从 raw 引用重新收回到 owner-aware 语义。后续如果继续收 `_currentPostprocessOutput` 或其他 graph 输出 consumer，就不需要再先解释“pipeline state 已经是 shared owner，但 stage 内部又只留了一根裸指针”这层不对称。
 - 当前停止线：这一步只收了 SSAO 输出进入 `LightStage` 的边界，没有扩大到 `IRenderPipelineDebugOutputs`、postprocess 输出接口或更高层 editor/runtime catalog；也没有改 `LightStage` 最终写 descriptor 时仍只消费 image view 的事实。因此它是 Deferred 主图 owner 对齐的一刀，而不是整套 debug/output API 重写。

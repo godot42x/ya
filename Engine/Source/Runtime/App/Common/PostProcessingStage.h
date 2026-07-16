@@ -70,13 +70,9 @@ struct PostProcessingStage
                          FrameContext*   ctx);
 
     [[nodiscard]] bool                       isEnabled() const { return bEnabled; }
-    [[nodiscard]] RenderImage*               getBloomExtractImage() const { return _bloomProcessor ? _bloomProcessor->getExtractImage() : nullptr; }
     [[nodiscard]] stdptr<RenderImage>        getBloomExtractImageShared() const { return _bloomProcessor ? _bloomProcessor->getExtractImageShared() : nullptr; }
-    [[nodiscard]] RenderImage*               getBloomBlurImage() const { return _bloomProcessor ? _bloomProcessor->getBlurImage() : nullptr; }
     [[nodiscard]] stdptr<RenderImage>        getBloomBlurImageShared() const { return _bloomProcessor ? _bloomProcessor->getBlurImageShared() : nullptr; }
-    [[nodiscard]] RenderImage*               getBloomCompositeImage() const { return _bloomProcessor ? _bloomProcessor->getCompositeImage() : nullptr; }
     [[nodiscard]] stdptr<RenderImage>        getBloomCompositeImageShared() const { return _bloomProcessor ? _bloomProcessor->getCompositeImageShared() : nullptr; }
-    [[nodiscard]] RenderImage*               getPreparedOutputImage() const { return _preparedOutputImage.get(); }
     [[nodiscard]] stdptr<RenderImage>        getPreparedOutputImageShared() const { return _preparedOutputImage; }
     [[nodiscard]] PostProcessingState&       getState() { return _state; }
     [[nodiscard]] const PostProcessingState& getState() const { return _state; }

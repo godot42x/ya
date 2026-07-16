@@ -140,14 +140,9 @@ struct ForwardRenderPipeline : public IRenderPipeline
 
     [[nodiscard]] bool           isShadowMappingEnabled() const override;
     [[nodiscard]] std::shared_ptr<IImage> getShadowDepthImage() const override { return _shadowResources.depthImage; }
-    [[nodiscard]] RenderImage*   getViewportOutputImage() const override { return bMSAA ? _viewportResources.resolveImage : _viewportResources.colorImage; }
     [[nodiscard]] Texture*       getViewportDepthTexture() const override { return _viewportResources.depth; }
     [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override;
-    [[nodiscard]] RenderImage*   getPostprocessOutputImage() const override { return _currentPostprocessOutput.get(); }
-    [[nodiscard]] RenderImage*   getBloomExtractImage() const override { return _postProcessStage.getBloomExtractImage(); }
-    [[nodiscard]] RenderImage*   getBloomBlurImage() const override { return _postProcessStage.getBloomBlurImage(); }
-    [[nodiscard]] RenderImage*   getBloomCompositeImage() const override { return _postProcessStage.getBloomCompositeImage(); }
     [[nodiscard]] bool           isPostprocessingEnabled() const override { return _postProcessStage.isEnabled(); }
 
   private:

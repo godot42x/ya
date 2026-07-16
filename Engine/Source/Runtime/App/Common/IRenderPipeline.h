@@ -75,15 +75,9 @@ struct IRenderPipelineDebugOutputs
 
     [[nodiscard]] virtual bool           isShadowMappingEnabled() const = 0;
     [[nodiscard]] virtual std::shared_ptr<IImage> getShadowDepthImage() const = 0;
-    [[nodiscard]] virtual RenderImage*   getViewportOutputImage() const = 0;
     [[nodiscard]] virtual Texture*       getViewportDepthTexture() const = 0;
     [[nodiscard]] virtual IImageView*    getShadowDirectionalDepthIV() const = 0;
     [[nodiscard]] virtual IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const = 0;
-
-    [[nodiscard]] virtual RenderImage* getPostprocessOutputImage() const = 0;
-    [[nodiscard]] virtual RenderImage* getBloomExtractImage() const    = 0;
-    [[nodiscard]] virtual RenderImage* getBloomBlurImage() const       = 0;
-    [[nodiscard]] virtual RenderImage* getBloomCompositeImage() const  = 0;
     [[nodiscard]] virtual bool     isPostprocessingEnabled() const     = 0;
 };
 

@@ -1431,8 +1431,8 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     }
 
     if (postprocessOutput.isValid()) {
-        if (_postProcessStage.getPreparedOutputImage()) {
-            _currentPostprocessOutput = _postProcessStage.getPreparedOutputImageShared();
+        if (auto preparedOutput = _postProcessStage.getPreparedOutputImageShared()) {
+            _currentPostprocessOutput = std::move(preparedOutput);
             return;
         }
     }

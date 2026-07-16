@@ -183,7 +183,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
 
     IImageView* getDebugAlbedoRGBView() const { return _debugAlbedoRGBView.get(); }
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
-    RenderImage* getSSAOTexture() const { return _currentSSAOOutput.get(); }
     const DeferredGBufferResources& getCurrentGBufferResources() const { return _currentGBufferResources; }
     const DeferredViewportResources& getCurrentViewportResources() const { return _currentViewportResources; }
     std::shared_ptr<RenderImage> getViewportOutputImageShared() const { return _currentViewportResources.colorOwner; }
@@ -197,7 +196,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     bool setRenderTargetColorFormat(RenderTargetEditorCatalog::Entry::EOwner owner, uint32_t attachmentIndex, EFormat::T format) override;
 
     std::shared_ptr<IImage> getShadowDepthImage() const override { return _shadowResources.depthImage; }
-    RenderImage*   getViewportOutputImage() const override { return _currentViewportResources.color; }
     Texture*       getViewportDepthTexture() const override
     {
         return _viewportDepthTextureCompat.get();
@@ -211,11 +209,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
         }
         return _shadowResources.pointFaceIVs[pointLightIndex][faceIndex].get();
     }
-    RenderImage* getBloomExtractImage() const override { return _postProcessStage.getBloomExtractImage(); }
-    RenderImage* getBloomBlurImage() const override { return _postProcessStage.getBloomBlurImage(); }
-    RenderImage* getBloomCompositeImage() const override { return _postProcessStage.getBloomCompositeImage(); }
     bool     isPostprocessingEnabled() const override { return _postProcessStage.isEnabled(); }
-    RenderImage* getPostprocessOutputImage() const override { return _currentPostprocessOutput.get(); }
 
   private:
     void               loadPersistentSettings();
