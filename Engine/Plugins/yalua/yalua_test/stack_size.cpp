@@ -1,13 +1,7 @@
 
 
-#include "yalua/core.h"
-#include "yalua/machine.h"
-#include "yalua/manager.h"
+#include "yalua/yalua.h"
 #include "gtest/gtest.h"
-
-
-
-#include "yalua/luavar.h"
 
 
 TEST(yalua, create_ref_with_stack_size)

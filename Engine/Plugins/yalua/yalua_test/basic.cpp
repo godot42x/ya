@@ -3,8 +3,7 @@
 
 #include <filesystem>
 
-#include "yalua/core.h"
-#include "yalua/log.h"
+#include "yalua/yalua.h"
 
 
 

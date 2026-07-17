@@ -12,17 +12,12 @@
 extern "C" {
 #include "lua.h"
 }
+
 #include "core.h"
-
 #include "luavar.h"
-
-#include "yalua/manager.h"
-
-
+#include "manager.h"
 #include <typeinfo>
-
 #include "log.h"
-
 
 #include "utility.cc/string_utils.h"
 

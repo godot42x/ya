@@ -10,4 +10,5 @@ do
 
     add_files("./**.cpp")
     add_packages("gtest", { public = true })
+
 end
