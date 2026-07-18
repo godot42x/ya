@@ -61,7 +61,7 @@ struct TextureSlot
 {
     YA_REFLECT_BEGIN(TextureSlot)
     YA_REFLECT_FIELD(textureRef)
-    YA_REFLECT_FIELD(bEnable, .editableIf<class_t>(&class_t::isEditorEnableEditable, "empty slot"))
+    YA_REFLECT_FIELD(bEnable, .editableIf<class_t>(&class_t::isEnableEditable, "empty slot"))
     YA_REFLECT_FIELD(uvScale)
     YA_REFLECT_FIELD(uvOffset)
     YA_REFLECT_FIELD(uvRotation)
@@ -146,7 +146,7 @@ struct TextureSlot
     bool               isReady() const { return !textureRef.hasPath() || textureRef.isLoaded(); }
     bool               needsResolve() const { return textureRef.hasPath() && !textureRef.isLoaded(); }
     EAssetResolveState getResolveState() const { return !textureRef.hasPath() ? EAssetResolveState::Ready : textureRef.getResolveState(); }
-    bool               isEditorEnableEditable() const { return hasPath(); }
+    bool               isEnableEditable() const { return hasPath(); }
     bool               isEnabledEffective() const { return hasPath() && textureRef.isLoaded() && textureRef.get() != nullptr && bEnable; }
 
     // Legacy compatibility accessors. Prefer hasPath()/isReady()/needsResolve().
