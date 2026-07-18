@@ -338,14 +338,6 @@ void RenderRuntime::initActivePipeline()
             .windowH                  = winH,
             .shadowSettings           = _app ? &_app->getShadowSettings() : nullptr,
             .automationShadowOverrides = _app ? &_app->getDesc().automation.shadow : nullptr,
-            .queueFrameTask           = _app
-                ? [this](std::function<void()> task)
-                  {
-                      if (_app) {
-                          _app->taskManager.registerFrameTask(std::move(task));
-                      }
-                  }
-                : std::function<void(std::function<void()>)>{},
             .environmentLightingDSL = _sharedResourceProvider.getEnvironmentLightingDescriptorSetLayout(),
             .getSceneEnvironmentLightingDescriptorSet = [this](Scene* scene)
             {

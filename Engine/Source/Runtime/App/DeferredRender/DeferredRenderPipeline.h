@@ -29,6 +29,7 @@
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <optional>
 
 
 namespace ya
@@ -42,6 +43,7 @@ struct DebugRenderSystem;
 struct Mesh;
 struct RenderTargetCatalog;
 class ResourceResolveSystem;
+class DeferredRenderPipelineTestAccess;
 
 enum class EDeferredPendingResourceRefresh : uint32_t
 {
@@ -69,7 +71,6 @@ struct DeferredRenderInitDesc
     int      windowH = 0;
     ShadowSettings* shadowSettings = nullptr;
     const AppAutomationShadowOverrides* automationShadowOverrides = nullptr;
-    std::function<void(std::function<void()>)> queueFrameTask;
     stdptr<IDescriptorSetLayout> environmentLightingDSL = nullptr;
     std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
     std::function<EnvironmentLightingSceneResources(Scene*)> resolveSceneEnvironmentLightingResources;
@@ -81,6 +82,8 @@ struct DeferredRenderInitDesc
 
 struct DeferredRenderPipeline : public IRenderPipeline
 {
+    friend class DeferredRenderPipelineTestAccess;
+
     struct SettingsSnapshot
     {
         bool           bReverseViewportY = true;
@@ -93,7 +96,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     IRender* _render = nullptr;
     ShadowSettings* _shadowSettings = nullptr;
     const AppAutomationShadowOverrides* _automationShadowOverrides = nullptr;
-    std::function<void(std::function<void()>)> _queueFrameTask;
     stdptr<IDescriptorSetLayout> _environmentLightingDSL = nullptr;
     std::function<DescriptorSetHandle(Scene*)> _getSceneEnvironmentLightingDescriptorSet;
     std::function<EnvironmentLightingSceneResources(Scene*)> _resolveSceneEnvironmentLightingResources;
@@ -131,8 +133,7 @@ struct DeferredRenderPipeline : public IRenderPipeline
     bool     _bReverseViewportY    = true;
     bool     _bEnableSSAO          = true;
 
-    bool     _bShadowSettingsChangePending    = false;
-    ShadowSettings _pendingShadowSettings{};
+    std::optional<SettingsSnapshot> _pendingSettings;
 
     uint32_t   _lastPointLightCount = 0;
     uint32_t   _lastDrawCount       = 0;
@@ -245,12 +246,12 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               applyPendingResourceRefreshes();
     void               requestViewportResize(Extent2D extent);
     void               requestShadowResourceRefresh();
+    void               applyPendingSettings();
     void               setDeferredSharedDepthFormat(EFormat::T format);
     void               initShadowResources();
     void               destroyShadowResources();
     void               syncShadowSettings();
     void               applyShadowSettings(const ShadowSettings& shadowSettings);
-    void               queueShadowSettingsChange(const ShadowSettings& shadowSettings);
 };
 
 } // namespace ya

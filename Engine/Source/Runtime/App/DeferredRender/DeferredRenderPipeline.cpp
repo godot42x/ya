@@ -325,10 +325,7 @@ DeferredRenderPipeline::SettingsSnapshot DeferredRenderPipeline::buildSettingsSn
 
 void DeferredRenderPipeline::requestSettings(const SettingsSnapshot& settings)
 {
-    _bReverseViewportY = settings.bReverseViewportY;
-    setSSAOEnabled(settings.bSSAOEnabled);
-    _postProcessStage.getState() = settings.postProcessing;
-    queueShadowSettingsChange(settings.shadow);
+    _pendingSettings = settings;
 }
 
 bool DeferredRenderPipeline::isShadowMappingEnabled() const
@@ -359,24 +356,19 @@ ShadowRuntimeState DeferredRenderPipeline::buildShadowState() const
     return shadowState;
 }
 
-void DeferredRenderPipeline::queueShadowSettingsChange(const ShadowSettings& shadowSettings)
+void DeferredRenderPipeline::applyPendingSettings()
 {
-    _pendingShadowSettings = shadowSettings;
-
-    if (_bShadowSettingsChangePending || !_queueFrameTask) {
-        if (!_queueFrameTask) {
-            applyShadowSettings(_pendingShadowSettings);
-        }
+    if (!_pendingSettings) {
         return;
     }
 
-    _bShadowSettingsChangePending = true;
-    _queueFrameTask([this]()
-                    {
-                        _bShadowSettingsChangePending = false;
+    const SettingsSnapshot settings = std::move(*_pendingSettings);
+    _pendingSettings.reset();
 
-                        applyShadowSettings(_pendingShadowSettings);
-                    });
+    _bReverseViewportY = settings.bReverseViewportY;
+    setSSAOEnabled(settings.bSSAOEnabled);
+    _postProcessStage.getState() = settings.postProcessing;
+    applyShadowSettings(settings.shadow);
 }
 
 void DeferredRenderPipeline::applyShadowSettings(const ShadowSettings& shadowSettings)
@@ -432,7 +424,7 @@ void DeferredRenderPipeline::loadPersistentSettings()
     if (_shadowSettings) {
         *_shadowSettings = shadowSettings;
     }
-    _pendingShadowSettings = shadowSettings;
+    _frameShadowSettings = shadowSettings;
 }
 
 DeferredPipelineDebugViews DeferredRenderPipeline::buildDebugViews() const
@@ -641,7 +633,6 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     _graphExecutor                = _render ? std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory()) : nullptr;
     _shadowSettings               = desc.shadowSettings;
     _automationShadowOverrides    = desc.automationShadowOverrides;
-    _queueFrameTask               = desc.queueFrameTask;
     _environmentLightingDSL       = desc.environmentLightingDSL;
     _getSceneEnvironmentLightingDescriptorSet = desc.getSceneEnvironmentLightingDescriptorSet;
     _resolveSceneEnvironmentLightingResources = desc.resolveSceneEnvironmentLightingResources;
@@ -649,7 +640,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     _getDebugRenderSystem         = desc.getDebugRenderSystem;
     _getActiveScene               = desc.getActiveScene;
     _getResourceResolveSystem     = desc.getResourceResolveSystem;
-    _bShadowSettingsChangePending = false;
+    _pendingSettings.reset();
     _pendingResourceRefreshMask   = 0;
     _currentSSAOOutput.reset();
     _currentPostprocessOutput.reset();
@@ -757,7 +748,7 @@ void DeferredRenderPipeline::shutdown()
 
     destroyShadowResources();
     _defaultSkyboxMesh = nullptr;
-    _bShadowSettingsChangePending = false;
+    _pendingSettings.reset();
     _environmentLightingDSL.reset();
     _getSceneEnvironmentLightingDescriptorSet = {};
     _resolveSceneEnvironmentLightingResources = {};
@@ -813,6 +804,7 @@ bool DeferredRenderPipeline::shouldSkipTick(const RenderPipelineFrameContext& fr
 
 void DeferredRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH)
 {
+    applyPendingSettings();
     applyPendingResourceRefreshes();
     _postProcessStage.beginFrame();
     captureShadowSettings(frame);
