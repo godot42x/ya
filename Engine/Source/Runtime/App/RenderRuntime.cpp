@@ -86,16 +86,6 @@ IRenderPipelineExecution* RenderRuntime::getActivePipelineExecution() const
     return getActivePipeline();
 }
 
-IRenderPipelineSettingsUI* RenderRuntime::getActivePipelineSettingsUI() const
-{
-    return getActivePipeline();
-}
-
-IRenderPipelineDebugUI* RenderRuntime::getActivePipelineDebugUI() const
-{
-    return getActivePipeline();
-}
-
 IRenderPipelineDebugOutputs* RenderRuntime::getActivePipelineDebugOutputs() const
 {
     return getActivePipeline();
@@ -274,7 +264,7 @@ void RenderRuntime::applyPendingRenderTargetFormatCommands()
         return;
     }
 
-    auto* pipeline = getActivePipelineSettingsUI();
+    auto* pipeline = getActivePipeline();
     if (!pipeline) {
         _pendingRenderTargetFormatCommands.clear();
         return;

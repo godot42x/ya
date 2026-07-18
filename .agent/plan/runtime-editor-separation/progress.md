@@ -19,6 +19,7 @@
 
 - Pipeline-stage UI remains in Runtime and still needs typed snapshots and commands before Editor can own its presentation.
 - Retired Deferred pipeline ImGui implementations have been removed; only no-op compatibility entry points remain until the shared pipeline UI interfaces are removed in the Forward/stage migration.
+- `IRenderPipelineSettingsUI` and `IRenderPipelineDebugUI` are removed. Render Target inspection and format requests now use a dedicated non-UI pipeline capability; Forward and Deferred empty GUI entry points are gone.
 
 ## Runtime UI Cleanup
 

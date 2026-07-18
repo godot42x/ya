@@ -99,14 +99,6 @@ struct ForwardRenderPipeline : public IRenderPipeline
     void tick(const RenderPipelineFrameContext& frame) override;
     void shutdown();
 
-    void renderGUI(bool bRenderTreeNode);
-    void renderSettingsGUI();
-    void renderGeneralSettingsGUI() override;
-    void renderShadowSettingsGUI() override;
-    void renderPostProcessSettingsGUI() override;
-    void renderTechnicalGUI();
-    void renderPerformanceGUI() override;
-    void renderStageInternalsGUI() override;
     bool setRenderTargetColorFormat(RenderTargetEditorCatalog::Entry::EOwner owner,
                                     uint32_t                                 attachmentIndex,
                                     EFormat::T                               format) override;

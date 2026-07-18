@@ -47,26 +47,13 @@ struct IRenderPipelineExecution
     [[nodiscard]] virtual EFormat::T getViewportDepthFormat() const     = 0;
 };
 
-struct IRenderPipelineSettingsUI
+struct IRenderPipelineRenderTargets
 {
-    virtual ~IRenderPipelineSettingsUI() = default;
+    virtual ~IRenderPipelineRenderTargets() = default;
 
-    virtual void renderGeneralSettingsGUI()     = 0;
-    virtual void renderLightingSettingsGUI()    {}
-    virtual void renderAOSettingsGUI()          {}
-    virtual void renderShadowSettingsGUI()      = 0;
-    virtual void renderPostProcessSettingsGUI() = 0;
+    virtual void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const {}
     virtual bool setRenderTargetDepthFormat(RenderTargetEditorCatalog::Entry::EOwner owner, EFormat::T format) { return false; }
     virtual bool setRenderTargetColorFormat(RenderTargetEditorCatalog::Entry::EOwner owner, uint32_t attachmentIndex, EFormat::T format) { return false; }
-};
-
-struct IRenderPipelineDebugUI
-{
-    virtual ~IRenderPipelineDebugUI() = default;
-
-    virtual void renderPerformanceGUI()    = 0;
-    virtual void renderStageInternalsGUI() = 0;
-    virtual void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const {}
 };
 
 struct IRenderPipelineDebugOutputs
@@ -82,8 +69,7 @@ struct IRenderPipelineDebugOutputs
 };
 
 struct IRenderPipeline : IRenderPipelineExecution,
-                         IRenderPipelineSettingsUI,
-                         IRenderPipelineDebugUI,
+                         IRenderPipelineRenderTargets,
                          IRenderPipelineDebugOutputs
 {
     ~IRenderPipeline() override = default;

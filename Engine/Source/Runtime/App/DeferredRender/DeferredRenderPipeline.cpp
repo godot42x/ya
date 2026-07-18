@@ -1417,19 +1417,4 @@ void DeferredRenderPipeline::onViewportResized(Rect2D rect)
     requestViewportResize(newExtent);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// GUI
-// ═══════════════════════════════════════════════════════════════════════
-
-void DeferredRenderPipeline::renderSettingsGUI() {}
-void DeferredRenderPipeline::renderGeneralSettingsGUI() {}
-void DeferredRenderPipeline::renderLightingSettingsGUI() {}
-void DeferredRenderPipeline::renderAOSettingsGUI() {}
-void DeferredRenderPipeline::renderPostProcessSettingsGUI() {}
-void DeferredRenderPipeline::renderShadowSettingsGUI() {}
-void DeferredRenderPipeline::renderTechnicalGUI() {}
-void DeferredRenderPipeline::renderPerformanceGUI() {}
-void DeferredRenderPipeline::renderStageInternalsGUI() {}
-void DeferredRenderPipeline::renderGUI(bool bRenderTreeNode) { (void)bRenderTreeNode; }
-
 } // namespace ya

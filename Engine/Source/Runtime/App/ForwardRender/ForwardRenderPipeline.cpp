@@ -743,39 +743,6 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
     return _graphExecutor->execute(graph, *frame.cmdBuf);
 }
 
-void ForwardRenderPipeline::renderSettingsGUI()
-{
-}
-
-void ForwardRenderPipeline::renderGeneralSettingsGUI()
-{
-}
-
-void ForwardRenderPipeline::renderShadowSettingsGUI()
-{
-}
-
-void ForwardRenderPipeline::renderPostProcessSettingsGUI()
-{
-}
-
-void ForwardRenderPipeline::renderTechnicalGUI()
-{
-}
-
-void ForwardRenderPipeline::renderPerformanceGUI()
-{
-}
-
-void ForwardRenderPipeline::renderStageInternalsGUI()
-{
-}
-
-void ForwardRenderPipeline::renderGUI(bool bRenderTreeNode)
-{
-    (void)bRenderTreeNode;
-}
-
 void ForwardRenderPipeline::onViewportResized(Rect2D rect)
 {
     Extent2D newExtent{

@@ -163,17 +163,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void tick(const RenderPipelineFrameContext& frame) override;
     void shutdown();
 
-    void renderGUI(bool bRenderTreeNode = true);
-    void renderSettingsGUI();
-    void renderGeneralSettingsGUI() override;
-    void renderLightingSettingsGUI() override;
-    void renderAOSettingsGUI() override;
-    void renderPostProcessSettingsGUI() override;
-    void renderShadowSettingsGUI() override;
-    void renderTechnicalGUI();
-    void renderPerformanceGUI() override;
-    void renderStageInternalsGUI() override;
-
     void onViewportResized(Rect2D rect) override;
 
     Extent2D getViewportExtent() const override

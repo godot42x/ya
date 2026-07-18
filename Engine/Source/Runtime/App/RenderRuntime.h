@@ -139,8 +139,6 @@ struct RenderRuntime
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
     [[nodiscard]] IRenderPipeline*               getActivePipeline() const;
     [[nodiscard]] IRenderPipelineExecution*      getActivePipelineExecution() const;
-    [[nodiscard]] IRenderPipelineSettingsUI*     getActivePipelineSettingsUI() const;
-    [[nodiscard]] IRenderPipelineDebugUI*        getActivePipelineDebugUI() const;
     [[nodiscard]] IRenderPipelineDebugOutputs*   getActivePipelineDebugOutputs() const;
     [[nodiscard]] bool                           isShadowMappingEnabled() const;
     [[nodiscard]] bool                           isMirrorRenderingEnabled() const;
