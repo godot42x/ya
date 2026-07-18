@@ -124,6 +124,7 @@ do
     add_files("./Source/**.cpp|Implementaion/*.cpp")
     remove_files("./Source/Editor/**.cpp")
     remove_files("./Source/ImGuiHelper.cpp")
+    remove_files("./Source/Core/Camera/FreeCameraController.cpp")
     remove_files("./Source/Platform/Render/OpenGL/**.cpp") -- develop vulkan mainly for now
     -- Runtime UI is now hosted by Editor extensions. These legacy controllers
     -- have no remaining callers and must not pull ImGui into runtime builds.
@@ -210,6 +211,7 @@ target("ya-editor")
 do
     set_kind("static")
     add_files("./Source/Editor/**.cpp")
+    add_files("./Source/Core/Camera/FreeCameraController.cpp")
     add_files("./Source/ImGuiHelper.cpp")
     add_deps("ya-runtime")
     add_deps("imgui-local")
