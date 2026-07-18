@@ -52,6 +52,7 @@ class ResourceResolveSystem;
 class AppLifecycle;
 class AppFrameLoop;
 class AppEventRouter;
+class AppExtensionTestAccess;
 
 enum AppMode : int
 {
@@ -398,6 +399,7 @@ struct App
     friend class AppLifecycle;
     friend class AppFrameLoop;
     friend class AppEventRouter;
+    friend class AppExtensionTestAccess;
 
     struct RenderFrameState
     {
