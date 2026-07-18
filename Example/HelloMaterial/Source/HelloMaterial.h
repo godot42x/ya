@@ -83,8 +83,6 @@ struct HelloMaterial : public ya::App
     void createEntities(ya::Scene *scene);
 
 
-    void onRenderGUI(float dt) override;
-
     int onEvent(const ya::Event &event) override
     {
         Super::onEvent(event);

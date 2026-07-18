@@ -9,10 +9,12 @@
 - XMake now builds `ya-runtime` without Editor, ImGui, or ImGuizmo link dependencies, `ya-editor` with the Editor and ImGui integration, and keeps `ya` as a compatibility aggregate.
 - `DebugPrimitives` now exposes a deferred settings snapshot consumed by the Editor instead of rendering Runtime ImGui; postprocessing controls likewise flow through `DeferredRenderPipeline::SettingsSnapshot`.
 - Render target inspection now lives in `Editor/RenderTargetInspector.cpp`; Runtime publishes the target catalog and queues typed format commands for application before the world pass.
+- The retired App GUI dashboard and profiling facade no longer live in Runtime. `App::onRenderGUI` and the corresponding no-op sample overrides are removed; the Runtime/Render/Core/ECS/Platform source scan now has zero ImGui includes.
+- `ya-runtime` now runs an XMake pre-build guard over non-Editor source files and rejects direct Editor, ImGui, ImGuiHelper, or ImGuizmo includes.
+- Editor configuration now enters through `IAppExtension::onConfigure` after generic config initialization and before Runtime startup; Runtime no longer opens `Editor.json` or derives its startup scene from it.
 
 ## Current Boundary Gaps
 
-- `AppGuiController` remains as the final Runtime source location with direct ImGui code; its app/profiling dashboard still needs Editor-owned adapters or retirement.
 - `SceneManager` still owns `_editorScene` and clone/restore play-session state.
 - Editor scene selection must be forwarded through the generic extension lifecycle before further migration.
 

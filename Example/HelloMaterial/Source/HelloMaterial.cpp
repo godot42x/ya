@@ -542,11 +542,6 @@ void HelloMaterial::createEntities(ya::Scene* scene)
     }
 }
 
-void HelloMaterial::onRenderGUI(float dt)
-{
-    Super::onRenderGUI(dt);
-}
-
 void HelloMaterial::onEnterRuntime()
 {
     Super::onEnterRuntime();

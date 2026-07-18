@@ -8,6 +8,7 @@ namespace ya
 {
 
 struct App;
+struct AppDesc;
 struct ICommandBuffer;
 struct Scene;
 
@@ -16,6 +17,7 @@ struct IAppExtension
 {
     virtual ~IAppExtension() = default;
 
+    virtual void onConfigure(App& app, AppDesc& desc) {}
     virtual void onAttach(App& app) {}
     virtual void onDetach(App& app) {}
     virtual void onSceneActivated(App& app, Scene* scene) {}

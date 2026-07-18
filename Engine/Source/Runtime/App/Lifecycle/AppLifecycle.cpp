@@ -174,11 +174,9 @@ void AppLifecycle::init(App& app, AppDesc ci)
                 .bPersistIfMissing = false,
                 .bReadOnly         = true,
             });
-        ConfigManager::get().openDocument("editor", "Engine/Saved/Config/Editor.json");
-
         profiling::StaticInitProfiler::ensureStarted();
         profiling::StaticInitProfiler::refOBJ();
-        profiling::loadEditorConfig();
+        app.configureExtensions();
         profiling::StaticInitProfiler::recordEnd();
 
         AppAutomation::loadConfig(app._ci);
@@ -187,10 +185,6 @@ void AppLifecycle::init(App& app, AppDesc ci)
         auto& configManager           = ConfigManager::get();
         app._ci.bEnableRenderDoc      = app._ci.bEnableRenderDoc || configManager.getOr<bool>("engine", "enableRenderDoc", false);
         app._ci.disabledGraphicsCards = configManager.getOr<std::vector<std::string>>("engine", "disableGraphicsCards", app._ci.disabledGraphicsCards);
-        if (!app._ci.defaultScenePath) {
-            app._ci.defaultScenePath = configManager.getOr<std::string>("editor", "startup.defaultScenePath", "");
-        }
-
         profiling::applyAppOverrides(app._ci);
         AppAutomation::applyStartupOverrides(app._ci);
         AppAutomation::applyLogOverrides(app._ci);

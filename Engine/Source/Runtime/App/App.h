@@ -562,7 +562,6 @@ struct App
     virtual int  onEvent(const Event& event);
     virtual void tickLogic(float dt);
     virtual void tickRender(float dt);
-    virtual void onRenderGUI(float dt);
 
 
 
@@ -640,6 +639,7 @@ struct App
   private:
     void attachExtensions();
     void detachExtensions();
+    void configureExtensions();
     void dispatchNativeEvent(const SDL_Event& event);
     [[nodiscard]] bool dispatchExtensionEvent(const Event& event);
     void tickExtensions(float dt);

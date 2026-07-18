@@ -4,6 +4,7 @@
 #include "Editor/RenderTargetInspector.h"
 #include "Editor/TypeRenderer.h"
 #include "Config/ConfigManager.h"
+#include "Core/Profiling/Profiling.h"
 #include "ImGuiHelper.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Runtime/App/App.h"
@@ -199,6 +200,19 @@ void renderDebugPrimitives(App& app)
 class EditorAppExtension final : public IAppExtension
 {
   public:
+    void onConfigure(App& app, AppDesc& desc) override
+    {
+        (void)app;
+        ConfigManager::get().openDocument("editor", "Engine/Saved/Config/Editor.json");
+        profiling::loadEditorConfig();
+        if (!desc.defaultScenePath) {
+            const std::string path = ConfigManager::get().getOr<std::string>("editor", "startup.defaultScenePath", "");
+            if (!path.empty()) {
+                desc.defaultScenePath = path;
+            }
+        }
+    }
+
     void onAttach(App& app) override
     {
         auto* renderRuntime = app.getRenderRuntime();
@@ -280,6 +294,7 @@ class EditorAppExtension final : public IAppExtension
 
     void onPresentation(App& app, ICommandBuffer& commandBuffer, float dt) override
     {
+        (void)dt;
         if (!_layer) {
             return;
         }
@@ -289,8 +304,7 @@ class EditorAppExtension final : public IAppExtension
         }
 
         ImGuiManager::get().beginFrame();
-        _layer->onImGuiRender([&app, dt]() {
-            app.onRenderGUI(dt);
+        _layer->onImGuiRender([&app]() {
             renderDeferredSettings(app);
             renderDiagnostics(app);
             renderDebugPrimitives(app);

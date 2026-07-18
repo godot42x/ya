@@ -13,16 +13,18 @@ ClearValue depthClearValue = ClearValue(1.0f, 0);
 
 App::~App() = default;
 
-void App::onRenderGUI(float dt)
-{
-    (void)dt;
-}
-
 void App::addExtension(std::unique_ptr<IAppExtension> extension)
 {
     YA_CORE_ASSERT(extension, "Cannot register a null app extension");
     YA_CORE_ASSERT(!_extensionsAttached, "App extensions must be registered before App::init");
     _extensions.push_back(std::move(extension));
+}
+
+void App::configureExtensions()
+{
+    for (const auto& extension : _extensions) {
+        extension->onConfigure(*this, _ci);
+    }
 }
 
 void App::attachExtensions()

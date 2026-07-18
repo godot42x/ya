@@ -69,11 +69,37 @@ do
     set_default(true)
 end
 
+local function check_runtime_source_isolation()
+    local forbiddenIncludes = {
+        { pattern = "#include%s*[<\"]%s*editor/", label = "Editor" },
+        { pattern = "#include%s*[<\"]%s*imgui%.h", label = "ImGui" },
+        { pattern = "#include%s*[<\"]%s*imguihelper%.h", label = "ImGuiHelper" },
+        { pattern = "#include%s*[<\"]%s*imguizmo", label = "ImGuizmo" },
+    }
+    local sourceRoot = path.join(os.scriptdir(), "Source")
+    local sourceFiles = os.files(path.join(sourceRoot, "**.h"))
+    table.join2(sourceFiles, os.files(path.join(sourceRoot, "**.cpp")))
+
+    for _, sourceFile in ipairs(sourceFiles) do
+        if not sourceFile:find("/Editor/", 1, true) then
+            local contents = io.readfile(sourceFile):lower()
+            for _, forbidden in ipairs(forbiddenIncludes) do
+                if contents:find(forbidden.pattern) then
+                    raise("ya-runtime isolation violation: %s includes %s", sourceFile, forbidden.label)
+                end
+            end
+        end
+    end
+end
+
 
 
 target("ya-runtime")
 do
     set_kind("static")
+    before_build(function(target)
+        check_runtime_source_isolation()
+    end)
     add_rules("ya.shader.codegen")
     local bEnableUnity = get_config("ya_enable_unity-build")
     if  bEnableUnity then
