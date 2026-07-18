@@ -10,18 +10,25 @@
 #include "Config/ConfigManager.h"
 #include "Core/Profiling/Profiling.h"
 #include "ImGuiHelper.h"
+#include "Render/2D/Render2D.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Runtime/App/App.h"
 #include "Runtime/App/DebugRenderSystem.h"
 #include "Runtime/App/RenderRuntime.h"
 #include "Runtime/App/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "Runtime/App/DeferredRender/DeferredRenderPipeline.h"
+#include "Runtime/App/Utility/FPSCtrl.h"
 
 #include <algorithm>
+#include <format>
+#include <glm/gtc/type_ptr.hpp>
 #include <string_view>
 
 namespace ya
 {
+
+extern ClearValue colorClearValue;
+extern ClearValue depthClearValue;
 
 namespace
 {
@@ -234,6 +241,117 @@ void renderDeferredSettings(App& app)
     ImGui::End();
 }
 
+void renderEditorCameraWindow(EditorLayer& layer, FreeCameraController& controller)
+{
+    if (!ImGui::Begin("Editor Camera")) {
+        ImGui::End();
+        return;
+    }
+
+    auto& camera    = layer.getCamera();
+    auto  position  = camera._position;
+    auto  rotation  = camera._rotation;
+    bool  bChanged  = false;
+
+    bChanged |= ImGui::DragFloat3("Camera Position", glm::value_ptr(position), 0.01f, -100.0f, 100.0f);
+    bChanged |= ImGui::DragFloat3("Camera Rotation", glm::value_ptr(rotation), 1.0f, -180.0f, 180.0f);
+    ImGui::DragFloat("Move Speed", &controller._moveSpeed, 0.1f, 0.1f, 20.0f);
+    ImGui::DragFloat("Rotation Speed", &controller._rotationSpeed, 1.0f, 10.0f, 180.0f);
+    ImGui::TextDisabled("Hold right mouse button to rotate camera");
+    ImGui::TextDisabled("WASD: Move horizontally, QE: Move vertically");
+
+    if (bChanged) {
+        camera.setPositionAndRotation(position, rotation);
+    }
+
+    ImGui::End();
+}
+
+void renderClearValuesWindow()
+{
+    if (!ImGui::Begin("Clear Values")) {
+        ImGui::End();
+        return;
+    }
+
+    float color[4] = {colorClearValue.color.r, colorClearValue.color.g, colorClearValue.color.b, colorClearValue.color.a};
+    if (ImGui::ColorEdit4("Color Clear Value", color)) {
+        colorClearValue = ClearValue(color[0], color[1], color[2], color[3]);
+    }
+
+    float depth = depthClearValue.depthStencil.depth;
+    if (ImGui::DragFloat("Depth Clear Value", &depth, 0.01f, 0.0f, 1.0f)) {
+        depthClearValue = ClearValue(depth, depthClearValue.depthStencil.stencil);
+    }
+
+    ImGui::End();
+}
+
+void renderRender2DDebugWindow()
+{
+    if (!ImGui::Begin("Render2D Debug")) {
+        ImGui::End();
+        return;
+    }
+
+    auto& data = Render2D::data;
+    ImGui::Checkbox("Reverse Viewport Y", &data.bReverseViewport);
+
+    int worldCullMode = static_cast<int>(data.worldCullMode);
+    if (ImGui::Combo("World Cull Mode", &worldCullMode, "None\0Front\0Back\0FrontAndBack\0")) {
+        data.worldCullMode = static_cast<ECullMode::T>(worldCullMode);
+    }
+
+    int screenCullMode = static_cast<int>(data.screenCullMode);
+    if (ImGui::Combo("Screen Cull Mode", &screenCullMode, "None\0Front\0Back\0FrontAndBack\0")) {
+        data.screenCullMode = static_cast<ECullMode::T>(screenCullMode);
+    }
+
+    ImGui::InputInt("Text Layout Mode", &data.TextLayoutMode);
+    ImGui::TextDisabled("Viewport: %u x %u", data.windowWidth, data.windowHeight);
+
+    ImGui::End();
+}
+
+void renderSessionWindow(App& app)
+{
+    if (!ImGui::Begin("Session")) {
+        ImGui::End();
+        return;
+    }
+
+    AppMode mode = app._appMode;
+    if (ImGui::Combo("App Mode", reinterpret_cast<int*>(&mode), "Control\0Drawing\0")) {
+        app._appMode = mode;
+    }
+
+    if (auto* fpsCtrl = FPSControl::get()) {
+        ImGui::SeparatorText("FPS Control");
+        ImGui::Text("FPS Limit: %.1f", fpsCtrl->fpsLimit);
+
+        static float newFpsLimit = fpsCtrl->fpsLimit;
+        ImGui::SetNextItemWidth(120.0f);
+        ImGui::InputFloat("New Limit", &newFpsLimit, 10.0f, 10.0f, "%.1f");
+        ImGui::SameLine();
+        if (ImGui::Button("Apply FPS Limit")) {
+            fpsCtrl->setFPSLimit(newFpsLimit);
+        }
+        ImGui::Checkbox("Enable FPS Control", &fpsCtrl->bEnable);
+    }
+
+    std::string clickedPoints;
+    for (const auto& point : app.clicked) {
+        clickedPoints += std::format("({}, {}) ", static_cast<int>(point.x), static_cast<int>(point.y));
+    }
+    if (clickedPoints.empty()) {
+        clickedPoints = "<none>";
+    }
+    ImGui::SeparatorText("Input Trace");
+    ImGui::TextWrapped("Clicked Points: %s", clickedPoints.c_str());
+
+    ImGui::End();
+}
+
 void renderDiagnostics(App& app)
 {
     auto* runtime = app.getRenderRuntime();
@@ -246,6 +364,7 @@ void renderDiagnostics(App& app)
     const bool bAvailable = renderDoc.capture && renderDoc.capture->isAvailable();
     ImGui::Text("RenderDoc: %s", bAvailable ? "Available" : "Unavailable");
     ImGui::TextWrapped("Last Capture: %s", renderDoc.lastCapturePath.empty() ? "<none>" : renderDoc.lastCapturePath.c_str());
+
     ImGui::End();
 }
 
@@ -416,8 +535,12 @@ class EditorAppExtension final : public IAppExtension
         }
 
         ImGuiManager::get().beginFrame();
-        _layer->onImGuiRender([&app]() {
+        _layer->onImGuiRender([this, &app]() {
+            renderSessionWindow(app);
             renderDeferredSettings(app);
+            renderEditorCameraWindow(*_layer, _cameraController);
+            renderClearValuesWindow();
+            renderRender2DDebugWindow();
             renderDiagnostics(app);
             renderDebugPrimitives(app);
             renderRenderTargetInspector(app);

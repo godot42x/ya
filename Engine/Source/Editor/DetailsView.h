@@ -4,7 +4,7 @@
 #include "ECS/Entity.h"
 #include "FilePicker.h"
 #include "TypeRenderer.h"
-#include <ImGui.h>
+#include <imgui.h>
 #include <sol/sol.hpp>
 #include <type_traits>
 

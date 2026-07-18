@@ -279,7 +279,7 @@ void EditorLayer::onEvent(const Event& event)
     case EEvent::MouseButtonReleased:
     {
         // Handle viewport clicks (object selection, gizmo interaction)
-        auto& mouseEvent = static_cast<const MouseButtonPressedEvent&>(event);
+        auto& mouseEvent = static_cast<const MouseButtonReleasedEvent&>(event);
         // Only pick on left click and when gizmo is not being used
         if (mouseEvent.GetMouseButton() == EMouse::Left) {
             if (!isGizmoActive()) {
