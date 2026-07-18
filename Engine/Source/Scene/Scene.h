@@ -115,8 +115,6 @@ struct [[refl]] Scene
     // Scene management
     void clear();
     void onUpdateRuntime(float deltaTime);
-    void onUpdateEditor(float deltaTime);
-    void onRenderEditor();
     void onRenderRuntime();
 
     // Getters

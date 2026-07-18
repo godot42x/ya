@@ -294,12 +294,6 @@ void Scene::onUpdateRuntime(float deltaTime)
     // }
 }
 
-void Scene::onUpdateEditor(float deltaTime)
-{
-    // Editor-specific updates
-    onUpdateRuntime(deltaTime);
-}
-
 void Scene::onRenderRuntime()
 {
     // Render entities with renderable components
@@ -309,14 +303,6 @@ void Scene::onRenderRuntime()
     //     auto [transform, sprite] = view.get<TransformComponent, SpriteRendererComponent>(entity);
     // Render sprite with transform
     // }
-}
-
-void Scene::onRenderEditor()
-{
-    // Editor-specific rendering
-    onRenderRuntime();
-
-    // Render editor-specific elements (gizmos, outlines, etc.)
 }
 
 Entity Scene::findEntityByName(const std::string &name)
