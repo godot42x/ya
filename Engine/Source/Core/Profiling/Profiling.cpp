@@ -28,10 +28,6 @@ namespace ya::profiling
 namespace
 {
 
-constexpr const char* PROFILE_CONFIG_DOC_NAME         = "editor";
-constexpr const char* PROFILE_CONFIG_KEY_CPU_TRACE    = "profile.runtime.cpuTrace";
-constexpr const char* PROFILE_CONFIG_KEY_PERF_METRICS = "profile.runtime.perfMetrics";
-constexpr const char* PROFILE_CONFIG_KEY_STATIC_INIT  = "profile.runtime.staticInit";
 constexpr const char* AUTOMATION_CONFIG_DOC_NAME      = "automation";
 
 struct RuntimeArtifactState
@@ -616,35 +612,6 @@ void setStaticInitEnabled(bool enabled)
     setRuntimeState(state);
 }
 
-void loadEditorConfig()
-{
-    auto& config = ConfigManager::get();
-    if (!config.hasDocument(PROFILE_CONFIG_DOC_NAME)) {
-        return;
-    }
-
-    auto state = getRuntimeState();
-    state.cpuTraceEnabled = config.getOr<bool>(PROFILE_CONFIG_DOC_NAME, PROFILE_CONFIG_KEY_CPU_TRACE, state.cpuTraceEnabled);
-    state.perfMetricsEnabled = config.getOr<bool>(PROFILE_CONFIG_DOC_NAME, PROFILE_CONFIG_KEY_PERF_METRICS, state.perfMetricsEnabled);
-    state.staticInitEnabled = config.getOr<bool>(PROFILE_CONFIG_DOC_NAME, PROFILE_CONFIG_KEY_STATIC_INIT, state.staticInitEnabled);
-    setRuntimeState(state);
-}
-
-void saveEditorConfig()
-{
-    auto& config = ConfigManager::get();
-    if (!config.hasDocument(PROFILE_CONFIG_DOC_NAME)) {
-        return;
-    }
-
-    const auto state = getRuntimeState();
-    ConfigManager::Editor(PROFILE_CONFIG_DOC_NAME)
-        .set(PROFILE_CONFIG_KEY_CPU_TRACE, state.cpuTraceEnabled)
-        .set(PROFILE_CONFIG_KEY_PERF_METRICS, state.perfMetricsEnabled)
-        .set(PROFILE_CONFIG_KEY_STATIC_INIT, state.staticInitEnabled)
-        .flush();
-}
-
 void applyAppOverrides(AppDesc& appDesc)
 {
     auto& configManager = ConfigManager::get();
@@ -773,4 +740,3 @@ PerfState& metrics()
 }
 
 } // namespace ya::profiling
-

@@ -127,9 +127,6 @@ void setPerfMetricsEnabled(bool enabled);
 [[nodiscard]] bool isStaticInitEnabled();
 void setStaticInitEnabled(bool enabled);
 
-void loadEditorConfig();
-void saveEditorConfig();
-
 void beginRuntimeSession(const AppDesc& appDesc);
 void endRuntimeSession();
 

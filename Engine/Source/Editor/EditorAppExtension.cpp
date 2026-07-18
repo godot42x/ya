@@ -2,6 +2,7 @@
 
 #include "Editor/EditorLayer.h"
 #include "Editor/EditorPlaySession.h"
+#include "Editor/EditorProfilingSettings.h"
 #include "Editor/RenderTargetInspector.h"
 #include "Editor/TypeRenderer.h"
 #include "Config/ConfigManager.h"
@@ -225,7 +226,7 @@ class EditorAppExtension final : public IAppExtension
             shadow_settings::saveRuntimeSettings(
                 shadow_settings::loadSettingsFromDocument("editor", app.getShadowSettings()));
         }
-        profiling::loadEditorConfig();
+        editor_profiling_settings::load();
         if (!desc.defaultScenePath) {
             const std::string path = ConfigManager::get().getOr<std::string>("editor", "startup.defaultScenePath", "");
             if (!path.empty()) {

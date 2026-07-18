@@ -17,6 +17,7 @@
 - Automation screenshot targets now distinguish the Runtime viewport and generic presentation output; the former `Editor` target and unused Runtime editor-camera overrides are removed from the public Runtime contract.
 - Material components expose generic property-change synchronization APIs; Editor forwards reflected property paths without defining a Runtime-side Editor protocol.
 - Removed unused `Scene` editor update/render hooks; Scene now exposes only generic Runtime update and render entry points.
+- Editor profiling preferences now use an Editor-side configuration adapter; Core profiling exposes only Runtime state and automation overrides.
 - `SceneManager` now owns only generic active-scene activation, destruction, loading, and cloning. `EditorPlaySession` owns authoring/play scene references and handles clone/restore through generic `IAppExtension` state-transition hooks; a Runtime-only App retains its active scene across state transitions.
 
 ## Current Boundary Gaps
