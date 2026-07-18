@@ -16,7 +16,7 @@ namespace shadow_settings_config_detail
 {
 
 constexpr const char* AUTOMATION_CONFIG_DOC_NAME                         = "automation";
-constexpr const char* DEFERRED_PIPELINE_CONFIG_DOC_NAME                  = "editor";
+constexpr const char* RUNTIME_CONFIG_DOC_NAME                            = "runtime";
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING = "render.deferred.shadow.enableShadowMapping";
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW = "render.deferred.shadow.enablePointLightShadow";
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS   = "render.deferred.shadow.maxPointLightShadowCount";
@@ -200,106 +200,140 @@ void applyAutomationOverrides(const AppAutomationShadowOverrides& overrides, Sha
     }
 }
 
-ShadowSettings loadEditorSettings(const ShadowSettings& baseline, const AppAutomationShadowOverrides* automationOverrides)
+bool hasRuntimeSettings()
 {
-    auto& cfgManager = ConfigManager::get();
+    return ConfigManager::get().hasValue(
+        shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+        shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_QUALITY);
+}
 
-    const bool bEnableShadowMapping = cfgManager.getOr<bool>(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                                             shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING,
-                                                             baseline.isEnabled());
-    const bool bEnablePointLightShadow = cfgManager.getOr<bool>(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                                                shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW,
-                                                                baseline.pointLightEnabled);
+ShadowSettings loadSettingsFromDocument(const std::string& documentName, const ShadowSettings& baseline)
+{
+    auto& config = ConfigManager::get();
+    const bool bEnableShadowMapping = config.getOr<bool>(documentName,
+                                                         shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING,
+                                                         baseline.isEnabled());
+    const bool bEnablePointLightShadow = config.getOr<bool>(documentName,
+                                                            shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW,
+                                                            baseline.pointLightEnabled);
 
-    ShadowSettings shadowSettings = baseline;
-    int qualityValue = cfgManager.getOr<int>(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                             shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_QUALITY,
-                                             static_cast<int>(shadowSettings.quality));
-    qualityValue = std::clamp(qualityValue,
-                              static_cast<int>(EShadowQuality::Off),
-                              static_cast<int>(EShadowQuality::Ultra));
-    shadowSettings.quality = static_cast<EShadowQuality::T>(qualityValue);
-    shadowSettings.directionalEnabled = cfgManager.getOr<bool>(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                                               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_ENABLED,
-                                                               shadowSettings.directionalEnabled);
-    shadowSettings.pointLightEnabled = cfgManager.getOr<bool>(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                                              shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_ENABLED,
-                                                              bEnablePointLightShadow);
-    shadowSettings.pointLightUseIndirect = cfgManager.getOr<bool>(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                                                  shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_INDIRECT,
-                                                                  shadowSettings.pointLightUseIndirect);
-    shadowSettings.pointLightIndirectCullEnabled = cfgManager.getOr<bool>(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                                                          shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_CULL,
-                                                                          shadowSettings.pointLightIndirectCullEnabled);
-    shadowSettings.maxPointLightShadows = static_cast<uint32_t>(std::clamp(
-        cfgManager.getOr<int>(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                              shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS,
-                              static_cast<int>(shadowSettings.maxPointLightShadows)),
+    ShadowSettings settings = baseline;
+    settings.quality = static_cast<EShadowQuality::T>(std::clamp(
+        config.getOr<int>(documentName,
+                          shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_QUALITY,
+                          static_cast<int>(settings.quality)),
+        static_cast<int>(EShadowQuality::Off),
+        static_cast<int>(EShadowQuality::Ultra)));
+    settings.directionalEnabled = config.getOr<bool>(documentName,
+                                                     shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_ENABLED,
+                                                     settings.directionalEnabled);
+    settings.pointLightEnabled = config.getOr<bool>(documentName,
+                                                    shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_ENABLED,
+                                                    bEnablePointLightShadow);
+    settings.pointLightUseIndirect = config.getOr<bool>(documentName,
+                                                        shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_INDIRECT,
+                                                        settings.pointLightUseIndirect);
+    settings.pointLightIndirectCullEnabled = config.getOr<bool>(documentName,
+                                                                shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_CULL,
+                                                                settings.pointLightIndirectCullEnabled);
+    settings.maxPointLightShadows = static_cast<uint32_t>(std::clamp(
+        config.getOr<int>(documentName,
+                          shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS,
+                          static_cast<int>(settings.maxPointLightShadows)),
         0,
         static_cast<int>(MAX_POINT_LIGHTS)));
-    shadowSettings.resolution = static_cast<uint32_t>(std::clamp(
-        cfgManager.getOr<int>(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                              shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_RESOLUTION,
-                              static_cast<int>(shadowSettings.resolution)),
+    settings.resolution = static_cast<uint32_t>(std::clamp(
+        config.getOr<int>(documentName,
+                          shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_RESOLUTION,
+                          static_cast<int>(settings.resolution)),
         128,
         8192));
-    shadowSettings.filter = static_cast<EShadowFilter::T>(std::clamp(
-        cfgManager.getOr<int>(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                              shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_FILTER,
-                              static_cast<int>(shadowSettings.filter)),
+    settings.filter = static_cast<EShadowFilter::T>(std::clamp(
+        config.getOr<int>(documentName,
+                          shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_FILTER,
+                          static_cast<int>(settings.filter)),
         static_cast<int>(EShadowFilter::Hard),
         static_cast<int>(EShadowFilter::PCF_High)));
-    shadowSettings.bias = cfgManager.getOr<float>(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                                  shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_BIAS,
-                                                  shadowSettings.bias);
-    shadowSettings.normalBias = cfgManager.getOr<float>(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                                        shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_NORMAL_BIAS,
-                                                        shadowSettings.normalBias);
-    shadowSettings.directionalDistance = cfgManager.getOr<float>(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                                                 shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_DIST,
-                                                                 shadowSettings.directionalDistance);
-    shadowSettings.directionalStableFit = cfgManager.getOr<bool>(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                                                 shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_STABLE,
-                                                                 shadowSettings.directionalStableFit);
-    shadowSettings.directionalCascades = static_cast<uint32_t>(std::clamp(
-        cfgManager.getOr<int>(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                              shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_CASCADE,
-                              static_cast<int>(shadowSettings.directionalCascades)),
+    settings.bias = config.getOr<float>(documentName,
+                                        shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_BIAS,
+                                        settings.bias);
+    settings.normalBias = config.getOr<float>(documentName,
+                                              shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_NORMAL_BIAS,
+                                              settings.normalBias);
+    settings.directionalDistance = config.getOr<float>(documentName,
+                                                       shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_DIST,
+                                                       settings.directionalDistance);
+    settings.directionalStableFit = config.getOr<bool>(documentName,
+                                                       shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_STABLE,
+                                                       settings.directionalStableFit);
+    settings.directionalCascades = static_cast<uint32_t>(std::clamp(
+        config.getOr<int>(documentName,
+                          shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_CASCADE,
+                          static_cast<int>(settings.directionalCascades)),
         0,
         4));
 
-    if (!bEnableShadowMapping || shadowSettings.quality == EShadowQuality::Off) {
-        shadowSettings.quality = EShadowQuality::Off;
+    if (!bEnableShadowMapping || settings.quality == EShadowQuality::Off) {
+        settings.quality = EShadowQuality::Off;
     }
-    shadowSettings.pointLightEnabled    = bEnablePointLightShadow && shadowSettings.pointLightEnabled;
-    shadowSettings.maxPointLightShadows = std::min(shadowSettings.maxPointLightShadows, static_cast<uint32_t>(MAX_POINT_LIGHTS));
-
-    if (automationOverrides) {
-        applyAutomationOverrides(*automationOverrides, shadowSettings);
-    }
-
-    return shadowSettings;
+    settings.pointLightEnabled = bEnablePointLightShadow && settings.pointLightEnabled;
+    return settings;
 }
 
-void saveEditorSettings(const ShadowSettings& shadowSettings)
+ShadowSettings loadRuntimeSettings(const ShadowSettings& baseline)
 {
-    ConfigManager::Editor(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_DOC_NAME)
-        .set(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING, shadowSettings.isEnabled())
-        .set(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW, shadowSettings.pointLightEnabled)
-        .set(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS,
-             static_cast<int>(std::min(shadowSettings.maxPointLightShadows, static_cast<uint32_t>(MAX_POINT_LIGHTS))))
-        .set(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_QUALITY, static_cast<int>(shadowSettings.quality))
-        .set(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_ENABLED, shadowSettings.directionalEnabled)
-        .set(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_ENABLED, shadowSettings.pointLightEnabled)
-        .set(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_INDIRECT, shadowSettings.pointLightUseIndirect)
-        .set(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_CULL, shadowSettings.pointLightIndirectCullEnabled)
-        .set(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_RESOLUTION, static_cast<int>(shadowSettings.resolution))
-        .set(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_FILTER, static_cast<int>(shadowSettings.filter))
-        .set(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_BIAS, shadowSettings.bias)
-        .set(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_NORMAL_BIAS, shadowSettings.normalBias)
-        .set(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_DIST, shadowSettings.directionalDistance)
-        .set(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_STABLE, shadowSettings.directionalStableFit)
-        .set(shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_CASCADE, static_cast<int>(shadowSettings.directionalCascades));
+    return loadSettingsFromDocument(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME, baseline);
+}
+
+void saveRuntimeSettings(const ShadowSettings& settings)
+{
+    auto& config = ConfigManager::get();
+    config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SHADOW_MAPPING,
+               settings.isEnabled());
+    config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_POINT_LIGHT_SHADOW,
+               settings.pointLightEnabled);
+    config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_MAX_POINT_LIGHT_SHADOWS,
+               static_cast<int>(std::min(settings.maxPointLightShadows, static_cast<uint32_t>(MAX_POINT_LIGHTS))));
+    config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_QUALITY,
+               static_cast<int>(settings.quality));
+    config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_ENABLED,
+               settings.directionalEnabled);
+    config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_ENABLED,
+               settings.pointLightEnabled);
+    config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_INDIRECT,
+               settings.pointLightUseIndirect);
+    config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_POINT_CULL,
+               settings.pointLightIndirectCullEnabled);
+    config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_RESOLUTION,
+               static_cast<int>(settings.resolution));
+    config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_FILTER,
+               static_cast<int>(settings.filter));
+    config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_BIAS,
+               settings.bias);
+    config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_NORMAL_BIAS,
+               settings.normalBias);
+    config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_DIST,
+               settings.directionalDistance);
+    config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_STABLE,
+               settings.directionalStableFit);
+    config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_CASCADE,
+               static_cast<int>(settings.directionalCascades));
+    config.flushDocument(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME);
 }
 
 } // namespace shadow_settings

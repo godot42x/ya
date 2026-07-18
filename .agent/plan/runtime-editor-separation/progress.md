@@ -12,6 +12,7 @@
 - The retired App GUI dashboard and profiling facade no longer live in Runtime. `App::onRenderGUI` and the corresponding no-op sample overrides are removed; the Runtime/Render/Core/ECS/Platform source scan now has zero ImGui includes.
 - `ya-runtime` now runs an XMake pre-build guard over non-Editor source files and rejects direct Editor, ImGui, ImGuiHelper, or ImGuizmo includes.
 - Editor configuration now enters through `IAppExtension::onConfigure` after generic config initialization and before Runtime startup; Runtime no longer opens `Editor.json` or derives its startup scene from it.
+- Shadow settings are Runtime developer settings stored in `Runtime.json`: Runtime loads them before pipeline initialization and applies `Automation.json` as a temporary override. Editor edits the same typed Runtime settings through deferred pipeline commands and migrates legacy Shadow values from `Editor.json` once when needed.
 
 ## Current Boundary Gaps
 

@@ -249,7 +249,6 @@ struct DeferredRenderPipeline : public IRenderPipeline
     void               syncFrameSettings(const RenderPipelineFrameContext& frame);
     void               prepareShadowPass(RenderStageContext& stageCtx);
     void               executeDeferredMainGraph(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH);
-    void               saveShadowSettingsToConfig(const ShadowSettings& shadowSettings) const;
     [[nodiscard]] ShadowRuntimeState buildShadowState() const;
     void               markPendingResourceRefresh(EDeferredPendingResourceRefresh refresh);
     [[nodiscard]] bool hasPendingResourceRefresh(EDeferredPendingResourceRefresh refresh) const;

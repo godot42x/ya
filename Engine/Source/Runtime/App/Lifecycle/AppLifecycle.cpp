@@ -174,6 +174,13 @@ void AppLifecycle::init(App& app, AppDesc ci)
                 .bPersistIfMissing = false,
                 .bReadOnly         = true,
             });
+        ConfigManager::get().openDocument(
+            "runtime",
+            "Engine/Saved/Config/Runtime.json",
+            Config::OpenDocumentOptions{
+                .bPersistIfMissing = true,
+                .bReadOnly         = false,
+            });
         profiling::StaticInitProfiler::ensureStarted();
         profiling::StaticInitProfiler::refOBJ();
         app.configureExtensions();

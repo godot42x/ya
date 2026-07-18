@@ -1,6 +1,5 @@
 #include "DeferredRenderPipeline.h"
 
-#include "Config/ConfigManager.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Core/Profiling/Profiling.h"
@@ -66,9 +65,6 @@ ViewportOverlayStage::FrameInputs::DirectionGizmoInput buildDirectionGizmoInput(
         .lineEnd       = tc.getWorldPosition() + tc.getForward(),
     };
 }
-
-constexpr const char* DEFERRED_PIPELINE_CONFIG_DOC_NAME                       = "editor";
-constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SSAO                = "render.deferred.ssao.enabled";
 
 DeferredAttachmentFormats buildDeferredGBufferFormats(EFormat::T signedLinearFormat,
                                                       EFormat::T linearFormat,
@@ -388,7 +384,6 @@ ShadowRuntimeState DeferredRenderPipeline::buildShadowState() const
 void DeferredRenderPipeline::queueShadowSettingsChange(const ShadowSettings& shadowSettings)
 {
     _pendingShadowSettings = shadowSettings;
-    shadow_settings::saveEditorSettings(_pendingShadowSettings);
 
     if (_bShadowSettingsChangePending || !_queueFrameTask) {
         if (!_queueFrameTask) {
@@ -422,26 +417,19 @@ void DeferredRenderPipeline::applyShadowSettings(const ShadowSettings& shadowSet
     }
 
     syncShadowSettings();
-    shadow_settings::saveEditorSettings(shadowSettings);
 }
 
 void DeferredRenderPipeline::loadPersistentSettings()
 {
-    auto& cfgManager = ConfigManager::get();
-    _bEnableSSAO                    = cfgManager.getOr<bool>(DEFERRED_PIPELINE_CONFIG_DOC_NAME,
-                                          DEFERRED_PIPELINE_CONFIG_KEY_ENABLE_SSAO,
-                                          _bEnableSSAO);
     const ShadowSettings baselineShadowSettings = _shadowSettings ? *_shadowSettings : currentShadowSettings();
-    ShadowSettings shadowSettings = shadow_settings::loadEditorSettings(baselineShadowSettings, _automationShadowOverrides);
+    ShadowSettings shadowSettings = shadow_settings::loadRuntimeSettings(baselineShadowSettings);
+    if (_automationShadowOverrides) {
+        shadow_settings::applyAutomationOverrides(*_automationShadowOverrides, shadowSettings);
+    }
     if (_shadowSettings) {
         *_shadowSettings = shadowSettings;
     }
     _pendingShadowSettings = shadowSettings;
-}
-
-void DeferredRenderPipeline::saveShadowSettingsToConfig(const ShadowSettings& shadowSettings) const
-{
-    shadow_settings::saveEditorSettings(shadowSettings);
 }
 
 DeferredPipelineDebugViews DeferredRenderPipeline::buildDebugViews() const

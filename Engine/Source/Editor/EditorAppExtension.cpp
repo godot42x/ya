@@ -10,6 +10,7 @@
 #include "Runtime/App/App.h"
 #include "Runtime/App/DebugRenderSystem.h"
 #include "Runtime/App/RenderRuntime.h"
+#include "Runtime/App/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "Runtime/App/DeferredRender/DeferredRenderPipeline.h"
 
 #include <algorithm>
@@ -38,10 +39,6 @@ void applyDeferredSettingsFromConfig(App& app)
     auto settings = pipeline->buildSettingsSnapshot();
     settings.bReverseViewportY = ConfigManager::get().getOr<bool>("editor", "render.deferred.reverseViewportY", settings.bReverseViewportY);
     settings.bSSAOEnabled      = ConfigManager::get().getOr<bool>("editor", "render.deferred.ssaoEnabled", settings.bSSAOEnabled);
-    const bool bShadowsEnabled = ConfigManager::get().getOr<bool>("editor", "render.deferred.shadowsEnabled", settings.shadow.isEnabled());
-    if (!bShadowsEnabled) {
-        settings.shadow.quality = EShadowQuality::Off;
-    }
     auto& post = settings.postProcessing;
     post.bEnableInversion       = ConfigManager::get().getOr<bool>("editor", "render.postprocess.basic.inversion", post.bEnableInversion);
     post.grayscaleMode          = static_cast<PostProcessingState::EGrayscaleMode>(ConfigManager::get().getOr<int>("editor", "render.postprocess.basic.grayscale", static_cast<int>(post.grayscaleMode)));
@@ -83,6 +80,11 @@ void savePostProcessingSettings(const PostProcessingState& settings)
         .set("render.postprocess.bloom.extractIntensity", settings.bloomExtractIntensity)
         .set("render.postprocess.bloom.blurPasses", static_cast<int>(settings.bloomBlurPasses))
         .set("render.postprocess.bloom.strength", settings.bloomStrength);
+}
+
+void saveShadowSettings(const ShadowSettings& settings)
+{
+    shadow_settings::saveRuntimeSettings(settings);
 }
 
 void renderDeferredSettings(App& app)
@@ -154,6 +156,7 @@ void renderDeferredSettings(App& app)
             .set("render.deferred.ssaoEnabled", settings.bSSAOEnabled)
             .set("render.deferred.shadowsEnabled", settings.shadow.isEnabled());
         savePostProcessingSettings(post);
+        saveShadowSettings(settings.shadow);
     }
     ImGui::End();
 }
@@ -202,8 +205,11 @@ class EditorAppExtension final : public IAppExtension
   public:
     void onConfigure(App& app, AppDesc& desc) override
     {
-        (void)app;
         ConfigManager::get().openDocument("editor", "Engine/Saved/Config/Editor.json");
+        if (!shadow_settings::hasRuntimeSettings()) {
+            shadow_settings::saveRuntimeSettings(
+                shadow_settings::loadSettingsFromDocument("editor", app.getShadowSettings()));
+        }
         profiling::loadEditorConfig();
         if (!desc.defaultScenePath) {
             const std::string path = ConfigManager::get().getOr<std::string>("editor", "startup.defaultScenePath", "");

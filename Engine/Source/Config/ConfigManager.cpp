@@ -84,7 +84,7 @@ ConfigManager::Document& ConfigManager::openDocument(const std::string& name, co
     doc.bReadOnly = options.bReadOnly;
 
     bool bLoadedFromDisk = false;
-    if (auto* vfs = VirtualFileSystem::get()) {
+    if (auto* vfs = VirtualFileSystem::get(); vfs && vfs->isFileExists(path)) {
         std::string content;
         if (vfs->readFileToString(path, content) && !content.empty()) {
             try {
