@@ -399,6 +399,31 @@ void DeferredRenderPipeline::applyShadowSettings(const ShadowSettings& shadowSet
 
 void DeferredRenderPipeline::loadPersistentSettings()
 {
+    constexpr const char* RUNTIME_CONFIG_DOCUMENT = "runtime";
+
+    auto& config = ConfigManager::get();
+    _bReverseViewportY = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.reverseViewportY", _bReverseViewportY);
+    _bEnableSSAO       = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.deferred.ssaoEnabled", _bEnableSSAO);
+
+    auto& post = _postProcessStage.getState();
+    post.bEnableInversion       = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.inversion", post.bEnableInversion);
+    post.grayscaleMode          = static_cast<PostProcessingState::EGrayscaleMode>(config.getOr<int>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.grayscale", static_cast<int>(post.grayscaleMode)));
+    post.kernelMode             = static_cast<PostProcessingState::EKernelMode>(config.getOr<int>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.kernel", static_cast<int>(post.kernelMode)));
+    post.kernelTexelOffset      = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.kernelTexelOffset", post.kernelTexelOffset);
+    post.bEnableToneMapping     = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.tonemapping.enabled", post.bEnableToneMapping);
+    post.toneMappingCurve       = static_cast<PostProcessingState::EToneMappingCurve>(config.getOr<int>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.tonemapping.curve", static_cast<int>(post.toneMappingCurve)));
+    post.exposure               = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.tonemapping.exposure", post.exposure);
+    post.bEnableGammaCorrection = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.output.gammaCorrection", post.bEnableGammaCorrection);
+    post.gamma                  = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.output.gamma", post.gamma);
+    post.bEnableRandomGrain     = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.output.randomGrain", post.bEnableRandomGrain);
+    post.randomGrainStrength    = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.basic.output.randomGrainStrength", post.randomGrainStrength);
+    post.bEnableBloom           = config.getOr<bool>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.bloom.enabled", post.bEnableBloom);
+    post.bloomThreshold         = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.bloom.threshold", post.bloomThreshold);
+    post.bloomSoftKnee          = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.bloom.softKnee", post.bloomSoftKnee);
+    post.bloomExtractIntensity  = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.bloom.extractIntensity", post.bloomExtractIntensity);
+    post.bloomBlurPasses        = static_cast<uint32_t>(std::max(1, config.getOr<int>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.bloom.blurPasses", static_cast<int>(post.bloomBlurPasses))));
+    post.bloomStrength          = config.getOr<float>(RUNTIME_CONFIG_DOCUMENT, "render.postprocess.bloom.strength", post.bloomStrength);
+
     const ShadowSettings baselineShadowSettings = _shadowSettings ? *_shadowSettings : currentShadowSettings();
     ShadowSettings shadowSettings = shadow_settings::loadRuntimeSettings(baselineShadowSettings);
     if (_automationShadowOverrides) {

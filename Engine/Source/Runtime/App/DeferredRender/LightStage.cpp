@@ -18,7 +18,7 @@ namespace ya
 namespace
 {
 
-constexpr const char* LIGHT_STAGE_CONFIG_DOC_NAME            = "editor";
+constexpr const char* LIGHT_STAGE_CONFIG_DOC_NAME            = "runtime";
 constexpr const char* LIGHT_STAGE_CONFIG_KEY_PBR_DIFFUSE_IBL = "render.deferred.light.enablePBRDiffuseIBL";
 constexpr const char* LIGHT_STAGE_CONFIG_KEY_PBR_SPECULAR_IBL = "render.deferred.light.enablePBRSpecularIBL";
 

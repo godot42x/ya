@@ -26,7 +26,7 @@ static const std::vector<VertexAttribute> kLitSkinningVertexAttributes = {
 
 static const VertexBufferDescription kLitVBDesc{.slot = 0, .pitch = sizeof(ya::Vertex)};
 
-constexpr const char* FORWARD_PBR_CONFIG_DOC_NAME         = "editor";
+constexpr const char* FORWARD_PBR_CONFIG_DOC_NAME         = "runtime";
 constexpr const char* FORWARD_PBR_CONFIG_KEY_IBL_DIFFUSE  = "render.deferred.light.enablePBRDiffuseIBL";
 constexpr const char* FORWARD_PBR_CONFIG_KEY_IBL_SPECULAR = "render.deferred.light.enablePBRSpecularIBL";
 

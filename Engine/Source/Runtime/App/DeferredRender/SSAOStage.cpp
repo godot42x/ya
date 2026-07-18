@@ -21,7 +21,7 @@ namespace ya
 namespace
 {
 
-constexpr const char* SSAO_CONFIG_DOC_NAME  = "editor";
+constexpr const char* SSAO_CONFIG_DOC_NAME  = "runtime";
 constexpr const char* SSAO_CONFIG_KEY_RADIUS = "render.deferred.ssao.radius";
 constexpr const char* SSAO_CONFIG_KEY_BIAS   = "render.deferred.ssao.bias";
 constexpr const char* SSAO_CONFIG_KEY_POWER  = "render.deferred.ssao.power";

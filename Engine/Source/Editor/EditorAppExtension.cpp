@@ -15,6 +15,7 @@
 #include "Runtime/App/DeferredRender/DeferredRenderPipeline.h"
 
 #include <algorithm>
+#include <string_view>
 
 namespace ya
 {
@@ -30,40 +31,9 @@ DeferredRenderPipeline* getDeferredPipeline(App& app)
     return renderRuntime ? dynamic_cast<DeferredRenderPipeline*>(renderRuntime->getActivePipeline()) : nullptr;
 }
 
-void applyDeferredSettingsFromConfig(App& app)
-{
-    auto* pipeline = getDeferredPipeline(app);
-    if (!pipeline) {
-        return;
-    }
-
-    auto settings = pipeline->buildSettingsSnapshot();
-    settings.bReverseViewportY = ConfigManager::get().getOr<bool>("editor", "render.deferred.reverseViewportY", settings.bReverseViewportY);
-    settings.bSSAOEnabled      = ConfigManager::get().getOr<bool>("editor", "render.deferred.ssaoEnabled", settings.bSSAOEnabled);
-    auto& post = settings.postProcessing;
-    post.bEnableInversion       = ConfigManager::get().getOr<bool>("editor", "render.postprocess.basic.inversion", post.bEnableInversion);
-    post.grayscaleMode          = static_cast<PostProcessingState::EGrayscaleMode>(ConfigManager::get().getOr<int>("editor", "render.postprocess.basic.grayscale", static_cast<int>(post.grayscaleMode)));
-    post.kernelMode             = static_cast<PostProcessingState::EKernelMode>(ConfigManager::get().getOr<int>("editor", "render.postprocess.basic.kernel", static_cast<int>(post.kernelMode)));
-    post.kernelTexelOffset      = ConfigManager::get().getOr<float>("editor", "render.postprocess.basic.kernelTexelOffset", post.kernelTexelOffset);
-    post.bEnableToneMapping     = ConfigManager::get().getOr<bool>("editor", "render.postprocess.basic.tonemapping.enabled", post.bEnableToneMapping);
-    post.toneMappingCurve       = static_cast<PostProcessingState::EToneMappingCurve>(ConfigManager::get().getOr<int>("editor", "render.postprocess.basic.tonemapping.curve", static_cast<int>(post.toneMappingCurve)));
-    post.exposure               = ConfigManager::get().getOr<float>("editor", "render.postprocess.basic.tonemapping.exposure", post.exposure);
-    post.bEnableGammaCorrection = ConfigManager::get().getOr<bool>("editor", "render.postprocess.basic.output.gammaCorrection", post.bEnableGammaCorrection);
-    post.gamma                  = ConfigManager::get().getOr<float>("editor", "render.postprocess.basic.output.gamma", post.gamma);
-    post.bEnableRandomGrain     = ConfigManager::get().getOr<bool>("editor", "render.postprocess.basic.output.randomGrain", post.bEnableRandomGrain);
-    post.randomGrainStrength    = ConfigManager::get().getOr<float>("editor", "render.postprocess.basic.output.randomGrainStrength", post.randomGrainStrength);
-    post.bEnableBloom           = ConfigManager::get().getOr<bool>("editor", "render.postprocess.bloom.enabled", post.bEnableBloom);
-    post.bloomThreshold         = ConfigManager::get().getOr<float>("editor", "render.postprocess.bloom.threshold", post.bloomThreshold);
-    post.bloomSoftKnee          = ConfigManager::get().getOr<float>("editor", "render.postprocess.bloom.softKnee", post.bloomSoftKnee);
-    post.bloomExtractIntensity  = ConfigManager::get().getOr<float>("editor", "render.postprocess.bloom.extractIntensity", post.bloomExtractIntensity);
-    post.bloomBlurPasses        = static_cast<uint32_t>(ConfigManager::get().getOr<int>("editor", "render.postprocess.bloom.blurPasses", static_cast<int>(post.bloomBlurPasses)));
-    post.bloomStrength          = ConfigManager::get().getOr<float>("editor", "render.postprocess.bloom.strength", post.bloomStrength);
-    pipeline->requestSettings(settings);
-}
-
 void savePostProcessingSettings(const PostProcessingState& settings)
 {
-    ConfigManager::Editor("editor")
+    ConfigManager::Editor("runtime")
         .set("render.postprocess.basic.inversion", settings.bEnableInversion)
         .set("render.postprocess.basic.grayscale", static_cast<int>(settings.grayscaleMode))
         .set("render.postprocess.basic.kernel", static_cast<int>(settings.kernelMode))
@@ -81,6 +51,49 @@ void savePostProcessingSettings(const PostProcessingState& settings)
         .set("render.postprocess.bloom.extractIntensity", settings.bloomExtractIntensity)
         .set("render.postprocess.bloom.blurPasses", static_cast<int>(settings.bloomBlurPasses))
         .set("render.postprocess.bloom.strength", settings.bloomStrength);
+}
+
+template <typename T>
+void migrateLegacyRuntimeSetting(std::string_view key)
+{
+    auto& config = ConfigManager::get();
+    if (config.hasValue("runtime", key)) {
+        return;
+    }
+
+    T value{};
+    if (config.tryGet<T>("editor", key, value)) {
+        ConfigManager::Editor("runtime").set(key, value);
+    }
+}
+
+void migrateLegacyRuntimeSettings()
+{
+    migrateLegacyRuntimeSetting<bool>("render.deferred.reverseViewportY");
+    migrateLegacyRuntimeSetting<bool>("render.deferred.ssaoEnabled");
+    migrateLegacyRuntimeSetting<float>("render.deferred.ssao.radius");
+    migrateLegacyRuntimeSetting<float>("render.deferred.ssao.bias");
+    migrateLegacyRuntimeSetting<float>("render.deferred.ssao.power");
+    migrateLegacyRuntimeSetting<float>("render.deferred.ssao.intensity");
+    migrateLegacyRuntimeSetting<bool>("render.deferred.light.enablePBRDiffuseIBL");
+    migrateLegacyRuntimeSetting<bool>("render.deferred.light.enablePBRSpecularIBL");
+    migrateLegacyRuntimeSetting<bool>("render.postprocess.basic.inversion");
+    migrateLegacyRuntimeSetting<int>("render.postprocess.basic.grayscale");
+    migrateLegacyRuntimeSetting<int>("render.postprocess.basic.kernel");
+    migrateLegacyRuntimeSetting<float>("render.postprocess.basic.kernelTexelOffset");
+    migrateLegacyRuntimeSetting<bool>("render.postprocess.basic.tonemapping.enabled");
+    migrateLegacyRuntimeSetting<int>("render.postprocess.basic.tonemapping.curve");
+    migrateLegacyRuntimeSetting<float>("render.postprocess.basic.tonemapping.exposure");
+    migrateLegacyRuntimeSetting<bool>("render.postprocess.basic.output.gammaCorrection");
+    migrateLegacyRuntimeSetting<float>("render.postprocess.basic.output.gamma");
+    migrateLegacyRuntimeSetting<bool>("render.postprocess.basic.output.randomGrain");
+    migrateLegacyRuntimeSetting<float>("render.postprocess.basic.output.randomGrainStrength");
+    migrateLegacyRuntimeSetting<bool>("render.postprocess.bloom.enabled");
+    migrateLegacyRuntimeSetting<float>("render.postprocess.bloom.threshold");
+    migrateLegacyRuntimeSetting<float>("render.postprocess.bloom.softKnee");
+    migrateLegacyRuntimeSetting<float>("render.postprocess.bloom.extractIntensity");
+    migrateLegacyRuntimeSetting<int>("render.postprocess.bloom.blurPasses");
+    migrateLegacyRuntimeSetting<float>("render.postprocess.bloom.strength");
 }
 
 void saveShadowSettings(const ShadowSettings& settings)
@@ -152,7 +165,7 @@ void renderDeferredSettings(App& app)
     ImGui::EndDisabled();
     if (changed) {
         pipeline->requestSettings(settings);
-        ConfigManager::Editor("editor")
+        ConfigManager::Editor("runtime")
             .set("render.deferred.reverseViewportY", settings.bReverseViewportY)
             .set("render.deferred.ssaoEnabled", settings.bSSAOEnabled)
             .set("render.deferred.shadowsEnabled", settings.shadow.isEnabled());
@@ -207,6 +220,7 @@ class EditorAppExtension final : public IAppExtension
     void onConfigure(App& app, AppDesc& desc) override
     {
         ConfigManager::get().openDocument("editor", "Engine/Saved/Config/Editor.json");
+        migrateLegacyRuntimeSettings();
         if (!shadow_settings::hasRuntimeSettings()) {
             shadow_settings::saveRuntimeSettings(
                 shadow_settings::loadSettingsFromDocument("editor", app.getShadowSettings()));
@@ -230,7 +244,6 @@ class EditorAppExtension final : public IAppExtension
 
         _layer = std::make_unique<EditorLayer>(&app);
         _layer->onAttach();
-        applyDeferredSettingsFromConfig(app);
         gEditorLayer = _layer.get();
     }
 

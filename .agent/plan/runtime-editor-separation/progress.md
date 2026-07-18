@@ -13,6 +13,7 @@
 - `ya-runtime` now runs an XMake pre-build guard over non-Editor source files and rejects direct Editor, ImGui, ImGuiHelper, or ImGuizmo includes.
 - Editor configuration now enters through `IAppExtension::onConfigure` after generic config initialization and before Runtime startup; Runtime no longer opens `Editor.json` or derives its startup scene from it.
 - Shadow settings are Runtime developer settings stored in `Runtime.json`: Runtime loads them before pipeline initialization and applies `Automation.json` as a temporary override. Editor edits the same typed Runtime settings through deferred pipeline commands and migrates legacy Shadow values from `Editor.json` once when needed.
+- Deferred render, post-processing, SSAO, and IBL settings now follow the same Runtime Developer Settings ownership: Runtime reads `Runtime.json` before stage initialization, while Editor migrates legacy values and writes only the Runtime document.
 - `SceneManager` now owns only generic active-scene activation, destruction, loading, and cloning. `EditorPlaySession` owns authoring/play scene references and handles clone/restore through generic `IAppExtension` state-transition hooks; a Runtime-only App retains its active scene across state transitions.
 
 ## Current Boundary Gaps

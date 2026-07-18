@@ -9,6 +9,7 @@ Produce a packageable `ya-runtime` that has no Editor, ImGui, ImGuizmo, or edito
 - Runtime play state is `Stopped`, `Simulation`, or `Runtime`; it is not an editor identity.
 - Editor-only state includes selection, editor camera, gizmos, docking, undo/redo, authoring config, and scene copy/restore policy.
 - Runtime exposes typed render snapshots and deferred commands. Editor does not access render pipeline internals.
+- Settings are owned by their runtime consumer: Runtime Developer Settings define typed defaults, schema, loading, and command application from `Runtime.json`; Editor provides only an authoring surface and legacy migration. Editor-private layout and workflow preferences remain in `Editor.json`.
 - XMake targets, not broad preprocessor conditionals, enforce package exclusion: `ya-runtime` <- `ya-editor` <- `YAEditor`; game targets depend only on `ya-runtime`.
 
 ## Ordered Work
