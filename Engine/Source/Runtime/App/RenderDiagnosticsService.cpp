@@ -180,10 +180,6 @@ void RenderDiagnosticsService::onFrameEnd()
     }
 }
 
-void RenderDiagnosticsService::renderGUI()
-{
-}
-
 bool RenderDiagnosticsService::requestAutomationRenderDocCapture()
 {
     _renderDoc.bAutomationCaptureFinished    = false;

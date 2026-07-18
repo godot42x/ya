@@ -423,16 +423,4 @@ void ForwardViewportAuxPasses::drawDebug(const DrawContext& drawCtx)
     cmdBuf->debugEndLabel();
 }
 
-void ForwardViewportAuxPasses::renderSettingsGUI()
-{
-}
-
-void ForwardViewportAuxPasses::renderDebugGUI()
-{
-}
-
-void ForwardViewportAuxPasses::renderGUIPipelines()
-{
-}
-
 } // namespace ya

@@ -33,8 +33,6 @@ struct RenderDiagnosticsService
 
     void onFrameBegin();
     void onFrameEnd();
-    void renderGUI();
-
     [[nodiscard]] bool requestAutomationRenderDocCapture();
     [[nodiscard]] bool isAutomationRenderDocCapturePending() const;
     [[nodiscard]] bool isAutomationRenderDocCaptureTerminal() const;

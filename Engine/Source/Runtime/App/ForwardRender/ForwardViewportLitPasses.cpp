@@ -830,8 +830,4 @@ DescriptorImageInfo ForwardViewportLitPasses::getDescriptorImageInfo(const Textu
     return DescriptorImageInfo(tb.getImageViewHandle(), tb.getSamplerHandle(), EImageLayout::ShaderReadOnlyOptimal);
 }
 
-void ForwardViewportLitPasses::renderGUIPipelines()
-{
-}
-
 } // namespace ya

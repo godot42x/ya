@@ -316,8 +316,4 @@ void ForwardViewportUnlitPass::draw(const DrawContext& drawCtx)
     cmdBuf->debugEndLabel();
 }
 
-void ForwardViewportUnlitPass::renderGUIPipelines()
-{
-}
-
 } // namespace ya

@@ -60,8 +60,6 @@ class ForwardViewportUnlitPass
     void prepare(const RenderStageContext& ctx);
     void refreshPipelineFormats(const RenderAttachmentFormats& formats);
     void draw(const DrawContext& ctx);
-    void renderGUIPipelines();
-
   private:
     void initUnlit(const InitDesc& desc);
     void prepareUnlit(const RenderStageContext& ctx);

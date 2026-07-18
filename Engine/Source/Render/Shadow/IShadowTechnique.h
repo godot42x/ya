@@ -50,8 +50,6 @@ struct IShadowTechnique
     /// Record GPU commands (compute dispatch, render passes).
     virtual void execute(ICommandBuffer* cmdBuf, uint32_t flightIndex, const RenderFrameData& frameData) = 0;
 
-    /// ImGui debug panel for this technique.
-    virtual void renderGUI() = 0;
 };
 
 } // namespace ya

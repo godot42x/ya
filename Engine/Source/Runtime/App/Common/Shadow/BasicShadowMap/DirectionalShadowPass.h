@@ -43,8 +43,6 @@ class DirectionalShadowPass
         const BasicShadowFramePayload& payload,
         std::optional<RGPassHandle> dependency = std::nullopt);
 
-    void renderGUI();
-
     void setShadowExtent(Extent2D extent) { _shadowExtent = extent; }
     void refreshPipeline(EFormat::T depthFormat);
     void setDepthAttachment(stdptr<IImage> image, stdptr<IImageView> view);

@@ -112,10 +112,6 @@ class ForwardViewportAuxPasses
     void drawDirectionOverlay(const DrawContext& ctx);
     void drawDebug(const DrawContext& ctx);
 
-    void renderSettingsGUI();
-    void renderDebugGUI();
-    void renderGUIPipelines();
-
   private:
     void initSimple(const InitDesc& desc);
     void initSkybox(const InitDesc& desc);

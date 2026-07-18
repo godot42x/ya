@@ -83,8 +83,6 @@ class ForwardViewportLitPasses
     void drawPBR(const DrawContext& ctx);
     void drawPhong(const DrawContext& ctx);
 
-    void renderGUIPipelines();
-
     [[nodiscard]] PhongDebugUBO& phongDebug() { return _phongDebug; }
     [[nodiscard]] const PhongDebugUBO& phongDebug() const { return _phongDebug; }
 

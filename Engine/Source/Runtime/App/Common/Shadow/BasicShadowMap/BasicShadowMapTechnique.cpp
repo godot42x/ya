@@ -146,10 +146,6 @@ void BasicShadowMapTechnique::rebuildLayerTextures(const std::shared_ptr<IImage>
 // GUI
 // ═══════════════════════════════════════════════════════════════════════════
 
-void BasicShadowMapTechnique::renderGUI()
-{
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Payload / Point shadow matrix calculation
 // ═══════════════════════════════════════════════════════════════════════════

@@ -129,8 +129,6 @@ struct VulkanPipeline : public ya::IGraphicsPipeline
     // 修改描述后仅标记 dirty，下一帧 beginFrame 重建 pipeline
     void updateDesc(GraphicsPipelineCreateInfo ci) override;
     void beginFrame() override;
-    void renderGUI() override;
-
     void            setSampleCount(ESampleCount::T sampleCount) override;
     ESampleCount::T getSampleCount() const override { return _ci.multisampleState.sampleCount; }
     void            setCullMode(ECullMode::T cullMode) override;

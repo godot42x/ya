@@ -129,7 +129,6 @@ struct IGraphicsPipeline : public IPipeline
 
     virtual bool recreate(const GraphicsPipelineCreateInfo& ci) = 0;
     virtual void beginFrame()                                   = 0;
-    virtual void renderGUI()                                    = 0;
 
     /**
      * @brief Bind this pipeline to a command buffer

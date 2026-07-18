@@ -21,6 +21,7 @@
 - Retired Deferred pipeline ImGui implementations have been removed; only no-op compatibility entry points remain until the shared pipeline UI interfaces are removed in the Forward/stage migration.
 - `IRenderPipelineSettingsUI` and `IRenderPipelineDebugUI` are removed. Render Target inspection and format requests now use a dedicated non-UI pipeline capability; Forward and Deferred empty GUI entry points are gone.
 - `IRenderStage` no longer exposes GUI hooks. Empty Deferred, Forward viewport, Shadow-stage, and post-processing UI entry points are removed; remaining independent Shadow/Vulkan GUI APIs are the next migration boundary.
+- Empty Shadow technique/pass, Vulkan pipeline, RenderDiagnostics, and Forward auxiliary GUI entry points are removed. Runtime, Render, and Platform source now have no remaining `renderGUI` APIs.
 
 ## Runtime UI Cleanup
 

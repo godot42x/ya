@@ -504,8 +504,4 @@ void PointShadowPass::rebuildFaceTextures(std::shared_ptr<IImage> shadowImage)
     }
 }
 
-void PointShadowPass::renderGUI()
-{
-}
-
 } // namespace ya

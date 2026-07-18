@@ -358,10 +358,6 @@ std::string VulkanPipeline::buildGuiNodeLabel() const
     return visibleLabel + "##" + hiddenId;
 }
 
-void VulkanPipeline::renderGUI()
-{
-}
-
 
 bool VulkanPipeline::createPipelineInternal()
 {

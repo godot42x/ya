@@ -367,11 +367,6 @@ void DirectionalShadowPass::refreshPipeline(EFormat::T depthFormat)
     }
 }
 
-void DirectionalShadowPass::renderGUI()
-{
-    // Directional shadow has no runtime-tweakable params currently
-}
-
 void DirectionalShadowPass::setDepthAttachment(stdptr<IImage> image, stdptr<IImageView> view)
 {
     _depthImage = std::move(image);
