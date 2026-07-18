@@ -1,12 +1,9 @@
 #include "Runtime/App/Common/PostProcessingStage.h"
 
-#include "Config/ConfigManager.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/Swapchain.h"
-#include "imgui.h"
-
 #include <algorithm>
 
 namespace ya
@@ -14,26 +11,6 @@ namespace ya
 
 namespace
 {
-
-constexpr const char* POSTPROCESS_CONFIG_DOC_NAME                    = "editor";
-constexpr const char* POSTPROCESS_CONFIG_KEY_ENABLE                  = "render.postprocess.enabled";
-constexpr const char* POSTPROCESS_CONFIG_KEY_BLOOM_ENABLE            = "render.postprocess.bloom.enabled";
-constexpr const char* POSTPROCESS_CONFIG_KEY_BLOOM_THRESHOLD         = "render.postprocess.bloom.threshold";
-constexpr const char* POSTPROCESS_CONFIG_KEY_BLOOM_SOFT_KNEE         = "render.postprocess.bloom.softKnee";
-constexpr const char* POSTPROCESS_CONFIG_KEY_BLOOM_EXTRACT_INTENSITY = "render.postprocess.bloom.extractIntensity";
-constexpr const char* POSTPROCESS_CONFIG_KEY_BLOOM_BLUR_PASSES       = "render.postprocess.bloom.blurPasses";
-constexpr const char* POSTPROCESS_CONFIG_KEY_BLOOM_STRENGTH          = "render.postprocess.bloom.strength";
-constexpr const char* POSTPROCESS_CONFIG_KEY_INVERSION               = "render.postprocess.basic.inversion";
-constexpr const char* POSTPROCESS_CONFIG_KEY_GRAYSCALE               = "render.postprocess.basic.grayscale";
-constexpr const char* POSTPROCESS_CONFIG_KEY_KERNEL                  = "render.postprocess.basic.kernel";
-constexpr const char* POSTPROCESS_CONFIG_KEY_KERNEL_TEXEL_OFFSET     = "render.postprocess.basic.kernelTexelOffset";
-constexpr const char* POSTPROCESS_CONFIG_KEY_TONEMAPPING_ENABLE      = "render.postprocess.basic.tonemapping.enabled";
-constexpr const char* POSTPROCESS_CONFIG_KEY_TONEMAPPING_CURVE       = "render.postprocess.basic.tonemapping.curve";
-constexpr const char* POSTPROCESS_CONFIG_KEY_TONEMAPPING_EXPOSURE    = "render.postprocess.basic.tonemapping.exposure";
-constexpr const char* POSTPROCESS_CONFIG_KEY_GAMMA_CORRECTION_ENABLE = "render.postprocess.basic.output.gammaCorrection";
-constexpr const char* POSTPROCESS_CONFIG_KEY_GAMMA                   = "render.postprocess.basic.output.gamma";
-constexpr const char* POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_ENABLE     = "render.postprocess.basic.output.randomGrain";
-constexpr const char* POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_STRENGTH   = "render.postprocess.basic.output.randomGrainStrength";
 
 stdptr<RenderImage> createPostprocessRenderImage(IRender* render,
                                                  std::string_view label,
@@ -85,26 +62,6 @@ void PostProcessingStage::init(const InitDesc& desc)
     _render      = desc.render;
     _colorFormat = desc.colorFormat;
     _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
-
-    auto& config               = ConfigManager::get();
-    bEnabled                   = config.getOr<bool>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_ENABLE, bEnabled);
-    _state.bEnableBloom        = config.getOr<bool>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_BLOOM_ENABLE, _state.bEnableBloom);
-    _state.bloomThreshold      = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_BLOOM_THRESHOLD, _state.bloomThreshold);
-    _state.bloomSoftKnee       = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_BLOOM_SOFT_KNEE, _state.bloomSoftKnee);
-    _state.bloomExtractIntensity = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_BLOOM_EXTRACT_INTENSITY, _state.bloomExtractIntensity);
-    _state.bloomBlurPasses     = static_cast<uint32_t>(std::max(1, config.getOr<int>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_BLOOM_BLUR_PASSES, static_cast<int>(_state.bloomBlurPasses))));
-    _state.bloomStrength       = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_BLOOM_STRENGTH, _state.bloomStrength);
-    _state.bEnableInversion    = config.getOr<bool>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_INVERSION, _state.bEnableInversion);
-    _state.grayscaleMode       = static_cast<PostProcessingState::EGrayscaleMode>(config.getOr<int>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_GRAYSCALE, static_cast<int>(_state.grayscaleMode)));
-    _state.kernelMode          = static_cast<PostProcessingState::EKernelMode>(config.getOr<int>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_KERNEL, static_cast<int>(_state.kernelMode)));
-    _state.kernelTexelOffset   = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_KERNEL_TEXEL_OFFSET, _state.kernelTexelOffset);
-    _state.bEnableToneMapping  = config.getOr<bool>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_TONEMAPPING_ENABLE, _state.bEnableToneMapping);
-    _state.toneMappingCurve    = static_cast<PostProcessingState::EToneMappingCurve>(config.getOr<int>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_TONEMAPPING_CURVE, static_cast<int>(_state.toneMappingCurve)));
-    _state.exposure            = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_TONEMAPPING_EXPOSURE, _state.exposure);
-    _state.bEnableGammaCorrection = config.getOr<bool>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_GAMMA_CORRECTION_ENABLE, _state.bEnableGammaCorrection);
-    _state.gamma               = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_GAMMA, _state.gamma);
-    _state.bEnableRandomGrain  = config.getOr<bool>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_ENABLE, _state.bEnableRandomGrain);
-    _state.randomGrainStrength = config.getOr<float>(POSTPROCESS_CONFIG_DOC_NAME, POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_STRENGTH, _state.randomGrainStrength);
 
     _bloomProcessor = ya::makeShared<BloomPostprocessing>();
     _bloomProcessor->init(BloomPostprocessing::InitDesc{
@@ -179,42 +136,15 @@ void PostProcessingStage::resolvePreparedResources(const RenderGraphResourceRegi
 
 void PostProcessingStage::renderSettingsGUI()
 {
-    if (ImGui::Checkbox("Enable Post Process", &bEnabled)) {
-        ConfigManager::Editor(POSTPROCESS_CONFIG_DOC_NAME)
-            .set(POSTPROCESS_CONFIG_KEY_ENABLE, bEnabled);
-    }
-
-    if (_bloomProcessor) {
-        ImGui::SeparatorText("Bloom");
-        _bloomProcessor->renderSettingsGUI(_state);
-    }
-
-    if (_postProcessor) {
-        ImGui::SeparatorText("Image Effects");
-        _postProcessor->renderSettingsGUI(_state);
-    }
+    // Editor owns UI. Runtime exposes PostProcessingState and setters only.
 }
 
 void PostProcessingStage::renderTechnicalGUI()
 {
-    if (_bloomProcessor) {
-        _bloomProcessor->renderTechnicalGUI();
-    }
-    if (_postProcessor) {
-        _postProcessor->renderTechnicalGUI();
-    }
 }
 
 void PostProcessingStage::renderGUI()
 {
-    if (!ImGui::TreeNode("Post Process")) {
-        return;
-    }
-
-    renderSettingsGUI();
-    renderTechnicalGUI();
-
-    ImGui::TreePop();
 }
 
 RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,

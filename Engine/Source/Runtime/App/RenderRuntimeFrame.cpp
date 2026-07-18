@@ -5,8 +5,6 @@
 #include "Core/Profiling/PerfState.h"
 #include "Core/UI/UIManager.h"
 #include "DeferredRender/DeferredRenderPipeline.h"
-#include "ImGuiHelper.h"
-#include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/2D/Render2D.h"
 #include "Render/Core/RenderGraphImportUtils.h"
 #include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
@@ -161,11 +159,11 @@ void RenderRuntime::renderViewportPassOverlays(const RenderPipelineFrameContext&
 
     Render2D::onRender();
     UIManager::get()->render();
-    Render2D::onRenderGUI();
     Render2D::end();
 }
 
 void RenderRuntime::renderPresentationPass(float deltaTime,
+                                           const std::function<void(ICommandBuffer*)>& recordPresentationExtensions,
                                            const std::function<void(ICommandBuffer*)>& recordPresentationCapture,
                                            ICommandBuffer* cmdBuf)
 {
@@ -190,9 +188,6 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
         return;
     }
 
-    auto*          imguiManager         = &ImGuiManager::get();
-    App*           app                  = _app;
-    const bool     bSubmitImguiToVulkan = _render && _render->getAPI() == ERenderAPI::Vulkan;
     const Extent2D presentationExtent = presentationImage->getExtent();
     RenderGraph    graph;
     const auto     output = graph.importTexture(
@@ -205,7 +200,7 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
         [output](RGPassBuilder& passBuilder) {
             passBuilder.useColorAttachment(output);
         },
-        [output, presentationExtent, deltaTime, imguiManager, app, bSubmitImguiToVulkan](RGRenderContext& rgCtx) {
+        [output, presentationExtent, recordPresentationExtensions](RGRenderContext& rgCtx) {
             rgCtx.beginColorRendering({
                 .color = output,
                 .renderArea = Rect2D{
@@ -216,17 +211,8 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
                 .finalLayout = EImageLayout::PresentSrcKHR,
             });
 
-            YA_CORE_ASSERT(imguiManager != nullptr, "Presentation pass requires ImGuiManager");
-            imguiManager->beginFrame();
-            if (app) {
-                YA_PERF_SCOPE(perf::sample::renderImgui(), perf::metric::cpuTimeMs(), perf::domain::render());
-                app->renderGUI(deltaTime);
-            }
-            imguiManager->endFrame();
-            imguiManager->render();
-
-            if (bSubmitImguiToVulkan) {
-                imguiManager->submitVulkan(rgCtx.getCommandBuffer().getHandleAs<VkCommandBuffer>());
+            if (recordPresentationExtensions) {
+                recordPresentationExtensions(&rgCtx.getCommandBuffer());
             }
 
             rgCtx.endRendering();

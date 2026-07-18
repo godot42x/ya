@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Base.h"
 #include "reflects-core/lib.h"
 
 #include "Core/Reflection/ContainerProperty.h"

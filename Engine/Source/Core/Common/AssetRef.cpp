@@ -2,7 +2,6 @@
 #include "Resource/AssetManager.h"
 #include "Core/Log.h"
 #include "Core/TypeIndex.h"
-#include "Editor/TypeRenderer.h" // For DeferredModificationQueue
 #include "Render/Core/Texture.h"
 #include "Render/Mesh.h"
 #include "Render/Model.h"

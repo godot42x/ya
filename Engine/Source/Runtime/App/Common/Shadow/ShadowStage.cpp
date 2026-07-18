@@ -8,8 +8,6 @@
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
 
-#include "imgui.h"
-
 namespace ya
 {
 
@@ -59,20 +57,10 @@ std::optional<RGPassHandle> ShadowStage::appendGraphPasses(
 
 void ShadowStage::renderGUI()
 {
-    if (!ImGui::TreeNode("Shadow Maps")) {
-        return;
-    }
-
-    renderTechnicalGUI();
-
-    ImGui::TreePop();
 }
 
 void ShadowStage::renderTechnicalGUI()
 {
-    if (_technique) {
-        _technique->renderGUI();
-    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

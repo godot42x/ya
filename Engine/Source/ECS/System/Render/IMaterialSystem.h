@@ -7,7 +7,6 @@
 #include "ECS/System/Render/IRenderSystem.h"
 #include "Render/Core/CommandBuffer.h"
 #include "glm/mat4x4.hpp"
-#include "imgui.h"
 
 
 namespace ya
@@ -34,7 +33,5 @@ struct IMaterialSystem : public IRenderSystem
         return static_cast<T*>(this);
     }
 
-  protected:
-    // void onRenderGUI() override { IRenderSystem::onRenderGUI();}
 };
 } // namespace ya

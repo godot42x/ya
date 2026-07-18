@@ -1,20 +1,13 @@
 #pragma once
 
 #include "Core/Input/InputManager.h"
-#include "Editor/EditorLayer.h"
-#include "ImGuiHelper.h"
 #include "SDL3/SDL_events.h"
 
 namespace ya
 {
 
-// Forward declaration
-struct EditorLayer;
-
 inline int processSDLEvent(SDL_Event &event, auto &&dispatchEvent)
 {
-    ImGuiManager::get().processEvents(event);
-
     switch (SDL_EventType(event.type))
     {
     case SDL_EVENT_FIRST:

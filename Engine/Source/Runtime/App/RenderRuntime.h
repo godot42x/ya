@@ -2,7 +2,6 @@
 
 #include "Core/Base.h"
 
-#include "Editor/EditorLayer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Core/RenderGraphExecutor.h"
@@ -10,6 +9,7 @@
 #include "Render/Shader.h"
 #include "Runtime/App/Common/IRenderPipeline.h"
 #include "Runtime/App/Common/RenderTargetEditorCatalog.h"
+#include "Runtime/App/Common/RenderViewportSnapshot.h"
 #include "Runtime/App/DeferredRender/DeferredPipelineDebugViews.h"
 #include "Runtime/App/OffscreenTaskService.h"
 #include "Runtime/App/RenderDiagnosticsService.h"
@@ -27,7 +27,6 @@ struct AppDesc;
 enum AppMode : int;
 struct SceneManager;
 struct Scene;
-struct EditorLayer;
 struct ForwardRenderPipeline;
 struct Texture;
 struct RenderImage;
@@ -91,15 +90,12 @@ struct RenderRuntime
             const std::vector<RenderOverlaySprite3D>* worldSprites  = nullptr;
         } overlay{};
 
-        struct EditorInput
-        {
-            EditorLayer* target = nullptr;
-        } editor{};
-
         struct AutomationInput
         {
             std::function<void(ICommandBuffer*)> recordPresentationCapture;
         } automation{};
+
+        std::function<void(ICommandBuffer*)> recordPresentationExtensions;
 
         RenderPipelineFrameContext pipeline{};
     };
@@ -175,9 +171,6 @@ struct RenderRuntime
     [[nodiscard]] ERenderPipeline getRenderPipeline() const { return _renderPipeline; }
     [[nodiscard]] ERenderPipeline getPendingRenderPipeline() const { return _pendingRenderPipeline; }
     void setPendingRenderPipeline(ERenderPipeline renderPipeline) { _pendingRenderPipeline = renderPipeline; }
-    void renderWorldSettingsGUI();
-    void renderProfilingDetailsGUI();
-    void renderRenderingInternalsGUI();
 
     [[nodiscard]] stdptr<IDescriptorPool>      getSkyboxDescriptorPool() const { return _sharedResourceProvider.getSkyboxDescriptorPool(); }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxDescriptorSetLayout() const { return _sharedResourceProvider.getSkyboxDescriptorSetLayout(); }
@@ -195,6 +188,7 @@ struct RenderRuntime
     [[nodiscard]] Extent2D      getViewportExtent() const;
     [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews() const;
     [[nodiscard]] RenderTargetEditorCatalog buildRenderTargetEditorCatalog() const;
+    [[nodiscard]] RenderViewportSnapshot buildViewportSnapshot() const;
     [[nodiscard]] bool            isDeferredPipelineActive() const { return _renderPipeline == ERenderPipeline::Deferred; }
 
   private:
@@ -212,21 +206,20 @@ struct RenderRuntime
     void                   destroyRenderBackend();
     bool                   prepareFrame(const FrameInput& input, int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf);
-    void                   syncEditorFrame(EditorLayer* editorLayer);
     void                   ensureViewportRectInitialized(const FrameInput& input);
     bool                   beginFrameCommandBuffer(int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   beginViewportPassAndTickPipeline(const FrameInput& input, ICommandBuffer* cmdBuf);
     void                   renderViewportPassOverlays(const RenderPipelineFrameContext& pipelineFrame, const FrameInput::OverlayInput& overlay, ICommandBuffer* cmdBuf);
     void                   renderPresentationPass(float deltaTime,
+                                                  const std::function<void(ICommandBuffer*)>& recordPresentationExtensions,
                                                   const std::function<void(ICommandBuffer*)>& recordPresentationCapture,
                                                   ICommandBuffer* cmdBuf);
     void                   submitFrame(int32_t imageIndex, ICommandBuffer* cmdBuf);
 
-    void updateEditorViewportContext(EditorLayer* editorLayer);
-    void appendForwardDebugSlots(EditorViewportContext& ctx);
-    void appendDeferredDebugSlots(EditorViewportContext& ctx);
-    void appendEnvironmentDebugSlots(EditorViewportContext& ctx);
-    [[nodiscard]] std::shared_ptr<RenderImage> getEditorViewportImageShared() const;
+    void appendForwardDebugSlots(RenderViewportSnapshot& snapshot) const;
+    void appendDeferredDebugSlots(RenderViewportSnapshot& snapshot) const;
+    void appendEnvironmentDebugSlots(RenderViewportSnapshot& snapshot) const;
+    [[nodiscard]] std::shared_ptr<RenderImage> getViewportSnapshotImageShared() const;
 
     void                   initActivePipeline();
     void                   shutdownActivePipeline();

@@ -510,15 +510,7 @@ void applyScheduledSmokeActions(App& app, uint64_t frameIndex)
         resizeRect.extent = glm::vec2(static_cast<float>(automation.viewportResize->width),
                                       static_cast<float>(automation.viewportResize->height));
 
-        if (app._editorLayer) {
-            app._editorLayer->queueViewportResize(resizeRect);
-        }
-        else {
-            renderRuntime->onViewportResized(resizeRect);
-            if (resizeRect.extent.y > 0.0f) {
-                app.camera.setAspectRatio(resizeRect.extent.x / resizeRect.extent.y);
-            }
-        }
+        renderRuntime->onViewportResized(resizeRect);
 
         runtimeState.bViewportResizeApplied = true;
         YA_CORE_INFO("Automation queued viewport resize to {}x{} at frame {}",

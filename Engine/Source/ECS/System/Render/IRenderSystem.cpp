@@ -7,36 +7,8 @@
 #include "Scene/SceneManager.h"
 
 
-
-#include "imgui.h"
-
 namespace ya
 {
-
-
-void IRenderSystem::renderGUI()
-{
-    bool bOpen = ImGui::TreeNode(_label.c_str());
-    if (!bOpen) {
-        return;
-    }
-    if(ImGui::Checkbox("Reverse Viewport Y", &bReverseViewportY)){
-    }
-    bool bEnabledLocal = this->bEnabled;
-    if (ImGui::Checkbox("Enabled", &bEnabledLocal)) {
-        App::get()->taskManager.registerFrameTask([this, bEnabledLocal]() {
-            // TODO: weak check
-            this->bEnabled = bEnabledLocal;
-        });
-    }
-
-    if (_pipeline) {
-        _pipeline->renderGUI();
-    }
-
-    onRenderGUI();
-    ImGui::TreePop();
-}
 
 App* IRenderSystem::getApp() const
 {

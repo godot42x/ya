@@ -3,7 +3,6 @@
 
 #include "App.h"
 #include "DeferredRender/DeferredRenderPipeline.h"
-#include "Editor/EditorLayer.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/System/ResourceResolveSystem.h"
@@ -26,7 +25,7 @@ constexpr uint32_t CATEGORY_SHARED      = 5;
 constexpr uint32_t CATEGORY_POSTPROCESS = 6;
 
 template <typename TGetter>
-void appendShadowDebugSlots(EditorViewportContext& ctx,
+void appendShadowDebugSlots(RenderViewportSnapshot& ctx,
                             IImageView*            directionalDepth,
                             const std::shared_ptr<IImage>& shadowDepthImage,
                             TGetter&&              pointFaceGetter,
@@ -43,9 +42,9 @@ void appendShadowDebugSlots(EditorViewportContext& ctx,
         });
     }
 
-    EditorViewportContext::DebugSpec::Group pointShadowGroup{
+    RenderViewportSnapshot::DebugSpec::Group pointShadowGroup{
         .label         = "Point Shadow Cubemap",
-        .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
+        .type          = RenderViewportSnapshot::DebugSpec::EGroupType::CubeMapFaces,
         .categoryIndex = categoryIndex,
         .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
         .groupSize     = 6,
@@ -75,7 +74,7 @@ void appendShadowDebugSlots(EditorViewportContext& ctx,
 
 } // namespace
 
-std::shared_ptr<RenderImage> RenderRuntime::getEditorViewportImageShared() const
+std::shared_ptr<RenderImage> RenderRuntime::getViewportSnapshotImageShared() const
 {
     if (_renderPipeline == ERenderPipeline::Forward) {
         if (!_forwardPipeline) {
@@ -100,18 +99,14 @@ std::shared_ptr<RenderImage> RenderRuntime::getEditorViewportImageShared() const
     return nullptr;
 }
 
-void RenderRuntime::updateEditorViewportContext(EditorLayer* editorLayer)
+RenderViewportSnapshot RenderRuntime::buildViewportSnapshot() const
 {
-    if (!editorLayer) {
-        return;
-    }
-
     const auto debugOutputs = buildPipelineDebugOutputCatalog();
 
-    EditorViewportContext ctx;
+    RenderViewportSnapshot ctx;
     ctx.bForwardPipeline       = (_renderPipeline == ERenderPipeline::Forward);
     ctx.bPostprocessingEnabled = debugOutputs.bPostprocessingEnabled;
-    ctx.viewportImageOwner     = getEditorViewportImageShared();
+    ctx.viewportImageOwner     = getViewportSnapshotImageShared();
     ctx.viewportImageView      = ctx.viewportImageOwner && ctx.viewportImageOwner->getImageView()
         ? ctx.viewportImageOwner->getImageView()
         : nullptr;
@@ -143,10 +138,10 @@ void RenderRuntime::updateEditorViewportContext(EditorLayer* editorLayer)
     }
 
     appendEnvironmentDebugSlots(ctx);
-    editorLayer->setViewportContext(ctx);
+    return ctx;
 }
 
-void RenderRuntime::appendForwardDebugSlots(EditorViewportContext& ctx)
+void RenderRuntime::appendForwardDebugSlots(RenderViewportSnapshot& ctx) const
 {
     if (!_forwardPipeline) {
         return;
@@ -173,9 +168,9 @@ void RenderRuntime::appendForwardDebugSlots(EditorViewportContext& ctx)
                     continue;
                 }
 
-                EditorViewportContext::DebugSpec::Group skyboxGroup{
+                RenderViewportSnapshot::DebugSpec::Group skyboxGroup{
                     .label         = "Skybox Cubemap",
-                    .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
+                    .type          = RenderViewportSnapshot::DebugSpec::EGroupType::CubeMapFaces,
                     .categoryIndex = CATEGORY_SKYBOX,
                     .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
                     .groupSize     = CubeFace_Count,
@@ -218,7 +213,7 @@ void RenderRuntime::appendForwardDebugSlots(EditorViewportContext& ctx)
     }
 }
 
-void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
+void RenderRuntime::appendDeferredDebugSlots(RenderViewportSnapshot& ctx) const
 {
     const auto debugOutputs = buildPipelineDebugOutputCatalog();
     const auto deferredViews = getDeferredPipelineDebugViews();
@@ -356,7 +351,7 @@ void RenderRuntime::appendDeferredDebugSlots(EditorViewportContext& ctx)
     }
 }
 
-void RenderRuntime::appendEnvironmentDebugSlots(EditorViewportContext& ctx)
+void RenderRuntime::appendEnvironmentDebugSlots(RenderViewportSnapshot& ctx) const
 {
     if (!_app || !_app->getSceneManager()) {
         return;
@@ -373,9 +368,9 @@ void RenderRuntime::appendEnvironmentDebugSlots(EditorViewportContext& ctx)
             auto preview = resolver->getEnvironmentLightingPreview(entity);
 
             if (preview.bHasRenderableCubemap && preview.cubemapImage) {
-                EditorViewportContext::DebugSpec::Group cubemapGroup{
+                RenderViewportSnapshot::DebugSpec::Group cubemapGroup{
                     .label         = "Environment Cubemap",
-                    .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
+                    .type          = RenderViewportSnapshot::DebugSpec::EGroupType::CubeMapFaces,
                     .categoryIndex = CATEGORY_ENVIRONMENT,
                     .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
                     .groupSize     = CubeFace_Count,
@@ -404,9 +399,9 @@ void RenderRuntime::appendEnvironmentDebugSlots(EditorViewportContext& ctx)
             }
 
             if (preview.bHasIrradianceMap && preview.irradianceImage) {
-                EditorViewportContext::DebugSpec::Group irradianceGroup{
+                RenderViewportSnapshot::DebugSpec::Group irradianceGroup{
                     .label         = "Environment Irradiance Cubemap",
-                    .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces,
+                    .type          = RenderViewportSnapshot::DebugSpec::EGroupType::CubeMapFaces,
                     .categoryIndex = CATEGORY_ENVIRONMENT,
                     .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
                     .groupSize     = CubeFace_Count,
@@ -436,9 +431,9 @@ void RenderRuntime::appendEnvironmentDebugSlots(EditorViewportContext& ctx)
 
             if (preview.bHasPrefilterMap && preview.prefilterImage && preview.prefilterMipCount > 0) {
                 const uint32_t                          mipLevels = preview.prefilterMipCount;
-                EditorViewportContext::DebugSpec::Group prefilterGroup{
+                RenderViewportSnapshot::DebugSpec::Group prefilterGroup{
                     .label         = "Environment Prefilter Cubemap",
-                    .type          = EditorViewportContext::DebugSpec::EGroupType::CubeMapMipFaces,
+                    .type          = RenderViewportSnapshot::DebugSpec::EGroupType::CubeMapMipFaces,
                     .categoryIndex = CATEGORY_ENVIRONMENT,
                     .beginIndex    = static_cast<uint32_t>(ctx.debugSpec.slots.size()),
                     .groupSize     = CubeFace_Count,

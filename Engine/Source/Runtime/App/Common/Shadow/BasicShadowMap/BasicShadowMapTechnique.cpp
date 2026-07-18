@@ -8,8 +8,6 @@
 #include "Render/RenderFrameData.h"
 
 #include "Core/Math/Math.h"
-#include "imgui.h"
-
 #include <format>
 
 namespace ya
@@ -150,32 +148,6 @@ void BasicShadowMapTechnique::rebuildLayerTextures(const std::shared_ptr<IImage>
 
 void BasicShadowMapTechnique::renderGUI()
 {
-    if (!ImGui::TreeNode("Basic Shadow Map Technique")) {
-        return;
-    }
-
-    if (ImGui::TreeNode("Stats")) {
-        ImGui::Text("Technique: Basic Shadow Map");
-        ImGui::Text("Resolution: %u", _settings.resolution);
-        ImGui::Text("Point lights: %u / %u", _lastPreparedPointLightCount, _settings.getEffectivePointLightCount());
-        ImGui::Text("Point Indirect: %s", _settings.pointLightUseIndirect ? "On" : "Off");
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("Passes")) {
-        if (ImGui::TreeNode("Directional")) {
-            _directionalPass.renderGUI();
-            ImGui::TextDisabled("No runtime controls");
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNode("Point")) {
-            _pointPass.renderGUI();
-            ImGui::TreePop();
-        }
-        ImGui::TreePop();
-    }
-
-    ImGui::TreePop();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

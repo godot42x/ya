@@ -85,9 +85,19 @@ void DebugRenderSystem::draw(ICommandBuffer*  cmdBuf,
     _primitives.draw(cmdBuf, viewportWidth, viewportHeight, projection, view);
 }
 
-void DebugRenderSystem::renderGUI()
+DebugPrimitives::SettingsSnapshot DebugRenderSystem::buildSettingsSnapshot() const
 {
-    _primitives.renderGUI();
+    return _primitives.buildSettingsSnapshot();
+}
+
+void DebugRenderSystem::requestSettings(const DebugPrimitives::SettingsSnapshot& settings)
+{
+    _primitives.requestSettings(settings);
+}
+
+void DebugRenderSystem::setReverseViewportY(bool enabled)
+{
+    _primitives.setReverseViewportY(enabled);
 }
 
 } // namespace ya

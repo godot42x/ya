@@ -524,9 +524,9 @@ void EditorLayer::toolbar()
     if (ImGui::ImageButton("Play", *_playIcon, ImVec2(size, size)))
     {
         _sceneHierarchyPanel.setSelection(nullptr);
-        if (_app->isEditorMode()) {
+        if (_app->isStopped()) {
             App::get()->taskManager.registerFrameTask([app = _app]() {
-                if (app && app->isEditorMode()) {
+                if (app && app->isStopped()) {
                     app->startRuntime();
                 }
             });
@@ -536,9 +536,9 @@ void EditorLayer::toolbar()
     if (ImGui::ImageButton("Simulate", *_simulationIcon, ImVec2(size, size)))
     {
         _sceneHierarchyPanel.setSelection(nullptr);
-        if (_app->isEditorMode()) {
+        if (_app->isStopped()) {
             App::get()->taskManager.registerFrameTask([app = _app]() {
-                if (app && app->isEditorMode()) {
+                if (app && app->isStopped()) {
                     app->startSimulation();
                 }
             });

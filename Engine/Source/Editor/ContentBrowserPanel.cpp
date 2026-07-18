@@ -1,4 +1,6 @@
 #include "ContentBrowserPanel.h"
+
+#include "Editor/EditorLayer.h"
 #include "Core/System/PathUtils.h"
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"

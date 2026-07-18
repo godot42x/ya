@@ -29,7 +29,7 @@ struct SceneManager
     stdptr<Scene> _activeScene = nullptr;
     stdptr<Scene> _editorScene = nullptr;
     stdptr<Scene> _playScene   = nullptr;
-    AppState      _appState    = AppState::Editor;
+    AppState      _appState    = AppState::Stopped;
     // std::string   _currentScenePath;
     std::unordered_map<entt::registry*, Scene*> _reg2scene;
     std::unordered_set<const Scene*>            _knownScenes;

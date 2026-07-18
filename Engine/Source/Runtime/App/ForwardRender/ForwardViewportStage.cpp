@@ -11,8 +11,6 @@
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Scene/Scene.h"
 
-#include "imgui.h"
-
 namespace ya
 {
 
@@ -399,42 +397,6 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
 
 void ForwardViewportStage::renderGUI()
 {
-    if (!ImGui::TreeNode("Viewport Renderer")) return;
-
-    if (ImGui::TreeNode("Settings")) {
-        _auxPasses.renderSettingsGUI();
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("Debug")) {
-        if (ImGui::TreeNode("Phong Debug")) {
-            auto& phongDebug = _litPasses.phongDebug();
-            bool bDebugNormal = (phongDebug.bDebugNormal != 0);
-            bool bDebugDepth  = (phongDebug.bDebugDepth != 0);
-            bool bDebugUV     = (phongDebug.bDebugUV != 0);
-
-            if (ImGui::Checkbox("Debug Normal", &bDebugNormal)) phongDebug.bDebugNormal = bDebugNormal ? 1u : 0u;
-            if (ImGui::Checkbox("Debug Depth", &bDebugDepth)) phongDebug.bDebugDepth = bDebugDepth ? 1u : 0u;
-            if (ImGui::Checkbox("Debug UV", &bDebugUV)) phongDebug.bDebugUV = bDebugUV ? 1u : 0u;
-            ImGui::DragFloat4("Float Param", glm::value_ptr(phongDebug.floatParam), 0.1f);
-            ImGui::TreePop();
-        }
-
-        if (ImGui::TreeNode("Debug Render")) {
-            _auxPasses.renderDebugGUI();
-            ImGui::TreePop();
-        }
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("Pipelines")) {
-        _unlitPass.renderGUIPipelines();
-        _litPasses.renderGUIPipelines();
-        _auxPasses.renderGUIPipelines();
-        ImGui::TreePop();
-    }
-
-    ImGui::TreePop();
 }
 
 // ═══════════════════════════════════════════════════════════════════════

@@ -5,8 +5,6 @@
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Render.h"
 
-#include "imgui.h"
-
 namespace ya
 {
 
@@ -320,11 +318,6 @@ void ForwardViewportUnlitPass::draw(const DrawContext& drawCtx)
 
 void ForwardViewportUnlitPass::renderGUIPipelines()
 {
-    if (ImGui::TreeNode("Unlit")) {
-        _unlitStatic.pipeline->renderGUI();
-        _unlitSkinned.pipeline->renderGUI();
-        ImGui::TreePop();
-    }
 }
 
 } // namespace ya

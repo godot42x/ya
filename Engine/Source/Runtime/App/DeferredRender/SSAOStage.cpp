@@ -11,8 +11,6 @@
 #include "Render/Render.h"
 #include "Resource/Texture/TextureLibrary.h"
 
-#include "imgui.h"
-
 #include <array>
 #include <format>
 #include <vector>
@@ -370,42 +368,14 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
 
 void SSAOStage::renderSettingsGUI()
 {
-    bool bDirty = false;
-    bDirty |= ImGui::DragFloat("Radius", &_radius, 0.01f, 0.05f, 5.0f, "%.3f");
-    bDirty |= ImGui::DragFloat("Bias", &_bias, 0.001f, 0.0f, 0.2f, "%.4f");
-    bDirty |= ImGui::DragFloat("Power", &_power, 0.01f, 0.1f, 4.0f, "%.3f");
-    bDirty |= ImGui::DragFloat("Intensity", &_intensity, 0.05f, 0.0f, 8.0f, "%.3f");
-
-    if (bDirty) {
-        ConfigManager::Editor(SSAO_CONFIG_DOC_NAME)
-            .set(SSAO_CONFIG_KEY_RADIUS, _radius)
-            .set(SSAO_CONFIG_KEY_BIAS, _bias)
-            .set(SSAO_CONFIG_KEY_POWER, _power)
-            .set(SSAO_CONFIG_KEY_INTENSITY, _intensity);
-    }
 }
 
 void SSAOStage::renderTechnicalGUI()
 {
-    ImGui::Text("Descriptor writes: %u", _lastInputDescriptorWriteCount);
-
-    if (ImGui::TreeNode("SSAO Pipeline")) {
-        _pipeline->renderGUI();
-        ImGui::TreePop();
-    }
 }
 
 void SSAOStage::renderGUI()
 {
-    if (!ImGui::TreeNode("Ambient Occlusion")) {
-        return;
-    }
-
-    renderSettingsGUI();
-
-    renderTechnicalGUI();
-
-    ImGui::TreePop();
 }
 
 } // namespace ya

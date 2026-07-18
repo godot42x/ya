@@ -4,8 +4,6 @@
 #include "Render/Core/RenderResourceFactory.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 
-#include "ImGuiHelper.h"
-
 #include <algorithm>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -50,6 +48,7 @@ void DebugPrimitives::destroy()
 
 void DebugPrimitives::beginFrame()
 {
+    applyPendingSettings();
     if (_linePipeline) {
         _linePipeline->beginFrame();
     }
@@ -63,6 +62,41 @@ void DebugPrimitives::beginFrame()
     _queuedShapeInstances.clear();
 
     clearImmediate();
+}
+
+DebugPrimitives::SettingsSnapshot DebugPrimitives::buildSettingsSnapshot() const
+{
+    return {
+        .bEnabled            = _bEnabled,
+        .bDepthTest          = _bDepthTest,
+        .bDrawLines          = _bDrawLines,
+        .bDrawShapes         = _bDrawShapes,
+        .pendingLineCount    = _queuedLineVertices.size() / 2,
+        .pendingShapeCount   = _queuedShapeInstances.size(),
+        .frameLineCount      = _frameLineVertices.size() / 2,
+        .frameShapeCount     = _frameShapeInstances.size(),
+        .immediateLineCount  = _immediateLineVertices.size() / 2,
+        .immediateShapeCount = _immediateShapeInstances.size(),
+    };
+}
+
+void DebugPrimitives::requestSettings(const SettingsSnapshot& settings)
+{
+    _pendingSettings   = settings;
+    _bSettingsPending  = true;
+}
+
+void DebugPrimitives::applyPendingSettings()
+{
+    if (!_bSettingsPending) {
+        return;
+    }
+
+    _bEnabled         = _pendingSettings.bEnabled;
+    _bDepthTest       = _pendingSettings.bDepthTest;
+    _bDrawLines       = _pendingSettings.bDrawLines;
+    _bDrawShapes      = _pendingSettings.bDrawShapes;
+    _bSettingsPending = false;
 }
 
 void DebugPrimitives::clear()
@@ -153,7 +187,7 @@ void DebugPrimitives::draw(ICommandBuffer*  cmdBuf,
                            const glm::mat4& projection,
                            const glm::mat4& view)
 {
-    if (!bEnabled || !cmdBuf || viewportWidth == 0 || viewportHeight == 0) {
+    if (!_bEnabled || !cmdBuf || viewportWidth == 0 || viewportHeight == 0) {
         return;
     }
 
@@ -163,7 +197,7 @@ void DebugPrimitives::draw(ICommandBuffer*  cmdBuf,
     updateFrameUBO();
     const uint32_t flightIndex = _render ? _render->getCurrentFrameIndex() % MAX_FLIGHTS_IN_FLIGHT : 0;
 
-    if (bDrawLines) {
+    if (_bDrawLines) {
         if (!_frameLineVertices.empty()) {
             drawLines(cmdBuf, viewportWidth, viewportHeight, flightIndex, _frameLineVertices);
         }
@@ -171,7 +205,7 @@ void DebugPrimitives::draw(ICommandBuffer*  cmdBuf,
             drawLines(cmdBuf, viewportWidth, viewportHeight, flightIndex, _immediateLineVertices);
         }
     }
-    if (bDrawShapes) {
+    if (_bDrawShapes) {
         if (!_frameShapeInstances.empty()) {
             drawShapes(cmdBuf, viewportWidth, viewportHeight, flightIndex, _frameShapeInstances);
         }
@@ -181,33 +215,6 @@ void DebugPrimitives::draw(ICommandBuffer*  cmdBuf,
     }
 }
 
-void DebugPrimitives::renderGUI()
-{
-    if (!ImGui::TreeNode("Debug Primitives")) {
-        return;
-    }
-
-    ImGui::Checkbox("Enabled", &bEnabled);
-    ImGui::Checkbox("Depth Test", &bDepthTest);
-    ImGui::Checkbox("Draw Lines", &bDrawLines);
-    ImGui::Checkbox("Draw Shapes", &bDrawShapes);
-    size_t pendingLineCount  = _queuedLineVertices.size() / 2;
-    size_t pendingShapeCount = _queuedShapeInstances.size();
-    ImGui::Text("Pending Lines: %d", static_cast<int>(pendingLineCount));
-    ImGui::Text("Pending Shapes: %d", static_cast<int>(pendingShapeCount));
-    ImGui::Text("Frame Lines: %d", static_cast<int>(_frameLineVertices.size() / 2));
-    ImGui::Text("Frame Shapes: %d", static_cast<int>(_frameShapeInstances.size()));
-    ImGui::Text("Immediate Lines: %d", static_cast<int>(_immediateLineVertices.size() / 2));
-    ImGui::Text("Immediate Shapes: %d", static_cast<int>(_immediateShapeInstances.size()));
-    if (_linePipeline) {
-        _linePipeline->renderGUI();
-    }
-    if (_shapePipeline) {
-        _shapePipeline->renderGUI();
-    }
-
-    ImGui::TreePop();
-}
 void DebugPrimitives::initFrameResources()
 {
     _frameDSL = IDescriptorSetLayout::create(_render, DescriptorSetLayoutDesc{
@@ -355,7 +362,7 @@ void DebugPrimitives::updateDepthState()
         }
 
         auto ci                                   = pipeline->getDesc();
-        ci.depthStencilState.bDepthTestEnable     = bDepthTest;
+        ci.depthStencilState.bDepthTestEnable     = _bDepthTest;
         ci.depthStencilState.bDepthWriteEnable    = false;
         ci.depthStencilState.depthCompareOp       = ECompareOp::LessOrEqual;
         pipeline->updateDesc(std::move(ci));
@@ -375,7 +382,7 @@ void DebugPrimitives::setViewportAndScissor(ICommandBuffer* cmdBuf, uint32_t vie
 {
     float viewportY      = 0.0f;
     float viewportHeightSigned = static_cast<float>(viewportHeight);
-    if (bReverseViewportY) {
+    if (_bReverseViewportY) {
         viewportY             = static_cast<float>(viewportHeight);
         viewportHeightSigned  = -viewportHeightSigned;
     }

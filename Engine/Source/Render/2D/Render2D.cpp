@@ -8,7 +8,6 @@
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
 #include "Render/RenderDefines.h"
-#include "imgui.h"
 
 #include "Resource/AssetManager.h"
 
@@ -62,56 +61,6 @@ void Render2D::begin(const FRender2dContext& ctx)
     data.windowWidth  = ctx.windowWidth;
     Extent2D extent{.width = data.windowWidth, .height = data.windowHeight};
     quadData->begin(extent);
-}
-
-void Render2D::onImGui()
-{
-    ImGui::Checkbox("bReverseViewPort", &data2D.bReverseViewport);
-
-    // Debug: cull mode override for world-space pipeline (useful for inspecting front/back faces)
-    int cull = (int)(data.worldCullMode);
-    if (ImGui::Combo("World Cull Mode", &cull, "None\0Front\0Back\0FrontAndBack\0")) {
-        switch (cull) {
-        case 0:
-            data.worldCullMode = ECullMode::None;
-            break;
-        case 1:
-            data.worldCullMode = ECullMode::Front;
-            break;
-        case 2:
-            data.worldCullMode = ECullMode::Back;
-            break;
-        case 3:
-            data.worldCullMode = ECullMode::FrontAndBack;
-            break;
-        default:
-            data.worldCullMode = ECullMode::Front;
-            break;
-        }
-    }
-    cull = (int)data.screenCullMode;
-    if (ImGui::Combo("Screen Cull Mode", &cull, "None\0Front\0Back\0FrontAndBack\0")) {
-        switch (cull) {
-        case 0:
-            data.screenCullMode = ECullMode::None;
-            break;
-        case 1:
-            data.screenCullMode = ECullMode::Front;
-            break;
-        case 2:
-            data.screenCullMode = ECullMode::Back;
-            break;
-        case 3:
-            data.screenCullMode = ECullMode::FrontAndBack;
-            break;
-        default:
-            data.screenCullMode = ECullMode::Front;
-            break;
-        }
-    }
-
-    ImGui::InputInt("Text Layout Mode", &data2D.TextLayoutMode);
-    quadData->onImGui();
 }
 
 

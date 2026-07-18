@@ -58,7 +58,7 @@ bool SceneManager::unloadScene()
 
     const bool bHadScene = (_editorScene != nullptr);
     destroySceneIfNeeded(_editorScene);
-    _appState = AppState::Editor;
+    _appState = AppState::Stopped;
     _activeScene.reset();
     return bHadScene;
 }
@@ -78,14 +78,14 @@ bool SceneManager::setEditorScene(stdptr<Scene> scene)
     destroySceneIfNeeded(_editorScene);
     _editorScene = scene;
     initSceneIfNeeded(_editorScene.get());
-    _appState = AppState::Editor;
+    _appState = AppState::Stopped;
     setActiveScene(_editorScene);
     return true;
 }
 
 bool SceneManager::enterPlayMode(AppState state)
 {
-    YA_CORE_ASSERT(state != AppState::Editor, "enterPlayMode requires a play state");
+    YA_CORE_ASSERT(state != AppState::Stopped, "enterPlayMode requires a play state");
 
     if (!_editorScene) {
         YA_CORE_WARN("Cannot enter play mode without an editor scene");
@@ -117,12 +117,12 @@ bool SceneManager::exitPlayMode()
 {
     if (!isInPlayMode()) {
         setActiveScene(_editorScene);
-        _appState = AppState::Editor;
+        _appState = AppState::Stopped;
         return false;
     }
 
     destroySceneIfNeeded(_playScene);
-    _appState = AppState::Editor;
+    _appState = AppState::Stopped;
     setActiveScene(_editorScene);
     return true;
 }

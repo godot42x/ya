@@ -145,7 +145,6 @@ struct DebugSkinning
         mesh->draw(cmdBuf);
     }
 
-    void renderGUI();
 };
 
 } // namespace ya

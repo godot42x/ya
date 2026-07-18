@@ -8,8 +8,6 @@
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Resource/Texture/TextureLibrary.h"
 
-#include "imgui.h"
-
 #include <string>
 #include <vector>
 
@@ -420,46 +418,14 @@ void LightStage::execute(const RenderStageContext& ctx)
 
 void LightStage::renderSettingsGUI()
 {
-    bool bEnablePBRDiffuseIBL  = _bEnablePBRDiffuseIBL;
-    bool bEnablePBRSpecularIBL = _bEnablePBRSpecularIBL;
-    bool bDirty                = false;
-    bDirty |= ImGui::Checkbox("Enable PBR Diffuse IBL", &bEnablePBRDiffuseIBL);
-    bDirty |= ImGui::Checkbox("Enable PBR Specular IBL", &bEnablePBRSpecularIBL);
-    if (bDirty) {
-        setIBLSettings(bEnablePBRDiffuseIBL, bEnablePBRSpecularIBL);
-        ConfigManager::Editor(LIGHT_STAGE_CONFIG_DOC_NAME)
-            .set(LIGHT_STAGE_CONFIG_KEY_PBR_DIFFUSE_IBL, _bEnablePBRDiffuseIBL)
-            .set(LIGHT_STAGE_CONFIG_KEY_PBR_SPECULAR_IBL, _bEnablePBRSpecularIBL);
-    }
 }
 
 void LightStage::renderTechnicalGUI()
 {
-    if (ImGui::TreeNode("Light Performance"))
-    {
-        auto& perf = PerfState::Get();
-        ImGui::Text("Light prepare CPU: %.3f ms", perf.getLastValue(perf::sample::deferredLightPrepare(), perf::metric::cpuTimeMs()));
-        ImGui::Text("Light execute CPU: %.3f ms", perf.getLastValue(perf::sample::deferredLightExecute(), perf::metric::cpuTimeMs()));
-        ImGui::Text("Descriptor writes: gbuffer=%u shadow=%u", _lastGBufferDescriptorWriteCount, _lastShadowDescriptorWriteCount);
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("Light Pipeline")) {
-        _pipeline->renderGUI();
-        ImGui::TreePop();
-    }
 }
 
 void LightStage::renderGUI()
 {
-    if (!ImGui::TreeNode("Lighting")) {
-        return;
-    }
-
-    renderSettingsGUI();
-    renderTechnicalGUI();
-
-    ImGui::TreePop();
 }
 
 } // namespace ya

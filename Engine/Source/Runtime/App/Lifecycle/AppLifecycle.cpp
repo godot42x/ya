@@ -16,8 +16,6 @@
 
 #include "Core/UI/UIManager.h"
 
-#include "Editor/TypeRenderer.h"
-
 #include "ECS/System/ComponentLinkageSystem.h"
 #include "ECS/System/LuaScriptingSystem.h"
 #include "ECS/System/ModelInstantiationSystem.h"
@@ -265,15 +263,8 @@ void AppLifecycle::init(App& app, AppDesc ci)
         app._systems.clear();
         app._resourceResolveSystem = nullptr; });
 
-    app._editorLayer = new EditorLayer(&app);
-    app._editorLayer->onAttach();
-    app._deleter.push("Editor", [&app](void*)
-                      {
-        app._editorLayer->onDetach();
-        delete app._editorLayer;
-        app._editorLayer = nullptr; });
-
-    ya::registerBuiltinTypeRenderers();
+    app.attachExtensions();
+    app._deleter.push("AppExtensions", [&app](void*) { app.detachExtensions(); });
 
     app._luaScriptingSystem = new LuaScriptingSystem();
     app._luaScriptingSystem->init();
@@ -307,8 +298,8 @@ void AppLifecycle::init(App& app, AppDesc ci)
         editorCameraRotation = *app._ci.automation.editorCameraRotation;
     }
 
-    app.camera.setPerspective(45.0f, 16.0f / 9.0f, 0.1f, 100.0f);
-    app.camera.setPositionAndRotation(editorCameraPosition, editorCameraRotation);
+    (void)editorCameraPosition;
+    (void)editorCameraRotation;
 }
 
 void AppLifecycle::handleSystemSignals(App& app)
@@ -432,7 +423,7 @@ bool AppLifecycle::loadScene(App& app, const std::string& path)
         stopSimulation(app);
         bWaitedForModeTransition = true;
         break;
-    case AppState::Editor:
+    case AppState::Stopped:
         break;
     }
 
@@ -470,7 +461,7 @@ void AppLifecycle::onSceneInit(App& app, Scene* scene)
 
 void AppLifecycle::onSceneDestroy(App& app, Scene* scene)
 {
-    (void)scene;
+    app.notifyExtensionsSceneDestroyed(scene);
 
     for (auto& frameData : app._renderFrameDataPerFlight) {
         frameData.clear();
@@ -484,17 +475,7 @@ void AppLifecycle::onSceneDestroy(App& app, Scene* scene)
 
 void AppLifecycle::onSceneActivated(App& app, Scene* scene)
 {
-    uint64_t selectedUUID = app._editorLayer ? app._editorLayer->getSelectedEntityUUID() : 0;
-
-    if (app._editorLayer) {
-        app._editorLayer->setSceneContext(scene);
-
-        Entity* remappedEntity = nullptr;
-        if (scene && selectedUUID != 0) {
-            remappedEntity = scene->getEntityByUUID(selectedUUID);
-        }
-        app._editorLayer->selectEntity(remappedEntity);
-    }
+    app.notifyExtensionsSceneActivated(scene);
 }
 
 void AppLifecycle::onEnterRuntime(App& app)
@@ -504,8 +485,8 @@ void AppLifecycle::onEnterRuntime(App& app)
 
 void AppLifecycle::startRuntime(App& app)
 {
-    if (app._appState != AppState::Editor) {
-        YA_CORE_WARN("Cannot start runtime: not in editor mode");
+    if (app._appState != AppState::Stopped) {
+        YA_CORE_WARN("Cannot start runtime: app is not stopped");
         return;
     }
 
@@ -525,8 +506,8 @@ void AppLifecycle::startRuntime(App& app)
 
 void AppLifecycle::startSimulation(App& app)
 {
-    if (app._appState != AppState::Editor) {
-        YA_CORE_WARN("Cannot start simulation: not in editor mode");
+    if (app._appState != AppState::Stopped) {
+        YA_CORE_WARN("Cannot start simulation: app is not stopped");
         return;
     }
 
@@ -560,7 +541,7 @@ void AppLifecycle::stopRuntime(App& app)
     if (app._sceneManager) {
         app._sceneManager->exitPlayMode();
     }
-    app._appState = AppState::Editor;
+    app._appState = AppState::Stopped;
     if (app._sceneManager) {
         app._sceneManager->setAppState(app._appState);
     }
@@ -585,7 +566,7 @@ void AppLifecycle::stopSimulation(App& app)
     if (app._sceneManager) {
         app._sceneManager->exitPlayMode();
     }
-    app._appState = AppState::Editor;
+    app._appState = AppState::Stopped;
     if (app._sceneManager) {
         app._sceneManager->setAppState(app._appState);
     }

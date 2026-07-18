@@ -7,8 +7,6 @@
 
 #include "Platform/Render/Vulkan/VulkanRender.h"
 
-#include "ImGuiHelper.h"
-
 #include <SDL3/SDL.h>
 #include <cstdlib>
 #include <filesystem>
@@ -184,47 +182,6 @@ void RenderDiagnosticsService::onFrameEnd()
 
 void RenderDiagnosticsService::renderGUI()
 {
-    if (!ImGui::TreeNode("RenderDoc")) {
-        return;
-    }
-
-    auto& renderDoc  = _renderDoc;
-    bool  bAvailable = renderDoc.capture && renderDoc.capture->isAvailable();
-    ImGui::Text("Available: %s", bAvailable ? "Yes" : "No");
-    ImGui::TextWrapped("DLL Path: %s", renderDoc.configuredDllPath.empty() ? "<default>" : renderDoc.configuredDllPath.c_str());
-    ImGui::TextWrapped("Output Dir: %s", renderDoc.configuredOutputDir.empty() ? "<default>" : renderDoc.configuredOutputDir.c_str());
-    if (bAvailable) {
-        bool bCaptureEnabled = renderDoc.capture->isCaptureEnabled();
-        if (ImGui::Checkbox("Capture Enabled", &bCaptureEnabled)) {
-            renderDoc.capture->setCaptureEnabled(bCaptureEnabled);
-        }
-
-        bool bHudVisible = renderDoc.capture->isHUDVisible();
-        if (ImGui::Checkbox("Show RenderDoc HUD", &bHudVisible)) {
-            renderDoc.capture->setHUDVisible(bHudVisible);
-        }
-
-        ImGui::Text("Capturing: %s", renderDoc.capture->isCapturing() ? "Yes" : "No");
-        ImGui::Text("Delay Frames: %u", renderDoc.capture->getDelayFrames());
-        ImGui::Combo("On Capture", &renderDoc.onCaptureAction, "None\0Open Replay UI\0Open Capture Folder\0");
-        ImGui::TextWrapped("Last Capture: %s", renderDoc.lastCapturePath.empty() ? "<none>" : renderDoc.lastCapturePath.c_str());
-
-        bool bCanCapture = renderDoc.capture->isCaptureEnabled();
-        ImGui::BeginDisabled(!bCanCapture);
-        if (ImGui::Button("Capture Next Frame (F9)")) {
-            renderDoc.capture->requestNextFrame();
-        }
-        if (ImGui::Button("Capture After 120 Frames (Ctrl+F9)")) {
-            renderDoc.capture->requestAfterFrames(120);
-        }
-        ImGui::EndDisabled();
-
-        if (ImGui::Button("Open Last Capture Folder") && !renderDoc.lastCapturePath.empty()) {
-            openCaptureDirectoryInOS(renderDoc.lastCapturePath);
-        }
-    }
-
-    ImGui::TreePop();
 }
 
 bool RenderDiagnosticsService::requestAutomationRenderDocCapture()

@@ -189,6 +189,7 @@ int AppFrameLoop::iterate(App& app, float dt)
 int AppFrameLoop::processEvent(App& app, SDL_Event& event)
 {
     YA_PROFILE_FUNCTION()
+    app.dispatchNativeEvent(event);
     processSDLEvent(
         event,
         [&app](const auto& e)
@@ -225,7 +226,7 @@ void AppFrameLoop::tickLogic(App& app, float dt)
     }
 
     switch (app._appState) {
-    case AppState::Editor:
+    case AppState::Stopped:
         break;
     case AppState::Simulation:
     case AppState::Runtime:
@@ -241,10 +242,7 @@ void AppFrameLoop::tickLogic(App& app, float dt)
         watcher->poll();
     }
 
-    {
-        YA_PROFILE_SCOPE("Logic/EditorUpdate");
-        app._editorLayer->onUpdate(dt);
-    }
+    app.tickExtensions(dt);
     {
         YA_PROFILE_SCOPE("Logic/InputPostUpdate");
         app.inputManager.postUpdate();
@@ -254,11 +252,6 @@ void AppFrameLoop::tickLogic(App& app, float dt)
         YA_PROFILE_SCOPE("Logic/InputPreUpdate");
         app.inputManager.preUpdate();
     }
-    {
-        YA_PROFILE_SCOPE("Logic/EditorCamera");
-        app.cameraController.update(app.camera, app.inputManager, dt);
-    }
-
     auto* render = app.getRender();
     if (!render) {
         return;
@@ -276,20 +269,7 @@ void AppFrameLoop::tickLogic(App& app, float dt)
 
 void AppFrameLoop::syncViewportState(App& app)
 {
-    auto* renderRuntime = app.getRenderRuntime();
-    if (!renderRuntime || !app._editorLayer) {
-        return;
-    }
-
-    Rect2D pendingRect;
-    if (!app._editorLayer->getPendingViewportResize(pendingRect)) {
-        return;
-    }
-
-    renderRuntime->onViewportResized(pendingRect);
-    if (pendingRect.extent.x > 0 && pendingRect.extent.y > 0) {
-        app.camera.setAspectRatio(pendingRect.extent.x / pendingRect.extent.y);
-    }
+    (void)app;
 }
 
 Extent2D AppFrameLoop::resolveViewportExtent(const App& app, RenderRuntime* renderRuntime, const Rect2D& viewportRect)
@@ -398,7 +378,7 @@ namespace
 std::vector<RenderOverlaySprite2D> buildScreenOverlaySprites(const App& app)
 {
     std::vector<RenderOverlaySprite2D> sprites;
-    if (app._appMode != AppMode::Drawing || !app._editorLayer || app.clicked.empty()) {
+    if (app._appMode != AppMode::Drawing || app.clicked.empty()) {
         return sprites;
     }
 
@@ -411,13 +391,8 @@ std::vector<RenderOverlaySprite2D> buildScreenOverlaySprites(const App& app)
         auto* texture = textureHandle.get();
         YA_CORE_ASSERT(texture, "Texture not found");
 
-        glm::vec2 viewportPos;
-        if (!app._editorLayer->screenToViewport(screenPos, viewportPos)) {
-            continue;
-        }
-
         RenderOverlaySprite2D sprite;
-        sprite.viewportPos = viewportPos;
+        sprite.viewportPos = screenPos;
         sprite.size        = {50.0f, 50.0f};
         sprite.texture     = texture;
         sprites.push_back(sprite);
@@ -493,6 +468,8 @@ void AppFrameLoop::tickRender(App& app, float dt)
         return;
     }
 
+    app.prepareExtensionsForRender(dt);
+
     auto& diagnostics = renderRuntime->getDiagnosticsService();
     diagnostics.onFrameBegin();
 
@@ -549,9 +526,6 @@ void AppFrameLoop::tickRender(App& app, float dt)
             .screenSprites = &screenOverlaySprites,
             .worldSprites  = &worldOverlaySprites,
         },
-        .editor = {
-            .target = app._editorLayer,
-        },
         .automation = {
             .recordPresentationCapture = [&app](ICommandBuffer* cmdBuf)
             {
@@ -563,6 +537,12 @@ void AppFrameLoop::tickRender(App& app, float dt)
                 AppAutomation::recordPresentationCapture(app.getFrameIndex(),
                                                          cmdBuf);
             },
+        },
+        .recordPresentationExtensions = [&app, dt](ICommandBuffer* commandBuffer)
+        {
+            if (commandBuffer) {
+                app.recordExtensionPresentation(*commandBuffer, dt);
+            }
         },
         .pipeline = pipelineFrame,
     });

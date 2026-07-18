@@ -6,7 +6,6 @@
 
 #include "Render/Core/CommandBuffer.h"
 #include "glm/mat4x4.hpp"
-#include "imgui.h"
 #include <any>
 #include <unordered_map>
 #include <utility>
@@ -103,11 +102,6 @@ struct IRenderSystem
         }
         onRender(cmdBuf, ctx);
     }
-
-
-
-    void renderGUI();
-
     App*     getApp() const;
     Scene*   getActiveScene() const;
     IRender* getRender() const;
@@ -142,10 +136,6 @@ struct IRenderSystem
         }
     }
 
-    virtual void onRenderGUI()
-    {
-        ImGui::Separator();
-    }
 };
 
 } // namespace ya

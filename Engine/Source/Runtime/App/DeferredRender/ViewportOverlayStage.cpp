@@ -107,7 +107,7 @@ void ViewportOverlayStage::init(IRender* render)
     _debugRenderSystem = &_getDebugRenderSystem();
     YA_CORE_ASSERT(_debugRenderSystem != nullptr, "ViewportOverlayStage requires debug render system instance");
     _debugRenderSystem->init(_render);
-    _debugRenderSystem->primitives().bReverseViewportY = bReverseViewportY;
+    _debugRenderSystem->setReverseViewportY(bReverseViewportY);
     _debugSkinning.init(_render);
     _debugSkinning.bReverseViewportY = bReverseViewportY;
 }
@@ -333,7 +333,7 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
         return;
     }
     auto& debugSystem = *_debugRenderSystem;
-    debugSystem.primitives().bReverseViewportY = bReverseViewportY;
+    debugSystem.setReverseViewportY(bReverseViewportY);
     _debugSkinning.bReverseViewportY   = bReverseViewportY;
 
     // Simple material entities (from snapshot)
@@ -425,25 +425,6 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
 
 void ViewportOverlayStage::renderGUI()
 {
-    if (!ImGui::TreeNode("Viewport Overlay")) {
-        return;
-    }
-
-    if (ImGui::TreeNode("Pipelines")) {
-        _skyboxPipeline->renderGUI();
-        _overlayPipeline->renderGUI();
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("Debug")) {
-        if (_debugRenderSystem) {
-            _debugRenderSystem->renderGUI();
-        }
-        _debugSkinning.renderGUI();
-        ImGui::TreePop();
-    }
-
-    ImGui::TreePop();
 }
 
 } // namespace ya

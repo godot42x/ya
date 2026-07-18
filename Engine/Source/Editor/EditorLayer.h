@@ -9,6 +9,7 @@
 #include "FilePicker.h"
 #include "ImGuiHelper.h"
 #include "Render/Core/Image.h"
+#include "Runtime/App/Common/RenderViewportSnapshot.h"
 #include "SceneHierarchyPanel.h"
 #include <imgui.h>
 
@@ -26,62 +27,7 @@ struct IImageView;
 struct IImage;
 struct RenderImage;
 
-// All render resources that the editor viewport needs, explicitly passed in from App
-struct EditorViewportContext
-{
-    // Which pipeline is active?
-    bool bForwardPipeline = false;
-
-    // Viewport output
-    std::shared_ptr<RenderImage> viewportImageOwner = nullptr;
-    IImageView*                  viewportImageView  = nullptr;
-
-    // Postprocessing
-    bool     bPostprocessingEnabled   = false;
-
-    struct ImageSlot
-    {
-        std::string             label;
-        IImageView*             defaultView = nullptr; // identity view from Texture
-        std::shared_ptr<IImageView> ownedView;
-        std::shared_ptr<IImage> image;                 // for createImageView()
-        uint32_t                categoryIndex = 0;
-        EImageAspect::T         aspectFlags   = EImageAspect::Color;
-        glm::vec4               tint          = glm::vec4(1.0);
-    };
-
-    struct DebugSpec
-    {
-        struct Category
-        {
-            std::string id;
-            std::string label;
-        };
-
-        std::vector<Category>  categories;
-        std::vector<ImageSlot> slots;
-
-        enum class EGroupType
-        {
-            Generic,
-            CubeMapFaces,
-            CubeMapMipFaces,
-        };
-
-        struct Group
-        {
-            std::string              label;
-            EGroupType               type          = EGroupType::Generic;
-            uint32_t                 categoryIndex = 0;
-            uint32_t                 beginIndex    = 0;
-            uint32_t                 slotCount     = 0;
-            uint32_t                 groupSize     = 1;
-            std::vector<std::string> itemLabels;
-        };
-
-        std::vector<Group> groups;
-    } debugSpec;
-};
+using EditorViewportContext = RenderViewportSnapshot;
 
 struct EditorLayer
 {

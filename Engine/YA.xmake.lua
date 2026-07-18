@@ -71,7 +71,7 @@ end
 
 
 
-target("ya") --"Yet Another (Game) Engine"
+target("ya-runtime")
 do
     set_kind("static")
     add_rules("ya.shader.codegen")
@@ -87,7 +87,6 @@ do
         add_files("./Source/ECS/**.cpp", { unity_group = "ECS" })
         add_files("./Source/Scene/**.cpp", { unity_group = "Scene" })
         add_files("./Source/Runtime/**.cpp", { unity_group = "Runtime" })
-        add_files("./Source/Editor/**.cpp", { unity_group = "Editor" })
     end
     -- Root source files (ImGuiHelper.cpp, WindowProvider.cpp)
     -- Exclude Implementaion/*.cpp from the broad glob; they're added
@@ -97,7 +96,14 @@ do
     -- implementation expansion via include guard and causes unresolved
     -- symbols at link time).
     add_files("./Source/**.cpp|Implementaion/*.cpp")
+    remove_files("./Source/Editor/**.cpp")
+    remove_files("./Source/ImGuiHelper.cpp")
     remove_files("./Source/Platform/Render/OpenGL/**.cpp") -- develop vulkan mainly for now
+    -- Runtime UI is now hosted by Editor extensions. These legacy controllers
+    -- have no remaining callers and must not pull ImGui into runtime builds.
+    remove_files("./Source/Runtime/App/GUI/AppGuiController.cpp")
+    remove_files("./Source/Runtime/App/GUI/AppProfilingFacade.cpp")
+    remove_files("./Source/Runtime/App/RenderRuntime.GUI.cpp")
 
     add_files("./Source/Implementaion/VulkanMemoryAllocator.cpp", { unity_ignored = true })
     add_files("./Source/Implementaion/STB.cpp", { unity_ignored = true })
@@ -115,8 +121,6 @@ do
     add_deps("utility.cc")
     add_deps("log.cc")
     add_deps("reflects-core")
-    add_deps("imgui-local")
-    add_deps("imguizmo-local")
 
 
     if is_plat("windows") then
@@ -174,4 +178,21 @@ do
         print("removing sdl log files")
         os.rm("$(projectdir)/ya.*-*-*.log")
     end)
+end
+
+target("ya-editor")
+do
+    set_kind("static")
+    add_files("./Source/Editor/**.cpp")
+    add_files("./Source/ImGuiHelper.cpp")
+    add_deps("ya-runtime")
+    add_deps("imgui-local")
+    add_deps("imguizmo-local")
+    add_includedirs("./Source", { public = true })
+end
+
+target("ya")
+do
+    set_kind("phony")
+    add_deps("ya-runtime", "ya-editor")
 end

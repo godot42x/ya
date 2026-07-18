@@ -9,7 +9,6 @@
 
 #include <array>
 #include <glm/glm.hpp>
-#include <imgui.h>
 #include <vector>
 
 namespace ya
@@ -19,6 +18,21 @@ struct Mesh;
 
 struct DebugPrimitives
 {
+    struct SettingsSnapshot
+    {
+        bool bEnabled   = true;
+        bool bDepthTest = true;
+        bool bDrawLines = true;
+        bool bDrawShapes = true;
+
+        size_t pendingLineCount   = 0;
+        size_t pendingShapeCount  = 0;
+        size_t frameLineCount     = 0;
+        size_t frameShapeCount    = 0;
+        size_t immediateLineCount = 0;
+        size_t immediateShapeCount = 0;
+    };
+
     struct LineVertex
     {
         glm::vec3 position{0.0f};
@@ -60,12 +74,6 @@ struct DebugPrimitives
     stdptr<IBuffer>           _lineVertexBuffer;
     uint32_t                  _lineVertexCapacity = 0;
 
-    bool bEnabled          = true;
-    bool bReverseViewportY = true;
-    bool bDepthTest        = true;
-    bool bDrawLines        = true;
-    bool bDrawShapes       = true;
-
     // Game-thread collected debug primitives, consumed by render thread next frame.
     std::vector<LineVertex>    _queuedLineVertices;
     std::vector<ShapeInstance> _queuedShapeInstances;
@@ -101,9 +109,20 @@ struct DebugPrimitives
               const glm::mat4& projection,
               const glm::mat4& view);
 
-    void renderGUI();
+    [[nodiscard]] SettingsSnapshot buildSettingsSnapshot() const;
+    void requestSettings(const SettingsSnapshot& settings);
+    void setReverseViewportY(bool enabled) { _bReverseViewportY = enabled; }
 
   private:
+    bool _bEnabled          = true;
+    bool _bReverseViewportY = true;
+    bool _bDepthTest        = true;
+    bool _bDrawLines        = true;
+    bool _bDrawShapes       = true;
+    bool _bSettingsPending  = false;
+    SettingsSnapshot _pendingSettings{};
+
+    void applyPendingSettings();
     void initFrameResources();
     void initLinePipeline();
     void initShapePipeline();

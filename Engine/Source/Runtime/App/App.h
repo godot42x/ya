@@ -7,9 +7,8 @@
 #include "Core/MessageBus.h"
 #include "Core/System/System.h"
 
-#include "Editor/EditorLayer.h"
-
 #include "Runtime/App/AppState.h"
+#include "Runtime/App/IAppExtension.h"
 #include "Runtime/App/Lifecycle/AppAutomation.h"
 #include "Runtime/App/Common/PostProcessingState.h"
 #include "Runtime/App/RenderRuntime.h"
@@ -53,7 +52,6 @@ struct DebugRenderSystem;
 class ResourceResolveSystem;
 class AppLifecycle;
 class AppFrameLoop;
-class AppGuiController;
 class AppEventRouter;
 
 enum AppMode : int
@@ -442,7 +440,6 @@ struct App
 {
     friend class AppLifecycle;
     friend class AppFrameLoop;
-    friend class AppGuiController;
     friend class AppEventRouter;
 
     struct RenderFrameState
@@ -481,7 +478,7 @@ struct App
     glm::vec2 _windowSize = {0, 0};
 
     // State management
-    AppState _appState = AppState::Editor;
+    AppState _appState = AppState::Stopped;
     // SimulationState _simulationState = SimulationState::Stopped;
 
     // Input and Camera
@@ -511,7 +508,8 @@ struct App
     std::array<RenderFrameData, MAX_FLIGHTS_IN_FLIGHT> _renderFrameDataPerFlight{};
 
 
-    EditorLayer* _editorLayer;
+    std::vector<std::unique_ptr<IAppExtension>> _extensions;
+    bool                                        _extensionsAttached = false;
 
 
     LuaScriptingSystem* _luaScriptingSystem;
@@ -538,7 +536,7 @@ struct App
         }
         return 0;
     }
-    void renderGUI(float dt);
+    void addExtension(std::unique_ptr<IAppExtension> extension);
 
     void requestQuit()
     {
@@ -602,7 +600,7 @@ struct App
     // State getters
     [[nodiscard]] AppState getAppState() const { return _appState; }
     // [[nodiscard]] SimulationState getSimulationState() const { return _simulationState; }
-    [[nodiscard]] bool isEditorMode() const { return _appState == AppState::Editor; }
+    [[nodiscard]] bool isStopped() const { return _appState == AppState::Stopped; }
     [[nodiscard]] bool isSimulationMode() const { return _appState == AppState::Simulation; }
     [[nodiscard]] bool isRuntimeMode() const { return _appState == AppState::Runtime; }
     bool               isPaused() const { return _bPause; }
@@ -640,6 +638,15 @@ struct App
     virtual void onSimulationResumed() {}
 
   private:
+    void attachExtensions();
+    void detachExtensions();
+    void dispatchNativeEvent(const SDL_Event& event);
+    [[nodiscard]] bool dispatchExtensionEvent(const Event& event);
+    void tickExtensions(float dt);
+    void prepareExtensionsForRender(float dt);
+    void recordExtensionPresentation(ICommandBuffer& commandBuffer, float dt);
+    void notifyExtensionsSceneActivated(Scene* scene);
+    void notifyExtensionsSceneDestroyed(Scene* scene);
     // temp
     [[nodiscard]] const InputManager& getInputManager() const { return inputManager; }
     [[nodiscard]] const glm::vec2&    getWindowSize() const { return _windowSize; }

@@ -225,6 +225,7 @@ DeferredAttachmentFormats buildDeferredFormatsFromSpec(const RenderTargetCreateI
     return formats;
 }
 
+#if 0 // Editor-owned performance UI; retained temporarily for migration reference.
 void drawPerfLeaf(const char* label, float value, float parentValue = 0.0f)
 {
     constexpr ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Bullet;
@@ -243,6 +244,8 @@ void drawPerfNode(const char* label, float value, Fn&& drawChildren)
         ImGui::TreePop();
     }
 }
+
+#endif
 
 } // namespace
 
@@ -334,6 +337,24 @@ void DeferredRenderPipeline::syncShadowSettings()
 ShadowSettings DeferredRenderPipeline::currentShadowSettings() const
 {
     return _frameShadowSettings;
+}
+
+DeferredRenderPipeline::SettingsSnapshot DeferredRenderPipeline::buildSettingsSnapshot() const
+{
+    return {
+        .bReverseViewportY = _bReverseViewportY,
+        .bSSAOEnabled      = _bEnableSSAO,
+        .shadow            = currentShadowSettings(),
+        .postProcessing    = _postProcessStage.getState(),
+    };
+}
+
+void DeferredRenderPipeline::requestSettings(const SettingsSnapshot& settings)
+{
+    _bReverseViewportY = settings.bReverseViewportY;
+    setSSAOEnabled(settings.bSSAOEnabled);
+    _postProcessStage.getState() = settings.postProcessing;
+    queueShadowSettingsChange(settings.shadow);
 }
 
 bool DeferredRenderPipeline::isShadowMappingEnabled() const
@@ -1434,6 +1455,18 @@ void DeferredRenderPipeline::onViewportResized(Rect2D rect)
 // GUI
 // ═══════════════════════════════════════════════════════════════════════
 
+void DeferredRenderPipeline::renderSettingsGUI() {}
+void DeferredRenderPipeline::renderGeneralSettingsGUI() {}
+void DeferredRenderPipeline::renderLightingSettingsGUI() {}
+void DeferredRenderPipeline::renderAOSettingsGUI() {}
+void DeferredRenderPipeline::renderPostProcessSettingsGUI() {}
+void DeferredRenderPipeline::renderShadowSettingsGUI() {}
+void DeferredRenderPipeline::renderTechnicalGUI() {}
+void DeferredRenderPipeline::renderPerformanceGUI() {}
+void DeferredRenderPipeline::renderStageInternalsGUI() {}
+void DeferredRenderPipeline::renderGUI(bool bRenderTreeNode) { (void)bRenderTreeNode; }
+
+#if 0 // Replaced by EditorAppExtension settings panel and runtime settings commands.
 void DeferredRenderPipeline::renderSettingsGUI()
 {
     renderGeneralSettingsGUI();
@@ -1693,5 +1726,7 @@ void DeferredRenderPipeline::renderGUI(bool bRenderTreeNode)
 
     if (bRenderTreeNode) { ImGui::TreePop(); }
 }
+
+#endif
 
 } // namespace ya

@@ -168,16 +168,6 @@ void renderRenderingSettings(App& app)
 }
 } // namespace
 
-void App::onRenderGUI(float dt)
-{
-    AppGuiController::onRenderGUI(*this, dt);
-}
-
-void App::renderGUI(float dt)
-{
-    AppGuiController::renderGUI(*this, dt);
-}
-
 void AppGuiController::onRenderGUI(App& app, float dt)
 {
     YA_PROFILE_FUNCTION()
@@ -285,8 +275,8 @@ void AppGuiController::onRenderGUI(App& app, float dt)
 
 void AppGuiController::renderGUI(App& app, float dt)
 {
-    app._editorLayer->onImGuiRender([&app, dt]()
-                                    { app.onRenderGUI(dt); });
+    (void)app;
+    (void)dt;
 }
 
 } // namespace ya

@@ -12,8 +12,6 @@
 #include "glm/gtc/type_ptr.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "imgui.h"
-
 namespace ya
 {
 
@@ -427,55 +425,14 @@ void ForwardViewportAuxPasses::drawDebug(const DrawContext& drawCtx)
 
 void ForwardViewportAuxPasses::renderSettingsGUI()
 {
-    ImGui::Combo("Simple Color Type", &_simpleDefaultColorType, "Normal\0UV\0Fixed");
 }
 
 void ForwardViewportAuxPasses::renderDebugGUI()
 {
-    if (!_debugPipeline) {
-        ImGui::TextUnformatted("Debug geometry pipeline is unavailable on this backend/device.");
-        return;
-    }
-
-    const char* modeNames[] = {"None", "NormalColor", "NormalDir", "Depth", "UV"};
-    int         mode        = static_cast<int>(_debugMode);
-    if (ImGui::Combo("Mode", &mode, modeNames, IM_ARRAYSIZE(modeNames))) {
-        EDebugMode newMode = static_cast<EDebugMode>(mode);
-        if (newMode != _debugMode) {
-            if (newMode == DebugNormalDir) {
-                _debugPipelineCI.shaderDesc.defines = {"DEBUG_NORMAL_DIR"};
-                _debugPipeline->updateDesc(_debugPipelineCI);
-            }
-            else if (_debugMode == DebugNormalDir) {
-                _debugPipelineCI.shaderDesc.defines = {};
-                _debugPipeline->updateDesc(_debugPipelineCI);
-            }
-            _debugMode     = newMode;
-            _debugUBO.mode = static_cast<int>(_debugMode);
-        }
-    }
-    ImGui::DragFloat4("Float Param", glm::value_ptr(_debugUBO.floatParam), 0.1f);
 }
 
 void ForwardViewportAuxPasses::renderGUIPipelines()
 {
-    if (ImGui::TreeNode("Simple")) {
-        _simplePipeline->renderGUI();
-        ImGui::TreePop();
-    }
-    if (ImGui::TreeNode("Skybox")) {
-        _skyboxPipeline->renderGUI();
-        ImGui::TreePop();
-    }
-    if (ImGui::TreeNode("Debug Pipeline")) {
-        if (_debugPipeline) {
-            _debugPipeline->renderGUI();
-        }
-        else {
-            ImGui::TextUnformatted("Unavailable on this backend/device.");
-        }
-        ImGui::TreePop();
-    }
 }
 
 } // namespace ya

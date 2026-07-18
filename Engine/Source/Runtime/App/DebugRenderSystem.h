@@ -34,10 +34,9 @@ struct DebugRenderSystem
               uint32_t viewportHeight,
               const glm::mat4& projection,
               const glm::mat4& view);
-    void renderGUI();
-
-    DebugPrimitives& primitives() { return _primitives; }
-    const DebugPrimitives& primitives() const { return _primitives; }
+    [[nodiscard]] DebugPrimitives::SettingsSnapshot buildSettingsSnapshot() const;
+    void requestSettings(const DebugPrimitives::SettingsSnapshot& settings);
+    void setReverseViewportY(bool enabled);
 
   private:
     DebugPrimitives _primitives;

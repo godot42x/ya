@@ -253,8 +253,6 @@ void RenderRuntime::initCommandResources()
 
 void RenderRuntime::initFrameServices()
 {
-    ImGuiManager::get().init(_render, nullptr);
-
     DeferredDeletionQueue::get().init(/*framesInFlight=*/1);
 }
 
@@ -276,7 +274,6 @@ void RenderRuntime::shutdownRuntimeServices()
     YA_CORE_ASSERT(_forwardPipeline == nullptr && _deferredPipeline == nullptr,
                    "shutdownRuntimeServices requires active pipelines to be torn down first");
 
-    ImGuiManager::get().shutdown();
     ResourceRegistry::get().clearAll();
 }
 

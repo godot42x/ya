@@ -10,8 +10,6 @@
 #include "Core/Math/Geometry.h"
 
 
-#include "imgui.h"
-
 #include "DeferredRender.LightPass.slang.h"
 
 #include <algorithm>
@@ -853,41 +851,10 @@ void GBufferStage::drawFallback(const RenderStageContext& ctx)
 
 void GBufferStage::renderGUI()
 {
-    if (!ImGui::TreeNode("GBuffer")) {
-        return;
-    }
-
-    renderTechnicalGUI();
-
-    ImGui::TreePop();
 }
 
 void GBufferStage::renderTechnicalGUI()
 {
-    if (ImGui::TreeNode("GBuffer Stats")) {
-        ImGui::Text("Point shadow budget: %u", _shadowState.maxShadowedPointLights);
-        ImGui::Text("Shadowed point lights: %u", _lastShadowedPointLights);
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("GBuffer Pipelines")) {
-        if (ImGui::TreeNode("PBR")) {
-            _pbr.pipeline->renderGUI();
-            _pbrSkinned.pipeline->renderGUI();
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNode("Phong")) {
-            _phong.pipeline->renderGUI();
-            _phongSkinned.pipeline->renderGUI();
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNode("Unlit")) {
-            _unlit.pipeline->renderGUI();
-            _unlitSkinned.pipeline->renderGUI();
-            ImGui::TreePop();
-        }
-        ImGui::TreePop();
-    }
 }
 
 } // namespace ya

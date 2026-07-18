@@ -1,14 +1,11 @@
 #include "BloomPostprocessing.h"
 
-#include "Config/ConfigManager.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Render.h"
 #include "Resource/Texture/TextureLibrary.h"
-
-#include "imgui.h"
 
 #include <algorithm>
 #include <string>
@@ -18,14 +15,6 @@ namespace ya
 
 namespace
 {
-
-constexpr const char* BLOOM_CONFIG_DOC_NAME              = "editor";
-constexpr const char* BLOOM_CONFIG_KEY_ENABLE            = "render.postprocess.bloom.enabled";
-constexpr const char* BLOOM_CONFIG_KEY_THRESHOLD         = "render.postprocess.bloom.threshold";
-constexpr const char* BLOOM_CONFIG_KEY_SOFT_KNEE         = "render.postprocess.bloom.softKnee";
-constexpr const char* BLOOM_CONFIG_KEY_EXTRACT_INTENSITY = "render.postprocess.bloom.extractIntensity";
-constexpr const char* BLOOM_CONFIG_KEY_BLUR_PASSES       = "render.postprocess.bloom.blurPasses";
-constexpr const char* BLOOM_CONFIG_KEY_STRENGTH          = "render.postprocess.bloom.strength";
 
 RGImportedTextureDesc makeBloomImportedTextureDesc(const Texture& texture,
                                                    std::string_view label,
@@ -488,54 +477,6 @@ void BloomPostprocessing::render(const RenderDesc& desc)
     }
 
     resolvePreparedResources(_graphExecutor->getRegistry());
-}
-
-void BloomPostprocessing::renderSettingsGUI(PostProcessingState& state)
-{
-    bool bDirty = false;
-    bDirty |= ImGui::Checkbox("Enable Bloom", &state.bEnableBloom);
-    ImGui::BeginDisabled(!state.bEnableBloom);
-    bDirty |= ImGui::DragFloat("Bloom Threshold", &state.bloomThreshold, 0.01f, 0.0f, 16.0f, "%.2f");
-    bDirty |= ImGui::DragFloat("Bloom Soft Knee", &state.bloomSoftKnee, 0.01f, 0.0f, 2.0f, "%.2f");
-    bDirty |= ImGui::DragFloat("Bloom Extract Intensity", &state.bloomExtractIntensity, 0.05f, 0.0f, 8.0f, "%.2f");
-    int blurPasses = static_cast<int>(state.bloomBlurPasses);
-    if (ImGui::DragInt("Bloom Blur Passes", &blurPasses, 1.0f, 1, 12)) {
-        state.bloomBlurPasses = static_cast<uint32_t>(std::max(1, blurPasses));
-        bDirty                = true;
-    }
-    bDirty |= ImGui::DragFloat("Bloom Strength", &state.bloomStrength, 0.05f, 0.0f, 4.0f, "%.2f");
-    ImGui::Text("Blur Passes (H+V): %u", _lastBlurPassCount);
-    ImGui::EndDisabled();
-
-    if (bDirty) {
-        ConfigManager::Editor(BLOOM_CONFIG_DOC_NAME)
-            .set(BLOOM_CONFIG_KEY_ENABLE, state.bEnableBloom)
-            .set(BLOOM_CONFIG_KEY_THRESHOLD, state.bloomThreshold)
-            .set(BLOOM_CONFIG_KEY_SOFT_KNEE, state.bloomSoftKnee)
-            .set(BLOOM_CONFIG_KEY_EXTRACT_INTENSITY, state.bloomExtractIntensity)
-            .set(BLOOM_CONFIG_KEY_BLUR_PASSES, static_cast<int>(state.bloomBlurPasses))
-            .set(BLOOM_CONFIG_KEY_STRENGTH, state.bloomStrength);
-    }
-
-}
-
-void BloomPostprocessing::renderTechnicalGUI()
-{
-    if (_extractPipeline && ImGui::TreeNode("Bloom Pipelines")) {
-        if (ImGui::TreeNode("Extract")) {
-            _extractPipeline->renderGUI();
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNode("Blur")) {
-            _blurPipeline->renderGUI();
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNode("Composite")) {
-            _compositePipeline->renderGUI();
-            ImGui::TreePop();
-        }
-        ImGui::TreePop();
-    }
 }
 
 } // namespace ya

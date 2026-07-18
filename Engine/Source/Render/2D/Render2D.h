@@ -172,11 +172,6 @@ struct FQuadRender
     void init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat);
     void destroy();
 
-    void onImGui()
-    {
-        // control viewports &scissors
-    }
-
     void begin(const Extent2D& extent);
     void end();
 
@@ -276,8 +271,6 @@ struct Render2D
 
 
     static void begin(const FRender2dContext& ctx);
-    static void onImGui();
-    static void onRenderGUI() {}
     static void end()
     {
         quadData->end();

@@ -16,8 +16,6 @@
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
 
-#include "imgui.h"
-
 #include <format>
 #include <vector>
 
@@ -508,7 +506,6 @@ void PointShadowPass::rebuildFaceTextures(std::shared_ptr<IImage> shadowImage)
 
 void PointShadowPass::renderGUI()
 {
-    ImGui::Text("Indirect Path: %s", _indirectRenderer.isSupported() ? "supported" : "unsupported");
 }
 
 } // namespace ya

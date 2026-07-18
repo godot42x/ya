@@ -1,5 +1,7 @@
 #include "TypeRenderer.h"
 
+#include "Editor/EditorLayer.h"
+
 #include "ContainerPropertyRenderer.h"
 #include "Runtime/App/App.h"
 #include "Core/Common/AssetRef.h"
@@ -8,6 +10,7 @@
 #include "Core/TypeIndex.h"
 #include "ReflectionCache.h"
 #include "ImGuiHelper.h"
+#include "Editor/EditorAppExtension.h"
 #include "Render/Material/Material.h"
 #include "Resource/Texture/TextureLibrary.h"
 #include "reflects-core/lib.h"
@@ -442,15 +445,13 @@ void registerBuiltinTypeRenderers()
             .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
                 pathWrapper(instance, propCtx, ctx, [](void* instance, const PropertyRenderContext& propCtx) {
                     auto& assetRef = *static_cast<AssetRefBase*>(instance);
-                    if (auto* app = App::get()) {
-                        if (auto* editorLayer = app->_editorLayer) {
-                            editorLayer->_filePicker.openModelPicker(
-                                assetRef.getPath(),
-                                [&assetRef](const std::string& newPath) {
-                                    auto p = VFS::get()->relativeTo(newPath, VFS::get()->getProjectRoot()).string();
-                                    assetRef.setPath(p);
-                                });
-                        }
+                    if (auto* editorLayer = getEditorLayer()) {
+                        editorLayer->_filePicker.openModelPicker(
+                            assetRef.getPath(),
+                            [&assetRef](const std::string& newPath) {
+                                auto p = VFS::get()->relativeTo(newPath, VFS::get()->getProjectRoot()).string();
+                                assetRef.setPath(p);
+                            });
                     }
                 });
             },
@@ -463,15 +464,13 @@ void registerBuiltinTypeRenderers()
             .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
                 pathWrapper(instance, propCtx, ctx, [](void* instance, const PropertyRenderContext& propCtx) {
                     auto& assetRef = *static_cast<AssetRefBase*>(instance);
-                    if (auto* app = App::get()) {
-                        if (auto* editorLayer = app->_editorLayer) {
-                            editorLayer->_filePicker.openTexturePicker(
-                                assetRef.getPath(),
-                                [&assetRef](const std::string& newPath) {
-                                    auto p = VFS::get()->relativeTo(newPath, VFS::get()->getProjectRoot()).string();
-                                    assetRef.setPath(p);
-                                });
-                        }
+                    if (auto* editorLayer = getEditorLayer()) {
+                        editorLayer->_filePicker.openTexturePicker(
+                            assetRef.getPath(),
+                            [&assetRef](const std::string& newPath) {
+                                auto p = VFS::get()->relativeTo(newPath, VFS::get()->getProjectRoot()).string();
+                                assetRef.setPath(p);
+                            });
                     }
                 });
             },
@@ -521,10 +520,8 @@ void pathWrapper(void* instance, const PropertyRenderContext& propCtx, RenderCon
     if (!assetRef.getPath().empty()) {
         ImGui::SameLine();
         if (ImGui::SmallButton((">>##locate_" + propCtx.prettyName).c_str())) {
-            if (auto* app = App::get()) {
-                if (auto* editorLayer = app->_editorLayer) {
-                    editorLayer->inspectAsset(assetRef.getPath());
-                }
+            if (auto* editorLayer = getEditorLayer()) {
+                editorLayer->inspectAsset(assetRef.getPath());
             }
         }
         if (ImGui::IsItemHovered()) {
@@ -535,10 +532,7 @@ void pathWrapper(void* instance, const PropertyRenderContext& propCtx, RenderCon
 
 struct EditorLayer* getEditor()
 {
-    if (auto* app = App::get()) {
-        return app->_editorLayer;
-    }
-    return nullptr;
+    return getEditorLayer();
 }
 
 struct FilePicker* getFilePicker()

@@ -4,7 +4,6 @@
 #include <optional>
 
 #include "Core/Log.h"
-#include "ImGui.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/RenderDefines.h"
 #include "Runtime/App/App.h"
@@ -361,89 +360,6 @@ std::string VulkanPipeline::buildGuiNodeLabel() const
 
 void VulkanPipeline::renderGUI()
 {
-    if (_guiNodeLabel.empty()) {
-        _guiNodeLabel = buildGuiNodeLabel();
-    }
-
-    if (!ImGui::TreeNodeEx(_guiNodeLabel.c_str())) {
-        return;
-    }
-
-    bool bDirty         = false;
-    bool bReloadShaders = false;
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.7f, 0.0f, 1.0f));
-    if (ImGui::Button("Reload Shaders")) {
-        _forceShaderReload = true;
-        bReloadShaders     = true;
-    }
-    ImGui::PopStyleColor();
-    int cull = static_cast<int>(_ci.rasterizationState.cullMode);
-    if (ImGui::Combo("Cull Mode", &cull, "None\0Front\0Back\0FrontAndBack\0")) {
-        setCullMode(static_cast<ECullMode::T>(cull));
-    }
-
-    int polygonMode = static_cast<int>(_ci.rasterizationState.polygonMode);
-    if (ImGui::Combo("Polygon Mode", &polygonMode, "Fill\0Line\0Point\0")) {
-        setPolygonMode(static_cast<EPolygonMode::T>(polygonMode));
-    }
-    bDirty |= ImGui::Checkbox("Depth Test Enable", &_ci.depthStencilState.bDepthTestEnable);
-    bDirty |= ImGui::Checkbox("Depth Write Enable", &_ci.depthStencilState.bDepthWriteEnable);
-    int op = _ci.depthStencilState.depthCompareOp;
-    if (ImGui::Combo("Depth Compare Op", &op, "Never\0Less\0Equal\0LessOrEqual\0Greater\0NotEqual\0GreaterOrEqual\0Always\0")) {
-        switch (op) {
-        case 0:
-            setDepthCompareOp(ECompareOp::Never);
-            break;
-        case 1:
-            setDepthCompareOp(ECompareOp::Less);
-            break;
-        case 2:
-            setDepthCompareOp(ECompareOp::Equal);
-            break;
-        case 3:
-            setDepthCompareOp(ECompareOp::LessOrEqual);
-            break;
-        case 4:
-            setDepthCompareOp(ECompareOp::Greater);
-            break;
-        case 5:
-            setDepthCompareOp(ECompareOp::NotEqual);
-            break;
-        case 6:
-            setDepthCompareOp(ECompareOp::GreaterOrEqual);
-            break;
-        case 7:
-            setDepthCompareOp(ECompareOp::Always);
-            break;
-        default:
-            break;
-        }
-    }
-
-    bool bDepthBiasEnable = _ci.rasterizationState.bDepthBiasEnable;
-    if (ImGui::Checkbox("Depth Bias Enable", &bDepthBiasEnable)) {
-        setDepthBiasEnable(bDepthBiasEnable);
-    }
-    if (_ci.rasterizationState.bDepthBiasEnable) {
-        float constantFactor = _ci.rasterizationState.depthBiasConstantFactor;
-        float clamp          = _ci.rasterizationState.depthBiasClamp;
-        float slopeFactor    = _ci.rasterizationState.depthBiasSlopeFactor;
-        bool  changed        = false;
-        changed |= ImGui::DragFloat("Depth Bias Constant", &constantFactor, 0.1f, -10.0f, 10.0f, "%.2f");
-        changed |= ImGui::DragFloat("Depth Bias Clamp", &clamp, 0.001f, -1.0f, 1.0f, "%.4f");
-        changed |= ImGui::DragFloat("Depth Bias Slope", &slopeFactor, 0.1f, -10.0f, 10.0f, "%.2f");
-        if (changed) {
-            setDepthBias(constantFactor, clamp, slopeFactor);
-        }
-    }
-
-    if (bDirty) {
-        updateDesc(_ci);
-    }
-    if (bReloadShaders) {
-        markDirty();
-    }
-    ImGui::TreePop();
 }
 
 

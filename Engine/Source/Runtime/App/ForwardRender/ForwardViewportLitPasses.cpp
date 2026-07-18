@@ -6,8 +6,6 @@
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Render.h"
 
-#include "imgui.h"
-
 namespace ya
 {
 
@@ -834,16 +832,6 @@ DescriptorImageInfo ForwardViewportLitPasses::getDescriptorImageInfo(const Textu
 
 void ForwardViewportLitPasses::renderGUIPipelines()
 {
-    if (ImGui::TreeNode("Phong")) {
-        _phongStatic.pipeline->renderGUI();
-        _phongSkinned.pipeline->renderGUI();
-        ImGui::TreePop();
-    }
-    if (ImGui::TreeNode("PBR")) {
-        _pbrStatic.pipeline->renderGUI();
-        _pbrSkinned.pipeline->renderGUI();
-        ImGui::TreePop();
-    }
 }
 
 } // namespace ya

@@ -1,13 +1,10 @@
 #include "BasicPostprocessing.h"
 
-#include "Config/ConfigManager.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Sampler.h"
 #include "Render/Render.h"
 #include "Resource/Texture/TextureLibrary.h"
-
-#include "imgui.h"
 
 #include <algorithm>
 
@@ -21,37 +18,6 @@ constexpr uint32_t POSTPROCESS_FLAG_INVERSION    = 1u << 0;
 constexpr uint32_t POSTPROCESS_FLAG_TONEMAPPING  = 1u << 1;
 constexpr uint32_t POSTPROCESS_FLAG_GAMMA        = 1u << 2;
 constexpr uint32_t POSTPROCESS_FLAG_RANDOM_GRAIN = 1u << 3;
-
-constexpr const char* kGrayscaleModeLabels[] = {
-    "None",
-    "Average",
-    "Weighted",
-};
-
-constexpr const char* kKernelModeLabels[] = {
-    "None",
-    "Sharpen",
-    "Blur",
-    "Edge Detection",
-};
-
-constexpr const char* kToneMappingCurveLabels[] = {
-    "ACES",
-    "Uncharted2",
-};
-
-constexpr const char* POSTPROCESS_CONFIG_DOC_NAME                         = "editor";
-constexpr const char* POSTPROCESS_CONFIG_KEY_INVERSION                    = "render.postprocess.basic.inversion";
-constexpr const char* POSTPROCESS_CONFIG_KEY_GRAYSCALE                    = "render.postprocess.basic.grayscale";
-constexpr const char* POSTPROCESS_CONFIG_KEY_KERNEL                       = "render.postprocess.basic.kernel";
-constexpr const char* POSTPROCESS_CONFIG_KEY_KERNEL_TEXEL_OFFSET          = "render.postprocess.basic.kernelTexelOffset";
-constexpr const char* POSTPROCESS_CONFIG_KEY_TONEMAPPING_ENABLE           = "render.postprocess.basic.tonemapping.enabled";
-constexpr const char* POSTPROCESS_CONFIG_KEY_TONEMAPPING_CURVE            = "render.postprocess.basic.tonemapping.curve";
-constexpr const char* POSTPROCESS_CONFIG_KEY_TONEMAPPING_EXPOSURE         = "render.postprocess.basic.tonemapping.exposure";
-constexpr const char* POSTPROCESS_CONFIG_KEY_GAMMA_CORRECTION_ENABLE      = "render.postprocess.basic.output.gammaCorrection";
-constexpr const char* POSTPROCESS_CONFIG_KEY_GAMMA                        = "render.postprocess.basic.output.gamma";
-constexpr const char* POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_ENABLE          = "render.postprocess.basic.output.randomGrain";
-constexpr const char* POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_STRENGTH        = "render.postprocess.basic.output.randomGrainStrength";
 
 } // namespace
 
@@ -213,82 +179,6 @@ void BasicPostprocessing::render(const RenderDesc& desc)
         _pipelineLayoutDesc.pushConstants[0].size,
         &_pushConstants);
     desc.cmdBuf->draw(3, 1, 0, 0);
-}
-
-void BasicPostprocessing::renderSettingsGUI(PostProcessingState& state)
-{
-    bool bDirty = false;
-
-    ImGui::SeparatorText("Color Transform");
-    bDirty |= ImGui::Checkbox("Inversion", &state.bEnableInversion);
-
-    int grayscaleMode = static_cast<int>(state.grayscaleMode);
-    if (ImGui::Combo("Grayscale", &grayscaleMode, kGrayscaleModeLabels, IM_ARRAYSIZE(kGrayscaleModeLabels))) {
-        state.grayscaleMode = static_cast<PostProcessingState::EGrayscaleMode>(grayscaleMode);
-        bDirty = true;
-    }
-
-    ImGui::SeparatorText("Spatial Filter");
-    int kernelMode = static_cast<int>(state.kernelMode);
-    if (ImGui::Combo("Kernel", &kernelMode, kKernelModeLabels, IM_ARRAYSIZE(kKernelModeLabels))) {
-        state.kernelMode = static_cast<PostProcessingState::EKernelMode>(kernelMode);
-        bDirty = true;
-    }
-    ImGui::BeginDisabled(state.kernelMode == PostProcessingState::EKernelMode::None);
-    bDirty |= ImGui::DragFloat("Kernel Texel Offset", &state.kernelTexelOffset, 0.0001f, 0.0001f, 0.02f, "%.5f");
-    ImGui::EndDisabled();
-
-    ImGui::SeparatorText("Tone Mapping");
-    bDirty |= ImGui::Checkbox("Enable Tone Mapping", &state.bEnableToneMapping);
-    ImGui::BeginDisabled(!state.bEnableToneMapping);
-    int toneMappingCurve = static_cast<int>(state.toneMappingCurve);
-    if (ImGui::Combo("ToneMapping Curve", &toneMappingCurve, kToneMappingCurveLabels, IM_ARRAYSIZE(kToneMappingCurveLabels))) {
-        state.toneMappingCurve = static_cast<PostProcessingState::EToneMappingCurve>(toneMappingCurve);
-        bDirty = true;
-    }
-    bDirty |= ImGui::DragFloat("Exposure", &state.exposure, 0.01f, 0.0f, 8.0f, "%.2f");
-    ImGui::EndDisabled();
-
-    ImGui::SeparatorText("Output");
-    bDirty |= ImGui::Checkbox("Gamma Correction", &state.bEnableGammaCorrection);
-    ImGui::BeginDisabled(!state.bEnableGammaCorrection);
-    bDirty |= ImGui::DragFloat("Gamma", &state.gamma, 0.01f, 0.1f, 4.0f);
-    ImGui::EndDisabled();
-
-    bDirty |= ImGui::Checkbox("Random Grain", &state.bEnableRandomGrain);
-    ImGui::BeginDisabled(!state.bEnableRandomGrain);
-    bDirty |= ImGui::DragFloat("Grain Strength", &state.randomGrainStrength, 0.001f, 0.0f, 0.25f, "%.3f");
-    ImGui::EndDisabled();
-
-    if (bDirty) {
-        ConfigManager::Editor(POSTPROCESS_CONFIG_DOC_NAME)
-            .set(POSTPROCESS_CONFIG_KEY_INVERSION, state.bEnableInversion)
-            .set(POSTPROCESS_CONFIG_KEY_GRAYSCALE, static_cast<int>(state.grayscaleMode))
-            .set(POSTPROCESS_CONFIG_KEY_KERNEL, static_cast<int>(state.kernelMode))
-            .set(POSTPROCESS_CONFIG_KEY_KERNEL_TEXEL_OFFSET, state.kernelTexelOffset)
-            .set(POSTPROCESS_CONFIG_KEY_TONEMAPPING_ENABLE, state.bEnableToneMapping)
-            .set(POSTPROCESS_CONFIG_KEY_TONEMAPPING_CURVE, static_cast<int>(state.toneMappingCurve))
-            .set(POSTPROCESS_CONFIG_KEY_TONEMAPPING_EXPOSURE, state.exposure)
-            .set(POSTPROCESS_CONFIG_KEY_GAMMA_CORRECTION_ENABLE, state.bEnableGammaCorrection)
-            .set(POSTPROCESS_CONFIG_KEY_GAMMA, state.gamma)
-            .set(POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_ENABLE, state.bEnableRandomGrain)
-            .set(POSTPROCESS_CONFIG_KEY_RANDOM_GRAIN_STRENGTH, state.randomGrainStrength);
-    }
-}
-
-void BasicPostprocessing::renderTechnicalGUI()
-{
-    if (_pipeline && ImGui::TreeNode("Basic Postprocess Pipeline")) {
-        _pipeline->renderGUI();
-        ImGui::TreePop();
-    }
-}
-
-void BasicPostprocessing::reloadShader()
-{
-    if (_pipeline) {
-        _pipeline->markDirty();
-    }
 }
 
 } // namespace ya

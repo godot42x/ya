@@ -21,7 +21,7 @@ class AppLifecycleTest : public ::testing::Test
     {
         sceneManager = std::make_unique<SceneManager>();
         app._sceneManager = sceneManager.get();
-        app._appState     = AppState::Editor;
+        app._appState     = AppState::Stopped;
     }
 
     void TearDown() override

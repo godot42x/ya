@@ -5,7 +5,7 @@ namespace ya
 
 enum class AppState
 {
-    Editor,
+    Stopped,
     Simulation,
     Runtime
 };

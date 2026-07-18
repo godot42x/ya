@@ -40,8 +40,8 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         YA_PERF_SCOPE(perf::sample::renderWorld(), perf::metric::cpuTimeMs(), perf::domain::render());
         renderWorldFrame(input, cmdBuf.get());
     }
-    syncEditorFrame(input.editor.target);
     renderPresentationPass(input.pipeline.deltaTime,
+                           input.recordPresentationExtensions,
                            input.automation.recordPresentationCapture,
                            cmdBuf.get());
     {
@@ -61,11 +61,6 @@ bool RenderRuntime::prepareFrame(const FrameInput& input, int32_t& imageIndex, s
 void RenderRuntime::renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf)
 {
     beginViewportPassAndTickPipeline(input, cmdBuf);
-}
-
-void RenderRuntime::syncEditorFrame(EditorLayer* editorLayer)
-{
-    updateEditorViewportContext(editorLayer);
 }
 
 IRenderPipeline* RenderRuntime::getActivePipeline() const
@@ -256,7 +251,7 @@ RenderTargetEditorCatalog RenderRuntime::buildRenderTargetEditorCatalog() const
             .bEditable        = false,
         });
     }
-    if (auto* pipeline = getActivePipelineDebugUI()) {
+    if (auto* pipeline = getActivePipeline()) {
         pipeline->appendRenderTargetEditorEntries(catalog);
     }
 

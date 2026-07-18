@@ -2,8 +2,6 @@
 
 #include "Runtime/App/App.h"
 
-#include "ImGuiHelper.h"
-
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Core/UI/UIManager.h"
@@ -12,27 +10,6 @@ namespace ya
 {
 namespace
 {
-
-bool zoomEditorCameraInViewport(App& app, const MouseScrolledEvent& event)
-{
-    if (!app._renderRuntime || !app._editorLayer) {
-        return false;
-    }
-
-    const Rect2D viewportRect = app._renderRuntime->getViewportRect();
-    const bool   bInViewport  = FUIHelper::isPointInRect(app._lastMousePos, viewportRect.pos, viewportRect.extent);
-    if (!bInViewport || event._offsetY == 0.0f) {
-        return false;
-    }
-
-    const float zoomDistance = event._offsetY * glm::max(app.cameraController._moveSpeed * 0.5f, 0.1f);
-    const glm::quat orientation = glm::quat(glm::radians(app.camera._rotation));
-    const glm::vec3 forward     = orientation * FMath::Vector::WorldForward;
-
-    app.camera._position += forward * zoomDistance;
-    app.camera.recalculateAll();
-    return true;
-}
 
 } // namespace
 
@@ -46,8 +23,7 @@ int AppEventRouter::onEvent(App& app, const Event& event)
     YA_PROFILE_FUNCTION()
     YA_PERF_SCOPE(perf::sample::appEventRoute(), perf::metric::cpuTimeMs(), perf::domain::game());
 
-    EventProcessState ret = ImGuiManager::get().processEvent(event);
-    if (ret != EventProcessState::Continue) {
+    if (app.dispatchExtensionEvent(event)) {
         return 0;
     }
 
@@ -122,14 +98,7 @@ int AppEventRouter::onEvent(App& app, const Event& event)
             .bInViewport  = bInViewport,
             .viewportRect = viewportRect,
         };
-        app._editorLayer->screenToViewport(app._lastMousePos, ctx.lastMousePos);
         UIManager::get()->onEvent(event, ctx);
-    }
-
-    {
-        YA_PROFILE_SCOPE("App/EditorEvent");
-        YA_PERF_SCOPE(perf::sample::appEditorEvent(), perf::metric::cpuTimeMs(), perf::domain::game());
-        app._editorLayer->onEvent(event);
     }
     return 0;
 }
@@ -178,7 +147,8 @@ bool AppEventRouter::onMouseButtonReleased(App& app, const MouseButtonReleasedEv
 
 bool AppEventRouter::onMouseScrolled(App& app, const MouseScrolledEvent& event)
 {
-    zoomEditorCameraInViewport(app, event);
+    (void)app;
+    (void)event;
     return false;
 }
 

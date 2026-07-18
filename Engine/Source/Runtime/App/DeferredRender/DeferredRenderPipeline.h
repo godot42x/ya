@@ -15,6 +15,7 @@
 #include "Render/RenderFrameData.h"
 #include "Runtime/App/Common/IRenderPipeline.h"
 #include "Runtime/App/Common/PostProcessingStage.h"
+#include "Runtime/App/Common/PostProcessingState.h"
 #include "Runtime/App/Common/Shadow/Common/ShadowMapResources.h"
 #include "Runtime/App/Common/Shadow/Common/ShadowRuntimeState.h"
 #include "Runtime/App/Common/Shadow/ShadowStage.h"
@@ -80,6 +81,13 @@ struct DeferredRenderInitDesc
 
 struct DeferredRenderPipeline : public IRenderPipeline
 {
+    struct SettingsSnapshot
+    {
+        bool           bReverseViewportY = true;
+        bool           bSSAOEnabled      = true;
+        ShadowSettings shadow{};
+        PostProcessingState postProcessing{};
+    };
     using InitDesc = DeferredRenderInitDesc;
 
     IRender* _render = nullptr;
@@ -197,6 +205,8 @@ struct DeferredRenderPipeline : public IRenderPipeline
             _lightStage->setSSAOTexture(_bEnableSSAO ? _currentSSAOOutput : std::shared_ptr<RenderImage>{});
         }
     }
+    [[nodiscard]] SettingsSnapshot buildSettingsSnapshot() const;
+    void requestSettings(const SettingsSnapshot& settings);
     DeferredPipelineDebugViews buildDebugViews() const;
     void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const override;
     bool setRenderTargetDepthFormat(RenderTargetEditorCatalog::Entry::EOwner owner, EFormat::T format) override;

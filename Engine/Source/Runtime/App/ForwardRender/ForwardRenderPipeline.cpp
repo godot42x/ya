@@ -745,17 +745,6 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
 
 void ForwardRenderPipeline::renderSettingsGUI()
 {
-    renderGeneralSettingsGUI();
-
-    if (ImGui::TreeNode("Shadows")) {
-        renderShadowSettingsGUI();
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("Post Process")) {
-        renderPostProcessSettingsGUI();
-        ImGui::TreePop();
-    }
 }
 
 void ForwardRenderPipeline::renderGeneralSettingsGUI()
@@ -764,50 +753,14 @@ void ForwardRenderPipeline::renderGeneralSettingsGUI()
 
 void ForwardRenderPipeline::renderShadowSettingsGUI()
 {
-    if (!_shadowSettings) {
-        return;
-    }
-    const ShadowSettings currentShadowSettings = *_shadowSettings;
-    ShadowSettings       pendingShadowSettings = currentShadowSettings;
-
-    bool bEnabled = pendingShadowSettings.isEnabled();
-    if (ImGui::Checkbox("Shadow Mapping", &bEnabled)) {
-        if (bEnabled) {
-            if (pendingShadowSettings.quality == EShadowQuality::Off) {
-                pendingShadowSettings.applyQualityPreset(EShadowQuality::Medium);
-            }
-        }
-        else {
-            pendingShadowSettings.quality = EShadowQuality::Off;
-        }
-        applyShadowSettings(pendingShadowSettings);
-    }
-
-    if (pendingShadowSettings.isEnabled()) {
-        bool bDirty = false;
-        bDirty |= ImGui::Checkbox("Point Light Shadow", &pendingShadowSettings.pointLightEnabled);
-        int maxPL = static_cast<int>(pendingShadowSettings.maxPointLightShadows);
-        if (ImGui::SliderInt("Max Point Shadows", &maxPL, 0, MAX_POINT_LIGHTS)) {
-            pendingShadowSettings.maxPointLightShadows = static_cast<uint32_t>(maxPL);
-            bDirty = true;
-        }
-        bDirty |= ImGui::Checkbox("Point Light Indirect Draw", &pendingShadowSettings.pointLightUseIndirect);
-        bDirty |= ImGui::Checkbox("Point Light Indirect Cull", &pendingShadowSettings.pointLightIndirectCullEnabled);
-        if (bDirty) {
-            applyShadowSettings(pendingShadowSettings);
-        }
-    }
 }
 
 void ForwardRenderPipeline::renderPostProcessSettingsGUI()
 {
-    _postProcessStage.renderSettingsGUI();
 }
 
 void ForwardRenderPipeline::renderTechnicalGUI()
 {
-    renderPerformanceGUI();
-    renderStageInternalsGUI();
 }
 
 void ForwardRenderPipeline::renderPerformanceGUI()
@@ -816,30 +769,11 @@ void ForwardRenderPipeline::renderPerformanceGUI()
 
 void ForwardRenderPipeline::renderStageInternalsGUI()
 {
-    if (_shadowStage) {
-        _shadowStage->renderGUI();
-    }
-    if (_viewportStage) {
-        _viewportStage->renderGUI();
-    }
-    if (ImGui::TreeNode("Post Process")) {
-        _postProcessStage.renderTechnicalGUI();
-        ImGui::TreePop();
-    }
 }
 
 void ForwardRenderPipeline::renderGUI(bool bRenderTreeNode)
 {
-    if (bRenderTreeNode && !ImGui::TreeNode("Forward Render Pipeline")) return;
-
-    renderSettingsGUI();
-
-    if (ImGui::TreeNode("Pipeline Internals")) {
-        renderTechnicalGUI();
-        ImGui::TreePop();
-    }
-
-    if (bRenderTreeNode) { ImGui::TreePop(); }
+    (void)bRenderTreeNode;
 }
 
 void ForwardRenderPipeline::onViewportResized(Rect2D rect)

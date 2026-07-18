@@ -83,8 +83,6 @@ struct BloomPostprocessing
     void resolvePreparedResources(const RenderGraphResourceRegistry& registry);
     void clearPreparedResources();
     void render(const RenderDesc& desc);
-    void renderSettingsGUI(PostProcessingState& state);
-    void renderTechnicalGUI();
     [[nodiscard]] stdptr<RenderImage> getExtractImageShared() const { return _extractImage; }
     [[nodiscard]] stdptr<RenderImage> getBlurImageShared() const { return _blurPongImage ? _blurPongImage : _blurPingImage; }
     [[nodiscard]] stdptr<RenderImage> getCompositeImageShared() const { return _compositeImage; }
