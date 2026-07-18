@@ -419,13 +419,13 @@ DeferredPipelineDebugViews DeferredRenderPipeline::buildDebugViews() const
     };
 }
 
-void DeferredRenderPipeline::appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const
+void DeferredRenderPipeline::appendRenderTargetEntries(RenderTargetCatalog& catalog) const
 {
     const DeferredAttachmentFormats gbufferFormats  = buildGBufferSnapshotFormats();
     const DeferredAttachmentFormats viewportFormats = buildViewportSnapshotFormats();
     catalog.entries.push_back({
         .label        = "Deferred GBuffer",
-        .owner        = RenderTargetEditorCatalog::Entry::EOwner::DeferredGBuffer,
+        .owner        = RenderTargetCatalog::Entry::EOwner::DeferredGBuffer,
         .colorFormats = gbufferFormats.colorFormats,
         .depthFormat  = gbufferFormats.depthFormat,
         .colorAttachments = {
@@ -440,7 +440,7 @@ void DeferredRenderPipeline::appendRenderTargetEditorEntries(RenderTargetEditorC
     });
     catalog.entries.push_back({
         .label        = "Deferred Viewport",
-        .owner        = RenderTargetEditorCatalog::Entry::EOwner::DeferredViewport,
+        .owner        = RenderTargetCatalog::Entry::EOwner::DeferredViewport,
         .colorFormats = viewportFormats.colorFormats,
         .depthFormat  = viewportFormats.depthFormat,
         .colorAttachments = {_currentViewportResources.colorOwner},
@@ -450,7 +450,7 @@ void DeferredRenderPipeline::appendRenderTargetEditorEntries(RenderTargetEditorC
     });
     catalog.entries.push_back({
         .label               = "Deferred Shadow",
-        .owner               = RenderTargetEditorCatalog::Entry::EOwner::DeferredShadow,
+        .owner               = RenderTargetCatalog::Entry::EOwner::DeferredShadow,
         .depthFormat         = _shadowResources.depthFormat,
         .depthAttachmentView = _shadowResources.directionalDepthIV,
         .extent              = _shadowResources.extent,
@@ -472,15 +472,15 @@ void DeferredRenderPipeline::setDeferredSharedDepthFormat(EFormat::T format)
 }
 
 bool DeferredRenderPipeline::setRenderTargetDepthFormat(
-    RenderTargetEditorCatalog::Entry::EOwner owner,
+    RenderTargetCatalog::Entry::EOwner owner,
     EFormat::T format)
 {
     switch (owner) {
-    case RenderTargetEditorCatalog::Entry::EOwner::DeferredGBuffer:
-    case RenderTargetEditorCatalog::Entry::EOwner::DeferredViewport:
+    case RenderTargetCatalog::Entry::EOwner::DeferredGBuffer:
+    case RenderTargetCatalog::Entry::EOwner::DeferredViewport:
         setDeferredSharedDepthFormat(format);
         return true;
-    case RenderTargetEditorCatalog::Entry::EOwner::DeferredShadow:
+    case RenderTargetCatalog::Entry::EOwner::DeferredShadow:
         if (_shadowDepthFormat != format) {
             _shadowDepthFormat = format;
             requestShadowResourceRefresh();
@@ -491,13 +491,13 @@ bool DeferredRenderPipeline::setRenderTargetDepthFormat(
     }
 }
 
-bool DeferredRenderPipeline::setRenderTargetColorFormat(RenderTargetEditorCatalog::Entry::EOwner owner,
+bool DeferredRenderPipeline::setRenderTargetColorFormat(RenderTargetCatalog::Entry::EOwner owner,
                                                         uint32_t attachmentIndex,
                                                         EFormat::T format)
 {
     bool bFormatChanged = false;
     switch (owner) {
-    case RenderTargetEditorCatalog::Entry::EOwner::DeferredGBuffer:
+    case RenderTargetCatalog::Entry::EOwner::DeferredGBuffer:
         if (attachmentIndex >= _gBufferRTSpec.attachments.colorAttach.size()) {
             return false;
         }
@@ -509,7 +509,7 @@ bool DeferredRenderPipeline::setRenderTargetColorFormat(RenderTargetEditorCatalo
             markPendingResourceRefresh(EDeferredPendingResourceRefresh::GBufferAttachments);
         }
         break;
-    case RenderTargetEditorCatalog::Entry::EOwner::DeferredViewport:
+    case RenderTargetCatalog::Entry::EOwner::DeferredViewport:
         if (attachmentIndex >= _viewportRTSpec.attachments.colorAttach.size()) {
             return false;
         }

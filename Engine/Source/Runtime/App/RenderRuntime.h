@@ -8,7 +8,7 @@
 #include "Render/Render.h"
 #include "Render/Shader.h"
 #include "Runtime/App/Common/IRenderPipeline.h"
-#include "Runtime/App/Common/RenderTargetEditorCatalog.h"
+#include "Runtime/App/Common/RenderTargetCatalog.h"
 #include "Runtime/App/Common/RenderViewportSnapshot.h"
 #include "Runtime/App/DeferredRender/DeferredPipelineDebugViews.h"
 #include "Runtime/App/OffscreenTaskService.h"
@@ -175,7 +175,7 @@ struct RenderRuntime
     [[nodiscard]] float         getViewportFrameBufferScale() const { return _viewportFrameBufferScale; }
     [[nodiscard]] Extent2D      getViewportExtent() const;
     [[nodiscard]] DeferredPipelineDebugViews getDeferredPipelineDebugViews() const;
-    [[nodiscard]] RenderTargetEditorCatalog buildRenderTargetEditorCatalog() const;
+    [[nodiscard]] RenderTargetCatalog buildRenderTargetCatalog() const;
     [[nodiscard]] RenderViewportSnapshot buildViewportSnapshot() const;
     [[nodiscard]] bool            isDeferredPipelineActive() const { return _renderPipeline == ERenderPipeline::Deferred; }
     void requestRenderTargetFormat(const RenderTargetFormatCommand& command);

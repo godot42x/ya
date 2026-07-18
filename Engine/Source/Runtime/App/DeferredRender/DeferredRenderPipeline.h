@@ -40,7 +40,7 @@ struct Scene;
 struct Sampler;
 struct DebugRenderSystem;
 struct Mesh;
-struct RenderTargetEditorCatalog;
+struct RenderTargetCatalog;
 class ResourceResolveSystem;
 
 enum class EDeferredPendingResourceRefresh : uint32_t
@@ -197,9 +197,9 @@ struct DeferredRenderPipeline : public IRenderPipeline
     [[nodiscard]] SettingsSnapshot buildSettingsSnapshot() const;
     void requestSettings(const SettingsSnapshot& settings);
     DeferredPipelineDebugViews buildDebugViews() const;
-    void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const override;
-    bool setRenderTargetDepthFormat(RenderTargetEditorCatalog::Entry::EOwner owner, EFormat::T format) override;
-    bool setRenderTargetColorFormat(RenderTargetEditorCatalog::Entry::EOwner owner, uint32_t attachmentIndex, EFormat::T format) override;
+    void appendRenderTargetEntries(RenderTargetCatalog& catalog) const override;
+    bool setRenderTargetDepthFormat(RenderTargetCatalog::Entry::EOwner owner, EFormat::T format) override;
+    bool setRenderTargetColorFormat(RenderTargetCatalog::Entry::EOwner owner, uint32_t attachmentIndex, EFormat::T format) override;
 
     std::shared_ptr<IImage> getShadowDepthImage() const override { return _shadowResources.depthImage; }
     std::shared_ptr<RenderImage> getViewportDepthImageShared() const override { return _currentViewportResources.depthOwner; }

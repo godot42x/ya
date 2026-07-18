@@ -99,10 +99,10 @@ struct ForwardRenderPipeline : public IRenderPipeline
     void tick(const RenderPipelineFrameContext& frame) override;
     void shutdown();
 
-    bool setRenderTargetColorFormat(RenderTargetEditorCatalog::Entry::EOwner owner,
+    bool setRenderTargetColorFormat(RenderTargetCatalog::Entry::EOwner owner,
                                     uint32_t                                 attachmentIndex,
                                     EFormat::T                               format) override;
-    bool setRenderTargetDepthFormat(RenderTargetEditorCatalog::Entry::EOwner owner,
+    bool setRenderTargetDepthFormat(RenderTargetCatalog::Entry::EOwner owner,
                                     EFormat::T                               format) override;
 
     void                         onViewportResized(Rect2D rect) override;
@@ -130,7 +130,7 @@ struct ForwardRenderPipeline : public IRenderPipeline
     {
         return _postProcessStage.getBloomCompositeImageShared();
     }
-    void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const override;
+    void appendRenderTargetEntries(RenderTargetCatalog& catalog) const override;
 
     [[nodiscard]] bool           isShadowMappingEnabled() const override;
     [[nodiscard]] std::shared_ptr<IImage> getShadowDepthImage() const override { return _shadowResources.depthImage; }

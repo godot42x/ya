@@ -226,14 +226,14 @@ DeferredPipelineDebugViews RenderRuntime::getDeferredPipelineDebugViews() const
     return {};
 }
 
-RenderTargetEditorCatalog RenderRuntime::buildRenderTargetEditorCatalog() const
+RenderTargetCatalog RenderRuntime::buildRenderTargetCatalog() const
 {
-    RenderTargetEditorCatalog catalog{};
+    RenderTargetCatalog catalog{};
 
     if (auto presentationImage = getCurrentPresentationImageShared()) {
         catalog.entries.push_back({
             .label            = "Presentation",
-            .owner            = RenderTargetEditorCatalog::Entry::EOwner::Presentation,
+            .owner            = RenderTargetCatalog::Entry::EOwner::Presentation,
             .colorFormats     = {_render->getSwapchain()->getFormat()},
             .colorAttachments = {presentationImage},
             .extent           = presentationImage->getExtent(),
@@ -243,7 +243,7 @@ RenderTargetEditorCatalog RenderRuntime::buildRenderTargetEditorCatalog() const
         });
     }
     if (auto* pipeline = getActivePipeline()) {
-        pipeline->appendRenderTargetEditorEntries(catalog);
+        pipeline->appendRenderTargetEntries(catalog);
     }
 
     return catalog;
@@ -251,7 +251,7 @@ RenderTargetEditorCatalog RenderRuntime::buildRenderTargetEditorCatalog() const
 
 void RenderRuntime::requestRenderTargetFormat(const RenderTargetFormatCommand& command)
 {
-    if (command.format == EFormat::Undefined || command.owner == RenderTargetEditorCatalog::Entry::EOwner::Presentation) {
+    if (command.format == EFormat::Undefined || command.owner == RenderTargetCatalog::Entry::EOwner::Presentation) {
         return;
     }
 

@@ -152,11 +152,11 @@ RGImportedTextureDesc makeForwardViewportImportedDesc(const RenderImage& image,
 
 } // namespace
 
-void ForwardRenderPipeline::appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const
+void ForwardRenderPipeline::appendRenderTargetEntries(RenderTargetCatalog& catalog) const
 {
     catalog.entries.push_back({
         .label            = "Forward Viewport",
-        .owner            = RenderTargetEditorCatalog::Entry::EOwner::ForwardViewport,
+        .owner            = RenderTargetCatalog::Entry::EOwner::ForwardViewport,
         .colorFormats     = _viewportFormats.colorFormats,
         .depthFormat      = _viewportFormats.depthFormat,
         .colorAttachments = {_viewportResources.colorOwner},
@@ -166,7 +166,7 @@ void ForwardRenderPipeline::appendRenderTargetEditorEntries(RenderTargetEditorCa
     });
     catalog.entries.push_back({
         .label               = "Forward Shadow",
-        .owner               = RenderTargetEditorCatalog::Entry::EOwner::ForwardShadow,
+        .owner               = RenderTargetCatalog::Entry::EOwner::ForwardShadow,
         .depthFormat         = _shadowResources.depthFormat,
         .depthAttachmentView = _shadowResources.directionalDepthIV,
         .extent              = _shadowResources.extent,
@@ -363,13 +363,13 @@ void ForwardRenderPipeline::beginTick(const RenderPipelineFrameContext& frame, R
     };
 }
 
-bool ForwardRenderPipeline::setRenderTargetColorFormat(RenderTargetEditorCatalog::Entry::EOwner owner,
+bool ForwardRenderPipeline::setRenderTargetColorFormat(RenderTargetCatalog::Entry::EOwner owner,
                                                        uint32_t                                 attachmentIndex,
                                                        EFormat::T                               format)
 {
     bool bFormatChanged = false;
     switch (owner) {
-    case RenderTargetEditorCatalog::Entry::EOwner::ForwardViewport:
+    case RenderTargetCatalog::Entry::EOwner::ForwardViewport:
         if (attachmentIndex < _viewportRTSpec.attachments.colorAttach.size()) {
             auto& colorDesc = _viewportRTSpec.attachments.colorAttach[attachmentIndex];
             bFormatChanged  = colorDesc.format != format;
@@ -387,10 +387,10 @@ bool ForwardRenderPipeline::setRenderTargetColorFormat(RenderTargetEditorCatalog
 }
 
 bool ForwardRenderPipeline::setRenderTargetDepthFormat(
-    RenderTargetEditorCatalog::Entry::EOwner owner,
+    RenderTargetCatalog::Entry::EOwner owner,
     EFormat::T format)
 {
-    if (owner != RenderTargetEditorCatalog::Entry::EOwner::ForwardShadow) {
+    if (owner != RenderTargetCatalog::Entry::EOwner::ForwardShadow) {
         return false;
     }
     if (_shadowDepthFormat != format) {

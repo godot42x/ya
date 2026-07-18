@@ -12,7 +12,7 @@ namespace ya
 struct IImageView;
 struct RenderImage;
 
-struct RenderTargetEditorCatalog
+struct RenderTargetCatalog
 {
     struct Entry
     {
@@ -48,7 +48,7 @@ struct RenderTargetFormatCommand
         Depth,
     } attachment = EAttachment::Color;
 
-    RenderTargetEditorCatalog::Entry::EOwner owner = RenderTargetEditorCatalog::Entry::EOwner::Presentation;
+    RenderTargetCatalog::Entry::EOwner owner = RenderTargetCatalog::Entry::EOwner::Presentation;
     uint32_t                                 colorAttachmentIndex = 0;
     EFormat::T                               format = EFormat::Undefined;
 };

@@ -46,17 +46,17 @@ struct RenderTargetInspectorState
     char formatSearch[64]        = {};
 };
 
-int getColorAttachmentCount(const RenderTargetEditorCatalog::Entry& entry)
+int getColorAttachmentCount(const RenderTargetCatalog::Entry& entry)
 {
     return static_cast<int>(entry.colorFormats.size());
 }
 
-bool hasDepthAttachment(const RenderTargetEditorCatalog::Entry& entry)
+bool hasDepthAttachment(const RenderTargetCatalog::Entry& entry)
 {
     return entry.depthFormat.has_value();
 }
 
-EFormat::T getAttachmentFormat(const RenderTargetEditorCatalog::Entry& entry, int attachmentIndex)
+EFormat::T getAttachmentFormat(const RenderTargetCatalog::Entry& entry, int attachmentIndex)
 {
     const int colorCount = getColorAttachmentCount(entry);
     if (attachmentIndex >= 0 && attachmentIndex < colorCount) {
@@ -90,12 +90,12 @@ const char* formatLabel(EFormat::T format)
     return "Unknown";
 }
 
-bool isEntryInitialized(const RenderTargetEditorCatalog::Entry& entry)
+bool isEntryInitialized(const RenderTargetCatalog::Entry& entry)
 {
     return !entry.colorAttachments.empty() || entry.depthAttachment || entry.depthAttachmentView;
 }
 
-IImageView* getAttachmentImageView(const RenderTargetEditorCatalog::Entry& entry, int attachmentIndex)
+IImageView* getAttachmentImageView(const RenderTargetCatalog::Entry& entry, int attachmentIndex)
 {
     if (attachmentIndex >= 0 && attachmentIndex < static_cast<int>(entry.colorAttachments.size())) {
         const auto& attachment = entry.colorAttachments[attachmentIndex];
@@ -106,7 +106,7 @@ IImageView* getAttachmentImageView(const RenderTargetEditorCatalog::Entry& entry
 }
 
 void requestFormat(RenderRuntime& runtime,
-                   const RenderTargetEditorCatalog::Entry& entry,
+                   const RenderTargetCatalog::Entry& entry,
                    int attachmentIndex,
                    bool bDepth,
                    EFormat::T format)
@@ -130,7 +130,7 @@ void renderRenderTargetInspector(App& app)
         return;
     }
 
-    const auto catalog = runtime->buildRenderTargetEditorCatalog();
+    const auto catalog = runtime->buildRenderTargetCatalog();
     const auto& entries = catalog.entries;
     if (entries.empty()) {
         ImGui::TextUnformatted("No render targets are available.");

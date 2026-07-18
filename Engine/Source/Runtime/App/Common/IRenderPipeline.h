@@ -2,7 +2,7 @@
 
 #include "Render/RenderDefines.h"
 #include "Render/Shadow/ShadowSettings.h"
-#include "Runtime/App/Common/RenderTargetEditorCatalog.h"
+#include "Runtime/App/Common/RenderTargetCatalog.h"
 
 #include <functional>
 #include <glm/glm.hpp>
@@ -51,9 +51,9 @@ struct IRenderPipelineRenderTargets
 {
     virtual ~IRenderPipelineRenderTargets() = default;
 
-    virtual void appendRenderTargetEditorEntries(RenderTargetEditorCatalog& catalog) const {}
-    virtual bool setRenderTargetDepthFormat(RenderTargetEditorCatalog::Entry::EOwner owner, EFormat::T format) { return false; }
-    virtual bool setRenderTargetColorFormat(RenderTargetEditorCatalog::Entry::EOwner owner, uint32_t attachmentIndex, EFormat::T format) { return false; }
+    virtual void appendRenderTargetEntries(RenderTargetCatalog& catalog) const {}
+    virtual bool setRenderTargetDepthFormat(RenderTargetCatalog::Entry::EOwner owner, EFormat::T format) { return false; }
+    virtual bool setRenderTargetColorFormat(RenderTargetCatalog::Entry::EOwner owner, uint32_t attachmentIndex, EFormat::T format) { return false; }
 };
 
 struct IRenderPipelineDebugOutputs

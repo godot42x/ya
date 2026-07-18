@@ -22,6 +22,7 @@
 - `IRenderPipelineSettingsUI` and `IRenderPipelineDebugUI` are removed. Render Target inspection and format requests now use a dedicated non-UI pipeline capability; Forward and Deferred empty GUI entry points are gone.
 - `IRenderStage` no longer exposes GUI hooks. Empty Deferred, Forward viewport, Shadow-stage, and post-processing UI entry points are removed; remaining independent Shadow/Vulkan GUI APIs are the next migration boundary.
 - Empty Shadow technique/pass, Vulkan pipeline, RenderDiagnostics, and Forward auxiliary GUI entry points are removed. Runtime, Render, and Platform source now have no remaining `renderGUI` APIs.
+- Render Target snapshots and format commands are named `RenderTargetCatalog` and `RenderTargetFormatCommand`; Editor consumes the neutral Runtime API without Editor-named Runtime types.
 
 ## Runtime UI Cleanup
 
