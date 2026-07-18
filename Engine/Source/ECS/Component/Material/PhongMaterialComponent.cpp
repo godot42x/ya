@@ -81,9 +81,9 @@ const TextureSlot* PhongMaterialComponent::getTextureSlotInternal(PhongMaterial:
     }
 }
 
-PhongMaterialComponent::EditorChangeSummary PhongMaterialComponent::summarizeEditorChanges(const std::vector<std::string>& propPaths)
+PhongMaterialComponent::PropertyChangeSummary PhongMaterialComponent::summarizePropertyChanges(const std::vector<std::string>& propPaths)
 {
-    EditorChangeSummary summary;
+    PropertyChangeSummary summary;
 
     for (const auto& propPath : propPaths) {
         auto resource = detail_phong::textureResourceFromPath(propPath);
@@ -236,19 +236,19 @@ EMaterialResolveResult PhongMaterialComponent::resolve()
     return hasPendingTextures ? EMaterialResolveResult::Pending : EMaterialResolveResult::Ready;
 }
 
-void PhongMaterialComponent::onEditorPropertyChanged(const std::string& propPath)
+void PhongMaterialComponent::onPropertyChanged(const std::string& propPath)
 {
-    onEditorPropertiesChanged({propPath});
+    onPropertiesChanged({propPath});
 }
 
-void PhongMaterialComponent::onEditorPropertiesChanged(const std::vector<std::string>& propPaths)
+void PhongMaterialComponent::onPropertiesChanged(const std::vector<std::string>& propPaths)
 {
     bool hasParamChange = false;
     for (const auto& propPath : propPaths) {
         hasParamChange = hasParamChange || detail_phong::isParamPath(propPath);
     }
 
-    const auto summary = summarizeEditorChanges(propPaths);
+    const auto summary = summarizePropertyChanges(propPaths);
 
     if (!summary.hasTextureSlotChange && !hasParamChange) {
         return;

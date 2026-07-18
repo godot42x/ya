@@ -67,9 +67,9 @@ const TextureSlot* UnlitMaterialComponent::getTextureSlotInternal(UnlitMaterial:
     }
 }
 
-UnlitMaterialComponent::EditorChangeSummary UnlitMaterialComponent::summarizeEditorChanges(const std::vector<std::string>& propPaths)
+UnlitMaterialComponent::PropertyChangeSummary UnlitMaterialComponent::summarizePropertyChanges(const std::vector<std::string>& propPaths)
 {
-    EditorChangeSummary summary;
+    PropertyChangeSummary summary;
 
     for (const auto& propPath : propPaths) {
         auto resource = unlit_detail::textureResourceFromPath(propPath);
@@ -201,19 +201,19 @@ EMaterialResolveResult UnlitMaterialComponent::resolve()
     return hasPendingTextures ? EMaterialResolveResult::Pending : EMaterialResolveResult::Ready;
 }
 
-void UnlitMaterialComponent::onEditorPropertyChanged(const std::string& propPath)
+void UnlitMaterialComponent::onPropertyChanged(const std::string& propPath)
 {
-    onEditorPropertiesChanged({propPath});
+    onPropertiesChanged({propPath});
 }
 
-void UnlitMaterialComponent::onEditorPropertiesChanged(const std::vector<std::string>& propPaths)
+void UnlitMaterialComponent::onPropertiesChanged(const std::vector<std::string>& propPaths)
 {
     bool hasParamChange = false;
     for (const auto& propPath : propPaths) {
         hasParamChange = hasParamChange || unlit_detail::isParamPath(propPath);
     }
 
-    const auto summary = summarizeEditorChanges(propPaths);
+    const auto summary = summarizePropertyChanges(propPaths);
 
     if (!summary.hasTextureSlotChange && !hasParamChange) {
         return;

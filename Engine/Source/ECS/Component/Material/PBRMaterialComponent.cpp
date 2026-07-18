@@ -63,9 +63,9 @@ const TextureSlot* PBRMaterialComponent::getTextureSlotInternal(PBRMaterial::ERe
     }
 }
 
-PBRMaterialComponent::EditorChangeSummary PBRMaterialComponent::summarizeEditorChanges(const std::vector<std::string>& propPaths)
+PBRMaterialComponent::PropertyChangeSummary PBRMaterialComponent::summarizePropertyChanges(const std::vector<std::string>& propPaths)
 {
-    EditorChangeSummary summary;
+    PropertyChangeSummary summary;
     for (const auto& propPath : propPaths) {
         auto resource = detail_pbr::textureResourceFromPath(propPath);
         if (resource == detail_pbr::TextureResource::Count) continue;
@@ -197,19 +197,19 @@ EMaterialResolveResult PBRMaterialComponent::resolve()
     return hasPendingTextures ? EMaterialResolveResult::Pending : EMaterialResolveResult::Ready;
 }
 
-void PBRMaterialComponent::onEditorPropertyChanged(const std::string& propPath)
+void PBRMaterialComponent::onPropertyChanged(const std::string& propPath)
 {
-    onEditorPropertiesChanged({propPath});
+    onPropertiesChanged({propPath});
 }
 
-void PBRMaterialComponent::onEditorPropertiesChanged(const std::vector<std::string>& propPaths)
+void PBRMaterialComponent::onPropertiesChanged(const std::vector<std::string>& propPaths)
 {
     bool hasParamChange = false;
     for (const auto& propPath : propPaths) {
         hasParamChange = hasParamChange || detail_pbr::isParamPath(propPath);
     }
 
-    const auto summary = summarizeEditorChanges(propPaths);
+    const auto summary = summarizePropertyChanges(propPaths);
 
     if (!summary.hasTextureSlotChange && !hasParamChange) return;
 

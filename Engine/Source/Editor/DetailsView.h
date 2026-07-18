@@ -159,7 +159,7 @@ struct DetailsView
     }
 
     // All material components share the same dirty-handling pattern: forward
-    // modified property paths to onEditorPropertiesChanged and expose an
+    // modified property paths to onPropertiesChanged and expose an
     // "Invalidate" button. `invalidateButtonId` disambiguates the button label
     // when ImGui IDs would otherwise collide across multiple material sections.
     template <typename T>
@@ -167,7 +167,7 @@ struct DetailsView
     {
         drawReflectedComponent<T>(name, entity, [invalidateButtonId](T *mat, const ya::RenderContext &ctx) {
             if (ctx.hasModifications()) {
-                mat->onEditorPropertiesChanged(ctx.getModificationPaths());
+                mat->onPropertiesChanged(ctx.getModificationPaths());
             }
             if (ImGui::Button(invalidateButtonId)) {
                 mat->invalidate();

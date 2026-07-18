@@ -80,7 +80,7 @@ struct PBRMaterialComponent : public MaterialComponent<PBRMaterial>
     }
 
   private:
-    struct EditorChangeSummary
+    struct PropertyChangeSummary
     {
         std::array<bool, PBRMaterial::EResource::Count> touchedSlots{};
         bool                                            hasTextureSlotChange     = false;
@@ -102,12 +102,12 @@ struct PBRMaterialComponent : public MaterialComponent<PBRMaterial>
     void               syncParamsToMaterial();
     void               syncTextureSlot(PBRMaterial::EResource resourceEnum);
     void               importParamsFromDescriptor(const MaterialData& matData);
-    static EditorChangeSummary summarizeEditorChanges(const std::vector<std::string>& propPaths);
+    static PropertyChangeSummary summarizePropertyChanges(const std::vector<std::string>& propPaths);
 
   public:
     EMaterialResolveResult resolve() override;
-    void onEditorPropertyChanged(const std::string& propPath);
-    void onEditorPropertiesChanged(const std::vector<std::string>& propPaths);
+    void onPropertyChanged(const std::string& propPath);
+    void onPropertiesChanged(const std::vector<std::string>& propPaths);
 
     void invalidate()
     {

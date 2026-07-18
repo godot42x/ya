@@ -80,7 +80,7 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
 
 
   private:
-    struct EditorChangeSummary
+    struct PropertyChangeSummary
     {
         std::array<bool, PhongMaterial::EResource::Count> touchedSlots{};
         bool                                              hasTextureSlotChange     = false;
@@ -104,13 +104,13 @@ struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
     void syncParamsToMaterial();
     void syncTextureSlot(PhongMaterial::EResource resourceEnum);
     void importParamsFromDescriptor(const MaterialData& matData);
-    static EditorChangeSummary summarizeEditorChanges(const std::vector<std::string>& propPaths);
+    static PropertyChangeSummary summarizePropertyChanges(const std::vector<std::string>& propPaths);
 
   public:
 
     EMaterialResolveResult resolve() override;
-    void onEditorPropertyChanged(const std::string& propPath);
-    void onEditorPropertiesChanged(const std::vector<std::string>& propPaths);
+    void onPropertyChanged(const std::string& propPath);
+    void onPropertiesChanged(const std::vector<std::string>& propPaths);
 
     void invalidate()
     {

@@ -74,7 +74,7 @@ struct UnlitMaterialComponent : public MaterialComponent<UnlitMaterial>
     }
 
   private:
-    struct EditorChangeSummary
+    struct PropertyChangeSummary
     {
         std::array<bool, UnlitMaterial::EResource::Count> touchedSlots{};
         bool                                              hasTextureSlotChange     = false;
@@ -95,12 +95,12 @@ struct UnlitMaterialComponent : public MaterialComponent<UnlitMaterial>
     const TextureSlot* getTextureSlotInternal(UnlitMaterial::EResource resourceEnum) const;
     void               syncParamsToMaterial();
     void               syncTextureSlot(UnlitMaterial::EResource resourceEnum);
-    static EditorChangeSummary summarizeEditorChanges(const std::vector<std::string>& propPaths);
+    static PropertyChangeSummary summarizePropertyChanges(const std::vector<std::string>& propPaths);
 
   public:
     EMaterialResolveResult resolve() override;
-    void onEditorPropertyChanged(const std::string& propPath);
-    void onEditorPropertiesChanged(const std::vector<std::string>& propPaths);
+    void onPropertyChanged(const std::string& propPath);
+    void onPropertiesChanged(const std::vector<std::string>& propPaths);
 
     void invalidate()
     {
