@@ -31,7 +31,7 @@ stdptr<RenderImage> createPostprocessRenderImage(IRender* render,
                 .mipLevels     = 1,
                 .arrayLayers   = 1,
                 .samples       = ESampleCount::Sample_1,
-                .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
                 .initialLayout = EImageLayout::Undefined,
             },
             .defaultView = ImageViewCreateInfo{
@@ -207,7 +207,7 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
         .label  = "Postprocessing.Output",
         .format = _colorFormat,
         .extent = Extent3D{inputExtent.width, inputExtent.height, 1},
-        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
     }, ERGResourceLifetime::Persistent);
     const Rect2D outputRenderArea{
         .pos    = {0.0f, 0.0f},
