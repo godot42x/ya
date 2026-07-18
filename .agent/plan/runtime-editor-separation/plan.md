@@ -14,9 +14,9 @@ Produce a packageable `ya-runtime` that has no Editor, ImGui, ImGuizmo, or edito
 
 ## Ordered Work
 
-1. Establish and test `IAppExtension` lifecycle, including scene lifecycle forwarding and editor selection restoration. Keep `ya` as a compatibility aggregate while this is introduced.
+1. Establish and test `IAppExtension` lifecycle, including scene lifecycle forwarding and editor selection restoration. Keep `ya` as a compatibility aggregate while this is introduced. Complete: direct Runtime-only tests now cover registration order, native/framework event routing, logic, render preparation, presentation, state transitions, reverse detach, and no-extension dispatch.
 2. Split `ya-runtime` and `ya-editor` in XMake. Runtime compilation must exclude Editor, `ImGuiHelper.cpp`, Editor extension sources, and all ImGui/ImGuizmo dependencies; add a dependency scan gate. The target split is complete; the source-level dependency guard and removal of excluded legacy GUI sources remain with the subsequent UI migration.
-3. Move presentation UI, render diagnostics, pipeline settings, and render-target tooling to Editor adapters driven by Runtime snapshots/commands.
+3. Move presentation UI, render diagnostics, pipeline settings, and render-target tooling to Editor adapters driven by Runtime snapshots/commands. Complete: Runtime settings and format commands apply at frame-safe boundaries; empty Runtime snapshots are covered without a render backend.
 4. Move editor camera, viewport input, Editor.json defaults, and `SceneManager` authoring/play-scene ownership into an Editor play-session service. Runtime scene loading accepts a runtime scene without clone/restore semantics.
 5. Add `YAEditor` and runtime-only example/package entry targets. `YAEditor` and the Runtime-only sample entry targets are now explicit; remove the compatibility `ya` target only after downstream migration.
 

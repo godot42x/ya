@@ -24,10 +24,11 @@
 - `YAEditor` is an explicit Editor host program depending on `ya-editor` and registering the Editor extension; it is separate from Runtime-only application entry points.
 - `ya-testing` now depends only on `ya-runtime`; its container reflection coverage no longer imports an unused Editor renderer header.
 - `SceneManager` now owns only generic active-scene activation, destruction, loading, and cloning. `EditorPlaySession` owns authoring/play scene references and handles clone/restore through generic `IAppExtension` state-transition hooks; a Runtime-only App retains its active scene across state transitions.
+- Runtime extension dispatch is directly tested without GPU initialization: registration order, native/framework event routing, logic, render preparation, presentation, state transitions, reverse detach, and the no-extension path are covered.
+- Deferred settings commands now coalesce into a single pending snapshot and apply at `beginTick()` before resource refresh; Runtime startup also copies loaded shadow Developer Settings into the first frame state. Empty viewport snapshots and target catalogs are tested without a render backend.
 
 ## Current Boundary Gaps
 
-- Add direct coverage for `IAppExtension` ordering, event consumption, no-extension dispatch, and deferred Runtime command application; the existing lifecycle tests currently cover scene ownership only.
 - Keep `ya` as a compatibility aggregate until the designated breaking-change window. All active samples, tests, and `YAEditor` already use explicit module dependencies.
 - Audit the remaining authoring-neutral uses of the word `editor` (`IS_EDITOR` script compatibility, profiling metric names, and comments) individually. They are not source or link dependencies and must not be mechanically removed.
 
@@ -45,4 +46,4 @@
 - Deferred pipeline now exposes a typed settings snapshot and safe settings request path for the future Editor adapter.
 - Editor deferred settings now controls shadow enablement through the same frame-safe settings request path.
 - Render diagnostics keeps automation/RenderDoc behavior but no longer includes Runtime ImGui UI.
-- Pipeline-stage UI remains in Runtime and is the next migration batch; it needs typed snapshots and commands before Editor can own the presentation.
+- Pipeline-stage UI migration is complete: Runtime, Render, and Platform no longer expose `renderGUI` APIs or ImGui pipeline interfaces; Editor consumes typed snapshots and submits typed commands.
