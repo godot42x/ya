@@ -90,6 +90,12 @@ void ImGuiManager::initImGuiCore()
         YA_CORE_ERROR("Failed to load main font");
         mainFont = io->Fonts->AddFontDefault();
     }
+    if (mainFont) {
+        io->FontDefault = mainFont;
+        ImGuiStyle& style = ImGui::GetStyle();
+        style.FontSizeBase = mainFont->LegacySize;
+        style._NextFrameFontSizeBase = mainFont->LegacySize;
+    }
 
     static constexpr std::array<const char*, 6> cjkFontCandidates = {
         "Engine/Content/Fonts/NotoSansSC-Regular.otf",
@@ -119,8 +125,6 @@ void ImGuiManager::initImGuiCore()
 
 
     // io->Fonts->AddFontDefault();
-
-
     ImGuizmo::SetImGuiContext(ImGui::GetCurrentContext());
 
     auto colors               = ImGui::GetStyle().Colors;
@@ -676,10 +680,10 @@ static void metricsHelpMarker(const char* desc)
     }
 }
 
-void ImGuiManager::onRenderGUI()
+bool ImGuiManager::onRenderGUI()
 {
-    auto& io    = ImGui::GetIO();
     auto& style = ImGui::GetStyle();
+    bool  bChanged = false;
 
     static bool bDarkMode = true;
     if (ImGui::Checkbox("Dark Mode", &bDarkMode)) {
@@ -689,26 +693,32 @@ void ImGuiManager::onRenderGUI()
         else {
             ImGui::StyleColorsLight();
         }
+        bChanged = true;
     }
 
     ShowFontSelector("Fonts##Selector");
-    if (DragFloat("FontSizeBase", &style.FontSizeBase, 0.20f, 5.0f, 100.0f, "%.0f"))
+    if (DragFloat("FontSizeBase", &style.FontSizeBase, 0.20f, 5.0f, 100.0f, "%.0f")) {
         style._NextFrameFontSizeBase = style.FontSizeBase; // FIXME: Temporary hack until we finish remaining work.
+        bChanged = true;
+    }
     SameLine(0.0f, 0.0f);
     Text(" (out %.2f)", GetFontSize());
-    DragFloat("FontScaleMain", &style.FontScaleMain, 0.02f, 0.5f, 4.0f);
+    bChanged |= DragFloat("FontScaleMain", &style.FontScaleMain, 0.02f, 0.5f, 4.0f);
     // BeginDisabled(GetIO().ConfigDpiScaleFonts);
-    DragFloat("FontScaleDpi", &style.FontScaleDpi, 0.02f, 0.5f, 4.0f);
+    bChanged |= DragFloat("FontScaleDpi", &style.FontScaleDpi, 0.02f, 0.5f, 4.0f);
     // SetItemTooltip("When io.ConfigDpiScaleFonts is set, this value is automatically overwritten.");
     // EndDisabled();
 
     // Simplified Settings (expose floating-pointer border sizes as boolean representing 0.0f or 1.0f)
-    if (SliderFloat("FrameRounding", &style.FrameRounding, 0.0f, 12.0f, "%.0f"))
+    if (SliderFloat("FrameRounding", &style.FrameRounding, 0.0f, 12.0f, "%.0f")) {
         style.GrabRounding = style.FrameRounding; // Make GrabRounding always the same value as FrameRounding
+        bChanged = true;
+    }
     {
         bool border = (style.WindowBorderSize > 0.0f);
         if (Checkbox("WindowBorder", &border)) {
             style.WindowBorderSize = border ? 1.0f : 0.0f;
+            bChanged = true;
         }
     }
     SameLine();
@@ -716,6 +726,7 @@ void ImGuiManager::onRenderGUI()
         bool border = (style.FrameBorderSize > 0.0f);
         if (Checkbox("FrameBorder", &border)) {
             style.FrameBorderSize = border ? 1.0f : 0.0f;
+            bChanged = true;
         }
     }
     SameLine();
@@ -723,8 +734,11 @@ void ImGuiManager::onRenderGUI()
         bool border = (style.PopupBorderSize > 0.0f);
         if (Checkbox("PopupBorder", &border)) {
             style.PopupBorderSize = border ? 1.0f : 0.0f;
+            bChanged = true;
         }
     }
+
+    return bChanged;
 }
 
 } // namespace ya

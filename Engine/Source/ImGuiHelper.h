@@ -155,7 +155,7 @@ struct ImGuiManager
      */
     static void setGizmoRect(float x, float y, float width, float height);
 
-    void onRenderGUI();
+    bool onRenderGUI();
 };
 
 // Legacy alias for backward compatibility

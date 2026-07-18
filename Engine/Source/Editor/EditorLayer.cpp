@@ -90,6 +90,39 @@ static std::string buildDebugGroupSelectionConfigKey(const std::string& groupLab
     return std::format("debugWindow.debugGroupSelection.{}", normalizeConfigLabel(groupLabel));
 }
 
+static constexpr const char* kEditorConfigDocument = "editor";
+static constexpr const char* kImGuiFontSizeBaseKey = "imgui.fontSizeBase";
+static constexpr const char* kImGuiFontScaleMainKey = "imgui.fontScaleMain";
+static constexpr const char* kImGuiFontScaleDpiKey = "imgui.fontScaleDpi";
+
+static void loadImGuiSettingsFromConfig()
+{
+    auto& config = ConfigManager::get();
+    if (!config.hasDocument(kEditorConfigDocument)) {
+        return;
+    }
+
+    auto& style = ImGui::GetStyle();
+    const float fallbackFontSizeBase = style.FontSizeBase > 0.0f ? style.FontSizeBase : ImGui::GetFontSize();
+    style.FontSizeBase  = config.getOr<float>(kEditorConfigDocument, kImGuiFontSizeBaseKey, fallbackFontSizeBase);
+    if (style.FontSizeBase <= 0.0f) {
+        style.FontSizeBase = fallbackFontSizeBase;
+    }
+    style.FontScaleMain = config.getOr<float>(kEditorConfigDocument, kImGuiFontScaleMainKey, style.FontScaleMain);
+    style.FontScaleDpi  = config.getOr<float>(kEditorConfigDocument, kImGuiFontScaleDpiKey, style.FontScaleDpi);
+    style._NextFrameFontSizeBase = style.FontSizeBase;
+}
+
+static void saveImGuiSettingsToConfig()
+{
+    const auto& style = ImGui::GetStyle();
+    ConfigManager::Editor(kEditorConfigDocument)
+        .set(kImGuiFontSizeBaseKey, style.FontSizeBase)
+        .set(kImGuiFontScaleMainKey, style.FontScaleMain)
+        .set(kImGuiFontScaleDpiKey, style.FontScaleDpi)
+        .flush();
+}
+
 static const char* const kCubeFaceLabels[6] = {
     "PosX",
     "NegX",
@@ -117,6 +150,8 @@ void EditorLayer::onAttach()
         return;
 
     syncEditorSettingsFromConfig();
+    loadImGuiSettingsFromConfig();
+    saveImGuiSettingsToConfig();
 
     // Initialize editor panels
     if (auto scene = getEditableScene())
@@ -815,6 +850,14 @@ void EditorLayer::editorSettings()
         if (ImGui::Button("Reset")) {
             syncEditorSettingsFromConfig();
         }
+    }
+
+    ImGui::Separator();
+    if (ImGui::TreeNode("ImGui")) {
+        if (ImGuiManager::get().onRenderGUI()) {
+            saveImGuiSettingsToConfig();
+        }
+        ImGui::TreePop();
     }
 
     ImGui::End();

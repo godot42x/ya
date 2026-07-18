@@ -34,6 +34,25 @@ DeferredRenderPipeline* getDeferredPipeline(App& app)
     return renderRuntime ? dynamic_cast<DeferredRenderPipeline*>(renderRuntime->getActivePipeline()) : nullptr;
 }
 
+glm::vec3 resolveInitialEditorCameraPosition(const App& app)
+{
+    return app.getDesc().automation.editorCameraPosition.value_or(glm::vec3(0.0f, 0.0f, 5.0f));
+}
+
+glm::vec3 resolveInitialEditorCameraRotation(const App& app)
+{
+    return app.getDesc().automation.editorCameraRotation.value_or(glm::vec3(0.0f, 0.0f, 0.0f));
+}
+
+void initializeEditorCamera(App& app, EditorLayer& layer)
+{
+    auto& editorCamera = layer.getCamera();
+    const auto& desc   = app.getDesc();
+    const float aspect = desc.height > 0 ? static_cast<float>(desc.width) / static_cast<float>(desc.height) : (16.0f / 9.0f);
+    editorCamera.setPerspective(45.0f, aspect, 0.1f, 100.0f);
+    editorCamera.setPositionAndRotation(resolveInitialEditorCameraPosition(app), resolveInitialEditorCameraRotation(app));
+}
+
 void savePostProcessingSettings(const PostProcessingState& settings)
 {
     ConfigManager::Editor("runtime")
@@ -106,12 +125,49 @@ void saveShadowSettings(const ShadowSettings& settings)
 
 void renderDeferredSettings(App& app)
 {
-    auto* pipeline = getDeferredPipeline(app);
-    if (!pipeline || !ImGui::Begin("Render Settings")) {
-        if (pipeline) ImGui::End();
+    auto* runtime = app.getRenderRuntime();
+    if (!runtime || !ImGui::Begin("Render Settings")) {
+        if (runtime) ImGui::End();
         return;
     }
 
+    const char* renderPipelineNames = "Forward\0Deferred\0";
+    int currentRenderPipeline = static_cast<int>(runtime->getPendingRenderPipeline());
+    if (ImGui::Combo("Render Pipeline", &currentRenderPipeline, renderPipelineNames)) {
+        runtime->setPendingRenderPipeline(static_cast<RenderRuntime::ERenderPipeline>(currentRenderPipeline));
+    }
+    if (runtime->getPendingRenderPipeline() != runtime->getRenderPipeline()) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1, 1, 0, 1), "(switch pending)");
+    }
+
+    if (auto* render = app.getRender()) {
+        if (auto* swapchain = render->getSwapchain()) {
+            ImGui::SeparatorText("Presentation");
+            bool bVsync = swapchain->getVsync();
+            if (ImGui::Checkbox("VSync", &bVsync)) {
+                swapchain->setVsync(bVsync);
+            }
+
+            EPresentMode::T presentMode = swapchain->getPresentMode();
+            if (ImGui::Combo("Present Mode",
+                             reinterpret_cast<int*>(&presentMode),
+                             "Immediate\0Mailbox\0FIFO\0FIFO Relaxed\0")) {
+                app.taskManager.registerFrameTask([swapchain, presentMode]() {
+                    swapchain->setPresentMode(presentMode);
+                });
+            }
+        }
+    }
+
+    auto* pipeline = getDeferredPipeline(app);
+    if (!pipeline) {
+        ImGui::TextDisabled("Deferred-only settings are unavailable while the forward pipeline is active.");
+        ImGui::End();
+        return;
+    }
+
+    ImGui::SeparatorText("Deferred");
     auto settings = pipeline->buildSettingsSnapshot();
     bool changed  = false;
     changed |= ImGui::Checkbox("Reverse Viewport Y", &settings.bReverseViewportY);
@@ -246,6 +302,7 @@ class EditorAppExtension final : public IAppExtension
         registerBuiltinTypeRenderers();
 
         _layer = std::make_unique<EditorLayer>(&app);
+        initializeEditorCamera(app, *_layer);
         _layer->onAttach();
         gEditorLayer = _layer.get();
     }
