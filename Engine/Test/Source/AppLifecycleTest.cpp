@@ -3,6 +3,7 @@
 #include "Runtime/App/App.h"
 #include "Runtime/App/IAppExtension.h"
 
+#include "Render/Core/CommandBuffer.h"
 #include "Scene/SceneManager.h"
 
 #include <gtest/gtest.h>
@@ -24,10 +25,52 @@ class AppExtensionTestAccess
     static bool dispatchEvent(App& app, const Event& event) { return app.dispatchExtensionEvent(event); }
     static void tick(App& app, float dt) { app.tickExtensions(dt); }
     static void prepareRender(App& app, float dt) { app.prepareExtensionsForRender(dt); }
+    static void recordPresentation(App& app, ICommandBuffer& commandBuffer, float dt) { app.recordExtensionPresentation(commandBuffer, dt); }
 };
 
 namespace
 {
+
+class PresentationTestCommandBuffer final : public ICommandBuffer
+{
+  public:
+    CommandBufferHandle getHandle() const override { return {}; }
+    CommandBufferHandle getTypedHandle() const override { return {}; }
+    bool begin(bool = false) override { return true; }
+    bool end() override { return true; }
+    void reset() override { clearRetainedResources(); }
+    void bindPipeline(IGraphicsPipeline*) override {}
+    void bindComputePipeline(IComputePipeline*) override {}
+    void bindVertexBuffer(uint32_t, const IBuffer*, uint64_t = 0) override {}
+    void bindIndexBuffer(IBuffer*, uint64_t = 0, bool = false) override {}
+    void draw(uint32_t, uint32_t = 1, uint32_t = 0, uint32_t = 0) override {}
+    void drawIndexed(uint32_t, uint32_t = 1, uint32_t = 0, int32_t = 0, uint32_t = 0) override {}
+    void setViewport(float, float, float, float, float = 0.0f, float = 1.0f) override {}
+    void setScissor(int32_t, int32_t, uint32_t, uint32_t) override {}
+    void setCullMode(ECullMode::T) override {}
+    void setPolygonMode(EPolygonMode::T) override {}
+    void setDepthBias(float, float, float) override {}
+    void bindDescriptorSets(IPipelineLayout*, uint32_t, const std::vector<DescriptorSetHandle>&, const std::vector<uint32_t>& = {}) override {}
+    void bindComputeDescriptorSets(IPipelineLayout*, uint32_t, const std::vector<DescriptorSetHandle>&, const std::vector<uint32_t>& = {}) override {}
+    void pushConstants(IPipelineLayout*, EShaderStage::T, uint32_t, uint32_t, const void*) override {}
+    void copyBuffer(IBuffer*, IBuffer*, uint64_t, uint64_t = 0, uint64_t = 0) override {}
+    void dispatch(uint32_t, uint32_t, uint32_t) override {}
+    void dispatchIndirect(IBuffer*, uint64_t = 0) override {}
+    void drawIndirect(IBuffer*, uint64_t, uint32_t, uint32_t) override {}
+    void drawIndexedIndirect(IBuffer*, uint64_t, uint32_t, uint32_t) override {}
+    void drawIndexedIndirectCount(IBuffer*, uint64_t, IBuffer*, uint64_t, uint32_t, uint32_t) override {}
+    void fillBuffer(IBuffer*, uint64_t, uint64_t, uint32_t) override {}
+    void bufferMemoryBarrier(IBuffer*, EPipelineStage::T, EPipelineStage::T, EResourceAccess::T, EResourceAccess::T, uint64_t = 0, uint64_t = 0) override {}
+    void copyBufferToImage(IBuffer*, IImage*, EImageLayout::T, const std::vector<BufferImageCopy>&) override {}
+    void copyImageToBuffer(IImage*, EImageLayout::T, IBuffer*, const std::vector<BufferImageCopy>&) override {}
+    void copyImage(IImage*, EImageLayout::T, IImage*, EImageLayout::T, const std::vector<ImageCopy>&) override {}
+    void beginRendering(const RenderingInfo&) override {}
+    void endRendering(const RenderingInfo& = {}) override {}
+    void transitionImageLayout(IImage*, EImageLayout::T, EImageLayout::T, const ImageSubresourceRange* = nullptr) override {}
+    void transitionImageLayoutAuto(IImage*, EImageLayout::T, const ImageSubresourceRange* = nullptr) override {}
+    void debugBeginLabel(const char*, const float* = nullptr) override {}
+    void debugEndLabel() override {}
+};
 
 struct RecordingExtension final : IAppExtension
 {
@@ -57,6 +100,7 @@ struct RecordingExtension final : IAppExtension
     }
     void onLogic(App&, float) override { calls.push_back(name + ".logic"); }
     void onBeforeRender(App&, float) override { calls.push_back(name + ".before-render"); }
+    void onPresentation(App&, ICommandBuffer&, float) override { calls.push_back(name + ".presentation"); }
 };
 
 class AppLifecycleTest : public ::testing::Test
@@ -128,6 +172,8 @@ TEST_F(AppLifecycleTest, ExtensionsDispatchInRegistrationOrderAndDetachInReverse
     EXPECT_TRUE(AppExtensionTestAccess::dispatchEvent(app, event));
     AppExtensionTestAccess::tick(app, 0.016f);
     AppExtensionTestAccess::prepareRender(app, 0.016f);
+    PresentationTestCommandBuffer commandBuffer;
+    AppExtensionTestAccess::recordPresentation(app, commandBuffer, 0.016f);
 
     ASSERT_TRUE(sceneManager->activateScene(makeShared<Scene>("Runtime")));
     app.startSimulation();
@@ -142,6 +188,7 @@ TEST_F(AppLifecycleTest, ExtensionsDispatchInRegistrationOrderAndDetachInReverse
                   "first.event", "second.event",
                   "first.logic", "second.logic", "third.logic",
                   "first.before-render", "second.before-render", "third.before-render",
+                  "first.presentation", "second.presentation", "third.presentation",
                   "first.before-state", "second.before-state", "third.before-state",
                   "first.after-state", "second.after-state", "third.after-state",
                   "first.before-state", "second.before-state", "third.before-state",
@@ -162,6 +209,8 @@ TEST_F(AppLifecycleTest, ExtensionDispatchIsSafeWithoutExtensions)
     EXPECT_FALSE(AppExtensionTestAccess::dispatchEvent(app, event));
     AppExtensionTestAccess::tick(app, 0.016f);
     AppExtensionTestAccess::prepareRender(app, 0.016f);
+    PresentationTestCommandBuffer commandBuffer;
+    AppExtensionTestAccess::recordPresentation(app, commandBuffer, 0.016f);
     AppExtensionTestAccess::detach(app);
 }
 
