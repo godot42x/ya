@@ -395,10 +395,6 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
 // GUI
 // ═══════════════════════════════════════════════════════════════════════
 
-void ForwardViewportStage::renderGUI()
-{
-}
-
 // ═══════════════════════════════════════════════════════════════════════
 // Shadow mapping toggle
 // ═══════════════════════════════════════════════════════════════════════

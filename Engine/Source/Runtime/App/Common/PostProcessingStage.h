@@ -43,9 +43,6 @@ struct PostProcessingStage
     void     init(const InitDesc& desc);
     void     shutdown();
     void     beginFrame();
-    void     renderGUI();
-    void     renderSettingsGUI();
-    void     renderTechnicalGUI();
     void     setEnabled(bool enabled) { bEnabled = enabled; }
     void     setBloomEnabled(bool enabled) { _state.bEnableBloom = enabled; }
     void     setToneMappingEnabled(bool enabled) { _state.bEnableToneMapping = enabled; }

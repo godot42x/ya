@@ -134,19 +134,6 @@ void PostProcessingStage::resolvePreparedResources(const RenderGraphResourceRegi
     }
 }
 
-void PostProcessingStage::renderSettingsGUI()
-{
-    // Editor owns UI. Runtime exposes PostProcessingState and setters only.
-}
-
-void PostProcessingStage::renderTechnicalGUI()
-{
-}
-
-void PostProcessingStage::renderGUI()
-{
-}
-
 RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
                                                        Texture*     inputTexture,
                                                        glm::vec2    viewportExtent,

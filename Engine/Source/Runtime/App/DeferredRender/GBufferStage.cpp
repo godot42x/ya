@@ -849,12 +849,4 @@ void GBufferStage::drawFallback(const RenderStageContext& ctx)
 // Debug GUI
 // ═══════════════════════════════════════════════════════════════════════
 
-void GBufferStage::renderGUI()
-{
-}
-
-void GBufferStage::renderTechnicalGUI()
-{
-}
-
 } // namespace ya

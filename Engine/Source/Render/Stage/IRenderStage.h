@@ -59,15 +59,6 @@ struct IRenderStage
     /// Record draw commands into the command buffer.
     virtual void execute(const RenderStageContext& ctx) = 0;
 
-    /// Render user-facing effect settings.
-    virtual void renderSettingsGUI() {}
-
-    /// Render technical / debug UI for this stage.
-    virtual void renderTechnicalGUI() {}
-
-    /// Legacy combined UI entry.
-    virtual void renderGUI() {}
-
     [[nodiscard]] const std::string& getLabel() const { return _label; }
 };
 

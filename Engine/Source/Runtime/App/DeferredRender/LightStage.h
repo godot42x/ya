@@ -116,9 +116,6 @@ struct LightStage : public IRenderStage
     void prepare(const RenderStageContext& ctx) override;
     void execute(const RenderStageContext& ctx) override;
 
-    void renderGUI() override;
-    void renderSettingsGUI() override;
-    void renderTechnicalGUI() override;
 };
 
 } // namespace ya

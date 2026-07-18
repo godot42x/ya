@@ -103,8 +103,6 @@ struct GBufferStage : public IRenderStage
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
     void execute(const RenderStageContext& ctx) override;
-    void renderGUI() override;
-    void renderTechnicalGUI() override;
 
     // ── Accessors for LightStage ─────────────────────────────────
     [[nodiscard]] DescriptorSetHandle getFrameAndLightDS(uint32_t flightIndex) const

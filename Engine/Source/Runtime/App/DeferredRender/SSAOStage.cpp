@@ -366,16 +366,4 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
     return output;
 }
 
-void SSAOStage::renderSettingsGUI()
-{
-}
-
-void SSAOStage::renderTechnicalGUI()
-{
-}
-
-void SSAOStage::renderGUI()
-{
-}
-
 } // namespace ya

@@ -423,8 +423,4 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
 // GUI
 // ═══════════════════════════════════════════════════════════════════════
 
-void ViewportOverlayStage::renderGUI()
-{
-}
-
 } // namespace ya

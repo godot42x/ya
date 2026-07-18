@@ -101,7 +101,6 @@ struct ViewportOverlayStage : public IRenderStage
     void execute(const RenderStageContext& ctx) override;
     void executeSkybox(const RenderStageContext& ctx);
     void executeOverlay(const RenderStageContext& ctx);
-    void renderGUI() override;
     void refreshPipelineFormats(const DeferredAttachmentFormats& formats);
     void setServices(Services services);
     void setFrameInputs(FrameInputs frameInputs);

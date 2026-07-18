@@ -28,8 +28,6 @@ struct ShadowStage : public IRenderStage
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
     void execute(const RenderStageContext& ctx) override;
-    void renderGUI() override;
-    void renderTechnicalGUI() override;
 
     [[nodiscard]] IShadowTechnique* getTechnique() const { return _technique.get(); }
 

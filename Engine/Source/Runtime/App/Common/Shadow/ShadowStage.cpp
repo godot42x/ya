@@ -55,14 +55,6 @@ std::optional<RGPassHandle> ShadowStage::appendGraphPasses(
     return basicShadowMapTechnique->appendGraphPasses(graph, ctx.flightIndex, *ctx.frameData);
 }
 
-void ShadowStage::renderGUI()
-{
-}
-
-void ShadowStage::renderTechnicalGUI()
-{
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Settings
 // ═══════════════════════════════════════════════════════════════════════════

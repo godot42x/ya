@@ -416,16 +416,4 @@ void LightStage::execute(const RenderStageContext& ctx)
     cmdBuf->debugEndLabel();
 }
 
-void LightStage::renderSettingsGUI()
-{
-}
-
-void LightStage::renderTechnicalGUI()
-{
-}
-
-void LightStage::renderGUI()
-{
-}
-
 } // namespace ya
