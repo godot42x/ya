@@ -22,6 +22,7 @@
 - Texture-slot reflection uses a generic Runtime editability predicate rather than an Editor-named API.
 - `HelloMaterial` now explicitly depends on `ya-editor` and registers the Editor extension, while `GreedySnake` is an explicit Runtime-only sample depending only on `ya-runtime`.
 - `YAEditor` is an explicit Editor host program depending on `ya-editor` and registering the Editor extension; it is separate from Runtime-only application entry points.
+- `ya-testing` now depends only on `ya-runtime`; its container reflection coverage no longer imports an unused Editor renderer header.
 - `SceneManager` now owns only generic active-scene activation, destruction, loading, and cloning. `EditorPlaySession` owns authoring/play scene references and handles clone/restore through generic `IAppExtension` state-transition hooks; a Runtime-only App retains its active scene across state transitions.
 
 ## Current Boundary Gaps

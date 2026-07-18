@@ -5,7 +5,7 @@ do
     set_kind("binary")
     add_files("./Source/**.cpp")
 
-    add_deps("ya")
+    add_deps("ya-runtime")
     add_packages("gtest")
 
     if is_plat("windows") then

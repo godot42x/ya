@@ -6,7 +6,6 @@
  */
 
 #include "Core/Reflection/Reflection.h"
-#include "Editor/ContainerPropertyRenderer.h"
 #include <gtest/gtest.h>
 #include <iostream>
 
