@@ -1,8 +1,8 @@
-#include "FileExplorer.h"
+#include "Editor/FileExplorer.h"
 #include "Config/ConfigManager.h"
 #include "Core/System/PathUtils.h"
 #include "Core/System/VirtualFileSystem.h"
-#include "ImGuiHelper.h"
+#include "Editor/ImGui/ImGuiHelper.h"
 #include <algorithm>
 #include <format>
 

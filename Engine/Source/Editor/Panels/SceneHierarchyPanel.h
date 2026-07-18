@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ECS/Entity.h"
-#include "FilePicker.h"
+#include "Editor/FilePicker.h"
 #include <memory>
 #include <sol/sol.hpp>
 

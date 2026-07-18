@@ -1,6 +1,6 @@
-#include "Editor/RenderTargetInspector.h"
+#include "Editor/Panels/RenderTargetInspector.h"
 
-#include "ImGuiHelper.h"
+#include "Editor/ImGui/ImGuiHelper.h"
 #include "Render/Core/RenderImage.h"
 #include "Resource/Texture/TextureLibrary.h"
 #include "Runtime/App/App.h"

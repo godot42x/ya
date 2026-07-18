@@ -1,8 +1,8 @@
-#include "SceneHierarchyPanel.h"
+#include "Editor/Panels/SceneHierarchyPanel.h"
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Manager/Facade.h"
-#include "EditorCommon.h"
-#include "EditorLayer.h"
+#include "Editor/EditorCommon.h"
+#include "Editor/App/EditorLayer.h"
 
 
 #include "Core/System/VirtualFileSystem.h"

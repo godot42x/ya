@@ -2,8 +2,8 @@
 
 #include "Core/TypeIndex.h"
 #include "ECS/Entity.h"
-#include "FilePicker.h"
-#include "TypeRenderer.h"
+#include "Editor/FilePicker.h"
+#include "Editor/Inspector/TypeRenderer.h"
 #include <imgui.h>
 #include <sol/sol.hpp>
 #include <type_traits>

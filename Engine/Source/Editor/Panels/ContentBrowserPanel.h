@@ -1,6 +1,6 @@
 #pragma once
 
-#include "FileExplorer.h"
+#include "Editor/FileExplorer.h"
 #include <filesystem>
 #include <memory>
 #include <string>

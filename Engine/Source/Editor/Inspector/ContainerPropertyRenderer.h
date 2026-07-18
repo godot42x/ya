@@ -18,7 +18,7 @@
 #include "Core/Reflection/PropertyExtensions.h"
 #include "Core/Reflection/ReflectionHelper.h"
 
-#include "TypeRenderer.h"
+#include "Editor/Inspector/TypeRenderer.h"
 #include "utility.cc/ranges.h"
 #include <imgui.h>
 #include <string>

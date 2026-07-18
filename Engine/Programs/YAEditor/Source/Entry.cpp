@@ -1,4 +1,4 @@
-#include "Editor/EditorAppExtension.h"
+#include "Editor/App/EditorAppExtension.h"
 
 #define YA_ENTRY_POINT
 #include "Runtime/App/EntryPoint.h"

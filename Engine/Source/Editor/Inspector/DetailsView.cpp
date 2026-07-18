@@ -1,4 +1,4 @@
-#include "DetailsView.h"
+#include "Editor/Inspector/DetailsView.h"
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "ECS/Component/2D/UIComponent.h"
@@ -8,7 +8,7 @@
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
-#include "TypeRenderer.h"
+#include "Editor/Inspector/TypeRenderer.h"
 
 
 
@@ -28,8 +28,8 @@
 
 
 
-#include "EditorLayer.h"
-#include "ImGuiHelper.h"
+#include "Editor/App/EditorLayer.h"
+#include "Editor/ImGui/ImGuiHelper.h"
 #include "Resource/Texture/TextureLibrary.h"
 #include "Runtime/App/App.h"
 #include "Scene/Node.h"

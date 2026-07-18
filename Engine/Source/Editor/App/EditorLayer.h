@@ -1,18 +1,18 @@
 #pragma once
 
-#include "AssetInspectorPanel.h"
-#include "ContentBrowserPanel.h"
+#include "Editor/Panels/AssetInspectorPanel.h"
+#include "Editor/Panels/ContentBrowserPanel.h"
 #include "Core/Base.h"
 
 #include "Core/Camera/Camera.h"
 
 #include "Core/Event.h"
-#include "DetailsView.h"
-#include "FilePicker.h"
-#include "ImGuiHelper.h"
+#include "Editor/Inspector/DetailsView.h"
+#include "Editor/FilePicker.h"
+#include "Editor/ImGui/ImGuiHelper.h"
 #include "Render/Core/Image.h"
 #include "Runtime/App/Common/RenderViewportSnapshot.h"
-#include "SceneHierarchyPanel.h"
+#include "Editor/Panels/SceneHierarchyPanel.h"
 #include <imgui.h>
 
 #include "Editor/EditorCommon.h"

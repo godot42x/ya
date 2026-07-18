@@ -1,6 +1,6 @@
-#include "AssetInspectorPanel.h"
+#include "Editor/Panels/AssetInspectorPanel.h"
 
-#include "EditorLayer.h"
+#include "Editor/App/EditorLayer.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Resource/AssetManager.h"
 #include "Resource/Meta/AssetMeta.h"
