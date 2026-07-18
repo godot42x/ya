@@ -18,6 +18,7 @@
 ## Current Boundary Gaps
 
 - Pipeline-stage UI remains in Runtime and still needs typed snapshots and commands before Editor can own its presentation.
+- Retired Deferred pipeline ImGui implementations have been removed; only no-op compatibility entry points remain until the shared pipeline UI interfaces are removed in the Forward/stage migration.
 
 ## Runtime UI Cleanup
 
