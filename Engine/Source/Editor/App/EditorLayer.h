@@ -73,8 +73,6 @@ struct EditorLayer
     // ImGui texture descriptor set cache (editor-only, application layer)
     std::unordered_set<ImGuiImageEntry> _imguiTextureCache; // ImageView → VkDescriptorSet
 
-    std::function<void()> _contentFunc;
-
     // Gizmo state
     ImGuizmo::OPERATION _gizmoOperation = ImGuizmo::TRANSLATE;
     ImGuizmo::MODE      _gizmoMode      = ImGuizmo::LOCAL;
@@ -192,7 +190,7 @@ struct EditorLayer
         _bViewportResizePending = true;
     }
 
-    void onImGuiRender(auto content)
+    void onImGuiRender()
     {
         YA_PROFILE_FUNCTION();
         // ya::DeferredModificationQueue::get().onFrameBegin();
@@ -225,8 +223,6 @@ struct EditorLayer
         // settingsWindow();
         // renderStatsWindow();
 
-        content();
-
         // Demo window option
         if (bShowDemoWindow)
         {
@@ -236,11 +232,6 @@ struct EditorLayer
         ImGui::End(); // End main dockspace window
     }
     void onEvent(const Event& event);
-
-    void setContent(std::function<void()> contentFunc)
-    {
-        _contentFunc = contentFunc;
-    }
 
 
     /**

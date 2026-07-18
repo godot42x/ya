@@ -534,9 +534,8 @@ class EditorAppExtension final : public IAppExtension
         }
 
         ImGuiManager::get().beginFrame();
-        _layer->onImGuiRender([this, &app]() {
-            renderRuntimeToolsWindow(app, *_layer, _cameraController);
-        });
+        _layer->onImGuiRender();
+        renderRuntimeToolsWindow(app, *_layer, _cameraController);
         ImGuiManager::get().endFrame();
         ImGuiManager::get().render();
 
