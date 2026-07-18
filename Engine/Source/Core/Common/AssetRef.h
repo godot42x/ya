@@ -99,7 +99,7 @@ struct AssetRefBase
 
     /**
      * @brief Notify that the asset was modified (enqueues to deferred queue)
-     * Called by editor UI after async file picker completes.
+     * Called by authoring UI after async file picker completes.
      * The modification will be collected by RenderContext::beginInstance() on next frame.
      */
     void notifyModified()

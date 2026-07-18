@@ -89,7 +89,7 @@ struct EnvironmentLightingRuntimeState
     }
 };
 
-// ── Read-only preview types for Editor / debug rendering ──────────────
+// ── Read-only preview types for tooling and debug rendering ───────────
 
 struct SkyboxPreviewInfo
 {
@@ -177,7 +177,7 @@ struct ResourceResolveSystem : public ISystem
     [[nodiscard]] ImageResourceRef resolveSceneSkyboxResource(Scene* scene) const;
     [[nodiscard]] EnvironmentLightingSceneResources resolveSceneEnvironmentLightingResources(Scene* scene) const;
 
-    // ── Read-only preview queries (Editor / debug) ────────────────────
+    // ── Read-only preview queries (tooling and debug) ─────────────────
     [[nodiscard]] SkyboxPreviewInfo              getSkyboxPreview(entt::entity entity) const;
     [[nodiscard]] EnvironmentLightingPreviewInfo getEnvironmentLightingPreview(entt::entity entity) const;
 };

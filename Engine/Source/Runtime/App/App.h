@@ -561,7 +561,6 @@ struct App
     // [[nodiscard]] bool            isSimulationPlaying() const { return _simulationState == SimulationState::Playing; }
     // [[nodiscard]] bool            isSimulationPaused() const { return _simulationState == SimulationState::Paused; }
     // [[nodiscard]] float getSimulationDeltaTime() const { return _simulationDeltaTime; }
-    // [[nodiscard]] float getEditorDeltaTime() const { return _editorDeltaTime; }
 
     void startRuntime();
     void startSimulation();

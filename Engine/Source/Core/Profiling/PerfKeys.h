@@ -221,13 +221,6 @@ inline const FName& appUiEvent()
     return key;
 }
 
-inline const FName& appEditorEvent()
-{
-    using namespace ya::literals;
-    static const FName key = "App/EditorEvent"_name;
-    return key;
-}
-
 inline const FName& appFileWatcher()
 {
     using namespace ya::literals;
@@ -344,13 +337,6 @@ inline const FName& shadowPointDirectDrawStatic()
 {
     using namespace ya::literals;
     static const FName key = "Shadow/Point/DirectDrawStatic"_name;
-    return key;
-}
-
-inline const FName& renderImgui()
-{
-    using namespace ya::literals;
-    static const FName key = "Render/ImGui"_name;
     return key;
 }
 

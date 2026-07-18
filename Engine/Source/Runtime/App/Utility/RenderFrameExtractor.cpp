@@ -175,7 +175,7 @@ void RenderFrameExtractor::extractLights(const ExtractInput& input, entt::regist
     }
 
     // Keep point-light order stable across camera motion so the shadow budget does not flicker
-    // between different lights while the editor camera moves.
+    // between different lights while the active view camera moves.
 }
 
 int32_t RenderFrameExtractor::registerSkinningPalette(DrawItemExtractionContext& ctx,
