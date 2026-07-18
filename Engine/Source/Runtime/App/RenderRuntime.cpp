@@ -35,6 +35,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     }
 
     applyPendingRenderPipelineSwitch();
+    applyPendingRenderTargetFormatCommands();
 
     {
         YA_PERF_SCOPE(perf::sample::renderWorld(), perf::metric::cpuTimeMs(), perf::domain::render());
@@ -256,6 +257,38 @@ RenderTargetEditorCatalog RenderRuntime::buildRenderTargetEditorCatalog() const
     }
 
     return catalog;
+}
+
+void RenderRuntime::requestRenderTargetFormat(const RenderTargetFormatCommand& command)
+{
+    if (command.format == EFormat::Undefined || command.owner == RenderTargetEditorCatalog::Entry::EOwner::Presentation) {
+        return;
+    }
+
+    _pendingRenderTargetFormatCommands.push_back(command);
+}
+
+void RenderRuntime::applyPendingRenderTargetFormatCommands()
+{
+    if (_pendingRenderTargetFormatCommands.empty()) {
+        return;
+    }
+
+    auto* pipeline = getActivePipelineSettingsUI();
+    if (!pipeline) {
+        _pendingRenderTargetFormatCommands.clear();
+        return;
+    }
+
+    for (const auto& command : _pendingRenderTargetFormatCommands) {
+        if (command.attachment == RenderTargetFormatCommand::EAttachment::Depth) {
+            pipeline->setRenderTargetDepthFormat(command.owner, command.format);
+        }
+        else {
+            pipeline->setRenderTargetColorFormat(command.owner, command.colorAttachmentIndex, command.format);
+        }
+    }
+    _pendingRenderTargetFormatCommands.clear();
 }
 
 DebugRenderSystem& RenderRuntime::getDebugRenderSystem() const

@@ -8,10 +8,11 @@
 - `AppState::Editor` was renamed to `Stopped` to represent a play-session state rather than a module identity.
 - XMake now builds `ya-runtime` without Editor, ImGui, or ImGuizmo link dependencies, `ya-editor` with the Editor and ImGui integration, and keeps `ya` as a compatibility aggregate.
 - `DebugPrimitives` now exposes a deferred settings snapshot consumed by the Editor instead of rendering Runtime ImGui; postprocessing controls likewise flow through `DeferredRenderPipeline::SettingsSnapshot`.
+- Render target inspection now lives in `Editor/RenderTargetInspector.cpp`; Runtime publishes the target catalog and queues typed format commands for application before the world pass.
 
 ## Current Boundary Gaps
 
-- Excluded legacy Runtime GUI source files still need to move into Editor adapters or be removed after their snapshots and commands are complete.
+- `AppGuiController` remains as the final Runtime source location with direct ImGui code; its app/profiling dashboard still needs Editor-owned adapters or retirement.
 - `SceneManager` still owns `_editorScene` and clone/restore play-session state.
 - Editor scene selection must be forwarded through the generic extension lifecycle before further migration.
 

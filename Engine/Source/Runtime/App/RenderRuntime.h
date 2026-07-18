@@ -116,14 +116,6 @@ struct RenderRuntime
     stdptr<ForwardRenderPipeline>  _forwardPipeline  = nullptr;
     stdptr<DeferredRenderPipeline> _deferredPipeline = nullptr;
 
-    struct RenderTargetEditorState
-    {
-        int  selectedTargetIndex     = 0;
-        int  selectedAttachmentIndex = 0;
-        char targetSearch[64]        = {};
-        char formatSearch[64]        = {};
-    };
-
     RenderSharedResourceProvider  _sharedResourceProvider{};
     RenderDiagnosticsService     _diagnostics{};
 
@@ -133,13 +125,11 @@ struct RenderRuntime
     std::vector<std::unique_ptr<RenderGraphExecutor>> _presentationGraphExecutors;
     std::vector<std::shared_ptr<RenderImage>>         _presentationImages;
 
-    RenderTargetEditorState _rtEditor{};
+    std::vector<RenderTargetFormatCommand> _pendingRenderTargetFormatCommands;
 
     void init(const InitDesc& desc);
     void shutdown(bool bRenderAlreadyIdle = false);
     void renderFrame(const FrameInput& input);
-    void renderGUI(float dt);
-
   public:
     void onViewportResized(Rect2D rect);
     void resetSkyboxPool();
@@ -190,6 +180,7 @@ struct RenderRuntime
     [[nodiscard]] RenderTargetEditorCatalog buildRenderTargetEditorCatalog() const;
     [[nodiscard]] RenderViewportSnapshot buildViewportSnapshot() const;
     [[nodiscard]] bool            isDeferredPipelineActive() const { return _renderPipeline == ERenderPipeline::Deferred; }
+    void requestRenderTargetFormat(const RenderTargetFormatCommand& command);
 
   private:
     void                   initRuntimeState(const InitDesc& desc);
@@ -224,7 +215,7 @@ struct RenderRuntime
     void                   initActivePipeline();
     void                   shutdownActivePipeline();
     void                   applyPendingRenderPipelineSwitch();
-    void                   renderRenderTargetEditor();
+    void                   applyPendingRenderTargetFormatCommands();
     [[nodiscard]] std::shared_ptr<RenderImage> getCurrentPresentationImageShared() const;
     [[nodiscard]] uint32_t                     getCurrentPresentationImageIndex() const;
 };

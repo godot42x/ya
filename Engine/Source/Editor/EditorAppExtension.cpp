@@ -1,6 +1,7 @@
 #include "Editor/EditorAppExtension.h"
 
 #include "Editor/EditorLayer.h"
+#include "Editor/RenderTargetInspector.h"
 #include "Editor/TypeRenderer.h"
 #include "Config/ConfigManager.h"
 #include "ImGuiHelper.h"
@@ -293,6 +294,7 @@ class EditorAppExtension final : public IAppExtension
             renderDeferredSettings(app);
             renderDiagnostics(app);
             renderDebugPrimitives(app);
+            renderRenderTargetInspector(app);
         });
         ImGuiManager::get().endFrame();
         ImGuiManager::get().render();

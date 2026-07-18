@@ -40,4 +40,17 @@ struct RenderTargetEditorCatalog
     std::vector<Entry> entries;
 };
 
+struct RenderTargetFormatCommand
+{
+    enum class EAttachment
+    {
+        Color,
+        Depth,
+    } attachment = EAttachment::Color;
+
+    RenderTargetEditorCatalog::Entry::EOwner owner = RenderTargetEditorCatalog::Entry::EOwner::Presentation;
+    uint32_t                                 colorAttachmentIndex = 0;
+    EFormat::T                               format = EFormat::Undefined;
+};
+
 } // namespace ya
