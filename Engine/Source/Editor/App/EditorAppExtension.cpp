@@ -130,11 +130,10 @@ void saveShadowSettings(const ShadowSettings& settings)
     shadow_settings::saveRuntimeSettings(settings);
 }
 
-void renderDeferredSettings(App& app)
+void renderDeferredSettingsContent(App& app)
 {
     auto* runtime = app.getRenderRuntime();
-    if (!runtime || !ImGui::Begin("Render Settings")) {
-        if (runtime) ImGui::End();
+    if (!runtime) {
         return;
     }
 
@@ -170,7 +169,6 @@ void renderDeferredSettings(App& app)
     auto* pipeline = getDeferredPipeline(app);
     if (!pipeline) {
         ImGui::TextDisabled("Deferred-only settings are unavailable while the forward pipeline is active.");
-        ImGui::End();
         return;
     }
 
@@ -238,16 +236,10 @@ void renderDeferredSettings(App& app)
         savePostProcessingSettings(post);
         saveShadowSettings(settings.shadow);
     }
-    ImGui::End();
 }
 
-void renderEditorCameraWindow(EditorLayer& layer, FreeCameraController& controller)
+void renderEditorCameraContent(EditorLayer& layer, FreeCameraController& controller)
 {
-    if (!ImGui::Begin("Editor Camera")) {
-        ImGui::End();
-        return;
-    }
-
     auto& camera    = layer.getCamera();
     auto  position  = camera._position;
     auto  rotation  = camera._rotation;
@@ -263,17 +255,10 @@ void renderEditorCameraWindow(EditorLayer& layer, FreeCameraController& controll
     if (bChanged) {
         camera.setPositionAndRotation(position, rotation);
     }
-
-    ImGui::End();
 }
 
-void renderClearValuesWindow()
+void renderClearValuesContent()
 {
-    if (!ImGui::Begin("Clear Values")) {
-        ImGui::End();
-        return;
-    }
-
     float color[4] = {colorClearValue.color.r, colorClearValue.color.g, colorClearValue.color.b, colorClearValue.color.a};
     if (ImGui::ColorEdit4("Color Clear Value", color)) {
         colorClearValue = ClearValue(color[0], color[1], color[2], color[3]);
@@ -283,17 +268,10 @@ void renderClearValuesWindow()
     if (ImGui::DragFloat("Depth Clear Value", &depth, 0.01f, 0.0f, 1.0f)) {
         depthClearValue = ClearValue(depth, depthClearValue.depthStencil.stencil);
     }
-
-    ImGui::End();
 }
 
-void renderRender2DDebugWindow()
+void renderRender2DDebugContent()
 {
-    if (!ImGui::Begin("Render2D Debug")) {
-        ImGui::End();
-        return;
-    }
-
     auto& data = Render2D::data;
     ImGui::Checkbox("Reverse Viewport Y", &data.bReverseViewport);
 
@@ -309,17 +287,10 @@ void renderRender2DDebugWindow()
 
     ImGui::InputInt("Text Layout Mode", &data.TextLayoutMode);
     ImGui::TextDisabled("Viewport: %u x %u", data.windowWidth, data.windowHeight);
-
-    ImGui::End();
 }
 
-void renderSessionWindow(App& app)
+void renderSessionContent(App& app)
 {
-    if (!ImGui::Begin("Session")) {
-        ImGui::End();
-        return;
-    }
-
     AppMode mode = app._appMode;
     if (ImGui::Combo("App Mode", reinterpret_cast<int*>(&mode), "Control\0Drawing\0")) {
         app._appMode = mode;
@@ -348,15 +319,12 @@ void renderSessionWindow(App& app)
     }
     ImGui::SeparatorText("Input Trace");
     ImGui::TextWrapped("Clicked Points: %s", clickedPoints.c_str());
-
-    ImGui::End();
 }
 
-void renderDiagnostics(App& app)
+void renderDiagnosticsContent(App& app)
 {
     auto* runtime = app.getRenderRuntime();
-    if (!runtime || !ImGui::Begin("Render Diagnostics")) {
-        if (runtime) ImGui::End();
+    if (!runtime) {
         return;
     }
 
@@ -364,15 +332,12 @@ void renderDiagnostics(App& app)
     const bool bAvailable = renderDoc.capture && renderDoc.capture->isAvailable();
     ImGui::Text("RenderDoc: %s", bAvailable ? "Available" : "Unavailable");
     ImGui::TextWrapped("Last Capture: %s", renderDoc.lastCapturePath.empty() ? "<none>" : renderDoc.lastCapturePath.c_str());
-
-    ImGui::End();
 }
 
-void renderDebugPrimitives(App& app)
+void renderDebugPrimitivesContent(App& app)
 {
     auto* runtime = app.getRenderRuntime();
-    if (!runtime || !ImGui::Begin("Debug Primitives")) {
-        if (runtime) ImGui::End();
+    if (!runtime) {
         return;
     }
 
@@ -389,6 +354,40 @@ void renderDebugPrimitives(App& app)
     if (changed) {
         runtime->getDebugRenderSystem().requestSettings(settings);
     }
+}
+
+void renderRuntimeToolsWindow(App& app, EditorLayer& layer, FreeCameraController& controller)
+{
+    if (!ImGui::Begin("Runtime Tools")) {
+        ImGui::End();
+        return;
+    }
+
+    if (ImGui::CollapsingHeader("Session", ImGuiTreeNodeFlags_DefaultOpen)) {
+        renderSessionContent(app);
+    }
+    if (ImGui::CollapsingHeader("Render Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+        renderDeferredSettingsContent(app);
+    }
+    if (ImGui::CollapsingHeader("Editor Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
+        renderEditorCameraContent(layer, controller);
+    }
+    if (ImGui::CollapsingHeader("Clear Values")) {
+        renderClearValuesContent();
+    }
+    if (ImGui::CollapsingHeader("Render2D Debug")) {
+        renderRender2DDebugContent();
+    }
+    if (ImGui::CollapsingHeader("Diagnostics")) {
+        renderDiagnosticsContent(app);
+    }
+    if (ImGui::CollapsingHeader("Debug Primitives")) {
+        renderDebugPrimitivesContent(app);
+    }
+    if (ImGui::CollapsingHeader("Render Targets")) {
+        renderRenderTargetInspectorContent(app);
+    }
+
     ImGui::End();
 }
 
@@ -536,14 +535,7 @@ class EditorAppExtension final : public IAppExtension
 
         ImGuiManager::get().beginFrame();
         _layer->onImGuiRender([this, &app]() {
-            renderSessionWindow(app);
-            renderDeferredSettings(app);
-            renderEditorCameraWindow(*_layer, _cameraController);
-            renderClearValuesWindow();
-            renderRender2DDebugWindow();
-            renderDiagnostics(app);
-            renderDebugPrimitives(app);
-            renderRenderTargetInspector(app);
+            renderRuntimeToolsWindow(app, *_layer, _cameraController);
         });
         ImGuiManager::get().endFrame();
         ImGuiManager::get().render();

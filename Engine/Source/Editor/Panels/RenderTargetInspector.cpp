@@ -121,12 +121,11 @@ void requestFormat(RenderRuntime& runtime,
 
 } // namespace
 
-void renderRenderTargetInspector(App& app)
+void renderRenderTargetInspectorContent(App& app)
 {
     static RenderTargetInspectorState state;
     auto* runtime = app.getRenderRuntime();
-    if (!runtime || !ImGui::Begin("Render Targets")) {
-        if (runtime) ImGui::End();
+    if (!runtime) {
         return;
     }
 
@@ -134,7 +133,6 @@ void renderRenderTargetInspector(App& app)
     const auto& entries = catalog.entries;
     if (entries.empty()) {
         ImGui::TextUnformatted("No render targets are available.");
-        ImGui::End();
         return;
     }
 
@@ -146,7 +144,6 @@ void renderRenderTargetInspector(App& app)
     }
     if (filteredIndices.empty()) {
         ImGui::TextUnformatted("No render target matches the current search.");
-        ImGui::End();
         return;
     }
 
@@ -171,7 +168,6 @@ void renderRenderTargetInspector(App& app)
 
     if (!isEntryInitialized(selectedEntry)) {
         ImGui::TextUnformatted("Selected target is not initialized.");
-        ImGui::End();
         return;
     }
 
@@ -198,14 +194,12 @@ void renderRenderTargetInspector(App& app)
 
     if (selectedEntry.bSwapChainTarget) {
         ImGui::TextWrapped("Presentation target format and preview are owned by the swapchain.");
-        ImGui::End();
         return;
     }
     if (auto* imageView = getAttachmentImageView(selectedEntry, state.selectedAttachmentIndex)) {
         ImGuiHelper::Image(imageView, TextureLibrary::get().getDefaultSampler().get(), "Preview", ImVec2(256.0f, 256.0f));
     }
     if (!selectedEntry.bEditable) {
-        ImGui::End();
         return;
     }
 
@@ -232,6 +226,16 @@ void renderRenderTargetInspector(App& app)
         }
         ImGui::EndCombo();
     }
+}
+
+void renderRenderTargetInspector(App& app)
+{
+    auto* runtime = app.getRenderRuntime();
+    if (!runtime || !ImGui::Begin("Render Targets")) {
+        if (runtime) ImGui::End();
+        return;
+    }
+    renderRenderTargetInspectorContent(app);
     ImGui::End();
 }
 
