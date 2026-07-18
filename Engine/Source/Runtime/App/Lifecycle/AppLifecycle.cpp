@@ -289,17 +289,6 @@ void AppLifecycle::init(App& app, AppDesc ci)
         loadScene(app, startupScenePath);
     }
 
-    glm::vec3 editorCameraPosition = glm::vec3(0.0f, 0.0f, 5.0f);
-    glm::vec3 editorCameraRotation = glm::vec3(0.0f, 0.0f, 0.0f);
-    if (app._ci.automation.editorCameraPosition) {
-        editorCameraPosition = *app._ci.automation.editorCameraPosition;
-    }
-    if (app._ci.automation.editorCameraRotation) {
-        editorCameraRotation = *app._ci.automation.editorCameraRotation;
-    }
-
-    (void)editorCameraPosition;
-    (void)editorCameraRotation;
 }
 
 void AppLifecycle::handleSystemSignals(App& app)

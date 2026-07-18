@@ -14,6 +14,7 @@
 - Editor configuration now enters through `IAppExtension::onConfigure` after generic config initialization and before Runtime startup; Runtime no longer opens `Editor.json` or derives its startup scene from it.
 - Shadow settings are Runtime developer settings stored in `Runtime.json`: Runtime loads them before pipeline initialization and applies `Automation.json` as a temporary override. Editor edits the same typed Runtime settings through deferred pipeline commands and migrates legacy Shadow values from `Editor.json` once when needed.
 - Deferred render, post-processing, SSAO, and IBL settings now follow the same Runtime Developer Settings ownership: Runtime reads `Runtime.json` before stage initialization, while Editor migrates legacy values and writes only the Runtime document.
+- Automation screenshot targets now distinguish the Runtime viewport and generic presentation output; the former `Editor` target and unused Runtime editor-camera overrides are removed from the public Runtime contract.
 - `SceneManager` now owns only generic active-scene activation, destruction, loading, and cloning. `EditorPlaySession` owns authoring/play scene references and handles clone/restore through generic `IAppExtension` state-transition hooks; a Runtime-only App retains its active scene across state transitions.
 
 ## Current Boundary Gaps

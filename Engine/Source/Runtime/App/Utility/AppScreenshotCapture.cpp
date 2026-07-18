@@ -335,10 +335,10 @@ bool AppScreenshotCapture::request(IRender*                        render,
     }
 
     const std::shared_ptr<RenderImage> selectedRenderImage =
-        target == EAutomationScreenshotTarget::Editor
+        target == EAutomationScreenshotTarget::Presentation
             ? presentationSourceImage
             : (postprocessSourceImage ? postprocessSourceImage : viewportSourceImage);
-    const ScreenshotSourceInfo source = target == EAutomationScreenshotTarget::Editor
+    const ScreenshotSourceInfo source = target == EAutomationScreenshotTarget::Presentation
         ? makeScreenshotSourceInfo(presentationSourceImage.get())
         : (postprocessSourceImage ? makeScreenshotSourceInfo(postprocessSourceImage.get())
                                   : makeScreenshotSourceInfo(viewportSourceImage.get()));
@@ -377,7 +377,7 @@ bool AppScreenshotCapture::request(IRender*                        render,
     state.bPendingPresentationCapture  = false;
     state.bPresentationCopyRecorded    = false;
 
-    if (target == EAutomationScreenshotTarget::Editor) {
+    if (target == EAutomationScreenshotTarget::Presentation) {
         state.presentationSourceImage      = std::move(presentationSourceImage);
         state.bPendingPresentationCapture = true;
         return true;
@@ -410,7 +410,7 @@ bool AppScreenshotCapture::recordPresentationCapture(uint64_t frameIndex,
                                                      AppScreenshotCaptureState& state,
                                                      ICommandBuffer* cmdBuf)
 {
-    if (!cmdBuf || !state.bPendingPresentationCapture || state.target != EAutomationScreenshotTarget::Editor || !state.readbackBuffer) {
+    if (!cmdBuf || !state.bPendingPresentationCapture || state.target != EAutomationScreenshotTarget::Presentation || !state.readbackBuffer) {
         return false;
     }
 

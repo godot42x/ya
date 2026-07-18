@@ -146,7 +146,7 @@ void RenderRuntime::initDiagnostics(const AppDesc& appDesc)
 void RenderRuntime::initRenderBackend(const AppDesc& appDesc)
 {
     const bool bNeedPresentationTransferSrc = appDesc.automation.screenshotPath.has_value() &&
-                                              appDesc.automation.screenshotTarget == EAutomationScreenshotTarget::Editor;
+                                              appDesc.automation.screenshotTarget == EAutomationScreenshotTarget::Presentation;
 
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,

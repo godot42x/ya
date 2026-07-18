@@ -180,7 +180,7 @@ std::shared_ptr<RenderImage> makePresentationImage()
 
 } // namespace
 
-TEST(AppScreenshotCaptureTest, EditorRequestRetainsPresentationOwnerUntilReset)
+TEST(AppScreenshotCaptureTest, PresentationRequestRetainsPresentationOwnerUntilReset)
 {
     TestRender render;
     AppScreenshotCaptureState state;
@@ -195,7 +195,7 @@ TEST(AppScreenshotCaptureTest, EditorRequestRetainsPresentationOwnerUntilReset)
                                                           presentationImage,
                                                           state,
                                                           "Engine/Saved/Screenshot/test.png",
-                                                          EAutomationScreenshotTarget::Editor);
+                                                          EAutomationScreenshotTarget::Presentation);
     ASSERT_TRUE(bRequested);
 
     presentationImage.reset();

@@ -60,8 +60,8 @@ bool tryParseScreenshotTargetValue(std::string_view text, EAutomationScreenshotT
         outTarget = EAutomationScreenshotTarget::Viewport;
         return true;
     }
-    if (normalized == "editor") {
-        outTarget = EAutomationScreenshotTarget::Editor;
+    if (normalized == "presentation") {
+        outTarget = EAutomationScreenshotTarget::Presentation;
         return true;
     }
     return false;
