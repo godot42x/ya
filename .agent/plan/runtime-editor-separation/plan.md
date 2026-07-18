@@ -9,7 +9,7 @@ Produce a packageable `ya-runtime` that has no Editor, ImGui, ImGuizmo, or edito
 - Runtime play state is `Stopped`, `Simulation`, or `Runtime`; it is not an editor identity.
 - Editor-only state includes selection, editor camera, gizmos, docking, undo/redo, authoring config, and scene copy/restore policy.
 - Runtime exposes typed render snapshots and deferred commands. Editor does not access render pipeline internals.
-- Settings are owned by their runtime consumer: Runtime Developer Settings define typed defaults, schema, loading, and command application from `Runtime.json`; Editor provides only an authoring surface and legacy migration. Editor-private layout and workflow preferences remain in `Editor.json`.
+- Settings follow the Unreal `UDeveloperSettings` ownership model: every setting that changes Runtime behavior belongs to its Runtime consumer module. That module defines the typed default/schema, loads `Runtime.json` before the consumer initializes, validates it, and applies changes at its own safe boundary. The Editor is only an authoring adapter: it may render, edit, persist, and perform one-way legacy migration, but it must neither own the type nor be required for Runtime to load it. Command-line and `Automation.json` values remain temporary Runtime overrides. Editor-private layout and workflow preferences remain in `Editor.json`.
 - XMake targets, not broad preprocessor conditionals, enforce package exclusion: `ya-runtime` <- `ya-editor` <- `YAEditor`; game targets depend only on `ya-runtime`.
 
 ## Ordered Work
@@ -25,4 +25,5 @@ Produce a packageable `ya-runtime` that has no Editor, ImGui, ImGuizmo, or edito
 - `xmake b ya-runtime` and a runtime-only sample build without ImGui, ImGuizmo, or `Engine/Source/Editor` inputs.
 - `xmake b ya-editor` and `YAEditor` provide current editor workflows.
 - Runtime-only smoke does not load Editor.json or register an editor extension.
+- A packaged Runtime process loads the same Runtime Developer Settings with no Editor binary, source, or configuration document present; Editor edits must be observable on the next Runtime-only launch.
 - Editor smoke preserves scene selection across activation and Play/Stop transitions.

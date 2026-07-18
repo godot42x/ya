@@ -12,8 +12,8 @@
 - The retired App GUI dashboard and profiling facade no longer live in Runtime. `App::onRenderGUI` and the corresponding no-op sample overrides are removed; the Runtime/Render/Core/ECS/Platform source scan now has zero ImGui includes.
 - `ya-runtime` now runs an XMake pre-build guard over non-Editor source files and rejects direct Editor, ImGui, ImGuiHelper, or ImGuizmo includes.
 - Editor configuration now enters through `IAppExtension::onConfigure` after generic config initialization and before Runtime startup; Runtime no longer opens `Editor.json` or derives its startup scene from it.
-- Shadow settings are Runtime developer settings stored in `Runtime.json`: Runtime loads them before pipeline initialization and applies `Automation.json` as a temporary override. Editor edits the same typed Runtime settings through deferred pipeline commands and migrates legacy Shadow values from `Editor.json` once when needed.
-- Deferred render, post-processing, SSAO, and IBL settings now follow the same Runtime Developer Settings ownership: Runtime reads `Runtime.json` before stage initialization, while Editor migrates legacy values and writes only the Runtime document.
+- Runtime settings use an Unreal `UDeveloperSettings`-style ownership model: the Runtime consumer owns each typed setting's default/schema/load/validation/application lifecycle, reads `Runtime.json` before consumer initialization, and accepts command-line or `Automation.json` only as temporary overrides. Editor is an authoring adapter that may display, persist, and one-way migrate legacy values, but does not own types or participate in a packaged Runtime load.
+- Shadow, deferred render, post-processing, SSAO, and IBL settings already follow this model: Runtime reads `Runtime.json` before stage initialization, while Editor migrates legacy values and writes only the Runtime document.
 - Automation screenshot targets now distinguish the Runtime viewport and generic presentation output; the former `Editor` target and unused Runtime editor-camera overrides are removed from the public Runtime contract.
 - Material components expose generic property-change synchronization APIs; Editor forwards reflected property paths without defining a Runtime-side Editor protocol.
 - Removed unused `Scene` editor update/render hooks; Scene now exposes only generic Runtime update and render entry points.
@@ -27,12 +27,9 @@
 
 ## Current Boundary Gaps
 
-- Pipeline-stage UI remains in Runtime and still needs typed snapshots and commands before Editor can own its presentation.
-- Retired Deferred pipeline ImGui implementations have been removed; only no-op compatibility entry points remain until the shared pipeline UI interfaces are removed in the Forward/stage migration.
-- `IRenderPipelineSettingsUI` and `IRenderPipelineDebugUI` are removed. Render Target inspection and format requests now use a dedicated non-UI pipeline capability; Forward and Deferred empty GUI entry points are gone.
-- `IRenderStage` no longer exposes GUI hooks. Empty Deferred, Forward viewport, Shadow-stage, and post-processing UI entry points are removed; remaining independent Shadow/Vulkan GUI APIs are the next migration boundary.
-- Empty Shadow technique/pass, Vulkan pipeline, RenderDiagnostics, and Forward auxiliary GUI entry points are removed. Runtime, Render, and Platform source now have no remaining `renderGUI` APIs.
-- Render Target snapshots and format commands are named `RenderTargetCatalog` and `RenderTargetFormatCommand`; Editor consumes the neutral Runtime API without Editor-named Runtime types.
+- Add direct coverage for `IAppExtension` ordering, event consumption, no-extension dispatch, and deferred Runtime command application; the existing lifecycle tests currently cover scene ownership only.
+- Keep `ya` as a compatibility aggregate until the designated breaking-change window. All active samples, tests, and `YAEditor` already use explicit module dependencies.
+- Audit the remaining authoring-neutral uses of the word `editor` (`IS_EDITOR` script compatibility, profiling metric names, and comments) individually. They are not source or link dependencies and must not be mechanically removed.
 
 ## Runtime UI Cleanup
 
