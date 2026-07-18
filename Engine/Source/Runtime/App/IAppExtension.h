@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Event.h"
+#include "Runtime/App/AppState.h"
 
 #include <SDL3/SDL_events.h>
 
@@ -20,6 +21,8 @@ struct IAppExtension
     virtual void onConfigure(App& app, AppDesc& desc) {}
     virtual void onAttach(App& app) {}
     virtual void onDetach(App& app) {}
+    virtual bool onBeforeAppStateChange(App& app, AppState previousState, AppState nextState) { return true; }
+    virtual void onAfterAppStateChange(App& app, AppState previousState, AppState currentState) {}
     virtual void onSceneActivated(App& app, Scene* scene) {}
     virtual void onSceneDestroyed(App& app, Scene* scene) {}
     virtual void onNativeEvent(App& app, const SDL_Event& event) {}

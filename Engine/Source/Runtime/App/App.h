@@ -645,6 +645,8 @@ struct App
     void tickExtensions(float dt);
     void prepareExtensionsForRender(float dt);
     void recordExtensionPresentation(ICommandBuffer& commandBuffer, float dt);
+    [[nodiscard]] bool notifyExtensionsBeforeAppStateChange(AppState nextState);
+    void notifyExtensionsAfterAppStateChange(AppState previousState);
     void notifyExtensionsSceneActivated(Scene* scene);
     void notifyExtensionsSceneDestroyed(Scene* scene);
     // temp

@@ -118,6 +118,7 @@ struct EditorLayer
     // File picker for save/load dialogs and asset selection
     FilePicker  _filePicker;
     std::string _currentScenePath; // Current scene file path
+    Scene*      _editableScene = nullptr;
 
   public:
     EditorLayer(App* app);
@@ -133,6 +134,7 @@ struct EditorLayer
     void setViewportContext(const EditorViewportContext& ctx) { _viewportCtx = ctx; }
 
     void onUpdate(float dt);
+    void setEditableScene(Scene* scene) { _editableScene = scene; }
     void setSceneContext(Scene* scene)
     {
         _sceneHierarchyPanel.setContext(scene);

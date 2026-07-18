@@ -2,7 +2,6 @@
 
 #include "Core/Base.h"
 #include "Core/Delegate.h"
-#include "Runtime/App/AppState.h"
 #include "Scene/Scene.h"
 #include <functional>
 #include <memory>
@@ -27,9 +26,6 @@ struct SceneManager
 
   private:
     stdptr<Scene> _activeScene = nullptr;
-    stdptr<Scene> _editorScene = nullptr;
-    stdptr<Scene> _playScene   = nullptr;
-    AppState      _appState    = AppState::Stopped;
     // std::string   _currentScenePath;
     std::unordered_map<entt::registry*, Scene*> _reg2scene;
     std::unordered_set<const Scene*>            _knownScenes;
@@ -64,21 +60,15 @@ struct SceneManager
 
     bool unloadScene();
 
-    bool                 setEditorScene(stdptr<Scene> scene);
-    bool                 enterPlayMode(AppState state);
-    bool                 exitPlayMode();
+    bool                 activateScene(stdptr<Scene> scene);
+    bool                 destroyScene(stdptr<Scene>& scene);
     [[nodiscard]] Scene* getActiveScene() const { return _activeScene.get(); }
-    [[nodiscard]] Scene* getEditorScene() const { return _editorScene.get(); }
-    [[nodiscard]] Scene* getPlayScene() const { return _playScene.get(); }
+    [[nodiscard]] stdptr<Scene> getActiveSceneShared() const { return _activeScene; }
     bool                 hasScene() const { return _activeScene != nullptr; }
-    [[nodiscard]] bool   isInPlayMode() const { return _playScene != nullptr; }
 
 
     void serializeToFile(const std::string& path, Scene* scene) const;
     void deserializeFromFile(const std::string& path, Scene* scene);
-
-    void                   setAppState(AppState state) { _appState = state; }
-    [[nodiscard]] AppState getAppState() const { return _appState; }
 
     bool isSceneValid(const Scene* ptr);
     void registerScenePointer(const Scene* ptr);
@@ -99,7 +89,7 @@ struct SceneManager
     }
 
     /// @brief Check if we're in shutdown state (no scenes registered)
-    bool isShuttingDown() const { return _reg2scene.empty() && !_activeScene && !_editorScene && !_playScene; }
+    bool isShuttingDown() const { return _reg2scene.empty() && !_activeScene; }
 
   private:
     void setActiveScene(stdptr<Scene> scene);
@@ -108,10 +98,6 @@ struct SceneManager
     void onSceneInitInternal(Scene* scene);
     void onSceneDestroyInternal(Scene* scene);
     // void onSceneActivatedInternal(Scene *scene);
-    void destroyScene(std::unique_ptr<Scene> scene)
-    {
-        scene.reset();
-    }
 };
 
 } // namespace ya

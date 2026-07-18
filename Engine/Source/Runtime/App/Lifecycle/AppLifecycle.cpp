@@ -225,7 +225,6 @@ void AppLifecycle::init(App& app, AppDesc ci)
     }
 
     app._sceneManager = new SceneManager();
-    app._sceneManager->setAppState(app._appState);
     app._sceneManager->onSceneInit.addLambda(&app, [&app](Scene* scene)
                                              { app.onSceneInit(scene); });
     app._sceneManager->onSceneActivated.addLambda(&app, [&app](Scene* scene)
@@ -492,15 +491,18 @@ void AppLifecycle::startRuntime(App& app)
     }
 
     YA_CORE_INFO("Starting runtime...");
-    if (!app._sceneManager || !app._sceneManager->enterPlayMode(AppState::Runtime)) {
-        YA_CORE_ERROR("Failed to enter runtime mode");
+    if (!app._sceneManager || !app._sceneManager->hasScene()) {
+        YA_CORE_ERROR("Cannot start runtime without an active scene");
+        return;
+    }
+    if (!app.notifyExtensionsBeforeAppStateChange(AppState::Runtime)) {
+        YA_CORE_WARN("Runtime start was rejected by an app extension");
         return;
     }
 
+    const AppState previousState = app._appState;
     app._appState = AppState::Runtime;
-    if (app._sceneManager) {
-        app._sceneManager->setAppState(app._appState);
-    }
+    app.notifyExtensionsAfterAppStateChange(previousState);
 
     app.onEnterRuntime();
 }
@@ -513,15 +515,18 @@ void AppLifecycle::startSimulation(App& app)
     }
 
     YA_CORE_INFO("Starting simulation...");
-    if (!app._sceneManager || !app._sceneManager->enterPlayMode(AppState::Simulation)) {
-        YA_CORE_ERROR("Failed to enter simulation mode");
+    if (!app._sceneManager || !app._sceneManager->hasScene()) {
+        YA_CORE_ERROR("Cannot start simulation without an active scene");
+        return;
+    }
+    if (!app.notifyExtensionsBeforeAppStateChange(AppState::Simulation)) {
+        YA_CORE_WARN("Simulation start was rejected by an app extension");
         return;
     }
 
+    const AppState previousState = app._appState;
     app._appState = AppState::Simulation;
-    if (app._sceneManager) {
-        app._sceneManager->setAppState(app._appState);
-    }
+    app.notifyExtensionsAfterAppStateChange(previousState);
 
     app.onEnterSimulation();
 }
@@ -534,18 +539,16 @@ void AppLifecycle::stopRuntime(App& app)
     }
 
     YA_CORE_INFO("Stopping runtime");
-    if (app._sceneManager && app._sceneManager->isInPlayMode()) {
-        if (auto* render = app.getRender()) {
-            render->waitIdle();
-        }
+    if (auto* render = app.getRender()) {
+        render->waitIdle();
     }
-    if (app._sceneManager) {
-        app._sceneManager->exitPlayMode();
+    if (!app.notifyExtensionsBeforeAppStateChange(AppState::Stopped)) {
+        YA_CORE_WARN("Runtime stop was rejected by an app extension");
+        return;
     }
+    const AppState previousState = app._appState;
     app._appState = AppState::Stopped;
-    if (app._sceneManager) {
-        app._sceneManager->setAppState(app._appState);
-    }
+    app.notifyExtensionsAfterAppStateChange(previousState);
     if (app._luaScriptingSystem) {
         app._luaScriptingSystem->onStop();
     }
@@ -559,18 +562,16 @@ void AppLifecycle::stopSimulation(App& app)
     }
 
     YA_CORE_INFO("Stopping simulation");
-    if (app._sceneManager && app._sceneManager->isInPlayMode()) {
-        if (auto* render = app.getRender()) {
-            render->waitIdle();
-        }
+    if (auto* render = app.getRender()) {
+        render->waitIdle();
     }
-    if (app._sceneManager) {
-        app._sceneManager->exitPlayMode();
+    if (!app.notifyExtensionsBeforeAppStateChange(AppState::Stopped)) {
+        YA_CORE_WARN("Simulation stop was rejected by an app extension");
+        return;
     }
+    const AppState previousState = app._appState;
     app._appState = AppState::Stopped;
-    if (app._sceneManager) {
-        app._sceneManager->setAppState(app._appState);
-    }
+    app.notifyExtensionsAfterAppStateChange(previousState);
 
     app.onExitSimulation();
 }

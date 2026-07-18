@@ -85,6 +85,23 @@ void App::recordExtensionPresentation(ICommandBuffer& commandBuffer, float dt)
     }
 }
 
+bool App::notifyExtensionsBeforeAppStateChange(AppState nextState)
+{
+    for (const auto& extension : _extensions) {
+        if (!extension->onBeforeAppStateChange(*this, _appState, nextState)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void App::notifyExtensionsAfterAppStateChange(AppState previousState)
+{
+    for (const auto& extension : _extensions) {
+        extension->onAfterAppStateChange(*this, previousState, _appState);
+    }
+}
+
 void App::notifyExtensionsSceneActivated(Scene* scene)
 {
     for (const auto& extension : _extensions) {

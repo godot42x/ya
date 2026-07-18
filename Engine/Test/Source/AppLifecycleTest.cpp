@@ -42,5 +42,25 @@ TEST_F(AppLifecycleTest, LoadSceneIgnoresEmptyPathWithoutCreatingFallbackScene)
     EXPECT_EQ(sceneManager->getActiveScene(), nullptr);
 }
 
+TEST_F(AppLifecycleTest, ActiveSceneSwitchKeepsCallerOwnedScenesAlive)
+{
+    auto authoringScene = makeShared<Scene>("Authoring");
+    ASSERT_TRUE(sceneManager->activateScene(authoringScene));
+
+    auto playScene = sceneManager->cloneScene(authoringScene.get());
+    ASSERT_NE(playScene, nullptr);
+    ASSERT_TRUE(sceneManager->activateScene(playScene));
+
+    EXPECT_EQ(sceneManager->getActiveScene(), playScene.get());
+    EXPECT_EQ(sceneManager->getSceneByRegistry(&authoringScene->getRegistry()), authoringScene.get());
+    EXPECT_EQ(sceneManager->getSceneByRegistry(&playScene->getRegistry()), playScene.get());
+
+    ASSERT_TRUE(sceneManager->activateScene(authoringScene));
+    EXPECT_TRUE(sceneManager->destroyScene(playScene));
+    EXPECT_EQ(playScene, nullptr);
+    EXPECT_EQ(sceneManager->getActiveScene(), authoringScene.get());
+    EXPECT_EQ(sceneManager->getSceneByRegistry(&authoringScene->getRegistry()), authoringScene.get());
+}
+
 } // namespace
 } // namespace ya

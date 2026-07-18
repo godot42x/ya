@@ -31,12 +31,7 @@ namespace ya
 
 Scene* EditorLayer::getEditableScene() const
 {
-    if (!_app) {
-        return nullptr;
-    }
-
-    auto* sceneManager = _app->getSceneManager();
-    return sceneManager ? sceneManager->getEditorScene() : nullptr;
+    return _editableScene;
 }
 
 Scene* EditorLayer::getViewportInteractionScene() const
@@ -124,7 +119,7 @@ void EditorLayer::onAttach()
     syncEditorSettingsFromConfig();
 
     // Initialize editor panels
-    if (auto scene = _app->getSceneManager()->getEditorScene())
+    if (auto scene = getEditableScene())
     {
         _sceneHierarchyPanel.setContext(scene);
     }
@@ -378,7 +373,8 @@ void EditorLayer::menuBar()
                 }
                 auto scene = makeShared<Scene>();
                 if (sceneManager) {
-                    sceneManager->setEditorScene(scene);
+                    sceneManager->unloadScene();
+                    sceneManager->activateScene(scene);
                 }
             });
         }
@@ -393,7 +389,7 @@ void EditorLayer::menuBar()
             {
                 if (_app && _app->getSceneManager())
                 {
-                    auto* scene = _app->getSceneManager()->getEditorScene();
+                    auto* scene = getEditableScene();
                     if (scene)
                     {
                         _app->getSceneManager()->serializeToFile(_currentScenePath, scene);
@@ -407,7 +403,7 @@ void EditorLayer::menuBar()
                 std::string defaultName = "NewScene";
                 if (_app && _app->getSceneManager())
                 {
-                    auto* scene = _app->getSceneManager()->getEditorScene();
+                    auto* scene = getEditableScene();
                     if (scene && !scene->getName().empty())
                     {
                         defaultName = scene->getName();
@@ -420,7 +416,7 @@ void EditorLayer::menuBar()
                         _currentScenePath = selectedDir + "/" + sceneName + ".scene.json";
                         if (_app && _app->getSceneManager())
                         {
-                            auto* scene = _app->getSceneManager()->getEditorScene();
+                            auto* scene = getEditableScene();
                             if (scene)
                             {
                                 scene->setName(sceneName);
@@ -437,7 +433,7 @@ void EditorLayer::menuBar()
             std::string defaultName = "NewScene";
             if (_app && _app->getSceneManager())
             {
-                auto* scene = _app->getSceneManager()->getEditorScene();
+                auto* scene = getEditableScene();
                 if (scene && !scene->getName().empty())
                 {
                     defaultName = scene->getName();
@@ -450,7 +446,7 @@ void EditorLayer::menuBar()
                     _currentScenePath = selectedDir + "/" + sceneName + ".scene.json";
                     if (_app && _app->getSceneManager())
                     {
-                        auto* scene = _app->getSceneManager()->getEditorScene();
+                        auto* scene = getEditableScene();
                         if (scene)
                         {
                             scene->setName(sceneName);

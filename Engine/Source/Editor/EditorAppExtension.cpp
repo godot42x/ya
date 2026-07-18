@@ -1,6 +1,7 @@
 #include "Editor/EditorAppExtension.h"
 
 #include "Editor/EditorLayer.h"
+#include "Editor/EditorPlaySession.h"
 #include "Editor/RenderTargetInspector.h"
 #include "Editor/TypeRenderer.h"
 #include "Config/ConfigManager.h"
@@ -235,7 +236,7 @@ class EditorAppExtension final : public IAppExtension
 
     void onDetach(App& app) override
     {
-        (void)app;
+        _playSession.shutdown(app);
         if (_layer) {
             _layer->onDetach();
             _layer.reset();
@@ -244,23 +245,35 @@ class EditorAppExtension final : public IAppExtension
         ImGuiManager::get().shutdown();
     }
 
+    bool onBeforeAppStateChange(App& app, AppState previousState, AppState nextState) override
+    {
+        if (previousState == AppState::Stopped && nextState != AppState::Stopped) {
+            return _playSession.begin(app, nextState);
+        }
+        if (previousState != AppState::Stopped && nextState == AppState::Stopped) {
+            _playSession.end(app);
+        }
+        return true;
+    }
+
     void onSceneActivated(App& app, Scene* scene) override
     {
-        (void)app;
+        _playSession.onSceneActivated(app, scene);
         if (!_layer) {
             return;
         }
 
         const uint64_t selectedUUID = _layer->getSelectedEntityUUID();
+        _layer->setEditableScene(_playSession.getAuthoringScene());
         _layer->setSceneContext(scene);
         _layer->selectEntity(scene && selectedUUID != 0 ? scene->getEntityByUUID(selectedUUID) : nullptr);
     }
 
     void onSceneDestroyed(App& app, Scene* scene) override
     {
-        (void)app;
-        (void)scene;
+        _playSession.onSceneDestroyed(scene);
         if (_layer) {
+            _layer->setEditableScene(_playSession.getAuthoringScene());
             _layer->selectEntity(nullptr);
         }
     }
@@ -326,6 +339,7 @@ class EditorAppExtension final : public IAppExtension
 
   private:
     std::unique_ptr<EditorLayer> _layer;
+    EditorPlaySession             _playSession;
 };
 
 } // namespace

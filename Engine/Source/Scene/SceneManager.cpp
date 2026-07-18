@@ -8,9 +8,7 @@ namespace ya
 
 SceneManager::~SceneManager()
 {
-    destroySceneIfNeeded(_playScene);
-    destroySceneIfNeeded(_editorScene);
-    _activeScene.reset();
+    destroySceneIfNeeded(_activeScene);
 
     _reg2scene.clear();
     _knownScenes.clear();
@@ -34,96 +32,42 @@ void SceneManager::unregisterScenePointer(const Scene* ptr)
 
 bool SceneManager::loadScene(const std::string& path)
 {
-    if (isInPlayMode()) {
-        YA_CORE_WARN("SceneManager::loadScene called while play mode is active, exiting play mode first");
-        exitPlayMode();
-    }
+    unloadScene();
 
     auto nextScene = makeShared<Scene>();
     SceneSerializer serializer(nextScene.get());
     if (!serializer.loadFromFile(path)) {
         YA_CORE_ERROR("Failed to load scene: {}, falling back to an empty scene", path);
         nextScene->setName("Untitled Scene");
-        return setEditorScene(nextScene);
+        return activateScene(nextScene);
     }
 
-    return setEditorScene(nextScene);
+    return activateScene(nextScene);
 }
 
 bool SceneManager::unloadScene()
 {
-    if (isInPlayMode()) {
-        exitPlayMode();
-    }
-
-    const bool bHadScene = (_editorScene != nullptr);
-    destroySceneIfNeeded(_editorScene);
-    _appState = AppState::Stopped;
-    _activeScene.reset();
-    return bHadScene;
+    return destroyScene(_activeScene);
 }
 
-bool SceneManager::setEditorScene(stdptr<Scene> scene)
+bool SceneManager::activateScene(stdptr<Scene> scene)
 {
-    if (isInPlayMode()) {
-        YA_CORE_WARN("Cannot replace editor scene while play mode is active");
-        return false;
-    }
-
-    if (_editorScene == scene) {
-        setActiveScene(_editorScene);
+    if (_activeScene == scene) {
         return true;
     }
 
-    destroySceneIfNeeded(_editorScene);
-    _editorScene = scene;
-    initSceneIfNeeded(_editorScene.get());
-    _appState = AppState::Stopped;
-    setActiveScene(_editorScene);
+    initSceneIfNeeded(scene.get());
+    setActiveScene(std::move(scene));
     return true;
 }
 
-bool SceneManager::enterPlayMode(AppState state)
+bool SceneManager::destroyScene(stdptr<Scene>& scene)
 {
-    YA_CORE_ASSERT(state != AppState::Stopped, "enterPlayMode requires a play state");
-
-    if (!_editorScene) {
-        YA_CORE_WARN("Cannot enter play mode without an editor scene");
+    if (!scene) {
         return false;
     }
 
-    if (isInPlayMode()) {
-        if (_appState == state) {
-            return true;
-        }
-        exitPlayMode();
-    }
-
-    auto playScene = _editorScene->clone();
-    playScene->setName(_editorScene->getName() + " (Play Mode)");
-    if (!playScene) {
-        YA_CORE_ERROR("Failed to clone editor scene for play mode");
-        return false;
-    }
-
-    _appState = state;
-    _playScene = std::move(playScene);
-    initSceneIfNeeded(_playScene.get());
-    setActiveScene(_playScene);
-    return true;
-}
-
-bool SceneManager::exitPlayMode()
-{
-    if (!isInPlayMode()) {
-        setActiveScene(_editorScene);
-        _appState = AppState::Stopped;
-        return false;
-    }
-
-    destroySceneIfNeeded(_playScene);
-    _appState = AppState::Stopped;
-    setActiveScene(_editorScene);
+    destroySceneIfNeeded(scene);
     return true;
 }
 
