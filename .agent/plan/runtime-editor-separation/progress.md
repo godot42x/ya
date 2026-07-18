@@ -20,6 +20,7 @@
 - Editor profiling preferences now use an Editor-side configuration adapter; Core profiling exposes only Runtime state and automation overrides.
 - Lua script preview bookkeeping is now authoring-neutral Runtime data; Editor owns the preview workflow that consumes it.
 - Texture-slot reflection uses a generic Runtime editability predicate rather than an Editor-named API.
+- `HelloMaterial` now explicitly depends on `ya-editor` and registers the Editor extension, while `GreedySnake` is an explicit Runtime-only sample depending only on `ya-runtime`.
 - `SceneManager` now owns only generic active-scene activation, destruction, loading, and cloning. `EditorPlaySession` owns authoring/play scene references and handles clone/restore through generic `IAppExtension` state-transition hooks; a Runtime-only App retains its active scene across state transitions.
 
 ## Current Boundary Gaps
