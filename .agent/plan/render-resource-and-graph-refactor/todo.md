@@ -1,5 +1,10 @@
 # GPU 资源模型与 RenderGraph 联合重构 TODO
 
+> 2026-07-18：Deferred/Forward 顶层 FrameGraph orchestrator、frame resource owner、typed pass
+> parameters、descriptor binding 和全量迁移任务已转入
+> `../frame-graph-orchestrator-migration/todo.md`。本清单中的 Phase 7 `[x]` 表示已有
+> graph-backed execution，不表示 Stage 隐藏资源和顶层编排已经完成。
+
 ## 使用说明
 
 本清单对应同目录 `plan.md`，并接替 `.agent/plan/render-architecture-refactor/todo.md`。

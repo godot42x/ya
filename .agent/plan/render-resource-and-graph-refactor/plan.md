@@ -1,5 +1,11 @@
 # GPU 资源模型与 RenderGraph 联合重构计划
 
+> 2026-07-18 后续执行入口：本计划已经完成 resource factory、state tracker、RenderGraph core
+> 和 Deferred graph-backed execution 等基础工作。针对“Stage 仍暗持 frame resource、缺少顶层
+> orchestrator、setup 与 descriptor binding 未统一”的下一阶段迁移，统一转入
+> `../frame-graph-orchestrator-migration/plan.md`。本文继续保留历史设计、已完成记录和 GPU API
+> 清理背景，不再用 Phase 7 的旧完成表述判断全量 RenderGraph 是否完成。
+
 ## 1. 计划定位
 
 本计划接替 `.agent/plan/render-architecture-refactor`，作为后续 GPU 资源重构和 RenderGraph 迁移的主计划。

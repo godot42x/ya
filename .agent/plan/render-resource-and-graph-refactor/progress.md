@@ -1,5 +1,10 @@
 # GPU 资源模型与 RenderGraph 联合重构进展
 
+> 2026-07-18：后续顶层 FrameGraph orchestrator、frame resource、typed pass parameters、
+> descriptor binding 与 Forward 全量迁移统一转入
+> `../frame-graph-orchestrator-migration/`。本文保留截至接替点的历史进展；其中“Deferred
+> 主链由 RenderGraph 执行”仅表示 graph-backed execution，不表示 Stage 隐藏 owner 和顶层编排已完成。
+
 本文件承接 `todo.md` 中不再适合作为待办项维护的阶段进展、迁移备注和调查结论。
 
 ## 当前状态
