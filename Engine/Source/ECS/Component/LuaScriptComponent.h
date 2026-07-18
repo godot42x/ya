@@ -46,7 +46,7 @@ struct LuaScriptComponent : public IComponent
     {
         std::string scriptPath;
         bool        bLoaded                 = false;
-        bool        bEditorPreviewAttempted = false; // 编辑器预览是否已尝试加载
+        bool        bAuthoringPreviewAttempted = false;
 
         sol::table self;
         // 注：不再使用独立环境，所有脚本共享全局环境以支持 require()

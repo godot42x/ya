@@ -663,7 +663,7 @@ void DetailsView::drawComponents(Entity& entity)
                 if (ImGui::InputText("##ScriptPath", buffer, sizeof(buffer))) {
                     script.scriptPath              = std::string(buffer);
                     script.bLoaded                 = false; // Force reload
-                    script.bEditorPreviewAttempted = false; // 重置编辑器预览标记
+                    script.bAuthoringPreviewAttempted = false;
                 }
 
                 ImGui::SameLine();
@@ -671,7 +671,7 @@ void DetailsView::drawComponents(Entity& entity)
                     _filePicker.openScriptPicker(script.scriptPath, [&script](const std::string& newPath) {
                         script.scriptPath              = newPath;
                         script.bLoaded                 = false;
-                        script.bEditorPreviewAttempted = false;
+                        script.bAuthoringPreviewAttempted = false;
                     });
                 }
 
@@ -690,7 +690,7 @@ void DetailsView::drawComponents(Entity& entity)
                 }
 
                 // Auto-preview on first expand (if not runtime-loaded)
-                if (hasValidPath && !script.bLoaded && !script.bEditorPreviewAttempted) {
+                if (hasValidPath && !script.bLoaded && !script.bAuthoringPreviewAttempted) {
                     tryLoadScriptForEditor(&script);
                 }
 
@@ -727,7 +727,7 @@ void DetailsView::drawComponents(Entity& entity)
                     ImGui::TextColored(ImVec4(1, 0, 0, 1), "Failed to load script");
                     ImGui::TextDisabled("Check console for error details");
                     if (ImGui::Button("Retry Load")) {
-                        script.bEditorPreviewAttempted = false; // 重置标记
+                        script.bAuthoringPreviewAttempted = false;
                         tryLoadScriptForEditor(&script);
                     }
                 }
@@ -1057,7 +1057,7 @@ void DetailsView::tryLoadScriptForEditor(void* scriptPtr)
     if (!VirtualFileSystem::get()->readFileToString(script.scriptPath, scriptContent)) {
         YA_CORE_ERROR("[Editor Preview] Failed to read file: {}", script.scriptPath);
         // 文件读取失败时清空旧数据，不再重试（直到路径被修改）
-        script.bEditorPreviewAttempted = true;
+        script.bAuthoringPreviewAttempted = true;
         script.self                    = sol::lua_nil;
         script.properties.clear();
         return;
@@ -1066,7 +1066,7 @@ void DetailsView::tryLoadScriptForEditor(void* scriptPtr)
     YA_CORE_INFO("[Editor Preview] Loading script: {}", script.scriptPath);
 
     // 标记已尝试加载（防止重复）
-    script.bEditorPreviewAttempted = true;
+    script.bAuthoringPreviewAttempted = true;
 
     try {
         // 在编辑器 Lua 状态中执行
