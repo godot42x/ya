@@ -1,8 +1,5 @@
 #pragma once
 #include "Core/Base.h"
-#include "Core/Camera/Camera.h"
-#include "Core/Camera/FreeCameraController.h"
-#include "Core/Camera/OrbitCameraController.h"
 #include "Core/Input/InputManager.h"
 #include "Core/MessageBus.h"
 #include "Core/System/System.h"
@@ -440,13 +437,9 @@ struct App
     AppState _appState = AppState::Stopped;
     // SimulationState _simulationState = SimulationState::Stopped;
 
-    // Input and Camera
+    // Input and task dispatch
     InputManager inputManager;
     TaskManager  taskManager;
-
-    FreeCamera            camera;
-    FreeCameraController  cameraController;
-    OrbitCameraController orbitCameraController;
 
     // Application state
     AppMode   _appMode      = AppMode::Control;
@@ -464,6 +457,7 @@ struct App
     bool bRenderMirror = false;
 
     RenderFrameState                                 _renderFrameState;
+    std::optional<RenderFrameState>                  _extensionRenderFrameState;
     std::array<RenderFrameData, MAX_FLIGHTS_IN_FLIGHT> _renderFrameDataPerFlight{};
 
 
@@ -552,6 +546,8 @@ struct App
     // Getters for subsystems
     [[nodiscard]] SceneManager*           getSceneManager() const { return _sceneManager; }
     [[nodiscard]] const RenderFrameState& getRenderFrameState() const { return _renderFrameState; }
+    void setExtensionRenderFrameState(const RenderFrameState& state) { _extensionRenderFrameState = state; }
+    void clearExtensionRenderFrameState() { _extensionRenderFrameState.reset(); }
     [[nodiscard]] uint32_t                getFrameIndex() const { return _frameIndex; }
     [[nodiscard]] uint64_t                getElapsedTimeMS() const { return std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - _startTime).count(); }
 

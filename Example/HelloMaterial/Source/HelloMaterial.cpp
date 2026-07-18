@@ -1,6 +1,7 @@
 #include "HelloMaterial.h"
 #include "Core/Math/Math.h"
 #include "ECS/Component/2D/BillboardComponent.h"
+#include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/MirrorComponent.h"
 #include "Resource/AssetManager.h"
 #include "Resource/Font/FontManager.h"

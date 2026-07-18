@@ -1532,7 +1532,7 @@ void EditorLayer::focusCameraOnEntity(Entity* entity)
     float distance = 10.0f; // Fixed distance from entity, can be adjusted
 
     glm::vec3 entityPos = tc->getPosition();
-    glm::vec3 camPos    = app->camera.getPosition();
+    glm::vec3 camPos    = _camera.getPosition();
 
     glm::vec3 camToEntity = glm::normalize(entityPos - camPos);
 
@@ -1564,8 +1564,8 @@ void EditorLayer::focusCameraOnEntity(Entity* entity)
         newCamRotation = glm::vec3(pitch, yaw, 0.0f);
     }
 
-    app->camera.setPosition(newCamPos);
-    app->camera.setRotation(newCamRotation);
+    _camera.setPosition(newCamPos);
+    _camera.setRotation(newCamRotation);
 }
 
 } // namespace ya

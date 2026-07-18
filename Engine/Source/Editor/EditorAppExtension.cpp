@@ -2,6 +2,8 @@
 
 #include "Editor/EditorLayer.h"
 #include "Editor/EditorPlaySession.h"
+
+#include "Core/Camera/FreeCameraController.h"
 #include "Editor/EditorProfilingSettings.h"
 #include "Editor/RenderTargetInspector.h"
 #include "Editor/TypeRenderer.h"
@@ -251,6 +253,7 @@ class EditorAppExtension final : public IAppExtension
     void onDetach(App& app) override
     {
         _playSession.shutdown(app);
+        app.clearExtensionRenderFrameState();
         if (_layer) {
             _layer->onDetach();
             _layer.reset();
@@ -316,6 +319,25 @@ class EditorAppExtension final : public IAppExtension
             return;
         }
 
+        if (auto* renderRuntime = app.getRenderRuntime()) {
+            auto& editorCamera = _layer->getCamera();
+            const Extent2D viewportExtent = renderRuntime->getViewportExtent();
+            if (_layer->shouldCaptureInput()) {
+                _cameraController.update(editorCamera, app.inputManager, dt);
+            }
+            if (viewportExtent.height > 0) {
+                editorCamera.setPerspective(editorCamera._fov,
+                                            static_cast<float>(viewportExtent.width) / static_cast<float>(viewportExtent.height),
+                                            editorCamera._nearClip,
+                                            editorCamera._farClip);
+            }
+            app.setExtensionRenderFrameState({
+                .view       = editorCamera.getViewMatrix(),
+                .projection = editorCamera.getProjectionMatrix(),
+                .cameraPos  = editorCamera.getPosition(),
+            });
+        }
+
         _layer->onUpdate(dt);
         Rect2D pendingRect;
         if (_layer->getPendingViewportResize(pendingRect)) {
@@ -354,6 +376,7 @@ class EditorAppExtension final : public IAppExtension
   private:
     std::unique_ptr<EditorLayer> _layer;
     EditorPlaySession             _playSession;
+    FreeCameraController          _cameraController;
 };
 
 } // namespace

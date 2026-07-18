@@ -4,6 +4,8 @@
 #include "ContentBrowserPanel.h"
 #include "Core/Base.h"
 
+#include "Core/Camera/Camera.h"
+
 #include "Core/Event.h"
 #include "DetailsView.h"
 #include "FilePicker.h"
@@ -93,6 +95,7 @@ struct EditorLayer
 
     // Render resources explicitly passed in from App each frame
     EditorViewportContext _viewportCtx;
+    FreeCamera            _camera;
 
     // Per-slot state for the deferred GBuffer debug viewer (RGBA toggle mask + cached swizzled view)
     struct ImageSlotState
@@ -132,6 +135,8 @@ struct EditorLayer
 
     // Set viewport render context before ImGui render - called from App each frame
     void setViewportContext(const EditorViewportContext& ctx) { _viewportCtx = ctx; }
+    [[nodiscard]] FreeCamera& getCamera() { return _camera; }
+    [[nodiscard]] const FreeCamera& getCamera() const { return _camera; }
 
     void onUpdate(float dt);
     void setEditableScene(Scene* scene) { _editableScene = scene; }

@@ -261,10 +261,6 @@ void AppFrameLoop::tickLogic(App& app, float dt)
     std::string title          = std::format("{}({})", app._ci.title, vkRender->_selectedDeviceInfo.deviceName);
     SDL_SetWindowTitle(windowProvider->getNativeWindowPtr<SDL_Window>(), title.c_str());
 
-    {
-        YA_PROFILE_SCOPE("Logic/PrepareRenderFrameState");
-        prepareRenderFrameState(app, dt);
-    }
 }
 
 void AppFrameLoop::syncViewportState(App& app)
@@ -331,35 +327,33 @@ void AppFrameLoop::prepareRenderFrameState(App& app, float dt)
 
     Rect2D viewportRect = renderRuntime->getViewportRect();
 
+    (void)dt;
+
     Entity* runtimeCamera = getPrimaryCamera(app);
-    if (runtimeCamera && runtimeCamera->isValid()) {
-        auto     cc             = runtimeCamera->getComponent<CameraComponent>();
-        auto     tc             = runtimeCamera->getComponent<TransformComponent>();
-        Extent2D viewportExtent = resolveViewportExtent(app, renderRuntime, viewportRect);
-        app.cameraController.update(*tc, *cc, app.inputManager, viewportExtent, dt);
-        if (viewportExtent.height > 0) {
-            cc->setAspectRatio(static_cast<float>(viewportExtent.width) / static_cast<float>(viewportExtent.height));
-        }
-    }
 
     const bool bUseRuntimeCamera = app._appState == AppState::Runtime &&
                                    runtimeCamera && runtimeCamera->isValid() &&
                                    runtimeCamera->hasComponent<CameraComponent>();
 
-    app._renderFrameState.viewportRect             = viewportRect;
-    app._renderFrameState.viewportFrameBufferScale = renderRuntime->getViewportFrameBufferScale();
+    App::RenderFrameState frameState{};
+    frameState.viewportRect             = viewportRect;
+    frameState.viewportFrameBufferScale = renderRuntime->getViewportFrameBufferScale();
     if (bUseRuntimeCamera) {
         auto cc                        = runtimeCamera->getComponent<CameraComponent>();
         auto tc                        = runtimeCamera->getComponent<TransformComponent>();
-        app._renderFrameState.view       = cc->getFreeView();
-        app._renderFrameState.projection = cc->getProjection();
-        app._renderFrameState.cameraPos  = tc->getWorldPosition();
+        frameState.view       = cc->getFreeView();
+        frameState.projection = cc->getProjection();
+        frameState.cameraPos  = tc->getWorldPosition();
+        app._renderFrameState = frameState;
         return;
     }
 
-    app._renderFrameState.view       = app.camera.getViewMatrix();
-    app._renderFrameState.projection = app.camera.getProjectionMatrix();
-    app._renderFrameState.cameraPos  = app.camera.getPosition();
+    if (app._extensionRenderFrameState) {
+        frameState.view       = app._extensionRenderFrameState->view;
+        frameState.projection = app._extensionRenderFrameState->projection;
+        frameState.cameraPos  = app._extensionRenderFrameState->cameraPos;
+    }
+    app._renderFrameState = frameState;
 }
 
 uint32_t AppFrameLoop::resolveFlightIndex(const App& app)
@@ -469,6 +463,10 @@ void AppFrameLoop::tickRender(App& app, float dt)
     }
 
     app.prepareExtensionsForRender(dt);
+    {
+        YA_PROFILE_SCOPE("Render/PrepareRenderFrameState");
+        prepareRenderFrameState(app, dt);
+    }
 
     auto& diagnostics = renderRuntime->getDiagnosticsService();
     diagnostics.onFrameBegin();
