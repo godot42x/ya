@@ -104,6 +104,7 @@ struct AssetResolvedTextureImportSettings
     AssetTexturePayloadType payloadType = AssetTexturePayloadType::U8;
     EFormat::T sourceFormat = EFormat::Undefined;
     bool sourceNeedsTranscoding = false;
+    bool generateMips = true;
     EFormat::T resolvedFormat = EFormat::R8G8B8A8_UNORM;
     uint32_t resolvedChannels = 4;
     AssetTextureUploadStrategy uploadStrategy = AssetTextureUploadStrategy::Direct;

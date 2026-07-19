@@ -42,9 +42,23 @@ struct TextureMemoryView
     const void* data      = nullptr;
     size_t      dataSize  = 0;
 
+    [[nodiscard]] size_t baseLevelDataSize() const
+    {
+        const auto blockExtent = EFormat::getCompressedBlockExtent(format);
+        const bool bCompressed = EFormat::isBlockCompressed(format);
+        const size_t blocksX = bCompressed
+                                   ? (static_cast<size_t>(width) + blockExtent.width - 1) / blockExtent.width
+                                   : width;
+        const size_t blocksY = bCompressed
+                                   ? (static_cast<size_t>(height) + blockExtent.height - 1) / blockExtent.height
+                                   : height;
+        return blocksX * blocksY * EFormat::getPixelSize(format);
+    }
+
     [[nodiscard]] bool isValid() const
     {
-        return data != nullptr && dataSize > 0 && width > 0 && height > 0;
+        return data != nullptr && width > 0 && height > 0 &&
+               dataSize >= baseLevelDataSize();
     }
 };
 

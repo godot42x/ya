@@ -1,6 +1,8 @@
 #include "VulkanSampler.h"
 #include "VulkanRender.h"
 
+#include <algorithm>
+
 namespace ya
 {
 
@@ -81,6 +83,12 @@ VulkanSampler::VulkanSampler(VulkanRender* vkRender, const ya::SamplerDesc& ci)
             YA_CORE_WARN("Anisotropic filtering is not supported by the physical device, disabling it.");
             vkCI.anisotropyEnable = VK_FALSE;
             vkCI.maxAnisotropy    = 1.0f;
+        }
+        else
+        {
+            VkPhysicalDeviceProperties deviceProperties;
+            vkGetPhysicalDeviceProperties(vkRender->getPhysicalDevice(), &deviceProperties);
+            vkCI.maxAnisotropy = std::min(vkCI.maxAnisotropy, deviceProperties.limits.maxSamplerAnisotropy);
         }
     }
 

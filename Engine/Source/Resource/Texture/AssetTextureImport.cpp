@@ -154,6 +154,7 @@ AssetManager::ResolvedTextureImportSettings AssetManager::resolveTextureImportSe
 
     const AssetMeta& meta = getOrLoadMeta(filepath);
     settings.colorSpace   = parseColorSpace(meta.getString("colorSpace", ""), codeHint);
+    settings.generateMips = meta.getBool("generateMips", true);
 
     std::string resolvedSourcePath = filepath;
     if (const auto companionKtx2 = findCompanionKtx2Path(filepath); !companionKtx2.empty()) {

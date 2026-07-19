@@ -87,24 +87,27 @@ std::vector<ColorRGBA<uint8_t>> buildMissingTexturePixels()
     return pixels;
 }
 
-static bool copyFaceToStaging(uint8_t* dst, const TextureMemoryView& face, bool flipVertical)
+static bool copyFaceToStaging(uint8_t* dst,
+                              const TextureMemoryView& face,
+                              size_t                   faceSize,
+                              bool                     flipVertical)
 {
-    if (!dst || !face.isValid()) {
+    if (!dst || !face.isValid() || face.dataSize < faceSize) {
         return false;
     }
 
     const auto* src = static_cast<const uint8_t*>(face.data);
     if (!flipVertical) {
-        std::memcpy(dst, src, face.dataSize);
+        std::memcpy(dst, src, faceSize);
         return true;
     }
 
-    if (face.height == 0 || face.dataSize % face.height != 0) {
+    if (face.height == 0 || faceSize % face.height != 0) {
         YA_CORE_ERROR("Texture cubemap face row stride is invalid");
         return false;
     }
 
-    const size_t rowSize = face.dataSize / face.height;
+    const size_t rowSize = faceSize / face.height;
     for (uint32_t row = 0; row < face.height; ++row) {
         const uint32_t srcRow = face.height - 1 - row;
         std::memcpy(dst + row * rowSize, src + srcRow * rowSize, rowSize);
@@ -514,7 +517,7 @@ void Texture::initFromData(const void* pixels,
 
     const bool isCompressed = EFormat::isBlockCompressed(format);
 
-    if (isCompressed && mipLevels > 1 && dataSize > 0) {
+    if (mipLevels > 1 && dataSize > 0) {
         VkDeviceSize bufferOffset  = 0;
         uint32_t     currentWidth  = texWidth;
         uint32_t     currentHeight = texHeight;
@@ -524,12 +527,12 @@ void Texture::initFromData(const void* pixels,
             currentWidth  = std::max(currentWidth, 1u);
             currentHeight = std::max(currentHeight, 1u);
 
-            const uint32_t blockSize = static_cast<uint32_t>(EFormat::getPixelSize(format));
-            uint32_t     blocksX   = (currentWidth + blockExtent.width - 1) / blockExtent.width;
-            uint32_t     blocksY   = (currentHeight + blockExtent.height - 1) / blockExtent.height;
-            VkDeviceSize levelSize = static_cast<VkDeviceSize>(blocksX) *
-                                     static_cast<VkDeviceSize>(blocksY) *
-                                     static_cast<VkDeviceSize>(blockSize);
+            const uint32_t pixelOrBlockSize = static_cast<uint32_t>(EFormat::getPixelSize(format));
+            const uint32_t blocksX = isCompressed ? (currentWidth + blockExtent.width - 1) / blockExtent.width : currentWidth;
+            const uint32_t blocksY = isCompressed ? (currentHeight + blockExtent.height - 1) / blockExtent.height : currentHeight;
+            const VkDeviceSize levelSize = static_cast<VkDeviceSize>(blocksX) *
+                                           static_cast<VkDeviceSize>(blocksY) *
+                                           static_cast<VkDeviceSize>(pixelOrBlockSize);
 
             if (bufferOffset + levelSize > imageSize) {
                 YA_CORE_ERROR("Mip level {} data exceeds buffer size: {} > {}",
@@ -703,7 +706,7 @@ void Texture::initCubeMapFromMemory(const CubeMapMemoryCreateInfo& ci)
     _format    = ci.faces[0].format;
     _mipLevels = 1;
 
-    const VkDeviceSize faceSize  = static_cast<VkDeviceSize>(ci.faces[0].dataSize);
+    const VkDeviceSize faceSize  = static_cast<VkDeviceSize>(ci.faces[0].baseLevelDataSize());
     const VkDeviceSize totalSize = faceSize * CubeFace_Count;
 
     ImageCreateInfo imageCI{
@@ -744,7 +747,10 @@ void Texture::initCubeMapFromMemory(const CubeMapMemoryCreateInfo& ci)
 
     std::vector<uint8_t> stagingData(static_cast<size_t>(totalSize));
     for (size_t i = 0; i < CubeFace_Count; ++i) {
-        if (!copyFaceToStaging(stagingData.data() + (i * faceSize), ci.faces[i], ci.flipVertical)) {
+        if (!copyFaceToStaging(stagingData.data() + (i * faceSize),
+                               ci.faces[i],
+                               static_cast<size_t>(faceSize),
+                               ci.flipVertical)) {
             image.reset();
             imageView.reset();
             return;

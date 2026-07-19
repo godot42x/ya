@@ -61,7 +61,9 @@ void TextureLibrary::createSamplers(IRender* render)
             .addressModeV  = ESamplerAddressMode::Repeat,
             .addressModeW  = ESamplerAddressMode::Repeat,
             .mipLodBias    = 0.0f,
-            .maxAnisotropy = 1.0f,
+            .anisotropyEnable = true,
+            .maxAnisotropy = 8.0f,
+            .maxLod        = 1000.0f,
         });
 
     _nearestSampler = resourceFactory->createSampler(

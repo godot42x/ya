@@ -15,6 +15,7 @@ bool applyKtxResolvedSettings(const std::string& filepath,
                               AssetManager::ResolvedTextureImportSettings& settings);
 
 AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::ResolvedTextureImportSettings& settings);
+void generateU8MipChain(AssetManager::TextureMemoryBlock& texture);
 
 AssetManager::ETextureColorSpace parseColorSpace(const std::string& raw,
                                                  AssetManager::ETextureColorSpace fallback);
