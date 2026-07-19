@@ -43,8 +43,8 @@ float4 fragMain(VertexOutput input) : SV_Target
 {
     float4 scene = sceneTexture.Sample(sceneSampler, input.uv);
     float3 color = scene.rgb;
-    if (pc.bloomEnabled != 0u) {
-        color += bloomTexture.Sample(bloomSampler, input.uv).rgb * max(pc.bloomStrength, 0.0);
+    if (pc.bloomEnabled != 0u && pc.bloomStrength > 0.0) {
+        color += bloomTexture.Sample(bloomSampler, input.uv).rgb * pc.bloomStrength;
     }
-    return float4(color, scene.a);
+    return float4(clamp(color, -65504.0, 65504.0), scene.a);
 }

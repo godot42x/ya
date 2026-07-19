@@ -48,5 +48,6 @@ float4 fragMain(VertexOutput input) : SV_Target
     float hard = step(threshold, brightness);
     float weight = max(soft, hard);
 
-    return float4(color * weight * max(pc.intensity, 0.0), 1.0);
+    float3 bloom = color * weight * max(pc.intensity, 0.0);
+    return float4(clamp(bloom, 0.0, 65504.0), 1.0);
 }
