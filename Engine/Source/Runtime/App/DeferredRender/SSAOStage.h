@@ -70,6 +70,9 @@ struct SSAOStage : public IRenderStage
     [[nodiscard]] float getBias() const { return _bias; }
     [[nodiscard]] float getPower() const { return _power; }
     [[nodiscard]] float getIntensity() const { return _intensity; }
+    [[nodiscard]] bool  isReverseYEnabled() const { return _bReverseY; }
+    [[nodiscard]] uint32_t getLastInputDescriptorWriteCount() const { return _lastInputDescriptorWriteCount; }
+    [[nodiscard]] IGraphicsPipeline* getPipeline() const { return _pipeline.get(); }
     void setSettings(float radius, float bias, float power, float intensity, bool bReverseY);
 
   private:

@@ -125,6 +125,12 @@ struct ForwardViewportStage : public IRenderStage
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setDepthBufferShadowDescriptorSet(DescriptorSetHandle depthBufferShadowDS);
     void refreshPipelineFormats(const RenderAttachmentFormats& formats);
+    [[nodiscard]] ForwardViewportAuxPasses&       getAuxPasses() { return _auxPasses; }
+    [[nodiscard]] const ForwardViewportAuxPasses& getAuxPasses() const { return _auxPasses; }
+    [[nodiscard]] ForwardViewportLitPasses&       getLitPasses() { return _litPasses; }
+    [[nodiscard]] const ForwardViewportLitPasses& getLitPasses() const { return _litPasses; }
+    [[nodiscard]] ForwardViewportUnlitPass&       getUnlitPass() { return _unlitPass; }
+    [[nodiscard]] const ForwardViewportUnlitPass& getUnlitPass() const { return _unlitPass; }
 
   private:
     void initSkinningResources();

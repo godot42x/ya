@@ -550,6 +550,16 @@ bool ForwardRenderPipeline::isShadowMappingEnabled() const
     return currentShadowSettings().isEnabled();
 }
 
+ShadowSettings ForwardRenderPipeline::getCurrentShadowSettings() const
+{
+    return currentShadowSettings();
+}
+
+void ForwardRenderPipeline::requestShadowSettings(const ShadowSettings& shadowSettings)
+{
+    applyShadowSettings(shadowSettings);
+}
+
 void ForwardRenderPipeline::applyShadowSettings(const ShadowSettings& shadowSettings)
 {
     const bool bWasEnabled    = currentShadowSettings().isEnabled();

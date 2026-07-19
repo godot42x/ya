@@ -60,6 +60,8 @@ class ForwardViewportUnlitPass
     void prepare(const RenderStageContext& ctx);
     void refreshPipelineFormats(const RenderAttachmentFormats& formats);
     void draw(const DrawContext& ctx);
+    [[nodiscard]] const ShadingPipelineVariant& getStaticVariant() const { return _unlitStatic; }
+    [[nodiscard]] const ShadingPipelineVariant& getSkinnedVariant() const { return _unlitSkinned; }
   private:
     void initUnlit(const InitDesc& desc);
     void prepareUnlit(const RenderStageContext& ctx);

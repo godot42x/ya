@@ -35,6 +35,8 @@ struct DebugRenderSystem
               const glm::mat4& projection,
               const glm::mat4& view);
     [[nodiscard]] DebugPrimitives::SettingsSnapshot buildSettingsSnapshot() const;
+    [[nodiscard]] DebugPrimitives&       getPrimitives() { return _primitives; }
+    [[nodiscard]] const DebugPrimitives& getPrimitives() const { return _primitives; }
     void requestSettings(const DebugPrimitives::SettingsSnapshot& settings);
     void setReverseViewportY(bool enabled);
 

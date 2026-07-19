@@ -138,6 +138,8 @@ struct ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override;
     [[nodiscard]] bool           isPostprocessingEnabled() const override { return _postProcessStage.isEnabled(); }
+    [[nodiscard]] ShadowSettings getCurrentShadowSettings() const;
+    void                         requestShadowSettings(const ShadowSettings& shadowSettings);
 
   private:
     void               initViewportResources(const InitDesc& desc);

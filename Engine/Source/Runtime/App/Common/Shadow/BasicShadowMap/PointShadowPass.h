@@ -51,6 +51,9 @@ class PointShadowPass
     void setShadowExtent(Extent2D extent) { _shadowExtent = extent; }
     void refreshPipeline(EFormat::T depthFormat);
     [[nodiscard]] PointShadowIndirectRenderer& getIndirectRenderer() { return _indirectRenderer; }
+    [[nodiscard]] const PointShadowIndirectRenderer& getIndirectRenderer() const { return _indirectRenderer; }
+    [[nodiscard]] IGraphicsPipeline* getDirectStaticPipeline() const { return _directStaticVariant.pipeline.get(); }
+    [[nodiscard]] IGraphicsPipeline* getDirectSkinnedPipeline() const { return _directSkinnedVariant.pipeline.get(); }
 
     void rebuildFaceTextures(std::shared_ptr<IImage> shadowImage);
 

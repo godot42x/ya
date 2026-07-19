@@ -72,6 +72,27 @@ void ForwardViewportAuxPasses::beginFrame()
     }
 }
 
+void ForwardViewportAuxPasses::setDebugMode(EDebugMode mode)
+{
+    if (mode == _debugMode) {
+        return;
+    }
+
+    if (_debugPipeline) {
+        if (mode == DebugNormalDir) {
+            _debugPipelineCI.shaderDesc.defines = {"DEBUG_NORMAL_DIR"};
+            _debugPipeline->updateDesc(_debugPipelineCI);
+        }
+        else if (_debugMode == DebugNormalDir) {
+            _debugPipelineCI.shaderDesc.defines = {};
+            _debugPipeline->updateDesc(_debugPipelineCI);
+        }
+    }
+
+    _debugMode     = mode;
+    _debugUBO.mode = static_cast<int>(_debugMode);
+}
+
 void ForwardViewportAuxPasses::refreshPipelineFormats(const RenderAttachmentFormats& formats)
 {
     if (!formats.hasColor()) {

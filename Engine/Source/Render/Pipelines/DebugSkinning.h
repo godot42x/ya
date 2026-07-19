@@ -145,6 +145,8 @@ struct DebugSkinning
         mesh->draw(cmdBuf);
     }
 
+    [[nodiscard]] IGraphicsPipeline* getPipeline() const { return _pipeline.get(); }
+
 };
 
 } // namespace ya

@@ -120,6 +120,12 @@ struct GBufferStage : public IRenderStage
     [[nodiscard]] uint32_t                     getMaxShadowedPointLights() const { return _shadowState.maxShadowedPointLights; }
     [[nodiscard]] uint32_t                     getLastShadowedPointLights() const { return _lastShadowedPointLights; }
     void                                       refreshPipelineFormats(const DeferredAttachmentFormats& formats);
+    [[nodiscard]] IGraphicsPipeline*           getPBRPipeline() const { return _pbr.pipeline.get(); }
+    [[nodiscard]] IGraphicsPipeline*           getPBRSkinnedPipeline() const { return _pbrSkinned.pipeline.get(); }
+    [[nodiscard]] IGraphicsPipeline*           getPhongPipeline() const { return _phong.pipeline.get(); }
+    [[nodiscard]] IGraphicsPipeline*           getPhongSkinnedPipeline() const { return _phongSkinned.pipeline.get(); }
+    [[nodiscard]] IGraphicsPipeline*           getUnlitPipeline() const { return _unlit.pipeline.get(); }
+    [[nodiscard]] IGraphicsPipeline*           getUnlitSkinnedPipeline() const { return _unlitSkinned.pipeline.get(); }
 
   private:
     void initSharedResources();

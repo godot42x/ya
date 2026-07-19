@@ -85,6 +85,10 @@ class ForwardViewportLitPasses
 
     [[nodiscard]] PhongDebugUBO& phongDebug() { return _phongDebug; }
     [[nodiscard]] const PhongDebugUBO& phongDebug() const { return _phongDebug; }
+    [[nodiscard]] const ShadingPipelineVariant& getPhongStaticVariant() const { return _phongStatic; }
+    [[nodiscard]] const ShadingPipelineVariant& getPhongSkinnedVariant() const { return _phongSkinned; }
+    [[nodiscard]] const ShadingPipelineVariant& getPBRStaticVariant() const { return _pbrStatic; }
+    [[nodiscard]] const ShadingPipelineVariant& getPBRSkinnedVariant() const { return _pbrSkinned; }
 
   private:
     void initPBR(const InitDesc& desc);

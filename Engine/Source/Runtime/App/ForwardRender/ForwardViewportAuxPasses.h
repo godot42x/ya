@@ -112,6 +112,18 @@ class ForwardViewportAuxPasses
     void drawDirectionOverlay(const DrawContext& ctx);
     void drawDebug(const DrawContext& ctx);
 
+    [[nodiscard]] int getSimpleDefaultColorType() const { return _simpleDefaultColorType; }
+    void              setSimpleDefaultColorType(int colorType) { _simpleDefaultColorType = colorType; }
+
+    [[nodiscard]] EDebugMode getDebugMode() const { return _debugMode; }
+    void                     setDebugMode(EDebugMode mode);
+    [[nodiscard]] DebugUBO&       getDebugUBO() { return _debugUBO; }
+    [[nodiscard]] const DebugUBO& getDebugUBO() const { return _debugUBO; }
+
+    [[nodiscard]] IGraphicsPipeline* getSimplePipeline() const { return _simplePipeline.get(); }
+    [[nodiscard]] IGraphicsPipeline* getSkyboxPipeline() const { return _skyboxPipeline.get(); }
+    [[nodiscard]] IGraphicsPipeline* getDebugPipeline() const { return _debugPipeline.get(); }
+
   private:
     void initSimple(const InitDesc& desc);
     void initSkybox(const InitDesc& desc);

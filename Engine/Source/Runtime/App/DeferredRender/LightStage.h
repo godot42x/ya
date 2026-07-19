@@ -110,6 +110,9 @@ struct LightStage : public IRenderStage
     [[nodiscard]] bool shouldRefreshShadowDescriptors() const;
     [[nodiscard]] bool isPBRDiffuseIBLEnabled() const { return _bEnablePBRDiffuseIBL; }
     [[nodiscard]] bool isPBRSpecularIBLEnabled() const { return _bEnablePBRSpecularIBL; }
+    [[nodiscard]] uint32_t getLastGBufferDescriptorWriteCount() const { return _lastGBufferDescriptorWriteCount; }
+    [[nodiscard]] uint32_t getLastShadowDescriptorWriteCount() const { return _lastShadowDescriptorWriteCount; }
+    [[nodiscard]] IGraphicsPipeline* getPipeline() const { return _pipeline.get(); }
 
     void init(IRender* render) override;
     void destroy() override;

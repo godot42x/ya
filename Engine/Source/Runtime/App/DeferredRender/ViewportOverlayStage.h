@@ -104,6 +104,11 @@ struct ViewportOverlayStage : public IRenderStage
     void refreshPipelineFormats(const DeferredAttachmentFormats& formats);
     void setServices(Services services);
     void setFrameInputs(FrameInputs frameInputs);
+    [[nodiscard]] IGraphicsPipeline* getSkyboxPipeline() const { return _skyboxPipeline.get(); }
+    [[nodiscard]] IGraphicsPipeline* getOverlayPipeline() const { return _overlayPipeline.get(); }
+    [[nodiscard]] DebugRenderSystem* getDebugRenderSystem() const { return _debugRenderSystem; }
+    [[nodiscard]] DebugSkinning&       getDebugSkinning() { return _debugSkinning; }
+    [[nodiscard]] const DebugSkinning& getDebugSkinning() const { return _debugSkinning; }
 
   private:
     void initSkybox();

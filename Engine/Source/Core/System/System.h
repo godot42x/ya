@@ -12,7 +12,6 @@ struct ISystem
     virtual void init() {}
     virtual void onUpdate(float deltaTime) {}
     virtual void shutdown() {}
-    virtual void onRenderGUI() {}
 
 
     virtual ~ISystem() = default;

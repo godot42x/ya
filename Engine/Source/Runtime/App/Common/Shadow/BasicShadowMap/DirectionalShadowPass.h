@@ -47,6 +47,8 @@ class DirectionalShadowPass
     void refreshPipeline(EFormat::T depthFormat);
     void setDepthAttachment(stdptr<IImage> image, stdptr<IImageView> view);
     [[nodiscard]] IImageView* getDepthView() const { return _depthView.get(); }
+    [[nodiscard]] IGraphicsPipeline* getStaticPipeline() const { return _staticVariant.pipeline.get(); }
+    [[nodiscard]] IGraphicsPipeline* getSkinnedPipeline() const { return _skinnedVariant.pipeline.get(); }
 
   private:
     struct ShadowPipelineVariant
