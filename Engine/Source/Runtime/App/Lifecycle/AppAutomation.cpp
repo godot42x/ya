@@ -569,9 +569,6 @@ void AppAutomation::applyStartupOverrides(AppDesc& appDesc)
     if (appDesc.automation.renderDocCapture) {
         appDesc.bEnableRenderDoc = true;
     }
-    if (appDesc.automation.scenePath) {
-        appDesc.defaultScenePath = appDesc.automation.scenePath;
-    }
 }
 
 void AppAutomation::applyLogOverrides(const AppDesc& appDesc)
