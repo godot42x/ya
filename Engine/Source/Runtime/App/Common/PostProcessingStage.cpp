@@ -69,7 +69,7 @@ void PostProcessingStage::init(const InitDesc& desc)
         .pipelineRenderingInfo = PipelineRenderingInfo{
             .label = "BloomPostprocessing",
             .viewMask = 0,
-            .colorAttachmentFormats = {EFormat::R16G16B16A16_SFLOAT},
+            .colorAttachmentFormats = {BloomPostprocessing::BLOOM_FORMAT},
             .depthAttachmentFormat = EFormat::Undefined,
             .stencilAttachmentFormat = EFormat::Undefined,
         },

@@ -1,3 +1,5 @@
+#include "Common/Limits.slang"
+
 struct VertexOutput
 {
     float4 clipPos : SV_Position;
@@ -49,5 +51,5 @@ float4 fragMain(VertexOutput input) : SV_Target
     float weight = max(soft, hard);
 
     float3 bloom = color * weight * max(pc.intensity, 0.0);
-    return float4(clamp(bloom, 0.0, 65504.0), 1.0);
+    return float4(clamp(bloom, 0.0, BLOOM_FP16_MAX), 1.0);
 }

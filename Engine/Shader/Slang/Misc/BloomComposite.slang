@@ -1,3 +1,5 @@
+#include "Common/Limits.slang"
+
 struct VertexOutput
 {
     float4 clipPos : SV_Position;
@@ -46,5 +48,5 @@ float4 fragMain(VertexOutput input) : SV_Target
     if (pc.bloomEnabled != 0u && pc.bloomStrength > 0.0) {
         color += bloomTexture.Sample(bloomSampler, input.uv).rgb * pc.bloomStrength;
     }
-    return float4(clamp(color, -65504.0, 65504.0), scene.a);
+    return float4(clamp(color, -BLOOM_FP16_MAX, BLOOM_FP16_MAX), scene.a);
 }

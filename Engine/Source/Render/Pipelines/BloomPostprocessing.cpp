@@ -288,7 +288,7 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
             : graph.importTexture(makeBloomImportedTextureDesc(*desc.sceneTexture, "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal));
     const auto output = graph.createTexture(RGTextureDesc{
          .label  = "Bloom.CompositeOutput",
-         .format = EFormat::R16G16B16A16_SFLOAT,
+         .format = BloomPostprocessing::BLOOM_FORMAT,
          .extent = Extent3D{desc.renderExtent.width, desc.renderExtent.height, 1},
          .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
     }, ERGResourceLifetime::Persistent);
@@ -299,19 +299,19 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
     if (bBloomEnabled) {
         bloomExtract = graph.createTexture(RGTextureDesc{
             .label  = "Bloom.Extract",
-            .format = EFormat::R16G16B16A16_SFLOAT,
+            .format = BloomPostprocessing::BLOOM_FORMAT,
             .extent = Extent3D{desc.renderExtent.width, desc.renderExtent.height, 1},
             .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
         }, ERGResourceLifetime::Persistent);
         blurPing = graph.createTexture(RGTextureDesc{
             .label  = "Bloom.BlurPing",
-            .format = EFormat::R16G16B16A16_SFLOAT,
+            .format = BloomPostprocessing::BLOOM_FORMAT,
             .extent = Extent3D{desc.renderExtent.width, desc.renderExtent.height, 1},
             .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
         }, ERGResourceLifetime::Persistent);
         blurPong = graph.createTexture(RGTextureDesc{
             .label  = "Bloom.BlurPong",
-            .format = EFormat::R16G16B16A16_SFLOAT,
+            .format = BloomPostprocessing::BLOOM_FORMAT,
             .extent = Extent3D{desc.renderExtent.width, desc.renderExtent.height, 1},
             .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
         }, ERGResourceLifetime::Persistent);

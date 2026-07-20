@@ -18,6 +18,8 @@ constexpr uint32_t MAX_BLOOM_BLUR_DESCRIPTOR_SETS = 64;
 
 struct BloomPostprocessing
 {
+    static constexpr EFormat::T BLOOM_FORMAT = EFormat::R16G16B16A16_SFLOAT;
+
     struct GraphBuildResult
     {
         RGTextureHandle output{};
