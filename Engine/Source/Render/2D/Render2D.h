@@ -30,7 +30,7 @@ struct FRender2dData
 
     uint32_t        windowWidth      = 800;
     uint32_t        windowHeight     = 600;
-    ECullMode::T    screenCullMode   = ECullMode::Back;  // debug: world-space cull mode (Front when viewport reversed)
+    ECullMode::T    screenCullMode   = ECullMode::None;  // screen-space UI uses left-top origin; avoid winding-dependent cull
     ECullMode::T    worldCullMode    = ECullMode::Front; // debug: world-space cull mode (Front when viewport reversed)
     bool            bReverseViewport = true;             // flip viewport Y for world-space path to unify LH coordinate system across render backends
     ICommandBuffer* curCmdBuf        = nullptr;
@@ -160,8 +160,9 @@ struct FQuadRender
     DescriptorSetHandle      _worldFrameUboDS     = {};
     std::shared_ptr<IBuffer> _worldFrameUBOBuffer = nullptr;
 
-    std::shared_ptr<IDescriptorSetLayout>     _resourceDSL = nullptr;
-    DescriptorSetHandle                       _resourceDS  = {};
+    std::shared_ptr<IDescriptorSetLayout>     _resourceDSL      = nullptr;
+    DescriptorSetHandle                       _resourceDS       = {};
+    DescriptorSetHandle                       _worldResourceDS  = {};
     std::vector<TextureBinding>               _textureBindings;
     std::unordered_map<std::string, uint32_t> _textureLabel2Idx;
     static constexpr size_t                   TEXTURE_SET_SIZE     = 16;
@@ -181,7 +182,7 @@ struct FQuadRender
     void flushWorld(ICommandBuffer* cmdBuf);
 
     void updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer, DescriptorSetHandle dsHandle, glm::mat4 viewProj);
-    void updateResources();
+    void updateResources(DescriptorSetHandle dsHandle);
 
   public:
 

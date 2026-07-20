@@ -12,6 +12,7 @@
 #include "Editor/EditorCommon.h"
 #include "Editor/ImGui/ImGuiHelper.h"
 #include "Render/Core/RenderResourceFactory.h"
+#include "Render/Core/RenderImage.h"
 #include "Resource/AssetManager.h"
 #include "Resource/Texture/TextureLibrary.h"
 #include "Runtime/App/App.h"
@@ -20,6 +21,8 @@
 #include "Scene/Scene.h"
 #include "Scene/SceneManager.h"
 #include <ImGuizmo.h>
+#include <format>
+#include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 
@@ -53,6 +56,9 @@ void EditorLayer::syncEditorSettingsFromConfig()
     const std::string defaultScenePath = ConfigManager::get().getOr<std::string>("editor", "startup.defaultScenePath", "");
     strncpy_s(_defaultScenePathBuffer, sizeof(_defaultScenePathBuffer), defaultScenePath.c_str(), _TRUNCATE);
     _bDefaultScenePathDirty = false;
+    _bShowViewportCameraOverlay = ConfigManager::get().getOr<bool>("editor",
+                                                                   "viewport.cameraOverlay.enabled",
+                                                                   _bShowViewportCameraOverlay);
 }
 
 static std::string normalizeConfigLabel(const std::string& label)
@@ -94,6 +100,11 @@ static constexpr const char* kEditorConfigDocument = "editor";
 static constexpr const char* kImGuiFontSizeBaseKey = "imgui.fontSizeBase";
 static constexpr const char* kImGuiFontScaleMainKey = "imgui.fontScaleMain";
 static constexpr const char* kImGuiFontScaleDpiKey = "imgui.fontScaleDpi";
+static constexpr const char* kViewportCameraOverlayEnabledKey = "viewport.cameraOverlay.enabled";
+
+static constexpr float kViewportCameraOverlayMarginX = 10.0f;
+static constexpr float kViewportCameraOverlayMarginY = 10.0f;
+static constexpr float kViewportCameraOverlayLineSpacing = 4.0f;
 
 static void loadImGuiSettingsFromConfig()
 {
@@ -198,6 +209,35 @@ void EditorLayer::onUpdate(float dt)
 {
     YA_PROFILE_FUNCTION();
     // Update logic here if needed
+}
+
+std::vector<RenderOverlayText2D> EditorLayer::buildViewportCameraOverlayTexts() const
+{
+    if (!_bShowViewportCameraOverlay) {
+        return {};
+    }
+
+    const glm::quat rotQuat  = glm::quat(glm::radians(_camera._rotation));
+    const glm::vec3 forward  = rotQuat * FMath::Vector::WorldForward;
+    const glm::vec3 position = _camera.getPosition();
+
+    std::vector<RenderOverlayText2D> texts;
+    texts.reserve(2);
+    texts.push_back(RenderOverlayText2D{
+        .text        = std::format("Pos {:+.2f} {:+.2f} {:+.2f}", position.x, position.y, position.z),
+        .viewportPos = {kViewportCameraOverlayMarginX, kViewportCameraOverlayMarginY},
+        .color       = {0.92f, 0.92f, 0.92f, 0.92f},
+        .fontSize    = 16,
+        .depth       = 0.0f,
+    });
+    texts.push_back(RenderOverlayText2D{
+        .text        = std::format("Dir {:+.2f} {:+.2f} {:+.2f}", forward.x, forward.y, forward.z),
+        .viewportPos = {kViewportCameraOverlayMarginX, kViewportCameraOverlayMarginY + 18.0f + kViewportCameraOverlayLineSpacing},
+        .color       = {0.75f, 0.86f, 1.0f, 0.92f},
+        .fontSize    = 16,
+        .depth       = 0.0f,
+    });
+    return texts;
 }
 
 
@@ -646,7 +686,9 @@ void EditorLayer::viewportWindow()
         Sampler* sampler         = _viewPortSamplerType == Linear
                                      ? TextureLibrary::get().getLinearSampler()
                                      : TextureLibrary::get().getNearestSampler();
-        auto*    viewportImageView = _viewportCtx.viewportImageView;
+        auto*    viewportImageView = _viewportDisplayImage && _viewportDisplayImage->getImageView()
+                                       ? _viewportDisplayImage->getImageView()
+                                       : _viewportCtx.viewportImageView;
         if (viewportImageView) {
             if (ImGuiHelper::Image(viewportImageView,
                                    sampler,
@@ -808,6 +850,11 @@ void EditorLayer::editorSettings()
     }
 
     ImGui::Combo("Viewport Sampler", (int*)&_viewPortSamplerType, "Linear\0Nearest\0");
+    if (ImGui::Checkbox("Show Viewport Camera Overlay", &_bShowViewportCameraOverlay)) {
+        ConfigManager::Editor(kEditorConfigDocument)
+            .set(kViewportCameraOverlayEnabledKey, _bShowViewportCameraOverlay)
+            .flush();
+    }
 
     ImGui::Separator();
     ImGui::TextUnformatted("Startup Scene");
@@ -863,7 +910,18 @@ void EditorLayer::editorSettings()
     ImGui::End();
 }
 
-void EditorLayer::syncDebugSlotState(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state)
+const EditorViewportDebugCatalog& EditorLayer::getDebugCatalog() const
+{
+    static const EditorViewportDebugCatalog kEmptyCatalog;
+    return _viewportCtx.debugCatalog ? *_viewportCtx.debugCatalog : kEmptyCatalog;
+}
+
+const RenderViewportDebugImageSlot* EditorLayer::getDebugSlotFrame(uint32_t slotIndex) const
+{
+    return slotIndex < _viewportCtx.debugImages.size() ? &_viewportCtx.debugImages[slotIndex] : nullptr;
+}
+
+void EditorLayer::syncDebugSlotState(const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state)
 {
     const std::string configKey = buildDeferredMaskConfigKey(slot.label);
     if (state.configKey == configKey) {
@@ -877,10 +935,10 @@ void EditorLayer::syncDebugSlotState(const EditorViewportContext::ImageSlot& slo
     state.configKey      = configKey;
     state.channelEnabled = channelEnabled;
     state.maskedView.reset();
-    state.lastBase = nullptr;
+    state.lastBase      = nullptr;
 }
 
-bool EditorLayer::renderDebugSlotMaskControls(const EditorViewportContext::ImageSlot&, ImageSlotState& state)
+bool EditorLayer::renderDebugSlotMaskControls(const EditorViewportDebugCatalog::Slot&, ImageSlotState& state)
 {
     if (ImGuiHelper::RenderRGBAChannelMaskButtons(state.channelEnabled)) {
         ConfigManager::Editor("editor").set(state.configKey, state.channelEnabled);
@@ -889,15 +947,19 @@ bool EditorLayer::renderDebugSlotMaskControls(const EditorViewportContext::Image
     return false;
 }
 
-void EditorLayer::updateDebugSlotImageView(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state, bool bForceRefresh)
+void EditorLayer::updateDebugSlotImageView(uint32_t slotIndex,
+                                           const EditorViewportDebugCatalog::Slot& slot,
+                                           ImageSlotState&                         state,
+                                           bool                                    bForceRefresh)
 {
-    const bool baseChanged = slot.defaultView != state.lastBase;
+    const auto* frame      = getDebugSlotFrame(slotIndex);
+    const bool  baseChanged = frame && frame->defaultView != state.lastBase;
     if (!bForceRefresh && !baseChanged) {
         return;
     }
 
-    state.lastBase = slot.defaultView;
-    if (ImGuiHelper::IsIdentityRGBAChannelMask(state.channelEnabled) || !slot.image) {
+    state.lastBase = frame ? frame->defaultView : nullptr;
+    if (ImGuiHelper::IsIdentityRGBAChannelMask(state.channelEnabled) || !frame || !frame->image) {
         state.maskedView.reset();
         return;
     }
@@ -909,13 +971,19 @@ void EditorLayer::updateDebugSlotImageView(const EditorViewportContext::ImageSlo
     ci.components    = ImGuiHelper::BuildRGBAChannelMaskMapping(state.channelEnabled);
     auto* const render          = _app ? _app->getRender() : nullptr;
     auto* const resourceFactory = render ? render->getResourceFactory() : nullptr;
-    state.maskedView            = resourceFactory ? resourceFactory->createImageView(slot.image, ci) : nullptr;
+    state.maskedView            = resourceFactory ? resourceFactory->createImageView(frame->image, ci) : nullptr;
 }
 
-void EditorLayer::renderDebugSlotImage(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state, float width, float height, Sampler* sampler)
+void EditorLayer::renderDebugSlotImage(uint32_t slotIndex,
+                                       const EditorViewportDebugCatalog::Slot& slot,
+                                       ImageSlotState&                         state,
+                                       float                                   width,
+                                       float                                   height,
+                                       Sampler*                                sampler)
 {
+    const auto* frame = getDebugSlotFrame(slotIndex);
     IImageView* displayView = (ImGuiHelper::IsIdentityRGBAChannelMask(state.channelEnabled) || !state.maskedView)
-                                ? slot.defaultView
+                                ? (frame ? frame->defaultView : nullptr)
                                 : state.maskedView.get();
     ImGuiHelper::Image(displayView,
                        sampler,
@@ -926,7 +994,7 @@ void EditorLayer::renderDebugSlotImage(const EditorViewportContext::ImageSlot& s
                        {slot.tint.x, slot.tint.y, slot.tint.z, slot.tint.w});
 }
 
-bool EditorLayer::renderDebugImageGroup(const EditorViewportContext::DebugSpec::Group& group,
+bool EditorLayer::renderDebugImageGroup(const EditorViewportDebugCatalog::Group& group,
                                         int                                           groupIndex,
                                         const ImVec2&                                 panelSize,
                                         bool                                          bUseCollapsingHeader,
@@ -934,19 +1002,22 @@ bool EditorLayer::renderDebugImageGroup(const EditorViewportContext::DebugSpec::
 {
     using namespace ImGui;
     Sampler* sampler = TextureLibrary::get().getLinearSampler();
+    const auto& catalog = getDebugCatalog();
+    const auto& slots   = catalog.slots;
+    const auto& groups  = catalog.groups;
 
-    if (_viewportCtx.debugSpec.slots.size() > _debugImageSlotStates.size()) {
-        _debugImageSlotStates.resize(_viewportCtx.debugSpec.slots.size());
+    if (slots.size() > _debugImageSlotStates.size()) {
+        _debugImageSlotStates.resize(slots.size());
     }
-    if (static_cast<int>(_debugGroupStates.size()) < static_cast<int>(_viewportCtx.debugSpec.groups.size())) {
-        _debugGroupStates.resize(_viewportCtx.debugSpec.groups.size());
+    if (groups.size() > _debugGroupStates.size()) {
+        _debugGroupStates.resize(groups.size());
     }
 
-    if (group.slotCount == 0 || group.beginIndex >= _viewportCtx.debugSpec.slots.size()) {
+    if (group.slotCount == 0 || group.beginIndex >= slots.size()) {
         return false;
     }
 
-    const uint32_t availableSlots = static_cast<uint32_t>(_viewportCtx.debugSpec.slots.size()) - group.beginIndex;
+    const uint32_t availableSlots = static_cast<uint32_t>(slots.size()) - group.beginIndex;
     const uint32_t slotCount      = std::min(group.slotCount, availableSlots);
     if (slotCount == 0) {
         return false;
@@ -1017,22 +1088,22 @@ bool EditorLayer::renderDebugImageGroup(const EditorViewportContext::DebugSpec::
     };
 
     auto renderSlotViewer = [&](uint32_t slotIndex) {
-        auto& slot  = _viewportCtx.debugSpec.slots[slotIndex];
+        const auto& slot  = slots[slotIndex];
         auto& state = _debugImageSlotStates[slotIndex];
         syncDebugSlotState(slot, state);
         bool maskChanged = renderDebugSlotMaskControls(slot, state);
-        updateDebugSlotImageView(slot, state, maskChanged);
+        updateDebugSlotImageView(slotIndex, slot, state, maskChanged);
 
         const float availableWidth = GetContentRegionAvail().x;
         const float viewerWidth    = availableWidth;
         const float viewerHeight   = maxPreviewSize > 0.0f ? std::min(viewerWidth, maxPreviewSize) : std::min(viewerWidth, panelSize.x);
-        renderDebugSlotImage(slot, state, viewerWidth, viewerHeight, sampler);
+        renderDebugSlotImage(slotIndex, slot, state, viewerWidth, viewerHeight, sampler);
     };
 
     PushID(group.label.c_str());
     bool anySelectionChanged = false;
 
-    if (group.type == EditorViewportContext::DebugSpec::EGroupType::CubeMapMipFaces && groupSize == CubeFace_Count) {
+    if (group.type == EditorViewportDebugCatalog::EGroupType::CubeMapMipFaces && groupSize == CubeFace_Count) {
         std::string comboItems;
         for (uint32_t groupItemIndex = 0; groupItemIndex < groupCount; ++groupItemIndex) {
             if (groupItemIndex < group.itemLabels.size() && !group.itemLabels[groupItemIndex].empty()) {
@@ -1082,13 +1153,13 @@ bool EditorLayer::renderDebugImageGroup(const EditorViewportContext::DebugSpec::
                     Text("Viewer %u", groupItemIndex);
                 }
 
-                if (group.type == EditorViewportContext::DebugSpec::EGroupType::CubeMapFaces && groupSize == CubeFace_Count) {
+                if (group.type == EditorViewportDebugCatalog::EGroupType::CubeMapFaces && groupSize == CubeFace_Count) {
                     renderCubeFaceSelector(selectedFace, anySelectionChanged);
                 }
                 else {
                     std::string comboItems;
                     for (uint32_t slotOffset = 0; slotOffset < groupSize; ++slotOffset) {
-                        comboItems += _viewportCtx.debugSpec.slots[slotBase + slotOffset].label;
+                        comboItems += slots[slotBase + slotOffset].label;
                         comboItems.push_back('\0');
                     }
                     comboItems.push_back('\0');
@@ -1120,7 +1191,7 @@ bool EditorLayer::renderDebugImageGroup(const EditorViewportContext::DebugSpec::
 
 void EditorLayer::renderDebugImageGroups(const ImVec2& panelSize, int categoryFilter)
 {
-    const auto& groups = _viewportCtx.debugSpec.groups;
+    const auto& groups = getDebugCatalog().groups;
     if (groups.empty()) {
         return;
     }
@@ -1137,7 +1208,7 @@ void EditorLayer::renderDebugImageGroups(const ImVec2& panelSize, int categoryFi
 void EditorLayer::renderDebugImageGroupsGrid(const ImVec2& panelSize, int categoryFilter, float maxPreviewSize)
 {
     using namespace ImGui;
-    const auto& groups = _viewportCtx.debugSpec.groups;
+    const auto& groups = getDebugCatalog().groups;
     if (groups.empty()) {
         return;
     }
@@ -1186,9 +1257,11 @@ void EditorLayer::renderDebugImageSlots(const ImVec2& panelSize, int categoryFil
 {
     using namespace ImGui;
     Sampler*    sampler = TextureLibrary::get().getLinearSampler();
-    const auto& slots   = _viewportCtx.debugSpec.slots;
+    const auto& catalog = getDebugCatalog();
+    const auto& slots   = catalog.slots;
+    const auto& groups  = catalog.groups;
     std::vector<bool> groupedSlotMask(slots.size(), false);
-    for (const auto& group : _viewportCtx.debugSpec.groups) {
+    for (const auto& group : groups) {
         if (categoryFilter >= 0 && static_cast<int>(group.categoryIndex) != categoryFilter) {
             continue;
         }
@@ -1252,8 +1325,8 @@ void EditorLayer::renderDebugImageSlots(const ImVec2& panelSize, int categoryFil
         Text("%s", slot.label.c_str());
         ImGui::PushID(slotIndex);
         bool maskChanged = renderDebugSlotMaskControls(slot, state);
-        updateDebugSlotImageView(slot, state, maskChanged);
-        renderDebugSlotImage(slot, state, colWidth, imgHeight, sampler);
+        updateDebugSlotImageView(slotIndex, slot, state, maskChanged);
+        renderDebugSlotImage(slotIndex, slot, state, colWidth, imgHeight, sampler);
         ImGui::PopID();
     }
 
@@ -1270,29 +1343,32 @@ void EditorLayer::debugWindow()
     }
 
     const ImVec2 panelSize = ImGui::GetContentRegionAvail();
-    const auto&  categories = _viewportCtx.debugSpec.categories;
+    const auto&  catalog    = getDebugCatalog();
+    const auto&  categories = catalog.categories;
+    const auto&  slots      = catalog.slots;
+    const auto&  groups     = catalog.groups;
 
     auto renderCategoryContent = [&](int categoryIndex) {
         int groupCount = 0;
         int standaloneSlotCount = 0;
 
-        std::vector<bool> groupedSlotMask(_viewportCtx.debugSpec.slots.size(), false);
-        for (const auto& group : _viewportCtx.debugSpec.groups) {
+        std::vector<bool> groupedSlotMask(slots.size(), false);
+        for (const auto& group : groups) {
             if (categoryIndex >= 0 && static_cast<int>(group.categoryIndex) != categoryIndex) {
                 continue;
             }
             ++groupCount;
-            const uint32_t slotEnd = std::min<uint32_t>(group.beginIndex + group.slotCount, static_cast<uint32_t>(_viewportCtx.debugSpec.slots.size()));
+            const uint32_t slotEnd = std::min<uint32_t>(group.beginIndex + group.slotCount, static_cast<uint32_t>(slots.size()));
             for (uint32_t slotIndex = group.beginIndex; slotIndex < slotEnd; ++slotIndex) {
                 groupedSlotMask[slotIndex] = true;
             }
         }
 
-        for (int slotIndex = 0; slotIndex < static_cast<int>(_viewportCtx.debugSpec.slots.size()); ++slotIndex) {
+        for (int slotIndex = 0; slotIndex < static_cast<int>(slots.size()); ++slotIndex) {
             if (groupedSlotMask[slotIndex]) {
                 continue;
             }
-            if (categoryIndex >= 0 && static_cast<int>(_viewportCtx.debugSpec.slots[slotIndex].categoryIndex) != categoryIndex) {
+            if (categoryIndex >= 0 && static_cast<int>(slots[slotIndex].categoryIndex) != categoryIndex) {
                 continue;
             }
             ++standaloneSlotCount;

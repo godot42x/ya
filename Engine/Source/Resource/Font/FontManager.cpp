@@ -60,8 +60,8 @@ bool appendStandaloneGlyph(Font& font, FT_Face face, uint32_t codePoint)
         character.standaloneTexture = Texture::fromData(glyph->bitmap.width,
                                                         glyph->bitmap.rows,
                                                         glyphPixels.data(),
-                                                        glyphPixels.size(),
-                                                        EFormat::R8_UNORM,
+                                                        glyphPixels.size() * sizeof(ColorU8_t),
+                                                        EFormat::R8G8B8A8_UNORM,
                                                         std::format("FontGlyph_{:X}_{}", codePoint, font.fontSize));
     }
 
@@ -245,8 +245,8 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
     font->atlasTexture = Texture::fromData(atlasWidth,
                                            atlasHeight,
                                            atlasData.data(),
-                                           atlasData.size(),
-                                           EFormat::R8_UNORM,
+                                           atlasData.size() * sizeof(ColorU8_t),
+                                           EFormat::R8G8B8A8_UNORM,
                                            std::format("FontAtlas_{}", fontName.toString()));
     AssetManager::get()->registerTexture(std::format("FontAtlas_{}:{}", fontName.toString(), fontSize), font->atlasTexture);
 

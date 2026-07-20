@@ -29,6 +29,7 @@ struct IAppExtension
     virtual bool onEvent(App& app, const Event& event) { return false; }
     virtual void onLogic(App& app, float dt) {}
     virtual void onBeforeRender(App& app, float dt) {}
+    virtual void onBeforePresentation(App& app, ICommandBuffer& commandBuffer, float dt) {}
     virtual void onPresentation(App& app, ICommandBuffer& commandBuffer, float dt) {}
 };
 

@@ -7,6 +7,11 @@
 #include "Core/Camera/FreeCameraController.h"
 #include "Editor/EditorProfilingSettings.h"
 #include "Editor/Inspector/TypeRenderer.h"
+#include "Render/2D/Render2D.h"
+#include "Render/Core/CommandBuffer.h"
+#include "Render/Core/RenderImage.h"
+#include "Resource/Texture/TextureLibrary.h"
+#include "Resource/Font/FontManager.h"
 #include "Config/ConfigManager.h"
 #include "Core/Profiling/Profiling.h"
 #include "Editor/ImGui/ImGuiHelper.h"
@@ -43,6 +48,159 @@ void initializeEditorCamera(App& app, EditorLayer& layer)
     editorCamera.setPositionAndRotation(resolveInitialEditorCameraPosition(app), resolveInitialEditorCameraRotation(app));
 }
 
+std::shared_ptr<RenderImage> createEditorViewportImage(IRender& render, const RenderImage& source)
+{
+    const Extent2D extent = source.getExtent();
+    if (extent.width == 0 || extent.height == 0) {
+        return nullptr;
+    }
+
+    const EFormat::T targetFormat = source.getFormat() == EFormat::R16G16B16A16_SFLOAT
+        ? source.getFormat()
+        : EFormat::R16G16B16A16_SFLOAT;
+
+    return createRenderImage(
+        *render.getResourceFactory(),
+        RenderImageDesc{
+            .image = ImageCreateInfo{
+                .label         = "EditorViewportComposed",
+                .format        = targetFormat,
+                .extent        = {.width = extent.width, .height = extent.height, .depth = 1},
+                .mipLevels     = 1,
+                .arrayLayers   = 1,
+                .samples       = ESampleCount::Sample_1,
+                .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+                .initialLayout = EImageLayout::Undefined,
+            },
+            .defaultView = ImageViewCreateInfo{
+                .label       = "EditorViewportComposed_DefaultView",
+                .aspectFlags = EImageAspect::Color,
+            },
+        });
+}
+
+class EditorViewportCompositor
+{
+  public:
+    void shutdown()
+    {
+        _composedViewportImage.reset();
+    }
+
+    [[nodiscard]] std::shared_ptr<RenderImage> getOutputImage() const
+    {
+        return _composedViewportImage;
+    }
+
+    void compose(IRender& render, ICommandBuffer& commandBuffer, const RenderViewportSnapshot& snapshot, const EditorLayer& layer)
+    {
+        auto source = snapshot.viewportImageOwner;
+        if (!source || !source->getImageShared() || !source->getImageView()) {
+            _composedViewportImage.reset();
+            return;
+        }
+
+        ensureTarget(render, *source);
+        if (!_composedViewportImage || !_composedViewportImage->isValid()) {
+            return;
+        }
+
+        commandBuffer.retainResource(source->getImageShared());
+        commandBuffer.retainResource(source->getImageViewShared());
+        commandBuffer.retainResources(source->getRetainedResources());
+        commandBuffer.retainResource(_composedViewportImage->getImageShared());
+        commandBuffer.retainResource(_composedViewportImage->getImageViewShared());
+
+        commandBuffer.transitionImageLayoutAuto(source->getImage(), EImageLayout::ShaderReadOnlyOptimal);
+        commandBuffer.transitionImageLayoutAuto(_composedViewportImage->getImage(), EImageLayout::ColorAttachmentOptimal);
+
+        const Extent2D extent = _composedViewportImage->getExtent();
+        commandBuffer.beginRendering(RenderingInfo{
+            .label = "EditorViewportComposition",
+            .bExternalTransitionManagement = true,
+            .attachments = RenderAttachmentSet{
+                .renderArea = Rect2D{
+                    .pos = {0.0f, 0.0f},
+                    .extent = {static_cast<float>(extent.width), static_cast<float>(extent.height)},
+                },
+                .layerCount = 1,
+                .colors = {
+                    RenderAttachment{
+                        .image = _composedViewportImage->getImage(),
+                        .imageView = _composedViewportImage->getImageView(),
+                        .loadOp = EAttachmentLoadOp::Clear,
+                        .storeOp = EAttachmentStoreOp::Store,
+                        .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                        .finalLayout = EImageLayout::ColorAttachmentOptimal,
+                        .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
+                    },
+                },
+            },
+        });
+
+        FRender2dContext render2dCtx{
+            .cmdBuf = &commandBuffer,
+            .windowWidth = extent.width,
+            .windowHeight = extent.height,
+            .cam = {
+                .position = layer.getCamera().getPosition(),
+                .view = layer.getCamera().getViewMatrix(),
+                .projection = layer.getCamera().getProjectionMatrix(),
+                .viewProjection = layer.getCamera().getProjectionMatrix() * layer.getCamera().getViewMatrix(),
+            },
+        };
+        Render2D::begin(render2dCtx);
+
+        auto sourceTexture = Texture::wrap(source->getImageShared(),
+                                           source->getImageViewShared(),
+                                           "EditorViewportCompositionSource");
+        Render2D::makeSprite(glm::vec3(0.0f, 0.0f, 0.0f),
+                             glm::vec2(static_cast<float>(extent.width), static_cast<float>(extent.height)),
+                             sourceTexture.get(),
+                             glm::vec4(1.0f));
+
+        const auto texts = layer.buildViewportCameraOverlayTexts();
+        if (!texts.empty()) {
+            Render2D::makeSprite(glm::vec3(6.0f, 6.0f, 0.0f),
+                                 glm::vec2(240.0f, 46.0f),
+                                 TextureLibrary::get().getWhiteTexture().get(),
+                                 glm::vec4(0.0f, 0.0f, 0.0f, 0.36f));
+        }
+        for (const auto& text : texts) {
+            auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, text.fontSize);
+            if (!font) {
+                continue;
+            }
+            Render2D::makeText(text.text,
+                               glm::vec3(text.viewportPos, text.depth),
+                               text.color,
+                               font.get());
+        }
+        Render2D::onRender();
+        Render2D::end();
+
+        commandBuffer.endRendering();
+        commandBuffer.transitionImageLayoutAuto(_composedViewportImage->getImage(), EImageLayout::ShaderReadOnlyOptimal);
+    }
+
+  private:
+    void ensureTarget(IRender& render, const RenderImage& source)
+    {
+        const Extent2D sourceExtent = source.getExtent();
+        if (_composedViewportImage &&
+            _composedViewportImage->getWidth() == sourceExtent.width &&
+            _composedViewportImage->getHeight() == sourceExtent.height &&
+            _composedViewportImage->getFormat() == (source.getFormat() == EFormat::R16G16B16A16_SFLOAT
+                                                        ? source.getFormat()
+                                                        : EFormat::R16G16B16A16_SFLOAT)) {
+            return;
+        }
+
+        _composedViewportImage = createEditorViewportImage(render, source);
+    }
+
+    std::shared_ptr<RenderImage> _composedViewportImage = nullptr;
+};
 
 class EditorAppExtension final : public IAppExtension
 {
@@ -82,7 +240,9 @@ class EditorAppExtension final : public IAppExtension
     {
         _playSession.shutdown(app);
         app.clearExtensionRenderFrameState();
+        _viewportCompositor.shutdown();
         if (_layer) {
+            _layer->setViewportDisplayImage(nullptr);
             _layer->onDetach();
             _layer.reset();
         }
@@ -176,15 +336,31 @@ class EditorAppExtension final : public IAppExtension
         }
     }
 
-    void onPresentation(App& app, ICommandBuffer& commandBuffer, float dt) override
+    void onBeforePresentation(App& app, ICommandBuffer& commandBuffer, float dt) override
     {
         (void)dt;
         if (!_layer) {
             return;
         }
 
-        if (auto* renderRuntime = app.getRenderRuntime()) {
-            _layer->setViewportContext(renderRuntime->buildViewportSnapshot());
+        auto* renderRuntime = app.getRenderRuntime();
+        auto* render        = app.getRender();
+        if (!renderRuntime || !render) {
+            _layer->setViewportDisplayImage(nullptr);
+            return;
+        }
+
+        const auto snapshot = renderRuntime->buildViewportSnapshot();
+        _layer->setViewportContext(snapshot);
+        _viewportCompositor.compose(*render, commandBuffer, snapshot, *_layer);
+        _layer->setViewportDisplayImage(_viewportCompositor.getOutputImage());
+    }
+
+    void onPresentation(App& app, ICommandBuffer& commandBuffer, float dt) override
+    {
+        (void)dt;
+        if (!_layer) {
+            return;
         }
 
         ImGuiManager::get().beginFrame();
@@ -202,6 +378,7 @@ class EditorAppExtension final : public IAppExtension
     std::unique_ptr<EditorLayer> _layer;
     EditorPlaySession             _playSession;
     FreeCameraController          _cameraController;
+    EditorViewportCompositor      _viewportCompositor;
 };
 
 } // namespace

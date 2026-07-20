@@ -8,6 +8,7 @@
 #include "Render/Render.h"
 #include "Render/Shader.h"
 #include "Runtime/App/Common/IRenderPipeline.h"
+#include "Runtime/App/Common/RenderOverlay.h"
 #include "Runtime/App/Common/RenderTargetCatalog.h"
 #include "Runtime/App/Common/RenderViewportSnapshot.h"
 #include "Runtime/App/DeferredRender/DeferredPipelineDebugViews.h"
@@ -53,21 +54,6 @@ struct RenderPipelineDebugOutputCatalog
     bool                         bPostprocessingEnabled      = false;
 };
 
-struct RenderOverlaySprite2D
-{
-    glm::vec2 viewportPos = glm::vec2(0.0f);
-    glm::vec2 size        = glm::vec2(50.0f);
-    Texture*  texture     = nullptr;
-    glm::vec4 tint        = glm::vec4(1.0f);
-};
-
-struct RenderOverlaySprite3D
-{
-    glm::mat4 worldTransform = glm::mat4(1.0f);
-    Texture*  texture        = nullptr;
-    glm::vec4 tint           = glm::vec4(1.0f);
-};
-
 struct RenderRuntime
 {
     enum class ERenderPipeline
@@ -88,6 +74,7 @@ struct RenderRuntime
         {
             const std::vector<RenderOverlaySprite2D>* screenSprites = nullptr;
             const std::vector<RenderOverlaySprite3D>* worldSprites  = nullptr;
+            const std::vector<RenderOverlayText2D>*   screenTexts   = nullptr;
         } overlay{};
 
         struct AutomationInput
@@ -95,6 +82,7 @@ struct RenderRuntime
             std::function<void(ICommandBuffer*)> recordPresentationCapture;
         } automation{};
 
+        std::function<void(ICommandBuffer*)> recordBeforePresentationExtensions;
         std::function<void(ICommandBuffer*)> recordPresentationExtensions;
 
         RenderPipelineFrameContext pipeline{};
@@ -126,6 +114,9 @@ struct RenderRuntime
     std::vector<std::shared_ptr<RenderImage>>         _presentationImages;
 
     std::vector<RenderTargetFormatCommand> _pendingRenderTargetFormatCommands;
+    bool                                   _pendingActivePipelineReload = false;
+    mutable size_t _viewportDebugCatalogSignature = 0;
+    mutable std::shared_ptr<RenderViewportDebugCatalog> _viewportDebugCatalog = nullptr;
 
     void init(const InitDesc& desc);
     void shutdown(bool bRenderAlreadyIdle = false);
@@ -200,14 +191,15 @@ struct RenderRuntime
     void                   beginViewportPassAndTickPipeline(const FrameInput& input, ICommandBuffer* cmdBuf);
     void                   renderViewportPassOverlays(const RenderPipelineFrameContext& pipelineFrame, const FrameInput::OverlayInput& overlay, ICommandBuffer* cmdBuf);
     void                   renderPresentationPass(float deltaTime,
+                                                  const std::function<void(ICommandBuffer*)>& recordBeforePresentationExtensions,
                                                   const std::function<void(ICommandBuffer*)>& recordPresentationExtensions,
                                                   const std::function<void(ICommandBuffer*)>& recordPresentationCapture,
                                                   ICommandBuffer* cmdBuf);
     void                   submitFrame(int32_t imageIndex, ICommandBuffer* cmdBuf);
 
-    void appendForwardDebugSlots(RenderViewportSnapshot& snapshot) const;
-    void appendDeferredDebugSlots(RenderViewportSnapshot& snapshot) const;
-    void appendEnvironmentDebugSlots(RenderViewportSnapshot& snapshot) const;
+    void buildViewportDebugCatalog(RenderViewportDebugCatalog& catalog) const;
+    [[nodiscard]] size_t buildViewportDebugCatalogSignature() const;
+    void ensureViewportDebugCatalog() const;
     [[nodiscard]] std::shared_ptr<RenderImage> getViewportSnapshotImageShared() const;
 
     void                   initActivePipeline();

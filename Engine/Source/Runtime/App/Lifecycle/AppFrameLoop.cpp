@@ -536,6 +536,12 @@ void AppFrameLoop::tickRender(App& app, float dt)
                                                          cmdBuf);
             },
         },
+        .recordBeforePresentationExtensions = [&app, dt](ICommandBuffer* commandBuffer)
+        {
+            if (commandBuffer) {
+                app.recordExtensionBeforePresentation(*commandBuffer, dt);
+            }
+        },
         .recordPresentationExtensions = [&app, dt](ICommandBuffer* commandBuffer)
         {
             if (commandBuffer) {

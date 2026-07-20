@@ -78,6 +78,13 @@ void App::prepareExtensionsForRender(float dt)
     }
 }
 
+void App::recordExtensionBeforePresentation(ICommandBuffer& commandBuffer, float dt)
+{
+    for (const auto& extension : _extensions) {
+        extension->onBeforePresentation(*this, commandBuffer, dt);
+    }
+}
+
 void App::recordExtensionPresentation(ICommandBuffer& commandBuffer, float dt)
 {
     for (const auto& extension : _extensions) {

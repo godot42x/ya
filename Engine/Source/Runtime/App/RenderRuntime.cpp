@@ -42,6 +42,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         renderWorldFrame(input, cmdBuf.get());
     }
     renderPresentationPass(input.pipeline.deltaTime,
+                           input.recordBeforePresentationExtensions,
                            input.recordPresentationExtensions,
                            input.automation.recordPresentationCapture,
                            cmdBuf.get());

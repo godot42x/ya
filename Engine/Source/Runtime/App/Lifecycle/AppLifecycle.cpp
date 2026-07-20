@@ -347,6 +347,7 @@ void AppLifecycle::onInit(App& app, const AppDesc& ci)
     (void)ci;
     if (const std::string runtimeFontPath = findRuntimeDefaultFontPath(); !runtimeFontPath.empty()) {
         FontManager::get()->loadFont(runtimeFontPath, DEFAULT_RUNTIME_FONT_NAME, DEFAULT_RUNTIME_FONT_SIZE);
+        FontManager::get()->loadFont(runtimeFontPath, DEFAULT_RUNTIME_FONT_NAME, 16);
     }
 
     auto mgr = UIManager::get();

@@ -650,6 +650,7 @@ struct App
     [[nodiscard]] bool dispatchExtensionEvent(const Event& event);
     void tickExtensions(float dt);
     void prepareExtensionsForRender(float dt);
+    void recordExtensionBeforePresentation(ICommandBuffer& commandBuffer, float dt);
     void recordExtensionPresentation(ICommandBuffer& commandBuffer, float dt);
     [[nodiscard]] bool notifyExtensionsBeforeAppStateChange(AppState nextState);
     void notifyExtensionsAfterAppStateChange(AppState previousState);

@@ -17,8 +17,11 @@ TEST(RenderRuntimeSnapshotTest, EmptyRuntimePublishesEmptyViewportResources)
     EXPECT_EQ(viewport.viewportImageOwner, nullptr);
     EXPECT_EQ(viewport.viewportImageView, nullptr);
     EXPECT_FALSE(viewport.bPostprocessingEnabled);
-    EXPECT_TRUE(viewport.debugSpec.slots.empty());
-    EXPECT_TRUE(viewport.debugSpec.groups.empty());
+    ASSERT_NE(viewport.debugCatalog, nullptr);
+    EXPECT_FALSE(viewport.debugCatalog->categories.empty());
+    EXPECT_TRUE(viewport.debugCatalog->slots.empty());
+    EXPECT_TRUE(viewport.debugCatalog->groups.empty());
+    EXPECT_TRUE(viewport.debugImages.empty());
     EXPECT_TRUE(targets.entries.empty());
 }
 

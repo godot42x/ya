@@ -7,6 +7,7 @@
 #include "DeferredRender/DeferredRenderPipeline.h"
 #include "Render/2D/Render2D.h"
 #include "Render/Core/RenderGraphImportUtils.h"
+#include "Resource/Font/FontManager.h"
 #include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
 #include <functional>
 #include "utility.cc/ranges.h"
@@ -157,12 +158,31 @@ void RenderRuntime::renderViewportPassOverlays(const RenderPipelineFrameContext&
         }
     }
 
+    if (overlay.screenTexts) {
+        for (const auto& text : *overlay.screenTexts) {
+            if (text.text.empty()) {
+                continue;
+            }
+
+            auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, text.fontSize);
+            if (!font) {
+                continue;
+            }
+
+            Render2D::makeText(text.text,
+                               glm::vec3(text.viewportPos, text.depth),
+                               text.color,
+                               font.get());
+        }
+    }
+
     Render2D::onRender();
     UIManager::get()->render();
     Render2D::end();
 }
 
 void RenderRuntime::renderPresentationPass(float deltaTime,
+                                           const std::function<void(ICommandBuffer*)>& recordBeforePresentationExtensions,
                                            const std::function<void(ICommandBuffer*)>& recordPresentationExtensions,
                                            const std::function<void(ICommandBuffer*)>& recordPresentationCapture,
                                            ICommandBuffer* cmdBuf)
@@ -186,6 +206,10 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
     auto presentationImage = getCurrentPresentationImageShared();
     if (!presentationImage) {
         return;
+    }
+
+    if (recordBeforePresentationExtensions) {
+        recordBeforePresentationExtensions(cmdBuf);
     }
 
     const Extent2D presentationExtent = presentationImage->getExtent();

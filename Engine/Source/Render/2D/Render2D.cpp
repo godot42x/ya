@@ -74,7 +74,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
     _descriptorPool = IDescriptorPool::create(
         render,
         DescriptorPoolCreateInfo{
-            .maxSets   = 3,
+            .maxSets   = 4,
             .poolSizes = {
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::UniformBuffer,
@@ -113,8 +113,9 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
 
     _resourceDSL = IDescriptorSetLayout::create(render, _pipelineDesc.descriptorSetLayouts[1]);
     descriptorSets.clear();
-    _descriptorPool->allocateDescriptorSets(_resourceDSL, 1, descriptorSets);
-    _resourceDS = descriptorSets[0];
+    _descriptorPool->allocateDescriptorSets(_resourceDSL, 2, descriptorSets);
+    _resourceDS      = descriptorSets[0];
+    _worldResourceDS = descriptorSets[1];
 
 
     // Use factory method to create pipeline layout
@@ -192,9 +193,9 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
         },
         .multisampleState  = MultisampleState{},
         .depthStencilState = DepthStencilState{
-            .bDepthTestEnable       = true,
-            .bDepthWriteEnable      = true,
-            .depthCompareOp         = ECompareOp::Less,
+            .bDepthTestEnable       = false,
+            .bDepthWriteEnable      = false,
+            .depthCompareOp         = ECompareOp::Always,
             .bDepthBoundsTestEnable = false,
             .bStencilTestEnable     = false,
             .minDepthBounds         = 0.0f,
@@ -205,7 +206,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
             .attachments    = {
                 ColorBlendAttachmentState{
                        .index               = 0,
-                       .bBlendEnable        = false,
+                       .bBlendEnable        = true,
                        .srcColorBlendFactor = EBlendFactor::SrcAlpha,
                        .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
                        .colorBlendOp        = EBlendOp::Add,
@@ -375,15 +376,15 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
 
         // quad -> 2 triangles -> CCW when viewed from +Z (camera looks down -Z)
         // Vertices: 0=(0,0) 1=(1,0) 2=(0,1) 3=(1,1)
-        // From +Z: 0→3→1 = (0,0)→(1,1)→(1,0) = CCW
-        //          0→2→3 = (0,0)→(0,1)→(1,1) = CCW
+        // From +Z: 0→1→3 = (0,0)→(1,0)→(1,1) = CCW
+        //          0→3→2 = (0,0)→(1,1)→(0,1) = CCW
         indices[i + 0] = vertexIndex + 0;
-        indices[i + 1] = vertexIndex + 3;
-        indices[i + 2] = vertexIndex + 1;
+        indices[i + 1] = vertexIndex + 1;
+        indices[i + 2] = vertexIndex + 3;
 
         indices[i + 3] = vertexIndex + 0;
-        indices[i + 4] = vertexIndex + 2;
-        indices[i + 5] = vertexIndex + 3;
+        indices[i + 4] = vertexIndex + 3;
+        indices[i + 5] = vertexIndex + 2;
     }
 
     _indexBuffer = render->getResourceFactory()->createBuffer(
@@ -464,9 +465,8 @@ void FQuadRender::begin(const Extent2D& extent)
      * x++ 向下 y++ 向右 z++ 向屏幕外
      */
 
-    // Screen-space ortho: (0,0) at top-left, (w,h) at bottom-right.
-    // top=0, bottom=h flips Y so Y+ goes downward — standard UI convention.
-    // No viewport flip needed for screen-space path.
+    // Screen-space ortho uses the same Y convention that the Vulkan viewport transform
+    // already maps into top-left framebuffer space. Keep the projection non-flipped here.
     _screenOrthoProj = glm::orthoRH_ZO(0.0f, w, 0.0f, h, -1.0f, 1.0f);
 }
 
@@ -484,7 +484,7 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
     if (vertexCount <= 0) {
         return;
     }
-    updateResources();
+    updateResources(_resourceDS);
 
     // Update FrameUBO with screen-space ortho projection
     updateFrameUBO(_frameUBOBuffer, _frameUboDS, _screenOrthoProj);
@@ -526,7 +526,7 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
     if (worldVertexCount <= 0) {
         return;
     }
-    updateResources();
+    updateResources(_worldResourceDS);
 
     // Update FrameUBO with camera view-projection
     updateFrameUBO(_worldFrameUBOBuffer, _worldFrameUboDS, data2D.cam.viewProjection);
@@ -548,7 +548,7 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
     cmdBuf->setScissor(0, 0, Render2D::data.windowWidth, Render2D::data.windowHeight);
 
     // Bind descriptor sets (world-space uses its own FrameUBO DS)
-    std::vector<DescriptorSetHandle> descriptorSets = {_worldFrameUboDS, _resourceDS};
+    std::vector<DescriptorSetHandle> descriptorSets = {_worldFrameUboDS, _worldResourceDS};
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descriptorSets);
 
     // Bind world vertex buffer but shared index buffer
@@ -585,7 +585,7 @@ void FQuadRender::updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer, Descriptor
         {});
 }
 
-void FQuadRender::updateResources()
+void FQuadRender::updateResources(DescriptorSetHandle dsHandle)
 {
 
     // TODO: let font atlas/icon atlas always on gpu not update every frame
@@ -617,7 +617,7 @@ void FQuadRender::updateResources()
         ->updateDescriptorSets(
             {
                 IDescriptorSetHelper::genImageWrite(
-                    _resourceDS,
+                    dsHandle,
                     0,
                     0,
                     EPipelineDescriptorType::CombinedImageSampler,

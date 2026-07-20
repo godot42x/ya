@@ -10,7 +10,9 @@
 #include "Editor/Inspector/DetailsView.h"
 #include "Editor/FilePicker.h"
 #include "Editor/ImGui/ImGuiHelper.h"
+#include "Runtime/App/Common/RenderOverlay.h"
 #include "Render/Core/Image.h"
+#include "Render/Core/RenderImage.h"
 #include "Runtime/App/Common/RenderViewportSnapshot.h"
 #include "Editor/Panels/SceneHierarchyPanel.h"
 #include <imgui.h>
@@ -29,7 +31,8 @@ struct IImageView;
 struct IImage;
 struct RenderImage;
 
-using EditorViewportContext = RenderViewportSnapshot;
+using EditorViewportContext      = RenderViewportSnapshot;
+using EditorViewportDebugCatalog = RenderViewportDebugCatalog;
 
 struct EditorLayer
 {
@@ -69,6 +72,7 @@ struct EditorLayer
     float     _debugFloat = 0.0f;
     char      _defaultScenePathBuffer[512] = {};
     bool      _bDefaultScenePathDirty      = false;
+    bool      _bShowViewportCameraOverlay  = true;
 
     // ImGui texture descriptor set cache (editor-only, application layer)
     std::unordered_set<ImGuiImageEntry> _imguiTextureCache; // ImageView → VkDescriptorSet
@@ -92,8 +96,9 @@ struct EditorLayer
     bool     _bViewportResizePending = false;
 
     // Render resources explicitly passed in from App each frame
-    EditorViewportContext _viewportCtx;
-    FreeCamera            _camera;
+    EditorViewportContext          _viewportCtx;
+    std::shared_ptr<RenderImage>   _viewportDisplayImage = nullptr;
+    FreeCamera                     _camera;
 
     // Per-slot state for the deferred GBuffer debug viewer (RGBA toggle mask + cached swizzled view)
     struct ImageSlotState
@@ -133,8 +138,10 @@ struct EditorLayer
 
     // Set viewport render context before ImGui render - called from App each frame
     void setViewportContext(const EditorViewportContext& ctx) { _viewportCtx = ctx; }
+    void setViewportDisplayImage(std::shared_ptr<RenderImage> image) { _viewportDisplayImage = std::move(image); }
     [[nodiscard]] FreeCamera& getCamera() { return _camera; }
     [[nodiscard]] const FreeCamera& getCamera() const { return _camera; }
+    [[nodiscard]] std::vector<RenderOverlayText2D> buildViewportCameraOverlayTexts() const;
 
     void onUpdate(float dt);
     void setEditableScene(Scene* scene) { _editableScene = scene; }
@@ -170,6 +177,7 @@ struct EditorLayer
      * @return true if viewport is focused and should receive events
      */
     bool shouldCaptureInput() const { return bViewportFocused; }
+    bool shouldShowViewportCameraOverlay() const { return _bShowViewportCameraOverlay; }
 
     // Get and clear pending viewport resize - called from App before render
     bool getPendingViewportResize(Rect2D& outRect)
@@ -263,7 +271,7 @@ struct EditorLayer
 
     // --
     void debugWindow();
-    bool renderDebugImageGroup(const EditorViewportContext::DebugSpec::Group& group,
+    bool renderDebugImageGroup(const EditorViewportDebugCatalog::Group& group,
                                int                                           groupIndex,
                                const ImVec2&                                 panelSize,
                                bool                                          bUseCollapsingHeader = true,
@@ -271,10 +279,12 @@ struct EditorLayer
     void renderDebugImageGroups(const ImVec2& panelSize, int categoryFilter = -1);
     void renderDebugImageGroupsGrid(const ImVec2& panelSize, int categoryFilter, float maxPreviewSize = 0.0f);
     void renderDebugImageSlots(const ImVec2& panelSize, int categoryFilter = -1);
-    void syncDebugSlotState(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state);
-    bool renderDebugSlotMaskControls(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state);
-    void updateDebugSlotImageView(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state, bool bForceRefresh = false);
-    void renderDebugSlotImage(const EditorViewportContext::ImageSlot& slot, ImageSlotState& state, float width, float height, Sampler* sampler);
+    void syncDebugSlotState(const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state);
+    bool renderDebugSlotMaskControls(const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state);
+    void updateDebugSlotImageView(uint32_t slotIndex, const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state, bool bForceRefresh = false);
+    void renderDebugSlotImage(uint32_t slotIndex, const EditorViewportDebugCatalog::Slot& slot, ImageSlotState& state, float width, float height, Sampler* sampler);
+    [[nodiscard]] const EditorViewportDebugCatalog& getDebugCatalog() const;
+    [[nodiscard]] const RenderViewportDebugImageSlot* getDebugSlotFrame(uint32_t slotIndex) const;
 
     // Helpers
     void setupDockspace();
