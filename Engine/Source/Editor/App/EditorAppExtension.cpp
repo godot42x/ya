@@ -85,6 +85,9 @@ class EditorViewportCompositor
     void shutdown()
     {
         _composedViewportImage.reset();
+        _sourceViewportTexture.reset();
+        _sourceViewportImage.reset();
+        _sourceViewportImageView.reset();
     }
 
     [[nodiscard]] std::shared_ptr<RenderImage> getOutputImage() const
@@ -151,9 +154,7 @@ class EditorViewportCompositor
         };
         Render2D::begin(render2dCtx);
 
-        auto sourceTexture = Texture::wrap(source->getImageShared(),
-                                           source->getImageViewShared(),
-                                           "EditorViewportCompositionSource");
+        auto sourceTexture = resolveSourceTexture(*source);
         Render2D::makeSprite(glm::vec3(0.0f, 0.0f, 0.0f),
                              glm::vec2(static_cast<float>(extent.width), static_cast<float>(extent.height)),
                              sourceTexture.get(),
@@ -184,6 +185,31 @@ class EditorViewportCompositor
     }
 
   private:
+    std::shared_ptr<Texture> resolveSourceTexture(const RenderImage& source)
+    {
+        auto sourceImage     = source.getImageShared();
+        auto sourceImageView = source.getImageViewShared();
+        if (!sourceImage || !sourceImageView) {
+            _sourceViewportTexture.reset();
+            _sourceViewportImage.reset();
+            _sourceViewportImageView.reset();
+            return nullptr;
+        }
+
+        if (_sourceViewportTexture &&
+            _sourceViewportImage == sourceImage &&
+            _sourceViewportImageView == sourceImageView) {
+            return _sourceViewportTexture;
+        }
+
+        _sourceViewportImage     = std::move(sourceImage);
+        _sourceViewportImageView = std::move(sourceImageView);
+        _sourceViewportTexture   = Texture::wrap(_sourceViewportImage,
+                                               _sourceViewportImageView,
+                                               "EditorViewportCompositionSource");
+        return _sourceViewportTexture;
+    }
+
     void ensureTarget(IRender& render, const RenderImage& source)
     {
         const Extent2D sourceExtent = source.getExtent();
@@ -200,6 +226,9 @@ class EditorViewportCompositor
     }
 
     std::shared_ptr<RenderImage> _composedViewportImage = nullptr;
+    std::shared_ptr<Texture>     _sourceViewportTexture = nullptr;
+    std::shared_ptr<IImage>      _sourceViewportImage = nullptr;
+    std::shared_ptr<IImageView>  _sourceViewportImageView = nullptr;
 };
 
 class EditorAppExtension final : public IAppExtension
