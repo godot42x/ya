@@ -15,6 +15,14 @@ local function _run_shader_codegen(run_script)
     local now    = os.mclock()
 
     do
+        run_script("Engine/Shader/shader_config.py", {
+            "--config", "Engine/Config/Engine.jsonc",
+            "--glsl-output", "Engine/Shader/GLSL/Common/Limits.glsl",
+            "--slang-output", "Engine/Shader/Slang/Common/Limits.slang",
+        })
+    end
+
+    do
         local script    = "Engine/Shader/slang_gen_header.py"
         local outputDir = "Engine/Shader/Slang/Generated"
         local args      = {

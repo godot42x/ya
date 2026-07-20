@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -32,6 +33,18 @@ def print(*args, **kwargs):
     except ValueError:
         rel = filename
     return _builtin_print(f"{rel}:{lineno}", *args, **kwargs)
+
+def find_slangc() -> str:
+    if configured := os.environ.get("SLANGC"):
+        return configured
+    if discovered := shutil.which("slangc"):
+        return discovered
+
+    vulkan_sdk_root = Path(__file__).resolve().parents[1] / "ThirdParty" / "VulkanSDK"
+    bundled = sorted(vulkan_sdk_root.glob("*/macOS/bin/slangc"), reverse=True)
+    if bundled:
+        return str(bundled[0])
+    raise FileNotFoundError("slangc was not found in PATH or Engine/ThirdParty/VulkanSDK")
 
 # ---------------------------------------------------------------------------
 # Slang scalar type -> C++ type mapping
@@ -681,7 +694,7 @@ def _process_one_slang(
     print(f"[slang-gen] Generating C++ header for {slang_file} ...")
 
     cmd = [
-        "slangc",
+        find_slangc(),
         str(slang_file),
         "-reflection-json", str(json_path),
         "-entry", resolved_entry,

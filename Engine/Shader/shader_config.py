@@ -41,6 +41,7 @@ def _to_define_literal(value: int | float | str | bool) -> str:
 def build_glsl_limits_content(config_path: str | Path) -> str:
     defines = extract_shader_defines(config_path)
     header_lines = [
+        "#pragma once",
         f"// Auto-generated from {config_path} - DO NOT EDIT.",
         "// Modify Engine.jsonc shader.defines instead.",
         "",
@@ -55,6 +56,7 @@ def build_glsl_limits_content(config_path: str | Path) -> str:
 def build_slang_limits_content(config_path: str | Path) -> str:
     defines = extract_shader_defines(config_path)
     header_lines = [
+        "#pragma once",
         f"// Auto-generated from {config_path} - DO NOT EDIT.",
         "// Modify Engine.jsonc shader.defines instead.",
         "",

@@ -1,6 +1,9 @@
 {
     "shader": {
         "defines": {
+            "MAX_DIRECTIONAL_CASCADES": 4,
+            "MAX_BONE_COUNT": 64,
+            "MAX_BONE_WEIGHT_PER_VERTEX": 4,
             "MAX_POINT_LIGHTS": 6,
             "MAX_POINT_LIGHTS_DEFERRED": 32
         }
