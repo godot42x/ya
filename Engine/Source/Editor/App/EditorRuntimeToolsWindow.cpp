@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <array>
 #include <glm/gtc/type_ptr.hpp>
+#include <string>
 
 namespace ya
 {
@@ -252,19 +253,6 @@ bool renderShadowSettingsControls(ShadowSettings& shadowSettings, bool bAllowDir
         bDirty = true;
     }
 
-    if (bAllowDirectionalControls) {
-        bDirty |= ImGui::Checkbox("Directional Shadow", &shadowSettings.directionalEnabled);
-    }
-    bDirty |= ImGui::Checkbox("Point Light Shadow", &shadowSettings.pointLightEnabled);
-    bDirty |= ImGui::Checkbox("Point Light Indirect Draw", &shadowSettings.pointLightUseIndirect);
-    bDirty |= ImGui::Checkbox("Point Light Indirect Cull", &shadowSettings.pointLightIndirectCullEnabled);
-
-    int maxPointLights = static_cast<int>(shadowSettings.maxPointLightShadows);
-    if (ImGui::SliderInt("Max Point Shadows", &maxPointLights, 0, MAX_POINT_LIGHTS)) {
-        shadowSettings.maxPointLightShadows = static_cast<uint32_t>(maxPointLights);
-        bDirty = true;
-    }
-
     int shadowResolution = static_cast<int>(shadowSettings.resolution);
     if (ImGui::DragInt("Shadow Resolution", &shadowResolution, 16.0f, 128, 8192, "%d")) {
         shadowSettings.resolution = static_cast<uint32_t>(std::clamp(shadowResolution, 128, 8192));
@@ -274,21 +262,83 @@ bool renderShadowSettingsControls(ShadowSettings& shadowSettings, bool bAllowDir
     bDirty |= ImGui::DragFloat("Depth Bias", &shadowSettings.bias, 0.0001f, 0.0f, 0.1f, "%.5f");
     bDirty |= ImGui::DragFloat("Normal Bias", &shadowSettings.normalBias, 0.0001f, 0.0f, 0.1f, "%.5f");
 
-    if (bAllowDirectionalControls) {
-        bDirty |= ImGui::DragFloat("Directional Distance", &shadowSettings.directionalDistance, 0.5f, 1.0f, 500.0f, "%.1f");
-        bDirty |= ImGui::Checkbox("Stable Directional Fit", &shadowSettings.directionalStableFit);
-        int directionalCascades = static_cast<int>(shadowSettings.directionalCascades);
-        if (ImGui::SliderInt("Directional Cascades", &directionalCascades, 0, 4)) {
-            shadowSettings.directionalCascades = static_cast<uint32_t>(directionalCascades);
-            bDirty = true;
-        }
-    }
-
     static const char* filterNames[] = {"Hard", "PCF Low", "PCF High"};
     int filter = static_cast<int>(shadowSettings.filter);
     if (ImGui::Combo("Shadow Filter", &filter, filterNames, IM_ARRAYSIZE(filterNames))) {
         shadowSettings.filter = static_cast<EShadowFilter::T>(filter);
         bDirty = true;
+    }
+
+    if (ImGui::BeginTable("ShadowLightSettings", 2, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchSame)) {
+        ImGui::TableSetupColumn("Directional", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Point", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableHeadersRow();
+        ImGui::TableNextRow();
+
+        ImGui::TableSetColumnIndex(0);
+        ImGui::PushID("DirectionalShadowSettings");
+        if (bAllowDirectionalControls) {
+            bDirty |= ImGui::Checkbox("Enabled", &shadowSettings.directionalEnabled);
+            ImGui::BeginDisabled(!shadowSettings.directionalEnabled);
+
+            const bool bUseCSM = shadowSettings.directionalCascades > 1;
+            if (ImGui::RadioButton("Single Map", !bUseCSM)) {
+                shadowSettings.directionalCascades = 1;
+                bDirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::RadioButton("CSM", bUseCSM)) {
+                shadowSettings.directionalCascades = MAX_DIRECTIONAL_CASCADES;
+                shadowSettings.resetDirectionalCascadeSplitRatios();
+                bDirty = true;
+            }
+
+            bDirty |= ImGui::DragFloat("Distance", &shadowSettings.directionalDistance, 0.5f, 1.0f, 500.0f, "%.1f");
+            bDirty |= ImGui::Checkbox("Stable Fit", &shadowSettings.directionalStableFit);
+
+            if (shadowSettings.directionalCascades > 1) {
+                int directionalCascades = static_cast<int>(shadowSettings.directionalCascades);
+                if (ImGui::SliderInt("Cascades", &directionalCascades, 2, MAX_DIRECTIONAL_CASCADES)) {
+                    shadowSettings.directionalCascades = static_cast<uint32_t>(directionalCascades);
+                    shadowSettings.resetDirectionalCascadeSplitRatios();
+                    bDirty = true;
+                }
+                for (uint32_t splitIndex = 0; splitIndex + 1 < shadowSettings.directionalCascades; ++splitIndex) {
+                    const float lowerBound = splitIndex == 0
+                        ? 0.001f
+                        : shadowSettings.directionalCascadeSplitRatios[splitIndex - 1] + 0.001f;
+                    const float upperBound = splitIndex + 2 < shadowSettings.directionalCascades
+                        ? shadowSettings.directionalCascadeSplitRatios[splitIndex + 1] - 0.001f
+                        : 0.999f;
+                    float& splitRatio = shadowSettings.directionalCascadeSplitRatios[splitIndex];
+                    splitRatio        = std::clamp(splitRatio, lowerBound, upperBound);
+                    const std::string label = "Split " + std::to_string(splitIndex + 1);
+                    bDirty |= ImGui::SliderFloat(label.c_str(), &splitRatio, lowerBound, upperBound, "%.3f");
+                }
+                bDirty |= ImGui::DragFloat("Z Range", &shadowSettings.directionalDepthRangeMultiplier, 0.1f, 1.0f, 100.0f, "%.1f");
+            }
+            ImGui::EndDisabled();
+        }
+        else {
+            ImGui::TextDisabled("Unavailable in this pipeline");
+        }
+        ImGui::PopID();
+
+        ImGui::TableSetColumnIndex(1);
+        ImGui::PushID("PointShadowSettings");
+        bDirty |= ImGui::Checkbox("Enabled", &shadowSettings.pointLightEnabled);
+        ImGui::BeginDisabled(!shadowSettings.pointLightEnabled);
+        bDirty |= ImGui::Checkbox("Indirect Draw", &shadowSettings.pointLightUseIndirect);
+        bDirty |= ImGui::Checkbox("Indirect Cull", &shadowSettings.pointLightIndirectCullEnabled);
+        int maxPointLights = static_cast<int>(shadowSettings.maxPointLightShadows);
+        if (ImGui::SliderInt("Max Shadows", &maxPointLights, 0, MAX_POINT_LIGHTS)) {
+            shadowSettings.maxPointLightShadows = static_cast<uint32_t>(maxPointLights);
+            bDirty = true;
+        }
+        ImGui::EndDisabled();
+        ImGui::PopID();
+
+        ImGui::EndTable();
     }
 
     return bDirty;
