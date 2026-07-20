@@ -11,6 +11,7 @@
 #include "ECS/Component/SkeletonAnimatorComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Scene/Scene.h"
+#include "Runtime/App/Common/Shadow/Common/DirectionalShadowMath.h"
 
 #include <algorithm>
 #include <cmath>
@@ -114,18 +115,42 @@ void RenderFrameExtractor::extractLights(const ExtractInput& input, entt::regist
 {
     const ShadowSettings defaultShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Medium);
     const ShadowSettings& shadowSettings = input.shadowSettings ? *input.shadowSettings : defaultShadowSettings;
+    const auto populateDirectionalShadow = [&](FrameContext::DirectionalLightData& light) {
+        light.viewProjection = buildDirectionalShadowViewProjection(
+            light.direction,
+            input.cameraPos,
+            input.view,
+            shadowSettings);
+        light.cascadeViewProjections[0] = light.viewProjection;
+        light.cascadeSplits[0]          = shadowSettings.directionalDistance;
+        light.cascadeCount              = 1;
+
+        const uint32_t cascadeCount = shadowSettings.getEffectiveDirectionalCascadeCount();
+        if (cascadeCount > 1) {
+            const auto cascades = DirectionalShadowMath::buildCascades(
+                light.direction,
+                input.view,
+                input.projection,
+                shadowSettings.directionalDistance,
+                shadowSettings.resolution,
+                cascadeCount,
+                shadowSettings.directionalStableFit,
+                shadowSettings.directionalCascadeSplitRatios,
+                shadowSettings.directionalDepthRangeMultiplier);
+            light.cascadeViewProjections = cascades.viewProjections;
+            light.cascadeSplits          = cascades.splits;
+            light.cascadeCount           = cascades.count;
+        }
+        light.projection = glm::mat4(1.0f);
+        light.view       = light.viewProjection;
+    };
 
     // Directional light (take the first one with a transform)
     out.bHasDirectionalLight = false;
     for (const auto& [e, dlc, tc] : reg.view<DirectionalLightComponent, TransformComponent>().each()) {
         auto& dl                 = out.directionalLight;
         dl.direction             = glm::normalize(tc.getForward());
-        dl.viewProjection        = buildDirectionalShadowViewProjection(dl.direction,
-                                                                        input.cameraPos,
-                                                                        input.view,
-                                                                        shadowSettings);
-        dl.projection            = glm::mat4(1.0f);
-        dl.view                  = dl.viewProjection;
+        populateDirectionalShadow(dl);
         dl.color                 = dlc._color;
         dl.intensity             = dlc.intensity;
         out.bHasDirectionalLight = true;
@@ -137,12 +162,7 @@ void RenderFrameExtractor::extractLights(const ExtractInput& input, entt::regist
         for (const auto& [e, dlc] : reg.view<DirectionalLightComponent>().each()) {
             auto& dl                 = out.directionalLight;
             dl.direction             = glm::normalize(dlc._direction);
-            dl.viewProjection        = buildDirectionalShadowViewProjection(dl.direction,
-                                                                            input.cameraPos,
-                                                                            input.view,
-                                                                            shadowSettings);
-            dl.projection            = glm::mat4(1.0f);
-            dl.view                  = dl.viewProjection;
+            populateDirectionalShadow(dl);
             dl.color                 = dlc._color;
             dl.intensity             = dlc.intensity;
             out.bHasDirectionalLight = true;

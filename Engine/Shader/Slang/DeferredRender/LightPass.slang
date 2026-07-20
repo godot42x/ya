@@ -41,14 +41,18 @@ void vertMain(in VertexInput IN, out VertexOutput OUT)
 // ── UBO definitions ──
 
 struct FrameData{
-    vec3 camPos;
+    vec3 viewPos;
+    mat4 viewMatrix;
+    mat4 projMatrix;
 };
 
 struct DirectionalLight{
     vec3 dir;
     vec3 color;
     float intensity;
-    float4x4 shadowMatrix;
+    float4x4 shadowMatrices[MAX_DIRECTIONAL_CASCADES];
+    float4 cascadeSplits;
+    uint cascadeCount;
     float bias;
     float normalBias;
     uint shadowFilter;
@@ -129,16 +133,28 @@ vec3 F_fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
 
 // ── Shading functions ──
 
-float sampleDirectionalShadowCompare(float2 uv, float compareDepth, float bias)
+uint selectDirectionalCascade(vec3 worldPos)
 {
-    float closestDepth = uDirectionalLightShadowMap.Sample(uv).r;
+    float viewDepth = max(-mul(uFrame.viewMatrix, float4(worldPos, 1.0)).z, 0.0);
+    uint cascadeIndex = 0;
+    for (uint i = 0; i + 1 < uLight.dirLight.cascadeCount; ++i) {
+        if (viewDepth > uLight.dirLight.cascadeSplits[i]) {
+            cascadeIndex = i + 1;
+        }
+    }
+    return min(cascadeIndex, max(uLight.dirLight.cascadeCount, 1u) - 1u);
+}
+
+float sampleDirectionalShadowCompare(float2 uv, uint cascadeIndex, float compareDepth, float bias)
+{
+    float closestDepth = uDirectionalLightShadowMap.Sample(float3(uv, float(cascadeIndex))).r;
     return (compareDepth - bias) > closestDepth ? 1.0 : 0.0;
 }
 
-float filterDirectionalShadow(float2 uv, float compareDepth, float bias)
+float filterDirectionalShadow(float2 uv, uint cascadeIndex, float compareDepth, float bias)
 {
     if (uLight.dirLight.shadowFilter == 0 || uLight.dirLight.shadowTexelSize <= 0.0) {
-        return sampleDirectionalShadowCompare(uv, compareDepth, bias);
+        return sampleDirectionalShadowCompare(uv, cascadeIndex, compareDepth, bias);
     }
 
     float shadow = 0.0;
@@ -148,7 +164,7 @@ float filterDirectionalShadow(float2 uv, float compareDepth, float bias)
         for (int x = -radius; x <= radius; ++x) {
             float2 offset = float2(x, y) * uLight.dirLight.shadowTexelSize;
             float2 sampleUv = clamp(uv + offset, float2(0.0), float2(1.0));
-            shadow += sampleDirectionalShadowCompare(sampleUv, compareDepth, bias);
+            shadow += sampleDirectionalShadowCompare(sampleUv, cascadeIndex, compareDepth, bias);
             sampleCount += 1;
         }
     }
@@ -161,7 +177,8 @@ float calculateDirectionalShadow(vec3 worldPos, vec3 norm, vec3 lightDir)
     return 0.0;
 #else
     vec3 biasedWorldPos = worldPos + normalize(norm) * uLight.dirLight.normalBias;
-    float4 fragLightSpacePos = mul(uLight.dirLight.shadowMatrix, float4(biasedWorldPos, 1.0));
+    uint cascadeIndex = selectDirectionalCascade(worldPos);
+    float4 fragLightSpacePos = mul(uLight.dirLight.shadowMatrices[cascadeIndex], float4(biasedWorldPos, 1.0));
     float w = fragLightSpacePos.w;
     if (abs(w) < 1e-6) {
         return 0.0;
@@ -184,7 +201,10 @@ float calculateDirectionalShadow(vec3 worldPos, vec3 norm, vec3 lightDir)
 
     float NdotL = clamp(dot(normalize(norm), lightDir), 0.0, 1.0);
     float bias = uLight.dirLight.bias * lerp(3.0, 1.0, NdotL);
-    return filterDirectionalShadow(uv, curDepth, bias);
+    if (uLight.dirLight.cascadeCount > 1) {
+        bias /= max(uLight.dirLight.cascadeSplits[cascadeIndex] * 0.5, 1.0);
+    }
+    return filterDirectionalShadow(uv, cascadeIndex, curDepth, bias);
 #endif
 }
 
@@ -355,7 +375,7 @@ vec3 shadePhong(vec3 worldPos, vec3 N, vec3 V, vec3 albedo, float specIntensity,
 [[vk::binding(2,2)]] SamplerCube uTexPBRPrefilterMap;  
 [[vk::binding(3,2)]] Sampler2D   uTexPBRBrdfLUT;  
 
-[[vk::binding(0,3)]] Sampler2D   uDirectionalLightShadowMap;
+[[vk::binding(0,3)]] Sampler2DArray uDirectionalLightShadowMap;
 [[vk::binding(1,3)]] SamplerCube uPointLightCubeArray[MAX_POINT_LIGHTS];
 
 
@@ -382,7 +402,7 @@ void fragMain(in VertexOutput IN, out FragmentOutput OUT)
     {
         vec3 worldPos = rt0.rgb;
         vec3 N        = normalize(rt1.rgb);
-        vec3 V        = normalize(uFrame.camPos - worldPos);
+        vec3 V        = normalize(uFrame.viewPos - worldPos);
         vec3 albedo   = rt2.rgb;
 
         float metallic  = rt2.a;
@@ -395,7 +415,7 @@ void fragMain(in VertexOutput IN, out FragmentOutput OUT)
     {
         vec3 worldPos = rt0.rgb;
         vec3 N        = normalize(rt1.rgb);
-        vec3 V        = normalize(uFrame.camPos - worldPos);
+        vec3 V        = normalize(uFrame.viewPos - worldPos);
         vec3 albedo   = rt2.rgb;
 
         float shininess     = rt0.a;

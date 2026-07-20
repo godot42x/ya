@@ -20,12 +20,12 @@ LayerViews buildLayerViews(IRenderResourceFactory* resourceFactory,
         shadowImage,
         ImageViewCreateInfo{
             .label          = std::format("{} Directional Depth IV", prefix),
-            .viewType       = EImageViewType::View2D,
+            .viewType       = EImageViewType::View2DArray,
             .aspectFlags    = EImageAspect::Depth,
             .baseMipLevel   = 0,
             .levelCount     = 1,
             .baseArrayLayer = SHADOW_DIRECTIONAL_LAYER_INDEX,
-            .layerCount     = 1,
+            .layerCount     = MAX_DIRECTIONAL_CASCADES,
         });
 
     for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {

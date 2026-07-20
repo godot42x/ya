@@ -3,6 +3,7 @@
 #include "Render/RenderDefines.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 
 namespace ya
@@ -52,8 +53,10 @@ struct ShadowSettings
     // Directional light shadow
     bool     directionalEnabled   = true;
     float    directionalDistance  = 50.0f; // max shadow distance from camera
-    uint32_t directionalCascades = 1;     // cascade count (1 = no cascading, future: 2/4)
+    uint32_t directionalCascades  = 1;     // 1 = legacy single map, 2..4 = CSM
     bool     directionalStableFit = true;
+    std::array<float, MAX_DIRECTIONAL_CASCADES - 1> directionalCascadeSplitRatios{0.02f, 0.1f, 0.5f};
+    float directionalDepthRangeMultiplier = 10.0f;
 
     // Point light shadow
     bool     pointLightEnabled             = true;
@@ -78,6 +81,44 @@ struct ShadowSettings
         return std::min(maxPointLightShadows, static_cast<uint32_t>(MAX_POINT_LIGHTS));
     }
 
+    [[nodiscard]] uint32_t getEffectiveDirectionalCascadeCount() const
+    {
+        if (!isEnabled() || !directionalEnabled) return 0;
+        return std::clamp(directionalCascades,
+                          1u,
+                          static_cast<uint32_t>(MAX_DIRECTIONAL_CASCADES));
+    }
+
+    void resetDirectionalCascadeSplitRatios()
+    {
+        switch (std::clamp(directionalCascades, 1u, static_cast<uint32_t>(MAX_DIRECTIONAL_CASCADES))) {
+        case 2:
+            directionalCascadeSplitRatios = {0.1f, 0.35f, 0.7f};
+            break;
+        case 3:
+            directionalCascadeSplitRatios = {0.05f, 0.25f, 0.65f};
+            break;
+        case 4:
+            directionalCascadeSplitRatios = {0.02f, 0.1f, 0.5f};
+            break;
+        default:
+            directionalCascadeSplitRatios = {0.1f, 0.3f, 0.6f};
+            break;
+        }
+    }
+
+    void sanitizeDirectionalCascadeSplitRatios()
+    {
+        constexpr float MIN_SPLIT_GAP = 0.001f;
+        float previous = 0.0f;
+        for (uint32_t splitIndex = 0; splitIndex < directionalCascadeSplitRatios.size(); ++splitIndex) {
+            const float maximum = 1.0f - MIN_SPLIT_GAP * static_cast<float>(directionalCascadeSplitRatios.size() - splitIndex);
+            directionalCascadeSplitRatios[splitIndex] = std::clamp(
+                directionalCascadeSplitRatios[splitIndex], previous + MIN_SPLIT_GAP, maximum);
+            previous = directionalCascadeSplitRatios[splitIndex];
+        }
+    }
+
     void applyQualityPreset(EShadowQuality::T q)
     {
         const ShadowSettings preset = fromQuality(q);
@@ -86,6 +127,8 @@ struct ShadowSettings
         directionalEnabled          = preset.directionalEnabled;
         directionalCascades         = preset.directionalCascades;
         directionalStableFit        = preset.directionalStableFit;
+        directionalCascadeSplitRatios = preset.directionalCascadeSplitRatios;
+        directionalDepthRangeMultiplier = preset.directionalDepthRangeMultiplier;
         pointLightEnabled           = preset.pointLightEnabled;
         maxPointLightShadows        = preset.maxPointLightShadows;
         filter                      = preset.filter;
@@ -140,6 +183,7 @@ struct ShadowSettings
             s.filter               = EShadowFilter::PCF_High;
             break;
         }
+        s.resetDirectionalCascadeSplitRatios();
         return s;
     }
 };

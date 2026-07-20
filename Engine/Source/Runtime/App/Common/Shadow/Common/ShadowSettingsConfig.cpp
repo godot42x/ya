@@ -32,6 +32,8 @@ constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_NORMAL_BIAS         = 
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_DIST    = "render.deferred.shadow.directionalDistance";
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_CASCADE = "render.deferred.shadow.directionalCascades";
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_STABLE  = "render.deferred.shadow.directionalStableFit";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_SPLITS  = "render.deferred.shadow.directionalCascadeSplitRatios";
+constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_Z_RANGE = "render.deferred.shadow.directionalDepthRangeMultiplier";
 
 std::string toLowerCopy(std::string_view text)
 {
@@ -161,6 +163,16 @@ void loadAutomationOverridesFromConfig(AppAutomationShadowOverrides& overrides)
     if (float directionalDistance = 0.0f; configManager.tryGet<float>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.directionalDistance", directionalDistance)) {
         overrides.directionalDistance = directionalDistance;
     }
+    if (uint32_t directionalCascades = 0; configManager.tryGet<uint32_t>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.directionalCascades", directionalCascades)) {
+        overrides.directionalCascades = std::clamp(directionalCascades, 1u, static_cast<uint32_t>(MAX_DIRECTIONAL_CASCADES));
+    }
+    if (std::array<float, MAX_DIRECTIONAL_CASCADES - 1> splitRatios{};
+        configManager.tryGet(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.directionalCascadeSplitRatios", splitRatios)) {
+        overrides.directionalCascadeSplitRatios = splitRatios;
+    }
+    if (float depthRangeMultiplier = 0.0f; configManager.tryGet<float>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.directionalDepthRangeMultiplier", depthRangeMultiplier)) {
+        overrides.directionalDepthRangeMultiplier = std::max(depthRangeMultiplier, 1.0f);
+    }
 }
 
 void applyAutomationOverrides(const AppAutomationShadowOverrides& overrides, ShadowSettings& shadowSettings)
@@ -197,6 +209,17 @@ void applyAutomationOverrides(const AppAutomationShadowOverrides& overrides, Sha
     }
     if (overrides.directionalDistance) {
         shadowSettings.directionalDistance = *overrides.directionalDistance;
+    }
+    if (overrides.directionalCascades) {
+        shadowSettings.directionalCascades = *overrides.directionalCascades;
+        shadowSettings.resetDirectionalCascadeSplitRatios();
+    }
+    if (overrides.directionalCascadeSplitRatios) {
+        shadowSettings.directionalCascadeSplitRatios = *overrides.directionalCascadeSplitRatios;
+        shadowSettings.sanitizeDirectionalCascadeSplitRatios();
+    }
+    if (overrides.directionalDepthRangeMultiplier) {
+        shadowSettings.directionalDepthRangeMultiplier = *overrides.directionalDepthRangeMultiplier;
     }
 }
 
@@ -266,12 +289,24 @@ ShadowSettings loadSettingsFromDocument(const std::string& documentName, const S
     settings.directionalStableFit = config.getOr<bool>(documentName,
                                                        shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_STABLE,
                                                        settings.directionalStableFit);
-    settings.directionalCascades = static_cast<uint32_t>(std::clamp(
-        config.getOr<int>(documentName,
-                          shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_CASCADE,
-                          static_cast<int>(settings.directionalCascades)),
-        0,
-        4));
+    if (int configuredCascades = 0;
+        config.tryGet(documentName,
+                      shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_CASCADE,
+                      configuredCascades)) {
+        settings.directionalCascades = static_cast<uint32_t>(std::clamp(
+            configuredCascades, 1, static_cast<int>(MAX_DIRECTIONAL_CASCADES)));
+        settings.resetDirectionalCascadeSplitRatios();
+    }
+    settings.directionalCascadeSplitRatios = config.getOr(
+        documentName,
+        shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_SPLITS,
+        settings.directionalCascadeSplitRatios);
+    settings.sanitizeDirectionalCascadeSplitRatios();
+    settings.directionalDepthRangeMultiplier = std::max(
+        config.getOr<float>(documentName,
+                            shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_Z_RANGE,
+                            settings.directionalDepthRangeMultiplier),
+        1.0f);
 
     if (!bEnableShadowMapping || settings.quality == EShadowQuality::Off) {
         settings.quality = EShadowQuality::Off;
@@ -333,6 +368,12 @@ void saveRuntimeSettings(const ShadowSettings& settings)
     config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
                shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_CASCADE,
                static_cast<int>(settings.directionalCascades));
+    config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_SPLITS,
+               settings.directionalCascadeSplitRatios);
+    config.set(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME,
+               shadow_settings_config_detail::DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_Z_RANGE,
+               settings.directionalDepthRangeMultiplier);
     config.flushDocument(shadow_settings_config_detail::RUNTIME_CONFIG_DOC_NAME);
 }
 

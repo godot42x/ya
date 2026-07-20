@@ -20,6 +20,7 @@ namespace ya
 // using glsl_types::Common::Limits::MAX_POINT_LIGHTS;
 using slang_types::Common::Limits::MAX_BONE_COUNT;
 using slang_types::Common::Limits::MAX_BONE_WEIGHT_PER_VERTEX;
+using slang_types::Common::Limits::MAX_DIRECTIONAL_CASCADES;
 using slang_types::Common::Limits::MAX_POINT_LIGHTS;
 
 // enum bit flags support
@@ -1569,6 +1570,9 @@ struct FrameContext
         glm::mat4 view;
         glm::mat4 projection;
         glm::mat4 viewProjection;
+        std::array<glm::mat4, MAX_DIRECTIONAL_CASCADES> cascadeViewProjections{};
+        std::array<float, MAX_DIRECTIONAL_CASCADES>     cascadeSplits{};
+        uint32_t                                        cascadeCount = 1;
         glm::vec3 direction;
         glm::vec3 color;
         float     intensity;

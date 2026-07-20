@@ -92,7 +92,7 @@ std::optional<RGPassHandle> BasicShadowMapTechnique::appendGraphPasses(
 
     std::optional<RGPassHandle> lastPass;
     if (payload.directionalEnabled()) {
-        lastPass = _directionalPass.appendGraphPass(graph, payload, lastPass);
+        lastPass = _directionalPass.appendGraphPasses(graph, payload, lastPass);
     }
     if (payload.pointEnabled()) {
         lastPass = _pointPass.appendGraphPasses(graph, payload, lastPass);
@@ -121,24 +121,25 @@ void BasicShadowMapTechnique::rebuildLayerTextures(const std::shared_ptr<IImage>
 {
     if (!_render || !shadowImage) return;
 
-    // Directional: layer 0
+    // Directional cascades: reserved layers 0..MAX_DIRECTIONAL_CASCADES-1.
     auto* resourceFactory = _render->getResourceFactory();
-    auto  dirView = resourceFactory->createImageView(
-        shadowImage,
-        ImageViewCreateInfo{
-            .label          = "BasicShadowMap_DirectionalDepthView",
-            .viewType       = EImageViewType::View2D,
-            .aspectFlags    = EImageAspect::Depth,
-            .baseMipLevel   = 0,
-            .levelCount     = 1,
-            .baseArrayLayer = 0,
-            .layerCount     = 1,
-        });
-    if (dirView) {
-        _directionalPass.setDepthAttachment(shadowImage, dirView);
+    std::array<stdptr<IImageView>, MAX_DIRECTIONAL_CASCADES> directionalViews{};
+    for (uint32_t cascadeIndex = 0; cascadeIndex < MAX_DIRECTIONAL_CASCADES; ++cascadeIndex) {
+        directionalViews[cascadeIndex] = resourceFactory->createImageView(
+            shadowImage,
+            ImageViewCreateInfo{
+                .label          = std::format("BasicShadowMap_DirectionalDepthView_{}", cascadeIndex),
+                .viewType       = EImageViewType::View2D,
+                .aspectFlags    = EImageAspect::Depth,
+                .baseMipLevel   = 0,
+                .levelCount     = 1,
+                .baseArrayLayer = cascadeIndex,
+                .layerCount     = 1,
+            });
     }
+    _directionalPass.setDepthAttachments(shadowImage, std::move(directionalViews));
 
-    // Point faces: layers 1..36
+    // Point faces: layers 6..41.
     _pointPass.rebuildFaceTextures(shadowImage);
 }
 

@@ -9,7 +9,7 @@
 #include "Runtime/App/Common/Shadow/Common/ShadowRuntimeState.h"
 
 #include "PBRForward.slang.h"
-#include "PhongLit.Types.glsl.h"
+#include "PhongLit.slang.h"
 
 #include <array>
 #include <functional>
@@ -35,9 +35,9 @@ class ForwardViewportLitPasses
     using PBRLightUBO     = slang_types::PBRForward::LightData;
     using PBRParamUBO     = slang_types::PBRForward::PBRParamsData;
 
-    using PhongFrameUBO   = glsl_types::PhongLit::Types::FrameData;
-    using PhongLightUBO   = glsl_types::PhongLit::Types::LightData;
-    using PhongDebugUBO   = glsl_types::PhongLit::Types::DebugData;
+    using PhongFrameUBO   = slang_types::PhongLit::FrameData;
+    using PhongLightUBO   = slang_types::PhongLit::LightData;
+    using PhongDebugUBO   = slang_types::PhongLit::DebugData;
 
     struct PhongModelPC
     {

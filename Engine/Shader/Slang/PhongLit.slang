@@ -18,7 +18,9 @@ struct DirectionalLight
     float3 direction;
     float3 color;
     float  intensity;
-    float4x4 directionalLightMatrix;
+    float4x4 shadowMatrices[MAX_DIRECTIONAL_CASCADES];
+    float4 cascadeSplits;
+    uint cascadeCount;
 };
 
 struct PointLight
@@ -106,7 +108,7 @@ struct ParamUBO
 [[vk::binding(0, 3)]]  SamplerState sSkyBox;
 
 // set=4 : Shadow maps (combined image sampler)
-[[vk::binding(0, 4)]]  Sampler2D    uDirectionalLightShadowMap;
+[[vk::binding(0, 4)]]  Sampler2DArray uDirectionalLightShadowMap;
 [[vk::binding(1, 4)]]  SamplerCube  uPointLightCubeArray[MAX_POINT_LIGHTS];
 
 // Push constants
@@ -181,7 +183,7 @@ VSOutput vertMain(VSInput input)
     // Directional light space transform
     if (uLit.hasDirectionalLight == 1)
     {
-        output.fragLightSpacePos = mul(uLit.dirLight.directionalLightMatrix, pos);
+        output.fragLightSpacePos = mul(uLit.dirLight.shadowMatrices[0], pos);
     }
 
     return output;
@@ -199,8 +201,17 @@ float calculateSpec(float3 norm, float3 lightDir, float3 viewDir, float shinines
     return spec;
 }
 
-float calculateDirectionalShadow(float4 fragLightSpacePos, float3 norm, float3 lightDir)
+float calculateDirectionalShadow(float3 worldPos, float3 norm, float3 lightDir)
 {
+    float viewDepth = max(-mul(uFrame.viewMat, float4(worldPos, 1.0)).z, 0.0);
+    uint cascadeIndex = 0;
+    for (uint i = 0; i + 1 < uLit.dirLight.cascadeCount; ++i) {
+        if (viewDepth > uLit.dirLight.cascadeSplits[i]) {
+            cascadeIndex = i + 1;
+        }
+    }
+    cascadeIndex = min(cascadeIndex, max(uLit.dirLight.cascadeCount, 1u) - 1u);
+    float4 fragLightSpacePos = mul(uLit.dirLight.shadowMatrices[cascadeIndex], float4(worldPos, 1.0));
     float w = fragLightSpacePos.w;
     if (abs(w) < 1e-6)
         return 0.0;
@@ -220,9 +231,12 @@ float calculateDirectionalShadow(float4 fragLightSpacePos, float3 norm, float3 l
         return 0.0;
 
     float bias = max(0.05 * (1.0 - dot(norm, lightDir)), 0.005);
+    if (uLit.dirLight.cascadeCount > 1) {
+        bias /= max(uLit.dirLight.cascadeSplits[cascadeIndex] * 0.5, 1.0);
+    }
 
     // Simple shadow (non-PCF)
-    float closestDepth = uDirectionalLightShadowMap.Sample( uv).r;
+    float closestDepth = uDirectionalLightShadowMap.Sample(float3(uv, float(cascadeIndex))).r;
     float shadow = (curDepth - bias) > closestDepth ? 1.0 : 0.0;
 
     return shadow;
@@ -353,7 +367,7 @@ float4 fragMain(VSOutput input) : SV_Target
     {
         float3 dirLightDir = normalize(-uLit.dirLight.direction);
         _fragLightSpacePos_shadow = calculateDirectionalShadow(
-            input.fragLightSpacePos, norm, dirLightDir);
+            input.worldPos, norm, dirLightDir);
 
         lighting += calculateDirLight(
             uLit.dirLight, norm, viewDir,

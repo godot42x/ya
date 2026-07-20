@@ -69,7 +69,9 @@ TEST_F(RuntimeSettingsConfigTest, LoadsDeveloperSettingsFromRuntimeDocumentWitho
         "bias": 0.025,
         "normalBias": 0.075,
         "directionalDistance": 250.0,
-        "directionalCascades": 3
+        "directionalCascades": 3,
+        "directionalCascadeSplitRatios": [0.05, 0.3, 0.8],
+        "directionalDepthRangeMultiplier": 12.0
       }
     }
   }
@@ -91,6 +93,10 @@ TEST_F(RuntimeSettingsConfigTest, LoadsDeveloperSettingsFromRuntimeDocumentWitho
     EXPECT_FLOAT_EQ(settings.normalBias, 0.075f);
     EXPECT_FLOAT_EQ(settings.directionalDistance, 250.0f);
     EXPECT_EQ(settings.directionalCascades, 3u);
+    EXPECT_FLOAT_EQ(settings.directionalCascadeSplitRatios[0], 0.05f);
+    EXPECT_FLOAT_EQ(settings.directionalCascadeSplitRatios[1], 0.3f);
+    EXPECT_FLOAT_EQ(settings.directionalCascadeSplitRatios[2], 0.8f);
+    EXPECT_FLOAT_EQ(settings.directionalDepthRangeMultiplier, 12.0f);
 }
 
 } // namespace

@@ -34,6 +34,13 @@ struct BasicShadowFramePayload
         return settings && settings->directionalEnabled
             && frameData && frameData->bHasDirectionalLight;
     }
+    [[nodiscard]] uint32_t directionalCascadeCount() const
+    {
+        if (!directionalEnabled()) return 0;
+        return std::clamp(frameData->directionalLight.cascadeCount,
+                          1u,
+                          static_cast<uint32_t>(MAX_DIRECTIONAL_CASCADES));
+    }
     [[nodiscard]] bool pointEnabled() const
     {
         return settings && settings->pointLightEnabled && pointLightCount > 0;

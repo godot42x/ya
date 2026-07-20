@@ -92,6 +92,9 @@ struct AppAutomationShadowOverrides
     std::optional<float>             bias;
     std::optional<float>             normalBias;
     std::optional<float>             directionalDistance;
+    std::optional<uint32_t>          directionalCascades;
+    std::optional<std::array<float, MAX_DIRECTIONAL_CASCADES - 1>> directionalCascadeSplitRatios;
+    std::optional<float>             directionalDepthRangeMultiplier;
 };
 
 struct AppAutomationViewportResize

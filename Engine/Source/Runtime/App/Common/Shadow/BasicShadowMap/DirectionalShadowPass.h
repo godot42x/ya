@@ -23,7 +23,7 @@ struct RenderDrawItem;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DirectionalShadowPass
-// Renders the single directional-light depth map using direct draw calls.
+// Renders one directional-light depth map per active cascade using direct draws.
 // ═══════════════════════════════════════════════════════════════════════════
 
 class DirectionalShadowPass
@@ -38,15 +38,16 @@ class DirectionalShadowPass
     void prepare(const BasicShadowFramePayload& payload);
 
     void execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload);
-    [[nodiscard]] std::optional<RGPassHandle> appendGraphPass(
+    [[nodiscard]] std::optional<RGPassHandle> appendGraphPasses(
         RenderGraph& graph,
         const BasicShadowFramePayload& payload,
         std::optional<RGPassHandle> dependency = std::nullopt);
 
     void setShadowExtent(Extent2D extent) { _shadowExtent = extent; }
     void refreshPipeline(EFormat::T depthFormat);
-    void setDepthAttachment(stdptr<IImage> image, stdptr<IImageView> view);
-    [[nodiscard]] IImageView* getDepthView() const { return _depthView.get(); }
+    void setDepthAttachments(stdptr<IImage> image,
+                             std::array<stdptr<IImageView>, MAX_DIRECTIONAL_CASCADES> views);
+    [[nodiscard]] IImageView* getDepthView() const { return _depthViews[0].get(); }
     [[nodiscard]] IGraphicsPipeline* getStaticPipeline() const { return _staticVariant.pipeline.get(); }
     [[nodiscard]] IGraphicsPipeline* getSkinnedPipeline() const { return _skinnedVariant.pipeline.get(); }
 
@@ -59,13 +60,18 @@ class DirectionalShadowPass
 
     struct PerFlightResources
     {
-        stdptr<IBuffer>     frameUBO;
-        DescriptorSetHandle frameDS       = nullptr;
+        std::array<stdptr<IBuffer>, MAX_DIRECTIONAL_CASCADES>     frameUBOs{};
+        std::array<DescriptorSetHandle, MAX_DIRECTIONAL_CASCADES> frameDSs{};
         stdptr<IBuffer>     skinningSSBO;
         DescriptorSetHandle skinningDS    = nullptr;
     };
 
     void ensureSkinningCapacity(uint32_t paletteCount);
+    [[nodiscard]] std::optional<RGPassHandle> appendCascadePass(
+        RenderGraph& graph,
+        const BasicShadowFramePayload& payload,
+        uint32_t cascadeIndex,
+        std::optional<RGPassHandle> dependency);
 
     IRender* _render       = nullptr;
     Extent2D _shadowExtent = {.width = 1024, .height = 1024};
@@ -77,8 +83,8 @@ class DirectionalShadowPass
     stdptr<IDescriptorPool>      _dsp;
     GraphicsPipelineCreateInfo   _pipelineCI{};
 
-    stdptr<IImage>     _depthImage;
-    stdptr<IImageView> _depthView;
+    stdptr<IImage> _depthImage;
+    std::array<stdptr<IImageView>, MAX_DIRECTIONAL_CASCADES> _depthViews{};
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
     std::array<PerFlightResources, MAX_FLIGHTS_IN_FLIGHT> _perFlight{};

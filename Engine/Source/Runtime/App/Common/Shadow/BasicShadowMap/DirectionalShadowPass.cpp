@@ -111,9 +111,9 @@ void DirectionalShadowPass::init(IRender* render, Extent2D shadowExtent)
     // Descriptor pool
     _dsp = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
         .label     = "DirectionalShadow_DSP",
-        .maxSets   = MAX_FLIGHTS_IN_FLIGHT * 2, // 1 frame DS + 1 skinning DS per flight
+        .maxSets   = MAX_FLIGHTS_IN_FLIGHT * (MAX_DIRECTIONAL_CASCADES + 1),
         .poolSizes = {
-            {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT},
+            {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT * MAX_DIRECTIONAL_CASCADES},
             {.type = EPipelineDescriptorType::StorageBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT},
         },
     });
@@ -122,32 +122,35 @@ void DirectionalShadowPass::init(IRender* render, Extent2D shadowExtent)
     FrameUBO initialData{};
     for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
         auto& flight = _perFlight[i];
-        flight.frameUBO = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-            .label       = std::format("DirectionalShadow_Frame_UBO_{}", i),
-            .usage       = EBufferUsage::UniformBuffer,
-            .size        = sizeof(FrameUBO),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
-        flight.frameUBO->writeData(&initialData, sizeof(FrameUBO), 0);
+        for (uint32_t cascadeIndex = 0; cascadeIndex < MAX_DIRECTIONAL_CASCADES; ++cascadeIndex) {
+            flight.frameUBOs[cascadeIndex] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
+                .label       = std::format("DirectionalShadow_Frame_UBO_{}_{}", i, cascadeIndex),
+                .usage       = EBufferUsage::UniformBuffer,
+                .size        = sizeof(FrameUBO),
+                .memoryUsage = EMemoryUsage::CpuToGpu,
+            });
+            flight.frameUBOs[cascadeIndex]->writeData(&initialData, sizeof(FrameUBO), 0);
 
-        flight.frameDS = _dsp->allocateDescriptorSets(_frameDSL);
-        _render->getDescriptorHelper()->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneUniformBuffer(flight.frameDS, 0, flight.frameUBO.get()),
-        });
+            flight.frameDSs[cascadeIndex] = _dsp->allocateDescriptorSets(_frameDSL);
+            _render->getDescriptorHelper()->updateDescriptorSets({
+                IDescriptorSetHelper::writeOneUniformBuffer(
+                    flight.frameDSs[cascadeIndex], 0, flight.frameUBOs[cascadeIndex].get()),
+            });
+        }
     }
 }
 
 void DirectionalShadowPass::destroy()
 {
     for (auto& flight : _perFlight) {
-        flight.frameUBO.reset();
+        for (auto& frameUBO : flight.frameUBOs) frameUBO.reset();
+        flight.frameDSs.fill(nullptr);
         flight.skinningSSBO.reset();
-        flight.frameDS    = nullptr;
         flight.skinningDS = nullptr;
     }
     _dsp.reset();
     _depthImage.reset();
-    _depthView.reset();
+    for (auto& depthView : _depthViews) depthView.reset();
     _graphExecutor.reset();
     _staticVariant  = {};
     _skinnedVariant = {};
@@ -170,12 +173,16 @@ void DirectionalShadowPass::prepare(const BasicShadowFramePayload& payload)
 
     {
         YA_PROFILE_SCOPE("DirectionalShadowPass::FrameUBO");
-        FrameUBO uboData{
-            .directionalLightMatrix = payload.frameUBO.directionalLightMatrix,
-            .numPointLights         = 0,
-            .hasDirectionalLight    = 1u,
-        };
-        flight.frameUBO->writeData(&uboData, sizeof(FrameUBO), 0);
+        for (uint32_t cascadeIndex = 0;
+             cascadeIndex < payload.directionalCascadeCount();
+             ++cascadeIndex) {
+            FrameUBO uboData{
+                .directionalLightMatrix = payload.frameData->directionalLight.cascadeViewProjections[cascadeIndex],
+                .numPointLights         = 0,
+                .hasDirectionalLight    = 1u,
+            };
+            flight.frameUBOs[cascadeIndex]->writeData(&uboData, sizeof(FrameUBO), 0);
+        }
     }
 
     {
@@ -205,26 +212,44 @@ void DirectionalShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFra
     if (!cmdBuf || !_graphExecutor) return;
 
     RenderGraph graph;
-    if (!appendGraphPass(graph, payload).has_value()) return;
+    if (!appendGraphPasses(graph, payload).has_value()) return;
     YA_CORE_ASSERT(_graphExecutor->execute(graph, *cmdBuf),
                    "Failed to execute directional shadow graph");
 }
 
-std::optional<RGPassHandle> DirectionalShadowPass::appendGraphPass(
+std::optional<RGPassHandle> DirectionalShadowPass::appendGraphPasses(
     RenderGraph& graph,
     const BasicShadowFramePayload& payload,
     std::optional<RGPassHandle> dependency)
 {
-    if (!_depthImage || !_depthView || !payload.frameData) return std::nullopt;
+    if (!_depthImage || !payload.frameData) return std::nullopt;
+
+    std::optional<RGPassHandle> lastPass = dependency;
+    for (uint32_t cascadeIndex = 0;
+         cascadeIndex < payload.directionalCascadeCount();
+         ++cascadeIndex) {
+        lastPass = appendCascadePass(graph, payload, cascadeIndex, lastPass);
+        if (!lastPass.has_value()) return std::nullopt;
+    }
+    return lastPass;
+}
+
+std::optional<RGPassHandle> DirectionalShadowPass::appendCascadePass(
+    RenderGraph& graph,
+    const BasicShadowFramePayload& payload,
+    uint32_t cascadeIndex,
+    std::optional<RGPassHandle> dependency)
+{
+    if (cascadeIndex >= _depthViews.size() || !_depthViews[cascadeIndex]) return std::nullopt;
 
     const auto& flight = _perFlight[payload.flightIndex];
-    YA_CORE_ASSERT(flight.frameUBO && flight.skinningSSBO,
+    YA_CORE_ASSERT(flight.frameUBOs[cascadeIndex] && flight.skinningSSBO,
                    "Directional shadow graph requires frame and skinning buffers");
 
     const auto depth = graph.importTexture(makeImportedTextureDesc(
         _depthImage,
-        _depthView,
-        "DirectionalShadow.Depth",
+        _depthViews[cascadeIndex],
+        std::format("DirectionalShadow.Depth.{}", cascadeIndex),
         EImageLayout::ShaderReadOnlyOptimal,
         EImageUsage::DepthStencilAttachment,
         Extent3D{_shadowExtent.width, _shadowExtent.height, 1}));
@@ -246,19 +271,21 @@ std::optional<RGPassHandle> DirectionalShadowPass::appendGraphPass(
         });
     };
     const auto frameBuffer = importHostWrittenBuffer(
-        flight.frameUBO, "DirectionalShadow.FrameUBO", EBufferUsage::UniformBuffer);
+        flight.frameUBOs[cascadeIndex],
+        std::format("DirectionalShadow.FrameUBO.{}", cascadeIndex),
+        EBufferUsage::UniformBuffer);
     const auto skinningBuffer = importHostWrittenBuffer(
         flight.skinningSSBO, "DirectionalShadow.SkinningSSBO", EBufferUsage::StorageBuffer);
 
     const auto shadowPass = graph.addPass(
-        "Directional Shadow",
+        std::format("Directional Shadow Cascade {}", cascadeIndex),
         [frameBuffer, skinningBuffer, depth, dependency](RGPassBuilder& pass) {
             if (dependency.has_value()) pass.dependsOn(*dependency);
             pass.read(frameBuffer);
             pass.read(skinningBuffer);
             pass.useDepthAttachment(depth);
         },
-        [this, payload, depth](RGRenderContext& ctx) {
+        [this, payload, depth, cascadeIndex](RGRenderContext& ctx) {
             YA_PERF_SCOPE(perf::sample::shadowDirectional(), perf::metric::cpuTimeMs(), perf::domain::render());
             ctx.beginRasterRendering({
                 .renderArea = Rect2D{.pos = {0.0f, 0.0f}, .extent = _shadowExtent.toVec2()},
@@ -281,12 +308,12 @@ std::optional<RGPassHandle> DirectionalShadowPass::appendGraphPass(
             ShadowDrawHelper::PassResources staticRes{
                 .pipeline       = _staticVariant.pipeline.get(),
                 .pipelineLayout = _staticVariant.pipelineLayout.get(),
-                .frameDS        = passFlight.frameDS,
+                .frameDS        = passFlight.frameDSs[cascadeIndex],
             };
             ShadowDrawHelper::PassResources skinnedRes{
                 .pipeline       = _skinnedVariant.pipeline.get(),
                 .pipelineLayout = _skinnedVariant.pipelineLayout.get(),
-                .frameDS        = passFlight.frameDS,
+                .frameDS        = passFlight.frameDSs[cascadeIndex],
                 .skinningDS     = passFlight.skinningDS,
             };
             {
@@ -367,10 +394,12 @@ void DirectionalShadowPass::refreshPipeline(EFormat::T depthFormat)
     }
 }
 
-void DirectionalShadowPass::setDepthAttachment(stdptr<IImage> image, stdptr<IImageView> view)
+void DirectionalShadowPass::setDepthAttachments(
+    stdptr<IImage> image,
+    std::array<stdptr<IImageView>, MAX_DIRECTIONAL_CASCADES> views)
 {
     _depthImage = std::move(image);
-    _depthView  = std::move(view);
+    _depthViews = std::move(views);
 }
 
 } // namespace ya

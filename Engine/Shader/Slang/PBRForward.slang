@@ -41,7 +41,9 @@ struct DirectionalLight
     float3   dir;
     float3   color;
     float    intensity;
-    float4x4 shadowMatrix;
+    float4x4 shadowMatrices[MAX_DIRECTIONAL_CASCADES];
+    float4 cascadeSplits;
+    uint cascadeCount;
 };
 
 struct PointLight
@@ -103,7 +105,7 @@ struct PBRParamsData
 [[vk::binding(2,3)]] SamplerCube uTexPBRPrefilterMap;
 [[vk::binding(3,3)]] Sampler2D   uTexPBRBrdfLUT;
 
-[[vk::binding(0,4)]] Sampler2D   uDirectionalLightShadowMap;
+[[vk::binding(0,4)]] Sampler2DArray uDirectionalLightShadowMap;
 [[vk::binding(1,4)]] SamplerCube uPointLightCubeArray[MAX_POINT_LIGHTS];
 
 #ifndef YA_DEFERRED_PBR_ENABLE_IBL_DIFFUSE
@@ -151,7 +153,16 @@ float calculateDirectionalShadow(float3 worldPos, float3 norm, float3 lightDir)
 #if !YA_DEFERRED_ENABLE_SHADOW_MAPPING
     return 0.0;
 #else
-    float4 fragLightSpacePos = mul(uLight.dirLight.shadowMatrix, float4(worldPos, 1.0));
+    float viewDepth = max(-mul(uFrame.viewMat, float4(worldPos, 1.0)).z, 0.0);
+    uint cascadeIndex = 0;
+    for (uint i = 0; i + 1 < uLight.dirLight.cascadeCount; ++i) {
+        if (viewDepth > uLight.dirLight.cascadeSplits[i]) {
+            cascadeIndex = i + 1;
+        }
+    }
+    cascadeIndex = min(cascadeIndex, max(uLight.dirLight.cascadeCount, 1u) - 1u);
+
+    float4 fragLightSpacePos = mul(uLight.dirLight.shadowMatrices[cascadeIndex], float4(worldPos, 1.0));
     float w = fragLightSpacePos.w;
     if (abs(w) < 1e-6) {
         return 0.0;
@@ -172,7 +183,10 @@ float calculateDirectionalShadow(float3 worldPos, float3 norm, float3 lightDir)
     }
 
     float bias = max(0.05 * (1.0 - dot(norm, lightDir)), 0.005);
-    float closestDepth = uDirectionalLightShadowMap.Sample(uv).r;
+    if (uLight.dirLight.cascadeCount > 1) {
+        bias /= max(uLight.dirLight.cascadeSplits[cascadeIndex] * 0.5, 1.0);
+    }
+    float closestDepth = uDirectionalLightShadowMap.Sample(float3(uv, float(cascadeIndex))).r;
     return (curDepth - bias) > closestDepth ? 1.0 : 0.0;
 #endif
 }

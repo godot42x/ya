@@ -528,7 +528,11 @@ void GBufferStage::updateFrameUBOs(const RenderStageContext& ctx)
         lightData.dirLight.dir          = fd.directionalLight.direction;
         lightData.dirLight.color        = fd.directionalLight.color;
         lightData.dirLight.intensity    = fd.directionalLight.intensity;
-        lightData.dirLight.shadowMatrix = fd.directionalLight.viewProjection;
+        lightData.dirLight.cascadeCount = fd.directionalLight.cascadeCount;
+        for (uint32_t cascadeIndex = 0; cascadeIndex < MAX_DIRECTIONAL_CASCADES; ++cascadeIndex) {
+            lightData.dirLight.shadowMatrices[cascadeIndex] = fd.directionalLight.cascadeViewProjections[cascadeIndex];
+            lightData.dirLight.cascadeSplits[cascadeIndex]  = fd.directionalLight.cascadeSplits[cascadeIndex];
+        }
         lightData.hasDirLight           = true;
     }
     int            pli                      = 0;

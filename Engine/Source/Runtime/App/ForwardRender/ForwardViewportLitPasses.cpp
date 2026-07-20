@@ -776,7 +776,11 @@ void ForwardViewportLitPasses::fillPBRLightFromFrameData(const RenderFrameData& 
         _pbrLight.dirLight.dir          = fd.directionalLight.direction;
         _pbrLight.dirLight.color        = fd.directionalLight.color;
         _pbrLight.dirLight.intensity    = fd.directionalLight.intensity;
-        _pbrLight.dirLight.shadowMatrix = fd.directionalLight.viewProjection;
+        _pbrLight.dirLight.cascadeCount = fd.directionalLight.cascadeCount;
+        for (uint32_t cascadeIndex = 0; cascadeIndex < MAX_DIRECTIONAL_CASCADES; ++cascadeIndex) {
+            _pbrLight.dirLight.shadowMatrices[cascadeIndex] = fd.directionalLight.cascadeViewProjections[cascadeIndex];
+            _pbrLight.dirLight.cascadeSplits[cascadeIndex]  = fd.directionalLight.cascadeSplits[cascadeIndex];
+        }
         _pbrLight.hasDirLight           = true;
     }
 
@@ -799,10 +803,14 @@ void ForwardViewportLitPasses::fillPhongLightFromFrameData(const RenderFrameData
 {
     _phongLight.hasDirectionalLight = fd.bHasDirectionalLight;
     if (fd.bHasDirectionalLight) {
-        _phongLight.dirLight.direction              = fd.directionalLight.direction;
-        _phongLight.dirLight.color                  = fd.directionalLight.color;
-        _phongLight.dirLight.intensity              = fd.directionalLight.intensity;
-        _phongLight.dirLight.directionalLightMatrix = fd.directionalLight.viewProjection;
+        _phongLight.dirLight.direction    = fd.directionalLight.direction;
+        _phongLight.dirLight.color        = fd.directionalLight.color;
+        _phongLight.dirLight.intensity    = fd.directionalLight.intensity;
+        _phongLight.dirLight.cascadeCount = fd.directionalLight.cascadeCount;
+        for (uint32_t cascadeIndex = 0; cascadeIndex < MAX_DIRECTIONAL_CASCADES; ++cascadeIndex) {
+            _phongLight.dirLight.shadowMatrices[cascadeIndex] = fd.directionalLight.cascadeViewProjections[cascadeIndex];
+            _phongLight.dirLight.cascadeSplits[cascadeIndex]  = fd.directionalLight.cascadeSplits[cascadeIndex];
+        }
     }
 
     _phongLight.numPointLights = fd.numPointLights;
