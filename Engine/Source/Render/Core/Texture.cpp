@@ -16,6 +16,8 @@
 
 #include "ktx.h"
 
+#include <bit>
+
 namespace ya
 {
 
@@ -144,7 +146,8 @@ std::shared_ptr<Texture> Texture::fromMemory(const TextureMemoryCreateInfo& ci)
                           ci.memory.width,
                           ci.memory.height,
                           ci.memory.format,
-                          ci.memory.mipLevels);
+                          ci.memory.mipLevels,
+                          ci.memory.generateMipmaps);
 
     YA_CORE_TRACE("Created texture from memory: {} ({}x{})", texture->_label, ci.memory.width, ci.memory.height);
     return texture;
@@ -428,15 +431,23 @@ void Texture::initFromData(const void* pixels,
                            uint32_t    texWidth,
                            uint32_t    texHeight,
                            EFormat::T  format,
-                           uint32_t    mipLevels)
+                           uint32_t    mipLevels,
+                           bool        generateMipmaps)
 {
+    auto* render          = App::get()->getRender();
+    auto* resourceFactory = render->getResourceFactory();
+
+    const bool bGenerateMipmaps = generateMipmaps && mipLevels == 1 && render->supportsMipGeneration(format);
+    if (generateMipmaps && !bGenerateMipmaps) {
+        YA_CORE_WARN("GPU mip generation is not supported for texture '{}' format {}; uploading base level only",
+                     _filepath.empty() ? _label : _filepath,
+                     static_cast<int>(format));
+    }
+
     _width     = texWidth;
     _height    = texHeight;
     _format    = format;
-    _mipLevels = mipLevels;
-
-    auto* render          = App::get()->getRender();
-    auto* resourceFactory = render->getResourceFactory();
+    _mipLevels = bGenerateMipmaps ? std::bit_width(std::max(texWidth, texHeight)) : mipLevels;
 
     VkDeviceSize imageSize = 0;
     if (dataSize > 0) {
@@ -455,9 +466,11 @@ void Texture::initFromData(const void* pixels,
             .height = texHeight,
             .depth  = 1,
         },
-        .mipLevels     = mipLevels,
+        .mipLevels     = _mipLevels,
         .samples       = ESampleCount::Sample_1,
-        .usage         = static_cast<EImageUsage::T>(EImageUsage::Sampled | EImageUsage::TransferDst),
+        .usage         = static_cast<EImageUsage::T>(EImageUsage::Sampled |
+                                                     EImageUsage::TransferDst |
+                                                     (bGenerateMipmaps ? EImageUsage::TransferSrc : 0)),
         .initialLayout = EImageLayout::Undefined,
     };
 
@@ -468,27 +481,6 @@ void Texture::initFromData(const void* pixels,
                       static_cast<int>(format),
                       texWidth,
                       texHeight);
-        const auto fallbackPixels = buildMissingTexturePixels();
-        initFallbackTexture(fallbackPixels.data(),
-                            fallbackPixels.size() * sizeof(ColorRGBA<uint8_t>),
-                            8,
-                            8);
-        return;
-    }
-
-    ImageViewCreateInfo viewCI{
-        .label       = std::format("Texture_ImageView_{}", _label),
-        .aspectFlags = EImageAspect::Color,
-        .levelCount  = mipLevels,
-    };
-    imageView = resourceFactory->createImageView(image, viewCI);
-    if (!imageView || !imageView->getHandle()) {
-        YA_CORE_ERROR("Failed to create image view for texture: {} (format: {}, {}x{})",
-                      _filepath.empty() ? _label : _filepath,
-                      static_cast<int>(format),
-                      texWidth,
-                      texHeight);
-        image.reset();
         const auto fallbackPixels = buildMissingTexturePixels();
         initFallbackTexture(fallbackPixels.data(),
                             fallbackPixels.size() * sizeof(ColorRGBA<uint8_t>),
@@ -511,7 +503,7 @@ void Texture::initFromData(const void* pixels,
         _filepath.empty() ? _label : _filepath,
         texWidth,
         texHeight,
-        mipLevels));
+        _mipLevels));
 
     cmdBuf->transitionImageLayout(image.get(), EImageLayout::Undefined, EImageLayout::TransferDst);
 
@@ -589,9 +581,46 @@ void Texture::initFromData(const void* pixels,
         cmdBuf->copyBufferToImage(stagingBuffer.get(), image.get(), EImageLayout::TransferDst, {region});
     }
 
-    cmdBuf->transitionImageLayout(image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal);
+    if (bGenerateMipmaps) {
+        if (!cmdBuf->generateMipmaps(image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal)) {
+            YA_CORE_ERROR("GPU mip generation failed for texture '{}'; using base level only",
+                          _filepath.empty() ? _label : _filepath);
+            const ImageSubresourceRange baseLevelRange{
+                .aspectMask     = EImageAspect::Color,
+                .baseMipLevel   = 0,
+                .levelCount     = 1,
+                .baseArrayLayer = 0,
+                .layerCount     = 1,
+            };
+            cmdBuf->transitionImageLayout(image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal, &baseLevelRange);
+            _mipLevels = 1;
+        }
+    }
+    else {
+        cmdBuf->transitionImageLayout(image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal);
+    }
 
     render->endIsolateCommands(cmdBuf);
+
+    ImageViewCreateInfo viewCI{
+        .label       = std::format("Texture_ImageView_{}", _label),
+        .aspectFlags = EImageAspect::Color,
+        .levelCount  = _mipLevels,
+    };
+    imageView = resourceFactory->createImageView(image, viewCI);
+    if (!imageView || !imageView->getHandle()) {
+        YA_CORE_ERROR("Failed to create image view for texture: {} (format: {}, {}x{})",
+                      _filepath.empty() ? _label : _filepath,
+                      static_cast<int>(format),
+                      texWidth,
+                      texHeight);
+        image.reset();
+        const auto fallbackPixels = buildMissingTexturePixels();
+        initFallbackTexture(fallbackPixels.data(),
+                            fallbackPixels.size() * sizeof(ColorRGBA<uint8_t>),
+                            8,
+                            8);
+    }
 }
 
 void Texture::initFallbackTexture(const void* pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight)

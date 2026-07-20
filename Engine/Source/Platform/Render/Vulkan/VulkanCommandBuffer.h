@@ -134,6 +134,9 @@ class VulkanCommandBuffer : public ICommandBuffer
     bool begin(bool oneTimeSubmit = false) override;
     bool end() override;
     void reset() override;
+    bool generateMipmaps(IImage* image,
+                         EImageLayout::T baseLevelLayout,
+                         EImageLayout::T finalLayout) override;
 
 #if YA_CMDBUF_RECORD_MODE
     void executeAll() override;

@@ -1,5 +1,6 @@
 #include "OpenGLCommandBuffer.h"
 #include "Core/Log.h"
+#include "Render/Core/Image.h"
 #include "OpenGLBuffer.h"
 #include "OpenGLPipeline.h"
 #include "OpenGLRender.h"
@@ -42,6 +43,23 @@ void OpenGLCommandBuffer::reset()
 #endif
     _isRecording     = false;
     _currentPipeline = nullptr;
+}
+
+bool OpenGLCommandBuffer::generateMipmaps(IImage* image,
+                                          EImageLayout::T baseLevelLayout,
+                                          EImageLayout::T finalLayout)
+{
+    (void)baseLevelLayout;
+    (void)finalLayout;
+    if (!image || image->getMipLevels() <= 1) {
+        return image != nullptr;
+    }
+
+    const auto texture = static_cast<GLuint>(reinterpret_cast<uintptr_t>(image->getHandle().ptr));
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return glGetError() == GL_NO_ERROR;
 }
 
 #if YA_CMDBUF_RECORD_MODE

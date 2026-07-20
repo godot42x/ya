@@ -183,6 +183,12 @@ struct IRender : public plat_base<IRender>
         return false;
     }
 
+    virtual bool supportsMipGeneration(EFormat::T format) const
+    {
+        (void)format;
+        return false;
+    }
+
     virtual const RenderCapabilities& getCapabilities() const
     {
         static const RenderCapabilities caps{};

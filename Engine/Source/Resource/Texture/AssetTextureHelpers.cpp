@@ -380,63 +380,6 @@ uint32_t textureChannelCount(EFormat::T format)
     }
 }
 
-void generateU8MipChain(AssetManager::TextureMemoryBlock& texture)
-{
-    if (texture.width == 0 || texture.height == 0 || texture.channels == 0 ||
-        texture.payloadType != AssetManager::ETexturePayloadType::U8) {
-        return;
-    }
-
-    const size_t baseSize = static_cast<size_t>(texture.width) * texture.height * texture.channels;
-    if (texture.bytes.size() != baseSize) {
-        return;
-    }
-
-    size_t totalSize       = baseSize;
-    uint32_t reserveWidth  = texture.width;
-    uint32_t reserveHeight = texture.height;
-    while (reserveWidth > 1 || reserveHeight > 1) {
-        reserveWidth  = std::max(1u, reserveWidth / 2);
-        reserveHeight = std::max(1u, reserveHeight / 2);
-        totalSize += static_cast<size_t>(reserveWidth) * reserveHeight * texture.channels;
-    }
-    texture.bytes.reserve(totalSize);
-
-    size_t currentOffset    = 0;
-    uint32_t currentWidth   = texture.width;
-    uint32_t currentHeight  = texture.height;
-    texture.mipLevels       = 1;
-
-    while (currentWidth > 1 || currentHeight > 1) {
-        const uint32_t nextWidth  = std::max(1u, currentWidth / 2);
-        const uint32_t nextHeight = std::max(1u, currentHeight / 2);
-        const size_t nextOffset   = texture.bytes.size();
-        texture.bytes.resize(nextOffset + static_cast<size_t>(nextWidth) * nextHeight * texture.channels);
-
-        for (uint32_t y = 0; y < nextHeight; ++y) {
-            for (uint32_t x = 0; x < nextWidth; ++x) {
-                for (uint32_t channel = 0; channel < texture.channels; ++channel) {
-                    uint32_t sum = 0;
-                    for (uint32_t dy = 0; dy < 2; ++dy) {
-                        const uint32_t srcY = std::min(y * 2 + dy, currentHeight - 1);
-                        for (uint32_t dx = 0; dx < 2; ++dx) {
-                            const uint32_t srcX = std::min(x * 2 + dx, currentWidth - 1);
-                            sum += texture.bytes[currentOffset + (static_cast<size_t>(srcY) * currentWidth + srcX) * texture.channels + channel];
-                        }
-                    }
-                    texture.bytes[nextOffset + (static_cast<size_t>(y) * nextWidth + x) * texture.channels + channel] =
-                        static_cast<uint8_t>((sum + 2) / 4);
-                }
-            }
-        }
-
-        currentOffset = nextOffset;
-        currentWidth  = nextWidth;
-        currentHeight = nextHeight;
-        ++texture.mipLevels;
-    }
-}
-
 bool applyKtxResolvedSettings(const std::string& filepath,
                               AssetManager::ResolvedTextureImportSettings& settings)
 {
@@ -611,9 +554,7 @@ AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::Resol
         result.bytes.resize(static_cast<size_t>(result.width) * result.height * result.channels);
         std::memcpy(result.bytes.data(), raw, result.bytes.size());
         stbi_image_free(raw);
-        if (settings.generateMips) {
-            generateU8MipChain(result);
-        }
+        result.generateMipmaps = settings.generateMips;
         return result;
     }
 

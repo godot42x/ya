@@ -273,6 +273,7 @@ struct VulkanRender : public IRender
                                                     EImageUsage::T usage,
                                                     EImageCreateFlag::T flags = EImageCreateFlag::None,
                                                     ESampleCount::T samples = ESampleCount::Sample_1) const override;
+    bool                     supportsMipGeneration(EFormat::T format) const override;
 
   private:
     void terminate()

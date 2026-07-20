@@ -77,6 +77,10 @@ struct OpenGLRender : public IRender
 
     void allocateCommandBuffers(uint32_t count, std::vector<std::shared_ptr<ICommandBuffer>> &outBuffers) override;
     void waitIdle() override;
+    bool supportsMipGeneration(EFormat::T format) const override
+    {
+        return !EFormat::isBlockCompressed(format);
+    }
 
     ICommandBuffer       *beginIsolateCommands() override;
     void                  endIsolateCommands(ICommandBuffer *commandBuffer) override;

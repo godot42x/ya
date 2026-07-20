@@ -274,6 +274,16 @@ struct ICommandBuffer
      */
     virtual void reset() = 0;
 
+    virtual bool generateMipmaps(IImage* image,
+                                 EImageLayout::T baseLevelLayout,
+                                 EImageLayout::T finalLayout)
+    {
+        (void)image;
+        (void)baseLevelLayout;
+        (void)finalLayout;
+        return false;
+    }
+
     void retainResource(std::shared_ptr<void> resource)
     {
         if (resource) {

@@ -737,6 +737,79 @@ void VulkanCommandBuffer::copyImage(IImage*                       srcImage,
         vkRegions.data());
 }
 
+bool VulkanCommandBuffer::generateMipmaps(IImage* image,
+                                          EImageLayout::T baseLevelLayout,
+                                          EImageLayout::T finalLayout)
+{
+    if (!image) {
+        return false;
+    }
+    if (image->getMipLevels() <= 1) {
+        transitionImageLayout(image, baseLevelLayout, finalLayout, nullptr);
+        return true;
+    }
+    if (baseLevelLayout != EImageLayout::TransferDst || !_render->supportsMipGeneration(image->getFormat())) {
+        return false;
+    }
+
+    const auto vkImage = image->getHandle().as<VkImage>();
+    int32_t width       = static_cast<int32_t>(image->getWidth());
+    int32_t height      = static_cast<int32_t>(image->getHeight());
+    const uint32_t layerCount = image->getArrayLayers();
+
+    for (uint32_t mip = 1; mip < image->getMipLevels(); ++mip) {
+        const ImageSubresourceRange srcRange{
+            .aspectMask     = EImageAspect::Color,
+            .baseMipLevel   = mip - 1,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = layerCount,
+        };
+        transitionImageLayout(image, EImageLayout::TransferDst, EImageLayout::TransferSrc, &srcRange);
+
+        const int32_t nextWidth  = std::max(1, width / 2);
+        const int32_t nextHeight = std::max(1, height / 2);
+        const VkImageBlit blit{
+            .srcSubresource = {
+                .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+                .mipLevel       = mip - 1,
+                .baseArrayLayer = 0,
+                .layerCount     = layerCount,
+            },
+            .srcOffsets = {{0, 0, 0}, {width, height, 1}},
+            .dstSubresource = {
+                .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+                .mipLevel       = mip,
+                .baseArrayLayer = 0,
+                .layerCount     = layerCount,
+            },
+            .dstOffsets = {{0, 0, 0}, {nextWidth, nextHeight, 1}},
+        };
+        vkCmdBlitImage(_commandBuffer,
+                       vkImage,
+                       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                       vkImage,
+                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                       1,
+                       &blit,
+                       VK_FILTER_LINEAR);
+
+        transitionImageLayout(image, EImageLayout::TransferSrc, finalLayout, &srcRange);
+        width  = nextWidth;
+        height = nextHeight;
+    }
+
+    const ImageSubresourceRange lastMipRange{
+        .aspectMask     = EImageAspect::Color,
+        .baseMipLevel   = image->getMipLevels() - 1,
+        .levelCount     = 1,
+        .baseArrayLayer = 0,
+        .layerCount     = layerCount,
+    };
+    transitionImageLayout(image, EImageLayout::TransferDst, finalLayout, &lastMipRange);
+    return true;
+}
+
 void VulkanCommandBuffer::executeTransitionImageLayout(IImage* image, EImageLayout::T oldLayout, EImageLayout::T newLayout,
                                                        const ImageSubresourceRange* subresourceRange)
 {

@@ -109,6 +109,21 @@ bool VulkanRender::isTextureFormatSupported(EFormat::T format, EImageUsage::T us
     return false;
 }
 
+bool VulkanRender::supportsMipGeneration(EFormat::T format) const
+{
+    VkFormatProperties properties{};
+    vkGetPhysicalDeviceFormatProperties(m_PhysicalDevice, toVk(format), &properties);
+
+    constexpr VkFormatFeatureFlags required = VK_FORMAT_FEATURE_BLIT_SRC_BIT |
+                                               VK_FORMAT_FEATURE_BLIT_DST_BIT |
+                                               VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+    const auto usage = static_cast<EImageUsage::T>(EImageUsage::Sampled |
+                                                    EImageUsage::TransferSrc |
+                                                    EImageUsage::TransferDst);
+    return (properties.optimalTilingFeatures & required) == required &&
+           isImageFormatSupported(format, usage);
+}
+
 namespace
 {
 VkImageCreateFlags toVkImageCreateFlagsForSupportQuery(EImageCreateFlag::T flags)

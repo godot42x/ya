@@ -38,6 +38,7 @@ struct TextureMemoryView
     uint32_t    height    = 0;
     uint32_t    channels  = 4;
     uint32_t    mipLevels = 1;
+    bool        generateMipmaps = false;
     EFormat::T  format    = EFormat::R8G8B8A8_UNORM;
     const void* data      = nullptr;
     size_t      dataSize  = 0;
@@ -165,7 +166,13 @@ struct Texture
     static std::shared_ptr<Texture> createShared() { return ya::make_shared<Texture>(dummy{}); }
 
     // Internal initialization methods (called by factory)
-    void initFromData(const void* pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight, EFormat::T format, uint32_t mipLevels = 1);
+    void initFromData(const void* pixels,
+                      size_t dataSize,
+                      uint32_t texWidth,
+                      uint32_t texHeight,
+                      EFormat::T format,
+                      uint32_t mipLevels = 1,
+                      bool generateMipmaps = false);
     void initCubeMap(const CubeMapCreateInfo& ci);
     void initCubeMapFromMemory(const CubeMapMemoryCreateInfo& ci);
     void initFallbackTexture(const void* pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight);
