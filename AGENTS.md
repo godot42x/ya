@@ -1,22 +1,27 @@
 # AGENTS.md
 
-本文件只提供最小必要上下文。先读这里，按需进入 `./.agent/` 的具体资料，不要一次性加载全部 skills / memories。
+本文件只提供主入口所需的最小上下文。先读这里，再按需进入 `./.agent/`。不要因为“可能有用”就预读全部 skills / memories。
 
 ## Project
 
 YA Engine 是 C++20 游戏引擎，主渲染后端为 Vulkan，兼容 OpenGL；使用 EnTT ECS、ImGui 编辑器、Lua（sol2）和自定义反射系统。
 
-## Build / Run / Test
+## Main Commands
 
-构建系统只有 XMake，日常优先走 `make` 包装：
+构建系统只有 XMake；日常优先走 `make` 包装。
 
 ```bash
-make cfg                           # 配置三方依赖、debug、刷新 compile_commands.json
-make b t=HelloMaterial             # 构建目标
-make r t=HelloMaterial             # 构建并运行目标
-make test                          # 运行默认测试目标
-make test t=ya r_args="Suite.Test" # 运行单个 GoogleTest case
-make cfg m=profile                 # 配置 profile 模式，用于产出 speedscope CPU trace
+make cfg
+make r t=ya-runtime project=Example/HelloMaterial/HelloMaterial.yaproject
+make r t=ya-runtime editor=true project=Example/HelloMaterial/HelloMaterial.yaproject
+make package t=ya-runtime project=Example/HelloMaterial/HelloMaterial.yaproject
+make test t=ya r_args="Suite.Test"
+```
+
+兼容入口保留，但不是主路径：
+
+```bash
+make r t=HelloMaterial
 ```
 
 需要精细控制时再直接用 XMake：
@@ -25,36 +30,11 @@ make cfg m=profile                 # 配置 profile 模式，用于产出 speeds
 xmake l targets
 xmake b TargetName
 xmake run TargetName
-xmake project -k compile_commands
 xmake ya-shader
-xmake f -m profile -y              # 开启 profile 编译模式
+xmake project -k compile_commands
 ```
 
-## Profiling Quick Start
-
-- `automation` 只用于自动化/冒烟/离线跑批模式，不作为编辑器人工操作的统一配置入口。
-- 编辑器人工操作下的 profiling runtime 开关继续走 `Engine/Saved/Config/Editor.json`。
-- speedscope CPU trace 需要 `profile` 编译模式；当前 `xmake.lua` 会定义 `YA_PROFILING_CONDITIONAL`，非 `profile` 模式则定义 `YA_PROFILING_DISABLED`。
-- 自动化模式若需要 CPU trace、RenderDoc、screenshot 等，配置放到 `Engine/Saved/Config/Automation.json`，或继续用 `--automation-config=<path>` 指向专用 automation 文件。
-- 推荐命令：`make cfg m=profile`，然后 `make r t=HelloMaterial r_args="--exit-after-frame=300"`。
-- 若未指定输出路径，默认写到 `Engine/Saved/Automation/Profile/<session>-<timestamp>.cpu.speedscope.json`。
-- 查看更完整规则时，进入 `./.agent/skills/ya-build/SKILL.md`。
-
-要求：`xmake`、C++20 编译器、Vulkan SDK。
-
-## Repo Facts
-
-- `Engine/Source/Core/`：核心系统、数学、日志、反射、脚本
-- `Engine/Source/Render/`：渲染抽象层
-- `Engine/Source/Platform/Render/`：Vulkan / OpenGL 后端
-- `Engine/Source/ECS/`：EnTT ECS、组件、系统
-- `Engine/Source/Resource/`：AssetManager、HandlePool、ResourceDirtyQueue
-- `Engine/Source/Editor/`：ImGui 编辑器层
-- `Engine/Source/Runtime/App/`：应用入口与 RenderRuntime
-- `Engine/Source/Scene/`：场景图与节点层级
-- `Engine/Shader/`：Slang / GLSL 与生成头
-- `Example/`：可运行示例
-- `Test/`：GoogleTest
+更完整的构建、profiling、命令与排障规则，进入 `./.agent/skills/ya-build/SKILL.md`。
 
 ## Working Mode
 
@@ -68,9 +48,10 @@ xmake f -m profile -y              # 开启 profile 编译模式
 
 ## Skill Routing
 
-默认优先级：`ya-build > vscode > resource-system > material-flow > render-arch > cpp-style > code-reorganize > debug-review`
+默认优先级：`ya-build > profiling > vscode > resource-system > material-flow > render-arch > cpp-style > code-reorganize > debug-review`
 
 - 构建、目标、编译、shader 生成、测试：`./.agent/skills/ya-build/SKILL.md`
+- profiling、automation trace、性能冒烟：`./.agent/skills/profiling/SKILL.md`
 - VS Code、clangd、launch、tasks：`./.agent/skills/vscode/SKILL.md`
 - 资源加载、resolve、dirty queue、environment lighting：`./.agent/skills/resource-system/SKILL.md`
 - ECS -> material -> render consumer：`./.agent/skills/material-flow/SKILL.md`
@@ -83,34 +64,31 @@ xmake f -m profile -y              # 开启 profile 编译模式
 
 1. 只使用 XMake，不引入 CMake。
 2. 生成文件只读；修生成链，不手改 `Generated/*`。
-3. Shader-facing C++ 类型以 Slang/GLSL 生成头为单一事实源；不要手写 UBO / SSBO / push constant / indirect command 的镜像结构。
+3. Shader-facing C++ 类型以 Slang/GLSL 生成头为单一事实源；不要手写 UBO / SSBO / push constant / indirect command 镜像结构。
 4. 保持最小改动，不混入无关重构。
 5. 遵循现有抽象，不平行造新接口。
 6. 不在帧录制中途重建 GPU 资源；延迟到安全时机。
-7. 命令录制期引用到的 GPU 资源、image view、descriptor 数据必须至少活到 queue submit 完成；若后端在 submit/encode 阶段才消费它们，不能只保活到 `record` 或局部函数返回。
+7. 命令录制期引用到的 GPU 资源、image view、descriptor 数据必须至少活到 queue submit 完成。
 8. `Render2D` 使用左上角原点坐标系。
-9. 文件命名按类名或稳定职责，不用 `module.part.cpp` 这类命名。
-10. 目录按稳定职责分层；facade/owner 与 helper/importer 分开收敛。
-11. 日志只用 `YA_CORE_TRACE/DEBUG/INFO/WARN/ERROR/ASSERT`。
-12. 非明确要求时，不生成多余文档或显而易见的注释。
+9. 日志只用 `YA_CORE_TRACE/DEBUG/INFO/WARN/ERROR/ASSERT`。
 
-## Code Style
+## Repo Facts
 
-- 类型：`PascalCase`
-- 枚举：`E<Name>::T` 或 `enum class E<Name>`
-- 私有成员：`_camelCase`
-- 公有成员：`camelCase`
-- 函数 / 局部变量：`camelCase`
-- 常量：`UPPER_SNAKE_CASE`
-- 接口前缀：`I`
-- 数据类型前缀：`F`
-- 类中成员变量声明放在方法前面
+- `Engine/Source/Core/`：核心系统、日志、反射、脚本
+- `Engine/Source/Render/`：渲染抽象层
+- `Engine/Source/Platform/Render/`：Vulkan / OpenGL 后端
+- `Engine/Source/Runtime/App/`：应用入口与 RenderRuntime
+- `Engine/Source/Editor/`：编辑器层
+- `Engine/Shader/`：Slang / GLSL 与生成头
+- `Example/`：项目 / 示例
+- `Test/`：GoogleTest
 
 ## Documentation Policy
 
 - 稳定架构、长期工作流、可复用规则写到 `./.agent/skills/`
 - 历史故障、回归根因、项目坑点写到 `./.agent/memories/`
-- 完成任务后，如产生可复用经验，判断是否需要补充 memory 或更新相关 skill
+- 阶段性重构目标与进度写到 `./.agent/plan/`；该目录是阶段性工件，不默认代表当前主工作流
+- 顶层 `AGENTS.md` 只保留当前默认路径；兼容路径只做简短说明
 
 ## Git
 

@@ -13,18 +13,21 @@ description: YA Engine 的 XMake 构建、目标选择、shader 生成与测试�
 ## 核心规则
 
 1. 只使用 XMake；不要引入 CMake。
-2. 默认目标是 `ya`，示例目标在 `Example/` 下。
+2. 默认宿主目标是 `ya-runtime`；带项目运行时优先显式传 `project=...`，编辑器叠加 `editor=true`。
 3. shader 生成通过 `xmake ya-shader`，不要手改 `Engine/Shader/*/Generated/*`。
 4. 测试使用 GoogleTest 目标，不要自己发明另一套测试入口。
+5. `make r t=<Example>` 只保留兼容层；新入口优先回到 `ya-runtime + project=...`。
 
 ## 常用命令
 
 ### Makefile 包装（优先）
 
 ```bash
+make r t=ya-runtime project=Example/HelloMaterial/HelloMaterial.yaproject
+make r t=ya-runtime editor=true project=Example/HelloMaterial/HelloMaterial.yaproject
+make b t=ya-runtime project=Example/HelloMaterial/HelloMaterial.yaproject
+make package t=ya-runtime project=Example/HelloMaterial/HelloMaterial.yaproject
 make r t=HelloMaterial
-make b t=HelloMaterial
-make f=true r t=HelloMaterial
 make test t=ya r_args="Suite.Test"
 make cfg
 ```
@@ -41,105 +44,16 @@ xmake ya-shader
 xmake b ya-testing && xmake r ya-testing --gtest_filter=Suite.Test
 ```
 
-## Speedscope / CPU Profile
+## Profiling
 
-### 模式边界
-
-1. `automation` 只用于自动化 / 冒烟 / 离线跑批。
-2. 编辑器人工操作下的 profiling runtime 开关继续走 `Engine/Saved/Config/Editor.json`。
-3. 不要把 editor runtime profiling 配置和 automation 产物配置混为同一个入口。
-
-### 编译模式
-
-1. 产出 speedscope CPU trace 需要用 `profile` 构建模式。
-2. 推荐先执行 `make cfg m=profile`，再执行 `make r t=<Target> ...`。
-3. 若直接用 XMake，则使用 `xmake f -m profile -y`，然后 `xmake b` / `xmake run`。
-
-### 对应宏
-
-1. `xmake.lua` 在 `profile` 模式下定义 `YA_PROFILING_CONDITIONAL`。
-2. 非 `profile` 模式下定义 `YA_PROFILING_DISABLED`。
-3. `Core/Profiling/Profiling.h` 会把它们统一映射为兼容宏：
-
-```cpp
-YA_PROFILING_CONDITIONAL -> YA_PROFILE_CONDITIONAL / YA_PERF_CONDITIONAL
-YA_PROFILING_DISABLED    -> YA_PROFILE_DISABLED / YA_PERF_DISABLED
-```
-
-### 配置入口
-
-1. 编辑器人工操作：`Engine/Saved/Config/Editor.json`
-   这里控制 `profile.runtime.cpuTrace`、`profile.runtime.perfMetrics`、`profile.runtime.staticInit`。
-2. 自动化模式：`Engine/Saved/Config/Automation.json` 或 `--automation-config=<path>`
-   这里控制 `profile.cpu.enabled`、`profile.cpu.output`、`profile.sessionName`、`profile.gpu.renderdoc`、`screenshot.*`、`shadow.*`、`smoke.log.*`。
-3. 命令行参数仍可用，但在 automation 模式下它们只是本次运行的直接覆盖，不是长期配置入口。
-
-### 自动化模式最小配置
-
-```json
-{
-  "profile": {
-    "cpu": {
-      "enabled": true,
-      "output": "Engine/Saved/Automation/Profile/custom.cpu.speedscope.json"
-    },
-    "sessionName": "MySession",
-    "gpu": {
-      "renderdoc": false,
-      "outputDir": "Engine/Saved/RenderDoc"
-    }
-  },
-  "smoke": {
-    "log": {
-      "level": "warn",
-      "detailLevel": "error"
-    }
-  },
-  "automation": {
-    "exitAfterFrame": 300,
-    "screenshotWarmupFrames": 30,
-    "screenshotSettleFrames": 5
-  },
-  "startup": {
-    "scene": "Engine/Content/Scene/Test.scene"
-  },
-  "screenshot": {
-    "target": "viewport",
-    "output": "Engine/Saved/Screenshot/out.png"
-  }
-}
-```
-
-### 输出位置规则
-
-1. 若显式传 `--cpu-profile-output`，就直接写到该路径。
-2. 若 automation 配置里有 `profile.cpu.output`，且命令行没覆盖，则使用该路径。
-3. 若两者都没有：
-   默认目录是 `Engine/Saved/Automation/Profile/`
-   默认文件名是 `<sessionName>-<timestamp>.cpu.speedscope.json`
-4. 若同时启用了 RenderDoc automation，默认基础目录会优先跟随 `renderDocCaptureOutputDir`。
-5. 输出路径若不是 `.json`，代码会自动改成 `.json`。
-6. 目录不存在时会自动创建。
-
-### 最小可用命令
+- profiling、automation trace 与 speedscope 规则已独立到 `profiling` skill。
+- 若任务重点是 profile 模式、CPU trace、RenderDoc、automation 配置，转到 `./profiling/SKILL.md`。
+- 最小入口仍是：
 
 ```bash
 make cfg m=profile
-make r t=HelloMaterial r_args="--exit-after-frame=300 --log-level=warn --log-detail-level=error"
+make r t=ya-runtime project=Example/HelloMaterial/HelloMaterial.yaproject r_args="--exit-after-frame=300 --log-level=warn --log-detail-level=error"
 ```
-
-### 低噪音 smoke 建议
-
-1. 默认用 `--log-level=warn --log-detail-level=error` 跑 smoke。
-2. 若需要更多线索，优先升到 `info`，只在明确缺证据时再开 `debug/trace`。
-3. 查看日志时先 `rg` 过滤模块/关键词，再决定是否打开整段上下文。
-
-### 查看结果
-
-1. 程序退出后会在日志打印实际输出绝对路径。
-2. 可直接把 `.speedscope.json` 拖到 https://www.speedscope.app/。
-3. 也可以本地安装 CLI：`npm install -g speedscope`。
-4. 旧的 `make profile` 目标仍写死到 `./Engine/Saved/Profiling/App.speedscope.json`，和当前 automation 默认输出规则不一致，使用时需要自己确认文件路径。
 
 ## 何时用哪种入口
 
@@ -147,10 +61,11 @@ make r t=HelloMaterial r_args="--exit-after-frame=300 --log-level=warn --log-det
 2. 需要精确控制某个 xmake 子命令时，直接用 `xmake`。
 3. 需要刷新工作区构建配置时，用 `make cfg`。
 4. 需要重建 shader 头时，用 `xmake ya-shader`。
+5. 需要收集最小项目包时，用 `make package t=ya-runtime project=<path>`。
 
 ## 当前仓库锚点
 
-- `Makefile`：封装 `b / r / cfg / test`
+- `Makefile`：封装 `b / r / cfg / test / help`
 - `xmake.lua`：全局规则、`compile_commands.autoupdate`
 - `Xmake/task.lua`：`xmake cpcm`、`xmake vscode`
 - `Engine/Shader/Shader.xmake.lua`：shader 生成入口
@@ -162,14 +77,14 @@ make r t=HelloMaterial r_args="--exit-after-frame=300 --log-level=warn --log-det
 ### 1. 目标找不到
 
 1. 先运行 `xmake l targets` 确认目标名。
-2. 再确认目标是不是 example、主程序还是 `*-testing`。
+2. 再确认当前要跑的是 `ya-runtime + project=...`、legacy example shorthand，还是 `*-testing`。
 3. 若是 VS Code 启动项问题，再联动看 `vscode` skill。
 
 ### 2. 编译通过但运行入口不对
 
-1. 检查 `make r t=<target>` 或 `xmake run <target>` 的 target 是否正确。
-2. 确认 `launch.json` 中程序路径是否仍匹配当前输出目录。
-3. 若是示例程序，确认目标名是否来自 `Example/`。
+1. 优先检查是否应该使用 `make r t=ya-runtime project=<path>`。
+2. 若使用 legacy shorthand，确认 `Example/<Target>/<Target>.yaproject` 确实存在。
+3. 确认 `launch.json` 中程序路径是否仍匹配当前输出目录。
 
 ### 3. shader 相关报错
 
@@ -193,6 +108,7 @@ make r t=HelloMaterial r_args="--exit-after-frame=300 --log-level=warn --log-det
 ## 相关 skills
 
 - `vscode`：处理任务、launch 配置、compile_commands 与调试链路
+- `profiling`：profile 模式、automation trace、低噪音性能冒烟
 - `render-arch`：改到 shader、RenderRuntime、后端边界时一起看
 - `resource-system`：资源链路改动引起的编译或生成问题时一起看
 - `material-flow`：材质 shader / UBO 变更引起的构建问题时一起看

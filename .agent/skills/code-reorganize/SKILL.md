@@ -48,7 +48,7 @@ description: YA Engine 代码拆分与目录重组指南：按稳定职责整理
 2. 如果模块外部引用了旧路径，要一起修；不要只修当前目录内的 include。
 3. 新子目录落地后，确认 `xmake` 的源文件收集仍覆盖这些路径。
 4. 需要时运行 `make cfg` 或 `xmake project -k compile_commands` 刷新 clangd 与导航。
-5. 完成后至少执行一次构建验证，优先 `make b t=ya`。
+5. 完成后至少执行一次构建验证，优先 `make b t=ya-runtime`。
 
 ## 验证清单
 

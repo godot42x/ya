@@ -9,6 +9,8 @@
 ## 当前条目
 
 - `./animation_system_debug.md`：骨骼动画、shadow pass、root transform、shader define 相关历史问题
+- `./vulkan_submit_lifecycle_debug.md`：Vulkan / MoltenVK submit 期生命周期与 keepalive 排查
+- `./ibl_visual_regression_baseline.md`：IBL / environment lighting 视觉回归的固定观察基线
 
 ## 边界
 

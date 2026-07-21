@@ -4,14 +4,15 @@
 
 ## 推荐顺序
 
-`ya-build` > `vscode` > `resource-system` > `material-flow` > `render-arch` > `cpp-style` > `code-reorganize` > `debug-review`
+`ya-build` > `profiling` > `vscode` > `resource-system` > `material-flow` > `render-arch` > `cpp-style` > `code-reorganize` > `debug-review`
 
-若问题描述本身不清晰，先读 `soul`，澄清后再切到主 skill。
+若问题描述不清晰，先读 `soul`，澄清后再切到主 skill。
 
-## 技能索引
+## 索引
 
 - `soul`：需求不清晰、方向未收敛时先做澄清
 - `ya-build`：XMake 构建、目标、shader 生成、测试
+- `profiling`：profile 模式、automation trace、低噪音性能冒烟
 - `vscode`：VS Code 任务、调试、clangd、compile_commands
 - `resource-system`：AssetManager、resolve、dirty queue、environment lighting
 - `material-flow`：ECS 到 runtime material 到 render consumer 的数据流
@@ -20,14 +21,8 @@
 - `code-reorganize`：文件拆分、目录重组、include 修复
 - `debug-review`：崩溃排查、diff 自检、review 风险
 
-## 路径
+## 维护规则
 
-- `./soul/SKILL.md`
-- `./ya-build/SKILL.md`
-- `./vscode/SKILL.md`
-- `./resource-system/SKILL.md`
-- `./material-flow/SKILL.md`
-- `./render-arch/SKILL.md`
-- `./cpp-style/SKILL.md`
-- `./code-reorganize/SKILL.md`
-- `./debug-review/SKILL.md`
+- 一个任务默认只进入一个主 skill。
+- 通用稳定规则继续往 skill 收敛，不要回流到顶层 `AGENTS.md`。
+- 已不再是默认路径的内容，不要继续堆在 skill 开头。

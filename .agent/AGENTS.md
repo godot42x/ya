@@ -1,36 +1,35 @@
 # Agent Workspace
 
-先读本文件，再按任务需要进入更具体的资料。默认不要一次性加载全部内容。
+先读仓库根 `AGENTS.md`，这里只负责二级路由。默认不要一次性加载全部内容。
 
 ## 入口原则
 
-- 保持主入口克制，只拿完成当前任务所需的最小上下文。
-- 先看仓库根 `AGENTS.md` 获取项目事实、构建命令、总规则。
-- 若任务已明确，直接跳到对应 `skill`；若任务不明确，先看 `soul`。
-- `memory` 只在遇到历史坑、回归问题、相似故障时再读。
-- `agents` 是特定角色说明；只有确实需要该工作模式时才打开。
-- `prompts` 是模板资产，不属于默认上下文。
+- 任务明确：直接进入对应单个 skill。
+- 任务不明确：先读 `./skills/soul/SKILL.md` 做澄清。
+- 只有遇到历史坑、回归、相似故障时，才读 `./memories/*.md`。
+- `agents/` 是特定工作模式说明；只有确实需要时才打开。
+- `prompts/` 是模板资产，不属于默认上下文。
+- `misc/` 不是规范来源。
 
 ## 目录
 
-- `./skills/AGENTS.md`：技能索引与选择顺序
-- `./memories/AGENTS.md`：历史经验索引
+- `./skills/AGENTS.md`：skill 索引
+- `./memories/AGENTS.md`：memory 索引
 - `./agents/AGENTS.md`：可选代理角色索引
 - `./prompts/AGENTS.md`：提示模板索引
-- `./plan/`：长任务计划工件
-- `./misc/`：临时分析资料，不视为规范来源
+- `./plan/`：阶段性计划与进度，先读 `./plan/AGENTS.md`
+- `./misc/`：临时分析资料
 
-## 选择顺序
+## 默认路由
 
-1. 判断任务是否清晰；不清晰先读 `./skills/soul/SKILL.md`。
-2. 若是构建、运行、编译、target、shader 生成问题，读 `./skills/ya-build/SKILL.md`。
-3. 若是 VS Code / clangd / launch / tasks，读 `./skills/vscode/SKILL.md`。
-4. 若是资源、材质、渲染、代码组织等专项问题，只进入对应单个 skill。
-5. 只有当当前问题明显和过去故障相似时，才补充读取 `./memories/*.md`。
+1. 构建、运行、测试、target、shader 生成：`./skills/ya-build/SKILL.md`
+2. VS Code / clangd / launch / tasks：`./skills/vscode/SKILL.md`
+3. 资源、材质、渲染、代码组织等专项问题：只进入对应单个 skill
+4. 历史坑与回归：按需补充 memory
 
-## 约束
+## 维护规则
 
-- 不把 `misc/` 内容当成正式规范。
-- 不因为“可能有用”就预读全部 skills 或 memories。
-- Shader-facing C++ 类型必须消费 Slang/GLSL 生成头，不能手写 shader layout 镜像结构。
-- 修改架构或长期约定后，优先更新 skill；一次性故障结论优先更新 memory。
+- 稳定规则优先写 skill。
+- 历史坑优先写 memory。
+- 阶段性状态优先写 plan。
+- 若某条信息不是“当前默认路径”，不要留在顶层入口。

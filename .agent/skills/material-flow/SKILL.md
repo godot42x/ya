@@ -25,7 +25,7 @@ description: YA Engine ECS 到材质系统到渲染管线的数据流整理与�
 3. `TextureSlot` 持有 authoring 语义：path、enable、uv。
 4. `TextureView` 只表示运行时 resolved view，不承载 authoring 真相。
 5. `EMaterialResolveState` / `EAssetResolveState` 只表达 resolve 生命周期，不表达 param dirty 或 resource upload dirty。
-6. 材质上传脏位采用 `paramVersion/resourceVersion` + 每个 consumer 的 last uploaded version，不再依赖全局 dirty 被某一路消费后清空。
+6. 资源 resolve、缓存、版本推进的底层细节交给 `resource-system`；这里重点只看 authoring -> runtime material -> pipeline 的职责边界。
 
 ## 系统边界
 
@@ -53,6 +53,7 @@ description: YA Engine ECS 到材质系统到渲染管线的数据流整理与�
 
 - 只读取 runtime `PhongMaterial`
 - 不直接回读 `PhongMaterialComponent` 内部 slot / params
+- descriptor 刷新、consumer uploaded version 等资源上传细节交给 `resource-system`
 
 ## Editor 修改链路
 
@@ -105,9 +106,9 @@ description: YA Engine ECS 到材质系统到渲染管线的数据流整理与�
 
 1. editor 修改是否真的生成了稳定 raw field path
 2. component 是否识别该路径并进入正确分类分支
-3. runtime material 的 param/resource version 是否递增
-4. MaterialDescPool 对应 consumer 是否检测到版本变化并重新上传
-5. shader 是否实际读取了对应 runtime param / texture binding
+3. component 是否真的把 authoring 数据同步进 runtime material
+4. pipeline 是否仍只从 runtime material 读取
+5. 若已经落到 version / descriptor / 上传层，再转去 `resource-system`
 
 ## 退出条件
 

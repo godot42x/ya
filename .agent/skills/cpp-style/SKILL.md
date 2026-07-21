@@ -107,7 +107,7 @@ description: YA Engine C++ 编码约定、生命周期规则与热路径风格�
 - `resource-system`：改 resolve 状态机、runtime state、资源生命周期时一起看
 - `material-flow`：改材质组件 / runtime material 分层时一起看
 - `debug-review`：做提交前风格与风险复盘时一起看
-- `code-reorganize`：当风格问题已经演变成文件拆分、目录收敛或职责重组问题时一起看
+- `code-reorganize`：当问题已经演变成文件拆分、目录收敛或职责重组时切过去，不在这里展开物理重组细节
 - `ya-build`：改动引起编译错误或需要验证构建约束时一起看
 
 ## 变更约束
@@ -115,9 +115,7 @@ description: YA Engine C++ 编码约定、生命周期规则与热路径风格�
 1. 只做最小必要改动，不顺手做无关重构。
 2. 注释克制，不补显而易见的说明。
 3. 生成文件不直接改；若问题来自 shader 头或脚本生成物，回到生成链修。
-4. 单个 `.cpp` / `.h` 文件尽量不要超过 1000 行；超过时优先按功能块、helper、pipeline 等稳定职责拆分，而不是继续堆在一个文件里
-5. 文件命名按类名或稳定职责收敛；避免 `module.part.h` / `module.part.cpp` 这种分段命名，优先 `AssetTextureManager.h`、`AssetModelManager.cpp`、`AssetTextureImport.cpp` 这类名字
-6. 目录结构也按功能与层级收敛；例如 facade/owner、专属导入逻辑、内部 helper 应放在稳定子目录中，而不是长期平铺在同一目录
+4. 文件、目录、命名层面的物理重组问题转给 `code-reorganize`；这里只保留“何时应该重组”的判断，不展开具体拆法
 
 ## 退出条件
 
