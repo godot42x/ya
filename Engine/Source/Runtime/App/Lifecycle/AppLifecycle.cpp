@@ -33,8 +33,13 @@
 
 #include <array>
 #include <csignal>
+#include <cstdlib>
 #include <filesystem>
 #include <utility>
+
+#if defined(__APPLE__)
+    #include <mach-o/dyld.h>
+#endif
 
 #if defined(_WIN32)
     #include <windows.h>
@@ -44,6 +49,65 @@ namespace ya
 {
 namespace
 {
+#if defined(__APPLE__)
+std::filesystem::path getExecutableDir()
+{
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    std::string buffer(size, '\0');
+    if (_NSGetExecutablePath(buffer.data(), &size) != 0) {
+        return {};
+    }
+    return std::filesystem::weakly_canonical(std::filesystem::path(buffer.c_str())).parent_path();
+}
+
+void configureBundledVulkanRuntimeEnv()
+{
+    if (std::getenv("VK_ICD_FILENAMES") != nullptr) {
+        return;
+    }
+
+    const auto executableDir = getExecutableDir();
+    if (executableDir.empty()) {
+        return;
+    }
+
+    const auto sdkRoot = executableDir / "Engine" / "ThirdParty" / "VulkanSDK";
+    if (!std::filesystem::is_directory(sdkRoot)) {
+        return;
+    }
+
+    std::filesystem::path selectedSdkDir;
+    for (const auto& entry : std::filesystem::directory_iterator(sdkRoot)) {
+        if (!entry.is_directory()) {
+            continue;
+        }
+        const auto sdkDir   = entry.path() / "macOS";
+        const auto icdJson  = sdkDir / "share" / "vulkan" / "icd.d" / "MoltenVK_icd.json";
+        const auto layerDir = sdkDir / "share" / "vulkan" / "explicit_layer.d";
+        const auto moltenVk = sdkDir / "lib" / "libMoltenVK.dylib";
+        if (std::filesystem::is_regular_file(icdJson) && std::filesystem::is_regular_file(moltenVk) &&
+            std::filesystem::is_directory(layerDir)) {
+            if (selectedSdkDir.empty() || entry.path().filename().string() > selectedSdkDir.parent_path().filename().string()) {
+                selectedSdkDir = sdkDir;
+            }
+        }
+    }
+
+    if (selectedSdkDir.empty()) {
+        return;
+    }
+
+    const auto icdJson  = selectedSdkDir / "share" / "vulkan" / "icd.d" / "MoltenVK_icd.json";
+    const auto layerDir = selectedSdkDir / "share" / "vulkan" / "explicit_layer.d";
+    const auto sdkPath  = selectedSdkDir.string();
+
+    setenv("VULKAN_SDK", sdkPath.c_str(), 0);
+    setenv("VK_ICD_FILENAMES", icdJson.string().c_str(), 0);
+    setenv("VK_LAYER_PATH", layerDir.string().c_str(), 0);
+}
+#endif
+
 std::string findRuntimeDefaultFontPath()
 {
     static constexpr std::array<const char*, 11> fontCandidates = {
@@ -157,6 +221,9 @@ void AppLifecycle::init(App& app, AppDesc ci)
     App::_instance = &app;
 
     handleSystemSignals(app);
+#if defined(__APPLE__)
+    configureBundledVulkanRuntimeEnv();
+#endif
     {
         YA_PROFILE_SCOPE_LOG("Init Config");
 
@@ -166,6 +233,9 @@ void AppLifecycle::init(App& app, AppDesc ci)
         }
 
         VirtualFileSystem::init();
+        if (app._ci.projectRoot) {
+            VirtualFileSystem::get()->setGameRoot(*app._ci.projectRoot);
+        }
         ConfigManager::get().init();
         ConfigManager::get().openDocument(
             "engine",
@@ -183,7 +253,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
             });
         profiling::StaticInitProfiler::ensureStarted();
         profiling::StaticInitProfiler::refOBJ();
-        app.configureExtensions();
+        app.configureModules();
         profiling::StaticInitProfiler::recordEnd();
 
         AppAutomation::loadConfig(app._ci);
@@ -263,8 +333,8 @@ void AppLifecycle::init(App& app, AppDesc ci)
         app._systems.clear();
         app._resourceResolveSystem = nullptr; });
 
-    app.attachExtensions();
-    app._deleter.push("AppExtensions", [&app](void*) { app.detachExtensions(); });
+    app.attachModules();
+    app._deleter.push("Modules", [&app](void*) { app.detachModules(); });
 
     app._luaScriptingSystem = new LuaScriptingSystem();
     app._luaScriptingSystem->init();
@@ -451,7 +521,7 @@ void AppLifecycle::onSceneInit(App& app, Scene* scene)
 
 void AppLifecycle::onSceneDestroy(App& app, Scene* scene)
 {
-    app.notifyExtensionsSceneDestroyed(scene);
+    app.notifyModulesSceneDestroyed(scene);
 
     for (auto& frameData : app._renderFrameDataPerFlight) {
         frameData.clear();
@@ -465,7 +535,7 @@ void AppLifecycle::onSceneDestroy(App& app, Scene* scene)
 
 void AppLifecycle::onSceneActivated(App& app, Scene* scene)
 {
-    app.notifyExtensionsSceneActivated(scene);
+    app.notifyModulesSceneActivated(scene);
 }
 
 void AppLifecycle::onEnterRuntime(App& app)
@@ -485,14 +555,14 @@ void AppLifecycle::startRuntime(App& app)
         YA_CORE_ERROR("Cannot start runtime without an active scene");
         return;
     }
-    if (!app.notifyExtensionsBeforeAppStateChange(AppState::Runtime)) {
-        YA_CORE_WARN("Runtime start was rejected by an app extension");
+    if (!app.notifyModulesBeforeAppStateChange(AppState::Runtime)) {
+        YA_CORE_WARN("Runtime start was rejected by an app module");
         return;
     }
 
     const AppState previousState = app._appState;
     app._appState = AppState::Runtime;
-    app.notifyExtensionsAfterAppStateChange(previousState);
+    app.notifyModulesAfterAppStateChange(previousState);
 
     app.onEnterRuntime();
 }
@@ -509,14 +579,14 @@ void AppLifecycle::startSimulation(App& app)
         YA_CORE_ERROR("Cannot start simulation without an active scene");
         return;
     }
-    if (!app.notifyExtensionsBeforeAppStateChange(AppState::Simulation)) {
-        YA_CORE_WARN("Simulation start was rejected by an app extension");
+    if (!app.notifyModulesBeforeAppStateChange(AppState::Simulation)) {
+        YA_CORE_WARN("Simulation start was rejected by an app module");
         return;
     }
 
     const AppState previousState = app._appState;
     app._appState = AppState::Simulation;
-    app.notifyExtensionsAfterAppStateChange(previousState);
+    app.notifyModulesAfterAppStateChange(previousState);
 
     app.onEnterSimulation();
 }
@@ -532,13 +602,13 @@ void AppLifecycle::stopRuntime(App& app)
     if (auto* render = app.getRender()) {
         render->waitIdle();
     }
-    if (!app.notifyExtensionsBeforeAppStateChange(AppState::Stopped)) {
-        YA_CORE_WARN("Runtime stop was rejected by an app extension");
+    if (!app.notifyModulesBeforeAppStateChange(AppState::Stopped)) {
+        YA_CORE_WARN("Runtime stop was rejected by an app module");
         return;
     }
     const AppState previousState = app._appState;
     app._appState = AppState::Stopped;
-    app.notifyExtensionsAfterAppStateChange(previousState);
+    app.notifyModulesAfterAppStateChange(previousState);
     if (app._luaScriptingSystem) {
         app._luaScriptingSystem->onStop();
     }
@@ -555,13 +625,13 @@ void AppLifecycle::stopSimulation(App& app)
     if (auto* render = app.getRender()) {
         render->waitIdle();
     }
-    if (!app.notifyExtensionsBeforeAppStateChange(AppState::Stopped)) {
-        YA_CORE_WARN("Simulation stop was rejected by an app extension");
+    if (!app.notifyModulesBeforeAppStateChange(AppState::Stopped)) {
+        YA_CORE_WARN("Simulation stop was rejected by an app module");
         return;
     }
     const AppState previousState = app._appState;
     app._appState = AppState::Stopped;
-    app.notifyExtensionsAfterAppStateChange(previousState);
+    app.notifyModulesAfterAppStateChange(previousState);
 
     app.onExitSimulation();
 }

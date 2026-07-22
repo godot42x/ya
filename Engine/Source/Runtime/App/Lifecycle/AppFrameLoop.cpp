@@ -242,7 +242,7 @@ void AppFrameLoop::tickLogic(App& app, float dt)
         watcher->poll();
     }
 
-    app.tickExtensions(dt);
+    app.tickModules(dt);
     {
         YA_PROFILE_SCOPE("Logic/InputPostUpdate");
         app.inputManager.postUpdate();
@@ -462,7 +462,7 @@ void AppFrameLoop::tickRender(App& app, float dt)
         return;
     }
 
-    app.prepareExtensionsForRender(dt);
+    app.prepareModulesForRender(dt);
     {
         YA_PROFILE_SCOPE("Render/PrepareRenderFrameState");
         prepareRenderFrameState(app, dt);
@@ -539,13 +539,13 @@ void AppFrameLoop::tickRender(App& app, float dt)
         .recordBeforePresentationExtensions = [&app, dt](ICommandBuffer* commandBuffer)
         {
             if (commandBuffer) {
-                app.recordExtensionBeforePresentation(*commandBuffer, dt);
+                app.recordModuleBeforePresentation(*commandBuffer, dt);
             }
         },
         .recordPresentationExtensions = [&app, dt](ICommandBuffer* commandBuffer)
         {
             if (commandBuffer) {
-                app.recordExtensionPresentation(*commandBuffer, dt);
+                app.recordModulePresentation(*commandBuffer, dt);
             }
         },
         .pipeline = pipelineFrame,

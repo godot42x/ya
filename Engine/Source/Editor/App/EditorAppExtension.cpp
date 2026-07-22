@@ -231,9 +231,14 @@ class EditorViewportCompositor
     std::shared_ptr<IImageView>  _sourceViewportImageView = nullptr;
 };
 
-class EditorAppExtension final : public IAppExtension
+class EditorAppExtension final : public IModule
 {
   public:
+    bool onLoad(FModuleContext&) override { return true; }
+    bool onStart(const FEngineContext&) override { return true; }
+    void onStop() override {}
+    void onUnload() override {}
+
     void onConfigure(App& app, AppDesc& desc) override
     {
         ConfigManager::get().openDocument("editor", "Engine/Saved/Config/Editor.json");
@@ -412,7 +417,7 @@ class EditorAppExtension final : public IAppExtension
 
 } // namespace
 
-std::unique_ptr<IAppExtension> createEditorAppExtension()
+std::unique_ptr<IModule> createEditorModule()
 {
     return std::make_unique<EditorAppExtension>();
 }

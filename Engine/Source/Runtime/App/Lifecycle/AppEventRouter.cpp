@@ -23,7 +23,7 @@ int AppEventRouter::onEvent(App& app, const Event& event)
     YA_PROFILE_FUNCTION()
     YA_PERF_SCOPE(perf::sample::appEventRoute(), perf::metric::cpuTimeMs(), perf::domain::game());
 
-    if (app.dispatchExtensionEvent(event)) {
+    if (app.dispatchModuleEvent(event)) {
         return 0;
     }
 

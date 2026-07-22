@@ -391,17 +391,19 @@ void RenderRuntime::shutdownActivePipeline()
 
 void RenderRuntime::applyPendingRenderPipelineSwitch()
 {
-    if (_pendingRenderPipeline == _renderPipeline) {
+    if (_pendingRenderPipeline == _renderPipeline && !_pendingActivePipelineReload) {
         return;
     }
     YA_PROFILE_FUNCTION_LOG();
 
-    YA_CORE_INFO("Switching render pipeline: {} -> {}",
+    YA_CORE_INFO("{} render pipeline: {} -> {}",
+                 _pendingActivePipelineReload ? "Reloading" : "Switching",
                  _renderPipeline == ERenderPipeline::Forward ? "Forward" : "Deferred",
                  _pendingRenderPipeline == ERenderPipeline::Forward ? "Forward" : "Deferred");
 
     shutdownActivePipeline();
     _renderPipeline = _pendingRenderPipeline;
+    _pendingActivePipelineReload = false;
     initActivePipeline();
 
     if (_viewportRect.extent.x > 0 && _viewportRect.extent.y > 0) {

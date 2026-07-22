@@ -13,7 +13,7 @@ struct FPSControl
     static constexpr float defaultFps = 60.f;
 
     float fpsLimit = defaultFps;
-    float wantedDT = 1.f / defaultFps;
+    float remainSec = 1.f / defaultFps;
 
     static FPSControl *get();
 
@@ -23,9 +23,10 @@ struct FPSControl
             return 0;
         }
 
-        if (dt < wantedDT)
+        // TODO: sleep is not so accurate, could be sleep small duration for n times more accurately
+        if (dt < remainSec)
         {
-            float delayTimeSec = wantedDT - dt;
+            float delayTimeSec = remainSec - dt;
             // YA_CORE_INFO("FPS limit exceeded. Delaying for {} ms", delayTime);
             SDL_Delay(static_cast<Uint32>(delayTimeSec * 1000));
             return delayTimeSec;
@@ -37,7 +38,7 @@ struct FPSControl
     void setFPSLimit(float limit)
     {
         fpsLimit = limit;
-        wantedDT = 1.f / fpsLimit;
+        remainSec = 1.f / fpsLimit;
     }
 };
 

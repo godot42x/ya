@@ -13,113 +13,120 @@ ClearValue depthClearValue = ClearValue(1.0f, 0);
 
 App::~App() = default;
 
-void App::addExtension(std::unique_ptr<IAppExtension> extension)
+void App::addModule(std::unique_ptr<IModule> module)
 {
-    YA_CORE_ASSERT(extension, "Cannot register a null app extension");
-    YA_CORE_ASSERT(!_extensionsAttached, "App extensions must be registered before App::init");
-    _extensions.push_back(std::move(extension));
+    YA_CORE_ASSERT(module, "Cannot register a null module");
+    YA_CORE_ASSERT(!_modulesAttached, "Modules must be registered before App::init");
+    IModule* instance = module.get();
+    _modules.push_back({.owned = std::move(module), .module = instance});
 }
 
-void App::configureExtensions()
+void App::addModule(IModule& module)
 {
-    for (const auto& extension : _extensions) {
-        extension->onConfigure(*this, _ci);
+    YA_CORE_ASSERT(!_modulesAttached, "Modules must be registered before App::init");
+    _modules.push_back({.module = &module});
+}
+
+void App::configureModules()
+{
+    for (const auto& slot : _modules) {
+        slot.module->onConfigure(*this, _ci);
     }
 }
 
-void App::attachExtensions()
+void App::attachModules()
 {
-    YA_CORE_ASSERT(!_extensionsAttached, "App extensions are already attached");
-    for (const auto& extension : _extensions) {
-        extension->onAttach(*this);
+    YA_CORE_ASSERT(!_modulesAttached, "Modules are already attached");
+    for (const auto& slot : _modules) {
+        slot.module->onAttach(*this);
     }
-    _extensionsAttached = true;
+    _modulesAttached = true;
 }
 
-void App::detachExtensions()
+void App::detachModules()
 {
-    if (!_extensionsAttached) {
+    if (!_modulesAttached) {
         return;
     }
-    for (auto it = _extensions.rbegin(); it != _extensions.rend(); ++it) {
-        (*it)->onDetach(*this);
+    for (auto it = _modules.rbegin(); it != _modules.rend(); ++it) {
+        it->module->onDetach(*this);
     }
-    _extensionsAttached = false;
+    _modulesAttached = false;
 }
 
 void App::dispatchNativeEvent(const SDL_Event& event)
 {
-    for (const auto& extension : _extensions) {
-        extension->onNativeEvent(*this, event);
+    for (const auto& slot : _modules) {
+        slot.module->onNativeEvent(*this, event);
     }
 }
 
-bool App::dispatchExtensionEvent(const Event& event)
+bool App::dispatchModuleEvent(const Event& event)
 {
-    for (const auto& extension : _extensions) {
-        if (extension->onEvent(*this, event)) {
+    for (const auto& slot : _modules) {
+        if (slot.module->onEvent(*this, event)) {
             return true;
         }
     }
     return false;
 }
 
-void App::tickExtensions(float dt)
+void App::tickModules(float dt)
 {
-    for (const auto& extension : _extensions) {
-        extension->onLogic(*this, dt);
+    for (const auto& slot : _modules) {
+        slot.module->onLogic(*this, dt);
     }
 }
 
-void App::prepareExtensionsForRender(float dt)
+void App::prepareModulesForRender(float dt)
 {
-    for (const auto& extension : _extensions) {
-        extension->onBeforeRender(*this, dt);
+    for (const auto& slot : _modules) {
+        slot.module->onBeforeRender(*this, dt);
     }
 }
 
-void App::recordExtensionBeforePresentation(ICommandBuffer& commandBuffer, float dt)
+void App::recordModuleBeforePresentation(ICommandBuffer& commandBuffer, float dt)
 {
-    for (const auto& extension : _extensions) {
-        extension->onBeforePresentation(*this, commandBuffer, dt);
+    for (const auto& slot : _modules) {
+        slot.module->onBeforePresentation(*this, commandBuffer, dt);
     }
 }
 
-void App::recordExtensionPresentation(ICommandBuffer& commandBuffer, float dt)
+void App::recordModulePresentation(ICommandBuffer& commandBuffer, float dt)
 {
-    for (const auto& extension : _extensions) {
-        extension->onPresentation(*this, commandBuffer, dt);
+    for (const auto& slot : _modules) {
+        slot.module->onPresentation(*this, commandBuffer, dt);
     }
 }
 
-bool App::notifyExtensionsBeforeAppStateChange(AppState nextState)
+bool App::notifyModulesBeforeAppStateChange(AppState nextState)
 {
-    for (const auto& extension : _extensions) {
-        if (!extension->onBeforeAppStateChange(*this, _appState, nextState)) {
+    for (const auto& slot : _modules) {
+        if (!slot.module->onBeforeAppStateChange(*this, _appState, nextState)) {
             return false;
         }
     }
     return true;
 }
 
-void App::notifyExtensionsAfterAppStateChange(AppState previousState)
+void App::notifyModulesAfterAppStateChange(AppState previousState)
 {
-    for (const auto& extension : _extensions) {
-        extension->onAfterAppStateChange(*this, previousState, _appState);
+    for (const auto& slot : _modules) {
+        slot.module->onAfterAppStateChange(*this, previousState, _appState);
     }
 }
 
-void App::notifyExtensionsSceneActivated(Scene* scene)
+void App::notifyModulesSceneActivated(Scene* scene)
 {
-    for (const auto& extension : _extensions) {
-        extension->onSceneActivated(*this, scene);
+    for (const auto& slot : _modules) {
+        slot.module->onSceneActivated(*this, scene);
     }
 }
 
-void App::notifyExtensionsSceneDestroyed(Scene* scene)
+void App::notifyModulesSceneDestroyed(Scene* scene)
 {
-    for (const auto& extension : _extensions) {
-        extension->onSceneDestroyed(*this, scene);
+    for (const auto& slot : _modules) {
+        slot.module->onSceneDestroyed(*this, scene);
     }
 }
 

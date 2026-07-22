@@ -619,8 +619,8 @@ RGCompiledGraph RenderGraph::compile() const
         });
     };
 
-    for (const auto& pass : _passes) {
-        for (const auto dependency : pass.dependencies) {
+    for (const RGPass& pass : _passes) {
+        for (const RGHandle<RGPassHandleTag> dependency : pass.dependencies) {
             if (!getPass(dependency)) {
                 addIssue(RGCompileIssue::EKind::InvalidResource, pass.handle,
                          std::format("pass {} depends on invalid pass handle", pass.name));

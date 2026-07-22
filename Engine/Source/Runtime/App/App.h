@@ -2,10 +2,10 @@
 #include "Core/Base.h"
 #include "Core/Input/InputManager.h"
 #include "Core/MessageBus.h"
+#include "Core/Module/Module.h"
 #include "Core/System/System.h"
 
 #include "Runtime/App/AppState.h"
-#include "Runtime/App/IAppExtension.h"
 #include "Runtime/App/Lifecycle/AppAutomation.h"
 #include "Runtime/App/Common/PostProcessingState.h"
 #include "Runtime/App/RenderRuntime.h"
@@ -50,7 +50,7 @@ class ResourceResolveSystem;
 class AppLifecycle;
 class AppFrameLoop;
 class AppEventRouter;
-class AppExtensionTestAccess;
+class AppModuleTestAccess;
 
 enum AppMode : int
 {
@@ -279,6 +279,9 @@ struct AppDesc
     AppAutomationOptions automation;
 
     std::optional<std::string> defaultScenePath;
+    std::optional<std::string> projectPath;
+    std::optional<std::string> projectRoot;
+    bool                       bEditor = false;
 
     bool                     bEnableRenderDoc            = false;
     bool                     bRenderDocOutputOverridden  = false;
@@ -297,6 +300,9 @@ struct AppDesc
             .opt<uint64_t>("", {"exit-after-frame"}, "Quit gracefully after rendering N frames", "0")
             .opt<std::string>("", {"automation-config"}, "Automation override settings file path")
             .opt<std::string>("", {"scene"}, "Startup scene path override")
+            .opt<std::string>("", {"project"}, "Project descriptor path")
+            .opt<std::string>("", {"ya-project"}, "Project descriptor path (XMake-safe alias)")
+            .opt<bool>("", {"editor"}, "Enable the Editor module", "false")
             .opt<std::string>("", {"screenshot"}, "Automation screenshot output PNG path")
             .opt<std::string>("", {"screenshot-target"}, "Automation screenshot target: viewport or presentation")
             .opt<uint64_t>("", {"screenshot-frame"}, "Earliest frame index allowed to request automation screenshot", "0")
@@ -347,6 +353,13 @@ struct AppDesc
         if (std::string scenePath; params.tryGet<std::string>("scene", scenePath)) {
             automation.scenePath = std::move(scenePath);
         }
+        if (std::string project; params.tryGet<std::string>("project", project)) {
+            projectPath = std::move(project);
+        }
+        if (std::string project; params.tryGet<std::string>("ya-project", project)) {
+            projectPath = std::move(project);
+        }
+        params.tryGet<bool>("editor", bEditor);
         if (std::string screenshotPath; params.tryGet<std::string>("screenshot", screenshotPath)) {
             automation.screenshotPath = std::move(screenshotPath);
         }
@@ -448,7 +461,7 @@ struct App
     friend class AppLifecycle;
     friend class AppFrameLoop;
     friend class AppEventRouter;
-    friend class AppExtensionTestAccess;
+    friend class AppModuleTestAccess;
 
     struct RenderFrameState
     {
@@ -513,8 +526,14 @@ struct App
     std::array<RenderFrameData, MAX_FLIGHTS_IN_FLIGHT> _renderFrameDataPerFlight{};
 
 
-    std::vector<std::unique_ptr<IAppExtension>> _extensions;
-    bool                                        _extensionsAttached = false;
+    struct FModuleSlot
+    {
+        std::unique_ptr<IModule> owned;
+        IModule*                  module = nullptr;
+    };
+
+    std::vector<FModuleSlot> _modules;
+    bool                     _modulesAttached = false;
 
 
     LuaScriptingSystem* _luaScriptingSystem;
@@ -541,7 +560,8 @@ struct App
         }
         return 0;
     }
-    void addExtension(std::unique_ptr<IAppExtension> extension);
+    void addModule(std::unique_ptr<IModule> module);
+    void addModule(IModule& module);
 
     void requestQuit()
     {
@@ -643,19 +663,19 @@ struct App
     virtual void onSimulationResumed() {}
 
   private:
-    void attachExtensions();
-    void detachExtensions();
-    void configureExtensions();
+    void attachModules();
+    void detachModules();
+    void configureModules();
     void dispatchNativeEvent(const SDL_Event& event);
-    [[nodiscard]] bool dispatchExtensionEvent(const Event& event);
-    void tickExtensions(float dt);
-    void prepareExtensionsForRender(float dt);
-    void recordExtensionBeforePresentation(ICommandBuffer& commandBuffer, float dt);
-    void recordExtensionPresentation(ICommandBuffer& commandBuffer, float dt);
-    [[nodiscard]] bool notifyExtensionsBeforeAppStateChange(AppState nextState);
-    void notifyExtensionsAfterAppStateChange(AppState previousState);
-    void notifyExtensionsSceneActivated(Scene* scene);
-    void notifyExtensionsSceneDestroyed(Scene* scene);
+    [[nodiscard]] bool dispatchModuleEvent(const Event& event);
+    void tickModules(float dt);
+    void prepareModulesForRender(float dt);
+    void recordModuleBeforePresentation(ICommandBuffer& commandBuffer, float dt);
+    void recordModulePresentation(ICommandBuffer& commandBuffer, float dt);
+    [[nodiscard]] bool notifyModulesBeforeAppStateChange(AppState nextState);
+    void notifyModulesAfterAppStateChange(AppState previousState);
+    void notifyModulesSceneActivated(Scene* scene);
+    void notifyModulesSceneDestroyed(Scene* scene);
     // temp
     [[nodiscard]] const InputManager& getInputManager() const { return inputManager; }
     [[nodiscard]] const glm::vec2&    getWindowSize() const { return _windowSize; }

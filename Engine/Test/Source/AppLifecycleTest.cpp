@@ -1,7 +1,6 @@
 #include "Runtime/App/Lifecycle/AppLifecycle.h"
 
 #include "Runtime/App/App.h"
-#include "Runtime/App/IAppExtension.h"
 
 #include "Render/Core/CommandBuffer.h"
 #include "Scene/SceneManager.h"
@@ -15,17 +14,17 @@
 namespace ya
 {
 
-class AppExtensionTestAccess
+class AppModuleTestAccess
 {
   public:
-    static void configure(App& app) { app.configureExtensions(); }
-    static void attach(App& app) { app.attachExtensions(); }
-    static void detach(App& app) { app.detachExtensions(); }
+    static void configure(App& app) { app.configureModules(); }
+    static void attach(App& app) { app.attachModules(); }
+    static void detach(App& app) { app.detachModules(); }
     static void dispatchNativeEvent(App& app, const SDL_Event& event) { app.dispatchNativeEvent(event); }
-    static bool dispatchEvent(App& app, const Event& event) { return app.dispatchExtensionEvent(event); }
-    static void tick(App& app, float dt) { app.tickExtensions(dt); }
-    static void prepareRender(App& app, float dt) { app.prepareExtensionsForRender(dt); }
-    static void recordPresentation(App& app, ICommandBuffer& commandBuffer, float dt) { app.recordExtensionPresentation(commandBuffer, dt); }
+    static bool dispatchEvent(App& app, const Event& event) { return app.dispatchModuleEvent(event); }
+    static void tick(App& app, float dt) { app.tickModules(dt); }
+    static void prepareRender(App& app, float dt) { app.prepareModulesForRender(dt); }
+    static void recordPresentation(App& app, ICommandBuffer& commandBuffer, float dt) { app.recordModulePresentation(commandBuffer, dt); }
 };
 
 namespace
@@ -72,17 +71,21 @@ class PresentationTestCommandBuffer final : public ICommandBuffer
     void debugEndLabel() override {}
 };
 
-struct RecordingExtension final : IAppExtension
+struct RecordingAppModule final : IModule
 {
     std::vector<std::string>& calls;
     std::string               name;
     bool                      consumesEvents = false;
 
-    RecordingExtension(std::vector<std::string>& calls, std::string name, bool consumesEvents = false)
+    RecordingAppModule(std::vector<std::string>& calls, std::string name, bool consumesEvents = false)
         : calls(calls), name(std::move(name)), consumesEvents(consumesEvents)
     {
     }
 
+    bool onLoad(FModuleContext&) override { return true; }
+    bool onStart(const FEngineContext&) override { return true; }
+    void onStop() override {}
+    void onUnload() override {}
     void onConfigure(App&, AppDesc&) override { calls.push_back(name + ".configure"); }
     void onAttach(App&) override { calls.push_back(name + ".attach"); }
     void onDetach(App&) override { calls.push_back(name + ".detach"); }
@@ -154,31 +157,31 @@ TEST_F(AppLifecycleTest, ActiveSceneSwitchKeepsCallerOwnedScenesAlive)
     EXPECT_EQ(sceneManager->getSceneByRegistry(&authoringScene->getRegistry()), authoringScene.get());
 }
 
-TEST_F(AppLifecycleTest, ExtensionsDispatchInRegistrationOrderAndDetachInReverseOrder)
+TEST_F(AppLifecycleTest, ModulesDispatchInRegistrationOrderAndDetachInReverseOrder)
 {
     std::vector<std::string> calls;
-    app.addExtension(std::make_unique<RecordingExtension>(calls, "first"));
-    app.addExtension(std::make_unique<RecordingExtension>(calls, "second", true));
-    app.addExtension(std::make_unique<RecordingExtension>(calls, "third"));
+    app.addModule(std::make_unique<RecordingAppModule>(calls, "first"));
+    app.addModule(std::make_unique<RecordingAppModule>(calls, "second", true));
+    app.addModule(std::make_unique<RecordingAppModule>(calls, "third"));
 
-    AppExtensionTestAccess::configure(app);
-    AppExtensionTestAccess::attach(app);
+    AppModuleTestAccess::configure(app);
+    AppModuleTestAccess::attach(app);
 
     SDL_Event nativeEvent{};
     nativeEvent.type = SDL_EVENT_FIRST;
-    AppExtensionTestAccess::dispatchNativeEvent(app, nativeEvent);
+    AppModuleTestAccess::dispatchNativeEvent(app, nativeEvent);
 
     AppQuitEvent event;
-    EXPECT_TRUE(AppExtensionTestAccess::dispatchEvent(app, event));
-    AppExtensionTestAccess::tick(app, 0.016f);
-    AppExtensionTestAccess::prepareRender(app, 0.016f);
+    EXPECT_TRUE(AppModuleTestAccess::dispatchEvent(app, event));
+    AppModuleTestAccess::tick(app, 0.016f);
+    AppModuleTestAccess::prepareRender(app, 0.016f);
     PresentationTestCommandBuffer commandBuffer;
-    AppExtensionTestAccess::recordPresentation(app, commandBuffer, 0.016f);
+    AppModuleTestAccess::recordPresentation(app, commandBuffer, 0.016f);
 
     ASSERT_TRUE(sceneManager->activateScene(makeShared<Scene>("Runtime")));
     app.startSimulation();
     app.stopSimulation();
-    AppExtensionTestAccess::detach(app);
+    AppModuleTestAccess::detach(app);
 
     EXPECT_EQ(calls,
               (std::vector<std::string>{
@@ -197,21 +200,21 @@ TEST_F(AppLifecycleTest, ExtensionsDispatchInRegistrationOrderAndDetachInReverse
               }));
 }
 
-TEST_F(AppLifecycleTest, ExtensionDispatchIsSafeWithoutExtensions)
+TEST_F(AppLifecycleTest, ModuleDispatchIsSafeWithoutModules)
 {
     SDL_Event nativeEvent{};
     nativeEvent.type = SDL_EVENT_FIRST;
     AppQuitEvent event;
 
-    AppExtensionTestAccess::configure(app);
-    AppExtensionTestAccess::attach(app);
-    AppExtensionTestAccess::dispatchNativeEvent(app, nativeEvent);
-    EXPECT_FALSE(AppExtensionTestAccess::dispatchEvent(app, event));
-    AppExtensionTestAccess::tick(app, 0.016f);
-    AppExtensionTestAccess::prepareRender(app, 0.016f);
+    AppModuleTestAccess::configure(app);
+    AppModuleTestAccess::attach(app);
+    AppModuleTestAccess::dispatchNativeEvent(app, nativeEvent);
+    EXPECT_FALSE(AppModuleTestAccess::dispatchEvent(app, event));
+    AppModuleTestAccess::tick(app, 0.016f);
+    AppModuleTestAccess::prepareRender(app, 0.016f);
     PresentationTestCommandBuffer commandBuffer;
-    AppExtensionTestAccess::recordPresentation(app, commandBuffer, 0.016f);
-    AppExtensionTestAccess::detach(app);
+    AppModuleTestAccess::recordPresentation(app, commandBuffer, 0.016f);
+    AppModuleTestAccess::detach(app);
 }
 
 } // namespace
