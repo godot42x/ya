@@ -11,6 +11,33 @@ local function _shader_codegen_inputs()
     return files
 end
 
+local function _make_shader_codegen_runner(run_command, uv, python)
+    if uv then
+        return function(script, args)
+            local uvArgs = {
+                "run",
+                "--offline",
+                "--with-requirements",
+                "./requirements.txt",
+                "python",
+                script,
+            }
+            table.join2(uvArgs, args)
+            run_command(uv.program, uvArgs)
+        end
+    end
+
+    if python then
+        return function(script, args)
+            local pythonArgs = { script }
+            table.join2(pythonArgs, args)
+            run_command(python.program, pythonArgs)
+        end
+    end
+
+    assert(false, "uv or python3/python not found for shader codegen")
+end
+
 local function _run_shader_codegen(run_script)
     local now    = os.mclock()
 
@@ -64,29 +91,12 @@ do
         local dependfile = path.join(target:autogendir(), "rules", "ya", "shader_codegen.d")
         local uv = find_tool("uv")
         local python = find_tool("python3") or find_tool("python")
-        assert(uv or python, "uv or python3/python not found for shader codegen")
+        local runScript = _make_shader_codegen_runner(os.vrunv, uv, python)
         os.mkdir(path.directory(dependfile))
 
         depend.on_changed(function()
             progress.show(0, "${color.build.object}generating.shader %s", target:name())
-            _run_shader_codegen(function(script, args)
-                if uv then
-                    local uvArgs = {
-                        "run",
-                        "--with-requirements",
-                        "./requirements.txt",
-                        "python",
-                        script,
-                    }
-                    table.join2(uvArgs, args)
-                    os.vrunv(uv.program, uvArgs)
-                    return
-                end
-
-                local pythonArgs = { script }
-                table.join2(pythonArgs, args)
-                os.vrunv(python.program, pythonArgs)
-            end)
+            _run_shader_codegen(runScript)
         end, {
             files = _shader_codegen_inputs(),
             dependfile = dependfile,
@@ -104,24 +114,7 @@ do
 
         local uv = find_tool("uv")
         local python = find_tool("python3") or find_tool("python")
-        assert(uv or python, "uv or python3/python not found for shader codegen")
-        _run_shader_codegen(function(script, args)
-            if uv then
-                local uvArgs = {
-                    "run",
-                    "--with-requirements",
-                    "./requirements.txt",
-                    "python",
-                    script,
-                }
-                table.join2(uvArgs, args)
-                os.execv(uv.program, uvArgs)
-                return
-            end
-
-            local pythonArgs = { script }
-            table.join2(pythonArgs, args)
-            os.execv(python.program, pythonArgs)
-        end)
+        local runScript = _make_shader_codegen_runner(os.execv, uv, python)
+        _run_shader_codegen(runScript)
     end)
 end

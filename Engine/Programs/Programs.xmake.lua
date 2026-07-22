@@ -1,2 +1,2 @@
 includes("./ShaderCompiler/xmake.lua")
-includes("./YAEditor/xmake.lua")
+includes("./YARuntime/xmake.lua")

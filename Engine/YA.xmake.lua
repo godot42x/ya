@@ -94,9 +94,9 @@ end
 
 
 
-target("ya-runtime")
+target("ya-engine")
 do
-    set_kind("static")
+    set_kind("shared")
     before_build(function(target)
         check_runtime_source_isolation()
     end)
@@ -207,16 +207,10 @@ end
 
 target("ya-editor")
 do
-    set_kind("static")
+    set_kind("shared")
     add_files("./Source/Editor/**.cpp")
-    add_deps("ya-runtime")
+    add_deps("ya-engine")
     add_deps("imgui-local")
     add_deps("imguizmo-local")
     add_includedirs("./Source", { public = true })
-end
-
-target("ya")
-do
-    set_kind("phony")
-    add_deps("ya-runtime", "ya-editor")
 end

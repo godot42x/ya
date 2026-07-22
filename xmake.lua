@@ -33,6 +33,16 @@ if is_plat("windows") then
 
 end
 
+if is_mode("debug") then
+    add_defines("YA_BUILD_MODE_DEBUG")
+elseif is_mode("releasedbg") then
+    add_defines("YA_BUILD_MODE_RELEASEDBG")
+elseif is_mode("profile") then
+    add_defines("YA_BUILD_MODE_PROFILE")
+else
+    add_defines("YA_BUILD_MODE_RELEASE")
+end
+
 if is_mode("debug") or is_mode("releasedbg") then
     add_defines("BUILD_DEBUG")
 else
@@ -49,7 +59,6 @@ end
 includes("./Xmake/Rule.lua")
 includes("./Xmake/package/xmake.lua")
 includes("./Engine/YA.xmake.lua")
-includes("./Xmake/task.lua")
 includes("./Test/xmake.lua")
 
 -- add_rules("SourceFiles")

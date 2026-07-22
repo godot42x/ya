@@ -1,6 +1,7 @@
-target("YAEditor")
+target("ya-runtime")
 do
     set_kind("binary")
     add_files("Source/*.cpp")
-    add_deps("ya-editor")
+    add_deps("ya-engine")
 end
+
