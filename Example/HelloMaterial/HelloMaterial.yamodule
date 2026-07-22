@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "name": "HelloMaterial",
+  "kind": "project",
+  "binary": "HelloMaterial",
+  "dependencies": []
+}

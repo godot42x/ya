@@ -1,45 +1,19 @@
 #pragma once
 
-#include "Runtime/App/App.h"
-#include "Render/Mesh.h"
+#include "Core/Module/Module.h"
 
-
-struct GreedySnake : public ya::App
+struct GreedySnakeModule final : ya::IModule
 {
-    using Super = ya::App;
-
-
-    void onInit(const ya::AppDesc& ci) override
+    bool onLoad(ya::FModuleContext&) override
     {
-        Super::onInit(ci);
+        return true;
     }
 
-    void onPostInit() override
+    bool onStart(const ya::FEngineContext&) override
     {
-        Super::onPostInit();
+        return true;
     }
 
-
-    void onQuit() override
-    {
-        Super::onQuit();
-    }
-
-    // void onSceneInit(ya::Scene *scene) override
-    // {
-    //     Super::onSceneInit(scene);
-
-    //     YA_INFO("GreedySnake scene initialized.");
-    // }
-
-    void onSceneDestroy(ya::Scene *scene) override
-    {
-        Super::onSceneDestroy(scene);
-    }
-
-    int onEvent(const ya::Event &event) override
-    {
-        Super::onEvent(event);
-        return 0;
-    }
+    void onStop() override {}
+    void onUnload() override {}
 };

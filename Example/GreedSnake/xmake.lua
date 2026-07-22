@@ -1,9 +1,9 @@
 target("GreedySnake")
 do
-    set_kind("binary")
+    set_kind("shared")
     add_files("Source/*.cpp")
-    -- add_rules("SourceFiles")
-    add_deps("ya-runtime")
+    add_deps("ya-engine")
+    add_includedirs("../../Engine/Source", { public = true })
 end
 
 

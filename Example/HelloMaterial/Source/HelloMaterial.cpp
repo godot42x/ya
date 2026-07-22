@@ -40,13 +40,13 @@
 #include "Core/System/VirtualFileSystem.h"
 
 
-void HelloMaterial::createCubeMesh()
+void HelloMaterialModule::createCubeMesh()
 {
     // No longer needed - use PrimitiveMeshCache instead
     // cubeMesh is now managed by PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube)
 }
 
-void HelloMaterial::loadResources()
+void HelloMaterialModule::loadResources()
 {
 
     ya::FontManager::get()->loadFont("Engine/Content/Fonts/JetBrainsMono-Medium.ttf", "JetBrainsMono-Medium", 18);
@@ -56,7 +56,7 @@ void HelloMaterial::loadResources()
     });
 }
 
-void HelloMaterial::createMaterials()
+void HelloMaterialModule::createMaterials()
 {
     // Create base materials
     auto* baseMaterial0      = ya::MaterialFactory::get()->createMaterial<ya::SimpleMaterial>("base0");
@@ -91,7 +91,7 @@ void HelloMaterial::createMaterials()
     ya::MaterialFactory::get()->createMaterial<ya::UnlitMaterial>("unlit_point-light_shared");
 }
 
-void HelloMaterial::createEntities(ya::Scene* scene)
+void HelloMaterialModule::createEntities(ya::Scene* scene)
 {
 
 
@@ -210,7 +210,6 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         auto        tc     = entity->getComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(0.0f, 0.f, -5.0f));
         tc->setScale(glm::vec3(3.0f));
-        _litTestEntity = entity;
 
         // Mesh component (separate from material)
         auto mc = entity->addComponent<ya::StaticMeshComponent>();
@@ -244,7 +243,6 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         auto        tc     = entity->getComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(-5.0f, 0.f, -5.0f));
         tc->setScale(glm::vec3(3.0f));
-        _litTestEntity = entity;
 
         // Mesh component (separate from material)
         auto mc = entity->addComponent<ya::StaticMeshComponent>();
@@ -346,7 +344,6 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         ya::Entity* entity = pointLt->getEntity();
         auto        tc     = entity->getComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(0.0, 5.f, 0.f));
-        _pointLightEntity = entity;
 
         // Mesh component
         auto mc = entity->addComponent<ya::StaticMeshComponent>();
@@ -375,7 +372,6 @@ void HelloMaterial::createEntities(ya::Scene* scene)
         ya::Entity* entity = pointLt->getEntity();
         auto        tc     = entity->getComponent<ya::TransformComponent>();
         tc->setPosition(glm::vec3(-10.0, 5.f, 0.f));
-        _pointLightEntity = entity;
 
         // Mesh component
         auto mc = entity->addComponent<ya::StaticMeshComponent>();
@@ -543,11 +539,10 @@ void HelloMaterial::createEntities(ya::Scene* scene)
     }
 }
 
-void HelloMaterial::onEnterRuntime()
+void HelloMaterialModule::onEnterRuntime(ya::App& app)
 {
-    Super::onEnterRuntime();
     // Set up default camera
-    auto scene = ya::App::get()->getSceneManager()->getActiveScene();
+    auto scene = app.getSceneManager()->getActiveScene();
     YA_CORE_ASSERT(scene, "Scene is null");
 
     if (auto player = scene->createNode3D("Player"))

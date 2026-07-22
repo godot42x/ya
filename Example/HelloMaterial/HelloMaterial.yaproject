@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "name": "HelloMaterial",
+  "mainModule": "HelloMaterial",
+  "modules": ["HelloMaterial.yamodule"],
+  "plugins": [],
+  "contentDir": "Content",
+  "defaultScene": "Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json"
+}

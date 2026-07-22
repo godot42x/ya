@@ -1,8 +1,9 @@
 target("HelloMaterial")
 do
-    set_kind("binary")
+    set_kind("shared")
     add_files("Source/*.cpp")
-    add_deps("ya-editor")
+    add_deps("ya-engine")
+    add_includedirs("../../Engine/Source", { public = true })
     add_rules("c++.unity_build", { batchsize = -1 })
 
     if is_plat("windows") then
