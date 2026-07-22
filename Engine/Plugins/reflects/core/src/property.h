@@ -122,8 +122,8 @@ struct Property : public Field
     bool        bConst           = false;
     bool        bStatic          = false;
     bool        bPointer         = false; ///< True if the property type is a pointer (T*)
-    uint32_t    typeIndex        = 0;
-    uint32_t    pointeeTypeIndex = 0; ///< If bPointer, the type index of the pointee type (T in T*)
+    refl::type_index_t typeIndex        = 0;
+    refl::type_index_t pointeeTypeIndex = 0; ///< If bPointer, the type index of the pointee type (T in T*)
     std::string typeName;
 
     // ============================================================================

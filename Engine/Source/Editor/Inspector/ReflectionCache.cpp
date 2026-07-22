@@ -17,7 +17,7 @@ static std::unordered_map<size_t, ReflectionCache> _reflectionCache;
 // ReflectionCache Management
 // ============================================================================
 
-ReflectionCache* getOrCreateReflectionCache(uint32_t typeIndex)
+ReflectionCache* getOrCreateReflectionCache(type_index_t typeIndex)
 {
     YA_PROFILE_FUNCTION();
     auto it = _reflectionCache.find(typeIndex);

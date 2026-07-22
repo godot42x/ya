@@ -70,7 +70,7 @@ struct ReflectionCache
 {
     Class   *classPtr      = nullptr;
     size_t   propertyCount = 0;
-    uint32_t typeIndex     = 0;
+    type_index_t typeIndex     = 0;
 
     bool bEnum = false;
     struct EnumMisc
@@ -86,7 +86,7 @@ struct ReflectionCache
     // 属性渲染上下文缓存（按属性名索引）
     std::unordered_map<std::string, PropertyRenderContext> propertyContexts;
 
-    bool isValid(uint32_t ti) const { return ti == typeIndex && (classPtr != nullptr || enumMisc.enumPtr != nullptr); }
+    bool isValid(type_index_t ti) const { return ti == typeIndex && (classPtr != nullptr || enumMisc.enumPtr != nullptr); }
 };
 
 /**
@@ -94,7 +94,7 @@ struct ReflectionCache
  * @param typeIndex 类型索引
  * @return 反射缓存指针
  */
-ReflectionCache *getOrCreateReflectionCache(uint32_t typeIndex);
+ReflectionCache *getOrCreateReflectionCache(type_index_t typeIndex);
 
 
 

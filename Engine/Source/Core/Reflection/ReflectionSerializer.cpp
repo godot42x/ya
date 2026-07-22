@@ -9,7 +9,7 @@ namespace ya
 namespace
 {
 
-using CustomTypeHookMap = std::unordered_map<uint32_t, ReflectionSerializer::CustomTypeHook>;
+using CustomTypeHookMap = std::unordered_map<type_index_t, ReflectionSerializer::CustomTypeHook>;
 
 CustomTypeHookMap &getCustomTypeHooks()
 {
@@ -19,24 +19,24 @@ CustomTypeHookMap &getCustomTypeHooks()
 
 } // namespace
 
-void ReflectionSerializer::registerCustomTypeHook(uint32_t typeIndex, CustomTypeHook hook)
+void ReflectionSerializer::registerCustomTypeHook(type_index_t typeIndex, CustomTypeHook hook)
 {
     getCustomTypeHooks()[typeIndex] = std::move(hook);
 }
 
-bool ReflectionSerializer::hasCustomTypeHook(uint32_t typeIndex)
+bool ReflectionSerializer::hasCustomTypeHook(type_index_t typeIndex)
 {
     return findCustomTypeHook(typeIndex) != nullptr;
 }
 
-const ReflectionSerializer::CustomTypeHook *ReflectionSerializer::findCustomTypeHook(uint32_t typeIndex)
+const ReflectionSerializer::CustomTypeHook *ReflectionSerializer::findCustomTypeHook(type_index_t typeIndex)
 {
     auto &hooks = getCustomTypeHooks();
     auto  it    = hooks.find(typeIndex);
     return it != hooks.end() ? &it->second : nullptr;
 }
 
-bool ReflectionSerializer::trySerializeCustomType(const void *valuePtr, uint32_t typeIndex, nlohmann::json &outJson)
+bool ReflectionSerializer::trySerializeCustomType(const void *valuePtr, type_index_t typeIndex, nlohmann::json &outJson)
 {
     auto *hook = findCustomTypeHook(typeIndex);
     if (!hook || !hook->serialize) {
@@ -47,7 +47,7 @@ bool ReflectionSerializer::trySerializeCustomType(const void *valuePtr, uint32_t
     return true;
 }
 
-bool ReflectionSerializer::tryDeserializeCustomType(void *valuePtr, uint32_t typeIndex, const nlohmann::json &jsonValue)
+bool ReflectionSerializer::tryDeserializeCustomType(void *valuePtr, type_index_t typeIndex, const nlohmann::json &jsonValue)
 {
     auto *hook = findCustomTypeHook(typeIndex);
     if (!hook || !hook->deserialize) {
@@ -65,7 +65,7 @@ bool ReflectionSerializer::tryDeserializeCustomType(void *valuePtr, uint32_t typ
 /**
  * Serialize any value (scalar or complex) to JSON
  */
-nlohmann::json ReflectionSerializer::serializeAnyValue(void *valuePtr, uint32_t typeIndex)
+nlohmann::json ReflectionSerializer::serializeAnyValue(void *valuePtr, type_index_t typeIndex)
 {
     nlohmann::json customJson;
     if (trySerializeCustomType(valuePtr, typeIndex, customJson)) {
@@ -133,7 +133,7 @@ nlohmann::json ReflectionSerializer::serializeAnyValue(void *valuePtr, uint32_t 
 /**
  * Deserialize JSON value to any type (scalar or complex)
  */
-void ReflectionSerializer::deserializeAnyValue(void *valuePtr, uint32_t typeIndex, const nlohmann::json &jsonValue)
+void ReflectionSerializer::deserializeAnyValue(void *valuePtr, type_index_t typeIndex, const nlohmann::json &jsonValue)
 {
     if (tryDeserializeCustomType(valuePtr, typeIndex, jsonValue)) {
         return;
@@ -242,7 +242,7 @@ void ReflectionSerializer::deserializeAnyValue(void *valuePtr, uint32_t typeInde
 /**
  * Convert map key to string for JSON serialization
  */
-std::string ReflectionSerializer::convertKeyToString(void *keyPtr, uint32_t keyTypeIndex)
+std::string ReflectionSerializer::convertKeyToString(void *keyPtr, type_index_t keyTypeIndex)
 {
     if (keyTypeIndex == ya::type_index_v<int>) {
         return std::to_string(*static_cast<int *>(keyPtr));
@@ -256,7 +256,7 @@ std::string ReflectionSerializer::convertKeyToString(void *keyPtr, uint32_t keyT
 /**
  * Convert string key from JSON to actual key type
  */
-void ReflectionSerializer::convertStringToKey(const std::string &jsonKey, void *keyPtr, uint32_t keyTypeIndex)
+void ReflectionSerializer::convertStringToKey(const std::string &jsonKey, void *keyPtr, type_index_t keyTypeIndex)
 {
     if (keyTypeIndex == ya::type_index_v<std::string>) {
         *static_cast<std::string *>(keyPtr) = jsonKey;
@@ -278,7 +278,7 @@ void ReflectionSerializer::convertStringToKey(const std::string &jsonKey, void *
  * Create, deserialize and add complex object to container
  */
 void ReflectionSerializer::deserializeComplexElement(ya::reflection::IContainerProperty *accessor, void *containerPtr,
-                                                     uint32_t elementTypeIndex, const nlohmann::json &elementJson)
+                                                     type_index_t elementTypeIndex, const nlohmann::json &elementJson)
 {
     auto &registry     = ClassRegistry::instance();
     auto *elementClass = registry.getClass(elementTypeIndex);
@@ -325,8 +325,8 @@ void ReflectionSerializer::deserializeMapContainer(ya::reflection::IContainerPro
         return;
     }
 
-    uint32_t keyTypeIndex   = accessor->getKeyTypeIndex();
-    uint32_t valueTypeIndex = accessor->getElementTypeIndex();
+    type_index_t keyTypeIndex   = accessor->getKeyTypeIndex();
+    type_index_t valueTypeIndex = accessor->getElementTypeIndex();
 
     for (auto it = jsonObject.begin(); it != jsonObject.end(); ++it) {
         const std::string &jsonKey   = it.key();
@@ -385,7 +385,7 @@ void ReflectionSerializer::deserializeMapContainer(ya::reflection::IContainerPro
  * Insert basic type element into map container
  */
 void ReflectionSerializer::insertBasicMapElement(ya::reflection::IContainerProperty *accessor, void *containerPtr,
-                                                 void *keyPtr, uint32_t valueTypeIndex, const nlohmann::json &jsonValue)
+                                                 void *keyPtr, type_index_t valueTypeIndex, const nlohmann::json &jsonValue)
 {
     if (valueTypeIndex == ya::type_index_v<int>) {
         int value = jsonValue.get<int>();
@@ -509,7 +509,7 @@ void ReflectionSerializer::deserializeBaseClasses(const Class *classPtr, void *o
     }
 }
 
-nlohmann::json ReflectionSerializer::serializeByRuntimeReflection(const void *obj, uint32_t typeIndex, const std::string &typeName)
+nlohmann::json ReflectionSerializer::serializeByRuntimeReflection(const void *obj, type_index_t typeIndex, const std::string &typeName)
 {
     nlohmann::json customJson;
     if (trySerializeCustomType(obj, typeIndex, customJson)) {
@@ -606,7 +606,7 @@ nlohmann::json ReflectionSerializer::serializeProperty(const void *obj, const Pr
             ::ya::reflection::PropertyContainerHelper::iterateMapContainer(
                 (prop),
                 const_cast<void *>(valuePtr),
-                [&j](void *keyPtr, uint32_t keyTypeIndex, void *valuePtr, uint32_t valueTypeIndex) {
+                [&j](void *keyPtr, type_index_t keyTypeIndex, void *valuePtr, type_index_t valueTypeIndex) {
                     // Convert key to string and serialize value using unified helpers
                     std::string keyStr = convertKeyToString(keyPtr, keyTypeIndex);
                     j[keyStr]          = serializeAnyValue(valuePtr, valueTypeIndex);
@@ -618,7 +618,7 @@ nlohmann::json ReflectionSerializer::serializeProperty(const void *obj, const Pr
             ::ya::reflection::PropertyContainerHelper::iterateContainer(
                 const_cast<Property &>(prop),
                 const_cast<void *>(valuePtr),
-                [&j](size_t index, void *elementPtr, uint32_t elementTypeIndex) {
+                [&j](size_t index, void *elementPtr, type_index_t elementTypeIndex) {
                     // Serialize container element using unified helper
                     j.push_back(serializeAnyValue(elementPtr, elementTypeIndex));
                 });
@@ -676,7 +676,7 @@ nlohmann::json ReflectionSerializer::serializeProperty(const void *obj, const Pr
     return j;
 }
 
-void ReflectionSerializer::deserializeByRuntimeReflection(void *obj, uint32_t typeIndex, const nlohmann::json &j, const std::string &className)
+void ReflectionSerializer::deserializeByRuntimeReflection(void *obj, type_index_t typeIndex, const nlohmann::json &j, const std::string &className)
 {
     if (tryDeserializeCustomType(obj, typeIndex, j)) {
         return;
@@ -815,7 +815,7 @@ void ReflectionSerializer::deserializeProperty(const Property &prop, void *obj, 
         else {
             // Deserialize Vector/Set-like containers (std::vector, std::set, std::unordered_set)
             if (j.is_array()) {
-                uint32_t elementTypeIndex = accessor->getElementTypeIndex();
+                type_index_t elementTypeIndex = accessor->getElementTypeIndex();
 
                 if (accessor->isFixedSize()) {
                     const size_t count = std::min(j.size(), accessor->getFixedSize());

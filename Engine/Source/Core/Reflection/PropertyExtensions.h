@@ -67,7 +67,7 @@ class PropertyContainerHelper
     static const ContainerPropertyExtension *getContainerExtension(const Property &prop)
     {
         // cache to avoid search string  each time
-        static std::unordered_map<uint32_t, ContainerPropertyExtension *> hasContainerExtension;
+        static std::unordered_map<type_index_t, ContainerPropertyExtension *> hasContainerExtension;
         if (hasContainerExtension.find(prop.typeIndex) != hasContainerExtension.end()) {
             return hasContainerExtension[prop.typeIndex];
         }
@@ -120,7 +120,7 @@ class PropertyContainerHelper
 
         while (iterator->hasNext()) {
             void    *elementPtr       = iterator->getElementPtr();
-            uint32_t elementTypeIndex = iterator->getElementTypeIndex();
+            type_index_t elementTypeIndex = iterator->getElementTypeIndex();
 
             std::forward<Visitor>(visitor)(index, elementPtr, elementTypeIndex);
 
@@ -148,9 +148,9 @@ class PropertyContainerHelper
 
         while (iterator->hasNext()) {
             void    *keyPtr         = iterator->getKeyPtr();
-            uint32_t keyTypeIndex   = iterator->getKeyTypeIndex();
+            type_index_t keyTypeIndex   = iterator->getKeyTypeIndex();
             void    *valuePtr       = iterator->getElementPtr();
-            uint32_t valueTypeIndex = iterator->getElementTypeIndex();
+            type_index_t valueTypeIndex = iterator->getElementTypeIndex();
 
             std::forward<Visitor>(visitor)(keyPtr, keyTypeIndex, valuePtr, valueTypeIndex);
 

@@ -7,12 +7,12 @@
 namespace ya
 {
 
-bool ReflectionCopier::isEnumType(uint32_t typeIndex)
+bool ReflectionCopier::isEnumType(type_index_t typeIndex)
 {
     return EnumRegistry::instance().hasEnum(typeIndex);
 }
 
-bool ReflectionCopier::copyByRuntimeReflection(void* dstObj, const void* srcObj, uint32_t typeIndex, const std::string& className)
+bool ReflectionCopier::copyByRuntimeReflection(void* dstObj, const void* srcObj, type_index_t typeIndex, const std::string& className)
 {
     if (!dstObj || !srcObj) {
         YA_CORE_WARN("ReflectionCopier: copyByRuntimeReflection got null object pointer");
@@ -104,7 +104,7 @@ bool ReflectionCopier::copyPropertyValue(const Property& prop, void* dstObj, con
     return true;
 }
 
-bool ReflectionCopier::copyAnyValue(void* dstValuePtr, const void* srcValuePtr, uint32_t typeIndex)
+bool ReflectionCopier::copyAnyValue(void* dstValuePtr, const void* srcValuePtr, type_index_t typeIndex)
 {
     if (!dstValuePtr || !srcValuePtr) {
         return false;
@@ -137,7 +137,7 @@ bool ReflectionCopier::copyContainerValue(const Property& prop, void* dstContain
         ::ya::reflection::PropertyContainerHelper::iterateMapContainer(
             prop,
             const_cast<void*>(srcContainerPtr),
-            [&](void* keyPtr, uint32_t /*keyTypeIndex*/, void* valuePtr, uint32_t valueTypeIndex) {
+            [&](void* keyPtr, uint32_t /*keyTypeIndex*/, void* valuePtr, type_index_t valueTypeIndex) {
                 if (!keyPtr || !valuePtr) {
                     success = false;
                     return;
@@ -186,7 +186,7 @@ bool ReflectionCopier::copyContainerValue(const Property& prop, void* dstContain
     ::ya::reflection::PropertyContainerHelper::iterateContainer(
         prop,
         const_cast<void*>(srcContainerPtr),
-        [&](size_t /*index*/, void* elementPtr, uint32_t elementTypeIndex) {
+        [&](size_t /*index*/, void* elementPtr, type_index_t elementTypeIndex) {
             if (!elementPtr) {
                 success = false;
                 return;
@@ -218,7 +218,7 @@ bool ReflectionCopier::copyContainerValue(const Property& prop, void* dstContain
     return success;
 }
 
-bool ReflectionCopier::copyScalarValue(void* dstValuePtr, const void* srcValuePtr, uint32_t typeIndex)
+bool ReflectionCopier::copyScalarValue(void* dstValuePtr, const void* srcValuePtr, type_index_t typeIndex)
 {
     if (typeIndex == ya::type_index_v<int>) {
         *static_cast<int*>(dstValuePtr) = *static_cast<const int*>(srcValuePtr);

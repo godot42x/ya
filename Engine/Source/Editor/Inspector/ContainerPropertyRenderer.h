@@ -109,9 +109,9 @@ class ContainerPropertyRenderer
     struct MapEntry
     {
         void       *keyPtr;
-        uint32_t    keyTypeIndex;
+        type_index_t keyTypeIndex;
         void       *valuePtr;
-        uint32_t    valueTypeIndex;
+        type_index_t valueTypeIndex;
         std::string keyStr;
         std::string valueStr;
         std::string typeStr;
@@ -240,7 +240,7 @@ class ContainerPropertyRenderer
         ya::reflection::PropertyContainerHelper::iterateMapContainer(
             prop,
             containerPtr,
-            [&](void *keyPtr, uint32_t keyTypeIndex, void *valuePtr, uint32_t valueTypeIndex) {
+            [&](void *keyPtr, type_index_t keyTypeIndex, void *valuePtr, type_index_t valueTypeIndex) {
                 cache.entries.push_back({
                     .keyPtr         = keyPtr,
                     .keyTypeIndex   = keyTypeIndex,
@@ -270,7 +270,7 @@ class ContainerPropertyRenderer
         ya::reflection::PropertyContainerHelper::iterateContainer(
             prop,
             containerPtr,
-            [&](size_t index, void *elementPtr, uint32_t elementTypeIndex) {
+            [&](size_t index, void *elementPtr, type_index_t elementTypeIndex) {
                 ImGui::PushID(static_cast<int>(index));
 
                 // Stack-allocated label buffer
@@ -339,7 +339,7 @@ class ContainerPropertyRenderer
      * @brief Render basic type elements (int, float, string, bool)
      * Used as default renderer for container values
      */
-    static bool renderBasicElement(const char *label, void *elementPtr, uint32_t typeIndex)
+    static bool renderBasicElement(const char *label, void *elementPtr, type_index_t typeIndex)
     {
         // Cache type indices for fast comparison
         static const auto kIntTypeIdx    = ya::type_index_v<int>;
@@ -375,12 +375,12 @@ class ContainerPropertyRenderer
     }
 
     // Overload for std::string label (convenience)
-    static bool renderBasicElement(const std::string &label, void *elementPtr, uint32_t typeIndex)
+    static bool renderBasicElement(const std::string &label, void *elementPtr, type_index_t typeIndex)
     {
         return renderBasicElement(label.c_str(), elementPtr, typeIndex);
     }
 
-    static std::string toString(const void *ptr, uint32_t typeIndex)
+    static std::string toString(const void *ptr, type_index_t typeIndex)
     {
         if (typeIndex == ya::type_index_v<std::string>) {
             return *static_cast<const std::string *>(ptr);
@@ -389,7 +389,7 @@ class ContainerPropertyRenderer
             return std::format("{} [unsupported type: {}]", uintptr_t(ptr), typeIndex);
         }
     }
-    static std::string getTypeName(uint32_t typeIndex)
+    static std::string getTypeName(type_index_t typeIndex)
     {
         if (auto cls = ClassRegistry::instance().getClass(typeIndex); cls) {
             return cls->getName();

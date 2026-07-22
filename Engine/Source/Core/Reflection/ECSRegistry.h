@@ -85,8 +85,8 @@ struct ECSRegistry
     };
 
   private:
-    std::unordered_map<FName, uint32_t>          _typeIndexCache;
-    std::unordered_map<uint32_t, IComponentOps*> _componentOps;
+    std::unordered_map<FName, type_index_t>          _typeIndexCache;
+    std::unordered_map<type_index_t, IComponentOps*> _componentOps;
 
   public:
 
@@ -94,7 +94,7 @@ struct ECSRegistry
     void registerComponent(const std::string& name /*, auto &&componentGetter, auto &&componentCreator*/)
     {
         if constexpr (std::derived_from<T, ::ya::IComponent>) {
-            const uint32_t typeIndex       = ya::TypeIndex<T>::value();
+            const type_index_t typeIndex       = ya::TypeIndex<T>::value();
             IComponentOps* componentOpsPtr = new ComponentOps<T>{};
             _componentOps[typeIndex]       = componentOpsPtr;
             _typeIndexCache[FName(name)]   = typeIndex;
@@ -177,7 +177,7 @@ struct ECSRegistry
         return nullptr;
     }
 
-    [[nodiscard]] const std::unordered_map<FName, uint32_t>& getTypeIndexCache() const { return _typeIndexCache; }
+    [[nodiscard]] const std::unordered_map<FName, type_index_t>& getTypeIndexCache() const { return _typeIndexCache; }
 };
 
 } // namespace ya
@@ -212,7 +212,7 @@ void* ECSRegistry::ComponentOps<T>::clone(
     // Safe path: default-construct, then copy only reflected fields
     T&          dst = dstRegistry.emplace_or_replace<T>(dstEntity);
     const T&    src = srcRegistry.get<T>(srcEntity);
-    uint32_t    typeIndex = ya::TypeIndex<T>::value();
+    type_index_t typeIndex = ya::TypeIndex<T>::value();
     const auto* cls = ClassRegistry::instance().getClass(typeIndex);
 
     if (cls) {

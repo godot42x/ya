@@ -2,38 +2,58 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
+
 namespace refl
 {
 
-using type_index_t = uint32_t;
+using type_index_t = uint64_t;
 
-extern uint32_t _nextTypeID;
+namespace detail
+{
 
-// 使用函数内静态变量（Meyers Singleton）避免静态初始化顺序问题
-// inline uint32_t &getNextTypeId()
-// {
-//     static std::atomic<uint32_t> nextTypeId{1}; // 从 1 开始，0 保留为无效值
-//     return *reinterpret_cast<uint32_t *>(&nextTypeId);
-// }
+constexpr type_index_t FNV_OFFSET_BASIS = 14695981039346656037ull;
+constexpr type_index_t FNV_PRIME        = 1099511628211ull;
+
+consteval type_index_t hashTypeName(std::string_view name)
+{
+    type_index_t hash = FNV_OFFSET_BASIS;
+    for (const char ch : name) {
+        hash ^= static_cast<uint8_t>(ch);
+        hash *= FNV_PRIME;
+    }
+    return hash == 0 ? 1 : hash;
+}
+
+template <typename T>
+consteval std::string_view compilerTypeName()
+{
+#if defined(_MSC_VER)
+    constexpr std::string_view signature = __FUNCSIG__;
+    constexpr std::string_view prefix    = "compilerTypeName<";
+    const size_t               begin     = signature.find(prefix) + prefix.size();
+    const size_t               end       = signature.find(">(void)", begin);
+#else
+    constexpr std::string_view signature = __PRETTY_FUNCTION__;
+    constexpr std::string_view prefix    = "T = ";
+    const size_t               begin     = signature.find(prefix) + prefix.size();
+    const size_t               end       = signature.find_first_of("];", begin);
+#endif
+    return signature.substr(begin, end - begin);
+}
+
+} // namespace detail
 
 template <typename T>
 struct TypeIndex
 {
-    static uint32_t value()
+    static consteval type_index_t value()
     {
-        static auto id = _nextTypeID++;
-        return id;
-        // 使用 typeid().hash_code() 作为类型 ID
-        // 延迟求值：只在调用 value() 时才需要完整类型定义
-        // return static_cast<uint32_t>(typeid(T).hash_code());
+        return detail::hashTypeName(detail::compilerTypeName<T>());
     }
 };
 
-// 注意：直接调用 TypeIndex<T>::value() 而不是使用变量模板
-// 避免在不完整类型上实例化
 template <typename T>
-inline static const auto type_index_v = TypeIndex<T>::value();
-
-
+inline constexpr type_index_t type_index_v = TypeIndex<T>::value();
 
 } // namespace refl

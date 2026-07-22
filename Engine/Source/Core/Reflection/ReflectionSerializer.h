@@ -49,7 +49,7 @@ struct ReflectionSerializer
         return hasCustomTypeHook(ya::type_index_v<T>);
     }
 
-    static bool hasCustomTypeHook(uint32_t typeIndex);
+    static bool hasCustomTypeHook(type_index_t typeIndex);
 
     template <typename T, typename SerializeFn, typename DeserializeFn>
     static void deferCustomTypeHookRegistration(SerializeFn&& serializeFn, DeserializeFn&& deserializeFn)
@@ -78,13 +78,13 @@ struct ReflectionSerializer
         return serializeByRuntimeReflection(&obj, ya::type_index_v<T>);
     }
 
-    static nlohmann::json serializeByRuntimeReflection(const void* obj, uint32_t typeIndex, const std::string& typeName = "");
+    static nlohmann::json serializeByRuntimeReflection(const void* obj, type_index_t typeIndex, const std::string& typeName = "");
     static nlohmann::json serializeProperty(const void* obj, const Property& prop);
 
     // MARK: Deserialization
 
 
-    static void deserializeByRuntimeReflection(void* obj, uint32_t typeIndex, const nlohmann::json& j, const std::string& className);
+    static void deserializeByRuntimeReflection(void* obj, type_index_t typeIndex, const nlohmann::json& j, const std::string& className);
 
 
     template <typename T>
@@ -97,10 +97,10 @@ struct ReflectionSerializer
     static void deserializeProperty(const Property& prop, void* obj, const nlohmann::json& j);
 
   private:
-    static void                  registerCustomTypeHook(uint32_t typeIndex, CustomTypeHook hook);
-    static const CustomTypeHook* findCustomTypeHook(uint32_t typeIndex);
-    static bool                  trySerializeCustomType(const void* valuePtr, uint32_t typeIndex, nlohmann::json& outJson);
-    static bool                  tryDeserializeCustomType(void* valuePtr, uint32_t typeIndex, const nlohmann::json& jsonValue);
+    static void                  registerCustomTypeHook(type_index_t typeIndex, CustomTypeHook hook);
+    static const CustomTypeHook* findCustomTypeHook(type_index_t typeIndex);
+    static bool                  trySerializeCustomType(const void* valuePtr, type_index_t typeIndex, nlohmann::json& outJson);
+    static bool                  tryDeserializeCustomType(void* valuePtr, type_index_t typeIndex, const nlohmann::json& jsonValue);
 
     // MARK: helper
     // ========================================================================
@@ -149,7 +149,7 @@ struct ReflectionSerializer
      * @param typeIndex Type index of the value
      * @return JSON representation of the value
      */
-    static nlohmann::json serializeAnyValue(void* valuePtr, uint32_t typeIndex);
+    static nlohmann::json serializeAnyValue(void* valuePtr, type_index_t typeIndex);
 
     /**
      * Deserialize JSON value to any type (scalar or complex)
@@ -157,7 +157,7 @@ struct ReflectionSerializer
      * @param typeIndex Type index of the destination type
      * @param jsonValue JSON value to deserialize
      */
-    static void deserializeAnyValue(void* valuePtr, uint32_t typeIndex, const nlohmann::json& jsonValue);
+    static void deserializeAnyValue(void* valuePtr, type_index_t typeIndex, const nlohmann::json& jsonValue);
 
     /**
      * Convert map key to string for JSON serialization
@@ -165,7 +165,7 @@ struct ReflectionSerializer
      * @param keyTypeIndex Type index of the key
      * @return String representation of the key
      */
-    static std::string convertKeyToString(void* keyPtr, uint32_t keyTypeIndex);
+    static std::string convertKeyToString(void* keyPtr, type_index_t keyTypeIndex);
 
     /**
      * Convert string key from JSON to actual key type
@@ -173,7 +173,7 @@ struct ReflectionSerializer
      * @param keyPtr Pointer to the destination key
      * @param keyTypeIndex Type index of the key type
      */
-    static void convertStringToKey(const std::string& jsonKey, void* keyPtr, uint32_t keyTypeIndex);
+    static void convertStringToKey(const std::string& jsonKey, void* keyPtr, type_index_t keyTypeIndex);
 
     /**
      * Create, deserialize and add complex object to container
@@ -183,7 +183,7 @@ struct ReflectionSerializer
      * @param elementJson JSON data for the element
      */
     static void deserializeComplexElement(ya::reflection::IContainerProperty* accessor, void* containerPtr,
-                                          uint32_t elementTypeIndex, const nlohmann::json& elementJson);
+                                          type_index_t elementTypeIndex, const nlohmann::json& elementJson);
 
     /**
      * Deserialize Map-like container from JSON object
@@ -203,7 +203,7 @@ struct ReflectionSerializer
      * @param jsonValue JSON value to deserialize
      */
     static void insertBasicMapElement(ya::reflection::IContainerProperty* accessor, void* containerPtr,
-                                      void* keyPtr, uint32_t valueTypeIndex, const nlohmann::json& jsonValue);
+                                      void* keyPtr, type_index_t valueTypeIndex, const nlohmann::json& jsonValue);
 
     /**
      * Check if a property should be serialized as a scalar value (base type or enum)
@@ -213,9 +213,9 @@ struct ReflectionSerializer
         return is_base_type(prop.typeIndex) || is_enum_type(prop.typeIndex);
     }
 
-    static bool is_base_type(uint32_t typeIdx)
+    static bool is_base_type(type_index_t typeIdx)
     {
-        static std::unordered_set<uint32_t> baseTypes = {
+        static std::unordered_set<type_index_t> baseTypes = {
             ya::type_index_v<int>,
             ya::type_index_v<float>,
             ya::type_index_v<double>,
@@ -231,7 +231,7 @@ struct ReflectionSerializer
     /**
      * Check if a type is an enum by typeIndex
      */
-    static bool is_enum_type(uint32_t typeIndex)
+    static bool is_enum_type(type_index_t typeIndex)
     {
         return EnumRegistry::instance().hasEnum(typeIndex);
     }

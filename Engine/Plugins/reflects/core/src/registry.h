@@ -21,7 +21,7 @@
 struct ClassRegistry
 {
     std::unordered_map<std::string, std::shared_ptr<Class>> classes;
-    std::unordered_map<uint32_t, std::shared_ptr<Class>>    typeIdMap;
+    std::unordered_map<refl::type_index_t, std::shared_ptr<Class>> typeIdMap;
 
     // parent -> childrens
     std::unordered_map<refl::type_index_t, std::vector<refl::type_index_t>> parentToChildren;
@@ -37,14 +37,17 @@ struct ClassRegistry
         // 设置类型索引
         ptr->typeIndex = id;
 
+        if (const auto it = typeIdMap.find(id); it != typeIdMap.end() && it->second->name != name) {
+            throw std::runtime_error("Reflection type id collision between " + it->second->name + " and " + name);
+        }
         classes[name] = ptr;
         typeIdMap[id] = ptr;
-        printf("_____ Registered class: %s (typeId: %zu)\n", name.c_str(), (uint64_t)id);
+        printf("_____ Registered class: %s (typeId: %llu)\n", name.c_str(), static_cast<unsigned long long>(id));
 
         return classes[name];
     }
 
-    Class *getClass(uint32_t typeId)
+    Class *getClass(refl::type_index_t typeId)
     {
         auto it = typeIdMap.find(typeId);
         return it != typeIdMap.end() ? it->second.get() : nullptr;
@@ -78,12 +81,12 @@ struct ClassRegistry
     }
 
     // MARK: Inheritance
-    void registerInheritance(uint32_t childTypeId, uint32_t parentTypeId)
+    void registerInheritance(refl::type_index_t childTypeId, refl::type_index_t parentTypeId)
     {
         parentToChildren[parentTypeId].push_back(childTypeId);
     }
 
-    bool isDerivedFrom(uint32_t childTypeId, uint32_t parentTypeId)
+    bool isDerivedFrom(refl::type_index_t childTypeId, refl::type_index_t parentTypeId)
     {
         auto it = parentToChildren.find(parentTypeId);
         if (it != parentToChildren.end()) {
@@ -99,7 +102,7 @@ struct ClassRegistry
     {
         return classes.find(name) != classes.end();
     }
-    bool hasClass(uint32_t typeId) const
+    bool hasClass(refl::type_index_t typeId) const
     {
         return typeIdMap.find(typeId) != typeIdMap.end();
     }
@@ -219,11 +222,11 @@ struct Register
 struct EnumRegistry
 {
     std::unordered_map<std::string, Enum> enums;
-    std::unordered_map<uint32_t, Enum *>  typeIdMap; // typeIndex -> Enum*
+    std::unordered_map<refl::type_index_t, Enum *> typeIdMap; // typeIndex -> Enum*
 
     static EnumRegistry &instance();
 
-    void registerEnum(const std::string &enumName, const Enum &enumInfo, uint32_t typeIndex = 0)
+    void registerEnum(const std::string &enumName, const Enum &enumInfo, refl::type_index_t typeIndex = 0)
     {
         enums[enumName] = enumInfo;
         if (typeIndex != 0) {
@@ -237,7 +240,7 @@ struct EnumRegistry
         return it != enums.end() ? &it->second : nullptr;
     }
 
-    Enum *getEnum(uint32_t typeIndex)
+    Enum *getEnum(refl::type_index_t typeIndex)
     {
         auto it = typeIdMap.find(typeIndex);
         return it != typeIdMap.end() ? it->second : nullptr;
@@ -248,7 +251,7 @@ struct EnumRegistry
         return enums.find(enumName) != enums.end();
     }
 
-    bool hasEnum(uint32_t typeIndex) const
+    bool hasEnum(refl::type_index_t typeIndex) const
     {
         return typeIdMap.find(typeIndex) != typeIdMap.end();
     }
@@ -261,9 +264,9 @@ template <typename EnumType>
 struct RegisterEnum
 {
     Enum     enumInfo;
-    uint32_t typeIndex = 0;
+    refl::type_index_t typeIndex = 0;
 
-    RegisterEnum(const std::string &enumName, uint32_t inTypeIndex = 0)
+    RegisterEnum(const std::string &enumName, refl::type_index_t inTypeIndex = 0)
     {
         static_assert(std::is_enum_v<EnumType>, "T must be an enum type");
         enumInfo.name           = enumName;

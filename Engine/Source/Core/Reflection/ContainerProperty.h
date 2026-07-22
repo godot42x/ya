@@ -38,9 +38,9 @@ struct ContainerIterator
     virtual bool     hasNext() const             = 0;
     virtual void     next()                      = 0;
     virtual void    *getElementPtr()             = 0; // 返回当前元素的指针
-    virtual uint32_t getElementTypeIndex() const = 0;
+    virtual type_index_t getElementTypeIndex() const = 0;
     virtual void    *getKeyPtr() { return nullptr; }       // Map 专用：获取当前 key 指针
-    virtual uint32_t getKeyTypeIndex() const { return 0; } // Map 专用：获取 key 类型索引
+    virtual type_index_t getKeyTypeIndex() const { return 0; } // Map 专用：获取 key 类型索引
 };
 
 /**
@@ -64,8 +64,8 @@ struct IContainerProperty
     // 元素访问
     virtual void    *getElementPtr(void *containerPtr, size_t index)         = 0; // Vector[i]
     virtual void    *getValuePtr(void *containerPtr, const std::string &key) = 0; // Map[key]
-    virtual uint32_t getElementTypeIndex() const                             = 0;
-    virtual uint32_t getKeyTypeIndex() const { return 0; } // Map 专用
+    virtual type_index_t getElementTypeIndex() const                             = 0;
+    virtual type_index_t getKeyTypeIndex() const { return 0; } // Map 专用
 
     // 迭代器
     virtual std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) = 0;
@@ -110,7 +110,7 @@ class VectorProperty : public IContainerProperty
             return currentIndex < container->size() ? &(*container)[currentIndex] : nullptr;
         }
 
-        uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
+        type_index_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
     };
 
   public:
@@ -144,7 +144,7 @@ class VectorProperty : public IContainerProperty
         return nullptr; // Vector 不支持 key 访问
     }
 
-    uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
+    type_index_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
 
     std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) override
     {
@@ -199,14 +199,14 @@ class MapProperty : public IContainerProperty
             return current != container->end() ? &current->second : nullptr;
         }
 
-        uint32_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
+        type_index_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
 
         void *getKeyPtr() override
         {
             return current != container->end() ? const_cast<K *>(&current->first) : nullptr;
         }
 
-        uint32_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
+        type_index_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
     };
 
   public:
@@ -266,8 +266,8 @@ class MapProperty : public IContainerProperty
         return it != map->end() ? &it->second : nullptr;
     }
 
-    uint32_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
-    uint32_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
+    type_index_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
+    type_index_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
 
     std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) override
     {
@@ -334,7 +334,7 @@ class SetProperty : public IContainerProperty
             return current != container->end() ? const_cast<T *>(&(*current)) : nullptr;
         }
 
-        uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
+        type_index_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
     };
 
   public:
@@ -368,7 +368,7 @@ class SetProperty : public IContainerProperty
         return nullptr; // Set 不支持 key 访问
     }
 
-    uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
+    type_index_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
 
     std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) override
     {
@@ -426,14 +426,14 @@ class UnorderedMapProperty : public IContainerProperty
             return current != container->end() ? &current->second : nullptr;
         }
 
-        uint32_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
+        type_index_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
 
         void *getKeyPtr() override
         {
             return current != container->end() ? const_cast<K *>(&current->first) : nullptr;
         }
 
-        uint32_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
+        type_index_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
     };
 
   public:
@@ -493,8 +493,8 @@ class UnorderedMapProperty : public IContainerProperty
         return it != map->end() ? &it->second : nullptr;
     }
 
-    uint32_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
-    uint32_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
+    type_index_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
+    type_index_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
 
     std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) override
     {
@@ -561,7 +561,7 @@ class UnorderedSetProperty : public IContainerProperty
             return current != container->end() ? const_cast<T *>(&(*current)) : nullptr;
         }
 
-        uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
+        type_index_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
     };
 
   public:
@@ -595,7 +595,7 @@ class UnorderedSetProperty : public IContainerProperty
         return nullptr; // UnorderedSet 不支持 key 访问
     }
 
-    uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
+    type_index_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
 
     std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) override
     {
@@ -652,7 +652,7 @@ class ArrayProperty : public IContainerProperty
             return currentIndex < N ? &(*container)[currentIndex] : nullptr;
         }
 
-        uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
+        type_index_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
     };
 
   public:
@@ -695,7 +695,7 @@ class ArrayProperty : public IContainerProperty
         return nullptr; // Array does not support key access
     }
 
-    uint32_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
+    type_index_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
 
     std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) override
     {

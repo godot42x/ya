@@ -497,12 +497,12 @@ class TypeRenderRegistry
   public:
     static TypeRenderRegistry& instance();
 
-    void registerRenderer(uint32_t typeIndex, TypeRenderer renderer)
+    void registerRenderer(type_index_t typeIndex, TypeRenderer renderer)
     {
         _renderers[typeIndex] = renderer;
     }
 
-    const TypeRenderer* getRenderer(uint32_t typeIndex) const
+    const TypeRenderer* getRenderer(type_index_t typeIndex) const
     {
         auto it = _renderers.find(typeIndex);
         return it != _renderers.end() ? &it->second : nullptr;
@@ -512,7 +512,7 @@ class TypeRenderRegistry
 
   private:
     TypeRenderRegistry() = default;
-    std::unordered_map<uint32_t, TypeRenderer> _renderers;
+    std::unordered_map<type_index_t, TypeRenderer> _renderers;
 };
 
 // ============================================================================
@@ -530,7 +530,7 @@ class TypeRenderRegistry
  *
  * @note 不再返回 bool，改用 ctx.isModified() 系列方法查询修改状态
  */
-void renderReflectedType(const std::string& name, uint32_t typeIndex, void* instance, RenderContext& ctx, int depth = 0, const PropertyRenderContext* propCtx = nullptr);
+void renderReflectedType(const std::string& name, type_index_t typeIndex, void* instance, RenderContext& ctx, int depth = 0, const PropertyRenderContext* propCtx = nullptr);
 
 struct ReflectRender
 {

@@ -37,7 +37,7 @@ TypeRenderRegistry& TypeRenderRegistry::instance()
 // ============================================================================
 // Type Rendering Functions - New Implementation with Context
 void renderReflectedType(const std::string& name,
-                         uint32_t typeIndex, void* instance,
+                         type_index_t typeIndex, void* instance,
                          RenderContext& ctx, int depth, const PropertyRenderContext* propRenderCache)
 {
     YA_PROFILE_SCOPE(std::format("renderReflectedType(ctx), {}, typeIndex: {}", name, typeIndex));

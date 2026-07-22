@@ -12,7 +12,7 @@ struct ReflectionHelper
     static bool isScalarType(type_index_t typeIdx)
     {
 
-        static std::unordered_set<uint32_t> baseTypes = {
+        static std::unordered_set<type_index_t> baseTypes = {
             ya::type_index_v<int>,
             ya::type_index_v<float>,
             ya::type_index_v<double>,
@@ -25,7 +25,7 @@ struct ReflectionHelper
         return baseTypes.contains(typeIdx);
     }
 
-    static bool isBaseType(uint32_t typeIdx)
+    static bool isBaseType(type_index_t typeIdx)
     {
         return isScalarType(typeIdx) || isEnumType(typeIdx);
     }
@@ -33,7 +33,7 @@ struct ReflectionHelper
     /**
      * Check if a type is an enum by typeIndex
      */
-    static bool isEnumType(uint32_t typeIndex)
+    static bool isEnumType(type_index_t typeIndex)
     {
         return EnumRegistry::instance().hasEnum(typeIndex);
     }

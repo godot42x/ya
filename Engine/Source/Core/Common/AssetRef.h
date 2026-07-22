@@ -262,14 +262,14 @@ struct IAssetRefResolver
     /**
      * @brief Check if a type index represents an asset reference type
      */
-    virtual bool isAssetRefType(uint32_t typeIndex) const = 0;
+    virtual bool isAssetRefType(type_index_t typeIndex) const = 0;
 
     /**
      * @brief Resolve an asset reference (load the asset from path)
      * @param typeIndex Type index of the concrete asset ref
      * @param assetRefPtr Pointer to the asset ref instance
      */
-    virtual void resolveAssetRef(uint32_t typeIndex, void *assetRefPtr) const = 0;
+    virtual void resolveAssetRef(type_index_t typeIndex, void *assetRefPtr) const = 0;
 };
 
 /**
@@ -279,8 +279,8 @@ struct DefaultAssetRefResolver : public IAssetRefResolver
 {
     static DefaultAssetRefResolver &instance();
 
-    bool isAssetRefType(uint32_t typeIndex) const override;
-    void resolveAssetRef(uint32_t typeIndex, void *assetRefPtr) const override;
+    bool isAssetRefType(type_index_t typeIndex) const override;
+    void resolveAssetRef(type_index_t typeIndex, void *assetRefPtr) const override;
 };
 
 } // namespace ya
