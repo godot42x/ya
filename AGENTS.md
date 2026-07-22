@@ -8,20 +8,20 @@ YA Engine 是 C++20 游戏引擎，主渲染后端为 Vulkan，兼容 OpenGL；�
 
 ## Main Commands
 
-构建系统只有 XMake；日常优先走 `make` 包装。
+构建系统只有 XMake；日常工作流优先走 `python3 Script/ya.py`。
 
 ```bash
-make cfg
-make r t=ya-runtime project=Example/HelloMaterial/HelloMaterial.yaproject
-make r t=ya-runtime editor=true project=Example/HelloMaterial/HelloMaterial.yaproject
-make package t=ya-runtime project=Example/HelloMaterial/HelloMaterial.yaproject
-make test t=ya r_args="Suite.Test"
+python3 Script/ya.py cfg
+python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
+python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject
+python3 Script/ya.py package --project Example/HelloMaterial/HelloMaterial.yaproject
+python3 Script/ya.py test --target ya --filter Suite.Test
 ```
 
 兼容入口保留，但不是主路径：
 
 ```bash
-make r t=HelloMaterial
+python3 Script/ya.py run --target HelloMaterial
 ```
 
 需要精细控制时再直接用 XMake：

@@ -8,28 +8,29 @@ description: YA Engine 的 XMake 构建、目标选择、shader 生成与测试�
 - 构建失败、链接失败、目标找不到、编译参数不对
 - 需要选择正确的 target 进行 build / run / test
 - 需要刷新 `compile_commands.json` 或重跑 shader 生成
-- 需要判断应该用 `make` 包装命令还是直接用 `xmake`
+- 需要判断应该用 `python3 Script/ya.py` 工作流命令还是直接用 `xmake`
 
 ## 核心规则
 
 1. 只使用 XMake；不要引入 CMake。
-2. 默认宿主目标是 `ya-runtime`；带项目运行时优先显式传 `project=...`，编辑器叠加 `editor=true`。
+2. 默认宿主目标是 `ya-runtime`；带项目运行时优先显式传 `--project ...`，编辑器走 `run-editor`。
 3. shader 生成通过 `xmake ya-shader`，不要手改 `Engine/Shader/*/Generated/*`。
 4. 测试使用 GoogleTest 目标，不要自己发明另一套测试入口。
-5. `make r t=<Example>` 只保留兼容层；新入口优先回到 `ya-runtime + project=...`。
+5. `python3 Script/ya.py run --target <Example>` 只保留兼容层；新入口优先回到 `ya-runtime + --project ...`。
+6. `python3 Script/ya.py package` 的定位是最小收集器，不默认承诺完整跨平台可分发包。
 
 ## 常用命令
 
-### Makefile 包装（优先）
+### Python launcher（优先）
 
 ```bash
-make r t=ya-runtime project=Example/HelloMaterial/HelloMaterial.yaproject
-make r t=ya-runtime editor=true project=Example/HelloMaterial/HelloMaterial.yaproject
-make b t=ya-runtime project=Example/HelloMaterial/HelloMaterial.yaproject
-make package t=ya-runtime project=Example/HelloMaterial/HelloMaterial.yaproject
-make r t=HelloMaterial
-make test t=ya r_args="Suite.Test"
-make cfg
+python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
+python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject
+python3 Script/ya.py build --project Example/HelloMaterial/HelloMaterial.yaproject
+python3 Script/ya.py package --project Example/HelloMaterial/HelloMaterial.yaproject
+python3 Script/ya.py run --target HelloMaterial
+python3 Script/ya.py test --target ya --filter Suite.Test
+python3 Script/ya.py cfg
 ```
 
 ### 直接使用 XMake
@@ -51,23 +52,23 @@ xmake b ya-testing && xmake r ya-testing --gtest_filter=Suite.Test
 - 最小入口仍是：
 
 ```bash
-make cfg m=profile
-make r t=ya-runtime project=Example/HelloMaterial/HelloMaterial.yaproject r_args="--exit-after-frame=300 --log-level=warn --log-detail-level=error"
+python3 Script/ya.py cfg --mode profile
+python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject -- --exit-after-frame=300 --log-level=warn --log-detail-level=error
 ```
 
 ## 何时用哪种入口
 
-1. 日常构建 / 运行 / 刷新 compile commands，优先用 `make` 包装命令。
+1. 日常构建 / 运行 / 刷新 compile commands，优先用 `python3 Script/ya.py`。
 2. 需要精确控制某个 xmake 子命令时，直接用 `xmake`。
-3. 需要刷新工作区构建配置时，用 `make cfg`。
+3. 需要刷新工作区构建配置时，用 `python3 Script/ya.py cfg`。
 4. 需要重建 shader 头时，用 `xmake ya-shader`。
-5. 需要收集最小项目包时，用 `make package t=ya-runtime project=<path>`。
+5. 需要收集最小项目包时，用 `python3 Script/ya.py package --project <path>`。
+6. 若问题已经进入平台发行、app bundle、签名、图形驱动分发，先明确那不是当前默认 package 目标，再决定是否单独扩工作范围。
 
 ## 当前仓库锚点
 
-- `Makefile`：封装 `b / r / cfg / test / help`
+- `Script/ya.py`：工作流入口，封装 `cfg / build / run / run-editor / package / test`
 - `xmake.lua`：全局规则、`compile_commands.autoupdate`
-- `Xmake/task.lua`：`xmake cpcm`、`xmake vscode`
 - `Engine/Shader/Shader.xmake.lua`：shader 生成入口
 - `Test/xmake.lua`：测试目标定义
 - `Example/`：可运行示例目标
@@ -82,7 +83,7 @@ make r t=ya-runtime project=Example/HelloMaterial/HelloMaterial.yaproject r_args
 
 ### 2. 编译通过但运行入口不对
 
-1. 优先检查是否应该使用 `make r t=ya-runtime project=<path>`。
+1. 优先检查是否应该使用 `python3 Script/ya.py run --project <path>`。
 2. 若使用 legacy shorthand，确认 `Example/<Target>/<Target>.yaproject` 确实存在。
 3. 确认 `launch.json` 中程序路径是否仍匹配当前输出目录。
 
@@ -95,7 +96,7 @@ make r t=ya-runtime project=Example/HelloMaterial/HelloMaterial.yaproject r_args
 
 ### 4. IntelliSense / clangd 不对
 
-1. 先刷新 `compile_commands.json`：`make cfg` 或 `xmake cpcm`。
+1. 先刷新 `compile_commands.json`：`python3 Script/ya.py cfg`。
 2. 再检查 VS Code 是否读取了正确文件。
 3. 这类问题通常和 `vscode` skill 一起看。
 
