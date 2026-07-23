@@ -34,6 +34,35 @@
 namespace ya
 {
 
+namespace
+{
+
+Extent2D resolveRuntimeViewportExtent(App& app)
+{
+    auto* renderRuntime = app.getRenderRuntime();
+    return AppFrameLoop::resolveViewportExtent(app,
+                                               renderRuntime,
+                                               renderRuntime ? renderRuntime->getViewportRect() : Rect2D{});
+}
+
+void syncRuntimeCameraAspect(Scene& scene, const Extent2D& viewportExtent)
+{
+    if (viewportExtent.width == 0 || viewportExtent.height == 0) {
+        return;
+    }
+
+    const float aspectRatio = static_cast<float>(viewportExtent.width) / static_cast<float>(viewportExtent.height);
+    auto        cameras     = scene.getRegistry().view<CameraComponent>();
+    for (auto entityHandle : cameras) {
+        auto& camera = cameras.get<CameraComponent>(entityHandle);
+        if (!camera._fixedAspectRatio) {
+            camera.setAspectRatio(aspectRatio);
+        }
+    }
+}
+
+} // namespace
+
 int App::run()
 {
     return AppFrameLoop::run(*this);
@@ -217,6 +246,14 @@ void AppFrameLoop::tickLogic(App& app, float dt)
         YA_PROFILE_SCOPE("Logic/Systems");
         for (auto& sys : app._systems) {
             sys->onUpdate(dt);
+        }
+    }
+
+    if (auto* sceneManager = app.getSceneManager()) {
+        if (auto* scene = sceneManager->getActiveScene()) {
+            YA_PROFILE_SCOPE("Logic/RuntimeCamera");
+            const Extent2D viewportExtent = resolveRuntimeViewportExtent(app);
+            syncRuntimeCameraAspect(*scene, viewportExtent);
         }
     }
 
