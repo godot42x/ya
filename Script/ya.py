@@ -31,7 +31,7 @@ class YaSubcommandParser(YaArgumentParser):
         self.exit(2, f"{self.prog}: error: {message}\n\n{self.format_help()}")
 
 
-def _fail_command(command_name: str, message: str) -> "NoReturn":
+def _fail_command(command_name: str, message: str):
     subparser = SUBCOMMAND_PARSERS.get(command_name)
     if subparser is not None:
         raise SystemExit(f"{message}\n\n{subparser.format_help()}")
@@ -261,7 +261,13 @@ def cmd_run(args: argparse.Namespace) -> None:
 
 
 def cmd_run_editor(args: argparse.Namespace) -> None:
-    project_path = _require_project_path(args.target, args.project, "run-editor")
+    project_path = _resolve_project_path(args.target, args.project, "run-editor")
+    if args.target != "ya-runtime" and project_path is None:
+        _fail_command(
+            "run-editor",
+            f"run-editor requires --project, or a legacy example target that maps to a .yaproject.\n"
+            f"{_format_command_examples('run-editor')}",
+        )
     if args.force:
         _run(["xmake", "c"])
     if args.config_arg:
