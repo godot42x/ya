@@ -2,22 +2,20 @@
 
 #include "Editor/App/EditorLayer.h"
 #include "Editor/App/EditorPlaySession.h"
-#include "Editor/App/EditorRuntimeToolsWindow.h"
-
+#include "Config/ConfigManager.h"
 #include "Core/Camera/FreeCameraController.h"
+#include "Core/Profiling/Profiling.h"
 #include "Editor/EditorProfilingSettings.h"
+#include "Editor/ImGui/ImGuiHelper.h"
 #include "Editor/Inspector/TypeRenderer.h"
 #include "Render/2D/Render2D.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/RenderImage.h"
-#include "Resource/Texture/TextureLibrary.h"
 #include "Resource/Font/FontManager.h"
-#include "Config/ConfigManager.h"
-#include "Core/Profiling/Profiling.h"
-#include "Editor/ImGui/ImGuiHelper.h"
+#include "Resource/Texture/TextureLibrary.h"
 #include "Runtime/App/App.h"
-#include "Runtime/App/RenderRuntime.h"
 #include "Runtime/App/Common/Shadow/Common/ShadowSettingsConfig.h"
+#include "Runtime/App/RenderRuntime.h"
 
 #include <string_view>
 
@@ -41,11 +39,12 @@ glm::vec3 resolveInitialEditorCameraRotation(const App& app)
 
 void initializeEditorCamera(App& app, EditorLayer& layer)
 {
-    auto& editorCamera = layer.getCamera();
-    const auto& desc   = app.getDesc();
-    const float aspect = desc.height > 0 ? static_cast<float>(desc.width) / static_cast<float>(desc.height) : (16.0f / 9.0f);
+    auto&       editorCamera = layer.getCamera();
+    const auto& desc         = app.getDesc();
+    const float aspect       = desc.height > 0 ? static_cast<float>(desc.width) / static_cast<float>(desc.height) : (16.0f / 9.0f);
     editorCamera.setPerspective(45.0f, aspect, 0.1f, 100.0f);
-    editorCamera.setPositionAndRotation(resolveInitialEditorCameraPosition(app), resolveInitialEditorCameraRotation(app));
+    editorCamera.setPositionAndRotation(resolveInitialEditorCameraPosition(app),
+                                        resolveInitialEditorCameraRotation(app));
 }
 
 std::shared_ptr<RenderImage> createEditorViewportImage(IRender& render, const RenderImage& source)
@@ -56,8 +55,8 @@ std::shared_ptr<RenderImage> createEditorViewportImage(IRender& render, const Re
     }
 
     const EFormat::T targetFormat = source.getFormat() == EFormat::R16G16B16A16_SFLOAT
-        ? source.getFormat()
-        : EFormat::R16G16B16A16_SFLOAT;
+                                      ? source.getFormat()
+                                      : EFormat::R16G16B16A16_SFLOAT;
 
     return createRenderImage(
         *render.getResourceFactory(),
@@ -81,6 +80,12 @@ std::shared_ptr<RenderImage> createEditorViewportImage(IRender& render, const Re
 
 class EditorViewportCompositor
 {
+  private:
+    std::shared_ptr<RenderImage> _composedViewportImage   = nullptr;
+    std::shared_ptr<Texture>     _sourceViewportTexture   = nullptr;
+    std::shared_ptr<IImage>      _sourceViewportImage     = nullptr;
+    std::shared_ptr<IImageView>  _sourceViewportImageView = nullptr;
+
   public:
     void shutdown()
     {
@@ -119,37 +124,38 @@ class EditorViewportCompositor
 
         const Extent2D extent = _composedViewportImage->getExtent();
         commandBuffer.beginRendering(RenderingInfo{
-            .label = "EditorViewportComposition",
+            .label                         = "EditorViewportComposition",
             .bExternalTransitionManagement = true,
+            //
             .attachments = RenderAttachmentSet{
                 .renderArea = Rect2D{
-                    .pos = {0.0f, 0.0f},
+                    .pos    = {0.0f, 0.0f},
                     .extent = {static_cast<float>(extent.width), static_cast<float>(extent.height)},
                 },
                 .layerCount = 1,
-                .colors = {
+                .colors     = {
                     RenderAttachment{
-                        .image = _composedViewportImage->getImage(),
-                        .imageView = _composedViewportImage->getImageView(),
-                        .loadOp = EAttachmentLoadOp::Clear,
-                        .storeOp = EAttachmentStoreOp::Store,
-                        .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                        .finalLayout = EImageLayout::ColorAttachmentOptimal,
-                        .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
+                            .image         = _composedViewportImage->getImage(),
+                            .imageView     = _composedViewportImage->getImageView(),
+                            .loadOp        = EAttachmentLoadOp::Clear,
+                            .storeOp       = EAttachmentStoreOp::Store,
+                            .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                            .finalLayout   = EImageLayout::ColorAttachmentOptimal,
+                            .clearValue    = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
                     },
                 },
             },
         });
 
         FRender2dContext render2dCtx{
-            .cmdBuf = &commandBuffer,
-            .windowWidth = extent.width,
+            .cmdBuf       = &commandBuffer,
+            .windowWidth  = extent.width,
             .windowHeight = extent.height,
-            .cam = {
-                .position = layer.getCamera().getPosition(),
-                .view = layer.getCamera().getViewMatrix(),
-                .projection = layer.getCamera().getProjectionMatrix(),
-                .viewProjection = layer.getCamera().getProjectionMatrix() * layer.getCamera().getViewMatrix(),
+            .cam          = {
+                         .position       = layer.getCamera().getPosition(),
+                         .view           = layer.getCamera().getViewMatrix(),
+                         .projection     = layer.getCamera().getProjectionMatrix(),
+                         .viewProjection = layer.getCamera().getProjectionMatrix() * layer.getCamera().getViewMatrix(),
             },
         };
         Render2D::begin(render2dCtx);
@@ -224,15 +230,16 @@ class EditorViewportCompositor
 
         _composedViewportImage = createEditorViewportImage(render, source);
     }
-
-    std::shared_ptr<RenderImage> _composedViewportImage = nullptr;
-    std::shared_ptr<Texture>     _sourceViewportTexture = nullptr;
-    std::shared_ptr<IImage>      _sourceViewportImage = nullptr;
-    std::shared_ptr<IImageView>  _sourceViewportImageView = nullptr;
 };
 
 class EditorAppExtension final : public IModule
 {
+  private:
+    std::unique_ptr<EditorLayer> _layer;
+    EditorPlaySession            _playSession;
+    FreeCameraController         _cameraController;
+    EditorViewportCompositor     _viewportCompositor;
+
   public:
     bool onLoad(FModuleContext&) override { return true; }
     bool onStart(const FEngineContext&) override { return true; }
@@ -248,7 +255,7 @@ class EditorAppExtension final : public IModule
                 shadow_settings::loadSettingsFromDocument("editor", app.getShadowSettings()));
         }
         editor_profiling_settings::load();
-        if (!desc.defaultScenePath) {
+        if (desc.projectPath && !desc.defaultScenePath) {
             const std::string path = ConfigManager::get().getOr<std::string>("editor", "startup.defaultScenePath", "");
             if (!path.empty()) {
                 desc.defaultScenePath = path;
@@ -265,6 +272,7 @@ class EditorAppExtension final : public IModule
         registerBuiltinTypeRenderers();
 
         _layer = std::make_unique<EditorLayer>(&app);
+        _layer->setCameraController(&_cameraController);
         initializeEditorCamera(app, *_layer);
         _layer->onAttach();
         gEditorLayer = _layer.get();
@@ -343,7 +351,7 @@ class EditorAppExtension final : public IModule
         }
 
         if (auto* renderRuntime = app.getRenderRuntime()) {
-            auto& editorCamera = _layer->getCamera();
+            auto&          editorCamera   = _layer->getCamera();
             const Extent2D viewportExtent = renderRuntime->getViewportExtent();
             if (_layer->shouldCaptureInput()) {
                 _cameraController.update(editorCamera, app.inputManager, dt);
@@ -399,7 +407,6 @@ class EditorAppExtension final : public IModule
 
         ImGuiManager::get().beginFrame();
         _layer->onImGuiRender();
-        renderRuntimeToolsWindow(app, *_layer, _cameraController, dt);
         ImGuiManager::get().endFrame();
         ImGuiManager::get().render();
 
@@ -407,12 +414,6 @@ class EditorAppExtension final : public IModule
             ImGuiManager::get().submitVulkan(commandBuffer.getHandleAs<VkCommandBuffer>());
         }
     }
-
-  private:
-    std::unique_ptr<EditorLayer> _layer;
-    EditorPlaySession             _playSession;
-    FreeCameraController          _cameraController;
-    EditorViewportCompositor      _viewportCompositor;
 };
 
 } // namespace

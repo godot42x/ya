@@ -11,6 +11,7 @@
 #include "ECS/System/TransformSystem.h"
 #include "Editor/EditorCommon.h"
 #include "Editor/ImGui/ImGuiHelper.h"
+#include "Core/Module/ProjectDescriptor.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Core/RenderImage.h"
 #include "Resource/AssetManager.h"
@@ -21,6 +22,7 @@
 #include "Scene/Scene.h"
 #include "Scene/SceneManager.h"
 #include <ImGuizmo.h>
+#include <filesystem>
 #include <format>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -31,7 +33,6 @@
 
 namespace ya
 {
-
 Scene* EditorLayer::getEditableScene() const
 {
     return _editableScene;
@@ -59,6 +60,65 @@ void EditorLayer::syncEditorSettingsFromConfig()
     _bShowViewportCameraOverlay = ConfigManager::get().getOr<bool>("editor",
                                                                    "viewport.cameraOverlay.enabled",
                                                                    _bShowViewportCameraOverlay);
+}
+
+bool EditorLayer::hasProjectLoaded() const
+{
+    return _app && _app->getDesc().projectPath.has_value();
+}
+
+void EditorLayer::refreshProjectBrowser()
+{
+    _discoveredProjects.clear();
+    _projectBrowserSelection = -1;
+    _projectBrowserError.clear();
+
+    namespace fs = std::filesystem;
+    const fs::path exampleRoot = fs::current_path() / "Example";
+    if (!fs::exists(exampleRoot) || !fs::is_directory(exampleRoot)) {
+        _projectBrowserError = std::format("Project root not found: {}", exampleRoot.string());
+        return;
+    }
+
+    for (const auto& entry : fs::recursive_directory_iterator(exampleRoot)) {
+        if (!entry.is_regular_file()) {
+            continue;
+        }
+        if (entry.path().extension() != ".yaproject") {
+            continue;
+        }
+        _discoveredProjects.push_back(fs::weakly_canonical(entry.path()).string());
+    }
+
+    std::sort(_discoveredProjects.begin(), _discoveredProjects.end());
+    if (!_discoveredProjects.empty()) {
+        _projectBrowserSelection = 0;
+    }
+    else {
+        _projectBrowserError = "No .yaproject files were found under Example/.";
+    }
+}
+
+bool EditorLayer::openProjectInPlace(const std::string& projectPath)
+{
+    if (!_app) {
+        _projectBrowserError = "App is not available.";
+        return false;
+    }
+
+    try {
+        const auto descriptor = FProjectDescriptor::load(projectPath);
+        if (!_app->openProject(descriptor)) {
+            _projectBrowserError = std::format("Failed to open project scene: {}", descriptor.name);
+            return false;
+        }
+        _projectBrowserError.clear();
+        return true;
+    }
+    catch (const std::exception& exception) {
+        _projectBrowserError = exception.what();
+        return false;
+    }
 }
 
 static std::string normalizeConfigLabel(const std::string& label)
@@ -148,7 +208,8 @@ EditorLayer::EditorLayer(App* app)
       _sceneHierarchyPanel(this),
       _detailsView(this),
       _contentBrowserPanel(this),
-      _assetInspectorPanel(this)
+      _assetInspectorPanel(this),
+      _runtimeToolsPanel(this)
 {
 }
 
@@ -192,6 +253,10 @@ void EditorLayer::onAttach()
     _pauseIcon      = getOrCreateImGuiTextureID(pauseIcon->getImageView());
     _stopIcon       = getOrCreateImGuiTextureID(stopIcon->getImageView());
     _simulationIcon = getOrCreateImGuiTextureID(simulationIcon->getImageView());
+
+    if (!hasProjectLoaded()) {
+        refreshProjectBrowser();
+    }
 }
 
 void EditorLayer::onDetach()
@@ -208,7 +273,7 @@ void EditorLayer::onDetach()
 void EditorLayer::onUpdate(float dt)
 {
     YA_PROFILE_FUNCTION();
-    // Update logic here if needed
+    _lastDeltaTime = dt;
 }
 
 std::vector<RenderOverlayText2D> EditorLayer::buildViewportCameraOverlayTexts() const
@@ -633,6 +698,108 @@ void EditorLayer::toolbar()
 
     // style RAII auto-pop
     ImGui::End();
+}
+
+void EditorLayer::projectBrowserWindow()
+{
+    YA_PROFILE_FUNCTION();
+
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->WorkPos, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(viewport->WorkSize, ImGuiCond_Always);
+
+    if (!ImGui::Begin("Project Browser",
+                      nullptr,
+                      ImGuiWindowFlags_NoCollapse |
+                          ImGuiWindowFlags_NoResize |
+                          ImGuiWindowFlags_NoMove |
+                          ImGuiWindowFlags_NoDocking |
+                          ImGuiWindowFlags_NoTitleBar))
+    {
+        ImGui::End();
+        return;
+    }
+
+    const ImVec2 workSize = viewport->WorkSize;
+    const float  contentWidth = std::min(workSize.x - 80.0f, 920.0f);
+    const float  topPadding   = std::max(32.0f, workSize.y * 0.12f);
+
+    ImGui::SetCursorPos(ImVec2((workSize.x - contentWidth) * 0.5f, topPadding));
+    ImGui::BeginGroup();
+
+    ImGui::Text("YA Editor");
+    ImGui::Separator();
+    ImGui::Spacing();
+    ImGui::TextWrapped("Select a project to open. This startup screen is isolated from the main editor layout until a project is loaded.");
+    ImGui::Spacing();
+
+    if (!_projectBrowserError.empty()) {
+        ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.35f, 1.0f), "%s", _projectBrowserError.c_str());
+        ImGui::Spacing();
+    }
+
+    const float buttonWidth = 160.0f;
+    if (ImGui::Button("Refresh Projects", ImVec2(buttonWidth, 0.0f))) {
+        refreshProjectBrowser();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Exit Editor", ImVec2(buttonWidth, 0.0f)) && _app) {
+        _app->requestQuit();
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    const float listHeight = std::max(240.0f, std::min(420.0f, workSize.y * 0.45f));
+    if (ImGui::BeginListBox("##projects", ImVec2(contentWidth, listHeight))) {
+        for (int index = 0; index < static_cast<int>(_discoveredProjects.size()); ++index) {
+            const bool bSelected = _projectBrowserSelection == index;
+            if (ImGui::Selectable(_discoveredProjects[index].c_str(), bSelected)) {
+                _projectBrowserSelection = index;
+            }
+            if (bSelected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndListBox();
+    }
+
+    const bool bCanOpen = _projectBrowserSelection >= 0 &&
+                          _projectBrowserSelection < static_cast<int>(_discoveredProjects.size());
+    if (bCanOpen) {
+        ImGui::TextWrapped("%s", _discoveredProjects[_projectBrowserSelection].c_str());
+    }
+    else {
+        ImGui::TextDisabled("Select a project to continue.");
+    }
+
+    ImGui::Spacing();
+    if (ImGui::Button("Open Project", ImVec2(buttonWidth, 0.0f)) && bCanOpen) {
+        const std::string selectedProject = _discoveredProjects[_projectBrowserSelection];
+        openProjectInPlace(selectedProject);
+    }
+
+    ImGui::EndGroup();
+    ImGui::End();
+}
+
+void EditorLayer::runtimeToolsWindow()
+{
+    if (!_app) {
+        return;
+    }
+    _runtimeToolsPanel.onImGuiRender(*_app, _lastDeltaTime);
+}
+
+void EditorLayer::renderAuxiliaryUi()
+{
+    _filePicker.render();
+
+    if (bShowDemoWindow)
+    {
+        ImGui::ShowDemoWindow(&bShowDemoWindow);
+    }
 }
 
 void EditorLayer::viewportWindow()

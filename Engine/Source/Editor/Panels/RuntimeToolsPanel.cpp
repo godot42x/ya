@@ -1,4 +1,4 @@
-#include "Editor/App/EditorRuntimeToolsWindow.h"
+#include "Editor/Panels/RuntimeToolsPanel.h"
 
 #include "Config/ConfigManager.h"
 #include "Core/Camera/FreeCameraController.h"
@@ -11,13 +11,13 @@
 #include "Runtime/App/App.h"
 #include "Runtime/App/Common/PostProcessingStage.h"
 #include "Runtime/App/Common/Shadow/BasicShadowMap/BasicShadowMapTechnique.h"
+#include "Runtime/App/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "Runtime/App/Common/Shadow/ShadowStage.h"
 #include "Runtime/App/DebugRenderSystem.h"
 #include "Runtime/App/DeferredRender/DeferredRenderPipeline.h"
 #include "Runtime/App/ForwardRender/ForwardRenderPipeline.h"
 #include "Runtime/App/RenderRuntime.h"
 #include "Runtime/App/Utility/FPSCtrl.h"
-#include "Runtime/App/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "Render/2D/Render2D.h"
 #include "Render/Core/Swapchain.h"
 
@@ -344,6 +344,73 @@ bool renderShadowSettingsControls(ShadowSettings& shadowSettings, bool bAllowDir
     return bDirty;
 }
 
+void renderSessionContent(App& app)
+{
+    auto* render = app.getRender();
+    auto* renderRuntime = app.getRenderRuntime();
+    auto* swapchain = render ? render->getSwapchain() : nullptr;
+
+    ImGui::Text("State: %s", app.isRuntimeMode() ? "Runtime" : (app.isSimulationMode() ? "Simulation" : "Stopped"));
+    if (renderRuntime) {
+        ImGui::Text("Pipeline: %s", renderRuntime->isDeferredPipelineActive() ? "Deferred" : "Forward");
+    }
+    if (swapchain) {
+        ImGui::Text("Swapchain: %u x %u", swapchain->getExtent().width, swapchain->getExtent().height);
+    }
+}
+
+void renderProfilingContent()
+{
+    const auto compileMode = profiling::getCompileModeLabel();
+    ImGui::Text("Compile Mode: %s", compileMode);
+
+    auto state  = profiling::getRuntimeState();
+    bool bDirty = false;
+    bDirty |= ImGui::Checkbox("CPU Trace", &state.cpuTraceEnabled);
+    bDirty |= ImGui::Checkbox("Perf Metrics", &state.perfMetricsEnabled);
+    bDirty |= ImGui::Checkbox("Static Init", &state.staticInitEnabled);
+    if (bDirty) {
+        profiling::setRuntimeState(state);
+        editor_profiling_settings::save();
+    }
+
+    const auto paths     = profiling::getRuntimeSessionPaths();
+    const auto& cpuTrace = profiling::cpuTrace();
+    ImGui::Text("CPU Trace Session: %s", cpuTrace.IsSessionActive() ? "Active" : "Idle");
+    if (!paths.sessionName.empty()) {
+        ImGui::TextWrapped("Session: %s", paths.sessionName.c_str());
+    }
+    if (!paths.runId.empty()) {
+        ImGui::TextWrapped("Run: %s", paths.runId.c_str());
+    }
+    if (!paths.outputDir.empty()) {
+        ImGui::TextWrapped("Output Dir: %s", paths.outputDir.c_str());
+    }
+    if (!paths.cpuProfilePath.empty()) {
+        ImGui::TextWrapped("CPU Trace Path: %s", paths.cpuProfilePath.c_str());
+    }
+    if (!paths.profileSummaryPath.empty()) {
+        ImGui::TextWrapped("Summary Path: %s", paths.profileSummaryPath.c_str());
+    }
+
+    auto& perfState = profiling::metrics();
+    static constexpr size_t WINDOW_SIZES[]          = {1, 10, 30, 60};
+    static constexpr const char* WINDOW_LABELS[]    = {"Last", "10 frames", "30 frames", "60 frames"};
+    int currentWindowIndex = 0;
+    for (int i = 0; i < IM_ARRAYSIZE(WINDOW_SIZES); ++i) {
+        if (perfState.getAverageWindowSize() == WINDOW_SIZES[i]) {
+            currentWindowIndex = i;
+            break;
+        }
+    }
+    if (ImGui::Combo("Metrics Average", &currentWindowIndex, WINDOW_LABELS, IM_ARRAYSIZE(WINDOW_LABELS))) {
+        perfState.setAverageWindowSize(WINDOW_SIZES[currentWindowIndex]);
+    }
+
+    ImGui::Text("Frame CPU: %.3f ms", perfState.getDisplayValue(perf::sample::renderFrame(), perf::metric::cpuTimeMs()));
+    ImGui::Text("Frame GPU: %.3f ms", perfState.getDisplayValue(perf::sample::renderFrame(), perf::metric::gpuTimeMs()));
+}
+
 bool renderPostProcessingSettings(PostProcessingState& post)
 {
     bool changed = false;
@@ -436,9 +503,36 @@ void renderPresentationSettings(App& app, RenderRuntime& runtime)
     }
 }
 
+void renderForwardSettingsContent(App& app)
+{
+    auto* pipeline = getForwardPipeline(app);
+    if (!pipeline) {
+        ImGui::TextDisabled("Forward-only settings are unavailable while the deferred pipeline is active.");
+        return;
+    }
+
+    if (ImGui::TreeNode("Shadows")) {
+        ShadowSettings shadowSettings = pipeline->getCurrentShadowSettings();
+        if (renderShadowSettingsControls(shadowSettings, false)) {
+            pipeline->requestShadowSettings(shadowSettings);
+            saveShadowSettings(shadowSettings);
+        }
+        ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNode("Post Process")) {
+        auto post = pipeline->_postProcessStage.getState();
+        if (renderPostProcessingSettings(post)) {
+            pipeline->_postProcessStage.getState() = post;
+            savePostProcessingSettings(post);
+        }
+        ImGui::TreePop();
+    }
+}
+
 void renderDeferredSettingsContent(App& app)
 {
-    auto* runtime = app.getRenderRuntime();
+    auto* runtime  = app.getRenderRuntime();
     auto* pipeline = getDeferredPipeline(app);
     if (!runtime || !pipeline) {
         ImGui::TextDisabled("Deferred-only settings are unavailable while the forward pipeline is active.");
@@ -446,7 +540,7 @@ void renderDeferredSettingsContent(App& app)
     }
 
     auto settings = pipeline->buildSettingsSnapshot();
-    bool changed = false;
+    bool changed  = false;
 
     if (ImGui::TreeNode("General")) {
         changed |= ImGui::Checkbox("GBuffer Reverse Viewport Y", &settings.bReverseViewportY);
@@ -456,8 +550,8 @@ void renderDeferredSettingsContent(App& app)
 
     if (ImGui::TreeNode("Lighting")) {
         if (pipeline->_lightStage) {
-            bool diffuseIBL = pipeline->_lightStage->isPBRDiffuseIBLEnabled();
-            bool specularIBL = pipeline->_lightStage->isPBRSpecularIBLEnabled();
+            bool diffuseIBL   = pipeline->_lightStage->isPBRDiffuseIBLEnabled();
+            bool specularIBL  = pipeline->_lightStage->isPBRSpecularIBLEnabled();
             bool bLightChanged = false;
             bLightChanged |= ImGui::Checkbox("Enable PBR Diffuse IBL", &diffuseIBL);
             bLightChanged |= ImGui::Checkbox("Enable PBR Specular IBL", &specularIBL);
@@ -472,11 +566,11 @@ void renderDeferredSettingsContent(App& app)
     if (ImGui::TreeNode("Ambient Occlusion")) {
         changed |= ImGui::Checkbox("Enable SSAO", &settings.bSSAOEnabled);
         if (settings.bSSAOEnabled && pipeline->_ssaoStage) {
-            float radius    = pipeline->_ssaoStage->getRadius();
-            float bias      = pipeline->_ssaoStage->getBias();
-            float power     = pipeline->_ssaoStage->getPower();
-            float intensity = pipeline->_ssaoStage->getIntensity();
-            bool reverseY   = pipeline->_ssaoStage->isReverseYEnabled();
+            float radius      = pipeline->_ssaoStage->getRadius();
+            float bias        = pipeline->_ssaoStage->getBias();
+            float power       = pipeline->_ssaoStage->getPower();
+            float intensity   = pipeline->_ssaoStage->getIntensity();
+            bool reverseY     = pipeline->_ssaoStage->isReverseYEnabled();
             bool bSSAOChanged = false;
             bSSAOChanged |= ImGui::DragFloat("Radius", &radius, 0.01f, 0.05f, 5.0f, "%.3f");
             bSSAOChanged |= ImGui::DragFloat("Bias", &bias, 0.001f, 0.0f, 0.2f, "%.4f");
@@ -510,30 +604,291 @@ void renderDeferredSettingsContent(App& app)
     }
 }
 
-void renderForwardSettingsContent(App& app)
+void renderRenderingInternalsContent(App& app)
 {
-    auto* pipeline = getForwardPipeline(app);
-    if (!pipeline) {
-        ImGui::TextDisabled("Forward-only settings are unavailable while the deferred pipeline is active.");
+    auto renderPostProcessingTechnicalContent = [](const PostProcessingStage& stage) {
+        if (stage._bloomProcessor && ImGui::TreeNode("Bloom")) {
+            ImGui::Text("Blur Passes (H+V): %u", stage._bloomProcessor->_lastBlurPassCount);
+            renderGraphicsPipelineInspector("Extract", stage._bloomProcessor->_extractPipeline.get());
+            renderGraphicsPipelineInspector("Blur", stage._bloomProcessor->_blurPipeline.get());
+            renderGraphicsPipelineInspector("Composite", stage._bloomProcessor->_compositePipeline.get());
+            ImGui::TreePop();
+        }
+
+        if (stage._postProcessor) {
+            renderGraphicsPipelineInspector("Basic Postprocess Pipeline", stage._postProcessor->_pipeline.get());
+        }
+    };
+
+    auto renderShadowStageInternals = [](ShadowStage& stage) {
+        auto* basicTechnique = dynamic_cast<BasicShadowMapTechnique*>(stage.getTechnique());
+        if (!basicTechnique) {
+            ImGui::TextDisabled("Unsupported shadow technique.");
+            return;
+        }
+
+        if (ImGui::TreeNode("Stats")) {
+            const auto& settings = basicTechnique->getSettings();
+            ImGui::Text("Technique: Basic Shadow Map");
+            ImGui::Text("Resolution: %u", settings.resolution);
+            ImGui::Text("Point lights: %u / %u", basicTechnique->getLastPreparedPointLightCount(), settings.getEffectivePointLightCount());
+            ImGui::Text("Point Indirect: %s", settings.pointLightUseIndirect ? "On" : "Off");
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("Passes")) {
+            if (ImGui::TreeNode("Directional")) {
+                ImGui::TextDisabled("No runtime controls");
+                renderGraphicsPipelineInspector("Directional Static", basicTechnique->getDirectionalPass().getStaticPipeline());
+                renderGraphicsPipelineInspector("Directional Skinned", basicTechnique->getDirectionalPass().getSkinnedPipeline());
+                ImGui::TreePop();
+            }
+            if (ImGui::TreeNode("Point")) {
+                ImGui::Text("Indirect Path: %s", basicTechnique->getPointPass().getIndirectRenderer().isSupported() ? "supported" : "unsupported");
+                renderGraphicsPipelineInspector("Point Static", basicTechnique->getPointPass().getDirectStaticPipeline());
+                renderGraphicsPipelineInspector("Point Skinned", basicTechnique->getPointPass().getDirectSkinnedPipeline());
+                ImGui::TreePop();
+            }
+            ImGui::TreePop();
+        }
+    };
+
+    auto renderDeferredPerformanceContent = [](DeferredRenderPipeline& pipeline) {
+        auto& perf = profiling::metrics();
+        auto metric = [&perf](FName sampleKey, FName metricKey) {
+            return perf.getDisplayValue(sampleKey, metricKey);
+        };
+        auto cpu = [&metric](FName sampleKey) {
+            return metric(sampleKey, perf::metric::cpuTimeMs());
+        };
+
+        const float frameCpuMs        = cpu(perf::sample::renderFrame());
+        const float frameGpuMs        = metric(perf::sample::renderFrame(), perf::metric::gpuTimeMs());
+        const float logicMs           = cpu(perf::sample::frameLogic());
+        const float renderMs          = cpu(perf::sample::frameRender());
+        const float automationMs      = cpu(perf::sample::frameAutomation());
+        const float unaccountedMs     = cpu(perf::sample::frameUnaccounted());
+        const float extractMs         = cpu(perf::sample::renderExtract());
+        const float runtimeMs         = cpu(perf::sample::renderRuntime());
+        const float prepareFrameMs    = cpu(perf::sample::renderPrepareFrame());
+        const float waitIdleMs        = cpu(perf::sample::renderWaitIdle());
+        const float beginMs           = cpu(perf::sample::renderBegin());
+        const float waitFenceMs       = cpu(perf::sample::vulkanWaitFence());
+        const float acquireMs         = cpu(perf::sample::vulkanAcquire());
+        const float worldMs           = cpu(perf::sample::renderWorld());
+        const float deferredTickMs    = cpu(perf::sample::deferredTick());
+        const float shadowMs          = cpu(perf::sample::deferredShadow());
+        const float gbufferMs         = cpu(perf::sample::deferredGBuffer());
+        const float depthCopyMs       = cpu(perf::sample::deferredDepthCopy());
+        const float lightMs           = cpu(perf::sample::deferredLight());
+        const float overlayMs         = cpu(perf::sample::deferredOverlay());
+        const float viewportOverlayMs = cpu(perf::sample::renderViewportOverlay());
+        const float postProcessMs     = cpu(perf::sample::renderPostProcess());
+        const float presentationMs    = cpu(perf::sample::renderPresentation());
+        const float renderCallbacksMs = cpu(perf::sample::frameRenderCallbacks());
+        const float submitMs          = cpu(perf::sample::renderSubmit());
+        const float presentMs         = cpu(perf::sample::vulkanPresent());
+
+        ImGui::Text("CPU frame: %.3f ms", frameCpuMs);
+        ImGui::Text("GPU frame: %.3f ms", frameGpuMs);
+        ImGui::Text("Draw items: %u", pipeline._lastDrawCount);
+        ImGui::Text("Point lights: %u", pipeline._lastPointLightCount);
+
+        renderPerfTree("Frame Cycle", frameCpuMs, [&]() {
+            renderPerfLeaf("Logic", logicMs, frameCpuMs);
+            renderPerfTree("Render", renderMs, [&]() {
+                renderPerfLeaf("Extract", extractMs, renderMs);
+                renderPerfTree("Runtime", runtimeMs, [&]() {
+                    renderPerfTree("PrepareFrame", prepareFrameMs, [&]() {
+                        renderPerfLeaf("WaitIdle", waitIdleMs, prepareFrameMs);
+                        renderPerfTree("Begin", beginMs, [&]() {
+                            renderPerfLeaf("WaitFence", waitFenceMs, beginMs);
+                            renderPerfLeaf("Acquire", acquireMs, beginMs);
+                        });
+                    });
+                    renderPerfTree("World", worldMs, [&]() {
+                        renderPerfTree("Deferred", deferredTickMs, [&]() {
+                            renderPerfLeaf("Shadow", shadowMs, deferredTickMs);
+                            renderPerfLeaf("GBuffer", gbufferMs, deferredTickMs);
+                            renderPerfLeaf("DepthCopy", depthCopyMs, deferredTickMs);
+                            renderPerfLeaf("Light", lightMs, deferredTickMs);
+                            renderPerfLeaf("Overlay", overlayMs, deferredTickMs);
+                        });
+                        renderPerfLeaf("ViewportOverlay", viewportOverlayMs, worldMs);
+                        renderPerfLeaf("PostProcess", postProcessMs, worldMs);
+                    });
+                    renderPerfLeaf("Presentation", presentationMs, runtimeMs);
+                    renderPerfLeaf("RenderCallbacks", renderCallbacksMs, runtimeMs);
+                    renderPerfTree("Submit", submitMs, [&]() {
+                        renderPerfLeaf("Present", presentMs, submitMs);
+                    });
+                });
+            });
+            renderPerfLeaf("Automation", automationMs, frameCpuMs);
+            renderPerfLeaf("Unaccounted", unaccountedMs, frameCpuMs);
+        });
+    };
+
+    auto renderDeferredStageInternals = [&](DeferredRenderPipeline& pipeline) {
+        if (pipeline._shadowStage && ImGui::TreeNode("Shadow")) {
+            renderShadowStageInternals(*pipeline._shadowStage);
+            ImGui::TreePop();
+        }
+
+        if (pipeline._gBufferStage && ImGui::TreeNode("GBuffer")) {
+            if (ImGui::TreeNode("Stats")) {
+                ImGui::Text("Point shadow budget: %u", pipeline._gBufferStage->getMaxShadowedPointLights());
+                ImGui::Text("Shadowed point lights: %u", pipeline._gBufferStage->getLastShadowedPointLights());
+                ImGui::TreePop();
+            }
+            if (ImGui::TreeNode("Pipelines")) {
+                renderGraphicsPipelineInspector("PBR Static", pipeline._gBufferStage->getPBRPipeline());
+                renderGraphicsPipelineInspector("PBR Skinned", pipeline._gBufferStage->getPBRSkinnedPipeline());
+                renderGraphicsPipelineInspector("Phong Static", pipeline._gBufferStage->getPhongPipeline());
+                renderGraphicsPipelineInspector("Phong Skinned", pipeline._gBufferStage->getPhongSkinnedPipeline());
+                renderGraphicsPipelineInspector("Unlit Static", pipeline._gBufferStage->getUnlitPipeline());
+                renderGraphicsPipelineInspector("Unlit Skinned", pipeline._gBufferStage->getUnlitSkinnedPipeline());
+                ImGui::TreePop();
+            }
+            ImGui::TreePop();
+        }
+
+        if (pipeline._ssaoStage && ImGui::TreeNode("SSAO")) {
+            ImGui::Text("Descriptor writes: %u", pipeline._ssaoStage->getLastInputDescriptorWriteCount());
+            renderGraphicsPipelineInspector("SSAO Pipeline", pipeline._ssaoStage->getPipeline());
+            ImGui::TreePop();
+        }
+
+        if (pipeline._lightStage && ImGui::TreeNode("Lighting")) {
+            if (ImGui::TreeNode("Performance")) {
+                auto& perf = profiling::metrics();
+                ImGui::Text("Light prepare CPU: %.3f ms", perf.getDisplayValue(perf::sample::deferredLightPrepare(), perf::metric::cpuTimeMs()));
+                ImGui::Text("Light execute CPU: %.3f ms", perf.getDisplayValue(perf::sample::deferredLightExecute(), perf::metric::cpuTimeMs()));
+                ImGui::Text("Descriptor writes: gbuffer=%u shadow=%u",
+                            pipeline._lightStage->getLastGBufferDescriptorWriteCount(),
+                            pipeline._lightStage->getLastShadowDescriptorWriteCount());
+                ImGui::TreePop();
+            }
+            renderGraphicsPipelineInspector("Light Pipeline", pipeline._lightStage->getPipeline());
+            ImGui::TreePop();
+        }
+
+        if (pipeline._overlayStage && ImGui::TreeNode("Viewport Overlay")) {
+            if (ImGui::TreeNode("Pipelines")) {
+                renderGraphicsPipelineInspector("Skybox", pipeline._overlayStage->getSkyboxPipeline());
+                renderGraphicsPipelineInspector("Overlay", pipeline._overlayStage->getOverlayPipeline());
+                ImGui::TreePop();
+            }
+            if (ImGui::TreeNode("Debug")) {
+                if (auto* debugRender = pipeline._overlayStage->getDebugRenderSystem()) {
+                    auto settings = debugRender->buildSettingsSnapshot();
+                    ImGui::Text("Debug primitives: %s", settings.bEnabled ? "enabled" : "disabled");
+                }
+
+                auto& debugSkinning = pipeline._overlayStage->getDebugSkinning();
+                ImGui::Checkbox("Enable Debug Skinning", &debugSkinning.bEnabled);
+                ImGui::DragInt("Picking Bone", &debugSkinning.pickingBone, 1.0f, 0, DebugSkinning::BONE_COUNT - 1);
+                renderGraphicsPipelineInspector("Debug Skinning Pipeline", debugSkinning.getPipeline());
+                ImGui::TreePop();
+            }
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("Post Process")) {
+            renderPostProcessingTechnicalContent(pipeline._postProcessStage);
+            ImGui::TreePop();
+        }
+    };
+
+    auto renderForwardStageInternals = [&](ForwardRenderPipeline& pipeline) {
+        if (pipeline._shadowStage && ImGui::TreeNode("Shadow")) {
+            renderShadowStageInternals(*pipeline._shadowStage);
+            ImGui::TreePop();
+        }
+
+        if (pipeline._viewportStage && ImGui::TreeNode("Viewport Renderer")) {
+            auto& viewportStage = *pipeline._viewportStage;
+            auto& auxPasses     = viewportStage.getAuxPasses();
+            auto& litPasses     = viewportStage.getLitPasses();
+            auto& unlitPass     = viewportStage.getUnlitPass();
+
+            if (ImGui::TreeNode("Settings")) {
+                int colorType = auxPasses.getSimpleDefaultColorType();
+                if (ImGui::Combo("Simple Color Type", &colorType, "Normal\0UV\0Fixed\0")) {
+                    auxPasses.setSimpleDefaultColorType(colorType);
+                }
+                ImGui::TreePop();
+            }
+
+            if (ImGui::TreeNode("Debug")) {
+                if (ImGui::TreeNode("Phong Debug")) {
+                    auto& phongDebug  = litPasses.phongDebug();
+                    bool bDebugNormal = phongDebug.bDebugNormal != 0;
+                    bool bDebugDepth  = phongDebug.bDebugDepth != 0;
+                    bool bDebugUV     = phongDebug.bDebugUV != 0;
+                    if (ImGui::Checkbox("Debug Normal", &bDebugNormal)) {
+                        phongDebug.bDebugNormal = bDebugNormal ? 1u : 0u;
+                    }
+                    if (ImGui::Checkbox("Debug Depth", &bDebugDepth)) {
+                        phongDebug.bDebugDepth = bDebugDepth ? 1u : 0u;
+                    }
+                    if (ImGui::Checkbox("Debug UV", &bDebugUV)) {
+                        phongDebug.bDebugUV = bDebugUV ? 1u : 0u;
+                    }
+                    ImGui::DragFloat4("Float Param", glm::value_ptr(phongDebug.floatParam), 0.1f);
+                    ImGui::TreePop();
+                }
+
+                if (ImGui::TreeNode("Debug Render")) {
+                    int mode = static_cast<int>(auxPasses.getDebugMode());
+                    if (ImGui::Combo("Mode", &mode, "None\0NormalColor\0NormalDir\0Depth\0UV\0")) {
+                        auxPasses.setDebugMode(static_cast<ForwardViewportAuxPasses::EDebugMode>(mode));
+                    }
+                    ImGui::DragFloat4("Float Param", glm::value_ptr(auxPasses.getDebugUBO().floatParam), 0.1f);
+                    ImGui::TreePop();
+                }
+                ImGui::TreePop();
+            }
+
+            if (ImGui::TreeNode("Pipelines")) {
+                renderGraphicsPipelineInspector("Unlit Static", unlitPass.getStaticVariant().pipeline.get());
+                renderGraphicsPipelineInspector("Unlit Skinned", unlitPass.getSkinnedVariant().pipeline.get());
+                renderGraphicsPipelineInspector("Phong Static", litPasses.getPhongStaticVariant().pipeline.get());
+                renderGraphicsPipelineInspector("Phong Skinned", litPasses.getPhongSkinnedVariant().pipeline.get());
+                renderGraphicsPipelineInspector("PBR Static", litPasses.getPBRStaticVariant().pipeline.get());
+                renderGraphicsPipelineInspector("PBR Skinned", litPasses.getPBRSkinnedVariant().pipeline.get());
+                renderGraphicsPipelineInspector("Simple", auxPasses.getSimplePipeline());
+                renderGraphicsPipelineInspector("Skybox", auxPasses.getSkyboxPipeline());
+                renderGraphicsPipelineInspector("Debug Pipeline", auxPasses.getDebugPipeline());
+                ImGui::TreePop();
+            }
+
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("Post Process")) {
+            renderPostProcessingTechnicalContent(pipeline._postProcessStage);
+            ImGui::TreePop();
+        }
+    };
+
+    if (auto* deferred = getDeferredPipeline(app)) {
+        if (ImGui::TreeNode("Runtime Perf")) {
+            renderDeferredPerformanceContent(*deferred);
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Stage Internals")) {
+            renderDeferredStageInternals(*deferred);
+            ImGui::TreePop();
+        }
         return;
     }
 
-    if (ImGui::TreeNode("Shadows")) {
-        ShadowSettings shadowSettings = pipeline->getCurrentShadowSettings();
-        if (renderShadowSettingsControls(shadowSettings, false)) {
-            pipeline->requestShadowSettings(shadowSettings);
-            saveShadowSettings(shadowSettings);
+    if (auto* forward = getForwardPipeline(app)) {
+        if (ImGui::TreeNode("Stage Internals")) {
+            renderForwardStageInternals(*forward);
+            ImGui::TreePop();
         }
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("Post Process")) {
-        auto post = pipeline->_postProcessStage.getState();
-        if (renderPostProcessingSettings(post)) {
-            pipeline->_postProcessStage.getState() = post;
-            savePostProcessingSettings(post);
-        }
-        ImGui::TreePop();
     }
 }
 
@@ -588,80 +943,6 @@ void renderRender2DDebugContent()
     ImGui::TextDisabled("Viewport: %u x %u", data.windowWidth, data.windowHeight);
 }
 
-void renderSessionContent(App& app)
-{
-    AppMode mode = app._appMode;
-    if (ImGui::Combo("App Mode", reinterpret_cast<int*>(&mode), "Control\0Drawing\0")) {
-        app._appMode = mode;
-    }
-
-    if (auto* fpsCtrl = FPSControl::get()) {
-        ImGui::SeparatorText("FPS Control");
-        ImGui::Text("FPS Limit: %.1f", fpsCtrl->fpsLimit);
-
-        static float newFpsLimit = fpsCtrl->fpsLimit;
-        ImGui::SetNextItemWidth(120.0f);
-        ImGui::InputFloat("New Limit", &newFpsLimit, 10.0f, 10.0f, "%.1f");
-        ImGui::SameLine();
-        if (ImGui::Button("Apply FPS Limit")) {
-            fpsCtrl->setFPSLimit(newFpsLimit);
-        }
-        ImGui::Checkbox("Enable FPS Control", &fpsCtrl->bEnable);
-    }
-}
-
-void renderProfilingContent()
-{
-    const auto compileMode = profiling::getCompileModeLabel();
-    ImGui::Text("Compile Mode: %s", compileMode);
-
-    auto state  = profiling::getRuntimeState();
-    bool bDirty = false;
-    bDirty |= ImGui::Checkbox("CPU Trace", &state.cpuTraceEnabled);
-    bDirty |= ImGui::Checkbox("Perf Metrics", &state.perfMetricsEnabled);
-    bDirty |= ImGui::Checkbox("Static Init", &state.staticInitEnabled);
-    if (bDirty) {
-        profiling::setRuntimeState(state);
-        editor_profiling_settings::save();
-    }
-
-    const auto paths = profiling::getRuntimeSessionPaths();
-    const auto& cpuTrace = profiling::cpuTrace();
-    ImGui::Text("CPU Trace Session: %s", cpuTrace.IsSessionActive() ? "Active" : "Idle");
-    if (!paths.sessionName.empty()) {
-        ImGui::TextWrapped("Session: %s", paths.sessionName.c_str());
-    }
-    if (!paths.runId.empty()) {
-        ImGui::TextWrapped("Run: %s", paths.runId.c_str());
-    }
-    if (!paths.outputDir.empty()) {
-        ImGui::TextWrapped("Output Dir: %s", paths.outputDir.c_str());
-    }
-    if (!paths.cpuProfilePath.empty()) {
-        ImGui::TextWrapped("CPU Trace Path: %s", paths.cpuProfilePath.c_str());
-    }
-    if (!paths.profileSummaryPath.empty()) {
-        ImGui::TextWrapped("Summary Path: %s", paths.profileSummaryPath.c_str());
-    }
-
-    auto& perfState = profiling::metrics();
-    static constexpr size_t WINDOW_SIZES[] = {1, 10, 30, 60};
-    static constexpr const char* WINDOW_LABELS[] = {"Last", "10 frames", "30 frames", "60 frames"};
-    int currentWindowIndex = 0;
-    for (int i = 0; i < IM_ARRAYSIZE(WINDOW_SIZES); ++i) {
-        if (perfState.getAverageWindowSize() == WINDOW_SIZES[i]) {
-            currentWindowIndex = i;
-            break;
-        }
-    }
-    if (ImGui::Combo("Metrics Average", &currentWindowIndex, WINDOW_LABELS, IM_ARRAYSIZE(WINDOW_LABELS))) {
-        perfState.setAverageWindowSize(WINDOW_SIZES[currentWindowIndex]);
-    }
-
-    ImGui::Text("Frame CPU: %.3f ms", perfState.getDisplayValue(perf::sample::renderFrame(), perf::metric::cpuTimeMs()));
-    ImGui::Text("Frame GPU: %.3f ms", perfState.getDisplayValue(perf::sample::renderFrame(), perf::metric::gpuTimeMs()));
-}
-
 void renderDiagnosticsContent(App& app)
 {
     auto* runtime = app.getRenderRuntime();
@@ -669,7 +950,7 @@ void renderDiagnosticsContent(App& app)
         return;
     }
 
-    auto& renderDoc = runtime->getDiagnosticsService().getRenderDocState();
+    auto& renderDoc      = runtime->getDiagnosticsService().getRenderDocState();
     const bool bAvailable = renderDoc.capture && renderDoc.capture->isAvailable();
     ImGui::Text("RenderDoc: %s", bAvailable ? "Available" : "Unavailable");
     ImGui::TextWrapped("DLL Path: %s", renderDoc.configuredDllPath.empty() ? "<default>" : renderDoc.configuredDllPath.c_str());
@@ -712,8 +993,8 @@ void renderDebugPrimitivesContent(App& app)
     }
 
     auto& debugSystem = runtime->getDebugRenderSystem();
-    auto settings = debugSystem.buildSettingsSnapshot();
-    bool changed = false;
+    auto settings     = debugSystem.buildSettingsSnapshot();
+    bool changed      = false;
     changed |= ImGui::Checkbox("Enabled", &settings.bEnabled);
     changed |= ImGui::Checkbox("Depth Test", &settings.bDepthTest);
     changed |= ImGui::Checkbox("Draw Lines", &settings.bDrawLines);
@@ -730,299 +1011,6 @@ void renderDebugPrimitivesContent(App& app)
         renderGraphicsPipelineInspector("Lines", debugSystem.getPrimitives()._linePipeline.get());
         renderGraphicsPipelineInspector("Shapes", debugSystem.getPrimitives()._shapePipeline.get());
         ImGui::TreePop();
-    }
-}
-
-void renderPostProcessingTechnicalContent(const PostProcessingStage& stage)
-{
-    if (stage._bloomProcessor && ImGui::TreeNode("Bloom")) {
-        ImGui::Text("Blur Passes (H+V): %u", stage._bloomProcessor->_lastBlurPassCount);
-        renderGraphicsPipelineInspector("Extract", stage._bloomProcessor->_extractPipeline.get());
-        renderGraphicsPipelineInspector("Blur", stage._bloomProcessor->_blurPipeline.get());
-        renderGraphicsPipelineInspector("Composite", stage._bloomProcessor->_compositePipeline.get());
-        ImGui::TreePop();
-    }
-
-    if (stage._postProcessor) {
-        renderGraphicsPipelineInspector("Basic Postprocess Pipeline", stage._postProcessor->_pipeline.get());
-    }
-}
-
-void renderShadowStageInternals(ShadowStage& stage)
-{
-    auto* basicTechnique = dynamic_cast<BasicShadowMapTechnique*>(stage.getTechnique());
-    if (!basicTechnique) {
-        ImGui::TextDisabled("Unsupported shadow technique.");
-        return;
-    }
-
-    if (ImGui::TreeNode("Stats")) {
-        const auto& settings = basicTechnique->getSettings();
-        ImGui::Text("Technique: Basic Shadow Map");
-        ImGui::Text("Resolution: %u", settings.resolution);
-        ImGui::Text("Point lights: %u / %u", basicTechnique->getLastPreparedPointLightCount(), settings.getEffectivePointLightCount());
-        ImGui::Text("Point Indirect: %s", settings.pointLightUseIndirect ? "On" : "Off");
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("Passes")) {
-        if (ImGui::TreeNode("Directional")) {
-            ImGui::TextDisabled("No runtime controls");
-            renderGraphicsPipelineInspector("Directional Static", basicTechnique->getDirectionalPass().getStaticPipeline());
-            renderGraphicsPipelineInspector("Directional Skinned", basicTechnique->getDirectionalPass().getSkinnedPipeline());
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNode("Point")) {
-            ImGui::Text("Indirect Path: %s", basicTechnique->getPointPass().getIndirectRenderer().isSupported() ? "supported" : "unsupported");
-            renderGraphicsPipelineInspector("Point Static", basicTechnique->getPointPass().getDirectStaticPipeline());
-            renderGraphicsPipelineInspector("Point Skinned", basicTechnique->getPointPass().getDirectSkinnedPipeline());
-            ImGui::TreePop();
-        }
-        ImGui::TreePop();
-    }
-}
-
-void renderDeferredPerformanceContent(DeferredRenderPipeline& pipeline)
-{
-    auto& perf = profiling::metrics();
-    auto metric = [&perf](FName sampleKey, FName metricKey) {
-        return perf.getDisplayValue(sampleKey, metricKey);
-    };
-    auto cpu = [&metric](FName sampleKey) {
-        return metric(sampleKey, perf::metric::cpuTimeMs());
-    };
-
-    const float frameCpuMs        = cpu(perf::sample::renderFrame());
-    const float frameGpuMs        = metric(perf::sample::renderFrame(), perf::metric::gpuTimeMs());
-    const float logicMs           = cpu(perf::sample::frameLogic());
-    const float renderMs          = cpu(perf::sample::frameRender());
-    const float automationMs      = cpu(perf::sample::frameAutomation());
-    const float unaccountedMs     = cpu(perf::sample::frameUnaccounted());
-    const float extractMs         = cpu(perf::sample::renderExtract());
-    const float runtimeMs         = cpu(perf::sample::renderRuntime());
-    const float prepareFrameMs    = cpu(perf::sample::renderPrepareFrame());
-    const float waitIdleMs        = cpu(perf::sample::renderWaitIdle());
-    const float beginMs           = cpu(perf::sample::renderBegin());
-    const float waitFenceMs       = cpu(perf::sample::vulkanWaitFence());
-    const float acquireMs         = cpu(perf::sample::vulkanAcquire());
-    const float worldMs           = cpu(perf::sample::renderWorld());
-    const float deferredTickMs    = cpu(perf::sample::deferredTick());
-    const float shadowMs          = cpu(perf::sample::deferredShadow());
-    const float gbufferMs         = cpu(perf::sample::deferredGBuffer());
-    const float depthCopyMs       = cpu(perf::sample::deferredDepthCopy());
-    const float lightMs           = cpu(perf::sample::deferredLight());
-    const float overlayMs         = cpu(perf::sample::deferredOverlay());
-    const float viewportOverlayMs = cpu(perf::sample::renderViewportOverlay());
-    const float postProcessMs     = cpu(perf::sample::renderPostProcess());
-    const float presentationMs    = cpu(perf::sample::renderPresentation());
-    const float renderCallbacksMs = cpu(perf::sample::frameRenderCallbacks());
-    const float submitMs          = cpu(perf::sample::renderSubmit());
-    const float presentMs         = cpu(perf::sample::vulkanPresent());
-
-    ImGui::Text("CPU frame: %.3f ms", frameCpuMs);
-    ImGui::Text("GPU frame: %.3f ms", frameGpuMs);
-    ImGui::Text("Draw items: %u", pipeline._lastDrawCount);
-    ImGui::Text("Point lights: %u", pipeline._lastPointLightCount);
-
-    renderPerfTree("Frame Cycle", frameCpuMs, [&]() {
-        renderPerfLeaf("Logic", logicMs, frameCpuMs);
-        renderPerfTree("Render", renderMs, [&]() {
-            renderPerfLeaf("Extract", extractMs, renderMs);
-            renderPerfTree("Runtime", runtimeMs, [&]() {
-                renderPerfTree("PrepareFrame", prepareFrameMs, [&]() {
-                    renderPerfLeaf("WaitIdle", waitIdleMs, prepareFrameMs);
-                    renderPerfTree("Begin", beginMs, [&]() {
-                        renderPerfLeaf("WaitFence", waitFenceMs, beginMs);
-                        renderPerfLeaf("Acquire", acquireMs, beginMs);
-                    });
-                });
-                renderPerfTree("World", worldMs, [&]() {
-                    renderPerfTree("Deferred", deferredTickMs, [&]() {
-                        renderPerfLeaf("Shadow", shadowMs, deferredTickMs);
-                        renderPerfLeaf("GBuffer", gbufferMs, deferredTickMs);
-                        renderPerfLeaf("DepthCopy", depthCopyMs, deferredTickMs);
-                        renderPerfLeaf("Light", lightMs, deferredTickMs);
-                        renderPerfLeaf("Overlay", overlayMs, deferredTickMs);
-                    });
-                    renderPerfLeaf("ViewportOverlay", viewportOverlayMs, worldMs);
-                    renderPerfLeaf("PostProcess", postProcessMs, worldMs);
-                });
-                renderPerfLeaf("Presentation", presentationMs, runtimeMs);
-                renderPerfLeaf("RenderCallbacks", renderCallbacksMs, runtimeMs);
-                renderPerfTree("Submit", submitMs, [&]() {
-                    renderPerfLeaf("Present", presentMs, submitMs);
-                });
-            });
-        });
-        renderPerfLeaf("Automation", automationMs, frameCpuMs);
-        renderPerfLeaf("Unaccounted", unaccountedMs, frameCpuMs);
-    });
-}
-
-void renderDeferredStageInternals(DeferredRenderPipeline& pipeline)
-{
-    if (pipeline._shadowStage && ImGui::TreeNode("Shadow")) {
-        renderShadowStageInternals(*pipeline._shadowStage);
-        ImGui::TreePop();
-    }
-
-    if (pipeline._gBufferStage && ImGui::TreeNode("GBuffer")) {
-        if (ImGui::TreeNode("Stats")) {
-            ImGui::Text("Point shadow budget: %u", pipeline._gBufferStage->getMaxShadowedPointLights());
-            ImGui::Text("Shadowed point lights: %u", pipeline._gBufferStage->getLastShadowedPointLights());
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNode("Pipelines")) {
-            renderGraphicsPipelineInspector("PBR Static", pipeline._gBufferStage->getPBRPipeline());
-            renderGraphicsPipelineInspector("PBR Skinned", pipeline._gBufferStage->getPBRSkinnedPipeline());
-            renderGraphicsPipelineInspector("Phong Static", pipeline._gBufferStage->getPhongPipeline());
-            renderGraphicsPipelineInspector("Phong Skinned", pipeline._gBufferStage->getPhongSkinnedPipeline());
-            renderGraphicsPipelineInspector("Unlit Static", pipeline._gBufferStage->getUnlitPipeline());
-            renderGraphicsPipelineInspector("Unlit Skinned", pipeline._gBufferStage->getUnlitSkinnedPipeline());
-            ImGui::TreePop();
-        }
-        ImGui::TreePop();
-    }
-
-    if (pipeline._ssaoStage && ImGui::TreeNode("SSAO")) {
-        ImGui::Text("Descriptor writes: %u", pipeline._ssaoStage->getLastInputDescriptorWriteCount());
-        renderGraphicsPipelineInspector("SSAO Pipeline", pipeline._ssaoStage->getPipeline());
-        ImGui::TreePop();
-    }
-
-    if (pipeline._lightStage && ImGui::TreeNode("Lighting")) {
-        if (ImGui::TreeNode("Performance")) {
-            auto& perf = profiling::metrics();
-            ImGui::Text("Light prepare CPU: %.3f ms", perf.getDisplayValue(perf::sample::deferredLightPrepare(), perf::metric::cpuTimeMs()));
-            ImGui::Text("Light execute CPU: %.3f ms", perf.getDisplayValue(perf::sample::deferredLightExecute(), perf::metric::cpuTimeMs()));
-            ImGui::Text("Descriptor writes: gbuffer=%u shadow=%u",
-                        pipeline._lightStage->getLastGBufferDescriptorWriteCount(),
-                        pipeline._lightStage->getLastShadowDescriptorWriteCount());
-            ImGui::TreePop();
-        }
-        renderGraphicsPipelineInspector("Light Pipeline", pipeline._lightStage->getPipeline());
-        ImGui::TreePop();
-    }
-
-    if (pipeline._overlayStage && ImGui::TreeNode("Viewport Overlay")) {
-        if (ImGui::TreeNode("Pipelines")) {
-            renderGraphicsPipelineInspector("Skybox", pipeline._overlayStage->getSkyboxPipeline());
-            renderGraphicsPipelineInspector("Overlay", pipeline._overlayStage->getOverlayPipeline());
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNode("Debug")) {
-            if (auto* debugRender = pipeline._overlayStage->getDebugRenderSystem()) {
-                auto settings = debugRender->buildSettingsSnapshot();
-                ImGui::Text("Debug primitives: %s", settings.bEnabled ? "enabled" : "disabled");
-            }
-
-            auto& debugSkinning = pipeline._overlayStage->getDebugSkinning();
-            ImGui::Checkbox("Enable Debug Skinning", &debugSkinning.bEnabled);
-            ImGui::DragInt("Picking Bone", &debugSkinning.pickingBone, 1.0f, 0, DebugSkinning::BONE_COUNT - 1);
-            renderGraphicsPipelineInspector("Debug Skinning Pipeline", debugSkinning.getPipeline());
-            ImGui::TreePop();
-        }
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("Post Process")) {
-        renderPostProcessingTechnicalContent(pipeline._postProcessStage);
-        ImGui::TreePop();
-    }
-}
-
-void renderForwardStageInternals(ForwardRenderPipeline& pipeline)
-{
-    if (pipeline._shadowStage && ImGui::TreeNode("Shadow")) {
-        renderShadowStageInternals(*pipeline._shadowStage);
-        ImGui::TreePop();
-    }
-
-    if (pipeline._viewportStage && ImGui::TreeNode("Viewport Renderer")) {
-        auto& viewportStage = *pipeline._viewportStage;
-        auto& auxPasses     = viewportStage.getAuxPasses();
-        auto& litPasses     = viewportStage.getLitPasses();
-        auto& unlitPass     = viewportStage.getUnlitPass();
-
-        if (ImGui::TreeNode("Settings")) {
-            int colorType = auxPasses.getSimpleDefaultColorType();
-            if (ImGui::Combo("Simple Color Type", &colorType, "Normal\0UV\0Fixed\0")) {
-                auxPasses.setSimpleDefaultColorType(colorType);
-            }
-            ImGui::TreePop();
-        }
-
-        if (ImGui::TreeNode("Debug")) {
-            if (ImGui::TreeNode("Phong Debug")) {
-                auto& phongDebug = litPasses.phongDebug();
-                bool bDebugNormal = phongDebug.bDebugNormal != 0;
-                bool bDebugDepth  = phongDebug.bDebugDepth != 0;
-                bool bDebugUV     = phongDebug.bDebugUV != 0;
-                if (ImGui::Checkbox("Debug Normal", &bDebugNormal)) {
-                    phongDebug.bDebugNormal = bDebugNormal ? 1u : 0u;
-                }
-                if (ImGui::Checkbox("Debug Depth", &bDebugDepth)) {
-                    phongDebug.bDebugDepth = bDebugDepth ? 1u : 0u;
-                }
-                if (ImGui::Checkbox("Debug UV", &bDebugUV)) {
-                    phongDebug.bDebugUV = bDebugUV ? 1u : 0u;
-                }
-                ImGui::DragFloat4("Float Param", glm::value_ptr(phongDebug.floatParam), 0.1f);
-                ImGui::TreePop();
-            }
-
-            if (ImGui::TreeNode("Debug Render")) {
-                int mode = static_cast<int>(auxPasses.getDebugMode());
-                if (ImGui::Combo("Mode", &mode, "None\0NormalColor\0NormalDir\0Depth\0UV\0")) {
-                    auxPasses.setDebugMode(static_cast<ForwardViewportAuxPasses::EDebugMode>(mode));
-                }
-                ImGui::DragFloat4("Float Param", glm::value_ptr(auxPasses.getDebugUBO().floatParam), 0.1f);
-                ImGui::TreePop();
-            }
-            ImGui::TreePop();
-        }
-
-        if (ImGui::TreeNode("Pipelines")) {
-            renderGraphicsPipelineInspector("Unlit Static", unlitPass.getStaticVariant().pipeline.get());
-            renderGraphicsPipelineInspector("Unlit Skinned", unlitPass.getSkinnedVariant().pipeline.get());
-            renderGraphicsPipelineInspector("Phong Static", litPasses.getPhongStaticVariant().pipeline.get());
-            renderGraphicsPipelineInspector("Phong Skinned", litPasses.getPhongSkinnedVariant().pipeline.get());
-            renderGraphicsPipelineInspector("PBR Static", litPasses.getPBRStaticVariant().pipeline.get());
-            renderGraphicsPipelineInspector("PBR Skinned", litPasses.getPBRSkinnedVariant().pipeline.get());
-            renderGraphicsPipelineInspector("Simple", auxPasses.getSimplePipeline());
-            renderGraphicsPipelineInspector("Skybox", auxPasses.getSkyboxPipeline());
-            renderGraphicsPipelineInspector("Debug Pipeline", auxPasses.getDebugPipeline());
-            ImGui::TreePop();
-        }
-
-        ImGui::TreePop();
-    }
-
-    if (ImGui::TreeNode("Post Process")) {
-        renderPostProcessingTechnicalContent(pipeline._postProcessStage);
-        ImGui::TreePop();
-    }
-}
-
-void renderRenderingInternalsContent(App& app)
-{
-    if (auto* deferred = getDeferredPipeline(app)) {
-        if (ImGui::TreeNode("Runtime Perf")) {
-            renderDeferredPerformanceContent(*deferred);
-            ImGui::TreePop();
-        }
-        if (ImGui::TreeNode("Stage Internals")) {
-            renderDeferredStageInternals(*deferred);
-            ImGui::TreePop();
-        }
-        return;
-    }
-
-    if (auto* forward = getForwardPipeline(app)) {
-        if (ImGui::TreeNode("Stage Internals")) {
-            renderForwardStageInternals(*forward);
-            ImGui::TreePop();
-        }
     }
 }
 
@@ -1057,8 +1045,12 @@ void migrateLegacyRuntimeSettings()
     migrateLegacyRuntimeSetting<float>("render.postprocess.bloom.strength");
 }
 
-void renderRuntimeToolsWindow(App& app, EditorLayer& layer, FreeCameraController& controller, float dt)
+void RuntimeToolsPanel::onImGuiRender(App& app, float dt)
 {
+    if (!_owner || !_controller) {
+        return;
+    }
+
     if (!ImGui::Begin("Runtime Tools")) {
         ImGui::End();
         return;
@@ -1075,7 +1067,9 @@ void renderRuntimeToolsWindow(App& app, EditorLayer& layer, FreeCameraController
     }
     if (ImGui::CollapsingHeader("Render Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (auto* runtime = app.getRenderRuntime()) {
+            ImGui::Indent();
             renderPresentationSettings(app, *runtime);
+            ImGui::Unindent();
             ImGui::Separator();
             if (runtime->isDeferredPipelineActive()) {
                 renderDeferredSettingsContent(app);
@@ -1089,7 +1083,7 @@ void renderRuntimeToolsWindow(App& app, EditorLayer& layer, FreeCameraController
         renderRenderingInternalsContent(app);
     }
     if (ImGui::CollapsingHeader("Editor Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
-        renderEditorCameraContent(layer, controller);
+        renderEditorCameraContent(*_owner, *_controller);
     }
     if (ImGui::CollapsingHeader("Clear Values")) {
         renderClearValuesContent();

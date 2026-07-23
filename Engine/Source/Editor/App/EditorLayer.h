@@ -2,6 +2,7 @@
 
 #include "Editor/Panels/AssetInspectorPanel.h"
 #include "Editor/Panels/ContentBrowserPanel.h"
+#include "Editor/Panels/RuntimeToolsPanel.h"
 #include "Core/Base.h"
 
 #include "Core/Camera/Camera.h"
@@ -20,6 +21,8 @@
 #include "Editor/EditorCommon.h"
 
 #include <ImGuizmo.h>
+#include <string>
+#include <vector>
 
 
 
@@ -46,6 +49,7 @@ struct EditorLayer
     DetailsView         _detailsView;
     ContentBrowserPanel _contentBrowserPanel;
     AssetInspectorPanel _assetInspectorPanel;
+    RuntimeToolsPanel   _runtimeToolsPanel;
 
     // ImGui Docking state
     ImGuiDockNodeFlags _dockspaceFlags = ImGuiDockNodeFlags_None;
@@ -66,6 +70,9 @@ struct EditorLayer
     bool      bViewportHovered     = false;
     bool      _bRightMouseDragging = false; // Track right mouse drag for camera rotation
     glm::vec2 _rightMousePressPos  = {};    // Position when right mouse was pressed
+    int       _projectBrowserSelection = -1;
+    std::vector<std::string> _discoveredProjects;
+    std::string              _projectBrowserError;
 
     // Editor settings
     glm::vec4 _clearColor = {0.1f, 0.1f, 0.1f, 1.0f};
@@ -99,6 +106,7 @@ struct EditorLayer
     EditorViewportContext          _viewportCtx;
     std::shared_ptr<RenderImage>   _viewportDisplayImage = nullptr;
     FreeCamera                     _camera;
+    float                          _lastDeltaTime = 0.0f;
 
     // Per-slot state for the deferred GBuffer debug viewer (RGBA toggle mask + cached swizzled view)
     struct ImageSlotState
@@ -144,6 +152,7 @@ struct EditorLayer
     [[nodiscard]] std::vector<RenderOverlayText2D> buildViewportCameraOverlayTexts() const;
 
     void onUpdate(float dt);
+    void setCameraController(FreeCameraController* controller) { _runtimeToolsPanel.setCameraController(controller); }
     void setEditableScene(Scene* scene) { _editableScene = scene; }
     void setSceneContext(Scene* scene)
     {
@@ -203,6 +212,11 @@ struct EditorLayer
         YA_PROFILE_FUNCTION();
         // ya::DeferredModificationQueue::get().onFrameBegin();
 
+        if (!hasProjectLoaded()) {
+            projectBrowserWindow();
+            return;
+        }
+
         {
             ya::ImGuiStyleScope style;
             updateWindowFlags(style);
@@ -223,19 +237,8 @@ struct EditorLayer
         _detailsView.onImGuiRender();
         _contentBrowserPanel.onImGuiRender();
         _assetInspectorPanel.onImGuiRender();
-
-        // Render file picker dialog
-        _filePicker.render();
-
-        // Render windows
-        // settingsWindow();
-        // renderStatsWindow();
-
-        // Demo window option
-        if (bShowDemoWindow)
-        {
-            ImGui::ShowDemoWindow(&bShowDemoWindow);
-        }
+        runtimeToolsWindow();
+        renderAuxiliaryUi();
 
         ImGui::End(); // End main dockspace window
     }
@@ -259,11 +262,17 @@ struct EditorLayer
     Scene* getEditableScene() const;
     Scene* getViewportInteractionScene() const;
     void   syncEditorSettingsFromConfig();
+    [[nodiscard]] bool hasProjectLoaded() const;
+    void refreshProjectBrowser();
+    [[nodiscard]] bool openProjectInPlace(const std::string& projectPath);
 
     // UI Methods
     void updateWindowFlags(ya::ImGuiStyleScope& style);
     void menuBar();
     void toolbar();
+    void projectBrowserWindow();
+    void runtimeToolsWindow();
+    void renderAuxiliaryUi();
     // void settingsWindow();
     // void renderStatsWindow();
     void viewportWindow();
