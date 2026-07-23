@@ -207,12 +207,19 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
     if (!presentationImage) {
         return;
     }
+    if (_presentationPostProcessor) {
+        _presentationPostProcessor->beginFrame();
+    }
 
     if (recordBeforePresentationExtensions) {
         recordBeforePresentationExtensions(cmdBuf);
     }
 
     const Extent2D presentationExtent = presentationImage->getExtent();
+    auto           sourceImage        = getPostprocessOutputImageShared();
+    if (!sourceImage) {
+        sourceImage = getActiveViewportImageShared();
+    }
     RenderGraph    graph;
     const auto     output = graph.importTexture(
         makePresentationImportedTextureDesc(*presentationImage,
@@ -224,7 +231,7 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
         [output](RGPassBuilder& passBuilder) {
             passBuilder.useColorAttachment(output);
         },
-        [output, presentationExtent, recordPresentationExtensions](RGRenderContext& rgCtx) {
+        [this, sourceImage, output, presentationExtent, recordPresentationExtensions, deltaTime](RGRenderContext& rgCtx) {
             rgCtx.beginColorRendering({
                 .color = output,
                 .renderArea = Rect2D{
@@ -234,6 +241,17 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
                 .clearValue  = ClearValue::Black(),
                 .finalLayout = EImageLayout::PresentSrcKHR,
             });
+
+            if (_presentationPostProcessor && sourceImage && sourceImage->getImageView()) {
+                _presentationPostProcessor->render(BasicPostprocessing::RenderDesc{
+                    .cmdBuf         = &rgCtx.getCommandBuffer(),
+                    .ctx            = nullptr,
+                    .inputImageView = sourceImage->getImageView(),
+                    .renderExtent   = presentationExtent,
+                    .bOutputIsSRGB  = EFormat::isSRGB(_render->getSwapchain()->getFormat()),
+                    .state          = &_presentationPostProcessState,
+                });
+            }
 
             if (recordPresentationExtensions) {
                 recordPresentationExtensions(&rgCtx.getCommandBuffer());

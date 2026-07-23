@@ -1,5 +1,7 @@
 #include "Runtime/App/App.h"
 
+#include "Core/Module/ProjectDescriptor.h"
+#include "Core/System/VirtualFileSystem.h"
 #include "Runtime/App/DebugRenderSystem.h"
 
 namespace ya
@@ -179,6 +181,23 @@ IImageView* App::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t fa
 bool App::isPostprocessingEnabled() const
 {
     return _renderRuntime && _renderRuntime->isPostprocessingEnabled();
+}
+
+bool App::openProject(const FProjectDescriptor& descriptor)
+{
+    _ci.projectPath      = descriptor.sourcePath.string();
+    _ci.projectRoot      = descriptor.sourcePath.parent_path().string();
+    _ci.defaultScenePath = descriptor.defaultScene;
+
+    if (_ci.projectRoot) {
+        VirtualFileSystem::get()->setGameRoot(*_ci.projectRoot);
+    }
+
+    if (descriptor.defaultScene && !descriptor.defaultScene->empty()) {
+        return loadScene(*descriptor.defaultScene);
+    }
+
+    return true;
 }
 
 } // namespace ya

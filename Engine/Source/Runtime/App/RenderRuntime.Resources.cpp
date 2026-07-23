@@ -5,6 +5,7 @@
 #include "Platform/Render/Vulkan/VulkanSwapChain.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Core/Swapchain.h"
+#include "Render/Pipelines/BasicPostprocessing.h"
 #include "Resource/AssetManager.h"
 #include "Resource/DeferredDeletionQueue.h"
 #include "Resource/Font/FontManager.h"
@@ -193,6 +194,19 @@ void RenderRuntime::initPresentationResources()
 {
     rebuildPresentationImages();
 
+    _presentationPostProcessor = ya::makeShared<BasicPostprocessing>();
+    _presentationPostProcessor->init(BasicPostprocessing::InitDesc{
+        .render                = _render,
+        .renderPass            = nullptr,
+        .pipelineRenderingInfo = PipelineRenderingInfo{
+            .label                   = "RuntimePresentation",
+            .viewMask                = 0,
+            .colorAttachmentFormats  = {_render->getSwapchain()->getFormat()},
+            .depthAttachmentFormat   = EFormat::Undefined,
+            .stencilAttachmentFormat = EFormat::Undefined,
+        },
+    });
+
     _render->getSwapchain()->onRecreate.addLambda(
         this,
         [this](ISwapchain::DiffInfo old, ISwapchain::DiffInfo now, bool bImageRecreated)
@@ -208,6 +222,10 @@ void RenderRuntime::initPresentationResources()
 
     _deleter.push("ScreenRT", [this](void*)
                   {
+        if (_presentationPostProcessor) {
+            _presentationPostProcessor->shutdown();
+            _presentationPostProcessor.reset();
+        }
         _presentationGraphExecutors.clear();
         _presentationImages.clear(); });
 }

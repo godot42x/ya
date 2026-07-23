@@ -8,6 +8,7 @@
 #include "Render/Render.h"
 #include "Render/Shader.h"
 #include "Runtime/App/Common/IRenderPipeline.h"
+#include "Runtime/App/Common/PostProcessingState.h"
 #include "Runtime/App/Common/RenderOverlay.h"
 #include "Runtime/App/Common/RenderTargetCatalog.h"
 #include "Runtime/App/Common/RenderViewportSnapshot.h"
@@ -33,6 +34,7 @@ struct Texture;
 struct RenderImage;
 struct IImage;
 struct IImageView;
+struct BasicPostprocessing;
 struct DeferredRenderPipeline;
 struct Sampler;
 struct EnvironmentLightingComponent;
@@ -112,6 +114,8 @@ struct RenderRuntime
 
     std::vector<std::unique_ptr<RenderGraphExecutor>> _presentationGraphExecutors;
     std::vector<std::shared_ptr<RenderImage>>         _presentationImages;
+    stdptr<BasicPostprocessing>                       _presentationPostProcessor = nullptr;
+    PostProcessingState                               _presentationPostProcessState{};
 
     std::vector<RenderTargetFormatCommand> _pendingRenderTargetFormatCommands;
     bool                                   _pendingActivePipelineReload = false;

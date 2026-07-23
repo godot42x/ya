@@ -356,7 +356,10 @@ void AppLifecycle::init(App& app, AppDesc ci)
 
     const std::string startupScenePath = resolveStartupScenePath(app._ci);
     if (!startupScenePath.empty()) {
-        loadScene(app, startupScenePath);
+        const bool bLoadedStartupScene = loadScene(app, startupScenePath);
+        if (bLoadedStartupScene && !app._ci.bEditor && app._appState == AppState::Stopped) {
+            startRuntime(app);
+        }
     }
 
 }

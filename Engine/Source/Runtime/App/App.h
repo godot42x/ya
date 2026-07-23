@@ -51,6 +51,7 @@ class AppLifecycle;
 class AppFrameLoop;
 class AppEventRouter;
 class AppModuleTestAccess;
+struct FProjectDescriptor;
 
 enum AppMode : int
 {
@@ -281,6 +282,7 @@ struct AppDesc
     std::optional<std::string> defaultScenePath;
     std::optional<std::string> projectPath;
     std::optional<std::string> projectRoot;
+    std::optional<std::string> executablePath;
     bool                       bEditor = false;
 
     bool                     bEnableRenderDoc            = false;
@@ -293,6 +295,9 @@ struct AppDesc
 
     void init(int argc, char** argv)
     {
+        if (argc > 0 && argv && argv[0]) {
+            executablePath = std::string(argv[0]);
+        }
         params
             .opt<int>("w", {"width"}, "Window width")
             .opt<int>("h", {"height"}, "Window height")
@@ -645,6 +650,7 @@ struct App
 
     bool loadScene(const std::string& path);
     bool unloadScene();
+    bool openProject(const FProjectDescriptor& descriptor);
 
     glm::vec2 getLastMousePos() const { return _lastMousePos; }
 
