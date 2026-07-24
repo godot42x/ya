@@ -137,6 +137,25 @@ void EditorLayer::viewportWindow()
     bViewportFocused = ImGui::IsWindowFocused();
     bViewportHovered = ImGui::IsWindowHovered();
 
+    // Update InputRouter viewport center for mouse capture warp
+    {
+        float centerX = _viewportBounds[0].x + (_viewportBounds[1].x - _viewportBounds[0].x) * 0.5f;
+        float centerY = _viewportBounds[0].y + (_viewportBounds[1].y - _viewportBounds[0].y) * 0.5f;
+        if (_app) {
+            _app->getInputRouter().setViewportCenter(centerX, centerY);
+        }
+    }
+
+    // CaptureOnClick: auto-capture mouse on viewport click in Game mode
+    if (bViewportHovered && ImGui::IsMouseClicked(0)) {
+        if (_app) {
+            auto& router = _app->getInputRouter();
+            if (router.getMouseCaptureMode() == EMouseCapture::CaptureOnClick && !router.isMouseCaptured()) {
+                router.captureMouse();
+            }
+        }
+    }
+
     // Allow ImGuizmo to receive input even when viewport is focused
     // Block events only when viewport is NOT focused/hovered AND ImGuizmo is not using/over
     bool isGizmoActive = ImGuizmo::IsUsing() || ImGuizmo::IsOver();

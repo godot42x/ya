@@ -199,10 +199,8 @@ void EditorLayer::toolbar()
 
     ya::ImGuiStyleScope style;
     style.pushVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 2));
-    style.pushVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(0, 0));
-    style.pushColor(ImGuiCol_Button, ImVec4(0.5f, 0.5f, 0.5f, 0.3f));
-    style.pushColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.6f, 0.6f, 0.5f));
-    style.pushColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.6f, 0.6f, 0.5f));
+    style.pushVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(6, 0));
+    style.pushVar(ImGuiStyleVar_FrameRounding, 6.0f);
 
     if (!ImGui::Begin("##toolbar",
                       nullptr,
@@ -216,12 +214,31 @@ void EditorLayer::toolbar()
         return;
     }
 
-
     float size = ImGui::GetWindowHeight() - 4.0f;
+    const bool bEditMode     = _app->isStopped();
+    const bool bRuntimeMode  = _app->isRuntimeMode();
+    const bool bSimMode      = _app->isSimulationMode();
+    const char* modeLabel    = bRuntimeMode ? "PLAYING" : (bSimMode ? "SIMULATING" : "EDIT");
+    const ImVec4 activeColor = bRuntimeMode ? ImVec4(0.24f, 0.62f, 0.34f, 0.95f)
+                                            : (bSimMode ? ImVec4(0.72f, 0.54f, 0.19f, 0.95f)
+                                                        : ImVec4(0.23f, 0.47f, 0.85f, 0.95f));
 
-    ImGui::SetCursorPosX((ImGui::GetWindowContentRegionMax().x * 0.5f) - (size * 0.5f));
+    const float totalWidth = size * 3.0f + 16.0f + 88.0f;
+    ImGui::SetCursorPosX(std::max(0.0f, (ImGui::GetWindowContentRegionMax().x - totalWidth) * 0.5f));
 
-    if (ImGui::ImageButton("Play", *_playIcon, ImVec2(size, size)))
+    auto drawModeButton = [&](const char* id, const ImGuiImageEntry& icon, bool bActive, const char* tooltip) {
+        ya::ImGuiStyleScope buttonStyle;
+        buttonStyle.pushColor(ImGuiCol_Button, bActive ? activeColor : ImVec4(0.22f, 0.22f, 0.24f, 0.92f));
+        buttonStyle.pushColor(ImGuiCol_ButtonHovered, bActive ? activeColor : ImVec4(0.32f, 0.32f, 0.35f, 0.95f));
+        buttonStyle.pushColor(ImGuiCol_ButtonActive, bActive ? activeColor : ImVec4(0.18f, 0.18f, 0.2f, 0.95f));
+        const bool clicked = ImGui::ImageButton(id, icon, ImVec2(size, size));
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+            ImGui::SetTooltip("%s", tooltip);
+        }
+        return clicked;
+    };
+
+    if (drawModeButton("Play", *_playIcon, bRuntimeMode, "Play the current scene"))
     {
         _sceneHierarchyPanel.setSelection(nullptr);
         if (_app->isStopped()) {
@@ -233,7 +250,7 @@ void EditorLayer::toolbar()
         }
     }
     ImGui::SameLine();
-    if (ImGui::ImageButton("Simulate", *_simulationIcon, ImVec2(size, size)))
+    if (drawModeButton("Simulate", *_simulationIcon, bSimMode, "Simulate without entering full runtime"))
     {
         _sceneHierarchyPanel.setSelection(nullptr);
         if (_app->isStopped()) {
@@ -245,7 +262,7 @@ void EditorLayer::toolbar()
         }
     }
     ImGui::SameLine();
-    if (ImGui::ImageButton("Stop", *_stopIcon, ImVec2(size, size)))
+    if (drawModeButton("Stop", *_stopIcon, bEditMode, "Stop play/simulate and return to edit mode"))
     {
         App::get()->taskManager.registerFrameTask([app = _app]() {
             if (!app) {
@@ -258,6 +275,18 @@ void EditorLayer::toolbar()
                 app->stopSimulation();
             }
         });
+    }
+
+    ImGui::SameLine();
+    ImGui::Dummy(ImVec2(8.0f, 0.0f));
+    ImGui::SameLine();
+
+    {
+        ya::ImGuiStyleScope badgeStyle;
+        badgeStyle.pushColor(ImGuiCol_Button, activeColor);
+        badgeStyle.pushColor(ImGuiCol_ButtonHovered, activeColor);
+        badgeStyle.pushColor(ImGuiCol_ButtonActive, activeColor);
+        ImGui::Button(modeLabel, ImVec2(80.0f, size));
     }
 
     // style RAII auto-pop

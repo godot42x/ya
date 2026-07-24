@@ -113,6 +113,8 @@ enum T
     K_8 = SDLK_8,
     K_9 = SDLK_9,
 
+    K_GRAVE = SDLK_GRAVE, // ` / ~ key (left of 1 on US keyboard)
+
     Space     = SDLK_SPACE,
     Enter     = SDLK_RETURN,
     Escape    = SDLK_ESCAPE,
@@ -197,6 +199,7 @@ constexpr const char *toString(EKey::T v)
         CASE_ENUM_TO_STR(EKey::K_7);
         CASE_ENUM_TO_STR(EKey::K_8);
         CASE_ENUM_TO_STR(EKey::K_9);
+        CASE_ENUM_TO_STR(EKey::K_GRAVE);
 
         CASE_ENUM_TO_STR(EKey::Space);
         CASE_ENUM_TO_STR(EKey::Enter);

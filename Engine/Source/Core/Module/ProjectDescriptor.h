@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace ya
@@ -17,6 +18,7 @@ struct FProjectDescriptor
     std::vector<std::filesystem::path> plugins;
     std::filesystem::path              contentDir = "Content";
     std::optional<std::string>         defaultScene;
+    std::unordered_map<std::string, std::vector<std::string>> inputActions;
     std::filesystem::path              sourcePath;
 
     [[nodiscard]] static FProjectDescriptor load(const std::filesystem::path& path);

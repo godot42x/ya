@@ -5,7 +5,10 @@
 
 
 #include <glm/glm.hpp>
+#include <string>
+#include <string_view>
 #include <unordered_map>
+#include <vector>
 
 #include "Core/Event.h"
 #include "Core/KeyCode.h"
@@ -25,11 +28,34 @@ struct InputManager
     friend struct App;
 
   private:
+    struct ActionBinding
+    {
+        std::vector<EKey::T>     keys;
+        std::vector<EMouse::T>    mouseButtons;
+    };
+
+    struct StringHash
+    {
+        using is_transparent = void;
+
+        size_t operator()(std::string_view value) const noexcept
+        {
+            return std::hash<std::string_view>{}(value);
+        }
+
+        size_t operator()(const std::string& value) const noexcept
+        {
+            return operator()(std::string_view(value));
+        }
+    };
+
     std::unordered_map<EKey::T, KeyState> currentKeyStates;
     std::unordered_map<EKey::T, KeyState> previousKeyStates;
 
     std::unordered_map<EMouse::T, KeyState> currentMouseStates;
     std::unordered_map<EMouse::T, KeyState> previousMouseStates;
+
+    std::unordered_map<std::string, ActionBinding, StringHash, std::equal_to<>> _actionBindings;
 
     glm::vec2 mousePosition{0.0f, 0.0f};
     glm::vec2 previousMousePosition{0.0f, 0.0f};
@@ -59,6 +85,13 @@ struct InputManager
     bool wasMouseButtonPressed(EMouse::T button) const;
     bool wasMouseButtonReleased(EMouse::T button) const;
 
+    void clearActionBindings();
+    void bindAction(const std::string& actionName, EKey::T key);
+    void bindAction(const std::string& actionName, EMouse::T button);
+    void configureActionBindings(const std::unordered_map<std::string, std::vector<std::string>>& actionBindings);
+    [[nodiscard]] bool isActionPressed(std::string_view actionName) const;
+    [[nodiscard]] bool wasActionPressed(std::string_view actionName) const;
+    [[nodiscard]] bool wasActionReleased(std::string_view actionName) const;
 
     glm::vec2 getMouseScrollDelta() const;
 

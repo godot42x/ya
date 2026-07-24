@@ -334,14 +334,30 @@ class EditorAppExtension final : public IModule
 
     bool onEvent(App& app, const Event& event) override
     {
-        (void)app;
-        if (ImGuiManager::get().processEvent(event) != EventProcessState::Continue) {
-            return true;
-        }
         if (_layer) {
             _layer->onEvent(event);
         }
-        return false;
+
+        // Grave (~) releases mouse capture (UE-style: tilde to free cursor).
+        // Escape remains the quit/stop key and is not overridden here.
+        if (event.getEventType() == EEvent::KeyReleased) {
+            const auto& keyEvent = static_cast<const KeyReleasedEvent&>(event);
+            if (keyEvent.getKeyCode() == EKey::K_GRAVE) {
+                auto& router = app.getInputRouter();
+                if (router.isMouseCaptured()) {
+                    router.releaseMouse();
+                    return true; // consumed — don't pass to game or AppEventRouter
+                }
+            }
+        }
+
+        const bool bImGuiHandled = ImGuiManager::get().processEvent(event) != EventProcessState::Continue;
+        if (app.isStopped() || !_layer) {
+            return bImGuiHandled;
+        }
+
+        // Delegate routing to InputRouter (handles capture / viewport focus / input mode)
+        return app.getInputRouter().routeEvent(event, bImGuiHandled);
     }
 
     void onLogic(App& app, float dt) override
@@ -350,10 +366,31 @@ class EditorAppExtension final : public IModule
             return;
         }
 
+        auto& router = app.getInputRouter();
+
+        // Sync InputMode with AppState
+        if (app.isStopped()) {
+            router.setInputMode(EInputMode::Editor);
+            // Release mouse capture when returning to editor mode
+            if (router.isMouseCaptured()) {
+                router.releaseMouse();
+            }
+        } else {
+            router.setInputMode(EInputMode::Game);
+            // Default to CaptureOnClick in Game mode — first viewport click captures mouse
+            if (router.getMouseCaptureMode() == EMouseCapture::None) {
+                router.setMouseCaptureMode(EMouseCapture::CaptureOnClick);
+            }
+        }
+
+        // Sync viewport state from EditorLayer
+        router.setViewportFocused(_layer->isViewportFocused());
+        router.setViewportHovered(_layer->isViewportHovered());
+
         if (auto* renderRuntime = app.getRenderRuntime()) {
             auto&          editorCamera   = _layer->getCamera();
             const Extent2D viewportExtent = renderRuntime->getViewportExtent();
-            if (_layer->shouldCaptureInput()) {
+            if (app.isStopped() && _layer->shouldCaptureInput()) {
                 _cameraController.update(editorCamera, app.inputManager, dt);
             }
             if (viewportExtent.height > 0) {

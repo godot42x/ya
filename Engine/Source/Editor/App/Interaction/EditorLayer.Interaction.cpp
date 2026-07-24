@@ -4,6 +4,10 @@ namespace ya
 {
 void EditorLayer::onEvent(const Event& event)
 {
+    if (_app && !_app->isStopped()) {
+        return;
+    }
+
     // Handle viewport-specific events when focused
     // Example: Camera controls, object picking, gizmo manipulation
 

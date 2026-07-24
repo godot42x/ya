@@ -1,6 +1,7 @@
 #pragma once
 #include "Core/Base.h"
 #include "Core/Input/InputManager.h"
+#include "Core/Input/InputRouter.h"
 #include "Core/MessageBus.h"
 #include "Core/Module/Module.h"
 #include "Core/System/System.h"
@@ -509,6 +510,7 @@ struct App
 
     // Input and task dispatch
     InputManager inputManager;
+    InputRouter  inputRouter;
     TaskManager  taskManager;
 
     // Application state
@@ -606,6 +608,9 @@ struct App
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const;
     [[nodiscard]] RenderRuntime*                 getRenderRuntime() const { return _renderRuntime.get(); }
     [[nodiscard]] ResourceResolveSystem*         getResourceResolveSystem() const { return _resourceResolveSystem; }
+    [[nodiscard]] const InputManager&            getInputManager() const { return inputManager; }
+    [[nodiscard]] InputRouter&                   getInputRouter() { return inputRouter; }
+    [[nodiscard]] const InputRouter&             getInputRouter() const { return inputRouter; }
 
     // Global render settings accessors (game layer writes, pipeline reads)
     [[nodiscard]] ShadowSettings&       getShadowSettings()       { return _shadowSettings; }
@@ -682,8 +687,6 @@ struct App
     void notifyModulesAfterAppStateChange(AppState previousState);
     void notifyModulesSceneActivated(Scene* scene);
     void notifyModulesSceneDestroyed(Scene* scene);
-    // temp
-    [[nodiscard]] const InputManager& getInputManager() const { return inputManager; }
     [[nodiscard]] const glm::vec2&    getWindowSize() const { return _windowSize; }
     void                              syncViewportState();
     [[nodiscard]] Extent2D            resolveViewportExtent(RenderRuntime* renderRuntime, const Rect2D& viewportRect) const;

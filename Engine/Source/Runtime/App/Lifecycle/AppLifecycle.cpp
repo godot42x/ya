@@ -270,6 +270,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
     {
         YA_PROFILE_SCOPE_LOG("Init Default");
 
+        app.inputManager.init();
         FileWatcher::init();
         MaterialFactory::init();
         TaskQueue::get().start(/*numThreads=*/2);
@@ -292,6 +293,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
         render->getWindowSize(winW, winH);
         app._windowSize.x = static_cast<float>(winW);
         app._windowSize.y = static_cast<float>(winH);
+        app.inputRouter.setWindow(render->getNativeWindow<SDL_Window*>());
     }
 
     app._sceneManager = new SceneManager();

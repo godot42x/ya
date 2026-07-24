@@ -24,6 +24,18 @@ FProjectDescriptor FProjectDescriptor::load(const std::filesystem::path& path)
     if (json.contains("defaultScene")) {
         descriptor.defaultScene = json.at("defaultScene").get<std::string>();
     }
+    if (json.contains("inputActions")) {
+        for (const auto& [actionName, actionBindings] : json.at("inputActions").items()) {
+            if (!actionBindings.is_array()) {
+                throw std::runtime_error("Project inputActions entry must be an array: " + actionName);
+            }
+
+            auto& bindings = descriptor.inputActions[actionName];
+            for (const auto& binding : actionBindings) {
+                bindings.push_back(binding.get<std::string>());
+            }
+        }
+    }
 
     if (descriptor.schemaVersion != 1) {
         throw std::runtime_error("Unsupported project descriptor schema: " + std::to_string(descriptor.schemaVersion));

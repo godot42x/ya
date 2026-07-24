@@ -188,6 +188,7 @@ bool App::openProject(const FProjectDescriptor& descriptor)
     _ci.projectPath      = descriptor.sourcePath.string();
     _ci.projectRoot      = descriptor.sourcePath.parent_path().string();
     _ci.defaultScenePath = descriptor.defaultScene;
+    inputManager.configureActionBindings(descriptor.inputActions);
 
     if (_ci.projectRoot) {
         VirtualFileSystem::get()->setGameRoot(*_ci.projectRoot);
