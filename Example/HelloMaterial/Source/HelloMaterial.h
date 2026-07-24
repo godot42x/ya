@@ -2,7 +2,7 @@
 
 #include "Core/Module/Module.h"
 #include "Render/Mesh.h"
-#include "Runtime/App/AppState.h"
+#include "Runtime/Application/AppState.h"
 
 struct HelloMaterialModule final : ya::IModule
 {

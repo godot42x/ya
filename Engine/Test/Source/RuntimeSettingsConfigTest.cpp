@@ -1,4 +1,4 @@
-#include "Runtime/App/Common/Shadow/Common/ShadowSettingsConfig.h"
+#include "Runtime/Rendering/Common/Shadow/Common/ShadowSettingsConfig.h"
 
 #include "Config/ConfigManager.h"
 #include "Core/System/VirtualFileSystem.h"

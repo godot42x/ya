@@ -4,7 +4,7 @@
 #include "Misc.BasicPostprocessing.slang.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
-#include "Runtime/App/Common/PostProcessingState.h"
+#include "Runtime/Rendering/Common/PostProcessingState.h"
 
 namespace ya
 {

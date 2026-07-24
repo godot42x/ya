@@ -1,5 +1,5 @@
 #include "LuaScriptingSystem.h"
-#include "Runtime/App/App.h"
+#include "Runtime/Application/App.h"
 #include "Core/Input/InputManager.h"
 #include "Core/Input/InputRouter.h"
 #include "Core/Log.h"

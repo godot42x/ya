@@ -6,7 +6,7 @@
 
 #include "Core/Reflection/ECSRegistry.h"
 
-#include "Runtime/App/App.h"
+#include "Runtime/Application/App.h"
 #include "Scene/SceneManager.h"
 
 #include "Core/UUID.h"

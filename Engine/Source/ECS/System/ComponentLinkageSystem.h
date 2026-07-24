@@ -9,7 +9,7 @@
 #include "ECS/Component/RenderComponent.h"
 #include "Scene/Scene.h"
 
-#include "Runtime/App/App.h"
+#include "Runtime/Application/App.h"
 #include "entt/entt.hpp"
 
 

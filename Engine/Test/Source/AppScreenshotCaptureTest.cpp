@@ -1,6 +1,6 @@
-#include "Runtime/App/Utility/AppScreenshotCapture.h"
-#include "Runtime/App/Utility/OffscreenJobRunner.h"
-#include "Runtime/App/App.h"
+#include "Runtime/Application/Utility/AppScreenshotCapture.h"
+#include "Runtime/Application/Utility/OffscreenJobRunner.h"
+#include "Runtime/Application/App.h"
 
 #include "Render/Render.h"
 #include "Render/Core/RenderImage.h"

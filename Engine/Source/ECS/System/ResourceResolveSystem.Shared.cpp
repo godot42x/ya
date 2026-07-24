@@ -2,8 +2,8 @@
 
 #include "Render/Core/RenderResourceFactory.h"
 #include "Resource/DeferredDeletionQueue.h"
-#include "Runtime/App/App.h"
-#include "Runtime/App/Utility/OffscreenJobRunner.h"
+#include "Runtime/Application/App.h"
+#include "Runtime/Application/Utility/OffscreenJobRunner.h"
 
 
 #include <algorithm>

@@ -7,7 +7,7 @@
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
-#include "Runtime/App/App.h"
+#include "Runtime/Application/App.h"
 #include "Scene/SceneManager.h"
 
 namespace ya

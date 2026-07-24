@@ -5,7 +5,7 @@
 #include "Render/Core/Pipeline.h"
 #include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderImage.h"
-#include "Runtime/App/Common/PostProcessingState.h"
+#include "Runtime/Rendering/Common/PostProcessingState.h"
 
 #include "Misc.BloomBlur.slang.h"
 #include "Misc.BloomComposite.slang.h"

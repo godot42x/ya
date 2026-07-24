@@ -1,6 +1,6 @@
 #include "Core/Profiling/Profiling.h"
 
-#include "Runtime/App/App.h"
+#include "Runtime/Application/App.h"
 
 #include "Config/ConfigManager.h"
 

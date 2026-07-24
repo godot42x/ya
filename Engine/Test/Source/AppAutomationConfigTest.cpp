@@ -1,9 +1,9 @@
-#include "Runtime/App/Lifecycle/AppAutomation.h"
+#include "Runtime/Application/Lifecycle/AppAutomation.h"
 
 #include "Config/ConfigManager.h"
 #include "Core/Profiling/Profiling.h"
 #include "Core/System/VirtualFileSystem.h"
-#include "Runtime/App/App.h"
+#include "Runtime/Application/App.h"
 
 #include <gtest/gtest.h>
 

@@ -1,0 +1,704 @@
+#pragma once
+#include "Core/Base.h"
+#include "Core/Input/InputManager.h"
+#include "Core/Input/InputRouter.h"
+#include "Core/MessageBus.h"
+#include "Core/Module/Module.h"
+#include "Core/System/System.h"
+
+#include "Runtime/Application/AppState.h"
+#include "Runtime/Application/Lifecycle/AppAutomation.h"
+#include "Runtime/Rendering/Common/PostProcessingState.h"
+#include "Runtime/Rendering/RenderRuntime.h"
+
+#include "Render/RenderFrameData.h"
+#include "Render/Shadow/ShadowSettings.h"
+#include "Render/Stage/IRenderStage.h"
+
+
+#include "Render/Render.h"
+#include "Render/Shader.h"
+#include "Scene/SceneManager.h"
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <glm/glm.hpp>
+#include <memory>
+#include <optional>
+#include <sstream>
+
+
+
+#include "Runtime/Application/Utility/ClLIParams.h"
+
+#include "Core/Profiling/Profiling.h"
+
+// Forward declarations
+namespace ya
+{
+struct SceneManager;
+struct Scene;
+struct Material;
+struct IRenderPass;
+struct IImageView;
+struct LuaScriptingSystem;
+struct Texture;
+struct Sampler;
+struct RenderDocCapture;
+struct DeferredRenderPipeline;
+struct DebugRenderSystem;
+class ResourceResolveSystem;
+class AppLifecycle;
+class AppFrameLoop;
+class AppEventRouter;
+class AppModuleTestAccess;
+struct FProjectDescriptor;
+
+enum AppMode : int
+{
+    Control,
+    Drawing,
+};
+
+// enum class SimulationState
+// {
+//     Stopped,
+//     Playing,
+//     Paused,
+//     Stepping // Advance one frame
+// };
+
+
+enum class EAutomationScreenshotTarget : uint8_t
+{
+    Viewport = 0,
+    Presentation,
+};
+
+enum class EAutomationRenderPipeline : uint8_t
+{
+    Forward = 0,
+    Deferred,
+};
+
+struct AppAutomationShadowOverrides
+{
+    std::optional<EShadowQuality::T> quality;
+    std::optional<uint32_t>          resolution;
+    std::optional<bool>              directionalEnabled;
+    std::optional<bool>              pointLightEnabled;
+    std::optional<bool>              pointLightUseIndirect;
+    std::optional<bool>              pointLightIndirectCullEnabled;
+    std::optional<uint32_t>          maxPointLightShadows;
+    std::optional<EShadowFilter::T>  filter;
+    std::optional<float>             bias;
+    std::optional<float>             normalBias;
+    std::optional<float>             directionalDistance;
+    std::optional<uint32_t>          directionalCascades;
+    std::optional<std::array<float, MAX_DIRECTIONAL_CASCADES - 1>> directionalCascadeSplitRatios;
+    std::optional<float>             directionalDepthRangeMultiplier;
+};
+
+struct AppAutomationViewportResize
+{
+    uint32_t width      = 0;
+    uint32_t height     = 0;
+    uint64_t frameIndex = 1;
+};
+
+struct AppAutomationPipelineSwitch
+{
+    EAutomationRenderPipeline target     = EAutomationRenderPipeline::Deferred;
+    uint64_t                  frameIndex = 1;
+};
+
+struct AppAutomationDeferredOverrides
+{
+    std::optional<bool> ssaoEnabled;
+};
+
+struct AppAutomationPostProcessOverrides
+{
+    std::optional<bool>                                 enabled;
+    std::optional<bool>                                 bloomEnabled;
+    std::optional<bool>                                 toneMappingEnabled;
+    std::optional<PostProcessingState::EToneMappingCurve> toneMappingCurve;
+};
+
+struct AppProfilingOptions
+{
+    bool                       bCpuProfileEnabled            = !profiling::isCompiledOut();
+    bool                       bCpuProfileOverridden         = false;
+    bool                       bCpuProfileOutputOverridden   = false;
+    bool                       bProfileSessionNameOverridden = false;
+    std::string                profileSessionName            = "App";
+    std::optional<std::string> cpuProfileOutputPath;
+};
+
+struct AppAutomationOptions
+{
+    uint64_t                     exitAfterFrame                  = 0;
+    uint64_t                     screenshotFrameIndex            = 0;
+    uint64_t                     screenshotWarmupFrames          = 30;
+    uint64_t                     screenshotSettleFrames          = 5;
+    bool                         renderDocCapture                = false;
+    bool                         bRenderDocCaptureOverridden     = false;
+    bool                         bScreenshotTargetOverridden     = false;
+    EAutomationScreenshotTarget  screenshotTarget                = EAutomationScreenshotTarget::Viewport;
+    std::optional<std::string>   configPath;
+    std::optional<std::string>   scenePath;
+    std::optional<std::string>   screenshotPath;
+    std::optional<glm::vec3>     editorCameraPosition;
+    std::optional<glm::vec3>     editorCameraRotation;
+    std::optional<AppAutomationViewportResize> viewportResize;
+    std::optional<AppAutomationPipelineSwitch> pipelineSwitch;
+    std::optional<logcc::LogLevel::T> logLevel;
+    std::optional<logcc::LogLevel::T> logDetailLevel;
+    AppAutomationShadowOverrides shadow;
+    AppAutomationDeferredOverrides deferred;
+    AppAutomationPostProcessOverrides postprocess;
+};
+
+inline bool tryParseAutomationScreenshotTarget(const std::string& text, EAutomationScreenshotTarget& outValue)
+{
+    std::string normalized = text;
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch)
+                   { return static_cast<char>(std::tolower(ch)); });
+
+    if (normalized == "viewport") {
+        outValue = EAutomationScreenshotTarget::Viewport;
+        return true;
+    }
+    if (normalized == "presentation") {
+        outValue = EAutomationScreenshotTarget::Presentation;
+        return true;
+    }
+    return false;
+}
+
+inline bool tryParseAutomationVec3(const std::string& text, glm::vec3& outValue)
+{
+    std::string normalized = text;
+    for (char& ch : normalized) {
+        if (ch == ',' || ch == ';') {
+            ch = ' ';
+        }
+    }
+
+    std::stringstream stream(normalized);
+    float             x = 0.0f;
+    float             y = 0.0f;
+    float             z = 0.0f;
+    if (!(stream >> x >> y >> z)) {
+        return false;
+    }
+
+    stream >> std::ws;
+    if (!stream.eof()) {
+        return false;
+    }
+
+    outValue = glm::vec3(x, y, z);
+    return true;
+}
+
+inline bool tryParseAutomationRenderPipeline(const std::string& text, EAutomationRenderPipeline& outValue)
+{
+    std::string normalized = text;
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch)
+                   { return static_cast<char>(std::tolower(ch)); });
+
+    if (normalized == "forward") {
+        outValue = EAutomationRenderPipeline::Forward;
+        return true;
+    }
+    if (normalized == "deferred") {
+        outValue = EAutomationRenderPipeline::Deferred;
+        return true;
+    }
+    return false;
+}
+
+inline bool tryParseAutomationToneMappingCurve(const std::string& text, PostProcessingState::EToneMappingCurve& outValue)
+{
+    std::string normalized = text;
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch)
+                   { return static_cast<char>(std::tolower(ch)); });
+
+    if (normalized == "aces") {
+        outValue = PostProcessingState::EToneMappingCurve::ACES;
+        return true;
+    }
+    if (normalized == "uncharted2" || normalized == "uncharted") {
+        outValue = PostProcessingState::EToneMappingCurve::Uncharted2;
+        return true;
+    }
+    return false;
+}
+
+inline bool tryParseLogLevel(const std::string& text, logcc::LogLevel::T& outValue)
+{
+    std::string normalized = text;
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch)
+                   { return static_cast<char>(std::tolower(ch)); });
+
+    if (normalized == "debug" || normalized == "d") {
+        outValue = logcc::LogLevel::Debug;
+        return true;
+    }
+    if (normalized == "trace" || normalized == "t") {
+        outValue = logcc::LogLevel::Trace;
+        return true;
+    }
+    if (normalized == "info" || normalized == "i") {
+        outValue = logcc::LogLevel::Info;
+        return true;
+    }
+    if (normalized == "warn" || normalized == "warning" || normalized == "w") {
+        outValue = logcc::LogLevel::Warn;
+        return true;
+    }
+    if (normalized == "error" || normalized == "e") {
+        outValue = logcc::LogLevel::Error;
+        return true;
+    }
+    if (normalized == "fatal" || normalized == "f") {
+        outValue = logcc::LogLevel::Fatal;
+        return true;
+    }
+    return false;
+}
+
+struct AppDesc
+{
+    CliParams params = CliParams("Yet Another Game Engine", "Command line options");
+
+    std::string          title      = "Yet Another Game Engine";
+    int                  width      = 1024;
+    int                  height     = 768;
+    bool                 fullscreen = false;
+    AppProfilingOptions  profiling;
+    AppAutomationOptions automation;
+
+    std::optional<std::string> defaultScenePath;
+    std::optional<std::string> projectPath;
+    std::optional<std::string> projectRoot;
+    std::optional<std::string> executablePath;
+    bool                       bEditor = false;
+
+    bool                     bEnableRenderDoc            = false;
+    bool                     bRenderDocOutputOverridden  = false;
+    std::string              renderDocDllPath            = "C:/Program Files/RenderDoc/renderdoc.dll";
+    std::string              renderDocCaptureOutputDir   = "Engine/Saved/RenderDoc";
+    std::vector<std::string> disabledGraphicsCards; // e.g. ["NVIDIA GeForce RTX 3060"]
+
+
+
+    void init(int argc, char** argv)
+    {
+        if (argc > 0 && argv && argv[0]) {
+            executablePath = std::string(argv[0]);
+        }
+        params
+            .opt<int>("w", {"width"}, "Window width")
+            .opt<int>("h", {"height"}, "Window height")
+            .opt<bool>("f", {"fullscreen"}, "Fullscreen mode", "false")
+            .opt<uint64_t>("", {"exit-after-frame"}, "Quit gracefully after rendering N frames", "0")
+            .opt<std::string>("", {"automation-config"}, "Automation override settings file path")
+            .opt<std::string>("", {"scene"}, "Startup scene path override")
+            .opt<std::string>("", {"project"}, "Project descriptor path")
+            .opt<std::string>("", {"ya-project"}, "Project descriptor path (XMake-safe alias)")
+            .opt<bool>("", {"editor"}, "Enable the Editor module", "false")
+            .opt<std::string>("", {"screenshot"}, "Automation screenshot output PNG path")
+            .opt<std::string>("", {"screenshot-target"}, "Automation screenshot target: viewport or presentation")
+            .opt<uint64_t>("", {"screenshot-frame"}, "Earliest frame index allowed to request automation screenshot", "0")
+            .opt<bool>("", {"cpu-profile"}, "Enable runtime CPU trace profiling",
+                       !profiling::isCompiledOut() ? "true" : "false")
+            .opt<std::string>("", {"cpu-profile-output"}, "Runtime CPU trace output path")
+            .opt<std::string>("", {"profile-session"}, "Runtime profile session name")
+            .opt<uint64_t>("", {"screenshot-warmup-frames"}, "Frames to wait before checking screenshot stability", "30")
+            .opt<uint64_t>("", {"screenshot-settle-frames"}, "Consecutive stable frames required before screenshot", "5")
+            .opt<bool>("", {"renderdoc-capture"}, "Automation trigger one RenderDoc frame capture after warmup and settle", "false")
+            .opt<std::string>("", {"editor-camera-pos"}, "Editor camera position override as x,y,z")
+            .opt<std::string>("", {"editor-camera-rot"}, "Editor camera rotation override as pitch,yaw,roll")
+            .opt<std::string>("", {"log-level"}, "Runtime log level: debug/trace/info/warn/error/fatal")
+            .opt<std::string>("", {"log-detail-level"}, "Runtime source-detail log level: debug/trace/info/warn/error/fatal")
+            .opt<std::string>("", {"renderdoc-dll"}, "RenderDoc dll path", renderDocDllPath)
+            .opt<std::string>("", {"renderdoc-output"}, "RenderDoc capture output directory", renderDocCaptureOutputDir)
+            .parse(argc, argv);
+
+        title = params._opt.program();
+        params.tryGet<int>("width", width);
+        params.tryGet<int>("height", height);
+        params.tryGet<bool>("fullscreen", fullscreen);
+        params.tryGet<uint64_t>("exit-after-frame", automation.exitAfterFrame);
+        if (std::string automationConfigPath; params.tryGet<std::string>("automation-config", automationConfigPath)) {
+            automation.configPath = std::move(automationConfigPath);
+        }
+        params.tryGet<uint64_t>("screenshot-frame", automation.screenshotFrameIndex);
+        params.tryGet<uint64_t>("screenshot-warmup-frames", automation.screenshotWarmupFrames);
+        params.tryGet<uint64_t>("screenshot-settle-frames", automation.screenshotSettleFrames);
+        if (bool bRenderDocCapture = false; params.tryGet<bool>("renderdoc-capture", bRenderDocCapture)) {
+            automation.renderDocCapture            = bRenderDocCapture;
+            automation.bRenderDocCaptureOverridden = true;
+        }
+        if (bool bCpuProfileEnabled = false; params.tryGet<bool>("cpu-profile", bCpuProfileEnabled)) {
+            profiling.bCpuProfileEnabled    = bCpuProfileEnabled;
+            profiling.bCpuProfileOverridden = true;
+        }
+        if (std::string cpuProfileOutputPath; params.tryGet<std::string>("cpu-profile-output", cpuProfileOutputPath)) {
+            profiling.cpuProfileOutputPath        = std::move(cpuProfileOutputPath);
+            profiling.bCpuProfileOutputOverridden = true;
+        }
+        if (std::string profileSessionName; params.tryGet<std::string>("profile-session", profileSessionName)) {
+            if (!profileSessionName.empty()) {
+                profiling.profileSessionName            = std::move(profileSessionName);
+                profiling.bProfileSessionNameOverridden = true;
+            }
+        }
+        if (std::string scenePath; params.tryGet<std::string>("scene", scenePath)) {
+            automation.scenePath = std::move(scenePath);
+        }
+        if (std::string project; params.tryGet<std::string>("project", project)) {
+            projectPath = std::move(project);
+        }
+        if (std::string project; params.tryGet<std::string>("ya-project", project)) {
+            projectPath = std::move(project);
+        }
+        params.tryGet<bool>("editor", bEditor);
+        if (std::string screenshotPath; params.tryGet<std::string>("screenshot", screenshotPath)) {
+            automation.screenshotPath = std::move(screenshotPath);
+        }
+        if (std::string cameraPos; params.tryGet<std::string>("editor-camera-pos", cameraPos)) {
+            glm::vec3 parsedPosition{0.0f};
+            if (tryParseAutomationVec3(cameraPos, parsedPosition)) {
+                automation.editorCameraPosition = parsedPosition;
+            }
+            else {
+                YA_CORE_WARN("Ignoring invalid editor camera position override: {}", cameraPos);
+            }
+        }
+        if (std::string cameraRot; params.tryGet<std::string>("editor-camera-rot", cameraRot)) {
+            glm::vec3 parsedRotation{0.0f};
+            if (tryParseAutomationVec3(cameraRot, parsedRotation)) {
+                automation.editorCameraRotation = parsedRotation;
+            }
+            else {
+                YA_CORE_WARN("Ignoring invalid editor camera rotation override: {}", cameraRot);
+            }
+        }
+        if (std::string screenshotTargetText; params.tryGet<std::string>("screenshot-target", screenshotTargetText)) {
+            EAutomationScreenshotTarget screenshotTarget = EAutomationScreenshotTarget::Viewport;
+            if (tryParseAutomationScreenshotTarget(screenshotTargetText, screenshotTarget)) {
+                automation.screenshotTarget            = screenshotTarget;
+                automation.bScreenshotTargetOverridden = true;
+            }
+            else {
+                YA_CORE_WARN("Ignoring invalid automation screenshot target: {}", screenshotTargetText);
+            }
+        }
+        if (std::string logLevelText; params.tryGet<std::string>("log-level", logLevelText)) {
+            logcc::LogLevel::T parsedLogLevel = logcc::LogLevel::Info;
+            if (tryParseLogLevel(logLevelText, parsedLogLevel)) {
+                automation.logLevel = parsedLogLevel;
+            }
+        }
+        if (std::string logDetailLevelText; params.tryGet<std::string>("log-detail-level", logDetailLevelText)) {
+            logcc::LogLevel::T parsedLogDetailLevel = logcc::LogLevel::Warn;
+            if (tryParseLogLevel(logDetailLevelText, parsedLogDetailLevel)) {
+                automation.logDetailLevel = parsedLogDetailLevel;
+            }
+        }
+        YA_CORE_INFO(FUNCTION_SIG);
+        params.tryGet<std::string>("renderdoc-dll", renderDocDllPath);
+        if (std::string renderDocOutputPath; params.tryGet<std::string>("renderdoc-output", renderDocOutputPath)) {
+            renderDocCaptureOutputDir      = std::move(renderDocOutputPath);
+            bRenderDocOutputOverridden     = true;
+        }
+        if (automation.renderDocCapture) {
+            bEnableRenderDoc = true;
+        }
+    }
+};
+
+struct TaskManager
+{
+    // TODO: use vector for fast execution, but it's not the bottleneck and most important things for now
+    std::deque<std::function<void()>>                tasks;
+    std::deque<std::pair<std::shared_ptr<OffscreenJobState>, std::function<void(ICommandBuffer*)>>> offscreenTasks;
+
+    [[nodiscard]] bool hasFrameTasks() const { return !tasks.empty(); }
+    [[nodiscard]] bool hasOffscreenTasks() const { return !offscreenTasks.empty(); }
+
+    void registerFrameTask(std::function<void()> task)
+    {
+        tasks.push_back(std::move(task));
+    }
+    void enqueueOffscreenTask(const std::shared_ptr<OffscreenJobState>& job, std::function<void(ICommandBuffer*)> task)
+    {
+        offscreenTasks.emplace_back(job, std::move(task));
+    }
+
+    void update()
+    {
+        while (!tasks.empty()) {
+            auto task = std::move(tasks.front());
+            tasks.pop_front();
+            task();
+        }
+    }
+    void updateOffscreenTasks(ICommandBuffer* cmdBuf, std::vector<std::shared_ptr<OffscreenJobState>>* submittedJobs = nullptr)
+    {
+        while (!offscreenTasks.empty()) {
+            auto [job, task] = std::move(offscreenTasks.front());
+            offscreenTasks.pop_front();
+            if (submittedJobs && job) {
+                submittedJobs->push_back(job);
+            }
+            task(cmdBuf);
+        }
+    }
+};
+
+
+
+struct App
+{
+    friend class AppLifecycle;
+    friend class AppFrameLoop;
+    friend class AppEventRouter;
+    friend class AppModuleTestAccess;
+
+    struct RenderFrameState
+    {
+        Rect2D    viewportRect             = {};
+        float     viewportFrameBufferScale = 1.0f;
+        glm::mat4 view                     = glm::mat4(1.0f);
+        glm::mat4 projection               = glm::mat4(1.0f);
+        glm::vec3 cameraPos                = glm::vec3(0.0f);
+    };
+
+    static App* _instance;
+
+    Deleter _deleter;
+
+    // Core subsystems
+    SceneManager*                  _sceneManager = nullptr;
+    std::unique_ptr<RenderRuntime> _renderRuntime;
+
+    // Global render settings (authoritative source for the render pipeline)
+    ShadowSettings _shadowSettings = ShadowSettings::fromQuality(EShadowQuality::Medium);
+
+    // Runtime state
+    bool bRunning = true;
+
+    using clock_t      = std::chrono::steady_clock;
+    using time_point_t = clock_t::time_point;
+    time_point_t _lastTime;
+    time_point_t _startTime;
+
+    static uint32_t _frameIndex;
+    bool            _bPause     = false;
+    bool            _bMinimized = false; // Track window minimized state
+
+    AppDesc   _ci;
+    glm::vec2 _windowSize = {0, 0};
+
+    // State management
+    AppState _appState = AppState::Stopped;
+    // SimulationState _simulationState = SimulationState::Stopped;
+
+    // Input and task dispatch
+    InputManager inputManager;
+    InputRouter  inputRouter;
+    TaskManager  taskManager;
+
+    // Application state
+    AppMode   _appMode      = AppMode::Control;
+    glm::vec2 _lastMousePos = {0, 0};
+
+    static const auto LINEAR_FORMAT    = EFormat::R8G8B8A8_UNORM;
+    static const auto SWAPCHAIN_FORMAT = LINEAR_FORMAT;
+
+    std::vector<glm::vec2> clicked;
+
+    // other systems, eg: transform, resource resolve
+    std::vector<stdptr<ISystem>> _systems;
+    ResourceResolveSystem*       _resourceResolveSystem = nullptr;
+
+    bool bRenderMirror = false;
+
+    RenderFrameState                                 _renderFrameState;
+    std::optional<RenderFrameState>                  _extensionRenderFrameState;
+    std::array<RenderFrameData, MAX_FLIGHTS_IN_FLIGHT> _renderFrameDataPerFlight{};
+
+
+    struct FModuleSlot
+    {
+        std::unique_ptr<IModule> owned;
+        IModule*                  module = nullptr;
+    };
+
+    std::vector<FModuleSlot> _modules;
+    bool                     _modulesAttached = false;
+
+
+    LuaScriptingSystem* _luaScriptingSystem;
+
+  public:
+    App()                      = default;
+    App(const App&)            = delete;
+    App& operator=(const App&) = delete;
+    App(App&&)                 = delete;
+    App& operator=(App&&)      = delete;
+    virtual ~App();
+
+    void init(AppDesc ci);
+    int  run();
+    int  iterate(float dt);
+    void quit();
+    int  processEvent(SDL_Event& event);
+
+    template <typename T>
+    int dispatchEvent(const T& event)
+    {
+        if (0 == onEvent(event)) {
+            MessageBus::get()->publish(event);
+        }
+        return 0;
+    }
+    void addModule(std::unique_ptr<IModule> module);
+    void addModule(IModule& module);
+
+    void requestQuit()
+    {
+        if (AppAutomation::shouldDeferQuit(*this)) {
+            return;
+        }
+        if (isRuntimeMode()) {
+            stopRuntime();
+        }
+        else if (isSimulationMode()) {
+            stopSimulation();
+        }
+        bRunning = false;
+    }
+
+    // before render context created
+    virtual void onInit(const AppDesc& ci);
+    //  after render context created
+    virtual void onPostInit();
+    virtual void onQuit() {}
+
+
+    virtual int  onEvent(const Event& event);
+    virtual void tickLogic(float dt);
+    virtual void tickRender(float dt);
+
+
+
+    static App* get() { return _instance; }
+
+
+    [[nodiscard]] IRender* getRender() const;
+    template <typename T>
+    [[nodiscard]] T* getRender() { return static_cast<T*>(getRender()); }
+
+    [[nodiscard]] const AppDesc&                 getDesc() const { return _ci; }
+    [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const;
+    [[nodiscard]] RenderRuntime*                 getRenderRuntime() const { return _renderRuntime.get(); }
+    [[nodiscard]] ResourceResolveSystem*         getResourceResolveSystem() const { return _resourceResolveSystem; }
+    [[nodiscard]] const InputManager&            getInputManager() const { return inputManager; }
+    [[nodiscard]] InputRouter&                   getInputRouter() { return inputRouter; }
+    [[nodiscard]] const InputRouter&             getInputRouter() const { return inputRouter; }
+
+    // Global render settings accessors (game layer writes, pipeline reads)
+    [[nodiscard]] ShadowSettings&       getShadowSettings()       { return _shadowSettings; }
+    [[nodiscard]] const ShadowSettings& getShadowSettings() const { return _shadowSettings; }
+
+    [[nodiscard]] IRenderPipeline*       getRenderPipeline() const;
+    [[nodiscard]] DebugRenderSystem&     getDebugRenderSystem() const;
+    [[nodiscard]] bool                   isShadowMappingEnabled() const;
+    [[nodiscard]] bool                   isMirrorRenderingEnabled() const;
+    [[nodiscard]] bool                   hasMirrorRenderResult() const;
+    [[nodiscard]] IImageView*            getShadowDirectionalDepthIV() const;
+    [[nodiscard]] IImageView*            getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
+    [[nodiscard]] bool                   isPostprocessingEnabled() const;
+
+    // Getters for subsystems
+    [[nodiscard]] SceneManager*           getSceneManager() const { return _sceneManager; }
+    [[nodiscard]] const RenderFrameState& getRenderFrameState() const { return _renderFrameState; }
+    void setExtensionRenderFrameState(const RenderFrameState& state) { _extensionRenderFrameState = state; }
+    void clearExtensionRenderFrameState() { _extensionRenderFrameState.reset(); }
+    [[nodiscard]] uint32_t                getFrameIndex() const { return _frameIndex; }
+    [[nodiscard]] uint64_t                getElapsedTimeMS() const { return std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - _startTime).count(); }
+
+    // State getters
+    [[nodiscard]] AppState getAppState() const { return _appState; }
+    // [[nodiscard]] SimulationState getSimulationState() const { return _simulationState; }
+    [[nodiscard]] bool isStopped() const { return _appState == AppState::Stopped; }
+    [[nodiscard]] bool isSimulationMode() const { return _appState == AppState::Simulation; }
+    [[nodiscard]] bool isRuntimeMode() const { return _appState == AppState::Runtime; }
+    bool               isPaused() const { return _bPause; }
+    // [[nodiscard]] bool            isSimulationPlaying() const { return _simulationState == SimulationState::Playing; }
+    // [[nodiscard]] bool            isSimulationPaused() const { return _simulationState == SimulationState::Paused; }
+    // [[nodiscard]] float getSimulationDeltaTime() const { return _simulationDeltaTime; }
+
+    void startRuntime();
+    void startSimulation();
+    void stopRuntime();
+    void stopSimulation();
+
+    // Get primary camera from ECS (entity with CameraComponent._primary == true)
+    // Returns nullptr if no primary camera found
+    Entity* getPrimaryCamera() const;
+
+    bool loadScene(const std::string& path);
+    bool unloadScene();
+    bool openProject(const FProjectDescriptor& descriptor);
+
+    glm::vec2 getLastMousePos() const { return _lastMousePos; }
+
+  protected:
+    // Protected for derived classes to override
+    virtual void onSceneInit(Scene* scene);
+    virtual void onSceneDestroy(Scene* scene);
+    virtual void onSceneActivated(Scene* scene);
+
+    // void onScenePostInit(Scene *scene) {}
+
+    virtual void onEnterRuntime();
+    virtual void onEnterSimulation() {}
+    virtual void onExitSimulation() {}
+    virtual void onSimulationPaused() {}
+    virtual void onSimulationResumed() {}
+
+  private:
+    void attachModules();
+    void detachModules();
+    void configureModules();
+    void dispatchNativeEvent(const SDL_Event& event);
+    [[nodiscard]] bool dispatchModuleEvent(const Event& event);
+    void tickModules(float dt);
+    void prepareModulesForRender(float dt);
+    void recordModuleBeforePresentation(ICommandBuffer& commandBuffer, float dt);
+    void recordModulePresentation(ICommandBuffer& commandBuffer, float dt);
+    [[nodiscard]] bool notifyModulesBeforeAppStateChange(AppState nextState);
+    void notifyModulesAfterAppStateChange(AppState previousState);
+    void notifyModulesSceneActivated(Scene* scene);
+    void notifyModulesSceneDestroyed(Scene* scene);
+    [[nodiscard]] const glm::vec2&    getWindowSize() const { return _windowSize; }
+    void                              syncViewportState();
+    [[nodiscard]] Extent2D            resolveViewportExtent(RenderRuntime* renderRuntime, const Rect2D& viewportRect) const;
+    void                              prepareRenderFrameState(float dt);
+
+
+  private:
+
+
+    bool saveScene([[maybe_unused]] const std::string& path) { return false; } // TODO: implement
+
+};
+
+
+} // namespace ya

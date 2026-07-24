@@ -1,6 +1,6 @@
-#include "Runtime/App/Lifecycle/AppLifecycle.h"
+#include "Runtime/Application/Lifecycle/AppLifecycle.h"
 
-#include "Runtime/App/App.h"
+#include "Runtime/Application/App.h"
 
 #include "Render/Core/CommandBuffer.h"
 #include "Scene/SceneManager.h"

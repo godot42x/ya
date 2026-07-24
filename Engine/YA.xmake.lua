@@ -124,11 +124,6 @@ do
     add_files("./Source/**.cpp|Implementaion/*.cpp")
     remove_files("./Source/Editor/**.cpp")
     remove_files("./Source/Platform/Render/OpenGL/**.cpp") -- develop vulkan mainly for now
-    -- Runtime UI is now hosted by Editor extensions. These legacy controllers
-    -- have no remaining callers and must not pull ImGui into runtime builds.
-    remove_files("./Source/Runtime/App/GUI/AppGuiController.cpp")
-    remove_files("./Source/Runtime/App/GUI/AppProfilingFacade.cpp")
-    remove_files("./Source/Runtime/App/RenderRuntime.GUI.cpp")
 
     add_files("./Source/Implementaion/VulkanMemoryAllocator.cpp", { unity_ignored = true })
     add_files("./Source/Implementaion/STB.cpp", { unity_ignored = true })
@@ -208,6 +203,10 @@ end
 target("ya-editor")
 do
     set_kind("shared")
+    local bEnableUnity = get_config("ya_enable_unity-build")
+    if  bEnableUnity then
+        add_rules("c++.unity_build", { batchsize = 2 })
+    end
     add_files("./Source/Editor/**.cpp")
     add_deps("ya-engine")
     add_deps("imgui-local")

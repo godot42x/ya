@@ -3,7 +3,7 @@
 #include "Core/Log.h"
 #include "Core/System/PathUtils.h"
 #include "Core/System/VirtualFileSystem.h"
-#include "Runtime/App/App.h"
+#include "Runtime/Application/App.h"
 #include "ktx.h"
 #include "stb/stb_image.h"
 

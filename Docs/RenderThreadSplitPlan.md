@@ -17,8 +17,8 @@
 
 目前 `App` 仍然是单线程串行推进：
 
-- [`App.cpp`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/App/App.cpp) `tickRender`
-- [`App.cpp`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/App/App.cpp) `prepareRenderFrameState`
+- [`App.cpp`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/Application/App.cpp) `tickRender`
+- [`App.cpp`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/Application/App.cpp) `prepareRenderFrameState`
 
 问题在于：
 
@@ -28,8 +28,8 @@
 
 ### 2.2 RenderRuntime 仍直接依赖 SceneManager / EditorLayer
 
-- [`RenderRuntime.h`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/App/RenderRuntime.h)
-- [`RenderRuntime.cpp`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/App/RenderRuntime.cpp)
+- [`RenderRuntime.h`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/Rendering/RenderRuntime.h)
+- [`RenderRuntime.cpp`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/Rendering/RenderRuntime.cpp)
 
 `RenderRuntime::FrameInput` 里仍直接传：
 
@@ -42,8 +42,8 @@
 
 ### 2.3 Render pipeline 直接遍历场景与系统
 
-- [`ForwardRenderPipeline.cpp`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/App/ForwardRender/ForwardRenderPipeline.cpp)
-- [`DeferredRenderPipeline.cpp`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/App/DeferredRender/DeferredRenderPipeline.cpp)
+- [`ForwardRenderPipeline.cpp`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/Rendering/Forward/ForwardRenderPipeline.cpp)
+- [`DeferredRenderPipeline.cpp`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/Rendering/Deferred/DeferredRenderPipeline.cpp)
 - [`IRenderSystem.h`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/ECS/System/Render/IRenderSystem.h)
 
 现在的模型是：
@@ -55,7 +55,7 @@
 
 ### 2.4 GPU 同步仍偏保守
 
-- [`RenderRuntime.cpp`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/App/RenderRuntime.cpp) `_render->waitIdle()`
+- [`RenderRuntime.cpp`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/Rendering/RenderRuntime.cpp) `_render->waitIdle()`
 - [`VulkanRender.h`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Platform/Render/Vulkan/VulkanRender.h) `flightFrameSize = 1`
 
 目前存在几个直接限制吞吐的点：
@@ -70,7 +70,7 @@
 
 - [`TaskQueue.h`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Core/Async/TaskQueue.h)
 - [`AssetManager.cpp`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Resource/AssetManager.cpp)
-- [`App.h`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/App/App.h)
+- [`App.h`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/Application/App.h)
 
 当前资源加载模型：
 
@@ -238,9 +238,9 @@ GT 更新 proxy 的 authoring state，RT 负责把 proxy 对应的 GPU state 真
 
 - 新建 `Engine/Source/Render/RHI/RenderFrameSnapshot.h`
 - 新建 `Engine/Source/Render/RHI/RenderSceneExtractor.*`
-- 修改 [`RenderRuntime.h`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/App/RenderRuntime.h)
-- 修改 [`RenderRuntime.cpp`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/App/RenderRuntime.cpp)
-- 修改 [`App.cpp`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/App/App.cpp)
+- 修改 [`RenderRuntime.h`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/Rendering/RenderRuntime.h)
+- 修改 [`RenderRuntime.cpp`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/Rendering/RenderRuntime.cpp)
+- 修改 [`App.cpp`](/C:/Users/dexzhou/1/craft/Neon/Engine/Source/Runtime/Application/App.cpp)
 
 先做一个最小版本 snapshot：
 

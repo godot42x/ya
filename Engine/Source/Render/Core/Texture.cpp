@@ -1,7 +1,7 @@
 #include "Texture.h"
 
 #include "Resource/Texture/TextureLibrary.h"
-#include "Runtime/App/App.h"
+#include "Runtime/Application/App.h"
 #include "stb/stb_image.h"
 
 #include <cstddef>

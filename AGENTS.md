@@ -77,7 +77,8 @@ xmake project -k compile_commands
 - `Engine/Source/Core/`：核心系统、日志、反射、脚本
 - `Engine/Source/Render/`：渲染抽象层
 - `Engine/Source/Platform/Render/`：Vulkan / OpenGL 后端
-- `Engine/Source/Runtime/App/`：应用入口与 RenderRuntime
+- `Engine/Source/Runtime/Application/`：应用入口、生命周期与自动化
+- `Engine/Source/Runtime/Rendering/`：RenderRuntime、渲染管线与渲染服务
 - `Engine/Source/Editor/`：编辑器层
 - `Engine/Shader/`：Slang / GLSL 与生成头
 - `Example/`：项目 / 示例
