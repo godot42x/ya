@@ -2,7 +2,7 @@
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Manager/Facade.h"
 #include "Editor/EditorCommon.h"
-#include "Editor/App/EditorLayer.h"
+#include "Editor/EditorLayer.h"
 
 
 #include "Core/System/VirtualFileSystem.h"

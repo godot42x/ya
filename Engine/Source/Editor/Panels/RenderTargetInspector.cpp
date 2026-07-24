@@ -3,8 +3,8 @@
 #include "Editor/ImGui/ImGuiHelper.h"
 #include "Render/Core/RenderImage.h"
 #include "Resource/Texture/TextureLibrary.h"
-#include "Runtime/App/App.h"
-#include "Runtime/App/RenderRuntime.h"
+#include "Runtime/Application/App.h"
+#include "Runtime/Rendering/RenderRuntime.h"
 
 #include <algorithm>
 #include <array>

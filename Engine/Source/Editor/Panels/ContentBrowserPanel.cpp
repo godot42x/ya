@@ -1,13 +1,13 @@
 #include "Editor/Panels/ContentBrowserPanel.h"
 
-#include "Editor/App/EditorLayer.h"
+#include "Editor/EditorLayer.h"
 #include "Core/System/PathUtils.h"
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Editor/ImGui/ImGuiHelper.h"
 #include "Resource/AssetManager.h"
 #include "Resource/Texture/TextureLibrary.h"
-#include "Runtime/App/App.h"
+#include "Runtime/Application/App.h"
 #include <imgui.h>
 
 

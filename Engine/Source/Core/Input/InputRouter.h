@@ -36,7 +36,7 @@ public:
     [[nodiscard]] bool isViewportFocused() const { return _bViewportFocused; }
     [[nodiscard]] bool isViewportHovered() const { return _bViewportHovered; }
 
-    // Convenience: called from EditorAppExtension::onEvent.
+    // Convenience: called from EditorModule::onEvent.
     // Returns true if the event was consumed (should NOT reach InputManager).
     [[nodiscard]] bool routeEvent(const Event& event, bool bImGuiHandled);
 

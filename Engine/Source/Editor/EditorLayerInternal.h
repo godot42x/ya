@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Editor/App/EditorLayer.h"
+#include "Editor/EditorLayer.h"
 
 #include "Config/ConfigManager.h"
 #include "Core/KeyCode.h"
@@ -21,7 +21,7 @@
 #include "Render/Core/RenderResourceFactory.h"
 #include "Resource/AssetManager.h"
 #include "Resource/Texture/TextureLibrary.h"
-#include "Runtime/App/App.h"
+#include "Runtime/Application/App.h"
 #include "Scene/Node.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneManager.h"

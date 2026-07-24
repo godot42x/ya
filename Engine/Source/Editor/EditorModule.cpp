@@ -1,7 +1,7 @@
-#include "Editor/App/EditorAppExtension.h"
+#include "Editor/EditorModule.h"
 
-#include "Editor/App/EditorLayer.h"
-#include "Editor/App/EditorPlaySession.h"
+#include "Editor/EditorLayer.h"
+#include "Editor/EditorPlaySession.h"
 #include "Config/ConfigManager.h"
 #include "Core/Camera/FreeCameraController.h"
 #include "Core/Profiling/Profiling.h"
@@ -13,9 +13,9 @@
 #include "Render/Core/RenderImage.h"
 #include "Resource/Font/FontManager.h"
 #include "Resource/Texture/TextureLibrary.h"
-#include "Runtime/App/App.h"
-#include "Runtime/App/Common/Shadow/Common/ShadowSettingsConfig.h"
-#include "Runtime/App/RenderRuntime.h"
+#include "Runtime/Application/App.h"
+#include "Runtime/Rendering/Common/Shadow/Common/ShadowSettingsConfig.h"
+#include "Runtime/Rendering/RenderRuntime.h"
 
 #include <string_view>
 
@@ -232,7 +232,7 @@ class EditorViewportCompositor
     }
 };
 
-class EditorAppExtension final : public IModule
+class EditorModule final : public IModule
 {
   private:
     std::unique_ptr<EditorLayer> _layer;
@@ -457,7 +457,7 @@ class EditorAppExtension final : public IModule
 
 std::unique_ptr<IModule> createEditorModule()
 {
-    return std::make_unique<EditorAppExtension>();
+    return std::make_unique<EditorModule>();
 }
 
 EditorLayer* getEditorLayer()

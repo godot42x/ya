@@ -11,10 +11,10 @@
 #include "Editor/Inspector/DetailsView.h"
 #include "Editor/FilePicker.h"
 #include "Editor/ImGui/ImGuiHelper.h"
-#include "Runtime/App/Common/RenderOverlay.h"
+#include "Runtime/Rendering/Common/RenderOverlay.h"
 #include "Render/Core/Image.h"
 #include "Render/Core/RenderImage.h"
-#include "Runtime/App/Common/RenderViewportSnapshot.h"
+#include "Runtime/Rendering/Common/RenderViewportSnapshot.h"
 #include "Editor/Panels/SceneHierarchyPanel.h"
 #include <imgui.h>
 
