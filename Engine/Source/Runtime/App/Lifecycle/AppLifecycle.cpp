@@ -607,6 +607,9 @@ void AppLifecycle::stopRuntime(App& app)
     if (auto* render = app.getRender()) {
         render->waitIdle();
     }
+    if (app._luaScriptingSystem) {
+        app._luaScriptingSystem->onStop();
+    }
     if (!app.notifyModulesBeforeAppStateChange(AppState::Stopped)) {
         YA_CORE_WARN("Runtime stop was rejected by an app module");
         return;
@@ -614,9 +617,6 @@ void AppLifecycle::stopRuntime(App& app)
     const AppState previousState = app._appState;
     app._appState = AppState::Stopped;
     app.notifyModulesAfterAppStateChange(previousState);
-    if (app._luaScriptingSystem) {
-        app._luaScriptingSystem->onStop();
-    }
 }
 
 void AppLifecycle::stopSimulation(App& app)
@@ -629,6 +629,9 @@ void AppLifecycle::stopSimulation(App& app)
     YA_CORE_INFO("Stopping simulation");
     if (auto* render = app.getRender()) {
         render->waitIdle();
+    }
+    if (app._luaScriptingSystem) {
+        app._luaScriptingSystem->onStop();
     }
     if (!app.notifyModulesBeforeAppStateChange(AppState::Stopped)) {
         YA_CORE_WARN("Simulation stop was rejected by an app module");

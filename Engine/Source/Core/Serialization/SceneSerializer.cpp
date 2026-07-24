@@ -234,12 +234,23 @@ nlohmann::json SceneSerializer::serializeEntity(Entity* entity)
         }
 
         void* componentPtr = reg.getComponent(name, registry, handle);
-
-        if (componentPtr) {
-            components[name.toString()] = ::ya::ReflectionSerializer::serializeByRuntimeReflection(componentPtr, typeIndex, name.toString());
-            // YA_CORE_TRACE("  -> Serialized component: {}", name.toString());
+        if (!componentPtr) {
+            continue;
         }
+
+        nlohmann::json componentJson;
+        const auto* ops = reg.getComponentOps(typeIndex);
+        if (!ops || ops->useReflectionSerialization(componentPtr)) {
+            componentJson = ::ya::ReflectionSerializer::serializeByRuntimeReflection(componentPtr, typeIndex, name.toString());
+        }
+        if (ops) {
+            ops->serializeCustom(componentPtr, componentJson);
+        }
+
+        components[name.toString()] = std::move(componentJson);
     }
+
+
     return j;
 }
 
@@ -277,12 +288,18 @@ Entity* SceneSerializer::deserializeEntity(const nlohmann::json& j)
             if (typeIndex) {
                 auto  id           = *typeIndex;
                 void* componentPtr = reg.addComponent(FName(typeName), *_scene, entity->getHandle());
+                auto* ops = reg.getComponentOps(id);
                 auto  cls          = ClassRegistry::instance().getClass(id);
-                if (cls) {
-                    ::ya::ReflectionSerializer::deserializeByRuntimeReflection(componentPtr, id, componentJ, cls->name);
-                    if (auto* component = static_cast<IComponent*>(componentPtr)) {
-                        component->onPostSerialize();
+                if (!ops || ops->useReflectionSerialization(componentPtr)) {
+                    if (cls) {
+                        ::ya::ReflectionSerializer::deserializeByRuntimeReflection(componentPtr, id, componentJ, cls->name);
                     }
+                }
+                if (ops) {
+                    ops->deserializeCustom(componentPtr, componentJ);
+                }
+                if (auto* component = static_cast<IComponent*>(componentPtr)) {
+                    component->onPostSerialize();
                 }
             }
         }

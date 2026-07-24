@@ -3,6 +3,7 @@
 
 local Class = require("Class")
 
+---@class ScriptBase
 local ScriptBase = Class.define("ScriptBase")
 
 --- 全局运行时环境标识（由 C++ 设置）

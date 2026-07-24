@@ -1,5 +1,8 @@
 #include "LuaScriptingSystem.h"
 #include "Runtime/App/App.h"
+#include "Core/Input/InputManager.h"
+#include "Core/Input/InputRouter.h"
+#include "Core/Log.h"
 #include "Core/Reflection/MetadataSupport.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Core/System/FileWatcher.h"
@@ -10,6 +13,60 @@
 #include "ECS/Entity.h"
 #include "Scene/SceneManager.h"
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+
+namespace
+{
+
+struct LuaInputApi
+{
+    const ya::InputManager* input = nullptr;
+    ya::InputRouter*        router = nullptr;
+
+    [[nodiscard]] bool isKeyDown(ya::EKey::T key) const { return input && input->isKeyPressed(key); }
+    [[nodiscard]] bool isKeyPressed(ya::EKey::T key) const { return input && input->wasKeyPressed(key); }
+    [[nodiscard]] bool isKeyReleased(ya::EKey::T key) const { return input && input->wasKeyReleased(key); }
+    [[nodiscard]] bool isMouseButtonDown(ya::EMouse::T button) const { return input && input->isMouseButtonPressed(button); }
+    [[nodiscard]] bool isMouseButtonPressed(ya::EMouse::T button) const { return input && input->wasMouseButtonPressed(button); }
+    [[nodiscard]] bool isMouseButtonReleased(ya::EMouse::T button) const { return input && input->wasMouseButtonReleased(button); }
+    [[nodiscard]] glm::vec2 getMousePosition() const { return input ? input->getMousePosition() : glm::vec2(0.0f); }
+    [[nodiscard]] glm::vec2 getMouseDelta() const { return input ? input->getMouseDelta() : glm::vec2(0.0f); }
+    [[nodiscard]] glm::vec2 getMouseScrollDelta() const { return input ? input->getMouseScrollDelta() : glm::vec2(0.0f); }
+    [[nodiscard]] bool isActionDown(const std::string& action) const { return input && input->isActionPressed(action); }
+    [[nodiscard]] bool wasActionPressed(const std::string& action) const { return input && input->wasActionPressed(action); }
+    [[nodiscard]] bool wasActionReleased(const std::string& action) const { return input && input->wasActionReleased(action); }
+
+    // Mouse capture API (delegates to InputRouter)
+    void captureMouse() const { if (router) router->captureMouse(); }
+    void releaseMouse() const { if (router) router->releaseMouse(); }
+    [[nodiscard]] bool isMouseCaptured() const { return router && router->isMouseCaptured(); }
+    void setInputMode(int mode) const { if (router) router->setInputMode(static_cast<ya::EInputMode>(mode)); }
+};
+
+struct LuaTimeApi
+{
+    const ya::App* app = nullptr;
+
+    [[nodiscard]] double getElapsedSeconds() const
+    {
+        return app ? static_cast<double>(app->getElapsedTimeMS()) / 1000.0 : 0.0;
+    }
+
+    [[nodiscard]] uint64_t getFrameIndex() const
+    {
+        return app ? app->getFrameIndex() : 0;
+    }
+};
+
+struct LuaLogApi
+{
+    void info(const std::string& message) const { YA_INFO("{}", message); }
+    void warn(const std::string& message) const { YA_WARN("{}", message); }
+    void error(const std::string& message) const { YA_ERROR("{}", message); }
+    void debug(const std::string& message) const { YA_DEBUG("{}", message); }
+};
+
+} // namespace
 
 
 
@@ -60,7 +117,139 @@ void LuaScriptingSystem::init()
                                  "z",
                                  &glm::vec3::z,
                                  "__add",
-                                 [](const glm::vec3 &a, const glm::vec3 &b) { return a + b; });
+                                 [](const glm::vec3 &a, const glm::vec3 &b) { return a + b; },
+                                 "__sub",
+                                 [](const glm::vec3 &a, const glm::vec3 &b) { return a - b; },
+                                 "__mul",
+                                 sol::overload([](const glm::vec3 &v, float s) { return v * s; },
+                                               [](float s, const glm::vec3 &v) { return s * v; }),
+                                 "__div",
+                                 [](const glm::vec3 &v, float s) { return v / s; },
+                                 "length",
+                                 [](const glm::vec3 &v) { return glm::length(v); },
+                                 "normalize",
+                                 [](const glm::vec3 &v) { return glm::normalize(v); },
+                                 "dot",
+                                 [](const glm::vec3 &a, const glm::vec3 &b) { return glm::dot(a, b); },
+                                 "cross",
+                                 [](const glm::vec3 &a, const glm::vec3 &b) { return glm::cross(a, b); });
+
+    _lua.new_usertype<glm::vec2>("Vec2",
+                                 sol::constructors<glm::vec2(), glm::vec2(float), glm::vec2(float, float)>(),
+                                 "x",
+                                 &glm::vec2::x,
+                                 "y",
+                                 &glm::vec2::y,
+                                 "__add",
+                                 [](const glm::vec2 &a, const glm::vec2 &b) { return a + b; },
+                                 "__sub",
+                                 [](const glm::vec2 &a, const glm::vec2 &b) { return a - b; },
+                                 "__mul",
+                                 sol::overload([](const glm::vec2 &v, float s) { return v * s; },
+                                               [](float s, const glm::vec2 &v) { return s * v; }),
+                                 "__div",
+                                 [](const glm::vec2 &v, float s) { return v / s; },
+                                 "length",
+                                 [](const glm::vec2 &v) { return glm::length(v); },
+                                 "normalize",
+                                 [](const glm::vec2 &v) { return glm::normalize(v); });
+
+    _lua.new_usertype<LuaInputApi>(
+        "Input",
+        sol::no_constructor,
+        "isKeyDown",
+        &LuaInputApi::isKeyDown,
+        "isKeyPressed",
+        &LuaInputApi::isKeyPressed,
+        "isKeyReleased",
+        &LuaInputApi::isKeyReleased,
+        "isMouseButtonDown",
+        &LuaInputApi::isMouseButtonDown,
+        "isMouseButtonPressed",
+        &LuaInputApi::isMouseButtonPressed,
+        "isMouseButtonReleased",
+        &LuaInputApi::isMouseButtonReleased,
+        "getMousePosition",
+        &LuaInputApi::getMousePosition,
+        "getMouseDelta",
+        &LuaInputApi::getMouseDelta,
+        "getMouseScrollDelta",
+        &LuaInputApi::getMouseScrollDelta,
+        "isActionDown",
+        &LuaInputApi::isActionDown,
+        "wasActionPressed",
+        &LuaInputApi::wasActionPressed,
+        "wasActionReleased",
+        &LuaInputApi::wasActionReleased,
+        "captureMouse",
+        &LuaInputApi::captureMouse,
+        "releaseMouse",
+        &LuaInputApi::releaseMouse,
+        "isMouseCaptured",
+        &LuaInputApi::isMouseCaptured,
+        "setInputMode",
+        &LuaInputApi::setInputMode);
+
+    // EKey enum: expose key constants to Lua as a table
+    {
+        auto ekey = _lua.create_named_table("EKey");
+        ekey["K_A"] = EKey::K_A;  ekey["K_B"] = EKey::K_B;  ekey["K_C"] = EKey::K_C;
+        ekey["K_D"] = EKey::K_D;  ekey["K_E"] = EKey::K_E;  ekey["K_F"] = EKey::K_F;
+        ekey["K_G"] = EKey::K_G;  ekey["K_H"] = EKey::K_H;  ekey["K_I"] = EKey::K_I;
+        ekey["K_J"] = EKey::K_J;  ekey["K_K"] = EKey::K_K;  ekey["K_L"] = EKey::K_L;
+        ekey["K_M"] = EKey::K_M;  ekey["K_N"] = EKey::K_N;  ekey["K_O"] = EKey::K_O;
+        ekey["K_P"] = EKey::K_P;  ekey["K_Q"] = EKey::K_Q;  ekey["K_R"] = EKey::K_R;
+        ekey["K_S"] = EKey::K_S;  ekey["K_T"] = EKey::K_T;  ekey["K_U"] = EKey::K_U;
+        ekey["K_V"] = EKey::K_V;  ekey["K_W"] = EKey::K_W;  ekey["K_X"] = EKey::K_X;
+        ekey["K_Y"] = EKey::K_Y;  ekey["K_Z"] = EKey::K_Z;
+        ekey["K_0"] = EKey::K_0;  ekey["K_1"] = EKey::K_1;  ekey["K_2"] = EKey::K_2;
+        ekey["K_3"] = EKey::K_3;  ekey["K_4"] = EKey::K_4;  ekey["K_5"] = EKey::K_5;
+        ekey["K_6"] = EKey::K_6;  ekey["K_7"] = EKey::K_7;  ekey["K_8"] = EKey::K_8;
+        ekey["K_9"] = EKey::K_9;
+        ekey["K_GRAVE"] = EKey::K_GRAVE; // ` / ~ (toggle mouse capture)
+        ekey["Space"] = EKey::Space;      ekey["Escape"] = EKey::Escape;
+        ekey["Enter"] = EKey::Enter;      ekey["Tab"] = EKey::Tab;
+        ekey["Backspace"] = EKey::Backspace;
+        ekey["LShift"] = EKey::LShift;    ekey["RShift"] = EKey::RShift;
+        ekey["LCtrl"] = EKey::LCtrl;      ekey["RCtrl"] = EKey::RCtrl;
+        ekey["LAlt"] = EKey::LAlt;        ekey["RAlt"] = EKey::RAlt;
+        ekey["Up"] = EKey::Up;            ekey["Down"] = EKey::Down;
+        ekey["Left"] = EKey::Left;        ekey["Right"] = EKey::Right;
+        ekey["F1"] = EKey::F1;   ekey["F2"] = EKey::F2;   ekey["F3"] = EKey::F3;
+        ekey["F4"] = EKey::F4;   ekey["F5"] = EKey::F5;   ekey["F6"] = EKey::F6;
+        ekey["F7"] = EKey::F7;   ekey["F8"] = EKey::F8;   ekey["F9"] = EKey::F9;
+        ekey["F10"] = EKey::F10; ekey["F11"] = EKey::F11; ekey["F12"] = EKey::F12;
+    }
+
+    // EMouse enum: expose mouse button constants to Lua as a table
+    {
+        auto emouse = _lua.create_named_table("EMouse");
+        emouse["Left"] = EMouse::Left;
+        emouse["Middle"] = EMouse::Middle;
+        emouse["Right"] = EMouse::Right;
+        emouse["X1"] = EMouse::X1;
+        emouse["X2"] = EMouse::X2;
+    }
+
+    _lua.new_usertype<LuaTimeApi>(
+        "Time",
+        sol::no_constructor,
+        "getElapsedSeconds",
+        &LuaTimeApi::getElapsedSeconds,
+        "getFrameIndex",
+        &LuaTimeApi::getFrameIndex);
+
+    _lua.new_usertype<LuaLogApi>(
+        "Log",
+        sol::no_constructor,
+        "info",
+        &LuaLogApi::info,
+        "warn",
+        &LuaLogApi::warn,
+        "error",
+        &LuaLogApi::error,
+        "debug",
+        &LuaLogApi::debug);
 
     // ========================================================================
     // 高性能组件：手动绑定（避免反射开销）
@@ -88,7 +277,44 @@ void LuaScriptingSystem::init()
                                           "getScale",
                                           &TransformComponent::getScale,
                                           "setScale",
-                                          &TransformComponent::setScale);
+                                          &TransformComponent::setScale,
+                                          // Direction vectors (computed from rotation euler angles)
+                                          "getForward",
+                                          [](TransformComponent& t) -> glm::vec3 {
+                                              glm::quat q = glm::quat(glm::radians(t._rotation));
+                                              return q * glm::vec3(0.0f, 0.0f, -1.0f); // WorldForward
+                                          },
+                                          "getRight",
+                                          [](TransformComponent& t) -> glm::vec3 {
+                                              glm::quat q = glm::quat(glm::radians(t._rotation));
+                                              return q * glm::vec3(1.0f, 0.0f, 0.0f); // WorldRight
+                                          },
+                                          "getUp",
+                                          [](TransformComponent& t) -> glm::vec3 {
+                                              glm::quat q = glm::quat(glm::radians(t._rotation));
+                                              return q * glm::vec3(0.0f, 1.0f, 0.0f); // WorldUp
+                                          });
+
+    _lua.new_usertype<CameraComponent>("CameraComponent",
+                                       sol::no_constructor,
+                                       "primary",
+                                       &CameraComponent::bPrimary,
+                                       "fixedAspectRatio",
+                                       &CameraComponent::_fixedAspectRatio,
+                                       "fov",
+                                       &CameraComponent::_fov,
+                                       "aspectRatio",
+                                       &CameraComponent::_aspectRatio,
+                                       "nearClip",
+                                       &CameraComponent::_nearClip,
+                                       "farClip",
+                                       &CameraComponent::_farClip,
+                                       "distance",
+                                       &CameraComponent::_distance,
+                                       "focusPoint",
+                                       &CameraComponent::_focusPoint,
+                                       "setAspectRatio",
+                                       &CameraComponent::setAspectRatio);
 
     // 暴露 Entity (通用接口)
     _lua.new_usertype<Entity>(
@@ -98,7 +324,17 @@ void LuaScriptingSystem::init()
         "getTransform",
         [](Entity &e) -> TransformComponent * {
             return e.hasComponent<TransformComponent>() ? e.getComponent<TransformComponent>() : nullptr;
+        },
+        "hasCamera",
+        [](Entity &e) { return e.hasComponent<CameraComponent>(); },
+        "getCamera",
+        [](Entity &e) -> CameraComponent * {
+            return e.hasComponent<CameraComponent>() ? e.getComponent<CameraComponent>() : nullptr;
         });
+
+    _lua["input"] = LuaInputApi{&App::get()->getInputManager(), &App::get()->getInputRouter()};
+    _lua["time"]  = LuaTimeApi{App::get()};
+    _lua["log"]   = LuaLogApi{};
 
     // ========================================================================
     // 自动绑定所有反射组件（跳过已手动绑定的）
@@ -207,6 +443,14 @@ void LuaScriptingSystem::onStop()
                 }
             }
             script.bLoaded = false;
+            script.bAuthoringPreviewAttempted = false;
+            script.properties.clear();
+            script.self = sol::lua_nil;
+            script.onInit = sol::lua_nil;
+            script.onUpdate = sol::lua_nil;
+            script.onDestroy = sol::lua_nil;
+            script.onEnable = sol::lua_nil;
+            script.onDisable = sol::lua_nil;
         }
     }
 }

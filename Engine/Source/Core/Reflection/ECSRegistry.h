@@ -59,6 +59,10 @@ struct ECSRegistry
         virtual void* clone(const entt::registry& srcRegistry, entt::entity srcEntity,
                             entt::registry& dstRegistry, entt::entity dstEntity,
                             EClonePolicy policy) = 0;
+
+        virtual bool useReflectionSerialization(const void* component) const = 0;
+        virtual void serializeCustom(const void* component, nlohmann::json& out) const { (void)component; (void)out; }
+        virtual void deserializeCustom(void* component, const nlohmann::json& in) const { (void)component; (void)in; }
     };
 
     template <typename T>
@@ -82,6 +86,16 @@ struct ECSRegistry
         void* clone(const entt::registry& srcRegistry, entt::entity srcEntity,
                      entt::registry& dstRegistry, entt::entity dstEntity,
                      EClonePolicy policy) override;
+
+        bool useReflectionSerialization(const void* component) const override {
+            return static_cast<const T*>(component)->useReflectionSerialization();
+        }
+        void serializeCustom(const void* component, nlohmann::json& out) const override {
+            static_cast<const T*>(component)->serializeCustom(out);
+        }
+        void deserializeCustom(void* component, const nlohmann::json& in) const override {
+            static_cast<T*>(component)->deserializeCustom(in);
+        }
     };
 
   private:
@@ -177,6 +191,12 @@ struct ECSRegistry
         return nullptr;
     }
 
+    [[nodiscard]] const IComponentOps* getComponentOps(ya::type_index_t typeIndex) const
+    {
+        auto it = _componentOps.find(typeIndex);
+        return it != _componentOps.end() ? it->second : nullptr;
+    }
+
     [[nodiscard]] const std::unordered_map<FName, type_index_t>& getTypeIndexCache() const { return _typeIndexCache; }
 };
 
@@ -206,10 +226,12 @@ void* ECSRegistry::ComponentOps<T>::clone(
     if (policy == EClonePolicy::CopyCtor) {
         // Fast path: C++ copy constructor (caller must ensure T's copy ctor is correct)
         const T& src = srcRegistry.get<T>(srcEntity);
-        return &dstRegistry.emplace_or_replace<T>(dstEntity, src);
+        T& dst = dstRegistry.emplace_or_replace<T>(dstEntity, src);
+        dst.cloneCustom(src);
+        return &dst;
     }
 
-    // Safe path: default-construct, then copy only reflected fields
+    // Safe path: default-construct, then copy reflected fields
     T&          dst = dstRegistry.emplace_or_replace<T>(dstEntity);
     const T&    src = srcRegistry.get<T>(srcEntity);
     type_index_t typeIndex = ya::TypeIndex<T>::value();
@@ -227,6 +249,9 @@ void* ECSRegistry::ComponentOps<T>::clone(
                 &dst, typeIndex, json, cls->getName());
         }
     }
+
+    // Let component copy custom fields that reflection can't handle
+    dst.cloneCustom(src);
 
     return &dst;
 }

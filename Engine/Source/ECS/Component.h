@@ -3,6 +3,8 @@
 #include "Core/Base.h"
 
 
+#include <nlohmann/json.hpp>
+
 #include "Core/UUID.h"
 
 
@@ -25,6 +27,12 @@ struct IComponent
 
     virtual void onPostSerialize() {}
     virtual void onEdit() {}
+
+    // Return false when the component owns its complete serialized representation.
+    virtual bool useReflectionSerialization() const { return true; }
+    virtual void serializeCustom(nlohmann::json& out) const { (void)out; }
+    virtual void deserializeCustom(const nlohmann::json& in) { (void)in; }
+    virtual void cloneCustom(const IComponent& src) { (void)src; }
 };
 
 // Basic component for entity identification

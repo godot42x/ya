@@ -29,6 +29,9 @@ function Class.new(base)
     end
     
     -- 默认构造函数（子类可覆盖）
+    ---@generic T:table
+    ---@param  self T
+    ---@return T
     function class:new(...)
         local instance = setmetatable({}, {__index = self})
         
