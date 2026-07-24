@@ -15,7 +15,6 @@
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
-#include "ECS/Component/PlayerComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 
@@ -536,33 +535,5 @@ void HelloMaterialModule::createEntities(ya::Scene* scene)
         // textBlock->_font = ya::FontManager::get()->getFont("JetBrainsMono-Medium", 18).get();
         // textBlock->setText(_pongMaterialNames[i]);
         // wc->widget = textBlock;
-    }
-}
-
-void HelloMaterialModule::onEnterRuntime(ya::App& app)
-{
-    // Set up default camera
-    auto scene = app.getSceneManager()->getActiveScene();
-    YA_CORE_ASSERT(scene, "Scene is null");
-
-    if (auto player = scene->createNode3D("Player"))
-    {
-        ya::Entity* entity = player->getEntity();
-        entity->addComponent<ya::PlayerComponent>();
-        entity->addComponent<ya::CameraComponent>();
-        entity->addComponent<ya::SimpleMaterialComponent>();
-        entity->addComponent<ya::LuaScriptComponent>();
-        if (auto spot = entity->addComponent<ya::PointLightComponent>()) {
-            spot->_type           = ya::PointLightComponent::Spot;
-            spot->_innerConeAngle = 10.0f;
-            spot->_outerConeAngle = 30.0f;
-        }
-
-        YA_CORE_ASSERT(scene->getRegistry().all_of<ya::CameraComponent>(entity->getHandle()), "Camera component not found");
-        YA_CORE_ASSERT(entity->hasComponent<ya::CameraComponent>(), "Camera component not attached");
-
-        auto cc    = entity->getComponent<ya::CameraComponent>();
-        auto owner = cc->getOwner();
-        YA_CORE_ASSERT(owner == entity, "Camera component owner mismatch");
     }
 }

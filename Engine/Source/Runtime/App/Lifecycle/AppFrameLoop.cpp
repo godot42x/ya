@@ -13,7 +13,6 @@
 
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/CameraComponent.h"
-#include "ECS/Component/PlayerComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/LuaScriptingSystem.h"
 
@@ -337,21 +336,15 @@ Entity* AppFrameLoop::getPrimaryCamera(const App& app)
 
     auto& registry = scene->getRegistry();
 
-    for (const auto& [entity, cameraComp, playerComp] :
-         registry.view<CameraComponent, PlayerComponent>().each()) {
-        (void)cameraComp;
-        (void)playerComp;
-        return scene->getEntityByEnttID(entity);
-    }
-
-    for (const auto& [entity, cameraComp] :
-         registry.view<CameraComponent>().each()) {
+    Entity* anyCam = nullptr;
+    for (const auto& [entity, cameraComp] : registry.view<CameraComponent>().each()) {
         if (cameraComp.bPrimary) {
             return scene->getEntityByEnttID(entity);
         }
+        anyCam = scene->getEntityByEnttID(entity);
     }
 
-    return nullptr;
+    return anyCam;
 }
 
 void AppFrameLoop::prepareRenderFrameState(App& app, float dt)
@@ -534,6 +527,7 @@ void AppFrameLoop::tickRender(App& app, float dt)
                 .projection     = app._renderFrameState.projection,
                 .cameraPos      = app._renderFrameState.cameraPos,
                 .viewportExtent = renderRuntime->getViewportExtent(),
+                .viewOwner      = entt::null,
                 .frameIndex     = App::_frameIndex,
                 .deltaTime      = dt,
                 .shadowSettings = &app.getShadowSettings(),

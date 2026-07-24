@@ -2,6 +2,51 @@
     "entities": [
         {
             "components": {
+                "CameraComponent": {
+                    "_aspectRatio": 1.0,
+                    "_distance": 6.0,
+                    "_farClip": 1000.0,
+                    "_fixedAspectRatio": false,
+                    "_focusPoint": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "_fov": 45.0,
+                    "_nearClip": 0.1,
+                    "bPrimary": true
+                },
+                "LuaScriptComponent": {
+                    "scripts": [
+                        {
+                            "enabled": true,
+                            "scriptPath": "Example/HelloMaterial/Content/Scripts/PlayerCamera.lua"
+                        }
+                    ]
+                },
+                "TransformComponent": {
+                    "_position": [
+                        0.0,
+                        1.6,
+                        8.0
+                    ],
+                    "_rotation": [
+                        0.0,
+                        180.0,
+                        0.0
+                    ],
+                    "_scale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                }
+            },
+            "id": 18446744073709551,
+            "name": "Player"
+        },
+        {
+            "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
                         "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
@@ -13613,9 +13658,13 @@
             "name": "PBR_Sphere_5_5"
         }
     ],
-    "name": "Untitled Scene (Play Mode)",
+    "name": "HelloMaterial",
     "nodeTree": {
         "children": [
+            {
+                "entityRef": 18446744073709551,
+                "name": "Player"
+            },
             {
                 "entityRef": 14886455398585154065,
                 "name": "Environment Lighting"

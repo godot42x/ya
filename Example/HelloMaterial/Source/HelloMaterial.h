@@ -28,16 +28,8 @@ struct HelloMaterialModule final : ya::IModule
         YA_INFO("HelloMaterial scene initialized.");
     }
 
-    void onAfterAppStateChange(ya::App& app, ya::AppState, ya::AppState currentState) override
-    {
-        if (currentState == ya::AppState::Runtime) {
-            onEnterRuntime(app);
-        }
-    }
-
     void createCubeMesh();
     void loadResources();
     void createMaterials();
     void createEntities(ya::Scene* scene);
-    void onEnterRuntime(ya::App& app);
 };

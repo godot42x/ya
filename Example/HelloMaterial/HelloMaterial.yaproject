@@ -2,8 +2,33 @@
   "schemaVersion": 1,
   "name": "HelloMaterial",
   "mainModule": "HelloMaterial",
-  "modules": ["HelloMaterial.yamodule"],
+  "modules": [
+    "HelloMaterial.yamodule"
+  ],
   "plugins": [],
   "contentDir": "Content",
-  "defaultScene": "Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json"
+  "defaultScene": "Example/HelloMaterial/Content/Scenes/HelloMaterial.scene.json",
+  "inputActions": {
+    "move_forward": [
+      "W"
+    ],
+    "move_back": [
+      "S"
+    ],
+    "move_left": [
+      "A"
+    ],
+    "move_right": [
+      "D"
+    ],
+    "move_up": [
+      "Q"
+    ],
+    "move_down": [
+      "E"
+    ],
+    "look": [
+      "MouseRight"
+    ]
+  }
 }
