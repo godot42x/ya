@@ -25,8 +25,8 @@ class GuiSystem
     [[nodiscard]] bool render();
     void submit(ICommandBuffer& commandBuffer);
 
-    [[nodiscard]] EventProcessState processNativeEvent(const SDL_Event& event);
     [[nodiscard]] EventProcessState processEvent(const Event& event);
+    [[nodiscard]] FGuiInputClaim    describeInputClaim(const Event& event) const;
     [[nodiscard]] bool              wantsInput() const;
 
     void setBlockEvents(bool block);

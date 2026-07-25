@@ -21,7 +21,7 @@ namespace
 struct LuaInputApi
 {
     const ya::InputManager* input = nullptr;
-    ya::InputRouter*        router = nullptr;
+    const ya::InputRouter*  router = nullptr;
 
     [[nodiscard]] bool isKeyDown(ya::EKey::T key) const { return input && input->isKeyPressed(key); }
     [[nodiscard]] bool isKeyPressed(ya::EKey::T key) const { return input && input->wasKeyPressed(key); }
@@ -36,11 +36,7 @@ struct LuaInputApi
     [[nodiscard]] bool wasActionPressed(const std::string& action) const { return input && input->wasActionPressed(action); }
     [[nodiscard]] bool wasActionReleased(const std::string& action) const { return input && input->wasActionReleased(action); }
 
-    // Mouse capture API (delegates to InputRouter)
-    void captureMouse() const { if (router) router->captureMouse(); }
-    void releaseMouse() const { if (router) router->releaseMouse(); }
     [[nodiscard]] bool isMouseCaptured() const { return router && router->isMouseCaptured(); }
-    void setInputMode(int mode) const { if (router) router->setInputMode(static_cast<ya::EInputMode>(mode)); }
 };
 
 struct LuaTimeApi
@@ -181,14 +177,8 @@ void LuaScriptingSystem::init()
         &LuaInputApi::wasActionPressed,
         "wasActionReleased",
         &LuaInputApi::wasActionReleased,
-        "captureMouse",
-        &LuaInputApi::captureMouse,
-        "releaseMouse",
-        &LuaInputApi::releaseMouse,
         "isMouseCaptured",
-        &LuaInputApi::isMouseCaptured,
-        "setInputMode",
-        &LuaInputApi::setInputMode);
+        &LuaInputApi::isMouseCaptured);
 
     // EKey enum: expose key constants to Lua as a table
     {

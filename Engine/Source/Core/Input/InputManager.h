@@ -74,6 +74,7 @@ struct InputManager
     void init();
     void preUpdate();
     void postUpdate();
+    void cancelInput();
 
     bool isKeyPressed(EKey::T keycode) const;
     bool wasKeyPressed(EKey::T keycode) const;
@@ -101,7 +102,6 @@ struct InputManager
     }
     glm::vec2 getMouseDelta() const { return mouseDelta; }
 
-    EventProcessState processEvent(const SDL_Event &event);
     EventProcessState processEvent(const Event &event);
 
   private:
@@ -110,6 +110,7 @@ struct InputManager
 
     void setMouseState(EMouse::T button, KeyState state) { currentMouseStates[button] = state; }
     void setMouseState(Uint8 button, KeyState state) { setMouseState(EMouse::fromSDLMouseButton(button), state); } // from sdl defines
+    void setMousePosition(glm::vec2 position);
 };
 
 } // namespace ya

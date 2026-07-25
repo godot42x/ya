@@ -88,7 +88,8 @@ void EditorLayer::viewportWindow()
     _viewportBounds[1] = {maxBound.x, maxBound.y};
 
     // Update viewport size if changed
-    if (_viewportSize.x != viewportPanelSize.x || _viewportSize.y != viewportPanelSize.y)
+    const bool bMouseCaptured = _app && _app->getInputRouter().isMouseCaptured();
+    if (!bMouseCaptured && (_viewportSize.x != viewportPanelSize.x || _viewportSize.y != viewportPanelSize.y))
     {
         _viewportSize = {viewportPanelSize.x, viewportPanelSize.y};
 
@@ -139,29 +140,22 @@ void EditorLayer::viewportWindow()
     bViewportFocused = ImGui::IsWindowFocused();
     bViewportHovered = ImGui::IsWindowHovered();
 
-    // Update InputRouter viewport center for mouse capture warp
-    {
-        float centerX = _viewportBounds[0].x + (_viewportBounds[1].x - _viewportBounds[0].x) * 0.5f;
-        float centerY = _viewportBounds[0].y + (_viewportBounds[1].y - _viewportBounds[0].y) * 0.5f;
-        if (_app) {
-            _app->getInputRouter().setViewportCenter(centerX, centerY);
-        }
+    if (const ImGuiViewport* mainViewport = ImGui::GetMainViewport()) {
+        _viewportMouseCenter = {
+            (_viewportBounds[0].x + (_viewportBounds[1].x - _viewportBounds[0].x) * 0.5f) - mainViewport->Pos.x,
+            (_viewportBounds[0].y + (_viewportBounds[1].y - _viewportBounds[0].y) * 0.5f) - mainViewport->Pos.y,
+        };
+        _viewportMouseRect = Rect2D{
+            .pos = {
+                std::round(_viewportBounds[0].x - mainViewport->Pos.x),
+                std::round(_viewportBounds[0].y - mainViewport->Pos.y),
+            },
+            .extent = {
+                std::round(_viewportBounds[1].x - _viewportBounds[0].x),
+                std::round(_viewportBounds[1].y - _viewportBounds[0].y),
+            },
+        };
     }
-
-    // CaptureOnClick: auto-capture mouse on viewport click in Game mode
-    if (bViewportHovered && ImGui::IsMouseClicked(0)) {
-        if (_app) {
-            auto& router = _app->getInputRouter();
-            if (router.getMouseCaptureMode() == EMouseCapture::CaptureOnClick && !router.isMouseCaptured()) {
-                router.captureMouse();
-            }
-        }
-    }
-
-    // Allow ImGuizmo to receive input even when viewport is focused
-    // Block events only when viewport is NOT focused/hovered AND ImGuizmo is not using/over
-    bool isGizmoActive = ImGuizmo::IsUsing() || ImGuizmo::IsOver();
-    GuiSystem::get().setBlockEvents(!bViewportFocused && !bViewportHovered && !isGizmoActive);
 
     // Viewport context menu - right-click on blank space
     // Only show if not dragging camera (right mouse drag)

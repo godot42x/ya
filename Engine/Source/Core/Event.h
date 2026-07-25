@@ -341,6 +341,23 @@ class ENGINE_API KeyReleasedEvent : public KeyEvent
   protected:
 };
 
+class ENGINE_API KeyTypedEvent : public KeyEvent
+{
+  private:
+    std::string _text;
+
+  public:
+    KeyTypedEvent() = default;
+    explicit KeyTypedEvent(std::string text)
+        : _text(std::move(text))
+    {
+    }
+
+    EVENT_CLASS_TYPE(KeyTyped)
+    [[nodiscard]] const std::string& getText() const { return _text; }
+    [[nodiscard]] std::string        toString() const override { return std::format("KeyTypedEvent: {}", _text); }
+};
+
 
 
 // MARK: MouseEvent
@@ -370,8 +387,8 @@ struct ENGINE_API MouseScrolledEvent : public Event
     MouseScrolledEvent() = default;
     MouseScrolledEvent(float x, float y) : _offsetX(x), _offsetY(y) {}
 
-    inline float getOffsetX() { return _offsetX; }
-    inline float getOffsetY() { return _offsetY; }
+    inline float getOffsetX() const { return _offsetX; }
+    inline float getOffsetY() const { return _offsetY; }
 
     [[nodiscard]] std::string toString() const override { return std::format("MouseScrolledEvent: {}, {} ", _offsetX, _offsetY); }
 

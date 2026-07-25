@@ -64,6 +64,21 @@ void syncRuntimeCameraAspect(Scene& scene, const Extent2D& viewportExtent)
 
 } // namespace
 
+namespace
+{
+
+int processNativeEvent(App& app, SDL_Event& event)
+{
+    YA_PROFILE_FUNCTION()
+    processSDLEvent(
+        event,
+        [&app](const auto& e)
+        { app.dispatchEvent(e); });
+    return 0;
+}
+
+} // namespace
+
 int App::run()
 {
     return AppFrameLoop::run(*this);
@@ -72,11 +87,6 @@ int App::run()
 int App::iterate(float dt)
 {
     return AppFrameLoop::iterate(*this, dt);
-}
-
-int App::processEvent(SDL_Event& event)
-{
-    return AppFrameLoop::processEvent(*this, event);
 }
 
 void App::tickLogic(float dt)
@@ -145,8 +155,8 @@ int AppFrameLoop::iterate(App& app, float dt)
     {
         YA_PROFILE_SCOPE("Frame/EventPump");
         YA_PERF_SCOPE(perf::sample::frameEventPump(), perf::metric::cpuTimeMs(), perf::domain::game());
-        if (SDL_PollEvent(&evt)) {
-            processEvent(app, evt);
+        while (SDL_PollEvent(&evt)) {
+            processNativeEvent(app, evt);
         }
     }
 
@@ -209,17 +219,6 @@ int AppFrameLoop::iterate(App& app, float dt)
                                         });
     }
 
-    return 0;
-}
-
-int AppFrameLoop::processEvent(App& app, SDL_Event& event)
-{
-    YA_PROFILE_FUNCTION()
-    app.dispatchNativeEvent(event);
-    processSDLEvent(
-        event,
-        [&app](const auto& e)
-        { app.dispatchEvent(e); });
     return 0;
 }
 

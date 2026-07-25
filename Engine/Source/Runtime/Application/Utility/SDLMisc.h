@@ -97,16 +97,20 @@ inline int processSDLEvent(SDL_Event &event, auto &&dispatchEvent)
         dispatchEvent(ev);
     } break;
     case SDL_EVENT_TEXT_EDITING:
+    case SDL_EVENT_TEXT_EDITING_CANDIDATES:
+        break;
     case SDL_EVENT_TEXT_INPUT:
+    {
+        KeyTypedEvent ev(event.text.text);
+        dispatchEvent(ev);
+    } break;
     case SDL_EVENT_KEYMAP_CHANGED:
     case SDL_EVENT_KEYBOARD_ADDED:
     case SDL_EVENT_KEYBOARD_REMOVED:
-    case SDL_EVENT_TEXT_EDITING_CANDIDATES:
+        break;
     case SDL_EVENT_MOUSE_MOTION:
     {
         MouseMoveEvent ev(event.motion.x, event.motion.y);
-        // Global size from the window top-left
-        // YA_CORE_INFO("Mouse Move: {}, {}", event.motion.x, event.motion.y);
         dispatchEvent(ev);
     } break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN:

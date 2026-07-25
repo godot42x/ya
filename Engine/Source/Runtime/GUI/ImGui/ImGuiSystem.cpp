@@ -2,6 +2,7 @@
 
 #include "Core/Profiling/Instrumentor.h"
 
+#include <cfloat>
 #include <array>
 #include <filesystem>
 #include <span>
@@ -13,6 +14,109 @@ namespace ya
 
 namespace
 {
+
+ImGuiKey mapKeyCodeToImGuiKey(EKey::T key)
+{
+    switch (key) {
+    case EKey::Tab: return ImGuiKey_Tab;
+    case EKey::Left: return ImGuiKey_LeftArrow;
+    case EKey::Right: return ImGuiKey_RightArrow;
+    case EKey::Up: return ImGuiKey_UpArrow;
+    case EKey::Down: return ImGuiKey_DownArrow;
+    case EKey::Pageup: return ImGuiKey_PageUp;
+    case EKey::PagedowN: return ImGuiKey_PageDown;
+    case EKey::Home: return ImGuiKey_Home;
+    case EKey::End: return ImGuiKey_End;
+    case EKey::Insert: return ImGuiKey_Insert;
+    case EKey::Delete: return ImGuiKey_Delete;
+    case EKey::Backspace: return ImGuiKey_Backspace;
+    case EKey::Space: return ImGuiKey_Space;
+    case EKey::Enter: return ImGuiKey_Enter;
+    case EKey::Escape: return ImGuiKey_Escape;
+    case EKey::LCtrl: return ImGuiKey_LeftCtrl;
+    case EKey::LShift: return ImGuiKey_LeftShift;
+    case EKey::LAlt: return ImGuiKey_LeftAlt;
+    case EKey::LMeta: return ImGuiKey_LeftSuper;
+    case EKey::RCtrl: return ImGuiKey_RightCtrl;
+    case EKey::RShift: return ImGuiKey_RightShift;
+    case EKey::RAlt: return ImGuiKey_RightAlt;
+    case EKey::RMeta: return ImGuiKey_RightSuper;
+    case EKey::K_0: return ImGuiKey_0;
+    case EKey::K_1: return ImGuiKey_1;
+    case EKey::K_2: return ImGuiKey_2;
+    case EKey::K_3: return ImGuiKey_3;
+    case EKey::K_4: return ImGuiKey_4;
+    case EKey::K_5: return ImGuiKey_5;
+    case EKey::K_6: return ImGuiKey_6;
+    case EKey::K_7: return ImGuiKey_7;
+    case EKey::K_8: return ImGuiKey_8;
+    case EKey::K_9: return ImGuiKey_9;
+    case EKey::K_A: return ImGuiKey_A;
+    case EKey::K_B: return ImGuiKey_B;
+    case EKey::K_C: return ImGuiKey_C;
+    case EKey::K_D: return ImGuiKey_D;
+    case EKey::K_E: return ImGuiKey_E;
+    case EKey::K_F: return ImGuiKey_F;
+    case EKey::K_G: return ImGuiKey_G;
+    case EKey::K_H: return ImGuiKey_H;
+    case EKey::K_I: return ImGuiKey_I;
+    case EKey::K_J: return ImGuiKey_J;
+    case EKey::K_K: return ImGuiKey_K;
+    case EKey::K_L: return ImGuiKey_L;
+    case EKey::K_M: return ImGuiKey_M;
+    case EKey::K_N: return ImGuiKey_N;
+    case EKey::K_O: return ImGuiKey_O;
+    case EKey::K_P: return ImGuiKey_P;
+    case EKey::K_Q: return ImGuiKey_Q;
+    case EKey::K_R: return ImGuiKey_R;
+    case EKey::K_S: return ImGuiKey_S;
+    case EKey::K_T: return ImGuiKey_T;
+    case EKey::K_U: return ImGuiKey_U;
+    case EKey::K_V: return ImGuiKey_V;
+    case EKey::K_W: return ImGuiKey_W;
+    case EKey::K_X: return ImGuiKey_X;
+    case EKey::K_Y: return ImGuiKey_Y;
+    case EKey::K_Z: return ImGuiKey_Z;
+    case EKey::F1: return ImGuiKey_F1;
+    case EKey::F2: return ImGuiKey_F2;
+    case EKey::F3: return ImGuiKey_F3;
+    case EKey::F4: return ImGuiKey_F4;
+    case EKey::F5: return ImGuiKey_F5;
+    case EKey::F6: return ImGuiKey_F6;
+    case EKey::F7: return ImGuiKey_F7;
+    case EKey::F8: return ImGuiKey_F8;
+    case EKey::F9: return ImGuiKey_F9;
+    case EKey::F10: return ImGuiKey_F10;
+    case EKey::F11: return ImGuiKey_F11;
+    case EKey::F12: return ImGuiKey_F12;
+    case EKey::K_GRAVE: return ImGuiKey_GraveAccent;
+    case EKey::NONE:
+    case EKey::CapsLock:
+    default:
+        return ImGuiKey_None;
+    }
+}
+
+void submitKeyModifiers(uint32_t modifiers)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.AddKeyEvent(ImGuiMod_Ctrl, (modifiers & EKeyMod::Ctrl) != 0);
+    io.AddKeyEvent(ImGuiMod_Shift, (modifiers & EKeyMod::Shift) != 0);
+    io.AddKeyEvent(ImGuiMod_Alt, (modifiers & EKeyMod::Alt) != 0);
+    io.AddKeyEvent(ImGuiMod_Super, (modifiers & EKeyMod::LMeta) != 0 || (modifiers & EKeyMod::RMeta) != 0);
+}
+
+int mapMouseButtonToImGuiButton(int button)
+{
+    switch (static_cast<EMouse::T>(button)) {
+    case EMouse::Left: return 0;
+    case EMouse::Right: return 1;
+    case EMouse::Middle: return 2;
+    case EMouse::X1: return 3;
+    case EMouse::X2: return 4;
+    default: return -1;
+    }
+}
 
 ImFont* addMergedFont(ImGuiIO*                     io,
                       std::span<const char* const> candidatePaths,
@@ -194,49 +298,101 @@ bool ImGuiManager::render()
     return bMinimized;
 }
 
-EventProcessState ImGuiManager::processEvents(const SDL_Event& event)
+EventProcessState ImGuiManager::processEvent(const Event& event)
 {
-    ImGui_ImplSDL3_ProcessEvent(&event);
-
-    auto io = &ImGui::GetIO();
-
-    if (io->WantCaptureMouse) {
-        if (!(ImGuizmo::IsOver() && !ImGuizmo::IsUsingAny())) {
-            return EventProcessState::Handled;
-        }
+    submitEventToImGui(event);
+    const FGuiInputClaim claim = describeInputClaim(event);
+    if (claim.wantsEvent(event)) {
+        return EventProcessState::Handled;
     }
-    if (io->WantCaptureKeyboard) {
-        if (event.type == SDL_EVENT_KEY_DOWN ||
-            event.type == SDL_EVENT_KEY_UP ||
-            event.type == SDL_EVENT_TEXT_INPUT) {
-            if (!(ImGuizmo::IsOver() && !ImGuizmo::IsUsingAny())) {
-                return EventProcessState::Handled;
-            }
-        }
-    }
-
     return EventProcessState::Continue;
 }
 
-EventProcessState ImGuiManager::processEvent(const Event& event)
+FGuiInputClaim ImGuiManager::describeInputClaim(const Event& event) const
 {
-    if (!bBlockEvents) {
-        return EventProcessState::Continue;
-    }
-    auto io = &ImGui::GetIO();
-    if (event.isInCategory(EEventCategory::Mouse) && io->WantCaptureMouse) {
-        return EventProcessState::Handled;
-    }
-    if (event.isInCategory(EEventCategory::Keyboard) && io->WantCaptureKeyboard) {
-        return EventProcessState::Handled;
-    }
-    return EventProcessState::Continue;
+    const ImGuiIO& io = ImGui::GetIO();
+    const bool bGizmoPassiveHover = ImGuizmo::IsOver() && !ImGuizmo::IsUsingAny();
+
+    FGuiInputClaim claim;
+    claim.pointer   = io.WantCaptureMouse && !bGizmoPassiveHover;
+    claim.keyboard  = io.WantCaptureKeyboard && !bGizmoPassiveHover;
+    claim.text      = io.WantTextInput && event.isInCategory(EEventCategory::Keyboard);
+    claim.exclusive = claim.text || ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId);
+    return claim;
 }
 
 bool ImGuiManager::isWantInput() const
 {
     ImGuiIO& io = ImGui::GetIO();
     return io.WantCaptureMouse || io.WantCaptureKeyboard;
+}
+
+void ImGuiManager::submitEventToImGui(const Event& event)
+{
+    ImGuiIO& io = ImGui::GetIO();
+
+    switch (event.getEventType()) {
+    case EEvent::MouseMoved:
+    {
+        const auto& mouseEvent = static_cast<const MouseMoveEvent&>(event);
+        io.AddMousePosEvent(mouseEvent.getX(), mouseEvent.getY());
+    } break;
+    case EEvent::MouseButtonPressed:
+    {
+        const auto& buttonEvent = static_cast<const MouseButtonPressedEvent&>(event);
+        if (const int button = mapMouseButtonToImGuiButton(buttonEvent.GetMouseButton()); button >= 0) {
+            io.AddMouseButtonEvent(button, true);
+        }
+    } break;
+    case EEvent::MouseButtonReleased:
+    {
+        const auto& buttonEvent = static_cast<const MouseButtonReleasedEvent&>(event);
+        if (const int button = mapMouseButtonToImGuiButton(buttonEvent.GetMouseButton()); button >= 0) {
+            io.AddMouseButtonEvent(button, false);
+        }
+    } break;
+    case EEvent::MouseScrolled:
+    {
+        const auto& scrollEvent = static_cast<const MouseScrolledEvent&>(event);
+        io.AddMouseWheelEvent(-scrollEvent.getOffsetX(), scrollEvent.getOffsetY());
+    } break;
+    case EEvent::KeyPressed:
+    {
+        const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
+        submitKeyModifiers(keyEvent._mod);
+        if (const ImGuiKey key = mapKeyCodeToImGuiKey(keyEvent.getKeyCode()); key != ImGuiKey_None) {
+            io.AddKeyEvent(key, true);
+            io.SetKeyEventNativeData(key, static_cast<int>(keyEvent.getKeyCode()), 0, 0);
+        }
+    } break;
+    case EEvent::KeyReleased:
+    {
+        const auto& keyEvent = static_cast<const KeyReleasedEvent&>(event);
+        submitKeyModifiers(keyEvent._mod);
+        if (const ImGuiKey key = mapKeyCodeToImGuiKey(keyEvent.getKeyCode()); key != ImGuiKey_None) {
+            io.AddKeyEvent(key, false);
+            io.SetKeyEventNativeData(key, static_cast<int>(keyEvent.getKeyCode()), 0, 0);
+        }
+    } break;
+    case EEvent::KeyTyped:
+    {
+        const auto& typedEvent = static_cast<const KeyTypedEvent&>(event);
+        if (!typedEvent.getText().empty()) {
+            io.AddInputCharactersUTF8(typedEvent.getText().c_str());
+        }
+    } break;
+    case EEvent::WindowFocus:
+    {
+        io.AddFocusEvent(true);
+    } break;
+    case EEvent::WindowFocusLost:
+    {
+        io.AddFocusEvent(false);
+        io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+    } break;
+    default:
+        break;
+    }
 }
 
 ImGuiManager& ImGuiManager::get()

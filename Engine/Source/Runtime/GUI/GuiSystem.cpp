@@ -45,14 +45,14 @@ class ImGuiBackendAdapter final : public IGuiBackend
         ImGuiManager::get().submitVulkan(commandBuffer.getHandleAs<VkCommandBuffer>());
     }
 
-    [[nodiscard]] EventProcessState processNativeEvent(const SDL_Event& event) override
-    {
-        return ImGuiManager::get().processEvents(event);
-    }
-
     [[nodiscard]] EventProcessState processEvent(const Event& event) override
     {
         return ImGuiManager::get().processEvent(event);
+    }
+
+    [[nodiscard]] FGuiInputClaim describeInputClaim(const Event& event) const override
+    {
+        return ImGuiManager::get().describeInputClaim(event);
     }
 
     [[nodiscard]] bool wantsInput() const override
@@ -62,7 +62,7 @@ class ImGuiBackendAdapter final : public IGuiBackend
 
     void setBlockEvents(bool block) override
     {
-        ImGuiManager::get().setBlockEvents(block);
+        (void)block;
     }
 
     void setViewportRect(float x, float y, float width, float height) override
@@ -149,14 +149,14 @@ void GuiSystem::submit(ICommandBuffer& commandBuffer)
     requireBackend().submit(commandBuffer);
 }
 
-EventProcessState GuiSystem::processNativeEvent(const SDL_Event& event)
-{
-    return requireBackend().processNativeEvent(event);
-}
-
 EventProcessState GuiSystem::processEvent(const Event& event)
 {
     return requireBackend().processEvent(event);
+}
+
+FGuiInputClaim GuiSystem::describeInputClaim(const Event& event) const
+{
+    return _backend ? _backend->describeInputClaim(event) : FGuiInputClaim{};
 }
 
 bool GuiSystem::wantsInput() const

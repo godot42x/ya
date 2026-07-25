@@ -3,8 +3,6 @@
 #include "Core/Event.h"
 #include "Render/RenderDefines.h"
 
-#include <SDL3/SDL.h>
-
 namespace ya
 {
 
@@ -14,6 +12,25 @@ struct ICommandBuffer;
 struct Sampler;
 
 using GuiTextureHandle = void*;
+
+struct FGuiInputClaim
+{
+    bool pointer   = false;
+    bool keyboard  = false;
+    bool text      = false;
+    bool exclusive = false;
+
+    [[nodiscard]] bool wantsEvent(const Event& event) const
+    {
+        if (event.isInCategory(EEventCategory::Mouse)) {
+            return pointer;
+        }
+        if (event.isInCategory(EEventCategory::Keyboard)) {
+            return keyboard || text;
+        }
+        return false;
+    }
+};
 
 struct IGuiBackend
 {
@@ -28,8 +45,8 @@ struct IGuiBackend
     [[nodiscard]] virtual bool render()                         = 0;
     virtual void submit(ICommandBuffer& commandBuffer)          = 0;
 
-    [[nodiscard]] virtual EventProcessState processNativeEvent(const SDL_Event& event) = 0;
     [[nodiscard]] virtual EventProcessState processEvent(const Event& event)            = 0;
+    [[nodiscard]] virtual FGuiInputClaim    describeInputClaim(const Event& event) const = 0;
     [[nodiscard]] virtual bool              wantsInput() const                          = 0;
 
     virtual void setBlockEvents(bool block)                             = 0;

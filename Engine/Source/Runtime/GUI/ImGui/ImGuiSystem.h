@@ -9,6 +9,7 @@
 #include "Core/Log.h"
 #include "Render/Core/RenderPass.h"
 #include "Render/Render.h"
+#include "Runtime/GUI/GuiBackend.h"
 
 #include <SDL3/SDL.h>
 
@@ -40,7 +41,6 @@ struct ImGuiManager
   private:
     ImDrawData* _drawData    = nullptr;
     bool        _initialized = false;
-    bool        bBlockEvents = false;
 
   public:
     ImGuiManager()                               = default;
@@ -69,17 +69,19 @@ struct ImGuiManager
     void submitSDLGPU(SDL_GPUCommandBuffer* commandBuffer, SDL_GPURenderPass* renderpass);
 #endif
 
-    EventProcessState processEvents(const SDL_Event& event);
     EventProcessState processEvent(const Event& event);
+    [[nodiscard]] FGuiInputClaim describeInputClaim(const Event& event) const;
     bool              isWantInput() const;
     void              initImGuiCore();
-    void              setBlockEvents(bool block) { bBlockEvents = block; }
 
     static void* addTexture(IImageView* imageView, Sampler* sampler, EImageLayout::T layout = EImageLayout::ShaderReadOnlyOptimal);
     static void  removeTexture(void* textureID);
     static void  setGizmoRect(float x, float y, float width, float height);
 
     bool onRenderGUI();
+
+  private:
+    void submitEventToImGui(const Event& event);
 };
 
 using ImguiState = ImGuiManager;

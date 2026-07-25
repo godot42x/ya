@@ -66,6 +66,8 @@ struct EditorLayer
     glm::vec2 _viewportSize = {1280.f, 720.f};
     glm::vec2 _viewportBounds[2]; // Min and max bounds
     Rect2D    viewportRect;
+    Rect2D    _viewportMouseRect;
+    glm::vec2 _viewportMouseCenter = {0.0f, 0.0f};
     bool      bViewportFocused     = false;
     bool      bViewportHovered     = false;
     bool      _bRightMouseDragging = false; // Track right mouse drag for camera rotation
@@ -154,6 +156,8 @@ struct EditorLayer
     void onUpdate(float dt);
     void setCameraController(FreeCameraController* controller) { _runtimeToolsPanel.setCameraController(controller); }
     void setEditableScene(Scene* scene) { _editableScene = scene; }
+    void setCurrentScenePath(std::string scenePath) { _currentScenePath = std::move(scenePath); }
+    [[nodiscard]] const std::string& getCurrentScenePath() const { return _currentScenePath; }
     void setSceneContext(Scene* scene)
     {
         _sceneHierarchyPanel.setContext(scene);
@@ -310,6 +314,8 @@ struct EditorLayer
     glm::vec2                   getViewportSize() const { return _viewportSize; }
     bool                        isViewportFocused() const { return bViewportFocused; }
     bool                        isViewportHovered() const { return bViewportHovered; }
+    const Rect2D&               getViewportMouseRect() const { return _viewportMouseRect; }
+    const glm::vec2&            getViewportMouseCenter() const { return _viewportMouseCenter; }
     bool                        isGizmoActive() const; // Check if ImGuizmo is being used or hovered
     bool                        isRightMouseDragging() const { return _bRightMouseDragging; }
     const std::vector<Entity*>& getSelections() const { return _selections; }

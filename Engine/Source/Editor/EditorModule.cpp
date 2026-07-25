@@ -232,6 +232,103 @@ class EditorViewportCompositor
     }
 };
 
+class EditorInputRoot final : public IHostInputRoot
+{
+  private:
+    App*         _app   = nullptr;
+    EditorLayer* _layer = nullptr;
+
+  public:
+    void bind(App& app, EditorLayer& layer)
+    {
+        _app   = &app;
+        _layer = &layer;
+    }
+
+    void unbind()
+    {
+        _layer = nullptr;
+        _app   = nullptr;
+    }
+
+    [[nodiscard]] FInputReply route(const FInputEvent& event) override
+    {
+        if (!_app || !_layer) {
+            return {};
+        }
+
+        if (_app->isStopped()) {
+            _layer->onEvent(event);
+            const FGuiInputClaim guiClaim = GuiSystem::get().describeInputClaim(event);
+            return FInputReply{
+                .handled = guiClaim.wantsEvent(event) || event.isInCategory(EEventCategory::Input),
+            };
+        }
+
+        InputRouter& router = _app->getInputRouter();
+
+        if (event.getEventType() == EEvent::KeyReleased) {
+            const auto& keyEvent = static_cast<const KeyReleasedEvent&>(event);
+            if (keyEvent.getKeyCode() == EKey::K_GRAVE && router.isMouseCaptured()) {
+                return FInputReply{
+                    .handled        = true,
+                    .pointerCapture = FPointerCaptureRequest{},
+                };
+            }
+        }
+
+        const FGuiInputClaim guiClaim = GuiSystem::get().describeInputClaim(event);
+        if (guiClaim.exclusive || guiClaim.wantsEvent(event)) {
+            return FInputReply{.handled = true};
+        }
+
+        if (router.isMouseCaptured()) {
+            _app->getInputManager().processEvent(event);
+            return FInputReply{.handled = true};
+        }
+
+        const bool bPointerEvent = event.isInCategory(EEventCategory::Mouse);
+        const bool bKeyboardEvent = event.isInCategory(EEventCategory::Keyboard);
+        const bool bViewportMouse = _layer->isViewportHovered() || _layer->isViewportFocused();
+        const bool bViewportKeyboard = _layer->isViewportFocused();
+
+        if (bPointerEvent && bViewportMouse) {
+            _app->getInputManager().processEvent(event);
+
+            std::optional<FPointerCaptureRequest> pointerCapture;
+            if (event.getEventType() == EEvent::MouseButtonPressed) {
+                const Rect2D& mouseRect = _layer->getViewportMouseRect();
+                pointerCapture = FPointerCaptureRequest{
+                    .relative   = true,
+                    .hideCursor = true,
+                    .confine    = mouseRect.extent.x > 0.0f && mouseRect.extent.y > 0.0f,
+                    .confinement = mouseRect,
+                };
+            }
+
+            return FInputReply{
+                .handled        = true,
+                .pointerCapture = pointerCapture,
+            };
+        }
+
+        if (bKeyboardEvent && bViewportKeyboard) {
+            _app->getInputManager().processEvent(event);
+            return FInputReply{.handled = true};
+        }
+
+        return {};
+    }
+
+    void cancelInput(EInputCancelReason reason) override
+    {
+        (void)reason;
+        if (_app) {
+            _app->getInputManager().cancelInput();
+        }
+    }
+};
+
 class EditorModule final : public IModule
 {
   private:
@@ -239,6 +336,8 @@ class EditorModule final : public IModule
     EditorPlaySession            _playSession;
     FreeCameraController         _cameraController;
     EditorViewportCompositor     _viewportCompositor;
+    EditorInputRoot              _inputRoot;
+    InputRouter::FRootRegistration _inputRootRegistration;
 
   public:
     bool onLoad(FModuleContext&) override { return true; }
@@ -275,12 +374,18 @@ class EditorModule final : public IModule
         _layer = std::make_unique<EditorLayer>(&app);
         _layer->setCameraController(&_cameraController);
         initializeEditorCamera(app, *_layer);
+        _layer->setCurrentScenePath(app.getDesc().defaultScenePath.value_or(std::string{}));
         _layer->onAttach();
+        _inputRoot.bind(app, *_layer);
+        _inputRootRegistration = app.getInputRouter().registerRoot(_inputRoot);
         gEditorLayer = _layer.get();
     }
 
     void onDetach(App& app) override
     {
+        app.getInputRouter().cancelInput(EInputCancelReason::ModuleDetached);
+        _inputRootRegistration.reset();
+        _inputRoot.unbind();
         _playSession.shutdown(app);
         app.getRenderServices().clearExtensionRenderFrameState();
         _viewportCompositor.shutdown();
@@ -299,6 +404,7 @@ class EditorModule final : public IModule
             return _playSession.begin(app, nextState);
         }
         if (previousState != AppState::Stopped && nextState == AppState::Stopped) {
+            app.getInputRouter().cancelInput(EInputCancelReason::AppStateChanged);
             _playSession.end(app);
         }
         return true;
@@ -327,38 +433,11 @@ class EditorModule final : public IModule
         }
     }
 
-    void onNativeEvent(App& app, const SDL_Event& event) override
-    {
-        (void)app;
-        GuiSystem::get().processNativeEvent(event);
-    }
-
     bool onEvent(App& app, const Event& event) override
     {
-        if (_layer) {
-            _layer->onEvent(event);
-        }
-
-        // Grave (~) releases mouse capture (UE-style: tilde to free cursor).
-        // Escape remains the quit/stop key and is not overridden here.
-        if (event.getEventType() == EEvent::KeyReleased) {
-            const auto& keyEvent = static_cast<const KeyReleasedEvent&>(event);
-            if (keyEvent.getKeyCode() == EKey::K_GRAVE) {
-                auto& router = app.getInputRouter();
-                if (router.isMouseCaptured()) {
-                    router.releaseMouse();
-                    return true; // consumed — don't pass to game or AppEventRouter
-                }
-            }
-        }
-
-        const bool bImGuiHandled = GuiSystem::get().processEvent(event) != EventProcessState::Continue;
-        if (app.isStopped() || !_layer) {
-            return bImGuiHandled;
-        }
-
-        // Delegate routing to InputRouter (handles capture / viewport focus / input mode)
-        return app.getInputRouter().routeEvent(event, bImGuiHandled);
+        (void)app;
+        (void)event;
+        return false;
     }
 
     void onLogic(App& app, float dt) override
@@ -366,27 +445,6 @@ class EditorModule final : public IModule
         if (!_layer) {
             return;
         }
-
-        auto& router = app.getInputRouter();
-
-        // Sync InputMode with AppState
-        if (app.isStopped()) {
-            router.setInputMode(EInputMode::Editor);
-            // Release mouse capture when returning to editor mode
-            if (router.isMouseCaptured()) {
-                router.releaseMouse();
-            }
-        } else {
-            router.setInputMode(EInputMode::Game);
-            // Default to CaptureOnClick in Game mode — first viewport click captures mouse
-            if (router.getMouseCaptureMode() == EMouseCapture::None) {
-                router.setMouseCaptureMode(EMouseCapture::CaptureOnClick);
-            }
-        }
-
-        // Sync viewport state from EditorLayer
-        router.setViewportFocused(_layer->isViewportFocused());
-        router.setViewportHovered(_layer->isViewportHovered());
 
         auto& renderServices = app.getRenderServices();
         if (auto* renderRuntime = renderServices.getRenderRuntime()) {

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <SDL3/SDL_events.h>
-
 #include <cstdint>
 #include <string_view>
 
@@ -126,11 +124,6 @@ struct IModule
     {
         (void)app;
         (void)scene;
-    }
-    virtual void onNativeEvent(App& app, const SDL_Event& event)
-    {
-        (void)app;
-        (void)event;
     }
     virtual bool onEvent(App& app, const Event& event)
     {

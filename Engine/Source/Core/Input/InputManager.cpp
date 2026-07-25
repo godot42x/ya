@@ -128,7 +128,7 @@ void bindDefaultGameplayActions(InputManager& input)
     input.bindAction("move_right", EKey::K_D);
     input.bindAction("move_up", EKey::K_Q);
     input.bindAction("move_down", EKey::K_E);
-    input.bindAction("look", EMouse::Right);
+    input.bindAction("right_mouse", EMouse::Right);
 }
 
 } // namespace
@@ -136,11 +136,6 @@ void bindDefaultGameplayActions(InputManager& input)
 
 InputManager::InputManager()
 {
-    // Initialize mouse position
-    float x, y;
-    SDL_GetMouseState(&x, &y);
-    mousePosition         = {static_cast<float>(x), static_cast<float>(y)};
-    previousMousePosition = mousePosition;
 }
 
 InputManager::~InputManager()
@@ -154,22 +149,26 @@ void InputManager::init()
 
 void InputManager::preUpdate()
 {
-    // Store previous states
     previousKeyStates   = currentKeyStates;
     previousMouseStates = currentMouseStates;
-
-    // Update mouse delta
     previousMousePosition = mousePosition;
-    float x = 0, y = 0;
-    SDL_GetMouseState(&x, &y);
-    mousePosition = {static_cast<float>(x), static_cast<float>(y)};
-    mouseDelta    = mousePosition - previousMousePosition;
+    mouseDelta           = {0.0f, 0.0f};
+    _mouseScrollDelta    = {0.0f, 0.0f};
 }
 
 void InputManager::postUpdate()
 {
-    // Reset scroll delta after events
-    _mouseScrollDelta = glm::vec2(0.f);
+}
+
+void InputManager::cancelInput()
+{
+    currentKeyStates.clear();
+    previousKeyStates.clear();
+    currentMouseStates.clear();
+    previousMouseStates.clear();
+    mouseDelta           = {0.0f, 0.0f};
+    _mouseScrollDelta    = {0.0f, 0.0f};
+    previousMousePosition = mousePosition;
 }
 
 void InputManager::clearActionBindings()
@@ -275,29 +274,6 @@ bool InputManager::wasActionReleased(std::string_view actionName) const
     return false;
 }
 
-ya::EventProcessState InputManager::processEvent(const SDL_Event &event)
-{
-    switch (event.type)
-    {
-    case SDL_EVENT_KEY_DOWN:
-        setKeyState(event.key.key, KeyState::Pressed);
-        break;
-
-    case SDL_EVENT_KEY_UP:
-        setKeyState(event.key.key, KeyState::Released);
-        break;
-
-    case SDL_EVENT_MOUSE_BUTTON_DOWN:
-        setMouseState(event.button.button, KeyState::Pressed);
-        break;
-
-    case SDL_EVENT_MOUSE_BUTTON_UP:
-        setMouseState(event.button.button, KeyState::Released);
-        break;
-    }
-    return ya::EventProcessState::Continue;
-}
-
 EventProcessState InputManager::processEvent(const Event &event)
 {
     switch (event.getEventType()) {
@@ -317,6 +293,11 @@ EventProcessState InputManager::processEvent(const Event &event)
     {
         const auto &e     = static_cast<const MouseScrolledEvent &>(event);
         _mouseScrollDelta = {e._offsetX, e._offsetY};
+    } break;
+    case EEvent::MouseMoved:
+    {
+        const auto& e = static_cast<const MouseMoveEvent&>(event);
+        setMousePosition({e.getX(), e.getY()});
     } break;
     default:
         break;
@@ -375,6 +356,12 @@ bool InputManager::wasMouseButtonReleased(EMouse::T button) const
 glm::vec2 InputManager::getMouseScrollDelta() const
 {
     return _mouseScrollDelta;
+}
+
+void InputManager::setMousePosition(glm::vec2 position)
+{
+    mouseDelta += position - mousePosition;
+    mousePosition = position;
 }
 
 } // namespace ya

@@ -24,10 +24,6 @@ int AppEventRouter::onEvent(App& app, const Event& event)
     YA_PROFILE_FUNCTION()
     YA_PERF_SCOPE(perf::sample::appEventRoute(), perf::metric::cpuTimeMs(), perf::domain::game());
 
-    if (app.dispatchModuleEvent(event)) {
-        return 0;
-    }
-
     bool      bHandled = false;
     EEvent::T ty       = event.getEventType();
     switch (ty) {
@@ -64,6 +60,11 @@ int AppEventRouter::onEvent(App& app, const Event& event)
         break;
     case EEvent::WindowFocus:
     case EEvent::WindowFocusLost:
+    {
+        if (ty == EEvent::WindowFocusLost) {
+            app.inputRouter.cancelInput(EInputCancelReason::WindowFocusLost);
+        }
+    } break;
     case EEvent::WindowMoved:
     case EEvent::AppTick:
     case EEvent::AppUpdate:
@@ -84,10 +85,16 @@ int AppEventRouter::onEvent(App& app, const Event& event)
         return 0;
     }
 
-    {
+    if (app.dispatchModuleEvent(event)) {
+        return 0;
+    }
+
+    if (event.isInCategory(EEventCategory::Input)) {
         YA_PROFILE_SCOPE("App/InputEvent");
         YA_PERF_SCOPE(perf::sample::appInputEvent(), perf::metric::cpuTimeMs(), perf::domain::game());
-        app.inputManager.processEvent(event);
+        if (app.inputRouter.routeEvent(event)) {
+            return 0;
+        }
     }
 
     Rect2D viewportRect = app._renderState && app._renderState->runtime
