@@ -306,7 +306,7 @@ bool isAutomationStableFrameReady(App& app)
 {
     auto& runtimeState = getAutomationRuntimeState();
 
-    Scene* activeScene = app.getSceneManager() ? app.getSceneManager()->getActiveScene() : nullptr;
+    Scene* activeScene = app.getSceneServices().getActiveScene();
     if (runtimeState.stableScene != activeScene) {
         resetAutomationStability(runtimeState, activeScene);
     }

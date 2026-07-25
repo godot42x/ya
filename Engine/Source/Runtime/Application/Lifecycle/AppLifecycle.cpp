@@ -164,31 +164,6 @@ void App::quit()
     AppLifecycle::quit(*this);
 }
 
-bool App::loadScene(const std::string& path)
-{
-    return AppLifecycle::loadScene(*this, path);
-}
-
-bool App::unloadScene()
-{
-    return AppLifecycle::unloadScene(*this);
-}
-
-void App::onSceneInit(Scene* scene)
-{
-    AppLifecycle::onSceneInit(*this, scene);
-}
-
-void App::onSceneDestroy(Scene* scene)
-{
-    AppLifecycle::onSceneDestroy(*this, scene);
-}
-
-void App::onSceneActivated(Scene* scene)
-{
-    AppLifecycle::onSceneActivated(*this, scene);
-}
-
 void App::onEnterRuntime()
 {
     AppLifecycle::onEnterRuntime(*this);
@@ -299,11 +274,11 @@ void AppLifecycle::init(App& app, AppDesc ci)
 
     app._sceneManager = new SceneManager();
     app._sceneManager->onSceneInit.addLambda(&app, [&app](Scene* scene)
-                                             { app.onSceneInit(scene); });
+                                             { AppLifecycle::onSceneInit(app, scene); });
     app._sceneManager->onSceneActivated.addLambda(&app, [&app](Scene* scene)
-                                                  { app.onSceneActivated(scene); });
+                                                  { AppLifecycle::onSceneActivated(app, scene); });
     app._sceneManager->onSceneDestroy.addLambda(&app, [&app](Scene* scene)
-                                                { app.onSceneDestroy(scene); });
+                                                { AppLifecycle::onSceneDestroy(app, scene); });
     app._deleter.push("SceneManager", [&app](void*)
                       {
         delete app._sceneManager;

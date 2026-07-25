@@ -128,7 +128,7 @@ void appendForwardDebugSlots(const RenderRuntime& runtime, ViewportDebugBuilder&
             CATEGORY_SHADOW);
     }
 
-    if (auto* scene = runtime._app->getSceneManager()->getActiveScene()) {
+    if (auto* scene = runtime._app->getSceneServices().getActiveScene()) {
         auto* resolver = runtime._app->getResourceResolveSystem();
         if (resolver) {
             for (auto&& [entity, sc] : scene->getRegistry().view<SkyboxComponent>().each()) {
@@ -349,11 +349,11 @@ void appendDeferredDebugSlots(const RenderRuntime&                    runtime,
 
 void appendEnvironmentDebugSlots(const RenderRuntime& runtime, ViewportDebugBuilder& builder)
 {
-    if (!runtime._app || !runtime._app->getSceneManager()) {
+    if (!runtime._app || !runtime._app->getSceneServices().getSceneManager()) {
         return;
     }
 
-    if (auto* scene = runtime._app->getSceneManager()->getActiveScene()) {
+    if (auto* scene = runtime._app->getSceneServices().getActiveScene()) {
         auto* resolver = runtime._app->getResourceResolveSystem();
         if (!resolver) {
             return;
@@ -543,8 +543,8 @@ size_t RenderRuntime::buildViewportDebugCatalogSignature() const
         hashCombineValue(seed, deferredViews.ssaoTextureOwner != nullptr);
     }
 
-    if (_app && _app->getSceneManager()) {
-        if (auto* scene = _app->getSceneManager()->getActiveScene()) {
+    if (_app && _app->getSceneServices().getSceneManager()) {
+        if (auto* scene = _app->getSceneServices().getActiveScene()) {
             auto* resolver = _app->getResourceResolveSystem();
             if (resolver) {
                 bool     bHasSkybox     = false;

@@ -2,11 +2,13 @@
 
 #include "Runtime/Application/App.h"
 
+#include "Core/System/VirtualFileSystem.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Scene/SceneManager.h"
 
 #include <gtest/gtest.h>
 
+#include <filesystem>
 #include <string>
 #include <utility>
 #include <vector>
@@ -116,6 +118,7 @@ class AppLifecycleTest : public ::testing::Test
 
     void SetUp() override
     {
+        VirtualFileSystem::init();
         sceneManager = std::make_unique<SceneManager>();
         AppModuleTestAccess::setSceneManager(app, sceneManager.get());
         AppModuleTestAccess::setAppState(app, AppState::Stopped);
@@ -217,6 +220,28 @@ TEST_F(AppLifecycleTest, ModuleDispatchIsSafeWithoutModules)
     PresentationTestCommandBuffer commandBuffer;
     AppModuleTestAccess::recordPresentation(app, commandBuffer, 0.016f);
     AppModuleTestAccess::detach(app);
+}
+
+TEST_F(AppLifecycleTest, SaveScenePersistsAndReloadsRoundTrip)
+{
+    auto scene = makeShared<Scene>("RoundTripScene");
+    ASSERT_TRUE(sceneManager->activateScene(scene));
+    ASSERT_NE(scene->createNode("Cube"), nullptr);
+
+    const auto savePath = std::filesystem::temp_directory_path() /
+                          ("ya-scene-roundtrip-" + std::to_string(::testing::UnitTest::GetInstance()->random_seed()) + ".scene.json");
+    std::error_code removeError;
+    std::filesystem::remove(savePath, removeError);
+
+    ASSERT_TRUE(app.getSceneServices().saveScene(savePath.string()));
+    ASSERT_TRUE(std::filesystem::is_regular_file(savePath));
+
+    SceneManager reloadManager;
+    ASSERT_TRUE(reloadManager.loadScene(savePath.string()));
+    ASSERT_NE(reloadManager.getActiveScene(), nullptr);
+    EXPECT_EQ(reloadManager.getActiveScene()->getName(), "RoundTripScene");
+
+    std::filesystem::remove(savePath, removeError);
 }
 
 } // namespace

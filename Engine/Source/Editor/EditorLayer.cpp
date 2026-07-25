@@ -62,8 +62,10 @@ void EditorLayer::onDetach()
 {
     YA_CORE_INFO("EditorLayer::onDetach");
     // Unsubscribe from scene manager events
-    if (_app && _app->getSceneManager()) {
-        _app->getSceneManager()->onSceneActivated.removeAll(this);
+    if (_app) {
+        if (auto* sceneManager = _app->getSceneServices().getSceneManager()) {
+            sceneManager->onSceneActivated.removeAll(this);
+        }
     }
     // Cleanup ImGui textures before destroying panels
     cleanupImGuiTextures();

@@ -189,7 +189,7 @@ void ModelInstantiationSystem::onUpdate(float dt)
 {
     (void)dt;
 
-    auto  sceneManager = App::get()->getSceneManager();
+    auto  sceneManager = App::get()->getSceneServices().getSceneManager();
     auto* scene        = sceneManager->getActiveScene();
     if (!scene) {
         return;

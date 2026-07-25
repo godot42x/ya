@@ -63,13 +63,13 @@ void EditorLayer::menuBar()
         if (ImGui::MenuItem("New Scene", "Ctrl+N"))
         {
             // TODO: New scene
-            App::get()->getTaskManager().registerFrameTask([]() {
+            App::get()->getTaskManager().registerFrameTask([this]() {
                 auto* app = App::get();
                 if (!app) {
                     return;
                 }
 
-                auto* sceneManager = app->getSceneManager();
+                auto* sceneManager = app->getSceneServices().getSceneManager();
                 if (sceneManager && sceneManager->hasScene()) {
                     if (auto* render = app->getRenderServices().getRender()) {
                         render->waitIdle();
@@ -80,6 +80,7 @@ void EditorLayer::menuBar()
                     sceneManager->unloadScene();
                     sceneManager->activateScene(scene);
                 }
+                _currentScenePath.clear();
             });
         }
         if (ImGui::MenuItem("Open Scene", "Ctrl+O"))
@@ -91,12 +92,12 @@ void EditorLayer::menuBar()
             // Save to current path if available, otherwise open Save As dialog
             if (!_currentScenePath.empty())
             {
-                if (_app && _app->getSceneManager())
+                if (_app && _app->getSceneServices().getSceneManager())
                 {
                     auto* scene = getEditableScene();
                     if (scene)
                     {
-                        _app->getSceneManager()->serializeToFile(_currentScenePath, scene);
+                        _app->getSceneServices().saveScene(_currentScenePath);
                         YA_CORE_INFO("Scene saved to: {}", _currentScenePath);
                     }
                 }
@@ -105,7 +106,7 @@ void EditorLayer::menuBar()
             {
                 // No current path, open Save As dialog with scene save picker
                 std::string defaultName = "NewScene";
-                if (_app && _app->getSceneManager())
+                if (_app && _app->getSceneServices().getSceneManager())
                 {
                     auto* scene = getEditableScene();
                     if (scene && !scene->getName().empty())
@@ -118,13 +119,13 @@ void EditorLayer::menuBar()
                     defaultName,
                     [this](const std::string& selectedDir, const std::string& sceneName) {
                         _currentScenePath = selectedDir + "/" + sceneName + ".scene.json";
-                        if (_app && _app->getSceneManager())
+                        if (_app && _app->getSceneServices().getSceneManager())
                         {
                             auto* scene = getEditableScene();
                             if (scene)
                             {
                                 scene->setName(sceneName);
-                                _app->getSceneManager()->serializeToFile(_currentScenePath, scene);
+                                _app->getSceneServices().saveScene(_currentScenePath);
                                 YA_CORE_INFO("Scene saved to: {}", _currentScenePath);
                             }
                         }
@@ -135,7 +136,7 @@ void EditorLayer::menuBar()
         {
             // Open scene save picker with name input and mount point selection
             std::string defaultName = "NewScene";
-            if (_app && _app->getSceneManager())
+            if (_app && _app->getSceneServices().getSceneManager())
             {
                 auto* scene = getEditableScene();
                 if (scene && !scene->getName().empty())
@@ -148,13 +149,13 @@ void EditorLayer::menuBar()
                 defaultName,
                 [this](const std::string& selectedDir, const std::string& sceneName) {
                     _currentScenePath = selectedDir + "/" + sceneName + ".scene.json";
-                    if (_app && _app->getSceneManager())
+                    if (_app && _app->getSceneServices().getSceneManager())
                     {
                         auto* scene = getEditableScene();
                         if (scene)
                         {
                             scene->setName(sceneName);
-                            _app->getSceneManager()->serializeToFile(_currentScenePath, scene);
+                            _app->getSceneServices().saveScene(_currentScenePath);
                             YA_CORE_INFO("Scene saved to: {}", _currentScenePath);
                         }
                     }

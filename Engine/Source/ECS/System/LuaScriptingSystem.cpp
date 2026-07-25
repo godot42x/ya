@@ -347,7 +347,7 @@ void LuaScriptingSystem::init()
 
 void LuaScriptingSystem::onUpdate(float deltaTime)
 {
-    auto *scene = App::get()->getSceneManager()->getActiveScene();
+    auto *scene = App::get()->getSceneServices().getActiveScene();
     if (!scene) return;
 
     auto view = scene->getRegistry().view<LuaScriptComponent>();
@@ -425,7 +425,7 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
 void LuaScriptingSystem::onStop()
 {
     // TODO: let app use serialization to reload all/ recreate entity and components
-    auto *scene = App::get()->getSceneManager()->getActiveScene();
+    auto *scene = App::get()->getSceneServices().getActiveScene();
     if (!scene) return;
 
     auto view = scene->getRegistry().view<LuaScriptComponent>();
@@ -506,7 +506,7 @@ void LuaScriptingSystem::reloadScript(const std::string &scriptPath)
 {
     YA_CORE_INFO("[Hot Reload] Reloading script: {}", scriptPath);
 
-    auto *scene = App::get()->getSceneManager()->getActiveScene();
+    auto *scene = App::get()->getSceneServices().getActiveScene();
     if (!scene) return;
 
     // 查找所有使用该脚本的实体

@@ -17,6 +17,8 @@ ClearValue depthClearValue = ClearValue(1.0f, 0);
 App::App()
     : _renderState(std::make_unique<AppRenderState>())
     , _renderServices(_renderState.get())
+    , _sceneServices(this)
+    , gameInputRoot(inputManager)
 {
 }
 
@@ -156,7 +158,7 @@ bool App::openProject(const FProjectDescriptor& descriptor)
     }
 
     if (descriptor.defaultScene && !descriptor.defaultScene->empty()) {
-        return loadScene(*descriptor.defaultScene);
+        return _sceneServices.loadScene(*descriptor.defaultScene);
     }
 
     return true;

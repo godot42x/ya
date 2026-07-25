@@ -60,7 +60,7 @@ struct ComponentLinkageSystem : public ISystem
             return;
         }
 
-        auto* sceneManager = app->getSceneManager();
+        auto* sceneManager = app->getSceneServices().getSceneManager();
         if (!sceneManager) {
             return;
         }
@@ -76,7 +76,7 @@ struct ComponentLinkageSystem : public ISystem
                 return;
             }
 
-            auto* sceneManagerLocal = appLocal->getSceneManager();
+            auto* sceneManagerLocal = appLocal->getSceneServices().getSceneManager();
             if (!sceneManagerLocal || !sceneManagerLocal->isSceneValid(scene)) {
                 return;
             }
@@ -87,7 +87,7 @@ struct ComponentLinkageSystem : public ISystem
 
     ComponentLinkageSystem()
     {
-        handle1 = App::get()->getSceneManager()->onSceneInit.addObject(this, &ComponentLinkageSystem::onSceneInit);
+        handle1 = App::get()->getSceneServices().getSceneManager()->onSceneInit.addObject(this, &ComponentLinkageSystem::onSceneInit);
         handle2 = SceneBus::get().onComponentRemoved.addLambda(
             this,
             [](entt::registry& reg, const entt::entity entity, ya::type_index_t type) {
@@ -103,7 +103,7 @@ struct ComponentLinkageSystem : public ISystem
 
     ~ComponentLinkageSystem()
     {
-        App::get()->getSceneManager()->onSceneInit.remove(handle1);
+        App::get()->getSceneServices().getSceneManager()->onSceneInit.remove(handle1);
         SceneBus::get().onComponentRemoved.remove(handle2);
     }
 

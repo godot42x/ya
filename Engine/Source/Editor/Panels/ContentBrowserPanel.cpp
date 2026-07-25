@@ -59,7 +59,7 @@ void ContentBrowserPanel::init()
             _pendingSceneOpenPath = scenePath;
             App::get()->getTaskManager().registerFrameTask(
                 [this, scenePath]() {
-                    App::get()->loadScene(scenePath);
+                    App::get()->getSceneServices().loadScene(scenePath);
                     if (_pendingSceneOpenPath == scenePath) {
                         _pendingSceneOpenPath.clear();
                     }

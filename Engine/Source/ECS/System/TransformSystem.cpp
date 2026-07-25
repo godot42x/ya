@@ -140,7 +140,7 @@ void TransformSystem::onUpdate(float dt)
         return;
     }
 
-    auto *sceneManager = app->getSceneManager();
+    auto *sceneManager = app->getSceneServices().getSceneManager();
     if (!sceneManager) {
         return;
     }

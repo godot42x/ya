@@ -136,8 +136,8 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneSkyboxDescriptorSet(Sc
         return _skybox.fallbackDS;
     }
 
-    if (!scene && _app && _app->getSceneManager()) {
-        scene = _app->getSceneManager()->getActiveScene();
+    if (!scene && _app) {
+        scene = _app->getSceneServices().getActiveScene();
     }
 
     auto* resolver = (_app ? _app->getResourceResolveSystem() : nullptr);
@@ -219,8 +219,8 @@ EnvironmentLightingSceneResources RenderSharedResourceProvider::resolveSceneEnvi
 {
     EnvironmentLightingSceneResources resources{};
 
-    if (!scene && _app && _app->getSceneManager()) {
-        scene = _app->getSceneManager()->getActiveScene();
+    if (!scene && _app) {
+        scene = _app->getSceneServices().getActiveScene();
     }
 
     if (_app && _app->getResourceResolveSystem()) {

@@ -67,7 +67,7 @@ void ResourceResolveSystem::onUpdate(float dt)
 {
     (void)dt;
 
-    auto* const sceneManager = App::get()->getSceneManager();
+    auto* const sceneManager = App::get()->getSceneServices().getSceneManager();
     auto* const scene        = sceneManager->getActiveScene();
     if (!scene) {
         clearPendingResolveStates();

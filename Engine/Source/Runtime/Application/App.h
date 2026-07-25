@@ -8,6 +8,7 @@
 #include "Core/System/System.h"
 #include "Runtime/Application/AppOptions.h"
 #include "Runtime/Application/AppRenderServices.h"
+#include "Runtime/Application/AppSceneServices.h"
 #include "Runtime/Application/AppState.h"
 #include "Runtime/Application/AppTaskManager.h"
 #include "Runtime/Application/Lifecycle/AppAutomation.h"
@@ -46,6 +47,7 @@ struct App
     friend class AppFrameLoop;
     friend class AppEventRouter;
     friend class AppModuleTestAccess;
+    friend class AppSceneServices;
 
   private:
     static App* _instance;
@@ -55,6 +57,7 @@ struct App
     SceneManager*                   _sceneManager = nullptr;
     std::unique_ptr<AppRenderState> _renderState;
     AppRenderServices               _renderServices;
+    AppSceneServices                _sceneServices;
 
     bool bRunning = true;
 
@@ -146,6 +149,8 @@ struct App
 
     [[nodiscard]] AppRenderServices&       getRenderServices() { return _renderServices; }
     [[nodiscard]] const AppRenderServices& getRenderServices() const { return _renderServices; }
+    [[nodiscard]] AppSceneServices&        getSceneServices() { return _sceneServices; }
+    [[nodiscard]] const AppSceneServices&  getSceneServices() const { return _sceneServices; }
 
     [[nodiscard]] const AppDesc&                 getDesc() const { return _ci; }
     [[nodiscard]] ResourceResolveSystem*         getResourceResolveSystem() const { return _resourceResolveSystem; }
@@ -156,7 +161,6 @@ struct App
     [[nodiscard]] TaskManager&                   getTaskManager() { return taskManager; }
     [[nodiscard]] const TaskManager&             getTaskManager() const { return taskManager; }
 
-    [[nodiscard]] SceneManager*           getSceneManager() const { return _sceneManager; }
     [[nodiscard]] uint32_t                getFrameIndex() const { return _frameIndex; }
     [[nodiscard]] uint64_t                getElapsedTimeMS() const;
 
@@ -170,20 +174,11 @@ struct App
     void startSimulation();
     void stopRuntime();
     void stopSimulation();
-
-    Entity* getPrimaryCamera() const;
-
-    bool loadScene(const std::string& path);
-    bool unloadScene();
     bool openProject(const FProjectDescriptor& descriptor);
 
     glm::vec2 getLastMousePos() const { return _lastMousePos; }
 
   protected:
-    virtual void onSceneInit(Scene* scene);
-    virtual void onSceneDestroy(Scene* scene);
-    virtual void onSceneActivated(Scene* scene);
-
     virtual void onEnterRuntime();
     virtual void onEnterSimulation() {}
     virtual void onExitSimulation() {}
@@ -209,7 +204,6 @@ struct App
     [[nodiscard]] Extent2D            resolveViewportExtent(RenderRuntime* renderRuntime,
                                                             const Rect2D& viewportRect) const;
     void                              prepareRenderFrameState(float dt);
-    bool                              saveScene([[maybe_unused]] const std::string& path) { return false; }
 };
 
 } // namespace ya

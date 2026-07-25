@@ -15,12 +15,7 @@ Scene* EditorLayer::getViewportInteractionScene() const
         return nullptr;
     }
 
-    auto* sceneManager = _app->getSceneManager();
-    if (!sceneManager) {
-        return nullptr;
-    }
-
-    return sceneManager->getActiveScene();
+    return _app->getSceneServices().getActiveScene();
 }
 
 void EditorLayer::syncEditorSettingsFromConfig()
@@ -83,6 +78,7 @@ bool EditorLayer::openProjectInPlace(const std::string& projectPath)
             _projectBrowserError = std::format("Failed to open project scene: {}", descriptor.name);
             return false;
         }
+        _currentScenePath = descriptor.defaultScene.value_or(std::string{});
         _projectBrowserError.clear();
         return true;
     }

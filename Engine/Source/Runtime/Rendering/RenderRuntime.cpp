@@ -309,10 +309,10 @@ void RenderRuntime::initActivePipeline()
             .getActiveScene               = _app
                 ? [this]() -> Scene*
                   {
-                      if (!_app || !_app->getSceneManager()) {
+                      if (!_app || !_app->getSceneServices().getSceneManager()) {
                           return nullptr;
                       }
-                      return _app->getSceneManager()->getActiveScene();
+                      return _app->getSceneServices().getActiveScene();
                   }
                 : std::function<Scene*()>{},
             .getResourceResolveSystem     = _app
@@ -358,10 +358,10 @@ void RenderRuntime::initActivePipeline()
             },
             .getActiveScene = [this]() -> Scene*
             {
-                if (!_app || !_app->getSceneManager()) {
+                if (!_app || !_app->getSceneServices().getSceneManager()) {
                     return nullptr;
                 }
-                return _app->getSceneManager()->getActiveScene();
+                return _app->getSceneServices().getActiveScene();
             },
             .getResourceResolveSystem = [this]() -> ResourceResolveSystem*
             {

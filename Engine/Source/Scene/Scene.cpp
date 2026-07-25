@@ -19,7 +19,7 @@ Scene::Scene(const std::string &name)
     : _name(name)
 {
     if (auto *app = App::get()) {
-        if (auto *sceneManager = app->getSceneManager()) {
+        if (auto *sceneManager = app->getSceneServices().getSceneManager()) {
             sceneManager->registerScenePointer(this);
         }
     }
@@ -30,7 +30,7 @@ Scene::~Scene()
     // _magic = 0xDEADBEEF; // Mark as destroyed
 
     if (auto *app = App::get()) {
-        if (auto *sceneManager = app->getSceneManager()) {
+        if (auto *sceneManager = app->getSceneServices().getSceneManager()) {
             sceneManager->unregisterScenePointer(this);
         }
     }
@@ -218,7 +218,7 @@ bool Scene::isValid() const
         return true;
     }
 
-    auto *sceneManager = app->getSceneManager();
+    auto *sceneManager = app->getSceneServices().getSceneManager();
     if (!sceneManager) {
         return true;
     }

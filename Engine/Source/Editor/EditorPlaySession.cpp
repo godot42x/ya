@@ -1,15 +1,37 @@
 #include "Editor/EditorPlaySession.h"
 
 #include "Core/Log.h"
+#include "ECS/Component/3D/EnvironmentLightingComponent.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
 #include "Runtime/Application/App.h"
 #include "Scene/SceneManager.h"
 
 namespace ya
 {
 
+namespace
+{
+
+void invalidateSceneEnvironmentAuthoringState(Scene* scene)
+{
+    if (!scene) {
+        return;
+    }
+
+    auto& registry = scene->getRegistry();
+    registry.view<SkyboxComponent>().each([](auto, SkyboxComponent& skybox) {
+        skybox.invalidate();
+    });
+    registry.view<EnvironmentLightingComponent>().each([](auto, EnvironmentLightingComponent& environment) {
+        environment.invalidate();
+    });
+}
+
+} // namespace
+
 bool EditorPlaySession::begin(App& app, AppState nextState)
 {
-    auto* sceneManager = app.getSceneManager();
+    auto* sceneManager = app.getSceneServices().getSceneManager();
     if (!sceneManager) {
         return false;
     }
@@ -38,9 +60,10 @@ void EditorPlaySession::end(App& app)
         return;
     }
 
-    if (auto* sceneManager = app.getSceneManager()) {
+    if (auto* sceneManager = app.getSceneServices().getSceneManager()) {
         if (_authoringScene) {
             sceneManager->activateScene(_authoringScene);
+            invalidateSceneEnvironmentAuthoringState(_authoringScene.get());
         }
         sceneManager->destroyScene(_playScene);
     }
@@ -62,7 +85,7 @@ void EditorPlaySession::onSceneActivated(App& app, Scene* scene)
     }
 
     if (app.isStopped()) {
-        if (auto* sceneManager = app.getSceneManager()) {
+        if (auto* sceneManager = app.getSceneServices().getSceneManager()) {
             _authoringScene = sceneManager->getActiveSceneShared();
         }
     }

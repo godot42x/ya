@@ -19,11 +19,11 @@ double resolveTicksPerSecond(const SkeletonAnimationClip& clip)
 void SkeletonAnimationSystem::onUpdate(float deltaTime)
 {
     App* app = App::get();
-    if (!app || !app->getSceneManager()) {
+    if (!app || !app->getSceneServices().getSceneManager()) {
         return;
     }
 
-    Scene* scene = app->getSceneManager()->getActiveScene();
+    Scene* scene = app->getSceneServices().getActiveScene();
     if (!scene) {
         return;
     }

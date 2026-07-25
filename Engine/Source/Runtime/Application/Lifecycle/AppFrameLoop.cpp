@@ -94,11 +94,6 @@ Extent2D App::resolveViewportExtent(RenderRuntime* renderRuntime, const Rect2D& 
     return AppFrameLoop::resolveViewportExtent(*this, renderRuntime, viewportRect);
 }
 
-Entity* App::getPrimaryCamera() const
-{
-    return AppFrameLoop::getPrimaryCamera(*this);
-}
-
 void App::prepareRenderFrameState(float dt)
 {
     AppFrameLoop::prepareRenderFrameState(*this, dt);
@@ -251,12 +246,10 @@ void AppFrameLoop::tickLogic(App& app, float dt)
         }
     }
 
-    if (auto* sceneManager = app.getSceneManager()) {
-        if (auto* scene = sceneManager->getActiveScene()) {
-            YA_PROFILE_SCOPE("Logic/RuntimeCamera");
-            const Extent2D viewportExtent = resolveRuntimeViewportExtent(app);
-            syncRuntimeCameraAspect(*scene, viewportExtent);
-        }
+    if (auto* scene = app.getSceneServices().getActiveScene()) {
+        YA_PROFILE_SCOPE("Logic/RuntimeCamera");
+        const Extent2D viewportExtent = resolveRuntimeViewportExtent(app);
+        syncRuntimeCameraAspect(*scene, viewportExtent);
     }
 
     {
