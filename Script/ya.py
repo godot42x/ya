@@ -56,8 +56,8 @@ def _normalize_engine_args(engine_args: list[str]) -> list[str]:
 def _format_command_examples(command_name: str) -> str:
     return (
         f"examples:\n"
-        f"  uv run Script/ya.py {command_name} --project Example/HelloMaterial/HelloMaterial.yaproject\n"
-        f"  uv run Script/ya.py {command_name} --target HelloMaterial"
+        f"  python3 Script/ya.py {command_name} --project Example/HelloMaterial/HelloMaterial.yaproject\n"
+        f"  python3 Script/ya.py {command_name} --target HelloMaterial"
     )
 
 
@@ -133,8 +133,8 @@ def _validate_target_argument(target: str, project: str | None, command_name: st
             f"do not use --target editor with --project.\n"
             f"use `run-editor` for editor mode instead.\n\n"
             f"examples:\n"
-            f"  uv run Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject\n"
-            f"  uv run Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject",
+            f"  python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject\n"
+            f"  python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject",
         )
     _fail_command(
         command_name,

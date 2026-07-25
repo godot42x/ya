@@ -12,6 +12,7 @@
 #include "Core/Profiling/Profiling.h"
 #include "Core/Profiling/StaticInitProfiler.h"
 #include "Core/Reflection/DeferredInitializer.h"
+#include "Core/Module/ProjectDescriptor.h"
 #include "Core/System/FileWatcher.h"
 #include "Core/System/VirtualFileSystem.h"
 
@@ -36,6 +37,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <utility>
 
 #if defined(__APPLE__)
@@ -85,10 +87,8 @@ void configureBundledVulkanRuntimeEnv()
         }
         const auto sdkDir   = entry.path() / "macOS";
         const auto icdJson  = sdkDir / "share" / "vulkan" / "icd.d" / "MoltenVK_icd.json";
-        const auto layerDir = sdkDir / "share" / "vulkan" / "explicit_layer.d";
         const auto moltenVk = sdkDir / "lib" / "libMoltenVK.dylib";
-        if (std::filesystem::is_regular_file(icdJson) && std::filesystem::is_regular_file(moltenVk) &&
-            std::filesystem::is_directory(layerDir)) {
+        if (std::filesystem::is_regular_file(icdJson) && std::filesystem::is_regular_file(moltenVk)) {
             if (selectedSdkDir.empty() || entry.path().filename().string() > selectedSdkDir.parent_path().filename().string()) {
                 selectedSdkDir = sdkDir;
             }
@@ -99,13 +99,15 @@ void configureBundledVulkanRuntimeEnv()
         return;
     }
 
-    const auto icdJson  = selectedSdkDir / "share" / "vulkan" / "icd.d" / "MoltenVK_icd.json";
+    const auto icdJson = selectedSdkDir / "share" / "vulkan" / "icd.d" / "MoltenVK_icd.json";
     const auto layerDir = selectedSdkDir / "share" / "vulkan" / "explicit_layer.d";
-    const auto sdkPath  = selectedSdkDir.string();
+    const auto sdkPath = selectedSdkDir.string();
 
     setenv("VULKAN_SDK", sdkPath.c_str(), 0);
     setenv("VK_ICD_FILENAMES", icdJson.string().c_str(), 0);
-    setenv("VK_LAYER_PATH", layerDir.string().c_str(), 0);
+    if (std::filesystem::is_directory(layerDir)) {
+        setenv("VK_LAYER_PATH", layerDir.string().c_str(), 0);
+    }
 }
 #endif
 
@@ -141,6 +143,30 @@ std::string resolveStartupScenePath(const AppDesc& appDesc)
         return *appDesc.automation.scenePath;
     }
     return appDesc.defaultScenePath.value_or("");
+}
+
+std::string resolveProjectScenePath(const App& app, const std::string& requestedPath)
+{
+    if (requestedPath.empty()) {
+        return {};
+    }
+
+    const std::filesystem::path inputPath(requestedPath);
+    if (inputPath.is_absolute() && std::filesystem::is_regular_file(inputPath)) {
+        return inputPath.lexically_normal().string();
+    }
+    if (std::filesystem::is_regular_file(inputPath)) {
+        return inputPath.lexically_normal().string();
+    }
+
+    if (app.getDesc().projectRoot) {
+        const auto rootedPath = std::filesystem::path(*app.getDesc().projectRoot) / inputPath;
+        if (std::filesystem::is_regular_file(rootedPath)) {
+            return rootedPath.lexically_normal().string();
+        }
+    }
+
+    return requestedPath;
 }
 } // namespace
 
@@ -211,6 +237,10 @@ void AppLifecycle::init(App& app, AppDesc ci)
         VirtualFileSystem::init();
         if (app._ci.projectRoot) {
             VirtualFileSystem::get()->setGameRoot(*app._ci.projectRoot);
+        }
+        if (app._ci.projectPath) {
+            const auto descriptor = FProjectDescriptor::load(*app._ci.projectPath);
+            app.applyProjectDescriptor(descriptor);
         }
         ConfigManager::get().init();
         ConfigManager::get().openDocument(
@@ -475,7 +505,7 @@ bool AppLifecycle::loadScene(App& app, const std::string& path)
     }
 
     if (app._sceneManager) {
-        return app._sceneManager->loadScene(path);
+        return app._sceneManager->loadScene(resolveProjectScenePath(app, path));
     }
     return false;
 }

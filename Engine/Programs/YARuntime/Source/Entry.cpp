@@ -46,6 +46,11 @@ bool addPluginDescriptor(ya::ModuleManager& manager,
     }
 }
 
+bool containsRootModule(const std::vector<std::string>& roots, std::string_view moduleName)
+{
+    return std::find(roots.begin(), roots.end(), moduleName) != roots.end();
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -72,9 +77,14 @@ int main(int argc, char** argv)
                     return 2;
                 }
             }
-            if (std::find(roots.begin(), roots.end(), project->mainModule) == roots.end()) {
-                roots.insert(roots.begin(), project->mainModule);
+            if (!containsRootModule(roots, project->mainModule)) {
+                std::fprintf(stderr,
+                             "Project main module is not provided by project modules/plugins: %s\n",
+                             project->mainModule.c_str());
+                return 2;
             }
+            roots.erase(std::remove(roots.begin(), roots.end(), project->mainModule), roots.end());
+            roots.insert(roots.begin(), project->mainModule);
             appDesc.projectRoot = project->sourcePath.parent_path().string();
             if (!appDesc.defaultScenePath && project->defaultScene) {
                 appDesc.defaultScenePath = project->defaultScene;

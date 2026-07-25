@@ -22,6 +22,7 @@ struct FProjectDescriptor
     std::filesystem::path              sourcePath;
 
     [[nodiscard]] static FProjectDescriptor load(const std::filesystem::path& path);
+    [[nodiscard]] std::filesystem::path resolvePath(const std::filesystem::path& value) const;
 };
 
 } // namespace ya

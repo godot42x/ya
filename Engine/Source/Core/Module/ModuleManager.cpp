@@ -146,17 +146,38 @@ std::filesystem::path ModuleManager::resolveBinaryPath(const FModuleManifest& ma
     if (std::filesystem::exists(besideManifest)) {
         return besideManifest;
     }
+    const auto manifestBinaries = manifest.sourcePath.parent_path() / "Binaries" / binary.filename();
+    if (std::filesystem::exists(manifestBinaries)) {
+        return manifestBinaries;
+    }
     if (const char* basePath = SDL_GetBasePath()) {
-        const auto besideExecutable = std::filesystem::path(basePath) / binary;
+        const auto executableRoot = std::filesystem::path(basePath);
+        const auto besideExecutable = executableRoot / binary;
         if (std::filesystem::exists(besideExecutable)) {
             return besideExecutable;
         }
-        const auto modulesPath = std::filesystem::path(basePath) / "Modules" / binary.filename();
+        const auto engineBinariesPath = executableRoot / "Engine" / "Binaries" / binary.filename();
+        if (std::filesystem::exists(engineBinariesPath)) {
+            return engineBinariesPath;
+        }
+        const auto legacyBinariesPath = executableRoot / "Binaries" / binary.filename();
+        if (std::filesystem::exists(legacyBinariesPath)) {
+            return legacyBinariesPath;
+        }
+        if (auto relativeManifest = std::filesystem::relative(manifest.sourcePath.parent_path(), executableRoot);
+            !relativeManifest.empty() && relativeManifest.native().front() != '.') {
+            const auto topLevel = *relativeManifest.begin();
+            const auto packagedProjectBinary = executableRoot / topLevel / "Binaries" / binary.filename();
+            if (std::filesystem::exists(packagedProjectBinary)) {
+                return packagedProjectBinary;
+            }
+        }
+        const auto modulesPath = executableRoot / "Modules" / binary.filename();
         if (std::filesystem::exists(modulesPath)) {
             return modulesPath;
         }
     }
-    return besideManifest;
+    return manifestBinaries;
 }
 
 bool ModuleManager::loadAll()

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
+import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -15,15 +17,49 @@ from pathlib import Path
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_EDITOR_PLUGIN = WORKSPACE_ROOT / "Engine/Plugins/ya-editor/ya-editor.yaplugin"
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
-ENGINE_RUNTIME_RESOURCE_DIRS = [
-    WORKSPACE_ROOT / "Engine/Shader",
-    WORKSPACE_ROOT / "Engine/Content",
+ENGINE_CONTENT_DIR = WORKSPACE_ROOT / "Engine/Content"
+ENGINE_SHADER_GLSL_DIR = WORKSPACE_ROOT / "Engine/Shader" / "GLSL"
+ENGINE_SHADER_SLANG_DIR = WORKSPACE_ROOT / "Engine/Shader" / "Slang"
+ENGINE_THIRDPARTY_RESOURCE_DIRS = [
+    WORKSPACE_ROOT / "Engine/ThirdParty" / "LearnOpenGL" / "resources",
+    WORKSPACE_ROOT / "Engine/ThirdParty" / "Vulkan-Samples-Assets",
 ]
 
 
 def _read_json(path: Path) -> dict:
     with path.open("r", encoding="utf-8") as stream:
         return json.load(stream)
+
+
+def _write_json(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as stream:
+        json.dump(data, stream, indent=2, ensure_ascii=False)
+        stream.write("\n")
+
+
+def _force_remove_readonly(func, path, exc_info) -> None:
+    del exc_info
+    os.chmod(path, stat.S_IWRITE | stat.S_IREAD | stat.S_IEXEC)
+    func(path)
+
+
+def _prepare_tree_for_removal(path: Path) -> None:
+    if not path.exists():
+        return
+    for root, dirs, files in os.walk(path):
+        for entry in dirs:
+            candidate = Path(root) / entry
+            try:
+                os.chmod(candidate, stat.S_IRWXU)
+            except OSError:
+                pass
+        for entry in files:
+            candidate = Path(root) / entry
+            try:
+                os.chmod(candidate, stat.S_IRUSR | stat.S_IWUSR)
+            except OSError:
+                pass
 
 
 @dataclass
@@ -52,6 +88,13 @@ class ProjectDescriptor:
     plugins: list[Path]
     content_dir: Path
 
+    def resolve_path(self, value: Path) -> Path:
+        if value.is_absolute():
+            return value.resolve()
+        if value.exists():
+            return value.resolve()
+        return (self.source_path.parent / value).resolve()
+
 
 def load_module_manifest(path: Path) -> ModuleManifest:
     data = _read_json(path)
@@ -78,7 +121,7 @@ def load_plugin_descriptor(path: Path) -> PluginDescriptor:
 def load_project_descriptor(path: Path) -> ProjectDescriptor:
     data = _read_json(path)
     root = path.resolve().parent
-    return ProjectDescriptor(
+    descriptor = ProjectDescriptor(
         source_path=path.resolve(),
         name=data["name"],
         main_module=data["mainModule"],
@@ -86,6 +129,22 @@ def load_project_descriptor(path: Path) -> ProjectDescriptor:
         plugins=[(root / entry).resolve() for entry in data.get("plugins", [])],
         content_dir=(root / data.get("contentDir", "Content")).resolve(),
     )
+    if not descriptor.modules:
+        raise RuntimeError(f"Project descriptor requires at least one module manifest: {descriptor.source_path}")
+    for module_path in descriptor.modules:
+        if not module_path.is_file():
+            raise RuntimeError(f"Project module manifest not found: {module_path}")
+    for plugin_path in descriptor.plugins:
+        if not plugin_path.is_file():
+            raise RuntimeError(f"Project plugin descriptor not found: {plugin_path}")
+    if not descriptor.content_dir.exists():
+        raise RuntimeError(f"Project content dir not found: {descriptor.content_dir}")
+    default_scene = data.get("defaultScene")
+    if default_scene:
+        resolved_default_scene = descriptor.resolve_path(Path(default_scene))
+        if not resolved_default_scene.is_file():
+            raise RuntimeError(f"Project defaultScene not found: {resolved_default_scene}")
+    return descriptor
 
 
 def _iter_enabled_plugin_descriptors(project: ProjectDescriptor, include_editor: bool) -> list[PluginDescriptor]:
@@ -113,6 +172,10 @@ def collect_enabled_module_manifests(project: ProjectDescriptor, include_editor:
     for plugin in _iter_enabled_plugin_descriptors(project, include_editor):
         for path in plugin.modules:
             add_manifest(path)
+    if project.main_module not in {manifest.name for manifest in manifests}:
+        raise RuntimeError(
+            f"Project main module is not provided by project modules/plugins: {project.main_module}"
+        )
     return manifests
 
 
@@ -204,7 +267,7 @@ def _collect_target_closure(initial_targets: list[str]) -> list[str]:
     return ordered
 
 
-def _resolve_rpath_dependencies(targetfile: Path, linkdirs: list[Path], package_root: Path) -> None:
+def _resolve_rpath_dependencies(targetfile: Path, linkdirs: list[Path], destination_dir: Path) -> None:
     result = subprocess.run(
         ["otool", "-L", str(targetfile)],
         cwd=WORKSPACE_ROOT,
@@ -219,16 +282,18 @@ def _resolve_rpath_dependencies(targetfile: Path, linkdirs: list[Path], package_
         if not stripped.startswith("@rpath/"):
             continue
         basename = Path(stripped.split(" ", 1)[0]).name
+        if basename == targetfile.name:
+            continue
         if basename in seen:
             continue
         seen.add(basename)
-        destination = package_root / basename
+        destination = destination_dir / basename
         if destination.exists():
             continue
         for directory in search_dirs:
             candidate = directory / basename
             if candidate.exists():
-                _copy_file(candidate, package_root, destination)
+                _copy_file(candidate, WORKSPACE_ROOT, destination)
                 break
 
 
@@ -238,12 +303,124 @@ def _copy_file(source: Path, package_root: Path, destination: Path | None = None
     shutil.copy2(source, destination_path)
 
 
-def _copy_tree(source: Path, package_root: Path) -> None:
-    destination = package_root / source.relative_to(WORKSPACE_ROOT)
+def _copy_tree_to(source: Path, destination: Path) -> None:
     if destination.exists():
         shutil.rmtree(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source, destination)
+
+
+def _copy_tree(source: Path, package_root: Path) -> None:
+    destination = package_root / source.relative_to(WORKSPACE_ROOT)
+    _copy_tree_to(source, destination)
+
+
+def _copy_filtered_tree(source: Path, destination: Path, *, skip_dir_names: set[str], allow_file) -> None:
+    if destination.exists():
+        shutil.rmtree(destination)
+
+    copied_any = False
+    for root, dirs, files in os.walk(source):
+        dirs[:] = [entry for entry in dirs if entry not in skip_dir_names]
+        root_path = Path(root)
+        relative_root = root_path.relative_to(source)
+        for filename in files:
+            source_file = root_path / filename
+            if not allow_file(source_file):
+                continue
+            destination_file = destination / relative_root / filename
+            destination_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_file, destination_file)
+            copied_any = True
+
+    if not copied_any:
+        destination.mkdir(parents=True, exist_ok=True)
+
+
+def _copy_engine_runtime_resources(package_root: Path) -> None:
+    if ENGINE_CONTENT_DIR.exists():
+        _copy_tree_to(ENGINE_CONTENT_DIR, package_root / "Engine" / "Content")
+
+    if ENGINE_SHADER_GLSL_DIR.exists():
+        _copy_filtered_tree(
+            ENGINE_SHADER_GLSL_DIR,
+            package_root / "Engine" / "Shader" / "GLSL",
+            skip_dir_names={"Generated"},
+            allow_file=lambda path: path.suffix == ".glsl",
+        )
+
+    if ENGINE_SHADER_SLANG_DIR.exists():
+        _copy_filtered_tree(
+            ENGINE_SHADER_SLANG_DIR,
+            package_root / "Engine" / "Shader" / "Slang",
+            skip_dir_names={"Generated"},
+            allow_file=lambda path: path.suffix == ".slang",
+        )
+
+    for resource_dir in ENGINE_THIRDPARTY_RESOURCE_DIRS:
+        if resource_dir.exists():
+            _copy_tree(resource_dir, package_root)
+
+
+def _project_package_dir(package_root: Path, project: ProjectDescriptor) -> Path:
+    return package_root / project.name
+
+
+def _rewrite_project_descriptor_for_package(project: ProjectDescriptor) -> dict:
+    data = _read_json(project.source_path)
+    default_scene = data.get("defaultScene")
+    if default_scene:
+        resolved_default_scene = project.resolve_path(Path(default_scene))
+        try:
+            data["defaultScene"] = resolved_default_scene.relative_to(project.source_path.parent).as_posix()
+        except ValueError:
+            try:
+                data["defaultScene"] = resolved_default_scene.relative_to(WORKSPACE_ROOT).as_posix()
+            except ValueError:
+                data["defaultScene"] = resolved_default_scene.as_posix()
+    return data
+
+
+def _copy_project_bundle(project: ProjectDescriptor, include_editor: bool, package_root: Path) -> tuple[Path, list[ModuleManifest]]:
+    project_package_dir = _project_package_dir(package_root, project)
+    _write_json(project_package_dir / project.source_path.name, _rewrite_project_descriptor_for_package(project))
+
+    if project.content_dir.exists():
+        _copy_tree_to(project.content_dir, project_package_dir / "Content")
+
+    project_root = project.source_path.parent
+    manifests = collect_enabled_module_manifests(project, include_editor)
+    for manifest_path in project.modules:
+        _copy_file(manifest_path, package_root, project_package_dir / manifest_path.relative_to(project_root))
+
+    for plugin_path in project.plugins:
+        _copy_file(plugin_path, package_root, project_package_dir / plugin_path.relative_to(project_root))
+        plugin = load_plugin_descriptor(plugin_path)
+        for module_path in plugin.modules:
+            if module_path.exists():
+                _copy_file(module_path, package_root, project_package_dir / module_path.relative_to(project_root))
+        for content_dir in plugin.content_dirs:
+            if content_dir.exists():
+                _copy_tree_to(content_dir, project_package_dir / content_dir.relative_to(project_root))
+        for config_file in plugin.config_files:
+            if config_file.exists():
+                _copy_file(config_file, package_root, project_package_dir / config_file.relative_to(project_root))
+
+    return project_package_dir, manifests
+
+
+def _copy_editor_plugin_bundle(package_root: Path) -> None:
+    plugin = load_plugin_descriptor(DEFAULT_EDITOR_PLUGIN)
+    _copy_file(plugin.source_path, package_root)
+    for module_path in plugin.modules:
+        if module_path.exists():
+            _copy_file(module_path, package_root)
+    for content_dir in plugin.content_dirs:
+        if content_dir.exists():
+            _copy_tree(content_dir, package_root)
+    for config_file in plugin.config_files:
+        if config_file.exists():
+            _copy_file(config_file, package_root)
 
 
 def _find_repo_local_vulkan_sdk_macos_dir() -> Path | None:
@@ -264,70 +441,90 @@ def _find_repo_local_vulkan_sdk_macos_dir() -> Path | None:
     return sorted(candidates)[-1]
 
 
-def _copy_macos_vulkan_runtime(package_root: Path) -> None:
+def _copy_macos_vulkan_runtime(package_root: Path, binaries_dir: Path) -> None:
     sdk_dir = _find_repo_local_vulkan_sdk_macos_dir()
     if sdk_dir is None:
         return
 
     icd_dir = sdk_dir / "share" / "vulkan" / "icd.d"
-    layer_dir = sdk_dir / "share" / "vulkan" / "explicit_layer.d"
-    runtime_dirs = [icd_dir, layer_dir]
-    for directory in runtime_dirs:
-        if directory.exists():
-            _copy_tree(directory, package_root)
+    if icd_dir.exists():
+        _copy_tree(icd_dir, package_root)
 
     runtime_libs = [sdk_dir / "lib" / "libMoltenVK.dylib"]
-    for manifest_dir, key in ((icd_dir, "ICD"), (layer_dir, "layer")):
-        if not manifest_dir.is_dir():
-            continue
-        for manifest_path in manifest_dir.glob("*.json"):
-            try:
-                data = _read_json(manifest_path)
-            except json.JSONDecodeError:
-                continue
-            info = data.get(key, {})
-            library_path = info.get("library_path")
-            if not library_path:
-                continue
-            candidate = (manifest_path.parent / library_path).resolve()
-            if candidate.is_file():
-                runtime_libs.append(candidate)
 
     for lib in sorted(set(runtime_libs)):
         if lib.exists():
-            _copy_file(lib, package_root)
+            _copy_file(lib, package_root, binaries_dir / lib.name)
+
+
+def _read_macos_rpaths(binary: Path) -> set[str]:
+    result = subprocess.run(
+        ["otool", "-l", str(binary)],
+        cwd=WORKSPACE_ROOT,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    rpaths: set[str] = set()
+    pending_rpath = False
+    for line in result.stdout.splitlines():
+        stripped = line.strip()
+        if stripped == "cmd LC_RPATH":
+            pending_rpath = True
+            continue
+        if pending_rpath and stripped.startswith("path "):
+            rpaths.add(stripped.split(" ", 2)[1])
+            pending_rpath = False
+    return rpaths
+
+
+def _ensure_macos_rpath(binary: Path, rpath: str) -> None:
+    if rpath in _read_macos_rpaths(binary):
+        return
+    subprocess.run(["install_name_tool", "-add_rpath", rpath, str(binary)], cwd=WORKSPACE_ROOT, check=True)
+
+
+def _patch_macos_runtime_layout(runtime_binary: Path,
+                                engine_binaries_dir: Path,
+                                project_binaries_dir: Path) -> None:
+    if runtime_binary.exists():
+        _ensure_macos_rpath(runtime_binary, "@loader_path/Engine/Binaries")
+
+    if engine_binaries_dir.exists():
+        for candidate in engine_binaries_dir.iterdir():
+            if candidate.is_file() and candidate.suffix == ".dylib":
+                _ensure_macos_rpath(candidate, "@loader_path")
+
+    if not project_binaries_dir.exists():
+        return
+    for candidate in project_binaries_dir.iterdir():
+        if candidate.is_file() and candidate.suffix == ".dylib":
+            _ensure_macos_rpath(candidate, "@loader_path")
+            _ensure_macos_rpath(candidate, "@loader_path/../../Engine/Binaries")
 
 
 def create_package(project: ProjectDescriptor, include_editor: bool, output: Path) -> None:
     package_root = output.resolve()
     if package_root.exists():
-        shutil.rmtree(package_root)
+        _prepare_tree_for_removal(package_root)
+        shutil.rmtree(package_root, onerror=_force_remove_readonly)
     package_root.mkdir(parents=True, exist_ok=True)
+    engine_binaries_dir = package_root / "Engine" / "Binaries"
+    project_binaries_dir = _project_package_dir(package_root, project) / "Binaries"
+    engine_binaries_dir.mkdir(parents=True, exist_ok=True)
+    project_binaries_dir.mkdir(parents=True, exist_ok=True)
 
-    for resource_dir in ENGINE_RUNTIME_RESOURCE_DIRS:
-        if resource_dir.exists():
-            _copy_tree(resource_dir, package_root)
+    _copy_engine_runtime_resources(package_root)
+    project_package_dir, manifests = _copy_project_bundle(project, include_editor, package_root)
+    if include_editor:
+        _copy_editor_plugin_bundle(package_root)
 
-    _copy_file(project.source_path, package_root)
-    if project.content_dir.exists():
-        _copy_tree(project.content_dir, package_root)
-
-    manifests = collect_enabled_module_manifests(project, include_editor)
     module_target_names = {manifest.binary for manifest in manifests}
     for manifest in manifests:
-        _copy_file(manifest.source_path, package_root)
         binary_path = _targetfile_for(manifest.binary)
-        module_destination = package_root / manifest.source_path.parent.relative_to(WORKSPACE_ROOT) / binary_path.name
-        _copy_file(binary_path, package_root, module_destination)
-
-    for plugin in _iter_enabled_plugin_descriptors(project, include_editor):
-        _copy_file(plugin.source_path, package_root)
-        for content_dir in plugin.content_dirs:
-            if content_dir.exists():
-                _copy_tree(content_dir, package_root)
-        for config_file in plugin.config_files:
-            if config_file.exists():
-                _copy_file(config_file, package_root)
+        _copy_file(binary_path, package_root, project_binaries_dir / binary_path.name)
+        _, _, _, linkdirs = _target_info(manifest.binary)
+        _resolve_rpath_dependencies(binary_path, linkdirs, engine_binaries_dir)
 
     runtime_targets = ["ya-runtime", "ya-engine"]
     if include_editor:
@@ -342,12 +539,77 @@ def create_package(project: ProjectDescriptor, include_editor: bool, output: Pat
         if target == "ya-runtime":
             destination = package_root / targetfile.name
         else:
-            destination = package_root / targetfile.name
+            destination = engine_binaries_dir / targetfile.name
         _copy_file(targetfile, package_root, destination)
-        _resolve_rpath_dependencies(targetfile, linkdirs, package_root)
+        _resolve_rpath_dependencies(targetfile, linkdirs, engine_binaries_dir)
 
     if sys.platform == "darwin":
-        _copy_macos_vulkan_runtime(package_root)
+        _copy_macos_vulkan_runtime(package_root, engine_binaries_dir)
+        _patch_macos_runtime_layout(
+            package_root / _targetfile_for("ya-runtime").name,
+            engine_binaries_dir,
+            project_binaries_dir,
+        )
+
+    verify_package_contents(
+        project,
+        include_editor,
+        package_root,
+        project_package_dir,
+        engine_binaries_dir,
+        project_binaries_dir,
+    )
+
+
+def verify_package_contents(project: ProjectDescriptor,
+                            include_editor: bool,
+                            package_root: Path,
+                            project_package_dir: Path,
+                            engine_binaries_dir: Path,
+                            project_binaries_dir: Path) -> None:
+    editor_binary = engine_binaries_dir / _targetfile_for("ya-editor").name
+    required_files = [
+        package_root / _targetfile_for("ya-runtime").name,
+        engine_binaries_dir / _targetfile_for("ya-engine").name,
+        project_package_dir / project.source_path.name,
+    ]
+    if include_editor:
+        required_files.append(editor_binary)
+
+    project_root = project.source_path.parent
+    for manifest_path in project.modules:
+        required_files.append(project_package_dir / manifest_path.relative_to(project_root))
+    for plugin_path in project.plugins:
+        required_files.append(project_package_dir / plugin_path.relative_to(project_root))
+    for manifest in collect_enabled_module_manifests(project, include_editor):
+        required_files.append(project_binaries_dir / _targetfile_for(manifest.binary).name)
+
+    missing = [path for path in required_files if not path.exists()]
+    if missing:
+        raise RuntimeError(
+            "Package verification failed; missing files:\n" + "\n".join(f"  {path}" for path in missing)
+        )
+    if not include_editor and editor_binary.exists():
+        raise RuntimeError(f"Package verification failed; runtime-only package unexpectedly contains editor module: {editor_binary}")
+    if (package_root / "Example").exists():
+        raise RuntimeError(f"Package verification failed; packaged output still contains Example/: {package_root / 'Example'}")
+    if (package_root / "Engine" / "Shader" / "GLSL" / "Generated").exists():
+        raise RuntimeError("Package verification failed; Engine/Shader/GLSL/Generated should not be packaged")
+    if (package_root / "Engine" / "Shader" / "Slang" / "Generated").exists():
+        raise RuntimeError("Package verification failed; Engine/Shader/Slang/Generated should not be packaged")
+    root_dylibs = sorted(path.name for path in package_root.glob("*.dylib"))
+    if root_dylibs:
+        raise RuntimeError(
+            "Package verification failed; shared libraries should live under Engine/Binaries or <Project>/Binaries:\n"
+            + "\n".join(f"  {name}" for name in root_dylibs)
+        )
+    project_module_binaries = {_targetfile_for(manifest.binary).name for manifest in collect_enabled_module_manifests(project, include_editor)}
+    leaked_engine_binaries = sorted(name for name in project_module_binaries if (engine_binaries_dir / name).exists())
+    if leaked_engine_binaries:
+        raise RuntimeError(
+            "Package verification failed; project module binaries leaked into Engine/Binaries:\n"
+            + "\n".join(f"  {name}" for name in leaked_engine_binaries)
+        )
 
 
 def main() -> int:
