@@ -1,5 +1,7 @@
 #include "Editor/EditorLayerInternal.h"
 
+#include "Runtime/GUI/GuiSystem.h"
+
 namespace ya
 {
 Scene* EditorLayer::getEditableScene() const
@@ -153,7 +155,7 @@ void EditorLayer::editorSettings()
 
     ImGui::Separator();
     if (ImGui::TreeNode("ImGui")) {
-        if (ImGuiManager::get().onRenderGUI()) {
+        if (GuiSystem::get().renderBackendSettings()) {
             saveImGuiSettingsToConfig();
         }
         ImGui::TreePop();

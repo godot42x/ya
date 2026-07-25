@@ -6,7 +6,6 @@
 #include "Core/Camera/FreeCameraController.h"
 #include "Core/Profiling/Profiling.h"
 #include "Editor/EditorProfilingSettings.h"
-#include "Editor/ImGui/ImGuiHelper.h"
 #include "Editor/Inspector/TypeRenderer.h"
 #include "Render/2D/Render2D.h"
 #include "Render/Core/CommandBuffer.h"
@@ -14,6 +13,7 @@
 #include "Resource/Font/FontManager.h"
 #include "Resource/Texture/TextureLibrary.h"
 #include "Runtime/Application/App.h"
+#include "Runtime/GUI/GuiSystem.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "Runtime/Rendering/RenderRuntime.h"
 
@@ -252,7 +252,7 @@ class EditorModule final : public IModule
         migrateLegacyRuntimeSettings();
         if (!shadow_settings::hasRuntimeSettings()) {
             shadow_settings::saveRuntimeSettings(
-                shadow_settings::loadSettingsFromDocument("editor", app.getShadowSettings()));
+                shadow_settings::loadSettingsFromDocument("editor", app.getRenderServices().getShadowSettings()));
         }
         editor_profiling_settings::load();
         if (desc.projectPath && !desc.defaultScenePath) {
@@ -265,10 +265,11 @@ class EditorModule final : public IModule
 
     void onAttach(App& app) override
     {
-        auto* renderRuntime = app.getRenderRuntime();
+        auto& renderServices = app.getRenderServices();
+        auto* renderRuntime = renderServices.getRenderRuntime();
         YA_CORE_ASSERT(renderRuntime, "Editor extension requires an initialized RenderRuntime");
 
-        ImGuiManager::get().init(renderRuntime->getRender(), nullptr);
+        GuiSystem::get().init(renderServices.getRender(), nullptr);
         registerBuiltinTypeRenderers();
 
         _layer = std::make_unique<EditorLayer>(&app);
@@ -281,7 +282,7 @@ class EditorModule final : public IModule
     void onDetach(App& app) override
     {
         _playSession.shutdown(app);
-        app.clearExtensionRenderFrameState();
+        app.getRenderServices().clearExtensionRenderFrameState();
         _viewportCompositor.shutdown();
         if (_layer) {
             _layer->setViewportDisplayImage(nullptr);
@@ -289,7 +290,7 @@ class EditorModule final : public IModule
             _layer.reset();
         }
         gEditorLayer = nullptr;
-        ImGuiManager::get().shutdown();
+        GuiSystem::get().shutdown();
     }
 
     bool onBeforeAppStateChange(App& app, AppState previousState, AppState nextState) override
@@ -329,7 +330,7 @@ class EditorModule final : public IModule
     void onNativeEvent(App& app, const SDL_Event& event) override
     {
         (void)app;
-        ImGuiManager::get().processEvents(const_cast<SDL_Event&>(event));
+        GuiSystem::get().processNativeEvent(event);
     }
 
     bool onEvent(App& app, const Event& event) override
@@ -351,7 +352,7 @@ class EditorModule final : public IModule
             }
         }
 
-        const bool bImGuiHandled = ImGuiManager::get().processEvent(event) != EventProcessState::Continue;
+        const bool bImGuiHandled = GuiSystem::get().processEvent(event) != EventProcessState::Continue;
         if (app.isStopped() || !_layer) {
             return bImGuiHandled;
         }
@@ -387,11 +388,12 @@ class EditorModule final : public IModule
         router.setViewportFocused(_layer->isViewportFocused());
         router.setViewportHovered(_layer->isViewportHovered());
 
-        if (auto* renderRuntime = app.getRenderRuntime()) {
+        auto& renderServices = app.getRenderServices();
+        if (auto* renderRuntime = renderServices.getRenderRuntime()) {
             auto&          editorCamera   = _layer->getCamera();
             const Extent2D viewportExtent = renderRuntime->getViewportExtent();
             if (app.isStopped() && _layer->shouldCaptureInput()) {
-                _cameraController.update(editorCamera, app.inputManager, dt);
+                _cameraController.update(editorCamera, app.getInputManager(), dt);
             }
             if (viewportExtent.height > 0) {
                 editorCamera.setPerspective(editorCamera._fov,
@@ -399,7 +401,7 @@ class EditorModule final : public IModule
                                             editorCamera._nearClip,
                                             editorCamera._farClip);
             }
-            app.setExtensionRenderFrameState({
+            renderServices.setExtensionRenderFrameState({
                 .view       = editorCamera.getViewMatrix(),
                 .projection = editorCamera.getProjectionMatrix(),
                 .cameraPos  = editorCamera.getPosition(),
@@ -409,7 +411,7 @@ class EditorModule final : public IModule
         _layer->onUpdate(dt);
         Rect2D pendingRect;
         if (_layer->getPendingViewportResize(pendingRect)) {
-            if (auto* renderRuntime = app.getRenderRuntime()) {
+            if (auto* renderRuntime = renderServices.getRenderRuntime()) {
                 renderRuntime->onViewportResized(pendingRect);
             }
         }
@@ -422,8 +424,9 @@ class EditorModule final : public IModule
             return;
         }
 
-        auto* renderRuntime = app.getRenderRuntime();
-        auto* render        = app.getRender();
+        auto& renderServices = app.getRenderServices();
+        auto* renderRuntime = renderServices.getRenderRuntime();
+        auto* render        = renderServices.getRender();
         if (!renderRuntime || !render) {
             _layer->setViewportDisplayImage(nullptr);
             return;
@@ -442,14 +445,11 @@ class EditorModule final : public IModule
             return;
         }
 
-        ImGuiManager::get().beginFrame();
+        GuiSystem::get().beginFrame();
         _layer->onImGuiRender();
-        ImGuiManager::get().endFrame();
-        ImGuiManager::get().render();
-
-        if (auto* render = app.getRender(); render && render->getAPI() == ERenderAPI::Vulkan) {
-            ImGuiManager::get().submitVulkan(commandBuffer.getHandleAs<VkCommandBuffer>());
-        }
+        GuiSystem::get().endFrame();
+        GuiSystem::get().render();
+        GuiSystem::get().submit(commandBuffer);
     }
 };
 

@@ -1,4 +1,4 @@
-#include "Editor/ImGui/ImGuiHelper.h"
+#include "Runtime/GUI/ImGui/ImGuiSystem.h"
 
 #include "Core/Profiling/Instrumentor.h"
 

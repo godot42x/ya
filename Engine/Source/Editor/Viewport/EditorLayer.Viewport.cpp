@@ -1,5 +1,7 @@
 #include "Editor/EditorLayerInternal.h"
 
+#include "Runtime/GUI/GuiSystem.h"
+
 namespace ya
 {
 std::vector<RenderOverlayText2D> EditorLayer::buildViewportCameraOverlayTexts() const
@@ -159,7 +161,7 @@ void EditorLayer::viewportWindow()
     // Allow ImGuizmo to receive input even when viewport is focused
     // Block events only when viewport is NOT focused/hovered AND ImGuizmo is not using/over
     bool isGizmoActive = ImGuizmo::IsUsing() || ImGuizmo::IsOver();
-    ImGuiManager::get().setBlockEvents(!bViewportFocused && !bViewportHovered && !isGizmoActive);
+    GuiSystem::get().setBlockEvents(!bViewportFocused && !bViewportHovered && !isGizmoActive);
 
     // Viewport context menu - right-click on blank space
     // Only show if not dragging camera (right mouse drag)

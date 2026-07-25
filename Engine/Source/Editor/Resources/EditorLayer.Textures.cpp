@@ -1,5 +1,7 @@
 #include "Editor/EditorLayerInternal.h"
 
+#include "Runtime/GUI/GuiSystem.h"
+
 namespace ya
 {
 
@@ -26,7 +28,7 @@ const ImGuiImageEntry* EditorLayer::getOrCreateImGuiTextureID(ya::Ptr<IImageView
         }
     }
 
-    void* textureID = ImGuiManager::addTexture(imageView.get(), sampler.get(), EImageLayout::ShaderReadOnlyOptimal);
+    void* textureID = GuiSystem::get().addTexture(imageView.get(), sampler.get(), EImageLayout::ShaderReadOnlyOptimal);
     if (!textureID) {
         YA_CORE_ERROR("EditorLayer::getOrCreateImGuiTextureID: Failed to create descriptor set");
         return nullptr;
@@ -45,7 +47,7 @@ void EditorLayer::cleanupImGuiTextures()
 
     for (auto& entry : _imguiTextureCache) {
         if (entry.ds) {
-            ImGuiManager::removeTexture(entry.ds);
+            GuiSystem::get().removeTexture(entry.ds);
         }
     }
     _imguiTextureCache.clear();
@@ -53,7 +55,7 @@ void EditorLayer::cleanupImGuiTextures()
 
 void EditorLayer::removeImGuiTexture(const ImGuiImageEntry* entry)
 {
-    ImGuiManager::removeTexture(entry->ds);
+    GuiSystem::get().removeTexture(entry->ds);
     _imguiTextureCache.erase(*entry);
 }
 

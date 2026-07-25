@@ -36,8 +36,8 @@ do
     add_files("./ImGui/misc/freetype/imgui_freetype.cpp")
     -- add_headerfiles("misc/freetype/imgui_freetype.h")
     add_packages("freetype")
-    add_defines("IMGUI_ENABLE_FREETYPE")
-    add_defines("IMGUI_USE_WCHAR32")
+    add_defines("IMGUI_ENABLE_FREETYPE", { public = true })
+    add_defines("IMGUI_USE_WCHAR32", { public = true })
 
     if is_kind("shared") and is_plat("windows", "mingw") then
         add_defines("IMGUI_API=__declspec(dllexport)")
