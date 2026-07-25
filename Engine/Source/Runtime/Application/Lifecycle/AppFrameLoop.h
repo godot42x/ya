@@ -24,6 +24,12 @@ class AppFrameLoop
     static void     prepareRenderFrameState(App& app, float dt);
     static void     tickRender(App& app, float dt);
     static uint32_t resolveFlightIndex(const App& app);
+
+  private:
+    static std::vector<RenderOverlaySprite2D> buildScreenOverlaySprites(const App& app);
+    static std::vector<RenderOverlaySprite3D> buildWorldOverlaySprites(const App& app,
+                                                                       Scene* scene,
+                                                                       const RenderPipelineFrameContext& pipelineFrame);
 };
 
 } // namespace ya

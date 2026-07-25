@@ -63,7 +63,7 @@ void EditorLayer::menuBar()
         if (ImGui::MenuItem("New Scene", "Ctrl+N"))
         {
             // TODO: New scene
-            App::get()->taskManager.registerFrameTask([]() {
+            App::get()->getTaskManager().registerFrameTask([]() {
                 auto* app = App::get();
                 if (!app) {
                     return;
@@ -71,7 +71,7 @@ void EditorLayer::menuBar()
 
                 auto* sceneManager = app->getSceneManager();
                 if (sceneManager && sceneManager->hasScene()) {
-                    if (auto* render = app->getRender()) {
+                    if (auto* render = app->getRenderServices().getRender()) {
                         render->waitIdle();
                     }
                 }
@@ -242,7 +242,7 @@ void EditorLayer::toolbar()
     {
         _sceneHierarchyPanel.setSelection(nullptr);
         if (_app->isStopped()) {
-            App::get()->taskManager.registerFrameTask([app = _app]() {
+            App::get()->getTaskManager().registerFrameTask([app = _app]() {
                 if (app && app->isStopped()) {
                     app->startRuntime();
                 }
@@ -254,7 +254,7 @@ void EditorLayer::toolbar()
     {
         _sceneHierarchyPanel.setSelection(nullptr);
         if (_app->isStopped()) {
-            App::get()->taskManager.registerFrameTask([app = _app]() {
+            App::get()->getTaskManager().registerFrameTask([app = _app]() {
                 if (app && app->isStopped()) {
                     app->startSimulation();
                 }
@@ -264,7 +264,7 @@ void EditorLayer::toolbar()
     ImGui::SameLine();
     if (drawModeButton("Stop", *_stopIcon, bEditMode, "Stop play/simulate and return to edit mode"))
     {
-        App::get()->taskManager.registerFrameTask([app = _app]() {
+        App::get()->getTaskManager().registerFrameTask([app = _app]() {
             if (!app) {
                 return;
             }

@@ -1,5 +1,6 @@
 #include "ResourceResolveSystem.Detail.h"
 
+#include "Render/Render.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Resource/DeferredDeletionQueue.h"
 #include "Runtime/Application/App.h"
@@ -440,7 +441,7 @@ void rebuildCubeFaceViews(const stdptr<Texture>&                          textur
     }
 
     auto* const app             = App::get();
-    auto* const render          = app ? app->getRender() : nullptr;
+    auto* const render          = app ? app->getRenderServices().getRender() : nullptr;
     auto* const resourceFactory = render ? render->getResourceFactory() : nullptr;
     if (!resourceFactory) {
         return;
@@ -482,7 +483,7 @@ void rebuildPrefilterViews(EnvironmentLightingRuntimeState& state)
     }
 
     auto* const app             = App::get();
-    auto* const render          = app ? app->getRender() : nullptr;
+    auto* const render          = app ? app->getRenderServices().getRender() : nullptr;
     auto* const resourceFactory = render ? render->getResourceFactory() : nullptr;
     if (!resourceFactory) {
         return;

@@ -152,7 +152,7 @@ void RenderRuntime::initRenderBackend(const AppDesc& appDesc)
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
         .swapchainCI = SwapchainCreateInfo{
-            .imageFormat        = App::LINEAR_FORMAT,
+            .imageFormat        = EFormat::R8G8B8A8_UNORM,
             .bVsync             = false,
             .minImageCount      = 3,
             .bEnableTransferSrc = bNeedPresentationTransferSrc,

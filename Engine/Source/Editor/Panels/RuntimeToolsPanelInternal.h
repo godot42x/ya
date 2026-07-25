@@ -42,13 +42,13 @@ inline constexpr const char* kRenderPipelineLabels = "Forward\0Deferred\0";
 
 inline DeferredRenderPipeline* getDeferredPipeline(App& app)
 {
-    auto* renderRuntime = app.getRenderRuntime();
+    auto* renderRuntime = app.getRenderServices().getRenderRuntime();
     return renderRuntime ? dynamic_cast<DeferredRenderPipeline*>(renderRuntime->getActivePipeline()) : nullptr;
 }
 
 inline ForwardRenderPipeline* getForwardPipeline(App& app)
 {
-    auto* renderRuntime = app.getRenderRuntime();
+    auto* renderRuntime = app.getRenderServices().getRenderRuntime();
     return renderRuntime ? dynamic_cast<ForwardRenderPipeline*>(renderRuntime->getActivePipeline()) : nullptr;
 }
 

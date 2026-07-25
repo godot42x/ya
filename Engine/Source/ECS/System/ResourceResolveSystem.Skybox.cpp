@@ -1,5 +1,6 @@
 #include "ResourceResolveSystem.Detail.h"
 
+#include "Render/Render.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Resource/DeferredDeletionQueue.h"
 #include "Runtime/Application/App.h"
@@ -40,7 +41,7 @@ void rebuildSkyboxViews(SkyboxRuntimeState& state)
     }
 
     auto* const app             = App::get();
-    auto* const render          = app ? app->getRender() : nullptr;
+    auto* const render          = app ? app->getRenderServices().getRender() : nullptr;
     auto* const resourceFactory = render ? render->getResourceFactory() : nullptr;
     if (!resourceFactory) {
         return;

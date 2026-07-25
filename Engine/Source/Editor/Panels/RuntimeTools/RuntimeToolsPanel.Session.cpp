@@ -39,8 +39,9 @@ void renderFrameStatsContent(const App& app, float dt)
 
 void renderSessionContent(App& app)
 {
-    auto* render        = app.getRender();
-    auto* renderRuntime = app.getRenderRuntime();
+    auto& renderServices = app.getRenderServices();
+    auto* render        = renderServices.getRender();
+    auto* renderRuntime = renderServices.getRenderRuntime();
     auto* swapchain     = render ? render->getSwapchain() : nullptr;
 
     ImGui::Text("State: %s", app.isRuntimeMode() ? "Runtime" : (app.isSimulationMode() ? "Simulation" : "Stopped"));

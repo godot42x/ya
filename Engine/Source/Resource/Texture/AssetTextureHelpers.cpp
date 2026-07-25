@@ -3,6 +3,7 @@
 #include "Core/Log.h"
 #include "Core/System/PathUtils.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "Render/Render.h"
 #include "Runtime/Application/App.h"
 #include "ktx.h"
 #include "stb/stb_image.h"
@@ -70,11 +71,11 @@ bool supportsTextureUploadFormat(EFormat::T format)
     }
 
     auto* app = App::get();
-    if (!app || !app->getRender()) {
+    if (!app || !app->getRenderServices().getRender()) {
         return true;
     }
 
-    return app->getRender()->isTextureFormatSupported(
+    return app->getRenderServices().getRender()->isTextureFormatSupported(
         format,
         static_cast<EImageUsage::T>(EImageUsage::Sampled | EImageUsage::TransferDst));
 }

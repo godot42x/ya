@@ -31,7 +31,7 @@ void queueOffscreenJob(App* app, IRender* render, const std::shared_ptr<Offscree
     if (app) {
         queueService.enqueue = [app](const std::shared_ptr<OffscreenJobState>& queuedJob, std::function<void(ICommandBuffer*)> task)
         {
-            app->taskManager.enqueueOffscreenTask(queuedJob, std::move(task));
+            app->getTaskManager().enqueueOffscreenTask(queuedJob, std::move(task));
         };
     }
 

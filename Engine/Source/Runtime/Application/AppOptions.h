@@ -1,0 +1,144 @@
+#pragma once
+
+#include "Core/Log.h"
+#include "Core/Profiling/Profiling.h"
+#include "Render/Shadow/ShadowSettings.h"
+#include "Runtime/Application/Utility/ClLIParams.h"
+#include "Runtime/Rendering/Common/PostProcessingState.h"
+
+#include <array>
+#include <cstdint>
+#include <glm/glm.hpp>
+#include <optional>
+#include <string>
+#include <vector>
+
+namespace ya
+{
+
+enum class EAutomationScreenshotTarget : uint8_t
+{
+    Viewport = 0,
+    Presentation,
+};
+
+enum class EAutomationRenderPipeline : uint8_t
+{
+    Forward = 0,
+    Deferred,
+};
+
+struct AppAutomationShadowOverrides
+{
+    std::optional<EShadowQuality::T> quality;
+    std::optional<uint32_t>          resolution;
+    std::optional<bool>              directionalEnabled;
+    std::optional<bool>              pointLightEnabled;
+    std::optional<bool>              pointLightUseIndirect;
+    std::optional<bool>              pointLightIndirectCullEnabled;
+    std::optional<uint32_t>          maxPointLightShadows;
+    std::optional<EShadowFilter::T>  filter;
+    std::optional<float>             bias;
+    std::optional<float>             normalBias;
+    std::optional<float>             directionalDistance;
+    std::optional<uint32_t>          directionalCascades;
+    std::optional<std::array<float, MAX_DIRECTIONAL_CASCADES - 1>> directionalCascadeSplitRatios;
+    std::optional<float>             directionalDepthRangeMultiplier;
+};
+
+struct AppAutomationViewportResize
+{
+    uint32_t width      = 0;
+    uint32_t height     = 0;
+    uint64_t frameIndex = 1;
+};
+
+struct AppAutomationPipelineSwitch
+{
+    EAutomationRenderPipeline target = EAutomationRenderPipeline::Deferred;
+    uint64_t                  frameIndex = 1;
+};
+
+struct AppAutomationDeferredOverrides
+{
+    std::optional<bool> ssaoEnabled;
+};
+
+struct AppAutomationPostProcessOverrides
+{
+    std::optional<bool>                                  enabled;
+    std::optional<bool>                                  bloomEnabled;
+    std::optional<bool>                                  toneMappingEnabled;
+    std::optional<PostProcessingState::EToneMappingCurve> toneMappingCurve;
+};
+
+struct AppProfilingOptions
+{
+    bool                       bCpuProfileEnabled            = !profiling::isCompiledOut();
+    bool                       bCpuProfileOverridden         = false;
+    bool                       bCpuProfileOutputOverridden   = false;
+    bool                       bProfileSessionNameOverridden = false;
+    std::string                profileSessionName            = "App";
+    std::optional<std::string> cpuProfileOutputPath;
+};
+
+struct AppAutomationOptions
+{
+    uint64_t                     exitAfterFrame               = 0;
+    uint64_t                     screenshotFrameIndex         = 0;
+    uint64_t                     screenshotWarmupFrames       = 30;
+    uint64_t                     screenshotSettleFrames       = 5;
+    bool                         renderDocCapture             = false;
+    bool                         bRenderDocCaptureOverridden  = false;
+    bool                         bScreenshotTargetOverridden  = false;
+    EAutomationScreenshotTarget  screenshotTarget             = EAutomationScreenshotTarget::Viewport;
+    std::optional<std::string>   configPath;
+    std::optional<std::string>   scenePath;
+    std::optional<std::string>   screenshotPath;
+    std::optional<glm::vec3>     editorCameraPosition;
+    std::optional<glm::vec3>     editorCameraRotation;
+    std::optional<AppAutomationViewportResize> viewportResize;
+    std::optional<AppAutomationPipelineSwitch> pipelineSwitch;
+    std::optional<logcc::LogLevel::T> logLevel;
+    std::optional<logcc::LogLevel::T> logDetailLevel;
+    AppAutomationShadowOverrides shadow;
+    AppAutomationDeferredOverrides deferred;
+    AppAutomationPostProcessOverrides postprocess;
+};
+
+[[nodiscard]] bool tryParseAutomationScreenshotTarget(const std::string& text,
+                                                      EAutomationScreenshotTarget& outValue);
+[[nodiscard]] bool tryParseAutomationVec3(const std::string& text, glm::vec3& outValue);
+[[nodiscard]] bool tryParseAutomationRenderPipeline(const std::string& text,
+                                                     EAutomationRenderPipeline& outValue);
+[[nodiscard]] bool tryParseAutomationToneMappingCurve(const std::string& text,
+                                                       PostProcessingState::EToneMappingCurve& outValue);
+[[nodiscard]] bool tryParseLogLevel(const std::string& text, logcc::LogLevel::T& outValue);
+
+struct AppDesc
+{
+    CliParams params = CliParams("Yet Another Game Engine", "Command line options");
+
+    std::string          title      = "Yet Another Game Engine";
+    int                  width      = 1024;
+    int                  height     = 768;
+    bool                 fullscreen = false;
+    AppProfilingOptions  profiling;
+    AppAutomationOptions automation;
+
+    std::optional<std::string> projectPath;
+    std::optional<std::string> defaultScenePath;
+    std::optional<std::string> projectRoot;
+    std::optional<std::string> executablePath;
+    bool                       bEditor = false;
+
+    bool                     bEnableRenderDoc           = false;
+    bool                     bRenderDocOutputOverridden = false;
+    std::string              renderDocDllPath           = "C:/Program Files/RenderDoc/renderdoc.dll";
+    std::string              renderDocCaptureOutputDir  = "Engine/Saved/RenderDoc";
+    std::vector<std::string> disabledGraphicsCards;
+
+    void init(int argc, char** argv);
+};
+
+} // namespace ya

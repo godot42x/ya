@@ -124,7 +124,7 @@ void requestFormat(RenderRuntime& runtime,
 void renderRenderTargetInspectorContent(App& app)
 {
     static RenderTargetInspectorState state;
-    auto* runtime = app.getRenderRuntime();
+    auto* runtime = app.getRenderServices().getRenderRuntime();
     if (!runtime) {
         return;
     }
@@ -230,7 +230,7 @@ void renderRenderTargetInspectorContent(App& app)
 
 void renderRenderTargetInspector(App& app)
 {
-    auto* runtime = app.getRenderRuntime();
+    auto* runtime = app.getRenderServices().getRenderRuntime();
     if (!runtime || !ImGui::Begin("Render Targets")) {
         if (runtime) ImGui::End();
         return;

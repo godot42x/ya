@@ -8,7 +8,7 @@ namespace ya
 
 stdptr<ISwapchain> ISwapchain::create(IRender *render, const SwapchainCreateInfo &createInfo)
 {
-    auto api = App::get()->getRender()->getAPI();
+    auto api = App::get()->getRenderServices().getRender()->getAPI();
     switch (api) {
     case ERenderAPI::None:
     case ERenderAPI::OpenGL:

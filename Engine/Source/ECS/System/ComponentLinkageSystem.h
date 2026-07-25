@@ -70,7 +70,7 @@ struct ComponentLinkageSystem : public ISystem
             return;
         }
 
-        app->taskManager.registerFrameTask([scene, entity]() {
+        app->getTaskManager().registerFrameTask([scene, entity]() {
             auto* appLocal = App::get();
             if (!appLocal) {
                 return;

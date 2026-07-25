@@ -15,7 +15,7 @@ Mesh::Mesh(const EngineMeshData& meshData)
 {
     _name = meshData.name;
 
-    auto render = App::get()->getRender<VulkanRender>();
+    auto render = App::get()->getRenderServices().getRender<VulkanRender>();
 
     std::ranges::for_each(meshData.vertices, [&](const ya::Vertex& v)
                           { boundingBox.expand(v.position); });

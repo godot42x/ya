@@ -26,7 +26,7 @@ Scene* IRenderSystem::getActiveScene() const
 IRender* IRenderSystem::getRender() const
 {
     if (getApp()) {
-        return getApp()->getRender();
+        return getApp()->getRenderServices().getRender();
     }
     return nullptr;
 }

@@ -1,6 +1,7 @@
 #include "Runtime/Application/Lifecycle/AppEventRouter.h"
 
 #include "Runtime/Application/App.h"
+#include "Runtime/Application/AppRenderState.h"
 
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
@@ -89,7 +90,9 @@ int AppEventRouter::onEvent(App& app, const Event& event)
         app.inputManager.processEvent(event);
     }
 
-    Rect2D viewportRect = app._renderRuntime ? app._renderRuntime->getViewportRect() : Rect2D{};
+    Rect2D viewportRect = app._renderState && app._renderState->runtime
+                            ? app._renderState->runtime->getViewportRect()
+                            : Rect2D{};
     bool   bInViewport  = FUIHelper::isPointInRect(app._lastMousePos, viewportRect.pos, viewportRect.extent);
     if (bInViewport) {
         YA_PROFILE_SCOPE("App/UIEvent");

@@ -1,6 +1,8 @@
 #include "Runtime/Application/Lifecycle/AppFrameLoop.h"
 
 #include "Runtime/Application/App.h"
+#include "Runtime/Application/AppRenderFrameState.h"
+#include "Runtime/Application/AppRenderState.h"
 #include "Runtime/Application/Lifecycle/AppAutomation.h"
 #include "Runtime/Rendering/Services/RenderDiagnosticsService.h"
 #include "Runtime/Application/Utility/FPSCtrl.h"
@@ -38,7 +40,7 @@ namespace
 
 Extent2D resolveRuntimeViewportExtent(App& app)
 {
-    auto* renderRuntime = app.getRenderRuntime();
+    auto* renderRuntime = app.getRenderServices().getRenderRuntime();
     return AppFrameLoop::resolveViewportExtent(app,
                                                renderRuntime,
                                                renderRuntime ? renderRuntime->getViewportRect() : Rect2D{});
@@ -183,12 +185,13 @@ int AppFrameLoop::iterate(App& app, float dt)
     if (AppAutomation::isFrameAutomationEnabled(app)) {
         YA_PROFILE_SCOPE("Frame/Automation");
         YA_PERF_SCOPE(perf::sample::frameAutomation(), perf::metric::cpuTimeMs(), perf::domain::render());
-        auto* renderRuntime = app.getRenderRuntime();
+        auto& renderServices = app.getRenderServices();
+        auto* renderRuntime = renderServices.getRenderRuntime();
         auto* diagnosticsService = renderRuntime ? &renderRuntime->getDiagnosticsService() : nullptr;
 
         AppAutomation::onFrameCompleted(app,
                                         AppAutomationFrameContext{
-                                            .render                     = app.getRender(),
+                                            .render                     = renderServices.getRender(),
                                             .postprocessImage           = renderRuntime ? renderRuntime->getPostprocessOutputImageShared() : nullptr,
                                             .viewportImage              = renderRuntime ? renderRuntime->getActiveViewportImageShared() : nullptr,
                                             .presentationImage          = renderRuntime ? renderRuntime->getPresentationImageShared() : nullptr,
@@ -288,7 +291,7 @@ void AppFrameLoop::tickLogic(App& app, float dt)
         YA_PROFILE_SCOPE("Logic/InputPreUpdate");
         app.inputManager.preUpdate();
     }
-    auto* render = app.getRender();
+    auto* render = app.getRenderServices().getRender();
     if (!render) {
         return;
     }
@@ -349,9 +352,9 @@ Entity* AppFrameLoop::getPrimaryCamera(const App& app)
 
 void AppFrameLoop::prepareRenderFrameState(App& app, float dt)
 {
-    auto* renderRuntime = app.getRenderRuntime();
+    auto* renderRuntime = app.getRenderServices().getRenderRuntime();
     if (!renderRuntime) {
-        app._renderFrameState = {};
+        app._renderState->frameState = {};
         return;
     }
 
@@ -365,7 +368,7 @@ void AppFrameLoop::prepareRenderFrameState(App& app, float dt)
                                    runtimeCamera && runtimeCamera->isValid() &&
                                    runtimeCamera->hasComponent<CameraComponent>();
 
-    App::RenderFrameState frameState{};
+    AppRenderFrameState frameState{};
     frameState.viewportRect             = viewportRect;
     frameState.viewportFrameBufferScale = renderRuntime->getViewportFrameBufferScale();
     if (bUseRuntimeCamera) {
@@ -374,21 +377,21 @@ void AppFrameLoop::prepareRenderFrameState(App& app, float dt)
         frameState.view       = cc->getFreeView();
         frameState.projection = cc->getProjection();
         frameState.cameraPos  = tc->getWorldPosition();
-        app._renderFrameState = frameState;
+        app._renderState->frameState = frameState;
         return;
     }
 
-    if (app._extensionRenderFrameState) {
-        frameState.view       = app._extensionRenderFrameState->view;
-        frameState.projection = app._extensionRenderFrameState->projection;
-        frameState.cameraPos  = app._extensionRenderFrameState->cameraPos;
+    if (app._renderState->extensionFrameState) {
+        frameState.view       = app._renderState->extensionFrameState->view;
+        frameState.projection = app._renderState->extensionFrameState->projection;
+        frameState.cameraPos  = app._renderState->extensionFrameState->cameraPos;
     }
-    app._renderFrameState = frameState;
+    app._renderState->frameState = frameState;
 }
 
 uint32_t AppFrameLoop::resolveFlightIndex(const App& app)
 {
-    auto* render = app.getRender();
+    auto* render = app.getRenderServices().getRender();
     if (!render) {
         return 0;
     }
@@ -396,10 +399,7 @@ uint32_t AppFrameLoop::resolveFlightIndex(const App& app)
     return render->getCurrentFrameIndex() % MAX_FLIGHTS_IN_FLIGHT;
 }
 
-namespace
-{
-
-std::vector<RenderOverlaySprite2D> buildScreenOverlaySprites(const App& app)
+std::vector<RenderOverlaySprite2D> AppFrameLoop::buildScreenOverlaySprites(const App& app)
 {
     std::vector<RenderOverlaySprite2D> sprites;
     if (app._appMode != AppMode::Drawing || app.clicked.empty()) {
@@ -425,7 +425,9 @@ std::vector<RenderOverlaySprite2D> buildScreenOverlaySprites(const App& app)
     return sprites;
 }
 
-std::vector<RenderOverlaySprite3D> buildWorldOverlaySprites(const App& app, Scene* scene, const RenderPipelineFrameContext& pipelineFrame)
+std::vector<RenderOverlaySprite3D> AppFrameLoop::buildWorldOverlaySprites(const App& app,
+                                                                          Scene* scene,
+                                                                          const RenderPipelineFrameContext& pipelineFrame)
 {
     (void)app;
     std::vector<RenderOverlaySprite3D> sprites;
@@ -483,11 +485,9 @@ std::vector<RenderOverlaySprite3D> buildWorldOverlaySprites(const App& app, Scen
     return sprites;
 }
 
-} // namespace
-
 void AppFrameLoop::tickRender(App& app, float dt)
 {
-    auto* renderRuntime = app.getRenderRuntime();
+    auto* renderRuntime = app.getRenderServices().getRenderRuntime();
     if (!renderRuntime) {
         return;
     }
@@ -523,32 +523,32 @@ void AppFrameLoop::tickRender(App& app, float dt)
         RenderFrameExtractor::extract(
             RenderFrameExtractor::ExtractInput{
                 .scene          = scene,
-                .view           = app._renderFrameState.view,
-                .projection     = app._renderFrameState.projection,
-                .cameraPos      = app._renderFrameState.cameraPos,
+                .view           = app._renderState->frameState.view,
+                .projection     = app._renderState->frameState.projection,
+                .cameraPos      = app._renderState->frameState.cameraPos,
                 .viewportExtent = renderRuntime->getViewportExtent(),
                 .viewOwner      = entt::null,
                 .frameIndex     = App::_frameIndex,
                 .deltaTime      = dt,
-                .shadowSettings = &app.getShadowSettings(),
+                .shadowSettings = &app.getRenderServices().getShadowSettings(),
             },
-            app._renderFrameDataPerFlight[flightIndex]);
+            app._renderState->frameDataPerFlight[flightIndex]);
     }
 
     RenderPipelineFrameContext pipelineFrame{
         .flightIndex              = flightIndex,
         .deltaTime                = dt,
-        .view                     = app._renderFrameState.view,
-        .projection               = app._renderFrameState.projection,
-        .cameraPos                = app._renderFrameState.cameraPos,
-        .viewportRect             = app._renderFrameState.viewportRect,
-        .viewportFrameBufferScale = app._renderFrameState.viewportFrameBufferScale,
-        .frameData                = &app._renderFrameDataPerFlight[flightIndex],
-        .shadowSettings           = &app.getShadowSettings(),
+        .view                     = app._renderState->frameState.view,
+        .projection               = app._renderState->frameState.projection,
+        .cameraPos                = app._renderState->frameState.cameraPos,
+        .viewportRect             = app._renderState->frameState.viewportRect,
+        .viewportFrameBufferScale = app._renderState->frameState.viewportFrameBufferScale,
+        .frameData                = &app._renderState->frameDataPerFlight[flightIndex],
+        .shadowSettings           = &app.getRenderServices().getShadowSettings(),
     };
 
-    auto screenOverlaySprites = buildScreenOverlaySprites(app);
-    auto worldOverlaySprites  = buildWorldOverlaySprites(app, scene, pipelineFrame);
+    auto screenOverlaySprites = AppFrameLoop::buildScreenOverlaySprites(app);
+    auto worldOverlaySprites  = AppFrameLoop::buildWorldOverlaySprites(app, scene, pipelineFrame);
 
     renderRuntime->renderFrame(RenderRuntime::FrameInput{
         .overlay = {
@@ -558,7 +558,7 @@ void AppFrameLoop::tickRender(App& app, float dt)
         .automation = {
             .recordPresentationCapture = [&app](ICommandBuffer* cmdBuf)
             {
-                auto* renderRuntime = app.getRenderRuntime();
+                auto* renderRuntime = app.getRenderServices().getRenderRuntime();
                 if (!renderRuntime) {
                     return;
                 }

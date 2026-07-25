@@ -166,7 +166,7 @@ void AssetManager::dispatchToGameThread(std::function<void()> task)
         return;
     }
 
-    app->taskManager.registerFrameTask(std::move(task));
+    app->getTaskManager().registerFrameTask(std::move(task));
 }
 
 uint64_t AssetManager::getResourceVersion(const std::string& assetPath) const

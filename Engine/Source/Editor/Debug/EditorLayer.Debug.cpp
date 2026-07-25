@@ -61,7 +61,7 @@ void EditorLayer::updateDebugSlotImageView(uint32_t slotIndex,
     ci.viewType      = EImageViewType::View2D;
     ci.aspectFlags   = slot.aspectFlags;
     ci.components    = ImGuiHelper::BuildRGBAChannelMaskMapping(state.channelEnabled);
-    auto* const render          = _app ? _app->getRender() : nullptr;
+    auto* const render          = _app ? _app->getRenderServices().getRender() : nullptr;
     auto* const resourceFactory = render ? render->getResourceFactory() : nullptr;
     state.maskedView            = resourceFactory ? resourceFactory->createImageView(frame->image, ci) : nullptr;
 }

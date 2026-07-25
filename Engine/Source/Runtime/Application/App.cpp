@@ -1,4 +1,5 @@
 #include "Runtime/Application/App.h"
+#include "Runtime/Application/AppRenderState.h"
 
 #include "Core/Module/ProjectDescriptor.h"
 #include "Core/System/VirtualFileSystem.h"
@@ -12,6 +13,12 @@ uint32_t App::App::_frameIndex = 0;
 
 ClearValue colorClearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);
 ClearValue depthClearValue = ClearValue(1.0f, 0);
+
+App::App()
+    : _renderState(std::make_unique<AppRenderState>())
+    , _renderServices(_renderState.get())
+{
+}
 
 App::~App() = default;
 
@@ -132,55 +139,9 @@ void App::notifyModulesSceneDestroyed(Scene* scene)
     }
 }
 
-IRender* App::getRender() const
+uint64_t App::getElapsedTimeMS() const
 {
-    return _renderRuntime ? _renderRuntime->getRender() : nullptr;
-}
-
-std::shared_ptr<ShaderStorage> App::getShaderStorage() const
-{
-    return _renderRuntime ? _renderRuntime->getShaderStorage() : nullptr;
-}
-
-IRenderPipeline* App::getRenderPipeline() const
-{
-    return _renderRuntime ? _renderRuntime->getActivePipeline() : nullptr;
-}
-
-DebugRenderSystem& App::getDebugRenderSystem() const
-{
-    YA_CORE_ASSERT(_renderRuntime, "RenderRuntime is not available");
-    return _renderRuntime->getDebugRenderSystem();
-}
-
-bool App::isShadowMappingEnabled() const
-{
-    return _renderRuntime && _renderRuntime->isShadowMappingEnabled();
-}
-
-bool App::isMirrorRenderingEnabled() const
-{
-    return _renderRuntime && _renderRuntime->isMirrorRenderingEnabled();
-}
-
-bool App::hasMirrorRenderResult() const
-{
-    return _renderRuntime && _renderRuntime->hasMirrorRenderResult();
-}
-
-IImageView* App::getShadowDirectionalDepthIV() const
-{
-    return _renderRuntime ? _renderRuntime->getShadowDirectionalDepthIV() : nullptr;
-}
-
-IImageView* App::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
-{
-    return _renderRuntime ? _renderRuntime->getShadowPointFaceDepthIV(pointLightIndex, faceIndex) : nullptr;
-}
-
-bool App::isPostprocessingEnabled() const
-{
-    return _renderRuntime && _renderRuntime->isPostprocessingEnabled();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - _startTime).count();
 }
 
 bool App::openProject(const FProjectDescriptor& descriptor)

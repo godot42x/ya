@@ -311,7 +311,7 @@ void renderPresentationSettings(App& app, RenderRuntime& runtime)
 
     ImGui::DragFloat("Viewport Scale", &runtime._viewportFrameBufferScale, 0.1f, 1.0f, 10.0f);
 
-    if (auto* render = app.getRender()) {
+    if (auto* render = app.getRenderServices().getRender()) {
         if (auto* swapchain = render->getSwapchain()) {
             bool bVsync = swapchain->getVsync();
             if (ImGui::Checkbox("VSync", &bVsync)) {
@@ -320,7 +320,7 @@ void renderPresentationSettings(App& app, RenderRuntime& runtime)
 
             EPresentMode::T presentMode = swapchain->getPresentMode();
             if (ImGui::Combo("Present Mode", reinterpret_cast<int*>(&presentMode), kPresentModeLabels)) {
-                app.taskManager.registerFrameTask([swapchain, presentMode]() {
+                app.getTaskManager().registerFrameTask([swapchain, presentMode]() {
                     swapchain->setPresentMode(presentMode);
                 });
             }
@@ -357,7 +357,7 @@ void renderForwardSettingsContent(App& app)
 
 void renderDeferredSettingsContent(App& app)
 {
-    auto* runtime  = app.getRenderRuntime();
+    auto* runtime  = app.getRenderServices().getRenderRuntime();
     auto* pipeline = getDeferredPipeline(app);
     if (!runtime || !pipeline) {
         ImGui::TextDisabled("Deferred-only settings are unavailable while the forward pipeline is active.");

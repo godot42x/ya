@@ -24,7 +24,7 @@ void renderRender2DDebugContent()
 
 void renderDiagnosticsContent(App& app)
 {
-    auto* runtime = app.getRenderRuntime();
+    auto* runtime = app.getRenderServices().getRenderRuntime();
     if (!runtime) {
         return;
     }
@@ -66,7 +66,7 @@ void renderDiagnosticsContent(App& app)
 
 void renderDebugPrimitivesContent(App& app)
 {
-    auto* runtime = app.getRenderRuntime();
+    auto* runtime = app.getRenderServices().getRenderRuntime();
     if (!runtime) {
         return;
     }

@@ -75,7 +75,7 @@ void OffscreenTaskService::tick(App& app)
         finalizeCompletedJobs();
     }
 
-    if (!app.taskManager.hasOffscreenTasks()) {
+    if (!app.getTaskManager().hasOffscreenTasks()) {
         return;
     }
 
@@ -87,7 +87,7 @@ void OffscreenTaskService::tick(App& app)
     }
 
     _submittedJobs.clear();
-    app.taskManager.updateOffscreenTasks(cmdBuf.get(), &_submittedJobs);
+    app.getTaskManager().updateOffscreenTasks(cmdBuf.get(), &_submittedJobs);
 
     if (!cmdBuf->end()) {
         YA_CORE_ERROR("Failed to end offscreen command buffer");

@@ -1,5 +1,6 @@
 #include "ResourceResolveSystem.Detail.h"
 
+#include "Render/Render.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Resource/DeferredDeletionQueue.h"
 #include "Runtime/Application/App.h"
@@ -208,7 +209,7 @@ void tryQueueJob(const std::shared_ptr<OffscreenJobState>& job)
     }
 
     auto* const app    = App::get();
-    auto* const render = app ? app->getRender() : nullptr;
+    auto* const render = app ? app->getRenderServices().getRender() : nullptr;
     queueOffscreenJob(app, render, job);
 }
 

@@ -102,7 +102,7 @@ void AssetInspectorPanel::updatePreviewMaskView(bool bForceRefresh)
     ci.aspectFlags = EImageAspect::Color;
     ci.components  = ImGuiHelper::BuildRGBAChannelMaskMapping(_previewChannelEnabled);
     auto* const app             = App::get();
-    auto* const render          = app ? app->getRender() : nullptr;
+    auto* const render          = app ? app->getRenderServices().getRender() : nullptr;
     auto* const resourceFactory = render ? render->getResourceFactory() : nullptr;
     _previewMaskedView          = resourceFactory ? resourceFactory->createImageView(_previewTexture->getImageShared(), ci) : nullptr;
 }

@@ -34,9 +34,9 @@ void resolvePendingMaterialComponents(entt::registry& registry)
 
 void ResourceResolveSystem::init()
 {
-    _equidistantCylindrical2CubeMap.init(App::get()->getRender());
-    _cubeMap2IrradianceMap.init(App::get()->getRender());
-    _cubeMap2PrefilterPipeline.init(App::get()->getRender());
+    _equidistantCylindrical2CubeMap.init(App::get()->getRenderServices().getRender());
+    _cubeMap2IrradianceMap.init(App::get()->getRenderServices().getRender());
+    _cubeMap2PrefilterPipeline.init(App::get()->getRenderServices().getRender());
 }
 
 void ResourceResolveSystem::clearPendingResolveStates()

@@ -311,10 +311,10 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobRecordsAndPublishesSuccessfulTask)
     queueOffscreenJob(&app, reinterpret_cast<IRender*>(0x1), job);
 
     ASSERT_EQ(job->phase, EOffscreenJobPhase::Queued);
-    ASSERT_EQ(app.taskManager.offscreenTasks.size(), 1u);
+    ASSERT_EQ(app.getTaskManager().offscreenTasks.size(), 1u);
 
     std::vector<std::shared_ptr<OffscreenJobState>> submittedJobs;
-    app.taskManager.updateOffscreenTasks(&cmdBuf, &submittedJobs);
+    app.getTaskManager().updateOffscreenTasks(&cmdBuf, &submittedJobs);
 
     ASSERT_EQ(job->phase, EOffscreenJobPhase::Recorded);
     ASSERT_NE(job->result, nullptr);
@@ -346,7 +346,7 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobPublishesRecordedKeepAliveResources)
     ASSERT_EQ(job->phase, EOffscreenJobPhase::Queued);
 
     std::vector<std::shared_ptr<OffscreenJobState>> submittedJobs;
-    app.taskManager.updateOffscreenTasks(&cmdBuf, &submittedJobs);
+    app.getTaskManager().updateOffscreenTasks(&cmdBuf, &submittedJobs);
 
     ASSERT_EQ(job->phase, EOffscreenJobPhase::Recorded);
     ASSERT_NE(job->result, nullptr);
@@ -366,7 +366,7 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobMarksExecutionFailure)
     queueOffscreenJob(&app, reinterpret_cast<IRender*>(0x1), job);
     ASSERT_EQ(job->phase, EOffscreenJobPhase::Queued);
 
-    app.taskManager.updateOffscreenTasks(&cmdBuf);
+    app.getTaskManager().updateOffscreenTasks(&cmdBuf);
 
     EXPECT_EQ(job->phase, EOffscreenJobPhase::Failed);
     ASSERT_NE(job->result, nullptr);
@@ -393,7 +393,7 @@ TEST(OffscreenAsyncTest, CancelledQueuedJobRemainsCancelledWhenQueuedWorkerRuns)
     EXPECT_TRUE(queuedJob->bCancelled);
     EXPECT_EQ(queuedJob->phase, EOffscreenJobPhase::Cancelled);
 
-    app.taskManager.updateOffscreenTasks(&cmdBuf);
+    app.getTaskManager().updateOffscreenTasks(&cmdBuf);
 
     EXPECT_EQ(queuedJob->phase, EOffscreenJobPhase::Cancelled);
     ASSERT_NE(queuedJob->result, nullptr);

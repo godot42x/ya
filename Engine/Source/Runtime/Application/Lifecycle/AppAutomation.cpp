@@ -440,7 +440,7 @@ bool hasPendingAutomationWork(const App& app, const AppAutomationFrameContext* f
         if (frameContext && frameContext->isRenderDocCaptureTerminal) {
             bRenderDocPending = !frameContext->isRenderDocCaptureTerminal();
         }
-        else if (const RenderRuntime* renderRuntime = app.getRenderRuntime()) {
+        else if (const RenderRuntime* renderRuntime = app.getRenderServices().getRenderRuntime()) {
             bRenderDocPending = !renderRuntime->getDiagnosticsService().isAutomationRenderDocCaptureTerminal();
         }
     }
@@ -488,7 +488,7 @@ void applyScheduledSmokeActions(App& app, uint64_t frameIndex)
 {
     auto&                       runtimeState = getAutomationRuntimeState();
     const AppAutomationOptions& automation   = app.getDesc().automation;
-    auto*                       renderRuntime = app.getRenderRuntime();
+    auto*                       renderRuntime = app.getRenderServices().getRenderRuntime();
     if (!renderRuntime) {
         return;
     }
@@ -594,9 +594,9 @@ void AppAutomation::applyLogOverrides(const AppDesc& appDesc)
 
 void AppAutomation::applyRuntimeOverrides(App& app)
 {
-    shadow_settings::applyAutomationOverrides(app.getDesc().automation.shadow, app.getShadowSettings());
+    shadow_settings::applyAutomationOverrides(app.getDesc().automation.shadow, app.getRenderServices().getShadowSettings());
 
-    auto* renderRuntime = app.getRenderRuntime();
+    auto* renderRuntime = app.getRenderServices().getRenderRuntime();
     if (!renderRuntime) {
         return;
     }
@@ -625,7 +625,7 @@ OffscreenJobQueueService AppAutomation::buildOffscreenJobQueueService(App& app)
     OffscreenJobQueueService queueService{};
     queueService.enqueue = [&app](const std::shared_ptr<OffscreenJobState>& job, std::function<void(ICommandBuffer*)> task)
     {
-        app.taskManager.enqueueOffscreenTask(job, std::move(task));
+        app.getTaskManager().enqueueOffscreenTask(job, std::move(task));
     };
     return queueService;
 }

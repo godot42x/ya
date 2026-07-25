@@ -1244,7 +1244,7 @@ bool VulkanRender::begin(int32_t* outImageIndex)
 
     // GPU has finished with the previous frame at this slot — safe to destroy
     // any GPU resources that were deferred-deleted during that frame.
-    DeferredDeletionQueue::get().flush(App::_frameIndex);
+    DeferredDeletionQueue::get().flush(App::currentFrameIndex());
 
     auto vkSwapChain = this->getSwapchain<VulkanSwapChain>();
 

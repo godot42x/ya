@@ -72,7 +72,7 @@ void RuntimeToolsPanel::onImGuiRender(App& app, float dt)
         renderProfilingContent();
     }
     if (ImGui::CollapsingHeader("Render Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-        if (auto* runtime = app.getRenderRuntime()) {
+        if (auto* runtime = app.getRenderServices().getRenderRuntime()) {
             ImGui::Indent();
             renderPresentationSettings(app, *runtime);
             ImGui::Unindent();

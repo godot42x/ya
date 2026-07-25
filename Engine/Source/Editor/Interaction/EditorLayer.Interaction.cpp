@@ -162,7 +162,7 @@ void EditorLayer::renderGizmo()
         return;
     }
 
-    const auto& frameState = app->getRenderFrameState();
+    const auto& frameState = app->getRenderServices().getRenderFrameState();
     glm::mat4   view       = frameState.view;
     glm::mat4   proj       = frameState.projection;
 
@@ -249,7 +249,7 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
         return;
     }
 
-    const auto& frameState = app->getRenderFrameState();
+    const auto& frameState = app->getRenderServices().getRenderFrameState();
     glm::mat4   view       = frameState.view;
     glm::mat4   projection = frameState.projection;
 

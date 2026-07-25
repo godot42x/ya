@@ -20,6 +20,8 @@ class AppModuleTestAccess
     static void configure(App& app) { app.configureModules(); }
     static void attach(App& app) { app.attachModules(); }
     static void detach(App& app) { app.detachModules(); }
+    static void setSceneManager(App& app, SceneManager* sceneManager) { app._sceneManager = sceneManager; }
+    static void setAppState(App& app, AppState state) { app._appState = state; }
     static void dispatchNativeEvent(App& app, const SDL_Event& event) { app.dispatchNativeEvent(event); }
     static bool dispatchEvent(App& app, const Event& event) { return app.dispatchModuleEvent(event); }
     static void tick(App& app, float dt) { app.tickModules(dt); }
@@ -115,13 +117,13 @@ class AppLifecycleTest : public ::testing::Test
     void SetUp() override
     {
         sceneManager = std::make_unique<SceneManager>();
-        app._sceneManager = sceneManager.get();
-        app._appState     = AppState::Stopped;
+        AppModuleTestAccess::setSceneManager(app, sceneManager.get());
+        AppModuleTestAccess::setAppState(app, AppState::Stopped);
     }
 
     void TearDown() override
     {
-        app._sceneManager = nullptr;
+        AppModuleTestAccess::setSceneManager(app, nullptr);
         sceneManager.reset();
     }
 };

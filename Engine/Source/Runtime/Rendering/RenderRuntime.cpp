@@ -299,7 +299,7 @@ void RenderRuntime::initActivePipeline()
             .render                       = _render,
             .windowW                      = winW,
             .windowH                      = winH,
-            .shadowSettings               = _app ? &_app->getShadowSettings() : nullptr,
+            .shadowSettings               = _app ? &_app->getRenderServices().getShadowSettings() : nullptr,
             .getFrameIndex                = _app
                 ? [this]() -> uint64_t { return _app ? _app->getFrameIndex() : 0; }
                 : std::function<uint64_t()>{},
@@ -337,7 +337,7 @@ void RenderRuntime::initActivePipeline()
             .render                   = _render,
             .windowW                  = winW,
             .windowH                  = winH,
-            .shadowSettings           = _app ? &_app->getShadowSettings() : nullptr,
+            .shadowSettings           = _app ? &_app->getRenderServices().getShadowSettings() : nullptr,
             .automationShadowOverrides = _app ? &_app->getDesc().automation.shadow : nullptr,
             .environmentLightingDSL = _sharedResourceProvider.getEnvironmentLightingDescriptorSetLayout(),
             .getSceneEnvironmentLightingDescriptorSet = [this](Scene* scene)

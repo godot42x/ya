@@ -121,7 +121,7 @@ static bool copyFaceToStaging(uint8_t* dst,
 
 IRenderResourceFactory* Texture::getResourceFactory()
 {
-    auto render = ya::App::get()->getRender();
+    auto render = ya::App::get()->getRenderServices().getRender();
     YA_CORE_ASSERT(render, "Render is not initialized");
 
     auto* resourceFactory = render->getResourceFactory();
@@ -266,7 +266,7 @@ std::shared_ptr<Texture> Texture::createSolidCubeMap(const ColorU8_t& color, con
     texture->_mipLevels = 1;
 
     auto* resourceFactory = getResourceFactory();
-    auto* render          = App::get()->getRender();
+    auto* render          = App::get()->getRenderServices().getRender();
 
     std::array<ColorU8_t, CubeFace_Count> facePixels{};
     facePixels.fill(color);
@@ -434,7 +434,7 @@ void Texture::initFromData(const void* pixels,
                            uint32_t    mipLevels,
                            bool        generateMipmaps)
 {
-    auto* render          = App::get()->getRender();
+    auto* render          = App::get()->getRenderServices().getRender();
     auto* resourceFactory = render->getResourceFactory();
 
     const bool bGenerateMipmaps = generateMipmaps && mipLevels == 1 && render->supportsMipGeneration(format);
@@ -632,7 +632,7 @@ void Texture::initFallbackTexture(const void* pixels, size_t dataSize, uint32_t 
     _channels  = 4;
 
     auto* resourceFactory = getResourceFactory();
-    auto* render          = App::get()->getRender();
+    auto* render          = App::get()->getRenderServices().getRender();
 
     auto ci = ya::ImageCreateInfo{
         .label  = std::format("Texture_Fallback_{}", _label),
@@ -727,7 +727,7 @@ void Texture::initCubeMap(const CubeMapCreateInfo& ci)
 void Texture::initCubeMapFromMemory(const CubeMapMemoryCreateInfo& ci)
 {
     auto* resourceFactory = getResourceFactory();
-    auto* render          = App::get()->getRender();
+    auto* render          = App::get()->getRenderServices().getRender();
 
     _width     = ci.faces[0].width;
     _height    = ci.faces[0].height;

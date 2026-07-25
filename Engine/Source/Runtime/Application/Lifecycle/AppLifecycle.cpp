@@ -1,6 +1,7 @@
 #include "Runtime/Application/Lifecycle/AppLifecycle.h"
 
 #include "Runtime/Application/App.h"
+#include "Runtime/Application/AppRenderState.h"
 #include "Runtime/Application/Lifecycle/AppAutomation.h"
 #include "Runtime/Application/Utility/FPSCtrl.h"
 
@@ -280,15 +281,15 @@ void AppLifecycle::init(App& app, AppDesc ci)
         }
     }
 
-    app._renderRuntime = std::make_unique<RenderRuntime>();
-    app._renderRuntime->init(RenderRuntime::InitDesc{
+    app._renderState->runtime = std::make_unique<RenderRuntime>();
+    app._renderState->runtime->init(RenderRuntime::InitDesc{
         .app     = &app,
         .appDesc = &app._ci,
     });
     if (ConfigManager::get().hasDocument("automation")) {
         AppAutomation::applyRuntimeOverrides(app);
     }
-    if (auto* render = app.getRender()) {
+    if (auto* render = app.getRenderServices().getRender()) {
         int winW = 0, winH = 0;
         render->getWindowSize(winW, winH);
         app._windowSize.x = static_cast<float>(winW);
@@ -447,23 +448,23 @@ void AppLifecycle::quit(App& app)
         app.onQuit();
     }
 
-    for (auto& frameData : app._renderFrameDataPerFlight) {
+    for (auto& frameData : app._renderState->frameDataPerFlight) {
         frameData.clear();
     }
     const bool bHadSceneBeforeUnload = app._sceneManager && app._sceneManager->hasScene();
     unloadScene(app);
 
     if (!bHadSceneBeforeUnload) {
-        if (auto* render = app.getRender()) {
+        if (auto* render = app.getRenderServices().getRender()) {
             render->waitIdle();
         }
     }
 
     app._deleter.clear();
 
-    if (app._renderRuntime) {
-        app._renderRuntime->shutdown(/*bRenderAlreadyIdle=*/true);
-        app._renderRuntime.reset();
+    if (app._renderState->runtime) {
+        app._renderState->runtime->shutdown(/*bRenderAlreadyIdle=*/true);
+        app._renderState->runtime.reset();
     }
 
     MaterialFactory::get()->destroy();
@@ -493,7 +494,7 @@ bool AppLifecycle::loadScene(App& app, const std::string& path)
     }
 
     if (!bWaitedForModeTransition && bHasCurrentScene) {
-        if (auto* render = app.getRender()) {
+        if (auto* render = app.getRenderServices().getRender()) {
             render->waitIdle();
         }
     }
@@ -507,9 +508,9 @@ bool AppLifecycle::loadScene(App& app, const std::string& path)
 bool AppLifecycle::unloadScene(App& app)
 {
     if (app._sceneManager && app._sceneManager->hasScene()) {
-        if (auto* render = app.getRender()) {
-            render->waitIdle();
-        }
+    if (auto* render = app.getRenderServices().getRender()) {
+        render->waitIdle();
+    }
     }
 
     if (app._sceneManager) {
@@ -528,13 +529,13 @@ void AppLifecycle::onSceneDestroy(App& app, Scene* scene)
 {
     app.notifyModulesSceneDestroyed(scene);
 
-    for (auto& frameData : app._renderFrameDataPerFlight) {
+    for (auto& frameData : app._renderState->frameDataPerFlight) {
         frameData.clear();
     }
 
-    if (app._renderRuntime) {
-        app._renderRuntime->resetSkyboxPool();
-        app._renderRuntime->resetEnvironmentLightingPool();
+    if (app._renderState->runtime) {
+        app._renderState->runtime->resetSkyboxPool();
+        app._renderState->runtime->resetEnvironmentLightingPool();
     }
 }
 
@@ -604,7 +605,7 @@ void AppLifecycle::stopRuntime(App& app)
     }
 
     YA_CORE_INFO("Stopping runtime");
-    if (auto* render = app.getRender()) {
+    if (auto* render = app.getRenderServices().getRender()) {
         render->waitIdle();
     }
     if (app._luaScriptingSystem) {
@@ -627,7 +628,7 @@ void AppLifecycle::stopSimulation(App& app)
     }
 
     YA_CORE_INFO("Stopping simulation");
-    if (auto* render = app.getRender()) {
+    if (auto* render = app.getRenderServices().getRender()) {
         render->waitIdle();
     }
     if (app._luaScriptingSystem) {
