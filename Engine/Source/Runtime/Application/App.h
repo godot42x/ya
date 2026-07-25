@@ -75,6 +75,7 @@ struct App
     AppState  _appState   = AppState::Stopped;
 
     InputManager inputManager;
+    GameInputRoot gameInputRoot;
     InputRouter  inputRouter;
     TaskManager  taskManager;
 
@@ -108,7 +109,6 @@ struct App
     int  run();
     int  iterate(float dt);
     void quit();
-    int  processEvent(SDL_Event& event);
 
     template <typename T>
     int dispatchEvent(const T& event)
@@ -189,7 +189,7 @@ struct App
     void attachModules();
     void detachModules();
     void configureModules();
-    void dispatchNativeEvent(const SDL_Event& event);
+    void applyProjectDescriptor(const FProjectDescriptor& descriptor);
     [[nodiscard]] bool dispatchModuleEvent(const Event& event);
     void tickModules(float dt);
     void prepareModulesForRender(float dt);

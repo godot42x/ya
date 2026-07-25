@@ -81,36 +81,36 @@ stdptr<Scene> SceneManager::cloneScene(Scene* scene) const
     return scene ? scene->clone() : nullptr;
 }
 
-void SceneManager::serializeToFile(const std::string& path, Scene* scene) const
+bool SceneManager::serializeToFile(const std::string& path, Scene* scene) const
 {
     if (!scene) {
         YA_CORE_WARN("No scene loaded to serialize");
-        return;
+        return false;
     }
 
     SceneSerializer serializer(scene);
     if (serializer.saveToFile(path)) {
         YA_CORE_INFO("Scene serialized to file: {}", path);
+        return true;
     }
-    else {
-        YA_CORE_ERROR("Failed to serialize scene to file: {}", path);
-    }
+    YA_CORE_ERROR("Failed to serialize scene to file: {}", path);
+    return false;
 }
 
-void SceneManager::deserializeFromFile(const std::string& path, Scene* scene)
+bool SceneManager::deserializeFromFile(const std::string& path, Scene* scene)
 {
     if (!scene) {
         YA_CORE_WARN("No scene provided to deserialize into");
-        return;
+        return false;
     }
 
     SceneSerializer serializer(scene);
     if (serializer.loadFromFile(path)) {
         YA_CORE_INFO("Scene deserialized from file: {}", path);
+        return true;
     }
-    else {
-        YA_CORE_ERROR("Failed to deserialize scene from file: {}", path);
-    }
+    YA_CORE_ERROR("Failed to deserialize scene from file: {}", path);
+    return false;
 }
 
 void SceneManager::setActiveScene(stdptr<Scene> scene)

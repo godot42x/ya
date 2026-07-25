@@ -67,8 +67,8 @@ struct SceneManager
     bool                 hasScene() const { return _activeScene != nullptr; }
 
 
-    void serializeToFile(const std::string& path, Scene* scene) const;
-    void deserializeFromFile(const std::string& path, Scene* scene);
+    bool serializeToFile(const std::string& path, Scene* scene) const;
+    bool deserializeFromFile(const std::string& path, Scene* scene);
 
     bool isSceneValid(const Scene* ptr);
     void registerScenePointer(const Scene* ptr);

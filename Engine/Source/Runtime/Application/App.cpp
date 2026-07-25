@@ -20,6 +20,7 @@ App::App()
     , _sceneServices(this)
     , gameInputRoot(inputManager)
 {
+    inputRouter.setDefaultRoot(gameInputRoot);
 }
 
 App::~App() = default;
@@ -45,6 +46,18 @@ void App::configureModules()
     }
 }
 
+void App::applyProjectDescriptor(const FProjectDescriptor& descriptor)
+{
+    _ci.projectPath      = descriptor.sourcePath.string();
+    _ci.projectRoot      = descriptor.sourcePath.parent_path().string();
+    _ci.defaultScenePath = descriptor.defaultScene;
+    inputManager.configureActionBindings(descriptor.inputActions);
+
+    if (_ci.projectRoot) {
+        VirtualFileSystem::get()->setGameRoot(*_ci.projectRoot);
+    }
+}
+
 void App::attachModules()
 {
     YA_CORE_ASSERT(!_modulesAttached, "Modules are already attached");
@@ -63,13 +76,6 @@ void App::detachModules()
         it->module->onDetach(*this);
     }
     _modulesAttached = false;
-}
-
-void App::dispatchNativeEvent(const SDL_Event& event)
-{
-    for (const auto& slot : _modules) {
-        slot.module->onNativeEvent(*this, event);
-    }
 }
 
 bool App::dispatchModuleEvent(const Event& event)
@@ -148,14 +154,7 @@ uint64_t App::getElapsedTimeMS() const
 
 bool App::openProject(const FProjectDescriptor& descriptor)
 {
-    _ci.projectPath      = descriptor.sourcePath.string();
-    _ci.projectRoot      = descriptor.sourcePath.parent_path().string();
-    _ci.defaultScenePath = descriptor.defaultScene;
-    inputManager.configureActionBindings(descriptor.inputActions);
-
-    if (_ci.projectRoot) {
-        VirtualFileSystem::get()->setGameRoot(*_ci.projectRoot);
-    }
+    applyProjectDescriptor(descriptor);
 
     if (descriptor.defaultScene && !descriptor.defaultScene->empty()) {
         return _sceneServices.loadScene(*descriptor.defaultScene);

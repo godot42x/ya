@@ -24,7 +24,6 @@ class AppModuleTestAccess
     static void detach(App& app) { app.detachModules(); }
     static void setSceneManager(App& app, SceneManager* sceneManager) { app._sceneManager = sceneManager; }
     static void setAppState(App& app, AppState state) { app._appState = state; }
-    static void dispatchNativeEvent(App& app, const SDL_Event& event) { app.dispatchNativeEvent(event); }
     static bool dispatchEvent(App& app, const Event& event) { return app.dispatchModuleEvent(event); }
     static void tick(App& app, float dt) { app.tickModules(dt); }
     static void prepareRender(App& app, float dt) { app.prepareModulesForRender(dt); }
@@ -99,7 +98,6 @@ struct RecordingAppModule final : IModule
         return true;
     }
     void onAfterAppStateChange(App&, AppState, AppState) override { calls.push_back(name + ".after-state"); }
-    void onNativeEvent(App&, const SDL_Event&) override { calls.push_back(name + ".native"); }
     bool onEvent(App&, const Event&) override
     {
         calls.push_back(name + ".event");
@@ -172,10 +170,6 @@ TEST_F(AppLifecycleTest, ModulesDispatchInRegistrationOrderAndDetachInReverseOrd
     AppModuleTestAccess::configure(app);
     AppModuleTestAccess::attach(app);
 
-    SDL_Event nativeEvent{};
-    nativeEvent.type = SDL_EVENT_FIRST;
-    AppModuleTestAccess::dispatchNativeEvent(app, nativeEvent);
-
     AppQuitEvent event;
     EXPECT_TRUE(AppModuleTestAccess::dispatchEvent(app, event));
     AppModuleTestAccess::tick(app, 0.016f);
@@ -192,7 +186,6 @@ TEST_F(AppLifecycleTest, ModulesDispatchInRegistrationOrderAndDetachInReverseOrd
               (std::vector<std::string>{
                   "first.configure", "second.configure", "third.configure",
                   "first.attach", "second.attach", "third.attach",
-                  "first.native", "second.native", "third.native",
                   "first.event", "second.event",
                   "first.logic", "second.logic", "third.logic",
                   "first.before-render", "second.before-render", "third.before-render",
@@ -207,13 +200,10 @@ TEST_F(AppLifecycleTest, ModulesDispatchInRegistrationOrderAndDetachInReverseOrd
 
 TEST_F(AppLifecycleTest, ModuleDispatchIsSafeWithoutModules)
 {
-    SDL_Event nativeEvent{};
-    nativeEvent.type = SDL_EVENT_FIRST;
     AppQuitEvent event;
 
     AppModuleTestAccess::configure(app);
     AppModuleTestAccess::attach(app);
-    AppModuleTestAccess::dispatchNativeEvent(app, nativeEvent);
     EXPECT_FALSE(AppModuleTestAccess::dispatchEvent(app, event));
     AppModuleTestAccess::tick(app, 0.016f);
     AppModuleTestAccess::prepareRender(app, 0.016f);
