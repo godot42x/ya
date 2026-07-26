@@ -7,14 +7,94 @@
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
+#include "ECS/Component/Terrain/TerrainComponent.h"
 #include "Runtime/Application/App.h"
 #include "Scene/SceneManager.h"
+#include "Render/Terrain/TerrainMeshBuilder.h"
+
+#include <cstring>
 
 namespace ya
 {
 
 namespace
 {
+
+float halfToFloat(uint16_t value)
+{
+    const uint32_t sign = (value & 0x8000u) << 16;
+    uint32_t       exp  = (value & 0x7C00u) >> 10;
+    uint32_t       mant = value & 0x03FFu;
+
+    uint32_t bits = 0;
+    if (exp == 0) {
+        if (mant == 0) {
+            bits = sign;
+        }
+        else {
+            exp = 1;
+            while ((mant & 0x0400u) == 0) {
+                mant <<= 1;
+                --exp;
+            }
+            mant &= 0x03FFu;
+            bits = sign | ((exp + (127 - 15)) << 23) | (mant << 13);
+        }
+    }
+    else if (exp == 0x1Fu) {
+        bits = sign | 0x7F800000u | (mant << 13);
+    }
+    else {
+        bits = sign | ((exp + (127 - 15)) << 23) | (mant << 13);
+    }
+
+    float result = 0.0f;
+    std::memcpy(&result, &bits, sizeof(result));
+    return result;
+}
+
+std::vector<float> extractTerrainHeights(const AssetManager::TextureMemoryBlock& texture)
+{
+    std::vector<float> heights;
+    if (!texture.isValid() || texture.channels == 0) {
+        return heights;
+    }
+
+    const size_t pixelCount = static_cast<size_t>(texture.width) * texture.height;
+    heights.resize(pixelCount, 0.0f);
+
+    switch (texture.payloadType) {
+    case AssetManager::ETexturePayloadType::U8: {
+        const auto* data = texture.bytes.data();
+        for (size_t i = 0; i < pixelCount; ++i) {
+            heights[i] = static_cast<float>(data[i * texture.channels]) / 255.0f;
+        }
+        break;
+    }
+    case AssetManager::ETexturePayloadType::F16: {
+        const auto* data = reinterpret_cast<const uint16_t*>(texture.bytes.data());
+        for (size_t i = 0; i < pixelCount; ++i) {
+            heights[i] = halfToFloat(data[i * texture.channels]);
+        }
+        break;
+    }
+    case AssetManager::ETexturePayloadType::F32: {
+        const auto* data = reinterpret_cast<const float*>(texture.bytes.data());
+        for (size_t i = 0; i < pixelCount; ++i) {
+            heights[i] = data[i * texture.channels];
+        }
+        break;
+    }
+    default:
+        heights.clear();
+        break;
+    }
+
+    for (auto& height : heights) {
+        height = std::clamp(height, 0.0f, 1.0f);
+    }
+    return heights;
+}
 
 template <typename TMaterialComponent>
 void resolvePendingMaterialComponents(entt::registry& registry)
@@ -80,6 +160,7 @@ void ResourceResolveSystem::onUpdate(float dt)
     }
 
     resolvePendingMeshes(scene);
+    resolvePendingTerrain(scene);
     resolvePendingMaterials(scene);
     resolvePendingUI(scene);
     resolvePendingBillboards(scene);
@@ -104,6 +185,74 @@ void ResourceResolveSystem::resolvePendingMeshes(Scene* scene)
     registry.view<SkinnedMeshComponent>().each([&](auto entity, SkinnedMeshComponent& comp) {
         (void)entity;
         resolveOne(comp);
+    });
+}
+
+void ResourceResolveSystem::resolvePendingTerrain(Scene* scene)
+{
+    auto& registry = scene->getRegistry();
+    auto* assets   = AssetManager::get();
+    if (!assets) {
+        return;
+    }
+
+    registry.view<TerrainComponent>().each([&](auto entity, TerrainComponent& terrain) {
+        (void)entity;
+
+        if (!terrain.hasHeightMap()) {
+            return;
+        }
+
+        const uint64_t heightMapVersion = assets->getResourceVersion(terrain._heightMapRef.getPath());
+        if (terrain.isResolved() && terrain.getLastBuiltHeightMapVersion() != heightMapVersion) {
+            terrain.invalidate();
+        }
+
+        if (!terrain.needsResolve()) {
+            return;
+        }
+
+        if (terrain.getPendingHeightMapHandle() == 0) {
+            const auto handle = assets->loadTextureBatchIntoMemory(AssetManager::TextureBatchMemoryLoadRequest{
+                .filepaths   = {terrain._heightMapRef.getPath()},
+                .colorSpace  = AssetManager::ETextureColorSpace::Linear,
+            });
+            terrain.markLoading(handle);
+            return;
+        }
+
+        AssetManager::TextureBatchMemory batchMemory;
+        if (!assets->consumeTextureBatchMemory(terrain.getPendingHeightMapHandle(), batchMemory)) {
+            return;
+        }
+        terrain.clearPendingHeightMapHandle();
+
+        if (!batchMemory.isValid() || batchMemory.textures.empty()) {
+            YA_CORE_WARN("Terrain height map decode failed: {}", terrain._heightMapRef.getPath());
+            terrain.markFailed();
+            return;
+        }
+
+        const auto& texture = batchMemory.textures.front();
+        auto heights = extractTerrainHeights(texture);
+        if (heights.empty()) {
+            YA_CORE_WARN("Terrain height map has unsupported payload: {}", terrain._heightMapRef.getPath());
+            terrain.markFailed();
+            return;
+        }
+
+        auto meshData = buildTerrainMeshData(TerrainMeshBuildDesc{
+            .name           = std::format("terrain_{}", terrain._heightMapRef.getPath()),
+            .size           = terrain._size,
+            .heightScale    = terrain._heightScale,
+            .heightOffset   = terrain._heightOffset,
+            .gridResolution = terrain._gridResolution,
+            .heightWidth    = texture.width,
+            .heightHeight   = texture.height,
+            .heights        = heights,
+        });
+
+        terrain.setRuntimeMesh(Mesh::create(meshData), heightMapVersion);
     });
 }
 

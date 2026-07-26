@@ -157,6 +157,7 @@ struct ResourceResolveSystem : public ISystem
 
     void clearPendingResolveStates();
     void resolvePendingMeshes(Scene* scene);
+    void resolvePendingTerrain(Scene* scene);
     void resolvePendingMaterials(Scene* scene);
     void resolvePendingUI(Scene* scene);
     void resolvePendingBillboards(Scene* scene);
