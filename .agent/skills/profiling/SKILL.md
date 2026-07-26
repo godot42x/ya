@@ -19,8 +19,8 @@ description: YA Engine profiling、automation trace 与低噪音性能冒烟指�
 ## 最小命令
 
 ```bash
-make cfg m=profile
-make r t=ya-runtime project=Example/HelloMaterial/HelloMaterial.yaproject r_args="--exit-after-frame=300 --log-level=warn --log-detail-level=error"
+python3 Script/ya.py cfg --mode profile
+python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject -- --exit-after-frame=300 --log-level=warn --log-detail-level=error
 ```
 
 ## 配置入口

@@ -19,7 +19,8 @@ description: YA Engine 渲染架构、RenderRuntime 边界与 shader 生成链�
 
 ## 目录锚点
 
-- `Engine/Source/Runtime/App/`
+- `Engine/Source/Runtime/Application/`：应用入口、生命周期与自动化
+- `Engine/Source/Runtime/Rendering/`：RenderRuntime、渲染管线与渲染服务
 - `Engine/Source/Render/`
 - `Engine/Source/Platform/Render/Vulkan/`
 - `Engine/Source/Platform/Render/OpenGL/`

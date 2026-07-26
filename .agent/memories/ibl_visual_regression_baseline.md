@@ -26,7 +26,7 @@ signal  = 球体表面是否能看到天空盒/环境倒影
 ## 推荐命令模板
 
 ```bash
-make r t=HelloMaterial r_args="--exit-after-frame=1500 --screenshot-frame=1500 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error"
+python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject -- --exit-after-frame=1500 --screenshot-frame=1500 --screenshot-target=editor --editor-camera-pos=12,12,10 --editor-camera-rot=-9,-39,0 --log-level=warn --log-detail-level=error
 ```
 
 若需要落盘截图，再补：

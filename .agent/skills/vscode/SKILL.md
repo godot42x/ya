@@ -45,7 +45,7 @@ description: VS Code 工作区配置、XMake 任务、调试启动项与 Intelli
 优先使用现有工程方式：
 
 ```bash
-make cfg
+python3 Script/ya.py cfg
 ```
 
 或直接使用 XMake：
