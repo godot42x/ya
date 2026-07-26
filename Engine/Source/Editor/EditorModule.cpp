@@ -1,6 +1,7 @@
 #include "Editor/EditorModule.h"
 
 #include "Editor/EditorLayer.h"
+#include "Editor/Input/EditorInputNode.h"
 #include "Editor/EditorPlaySession.h"
 #include "Config/ConfigManager.h"
 #include "Core/Camera/FreeCameraController.h"
@@ -232,103 +233,6 @@ class EditorViewportCompositor
     }
 };
 
-class EditorInputRoot final : public IHostInputRoot
-{
-  private:
-    App*         _app   = nullptr;
-    EditorLayer* _layer = nullptr;
-
-  public:
-    void bind(App& app, EditorLayer& layer)
-    {
-        _app   = &app;
-        _layer = &layer;
-    }
-
-    void unbind()
-    {
-        _layer = nullptr;
-        _app   = nullptr;
-    }
-
-    [[nodiscard]] FInputReply route(const FInputEvent& event) override
-    {
-        if (!_app || !_layer) {
-            return {};
-        }
-
-        if (_app->isStopped()) {
-            _layer->onEvent(event);
-            const FGuiInputClaim guiClaim = GuiSystem::get().describeInputClaim(event);
-            return FInputReply{
-                .handled = guiClaim.wantsEvent(event) || event.isInCategory(EEventCategory::Input),
-            };
-        }
-
-        InputRouter& router = _app->getInputRouter();
-
-        if (event.getEventType() == EEvent::KeyReleased) {
-            const auto& keyEvent = static_cast<const KeyReleasedEvent&>(event);
-            if (keyEvent.getKeyCode() == EKey::K_GRAVE && router.isMouseCaptured()) {
-                return FInputReply{
-                    .handled        = true,
-                    .pointerCapture = FPointerCaptureRequest{},
-                };
-            }
-        }
-
-        const FGuiInputClaim guiClaim = GuiSystem::get().describeInputClaim(event);
-        if (guiClaim.exclusive || guiClaim.wantsEvent(event)) {
-            return FInputReply{.handled = true};
-        }
-
-        if (router.isMouseCaptured()) {
-            _app->getInputManager().processEvent(event);
-            return FInputReply{.handled = true};
-        }
-
-        const bool bPointerEvent = event.isInCategory(EEventCategory::Mouse);
-        const bool bKeyboardEvent = event.isInCategory(EEventCategory::Keyboard);
-        const bool bViewportMouse = _layer->isViewportHovered() || _layer->isViewportFocused();
-        const bool bViewportKeyboard = _layer->isViewportFocused();
-
-        if (bPointerEvent && bViewportMouse) {
-            _app->getInputManager().processEvent(event);
-
-            std::optional<FPointerCaptureRequest> pointerCapture;
-            if (event.getEventType() == EEvent::MouseButtonPressed) {
-                const Rect2D& mouseRect = _layer->getViewportMouseRect();
-                pointerCapture = FPointerCaptureRequest{
-                    .relative   = true,
-                    .hideCursor = true,
-                    .confine    = mouseRect.extent.x > 0.0f && mouseRect.extent.y > 0.0f,
-                    .confinement = mouseRect,
-                };
-            }
-
-            return FInputReply{
-                .handled        = true,
-                .pointerCapture = pointerCapture,
-            };
-        }
-
-        if (bKeyboardEvent && bViewportKeyboard) {
-            _app->getInputManager().processEvent(event);
-            return FInputReply{.handled = true};
-        }
-
-        return {};
-    }
-
-    void cancelInput(EInputCancelReason reason) override
-    {
-        (void)reason;
-        if (_app) {
-            _app->getInputManager().cancelInput();
-        }
-    }
-};
-
 class EditorModule final : public IModule
 {
   private:
@@ -336,8 +240,8 @@ class EditorModule final : public IModule
     EditorPlaySession            _playSession;
     FreeCameraController         _cameraController;
     EditorViewportCompositor     _viewportCompositor;
-    EditorInputRoot              _inputRoot;
-    InputRouter::FRootRegistration _inputRootRegistration;
+    EditorInputNode               _inputNode;
+    InputRouter::FNodeRegistration _inputNodeRegistration;
 
   public:
     bool onLoad(FModuleContext&) override { return true; }
@@ -376,16 +280,16 @@ class EditorModule final : public IModule
         initializeEditorCamera(app, *_layer);
         _layer->setCurrentScenePath(app.getDesc().defaultScenePath.value_or(std::string{}));
         _layer->onAttach();
-        _inputRoot.bind(app, *_layer);
-        _inputRootRegistration = app.getInputRouter().registerRoot(_inputRoot);
+        _inputNode.bind(app, *_layer);
+        _inputNodeRegistration = app.getInputRouter().registerNode(_inputNode);
         gEditorLayer = _layer.get();
     }
 
     void onDetach(App& app) override
     {
         app.getInputRouter().cancelInput(EInputCancelReason::ModuleDetached);
-        _inputRootRegistration.reset();
-        _inputRoot.unbind();
+        _inputNodeRegistration.reset();
+        _inputNode.unbind();
         _playSession.shutdown(app);
         app.getRenderServices().clearExtensionRenderFrameState();
         _viewportCompositor.shutdown();

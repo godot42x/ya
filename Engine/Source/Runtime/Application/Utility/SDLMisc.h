@@ -110,7 +110,7 @@ inline int processSDLEvent(SDL_Event &event, auto &&dispatchEvent)
         break;
     case SDL_EVENT_MOUSE_MOTION:
     {
-        MouseMoveEvent ev(event.motion.x, event.motion.y);
+        MouseMoveEvent ev(event.motion.x, event.motion.y, event.motion.xrel, event.motion.yrel);
         dispatchEvent(ev);
     } break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN:

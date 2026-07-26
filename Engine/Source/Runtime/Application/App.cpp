@@ -3,6 +3,7 @@
 
 #include "Core/Module/ProjectDescriptor.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "Core/UI/UIManager.h"
 #include "Runtime/Rendering/Services/DebugRenderSystem.h"
 
 namespace ya
@@ -18,9 +19,10 @@ App::App()
     : _renderState(std::make_unique<AppRenderState>())
     , _renderServices(_renderState.get())
     , _sceneServices(this)
-    , gameInputRoot(inputManager)
+    , gameInputNode(inputManager)
 {
-    inputRouter.setDefaultRoot(gameInputRoot);
+    inputRouter.setApp(*this);
+    inputRouter.setDefaultNode(gameInputNode);
 }
 
 App::~App() = default;
@@ -78,7 +80,7 @@ void App::detachModules()
     _modulesAttached = false;
 }
 
-bool App::dispatchModuleEvent(const Event& event)
+bool App::dispatchHostModuleEvent(const Event& event)
 {
     for (const auto& slot : _modules) {
         if (slot.module->onEvent(*this, event)) {
@@ -86,6 +88,51 @@ bool App::dispatchModuleEvent(const Event& event)
         }
     }
     return false;
+}
+
+bool App::dispatchInputModuleEvent(const Event& event)
+{
+    for (const auto& slot : _modules) {
+        if (slot.module->onEvent(*this, event)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool App::dispatchInputFallbackEvent(const Event& event)
+{
+    if (event.getEventType() == EEvent::KeyReleased) {
+        const auto& keyEvent = static_cast<const KeyReleasedEvent&>(event);
+        if (keyEvent.getKeyCode() == EKey::Escape) {
+            requestQuit();
+            return true;
+        }
+    }
+
+    if (event.getEventType() == EEvent::MouseButtonReleased && _appMode == AppMode::Drawing) {
+        const auto& mouseEvent = static_cast<const MouseButtonReleasedEvent&>(event);
+        if (mouseEvent.GetMouseButton() == EMouse::Left) {
+            clicked.push_back(_lastMousePos);
+            return true;
+        }
+    }
+
+    Rect2D viewportRect = _renderState && _renderState->runtime
+                            ? _renderState->runtime->getViewportRect()
+                            : Rect2D{};
+    const bool bInViewport = FUIHelper::isPointInRect(_lastMousePos, viewportRect.pos, viewportRect.extent);
+    if (!bInViewport) {
+        return false;
+    }
+
+    UIAppCtx ctx{
+        .lastMousePos = _lastMousePos,
+        .bInViewport  = bInViewport,
+        .viewportRect = viewportRect,
+    };
+    UIManager::get()->onEvent(event, ctx);
+    return true;
 }
 
 void App::tickModules(float dt)

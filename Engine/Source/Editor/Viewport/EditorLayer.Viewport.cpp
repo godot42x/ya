@@ -159,7 +159,7 @@ void EditorLayer::viewportWindow()
 
     // Viewport context menu - right-click on blank space
     // Only show if not dragging camera (right mouse drag)
-    if (!_bRightMouseDragging)
+    if (_app && _app->isStopped() && !_bRightMouseDragging)
     {
         ContextMenu ctx("ViewportContextMenu", ContextMenu::Type::BlankSpace);
         if (ctx.begin())

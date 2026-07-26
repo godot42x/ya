@@ -70,9 +70,9 @@ local function updateMove(script, transform, dt)
     local forward = Vec3.new(
         math.sin(yaw) * cosPitch,
         -math.sin(pitch),
-        math.cos(yaw) * cosPitch
+        -math.cos(yaw) * cosPitch
     )
-    local right = Vec3.new(math.cos(yaw), 0.0, -math.sin(yaw))
+    local right = Vec3.new(math.cos(yaw), 0.0, math.sin(yaw))
     local up = Vec3.new(0.0, 1.0, 0.0)
 
     local direction = Vec3.new(0.0, 0.0, 0.0)

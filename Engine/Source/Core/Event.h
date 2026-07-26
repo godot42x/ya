@@ -366,12 +366,27 @@ class ENGINE_API MouseMoveEvent : public Event
 {
   private:
     float _mouseX, _mouseY;
+    float _mouseDeltaX = 0.0f, _mouseDeltaY = 0.0f;
 
   public:
-    MouseMoveEvent(float x, float y) : _mouseX(x), _mouseY(y) {}
+    MouseMoveEvent(float x, float y)
+        : _mouseX(x)
+        , _mouseY(y)
+    {
+    }
+
+    MouseMoveEvent(float x, float y, float deltaX, float deltaY)
+        : _mouseX(x)
+        , _mouseY(y)
+        , _mouseDeltaX(deltaX)
+        , _mouseDeltaY(deltaY)
+    {
+    }
 
     inline float getX() const { return _mouseX; }
     inline float getY() const { return _mouseY; }
+    inline float getDeltaX() const { return _mouseDeltaX; }
+    inline float getDeltaY() const { return _mouseDeltaY; }
 
     [[nodiscard]] std::string toString() const override { return std::format("MouseMovedEvent: {}, {} ", _mouseX, _mouseY); }
 

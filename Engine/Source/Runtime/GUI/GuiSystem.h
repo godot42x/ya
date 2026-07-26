@@ -27,9 +27,7 @@ class GuiSystem
 
     [[nodiscard]] EventProcessState processEvent(const Event& event);
     [[nodiscard]] FGuiInputClaim    describeInputClaim(const Event& event) const;
-    [[nodiscard]] bool              wantsInput() const;
 
-    void setBlockEvents(bool block);
     void setViewportRect(float x, float y, float width, float height);
 
     [[nodiscard]] GuiTextureHandle addTexture(IImageView* imageView,

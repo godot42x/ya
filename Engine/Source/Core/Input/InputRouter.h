@@ -12,12 +12,13 @@
 namespace ya
 {
 
+struct App;
 struct InputManager;
 using FInputEvent = Event;
 
 enum class EInputCancelReason : uint8_t
 {
-    RootChanged,
+    NodeChanged,
     CaptureReleased,
     WindowFocusLost,
     AppStateChanged,
@@ -34,65 +35,73 @@ struct FPointerCaptureRequest
 
 struct FInputReply
 {
-    bool                                 handled = false;
+    bool                                  handled = false;
     std::optional<FPointerCaptureRequest> pointerCapture;
 };
 
-struct IHostInputRoot
-{
-    virtual ~IHostInputRoot() = default;
+class InputRouter;
 
-    [[nodiscard]] virtual FInputReply route(const FInputEvent& event) = 0;
-    virtual void                     cancelInput(EInputCancelReason reason) = 0;
+struct FInputRouteContext
+{
+    App&         app;
+    InputRouter& router;
 };
 
-class GameInputRoot final : public IHostInputRoot
+struct IInputNode
+{
+    virtual ~IInputNode() = default;
+
+    [[nodiscard]] virtual FInputReply route(FInputRouteContext& context, const FInputEvent& event) = 0;
+    virtual void                     cancelInput(FInputRouteContext& context, EInputCancelReason reason) = 0;
+};
+
+class GameInputNode final : public IInputNode
 {
   private:
     InputManager* _inputManager = nullptr;
 
   public:
-    explicit GameInputRoot(InputManager& inputManager)
+    explicit GameInputNode(InputManager& inputManager)
         : _inputManager(&inputManager)
     {
     }
 
-    [[nodiscard]] FInputReply route(const FInputEvent& event) override;
-    void                     cancelInput(EInputCancelReason reason) override;
+    [[nodiscard]] FInputReply route(FInputRouteContext& context, const FInputEvent& event) override;
+    void                     cancelInput(FInputRouteContext& context, EInputCancelReason reason) override;
 };
 
 class InputRouter
 {
   public:
-    class FRootRegistration
+    class FNodeRegistration
     {
       private:
         InputRouter* _owner = nullptr;
         uint64_t     _id    = 0;
 
       public:
-        FRootRegistration() = default;
-        FRootRegistration(InputRouter* owner, uint64_t id)
+        FNodeRegistration() = default;
+        FNodeRegistration(InputRouter* owner, uint64_t id)
             : _owner(owner)
             , _id(id)
         {
         }
 
-        FRootRegistration(const FRootRegistration&)            = delete;
-        FRootRegistration& operator=(const FRootRegistration&) = delete;
+        FNodeRegistration(const FNodeRegistration&)            = delete;
+        FNodeRegistration& operator=(const FNodeRegistration&) = delete;
 
-        FRootRegistration(FRootRegistration&& other) noexcept;
-        FRootRegistration& operator=(FRootRegistration&& other) noexcept;
-        ~FRootRegistration();
+        FNodeRegistration(FNodeRegistration&& other) noexcept;
+        FNodeRegistration& operator=(FNodeRegistration&& other) noexcept;
+        ~FNodeRegistration();
 
         void reset();
     };
 
   private:
-    struct FRootEntry
+    struct FNodeEntry
     {
-        uint64_t        id   = 0;
-        IHostInputRoot* root = nullptr;
+        uint64_t    id   = 0;
+        IInputNode* node = nullptr;
     };
 
     struct FPointerCaptureState
@@ -108,35 +117,39 @@ class InputRouter
         }
     };
 
-    SDL_Window*              _window         = nullptr;
-    IHostInputRoot*          _defaultRoot    = nullptr;
-    std::vector<FRootEntry>  _rootStack;
-    FPointerCaptureState     _pointerCapture;
-    uint64_t                 _nextRootId     = 1;
+    App*                    _app         = nullptr;
+    SDL_Window*             _window      = nullptr;
+    IInputNode*             _defaultNode = nullptr;
+    std::vector<FNodeEntry> _nodeStack;
+    FPointerCaptureState    _pointerCapture;
+    uint64_t                _nextNodeId  = 1;
 
   public:
     InputRouter() = default;
 
+    void setApp(App& app) { _app = &app; }
     void setWindow(SDL_Window* window) { _window = window; }
     [[nodiscard]] SDL_Window* getWindow() const { return _window; }
 
-    void setDefaultRoot(IHostInputRoot& root);
-    [[nodiscard]] FRootRegistration registerRoot(IHostInputRoot& root);
+    void setDefaultNode(IInputNode& node);
+    [[nodiscard]] FNodeRegistration registerNode(IInputNode& node);
 
     [[nodiscard]] bool routeEvent(const FInputEvent& event);
+    [[nodiscard]] bool routeUnhandledInput(const FInputEvent& event);
     void               cancelInput(EInputCancelReason reason);
 
     [[nodiscard]] bool isMouseCaptured() const { return _pointerCapture.isCaptured(); }
 
   private:
-    friend class FRootRegistration;
+    friend class FNodeRegistration;
 
-    void unregisterRoot(uint64_t id);
+    void unregisterNode(uint64_t id);
     void applyReply(const FInputReply& reply);
     void applyPointerCapture(const FPointerCaptureRequest& request);
-    void handleRootTransition(IHostInputRoot* previousRoot, IHostInputRoot* nextRoot);
-    [[nodiscard]] IHostInputRoot* getActiveRoot() const;
-    [[nodiscard]] static SDL_Rect toSDLRect(const Rect2D& rect);
+    void handleNodeTransition(IInputNode* previousNode, IInputNode* nextNode);
+    [[nodiscard]] FInputRouteContext makeRouteContext();
+    [[nodiscard]] IInputNode*        getActiveNode() const;
+    [[nodiscard]] static SDL_Rect    toSDLRect(const Rect2D& rect);
 };
 
 } // namespace ya

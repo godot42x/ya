@@ -22,7 +22,8 @@ struct FGuiInputClaim
 
     [[nodiscard]] bool wantsEvent(const Event& event) const
     {
-        if (event.isInCategory(EEventCategory::Mouse)) {
+        if (event.isInCategory(EEventCategory::Mouse) ||
+            event.isInCategory(EEventCategory::MouseButton)) {
             return pointer;
         }
         if (event.isInCategory(EEventCategory::Keyboard)) {
@@ -47,9 +48,7 @@ struct IGuiBackend
 
     [[nodiscard]] virtual EventProcessState processEvent(const Event& event)            = 0;
     [[nodiscard]] virtual FGuiInputClaim    describeInputClaim(const Event& event) const = 0;
-    [[nodiscard]] virtual bool              wantsInput() const                          = 0;
 
-    virtual void setBlockEvents(bool block)                             = 0;
     virtual void setViewportRect(float x, float y, float width, float height) = 0;
 
     [[nodiscard]] virtual GuiTextureHandle addTexture(IImageView* imageView,

@@ -2,6 +2,7 @@
 
 #include "Core/Input/InputManager.h"
 #include "Core/Log.h"
+#include "Runtime/Application/App.h"
 
 namespace ya
 {
@@ -16,23 +17,26 @@ bool isInputEvent(const FInputEvent& event)
 
 } // namespace
 
-FInputReply GameInputRoot::route(const FInputEvent& event)
+FInputReply GameInputNode::route(FInputRouteContext& context, const FInputEvent& event)
 {
     if (_inputManager && isInputEvent(event)) {
         _inputManager->processEvent(event);
     }
-    return {};
+    return FInputReply{
+        .handled = context.router.routeUnhandledInput(event),
+    };
 }
 
-void GameInputRoot::cancelInput(EInputCancelReason reason)
+void GameInputNode::cancelInput(FInputRouteContext& context, EInputCancelReason reason)
 {
+    (void)context;
     (void)reason;
     if (_inputManager) {
         _inputManager->cancelInput();
     }
 }
 
-InputRouter::FRootRegistration::FRootRegistration(FRootRegistration&& other) noexcept
+InputRouter::FNodeRegistration::FNodeRegistration(FNodeRegistration&& other) noexcept
     : _owner(other._owner)
     , _id(other._id)
 {
@@ -40,7 +44,7 @@ InputRouter::FRootRegistration::FRootRegistration(FRootRegistration&& other) noe
     other._id    = 0;
 }
 
-InputRouter::FRootRegistration& InputRouter::FRootRegistration::operator=(FRootRegistration&& other) noexcept
+InputRouter::FNodeRegistration& InputRouter::FNodeRegistration::operator=(FNodeRegistration&& other) noexcept
 {
     if (this == &other) {
         return *this;
@@ -54,34 +58,34 @@ InputRouter::FRootRegistration& InputRouter::FRootRegistration::operator=(FRootR
     return *this;
 }
 
-InputRouter::FRootRegistration::~FRootRegistration()
+InputRouter::FNodeRegistration::~FNodeRegistration()
 {
     reset();
 }
 
-void InputRouter::FRootRegistration::reset()
+void InputRouter::FNodeRegistration::reset()
 {
     if (_owner && _id != 0) {
-        _owner->unregisterRoot(_id);
+        _owner->unregisterNode(_id);
     }
     _owner = nullptr;
     _id    = 0;
 }
 
-void InputRouter::setDefaultRoot(IHostInputRoot& root)
+void InputRouter::setDefaultNode(IInputNode& node)
 {
-    IHostInputRoot* previousRoot = getActiveRoot();
-    _defaultRoot                 = &root;
-    handleRootTransition(previousRoot, getActiveRoot());
+    IInputNode* previousNode = getActiveNode();
+    _defaultNode             = &node;
+    handleNodeTransition(previousNode, getActiveNode());
 }
 
-InputRouter::FRootRegistration InputRouter::registerRoot(IHostInputRoot& root)
+InputRouter::FNodeRegistration InputRouter::registerNode(IInputNode& node)
 {
-    const uint64_t id = _nextRootId++;
-    IHostInputRoot* previousRoot = getActiveRoot();
-    _rootStack.push_back({.id = id, .root = &root});
-    handleRootTransition(previousRoot, getActiveRoot());
-    return FRootRegistration(this, id);
+    const uint64_t id = _nextNodeId++;
+    IInputNode* previousNode = getActiveNode();
+    _nodeStack.push_back({.id = id, .node = &node});
+    handleNodeTransition(previousNode, getActiveNode());
+    return FNodeRegistration(this, id);
 }
 
 bool InputRouter::routeEvent(const FInputEvent& event)
@@ -90,37 +94,54 @@ bool InputRouter::routeEvent(const FInputEvent& event)
         return false;
     }
 
-    IHostInputRoot* root = getActiveRoot();
-    if (!root) {
+    IInputNode* node = getActiveNode();
+    if (!node || !_app) {
         return false;
     }
 
-    const FInputReply reply = root->route(event);
+    FInputRouteContext context = makeRouteContext();
+    const FInputReply  reply   = node->route(context, event);
     applyReply(reply);
     return reply.handled;
+}
+
+bool InputRouter::routeUnhandledInput(const FInputEvent& event)
+{
+    if (!_app) {
+        return false;
+    }
+
+    if (_app->dispatchInputModuleEvent(event)) {
+        return true;
+    }
+    if (_app->dispatchInputFallbackEvent(event)) {
+        return true;
+    }
+    return false;
 }
 
 void InputRouter::cancelInput(EInputCancelReason reason)
 {
     applyPointerCapture({});
 
-    if (IHostInputRoot* root = getActiveRoot()) {
-        root->cancelInput(reason);
+    if (IInputNode* node = getActiveNode(); node && _app) {
+        FInputRouteContext context = makeRouteContext();
+        node->cancelInput(context, reason);
     }
 }
 
-void InputRouter::unregisterRoot(uint64_t id)
+void InputRouter::unregisterNode(uint64_t id)
 {
-    IHostInputRoot* previousRoot = getActiveRoot();
+    IInputNode* previousNode = getActiveNode();
 
-    for (auto it = _rootStack.begin(); it != _rootStack.end(); ++it) {
+    for (auto it = _nodeStack.begin(); it != _nodeStack.end(); ++it) {
         if (it->id == id) {
-            _rootStack.erase(it);
+            _nodeStack.erase(it);
             break;
         }
     }
 
-    handleRootTransition(previousRoot, getActiveRoot());
+    handleNodeTransition(previousNode, getActiveNode());
 }
 
 void InputRouter::applyReply(const FInputReply& reply)
@@ -133,9 +154,9 @@ void InputRouter::applyReply(const FInputReply& reply)
 void InputRouter::applyPointerCapture(const FPointerCaptureRequest& request)
 {
     const FPointerCaptureState nextState{
-        .relative   = request.relative,
-        .hideCursor = request.hideCursor,
-        .confine    = request.confine,
+        .relative    = request.relative,
+        .hideCursor  = request.hideCursor,
+        .confine     = request.confine,
         .confinement = request.confine ? toSDLRect(request.confinement) : SDL_Rect{0, 0, 0, 0},
     };
 
@@ -181,31 +202,42 @@ void InputRouter::applyPointerCapture(const FPointerCaptureRequest& request)
     _pointerCapture = nextState;
 
     if (bWasCaptured && !bWillCapture) {
-        if (IHostInputRoot* root = getActiveRoot()) {
-            root->cancelInput(EInputCancelReason::CaptureReleased);
+        if (IInputNode* node = getActiveNode(); node && _app) {
+            FInputRouteContext context = makeRouteContext();
+            node->cancelInput(context, EInputCancelReason::CaptureReleased);
         }
     }
 }
 
-void InputRouter::handleRootTransition(IHostInputRoot* previousRoot, IHostInputRoot* nextRoot)
+void InputRouter::handleNodeTransition(IInputNode* previousNode, IInputNode* nextNode)
 {
-    if (previousRoot == nextRoot) {
+    if (previousNode == nextNode) {
         return;
     }
 
     applyPointerCapture({});
 
-    if (previousRoot) {
-        previousRoot->cancelInput(EInputCancelReason::RootChanged);
+    if (previousNode && _app) {
+        FInputRouteContext context = makeRouteContext();
+        previousNode->cancelInput(context, EInputCancelReason::NodeChanged);
     }
 }
 
-IHostInputRoot* InputRouter::getActiveRoot() const
+FInputRouteContext InputRouter::makeRouteContext()
 {
-    if (!_rootStack.empty()) {
-        return _rootStack.back().root;
+    YA_CORE_ASSERT(_app, "InputRouter requires a bound App before routing input");
+    return FInputRouteContext{
+        .app    = *_app,
+        .router = *this,
+    };
+}
+
+IInputNode* InputRouter::getActiveNode() const
+{
+    if (!_nodeStack.empty()) {
+        return _nodeStack.back().node;
     }
-    return _defaultRoot;
+    return _defaultNode;
 }
 
 SDL_Rect InputRouter::toSDLRect(const Rect2D& rect)

@@ -34,6 +34,7 @@ class AppLifecycle;
 class AppFrameLoop;
 class AppEventRouter;
 class AppModuleTestAccess;
+class InputRouter;
 
 enum AppMode : int
 {
@@ -48,6 +49,7 @@ struct App
     friend class AppEventRouter;
     friend class AppModuleTestAccess;
     friend class AppSceneServices;
+    friend class InputRouter;
 
   private:
     static App* _instance;
@@ -75,7 +77,7 @@ struct App
     AppState  _appState   = AppState::Stopped;
 
     InputManager inputManager;
-    GameInputRoot gameInputRoot;
+    GameInputNode gameInputNode;
     InputRouter  inputRouter;
     TaskManager  taskManager;
 
@@ -190,7 +192,9 @@ struct App
     void detachModules();
     void configureModules();
     void applyProjectDescriptor(const FProjectDescriptor& descriptor);
-    [[nodiscard]] bool dispatchModuleEvent(const Event& event);
+    [[nodiscard]] bool dispatchHostModuleEvent(const Event& event);
+    [[nodiscard]] bool dispatchInputModuleEvent(const Event& event);
+    [[nodiscard]] bool dispatchInputFallbackEvent(const Event& event);
     void tickModules(float dt);
     void prepareModulesForRender(float dt);
     void recordModuleBeforePresentation(ICommandBuffer& commandBuffer, float dt);

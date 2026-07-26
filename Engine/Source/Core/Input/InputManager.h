@@ -110,7 +110,7 @@ struct InputManager
 
     void setMouseState(EMouse::T button, KeyState state) { currentMouseStates[button] = state; }
     void setMouseState(Uint8 button, KeyState state) { setMouseState(EMouse::fromSDLMouseButton(button), state); } // from sdl defines
-    void setMousePosition(glm::vec2 position);
+    void setMousePosition(glm::vec2 position, glm::vec2 delta);
 };
 
 } // namespace ya

@@ -1,5 +1,6 @@
 #include "Core/Input/InputManager.h"
 #include "Core/Input/InputRouter.h"
+#include "Runtime/Application/App.h"
 
 #include <gtest/gtest.h>
 
@@ -8,48 +9,74 @@ namespace ya
 namespace
 {
 
-struct RecordingInputRoot final : IHostInputRoot
+struct RecordingInputNode final : IInputNode
 {
     FInputReply                      nextReply{};
     int                              routeCount  = 0;
     int                              cancelCount = 0;
     std::vector<EInputCancelReason>  cancelReasons;
 
-    [[nodiscard]] FInputReply route(const FInputEvent& event) override
+    [[nodiscard]] FInputReply route(FInputRouteContext& context, const FInputEvent& event) override
     {
+        (void)context;
         (void)event;
         ++routeCount;
         return nextReply;
     }
 
-    void cancelInput(EInputCancelReason reason) override
+    void cancelInput(FInputRouteContext& context, EInputCancelReason reason) override
     {
+        (void)context;
         ++cancelCount;
         cancelReasons.push_back(reason);
     }
 };
 
-TEST(GameInputRootTest, ForwardsEventsAndCancelsInputState)
+TEST(GameInputNodeTest, ForwardsEventsAndCancelsInputState)
 {
     InputManager inputManager;
-    GameInputRoot root(inputManager);
+    GameInputNode root(inputManager);
+    App          app;
+    InputRouter  router;
+    router.setApp(app);
+    FInputRouteContext context{.app = app, .router = router};
 
     KeyPressedEvent pressed;
     pressed._keyCode = EKey::K_W;
     pressed._mod     = 0;
 
-    root.route(pressed);
+    root.route(context, pressed);
     EXPECT_TRUE(inputManager.isKeyPressed(EKey::K_W));
 
-    root.cancelInput(EInputCancelReason::WindowFocusLost);
+    root.cancelInput(context, EInputCancelReason::WindowFocusLost);
     EXPECT_FALSE(inputManager.isKeyPressed(EKey::K_W));
+}
+
+TEST(GameInputNodeTest, ForwardsMouseDeltaFromRoutedEvents)
+{
+    InputManager inputManager;
+    GameInputNode root(inputManager);
+    App          app;
+    InputRouter  router;
+    router.setApp(app);
+    FInputRouteContext context{.app = app, .router = router};
+
+    inputManager.preUpdate();
+    root.route(context, MouseMoveEvent(100.0f, 200.0f, 7.0f, -3.0f));
+    root.route(context, MouseMoveEvent(107.0f, 197.0f, 2.0f, 5.0f));
+
+    const glm::vec2 delta = inputManager.getMouseDelta();
+    EXPECT_FLOAT_EQ(delta.x, 9.0f);
+    EXPECT_FLOAT_EQ(delta.y, 2.0f);
 }
 
 TEST(InputRouterTest, AppliesCaptureReplyAndCancelsOnRelease)
 {
-    RecordingInputRoot root;
+    RecordingInputNode root;
+    App             app;
     InputRouter router;
-    router.setDefaultRoot(root);
+    router.setApp(app);
+    router.setDefaultNode(root);
 
     root.nextReply = FInputReply{
         .handled = true,
@@ -77,28 +104,30 @@ TEST(InputRouterTest, AppliesCaptureReplyAndCancelsOnRelease)
 
 TEST(InputRouterTest, RestoresPreviousRootWhenRegistrationEnds)
 {
-    RecordingInputRoot defaultRoot;
-    RecordingInputRoot overrideRoot;
+    RecordingInputNode defaultNode;
+    RecordingInputNode overrideNode;
+    App               app;
     InputRouter        router;
-    router.setDefaultRoot(defaultRoot);
+    router.setApp(app);
+    router.setDefaultNode(defaultNode);
 
     {
-        auto registration = router.registerRoot(overrideRoot);
-        EXPECT_EQ(defaultRoot.cancelCount, 1);
+        auto registration = router.registerNode(overrideNode);
+        EXPECT_EQ(defaultNode.cancelCount, 1);
 
         MouseButtonPressedEvent pressed(EMouse::Left);
-        overrideRoot.nextReply = FInputReply{.handled = true};
+        overrideNode.nextReply = FInputReply{.handled = true};
         EXPECT_TRUE(router.routeEvent(pressed));
-        EXPECT_EQ(overrideRoot.routeCount, 1);
+        EXPECT_EQ(overrideNode.routeCount, 1);
     }
 
-    EXPECT_EQ(overrideRoot.cancelCount, 1);
-    EXPECT_EQ(overrideRoot.cancelReasons[0], EInputCancelReason::RootChanged);
+    EXPECT_EQ(overrideNode.cancelCount, 1);
+    EXPECT_EQ(overrideNode.cancelReasons[0], EInputCancelReason::NodeChanged);
 
     MouseButtonPressedEvent pressed(EMouse::Left);
-    defaultRoot.nextReply = FInputReply{.handled = true};
+    defaultNode.nextReply = FInputReply{.handled = true};
     EXPECT_TRUE(router.routeEvent(pressed));
-    EXPECT_EQ(defaultRoot.routeCount, 1);
+    EXPECT_EQ(defaultNode.routeCount, 1);
 }
 
 } // namespace

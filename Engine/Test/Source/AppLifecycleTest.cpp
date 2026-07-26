@@ -24,7 +24,7 @@ class AppModuleTestAccess
     static void detach(App& app) { app.detachModules(); }
     static void setSceneManager(App& app, SceneManager* sceneManager) { app._sceneManager = sceneManager; }
     static void setAppState(App& app, AppState state) { app._appState = state; }
-    static bool dispatchEvent(App& app, const Event& event) { return app.dispatchModuleEvent(event); }
+    static bool dispatchEvent(App& app, const Event& event) { return app.dispatchHostModuleEvent(event); }
     static void tick(App& app, float dt) { app.tickModules(dt); }
     static void prepareRender(App& app, float dt) { app.prepareModulesForRender(dt); }
     static void recordPresentation(App& app, ICommandBuffer& commandBuffer, float dt) { app.recordModulePresentation(commandBuffer, dt); }
@@ -106,6 +106,27 @@ struct RecordingAppModule final : IModule
     void onLogic(App&, float) override { calls.push_back(name + ".logic"); }
     void onBeforeRender(App&, float) override { calls.push_back(name + ".before-render"); }
     void onPresentation(App&, ICommandBuffer&, float) override { calls.push_back(name + ".presentation"); }
+};
+
+struct CountingEventModule final : IModule
+{
+    int inputEvents    = 0;
+    int nonInputEvents = 0;
+
+    bool onLoad(FModuleContext&) override { return true; }
+    bool onStart(const FEngineContext&) override { return true; }
+    void onStop() override {}
+    void onUnload() override {}
+    bool onEvent(App&, const Event& event) override
+    {
+        if (event.isInCategory(EEventCategory::Input)) {
+            ++inputEvents;
+        }
+        else {
+            ++nonInputEvents;
+        }
+        return false;
+    }
 };
 
 class AppLifecycleTest : public ::testing::Test
@@ -209,6 +230,28 @@ TEST_F(AppLifecycleTest, ModuleDispatchIsSafeWithoutModules)
     AppModuleTestAccess::prepareRender(app, 0.016f);
     PresentationTestCommandBuffer commandBuffer;
     AppModuleTestAccess::recordPresentation(app, commandBuffer, 0.016f);
+    AppModuleTestAccess::detach(app);
+}
+
+TEST_F(AppLifecycleTest, InputEventsReachModulesOnlyThroughInputRouter)
+{
+    auto module = std::make_unique<CountingEventModule>();
+    auto* raw   = module.get();
+    app.addModule(std::move(module));
+
+    AppModuleTestAccess::configure(app);
+    AppModuleTestAccess::attach(app);
+
+    MouseButtonPressedEvent mousePressed(EMouse::Left);
+    EXPECT_EQ(app.onEvent(mousePressed), 0);
+    EXPECT_EQ(raw->inputEvents, 1);
+    EXPECT_EQ(raw->nonInputEvents, 0);
+
+    WindowResizeEvent resizeEvent(1, 1280, 720);
+    EXPECT_EQ(app.onEvent(resizeEvent), 0);
+    EXPECT_EQ(raw->inputEvents, 1);
+    EXPECT_EQ(raw->nonInputEvents, 1);
+
     AppModuleTestAccess::detach(app);
 }
 

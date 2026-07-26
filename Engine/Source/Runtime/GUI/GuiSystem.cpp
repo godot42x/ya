@@ -55,16 +55,6 @@ class ImGuiBackendAdapter final : public IGuiBackend
         return ImGuiManager::get().describeInputClaim(event);
     }
 
-    [[nodiscard]] bool wantsInput() const override
-    {
-        return ImGuiManager::get().isWantInput();
-    }
-
-    void setBlockEvents(bool block) override
-    {
-        (void)block;
-    }
-
     void setViewportRect(float x, float y, float width, float height) override
     {
         ImGuiManager::get().setGizmoRect(x, y, width, height);
@@ -157,16 +147,6 @@ EventProcessState GuiSystem::processEvent(const Event& event)
 FGuiInputClaim GuiSystem::describeInputClaim(const Event& event) const
 {
     return _backend ? _backend->describeInputClaim(event) : FGuiInputClaim{};
-}
-
-bool GuiSystem::wantsInput() const
-{
-    return _backend && _backend->wantsInput();
-}
-
-void GuiSystem::setBlockEvents(bool block)
-{
-    requireBackend().setBlockEvents(block);
 }
 
 void GuiSystem::setViewportRect(float x, float y, float width, float height)

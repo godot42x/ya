@@ -128,7 +128,7 @@ void bindDefaultGameplayActions(InputManager& input)
     input.bindAction("move_right", EKey::K_D);
     input.bindAction("move_up", EKey::K_Q);
     input.bindAction("move_down", EKey::K_E);
-    input.bindAction("right_mouse", EMouse::Right);
+    input.bindAction("look", EMouse::Right);
 }
 
 } // namespace
@@ -297,7 +297,7 @@ EventProcessState InputManager::processEvent(const Event &event)
     case EEvent::MouseMoved:
     {
         const auto& e = static_cast<const MouseMoveEvent&>(event);
-        setMousePosition({e.getX(), e.getY()});
+        setMousePosition({e.getX(), e.getY()}, {e.getDeltaX(), e.getDeltaY()});
     } break;
     default:
         break;
@@ -358,9 +358,9 @@ glm::vec2 InputManager::getMouseScrollDelta() const
     return _mouseScrollDelta;
 }
 
-void InputManager::setMousePosition(glm::vec2 position)
+void InputManager::setMousePosition(glm::vec2 position, glm::vec2 delta)
 {
-    mouseDelta += position - mousePosition;
+    mouseDelta += delta;
     mousePosition = position;
 }
 
