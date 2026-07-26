@@ -219,6 +219,19 @@ void EditorLayer::viewportWindow()
                         }
                     }
                 }
+                if (ctx.menuItem("Terrain"))
+                {
+                    if (auto scene = getEditableScene())
+                    {
+                        Node* newNode = scene->createNode3D("Terrain");
+                        if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
+                            Entity* newEntity = node3D->getEntity();
+                            newEntity->addComponent<TerrainComponent>();
+                            newEntity->addComponent<PhongMaterialComponent>();
+                            setSelectedEntity(newEntity);
+                        }
+                    }
+                }
                 ctx.endMenu();
             }
 

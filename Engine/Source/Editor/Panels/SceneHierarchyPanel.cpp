@@ -13,6 +13,7 @@
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/PointLightComponent.h"
+#include "ECS/Component/Terrain/TerrainComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Scene/Node.h"
 #include "Scene/Scene.h"
@@ -149,6 +150,16 @@ void SceneHierarchyPanel::sceneTree()
                             Entity* newEntity = node3D->getEntity();
                             auto    mc        = newEntity->addComponent<StaticMeshComponent>();
                             mc->setPrimitiveGeometry(EPrimitiveGeometry::Quad);
+                            newEntity->addComponent<PhongMaterialComponent>();
+                            setSelection(newEntity);
+                        }
+                    }
+                    if (ctx.menuItem("Terrain"))
+                    {
+                        Node* newNode = _context->createNode3D("Terrain", parentNode);
+                        if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
+                            Entity* newEntity = node3D->getEntity();
+                            newEntity->addComponent<TerrainComponent>();
                             newEntity->addComponent<PhongMaterialComponent>();
                             setSelection(newEntity);
                         }

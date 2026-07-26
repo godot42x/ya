@@ -12,6 +12,7 @@
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/PointLightComponent.h"
+#include "ECS/Component/Terrain/TerrainComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
 #include "ECS/System/TransformSystem.h"

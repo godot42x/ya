@@ -17,6 +17,7 @@ void DetailsView::drawReflectedFallbackComponents(Entity& entity)
             type_index_v<ModelComponent>,
             type_index_v<StaticMeshComponent>,
             type_index_v<SkinnedMeshComponent>,
+            type_index_v<TerrainComponent>,
             type_index_v<UIComponent>,
             type_index_v<DirectionalLightComponent>,
             type_index_v<PointLightComponent>,

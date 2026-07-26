@@ -76,6 +76,9 @@ void DetailsView::drawComponents(Entity& entity)
     drawReflectedComponent<SkinnedMeshComponent>("Skinned Mesh", entity, [](SkinnedMeshComponent* mc) {
         mc->invalidate();
     });
+    drawReflectedComponent<TerrainComponent>("Terrain", entity, [](TerrainComponent* terrain) {
+        terrain->invalidate();
+    });
     drawReflectedComponent<UIComponent>("UI Component", entity, [](UIComponent* uc) {});
 
     drawReflectedComponent<DirectionalLightComponent>("Directional Light", entity, [](DirectionalLightComponent* dlc) {});

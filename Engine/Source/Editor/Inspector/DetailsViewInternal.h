@@ -21,6 +21,7 @@
 #include "ECS/Component/ModelComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/RenderComponent.h"
+#include "ECS/Component/Terrain/TerrainComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "Editor/EditorLayer.h"
