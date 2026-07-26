@@ -622,6 +622,7 @@ void AppLifecycle::stopRuntime(App& app)
     }
     const AppState previousState = app._appState;
     app._appState = AppState::Stopped;
+    app.getSceneServices().refreshActiveSceneDerivedState();
     app.notifyModulesAfterAppStateChange(previousState);
 }
 
@@ -645,6 +646,7 @@ void AppLifecycle::stopSimulation(App& app)
     }
     const AppState previousState = app._appState;
     app._appState = AppState::Stopped;
+    app.getSceneServices().refreshActiveSceneDerivedState();
     app.notifyModulesAfterAppStateChange(previousState);
 
     app.onExitSimulation();

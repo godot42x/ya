@@ -28,9 +28,13 @@ class AppSceneServices
     [[nodiscard]] Scene*        getActiveScene() const;
     [[nodiscard]] bool          hasScene() const;
 
-    bool   loadScene(const std::string& path);
-    bool   unloadScene();
-    bool   saveScene(const std::string& path);
+    bool loadScene(const std::string& path);
+    bool unloadScene();
+    bool saveScene(const std::string& path);
+
+    void refreshSceneDerivedState(Scene* scene);
+    void refreshActiveSceneDerivedState();
+
     Entity* getPrimaryCamera() const;
 };
 

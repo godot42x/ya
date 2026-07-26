@@ -5,6 +5,8 @@
 #include "Runtime/Application/Lifecycle/AppLifecycle.h"
 
 #include "Core/Log.h"
+#include "ECS/Component/3D/EnvironmentLightingComponent.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
 #include "Scene/SceneManager.h"
 
 namespace ya
@@ -60,6 +62,26 @@ bool AppSceneServices::saveScene(const std::string& path)
     }
 
     return sceneManager->serializeToFile(path, scene);
+}
+
+void AppSceneServices::refreshSceneDerivedState(Scene* scene)
+{
+    if (!scene) {
+        return;
+    }
+
+    auto& registry = scene->getRegistry();
+    registry.view<SkyboxComponent>().each([](auto, SkyboxComponent& skybox) {
+        skybox.invalidate();
+    });
+    registry.view<EnvironmentLightingComponent>().each([](auto, EnvironmentLightingComponent& environment) {
+        environment.invalidate();
+    });
+}
+
+void AppSceneServices::refreshActiveSceneDerivedState()
+{
+    refreshSceneDerivedState(getActiveScene());
 }
 
 Entity* AppSceneServices::getPrimaryCamera() const
