@@ -9,6 +9,7 @@
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/SkeletonAnimatorComponent.h"
+#include "ECS/Component/Terrain/TerrainComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Scene/Scene.h"
 #include "Runtime/Rendering/Common/Shadow/Common/DirectionalShadowMath.h"
@@ -276,6 +277,11 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
     emitTyped.template operator()<StaticMeshComponent, UnlitMaterialComponent>(staticBuckets.unlitDrawItems);
     emitTyped.template operator()<StaticMeshComponent, SimpleMaterialComponent>(staticBuckets.simpleDrawItems);
 
+    emitTyped.template operator()<TerrainComponent, PBRMaterialComponent>(staticBuckets.pbrDrawItems);
+    emitTyped.template operator()<TerrainComponent, PhongMaterialComponent>(staticBuckets.phongDrawItems);
+    emitTyped.template operator()<TerrainComponent, UnlitMaterialComponent>(staticBuckets.unlitDrawItems);
+    emitTyped.template operator()<TerrainComponent, SimpleMaterialComponent>(staticBuckets.simpleDrawItems);
+
     emitTyped.template operator()<SkinnedMeshComponent, PBRMaterialComponent>(skinnedBuckets.pbrDrawItems);
     emitTyped.template operator()<SkinnedMeshComponent, PhongMaterialComponent>(skinnedBuckets.phongDrawItems);
     emitTyped.template operator()<SkinnedMeshComponent, UnlitMaterialComponent>(skinnedBuckets.unlitDrawItems);
@@ -306,6 +312,7 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
     };
 
     emitFallback.template operator()<StaticMeshComponent>(staticBuckets.fallbackDrawItems);
+    emitFallback.template operator()<TerrainComponent>(staticBuckets.fallbackDrawItems);
     emitFallback.template operator()<SkinnedMeshComponent>(skinnedBuckets.fallbackDrawItems);
 }
 
