@@ -26,8 +26,7 @@ std::vector<uint8_t> VirtualFileSystem::loadFileToMemory(std::string_view filepa
 
 bool VirtualFileSystem::readFileToString(std::string_view filepath, std::string &output) const
 {
-    // default to project root
-    std::filesystem::path fullPath = projectRoot / filepath;
+    std::filesystem::path fullPath = translatePath(filepath);
 
     auto opt = ut::file::read_all(fullPath);
     if (!opt) {

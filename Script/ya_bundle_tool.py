@@ -20,10 +20,17 @@ ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 ENGINE_CONTENT_DIR = WORKSPACE_ROOT / "Engine/Content"
 ENGINE_SHADER_GLSL_DIR = WORKSPACE_ROOT / "Engine/Shader" / "GLSL"
 ENGINE_SHADER_SLANG_DIR = WORKSPACE_ROOT / "Engine/Shader" / "Slang"
+RUNTIME_SHADER_SOURCE_DIRS = [
+    WORKSPACE_ROOT / "Engine" / "Source" / "Render",
+    WORKSPACE_ROOT / "Engine" / "Source" / "Runtime",
+]
 ENGINE_THIRDPARTY_RESOURCE_DIRS = [
     WORKSPACE_ROOT / "Engine/ThirdParty" / "LearnOpenGL" / "resources",
     WORKSPACE_ROOT / "Engine/ThirdParty" / "Vulkan-Samples-Assets",
 ]
+SHADER_LITERAL_RE = re.compile(r'"([^"\n]+\.(?:glsl|slang))"')
+GLSL_INCLUDE_RE = re.compile(r'^\s*#include\s*[<"]([^">]+)[">]')
+SLANG_IMPORT_RE = re.compile(r'^\s*import\s+([A-Za-z0-9_.]+)\s*;')
 
 
 def _read_json(path: Path) -> dict:
@@ -337,25 +344,104 @@ def _copy_filtered_tree(source: Path, destination: Path, *, skip_dir_names: set[
         destination.mkdir(parents=True, exist_ok=True)
 
 
-def _copy_engine_runtime_resources(package_root: Path) -> None:
+def _iter_shader_scan_roots(project: ProjectDescriptor, include_editor: bool) -> list[Path]:
+    roots = list(RUNTIME_SHADER_SOURCE_DIRS)
+    if include_editor:
+        roots.append(WORKSPACE_ROOT / "Engine" / "Source" / "Editor")
+
+    project_source_dir = project.source_path.parent / "Source"
+    if project_source_dir.is_dir():
+        roots.append(project_source_dir)
+
+    return [root for root in roots if root.is_dir()]
+
+
+def _resolve_engine_shader_path(shader_name: str) -> Path | None:
+    normalized = Path(shader_name)
+    if shader_name.endswith(".glsl"):
+        candidate = (ENGINE_SHADER_GLSL_DIR / normalized).resolve()
+        return candidate if candidate.is_file() else None
+    if shader_name.endswith(".slang"):
+        candidate = (ENGINE_SHADER_SLANG_DIR / normalized).resolve()
+        return candidate if candidate.is_file() else None
+    return None
+
+
+def _collect_runtime_shader_roots(project: ProjectDescriptor, include_editor: bool) -> list[Path]:
+    roots: set[Path] = set()
+    for source_root in _iter_shader_scan_roots(project, include_editor):
+        for path in source_root.rglob("*"):
+            if not path.is_file() or path.suffix.lower() not in {".cpp", ".cc", ".cxx", ".h", ".hpp", ".inl"}:
+                continue
+            try:
+                content = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            for match in SHADER_LITERAL_RE.finditer(content):
+                shader_path = _resolve_engine_shader_path(match.group(1))
+                if shader_path is not None:
+                    roots.add(shader_path)
+    return sorted(roots)
+
+
+def _resolve_shader_dependency_path(dependency: str, owner: Path) -> Path | None:
+    owner_root = ENGINE_SHADER_GLSL_DIR if owner.suffix == ".glsl" else ENGINE_SHADER_SLANG_DIR
+    normalized_dependency = Path(dependency)
+    candidates = [
+        (owner.parent / normalized_dependency).resolve(),
+        (owner_root / normalized_dependency).resolve(),
+    ]
+    if owner.suffix == ".slang":
+        candidates.append((ENGINE_SHADER_SLANG_DIR / normalized_dependency).resolve())
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _collect_shader_dependency_closure(roots: list[Path]) -> set[Path]:
+    closure: set[Path] = set()
+    stack = list(roots)
+
+    while stack:
+        current = stack.pop()
+        if current in closure or not current.is_file():
+            continue
+        closure.add(current)
+
+        try:
+            content = current.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+
+        for line in content.splitlines():
+            include_match = GLSL_INCLUDE_RE.match(line)
+            if include_match:
+                dependency = _resolve_shader_dependency_path(include_match.group(1), current)
+                if dependency is not None and dependency not in closure:
+                    stack.append(dependency)
+                continue
+
+            if current.suffix == ".slang":
+                import_match = SLANG_IMPORT_RE.match(line)
+                if import_match:
+                    dependency_name = import_match.group(1).replace(".", "/") + ".slang"
+                    dependency = _resolve_shader_dependency_path(dependency_name, current)
+                    if dependency is not None and dependency not in closure:
+                        stack.append(dependency)
+
+    return closure
+
+
+def _copy_engine_runtime_resources(package_root: Path, project: ProjectDescriptor, include_editor: bool) -> None:
     if ENGINE_CONTENT_DIR.exists():
         _copy_tree_to(ENGINE_CONTENT_DIR, package_root / "Engine" / "Content")
 
-    if ENGINE_SHADER_GLSL_DIR.exists():
-        _copy_filtered_tree(
-            ENGINE_SHADER_GLSL_DIR,
-            package_root / "Engine" / "Shader" / "GLSL",
-            skip_dir_names={"Generated"},
-            allow_file=lambda path: path.suffix == ".glsl",
-        )
-
-    if ENGINE_SHADER_SLANG_DIR.exists():
-        _copy_filtered_tree(
-            ENGINE_SHADER_SLANG_DIR,
-            package_root / "Engine" / "Shader" / "Slang",
-            skip_dir_names={"Generated"},
-            allow_file=lambda path: path.suffix == ".slang",
-        )
+    shader_roots = _collect_runtime_shader_roots(project, include_editor)
+    shader_closure = _collect_shader_dependency_closure(shader_roots)
+    for shader_path in sorted(shader_closure):
+        destination = package_root / "Engine" / "Shader" / shader_path.relative_to(ENGINE_SHADER_GLSL_DIR.parent)
+        _copy_file(shader_path, package_root, destination)
 
     for resource_dir in ENGINE_THIRDPARTY_RESOURCE_DIRS:
         if resource_dir.exists():
@@ -379,6 +465,39 @@ def _rewrite_project_descriptor_for_package(project: ProjectDescriptor) -> dict:
             except ValueError:
                 data["defaultScene"] = resolved_default_scene.as_posix()
     return data
+
+
+def _rewrite_project_content_value(value, *, project_prefix: str):
+    if isinstance(value, str):
+        normalized = value.replace("\\", "/")
+        if normalized.startswith(project_prefix + "/"):
+            return normalized[len(project_prefix) + 1 :]
+        return value
+    if isinstance(value, list):
+        return [_rewrite_project_content_value(item, project_prefix=project_prefix) for item in value]
+    if isinstance(value, dict):
+        return {key: _rewrite_project_content_value(item, project_prefix=project_prefix) for key, item in value.items()}
+    return value
+
+
+def _rewrite_project_content_for_package(project: ProjectDescriptor, project_package_dir: Path) -> None:
+    try:
+        project_prefix = project.source_path.parent.relative_to(WORKSPACE_ROOT).as_posix()
+    except ValueError:
+        return
+
+    content_dir = project_package_dir / "Content"
+    if not content_dir.is_dir():
+        return
+
+    for path in content_dir.rglob("*.json"):
+        try:
+            data = _read_json(path)
+        except json.JSONDecodeError:
+            continue
+        rewritten = _rewrite_project_content_value(data, project_prefix=project_prefix)
+        if rewritten != data:
+            _write_json(path, rewritten)
 
 
 def _copy_project_bundle(project: ProjectDescriptor, include_editor: bool, package_root: Path) -> tuple[Path, list[ModuleManifest]]:
@@ -406,6 +525,7 @@ def _copy_project_bundle(project: ProjectDescriptor, include_editor: bool, packa
             if config_file.exists():
                 _copy_file(config_file, package_root, project_package_dir / config_file.relative_to(project_root))
 
+    _rewrite_project_content_for_package(project, project_package_dir)
     return project_package_dir, manifests
 
 
@@ -447,14 +567,42 @@ def _copy_macos_vulkan_runtime(package_root: Path, binaries_dir: Path) -> None:
         return
 
     icd_dir = sdk_dir / "share" / "vulkan" / "icd.d"
-    if icd_dir.exists():
-        _copy_tree(icd_dir, package_root)
+    sdk_package_root = package_root / "Engine" / "ThirdParty" / "VulkanSDK" / sdk_dir.parent.name / "macOS"
+    package_icd_dir = sdk_package_root / "share" / "vulkan" / "icd.d"
+    package_lib_dir = sdk_package_root / "lib"
+    package_layer_dir = sdk_package_root / "share" / "vulkan" / "explicit_layer.d"
 
-    runtime_libs = [sdk_dir / "lib" / "libMoltenVK.dylib"]
+    moltentvk_manifest = icd_dir / "MoltenVK_icd.json"
+    if moltentvk_manifest.exists():
+        _copy_file(moltentvk_manifest, package_root, package_icd_dir / moltentvk_manifest.name)
+
+    validation_manifest = sdk_dir / "share" / "vulkan" / "explicit_layer.d" / "VkLayer_khronos_validation.json"
+    if validation_manifest.exists():
+        _copy_file(validation_manifest, package_root, package_layer_dir / validation_manifest.name)
+
+    runtime_libs = [
+        sdk_dir / "lib" / "libMoltenVK.dylib",
+        sdk_dir / "lib" / "libVkLayer_khronos_validation.dylib",
+    ]
 
     for lib in sorted(set(runtime_libs)):
         if lib.exists():
-            _copy_file(lib, package_root, binaries_dir / lib.name)
+            _copy_file(lib, package_root, package_lib_dir / lib.name)
+
+    for manifest_path in package_icd_dir.glob("*.json"):
+        data = _read_json(manifest_path)
+        icd = data.get("ICD")
+        if isinstance(icd, dict) and icd.get("library_path"):
+            icd["library_path"] = "../../../lib/libMoltenVK.dylib"
+            _write_json(manifest_path, data)
+
+    if validation_manifest.exists():
+        manifest_path = package_layer_dir / validation_manifest.name
+        data = _read_json(manifest_path)
+        layer = data.get("layer")
+        if isinstance(layer, dict) and layer.get("library_path"):
+            layer["library_path"] = "../../../lib/libVkLayer_khronos_validation.dylib"
+            _write_json(manifest_path, data)
 
 
 def _read_macos_rpaths(binary: Path) -> set[str]:
@@ -503,7 +651,64 @@ def _patch_macos_runtime_layout(runtime_binary: Path,
             _ensure_macos_rpath(candidate, "@loader_path/../../Engine/Binaries")
 
 
-def create_package(project: ProjectDescriptor, include_editor: bool, output: Path) -> None:
+def _ad_hoc_sign_macos_binary(path: Path) -> None:
+    subprocess.run(
+        ["codesign", "--force", "--sign", "-", "--timestamp=none", str(path)],
+        cwd=WORKSPACE_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _ad_hoc_sign_macos_package(package_root: Path,
+                               engine_binaries_dir: Path,
+                               project_binaries_dir: Path) -> None:
+    dylibs: list[Path] = []
+    dylibs.extend(sorted(engine_binaries_dir.glob("*.dylib")))
+    dylibs.extend(sorted(project_binaries_dir.glob("*.dylib")))
+    dylibs.extend(sorted((package_root / "Engine" / "ThirdParty" / "VulkanSDK").rglob("*.dylib")))
+
+    for path in dylibs:
+        _ad_hoc_sign_macos_binary(path)
+
+    runtime_binary = package_root / _targetfile_for("ya-runtime").name
+    if runtime_binary.exists():
+        _ad_hoc_sign_macos_binary(runtime_binary)
+
+
+def _smoke_run_packaged_project(project: ProjectDescriptor, include_editor: bool, package_root: Path) -> None:
+    runtime_binary = package_root / _targetfile_for("ya-runtime").name
+    packaged_project_path = _project_package_dir(package_root, project) / project.source_path.name
+    cmd = [
+        str(runtime_binary),
+        f"--ya-project={packaged_project_path.relative_to(package_root).as_posix()}",
+        "--exit-after-frame=1",
+        "--log-level=warn",
+        "--log-detail-level=error",
+    ]
+    if include_editor:
+        cmd.append("--editor")
+
+    result = subprocess.run(
+        cmd,
+        cwd=package_root,
+        text=True,
+        capture_output=True,
+        timeout=60,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "Packaged runtime smoke failed:\n"
+            f"cwd: {package_root}\n"
+            f"cmd: {' '.join(cmd)}\n"
+            f"exit: {result.returncode}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+
+def create_package(project: ProjectDescriptor, include_editor: bool, output: Path, smoke_run: bool = False) -> None:
     package_root = output.resolve()
     if package_root.exists():
         _prepare_tree_for_removal(package_root)
@@ -514,7 +719,7 @@ def create_package(project: ProjectDescriptor, include_editor: bool, output: Pat
     engine_binaries_dir.mkdir(parents=True, exist_ok=True)
     project_binaries_dir.mkdir(parents=True, exist_ok=True)
 
-    _copy_engine_runtime_resources(package_root)
+    _copy_engine_runtime_resources(package_root, project, include_editor)
     project_package_dir, manifests = _copy_project_bundle(project, include_editor, package_root)
     if include_editor:
         _copy_editor_plugin_bundle(package_root)
@@ -550,6 +755,7 @@ def create_package(project: ProjectDescriptor, include_editor: bool, output: Pat
             engine_binaries_dir,
             project_binaries_dir,
         )
+        _ad_hoc_sign_macos_package(package_root, engine_binaries_dir, project_binaries_dir)
 
     verify_package_contents(
         project,
@@ -559,6 +765,8 @@ def create_package(project: ProjectDescriptor, include_editor: bool, output: Pat
         engine_binaries_dir,
         project_binaries_dir,
     )
+    if smoke_run:
+        _smoke_run_packaged_project(project, include_editor, package_root)
 
 
 def verify_package_contents(project: ProjectDescriptor,
@@ -624,6 +832,7 @@ def main() -> int:
     package_parser.add_argument("--project", required=True, type=Path)
     package_parser.add_argument("--editor", action="store_true")
     package_parser.add_argument("--output", required=True, type=Path)
+    package_parser.add_argument("--smoke-run", action="store_true")
 
     args = parser.parse_args()
     project = load_project_descriptor((WORKSPACE_ROOT / args.project).resolve() if not args.project.is_absolute() else args.project.resolve())
@@ -635,7 +844,7 @@ def main() -> int:
 
     if args.command == "package":
         output = (WORKSPACE_ROOT / args.output).resolve() if not args.output.is_absolute() else args.output.resolve()
-        create_package(project, args.editor, output)
+        create_package(project, args.editor, output, smoke_run=args.smoke_run)
         print(output)
         return 0
 

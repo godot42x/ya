@@ -144,8 +144,17 @@ struct VirtualFileSystem
 
         auto index = normalizedPath.find_first_of(":");
         if (index == std::string::npos) {
-
-            return projectRoot / normalizedPath;
+            const auto relativePath = stdpath(normalizedPath);
+            if (!gameRoot.empty()) {
+                if (normalizedPath == "Content" || normalizedPath.starts_with("Content/")) {
+                    return gameRoot / relativePath;
+                }
+                const auto gamePath = gameRoot / relativePath;
+                if (std::filesystem::exists(gamePath)) {
+                    return gamePath;
+                }
+            }
+            return projectRoot / relativePath;
         }
 
         auto mountName    = std::string_view(normalizedPath).substr(0, index);

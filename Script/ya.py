@@ -299,6 +299,8 @@ def cmd_package(args: argparse.Namespace) -> None:
     ]
     if args.editor:
         cmd.append("--editor")
+    if args.smoke_run:
+        cmd.append("--smoke-run")
     _run(cmd)
 
 
@@ -375,6 +377,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common_build_flags(package)
     package.add_argument("--editor", action="store_true", help="Also package editor-side modules.")
     package.add_argument("--output", help="Package output directory.")
+    package.add_argument("--smoke-run", action="store_true", help="Run the packaged runtime once after bundling.")
     package.set_defaults(func=cmd_package)
 
     test = subparsers.add_parser("test", help="Build and run a GoogleTest target.")

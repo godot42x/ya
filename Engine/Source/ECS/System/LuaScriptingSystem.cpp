@@ -88,6 +88,13 @@ void LuaScriptingSystem::init()
     _lua["IS_EDITOR"]  = false;
     _lua["IS_RUNTIME"] = true;
 
+    std::string projectScriptRoot;
+    if (const auto gameRoot = VirtualFileSystem::get()->getGameRoot(); !gameRoot.empty()) {
+        projectScriptRoot = (gameRoot / "Content" / "Scripts").lexically_normal().string();
+        std::replace(projectScriptRoot.begin(), projectScriptRoot.end(), '\\', '/');
+    }
+    _lua["YA_PROJECT_SCRIPT_ROOT"] = projectScriptRoot;
+
     // 配置 Lua 模块搜索路径（支持 require）
     // 添加 Engine/Content/Lua 和项目脚本目录到搜索路径
     _lua.script(R"(
@@ -98,6 +105,12 @@ void LuaScriptingSystem::init()
         -- 添加项目脚本路径（相对于工作目录）
         package.path = package.path .. ';./Content/Scripts/?.lua'
         package.path = package.path .. ';./Content/Scripts/?/init.lua'
+
+        -- 添加当前项目脚本路径（打包后/非工作区路径）
+        if YA_PROJECT_SCRIPT_ROOT ~= nil and YA_PROJECT_SCRIPT_ROOT ~= '' then
+            package.path = package.path .. ';' .. YA_PROJECT_SCRIPT_ROOT .. '/?.lua'
+            package.path = package.path .. ';' .. YA_PROJECT_SCRIPT_ROOT .. '/?/init.lua'
+        end
         
         print('[Lua] Package search paths configured:')
         print(package.path)
