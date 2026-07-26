@@ -217,7 +217,7 @@ do
     set_kind("shared")
     local bEnableUnity = get_config("ya_enable_unity-build")
     if  bEnableUnity then
-        add_rules("c++.unity_build", { batchsize = 2 })
+        add_rules("c++.unity_build", { batchsize = 3 })
     end
     add_files("./Source/Editor/**.cpp")
     add_deps("ya-engine")

@@ -7,7 +7,9 @@
       "Read(//tmp/**)",
       "Bash(printf:*)",
       "Bash(xargs grep:*)",
-      "Bash(grep -E \"\\\\.\\(h|cpp\\)$\")"
+      "Bash(grep -E \"\\\\.\\(h|cpp\\)$\")",
+      "Bash(make -j8)",
+      "Bash(uv run *)"
     ]
   }
 }
