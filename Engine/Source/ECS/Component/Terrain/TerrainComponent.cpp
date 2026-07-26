@@ -1,5 +1,7 @@
 #include "ECS/Component/Terrain/TerrainComponent.h"
 
+#include "Resource/DeferredDeletionQueue.h"
+
 namespace ya
 {
 
@@ -19,13 +21,19 @@ bool TerrainComponent::needsResolve() const
            _resolveState == ETerrainResolveState::LoadingHeightMap;
 }
 
-void TerrainComponent::invalidate()
+void TerrainComponent::invalidate(uint64_t rebuildNotBeforeFrame)
 {
     ++_authoringVersion;
     _heightMapRef.invalidate();
-    _runtimeMesh.reset();
+    _rebuildNotBeforeFrame = rebuildNotBeforeFrame;
+    if (hasHeightMap()) {
+        _resolveState = ETerrainResolveState::Dirty;
+        return;
+    }
+
+    retireRuntimeMesh();
     _pendingHeightMapHandle = 0;
-    _resolveState = hasHeightMap() ? ETerrainResolveState::Dirty : ETerrainResolveState::Empty;
+    _resolveState = ETerrainResolveState::Empty;
 }
 
 void TerrainComponent::markLoading(AssetManager::TextureBatchMemoryHandle handle)
@@ -36,16 +44,18 @@ void TerrainComponent::markLoading(AssetManager::TextureBatchMemoryHandle handle
 
 void TerrainComponent::markFailed()
 {
-    _runtimeMesh.reset();
+    retireRuntimeMesh();
     _pendingHeightMapHandle = 0;
     _resolveState           = ETerrainResolveState::Failed;
 }
 
 void TerrainComponent::setRuntimeMesh(stdptr<Mesh> mesh, uint64_t heightMapVersion)
 {
+    retireRuntimeMesh();
     _runtimeMesh               = std::move(mesh);
     _lastBuiltHeightMapVersion = heightMapVersion;
     _pendingHeightMapHandle    = 0;
+    _rebuildNotBeforeFrame     = 0;
     _resolveState              = _runtimeMesh ? ETerrainResolveState::Ready : ETerrainResolveState::Failed;
 }
 
@@ -60,6 +70,14 @@ void TerrainComponent::setupCallbacks()
     _heightMapRef.onModified.addLambda(this, [this]() {
         invalidate();
     });
+}
+
+void TerrainComponent::retireRuntimeMesh()
+{
+    if (!_runtimeMesh) {
+        return;
+    }
+    DeferredDeletionQueue::get().retireResource(std::move(_runtimeMesh));
 }
 
 } // namespace ya

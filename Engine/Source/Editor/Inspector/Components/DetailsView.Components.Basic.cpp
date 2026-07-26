@@ -76,8 +76,10 @@ void DetailsView::drawComponents(Entity& entity)
     drawReflectedComponent<SkinnedMeshComponent>("Skinned Mesh", entity, [](SkinnedMeshComponent* mc) {
         mc->invalidate();
     });
-    drawReflectedComponent<TerrainComponent>("Terrain", entity, [](TerrainComponent* terrain) {
-        terrain->invalidate();
+    drawReflectedComponent<TerrainComponent>("Terrain", entity, [](TerrainComponent* terrain, const ya::RenderContext& ctx) {
+        if (ctx.hasModifications()) {
+            terrain->invalidate(App::currentFrameIndex() + 8);
+        }
     });
     drawReflectedComponent<UIComponent>("UI Component", entity, [](UIComponent* uc) {});
 

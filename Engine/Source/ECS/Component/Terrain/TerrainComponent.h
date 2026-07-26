@@ -25,7 +25,7 @@ struct TerrainComponent : public IComponent
     YA_REFLECT_BEGIN(TerrainComponent, IComponent)
     YA_REFLECT_FIELD(_heightMapRef)
     YA_REFLECT_FIELD(_size)
-    YA_REFLECT_FIELD(_heightScale, .manipulate(-1024.0f, 1024.0f))
+    YA_REFLECT_FIELD(_heightScale)
     YA_REFLECT_FIELD(_heightOffset, .manipulate(-1024.0f, 1024.0f))
     YA_REFLECT_FIELD(_gridResolution, .manipulate(2, 1024))
     YA_REFLECT_END()
@@ -41,13 +41,14 @@ struct TerrainComponent : public IComponent
     TerrainComponent();
 
     [[nodiscard]] bool hasHeightMap() const { return _heightMapRef.hasPath(); }
-    [[nodiscard]] bool isResolved() const { return _resolveState == ETerrainResolveState::Ready && _runtimeMesh != nullptr; }
+    [[nodiscard]] bool isResolved() const { return _runtimeMesh != nullptr; }
     [[nodiscard]] bool needsResolve() const;
     [[nodiscard]] Mesh* getMesh() const { return _runtimeMesh.get(); }
     [[nodiscard]] uint64_t getLastBuiltHeightMapVersion() const { return _lastBuiltHeightMapVersion; }
     [[nodiscard]] uint64_t getAuthoringVersion() const { return _authoringVersion; }
+    [[nodiscard]] uint64_t getRebuildNotBeforeFrame() const { return _rebuildNotBeforeFrame; }
 
-    void invalidate();
+    void invalidate(uint64_t rebuildNotBeforeFrame = 0);
     void markLoading(AssetManager::TextureBatchMemoryHandle handle);
     void markFailed();
     void setRuntimeMesh(stdptr<Mesh> mesh, uint64_t heightMapVersion);
@@ -58,11 +59,13 @@ struct TerrainComponent : public IComponent
 
   private:
     void setupCallbacks();
+    void retireRuntimeMesh();
 
     stdptr<Mesh>                            _runtimeMesh;
     AssetManager::TextureBatchMemoryHandle _pendingHeightMapHandle     = 0;
     uint64_t                               _lastBuiltHeightMapVersion  = 0;
     uint64_t                               _authoringVersion           = 1;
+    uint64_t                               _rebuildNotBeforeFrame      = 0;
 };
 
 } // namespace ya

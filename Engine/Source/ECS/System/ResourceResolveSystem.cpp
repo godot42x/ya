@@ -199,7 +199,14 @@ void ResourceResolveSystem::resolvePendingTerrain(Scene* scene)
     registry.view<TerrainComponent>().each([&](auto entity, TerrainComponent& terrain) {
         (void)entity;
 
+        const uint64_t currentFrame = App::currentFrameIndex();
+
+        if (terrain.getRebuildNotBeforeFrame() > currentFrame) {
+            return;
+        }
+
         if (!terrain.hasHeightMap()) {
+            terrain.invalidate();
             return;
         }
 
@@ -234,6 +241,11 @@ void ResourceResolveSystem::resolvePendingTerrain(Scene* scene)
         }
 
         const auto& texture = batchMemory.textures.front();
+        if (AssetManager::normalizeAssetPath(texture.filepath) != AssetManager::normalizeAssetPath(terrain._heightMapRef.getPath())) {
+            terrain.invalidate();
+            return;
+        }
+
         auto heights = extractTerrainHeights(texture);
         if (heights.empty()) {
             YA_CORE_WARN("Terrain height map has unsupported payload: {}", terrain._heightMapRef.getPath());
