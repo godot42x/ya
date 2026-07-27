@@ -86,11 +86,14 @@ void Instrumentor::EndSessionInternal()
 
         // 打印可点击的链接
         auto absPath = std::filesystem::absolute(_outputPath);
-        auto pathStr = absPath.string();
 
-        // 转换为 URL 编码的路径 (替换反斜杠)
-        std::string urlPath = pathStr;
-        std::replace(urlPath.begin(), urlPath.end(), '\\', '/');
+        // 重定向 latest profile
+        auto latestPath = absPath.parent_path() / "profile-latest.speedscope.json";
+        std::filesystem::copy_file(absPath,
+            latestPath,
+                                   std::filesystem::copy_options::overwrite_existing);
+
+        auto pathStr = latestPath.string();
 
         YA_CORE_INFO("Instrumentor: Session '{}' ended, wrote to '{}'", m_SessionName, pathStr);
         YA_CORE_INFO("========================================");

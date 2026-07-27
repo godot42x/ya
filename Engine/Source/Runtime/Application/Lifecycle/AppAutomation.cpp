@@ -1,7 +1,10 @@
 #include "Runtime/Application/Lifecycle/AppAutomation.h"
 
+#include "Runtime/Rendering/Forward/ForwardRenderPipeline.h"
 #include "Runtime/Application/App.h"
+#include "Runtime/Rendering/Common/PostProcessingStage.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowSettingsConfig.h"
+#include "Runtime/Rendering/Deferred/DeferredRenderPipeline.h"
 #include "Runtime/Rendering/RenderRuntime.h"
 #include "Runtime/Application/Utility/AppScreenshotCapture.h"
 #include "Runtime/Application/Utility/OffscreenJobRunner.h"

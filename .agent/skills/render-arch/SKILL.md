@@ -34,6 +34,13 @@ description: YA Engine 渲染架构、RenderRuntime 边界与 shader 生成链�
 - `cpp-style`：需要收敛类边界、生命周期、最小改动时一起看
 - `debug-review`：做 Vulkan 问题复盘或提交前自检时一起看
 
+## Windows DLL Boundary
+
+1. Windows 下若某个库包含单例、全局状态、registry、延迟初始化队列或 UI context，不要让多个 DLL 各自静态持有一份。
+2. 这类库要么集中到唯一 shared owner，要么由 engine API 做边界封装。
+3. 宏/模板注册允许多模块执行，但注册目标必须共享，且注册 API 要幂等。
+4. 具体案例与排查单见 `./windows-dll-boundary.md` 与 `../../memories/windows_dll_boundary.md`。
+
 ## 决策原则
 
 1. 公共能力先落抽象层，再按后端补实现。

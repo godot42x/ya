@@ -30,7 +30,7 @@ extern void refMStartMSVC();
  * 2. 可选：使用 YA_PROFILE_STATIC_INIT 宏标记慢变量
  */
 
-class StaticInitProfiler
+class ENGINE_API StaticInitProfiler
 {
   public:
     // MSVC: 使用单独的 .cpp 文件来确保起始标记翻译单元被链接进来。
@@ -109,7 +109,7 @@ class StaticInitProfiler
  * }();
  * ```
  */
-class StaticInitTimer
+class ENGINE_API StaticInitTimer
 {
   public:
     explicit StaticInitTimer(const std::string &varName);

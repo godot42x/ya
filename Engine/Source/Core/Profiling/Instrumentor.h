@@ -89,7 +89,7 @@ struct ProfilerConfig
  * The output JSON conforms to the speedscope file format specification:
  * https://github.com/jlfwong/speedscope/wiki/Importing-from-custom-sources
  */
-struct Instrumentor
+struct ENGINE_API Instrumentor
 {
   private:
     // Session state

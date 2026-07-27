@@ -2,52 +2,12 @@
     "entities": [
         {
             "components": {
-                "CameraComponent": {
-                    "_aspectRatio": 1.316629,
-                    "_distance": 6.0,
-                    "_farClip": 1000.0,
-                    "_fixedAspectRatio": false,
-                    "_focusPoint": [
-                        0.0,
-                        0.0,
-                        0.0
-                    ],
-                    "_fov": 45.0,
-                    "_nearClip": 0.1,
-                    "bPrimary": true
-                },
-                "LuaScriptComponent": {
-                    "scripts": [
-                        {
-                            "enabled": true,
-                            "scriptPath": "Example/HelloMaterial/Content/Scripts/PlayerCamera.lua"
-                        }
-                    ]
-                },
-                "TransformComponent": {
-                    "_position": [
-                        0.0,
-                        1.6,
-                        8.0
-                    ],
-                    "_rotation": [
-                        0.0,
-                        180.0,
-                        0.0
-                    ],
-                    "_scale": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ]
-                }
-            },
-            "id": 18446744073709551,
-            "name": "Player"
-        },
-        {
-            "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -193,6 +153,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -352,6 +317,11 @@
                     "_useEmbeddedMaterials": true
                 },
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -490,6 +460,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -650,6 +625,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -868,7 +848,7 @@
                     "_skeletonIndex": 0,
                     "_sourceModelPath": "Engine/ThirdParty/LearnOpenGL/resources/objects/vampire/dancing_vampire.dae",
                     "_speed": 1.0,
-                    "_time": 488128.084232
+                    "_time": 125681.114322
                 },
                 "TransformComponent": {
                     "_position": [
@@ -894,6 +874,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -1054,6 +1039,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -1199,6 +1189,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -1344,6 +1339,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -1552,6 +1552,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -1712,6 +1717,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -1857,6 +1867,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -2002,6 +2017,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -2147,6 +2167,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -2307,6 +2332,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -2452,6 +2482,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -2612,6 +2647,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -2772,6 +2812,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -2932,6 +2977,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -3092,6 +3142,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -3252,6 +3307,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -3412,6 +3472,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -3572,6 +3637,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -3717,6 +3787,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -3862,6 +3937,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -4022,6 +4102,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -4182,6 +4267,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -4342,6 +4432,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -4502,6 +4597,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -4662,6 +4762,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -4822,6 +4927,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -4970,8 +5080,8 @@
                 "TransformComponent": {
                     "_position": [
                         0.0,
-                        -2.845034,
-                        0.0
+                        -8.648003,
+                        2.430655
                     ],
                     "_rotation": [
                         0.0,
@@ -4991,6 +5101,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -5179,6 +5294,11 @@
                     ]
                 },
                 "UnlitMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::UnlitMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_baseColor0Slot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -5246,6 +5366,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -5449,6 +5574,11 @@
                     ]
                 },
                 "UnlitMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::UnlitMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_baseColor0Slot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -5516,6 +5646,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -5661,6 +5796,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -5821,6 +5961,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -5981,6 +6126,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -6142,6 +6292,11 @@
             "components": {
                 "MirrorComponent": null,
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -6287,6 +6442,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -6490,6 +6650,11 @@
                     ]
                 },
                 "UnlitMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::UnlitMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_baseColor0Slot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -6557,6 +6722,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -6717,6 +6887,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -6862,6 +7037,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -7007,6 +7187,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -7167,6 +7352,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -7327,6 +7517,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -7487,6 +7682,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -7721,6 +7921,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -7866,6 +8071,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -8026,6 +8236,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -8186,6 +8401,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -8331,6 +8551,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -8476,6 +8701,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -8636,6 +8866,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -8796,6 +9031,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -8941,6 +9181,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -9086,6 +9331,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -9246,6 +9496,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -9391,6 +9646,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -9604,6 +9864,11 @@
                     ]
                 },
                 "UnlitMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::UnlitMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_baseColor0Slot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -9671,6 +9936,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -9831,6 +10101,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -9998,8 +10273,8 @@
                 },
                 "TransformComponent": {
                     "_position": [
-                        0.0,
-                        0.0,
+                        4.032334,
+                        10.134279,
                         0.0
                     ],
                     "_rotation": [
@@ -10020,6 +10295,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -10180,6 +10460,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -10344,6 +10629,11 @@
                     "intensity": 1.0
                 },
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -10489,6 +10779,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -10649,6 +10944,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -10809,6 +11109,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -11012,6 +11317,11 @@
                     ]
                 },
                 "UnlitMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::UnlitMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_baseColor0Slot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -11079,6 +11389,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -11239,6 +11554,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -11399,6 +11719,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -11544,6 +11869,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -11704,6 +12034,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -11864,6 +12199,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -12024,6 +12364,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -12184,6 +12529,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -12329,6 +12679,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -12474,6 +12829,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -12634,6 +12994,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -12794,6 +13159,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -12954,6 +13324,11 @@
         {
             "components": {
                 "PhongMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_diffuseSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -13099,6 +13474,11 @@
         {
             "components": {
                 "PBRMaterialComponent": {
+                    "__base__": {
+                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
                     "_albedoSlot": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -13261,12 +13641,12 @@
     "nodeTree": {
         "children": [
             {
-                "entityRef": 18446744073709551,
-                "name": "Player"
-            },
-            {
                 "entityRef": 14886455398585154065,
                 "name": "Environment Lighting"
+            },
+            {
+                "entityRef": 7548853007100660369,
+                "name": "Terrain"
             },
             {
                 "entityRef": 2216115674986966606,
@@ -13306,10 +13686,6 @@
             {
                 "entityRef": 13027127020140117177,
                 "name": "Wall"
-            },
-            {
-                "entityRef": 7548853007100660369,
-                "name": "Terrain"
             },
             {
                 "entityRef": 15448121488741696493,

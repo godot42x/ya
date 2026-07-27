@@ -135,14 +135,15 @@ class EditorViewportCompositor
                 },
                 .layerCount = 1,
                 .colors     = {
+
                     RenderAttachment{
-                            .image         = _composedViewportImage->getImage(),
-                            .imageView     = _composedViewportImage->getImageView(),
-                            .loadOp        = EAttachmentLoadOp::Clear,
-                            .storeOp       = EAttachmentStoreOp::Store,
-                            .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                            .finalLayout   = EImageLayout::ColorAttachmentOptimal,
-                            .clearValue    = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
+                        .image         = _composedViewportImage->getImage(),
+                        .imageView     = _composedViewportImage->getImageView(),
+                        .loadOp        = EAttachmentLoadOp::Clear,
+                        .storeOp       = EAttachmentStoreOp::Store,
+                        .clearValue    = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
+                        .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                        .finalLayout   = EImageLayout::ColorAttachmentOptimal,
                     },
                 },
             },
