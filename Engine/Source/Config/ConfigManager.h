@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Api.h"
 #include "Core/Trait.h"
 
 #include <nlohmann/json.hpp>
@@ -22,7 +23,7 @@ struct OpenDocumentOptions
 };
 } // namespace Config
 
-struct ConfigManager : public disable_copy
+struct ENGINE_API ConfigManager : public disable_copy
 {
     struct Document
     {

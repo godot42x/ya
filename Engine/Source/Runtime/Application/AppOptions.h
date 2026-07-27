@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Api.h"
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
 #include "Render/Shadow/ShadowSettings.h"
@@ -115,7 +116,7 @@ struct AppAutomationOptions
                                                        PostProcessingState::EToneMappingCurve& outValue);
 [[nodiscard]] bool tryParseLogLevel(const std::string& text, logcc::LogLevel::T& outValue);
 
-struct AppDesc
+struct ENGINE_API AppDesc
 {
     CliParams params = CliParams("Yet Another Game Engine", "Command line options");
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/Api.h"
+
 #include <cstdint>
 #include <string>
 
@@ -113,32 +115,32 @@ struct RuntimeSessionPaths
     return getCompileMode() == ECompileMode::Enabled;
 }
 
-[[nodiscard]] const char* getCompileModeLabel();
+ENGINE_API [[nodiscard]] const char* getCompileModeLabel();
 
-[[nodiscard]] RuntimeState getRuntimeState();
-void setRuntimeState(const RuntimeState& state);
+ENGINE_API [[nodiscard]] RuntimeState getRuntimeState();
+ENGINE_API void setRuntimeState(const RuntimeState& state);
 
-[[nodiscard]] bool isCpuTraceEnabled();
-void setCpuTraceEnabled(bool enabled);
+ENGINE_API [[nodiscard]] bool isCpuTraceEnabled();
+ENGINE_API void setCpuTraceEnabled(bool enabled);
 
-[[nodiscard]] bool isPerfMetricsEnabled();
-void setPerfMetricsEnabled(bool enabled);
+ENGINE_API [[nodiscard]] bool isPerfMetricsEnabled();
+ENGINE_API void setPerfMetricsEnabled(bool enabled);
 
-[[nodiscard]] bool isStaticInitEnabled();
-void setStaticInitEnabled(bool enabled);
+ENGINE_API [[nodiscard]] bool isStaticInitEnabled();
+ENGINE_API void setStaticInitEnabled(bool enabled);
 
-void beginRuntimeSession(const AppDesc& appDesc);
-void endRuntimeSession();
+ENGINE_API void beginRuntimeSession(const AppDesc& appDesc);
+ENGINE_API void endRuntimeSession();
 
-void applyAppOverrides(AppDesc& appDesc);
+ENGINE_API void applyAppOverrides(AppDesc& appDesc);
 
-[[nodiscard]] RuntimeSessionPaths getRuntimeSessionPaths();
-void setGpuCapturePath(std::string path);
-void setPassSummaryPath(std::string path);
-void setScreenshotPath(std::string path);
-void flushRuntimeArtifacts();
+ENGINE_API [[nodiscard]] RuntimeSessionPaths getRuntimeSessionPaths();
+ENGINE_API void setGpuCapturePath(std::string path);
+ENGINE_API void setPassSummaryPath(std::string path);
+ENGINE_API void setScreenshotPath(std::string path);
+ENGINE_API void flushRuntimeArtifacts();
 
-Instrumentor& cpuTrace();
-PerfState&    metrics();
+ENGINE_API Instrumentor& cpuTrace();
+ENGINE_API PerfState&    metrics();
 
 } // namespace ya::profiling

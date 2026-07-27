@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/Api.h"
+
 #include <nlohmann/json.hpp>
 #include <string>
 
@@ -18,7 +20,7 @@ namespace ya
  *   - The .ya-meta.json only *describes* how to load it.
  *   - Editing the meta triggers hot-reload of the affected resource.
  */
-struct AssetMeta
+struct ENGINE_API AssetMeta
 {
     /// Asset type tag: "texture", "model", "shader", ...
     std::string type;

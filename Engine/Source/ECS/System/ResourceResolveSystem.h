@@ -132,7 +132,7 @@ struct EnvironmentLightingSceneResources
 };
 
 
-struct ResourceResolveSystem : public ISystem
+struct ENGINE_API ResourceResolveSystem : public ISystem
 {
 
   private:

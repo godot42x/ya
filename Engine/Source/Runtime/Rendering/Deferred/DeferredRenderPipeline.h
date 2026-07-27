@@ -80,7 +80,7 @@ struct DeferredRenderInitDesc
     std::function<ResourceResolveSystem*()> getResourceResolveSystem;
 };
 
-struct DeferredRenderPipeline : public IRenderPipeline
+struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
 {
     friend class DeferredRenderPipelineTestAccess;
 

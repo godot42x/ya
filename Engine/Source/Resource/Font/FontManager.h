@@ -166,7 +166,7 @@ struct Font
     }
 };
 
-struct FontManager : public IResourceCache
+struct ENGINE_API FontManager : public IResourceCache
 {
 
   private:

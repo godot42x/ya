@@ -58,7 +58,7 @@ struct FRender2dContext
 };
 
 
-struct FQuadRender
+struct ENGINE_API FQuadRender
 {
     struct Vertex
     {
@@ -253,7 +253,7 @@ struct FQuadRender
 
 
 // MARK: Render2D
-struct Render2D
+struct ENGINE_API Render2D
 {
 
     static FQuadRender*  quadData;

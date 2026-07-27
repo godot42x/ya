@@ -1,4 +1,5 @@
 #pragma once
+#include "Core/Api.h"
 #include "CameraController.h"
 #include "Core/Camera/Camera.h"
 #include "Core/Input/InputManager.h"
@@ -12,7 +13,7 @@ namespace ya
 {
 
 
-struct FreeCameraController : public CameraController
+struct ENGINE_API FreeCameraController : public CameraController
 {
     float _moveSpeed     = 5.0f;  // Units per second
     float _rotationSpeed = 45.0f; // Degrees per mouse unit

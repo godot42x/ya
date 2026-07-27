@@ -38,7 +38,7 @@ namespace ya
  * Holds PBR parameters and texture slots for serialization.
  * Runtime material instance is managed separately via MaterialFactory.
  */
-struct PBRMaterialComponent : public MaterialComponent<PBRMaterial>
+struct ENGINE_API PBRMaterialComponent : public MaterialComponent<PBRMaterial>
 {
     struct AuthoringParams
     {

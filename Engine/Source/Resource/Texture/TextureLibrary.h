@@ -25,7 +25,7 @@ struct IRender;
  *   TextureLibrary::get().init();
  *   auto whiteTexture = TextureLibrary::get().getWhiteTexture();
  */
-class TextureLibrary : public IResourceCache
+class ENGINE_API TextureLibrary : public IResourceCache
 {
   public:
     static TextureLibrary &get();

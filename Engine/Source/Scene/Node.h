@@ -24,7 +24,7 @@ struct TransformComponent;
  * - Use Node for pure organizational hierarchy
  * - Use Node3D for nodes that need transform and ECS integration
  */
-struct Node : public disable_copy
+struct ENGINE_API Node : public disable_copy
 {
     YA_REFLECT_BEGIN(Node)
     YA_REFLECT_END()

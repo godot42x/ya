@@ -23,7 +23,7 @@ class AssetTextureManager;
 
 // Asset type taxonomy is defined once by EAssetType (Core/Common/AssetRef.h).
 
-class AssetManager : public IResourceCache
+class ENGINE_API AssetManager : public IResourceCache
 {
   public:
     using TextureBatchMemoryHandle      = AssetTextureBatchMemoryHandle;

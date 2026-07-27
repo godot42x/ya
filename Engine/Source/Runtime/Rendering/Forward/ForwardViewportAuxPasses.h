@@ -23,7 +23,7 @@ class IDescriptorPool;
 class IRenderPass;
 class IRender;
 
-class ForwardViewportAuxPasses
+class ENGINE_API ForwardViewportAuxPasses
 {
   public:
     struct SimplePC

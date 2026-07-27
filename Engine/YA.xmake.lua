@@ -107,6 +107,8 @@ end
 target("ya-engine")
 do
     set_kind("shared")
+    add_defines("BUILD_LIBRARY=1")
+    add_defines("BUILD_SHARED_YA=1", { public = true })
     before_build(function(target)
         check_runtime_source_isolation()
     end)
@@ -138,6 +140,7 @@ do
     add_files("./Source/Implementaion/VulkanMemoryAllocator.cpp", { unity_ignored = true })
     add_files("./Source/Implementaion/STB.cpp", { unity_ignored = true })
     add_files("./Source/Implementaion/TinyGLTF.cpp", { unity_ignored = true })
+    add_files("./ThirdParty/ImGui/imgui_demo.cpp", { unity_ignored = true })
 
     add_headerfiles("./Source/**.h")
     set_pcheader("./Source//FWD.h")
@@ -150,9 +153,15 @@ do
 
     add_deps("utility.cc")
     add_deps("log.cc")
-    add_deps("reflects-core")
+    add_deps("reflects-core", { public = true })
     add_deps("imgui-local")
     add_deps("imguizmo-local")
+
+    if is_plat("windows") then
+        add_defines("IMGUI_API=__declspec(dllexport)")
+        add_defines("IMGUI_IMPL_API=__declspec(dllexport)")
+        add_defines("USE_IMGUI_API")
+    end
 
 
     if is_plat("windows") then
@@ -221,7 +230,17 @@ do
     end
     add_files("./Source/Editor/**.cpp")
     add_deps("ya-engine")
-    add_deps("imgui-local")
-    add_deps("imguizmo-local")
+    add_links("ya-engine")
     add_includedirs("./Source", { public = true })
+    add_includedirs("./ThirdParty/ImGui", { public = true })
+    add_includedirs("./ThirdParty/ImGui/Backends", { public = true })
+    add_includedirs("./ThirdParty/ImGui/misc/cpp", { public = true })
+    add_includedirs("./ThirdParty/ImGui/misc/freetype", { public = true })
+    add_includedirs("./ThirdParty/ImGuizmo", { public = true })
+    if is_plat("windows") then
+        add_cxxflags("/bigobj")
+        add_defines("IMGUI_API=__declspec(dllimport)")
+        add_defines("IMGUI_IMPL_API=__declspec(dllimport)")
+        add_defines("USE_IMGUI_API")
+    end
 end

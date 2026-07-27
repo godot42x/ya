@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+#include "reflects-core/api.h"
+
 // ============================================================================
 // Function Type Enumeration
 // ============================================================================
@@ -25,7 +27,7 @@ enum class FunctionType
 // ============================================================================
 // MARK: Function
 // ============================================================================
-struct Function : public Field
+struct REFLECTS_CORE_API Function : public Field
 {
     FunctionType type = FunctionType::MemberFunction;
 

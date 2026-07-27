@@ -6,16 +6,18 @@
 #include <unordered_map>
 #include <vector>
 
+#include "reflects-core/api.h"
+
 // ============================================================================
 // MARK: Enum
 // ============================================================================
-struct EnumValue
+struct REFLECTS_CORE_API EnumValue
 {
     std::string name;
     int64_t     value;
 };
 
-struct Enum
+struct REFLECTS_CORE_API Enum
 {
     std::string                              name;
     std::vector<EnumValue>                   values;

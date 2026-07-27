@@ -56,7 +56,7 @@ struct RenderPipelineDebugOutputCatalog
     bool                         bPostprocessingEnabled      = false;
 };
 
-struct RenderRuntime
+struct ENGINE_API RenderRuntime
 {
     enum class ERenderPipeline
     {

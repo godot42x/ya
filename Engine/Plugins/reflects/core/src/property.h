@@ -8,11 +8,12 @@
 #include <unordered_map>
 #include <variant>
 
+#include "reflects-core/api.h"
 #include "type_index.h"
 
 
 
-struct Metadata
+struct REFLECTS_CORE_API Metadata
 {
     std::string name;
     uint32_t    flags = 0;
@@ -93,7 +94,7 @@ inline bool operator&(FieldFlags a, FieldFlags b)
 {
     return (static_cast<uint32_t>(a) & static_cast<uint32_t>(b)) != 0;
 }
-struct Field
+struct REFLECTS_CORE_API Field
 {
     std::string name;
     Metadata    metadata;
@@ -117,7 +118,7 @@ struct Field
 // Note: Reference types (T&) are not supported in the reflection system.
 // If you need reference semantics, use pointer types (T*) instead.
 // ============================================================================
-struct Property : public Field
+struct REFLECTS_CORE_API Property : public Field
 {
     bool        bConst           = false;
     bool        bStatic          = false;

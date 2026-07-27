@@ -1,12 +1,14 @@
 #pragma once
 
+#include "Core/Api.h"
+
 #include <functional>
 #include <vector>
 
 namespace ya::reflection
 {
 
-class DeferredInitializerQueue
+class ENGINE_API DeferredInitializerQueue
 {
   public:
     static DeferredInitializerQueue& instance();

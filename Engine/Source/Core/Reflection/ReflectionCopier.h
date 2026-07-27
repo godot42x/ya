@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Api.h"
 #include "Core/TypeIndex.h"
 
 #include <string>
@@ -11,7 +12,7 @@ struct Property;
 namespace ya
 {
 
-struct ReflectionCopier
+struct ENGINE_API ReflectionCopier
 {
     static bool copyByRuntimeReflection(void* dstObj, const void* srcObj, type_index_t typeIndex, const std::string& className = "");
 

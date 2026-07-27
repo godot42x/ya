@@ -19,7 +19,7 @@ namespace ya
 {
 struct Entity;
 
-struct [[refl]] Scene
+struct ENGINE_API [[refl]] Scene
 {
     friend struct Entity;
 

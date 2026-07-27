@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Api.h"
 #include "Core/Module/Module.h"
 
 #include <filesystem>
@@ -15,7 +16,7 @@ struct FModuleDependency
     bool        required = true;
 };
 
-struct FModuleManifest
+struct ENGINE_API FModuleManifest
 {
     uint32_t                       schemaVersion = 1;
     std::string                    name;

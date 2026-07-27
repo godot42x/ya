@@ -18,7 +18,7 @@
 // namespace refl
 
 // MARK: ClassRegistry
-struct ClassRegistry
+struct REFLECTS_CORE_API ClassRegistry
 {
     std::unordered_map<std::string, std::shared_ptr<Class>> classes;
     std::unordered_map<refl::type_index_t, std::shared_ptr<Class>> typeIdMap;
@@ -31,18 +31,24 @@ struct ClassRegistry
     template <typename T>
     std::shared_ptr<Class> registerClass(const std::string &name, Class *classInfo)
     {
+        auto id = refl::type_index_v<T>;
+
+        if (const auto byType = typeIdMap.find(id); byType != typeIdMap.end()) {
+            if (byType->second->name != name) {
+                delete classInfo;
+                throw std::runtime_error("Reflection type id collision between " + byType->second->name + " and " + name);
+            }
+            delete classInfo;
+            return byType->second;
+        }
+
         auto ptr = std::shared_ptr<Class>(classInfo);
-        auto id  = refl::type_index_v<T>;
 
         // 设置类型索引
         ptr->typeIndex = id;
 
-        if (const auto it = typeIdMap.find(id); it != typeIdMap.end() && it->second->name != name) {
-            throw std::runtime_error("Reflection type id collision between " + it->second->name + " and " + name);
-        }
         classes[name] = ptr;
         typeIdMap[id] = ptr;
-        printf("_____ Registered class: %s (typeId: %llu)\n", name.c_str(), static_cast<unsigned long long>(id));
 
         return classes[name];
     }
@@ -83,7 +89,10 @@ struct ClassRegistry
     // MARK: Inheritance
     void registerInheritance(refl::type_index_t childTypeId, refl::type_index_t parentTypeId)
     {
-        parentToChildren[parentTypeId].push_back(childTypeId);
+        auto& children = parentToChildren[parentTypeId];
+        if (std::ranges::find(children, childTypeId) == children.end()) {
+            children.push_back(childTypeId);
+        }
     }
 
     bool isDerivedFrom(refl::type_index_t childTypeId, refl::type_index_t parentTypeId)
@@ -219,7 +228,7 @@ struct Register
 // ============================================================================
 // MARK: EnumRegistry - 全局枚举注册表
 // ============================================================================
-struct EnumRegistry
+struct REFLECTS_CORE_API EnumRegistry
 {
     std::unordered_map<std::string, Enum> enums;
     std::unordered_map<refl::type_index_t, Enum *> typeIdMap; // typeIndex -> Enum*

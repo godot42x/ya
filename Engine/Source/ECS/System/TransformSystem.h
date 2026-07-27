@@ -27,7 +27,7 @@ struct TransformComponent;
  * 1. If using Node Tree: Traverse from root nodes, recursively update world transforms
  * 2. If using flat Entities: Simply copy local to world (no parent)
  */
-struct TransformSystem : public ISystem
+struct ENGINE_API TransformSystem : public ISystem
 {
     using Self = TransformSystem;
     void init() {}

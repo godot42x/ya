@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Api.h"
 #include "Core/Event.h"
 #include "Render/RenderDefines.h"
 
@@ -39,7 +40,7 @@ struct FInputReply
     std::optional<FPointerCaptureRequest> pointerCapture;
 };
 
-class InputRouter;
+class ENGINE_API InputRouter;
 
 struct FInputRouteContext
 {
@@ -70,7 +71,7 @@ class GameInputNode final : public IInputNode
     void                     cancelInput(FInputRouteContext& context, EInputCancelReason reason) override;
 };
 
-class InputRouter
+class ENGINE_API InputRouter
 {
   public:
     class FNodeRegistration
@@ -90,11 +91,11 @@ class InputRouter
         FNodeRegistration(const FNodeRegistration&)            = delete;
         FNodeRegistration& operator=(const FNodeRegistration&) = delete;
 
-        FNodeRegistration(FNodeRegistration&& other) noexcept;
-        FNodeRegistration& operator=(FNodeRegistration&& other) noexcept;
-        ~FNodeRegistration();
+        ENGINE_API FNodeRegistration(FNodeRegistration&& other) noexcept;
+        ENGINE_API FNodeRegistration& operator=(FNodeRegistration&& other) noexcept;
+        ENGINE_API ~FNodeRegistration();
 
-        void reset();
+        ENGINE_API void reset();
     };
 
   private:

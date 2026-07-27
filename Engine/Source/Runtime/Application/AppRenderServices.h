@@ -17,7 +17,7 @@ struct DebugRenderSystem;
 struct RenderRuntime;
 struct AppRenderState;
 
-class AppRenderServices
+class ENGINE_API AppRenderServices
 {
   public:
     AppRenderServices() = default;

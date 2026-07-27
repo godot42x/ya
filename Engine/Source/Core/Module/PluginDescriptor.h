@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/Api.h"
+
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -7,7 +9,7 @@
 namespace ya
 {
 
-struct FPluginDescriptor
+struct ENGINE_API FPluginDescriptor
 {
     uint32_t                           schemaVersion = 1;
     std::string                        name;

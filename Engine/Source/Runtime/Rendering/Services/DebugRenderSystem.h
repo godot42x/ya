@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Api.h"
 #include "Render/Core/RenderAttachmentFormats.h"
 #include "Render/Pipelines/DebugPrimitives.h"
 
@@ -8,7 +9,7 @@ namespace ya
 
 struct RenderRuntime;
 
-struct DebugRenderSystem
+struct ENGINE_API DebugRenderSystem
 {
     static DebugRenderSystem& get();
 

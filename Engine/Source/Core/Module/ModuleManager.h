@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Api.h"
 #include "Core/Module/ModuleManifest.h"
 
 #include <filesystem>
@@ -14,7 +15,7 @@ struct SDL_SharedObject;
 namespace ya
 {
 
-class ModuleManager
+class ENGINE_API ModuleManager
 {
   private:
     struct LoadedModule;

@@ -2,6 +2,7 @@
 #pragma once
 
 
+#include "Core/Api.h"
 #include "Core/Delegate.h"
 #include "Core/Trait.h"
 #include "Core/TypeIndex.h"
@@ -13,7 +14,7 @@ namespace ya
 {
 
 
-struct SceneBus : public disable_copy
+struct ENGINE_API SceneBus : public disable_copy
 {
     static SceneBus& get();
 

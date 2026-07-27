@@ -19,7 +19,7 @@ namespace ya
  * - Scene transitions
  * - Provide callbacks for custom scene initialization
  */
-struct SceneManager
+struct ENGINE_API SceneManager
 {
   public:
     using SceneInitCallback = std::function<void(Scene*)>;

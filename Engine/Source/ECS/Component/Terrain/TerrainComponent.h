@@ -20,7 +20,7 @@ enum class ETerrainResolveState : uint8_t
     Failed,
 };
 
-struct TerrainComponent : public IComponent
+struct ENGINE_API TerrainComponent : public IComponent
 {
     YA_REFLECT_BEGIN(TerrainComponent, IComponent)
     YA_REFLECT_FIELD(_heightMapRef)

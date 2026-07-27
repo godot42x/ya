@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/Api.h"
+
 #include <concepts>
 #include <entt/entt.hpp>
 #include <nlohmann/json.hpp>
@@ -33,7 +35,7 @@ enum class EClonePolicy : uint8_t
     CopyCtor,
     Reflection,
 };
-struct ECSRegistry
+struct ENGINE_API ECSRegistry
 {
 
   public:
@@ -108,10 +110,16 @@ struct ECSRegistry
     void registerComponent(const std::string& name /*, auto &&componentGetter, auto &&componentCreator*/)
     {
         if constexpr (std::derived_from<T, ::ya::IComponent>) {
-            const type_index_t typeIndex       = ya::TypeIndex<T>::value();
+            const type_index_t typeIndex = ya::TypeIndex<T>::value();
+            const FName        fname(name);
+
+            _typeIndexCache[fname] = typeIndex;
+            if (_componentOps.contains(typeIndex)) {
+                return;
+            }
+
             IComponentOps* componentOpsPtr = new ComponentOps<T>{};
-            _componentOps[typeIndex]       = componentOpsPtr;
-            _typeIndexCache[FName(name)]   = typeIndex;
+            _componentOps[typeIndex] = componentOpsPtr;
         }
     }
 

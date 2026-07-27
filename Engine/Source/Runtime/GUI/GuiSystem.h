@@ -7,7 +7,7 @@
 namespace ya
 {
 
-class GuiSystem
+class ENGINE_API GuiSystem
 {
   public:
     static GuiSystem& get();

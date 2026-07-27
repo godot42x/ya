@@ -36,7 +36,7 @@ struct Texture;
 struct Sampler;
 class ResourceResolveSystem;
 
-struct ForwardRenderPipeline : public IRenderPipeline
+struct ENGINE_API ForwardRenderPipeline : public IRenderPipeline
 {
     static constexpr auto VIEWPORT_COLOR_FORMAT              = EFormat::R16G16B16A16_SFLOAT;
     static constexpr auto POSTPROCESS_COLOR_FORMAT           = EFormat::R8G8B8A8_UNORM;

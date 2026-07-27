@@ -36,7 +36,7 @@ namespace ya
 struct IImageView;
 struct Sampler;
 
-struct ImGuiManager
+struct ENGINE_API ImGuiManager
 {
   private:
     ImDrawData* _drawData    = nullptr;
@@ -89,18 +89,18 @@ using ImguiState = ImGuiManager;
 namespace ImGuiHelper
 {
 
-void BeginFrame();
+ENGINE_API void BeginFrame();
 
-bool Image(IImageView*        imageView,
-           Sampler*           sampler,
-           const std::string& alt,
-           const ImVec2&      size,
-           const ImVec2&      uv0    = ImVec2(0, 0),
-           const ImVec2&      uv1    = ImVec2(1, 1),
-           const ImVec4&      tint   = ImVec4(1, 1, 1, 1),
-           const ImVec4&      border = ImVec4(0, 0, 0, 0));
+ENGINE_API bool Image(IImageView*        imageView,
+                      Sampler*           sampler,
+                      const std::string& alt,
+                      const ImVec2&      size,
+                      const ImVec2&      uv0    = ImVec2(0, 0),
+                      const ImVec2&      uv1    = ImVec2(1, 1),
+                      const ImVec4&      tint   = ImVec4(1, 1, 1, 1),
+                      const ImVec4&      border = ImVec4(0, 0, 0, 0));
 
-void ClearImageCache();
+ENGINE_API void ClearImageCache();
 
 } // namespace ImGuiHelper
 

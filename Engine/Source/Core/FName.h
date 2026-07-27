@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/Api.h"
+
 #include <format>
 #include <deque>
 #include <mutex>
@@ -17,7 +19,7 @@ inline constexpr std::string_view INVALID_FNAME_TEXT = "None";
 
 using index_t = uint32_t;
 
-class NameRegistry
+class ENGINE_API NameRegistry
 {
   public:
     struct StringViewHash

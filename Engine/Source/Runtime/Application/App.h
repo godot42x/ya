@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Api.h"
 #include "Core/Base.h"
 #include "Core/Input/InputManager.h"
 #include "Core/Input/InputRouter.h"
@@ -22,6 +23,9 @@
 namespace ya
 {
 
+extern ENGINE_API ClearValue colorClearValue;
+extern ENGINE_API ClearValue depthClearValue;
+
 struct Scene;
 struct SceneManager;
 struct Entity;
@@ -42,7 +46,7 @@ enum AppMode : int
     Drawing,
 };
 
-struct App
+struct ENGINE_API App
 {
     friend class AppLifecycle;
     friend class AppFrameLoop;

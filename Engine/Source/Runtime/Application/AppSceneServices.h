@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/Api.h"
+
 #include <string>
 
 namespace ya
@@ -10,7 +12,7 @@ struct Scene;
 struct SceneManager;
 struct Entity;
 
-class AppSceneServices
+class ENGINE_API AppSceneServices
 {
   private:
     App* _app = nullptr;

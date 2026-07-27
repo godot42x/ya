@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/Api.h"
+
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -9,7 +11,7 @@
 namespace ya
 {
 
-struct FProjectDescriptor
+struct ENGINE_API FProjectDescriptor
 {
     uint32_t                           schemaVersion = 1;
     std::string                        name;

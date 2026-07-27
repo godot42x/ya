@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/Api.h"
+
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -8,7 +10,7 @@ namespace ya
 {
 
 
-struct RenderDocCapture
+struct ENGINE_API RenderDocCapture
 {
     struct CaptureResult
     {

@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "Core/Api.h"
 #include "ContainerProperty.h"
 #include "Core/Macro/VariadicMacros.h"
 #include "Core/Reflection/DeferredInitializer.h"
@@ -19,7 +20,7 @@ namespace ya
 
 
 
-struct ReflectionSerializer
+struct ENGINE_API ReflectionSerializer
 {
     struct CustomTypeHook
     {

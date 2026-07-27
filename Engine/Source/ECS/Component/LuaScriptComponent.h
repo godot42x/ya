@@ -62,7 +62,7 @@ struct LuaScriptComponent : public IComponent
         bool enabled = true;
 
         // 刷新属性列表（从 self 表中读取）
-        void refreshProperties();
+        ENGINE_API void refreshProperties();
 
         // 应用属性覆盖（在运行时初始化后调用）
         void applyPropertyOverrides(sol::state &lua);

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/Api.h"
+
 #include "log.cc/helper.h"
 #include "log.cc/log.h"
 
@@ -7,7 +9,7 @@
 
 
 
-struct Logger
+struct ENGINE_API Logger
 {
     static logcc::SyncLogger CoreLogger;
     static logcc::SyncLogger AppLogger;

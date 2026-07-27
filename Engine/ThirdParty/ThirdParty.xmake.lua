@@ -19,6 +19,8 @@ do
 
     -- add_rules("c++.unity_build", { batchsize = 2 }) -- no need to build multiple times, and sub modules cannot manage recursively dependency
     add_files("./ImGui/*.cpp", "./ImGui/misc/cpp/*.cpp")
+    remove_files("./ImGui/imgui_demo.cpp")
+    remove_files("./ImGui/examples/**")
     -- add_headerfiles("ImGui/", "(./ImGui/misc/cpp/*.h)")
     add_includedirs("./ImGui/", { public = true })
     add_includedirs("./ImGui/misc/cpp/", { public = true })
@@ -39,8 +41,9 @@ do
     add_defines("IMGUI_ENABLE_FREETYPE", { public = true })
     add_defines("IMGUI_USE_WCHAR32", { public = true })
 
-    if is_kind("shared") and is_plat("windows", "mingw") then
+    if is_plat("windows", "mingw") then
         add_defines("IMGUI_API=__declspec(dllexport)")
+        add_defines("IMGUI_IMPL_API=__declspec(dllexport)")
     end
 
 
@@ -64,12 +67,13 @@ do
     add_deps("imgui-local")
 
     add_defines("IMGUI_DEFINE_MATH_OPERATORS")
+    add_defines("USE_IMGUI_API")
     add_files("./ImGuizmo/*.cpp")
     -- add_headerfiles("./ImGuizmo/*.h")
     add_includedirs("./ImGuizmo/", { public = true })
 
-    if is_plat("windows") and is_kind("shared") then
-        add_rules("utils.symbols.export_all", { export_classes = true })
+    if is_plat("windows") then
+        add_defines("IMGUI_API=__declspec(dllexport)")
     end
 
     on_test(function(package)

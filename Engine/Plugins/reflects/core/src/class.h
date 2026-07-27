@@ -2,12 +2,13 @@
 
 #include "function.h"
 #include "lib.h"
+#include "reflects-core/api.h"
 #include <memory>
 #include <vector>
 
 
 // ============================================================================
-struct Constructor
+struct REFLECTS_CORE_API Constructor
 {
     size_t                                      argCount = 0;
     std::vector<std::string>                    argTypeNames; // 参数类型名称列表
@@ -46,7 +47,7 @@ std::shared_ptr<T> makePtr(Args &&...args)
     return std::make_shared<T>(std::forward<Args>(args)...);
 }
 
-struct Class : public Field
+struct REFLECTS_CORE_API Class : public Field
 {
     refl::type_index_t typeIndex = 0; // 类型索引，用于快速查找和父类指针转换
 
@@ -88,6 +89,10 @@ struct Class : public Field
     constexpr Class &registerParent()
     {
         refl::type_index_t parentTypeId = refl::type_index_v<Parent>;
+
+        if (std::ranges::find(parents, parentTypeId) != parents.end()) {
+            return *this;
+        }
 
         // 检测是否为虚继承
         // constexpr bool bVirtualInheritance = detectVirtualInheritance<T, Parent>();

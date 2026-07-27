@@ -189,6 +189,9 @@ void renderReflectedType(const std::string& name,
                 return;
             }
         }
+
+        ImGui::TextDisabled("%s: [no editable reflected fields]", name.c_str());
+        return;
     }
 
     ImGui::TextDisabled("%s: [unsupported type]", name.c_str());

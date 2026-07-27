@@ -49,7 +49,7 @@ struct PerfSampleToken
     bool                bActive = false;
 };
 
-struct PerfState
+struct ENGINE_API PerfState
 {
   private:
     mutable std::mutex                          _mutex;

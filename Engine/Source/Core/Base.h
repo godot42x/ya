@@ -4,6 +4,7 @@
 
 #include "Common/FWD-std.h"
 #include "Common/FWD.h"
+#include "Core/Api.h"
 
 
 #if _WIN32
@@ -14,20 +15,6 @@
     #define PLATFORM_BREAK()
 #endif
 
-
-#if defined(_WIN32)
-    #if BUILD_LIBRARY
-        #if BUILD_SHARED_YA
-            #define ENGINE_API __declspec(dllexport)
-        #else
-            #define ENGINE_API __declspec(dllimport)
-        #endif
-    #else
-        #define ENGINE_API
-    #endif
-#else
-    #define ENGINE_API
-#endif
 
 #if _WIN32
     #define FUNCTION_SIG __FUNCSIG__

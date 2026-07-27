@@ -37,7 +37,7 @@ namespace ya
  * Holds material parameters and texture slots for serialization.
  * Runtime material instance is managed separately.
  */
-struct PhongMaterialComponent : public MaterialComponent<PhongMaterial>
+struct ENGINE_API PhongMaterialComponent : public MaterialComponent<PhongMaterial>
 {
     struct AuthoringParams
     {

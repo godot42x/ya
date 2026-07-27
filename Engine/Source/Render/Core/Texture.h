@@ -102,7 +102,7 @@ struct CubeMapMemoryCreateInfo
     }
 };
 
-struct Texture
+struct ENGINE_API Texture
 {
     EFormat::T _format    = EFormat::R8G8B8A8_UNORM;
     uint32_t   _width     = 0;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Api.h"
 #include "Core/Math/GLM.h"
 #include "Core/Math/Ray.h"
 #include <optional>
@@ -27,7 +28,7 @@ struct RaycastHit
  * Handles conversion from screen coordinates to world-space rays
  * and collision detection with scene entities.
  */
-class RayCastMousePickingSystem
+class ENGINE_API RayCastMousePickingSystem
 {
   public:
     RayCastMousePickingSystem()  = default;

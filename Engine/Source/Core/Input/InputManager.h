@@ -23,7 +23,7 @@ enum class KeyState
     Pressed
 };
 
-struct InputManager
+struct ENGINE_API InputManager
 {
     friend struct App;
 
