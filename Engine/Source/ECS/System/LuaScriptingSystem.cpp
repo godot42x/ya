@@ -350,6 +350,8 @@ void LuaScriptingSystem::init()
 
 void LuaScriptingSystem::onUpdate(float deltaTime)
 {
+    YA_PROFILE_FUNCTION();
+
     auto *scene = App::get()->getSceneServices().getActiveScene();
     if (!scene) return;
 
@@ -363,6 +365,7 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
         for (auto &script : luaComp.scripts) {
             // 首次加载脚本
             if (!script.bLoaded && !script.scriptPath.empty()) {
+                YA_PROFILE_SCOPE("LuaScriptingSystem::loadScript");
                 std::string scriptContent;
                 if (VirtualFileSystem::get()->readFileToString(script.scriptPath, scriptContent)) {
                     try {
@@ -411,6 +414,7 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
 
             // 调用 onUpdate（如果脚本已加载且启用）
             if (script.enabled && script.bLoaded && script.onUpdate.valid()) {
+                YA_PROFILE_SCOPE("LuaScriptingSystem::scriptOnUpdate");
                 try {
                     // 更新 entity 引用（防止 entity 被移动）
                     script.self["entity"] = &entity;
@@ -427,6 +431,8 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
 
 void LuaScriptingSystem::onStop()
 {
+    YA_PROFILE_FUNCTION();
+
     // TODO: let app use serialization to reload all/ recreate entity and components
     auto *scene = App::get()->getSceneServices().getActiveScene();
     if (!scene) return;

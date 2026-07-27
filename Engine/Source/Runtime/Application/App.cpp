@@ -2,6 +2,7 @@
 #include "Runtime/Application/AppRenderState.h"
 
 #include "Core/Module/ProjectDescriptor.h"
+#include "Core/Profiling/Profiling.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Core/UI/UIManager.h"
 #include "Runtime/Rendering/Services/DebugRenderSystem.h"
@@ -43,6 +44,8 @@ void App::addModule(IModule& module)
 
 void App::configureModules()
 {
+    YA_PROFILE_FUNCTION();
+
     for (const auto& slot : _modules) {
         slot.module->onConfigure(*this, _ci);
     }
@@ -50,6 +53,8 @@ void App::configureModules()
 
 void App::applyProjectDescriptor(const FProjectDescriptor& descriptor)
 {
+    YA_PROFILE_FUNCTION();
+
     _ci.projectPath      = descriptor.sourcePath.string();
     _ci.projectRoot      = descriptor.sourcePath.parent_path().string();
     _ci.defaultScenePath = descriptor.defaultScene;
@@ -62,6 +67,8 @@ void App::applyProjectDescriptor(const FProjectDescriptor& descriptor)
 
 void App::attachModules()
 {
+    YA_PROFILE_FUNCTION();
+
     YA_CORE_ASSERT(!_modulesAttached, "Modules are already attached");
     for (const auto& slot : _modules) {
         slot.module->onAttach(*this);
@@ -71,6 +78,8 @@ void App::attachModules()
 
 void App::detachModules()
 {
+    YA_PROFILE_FUNCTION();
+
     if (!_modulesAttached) {
         return;
     }
@@ -137,6 +146,8 @@ bool App::dispatchInputFallbackEvent(const Event& event)
 
 void App::tickModules(float dt)
 {
+    YA_PROFILE_FUNCTION();
+
     for (const auto& slot : _modules) {
         slot.module->onLogic(*this, dt);
     }
@@ -144,6 +155,8 @@ void App::tickModules(float dt)
 
 void App::prepareModulesForRender(float dt)
 {
+    YA_PROFILE_FUNCTION();
+
     for (const auto& slot : _modules) {
         slot.module->onBeforeRender(*this, dt);
     }
@@ -165,6 +178,8 @@ void App::recordModulePresentation(ICommandBuffer& commandBuffer, float dt)
 
 bool App::notifyModulesBeforeAppStateChange(AppState nextState)
 {
+    YA_PROFILE_FUNCTION();
+
     for (const auto& slot : _modules) {
         if (!slot.module->onBeforeAppStateChange(*this, _appState, nextState)) {
             return false;
@@ -175,6 +190,8 @@ bool App::notifyModulesBeforeAppStateChange(AppState nextState)
 
 void App::notifyModulesAfterAppStateChange(AppState previousState)
 {
+    YA_PROFILE_FUNCTION();
+
     for (const auto& slot : _modules) {
         slot.module->onAfterAppStateChange(*this, previousState, _appState);
     }
@@ -201,6 +218,8 @@ uint64_t App::getElapsedTimeMS() const
 
 bool App::openProject(const FProjectDescriptor& descriptor)
 {
+    YA_PROFILE_FUNCTION();
+
     applyProjectDescriptor(descriptor);
 
     if (descriptor.defaultScene && !descriptor.defaultScene->empty()) {

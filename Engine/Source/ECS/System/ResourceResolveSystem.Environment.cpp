@@ -935,6 +935,8 @@ void ResourceResolveSystem::resolvePendingEnvironmentLighting(Scene* scene)
     const auto* sceneSkyboxState = findFirstSceneSkyboxState(scene);
 
     for (auto&& [entity, elc] : registry.view<EnvironmentLightingComponent>().each()) {
+        YA_PROFILE_SCOPE("ResourceResolve/EnvironmentLighting/Entity");
+
         auto& pendingState = _environmentStates[entity];
         if (pendingState.authoringVersion != elc.authoringVersion) {
             detail::resetEnvState(pendingState);
@@ -957,9 +959,18 @@ void ResourceResolveSystem::resolvePendingEnvironmentLighting(Scene* scene)
             completeEnvironmentSourceFromDependency(elc, pendingState, "scene skybox source resolved");
         }
 
-        resolveEnvironmentSourceState(*this, entity, elc, pendingState);
-        resolveEnvironmentIrradianceState(*this, entity, elc, pendingState, sceneSkyboxState);
-        resolveEnvironmentPrefilterState(*this, entity, elc, pendingState, sceneSkyboxState);
+        {
+            YA_PROFILE_SCOPE("ResourceResolve/EnvironmentLighting/Source");
+            resolveEnvironmentSourceState(*this, entity, elc, pendingState);
+        }
+        {
+            YA_PROFILE_SCOPE("ResourceResolve/EnvironmentLighting/Irradiance");
+            resolveEnvironmentIrradianceState(*this, entity, elc, pendingState, sceneSkyboxState);
+        }
+        {
+            YA_PROFILE_SCOPE("ResourceResolve/EnvironmentLighting/Prefilter");
+            resolveEnvironmentPrefilterState(*this, entity, elc, pendingState, sceneSkyboxState);
+        }
     }
 
     for (auto it = _environmentStates.begin(); it != _environmentStates.end();) {

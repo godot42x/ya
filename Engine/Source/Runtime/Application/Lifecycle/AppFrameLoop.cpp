@@ -26,6 +26,7 @@
 #include "Runtime/Application/Utility/SDLMisc.h"
 
 #include "Scene/Scene.h"
+#include "Scene/SceneManager.h"
 
 #include <SDL3/SDL.h>
 
@@ -512,6 +513,7 @@ void AppFrameLoop::tickRender(App& app, float dt)
     auto* scene = app._sceneManager ? app._sceneManager->getActiveScene() : nullptr;
     {
         YA_PERF_SCOPE(perf::sample::renderExtract(), perf::metric::cpuTimeMs(), perf::domain::render());
+        YA_PROFILE_SCOPE("RenderFrameExtractor::extract");
         RenderFrameExtractor::extract(
             RenderFrameExtractor::ExtractInput{
                 .scene          = scene,

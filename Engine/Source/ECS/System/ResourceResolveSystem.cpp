@@ -145,6 +145,8 @@ void ResourceResolveSystem::shutdown()
 
 void ResourceResolveSystem::onUpdate(float dt)
 {
+    YA_PROFILE_FUNCTION();
+
     (void)dt;
 
     auto* const sceneManager = App::get()->getSceneServices().getSceneManager();
@@ -159,13 +161,34 @@ void ResourceResolveSystem::onUpdate(float dt)
         _pendingStateScene = scene;
     }
 
-    resolvePendingMeshes(scene);
-    resolvePendingTerrain(scene);
-    resolvePendingMaterials(scene);
-    resolvePendingUI(scene);
-    resolvePendingBillboards(scene);
-    resolvePendingSkybox(scene);
-    resolvePendingEnvironmentLighting(scene);
+    {
+        YA_PROFILE_SCOPE("ResourceResolve/Meshes");
+        resolvePendingMeshes(scene);
+    }
+    {
+        YA_PROFILE_SCOPE("ResourceResolve/Terrain");
+        resolvePendingTerrain(scene);
+    }
+    {
+        YA_PROFILE_SCOPE("ResourceResolve/Materials");
+        resolvePendingMaterials(scene);
+    }
+    {
+        YA_PROFILE_SCOPE("ResourceResolve/UI");
+        resolvePendingUI(scene);
+    }
+    {
+        YA_PROFILE_SCOPE("ResourceResolve/Billboards");
+        resolvePendingBillboards(scene);
+    }
+    {
+        YA_PROFILE_SCOPE("ResourceResolve/Skybox");
+        resolvePendingSkybox(scene);
+    }
+    {
+        YA_PROFILE_SCOPE("ResourceResolve/EnvironmentLighting");
+        resolvePendingEnvironmentLighting(scene);
+    }
 }
 
 void ResourceResolveSystem::resolvePendingMeshes(Scene* scene)

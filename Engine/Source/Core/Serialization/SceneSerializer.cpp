@@ -100,6 +100,8 @@ bool SceneSerializer::loadFromFile(const std::string& filepath)
 
 nlohmann::json SceneSerializer::serialize()
 {
+    YA_PROFILE_FUNCTION();
+
     nlohmann::json j;
 
     // Scene metadata
@@ -145,8 +147,11 @@ nlohmann::json SceneSerializer::serialize()
         }
         return lhs->name < rhs->name; });
 
-    for (Entity* entity : entities) {
-        j["entities"].push_back(serializeEntity(entity));
+    {
+        YA_PROFILE_SCOPE("SceneSerializer::SerializeEntities");
+        for (Entity* entity : entities) {
+            j["entities"].push_back(serializeEntity(entity));
+        }
     }
 
     // ★ Step 2: 树状序列化 NodeTree（只存引用）
@@ -156,6 +161,7 @@ nlohmann::json SceneSerializer::serialize()
         j["nodeTree"]["name"]     = rootNode->getName();
         j["nodeTree"]["children"] = nlohmann::json::array();
 
+        YA_PROFILE_SCOPE("SceneSerializer::SerializeNodeTree");
         for (Node* child : rootNode->getChildren()) {
             j["nodeTree"]["children"].push_back(serializeNodeTree(child));
         }
@@ -166,6 +172,8 @@ nlohmann::json SceneSerializer::serialize()
 
 void SceneSerializer::deserialize(const nlohmann::json& j)
 {
+    YA_PROFILE_FUNCTION();
+
     // 清空当前场景
     _scene->clear();
 
@@ -177,6 +185,7 @@ void SceneSerializer::deserialize(const nlohmann::json& j)
     // ★ Step 1: 先反序列化所有 Entities（平铺创建）
     std::unordered_map<uint64_t, Entity*> entityMap; // uuid -> Entity*
     if (j.contains("entities")) {
+        YA_PROFILE_SCOPE("SceneSerializer::DeserializeEntities");
         for (const auto& entityJson : j["entities"]) {
             Entity* entity = deserializeEntity(entityJson);
             if (entity) {
@@ -194,6 +203,7 @@ void SceneSerializer::deserialize(const nlohmann::json& j)
     if (j.contains("nodeTree")) {
         const auto& nodeTreeJson = j["nodeTree"];
         if (nodeTreeJson.contains("children")) {
+            YA_PROFILE_SCOPE("SceneSerializer::DeserializeNodeTree");
             for (const auto& childJson : nodeTreeJson["children"]) {
                 deserializeNodeTree(childJson, node, entityMap);
             }
@@ -207,6 +217,8 @@ void SceneSerializer::deserialize(const nlohmann::json& j)
 
 nlohmann::json SceneSerializer::serializeEntity(Entity* entity)
 {
+    YA_PROFILE_FUNCTION();
+
     nlohmann::json j;
 
     // Entity ID
@@ -256,6 +268,8 @@ nlohmann::json SceneSerializer::serializeEntity(Entity* entity)
 
 Entity* SceneSerializer::deserializeEntity(const nlohmann::json& j)
 {
+    YA_PROFILE_FUNCTION();
+
     // ★ 只创建 Entity（不创建 Node，Node 由 NodeTree 反序列化时创建）
     std::string name = j["name"].get<std::string>();
     uint64_t    uuid = j["id"].get<uint64_t>();
@@ -315,6 +329,8 @@ Entity* SceneSerializer::deserializeEntity(const nlohmann::json& j)
 
 nlohmann::json SceneSerializer::serializeNodeTree(Node* node)
 {
+    YA_PROFILE_FUNCTION();
+
     if (!node) {
         return nlohmann::json();
     }
@@ -350,6 +366,8 @@ nlohmann::json SceneSerializer::serializeNodeTree(Node* node)
 void SceneSerializer::deserializeNodeTree(const nlohmann::json& j, Node* parent,
                                           const std::unordered_map<uint64_t, Entity*>& entityMap)
 {
+    YA_PROFILE_FUNCTION();
+
     if (!j.contains("name")) {
         return;
     }

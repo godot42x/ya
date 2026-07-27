@@ -62,6 +62,8 @@ bool RenderRuntime::prepareFrame(const FrameInput& input, int32_t& imageIndex, s
 
 void RenderRuntime::renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf)
 {
+    YA_PROFILE_FUNCTION();
+
     beginViewportPassAndTickPipeline(input, cmdBuf);
 }
 

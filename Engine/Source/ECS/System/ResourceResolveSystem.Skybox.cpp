@@ -1,7 +1,7 @@
 #include "ResourceResolveSystem.Detail.h"
 
-#include "Render/Render.h"
 #include "Render/Core/RenderResourceFactory.h"
+#include "Render/Render.h"
 #include "Resource/DeferredDeletionQueue.h"
 #include "Runtime/Application/App.h"
 #include "Runtime/Application/Utility/OffscreenJobRunner.h"
@@ -88,10 +88,11 @@ void resetSkyboxState(SkyboxRuntimeState& state)
 
 void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
 {
+    YA_PROFILE_FUNCTION();
     auto& registry = scene->getRegistry();
 
     for (auto&& [entity, sc] : registry.view<SkyboxComponent>().each()) {
-
+        YA_PROFILE_SCOPE("ResourceResolve/Skybox/Entity");
         auto& pendingState = _skyboxStates[entity];
         // clear invalid version
         if (pendingState.authoringVersion != sc.authoringVersion) {
@@ -117,6 +118,7 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
         switch (sc.resolveState) {
         case ESkyboxResolveState::Dirty:
         {
+            YA_PROFILE_SCOPE("ResourceResolve/Skybox/Dirty");
             if (sc.hasCubemapSource()) {
                 std::vector<std::string> facePaths(sc.cubemapSource.files.begin(),
                                                    sc.cubemapSource.files.end());
@@ -144,6 +146,7 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
 
         case ESkyboxResolveState::ResolvingSource:
         {
+            YA_PROFILE_SCOPE("ResourceResolve/Skybox/ResolvingSource");
             if (sc.hasCubemapSource()) {
                 AssetManager::TextureBatchMemory batchMemory;
 
@@ -227,7 +230,8 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
                                   src       = sourceTexture,
                                   flipV     = sc.cylindricalSource.flipVertical,
                                   jobResult](
-                                     ICommandBuffer* cmdBuf, RenderImage* output) -> bool {
+                                     ICommandBuffer* cmdBuf, RenderImage* output) -> bool
+                {
                     auto result = pipeline.execute({
                         .cmdBuf        = cmdBuf,
                         .input         = src.get(),
@@ -262,6 +266,7 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
 
         case ESkyboxResolveState::Preprocessing:
         {
+            YA_PROFILE_SCOPE("ResourceResolve/Skybox/Preprocessing");
             if (!pendingState.pendingOffscreenProcess) {
                 transition.fail("preprocess job missing");
                 break;

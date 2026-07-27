@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Render/Render.h"
+#include "Runtime/Rendering/Common/IRenderPipeline.h"
+#include "Runtime/Rendering/Common/RenderOverlay.h"
 
 namespace ya
 {

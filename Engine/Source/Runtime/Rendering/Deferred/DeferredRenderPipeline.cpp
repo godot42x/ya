@@ -766,6 +766,8 @@ void DeferredRenderPipeline::shutdown()
 
 void DeferredRenderPipeline::tick(const RenderPipelineFrameContext& frame)
 {
+    YA_PROFILE_FUNCTION();
+
     frame.cmdBuf->debugBeginLabel("Deferred Pipeline");
 
     if (shouldSkipTick(frame)) {
@@ -777,10 +779,22 @@ void DeferredRenderPipeline::tick(const RenderPipelineFrameContext& frame)
     RenderStageContext stageCtx{};
     uint32_t           vpW = 0;
     uint32_t           vpH = 0;
-    beginTick(frame, stageCtx, vpW, vpH);
-    syncFrameSettings(frame);
-    prepareShadowPass(stageCtx);
-    executeDeferredMainGraph(frame, stageCtx, vpW, vpH);
+    {
+        YA_PROFILE_SCOPE("DeferredPipeline/BeginTick");
+        beginTick(frame, stageCtx, vpW, vpH);
+    }
+    {
+        YA_PROFILE_SCOPE("DeferredPipeline/SyncFrameSettings");
+        syncFrameSettings(frame);
+    }
+    {
+        YA_PROFILE_SCOPE("DeferredPipeline/ShadowPass");
+        prepareShadowPass(stageCtx);
+    }
+    {
+        YA_PROFILE_SCOPE("DeferredPipeline/MainGraph");
+        executeDeferredMainGraph(frame, stageCtx, vpW, vpH);
+    }
 
     frame.cmdBuf->debugEndLabel();
 }

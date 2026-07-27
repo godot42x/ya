@@ -5,6 +5,7 @@
 #include "ECS/Entity.h"
 
 #include "Core/Reflection/ECSRegistry.h"
+#include "Core/Profiling/Profiling.h"
 
 #include "Runtime/Application/App.h"
 #include "Scene/SceneManager.h"
@@ -47,6 +48,8 @@ Entity *Scene::createEntity(const std::string &name)
 
 Entity *Scene::createEntityWithUUID(uint64_t uuid, const std::string &name)
 {
+    YA_PROFILE_FUNCTION();
+
     Entity entity = {_registry.create(), this};
 
     // Add basic components with specific UUID
@@ -64,6 +67,8 @@ Entity *Scene::createEntityWithUUID(uint64_t uuid, const std::string &name)
 
 void Scene::createRootNode()
 {
+    YA_PROFILE_FUNCTION();
+
     if (_rootNode) {
         return;
     }
@@ -94,6 +99,8 @@ void Scene::onNodeCreated(stdptr<Node> node, Node *parent)
 
 void Scene::destroyEntity(Entity *entity)
 {
+    YA_PROFILE_FUNCTION();
+
     if (isValidEntity(entity))
     {
         auto handle = entity->getHandle();
@@ -116,6 +123,8 @@ void Scene::destroyEntity(Entity *entity)
 
 Node *Scene::createNode(const std::string &name, Node *parent, Entity *entity)
 {
+    YA_PROFILE_FUNCTION();
+
     // ★ 如果 Entity 已经有关联的 Node，直接返回（避免重复创建）
     if (entity) {
         auto it = _nodeMap.find(entity->getHandle());
@@ -143,6 +152,8 @@ Node *Scene::createNode(const std::string &name, Node *parent, Entity *entity)
 
 Node3D *Scene::createNode3D(const std::string &name, Node *parent, Entity *entity)
 {
+    YA_PROFILE_FUNCTION();
+
     // ★ 如果 Entity 已经有关联的 Node，直接返回（避免重复创建）
     if (entity) {
         auto it = _nodeMap.find(entity->getHandle());
@@ -274,6 +285,8 @@ Entity *Scene::getEntityByUUID(uint64_t uuid)
 
 void Scene::clear()
 {
+    YA_PROFILE_FUNCTION();
+
     _entityMap.clear();
     _nodeMap.clear();
     _rootNode.reset();

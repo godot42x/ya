@@ -2,6 +2,7 @@
 
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Core/Buffer.h"
+#include "Core/Profiling/Profiling.h"
 #include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/RenderingInfoUtils.h"
 #include "Render/Core/Sampler.h"
@@ -330,15 +331,29 @@ void ForwardRenderPipeline::initStageResources()
 
 void ForwardRenderPipeline::tick(const RenderPipelineFrameContext& frame)
 {
+    YA_PROFILE_FUNCTION();
+
     if (shouldSkipTick(frame)) {
         return;
     }
 
     RenderStageContext stageCtx{};
-    beginTick(frame, stageCtx);
-    executeShadowPass(stageCtx);
-    executeViewportPass(frame, stageCtx);
-    finalizeViewportPass(frame.cmdBuf);
+    {
+        YA_PROFILE_SCOPE("ForwardPipeline/BeginTick");
+        beginTick(frame, stageCtx);
+    }
+    {
+        YA_PROFILE_SCOPE("ForwardPipeline/ShadowPass");
+        executeShadowPass(stageCtx);
+    }
+    {
+        YA_PROFILE_SCOPE("ForwardPipeline/ViewportPass");
+        executeViewportPass(frame, stageCtx);
+    }
+    {
+        YA_PROFILE_SCOPE("ForwardPipeline/FinalizeViewport");
+        finalizeViewportPass(frame.cmdBuf);
+    }
 }
 
 bool ForwardRenderPipeline::shouldSkipTick(const RenderPipelineFrameContext& frame) const

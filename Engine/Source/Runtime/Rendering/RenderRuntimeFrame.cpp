@@ -1,17 +1,17 @@
 #include "RenderRuntime.h"
 
-#include "Runtime/Application/App.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Core/UI/UIManager.h"
-#include "Runtime/Rendering/Deferred/DeferredRenderPipeline.h"
 #include "Render/2D/Render2D.h"
-#include "Render/Core/Swapchain.h"
 #include "Render/Core/RenderGraphImportUtils.h"
+#include "Render/Core/Swapchain.h"
 #include "Resource/Font/FontManager.h"
+#include "Runtime/Application/App.h"
+#include "Runtime/Rendering/Deferred/DeferredRenderPipeline.h"
 #include "Runtime/Rendering/Forward/ForwardRenderPipeline.h"
-#include <functional>
 #include "utility.cc/ranges.h"
+#include <functional>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -22,10 +22,10 @@ namespace
 {
 
 RGImportedTextureDesc makePresentationImportedTextureDesc(const RenderImage& image,
-                                                          std::string_view label,
-                                                          EImageLayout::T finalLayout)
+                                                          std::string_view   label,
+                                                          EImageLayout::T    finalLayout)
 {
-    auto desc = makeImportedTextureDesc(image, label, finalLayout, EImageUsage::ColorAttachment);
+    auto desc                     = makeImportedTextureDesc(image, label, finalLayout, EImageUsage::ColorAttachment);
     desc.importDesc.initialLayout = EImageLayout::PresentSrcKHR;
     return desc;
 }
@@ -83,6 +83,8 @@ bool RenderRuntime::beginFrameCommandBuffer(int32_t& imageIndex, std::shared_ptr
 
 void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, ICommandBuffer* cmdBuf)
 {
+    YA_PROFILE_FUNCTION();
+
     auto* pipeline = getActivePipelineExecution();
     YA_CORE_ASSERT(pipeline, "Active render pipeline is null while ticking viewport pass");
 
@@ -98,15 +100,16 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
         .viewportFrameBufferScale = _viewportFrameBufferScale,
         .frameData                = input.pipeline.frameData,
         .shadowSettings           = input.pipeline.shadowSettings,
-        .recordViewportOverlays   = [this, overlayInput, input](ICommandBuffer* overlayCmdBuf, Extent2D viewportExtent, const FrameContext& frameCtx) {
+        .recordViewportOverlays   = [this, overlayInput, input](ICommandBuffer* overlayCmdBuf, Extent2D viewportExtent, const FrameContext& frameCtx)
+        {
             RenderPipelineFrameContext overlayFrame = input.pipeline;
-            overlayFrame.cmdBuf = overlayCmdBuf;
-            overlayFrame.view = frameCtx.view;
-            overlayFrame.projection = frameCtx.projection;
-            overlayFrame.cameraPos = frameCtx.cameraPos;
-            overlayFrame.viewportRect = Rect2D{
-                .pos    = {0.0f, 0.0f},
-                .extent = {static_cast<float>(viewportExtent.width), static_cast<float>(viewportExtent.height)},
+            overlayFrame.cmdBuf                     = overlayCmdBuf;
+            overlayFrame.view                       = frameCtx.view;
+            overlayFrame.projection                 = frameCtx.projection;
+            overlayFrame.cameraPos                  = frameCtx.cameraPos;
+            overlayFrame.viewportRect               = Rect2D{
+                              .pos    = {0.0f, 0.0f},
+                              .extent = {static_cast<float>(viewportExtent.width), static_cast<float>(viewportExtent.height)},
             };
             renderViewportPassOverlays(overlayFrame, overlayInput, overlayCmdBuf);
         },
@@ -126,6 +129,8 @@ std::shared_ptr<RenderImage> RenderRuntime::getActiveViewportImageShared() const
 
 void RenderRuntime::renderViewportPassOverlays(const RenderPipelineFrameContext& pipelineFrame, const FrameInput::OverlayInput& overlay, ICommandBuffer* cmdBuf)
 {
+    YA_PROFILE_FUNCTION();
+
     YA_PROFILE_SCOPE("Render2D");
     YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
 
@@ -138,10 +143,10 @@ void RenderRuntime::renderViewportPassOverlays(const RenderPipelineFrameContext&
         .windowWidth  = viewportExtent.width,
         .windowHeight = viewportExtent.height,
         .cam          = {
-            .position       = pipelineFrame.cameraPos,
-            .view           = pipelineFrame.view,
-            .projection     = pipelineFrame.projection,
-            .viewProjection = pipelineFrame.projection * pipelineFrame.view,
+                     .position       = pipelineFrame.cameraPos,
+                     .view           = pipelineFrame.view,
+                     .projection     = pipelineFrame.projection,
+                     .viewProjection = pipelineFrame.projection * pipelineFrame.view,
         },
     };
 
@@ -182,12 +187,14 @@ void RenderRuntime::renderViewportPassOverlays(const RenderPipelineFrameContext&
     Render2D::end();
 }
 
-void RenderRuntime::renderPresentationPass(float deltaTime,
+void RenderRuntime::renderPresentationPass(float                                       deltaTime,
                                            const std::function<void(ICommandBuffer*)>& recordBeforePresentationExtensions,
                                            const std::function<void(ICommandBuffer*)>& recordPresentationExtensions,
                                            const std::function<void(ICommandBuffer*)>& recordPresentationCapture,
-                                           ICommandBuffer* cmdBuf)
+                                           ICommandBuffer*                             cmdBuf)
 {
+    YA_PROFILE_FUNCTION();
+
     YA_PROFILE_SCOPE("Screen pass");
     YA_PERF_SCOPE(perf::sample::renderPresentation(), perf::metric::cpuTimeMs(), perf::domain::render());
 
@@ -221,20 +228,22 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
     if (!sourceImage) {
         sourceImage = getActiveViewportImageShared();
     }
-    RenderGraph    graph;
-    const auto     output = graph.importTexture(
+    RenderGraph graph;
+    const auto  output = graph.importTexture(
         makePresentationImportedTextureDesc(*presentationImage,
                                             "Presentation.Output",
                                             EImageLayout::PresentSrcKHR));
 
     [[maybe_unused]] const auto pass = graph.addPass(
         "Presentation",
-        [output](RGPassBuilder& passBuilder) {
+        [output](RGPassBuilder& passBuilder)
+        {
             passBuilder.useColorAttachment(output);
         },
-        [this, sourceImage, output, presentationExtent, recordPresentationExtensions, deltaTime](RGRenderContext& rgCtx) {
+        [this, sourceImage, output, presentationExtent, recordPresentationExtensions, deltaTime](RGRenderContext& rgCtx)
+        {
             rgCtx.beginColorRendering({
-                .color = output,
+                .color      = output,
                 .renderArea = Rect2D{
                     .pos    = {0.0f, 0.0f},
                     .extent = presentationExtent.toVec2(),
@@ -269,13 +278,25 @@ void RenderRuntime::renderPresentationPass(float deltaTime,
 
 void RenderRuntime::submitFrame(int32_t imageIndex, ICommandBuffer* cmdBuf)
 {
-    if (YA_PERF_IS_ENABLED()) {
-        _render->endFrameGpuTiming(cmdBuf);
-    }
-    cmdBuf->end();
-    _render->end(imageIndex, {cmdBuf->getHandle()});
+    YA_PROFILE_FUNCTION();
 
     if (YA_PERF_IS_ENABLED()) {
+        YA_PROFILE_SCOPE("RenderRuntime::endGpuTiming");
+        _render->endFrameGpuTiming(cmdBuf);
+    }
+
+    {
+        YA_PROFILE_SCOPE("RenderRuntime::endCommandBuffer");
+        cmdBuf->end();
+    }
+
+    {
+        YA_PROFILE_SCOPE("RenderRuntime::present");
+        _render->end(imageIndex, {cmdBuf->getHandle()});
+    }
+
+    if (YA_PERF_IS_ENABLED()) {
+        YA_PROFILE_SCOPE("RenderRuntime::publishGpuMetrics");
         PerfState::Get().setValue(
             perf::sample::renderFrame(),
             perf::metric::gpuTimeMs(),
