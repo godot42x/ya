@@ -7,6 +7,7 @@
 #include "Core/Camera/FreeCameraController.h"
 #include "Core/Profiling/Profiling.h"
 #include "Editor/EditorProfilingSettings.h"
+#include "Editor/EditorRuntimeSettings.h"
 #include "Editor/Inspector/TypeRenderer.h"
 #include "Render/2D/Render2D.h"
 #include "Render/Core/CommandBuffer.h"
@@ -259,6 +260,7 @@ class EditorModule final : public IModule
                 shadow_settings::loadSettingsFromDocument("editor", app.getRenderServices().getShadowSettings()));
         }
         editor_profiling_settings::load();
+        editor_runtime_settings::load();
         if (desc.projectPath && !desc.defaultScenePath) {
             const std::string path = ConfigManager::get().getOr<std::string>("editor", "startup.defaultScenePath", "");
             if (!path.empty()) {

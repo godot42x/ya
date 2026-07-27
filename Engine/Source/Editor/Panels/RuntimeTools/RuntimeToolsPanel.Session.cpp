@@ -43,6 +43,7 @@ void renderSessionContent(App& app)
     auto* render        = renderServices.getRender();
     auto* renderRuntime = renderServices.getRenderRuntime();
     auto* swapchain     = render ? render->getSwapchain() : nullptr;
+    auto* fpsControl    = FPSControl::get();
 
     ImGui::Text("State: %s", app.isRuntimeMode() ? "Runtime" : (app.isSimulationMode() ? "Simulation" : "Stopped"));
     if (renderRuntime) {
@@ -51,6 +52,21 @@ void renderSessionContent(App& app)
     if (swapchain) {
         ImGui::Text("Swapchain: %u x %u", swapchain->getExtent().width, swapchain->getExtent().height);
     }
+
+    ImGui::SeparatorText("Frame Pacing");
+    if (ImGui::Checkbox("Enable FPS Limit", &fpsControl->bEnable)) {
+        editor_runtime_settings::save();
+    }
+
+    float fpsLimit = fpsControl->fpsLimit;
+    ImGui::BeginDisabled(!fpsControl->bEnable);
+    if (ImGui::DragFloat("FPS Limit", &fpsLimit, 1.0f, 1.0f, 500.0f, "%.0f")) {
+        fpsControl->setFPSLimit(fpsLimit);
+        editor_runtime_settings::save();
+    }
+    ImGui::EndDisabled();
+
+    ImGui::TextDisabled("Frame budget: %.2f ms", fpsControl->remainSec * 1000.0f);
 }
 
 void renderEditorCameraContent(EditorLayer& layer, FreeCameraController& controller)

@@ -9,6 +9,7 @@
 #include "Core/Profiling/Profiling.h"
 #include "Editor/EditorLayer.h"
 #include "Editor/EditorProfilingSettings.h"
+#include "Editor/EditorRuntimeSettings.h"
 #include "Editor/Panels/RenderTargetInspector.h"
 #include "Render/2D/Render2D.h"
 #include "Render/Core/Swapchain.h"

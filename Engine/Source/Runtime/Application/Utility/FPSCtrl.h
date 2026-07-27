@@ -2,6 +2,8 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
+
 namespace ya
 {
 
@@ -37,7 +39,7 @@ struct FPSControl
 
     void setFPSLimit(float limit)
     {
-        fpsLimit = limit;
+        fpsLimit = std::max(1.0f, limit);
         remainSec = 1.f / fpsLimit;
     }
 };
