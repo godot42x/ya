@@ -2,22 +2,41 @@
     "version": "2.0.0",
     "inputs": [
         {
-            "id": "remember.target",
-            "type": "command",
-            "command": "extension.commandvariable.remember",
-            "args": {
-                "key": "target"
-            }
-        },
+            "id": "ya.project",
+            "type": "promptString",
+            "description": "Path to a .yaproject file relative to the workspace root.",
+            "default": "Example/HelloMaterial/HelloMaterial.yaproject"
+        }
     ],
     "tasks": [
         {
-            "label": "xmake build",
+            "label": "ya cfg",
             "type": "shell",
-            "command": "xmake",
+            "command": "python3",
             "args": [
-                "b",
-                "${input:remember.target}"
+                "Script/ya.py",
+                "cfg"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false,
+                "revealProblems": "never"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "ya build project",
+            "type": "shell",
+            "command": "python3",
+            "args": [
+                "Script/ya.py",
+                "build",
+                "--project",
+                "${input:ya.project}"
             ],
             "group": {
                 "kind": "build",
@@ -32,8 +51,29 @@
                 "clear": false,
                 "revealProblems": "never"
             },
-            "problemMatcher": [],
-            "runOptions": {}
+            "problemMatcher": []
+        },
+        {
+            "label": "ya build editor project",
+            "type": "shell",
+            "command": "python3",
+            "args": [
+                "Script/ya.py",
+                "build",
+                "--editor",
+                "--project",
+                "${input:ya.project}"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false,
+                "revealProblems": "never"
+            },
+            "problemMatcher": []
         }
     ]
 }

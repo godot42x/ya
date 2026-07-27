@@ -18,12 +18,6 @@ python3 Script/ya.py package --project Example/HelloMaterial/HelloMaterial.yapro
 python3 Script/ya.py test --target ya --filter Suite.Test
 ```
 
-兼容入口保留，但不是主路径：
-
-```bash
-python3 Script/ya.py run --target HelloMaterial
-```
-
 需要精细控制时再直接用 XMake：
 
 ```bash

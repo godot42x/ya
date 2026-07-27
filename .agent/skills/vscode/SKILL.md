@@ -13,7 +13,7 @@ description: VS Code 工作区配置、XMake 任务、调试启动项与 Intelli
 ## 核心规则
 
 1. 构建系统只有 XMake；不要推荐 CMake / MSBuild 作为主流程。
-2. 当前工作区已有 `.vscode/tasks.json` 的 `xmake build` 任务，以及 `.vscode/launch.json` 中基于 `cppvsdbg` 的 attach / launch 配置；新增配置应与这套方式保持一致。
+2. 当前工作区优先通过 `python3 Script/ya.py` 组织 build / run，`.vscode/tasks.json` 应围绕这条主路径，`.vscode/launch.json` 直接调试产出的 `ya-runtime`。
 3. `compile_commands.json` 由 XMake 生成，不手写。
 4. 路径优先使用 `${workspaceFolder}`，不要写用户本机绝对路径。
 
@@ -28,14 +28,14 @@ description: VS Code 工作区配置、XMake 任务、调试启动项与 Intelli
 
 ## 相关 skills
 
-- `ya-build`：目标选择、xmake 参数、测试入口与 shader 生成要一起看
+- `ya-build`：构建入口、xmake 参数、测试入口与 shader 生成要一起看
 - `debug-review`：当问题表现为断点失效、调试配置异常时一起看
 - `cpp-style`：需要联动 clangd / IntelliSense 诊断代码风格问题时可一起看
 
 ## 当前工作区锚点
 
-- `.vscode/tasks.json`：默认构建任务 `xmake build`
-- `.vscode/launch.json`：`Attach EXE`、`debug EXE MSVC`、`debug EXE MSVC with build`
+- `.vscode/tasks.json`：`ya cfg`、`ya build project`、`ya build editor project`
+- `.vscode/launch.json`：`YA: Debug Runtime Project`、`YA: Debug Editor Project`、Windows 通用附加/启动项
 - `.vscode/settings.json`：拼写词典、Lua 诊断、shader lint 等编辑器设置
 - `xmake.lua`：启用了 `plugin.compile_commands.autoupdate`
 - `Xmake/task.lua`：提供 `xmake cpcm` 任务来重建 compile commands
@@ -59,18 +59,18 @@ xmake cpcm
 
 1. 若 clangd 语义不对，先确认根目录 `compile_commands.json` 是否已刷新。
 2. 若 VS Code 仍读取旧数据，再检查 `.vscode/compile_commands.json` 是否需要同步。
-3. 若调试输入框或 target 选择失效，先检查 `rioj7.command-variable` 是否安装。
+3. 若调试输入框或文件选择失效，先检查 `rioj7.command-variable` 是否安装。
 
 ## 调试建议
 
 1. Windows / MSVC 默认使用 `cppvsdbg`。
-2. 若目标需要先构建，复用已有 `preLaunchTask: "xmake build"`。
-3. 目标程序路径优先跟随当前 `build/windows/x64/debug/<target>.exe` 约定，不要另起一套目录推断。
+2. 若目标需要先构建，优先复用 `ya build project` / `ya build editor project` 这类 `ya.py` 任务。
+3. 调试程序路径优先跟随当前 `build/.../ya-runtime` 产物，不要再为 project 层维护一套 legacy target 推断。
 
 ## 不建议的方向
 
 1. 不要引入 `ms-vscode.cmake-tools` 作为主推荐。
-2. 不要手写或长期维护重复的 target 列表脚本，优先复用已有 `xmake` / `command-variable` 流程。
+2. 不要手写或长期维护重复的 project/target 推断脚本，优先复用已有 `ya.py` / `xmake` 流程。
 3. 不要把与仓库无关的全局用户设置写进工作区配置。
 
 ## 退出条件

@@ -1,44 +1,55 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "2.0.0",
     "inputs": [
         {
+            "id": "ya.project",
+            "type": "promptString",
+            "description": "Path to a .yaproject file relative to the workspace root.",
+            "default": "Example/HelloMaterial/HelloMaterial.yaproject"
+        },
+        {
             "id": "pick-exe",
             "type": "command",
-            "command": "extension.commandvariable.file.pickFile", // install this 
+            "command": "extension.commandvariable.file.pickFile",
             "args": {
-                "include": "**/*.{exe}",
+                "include": "**/*.{exe}"
+            }
+        }
+    ],
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "YA: Debug Runtime Project",
+            "program": "${workspaceFolder}/build/macosx/arm64/debug/ya-runtime",
+            "args": [
+                "--project=${workspaceFolder}/${input:ya.project}"
+            ],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "ya build project",
+            "env": {
+                "DYLD_LIBRARY_PATH": "${workspaceFolder}/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/lib:${env:DYLD_LIBRARY_PATH}",
+                "VK_ICD_FILENAMES": "${workspaceFolder}/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/share/vulkan/icd.d/MoltenVK_icd.json",
+                "VK_LAYER_PATH": "${workspaceFolder}/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/share/vulkan/explicit_layer.d"
             }
         },
         {
-            "id": "debug.target",
-            "type": "command",
-            "command": "extension.commandvariable.pickStringRemember",
-            "args": {
-                "key": "target",
-                // "desc": "Input the target name to debug(xmake l targets)",
-                "addLabelToTop": "${remeber.target}",
-                "options": [
-                    "HelloMaterial",
-                    {
-                        "label": "Other...",
-                        "description": "Input the target name to debug(xmake l targets)",
-                        "value": "${promptStringRemember:customTarget}"
-                    }
-                ],
-                "promptStringRemember": {
-                    "customTarget": {
-                        "key": "target",
-                        "description": "Enter build target name:"
-                    }
-                }
+            "type": "lldb",
+            "request": "launch",
+            "name": "YA: Debug Editor Project",
+            "program": "${workspaceFolder}/build/macosx/arm64/debug/ya-runtime",
+            "args": [
+                "--editor",
+                "--project=${workspaceFolder}/${input:ya.project}"
+            ],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "ya build editor project",
+            "env": {
+                "DYLD_LIBRARY_PATH": "${workspaceFolder}/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/lib:${env:DYLD_LIBRARY_PATH}",
+                "VK_ICD_FILENAMES": "${workspaceFolder}/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/share/vulkan/icd.d/MoltenVK_icd.json",
+                "VK_LAYER_PATH": "${workspaceFolder}/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/share/vulkan/explicit_layer.d"
             }
         },
-    ],
-    "configurations": [
-
         {
             "type": "cppvsdbg",
             "request": "attach",
@@ -47,7 +58,52 @@
         },
         {
             "type": "cppvsdbg",
-            "name": "debug EXE MSVC",
+            "name": "YA: Debug Runtime Project (MSVC)",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/windows/x64/debug/ya-runtime.exe",
+            "args": [
+                "--project=${workspaceFolder}/${input:ya.project}"
+            ],
+            "logging": {
+                "moduleLoad": true,
+                "threadExit": true,
+                "processExit": true,
+                "programOutput": true,
+                "engineLogging": false,
+                "exceptions": true
+            },
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "visualizerFile": "${workspaceFolder}/.vscode/all.natvis",
+            "preLaunchTask": "ya build project",
+            "requireExactSource": false
+        },
+        {
+            "type": "cppvsdbg",
+            "name": "YA: Debug Editor Project (MSVC)",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/windows/x64/debug/ya-runtime.exe",
+            "args": [
+                "--editor",
+                "--project=${workspaceFolder}/${input:ya.project}"
+            ],
+            "logging": {
+                "moduleLoad": true,
+                "threadExit": true,
+                "processExit": true,
+                "programOutput": true,
+                "engineLogging": false,
+                "exceptions": true
+            },
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "visualizerFile": "${workspaceFolder}/.vscode/all.natvis",
+            "preLaunchTask": "ya build editor project",
+            "requireExactSource": false
+        },
+        {
+            "type": "cppvsdbg",
+            "name": "Debug EXE (MSVC)",
             "request": "launch",
             "program": "${input:pick-exe}",
             "logging": {
@@ -58,47 +114,9 @@
                 "engineLogging": false,
                 "exceptions": true
             },
-            "cwd": "${workspaceRoot}",
-            "console": "integratedTerminal",
-            "visualizerFile": "${workspaceFolder}/.vscode/all.natvis",
-            // "justMyCode": true,
-            // "preLaunchTask": "xmake build",
-        },
-        {
-            "type": "cppvsdbg",
-            "name": "debug EXE MSVC with build",
-            "request": "launch",
-            "program": "${workspaceFolder}/build/windows/x64/debug/${input:debug.target}.exe",
-            "logging": {
-                "moduleLoad": true,
-                "threadExit": true,
-                "processExit": true,
-                "programOutput": true,
-                "engineLogging": false,
-                "exceptions": true
-            },
-            "cwd": "${workspaceRoot}",
-            "console": "integratedTerminal",
-            "visualizerFile": "${workspaceFolder}/.vscode/all.natvis",
-            // "justMyCode": true,
-            "preLaunchTask": "xmake build",
-            "requireExactSource": false,
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "debug program LLVM with build",
-            // "program": "${workspaceFolder}/build/macosx/amd64/debug/${input:debug.target}",
-            "program": "${workspaceFolder}/build/macosx/arm64/debug/${input:debug.target}",
-            "args": [],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "xmake build",
-            "env": {
-                "DYLD_LIBRARY_PATH": "${workspaceFolder}/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/lib:${env:DYLD_LIBRARY_PATH}",
-                "VK_ICD_FILENAMES": "${workspaceFolder}/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/share/vulkan/icd.d/MoltenVK_icd.json",
-                "VK_LAYER_PATH": "${workspaceFolder}/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/share/vulkan/explicit_layer.d"
-            }
-
-        },
+            "console": "integratedTerminal",
+            "visualizerFile": "${workspaceFolder}/.vscode/all.natvis"
+        }
     ]
 }

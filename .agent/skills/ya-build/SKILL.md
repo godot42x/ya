@@ -1,22 +1,22 @@
 ---
 name: ya-build
-description: YA Engine 的 XMake 构建、目标选择、shader 生成与测试运行指南。
+description: YA Engine 的 XMake 构建、项目运行、shader 生成与测试运行指南。
 ---
 
 ## 适用场景
 
 - 构建失败、链接失败、目标找不到、编译参数不对
-- 需要选择正确的 target 进行 build / run / test
+- 需要选择正确的入口进行 build / run / test
 - 需要刷新 `compile_commands.json` 或重跑 shader 生成
 - 需要判断应该用 `python3 Script/ya.py` 工作流命令还是直接用 `xmake`
 
 ## 核心规则
 
 1. 只使用 XMake；不要引入 CMake。
-2. 默认宿主目标是 `ya-runtime`；带项目运行时优先显式传 `--project ...`，编辑器走 `run-editor`。
+2. 默认宿主目标固定为 `ya-runtime`；项目构建/运行只通过 `--project ...` 驱动，编辑器走 `run-editor`。
 3. shader 生成通过 `xmake ya-shader`，不要手改 `Engine/Shader/*/Generated/*`。
 4. 测试使用 GoogleTest 目标，不要自己发明另一套测试入口。
-5. `python3 Script/ya.py run --target <Example>` 只保留兼容层；新入口优先回到 `ya-runtime + --project ...`。
+5. 不要再为 project build/run/package 使用 legacy `--target` 语义。
 6. `python3 Script/ya.py package` 的定位是最小收集器，不默认承诺完整跨平台可分发包。
 
 ## 常用命令
@@ -28,7 +28,6 @@ python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
 python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject
 python3 Script/ya.py build --project Example/HelloMaterial/HelloMaterial.yaproject
 python3 Script/ya.py package --project Example/HelloMaterial/HelloMaterial.yaproject
-python3 Script/ya.py run --target HelloMaterial
 python3 Script/ya.py test --target ya --filter Suite.Test
 python3 Script/ya.py cfg
 ```
@@ -77,15 +76,14 @@ python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
 
 ### 1. 目标找不到
 
-1. 先运行 `xmake l targets` 确认目标名。
-2. 再确认当前要跑的是 `ya-runtime + project=...`、legacy example shorthand，还是 `*-testing`。
+1. 先运行 `xmake l targets` 确认 xmake 目标名。
+2. 再确认当前要跑的是 `ya-runtime + project=...`，还是 `*-testing`。
 3. 若是 VS Code 启动项问题，再联动看 `vscode` skill。
 
 ### 2. 编译通过但运行入口不对
 
 1. 优先检查是否应该使用 `python3 Script/ya.py run --project <path>`。
-2. 若使用 legacy shorthand，确认 `Example/<Target>/<Target>.yaproject` 确实存在。
-3. 确认 `launch.json` 中程序路径是否仍匹配当前输出目录。
+2. 确认 `launch.json` 中程序路径是否仍匹配当前输出目录。
 
 ### 3. shader 相关报错
 
@@ -125,6 +123,6 @@ python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
 
 ## 退出条件
 
-- 用户知道该用哪个 target、哪个命令入口
+- 用户知道该用哪个命令入口
 - 构建 / 运行 / 测试 / shader 生成路径至少有一条明确可用
 - 问题已收敛为构建配置、生成链、目标选择，或已转交给更合适的 skill

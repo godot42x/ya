@@ -60,7 +60,7 @@ description: YA Engine 代码拆分与目录重组指南：只在收益明确时
 2. 如果模块外部引用了旧路径，要一起修；不要只修当前目录内的 include。
 3. 新子目录落地后，确认 `xmake` 的源文件收集仍覆盖这些路径。
 4. 需要时运行 `python3 Script/ya.py cfg` 或 `xmake project -k compile_commands` 刷新 clangd 与导航。
-5. 完成后至少执行一次构建验证，优先 `python3 Script/ya.py build --target ya-runtime`。
+5. 完成后至少执行一次构建验证，优先 `python3 Script/ya.py build` 或 `python3 Script/ya.py build --project <path>`。
 
 ## 验证清单
 
