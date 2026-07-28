@@ -53,6 +53,10 @@ struct MaterialComponent : public IComponent
     std::string _materialPath;
 
   public:
+    MaterialComponent()
+    {
+        MaterialComponent<MaterialType>::__ensure_reflection_registered();
+    }
 
     virtual ~MaterialComponent()
     {

@@ -1,11 +1,43 @@
 #pragma once
 
 #include <reflects-core/lib.h>
+#include <string>
+#include <string_view>
 
 namespace ya
 {
 
 using type_index_t = refl::type_index_t;
+
+inline std::string canonical_type_name(std::string_view rawName)
+{
+    std::string result;
+    result.reserve(rawName.size());
+
+    for (size_t i = 0; i < rawName.size();) {
+        if (rawName.compare(i, 7, "struct ") == 0) {
+            i += 7;
+            continue;
+        }
+        if (rawName.compare(i, 6, "class ") == 0) {
+            i += 6;
+            continue;
+        }
+        if (rawName.compare(i, 6, "enum ") == 0) {
+            i += 6;
+            continue;
+        }
+        result.push_back(rawName[i++]);
+    }
+
+    return result;
+}
+
+template <typename T>
+inline std::string canonical_type_name()
+{
+    return canonical_type_name(refl::detail::compilerTypeName<T>());
+}
 
 
 #if NOT_USE_REFLECTS

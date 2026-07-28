@@ -149,17 +149,17 @@ struct Visitor<void>
 //     std::unique_ptr<::Register<class_t>> reg = std::make_unique<::Register<class_t>>(name);
 
 #define ___YA_CREATE_REGISTER_2(ClassName)                         \
-    auto real_name = typeid(ClassName).name();                     \
-    YA_PROFILE_STATIC_INIT(real_name);                             \
-                                                                   \
     constexpr std::string_view           macroName = #ClassName;   \
-    std::unique_ptr<::Register<class_t>> reg       = nullptr;      \
+    std::string                           real_name;               \
     if constexpr (macroName.find('<') != std::string_view::npos) { \
-        reg = std::make_unique<::Register<class_t>>(real_name);    \
+        real_name = ::ya::canonical_type_name<class_t>();          \
     }                                                              \
     else {                                                         \
-        reg = std::make_unique<::Register<class_t>>(#ClassName);   \
-    }
+        real_name = #ClassName;                                    \
+    }                                                              \
+    YA_PROFILE_STATIC_INIT(real_name);                             \
+    std::unique_ptr<::Register<class_t>> reg       = nullptr;      \
+    reg = std::make_unique<::Register<class_t>>(real_name);
 
 
 #define ___YA_REFLECT_BEGIN_IMPL(ClassName, BaseClass)                                                                                            \
@@ -309,6 +309,11 @@ struct Visitor<void>
     static inline _reflect_helper_class _reflect_helper_instance{};                                     \
                                                                                                         \
   public:                                                                                               \
+    static void __ensure_reflection_registered()                                                        \
+    {                                                                                                   \
+        (void)_reflect_helper_instance;                                                                  \
+    }                                                                                                   \
+                                                                                                        \
     template <typename __ReflectVisitor>                                                                \
     void __visit_properties(__ReflectVisitor &&visitor)                                                 \
     {                                                                                                   \

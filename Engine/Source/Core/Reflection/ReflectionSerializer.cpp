@@ -17,6 +17,21 @@ CustomTypeHookMap &getCustomTypeHooks()
     return hooks;
 }
 
+const nlohmann::json *findBaseClassJson(const nlohmann::json &baseJson, const std::string &className)
+{
+    if (auto it = baseJson.find(className); it != baseJson.end() && it->is_object()) {
+        return &*it;
+    }
+
+    for (auto it = baseJson.begin(); it != baseJson.end(); ++it) {
+        if (ya::canonical_type_name(it.key()) == className && it->is_object()) {
+            return &*it;
+        }
+    }
+
+    return nullptr;
+}
+
 } // namespace
 
 void ReflectionSerializer::registerCustomTypeHook(type_index_t typeIndex, CustomTypeHook hook)
@@ -475,10 +490,9 @@ void ReflectionSerializer::deserializeBaseClasses(const Class *classPtr, void *o
         if (parentClass) {
             void *parentObj = classPtr->getParentPointer(obj, parentTypeId);
             if (parentObj) {
-                if (baseJson.contains(parentClass->name) && baseJson[parentClass->name].is_object()) {
-                    const auto &parentJson = baseJson[parentClass->name];
+                if (const auto *parentJson = findBaseClassJson(baseJson, parentClass->name)) {
 
-                    for (auto it = parentJson.begin(); it != parentJson.end(); ++it) {
+                    for (auto it = parentJson->begin(); it != parentJson->end(); ++it) {
                         const std::string &jsonKey   = it.key();
                         const auto        &jsonValue = it.value();
 
