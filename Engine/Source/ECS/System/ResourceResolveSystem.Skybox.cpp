@@ -27,6 +27,56 @@ void clearSkyboxViews(SkyboxRuntimeState& state)
     }
 }
 
+std::string buildSkyboxDerivedKey(const SkyboxComponent& skybox, AssetManager* assets)
+{
+    if (!assets || !skybox.hasSource()) {
+        return {};
+    }
+
+    if (skybox.hasCubemapSource()) {
+        std::string key = std::format("skybox|cubefaces|flip={}", skybox.cubemapSource.flipVertical ? 1 : 0);
+        for (const auto& path : skybox.cubemapSource.files) {
+            const auto normalized = AssetManager::normalizeAssetPath(path);
+            key += std::format("|{}|v{}", normalized, assets->getResourceVersion(normalized));
+        }
+        return key;
+    }
+
+    const auto normalized = AssetManager::normalizeAssetPath(skybox.cylindricalSource.filepath);
+    return std::format("skybox|cyl|{}|v{}|flip={}",
+                       normalized,
+                       assets->getResourceVersion(normalized),
+                       skybox.cylindricalSource.flipVertical ? 1 : 0);
+}
+
+void applySkyboxResource(const std::shared_ptr<SkyboxDerivedResource>& resource,
+                         SkyboxRuntimeState&                           state)
+{
+    state.boundResource        = resource;
+    state.cubemapRenderImage   = resource ? resource->cubemapRenderImage : nullptr;
+    state.cubemapTexture       = resource ? resource->cubemapTexture : nullptr;
+    state.sourcePreviewTexture = resource ? resource->sourcePreviewTexture : nullptr;
+    state.cubemapFacePreviewViews.fill(nullptr);
+    if (!resource) {
+        return;
+    }
+
+    for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+        state.cubemapFacePreviewViews[faceIndex] = resource->cubemapFacePreviewViews[faceIndex];
+    }
+}
+
+std::shared_ptr<SkyboxDerivedResource> snapshotSkyboxResource(const SkyboxRuntimeState& state)
+{
+    auto resource                    = std::make_shared<SkyboxDerivedResource>();
+    resource->cubemapRenderImage     = state.cubemapRenderImage;
+    resource->cubemapTexture         = state.cubemapTexture;
+    resource->sourcePreviewTexture   = state.sourcePreviewTexture;
+    resource->cubemapFacePreviewViews = state.cubemapFacePreviewViews;
+    resource->lastUsedFrame          = App::currentFrameIndex();
+    return resource;
+}
+
 } // namespace
 
 namespace detail
@@ -90,32 +140,75 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
 {
     YA_PROFILE_FUNCTION();
     auto& registry = scene->getRegistry();
+    auto* assets   = AssetManager::get();
 
-    for (auto&& [entity, sc] : registry.view<SkyboxComponent>().each()) {
+    auto pumpOne = [&](entt::entity entity) {
         YA_PROFILE_SCOPE("ResourceResolve/Skybox/Entity");
+        if (!registry.valid(entity) || !registry.all_of<SkyboxComponent>(entity)) {
+            cleanupSkyboxState(entity);
+            return;
+        }
+
+        auto& sc           = registry.get<SkyboxComponent>(entity);
         auto& pendingState = _skyboxStates[entity];
+        const auto previousResultVersion = pendingState.resultVersion;
+        const std::string derivedKey = buildSkyboxDerivedKey(sc, assets);
         // clear invalid version
         if (pendingState.authoringVersion != sc.authoringVersion) {
             detail::resetSkyboxState(pendingState);
             pendingState.authoringVersion = sc.authoringVersion;
+            pendingState.lastStartedAuthoringVersion = sc.authoringVersion;
         }
 
         if (!sc.hasSource()) {
-            if (sc.resolveState != ESkyboxResolveState::Empty) {
-                makeTransition(sc.resolveState, "Skybox")
+            if (pendingState.resolveState != ESkyboxResolveState::Empty) {
+                makeTransition(pendingState.resolveState, "Skybox")
                     .to(ESkyboxResolveState::Empty, "no source");
                 detail::resetSkyboxState(pendingState);
             }
-            continue;
+            pendingState.derivedKey.clear();
+            pendingState.boundResource.reset();
+            pendingState.lastCompletedAuthoringVersion = sc.authoringVersion;
+            _activeSkybox.erase(entity);
+            return;
         }
 
-        if (sc.resolveState == ESkyboxResolveState::Dirty ||
-            sc.resolveState == ESkyboxResolveState::Empty) {
+        if (!derivedKey.empty() && pendingState.derivedKey != derivedKey &&
+            pendingState.resultVersion > 0) {
+            detail::resetSkyboxState(pendingState);
+            pendingState.resultVersion = 0;
+            makeTransition(pendingState.resolveState, "Skybox")
+                .to(ESkyboxResolveState::Dirty, "derived key changed");
+        }
+
+        if (!derivedKey.empty()) {
+            if (auto it = _skyboxDerivedResources.find(derivedKey); it != _skyboxDerivedResources.end() &&
+                it->second && it->second->hasRenderableCubemap()) {
+                it->second->lastUsedFrame = App::currentFrameIndex();
+                applySkyboxResource(it->second, pendingState);
+                pendingState.derivedKey = derivedKey;
+                if (pendingState.resolveState != ESkyboxResolveState::Ready) {
+                    makeTransition(pendingState.resolveState, "Skybox")
+                        .to(ESkyboxResolveState::Ready, "derived cache hit");
+                }
+                ++pendingState.resultVersion;
+                pendingState.lastCompletedAuthoringVersion = sc.authoringVersion;
+                _activeSkybox.erase(entity);
+                if (pendingState.resultVersion != previousResultVersion) {
+                    markAllSceneSkyboxEnvironmentDependentsDirty("scene skybox projection rebound");
+                }
+                return;
+            }
+        }
+
+        if (pendingState.resolveState == ESkyboxResolveState::Dirty ||
+            pendingState.resolveState == ESkyboxResolveState::Empty) {
             detail::resetSkyboxPending(pendingState);
+            pendingState.lastStartedAuthoringVersion = sc.authoringVersion;
         }
 
-        auto transition = makeTransition(sc.resolveState, "Skybox");
-        switch (sc.resolveState) {
+        auto transition = makeTransition(pendingState.resolveState, "Skybox");
+        switch (pendingState.resolveState) {
         case ESkyboxResolveState::Dirty:
         {
             YA_PROFILE_SCOPE("ResourceResolve/Skybox/Dirty");
@@ -192,7 +285,10 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
                 pendingState.cubemapTexture = std::move(cubemap);
                 pendingState.cubemapRenderImage.reset();
                 detail::rebuildSkyboxViews(pendingState);
+                pendingState.boundResource.reset();
+                pendingState.derivedKey = derivedKey;
                 ++pendingState.resultVersion;
+                _skyboxDerivedResources[derivedKey] = snapshotSkyboxResource(pendingState);
                 transition.to(ESkyboxResolveState::Ready, "cubemap source resolved");
                 break;
             }
@@ -299,8 +395,11 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
             detail::retireTextureNow(pendingState.cubemapTexture);
             pendingState.pendingOffscreenProcess.reset();
             detail::rebuildSkyboxViews(pendingState);
+            pendingState.boundResource.reset();
+            pendingState.derivedKey = derivedKey;
             ++pendingState.resultVersion;
-            makeTransition(sc.resolveState, "Skybox")
+            _skyboxDerivedResources[derivedKey] = snapshotSkyboxResource(pendingState);
+            makeTransition(pendingState.resolveState, "Skybox")
                 .to(ESkyboxResolveState::Ready, "preprocess completed");
         } break;
 
@@ -310,17 +409,32 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
         default:
             break;
         }
-    }
 
-    for (auto it = _skyboxStates.begin(); it != _skyboxStates.end();) {
-        if (!registry.valid(it->first) ||
-            !registry.all_of<SkyboxComponent>(it->first)) {
-            detail::resetSkyboxState(it->second);
-            it = _skyboxStates.erase(it);
+        const bool bActive = pendingState.resolveState == ESkyboxResolveState::ResolvingSource ||
+                             pendingState.resolveState == ESkyboxResolveState::Preprocessing;
+        if (bActive) {
+            _activeSkybox.insert(entity);
         }
         else {
-            ++it;
+            pendingState.lastCompletedAuthoringVersion = sc.authoringVersion;
+            _activeSkybox.erase(entity);
         }
+
+        if (pendingState.resultVersion != previousResultVersion) {
+            markAllSceneSkyboxEnvironmentDependentsDirty("scene skybox result changed");
+        }
+    };
+
+    while (!_dirtySkyboxQueue.empty()) {
+        const auto entity = _dirtySkyboxQueue.front();
+        _dirtySkyboxQueue.pop_front();
+        _dirtySkyboxSet.erase(entity);
+        pumpOne(entity);
+    }
+
+    std::vector<entt::entity> activeEntities(_activeSkybox.begin(), _activeSkybox.end());
+    for (const auto entity : activeEntities) {
+        pumpOne(entity);
     }
 }
 

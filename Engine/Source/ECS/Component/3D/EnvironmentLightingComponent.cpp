@@ -78,43 +78,6 @@ bool EnvironmentLightingComponent::hasCylindricalSource() const
 void EnvironmentLightingComponent::invalidate()
 {
     ++authoringVersion;
-    const bool bHasSource = hasSource();
-
-    makeTransition(sourceState, "EnvironmentLighting.Source")
-        .to(bHasSource ? EEnvironmentLightingSourceResolveState::Dirty : EEnvironmentLightingSourceResolveState::Empty,
-            "invalidate");
-    makeTransition(irradianceState, "EnvironmentLighting.Irradiance")
-        .to(bEnableIrradiance ? (bHasSource ? EEnvironmentLightingIrradianceResolveState::Dirty
-                                            : EEnvironmentLightingIrradianceResolveState::Empty)
-                              : EEnvironmentLightingIrradianceResolveState::Disabled,
-            "invalidate");
-    makeTransition(prefilterState, "EnvironmentLighting.Prefilter")
-        .to(bEnablePrefilter ? (bHasSource ? EEnvironmentLightingPrefilterResolveState::Dirty
-                                           : EEnvironmentLightingPrefilterResolveState::Empty)
-                             : EEnvironmentLightingPrefilterResolveState::Disabled,
-            "invalidate");
-}
-
-bool EnvironmentLightingComponent::isLoading() const
-{
-    return isEnvironmentLightingSourceStateLoading(sourceState) ||
-           isEnvironmentLightingIrradianceStateLoading(irradianceState) ||
-           isEnvironmentLightingPrefilterStateLoading(prefilterState);
-}
-
-bool EnvironmentLightingComponent::hasReadySource() const
-{
-    return sourceState == EEnvironmentLightingSourceResolveState::Ready;
-}
-
-bool EnvironmentLightingComponent::hasReadyIrradiance() const
-{
-    return bEnableIrradiance && irradianceState == EEnvironmentLightingIrradianceResolveState::Ready;
-}
-
-bool EnvironmentLightingComponent::hasReadyPrefilter() const
-{
-    return bEnablePrefilter && prefilterState == EEnvironmentLightingPrefilterResolveState::Ready;
 }
 
 uint32_t EnvironmentLightingComponent::getResolvedIrradianceFaceSize() const

@@ -82,8 +82,6 @@ struct ENGINE_API SkyboxComponent : public IComponent
     CylindricalSource cylindricalSource;
     uint64_t          authoringVersion = 1;
 
-    ESkyboxResolveState resolveState = ESkyboxResolveState::Dirty;
-
     void setFace(ECubeFace face, const std::string& path);
     void setCubemapSource(const CubeMapCreateInfo& createInfo);
     void setCylindricalSource(const std::string& filepath);
@@ -91,9 +89,7 @@ struct ENGINE_API SkyboxComponent : public IComponent
     bool hasCubemapSource() const;
     bool hasCylindricalSource() const;
     void        invalidate();
-    bool        isLoading() const;
     void        onPostSerialize() override;
-    bool        isValid() { return resolveState == ESkyboxResolveState::Ready; }
 };
 
 } // namespace ya

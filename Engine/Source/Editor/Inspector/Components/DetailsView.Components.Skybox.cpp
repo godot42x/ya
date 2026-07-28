@@ -3,12 +3,12 @@
 namespace ya
 {
 
-void DetailsView::drawSkyboxStatus(const SkyboxComponent& skybox)
+void DetailsView::drawSkyboxStatus(ESkyboxResolveState resolveState)
 {
     const char* label = "Status: Unknown";
     ImVec4      color = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
 
-    switch (skybox.resolveState) {
+    switch (resolveState) {
     case ESkyboxResolveState::Empty:
         label = "Status: No skybox source";
         color = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
@@ -41,6 +41,7 @@ void DetailsView::drawSkyboxStatus(const SkyboxComponent& skybox)
 void DetailsView::drawSkyboxComponent(Entity& entity)
 {
     componentWrapper<SkyboxComponent>("Skybox", entity, [this, &entity](SkyboxComponent* sc) {
+        const auto entityId = static_cast<entt::entity>(entity);
         bool bSourceChanged = false;
 
         int sourceType = static_cast<int>(sc->sourceType);
@@ -69,10 +70,13 @@ void DetailsView::drawSkyboxComponent(Entity& entity)
 
                 ImGui::SameLine();
                 if (ImGui::Button("Browse")) {
-                    _filePicker.openTexturePicker(sc->cubemapSource.files[faceIndex], [sc, faceIndex](const std::string& newPath) {
+                    _filePicker.openTexturePicker(sc->cubemapSource.files[faceIndex], [sc, faceIndex, entityId](const std::string& newPath) {
                         sc->sourceType                      = ESkyboxSourceType::CubeFaces;
                         sc->cubemapSource.files[faceIndex] = newPath;
                         sc->invalidate();
+                        if (auto* resolver = App::get()->getResourceResolveSystem()) {
+                            resolver->markSkyboxDirty(entityId, "editor skybox face picked");
+                        }
                     });
                 }
                 ImGui::PopID();
@@ -100,25 +104,39 @@ void DetailsView::drawSkyboxComponent(Entity& entity)
 
                 ImGui::TableSetColumnIndex(1);
                 if (ImGui::Button("Browse##SkyboxCylindrical", ImVec2(-1.0f, 0.0f))) {
-                    _filePicker.openTexturePicker(sc->cylindricalSource.filepath, [sc](const std::string& newPath) {
+                    _filePicker.openTexturePicker(sc->cylindricalSource.filepath, [sc, entityId](const std::string& newPath) {
                         sc->setCylindricalSource(newPath);
+                        if (auto* resolver = App::get()->getResourceResolveSystem()) {
+                            resolver->markSkyboxDirty(entityId, "editor skybox cylindrical picked");
+                        }
                     });
                 }
                 ImGui::EndTable();
             }
         }
 
+        auto* resolver = App::get()->getResourceResolveSystem();
+
         if (bSourceChanged) {
             sc->invalidate();
+            if (resolver) {
+                resolver->markSkyboxDirty(entityId, "editor skybox modified");
+            }
         }
 
         ImGui::Separator();
-        drawSkyboxStatus(*sc);
-        if (sc->isLoading()) {
+        drawSkyboxStatus(resolver ? resolver->getSkyboxResolveState(entityId) : ESkyboxResolveState::Empty);
+        if (resolver) {
+            const auto state = resolver->getSkyboxResolveState(entityId);
+            if (state == ESkyboxResolveState::ResolvingSource || state == ESkyboxResolveState::Preprocessing) {
             ImGui::TextDisabled("Waiting for skybox source load or preprocessing to finish");
+            }
         }
         if (ImGui::Button("Invalidate##Skybox")) {
             sc->invalidate();
+            if (auto* resolver = App::get()->getResourceResolveSystem()) {
+                resolver->markSkyboxDirty(entityId, "editor skybox invalidate button");
+            }
         }
 
         drawSkyboxPreviewSection(entity, *sc);

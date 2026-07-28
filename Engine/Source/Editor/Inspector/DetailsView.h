@@ -4,6 +4,8 @@
 #include "ECS/Entity.h"
 #include "Editor/FilePicker.h"
 #include "Editor/Inspector/TypeRenderer.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
+#include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include <imgui.h>
 #include <sol/sol.hpp>
 #include <type_traits>
@@ -14,8 +16,6 @@ namespace ya
 struct Scene;
 struct EditorLayer;
 struct LuaScriptComponent;
-struct EnvironmentLightingComponent;
-struct SkyboxComponent;
 struct SkyboxPreviewInfo;
 struct Texture;
 
@@ -47,9 +47,9 @@ struct DetailsView
     void drawComponents(Entity &entity);
     void drawAddComponentButton(Entity &entity); // Add component popup
     void drawEnvironmentLightingComponent(Entity& entity);
-    void drawEnvironmentLightingStatus(const EnvironmentLightingComponent& environmentLighting);
+    void drawEnvironmentLightingStatus(EEnvironmentLightingSourceResolveState sourceState, EEnvironmentLightingIrradianceResolveState irradianceState, EEnvironmentLightingPrefilterResolveState prefilterState, bool bUsesSceneSkybox);
     void drawSkyboxComponent(Entity& entity);
-    void drawSkyboxStatus(const SkyboxComponent& skybox);
+    void drawSkyboxStatus(ESkyboxResolveState resolveState);
     void drawSkyboxPreviewSection(const Entity& entity, const SkyboxComponent& skybox);
     void drawSkyboxSourcePreview(const SkyboxPreviewInfo& preview, const SkyboxComponent& skybox);
     void drawSkyboxCubemapPreviewGrid(const SkyboxPreviewInfo& preview);

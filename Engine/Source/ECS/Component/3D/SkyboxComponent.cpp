@@ -65,15 +65,6 @@ bool SkyboxComponent::hasCylindricalSource() const
 void SkyboxComponent::invalidate()
 {
     ++authoringVersion;
-    auto transition = makeTransition(resolveState, "Skybox");
-    transition.to(hasSource() ? ESkyboxResolveState::Dirty : ESkyboxResolveState::Empty,
-                  "invalidate");
-}
-
-bool SkyboxComponent::isLoading() const
-{
-    return resolveState == ESkyboxResolveState::ResolvingSource ||
-           resolveState == ESkyboxResolveState::Preprocessing;
 }
 
 void SkyboxComponent::onPostSerialize()

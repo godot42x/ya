@@ -68,16 +68,16 @@ void completeEnvironmentSource(EnvironmentLightingComponent&    component,
                                const char*                      reason)
 {
     detail::rebuildEnvironmentCubemapViews(state);
-    makeTransition(component.sourceState, "EnvironmentLighting.Source")
+    makeTransition(state.sourceState, "EnvironmentLighting.Source")
         .to(EEnvironmentLightingSourceResolveState::Ready, reason);
     ++state.resultVersion;
 
     if (!component.bEnableIrradiance) {
-        makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance")
+        makeTransition(state.irradianceState, "EnvironmentLighting.Irradiance")
             .to(EEnvironmentLightingIrradianceResolveState::Disabled, "irradiance disabled");
     }
     if (!component.bEnablePrefilter) {
-        makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter")
+        makeTransition(state.prefilterState, "EnvironmentLighting.Prefilter")
             .to(EEnvironmentLightingPrefilterResolveState::Disabled, "prefilter disabled");
     }
 }
@@ -86,16 +86,16 @@ void completeEnvironmentSourceFromDependency(EnvironmentLightingComponent&    co
                                              EnvironmentLightingRuntimeState& state,
                                              const char*                      reason)
 {
-    makeTransition(component.sourceState, "EnvironmentLighting.Source")
+    makeTransition(state.sourceState, "EnvironmentLighting.Source")
         .to(EEnvironmentLightingSourceResolveState::Ready, reason);
     ++state.resultVersion;
 
     if (!component.bEnableIrradiance) {
-        makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance")
+        makeTransition(state.irradianceState, "EnvironmentLighting.Irradiance")
             .to(EEnvironmentLightingIrradianceResolveState::Disabled, "irradiance disabled");
     }
     if (!component.bEnablePrefilter) {
-        makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter")
+        makeTransition(state.prefilterState, "EnvironmentLighting.Prefilter")
             .to(EEnvironmentLightingPrefilterResolveState::Disabled, "prefilter disabled");
     }
 }
@@ -124,13 +124,13 @@ void syncEnvironmentDerivedBranchEnablement(EnvironmentLightingComponent&    com
         cancelOffscreenJob(state.pendingIrradianceOffscreen);
         detail::retireRenderImageNow(state.irradianceRenderImage);
         detail::rebuildEnvironmentIrradianceViews(state);
-        if (component.irradianceState != EEnvironmentLightingIrradianceResolveState::Disabled) {
-            makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance")
+        if (state.irradianceState != EEnvironmentLightingIrradianceResolveState::Disabled) {
+            makeTransition(state.irradianceState, "EnvironmentLighting.Irradiance")
                 .to(EEnvironmentLightingIrradianceResolveState::Disabled, "irradiance disabled");
         }
     }
-    else if (component.hasReadySource() && component.irradianceState == EEnvironmentLightingIrradianceResolveState::Disabled) {
-        makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance")
+    else if (state.sourceState == EEnvironmentLightingSourceResolveState::Ready && state.irradianceState == EEnvironmentLightingIrradianceResolveState::Disabled) {
+        makeTransition(state.irradianceState, "EnvironmentLighting.Irradiance")
             .to(EEnvironmentLightingIrradianceResolveState::Dirty, "irradiance enabled");
     }
 
@@ -138,32 +138,32 @@ void syncEnvironmentDerivedBranchEnablement(EnvironmentLightingComponent&    com
         cancelOffscreenJob(state.pendingPrefilterOffscreen);
         detail::retireRenderImageNow(state.prefilterRenderImage);
         detail::rebuildPrefilterViews(state);
-        if (component.prefilterState != EEnvironmentLightingPrefilterResolveState::Disabled) {
-            makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter")
+        if (state.prefilterState != EEnvironmentLightingPrefilterResolveState::Disabled) {
+            makeTransition(state.prefilterState, "EnvironmentLighting.Prefilter")
                 .to(EEnvironmentLightingPrefilterResolveState::Disabled, "prefilter disabled");
         }
     }
-    else if (component.hasReadySource() && component.prefilterState == EEnvironmentLightingPrefilterResolveState::Disabled) {
-        makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter")
+    else if (state.sourceState == EEnvironmentLightingSourceResolveState::Ready && state.prefilterState == EEnvironmentLightingPrefilterResolveState::Disabled) {
+        makeTransition(state.prefilterState, "EnvironmentLighting.Prefilter")
             .to(EEnvironmentLightingPrefilterResolveState::Dirty, "prefilter enabled");
     }
 }
 
-void failEnvironmentDerivedBranches(EnvironmentLightingComponent& component, const char* reason)
+void failEnvironmentDerivedBranches(EnvironmentLightingComponent& component, EnvironmentLightingRuntimeState& state, const char* reason)
 {
     if (component.bEnableIrradiance) {
-        makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance").fail(reason);
+        makeTransition(state.irradianceState, "EnvironmentLighting.Irradiance").fail(reason);
     }
     else {
-        makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance")
+        makeTransition(state.irradianceState, "EnvironmentLighting.Irradiance")
             .to(EEnvironmentLightingIrradianceResolveState::Disabled, reason);
     }
 
     if (component.bEnablePrefilter) {
-        makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter").fail(reason);
+        makeTransition(state.prefilterState, "EnvironmentLighting.Prefilter").fail(reason);
     }
     else {
-        makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter")
+        makeTransition(state.prefilterState, "EnvironmentLighting.Prefilter")
             .to(EEnvironmentLightingPrefilterResolveState::Disabled, reason);
     }
 }
@@ -308,13 +308,13 @@ void tryBeginEnvIrradianceJob(ResourceResolveSystem&           system,
                               const ImageResourceRef&          sourceCubemap)
 {
     if (!sourceCubemap.isValid()) {
-        makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance")
+        makeTransition(state.irradianceState, "EnvironmentLighting.Irradiance")
             .fail("irradiance source invalid");
         return;
     }
 
     if (!component.bEnableIrradiance) {
-        makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance")
+        makeTransition(state.irradianceState, "EnvironmentLighting.Irradiance")
             .to(EEnvironmentLightingIrradianceResolveState::Disabled, "irradiance disabled");
         return;
     }
@@ -323,13 +323,13 @@ void tryBeginEnvIrradianceJob(ResourceResolveSystem&           system,
 
     auto job = createEnvironmentIrradianceJob(system, entity, component, sourceCubemap);
     if (!job) {
-        makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance")
+        makeTransition(state.irradianceState, "EnvironmentLighting.Irradiance")
             .fail("irradiance job not wired");
         return;
     }
 
     state.pendingIrradianceOffscreen = std::move(job);
-    makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance")
+    makeTransition(state.irradianceState, "EnvironmentLighting.Irradiance")
         .to(EEnvironmentLightingIrradianceResolveState::Building, "queue irradiance preprocess");
 }
 
@@ -340,12 +340,12 @@ void tryBeginEnvPrefilterJob(ResourceResolveSystem&           system,
                              const ImageResourceRef&          sourceCubemap)
 {
     if (!sourceCubemap.isValid()) {
-        makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter").fail("prefilter source invalid");
+        makeTransition(state.prefilterState, "EnvironmentLighting.Prefilter").fail("prefilter source invalid");
         return;
     }
 
     if (!component.bEnablePrefilter) {
-        makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter")
+        makeTransition(state.prefilterState, "EnvironmentLighting.Prefilter")
             .to(EEnvironmentLightingPrefilterResolveState::Disabled, "prefilter disabled");
         return;
     }
@@ -354,12 +354,12 @@ void tryBeginEnvPrefilterJob(ResourceResolveSystem&           system,
 
     auto job = createEnvironmentPrefilterJob(system, entity, component, sourceCubemap);
     if (!job) {
-        makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter").fail("prefilter job not wired");
+        makeTransition(state.prefilterState, "EnvironmentLighting.Prefilter").fail("prefilter job not wired");
         return;
     }
 
     state.pendingPrefilterOffscreen = std::move(job);
-    makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter")
+    makeTransition(state.prefilterState, "EnvironmentLighting.Prefilter")
         .to(EEnvironmentLightingPrefilterResolveState::Building, "queue prefilter preprocess");
 }
 
@@ -377,15 +377,15 @@ const SkyboxRuntimeState* syncEnvSkybox(EnvironmentLightingComponent&    compone
         state.lastSceneSkyboxResultVersion = currentResultVersion;
         const auto nextSourceState         = currentResultVersion == 0 ? EEnvironmentLightingSourceResolveState::Empty
                                                                        : EEnvironmentLightingSourceResolveState::Dirty;
-        makeTransition(component.sourceState, "EnvironmentLighting.Source")
+        makeTransition(state.sourceState, "EnvironmentLighting.Source")
             .to(nextSourceState, "scene skybox dependency changed");
-        makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance")
+        makeTransition(state.irradianceState, "EnvironmentLighting.Irradiance")
             .to(component.bEnableIrradiance
                     ? (currentResultVersion == 0 ? EEnvironmentLightingIrradianceResolveState::Empty
                                                  : EEnvironmentLightingIrradianceResolveState::Dirty)
                     : EEnvironmentLightingIrradianceResolveState::Disabled,
                 "scene skybox dependency changed");
-        makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter")
+        makeTransition(state.prefilterState, "EnvironmentLighting.Prefilter")
             .to(component.bEnablePrefilter
                     ? (currentResultVersion == 0 ? EEnvironmentLightingPrefilterResolveState::Empty
                                                  : EEnvironmentLightingPrefilterResolveState::Dirty)
@@ -394,7 +394,7 @@ const SkyboxRuntimeState* syncEnvSkybox(EnvironmentLightingComponent&    compone
     }
 
     if (sceneSkyboxState && sceneSkyboxState->hasRenderableCubemap() &&
-        component.sourceState == EEnvironmentLightingSourceResolveState::Dirty) {
+        state.sourceState == EEnvironmentLightingSourceResolveState::Dirty) {
         return sceneSkyboxState;
     }
 
@@ -545,20 +545,20 @@ namespace
 void handleEnvironmentNoSource(EnvironmentLightingComponent&    component,
                                EnvironmentLightingRuntimeState& state)
 {
-    if (component.sourceState != EEnvironmentLightingSourceResolveState::Empty) {
-        makeTransition(component.sourceState, "EnvironmentLighting.Source")
+    if (state.sourceState != EEnvironmentLightingSourceResolveState::Empty) {
+        makeTransition(state.sourceState, "EnvironmentLighting.Source")
             .to(EEnvironmentLightingSourceResolveState::Empty, "no source");
     }
-    if (component.irradianceState != EEnvironmentLightingIrradianceResolveState::Empty &&
-        component.irradianceState != EEnvironmentLightingIrradianceResolveState::Disabled) {
-        makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance")
+    if (state.irradianceState != EEnvironmentLightingIrradianceResolveState::Empty &&
+        state.irradianceState != EEnvironmentLightingIrradianceResolveState::Disabled) {
+        makeTransition(state.irradianceState, "EnvironmentLighting.Irradiance")
             .to(component.bEnableIrradiance ? EEnvironmentLightingIrradianceResolveState::Empty
                                             : EEnvironmentLightingIrradianceResolveState::Disabled,
                 "no source");
     }
-    if (component.prefilterState != EEnvironmentLightingPrefilterResolveState::Empty &&
-        component.prefilterState != EEnvironmentLightingPrefilterResolveState::Disabled) {
-        makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter")
+    if (state.prefilterState != EEnvironmentLightingPrefilterResolveState::Empty &&
+        state.prefilterState != EEnvironmentLightingPrefilterResolveState::Disabled) {
+        makeTransition(state.prefilterState, "EnvironmentLighting.Prefilter")
             .to(component.bEnablePrefilter ? EEnvironmentLightingPrefilterResolveState::Empty
                                            : EEnvironmentLightingPrefilterResolveState::Disabled,
                 "no source");
@@ -569,7 +569,7 @@ void handleEnvironmentNoSource(EnvironmentLightingComponent&    component,
 void handleEnvironmentSourceDirty(EnvironmentLightingComponent&    component,
                                   EnvironmentLightingRuntimeState& state)
 {
-    auto transition = makeTransition(component.sourceState, "EnvironmentLighting.Source");
+    auto transition = makeTransition(state.sourceState, "EnvironmentLighting.Source");
     if (component.hasCubemapSource()) {
         std::vector<std::string> facePaths(component.cubemapSource.files.begin(), component.cubemapSource.files.end());
         state.pendingBatchLoad              = std::make_shared<EnvironmentLightingPendingBatchLoadState>();
@@ -602,7 +602,7 @@ void handleEnvironmentSourceResolving(ResourceResolveSystem&           system,
                                       EnvironmentLightingComponent&    component,
                                       EnvironmentLightingRuntimeState& state)
 {
-    auto transition = makeTransition(component.sourceState, "EnvironmentLighting.Source");
+    auto transition = makeTransition(state.sourceState, "EnvironmentLighting.Source");
     if (component.hasCubemapSource()) {
         AssetManager::TextureBatchMemory batchMemory;
         if (!state.pendingBatchLoad || !AssetManager::get()->consumeTextureBatchMemory(state.pendingBatchLoad->batchHandle, batchMemory)) {
@@ -613,7 +613,7 @@ void handleEnvironmentSourceResolving(ResourceResolveSystem&           system,
         if (batchMemory.textures.size() != CubeFace_Count || !batchMemory.isValid()) {
             detail::retireEnvTextures(state);
             transition.fail("cubemap batch invalid");
-            failEnvironmentDerivedBranches(component, "cubemap batch invalid");
+            failEnvironmentDerivedBranches(component, state, "cubemap batch invalid");
             return;
         }
 
@@ -637,7 +637,7 @@ void handleEnvironmentSourceResolving(ResourceResolveSystem&           system,
         if (!cubemap || !cubemap->isValid()) {
             detail::retireEnvTextures(state);
             transition.fail("cubemap creation failed");
-            failEnvironmentDerivedBranches(component, "cubemap creation failed");
+            failEnvironmentDerivedBranches(component, state, "cubemap creation failed");
             return;
         }
 
@@ -666,7 +666,7 @@ void handleEnvironmentSourceResolving(ResourceResolveSystem&           system,
         if (!sourceTexture || !sourceTexture->getImageView()) {
             detail::retireEnvTextures(state);
             transition.fail("cylindrical source invalid");
-            failEnvironmentDerivedBranches(component, "cylindrical source invalid");
+            failEnvironmentDerivedBranches(component, state, "cylindrical source invalid");
             return;
         }
 
@@ -674,7 +674,7 @@ void handleEnvironmentSourceResolving(ResourceResolveSystem&           system,
         if (!job) {
             detail::retireEnvTextures(state);
             transition.fail("cubemap job not wired");
-            failEnvironmentDerivedBranches(component, "cubemap job not wired");
+            failEnvironmentDerivedBranches(component, state, "cubemap job not wired");
             return;
         }
 
@@ -685,11 +685,11 @@ void handleEnvironmentSourceResolving(ResourceResolveSystem&           system,
 
     detail::resetEnvPending(state);
     transition.to(EEnvironmentLightingSourceResolveState::Empty, "active source changed while resolving");
-    makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance")
+    makeTransition(state.irradianceState, "EnvironmentLighting.Irradiance")
         .to(component.bEnableIrradiance ? EEnvironmentLightingIrradianceResolveState::Empty
                                         : EEnvironmentLightingIrradianceResolveState::Disabled,
             "active source changed while resolving");
-    makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter")
+    makeTransition(state.prefilterState, "EnvironmentLighting.Prefilter")
         .to(component.bEnablePrefilter ? EEnvironmentLightingPrefilterResolveState::Empty
                                        : EEnvironmentLightingPrefilterResolveState::Disabled,
             "active source changed while resolving");
@@ -698,10 +698,10 @@ void handleEnvironmentSourceResolving(ResourceResolveSystem&           system,
 void handleEnvironmentSourceBuildingCubemap(EnvironmentLightingComponent&    component,
                                             EnvironmentLightingRuntimeState& state)
 {
-    auto transition = makeTransition(component.sourceState, "EnvironmentLighting.Source");
+    auto transition = makeTransition(state.sourceState, "EnvironmentLighting.Source");
     if (!state.pendingEnvironmentOffscreen) {
         transition.fail("preprocess job missing");
-        failEnvironmentDerivedBranches(component, "preprocess job missing");
+        failEnvironmentDerivedBranches(component, state, "preprocess job missing");
         return;
     }
 
@@ -720,7 +720,7 @@ void handleEnvironmentSourceBuildingCubemap(EnvironmentLightingComponent&    com
         state.pendingEnvironmentOffscreen.reset();
         detail::retireEnvTextures(state);
         transition.fail("preprocess failed");
-        failEnvironmentDerivedBranches(component, "preprocess failed");
+        failEnvironmentDerivedBranches(component, state, "preprocess failed");
         return;
     }
 
@@ -741,7 +741,7 @@ void handleEnvironmentIrradianceDirty(ResourceResolveSystem&           system,
                                       const SkyboxRuntimeState*        sceneSkyboxState)
 {
     const auto sourceCubemap = resolveEnvironmentSourceCubemap(component, state, sceneSkyboxState);
-    if (!component.bEnableIrradiance || !component.hasReadySource() || !sourceCubemap.isValid()) {
+    if (!component.bEnableIrradiance || state.sourceState != EEnvironmentLightingSourceResolveState::Ready || !sourceCubemap.isValid()) {
         return;
     }
 
@@ -756,7 +756,7 @@ void handleEnvironmentIrradianceBuilding(EnvironmentLightingComponent&    compon
                                          EnvironmentLightingRuntimeState& state)
 {
     if (!state.pendingIrradianceOffscreen) {
-        makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance").fail("preprocess job missing");
+        makeTransition(state.irradianceState, "EnvironmentLighting.Irradiance").fail("preprocess job missing");
         return;
     }
 
@@ -775,7 +775,7 @@ void handleEnvironmentIrradianceBuilding(EnvironmentLightingComponent&    compon
         !state.pendingIrradianceOffscreen->result->outputImage) {
         state.pendingIrradianceOffscreen.reset();
         detail::retireRenderImageNow(state.irradianceRenderImage);
-        makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance").fail("preprocess failed");
+        makeTransition(state.irradianceState, "EnvironmentLighting.Irradiance").fail("preprocess failed");
         return;
     }
 
@@ -788,7 +788,7 @@ void handleEnvironmentIrradianceBuilding(EnvironmentLightingComponent&    compon
     detail::rebuildEnvironmentIrradianceViews(state);
     state.pendingIrradianceOffscreen.reset();
     ++state.resultVersion;
-    makeTransition(component.irradianceState, "EnvironmentLighting.Irradiance")
+    makeTransition(state.irradianceState, "EnvironmentLighting.Irradiance")
         .to(EEnvironmentLightingIrradianceResolveState::Ready, "irradiance preprocess completed");
 }
 
@@ -799,7 +799,7 @@ void handleEnvironmentPrefilterDirty(ResourceResolveSystem&           system,
                                      const SkyboxRuntimeState*        sceneSkyboxState)
 {
     const auto sourceCubemap = resolveEnvironmentSourceCubemap(component, state, sceneSkyboxState);
-    if (!component.bEnablePrefilter || !component.hasReadySource() || !sourceCubemap.isValid()) {
+    if (!component.bEnablePrefilter || state.sourceState != EEnvironmentLightingSourceResolveState::Ready || !sourceCubemap.isValid()) {
         return;
     }
 
@@ -814,7 +814,7 @@ void handleEnvironmentPrefilterBuilding(EnvironmentLightingComponent&    compone
                                         EnvironmentLightingRuntimeState& state)
 {
     if (!state.pendingPrefilterOffscreen) {
-        makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter").fail("preprocess job missing");
+        makeTransition(state.prefilterState, "EnvironmentLighting.Prefilter").fail("preprocess job missing");
         return;
     }
 
@@ -833,7 +833,7 @@ void handleEnvironmentPrefilterBuilding(EnvironmentLightingComponent&    compone
         state.pendingPrefilterOffscreen.reset();
         detail::retireRenderImageNow(state.prefilterRenderImage);
         detail::rebuildPrefilterViews(state);
-        makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter").fail("preprocess failed");
+        makeTransition(state.prefilterState, "EnvironmentLighting.Prefilter").fail("preprocess failed");
         return;
     }
 
@@ -845,7 +845,7 @@ void handleEnvironmentPrefilterBuilding(EnvironmentLightingComponent&    compone
     detail::rebuildPrefilterViews(state);
     state.pendingPrefilterOffscreen.reset();
     ++state.resultVersion;
-    makeTransition(component.prefilterState, "EnvironmentLighting.Prefilter")
+    makeTransition(state.prefilterState, "EnvironmentLighting.Prefilter")
         .to(EEnvironmentLightingPrefilterResolveState::Ready, "prefilter preprocess completed");
 }
 
@@ -854,7 +854,7 @@ void resolveEnvironmentSourceState(ResourceResolveSystem&           system,
                                    EnvironmentLightingComponent&    component,
                                    EnvironmentLightingRuntimeState& state)
 {
-    switch (component.sourceState) {
+    switch (state.sourceState) {
     case EEnvironmentLightingSourceResolveState::Dirty:
     {
         handleEnvironmentSourceDirty(component, state);
@@ -882,7 +882,7 @@ void resolveEnvironmentIrradianceState(ResourceResolveSystem&           system,
                                        EnvironmentLightingRuntimeState& state,
                                        const SkyboxRuntimeState*        sceneSkyboxState)
 {
-    switch (component.irradianceState) {
+    switch (state.irradianceState) {
     case EEnvironmentLightingIrradianceResolveState::Dirty:
     {
         handleEnvironmentIrradianceDirty(system, entity, component, state, sceneSkyboxState);
@@ -907,7 +907,7 @@ void resolveEnvironmentPrefilterState(ResourceResolveSystem&           system,
                                       EnvironmentLightingRuntimeState& state,
                                       const SkyboxRuntimeState*        sceneSkyboxState)
 {
-    switch (component.prefilterState) {
+    switch (state.prefilterState) {
     case EEnvironmentLightingPrefilterResolveState::Dirty:
     {
         handleEnvironmentPrefilterDirty(system, entity, component, state, sceneSkyboxState);
@@ -948,8 +948,8 @@ void ResourceResolveSystem::resolvePendingEnvironmentLighting(Scene* scene)
             continue;
         }
 
-        if (elc.sourceState == EEnvironmentLightingSourceResolveState::Dirty ||
-            elc.sourceState == EEnvironmentLightingSourceResolveState::Empty) {
+        if (pendingState.sourceState == EEnvironmentLightingSourceResolveState::Dirty ||
+            pendingState.sourceState == EEnvironmentLightingSourceResolveState::Empty) {
             detail::resetEnvPending(pendingState);
         }
 

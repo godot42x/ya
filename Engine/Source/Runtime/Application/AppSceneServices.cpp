@@ -7,6 +7,7 @@
 #include "Core/Log.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
+#include "ECS/System/ResourceResolveSystem.h"
 #include "Scene/SceneManager.h"
 
 namespace ya
@@ -71,11 +72,18 @@ void AppSceneServices::refreshSceneDerivedState(Scene* scene)
     }
 
     auto& registry = scene->getRegistry();
-    registry.view<SkyboxComponent>().each([](auto, SkyboxComponent& skybox) {
+    auto* resolver = _app ? _app->getResourceResolveSystem() : nullptr;
+    registry.view<SkyboxComponent>().each([resolver](auto entity, SkyboxComponent& skybox) {
         skybox.invalidate();
+        if (resolver) {
+            resolver->markSkyboxDirty(entity, "scene derived-state refresh");
+        }
     });
-    registry.view<EnvironmentLightingComponent>().each([](auto, EnvironmentLightingComponent& environment) {
+    registry.view<EnvironmentLightingComponent>().each([resolver](auto entity, EnvironmentLightingComponent& environment) {
         environment.invalidate();
+        if (resolver) {
+            resolver->markEnvironmentLightingDirty(entity, "scene derived-state refresh");
+        }
     });
 }
 

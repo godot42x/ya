@@ -152,10 +152,6 @@ struct ENGINE_API EnvironmentLightingComponent : public IComponent
     uint32_t                       irradianceFaceSize = 32;
     uint64_t                       authoringVersion   = 1;
 
-    EEnvironmentLightingSourceResolveState     sourceState     = EEnvironmentLightingSourceResolveState::Dirty;
-    EEnvironmentLightingIrradianceResolveState irradianceState = EEnvironmentLightingIrradianceResolveState::Dirty;
-    EEnvironmentLightingPrefilterResolveState  prefilterState  = EEnvironmentLightingPrefilterResolveState::Dirty;
-
     void setFace(ECubeFace face, const std::string& path);
     void setCubemapSource(const CubeMapCreateInfo& createInfo);
     void setCylindricalSource(const std::string& filepath);
@@ -178,10 +174,7 @@ struct ENGINE_API EnvironmentLightingComponent : public IComponent
     }
     bool     hasCylindricalSource() const;
     void     invalidate();
-    bool     isLoading() const;
-    bool     hasReadySource() const;
-    bool     hasReadyIrradiance() const;
-    bool     hasReadyPrefilter() const;
+
     uint32_t getResolvedIrradianceFaceSize() const;
     void     onPostSerialize() override;
 };
