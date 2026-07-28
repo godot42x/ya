@@ -41,24 +41,13 @@ void DetailsView::drawComponents(Entity& entity)
         ImGuiStyleScope style;
         style.pushColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.5f, 1.0f));
         ImGui::PushID("Name");
-        if (node) {
-            char        buffer[256];
-            std::string name = node->getName();
-            strncpy_s(buffer, name.c_str(), sizeof(buffer) - 1);
-            buffer[sizeof(buffer) - 1] = '\0';
+        char        buffer[256];
+        std::string name = node ? node->getName() : entity.getName();
+        strncpy_s(buffer, name.c_str(), sizeof(buffer) - 1);
+        buffer[sizeof(buffer) - 1] = '\0';
 
-            if (ImGui::InputText("Name", buffer, sizeof(buffer))) {
-                node->setName(buffer);
-            }
-        }
-        else {
-            char buffer[256];
-            strncpy_s(buffer, entity.name.c_str(), sizeof(buffer) - 1);
-            buffer[sizeof(buffer) - 1] = '\0';
-
-            if (ImGui::InputText("Name", buffer, sizeof(buffer))) {
-                entity.name = buffer;
-            }
+        if (ImGui::InputText("Name", buffer, sizeof(buffer))) {
+            entity.setName(buffer);
         }
         ImGui::PopID();
     }

@@ -94,7 +94,15 @@ struct ENGINE_API Entity
     bool operator!=(const Entity &other) const { return !(*this == other); }
 
     const std::string &getName() const { return name; }
-    void               setName(const std::string &newName) { name = newName; }
+    void               setName(const std::string &newName)
+    {
+        name = newName;
+        if (_scene) {
+            if (auto *node = _scene->getNodeByEntity(this)) {
+                node->setName(newName);
+            }
+        }
+    }
 };
 
 } // namespace ya

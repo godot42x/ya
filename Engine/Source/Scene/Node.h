@@ -48,8 +48,8 @@ struct ENGINE_API Node : public disable_copy
     virtual ~Node() = default;
 
     // === Identity ===
-    [[nodiscard]] const std::string &getName() const { return _name; }
-    void                             setName(const std::string &name) { _name = name; }
+    [[nodiscard]] const std::string &getName() const;
+    void                             setName(const std::string &name);
 
     // === Hierarchy Management ===
     static constexpr size_t NPOS = static_cast<size_t>(-1);

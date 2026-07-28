@@ -11,6 +11,22 @@ namespace ya
 // Node Implementation (Pure Hierarchy)
 // ============================================================================
 
+const std::string &Node::getName() const
+{
+    if (_entity && !_entity->name.empty()) {
+        return _entity->name;
+    }
+    return _name;
+}
+
+void Node::setName(const std::string &name)
+{
+    _name = name;
+    if (_entity) {
+        _entity->name = name;
+    }
+}
+
 size_t Node::getChildIndex(const Node *child) const
 {
     auto it = std::find(_children.begin(), _children.end(), child);
