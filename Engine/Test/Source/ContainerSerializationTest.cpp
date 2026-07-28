@@ -85,6 +85,30 @@ struct TestData
     }
 };
 
+template <typename T>
+struct TemplateBaseSerializationData
+{
+    YA_REFLECT_BEGIN(TemplateBaseSerializationData<T>)
+    YA_REFLECT_FIELD(baseValue)
+    YA_REFLECT_END()
+
+    T baseValue{};
+
+    TemplateBaseSerializationData()
+    {
+        TemplateBaseSerializationData<T>::__ensure_reflection_registered();
+    }
+};
+
+struct TemplateDerivedSerializationData : public TemplateBaseSerializationData<int>
+{
+    YA_REFLECT_BEGIN(TemplateDerivedSerializationData, TemplateBaseSerializationData<int>)
+    YA_REFLECT_FIELD(derivedValue)
+    YA_REFLECT_END()
+
+    int derivedValue = 0;
+};
+
 namespace
 {
 
@@ -92,6 +116,9 @@ void ensureContainerSerializationReflectionReady()
 {
     static bool bInitialized = false;
     if (!bInitialized) {
+        TemplateBaseSerializationData<int>::__ensure_reflection_registered();
+        TemplateDerivedSerializationData::__ensure_reflection_registered();
+
         ya::reflection::DeferredInitializerQueue::instance().executeAll();
 
         auto& registry = ClassRegistry::instance();
@@ -221,6 +248,49 @@ TEST_F(ContainerSerializationTest, VectorObject_Serialize)
     EXPECT_EQ(json["objectVector"][1]["id"], 2);
     EXPECT_EQ(json["objectVector"][1]["name"], "Second");
 }
+
+TEST_F(ContainerSerializationTest, TemplateBaseKeyUsesCanonicalTypeName)
+{
+    TemplateDerivedSerializationData obj;
+    obj.baseValue    = 42;
+    obj.derivedValue = 7;
+
+    const nlohmann::json json = ReflectionSerializer::serializeByRuntimeReflection(obj);
+
+    ASSERT_TRUE(json.contains("__base__"));
+    ASSERT_TRUE(json["__base__"].is_object());
+    ASSERT_EQ(json["__base__"].size(), 1);
+
+    const std::string baseKey = json["__base__"].begin().key();
+    EXPECT_EQ(baseKey.find("struct "), std::string::npos);
+    EXPECT_EQ(baseKey.find("class "), std::string::npos);
+    EXPECT_NE(baseKey.find("TemplateBaseSerializationData"), std::string::npos);
+    EXPECT_EQ(json["__base__"][baseKey]["baseValue"], 42);
+}
+
+TEST_F(ContainerSerializationTest, TemplateBaseDeserializerAcceptsMsvcDecoratedBaseKey)
+{
+    TemplateDerivedSerializationData source;
+    source.baseValue    = 42;
+    source.derivedValue = 7;
+
+    nlohmann::json json = ReflectionSerializer::serializeByRuntimeReflection(source);
+    ASSERT_TRUE(json.contains("__base__"));
+    ASSERT_EQ(json["__base__"].size(), 1);
+
+    const std::string canonicalBaseKey = json["__base__"].begin().key();
+    const auto        basePayload      = json["__base__"][canonicalBaseKey];
+    json["__base__"]                  = nlohmann::json::object();
+    json["__base__"]["struct " + canonicalBaseKey] = basePayload;
+
+    TemplateDerivedSerializationData loaded;
+    ReflectionSerializer::deserializeByRuntimeReflection(loaded, json, "");
+
+    EXPECT_EQ(loaded.baseValue, 42);
+    EXPECT_EQ(loaded.derivedValue, 7);
+}
+
+
 
 TEST_F(ContainerSerializationTest, VectorObject_Deserialize)
 {
