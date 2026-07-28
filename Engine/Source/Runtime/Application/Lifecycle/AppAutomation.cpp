@@ -267,9 +267,12 @@ void resetAutomationStability(AppAutomationRuntimeState& runtimeState, const Sce
 
 bool hasLoadingSkybox(const Scene& scene)
 {
+    auto* resolver = App::get() ? App::get()->getResourceResolveSystem() : nullptr;
+    if (!resolver) return false;
     for (const auto& [entity, skybox] : scene.getRegistry().view<SkyboxComponent>().each()) {
-        (void)entity;
-        if (skybox.isLoading()) {
+        (void)skybox;
+        const auto state = resolver->getSkyboxResolveState(entity);
+        if (state == ESkyboxResolveState::ResolvingSource || state == ESkyboxResolveState::Preprocessing) {
             return true;
         }
     }
@@ -278,9 +281,17 @@ bool hasLoadingSkybox(const Scene& scene)
 
 bool hasLoadingEnvironmentLighting(const Scene& scene)
 {
-    for (const auto& [entity, environmentLighting] : scene.getRegistry().view<EnvironmentLightingComponent>().each()) {
-        (void)entity;
-        if (environmentLighting.isLoading()) {
+    auto* resolver = App::get() ? App::get()->getResourceResolveSystem() : nullptr;
+    if (!resolver) return false;
+    for (const auto& [entity, elc] : scene.getRegistry().view<EnvironmentLightingComponent>().each()) {
+        (void)elc;
+        const auto srcState = resolver->getEnvironmentSourceState(entity);
+        const auto irrState = resolver->getEnvironmentIrradianceState(entity);
+        const auto preState = resolver->getEnvironmentPrefilterState(entity);
+        if (srcState == EEnvironmentLightingSourceResolveState::ResolvingSource ||
+            srcState == EEnvironmentLightingSourceResolveState::BuildingEnvironmentCubemap ||
+            irrState == EEnvironmentLightingIrradianceResolveState::Building ||
+            preState == EEnvironmentLightingPrefilterResolveState::Building) {
             return true;
         }
     }
