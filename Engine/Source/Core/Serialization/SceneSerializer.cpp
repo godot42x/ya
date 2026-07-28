@@ -1,6 +1,7 @@
 #include "SceneSerializer.h"
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Log.h"
+#include "Core/Reflection/DeferredInitializer.h"
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "ECS/Component/ManagedChildComponent.h"
@@ -101,6 +102,12 @@ bool SceneSerializer::loadFromFile(const std::string& filepath)
 nlohmann::json SceneSerializer::serialize()
 {
     YA_PROFILE_FUNCTION();
+
+    // Ensure all deferred reflection registrations are processed before serializing.
+    // Template classes may trigger their registration during component construction
+    // (e.g., when a scene is loaded), which queues deferred init lambdas. Without
+    // this flush, parent-class reflection info may be missing from __base__ blocks.
+    ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
 
     nlohmann::json j;
 
@@ -302,6 +309,7 @@ Entity* SceneSerializer::deserializeEntity(const nlohmann::json& j)
             if (typeIndex) {
                 auto  id           = *typeIndex;
                 void* componentPtr = reg.addComponent(FName(typeName), *_scene, entity->getHandle());
+                ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
                 auto* ops = reg.getComponentOps(id);
                 auto  cls          = ClassRegistry::instance().getClass(id);
                 if (!ops || ops->useReflectionSerialization(componentPtr)) {
@@ -381,6 +389,9 @@ void SceneSerializer::deserializeNodeTree(const nlohmann::json& j, Node* parent,
         auto     it   = entityMap.find(uuid);
         if (it != entityMap.end()) {
             entity = it->second;
+            // Entity is the canonical owner of the display name. This also
+            // migrates scenes written before Node/Entity names were unified.
+            entity->setName(name);
         }
         else {
             YA_CORE_WARN("NodeTree: Entity with UUID {} not found in entityMap", uuid);
