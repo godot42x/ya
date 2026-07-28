@@ -1,7 +1,9 @@
 #pragma once
 
 #include "Render/Core/Image.h"
+#include "Render/Render.h"
 #include "Render/Core/Sampler.h"
+#include "Render/Render.h"
 
 #include <array>
 #include <string_view>

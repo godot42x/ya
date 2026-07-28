@@ -6,6 +6,8 @@
 #include "Render/RenderDefines.h"
 #include "vulkan/vulkan.h"
 
+#include "VulkanRender.h"
+
 
 namespace ya
 {
