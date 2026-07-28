@@ -277,10 +277,36 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
     emitTyped.template operator()<StaticMeshComponent, UnlitMaterialComponent>(staticBuckets.unlitDrawItems);
     emitTyped.template operator()<StaticMeshComponent, SimpleMaterialComponent>(staticBuckets.simpleDrawItems);
 
-    emitTyped.template operator()<TerrainComponent, PBRMaterialComponent>(staticBuckets.pbrDrawItems);
-    emitTyped.template operator()<TerrainComponent, PhongMaterialComponent>(staticBuckets.phongDrawItems);
-    emitTyped.template operator()<TerrainComponent, UnlitMaterialComponent>(staticBuckets.unlitDrawItems);
-    emitTyped.template operator()<TerrainComponent, SimpleMaterialComponent>(staticBuckets.simpleDrawItems);
+    // Terrain draw items: mesh lives in resolver runtime state, not on component.
+    auto* const resolver = App::get() ? App::get()->getResourceResolveSystem() : nullptr;
+    if (resolver) {
+        auto emitTerrain = [&]<typename MatComp>(std::vector<RenderDrawItem>& bucket)
+        {
+            for (const auto& [e, terrain, tc, matComp] :
+                 reg.view<TerrainComponent, TransformComponent, MatComp>().each()) {
+                if (e == viewOwner) continue;
+                auto* mesh = resolver->getTerrainMesh(e);
+                if (!mesh) continue;
+
+                auto* mat = matComp.getMaterial();
+                if (!mat || mat->getIndex() < 0) continue;
+
+                bucket.push_back(RenderDrawItem{
+                    .worldMatrix          = tc.getTransform(),
+                    .mesh                 = mesh,
+                    .material             = mat,
+                    .materialIndex        = static_cast<uint32_t>(mat->getIndex()),
+                    .sortKey              = 0.0f,
+                    .skinningPaletteIndex = registerSkinningPalette(ctx, e, mesh),
+                });
+            }
+        };
+
+        emitTerrain.template operator()<PBRMaterialComponent>(staticBuckets.pbrDrawItems);
+        emitTerrain.template operator()<PhongMaterialComponent>(staticBuckets.phongDrawItems);
+        emitTerrain.template operator()<UnlitMaterialComponent>(staticBuckets.unlitDrawItems);
+        emitTerrain.template operator()<SimpleMaterialComponent>(staticBuckets.simpleDrawItems);
+    }
 
     emitTyped.template operator()<SkinnedMeshComponent, PBRMaterialComponent>(skinnedBuckets.pbrDrawItems);
     emitTyped.template operator()<SkinnedMeshComponent, PhongMaterialComponent>(skinnedBuckets.phongDrawItems);
@@ -312,8 +338,28 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
     };
 
     emitFallback.template operator()<StaticMeshComponent>(staticBuckets.fallbackDrawItems);
-    emitFallback.template operator()<TerrainComponent>(staticBuckets.fallbackDrawItems);
     emitFallback.template operator()<SkinnedMeshComponent>(skinnedBuckets.fallbackDrawItems);
+
+    // Terrain fallback: no material component
+    if (resolver) {
+        for (const auto& [e, terrain, tc] : reg.view<TerrainComponent, TransformComponent>().each()) {
+            if (e == viewOwner) continue;
+            auto* mesh = resolver->getTerrainMesh(e);
+            if (!mesh) continue;
+            if (reg.any_of<PBRMaterialComponent, PhongMaterialComponent, UnlitMaterialComponent, SimpleMaterialComponent>(e)) {
+                continue;
+            }
+
+            staticBuckets.fallbackDrawItems.push_back(RenderDrawItem{
+                .worldMatrix          = tc.getTransform(),
+                .mesh                 = mesh,
+                .material             = nullptr,
+                .materialIndex        = 0,
+                .sortKey              = 0.0f,
+                .skinningPaletteIndex = registerSkinningPalette(ctx, e, mesh),
+            });
+        }
+    }
 }
 
 void RenderFrameExtractor::sortDrawItems(const glm::vec3& cameraPos, RenderFrameData& out)
