@@ -4,7 +4,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -154,7 +154,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -318,7 +318,7 @@
                 },
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -461,7 +461,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -626,7 +626,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -848,7 +848,7 @@
                     "_skeletonIndex": 0,
                     "_sourceModelPath": "Engine/ThirdParty/LearnOpenGL/resources/objects/vampire/dancing_vampire.dae",
                     "_speed": 1.0,
-                    "_time": 125681.114322
+                    "_time": 12050.553699
                 },
                 "TransformComponent": {
                     "_position": [
@@ -869,13 +869,13 @@
                 }
             },
             "id": 1325285700919779996,
-            "name": "New Node"
+            "name": "Vampire"
         },
         {
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -1040,7 +1040,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -1190,7 +1190,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -1340,7 +1340,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -1553,7 +1553,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -1718,7 +1718,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -1868,7 +1868,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -2018,7 +2018,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -2168,7 +2168,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -2333,7 +2333,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -2483,7 +2483,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -2648,7 +2648,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -2813,7 +2813,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -2978,7 +2978,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -3143,7 +3143,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -3308,7 +3308,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -3473,7 +3473,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -3638,7 +3638,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -3788,7 +3788,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -3938,7 +3938,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -4103,7 +4103,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -4268,7 +4268,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -4433,7 +4433,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -4598,7 +4598,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -4763,7 +4763,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -4928,7 +4928,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -5102,7 +5102,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -5295,7 +5295,7 @@
                 },
                 "UnlitMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::UnlitMaterial>": {
+                        "ya::MaterialComponent<ya::UnlitMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -5367,7 +5367,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -5575,7 +5575,7 @@
                 },
                 "UnlitMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::UnlitMaterial>": {
+                        "ya::MaterialComponent<ya::UnlitMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -5647,7 +5647,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -5797,7 +5797,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -5962,7 +5962,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -6127,7 +6127,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -6293,7 +6293,7 @@
                 "MirrorComponent": null,
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -6443,7 +6443,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -6651,7 +6651,7 @@
                 },
                 "UnlitMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::UnlitMaterial>": {
+                        "ya::MaterialComponent<ya::UnlitMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -6723,7 +6723,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -6888,7 +6888,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -7038,7 +7038,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -7188,7 +7188,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -7353,7 +7353,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -7518,7 +7518,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -7683,7 +7683,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -7879,7 +7879,7 @@
                 }
             },
             "id": 11258221024073225263,
-            "name": "New Node"
+            "name": "Sponza"
         },
         {
             "components": {
@@ -7920,9 +7920,54 @@
         },
         {
             "components": {
+                "CameraComponent": {
+                    "_aspectRatio": 1.585421,
+                    "_distance": 6.0,
+                    "_farClip": 1000.0,
+                    "_fixedAspectRatio": false,
+                    "_focusPoint": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "_fov": 45.0,
+                    "_nearClip": 0.1,
+                    "bPrimary": false
+                },
+                "LuaScriptComponent": {
+                    "scripts": [
+                        {
+                            "enabled": true,
+                            "scriptPath": "/Users/mark/1/craft/ya/Example/HelloMaterial/Content/Scripts/PlayerCamera.lua"
+                        }
+                    ]
+                },
+                "TransformComponent": {
+                    "_position": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "_rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "_scale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                }
+            },
+            "id": 12002726299992098586,
+            "name": "Camera"
+        },
+        {
+            "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -8072,7 +8117,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -8237,7 +8282,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -8402,7 +8447,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -8552,7 +8597,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -8702,7 +8747,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -8867,7 +8912,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -9032,7 +9077,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -9182,7 +9227,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -9332,7 +9377,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -9497,7 +9542,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -9647,7 +9692,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -9865,7 +9910,7 @@
                 },
                 "UnlitMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::UnlitMaterial>": {
+                        "ya::MaterialComponent<ya::UnlitMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -9937,7 +9982,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -10102,7 +10147,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -10290,13 +10335,13 @@
                 }
             },
             "id": 14886455398585154065,
-            "name": "New Node"
+            "name": "Environment Lighting"
         },
         {
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -10461,7 +10506,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -10630,7 +10675,7 @@
                 },
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -10780,7 +10825,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -10945,7 +10990,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -11110,7 +11155,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -11318,7 +11363,7 @@
                 },
                 "UnlitMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::UnlitMaterial>": {
+                        "ya::MaterialComponent<ya::UnlitMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -11390,7 +11435,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -11555,7 +11600,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -11720,7 +11765,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -11870,7 +11915,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -12035,7 +12080,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -12200,7 +12245,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -12365,7 +12410,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -12530,7 +12575,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -12680,7 +12725,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -12830,7 +12875,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -12995,7 +13040,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -13160,7 +13205,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -13325,7 +13370,7 @@
             "components": {
                 "PhongMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PhongMaterial>": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -13475,7 +13520,7 @@
             "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
-                        "struct ya::MaterialComponent<struct ya::PBRMaterial>": {
+                        "ya::MaterialComponent<ya::PBRMaterial>": {
                             "_materialPath": ""
                         }
                     },
@@ -13655,6 +13700,10 @@
             {
                 "entityRef": 12765440042600883648,
                 "name": "Lit Test"
+            },
+            {
+                "entityRef": 12002726299992098586,
+                "name": "Camera"
             },
             {
                 "entityRef": 9746208794642443109,
