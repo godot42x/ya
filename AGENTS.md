@@ -56,6 +56,7 @@ xmake project -k compile_commands
 
 ## Core Rules
 
+0. 禁止做 "目前能用就行" 的修复以及重构，应该以架构师的视角来思考问题。避免在补丁之上打补丁，hack之上补hack。遇到目前架构不合理，不支持的时候，及时重构，不断重构是项目良好迭代的关键。
 1. 只使用 XMake，不引入 CMake。
 2. 生成文件只读；修生成链，不手改 `Generated/*`。
 3. Shader-facing C++ 类型以 Slang/GLSL 生成头为单一事实源；不要手写 UBO / SSBO / push constant / indirect command 镜像结构。
