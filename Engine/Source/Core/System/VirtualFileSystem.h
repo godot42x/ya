@@ -15,7 +15,7 @@
 #include <vector>
 
 
-struct ENGINE_API VirtualFileSystem;
+struct VirtualFileSystem;
 
 namespace ya
 {
@@ -23,7 +23,7 @@ using VFS = VirtualFileSystem;
 }
 
 
-struct ENGINE_API VirtualFileSystem
+struct VirtualFileSystem
 {
     using stdpath = std::filesystem::path;
 
@@ -46,8 +46,8 @@ struct ENGINE_API VirtualFileSystem
     MulticastDelegate<void()> onMountPointChanged;
 
   public:
-    static void               init();
-    static VirtualFileSystem* get() { return instance; }
+    static ENGINE_API void              init();
+    static ENGINE_API VirtualFileSystem* get();
 
     VirtualFileSystem()
     {
@@ -138,40 +138,12 @@ struct ENGINE_API VirtualFileSystem
         return std::filesystem::relative(p, to);
     }
 
-    stdpath translatePath(std::string_view virtualPath) const
-    {
-        std::string normalizedPath(virtualPath);
-        std::replace(normalizedPath.begin(), normalizedPath.end(), '\\', '/');
-
-        auto index = normalizedPath.find_first_of(":");
-        if (index == std::string::npos) {
-            const auto relativePath = stdpath(normalizedPath);
-            if (!gameRoot.empty()) {
-                if (normalizedPath == "Content" || normalizedPath.starts_with("Content/")) {
-                    return gameRoot / relativePath;
-                }
-                const auto gamePath = gameRoot / relativePath;
-                if (std::filesystem::exists(gamePath)) {
-                    return gamePath;
-                }
-            }
-            return projectRoot / relativePath;
-        }
-
-        auto mountName    = std::string_view(normalizedPath).substr(0, index);
-        auto physicalPath = std::string_view(normalizedPath).substr(index + 1);
-
-        auto it = mountPoints.find(std::string(mountName));
-        if (it == mountPoints.end()) {
-            YA_CORE_ERROR("VirtualFileSystem::translatePath - Mount point not found: {}", mountName);
-            return {};
-        }
-        return it->second / physicalPath;
-    }
+    ENGINE_API stdpath translatePath(std::string_view virtualPath) const;
+    ENGINE_API std::string toVfsPath(std::string_view path) const;
 
 
-    std::vector<uint8_t> loadFileToMemory(std::string_view filepath) const;
-    bool                 readFileToString(std::string_view filepath, std::string& output) const;
+    ENGINE_API std::vector<uint8_t> loadFileToMemory(std::string_view filepath) const;
+    ENGINE_API bool                 readFileToString(std::string_view filepath, std::string& output) const;
 
     bool isFileExists(const std::string& filepath) const
     {

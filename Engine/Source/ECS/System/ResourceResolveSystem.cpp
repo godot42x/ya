@@ -360,6 +360,45 @@ void ResourceResolveSystem::markAllSceneSkyboxEnvironmentDependentsDirty(const c
     }
 }
 
+void ResourceResolveSystem::gcDerivedResources(uint64_t currentFrame)
+{
+    const auto shouldKeep = [currentFrame](uint64_t lastUsedFrame) {
+        return lastUsedFrame + DERIVED_RESOURCE_GC_DELAY_FRAMES > currentFrame;
+    };
+
+    for (auto it = _terrainDerivedResources.begin(); it != _terrainDerivedResources.end();) {
+        if (!it->second || shouldKeep(it->second->lastUsedFrame)) {
+            ++it;
+            continue;
+        }
+        it = _terrainDerivedResources.erase(it);
+    }
+
+    for (auto it = _skyboxDerivedResources.begin(); it != _skyboxDerivedResources.end();) {
+        if (!it->second || shouldKeep(it->second->lastUsedFrame)) {
+            ++it;
+            continue;
+        }
+
+        SkyboxRuntimeState temp{};
+        copySkyboxResourceToRuntime(it->second, temp);
+        detail::resetSkyboxState(temp);
+        it = _skyboxDerivedResources.erase(it);
+    }
+
+    for (auto it = _environmentDerivedResources.begin(); it != _environmentDerivedResources.end();) {
+        if (!it->second || shouldKeep(it->second->lastUsedFrame)) {
+            ++it;
+            continue;
+        }
+
+        EnvironmentLightingRuntimeState temp{};
+        copyEnvironmentResourceToRuntime(it->second, temp);
+        detail::resetEnvState(temp);
+        it = _environmentDerivedResources.erase(it);
+    }
+}
+
 void ResourceResolveSystem::cleanupTerrainState(entt::entity entity)
 {
     _terrainStates.erase(entity);
@@ -507,6 +546,7 @@ void ResourceResolveSystem::onUpdate(float dt)
     }
 
     auditResolveWork(scene);
+    gcDerivedResources(App::currentFrameIndex());
 
     {
         YA_PROFILE_SCOPE("ResourceResolve/Meshes");
@@ -557,6 +597,12 @@ ESkyboxResolveState ResourceResolveSystem::getSkyboxResolveState(entt::entity en
 {
     const auto it = _skyboxStates.find(entity);
     return it == _skyboxStates.end() ? ESkyboxResolveState::Empty : it->second.resolveState;
+}
+
+bool ResourceResolveSystem::isSkyboxLoading(entt::entity entity) const
+{
+    const auto state = getSkyboxResolveState(entity);
+    return state == ESkyboxResolveState::ResolvingSource || state == ESkyboxResolveState::Preprocessing;
 }
 
 const SkyboxRuntimeState* ResourceResolveSystem::findSkyboxState(entt::entity entity) const
@@ -802,6 +848,14 @@ EEnvironmentLightingPrefilterResolveState ResourceResolveSystem::getEnvironmentP
 {
     const auto it = _environmentStates.find(entity);
     return it == _environmentStates.end() ? EEnvironmentLightingPrefilterResolveState::Empty : it->second.prefilterState;
+}
+
+bool ResourceResolveSystem::isEnvironmentLightingLoading(entt::entity entity) const
+{
+    return getEnvironmentSourceState(entity) == EEnvironmentLightingSourceResolveState::ResolvingSource ||
+           getEnvironmentSourceState(entity) == EEnvironmentLightingSourceResolveState::BuildingEnvironmentCubemap ||
+           getEnvironmentIrradianceState(entity) == EEnvironmentLightingIrradianceResolveState::Building ||
+           getEnvironmentPrefilterState(entity) == EEnvironmentLightingPrefilterResolveState::Building;
 }
 
 const EnvironmentLightingRuntimeState* ResourceResolveSystem::findEnvironmentLightingState(entt::entity entity) const

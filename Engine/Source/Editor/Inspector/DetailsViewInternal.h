@@ -29,6 +29,7 @@
 #include "Editor/Inspector/TypeRenderer.h"
 #include "Resource/Texture/TextureLibrary.h"
 #include "Runtime/Application/App.h"
+#include "Resource/AssetManager.h"
 #include "Scene/Node.h"
 #include "Scene/Scene.h"
 
@@ -65,10 +66,9 @@ inline bool drawPathInput(const char* id, std::string& path, size_t bufferSize)
         return false;
     }
 
-    path = buffer.data();
+    path = AssetManager::normalizeAssetPath(std::string(buffer.data()));
     return true;
 }
-
 inline void drawTexturePreviewImage(const char* id, Texture* texture, float maxWidth, float maxHeight)
 {
     if (!texture || !texture->getImageView()) {
@@ -98,3 +98,6 @@ inline void drawTexturePreviewImage(const char* id, Texture* texture, float maxW
 }
 
 } // namespace ya
+
+
+

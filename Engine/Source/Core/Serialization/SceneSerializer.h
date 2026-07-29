@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Api.h"
 #include <Scene/Scene.h>
 #include <fstream>
 #include <glm/glm.hpp>
@@ -22,7 +23,7 @@ namespace ya
  * 4. 支持资源引用（Texture, Mesh 等）
  */
 
-struct SceneSerializer
+struct ENGINE_API SceneSerializer
 {
   private:
     Scene *_scene = nullptr;
@@ -36,6 +37,7 @@ struct SceneSerializer
 
     nlohmann::json serialize();
     void           deserialize(const nlohmann::json &j);
+    static void normalizePaths(nlohmann::json &j);
 
 
     nlohmann::json serializeEntity(Entity *entity);

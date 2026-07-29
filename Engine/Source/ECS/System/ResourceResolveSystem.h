@@ -124,6 +124,7 @@ struct EnvironmentLightingRuntimeState
     uint64_t                                                  authoringVersion             = 0;
     uint64_t                                                  resultVersion                = 0;
     uint64_t                                                  lastSceneSkyboxResultVersion = 0;
+    bool                                                      bSceneSkyboxDependencyReady  = false;
     uint64_t                                                  lastQueuedAuthoringVersion   = 0;
     uint64_t                                                  lastStartedAuthoringVersion  = 0;
     uint64_t                                                  lastCompletedAuthoringVersion = 0;
@@ -256,6 +257,7 @@ struct ENGINE_API ResourceResolveSystem : public ISystem
     uint64_t                                                          _nextResolveAuditFrame = 0;
 
     void seedSceneResolveWork(Scene* scene);
+    void gcDerivedResources(uint64_t currentFrame);
     void auditResolveWork(Scene* scene);
     void markAllSceneSkyboxEnvironmentDependentsDirty(const char* reason);
     void clearSceneResolveWork();
@@ -292,6 +294,8 @@ struct ENGINE_API ResourceResolveSystem : public ISystem
     void resolvePendingSkybox(Scene* scene);
     void resolvePendingEnvironmentLighting(Scene* scene);
 
+    static constexpr uint64_t DERIVED_RESOURCE_GC_DELAY_FRAMES = 300;
+
     // Pipeline accessors — used by step functions to bind concrete execute lambdas
     EquidistantCylindrical2CubeMap& getCylindrical2CubePipeline() { return _equidistantCylindrical2CubeMap; }
     CubeMap2PBRIrradianceMap&       getCube2IrradiancePipeline() { return _cubeMap2IrradianceMap; }
@@ -299,10 +303,12 @@ struct ENGINE_API ResourceResolveSystem : public ISystem
     [[nodiscard]] Mesh*                   getTerrainMesh(entt::entity entity) const;
     [[nodiscard]] const TerrainRuntimeState* findTerrainState(entt::entity entity) const;
     [[nodiscard]] ESkyboxResolveState getSkyboxResolveState(entt::entity entity) const;
+    [[nodiscard]] bool isSkyboxLoading(entt::entity entity) const;
     [[nodiscard]] const SkyboxRuntimeState* findSkyboxState(entt::entity entity) const;
     [[nodiscard]] EEnvironmentLightingSourceResolveState getEnvironmentSourceState(entt::entity entity) const;
     [[nodiscard]] EEnvironmentLightingIrradianceResolveState getEnvironmentIrradianceState(entt::entity entity) const;
     [[nodiscard]] EEnvironmentLightingPrefilterResolveState getEnvironmentPrefilterState(entt::entity entity) const;
+    [[nodiscard]] bool isEnvironmentLightingLoading(entt::entity entity) const;
     [[nodiscard]] const EnvironmentLightingRuntimeState* findEnvironmentLightingState(entt::entity entity) const;
 
     // ── Internal state queries (used by rendering) ────────────────────

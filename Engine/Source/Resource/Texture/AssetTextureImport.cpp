@@ -45,12 +45,13 @@ const AssetManager::TextureFormatTraits* AssetManager::getFormatTraits(EFormat::
 AssetManager::TextureSourceInfo AssetManager::inspectTextureSource(const std::string& filepath) const
 {
     TextureSourceInfo info;
-    info.filepath  = filepath;
-    info.extension = textureExtension(filepath);
+    info.filepath   = AssetManager::normalizeAssetPath(filepath);
+    info.ioFilepath = resolveTextureIoPath(info.filepath);
+    info.extension  = textureExtension(info.filepath);
 
-    if (isKtxPath(filepath)) {
+    if (isKtxPath(info.filepath)) {
         ResolvedTextureImportSettings settings;
-        if (!applyKtxResolvedSettings(filepath, settings)) {
+        if (!applyKtxResolvedSettings(info.filepath, settings)) {
             return info;
         }
         return settings.sourceInfo;
@@ -59,15 +60,15 @@ AssetManager::TextureSourceInfo AssetManager::inspectTextureSource(const std::st
     int width    = -1;
     int height   = -1;
     int channels = -1;
-    if (!stbi_info(filepath.c_str(), &width, &height, &channels)) {
-        YA_CORE_ERROR("inspectTextureSource: Failed to inspect '{}'", filepath);
+    if (!stbi_info(info.ioFilepath.c_str(), &width, &height, &channels)) {
+        YA_CORE_ERROR("inspectTextureSource: Failed to inspect '{}' (io='{}')", info.filepath, info.ioFilepath);
         return info;
     }
 
     info.width            = static_cast<uint32_t>(width);
     info.height           = static_cast<uint32_t>(height);
     info.detectedChannels = static_cast<uint32_t>(std::max(channels, 0));
-    info.bIsHDR           = stbi_is_hdr(filepath.c_str()) != 0;
+    info.bIsHDR           = stbi_is_hdr(info.ioFilepath.c_str()) != 0;
     info.bIsCompressed    = (info.extension == ".dds" || info.extension == ".ktx" || info.extension == ".ktx2");
     info.detectedKind     = info.bIsCompressed ? ETextureSourceKind::Compressed
                                                : (info.bIsHDR ? ETextureSourceKind::HDR : ETextureSourceKind::LDR);
@@ -156,9 +157,9 @@ AssetManager::ResolvedTextureImportSettings AssetManager::resolveTextureImportSe
     settings.colorSpace   = parseColorSpace(meta.getString("colorSpace", ""), codeHint);
     settings.generateMips = meta.getBool("generateMips", true);
 
-    std::string resolvedSourcePath = filepath;
-    if (const auto companionKtx2 = findCompanionKtx2Path(filepath); !companionKtx2.empty()) {
-        resolvedSourcePath = companionKtx2;
+    std::string resolvedSourcePath = AssetManager::normalizeAssetPath(filepath);
+    if (const auto companionKtx2 = findCompanionKtx2Path(resolvedSourcePath); !companionKtx2.empty()) {
+        resolvedSourcePath = AssetManager::normalizeAssetPath(companionKtx2);
     }
 
     settings.sourceInfo = inspectTextureSource(resolvedSourcePath);

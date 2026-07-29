@@ -13,6 +13,7 @@
 #include "Editor/EditorModule.h"
 #include "Render/Material/Material.h"
 #include "Resource/Texture/TextureLibrary.h"
+#include "Resource/AssetManager.h"
 #include "reflects-core/lib.h"
 
 
@@ -452,8 +453,7 @@ void registerBuiltinTypeRenderers()
                         editorLayer->_filePicker.openModelPicker(
                             assetRef.getPath(),
                             [&assetRef](const std::string& newPath) {
-                                auto p = VFS::get()->relativeTo(newPath, VFS::get()->getProjectRoot()).string();
-                                assetRef.setPath(p);
+                                assetRef.setPath(newPath);
                             });
                     }
                 });
@@ -471,8 +471,7 @@ void registerBuiltinTypeRenderers()
                         editorLayer->_filePicker.openTexturePicker(
                             assetRef.getPath(),
                             [&assetRef](const std::string& newPath) {
-                                auto p = VFS::get()->relativeTo(newPath, VFS::get()->getProjectRoot()).string();
-                                assetRef.setPath(p);
+                                assetRef.setPath(newPath);
                             });
                     }
                 });
@@ -509,7 +508,7 @@ void pathWrapper(void* instance, const PropertyRenderContext& propCtx, RenderCon
     strncpy_s(buffer, displayPath.c_str(), _TRUNCATE);
 
     if (ImGui::InputText(("##" + propCtx.prettyName).c_str(), buffer, sizeof(buffer))) {
-        assetRef.setPath(buffer);
+        assetRef.setPath(AssetManager::normalizeAssetPath(buffer));
         ctx.pushModified();
     }
 
@@ -549,3 +548,6 @@ struct FilePicker* getFilePicker()
 
 
 } // namespace ya
+
+
+

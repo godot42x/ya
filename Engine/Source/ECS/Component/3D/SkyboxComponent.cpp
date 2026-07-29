@@ -1,4 +1,5 @@
 #include "SkyboxComponent.h"
+#include "Resource/AssetManager.h"
 
 namespace ya
 {
@@ -25,14 +26,16 @@ void SkyboxComponent::setFace(ECubeFace face, const std::string& path)
     }
 
     sourceType                                     = ESkyboxSourceType::CubeFaces;
-    cubemapSource.files[static_cast<size_t>(face)] = path;
+    cubemapSource.files[static_cast<size_t>(face)] = AssetManager::normalizeAssetPath(path);
     invalidate();
 }
 
 void SkyboxComponent::setCubemapSource(const CubeMapCreateInfo& createInfo)
 {
     sourceType                 = ESkyboxSourceType::CubeFaces;
-    cubemapSource.files        = createInfo.files;
+    for (size_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+        cubemapSource.files[faceIndex] = AssetManager::normalizeAssetPath(createInfo.files[faceIndex]);
+    }
     cubemapSource.flipVertical = createInfo.flipVertical;
     invalidate();
 }
@@ -40,7 +43,7 @@ void SkyboxComponent::setCubemapSource(const CubeMapCreateInfo& createInfo)
 void SkyboxComponent::setCylindricalSource(const std::string& filepath)
 {
     sourceType                 = ESkyboxSourceType::Cylindrical;
-    cylindricalSource.filepath = filepath;
+    cylindricalSource.filepath = AssetManager::normalizeAssetPath(filepath);
     invalidate();
 }
 
@@ -73,3 +76,5 @@ void SkyboxComponent::onPostSerialize()
 }
 
 } // namespace ya
+
+

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Api.h"
 #include <cstdint>
 #include <functional>
 #include <mutex>
@@ -44,7 +45,7 @@ struct IRender;
  *
  * The queue is thread-safe: enqueue() may be called from any thread.
  */
-class DeferredDeletionQueue
+class ENGINE_API DeferredDeletionQueue
 {
   public:
     static DeferredDeletionQueue& get();

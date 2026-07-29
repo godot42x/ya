@@ -4,6 +4,7 @@
 #include "Core/Base.h"
 #include "Core/Reflection/Reflection.h"
 
+#include "Core/Api.h"
 #include "Runtime/Application/App.h"
 #include "Scene/SceneManager.h"
 
@@ -67,6 +68,8 @@ struct LuaScriptComponent : public IComponent
         // 应用属性覆盖（在运行时初始化后调用）
         void applyPropertyOverrides(sol::state &lua);
 
+        static ENGINE_API std::string normalizeScriptPath(std::string_view path);
+
       private:
         // 类型推断辅助函数
         static std::string inferType(const sol::object &value);
@@ -77,7 +80,7 @@ struct LuaScriptComponent : public IComponent
     // Unity-like API
     ScriptInstance *addScript(const std::string &path)
     {
-        scripts.push_back({path});
+        scripts.push_back({ScriptInstance::normalizeScriptPath(path)});
         return &scripts.back();
     }
 
@@ -127,7 +130,7 @@ struct LuaScriptComponent : public IComponent
         auto scriptsJson = nlohmann::json::array();
         for (const auto& script : scripts) {
             nlohmann::json s;
-            s["scriptPath"] = script.scriptPath;
+            s["scriptPath"] = ScriptInstance::normalizeScriptPath(script.scriptPath);
             s["enabled"]    = script.enabled;
 
             if (!script.propertyOverrides.empty()) {
@@ -200,7 +203,7 @@ struct LuaScriptComponent : public IComponent
         scripts.reserve(srcLua.scripts.size());
         for (const auto& sourceScript : srcLua.scripts) {
             auto& script = scripts.emplace_back();
-            script.scriptPath = sourceScript.scriptPath;
+            script.scriptPath = ScriptInstance::normalizeScriptPath(sourceScript.scriptPath);
             script.enabled = sourceScript.enabled;
             script.propertyOverrides = sourceScript.propertyOverrides;
         }

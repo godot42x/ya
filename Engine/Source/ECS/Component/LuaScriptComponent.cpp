@@ -1,4 +1,6 @@
 #include "LuaScriptComponent.h"
+#include "Core/System/PathUtils.h"
+#include "Resource/AssetManager.h"
 #include <cmath>
 #include <glm/glm.hpp>
 #include <limits>
@@ -7,6 +9,17 @@
 namespace ya
 {
 
+std::string LuaScriptComponent::ScriptInstance::normalizeScriptPath(std::string_view path)
+{
+    if (path.empty()) {
+        return {};
+    }
+
+    auto normalizedString = path_utils::pathToGenericUtf8String(std::filesystem::path(std::string(path)).lexically_normal());
+    std::replace(normalizedString.begin(), normalizedString.end(), '\\', '/');
+
+    return AssetManager::normalizeAssetPath(normalizedString);
+}
 void LuaScriptComponent::ScriptInstance::refreshProperties()
 {
     properties.clear();
@@ -150,3 +163,5 @@ void LuaScriptComponent::ScriptInstance::applyPropertyOverrides(sol::state &lua)
 
 
 } // namespace ya
+
+

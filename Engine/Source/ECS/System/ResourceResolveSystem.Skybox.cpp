@@ -184,19 +184,21 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
         if (!derivedKey.empty()) {
             if (auto it = _skyboxDerivedResources.find(derivedKey); it != _skyboxDerivedResources.end() &&
                 it->second && it->second->hasRenderableCubemap()) {
+                const bool bCacheRebound = pendingState.resultVersion == 0 ||
+                                           pendingState.derivedKey != derivedKey ||
+                                           pendingState.boundResource.get() != it->second.get() ||
+                                           pendingState.resolveState != ESkyboxResolveState::Ready;
                 it->second->lastUsedFrame = App::currentFrameIndex();
                 applySkyboxResource(it->second, pendingState);
                 pendingState.derivedKey = derivedKey;
-                if (pendingState.resolveState != ESkyboxResolveState::Ready) {
+                if (bCacheRebound) {
                     makeTransition(pendingState.resolveState, "Skybox")
                         .to(ESkyboxResolveState::Ready, "derived cache hit");
-                }
-                ++pendingState.resultVersion;
-                pendingState.lastCompletedAuthoringVersion = sc.authoringVersion;
-                _activeSkybox.erase(entity);
-                if (pendingState.resultVersion != previousResultVersion) {
+                    ++pendingState.resultVersion;
                     markAllSceneSkyboxEnvironmentDependentsDirty("scene skybox projection rebound");
                 }
+                pendingState.lastCompletedAuthoringVersion = sc.authoringVersion;
+                _activeSkybox.erase(entity);
                 return;
             }
         }

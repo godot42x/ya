@@ -18,9 +18,7 @@ namespace ya
 
 ImportedModelData ImportedModelData::decode(const std::string& filepath)
 {
-    std::string normalizedFilepath = filepath;
-    std::replace(normalizedFilepath.begin(), normalizedFilepath.end(), '\\', '/');
-    normalizedFilepath = std::filesystem::path(normalizedFilepath).lexically_normal().generic_string();
+    const std::string normalizedFilepath = model_importer::detail::normalizeImportedAssetPath(filepath);
 
     if (model_importer::detail::isGltfPath(normalizedFilepath)) {
         return model_importer::getGltfImporter().import(normalizedFilepath);

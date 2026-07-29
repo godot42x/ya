@@ -134,7 +134,7 @@ void DetailsView::drawComponents(Entity& entity)
 
                 ImGui::SetNextItemWidth(-80);
                 if (ImGui::InputText("##ScriptPath", buffer, sizeof(buffer))) {
-                    script.scriptPath                 = std::string(buffer);
+                    script.scriptPath                 = LuaScriptComponent::ScriptInstance::normalizeScriptPath(buffer);
                     script.bLoaded                    = false;
                     script.bAuthoringPreviewAttempted = false;
                 }
@@ -142,7 +142,7 @@ void DetailsView::drawComponents(Entity& entity)
                 ImGui::SameLine();
                 if (ImGui::Button("Browse...")) {
                     _filePicker.openScriptPicker(script.scriptPath, [&script](const std::string& newPath) {
-                        script.scriptPath                 = newPath;
+                        script.scriptPath                 = LuaScriptComponent::ScriptInstance::normalizeScriptPath(newPath);
                         script.bLoaded                    = false;
                         script.bAuthoringPreviewAttempted = false;
                     });

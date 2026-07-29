@@ -63,6 +63,107 @@ EFormat::T chooseEnvironmentPrefilterFormat(EFormat::T sourceFormat)
     return EFormat::R16G16B16A16_SFLOAT;
 }
 
+std::string buildEnvironmentDerivedKey(const EnvironmentLightingComponent& component,
+                                      AssetManager*                       assets,
+                                      const SkyboxRuntimeState*          sceneSkyboxState)
+{
+    const auto baseSuffix = std::format("|irr={}|pref={}|irrsize={}",
+                                        component.bEnableIrradiance ? 1 : 0,
+                                        component.bEnablePrefilter ? 1 : 0,
+                                        component.getResolvedIrradianceFaceSize());
+
+    if (component.usesSceneSkybox()) {
+        if (!sceneSkyboxState || !sceneSkyboxState->hasRenderableCubemap() || sceneSkyboxState->derivedKey.empty()) {
+            return {};
+        }
+        return std::format("env|scene-skybox|{}{}", sceneSkyboxState->derivedKey, baseSuffix);
+    }
+
+    if (!assets || !component.hasSource()) {
+        return {};
+    }
+
+    if (component.hasCubemapSource()) {
+        std::string key = std::format("env|cubefaces|flip={}", component.cubemapSource.flipVertical ? 1 : 0);
+        for (const auto& path : component.cubemapSource.files) {
+            const auto normalized = AssetManager::normalizeAssetPath(path);
+            key += std::format("|{}|v{}", normalized, assets->getResourceVersion(normalized));
+        }
+        key += baseSuffix;
+        return key;
+    }
+
+    const auto normalized = AssetManager::normalizeAssetPath(component.cylindricalSource.filepath);
+    return std::format("env|cyl|{}|v{}|flip={}{}",
+                       normalized,
+                       assets->getResourceVersion(normalized),
+                       component.cylindricalSource.flipVertical ? 1 : 0,
+                       baseSuffix);
+}
+
+void applyEnvironmentResource(const std::shared_ptr<EnvironmentLightingDerivedResource>& resource,
+                              EnvironmentLightingRuntimeState&                            state)
+{
+    state.boundResource         = resource;
+    state.cubemapRenderImage    = resource ? resource->cubemapRenderImage : nullptr;
+    state.cubemapTexture        = resource ? resource->cubemapTexture : nullptr;
+    state.irradianceRenderImage = resource ? resource->irradianceRenderImage : nullptr;
+    state.prefilterRenderImage  = resource ? resource->prefilterRenderImage : nullptr;
+    state.cubemapFacePreviewViews.fill(nullptr);
+    state.irradianceFacePreviewViews.fill(nullptr);
+    for (auto& mipViews : state.prefilterMipFacePreviewViews) {
+        mipViews.fill(nullptr);
+    }
+    state.prefilterPreviewMipCount = resource ? resource->prefilterPreviewMipCount : 0;
+
+    if (!resource) {
+        return;
+    }
+
+    for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+        state.cubemapFacePreviewViews[faceIndex]    = resource->cubemapFacePreviewViews[faceIndex];
+        state.irradianceFacePreviewViews[faceIndex] = resource->irradianceFacePreviewViews[faceIndex];
+    }
+
+    for (uint32_t mipIndex = 0; mipIndex < resource->prefilterPreviewMipCount; ++mipIndex) {
+        for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+            state.prefilterMipFacePreviewViews[mipIndex][faceIndex] =
+                resource->prefilterMipFacePreviewViews[mipIndex][faceIndex];
+        }
+    }
+}
+
+std::shared_ptr<EnvironmentLightingDerivedResource> snapshotEnvironmentResource(const EnvironmentLightingRuntimeState& state)
+{
+    auto resource                         = std::make_shared<EnvironmentLightingDerivedResource>();
+    resource->cubemapRenderImage         = state.cubemapRenderImage;
+    resource->cubemapTexture             = state.cubemapTexture;
+    resource->cubemapFacePreviewViews    = state.cubemapFacePreviewViews;
+    resource->irradianceRenderImage      = state.irradianceRenderImage;
+    resource->irradianceFacePreviewViews = state.irradianceFacePreviewViews;
+    resource->prefilterRenderImage       = state.prefilterRenderImage;
+    resource->prefilterMipFacePreviewViews = state.prefilterMipFacePreviewViews;
+    resource->prefilterPreviewMipCount   = state.prefilterPreviewMipCount;
+    resource->lastUsedFrame              = App::currentFrameIndex();
+    return resource;
+}
+
+bool isEnvironmentResolveComplete(const EnvironmentLightingComponent& component,
+                                  const EnvironmentLightingRuntimeState& state)
+{
+    return state.sourceState == EEnvironmentLightingSourceResolveState::Ready &&
+           (!component.bEnableIrradiance || state.irradianceState == EEnvironmentLightingIrradianceResolveState::Ready) &&
+           (!component.bEnablePrefilter || state.prefilterState == EEnvironmentLightingPrefilterResolveState::Ready);
+}
+
+bool canUseEnvironmentDerivedResource(const EnvironmentLightingComponent& component,
+                                      const EnvironmentLightingDerivedResource& resource)
+{
+    return resource.hasRenderableCubemap() &&
+           (!component.bEnableIrradiance || resource.hasIrradianceMap()) &&
+           (!component.bEnablePrefilter || resource.hasPrefilterMap());
+}
+
 void completeEnvironmentSource(EnvironmentLightingComponent&    component,
                                EnvironmentLightingRuntimeState& state,
                                const char*                      reason)
@@ -368,39 +469,42 @@ const SkyboxRuntimeState* syncEnvSkybox(EnvironmentLightingComponent&    compone
                                         const SkyboxRuntimeState*        sceneSkyboxState)
 {
     if (!component.usesSceneSkybox()) {
+        state.bSceneSkyboxDependencyReady = false;
         return nullptr;
     }
 
-    const uint64_t currentResultVersion = sceneSkyboxState ? sceneSkyboxState->resultVersion : 0;
-    if (state.lastSceneSkyboxResultVersion != currentResultVersion) {
+    const bool     bDependencyReady      = sceneSkyboxState && sceneSkyboxState->hasRenderableCubemap();
+    const uint64_t currentResultVersion  = bDependencyReady ? sceneSkyboxState->resultVersion : 0;
+    const bool     bDependencyChanged    = state.lastSceneSkyboxResultVersion != currentResultVersion ||
+                                           state.bSceneSkyboxDependencyReady != bDependencyReady;
+    if (bDependencyChanged) {
         detail::resetEnvState(state);
         state.lastSceneSkyboxResultVersion = currentResultVersion;
-        const auto nextSourceState         = currentResultVersion == 0 ? EEnvironmentLightingSourceResolveState::Empty
-                                                                       : EEnvironmentLightingSourceResolveState::Dirty;
+        state.bSceneSkyboxDependencyReady  = bDependencyReady;
+        const auto nextSourceState         = bDependencyReady ? EEnvironmentLightingSourceResolveState::Dirty
+                                                              : EEnvironmentLightingSourceResolveState::Empty;
         makeTransition(state.sourceState, "EnvironmentLighting.Source")
             .to(nextSourceState, "scene skybox dependency changed");
         makeTransition(state.irradianceState, "EnvironmentLighting.Irradiance")
             .to(component.bEnableIrradiance
-                    ? (currentResultVersion == 0 ? EEnvironmentLightingIrradianceResolveState::Empty
-                                                 : EEnvironmentLightingIrradianceResolveState::Dirty)
+                    ? (bDependencyReady ? EEnvironmentLightingIrradianceResolveState::Dirty
+                                        : EEnvironmentLightingIrradianceResolveState::Empty)
                     : EEnvironmentLightingIrradianceResolveState::Disabled,
                 "scene skybox dependency changed");
         makeTransition(state.prefilterState, "EnvironmentLighting.Prefilter")
             .to(component.bEnablePrefilter
-                    ? (currentResultVersion == 0 ? EEnvironmentLightingPrefilterResolveState::Empty
-                                                 : EEnvironmentLightingPrefilterResolveState::Dirty)
+                    ? (bDependencyReady ? EEnvironmentLightingPrefilterResolveState::Dirty
+                                        : EEnvironmentLightingPrefilterResolveState::Empty)
                     : EEnvironmentLightingPrefilterResolveState::Disabled,
                 "scene skybox dependency changed");
     }
 
-    if (sceneSkyboxState && sceneSkyboxState->hasRenderableCubemap() &&
-        state.sourceState == EEnvironmentLightingSourceResolveState::Dirty) {
+    if (bDependencyReady && state.sourceState == EEnvironmentLightingSourceResolveState::Dirty) {
         return sceneSkyboxState;
     }
 
     return nullptr;
 }
-
 } // namespace
 
 namespace detail
@@ -524,7 +628,6 @@ void resetEnvPending(EnvironmentLightingRuntimeState& state)
 {
     state.pendingBatchLoad.reset();
     state.pendingCylindricalFuture.reset();
-    state.lastSceneSkyboxResultVersion = 0;
     cancelOffscreenJob(state.pendingEnvironmentOffscreen);
     cancelOffscreenJob(state.pendingIrradianceOffscreen);
     cancelOffscreenJob(state.pendingPrefilterOffscreen);
@@ -535,6 +638,8 @@ void resetEnvState(EnvironmentLightingRuntimeState& state)
     resetEnvPending(state);
     retireEnvTextures(state);
     state.resultVersion = 0;
+    state.lastSceneSkyboxResultVersion = 0;
+    state.bSceneSkyboxDependencyReady  = false;
 }
 
 } // namespace detail
@@ -932,25 +1037,97 @@ void ResourceResolveSystem::resolvePendingEnvironmentLighting(Scene* scene)
 {
     YA_PROFILE_FUNCTION();
     auto&       registry         = scene->getRegistry();
+    auto*       assets           = AssetManager::get();
     const auto* sceneSkyboxState = findFirstSceneSkyboxState(scene);
 
-    for (auto&& [entity, elc] : registry.view<EnvironmentLightingComponent>().each()) {
+    auto pumpOne = [&](entt::entity entity) {
         YA_PROFILE_SCOPE("ResourceResolve/EnvironmentLighting/Entity");
+        if (!registry.valid(entity) || !registry.all_of<EnvironmentLightingComponent>(entity)) {
+            cleanupEnvironmentLightingState(entity);
+            return;
+        }
 
+        auto& elc          = registry.get<EnvironmentLightingComponent>(entity);
         auto& pendingState = _environmentStates[entity];
+        const auto previousResultVersion = pendingState.resultVersion;
+        const std::string derivedKey = buildEnvironmentDerivedKey(elc, assets, sceneSkyboxState);
+
         if (pendingState.authoringVersion != elc.authoringVersion) {
             detail::resetEnvState(pendingState);
             pendingState.authoringVersion = elc.authoringVersion;
+            pendingState.lastStartedAuthoringVersion = elc.authoringVersion;
+        }
+
+        if (elc.usesSceneSkybox()) {
+            _sceneSkyboxEnvironmentDependents.insert(entity);
+        }
+        else {
+            _sceneSkyboxEnvironmentDependents.erase(entity);
         }
 
         if (!elc.hasSource()) {
             handleEnvironmentNoSource(elc, pendingState);
-            continue;
+            pendingState.derivedKey.clear();
+            pendingState.boundResource.reset();
+            pendingState.lastCompletedAuthoringVersion = elc.authoringVersion;
+            _activeEnvironment.erase(entity);
+            return;
+        }
+
+        if (!derivedKey.empty() && !pendingState.derivedKey.empty() && pendingState.derivedKey != derivedKey) {
+            detail::resetEnvState(pendingState);
+            pendingState.resultVersion = 0;
+            makeTransition(pendingState.sourceState, "EnvironmentLighting.Source")
+                .to(EEnvironmentLightingSourceResolveState::Dirty, "derived key changed");
+            makeTransition(pendingState.irradianceState, "EnvironmentLighting.Irradiance")
+                .to(elc.bEnableIrradiance
+                        ? EEnvironmentLightingIrradianceResolveState::Dirty
+                        : EEnvironmentLightingIrradianceResolveState::Disabled,
+                    "derived key changed");
+            makeTransition(pendingState.prefilterState, "EnvironmentLighting.Prefilter")
+                .to(elc.bEnablePrefilter
+                        ? EEnvironmentLightingPrefilterResolveState::Dirty
+                        : EEnvironmentLightingPrefilterResolveState::Disabled,
+                    "derived key changed");
+        }
+
+        if (!derivedKey.empty()) {
+            if (auto it = _environmentDerivedResources.find(derivedKey); it != _environmentDerivedResources.end() &&
+                it->second && canUseEnvironmentDerivedResource(elc, *it->second)) {
+                const bool bCacheRebound = pendingState.resultVersion == 0 ||
+                                           pendingState.derivedKey != derivedKey ||
+                                           pendingState.boundResource.get() != it->second.get() ||
+                                           pendingState.sourceState != EEnvironmentLightingSourceResolveState::Ready ||
+                                           (elc.bEnableIrradiance && pendingState.irradianceState != EEnvironmentLightingIrradianceResolveState::Ready) ||
+                                           (elc.bEnablePrefilter && pendingState.prefilterState != EEnvironmentLightingPrefilterResolveState::Ready);
+                it->second->lastUsedFrame = App::currentFrameIndex();
+                applyEnvironmentResource(it->second, pendingState);
+                pendingState.derivedKey = derivedKey;
+                if (bCacheRebound) {
+                    makeTransition(pendingState.sourceState, "EnvironmentLighting.Source")
+                        .to(EEnvironmentLightingSourceResolveState::Ready, "derived cache hit");
+                    makeTransition(pendingState.irradianceState, "EnvironmentLighting.Irradiance")
+                        .to(elc.bEnableIrradiance
+                                ? EEnvironmentLightingIrradianceResolveState::Ready
+                                : EEnvironmentLightingIrradianceResolveState::Disabled,
+                            "derived cache hit");
+                    makeTransition(pendingState.prefilterState, "EnvironmentLighting.Prefilter")
+                        .to(elc.bEnablePrefilter
+                                ? EEnvironmentLightingPrefilterResolveState::Ready
+                                : EEnvironmentLightingPrefilterResolveState::Disabled,
+                            "derived cache hit");
+                    ++pendingState.resultVersion;
+                }
+                pendingState.lastCompletedAuthoringVersion = elc.authoringVersion;
+                _activeEnvironment.erase(entity);
+                return;
+            }
         }
 
         if (pendingState.sourceState == EEnvironmentLightingSourceResolveState::Dirty ||
             pendingState.sourceState == EEnvironmentLightingSourceResolveState::Empty) {
             detail::resetEnvPending(pendingState);
+            pendingState.lastStartedAuthoringVersion = elc.authoringVersion;
         }
 
         syncEnvironmentDerivedBranchEnablement(elc, pendingState);
@@ -971,17 +1148,55 @@ void ResourceResolveSystem::resolvePendingEnvironmentLighting(Scene* scene)
             YA_PROFILE_SCOPE("ResourceResolve/EnvironmentLighting/Prefilter");
             resolveEnvironmentPrefilterState(*this, entity, elc, pendingState, sceneSkyboxState);
         }
-    }
 
-    for (auto it = _environmentStates.begin(); it != _environmentStates.end();) {
-        if (!registry.valid(it->first) || !registry.all_of<EnvironmentLightingComponent>(it->first)) {
-            detail::resetEnvState(it->second);
-            it = _environmentStates.erase(it);
+        if (!derivedKey.empty() && isEnvironmentResolveComplete(elc, pendingState)) {
+            pendingState.derivedKey = derivedKey;
+            auto resource = snapshotEnvironmentResource(pendingState);
+            _environmentDerivedResources[derivedKey] = resource;
+            pendingState.boundResource = resource;
+        }
+
+        const bool bActive = pendingState.sourceState == EEnvironmentLightingSourceResolveState::ResolvingSource ||
+                             pendingState.sourceState == EEnvironmentLightingSourceResolveState::BuildingEnvironmentCubemap ||
+                             pendingState.irradianceState == EEnvironmentLightingIrradianceResolveState::Building ||
+                             pendingState.prefilterState == EEnvironmentLightingPrefilterResolveState::Building;
+        if (bActive) {
+            _activeEnvironment.insert(entity);
         }
         else {
-            ++it;
+            pendingState.lastCompletedAuthoringVersion = elc.authoringVersion;
+            _activeEnvironment.erase(entity);
         }
+
+        if (pendingState.resultVersion != previousResultVersion) {
+            pendingState.lastCompletedAuthoringVersion = elc.authoringVersion;
+        }
+    };
+
+    while (!_dirtyEnvironmentQueue.empty()) {
+        const auto entity = _dirtyEnvironmentQueue.front();
+        _dirtyEnvironmentQueue.pop_front();
+        _dirtyEnvironmentSet.erase(entity);
+        pumpOne(entity);
+    }
+
+    std::vector<entt::entity> activeEntities(_activeEnvironment.begin(), _activeEnvironment.end());
+    for (const auto entity : activeEntities) {
+        pumpOne(entity);
+    }
+
+    std::vector<entt::entity> staleEntities;
+    staleEntities.reserve(_environmentStates.size());
+    for (const auto& [entity, state] : _environmentStates) {
+        (void)state;
+        if (!registry.valid(entity) || !registry.all_of<EnvironmentLightingComponent>(entity)) {
+            staleEntities.push_back(entity);
+        }
+    }
+    for (const auto entity : staleEntities) {
+        cleanupEnvironmentLightingState(entity);
     }
 }
 
 } // namespace ya
+

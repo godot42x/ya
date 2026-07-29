@@ -79,6 +79,7 @@ struct AssetTextureFormatTraits
 struct AssetTextureSourceInfo
 {
     std::string            filepath;
+    std::string            ioFilepath;
     std::string            extension;
     uint32_t               width            = 0;
     uint32_t               height           = 0;

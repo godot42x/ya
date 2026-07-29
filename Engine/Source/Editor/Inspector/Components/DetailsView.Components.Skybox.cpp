@@ -71,9 +71,7 @@ void DetailsView::drawSkyboxComponent(Entity& entity)
                 ImGui::SameLine();
                 if (ImGui::Button("Browse")) {
                     _filePicker.openTexturePicker(sc->cubemapSource.files[faceIndex], [sc, faceIndex, entityId](const std::string& newPath) {
-                        sc->sourceType                      = ESkyboxSourceType::CubeFaces;
-                        sc->cubemapSource.files[faceIndex] = newPath;
-                        sc->invalidate();
+                        sc->setFace(static_cast<ECubeFace>(faceIndex), newPath);
                         if (auto* resolver = App::get()->getResourceResolveSystem()) {
                             resolver->markSkyboxDirty(entityId, "editor skybox face picked");
                         }
@@ -222,3 +220,4 @@ void DetailsView::drawSkyboxCubemapPreviewGrid(const SkyboxPreviewInfo& preview)
 }
 
 } // namespace ya
+

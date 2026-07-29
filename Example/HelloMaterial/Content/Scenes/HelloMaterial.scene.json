@@ -7938,7 +7938,7 @@
                     "scripts": [
                         {
                             "enabled": true,
-                            "scriptPath": "/Users/mark/1/craft/ya/Example/HelloMaterial/Content/Scripts/PlayerCamera.lua"
+                            "scriptPath": "Content/Scripts/PlayerCamera.lua"
                         }
                     ]
                 },
