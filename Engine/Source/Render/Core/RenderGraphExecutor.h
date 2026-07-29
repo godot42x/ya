@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render/Core/RenderGraph.h"
+#include "Core/Api.h"
 #include "Render/Core/RenderGraphResourceRegistry.h"
 #include "Render/Core/ResourceStateTracker.h"
 
@@ -9,7 +10,7 @@
 namespace ya
 {
 
-class RenderGraphExecutor
+class ENGINE_API RenderGraphExecutor
 {
   private:
     std::unordered_map<IBuffer*, BufferResourceState> _bufferStates;

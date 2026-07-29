@@ -13,7 +13,7 @@
 
 
 
-struct REFLECTS_CORE_API Metadata
+struct Metadata
 {
     std::string name;
     uint32_t    flags = 0;
@@ -94,7 +94,7 @@ inline bool operator&(FieldFlags a, FieldFlags b)
 {
     return (static_cast<uint32_t>(a) & static_cast<uint32_t>(b)) != 0;
 }
-struct REFLECTS_CORE_API Field
+struct Field
 {
     std::string name;
     Metadata    metadata;
@@ -118,7 +118,7 @@ struct REFLECTS_CORE_API Field
 // Note: Reference types (T&) are not supported in the reflection system.
 // If you need reference semantics, use pointer types (T*) instead.
 // ============================================================================
-struct REFLECTS_CORE_API Property : public Field
+struct Property : public Field
 {
     bool        bConst           = false;
     bool        bStatic          = false;

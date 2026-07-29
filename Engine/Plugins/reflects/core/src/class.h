@@ -8,7 +8,7 @@
 
 
 // ============================================================================
-struct REFLECTS_CORE_API Constructor
+struct Constructor
 {
     size_t                                      argCount = 0;
     std::vector<std::string>                    argTypeNames; // 参数类型名称列表
@@ -47,7 +47,7 @@ std::shared_ptr<T> makePtr(Args &&...args)
     return std::make_shared<T>(std::forward<Args>(args)...);
 }
 
-struct REFLECTS_CORE_API Class : public Field
+struct Class : public Field
 {
     refl::type_index_t typeIndex = 0; // 类型索引，用于快速查找和父类指针转换
 
@@ -165,7 +165,7 @@ struct REFLECTS_CORE_API Class : public Field
     }
 
 
-    Class *getClassByTypeId(refl::type_index_t typeId) const;
+    REFLECTS_CORE_API Class *getClassByTypeId(refl::type_index_t typeId) const;
 
     // 访问所有属性（可选递归访问父类）- 非 const 版本（用于修改操作）
     template <typename VisitorFunc>

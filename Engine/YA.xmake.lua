@@ -124,7 +124,10 @@ do
         add_files("./Source/Render/**.cpp", { unity_group = "Renderer" })
         add_files("./Source/ECS/**.cpp", { unity_group = "ECS" })
         add_files("./Source/Scene/**.cpp", { unity_group = "Scene" })
-        add_files("./Source/Runtime/**.cpp", { unity_group = "Runtime" })
+        -- add_files("./Source/Runtime/**.cpp", { unity_group = "Runtime" })
+        add_files("./Source/Runtime/Rendering/**.cpp", { unity_group = "Runtime.Rendering" })
+        add_files("./Source/Runtime/GUI/**.cpp", { unity_group = "Runtime.GUI" })
+        add_files("./Source/Runtime/Application/**.cpp", { unity_group = "Runtime.Application" })
     end
     -- Root source files (ImGuiHelper.cpp, WindowProvider.cpp)
     -- Exclude Implementaion/*.cpp from the broad glob; they're added

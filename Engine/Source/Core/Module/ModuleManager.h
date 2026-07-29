@@ -15,7 +15,7 @@ struct SDL_SharedObject;
 namespace ya
 {
 
-class ENGINE_API ModuleManager
+class ModuleManager
 {
   private:
     struct LoadedModule;
@@ -28,23 +28,23 @@ class ENGINE_API ModuleManager
     bool                                                           _started = false;
 
   public:
-    ModuleManager();
-    ~ModuleManager();
+    ENGINE_API ModuleManager();
+    ENGINE_API ~ModuleManager();
 
     ModuleManager(const ModuleManager&)            = delete;
     ModuleManager& operator=(const ModuleManager&) = delete;
 
-    bool addManifest(const std::filesystem::path& path);
-    bool addManifest(FModuleManifest manifest);
-    bool resolve(const std::vector<std::string>& roots);
-    bool loadAll();
-    bool startAll(const FEngineContext& context);
-    void stopAll();
-    void unloadAll();
+    ENGINE_API bool addManifest(const std::filesystem::path& path);
+    ENGINE_API bool addManifest(FModuleManifest manifest);
+    ENGINE_API bool resolve(const std::vector<std::string>& roots);
+    ENGINE_API bool loadAll();
+    ENGINE_API bool startAll(const FEngineContext& context);
+    ENGINE_API void stopAll();
+    ENGINE_API void unloadAll();
 
-    [[nodiscard]] std::vector<IModule*>           getLoadedModules() const;
-    [[nodiscard]] void*                           queryInterface(std::string_view moduleName, FInterfaceId interfaceId) const;
-    [[nodiscard]] std::vector<void*>              queryInterfaces(FInterfaceId interfaceId) const;
+    [[nodiscard]] ENGINE_API std::vector<IModule*>           getLoadedModules() const;
+    [[nodiscard]] ENGINE_API void*                           queryInterface(std::string_view moduleName, FInterfaceId interfaceId) const;
+    [[nodiscard]] ENGINE_API std::vector<void*>              queryInterfaces(FInterfaceId interfaceId) const;
     [[nodiscard]] const std::vector<std::string>& getResolvedOrder() const { return _resolvedOrder; }
     [[nodiscard]] const std::string&              getLastError() const { return _lastError; }
 

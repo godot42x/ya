@@ -9,7 +9,7 @@
 namespace ya
 {
 
-struct ENGINE_API FPluginDescriptor
+struct FPluginDescriptor
 {
     uint32_t                           schemaVersion = 1;
     std::string                        name;
@@ -18,7 +18,7 @@ struct ENGINE_API FPluginDescriptor
     std::vector<std::filesystem::path> configFiles;
     std::filesystem::path              sourcePath;
 
-    [[nodiscard]] static FPluginDescriptor load(const std::filesystem::path& path);
+    [[nodiscard]] static ENGINE_API FPluginDescriptor load(const std::filesystem::path& path);
 };
 
 } // namespace ya

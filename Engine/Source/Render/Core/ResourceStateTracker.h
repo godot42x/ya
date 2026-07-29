@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render/RenderDefines.h"
+#include "Core/Api.h"
 
 #include <unordered_map>
 #include <vector>
@@ -26,7 +27,7 @@ struct ImageLayoutExpectationMismatch
     ImageSubresourceRange range{};
 };
 
-class ResourceStateTracker
+class ENGINE_API ResourceStateTracker
 {
   private:
     struct ImageSubresourceKey

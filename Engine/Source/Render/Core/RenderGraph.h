@@ -4,6 +4,7 @@
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/RenderDefines.h"
+#include "Core/Api.h"
 
 #include <cstdint>
 #include <functional>
@@ -216,10 +217,10 @@ class RGPassContext
     {}
 
     [[nodiscard]] const RGPass& getPass() const { return _pass; }
-    [[nodiscard]] const RGTextureResource& getTexture(RGTextureHandle handle) const;
-    [[nodiscard]] const RGBufferResource& getBuffer(RGBufferHandle handle) const;
-    [[nodiscard]] const RGTextureDesc& getTextureDesc(RGTextureHandle handle) const;
-    [[nodiscard]] const RGBufferDesc& getBufferDesc(RGBufferHandle handle) const;
+    [[nodiscard]] ENGINE_API const RGTextureResource& getTexture(RGTextureHandle handle) const;
+    [[nodiscard]] ENGINE_API const RGBufferResource& getBuffer(RGBufferHandle handle) const;
+    [[nodiscard]] ENGINE_API const RGTextureDesc& getTextureDesc(RGTextureHandle handle) const;
+    [[nodiscard]] ENGINE_API const RGBufferDesc& getBufferDesc(RGBufferHandle handle) const;
 };
 
 class RGRenderContext
@@ -282,21 +283,21 @@ class RGRenderContext
 
     [[nodiscard]] const RGPass& getPass() const { return _pass; }
     [[nodiscard]] ICommandBuffer& getCommandBuffer() const { return _cmdBuf; }
-    [[nodiscard]] const RGTextureResource& getTexture(RGTextureHandle handle) const;
-    [[nodiscard]] const RGBufferResource& getBuffer(RGBufferHandle handle) const;
-    [[nodiscard]] const RGTextureDesc& getTextureDesc(RGTextureHandle handle) const;
-    [[nodiscard]] const RGBufferDesc& getBufferDesc(RGBufferHandle handle) const;
-    [[nodiscard]] const RenderImage* resolveTexture(RGTextureHandle handle) const;
-    [[nodiscard]] IBuffer* resolveBuffer(RGBufferHandle handle) const;
-    void beginRasterRendering(const RasterRenderingDesc& desc) const;
-    void beginColorRendering(const ColorRenderingDesc& desc) const;
-    void endRendering() const;
-    void copyBuffer(RGBufferHandle src, RGBufferHandle dst, uint64_t size, uint64_t srcOffset = 0, uint64_t dstOffset = 0) const;
-    void copyTextureToBuffer(
+    [[nodiscard]] ENGINE_API const RGTextureResource& getTexture(RGTextureHandle handle) const;
+    [[nodiscard]] ENGINE_API const RGBufferResource& getBuffer(RGBufferHandle handle) const;
+    [[nodiscard]] ENGINE_API const RGTextureDesc& getTextureDesc(RGTextureHandle handle) const;
+    [[nodiscard]] ENGINE_API const RGBufferDesc& getBufferDesc(RGBufferHandle handle) const;
+    [[nodiscard]] ENGINE_API const RenderImage* resolveTexture(RGTextureHandle handle) const;
+    [[nodiscard]] ENGINE_API IBuffer* resolveBuffer(RGBufferHandle handle) const;
+    ENGINE_API void beginRasterRendering(const RasterRenderingDesc& desc) const;
+    ENGINE_API void beginColorRendering(const ColorRenderingDesc& desc) const;
+    ENGINE_API void endRendering() const;
+    ENGINE_API void copyBuffer(RGBufferHandle src, RGBufferHandle dst, uint64_t size, uint64_t srcOffset = 0, uint64_t dstOffset = 0) const;
+    ENGINE_API void copyTextureToBuffer(
         RGTextureHandle src,
         RGBufferHandle  dst,
         const std::vector<BufferImageCopy>& regions) const;
-    void copyTexture(RGTextureHandle src, RGTextureHandle dst, const ImageCopy& region) const;
+    ENGINE_API void copyTexture(RGTextureHandle src, RGTextureHandle dst, const ImageCopy& region) const;
 };
 
 class RGPassBuilder
@@ -312,19 +313,19 @@ class RGPassBuilder
         : _graph(graph), _passIndex(passIndex)
     {}
 
-    void read(RGTextureHandle handle);
-    void write(RGTextureHandle handle);
-    void read(RGBufferHandle handle);
-    void write(RGBufferHandle handle);
-    void readWrite(RGBufferHandle handle);
-    void indirectRead(RGBufferHandle handle);
-    void transferSrc(RGBufferHandle handle);
-    void transferDst(RGBufferHandle handle);
-    void dependsOn(RGPassHandle handle);
-    void useColorAttachment(RGTextureHandle handle);
-    void useDepthAttachment(RGTextureHandle handle);
-    void transferSrc(RGTextureHandle handle);
-    void transferDst(RGTextureHandle handle);
+    ENGINE_API void read(RGTextureHandle handle);
+    ENGINE_API void write(RGTextureHandle handle);
+    ENGINE_API void read(RGBufferHandle handle);
+    ENGINE_API void write(RGBufferHandle handle);
+    ENGINE_API void readWrite(RGBufferHandle handle);
+    ENGINE_API void indirectRead(RGBufferHandle handle);
+    ENGINE_API void transferSrc(RGBufferHandle handle);
+    ENGINE_API void transferDst(RGBufferHandle handle);
+    ENGINE_API void dependsOn(RGPassHandle handle);
+    ENGINE_API void useColorAttachment(RGTextureHandle handle);
+    ENGINE_API void useDepthAttachment(RGTextureHandle handle);
+    ENGINE_API void transferSrc(RGTextureHandle handle);
+    ENGINE_API void transferDst(RGTextureHandle handle);
 };
 
 class RenderGraph
@@ -348,23 +349,23 @@ class RenderGraph
     }
 
   public:
-    [[nodiscard]] RGTextureHandle createTexture(const RGTextureDesc& desc, ERGResourceLifetime lifetime = ERGResourceLifetime::Transient);
-    [[nodiscard]] RGTextureHandle importTexture(const RGImportedTextureDesc& desc);
+    [[nodiscard]] ENGINE_API RGTextureHandle createTexture(const RGTextureDesc& desc, ERGResourceLifetime lifetime = ERGResourceLifetime::Transient);
+    [[nodiscard]] ENGINE_API RGTextureHandle importTexture(const RGImportedTextureDesc& desc);
 
-    [[nodiscard]] RGBufferHandle createBuffer(const RGBufferDesc& desc, ERGResourceLifetime lifetime = ERGResourceLifetime::Transient);
-    [[nodiscard]] RGBufferHandle importBuffer(const RGImportedBufferDesc& desc);
+    [[nodiscard]] ENGINE_API RGBufferHandle createBuffer(const RGBufferDesc& desc, ERGResourceLifetime lifetime = ERGResourceLifetime::Transient);
+    [[nodiscard]] ENGINE_API RGBufferHandle importBuffer(const RGImportedBufferDesc& desc);
 
-    [[nodiscard]] const RGTextureResource* getTexture(RGTextureHandle handle) const;
-    [[nodiscard]] const RGBufferResource* getBuffer(RGBufferHandle handle) const;
-    [[nodiscard]] const RGPass* getPass(RGPassHandle handle) const;
+    [[nodiscard]] ENGINE_API const RGTextureResource* getTexture(RGTextureHandle handle) const;
+    [[nodiscard]] ENGINE_API const RGBufferResource* getBuffer(RGBufferHandle handle) const;
+    [[nodiscard]] ENGINE_API const RGPass* getPass(RGPassHandle handle) const;
 
-    [[nodiscard]] RGPassHandle addPass(
+    [[nodiscard]] ENGINE_API RGPassHandle addPass(
         const std::string& name,
         const std::function<void(RGPassBuilder&)>& setup,
         const std::function<void(RGRenderContext&)>& execute = {});
-    [[nodiscard]] RGCompiledGraph compile() const;
-    [[nodiscard]] std::optional<RGPassContext> createPassContext(RGPassHandle handle) const;
-    [[nodiscard]] std::string debugDump(const RGCompiledGraph& compiled) const;
+    [[nodiscard]] ENGINE_API RGCompiledGraph compile() const;
+    [[nodiscard]] ENGINE_API std::optional<RGPassContext> createPassContext(RGPassHandle handle) const;
+    [[nodiscard]] ENGINE_API std::string debugDump(const RGCompiledGraph& compiled) const;
 
     [[nodiscard]] const std::vector<RGTextureResource>& getTextures() const { return _textures; }
     [[nodiscard]] const std::vector<RGBufferResource>& getBuffers() const { return _buffers; }

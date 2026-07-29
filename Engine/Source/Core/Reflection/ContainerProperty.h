@@ -34,12 +34,12 @@ namespace ya::reflection
  */
 struct ContainerIterator
 {
-    virtual ~ContainerIterator()                 = default;
-    virtual bool     hasNext() const             = 0;
-    virtual void     next()                      = 0;
-    virtual void    *getElementPtr()             = 0; // 返回当前元素的指针
+    virtual ~ContainerIterator()                     = default;
+    virtual bool         hasNext() const             = 0;
+    virtual void         next()                      = 0;
+    virtual void*        getElementPtr()             = 0; // 返回当前元素的指针
     virtual type_index_t getElementTypeIndex() const = 0;
-    virtual void    *getKeyPtr() { return nullptr; }       // Map 专用：获取当前 key 指针
+    virtual void*        getKeyPtr() { return nullptr; }       // Map 专用：获取当前 key 指针
     virtual type_index_t getKeyTypeIndex() const { return 0; } // Map 专用：获取 key 类型索引
 };
 
@@ -57,27 +57,50 @@ struct IContainerProperty
     virtual bool              isMapLike() const        = 0;
 
     // 容器操作
-    virtual size_t getSize(void *containerPtr) const       = 0;
-    virtual void   clear(void *containerPtr)               = 0;
-    virtual void   resize(void *containerPtr, size_t size) = 0; // 仅 Vector 等支持
+    virtual size_t getSize(void* containerPtr) const       = 0;
+    virtual void   clear(void* containerPtr)               = 0;
+    virtual void   resize(void* containerPtr, size_t size) = 0; // 仅 Vector 等支持
 
     // 元素访问
-    virtual void    *getElementPtr(void *containerPtr, size_t index)         = 0; // Vector[i]
-    virtual void    *getValuePtr(void *containerPtr, const std::string &key) = 0; // Map[key]
+    virtual void*        getElementPtr(void* containerPtr, size_t index)         = 0; // Vector[i]
+    virtual void*        getValuePtr(void* containerPtr, const std::string& key) = 0; // Map[key]
     virtual type_index_t getElementTypeIndex() const                             = 0;
     virtual type_index_t getKeyTypeIndex() const { return 0; } // Map 专用
 
     // 迭代器
-    virtual std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) = 0;
+    virtual std::unique_ptr<ContainerIterator> createIterator(void* containerPtr) = 0;
 
     // 添加/删除（可选）
-    virtual void addElement(void *containerPtr, void *elementPtr) {}                // Vector::push_back
-    virtual void removeElement(void *containerPtr, size_t index) {}                 // Vector::erase
-    virtual void removeByKey(void *containerPtr, void *keyPtr) {}                   // Map::erase (keyPtr 指向实际的 key)
-    virtual void insertElement(void *containerPtr, void *keyPtr, void *valuePtr) {} // Map::insert
+    virtual void addElement(void* containerPtr, void* elementPtr) // Vector::push_back
+    {
+        (void)containerPtr;
+        (void)elementPtr;
+    }
+    virtual void removeElement(void* containerPtr, size_t index) // Vector::erase
+    {
+        (void)containerPtr;
+        (void)index;
+    }
+    virtual void removeByKey(void* containerPtr, void* keyPtr) // Map::erase (keyPtr 指向实际的 key)
+    {
+        (void)containerPtr;
+        (void)keyPtr;
+    }
+    virtual void insertElement(void* containerPtr, void* keyPtr, void* valuePtr) // Map::insert
+    {
+        (void)containerPtr;
+        (void)keyPtr;
+        (void)valuePtr;
+    }
 
-    virtual void addEmptyEntry(void *containerPtr) {}                               // Map::emplace
-    virtual void popBack(void *containerPtr) {}                               // Map::emplace
+    virtual void addEmptyEntry(void* containerPtr) // Map::emplace
+    {
+        (void)containerPtr;
+    }
+    virtual void popBack(void* containerPtr) // Map::emplace
+    {
+        (void)containerPtr;
+    }
 
     // Fixed-size container query
     virtual bool   isFixedSize() const { return false; }
@@ -97,15 +120,15 @@ class VectorProperty : public IContainerProperty
     // Vector 迭代器实现
     struct VectorIterator : public ContainerIterator
     {
-        ContainerType *container;
+        ContainerType* container;
         size_t         currentIndex = 0;
 
-        VectorIterator(ContainerType *c) : container(c) {}
+        VectorIterator(ContainerType* c) : container(c) {}
 
         bool hasNext() const override { return currentIndex < container->size(); }
         void next() override { ++currentIndex; }
 
-        void *getElementPtr() override
+        void* getElementPtr() override
         {
             return currentIndex < container->size() ? &(*container)[currentIndex] : nullptr;
         }
@@ -118,54 +141,54 @@ class VectorProperty : public IContainerProperty
     ContainerCategory getCategory() const override { return ContainerCategory::SequenceContainer; }
     bool              isMapLike() const override { return false; }
 
-    size_t getSize(void *containerPtr) const override
+    size_t getSize(void* containerPtr) const override
     {
-        return static_cast<ContainerType *>(containerPtr)->size();
+        return static_cast<ContainerType*>(containerPtr)->size();
     }
 
-    void clear(void *containerPtr) override
+    void clear(void* containerPtr) override
     {
-        static_cast<ContainerType *>(containerPtr)->clear();
+        static_cast<ContainerType*>(containerPtr)->clear();
     }
 
-    void resize(void *containerPtr, size_t size) override
+    void resize(void* containerPtr, size_t size) override
     {
-        static_cast<ContainerType *>(containerPtr)->resize(size);
+        static_cast<ContainerType*>(containerPtr)->resize(size);
     }
 
-    void *getElementPtr(void *containerPtr, size_t index) override
+    void* getElementPtr(void* containerPtr, size_t index) override
     {
-        auto *vec = static_cast<ContainerType *>(containerPtr);
+        auto* vec = static_cast<ContainerType*>(containerPtr);
         return index < vec->size() ? &(*vec)[index] : nullptr;
     }
 
-    void *getValuePtr(void *containerPtr, const std::string &key) override
+    void* getValuePtr(void* containerPtr, const std::string& key) override
     {
         return nullptr; // Vector 不支持 key 访问
     }
 
     type_index_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
 
-    std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) override
+    std::unique_ptr<ContainerIterator> createIterator(void* containerPtr) override
     {
-        return std::make_unique<VectorIterator>(static_cast<ContainerType *>(containerPtr));
+        return std::make_unique<VectorIterator>(static_cast<ContainerType*>(containerPtr));
     }
 
-    void addElement(void *containerPtr, void *elementPtr) override
+    void addElement(void* containerPtr, void* elementPtr) override
     {
-        auto *vec = static_cast<ContainerType *>(containerPtr);
+        auto* vec = static_cast<ContainerType*>(containerPtr);
         if (elementPtr) {
             // 使用拷贝构造函数创建新元素
-            vec->emplace_back(*static_cast<const T *>(elementPtr));
+            vec->emplace_back(*static_cast<const T*>(elementPtr));
         }
         else {
             vec->emplace_back(); // 默认构造
         }
     }
 
-    void removeElement(void *containerPtr, size_t index) override
+    void removeElement(void* containerPtr, size_t index) override
     {
-        auto *vec = static_cast<ContainerType *>(containerPtr);
+        auto* vec = static_cast<ContainerType*>(containerPtr);
         if (index < vec->size()) {
             vec->erase(vec->begin() + index);
         }
@@ -186,24 +209,24 @@ class MapProperty : public IContainerProperty
     // Map 迭代器实现
     struct MapIterator : public ContainerIterator
     {
-        ContainerType                   *container;
+        ContainerType*                   container;
         typename ContainerType::iterator current;
 
-        MapIterator(ContainerType *c) : container(c), current(c->begin()) {}
+        MapIterator(ContainerType* c) : container(c), current(c->begin()) {}
 
         bool hasNext() const override { return current != container->end(); }
         void next() override { ++current; }
 
-        void *getElementPtr() override
+        void* getElementPtr() override
         {
             return current != container->end() ? &current->second : nullptr;
         }
 
         type_index_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
 
-        void *getKeyPtr() override
+        void* getKeyPtr() override
         {
-            return current != container->end() ? const_cast<K *>(&current->first) : nullptr;
+            return current != container->end() ? const_cast<K*>(&current->first) : nullptr;
         }
 
         type_index_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
@@ -214,30 +237,30 @@ class MapProperty : public IContainerProperty
     ContainerCategory getCategory() const override { return ContainerCategory::AssociativeContainer; }
     bool              isMapLike() const override { return true; }
 
-    size_t getSize(void *containerPtr) const override
+    size_t getSize(void* containerPtr) const override
     {
-        return static_cast<ContainerType *>(containerPtr)->size();
+        return static_cast<ContainerType*>(containerPtr)->size();
     }
 
-    void clear(void *containerPtr) override
+    void clear(void* containerPtr) override
     {
-        static_cast<ContainerType *>(containerPtr)->clear();
+        static_cast<ContainerType*>(containerPtr)->clear();
     }
 
-    void resize(void *containerPtr, size_t size) override
+    void resize(void* containerPtr, size_t size) override
     {
         // Map 不支持 resize
     }
 
-    void *getElementPtr(void *containerPtr, size_t index) override
+    void* getElementPtr(void* containerPtr, size_t index) override
     {
         // Map 不支持索引访问
         return nullptr;
     }
 
-    void *getValuePtr(void *containerPtr, const std::string &key) override
+    void* getValuePtr(void* containerPtr, const std::string& key) override
     {
-        auto *map = static_cast<ContainerType *>(containerPtr);
+        auto* map = static_cast<ContainerType*>(containerPtr);
 
         K actualKey;
         if constexpr (std::is_same_v<K, std::string>) {
@@ -269,41 +292,41 @@ class MapProperty : public IContainerProperty
     type_index_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
     type_index_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
 
-    std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) override
+    std::unique_ptr<ContainerIterator> createIterator(void* containerPtr) override
     {
-        return std::make_unique<MapIterator>(static_cast<ContainerType *>(containerPtr));
+        return std::make_unique<MapIterator>(static_cast<ContainerType*>(containerPtr));
     }
 
-    void insertElement(void *containerPtr, void *keyPtr, void *valuePtr) override
+    void insertElement(void* containerPtr, void* keyPtr, void* valuePtr) override
     {
         if (!keyPtr) return;
 
-        auto    *map = static_cast<ContainerType *>(containerPtr);
-        const K &key = *static_cast<K *>(keyPtr);
+        auto*    map = static_cast<ContainerType*>(containerPtr);
+        const K& key = *static_cast<K*>(keyPtr);
 
         if (valuePtr) {
-            (*map)[key] = *static_cast<V *>(valuePtr);
+            (*map)[key] = *static_cast<V*>(valuePtr);
         }
         else {
             (*map)[key] = V{}; // 默认构造
         }
     }
 
-    void removeByKey(void *containerPtr, void *keyPtr) override
+    void removeByKey(void* containerPtr, void* keyPtr) override
     {
         if (!keyPtr) return;
 
-        auto    *map = static_cast<ContainerType *>(containerPtr);
-        const K &key = *static_cast<K *>(keyPtr);
+        auto*    map = static_cast<ContainerType*>(containerPtr);
+        const K& key = *static_cast<K*>(keyPtr);
         map->erase(key);
     }
 
-    void addEmptyEntry(void *containerPtr) override
+    void addEmptyEntry(void* containerPtr) override
     {
         // TODO: reflection should only support string key?
         //      or support a temp entry that did not added to the container
         //      until user input a valid key?
-        auto *map = static_cast<ContainerType *>(containerPtr);
+        auto* map = static_cast<ContainerType*>(containerPtr);
         map->emplace(K{}, V{});
     }
 };
@@ -321,17 +344,17 @@ class SetProperty : public IContainerProperty
     // Set 迭代器实现
     struct SetIterator : public ContainerIterator
     {
-        ContainerType                   *container;
+        ContainerType*                   container;
         typename ContainerType::iterator current;
 
-        SetIterator(ContainerType *c) : container(c), current(c->begin()) {}
+        SetIterator(ContainerType* c) : container(c), current(c->begin()) {}
 
         bool hasNext() const override { return current != container->end(); }
         void next() override { ++current; }
 
-        void *getElementPtr() override
+        void* getElementPtr() override
         {
-            return current != container->end() ? const_cast<T *>(&(*current)) : nullptr;
+            return current != container->end() ? const_cast<T*>(&(*current)) : nullptr;
         }
 
         type_index_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
@@ -342,59 +365,59 @@ class SetProperty : public IContainerProperty
     ContainerCategory getCategory() const override { return ContainerCategory::AssociativeContainer; }
     bool              isMapLike() const override { return false; }
 
-    size_t getSize(void *containerPtr) const override
+    size_t getSize(void* containerPtr) const override
     {
-        return static_cast<ContainerType *>(containerPtr)->size();
+        return static_cast<ContainerType*>(containerPtr)->size();
     }
 
-    void clear(void *containerPtr) override
+    void clear(void* containerPtr) override
     {
-        static_cast<ContainerType *>(containerPtr)->clear();
+        static_cast<ContainerType*>(containerPtr)->clear();
     }
 
-    void resize(void *containerPtr, size_t size) override
+    void resize(void* containerPtr, size_t size) override
     {
         // Set 不支持 resize
     }
 
-    void *getElementPtr(void *containerPtr, size_t index) override
+    void* getElementPtr(void* containerPtr, size_t index) override
     {
         // Set 不支持索引访问
         return nullptr;
     }
 
-    void *getValuePtr(void *containerPtr, const std::string &key) override
+    void* getValuePtr(void* containerPtr, const std::string& key) override
     {
         return nullptr; // Set 不支持 key 访问
     }
 
     type_index_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
 
-    std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) override
+    std::unique_ptr<ContainerIterator> createIterator(void* containerPtr) override
     {
-        return std::make_unique<SetIterator>(static_cast<ContainerType *>(containerPtr));
+        return std::make_unique<SetIterator>(static_cast<ContainerType*>(containerPtr));
     }
 
-    void addElement(void *containerPtr, void *elementPtr) override
+    void addElement(void* containerPtr, void* elementPtr) override
     {
-        auto *set = static_cast<ContainerType *>(containerPtr);
+        auto* set = static_cast<ContainerType*>(containerPtr);
         if (elementPtr) {
-            set->insert(*static_cast<T *>(elementPtr));
+            set->insert(*static_cast<T*>(elementPtr));
         }
     }
 
-    void removeByKey(void *containerPtr, void *keyPtr) override
+    void removeByKey(void* containerPtr, void* keyPtr) override
     {
         if (!keyPtr) return;
 
-        auto    *set = static_cast<ContainerType *>(containerPtr);
-        const T &key = *static_cast<T *>(keyPtr);
+        auto*    set = static_cast<ContainerType*>(containerPtr);
+        const T& key = *static_cast<T*>(keyPtr);
         set->erase(key);
     }
 
-    void addEmptyEntry(void *containerPtr) override
+    void addEmptyEntry(void* containerPtr) override
     {
-        auto *set = static_cast<ContainerType *>(containerPtr);
+        auto* set = static_cast<ContainerType*>(containerPtr);
         set->emplace(T{});
     }
 };
@@ -413,24 +436,24 @@ class UnorderedMapProperty : public IContainerProperty
     // UnorderedMap 迭代器实现
     struct UnorderedMapIterator : public ContainerIterator
     {
-        ContainerType                   *container;
+        ContainerType*                   container;
         typename ContainerType::iterator current;
 
-        UnorderedMapIterator(ContainerType *c) : container(c), current(c->begin()) {}
+        UnorderedMapIterator(ContainerType* c) : container(c), current(c->begin()) {}
 
         bool hasNext() const override { return current != container->end(); }
         void next() override { ++current; }
 
-        void *getElementPtr() override
+        void* getElementPtr() override
         {
             return current != container->end() ? &current->second : nullptr;
         }
 
         type_index_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
 
-        void *getKeyPtr() override
+        void* getKeyPtr() override
         {
-            return current != container->end() ? const_cast<K *>(&current->first) : nullptr;
+            return current != container->end() ? const_cast<K*>(&current->first) : nullptr;
         }
 
         type_index_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
@@ -441,30 +464,30 @@ class UnorderedMapProperty : public IContainerProperty
     ContainerCategory getCategory() const override { return ContainerCategory::UnorderedContainer; }
     bool              isMapLike() const override { return true; }
 
-    size_t getSize(void *containerPtr) const override
+    size_t getSize(void* containerPtr) const override
     {
-        return static_cast<ContainerType *>(containerPtr)->size();
+        return static_cast<ContainerType*>(containerPtr)->size();
     }
 
-    void clear(void *containerPtr) override
+    void clear(void* containerPtr) override
     {
-        static_cast<ContainerType *>(containerPtr)->clear();
+        static_cast<ContainerType*>(containerPtr)->clear();
     }
 
-    void resize(void *containerPtr, size_t size) override
+    void resize(void* containerPtr, size_t size) override
     {
         // UnorderedMap 不支持 resize
     }
 
-    void *getElementPtr(void *containerPtr, size_t index) override
+    void* getElementPtr(void* containerPtr, size_t index) override
     {
         // UnorderedMap 不支持索引访问
         return nullptr;
     }
 
-    void *getValuePtr(void *containerPtr, const std::string &key) override
+    void* getValuePtr(void* containerPtr, const std::string& key) override
     {
-        auto *map = static_cast<ContainerType *>(containerPtr);
+        auto* map = static_cast<ContainerType*>(containerPtr);
 
         K actualKey;
         if constexpr (std::is_same_v<K, std::string>) {
@@ -496,41 +519,41 @@ class UnorderedMapProperty : public IContainerProperty
     type_index_t getElementTypeIndex() const override { return ya::type_index_v<V>; }
     type_index_t getKeyTypeIndex() const override { return ya::type_index_v<K>; }
 
-    std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) override
+    std::unique_ptr<ContainerIterator> createIterator(void* containerPtr) override
     {
-        return std::make_unique<UnorderedMapIterator>(static_cast<ContainerType *>(containerPtr));
+        return std::make_unique<UnorderedMapIterator>(static_cast<ContainerType*>(containerPtr));
     }
 
-    void insertElement(void *containerPtr, void *keyPtr, void *valuePtr) override
+    void insertElement(void* containerPtr, void* keyPtr, void* valuePtr) override
     {
         if (!keyPtr) return;
 
-        auto    *map = static_cast<ContainerType *>(containerPtr);
-        const K &key = *static_cast<K *>(keyPtr);
+        auto*    map = static_cast<ContainerType*>(containerPtr);
+        const K& key = *static_cast<K*>(keyPtr);
 
         if (valuePtr) {
-            (*map)[key] = *static_cast<V *>(valuePtr);
+            (*map)[key] = *static_cast<V*>(valuePtr);
         }
         else {
             (*map)[key] = V{}; // 默认构造
         }
     }
 
-    void removeByKey(void *containerPtr, void *keyPtr) override
+    void removeByKey(void* containerPtr, void* keyPtr) override
     {
         if (!keyPtr) return;
 
-        auto    *map = static_cast<ContainerType *>(containerPtr);
-        const K &key = *static_cast<K *>(keyPtr);
+        auto*    map = static_cast<ContainerType*>(containerPtr);
+        const K& key = *static_cast<K*>(keyPtr);
         map->erase(key);
     }
 
-    void addEmptyEntry(void *containerPtr) override
+    void addEmptyEntry(void* containerPtr) override
     {
         // TODO: reflection should only support string key?
         //      or support a temp entry that did not added to the container
         //      until user input a valid key?
-        auto *map = static_cast<ContainerType *>(containerPtr);
+        auto* map = static_cast<ContainerType*>(containerPtr);
         map->emplace(K{}, V{});
     }
 };
@@ -548,17 +571,17 @@ class UnorderedSetProperty : public IContainerProperty
     // UnorderedSet 迭代器实现
     struct UnorderedSetIterator : public ContainerIterator
     {
-        ContainerType                   *container;
+        ContainerType*                   container;
         typename ContainerType::iterator current;
 
-        UnorderedSetIterator(ContainerType *c) : container(c), current(c->begin()) {}
+        UnorderedSetIterator(ContainerType* c) : container(c), current(c->begin()) {}
 
         bool hasNext() const override { return current != container->end(); }
         void next() override { ++current; }
 
-        void *getElementPtr() override
+        void* getElementPtr() override
         {
-            return current != container->end() ? const_cast<T *>(&(*current)) : nullptr;
+            return current != container->end() ? const_cast<T*>(&(*current)) : nullptr;
         }
 
         type_index_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
@@ -569,59 +592,59 @@ class UnorderedSetProperty : public IContainerProperty
     ContainerCategory getCategory() const override { return ContainerCategory::UnorderedContainer; }
     bool              isMapLike() const override { return false; }
 
-    size_t getSize(void *containerPtr) const override
+    size_t getSize(void* containerPtr) const override
     {
-        return static_cast<ContainerType *>(containerPtr)->size();
+        return static_cast<ContainerType*>(containerPtr)->size();
     }
 
-    void clear(void *containerPtr) override
+    void clear(void* containerPtr) override
     {
-        static_cast<ContainerType *>(containerPtr)->clear();
+        static_cast<ContainerType*>(containerPtr)->clear();
     }
 
-    void resize(void *containerPtr, size_t size) override
+    void resize(void* containerPtr, size_t size) override
     {
         // UnorderedSet 不支持 resize
     }
 
-    void *getElementPtr(void *containerPtr, size_t index) override
+    void* getElementPtr(void* containerPtr, size_t index) override
     {
         // UnorderedSet 不支持索引访问
         return nullptr;
     }
 
-    void *getValuePtr(void *containerPtr, const std::string &key) override
+    void* getValuePtr(void* containerPtr, const std::string& key) override
     {
         return nullptr; // UnorderedSet 不支持 key 访问
     }
 
     type_index_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
 
-    std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) override
+    std::unique_ptr<ContainerIterator> createIterator(void* containerPtr) override
     {
-        return std::make_unique<UnorderedSetIterator>(static_cast<ContainerType *>(containerPtr));
+        return std::make_unique<UnorderedSetIterator>(static_cast<ContainerType*>(containerPtr));
     }
 
-    void addElement(void *containerPtr, void *elementPtr) override
+    void addElement(void* containerPtr, void* elementPtr) override
     {
-        auto *set = static_cast<ContainerType *>(containerPtr);
+        auto* set = static_cast<ContainerType*>(containerPtr);
         if (elementPtr) {
-            set->insert(*static_cast<T *>(elementPtr));
+            set->insert(*static_cast<T*>(elementPtr));
         }
     }
 
-    void removeByKey(void *containerPtr, void *keyPtr) override
+    void removeByKey(void* containerPtr, void* keyPtr) override
     {
         if (!keyPtr) return;
 
-        auto    *set = static_cast<ContainerType *>(containerPtr);
-        const T &key = *static_cast<T *>(keyPtr);
+        auto*    set = static_cast<ContainerType*>(containerPtr);
+        const T& key = *static_cast<T*>(keyPtr);
         set->erase(key);
     }
 
-    void addEmptyEntry(void *containerPtr) override
+    void addEmptyEntry(void* containerPtr) override
     {
-        auto *set = static_cast<ContainerType *>(containerPtr);
+        auto* set = static_cast<ContainerType*>(containerPtr);
         set->emplace(T{});
     }
 };
@@ -639,15 +662,15 @@ class ArrayProperty : public IContainerProperty
     // Array 迭代器实现
     struct ArrayIterator : public ContainerIterator
     {
-        ContainerType *container;
+        ContainerType* container;
         size_t         currentIndex = 0;
 
-        ArrayIterator(ContainerType *c) : container(c) {}
+        ArrayIterator(ContainerType* c) : container(c) {}
 
         bool hasNext() const override { return currentIndex < N; }
         void next() override { ++currentIndex; }
 
-        void *getElementPtr() override
+        void* getElementPtr() override
         {
             return currentIndex < N ? &(*container)[currentIndex] : nullptr;
         }
@@ -662,62 +685,62 @@ class ArrayProperty : public IContainerProperty
     bool              isFixedSize() const override { return true; }
     size_t            getFixedSize() const override { return N; }
 
-    size_t getSize(void *containerPtr) const override
+    size_t getSize(void* containerPtr) const override
     {
         (void)containerPtr;
         return N; // Array size is always N
     }
 
-    void clear(void *containerPtr) override
+    void clear(void* containerPtr) override
     {
         // Array cannot be cleared, but we can reset to default values
-        auto *arr = static_cast<ContainerType *>(containerPtr);
+        auto* arr = static_cast<ContainerType*>(containerPtr);
         for (size_t i = 0; i < N; ++i) {
             (*arr)[i] = T{};
         }
     }
 
-    void resize(void *containerPtr, size_t size) override
+    void resize(void* containerPtr, size_t size) override
     {
         // Array cannot be resized - fixed size at compile time
         (void)containerPtr;
         (void)size;
     }
 
-    void *getElementPtr(void *containerPtr, size_t index) override
+    void* getElementPtr(void* containerPtr, size_t index) override
     {
-        auto *arr = static_cast<ContainerType *>(containerPtr);
+        auto* arr = static_cast<ContainerType*>(containerPtr);
         return index < N ? &(*arr)[index] : nullptr;
     }
 
-    void *getValuePtr(void *containerPtr, const std::string &key) override
+    void* getValuePtr(void* containerPtr, const std::string& key) override
     {
         return nullptr; // Array does not support key access
     }
 
     type_index_t getElementTypeIndex() const override { return ya::type_index_v<T>; }
 
-    std::unique_ptr<ContainerIterator> createIterator(void *containerPtr) override
+    std::unique_ptr<ContainerIterator> createIterator(void* containerPtr) override
     {
-        return std::make_unique<ArrayIterator>(static_cast<ContainerType *>(containerPtr));
+        return std::make_unique<ArrayIterator>(static_cast<ContainerType*>(containerPtr));
     }
 
     // Array does not support dynamic add/remove operations
-    void addElement(void *containerPtr, void *elementPtr) override
+    void addElement(void* containerPtr, void* elementPtr) override
     {
         // Not supported for fixed-size array
         (void)containerPtr;
         (void)elementPtr;
     }
 
-    void removeElement(void *containerPtr, size_t index) override
+    void removeElement(void* containerPtr, size_t index) override
     {
         // Not supported for fixed-size array
         (void)containerPtr;
         (void)index;
     }
 
-    void addEmptyEntry(void *containerPtr) override
+    void addEmptyEntry(void* containerPtr) override
     {
         // Not supported for fixed-size array
         (void)containerPtr;
@@ -757,7 +780,7 @@ std::unique_ptr<IContainerProperty> createContainerProperty()
             return std::make_unique<UnorderedSetProperty<ElementType>>();
         }
         else if constexpr (Traits::Type == EContainer::Array) {
-            using ElementType            = typename Traits::ElementType;
+            using ElementType             = typename Traits::ElementType;
             constexpr std::size_t ArrSize = Traits::Size;
             return std::make_unique<ArrayProperty<ElementType, ArrSize>>();
         }

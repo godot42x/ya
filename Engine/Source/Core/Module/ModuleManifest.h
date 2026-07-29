@@ -16,7 +16,7 @@ struct FModuleDependency
     bool        required = true;
 };
 
-struct ENGINE_API FModuleManifest
+struct FModuleManifest
 {
     uint32_t                       schemaVersion = 1;
     std::string                    name;
@@ -25,10 +25,10 @@ struct ENGINE_API FModuleManifest
     std::vector<FModuleDependency> dependencies;
     std::filesystem::path          sourcePath;
 
-    [[nodiscard]] static FModuleManifest load(const std::filesystem::path& path);
+    [[nodiscard]] static ENGINE_API FModuleManifest load(const std::filesystem::path& path);
 };
 
-[[nodiscard]] const char* moduleKindName(EModuleKind kind);
+[[nodiscard]] ENGINE_API const char* moduleKindName(EModuleKind kind);
 
 } // namespace ya
 

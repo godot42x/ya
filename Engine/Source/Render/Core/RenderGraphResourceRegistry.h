@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render/Core/RenderGraph.h"
+#include "Core/Api.h"
 #include "Render/Core/RenderImage.h"
 
 #include <memory>
@@ -48,14 +49,14 @@ class RenderGraphResourceRegistry
     explicit RenderGraphResourceRegistry(IRenderResourceFactory& factory)
         : _factory(factory)
     {}
-    ~RenderGraphResourceRegistry();
+    ENGINE_API ~RenderGraphResourceRegistry();
 
-    void sync(const RenderGraph& graph);
-    void clear();
+    ENGINE_API void sync(const RenderGraph& graph);
+    ENGINE_API void clear();
 
-    [[nodiscard]] const RenderImage* resolveTexture(RGTextureHandle handle) const;
-    [[nodiscard]] std::shared_ptr<RenderImage> resolveTextureShared(RGTextureHandle handle) const;
-    [[nodiscard]] IBuffer* resolveBuffer(RGBufferHandle handle) const;
+    [[nodiscard]] ENGINE_API const RenderImage* resolveTexture(RGTextureHandle handle) const;
+    [[nodiscard]] ENGINE_API std::shared_ptr<RenderImage> resolveTextureShared(RGTextureHandle handle) const;
+    [[nodiscard]] ENGINE_API IBuffer* resolveBuffer(RGBufferHandle handle) const;
 
     [[nodiscard]] const std::unordered_map<RGTextureHandle, TextureEntry>& getTextures() const { return _textures; }
     [[nodiscard]] const std::unordered_map<RGBufferHandle, OwnedBufferEntry>& getOwnedBuffers() const { return _ownedBuffers; }

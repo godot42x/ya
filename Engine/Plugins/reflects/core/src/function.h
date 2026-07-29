@@ -27,7 +27,7 @@ enum class FunctionType
 // ============================================================================
 // MARK: Function
 // ============================================================================
-struct REFLECTS_CORE_API Function : public Field
+struct Function : public Field
 {
     FunctionType type = FunctionType::MemberFunction;
 

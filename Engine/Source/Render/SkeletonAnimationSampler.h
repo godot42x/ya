@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render/Skeleton.h"
+#include "Core/Api.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -25,7 +26,7 @@ struct SkeletonPose
     std::vector<uint32_t>  animatedNodeIndices;
 };
 
-struct SkeletonAnimationSampler
+struct ENGINE_API SkeletonAnimationSampler
 {
     static double wrapTime(double time, double duration);
 

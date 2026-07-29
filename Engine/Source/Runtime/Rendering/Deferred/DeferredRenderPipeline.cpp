@@ -18,6 +18,9 @@
 #include "Runtime/Application/App.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "Render/Core/RenderGraphExecutor.h"
+#include "Config/ConfigManager.h"
+
+#include "Scene/Scene.h"
 #include <algorithm>
 #include <chrono>
 #include <format>

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render/RenderDefines.h"
+#include "Core/Api.h"
 
 #include <array>
 
@@ -14,7 +15,7 @@ struct CascadeData
     uint32_t                                        count = 1;
 };
 
-[[nodiscard]] CascadeData buildCascades(const glm::vec3& lightDirection,
+[[nodiscard]] ENGINE_API CascadeData buildCascades(const glm::vec3& lightDirection,
                                         const glm::mat4& cameraView,
                                         const glm::mat4& cameraProjection,
                                         float            shadowDistance,

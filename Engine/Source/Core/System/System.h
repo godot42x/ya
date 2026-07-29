@@ -10,7 +10,7 @@ namespace ya
 struct ISystem
 {
     virtual void init() {}
-    virtual void onUpdate(float deltaTime) {}
+    virtual void onUpdate(float /*deltaTime*/) {}
     virtual void shutdown() {}
 
 

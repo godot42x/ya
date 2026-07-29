@@ -102,7 +102,7 @@ enum T : uint32_t
     virtual uint32_t getCategory() const override { return category; }
 
 
-class Event
+class ENGINE_API Event
 {
   public:
     virtual ~Event() = default;

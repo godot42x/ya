@@ -18,7 +18,7 @@
 // namespace refl
 
 // MARK: ClassRegistry
-struct REFLECTS_CORE_API ClassRegistry
+struct ClassRegistry
 {
     std::unordered_map<std::string, std::shared_ptr<Class>> classes;
     std::unordered_map<refl::type_index_t, std::shared_ptr<Class>> typeIdMap;
@@ -26,7 +26,7 @@ struct REFLECTS_CORE_API ClassRegistry
     // parent -> childrens
     std::unordered_map<refl::type_index_t, std::vector<refl::type_index_t>> parentToChildren;
 
-    static ClassRegistry &instance();
+    static REFLECTS_CORE_API ClassRegistry &instance();
 
     template <typename T>
     std::shared_ptr<Class> registerClass(const std::string &name, Class *classInfo)
@@ -228,12 +228,12 @@ struct Register
 // ============================================================================
 // MARK: EnumRegistry - 全局枚举注册表
 // ============================================================================
-struct REFLECTS_CORE_API EnumRegistry
+struct EnumRegistry
 {
     std::unordered_map<std::string, Enum> enums;
     std::unordered_map<refl::type_index_t, Enum *> typeIdMap; // typeIndex -> Enum*
 
-    static EnumRegistry &instance();
+    static REFLECTS_CORE_API EnumRegistry &instance();
 
     void registerEnum(const std::string &enumName, const Enum &enumInfo, refl::type_index_t typeIndex = 0)
     {
