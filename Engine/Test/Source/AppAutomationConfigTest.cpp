@@ -1,5 +1,7 @@
 #include "Runtime/Application/Lifecycle/AppAutomation.h"
 
+#include "ECS/System/ResourceResolveSystem.h"
+
 #include "Config/ConfigManager.h"
 #include "Core/Profiling/Profiling.h"
 #include "Core/System/VirtualFileSystem.h"
@@ -239,6 +241,12 @@ TEST_F(AppAutomationConfigTest, LoadConfigReadsDeferredSsaoAndPostprocessAutomat
 
     ASSERT_TRUE(appDesc.automation.postprocess.toneMappingCurve.has_value());
     EXPECT_EQ(*appDesc.automation.postprocess.toneMappingCurve, PostProcessingState::EToneMappingCurve::Uncharted2);
+}
+
+
+TEST_F(AppAutomationConfigTest, ResourceResolveDerivedResourceGcDelayConstantIsStable)
+{
+    EXPECT_EQ(ResourceResolveSystem::DERIVED_RESOURCE_GC_DELAY_FRAMES, 300u);
 }
 
 } // namespace

@@ -137,14 +137,6 @@ std::string findRuntimeDefaultFontPath()
     return {};
 }
 
-std::string resolveStartupScenePath(const AppDesc& appDesc)
-{
-    if (appDesc.automation.scenePath) {
-        return *appDesc.automation.scenePath;
-    }
-    return appDesc.defaultScenePath.value_or("");
-}
-
 std::string resolveProjectScenePath(const App& app, const std::string& requestedPath)
 {
     if (requestedPath.empty()) {
@@ -213,6 +205,15 @@ void App::stopRuntime()
 void App::stopSimulation()
 {
     AppLifecycle::stopSimulation(*this);
+}
+
+
+std::string AppLifecycle::resolveStartupScenePath(const AppDesc& appDesc)
+{
+    if (appDesc.automation.scenePath) {
+        return *appDesc.automation.scenePath;
+    }
+    return appDesc.defaultScenePath.value_or("");
 }
 
 void AppLifecycle::init(App& app, AppDesc ci)

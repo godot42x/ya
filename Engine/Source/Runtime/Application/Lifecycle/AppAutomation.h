@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/Api.h"
+
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -31,7 +33,7 @@ struct AppAutomationFrameContext
     uint64_t                                frameIndex                        = 0;
 };
 
-class AppAutomation
+class ENGINE_API AppAutomation
 {
   public:
     static bool isFrameAutomationEnabled(const App& app);

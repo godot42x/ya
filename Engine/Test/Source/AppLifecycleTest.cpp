@@ -150,6 +150,23 @@ class AppLifecycleTest : public ::testing::Test
     }
 };
 
+TEST_F(AppLifecycleTest, ResolveStartupScenePrefersAutomationOverride)
+{
+    AppDesc desc;
+    desc.defaultScenePath    = "Content/Scenes/default.scene.json";
+    desc.automation.scenePath = "Content/Scenes/automation.scene.json";
+
+    EXPECT_EQ(AppLifecycle::resolveStartupScenePath(desc), "Content/Scenes/automation.scene.json");
+}
+
+TEST_F(AppLifecycleTest, ResolveStartupSceneFallsBackToDefaultScene)
+{
+    AppDesc desc;
+    desc.defaultScenePath = "Content/Scenes/default.scene.json";
+
+    EXPECT_EQ(AppLifecycle::resolveStartupScenePath(desc), "Content/Scenes/default.scene.json");
+}
+
 TEST_F(AppLifecycleTest, LoadSceneIgnoresEmptyPathWithoutCreatingFallbackScene)
 {
     EXPECT_FALSE(sceneManager->hasScene());

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/Api.h"
+
 #include <string>
 
 namespace ya
@@ -9,7 +11,7 @@ struct App;
 struct AppDesc;
 struct Scene;
 
-class AppLifecycle
+class ENGINE_API AppLifecycle
 {
   public:
     static void init(App& app, AppDesc ci);
@@ -18,6 +20,7 @@ class AppLifecycle
     static void onPostInit(App& app);
     static void quit(App& app);
 
+    static std::string resolveStartupScenePath(const AppDesc& appDesc);
     static bool loadScene(App& app, const std::string& path);
     static bool unloadScene(App& app);
 
