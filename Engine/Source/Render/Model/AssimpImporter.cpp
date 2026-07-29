@@ -236,9 +236,9 @@ void importAssimpCommonTextures(const aiMaterial* mat, MaterialData& matData)
 
     const std::string diffusePath = getFirstTexturePath(mat, aiTextureType_DIFFUSE);
     detail::setTextureAlias(matData, MatTexture::Diffuse, MatTexture::Albedo, diffusePath);
-    matData.setTexturePath(MatTexture::Specular, getFirstTexturePath(mat, aiTextureType_SPECULAR));
-    matData.setTexturePath(MatTexture::Emissive, getFirstTexturePath(mat, aiTextureType_EMISSIVE));
-    matData.setTexturePath(MatTexture::AO, getFirstTexturePath(mat, aiTextureType_LIGHTMAP));
+    matData.setTexturePath(MatTexture::Specular, detail::resolveImportedAssetPath(matData.directory, getFirstTexturePath(mat, aiTextureType_SPECULAR)));
+    matData.setTexturePath(MatTexture::Emissive, detail::resolveImportedAssetPath(matData.directory, getFirstTexturePath(mat, aiTextureType_EMISSIVE)));
+    matData.setTexturePath(MatTexture::AO, detail::resolveImportedAssetPath(matData.directory, getFirstTexturePath(mat, aiTextureType_LIGHTMAP)));
 
     const std::string normalPath = [&]()
     {
@@ -248,7 +248,7 @@ void importAssimpCommonTextures(const aiMaterial* mat, MaterialData& matData)
         }
         return getFirstTexturePath(mat, aiTextureType_HEIGHT);
     }();
-    matData.setTexturePath(MatTexture::Normal, normalPath);
+    matData.setTexturePath(MatTexture::Normal, detail::resolveImportedAssetPath(matData.directory, normalPath));
 }
 
 void importRawMaterialHints(const aiMaterial* mat, MaterialData& matData)
@@ -338,25 +338,25 @@ void importRawMaterialHints(const aiMaterial* mat, MaterialData& matData)
             continue;
         }
         if (detail::containsInsensitive(key, "normal")) {
-            matData.setTexturePath(MatTexture::Normal, path);
+            matData.setTexturePath(MatTexture::Normal, detail::resolveImportedAssetPath(matData.directory, path));
             continue;
         }
         if (detail::containsInsensitive(key, "occlusion")) {
-            matData.setTexturePath(MatTexture::AO, path);
+            matData.setTexturePath(MatTexture::AO, detail::resolveImportedAssetPath(matData.directory, path));
             continue;
         }
         if (detail::containsInsensitive(key, "metallicroughness")) {
-            matData.setTexturePath(MatTexture::MetallicRoughness, path);
+            matData.setTexturePath(MatTexture::MetallicRoughness, detail::resolveImportedAssetPath(matData.directory, path));
             isPBRHint = true;
             continue;
         }
         if (detail::containsInsensitive(key, "metallic")) {
-            matData.setTexturePath(MatTexture::Metallic, path);
+            matData.setTexturePath(MatTexture::Metallic, detail::resolveImportedAssetPath(matData.directory, path));
             isPBRHint = true;
             continue;
         }
         if (detail::containsInsensitive(key, "roughness")) {
-            matData.setTexturePath(MatTexture::Roughness, path);
+            matData.setTexturePath(MatTexture::Roughness, detail::resolveImportedAssetPath(matData.directory, path));
             isPBRHint = true;
             continue;
         }
@@ -828,14 +828,15 @@ void importMaterialData(const aiScene* scene, AssimpImportContext& context)
 ImportedModelData AssimpImporter::import(const std::string& filepath) const
 {
     ImportedModelData result;
-    result.filepath  = filepath;
-    result.directory = std::filesystem::path(filepath).parent_path().generic_string();
+    result.filepath  = detail::normalizeImportedAssetPath(filepath);
+    const auto ioFilepath = detail::resolveImportedIoPath(result.filepath);
+    result.directory = std::filesystem::path(result.filepath).parent_path().generic_string();
     if (!result.directory.empty() && result.directory.back() != '/') {
         result.directory += '/';
     }
 
-    if (!VirtualFileSystem::get()->isFileExists(filepath)) {
-        YA_CORE_ERROR("ImportedModelData::decode: file not found: {}", filepath);
+    if (!std::filesystem::exists(ioFilepath)) {
+        YA_CORE_ERROR("ImportedModelData::decode: file not found: {} (io='{}')", result.filepath, ioFilepath);
         return result;
     }
 
@@ -850,16 +851,16 @@ ImportedModelData AssimpImporter::import(const std::string& filepath) const
                                          aiProcess_ValidateDataStructure;
 
     Assimp::Importer importer;
-    const aiScene*   scene = importer.ReadFile(filepath, assimpFlags);
+    const aiScene*   scene = importer.ReadFile(ioFilepath, assimpFlags);
 
     if (!scene || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode) {
-        YA_CORE_ERROR("ImportedModelData::decode: Assimp error for '{}': {}", filepath, importer.GetErrorString());
+        YA_CORE_ERROR("ImportedModelData::decode: Assimp error for '{}' (io='{}'): {}", result.filepath, ioFilepath, importer.GetErrorString());
         return result;
     }
 
     AssimpImportContext context{
         .result      = result,
-        .coordSystem = inferAssimpCoordSystem(scene, filepath),
+        .coordSystem = inferAssimpCoordSystem(scene, result.filepath),
     };
     context.result.sourceCoordSystem = context.coordSystem;
 
@@ -868,7 +869,7 @@ ImportedModelData AssimpImporter::import(const std::string& filepath) const
     importMaterialData(scene, context);
 
     YA_CORE_INFO("ImportedModelData::decode: '{}' -> {} meshes, {} materials, {} skeletons",
-                 filepath,
+                 result.filepath,
                  result.meshes.size(),
                  result.materials.size(),
                  result.skeletons.size());
@@ -893,3 +894,4 @@ const IModelImporter& getAssimpImporter()
 }
 
 } // namespace ya::model_importer
+

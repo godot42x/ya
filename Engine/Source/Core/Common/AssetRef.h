@@ -3,6 +3,7 @@
 #include "Core/Common/Types.h"
 #include "Core/Delegate.h"
 #include "Core/Reflection/Reflection.h"
+#include "Core/System/VirtualFileSystem.h"
 #include <algorithm>
 #include <memory>
 #include <string>
@@ -73,12 +74,7 @@ struct AssetRefBase
 
     const std::string &getPath() const { return _path; }
     bool               hasPath() const { return !_path.empty(); }
-    static std::string normalizePath(std::string path)
-    {
-        std::replace(path.begin(), path.end(), '\\', '/');
-        return path;
-    }
-
+    static std::string normalizePath(std::string path);
     void               setPath(const std::string &path)
     {
         _path = normalizePath(path);
@@ -295,6 +291,11 @@ struct DefaultAssetRefResolver : public IAssetRefResolver
 
 namespace ya
 {
+
+inline std::string AssetRefBase::normalizePath(std::string path)
+{
+    return AssetManager::normalizeAssetPath(std::move(path));
+}
 
 inline EAssetResolveResult TextureRef::resolve()
 {

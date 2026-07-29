@@ -4,14 +4,14 @@
 #include "Core/Reflection/DeferredInitializer.h"
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "Resource/AssetManager.h"
 #include "ECS/Component/ManagedChildComponent.h"
 #include "ECS/Entity.h"
+#include "ECS/Component/LuaScriptComponent.h"
 
 #include <algorithm>
 #include <cmath>
 #include <vector>
-
-
 
 namespace ya
 {
@@ -49,8 +49,54 @@ void normalizeSceneJsonNumbers(nlohmann::json& json)
     }
 }
 
-} // namespace
+void normalizeSceneJsonPaths(nlohmann::json& json)
+{
+    const auto normalizeStringField = [&](nlohmann::json& value, bool bAssetPath) {
+        if (!value.is_string()) {
+            return;
+        }
 
+        auto path = value.get<std::string>();
+        if (path.empty()) {
+            return;
+        }
+
+        value = bAssetPath ? AssetManager::normalizeAssetPath(path)
+                           : LuaScriptComponent::ScriptInstance::normalizeScriptPath(path);
+    };
+
+    if (json.is_array()) {
+        for (auto& item : json) {
+            normalizeSceneJsonPaths(item);
+        }
+        return;
+    }
+
+    if (!json.is_object()) {
+        return;
+    }
+
+    for (auto& [key, value] : json.items()) {
+        if (key == "scriptPath") {
+            normalizeStringField(value, false);
+            continue;
+        }
+        if (key == "filepath") {
+            normalizeStringField(value, true);
+            continue;
+        }
+        if (key == "files" && value.is_array()) {
+            for (auto& entry : value) {
+                normalizeStringField(entry, true);
+            }
+            continue;
+        }
+
+        normalizeSceneJsonPaths(value);
+    }
+}
+
+} // namespace
 
 // std::unordered_map<std::string, ComponentSerializer>   SceneSerializer::_componentSerializers;
 // std::unordered_map<std::string, ComponentDeserializer> SceneSerializer::_componentDeserializers;
@@ -64,6 +110,7 @@ bool SceneSerializer::saveToFile(const std::string& filepath)
     YA_PROFILE_FUNCTION_LOG();
     try {
         nlohmann::json j = serialize();
+        normalizePaths(j);
         normalizeSceneJsonNumbers(j);
         VirtualFileSystem::get()->saveToFile(filepath, j.dump(4, ' ', false));
         YA_CORE_INFO("Scene saved to: {}", filepath);
@@ -135,11 +182,6 @@ nlohmann::json SceneSerializer::serialize()
                 return;
             }
 
-            // ★ 跳过被父组件动态管理的子 Entity（运行时由父组件重建，不持久化）
-            // if (registry.any_of<ManagedChildComponent>(entityID)) {
-            //     return;
-            // }
-
             entities.push_back(entity);
         } });
 
@@ -177,23 +219,31 @@ nlohmann::json SceneSerializer::serialize()
     return j;
 }
 
+void SceneSerializer::normalizePaths(nlohmann::json& j)
+{
+    normalizeSceneJsonPaths(j);
+}
+
 void SceneSerializer::deserialize(const nlohmann::json& j)
 {
     YA_PROFILE_FUNCTION();
+
+    auto normalizedJson = j;
+    normalizePaths(normalizedJson);
 
     // 清空当前场景
     _scene->clear();
 
     // 设置场景名称
-    if (j.contains("name")) {
-        _scene->setName(j["name"].get<std::string>());
+    if (normalizedJson.contains("name")) {
+        _scene->setName(normalizedJson["name"].get<std::string>());
     }
 
     // ★ Step 1: 先反序列化所有 Entities（平铺创建）
     std::unordered_map<uint64_t, Entity*> entityMap; // uuid -> Entity*
-    if (j.contains("entities")) {
+    if (normalizedJson.contains("entities")) {
         YA_PROFILE_SCOPE("SceneSerializer::DeserializeEntities");
-        for (const auto& entityJson : j["entities"]) {
+        for (const auto& entityJson : normalizedJson["entities"]) {
             Entity* entity = deserializeEntity(entityJson);
             if (entity) {
                 uint64_t uuid   = entityJson["id"].get<uint64_t>();
@@ -202,13 +252,11 @@ void SceneSerializer::deserialize(const nlohmann::json& j)
         }
     }
 
-    // TODO: where to attach?
-    //      like godot, attach one scene to one node
     auto node = _scene->getRootNode();
 
     // ★ Step 2: 反序列化 NodeTree（重建树状结构）
-    if (j.contains("nodeTree")) {
-        const auto& nodeTreeJson = j["nodeTree"];
+    if (normalizedJson.contains("nodeTree")) {
+        const auto& nodeTreeJson = normalizedJson["nodeTree"];
         if (nodeTreeJson.contains("children")) {
             YA_PROFILE_SCOPE("SceneSerializer::DeserializeNodeTree");
             for (const auto& childJson : nodeTreeJson["children"]) {
@@ -269,7 +317,6 @@ nlohmann::json SceneSerializer::serializeEntity(Entity* entity)
         components[name.toString()] = std::move(componentJson);
     }
 
-
     return j;
 }
 
@@ -311,7 +358,7 @@ Entity* SceneSerializer::deserializeEntity(const nlohmann::json& j)
                 void* componentPtr = reg.addComponent(FName(typeName), *_scene, entity->getHandle());
                 ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
                 auto* ops = reg.getComponentOps(id);
-                auto  cls          = ClassRegistry::instance().getClass(id);
+                auto  cls = ClassRegistry::instance().getClass(id);
                 if (!ops || ops->useReflectionSerialization(componentPtr)) {
                     if (cls) {
                         ::ya::ReflectionSerializer::deserializeByRuntimeReflection(componentPtr, id, componentJ, cls->name);
@@ -329,7 +376,6 @@ Entity* SceneSerializer::deserializeEntity(const nlohmann::json& j)
 
     return entity;
 }
-
 
 // ============================================================================
 // NodeTree 序列化（树状结构，只存引用）
@@ -358,7 +404,6 @@ nlohmann::json SceneSerializer::serializeNodeTree(Node* node)
     if (node->hasChildren()) {
         j["children"] = nlohmann::json::array();
         for (Node* child : node->getChildren()) {
-            // 跳过 ManagedChildComponent 标记的子节点（及其子树）
             if (Entity* childEntity = child->getEntity()) {
                 if (_scene->getRegistry().any_of<ManagedChildComponent>(childEntity->getHandle())) {
                     continue;
@@ -389,8 +434,6 @@ void SceneSerializer::deserializeNodeTree(const nlohmann::json& j, Node* parent,
         auto     it   = entityMap.find(uuid);
         if (it != entityMap.end()) {
             entity = it->second;
-            // Entity is the canonical owner of the display name. This also
-            // migrates scenes written before Node/Entity names were unified.
             entity->setName(name);
         }
         else {
@@ -398,28 +441,13 @@ void SceneSerializer::deserializeNodeTree(const nlohmann::json& j, Node* parent,
         }
     }
 
-    // ★ 创建 Node3D（如果有 Entity 则关联，否则创建空 Node）
-    // Node *node = nullptr;
-    // if (entity) {
-    //     // 为已存在的 Entity 创建 Node3D
-
-    // 先默认必定存在 Entity 关联
     Node* node = _scene->createNode(name, parent, entity);
-
-    // }
-    // else {
-    //     // 创建空 Node（没有关联 Entity）
-    //     node = _scene->createNode(name, parent);
-    // }
 
     if (!node) {
         YA_CORE_ERROR("Failed to create node '{}'", name);
         return;
     }
 
-    // node->setName(name);
-
-    // ★ 递归反序列化子节点
     if (j.contains("children")) {
         for (const auto& childJson : j["children"]) {
             deserializeNodeTree(childJson, node, entityMap);
@@ -427,5 +455,7 @@ void SceneSerializer::deserializeNodeTree(const nlohmann::json& j, Node* parent,
     }
 }
 
-
 } // namespace ya
+
+
+

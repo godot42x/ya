@@ -145,9 +145,7 @@ void DetailsView::drawEnvironmentLightingComponent(Entity& entity)
                 ImGui::SameLine();
                 if (ImGui::Button("Browse##EnvironmentLightingFace")) {
                     _filePicker.openTexturePicker(elc->cubemapSource.files[faceIndex], [elc, faceIndex, entityId](const std::string& newPath) {
-                        elc->sourceType                      = EEnvironmentLightingSourceType::CubeFaces;
-                        elc->cubemapSource.files[faceIndex] = newPath;
-                        elc->invalidate();
+                        elc->setFace(static_cast<ECubeFace>(faceIndex), newPath);
                         if (auto* resolver = App::get()->getResourceResolveSystem()) {
                             resolver->markEnvironmentLightingDirty(entityId, "editor environment face picked");
                         }
@@ -226,3 +224,4 @@ void DetailsView::drawEnvironmentLightingComponent(Entity& entity)
 }
 
 } // namespace ya
+

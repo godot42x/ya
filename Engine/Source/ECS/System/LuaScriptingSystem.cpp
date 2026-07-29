@@ -363,6 +363,10 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
 
         // 遍历所有脚本实例
         for (auto &script : luaComp.scripts) {
+            if (!script.scriptPath.empty()) {
+                script.scriptPath = LuaScriptComponent::ScriptInstance::normalizeScriptPath(script.scriptPath);
+            }
+
             // 首次加载脚本
             if (!script.bLoaded && !script.scriptPath.empty()) {
                 YA_PROFILE_SCOPE("LuaScriptingSystem::loadScript");
@@ -513,7 +517,8 @@ void LuaScriptingSystem::bindReflectedComponents()
 
 void LuaScriptingSystem::reloadScript(const std::string &scriptPath)
 {
-    YA_CORE_INFO("[Hot Reload] Reloading script: {}", scriptPath);
+    const auto normalizedScriptPath = LuaScriptComponent::ScriptInstance::normalizeScriptPath(scriptPath);
+    YA_CORE_INFO("[Hot Reload] Reloading script: {}", normalizedScriptPath);
 
     auto *scene = App::get()->getSceneServices().getActiveScene();
     if (!scene) return;
@@ -525,7 +530,8 @@ void LuaScriptingSystem::reloadScript(const std::string &scriptPath)
         Entity entity(entityHandle, scene);
 
         for (auto &script : luaComp.scripts) {
-            if (script.scriptPath != scriptPath) continue;
+            script.scriptPath = LuaScriptComponent::ScriptInstance::normalizeScriptPath(script.scriptPath);
+            if (script.scriptPath != normalizedScriptPath) continue;
 
             // 保存当前属性值
             std::unordered_map<std::string, sol::object> savedProperties;
@@ -547,7 +553,7 @@ void LuaScriptingSystem::reloadScript(const std::string &scriptPath)
 
             // 重新加载脚本
             std::string scriptContent;
-            if (VirtualFileSystem::get()->readFileToString(scriptPath, scriptContent)) {
+            if (VirtualFileSystem::get()->readFileToString(normalizedScriptPath, scriptContent)) {
                 try {
                     sol::table scriptTable = _lua.script(scriptContent);
 
@@ -577,10 +583,10 @@ void LuaScriptingSystem::reloadScript(const std::string &scriptPath)
                         script.onInit(script.self);
                     }
 
-                    YA_CORE_INFO("[Hot Reload] Successfully reloaded: {}", scriptPath);
+                    YA_CORE_INFO("[Hot Reload] Successfully reloaded: {}", normalizedScriptPath);
                 }
                 catch (const sol::error &e) {
-                    YA_CORE_ERROR("[Hot Reload] Failed to reload {}: {}", scriptPath, e.what());
+                    YA_CORE_ERROR("[Hot Reload] Failed to reload {}: {}", normalizedScriptPath, e.what());
                 }
             }
         }

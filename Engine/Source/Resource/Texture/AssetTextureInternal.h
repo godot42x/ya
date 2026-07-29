@@ -9,6 +9,7 @@ std::string toLowerCopy(std::string value);
 std::string textureExtension(const std::string& filepath);
 bool        isKtxPath(const std::string& filepath);
 std::string findCompanionKtx2Path(const std::string& filepath);
+std::string resolveTextureIoPath(const std::string& filepath);
 uint32_t    textureChannelCount(EFormat::T format);
 
 bool applyKtxResolvedSettings(const std::string& filepath,
@@ -24,3 +25,4 @@ AssetManager::ETextureChannelPolicy parseChannelPolicy(const std::string& raw);
 AssetManager::ETextureDecodePrecision parseDecodePrecision(const std::string& raw);
 
 } // namespace ya::asset_manager_texture_detail
+

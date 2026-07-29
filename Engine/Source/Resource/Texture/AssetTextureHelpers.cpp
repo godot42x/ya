@@ -285,10 +285,11 @@ EFormat::T resolveKtxTextureFormat(const ktxTexture* texture)
 
 KtxTextureHandle loadKtxTexture(const std::string& filepath, ktxTextureCreateFlags createFlags)
 {
+    const auto ioPath = resolveTextureIoPath(filepath);
     ktxTexture* rawTexture = nullptr;
-    const auto  result = ktxTexture_CreateFromNamedFile(filepath.c_str(), createFlags, &rawTexture);
+    const auto  result = ktxTexture_CreateFromNamedFile(ioPath.c_str(), createFlags, &rawTexture);
     if (result != KTX_SUCCESS || rawTexture == nullptr) {
-        YA_CORE_ERROR("KTX load failed for '{}': {}", filepath, ktxErrorString(result));
+        YA_CORE_ERROR("KTX load failed for '{}' (io='{}'): {}", filepath, ioPath, ktxErrorString(result));
         return {};
     }
 
@@ -359,6 +360,22 @@ std::string findCompanionKtx2Path(const std::string& filepath)
     return fileExistsInVfs(candidatePath) ? candidatePath : std::string{};
 }
 
+std::string resolveTextureIoPath(const std::string& filepath)
+{
+    if (filepath.empty()) {
+        return {};
+    }
+
+    if (auto* vfs = VirtualFileSystem::get()) {
+        const auto translated = vfs->translatePath(filepath);
+        if (!translated.empty()) {
+            return path_utils::pathToGenericUtf8String(translated.lexically_normal());
+        }
+    }
+
+    return path_utils::pathToGenericUtf8String(std::filesystem::path(filepath).lexically_normal());
+}
+
 uint32_t textureChannelCount(EFormat::T format)
 {
     switch (format) {
@@ -389,8 +406,9 @@ bool applyKtxResolvedSettings(const std::string& filepath,
         return false;
     }
 
-    settings.sourceInfo.filepath         = filepath;
-    settings.sourceInfo.extension        = textureExtension(filepath);
+    settings.sourceInfo.filepath         = AssetManager::normalizeAssetPath(filepath);
+    settings.sourceInfo.ioFilepath       = resolveTextureIoPath(settings.sourceInfo.filepath);
+    settings.sourceInfo.extension        = textureExtension(settings.sourceInfo.filepath);
     settings.sourceInfo.width            = texture->baseWidth;
     settings.sourceInfo.height           = texture->baseHeight;
     settings.sourceInfo.bIsCompressed    = texture->isCompressed;
@@ -452,7 +470,7 @@ bool applyKtxResolvedSettings(const std::string& filepath,
 AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::ResolvedTextureImportSettings& settings)
 {
     AssetManager::TextureMemoryBlock result;
-    result.filepath       = settings.sourceInfo.filepath;
+    result.filepath       = settings.requestedFilepath;
     result.width          = settings.sourceInfo.width;
     result.height         = settings.sourceInfo.height;
     result.channels       = settings.resolvedChannels;
@@ -541,10 +559,12 @@ AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::Resol
         return result;
     }
 
+    const auto& ioPath = settings.sourceInfo.ioFilepath;
+
     if (settings.payloadType == AssetManager::ETexturePayloadType::U8) {
-        stbi_uc* raw = stbi_load(settings.sourceInfo.filepath.c_str(), &width, &height, &channels, desiredChannels);
+        stbi_uc* raw = stbi_load(ioPath.c_str(), &width, &height, &channels, desiredChannels);
         if (!raw) {
-            YA_CORE_ERROR("decodeTextureToMemory: Failed to load '{}'", settings.sourceInfo.filepath);
+            YA_CORE_ERROR("decodeTextureToMemory: Failed to load '{}' (io='{}')", settings.sourceInfo.filepath, ioPath);
             result.hardFailure = true;
             result.error       = "Failed to load texture bytes";
             return result;
@@ -559,9 +579,9 @@ AssetManager::TextureMemoryBlock decodeTextureToMemory(const AssetManager::Resol
         return result;
     }
 
-    float* rawFloat = stbi_loadf(settings.sourceInfo.filepath.c_str(), &width, &height, &channels, desiredChannels);
+    float* rawFloat = stbi_loadf(ioPath.c_str(), &width, &height, &channels, desiredChannels);
     if (!rawFloat) {
-        YA_CORE_ERROR("decodeTextureToMemory: Failed to load HDR texture '{}'", settings.sourceInfo.filepath);
+        YA_CORE_ERROR("decodeTextureToMemory: Failed to load HDR texture '{}' (io='{}')", settings.sourceInfo.filepath, ioPath);
         result.hardFailure = true;
         result.error       = "Failed to load HDR texture bytes";
         return result;

@@ -1,4 +1,5 @@
 #include "EnvironmentLightingComponent.h"
+#include "Resource/AssetManager.h"
 
 namespace ya
 {
@@ -46,14 +47,16 @@ void EnvironmentLightingComponent::setFace(ECubeFace face, const std::string& pa
     }
 
     sourceType                                     = EEnvironmentLightingSourceType::CubeFaces;
-    cubemapSource.files[static_cast<size_t>(face)] = path;
+    cubemapSource.files[static_cast<size_t>(face)] = AssetManager::normalizeAssetPath(path);
     invalidate();
 }
 
 void EnvironmentLightingComponent::setCubemapSource(const CubeMapCreateInfo& createInfo)
 {
     sourceType                 = EEnvironmentLightingSourceType::CubeFaces;
-    cubemapSource.files        = createInfo.files;
+    for (size_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
+        cubemapSource.files[faceIndex] = AssetManager::normalizeAssetPath(createInfo.files[faceIndex]);
+    }
     cubemapSource.flipVertical = createInfo.flipVertical;
     invalidate();
 }
@@ -61,7 +64,7 @@ void EnvironmentLightingComponent::setCubemapSource(const CubeMapCreateInfo& cre
 void EnvironmentLightingComponent::setCylindricalSource(const std::string& filepath)
 {
     sourceType                 = EEnvironmentLightingSourceType::Cylindrical;
-    cylindricalSource.filepath = filepath;
+    cylindricalSource.filepath = AssetManager::normalizeAssetPath(filepath);
     invalidate();
 }
 
@@ -91,3 +94,4 @@ void EnvironmentLightingComponent::onPostSerialize()
 }
 
 } // namespace ya
+

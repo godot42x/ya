@@ -104,17 +104,7 @@ struct MaterialData
 
     std::string resolveTexturePath(const FName& key) const
     {
-        std::string texPath = getTexturePath(key);
-        if (texPath.empty()) {
-            return "";
-        }
-        if (texPath.find(':') != std::string::npos || texPath[0] == '/') {
-            return texPath;
-        }
-        if (!directory.empty() && texPath.rfind(directory, 0) == 0) {
-            return texPath;
-        }
-        return directory + texPath;
+        return getTexturePath(key);
     }
 };
 

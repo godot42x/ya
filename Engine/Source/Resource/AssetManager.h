@@ -49,6 +49,7 @@ class ENGINE_API AssetManager : public IResourceCache
 
     /// Returns the traits for a supported texture upload format, or nullptr if unknown.
     static const TextureFormatTraits* getFormatTraits(EFormat::T format);
+    static std::string canonicalizeAssetPath(std::string path);
     static std::string normalizeAssetPath(std::string path);
 
   private:
@@ -212,3 +213,4 @@ class ENGINE_API AssetManager : public IResourceCache
 };
 
 } // namespace ya
+

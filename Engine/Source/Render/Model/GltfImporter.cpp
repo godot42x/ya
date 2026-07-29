@@ -211,12 +211,7 @@ std::string resolveAssetUri(const std::string& directory, const std::string& uri
         return {};
     }
 
-    const std::filesystem::path assetPath(uri);
-    if (assetPath.is_absolute()) {
-        return path_utils::pathToGenericUtf8String(assetPath);
-    }
-
-    return path_utils::pathToGenericUtf8String((std::filesystem::path(directory) / assetPath).lexically_normal());
+    return detail::resolveImportedAssetPath(directory, uri);
 }
 
 std::string resolveGltfTexturePath(const tinygltf::Model& model, const MaterialData& matData, int textureIndex)
@@ -419,8 +414,9 @@ bool appendGltfPrimitive(const tinygltf::Model&     gltfModel,
 ImportedModelData GltfImporter::import(const std::string& filepath) const
 {
     ImportedModelData result;
-    result.filepath  = filepath;
-    result.directory = path_utils::pathToGenericUtf8String(std::filesystem::path(filepath).parent_path());
+    result.filepath  = detail::normalizeImportedAssetPath(filepath);
+    const auto ioFilepath = detail::resolveImportedIoPath(result.filepath);
+    result.directory = path_utils::pathToGenericUtf8String(std::filesystem::path(result.filepath).parent_path());
     if (!result.directory.empty() && result.directory.back() != '/') {
         result.directory += '/';
     }
@@ -432,18 +428,18 @@ ImportedModelData GltfImporter::import(const std::string& filepath) const
 
     loader.SetImageLoader(ignoreTinyGltfImageData, nullptr);
 
-    const bool loaded = detail::containsInsensitive(path_utils::pathToUtf8String(std::filesystem::path(filepath).extension()), ".glb")
-                          ? loader.LoadBinaryFromFile(&model, &err, &warn, filepath)
-                          : loader.LoadASCIIFromFile(&model, &err, &warn, filepath);
+    const bool loaded = detail::containsInsensitive(path_utils::pathToUtf8String(std::filesystem::path(result.filepath).extension()), ".glb")
+                          ? loader.LoadBinaryFromFile(&model, &err, &warn, ioFilepath)
+                          : loader.LoadASCIIFromFile(&model, &err, &warn, ioFilepath);
 
     if (!warn.empty()) {
-        YA_CORE_WARN("TinyGLTF warning for '{}': {}", filepath, warn);
+        YA_CORE_WARN("TinyGLTF warning for '{}' (io='{}'): {}", result.filepath, ioFilepath, warn);
     }
     if (!err.empty()) {
-        YA_CORE_WARN("TinyGLTF detail for '{}': {}", filepath, err);
+        YA_CORE_WARN("TinyGLTF detail for '{}' (io='{}'): {}", result.filepath, ioFilepath, err);
     }
     if (!loaded) {
-        YA_CORE_ERROR("ImportedModelData::decode: TinyGLTF failed for '{}'", filepath);
+        YA_CORE_ERROR("ImportedModelData::decode: TinyGLTF failed for '{}' (io='{}')", result.filepath, ioFilepath);
         return result;
     }
 
@@ -474,7 +470,7 @@ ImportedModelData GltfImporter::import(const std::string& filepath) const
     }
 
     YA_CORE_INFO("ImportedModelData::decode: '{}'via TinyGLTF -> {} meshes, {} materials",
-                 filepath,
+                 result.filepath,
                  result.meshes.size(),
                  result.materials.size());
 
@@ -498,5 +494,3 @@ const IModelImporter& getGltfImporter()
 }
 
 } // namespace ya::model_importer
-
-

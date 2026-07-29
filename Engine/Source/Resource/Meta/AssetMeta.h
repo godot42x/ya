@@ -20,7 +20,7 @@ namespace ya
  *   - The .ya-meta.json only *describes* how to load it.
  *   - Editing the meta triggers hot-reload of the affected resource.
  */
-struct ENGINE_API AssetMeta
+struct AssetMeta
 {
     /// Asset type tag: "texture", "model", "shader", ...
     std::string type;
@@ -31,10 +31,10 @@ struct ENGINE_API AssetMeta
 
     // ── Convenience accessors ───────────────────────────────────────────
 
-    std::string getString(const std::string& key, const std::string& defaultValue = "") const;
-    bool        getBool(const std::string& key, bool defaultValue = false) const;
-    int         getInt(const std::string& key, int defaultValue = 0) const;
-    float       getFloat(const std::string& key, float defaultValue = 0.0f) const;
+    ENGINE_API std::string getString(const std::string& key, const std::string& defaultValue = "") const;
+    ENGINE_API bool        getBool(const std::string& key, bool defaultValue = false) const;
+    ENGINE_API int         getInt(const std::string& key, int defaultValue = 0) const;
+    ENGINE_API float       getFloat(const std::string& key, float defaultValue = 0.0f) const;
 
     // ── Properties hash (for composite cache key) ───────────────────────
 
@@ -42,32 +42,32 @@ struct ENGINE_API AssetMeta
      * @brief Compute a stable hash of `properties` so that two metas with
      *        identical properties produce the same hash.
      */
-    size_t propertiesHash() const;
+    ENGINE_API size_t propertiesHash() const;
 
     // ── Serialization ───────────────────────────────────────────────────
 
-    static AssetMeta loadFromFile(const std::string& metaPath);
-    void             saveToFile(const std::string& metaPath) const;
+    static ENGINE_API AssetMeta loadFromFile(const std::string& metaPath);
+    ENGINE_API void             saveToFile(const std::string& metaPath) const;
 
-    nlohmann::json toJson() const;
-    static AssetMeta fromJson(const nlohmann::json& j);
+    ENGINE_API nlohmann::json toJson() const;
+    static ENGINE_API AssetMeta fromJson(const nlohmann::json& j);
 
     // ── Path helpers ────────────────────────────────────────────────────
 
     /** @brief Return `<assetPath>.ya-meta.json` */
-    static std::string metaPathFor(const std::string& assetPath);
+    static ENGINE_API std::string metaPathFor(const std::string& assetPath);
 
     /** @brief Does the sidecar file exist on disk? */
-    static bool metaFileExists(const std::string& assetPath);
+    static ENGINE_API bool metaFileExists(const std::string& assetPath);
 
     // ── Defaults (when no sidecar is present) ───────────────────────────
 
-    static AssetMeta defaultForTexture();
-    static AssetMeta defaultForModel();
+    static ENGINE_API AssetMeta defaultForTexture();
+    static ENGINE_API AssetMeta defaultForModel();
 
     // ── Comparison ──────────────────────────────────────────────────────
 
-    bool operator==(const AssetMeta& other) const;
+    ENGINE_API bool operator==(const AssetMeta& other) const;
     bool operator!=(const AssetMeta& other) const { return !(*this == other); }
 };
 
