@@ -17,6 +17,7 @@
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/ModelComponent.h"
+#include "ECS/Component/Terrain/TerrainComponent.h"
 
 #include "Scene/Scene.h"
 
@@ -271,8 +272,7 @@ bool hasLoadingSkybox(const Scene& scene)
     if (!resolver) return false;
     for (const auto& [entity, skybox] : scene.getRegistry().view<SkyboxComponent>().each()) {
         (void)skybox;
-        const auto state = resolver->getSkyboxResolveState(entity);
-        if (state == ESkyboxResolveState::ResolvingSource || state == ESkyboxResolveState::Preprocessing) {
+        if (resolver->isSkyboxLoading(entity)) {
             return true;
         }
     }
@@ -285,13 +285,7 @@ bool hasLoadingEnvironmentLighting(const Scene& scene)
     if (!resolver) return false;
     for (const auto& [entity, elc] : scene.getRegistry().view<EnvironmentLightingComponent>().each()) {
         (void)elc;
-        const auto srcState = resolver->getEnvironmentSourceState(entity);
-        const auto irrState = resolver->getEnvironmentIrradianceState(entity);
-        const auto preState = resolver->getEnvironmentPrefilterState(entity);
-        if (srcState == EEnvironmentLightingSourceResolveState::ResolvingSource ||
-            srcState == EEnvironmentLightingSourceResolveState::BuildingEnvironmentCubemap ||
-            irrState == EEnvironmentLightingIrradianceResolveState::Building ||
-            preState == EEnvironmentLightingPrefilterResolveState::Building) {
+        if (resolver->isEnvironmentLightingLoading(entity)) {
             return true;
         }
     }
@@ -309,11 +303,42 @@ bool hasPendingModelResolve(const Scene& scene)
     return false;
 }
 
+bool hasPendingTerrainResolve(const Scene& scene)
+{
+    auto* resolver = App::get() ? App::get()->getResourceResolveSystem() : nullptr;
+    if (!resolver) return false;
+
+    for (const auto& [entity, terrain] : scene.getRegistry().view<TerrainComponent>().each()) {
+        if (!terrain.hasHeightMap()) {
+            continue;
+        }
+
+        const auto* state = resolver->findTerrainState(entity);
+        if (!state) {
+            return true;
+        }
+
+        switch (state->state) {
+        case TerrainRuntimeState::EResolveState::Empty:
+        case TerrainRuntimeState::EResolveState::Dirty:
+        case TerrainRuntimeState::EResolveState::LoadingHeightMap:
+            return true;
+        case TerrainRuntimeState::EResolveState::Ready:
+        case TerrainRuntimeState::EResolveState::Failed:
+        default:
+            break;
+        }
+    }
+
+    return false;
+}
+
 bool isSceneStableForAutomation(const Scene& scene)
 {
     return !hasLoadingSkybox(scene) &&
            !hasLoadingEnvironmentLighting(scene) &&
-           !hasPendingModelResolve(scene);
+           !hasPendingModelResolve(scene) &&
+           !hasPendingTerrainResolve(scene);
 }
 
 bool isAutomationStableFrameReady(App& app)
@@ -589,17 +614,17 @@ void AppAutomation::applyLogOverrides(const AppDesc& appDesc)
 {
     const auto& automation = appDesc.automation;
     if (automation.logLevel) {
-        Logger::CoreLogger.config.setLogLevel(*automation.logLevel);
-        Logger::AppLogger.config.setLogLevel(*automation.logLevel);
+        Logger::core().config.setLogLevel(*automation.logLevel);
+        Logger::app().config.setLogLevel(*automation.logLevel);
     }
     if (automation.logDetailLevel) {
-        Logger::CoreLogger.config.setLogDetailLevel(*automation.logDetailLevel);
-        Logger::AppLogger.config.setLogDetailLevel(*automation.logDetailLevel);
+        Logger::core().config.setLogDetailLevel(*automation.logDetailLevel);
+        Logger::app().config.setLogDetailLevel(*automation.logDetailLevel);
     }
 
     if (automation.logLevel || automation.logDetailLevel) {
-        const auto effectiveLogLevel = automation.logLevel.value_or(Logger::CoreLogger.config.logLevel);
-        const auto effectiveLogDetailLevel = automation.logDetailLevel.value_or(Logger::CoreLogger.config.logDetailLevel);
+        const auto effectiveLogLevel = automation.logLevel.value_or(Logger::core().config.logLevel);
+        const auto effectiveLogDetailLevel = automation.logDetailLevel.value_or(Logger::core().config.logDetailLevel);
         YA_CORE_INFO("Automation log overrides applied: level={}, detailLevel={}",
                      logcc::LogLevel::toString(effectiveLogLevel),
                      logcc::LogLevel::toString(effectiveLogDetailLevel));
