@@ -100,9 +100,9 @@ struct FMath
 
     static glm::mat4 build_transform_mat4(glm::vec3 translation, glm::vec3 rotationDeg, glm::vec3 scale)
     {
-        // glm::translate(glm::mat4(1.0), translation) *glm::rotation()
-
-        return glm::mat4(1.0f); // 临时返回单位矩阵，避免编译错误
+        return glm::translate(glm::mat4(1.0), translation) *
+               glm::toMat4(glm::quat(glm::radians(rotationDeg))) *
+               glm::scale(glm::mat4(1.0), scale);
     }
 
     static glm::mat4 dropTranslation(const glm::mat4 &mat)

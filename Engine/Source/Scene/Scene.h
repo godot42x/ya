@@ -7,6 +7,7 @@
 #include "Core/TypeIndex.h"
 #include "ECS/Component.h"
 #include "ECS/ComponentMutation.h"
+#include "ECS/Entity.h"
 #include "Node.h"
 #include "Render/Model.h"
 #include <entt/entt.hpp>
@@ -17,8 +18,6 @@
 
 namespace ya
 {
-struct Entity;
-
 struct ENGINE_API [[refl]] Scene
 {
     friend struct Entity;

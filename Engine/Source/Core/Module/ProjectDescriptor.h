@@ -11,7 +11,7 @@
 namespace ya
 {
 
-struct ENGINE_API FProjectDescriptor
+struct FProjectDescriptor
 {
     uint32_t                           schemaVersion = 1;
     std::string                        name;
@@ -23,8 +23,8 @@ struct ENGINE_API FProjectDescriptor
     std::unordered_map<std::string, std::vector<std::string>> inputActions;
     std::filesystem::path              sourcePath;
 
-    [[nodiscard]] static FProjectDescriptor load(const std::filesystem::path& path);
-    [[nodiscard]] std::filesystem::path resolvePath(const std::filesystem::path& value) const;
+    [[nodiscard]] static ENGINE_API FProjectDescriptor load(const std::filesystem::path& path);
+    [[nodiscard]] ENGINE_API std::filesystem::path resolvePath(const std::filesystem::path& value) const;
 };
 
 } // namespace ya

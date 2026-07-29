@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render/EngineMeshData.h"
+#include "Core/Api.h"
 
 #include <span>
 #include <string>
@@ -22,7 +23,7 @@ struct TerrainMeshBuildDesc
     std::span<const float> heights;
 };
 
-[[nodiscard]] uint32_t clampTerrainGridResolution(uint32_t value);
-[[nodiscard]] EngineMeshData buildTerrainMeshData(const TerrainMeshBuildDesc& desc);
+[[nodiscard]] ENGINE_API uint32_t clampTerrainGridResolution(uint32_t value);
+[[nodiscard]] ENGINE_API EngineMeshData buildTerrainMeshData(const TerrainMeshBuildDesc& desc);
 
 } // namespace ya

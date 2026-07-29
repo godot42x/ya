@@ -1258,34 +1258,34 @@ TEST(RenderGraphCoreTest, ResourceRegistryKeepsImportedTextureWhenOnlyViewLabelC
 
     const auto buildGraph = [](std::string_view viewLabel) {
         RenderGraph graph;
-        graph.importTexture(RGImportedTextureDesc{
-            .desc = RGTextureDesc{
-                .label       = "history.imported.face",
-                .format      = EFormat::R16G16B16A16_SFLOAT,
-                .extent      = Extent3D{128, 128, 1},
-                .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                .mipLevels   = 1,
-                .arrayLayers = 1,
-            },
-            .importDesc = ImportedImageDesc{
-                .label        = "history.imported.face",
-                .nativeHandle = reinterpret_cast<void*>(0x303),
-                .format       = EFormat::R16G16B16A16_SFLOAT,
-                .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                .extent       = Extent3D{128, 128, 1},
-                .mipLevels    = 4,
-                .arrayLayers  = 6,
-            },
-            .viewDesc = ImageViewCreateInfo{
-                .label          = std::string(viewLabel),
-                .viewType       = EImageViewType::View2D,
-                .aspectFlags    = EImageAspect::Color,
-                .baseMipLevel   = 2,
-                .levelCount     = 1,
-                .baseArrayLayer = 5,
-                .layerCount     = 1,
-            },
-        });
+        RGImportedTextureDesc importedDesc{};
+        importedDesc.desc = RGTextureDesc{
+            .label       = "history.imported.face",
+            .format      = EFormat::R16G16B16A16_SFLOAT,
+            .extent      = Extent3D{128, 128, 1},
+            .mipLevels   = 1,
+            .arrayLayers = 1,
+            .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        };
+        importedDesc.importDesc = ImportedImageDesc{
+            .label        = "history.imported.face",
+            .nativeHandle = reinterpret_cast<void*>(0x303),
+            .format       = EFormat::R16G16B16A16_SFLOAT,
+            .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .extent       = Extent3D{128, 128, 1},
+            .mipLevels    = 4,
+            .arrayLayers  = 6,
+        };
+        importedDesc.viewDesc = ImageViewCreateInfo{
+            .label          = std::string(viewLabel),
+            .viewType       = EImageViewType::View2D,
+            .aspectFlags    = EImageAspect::Color,
+            .baseMipLevel   = 2,
+            .levelCount     = 1,
+            .baseArrayLayer = 5,
+            .layerCount     = 1,
+        };
+        graph.importTexture(importedDesc);
         return graph;
     };
 
@@ -1306,16 +1306,17 @@ TEST(RenderGraphCoreTest, ResourceRegistryReimportsTextureWhenViewIdentityChange
     RenderGraphResourceRegistry registry(factory);
 
     RenderGraph graphA;
-    graphA.importTexture(RGImportedTextureDesc{
-        .desc = RGTextureDesc{
+    {
+        RGImportedTextureDesc importedDesc{};
+        importedDesc.desc = RGTextureDesc{
             .label       = "history.imported.face",
             .format      = EFormat::R16G16B16A16_SFLOAT,
             .extent      = Extent3D{128, 128, 1},
-            .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
             .mipLevels   = 1,
             .arrayLayers = 1,
-        },
-        .importDesc = ImportedImageDesc{
+            .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        };
+        importedDesc.importDesc = ImportedImageDesc{
             .label        = "history.imported.face",
             .nativeHandle = reinterpret_cast<void*>(0x404),
             .format       = EFormat::R16G16B16A16_SFLOAT,
@@ -1323,8 +1324,8 @@ TEST(RenderGraphCoreTest, ResourceRegistryReimportsTextureWhenViewIdentityChange
             .extent       = Extent3D{128, 128, 1},
             .mipLevels    = 4,
             .arrayLayers  = 6,
-        },
-        .viewDesc = ImageViewCreateInfo{
+        };
+        importedDesc.viewDesc = ImageViewCreateInfo{
             .label          = "history.imported.face.view",
             .viewType       = EImageViewType::View2D,
             .aspectFlags    = EImageAspect::Color,
@@ -1332,24 +1333,26 @@ TEST(RenderGraphCoreTest, ResourceRegistryReimportsTextureWhenViewIdentityChange
             .levelCount     = 1,
             .baseArrayLayer = 0,
             .layerCount     = 1,
-        },
-    });
+        };
+        graphA.importTexture(importedDesc);
+    }
 
     registry.sync(graphA);
     EXPECT_EQ(factory.importedImages, 1u);
     EXPECT_EQ(factory.createdViews, 1u);
 
     RenderGraph graphB;
-    graphB.importTexture(RGImportedTextureDesc{
-        .desc = RGTextureDesc{
+    {
+        RGImportedTextureDesc importedDesc{};
+        importedDesc.desc = RGTextureDesc{
             .label       = "history.imported.face",
             .format      = EFormat::R16G16B16A16_SFLOAT,
             .extent      = Extent3D{128, 128, 1},
-            .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
             .mipLevels   = 1,
             .arrayLayers = 1,
-        },
-        .importDesc = ImportedImageDesc{
+            .usage       = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        };
+        importedDesc.importDesc = ImportedImageDesc{
             .label        = "history.imported.face",
             .nativeHandle = reinterpret_cast<void*>(0x404),
             .format       = EFormat::R16G16B16A16_SFLOAT,
@@ -1357,8 +1360,8 @@ TEST(RenderGraphCoreTest, ResourceRegistryReimportsTextureWhenViewIdentityChange
             .extent       = Extent3D{128, 128, 1},
             .mipLevels    = 4,
             .arrayLayers  = 6,
-        },
-        .viewDesc = ImageViewCreateInfo{
+        };
+        importedDesc.viewDesc = ImageViewCreateInfo{
             .label          = "history.imported.face.view",
             .viewType       = EImageViewType::View2D,
             .aspectFlags    = EImageAspect::Color,
@@ -1366,8 +1369,9 @@ TEST(RenderGraphCoreTest, ResourceRegistryReimportsTextureWhenViewIdentityChange
             .levelCount     = 1,
             .baseArrayLayer = 0,
             .layerCount     = 1,
-        },
-    });
+        };
+        graphB.importTexture(importedDesc);
+    }
 
     registry.sync(graphB);
     EXPECT_EQ(factory.importedImages, 2u);

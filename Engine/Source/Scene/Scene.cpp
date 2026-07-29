@@ -50,7 +50,7 @@ Entity *Scene::createEntityWithUUID(uint64_t uuid, const std::string &name)
 {
     YA_PROFILE_FUNCTION();
 
-    Entity entity = {_registry.create(), this};
+    Entity entity = {_registry.create(), this, &_registry};
 
     // Add basic components with specific UUID
     auto idComponent = entity.addComponent<IDComponent>();

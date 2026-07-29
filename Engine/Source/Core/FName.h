@@ -19,7 +19,7 @@ inline constexpr std::string_view INVALID_FNAME_TEXT = "None";
 
 using index_t = uint32_t;
 
-class ENGINE_API NameRegistry
+class NameRegistry
 {
   public:
     struct StringViewHash
@@ -58,11 +58,11 @@ class ENGINE_API NameRegistry
     mutable std::shared_mutex                                                 _mutex;
 
   public:
-    static NameRegistry& get();
+    static ENGINE_API NameRegistry& get();
     static NameRegistry* getP() { return &get(); }
 
-    index_t           indexing(std::string_view name);
-    std::string_view  view(index_t index) const;
+    ENGINE_API index_t           indexing(std::string_view name);
+    ENGINE_API std::string_view  view(index_t index) const;
         const char*       c_str(index_t index) const { return view(index).data(); }
         std::string       toString(index_t index) const { return std::string(view(index)); }
 };

@@ -30,7 +30,7 @@ extern void refMStartMSVC();
  * 2. 可选：使用 YA_PROFILE_STATIC_INIT 宏标记慢变量
  */
 
-class ENGINE_API StaticInitProfiler
+class StaticInitProfiler
 {
   public:
     // MSVC: 使用单独的 .cpp 文件来确保起始标记翻译单元被链接进来。
@@ -41,8 +41,8 @@ class ENGINE_API StaticInitProfiler
 #endif
     }
 
-    static void ensureStarted();
-    static void reset();
+    static ENGINE_API void ensureStarted();
+    static ENGINE_API void reset();
 
 
     // ========================================================================
@@ -50,26 +50,26 @@ class ENGINE_API StaticInitProfiler
     // ========================================================================
 
     /// 记录静态初始化开始时间（编译器保证最早执行）
-    static void recordStart();
+    static ENGINE_API void recordStart();
 
     /// 记录静态初始化结束时间（编译器保证最晚执行）
-    static void recordEnd();
+    static ENGINE_API void recordEnd();
 
     /// 获取总耗时（纳秒）
-    static uint64_t getTotalNanoseconds();
+    static ENGINE_API uint64_t getTotalNanoseconds();
 
     /// 获取总耗时（毫秒）
-    static double getTotalMilliseconds();
+    static ENGINE_API double getTotalMilliseconds();
 
     /// 打印统计报告
-    static void printReport();
+    static ENGINE_API void printReport();
 
     // ========================================================================
     // 单个变量耗时统计（可选）
     // ========================================================================
 
     /// 记录单个变量初始化耗时
-    static void recordVariable(const std::string &name, uint64_t nanoseconds);
+    static ENGINE_API void recordVariable(const std::string &name, uint64_t nanoseconds);
 
     /// 获取所有变量的初始化记录
     struct VariableRecord
@@ -78,7 +78,7 @@ class ENGINE_API StaticInitProfiler
         uint64_t    nanoseconds;
         double      milliseconds;
     };
-    static std::vector<VariableRecord> getVariableRecords();
+    static ENGINE_API std::vector<VariableRecord> getVariableRecords();
 
   private:
     // 原子变量存储时间戳（线程安全）
@@ -109,11 +109,11 @@ class ENGINE_API StaticInitProfiler
  * }();
  * ```
  */
-class ENGINE_API StaticInitTimer
+class StaticInitTimer
 {
   public:
-    explicit StaticInitTimer(const std::string &varName);
-    ~StaticInitTimer();
+    explicit ENGINE_API StaticInitTimer(const std::string &varName);
+    ENGINE_API ~StaticInitTimer();
 
   private:
     std::string                                    _varName;

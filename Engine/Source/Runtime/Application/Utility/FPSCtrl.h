@@ -3,11 +3,12 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include "Core/Api.h"
 
 namespace ya
 {
 
-struct FPSControl
+struct ENGINE_API FPSControl
 {
     float fps     = 0.0f;
     bool  bEnable = false;

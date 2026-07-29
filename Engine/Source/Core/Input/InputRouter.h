@@ -56,7 +56,7 @@ struct IInputNode
     virtual void                     cancelInput(FInputRouteContext& context, EInputCancelReason reason) = 0;
 };
 
-class GameInputNode final : public IInputNode
+class ENGINE_API GameInputNode final : public IInputNode
 {
   private:
     InputManager* _inputManager = nullptr;

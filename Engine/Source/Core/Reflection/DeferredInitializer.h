@@ -8,16 +8,16 @@
 namespace ya::reflection
 {
 
-class ENGINE_API DeferredInitializerQueue
+class DeferredInitializerQueue
 {
   public:
-    static DeferredInitializerQueue& instance();
+    static ENGINE_API DeferredInitializerQueue& instance();
 
     void add(std::function<void()> initFunc)
     {
         _initializers.push_back(std::move(initFunc));
     }
-    void executeAll();
+    ENGINE_API void executeAll();
 
   private:
     std::vector<std::function<void()>> _initializers;

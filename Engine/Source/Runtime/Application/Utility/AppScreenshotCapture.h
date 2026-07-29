@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render/RenderDefines.h"
+#include "Core/Api.h"
 
 #include <cstdint>
 #include <memory>
@@ -37,7 +38,7 @@ struct AppScreenshotCaptureState
     bool                               bPresentationCopyRecorded     = false;
 };
 
-class AppScreenshotCapture
+class ENGINE_API AppScreenshotCapture
 {
   public:
     static bool request(IRender* render,

@@ -11,13 +11,13 @@
 // ============================================================================
 // MARK: Enum
 // ============================================================================
-struct REFLECTS_CORE_API EnumValue
+struct EnumValue
 {
     std::string name;
     int64_t     value;
 };
 
-struct REFLECTS_CORE_API Enum
+struct Enum
 {
     std::string                              name;
     std::vector<EnumValue>                   values;

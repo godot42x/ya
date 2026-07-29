@@ -118,19 +118,30 @@ void clearFileAppenders(logcc::SyncLogger& logger)
 }
 } // namespace
 
-logcc::SyncLogger Logger::CoreLogger;
-logcc::SyncLogger Logger::AppLogger;
+logcc::SyncLogger& Logger::core()
+{
+    static logcc::SyncLogger logger;
+    return logger;
+}
+
+logcc::SyncLogger& Logger::app()
+{
+    static logcc::SyncLogger logger;
+    return logger;
+}
 
 void Logger::init()
 {
-    CoreLogger.setFormatter(YaFormatterV2("Core"));
-    AppLogger.setFormatter(YaFormatterV2("App"));
+    auto& coreLogger = core();
+    auto& appLogger  = app();
+    coreLogger.setFormatter(YaFormatterV2("Core"));
+    appLogger.setFormatter(YaFormatterV2("App"));
 
     auto& lazyLogger = getLazyLog();
     lazyLogger.setFormatter(YaFormatterV2("Lazy"));
 
-    clearFileAppenders(CoreLogger);
-    clearFileAppenders(AppLogger);
+    clearFileAppenders(coreLogger);
+    clearFileAppenders(appLogger);
     clearFileAppenders(lazyLogger);
 
     const auto logsDir = getLogsDirectory();
@@ -147,12 +158,12 @@ void Logger::init()
     const auto        logFilePath     = logsDir / makeLaunchLogFileName();
     const std::string logFilePathText = logFilePath.string();
 
-    if (!addFileAppender(CoreLogger, logFilePathText) ||
-        !addFileAppender(AppLogger, logFilePathText) ||
+    if (!addFileAppender(coreLogger, logFilePathText) ||
+        !addFileAppender(appLogger, logFilePathText) ||
         !addFileAppender(lazyLogger, logFilePathText))
     {
-        clearFileAppenders(CoreLogger);
-        clearFileAppenders(AppLogger);
+        clearFileAppenders(coreLogger);
+        clearFileAppenders(appLogger);
         clearFileAppenders(lazyLogger);
         YA_CORE_WARN("Logger::init - Failed to open session log file {}", logFilePathText);
         return;

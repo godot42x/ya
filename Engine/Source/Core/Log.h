@@ -9,14 +9,13 @@
 
 
 
-struct ENGINE_API Logger
+struct Logger
 {
-    static logcc::SyncLogger CoreLogger;
-    static logcc::SyncLogger AppLogger;
+    static ENGINE_API void init();
 
-    static void init();
-
-    static logcc::SyncLogger &getLazyLog();
+    static ENGINE_API logcc::SyncLogger& core();
+    static ENGINE_API logcc::SyncLogger& app();
+    static ENGINE_API logcc::SyncLogger& getLazyLog();
 };
 
 
@@ -29,19 +28,19 @@ struct ENGINE_API Logger
 
 
 // clang-format off
-#define YA_CORE_DEBUG(...) Logger::CoreLogger.log(logcc::LogLevel::Debug, std::format(__VA_ARGS__))
-#define YA_CORE_TRACE(...) Logger::CoreLogger.log(logcc::LogLevel::Trace, std::format(__VA_ARGS__))
-#define YA_CORE_INFO(...)  Logger::CoreLogger.log(logcc::LogLevel::Info, std::format(__VA_ARGS__))
-#define YA_CORE_WARN(...)  Logger::CoreLogger.log(logcc::LogLevel::Warn, std::format(__VA_ARGS__))
-#define YA_CORE_ERROR(...) Logger::CoreLogger.log(logcc::LogLevel::Error, std::format(__VA_ARGS__))
+#define YA_CORE_DEBUG(...) Logger::core().log(logcc::LogLevel::Debug, std::format(__VA_ARGS__))
+#define YA_CORE_TRACE(...) Logger::core().log(logcc::LogLevel::Trace, std::format(__VA_ARGS__))
+#define YA_CORE_INFO(...)  Logger::core().log(logcc::LogLevel::Info, std::format(__VA_ARGS__))
+#define YA_CORE_WARN(...)  Logger::core().log(logcc::LogLevel::Warn, std::format(__VA_ARGS__))
+#define YA_CORE_ERROR(...) Logger::core().log(logcc::LogLevel::Error, std::format(__VA_ARGS__))
 
 
 
-#define YA_DEBUG(...) Logger::AppLogger.log(logcc::LogLevel::Debug, std::format(__VA_ARGS__))
-#define YA_TRACE(...) Logger::AppLogger.log(logcc::LogLevel::Trace, std::format(__VA_ARGS__))
-#define YA_INFO(...)  Logger::AppLogger.log(logcc::LogLevel::Info, std::format(__VA_ARGS__))
-#define YA_WARN(...)  Logger::AppLogger.log(logcc::LogLevel::Warn, std::format(__VA_ARGS__))
-#define YA_ERROR(...) Logger::AppLogger.log(logcc::LogLevel::Error, std::format(__VA_ARGS__))
+#define YA_DEBUG(...) Logger::app().log(logcc::LogLevel::Debug, std::format(__VA_ARGS__))
+#define YA_TRACE(...) Logger::app().log(logcc::LogLevel::Trace, std::format(__VA_ARGS__))
+#define YA_INFO(...)  Logger::app().log(logcc::LogLevel::Info, std::format(__VA_ARGS__))
+#define YA_WARN(...)  Logger::app().log(logcc::LogLevel::Warn, std::format(__VA_ARGS__))
+#define YA_ERROR(...) Logger::app().log(logcc::LogLevel::Error, std::format(__VA_ARGS__))
 
 
 #define YA_CORE_TRACE_LZ(...) Logger::getLazyLog().log(logcc::LogLevel::Info, std::format(__VA_ARGS__))
