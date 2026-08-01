@@ -44,7 +44,7 @@ SamplerState inputSampler : register(s0, space0);
 struct VertexOutput
 {
     float4 clipPos : SV_Position;
-    float2 uv : TEXCOORD0;
+    float2 uv : TEXCOORD_UV;
 };
 
 float hash21(float2 p)

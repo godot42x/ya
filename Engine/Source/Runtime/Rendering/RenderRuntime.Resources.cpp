@@ -120,8 +120,13 @@ void RenderRuntime::initShaderSystems()
     _shaderStorage->preloadAsync({
         ShaderDesc{.shaderName = "Test/Unlit.glsl"},
         ShaderDesc{.shaderName = "Test/SimpleMaterial.glsl"},
-        ShaderDesc{.shaderName = "Sprite2D_Screen.glsl"},
-        ShaderDesc{.shaderName = "Sprite2D_World.glsl"},
+        ShaderDesc{
+            .sourceMode = ShaderDesc::ESourceMode::StageFiles,
+            .stageFiles = {
+                ShaderDesc::StageFile{.stage = EShaderStage::Vertex, .file = "Sprite2D.slang"},
+                ShaderDesc::StageFile{.stage = EShaderStage::Fragment, .file = "Sprite2D.slang"},
+            },
+        },
         ShaderDesc{.shaderName = "Test/DebugRender.glsl"},
         ShaderDesc{.shaderName = "Test/DebugPrimitiveLine.glsl"},
         ShaderDesc{.shaderName = "Test/DebugPrimitiveShape.glsl"},
@@ -319,3 +324,4 @@ void RenderRuntime::resetEnvironmentLightingPool()
 }
 
 } // namespace ya
+

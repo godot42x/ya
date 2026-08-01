@@ -25,8 +25,7 @@ bool BillboardComponent::resolve()
     params.mixValue   = 0.0f;
     _material->setParamDirty();
 
-    const bool requiresTexture = getMode() != RenderOverlaySprite3D::Mode::DirectionalLightIcon;
-    if (!requiresTexture || !image.hasPath()) {
+    if (!image.hasPath()) {
         _material->clearTextureBinding(UnlitMaterial::BaseColor0);
         _material->disableTextureParam(UnlitMaterial::BaseColor0);
         bDirty = false;

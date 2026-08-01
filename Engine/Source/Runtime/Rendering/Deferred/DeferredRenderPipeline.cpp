@@ -5,6 +5,7 @@
 #include "Core/Profiling/Profiling.h"
 #include "DeferredViewportResources.h"
 #include "DeferredAttachmentFormats.h"
+#include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/DirectionComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
@@ -30,6 +31,23 @@ namespace ya
 
 namespace
 {
+
+bool shouldRenderBillboard(const BillboardComponent& billboard)
+{
+    if (!billboard.bVisible) {
+        return false;
+    }
+
+    if (!billboard.bManagedByLight) {
+        return true;
+    }
+
+    if (const auto* app = App::get()) {
+        return app->isStopped();
+    }
+
+    return false;
+}
 
 EFormat::T chooseSupportedAttachmentFormat(IRender* render,
                                            std::string_view label,
@@ -873,6 +891,36 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
         auto* resourceResolveSystem = _getResourceResolveSystem ? _getResourceResolveSystem() : nullptr;
 
         if (activeScene) {
+            const float viewportHeight = static_cast<float>(frame.viewportRect.extent.y);
+            if (viewportHeight > 0.0f) {
+                for (const auto& [entity, billboard, transform] : activeScene->getRegistry().view<BillboardComponent, TransformComponent>().each()) {
+                    (void)entity;
+                    if (!shouldRenderBillboard(billboard)) {
+                        continue;
+                    }
+
+                    const glm::vec3 worldCenter = transform.getWorldPosition();
+                    const float distance        = glm::length(frame.cameraPos - worldCenter);
+                    if (distance <= std::numeric_limits<float>::epsilon()) {
+                        continue;
+                    }
+
+                    const float screenSizePixels = std::max(billboard.screenSizePixels, 1.0f);
+                    const float scaleFactor      = screenSizePixels / viewportHeight;
+                    const float size             = std::max(billboard.minWorldScale, scaleFactor * distance * 2.0f);
+
+                    ViewportOverlayStage::FrameInputs::BillboardInput input{};
+                    input.worldCenter    = worldCenter;
+                    input.worldDirection = billboard.worldDirection;
+                    input.worldSize      = glm::vec2(size, size);
+                    input.tint           = billboard.tint;
+                    if (billboard.image.isReady()) {
+                        input.textureBinding = billboard.image.toTextureBinding();
+                    }
+                    frameInputs.billboards.push_back(std::move(input));
+                }
+            }
+
             const auto& dirView = activeScene->getRegistry().view<TransformComponent, DirectionComponent>();
             for (auto entity : dirView) {
                 const auto& [tc, direction] = dirView.get(entity);

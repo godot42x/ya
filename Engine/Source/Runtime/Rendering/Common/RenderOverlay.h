@@ -20,7 +20,9 @@ struct RenderOverlaySprite2D
 
 struct RenderOverlaySprite3D
 {
-    glm::mat4 worldTransform = glm::mat4(1.0f);
+    glm::vec3 worldCenter    = glm::vec3(0.0f);
+    glm::vec3 worldDirection = glm::vec3(0.0f, 0.0f, -1.0f);
+    glm::vec2 worldSize      = glm::vec2(1.0f);
     Texture*  texture        = nullptr;
     glm::vec4 tint           = glm::vec4(1.0f);
 };

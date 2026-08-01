@@ -32,31 +32,15 @@ struct ComponentLinkageSystem : public ISystem
     using Self = ComponentLinkageSystem;
     struct LightBillboardConfig
     {
-        bool                         enabled          = true;
-        float                        screenSizePixels = 30.0f;
-        float                        minWorldScale    = 0.0f;
-        glm::vec4                    tint             = glm::vec4(1.0f);
-        RenderOverlaySprite3D::Mode  mode             = RenderOverlaySprite3D::Mode::Textured;
-        std::string                  texturePath{};
+        bool        enabled          = true;
+        float       screenSizePixels = 30.0f;
+        float       minWorldScale    = 0.0f;
+        glm::vec4   tint             = glm::vec4(1.0f);
+        std::string texturePath{};
     };
 
     DelegateHandle handle1;
     DelegateHandle handle2;
-
-    static RenderOverlaySprite3D::Mode readBillboardModeConfig(const char* key, RenderOverlaySprite3D::Mode defaultMode)
-    {
-        const int rawMode = ConfigManager::get().getOr<int>("editor", key, static_cast<int>(defaultMode));
-        switch (rawMode) {
-        case static_cast<int>(RenderOverlaySprite3D::Mode::Textured):
-            return RenderOverlaySprite3D::Mode::Textured;
-        case static_cast<int>(RenderOverlaySprite3D::Mode::LightIcon):
-            return RenderOverlaySprite3D::Mode::LightIcon;
-        case static_cast<int>(RenderOverlaySprite3D::Mode::DirectionalLightIcon):
-            return RenderOverlaySprite3D::Mode::DirectionalLightIcon;
-        default:
-            return defaultMode;
-        }
-    }
 
     static const LightBillboardConfig& pointLightBillboardConfig()
     {
@@ -68,7 +52,6 @@ struct ComponentLinkageSystem : public ISystem
                                                                            "lightBillboards.point.texturePath",
                                                                            "Engine:Content/TestTextures/icons8-light-64.png");
         config.tint             = glm::vec4(1.0f, 0.95f, 0.45f, 1.0f);
-        config.mode             = readBillboardModeConfig("lightBillboards.point.mode", RenderOverlaySprite3D::Mode::LightIcon);
         return config;
     }
 
@@ -78,10 +61,10 @@ struct ComponentLinkageSystem : public ISystem
         config.enabled          = ConfigManager::get().getOr<bool>("editor", "lightBillboards.directional.enabled", true);
         config.screenSizePixels = ConfigManager::get().getOr<float>("editor", "lightBillboards.directional.screenSizePixels", 42.0f);
         config.minWorldScale    = ConfigManager::get().getOr<float>("editor", "lightBillboards.directional.minWorldScale", 1.0f);
-        config.texturePath      = ConfigManager::get().getOr<std::string>("editor", "lightBillboards.directional.texturePath", "");
+        config.texturePath      = ConfigManager::get().getOr<std::string>("editor",
+                                                                           "lightBillboards.directional.texturePath",
+                                                                           "Engine:Content/TestTextures/icons8-light-64.png");
         config.tint             = glm::vec4(1.0f, 0.96f, 0.72f, 1.0f);
-        config.mode             = readBillboardModeConfig("lightBillboards.directional.mode",
-                                                          RenderOverlaySprite3D::Mode::DirectionalLightIcon);
         return config;
     }
 
@@ -92,8 +75,7 @@ struct ComponentLinkageSystem : public ISystem
         billboard.minWorldScale     = config.minWorldScale;
         billboard.tint              = config.tint;
         billboard.bManagedByLight   = true;
-        billboard.setMode(config.mode);
-        if (billboard.image.textureRef.getPath() != config.texturePath) {
+        if (!billboard.image.hasPath() && billboard.image.textureRef.getPath() != config.texturePath) {
             billboard.image.textureRef.setPathWithoutNotify(config.texturePath);
         }
         billboard.invalidate();

@@ -1,9 +1,9 @@
-
 #pragma once
 
 #include "glm/glm.hpp"
 
 #include "Core/Base.h"
+#include "Core/System/System.h"
 
 #include "Render/Core/Buffer.h"
 #include "Render/Core/DescriptorSet.h"
@@ -11,28 +11,20 @@
 #include "Render/Core/Texture.h"
 #include "Render/Render.h"
 #include "Render/RenderDefines.h"
-#include "Resource/Texture/TextureLibrary.h"
-
-
-#include "Core/System/System.h"
-
-
 #include "Resource/Font/FontManager.h"
+#include "Resource/Texture/TextureLibrary.h"
+#include "Runtime/Rendering/Common/RenderOverlay.h"
 
 namespace ya
 {
 
-
-
 struct FRender2dData
 {
-    // std::vector<stdptr<RenderSystem>> _systems;
-
     uint32_t        windowWidth      = 800;
     uint32_t        windowHeight     = 600;
-    ECullMode::T    screenCullMode   = ECullMode::None;  // screen-space UI uses left-top origin; avoid winding-dependent cull
-    ECullMode::T    worldCullMode    = ECullMode::Front; // debug: world-space cull mode (Front when viewport reversed)
-    bool            bReverseViewport = true;             // flip viewport Y for world-space path to unify LH coordinate system across render backends
+    ECullMode::T    screenCullMode   = ECullMode::None;
+    ECullMode::T    worldCullMode    = ECullMode::None;
+    bool            bReverseViewport = true;
     ICommandBuffer* curCmdBuf        = nullptr;
 
     struct Camera
@@ -48,15 +40,12 @@ struct FRender2dData
 
 struct FRender2dContext
 {
-    // std::vector<stdptr<RenderSystem>> _systems;
-
     ICommandBuffer* cmdBuf       = nullptr;
     uint32_t        windowWidth  = 800;
     uint32_t        windowHeight = 600;
 
     FRender2dData::Camera cam;
 };
-
 
 struct ENGINE_API FQuadRender
 {
@@ -66,52 +55,50 @@ struct ENGINE_API FQuadRender
         glm::vec4 color;
         glm::vec2 texCoord;
         uint32_t  textureIdx;
+        glm::vec3 worldCenter;
+        glm::vec3 worldDirection;
+        glm::vec2 worldSize;
     };
 
-
     static constexpr const std::array<glm::vec4, 4> vertices        = {{
-        {0.0f, 0.0f, 0.0f, 1.f}, // LT
-        {1.0f, 0.0f, 0.0f, 1.f}, // RT
-        {0.0f, 1.0f, 0.0f, 1.f}, // LB
-        {1.0f, 1.0f, 0.0f, 1.f}, // RB
+        {0.0f, 0.0f, 0.0f, 1.f},
+        {1.0f, 0.0f, 0.0f, 1.f},
+        {0.0f, 1.0f, 0.0f, 1.f},
+        {1.0f, 1.0f, 0.0f, 1.f},
     }};
     static constexpr const std::array<glm::vec2, 4> defaultTexcoord = {{
-        {0, 0}, // LT
-        {1, 0}, // RT
-        {0, 1}, // LB
-        {1, 1}, // RB
+        {0, 0},
+        {1, 0},
+        {0, 1},
+        {1, 1},
     }};
 
     static constexpr size_t MaxVertexCount = 10000;
-    static constexpr size_t MaxIndexCount  = MaxVertexCount * 6 / 4; // 6 indices per quad, 4 vertices per quad
-
-    // static constexpr
+    static constexpr size_t MaxIndexCount  = MaxVertexCount * 6 / 4;
 
     struct FrameUBO
     {
         glm::mat4 viewProj = glm::mat4(1.0f);
+        glm::mat4 view     = glm::mat4(1.0f);
     };
 
     IRender* _render = nullptr;
 
-    glm::mat4 _screenOrthoProj = glm::mat4(1.0f); // cached ortho projection for screen-space flush
+    glm::mat4 _screenOrthoProj = glm::mat4(1.0f);
 
     std::shared_ptr<IBuffer> _vertexBuffer;
     std::shared_ptr<IBuffer> _indexBuffer;
 
-    // Screen-space batch
     FQuadRender::Vertex* vertexPtr     = nullptr;
     FQuadRender::Vertex* vertexPtrHead = nullptr;
     uint32_t             vertexCount   = 0;
     uint32_t             indexCount    = 0;
 
-    // World-space batch
     std::shared_ptr<IBuffer> _worldVertexBuffer;
     FQuadRender::Vertex*     worldVertexPtr     = nullptr;
     FQuadRender::Vertex*     worldVertexPtrHead = nullptr;
     uint32_t                 worldVertexCount   = 0;
     uint32_t                 worldIndexCount    = 0;
-
 
     PipelineLayoutDesc _pipelineDesc = PipelineLayoutDesc{
         .pushConstants        = {},
@@ -144,31 +131,26 @@ struct ENGINE_API FQuadRender
     };
 
     std::shared_ptr<IPipelineLayout>   _pipelineLayout = nullptr;
-    std::shared_ptr<IGraphicsPipeline> _pipeline       = nullptr; // screen-space pipeline
-    std::shared_ptr<IGraphicsPipeline> _worldPipeline  = nullptr; // world-space pipeline
+    std::shared_ptr<IGraphicsPipeline> _pipeline       = nullptr;
+    std::shared_ptr<IGraphicsPipeline> _worldPipeline  = nullptr;
 
-    // descriptor set layout & pool
     std::shared_ptr<IDescriptorPool> _descriptorPool = nullptr;
 
     std::shared_ptr<IDescriptorSetLayout> _frameUboDSL = nullptr;
 
-    // Screen-space FrameUBO
     DescriptorSetHandle      _frameUboDS     = {};
     std::shared_ptr<IBuffer> _frameUBOBuffer = nullptr;
 
-    // World-space FrameUBO (separate buffer to avoid GPU read hazard)
     DescriptorSetHandle      _worldFrameUboDS     = {};
     std::shared_ptr<IBuffer> _worldFrameUBOBuffer = nullptr;
 
-    std::shared_ptr<IDescriptorSetLayout>     _resourceDSL      = nullptr;
-    DescriptorSetHandle                       _resourceDS       = {};
-    DescriptorSetHandle                       _worldResourceDS  = {};
-    std::vector<TextureBinding>               _textureBindings;
-    std::unordered_map<std::string, uint32_t> _textureLabel2Idx;
-    static constexpr size_t                   TEXTURE_SET_SIZE     = 16;
-    int                                       _lastPushTextureSlot = -1;
-
-    // Note: White texture and default sampler are now provided by TextureLibrary
+    std::shared_ptr<IDescriptorSetLayout>      _resourceDSL      = nullptr;
+    DescriptorSetHandle                        _resourceDS       = {};
+    DescriptorSetHandle                        _worldResourceDS  = {};
+    std::vector<TextureBinding>                _textureBindings;
+    std::unordered_map<std::string, uint32_t>  _textureLabel2Idx;
+    static constexpr size_t                    TEXTURE_SET_SIZE     = 16;
+    int                                        _lastPushTextureSlot = -1;
 
     void init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat);
     void destroy();
@@ -181,12 +163,10 @@ struct ENGINE_API FQuadRender
     void flush(ICommandBuffer* cmdBuf);
     void flushWorld(ICommandBuffer* cmdBuf);
 
-    void updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer, DescriptorSetHandle dsHandle, glm::mat4 viewProj);
+    void updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer, DescriptorSetHandle dsHandle, const glm::mat4& viewProj, const glm::mat4& view);
     void updateResources(DescriptorSetHandle dsHandle);
 
   public:
-
-    // on screen
     void drawTexture(const glm::vec3& position,
                      const glm::vec2& size,
                      ya::Ptr<Texture> texture = nullptr,
@@ -198,8 +178,9 @@ struct ENGINE_API FQuadRender
                      const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
                      const glm::vec2& uvScale = {1.0f, 1.0f});
 
-    // World-space draw
-    void drawWorldTexture(const glm::mat4& transform,
+    void drawWorldTexture(const glm::vec3& center,
+                          const glm::vec3& direction,
+                          const glm::vec2& size,
                           ya::Ptr<Texture> texture = nullptr,
                           const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
                           const glm::vec2& uvScale = {1.0f, 1.0f});
@@ -208,26 +189,20 @@ struct ENGINE_API FQuadRender
                         const glm::vec2& size,
                         ya::Ptr<Texture> texture = nullptr,
                         const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
-                        const glm::vec4& uvRect  = glm::vec4(0.0f) // offset: xy , scale: zw
-    );
+                        const glm::vec4& uvRect  = glm::vec4(0.0f));
 
     void drawText(const std::string& text, const glm::vec3& position, const glm::vec4& color, Font* font);
 
   private:
-
     uint32_t findOrAddTexture(ya::Ptr<Texture> texture)
     {
-        uint32_t textureIdx = 0; // white texture
+        uint32_t textureIdx = 0;
         if (texture) {
-            // TODO: use ptr as key?
             auto it = _textureLabel2Idx.find(texture->getLabel());
-            if (it != _textureLabel2Idx.end())
-            {
+            if (it != _textureLabel2Idx.end()) {
                 textureIdx = it->second;
             }
             else {
-                // TODO: use map to cache same texture view
-                // TODO: different sampler?
                 _textureBindings.push_back(TextureBinding{
                     .texture = texture,
                     .sampler = TextureLibrary::get().getDefaultSampler(),
@@ -240,36 +215,34 @@ struct ENGINE_API FQuadRender
         }
         return textureIdx;
     }
+
     void drawTextureInternal(const glm::mat4& transform,
-                             uint32_t textureIdx, const glm::vec3 tint,
+                             uint32_t textureIdx,
+                             const glm::vec3 tint,
                              const glm::vec2& uvScale,
                              const glm::vec2& uvTranslation = {0, 0});
 
-    void drawWorldTextureInternal(const glm::mat4& transform,
-                                  uint32_t textureIdx, const glm::vec3 tint,
+    void drawWorldTextureInternal(const glm::vec3& center,
+                                  const glm::vec3& direction,
+                                  const glm::vec2& size,
+                                  uint32_t textureIdx,
+                                  const glm::vec3 tint,
                                   const glm::vec2& uvScale);
 };
 
-
-
-// MARK: Render2D
 struct ENGINE_API Render2D
 {
-
     static FQuadRender*  quadData;
     static FRender2dData data;
 
-
     Render2D()          = default;
     virtual ~Render2D() = default;
-
 
     static void init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat);
     static void destroy();
 
     static void onUpdate(float dt);
     static void onRender();
-
 
     static void begin(const FRender2dContext& ctx);
     static void end()
@@ -280,7 +253,6 @@ struct ENGINE_API Render2D
         data.windowHeight = 0;
     }
 
-    // Convenience wrappers - delegate to FQuadRender
     static void makeSprite(const glm::vec3& position,
                            const glm::vec2& size,
                            ya::Ptr<Texture> texture = nullptr,
@@ -298,13 +270,14 @@ struct ENGINE_API Render2D
         quadData->drawTexture(transform, texture, tint, uvScale);
     }
 
-    // World-space sprite (billboard, 2D game characters, world particles, etc.)
-    static void makeWorldSprite(const glm::mat4& worldTransform,
+    static void makeWorldSprite(const glm::vec3& worldCenter,
+                                const glm::vec3& worldDirection,
+                                const glm::vec2& worldSize,
                                 ya::Ptr<Texture> texture = nullptr,
                                 const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
                                 const glm::vec2& uvScale = {1.0f, 1.0f})
     {
-        quadData->drawWorldTexture(worldTransform, texture, tint, uvScale);
+        quadData->drawWorldTexture(worldCenter, worldDirection, worldSize, texture, tint, uvScale);
     }
 
     static void makeText(const std::string& text, const glm::vec3& position, const glm::vec4& color, Font* font)
@@ -313,5 +286,4 @@ struct ENGINE_API Render2D
     }
 };
 
-
-}; // namespace ya
+} // namespace ya

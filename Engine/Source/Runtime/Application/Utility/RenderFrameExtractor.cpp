@@ -1,6 +1,7 @@
 #include "RenderFrameExtractor.h"
 
 #include "ECS/Component/DirectionalLightComponent.h"
+#include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
@@ -11,6 +12,7 @@
 #include "ECS/Component/SkeletonAnimatorComponent.h"
 #include "ECS/Component/Terrain/TerrainComponent.h"
 #include "ECS/Component/TransformComponent.h"
+#include "ECS/System/TransformSystem.h"
 #include "Scene/Scene.h"
 #include "Runtime/Rendering/Common/Shadow/Common/DirectionalShadowMath.h"
 
@@ -23,6 +25,23 @@ namespace ya
 
 namespace
 {
+
+glm::vec3 resolveDirectionalVector(TransformComponent* transform, const glm::vec3& fallbackDirection)
+{
+    if (transform) {
+        TransformSystem::computeWorldMatrix(transform);
+        const glm::vec3 forward = transform->getForward();
+        if (glm::length2(forward) > std::numeric_limits<float>::epsilon()) {
+            return glm::normalize(forward);
+        }
+    }
+
+    if (glm::length2(fallbackDirection) > std::numeric_limits<float>::epsilon()) {
+        return glm::normalize(fallbackDirection);
+    }
+
+    return glm::vec3(0.0f, 0.0f, -1.0f);
+}
 
 glm::mat4 buildStableDirectionalShadowViewProjection(const glm::vec3& lightDirection,
                                                      const glm::vec3& cameraPosition,
@@ -150,7 +169,7 @@ void RenderFrameExtractor::extractLights(const ExtractInput& input, entt::regist
     out.bHasDirectionalLight = false;
     for (const auto& [e, dlc, tc] : reg.view<DirectionalLightComponent, TransformComponent>().each()) {
         auto& dl                 = out.directionalLight;
-        dl.direction             = glm::normalize(tc.getForward());
+        dl.direction             = resolveDirectionalVector(&tc, dlc._direction);
         populateDirectionalShadow(dl);
         dl.color                 = dlc._color;
         dl.intensity             = dlc.intensity;
@@ -162,7 +181,7 @@ void RenderFrameExtractor::extractLights(const ExtractInput& input, entt::regist
     if (!out.bHasDirectionalLight) {
         for (const auto& [e, dlc] : reg.view<DirectionalLightComponent>().each()) {
             auto& dl                 = out.directionalLight;
-            dl.direction             = glm::normalize(dlc._direction);
+            dl.direction             = resolveDirectionalVector(nullptr, dlc._direction);
             populateDirectionalShadow(dl);
             dl.color                 = dlc._color;
             dl.intensity             = dlc.intensity;

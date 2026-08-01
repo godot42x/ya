@@ -59,17 +59,13 @@ def main() -> int:
                            value=48.0),
                "set_editor_config_value(point.screenSizePixels)")
     require_ok(client.call("set_editor_config_value",
-                           key="lightBillboards.point.mode",
-                           value=1),
-               "set_editor_config_value(point.mode)")
+                           key="lightBillboards.directional.texturePath",
+                           value="Engine:Content/TestTextures/icons8-light-64.png"),
+               "set_editor_config_value(directional.texturePath)")
     require_ok(client.call("set_editor_config_value",
                            key="lightBillboards.directional.screenSizePixels",
                            value=54.0),
                "set_editor_config_value(directional.screenSizePixels)")
-    require_ok(client.call("set_editor_config_value",
-                           key="lightBillboards.directional.mode",
-                           value=2),
-               "set_editor_config_value(directional.mode)")
 
     scene = require_ok(client.call("create_billboard_regression_scene"), "create_billboard_regression_scene")
     print(f"   scene={scene.get('scene_name')} entities={scene.get('entity_count')}")
@@ -87,11 +83,11 @@ def main() -> int:
     if not all(entry.get("owner_entity_id") for entry in managed):
         raise RuntimeError("expected every managed billboard to report its owner entity")
 
-    mode_names = {entry.get("mode_name") for entry in managed}
-    if "LightIcon" not in mode_names:
-        raise RuntimeError("expected a LightIcon billboard in isolated scene")
-    if "DirectionalLightIcon" not in mode_names:
-        raise RuntimeError("expected a DirectionalLightIcon billboard in isolated scene")
+    texture_paths = {entry.get("texture_path") for entry in managed}
+    if "Engine:Content/TestTextures/icons8-light-64.png" not in texture_paths:
+        raise RuntimeError("expected a default point-light billboard texture in isolated scene")
+    if "Engine:Content/TestTextures/icons8-light-64.png" not in texture_paths:
+        raise RuntimeError("expected a default directional-light billboard texture in isolated scene")
 
     print("3. focus camera on point light")
     point = require_ok(client.call("get_point_light_pos"), "get_point_light_pos")
