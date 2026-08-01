@@ -3,6 +3,33 @@
 namespace ya
 {
 
+bool DetailsView::isManagedLightBillboard(Entity& entity) const
+{
+    if (!entity.hasComponent<BillboardComponent>()) {
+        return false;
+    }
+    auto* billboard = entity.getComponent<BillboardComponent>();
+    return billboard && billboard->bManagedByLight;
+}
+
+bool DetailsView::canRemoveComponent(Entity& entity, type_index_t typeIndex) const
+{
+    if (typeIndex == type_index_v<BillboardComponent>) {
+        return !isManagedLightBillboard(entity);
+    }
+
+    return true;
+}
+
+bool DetailsView::canAddComponent(Entity& entity, type_index_t typeIndex) const
+{
+    if (typeIndex == type_index_v<BillboardComponent>) {
+        return !entity.hasComponents<PointLightComponent>() && !entity.hasComponents<DirectionalLightComponent>();
+    }
+
+    return true;
+}
+
 void DetailsView::drawReflectedFallbackComponents(Entity& entity)
 {
     Scene* scene = entity.getScene();
@@ -63,6 +90,7 @@ void DetailsView::drawReflectedFallbackOne(const std::string& name,
     componentSectionShell(
         label,
         reinterpret_cast<const void*>(static_cast<uintptr_t>(typeIndex)),
+        canRemoveComponent(entity, typeIndex),
         [&] {
             const auto* cls = ClassRegistry::instance().getClass(typeIndex);
             if (cls) {
@@ -117,6 +145,11 @@ void DetailsView::drawAddComponentButton(Entity& entity)
 
             auto* scene = entity.getScene();
             if (ecsRegistry.hasComponent(typeIndex, *scene, entity.getHandle())) {
+                ImGui::BeginDisabled();
+                ImGui::MenuItem(componentName.c_str());
+                ImGui::EndDisabled();
+            }
+            else if (!canAddComponent(entity, typeIndex)) {
                 ImGui::BeginDisabled();
                 ImGui::MenuItem(componentName.c_str());
                 ImGui::EndDisabled();

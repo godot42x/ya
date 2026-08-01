@@ -3,6 +3,7 @@
 #include "Core/Api.h"
 #include "Core/Math/GLM.h"
 #include "Core/Math/Ray.h"
+#include "Runtime/Application/AppState.h"
 #include <optional>
 
 namespace ya
@@ -41,6 +42,13 @@ class ENGINE_API RayCastMousePickingSystem
      * @return Hit information if any entity was hit
      */
     static std::optional<RaycastHit> raycast(Scene *scene, const Ray &ray);
+
+    static std::optional<RaycastHit> raycastBillboards(Scene* scene,
+                                                       const Ray& ray,
+                                                       const glm::mat4& viewMatrix,
+                                                       const glm::vec3& cameraPosition,
+                                                       float viewportHeight,
+                                                       AppState appState = AppState::Stopped);
 
     /**
      * @brief Pick entity at screen coordinates

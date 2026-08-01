@@ -7,6 +7,7 @@
 
 #include "Core/System/VirtualFileSystem.h"
 #include "ECS/Component.h"
+#include "ECS/Component/DirectionalLightComponent.h"
 #include "ECS/Component/LuaScriptComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
@@ -173,6 +174,16 @@ void SceneHierarchyPanel::sceneTree()
                     if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
                         Entity* newEntity = node3D->getEntity();
                         newEntity->addComponent<PointLightComponent>();
+                        setSelection(newEntity);
+                    }
+                }
+
+                if (ctx.menuItem("Create Directional Light"))
+                {
+                    Node* newNode = _context->createNode3D("Directional Light", parentNode);
+                    if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
+                        Entity* newEntity = node3D->getEntity();
+                        newEntity->addComponent<DirectionalLightComponent>();
                         setSelection(newEntity);
                     }
                 }
