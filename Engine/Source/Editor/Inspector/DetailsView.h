@@ -38,6 +38,10 @@ struct DetailsView
     // 递归深度追踪（防止无限递归）
     int _recursionDepth = 0;
 
+    [[nodiscard]] bool isManagedLightBillboard(Entity& entity) const;
+    [[nodiscard]] bool canRemoveComponent(Entity& entity, type_index_t typeIndex) const;
+    [[nodiscard]] bool canAddComponent(Entity& entity, type_index_t typeIndex) const;
+
   public:
     DetailsView(EditorLayer *owner);
 
@@ -66,7 +70,7 @@ struct DetailsView
     // body 在 TreeNode 展开时执行；onRemove 在用户点了 Remove Component 时执行。
     // componentWrapper<T> 与 drawReflectedFallbackOne 共用这里，保证 header 一致。
     template <typename BodyFn, typename RemoveFn>
-    void componentSectionShell(const std::string &label, const void *id, BodyFn body, RemoveFn onRemove)
+    void componentSectionShell(const std::string &label, const void *id, bool bCanRemove, BodyFn body, RemoveFn onRemove)
     {
         const auto treeNodeFlags = ImGuiTreeNodeFlags_DefaultOpen |
                                    ImGuiTreeNodeFlags_AllowOverlap |
@@ -92,7 +96,13 @@ struct DetailsView
 
         bool bRemoveComponent = false;
         if (ImGui::BeginPopup("ComponentSettings")) {
-            if (ImGui::MenuItem("Remove Component")) {
+            if (!bCanRemove) {
+                ImGui::BeginDisabled();
+                ImGui::MenuItem("Remove Component");
+                ImGui::EndDisabled();
+                ImGui::TextDisabled("Managed by light component linkage");
+            }
+            else if (ImGui::MenuItem("Remove Component")) {
                 bRemoveComponent = true;
             }
             ImGui::EndPopup();
@@ -120,6 +130,7 @@ struct DetailsView
         componentSectionShell(
             name,
             static_cast<const void *>(name.c_str()),
+            canRemoveComponent(entity, ya::type_index_v<T>),
             [&] { impl(component); },
             [&] { entity.removeComponent<T>(); });
     }

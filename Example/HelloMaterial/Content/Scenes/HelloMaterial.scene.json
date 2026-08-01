@@ -310,7 +310,7 @@
                     "_modelRef": {
                         "__base__": {
                             "AssetRefBase": {
-                                "_path": "Engine/Content/Misc/Monkey.obj"
+                                "_path": "Engine:Content/Misc/Monkey.obj"
                             }
                         }
                     },
@@ -797,7 +797,7 @@
                     "_modelRef": {
                         "__base__": {
                             "AssetRefBase": {
-                                "_path": "Engine/Content/Assets/backpack/backpack.obj"
+                                "_path": "Engine:Content/Assets/backpack/backpack.obj"
                             }
                         }
                     },
@@ -805,9 +805,9 @@
                 },
                 "TransformComponent": {
                     "_position": [
-                        -5.0,
+                        1.944763,
                         0.0,
-                        0.0
+                        5.500115
                     ],
                     "_rotation": [
                         0.0,
@@ -848,7 +848,7 @@
                     "_skeletonIndex": 0,
                     "_sourceModelPath": "Engine/ThirdParty/LearnOpenGL/resources/objects/vampire/dancing_vampire.dae",
                     "_speed": 1.0,
-                    "_time": 12050.553699
+                    "_time": 92828.467925
                 },
                 "TransformComponent": {
                     "_position": [
@@ -5066,7 +5066,7 @@
                     "_heightMapRef": {
                         "__base__": {
                             "AssetRefBase": {
-                                "_path": "Engine/Content/Assets/iceland_heightmap.png"
+                                "_path": "Engine:Content/Assets/iceland_heightmap.png"
                             }
                         }
                     },
@@ -5250,6 +5250,46 @@
         },
         {
             "components": {
+                "BillboardComponent": {
+                    "bVisible": true,
+                    "image": {
+                        "bEnable": true,
+                        "samplerConfig": {
+                            "addressMode": "Repeat",
+                            "filterMode": "Linear"
+                        },
+                        "textureRef": {
+                            "__base__": {
+                                "AssetRefBase": {
+                                    "_path": "Engine:Content/TestTextures/icons8-light-64.png"
+                                }
+                            }
+                        },
+                        "uvOffset": [
+                            0.0,
+                            0.0
+                        ],
+                        "uvRotation": 0.0,
+                        "uvScale": [
+                            1.0,
+                            1.0
+                        ]
+                    },
+                    "minWorldScale": 0.4,
+                    "renderMode": 1,
+                    "screenSizePixels": 30.0,
+                    "tint": [
+                        300.0,
+                        300.0,
+                        300.0,
+                        1.0
+                    ],
+                    "worldDirection": [
+                        0.0,
+                        0.0,
+                        -1.0
+                    ]
+                },
                 "PointLightComponent": {
                     "_constant": 1.0,
                     "_innerConeAngle": 30.0,
@@ -5272,7 +5312,7 @@
                 "StaticMeshComponent": {
                     "_mesh": {
                         "_meshIndex": 0,
-                        "_primitiveGeometry": "Cube",
+                        "_primitiveGeometry": "None",
                         "_sourceModelPath": ""
                     }
                 },
@@ -5530,6 +5570,46 @@
         },
         {
             "components": {
+                "BillboardComponent": {
+                    "bVisible": true,
+                    "image": {
+                        "bEnable": true,
+                        "samplerConfig": {
+                            "addressMode": "Repeat",
+                            "filterMode": "Linear"
+                        },
+                        "textureRef": {
+                            "__base__": {
+                                "AssetRefBase": {
+                                    "_path": "Engine:Content/TestTextures/icons8-light-64.png"
+                                }
+                            }
+                        },
+                        "uvOffset": [
+                            0.0,
+                            0.0
+                        ],
+                        "uvRotation": 0.0,
+                        "uvScale": [
+                            1.0,
+                            1.0
+                        ]
+                    },
+                    "minWorldScale": 0.4,
+                    "renderMode": 1,
+                    "screenSizePixels": 30.0,
+                    "tint": [
+                        300.0,
+                        300.0,
+                        300.0,
+                        1.0
+                    ],
+                    "worldDirection": [
+                        0.0,
+                        0.0,
+                        -1.0
+                    ]
+                },
                 "PointLightComponent": {
                     "_constant": 1.0,
                     "_innerConeAngle": 30.0,
@@ -5552,7 +5632,7 @@
                 "StaticMeshComponent": {
                     "_mesh": {
                         "_meshIndex": 0,
-                        "_primitiveGeometry": "Cube",
+                        "_primitiveGeometry": "None",
                         "_sourceModelPath": ""
                     }
                 },
@@ -6606,6 +6686,46 @@
         },
         {
             "components": {
+                "BillboardComponent": {
+                    "bVisible": true,
+                    "image": {
+                        "bEnable": true,
+                        "samplerConfig": {
+                            "addressMode": "Repeat",
+                            "filterMode": "Linear"
+                        },
+                        "textureRef": {
+                            "__base__": {
+                                "AssetRefBase": {
+                                    "_path": "Engine:Content/TestTextures/icons8-light-64.png"
+                                }
+                            }
+                        },
+                        "uvOffset": [
+                            0.0,
+                            0.0
+                        ],
+                        "uvRotation": 0.0,
+                        "uvScale": [
+                            1.0,
+                            1.0
+                        ]
+                    },
+                    "minWorldScale": 0.4,
+                    "renderMode": 1,
+                    "screenSizePixels": 30.0,
+                    "tint": [
+                        300.0,
+                        300.0,
+                        300.0,
+                        1.0
+                    ],
+                    "worldDirection": [
+                        0.0,
+                        0.0,
+                        -1.0
+                    ]
+                },
                 "PointLightComponent": {
                     "_constant": 1.0,
                     "_innerConeAngle": 30.0,
@@ -6628,7 +6748,7 @@
                 "StaticMeshComponent": {
                     "_mesh": {
                         "_meshIndex": 0,
-                        "_primitiveGeometry": "Cube",
+                        "_primitiveGeometry": "None",
                         "_sourceModelPath": ""
                     }
                 },
@@ -7921,7 +8041,7 @@
         {
             "components": {
                 "CameraComponent": {
-                    "_aspectRatio": 1.585421,
+                    "_aspectRatio": 1.830751,
                     "_distance": 6.0,
                     "_farClip": 1000.0,
                     "_fixedAspectRatio": false,
@@ -8460,7 +8580,7 @@
                         "textureRef": {
                             "__base__": {
                                 "AssetRefBase": {
-                                    "_path": "Engine/Content/TestTextures/LearnOpenGL/container2.png"
+                                    "_path": "Engine:Content/TestTextures/LearnOpenGL/container2.png"
                                 }
                             }
                         },
@@ -8547,7 +8667,7 @@
                         "textureRef": {
                             "__base__": {
                                 "AssetRefBase": {
-                                    "_path": "Engine/Content/TestTextures/LearnOpenGL/container2_specular.png"
+                                    "_path": "Engine:Content/TestTextures/LearnOpenGL/container2_specular.png"
                                 }
                             }
                         },
@@ -9841,6 +9961,7 @@
         {
             "components": {
                 "BillboardComponent": {
+                    "bVisible": true,
                     "image": {
                         "bEnable": true,
                         "samplerConfig": {
@@ -9850,7 +9971,7 @@
                         "textureRef": {
                             "__base__": {
                                 "AssetRefBase": {
-                                    "_path": "Engine/Content/TestTextures/icons8-light-64.png"
+                                    "_path": "Engine:Content/TestTextures/icons8-light-64.png"
                                 }
                             }
                         },
@@ -9863,7 +9984,21 @@
                             1.0,
                             1.0
                         ]
-                    }
+                    },
+                    "minWorldScale": 0.4,
+                    "renderMode": 1,
+                    "screenSizePixels": 30.0,
+                    "tint": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "worldDirection": [
+                        0.0,
+                        0.0,
+                        -1.0
+                    ]
                 },
                 "PointLightComponent": {
                     "_constant": 1.0,
@@ -9887,7 +10022,7 @@
                 "StaticMeshComponent": {
                     "_mesh": {
                         "_meshIndex": 0,
-                        "_primitiveGeometry": "Cube",
+                        "_primitiveGeometry": "None",
                         "_sourceModelPath": ""
                     }
                 },
@@ -9946,7 +10081,7 @@
                         "textureRef": {
                             "__base__": {
                                 "AssetRefBase": {
-                                    "_path": "Engine/Content/TestTextures/icons8-light-64.png"
+                                    "_path": "Engine:Content/TestTextures/icons8-light-64.png"
                                 }
                             }
                         },
@@ -10654,6 +10789,46 @@
         },
         {
             "components": {
+                "BillboardComponent": {
+                    "bVisible": true,
+                    "image": {
+                        "bEnable": true,
+                        "samplerConfig": {
+                            "addressMode": "Repeat",
+                            "filterMode": "Linear"
+                        },
+                        "textureRef": {
+                            "__base__": {
+                                "AssetRefBase": {
+                                    "_path": ""
+                                }
+                            }
+                        },
+                        "uvOffset": [
+                            0.0,
+                            0.0
+                        ],
+                        "uvRotation": 0.0,
+                        "uvScale": [
+                            1.0,
+                            1.0
+                        ]
+                    },
+                    "minWorldScale": 1.0,
+                    "renderMode": 2,
+                    "screenSizePixels": 42.0,
+                    "tint": [
+                        0.113924,
+                        0.113924,
+                        0.113924,
+                        1.0
+                    ],
+                    "worldDirection": [
+                        -0.5,
+                        -0.707107,
+                        -0.5
+                    ]
+                },
                 "DirectionalLightComponent": {
                     "_color": [
                         0.113924,
@@ -10796,7 +10971,7 @@
                 "StaticMeshComponent": {
                     "_mesh": {
                         "_meshIndex": 0,
-                        "_primitiveGeometry": "Cube",
+                        "_primitiveGeometry": "None",
                         "_sourceModelPath": ""
                     }
                 },
@@ -11318,6 +11493,46 @@
         },
         {
             "components": {
+                "BillboardComponent": {
+                    "bVisible": true,
+                    "image": {
+                        "bEnable": true,
+                        "samplerConfig": {
+                            "addressMode": "Repeat",
+                            "filterMode": "Linear"
+                        },
+                        "textureRef": {
+                            "__base__": {
+                                "AssetRefBase": {
+                                    "_path": "Engine:Content/TestTextures/icons8-light-64.png"
+                                }
+                            }
+                        },
+                        "uvOffset": [
+                            0.0,
+                            0.0
+                        ],
+                        "uvRotation": 0.0,
+                        "uvScale": [
+                            1.0,
+                            1.0
+                        ]
+                    },
+                    "minWorldScale": 0.4,
+                    "renderMode": 1,
+                    "screenSizePixels": 30.0,
+                    "tint": [
+                        300.0,
+                        300.0,
+                        300.0,
+                        1.0
+                    ],
+                    "worldDirection": [
+                        0.0,
+                        0.0,
+                        -1.0
+                    ]
+                },
                 "PointLightComponent": {
                     "_constant": 1.0,
                     "_innerConeAngle": 30.0,
@@ -11340,7 +11555,7 @@
                 "StaticMeshComponent": {
                     "_mesh": {
                         "_meshIndex": 0,
-                        "_primitiveGeometry": "Cube",
+                        "_primitiveGeometry": "None",
                         "_sourceModelPath": ""
                     }
                 },
@@ -12405,6 +12620,43 @@
             },
             "id": 16919241215363085923,
             "name": "PBR_Sphere_1_1"
+        },
+        {
+            "components": {
+                "ModelComponent": {
+                    "_autoCreateChildEntities": true,
+                    "_customMaterialPath": "",
+                    "_flipImportedTextureV": false,
+                    "_materialType": "PBR",
+                    "_modelRef": {
+                        "__base__": {
+                            "AssetRefBase": {
+                                "_path": "Engine:Content/Assets/backpack/backpack.obj"
+                            }
+                        }
+                    },
+                    "_useEmbeddedMaterials": true
+                },
+                "TransformComponent": {
+                    "_position": [
+                        -1.893499,
+                        0.0,
+                        5.692333
+                    ],
+                    "_rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "_scale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                }
+            },
+            "id": 17191689219824214793,
+            "name": "Backpack(pbr)"
         },
         {
             "components": {
@@ -13718,6 +13970,11 @@
                 "children": [],
                 "entityRef": 1322239064819677931,
                 "name": "Backpack"
+            },
+            {
+                "children": [],
+                "entityRef": 17191689219824214793,
+                "name": "Backpack(pbr)"
             },
             {
                 "children": [],

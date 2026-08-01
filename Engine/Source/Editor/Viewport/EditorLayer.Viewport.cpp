@@ -1,5 +1,6 @@
 #include "Editor/EditorLayerInternal.h"
 
+#include "ECS/Component/DirectionalLightComponent.h"
 #include "Runtime/GUI/GuiSystem.h"
 
 namespace ya
@@ -243,6 +244,19 @@ void EditorLayer::viewportWindow()
                     if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
                         Entity* newEntity = node3D->getEntity();
                         newEntity->addComponent<PointLightComponent>();
+                        setSelectedEntity(newEntity);
+                    }
+                }
+            }
+
+            if (ctx.menuItem("Create Directional Light"))
+            {
+                if (auto scene = getEditableScene())
+                {
+                    Node* newNode = scene->createNode3D("Directional Light");
+                    if (auto* node3D = dynamic_cast<Node3D*>(newNode)) {
+                        Entity* newEntity = node3D->getEntity();
+                        newEntity->addComponent<DirectionalLightComponent>();
                         setSelectedEntity(newEntity);
                     }
                 }
