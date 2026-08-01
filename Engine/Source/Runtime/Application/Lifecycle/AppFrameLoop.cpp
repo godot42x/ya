@@ -4,6 +4,7 @@
 #include "Runtime/Application/AppRenderFrameState.h"
 #include "Runtime/Application/AppRenderState.h"
 #include "Runtime/Application/Lifecycle/AppAutomation.h"
+#include "Runtime/Application/Automation/AppAutomationControlService.h"
 #include "Runtime/Rendering/Services/RenderDiagnosticsService.h"
 #include "Runtime/Application/Utility/FPSCtrl.h"
 
@@ -21,6 +22,7 @@
 #include "Platform/Render/Vulkan//VulkanRender.h"
 
 #include "Render/2D/Render2D.h"
+#include "Render/Material/Material.h"
 
 #include "Runtime/Application/Utility/RenderFrameExtractor.h"
 #include "Runtime/Application/Utility/SDLMisc.h"
@@ -188,11 +190,21 @@ int AppFrameLoop::iterate(App& app, float dt)
         TaskQueue::get().processMainThreadCallbacks();
     }
     ++App::_frameIndex;
+
+    auto& renderServices = app.getRenderServices();
+    auto* renderRuntime = renderServices.getRenderRuntime();
+    if (auto* automationControl = app.getAutomationControlService()) {
+        automationControl->onFrameCompleted(app,
+                                            renderServices.getRender(),
+                                            renderRuntime ? renderRuntime->getPostprocessOutputImageShared() : nullptr,
+                                            renderRuntime ? renderRuntime->getActiveViewportImageShared() : nullptr,
+                                            renderRuntime ? renderRuntime->getPresentationImageShared() : nullptr,
+                                            App::_frameIndex);
+    }
+
     if (AppAutomation::isFrameAutomationEnabled(app)) {
         YA_PROFILE_SCOPE("Frame/Automation");
         YA_PERF_SCOPE(perf::sample::frameAutomation(), perf::metric::cpuTimeMs(), perf::domain::render());
-        auto& renderServices = app.getRenderServices();
-        auto* renderRuntime = renderServices.getRenderRuntime();
         auto* diagnosticsService = renderRuntime ? &renderRuntime->getDiagnosticsService() : nullptr;
 
         AppAutomation::onFrameCompleted(app,
@@ -233,6 +245,9 @@ void AppFrameLoop::tickLogic(App& app, float dt)
     {
         YA_PROFILE_SCOPE("Logic/TimerManager");
         Facade.timerManager.onUpdate(dt);
+    }
+    if (auto* automationControl = app.getAutomationControlService()) {
+        automationControl->update(app);
     }
     {
         YA_PROFILE_SCOPE("Logic/ViewportSync");
@@ -418,66 +433,6 @@ std::vector<RenderOverlaySprite2D> AppFrameLoop::buildScreenOverlaySprites(const
     return sprites;
 }
 
-std::vector<RenderOverlaySprite3D> AppFrameLoop::buildWorldOverlaySprites(const App& app,
-                                                                          Scene* scene,
-                                                                          const RenderPipelineFrameContext& pipelineFrame)
-{
-    (void)app;
-    std::vector<RenderOverlaySprite3D> sprites;
-    if (!scene) {
-        return sprites;
-    }
-
-    const auto view = scene->getRegistry().view<BillboardComponent, TransformComponent>();
-    sprites.reserve(view.size_hint());
-
-    const glm::vec2 screenSize(30.0f, 30.0f);
-    const float viewportHeight = pipelineFrame.viewportRect.extent.y;
-    if (viewportHeight <= 0.0f) {
-        return sprites;
-    }
-    const float scaleFactor = screenSize.x / viewportHeight;
-
-    for (const auto& [entity, billboard, transfCompp] : view.each()) {
-        (void)entity;
-
-        auto texture = billboard.image.hasPath() ? billboard.image.getResolvedTexture().get() : nullptr;
-        const auto& pos = transfCompp.getWorldPosition();
-
-        glm::vec3 billboardToCamera = pipelineFrame.cameraPos - pos;
-        float     distance          = glm::length(billboardToCamera);
-        if (distance <= 0.0f) {
-            continue;
-        }
-        billboardToCamera = glm::normalize(billboardToCamera);
-
-        glm::vec3 forward = billboardToCamera;
-        glm::vec3 worldUp = glm::vec3(0, 1, 0);
-        glm::vec3 right   = glm::normalize(glm::cross(worldUp, forward));
-        glm::vec3 up      = glm::cross(forward, right);
-
-        glm::mat4 rot(1.0f);
-        rot[0] = glm::vec4(right, 0.0f);
-        rot[1] = glm::vec4(up, 0.0f);
-        rot[2] = glm::vec4(forward, 0.0f);
-
-        float     factor = scaleFactor * distance * 2.0f;
-        glm::vec3 scale  = glm::vec3(factor, factor, 1.0f);
-
-        glm::mat4 trans = glm::mat4(1.0f);
-        trans           = glm::translate(trans, pos);
-        trans           = trans * rot;
-        trans           = glm::scale(trans, scale);
-
-        RenderOverlaySprite3D sprite;
-        sprite.worldTransform = trans;
-        sprite.texture        = texture;
-        sprites.push_back(sprite);
-    }
-
-    return sprites;
-}
-
 void AppFrameLoop::tickRender(App& app, float dt)
 {
     auto* renderRuntime = app.getRenderServices().getRenderRuntime();
@@ -542,12 +497,10 @@ void AppFrameLoop::tickRender(App& app, float dt)
     };
 
     auto screenOverlaySprites = AppFrameLoop::buildScreenOverlaySprites(app);
-    auto worldOverlaySprites  = AppFrameLoop::buildWorldOverlaySprites(app, scene, pipelineFrame);
 
     renderRuntime->renderFrame(RenderRuntime::FrameInput{
         .overlay = {
             .screenSprites = &screenOverlaySprites,
-            .worldSprites  = &worldOverlaySprites,
         },
         .automation = {
             .recordPresentationCapture = [&app](ICommandBuffer* cmdBuf)
@@ -559,6 +512,9 @@ void AppFrameLoop::tickRender(App& app, float dt)
 
                 AppAutomation::recordPresentationCapture(app.getFrameIndex(),
                                                          cmdBuf);
+                if (auto* automationControl = app.getAutomationControlService()) {
+                    automationControl->recordPresentationCapture(app.getFrameIndex(), cmdBuf);
+                }
             },
         },
         .recordBeforePresentationExtensions = [&app, dt](ICommandBuffer* commandBuffer)

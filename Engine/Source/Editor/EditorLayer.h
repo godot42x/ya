@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/Common/FWD.h"
+
 #include "Editor/Panels/AssetInspectorPanel.h"
 #include "Editor/Panels/ContentBrowserPanel.h"
 #include "Editor/Panels/RuntimeToolsPanel.h"
@@ -8,6 +10,7 @@
 #include "Core/Camera/Camera.h"
 
 #include "Core/Event.h"
+#include "Core/Profiling/Instrumentor.h"
 #include "Editor/Inspector/DetailsView.h"
 #include "Editor/FilePicker.h"
 #include "Editor/ImGui/ImGuiHelper.h"
@@ -84,7 +87,7 @@ struct EditorLayer
     bool      _bShowViewportCameraOverlay  = true;
 
     // ImGui texture descriptor set cache (editor-only, application layer)
-    std::unordered_set<ImGuiImageEntry> _imguiTextureCache; // ImageView → VkDescriptorSet
+    std::unordered_set<ImGuiImageEntry> _imguiTextureCache; // ImageView -> VkDescriptorSet
 
     // Gizmo state
     ImGuizmo::OPERATION _gizmoOperation = ImGuizmo::TRANSLATE;
@@ -325,3 +328,4 @@ struct EditorLayer
 };
 
 } // namespace ya
+

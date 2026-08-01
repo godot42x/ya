@@ -15,9 +15,11 @@
 #include "Resource/Font/FontManager.h"
 #include "Resource/Texture/TextureLibrary.h"
 #include "Runtime/Application/App.h"
+#include "Runtime/Application/Automation/EditorAutomationControl.h"
 #include "Runtime/GUI/GuiSystem.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "Runtime/Rendering/RenderRuntime.h"
+
 
 #include <string_view>
 
@@ -28,6 +30,7 @@ namespace
 {
 
 EditorLayer* gEditorLayer = nullptr;
+Scene*       gEditorAuthoringScene = nullptr;
 
 glm::vec3 resolveInitialEditorCameraPosition(const App& app)
 {
@@ -235,7 +238,7 @@ class EditorViewportCompositor
     }
 };
 
-class EditorModule final : public IModule
+class EditorModule final : public IModule, public IEditorAutomationControl
 {
   private:
     std::unique_ptr<EditorLayer> _layer;
@@ -288,12 +291,60 @@ class EditorModule final : public IModule
         gEditorLayer = _layer.get();
     }
 
+    void* queryInterface(FInterfaceId interfaceId) override
+    {
+        if (interfaceId == YA_EDITOR_AUTOMATION_CONTROL_INTERFACE) {
+            return static_cast<IEditorAutomationControl*>(this);
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] Scene* getAuthoringScene() const override
+    {
+        return _playSession.getAuthoringScene();
+    }
+
+    bool setEditorCameraTransform(const glm::vec3& position, const glm::vec3& rotation) override
+    {
+        if (!_layer) {
+            return false;
+        }
+        _layer->getCamera().setPositionAndRotation(position, rotation);
+        return true;
+    }
+
+    bool focusEditorCameraOnWorldPoint(const glm::vec3& target,
+                                       float             distance,
+                                       float             heightOffset) override
+    {
+        if (!_layer) {
+            return false;
+        }
+
+        const float safeDistance = std::max(distance, 0.2f);
+        glm::vec3 offset = glm::normalize(glm::vec3(1.0f, 0.35f, 1.0f));
+        glm::vec3 position = target + offset * safeDistance + glm::vec3(0.0f, heightOffset, 0.0f);
+
+        glm::vec3 toTarget = glm::normalize(target - position);
+        float pitch = glm::degrees(std::asin(glm::clamp(toTarget.y, -1.0f, 1.0f)));
+        glm::vec3 yawVector = toTarget;
+        if constexpr (FMath::Vector::IsRightHanded) {
+            yawVector.z = -yawVector.z;
+            yawVector.x = -yawVector.x;
+        }
+        float yaw = glm::degrees(std::atan2(yawVector.x, yawVector.z));
+
+        _layer->getCamera().setPositionAndRotation(position, glm::vec3(pitch, yaw, 0.0f));
+        return true;
+    }
+
     void onDetach(App& app) override
     {
         app.getInputRouter().cancelInput(EInputCancelReason::ModuleDetached);
         _inputNodeRegistration.reset();
         _inputNode.unbind();
         _playSession.shutdown(app);
+        gEditorAuthoringScene = nullptr;
         app.getRenderServices().clearExtensionRenderFrameState();
         _viewportCompositor.shutdown();
         if (_layer) {
@@ -320,6 +371,7 @@ class EditorModule final : public IModule
     void onSceneActivated(App& app, Scene* scene) override
     {
         _playSession.onSceneActivated(app, scene);
+        gEditorAuthoringScene = _playSession.getAuthoringScene();
         if (!_layer) {
             return;
         }
@@ -334,6 +386,7 @@ class EditorModule final : public IModule
     {
         (void)app;
         _playSession.onSceneDestroyed(scene);
+        gEditorAuthoringScene = _playSession.getAuthoringScene();
         if (_layer) {
             _layer->setEditableScene(_playSession.getAuthoringScene());
             _layer->selectEntity(nullptr);
@@ -430,4 +483,11 @@ EditorLayer* getEditorLayer()
     return gEditorLayer;
 }
 
+Scene* getEditorAuthoringScene()
+{
+    return gEditorAuthoringScene;
+}
+
 } // namespace ya
+
+

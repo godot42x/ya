@@ -153,6 +153,7 @@ void AppDesc::init(int argc, char** argv)
         .opt<std::string>("", {"log-detail-level"}, "Runtime source-detail log level: debug/trace/info/warn/error/fatal")
         .opt<std::string>("", {"renderdoc-dll"}, "RenderDoc dll path", renderDocDllPath)
         .opt<std::string>("", {"renderdoc-output"}, "RenderDoc capture output directory", renderDocCaptureOutputDir)
+        .opt<uint16_t>("", {"automation-control-port"}, "Automation control TCP port; 0 disables the server", "0")
         .parse(argc, argv);
 
     title = params._opt.program();
@@ -160,6 +161,7 @@ void AppDesc::init(int argc, char** argv)
     params.tryGet<int>("height", height);
     params.tryGet<bool>("fullscreen", fullscreen);
     params.tryGet<uint64_t>("exit-after-frame", automation.exitAfterFrame);
+    params.tryGet<uint16_t>("automation-control-port", automation.controlPort);
     if (std::string automationConfigPath; params.tryGet<std::string>("automation-config", automationConfigPath)) {
         automation.configPath = std::move(automationConfigPath);
     }
@@ -249,3 +251,4 @@ void AppDesc::init(int argc, char** argv)
 }
 
 } // namespace ya
+

@@ -38,6 +38,7 @@ class AppLifecycle;
 class AppFrameLoop;
 class AppEventRouter;
 class AppModuleTestAccess;
+class AppAutomationControlService;
 class InputRouter;
 
 enum AppMode : int
@@ -62,8 +63,9 @@ struct ENGINE_API App
 
     SceneManager*                   _sceneManager = nullptr;
     std::unique_ptr<AppRenderState> _renderState;
-    AppRenderServices               _renderServices;
-    AppSceneServices                _sceneServices;
+    AppRenderServices                            _renderServices;
+    AppSceneServices                             _sceneServices;
+    std::unique_ptr<AppAutomationControlService> _automationControlService;
 
     bool bRunning = true;
 
@@ -157,6 +159,8 @@ struct ENGINE_API App
     [[nodiscard]] const AppRenderServices& getRenderServices() const { return _renderServices; }
     [[nodiscard]] AppSceneServices&        getSceneServices() { return _sceneServices; }
     [[nodiscard]] const AppSceneServices&  getSceneServices() const { return _sceneServices; }
+    [[nodiscard]] AppAutomationControlService*       getAutomationControlService() { return _automationControlService.get(); }
+    [[nodiscard]] const AppAutomationControlService* getAutomationControlService() const { return _automationControlService.get(); }
 
     [[nodiscard]] const AppDesc&                 getDesc() const { return _ci; }
     [[nodiscard]] ResourceResolveSystem*         getResourceResolveSystem() const { return _resourceResolveSystem; }
@@ -181,6 +185,13 @@ struct ENGINE_API App
     void stopRuntime();
     void stopSimulation();
     bool openProject(const FProjectDescriptor& descriptor);
+
+    [[nodiscard]] void* queryModuleInterface(FInterfaceId interfaceId) const;
+    template <typename T>
+    [[nodiscard]] T* queryModuleInterface(FInterfaceId interfaceId) const
+    {
+        return static_cast<T*>(queryModuleInterface(interfaceId));
+    }
 
     glm::vec2 getLastMousePos() const { return _lastMousePos; }
 
@@ -215,3 +226,4 @@ struct ENGINE_API App
 };
 
 } // namespace ya
+
