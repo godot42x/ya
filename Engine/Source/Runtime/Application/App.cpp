@@ -1,5 +1,6 @@
 #include "Runtime/Application/App.h"
 #include "Runtime/Application/AppRenderState.h"
+#include "Runtime/Application/Automation/AppAutomationControlService.h"
 
 #include "Core/Module/ProjectDescriptor.h"
 #include "Core/Profiling/Profiling.h"
@@ -20,6 +21,7 @@ App::App()
     : _renderState(std::make_unique<AppRenderState>())
     , _renderServices(_renderState.get())
     , _sceneServices(this)
+    , _automationControlService(std::make_unique<AppAutomationControlService>())
     , gameInputNode(inputManager)
 {
     inputRouter.setApp(*this);
@@ -216,6 +218,16 @@ uint64_t App::getElapsedTimeMS() const
     return std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - _startTime).count();
 }
 
+void* App::queryModuleInterface(FInterfaceId interfaceId) const
+{
+    for (const auto& slot : _modules) {
+        if (void* iface = slot.module->queryInterface(interfaceId)) {
+            return iface;
+        }
+    }
+    return nullptr;
+}
+
 bool App::openProject(const FProjectDescriptor& descriptor)
 {
     YA_PROFILE_FUNCTION();
@@ -230,3 +242,4 @@ bool App::openProject(const FProjectDescriptor& descriptor)
 }
 
 } // namespace ya
+

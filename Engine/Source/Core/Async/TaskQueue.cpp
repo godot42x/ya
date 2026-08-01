@@ -1,6 +1,7 @@
 #include "TaskQueue.h"
 
 #include "Core/Log.h"
+#include "Core/Profiling/Instrumentor.h"
 
 namespace ya
 {
@@ -32,6 +33,7 @@ void TaskQueue::start(uint32_t numThreads)
 
 void TaskQueue::stop()
 {
+    YA_PROFILE_FUNCTION_LOG();
     if (!_running) return;
 
     {

@@ -26,9 +26,6 @@ class AppFrameLoop
 
   private:
     static std::vector<RenderOverlaySprite2D> buildScreenOverlaySprites(const App& app);
-    static std::vector<RenderOverlaySprite3D> buildWorldOverlaySprites(const App& app,
-                                                                       Scene* scene,
-                                                                       const RenderPipelineFrameContext& pipelineFrame);
 };
 
 } // namespace ya

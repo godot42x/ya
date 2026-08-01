@@ -115,30 +115,30 @@ struct RuntimeSessionPaths
     return getCompileMode() == ECompileMode::Enabled;
 }
 
-ENGINE_API [[nodiscard]] const char* getCompileModeLabel();
+[[nodiscard]] ENGINE_API const char* getCompileModeLabel();
 
-ENGINE_API [[nodiscard]] RuntimeState getRuntimeState();
-ENGINE_API void setRuntimeState(const RuntimeState& state);
+[[nodiscard]] ENGINE_API RuntimeState getRuntimeState();
+ENGINE_API void                       setRuntimeState(const RuntimeState& state);
 
-ENGINE_API [[nodiscard]] bool isCpuTraceEnabled();
-ENGINE_API void setCpuTraceEnabled(bool enabled);
+[[nodiscard]] ENGINE_API bool isCpuTraceEnabled();
+ENGINE_API void               setCpuTraceEnabled(bool enabled);
 
-ENGINE_API [[nodiscard]] bool isPerfMetricsEnabled();
-ENGINE_API void setPerfMetricsEnabled(bool enabled);
+[[nodiscard]] ENGINE_API bool isPerfMetricsEnabled();
+ENGINE_API void               setPerfMetricsEnabled(bool enabled);
 
-ENGINE_API [[nodiscard]] bool isStaticInitEnabled();
-ENGINE_API void setStaticInitEnabled(bool enabled);
+[[nodiscard]] ENGINE_API bool isStaticInitEnabled();
+ENGINE_API void               setStaticInitEnabled(bool enabled);
 
 ENGINE_API void beginRuntimeSession(const AppDesc& appDesc);
 ENGINE_API void endRuntimeSession();
 
 ENGINE_API void applyAppOverrides(AppDesc& appDesc);
 
-ENGINE_API [[nodiscard]] RuntimeSessionPaths getRuntimeSessionPaths();
-ENGINE_API void setGpuCapturePath(std::string path);
-ENGINE_API void setPassSummaryPath(std::string path);
-ENGINE_API void setScreenshotPath(std::string path);
-ENGINE_API void flushRuntimeArtifacts();
+[[nodiscard]] ENGINE_API RuntimeSessionPaths getRuntimeSessionPaths();
+ENGINE_API void                              setGpuCapturePath(std::string path);
+ENGINE_API void                              setPassSummaryPath(std::string path);
+ENGINE_API void                              setScreenshotPath(std::string path);
+ENGINE_API void                              flushRuntimeArtifacts();
 
 ENGINE_API Instrumentor& cpuTrace();
 ENGINE_API PerfState&    metrics();

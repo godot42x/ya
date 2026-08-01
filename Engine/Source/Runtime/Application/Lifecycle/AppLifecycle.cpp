@@ -3,6 +3,7 @@
 #include "Runtime/Application/App.h"
 #include "Runtime/Application/AppRenderState.h"
 #include "Runtime/Application/Lifecycle/AppAutomation.h"
+#include "Runtime/Application/Automation/AppAutomationControlService.h"
 #include "Runtime/Application/Utility/FPSCtrl.h"
 
 #include "Config/ConfigManager.h"
@@ -345,6 +346,10 @@ void AppLifecycle::init(App& app, AppDesc ci)
     app.attachModules();
     app._deleter.push("Modules", [&app](void*) { app.detachModules(); });
 
+    if (app._automationControlService) {
+        app._automationControlService->init(app._ci.automation.controlPort);
+    }
+
     app._luaScriptingSystem = new LuaScriptingSystem();
     app._luaScriptingSystem->init();
     app._deleter.push("LuaScriptingSystem", [&app](void*)
@@ -448,6 +453,9 @@ void AppLifecycle::onPostInit(App& app)
 
 void AppLifecycle::quit(App& app)
 {
+    if (app._automationControlService) {
+        app._automationControlService->shutdown();
+    }
     TaskQueue::get().stop();
     {
         YA_PROFILE_SCOPE_LOG("Inheritance Quit");
@@ -654,3 +662,4 @@ void AppLifecycle::stopSimulation(App& app)
 }
 
 } // namespace ya
+

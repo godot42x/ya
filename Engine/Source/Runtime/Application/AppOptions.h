@@ -105,6 +105,7 @@ struct AppAutomationOptions
     AppAutomationShadowOverrides shadow;
     AppAutomationDeferredOverrides deferred;
     AppAutomationPostProcessOverrides postprocess;
+    uint16_t                         controlPort = 0;
 };
 
 [[nodiscard]] bool tryParseAutomationScreenshotTarget(const std::string& text,
@@ -143,3 +144,4 @@ struct ENGINE_API AppDesc
 };
 
 } // namespace ya
+

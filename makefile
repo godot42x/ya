@@ -1,7 +1,11 @@
 
 t:=
 
-.PHONY: package
+.PHONY: package, cfg
+
+cfg:
+	xmake f -m debug
+	xmake project -k compile_commands
 
 r:
 	uv run ./Script/ya.py run-editor --project  ./Example/$(t)/$(t).yaproject

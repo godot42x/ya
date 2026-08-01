@@ -8,6 +8,7 @@ includes("./ThirdParty/ThirdParty.xmake.lua")
 add_requires(
     "spdlog"
     , "libsdl3_image"
+    , "asio"
     , "glm"
     , "stb"
     , "tinygltf v2.9.6"
@@ -180,6 +181,7 @@ do
     -- add_packages("spdlog")
     add_packages("libsdl3", { public = true })
     add_packages("libsdl3_image")
+    add_packages("asio")
     add_packages("glm", { public = true })
     --add_packages("glad")
     add_packages("assimp")
@@ -201,6 +203,7 @@ do
     -- Add subsystem specification to fix LNK4031 warning
     if is_plat("windows") then
         add_ldflags("/subsystem:console")
+        add_syslinks("ws2_32")
         add_defines("NOMINMAX")     -- Disable min and max macros
         add_cxxflags("/utf-8")      -- Enable UTF-8 source code support for Unicode characters
         add_cxxflags("/Zm1000")     -- the memory allocation for compiler increased to 1000MB
