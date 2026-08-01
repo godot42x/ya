@@ -19,3 +19,9 @@ ed:
 package:
 	uv run  Script/ya.py package --project Example/$(t)/$(t).yaproject
 	
+
+profile:
+	xmake f -m profile
+	uv run ./Script/ya.py run-editor --project  ./Example/$(t)/$(t).yaproject
+	npx speedscope "./Engine/Saved/Profile/profile-latest.speedscope.json"
+	xmake f -m debug

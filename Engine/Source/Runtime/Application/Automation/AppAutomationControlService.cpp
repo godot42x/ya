@@ -43,19 +43,6 @@ namespace
 {
 using asio::ip::tcp;
 
-const char* renderOverlayModeName(RenderOverlaySprite3D::Mode mode)
-{
-    switch (mode) {
-    case RenderOverlaySprite3D::Mode::Textured:
-        return "Textured";
-    case RenderOverlaySprite3D::Mode::LightIcon:
-        return "LightIcon";
-    case RenderOverlaySprite3D::Mode::DirectionalLightIcon:
-        return "DirectionalLightIcon";
-    }
-    return "Unknown";
-}
-
 struct DirectionalLightInfo
 {
     glm::vec3                direction = glm::vec3(0.0f, -1.0f, 0.0f);
@@ -799,8 +786,6 @@ void AppAutomationControlService::handleListOverlaySprites(App& app, const std::
             {"world_direction", {billboard.worldDirection.x, billboard.worldDirection.y, billboard.worldDirection.z}},
             {"screen_size_pixels", billboard.screenSizePixels},
             {"min_world_scale", billboard.minWorldScale},
-            {"mode", static_cast<uint32_t>(billboard.getMode())},
-            {"mode_name", renderOverlayModeName(billboard.getMode())},
             {"managed_by_light", billboard.bManagedByLight},
             {"owner_entity_id", static_cast<uint32_t>(entity)},
         };
@@ -833,8 +818,6 @@ void AppAutomationControlService::handleListBillboardComponents(App& app, const 
             {"screen_size_pixels", billboard.screenSizePixels},
             {"min_world_scale", billboard.minWorldScale},
             {"world_direction", {billboard.worldDirection.x, billboard.worldDirection.y, billboard.worldDirection.z}},
-            {"mode", static_cast<uint32_t>(billboard.getMode())},
-            {"mode_name", renderOverlayModeName(billboard.getMode())},
             {"texture_path", billboard.image.textureRef.getPath()},
         };
         billboards.push_back(std::move(entry));

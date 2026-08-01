@@ -295,7 +295,7 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
     };
 
     if (ci.sourceMode == ShaderDesc::ESourceMode::StageFiles) {
-        static const std::unordered_map<EShaderStage::T, std::string> stageEntryNames = {
+        static const std::unordered_map<EShaderStage::T, std::string> defaultStageEntryNames = {
             {EShaderStage::Vertex, "vertMain"},
             {EShaderStage::Fragment, "fragMain"},
             {EShaderStage::Geometry, "geomMain"},
@@ -349,8 +349,11 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
                 stagePath = stdpath(shaderStoragePath) / stagePath;
             }
 
-            const auto entryIt   = stageEntryNames.find(stageFile.stage);
-            const auto entryName = entryIt != stageEntryNames.end() ? entryIt->second : std::string{"main"};
+            std::string entryName = stageFile.entryName;
+            if (entryName.empty()) {
+                const auto entryIt = defaultStageEntryNames.find(stageFile.stage);
+                entryName = entryIt != defaultStageEntryNames.end() ? entryIt->second : std::string{"main"};
+            }
             if (!compileStage(stageFile.stage, stagePath.generic_string(), entryName)) {
                 return {};
             }

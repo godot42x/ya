@@ -796,7 +796,10 @@ void GBufferStage::drawUnlit(const RenderStageContext& ctx)
                 cmdBuf->bindDescriptorSets(layout, 0, {ds0, _unlitMatPool.resourceDS(item.materialIndex), _unlitMatPool.paramDS(item.materialIndex)});
             }
 
-            UnlitPushConstant pc{.modelMat = item.worldMatrix, .skinningPaletteIndex = item.skinningPaletteIndex};
+            UnlitPushConstant pc{
+                .modelMat = item.worldMatrix,
+                .skinningPaletteIndex = item.skinningPaletteIndex,
+            };
             cmdBuf->pushConstants(layout, EShaderStage::Vertex, 0, sizeof(pc), &pc);
             if (bSkinned) {
                 item.mesh->drawSkinned(cmdBuf);
@@ -834,7 +837,10 @@ void GBufferStage::drawFallback(const RenderStageContext& ctx)
         }
         for (const auto& item : items) {
             if (!item.mesh) continue;
-            UnlitPushConstant pc{.modelMat = item.worldMatrix, .skinningPaletteIndex = item.skinningPaletteIndex};
+            UnlitPushConstant pc{
+                .modelMat = item.worldMatrix,
+                .skinningPaletteIndex = item.skinningPaletteIndex,
+            };
             cmdBuf->pushConstants(layout, EShaderStage::Vertex, 0, sizeof(pc), &pc);
             if (bSkinned) {
                 item.mesh->drawSkinned(cmdBuf);

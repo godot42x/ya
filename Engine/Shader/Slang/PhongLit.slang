@@ -131,7 +131,7 @@ struct VSOutput
 {
     float4 sv_position          : SV_Position;
     float3 worldPos            : WorldPos;
-    float2 texcoord            : Texcoord;
+    float2 texcoord            : TEXCOORD;
     float3 normal              : Normal;
     float4 fragLightSpacePos   : LightSpacePos;
 };
@@ -142,7 +142,7 @@ struct VSOutput
 struct VSInput
 {
     [[vk::location(0)]] float3 aPos      : POSITION;
-    [[vk::location(1)]] float2 aTexcoord : TEXCOORD0;
+    [[vk::location(1)]] float2 aTexcoord : TEXCOORD;
     [[vk::location(2)]] float3 aNormal   : NORMAL;
     [[vk::location(3)]] float3 aTangent  : TANGENT;
     YA_SKINNING_VERTEX_FIELDS

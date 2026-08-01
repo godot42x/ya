@@ -287,6 +287,7 @@ struct ShaderDesc
     {
         EShaderStage::T stage = EShaderStage::Vertex;
         std::string     file;
+        std::string     entryName;
     };
 
     ESourceMode                          sourceMode = ESourceMode::SingleShader;
@@ -326,6 +327,8 @@ struct ShaderDesc
             key += std::to_string(static_cast<int>(sf.stage));
             key += ":";
             key += sf.file;
+            key += "@";
+            key += sf.entryName;
             key += ";";
         }
         appendDefines(key);

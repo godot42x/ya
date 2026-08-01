@@ -18,7 +18,6 @@ class BillboardComponent : public IComponent
     YA_REFLECT_FIELD(worldDirection)
     YA_REFLECT_FIELD(screenSizePixels)
     YA_REFLECT_FIELD(minWorldScale)
-    YA_REFLECT_FIELD(renderMode)
     YA_REFLECT_END()
 
 
@@ -46,24 +45,12 @@ class BillboardComponent : public IComponent
     glm::vec3  worldDirection   = glm::vec3(0.0f, 0.0f, -1.0f);
     float      screenSizePixels = 30.0f;
     float      minWorldScale    = 0.0f;
-    uint32_t   renderMode       = static_cast<uint32_t>(RenderOverlaySprite3D::Mode::Textured);
     bool       bManagedByLight  = false;
 
     bool bDirty = true;
     void invalidate() { bDirty = true; }
 
     UnlitMaterial* getMaterial() const { return _material; }
-
-    [[nodiscard]] RenderOverlaySprite3D::Mode getMode() const
-    {
-        return static_cast<RenderOverlaySprite3D::Mode>(renderMode);
-    }
-
-    void setMode(RenderOverlaySprite3D::Mode mode)
-    {
-        renderMode = static_cast<uint32_t>(mode);
-        invalidate();
-    }
 
     bool resolve();
 

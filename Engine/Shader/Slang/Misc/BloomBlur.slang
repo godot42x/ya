@@ -1,7 +1,7 @@
 struct VertexOutput
 {
     float4 clipPos : SV_Position;
-    float2 uv : TEXCOORD0;
+    float2 uv : TEXCOORD_UV;
 };
 
 struct PushConstants

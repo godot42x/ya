@@ -159,8 +159,13 @@ void RenderRuntime::renderViewportPassOverlays(const RenderPipelineFrameContext&
     }
 
     if (overlay.worldSprites) {
+        // YA_CORE_INFO("Rendering {} world overlay sprites", overlay.worldSprites->size());
         for (const auto& sprite : *overlay.worldSprites) {
-            Render2D::makeWorldSprite(sprite.worldTransform, sprite.texture, sprite.tint);
+            Render2D::makeWorldSprite(sprite.worldCenter,
+                                      sprite.worldDirection,
+                                      sprite.worldSize,
+                                      sprite.texture,
+                                      sprite.tint);
         }
     }
 

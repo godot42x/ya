@@ -12,7 +12,7 @@
 
 struct VertexInput{
     [[vk::location(0)]] float3 pos      : POSITION;
-    [[vk::location(1)]] float2 uv       : TEXCOORD0;
+    [[vk::location(1)]] float2 uv       : TEXCOORD_UV;
     [[vk::location(2)]] float3 normal   : NORMAL;
     [[vk::location(3)]] float3 tangent  : TANGENT;
     YA_SKINNING_VERTEX_FIELDS
@@ -113,14 +113,21 @@ void fragMain(in VertexOutput IN, out FragmentOutput OUT)
     // Compute final unlit color: mix two base colors, modulated by textures
     vec3 color0 = uParams.baseColor0;
     vec3 color1 = uParams.baseColor1;
+    float alpha = 1.0;
 
     if (uParams.textures[0].bEnable) {
         vec2 uv0 = (uParams.textures[0].uvTransform * vec3(IN.uv, 1.0)).xy;
-        color0 = uTexBaseColor0.Sample(uv0).rgb;
+        float4 sample0 = uTexBaseColor0.Sample(uv0);
+        color0 = sample0.rgb;
+        alpha = sample0.a;
     }
     if (uParams.textures[1].bEnable) {
         vec2 uv1 = (uParams.textures[1].uvTransform * vec3(IN.uv, 1.0)).xy;
         color1 = uTexBaseColor1.Sample(uv1).rgb;
+    }
+
+    if (alpha < 0.01) {
+        discard;
     }
 
     vec3 finalColor = lerp(color0, color1, uParams.mixValue);
@@ -128,6 +135,6 @@ void fragMain(in VertexOutput IN, out FragmentOutput OUT)
     // Pack into GBuffer — Unlit: no lighting needed, store final color as albedo
     OUT.posRoughness   = vec4(IN.pos, 0.0);
     OUT.normalAO       = vec4(normalize(IN.normal), 0.0);
-    OUT.albedoMisc     = vec4(finalColor, 0.0);
+    OUT.albedoMisc     = vec4(finalColor, alpha);
     OUT.shadingModelID = 3.0 / 255.0; // EShadingModelID::Unlit = 3
 }

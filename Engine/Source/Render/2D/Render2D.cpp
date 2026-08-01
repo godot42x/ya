@@ -13,6 +13,8 @@
 
 #include "utility.cc/ranges.h"
 
+#include <limits>
+
 namespace ya
 {
 
@@ -21,12 +23,8 @@ FQuadRender*  Render2D::quadData = nullptr;
 
 auto& data2D = Render2D::data;
 
-
 void Render2D::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
 {
-    // windowWidth/Height are now set per-frame in begin() from the actual render target extent,
-    // instead of from the swapchain. This unifies the data source.
-
     quadData = new FQuadRender();
     quadData->init(render, colorFormat, depthFormat);
 }
@@ -39,18 +37,11 @@ void Render2D::destroy()
 
 void Render2D::onUpdate(float dt)
 {
-    // for (auto sys : Render2D::data._systems)
-    // {
-    //     sys->onUpdate(dt);
-    // }
+    (void)dt;
 }
 
 void Render2D::onRender()
 {
-    // for (auto sys : Render2D::data._systems)
-    // {
-    //     sys->onRender();
-    // }
 }
 
 void Render2D::begin(const FRender2dContext& ctx)
@@ -63,13 +54,9 @@ void Render2D::begin(const FRender2dContext& ctx)
     quadData->begin(extent);
 }
 
-
-// MARK: quad init
-
 void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
 {
     _render = render;
-
 
     _descriptorPool = IDescriptorPool::create(
         render,
@@ -93,21 +80,20 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
     _frameUboDS     = descriptorSets[0];
     _frameUBOBuffer = render->getResourceFactory()->createBuffer(
         ya::BufferCreateInfo{
-            .label         = "Sprite2D_Screen_FrameUBO",
-            .usage         = EBufferUsage::UniformBuffer,
-            .size          = sizeof(FrameUBO),
+            .label       = "Sprite2D_Screen_FrameUBO",
+            .usage       = EBufferUsage::UniformBuffer,
+            .size        = sizeof(FrameUBO),
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
-    // World-space FrameUBO (separate buffer to avoid GPU read hazard when both paths flush in the same frame)
     descriptorSets.clear();
     _descriptorPool->allocateDescriptorSets(_frameUboDSL, 1, descriptorSets);
     _worldFrameUboDS     = descriptorSets[0];
     _worldFrameUBOBuffer = render->getResourceFactory()->createBuffer(
         ya::BufferCreateInfo{
-            .label         = "Sprite2D_World_FrameUBO",
-            .usage         = EBufferUsage::UniformBuffer,
-            .size          = sizeof(FrameUBO),
+            .label       = "Sprite2D_World_FrameUBO",
+            .usage       = EBufferUsage::UniformBuffer,
+            .size        = sizeof(FrameUBO),
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
@@ -117,12 +103,77 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
     _resourceDS      = descriptorSets[0];
     _worldResourceDS = descriptorSets[1];
 
-
-    // Use factory method to create pipeline layout
     std::vector<std::shared_ptr<IDescriptorSetLayout>> dslVec = {_frameUboDSL, _resourceDSL};
-    _pipelineLayout                                           = IPipelineLayout::create(render, "Sprite2D_PipelineLayout", _pipelineDesc.pushConstants, dslVec);
+    _pipelineLayout = IPipelineLayout::create(render, "Sprite2D_PipelineLayout", _pipelineDesc.pushConstants, dslVec);
 
-    // Use factory method to create graphics pipeline
+    const auto buildVertexAttributes = []()
+    {
+        return std::vector<VertexAttribute>{
+            VertexAttribute{
+                .bufferSlot = 0,
+                .location   = 0,
+                .format     = EVertexAttributeFormat::Float3,
+                .offset     = offsetof(Vertex, pos),
+            },
+            VertexAttribute{
+                .bufferSlot = 0,
+                .location   = 1,
+                .format     = EVertexAttributeFormat::Float4,
+                .offset     = offsetof(Vertex, color),
+            },
+            VertexAttribute{
+                .bufferSlot = 0,
+                .location   = 2,
+                .format     = EVertexAttributeFormat::Float2,
+                .offset     = offsetof(Vertex, texCoord),
+            },
+            VertexAttribute{
+                .bufferSlot = 0,
+                .location   = 3,
+                .format     = EVertexAttributeFormat::Uint,
+                .offset     = offsetof(Vertex, textureIdx),
+            },
+            VertexAttribute{
+                .bufferSlot = 0,
+                .location   = 4,
+                .format     = EVertexAttributeFormat::Float3,
+                .offset     = offsetof(Vertex, worldCenter),
+            },
+            VertexAttribute{
+                .bufferSlot = 0,
+                .location   = 5,
+                .format     = EVertexAttributeFormat::Float3,
+                .offset     = offsetof(Vertex, worldDirection),
+            },
+            VertexAttribute{
+                .bufferSlot = 0,
+                .location   = 6,
+                .format     = EVertexAttributeFormat::Float2,
+                .offset     = offsetof(Vertex, worldSize),
+            },
+        };
+    };
+
+    const auto buildViewportState = []()
+    {
+        return ViewportState{
+            .viewports = {Viewport{
+                .x        = 0.0f,
+                .y        = 0.0f,
+                .width    = static_cast<float>(Render2D::data.windowWidth),
+                .height   = static_cast<float>(Render2D::data.windowHeight),
+                .minDepth = 0.0f,
+                .maxDepth = 1.0f,
+            }},
+            .scissors  = {Scissor{
+                .offsetX = 0,
+                .offsetY = 0,
+                .width   = Render2D::data.windowWidth,
+                .height  = Render2D::data.windowHeight,
+            }},
+        };
+    };
+
     _pipeline = IGraphicsPipeline::create(render);
     _pipeline->recreate(GraphicsPipelineCreateInfo{
         .subPassRef            = 0,
@@ -134,52 +185,23 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
             .depthAttachmentFormat  = depthFormat,
         },
         .pipelineLayout = _pipelineLayout.get(),
-
         .shaderDesc = ShaderDesc{
-            .shaderName        = "Sprite2D_Screen.glsl",
+            .sourceMode        = ShaderDesc::ESourceMode::StageFiles,
+            .stageFiles        = {
+                ShaderDesc::StageFile{.stage = EShaderStage::Vertex, .file = "Sprite2D.slang", .entryName = "vertMain"},
+                ShaderDesc::StageFile{.stage = EShaderStage::Fragment, .file = "Sprite2D.slang", .entryName = "fragMain"},
+            },
             .vertexBufferDescs = {
                 VertexBufferDescription{
                     .slot  = 0,
                     .pitch = sizeof(FQuadRender::Vertex),
                 },
             },
-            // MARK: vertex attributes
-
-            .vertexAttributes = {
-                // (layout binding = 0, set = 0) in vec3 aPos,
-                VertexAttribute{
-                    .bufferSlot = 0,
-                    .location   = 0,
-                    .format     = EVertexAttributeFormat::Float3,
-                    .offset     = offsetof(Vertex, pos),
-                },
-                // aColor
-                VertexAttribute{
-                    .bufferSlot = 0, // same buffer slot
-                    .location   = 1,
-                    .format     = EVertexAttributeFormat::Float4,
-                    .offset     = offsetof(Vertex, color),
-                },
-                // uv
-                VertexAttribute{
-                    .bufferSlot = 0,
-                    .location   = 2,
-                    .format     = EVertexAttributeFormat::Float2,
-                    .offset     = offsetof(Vertex, texCoord),
-                },
-                // texture index
-                VertexAttribute{
-                    .bufferSlot = 0,
-                    .location   = 3,
-                    .format     = EVertexAttributeFormat::Uint,
-                    .offset     = offsetof(Vertex, textureIdx),
-                },
-            },
-            .defines = {
+            .vertexAttributes = buildVertexAttributes(),
+            .defines          = {
                 std::format("TEXTURE_SET_SIZE {}", TEXTURE_SET_SIZE),
             },
         },
-        // define what state need to dynamically modified in render pass execution
         .dynamicFeatures = {
             EPipelineDynamicFeature::Viewport,
             EPipelineDynamicFeature::Scissor,
@@ -205,38 +227,21 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
             .bLogicOpEnable = false,
             .attachments    = {
                 ColorBlendAttachmentState{
-                       .index               = 0,
-                       .bBlendEnable        = true,
-                       .srcColorBlendFactor = EBlendFactor::SrcAlpha,
-                       .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
-                       .colorBlendOp        = EBlendOp::Add,
-                       .srcAlphaBlendFactor = EBlendFactor::One,
-                       .dstAlphaBlendFactor = EBlendFactor::Zero,
-                       .alphaBlendOp        = EBlendOp::Add,
-                       .colorWriteMask      = static_cast<EColorComponent::T>(EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A),
+                    .index               = 0,
+                    .bBlendEnable        = true,
+                    .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+                    .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                    .colorBlendOp        = EBlendOp::Add,
+                    .srcAlphaBlendFactor = EBlendFactor::One,
+                    .dstAlphaBlendFactor = EBlendFactor::Zero,
+                    .alphaBlendOp        = EBlendOp::Add,
+                    .colorWriteMask      = static_cast<EColorComponent::T>(EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A),
                 },
-
             },
         },
-        .viewportState = ViewportState{
-            .viewports = {Viewport{
-                .x        = 0.0f,
-                .y        = 0.0f,
-                .width    = static_cast<float>(Render2D::data.windowWidth),
-                .height   = static_cast<float>(Render2D::data.windowHeight),
-                .minDepth = 0.0f,
-                .maxDepth = 1.0f,
-            }},
-            .scissors  = {Scissor{
-                 .offsetX = 0,
-                 .offsetY = 0,
-                 .width   = Render2D::data.windowWidth,
-                 .height  = Render2D::data.windowHeight,
-            }},
-        },
+        .viewportState = buildViewportState(),
     });
 
-    // MARK: world-space pipeline
     _worldPipeline = IGraphicsPipeline::create(render);
     _worldPipeline->recreate(GraphicsPipelineCreateInfo{
         .subPassRef            = 0,
@@ -248,42 +253,20 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
             .depthAttachmentFormat  = depthFormat,
         },
         .pipelineLayout = _pipelineLayout.get(),
-
         .shaderDesc = ShaderDesc{
-            .shaderName        = "Sprite2D_World.glsl",
+            .sourceMode        = ShaderDesc::ESourceMode::StageFiles,
+            .stageFiles        = {
+                ShaderDesc::StageFile{.stage = EShaderStage::Vertex, .file = "Sprite2D.slang", .entryName = "vertWorldMain"},
+                ShaderDesc::StageFile{.stage = EShaderStage::Fragment, .file = "Sprite2D.slang", .entryName = "fragMain"},
+            },
             .vertexBufferDescs = {
                 VertexBufferDescription{
                     .slot  = 0,
                     .pitch = sizeof(FQuadRender::Vertex),
                 },
             },
-            .vertexAttributes = {
-                VertexAttribute{
-                    .bufferSlot = 0,
-                    .location   = 0,
-                    .format     = EVertexAttributeFormat::Float3,
-                    .offset     = offsetof(Vertex, pos),
-                },
-                VertexAttribute{
-                    .bufferSlot = 0,
-                    .location   = 1,
-                    .format     = EVertexAttributeFormat::Float4,
-                    .offset     = offsetof(Vertex, color),
-                },
-                VertexAttribute{
-                    .bufferSlot = 0,
-                    .location   = 2,
-                    .format     = EVertexAttributeFormat::Float2,
-                    .offset     = offsetof(Vertex, texCoord),
-                },
-                VertexAttribute{
-                    .bufferSlot = 0,
-                    .location   = 3,
-                    .format     = EVertexAttributeFormat::Uint,
-                    .offset     = offsetof(Vertex, textureIdx),
-                },
-            },
-            .defines = {
+            .vertexAttributes = buildVertexAttributes(),
+            .defines          = {
                 std::format("TEXTURE_SET_SIZE {}", TEXTURE_SET_SIZE),
             },
         },
@@ -300,9 +283,9 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
         },
         .multisampleState  = MultisampleState{},
         .depthStencilState = DepthStencilState{
-            .bDepthTestEnable       = true,
-            .bDepthWriteEnable      = true,
-            .depthCompareOp         = ECompareOp::Less,
+            .bDepthTestEnable       = false,
+            .bDepthWriteEnable      = false,
+            .depthCompareOp         = ECompareOp::Always,
             .bDepthBoundsTestEnable = false,
             .bStencilTestEnable     = false,
             .minDepthBounds         = 0.0f,
@@ -312,76 +295,47 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
             .bLogicOpEnable = false,
             .attachments    = {
                 ColorBlendAttachmentState{
-                       .index               = 0,
-                       .bBlendEnable        = false,
-                       .srcColorBlendFactor = EBlendFactor::SrcAlpha,
-                       .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
-                       .colorBlendOp        = EBlendOp::Add,
-                       .srcAlphaBlendFactor = EBlendFactor::One,
-                       .dstAlphaBlendFactor = EBlendFactor::Zero,
-                       .alphaBlendOp        = EBlendOp::Add,
-                       .colorWriteMask      = static_cast<EColorComponent::T>(EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A),
+                    .index               = 0,
+                    .bBlendEnable        = true,
+                    .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+                    .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                    .colorBlendOp        = EBlendOp::Add,
+                    .srcAlphaBlendFactor = EBlendFactor::One,
+                    .dstAlphaBlendFactor = EBlendFactor::Zero,
+                    .alphaBlendOp        = EBlendOp::Add,
+                    .colorWriteMask      = static_cast<EColorComponent::T>(EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A),
                 },
             },
         },
-        .viewportState = ViewportState{
-            .viewports = {Viewport{
-                .x        = 0.0f,
-                .y        = 0.0f,
-                .width    = static_cast<float>(Render2D::data.windowWidth),
-                .height   = static_cast<float>(Render2D::data.windowHeight),
-                .minDepth = 0.0f,
-                .maxDepth = 1.0f,
-            }},
-            .scissors  = {Scissor{
-                 .offsetX = 0,
-                 .offsetY = 0,
-                 .width   = Render2D::data.windowWidth,
-                 .height  = Render2D::data.windowHeight,
-            }},
-        },
+        .viewportState = buildViewportState(),
     });
 
-    // Screen-space vertex buffer
     _vertexBuffer = render->getResourceFactory()->createBuffer(
         ya::BufferCreateInfo{
-            .label         = "Sprite2D_Screen_VertexBuffer",
-            .usage         = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
-            .size          = sizeof(FQuadRender::Vertex) * MaxVertexCount,
+            .label       = "Sprite2D_Screen_VertexBuffer",
+            .usage       = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
+            .size        = sizeof(FQuadRender::Vertex) * MaxVertexCount,
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
-
     vertexPtr     = _vertexBuffer->map<FQuadRender::Vertex>();
     vertexPtrHead = vertexPtr;
 
-    // World-space vertex buffer
     _worldVertexBuffer = render->getResourceFactory()->createBuffer(
         ya::BufferCreateInfo{
-            .label         = "Sprite2D_World_VertexBuffer",
-            .usage         = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
-            .size          = sizeof(FQuadRender::Vertex) * MaxVertexCount,
+            .label       = "Sprite2D_World_VertexBuffer",
+            .usage       = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
+            .size        = sizeof(FQuadRender::Vertex) * MaxVertexCount,
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
-
     worldVertexPtr     = _worldVertexBuffer->map<FQuadRender::Vertex>();
     worldVertexPtrHead = worldVertexPtr;
 
-
-    std::vector<uint32_t> indices;
-    indices.resize(MaxIndexCount);
-    // constant indices?
+    std::vector<uint32_t> indices(MaxIndexCount);
     for (uint32_t i = 0; i < MaxIndexCount; i += 6) {
-
-        uint32_t vertexIndex = (i / 6) * 4;
-
-        // quad -> 2 triangles -> CCW when viewed from +Z (camera looks down -Z)
-        // Vertices: 0=(0,0) 1=(1,0) 2=(0,1) 3=(1,1)
-        // From +Z: 0→1→3 = (0,0)→(1,0)→(1,1) = CCW
-        //          0→3→2 = (0,0)→(1,1)→(0,1) = CCW
+        const uint32_t vertexIndex = (i / 6) * 4;
         indices[i + 0] = vertexIndex + 0;
         indices[i + 1] = vertexIndex + 1;
         indices[i + 2] = vertexIndex + 3;
-
         indices[i + 3] = vertexIndex + 0;
         indices[i + 4] = vertexIndex + 3;
         indices[i + 5] = vertexIndex + 2;
@@ -389,23 +343,16 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
 
     _indexBuffer = render->getResourceFactory()->createBuffer(
         ya::BufferCreateInfo{
-            .label         = "Sprite2D_IndexBuffer",
-            .usage         = EBufferUsage::IndexBuffer | EBufferUsage::TransferDst,
-            .data          = indices.data(),
-            .size          = sizeof(uint32_t) * MaxIndexCount,
+            .label       = "Sprite2D_IndexBuffer",
+            .usage       = EBufferUsage::IndexBuffer | EBufferUsage::TransferDst,
+            .data        = indices.data(),
+            .size        = sizeof(uint32_t) * MaxIndexCount,
             .memoryUsage = EMemoryUsage::GpuOnly,
         });
-
-
-
-    // Note: White texture and default sampler are now managed by TextureLibrary
 }
-
 
 void FQuadRender::destroy()
 {
-    // Note: White texture and default sampler are now managed by TextureLibrary
-
     _vertexBuffer.reset();
     _worldVertexBuffer.reset();
     _indexBuffer.reset();
@@ -424,15 +371,13 @@ void FQuadRender::begin(const Extent2D& extent)
 {
     _textureBindings.clear();
     _textureLabel2Idx.clear();
-    _textureBindings.push_back(
-        TextureBinding{
-            .texture = TextureLibrary::get().getWhiteTexture(),
-            .sampler = TextureLibrary::get().getDefaultSampler(),
-        });
+    _textureBindings.push_back(TextureBinding{
+        .texture = TextureLibrary::get().getWhiteTexture(),
+        .sampler = TextureLibrary::get().getDefaultSampler(),
+    });
 
-
-    float w      = (float)extent.width;
-    float h      = (float)extent.height;
+    float w      = static_cast<float>(extent.width);
+    float h      = static_cast<float>(extent.height);
     float aspect = w / h;
     if (w > h) {
         h = w / aspect;
@@ -441,60 +386,26 @@ void FQuadRender::begin(const Extent2D& extent)
         w = h * aspect;
     }
 
-    /**
-    LH: left-handed coordinate system
-    RH: right-handed coordinate system
-    NO: (-1,1) depth range (OpenGL style)
-    ZO: (0,1) depth range (DirectX style)
-
-    VK: x: right [ -1,1 ]
-        y: up [ -1,1 ]
-        z: backward (out to the screen) [0,1]
-     */
-
-
-
-    /*
-     * In 2D rendering:
-     *      map (-1,-1,0) -> (0,0,-1)
-     *      map (1,1,1)   -> (w,h,1)
-     * 这里的参数，按照vulkan的右手坐标:
-     *      origin 在左下角，所以 bottom = 0, top = h
-     *      但glm是左手坐标系，所以 near 和 far 需要反过来
-     * 最终，会被映射到sd的窗口坐标系(0, 0) 在左上角:
-     * x++ 向下 y++ 向右 z++ 向屏幕外
-     */
-
-    // Screen-space ortho uses the same Y convention that the Vulkan viewport transform
-    // already maps into top-left framebuffer space. Keep the projection non-flipped here.
     _screenOrthoProj = glm::orthoRH_ZO(0.0f, w, 0.0f, h, -1.0f, 1.0f);
 }
 
 void FQuadRender::end()
 {
-    // World-space first, then screen-space on top (UI overlays scene)
     flushWorld(Render2D::data.curCmdBuf);
     flush(Render2D::data.curCmdBuf);
 }
 
-
-// MARK: quad flush — screen-space
 void FQuadRender::flush(ICommandBuffer* cmdBuf)
 {
-    if (vertexCount <= 0) {
+    if (!cmdBuf || vertexCount == 0) {
         return;
     }
+
     updateResources(_resourceDS);
-
-    // Update FrameUBO with screen-space ortho projection
-    updateFrameUBO(_frameUBOBuffer, _frameUboDS, _screenOrthoProj);
-
+    updateFrameUBO(_frameUBOBuffer, _frameUboDS, _screenOrthoProj, glm::mat4(1.0f));
     _vertexBuffer->flush();
 
-    // Bind screen-space pipeline
     cmdBuf->bindPipeline(_pipeline.get());
-
-    // Screen-space always uses normal viewport (y=0, h=height) and Back cull
     cmdBuf->setViewport(0.0f,
                         0.0f,
                         static_cast<float>(Render2D::data.windowWidth),
@@ -504,15 +415,10 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
     cmdBuf->setScissor(0, 0, Render2D::data.windowWidth, Render2D::data.windowHeight);
     cmdBuf->setCullMode(data2D.screenCullMode);
 
-    // Bind descriptor sets
     std::vector<DescriptorSetHandle> descriptorSets = {_frameUboDS, _resourceDS};
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descriptorSets);
-
-    // Bind vertex and index buffers
     cmdBuf->bindVertexBuffer(0, _vertexBuffer.get(), 0);
     cmdBuf->bindIndexBuffer(_indexBuffer.get(), 0, false);
-
-    // Draw indexed
     cmdBuf->drawIndexed(static_cast<uint32_t>(indexCount), 1, 0, 0, 0);
 
     vertexPtr   = vertexPtrHead;
@@ -520,42 +426,33 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
     indexCount  = 0;
 }
 
-// MARK: quad flush — world-space
 void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
 {
-    if (worldVertexCount <= 0) {
+    if (!cmdBuf || worldVertexCount == 0) {
         return;
     }
+
+    // YA_CORE_INFO("World overlay flush: {} vertices ({} quads), {} indices",
+    //                worldVertexCount, worldVertexCount / 4, worldIndexCount);
+
     updateResources(_worldResourceDS);
-
-    // Update FrameUBO with camera view-projection
-    updateFrameUBO(_worldFrameUBOBuffer, _worldFrameUboDS, data2D.cam.viewProjection);
-
+    updateFrameUBO(_worldFrameUBOBuffer, _worldFrameUboDS, data2D.cam.viewProjection, data2D.cam.view);
     _worldVertexBuffer->flush();
 
-    // Bind world-space pipeline
     cmdBuf->bindPipeline(_worldPipeline.get());
-
-    // World-space viewport & cull mode depend on bReverseViewport
     cmdBuf->setViewport(0.0f,
                         static_cast<float>(Render2D::data.windowHeight),
                         static_cast<float>(Render2D::data.windowWidth),
                         -static_cast<float>(Render2D::data.windowHeight),
                         0.0f,
                         1.0f);
-    // Reversed viewport flips winding order, use configurable cull mode (default: Front to compensate)
     cmdBuf->setCullMode(Render2D::data.worldCullMode);
     cmdBuf->setScissor(0, 0, Render2D::data.windowWidth, Render2D::data.windowHeight);
 
-    // Bind descriptor sets (world-space uses its own FrameUBO DS)
     std::vector<DescriptorSetHandle> descriptorSets = {_worldFrameUboDS, _worldResourceDS};
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descriptorSets);
-
-    // Bind world vertex buffer but shared index buffer
     cmdBuf->bindVertexBuffer(0, _worldVertexBuffer.get(), 0);
     cmdBuf->bindIndexBuffer(_indexBuffer.get(), 0, false);
-
-    // Draw indexed
     cmdBuf->drawIndexed(static_cast<uint32_t>(worldIndexCount), 1, 0, 0, 0);
 
     worldVertexPtr   = worldVertexPtrHead;
@@ -563,18 +460,20 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
     worldIndexCount  = 0;
 }
 
-void FQuadRender::updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer, DescriptorSetHandle dsHandle, glm::mat4 viewProj)
+void FQuadRender::updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer,
+                                 DescriptorSetHandle       dsHandle,
+                                 const glm::mat4&          viewProj,
+                                 const glm::mat4&          view)
 {
     FrameUBO ubo{
         .viewProj = viewProj,
+        .view     = view,
     };
     uboBuffer->writeData(&ubo, sizeof(ubo), 0);
 
     DescriptorBufferInfo bufferInfo(BufferHandle(uboBuffer->getHandle()), 0, static_cast<uint64_t>(sizeof(FrameUBO)));
 
-    // TODO: only update once
-    auto* descriptorHelper = _render->getDescriptorHelper();
-    descriptorHelper->updateDescriptorSets(
+    _render->getDescriptorHelper()->updateDescriptorSets(
         {
             IDescriptorSetHelper::genBufferWrite(dsHandle,
                                                  0,
@@ -587,61 +486,49 @@ void FQuadRender::updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer, Descriptor
 
 void FQuadRender::updateResources(DescriptorSetHandle dsHandle)
 {
-
-    // TODO: let font atlas/icon atlas always on gpu not update every frame
     std::vector<DescriptorImageInfo> imageInfos;
 
     auto defaultSampler = TextureLibrary::get().getDefaultSampler();
     auto whiteTexture   = TextureLibrary::get().getWhiteTexture();
 
-    // make empty slot to be updated
     for (uint32_t i = imageInfos.size(); i < TEXTURE_SET_SIZE; i++) {
-
         if (i < _textureBindings.size()) {
             auto& tb = _textureBindings[i];
-            imageInfos.emplace_back(
-                tb.getImageViewHandle(),
-                tb.getSamplerHandle(),
-                EImageLayout::ShaderReadOnlyOptimal);
+            imageInfos.emplace_back(tb.getImageViewHandle(), tb.getSamplerHandle(), EImageLayout::ShaderReadOnlyOptimal);
         }
         else {
-            imageInfos.emplace_back(
-                whiteTexture->getImageView()->getHandle(),
-                defaultSampler->getHandle(),
-                EImageLayout::ShaderReadOnlyOptimal);
+            imageInfos.emplace_back(whiteTexture->getImageView()->getHandle(),
+                                    defaultSampler->getHandle(),
+                                    EImageLayout::ShaderReadOnlyOptimal);
         }
     }
 
-    _render
-        ->getDescriptorHelper()
-        ->updateDescriptorSets(
-            {
-                IDescriptorSetHelper::genImageWrite(
-                    dsHandle,
-                    0,
-                    0,
-                    EPipelineDescriptorType::CombinedImageSampler,
-                    imageInfos),
-            },
-            {});
+    _render->getDescriptorHelper()->updateDescriptorSets(
+        {
+            IDescriptorSetHelper::genImageWrite(dsHandle,
+                                                0,
+                                                0,
+                                                EPipelineDescriptorType::CombinedImageSampler,
+                                                imageInfos),
+        },
+        {});
 }
 
-
-
-// MARK: quad  interface
-
-
 void FQuadRender::drawTextureInternal(const glm::mat4& transform,
-                                      uint32_t textureIdx, const glm::vec3 tint,
+                                      uint32_t         textureIdx,
+                                      const glm::vec3  tint,
                                       const glm::vec2& uvScale,
                                       const glm::vec2& uvTranslation)
 {
     for (int i = 0; i < 4; i++) {
         *vertexPtr = FQuadRender::Vertex{
-            .pos        = transform * FQuadRender::vertices[i],
-            .color      = {tint, 1.0f},
-            .texCoord   = FQuadRender::defaultTexcoord[i] * uvScale + uvTranslation,
-            .textureIdx = textureIdx,
+            .pos         = transform * FQuadRender::vertices[i],
+            .color       = {tint, 1.0f},
+            .texCoord    = FQuadRender::defaultTexcoord[i] * uvScale + uvTranslation,
+            .textureIdx  = textureIdx,
+            .worldCenter = glm::vec3(0.0f),
+            .worldDirection = glm::vec3(0.0f, 0.0f, -1.0f),
+            .worldSize   = glm::vec2(0.0f),
         };
         ++vertexPtr;
     }
@@ -650,16 +537,26 @@ void FQuadRender::drawTextureInternal(const glm::mat4& transform,
     indexCount += 6;
 }
 
-void FQuadRender::drawWorldTextureInternal(const glm::mat4& transform,
-                                           uint32_t textureIdx, const glm::vec3 tint,
-                                           const glm::vec2& uvScale)
+void FQuadRender::drawWorldTextureInternal(const glm::vec3&            center,
+                                           const glm::vec3&            direction,
+                                           const glm::vec2&            size,
+                                           uint32_t                    textureIdx,
+                                           const glm::vec3             tint,
+                                           const glm::vec2&            uvScale)
 {
+    const glm::vec3 normalizedDirection = glm::length2(direction) > std::numeric_limits<float>::epsilon()
+                                            ? glm::normalize(direction)
+                                            : glm::vec3(0.0f, -1.0f, 0.0f);
+
     for (int i = 0; i < 4; i++) {
         *worldVertexPtr = FQuadRender::Vertex{
-            .pos        = transform * FQuadRender::vertices[i],
-            .color      = {tint, 1.0f},
-            .texCoord   = FQuadRender::defaultTexcoord[i] * uvScale,
-            .textureIdx = textureIdx,
+            .pos         = glm::vec3(FQuadRender::vertices[i]),
+            .color       = {tint, 1.0f},
+            .texCoord    = FQuadRender::defaultTexcoord[i] * uvScale,
+            .textureIdx  = textureIdx,
+            .worldCenter = center,
+            .worldDirection = normalizedDirection,
+            .worldSize   = size,
         };
         ++worldVertexPtr;
     }
@@ -681,11 +578,9 @@ void FQuadRender::drawTexture(const glm::vec3& position,
     glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
                       glm::scale(glm::mat4(1.f), glm::vec3(size, 1.0f));
 
-
     uint32_t textureIdx = findOrAddTexture(texture);
     drawTextureInternal(model, textureIdx, tint, uvScale);
 }
-
 
 void FQuadRender::drawTexture(const glm::mat4& transform,
                               ya::Ptr<Texture> texture,
@@ -700,17 +595,19 @@ void FQuadRender::drawTexture(const glm::mat4& transform,
     drawTextureInternal(transform, textureIdx, tint, {uvScale.x, uvScale.y});
 }
 
-void FQuadRender::drawWorldTexture(const glm::mat4& transform,
-                                   ya::Ptr<Texture> texture,
-                                   const glm::vec4& tint,
-                                   const glm::vec2& uvScale)
+void FQuadRender::drawWorldTexture(const glm::vec3&            center,
+                                   const glm::vec3&            direction,
+                                   const glm::vec2&            size,
+                                   ya::Ptr<Texture>            texture,
+                                   const glm::vec4&            tint,
+                                   const glm::vec2&            uvScale)
 {
     if (shouldFlushWorld()) {
         flushWorld(Render2D::data.curCmdBuf);
     }
 
     uint32_t textureIdx = findOrAddTexture(texture);
-    drawWorldTextureInternal(transform, textureIdx, tint, {uvScale.x, uvScale.y});
+    drawWorldTextureInternal(center, direction, size, textureIdx, tint, {uvScale.x, uvScale.y});
 }
 
 void FQuadRender::drawSubTexture(const glm::vec3& position,
@@ -723,7 +620,6 @@ void FQuadRender::drawSubTexture(const glm::vec3& position,
         flush(Render2D::data.curCmdBuf);
     }
 
-    // TODO: check texture full after findOrAddTexture, maybe use same white texture/ same sub texture
     uint32_t textureIdx = findOrAddTexture(texture);
 
     glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
@@ -731,7 +627,6 @@ void FQuadRender::drawSubTexture(const glm::vec3& position,
 
     drawTextureInternal(model, textureIdx, tint, {uvRect.z, uvRect.w}, {uvRect.x, uvRect.y});
 }
-
 
 void FQuadRender::drawText(const std::string& text, const glm::vec3& position, const glm::vec4& color, Font* font)
 {
@@ -772,12 +667,11 @@ void FQuadRender::drawText(const std::string& text, const glm::vec3& position, c
             }
         }
         else {
-            drawSubTexture(
-                pos,
-                glm::vec2(character.size),
-                font->atlasTexture,
-                color,
-                character.uvRect);
+            drawSubTexture(pos,
+                           glm::vec2(character.size),
+                           font->atlasTexture,
+                           color,
+                           character.uvRect);
         }
 
         cursorX += character.advance.x;

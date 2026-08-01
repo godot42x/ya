@@ -15,7 +15,7 @@
 
 struct VertexInput{
     float3 pos : POSITION;
-    float2 uv : TEXCOORD0;
+    float2 uv : TEXCOORD_UV;
 };
 
 struct VertexOutput{

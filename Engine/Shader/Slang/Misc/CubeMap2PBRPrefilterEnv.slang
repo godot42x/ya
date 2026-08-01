@@ -14,7 +14,7 @@ struct VertexInput{
 
 struct VertexOutput{
     vec4 clipPos : SV_Position;
-    vec3 localPos: TEXCOORD0;
+    vec3 localPos: TEXCOORD_LOCALPOS;
 };
 
 
