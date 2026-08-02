@@ -103,7 +103,10 @@ struct Visitor
 template <>
 struct Visitor<void>
 {
-    static void visit_properties(auto& obj, auto&& visitor) {}
+    static void visit_properties(auto& obj, auto&& visitor) {
+        (void) obj;
+        (void) visitor;
+    }
 };
 
 

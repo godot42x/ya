@@ -164,6 +164,8 @@ class VectorProperty : public IContainerProperty
 
     void* getValuePtr(void* containerPtr, const std::string& key) override
     {
+        (void)containerPtr;
+        (void)key;
         return nullptr; // Vector 不支持 key 访问
     }
 
@@ -250,11 +252,15 @@ class MapProperty : public IContainerProperty
     void resize(void* containerPtr, size_t size) override
     {
         // Map 不支持 resize
+        (void)containerPtr;
+        (void)size;
     }
 
     void* getElementPtr(void* containerPtr, size_t index) override
     {
         // Map 不支持索引访问
+        (void)containerPtr;
+        (void)index;
         return nullptr;
     }
 
@@ -378,16 +384,22 @@ class SetProperty : public IContainerProperty
     void resize(void* containerPtr, size_t size) override
     {
         // Set 不支持 resize
+        (void)containerPtr;
+        (void)size;
     }
 
     void* getElementPtr(void* containerPtr, size_t index) override
     {
         // Set 不支持索引访问
+        (void)containerPtr;
+        (void)index;
         return nullptr;
     }
 
     void* getValuePtr(void* containerPtr, const std::string& key) override
     {
+        (void)containerPtr;
+        (void)key;
         return nullptr; // Set 不支持 key 访问
     }
 
@@ -476,12 +488,16 @@ class UnorderedMapProperty : public IContainerProperty
 
     void resize(void* containerPtr, size_t size) override
     {
+        (void)containerPtr;
+        (void)size;
         // UnorderedMap 不支持 resize
     }
 
     void* getElementPtr(void* containerPtr, size_t index) override
     {
         // UnorderedMap 不支持索引访问
+        (void)containerPtr;
+        (void)index;
         return nullptr;
     }
 
@@ -605,16 +621,22 @@ class UnorderedSetProperty : public IContainerProperty
     void resize(void* containerPtr, size_t size) override
     {
         // UnorderedSet 不支持 resize
+        (void)containerPtr;
+        (void)size;
     }
 
     void* getElementPtr(void* containerPtr, size_t index) override
     {
         // UnorderedSet 不支持索引访问
+        (void)containerPtr;
+        (void)index;
         return nullptr;
     }
 
     void* getValuePtr(void* containerPtr, const std::string& key) override
     {
+        (void)containerPtr;
+        (void)key;
         return nullptr; // UnorderedSet 不支持 key 访问
     }
 
@@ -715,6 +737,8 @@ class ArrayProperty : public IContainerProperty
 
     void* getValuePtr(void* containerPtr, const std::string& key) override
     {
+        (void)containerPtr;
+        (void)key;
         return nullptr; // Array does not support key access
     }
 
