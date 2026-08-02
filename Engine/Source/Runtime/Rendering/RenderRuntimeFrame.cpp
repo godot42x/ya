@@ -241,21 +241,22 @@ void RenderRuntime::renderPresentationPass(float                                
 
     [[maybe_unused]] const auto pass = graph.addPass(
         "Presentation",
-        [output](RGPassBuilder& passBuilder)
+        [output, presentationExtent](RGPassBuilder& passBuilder)
         {
-            passBuilder.useColorAttachment(output);
+            passBuilder.declareRaster({
+                .renderArea  = Rect2D{.pos = {0.0f, 0.0f}, .extent = presentationExtent.toVec2()},
+                .layerCount  = 1,
+                .colors = {{
+                    .color       = output,
+                    .clearValue  = ClearValue::Black(),
+                    .finalLayout = EImageLayout::PresentSrcKHR,
+                }},
+            });
         },
         [this, sourceImage, output, presentationExtent, recordPresentationExtensions, deltaTime](RGRenderContext& rgCtx)
         {
-            rgCtx.beginColorRendering({
-                .color      = output,
-                .renderArea = Rect2D{
-                    .pos    = {0.0f, 0.0f},
-                    .extent = presentationExtent.toVec2(),
-                },
-                .clearValue  = ClearValue::Black(),
-                .finalLayout = EImageLayout::PresentSrcKHR,
-            });
+            [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
+            rgCtx.beginDeclaredRasterRendering();
 
             if (_presentationPostProcessor && sourceImage && sourceImage->getImageView()) {
                 _presentationPostProcessor->render(BasicPostprocessing::RenderDesc{

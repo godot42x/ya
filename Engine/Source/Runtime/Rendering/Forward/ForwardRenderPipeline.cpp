@@ -749,7 +749,9 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
                 },
             });
         },
-        [this, &stageCtx, color, resolve, depth, viewportExtent, colorAttachment, depthAttachment](RGRenderContext& rgCtx) {
+        [this, &stageCtx](RGRenderContext& rgCtx) {
+            const auto rasterParams  = rgCtx.getRasterPassExecutionParams();
+            const auto viewportExtent = rasterParams.getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
 
             stageCtx.viewportExtent = viewportExtent;

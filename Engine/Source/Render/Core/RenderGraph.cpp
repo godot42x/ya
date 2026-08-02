@@ -276,6 +276,23 @@ IBuffer* RGRenderContext::resolveBuffer(RGBufferHandle handle) const
     return _registry.resolveBuffer(handle);
 }
 
+const RGRasterPassDesc* RGRenderContext::getDeclaredRasterPlan() const
+{
+    if (_compiledPassPlan == nullptr || !_compiledPassPlan->rasterPlan.has_value()) {
+        return nullptr;
+    }
+    return &*_compiledPassPlan->rasterPlan;
+}
+
+RGRenderContext::RasterPassExecutionParams RGRenderContext::getRasterPassExecutionParams() const
+{
+    const auto* rasterPlan = getDeclaredRasterPlan();
+    YA_CORE_ASSERT(rasterPlan != nullptr,
+                   "RGRenderContext pass {} has no declared raster execution params",
+                   _pass.name);
+    return RasterPassExecutionParams{.rasterPlan = *rasterPlan};
+}
+
 void RGRenderContext::beginColorRendering(const ColorRenderingDesc& desc) const
 {
     beginRasterRendering(RasterRenderingDesc{

@@ -235,24 +235,23 @@ RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph&   gr
         .extent = Extent3D{inputExtent.width, inputExtent.height, 1},
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
     }, ERGResourceLifetime::Persistent);
-    const Rect2D outputRenderArea{
-        .pos    = {0.0f, 0.0f},
-        .extent = inputExtent.toVec2(),
-    };
-
     [[maybe_unused]] const auto pass = graph.addPass(
         "Postprocessing",
-        [input, output](RGPassBuilder& pass) {
+        [input, output, inputExtent](RGPassBuilder& pass) {
             pass.read(input);
-            pass.useColorAttachment(output);
-        },
-        [this, input, output, outputRenderArea, inputExtent, bOutputIsSRGB, state = &_state, postContext = ctx](RGRenderContext& rgCtx) {
-            rgCtx.beginColorRendering({
-                .color       = output,
-                .renderArea  = outputRenderArea,
-                .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
-                .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+            pass.declareRaster({
+                .renderArea  = Rect2D{.pos = {0.0f, 0.0f}, .extent = inputExtent.toVec2()},
+                .layerCount  = 1,
+                .colors = {{
+                    .color       = output,
+                    .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                }},
             });
+        },
+        [this, input, inputExtent, bOutputIsSRGB, state = &_state, postContext = ctx](RGRenderContext& rgCtx) {
+            [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
+            rgCtx.beginDeclaredRasterRendering();
 
             const auto* compositeInputImage = rgCtx.resolveTexture(input);
             YA_CORE_ASSERT(compositeInputImage != nullptr && compositeInputImage->getImageView() != nullptr,

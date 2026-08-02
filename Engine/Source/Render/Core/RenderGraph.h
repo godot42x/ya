@@ -282,6 +282,34 @@ class RGRenderContext
     using DepthRenderingDesc           = RGDepthAttachmentDesc;
     using RasterRenderingDesc          = RGRasterPassDesc;
 
+    struct RasterPassExecutionParams
+    {
+        const RGRasterPassDesc& rasterPlan;
+
+        [[nodiscard]] Extent2D getRenderExtent() const
+        {
+            return Extent2D{
+                .width  = static_cast<uint32_t>(rasterPlan.renderArea.extent.x),
+                .height = static_cast<uint32_t>(rasterPlan.renderArea.extent.y),
+            };
+        }
+
+        [[nodiscard]] const RGColorAttachmentDesc& getColorAttachment(size_t index = 0) const
+        {
+            YA_CORE_ASSERT(index < rasterPlan.colors.size(),
+                           "RasterPassExecutionParams color attachment index {} is out of range (size={})",
+                           index,
+                           rasterPlan.colors.size());
+            return rasterPlan.colors[index];
+        }
+
+        [[nodiscard]] const RGDepthAttachmentDesc& getDepthAttachment() const
+        {
+            YA_CORE_ASSERT(rasterPlan.depth.has_value(), "RasterPassExecutionParams does not have a depth attachment");
+            return *rasterPlan.depth;
+        }
+    };
+
     struct ColorRenderingDesc
     {
         RGTextureHandle          color;
@@ -319,6 +347,8 @@ class RGRenderContext
     [[nodiscard]] ENGINE_API const RGBufferDesc& getBufferDesc(RGBufferHandle handle) const;
     [[nodiscard]] ENGINE_API const RenderImage* resolveTexture(RGTextureHandle handle) const;
     [[nodiscard]] ENGINE_API IBuffer* resolveBuffer(RGBufferHandle handle) const;
+    [[nodiscard]] ENGINE_API const RGRasterPassDesc* getDeclaredRasterPlan() const;
+    [[nodiscard]] ENGINE_API RasterPassExecutionParams getRasterPassExecutionParams() const;
     ENGINE_API void beginRasterRendering(const RasterRenderingDesc& desc) const;
     ENGINE_API void beginDeclaredRasterRendering() const;
     ENGINE_API void beginColorRendering(const ColorRenderingDesc& desc) const;

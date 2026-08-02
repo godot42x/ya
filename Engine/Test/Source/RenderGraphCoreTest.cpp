@@ -1875,6 +1875,65 @@ TEST(RenderGraphCoreTest, ExecutorCanBeginDeclaredRasterRenderingFromCompiledPas
     EXPECT_EQ(cmdBuf.lastDepthFinalLayout, EImageLayout::DepthStencilAttachmentOptimal);
 }
 
+TEST(RenderGraphCoreTest, ExecutorExposesTypedRasterExecutionParamsFromCompiledPlan)
+{
+    TestResourceFactory factory;
+    RenderGraphExecutor executor(factory);
+    RenderGraph graph;
+
+    const auto color = graph.createTexture(RGTextureDesc{
+        .label  = "hdr",
+        .format = EFormat::R16G16B16A16_SFLOAT,
+        .extent = Extent3D{512, 256, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    });
+    const auto depth = graph.createTexture(RGTextureDesc{
+        .label  = "depth",
+        .format = EFormat::D32_SFLOAT,
+        .extent = Extent3D{512, 256, 1},
+        .usage  = EImageUsage::DepthStencilAttachment,
+    });
+
+    bool seenParams = false;
+
+    graph.addPass(
+        "typed-raster-params",
+        [&](RGPassBuilder& pass) {
+            pass.declareRaster({
+                .renderArea = Rect2D{.pos = {12, 24}, .extent = {320, 200}},
+                .layerCount = 2,
+                .colors = {{
+                    .color       = color,
+                    .clearValue  = ClearValue(0.1f, 0.2f, 0.3f, 1.0f),
+                    .loadOp      = EAttachmentLoadOp::Clear,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                }},
+                .depth = RGDepthAttachmentDesc{
+                    .depth       = depth,
+                    .clearValue  = ClearValue(1.0f, 0),
+                    .loadOp      = EAttachmentLoadOp::Load,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::DepthStencilAttachmentOptimal,
+                },
+            });
+        },
+        [&](RGRenderContext& ctx) {
+            const auto params = ctx.getRasterPassExecutionParams();
+            EXPECT_EQ(params.getRenderExtent().width, 320u);
+            EXPECT_EQ(params.getRenderExtent().height, 200u);
+            EXPECT_EQ(params.rasterPlan.layerCount, 2u);
+            EXPECT_EQ(params.getColorAttachment().color, color);
+            EXPECT_EQ(params.getColorAttachment().finalLayout, EImageLayout::ShaderReadOnlyOptimal);
+            EXPECT_EQ(params.getDepthAttachment().depth, depth);
+            seenParams = true;
+        });
+
+    TestCommandBuffer cmdBuf;
+    ASSERT_TRUE(executor.execute(graph, cmdBuf));
+    EXPECT_TRUE(seenParams);
+}
+
 TEST(RenderGraphCoreTest, ExecutorRejectsInvalidGraphWithoutRunningPasses)
 {
     TestResourceFactory factory;
