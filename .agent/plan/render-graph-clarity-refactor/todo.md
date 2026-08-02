@@ -63,7 +63,9 @@
 - [x] RG-0604 对齐 FG-110 的 reuse diagnostics，不把“handle 复用”冒充物理复用
   - 当前阶段只输出 logical transient count/bytes、used/unused lifetime 统计，并明确标记 physical reuse 尚未 materialize
   - physical slot count/bytes、assignment、pool hit/miss、reuse ratio 仍由主计划 FG-107~FG-110 完成
-- [ ] RG-0605 评估 async compute / multi-queue 是否需要扩展 state model
+- [x] RG-0605 评估 async compute / multi-queue 是否需要扩展 state model
+  - assessment：[async-queue-assessment.md](./async-queue-assessment.md)
+  - 结论：当前只支持 graphics-queue graph；async/multi-queue 需要 queue ownership、cross-queue sync、timeline completion 和 submit/lifetime 前置契约
 
 ## 每阶段验证
 
