@@ -189,16 +189,42 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
 
     clearPreparedResources();
 
-    RGTextureHandle compositeInput = input;
+    const auto compositeInput = appendBloomGraphPasses(graph, input, inputExtent, ctx);
+    return appendFinalizeGraphPasses(graph,
+                                     compositeInput.isValid() ? compositeInput : input,
+                                     inputExtent,
+                                     ctx);
+}
+
+RGTextureHandle PostProcessingStage::appendBloomGraphPasses(RenderGraph&   graph,
+                                                            RGTextureHandle input,
+                                                            Extent2D        inputExtent,
+                                                            FrameContext*   ctx)
+{
+    (void)ctx;
+    clearPreparedResources();
+    if (!bEnabled || !input.isValid() || inputExtent.width == 0 || inputExtent.height == 0) {
+        return {};
+    }
+
     if (_state.bEnableBloom && _bloomProcessor) {
-        const auto bloomOutput = _bloomProcessor->appendGraphPasses(graph, BloomPostprocessing::RenderDesc{
+        return _bloomProcessor->appendGraphPasses(graph, BloomPostprocessing::RenderDesc{
             .sceneHandle  = input,
             .renderExtent = inputExtent,
             .state        = &_state,
         });
-        if (bloomOutput.isValid()) {
-            compositeInput = bloomOutput;
-        }
+    }
+
+    return input;
+}
+
+RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph&   graph,
+                                                               RGTextureHandle input,
+                                                               Extent2D        inputExtent,
+                                                               FrameContext*   ctx)
+{
+    if (!bEnabled || !_postProcessor || !input.isValid() || inputExtent.width == 0 || inputExtent.height == 0) {
+        return {};
     }
 
     const auto swapchainFormat = _render->getSwapchain()->getFormat();
@@ -216,11 +242,11 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
 
     [[maybe_unused]] const auto pass = graph.addPass(
         "Postprocessing",
-        [compositeInput, output](RGPassBuilder& pass) {
-            pass.read(compositeInput);
+        [input, output](RGPassBuilder& pass) {
+            pass.read(input);
             pass.useColorAttachment(output);
         },
-        [this, compositeInput, output, outputRenderArea, inputExtent, bOutputIsSRGB, state = &_state, postContext = ctx](RGRenderContext& rgCtx) {
+        [this, input, output, outputRenderArea, inputExtent, bOutputIsSRGB, state = &_state, postContext = ctx](RGRenderContext& rgCtx) {
             rgCtx.beginColorRendering({
                 .color       = output,
                 .renderArea  = outputRenderArea,
@@ -228,9 +254,9 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
                 .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
             });
 
-            const auto* compositeInputImage = rgCtx.resolveTexture(compositeInput);
+            const auto* compositeInputImage = rgCtx.resolveTexture(input);
             YA_CORE_ASSERT(compositeInputImage != nullptr && compositeInputImage->getImageView() != nullptr,
-                           "Postprocessing failed to resolve input texture {}", compositeInput.index);
+                           "Postprocessing failed to resolve input texture {}", input.index);
             _postProcessor->render(BasicPostprocessing::RenderDesc{
                 .cmdBuf         = &rgCtx.getCommandBuffer(),
                 .ctx            = postContext,
@@ -243,7 +269,7 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
             rgCtx.endRendering();
         });
 
-    _preparedGraphResources.input  = compositeInput;
+    _preparedGraphResources.input  = input;
     _preparedGraphResources.output = output;
     return output;
 }
