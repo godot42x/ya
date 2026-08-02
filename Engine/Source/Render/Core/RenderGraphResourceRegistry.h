@@ -17,6 +17,7 @@ class RenderGraphResourceRegistry
     {
         std::shared_ptr<RenderImage> resource;
         RGTextureDesc                desc{};
+        std::optional<RGPersistentTextureKey> persistentKey{};
         std::optional<RGImportedTextureDesc> imported{};
     };
 
@@ -24,6 +25,7 @@ class RenderGraphResourceRegistry
     {
         std::shared_ptr<IBuffer> resource;
         RGBufferDesc             desc{};
+        std::optional<RGPersistentBufferKey> persistentKey{};
     };
 
     struct ImportedBufferEntry
@@ -33,8 +35,10 @@ class RenderGraphResourceRegistry
     };
 
     IRenderResourceFactory& _factory;
-    std::unordered_map<RGTextureHandle, TextureEntry> _textures;
-    std::unordered_map<RGBufferHandle, OwnedBufferEntry> _ownedBuffers;
+    std::unordered_map<RGTextureHandle, std::shared_ptr<TextureEntry>> _textures;
+    std::unordered_map<std::string, std::shared_ptr<TextureEntry>> _persistentTextures;
+    std::unordered_map<RGBufferHandle, std::shared_ptr<OwnedBufferEntry>> _ownedBuffers;
+    std::unordered_map<std::string, std::shared_ptr<OwnedBufferEntry>> _persistentOwnedBuffers;
     std::unordered_map<RGBufferHandle, ImportedBufferEntry> _importedBuffers;
 
     static RenderImageDesc makeRenderImageDesc(const RGTextureDesc& desc);
@@ -44,6 +48,8 @@ class RenderGraphResourceRegistry
     static bool needsTextureReplacement(const TextureEntry& entry, const RGTextureResource& resource);
     static bool needsOwnedBufferReplacement(const OwnedBufferEntry& entry, const RGBufferResource& resource);
     static bool needsImportedBufferReplacement(const ImportedBufferEntry& entry, const RGBufferResource& resource);
+    static void releaseTextureBinding(std::shared_ptr<TextureEntry>& entry);
+    static void releaseOwnedBufferBinding(std::shared_ptr<OwnedBufferEntry>& entry);
 
   public:
     explicit RenderGraphResourceRegistry(IRenderResourceFactory& factory)
@@ -58,8 +64,8 @@ class RenderGraphResourceRegistry
     [[nodiscard]] ENGINE_API std::shared_ptr<RenderImage> resolveTextureShared(RGTextureHandle handle) const;
     [[nodiscard]] ENGINE_API IBuffer* resolveBuffer(RGBufferHandle handle) const;
 
-    [[nodiscard]] const std::unordered_map<RGTextureHandle, TextureEntry>& getTextures() const { return _textures; }
-    [[nodiscard]] const std::unordered_map<RGBufferHandle, OwnedBufferEntry>& getOwnedBuffers() const { return _ownedBuffers; }
+    [[nodiscard]] const std::unordered_map<RGTextureHandle, std::shared_ptr<TextureEntry>>& getTextures() const { return _textures; }
+    [[nodiscard]] const std::unordered_map<RGBufferHandle, std::shared_ptr<OwnedBufferEntry>>& getOwnedBuffers() const { return _ownedBuffers; }
 };
 
 } // namespace ya

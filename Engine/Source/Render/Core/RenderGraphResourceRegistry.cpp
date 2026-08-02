@@ -10,6 +10,16 @@ namespace ya
 namespace
 {
 
+std::string makePersistentTextureKeyValue(const RGPersistentTextureKey& key)
+{
+    return key.value;
+}
+
+std::string makePersistentBufferKeyValue(const RGPersistentBufferKey& key)
+{
+    return key.value;
+}
+
 bool isSameTextureDesc(const RGTextureDesc& lhs, const RGTextureDesc& rhs)
 {
     return lhs.label == rhs.label &&
@@ -144,6 +154,28 @@ void refreshRetainedResources(std::vector<std::shared_ptr<void>>& currentRetaine
 
 } // namespace
 
+void RenderGraphResourceRegistry::releaseTextureBinding(std::shared_ptr<TextureEntry>& entry)
+{
+    if (!entry) {
+        return;
+    }
+    if (!entry->persistentKey.has_value()) {
+        retireSharedResource(entry->resource);
+    }
+    entry.reset();
+}
+
+void RenderGraphResourceRegistry::releaseOwnedBufferBinding(std::shared_ptr<OwnedBufferEntry>& entry)
+{
+    if (!entry) {
+        return;
+    }
+    if (!entry->persistentKey.has_value()) {
+        retireSharedResource(entry->resource);
+    }
+    entry.reset();
+}
+
 RenderGraphResourceRegistry::~RenderGraphResourceRegistry()
 {
     clear();
@@ -225,10 +257,10 @@ void RenderGraphResourceRegistry::pruneUnusedResources(const RenderGraph& graph)
     for (auto it = _textures.begin(); it != _textures.end();) {
         if (!liveTextures.contains(it->first)) {
             YA_CORE_TRACE("RenderGraph registry pruning texture '{}' (handle={}:{})",
-                          it->second.desc.label,
+                          it->second->desc.label,
                           it->first.index,
                           it->first.generation);
-            retireSharedResource(it->second.resource);
+            releaseTextureBinding(it->second);
             it = _textures.erase(it);
         }
         else {
@@ -244,7 +276,7 @@ void RenderGraphResourceRegistry::pruneUnusedResources(const RenderGraph& graph)
 
     for (auto it = _ownedBuffers.begin(); it != _ownedBuffers.end();) {
         if (!liveBuffers.contains(it->first)) {
-            retireSharedResource(it->second.resource);
+            releaseOwnedBufferBinding(it->second);
             it = _ownedBuffers.erase(it);
         }
         else {
@@ -299,16 +331,46 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
     pruneUnusedResources(graph);
 
     for (const auto& texture : graph.getTextures()) {
+        if (texture.lifetime == ERGResourceLifetime::Persistent) {
+            YA_CORE_ASSERT(texture.persistentKey.has_value(),
+                           "Persistent render graph texture '{}' is missing stable key",
+                           texture.desc.label);
+            const auto key = makePersistentTextureKeyValue(*texture.persistentKey);
+            auto& persistentEntry = _persistentTextures[key];
+            if (!persistentEntry) {
+                persistentEntry = std::make_shared<TextureEntry>();
+                persistentEntry->persistentKey = texture.persistentKey;
+            }
+            if (!persistentEntry->resource || needsTextureReplacement(*persistentEntry, texture)) {
+                if (persistentEntry->resource) {
+                    YA_CORE_TRACE("RenderGraph registry replacing persistent texture '{}' (key={})",
+                                  texture.desc.label,
+                                  key);
+                    retireSharedResource(persistentEntry->resource);
+                }
+                persistentEntry->resource = createRenderImage(_factory, makeRenderImageDesc(texture.desc));
+                persistentEntry->desc = texture.desc;
+                persistentEntry->imported.reset();
+            }
+
+            if (auto existing = _textures.find(texture.handle); existing != _textures.end() &&
+                existing->second != persistentEntry) {
+                releaseTextureBinding(existing->second);
+            }
+            _textures[texture.handle] = persistentEntry;
+            continue;
+        }
+
         const auto existing = _textures.find(texture.handle);
-        if (existing != _textures.end() && !needsTextureReplacement(existing->second, texture)) {
+        if (existing != _textures.end() && !needsTextureReplacement(*existing->second, texture)) {
             if (texture.lifetime == ERGResourceLifetime::Imported) {
-                if (existing->second.imported.has_value()) {
-                    refreshRetainedResources(existing->second.imported->retainedResources,
+                if (existing->second->imported.has_value()) {
+                    refreshRetainedResources(existing->second->imported->retainedResources,
                                              texture.imported ? texture.imported->retainedResources : std::vector<std::shared_ptr<void>>{});
                 }
-                existing->second.imported = texture.imported;
-                if (existing->second.resource) {
-                    refreshRetainedResources(existing->second.resource->retainedResources,
+                existing->second->imported = texture.imported;
+                if (existing->second->resource) {
+                    refreshRetainedResources(existing->second->resource->retainedResources,
                                              texture.imported ? texture.imported->retainedResources : std::vector<std::shared_ptr<void>>{});
                 }
             }
@@ -319,30 +381,70 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
                           texture.desc.label,
                           texture.handle.index,
                           texture.handle.generation);
-            retireSharedResource(existing->second.resource);
+            releaseTextureBinding(existing->second);
         }
 
         if (texture.lifetime == ERGResourceLifetime::Imported) {
             YA_CORE_ASSERT(texture.imported.has_value(), "Imported render graph texture '{}' is missing import desc", texture.desc.label);
-            _textures[texture.handle] = TextureEntry{
+            _textures[texture.handle] = std::make_shared<TextureEntry>(TextureEntry{
                 .resource = createImportedTexture(*texture.imported),
                 .desc = texture.desc,
                 .imported = texture.imported,
-            };
+            });
             continue;
         }
 
-        _textures[texture.handle] = TextureEntry{
+        _textures[texture.handle] = std::make_shared<TextureEntry>(TextureEntry{
             .resource = createRenderImage(_factory, makeRenderImageDesc(texture.desc)),
             .desc = texture.desc,
-        };
+        });
     }
 
     for (const auto& buffer : graph.getBuffers()) {
+        if (buffer.lifetime == ERGResourceLifetime::Persistent) {
+            YA_CORE_ASSERT(buffer.persistentKey.has_value(),
+                           "Persistent render graph buffer '{}' is missing stable key",
+                           buffer.desc.label);
+            const auto key = makePersistentBufferKeyValue(*buffer.persistentKey);
+            auto& persistentEntry = _persistentOwnedBuffers[key];
+            if (!persistentEntry) {
+                persistentEntry = std::make_shared<OwnedBufferEntry>();
+                persistentEntry->persistentKey = buffer.persistentKey;
+            }
+            if (!persistentEntry->resource || needsOwnedBufferReplacement(*persistentEntry, buffer)) {
+                if (persistentEntry->resource) {
+                    YA_CORE_TRACE("RenderGraph registry replacing persistent buffer '{}' (key={})",
+                                  buffer.desc.label,
+                                  key);
+                    retireSharedResource(persistentEntry->resource);
+                }
+                persistentEntry->resource = _factory.createBuffer(BufferCreateInfo{
+                    .label       = buffer.desc.label,
+                    .usage       = buffer.desc.usage,
+                    .size        = buffer.desc.size,
+                    .memoryUsage = buffer.desc.memoryUsage,
+                });
+                persistentEntry->desc = buffer.desc;
+            }
+
+            if (const auto imported = _importedBuffers.find(buffer.handle);
+                imported != _importedBuffers.end() && imported->second.imported.has_value()) {
+                retireRetainedResources(imported->second.imported->retainedResources);
+            }
+            _importedBuffers.erase(buffer.handle);
+
+            if (const auto existing = _ownedBuffers.find(buffer.handle);
+                existing != _ownedBuffers.end() && existing->second != persistentEntry) {
+                releaseOwnedBufferBinding(existing->second);
+            }
+            _ownedBuffers[buffer.handle] = persistentEntry;
+            continue;
+        }
+
         if (buffer.lifetime == ERGResourceLifetime::Imported) {
             YA_CORE_ASSERT(buffer.imported.has_value(), "Imported render graph buffer '{}' is missing import desc", buffer.desc.label);
             if (const auto owned = _ownedBuffers.find(buffer.handle); owned != _ownedBuffers.end()) {
-                retireSharedResource(owned->second.resource);
+                releaseOwnedBufferBinding(owned->second);
             }
             _ownedBuffers.erase(buffer.handle);
 
@@ -373,14 +475,14 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
         _importedBuffers.erase(buffer.handle);
 
         const auto existing = _ownedBuffers.find(buffer.handle);
-        if (existing != _ownedBuffers.end() && !needsOwnedBufferReplacement(existing->second, buffer)) {
+        if (existing != _ownedBuffers.end() && !needsOwnedBufferReplacement(*existing->second, buffer)) {
             continue;
         }
         if (existing != _ownedBuffers.end()) {
-            retireSharedResource(existing->second.resource);
+            releaseOwnedBufferBinding(existing->second);
         }
 
-        _ownedBuffers[buffer.handle] = OwnedBufferEntry{
+        _ownedBuffers[buffer.handle] = std::make_shared<OwnedBufferEntry>(OwnedBufferEntry{
             .resource = _factory.createBuffer(BufferCreateInfo{
                 .label       = buffer.desc.label,
                 .usage       = buffer.desc.usage,
@@ -388,20 +490,30 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
                 .memoryUsage = buffer.desc.memoryUsage,
             }),
             .desc = buffer.desc,
-        };
+        });
     }
 }
 
 void RenderGraphResourceRegistry::clear()
 {
+    for (auto& [key, texture] : _persistentTextures) {
+        (void)key;
+        retireSharedResource(texture->resource);
+    }
+    for (auto& [key, buffer] : _persistentOwnedBuffers) {
+        (void)key;
+        retireSharedResource(buffer->resource);
+    }
     for (auto& [handle, texture] : _textures) {
         (void)handle;
-        retireSharedResource(texture.resource);
+        releaseTextureBinding(texture);
     }
     for (auto& [handle, buffer] : _ownedBuffers) {
         (void)handle;
-        retireSharedResource(buffer.resource);
+        releaseOwnedBufferBinding(buffer);
     }
+    _persistentTextures.clear();
+    _persistentOwnedBuffers.clear();
     _textures.clear();
     _ownedBuffers.clear();
     for (auto& [handle, buffer] : _importedBuffers) {
@@ -416,19 +528,19 @@ void RenderGraphResourceRegistry::clear()
 const RenderImage* RenderGraphResourceRegistry::resolveTexture(RGTextureHandle handle) const
 {
     const auto it = _textures.find(handle);
-    return it != _textures.end() ? it->second.resource.get() : nullptr;
+    return it != _textures.end() && it->second ? it->second->resource.get() : nullptr;
 }
 
 std::shared_ptr<RenderImage> RenderGraphResourceRegistry::resolveTextureShared(RGTextureHandle handle) const
 {
     const auto it = _textures.find(handle);
-    return it != _textures.end() ? it->second.resource : nullptr;
+    return it != _textures.end() && it->second ? it->second->resource : nullptr;
 }
 
 IBuffer* RenderGraphResourceRegistry::resolveBuffer(RGBufferHandle handle) const
 {
     if (const auto it = _ownedBuffers.find(handle); it != _ownedBuffers.end()) {
-        return it->second.resource.get();
+        return it->second ? it->second->resource.get() : nullptr;
     }
     if (const auto it = _importedBuffers.find(handle); it != _importedBuffers.end()) {
         return it->second.resource;
