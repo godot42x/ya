@@ -98,7 +98,7 @@ bool RenderGraphExecutor::executeCompiled(
             continue;
         }
 
-        RGRenderContext ctx(graph, *pass, _registry, cmdBuf);
+        RGRenderContext ctx(graph, *pass, _registry, &passPlan, cmdBuf);
         pass->execute(ctx);
     }
 

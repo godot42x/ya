@@ -75,5 +75,27 @@
   - parity test 覆盖了两条入口在 imported finalize contract 上的执行一致性
 - 验证：
   - `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`
-  - 结果：66 tests passed
+- 结果：66 tests passed
 - 下一步：进入 Phase 3，收敛 raster declaration 与 execute callback 间的双重真相。
+
+## 2026-08-02：第四批代码切片完成
+
+- 完成 `RG-0401` 与 `RG-0402`。
+- 修改 `RenderGraph` / `RenderGraphExecutor`：
+  - 新增 `RGRasterPassDesc`、`RGColorAttachmentDesc`、`RGDepthAttachmentDesc`
+  - `RGPassBuilder::declareRaster()` 负责在 declaration 阶段声明 raster attachment/render area/layer count，并同步建立 attachment usage
+  - `RGCompiledPassPlan` 现在携带 `rasterPlan`
+  - `RGRenderContext::beginDeclaredRasterRendering()` 从 compiled pass plan 消费声明好的 raster plan
+- 真实 consumer 迁移：
+  - Deferred 本地图内 `GBuffer / Light / Skybox / Scene Overlay / Viewport Overlay`
+  - Forward graph-backed `Forward Viewport`
+- 新增 RenderGraphCore tests：
+  - `CompileStoresDeclaredRasterPlanInCompiledPassPlan`
+  - `ExecutorCanBeginDeclaredRasterRenderingFromCompiledPassPlan`
+- 验证：
+  - `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`
+  - `xmake b ya-engine`
+  - 结果：68 tests passed；`ya-engine` build ok
+- 剩余工作：
+  - `RG-0403` 仍未完成：execute callback 还没有 typed pass parameters，只是先移除了 attachment/rendering 描述的双重真相
+  - `RG-0404` 只完成了 Deferred 本地 pass 与 Forward viewport 的首批 consumer，Postprocess / SSAO / utility pipeline 仍待迁移
