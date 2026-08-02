@@ -1153,17 +1153,17 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
 
     std::array<RGTextureHandle, 4> gbufferColors{};
     for (uint32_t attachmentIndex = 0; attachmentIndex < gbufferColors.size(); ++attachmentIndex) {
-        gbufferColors[attachmentIndex] = graph.createTexture(
+        gbufferColors[attachmentIndex] = graph.createPersistentTexture(
             makeGraphAttachmentDesc(
                 _gBufferRTSpec,
                 _gBufferRTSpec.attachments.colorAttach[attachmentIndex],
                 std::format("DeferredGBuffer.Color{}", attachmentIndex)),
-            ERGResourceLifetime::Persistent);
+            RGPersistentTextureKey{.value = std::format("DeferredGBuffer.Color{}", attachmentIndex)});
     }
     YA_CORE_ASSERT(_gBufferRTSpec.attachments.depthAttach.has_value(), "Deferred GBuffer graph requires a depth attachment spec");
-    const auto gbufferDepthHandle = graph.createTexture(
+    const auto gbufferDepthHandle = graph.createPersistentTexture(
         makeGraphAttachmentDesc(_gBufferRTSpec, *_gBufferRTSpec.attachments.depthAttach, "DeferredGBuffer.Depth"),
-        ERGResourceLifetime::Persistent);
+        RGPersistentTextureKey{.value = "DeferredGBuffer.Depth"});
     const Extent2D gbufferExtent = _gBufferRTSpec.extent;
 
     [[maybe_unused]] const auto gbufferPass = graph.addPass(
@@ -1219,9 +1219,9 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     _lastFrameInput = frame;
 
     YA_CORE_ASSERT(!_viewportRTSpec.attachments.colorAttach.empty(), "Deferred viewport graph requires a color attachment spec");
-    const auto color = graph.createTexture(
+    const auto color = graph.createPersistentTexture(
         makeGraphAttachmentDesc(_viewportRTSpec, _viewportRTSpec.attachments.colorAttach.front(), "DeferredViewport.Color"),
-        ERGResourceLifetime::Persistent);
+        RGPersistentTextureKey{.value = "DeferredViewport.Color"});
     const auto viewportDepthHandle = gbufferDepthHandle;
     const Extent2D viewportExtent = _viewportRTSpec.extent;
 

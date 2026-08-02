@@ -57,9 +57,9 @@
 
 ## Gate 3 / Phase 5：资源模型扩展入口
 
-- [ ] RG-0601 对齐 FG-101/102 的 persistent stable key API
-- [ ] RG-0602 对齐 FG-106 的 transient lifetime metadata
-- [ ] RG-0603 为 FG-107~FG-109 提供 compiled-plan seam，不重复实现 slot allocator
+- [x] RG-0601 对齐 FG-101/102 的 persistent stable key API
+- [x] RG-0602 对齐 FG-106 的 transient lifetime metadata
+- [x] RG-0603 为 FG-107~FG-109 提供 compiled-plan seam，不重复实现 slot allocator
 - [ ] RG-0604 对齐 FG-110 的 reuse diagnostics，不把“handle 复用”冒充物理复用
 - [ ] RG-0605 评估 async compute / multi-queue 是否需要扩展 state model
 
