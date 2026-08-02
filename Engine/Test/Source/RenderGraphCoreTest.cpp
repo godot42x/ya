@@ -761,9 +761,20 @@ TEST(RenderGraphCoreTest, CompileBuildsTransientBufferLifetimeMetadata)
     ASSERT_NE(lifetimeUnused, nullptr);
     EXPECT_FALSE(lifetimeUnused->isUsed());
 
+    EXPECT_EQ(compiled.transientBufferDiagnostics.logicalCount, 3u);
+    EXPECT_EQ(compiled.transientBufferDiagnostics.logicalBytes, 448u);
+    EXPECT_EQ(compiled.transientBufferDiagnostics.usedCount, 2u);
+    EXPECT_EQ(compiled.transientBufferDiagnostics.usedBytes, 384u);
+    EXPECT_EQ(compiled.transientBufferDiagnostics.unusedCount, 1u);
+    EXPECT_EQ(compiled.transientBufferDiagnostics.unusedBytes, 64u);
+
     const auto dump = graph.debugDump(compiled);
     EXPECT_NE(dump.find("transientBufferLifetimes(3)"), std::string::npos);
     EXPECT_NE(dump.find("transient.unused unused"), std::string::npos);
+    EXPECT_NE(dump.find("transientBufferDiagnostics logicalCount=3 logicalBytes=448 "
+                        "usedCount=2 usedBytes=384 unusedCount=1 unusedBytes=64"),
+              std::string::npos);
+    EXPECT_NE(dump.find("physicalReuse=not-materialized"), std::string::npos);
 }
 
 TEST(RenderGraphCoreTest, CompileBuildsImportedFinalizePlans)

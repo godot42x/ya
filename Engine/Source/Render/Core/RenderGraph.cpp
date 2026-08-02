@@ -1090,6 +1090,8 @@ RGCompiledGraph RenderGraph::compile() const
                 .desc   = buffer.desc,
             });
             transientLifetimeByHandle.emplace(buffer.handle, &compiled.transientBufferLifetimes.back());
+            ++compiled.transientBufferDiagnostics.logicalCount;
+            compiled.transientBufferDiagnostics.logicalBytes += buffer.desc.size;
         }
 
         for (uint32_t passIndex = 0; passIndex < compiled.passPlans.size(); ++passIndex) {
@@ -1106,6 +1108,17 @@ RGCompiledGraph RenderGraph::compile() const
                 }
                 lifetime.lastPassIndex = passIndex;
                 lifetime.lastPass      = passPlan.pass;
+            }
+        }
+
+        for (const auto& lifetime : compiled.transientBufferLifetimes) {
+            if (lifetime.isUsed()) {
+                ++compiled.transientBufferDiagnostics.usedCount;
+                compiled.transientBufferDiagnostics.usedBytes += lifetime.desc.size;
+            }
+            else {
+                ++compiled.transientBufferDiagnostics.unusedCount;
+                compiled.transientBufferDiagnostics.unusedBytes += lifetime.desc.size;
             }
         }
     }
@@ -1204,6 +1217,16 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
         }
         oss << "\n";
     }
+
+    const auto& transientDiagnostics = compiled.transientBufferDiagnostics;
+    oss << "transientBufferDiagnostics"
+        << " logicalCount=" << transientDiagnostics.logicalCount
+        << " logicalBytes=" << transientDiagnostics.logicalBytes
+        << " usedCount=" << transientDiagnostics.usedCount
+        << " usedBytes=" << transientDiagnostics.usedBytes
+        << " unusedCount=" << transientDiagnostics.unusedCount
+        << " unusedBytes=" << transientDiagnostics.unusedBytes
+        << " physicalReuse=not-materialized\n";
 
     oss << "issues(" << compiled.issues.size() << ")\n";
     for (const auto& issue : compiled.issues) {

@@ -275,6 +275,16 @@ struct RGTransientBufferLifetimePlan
     }
 };
 
+struct RGTransientBufferDiagnostics
+{
+    uint32_t logicalCount      = 0;
+    uint64_t logicalBytes      = 0;
+    uint32_t usedCount         = 0;
+    uint64_t usedBytes         = 0;
+    uint32_t unusedCount       = 0;
+    uint64_t unusedBytes       = 0;
+};
+
 struct RGCompileIssue
 {
     enum class EKind : uint8_t
@@ -300,6 +310,7 @@ struct RGCompiledGraph
     std::vector<RGImportedTextureFinalizePlan> importedTextureFinalizes;
     std::vector<RGImportedBufferFinalizePlan>  importedBufferFinalizes;
     std::vector<RGTransientBufferLifetimePlan> transientBufferLifetimes;
+    RGTransientBufferDiagnostics               transientBufferDiagnostics;
     std::vector<RGCompileIssue>               issues;
 
     [[nodiscard]] bool isValid() const
