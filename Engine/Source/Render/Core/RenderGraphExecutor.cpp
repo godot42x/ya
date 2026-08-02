@@ -38,14 +38,11 @@ bool RenderGraphExecutor::executeCompiled(
     const RGCompiledGraph& compiled,
     ICommandBuffer&       cmdBuf)
 {
-    for (const auto& passHandle : compiled.order) {
-        const auto* pass = graph.getPass(passHandle);
-        YA_CORE_ASSERT(pass != nullptr, "RenderGraphExecutor encountered invalid pass handle {}", passHandle.index);
+    for (const auto& passPlan : compiled.passPlans) {
+        const auto* pass = graph.getPass(passPlan.pass);
+        YA_CORE_ASSERT(pass != nullptr, "RenderGraphExecutor encountered invalid pass handle {}", passPlan.pass.index);
 
-        for (const auto& statePlan : compiled.textureStates) {
-            if (statePlan.pass != passHandle) {
-                continue;
-            }
+        for (const auto& statePlan : passPlan.textureStates) {
 
             const auto* texture = _registry.resolveTexture(statePlan.texture);
             YA_CORE_ASSERT(texture != nullptr, "RenderGraphExecutor failed to resolve texture {}", statePlan.texture.index);
@@ -57,10 +54,7 @@ bool RenderGraphExecutor::executeCompiled(
                 &statePlan.requiredState.subresourceRange);
         }
 
-        for (const auto& statePlan : compiled.bufferStates) {
-            if (statePlan.pass != passHandle) {
-                continue;
-            }
+        for (const auto& statePlan : passPlan.bufferStates) {
 
             auto* buffer = _registry.resolveBuffer(statePlan.buffer);
             YA_CORE_ASSERT(buffer != nullptr, "RenderGraphExecutor failed to resolve buffer {}", statePlan.buffer.index);

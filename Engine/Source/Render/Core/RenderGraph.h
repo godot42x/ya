@@ -173,6 +173,13 @@ struct RGBufferStatePlan
     BufferResourceState  requiredState{};
 };
 
+struct RGCompiledPassPlan
+{
+    RGPassHandle                    pass{};
+    std::vector<RGTextureStatePlan> textureStates;
+    std::vector<RGBufferStatePlan>  bufferStates;
+};
+
 struct RGImportedTextureFinalizePlan
 {
     RGTextureHandle                        texture{};
@@ -204,13 +211,12 @@ struct RGCompileIssue
 
 struct RGCompiledGraph
 {
-    std::vector<RGPassHandle>      order;
-    std::vector<RGDependencyEdge>  dependencies;
-    std::vector<RGTextureStatePlan> textureStates;
-    std::vector<RGBufferStatePlan>  bufferStates;
+    std::vector<RGPassHandle>                 order;
+    std::vector<RGDependencyEdge>             dependencies;
+    std::vector<RGCompiledPassPlan>           passPlans;
     std::vector<RGImportedTextureFinalizePlan> importedTextureFinalizes;
     std::vector<RGImportedBufferFinalizePlan>  importedBufferFinalizes;
-    std::vector<RGCompileIssue>    issues;
+    std::vector<RGCompileIssue>               issues;
 
     [[nodiscard]] bool isValid() const
     {
