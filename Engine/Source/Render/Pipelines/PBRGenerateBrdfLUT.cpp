@@ -142,26 +142,31 @@ PBRGenerateBrdfLUT::ExecuteResult PBRGenerateBrdfLUT::execute(const ExecuteConte
     graph.addPass(
         "PBRGenerateBrdfLUT",
         [&](RGPassBuilder& pass) {
-            pass.useColorAttachment(output);
-        },
-        [&](RGRenderContext& rgCtx) {
-            rgCtx.beginColorRendering({
-                .color      = output,
+            pass.declareRaster({
                 .renderArea = Rect2D{
                     .pos    = {0.0f, 0.0f},
                     .extent = {static_cast<float>(ctx.output->getWidth()), static_cast<float>(ctx.output->getHeight())},
                 },
-                .clearValue  = ctx.clearColor,
-                .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                .layerCount = 1,
+                .colors = {{
+                    .color       = output,
+                    .clearValue  = ctx.clearColor,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                }},
             });
+        },
+        [&](RGRenderContext& rgCtx) {
+            const auto rasterParams = rgCtx.getRasterPassExecutionParams();
+            const auto renderExtent = rasterParams.getRenderExtent();
+            rgCtx.beginDeclaredRasterRendering();
             rgCtx.getCommandBuffer().bindPipeline(_pipeline.get());
             rgCtx.getCommandBuffer().setViewport(0.0f,
                                                 0.0f,
-                                                static_cast<float>(ctx.output->getWidth()),
-                                                static_cast<float>(ctx.output->getHeight()),
+                                                static_cast<float>(renderExtent.width),
+                                                static_cast<float>(renderExtent.height),
                                                 0.0f,
                                                 1.0f);
-            rgCtx.getCommandBuffer().setScissor(0, 0, ctx.output->getWidth(), ctx.output->getHeight());
+            rgCtx.getCommandBuffer().setScissor(0, 0, renderExtent.width, renderExtent.height);
             rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
             rgCtx.endRendering();
         });

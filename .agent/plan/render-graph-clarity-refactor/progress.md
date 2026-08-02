@@ -121,3 +121,32 @@
   - 结果：69 tests passed；`ya-engine` build ok
 - 说明：
   - 这一步仍然保持现有 `RGRenderContext&` callback 形态，没有直接改成新的 callback 签名；typed params 先通过 context view 暴露，避免本轮把所有 graph caller 一次性重写
+
+## 2026-08-02：第六批代码切片完成
+
+- 完成 `RG-0501~RG-0504`。
+- 修改 `RenderGraph` / `RenderGraphExecutor`：
+  - 新增 `ERGPassKind`
+  - `RGCompiledPassPlan` 现在显式保存 `kind`
+  - compiler 会为 pass 解析 `Raster / Compute / Copy` kind，并执行 kind-specific validation
+  - `debugDump()` 和 compile issue 现在会输出 pass kind 与 `InvalidPassKind`
+- builder 入口扩展：
+  - 新增 `RGPassBuilder::declareCompute()`
+  - 新增 `RGPassBuilder::declareCopy()`
+  - `declareRaster()` 现在会同步设置 `ERGPassKind::Raster`
+- 真实 consumer 覆盖：
+  - screenshot copy graph 显式声明为 Copy
+  - point shadow cull pass 显式声明为 Compute
+  - `PBRGenerateBrdfLUT` 迁移到 raster declaration + typed raster params
+- 新增 / 更新 RenderGraphCore tests：
+  - `CompileInfersCopyPassKindForTransferOnlyPass`
+  - `CompileRejectsCopyPassWithNonTransferUsage`
+  - `CompileBuildsStableDependencyOrder` 增加 pass kind 断言
+  - `DebugDumpIncludesPassOrderDependenciesAndIssues` 增加 kind 输出断言
+- 验证：
+  - `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`
+  - `xmake b ya-engine`
+  - 结果：71 tests passed；`ya-engine` build ok
+- 说明：
+  - 这一轮的 kind 模型带兼容层：未显式声明 kind 的旧 pass 仍会在 compile 阶段解析出有效 kind，避免一次性打爆所有既有 caller
+  - 像 `PointShadowPass` 这类一个 pass 内多次 begin rendering 的特殊路径，暂时保留兼容模型，不强推单一 `rasterDesc`

@@ -28,6 +28,27 @@ bool hasBufferUsage(EBufferUsage haystack, EBufferUsage needle)
     return (haystack & needle) == needle;
 }
 
+bool isTransferTextureAccess(ERGPassResourceAccess access)
+{
+    return access == ERGPassResourceAccess::TransferSrc || access == ERGPassResourceAccess::TransferDst;
+}
+
+bool isTransferBufferAccess(ERGBufferAccess access)
+{
+    return access == ERGBufferAccess::TransferRead || access == ERGBufferAccess::TransferWrite;
+}
+
+const char* toString(ERGPassKind kind)
+{
+    switch (kind) {
+        case ERGPassKind::Unknown: return "Unknown";
+        case ERGPassKind::Raster: return "Raster";
+        case ERGPassKind::Compute: return "Compute";
+        case ERGPassKind::Copy: return "Copy";
+    }
+    return "Unknown";
+}
+
 uint32_t graphDefaultAspectMask(EFormat::T format)
 {
     if (EFormat::isDepthStencilFormat(format)) {
@@ -487,9 +508,20 @@ void RGPassBuilder::dependsOn(RGPassHandle handle)
     pass().dependencies.push_back(handle);
 }
 
+void RGPassBuilder::declareCompute()
+{
+    pass().kind = ERGPassKind::Compute;
+}
+
+void RGPassBuilder::declareCopy()
+{
+    pass().kind = ERGPassKind::Copy;
+}
+
 void RGPassBuilder::declareRaster(const RGRasterPassDesc& desc)
 {
     auto& currentPass = pass();
+    currentPass.kind = ERGPassKind::Raster;
     currentPass.rasterDesc = desc;
 
     for (const auto& color : desc.colors) {
@@ -673,7 +705,111 @@ RGCompiledGraph RenderGraph::compile() const
         });
     };
 
+    const auto resolvePassKind = [](const RGPass& pass) {
+        if (pass.kind != ERGPassKind::Unknown) {
+            return pass.kind;
+        }
+        if (pass.rasterDesc.has_value()) {
+            return ERGPassKind::Raster;
+        }
+
+        bool hasRasterUsage      = false;
+        bool hasTransferUsage    = false;
+        bool hasNonTransferUsage = false;
+
+        for (const auto& usage : pass.textures) {
+            if (usage.access == ERGPassResourceAccess::ColorAttachment ||
+                usage.access == ERGPassResourceAccess::DepthAttachment) {
+                hasRasterUsage = true;
+            }
+            else if (isTransferTextureAccess(usage.access)) {
+                hasTransferUsage = true;
+            }
+            else {
+                hasNonTransferUsage = true;
+            }
+        }
+
+        for (const auto& usage : pass.buffers) {
+            if (isTransferBufferAccess(usage.access)) {
+                hasTransferUsage = true;
+            }
+            else {
+                hasNonTransferUsage = true;
+            }
+        }
+
+        if (hasRasterUsage) {
+            return ERGPassKind::Raster;
+        }
+        if (hasTransferUsage && !hasNonTransferUsage) {
+            return ERGPassKind::Copy;
+        }
+        return ERGPassKind::Compute;
+    };
+
+    const auto validatePassKind = [&](const RGPass& pass, ERGPassKind kind) {
+        bool hasRasterUsage   = false;
+        bool hasTransferUsage = false;
+        bool hasOtherUsage    = false;
+
+        for (const auto& usage : pass.textures) {
+            if (usage.access == ERGPassResourceAccess::ColorAttachment ||
+                usage.access == ERGPassResourceAccess::DepthAttachment) {
+                hasRasterUsage = true;
+            }
+            else if (isTransferTextureAccess(usage.access)) {
+                hasTransferUsage = true;
+            }
+            else {
+                hasOtherUsage = true;
+            }
+        }
+        for (const auto& usage : pass.buffers) {
+            if (isTransferBufferAccess(usage.access)) {
+                hasTransferUsage = true;
+            }
+            else {
+                hasOtherUsage = true;
+            }
+        }
+
+        switch (kind) {
+            case ERGPassKind::Raster:
+                if (!pass.rasterDesc.has_value() && !hasRasterUsage) {
+                    addIssue(RGCompileIssue::EKind::InvalidPassKind,
+                             pass.handle,
+                             std::format("pass {} is Raster but has no raster declaration or raster attachment usage", pass.name));
+                }
+                break;
+            case ERGPassKind::Compute:
+                if (pass.rasterDesc.has_value() || hasRasterUsage) {
+                    addIssue(RGCompileIssue::EKind::InvalidPassKind,
+                             pass.handle,
+                             std::format("pass {} is Compute but declares raster attachments", pass.name));
+                }
+                break;
+            case ERGPassKind::Copy:
+                if (pass.rasterDesc.has_value() || hasRasterUsage || hasOtherUsage) {
+                    addIssue(RGCompileIssue::EKind::InvalidPassKind,
+                             pass.handle,
+                             std::format("pass {} is Copy but uses non-transfer resources", pass.name));
+                }
+                if (!hasTransferUsage) {
+                    addIssue(RGCompileIssue::EKind::InvalidPassKind,
+                             pass.handle,
+                             std::format("pass {} is Copy but has no transfer resource usage", pass.name));
+                }
+                break;
+            case ERGPassKind::Unknown:
+                break;
+        }
+    };
+
     for (const RGPass& pass : _passes) {
+        passPlans[pass.handle.index].kind = resolvePassKind(pass);
+        validatePassKind(pass, passPlans[pass.handle.index].kind);
+
         for (const RGHandle<RGPassHandleTag> dependency : pass.dependencies) {
             if (!getPass(dependency)) {
                 addIssue(RGCompileIssue::EKind::InvalidResource, pass.handle,
@@ -899,7 +1035,8 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
     for (const auto& passPlan : compiled.passPlans) {
         const auto* pass = getPass(passPlan.pass);
         oss << "  [" << passPlan.pass.index << ":" << passPlan.pass.generation << "] "
-            << (pass ? pass->name : "<invalid-pass>") << "\n";
+            << (pass ? pass->name : "<invalid-pass>")
+            << " kind=" << toString(passPlan.kind) << "\n";
 
         if (passPlan.rasterPlan.has_value()) {
             oss << "    raster colors=" << passPlan.rasterPlan->colors.size()
@@ -949,6 +1086,9 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
                 break;
             case RGCompileIssue::EKind::InvalidUsage:
                 oss << "InvalidUsage";
+                break;
+            case RGCompileIssue::EKind::InvalidPassKind:
+                oss << "InvalidPassKind";
                 break;
             case RGCompileIssue::EKind::Cycle:
                 oss << "Cycle";
