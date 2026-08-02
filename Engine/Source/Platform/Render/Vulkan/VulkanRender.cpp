@@ -1230,6 +1230,7 @@ bool VulkanRender::begin(int32_t* outImageIndex)
     // 例如：如果MAX_FRAMES_IN_FLIGHT=2，当渲染第3帧时，等待第1帧完成
     {
         YA_PERF_SCOPE(perf::sample::vulkanWaitFence(), perf::metric::cpuTimeMs(), perf::domain::render());
+        YA_PROFILE_SCOPE("vkWaitFence1");
         VK_CALL(vkWaitForFences(this->getDevice(),
                                 1,
                                 &frameFences[currentFrameIdx],
@@ -1240,7 +1241,10 @@ bool VulkanRender::begin(int32_t* outImageIndex)
     updateCompletedFrameGpuTiming();
 
     // 重置fence为未信号状态，准备给GPU在本帧结束时发送信号
-    VK_CALL(vkResetFences(this->getDevice(), 1, &frameFences[currentFrameIdx]));
+    {
+        YA_PROFILE_SCOPE("vkWaitFence2");
+        VK_CALL(vkResetFences(this->getDevice(), 1, &frameFences[currentFrameIdx]));
+    }
 
     // GPU has finished with the previous frame at this slot — safe to destroy
     // any GPU resources that were deferred-deleted during that frame.
@@ -1264,6 +1268,7 @@ bool VulkanRender::begin(int32_t* outImageIndex)
     VkResult ret        = VK_SUCCESS;
     {
         YA_PERF_SCOPE(perf::sample::vulkanAcquire(), perf::metric::cpuTimeMs(), perf::domain::render());
+        YA_PROFILE_SCOPE("acquireNextImage");
         ret = vkSwapChain->acquireNextImage(
             frameImageAvailableSemaphores[currentFrameIdx], // 当前帧的图像可用信号量
             frameFences[currentFrameIdx],                   // 等待上一present完成
@@ -1272,6 +1277,7 @@ bool VulkanRender::begin(int32_t* outImageIndex)
 
     // Do a sync recreation here, Can it be async?(just return and register a frame task)
     if (ret == VK_ERROR_OUT_OF_DATE_KHR) {
+        YA_PROFILE_SCOPE("VK_ERROR_OUT_OF_DATE_KHR");
         vkDeviceWaitIdle(this->getDevice());
 
         // current ignore the size in ci

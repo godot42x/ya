@@ -6,6 +6,7 @@
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 
+#include "Render/RenderDefines.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowDrawHelper.h"
 
 #include "Render/Core/CommandBuffer.h"
@@ -287,6 +288,7 @@ std::optional<RGPassHandle> DirectionalShadowPass::appendCascadePass(
         },
         [this, payload, depth, cascadeIndex](RGRenderContext& ctx) {
             YA_PERF_SCOPE(perf::sample::shadowDirectional(), perf::metric::cpuTimeMs(), perf::domain::render());
+            YA_PROFILE_SCOPE("DirectionalShadowPass::RenderCascade");
             ctx.beginRasterRendering({
                 .renderArea = Rect2D{.pos = {0.0f, 0.0f}, .extent = _shadowExtent.toVec2()},
                 .layerCount = 1,

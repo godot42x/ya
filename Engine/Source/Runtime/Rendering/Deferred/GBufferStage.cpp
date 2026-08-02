@@ -705,6 +705,7 @@ void GBufferStage::execute(const RenderStageContext& ctx)
 
 void GBufferStage::drawPBR(const RenderStageContext& ctx)
 {
+    YA_PROFILE_FUNCTION();
     auto* cmdBuf = ctx.cmdBuf;
     auto  ds0    = _frameAndLightDS[ctx.flightIndex];
 
@@ -741,6 +742,7 @@ void GBufferStage::drawPBR(const RenderStageContext& ctx)
 
 void GBufferStage::drawPhong(const RenderStageContext& ctx)
 {
+    YA_PROFILE_FUNCTION();
     auto* cmdBuf     = ctx.cmdBuf;
     auto  ds0        = _frameAndLightDS[ctx.flightIndex];
     auto  drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
@@ -777,6 +779,7 @@ void GBufferStage::drawPhong(const RenderStageContext& ctx)
 
 void GBufferStage::drawUnlit(const RenderStageContext& ctx)
 {
+    YA_PROFILE_FUNCTION();
     auto* cmdBuf = ctx.cmdBuf;
     auto  ds0    = _frameAndLightDS[ctx.flightIndex];
 
@@ -816,6 +819,7 @@ void GBufferStage::drawUnlit(const RenderStageContext& ctx)
 
 void GBufferStage::drawFallback(const RenderStageContext& ctx)
 {
+    YA_PROFILE_FUNCTION();
     if (!_fallbackMaterial || _fallbackMaterial->getIndex() < 0) return;
 
     auto*    cmdBuf = ctx.cmdBuf;

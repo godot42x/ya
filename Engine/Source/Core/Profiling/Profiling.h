@@ -115,6 +115,15 @@ struct RuntimeSessionPaths
     return getCompileMode() == ECompileMode::Enabled;
 }
 
+[[nodiscard]] constexpr bool isProfileBuild()
+{
+#if defined(YA_BUILD_MODE_PROFILE)
+    return true;
+#else
+    return false;
+#endif
+}
+
 [[nodiscard]] ENGINE_API const char* getCompileModeLabel();
 
 [[nodiscard]] ENGINE_API RuntimeState getRuntimeState();

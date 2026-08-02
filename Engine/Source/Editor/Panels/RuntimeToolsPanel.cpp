@@ -53,6 +53,7 @@ void migrateLegacyRuntimeSettings()
 
 void RuntimeToolsPanel::onImGuiRender(App& app, float dt)
 {
+    (void)dt;
     if (!_owner || !_controller) {
         return;
     }
@@ -62,14 +63,11 @@ void RuntimeToolsPanel::onImGuiRender(App& app, float dt)
         return;
     }
 
-    if (ImGui::CollapsingHeader("Stats", ImGuiTreeNodeFlags_DefaultOpen)) {
-        renderFrameStatsContent(app, dt);
-    }
     if (ImGui::CollapsingHeader("Session", ImGuiTreeNodeFlags_DefaultOpen)) {
         renderSessionContent(app);
     }
     if (ImGui::CollapsingHeader("Profiling")) {
-        renderProfilingContent();
+        renderProfilingContent(app);
     }
     if (ImGui::CollapsingHeader("Render Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (auto* runtime = app.getRenderServices().getRenderRuntime()) {

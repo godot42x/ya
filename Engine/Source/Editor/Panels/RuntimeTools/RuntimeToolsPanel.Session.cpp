@@ -12,30 +12,6 @@ void renderPerfLeaf(const char* label, float valueMs, float parentMs)
     ImGui::Text("%s: %.3f ms", label, valueMs);
 }
 
-void renderFrameStatsContent(const App& app, float dt)
-{
-    static constexpr size_t kHistorySize = 120;
-    static std::array<float, kHistorySize> fpsHistory{};
-    static size_t historyHead = 0;
-    static size_t historyFill = 0;
-    static float  fpsSum      = 0.0f;
-
-    const float fps = dt > 0.0f ? 1.0f / dt : 0.0f;
-    if (historyFill >= kHistorySize) {
-        fpsSum -= fpsHistory[historyHead];
-    }
-    fpsHistory[historyHead] = fps;
-    fpsSum += fps;
-    historyHead = (historyHead + 1) % kHistorySize;
-    historyFill = std::min(historyFill + 1, kHistorySize);
-
-    const float avgFps = historyFill > 0 ? fpsSum / static_cast<float>(historyFill) : 0.0f;
-
-    ImGui::Text("Frame Index: %llu", static_cast<unsigned long long>(app.getFrameIndex()));
-    ImGui::Text("Delta: %.2f ms", dt * 1000.0f);
-    ImGui::Text("FPS: %.1f", fps);
-    ImGui::Text("Avg FPS: %.1f", avgFps);
-}
 
 void renderSessionContent(App& app)
 {

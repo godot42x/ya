@@ -3,7 +3,7 @@
 namespace ya
 {
 
-void renderProfilingContent()
+void renderProfilingContent(App& app)
 {
     const auto compileMode = profiling::getCompileModeLabel();
     ImGui::Text("Compile Mode: %s", compileMode);
@@ -53,6 +53,13 @@ void renderProfilingContent()
 
     ImGui::Text("Frame CPU: %.3f ms", perfState.getDisplayValue(perf::sample::renderFrame(), perf::metric::cpuTimeMs()));
     ImGui::Text("Frame GPU: %.3f ms", perfState.getDisplayValue(perf::sample::renderFrame(), perf::metric::gpuTimeMs()));
+
+    if (auto* deferred = getDeferredPipeline(app)) {
+        if (ImGui::TreeNode("Runtime Perf")) {
+            renderDeferredPerformanceContent(*deferred);
+            ImGui::TreePop();
+        }
+    }
 }
 
 } // namespace ya

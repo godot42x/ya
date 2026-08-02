@@ -3,6 +3,83 @@
 namespace ya
 {
 
+void renderDeferredPerformanceContent(DeferredRenderPipeline& pipeline)
+{
+    auto&    perf   = profiling::metrics();
+    auto     metric = [&perf](FName sampleKey, FName metricKey) {
+        return perf.getDisplayValue(sampleKey, metricKey);
+    };
+    auto cpu = [&metric](FName sampleKey) {
+        return metric(sampleKey, perf::metric::cpuTimeMs());
+    };
+
+    const float frameCpuMs        = cpu(perf::sample::renderFrame());
+    const float frameGpuMs        = metric(perf::sample::renderFrame(), perf::metric::gpuTimeMs());
+    const float logicMs           = cpu(perf::sample::frameLogic());
+    const float renderMs          = cpu(perf::sample::frameRender());
+    const float automationMs      = cpu(perf::sample::frameAutomation());
+    const float unaccountedMs     = cpu(perf::sample::frameUnaccounted());
+    const float extractMs         = cpu(perf::sample::renderExtract());
+    const float runtimeMs         = cpu(perf::sample::renderRuntime());
+    const float prepareFrameMs    = cpu(perf::sample::renderPrepareFrame());
+    const float waitIdleMs        = cpu(perf::sample::renderWaitIdle());
+    const float beginMs           = cpu(perf::sample::renderBegin());
+    const float waitFenceMs       = cpu(perf::sample::vulkanWaitFence());
+    const float acquireMs         = cpu(perf::sample::vulkanAcquire());
+    const float worldMs           = cpu(perf::sample::renderWorld());
+    const float deferredTickMs    = cpu(perf::sample::deferredTick());
+    const float shadowMs          = cpu(perf::sample::deferredShadow());
+    const float gbufferMs         = cpu(perf::sample::deferredGBuffer());
+    const float depthCopyMs       = cpu(perf::sample::deferredDepthCopy());
+    const float lightMs           = cpu(perf::sample::deferredLight());
+    const float overlayMs         = cpu(perf::sample::deferredOverlay());
+    const float viewportOverlayMs = cpu(perf::sample::renderViewportOverlay());
+    const float postProcessMs     = cpu(perf::sample::renderPostProcess());
+    const float presentationMs    = cpu(perf::sample::renderPresentation());
+    const float renderCallbacksMs = cpu(perf::sample::frameRenderCallbacks());
+    const float submitMs          = cpu(perf::sample::renderSubmit());
+    const float presentMs         = cpu(perf::sample::vulkanPresent());
+
+    ImGui::Text("CPU frame: %.3f ms", frameCpuMs);
+    ImGui::Text("GPU frame: %.3f ms", frameGpuMs);
+    ImGui::Text("Draw items: %u", pipeline._lastDrawCount);
+    ImGui::Text("Point lights: %u", pipeline._lastPointLightCount);
+
+    renderPerfTree("Frame Cycle", frameCpuMs, [&]() {
+        renderPerfLeaf("Logic", logicMs, frameCpuMs);
+        renderPerfTree("Render", renderMs, [&]() {
+            renderPerfLeaf("Extract", extractMs, renderMs);
+            renderPerfTree("Runtime", runtimeMs, [&]() {
+                renderPerfTree("PrepareFrame", prepareFrameMs, [&]() {
+                    renderPerfLeaf("WaitIdle", waitIdleMs, prepareFrameMs);
+                    renderPerfTree("Begin", beginMs, [&]() {
+                        renderPerfLeaf("WaitFence", waitFenceMs, beginMs);
+                        renderPerfLeaf("Acquire", acquireMs, beginMs);
+                    });
+                });
+                renderPerfTree("World", worldMs, [&]() {
+                    renderPerfTree("Deferred", deferredTickMs, [&]() {
+                        renderPerfLeaf("Shadow", shadowMs, deferredTickMs);
+                        renderPerfLeaf("GBuffer", gbufferMs, deferredTickMs);
+                        renderPerfLeaf("DepthCopy", depthCopyMs, deferredTickMs);
+                        renderPerfLeaf("Light", lightMs, deferredTickMs);
+                        renderPerfLeaf("Overlay", overlayMs, deferredTickMs);
+                    });
+                    renderPerfLeaf("ViewportOverlay", viewportOverlayMs, worldMs);
+                    renderPerfLeaf("PostProcess", postProcessMs, worldMs);
+                });
+                renderPerfLeaf("Presentation", presentationMs, runtimeMs);
+                renderPerfLeaf("RenderCallbacks", renderCallbacksMs, runtimeMs);
+                renderPerfTree("Submit", submitMs, [&]() {
+                    renderPerfLeaf("Present", presentMs, submitMs);
+                });
+            });
+        });
+        renderPerfLeaf("Automation", automationMs, frameCpuMs);
+        renderPerfLeaf("Unaccounted", unaccountedMs, frameCpuMs);
+    });
+}
+
 void savePostProcessingSettings(const PostProcessingState& settings)
 {
     ConfigManager::Editor("runtime")
@@ -478,82 +555,6 @@ void renderRenderingInternalsContent(App& app)
         }
     };
 
-    auto renderDeferredPerformanceContent = [](DeferredRenderPipeline& pipeline) {
-        auto& perf = profiling::metrics();
-        auto metric = [&perf](FName sampleKey, FName metricKey) {
-            return perf.getDisplayValue(sampleKey, metricKey);
-        };
-        auto cpu = [&metric](FName sampleKey) {
-            return metric(sampleKey, perf::metric::cpuTimeMs());
-        };
-
-        const float frameCpuMs        = cpu(perf::sample::renderFrame());
-        const float frameGpuMs        = metric(perf::sample::renderFrame(), perf::metric::gpuTimeMs());
-        const float logicMs           = cpu(perf::sample::frameLogic());
-        const float renderMs          = cpu(perf::sample::frameRender());
-        const float automationMs      = cpu(perf::sample::frameAutomation());
-        const float unaccountedMs     = cpu(perf::sample::frameUnaccounted());
-        const float extractMs         = cpu(perf::sample::renderExtract());
-        const float runtimeMs         = cpu(perf::sample::renderRuntime());
-        const float prepareFrameMs    = cpu(perf::sample::renderPrepareFrame());
-        const float waitIdleMs        = cpu(perf::sample::renderWaitIdle());
-        const float beginMs           = cpu(perf::sample::renderBegin());
-        const float waitFenceMs       = cpu(perf::sample::vulkanWaitFence());
-        const float acquireMs         = cpu(perf::sample::vulkanAcquire());
-        const float worldMs           = cpu(perf::sample::renderWorld());
-        const float deferredTickMs    = cpu(perf::sample::deferredTick());
-        const float shadowMs          = cpu(perf::sample::deferredShadow());
-        const float gbufferMs         = cpu(perf::sample::deferredGBuffer());
-        const float depthCopyMs       = cpu(perf::sample::deferredDepthCopy());
-        const float lightMs           = cpu(perf::sample::deferredLight());
-        const float overlayMs         = cpu(perf::sample::deferredOverlay());
-        const float viewportOverlayMs = cpu(perf::sample::renderViewportOverlay());
-        const float postProcessMs     = cpu(perf::sample::renderPostProcess());
-        const float presentationMs    = cpu(perf::sample::renderPresentation());
-        const float renderCallbacksMs = cpu(perf::sample::frameRenderCallbacks());
-        const float submitMs          = cpu(perf::sample::renderSubmit());
-        const float presentMs         = cpu(perf::sample::vulkanPresent());
-
-        ImGui::Text("CPU frame: %.3f ms", frameCpuMs);
-        ImGui::Text("GPU frame: %.3f ms", frameGpuMs);
-        ImGui::Text("Draw items: %u", pipeline._lastDrawCount);
-        ImGui::Text("Point lights: %u", pipeline._lastPointLightCount);
-
-        renderPerfTree("Frame Cycle", frameCpuMs, [&]() {
-            renderPerfLeaf("Logic", logicMs, frameCpuMs);
-            renderPerfTree("Render", renderMs, [&]() {
-                renderPerfLeaf("Extract", extractMs, renderMs);
-                renderPerfTree("Runtime", runtimeMs, [&]() {
-                    renderPerfTree("PrepareFrame", prepareFrameMs, [&]() {
-                        renderPerfLeaf("WaitIdle", waitIdleMs, prepareFrameMs);
-                        renderPerfTree("Begin", beginMs, [&]() {
-                            renderPerfLeaf("WaitFence", waitFenceMs, beginMs);
-                            renderPerfLeaf("Acquire", acquireMs, beginMs);
-                        });
-                    });
-                    renderPerfTree("World", worldMs, [&]() {
-                        renderPerfTree("Deferred", deferredTickMs, [&]() {
-                            renderPerfLeaf("Shadow", shadowMs, deferredTickMs);
-                            renderPerfLeaf("GBuffer", gbufferMs, deferredTickMs);
-                            renderPerfLeaf("DepthCopy", depthCopyMs, deferredTickMs);
-                            renderPerfLeaf("Light", lightMs, deferredTickMs);
-                            renderPerfLeaf("Overlay", overlayMs, deferredTickMs);
-                        });
-                        renderPerfLeaf("ViewportOverlay", viewportOverlayMs, worldMs);
-                        renderPerfLeaf("PostProcess", postProcessMs, worldMs);
-                    });
-                    renderPerfLeaf("Presentation", presentationMs, runtimeMs);
-                    renderPerfLeaf("RenderCallbacks", renderCallbacksMs, runtimeMs);
-                    renderPerfTree("Submit", submitMs, [&]() {
-                        renderPerfLeaf("Present", presentMs, submitMs);
-                    });
-                });
-            });
-            renderPerfLeaf("Automation", automationMs, frameCpuMs);
-            renderPerfLeaf("Unaccounted", unaccountedMs, frameCpuMs);
-        });
-    };
-
     auto renderDeferredStageInternals = [&](DeferredRenderPipeline& pipeline) {
         if (pipeline._shadowStage && ImGui::TreeNode("Shadow")) {
             renderShadowStageInternals(*pipeline._shadowStage);
@@ -698,10 +699,6 @@ void renderRenderingInternalsContent(App& app)
     };
 
     if (auto* deferred = getDeferredPipeline(app)) {
-        if (ImGui::TreeNode("Runtime Perf")) {
-            renderDeferredPerformanceContent(*deferred);
-            ImGui::TreePop();
-        }
         if (ImGui::TreeNode("Stage Internals")) {
             renderDeferredStageInternals(*deferred);
             ImGui::TreePop();

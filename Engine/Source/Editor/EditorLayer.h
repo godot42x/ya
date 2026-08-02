@@ -244,6 +244,7 @@ struct EditorLayer
         _detailsView.onImGuiRender();
         _contentBrowserPanel.onImGuiRender();
         _assetInspectorPanel.onImGuiRender();
+        statsWindow();
         runtimeToolsWindow();
         renderAuxiliaryUi();
 
@@ -279,6 +280,7 @@ struct EditorLayer
     void toolbar();
     void projectBrowserWindow();
     void runtimeToolsWindow();
+    void statsWindow();
     void renderAuxiliaryUi();
     // void settingsWindow();
     // void renderStatsWindow();

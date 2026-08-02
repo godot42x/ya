@@ -75,7 +75,7 @@ struct AppAutomationPostProcessOverrides
 
 struct AppProfilingOptions
 {
-    bool                       bCpuProfileEnabled            = !profiling::isCompiledOut();
+    bool                       bCpuProfileEnabled            = profiling::isProfileBuild();
     bool                       bCpuProfileOverridden         = false;
     bool                       bCpuProfileOutputOverridden   = false;
     bool                       bProfileSessionNameOverridden = false;
