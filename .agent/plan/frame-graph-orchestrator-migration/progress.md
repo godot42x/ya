@@ -91,6 +91,37 @@ CPU 在 execute 前预写的数据不能共享同一 alias 区间，除非后续
 完成门禁必须包含 logical/physical bytes、slot assignment、pool hit/miss 和 reuse ratio；core test 必须证明
 physical slot 数少于 logical transient buffer 数，真实 Deferred consumer 至少证明 graph slot 的跨帧 pool hit。
 
+### 2026-08-02：FG-102 完成
+
+- 状态：完成
+- 代码事实：
+  - `RenderGraphResourceRegistry` 之前以 `RGTextureHandle` / `RGBufferHandle` 作为主索引。
+  - 即使 graph 已经有 stable persistent key，registry 仍会把 persistent resource 当成 frame-local live set 一部分处理；
+    创建顺序变化或本帧暂时未声明时，会丢失跨帧物理身份。
+- 实现：
+  - 为 persistent texture / buffer 新增 stable-key cache：
+    - `key -> persistent entry`
+    - `current graph handle -> bound entry`
+  - 将 “persistent cache” 与 “current graph handle resolution” 分离。
+  - 当前显式策略：
+    - transient/imported：未出现在本帧 graph 中时按现有规则 prune
+    - persistent：未出现在本帧 graph 中时只解除当前 handle 绑定，不销毁 key cache
+  - spec 变化仍走安全 replacement，并通过 `DeferredDeletionQueue` 延迟退休旧 owner。
+- 未做：
+  - 这一步没有扩展 pass-scoped resolve/access validation；该项仍属于 `FG-103`
+  - 没有实现 pipeline/presentation 级 scope owner；当前 persistent cache 生命周期仍与 registry 一致
+- 测试：
+  - `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`
+  - 结果：75 tests passed
+  - 新增覆盖：
+    - persistent resource 在创建顺序变化下仍复用
+    - persistent resource 在中间一帧未声明后可重新绑定并复用
+- artifacts：
+  - `RenderGraphCoreTest.ResourceRegistryReusesStableResourcesAcrossSyncs`
+  - `RenderGraphCoreTest.ResourceRegistryKeepsPersistentResourcesAcrossTemporaryOmission`
+- 下一任务：
+  - 进入 `FG-103`，为 pass-scoped resolve / access 增加 validation，避免 executor resolve 越权和 stale handle 静默通过
+
 ## 任务记录模板
 
 ```text

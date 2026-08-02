@@ -40,7 +40,7 @@
   - 禁止：在本任务顺带改变 imported/transient identity；buffer aliasing 由 FG-106 至 FG-110 独立实现
   - 提交：`[render/graph] add stable persistent resource identity`
 
-- [ ] `FG-102` 让 registry 以 stable key 管理 persistent physical resource
+- [x] `FG-102` 让 registry 以 stable key 管理 persistent physical resource
   - 依赖：FG-101
   - 修改：`RenderGraphResourceRegistry.h/.cpp`、`RenderGraphExecutor`、core tests
   - 实现：persistent map 与 frame handle resolution 分离；spec change 延迟退休旧 owner；本帧未声明时保留还是 prune 必须由显式 policy 决定并测试

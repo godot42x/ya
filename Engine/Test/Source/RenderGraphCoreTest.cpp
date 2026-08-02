@@ -1239,23 +1239,87 @@ TEST(RenderGraphCoreTest, ResourceRegistryReusesStableResourcesAcrossSyncs)
     EXPECT_EQ(factory.createdBuffers, 1u);
 
     RenderGraph graphB;
-    graphB.createPersistentTexture(RGTextureDesc{
+    const auto transientBefore = graphB.createTexture(RGTextureDesc{
+        .label  = "transient.before",
+        .format = EFormat::R8_UNORM,
+        .extent = Extent3D{32, 32, 1},
+        .usage  = EImageUsage::ColorAttachment,
+    });
+    (void)transientBefore;
+    const auto textureHandleB = graphB.createPersistentTexture(RGTextureDesc{
         .label  = "persistent.ao",
         .format = EFormat::R8_UNORM,
         .extent = Extent3D{320, 180, 1},
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
     }, RGPersistentTextureKey{.value = "persistent.ao"});
-    graphB.createPersistentBuffer(RGBufferDesc{
+    const auto bufferHandleB = graphB.createPersistentBuffer(RGBufferDesc{
         .label = "persistent.constants",
         .usage = EBufferUsage::StorageBuffer,
         .size  = 256,
     }, RGPersistentBufferKey{.value = "persistent.constants"});
 
     registry.sync(graphB);
-    EXPECT_EQ(registry.resolveTexture(textureHandle), firstTexture);
-    EXPECT_EQ(registry.resolveBuffer(bufferHandle), firstBuffer);
-    EXPECT_EQ(factory.createdImages, 1u);
-    EXPECT_EQ(factory.createdViews, 1u);
+    EXPECT_EQ(registry.resolveTexture(textureHandleB), firstTexture);
+    EXPECT_EQ(registry.resolveBuffer(bufferHandleB), firstBuffer);
+    EXPECT_EQ(factory.createdImages, 2u);
+    EXPECT_EQ(factory.createdViews, 2u);
+    EXPECT_EQ(factory.createdBuffers, 1u);
+}
+
+TEST(RenderGraphCoreTest, ResourceRegistryKeepsPersistentResourcesAcrossTemporaryOmission)
+{
+    TestResourceFactory factory;
+    RenderGraphResourceRegistry registry(factory);
+
+    RenderGraph graphA;
+    const auto textureHandleA = graphA.createPersistentTexture(RGTextureDesc{
+        .label  = "persistent.history",
+        .format = EFormat::R32_SFLOAT,
+        .extent = Extent3D{160, 90, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    }, RGPersistentTextureKey{.value = "persistent.history"});
+    const auto bufferHandleA = graphA.createPersistentBuffer(RGBufferDesc{
+        .label = "persistent.history.constants",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 128,
+    }, RGPersistentBufferKey{.value = "persistent.history.constants"});
+
+    registry.sync(graphA);
+    const auto* firstTexture = registry.resolveTexture(textureHandleA);
+    auto* firstBuffer = registry.resolveBuffer(bufferHandleA);
+    ASSERT_NE(firstTexture, nullptr);
+    ASSERT_NE(firstBuffer, nullptr);
+
+    RenderGraph graphB;
+    const auto transientOnly = graphB.createTexture(RGTextureDesc{
+        .label  = "transient.only",
+        .format = EFormat::R8_UNORM,
+        .extent = Extent3D{16, 16, 1},
+        .usage  = EImageUsage::ColorAttachment,
+    });
+    (void)transientOnly;
+    registry.sync(graphB);
+    EXPECT_EQ(factory.createdImages, 2u);
+    EXPECT_EQ(factory.createdBuffers, 1u);
+
+    RenderGraph graphC;
+    const auto textureHandleC = graphC.createPersistentTexture(RGTextureDesc{
+        .label  = "persistent.history",
+        .format = EFormat::R32_SFLOAT,
+        .extent = Extent3D{160, 90, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    }, RGPersistentTextureKey{.value = "persistent.history"});
+    const auto bufferHandleC = graphC.createPersistentBuffer(RGBufferDesc{
+        .label = "persistent.history.constants",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 128,
+    }, RGPersistentBufferKey{.value = "persistent.history.constants"});
+
+    registry.sync(graphC);
+    EXPECT_EQ(registry.resolveTexture(textureHandleC), firstTexture);
+    EXPECT_EQ(registry.resolveBuffer(bufferHandleC), firstBuffer);
+    EXPECT_EQ(factory.createdImages, 2u);
+    EXPECT_EQ(factory.createdViews, 2u);
     EXPECT_EQ(factory.createdBuffers, 1u);
 }
 
