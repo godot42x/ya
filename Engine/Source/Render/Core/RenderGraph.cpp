@@ -12,6 +12,32 @@ namespace ya
 namespace
 {
 
+const char* toString(ERGPassResourceAccess access)
+{
+    switch (access) {
+        case ERGPassResourceAccess::Read: return "Read";
+        case ERGPassResourceAccess::Write: return "Write";
+        case ERGPassResourceAccess::ColorAttachment: return "ColorAttachment";
+        case ERGPassResourceAccess::DepthAttachment: return "DepthAttachment";
+        case ERGPassResourceAccess::TransferSrc: return "TransferSrc";
+        case ERGPassResourceAccess::TransferDst: return "TransferDst";
+    }
+    return "<unknown>";
+}
+
+const char* toString(ERGBufferAccess access)
+{
+    switch (access) {
+        case ERGBufferAccess::ShaderRead: return "ShaderRead";
+        case ERGBufferAccess::ShaderWrite: return "ShaderWrite";
+        case ERGBufferAccess::ShaderReadWrite: return "ShaderReadWrite";
+        case ERGBufferAccess::IndirectRead: return "IndirectRead";
+        case ERGBufferAccess::TransferRead: return "TransferRead";
+        case ERGBufferAccess::TransferWrite: return "TransferWrite";
+    }
+    return "<unknown>";
+}
+
 template <typename UsageT>
 bool containsUsage(const std::vector<UsageT>& usages, const UsageT& needle)
 {
@@ -278,8 +304,105 @@ const RGBufferDesc& RGRenderContext::getBufferDesc(RGBufferHandle handle) const
     return getBuffer(handle).desc;
 }
 
+bool RGRenderContext::hasDeclaredTextureUsage(RGTextureHandle handle) const
+{
+    return findDeclaredTextureUsage(handle) != nullptr;
+}
+
+bool RGRenderContext::hasDeclaredBufferUsage(RGBufferHandle handle) const
+{
+    return findDeclaredBufferUsage(handle) != nullptr;
+}
+
+bool RGRenderContext::hasDeclaredTextureAccess(RGTextureHandle handle, ERGPassResourceAccess access) const
+{
+    const auto* usage = findDeclaredTextureUsage(handle);
+    return usage != nullptr && usage->access == access;
+}
+
+bool RGRenderContext::hasDeclaredBufferAccess(RGBufferHandle handle, ERGBufferAccess access) const
+{
+    const auto* usage = findDeclaredBufferUsage(handle);
+    return usage != nullptr && usage->access == access;
+}
+
+const RGTextureUsage* RGRenderContext::findDeclaredTextureUsage(RGTextureHandle handle) const
+{
+    const auto it = std::find_if(_pass.textures.begin(), _pass.textures.end(), [handle](const RGTextureUsage& usage) {
+        return usage.handle == handle;
+    });
+    return it != _pass.textures.end() ? &*it : nullptr;
+}
+
+const RGBufferUsage* RGRenderContext::findDeclaredBufferUsage(RGBufferHandle handle) const
+{
+    const auto it = std::find_if(_pass.buffers.begin(), _pass.buffers.end(), [handle](const RGBufferUsage& usage) {
+        return usage.handle == handle;
+    });
+    return it != _pass.buffers.end() ? &*it : nullptr;
+}
+
+void RGRenderContext::assertTextureDeclared(RGTextureHandle handle, const char* operation) const
+{
+    const auto* usage = findDeclaredTextureUsage(handle);
+    YA_CORE_ASSERT(usage != nullptr,
+                   "RGRenderContext pass {} attempted {} on undeclared texture handle {}",
+                   _pass.name,
+                   operation,
+                   handle.index);
+}
+
+void RGRenderContext::assertBufferDeclared(RGBufferHandle handle, const char* operation) const
+{
+    const auto* usage = findDeclaredBufferUsage(handle);
+    YA_CORE_ASSERT(usage != nullptr,
+                   "RGRenderContext pass {} attempted {} on undeclared buffer handle {}",
+                   _pass.name,
+                   operation,
+                   handle.index);
+}
+
+void RGRenderContext::assertTextureAccess(RGTextureHandle handle,
+                                          std::initializer_list<ERGPassResourceAccess> allowed,
+                                          const char* operation) const
+{
+    const auto* usage = findDeclaredTextureUsage(handle);
+    YA_CORE_ASSERT(usage != nullptr,
+                   "RGRenderContext pass {} attempted {} on undeclared texture handle {}",
+                   _pass.name,
+                   operation,
+                   handle.index);
+    const bool matched = std::find(allowed.begin(), allowed.end(), usage->access) != allowed.end();
+    YA_CORE_ASSERT(matched,
+                   "RGRenderContext pass {} attempted {} on texture handle {} declared as {}",
+                   _pass.name,
+                   operation,
+                   handle.index,
+                   toString(usage->access));
+}
+
+void RGRenderContext::assertBufferAccess(RGBufferHandle handle,
+                                         std::initializer_list<ERGBufferAccess> allowed,
+                                         const char* operation) const
+{
+    const auto* usage = findDeclaredBufferUsage(handle);
+    YA_CORE_ASSERT(usage != nullptr,
+                   "RGRenderContext pass {} attempted {} on undeclared buffer handle {}",
+                   _pass.name,
+                   operation,
+                   handle.index);
+    const bool matched = std::find(allowed.begin(), allowed.end(), usage->access) != allowed.end();
+    YA_CORE_ASSERT(matched,
+                   "RGRenderContext pass {} attempted {} on buffer handle {} declared as {}",
+                   _pass.name,
+                   operation,
+                   handle.index,
+                   toString(usage->access));
+}
+
 const RenderImage* RGRenderContext::resolveTexture(RGTextureHandle handle) const
 {
+    assertTextureDeclared(handle, "resolveTexture");
     const auto* texture = _registry.resolveTexture(handle);
     if (texture) {
         retainResolvedRenderImage(_cmdBuf, *texture);
@@ -289,6 +412,7 @@ const RenderImage* RGRenderContext::resolveTexture(RGTextureHandle handle) const
 
 IBuffer* RGRenderContext::resolveBuffer(RGBufferHandle handle) const
 {
+    assertBufferDeclared(handle, "resolveBuffer");
     const auto* resource = _graph.getBuffer(handle);
     YA_CORE_ASSERT(resource != nullptr, "RGRenderContext pass {} references invalid buffer handle {}", _pass.name, handle.index);
     if (resource->imported.has_value()) {
@@ -413,6 +537,8 @@ void RGRenderContext::endRendering() const
 
 void RGRenderContext::copyBuffer(RGBufferHandle src, RGBufferHandle dst, uint64_t size, uint64_t srcOffset, uint64_t dstOffset) const
 {
+    assertBufferAccess(src, {ERGBufferAccess::TransferRead}, "copyBuffer(src)");
+    assertBufferAccess(dst, {ERGBufferAccess::TransferWrite}, "copyBuffer(dst)");
     auto* srcBuffer = resolveBuffer(src);
     auto* dstBuffer = resolveBuffer(dst);
     YA_CORE_ASSERT(srcBuffer != nullptr, "RGRenderContext pass {} failed to resolve src buffer {}", _pass.name, src.index);
@@ -425,6 +551,8 @@ void RGRenderContext::copyTextureToBuffer(
     RGBufferHandle  dst,
     const std::vector<BufferImageCopy>& regions) const
 {
+    assertTextureAccess(src, {ERGPassResourceAccess::TransferSrc}, "copyTextureToBuffer(src)");
+    assertBufferAccess(dst, {ERGBufferAccess::TransferWrite}, "copyTextureToBuffer(dst)");
     const auto* srcTexture = resolveTexture(src);
     auto*       dstBuffer  = resolveBuffer(dst);
     YA_CORE_ASSERT(srcTexture != nullptr, "RGRenderContext pass {} failed to resolve src texture {}", _pass.name, src.index);
@@ -441,6 +569,8 @@ void RGRenderContext::copyTextureToBuffer(
 
 void RGRenderContext::copyTexture(RGTextureHandle src, RGTextureHandle dst, const ImageCopy& region) const
 {
+    assertTextureAccess(src, {ERGPassResourceAccess::TransferSrc}, "copyTexture(src)");
+    assertTextureAccess(dst, {ERGPassResourceAccess::TransferDst}, "copyTexture(dst)");
     const auto* srcTexture = resolveTexture(src);
     const auto* dstTexture = resolveTexture(dst);
     YA_CORE_ASSERT(srcTexture != nullptr, "RGRenderContext pass {} failed to resolve src texture {}", _pass.name, src.index);

@@ -394,6 +394,17 @@ class RGRenderContext
     const RGCompiledPassPlan*          _compiledPassPlan = nullptr;
     mutable std::optional<RenderingInfo> _activeRenderingInfo;
 
+    [[nodiscard]] ENGINE_API const RGTextureUsage* findDeclaredTextureUsage(RGTextureHandle handle) const;
+    [[nodiscard]] ENGINE_API const RGBufferUsage* findDeclaredBufferUsage(RGBufferHandle handle) const;
+    ENGINE_API void assertTextureDeclared(RGTextureHandle handle, const char* operation) const;
+    ENGINE_API void assertBufferDeclared(RGBufferHandle handle, const char* operation) const;
+    ENGINE_API void assertTextureAccess(RGTextureHandle handle,
+                                       std::initializer_list<ERGPassResourceAccess> allowed,
+                                       const char* operation) const;
+    ENGINE_API void assertBufferAccess(RGBufferHandle handle,
+                                      std::initializer_list<ERGBufferAccess> allowed,
+                                      const char* operation) const;
+
   public:
     RGRenderContext(
         const RenderGraph& graph,
@@ -410,6 +421,10 @@ class RGRenderContext
     [[nodiscard]] ENGINE_API const RGBufferResource& getBuffer(RGBufferHandle handle) const;
     [[nodiscard]] ENGINE_API const RGTextureDesc& getTextureDesc(RGTextureHandle handle) const;
     [[nodiscard]] ENGINE_API const RGBufferDesc& getBufferDesc(RGBufferHandle handle) const;
+    [[nodiscard]] ENGINE_API bool hasDeclaredTextureUsage(RGTextureHandle handle) const;
+    [[nodiscard]] ENGINE_API bool hasDeclaredBufferUsage(RGBufferHandle handle) const;
+    [[nodiscard]] ENGINE_API bool hasDeclaredTextureAccess(RGTextureHandle handle, ERGPassResourceAccess access) const;
+    [[nodiscard]] ENGINE_API bool hasDeclaredBufferAccess(RGBufferHandle handle, ERGBufferAccess access) const;
     [[nodiscard]] ENGINE_API const RenderImage* resolveTexture(RGTextureHandle handle) const;
     [[nodiscard]] ENGINE_API IBuffer* resolveBuffer(RGBufferHandle handle) const;
     [[nodiscard]] ENGINE_API const RGRasterPassDesc* getDeclaredRasterPlan() const;

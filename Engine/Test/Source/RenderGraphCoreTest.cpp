@@ -2069,6 +2069,126 @@ TEST(RenderGraphCoreTest, ExecutorRunsPassesInCompiledOrderAndResolvesResources)
     EXPECT_EQ(factory.createdBuffers, 1u);
 }
 
+TEST(RenderGraphCoreTest, RenderContextReportsDeclaredTextureAndBufferUsage)
+{
+    TestResourceFactory factory;
+    TestCommandBuffer   cmdBuf;
+    RenderGraphExecutor executor(factory);
+    RenderGraph         graph;
+    TestBuffer          dstBacking(BufferCreateInfo{
+        .label = "dst",
+        .usage = EBufferUsage::TransferDst,
+        .size  = 64,
+    });
+
+    const auto declared = graph.importTexture(RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label  = "declared",
+            .format = EFormat::R8_UNORM,
+            .extent = Extent3D{32, 32, 1},
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        },
+        .importDesc = ImportedImageDesc{
+            .label        = "declared",
+            .nativeHandle = reinterpret_cast<void*>(0x1001),
+            .format       = EFormat::R8_UNORM,
+            .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .extent       = Extent3D{32, 32, 1},
+        },
+    });
+    const auto undeclared = graph.importTexture(RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label  = "undeclared",
+            .format = EFormat::R8_UNORM,
+            .extent = Extent3D{32, 32, 1},
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+        },
+        .importDesc = ImportedImageDesc{
+            .label        = "undeclared",
+            .nativeHandle = reinterpret_cast<void*>(0x1002),
+            .format       = EFormat::R8_UNORM,
+            .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .extent       = Extent3D{32, 32, 1},
+        },
+    });
+    const auto dstBuffer = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "dst",
+            .usage = EBufferUsage::TransferDst,
+            .size  = 64,
+        },
+        .buffer = &dstBacking,
+    });
+
+    graph.addPass(
+        "reader",
+        [&](RGPassBuilder& pass) {
+            pass.read(declared);
+            pass.transferDst(dstBuffer);
+        },
+        [&](RGRenderContext& ctx) {
+            EXPECT_TRUE(ctx.hasDeclaredTextureUsage(declared));
+            EXPECT_FALSE(ctx.hasDeclaredTextureUsage(undeclared));
+            EXPECT_TRUE(ctx.hasDeclaredTextureAccess(declared, ERGPassResourceAccess::Read));
+            EXPECT_FALSE(ctx.hasDeclaredTextureAccess(declared, ERGPassResourceAccess::TransferSrc));
+            EXPECT_TRUE(ctx.hasDeclaredBufferUsage(dstBuffer));
+            EXPECT_TRUE(ctx.hasDeclaredBufferAccess(dstBuffer, ERGBufferAccess::TransferWrite));
+            EXPECT_FALSE(ctx.hasDeclaredBufferAccess(dstBuffer, ERGBufferAccess::ShaderWrite));
+        });
+
+    ASSERT_TRUE(executor.execute(graph, cmdBuf));
+}
+
+TEST(RenderGraphCoreTest, RenderContextReportsTransferAccessRequirements)
+{
+    TestResourceFactory factory;
+    TestCommandBuffer   cmdBuf;
+    RenderGraphExecutor executor(factory);
+    RenderGraph         graph;
+    TestBuffer          srcBacking(BufferCreateInfo{
+        .label = "src",
+        .usage = EBufferUsage::TransferSrc | EBufferUsage::StorageBuffer,
+        .size  = 64,
+    });
+    TestBuffer          dstBacking(BufferCreateInfo{
+        .label = "dst",
+        .usage = EBufferUsage::TransferDst | EBufferUsage::StorageBuffer,
+        .size  = 64,
+    });
+
+    const auto src = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "src",
+            .usage = EBufferUsage::TransferSrc | EBufferUsage::StorageBuffer,
+            .size  = 64,
+        },
+        .buffer = &srcBacking,
+    });
+    const auto dst = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "dst",
+            .usage = EBufferUsage::TransferDst | EBufferUsage::StorageBuffer,
+            .size  = 64,
+        },
+        .buffer = &dstBacking,
+    });
+
+    graph.addPass(
+        "copy",
+        [&](RGPassBuilder& pass) {
+            pass.transferSrc(src);
+            pass.transferDst(dst);
+        },
+        [&](RGRenderContext& ctx) {
+            EXPECT_TRUE(ctx.hasDeclaredBufferAccess(src, ERGBufferAccess::TransferRead));
+            EXPECT_TRUE(ctx.hasDeclaredBufferAccess(dst, ERGBufferAccess::TransferWrite));
+            EXPECT_FALSE(ctx.hasDeclaredBufferAccess(src, ERGBufferAccess::ShaderRead));
+            ctx.copyBuffer(src, dst, 64);
+        });
+
+    ASSERT_TRUE(executor.execute(graph, cmdBuf));
+}
+
 TEST(RenderGraphCoreTest, ExecutorCanBeginDeclaredRasterRenderingFromCompiledPassPlan)
 {
     TestResourceFactory factory;
