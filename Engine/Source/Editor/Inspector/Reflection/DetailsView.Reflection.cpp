@@ -1,4 +1,20 @@
 #include "Editor/Inspector/DetailsViewInternal.h"
+#include "ECS/Component/2D/BillboardComponent.h"
+#include "ECS/Component/DirectionalLightComponent.h"
+#include "ECS/Component/Material/MaterialComponent.h"
+#include "ECS/Component/ModelComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
+#include "ECS/Component/Mesh/SkinnedMeshComponent.h"
+#include "ECS/Component/PointLightComponent.h"
+#include "ECS/Component/TransformComponent.h"
+#include "ECS/Component/Terrain/TerrainComponent.h"
+#include "ECS/Component/2D/UIComponent.h"
+#include "ECS/Component/Material/SimpleMaterialComponent.h"
+#include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
+#include "ECS/Component/Material/PBRMaterialComponent.h"
+#include "ECS/Component/RenderComponent.h"
+#include "Scene/Scene.h"
 
 namespace ya
 {

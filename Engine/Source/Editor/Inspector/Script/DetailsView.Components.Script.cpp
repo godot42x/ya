@@ -1,4 +1,6 @@
 #include "Editor/Inspector/DetailsViewInternal.h"
+#include "ECS/Component/LuaScriptComponent.h"
+#include "Core/System/VirtualFileSystem.h"
 
 namespace ya
 {

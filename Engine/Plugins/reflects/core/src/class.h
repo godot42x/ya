@@ -5,6 +5,7 @@
 #include "reflects-core/api.h"
 #include <memory>
 #include <vector>
+#include <ranges>
 
 
 // ============================================================================

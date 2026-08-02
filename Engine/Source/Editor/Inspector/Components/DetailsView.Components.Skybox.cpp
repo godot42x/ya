@@ -1,4 +1,6 @@
 #include "Editor/Inspector/DetailsViewInternal.h"
+#include "ECS/System/ResourceResolveSystem.h"
+#include "Runtime/Application/App.h"
 
 namespace ya
 {

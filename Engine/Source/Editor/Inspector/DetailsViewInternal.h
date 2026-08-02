@@ -2,43 +2,14 @@
 
 #include "Editor/Inspector/DetailsView.h"
 
-#include "Core/Profiling/Instrumentor.h"
-#include "Core/Reflection/ECSRegistry.h"
-#include "Core/System/VirtualFileSystem.h"
-#include "ECS/Component.h"
-#include "ECS/Component/2D/BillboardComponent.h"
-#include "ECS/Component/2D/UIComponent.h"
-#include "ECS/Component/3D/EnvironmentLightingComponent.h"
-#include "ECS/Component/3D/SkyboxComponent.h"
-#include "ECS/Component/DirectionalLightComponent.h"
-#include "ECS/Component/LuaScriptComponent.h"
-#include "ECS/Component/Material/PBRMaterialComponent.h"
-#include "ECS/Component/Material/PhongMaterialComponent.h"
-#include "ECS/Component/Material/SimpleMaterialComponent.h"
-#include "ECS/Component/Material/UnlitMaterialComponent.h"
-#include "ECS/Component/Mesh/SkinnedMeshComponent.h"
-#include "ECS/Component/Mesh/StaticMeshComponent.h"
-#include "ECS/Component/ModelComponent.h"
-#include "ECS/Component/PointLightComponent.h"
-#include "ECS/Component/RenderComponent.h"
-#include "ECS/Component/Terrain/TerrainComponent.h"
-#include "ECS/Component/TransformComponent.h"
-#include "ECS/System/ResourceResolveSystem.h"
-#include "Editor/EditorLayer.h"
-#include "Editor/ImGui/ImGuiHelper.h"
-#include "Editor/Inspector/TypeRenderer.h"
 #include "Resource/Texture/TextureLibrary.h"
-#include "Runtime/Application/App.h"
 #include "Resource/AssetManager.h"
-#include "Scene/Node.h"
-#include "Scene/Scene.h"
+#include "Runtime/GUI/ImGui/ImGuiSystem.h"
 
 #include <algorithm>
 #include <array>
 #include <cstring>
 #include <glm/gtc/type_ptr.hpp>
-#include <limits>
-#include <unordered_set>
 #include <vector>
 
 namespace ya
