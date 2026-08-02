@@ -238,7 +238,7 @@ vec3 shadePBR(in vec3 worldPos,in vec3 N, in vec3 V, in vec3 albedo, float metal
         // per-light radiance
         vec3 L = normalize(-uLight.dirLight.dir);
         vec3 H = normalize(V + L);
-        vec3 radiance = uLight.dirLight.color; // raw light
+        vec3 radiance = uLight.dirLight.color * uLight.dirLight.intensity;
         float shadow = calculateDirectionalShadow(worldPos, N, L);
 
         // Cook-Torrance BRDF

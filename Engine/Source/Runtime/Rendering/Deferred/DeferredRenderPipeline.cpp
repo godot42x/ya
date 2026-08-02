@@ -1347,10 +1347,17 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             rgCtx.endRendering();
         });
 
+    const auto bloomComposite = _postProcessStage.appendBloomGraphPasses(
+        graph,
+        color,
+        viewportExtent,
+        &_lastTickCtx);
+    const auto overlayInput = bloomComposite.isValid() ? bloomComposite : color;
+
     [[maybe_unused]] const auto overlayPass = graph.addPass(
         "Deferred Scene Overlay",
         [&](RGPassBuilder& passBuilder) {
-            passBuilder.useColorAttachment(color);
+            passBuilder.useColorAttachment(overlayInput);
             passBuilder.useDepthAttachment(viewportDepthHandle);
         },
         [&](RGRenderContext& rgCtx) {
@@ -1358,7 +1365,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
                 .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
                 .layerCount = 1,
                 .colors = {{
-                    .color       = color,
+                    .color       = overlayInput,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
@@ -1382,7 +1389,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     [[maybe_unused]] const auto viewportOverlayPass = graph.addPass(
         "Deferred Viewport Overlay",
         [&](RGPassBuilder& passBuilder) {
-            passBuilder.useColorAttachment(color);
+            passBuilder.useColorAttachment(overlayInput);
             passBuilder.useDepthAttachment(viewportDepthHandle);
         },
         [&](RGRenderContext& rgCtx) {
@@ -1390,7 +1397,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
                 .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
                 .layerCount = 1,
                 .colors = {{
-                    .color       = color,
+                    .color       = overlayInput,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
@@ -1411,9 +1418,9 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             rgCtx.endRendering();
         });
 
-    const auto postprocessOutput = _postProcessStage.appendGraphPasses(
+    const auto postprocessOutput = _postProcessStage.appendFinalizeGraphPasses(
         graph,
-        color,
+        overlayInput,
         viewportExtent,
         &_lastTickCtx);
 

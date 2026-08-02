@@ -47,6 +47,14 @@ struct PostProcessingStage
     void     setBloomEnabled(bool enabled) { _state.bEnableBloom = enabled; }
     void     setToneMappingEnabled(bool enabled) { _state.bEnableToneMapping = enabled; }
     void     setToneMappingCurve(PostProcessingState::EToneMappingCurve curve) { _state.toneMappingCurve = curve; }
+    RGTextureHandle appendBloomGraphPasses(RenderGraph&   graph,
+                                           RGTextureHandle input,
+                                           Extent2D        inputExtent,
+                                           FrameContext*   ctx);
+    RGTextureHandle appendFinalizeGraphPasses(RenderGraph&   graph,
+                                              RGTextureHandle input,
+                                              Extent2D        inputExtent,
+                                              FrameContext*   ctx);
     RGTextureHandle appendGraphPasses(RenderGraph& graph,
                                       Texture*      inputTexture,
                                       glm::vec2     viewportExtent,
