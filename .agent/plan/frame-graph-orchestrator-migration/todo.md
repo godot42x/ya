@@ -55,7 +55,7 @@
   - 验收：未声明 resolve、write-as-read、stale handle、合法 resolve 测试
   - 提交：`[render/graph] validate pass resource resolution`
 
-- [ ] `FG-104` 补 buffer range 和明确 state 语义
+- [x] `FG-104` 补 buffer range 和明确 state 语义
   - 依赖：FG-103
   - 修改：RG buffer usage/state plan、ResourceStateTracker、tests
   - 实现：pass 可声明 offset/size；HostWrite、UniformRead、StorageRead/Write、IndirectRead 映射明确

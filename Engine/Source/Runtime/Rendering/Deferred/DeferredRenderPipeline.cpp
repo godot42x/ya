@@ -1169,9 +1169,9 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     [[maybe_unused]] const auto gbufferPass = graph.addPass(
         "Deferred GBuffer",
         [&](RGPassBuilder& passBuilder) {
-            passBuilder.read(frameBuffer);
-            passBuilder.read(lightBuffer);
-            passBuilder.read(skinningBuffer);
+            passBuilder.uniformRead(frameBuffer);
+            passBuilder.uniformRead(lightBuffer);
+            passBuilder.storageRead(skinningBuffer);
             passBuilder.declareRaster({
                 .renderArea = Rect2D{.pos = {0, 0}, .extent = gbufferExtent.toVec2()},
                 .layerCount = 1,
@@ -1277,8 +1277,8 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             if (shadowPass.has_value()) {
                 passBuilder.dependsOn(*shadowPass);
             }
-            passBuilder.read(frameBuffer);
-            passBuilder.read(lightBuffer);
+            passBuilder.uniformRead(frameBuffer);
+            passBuilder.uniformRead(lightBuffer);
             for (const auto handle : gbufferColors) {
                 passBuilder.read(handle);
             }

@@ -28,9 +28,10 @@ const char* toString(ERGPassResourceAccess access)
 const char* toString(ERGBufferAccess access)
 {
     switch (access) {
-        case ERGBufferAccess::ShaderRead: return "ShaderRead";
-        case ERGBufferAccess::ShaderWrite: return "ShaderWrite";
-        case ERGBufferAccess::ShaderReadWrite: return "ShaderReadWrite";
+        case ERGBufferAccess::UniformRead: return "UniformRead";
+        case ERGBufferAccess::StorageRead: return "StorageRead";
+        case ERGBufferAccess::StorageWrite: return "StorageWrite";
+        case ERGBufferAccess::StorageReadWrite: return "StorageReadWrite";
         case ERGBufferAccess::IndirectRead: return "IndirectRead";
         case ERGBufferAccess::TransferRead: return "TransferRead";
         case ERGBufferAccess::TransferWrite: return "TransferWrite";
@@ -62,6 +63,36 @@ bool isTransferTextureAccess(ERGPassResourceAccess access)
 bool isTransferBufferAccess(ERGBufferAccess access)
 {
     return access == ERGBufferAccess::TransferRead || access == ERGBufferAccess::TransferWrite;
+}
+
+RGBufferRange normalizeBufferRange(const RGBufferResource& resource, const RGBufferRange& range)
+{
+    const uint64_t bufferSize = resource.desc.size;
+    RGBufferRange  normalized = range;
+    if (normalized.size == 0) {
+        YA_CORE_ASSERT(normalized.offset <= bufferSize,
+                       "RenderGraph buffer range offset {} exceeds buffer {} size {}",
+                       normalized.offset,
+                       resource.desc.label,
+                       bufferSize);
+        normalized.size = bufferSize - normalized.offset;
+    }
+
+    YA_CORE_ASSERT(normalized.size > 0,
+                   "RenderGraph buffer range for {} must be non-zero after normalization",
+                   resource.desc.label);
+    YA_CORE_ASSERT(normalized.offset + normalized.size <= bufferSize,
+                   "RenderGraph buffer range [{}, {}) exceeds buffer {} size {}",
+                   normalized.offset,
+                   normalized.offset + normalized.size,
+                   resource.desc.label,
+                   bufferSize);
+    return normalized;
+}
+
+bool rangesOverlap(const RGBufferRange& lhs, const RGBufferRange& rhs)
+{
+    return lhs.offset < rhs.offset + rhs.size && rhs.offset < lhs.offset + lhs.size;
 }
 
 const char* toString(ERGPassKind kind)
@@ -210,24 +241,29 @@ ImageResourceState makeTextureState(const RGTextureResource& resource, ERGPassRe
     return state;
 }
 
-BufferResourceState makeBufferState(const RGBufferResource& resource, ERGBufferAccess access)
+BufferResourceState makeBufferState(ERGPassKind passKind, const RGBufferResource& resource, const RGBufferUsage& usage)
 {
+    const auto normalizedRange = normalizeBufferRange(resource, usage.range);
     BufferResourceState state{
-        .offset = 0,
-        .size   = resource.desc.size,
+        .offset = normalizedRange.offset,
+        .size   = normalizedRange.size,
     };
 
-    switch (access) {
-        case ERGBufferAccess::ShaderRead:
+    switch (usage.access) {
+        case ERGBufferAccess::UniformRead:
             state.stages = EPipelineStage::AllCommands;
             state.access = EResourceAccess::ShaderRead;
             break;
-        case ERGBufferAccess::ShaderWrite:
-            state.stages = EPipelineStage::AllCommands;
+        case ERGBufferAccess::StorageRead:
+            state.stages = passKind == ERGPassKind::Compute ? EPipelineStage::ComputeShader : EPipelineStage::AllCommands;
+            state.access = EResourceAccess::ShaderRead;
+            break;
+        case ERGBufferAccess::StorageWrite:
+            state.stages = passKind == ERGPassKind::Compute ? EPipelineStage::ComputeShader : EPipelineStage::AllCommands;
             state.access = EResourceAccess::ShaderWrite;
             break;
-        case ERGBufferAccess::ShaderReadWrite:
-            state.stages = EPipelineStage::ComputeShader;
+        case ERGBufferAccess::StorageReadWrite:
+            state.stages = passKind == ERGPassKind::Compute ? EPipelineStage::ComputeShader : EPipelineStage::AllCommands;
             state.access = static_cast<EResourceAccess::T>(EResourceAccess::ShaderRead | EResourceAccess::ShaderWrite);
             break;
         case ERGBufferAccess::IndirectRead:
@@ -245,6 +281,86 @@ BufferResourceState makeBufferState(const RGBufferResource& resource, ERGBufferA
     }
 
     return state;
+}
+
+bool isBufferReadAccess(ERGBufferAccess access)
+{
+    switch (access) {
+        case ERGBufferAccess::UniformRead:
+        case ERGBufferAccess::StorageRead:
+        case ERGBufferAccess::StorageReadWrite:
+        case ERGBufferAccess::IndirectRead:
+        case ERGBufferAccess::TransferRead:
+            return true;
+        case ERGBufferAccess::StorageWrite:
+        case ERGBufferAccess::TransferWrite:
+            return false;
+    }
+    return false;
+}
+
+bool isBufferWriteAccess(ERGBufferAccess access)
+{
+    switch (access) {
+        case ERGBufferAccess::StorageWrite:
+        case ERGBufferAccess::StorageReadWrite:
+        case ERGBufferAccess::TransferWrite:
+            return true;
+        case ERGBufferAccess::UniformRead:
+        case ERGBufferAccess::StorageRead:
+        case ERGBufferAccess::IndirectRead:
+        case ERGBufferAccess::TransferRead:
+            return false;
+    }
+    return false;
+}
+
+void appendBufferUsage(RGPass& pass, RGBufferHandle handle, ERGBufferAccess access, RGBufferRange range)
+{
+    pass.buffers.push_back({
+        .handle = handle,
+        .access = access,
+        .range  = range,
+    });
+}
+
+bool isUniformOnlyBufferUsage(EBufferUsage usage)
+{
+    return hasBufferUsage(usage, EBufferUsage::UniformBuffer) && !hasBufferUsage(usage, EBufferUsage::StorageBuffer);
+}
+
+bool isStorageCapableBufferUsage(EBufferUsage usage)
+{
+    return hasBufferUsage(usage, EBufferUsage::StorageBuffer);
+}
+
+bool isUniformCapableBufferUsage(EBufferUsage usage)
+{
+    return hasBufferUsage(usage, EBufferUsage::UniformBuffer);
+}
+
+bool validateBufferUsageFlags(const RGBufferResource& resource, ERGBufferAccess access)
+{
+    switch (access) {
+        case ERGBufferAccess::UniformRead:
+            return isUniformCapableBufferUsage(resource.desc.usage);
+        case ERGBufferAccess::StorageRead:
+        case ERGBufferAccess::StorageWrite:
+        case ERGBufferAccess::StorageReadWrite:
+            return isStorageCapableBufferUsage(resource.desc.usage);
+        case ERGBufferAccess::IndirectRead:
+            return hasBufferUsage(resource.desc.usage, EBufferUsage::IndirectBuffer);
+        case ERGBufferAccess::TransferRead:
+            return hasBufferUsage(resource.desc.usage, EBufferUsage::TransferSrc);
+        case ERGBufferAccess::TransferWrite:
+            return hasBufferUsage(resource.desc.usage, EBufferUsage::TransferDst);
+    }
+    return false;
+}
+
+std::string formatBufferRange(const RGBufferRange& range)
+{
+    return std::format("[{}, {})", range.offset, range.offset + range.size);
 }
 
 void retainResolvedRenderImage(ICommandBuffer& cmdBuf, const RenderImage& image)
@@ -603,34 +719,39 @@ void RGPassBuilder::write(RGTextureHandle handle)
     pass().textures.push_back({.handle = handle, .access = ERGPassResourceAccess::Write});
 }
 
-void RGPassBuilder::read(RGBufferHandle handle)
+void RGPassBuilder::uniformRead(RGBufferHandle handle, RGBufferRange range)
 {
-    pass().buffers.push_back({.handle = handle, .access = ERGBufferAccess::ShaderRead});
+    appendBufferUsage(pass(), handle, ERGBufferAccess::UniformRead, range);
 }
 
-void RGPassBuilder::write(RGBufferHandle handle)
+void RGPassBuilder::storageRead(RGBufferHandle handle, RGBufferRange range)
 {
-    pass().buffers.push_back({.handle = handle, .access = ERGBufferAccess::ShaderWrite});
+    appendBufferUsage(pass(), handle, ERGBufferAccess::StorageRead, range);
 }
 
-void RGPassBuilder::readWrite(RGBufferHandle handle)
+void RGPassBuilder::storageWrite(RGBufferHandle handle, RGBufferRange range)
 {
-    pass().buffers.push_back({.handle = handle, .access = ERGBufferAccess::ShaderReadWrite});
+    appendBufferUsage(pass(), handle, ERGBufferAccess::StorageWrite, range);
 }
 
-void RGPassBuilder::indirectRead(RGBufferHandle handle)
+void RGPassBuilder::storageReadWrite(RGBufferHandle handle, RGBufferRange range)
 {
-    pass().buffers.push_back({.handle = handle, .access = ERGBufferAccess::IndirectRead});
+    appendBufferUsage(pass(), handle, ERGBufferAccess::StorageReadWrite, range);
 }
 
-void RGPassBuilder::transferSrc(RGBufferHandle handle)
+void RGPassBuilder::indirectRead(RGBufferHandle handle, RGBufferRange range)
 {
-    pass().buffers.push_back({.handle = handle, .access = ERGBufferAccess::TransferRead});
+    appendBufferUsage(pass(), handle, ERGBufferAccess::IndirectRead, range);
 }
 
-void RGPassBuilder::transferDst(RGBufferHandle handle)
+void RGPassBuilder::transferSrc(RGBufferHandle handle, RGBufferRange range)
 {
-    pass().buffers.push_back({.handle = handle, .access = ERGBufferAccess::TransferWrite});
+    appendBufferUsage(pass(), handle, ERGBufferAccess::TransferRead, range);
+}
+
+void RGPassBuilder::transferDst(RGBufferHandle handle, RGBufferRange range)
+{
+    appendBufferUsage(pass(), handle, ERGBufferAccess::TransferWrite, range);
 }
 
 void RGPassBuilder::dependsOn(RGPassHandle handle)
@@ -823,7 +944,13 @@ RGCompiledGraph RenderGraph::compile() const
     compiled.transientBufferLifetimes.reserve(_buffers.size());
 
     std::unordered_map<RGTextureHandle, RGPassHandle> textureWriters;
-    std::unordered_map<RGBufferHandle, RGPassHandle>  bufferWriters;
+    struct TrackedBufferAccess
+    {
+        RGPassHandle    pass{};
+        RGBufferRange   range{};
+        ERGBufferAccess access = ERGBufferAccess::StorageRead;
+    };
+    std::unordered_map<RGBufferHandle, std::vector<TrackedBufferAccess>> bufferAccesses;
     std::unordered_map<std::string, const RGTextureResource*> persistentTexturesByKey;
     std::unordered_map<std::string, const RGBufferResource*>  persistentBuffersByKey;
     std::vector<std::vector<uint32_t>> adjacency(_passes.size());
@@ -1036,53 +1163,53 @@ RGCompiledGraph RenderGraph::compile() const
                 continue;
             }
 
-            const bool bCompatibleUsage = [&]() {
-                switch (usage.access) {
-                    case ERGBufferAccess::ShaderRead:
-                        return hasBufferUsage(resource->desc.usage, EBufferUsage::StorageBuffer) ||
-                               hasBufferUsage(resource->desc.usage, EBufferUsage::UniformBuffer);
-                    case ERGBufferAccess::ShaderWrite:
-                    case ERGBufferAccess::ShaderReadWrite:
-                        return hasBufferUsage(resource->desc.usage, EBufferUsage::StorageBuffer);
-                    case ERGBufferAccess::IndirectRead:
-                        return hasBufferUsage(resource->desc.usage, EBufferUsage::IndirectBuffer);
-                    case ERGBufferAccess::TransferRead:
-                        return hasBufferUsage(resource->desc.usage, EBufferUsage::TransferSrc);
-                    case ERGBufferAccess::TransferWrite:
-                        return hasBufferUsage(resource->desc.usage, EBufferUsage::TransferDst);
-                }
-                return false;
-            }();
+            const bool bCompatibleUsage = validateBufferUsageFlags(*resource, usage.access);
             if (!bCompatibleUsage) {
                 addIssue(RGCompileIssue::EKind::InvalidUsage, pass.handle,
                          std::format("pass {} uses buffer {} with unsupported usage flags", pass.name, resource->desc.label));
                 continue;
             }
 
+            const auto normalizedRange = normalizeBufferRange(*resource, usage.range);
+
             passPlans[pass.handle.index].bufferStates.push_back({
                 .pass          = pass.handle,
                 .buffer        = usage.handle,
-                .requiredState = makeBufferState(*resource, usage.access),
+                .requiredState = makeBufferState(passPlans[pass.handle.index].kind, *resource, usage),
             });
 
-            const bool bWrite = usage.access == ERGBufferAccess::ShaderWrite ||
-                                usage.access == ERGBufferAccess::ShaderReadWrite ||
-                                usage.access == ERGBufferAccess::TransferWrite;
-            if (!bWrite) {
-                const auto writerIt = bufferWriters.find(usage.handle);
-                if (writerIt == bufferWriters.end() && resource->lifetime != ERGResourceLifetime::Imported) {
-                    addIssue(RGCompileIssue::EKind::ReadBeforeWrite, pass.handle,
-                             std::format("pass {} reads buffer {} before any writer", pass.name, resource->desc.label));
-                } else if (writerIt != bufferWriters.end()) {
-                    addDependency(writerIt->second, pass.handle);
+            const bool bRead  = isBufferReadAccess(usage.access);
+            const bool bWrite = isBufferWriteAccess(usage.access);
+            auto&      priorAccesses = bufferAccesses[usage.handle];
+
+            bool bHasOverlappingWriter = false;
+            for (const auto& prior : priorAccesses) {
+                if (!rangesOverlap(prior.range, normalizedRange)) {
+                    continue;
                 }
-                continue;
+                if ((bRead && isBufferWriteAccess(prior.access)) ||
+                    (bWrite && (isBufferReadAccess(prior.access) || isBufferWriteAccess(prior.access)))) {
+                    addDependency(prior.pass, pass.handle);
+                }
+                if (bRead && isBufferWriteAccess(prior.access)) {
+                    bHasOverlappingWriter = true;
+                }
             }
 
-            if (const auto writerIt = bufferWriters.find(usage.handle); writerIt != bufferWriters.end()) {
-                addDependency(writerIt->second, pass.handle);
+            if (bRead && !bWrite && !bHasOverlappingWriter && resource->lifetime != ERGResourceLifetime::Imported) {
+                addIssue(RGCompileIssue::EKind::ReadBeforeWrite,
+                         pass.handle,
+                         std::format("pass {} reads buffer {} range {} before any overlapping writer",
+                                     pass.name,
+                                     resource->desc.label,
+                                     formatBufferRange(normalizedRange)));
             }
-            bufferWriters[usage.handle] = pass.handle;
+
+            priorAccesses.push_back({
+                .pass   = pass.handle,
+                .range  = normalizedRange,
+                .access = usage.access,
+            });
         }
     }
 

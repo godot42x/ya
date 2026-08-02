@@ -333,11 +333,11 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
         "Point Shadow Faces",
         [graphFaces, skinningBuffer, drawCommands, visibleInstances, rasterDependency](RGPassBuilder& pass) {
             if (rasterDependency.has_value()) pass.dependsOn(*rasterDependency);
-            pass.read(skinningBuffer);
+            pass.storageRead(skinningBuffer);
             if (drawCommands.has_value()) pass.indirectRead(*drawCommands);
-            if (visibleInstances.has_value()) pass.read(*visibleInstances);
+            if (visibleInstances.has_value()) pass.storageRead(*visibleInstances);
             for (const auto& face : *graphFaces) {
-                pass.read(face.faceBuffer);
+                pass.uniformRead(face.faceBuffer);
                 pass.useDepthAttachment(face.depth);
             }
         },

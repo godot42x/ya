@@ -260,10 +260,10 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
         [instanceBuffer, frustumBuffer, drawCommandBuffer, visibleInstances, dependency](RGPassBuilder& pass) {
             if (dependency.has_value()) pass.dependsOn(*dependency);
             pass.declareCompute();
-            pass.read(instanceBuffer);
-            pass.read(frustumBuffer);
-            pass.readWrite(drawCommandBuffer);
-            pass.write(visibleInstances);
+            pass.storageRead(instanceBuffer);
+            pass.storageRead(frustumBuffer);
+            pass.storageReadWrite(drawCommandBuffer);
+            pass.storageWrite(visibleInstances);
         },
         [this, cullDS = flight.cullDS, pc, groupsX, faceCount = flight.activeFaceCount](RGRenderContext& ctx) {
             YA_PROFILE_SCOPE("PointShadowPass::CullDispatch");

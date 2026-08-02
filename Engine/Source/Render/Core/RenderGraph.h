@@ -97,6 +97,12 @@ struct RGBufferDesc
     EMemoryUsage memoryUsage = EMemoryUsage::Auto;
 };
 
+struct RGBufferRange
+{
+    uint64_t offset = 0;
+    uint64_t size   = 0;
+};
+
 struct RGImportedTextureDesc
 {
     RGTextureDesc     desc;
@@ -161,9 +167,10 @@ struct RGTextureUsage
 
 enum class ERGBufferAccess : uint8_t
 {
-    ShaderRead,
-    ShaderWrite,
-    ShaderReadWrite,
+    UniformRead,
+    StorageRead,
+    StorageWrite,
+    StorageReadWrite,
     IndirectRead,
     TransferRead,
     TransferWrite,
@@ -172,7 +179,8 @@ enum class ERGBufferAccess : uint8_t
 struct RGBufferUsage
 {
     RGBufferHandle handle{};
-    ERGBufferAccess access = ERGBufferAccess::ShaderRead;
+    ERGBufferAccess access = ERGBufferAccess::StorageRead;
+    RGBufferRange   range{};
 };
 
 struct RGColorAttachmentDesc
@@ -456,12 +464,13 @@ class RGPassBuilder
 
     ENGINE_API void read(RGTextureHandle handle);
     ENGINE_API void write(RGTextureHandle handle);
-    ENGINE_API void read(RGBufferHandle handle);
-    ENGINE_API void write(RGBufferHandle handle);
-    ENGINE_API void readWrite(RGBufferHandle handle);
-    ENGINE_API void indirectRead(RGBufferHandle handle);
-    ENGINE_API void transferSrc(RGBufferHandle handle);
-    ENGINE_API void transferDst(RGBufferHandle handle);
+    ENGINE_API void uniformRead(RGBufferHandle handle, RGBufferRange range = {});
+    ENGINE_API void storageRead(RGBufferHandle handle, RGBufferRange range = {});
+    ENGINE_API void storageWrite(RGBufferHandle handle, RGBufferRange range = {});
+    ENGINE_API void storageReadWrite(RGBufferHandle handle, RGBufferRange range = {});
+    ENGINE_API void indirectRead(RGBufferHandle handle, RGBufferRange range = {});
+    ENGINE_API void transferSrc(RGBufferHandle handle, RGBufferRange range = {});
+    ENGINE_API void transferDst(RGBufferHandle handle, RGBufferRange range = {});
     ENGINE_API void dependsOn(RGPassHandle handle);
     ENGINE_API void declareCompute();
     ENGINE_API void declareCopy();
