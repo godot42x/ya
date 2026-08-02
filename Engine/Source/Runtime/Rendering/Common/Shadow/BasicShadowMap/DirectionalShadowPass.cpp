@@ -282,8 +282,8 @@ std::optional<RGPassHandle> DirectionalShadowPass::appendCascadePass(
         std::format("Directional Shadow Cascade {}", cascadeIndex),
         [frameBuffer, skinningBuffer, depth, dependency](RGPassBuilder& pass) {
             if (dependency.has_value()) pass.dependsOn(*dependency);
-            pass.read(frameBuffer);
-            pass.read(skinningBuffer);
+            pass.uniformRead(frameBuffer);
+            pass.storageRead(skinningBuffer);
             pass.useDepthAttachment(depth);
         },
         [this, payload, depth, cascadeIndex](RGRenderContext& ctx) {

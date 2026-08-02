@@ -722,10 +722,10 @@ TEST(RenderGraphCoreTest, CompileBuildsTransientBufferLifetimeMetadata)
     });
     const auto readAWriteB = graph.addPass("read-a-write-b", [&](RGPassBuilder& pass) {
         pass.transferSrc(transientA);
-        pass.write(transientB);
+        pass.storageWrite(transientB);
     });
     const auto readB = graph.addPass("read-b", [&](RGPassBuilder& pass) {
-        pass.read(transientB);
+        pass.storageRead(transientB);
     });
 
     const auto compiled = graph.compile();
@@ -874,7 +874,7 @@ TEST(RenderGraphCoreTest, CompileBuildsBufferAndDepthStatePlans)
 
     graph.addPass("depth-prepass", [&](RGPassBuilder& pass) {
         pass.useDepthAttachment(depth);
-        pass.write(storage);
+        pass.storageWrite(storage);
     });
 
     const auto compiled = graph.compile();
@@ -888,6 +888,40 @@ TEST(RenderGraphCoreTest, CompileBuildsBufferAndDepthStatePlans)
     ASSERT_EQ(bufferStates.size(), 1u);
     EXPECT_EQ(bufferStates[0].requiredState.access, EResourceAccess::ShaderWrite);
     EXPECT_EQ(bufferStates[0].requiredState.size, 256u);
+}
+
+TEST(RenderGraphCoreTest, CompileTracksExplicitUniformAndStorageBufferStates)
+{
+    RenderGraph graph;
+    const auto uniformBuffer = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "frame.uniform",
+            .usage = EBufferUsage::UniformBuffer,
+            .size  = 256,
+        },
+        .buffer = reinterpret_cast<IBuffer*>(0x1),
+    });
+    const auto storageBuffer = graph.createBuffer(RGBufferDesc{
+        .label = "cull.storage",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 512,
+    });
+
+    graph.addPass("buffer-users", [&](RGPassBuilder& pass) {
+        pass.uniformRead(uniformBuffer, {.offset = 32, .size = 64});
+        pass.storageWrite(storageBuffer, {.offset = 128, .size = 96});
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid());
+    const auto bufferStates = collectBufferStatePlans(compiled);
+    ASSERT_EQ(bufferStates.size(), 2u);
+    EXPECT_EQ(bufferStates[0].requiredState.access, EResourceAccess::ShaderRead);
+    EXPECT_EQ(bufferStates[0].requiredState.offset, 32u);
+    EXPECT_EQ(bufferStates[0].requiredState.size, 64u);
+    EXPECT_EQ(bufferStates[1].requiredState.access, EResourceAccess::ShaderWrite);
+    EXPECT_EQ(bufferStates[1].requiredState.offset, 128u);
+    EXPECT_EQ(bufferStates[1].requiredState.size, 96u);
 }
 
 TEST(RenderGraphCoreTest, CompileUsesImportedViewRangeForTextureStatePlan)
@@ -945,7 +979,7 @@ TEST(RenderGraphCoreTest, CompileModelsComputeReadWriteToIndirectReadDependency)
     });
 
     const auto cullPass = graph.addPass("cull", [&](RGPassBuilder& pass) {
-        pass.readWrite(commands);
+        pass.storageReadWrite(commands);
     });
     const auto drawPass = graph.addPass("draw", [&](RGPassBuilder& pass) {
         pass.indirectRead(commands);
@@ -961,6 +995,53 @@ TEST(RenderGraphCoreTest, CompileModelsComputeReadWriteToIndirectReadDependency)
     EXPECT_EQ(bufferStates[1].requiredState.stages, EPipelineStage::DrawIndirect);
     EXPECT_EQ(bufferStates[1].requiredState.access, EResourceAccess::IndirectCommandRead);
     EXPECT_NE(std::find(compiled.dependencies.begin(), compiled.dependencies.end(), RGDependencyEdge{cullPass, drawPass}),
+              compiled.dependencies.end());
+}
+
+TEST(RenderGraphCoreTest, CompileDoesNotAddDependenciesForNonOverlappingImportedBufferRanges)
+{
+    RenderGraph graph;
+    const auto readback = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "readback",
+            .usage = EBufferUsage::TransferSrc | EBufferUsage::TransferDst,
+            .size  = 256,
+        },
+        .buffer = reinterpret_cast<IBuffer*>(0x1),
+    });
+
+    const auto writer = graph.addPass("writer-low", [&](RGPassBuilder& pass) {
+        pass.transferDst(readback, {.offset = 0, .size = 64});
+    });
+    const auto reader = graph.addPass("reader-high", [&](RGPassBuilder& pass) {
+        pass.transferSrc(readback, {.offset = 128, .size = 64});
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid());
+    EXPECT_EQ(std::find(compiled.dependencies.begin(), compiled.dependencies.end(), RGDependencyEdge{writer, reader}),
+              compiled.dependencies.end());
+}
+
+TEST(RenderGraphCoreTest, CompileAddsDependenciesForOverlappingBufferRanges)
+{
+    RenderGraph graph;
+    const auto storage = graph.createBuffer(RGBufferDesc{
+        .label = "shared.storage",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 256,
+    });
+
+    const auto writer = graph.addPass("writer", [&](RGPassBuilder& pass) {
+        pass.storageWrite(storage, {.offset = 32, .size = 96});
+    });
+    const auto reader = graph.addPass("reader", [&](RGPassBuilder& pass) {
+        pass.storageRead(storage, {.offset = 64, .size = 32});
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid());
+    EXPECT_NE(std::find(compiled.dependencies.begin(), compiled.dependencies.end(), RGDependencyEdge{writer, reader}),
               compiled.dependencies.end());
 }
 
@@ -2024,7 +2105,7 @@ TEST(RenderGraphCoreTest, ExecutorRunsPassesInCompiledOrderAndResolvesResources)
         "writer",
         [&](RGPassBuilder& pass) {
             pass.useColorAttachment(texture);
-            pass.write(buffer);
+            pass.storageWrite(buffer);
         },
         [&](RGRenderContext& ctx) {
             executionOrder.push_back(ctx.getPass().name);
@@ -2038,7 +2119,7 @@ TEST(RenderGraphCoreTest, ExecutorRunsPassesInCompiledOrderAndResolvesResources)
         "reader",
         [&](RGPassBuilder& pass) {
             pass.read(texture);
-            pass.read(buffer);
+            pass.storageRead(buffer);
         },
         [&](RGRenderContext& ctx) {
             executionOrder.push_back(ctx.getPass().name);
@@ -2133,7 +2214,7 @@ TEST(RenderGraphCoreTest, RenderContextReportsDeclaredTextureAndBufferUsage)
             EXPECT_FALSE(ctx.hasDeclaredTextureAccess(declared, ERGPassResourceAccess::TransferSrc));
             EXPECT_TRUE(ctx.hasDeclaredBufferUsage(dstBuffer));
             EXPECT_TRUE(ctx.hasDeclaredBufferAccess(dstBuffer, ERGBufferAccess::TransferWrite));
-            EXPECT_FALSE(ctx.hasDeclaredBufferAccess(dstBuffer, ERGBufferAccess::ShaderWrite));
+            EXPECT_FALSE(ctx.hasDeclaredBufferAccess(dstBuffer, ERGBufferAccess::StorageWrite));
         });
 
     ASSERT_TRUE(executor.execute(graph, cmdBuf));
@@ -2182,7 +2263,7 @@ TEST(RenderGraphCoreTest, RenderContextReportsTransferAccessRequirements)
         [&](RGRenderContext& ctx) {
             EXPECT_TRUE(ctx.hasDeclaredBufferAccess(src, ERGBufferAccess::TransferRead));
             EXPECT_TRUE(ctx.hasDeclaredBufferAccess(dst, ERGBufferAccess::TransferWrite));
-            EXPECT_FALSE(ctx.hasDeclaredBufferAccess(src, ERGBufferAccess::ShaderRead));
+            EXPECT_FALSE(ctx.hasDeclaredBufferAccess(src, ERGBufferAccess::StorageRead));
             ctx.copyBuffer(src, dst, 64);
         });
 
@@ -2361,7 +2442,7 @@ TEST(RenderGraphCoreTest, ExecutorSeedsImportedBufferBarrierFromDeclaredInitialS
     });
     graph.addPass(
         "uniform-reader",
-        [=](RGPassBuilder& pass) { pass.read(imported); },
+        [=](RGPassBuilder& pass) { pass.uniformRead(imported); },
         [](RGRenderContext&) {});
 
     ASSERT_TRUE(executor.execute(graph, cmdBuf));
@@ -2402,7 +2483,7 @@ TEST(RenderGraphCoreTest, ExecutorRetainsImportedBufferKeepAliveResources)
     });
     graph.addPass(
         "storage-reader",
-        [=](RGPassBuilder& pass) { pass.read(imported); },
+        [=](RGPassBuilder& pass) { pass.storageRead(imported); },
         [](RGRenderContext&) {});
 
     ASSERT_TRUE(executor.execute(graph, cmdBuf));

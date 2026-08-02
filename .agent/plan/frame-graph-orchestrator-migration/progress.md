@@ -145,6 +145,39 @@ physical slot 数少于 logical transient buffer 数，真实 Deferred consumer 
 - 下一任务：
   - 进入 `FG-104`，收口 buffer range/state、host-write 和 dynamic capacity replacement contract
 
+### 2026-08-02：FG-104 完成
+
+- 状态：完成
+- 实现：
+  - `RGBufferUsage` 新增显式 `RGBufferRange{offset,size}`，pass 可以按范围声明 buffer hazard，而不是一律 whole-buffer。
+  - buffer access 从含糊的 `read/write/readWrite` 拆成显式语义：
+    - `uniformRead()`
+    - `storageRead()`
+    - `storageWrite()`
+    - `storageReadWrite()`
+    - `indirectRead()`
+    - `transferSrc()/transferDst()`
+  - compiler 现在按“编译后 pass kind + buffer access + normalized range”生成 `BufferResourceState`，并据此建立 range-aware dependency：
+    - 非重叠 range 不再平白串行化
+    - 重叠 read/write、write/read、write/write 形成依赖
+    - `StorageReadWrite` 不再误报 read-before-write
+  - Deferred / directional shadow / point shadow 的 graph buffer callsite 已迁到显式 access API，不再继续使用模糊 buffer `read()`。
+- 行为边界：
+  - 这一步只补单 queue 下的 range-aware hazard 和 state 语义，不扩展到多 queue ownership 或通用 hazard optimizer。
+  - `HostWrite/HostRead` 仍主要体现在 imported buffer initial/final state；不会把 host 写入伪装成 graph pass access。
+- 测试：
+  - `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`
+  - 结果：80 tests passed
+  - 新增：
+    - `CompileTracksExplicitUniformAndStorageBufferStates`
+    - `CompileDoesNotAddDependenciesForNonOverlappingImportedBufferRanges`
+    - `CompileAddsDependenciesForOverlappingBufferRanges`
+  - 额外烟测：
+    - `xmake b ya-editor`
+    - 结果：build ok
+- 下一任务：
+  - 进入 `FG-105`，定义 frame graph execution result/export owner，避免 graph 外继续隐式抓 registry 内部 owner
+
 ## 任务记录模板
 
 ```text
