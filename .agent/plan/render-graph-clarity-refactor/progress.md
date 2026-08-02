@@ -179,3 +179,25 @@
   - 结果：74 tests passed；`ya-engine` build ok；`ya-runtime` build ok
 - 说明：
   - 这一步只提供 graph API 和 compiled metadata seam，不改变 registry 的 persistent ownership policy；按主计划 owner 约束，FG-102 仍负责“registry 按 stable key 管理物理资源”
+
+## 2026-08-02：第八批代码切片完成
+
+- 完成 `RG-0604`。
+- 新增 `RGTransientBufferDiagnostics`，由 compiled lifetime metadata 派生：
+  - logical transient buffer 数量 / 总字节数
+  - 已参与 lifetime 的数量 / 字节数
+  - 未被任何 pass 使用的数量 / 字节数
+- `RenderGraph::debugDump()` 新增 `transientBufferDiagnostics`，并显式输出
+  `physicalReuse=not-materialized`，避免把 frame-local handle 或 lifetime metadata 误报为 GPU physical reuse。
+- 扩展 `CompileBuildsTransientBufferLifetimeMetadata`，覆盖诊断数值和 dump 输出。
+- 这一步没有修改 `RenderGraphResourceRegistry`，也没有实现 physical slot、alias barrier、跨帧 pool 或 reuse ratio；
+  这些仍由主计划 `FG-107~FG-110` 负责。
+- 验证：
+  - `xmake b ya-engine`：通过
+  - `xmake b ya-runtime`：通过
+  - `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`：
+    构建阶段被 worktree 中既有的 `Engine/Source/Core/Reflection/ContainerProperty.h:636`
+    非本次改动语法错误阻塞；该文件未纳入本提交。
+  - 直接运行已有 `ya-testing` binary 还缺少 `libslang-compiler.0.2026.1.dylib`，因此没有将运行结果冒充为通过。
+- 下一步：若继续推进本子计划，先对 `RG-0605` 做 assessment-only，明确当前单 queue state model
+  对 async compute / multi-queue 的缺口，再等待主计划 owner 落地 physical slot/reuse。
