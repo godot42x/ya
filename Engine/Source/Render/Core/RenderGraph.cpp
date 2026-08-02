@@ -592,6 +592,8 @@ RGCompiledGraph RenderGraph::compile() const
 {
     RGCompiledGraph compiled;
     compiled.order.reserve(_passes.size());
+    compiled.importedTextureFinalizes.reserve(_textures.size());
+    compiled.importedBufferFinalizes.reserve(_buffers.size());
 
     std::unordered_map<RGTextureHandle, RGPassHandle> textureWriters;
     std::unordered_map<RGBufferHandle, RGPassHandle>  bufferWriters;
@@ -771,6 +773,36 @@ RGCompiledGraph RenderGraph::compile() const
         addIssue(RGCompileIssue::EKind::Cycle, RGPassHandle{}, "render graph contains a dependency cycle");
     }
 
+    for (const auto& texture : _textures) {
+        if (texture.lifetime != ERGResourceLifetime::Imported || !texture.imported.has_value()) {
+            continue;
+        }
+
+        const auto finalLayout = texture.imported->importDesc.finalLayout;
+        if (finalLayout == EImageLayout::Undefined) {
+            continue;
+        }
+
+        compiled.importedTextureFinalizes.push_back({
+            .texture          = texture.handle,
+            .finalLayout      = finalLayout,
+            .subresourceRange = texture.imported->subresourceRange,
+        });
+    }
+
+    for (const auto& buffer : _buffers) {
+        if (buffer.lifetime != ERGResourceLifetime::Imported || !buffer.imported.has_value() ||
+            !buffer.imported->finalState.has_value()) {
+            continue;
+        }
+
+        compiled.importedBufferFinalizes.push_back({
+            .buffer       = buffer.handle,
+            .initialState = buffer.imported->initialState,
+            .finalState   = *buffer.imported->finalState,
+        });
+    }
+
     return compiled;
 }
 
@@ -822,6 +854,20 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
         oss << "  " << (pass ? pass->name : "<invalid-pass>")
             << " -> " << (buffer ? buffer->desc.label : "<invalid-buffer>")
             << " access=" << static_cast<uint32_t>(state.requiredState.access) << "\n";
+    }
+
+    oss << "importedTextureFinalizes(" << compiled.importedTextureFinalizes.size() << ")\n";
+    for (const auto& finalize : compiled.importedTextureFinalizes) {
+        const auto* texture = getTexture(finalize.texture);
+        oss << "  " << (texture ? texture->desc.label : "<invalid-texture>")
+            << " layout=" << static_cast<uint32_t>(finalize.finalLayout) << "\n";
+    }
+
+    oss << "importedBufferFinalizes(" << compiled.importedBufferFinalizes.size() << ")\n";
+    for (const auto& finalize : compiled.importedBufferFinalizes) {
+        const auto* buffer = getBuffer(finalize.buffer);
+        oss << "  " << (buffer ? buffer->desc.label : "<invalid-buffer>")
+            << " access=" << static_cast<uint32_t>(finalize.finalState.access) << "\n";
     }
 
     oss << "issues(" << compiled.issues.size() << ")\n";

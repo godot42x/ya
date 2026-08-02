@@ -108,28 +108,25 @@ bool RenderGraphExecutor::executeCompiled(
         pass->execute(ctx);
     }
 
+    finalizeImportedBufferStates(compiled, cmdBuf);
+    finalizeImportedTextureStates(compiled, cmdBuf);
     return true;
 }
 
-void RenderGraphExecutor::finalizeImportedBufferStates(const RenderGraph& graph, ICommandBuffer& cmdBuf)
+void RenderGraphExecutor::finalizeImportedBufferStates(const RGCompiledGraph& compiled, ICommandBuffer& cmdBuf)
 {
-    for (const auto& bufferResource : graph.getBuffers()) {
-        if (bufferResource.lifetime != ERGResourceLifetime::Imported || !bufferResource.imported.has_value() ||
-            !bufferResource.imported->finalState.has_value()) {
-            continue;
-        }
+    for (const auto& finalize : compiled.importedBufferFinalizes) {
+        auto* buffer = _registry.resolveBuffer(finalize.buffer);
+        YA_CORE_ASSERT(buffer != nullptr, "RenderGraphExecutor failed to resolve imported buffer {}", finalize.buffer.index);
 
-        auto* buffer = _registry.resolveBuffer(bufferResource.handle);
-        YA_CORE_ASSERT(buffer != nullptr, "RenderGraphExecutor failed to resolve imported buffer {}", bufferResource.handle.index);
-
-        const auto newState = normalizeBufferState(*bufferResource.imported->finalState, *buffer);
+        const auto newState = normalizeBufferState(finalize.finalState, *buffer);
         const auto oldIt    = _bufferStates.find(buffer);
         BufferResourceState oldState{};
         if (oldIt != _bufferStates.end()) {
             oldState = oldIt->second;
         }
         else {
-            oldState = normalizeBufferState(bufferResource.imported->initialState, *buffer);
+            oldState = normalizeBufferState(finalize.initialState, *buffer);
         }
 
         const bool bNeedsBarrier =
@@ -153,25 +150,16 @@ void RenderGraphExecutor::finalizeImportedBufferStates(const RenderGraph& graph,
     }
 }
 
-void RenderGraphExecutor::finalizeImportedTextureStates(const RenderGraph& graph, ICommandBuffer& cmdBuf)
+void RenderGraphExecutor::finalizeImportedTextureStates(const RGCompiledGraph& compiled, ICommandBuffer& cmdBuf)
 {
-    for (const auto& textureResource : graph.getTextures()) {
-        if (textureResource.lifetime != ERGResourceLifetime::Imported || !textureResource.imported.has_value()) {
-            continue;
-        }
-
-        const auto finalLayout = textureResource.imported->importDesc.finalLayout;
-        if (finalLayout == EImageLayout::Undefined) {
-            continue;
-        }
-
-        const auto* texture = _registry.resolveTexture(textureResource.handle);
-        YA_CORE_ASSERT(texture != nullptr, "RenderGraphExecutor failed to resolve imported texture {}", textureResource.handle.index);
-        YA_CORE_ASSERT(texture->getImage() != nullptr, "RenderGraphExecutor imported texture {} has no backing image", textureResource.handle.index);
+    for (const auto& finalize : compiled.importedTextureFinalizes) {
+        const auto* texture = _registry.resolveTexture(finalize.texture);
+        YA_CORE_ASSERT(texture != nullptr, "RenderGraphExecutor failed to resolve imported texture {}", finalize.texture.index);
+        YA_CORE_ASSERT(texture->getImage() != nullptr, "RenderGraphExecutor imported texture {} has no backing image", finalize.texture.index);
 
         const ImageSubresourceRange* subresourceRange =
-            textureResource.imported->subresourceRange ? &*textureResource.imported->subresourceRange : nullptr;
-        cmdBuf.transitionImageLayoutAuto(texture->getImage(), finalLayout, subresourceRange);
+            finalize.subresourceRange ? &*finalize.subresourceRange : nullptr;
+        cmdBuf.transitionImageLayoutAuto(texture->getImage(), finalize.finalLayout, subresourceRange);
     }
 }
 
@@ -193,9 +181,6 @@ bool RenderGraphExecutor::execute(
     if (!executeCompiled(graph, compiled, cmdBuf)) {
         return false;
     }
-
-    finalizeImportedBufferStates(graph, cmdBuf);
-    finalizeImportedTextureStates(graph, cmdBuf);
     return true;
 }
 

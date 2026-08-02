@@ -17,8 +17,8 @@ class ENGINE_API RenderGraphExecutor
     RenderGraphResourceRegistry _registry;
     ResourceStateTracker        _resourceStateTracker;
 
-    void finalizeImportedBufferStates(const RenderGraph& graph, ICommandBuffer& cmdBuf);
-    void finalizeImportedTextureStates(const RenderGraph& graph, ICommandBuffer& cmdBuf);
+    void finalizeImportedBufferStates(const RGCompiledGraph& compiled, ICommandBuffer& cmdBuf);
+    void finalizeImportedTextureStates(const RGCompiledGraph& compiled, ICommandBuffer& cmdBuf);
 
   public:
     explicit RenderGraphExecutor(IRenderResourceFactory& factory)
