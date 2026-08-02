@@ -259,6 +259,7 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
         "Point Shadow Cull",
         [instanceBuffer, frustumBuffer, drawCommandBuffer, visibleInstances, dependency](RGPassBuilder& pass) {
             if (dependency.has_value()) pass.dependsOn(*dependency);
+            pass.declareCompute();
             pass.read(instanceBuffer);
             pass.read(frustumBuffer);
             pass.readWrite(drawCommandBuffer);

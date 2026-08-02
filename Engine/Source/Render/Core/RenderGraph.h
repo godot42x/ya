@@ -119,6 +119,14 @@ enum class ERGPassResourceAccess : uint8_t
     TransferDst,
 };
 
+enum class ERGPassKind : uint8_t
+{
+    Unknown,
+    Raster,
+    Compute,
+    Copy,
+};
+
 struct RGTextureUsage
 {
     RGTextureHandle         handle{};
@@ -173,6 +181,7 @@ struct RGPass
 {
     RGPassHandle                handle{};
     std::string                 name;
+    ERGPassKind                 kind = ERGPassKind::Unknown;
     std::vector<RGTextureUsage> textures;
     std::vector<RGBufferUsage>  buffers;
     std::vector<RGPassHandle>   dependencies;
@@ -205,6 +214,7 @@ struct RGBufferStatePlan
 struct RGCompiledPassPlan
 {
     RGPassHandle                    pass{};
+    ERGPassKind                     kind = ERGPassKind::Unknown;
     std::vector<RGTextureStatePlan> textureStates;
     std::vector<RGBufferStatePlan>  bufferStates;
     std::optional<RGRasterPassDesc> rasterPlan{};
@@ -231,6 +241,7 @@ struct RGCompileIssue
         ReadBeforeWrite,
         InvalidResource,
         InvalidUsage,
+        InvalidPassKind,
         Cycle,
     };
 
@@ -383,6 +394,8 @@ class RGPassBuilder
     ENGINE_API void transferSrc(RGBufferHandle handle);
     ENGINE_API void transferDst(RGBufferHandle handle);
     ENGINE_API void dependsOn(RGPassHandle handle);
+    ENGINE_API void declareCompute();
+    ENGINE_API void declareCopy();
     ENGINE_API void declareRaster(const RGRasterPassDesc& desc);
     ENGINE_API void useColorAttachment(RGTextureHandle handle);
     ENGINE_API void useDepthAttachment(RGTextureHandle handle);

@@ -243,6 +243,7 @@ bool executeScreenshotCopyGraph(RenderGraphExecutor& executor,
     [[maybe_unused]] const auto pass = graph.addPass(
         std::string(graphLabel),
         [src, dst](RGPassBuilder& pass) {
+            pass.declareCopy();
             pass.transferSrc(src);
             pass.transferDst(dst);
         },

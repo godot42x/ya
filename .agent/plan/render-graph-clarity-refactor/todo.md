@@ -49,10 +49,10 @@
 
 ## Phase 4：显式 pass kind
 
-- [ ] RG-0501 增加 `ERGPassKind`
-- [ ] RG-0502 增加 kind-specific validation
-- [ ] RG-0503 更新 debugDump 和错误信息
-- [ ] RG-0504 逐步提供 Raster / Compute / Copy builder 入口
+- [x] RG-0501 增加 `ERGPassKind`
+- [x] RG-0502 增加 kind-specific validation
+- [x] RG-0503 更新 debugDump 和错误信息
+- [x] RG-0504 逐步提供 Raster / Compute / Copy builder 入口
   - 前置：必须存在对应真实 consumer；首轮只实现 Raster declaration 和现有 transfer API 所需校验
 
 ## Gate 3 / Phase 5：资源模型扩展入口

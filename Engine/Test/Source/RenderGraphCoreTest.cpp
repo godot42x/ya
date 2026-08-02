@@ -408,6 +408,8 @@ TEST(RenderGraphCoreTest, CompileBuildsStableDependencyOrder)
     ASSERT_EQ(compiled.passPlans.size(), 2u);
     EXPECT_EQ(compiled.passPlans[0].pass, writer);
     EXPECT_EQ(compiled.passPlans[1].pass, reader);
+    EXPECT_EQ(compiled.passPlans[0].kind, ERGPassKind::Raster);
+    EXPECT_EQ(compiled.passPlans[1].kind, ERGPassKind::Compute);
     const auto textureStates = collectTextureStatePlans(compiled);
     ASSERT_EQ(textureStates.size(), 2u);
     EXPECT_EQ(textureStates[0].requiredState.layout, EImageLayout::ColorAttachmentOptimal);
@@ -535,9 +537,66 @@ TEST(RenderGraphCoreTest, DebugDumpIncludesPassOrderDependenciesAndIssues)
     EXPECT_NE(dump.find("passes(1)"), std::string::npos);
     EXPECT_NE(dump.find("consumer"), std::string::npos);
     EXPECT_NE(dump.find("passPlans("), std::string::npos);
+    EXPECT_NE(dump.find("kind=Compute"), std::string::npos);
     EXPECT_NE(dump.find("    textureStates("), std::string::npos);
     EXPECT_NE(dump.find("issues(1)"), std::string::npos);
     EXPECT_NE(dump.find("InvalidUsage"), std::string::npos);
+}
+
+TEST(RenderGraphCoreTest, CompileInfersCopyPassKindForTransferOnlyPass)
+{
+    RenderGraph graph;
+    const auto src = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "readback.src",
+            .usage = EBufferUsage::TransferSrc,
+            .size  = 128,
+        },
+        .buffer = reinterpret_cast<IBuffer*>(0x1),
+    });
+    const auto dst = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "readback.dst",
+            .usage = EBufferUsage::TransferDst,
+            .size  = 128,
+        },
+        .buffer = reinterpret_cast<IBuffer*>(0x2),
+    });
+
+    graph.addPass("copy", [&](RGPassBuilder& pass) {
+        pass.transferSrc(src);
+        pass.transferDst(dst);
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid());
+    ASSERT_EQ(compiled.passPlans.size(), 1u);
+    EXPECT_EQ(compiled.passPlans[0].kind, ERGPassKind::Copy);
+}
+
+TEST(RenderGraphCoreTest, CompileRejectsCopyPassWithNonTransferUsage)
+{
+    RenderGraph graph;
+    const auto texture = graph.createTexture(RGTextureDesc{
+        .label  = "hdr",
+        .format = EFormat::R16G16B16A16_SFLOAT,
+        .extent = Extent3D{64, 64, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    });
+
+    graph.addPass("bad-copy", [&](RGPassBuilder& pass) {
+        pass.declareCopy();
+        pass.read(texture);
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_FALSE(compiled.isValid());
+    EXPECT_NE(std::find_if(compiled.issues.begin(),
+                           compiled.issues.end(),
+                           [](const RGCompileIssue& issue) {
+                               return issue.kind == RGCompileIssue::EKind::InvalidPassKind;
+                           }),
+              compiled.issues.end());
 }
 
 TEST(RenderGraphCoreTest, CompileStoresDeclaredRasterPlanInCompiledPassPlan)
