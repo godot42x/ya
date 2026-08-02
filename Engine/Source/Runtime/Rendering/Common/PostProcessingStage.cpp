@@ -229,12 +229,12 @@ RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph&   gr
 
     const auto swapchainFormat = _render->getSwapchain()->getFormat();
     const bool bOutputIsSRGB   = EFormat::isSRGB(swapchainFormat);
-    const auto output = graph.createTexture(RGTextureDesc{
+    const auto output = graph.createPersistentTexture(RGTextureDesc{
         .label  = "Postprocessing.Output",
         .format = _colorFormat,
         .extent = Extent3D{inputExtent.width, inputExtent.height, 1},
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
-    }, ERGResourceLifetime::Persistent);
+    }, RGPersistentTextureKey{.value = "Postprocessing.Output"});
     [[maybe_unused]] const auto pass = graph.addPass(
         "Postprocessing",
         [input, output, inputExtent](RGPassBuilder& pass) {

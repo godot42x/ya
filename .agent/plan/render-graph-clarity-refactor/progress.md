@@ -150,3 +150,32 @@
 - 说明：
   - 这一轮的 kind 模型带兼容层：未显式声明 kind 的旧 pass 仍会在 compile 阶段解析出有效 kind，避免一次性打爆所有既有 caller
   - 像 `PointShadowPass` 这类一个 pass 内多次 begin rendering 的特殊路径，暂时保留兼容模型，不强推单一 `rasterDesc`
+
+## 2026-08-02：第七批代码切片完成
+
+- 完成 `RG-0601~RG-0603`。
+- 修改 `RenderGraph`：
+  - 新增 `RGPersistentTextureKey` / `RGPersistentBufferKey`
+  - 新增 `createPersistentTexture()` / `createPersistentBuffer()` 显式 graph API
+  - `RGTextureResource` / `RGBufferResource` 现在会记录 persistent key
+  - compiler 会校验：
+    - Persistent resource 缺失 stable key
+    - 同一 graph 内 stable key 映射到冲突 descriptor
+- 修改 `RGCompiledGraph`：
+  - 新增 `transientBufferLifetimes`
+  - compiler 现在会为 transient buffer 记录 `firstPassIndex / lastPassIndex / firstPass / lastPass`
+  - `debugDump()` 现在会输出 transient buffer lifetime metadata
+- 真实 caller 迁移：
+  - Deferred / SSAO / Postprocessing / Bloom 的 persistent graph textures 已切到显式 stable key API
+  - core tests 中的 persistent graph resources 也已切到显式 stable key API
+- 新增 / 更新 RenderGraphCore tests：
+  - `CompileRejectsPersistentResourceWithoutStableKey`
+  - `CompileRejectsConflictingPersistentTextureKeys`
+  - `CompileBuildsTransientBufferLifetimeMetadata`
+- 验证：
+  - `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`
+  - `xmake b ya-engine`
+  - `xmake b ya-runtime`
+  - 结果：74 tests passed；`ya-engine` build ok；`ya-runtime` build ok
+- 说明：
+  - 这一步只提供 graph API 和 compiled metadata seam，不改变 registry 的 persistent ownership policy；按主计划 owner 约束，FG-102 仍负责“registry 按 stable key 管理物理资源”

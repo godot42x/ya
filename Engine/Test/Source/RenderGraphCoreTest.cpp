@@ -599,6 +599,52 @@ TEST(RenderGraphCoreTest, CompileRejectsCopyPassWithNonTransferUsage)
               compiled.issues.end());
 }
 
+TEST(RenderGraphCoreTest, CompileRejectsPersistentResourceWithoutStableKey)
+{
+    RenderGraph graph;
+    graph.createTexture(RGTextureDesc{
+        .label  = "persistent.missing-key",
+        .format = EFormat::R8G8B8A8_UNORM,
+        .extent = Extent3D{64, 64, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    }, ERGResourceLifetime::Persistent);
+
+    const auto compiled = graph.compile();
+    ASSERT_FALSE(compiled.isValid());
+    EXPECT_NE(std::find_if(compiled.issues.begin(),
+                           compiled.issues.end(),
+                           [](const RGCompileIssue& issue) {
+                               return issue.kind == RGCompileIssue::EKind::InvalidPersistentIdentity;
+                           }),
+              compiled.issues.end());
+}
+
+TEST(RenderGraphCoreTest, CompileRejectsConflictingPersistentTextureKeys)
+{
+    RenderGraph graph;
+    graph.createPersistentTexture(RGTextureDesc{
+        .label  = "history.a",
+        .format = EFormat::R16G16B16A16_SFLOAT,
+        .extent = Extent3D{128, 128, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    }, RGPersistentTextureKey{.value = "history"});
+    graph.createPersistentTexture(RGTextureDesc{
+        .label  = "history.b",
+        .format = EFormat::R16G16B16A16_SFLOAT,
+        .extent = Extent3D{256, 128, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    }, RGPersistentTextureKey{.value = "history"});
+
+    const auto compiled = graph.compile();
+    ASSERT_FALSE(compiled.isValid());
+    EXPECT_NE(std::find_if(compiled.issues.begin(),
+                           compiled.issues.end(),
+                           [](const RGCompileIssue& issue) {
+                               return issue.kind == RGCompileIssue::EKind::InvalidPersistentIdentity;
+                           }),
+              compiled.issues.end());
+}
+
 TEST(RenderGraphCoreTest, CompileStoresDeclaredRasterPlanInCompiledPassPlan)
 {
     RenderGraph graph;
@@ -650,6 +696,74 @@ TEST(RenderGraphCoreTest, CompileStoresDeclaredRasterPlanInCompiledPassPlan)
     EXPECT_EQ(rasterPlan.colors[0].finalLayout, EImageLayout::ShaderReadOnlyOptimal);
     ASSERT_TRUE(rasterPlan.depth.has_value());
     EXPECT_EQ(rasterPlan.depth->depth, depth);
+}
+
+TEST(RenderGraphCoreTest, CompileBuildsTransientBufferLifetimeMetadata)
+{
+    RenderGraph graph;
+    const auto transientA = graph.createBuffer(RGBufferDesc{
+        .label = "transient.a",
+        .usage = EBufferUsage::TransferDst | EBufferUsage::TransferSrc,
+        .size  = 128,
+    });
+    const auto transientB = graph.createBuffer(RGBufferDesc{
+        .label = "transient.b",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 256,
+    });
+    const auto transientUnused = graph.createBuffer(RGBufferDesc{
+        .label = "transient.unused",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 64,
+    });
+
+    const auto writeA = graph.addPass("write-a", [&](RGPassBuilder& pass) {
+        pass.transferDst(transientA);
+    });
+    const auto readAWriteB = graph.addPass("read-a-write-b", [&](RGPassBuilder& pass) {
+        pass.transferSrc(transientA);
+        pass.write(transientB);
+    });
+    const auto readB = graph.addPass("read-b", [&](RGPassBuilder& pass) {
+        pass.read(transientB);
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid());
+    ASSERT_EQ(compiled.transientBufferLifetimes.size(), 3u);
+
+    const auto findLifetime = [&](RGBufferHandle handle) -> const RGTransientBufferLifetimePlan* {
+        const auto it = std::find_if(compiled.transientBufferLifetimes.begin(),
+                                     compiled.transientBufferLifetimes.end(),
+                                     [handle](const RGTransientBufferLifetimePlan& lifetime) {
+                                         return lifetime.buffer == handle;
+                                     });
+        return it != compiled.transientBufferLifetimes.end() ? &*it : nullptr;
+    };
+
+    const auto* lifetimeA = findLifetime(transientA);
+    ASSERT_NE(lifetimeA, nullptr);
+    EXPECT_TRUE(lifetimeA->isUsed());
+    EXPECT_EQ(lifetimeA->firstPass, writeA);
+    EXPECT_EQ(lifetimeA->lastPass, readAWriteB);
+    EXPECT_EQ(lifetimeA->firstPassIndex, 0u);
+    EXPECT_EQ(lifetimeA->lastPassIndex, 1u);
+
+    const auto* lifetimeB = findLifetime(transientB);
+    ASSERT_NE(lifetimeB, nullptr);
+    EXPECT_TRUE(lifetimeB->isUsed());
+    EXPECT_EQ(lifetimeB->firstPass, readAWriteB);
+    EXPECT_EQ(lifetimeB->lastPass, readB);
+    EXPECT_EQ(lifetimeB->firstPassIndex, 1u);
+    EXPECT_EQ(lifetimeB->lastPassIndex, 2u);
+
+    const auto* lifetimeUnused = findLifetime(transientUnused);
+    ASSERT_NE(lifetimeUnused, nullptr);
+    EXPECT_FALSE(lifetimeUnused->isUsed());
+
+    const auto dump = graph.debugDump(compiled);
+    EXPECT_NE(dump.find("transientBufferLifetimes(3)"), std::string::npos);
+    EXPECT_NE(dump.find("transient.unused unused"), std::string::npos);
 }
 
 TEST(RenderGraphCoreTest, CompileBuildsImportedFinalizePlans)
@@ -1089,17 +1203,17 @@ TEST(RenderGraphCoreTest, ResourceRegistryReusesStableResourcesAcrossSyncs)
     RenderGraphResourceRegistry registry(factory);
 
     RenderGraph graphA;
-    const auto textureHandle = graphA.createTexture(RGTextureDesc{
+    const auto textureHandle = graphA.createPersistentTexture(RGTextureDesc{
         .label  = "persistent.ao",
         .format = EFormat::R8_UNORM,
         .extent = Extent3D{320, 180, 1},
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, ERGResourceLifetime::Persistent);
-    const auto bufferHandle = graphA.createBuffer(RGBufferDesc{
+    }, RGPersistentTextureKey{.value = "persistent.ao"});
+    const auto bufferHandle = graphA.createPersistentBuffer(RGBufferDesc{
         .label = "persistent.constants",
         .usage = EBufferUsage::StorageBuffer,
         .size  = 256,
-    }, ERGResourceLifetime::Persistent);
+    }, RGPersistentBufferKey{.value = "persistent.constants"});
 
     registry.sync(graphA);
     const auto* firstTexture = registry.resolveTexture(textureHandle);
@@ -1114,17 +1228,17 @@ TEST(RenderGraphCoreTest, ResourceRegistryReusesStableResourcesAcrossSyncs)
     EXPECT_EQ(factory.createdBuffers, 1u);
 
     RenderGraph graphB;
-    graphB.createTexture(RGTextureDesc{
+    graphB.createPersistentTexture(RGTextureDesc{
         .label  = "persistent.ao",
         .format = EFormat::R8_UNORM,
         .extent = Extent3D{320, 180, 1},
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, ERGResourceLifetime::Persistent);
-    graphB.createBuffer(RGBufferDesc{
+    }, RGPersistentTextureKey{.value = "persistent.ao"});
+    graphB.createPersistentBuffer(RGBufferDesc{
         .label = "persistent.constants",
         .usage = EBufferUsage::StorageBuffer,
         .size  = 256,
-    }, ERGResourceLifetime::Persistent);
+    }, RGPersistentBufferKey{.value = "persistent.constants"});
 
     registry.sync(graphB);
     EXPECT_EQ(registry.resolveTexture(textureHandle), firstTexture);
@@ -1353,17 +1467,17 @@ TEST(RenderGraphCoreTest, ResourceRegistryReplacesResourcesWhenDescriptorsChange
     RenderGraphResourceRegistry registry(factory);
 
     RenderGraph graphA;
-    const auto textureHandle = graphA.createTexture(RGTextureDesc{
+    const auto textureHandle = graphA.createPersistentTexture(RGTextureDesc{
         .label  = "persistent.history",
         .format = EFormat::R32_SFLOAT,
         .extent = Extent3D{160, 90, 1},
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, ERGResourceLifetime::Persistent);
-    const auto bufferHandle = graphA.createBuffer(RGBufferDesc{
+    }, RGPersistentTextureKey{.value = "persistent.history"});
+    const auto bufferHandle = graphA.createPersistentBuffer(RGBufferDesc{
         .label = "persistent.history.buffer",
         .usage = EBufferUsage::StorageBuffer,
         .size  = 128,
-    }, ERGResourceLifetime::Persistent);
+    }, RGPersistentBufferKey{.value = "persistent.history.buffer"});
 
     registry.sync(graphA);
     const auto* firstTexture = registry.resolveTexture(textureHandle);
@@ -1372,17 +1486,17 @@ TEST(RenderGraphCoreTest, ResourceRegistryReplacesResourcesWhenDescriptorsChange
     ASSERT_NE(firstBuffer, nullptr);
 
     RenderGraph graphB;
-    graphB.createTexture(RGTextureDesc{
+    graphB.createPersistentTexture(RGTextureDesc{
         .label  = "persistent.history",
         .format = EFormat::R32_SFLOAT,
         .extent = Extent3D{320, 180, 1},
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, ERGResourceLifetime::Persistent);
-    graphB.createBuffer(RGBufferDesc{
+    }, RGPersistentTextureKey{.value = "persistent.history"});
+    graphB.createPersistentBuffer(RGBufferDesc{
         .label = "persistent.history.buffer",
         .usage = EBufferUsage::StorageBuffer,
         .size  = 256,
-    }, ERGResourceLifetime::Persistent);
+    }, RGPersistentBufferKey{.value = "persistent.history.buffer"});
 
     registry.sync(graphB);
     ASSERT_NE(registry.resolveTexture(textureHandle), nullptr);

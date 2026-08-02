@@ -575,6 +575,15 @@ RGTextureHandle RenderGraph::createTexture(const RGTextureDesc& desc, ERGResourc
     return handle;
 }
 
+RGTextureHandle RenderGraph::createPersistentTexture(const RGTextureDesc& desc, const RGPersistentTextureKey& key)
+{
+    YA_CORE_ASSERT(key.isValid(), "Persistent texture key must not be empty for '{}'", desc.label);
+
+    const auto handle = createTexture(desc, ERGResourceLifetime::Persistent);
+    _textures.back().persistentKey = key;
+    return handle;
+}
+
 RGTextureHandle RenderGraph::importTexture(const RGImportedTextureDesc& importedDesc)
 {
     YA_CORE_ASSERT(importedDesc.image || importedDesc.importDesc.nativeHandle != nullptr,
@@ -610,6 +619,15 @@ RGBufferHandle RenderGraph::createBuffer(const RGBufferDesc& desc, ERGResourceLi
         .lifetime = lifetime,
         .desc     = desc,
     });
+    return handle;
+}
+
+RGBufferHandle RenderGraph::createPersistentBuffer(const RGBufferDesc& desc, const RGPersistentBufferKey& key)
+{
+    YA_CORE_ASSERT(key.isValid(), "Persistent buffer key must not be empty for '{}'", desc.label);
+
+    const auto handle = createBuffer(desc, ERGResourceLifetime::Persistent);
+    _buffers.back().persistentKey = key;
     return handle;
 }
 
@@ -672,9 +690,12 @@ RGCompiledGraph RenderGraph::compile() const
     compiled.passPlans.reserve(_passes.size());
     compiled.importedTextureFinalizes.reserve(_textures.size());
     compiled.importedBufferFinalizes.reserve(_buffers.size());
+    compiled.transientBufferLifetimes.reserve(_buffers.size());
 
     std::unordered_map<RGTextureHandle, RGPassHandle> textureWriters;
     std::unordered_map<RGBufferHandle, RGPassHandle>  bufferWriters;
+    std::unordered_map<std::string, const RGTextureResource*> persistentTexturesByKey;
+    std::unordered_map<std::string, const RGBufferResource*>  persistentBuffersByKey;
     std::vector<std::vector<uint32_t>> adjacency(_passes.size());
     std::vector<uint32_t> indegree(_passes.size(), 0);
     std::vector<RGCompiledPassPlan> passPlans(_passes.size());
@@ -935,6 +956,68 @@ RGCompiledGraph RenderGraph::compile() const
         }
     }
 
+    for (const auto& texture : _textures) {
+        if (texture.lifetime != ERGResourceLifetime::Persistent) {
+            continue;
+        }
+        if (!texture.persistentKey.has_value() || !texture.persistentKey->isValid()) {
+            addIssue(RGCompileIssue::EKind::InvalidPersistentIdentity,
+                     RGPassHandle{},
+                     std::format("persistent texture {} is missing a stable key", texture.desc.label));
+            continue;
+        }
+
+        if (const auto existing = persistentTexturesByKey.find(texture.persistentKey->value);
+            existing != persistentTexturesByKey.end()) {
+            if (existing->second->desc.format != texture.desc.format ||
+                existing->second->desc.extent.width != texture.desc.extent.width ||
+                existing->second->desc.extent.height != texture.desc.extent.height ||
+                existing->second->desc.extent.depth != texture.desc.extent.depth ||
+                existing->second->desc.mipLevels != texture.desc.mipLevels ||
+                existing->second->desc.arrayLayers != texture.desc.arrayLayers ||
+                existing->second->desc.samples != texture.desc.samples ||
+                existing->second->desc.usage != texture.desc.usage ||
+                existing->second->desc.flags != texture.desc.flags) {
+                addIssue(RGCompileIssue::EKind::InvalidPersistentIdentity,
+                         RGPassHandle{},
+                         std::format("persistent texture key '{}' maps to conflicting descriptors ('{}' vs '{}')",
+                                     texture.persistentKey->value,
+                                     existing->second->desc.label,
+                                     texture.desc.label));
+            }
+            continue;
+        }
+        persistentTexturesByKey.emplace(texture.persistentKey->value, &texture);
+    }
+
+    for (const auto& buffer : _buffers) {
+        if (buffer.lifetime != ERGResourceLifetime::Persistent) {
+            continue;
+        }
+        if (!buffer.persistentKey.has_value() || !buffer.persistentKey->isValid()) {
+            addIssue(RGCompileIssue::EKind::InvalidPersistentIdentity,
+                     RGPassHandle{},
+                     std::format("persistent buffer {} is missing a stable key", buffer.desc.label));
+            continue;
+        }
+
+        if (const auto existing = persistentBuffersByKey.find(buffer.persistentKey->value);
+            existing != persistentBuffersByKey.end()) {
+            if (existing->second->desc.usage != buffer.desc.usage ||
+                existing->second->desc.size != buffer.desc.size ||
+                existing->second->desc.memoryUsage != buffer.desc.memoryUsage) {
+                addIssue(RGCompileIssue::EKind::InvalidPersistentIdentity,
+                         RGPassHandle{},
+                         std::format("persistent buffer key '{}' maps to conflicting descriptors ('{}' vs '{}')",
+                                     buffer.persistentKey->value,
+                                     existing->second->desc.label,
+                                     buffer.desc.label));
+            }
+            continue;
+        }
+        persistentBuffersByKey.emplace(buffer.persistentKey->value, &buffer);
+    }
+
     std::deque<uint32_t> ready;
     for (uint32_t i = 0; i < indegree.size(); ++i) {
         if (indegree[i] == 0) {
@@ -994,6 +1077,37 @@ RGCompiledGraph RenderGraph::compile() const
             .initialState = buffer.imported->initialState,
             .finalState   = *buffer.imported->finalState,
         });
+    }
+
+    if (compiled.isValid()) {
+        std::unordered_map<RGBufferHandle, RGTransientBufferLifetimePlan*> transientLifetimeByHandle;
+        for (const auto& buffer : _buffers) {
+            if (buffer.lifetime != ERGResourceLifetime::Transient) {
+                continue;
+            }
+            compiled.transientBufferLifetimes.push_back({
+                .buffer = buffer.handle,
+                .desc   = buffer.desc,
+            });
+            transientLifetimeByHandle.emplace(buffer.handle, &compiled.transientBufferLifetimes.back());
+        }
+
+        for (uint32_t passIndex = 0; passIndex < compiled.passPlans.size(); ++passIndex) {
+            const auto& passPlan = compiled.passPlans[passIndex];
+            for (const auto& bufferState : passPlan.bufferStates) {
+                const auto lifetimeIt = transientLifetimeByHandle.find(bufferState.buffer);
+                if (lifetimeIt == transientLifetimeByHandle.end()) {
+                    continue;
+                }
+                auto& lifetime = *lifetimeIt->second;
+                if (!lifetime.isUsed()) {
+                    lifetime.firstPassIndex = passIndex;
+                    lifetime.firstPass      = passPlan.pass;
+                }
+                lifetime.lastPassIndex = passIndex;
+                lifetime.lastPass      = passPlan.pass;
+            }
+        }
     }
 
     return compiled;
@@ -1073,6 +1187,24 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
             << " access=" << static_cast<uint32_t>(finalize.finalState.access) << "\n";
     }
 
+    oss << "transientBufferLifetimes(" << compiled.transientBufferLifetimes.size() << ")\n";
+    for (const auto& lifetime : compiled.transientBufferLifetimes) {
+        const auto* buffer = getBuffer(lifetime.buffer);
+        oss << "  " << (buffer ? buffer->desc.label : "<invalid-buffer>");
+        if (lifetime.isUsed()) {
+            const auto* firstPass = getPass(lifetime.firstPass);
+            const auto* lastPass  = getPass(lifetime.lastPass);
+            oss << " first=" << lifetime.firstPassIndex
+                << ":" << (firstPass ? firstPass->name : "<invalid-pass>")
+                << " last=" << lifetime.lastPassIndex
+                << ":" << (lastPass ? lastPass->name : "<invalid-pass>");
+        }
+        else {
+            oss << " unused";
+        }
+        oss << "\n";
+    }
+
     oss << "issues(" << compiled.issues.size() << ")\n";
     for (const auto& issue : compiled.issues) {
         const auto* pass = getPass(issue.pass);
@@ -1089,6 +1221,9 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
                 break;
             case RGCompileIssue::EKind::InvalidPassKind:
                 oss << "InvalidPassKind";
+                break;
+            case RGCompileIssue::EKind::InvalidPersistentIdentity:
+                oss << "InvalidPersistentIdentity";
                 break;
             case RGCompileIssue::EKind::Cycle:
                 oss << "Cycle";
