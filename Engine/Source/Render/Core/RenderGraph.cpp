@@ -592,6 +592,7 @@ RGCompiledGraph RenderGraph::compile() const
 {
     RGCompiledGraph compiled;
     compiled.order.reserve(_passes.size());
+    compiled.passPlans.reserve(_passes.size());
     compiled.importedTextureFinalizes.reserve(_textures.size());
     compiled.importedBufferFinalizes.reserve(_buffers.size());
 
@@ -599,6 +600,11 @@ RGCompiledGraph RenderGraph::compile() const
     std::unordered_map<RGBufferHandle, RGPassHandle>  bufferWriters;
     std::vector<std::vector<uint32_t>> adjacency(_passes.size());
     std::vector<uint32_t> indegree(_passes.size(), 0);
+    std::vector<RGCompiledPassPlan> passPlans(_passes.size());
+
+    for (size_t i = 0; i < _passes.size(); ++i) {
+        passPlans[i].pass = _passes[i].handle;
+    }
 
     const auto addDependency = [&](RGPassHandle from, RGPassHandle to) {
         if (!from.isValid() || !to.isValid() || from == to) {
@@ -661,7 +667,7 @@ RGCompiledGraph RenderGraph::compile() const
                 continue;
             }
 
-            compiled.textureStates.push_back({
+            passPlans[pass.handle.index].textureStates.push_back({
                 .pass          = pass.handle,
                 .texture       = usage.handle,
                 .requiredState = makeTextureState(*resource, usage.access),
@@ -720,7 +726,7 @@ RGCompiledGraph RenderGraph::compile() const
                 continue;
             }
 
-            compiled.bufferStates.push_back({
+            passPlans[pass.handle.index].bufferStates.push_back({
                 .pass          = pass.handle,
                 .buffer        = usage.handle,
                 .requiredState = makeBufferState(*resource, usage.access),
@@ -771,6 +777,11 @@ RGCompiledGraph RenderGraph::compile() const
     if (compiled.order.size() != _passes.size()) {
         compiled.order.clear();
         addIssue(RGCompileIssue::EKind::Cycle, RGPassHandle{}, "render graph contains a dependency cycle");
+    }
+    else {
+        for (const auto& passHandle : compiled.order) {
+            compiled.passPlans.push_back(std::move(passPlans[passHandle.index]));
+        }
     }
 
     for (const auto& texture : _textures) {
@@ -838,22 +849,25 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
             << " -> " << (to ? to->name : "<invalid-pass>") << "\n";
     }
 
-    oss << "textureStates(" << compiled.textureStates.size() << ")\n";
-    for (const auto& state : compiled.textureStates) {
-        const auto* pass    = getPass(state.pass);
-        const auto* texture = getTexture(state.texture);
-        oss << "  " << (pass ? pass->name : "<invalid-pass>")
-            << " -> " << (texture ? texture->desc.label : "<invalid-texture>")
-            << " layout=" << static_cast<uint32_t>(state.requiredState.layout) << "\n";
-    }
+    oss << "passPlans(" << compiled.passPlans.size() << ")\n";
+    for (const auto& passPlan : compiled.passPlans) {
+        const auto* pass = getPass(passPlan.pass);
+        oss << "  [" << passPlan.pass.index << ":" << passPlan.pass.generation << "] "
+            << (pass ? pass->name : "<invalid-pass>") << "\n";
 
-    oss << "bufferStates(" << compiled.bufferStates.size() << ")\n";
-    for (const auto& state : compiled.bufferStates) {
-        const auto* pass   = getPass(state.pass);
-        const auto* buffer = getBuffer(state.buffer);
-        oss << "  " << (pass ? pass->name : "<invalid-pass>")
-            << " -> " << (buffer ? buffer->desc.label : "<invalid-buffer>")
-            << " access=" << static_cast<uint32_t>(state.requiredState.access) << "\n";
+        oss << "    textureStates(" << passPlan.textureStates.size() << ")\n";
+        for (const auto& state : passPlan.textureStates) {
+            const auto* texture = getTexture(state.texture);
+            oss << "      " << (texture ? texture->desc.label : "<invalid-texture>")
+                << " layout=" << static_cast<uint32_t>(state.requiredState.layout) << "\n";
+        }
+
+        oss << "    bufferStates(" << passPlan.bufferStates.size() << ")\n";
+        for (const auto& state : passPlan.bufferStates) {
+            const auto* buffer = getBuffer(state.buffer);
+            oss << "      " << (buffer ? buffer->desc.label : "<invalid-buffer>")
+                << " access=" << static_cast<uint32_t>(state.requiredState.access) << "\n";
+        }
     }
 
     oss << "importedTextureFinalizes(" << compiled.importedTextureFinalizes.size() << ")\n";

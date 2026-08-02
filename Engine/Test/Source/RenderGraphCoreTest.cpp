@@ -279,6 +279,24 @@ class TestCommandBuffer final : public ICommandBuffer
     void debugEndLabel() override {}
 };
 
+std::vector<RGTextureStatePlan> collectTextureStatePlans(const RGCompiledGraph& compiled)
+{
+    std::vector<RGTextureStatePlan> states;
+    for (const auto& passPlan : compiled.passPlans) {
+        states.insert(states.end(), passPlan.textureStates.begin(), passPlan.textureStates.end());
+    }
+    return states;
+}
+
+std::vector<RGBufferStatePlan> collectBufferStatePlans(const RGCompiledGraph& compiled)
+{
+    std::vector<RGBufferStatePlan> states;
+    for (const auto& passPlan : compiled.passPlans) {
+        states.insert(states.end(), passPlan.bufferStates.begin(), passPlan.bufferStates.end());
+    }
+    return states;
+}
+
 } // namespace
 
 TEST(RenderGraphCoreTest, CreateTextureAllocatesGenerationBackedHandle)
@@ -387,9 +405,13 @@ TEST(RenderGraphCoreTest, CompileBuildsStableDependencyOrder)
     ASSERT_EQ(compiled.dependencies.size(), 1u);
     EXPECT_EQ(compiled.dependencies[0].from, writer);
     EXPECT_EQ(compiled.dependencies[0].to, reader);
-    ASSERT_EQ(compiled.textureStates.size(), 2u);
-    EXPECT_EQ(compiled.textureStates[0].requiredState.layout, EImageLayout::ColorAttachmentOptimal);
-    EXPECT_EQ(compiled.textureStates[1].requiredState.layout, EImageLayout::ShaderReadOnlyOptimal);
+    ASSERT_EQ(compiled.passPlans.size(), 2u);
+    EXPECT_EQ(compiled.passPlans[0].pass, writer);
+    EXPECT_EQ(compiled.passPlans[1].pass, reader);
+    const auto textureStates = collectTextureStatePlans(compiled);
+    ASSERT_EQ(textureStates.size(), 2u);
+    EXPECT_EQ(textureStates[0].requiredState.layout, EImageLayout::ColorAttachmentOptimal);
+    EXPECT_EQ(textureStates[1].requiredState.layout, EImageLayout::ShaderReadOnlyOptimal);
 }
 
 TEST(RenderGraphCoreTest, CompileIncludesExplicitPassDependency)
@@ -512,7 +534,8 @@ TEST(RenderGraphCoreTest, DebugDumpIncludesPassOrderDependenciesAndIssues)
     const auto dump = graph.debugDump(graph.compile());
     EXPECT_NE(dump.find("passes(1)"), std::string::npos);
     EXPECT_NE(dump.find("consumer"), std::string::npos);
-    EXPECT_NE(dump.find("textureStates("), std::string::npos);
+    EXPECT_NE(dump.find("passPlans("), std::string::npos);
+    EXPECT_NE(dump.find("    textureStates("), std::string::npos);
     EXPECT_NE(dump.find("issues(1)"), std::string::npos);
     EXPECT_NE(dump.find("InvalidUsage"), std::string::npos);
 }
@@ -619,13 +642,15 @@ TEST(RenderGraphCoreTest, CompileBuildsBufferAndDepthStatePlans)
 
     const auto compiled = graph.compile();
     ASSERT_TRUE(compiled.isValid());
-    ASSERT_EQ(compiled.textureStates.size(), 1u);
-    EXPECT_EQ(compiled.textureStates[0].requiredState.layout, EImageLayout::DepthStencilAttachmentOptimal);
-    EXPECT_EQ(compiled.textureStates[0].requiredState.access,
+    const auto textureStates = collectTextureStatePlans(compiled);
+    ASSERT_EQ(textureStates.size(), 1u);
+    EXPECT_EQ(textureStates[0].requiredState.layout, EImageLayout::DepthStencilAttachmentOptimal);
+    EXPECT_EQ(textureStates[0].requiredState.access,
               static_cast<EResourceAccess::T>(EResourceAccess::DepthStencilAttachmentRead | EResourceAccess::DepthStencilAttachmentWrite));
-    ASSERT_EQ(compiled.bufferStates.size(), 1u);
-    EXPECT_EQ(compiled.bufferStates[0].requiredState.access, EResourceAccess::ShaderWrite);
-    EXPECT_EQ(compiled.bufferStates[0].requiredState.size, 256u);
+    const auto bufferStates = collectBufferStatePlans(compiled);
+    ASSERT_EQ(bufferStates.size(), 1u);
+    EXPECT_EQ(bufferStates[0].requiredState.access, EResourceAccess::ShaderWrite);
+    EXPECT_EQ(bufferStates[0].requiredState.size, 256u);
 }
 
 TEST(RenderGraphCoreTest, CompileUsesImportedViewRangeForTextureStatePlan)
@@ -666,10 +691,11 @@ TEST(RenderGraphCoreTest, CompileUsesImportedViewRangeForTextureStatePlan)
 
     const auto compiled = graph.compile();
     ASSERT_TRUE(compiled.isValid());
-    ASSERT_EQ(compiled.textureStates.size(), 1u);
-    EXPECT_EQ(compiled.textureStates[0].requiredState.subresourceRange.baseMipLevel, 1u);
-    EXPECT_EQ(compiled.textureStates[0].requiredState.subresourceRange.baseArrayLayer, 3u);
-    EXPECT_EQ(compiled.textureStates[0].requiredState.subresourceRange.layerCount, 1u);
+    const auto textureStates = collectTextureStatePlans(compiled);
+    ASSERT_EQ(textureStates.size(), 1u);
+    EXPECT_EQ(textureStates[0].requiredState.subresourceRange.baseMipLevel, 1u);
+    EXPECT_EQ(textureStates[0].requiredState.subresourceRange.baseArrayLayer, 3u);
+    EXPECT_EQ(textureStates[0].requiredState.subresourceRange.layerCount, 1u);
 }
 
 TEST(RenderGraphCoreTest, CompileModelsComputeReadWriteToIndirectReadDependency)
@@ -690,12 +716,13 @@ TEST(RenderGraphCoreTest, CompileModelsComputeReadWriteToIndirectReadDependency)
 
     const auto compiled = graph.compile();
     ASSERT_TRUE(compiled.isValid());
-    ASSERT_EQ(compiled.bufferStates.size(), 2u);
-    EXPECT_EQ(compiled.bufferStates[0].requiredState.stages, EPipelineStage::ComputeShader);
-    EXPECT_EQ(compiled.bufferStates[0].requiredState.access,
+    const auto bufferStates = collectBufferStatePlans(compiled);
+    ASSERT_EQ(bufferStates.size(), 2u);
+    EXPECT_EQ(bufferStates[0].requiredState.stages, EPipelineStage::ComputeShader);
+    EXPECT_EQ(bufferStates[0].requiredState.access,
               static_cast<EResourceAccess::T>(EResourceAccess::ShaderRead | EResourceAccess::ShaderWrite));
-    EXPECT_EQ(compiled.bufferStates[1].requiredState.stages, EPipelineStage::DrawIndirect);
-    EXPECT_EQ(compiled.bufferStates[1].requiredState.access, EResourceAccess::IndirectCommandRead);
+    EXPECT_EQ(bufferStates[1].requiredState.stages, EPipelineStage::DrawIndirect);
+    EXPECT_EQ(bufferStates[1].requiredState.access, EResourceAccess::IndirectCommandRead);
     EXPECT_NE(std::find(compiled.dependencies.begin(), compiled.dependencies.end(), RGDependencyEdge{cullPass, drawPass}),
               compiled.dependencies.end());
 }
@@ -757,10 +784,11 @@ TEST(RenderGraphCoreTest, ImportedSubresourceHelperKeepsProvidedViewAndCompileRa
 
     const auto compiled = graph.compile();
     ASSERT_TRUE(compiled.isValid());
-    ASSERT_EQ(compiled.textureStates.size(), 1u);
-    EXPECT_EQ(compiled.textureStates[0].requiredState.subresourceRange.aspectMask, EImageAspect::Depth);
-    EXPECT_EQ(compiled.textureStates[0].requiredState.subresourceRange.baseArrayLayer, 0u);
-    EXPECT_EQ(compiled.textureStates[0].requiredState.subresourceRange.layerCount, 1u);
+    const auto textureStates = collectTextureStatePlans(compiled);
+    ASSERT_EQ(textureStates.size(), 1u);
+    EXPECT_EQ(textureStates[0].requiredState.subresourceRange.aspectMask, EImageAspect::Depth);
+    EXPECT_EQ(textureStates[0].requiredState.subresourceRange.baseArrayLayer, 0u);
+    EXPECT_EQ(textureStates[0].requiredState.subresourceRange.layerCount, 1u);
 
     RenderGraphResourceRegistry registry(factory);
     registry.sync(graph);
@@ -2569,6 +2597,113 @@ TEST(RenderGraphCoreTest, ExecuteCompiledRestoresImportedTextureFinalLayoutAfter
     EXPECT_EQ(cmdBuf.transitions[0].newLayout, EImageLayout::TransferDst);
     EXPECT_EQ(cmdBuf.transitions[1].oldLayout, EImageLayout::TransferDst);
     EXPECT_EQ(cmdBuf.transitions[1].newLayout, EImageLayout::PresentSrcKHR);
+}
+
+TEST(RenderGraphCoreTest, ExecuteWrapperMatchesPrepareAndExecuteCompiledForImportedFinalizeContract)
+{
+    auto buildGraph = [](TestResourceFactory& factory, TestBuffer& readbackBuffer) {
+        RenderGraph graph;
+
+        auto sharedImage = std::make_shared<TestImage>(ImageCreateInfo{
+            .label         = "swapchain",
+            .format        = EFormat::B8G8R8A8_UNORM,
+            .extent        = {.width = 1280, .height = 720, .depth = 1},
+            .usage         = EImageUsage::ColorAttachment | EImageUsage::TransferDst,
+            .initialLayout = EImageLayout::Undefined,
+        });
+        auto sharedView = std::make_shared<TestImageView>(sharedImage, ImageViewCreateInfo{
+            .label       = "swapchain.view",
+            .aspectFlags = EImageAspect::Color,
+            .levelCount  = 1,
+            .layerCount  = 1,
+        });
+
+        const auto importedTexture = graph.importTexture(RGImportedTextureDesc{
+            .desc = RGTextureDesc{
+                .label  = "swapchain",
+                .format = EFormat::B8G8R8A8_UNORM,
+                .extent = Extent3D{1280, 720, 1},
+                .usage  = EImageUsage::ColorAttachment | EImageUsage::TransferDst,
+            },
+            .importDesc = ImportedImageDesc{
+                .label         = "swapchain",
+                .nativeHandle  = static_cast<void*>(sharedImage->getHandle()),
+                .format        = EFormat::B8G8R8A8_UNORM,
+                .usage         = EImageUsage::ColorAttachment | EImageUsage::TransferDst,
+                .extent        = Extent3D{1280, 720, 1},
+                .initialLayout = EImageLayout::Undefined,
+                .finalLayout   = EImageLayout::PresentSrcKHR,
+            },
+            .image     = sharedImage,
+            .imageView = sharedView,
+        });
+        const auto importedBuffer = graph.importBuffer(RGImportedBufferDesc{
+            .desc = RGBufferDesc{
+                .label = "readback.dst",
+                .usage = EBufferUsage::TransferDst,
+                .size  = 512,
+            },
+            .buffer = &readbackBuffer,
+            .finalState = BufferResourceState{
+                .stages = EPipelineStage::Host,
+                .access = EResourceAccess::HostRead,
+                .size   = 512,
+            },
+        });
+
+        graph.addPass(
+            "copy-to-imported",
+            [&](RGPassBuilder& pass) {
+                pass.transferDst(importedTexture);
+                pass.transferDst(importedBuffer);
+            },
+            [](RGRenderContext&) {});
+
+        return graph;
+    };
+
+    TestResourceFactory factoryA;
+    TestBuffer          readbackA(BufferCreateInfo{
+        .label = "readback.dst",
+        .usage = EBufferUsage::TransferDst,
+        .size  = 512,
+    });
+    RenderGraphExecutor executeWrapperExecutor(factoryA);
+    TestCommandBuffer   executeWrapperCmdBuf;
+    auto                graphA = buildGraph(factoryA, readbackA);
+
+    ASSERT_TRUE(executeWrapperExecutor.execute(graphA, executeWrapperCmdBuf));
+
+    TestResourceFactory factoryB;
+    TestBuffer          readbackB(BufferCreateInfo{
+        .label = "readback.dst",
+        .usage = EBufferUsage::TransferDst,
+        .size  = 512,
+    });
+    RenderGraphExecutor compiledExecutor(factoryB);
+    TestCommandBuffer   compiledCmdBuf;
+    auto                graphB = buildGraph(factoryB, readbackB);
+    RGCompiledGraph     compiled{};
+
+    ASSERT_TRUE(compiledExecutor.prepare(graphB, compiled));
+    ASSERT_TRUE(compiled.isValid());
+    ASSERT_TRUE(compiledExecutor.executeCompiled(graphB, compiled, compiledCmdBuf));
+
+    ASSERT_EQ(executeWrapperCmdBuf.transitions.size(), compiledCmdBuf.transitions.size());
+    for (size_t i = 0; i < executeWrapperCmdBuf.transitions.size(); ++i) {
+        EXPECT_EQ(executeWrapperCmdBuf.transitions[i].oldLayout, compiledCmdBuf.transitions[i].oldLayout);
+        EXPECT_EQ(executeWrapperCmdBuf.transitions[i].newLayout, compiledCmdBuf.transitions[i].newLayout);
+    }
+
+    ASSERT_EQ(executeWrapperCmdBuf.bufferBarriers.size(), compiledCmdBuf.bufferBarriers.size());
+    for (size_t i = 0; i < executeWrapperCmdBuf.bufferBarriers.size(); ++i) {
+        EXPECT_EQ(executeWrapperCmdBuf.bufferBarriers[i].srcStage, compiledCmdBuf.bufferBarriers[i].srcStage);
+        EXPECT_EQ(executeWrapperCmdBuf.bufferBarriers[i].dstStage, compiledCmdBuf.bufferBarriers[i].dstStage);
+        EXPECT_EQ(executeWrapperCmdBuf.bufferBarriers[i].srcAccess, compiledCmdBuf.bufferBarriers[i].srcAccess);
+        EXPECT_EQ(executeWrapperCmdBuf.bufferBarriers[i].dstAccess, compiledCmdBuf.bufferBarriers[i].dstAccess);
+        EXPECT_EQ(executeWrapperCmdBuf.bufferBarriers[i].offset, compiledCmdBuf.bufferBarriers[i].offset);
+        EXPECT_EQ(executeWrapperCmdBuf.bufferBarriers[i].size, compiledCmdBuf.bufferBarriers[i].size);
+    }
 }
 
 TEST(RenderGraphCoreTest, RenderContextCanCopyTextureToBuffer)
