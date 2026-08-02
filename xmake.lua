@@ -49,7 +49,7 @@ else
     add_defines("BUILD_NO_DEBUG")
 end
 
-if is_mode("profile") then
+if is_mode("profile") or is_mode("debug") then
     add_defines("YA_PROFILING_CONDITIONAL")
 else
     add_defines("YA_PROFILING_DISABLED")
@@ -66,10 +66,7 @@ includes("./Test/xmake.lua")
 set_rundir(os.scriptdir())
 
 
-local bEnableUnity = get_config("ya_enable_unity-build")
-if not bEnableUnity then
-    add_rules("plugin.compile_commands.autoupdate", { outputdir = os.scriptdir() })
-end
+add_rules("plugin.compile_commands.autoupdate", { outputdir = os.scriptdir() })
 
 
 includes("./Example/xmake.lua")

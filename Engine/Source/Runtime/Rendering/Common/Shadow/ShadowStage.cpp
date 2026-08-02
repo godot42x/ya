@@ -73,6 +73,7 @@ void ShadowStage::applySettings(const ShadowSettings& settings)
 
 void ShadowStage::refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent)
 {
+    YA_PROFILE_FUNCTION();
     auto* basicShadowMapTechnique = dynamic_cast<BasicShadowMapTechnique*>(_technique.get());
     if (basicShadowMapTechnique) {
         basicShadowMapTechnique->refreshShadowResources(depthImage, depthFormat, shadowExtent);

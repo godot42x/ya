@@ -1,5 +1,6 @@
 #include "DeferredDeletionQueue.h"
 
+#include "Core/Profiling/Instrumentor.h"
 #include "Core/Log.h"
 
 #include <algorithm>
@@ -34,6 +35,7 @@ void DeferredDeletionQueue::enqueue(uint64_t frameIndex, std::function<void()> d
 
 size_t DeferredDeletionQueue::flush(uint64_t currentFrameIndex)
 {
+    YA_PROFILE_FUNCTION();
     std::lock_guard lock(_mutex);
 
     _currentFrame = currentFrameIndex;

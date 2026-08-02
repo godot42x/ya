@@ -618,7 +618,8 @@ void applyAppOverrides(AppDesc& appDesc)
     if (!appDesc.profiling.bCpuProfileOverridden) {
         if (bool bCpuProfileEnabled = false;
             configManager.tryGet<bool>(AUTOMATION_CONFIG_DOC_NAME, "profile.cpu.enabled", bCpuProfileEnabled)) {
-            appDesc.profiling.bCpuProfileEnabled = bCpuProfileEnabled;
+            appDesc.profiling.bCpuProfileEnabled    = bCpuProfileEnabled;
+            appDesc.profiling.bCpuProfileOverridden = true;
         }
     }
 
@@ -656,7 +657,9 @@ void beginRuntimeSession(const AppDesc& appDesc)
         cpuProfilePath       = state.paths.cpuProfilePath;
     }
 
-    YA_PROFILE_SET_ENABLED(appDesc.profiling.bCpuProfileEnabled);
+    if (appDesc.profiling.bCpuProfileOverridden || profiling::isProfileBuild()) {
+        YA_PROFILE_SET_ENABLED(appDesc.profiling.bCpuProfileEnabled);
+    }
     YA_PERF_SET_ENABLED(true);
 
     if (cpuTrace().IsSessionActive()) {

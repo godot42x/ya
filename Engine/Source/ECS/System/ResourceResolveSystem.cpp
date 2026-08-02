@@ -102,6 +102,7 @@ std::vector<float> extractTerrainHeights(const AssetManager::TextureMemoryBlock&
 template <typename TMaterialComponent>
 void resolvePendingMaterialComponents(entt::registry& registry)
 {
+    YA_PROFILE_FUNCTION();
     registry.view<TMaterialComponent>().each([](auto entity, TMaterialComponent& materialComponent) {
         (void)entity;
         if (materialComponent.needsResolve()) {
