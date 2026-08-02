@@ -6,6 +6,10 @@
 #include "Editor/Inspector/TypeRenderer.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
+#include "ECS/Component/Material/PBRMaterialComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
+#include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include <imgui.h>
 #include <sol/sol.hpp>
 #include <type_traits>

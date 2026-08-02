@@ -1,4 +1,5 @@
 #include "Editor/Inspector/DetailsViewInternal.h"
+#include "ECS/Component/TransformComponent.h"
 
 namespace ya
 {
