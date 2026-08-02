@@ -99,3 +99,25 @@
 - 剩余工作：
   - `RG-0403` 仍未完成：execute callback 还没有 typed pass parameters，只是先移除了 attachment/rendering 描述的双重真相
   - `RG-0404` 只完成了 Deferred 本地 pass 与 Forward viewport 的首批 consumer，Postprocess / SSAO / utility pipeline 仍待迁移
+
+## 2026-08-02：第五批代码切片完成
+
+- 完成 `RG-0403` 与 `RG-0404`。
+- 修改 `RenderGraph` / `RenderGraphExecutor`：
+  - 新增 `RGRenderContext::RasterPassExecutionParams`
+  - execute callback 现在可以从 `RGRenderContext::getRasterPassExecutionParams()` 读取 compiled raster plan，而不是依赖外部 capture 的 attachment/renderArea 真相
+  - `getDeclaredRasterPlan()` / `getRasterPassExecutionParams()` 形成了当前阶段的 typed pass parameter seam
+- 真实 consumer 追加迁移：
+  - `BloomPostprocessing`
+  - `SSAOStage`
+  - `PostProcessingStage`
+  - `RenderRuntimeFrame` presentation pass
+  - 同时把 Forward / Deferred 已迁移 pass 的 execute 侧改为消费 typed raster params
+- 新增 RenderGraphCore test：
+  - `ExecutorExposesTypedRasterExecutionParamsFromCompiledPlan`
+- 验证：
+  - `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`
+  - `xmake b ya-engine`
+  - 结果：69 tests passed；`ya-engine` build ok
+- 说明：
+  - 这一步仍然保持现有 `RGRenderContext&` callback 形态，没有直接改成新的 callback 签名；typed params 先通过 context view 暴露，避免本轮把所有 graph caller 一次性重写

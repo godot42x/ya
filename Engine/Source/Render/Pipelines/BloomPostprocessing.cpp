@@ -329,24 +329,24 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
         extractPC.knee      = desc.state->bloomSoftKnee;
         extractPC.intensity = desc.state->bloomExtractIntensity;
         const RGTextureHandle bloomExtractHandle = *bloomExtract;
-        const Rect2D extractRenderArea{
-            .pos    = {0.0f, 0.0f},
-            .extent = desc.renderExtent.toVec2(),
-        };
-
         [[maybe_unused]] const auto extractPass = graph.addPass(
             "BloomExtract",
-            [scene, bloomExtractHandle](RGPassBuilder& pass) {
+            [scene, bloomExtractHandle, renderExtent = desc.renderExtent](RGPassBuilder& pass) {
                 pass.read(scene);
-                pass.useColorAttachment(bloomExtractHandle);
-            },
-            [this, scene, bloomExtractHandle, extractRenderArea, extractPC, renderExtent = desc.renderExtent](RGRenderContext& rgCtx) {
-                rgCtx.beginColorRendering({
-                    .color       = bloomExtractHandle,
-                    .renderArea  = extractRenderArea,
-                    .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
-                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                pass.declareRaster({
+                    .renderArea  = Rect2D{.pos = {0.0f, 0.0f}, .extent = renderExtent.toVec2()},
+                    .layerCount  = 1,
+                    .colors = {{
+                        .color       = bloomExtractHandle,
+                        .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
+                        .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                    }},
                 });
+            },
+            [this, scene, extractPC](RGRenderContext& rgCtx) {
+                const auto rasterParams = rgCtx.getRasterPassExecutionParams();
+                const auto renderExtent = rasterParams.getRenderExtent();
+                rgCtx.beginDeclaredRasterRendering();
                 const auto* sceneImage = rgCtx.resolveTexture(scene);
                 YA_CORE_ASSERT(sceneImage != nullptr && sceneImage->getImageView() != nullptr,
                                "Bloom extract pass failed to resolve scene texture {}", scene.index);
@@ -373,24 +373,24 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
             slang_types::Misc::BloomBlur::PushConstants blurPC{};
             blurPC.texelSize  = glm::vec2(1.0f / static_cast<float>(desc.renderExtent.width), 1.0f / static_cast<float>(desc.renderExtent.height));
             blurPC.horizontal = bHorizontal ? 1u : 0u;
-            const Rect2D blurRenderArea{
-                .pos    = {0.0f, 0.0f},
-                .extent = desc.renderExtent.toVec2(),
-            };
-
             [[maybe_unused]] const auto blurPass = graph.addPass(
                 bHorizontal ? "BloomBlurHorizontal" : "BloomBlurVertical",
-                [blurInputHandle, blurTargetHandle](RGPassBuilder& pass) {
+                [blurInputHandle, blurTargetHandle, renderExtent = desc.renderExtent](RGPassBuilder& pass) {
                     pass.read(blurInputHandle);
-                    pass.useColorAttachment(blurTargetHandle);
-                },
-                [this, passIndex, blurInputHandle, blurTargetHandle, blurRenderArea, blurPC, renderExtent = desc.renderExtent](RGRenderContext& rgCtx) {
-                    rgCtx.beginColorRendering({
-                        .color       = blurTargetHandle,
-                        .renderArea  = blurRenderArea,
-                        .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
-                        .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                    pass.declareRaster({
+                        .renderArea  = Rect2D{.pos = {0.0f, 0.0f}, .extent = renderExtent.toVec2()},
+                        .layerCount  = 1,
+                        .colors = {{
+                            .color       = blurTargetHandle,
+                            .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
+                            .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                        }},
                     });
+                },
+                [this, passIndex, blurInputHandle, blurPC](RGRenderContext& rgCtx) {
+                    const auto rasterParams = rgCtx.getRasterPassExecutionParams();
+                    const auto renderExtent = rasterParams.getRenderExtent();
+                    rgCtx.beginDeclaredRasterRendering();
                     const auto* blurInputImage = rgCtx.resolveTexture(blurInputHandle);
                     YA_CORE_ASSERT(blurInputImage != nullptr && blurInputImage->getImageView() != nullptr,
                                    "Bloom blur pass failed to resolve input texture {}", blurInputHandle.index);
@@ -412,27 +412,27 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
     slang_types::Misc::BloomComposite::PushConstants compositePC{};
     compositePC.bloomStrength = desc.state->bloomStrength;
     compositePC.bloomEnabled  = bBloomEnabled ? 1u : 0u;
-    const Rect2D compositeRenderArea{
-        .pos    = {0.0f, 0.0f},
-        .extent = desc.renderExtent.toVec2(),
-    };
-
     [[maybe_unused]] const auto compositePass = graph.addPass(
         "BloomComposite",
-        [scene, bBloomEnabled, finalBloomHandle = (_lastBlurPassCount == 0 || (_lastBlurPassCount % 2) == 0) ? blurPong.value_or(RGTextureHandle{}) : blurPing.value_or(RGTextureHandle{}), output](RGPassBuilder& pass) {
+        [scene, bBloomEnabled, renderExtent = desc.renderExtent, finalBloomHandle = (_lastBlurPassCount == 0 || (_lastBlurPassCount % 2) == 0) ? blurPong.value_or(RGTextureHandle{}) : blurPing.value_or(RGTextureHandle{}), output](RGPassBuilder& pass) {
             pass.read(scene);
             if (bBloomEnabled) {
                 pass.read(finalBloomHandle);
             }
-            pass.useColorAttachment(output);
-        },
-        [this, scene, bBloomEnabled, compositePC, compositeRenderArea, renderExtent = desc.renderExtent, output, finalBloomHandle = (_lastBlurPassCount == 0 || (_lastBlurPassCount % 2) == 0) ? blurPong.value_or(RGTextureHandle{}) : blurPing.value_or(RGTextureHandle{})](RGRenderContext& rgCtx) {
-            rgCtx.beginColorRendering({
-                .color       = output,
-                .renderArea  = compositeRenderArea,
-                .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
-                .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+            pass.declareRaster({
+                .renderArea  = Rect2D{.pos = {0.0f, 0.0f}, .extent = renderExtent.toVec2()},
+                .layerCount  = 1,
+                .colors = {{
+                    .color       = output,
+                    .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 1.0f),
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                }},
             });
+        },
+        [this, scene, bBloomEnabled, compositePC, finalBloomHandle = (_lastBlurPassCount == 0 || (_lastBlurPassCount % 2) == 0) ? blurPong.value_or(RGTextureHandle{}) : blurPing.value_or(RGTextureHandle{})](RGRenderContext& rgCtx) {
+            const auto rasterParams = rgCtx.getRasterPassExecutionParams();
+            const auto renderExtent = rasterParams.getRenderExtent();
+            rgCtx.beginDeclaredRasterRendering();
             const auto* sceneImage = rgCtx.resolveTexture(scene);
             YA_CORE_ASSERT(sceneImage != nullptr && sceneImage->getImageView() != nullptr,
                            "Bloom composite pass failed to resolve scene texture {}", scene.index);

@@ -330,30 +330,33 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
          .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
     }, ERGResourceLifetime::Persistent);
 
-    const auto renderArea = Rect2D{
-        .pos    = {0.0f, 0.0f},
-        .extent = glm::vec2(ctx.viewportExtent.width, ctx.viewportExtent.height),
-    };
     const auto viewportWidth  = ctx.viewportExtent.width;
     const auto viewportHeight = ctx.viewportExtent.height;
     const auto flightIndex    = ctx.flightIndex;
 
     [[maybe_unused]] const auto pass = graph.addPass(
         "SSAO Pass",
-        [albedo, normal, depth, noise, output](RGPassBuilder& passBuilder) {
+        [albedo, normal, depth, noise, output, viewportExtent = ctx.viewportExtent](RGPassBuilder& passBuilder) {
             passBuilder.read(albedo);
             passBuilder.read(normal);
             passBuilder.read(depth);
             passBuilder.read(noise);
-            passBuilder.useColorAttachment(output);
-        },
-        [this, output, renderArea, viewportWidth, viewportHeight, flightIndex](RGRenderContext& rgCtx) {
-            rgCtx.beginColorRendering({
-                .color      = output,
-                .renderArea = renderArea,
-                .clearValue = ClearValue(1.0f, 1.0f, 1.0f, 1.0f),
-                .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+            passBuilder.declareRaster({
+                .renderArea  = Rect2D{.pos = {0.0f, 0.0f}, .extent = glm::vec2(viewportExtent.width, viewportExtent.height)},
+                .layerCount  = 1,
+                .colors = {{
+                    .color       = output,
+                    .clearValue  = ClearValue(1.0f, 1.0f, 1.0f, 1.0f),
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                }},
             });
+        },
+        [this, flightIndex](RGRenderContext& rgCtx) {
+            const auto rasterParams  = rgCtx.getRasterPassExecutionParams();
+            const auto renderExtent  = rasterParams.getRenderExtent();
+            const auto viewportWidth = renderExtent.width;
+            const auto viewportHeight = renderExtent.height;
+            rgCtx.beginDeclaredRasterRendering();
 
             rgCtx.getCommandBuffer().bindPipeline(_pipeline.get());
             rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));

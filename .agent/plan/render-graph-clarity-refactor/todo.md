@@ -44,8 +44,8 @@
 
 - [x] RG-0401 将 raster attachment desc 放入 declaration
 - [x] RG-0402 将 load/store/finalLayout/render area/layer count 放入 compiled rendering plan
-- [ ] RG-0403 将 execute callback 改为消费 typed pass parameters
-- [ ] RG-0404 按 GBuffer、Light、Skybox、Overlay、Postprocess 顺序迁移
+- [x] RG-0403 将 execute callback 改为消费 typed pass parameters
+- [x] RG-0404 按 GBuffer、Light、Skybox、Overlay、Postprocess 顺序迁移
 
 ## Phase 4：显式 pass kind
 

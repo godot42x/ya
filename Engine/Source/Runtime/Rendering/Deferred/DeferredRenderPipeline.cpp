@@ -1191,9 +1191,13 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             });
         },
         [&](RGRenderContext& rgCtx) {
+            const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             rgCtx.beginDeclaredRasterRendering();
 
             float gbVpY = 0.0f;
+            const auto gbufferExtent = rasterParams.getRenderExtent();
+            const auto vpW           = gbufferExtent.width;
+            const auto vpH           = gbufferExtent.height;
             float gbVpH = static_cast<float>(vpH);
             if (_bReverseViewportY) {
                 gbVpY = static_cast<float>(vpH);
@@ -1309,6 +1313,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             });
         },
         [&](RGRenderContext& rgCtx) {
+            [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             rgCtx.beginDeclaredRasterRendering();
 
             YA_PERF_SCOPE(perf::sample::deferredLight(), perf::metric::cpuTimeMs(), perf::domain::render());
@@ -1337,6 +1342,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             });
         },
         [&](RGRenderContext& rgCtx) {
+            [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             rgCtx.beginDeclaredRasterRendering();
 
             {
@@ -1374,6 +1380,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             });
         },
         [&](RGRenderContext& rgCtx) {
+            [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             rgCtx.beginDeclaredRasterRendering();
 
             {
@@ -1405,6 +1412,8 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             });
         },
         [&](RGRenderContext& rgCtx) {
+            const auto rasterParams   = rgCtx.getRasterPassExecutionParams();
+            const auto viewportExtent = rasterParams.getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
 
             if (_lastFrameInput.recordViewportOverlays) {
