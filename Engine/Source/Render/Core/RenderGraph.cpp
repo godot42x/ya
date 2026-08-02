@@ -291,6 +291,17 @@ void RGRenderContext::beginColorRendering(const ColorRenderingDesc& desc) const
     });
 }
 
+void RGRenderContext::beginDeclaredRasterRendering() const
+{
+    YA_CORE_ASSERT(_compiledPassPlan != nullptr,
+                   "RGRenderContext pass {} is missing compiled pass plan for declared raster rendering",
+                   _pass.name);
+    YA_CORE_ASSERT(_compiledPassPlan->rasterPlan.has_value(),
+                   "RGRenderContext pass {} has no declared raster rendering plan",
+                   _pass.name);
+    beginRasterRendering(*_compiledPassPlan->rasterPlan);
+}
+
 void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) const
 {
     YA_CORE_ASSERT(!desc.colors.empty() || desc.depth.has_value(),
@@ -459,6 +470,23 @@ void RGPassBuilder::dependsOn(RGPassHandle handle)
     pass().dependencies.push_back(handle);
 }
 
+void RGPassBuilder::declareRaster(const RGRasterPassDesc& desc)
+{
+    auto& currentPass = pass();
+    currentPass.rasterDesc = desc;
+
+    for (const auto& color : desc.colors) {
+        currentPass.textures.push_back({.handle = color.color, .access = ERGPassResourceAccess::ColorAttachment});
+        if (color.resolve.isValid()) {
+            currentPass.textures.push_back({.handle = color.resolve, .access = ERGPassResourceAccess::ColorAttachment});
+        }
+    }
+
+    if (desc.depth.has_value()) {
+        currentPass.textures.push_back({.handle = desc.depth->depth, .access = ERGPassResourceAccess::DepthAttachment});
+    }
+}
+
 void RGPassBuilder::useColorAttachment(RGTextureHandle handle)
 {
     pass().textures.push_back({.handle = handle, .access = ERGPassResourceAccess::ColorAttachment});
@@ -604,6 +632,7 @@ RGCompiledGraph RenderGraph::compile() const
 
     for (size_t i = 0; i < _passes.size(); ++i) {
         passPlans[i].pass = _passes[i].handle;
+        passPlans[i].rasterPlan = _passes[i].rasterDesc;
     }
 
     const auto addDependency = [&](RGPassHandle from, RGPassHandle to) {
@@ -854,6 +883,12 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
         const auto* pass = getPass(passPlan.pass);
         oss << "  [" << passPlan.pass.index << ":" << passPlan.pass.generation << "] "
             << (pass ? pass->name : "<invalid-pass>") << "\n";
+
+        if (passPlan.rasterPlan.has_value()) {
+            oss << "    raster colors=" << passPlan.rasterPlan->colors.size()
+                << " depth=" << (passPlan.rasterPlan->depth.has_value() ? 1 : 0)
+                << " layers=" << passPlan.rasterPlan->layerCount << "\n";
+        }
 
         oss << "    textureStates(" << passPlan.textureStates.size() << ")\n";
         for (const auto& state : passPlan.textureStates) {

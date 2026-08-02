@@ -724,18 +724,11 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
 
     [[maybe_unused]] const auto pass = graph.addPass(
         "Forward Viewport",
-        [color, resolve, depth, shadowPass](RGPassBuilder& passBuilder) {
+        [color, resolve, depth, shadowPass, viewportExtent, colorAttachment, depthAttachment](RGPassBuilder& passBuilder) {
             if (shadowPass.has_value()) {
                 passBuilder.dependsOn(*shadowPass);
             }
-            passBuilder.useColorAttachment(color);
-            if (resolve.isValid()) {
-                passBuilder.useColorAttachment(resolve);
-            }
-            passBuilder.useDepthAttachment(depth);
-        },
-        [this, &stageCtx, color, resolve, depth, viewportExtent, colorAttachment, depthAttachment](RGRenderContext& rgCtx) {
-            rgCtx.beginRasterRendering({
+            passBuilder.declareRaster({
                 .renderArea = Rect2D{.pos = {0, 0}, .extent = viewportExtent.toVec2()},
                 .layerCount = 1,
                 .colors = {{
@@ -747,7 +740,7 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
                     .storeOp     = colorAttachment.storeOp,
                     .finalLayout = colorAttachment.finalLayout,
                 }},
-                .depth = RGRenderContext::DepthRenderingDesc{
+                .depth = RGDepthAttachmentDesc{
                     .depth       = depth,
                     .clearValue  = ClearValue(1.0f, 0),
                     .loadOp      = depthAttachment.loadOp,
@@ -755,6 +748,9 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
                     .finalLayout = depthAttachment.finalLayout,
                 },
             });
+        },
+        [this, &stageCtx, color, resolve, depth, viewportExtent, colorAttachment, depthAttachment](RGRenderContext& rgCtx) {
+            rgCtx.beginDeclaredRasterRendering();
 
             stageCtx.viewportExtent = viewportExtent;
             _viewportStage->execute(stageCtx);

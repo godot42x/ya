@@ -540,6 +540,59 @@ TEST(RenderGraphCoreTest, DebugDumpIncludesPassOrderDependenciesAndIssues)
     EXPECT_NE(dump.find("InvalidUsage"), std::string::npos);
 }
 
+TEST(RenderGraphCoreTest, CompileStoresDeclaredRasterPlanInCompiledPassPlan)
+{
+    RenderGraph graph;
+    const auto color = graph.createTexture(RGTextureDesc{
+        .label  = "lighting",
+        .format = EFormat::R16G16B16A16_SFLOAT,
+        .extent = Extent3D{320, 180, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    });
+    const auto depth = graph.createTexture(RGTextureDesc{
+        .label  = "depth",
+        .format = EFormat::D32_SFLOAT,
+        .extent = Extent3D{320, 180, 1},
+        .usage  = EImageUsage::DepthStencilAttachment,
+    });
+
+    graph.addPass("declared-raster", [&](RGPassBuilder& pass) {
+        pass.declareRaster({
+            .renderArea = Rect2D{.pos = {4, 8}, .extent = {160, 90}},
+            .layerCount = 3,
+            .colors = {{
+                .color       = color,
+                .clearValue  = ClearValue(0.25f, 0.5f, 0.75f, 1.0f),
+                .loadOp      = EAttachmentLoadOp::Clear,
+                .storeOp     = EAttachmentStoreOp::Store,
+                .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+            }},
+            .depth = RGDepthAttachmentDesc{
+                .depth       = depth,
+                .loadOp      = EAttachmentLoadOp::Load,
+                .storeOp     = EAttachmentStoreOp::Store,
+                .finalLayout = EImageLayout::DepthStencilAttachmentOptimal,
+            },
+        });
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid());
+    ASSERT_EQ(compiled.passPlans.size(), 1u);
+    ASSERT_TRUE(compiled.passPlans[0].rasterPlan.has_value());
+    const auto& rasterPlan = *compiled.passPlans[0].rasterPlan;
+    EXPECT_EQ(rasterPlan.renderArea.pos.x, 4.0f);
+    EXPECT_EQ(rasterPlan.renderArea.pos.y, 8.0f);
+    EXPECT_EQ(rasterPlan.renderArea.extent.x, 160.0f);
+    EXPECT_EQ(rasterPlan.renderArea.extent.y, 90.0f);
+    EXPECT_EQ(rasterPlan.layerCount, 3u);
+    ASSERT_EQ(rasterPlan.colors.size(), 1u);
+    EXPECT_EQ(rasterPlan.colors[0].color, color);
+    EXPECT_EQ(rasterPlan.colors[0].finalLayout, EImageLayout::ShaderReadOnlyOptimal);
+    ASSERT_TRUE(rasterPlan.depth.has_value());
+    EXPECT_EQ(rasterPlan.depth->depth, depth);
+}
+
 TEST(RenderGraphCoreTest, CompileBuildsImportedFinalizePlans)
 {
     RenderGraph graph;
@@ -1766,6 +1819,60 @@ TEST(RenderGraphCoreTest, ExecutorRunsPassesInCompiledOrderAndResolvesResources)
     EXPECT_EQ(factory.createdImages, 1u);
     EXPECT_EQ(factory.createdViews, 1u);
     EXPECT_EQ(factory.createdBuffers, 1u);
+}
+
+TEST(RenderGraphCoreTest, ExecutorCanBeginDeclaredRasterRenderingFromCompiledPassPlan)
+{
+    TestResourceFactory factory;
+    RenderGraphExecutor executor(factory);
+    RenderGraph graph;
+
+    const auto color = graph.createTexture(RGTextureDesc{
+        .label  = "hdr",
+        .format = EFormat::R16G16B16A16_SFLOAT,
+        .extent = Extent3D{256, 128, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    });
+    const auto depth = graph.createTexture(RGTextureDesc{
+        .label  = "depth",
+        .format = EFormat::D32_SFLOAT,
+        .extent = Extent3D{256, 128, 1},
+        .usage  = EImageUsage::DepthStencilAttachment,
+    });
+
+    graph.addPass(
+        "declared-raster",
+        [&](RGPassBuilder& pass) {
+            pass.declareRaster({
+                .renderArea = Rect2D{.pos = {0, 0}, .extent = {256, 128}},
+                .layerCount = 1,
+                .colors = {{
+                    .color       = color,
+                    .clearValue  = ClearValue::Black(),
+                    .loadOp      = EAttachmentLoadOp::Clear,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                }},
+                .depth = RGDepthAttachmentDesc{
+                    .depth       = depth,
+                    .clearValue  = ClearValue(1.0f, 0),
+                    .loadOp      = EAttachmentLoadOp::Clear,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::DepthStencilAttachmentOptimal,
+                },
+            });
+        },
+        [](RGRenderContext& ctx) {
+            ctx.beginDeclaredRasterRendering();
+            ctx.endRendering();
+        });
+
+    TestCommandBuffer cmdBuf;
+    ASSERT_TRUE(executor.execute(graph, cmdBuf));
+    EXPECT_EQ(cmdBuf.beginRenderingCount, 1u);
+    EXPECT_EQ(cmdBuf.endRenderingCount, 1u);
+    EXPECT_TRUE(cmdBuf.lastBeginRenderingHadDepth);
+    EXPECT_EQ(cmdBuf.lastDepthFinalLayout, EImageLayout::DepthStencilAttachmentOptimal);
 }
 
 TEST(RenderGraphCoreTest, ExecutorRejectsInvalidGraphWithoutRunningPasses)

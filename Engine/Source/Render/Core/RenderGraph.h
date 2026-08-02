@@ -141,6 +141,34 @@ struct RGBufferUsage
     ERGBufferAccess access = ERGBufferAccess::ShaderRead;
 };
 
+struct RGColorAttachmentDesc
+{
+    RGTextureHandle          color;
+    RGTextureHandle          resolve{};
+    EResolveMode::T          resolveMode = EResolveMode::None;
+    ClearValue               clearValue = ClearValue::Black();
+    EAttachmentLoadOp::T     loadOp     = EAttachmentLoadOp::Clear;
+    EAttachmentStoreOp::T    storeOp    = EAttachmentStoreOp::Store;
+    EImageLayout::T          finalLayout = EImageLayout::ColorAttachmentOptimal;
+};
+
+struct RGDepthAttachmentDesc
+{
+    RGTextureHandle          depth;
+    ClearValue               clearValue = ClearValue(1.0f, 0);
+    EAttachmentLoadOp::T     loadOp     = EAttachmentLoadOp::Load;
+    EAttachmentStoreOp::T    storeOp    = EAttachmentStoreOp::Store;
+    EImageLayout::T          finalLayout = EImageLayout::DepthStencilAttachmentOptimal;
+};
+
+struct RGRasterPassDesc
+{
+    Rect2D                               renderArea{};
+    uint32_t                             layerCount = 1;
+    std::vector<RGColorAttachmentDesc>   colors{};
+    std::optional<RGDepthAttachmentDesc> depth{};
+};
+
 struct RGPass
 {
     RGPassHandle                handle{};
@@ -148,6 +176,7 @@ struct RGPass
     std::vector<RGTextureUsage> textures;
     std::vector<RGBufferUsage>  buffers;
     std::vector<RGPassHandle>   dependencies;
+    std::optional<RGRasterPassDesc> rasterDesc{};
     std::function<void(class RGRenderContext&)> execute;
 };
 
@@ -178,6 +207,7 @@ struct RGCompiledPassPlan
     RGPassHandle                    pass{};
     std::vector<RGTextureStatePlan> textureStates;
     std::vector<RGBufferStatePlan>  bufferStates;
+    std::optional<RGRasterPassDesc> rasterPlan{};
 };
 
 struct RGImportedTextureFinalizePlan
@@ -248,16 +278,9 @@ class RGPassContext
 class RGRenderContext
 {
   public:
-    struct ColorAttachmentRenderingDesc
-    {
-        RGTextureHandle          color;
-        RGTextureHandle          resolve{};
-        EResolveMode::T          resolveMode = EResolveMode::None;
-        ClearValue               clearValue = ClearValue::Black();
-        EAttachmentLoadOp::T     loadOp     = EAttachmentLoadOp::Clear;
-        EAttachmentStoreOp::T    storeOp    = EAttachmentStoreOp::Store;
-        EImageLayout::T          finalLayout = EImageLayout::ColorAttachmentOptimal;
-    };
+    using ColorAttachmentRenderingDesc = RGColorAttachmentDesc;
+    using DepthRenderingDesc           = RGDepthAttachmentDesc;
+    using RasterRenderingDesc          = RGRasterPassDesc;
 
     struct ColorRenderingDesc
     {
@@ -270,28 +293,12 @@ class RGRenderContext
         EImageLayout::T          finalLayout = EImageLayout::ColorAttachmentOptimal;
     };
 
-    struct DepthRenderingDesc
-    {
-        RGTextureHandle          depth;
-        ClearValue               clearValue = ClearValue(1.0f, 0);
-        EAttachmentLoadOp::T     loadOp     = EAttachmentLoadOp::Load;
-        EAttachmentStoreOp::T    storeOp    = EAttachmentStoreOp::Store;
-        EImageLayout::T          finalLayout = EImageLayout::DepthStencilAttachmentOptimal;
-    };
-
-    struct RasterRenderingDesc
-    {
-        Rect2D                               renderArea{};
-        uint32_t                             layerCount = 1;
-        std::vector<ColorAttachmentRenderingDesc> colors{};
-        std::optional<DepthRenderingDesc> depth{};
-    };
-
   private:
     const RenderGraph&                 _graph;
     const RGPass&                      _pass;
     const RenderGraphResourceRegistry& _registry;
     ICommandBuffer&                    _cmdBuf;
+    const RGCompiledPassPlan*          _compiledPassPlan = nullptr;
     mutable std::optional<RenderingInfo> _activeRenderingInfo;
 
   public:
@@ -299,8 +306,9 @@ class RGRenderContext
         const RenderGraph& graph,
         const RGPass& pass,
         const RenderGraphResourceRegistry& registry,
+        const RGCompiledPassPlan* compiledPassPlan,
         ICommandBuffer& cmdBuf)
-        : _graph(graph), _pass(pass), _registry(registry), _cmdBuf(cmdBuf)
+        : _graph(graph), _pass(pass), _registry(registry), _cmdBuf(cmdBuf), _compiledPassPlan(compiledPassPlan)
     {}
 
     [[nodiscard]] const RGPass& getPass() const { return _pass; }
@@ -312,6 +320,7 @@ class RGRenderContext
     [[nodiscard]] ENGINE_API const RenderImage* resolveTexture(RGTextureHandle handle) const;
     [[nodiscard]] ENGINE_API IBuffer* resolveBuffer(RGBufferHandle handle) const;
     ENGINE_API void beginRasterRendering(const RasterRenderingDesc& desc) const;
+    ENGINE_API void beginDeclaredRasterRendering() const;
     ENGINE_API void beginColorRendering(const ColorRenderingDesc& desc) const;
     ENGINE_API void endRendering() const;
     ENGINE_API void copyBuffer(RGBufferHandle src, RGBufferHandle dst, uint64_t size, uint64_t srcOffset = 0, uint64_t dstOffset = 0) const;
@@ -344,6 +353,7 @@ class RGPassBuilder
     ENGINE_API void transferSrc(RGBufferHandle handle);
     ENGINE_API void transferDst(RGBufferHandle handle);
     ENGINE_API void dependsOn(RGPassHandle handle);
+    ENGINE_API void declareRaster(const RGRasterPassDesc& desc);
     ENGINE_API void useColorAttachment(RGTextureHandle handle);
     ENGINE_API void useDepthAttachment(RGTextureHandle handle);
     ENGINE_API void transferSrc(RGTextureHandle handle);

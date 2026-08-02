@@ -1172,13 +1172,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             passBuilder.read(frameBuffer);
             passBuilder.read(lightBuffer);
             passBuilder.read(skinningBuffer);
-            for (const auto handle : gbufferColors) {
-                passBuilder.useColorAttachment(handle);
-            }
-            passBuilder.useDepthAttachment(gbufferDepthHandle);
-        },
-        [&](RGRenderContext& rgCtx) {
-            rgCtx.beginRasterRendering({
+            passBuilder.declareRaster({
                 .renderArea = Rect2D{.pos = {0, 0}, .extent = gbufferExtent.toVec2()},
                 .layerCount = 1,
                 .colors = {
@@ -1187,7 +1181,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
                     {.color = gbufferColors[2], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
                     {.color = gbufferColors[3], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
                 },
-                .depth = RGRenderContext::DepthRenderingDesc{
+                .depth = RGDepthAttachmentDesc{
                     .depth       = gbufferDepthHandle,
                     .clearValue  = ClearValue(1.0f, 0),
                     .loadOp      = EAttachmentLoadOp::Clear,
@@ -1195,6 +1189,9 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 },
             });
+        },
+        [&](RGRenderContext& rgCtx) {
+            rgCtx.beginDeclaredRasterRendering();
 
             float gbVpY = 0.0f;
             float gbVpH = static_cast<float>(vpH);
@@ -1299,17 +1296,20 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             if (environmentBrdfLut.has_value()) {
                 passBuilder.read(*environmentBrdfLut);
             }
-            passBuilder.useColorAttachment(color);
+            passBuilder.declareRaster({
+                .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
+                .layerCount = 1,
+                .colors = {{
+                    .color       = color,
+                    .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
+                    .loadOp      = EAttachmentLoadOp::Clear,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                }},
+            });
         },
         [&](RGRenderContext& rgCtx) {
-            rgCtx.beginColorRendering({
-                .color       = color,
-                .renderArea  = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
-                .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
-                .loadOp      = EAttachmentLoadOp::Clear,
-                .storeOp     = EAttachmentStoreOp::Store,
-                .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-            });
+            rgCtx.beginDeclaredRasterRendering();
 
             YA_PERF_SCOPE(perf::sample::deferredLight(), perf::metric::cpuTimeMs(), perf::domain::render());
             _lightStage->execute(stageCtx);
@@ -1319,11 +1319,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     [[maybe_unused]] const auto skyboxPass = graph.addPass(
             "Deferred Skybox",
         [&](RGPassBuilder& passBuilder) {
-            passBuilder.useColorAttachment(color);
-            passBuilder.useDepthAttachment(viewportDepthHandle);
-        },
-        [&](RGRenderContext& rgCtx) {
-            rgCtx.beginRasterRendering({
+            passBuilder.declareRaster({
                 .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
                 .layerCount = 1,
                 .colors = {{
@@ -1332,13 +1328,16 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 }},
-                .depth = RGRenderContext::DepthRenderingDesc{
+                .depth = RGDepthAttachmentDesc{
                     .depth       = viewportDepthHandle,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 },
             });
+        },
+        [&](RGRenderContext& rgCtx) {
+            rgCtx.beginDeclaredRasterRendering();
 
             {
                 _overlayStage->executeSkybox(stageCtx);
@@ -1357,11 +1356,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     [[maybe_unused]] const auto overlayPass = graph.addPass(
         "Deferred Scene Overlay",
         [&](RGPassBuilder& passBuilder) {
-            passBuilder.useColorAttachment(overlayInput);
-            passBuilder.useDepthAttachment(viewportDepthHandle);
-        },
-        [&](RGRenderContext& rgCtx) {
-            rgCtx.beginRasterRendering({
+            passBuilder.declareRaster({
                 .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
                 .layerCount = 1,
                 .colors = {{
@@ -1370,13 +1365,16 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 }},
-                .depth = RGRenderContext::DepthRenderingDesc{
+                .depth = RGDepthAttachmentDesc{
                     .depth       = viewportDepthHandle,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 },
             });
+        },
+        [&](RGRenderContext& rgCtx) {
+            rgCtx.beginDeclaredRasterRendering();
 
             {
                 YA_PERF_SCOPE(perf::sample::deferredOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
@@ -1389,11 +1387,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     [[maybe_unused]] const auto viewportOverlayPass = graph.addPass(
         "Deferred Viewport Overlay",
         [&](RGPassBuilder& passBuilder) {
-            passBuilder.useColorAttachment(overlayInput);
-            passBuilder.useDepthAttachment(viewportDepthHandle);
-        },
-        [&](RGRenderContext& rgCtx) {
-            rgCtx.beginRasterRendering({
+            passBuilder.declareRaster({
                 .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
                 .layerCount = 1,
                 .colors = {{
@@ -1402,13 +1396,16 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 }},
-                .depth = RGRenderContext::DepthRenderingDesc{
+                .depth = RGDepthAttachmentDesc{
                     .depth       = viewportDepthHandle,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 },
             });
+        },
+        [&](RGRenderContext& rgCtx) {
+            rgCtx.beginDeclaredRasterRendering();
 
             if (_lastFrameInput.recordViewportOverlays) {
                 YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
