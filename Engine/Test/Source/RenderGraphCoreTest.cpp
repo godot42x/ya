@@ -517,6 +517,86 @@ TEST(RenderGraphCoreTest, DebugDumpIncludesPassOrderDependenciesAndIssues)
     EXPECT_NE(dump.find("InvalidUsage"), std::string::npos);
 }
 
+TEST(RenderGraphCoreTest, CompileBuildsImportedFinalizePlans)
+{
+    RenderGraph graph;
+
+    auto sharedImage = std::make_shared<TestImage>(ImageCreateInfo{
+        .label         = "swapchain",
+        .format        = EFormat::B8G8R8A8_UNORM,
+        .extent        = {.width = 1280, .height = 720, .depth = 1},
+        .usage         = EImageUsage::ColorAttachment | EImageUsage::TransferDst,
+        .initialLayout = EImageLayout::Undefined,
+    });
+    auto sharedView = std::make_shared<TestImageView>(sharedImage, ImageViewCreateInfo{
+        .label       = "swapchain.view",
+        .aspectFlags = EImageAspect::Color,
+        .levelCount  = 1,
+        .layerCount  = 1,
+    });
+    TestBuffer readbackBuffer(BufferCreateInfo{
+        .label = "readback.dst",
+        .usage = EBufferUsage::TransferDst,
+        .size  = 512,
+    });
+
+    const auto importedTexture = graph.importTexture(RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label  = "swapchain",
+            .format = EFormat::B8G8R8A8_UNORM,
+            .extent = Extent3D{1280, 720, 1},
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::TransferDst,
+        },
+        .importDesc = ImportedImageDesc{
+            .label         = "swapchain",
+            .nativeHandle  = static_cast<void*>(sharedImage->getHandle()),
+            .format        = EFormat::B8G8R8A8_UNORM,
+            .usage         = EImageUsage::ColorAttachment | EImageUsage::TransferDst,
+            .extent        = Extent3D{1280, 720, 1},
+            .initialLayout = EImageLayout::Undefined,
+            .finalLayout   = EImageLayout::PresentSrcKHR,
+        },
+        .image     = sharedImage,
+        .imageView = sharedView,
+    });
+    const auto importedBuffer = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "readback.dst",
+            .usage = EBufferUsage::TransferDst,
+            .size  = 512,
+        },
+        .buffer = &readbackBuffer,
+        .initialState = BufferResourceState{
+            .stages = EPipelineStage::Transfer,
+            .access = EResourceAccess::TransferWrite,
+            .size   = 512,
+        },
+        .finalState = BufferResourceState{
+            .stages = EPipelineStage::Host,
+            .access = EResourceAccess::HostRead,
+            .size   = 512,
+        },
+    });
+
+    graph.addPass(
+        "copy-to-imported",
+        [&](RGPassBuilder& pass) {
+            pass.transferDst(importedTexture);
+            pass.transferDst(importedBuffer);
+        },
+        [](RGRenderContext&) {});
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid());
+    ASSERT_EQ(compiled.importedTextureFinalizes.size(), 1u);
+    EXPECT_EQ(compiled.importedTextureFinalizes[0].texture, importedTexture);
+    EXPECT_EQ(compiled.importedTextureFinalizes[0].finalLayout, EImageLayout::PresentSrcKHR);
+    ASSERT_EQ(compiled.importedBufferFinalizes.size(), 1u);
+    EXPECT_EQ(compiled.importedBufferFinalizes[0].buffer, importedBuffer);
+    EXPECT_EQ(compiled.importedBufferFinalizes[0].finalState.stages, EPipelineStage::Host);
+    EXPECT_EQ(compiled.importedBufferFinalizes[0].finalState.access, EResourceAccess::HostRead);
+}
+
 TEST(RenderGraphCoreTest, CompileBuildsBufferAndDepthStatePlans)
 {
     RenderGraph graph;
@@ -1809,6 +1889,50 @@ TEST(RenderGraphCoreTest, ExecutorRestoresImportedBufferFinalStateAfterTransferP
     EXPECT_EQ(cmdBuf.bufferBarriers[1].size, 512u);
 }
 
+TEST(RenderGraphCoreTest, ExecuteCompiledRestoresImportedBufferFinalStateAfterTransferPass)
+{
+    TestResourceFactory factory;
+    TestCommandBuffer   cmdBuf;
+    RenderGraphExecutor executor(factory);
+    RenderGraph         graph;
+    TestBuffer          readbackBuffer(BufferCreateInfo{
+        .label = "readback.dst",
+        .usage = EBufferUsage::TransferDst,
+        .size  = 512,
+    });
+
+    const auto imported = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "readback.dst",
+            .usage = EBufferUsage::TransferDst,
+            .size  = 512,
+        },
+        .buffer = &readbackBuffer,
+        .finalState = BufferResourceState{
+            .stages = EPipelineStage::Host,
+            .access = EResourceAccess::HostRead,
+            .size   = 512,
+        },
+    });
+    graph.addPass(
+        "copy-readback",
+        [=](RGPassBuilder& pass) { pass.transferDst(imported); },
+        [](RGRenderContext&) {});
+
+    RGCompiledGraph compiled;
+    ASSERT_TRUE(executor.prepare(graph, compiled));
+    ASSERT_TRUE(compiled.isValid());
+    ASSERT_TRUE(executor.executeCompiled(graph, compiled, cmdBuf));
+    ASSERT_EQ(cmdBuf.bufferBarriers.size(), 2u);
+    EXPECT_EQ(cmdBuf.bufferBarriers[0].dstStage, EPipelineStage::Transfer);
+    EXPECT_EQ(cmdBuf.bufferBarriers[0].dstAccess, EResourceAccess::TransferWrite);
+    EXPECT_EQ(cmdBuf.bufferBarriers[1].srcStage, EPipelineStage::Transfer);
+    EXPECT_EQ(cmdBuf.bufferBarriers[1].dstStage, EPipelineStage::Host);
+    EXPECT_EQ(cmdBuf.bufferBarriers[1].srcAccess, EResourceAccess::TransferWrite);
+    EXPECT_EQ(cmdBuf.bufferBarriers[1].dstAccess, EResourceAccess::HostRead);
+    EXPECT_EQ(cmdBuf.bufferBarriers[1].size, 512u);
+}
+
 TEST(RenderGraphCoreTest, ResolveTextureRetainsImportedTextureKeepAliveResources)
 {
     TestResourceFactory factory;
@@ -2320,6 +2444,127 @@ TEST(RenderGraphCoreTest, ExecutorRestoresImportedTextureFinalLayoutAfterTransfe
         [](RGRenderContext&) {});
 
     ASSERT_TRUE(executor.execute(graph, cmdBuf));
+    ASSERT_EQ(cmdBuf.transitions.size(), 2u);
+    EXPECT_EQ(cmdBuf.transitions[0].newLayout, EImageLayout::TransferDst);
+    EXPECT_EQ(cmdBuf.transitions[1].oldLayout, EImageLayout::TransferDst);
+    EXPECT_EQ(cmdBuf.transitions[1].newLayout, EImageLayout::PresentSrcKHR);
+}
+
+TEST(RenderGraphCoreTest, DebugDumpIncludesImportedFinalizePlans)
+{
+    RenderGraph graph;
+
+    auto sharedImage = std::make_shared<TestImage>(ImageCreateInfo{
+        .label         = "swapchain",
+        .format        = EFormat::B8G8R8A8_UNORM,
+        .extent        = {.width = 1280, .height = 720, .depth = 1},
+        .usage         = EImageUsage::ColorAttachment | EImageUsage::TransferDst,
+        .initialLayout = EImageLayout::Undefined,
+    });
+    auto sharedView = std::make_shared<TestImageView>(sharedImage, ImageViewCreateInfo{
+        .label       = "swapchain.view",
+        .aspectFlags = EImageAspect::Color,
+        .levelCount  = 1,
+        .layerCount  = 1,
+    });
+    TestBuffer readbackBuffer(BufferCreateInfo{
+        .label = "readback.dst",
+        .usage = EBufferUsage::TransferDst,
+        .size  = 512,
+    });
+
+    graph.importTexture(RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label  = "swapchain",
+            .format = EFormat::B8G8R8A8_UNORM,
+            .extent = Extent3D{1280, 720, 1},
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::TransferDst,
+        },
+        .importDesc = ImportedImageDesc{
+            .label         = "swapchain",
+            .nativeHandle  = static_cast<void*>(sharedImage->getHandle()),
+            .format        = EFormat::B8G8R8A8_UNORM,
+            .usage         = EImageUsage::ColorAttachment | EImageUsage::TransferDst,
+            .extent        = Extent3D{1280, 720, 1},
+            .initialLayout = EImageLayout::Undefined,
+            .finalLayout   = EImageLayout::PresentSrcKHR,
+        },
+        .image     = sharedImage,
+        .imageView = sharedView,
+    });
+    graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "readback.dst",
+            .usage = EBufferUsage::TransferDst,
+            .size  = 512,
+        },
+        .buffer = &readbackBuffer,
+        .finalState = BufferResourceState{
+            .stages = EPipelineStage::Host,
+            .access = EResourceAccess::HostRead,
+            .size   = 512,
+        },
+    });
+
+    const auto dump = graph.debugDump(graph.compile());
+    EXPECT_NE(dump.find("importedTextureFinalizes(1)"), std::string::npos);
+    EXPECT_NE(dump.find("swapchain layout="), std::string::npos);
+    EXPECT_NE(dump.find("importedBufferFinalizes(1)"), std::string::npos);
+    EXPECT_NE(dump.find("readback.dst access="), std::string::npos);
+}
+
+TEST(RenderGraphCoreTest, ExecuteCompiledRestoresImportedTextureFinalLayoutAfterTransferPass)
+{
+    TestResourceFactory factory;
+    TestCommandBuffer   cmdBuf;
+    RenderGraphExecutor executor(factory);
+    RenderGraph         graph;
+
+    auto sharedImage = std::make_shared<TestImage>(ImageCreateInfo{
+        .label         = "swapchain",
+        .format        = EFormat::B8G8R8A8_UNORM,
+        .extent        = {.width = 1280, .height = 720, .depth = 1},
+        .usage         = EImageUsage::ColorAttachment | EImageUsage::TransferDst,
+        .initialLayout = EImageLayout::Undefined,
+    });
+    auto sharedView = std::make_shared<TestImageView>(sharedImage, ImageViewCreateInfo{
+        .label       = "swapchain.view",
+        .aspectFlags = EImageAspect::Color,
+        .levelCount  = 1,
+        .layerCount  = 1,
+    });
+
+    const auto imported = graph.importTexture(RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label  = "swapchain",
+            .format = EFormat::B8G8R8A8_UNORM,
+            .extent = Extent3D{1280, 720, 1},
+            .usage  = EImageUsage::ColorAttachment | EImageUsage::TransferDst,
+        },
+        .importDesc = ImportedImageDesc{
+            .label         = "swapchain",
+            .nativeHandle  = static_cast<void*>(sharedImage->getHandle()),
+            .format        = EFormat::B8G8R8A8_UNORM,
+            .usage         = EImageUsage::ColorAttachment | EImageUsage::TransferDst,
+            .extent        = Extent3D{1280, 720, 1},
+            .initialLayout = EImageLayout::Undefined,
+            .finalLayout   = EImageLayout::PresentSrcKHR,
+        },
+        .image     = sharedImage,
+        .imageView = sharedView,
+    });
+
+    graph.addPass(
+        "copy-to-swapchain",
+        [&](RGPassBuilder& pass) {
+            pass.transferDst(imported);
+        },
+        [](RGRenderContext&) {});
+
+    RGCompiledGraph compiled;
+    ASSERT_TRUE(executor.prepare(graph, compiled));
+    ASSERT_TRUE(compiled.isValid());
+    ASSERT_TRUE(executor.executeCompiled(graph, compiled, cmdBuf));
     ASSERT_EQ(cmdBuf.transitions.size(), 2u);
     EXPECT_EQ(cmdBuf.transitions[0].newLayout, EImageLayout::TransferDst);
     EXPECT_EQ(cmdBuf.transitions[1].oldLayout, EImageLayout::TransferDst);

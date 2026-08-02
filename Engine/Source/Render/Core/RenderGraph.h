@@ -173,6 +173,20 @@ struct RGBufferStatePlan
     BufferResourceState  requiredState{};
 };
 
+struct RGImportedTextureFinalizePlan
+{
+    RGTextureHandle                        texture{};
+    EImageLayout::T                        finalLayout = EImageLayout::Undefined;
+    std::optional<ImageSubresourceRange>   subresourceRange{};
+};
+
+struct RGImportedBufferFinalizePlan
+{
+    RGBufferHandle        buffer{};
+    BufferResourceState   initialState{};
+    BufferResourceState   finalState{};
+};
+
 struct RGCompileIssue
 {
     enum class EKind : uint8_t
@@ -194,6 +208,8 @@ struct RGCompiledGraph
     std::vector<RGDependencyEdge>  dependencies;
     std::vector<RGTextureStatePlan> textureStates;
     std::vector<RGBufferStatePlan>  bufferStates;
+    std::vector<RGImportedTextureFinalizePlan> importedTextureFinalizes;
+    std::vector<RGImportedBufferFinalizePlan>  importedBufferFinalizes;
     std::vector<RGCompileIssue>    issues;
 
     [[nodiscard]] bool isValid() const
