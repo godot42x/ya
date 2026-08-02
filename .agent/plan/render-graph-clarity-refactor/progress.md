@@ -201,3 +201,16 @@
   - 直接运行已有 `ya-testing` binary 还缺少 `libslang-compiler.0.2026.1.dylib`，因此没有将运行结果冒充为通过。
 - 下一步：若继续推进本子计划，先对 `RG-0605` 做 assessment-only，明确当前单 queue state model
   对 async compute / multi-queue 的缺口，再等待主计划 owner 落地 physical slot/reuse。
+
+## 2026-08-02：RG-0605 assessment 完成
+
+- 新增 `async-queue-assessment.md`，基于当前 `ResourceStateTracker`、`RenderGraphExecutor`、
+  `VulkanQueue` 和 `VulkanRender::submitToQueue()` 的实际代码确认：
+  - state model 没有 queue ownership；
+  - executor 没有 queue domain / cross-queue dependency；
+  - submit 层只有 graphics queue 路径、binary semaphore 和固定 wait stage mask；
+  - deferred deletion / resource retirement 没有跨 queue completion token。
+- 决策：本子计划不实现 async compute / multi-queue API。`Compute` pass kind 只表示命令语义，
+  不表示已经可以投递到独立 compute queue。
+- `RG-0605` 以 assessment-only 完成；后续实现依赖主计划先收口 physical buffer reuse、frame resource owner、
+  submit/lifetime contract 和跨 queue completion 基础设施。
