@@ -13,6 +13,7 @@
 - `soul`：需求不清晰、方向未收敛时先做澄清
 - `ya-build`：XMake 构建、目标、shader 生成、测试
 - `profiling`：profile 模式、automation trace、低噪音性能冒烟
+- `speedscope-analysis`：speedscope trace 抽样转文本、热点定位、交给 AI 分析
 - `vscode`：VS Code 任务、调试、clangd、compile_commands
 - `resource-system`：AssetManager、resolve、dirty queue、environment lighting
 - `material-flow`：ECS 到 runtime material 到 render consumer 的数据流
