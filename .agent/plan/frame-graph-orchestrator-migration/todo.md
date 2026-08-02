@@ -48,7 +48,7 @@
   - 停止线：若现有 executor 生命周期无法区分 pipeline persistent scope，先写调查结论并拆出 scope-owner 任务
   - 提交：`[render/graph] persist graph resources by stable key`
 
-- [ ] `FG-103` 增加 pass-scoped resource resolve/access validation
+- [x] `FG-103` 增加 pass-scoped resource resolve/access validation
   - 依赖：FG-101
   - 修改：`RenderGraph.h/.cpp`、`RenderGraphExecutor`、core tests
   - 实现：execute resolve texture/buffer 时检查 handle 属于当前 pass 且声明了兼容 access；debug assert 给出 pass/resource label

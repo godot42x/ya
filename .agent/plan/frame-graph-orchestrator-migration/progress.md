@@ -122,6 +122,29 @@ physical slot 数少于 logical transient buffer 数，真实 Deferred consumer 
 - 下一任务：
   - 进入 `FG-103`，为 pass-scoped resolve / access 增加 validation，避免 executor resolve 越权和 stale handle 静默通过
 
+### 2026-08-02：FG-103 完成
+
+- 状态：完成
+- 实现：
+  - `RGRenderContext::resolveTexture()` / `resolveBuffer()` 现在先检查资源是否由当前 pass 声明。
+  - `copyBuffer()`、`copyTextureToBuffer()`、`copyTexture()` 额外检查 transfer source/destination access。
+  - 新增 declaration/access query API，供 debug tooling 和测试复用同一套判定逻辑：
+    - `hasDeclaredTextureUsage()`
+    - `hasDeclaredBufferUsage()`
+    - `hasDeclaredTextureAccess()`
+    - `hasDeclaredBufferAccess()`
+- 行为边界：
+  - 非法 resolve/copy 在开发期通过 `YA_CORE_ASSERT` 报告 pass 名、handle 和声明 access。
+  - 当前不把 descriptor binding、shader reflection 或 material binding 纳入本任务；这些属于后续 `FG-501+`。
+- 测试：
+  - `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`
+  - 结果：77 tests passed
+  - 新增：
+    - `RenderContextReportsDeclaredTextureAndBufferUsage`
+    - `RenderContextReportsTransferAccessRequirements`
+- 下一任务：
+  - 进入 `FG-104`，收口 buffer range/state、host-write 和 dynamic capacity replacement contract
+
 ## 任务记录模板
 
 ```text
