@@ -280,6 +280,8 @@ void PointShadowIndirectRenderer::fillCullDataNoCull(uint32_t                   
     const uint32_t batchCount = static_cast<uint32_t>(flight.meshBatches.size());
     const uint32_t faceCount  = flight.activeFaceCount;
 
+    _cullPass.prepareNoCull(flightIndex, faceCount, batchCount);
+
     // Pre-fill instanceCount + visibleInstances ourselves (cull shader skipped).
     std::vector<uint32_t> visible(static_cast<size_t>(cmdTemplates.size()) * ShadowConstants::MAX_DRAWS_PER_FACE, 0u);
 
@@ -312,9 +314,21 @@ void PointShadowIndirectRenderer::dispatchCull(ICommandBuffer* cmdBuf, uint32_t 
     _cullPass.dispatch(cmdBuf, flightIndex);
 }
 
+void PointShadowIndirectRenderer::bindGraphVisibleInstances(uint32_t flightIndex, IBuffer* visibleBuffer)
+{
+    if (flightIndex >= _perFlight.size() || !visibleBuffer || !_render) return;
+    auto& flight = _perFlight[flightIndex];
+    if (!flight.indirectDS || !flight.instanceBuffer) return;
+    _render->getDescriptorHelper()->updateDescriptorSets({
+        IDescriptorSetHelper::writeOneStorageBuffer(flight.indirectDS, 0, flight.instanceBuffer.get()),
+        IDescriptorSetHelper::writeOneStorageBuffer(flight.indirectDS, 1, visibleBuffer),
+    });
+}
+
 void PointShadowIndirectRenderer::renderFace(ICommandBuffer*                cmdBuf,
                                              const BasicShadowFramePayload& payload,
-                                             const PointShadowFacePayload&  facePayload) const
+                                             const PointShadowFacePayload&  facePayload,
+                                             IBuffer*                        drawCommandBuffer) const
 {
     YA_PROFILE_FUNCTION();
     const auto& flight = _perFlight[payload.flightIndex];
@@ -323,7 +337,8 @@ void PointShadowIndirectRenderer::renderFace(ICommandBuffer*                cmdB
     cmdBuf->bindPipeline(_pipeline.get());
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {facePayload.faceDS, flight.indirectDS});
 
-    IBuffer*       cmdBuffer  = _cullPass.getDrawCommandBuffer(payload.flightIndex);
+    IBuffer*       cmdBuffer  = drawCommandBuffer;
+    if (!cmdBuffer) return;
     const uint32_t faceCount  = flight.activeFaceCount;
     const uint32_t face       = facePayload.faceGlobalIndex;
     const uint32_t batchCount = static_cast<uint32_t>(flight.meshBatches.size());
@@ -388,7 +403,7 @@ bool PointShadowIndirectRenderer::ensureInstanceCapacity(uint32_t flightIndex, u
     auto nextBuffer = _render->getResourceFactory()->createBuffer(
         BufferCreateInfo{
             .label       = std::format("PointShadow_Instance_{}", flightIndex),
-            .usage       = EBufferUsage::StorageBuffer,
+            .usage       = EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
             .size        = static_cast<uint32_t>(bufferSize64),
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });

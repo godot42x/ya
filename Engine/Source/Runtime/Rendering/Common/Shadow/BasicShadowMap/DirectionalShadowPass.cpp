@@ -218,7 +218,7 @@ std::optional<RGPassHandle> DirectionalShadowPass::appendCascadePass(
             pass.storageRead(skinningBuffer);
             pass.useDepthAttachment(depth);
         },
-        [this, payload, depth, cascadeIndex, frameDS, skinningDS](RGRenderContext& ctx) {
+        [this, payload, depth, frameDS, skinningDS](RGRenderContext& ctx) {
             YA_PERF_SCOPE(perf::sample::shadowDirectional(), perf::metric::cpuTimeMs(), perf::domain::render());
             YA_PROFILE_SCOPE("DirectionalShadowPass::RenderCascade");
             ctx.beginRasterRendering({

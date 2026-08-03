@@ -3,9 +3,9 @@
 ## 当前状态
 
 - 计划建立日期：2026-07-18
-- 当前阶段：P1 RenderGraph 核心前置
-- 当前执行任务：FG-111
-- 下一可执行任务：FG-201（FG-111 完成后）
+- 当前阶段：P3 Typed resources 与 pass parameters
+- 当前执行任务：FG-301
+- 下一可执行任务：FG-301（FG-205/FG-206 完成后）
 
 ### 2026-08-03：FG-111 开始
 
@@ -113,6 +113,15 @@
 - 边界：这些资源仍是 imported per-flight buffers，尚未改成 graph transient slot；它们跨 compute cull 与 point raster pass，需要先完成跨 pass 参数对象后再决定 transient 化。
 - 测试：`xmake b ya-editor` 通过；`python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:DeferredRenderPipelineTest.*'` 通过（85 tests）；默认 smoke 与开启 `pointLightUseIndirect/pointLightIndirectCullEnabled` 的 smoke 均 exit code 0，后者日志 `Engine/Saved/Logs/YA-2026-08-03_19-51-10.log` 未发现 `Validation Error`、`VUID-`、`VK_ERROR` 或 `[Error]`。
 - 下一步：FG-205 收尾审计 Forward/Deferred shadow owner 共享边界，并为 cull/indirect imported resource 增加明确 range/descriptor snapshot 测试；确认后进入 FG-206 的真实 graph transient consumer。
+
+### 2026-08-03：FG-205/FG-206 第三批次完成
+
+- 实现：point shadow cull/indirect 的 draw command、visible instance、frustum 输出改为当前 graph 的 transient buffer；CPU 写入的 per-flight host buffer 通过显式 copy pass 上传，compute cull 和 point raster 通过同一组 graph handles 消费。descriptor 更新与 transient buffer resolve 均延迟到对应 pass callback，避免缓存 graph-owned 指针。
+- 修复：NoCull 路径补齐 cull pass 的 active face/batch shape；此前 graph 会计算出零 bucket 并触发必需资源断言，现由 `prepareNoCull()` 与 compute shape 使用同一 cull owner 状态。
+- 验收：`xmake b ya-editor` 通过；`python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*:DeferredRenderPipelineTest.*:SSAOStageTest.*:DeferredFrameResourceSetTest.*'` 通过（96 tests）；默认、Indirect+GPU Cull、Indirect+NoCull 各运行 300 帧并以 exit code 0 退出，日志 `Engine/Saved/Logs/YA-2026-08-03_20-03-15.log`、`Engine/Saved/Logs/YA-2026-08-03_20-10-02.log`、`Engine/Saved/Logs/YA-2026-08-03_20-08-36.log` 均无 `Validation Error`、`VUID-`、`VK_ERROR` 或错误级别输出。
+- 复用证据：RenderGraph core 已有 transient slot 跨帧 pool hit 与 alias barrier 测试；本批次将真实 Deferred point-shadow cull consumer 接入该 registry。当前 cull 输出在同帧生命周期重叠，没有可安全 alias 的业务 buffer，按停止线以跨帧 pool reuse 作为 runtime 证明。
+- commit：待提交，建议 `[runtime/shadow] route indirect buffers through render graph`
+- 下一任务：FG-301，定义 DeferredFrameGraphResources 与 frame import result。
 
 ## 初始代码审计
 

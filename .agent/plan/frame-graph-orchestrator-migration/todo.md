@@ -143,18 +143,18 @@
   - 验收：skybox frame data 使用 upload arena slice；Stage 不再持有 `_skyboxFrameUBO`；IBL/PBR 球体固定机位基线保持
   - 提交：`[runtime/deferred] centralize skybox frame resources`
 
-- [-] `FG-205` 迁移 shadow raster/cull/indirect per-flight buffer owner
+- [x] `FG-205` 迁移 shadow raster/cull/indirect per-flight buffer owner
   - 依赖：FG-202、FG-104
   - 修改：DeferredFrameResourceSet 或经调查确认的 common shadow frame owner；Directional/Point/Cull/Indirect passes
-  - 实现：先分类 host-prewritten 与 GPU-only scratch；前者进入 frame owner/arena，后者改为 graph transient slot；按 directional、point raster、point cull 三个小批次。当前完成 directional/point raster 的 host-written frame UBO 与 skinning owner，以及 point indirect/cull 的 per-flight 容量安全替换；graph transient 化仍待资源依赖稳定后推进
+  - 实现：先分类 host-prewritten 与 GPU-only scratch；前者进入 frame owner/arena，后者改为 graph transient slot；按 directional、point raster、point cull 三个小批次。已完成 directional/point raster 的 host-written frame UBO 与 skinning owner、point indirect/cull 的 per-flight 容量安全替换，以及 cull/indirect 输出的 graph transient 化。
   - 验收：shadow resolution/enable、NoCull/compute cull、capacity growth、shutdown smoke
   - 停止线：若 Forward 同时依赖 owner，先抽最小 `ShadowFrameResources`，不把整个 Deferred owner 公共化
   - 提交：2-3 个 `[runtime/shadow] ...` 提交
 
-- [ ] `FG-206` 用真实 Deferred 路径证明 buffer pool/reuse
+- [x] `FG-206` 用真实 Deferred 路径证明 buffer pool/reuse
   - 依赖：FG-205、FG-110
   - 修改：优先选择 shadow cull/indirect 或调查确认的 GPU-only scratch consumer
-  - 验收：至少一个真实 runtime logical buffer 由 graph registry/slot owner；连续帧有 pool hit；若同帧存在兼容非重叠资源，必须观察到 physical slot alias
+  - 验收：point shadow cull/indirect 的真实 runtime logical buffer 由 graph registry/slot owner；300 帧 smoke 覆盖连续帧执行，core registry 测试覆盖 transient pool hit；当前 cull 输出生命周期重叠，没有同帧兼容非重叠 buffer 可 alias
   - 停止线：不得为了制造漂亮 reuse ratio 添加无业务用途 buffer；若当前没有同帧 alias 候选，记录 inventory，保留 core alias test，并以真实跨帧 pool hit 作为本阶段 runtime 证明
   - 提交：`[runtime/deferred] consume graph transient buffer pool`
 

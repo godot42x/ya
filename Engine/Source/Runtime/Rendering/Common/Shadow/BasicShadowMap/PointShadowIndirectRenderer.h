@@ -50,9 +50,11 @@ class PointShadowIndirectRenderer
     void beginFrame();
     void prepare(const BasicShadowFramePayload& payload);
     void dispatchCull(ICommandBuffer* cmdBuf, uint32_t flightIndex);
+    void bindGraphVisibleInstances(uint32_t flightIndex, IBuffer* visibleBuffer);
     void renderFace(ICommandBuffer*                cmdBuf,
                     const BasicShadowFramePayload& payload,
-                    const PointShadowFacePayload&  facePayload) const;
+                    const PointShadowFacePayload&  facePayload,
+                    IBuffer*                        drawCommandBuffer) const;
     void refreshPipeline(EFormat::T depthFormat);
 
     [[nodiscard]] bool isSupported() const { return _bSupported; }

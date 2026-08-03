@@ -59,6 +59,9 @@ class PointShadowCullPass
                         uint32_t instanceCount,
                         uint32_t batchCount);
 
+    /// NoCull path — remember the graph buffer shape for CPU-populated data.
+    void prepareNoCull(uint32_t flightIndex, uint32_t activeFaceCount, uint32_t batchCount);
+
     /// Both paths — upload the per-bucket cmd template
     /// (indexCount/firstIndex/vertexOffset/firstInstance set by caller).
     /// Compute path leaves instanceCount=0 (cull shader bumps it).
