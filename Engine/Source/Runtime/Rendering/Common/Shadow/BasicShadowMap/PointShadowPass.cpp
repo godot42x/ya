@@ -273,12 +273,23 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
                 pass.useDepthAttachment(face.depth);
             }
         },
-        [this, payload, useIndirect, graphFaces, skinningDS = binding.skinningDS](RGRenderContext& ctx) {
+        [this, payload, useIndirect, graphFaces, drawCommands, visibleInstances,
+         skinningDS = binding.skinningDS](RGRenderContext& ctx) {
             YA_PERF_SCOPE(perf::sample::shadowPoint(), perf::metric::cpuTimeMs(), perf::domain::render());
             YA_PROFILE_SCOPE("PointShadowPass::RenderFaces");
             YA_PERF_SCOPE(perf::sample::shadowPointFaceLoop(), perf::metric::cpuTimeMs(), perf::domain::render());
 
             auto& commandBuffer = ctx.getCommandBuffer();
+            IBuffer* indirectCommandBuffer = nullptr;
+            if (useIndirect && drawCommands.has_value()) {
+                indirectCommandBuffer = ctx.resolveBuffer(*drawCommands);
+                if (visibleInstances.has_value()) {
+                    _indirectRenderer.bindGraphVisibleInstances(
+                        payload.flightIndex,
+                        ctx.resolveBuffer(*visibleInstances));
+                }
+            }
+            if (useIndirect && !indirectCommandBuffer) return;
             for (const auto& face : *graphFaces) {
                 const auto& facePayload = face.payload;
                 const auto  depth       = face.depth;
@@ -301,7 +312,7 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
 
                 if (useIndirect) {
                     YA_PROFILE_SCOPE("PointShadowPass::DrawFaceIndirect");
-                    _indirectRenderer.renderFace(&commandBuffer, payload, facePayload);
+                    _indirectRenderer.renderFace(&commandBuffer, payload, facePayload, indirectCommandBuffer);
                 }
                 else {
                     YA_PROFILE_SCOPE("PointShadowPass::DrawFaceDirect");

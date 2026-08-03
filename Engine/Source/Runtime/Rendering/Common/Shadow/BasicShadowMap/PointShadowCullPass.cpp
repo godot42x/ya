@@ -96,7 +96,7 @@ bool PointShadowCullPass::ensureCapacity(uint32_t flightIndex, uint32_t bucketCo
 
     auto nextFrustum = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
             .label       = std::format("PointShadowCull_Frustum_{}", flightIndex),
-            .usage       = EBufferUsage::StorageBuffer,
+            .usage       = EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
             .size        = static_cast<uint32_t>(frustumBytes),
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
@@ -104,13 +104,13 @@ bool PointShadowCullPass::ensureCapacity(uint32_t flightIndex, uint32_t bucketCo
     // compute path is active it atomically updates instanceCount on top.
     auto nextDrawCommands = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
             .label       = std::format("PointShadowCull_DrawCmd_{}", flightIndex),
-            .usage       = EBufferUsage::StorageBuffer | EBufferUsage::IndirectBuffer,
+            .usage       = EBufferUsage::StorageBuffer | EBufferUsage::IndirectBuffer | EBufferUsage::TransferSrc,
             .size        = static_cast<uint32_t>(cmdBytes),
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
     auto nextVisibleInstances = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
             .label       = std::format("PointShadowCull_VisInst_{}", flightIndex),
-            .usage       = EBufferUsage::StorageBuffer,
+            .usage       = EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
             .size        = static_cast<uint32_t>(visibleBytes64),
             .memoryUsage = EMemoryUsage::CpuToGpu, // host-visible to allow CPU NoCull writes
         });
@@ -191,6 +191,15 @@ void PointShadowCullPass::prepareCompute(uint32_t                      flightInd
     flight.faceFrustumBuffer->flush();
 }
 
+void PointShadowCullPass::prepareNoCull(uint32_t flightIndex, uint32_t activeFaceCount, uint32_t batchCount)
+{
+    if (flightIndex >= _perFlight.size()) return;
+    auto& flight            = _perFlight[flightIndex];
+    flight.activeFaceCount  = activeFaceCount;
+    flight.activeBatchCount = batchCount;
+    flight.instanceCount    = 0;
+}
+
 void PointShadowCullPass::dispatch(ICommandBuffer* cmdBuf, uint32_t flightIndex)
 {
     YA_PROFILE_FUNCTION();
@@ -209,6 +218,7 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
     bool bDispatchCull,
     std::optional<RGPassHandle> dependency)
 {
+    if (flightIndex >= _perFlight.size()) return std::nullopt;
     const auto& flight = _perFlight[flightIndex];
     if (!flight.drawCommandBuffer || !flight.visibleInstancesBuf) return std::nullopt;
     if (bDispatchCull &&
@@ -241,39 +251,96 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
         .stages = EPipelineStage::Host,
         .access = EResourceAccess::HostWrite,
     };
-    const BufferResourceState indirectReadState{
-        .stages = EPipelineStage::DrawIndirect,
-        .access = EResourceAccess::IndirectCommandRead,
-    };
-    const BufferResourceState shaderReadState{
-        .stages = EPipelineStage::AllCommands,
-        .access = EResourceAccess::ShaderRead,
-    };
-    const auto drawCommandBuffer = importBuffer(
+    const uint64_t bucketCount = static_cast<uint64_t>(flight.activeFaceCount) * flight.activeBatchCount;
+    const uint64_t commandBytes = bucketCount * sizeof(PointShadowIndirectCommand);
+    const uint64_t visibleBytes = bucketCount * ShadowConstants::MAX_DRAWS_PER_FACE * sizeof(uint32_t);
+    const uint64_t frustumBytes = static_cast<uint64_t>(flight.activeFaceCount) * sizeof(PointShadowFaceFrustum);
+    if (bucketCount == 0 || commandBytes > std::numeric_limits<uint32_t>::max() ||
+        visibleBytes > std::numeric_limits<uint32_t>::max() ||
+        (bDispatchCull && frustumBytes > std::numeric_limits<uint32_t>::max())) {
+        return std::nullopt;
+    }
+
+    const auto drawCommandStaging = importBuffer(
         graph,
         flight.drawCommandBuffer,
         "PointShadowCull.DrawCommands",
-        EBufferUsage::StorageBuffer | EBufferUsage::IndirectBuffer,
-        hostWriteState,
-        indirectReadState);
-    const auto visibleInstances = importBuffer(
+        EBufferUsage::StorageBuffer | EBufferUsage::IndirectBuffer | EBufferUsage::TransferSrc,
+        hostWriteState);
+    const auto visibleInstancesStaging = importBuffer(
         graph,
         flight.visibleInstancesBuf,
         "PointShadowCull.VisibleInstances",
-        EBufferUsage::StorageBuffer,
-        bDispatchCull ? BufferResourceState{} : hostWriteState,
-        shaderReadState);
+        EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
+        hostWriteState);
+    const auto drawCommands = graph.createBuffer(RGBufferDesc{
+        .label = "PointShadowCull.DrawCommands.Transient",
+        .usage = EBufferUsage::StorageBuffer | EBufferUsage::IndirectBuffer | EBufferUsage::TransferDst,
+        .size  = static_cast<uint32_t>(commandBytes),
+    });
+    const auto visibleInstances = graph.createBuffer(RGBufferDesc{
+        .label = "PointShadowCull.VisibleInstances.Transient",
+        .usage = EBufferUsage::StorageBuffer | EBufferUsage::TransferDst,
+        .size  = static_cast<uint32_t>(visibleBytes),
+    });
 
     GraphResources resources{
-        .drawCommands     = drawCommandBuffer,
+        .drawCommands     = drawCommands,
         .visibleInstances = visibleInstances,
     };
-    if (!bDispatchCull) return resources;
+
+    std::optional<RGBufferHandle> frustumBuffer;
+    std::optional<RGBufferHandle> frustumStaging;
+    if (bDispatchCull) {
+        frustumStaging = importBuffer(
+            graph,
+            flight.faceFrustumBuffer,
+            "PointShadowCull.Frustums",
+            EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
+            hostWriteState);
+        frustumBuffer = graph.createBuffer(RGBufferDesc{
+            .label = "PointShadowCull.Frustums.Transient",
+            .usage = EBufferUsage::StorageBuffer | EBufferUsage::TransferDst,
+            .size  = static_cast<uint32_t>(frustumBytes),
+        });
+    }
+    const auto frustumHandle = frustumBuffer.value_or(RGBufferHandle{});
+
+    const auto uploadPass = graph.addPass(
+        "Point Shadow Cull Upload",
+        [drawCommandStaging, drawCommands, visibleInstancesStaging, visibleInstances,
+         frustumStaging, frustumBuffer, bDispatchCull, dependency](RGPassBuilder& pass) {
+            if (dependency.has_value()) pass.dependsOn(*dependency);
+            pass.declareCopy();
+            pass.transferSrc(drawCommandStaging);
+            pass.transferDst(drawCommands);
+            if (!bDispatchCull) {
+                pass.transferSrc(visibleInstancesStaging);
+                pass.transferDst(visibleInstances);
+            }
+            if (bDispatchCull) {
+                pass.transferSrc(*frustumStaging);
+                pass.transferDst(*frustumBuffer);
+            }
+        },
+        [drawCommandStaging, drawCommands, visibleInstancesStaging, visibleInstances,
+         frustumStaging, frustumBuffer, bDispatchCull, commandBytes, visibleBytes, frustumBytes](RGRenderContext& ctx) {
+            ctx.copyBuffer(drawCommandStaging, drawCommands, commandBytes);
+            if (!bDispatchCull) {
+                ctx.copyBuffer(visibleInstancesStaging, visibleInstances, visibleBytes);
+            }
+            if (bDispatchCull) {
+                ctx.copyBuffer(*frustumStaging, *frustumBuffer, frustumBytes);
+            }
+        });
+
+    if (!bDispatchCull) {
+        resources.cullPass = uploadPass;
+        return resources;
+    }
 
     const auto instanceBuffer = importBuffer(
         graph, flight.instanceBuffer, "PointShadowCull.Instances", EBufferUsage::StorageBuffer, hostWriteState);
-    const auto frustumBuffer = importBuffer(
-        graph, flight.faceFrustumBuffer, "PointShadowCull.Frustums", EBufferUsage::StorageBuffer, hostWriteState);
 
     PushConstants pc{
         .instanceCount = flight.instanceCount,
@@ -282,25 +349,33 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
         ._pad          = 0,
     };
     const uint32_t groupsX = (flight.instanceCount + ShadowConstants::CULL_WORKGROUP_SIZE - 1) / ShadowConstants::CULL_WORKGROUP_SIZE;
-    resources.cullPass = graph.addPass(
+    const auto cullPass = graph.addPass(
         "Point Shadow Cull",
-        [instanceBuffer, frustumBuffer, drawCommandBuffer, visibleInstances, dependency](RGPassBuilder& pass) {
-            if (dependency.has_value()) pass.dependsOn(*dependency);
+        [instanceBuffer, frustumHandle, drawCommands, visibleInstances, uploadPass](RGPassBuilder& pass) {
+            pass.dependsOn(uploadPass);
             pass.declareCompute();
             pass.storageRead(instanceBuffer);
-            pass.storageRead(frustumBuffer);
-            pass.storageReadWrite(drawCommandBuffer);
+            pass.storageRead(frustumHandle);
+            pass.storageReadWrite(drawCommands);
             pass.storageWrite(visibleInstances);
         },
-        [this, cullDS = flight.cullDS, pc, groupsX, faceCount = flight.activeFaceCount](RGRenderContext& ctx) {
+        [this, cullDS = flight.cullDS, instanceBuffer, frustumHandle, drawCommands, visibleInstances,
+         pc, groupsX, faceCount = flight.activeFaceCount](RGRenderContext& ctx) {
             YA_PROFILE_SCOPE("PointShadowPass::CullDispatch");
             YA_PERF_SCOPE(perf::sample::shadowPointCull(), perf::metric::cpuTimeMs(), perf::domain::render());
+            _render->getDescriptorHelper()->updateDescriptorSets({
+                IDescriptorSetHelper::writeOneStorageBuffer(cullDS, 0, ctx.resolveBuffer(instanceBuffer)),
+                IDescriptorSetHelper::writeOneStorageBuffer(cullDS, 1, ctx.resolveBuffer(frustumHandle)),
+                IDescriptorSetHelper::writeOneStorageBuffer(cullDS, 2, ctx.resolveBuffer(drawCommands)),
+                IDescriptorSetHelper::writeOneStorageBuffer(cullDS, 3, ctx.resolveBuffer(visibleInstances)),
+            });
             auto& commandBuffer = ctx.getCommandBuffer();
             commandBuffer.bindComputePipeline(_pipeline.get());
             commandBuffer.bindComputeDescriptorSets(_pipelineLayout.get(), 0, {cullDS});
             commandBuffer.pushConstants(_pipelineLayout.get(), EShaderStage::Compute, 0, sizeof(PushConstants), &pc);
             commandBuffer.dispatch(groupsX, faceCount, 1);
         });
+    resources.cullPass = cullPass;
     return resources;
 }
 
