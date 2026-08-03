@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace ya
 {
@@ -26,6 +27,7 @@ class RenderGraphResourceRegistry
         std::shared_ptr<IBuffer> resource;
         RGBufferDesc             desc{};
         std::optional<RGPersistentBufferKey> persistentKey{};
+        bool                     pooledTransient = false;
     };
 
     struct ImportedBufferEntry
@@ -39,6 +41,7 @@ class RenderGraphResourceRegistry
     std::unordered_map<std::string, std::shared_ptr<TextureEntry>> _persistentTextures;
     std::unordered_map<RGBufferHandle, std::shared_ptr<OwnedBufferEntry>> _ownedBuffers;
     std::unordered_map<std::string, std::shared_ptr<OwnedBufferEntry>> _persistentOwnedBuffers;
+    std::vector<std::shared_ptr<OwnedBufferEntry>> _transientBufferPool;
     std::unordered_map<RGBufferHandle, ImportedBufferEntry> _importedBuffers;
 
     static RenderImageDesc makeRenderImageDesc(const RGTextureDesc& desc);
@@ -50,6 +53,11 @@ class RenderGraphResourceRegistry
     static bool needsImportedBufferReplacement(const ImportedBufferEntry& entry, const RGBufferResource& resource);
     static void releaseTextureBinding(std::shared_ptr<TextureEntry>& entry);
     static void releaseOwnedBufferBinding(std::shared_ptr<OwnedBufferEntry>& entry);
+    static bool canReuseTransientSlot(const OwnedBufferEntry& entry, const RGTransientBufferSlotPlan& slot);
+    std::shared_ptr<OwnedBufferEntry> acquireTransientSlot(
+        const RGTransientBufferSlotPlan& slot,
+        std::unordered_set<OwnedBufferEntry*>& usedPoolEntries);
+    void materializeTransientSlots(const RenderGraph& graph, const RGCompiledGraph& compiled);
 
   public:
     explicit RenderGraphResourceRegistry(IRenderResourceFactory& factory)
@@ -57,7 +65,7 @@ class RenderGraphResourceRegistry
     {}
     ENGINE_API ~RenderGraphResourceRegistry();
 
-    ENGINE_API void sync(const RenderGraph& graph);
+    ENGINE_API void sync(const RenderGraph& graph, const RGCompiledGraph* compiled = nullptr);
     ENGINE_API void clear();
 
     [[nodiscard]] ENGINE_API const RenderImage* resolveTexture(RGTextureHandle handle) const;

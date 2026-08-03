@@ -5,7 +5,7 @@
 - 计划建立日期：2026-07-18
 - 当前阶段：P1 RenderGraph 核心前置
 - 当前执行任务：无
-- 下一可执行任务：FG-108
+- 下一可执行任务：FG-109
 
 ## 初始代码审计
 
@@ -265,6 +265,36 @@ physical slot 数少于 logical transient buffer 数，真实 Deferred consumer 
 - commit：待提交
 - 下一任务：
   - 进入 `FG-108`，让 registry materialize 并跨帧池化 physical buffer slots
+
+### 2026-08-03：FG-108 完成
+
+- 状态：完成
+- 代码事实：
+  - FG-107 只生成了 compiler slot plan；此前 executor 仍按每个 transient logical handle 各自创建 buffer，slot plan 没有进入运行时 owner 链。
+  - registry 的旧 `sync(graph)` 调用仍被测试和 standalone 工具使用，不能让 registry 在没有 compiled graph 的情况下自行偷偷编译。
+- 实现：
+  - `RenderGraphExecutor::prepare()` 把同一次 compile 得到的 `RGCompiledGraph` 传给 registry；registry 只按 compiled slot plan materialize transient owner。
+  - 同一 slot 的多个 logical handle 绑定同一个 `IBuffer`，未使用的 transient buffer 不创建 owner；imported/persistent 继续走原有路径。
+  - registry 增加跨帧 transient pool：优先命中 `memoryUsage` 相同、capacity/usage/alignment 足够的 owner；capacity 或 memory class 不兼容时创建新 owner并保留旧 pool entry。
+  - pooled transient owner 的释放只发生在 registry clear/destructor，handle projection 被 prune 时不会提前 retire GPU buffer。
+  - 保留 `sync(graph, nullptr)` 兼容路径，未提供 compiled plan 时继续按 logical buffer materialize 原行为。
+- 未做：
+  - 还没有同一 physical slot 在 logical identity 切换时的 alias boundary barrier/state reset；这属于 `FG-109`。
+  - pool 当前不做 LRU/容量上限回收；先保证 completion-safe reuse 和可测的跨帧 pool hit。
+- 测试：
+  - `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`
+  - 结果：88 tests passed
+  - 新增：
+    - `ResourceRegistryMaterializesOneBufferPerCompiledTransientSlot`
+    - `ResourceRegistryReusesTransientBufferPoolAcrossFramesAndGrowsSafely`
+  - 额外烟测：`xmake b ya-editor`
+  - 结果：build ok
+- artifacts：
+  - `RenderGraphResourceRegistry::sync(const RenderGraph&, const RGCompiledGraph*)`
+  - transient pooled owner materialization and reuse tests
+- commit：待提交
+- 下一任务：
+  - 进入 `FG-109`，实现 buffer alias boundary barrier 与 state reset
 
 ## 任务记录模板
 

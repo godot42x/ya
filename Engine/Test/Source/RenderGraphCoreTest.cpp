@@ -1443,6 +1443,115 @@ TEST(RenderGraphCoreTest, ResourceRegistryCreatesTransientAndImportedResources)
     EXPECT_EQ(factory.createdViews, 2u);
 }
 
+TEST(RenderGraphCoreTest, ResourceRegistryMaterializesOneBufferPerCompiledTransientSlot)
+{
+    RenderGraph graph;
+    const auto first = graph.createBuffer(RGBufferDesc{
+        .label = "slot.first",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 64,
+    });
+    const auto second = graph.createBuffer(RGBufferDesc{
+        .label = "slot.second",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 128,
+    });
+    graph.addPass("write-first", [&](RGPassBuilder& pass) {
+        pass.storageWrite(first);
+    });
+    graph.addPass("write-second", [&](RGPassBuilder& pass) {
+        pass.storageWrite(second);
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid());
+    ASSERT_EQ(compiled.transientBufferSlots.size(), 1u);
+
+    TestResourceFactory factory;
+    RenderGraphResourceRegistry registry(factory);
+    registry.sync(graph, &compiled);
+
+    ASSERT_NE(registry.resolveBuffer(first), nullptr);
+    ASSERT_EQ(registry.resolveBuffer(first), registry.resolveBuffer(second));
+    ASSERT_EQ(factory.createdBuffers, 1u);
+    ASSERT_EQ(factory.createdBufferDescs.size(), 1u);
+    EXPECT_EQ(factory.createdBufferDescs.front().size, 128u);
+    EXPECT_EQ(factory.createdBufferDescs.front().usage, EBufferUsage::StorageBuffer);
+}
+
+TEST(RenderGraphCoreTest, ResourceRegistryReusesTransientBufferPoolAcrossFramesAndGrowsSafely)
+{
+    TestResourceFactory factory;
+    RenderGraphResourceRegistry registry(factory);
+
+    RenderGraph graphA;
+    const auto bufferA = graphA.createBuffer(RGBufferDesc{
+        .label       = "pool.a",
+        .usage       = EBufferUsage::StorageBuffer,
+        .size        = 64,
+        .memoryUsage = EMemoryUsage::GpuOnly,
+    });
+    graphA.addPass("write-a", [&](RGPassBuilder& pass) {
+        pass.storageWrite(bufferA);
+    });
+    const auto compiledA = graphA.compile();
+    ASSERT_TRUE(compiledA.isValid());
+    registry.sync(graphA, &compiledA);
+    auto* firstOwner = registry.resolveBuffer(bufferA);
+    ASSERT_NE(firstOwner, nullptr);
+    EXPECT_EQ(factory.createdBuffers, 1u);
+
+    RenderGraph graphB;
+    const auto bufferB = graphB.createBuffer(RGBufferDesc{
+        .label       = "pool.b",
+        .usage       = EBufferUsage::StorageBuffer,
+        .size        = 32,
+        .memoryUsage = EMemoryUsage::GpuOnly,
+    });
+    graphB.addPass("write-b", [&](RGPassBuilder& pass) {
+        pass.storageWrite(bufferB);
+    });
+    const auto compiledB = graphB.compile();
+    ASSERT_TRUE(compiledB.isValid());
+    registry.sync(graphB, &compiledB);
+    EXPECT_EQ(registry.resolveBuffer(bufferB), firstOwner);
+    EXPECT_EQ(factory.createdBuffers, 1u);
+
+    RenderGraph graphC;
+    const auto bufferC = graphC.createBuffer(RGBufferDesc{
+        .label       = "pool.c",
+        .usage       = EBufferUsage::StorageBuffer,
+        .size        = 128,
+        .memoryUsage = EMemoryUsage::GpuOnly,
+    });
+    graphC.addPass("write-c", [&](RGPassBuilder& pass) {
+        pass.storageWrite(bufferC);
+    });
+    const auto compiledC = graphC.compile();
+    ASSERT_TRUE(compiledC.isValid());
+    registry.sync(graphC, &compiledC);
+    auto* grownOwner = registry.resolveBuffer(bufferC);
+    ASSERT_NE(grownOwner, nullptr);
+    EXPECT_NE(grownOwner, firstOwner);
+    EXPECT_EQ(factory.createdBuffers, 2u);
+
+    RenderGraph graphD;
+    const auto bufferD = graphD.createBuffer(RGBufferDesc{
+        .label       = "pool.d",
+        .usage       = EBufferUsage::StorageBuffer,
+        .size        = 32,
+        .memoryUsage = EMemoryUsage::CpuToGpu,
+    });
+    graphD.addPass("write-d", [&](RGPassBuilder& pass) {
+        pass.storageWrite(bufferD);
+    });
+    const auto compiledD = graphD.compile();
+    ASSERT_TRUE(compiledD.isValid());
+    registry.sync(graphD, &compiledD);
+    EXPECT_NE(registry.resolveBuffer(bufferD), nullptr);
+    EXPECT_EQ(factory.createdBuffers, 3u);
+}
+
 TEST(RenderGraphCoreTest, ResourceRegistryCanImportExistingImageWithCustomViewDesc)
 {
     TestResourceFactory factory;

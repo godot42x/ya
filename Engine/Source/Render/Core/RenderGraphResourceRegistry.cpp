@@ -95,6 +95,11 @@ bool isSameBufferDesc(const RGBufferDesc& lhs, const RGBufferDesc& rhs)
            lhs.alignment == rhs.alignment;
 }
 
+bool hasRequestedBufferUsage(EBufferUsage value, EBufferUsage required)
+{
+    return (value & required) == required;
+}
+
 bool isSameImportedBufferDesc(const RGImportedBufferDesc& lhs, const RGImportedBufferDesc& rhs)
 {
     return isSameBufferDesc(lhs.desc, rhs.desc) &&
@@ -171,10 +176,75 @@ void RenderGraphResourceRegistry::releaseOwnedBufferBinding(std::shared_ptr<Owne
     if (!entry) {
         return;
     }
-    if (!entry->persistentKey.has_value()) {
+    if (!entry->persistentKey.has_value() && !entry->pooledTransient) {
         retireSharedResource(entry->resource);
     }
     entry.reset();
+}
+
+bool RenderGraphResourceRegistry::canReuseTransientSlot(const OwnedBufferEntry& entry,
+                                                        const RGTransientBufferSlotPlan& slot)
+{
+    return entry.pooledTransient &&
+           entry.resource != nullptr &&
+           entry.desc.memoryUsage == slot.desc.memoryUsage &&
+           entry.desc.size >= slot.desc.size &&
+           entry.desc.alignment >= slot.desc.alignment &&
+           hasRequestedBufferUsage(entry.desc.usage, slot.desc.usage);
+}
+
+std::shared_ptr<RenderGraphResourceRegistry::OwnedBufferEntry> RenderGraphResourceRegistry::acquireTransientSlot(
+    const RGTransientBufferSlotPlan& slot,
+    std::unordered_set<OwnedBufferEntry*>& usedPoolEntries)
+{
+    for (const auto& entry : _transientBufferPool) {
+        if (!entry || usedPoolEntries.contains(entry.get()) || !canReuseTransientSlot(*entry, slot)) {
+            continue;
+        }
+        usedPoolEntries.insert(entry.get());
+        return entry;
+    }
+
+    auto entry = std::make_shared<OwnedBufferEntry>(OwnedBufferEntry{
+        .resource = _factory.createBuffer(BufferCreateInfo{
+            .label       = slot.desc.label,
+            .usage       = slot.desc.usage,
+            .size        = slot.desc.size,
+            .memoryUsage = slot.desc.memoryUsage,
+        }),
+        .desc           = slot.desc,
+        .pooledTransient = true,
+    });
+    YA_CORE_ASSERT(entry->resource != nullptr,
+                   "RenderGraph registry failed to create transient buffer slot '{}'",
+                   slot.desc.label);
+    _transientBufferPool.push_back(entry);
+    usedPoolEntries.insert(entry.get());
+    return entry;
+}
+
+void RenderGraphResourceRegistry::materializeTransientSlots(const RenderGraph& graph,
+                                                             const RGCompiledGraph& compiled)
+{
+    std::unordered_set<OwnedBufferEntry*> usedPoolEntries;
+    usedPoolEntries.reserve(compiled.transientBufferSlots.size());
+
+    for (const auto& slot : compiled.transientBufferSlots) {
+        const auto entry = acquireTransientSlot(slot, usedPoolEntries);
+        for (const auto handle : slot.buffers) {
+            const auto* resource = graph.getBuffer(handle);
+            YA_CORE_ASSERT(resource != nullptr && resource->lifetime == ERGResourceLifetime::Transient,
+                           "RenderGraph transient slot {} references an invalid logical buffer {}",
+                           slot.slotIndex,
+                           handle.index);
+
+            if (const auto existing = _ownedBuffers.find(handle);
+                existing != _ownedBuffers.end() && existing->second != entry) {
+                existing->second.reset();
+            }
+            _ownedBuffers[handle] = entry;
+        }
+    }
 }
 
 RenderGraphResourceRegistry::~RenderGraphResourceRegistry()
@@ -327,7 +397,7 @@ bool RenderGraphResourceRegistry::needsImportedBufferReplacement(const ImportedB
     return !isSameImportedBufferDesc(*entry.imported, *resource.imported);
 }
 
-void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
+void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompiledGraph* compiled)
 {
     pruneUnusedResources(graph);
 
@@ -401,7 +471,15 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph)
         });
     }
 
+    if (compiled != nullptr) {
+        YA_CORE_ASSERT(compiled->isValid(), "RenderGraph registry cannot materialize an invalid compiled graph");
+        materializeTransientSlots(graph, *compiled);
+    }
+
     for (const auto& buffer : graph.getBuffers()) {
+        if (compiled != nullptr && buffer.lifetime == ERGResourceLifetime::Transient) {
+            continue;
+        }
         if (buffer.lifetime == ERGResourceLifetime::Persistent) {
             YA_CORE_ASSERT(buffer.persistentKey.has_value(),
                            "Persistent render graph buffer '{}' is missing stable key",
@@ -505,6 +583,9 @@ void RenderGraphResourceRegistry::clear()
         (void)key;
         retireSharedResource(buffer->resource);
     }
+    for (auto& buffer : _transientBufferPool) {
+        retireSharedResource(buffer->resource);
+    }
     for (auto& [handle, texture] : _textures) {
         (void)handle;
         releaseTextureBinding(texture);
@@ -515,6 +596,7 @@ void RenderGraphResourceRegistry::clear()
     }
     _persistentTextures.clear();
     _persistentOwnedBuffers.clear();
+    _transientBufferPool.clear();
     _textures.clear();
     _ownedBuffers.clear();
     for (auto& [handle, buffer] : _importedBuffers) {
