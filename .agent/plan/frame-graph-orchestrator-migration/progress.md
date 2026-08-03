@@ -4,8 +4,25 @@
 
 - 计划建立日期：2026-07-18
 - 当前阶段：P1 RenderGraph 核心前置
-- 当前执行任务：无
-- 下一可执行任务：FG-111
+- 当前执行任务：FG-111
+- 下一可执行任务：FG-201（FG-111 完成后）
+
+### 2026-08-03：FG-111 开始
+
+- 代码事实：`IBuffer` 提供跨后端 `writeData`、`map`、`unmap` 和 `BufferHandle`；`IRenderResourceFactory::createBuffer` 是资源创建边界。
+- 代码事实：`IRender::begin()` 在当前 flight fence 等待完成后才重置 fence；arena 的 `beginFlight()` 以此为调用前置条件。
+- 设计边界：不新增 Vulkan-only alignment API，不硬编码后端常量；`allocate()` 要求调用方提供显式 alignment。
+- 设计边界：每个 flight 独立 backing buffer 和 cursor；扩容时旧 backing 通过 `DeferredDeletionQueue` 延迟退休。
+- 预计提交边界：新增 `FrameUploadArena` 资源类和对应 RenderGraphCore 单测，不迁移任何 stage。
+
+### 2026-08-03：FG-111 完成
+
+- 新增 `FrameUploadArena`：按 flight 隔离 host-visible `CpuToGpu` backing buffer，显式 alignment 的线性 slice 分配，slice 可写入并生成 `DescriptorBufferInfo`。
+- backing 容量不足时按增长策略安全替换，旧 backing 进入 `DeferredDeletionQueue`；`beginFlight()` 只重置已由调用方 fence 等待完成的 flight cursor。
+- 新增 2 个核心测试，覆盖共享 backing/non-overlap、descriptor offset/range、跨 flight 隔离、容量增长和 deferred retirement。
+- 验证：`python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`（92/92 passed）；`xmake b ya-editor`（passed）；`python3 Script/ya.py build --project Example/HelloMaterial/HelloMaterial.yaproject`（passed）；`python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject -- --exit-after-frame=120 --log-level=warn --log-detail-level=error`（exit 0，日志无 Validation Error/VUID/[Error]/VK_ERROR）。
+- `make test` 当前仅返回 “Nothing to be done”；`make b t=HelloMaterial` 无对应 make rule，已使用项目规定的 `python3 Script/ya.py` 等价入口验证。
+- 下一可执行任务：FG-201。
 
 ## 初始代码审计
 
