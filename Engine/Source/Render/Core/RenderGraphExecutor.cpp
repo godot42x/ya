@@ -33,7 +33,7 @@ bool RenderGraphExecutor::prepare(
         return false;
     }
 
-    _registry.sync(graph);
+    _registry.sync(graph, &outCompiled);
     if (outResult) {
         captureExecutionResult(outCompiled, *outResult);
     }

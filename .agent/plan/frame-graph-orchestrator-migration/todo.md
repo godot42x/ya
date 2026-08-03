@@ -85,7 +85,7 @@
   - 禁止：texture aliasing、Vulkan memory handle 泄漏、多 queue lifetime
   - 提交：`[render/graph] allocate transient buffer slots`
 
-- [ ] `FG-108` 让 registry materialize 并跨帧池化 physical buffer slots
+- [x] `FG-108` 让 registry materialize 并跨帧池化 physical buffer slots
   - 依赖：FG-102、FG-107
   - 修改：`RenderGraphResourceRegistry`、`RenderGraphExecutor`、tests
   - 实现：logical handle -> physical slot 映射；每 slot 只创建一个 IBuffer；兼容 spec 跨帧 pool hit，扩容/usage 变化安全 replacement
