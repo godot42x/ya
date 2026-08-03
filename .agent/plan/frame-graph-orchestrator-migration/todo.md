@@ -168,12 +168,15 @@
   - 提交：`[runtime/deferred] add typed frame graph resources`
   - 说明：`frame import result`（typed pass params 的载体）作为 FG-302~FG-306 的前置类型继续演进
 
-- [ ] `FG-302` 为 GBuffer pass 增加单一参数对象
+- [x] `FG-302` 为 GBuffer pass 增加单一参数对象
   - 依赖：FG-301、FG-103
   - 修改：GBuffer pass module/pipeline
   - 实现：同一 params 驱动 setup 和 execute resolve；frame/light/skinning 从 binding context 获取
   - 验收：execute 不调用 Stage buffer/resource getter；resolve validation 通过
   - 提交：`[runtime/deferred] parameterize gbuffer graph pass`
+  - 说明：新增 `DeferredGBufferPassParams`；`GBufferStage` 删除 `_frameInputs`/`setFrameInputs`，
+    `execute(ctx, FrameInputs)` 显式接收 binding；GBuffer pass execute 对 declared 的
+    frame/light/skinning handle 执行 `rgCtx.resolveBuffer`（FG-103 validation）
 
 - [ ] `FG-303` 为 SSAO 和 Deferred Light 增加参数对象
   - 依赖：FG-301、FG-203

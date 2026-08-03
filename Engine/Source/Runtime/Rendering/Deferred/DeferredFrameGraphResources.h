@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Render/Core/DescriptorSet.h"
 #include "Render/Core/RenderGraph.h"
 
 #include <array>
@@ -47,6 +48,34 @@ struct DeferredFrameGraphResources
         std::optional<RGPassHandle> sceneOverlay{};
         std::optional<RGPassHandle> viewportOverlay{};
     } passes{};
+};
+
+/// Typed pass parameters for the Deferred GBuffer graph pass.
+///
+/// One object drives both graph setup (declaration) and execute (resolve), so
+/// the pass never reads binding state back from a stage member. Handles are
+/// frame-local; the current-flight descriptor binding is owned by
+/// DeferredFrameResourceSet and carried here only for the execute callback.
+struct DeferredGBufferPassParams
+{
+    struct BufferInput
+    {
+        RGBufferHandle handle{};
+        RGBufferRange  range{};
+    };
+
+    BufferInput                    frame{};
+    BufferInput                    light{};
+    RGBufferHandle                 skinning{};
+    std::array<RGTextureHandle, 4> gBufferColors{};
+    RGTextureHandle                gBufferDepth{};
+    Rect2D                         renderArea{};
+    uint32_t                       layerCount = 1;
+
+    // Current-flight binding (owned by DeferredFrameResourceSet); carried so the
+    // execute callback can drive the stage without reading stage members.
+    DescriptorSetHandle            frameAndLightDescriptorSet{};
+    DescriptorSetHandle            skinningDescriptorSet{};
 };
 
 } // namespace ya

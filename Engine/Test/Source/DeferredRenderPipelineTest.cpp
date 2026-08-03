@@ -152,6 +152,42 @@ TEST(DeferredFrameGraphResourcesTest, KeepsOptionalInputsExplicitAndHandlesFrame
     EXPECT_EQ(resources.passes.gBuffer->generation, 13u);
 }
 
+TEST(DeferredGBufferPassParamsTest, DefaultsAreEmptyAndHandlesRemainFrameLocal)
+{
+    DeferredGBufferPassParams params{};
+
+    EXPECT_FALSE(params.frame.handle.isValid());
+    EXPECT_FALSE(params.light.handle.isValid());
+    EXPECT_FALSE(params.skinning.isValid());
+    EXPECT_EQ(params.frame.range.offset, 0u);
+    EXPECT_EQ(params.frame.range.size, 0u);
+    EXPECT_EQ(params.layerCount, 1u);
+    EXPECT_FALSE(params.frameAndLightDescriptorSet);
+    EXPECT_FALSE(params.skinningDescriptorSet);
+    for (const auto& color : params.gBufferColors) {
+        EXPECT_FALSE(color.isValid());
+    }
+    EXPECT_FALSE(params.gBufferDepth.isValid());
+
+    params.frame.handle = RGBufferHandle{.index = 2, .generation = 7};
+    params.frame.range  = RGBufferRange{.offset = 256, .size = 128};
+    params.light.handle = RGBufferHandle{.index = 3, .generation = 8};
+    params.skinning     = RGBufferHandle{.index = 4, .generation = 9};
+    params.gBufferColors[0] = RGTextureHandle{.index = 5, .generation = 10};
+    params.gBufferDepth     = RGTextureHandle{.index = 6, .generation = 11};
+    params.renderArea       = Rect2D{.pos = {0, 0}, .extent = {1920, 1080}};
+
+    EXPECT_TRUE(params.frame.handle.isValid());
+    EXPECT_EQ(params.frame.range.offset, 256u);
+    EXPECT_EQ(params.frame.range.size, 128u);
+    EXPECT_TRUE(params.light.handle.isValid());
+    EXPECT_TRUE(params.skinning.isValid());
+    EXPECT_TRUE(params.gBufferColors[0].isValid());
+    EXPECT_TRUE(params.gBufferDepth.isValid());
+    EXPECT_EQ(params.renderArea.extent.x, 1920);
+    EXPECT_EQ(params.renderArea.extent.y, 1080);
+}
+
 TEST(SSAOStageTest, BuildsFrameDataWithoutOwningGpuResources)
 {
     SSAOStage stage;

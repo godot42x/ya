@@ -350,7 +350,6 @@ void GBufferStage::destroy()
 
     _skinningDSL.reset();
     _frameAndLightDSL.reset();
-    _frameInputs = {};
     _render = nullptr;
 }
 
@@ -523,24 +522,31 @@ void GBufferStage::prepareUnlit(const RenderFrameData& frameData)
 // Execute (draw)
 // ═══════════════════════════════════════════════════════════════════════
 
-void GBufferStage::execute(const RenderStageContext& ctx)
+void GBufferStage::execute(const RenderStageContext& ctx, const FrameInputs& inputs)
 {
     YA_PROFILE_FUNCTION();
-    if (!ctx.frameData || !ctx.cmdBuf || !_frameInputs.frameAndLightDescriptorSet) return;
+    if (!ctx.frameData || !ctx.cmdBuf || !inputs.isValid()) return;
 
     ctx.cmdBuf->debugBeginLabel("GBufferStage");
-    drawPBR(ctx);
-    drawPhong(ctx);
-    drawUnlit(ctx);
-    drawFallback(ctx);
+    drawPBR(ctx, inputs);
+    drawPhong(ctx, inputs);
+    drawUnlit(ctx, inputs);
+    drawFallback(ctx, inputs);
     ctx.cmdBuf->debugEndLabel();
 }
 
-void GBufferStage::drawPBR(const RenderStageContext& ctx)
+void GBufferStage::execute(const RenderStageContext& ctx)
+{
+    // Graph passes must call the parameterized overload with an explicit
+    // current-flight binding; a bare IRenderStage execute has no binding.
+    execute(ctx, FrameInputs{});
+}
+
+void GBufferStage::drawPBR(const RenderStageContext& ctx, const FrameInputs& inputs)
 {
     YA_PROFILE_FUNCTION();
     auto* cmdBuf = ctx.cmdBuf;
-    auto  ds0    = _frameInputs.frameAndLightDescriptorSet;
+    auto  ds0    = inputs.frameAndLightDescriptorSet;
 
     auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
     {
@@ -552,8 +558,8 @@ void GBufferStage::drawPBR(const RenderStageContext& ctx)
         for (const auto& item : items) {
             if (!item.mesh || !item.material) continue;
             if (bSkinned) {
-                YA_CORE_ASSERT(_frameInputs.skinningDescriptorSet, "GBufferStage missing skinning descriptor set");
-                cmdBuf->bindDescriptorSets(layout, 0, {ds0, _pbrMatPool.resourceDS(item.materialIndex), _pbrMatPool.paramDS(item.materialIndex), _frameInputs.skinningDescriptorSet});
+                YA_CORE_ASSERT(inputs.skinningDescriptorSet, "GBufferStage missing skinning descriptor set");
+                cmdBuf->bindDescriptorSets(layout, 0, {ds0, _pbrMatPool.resourceDS(item.materialIndex), _pbrMatPool.paramDS(item.materialIndex), inputs.skinningDescriptorSet});
             }
             else {
                 cmdBuf->bindDescriptorSets(layout, 0, {ds0, _pbrMatPool.resourceDS(item.materialIndex), _pbrMatPool.paramDS(item.materialIndex)});
@@ -574,11 +580,11 @@ void GBufferStage::drawPBR(const RenderStageContext& ctx)
     drawBucket(ctx.frameData->drawBuckets.skinnedMeshes.pbrDrawItems, true);
 }
 
-void GBufferStage::drawPhong(const RenderStageContext& ctx)
+void GBufferStage::drawPhong(const RenderStageContext& ctx, const FrameInputs& inputs)
 {
     YA_PROFILE_FUNCTION();
     auto* cmdBuf     = ctx.cmdBuf;
-    auto  ds0        = _frameInputs.frameAndLightDescriptorSet;
+    auto  ds0        = inputs.frameAndLightDescriptorSet;
     auto  drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
     {
         if (items.empty()) return;
@@ -590,8 +596,8 @@ void GBufferStage::drawPhong(const RenderStageContext& ctx)
             if (!item.mesh || !item.material) continue;
 
             if (bSkinned) {
-                YA_CORE_ASSERT(_frameInputs.skinningDescriptorSet, "GBufferStage missing skinning descriptor set");
-                cmdBuf->bindDescriptorSets(layout, 0, {ds0, _phongMatPool.resourceDS(item.materialIndex), _phongMatPool.paramDS(item.materialIndex), _frameInputs.skinningDescriptorSet});
+                YA_CORE_ASSERT(inputs.skinningDescriptorSet, "GBufferStage missing skinning descriptor set");
+                cmdBuf->bindDescriptorSets(layout, 0, {ds0, _phongMatPool.resourceDS(item.materialIndex), _phongMatPool.paramDS(item.materialIndex), inputs.skinningDescriptorSet});
             }
             else {
                 cmdBuf->bindDescriptorSets(layout, 0, {ds0, _phongMatPool.resourceDS(item.materialIndex), _phongMatPool.paramDS(item.materialIndex)});
@@ -612,11 +618,11 @@ void GBufferStage::drawPhong(const RenderStageContext& ctx)
     drawBucket(ctx.frameData->drawBuckets.skinnedMeshes.phongDrawItems, true);
 }
 
-void GBufferStage::drawUnlit(const RenderStageContext& ctx)
+void GBufferStage::drawUnlit(const RenderStageContext& ctx, const FrameInputs& inputs)
 {
     YA_PROFILE_FUNCTION();
     auto* cmdBuf = ctx.cmdBuf;
-    auto  ds0    = _frameInputs.frameAndLightDescriptorSet;
+    auto  ds0    = inputs.frameAndLightDescriptorSet;
 
     auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
     {
@@ -628,8 +634,8 @@ void GBufferStage::drawUnlit(const RenderStageContext& ctx)
         for (const auto& item : items) {
             if (!item.mesh || !item.material) continue;
             if (bSkinned) {
-                YA_CORE_ASSERT(_frameInputs.skinningDescriptorSet, "GBufferStage missing skinning descriptor set");
-                cmdBuf->bindDescriptorSets(layout, 0, {ds0, _unlitMatPool.resourceDS(item.materialIndex), _unlitMatPool.paramDS(item.materialIndex), _frameInputs.skinningDescriptorSet});
+                YA_CORE_ASSERT(inputs.skinningDescriptorSet, "GBufferStage missing skinning descriptor set");
+                cmdBuf->bindDescriptorSets(layout, 0, {ds0, _unlitMatPool.resourceDS(item.materialIndex), _unlitMatPool.paramDS(item.materialIndex), inputs.skinningDescriptorSet});
             }
             else {
                 cmdBuf->bindDescriptorSets(layout, 0, {ds0, _unlitMatPool.resourceDS(item.materialIndex), _unlitMatPool.paramDS(item.materialIndex)});
@@ -653,13 +659,13 @@ void GBufferStage::drawUnlit(const RenderStageContext& ctx)
     drawBucket(ctx.frameData->drawBuckets.skinnedMeshes.unlitDrawItems, true);
 }
 
-void GBufferStage::drawFallback(const RenderStageContext& ctx)
+void GBufferStage::drawFallback(const RenderStageContext& ctx, const FrameInputs& inputs)
 {
     YA_PROFILE_FUNCTION();
     if (!_fallbackMaterial || _fallbackMaterial->getIndex() < 0) return;
 
     auto*    cmdBuf = ctx.cmdBuf;
-    auto     ds0    = _frameInputs.frameAndLightDescriptorSet;
+    auto     ds0    = inputs.frameAndLightDescriptorSet;
     uint32_t fbIdx  = static_cast<uint32_t>(_fallbackMaterial->getIndex());
 
     auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
@@ -670,8 +676,8 @@ void GBufferStage::drawFallback(const RenderStageContext& ctx)
         auto* layout   = bSkinned ? _unlitSkinned.pipelineLayout.get() : _unlit.pipelineLayout.get();
         cmdBuf->bindPipeline(pipeline);
         if (bSkinned) {
-            YA_CORE_ASSERT(_frameInputs.skinningDescriptorSet, "GBufferStage missing skinning descriptor set");
-            cmdBuf->bindDescriptorSets(layout, 0, {ds0, _unlitMatPool.resourceDS(fbIdx), _unlitMatPool.paramDS(fbIdx), _frameInputs.skinningDescriptorSet});
+            YA_CORE_ASSERT(inputs.skinningDescriptorSet, "GBufferStage missing skinning descriptor set");
+            cmdBuf->bindDescriptorSets(layout, 0, {ds0, _unlitMatPool.resourceDS(fbIdx), _unlitMatPool.paramDS(fbIdx), inputs.skinningDescriptorSet});
         }
         else {
             cmdBuf->bindDescriptorSets(layout, 0, {ds0, _unlitMatPool.resourceDS(fbIdx), _unlitMatPool.paramDS(fbIdx)});

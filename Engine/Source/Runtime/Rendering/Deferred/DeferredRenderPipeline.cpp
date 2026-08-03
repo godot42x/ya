@@ -907,16 +907,8 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
                 : DescriptorSetHandle{},
         });
     }
-    if (_gBufferStage) {
-        _gBufferStage->setFrameInputs(GBufferStage::FrameInputs{
-            .frameAndLightDescriptorSet = _frameResources
-                ? _frameResources->getBinding(frame.flightIndex).frameAndLightDescriptorSet
-                : DescriptorSetHandle{},
-            .skinningDescriptorSet = _frameResources
-                ? _frameResources->getBinding(frame.flightIndex).skinningDescriptorSet
-                : DescriptorSetHandle{},
-        });
-    }
+    // GBufferStage no longer receives frame inputs here: its current-flight
+    // binding travels with DeferredGBufferPassParams in the graph pass (FG-302).
 
     if (_overlayStage) {
         ViewportOverlayStage::FrameInputs frameInputs{};
@@ -1158,10 +1150,8 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     }
 
     const auto& frameBinding = _frameResources->getBinding(frame.flightIndex);
-    _gBufferStage->setFrameInputs(GBufferStage::FrameInputs{
-        .frameAndLightDescriptorSet = frameBinding.frameAndLightDescriptorSet,
-        .skinningDescriptorSet      = frameBinding.skinningDescriptorSet,
-    });
+    // GBufferStage binding travels with DeferredGBufferPassParams in the graph
+    // pass (FG-302); only stages that still read frame inputs are pre-set here.
     if (bUseSSAO) {
         _ssaoStage->setFrameInputs(SSAOStage::FrameInputs{
             .descriptorSet = frameBinding.ssaoFrameDescriptorSet,
@@ -1245,29 +1235,43 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         RGPersistentTextureKey{.value = "DeferredGBuffer.Depth"});
     const Extent2D gbufferExtent = _gBufferRTSpec.extent;
 
+    // Single typed pass parameters: drives both graph setup and execute resolve,
+    // so the pass never reads binding state back from the stage (FG-302).
+    DeferredGBufferPassParams gbufferParams{
+        .frame = {
+            .handle = graphResources.buffers.frame,
+            .range  = RGBufferRange{.offset = frameBinding.frame.offset, .size = frameBinding.frame.size},
+        },
+        .light = {
+            .handle = graphResources.buffers.light,
+            .range  = RGBufferRange{.offset = frameBinding.light.offset, .size = frameBinding.light.size},
+        },
+        .skinning = graphResources.buffers.skinning,
+        .gBufferColors = graphResources.textures.gBufferColors,
+        .gBufferDepth  = graphResources.textures.gBufferDepth,
+        .renderArea    = Rect2D{.pos = {0, 0}, .extent = gbufferExtent.toVec2()},
+        .layerCount    = 1,
+        .frameAndLightDescriptorSet = frameBinding.frameAndLightDescriptorSet,
+        .skinningDescriptorSet      = frameBinding.skinningDescriptorSet,
+    };
+
     [[maybe_unused]] const auto gbufferPass = graph.addPass(
         "Deferred GBuffer",
-        [&](RGPassBuilder& passBuilder) {
-            passBuilder.uniformRead(graphResources.buffers.frame, RGBufferRange{
-                .offset = frameBinding.frame.offset,
-                .size   = frameBinding.frame.size,
-            });
-            passBuilder.uniformRead(graphResources.buffers.light, RGBufferRange{
-                .offset = frameBinding.light.offset,
-                .size   = frameBinding.light.size,
-            });
-            passBuilder.storageRead(graphResources.buffers.skinning);
+        [&gbufferParams](RGPassBuilder& passBuilder) {
+            passBuilder.uniformRead(gbufferParams.frame.handle, gbufferParams.frame.range);
+            passBuilder.uniformRead(gbufferParams.light.handle, gbufferParams.light.range);
+            passBuilder.storageRead(gbufferParams.skinning);
             passBuilder.declareRaster({
-                .renderArea = Rect2D{.pos = {0, 0}, .extent = gbufferExtent.toVec2()},
-                .layerCount = 1,
+                .renderArea = gbufferParams.renderArea,
+                .layerCount = gbufferParams.layerCount,
                 .colors = {
-                    {.color = graphResources.textures.gBufferColors[0], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
-                    {.color = graphResources.textures.gBufferColors[1], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
-                    {.color = graphResources.textures.gBufferColors[2], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
-                    {.color = graphResources.textures.gBufferColors[3], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
+                    {.color = gbufferParams.gBufferColors[0], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
+                    {.color = gbufferParams.gBufferColors[1], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
+                    {.color = gbufferParams.gBufferColors[2], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
+                    {.color = gbufferParams.gBufferColors[3], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
                 },
                 .depth = RGDepthAttachmentDesc{
-                    .depth       = graphResources.textures.gBufferDepth,
+                    .depth       = gbufferParams.gBufferDepth,
                     .clearValue  = ClearValue(1.0f, 0),
                     .loadOp      = EAttachmentLoadOp::Clear,
                     .storeOp     = EAttachmentStoreOp::Store,
@@ -1275,8 +1279,15 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
                 },
             });
         },
-        [&](RGRenderContext& rgCtx) {
+        [&gbufferParams, this, &stageCtx](RGRenderContext& rgCtx) {
             const auto rasterParams = rgCtx.getRasterPassExecutionParams();
+
+            // FG-103 resolve validation: declared frame/light/skinning handles
+            // must resolve from this pass; imported buffers are retained here.
+            [[maybe_unused]] IBuffer* const frameBuffer    = rgCtx.resolveBuffer(gbufferParams.frame.handle);
+            [[maybe_unused]] IBuffer* const lightBuffer    = rgCtx.resolveBuffer(gbufferParams.light.handle);
+            [[maybe_unused]] IBuffer* const skinningBuffer = rgCtx.resolveBuffer(gbufferParams.skinning);
+
             rgCtx.beginDeclaredRasterRendering();
 
             float gbVpY = 0.0f;
@@ -1291,7 +1302,10 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             rgCtx.getCommandBuffer().setViewport(0.0f, gbVpY, static_cast<float>(vpW), gbVpH);
             rgCtx.getCommandBuffer().setScissor(0, 0, vpW, vpH);
 
-            _gBufferStage->execute(stageCtx);
+            _gBufferStage->execute(stageCtx, GBufferStage::FrameInputs{
+                .frameAndLightDescriptorSet = gbufferParams.frameAndLightDescriptorSet,
+                .skinningDescriptorSet      = gbufferParams.skinningDescriptorSet,
+            });
             rgCtx.endRendering();
         });
     graphResources.passes.gBuffer = gbufferPass;
