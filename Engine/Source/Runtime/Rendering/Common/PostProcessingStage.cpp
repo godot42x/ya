@@ -12,6 +12,8 @@ namespace ya
 namespace
 {
 
+constexpr std::string_view kPostprocessingOutputExportName = "Postprocessing.Output";
+
 stdptr<RenderImage> createPostprocessRenderImage(IRender* render,
                                                  std::string_view label,
                                                  Extent2D extent,
@@ -124,13 +126,11 @@ void PostProcessingStage::clearPreparedResources()
     }
 }
 
-void PostProcessingStage::resolvePreparedResources(const RenderGraphResourceRegistry& registry)
+void PostProcessingStage::capturePreparedResources(const RenderGraphExecutionResult& result)
 {
-    _preparedOutputImage = _preparedGraphResources.output.isValid()
-        ? registry.resolveTextureShared(_preparedGraphResources.output)
-        : nullptr;
+    _preparedOutputImage = result.getExportedTextureShared(kPostprocessingOutputExportName);
     if (_bloomProcessor) {
-        _bloomProcessor->resolvePreparedResources(registry);
+        _bloomProcessor->capturePreparedResources(result);
     }
 }
 
@@ -270,6 +270,7 @@ RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph&   gr
 
     _preparedGraphResources.input  = input;
     _preparedGraphResources.output = output;
+    graph.exportTexture(output, std::string(kPostprocessingOutputExportName));
     return output;
 }
 
@@ -290,12 +291,13 @@ RenderImage* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
     }
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "PostProcessingStage graph executor is not initialized");
-    if (!_graphExecutor->execute(graph, *cmdBuf)) {
+    RenderGraphExecutionResult result;
+    if (!_graphExecutor->execute(graph, *cmdBuf, nullptr, &result)) {
         clearPreparedResources();
         return nullptr;
     }
 
-    resolvePreparedResources(_graphExecutor->getRegistry());
+    capturePreparedResources(result);
     return output.isValid() ? _preparedOutputImage.get() : nullptr;
 }
 
@@ -316,12 +318,13 @@ RenderImage* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
     }
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "PostProcessingStage graph executor is not initialized");
-    if (!_graphExecutor->execute(graph, *cmdBuf)) {
+    RenderGraphExecutionResult result;
+    if (!_graphExecutor->execute(graph, *cmdBuf, nullptr, &result)) {
         clearPreparedResources();
         return nullptr;
     }
 
-    resolvePreparedResources(_graphExecutor->getRegistry());
+    capturePreparedResources(result);
     return output.isValid() ? _preparedOutputImage.get() : nullptr;
 }
 } // namespace ya

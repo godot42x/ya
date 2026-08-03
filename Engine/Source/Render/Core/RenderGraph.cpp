@@ -5,9 +5,39 @@
 #include <algorithm>
 #include <deque>
 #include <sstream>
+#include <unordered_set>
 
 namespace ya
 {
+
+void RenderGraphExecutionResult::bindExportedTexture(std::string name, std::shared_ptr<RenderImage> texture)
+{
+    if (name.empty()) {
+        return;
+    }
+    _exportedTextures[std::move(name)] = std::move(texture);
+}
+
+bool RenderGraphExecutionResult::hasExportedTexture(std::string_view name) const
+{
+    return _exportedTextures.contains(std::string(name));
+}
+
+std::shared_ptr<RenderImage> RenderGraphExecutionResult::getExportedTextureShared(std::string_view name) const
+{
+    if (const auto it = _exportedTextures.find(std::string(name)); it != _exportedTextures.end()) {
+        return it->second;
+    }
+    return nullptr;
+}
+
+RenderImage* RenderGraphExecutionResult::getExportedTexture(std::string_view name) const
+{
+    if (const auto it = _exportedTextures.find(std::string(name)); it != _exportedTextures.end()) {
+        return it->second.get();
+    }
+    return nullptr;
+}
 
 namespace
 {
@@ -934,11 +964,22 @@ RGPassHandle RenderGraph::addPass(
     return handle;
 }
 
+void RenderGraph::exportTexture(RGTextureHandle handle, std::string name)
+{
+    YA_CORE_ASSERT(handle.isValid(), "RenderGraph exportTexture requires a valid texture handle");
+    YA_CORE_ASSERT(!name.empty(), "RenderGraph exportTexture requires a non-empty export name");
+    _textureExports.push_back({
+        .name    = std::move(name),
+        .texture = handle,
+    });
+}
+
 RGCompiledGraph RenderGraph::compile() const
 {
     RGCompiledGraph compiled;
     compiled.order.reserve(_passes.size());
     compiled.passPlans.reserve(_passes.size());
+    compiled.exportedTextures.reserve(_textureExports.size());
     compiled.importedTextureFinalizes.reserve(_textures.size());
     compiled.importedBufferFinalizes.reserve(_buffers.size());
     compiled.transientBufferLifetimes.reserve(_buffers.size());
@@ -1275,6 +1316,28 @@ RGCompiledGraph RenderGraph::compile() const
         persistentBuffersByKey.emplace(buffer.persistentKey->value, &buffer);
     }
 
+    std::unordered_set<std::string> exportedTextureNames;
+    exportedTextureNames.reserve(_textureExports.size());
+    for (const auto& exported : _textureExports) {
+        const auto* resource = getTexture(exported.texture);
+        if (!resource) {
+            addIssue(RGCompileIssue::EKind::InvalidResource,
+                     RGPassHandle{},
+                     std::format("exported texture {} references invalid handle {}", exported.name, exported.texture.index));
+            continue;
+        }
+        if (!exportedTextureNames.insert(exported.name).second) {
+            addIssue(RGCompileIssue::EKind::InvalidResource,
+                     RGPassHandle{},
+                     std::format("duplicate exported texture name {}", exported.name));
+            continue;
+        }
+        compiled.exportedTextures.push_back({
+            .name    = exported.name,
+            .texture = exported.texture,
+        });
+    }
+
     std::deque<uint32_t> ready;
     for (uint32_t i = 0; i < indegree.size(); ++i) {
         if (indegree[i] == 0) {
@@ -1455,6 +1518,13 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
         const auto* buffer = getBuffer(finalize.buffer);
         oss << "  " << (buffer ? buffer->desc.label : "<invalid-buffer>")
             << " access=" << static_cast<uint32_t>(finalize.finalState.access) << "\n";
+    }
+
+    oss << "exportedTextures(" << compiled.exportedTextures.size() << ")\n";
+    for (const auto& exported : compiled.exportedTextures) {
+        const auto* texture = getTexture(exported.texture);
+        oss << "  " << exported.name << " -> "
+            << (texture ? texture->desc.label : "<invalid-texture>") << "\n";
     }
 
     oss << "transientBufferLifetimes(" << compiled.transientBufferLifetimes.size() << ")\n";

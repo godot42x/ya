@@ -19,6 +19,7 @@ class ENGINE_API RenderGraphExecutor
 
     void finalizeImportedBufferStates(const RGCompiledGraph& compiled, ICommandBuffer& cmdBuf);
     void finalizeImportedTextureStates(const RGCompiledGraph& compiled, ICommandBuffer& cmdBuf);
+    void captureExecutionResult(const RGCompiledGraph& compiled, RenderGraphExecutionResult& outResult) const;
 
   public:
     explicit RenderGraphExecutor(IRenderResourceFactory& factory)
@@ -27,7 +28,8 @@ class ENGINE_API RenderGraphExecutor
 
     [[nodiscard]] bool prepare(
         const RenderGraph& graph,
-        RGCompiledGraph&   outCompiled);
+        RGCompiledGraph&   outCompiled,
+        RenderGraphExecutionResult* outResult = nullptr);
 
     [[nodiscard]] bool executeCompiled(
         const RenderGraph&  graph,
@@ -37,7 +39,8 @@ class ENGINE_API RenderGraphExecutor
     [[nodiscard]] bool execute(
         const RenderGraph& graph,
         ICommandBuffer& cmdBuf,
-        RGCompiledGraph* outCompiled = nullptr);
+        RGCompiledGraph* outCompiled = nullptr,
+        RenderGraphExecutionResult* outResult = nullptr);
 
     void clear();
 

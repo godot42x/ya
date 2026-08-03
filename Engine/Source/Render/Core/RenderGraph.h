@@ -254,6 +254,12 @@ struct RGCompiledPassPlan
     std::optional<RGRasterPassDesc> rasterPlan{};
 };
 
+struct RGTextureExportPlan
+{
+    std::string     name;
+    RGTextureHandle texture{};
+};
+
 struct RGImportedTextureFinalizePlan
 {
     RGTextureHandle                        texture{};
@@ -315,6 +321,7 @@ struct RGCompiledGraph
     std::vector<RGPassHandle>                 order;
     std::vector<RGDependencyEdge>             dependencies;
     std::vector<RGCompiledPassPlan>           passPlans;
+    std::vector<RGTextureExportPlan>          exportedTextures;
     std::vector<RGImportedTextureFinalizePlan> importedTextureFinalizes;
     std::vector<RGImportedBufferFinalizePlan>  importedBufferFinalizes;
     std::vector<RGTransientBufferLifetimePlan> transientBufferLifetimes;
@@ -325,6 +332,19 @@ struct RGCompiledGraph
     {
         return issues.empty();
     }
+};
+
+class ENGINE_API RenderGraphExecutionResult
+{
+  private:
+    std::unordered_map<std::string, std::shared_ptr<RenderImage>> _exportedTextures;
+
+  public:
+    void clear() { _exportedTextures.clear(); }
+    void bindExportedTexture(std::string name, std::shared_ptr<RenderImage> texture);
+    [[nodiscard]] bool hasExportedTexture(std::string_view name) const;
+    [[nodiscard]] std::shared_ptr<RenderImage> getExportedTextureShared(std::string_view name) const;
+    [[nodiscard]] RenderImage* getExportedTexture(std::string_view name) const;
 };
 
 class RenderGraph;
@@ -484,12 +504,19 @@ class RGPassBuilder
 class RenderGraph
 {
   private:
+    struct RGTextureExportRequest
+    {
+        std::string     name;
+        RGTextureHandle texture{};
+    };
+
     uint32_t _nextTextureGeneration = 1;
     uint32_t _nextBufferGeneration  = 1;
     uint32_t _nextPassGeneration    = 1;
     std::vector<RGTextureResource> _textures;
     std::vector<RGBufferResource>  _buffers;
     std::vector<RGPass>            _passes;
+    std::vector<RGTextureExportRequest> _textureExports;
 
     template <typename HandleT, typename ResourceT>
     static const ResourceT* findResource(const std::vector<ResourceT>& resources, HandleT handle)
@@ -521,6 +548,7 @@ class RenderGraph
     [[nodiscard]] ENGINE_API RGCompiledGraph compile() const;
     [[nodiscard]] ENGINE_API std::optional<RGPassContext> createPassContext(RGPassHandle handle) const;
     [[nodiscard]] ENGINE_API std::string debugDump(const RGCompiledGraph& compiled) const;
+    ENGINE_API void exportTexture(RGTextureHandle handle, std::string name);
 
     [[nodiscard]] const std::vector<RGTextureResource>& getTextures() const { return _textures; }
     [[nodiscard]] const std::vector<RGBufferResource>& getBuffers() const { return _buffers; }

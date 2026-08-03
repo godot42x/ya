@@ -227,10 +227,7 @@ struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
     void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
     void               invalidateGBufferDependentViews();
     void               syncGraphAttachmentSnapshots(
-                           const RenderGraphResourceRegistry& registry,
-                           const std::array<RGTextureHandle, 4>& gbufferColors,
-                           RGTextureHandle gbufferDepth,
-                           RGTextureHandle viewportColor);
+                           const RenderGraphExecutionResult& result);
     void               refreshGBufferStageState();
     void               refreshViewportStageState();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);

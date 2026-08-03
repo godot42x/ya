@@ -1670,6 +1670,77 @@ TEST(RenderGraphCoreTest, ResourceRegistryReplacesResourcesWhenDescriptorsChange
     EXPECT_EQ(factory.createdBufferDescs[1].size, 256u);
 }
 
+TEST(RenderGraphCoreTest, PrepareCapturesExplicitExportedTexturesOnly)
+{
+    TestResourceFactory factory;
+    RenderGraphExecutor executor(factory);
+    RenderGraph         graph;
+
+    const auto exported = graph.createPersistentTexture(RGTextureDesc{
+        .label  = "viewport",
+        .format = EFormat::R16G16B16A16_SFLOAT,
+        .extent = Extent3D{640, 360, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    }, RGPersistentTextureKey{.value = "viewport"});
+    graph.createTexture(RGTextureDesc{
+        .label  = "hidden",
+        .format = EFormat::R8G8B8A8_UNORM,
+        .extent = Extent3D{64, 64, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    });
+
+    graph.exportTexture(exported, "ViewportColor");
+
+    RGCompiledGraph           compiled;
+    RenderGraphExecutionResult result;
+    ASSERT_TRUE(executor.prepare(graph, compiled, &result));
+    ASSERT_TRUE(compiled.isValid());
+    EXPECT_TRUE(result.hasExportedTexture("ViewportColor"));
+    EXPECT_NE(result.getExportedTextureShared("ViewportColor"), nullptr);
+    EXPECT_EQ(result.getExportedTexture("Missing"), nullptr);
+    EXPECT_FALSE(result.hasExportedTexture("hidden"));
+}
+
+TEST(RenderGraphCoreTest, ExportedTextureOwnerSurvivesReplacementAcrossPrepare)
+{
+    TestResourceFactory factory;
+    RenderGraphExecutor executor(factory);
+
+    RenderGraph graphA;
+    const auto textureA = graphA.createPersistentTexture(RGTextureDesc{
+        .label  = "persistent.viewport",
+        .format = EFormat::R16G16B16A16_SFLOAT,
+        .extent = Extent3D{320, 180, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    }, RGPersistentTextureKey{.value = "persistent.viewport"});
+    graphA.exportTexture(textureA, "ViewportColor");
+
+    RGCompiledGraph           compiledA;
+    RenderGraphExecutionResult resultA;
+    ASSERT_TRUE(executor.prepare(graphA, compiledA, &resultA));
+    auto firstOwner = resultA.getExportedTextureShared("ViewportColor");
+    ASSERT_NE(firstOwner, nullptr);
+    EXPECT_EQ(firstOwner->getWidth(), 320u);
+
+    RenderGraph graphB;
+    const auto textureB = graphB.createPersistentTexture(RGTextureDesc{
+        .label  = "persistent.viewport",
+        .format = EFormat::R16G16B16A16_SFLOAT,
+        .extent = Extent3D{640, 360, 1},
+        .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    }, RGPersistentTextureKey{.value = "persistent.viewport"});
+    graphB.exportTexture(textureB, "ViewportColor");
+
+    RGCompiledGraph           compiledB;
+    RenderGraphExecutionResult resultB;
+    ASSERT_TRUE(executor.prepare(graphB, compiledB, &resultB));
+    auto secondOwner = resultB.getExportedTextureShared("ViewportColor");
+    ASSERT_NE(secondOwner, nullptr);
+    EXPECT_EQ(secondOwner->getWidth(), 640u);
+    EXPECT_NE(firstOwner.get(), secondOwner.get());
+    EXPECT_EQ(firstOwner->getWidth(), 320u);
+}
+
 TEST(RenderGraphCoreTest, ResourceRegistryReimportsTextureWhenImportedDescChanges)
 {
     TestResourceFactory factory;
