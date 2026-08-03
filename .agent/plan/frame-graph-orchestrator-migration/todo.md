@@ -178,12 +178,16 @@
     `execute(ctx, FrameInputs)` 显式接收 binding；GBuffer pass execute 对 declared 的
     frame/light/skinning handle 执行 `rgCtx.resolveBuffer`（FG-103 validation）
 
-- [ ] `FG-303` 为 SSAO 和 Deferred Light 增加参数对象
+- [x] `FG-303` 为 SSAO 和 Deferred Light 增加参数对象
   - 依赖：FG-301、FG-203
   - 修改：SSAOStage、LightStage、pipeline
   - 验收：删除 `setSSAOTexture()` 和 GBuffer resolved image 回灌；descriptor input 只从 pass params resolve
   - smoke：SSAO on/off、IBL PBR sphere
   - 提交：可拆 SSAO/Light 两个提交
+  - 说明：新增 `DeferredSSAOPassParams`/`DeferredLightPassParams`；`LightStage` 删除 `_ssaoTextureOwner`/
+    `setSSAOTexture`/`_gBufferResources`，`execute(ctx, frameAndLight, environmentLighting)` 显式接收 binding；
+    SSAO/Light pass 在 execute 内用 `rgCtx.resolveTexture` 解析 GBuffer/SSAO 并更新输入 DS，
+    主图不再 `syncGraphAttachmentSnapshots` 回灌到 stage（owner snapshot 保留给 debug，FG-403 收口）
 
 - [ ] `FG-304` 为 Skybox、Scene Overlay、Viewport Overlay 增加参数对象
   - 依赖：FG-301、FG-204

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DeferredFrameGraphResources.h"
 #include "DeferredGBufferResources.h"
 #include "Render/Core/Buffer.h"
 #include "Render/Core/DescriptorSet.h"
@@ -82,11 +83,7 @@ struct ENGINE_API SSAOStage : public IRenderStage
 
     RGTextureHandle appendGraphPass(RenderGraph& graph,
                                     const RenderStageContext& ctx,
-                                    RGBufferHandle frameBuffer,
-                                    RGBufferRange frameRange,
-                                    RGTextureHandle albedo,
-                                    RGTextureHandle normal,
-                                    RGTextureHandle depth);
+                                    const DeferredSSAOPassParams& params);
     [[nodiscard]] float getRadius() const { return _radius; }
     [[nodiscard]] float getBias() const { return _bias; }
     [[nodiscard]] float getPower() const { return _power; }
@@ -99,6 +96,9 @@ struct ENGINE_API SSAOStage : public IRenderStage
   private:
     void initNoiseTexture();
     void updateInputDescriptors();
+    /// Update set 1 (input DS) from GBuffer textures resolved in the SSAO graph
+    /// pass, instead of reading resolved-image snapshots back from the stage.
+    void updateInputDescriptors(const RenderImage* albedo, const RenderImage* normal, const RenderImage* depth);
 };
 
 } // namespace ya

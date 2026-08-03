@@ -194,9 +194,6 @@ struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
     void setSSAOEnabled(bool enabled)
     {
         _bEnableSSAO = enabled;
-        if (_lightStage) {
-            _lightStage->setSSAOTexture(_bEnableSSAO ? _currentSSAOOutput : std::shared_ptr<RenderImage>{});
-        }
     }
     [[nodiscard]] SettingsSnapshot buildSettingsSnapshot() const;
     void requestSettings(const SettingsSnapshot& settings);

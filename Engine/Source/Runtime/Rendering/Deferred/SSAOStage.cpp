@@ -245,6 +245,39 @@ void SSAOStage::updateInputDescriptors()
     _lastInputDescriptorWriteCount   = 4;
 }
 
+void SSAOStage::updateInputDescriptors(const RenderImage* albedo,
+                                       const RenderImage* normal,
+                                       const RenderImage* depth)
+{
+    if (!_render || !_inputDS || !_noiseTexture || !albedo || !normal || !depth) {
+        return;
+    }
+
+    auto sampler = TextureLibrary::get().getDefaultSampler();
+    const auto albedoHandle = albedo->getImageView() ? albedo->getImageView()->getHandle() : ImageViewHandle{};
+    const auto normalHandle = normal->getImageView() ? normal->getImageView()->getHandle() : ImageViewHandle{};
+    const auto depthHandle  = depth->getImageView() ? depth->getImageView()->getHandle() : ImageViewHandle{};
+    if (_bInputDescriptorsInitialized &&
+        _lastGBufferImageViewHandles[0] == albedoHandle &&
+        _lastGBufferImageViewHandles[1] == normalHandle &&
+        _lastGBufferDepthImageViewHandle == depthHandle) {
+        _lastInputDescriptorWriteCount = 0;
+        return;
+    }
+
+    _render->getDescriptorHelper()->updateDescriptorSets({
+        IDescriptorSetHelper::writeOneImage(_inputDS, 0, albedo->getImageView(), sampler.get()),
+        IDescriptorSetHelper::writeOneImage(_inputDS, 1, normal->getImageView(), sampler.get()),
+        IDescriptorSetHelper::writeOneImage(_inputDS, 2, depth->getImageView(), sampler.get()),
+        IDescriptorSetHelper::writeOneImage(_inputDS, 3, _noiseTexture->getImageView(), sampler.get()),
+    });
+
+    _lastGBufferImageViewHandles     = {albedoHandle, normalHandle, {}, {}};
+    _lastGBufferDepthImageViewHandle = depthHandle;
+    _bInputDescriptorsInitialized    = true;
+    _lastInputDescriptorWriteCount   = 4;
+}
+
 void SSAOStage::prepare(const RenderStageContext& ctx)
 {
     YA_PROFILE_FUNCTION();
@@ -297,11 +330,14 @@ void SSAOStage::execute(const RenderStageContext& ctx)
     const auto output = appendGraphPass(
         graph,
         ctx,
-        frameBuffer,
-        RGBufferRange{.offset = _frameInputs.frame.offset, .size = _frameInputs.frame.size},
-        albedo,
-        normal,
-        depth);
+        DeferredSSAOPassParams{
+            .frame      = frameBuffer,
+            .frameRange = RGBufferRange{.offset = _frameInputs.frame.offset, .size = _frameInputs.frame.size},
+            .albedo     = albedo,
+            .normal     = normal,
+            .depth      = depth,
+            .frameDescriptorSet = _frameInputs.descriptorSet,
+        });
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "SSAOStage graph executor is not initialized");
     [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *ctx.cmdBuf);
@@ -311,14 +347,9 @@ void SSAOStage::execute(const RenderStageContext& ctx)
 
 RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
                                            const RenderStageContext& ctx,
-                                           RGBufferHandle frameBuffer,
-                                           RGBufferRange frameRange,
-                                           RGTextureHandle albedo,
-                                           RGTextureHandle normal,
-                                           RGTextureHandle depth)
+                                           const DeferredSSAOPassParams& params)
 {
     YA_CORE_ASSERT(_noiseTexture != nullptr, "SSAOStage requires initialized noise texture before graph pass append");
-    YA_CORE_ASSERT(_frameInputs.isValid(), "SSAOStage requires current frame inputs");
 
     const auto  noise = graph.importTexture(makeSSAOImportedTextureDesc(*_noiseTexture, "SSAO.Noise", EImageLayout::ShaderReadOnlyOptimal));
     const auto  output = graph.createPersistentTexture(RGTextureDesc{
@@ -328,15 +359,13 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
          .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
     }, RGPersistentTextureKey{.value = "SSAO.Output"});
 
-    const auto frameDescriptorSet = _frameInputs.descriptorSet;
-
     [[maybe_unused]] const auto pass = graph.addPass(
         "SSAO Pass",
-        [albedo, normal, depth, noise, output, frameBuffer, frameRange, viewportExtent = ctx.viewportExtent](RGPassBuilder& passBuilder) {
-            passBuilder.uniformRead(frameBuffer, frameRange);
-            passBuilder.read(albedo);
-            passBuilder.read(normal);
-            passBuilder.read(depth);
+        [&params, noise, output, viewportExtent = ctx.viewportExtent](RGPassBuilder& passBuilder) {
+            passBuilder.uniformRead(params.frame, params.frameRange);
+            passBuilder.read(params.albedo);
+            passBuilder.read(params.normal);
+            passBuilder.read(params.depth);
             passBuilder.read(noise);
             passBuilder.declareRaster({
                 .renderArea  = Rect2D{.pos = {0.0f, 0.0f}, .extent = glm::vec2(viewportExtent.width, viewportExtent.height)},
@@ -348,7 +377,14 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
                 }},
             });
         },
-        [this, frameDescriptorSet](RGRenderContext& rgCtx) {
+        [this, &params](RGRenderContext& rgCtx) {
+            // FG-103 resolve validation + FG-303: GBuffer inputs resolve from the
+            // graph pass instead of a resolved-image snapshot stored on the stage.
+            [[maybe_unused]] const RenderImage* albedo = rgCtx.resolveTexture(params.albedo);
+            [[maybe_unused]] const RenderImage* normal = rgCtx.resolveTexture(params.normal);
+            [[maybe_unused]] const RenderImage* depth  = rgCtx.resolveTexture(params.depth);
+            updateInputDescriptors(albedo, normal, depth);
+
             const auto rasterParams  = rgCtx.getRasterPassExecutionParams();
             const auto renderExtent  = rasterParams.getRenderExtent();
             const auto viewportWidth = renderExtent.width;
@@ -358,7 +394,7 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
             rgCtx.getCommandBuffer().bindPipeline(_pipeline.get());
             rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
             rgCtx.getCommandBuffer().setScissor(0, 0, viewportWidth, viewportHeight);
-            rgCtx.getCommandBuffer().bindDescriptorSets(_pipelineLayout.get(), 0, {frameDescriptorSet, _inputDS});
+            rgCtx.getCommandBuffer().bindDescriptorSets(_pipelineLayout.get(), 0, {params.frameDescriptorSet, _inputDS});
             rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
             rgCtx.endRendering();
         });

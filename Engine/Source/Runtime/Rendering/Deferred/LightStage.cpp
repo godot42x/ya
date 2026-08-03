@@ -66,10 +66,9 @@ void LightStage::setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecul
     _bShadowDescriptorsInitialized = false;
 }
 
-void LightStage::setup(SharedInputs sharedInputs, const DeferredGBufferResources& gBufferResources)
+void LightStage::setup(SharedInputs sharedInputs)
 {
     _frameAndLightDSL = std::move(sharedInputs.frameAndLightDSL);
-    _gBufferResources = gBufferResources;
     invalidateGBufferDescriptors();
 }
 
@@ -82,16 +81,6 @@ void LightStage::setEnvironmentLightingInput(EnvironmentLightingInput input)
 void LightStage::setFrameInputs(FrameInputs frameInputs)
 {
     _frameInputs = frameInputs;
-}
-
-void LightStage::setSSAOTexture(std::shared_ptr<RenderImage> ssaoTexture)
-{
-    if (_ssaoTextureOwner == ssaoTexture) {
-        return;
-    }
-
-    _ssaoTextureOwner = std::move(ssaoTexture);
-    invalidateGBufferDescriptors();
 }
 
 void LightStage::applyShadowState(const ShadowRuntimeState& shadowState)
@@ -281,8 +270,6 @@ void LightStage::destroy()
     _dsp.reset();
     _render                   = nullptr;
     _frameAndLightDSL.reset();
-    _gBufferResources         = {};
-    _ssaoTextureOwner.reset();
     _fullscreenQuad           = nullptr;
     _environmentLightingDSL.reset();
     _getSceneEnvironmentLightingDescriptorSet = {};
@@ -305,53 +292,6 @@ void LightStage::prepare(const RenderStageContext& ctx)
     (void)ctx;
     if (_pipeline) {
         _pipeline->beginFrame();
-    }
-
-    if (!_gBufferResources.isComplete()) return;
-
-    auto  sampler = TextureLibrary::get().getDefaultSampler();
-    auto* albedo  = _gBufferResources.color[0];
-    auto* normal  = _gBufferResources.color[1];
-    auto* orm     = _gBufferResources.color[2];
-    auto* shading = _gBufferResources.color[3];
-    if (!albedo || !normal || !orm || !shading) {
-        return;
-    }
-
-    const std::array<ImageViewHandle, 4> gbufferImageViewHandles = {
-        albedo->getImageView() ? albedo->getImageView()->getHandle() : ImageViewHandle{},
-        normal->getImageView() ? normal->getImageView()->getHandle() : ImageViewHandle{},
-        orm->getImageView() ? orm->getImageView()->getHandle() : ImageViewHandle{},
-        shading->getImageView() ? shading->getImageView()->getHandle() : ImageViewHandle{},
-    };
-    const auto gbufferDepthImageViewHandle = _gBufferResources.depth && _gBufferResources.depth->getImageView()
-        ? _gBufferResources.depth->getImageView()->getHandle()
-        : ImageViewHandle{};
-    const auto ssaoImageViewHandle = _ssaoTextureOwner && _ssaoTextureOwner->getImageView()
-        ? _ssaoTextureOwner->getImageView()->getHandle()
-        : ImageViewHandle{};
-    if (!_bGBufferDescriptorsInitialized ||
-        _lastGBufferImageViewHandles != gbufferImageViewHandles ||
-        _lastGBufferDepthImageViewHandle != gbufferDepthImageViewHandle ||
-        _lastSSAOImageViewHandle != ssaoImageViewHandle) {
-        auto* ssaoImageView = _ssaoTextureOwner
-            ? _ssaoTextureOwner->getImageView()
-            : TextureLibrary::get().getWhiteTexture()->getImageView();
-        _render->getDescriptorHelper()->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 0, albedo->getImageView(), sampler.get()),
-            IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 1, normal->getImageView(), sampler.get()),
-            IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 2, orm->getImageView(), sampler.get()),
-            IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 3, shading->getImageView(), sampler.get()),
-            IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 4, ssaoImageView, sampler.get()),
-        });
-        _lastGBufferImageViewHandles     = gbufferImageViewHandles;
-        _lastGBufferDepthImageViewHandle = gbufferDepthImageViewHandle;
-        _lastSSAOImageViewHandle         = ssaoImageViewHandle;
-        _bGBufferDescriptorsInitialized  = true;
-        _lastGBufferDescriptorWriteCount = 5;
-    }
-    else {
-        _lastGBufferDescriptorWriteCount = 0;
     }
 
     if (_shadowState.bEnableShadowMapping && _shadowState.directionalDepthIV && _shadowState.sampler && shouldRefreshShadowDescriptors()) {
@@ -385,13 +325,57 @@ void LightStage::prepare(const RenderStageContext& ctx)
     else {
         _lastShadowDescriptorWriteCount = 0;
     }
-
 }
 
-void LightStage::execute(const RenderStageContext& ctx)
+void LightStage::updateGBufferTextureDescriptors(const RenderImage* albedo,
+                                                 const RenderImage* normal,
+                                                 const RenderImage* orm,
+                                                 const RenderImage* shading,
+                                                 const RenderImage* depth,
+                                                 const RenderImage* ssao)
+{
+    if (!_render || !_gBufferTextureDS || !albedo || !normal || !orm || !shading || !depth) {
+        return;
+    }
+
+    auto sampler = TextureLibrary::get().getDefaultSampler();
+    const std::array<ImageViewHandle, 4> gbufferImageViewHandles = {
+        albedo->getImageView() ? albedo->getImageView()->getHandle() : ImageViewHandle{},
+        normal->getImageView() ? normal->getImageView()->getHandle() : ImageViewHandle{},
+        orm->getImageView() ? orm->getImageView()->getHandle() : ImageViewHandle{},
+        shading->getImageView() ? shading->getImageView()->getHandle() : ImageViewHandle{},
+    };
+    const auto gbufferDepthImageViewHandle = depth->getImageView() ? depth->getImageView()->getHandle() : ImageViewHandle{};
+    const auto ssaoImageViewHandle = ssao && ssao->getImageView() ? ssao->getImageView()->getHandle() : ImageViewHandle{};
+    if (_bGBufferDescriptorsInitialized &&
+        _lastGBufferImageViewHandles == gbufferImageViewHandles &&
+        _lastGBufferDepthImageViewHandle == gbufferDepthImageViewHandle &&
+        _lastSSAOImageViewHandle == ssaoImageViewHandle) {
+        _lastGBufferDescriptorWriteCount = 0;
+        return;
+    }
+
+    auto* ssaoImageView = (ssao && ssao->getImageView())
+        ? ssao->getImageView()
+        : TextureLibrary::get().getWhiteTexture()->getImageView();
+    _render->getDescriptorHelper()->updateDescriptorSets({
+        IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 0, albedo->getImageView(), sampler.get()),
+        IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 1, normal->getImageView(), sampler.get()),
+        IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 2, orm->getImageView(), sampler.get()),
+        IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 3, shading->getImageView(), sampler.get()),
+        IDescriptorSetHelper::writeOneImage(_gBufferTextureDS, 4, ssaoImageView, sampler.get()),
+    });
+    _lastGBufferImageViewHandles     = gbufferImageViewHandles;
+    _lastGBufferDepthImageViewHandle = gbufferDepthImageViewHandle;
+    _lastSSAOImageViewHandle         = ssaoImageViewHandle;
+    _bGBufferDescriptorsInitialized  = true;
+    _lastGBufferDescriptorWriteCount = 5;
+}
+
+void LightStage::execute(const RenderStageContext& ctx, DescriptorSetHandle frameAndLight, DescriptorSetHandle environmentLighting)
 {
     YA_PERF_SCOPE(perf::sample::deferredLightExecute(), perf::metric::cpuTimeMs(), perf::domain::render());
-    if (!ctx.cmdBuf || !_frameInputs.frameAndLightDescriptorSet || !_fullscreenQuad) return;
+    if (!ctx.cmdBuf || !frameAndLight || !_fullscreenQuad) return;
 
     auto* cmdBuf = ctx.cmdBuf;
     auto  vpW    = ctx.viewportExtent.width;
@@ -403,17 +387,25 @@ void LightStage::execute(const RenderStageContext& ctx)
     cmdBuf->setViewport(0.0f, 0.0f, static_cast<float>(vpW), static_cast<float>(vpH));
     cmdBuf->setScissor(0, 0, vpW, vpH);
 
-    // set 0 = frame+light (from GBufferStage), set 1 = GBuffer textures, set 2 = environment
+    // set 0 = frame+light (from graph pass params), set 1 = GBuffer textures,
+    // set 2 = environment, set 3 = shadow
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {
-                                                             _frameInputs.frameAndLightDescriptorSet,
+                                                             frameAndLight,
                                                              _gBufferTextureDS,
-                                                             _frameInputs.environmentLightingDescriptorSet,
+                                                             environmentLighting,
                                                              _shadowDS,
                                                          });
 
     _fullscreenQuad->draw(cmdBuf);
 
     cmdBuf->debugEndLabel();
+}
+
+void LightStage::execute(const RenderStageContext& ctx)
+{
+    // Graph passes must call the parameterized overload with an explicit
+    // current-flight binding.
+    execute(ctx, _frameInputs.frameAndLightDescriptorSet, _frameInputs.environmentLightingDescriptorSet);
 }
 
 } // namespace ya

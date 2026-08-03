@@ -4,8 +4,8 @@
 
 - 计划建立日期：2026-07-18
 - 当前阶段：P3 Typed resources 与 pass parameters
-- 当前执行任务：FG-303
-- 下一可执行任务：FG-303
+- 当前执行任务：FG-304
+- 下一可执行任务：FG-304
 
 ### 2026-08-03：FG-301 开始
 
@@ -49,6 +49,31 @@
 - 未做：LightStage/SSAOStage/OverlayStage 仍用 stage 成员预置 frame inputs（FG-303/304）；
   descriptor binding 尚未走 `RGPassBindingContext`（P5/FG-501）。
 - 提交：`[runtime/deferred] parameterize gbuffer graph pass`（本提交）
+
+### 2026-08-03：FG-303 完成
+
+- 实现：
+  - 新增 `DeferredSSAOPassParams` / `DeferredLightPassParams`（`DeferredFrameGraphResources.h`），
+    SSAO/Light 两个 graph pass 的 setup 与 execute 共用同一 params。
+  - `LightStage`：删除 `_ssaoTextureOwner`/`setSSAOTexture()`/`_gBufferResources`，
+    `setup(SharedInputs)` 不再接收 GBuffer 快照；`execute(ctx, frameAndLight, environmentLighting)`
+    显式接收 current-flight binding；新增 `updateGBufferTextureDescriptors(...)` 从解析纹理更新 set 1。
+  - `SSAOStage`：`appendGraphPass(graph, ctx, const DeferredSSAOPassParams&)`；pass execute 用
+    `rgCtx.resolveTexture` 解析 albedo/normal/depth 并更新 `_inputDS`，不再从 `_gBufferResources` 读快照。
+  - 主图：light pass 声明读取 `gBufferDepth` 并解析 GBuffer colors/depth/SSAO；
+    删除 `setSSAOTexture`（initStages/refreshViewportStageState/syncFrameSettings/setSSAOEnabled/
+    executeDeferredMainGraph）；`syncGraphAttachmentSnapshots` 保留 owner snapshot（debug）但不再回灌 stage。
+- 关键决策：
+  - 首次按 graph 解析 GBuffer depth 时触发 `assertTextureDeclared`（depth 未被 light pass 声明），
+    已在 light pass build 增加 `passBuilder.read(gBufferDepth)` 修复。
+  - `_currentSSAOOutput`/`_currentGBufferResources` owner snapshot 保留给 editor debug views，
+    待 FG-403 改为 execution result 导出后移除双写。
+- 测试：`python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*:DeferredRenderPipelineTest.*:DeferredFrameResourceSetTest.*:SSAOStageTest.*'`
+  通过（96 tests）；新增 `DeferredPassParamsTest.SSAOAndLightDefaultsAreEmptyAndHandlesRemainFrameLocal`。
+- smoke：默认（SSAO on）与 `ssao-disabled-smoke.automation.json`（SSAO off）各 300 帧 exit 0，
+  日志无 Validation Error/VUID/VK_ERROR；`xmake b ya-engine`/`ya-editor` 通过。
+- 提交：`[runtime/deferred] parameterize ssao and light graph passes`（本提交）
+- 下一任务：FG-304（Skybox/Scene Overlay/Viewport Overlay 参数对象）
 
 ### 2026-08-03：FG-111 开始
 

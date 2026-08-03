@@ -188,6 +188,45 @@ TEST(DeferredGBufferPassParamsTest, DefaultsAreEmptyAndHandlesRemainFrameLocal)
     EXPECT_EQ(params.renderArea.extent.y, 1080);
 }
 
+TEST(DeferredPassParamsTest, SSAOAndLightDefaultsAreEmptyAndHandlesRemainFrameLocal)
+{
+    DeferredSSAOPassParams ssao{};
+    EXPECT_FALSE(ssao.frame.isValid());
+    EXPECT_FALSE(ssao.albedo.isValid());
+    EXPECT_FALSE(ssao.normal.isValid());
+    EXPECT_FALSE(ssao.depth.isValid());
+    EXPECT_FALSE(ssao.output.isValid());
+    EXPECT_EQ(ssao.frameRange.offset, 0u);
+    EXPECT_EQ(ssao.frameRange.size, 0u);
+    EXPECT_FALSE(ssao.frameDescriptorSet);
+
+    ssao.frame  = RGBufferHandle{.index = 1, .generation = 2};
+    ssao.albedo = RGTextureHandle{.index = 3, .generation = 4};
+    EXPECT_TRUE(ssao.frame.isValid());
+    EXPECT_TRUE(ssao.albedo.isValid());
+
+    DeferredLightPassParams light{};
+    EXPECT_FALSE(light.frame.handle.isValid());
+    EXPECT_FALSE(light.light.handle.isValid());
+    EXPECT_FALSE(light.gBufferDepth.isValid());
+    EXPECT_FALSE(light.ssao.has_value());
+    EXPECT_FALSE(light.viewportColor.isValid());
+    EXPECT_EQ(light.layerCount, 1u);
+    for (const auto& color : light.gBufferColors) {
+        EXPECT_FALSE(color.isValid());
+    }
+
+    light.frame.handle      = RGBufferHandle{.index = 5, .generation = 6};
+    light.gBufferColors[0]  = RGTextureHandle{.index = 7, .generation = 8};
+    light.gBufferDepth      = RGTextureHandle{.index = 8, .generation = 9};
+    light.ssao              = RGTextureHandle{.index = 9, .generation = 10};
+    EXPECT_TRUE(light.frame.handle.isValid());
+    EXPECT_TRUE(light.gBufferColors[0].isValid());
+    EXPECT_TRUE(light.gBufferDepth.isValid());
+    ASSERT_TRUE(light.ssao.has_value());
+    EXPECT_EQ(light.ssao->index, 9u);
+}
+
 TEST(SSAOStageTest, BuildsFrameDataWithoutOwningGpuResources)
 {
     SSAOStage stage;
