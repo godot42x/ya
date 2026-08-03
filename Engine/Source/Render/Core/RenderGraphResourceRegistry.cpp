@@ -202,6 +202,8 @@ std::shared_ptr<RenderGraphResourceRegistry::OwnedBufferEntry> RenderGraphResour
             continue;
         }
         usedPoolEntries.insert(entry.get());
+        ++_transientPoolDiagnostics.lastHitCount;
+        ++_transientPoolDiagnostics.totalHitCount;
         return entry;
     }
 
@@ -220,6 +222,8 @@ std::shared_ptr<RenderGraphResourceRegistry::OwnedBufferEntry> RenderGraphResour
                    slot.desc.label);
     _transientBufferPool.push_back(entry);
     usedPoolEntries.insert(entry.get());
+    ++_transientPoolDiagnostics.lastMissCount;
+    ++_transientPoolDiagnostics.totalMissCount;
     return entry;
 }
 
@@ -399,6 +403,8 @@ bool RenderGraphResourceRegistry::needsImportedBufferReplacement(const ImportedB
 
 void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompiledGraph* compiled)
 {
+    _transientPoolDiagnostics.lastHitCount = 0;
+    _transientPoolDiagnostics.lastMissCount = 0;
     pruneUnusedResources(graph);
 
     for (const auto& texture : graph.getTextures()) {
@@ -475,6 +481,7 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompile
         YA_CORE_ASSERT(compiled->isValid(), "RenderGraph registry cannot materialize an invalid compiled graph");
         materializeTransientSlots(graph, *compiled);
     }
+    _transientPoolDiagnostics.poolEntryCount = static_cast<uint32_t>(_transientBufferPool.size());
 
     for (const auto& buffer : graph.getBuffers()) {
         if (compiled != nullptr && buffer.lifetime == ERGResourceLifetime::Transient) {
@@ -597,6 +604,7 @@ void RenderGraphResourceRegistry::clear()
     _persistentTextures.clear();
     _persistentOwnedBuffers.clear();
     _transientBufferPool.clear();
+    _transientPoolDiagnostics = {};
     _textures.clear();
     _ownedBuffers.clear();
     for (auto& [handle, buffer] : _importedBuffers) {

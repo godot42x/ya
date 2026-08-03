@@ -1540,6 +1540,11 @@ RGCompiledGraph RenderGraph::compile() const
         }
         compiled.transientBufferDiagnostics.aliasedBufferCount =
             compiled.transientBufferDiagnostics.usedCount - compiled.transientBufferDiagnostics.physicalSlotCount;
+        if (compiled.transientBufferDiagnostics.usedCount > 0) {
+            compiled.transientBufferDiagnostics.reuseRatio =
+                static_cast<double>(compiled.transientBufferDiagnostics.aliasedBufferCount) /
+                static_cast<double>(compiled.transientBufferDiagnostics.usedCount);
+        }
 
         for (const auto& slot : compiled.transientBufferSlots) {
             for (size_t memberIndex = 1; memberIndex < slot.buffers.size(); ++memberIndex) {
@@ -1705,6 +1710,7 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
         << " physicalBytes=" << transientDiagnostics.physicalBytes
         << " aliasedBufferCount=" << transientDiagnostics.aliasedBufferCount
         << " aliasBoundaryCount=" << transientDiagnostics.aliasBoundaryCount
+        << " reuseRatio=" << transientDiagnostics.reuseRatio
         << " physicalReuse=compiler-plan\n";
 
     oss << "issues(" << compiled.issues.size() << ")\n";

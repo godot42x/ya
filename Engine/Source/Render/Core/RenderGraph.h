@@ -325,6 +325,16 @@ struct RGTransientBufferDiagnostics
     uint64_t physicalBytes      = 0;
     uint32_t aliasedBufferCount = 0;
     uint32_t aliasBoundaryCount = 0;
+    double   reuseRatio         = 0.0;
+};
+
+struct RGTransientBufferPoolDiagnostics
+{
+    uint32_t lastHitCount   = 0;
+    uint32_t lastMissCount  = 0;
+    uint32_t poolEntryCount = 0;
+    uint64_t totalHitCount  = 0;
+    uint64_t totalMissCount = 0;
 };
 
 struct RGCompileIssue

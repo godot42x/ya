@@ -5,7 +5,7 @@
 - 计划建立日期：2026-07-18
 - 当前阶段：P1 RenderGraph 核心前置
 - 当前执行任务：无
-- 下一可执行任务：FG-110
+- 下一可执行任务：FG-111
 
 ## 初始代码审计
 
@@ -325,6 +325,36 @@ physical slot 数少于 logical transient buffer 数，真实 Deferred consumer 
 - commit：待提交
 - 下一任务：
   - 进入 `FG-110`，增加 buffer reuse diagnostics 和完成门禁
+
+### 2026-08-03：FG-110 完成
+
+- 状态：完成
+- 代码事实：
+  - compiled graph 已有 logical/physical slot assignment，但此前没有明确的 reuse ratio，也没有 runtime registry 层的 pool hit/miss 可观测数据。
+  - `sync(graph)` 兼容路径有意不启用 alias；需要一个可测试的对照，防止“保留兼容 API”被误解成运行时 alias 已经生效。
+- 实现：
+  - `RGTransientBufferDiagnostics` 增加 `reuseRatio`，并在 debug dump 输出 logical/physical bytes、slot、alias boundary 和 ratio。
+  - `RenderGraphResourceRegistry` 增加只读 `RGTransientBufferPoolDiagnostics` snapshot，记录本次 sync 的 hit/miss、pool entry 数和累计计数。
+  - 完成门禁要求测试图中 physical slot 数小于 logical used 数，连续 compiled frame 能观察到 pool hit，capacity/memory class 变化观察到 miss。
+  - legacy `registry.sync(graph)` 对照测试确认未提供 compiled plan 时仍按 logical buffer 分配，不会偷偷改变旧 standalone 行为。
+- 未做：
+  - 还没有把 pool LRU/容量上限接入运行时；当前 pool 只在 registry clear/destructor 时统一回收。
+  - 还没有 per-flight upload arena；CPU-written UBO 仍由后续 `FG-111` 处理。
+- 测试：
+  - `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`
+  - 结果：90 tests passed
+  - 新增/覆盖：
+    - `ResourceRegistryReusesTransientBufferPoolAcrossFramesAndGrowsSafely` 的 hit/miss 断言
+    - `ResourceRegistryLegacySyncKeepsLogicalTransientBuffersSeparate`
+    - compiled slot reuse ratio 断言
+  - 额外烟测：`xmake b ya-editor`
+  - 结果：build ok
+- artifacts：
+  - `RGTransientBufferPoolDiagnostics`
+  - `RenderGraphResourceRegistry::getTransientBufferPoolDiagnostics()`
+- commit：待提交
+- 下一任务：
+  - 进入 `FG-111`，实现 completion-safe per-flight FrameUploadArena
 
 ## 任务记录模板
 
