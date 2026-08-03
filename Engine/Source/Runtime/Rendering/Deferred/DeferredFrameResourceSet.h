@@ -7,6 +7,7 @@
 
 #include "DeferredRender.GBufferPass_PBR.slang.h"
 #include "DeferredRender.LightPass.slang.h"
+#include "DeferredRender.SSAO.slang.h"
 
 #include <array>
 #include <optional>
@@ -30,13 +31,16 @@ class DeferredFrameResourceSet
   public:
     using FrameData = slang_types::DeferredRender::GBufferPass_PBR::FrameData;
     using LightData = slang_types::DeferredRender::LightPass::LightData;
+    using SSAOFrameData = slang_types::DeferredRender::SSAO::FrameData;
 
     struct Binding
     {
         DescriptorSetHandle             frameAndLightDescriptorSet{};
         DescriptorSetHandle             skinningDescriptorSet{};
+        DescriptorSetHandle             ssaoFrameDescriptorSet{};
         FrameUploadArena::Allocation    frame;
         FrameUploadArena::Allocation    light;
+        FrameUploadArena::Allocation    ssaoFrame;
         stdptr<IBuffer>                  skinningBuffer;
 
         [[nodiscard]] bool isValid() const
@@ -56,9 +60,12 @@ class DeferredFrameResourceSet
 
     /** Upload the current frame and light payloads for the fence-safe flight. */
     bool prepare(const RenderStageContext& ctx);
+    /** Upload SSAO parameters into the current flight's shared frame arena. */
+    bool prepareSSAO(const RenderStageContext& ctx, const SSAOFrameData& frameData);
 
     [[nodiscard]] stdptr<IDescriptorSetLayout> getFrameAndLightDSL() const { return _frameAndLightDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSkinningDSL() const { return _skinningDSL; }
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getSSAOFrameDSL() const { return _ssaoFrameDSL; }
     [[nodiscard]] const Binding&               getBinding(uint32_t flightIndex) const;
     [[nodiscard]] uint32_t getMaxShadowedPointLights() const { return _shadowState.maxShadowedPointLights; }
     [[nodiscard]] uint32_t getLastShadowedPointLights() const { return _lastShadowedPointLights; }
@@ -70,6 +77,8 @@ class DeferredFrameResourceSet
     stdptr<IDescriptorPool>           _frameAndLightDSP;
     stdptr<IDescriptorSetLayout>      _skinningDSL;
     stdptr<IDescriptorPool>           _skinningDSP;
+    stdptr<IDescriptorSetLayout>      _ssaoFrameDSL;
+    stdptr<IDescriptorPool>           _ssaoFrameDSP;
     std::array<Binding, MAX_FLIGHTS_IN_FLIGHT> _bindings{};
     ShadowRuntimeState _shadowState{};
     uint32_t _skinningCapacity = 0;
@@ -82,6 +91,7 @@ class DeferredFrameResourceSet
     bool ensureSkinningCapacity(uint32_t paletteCount);
     bool prepareSkinning(const RenderStageContext& ctx);
     void updateDescriptorSet(uint32_t flightIndex, const Binding& binding);
+    void updateSSAODescriptorSet(uint32_t flightIndex, const Binding& binding);
 };
 
 } // namespace ya

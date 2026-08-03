@@ -128,6 +128,31 @@ TEST(DeferredFrameResourceSetTest, SkinningCapacityStartsSmallGrowsAndRejectsOve
             .has_value());
 }
 
+TEST(SSAOStageTest, BuildsFrameDataWithoutOwningGpuResources)
+{
+    SSAOStage stage;
+    stage.setSettings(1.25f, 0.04f, 1.75f, 2.0f, false);
+
+    RenderFrameData frameData{};
+    frameData.projection = glm::mat4(2.0f);
+    frameData.view       = glm::mat4(1.0f);
+    RenderStageContext ctx{
+        .frameData      = &frameData,
+        .viewportExtent = {.width = 640, .height = 480},
+    };
+
+    const auto payload = stage.buildFrameData(ctx);
+    EXPECT_EQ(payload.screenResolution.x, 640);
+    EXPECT_EQ(payload.screenResolution.y, 480);
+    EXPECT_FLOAT_EQ(payload.radius, 1.25f);
+    EXPECT_FLOAT_EQ(payload.bias, 0.04f);
+    EXPECT_FLOAT_EQ(payload.power, 1.75f);
+    EXPECT_FLOAT_EQ(payload.intensity, 2.0f);
+    EXPECT_EQ(payload.reverseY, 0u);
+    EXPECT_FLOAT_EQ(payload.projectMat[0][0], 2.0f);
+    EXPECT_FLOAT_EQ(payload.invProjectMat[0][0], 0.5f);
+}
+
 TEST_F(DeferredRenderPipelineSettingsTest, PersistentShadowSettingsSeedFirstFrameState)
 {
     ConfigManager::get().set("runtime", "render.deferred.shadow.enableShadowMapping", true);

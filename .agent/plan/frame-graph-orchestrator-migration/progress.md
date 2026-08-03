@@ -71,6 +71,20 @@
 - 日志：`Engine/Saved/Logs/YA-2026-08-03_17-31-54.log` 未发现 `Validation Error`、`VUID-`、`VK_ERROR` 或 `[Error]`。
 - 下一任务：FG-203，迁移 Deferred SSAO frame buffer owner。
 
+### 2026-08-03：FG-203 实现进行中
+
+- 状态：开始
+- 代码事实：`SSAOStage` 当前持有 frame DSL、per-flight frame UBO 与 descriptor set，并在 `prepare()` 内自行上传。它的 `FrameData` 内容依赖 stage-owned SSAO settings，但 resource allocation/upload 不应由 pass module 持有。
+- 提交边界：将 SSAO frame DSL、descriptor set 和 upload-arena slice 迁到 `DeferredFrameResourceSet`；`SSAOStage` 只构造 Slang 生成的 frame data、接收当前 binding 并继续管理自己的 sampled-input descriptors、noise texture 和 pipeline。
+
+### 2026-08-03：FG-203 完成
+
+- 实现：`DeferredFrameResourceSet` 新增 SSAO frame DSL、per-flight descriptor set 和 arena slice upload；`SSAOStage` 删除 per-flight UBO 与上传逻辑，只保留 pipeline-layout DSL 引用、输入 descriptor、noise texture 和 frame binding。SSAO graph pass 显式声明对应 UBO slice 的 `uniformRead`，独立入口也 import 同一 owner-backed slice。
+- 验收：新增 `SSAOStageTest.BuildsFrameDataWithoutOwningGpuResources`，验证生成的 Slang frame payload、设置和投影矩阵；SSAO enable/disable 均通过编辑器冒烟。
+- 测试：`xmake b ya-editor` 通过；`python3 Script/ya.py test --target ya --filter 'SSAOStageTest.*:DeferredFrameResourceSetTest.*:DeferredRenderPipelineTest.*:RenderGraphCoreTest.*:ResourceStateTrackerTest.*'` 通过（5 suites，96 tests）；默认 SSAO `python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject -- --exit-after-frame=300 --log-level=warn --log-detail-level=error` 以 exit code 0 退出；关闭 SSAO 的同命令加 `--automation-config /tmp/ya-fg203-ssao-off.json` 以 exit code 0 退出。
+- 日志：`Engine/Saved/Logs/YA-2026-08-03_19-11-51.log` 与 `Engine/Saved/Logs/YA-2026-08-03_19-12-12.log` 均未发现 `Validation Error`、`VUID-`、`VK_ERROR` 或 `[Error]`。
+- 下一任务：FG-204，迁移 Deferred skybox frame buffer owner。
+
 ## 初始代码审计
 
 ### 已完成基础

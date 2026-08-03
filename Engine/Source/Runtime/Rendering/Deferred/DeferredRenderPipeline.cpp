@@ -726,7 +726,7 @@ void DeferredRenderPipeline::initStages()
     _ssaoStage = ya::makeShared<SSAOStage>();
     _ssaoStage->setup(_currentGBufferResources);
     _ssaoStage->setSettings(_ssaoStage->getRadius(), _ssaoStage->getBias(), _ssaoStage->getPower(), _ssaoStage->getIntensity(), _bReverseViewportY);
-    _ssaoStage->init(_render);
+    _ssaoStage->init(_render, _frameResources->getSSAOFrameDSL());
 
     _lightStage = ya::makeShared<LightStage>();
     _lightStage->setup(LightStage::SharedInputs{
@@ -1146,12 +1146,22 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     if (!_frameResources->prepare(stageCtx)) {
         return;
     }
+    const bool bUseSSAO = _bEnableSSAO && _ssaoStage;
+    if (bUseSSAO && !_frameResources->prepareSSAO(stageCtx, _ssaoStage->buildFrameData(stageCtx))) {
+        return;
+    }
 
     const auto& frameBinding = _frameResources->getBinding(frame.flightIndex);
     _gBufferStage->setFrameInputs(GBufferStage::FrameInputs{
         .frameAndLightDescriptorSet = frameBinding.frameAndLightDescriptorSet,
         .skinningDescriptorSet      = frameBinding.skinningDescriptorSet,
     });
+    if (bUseSSAO) {
+        _ssaoStage->setFrameInputs(SSAOStage::FrameInputs{
+            .descriptorSet = frameBinding.ssaoFrameDescriptorSet,
+            .frame         = frameBinding.ssaoFrame,
+        });
+    }
     _gBufferStage->prepare(stageCtx);
 
     RenderGraph graph;
@@ -1197,6 +1207,15 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         frameBinding.skinningBuffer,
         "Deferred.SkinningSSBO",
         EBufferUsage::StorageBuffer);
+    std::optional<RGBufferHandle> ssaoFrameBuffer;
+    if (bUseSSAO) {
+        ssaoFrameBuffer = importHostWrittenBuffer(
+            frameBinding.ssaoFrame.buffer,
+            "Deferred.SSAOFrameUBO",
+            EBufferUsage::UniformBuffer,
+            frameBinding.ssaoFrame.offset,
+            frameBinding.ssaoFrame.size);
+    }
 
     std::array<RGTextureHandle, 4> gbufferColors{};
     for (uint32_t attachmentIndex = 0; attachmentIndex < gbufferColors.size(); ++attachmentIndex) {
@@ -1279,8 +1298,16 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     const Extent2D viewportExtent = _viewportRTSpec.extent;
 
     std::optional<RGTextureHandle> ssao;
-    if (_bEnableSSAO && _ssaoStage) {
-        ssao = _ssaoStage->appendGraphPass(graph, stageCtx, gbufferColors[0], gbufferColors[1], gbufferDepthHandle);
+    if (bUseSSAO) {
+        YA_CORE_ASSERT(ssaoFrameBuffer.has_value(), "Deferred SSAO requires an imported frame buffer");
+        ssao = _ssaoStage->appendGraphPass(
+            graph,
+            stageCtx,
+            *ssaoFrameBuffer,
+            RGBufferRange{.offset = frameBinding.ssaoFrame.offset, .size = frameBinding.ssaoFrame.size},
+            gbufferColors[0],
+            gbufferColors[1],
+            gbufferDepthHandle);
     }
 
     std::optional<RGTextureHandle> environmentCubemap;

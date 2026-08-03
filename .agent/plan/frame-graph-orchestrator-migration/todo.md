@@ -131,7 +131,7 @@
   - 验收：零 palette、capacity growth、连续场景切换；删除 GBufferStage `_skinningSSBO` owner/getter
   - 提交：`[runtime/deferred] centralize skinning frame resources`
 
-- [ ] `FG-203` 迁移 SSAO frame buffer owner
+- [x] `FG-203` 迁移 SSAO frame buffer owner
   - 依赖：FG-201
   - 修改：DeferredFrameResourceSet、SSAOStage
   - 验收：SSAO frame data 使用 upload arena slice；SSAOStage 不再创建/持有 frame UBO；SSAO enable/disable smoke 通过
