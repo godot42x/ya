@@ -42,6 +42,15 @@ RenderImage* RenderGraphExecutionResult::getExportedTexture(std::string_view nam
 namespace
 {
 
+template <typename HandleT>
+bool isHandleDeterministicallyBefore(const HandleT& lhs, const HandleT& rhs)
+{
+    if (lhs.index != rhs.index) {
+        return lhs.index < rhs.index;
+    }
+    return lhs.generation < rhs.generation;
+}
+
 const char* toString(ERGPassResourceAccess access)
 {
     switch (access) {
@@ -1430,6 +1439,25 @@ RGCompiledGraph RenderGraph::compile() const
                 lifetime.lastPass      = passPlan.pass;
             }
         }
+
+        std::sort(compiled.transientBufferLifetimes.begin(),
+                  compiled.transientBufferLifetimes.end(),
+                  [](const RGTransientBufferLifetimePlan& lhs, const RGTransientBufferLifetimePlan& rhs) {
+                      const bool lhsUsed = lhs.isUsed();
+                      const bool rhsUsed = rhs.isUsed();
+                      if (lhsUsed != rhsUsed) {
+                          return lhsUsed && !rhsUsed;
+                      }
+                      if (lhsUsed && rhsUsed) {
+                          if (lhs.firstPassIndex != rhs.firstPassIndex) {
+                              return lhs.firstPassIndex < rhs.firstPassIndex;
+                          }
+                          if (lhs.lastPassIndex != rhs.lastPassIndex) {
+                              return lhs.lastPassIndex < rhs.lastPassIndex;
+                          }
+                      }
+                      return isHandleDeterministicallyBefore(lhs.buffer, rhs.buffer);
+                  });
 
         for (const auto& lifetime : compiled.transientBufferLifetimes) {
             if (lifetime.isUsed()) {

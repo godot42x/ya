@@ -70,7 +70,7 @@
   - 验收：export owner 在下一帧 replacement 后仍活到 submit completion；未 export 资源不可外取
   - 提交：`[render/graph] export frame graph outputs explicitly`
 
-- [ ] `FG-106` 计算 compiled transient buffer lifetime interval
+- [x] `FG-106` 计算 compiled transient buffer lifetime interval
   - 依赖：FG-104
   - 修改：`RenderGraph.h/.cpp`、compiled graph dump、core tests
   - 实现：按最终拓扑序记录每个 transient buffer 的 first/last use；Imported/Persistent 单独标记，不参与 alias

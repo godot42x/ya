@@ -208,6 +208,32 @@ physical slot 数少于 logical transient buffer 数，真实 Deferred consumer 
 - 下一任务：
   - 进入 `FG-106`，为 transient buffer 编译 first/last-use lifetime interval，给后续 physical slot allocation 提供确定性输入
 
+### 2026-08-03：FG-106 完成
+
+- 状态：完成
+- 代码事实：
+  - `RenderGraph` 之前已经会为 transient buffer 填 first/last pass index，但 `compiled.transientBufferLifetimes` 本身仍按 buffer 创建顺序输出。
+  - 这会让“lifetime interval 是编译后真相源”这件事不完整：下游 physical slot allocation 还得自己重新整理顺序，branch/merge、explicit dependency、optional-unused 的确定性也没有被完整锁进测试。
+- 实现：
+  - compiler 现在在收集完 transient buffer 的 first/last use 后，按以下稳定规则排序 `compiled.transientBufferLifetimes`：
+    - used 在前，unused 在后
+    - used buffer 按 `firstPassIndex -> lastPassIndex`
+    - 同区间再按 handle 稳定打破平局
+  - 保持 imported/persistent buffer 不进入 transient lifetime plan，继续作为后续 alias allocator 的输入边界。
+- 未做：
+  - 这一步只提供 deterministic compiled lifetime interval；还没有生成 physical slot coloring / allocation plan，那是下一步 `FG-107`。
+  - diagnostics 仍停留在 logical/used/unused 统计，还没有 physical reuse ratio。
+- 测试：
+  - `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`
+  - 结果：84 tests passed
+  - `xmake b ya-editor`
+  - 结果：build ok
+- artifacts：
+  - `RenderGraphCoreTest.CompileOrdersTransientBufferLifetimesByTopologicalUse`
+  - `RenderGraphCoreTest.CompileTransientBufferLifetimesFollowExplicitDependenciesAndIgnoreNonTransientBuffers`
+- 下一任务：
+  - 进入 `FG-107`，基于 compiled lifetime interval 生成 transient buffer physical slot allocation plan
+
 ## 任务记录模板
 
 ```text

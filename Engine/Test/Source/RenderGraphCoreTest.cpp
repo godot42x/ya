@@ -777,6 +777,130 @@ TEST(RenderGraphCoreTest, CompileBuildsTransientBufferLifetimeMetadata)
     EXPECT_NE(dump.find("physicalReuse=not-materialized"), std::string::npos);
 }
 
+TEST(RenderGraphCoreTest, CompileOrdersTransientBufferLifetimesByTopologicalUse)
+{
+    RenderGraph graph;
+    const auto lateCreatedButEarlyUsed = graph.createBuffer(RGBufferDesc{
+        .label = "transient.early",
+        .usage = EBufferUsage::TransferDst,
+        .size  = 32,
+    });
+    const auto earlyCreatedButLateUsed = graph.createBuffer(RGBufferDesc{
+        .label = "transient.late",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 64,
+    });
+    const auto middleUsed = graph.createBuffer(RGBufferDesc{
+        .label = "transient.middle",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 48,
+    });
+
+    graph.addPass("write-early", [&](RGPassBuilder& pass) {
+        pass.transferDst(lateCreatedButEarlyUsed);
+    });
+    graph.addPass("write-middle", [&](RGPassBuilder& pass) {
+        pass.storageWrite(middleUsed);
+    });
+    graph.addPass("write-late", [&](RGPassBuilder& pass) {
+        pass.storageWrite(earlyCreatedButLateUsed);
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid());
+    ASSERT_EQ(compiled.transientBufferLifetimes.size(), 3u);
+
+    EXPECT_EQ(compiled.transientBufferLifetimes[0].buffer, lateCreatedButEarlyUsed);
+    EXPECT_EQ(compiled.transientBufferLifetimes[0].firstPassIndex, 0u);
+    EXPECT_EQ(compiled.transientBufferLifetimes[1].buffer, middleUsed);
+    EXPECT_EQ(compiled.transientBufferLifetimes[1].firstPassIndex, 1u);
+    EXPECT_EQ(compiled.transientBufferLifetimes[2].buffer, earlyCreatedButLateUsed);
+    EXPECT_EQ(compiled.transientBufferLifetimes[2].firstPassIndex, 2u);
+}
+
+TEST(RenderGraphCoreTest, CompileTransientBufferLifetimesFollowExplicitDependenciesAndIgnoreNonTransientBuffers)
+{
+    RenderGraph graph;
+    const auto imported = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "imported.buffer",
+            .usage = EBufferUsage::StorageBuffer,
+            .size  = 64,
+        },
+        .buffer       = reinterpret_cast<IBuffer*>(0x1),
+        .initialState = BufferResourceState{
+            .stages = EPipelineStage::ComputeShader,
+            .access = EResourceAccess::ShaderRead,
+        },
+    });
+    const auto branchLeft = graph.createBuffer(RGBufferDesc{
+        .label = "transient.branch.left",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 96,
+    });
+    const auto branchRight = graph.createBuffer(RGBufferDesc{
+        .label = "transient.branch.right",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 112,
+    });
+    const auto optionalUnused = graph.createBuffer(RGBufferDesc{
+        .label = "transient.optional.unused",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 24,
+    });
+
+    const auto seed = graph.addPass("seed", [&](RGPassBuilder& pass) {
+        pass.storageRead(imported);
+    });
+    const auto rightPass = graph.addPass("branch-right", [&](RGPassBuilder& pass) {
+        pass.storageWrite(branchRight);
+    });
+    const auto leftPass = graph.addPass("branch-left", [&](RGPassBuilder& pass) {
+        pass.storageWrite(branchLeft);
+        pass.dependsOn(rightPass);
+        pass.dependsOn(seed);
+    });
+    const auto merge = graph.addPass("merge", [&](RGPassBuilder& pass) {
+        pass.storageRead(branchLeft);
+        pass.storageRead(branchRight);
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid());
+    ASSERT_EQ(compiled.transientBufferLifetimes.size(), 3u);
+
+    const auto findLifetime = [&](RGBufferHandle handle) -> const RGTransientBufferLifetimePlan* {
+        const auto it = std::find_if(compiled.transientBufferLifetimes.begin(),
+                                     compiled.transientBufferLifetimes.end(),
+                                     [handle](const RGTransientBufferLifetimePlan& lifetime) {
+                                         return lifetime.buffer == handle;
+                                     });
+        return it != compiled.transientBufferLifetimes.end() ? &*it : nullptr;
+    };
+
+    const auto* leftLifetime = findLifetime(branchLeft);
+    ASSERT_NE(leftLifetime, nullptr);
+    EXPECT_EQ(leftLifetime->firstPass, leftPass);
+    EXPECT_EQ(leftLifetime->lastPass, merge);
+    EXPECT_EQ(leftLifetime->firstPassIndex, 2u);
+    EXPECT_EQ(leftLifetime->lastPassIndex, 3u);
+
+    const auto* rightLifetime = findLifetime(branchRight);
+    ASSERT_NE(rightLifetime, nullptr);
+    EXPECT_EQ(rightLifetime->firstPass, rightPass);
+    EXPECT_EQ(rightLifetime->lastPass, merge);
+    EXPECT_EQ(rightLifetime->firstPassIndex, 1u);
+    EXPECT_EQ(rightLifetime->lastPassIndex, 3u);
+
+    const auto* unusedLifetime = findLifetime(optionalUnused);
+    ASSERT_NE(unusedLifetime, nullptr);
+    EXPECT_FALSE(unusedLifetime->isUsed());
+
+    EXPECT_EQ(compiled.transientBufferLifetimes[0].buffer, rightLifetime->buffer);
+    EXPECT_EQ(compiled.transientBufferLifetimes[1].buffer, leftLifetime->buffer);
+    EXPECT_EQ(compiled.transientBufferLifetimes[2].buffer, unusedLifetime->buffer);
+}
+
 TEST(RenderGraphCoreTest, CompileBuildsImportedFinalizePlans)
 {
     RenderGraph graph;
