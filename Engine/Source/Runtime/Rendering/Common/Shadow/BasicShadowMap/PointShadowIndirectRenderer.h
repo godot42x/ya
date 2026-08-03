@@ -72,6 +72,7 @@ class PointShadowIndirectRenderer
     {
         stdptr<IBuffer>     instanceBuffer;   // ShadowInstanceData[]
         DescriptorSetHandle indirectDS = nullptr;
+        uint32_t            instanceCapacity = 0;
 
         std::vector<MeshBatch> meshBatches;
         uint32_t               totalInstances  = 0;
@@ -85,7 +86,7 @@ class PointShadowIndirectRenderer
     // ─── prepare() sub-steps (all operate on _perFlight[payload.flightIndex]) ─
     bool collectBatches(const BasicShadowFramePayload& payload,
                         std::vector<PointShadowInstanceData>& outInstances);
-    void uploadInstances(uint32_t flightIndex,
+    bool uploadInstances(uint32_t flightIndex,
                          const std::vector<PointShadowInstanceData>& instances);
     std::vector<PointShadowIndirectCommand> buildCmdTemplates(uint32_t flightIndex) const;
     void fillCullDataCompute(const BasicShadowFramePayload&                 payload,
@@ -94,7 +95,7 @@ class PointShadowIndirectRenderer
                             std::vector<PointShadowIndirectCommand>&       cmdTemplates);
 
     // ─── Capacity & DS helpers ───────────────────────────────────────
-    void ensureInstanceCapacity(uint32_t requiredCount);
+    bool ensureInstanceCapacity(uint32_t flightIndex, uint32_t requiredCount);
     void updateIndirectDescriptors(uint32_t flightIndex);
 
     // ─── Resources ───────────────────────────────────────────────────
@@ -112,7 +113,6 @@ class PointShadowIndirectRenderer
     PointShadowCullPass _cullPass;
 
     std::array<PerFlightResources, MAX_FLIGHTS_IN_FLIGHT> _perFlight{};
-    uint32_t _instanceCapacity = 0;
 };
 
 } // namespace ya

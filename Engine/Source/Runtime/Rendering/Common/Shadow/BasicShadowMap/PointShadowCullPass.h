@@ -45,8 +45,8 @@ class PointShadowCullPass
     void init(IRender* render);
     void destroy();
 
-    /// Ensure the (frustum / cmd / lookup) buffers can hold `bucketCount`.
-    void ensureCapacity(uint32_t bucketCount);
+    /// Ensure the current flight's (frustum / cmd / lookup) buffers can hold `bucketCount`.
+    bool ensureCapacity(uint32_t flightIndex, uint32_t bucketCount);
 
     /// Bind the external instance buffer to the cull DS (binding 0).
     /// Required only for the compute path; harmless to call always.
@@ -93,6 +93,7 @@ class PointShadowCullPass
         stdptr<IBuffer>     visibleInstancesBuf;
         stdptr<IBuffer>     instanceBuffer;
         DescriptorSetHandle cullDS = nullptr;
+        uint32_t            allocatedBucketCount = 0;
         // Compute-path dispatch shape
         uint32_t            activeFaceCount  = 0;
         uint32_t            activeBatchCount = 0;
@@ -107,7 +108,6 @@ class PointShadowCullPass
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
     std::array<PerFlightResources, MAX_FLIGHTS_IN_FLIGHT> _perFlight{};
-    uint32_t _allocatedBucketCount = 0;
 };
 
 } // namespace ya
