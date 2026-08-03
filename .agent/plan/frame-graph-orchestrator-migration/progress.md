@@ -4,8 +4,31 @@
 
 - 计划建立日期：2026-07-18
 - 当前阶段：P3 Typed resources 与 pass parameters
-- 当前执行任务：FG-301
-- 下一可执行任务：FG-301（FG-205/FG-206 完成后）
+- 当前执行任务：FG-302
+- 下一可执行任务：FG-302
+
+### 2026-08-03：FG-301 开始
+
+- 代码事实：`DeferredRenderPipeline::executeDeferredMainGraph()` 仍在函数体内分别创建 frame/light/skinning/SSAO/skybox buffer handle、GBuffer/viewport/environment/shadow texture handle，并把多个 handle 通过局部 lambda 捕获。
+- 代码事实：graph prepare 后，SSAO export 仍被转换为 `_currentSSAOOutput` 再写回 `LightStage`；本任务只收口 handle 的 frame-local 组织，不提前改变该 descriptor contract。
+- 提交边界：新增 `DeferredFrameGraphResources` 值类型，集中保存本帧 RG buffer/texture/pass handles；不保存 resolved GPU pointer，不改变 pass 顺序、shader、descriptor binding 或 execution result 生命周期。
+
+### 2026-08-03：FG-301 完成
+
+- 实现：新增 `DeferredFrameGraphResources`（`Engine/Source/Runtime/Rendering/Deferred/DeferredFrameGraphResources.h`），
+  集中保存本帧 Deferred 图的 buffer/texture/pass handles；可选资源（SSAO、environment、shadow depth、
+  bloom、postprocess 输出、shadow/gbuffer/light/skybox/overlay pass）全部显式 `std::optional`；
+  不保存 resolved GPU pointer。
+- `DeferredRenderPipeline::executeDeferredMainGraph()` 改为以 `graphResources` 为 handle 单一出口：
+  GBuffer / Light / Skybox / Scene Overlay / Viewport Overlay / bloom / postprocess 全部消费 `graphResources`
+  中的 handle，不再散落局部 handle 命名。
+- 新增单测 `DeferredFrameGraphResourcesTest.KeepsOptionalInputsExplicitAndHandlesFrameLocal`，
+  验证 optional 默认值与 frame-local handle 的 index/generation 语义。
+- 测试：`python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*:DeferredRenderPipelineTest.*:DeferredFrameResourceSetTest.*:SSAOStageTest.*'`
+  通过（96 tests）；`xmake b ya-engine` 通过。
+- 未做：不改变 `setSSAOTexture`/export 回灌契约；`frame import result` 作为 FG-302~FG-306 typed
+  pass params 的前置类型，本任务只收口 handle 组织。
+- 提交：`[runtime/deferred] add typed frame graph resources`（本提交）
 
 ### 2026-08-03：FG-111 开始
 
@@ -135,12 +158,14 @@
 
 ### 当前关键缺口
 
-- Deferred 顶层图仍从 Stage getter import frame/light/skinning buffer。
-- GBuffer、SSAO、Skybox、Forward passes、Shadow passes 仍持有各自 per-flight GPU buffer。
+- Deferred 顶层图仍从 `DeferredFrameResourceSet` binding import frame/light/skinning buffer；
+  handle 组织已由 FG-301 收口到 `DeferredFrameGraphResources`，下一阶段（FG-302~306）把它升级为
+  typed pass parameters，消除回灌。
+- Deferred frame/light/skinning/SSAO/skybox 与 shadow raster owner 已集中；Forward 及部分 postprocess/overlay 资源边界仍待后续阶段收口。
 - SSAO、Postprocess、Bloom、Directional/Point/Cull shadow 等模块仍存在局部 executor/standalone graph 入口。
 - graph prepare 后仍有 resolved resource 回灌、Stage prepare 和 descriptor cache 更新；setup 与实际 binding 不是同一参数真相源。
 - world graph、presentation graph 和 graph 外 capture callback 构成三段 orchestration。
-- persistent physical identity 依赖每帧 handle 创建顺序，缺少 stable resource key。
+- persistent physical identity 已使用 stable key；imported resource 的 source/view identity 仍由各 consumer 显式声明。
 - Texture 仍含全局 `App::get()` factory 查询、upload orchestration 和 render texture 创建职责。
 - 原始计划明确延后 transient aliasing，只能提供 persistent key 跨帧复用和 per-flight owner 复用，不能提供不同 logical transient buffer 的物理 allocation 复用。
 

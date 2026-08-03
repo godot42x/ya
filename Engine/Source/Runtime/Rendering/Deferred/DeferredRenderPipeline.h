@@ -2,6 +2,7 @@
 
 #include "Core/Math/Geometry.h"
 #include "DeferredGBufferResources.h"
+#include "DeferredFrameGraphResources.h"
 #include "DeferredFrameResourceSet.h"
 #include "DeferredPipelineDebugViews.h"
 #include "DeferredViewportResources.h"
