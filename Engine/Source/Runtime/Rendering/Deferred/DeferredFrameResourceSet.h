@@ -8,6 +8,7 @@
 #include "DeferredRender.GBufferPass_PBR.slang.h"
 #include "DeferredRender.LightPass.slang.h"
 #include "DeferredRender.SSAO.slang.h"
+#include "GLSL.Skybox.glsl.h"
 
 #include <array>
 #include <optional>
@@ -32,15 +33,18 @@ class DeferredFrameResourceSet
     using FrameData = slang_types::DeferredRender::GBufferPass_PBR::FrameData;
     using LightData = slang_types::DeferredRender::LightPass::LightData;
     using SSAOFrameData = slang_types::DeferredRender::SSAO::FrameData;
+    using SkyboxFrameData = glsl_types::GLSL::Skybox::FrameUBO;
 
     struct Binding
     {
         DescriptorSetHandle             frameAndLightDescriptorSet{};
         DescriptorSetHandle             skinningDescriptorSet{};
         DescriptorSetHandle             ssaoFrameDescriptorSet{};
+        DescriptorSetHandle             skyboxFrameDescriptorSet{};
         FrameUploadArena::Allocation    frame;
         FrameUploadArena::Allocation    light;
         FrameUploadArena::Allocation    ssaoFrame;
+        FrameUploadArena::Allocation    skyboxFrame;
         stdptr<IBuffer>                  skinningBuffer;
 
         [[nodiscard]] bool isValid() const
@@ -62,10 +66,13 @@ class DeferredFrameResourceSet
     bool prepare(const RenderStageContext& ctx);
     /** Upload SSAO parameters into the current flight's shared frame arena. */
     bool prepareSSAO(const RenderStageContext& ctx, const SSAOFrameData& frameData);
+    /** Upload skybox camera parameters into the current flight's shared frame arena. */
+    bool prepareSkybox(const RenderStageContext& ctx, const SkyboxFrameData& frameData);
 
     [[nodiscard]] stdptr<IDescriptorSetLayout> getFrameAndLightDSL() const { return _frameAndLightDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSkinningDSL() const { return _skinningDSL; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSSAOFrameDSL() const { return _ssaoFrameDSL; }
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxFrameDSL() const { return _skyboxFrameDSL; }
     [[nodiscard]] const Binding&               getBinding(uint32_t flightIndex) const;
     [[nodiscard]] uint32_t getMaxShadowedPointLights() const { return _shadowState.maxShadowedPointLights; }
     [[nodiscard]] uint32_t getLastShadowedPointLights() const { return _lastShadowedPointLights; }
@@ -79,6 +86,8 @@ class DeferredFrameResourceSet
     stdptr<IDescriptorPool>           _skinningDSP;
     stdptr<IDescriptorSetLayout>      _ssaoFrameDSL;
     stdptr<IDescriptorPool>           _ssaoFrameDSP;
+    stdptr<IDescriptorSetLayout>      _skyboxFrameDSL;
+    stdptr<IDescriptorPool>           _skyboxFrameDSP;
     std::array<Binding, MAX_FLIGHTS_IN_FLIGHT> _bindings{};
     ShadowRuntimeState _shadowState{};
     uint32_t _skinningCapacity = 0;
@@ -92,6 +101,7 @@ class DeferredFrameResourceSet
     bool prepareSkinning(const RenderStageContext& ctx);
     void updateDescriptorSet(uint32_t flightIndex, const Binding& binding);
     void updateSSAODescriptorSet(uint32_t flightIndex, const Binding& binding);
+    void updateSkyboxDescriptorSet(uint32_t flightIndex, const Binding& binding);
 };
 
 } // namespace ya

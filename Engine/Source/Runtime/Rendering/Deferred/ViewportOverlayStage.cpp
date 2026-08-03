@@ -106,7 +106,7 @@ void ViewportOverlayStage::refreshPipelineFormats(const DeferredAttachmentFormat
 // Init
 // ═══════════════════════════════════════════════════════════════════════
 
-void ViewportOverlayStage::init(IRender* render)
+void ViewportOverlayStage::init(IRender* render, stdptr<IDescriptorSetLayout> skyboxFrameDSL)
 {
     _render = render;
     _billboardMesh = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Quad);
@@ -115,7 +115,7 @@ void ViewportOverlayStage::init(IRender* render)
     YA_CORE_ASSERT(_billboardMesh != nullptr, "ViewportOverlayStage requires billboard quad mesh");
     YA_CORE_ASSERT(_directionCone != nullptr, "ViewportOverlayStage requires direction cone mesh");
     YA_CORE_ASSERT(_directionCylinder != nullptr, "ViewportOverlayStage requires direction cylinder mesh");
-    initSkybox();
+    initSkybox(std::move(skyboxFrameDSL));
     initBillboards();
     initOverlay();
     YA_CORE_ASSERT(_getDebugRenderSystem, "ViewportOverlayStage requires debug render system service");
@@ -127,23 +127,17 @@ void ViewportOverlayStage::init(IRender* render)
     _debugSkinning.bReverseViewportY = bReverseViewportY;
 }
 
-void ViewportOverlayStage::initSkybox()
+void ViewportOverlayStage::initSkybox(stdptr<IDescriptorSetLayout> skyboxFrameDSL)
 {
-    // DSLs
-    auto dsls          = IDescriptorSetLayout::create(_render, {
-                                                                   DescriptorSetLayoutDesc{
-                                                                       .label    = "SkyboxOverlay_PerFrame_DSL",
-                                                                       .set      = 0,
-                                                                       .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
-                                                                   },
-                                                                   DescriptorSetLayoutDesc{
-                                                                       .label    = "SkyboxOverlay_Resource_DSL",
-                                                                       .set      = 1,
-                                                                       .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
-                                                                   },
-                                                               });
-    _skyboxFrameDSL    = dsls[0];
-    _skyboxResourceDSL = dsls[1];
+    _skyboxFrameDSL = std::move(skyboxFrameDSL);
+    YA_CORE_ASSERT(_skyboxFrameDSL != nullptr, "ViewportOverlayStage requires skybox frame DSL");
+    _skyboxResourceDSL = IDescriptorSetLayout::create(
+        _render,
+        DescriptorSetLayoutDesc{
+            .label    = "SkyboxOverlay_Resource_DSL",
+            .set      = 1,
+            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
+        });
 
     // Pipeline layout
     _skyboxPPL = IPipelineLayout::create(_render, "SkyboxOverlay_PPL", {}, {_skyboxFrameDSL, _skyboxResourceDSL});
@@ -175,28 +169,6 @@ void ViewportOverlayStage::initSkybox()
     _skyboxPipeline = IGraphicsPipeline::create(_render);
     YA_CORE_ASSERT(_skyboxPipeline && _skyboxPipeline->recreate(ci), "Failed to create Skybox overlay pipeline");
 
-    // Per-flight UBO + DS
-    _skyboxDSP = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-                                                      .label     = "SkyboxOverlay_DSP",
-                                                      .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
-                                                      .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT}},
-                                                  });
-
-    SkyboxFrameUBO initialData{};
-    for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _skyboxFrameUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-                                                          .label       = std::format("SkyboxOverlay_Frame_UBO_{}", i),
-                                                          .usage       = EBufferUsage::UniformBuffer,
-                                                          .size        = sizeof(SkyboxFrameUBO),
-                                                          .memoryUsage = EMemoryUsage::CpuToGpu,
-                                                      });
-        _skyboxFrameUBO[i]->writeData(&initialData, sizeof(SkyboxFrameUBO), 0);
-
-        _skyboxFrameDS[i] = _skyboxDSP->allocateDescriptorSets(_skyboxFrameDSL);
-        _render->getDescriptorHelper()->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneUniformBuffer(_skyboxFrameDS[i], 0, _skyboxFrameUBO[i].get()),
-        });
-    }
 }
 
 void ViewportOverlayStage::initBillboards()
@@ -326,8 +298,6 @@ void ViewportOverlayStage::destroy()
     _skyboxPPL.reset();
     _skyboxFrameDSL.reset();
     _skyboxResourceDSL.reset();
-    _skyboxDSP.reset();
-    for (auto& ubo : _skyboxFrameUBO) ubo.reset();
 
     _billboardPipeline.reset();
     _billboardPPL.reset();
@@ -373,19 +343,21 @@ void ViewportOverlayStage::prepare(const RenderStageContext& ctx)
 
     if (!ctx.frameData) return;
 
-    // Update skybox frame UBO (view without translation + projection)
-    SkyboxFrameUBO uboData{
-        .projection = ctx.frameData->projection,
-        .view       = FMath::dropTranslation(ctx.frameData->view),
-    };
-    _skyboxFrameUBO[ctx.flightIndex]->writeData(&uboData, sizeof(SkyboxFrameUBO), 0);
-
     BillboardFrameUBO billboardUbo{
         .viewProjection = ctx.frameData->projection * ctx.frameData->view,
         .view           = ctx.frameData->view,
     };
     _billboardFrameUBO[ctx.flightIndex]->writeData(&billboardUbo, sizeof(billboardUbo), 0);
     updateBillboardTextures();
+}
+
+ViewportOverlayStage::SkyboxFrameUBO ViewportOverlayStage::buildSkyboxFrameData(const RenderStageContext& ctx) const
+{
+    YA_CORE_ASSERT(ctx.frameData != nullptr, "ViewportOverlayStage requires frame data to build skybox parameters");
+    return SkyboxFrameUBO{
+        .proj = ctx.frameData->projection,
+        .view = FMath::dropTranslation(ctx.frameData->view),
+    };
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -519,7 +491,7 @@ void ViewportOverlayStage::drawSkybox(const RenderStageContext& ctx)
     if (vpW == 0 || vpH == 0) return;
 
     // Check if skybox is available
-    if (!_frameInputs.skybox.bAvailable || !_frameInputs.skybox.mesh) return;
+    if (!_frameInputs.skybox.bAvailable || !_frameInputs.skybox.mesh || !_frameInputs.skybox.frameDescriptorSet) return;
 
     cmdBuf->debugBeginLabel("Skybox");
 
@@ -534,7 +506,7 @@ void ViewportOverlayStage::drawSkybox(const RenderStageContext& ctx)
     cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(vpW), viewportHeight, 0.0f, 1.0f);
     cmdBuf->setScissor(0, 0, vpW, vpH);
 
-    cmdBuf->bindDescriptorSets(_skyboxPPL.get(), 0, {_skyboxFrameDS[ctx.flightIndex], _frameInputs.skybox.descriptorSet});
+    cmdBuf->bindDescriptorSets(_skyboxPPL.get(), 0, {_frameInputs.skybox.frameDescriptorSet, _frameInputs.skybox.descriptorSet});
     _frameInputs.skybox.mesh->draw(cmdBuf);
 
     cmdBuf->debugEndLabel();

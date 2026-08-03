@@ -85,6 +85,20 @@
 - 日志：`Engine/Saved/Logs/YA-2026-08-03_19-11-51.log` 与 `Engine/Saved/Logs/YA-2026-08-03_19-12-12.log` 均未发现 `Validation Error`、`VUID-`、`VK_ERROR` 或 `[Error]`。
 - 下一任务：FG-204，迁移 Deferred skybox frame buffer owner。
 
+### 2026-08-03：FG-204 实现进行中
+
+- 状态：开始
+- 代码事实：`ViewportOverlayStage` 当前同时创建 skybox frame DSL/pool、per-flight UBO 和 descriptor set，并在 `prepare()` 内写入 `SkyboxFrameUBO`；skybox pass 的 graph declaration 也没有声明该 UBO range。
+- 提交边界：使用生成的 `GLSL.Skybox.FrameUBO`，将 skybox frame DSL、descriptor set 和 arena slice 迁到 `DeferredFrameResourceSet`；overlay stage 仅保留 pipeline-layout DSL 和当前 frame descriptor，Deferred skybox pass 显式声明该 slice 的 uniform read。billboard frame UBO 不在本任务范围内。
+
+### 2026-08-03：FG-204 完成
+
+- 实现：`DeferredFrameResourceSet` 接管 skybox frame DSL、descriptor pool、per-flight arena slice 和 descriptor 更新；`ViewportOverlayStage` 删除 skybox UBO/pool/descriptor owner，仅保留 pipeline layout 与当前 frame descriptor。Deferred skybox pass 显式 import 并声明实际 UBO slice 的 `uniformRead`，frame payload 使用生成的 `GLSL.Skybox.FrameUBO`。
+- 验收：新增 skybox frame payload 测试，验证相机平移被移除；Deferred pipeline 构建与 skybox 资源绑定沿用当前 flight owner。
+- 测试：`xmake b ya-editor` 通过；定向渲染测试 97 tests 通过；`python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject -- --exit-after-frame=300 --log-level=warn --log-detail-level=error` 以 exit code 0 退出。
+- 日志：`Engine/Saved/Logs/YA-2026-08-03_19-23-35.log` 未发现 `Validation Error`、`VUID-`、`VK_ERROR` 或 `[Error]`。
+- 下一任务：FG-205，调查并迁移 shadow raster/cull/indirect per-flight buffer owner。
+
 ## 初始代码审计
 
 ### 已完成基础

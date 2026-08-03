@@ -137,11 +137,11 @@
   - 验收：SSAO frame data 使用 upload arena slice；SSAOStage 不再创建/持有 frame UBO；SSAO enable/disable smoke 通过
   - 提交：`[runtime/deferred] centralize ssao frame resources`
 
-- [ ] `FG-204` 迁移 skybox frame buffer owner
+- [x] `FG-204` 迁移 skybox frame buffer owner
   - 依赖：FG-201
   - 修改：DeferredFrameResourceSet、ViewportOverlayStage
   - 验收：skybox frame data 使用 upload arena slice；Stage 不再持有 `_skyboxFrameUBO`；IBL/PBR 球体固定机位基线保持
-  - 提交：可与 FG-203 合并为一个 reviewable auxiliary-frame-resource 提交
+  - 提交：`[runtime/deferred] centralize skybox frame resources`
 
 - [ ] `FG-205` 迁移 shadow raster/cull/indirect per-flight buffer owner
   - 依赖：FG-202、FG-104
