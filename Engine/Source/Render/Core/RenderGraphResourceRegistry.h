@@ -42,6 +42,7 @@ class RenderGraphResourceRegistry
     std::unordered_map<RGBufferHandle, std::shared_ptr<OwnedBufferEntry>> _ownedBuffers;
     std::unordered_map<std::string, std::shared_ptr<OwnedBufferEntry>> _persistentOwnedBuffers;
     std::vector<std::shared_ptr<OwnedBufferEntry>> _transientBufferPool;
+    RGTransientBufferPoolDiagnostics _transientPoolDiagnostics{};
     std::unordered_map<RGBufferHandle, ImportedBufferEntry> _importedBuffers;
 
     static RenderImageDesc makeRenderImageDesc(const RGTextureDesc& desc);
@@ -71,6 +72,10 @@ class RenderGraphResourceRegistry
     [[nodiscard]] ENGINE_API const RenderImage* resolveTexture(RGTextureHandle handle) const;
     [[nodiscard]] ENGINE_API std::shared_ptr<RenderImage> resolveTextureShared(RGTextureHandle handle) const;
     [[nodiscard]] ENGINE_API IBuffer* resolveBuffer(RGBufferHandle handle) const;
+    [[nodiscard]] const RGTransientBufferPoolDiagnostics& getTransientBufferPoolDiagnostics() const
+    {
+        return _transientPoolDiagnostics;
+    }
 
     [[nodiscard]] const std::unordered_map<RGTextureHandle, std::shared_ptr<TextureEntry>>& getTextures() const { return _textures; }
     [[nodiscard]] const std::unordered_map<RGBufferHandle, std::shared_ptr<OwnedBufferEntry>>& getOwnedBuffers() const { return _ownedBuffers; }

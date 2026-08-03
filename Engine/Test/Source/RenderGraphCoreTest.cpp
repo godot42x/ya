@@ -962,6 +962,7 @@ TEST(RenderGraphCoreTest, CompileAllocatesDeterministicTransientBufferSlots)
     EXPECT_EQ(compiled.transientBufferDiagnostics.physicalBytes, 128u);
     EXPECT_EQ(compiled.transientBufferDiagnostics.aliasedBufferCount, 2u);
     EXPECT_EQ(compiled.transientBufferDiagnostics.aliasBoundaryCount, 2u);
+    EXPECT_NEAR(compiled.transientBufferDiagnostics.reuseRatio, 2.0 / 3.0, 0.0001);
     ASSERT_EQ(compiled.transientBufferAliasBoundaries.size(), 2u);
     EXPECT_EQ(compiled.transientBufferAliasBoundaries[0].previousBuffer, first);
     EXPECT_EQ(compiled.transientBufferAliasBoundaries[0].nextBuffer, second);
@@ -1506,6 +1507,8 @@ TEST(RenderGraphCoreTest, ResourceRegistryReusesTransientBufferPoolAcrossFramesA
     auto* firstOwner = registry.resolveBuffer(bufferA);
     ASSERT_NE(firstOwner, nullptr);
     EXPECT_EQ(factory.createdBuffers, 1u);
+    EXPECT_EQ(registry.getTransientBufferPoolDiagnostics().lastHitCount, 0u);
+    EXPECT_EQ(registry.getTransientBufferPoolDiagnostics().lastMissCount, 1u);
 
     RenderGraph graphB;
     const auto bufferB = graphB.createBuffer(RGBufferDesc{
@@ -1522,6 +1525,8 @@ TEST(RenderGraphCoreTest, ResourceRegistryReusesTransientBufferPoolAcrossFramesA
     registry.sync(graphB, &compiledB);
     EXPECT_EQ(registry.resolveBuffer(bufferB), firstOwner);
     EXPECT_EQ(factory.createdBuffers, 1u);
+    EXPECT_EQ(registry.getTransientBufferPoolDiagnostics().lastHitCount, 1u);
+    EXPECT_EQ(registry.getTransientBufferPoolDiagnostics().lastMissCount, 0u);
 
     RenderGraph graphC;
     const auto bufferC = graphC.createBuffer(RGBufferDesc{
@@ -1540,6 +1545,8 @@ TEST(RenderGraphCoreTest, ResourceRegistryReusesTransientBufferPoolAcrossFramesA
     ASSERT_NE(grownOwner, nullptr);
     EXPECT_NE(grownOwner, firstOwner);
     EXPECT_EQ(factory.createdBuffers, 2u);
+    EXPECT_EQ(registry.getTransientBufferPoolDiagnostics().lastHitCount, 0u);
+    EXPECT_EQ(registry.getTransientBufferPoolDiagnostics().lastMissCount, 1u);
 
     RenderGraph graphD;
     const auto bufferD = graphD.createBuffer(RGBufferDesc{
@@ -1556,6 +1563,39 @@ TEST(RenderGraphCoreTest, ResourceRegistryReusesTransientBufferPoolAcrossFramesA
     registry.sync(graphD, &compiledD);
     EXPECT_NE(registry.resolveBuffer(bufferD), nullptr);
     EXPECT_EQ(factory.createdBuffers, 3u);
+    EXPECT_EQ(registry.getTransientBufferPoolDiagnostics().totalHitCount, 1u);
+    EXPECT_EQ(registry.getTransientBufferPoolDiagnostics().totalMissCount, 3u);
+}
+
+TEST(RenderGraphCoreTest, ResourceRegistryLegacySyncKeepsLogicalTransientBuffersSeparate)
+{
+    RenderGraph graph;
+    const auto first = graph.createBuffer(RGBufferDesc{
+        .label = "legacy.first",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 64,
+    });
+    const auto second = graph.createBuffer(RGBufferDesc{
+        .label = "legacy.second",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 64,
+    });
+    graph.addPass("write-first", [&](RGPassBuilder& pass) {
+        pass.storageWrite(first);
+    });
+    graph.addPass("write-second", [&](RGPassBuilder& pass) {
+        pass.storageWrite(second);
+    });
+
+    TestResourceFactory factory;
+    RenderGraphResourceRegistry registry(factory);
+    registry.sync(graph);
+
+    ASSERT_NE(registry.resolveBuffer(first), nullptr);
+    ASSERT_NE(registry.resolveBuffer(second), nullptr);
+    EXPECT_NE(registry.resolveBuffer(first), registry.resolveBuffer(second));
+    EXPECT_EQ(factory.createdBuffers, 2u);
+    EXPECT_EQ(registry.getTransientBufferPoolDiagnostics().poolEntryCount, 0u);
 }
 
 TEST(RenderGraphCoreTest, ExecutorForcesBarrierAtTransientAliasBoundary)

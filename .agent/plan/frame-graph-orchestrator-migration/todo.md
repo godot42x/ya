@@ -99,7 +99,7 @@
   - 验收：compute write -> aliased transfer write/read、storage -> indirect 等 alias sequence 产生正确 barrier；无重叠 logical resource 同时 resolve
   - 提交：`[render/graph] synchronize transient buffer aliases`
 
-- [ ] `FG-110` 增加 buffer reuse diagnostics 和完成门禁
+- [x] `FG-110` 增加 buffer reuse diagnostics 和完成门禁
   - 依赖：FG-109
   - 修改：graph debug dump/diagnostics、core tests
   - 实现：输出 logical count/bytes、physical slots/bytes、assignment、pool hit/miss、reuse ratio
