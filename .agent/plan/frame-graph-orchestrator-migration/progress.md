@@ -4,8 +4,8 @@
 
 - 计划建立日期：2026-07-18
 - 当前阶段：P3 Typed resources 与 pass parameters
-- 当前执行任务：FG-302
-- 下一可执行任务：FG-302
+- 当前执行任务：FG-303
+- 下一可执行任务：FG-303
 
 ### 2026-08-03：FG-301 开始
 
@@ -29,6 +29,26 @@
 - 未做：不改变 `setSSAOTexture`/export 回灌契约；`frame import result` 作为 FG-302~FG-306 typed
   pass params 的前置类型，本任务只收口 handle 组织。
 - 提交：`[runtime/deferred] add typed frame graph resources`（本提交）
+
+### 2026-08-03：FG-302 完成
+
+- 实现：新增 `DeferredGBufferPassParams`（`DeferredFrameGraphResources.h`），同一对象驱动 GBuffer
+  graph pass 的 setup（uniformRead/storageRead/declareRaster）与 execute（resolve + binding）：
+  - `GBufferStage` 删除 `_frameInputs`/`setFrameInputs`，`execute(ctx, FrameInputs)` 显式接收
+    current-flight binding，draw 方法只消费传入的 `FrameInputs`；
+  - `DeferredRenderPipeline::executeDeferredMainGraph()` 从 `frameBinding` + `graphResources` 构造
+    `gbufferParams`，build/execute 两个 lambda 只捕获它；
+  - GBuffer pass execute 对 declared 的 frame/light/skinning handle 调用 `rgCtx.resolveBuffer`
+    （FG-103 resolve validation + imported retain）；
+  - `updateStageFrameInputs()` 不再给 GBufferStage 预置 frame inputs（LightStage/OverlayStage 保留）。
+- 新增单测 `DeferredGBufferPassParamsTest.DefaultsAreEmptyAndHandlesRemainFrameLocal`。
+- 测试：`python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*:DeferredRenderPipelineTest.*:DeferredFrameResourceSetTest.*:SSAOStageTest.*'`
+  通过（97 tests）；`xmake b ya-engine`/`xmake b ya-editor` 通过；
+  `python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject -- --exit-after-frame=300 --log-level=warn --log-detail-level=error`
+  exit 0，日志无 Validation Error/VUID/VK_ERROR。
+- 未做：LightStage/SSAOStage/OverlayStage 仍用 stage 成员预置 frame inputs（FG-303/304）；
+  descriptor binding 尚未走 `RGPassBindingContext`（P5/FG-501）。
+- 提交：`[runtime/deferred] parameterize gbuffer graph pass`（本提交）
 
 ### 2026-08-03：FG-111 开始
 

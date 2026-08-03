@@ -89,9 +89,12 @@ struct GBufferStage : public IRenderStage
     {
         DescriptorSetHandle frameAndLightDescriptorSet{};
         DescriptorSetHandle skinningDescriptorSet{};
-    };
 
-    FrameInputs _frameInputs{};
+        [[nodiscard]] bool isValid() const
+        {
+            return frameAndLightDescriptorSet && skinningDescriptorSet;
+        }
+    };
 
     GBufferStage() : IRenderStage("GBuffer") {}
 
@@ -101,9 +104,11 @@ struct GBufferStage : public IRenderStage
     void init(IRender* render) override { init(render, nullptr, nullptr); }
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
+    /// Graph pass entry: explicit current-flight binding. Does not read stage members.
+    void execute(const RenderStageContext& ctx, const FrameInputs& inputs);
+    /// IRenderStage conformance; graph passes must use the parameterized overload.
     void execute(const RenderStageContext& ctx) override;
 
-    void setFrameInputs(FrameInputs frameInputs) { _frameInputs = frameInputs; }
     void                                       refreshPipelineFormats(const DeferredAttachmentFormats& formats);
     [[nodiscard]] IGraphicsPipeline*           getPBRPipeline() const { return _pbr.pipeline.get(); }
     [[nodiscard]] IGraphicsPipeline*           getPBRSkinnedPipeline() const { return _pbrSkinned.pipeline.get(); }
@@ -123,10 +128,10 @@ struct GBufferStage : public IRenderStage
     void preparePhong(const RenderFrameData& frameData);
     void prepareUnlit(const RenderFrameData& frameData);
 
-    void drawPBR(const RenderStageContext& ctx);
-    void drawPhong(const RenderStageContext& ctx);
-    void drawUnlit(const RenderStageContext& ctx);
-    void drawFallback(const RenderStageContext& ctx);
+    void drawPBR(const RenderStageContext& ctx, const FrameInputs& inputs);
+    void drawPhong(const RenderStageContext& ctx, const FrameInputs& inputs);
+    void drawUnlit(const RenderStageContext& ctx, const FrameInputs& inputs);
+    void drawFallback(const RenderStageContext& ctx, const FrameInputs& inputs);
 };
 
 } // namespace ya
