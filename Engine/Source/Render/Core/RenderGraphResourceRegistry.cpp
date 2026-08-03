@@ -91,7 +91,8 @@ bool isSameBufferDesc(const RGBufferDesc& lhs, const RGBufferDesc& rhs)
     return lhs.label == rhs.label &&
            lhs.usage == rhs.usage &&
            lhs.size == rhs.size &&
-           lhs.memoryUsage == rhs.memoryUsage;
+           lhs.memoryUsage == rhs.memoryUsage &&
+           lhs.alignment == rhs.alignment;
 }
 
 bool isSameImportedBufferDesc(const RGImportedBufferDesc& lhs, const RGImportedBufferDesc& rhs)

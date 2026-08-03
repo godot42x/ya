@@ -3,9 +3,9 @@
 ## 当前状态
 
 - 计划建立日期：2026-07-18
-- 当前阶段：P0 基线与计划接替
+- 当前阶段：P1 RenderGraph 核心前置
 - 当前执行任务：无
-- 下一可执行任务：FG-001
+- 下一可执行任务：FG-108
 
 ## 初始代码审计
 
@@ -233,6 +233,38 @@ physical slot 数少于 logical transient buffer 数，真实 Deferred consumer 
   - `RenderGraphCoreTest.CompileTransientBufferLifetimesFollowExplicitDependenciesAndIgnoreNonTransientBuffers`
 - 下一任务：
   - 进入 `FG-107`，基于 compiled lifetime interval 生成 transient buffer physical slot allocation plan
+
+### 2026-08-03：FG-107 完成
+
+- 状态：完成
+- 代码事实：
+  - FG-106 已经提供了按最终拓扑序排列的 transient buffer lifetime interval，但还没有把 logical buffer 映射到可供 registry 使用的 physical slot。
+  - 当前后端资源工厂没有跨后端 alignment limits 查询，且 slot materialization 属于下一步 registry 工作；本任务不能硬编码 Vulkan 对齐常量或提前创建 GPU buffer。
+- 实现：
+  - `RGBufferDesc` 增加显式 `alignment` 契约，默认值为 1；RenderGraph 创建时拒绝零对齐。
+  - compiler 对 used transient lifetime 执行确定性 first-fit coloring：只允许 lifetime 不重叠且 `memoryUsage` 相同的 logical buffer 复用 slot。
+  - slot descriptor 的 `size` 取成员最大值，`usage` 取并集，`alignment` 取成员最大值；logical handle 到 slot 的 assignment 作为 compiled graph 的显式输出。
+  - imported / persistent / unused buffer 不进入 slot assignment；保留现有 lifetime 统计。
+  - debug dump 增加 assignment、slot descriptor 和 physical slot/byte/alias 诊断；`physicalReuse=compiler-plan` 明确表示尚未 materialize GPU owner。
+  - persistent/registry buffer descriptor 比较纳入 alignment，避免契约变化静默复用旧资源。
+- 未做：
+  - 还没有让 `RenderGraphResourceRegistry` 创建或跨帧池化 physical slot buffer；这属于 `FG-108`。
+  - 还没有 alias boundary barrier/state reset；这属于 `FG-109`。
+- 测试：
+  - `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`
+  - 结果：86 tests passed
+  - 新增：
+    - `CompileAllocatesDeterministicTransientBufferSlots`
+    - `CompileDoesNotAliasOverlappingOrIncompatibleTransientBuffers`
+  - 额外烟测：`xmake b ya-editor`
+  - 结果：build ok
+- artifacts：
+  - `RGTransientBufferAssignment`
+  - `RGTransientBufferSlotPlan`
+  - `RGTransientBufferDiagnostics.physicalSlotCount/physicalBytes/aliasedBufferCount`
+- commit：待提交
+- 下一任务：
+  - 进入 `FG-108`，让 registry materialize 并跨帧池化 physical buffer slots
 
 ## 任务记录模板
 

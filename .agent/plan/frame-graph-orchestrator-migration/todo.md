@@ -77,7 +77,7 @@
   - 验收：linear、branch/merge、explicit dependency、unused buffer、optional pass 的确定性 lifetime tests
   - 提交：`[render/graph] compile transient buffer lifetimes`
 
-- [ ] `FG-107` 生成 transient buffer physical slot allocation plan
+- [x] `FG-107` 生成 transient buffer physical slot allocation plan
   - 依赖：FG-106
   - 修改：compiler allocation plan 与 tests
   - 实现：对不重叠 interval 做 deterministic slot coloring；memoryUsage 兼容、size 取最大、usage 取并集、alignment 显式

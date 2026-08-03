@@ -354,6 +354,14 @@ bool isBufferWriteAccess(ERGBufferAccess access)
     return false;
 }
 
+bool transientLifetimesOverlap(const RGTransientBufferLifetimePlan& lhs,
+                               const RGTransientBufferLifetimePlan& rhs)
+{
+    return lhs.isUsed() && rhs.isUsed() &&
+           lhs.firstPassIndex <= rhs.lastPassIndex &&
+           rhs.firstPassIndex <= lhs.lastPassIndex;
+}
+
 void appendBufferUsage(RGPass& pass, RGBufferHandle handle, ERGBufferAccess access, RGBufferRange range)
 {
     pass.buffers.push_back({
@@ -899,6 +907,7 @@ RGBufferHandle RenderGraph::createBuffer(const RGBufferDesc& desc, ERGResourceLi
 {
     YA_CORE_ASSERT(lifetime != ERGResourceLifetime::Imported, "Imported buffer must use importBuffer()");
     YA_CORE_ASSERT(desc.size > 0, "RenderGraph buffer size must be non-zero");
+    YA_CORE_ASSERT(desc.alignment > 0, "RenderGraph buffer alignment must be non-zero");
 
     RGBufferHandle handle{
         .index      = static_cast<uint32_t>(_buffers.size()),
@@ -1312,7 +1321,8 @@ RGCompiledGraph RenderGraph::compile() const
             existing != persistentBuffersByKey.end()) {
             if (existing->second->desc.usage != buffer.desc.usage ||
                 existing->second->desc.size != buffer.desc.size ||
-                existing->second->desc.memoryUsage != buffer.desc.memoryUsage) {
+                existing->second->desc.memoryUsage != buffer.desc.memoryUsage ||
+                existing->second->desc.alignment != buffer.desc.alignment) {
                 addIssue(RGCompileIssue::EKind::InvalidPersistentIdentity,
                          RGPassHandle{},
                          std::format("persistent buffer key '{}' maps to conflicting descriptors ('{}' vs '{}')",
@@ -1469,6 +1479,67 @@ RGCompiledGraph RenderGraph::compile() const
                 compiled.transientBufferDiagnostics.unusedBytes += lifetime.desc.size;
             }
         }
+
+        const auto findLifetime = [&](RGBufferHandle handle) -> const RGTransientBufferLifetimePlan* {
+            const auto lifetimeIt = std::find_if(
+                compiled.transientBufferLifetimes.begin(),
+                compiled.transientBufferLifetimes.end(),
+                [handle](const RGTransientBufferLifetimePlan& candidate) {
+                    return candidate.buffer == handle;
+                });
+            return lifetimeIt != compiled.transientBufferLifetimes.end() ? &*lifetimeIt : nullptr;
+        };
+
+        compiled.transientBufferAssignments.reserve(compiled.transientBufferDiagnostics.usedCount);
+        for (const auto& lifetime : compiled.transientBufferLifetimes) {
+            if (!lifetime.isUsed()) {
+                continue;
+            }
+
+            auto slotIt = std::find_if(
+                compiled.transientBufferSlots.begin(),
+                compiled.transientBufferSlots.end(),
+                [&](const RGTransientBufferSlotPlan& slot) {
+                    if (slot.desc.memoryUsage != lifetime.desc.memoryUsage) {
+                        return false;
+                    }
+                    return std::none_of(slot.buffers.begin(), slot.buffers.end(), [&](RGBufferHandle member) {
+                        const auto* memberLifetime = findLifetime(member);
+                        return memberLifetime != nullptr && transientLifetimesOverlap(*memberLifetime, lifetime);
+                    });
+                });
+
+            if (slotIt == compiled.transientBufferSlots.end()) {
+                const auto slotIndex = static_cast<uint32_t>(compiled.transientBufferSlots.size());
+                RGTransientBufferSlotPlan slot{
+                    .slotIndex = slotIndex,
+                    .desc      = lifetime.desc,
+                    .buffers   = {lifetime.buffer},
+                };
+                slot.desc.label = std::format("transient.slot.{}", slotIndex);
+                compiled.transientBufferSlots.push_back(std::move(slot));
+                slotIt = std::prev(compiled.transientBufferSlots.end());
+            }
+            else {
+                slotIt->desc.size      = std::max(slotIt->desc.size, lifetime.desc.size);
+                slotIt->desc.usage     = slotIt->desc.usage | lifetime.desc.usage;
+                slotIt->desc.alignment = std::max(slotIt->desc.alignment, lifetime.desc.alignment);
+                slotIt->buffers.push_back(lifetime.buffer);
+            }
+
+            compiled.transientBufferAssignments.push_back({
+                .buffer    = lifetime.buffer,
+                .slotIndex = slotIt->slotIndex,
+            });
+        }
+
+        compiled.transientBufferDiagnostics.physicalSlotCount =
+            static_cast<uint32_t>(compiled.transientBufferSlots.size());
+        for (const auto& slot : compiled.transientBufferSlots) {
+            compiled.transientBufferDiagnostics.physicalBytes += slot.desc.size;
+        }
+        compiled.transientBufferDiagnostics.aliasedBufferCount =
+            compiled.transientBufferDiagnostics.usedCount - compiled.transientBufferDiagnostics.physicalSlotCount;
     }
 
     return compiled;
@@ -1573,6 +1644,23 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
         oss << "\n";
     }
 
+    oss << "transientBufferAssignments(" << compiled.transientBufferAssignments.size() << ")\n";
+    for (const auto& assignment : compiled.transientBufferAssignments) {
+        const auto* buffer = getBuffer(assignment.buffer);
+        oss << "  " << (buffer ? buffer->desc.label : "<invalid-buffer>")
+            << " -> slot=" << assignment.slotIndex << "\n";
+    }
+
+    oss << "transientBufferSlots(" << compiled.transientBufferSlots.size() << ")\n";
+    for (const auto& slot : compiled.transientBufferSlots) {
+        oss << "  slot=" << slot.slotIndex
+            << " label=" << slot.desc.label
+            << " size=" << slot.desc.size
+            << " alignment=" << slot.desc.alignment
+            << " usage=" << static_cast<uint32_t>(slot.desc.usage)
+            << " members=" << slot.buffers.size() << "\n";
+    }
+
     const auto& transientDiagnostics = compiled.transientBufferDiagnostics;
     oss << "transientBufferDiagnostics"
         << " logicalCount=" << transientDiagnostics.logicalCount
@@ -1581,7 +1669,10 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
         << " usedBytes=" << transientDiagnostics.usedBytes
         << " unusedCount=" << transientDiagnostics.unusedCount
         << " unusedBytes=" << transientDiagnostics.unusedBytes
-        << " physicalReuse=not-materialized\n";
+        << " physicalSlotCount=" << transientDiagnostics.physicalSlotCount
+        << " physicalBytes=" << transientDiagnostics.physicalBytes
+        << " aliasedBufferCount=" << transientDiagnostics.aliasedBufferCount
+        << " physicalReuse=compiler-plan\n";
 
     oss << "issues(" << compiled.issues.size() << ")\n";
     for (const auto& issue : compiled.issues) {
