@@ -239,6 +239,11 @@ struct VulkanRender : public IRender
     }
 
     const RenderCapabilities& getCapabilities() const override { return _capabilities; }
+    uint32_t getUniformBufferOffsetAlignment() const override
+    {
+        const auto alignment = _physicalDeviceProperties.limits.minUniformBufferOffsetAlignment;
+        return alignment > 0 ? static_cast<uint32_t>(alignment) : 1u;
+    }
     bool supportsGeometryShader() const override { return _capabilities.geometryShader; }
 
     void allocateCommandBuffers(uint32_t count, std::vector<std::shared_ptr<ICommandBuffer>>& outBuffers) override;

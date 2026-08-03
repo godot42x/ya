@@ -1,8 +1,6 @@
 #pragma once
 
 #include "DeferredAttachmentFormats.h"
-#include "Runtime/Rendering/Common/Shadow/Common/ShadowRuntimeState.h"
-
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Material/MaterialDescPool.h"
@@ -12,6 +10,7 @@
 #include "Render/Shadow/ShadowSettings.h"
 #include "Render/Stage/IRenderStage.h"
 
+#include "DeferredFrameResourceSet.h"
 #include "DeferredRender.GBufferPass_PBR.slang.h"
 #include "DeferredRender.GBufferPass_Phong.slang.h"
 #include "DeferredRender.GBufferPass_Unlit.slang.h"
@@ -23,16 +22,15 @@ namespace ya
 
 /// GBuffer stage for the Deferred pipeline.
 ///
-/// Owns per-flight frame/light UBOs and descriptor sets (set 0),
+/// Consumes the current frame/light binding from DeferredFrameResourceSet,
 /// plus three shading-model pipelines (PBR, Phong, Unlit) with their
 /// MaterialDescPools.
 ///
-/// LightStage reads the same frame/light DS via getFrameAndLightDS().
+/// LightStage consumes the same frame/light DS from the pipeline resource set.
 struct GBufferStage : public IRenderStage
 {
     // ── Slang-generated type aliases ─────────────────────────────
     using PBRPushConstant = slang_types::DeferredRender::GBufferPass_PBR::PushConstants;
-    using PBRFrameData    = slang_types::DeferredRender::GBufferPass_PBR::FrameData;
     using PBRParamUBO     = slang_types::DeferredRender::GBufferPass_PBR::PBRParamsData;
 
     using PhongPushConstant = slang_types::DeferredRender::GBufferPass_Phong::PushConstants;
@@ -49,18 +47,10 @@ struct GBufferStage : public IRenderStage
     static constexpr EFormat::T SHADING_MODEL_FORMAT = EFormat::R8_UNORM;
     static constexpr EFormat::T DEPTH_FORMAT         = EFormat::D32_SFLOAT;
 
-    // ── Shared frame + light resources (per-flight) ──────────────
+    // ── Shared frame + light binding (owned by pipeline resource set) ──
     IRender*                     _render = nullptr;
     stdptr<IDescriptorSetLayout> _frameAndLightDSL;
-    stdptr<IDescriptorPool>      _frameAndLightDSP;
-
-    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _frameAndLightDS{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _frameUBO{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _lightUBO{};
-
-    PBRFrameData        _frameData{};
-    ShadowRuntimeState  _shadowState{};
-    uint32_t            _lastShadowedPointLights = 0;
+    DescriptorSetHandle           _frameAndLightDescriptorSet{};
 
     // ── Per-shading-model pipeline + material pool ───────────────
     struct ShadingPipeline
@@ -97,28 +87,24 @@ struct GBufferStage : public IRenderStage
     };
 
     // ── IRenderStage interface ───────────────────────────────────
+    struct FrameInputs
+    {
+        DescriptorSetHandle frameAndLightDescriptorSet{};
+    };
+
+    FrameInputs _frameInputs{};
+
     GBufferStage() : IRenderStage("GBuffer") {}
 
-    void init(IRender* render) override;
+    void init(IRender* render, stdptr<IDescriptorSetLayout> frameAndLightDSL);
+    void init(IRender* render) override { init(render, nullptr); }
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
     void execute(const RenderStageContext& ctx) override;
 
-    // ── Accessors for LightStage ─────────────────────────────────
-    [[nodiscard]] DescriptorSetHandle getFrameAndLightDS(uint32_t flightIndex) const
-    {
-        return _frameAndLightDS[flightIndex];
-    }
-    [[nodiscard]] stdptr<IDescriptorSetLayout> getFrameAndLightDSL() const { return _frameAndLightDSL; }
-    [[nodiscard]] const stdptr<IBuffer>&       getFrameBufferOwner(uint32_t flightIndex) const { return _frameUBO[flightIndex]; }
-    [[nodiscard]] const stdptr<IBuffer>&       getLightBufferOwner(uint32_t flightIndex) const { return _lightUBO[flightIndex]; }
+    void setFrameInputs(FrameInputs frameInputs) { _frameInputs = frameInputs; }
     [[nodiscard]] const stdptr<IBuffer>& getSkinningBufferOwner(uint32_t flightIndex) const { return _skinningSSBO[flightIndex]; }
-    [[nodiscard]] IBuffer* getFrameBuffer(uint32_t flightIndex) const { return _frameUBO[flightIndex].get(); }
-    [[nodiscard]] IBuffer* getLightBuffer(uint32_t flightIndex) const { return _lightUBO[flightIndex].get(); }
     [[nodiscard]] IBuffer* getSkinningBuffer(uint32_t flightIndex) const { return _skinningSSBO[flightIndex].get(); }
-    void                                       applyShadowState(const ShadowRuntimeState& shadowState) { _shadowState = shadowState; }
-    [[nodiscard]] uint32_t                     getMaxShadowedPointLights() const { return _shadowState.maxShadowedPointLights; }
-    [[nodiscard]] uint32_t                     getLastShadowedPointLights() const { return _lastShadowedPointLights; }
     void                                       refreshPipelineFormats(const DeferredAttachmentFormats& formats);
     [[nodiscard]] IGraphicsPipeline*           getPBRPipeline() const { return _pbr.pipeline.get(); }
     [[nodiscard]] IGraphicsPipeline*           getPBRSkinnedPipeline() const { return _pbrSkinned.pipeline.get(); }
@@ -128,7 +114,7 @@ struct GBufferStage : public IRenderStage
     [[nodiscard]] IGraphicsPipeline*           getUnlitSkinnedPipeline() const { return _unlitSkinned.pipeline.get(); }
 
   private:
-    void initSharedResources();
+    void initSharedResources(stdptr<IDescriptorSetLayout> frameAndLightDSL);
     void initPBR();
     void initPhong();
     void initUnlit();
@@ -139,7 +125,6 @@ struct GBufferStage : public IRenderStage
     void preparePBR(const RenderFrameData& frameData);
     void preparePhong(const RenderFrameData& frameData);
     void prepareUnlit(const RenderFrameData& frameData);
-    void updateFrameUBOs(const RenderStageContext& ctx);
 
     void drawPBR(const RenderStageContext& ctx);
     void drawPhong(const RenderStageContext& ctx);

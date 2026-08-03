@@ -116,7 +116,7 @@
 
 ## P2 Deferred FrameResourceSet
 
-- [ ] `FG-201` 新建 DeferredFrameResourceSet 并迁移 frame/light buffer owner
+- [x] `FG-201` 新建 DeferredFrameResourceSet 并迁移 frame/light buffer owner
   - 依赖：FG-110、FG-111
   - 修改：新增 `DeferredFrameResources.*`，调整 `DeferredRenderPipeline`、`GBufferStage`
   - 实现：frame/light 使用 current-flight upload arena slices；pipeline-level owner upload/import；GBufferStage 只接收当前 flight binding

@@ -2,6 +2,7 @@
 
 #include "Core/Math/Geometry.h"
 #include "DeferredGBufferResources.h"
+#include "DeferredFrameResourceSet.h"
 #include "DeferredPipelineDebugViews.h"
 #include "DeferredViewportResources.h"
 #include "GBufferStage.h"
@@ -121,6 +122,7 @@ struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
 
     // ── Render stages ─────────────────────────────────────────────────
     stdptr<ShadowStage>          _shadowStage;
+    stdptr<DeferredFrameResourceSet> _frameResources;
     stdptr<GBufferStage>         _gBufferStage;
     stdptr<SSAOStage>            _ssaoStage;
     stdptr<LightStage>           _lightStage;

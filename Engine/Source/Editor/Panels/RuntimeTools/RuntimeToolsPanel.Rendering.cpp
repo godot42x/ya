@@ -563,8 +563,8 @@ void renderRenderingInternalsContent(App& app)
 
         if (pipeline._gBufferStage && ImGui::TreeNode("GBuffer")) {
             if (ImGui::TreeNode("Stats")) {
-                ImGui::Text("Point shadow budget: %u", pipeline._gBufferStage->getMaxShadowedPointLights());
-                ImGui::Text("Shadowed point lights: %u", pipeline._gBufferStage->getLastShadowedPointLights());
+                ImGui::Text("Point shadow budget: %u", pipeline._frameResources ? pipeline._frameResources->getMaxShadowedPointLights() : 0u);
+                ImGui::Text("Shadowed point lights: %u", pipeline._frameResources ? pipeline._frameResources->getLastShadowedPointLights() : 0u);
                 ImGui::TreePop();
             }
             if (ImGui::TreeNode("Pipelines")) {

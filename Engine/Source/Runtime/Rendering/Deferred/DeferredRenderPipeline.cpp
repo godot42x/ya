@@ -334,8 +334,8 @@ void DeferredRenderPipeline::syncShadowSettings()
         _lightStage->applyShadowState(shadowState);
     }
 
-    if (_gBufferStage) {
-        _gBufferStage->applyShadowState(shadowState);
+    if (_frameResources) {
+        _frameResources->applyShadowState(shadowState);
     }
 }
 
@@ -714,8 +714,11 @@ void DeferredRenderPipeline::initStages()
         }
     }
 
+    _frameResources = ya::makeShared<DeferredFrameResourceSet>();
+    _frameResources->init(_render);
+
     _gBufferStage = ya::makeShared<GBufferStage>();
-    _gBufferStage->init(_render);
+    _gBufferStage->init(_render, _frameResources->getFrameAndLightDSL());
 
     _ssaoStage = ya::makeShared<SSAOStage>();
     _ssaoStage->setup(_currentGBufferResources);
@@ -724,7 +727,7 @@ void DeferredRenderPipeline::initStages()
 
     _lightStage = ya::makeShared<LightStage>();
     _lightStage->setup(LightStage::SharedInputs{
-        .frameAndLightDSL = _gBufferStage->getFrameAndLightDSL(),
+        .frameAndLightDSL = _frameResources->getFrameAndLightDSL(),
     }, _currentGBufferResources);
     _lightStage->setEnvironmentLightingInput(LightStage::EnvironmentLightingInput{
         .environmentLightingDSL = _environmentLightingDSL,
@@ -775,6 +778,10 @@ void DeferredRenderPipeline::shutdown()
     if (_gBufferStage) {
         _gBufferStage->destroy();
         _gBufferStage.reset();
+    }
+    if (_frameResources) {
+        _frameResources->destroy();
+        _frameResources.reset();
     }
 
     destroyShadowResources();
@@ -889,9 +896,18 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
 
     if (_lightStage) {
         _lightStage->setFrameInputs(LightStage::FrameInputs{
-            .frameAndLightDescriptorSet = _gBufferStage ? _gBufferStage->getFrameAndLightDS(frame.flightIndex) : DescriptorSetHandle{},
+            .frameAndLightDescriptorSet = _frameResources
+                ? _frameResources->getBinding(frame.flightIndex).frameAndLightDescriptorSet
+                : DescriptorSetHandle{},
             .environmentLightingDescriptorSet = _getSceneEnvironmentLightingDescriptorSet
                 ? _getSceneEnvironmentLightingDescriptorSet(activeScene)
+                : DescriptorSetHandle{},
+        });
+    }
+    if (_gBufferStage) {
+        _gBufferStage->setFrameInputs(GBufferStage::FrameInputs{
+            .frameAndLightDescriptorSet = _frameResources
+                ? _frameResources->getBinding(frame.flightIndex).frameAndLightDescriptorSet
                 : DescriptorSetHandle{},
         });
     }
@@ -1049,7 +1065,7 @@ void DeferredRenderPipeline::refreshGBufferStageState()
 
     if (_lightStage) {
         _lightStage->setup(LightStage::SharedInputs{
-            .frameAndLightDSL = _gBufferStage ? _gBufferStage->getFrameAndLightDSL() : nullptr,
+            .frameAndLightDSL = _frameResources ? _frameResources->getFrameAndLightDSL() : nullptr,
         }, _currentGBufferResources);
     }
 }
@@ -1120,6 +1136,15 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
 {
     _currentSSAOOutput.reset();
     _currentPostprocessOutput.reset();
+    YA_CORE_ASSERT(_frameResources != nullptr, "Deferred pipeline frame resources are not initialized");
+    if (!_frameResources->prepare(stageCtx)) {
+        return;
+    }
+
+    const auto& frameBinding = _frameResources->getBinding(frame.flightIndex);
+    _gBufferStage->setFrameInputs(GBufferStage::FrameInputs{
+        .frameAndLightDescriptorSet = frameBinding.frameAndLightDescriptorSet,
+    });
     _gBufferStage->prepare(stageCtx);
 
     RenderGraph graph;
@@ -1127,7 +1152,11 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     if (_shadowStage && currentShadowSettings().isEnabled()) {
         shadowPass = _shadowStage->appendGraphPasses(graph, stageCtx);
     }
-    auto importHostWrittenBuffer = [&](const stdptr<IBuffer>& buffer, std::string label, EBufferUsage usage) {
+    auto importHostWrittenBuffer = [&](const stdptr<IBuffer>& buffer,
+                                       std::string label,
+                                       EBufferUsage usage,
+                                       uint64_t rangeOffset = 0,
+                                       uint64_t rangeSize = 0) {
         YA_CORE_ASSERT(buffer != nullptr, "Deferred graph requires imported buffer '{}'", label);
         return graph.importBuffer(RGImportedBufferDesc{
             .desc = RGBufferDesc{
@@ -1139,20 +1168,24 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             .initialState = BufferResourceState{
                 .stages = EPipelineStage::Host,
                 .access = EResourceAccess::HostWrite,
-                .offset = 0,
-                .size   = buffer->getSize(),
+                .offset = rangeOffset,
+                .size   = rangeSize == 0 ? buffer->getSize() : rangeSize,
             },
             .retainedResources = {buffer},
         });
     };
     const auto frameBuffer = importHostWrittenBuffer(
-        _gBufferStage->getFrameBufferOwner(frame.flightIndex),
+        frameBinding.frame.buffer,
         "Deferred.FrameUBO",
-        EBufferUsage::UniformBuffer);
+        EBufferUsage::UniformBuffer,
+        frameBinding.frame.offset,
+        frameBinding.frame.size);
     const auto lightBuffer = importHostWrittenBuffer(
-        _gBufferStage->getLightBufferOwner(frame.flightIndex),
+        frameBinding.light.buffer,
         "Deferred.LightUBO",
-        EBufferUsage::UniformBuffer);
+        EBufferUsage::UniformBuffer,
+        frameBinding.light.offset,
+        frameBinding.light.size);
     const auto skinningBuffer = importHostWrittenBuffer(
         _gBufferStage->getSkinningBufferOwner(frame.flightIndex),
         "Deferred.SkinningSSBO",
@@ -1176,8 +1209,14 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     [[maybe_unused]] const auto gbufferPass = graph.addPass(
         "Deferred GBuffer",
         [&](RGPassBuilder& passBuilder) {
-            passBuilder.uniformRead(frameBuffer);
-            passBuilder.uniformRead(lightBuffer);
+            passBuilder.uniformRead(frameBuffer, RGBufferRange{
+                .offset = frameBinding.frame.offset,
+                .size   = frameBinding.frame.size,
+            });
+            passBuilder.uniformRead(lightBuffer, RGBufferRange{
+                .offset = frameBinding.light.offset,
+                .size   = frameBinding.light.size,
+            });
             passBuilder.storageRead(skinningBuffer);
             passBuilder.declareRaster({
                 .renderArea = Rect2D{.pos = {0, 0}, .extent = gbufferExtent.toVec2()},
@@ -1284,8 +1323,14 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             if (shadowPass.has_value()) {
                 passBuilder.dependsOn(*shadowPass);
             }
-            passBuilder.uniformRead(frameBuffer);
-            passBuilder.uniformRead(lightBuffer);
+            passBuilder.uniformRead(frameBuffer, RGBufferRange{
+                .offset = frameBinding.frame.offset,
+                .size   = frameBinding.frame.size,
+            });
+            passBuilder.uniformRead(lightBuffer, RGBufferRange{
+                .offset = frameBinding.light.offset,
+                .size   = frameBinding.light.size,
+            });
             for (const auto handle : gbufferColors) {
                 passBuilder.read(handle);
             }

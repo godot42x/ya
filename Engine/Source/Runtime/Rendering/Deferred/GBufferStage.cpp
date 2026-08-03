@@ -10,8 +10,6 @@
 #include "Core/Math/Geometry.h"
 
 
-#include "DeferredRender.LightPass.slang.h"
-
 #include <algorithm>
 #include <vector>
 
@@ -39,10 +37,10 @@ void refreshShadingPipelineFormats(IGraphicsPipeline* pipeline, const DeferredAt
 // Init
 // ═══════════════════════════════════════════════════════════════════════
 
-void GBufferStage::init(IRender* render)
+void GBufferStage::init(IRender* render, stdptr<IDescriptorSetLayout> frameAndLightDSL)
 {
     _render = render;
-    initSharedResources();
+    initSharedResources(std::move(frameAndLightDSL));
     initPBR();
     initPhong();
     initUnlit();
@@ -59,30 +57,10 @@ void GBufferStage::refreshPipelineFormats(const DeferredAttachmentFormats& forma
     refreshShadingPipelineFormats(_unlitSkinned.pipeline.get(), formats);
 }
 
-void GBufferStage::initSharedResources()
+void GBufferStage::initSharedResources(stdptr<IDescriptorSetLayout> frameAndLightDSL)
 {
-    // Frame + Light DSL (set 0, shared by all GBuffer pipelines and LightStage)
-    _frameAndLightDSL = IDescriptorSetLayout::create(
-        _render,
-        {DescriptorSetLayoutDesc{
-            .label    = "Deferred_Frame_And_Light_DSL",
-            .set      = 0,
-            .bindings = {
-                {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-                {.binding = 1, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::All},
-            },
-        }});
-
-    // Descriptor pool for per-flight frame+light DS
-    _frameAndLightDSP = IDescriptorPool::create(
-        _render,
-        DescriptorPoolCreateInfo{
-            .label     = "GBufferStage_FrameLight_DSP",
-            .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
-            .poolSizes = {
-                {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT * 2},
-            },
-        });
+    _frameAndLightDSL = std::move(frameAndLightDSL);
+    YA_CORE_ASSERT(_frameAndLightDSL != nullptr, "GBufferStage requires frame/light DSL");
 
     _skinningDSL = IDescriptorSetLayout::create(
         _render,
@@ -92,31 +70,6 @@ void GBufferStage::initSharedResources()
             .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::StorageBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
         });
 
-    // Create per-flight UBOs and descriptor sets
-    using LightPassLightData = slang_types::DeferredRender::LightPass::LightData;
-
-    for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _frameUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-                                                    .label       = std::format("GBuffer_Frame_UBO_{}", i),
-                                                    .usage       = EBufferUsage::UniformBuffer,
-                                                    .size        = sizeof(PBRFrameData),
-                                                    .memoryUsage = EMemoryUsage::CpuToGpu,
-                                                });
-
-        _lightUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-                                                    .label       = std::format("GBuffer_Light_UBO_{}", i),
-                                                    .usage       = EBufferUsage::UniformBuffer,
-                                                    .size        = sizeof(LightPassLightData),
-                                                    .memoryUsage = EMemoryUsage::CpuToGpu,
-                                                });
-
-        _frameAndLightDS[i] = _frameAndLightDSP->allocateDescriptorSets(_frameAndLightDSL);
-
-        _render->getDescriptorHelper()->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneUniformBuffer(_frameAndLightDS[i], 0, _frameUBO[i].get()),
-            IDescriptorSetHelper::writeOneUniformBuffer(_frameAndLightDS[i], 1, _lightUBO[i].get()),
-        });
-    }
 }
 
 void GBufferStage::initPBR()
@@ -457,14 +410,12 @@ void GBufferStage::destroy()
     _unlit        = {};
     _unlitSkinned = {};
 
-    for (auto& ubo : _frameUBO) ubo.reset();
-    for (auto& ubo : _lightUBO) ubo.reset();
     for (auto& ssbo : _skinningSSBO) ssbo.reset();
     _skinningDSP.reset();
     _skinningDSL.reset();
     _skinningCapacity = 0;
-    _frameAndLightDSP.reset();
     _frameAndLightDSL.reset();
+    _frameInputs = {};
     _render = nullptr;
 }
 
@@ -495,62 +446,10 @@ void GBufferStage::prepare(const RenderStageContext& ctx)
     }
 
     if (!ctx.frameData) return;
-    updateFrameUBOs(ctx);
     updateSkinningBuffer(ctx);
     preparePBR(*ctx.frameData);
     preparePhong(*ctx.frameData);
     prepareUnlit(*ctx.frameData);
-}
-
-void GBufferStage::updateFrameUBOs(const RenderStageContext& ctx)
-{
-    YA_PROFILE_FUNCTION();
-    using LightPassLightData = slang_types::DeferredRender::LightPass::LightData;
-
-    const auto& fd = *ctx.frameData;
-    uint32_t    fi = ctx.flightIndex;
-
-    // Frame UBO
-    _frameData.viewPos    = fd.cameraPos;
-    _frameData.projMatrix = fd.projection;
-    _frameData.viewMatrix = fd.view;
-    _frameUBO[fi]->writeData(&_frameData, sizeof(_frameData), 0);
-    _frameUBO[fi]->flush();
-
-    // Light UBO
-    LightPassLightData lightData{};
-    lightData.hasDirLight              = false;
-    lightData.dirLight.bias            = _shadowState.bias;
-    lightData.dirLight.normalBias      = _shadowState.normalBias;
-    lightData.dirLight.shadowFilter    = static_cast<uint32_t>(_shadowState.filter);
-    lightData.dirLight.shadowTexelSize = _shadowState.shadowMapResolution > 0 ? 1.0f / static_cast<float>(_shadowState.shadowMapResolution) : 0.0f;
-    if (fd.bHasDirectionalLight) {
-        lightData.dirLight.dir          = fd.directionalLight.direction;
-        lightData.dirLight.color        = fd.directionalLight.color;
-        lightData.dirLight.intensity    = fd.directionalLight.intensity;
-        lightData.dirLight.cascadeCount = fd.directionalLight.cascadeCount;
-        for (uint32_t cascadeIndex = 0; cascadeIndex < MAX_DIRECTIONAL_CASCADES; ++cascadeIndex) {
-            lightData.dirLight.shadowMatrices[cascadeIndex] = fd.directionalLight.cascadeViewProjections[cascadeIndex];
-            lightData.dirLight.cascadeSplits[cascadeIndex]  = fd.directionalLight.cascadeSplits[cascadeIndex];
-        }
-        lightData.hasDirLight           = true;
-    }
-    int            pli                      = 0;
-    const uint32_t shadowedPointLightBudget = std::min(_shadowState.maxShadowedPointLights, fd.numPointLights);
-    for (uint32_t i = 0; i < fd.numPointLights && pli < static_cast<int>(MAX_POINT_LIGHTS); ++i) {
-        const auto& src            = fd.pointLights[i];
-        lightData.pointLights[pli] = {
-            .pos       = src.position,
-            .color     = src.color,
-            .intensity = src.intensity,
-            .farPlane  = static_cast<uint32_t>(pli) < shadowedPointLightBudget ? src.farPlane : 0.0f,
-        };
-        ++pli;
-    }
-    _lastShadowedPointLights = std::min(shadowedPointLightBudget, static_cast<uint32_t>(pli));
-    lightData.numPointLight  = pli;
-    _lightUBO[fi]->writeData(&lightData, sizeof(lightData), 0);
-    _lightUBO[fi]->flush();
 }
 
 void GBufferStage::preparePBR(const RenderFrameData& frameData)
@@ -693,7 +592,7 @@ void GBufferStage::prepareUnlit(const RenderFrameData& frameData)
 void GBufferStage::execute(const RenderStageContext& ctx)
 {
     YA_PROFILE_FUNCTION();
-    if (!ctx.frameData || !ctx.cmdBuf) return;
+    if (!ctx.frameData || !ctx.cmdBuf || !_frameInputs.frameAndLightDescriptorSet) return;
 
     ctx.cmdBuf->debugBeginLabel("GBufferStage");
     drawPBR(ctx);
@@ -707,7 +606,7 @@ void GBufferStage::drawPBR(const RenderStageContext& ctx)
 {
     YA_PROFILE_FUNCTION();
     auto* cmdBuf = ctx.cmdBuf;
-    auto  ds0    = _frameAndLightDS[ctx.flightIndex];
+    auto  ds0    = _frameInputs.frameAndLightDescriptorSet;
 
     auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
     {
@@ -744,7 +643,7 @@ void GBufferStage::drawPhong(const RenderStageContext& ctx)
 {
     YA_PROFILE_FUNCTION();
     auto* cmdBuf     = ctx.cmdBuf;
-    auto  ds0        = _frameAndLightDS[ctx.flightIndex];
+    auto  ds0        = _frameInputs.frameAndLightDescriptorSet;
     auto  drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
     {
         if (items.empty()) return;
@@ -781,7 +680,7 @@ void GBufferStage::drawUnlit(const RenderStageContext& ctx)
 {
     YA_PROFILE_FUNCTION();
     auto* cmdBuf = ctx.cmdBuf;
-    auto  ds0    = _frameAndLightDS[ctx.flightIndex];
+    auto  ds0    = _frameInputs.frameAndLightDescriptorSet;
 
     auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
     {
@@ -823,7 +722,7 @@ void GBufferStage::drawFallback(const RenderStageContext& ctx)
     if (!_fallbackMaterial || _fallbackMaterial->getIndex() < 0) return;
 
     auto*    cmdBuf = ctx.cmdBuf;
-    auto     ds0    = _frameAndLightDS[ctx.flightIndex];
+    auto     ds0    = _frameInputs.frameAndLightDescriptorSet;
     uint32_t fbIdx  = static_cast<uint32_t>(_fallbackMaterial->getIndex());
 
     auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)

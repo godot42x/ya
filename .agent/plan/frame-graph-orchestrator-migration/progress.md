@@ -24,6 +24,39 @@
 - `make test` 当前仅返回 “Nothing to be done”；`make b t=HelloMaterial` 无对应 make rule，已使用项目规定的 `python3 Script/ya.py` 等价入口验证。
 - 下一可执行任务：FG-201。
 
+### 2026-08-03：FG-201 前置审计
+
+- 当前 Deferred 的 frame/light UBO 由 `GBufferStage` 创建、写入并持有，`LightStage` 只借用 descriptor set；主图再从 `GBufferStage` getter 导入整块 buffer。
+- 迁移到同一 upload backing 的两个 descriptor slice 需要真实的 uniform-buffer offset alignment。仅使用 C++ `alignof` 会在 Vulkan 上违反 `minUniformBufferOffsetAlignment`，因此 `IRender` 需要提供后端无关的 alignment 查询，Deferred frame-resource owner 才能安全分配 slice。
+- 该 RHI 查询是 FG-201 的前置代码依赖；实现范围限定为 `IRender`、Vulkan/OpenGL 后端和测试默认值，不改变 shader-facing 类型或 graph ownership。
+- 进一步审计发现执行器当前按 `IBuffer*` 只保存一个状态，无法正确执行同一 upload backing 的非重叠 frame/light ranges；FG-201 必须同时收口为物理 buffer 的 range 状态集合，否则声明的 slice range 仍可能漏掉 HostWrite barrier。
+
+### 2026-08-03：FG-201 实现进行中
+
+- 状态：开始
+- 提交边界：Deferred frame/light owner、RHI uniform alignment、共享 backing 的 graph range import/state tracking，以及对应 Deferred/Core 验证；保留用户已有的 `DescriptorVector.h` 删除，不纳入本任务。
+- 失败路径审计：`DeferredFrameResourceSet::prepare()` 的两次 slice 分配和写入必须在新 binding 完整可用后再替换旧 binding，分配失败不能清空当前 descriptor。
+
+### 2026-08-03：FG-201 完成
+
+- 状态：完成
+- 实现：
+  - 新增 `DeferredFrameResourceSet`，集中持有 Deferred frame/light descriptor layout、pool、per-flight upload arena 和 shadow light payload；`GBufferStage` 不再创建或持有 frame/light UBO、descriptor set、shadow payload。
+  - frame/light payload 使用生成的 Slang 类型写入同一 flight backing buffer，按 `IRender::getUniformBufferOffsetAlignment()` 计算真实 slice offset/range；两块数据一次连续预留，避免 arena 扩容时前一个 allocation 被旧 backing 留下。
+  - `DeferredRenderPipeline` 在 frame boundary 准备 resource set，graph 以真实 slice range import frame/light backing；GBuffer 和 Deferred Light 两个 pass 都声明精确 range，executor 按物理 buffer 的非重叠 range 保存状态。
+  - Vulkan backend 从 physical-device `minUniformBufferOffsetAlignment` 提供 alignment；RHI 默认值保持轻量 mock/OpenGL 实现兼容。
+  - frame/light backing、imported range 和 descriptor replacement 均保留 completion-safe owner；分配失败保留上一份完整 binding，不清空 descriptor。
+  - RuntimeTools panel 的 point-shadow 统计改从新的 frame resource owner 查询。
+- 测试：
+  - `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*:DeferredRenderPipelineTest.*'`
+  - 结果：94 tests passed。
+  - `xmake b ya-editor`：build ok。
+  - `python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject -- --exit-after-frame=300 --log-level=warn --log-detail-level=error`：exit code 0，退出稳定。
+  - 最新日志：`Engine/Saved/Logs/YA-2026-08-03_17-07-11.log`，无 `Validation Error`、`VUID-`、`VK_ERROR` 或错误级别日志。
+- 未做：skinning、SSAO、skybox、shadow per-flight owner 仍按后续 FG-202 至 FG-205 迁移；本任务不改变 shader-facing 结构。
+- commit：`[runtime/deferred] centralize frame and light resources`（本提交）
+- 下一任务：FG-202，迁移 Deferred skinning buffer owner。
+
 ## 初始代码审计
 
 ### 已完成基础
