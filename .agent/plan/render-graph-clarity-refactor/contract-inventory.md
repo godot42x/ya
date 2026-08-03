@@ -79,6 +79,9 @@ executeCompiled(graph, compiled, cmdBuf)
 - “persistent” 当前是 lifetime 标签，不是跨 graph 的稳定身份。
 - 本子计划不自行实现 stable key；由主计划 FG-101/102 持有。
 - 本子计划后续只能为 stable key / lifetime metadata 提供 graph compiler seam。
+- 过期声明（2026-08-03）：主计划 FG-101/FG-102 已落地 stable key 契约与
+  registry 按 stable key 管理物理资源；`RG-0601/RG-0602` 的 seam 已被消费，
+  见 `progress.md` 状态对齐。
 
 ## 4. 首个代码切片边界
 

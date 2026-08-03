@@ -1,5 +1,10 @@
 # RenderGraph 清晰化进度
 
+> 状态修订（2026-08-03）：本文件 RG-0605 之前的内容与代码一致；RG-0605 之后，
+> 主计划 `frame-graph-orchestrator-migration` 已完成 FG-101~FG-111、FG-201~FG-206，
+> 因此下方"第八批代码切片"中关于 physical slot / pool / alias 尚未实现的表述已过期，
+> 以文末"2026-08-03：状态对齐"为准。当前主计划处于 P3 / FG-301。
+
 ## 2026-08-02
 
 - 建立 RenderGraph 清晰化计划。
@@ -192,6 +197,8 @@
 - 扩展 `CompileBuildsTransientBufferLifetimeMetadata`，覆盖诊断数值和 dump 输出。
 - 这一步没有修改 `RenderGraphResourceRegistry`，也没有实现 physical slot、alias barrier、跨帧 pool 或 reuse ratio；
   这些仍由主计划 `FG-107~FG-110` 负责。
+  - 过期声明（2026-08-03）：主计划已随后完成 FG-107~FG-110，物理 slot/pool/alias 已落地为真实实现，
+    见文末"状态对齐"。
 - 验证：
   - `xmake b ya-engine`：通过
   - `xmake b ya-runtime`：通过
@@ -214,3 +221,22 @@
   不表示已经可以投递到独立 compute queue。
 - `RG-0605` 以 assessment-only 完成；后续实现依赖主计划先收口 physical buffer reuse、frame resource owner、
   submit/lifetime contract 和跨 queue completion 基础设施。
+
+## 2026-08-03：状态对齐（本子计划收敛，主计划已接管后续实现）
+
+- 主计划 `frame-graph-orchestrator-migration` 已完成（见其 `progress.md`）：
+  - `FG-101/FG-102`：persistent stable key 契约 + registry 以 stable key 管理物理资源
+  - `FG-103~FG-105`：pass-scoped resolve validation、buffer range/state、execution result/export owner
+  - `FG-106~FG-110`：transient buffer lifetime、物理 slot 分配、registry 跨帧 pool、alias boundary barrier、reuse 诊断
+  - `FG-111`：completion-safe per-flight `FrameUploadArena`
+  - `FG-201~FG-206`：`DeferredFrameResourceSet` 收口 frame/light/skinning/SSAO/skybox/shadow owner；
+    point shadow cull/indirect 输出走 graph transient slot，真实 consumer 接入 registry pool
+- 结论：
+  - 本子计划 `RG-0001~RG-0605` 已全部完成；
+  - 原计划"只提供 seam"的 transient 物理复用已由主计划落地为真实实现，第八批中
+    "未实现 physical slot / alias barrier / 跨帧 pool / reuse ratio" 的表述作废；
+  - 当前主计划处于 P3 / `FG-301`（DeferredFrameGraphResources）进行中。
+- 本子计划的残余工作仅为计划文档回填与验收记录，不再有独立代码任务。
+- 验证现状（2026-08-03）：`RenderGraphCoreTest.*` 84 tests 通过（含 slot/pool/alias/FrameUploadArena 相关）；
+  主计划最近批次 5 suites 96 tests 通过；编辑器 smoke（默认/SSAO 开关/NoCull/Indirect+GPU Cull）exit 0 且无
+  Validation Error / VUID / VK_ERROR。

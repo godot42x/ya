@@ -2,6 +2,10 @@
 
 > 本清单是 `.agent/plan/frame-graph-orchestrator-migration/` 的 graph core 子计划。
 > 若任务与 FG-101~FG-111 重叠，以主计划任务为 owner；不要双重修改同一公共契约。
+>
+> 状态（2026-08-03）：本子计划 RG-0001~RG-0605 已全部完成。主计划已落地 FG-101~FG-111、
+> FG-201~FG-206，transient 物理复用由"seam"变为真实实现；本清单后续不再有独立代码任务，
+> 进度以主计划为准。
 
 ## Gate 0：运行边界冻结
 
@@ -60,23 +64,28 @@
 - [x] RG-0601 对齐 FG-101/102 的 persistent stable key API
 - [x] RG-0602 对齐 FG-106 的 transient lifetime metadata
 - [x] RG-0603 为 FG-107~FG-109 提供 compiled-plan seam，不重复实现 slot allocator
-- [x] RG-0604 对齐 FG-110 的 reuse diagnostics，不把“handle 复用”冒充物理复用
-  - 当前阶段只输出 logical transient count/bytes、used/unused lifetime 统计，并明确标记 physical reuse 尚未 materialize
-  - physical slot count/bytes、assignment、pool hit/miss、reuse ratio 仍由主计划 FG-107~FG-110 完成
+  - 2026-08-03：主计划 FG-107~FG-109 已落地真实 slot allocator / pool / alias barrier，本 seam 已被消费
+- [x] `RG-0604` 对齐 FG-110 的 reuse diagnostics，不把"handle 复用"冒充物理复用
+  - 本子计划阶段只输出 logical transient count/bytes、used/unused lifetime 统计，并明确标记 physical reuse 尚未 materialize
+  - 2026-08-03：主计划 FG-107~FG-110 已实现 physical slot count/bytes、assignment、pool hit/miss、reuse ratio，
+    registry 跨帧 pool 与 alias boundary barrier 测试均已覆盖，物理复用已真实 materialize
 - [x] RG-0605 评估 async compute / multi-queue 是否需要扩展 state model
   - assessment：[async-queue-assessment.md](./async-queue-assessment.md)
   - 结论：当前只支持 graphics-queue graph；async/multi-queue 需要 queue ownership、cross-queue sync、timeline completion 和 submit/lifetime 前置契约
 
 ## 每阶段验证
 
-- [ ] `xmake b ya-engine`
-- [ ] `xmake b ya-runtime`
-- [ ] 受影响目标的 `xmake b`
-- [ ] `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`
-- [ ] Deferred / Forward / Presentation smoke
-- [ ] Bloom、SSAO、Shadow 开关
-- [ ] resize、pipeline switch、scene switch、shutdown
-- [ ] Vulkan validation / RenderDoc 检查 layout、barrier、lifetime
+> 状态（2026-08-03）：下述验证大多已在各批次与主计划 FG-111/FG-201~206 批次执行并留证，
+> 部分残留项转由主计划后续任务（Forward 迁移、RenderDoc 专项）负责。
+
+- [x] `xmake b ya-engine`（第五~七批）
+- [x] `xmake b ya-runtime`（第七批）
+- [x] 受影响目标的 `xmake b`（ya-editor 在主计划 FG-111/FG-201~206 批次通过）
+- [x] `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`（84/96 tests，2026-08-03 复核）
+- [x] Deferred / Presentation smoke（主计划 run-editor 冒烟 exit 0；Forward 主 surface 未 graph-backed，非本子计划职责）
+- [~] Bloom、SSAO、Shadow 开关（SSAO/Shadow 开关已冒烟；Bloom 开关未单独记录，转主计划验证）
+- [~] resize、pipeline switch、scene switch、shutdown（shutdown/scene switch/resize replacement 已覆盖；pipeline switch 的 `set_render_pipeline` automation 已在工作区，待主计划验证批次落地）
+- [~] Vulkan validation 已覆盖（冒烟日志无 Validation Error/VUID/VK_ERROR）；RenderDoc layout/barrier/lifetime 专项未记录，转主计划
 
 ## 当前建议提交分组
 
