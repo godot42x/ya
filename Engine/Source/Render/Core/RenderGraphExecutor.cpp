@@ -9,6 +9,11 @@ namespace ya
 namespace
 {
 
+bool bufferRangesOverlap(const BufferResourceState& lhs, const BufferResourceState& rhs)
+{
+    return lhs.offset < rhs.offset + rhs.size && rhs.offset < lhs.offset + lhs.size;
+}
+
 BufferResourceState normalizeBufferState(const BufferResourceState& state, const IBuffer& buffer)
 {
     auto normalized = state;
@@ -30,6 +35,37 @@ bool isTransientAliasBoundary(const RGCompiledGraph& compiled,
 }
 
 } // namespace
+
+const BufferResourceState* RenderGraphExecutor::findBufferState(
+    const std::vector<BufferResourceState>& states,
+    const BufferResourceState&              requested)
+{
+    for (const auto& state : states) {
+        if (state.offset == requested.offset && state.size == requested.size) {
+            return &state;
+        }
+    }
+
+    for (const auto& state : states) {
+        if (bufferRangesOverlap(state, requested)) {
+            return &state;
+        }
+    }
+    return nullptr;
+}
+
+void RenderGraphExecutor::setBufferState(
+    std::vector<BufferResourceState>& states,
+    const BufferResourceState&         state)
+{
+    for (auto& existing : states) {
+        if (existing.offset == state.offset && existing.size == state.size) {
+            existing = state;
+            return;
+        }
+    }
+    states.push_back(state);
+}
 
 bool RenderGraphExecutor::prepare(
     const RenderGraph& graph,
@@ -86,10 +122,13 @@ bool RenderGraphExecutor::executeCompiled(
             }
 
             const auto newState = normalizeBufferState(statePlan.requiredState, *buffer);
-            const auto oldIt = _bufferStates.find(buffer);
             BufferResourceState oldState{};
-            if (oldIt != _bufferStates.end()) {
-                oldState = oldIt->second;
+            const auto statesIt = _bufferStates.find(buffer);
+            const auto* priorState = statesIt != _bufferStates.end()
+                ? findBufferState(statesIt->second, newState)
+                : nullptr;
+            if (priorState) {
+                oldState = *priorState;
             }
             else if (const auto* resource = graph.getBuffer(statePlan.buffer);
                      resource && resource->imported.has_value()) {
@@ -122,7 +161,7 @@ bool RenderGraphExecutor::executeCompiled(
                 }
             }
 
-            _bufferStates[buffer] = newState;
+            setBufferState(_bufferStates[buffer], newState);
         }
 
         if (!pass->execute) {
@@ -145,10 +184,13 @@ void RenderGraphExecutor::finalizeImportedBufferStates(const RGCompiledGraph& co
         YA_CORE_ASSERT(buffer != nullptr, "RenderGraphExecutor failed to resolve imported buffer {}", finalize.buffer.index);
 
         const auto newState = normalizeBufferState(finalize.finalState, *buffer);
-        const auto oldIt    = _bufferStates.find(buffer);
         BufferResourceState oldState{};
-        if (oldIt != _bufferStates.end()) {
-            oldState = oldIt->second;
+        const auto statesIt = _bufferStates.find(buffer);
+        const auto* priorState = statesIt != _bufferStates.end()
+            ? findBufferState(statesIt->second, newState)
+            : nullptr;
+        if (priorState) {
+            oldState = *priorState;
         }
         else {
             oldState = normalizeBufferState(finalize.initialState, *buffer);
@@ -171,7 +213,7 @@ void RenderGraphExecutor::finalizeImportedBufferStates(const RGCompiledGraph& co
                 newState.size);
         }
 
-        _bufferStates[buffer] = newState;
+        setBufferState(_bufferStates[buffer], newState);
     }
 }
 

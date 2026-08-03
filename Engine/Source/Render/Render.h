@@ -195,6 +195,15 @@ struct IRender : public plat_base<IRender>
         return caps;
     }
 
+    /**
+     * Minimum offset alignment for dynamic uniform-buffer descriptors.
+     *
+     * Frame upload allocators use this value when several uniform slices share
+     * one backing buffer. Backends must report their native limit; the default
+     * keeps lightweight/mock render implementations valid until they opt in.
+     */
+    virtual uint32_t getUniformBufferOffsetAlignment() const { return 1; }
+
     virtual bool supportsGeometryShader() const { return getCapabilities().geometryShader; }
     virtual bool supportsMeshShader() const { return getCapabilities().meshShader; }
     virtual bool supportsComputeIndirect() const

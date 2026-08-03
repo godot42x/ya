@@ -2988,6 +2988,65 @@ TEST(RenderGraphCoreTest, ExecutorSeedsImportedBufferBarrierFromDeclaredInitialS
     EXPECT_EQ(cmdBuf.bufferBarriers[0].size, 256u);
 }
 
+TEST(RenderGraphCoreTest, ExecutorTracksInitialStatesForNonOverlappingSharedBufferRanges)
+{
+    TestResourceFactory factory;
+    TestCommandBuffer   cmdBuf;
+    RenderGraphExecutor executor(factory);
+    RenderGraph         graph;
+    TestBuffer           uploadBuffer(BufferCreateInfo{
+        .label = "shared.upload",
+        .usage = EBufferUsage::UniformBuffer,
+        .size  = 512,
+    });
+
+    const auto frameSlice = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "shared.upload.frame",
+            .usage = EBufferUsage::UniformBuffer,
+            .size  = 512,
+        },
+        .buffer = &uploadBuffer,
+        .initialState = BufferResourceState{
+            .stages = EPipelineStage::Host,
+            .access = EResourceAccess::HostWrite,
+            .offset = 0,
+            .size   = 128,
+        },
+    });
+    const auto lightSlice = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "shared.upload.light",
+            .usage = EBufferUsage::UniformBuffer,
+            .size  = 512,
+        },
+        .buffer = &uploadBuffer,
+        .initialState = BufferResourceState{
+            .stages = EPipelineStage::Host,
+            .access = EResourceAccess::HostWrite,
+            .offset = 256,
+            .size   = 128,
+        },
+    });
+
+    graph.addPass(
+        "shared-upload-reader",
+        [=](RGPassBuilder& pass) {
+            pass.uniformRead(frameSlice, RGBufferRange{.offset = 0, .size = 128});
+            pass.uniformRead(lightSlice, RGBufferRange{.offset = 256, .size = 128});
+        },
+        [](RGRenderContext&) {});
+
+    ASSERT_TRUE(executor.execute(graph, cmdBuf));
+    ASSERT_EQ(cmdBuf.bufferBarriers.size(), 2u);
+    EXPECT_EQ(cmdBuf.bufferBarriers[0].srcAccess, EResourceAccess::HostWrite);
+    EXPECT_EQ(cmdBuf.bufferBarriers[0].offset, 0u);
+    EXPECT_EQ(cmdBuf.bufferBarriers[0].size, 128u);
+    EXPECT_EQ(cmdBuf.bufferBarriers[1].srcAccess, EResourceAccess::HostWrite);
+    EXPECT_EQ(cmdBuf.bufferBarriers[1].offset, 256u);
+    EXPECT_EQ(cmdBuf.bufferBarriers[1].size, 128u);
+}
+
 TEST(RenderGraphCoreTest, ExecutorRetainsImportedBufferKeepAliveResources)
 {
     TestResourceFactory factory;

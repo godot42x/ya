@@ -6,6 +6,7 @@
 #include "Render/Core/ResourceStateTracker.h"
 
 #include <unordered_map>
+#include <vector>
 
 namespace ya
 {
@@ -13,9 +14,16 @@ namespace ya
 class ENGINE_API RenderGraphExecutor
 {
   private:
-    std::unordered_map<IBuffer*, BufferResourceState> _bufferStates;
+    std::unordered_map<IBuffer*, std::vector<BufferResourceState>> _bufferStates;
     RenderGraphResourceRegistry _registry;
     ResourceStateTracker        _resourceStateTracker;
+
+    [[nodiscard]] static const BufferResourceState* findBufferState(
+        const std::vector<BufferResourceState>& states,
+        const BufferResourceState&              requested);
+    static void setBufferState(
+        std::vector<BufferResourceState>& states,
+        const BufferResourceState&         state);
 
     void finalizeImportedBufferStates(const RGCompiledGraph& compiled, ICommandBuffer& cmdBuf);
     void finalizeImportedTextureStates(const RGCompiledGraph& compiled, ICommandBuffer& cmdBuf);
