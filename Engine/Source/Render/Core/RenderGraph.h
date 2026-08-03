@@ -305,6 +305,14 @@ struct RGTransientBufferSlotPlan
     std::vector<RGBufferHandle> buffers;
 };
 
+struct RGTransientBufferAliasBoundaryPlan
+{
+    uint32_t       slotIndex = ~0u;
+    RGBufferHandle previousBuffer{};
+    RGBufferHandle nextBuffer{};
+    RGPassHandle   nextPass{};
+};
+
 struct RGTransientBufferDiagnostics
 {
     uint32_t logicalCount       = 0;
@@ -316,6 +324,7 @@ struct RGTransientBufferDiagnostics
     uint32_t physicalSlotCount  = 0;
     uint64_t physicalBytes      = 0;
     uint32_t aliasedBufferCount = 0;
+    uint32_t aliasBoundaryCount = 0;
 };
 
 struct RGCompileIssue
@@ -346,6 +355,7 @@ struct RGCompiledGraph
     std::vector<RGTransientBufferLifetimePlan> transientBufferLifetimes;
     std::vector<RGTransientBufferAssignment>   transientBufferAssignments;
     std::vector<RGTransientBufferSlotPlan>     transientBufferSlots;
+    std::vector<RGTransientBufferAliasBoundaryPlan> transientBufferAliasBoundaries;
     RGTransientBufferDiagnostics               transientBufferDiagnostics;
     std::vector<RGCompileIssue>               issues;
 

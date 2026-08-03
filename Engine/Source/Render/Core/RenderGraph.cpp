@@ -1540,6 +1540,27 @@ RGCompiledGraph RenderGraph::compile() const
         }
         compiled.transientBufferDiagnostics.aliasedBufferCount =
             compiled.transientBufferDiagnostics.usedCount - compiled.transientBufferDiagnostics.physicalSlotCount;
+
+        for (const auto& slot : compiled.transientBufferSlots) {
+            for (size_t memberIndex = 1; memberIndex < slot.buffers.size(); ++memberIndex) {
+                const auto* previousLifetime = findLifetime(slot.buffers[memberIndex - 1]);
+                const auto* nextLifetime     = findLifetime(slot.buffers[memberIndex]);
+                YA_CORE_ASSERT(previousLifetime != nullptr && nextLifetime != nullptr,
+                               "RenderGraph transient slot {} references a missing lifetime",
+                               slot.slotIndex);
+                YA_CORE_ASSERT(previousLifetime->lastPassIndex < nextLifetime->firstPassIndex,
+                               "RenderGraph transient slot {} contains overlapping lifetimes",
+                               slot.slotIndex);
+                compiled.transientBufferAliasBoundaries.push_back({
+                    .slotIndex      = slot.slotIndex,
+                    .previousBuffer = previousLifetime->buffer,
+                    .nextBuffer     = nextLifetime->buffer,
+                    .nextPass       = nextLifetime->firstPass,
+                });
+            }
+        }
+        compiled.transientBufferDiagnostics.aliasBoundaryCount =
+            static_cast<uint32_t>(compiled.transientBufferAliasBoundaries.size());
     }
 
     return compiled;
@@ -1661,6 +1682,17 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
             << " members=" << slot.buffers.size() << "\n";
     }
 
+    oss << "transientBufferAliasBoundaries(" << compiled.transientBufferAliasBoundaries.size() << ")\n";
+    for (const auto& boundary : compiled.transientBufferAliasBoundaries) {
+        const auto* previousBuffer = getBuffer(boundary.previousBuffer);
+        const auto* nextBuffer     = getBuffer(boundary.nextBuffer);
+        const auto* nextPass       = getPass(boundary.nextPass);
+        oss << "  slot=" << boundary.slotIndex
+            << " " << (previousBuffer ? previousBuffer->desc.label : "<invalid-buffer>")
+            << " -> " << (nextBuffer ? nextBuffer->desc.label : "<invalid-buffer>")
+            << " at " << (nextPass ? nextPass->name : "<invalid-pass>") << "\n";
+    }
+
     const auto& transientDiagnostics = compiled.transientBufferDiagnostics;
     oss << "transientBufferDiagnostics"
         << " logicalCount=" << transientDiagnostics.logicalCount
@@ -1672,6 +1704,7 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
         << " physicalSlotCount=" << transientDiagnostics.physicalSlotCount
         << " physicalBytes=" << transientDiagnostics.physicalBytes
         << " aliasedBufferCount=" << transientDiagnostics.aliasedBufferCount
+        << " aliasBoundaryCount=" << transientDiagnostics.aliasBoundaryCount
         << " physicalReuse=compiler-plan\n";
 
     oss << "issues(" << compiled.issues.size() << ")\n";
