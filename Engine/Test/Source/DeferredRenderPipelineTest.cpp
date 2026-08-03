@@ -128,6 +128,30 @@ TEST(DeferredFrameResourceSetTest, SkinningCapacityStartsSmallGrowsAndRejectsOve
             .has_value());
 }
 
+TEST(DeferredFrameGraphResourcesTest, KeepsOptionalInputsExplicitAndHandlesFrameLocal)
+{
+    DeferredFrameGraphResources resources{};
+
+    EXPECT_FALSE(resources.buffers.ssaoFrame.has_value());
+    EXPECT_FALSE(resources.textures.ssao.has_value());
+    EXPECT_FALSE(resources.textures.environmentCubemap.has_value());
+    EXPECT_FALSE(resources.textures.shadowDepth.has_value());
+    EXPECT_FALSE(resources.textures.postprocessOutput.has_value());
+    EXPECT_FALSE(resources.passes.shadow.has_value());
+
+    resources.buffers.frame = RGBufferHandle{.index = 2, .generation = 7};
+    resources.textures.gBufferColors[0] = RGTextureHandle{.index = 3, .generation = 9};
+    resources.textures.ssao = RGTextureHandle{.index = 4, .generation = 11};
+    resources.passes.gBuffer = RGPassHandle{.index = 5, .generation = 13};
+
+    EXPECT_TRUE(resources.buffers.frame.isValid());
+    EXPECT_TRUE(resources.textures.gBufferColors[0].isValid());
+    ASSERT_TRUE(resources.textures.ssao.has_value());
+    EXPECT_EQ(resources.textures.ssao->index, 4u);
+    ASSERT_TRUE(resources.passes.gBuffer.has_value());
+    EXPECT_EQ(resources.passes.gBuffer->generation, 13u);
+}
+
 TEST(SSAOStageTest, BuildsFrameDataWithoutOwningGpuResources)
 {
     SSAOStage stage;

@@ -32,7 +32,7 @@
 
 ## P1 RenderGraph 核心前置
 
-- [ ] `FG-101` 为 persistent texture/buffer 定义稳定 resource key 契约
+- [x] `FG-101` 为 persistent texture/buffer 定义稳定 resource key 契约
   - 依赖：FG-001
   - 修改：`RenderGraph.h/.cpp`、core tests
   - 实现：新增 typed key；拒绝空 key、同帧重复 key 的 type/desc 冲突；handle 仍为 frame-local
@@ -160,12 +160,13 @@
 
 ## P3 Typed resources 与 pass parameters
 
-- [ ] `FG-301` 定义 DeferredFrameGraphResources 与 frame import result
+- [x] `FG-301` 定义 DeferredFrameGraphResources 与 frame import result
   - 依赖：FG-201、FG-202、FG-203、FG-204、FG-205、FG-206
-  - 修改：新增 `DeferredFrameGraphTypes.h`，调整 pipeline build 代码
+  - 修改：新增 `DeferredFrameGraphResources.h`，调整 pipeline build 代码
   - 实现：集中保存本帧所有 RG handles；不保存 resolved pointer；optional resource 显式 optional
   - 验收：顶层不再散落局部 handle 命名；类型可由单元测试构造
   - 提交：`[runtime/deferred] add typed frame graph resources`
+  - 说明：`frame import result`（typed pass params 的载体）作为 FG-302~FG-306 的前置类型继续演进
 
 - [ ] `FG-302` 为 GBuffer pass 增加单一参数对象
   - 依赖：FG-301、FG-103

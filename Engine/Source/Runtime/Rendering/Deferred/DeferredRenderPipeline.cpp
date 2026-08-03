@@ -1174,9 +1174,9 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     _gBufferStage->prepare(stageCtx);
 
     RenderGraph graph;
-    std::optional<RGPassHandle> shadowPass;
+    DeferredFrameGraphResources graphResources{};
     if (_shadowStage && currentShadowSettings().isEnabled()) {
-        shadowPass = _shadowStage->appendGraphPasses(graph, stageCtx);
+        graphResources.passes.shadow = _shadowStage->appendGraphPasses(graph, stageCtx);
     }
     auto importHostWrittenBuffer = [&](const stdptr<IBuffer>& buffer,
                                        std::string label,
@@ -1200,41 +1200,39 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             .retainedResources = {buffer},
         });
     };
-    const auto frameBuffer = importHostWrittenBuffer(
+    graphResources.buffers.frame = importHostWrittenBuffer(
         frameBinding.frame.buffer,
         "Deferred.FrameUBO",
         EBufferUsage::UniformBuffer,
         frameBinding.frame.offset,
         frameBinding.frame.size);
-    const auto lightBuffer = importHostWrittenBuffer(
+    graphResources.buffers.light = importHostWrittenBuffer(
         frameBinding.light.buffer,
         "Deferred.LightUBO",
         EBufferUsage::UniformBuffer,
         frameBinding.light.offset,
         frameBinding.light.size);
-    const auto skinningBuffer = importHostWrittenBuffer(
+    graphResources.buffers.skinning = importHostWrittenBuffer(
         frameBinding.skinningBuffer,
         "Deferred.SkinningSSBO",
         EBufferUsage::StorageBuffer);
-    std::optional<RGBufferHandle> ssaoFrameBuffer;
     if (bUseSSAO) {
-        ssaoFrameBuffer = importHostWrittenBuffer(
+        graphResources.buffers.ssaoFrame = importHostWrittenBuffer(
             frameBinding.ssaoFrame.buffer,
             "Deferred.SSAOFrameUBO",
             EBufferUsage::UniformBuffer,
             frameBinding.ssaoFrame.offset,
             frameBinding.ssaoFrame.size);
     }
-    const auto skyboxFrameBuffer = importHostWrittenBuffer(
+    graphResources.buffers.skyboxFrame = importHostWrittenBuffer(
         frameBinding.skyboxFrame.buffer,
         "Deferred.SkyboxFrameUBO",
         EBufferUsage::UniformBuffer,
         frameBinding.skyboxFrame.offset,
         frameBinding.skyboxFrame.size);
 
-    std::array<RGTextureHandle, 4> gbufferColors{};
-    for (uint32_t attachmentIndex = 0; attachmentIndex < gbufferColors.size(); ++attachmentIndex) {
-        gbufferColors[attachmentIndex] = graph.createPersistentTexture(
+    for (uint32_t attachmentIndex = 0; attachmentIndex < graphResources.textures.gBufferColors.size(); ++attachmentIndex) {
+        graphResources.textures.gBufferColors[attachmentIndex] = graph.createPersistentTexture(
             makeGraphAttachmentDesc(
                 _gBufferRTSpec,
                 _gBufferRTSpec.attachments.colorAttach[attachmentIndex],
@@ -1242,7 +1240,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             RGPersistentTextureKey{.value = std::format("DeferredGBuffer.Color{}", attachmentIndex)});
     }
     YA_CORE_ASSERT(_gBufferRTSpec.attachments.depthAttach.has_value(), "Deferred GBuffer graph requires a depth attachment spec");
-    const auto gbufferDepthHandle = graph.createPersistentTexture(
+    graphResources.textures.gBufferDepth = graph.createPersistentTexture(
         makeGraphAttachmentDesc(_gBufferRTSpec, *_gBufferRTSpec.attachments.depthAttach, "DeferredGBuffer.Depth"),
         RGPersistentTextureKey{.value = "DeferredGBuffer.Depth"});
     const Extent2D gbufferExtent = _gBufferRTSpec.extent;
@@ -1250,26 +1248,26 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     [[maybe_unused]] const auto gbufferPass = graph.addPass(
         "Deferred GBuffer",
         [&](RGPassBuilder& passBuilder) {
-            passBuilder.uniformRead(frameBuffer, RGBufferRange{
+            passBuilder.uniformRead(graphResources.buffers.frame, RGBufferRange{
                 .offset = frameBinding.frame.offset,
                 .size   = frameBinding.frame.size,
             });
-            passBuilder.uniformRead(lightBuffer, RGBufferRange{
+            passBuilder.uniformRead(graphResources.buffers.light, RGBufferRange{
                 .offset = frameBinding.light.offset,
                 .size   = frameBinding.light.size,
             });
-            passBuilder.storageRead(skinningBuffer);
+            passBuilder.storageRead(graphResources.buffers.skinning);
             passBuilder.declareRaster({
                 .renderArea = Rect2D{.pos = {0, 0}, .extent = gbufferExtent.toVec2()},
                 .layerCount = 1,
                 .colors = {
-                    {.color = gbufferColors[0], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
-                    {.color = gbufferColors[1], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
-                    {.color = gbufferColors[2], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
-                    {.color = gbufferColors[3], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
+                    {.color = graphResources.textures.gBufferColors[0], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
+                    {.color = graphResources.textures.gBufferColors[1], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
+                    {.color = graphResources.textures.gBufferColors[2], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
+                    {.color = graphResources.textures.gBufferColors[3], .clearValue = ClearValue(0.0f, 0.0f, 0.0f, 0.0f), .loadOp = EAttachmentLoadOp::Clear, .storeOp = EAttachmentStoreOp::Store, .finalLayout = EImageLayout::ShaderReadOnlyOptimal},
                 },
                 .depth = RGDepthAttachmentDesc{
-                    .depth       = gbufferDepthHandle,
+                    .depth       = graphResources.textures.gBufferDepth,
                     .clearValue  = ClearValue(1.0f, 0),
                     .loadOp      = EAttachmentLoadOp::Clear,
                     .storeOp     = EAttachmentStoreOp::Store,
@@ -1296,6 +1294,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             _gBufferStage->execute(stageCtx);
             rgCtx.endRendering();
         });
+    graphResources.passes.gBuffer = gbufferPass;
 
     _lastTickCtx = {
         .view       = frame.view,
@@ -1306,49 +1305,42 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     _lastFrameInput = frame;
 
     YA_CORE_ASSERT(!_viewportRTSpec.attachments.colorAttach.empty(), "Deferred viewport graph requires a color attachment spec");
-    const auto color = graph.createPersistentTexture(
+    graphResources.textures.viewportColor = graph.createPersistentTexture(
         makeGraphAttachmentDesc(_viewportRTSpec, _viewportRTSpec.attachments.colorAttach.front(), "DeferredViewport.Color"),
         RGPersistentTextureKey{.value = "DeferredViewport.Color"});
-    const auto viewportDepthHandle = gbufferDepthHandle;
     const Extent2D viewportExtent = _viewportRTSpec.extent;
 
-    std::optional<RGTextureHandle> ssao;
     if (bUseSSAO) {
-        YA_CORE_ASSERT(ssaoFrameBuffer.has_value(), "Deferred SSAO requires an imported frame buffer");
-        ssao = _ssaoStage->appendGraphPass(
+        YA_CORE_ASSERT(graphResources.buffers.ssaoFrame.has_value(), "Deferred SSAO requires an imported frame buffer");
+        graphResources.textures.ssao = _ssaoStage->appendGraphPass(
             graph,
             stageCtx,
-            *ssaoFrameBuffer,
+            *graphResources.buffers.ssaoFrame,
             RGBufferRange{.offset = frameBinding.ssaoFrame.offset, .size = frameBinding.ssaoFrame.size},
-            gbufferColors[0],
-            gbufferColors[1],
-            gbufferDepthHandle);
+            graphResources.textures.gBufferColors[0],
+            graphResources.textures.gBufferColors[1],
+            graphResources.textures.gBufferDepth);
     }
 
-    std::optional<RGTextureHandle> environmentCubemap;
-    std::optional<RGTextureHandle> environmentIrradiance;
-    std::optional<RGTextureHandle> environmentPrefilter;
-    std::optional<RGTextureHandle> environmentBrdfLut;
     if (_currentEnvironmentLightingTextures.isComplete()) {
-        environmentCubemap = graph.importTexture(
+        graphResources.textures.environmentCubemap = graph.importTexture(
             makeDeferredEnvironmentImportedDesc(_currentEnvironmentLightingTextures.cubemap,
                                                 "DeferredLight.Environment.Cubemap"));
-        environmentIrradiance = graph.importTexture(
+        graphResources.textures.environmentIrradiance = graph.importTexture(
             makeDeferredEnvironmentImportedDesc(_currentEnvironmentLightingTextures.irradiance,
                                                 "DeferredLight.Environment.Irradiance"));
-        environmentPrefilter = graph.importTexture(
+        graphResources.textures.environmentPrefilter = graph.importTexture(
             makeDeferredEnvironmentImportedDesc(_currentEnvironmentLightingTextures.prefilter,
                                                 "DeferredLight.Environment.Prefilter"));
-        environmentBrdfLut = graph.importTexture(
+        graphResources.textures.environmentBrdfLut = graph.importTexture(
             makeImportedTextureDesc(*_currentEnvironmentLightingTextures.brdfLut,
                                     "DeferredLight.Environment.BrdfLut",
                                     EImageLayout::ShaderReadOnlyOptimal));
     }
 
-    std::optional<RGTextureHandle> shadowDepth;
     if (auto shadowDepthImage = getShadowDepthImage();
         shadowDepthImage && _shadowResources.directionalDepthIV && isShadowMappingEnabled()) {
-        shadowDepth = graph.importTexture(
+        graphResources.textures.shadowDepth = graph.importTexture(
             makeImportedSubresourceTextureDesc(
                 shadowDepthImage,
                 ImageViewCreateInfo{
@@ -1369,43 +1361,43 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     [[maybe_unused]] const auto lightPass = graph.addPass(
         "Deferred Light",
         [&](RGPassBuilder& passBuilder) {
-            if (shadowPass.has_value()) {
-                passBuilder.dependsOn(*shadowPass);
+            if (graphResources.passes.shadow.has_value()) {
+                passBuilder.dependsOn(*graphResources.passes.shadow);
             }
-            passBuilder.uniformRead(frameBuffer, RGBufferRange{
+            passBuilder.uniformRead(graphResources.buffers.frame, RGBufferRange{
                 .offset = frameBinding.frame.offset,
                 .size   = frameBinding.frame.size,
             });
-            passBuilder.uniformRead(lightBuffer, RGBufferRange{
+            passBuilder.uniformRead(graphResources.buffers.light, RGBufferRange{
                 .offset = frameBinding.light.offset,
                 .size   = frameBinding.light.size,
             });
-            for (const auto handle : gbufferColors) {
+            for (const auto handle : graphResources.textures.gBufferColors) {
                 passBuilder.read(handle);
             }
-            if (ssao.has_value()) {
-                passBuilder.read(*ssao);
+            if (graphResources.textures.ssao.has_value()) {
+                passBuilder.read(*graphResources.textures.ssao);
             }
-            if (shadowDepth.has_value()) {
-                passBuilder.read(*shadowDepth);
+            if (graphResources.textures.shadowDepth.has_value()) {
+                passBuilder.read(*graphResources.textures.shadowDepth);
             }
-            if (environmentCubemap.has_value()) {
-                passBuilder.read(*environmentCubemap);
+            if (graphResources.textures.environmentCubemap.has_value()) {
+                passBuilder.read(*graphResources.textures.environmentCubemap);
             }
-            if (environmentIrradiance.has_value()) {
-                passBuilder.read(*environmentIrradiance);
+            if (graphResources.textures.environmentIrradiance.has_value()) {
+                passBuilder.read(*graphResources.textures.environmentIrradiance);
             }
-            if (environmentPrefilter.has_value()) {
-                passBuilder.read(*environmentPrefilter);
+            if (graphResources.textures.environmentPrefilter.has_value()) {
+                passBuilder.read(*graphResources.textures.environmentPrefilter);
             }
-            if (environmentBrdfLut.has_value()) {
-                passBuilder.read(*environmentBrdfLut);
+            if (graphResources.textures.environmentBrdfLut.has_value()) {
+                passBuilder.read(*graphResources.textures.environmentBrdfLut);
             }
             passBuilder.declareRaster({
                 .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
                 .layerCount = 1,
                 .colors = {{
-                    .color       = color,
+                    .color       = graphResources.textures.viewportColor,
                     .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
                     .loadOp      = EAttachmentLoadOp::Clear,
                     .storeOp     = EAttachmentStoreOp::Store,
@@ -1421,11 +1413,12 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             _lightStage->execute(stageCtx);
             rgCtx.endRendering();
         });
+    graphResources.passes.light = lightPass;
 
     [[maybe_unused]] const auto skyboxPass = graph.addPass(
             "Deferred Skybox",
         [&](RGPassBuilder& passBuilder) {
-            passBuilder.uniformRead(skyboxFrameBuffer, RGBufferRange{
+            passBuilder.uniformRead(graphResources.buffers.skyboxFrame, RGBufferRange{
                 .offset = frameBinding.skyboxFrame.offset,
                 .size   = frameBinding.skyboxFrame.size,
             });
@@ -1433,13 +1426,13 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
                 .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
                 .layerCount = 1,
                 .colors = {{
-                    .color       = color,
+                    .color       = graphResources.textures.viewportColor,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 }},
                 .depth = RGDepthAttachmentDesc{
-                    .depth       = viewportDepthHandle,
+                    .depth       = graphResources.textures.gBufferDepth,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
@@ -1456,13 +1449,17 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
 
             rgCtx.endRendering();
         });
+    graphResources.passes.skybox = skyboxPass;
 
     const auto bloomComposite = _postProcessStage.appendBloomGraphPasses(
         graph,
-        color,
+        graphResources.textures.viewportColor,
         viewportExtent,
         &_lastTickCtx);
-    const auto overlayInput = bloomComposite.isValid() ? bloomComposite : color;
+    if (bloomComposite.isValid()) {
+        graphResources.textures.bloomComposite = bloomComposite;
+    }
+    graphResources.textures.overlayInput = bloomComposite.isValid() ? bloomComposite : graphResources.textures.viewportColor;
 
     [[maybe_unused]] const auto overlayPass = graph.addPass(
         "Deferred Scene Overlay",
@@ -1471,13 +1468,13 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
                 .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
                 .layerCount = 1,
                 .colors = {{
-                    .color       = overlayInput,
+                    .color       = graphResources.textures.overlayInput,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 }},
                 .depth = RGDepthAttachmentDesc{
-                    .depth       = viewportDepthHandle,
+                    .depth       = graphResources.textures.gBufferDepth,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
@@ -1495,6 +1492,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
 
             rgCtx.endRendering();
         });
+    graphResources.passes.sceneOverlay = overlayPass;
 
     [[maybe_unused]] const auto viewportOverlayPass = graph.addPass(
         "Deferred Viewport Overlay",
@@ -1503,13 +1501,13 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
                 .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
                 .layerCount = 1,
                 .colors = {{
-                    .color       = overlayInput,
+                    .color       = graphResources.textures.overlayInput,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 }},
                 .depth = RGDepthAttachmentDesc{
-                    .depth       = viewportDepthHandle,
+                    .depth       = graphResources.textures.gBufferDepth,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
@@ -1528,20 +1526,24 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
 
             rgCtx.endRendering();
         });
+    graphResources.passes.viewportOverlay = viewportOverlayPass;
 
     const auto postprocessOutput = _postProcessStage.appendFinalizeGraphPasses(
         graph,
-        overlayInput,
+        graphResources.textures.overlayInput,
         viewportExtent,
         &_lastTickCtx);
-
-    for (uint32_t attachmentIndex = 0; attachmentIndex < gbufferColors.size(); ++attachmentIndex) {
-        graph.exportTexture(gbufferColors[attachmentIndex], std::string(kDeferredGBufferColorExportNames[attachmentIndex]));
+    if (postprocessOutput.isValid()) {
+        graphResources.textures.postprocessOutput = postprocessOutput;
     }
-    graph.exportTexture(gbufferDepthHandle, std::string(kDeferredGBufferDepthExportName));
-    graph.exportTexture(color, std::string(kDeferredViewportColorExportName));
-    if (ssao.has_value()) {
-        graph.exportTexture(*ssao, std::string(kDeferredSSAOExportName));
+
+    for (uint32_t attachmentIndex = 0; attachmentIndex < graphResources.textures.gBufferColors.size(); ++attachmentIndex) {
+        graph.exportTexture(graphResources.textures.gBufferColors[attachmentIndex], std::string(kDeferredGBufferColorExportNames[attachmentIndex]));
+    }
+    graph.exportTexture(graphResources.textures.gBufferDepth, std::string(kDeferredGBufferDepthExportName));
+    graph.exportTexture(graphResources.textures.viewportColor, std::string(kDeferredViewportColorExportName));
+    if (graphResources.textures.ssao.has_value()) {
+        graph.exportTexture(*graphResources.textures.ssao, std::string(kDeferredSSAOExportName));
     }
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");
@@ -1563,7 +1565,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         _ssaoStage->prepare(stageCtx);
     }
 
-    if (ssao.has_value()) {
+    if (graphResources.textures.ssao.has_value()) {
         _currentSSAOOutput = result.getExportedTextureShared(kDeferredSSAOExportName);
         if (_lightStage) {
             _lightStage->setSSAOTexture(_currentSSAOOutput);
@@ -1595,7 +1597,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         return;
     }
 
-    if (postprocessOutput.isValid()) {
+    if (graphResources.textures.postprocessOutput.has_value()) {
         if (auto preparedOutput = _postProcessStage.getPreparedOutputImageShared()) {
             _currentPostprocessOutput = std::move(preparedOutput);
             return;
