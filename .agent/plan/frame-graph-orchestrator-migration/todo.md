@@ -106,7 +106,7 @@
   - 验收：测试图必须满足 physical slot count < logical transient count；连续 frame 必须观察到 pool hit；禁用 alias 时结果可对照
   - 提交：`[test/render] lock transient buffer reuse`
 
-- [ ] `FG-111` 实现 completion-safe per-flight FrameUploadArena
+- [x] `FG-111` 实现 completion-safe per-flight FrameUploadArena
   - 依赖：FG-104
   - 修改：Render resource/common runtime 层、descriptor buffer slice tests
   - 实现：每 flight host-visible backing buffer；按 backend-agnostic alignment 分配 offset/range；fence 后 reset；capacity growth 延迟退休

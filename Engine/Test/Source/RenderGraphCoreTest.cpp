@@ -3,6 +3,7 @@
 #include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/RenderGraphResourceRegistry.h"
 #include "Render/Core/RenderingInfoUtils.h"
+#include "Render/Core/FrameUploadArena.h"
 #include "Resource/DeferredDeletionQueue.h"
 
 #include <gtest/gtest.h>
@@ -4146,6 +4147,78 @@ TEST(RenderGraphCoreTest, RasterRenderingHelperSupportsDepthOnlyPass)
     EXPECT_EQ(cmdBuf.endRenderingCount, 1u);
     EXPECT_TRUE(cmdBuf.lastBeginRenderingHadDepth);
     EXPECT_EQ(cmdBuf.lastDepthFinalLayout, EImageLayout::ShaderReadOnlyOptimal);
+}
+
+TEST(RenderGraphCoreTest, FrameUploadArenaSharesAlignedSlicesPerFlight)
+{
+    auto& deletionQueue = DeferredDeletionQueue::get();
+    deletionQueue.flushAll();
+    deletionQueue.init(/*framesInFlight=*/1);
+
+    TestResourceFactory factory;
+    FrameUploadArena   arena(factory, /*flightCount=*/2, /*initialCapacity=*/64);
+
+    ASSERT_TRUE(arena.beginFlight(0));
+    const auto first = arena.allocate(0, /*size=*/12, /*alignment=*/16);
+    const auto second = arena.allocate(0, /*size=*/8, /*alignment=*/16);
+    ASSERT_TRUE(first.has_value());
+    ASSERT_TRUE(second.has_value());
+    ASSERT_TRUE(first->valid());
+    ASSERT_TRUE(second->valid());
+    EXPECT_EQ(first->buffer.get(), second->buffer.get());
+    EXPECT_EQ(first->offset, 0u);
+    EXPECT_EQ(second->offset, 16u);
+    EXPECT_EQ(arena.bytesUsed(0), 24u);
+    EXPECT_EQ(arena.capacity(0), 64u);
+
+    const auto descriptor = second->descriptor();
+    EXPECT_EQ(descriptor.buffer, second->bufferHandle());
+    EXPECT_EQ(descriptor.offset, 16u);
+    EXPECT_EQ(descriptor.range, 8u);
+
+    const uint32_t value = 42;
+    EXPECT_TRUE(first->write(&value, sizeof(value)));
+    EXPECT_FALSE(first->write(&value, 13u));
+
+    ASSERT_TRUE(arena.beginFlight(1));
+    const auto otherFlight = arena.allocate(1, /*size=*/4, /*alignment=*/16);
+    ASSERT_TRUE(otherFlight.has_value());
+    EXPECT_NE(otherFlight->buffer.get(), first->buffer.get());
+    EXPECT_EQ(otherFlight->offset, 0u);
+    EXPECT_EQ(arena.bytesUsed(1), 4u);
+}
+
+TEST(RenderGraphCoreTest, FrameUploadArenaGrowsAndRetiresPreviousBacking)
+{
+    auto& deletionQueue = DeferredDeletionQueue::get();
+    deletionQueue.flushAll();
+    deletionQueue.init(/*framesInFlight=*/1);
+
+    TestResourceFactory factory;
+    FrameUploadArena   arena(factory, /*flightCount=*/1, /*initialCapacity=*/16);
+    ASSERT_TRUE(arena.beginFlight(0));
+
+    const auto first = arena.allocate(0, /*size=*/12, /*alignment=*/4);
+    ASSERT_TRUE(first.has_value());
+    EXPECT_EQ(arena.capacity(0), 16u);
+    const auto oldBacking = first->buffer;
+
+    const auto second = arena.allocate(0, /*size=*/12, /*alignment=*/4);
+    ASSERT_TRUE(second.has_value());
+    EXPECT_NE(second->buffer.get(), oldBacking.get());
+    EXPECT_EQ(second->offset, 12u);
+    EXPECT_EQ(arena.capacity(0), 32u);
+    EXPECT_EQ(arena.bytesUsed(0), 24u);
+    EXPECT_EQ(deletionQueue.pendingCount(), 1u);
+
+    ASSERT_TRUE(arena.beginFlight(0));
+    const auto afterReset = arena.allocate(0, /*size=*/4, /*alignment=*/16);
+    ASSERT_TRUE(afterReset.has_value());
+    EXPECT_EQ(afterReset->offset, 0u);
+    EXPECT_EQ(afterReset->buffer.get(), second->buffer.get());
+
+    EXPECT_FALSE(arena.allocate(1, 4, 4).has_value());
+    EXPECT_FALSE(arena.allocate(0, 4, 0).has_value());
 }
 
 } // namespace ya
