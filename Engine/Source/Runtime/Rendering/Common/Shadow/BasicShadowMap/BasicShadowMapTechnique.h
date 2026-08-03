@@ -3,6 +3,7 @@
 #include "BasicShadowPayload.h"
 #include "DirectionalShadowPass.h"
 #include "PointShadowPass.h"
+#include "Runtime/Rendering/Common/Shadow/ShadowFrameResources.h"
 #include "Runtime/Rendering/Common/Shadow/ShadowTypes.h"
 
 #include "Render/Core/Image.h"
@@ -53,6 +54,7 @@ class BasicShadowMapTechnique : public IShadowTechnique
     ShadowSettings _settings;
     uint32_t       _lastPreparedPointLightCount = 0;
 
+    ShadowFrameResources _frameResources;
     DirectionalShadowPass _directionalPass;
     PointShadowPass       _pointPass;
 };

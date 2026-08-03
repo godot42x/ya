@@ -23,14 +23,16 @@ void BasicShadowMapTechnique::init(IRender* render, const ShadowSettings& settin
     _settings = settings;
     _shadowExtent = {.width = settings.resolution, .height = settings.resolution};
 
-    _directionalPass.init(render, _shadowExtent);
-    _pointPass.init(render, _shadowExtent);
+    _frameResources.init(render);
+    _directionalPass.init(render, _shadowExtent, _frameResources);
+    _pointPass.init(render, _shadowExtent, _frameResources);
 }
 
 void BasicShadowMapTechnique::destroy()
 {
     _directionalPass.destroy();
     _pointPass.destroy();
+    _frameResources.destroy();
     _render      = nullptr;
 }
 
@@ -51,6 +53,11 @@ void BasicShadowMapTechnique::prepare(uint32_t flightIndex, const RenderFrameDat
 
     const auto payload = buildFramePayload(flightIndex, frameData);
     _lastPreparedPointLightCount = payload.pointLightCount;
+
+    if (!_frameResources.prepare(payload)) {
+        YA_CORE_ERROR("BasicShadowMapTechnique failed to prepare shadow frame resources");
+        return;
+    }
 
     if (payload.directionalEnabled()) {
         _directionalPass.prepare(payload);
