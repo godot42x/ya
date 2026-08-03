@@ -12,7 +12,6 @@
 #include "Resource/Texture/TextureLibrary.h"
 
 #include <array>
-#include <format>
 #include <vector>
 
 namespace ya
@@ -106,7 +105,7 @@ void SSAOStage::initNoiseTexture()
     _noiseTexture = Texture::fromData(4, 4, std::vector<ColorRGBA<uint8_t>>(noisePixels.begin(), noisePixels.end()), "ssao-noise");
 }
 
-void SSAOStage::init(IRender* render)
+void SSAOStage::init(IRender* render, stdptr<IDescriptorSetLayout> frameDSL)
 {
     _render = render;
     _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
@@ -117,13 +116,8 @@ void SSAOStage::init(IRender* render)
     _power  = config.getOr<float>(SSAO_CONFIG_DOC_NAME, SSAO_CONFIG_KEY_POWER, _power);
     _intensity = config.getOr<float>(SSAO_CONFIG_DOC_NAME, SSAO_CONFIG_KEY_INTENSITY, _intensity);
 
-    _frameDSL = IDescriptorSetLayout::create(
-        _render,
-        DescriptorSetLayoutDesc{
-            .label    = "Deferred_SSAO_Frame_DSL",
-            .set      = 0,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
-        });
+    _frameDSL = std::move(frameDSL);
+    YA_CORE_ASSERT(_frameDSL != nullptr, "SSAOStage requires a frame descriptor layout");
 
     _inputDSL = IDescriptorSetLayout::create(
         _render,
@@ -163,25 +157,11 @@ void SSAOStage::init(IRender* render)
 
     _descriptorPool = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
         .label     = "Deferred_SSAO_DSP",
-        .maxSets   = MAX_FLIGHTS_IN_FLIGHT + 1,
+        .maxSets   = 1,
         .poolSizes = {
-            {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT},
             {.type = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 4},
         },
     });
-
-    for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _frameUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-            .label       = std::format("Deferred_SSAO_Frame_UBO_{}", i),
-            .usage       = EBufferUsage::UniformBuffer,
-            .size        = sizeof(FrameData),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
-        _frameDS[i] = _descriptorPool->allocateDescriptorSets(_frameDSL);
-        _render->getDescriptorHelper()->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneUniformBuffer(_frameDS[i], 0, _frameUBO[i].get()),
-        });
-    }
 
     _inputDS = _descriptorPool->allocateDescriptorSets(_inputDSL);
 
@@ -192,12 +172,10 @@ void SSAOStage::destroy()
 {
     _graphExecutor.reset();
     _noiseTexture.reset();
-    for (auto& buffer : _frameUBO) {
-        buffer.reset();
-    }
     _descriptorPool.reset();
     _inputDSL.reset();
     _frameDSL.reset();
+    _frameInputs = {};
     _pipeline.reset();
     _pipelineLayout.reset();
 
@@ -209,11 +187,9 @@ void SSAOStage::destroy()
     _lastInputDescriptorWriteCount = 0;
 }
 
-void SSAOStage::updateFrameUBO(const RenderStageContext& ctx)
+SSAOStage::FrameData SSAOStage::buildFrameData(const RenderStageContext& ctx) const
 {
-    if (ctx.flightIndex >= MAX_FLIGHTS_IN_FLIGHT) {
-        return;
-    }
+    YA_CORE_ASSERT(ctx.frameData != nullptr, "SSAOStage requires frame data to build frame parameters");
 
     FrameData frameData{};
     frameData.screenResolution = {static_cast<int32_t>(ctx.viewportExtent.width), static_cast<int32_t>(ctx.viewportExtent.height)};
@@ -225,10 +201,7 @@ void SSAOStage::updateFrameUBO(const RenderStageContext& ctx)
     frameData.projectMat       = ctx.frameData->projection;
     frameData.invProjectMat    = glm::inverse(ctx.frameData->projection);
     frameData.viewMat          = ctx.frameData->view;
-
-    auto& frameUBO = _frameUBO[ctx.flightIndex];
-    frameUBO->writeData(&frameData, sizeof(frameData), 0);
-    frameUBO->flush();
+    return frameData;
 }
 
 void SSAOStage::updateInputDescriptors()
@@ -278,11 +251,10 @@ void SSAOStage::prepare(const RenderStageContext& ctx)
     if (_pipeline) {
         _pipeline->beginFrame();
     }
-    if (!ctx.frameData || ctx.flightIndex >= MAX_FLIGHTS_IN_FLIGHT) {
+    if (!ctx.frameData || !_frameInputs.isValid()) {
         return;
     }
 
-    updateFrameUBO(ctx);
     updateInputDescriptors();
 }
 
@@ -306,7 +278,30 @@ void SSAOStage::execute(const RenderStageContext& ctx)
     const auto  albedo = graph.importTexture(makeSSAOImportedTextureDesc(*gbufferAlbedo, "SSAO.GBufferAlbedo", EImageLayout::ShaderReadOnlyOptimal));
     const auto  normal = graph.importTexture(makeSSAOImportedTextureDesc(*gbufferNormal, "SSAO.GBufferNormal", EImageLayout::ShaderReadOnlyOptimal));
     const auto  depth = graph.importTexture(makeSSAOImportedTextureDesc(*gbufferDepth, "SSAO.GBufferDepth", EImageLayout::ShaderReadOnlyOptimal));
-    const auto  output = appendGraphPass(graph, ctx, albedo, normal, depth);
+    YA_CORE_ASSERT(_frameInputs.isValid(), "SSAOStage standalone execution requires a frame-resource binding");
+    const auto frameBuffer = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "SSAO.FrameUBO",
+            .usage = EBufferUsage::UniformBuffer,
+            .size  = _frameInputs.frame.buffer->getSize(),
+        },
+        .buffer = _frameInputs.frame.buffer.get(),
+        .initialState = BufferResourceState{
+            .stages = EPipelineStage::Host,
+            .access = EResourceAccess::HostWrite,
+            .offset = _frameInputs.frame.offset,
+            .size   = _frameInputs.frame.size,
+        },
+        .retainedResources = {_frameInputs.frame.buffer},
+    });
+    const auto output = appendGraphPass(
+        graph,
+        ctx,
+        frameBuffer,
+        RGBufferRange{.offset = _frameInputs.frame.offset, .size = _frameInputs.frame.size},
+        albedo,
+        normal,
+        depth);
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "SSAOStage graph executor is not initialized");
     [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *ctx.cmdBuf);
@@ -316,11 +311,14 @@ void SSAOStage::execute(const RenderStageContext& ctx)
 
 RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
                                            const RenderStageContext& ctx,
+                                           RGBufferHandle frameBuffer,
+                                           RGBufferRange frameRange,
                                            RGTextureHandle albedo,
                                            RGTextureHandle normal,
                                            RGTextureHandle depth)
 {
     YA_CORE_ASSERT(_noiseTexture != nullptr, "SSAOStage requires initialized noise texture before graph pass append");
+    YA_CORE_ASSERT(_frameInputs.isValid(), "SSAOStage requires current frame inputs");
 
     const auto  noise = graph.importTexture(makeSSAOImportedTextureDesc(*_noiseTexture, "SSAO.Noise", EImageLayout::ShaderReadOnlyOptimal));
     const auto  output = graph.createPersistentTexture(RGTextureDesc{
@@ -330,13 +328,12 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
          .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
     }, RGPersistentTextureKey{.value = "SSAO.Output"});
 
-    const auto viewportWidth  = ctx.viewportExtent.width;
-    const auto viewportHeight = ctx.viewportExtent.height;
-    const auto flightIndex    = ctx.flightIndex;
+    const auto frameDescriptorSet = _frameInputs.descriptorSet;
 
     [[maybe_unused]] const auto pass = graph.addPass(
         "SSAO Pass",
-        [albedo, normal, depth, noise, output, viewportExtent = ctx.viewportExtent](RGPassBuilder& passBuilder) {
+        [albedo, normal, depth, noise, output, frameBuffer, frameRange, viewportExtent = ctx.viewportExtent](RGPassBuilder& passBuilder) {
+            passBuilder.uniformRead(frameBuffer, frameRange);
             passBuilder.read(albedo);
             passBuilder.read(normal);
             passBuilder.read(depth);
@@ -351,7 +348,7 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
                 }},
             });
         },
-        [this, flightIndex](RGRenderContext& rgCtx) {
+        [this, frameDescriptorSet](RGRenderContext& rgCtx) {
             const auto rasterParams  = rgCtx.getRasterPassExecutionParams();
             const auto renderExtent  = rasterParams.getRenderExtent();
             const auto viewportWidth = renderExtent.width;
@@ -361,7 +358,7 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
             rgCtx.getCommandBuffer().bindPipeline(_pipeline.get());
             rgCtx.getCommandBuffer().setViewport(0.0f, 0.0f, static_cast<float>(viewportWidth), static_cast<float>(viewportHeight));
             rgCtx.getCommandBuffer().setScissor(0, 0, viewportWidth, viewportHeight);
-            rgCtx.getCommandBuffer().bindDescriptorSets(_pipelineLayout.get(), 0, {_frameDS[flightIndex], _inputDS});
+            rgCtx.getCommandBuffer().bindDescriptorSets(_pipelineLayout.get(), 0, {frameDescriptorSet, _inputDS});
             rgCtx.getCommandBuffer().draw(3, 1, 0, 0);
             rgCtx.endRendering();
         });

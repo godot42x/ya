@@ -3,6 +3,7 @@
 #include "DeferredGBufferResources.h"
 #include "Render/Core/Buffer.h"
 #include "Render/Core/DescriptorSet.h"
+#include "Render/Core/FrameUploadArena.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderImage.h"
@@ -28,12 +29,23 @@ struct ENGINE_API SSAOStage : public IRenderStage
     DeferredGBufferResources _gBufferResources{};
     stdptr<IGraphicsPipeline>    _pipeline;
     stdptr<IPipelineLayout>      _pipelineLayout;
-    stdptr<IDescriptorSetLayout> _frameDSL;
     stdptr<IDescriptorSetLayout> _inputDSL;
     stdptr<IDescriptorPool>      _descriptorPool;
 
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT> _frameUBO{};
-    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _frameDS{};
+    // Kept alive for the pipeline layout; frame descriptor sets and upload
+    // slices are owned by DeferredFrameResourceSet.
+    stdptr<IDescriptorSetLayout> _frameDSL;
+    struct FrameInputs
+    {
+        DescriptorSetHandle          descriptorSet{};
+        FrameUploadArena::Allocation frame;
+
+        [[nodiscard]] bool isValid() const
+        {
+            return descriptorSet && frame.valid();
+        }
+    };
+    FrameInputs _frameInputs{};
     DescriptorSetHandle _inputDS = nullptr;
 
     stdptr<Texture> _noiseTexture;
@@ -56,13 +68,22 @@ struct ENGINE_API SSAOStage : public IRenderStage
     void refreshPipelineFormat();
     void invalidateInputDescriptors();
 
-    void init(IRender* render) override;
+    void init(IRender* render, stdptr<IDescriptorSetLayout> frameDSL);
+    void init(IRender* render) override { init(render, nullptr); }
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
     void execute(const RenderStageContext& ctx) override;
 
+    [[nodiscard]] FrameData buildFrameData(const RenderStageContext& ctx) const;
+    void setFrameInputs(FrameInputs frameInputs)
+    {
+        _frameInputs = std::move(frameInputs);
+    }
+
     RGTextureHandle appendGraphPass(RenderGraph& graph,
                                     const RenderStageContext& ctx,
+                                    RGBufferHandle frameBuffer,
+                                    RGBufferRange frameRange,
                                     RGTextureHandle albedo,
                                     RGTextureHandle normal,
                                     RGTextureHandle depth);
@@ -77,7 +98,6 @@ struct ENGINE_API SSAOStage : public IRenderStage
 
   private:
     void initNoiseTexture();
-    void updateFrameUBO(const RenderStageContext& ctx);
     void updateInputDescriptors();
 };
 

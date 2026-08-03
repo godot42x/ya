@@ -45,6 +45,22 @@ void DeferredFrameResourceSet::init(IRender* render)
             .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::StorageBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
         });
 
+    _ssaoFrameDSL = IDescriptorSetLayout::create(
+        _render,
+        DescriptorSetLayoutDesc{
+            .label    = "Deferred_SSAO_Frame_DSL",
+            .set      = 0,
+            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
+        });
+
+    _ssaoFrameDSP = IDescriptorPool::create(
+        _render,
+        DescriptorPoolCreateInfo{
+            .label     = "Deferred_SSAO_Frame_DSP",
+            .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
+            .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT}},
+        });
+
     _uploadArena = std::make_unique<FrameUploadArena>(
         *render->getResourceFactory(),
         MAX_FLIGHTS_IN_FLIGHT,
@@ -55,6 +71,7 @@ void DeferredFrameResourceSet::init(IRender* render)
     for (uint32_t flightIndex = 0; flightIndex < MAX_FLIGHTS_IN_FLIGHT; ++flightIndex) {
         _bindings[flightIndex] = Binding{
             .frameAndLightDescriptorSet = _frameAndLightDSP->allocateDescriptorSets(_frameAndLightDSL),
+            .ssaoFrameDescriptorSet     = _ssaoFrameDSP->allocateDescriptorSets(_ssaoFrameDSL),
         };
     }
 
@@ -67,6 +84,8 @@ void DeferredFrameResourceSet::destroy()
     _uploadArena.reset();
     _skinningDSP.reset();
     _skinningDSL.reset();
+    _ssaoFrameDSP.reset();
+    _ssaoFrameDSL.reset();
     _frameAndLightDSP.reset();
     _frameAndLightDSL.reset();
     _shadowState = {};
@@ -269,6 +288,26 @@ void DeferredFrameResourceSet::updateDescriptorSet(uint32_t flightIndex, const B
     });
 }
 
+void DeferredFrameResourceSet::updateSSAODescriptorSet(uint32_t flightIndex, const Binding& binding)
+{
+    const auto& previous = _bindings[flightIndex];
+    const bool bChanged = previous.ssaoFrame.buffer.get() != binding.ssaoFrame.buffer.get() ||
+                          previous.ssaoFrame.offset != binding.ssaoFrame.offset ||
+                          previous.ssaoFrame.size != binding.ssaoFrame.size;
+    if (!bChanged) {
+        return;
+    }
+
+    _render->getDescriptorHelper()->updateDescriptorSets({
+        IDescriptorSetHelper::genBufferWrite(
+            binding.ssaoFrameDescriptorSet,
+            0,
+            0,
+            EPipelineDescriptorType::UniformBuffer,
+            {binding.ssaoFrame.descriptor()}),
+    });
+}
+
 bool DeferredFrameResourceSet::prepare(const RenderStageContext& ctx)
 {
     if (!_render || !_uploadArena || !ctx.frameData || ctx.flightIndex >= MAX_FLIGHTS_IN_FLIGHT) {
@@ -339,6 +378,30 @@ bool DeferredFrameResourceSet::prepare(const RenderStageContext& ctx)
     next.frame   = frame;
     next.light   = light;
     updateDescriptorSet(ctx.flightIndex, next);
+    _bindings[ctx.flightIndex] = std::move(next);
+    return true;
+}
+
+bool DeferredFrameResourceSet::prepareSSAO(
+    const RenderStageContext& ctx,
+    const SSAOFrameData& frameData)
+{
+    if (!_render || !_uploadArena || ctx.flightIndex >= MAX_FLIGHTS_IN_FLIGHT) {
+        return false;
+    }
+
+    const uint32_t alignment = std::max(_render->getUniformBufferOffsetAlignment(), 1u);
+    const auto ssaoFrame = _uploadArena->allocate(
+        ctx.flightIndex,
+        sizeof(SSAOFrameData),
+        alignment);
+    if (!ssaoFrame.has_value() || !ssaoFrame->write(&frameData, sizeof(frameData))) {
+        return false;
+    }
+
+    Binding next   = _bindings[ctx.flightIndex];
+    next.ssaoFrame = *ssaoFrame;
+    updateSSAODescriptorSet(ctx.flightIndex, next);
     _bindings[ctx.flightIndex] = std::move(next);
     return true;
 }
