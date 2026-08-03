@@ -44,3 +44,8 @@ Scene、AssetManager、ResourceResolveSystem 不进入 graph 内部状态机。
 
 Gate 3 不是本子计划的最小闭环 blocker，但它仍是完整 RenderGraph 迁移的硬门禁；
 本子计划只负责提供 metadata 和 compiled-plan seam。
+
+> 2026-08-03：主计划已完成 FG-101~FG-110，本 Gate 中 persistent stable identity、
+> transient lifetime interval、physical slot/alias plan 已由"seam"落地为真实实现；
+> 剩余未落地项为 subresource 粒度 state 与 async compute / multi-queue（见
+> `async-queue-assessment.md`，均为主计划后续阶段）。
