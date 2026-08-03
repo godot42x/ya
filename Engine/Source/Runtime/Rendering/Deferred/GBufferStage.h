@@ -72,11 +72,9 @@ struct GBufferStage : public IRenderStage
     MaterialDescPool<UnlitMaterial, UnlitParamUBO> _unlitMatPool;
     UnlitMaterial*                                 _fallbackMaterial = nullptr;
 
-    stdptr<IDescriptorSetLayout>                           _skinningDSL;
-    stdptr<IDescriptorPool>                                _skinningDSP;
-    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _skinningDS{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _skinningSSBO{};
-    uint32_t                                               _skinningCapacity = 0;
+    // Kept alive for graphics pipeline layouts; buffers, descriptor sets and
+    // capacity are owned by DeferredFrameResourceSet.
+    stdptr<IDescriptorSetLayout> _skinningDSL;
 
     // ── Common vertex attributes ─────────────────────────────────
     std::vector<VertexAttribute> _commonVertexAttributes = {
@@ -90,21 +88,22 @@ struct GBufferStage : public IRenderStage
     struct FrameInputs
     {
         DescriptorSetHandle frameAndLightDescriptorSet{};
+        DescriptorSetHandle skinningDescriptorSet{};
     };
 
     FrameInputs _frameInputs{};
 
     GBufferStage() : IRenderStage("GBuffer") {}
 
-    void init(IRender* render, stdptr<IDescriptorSetLayout> frameAndLightDSL);
-    void init(IRender* render) override { init(render, nullptr); }
+    void init(IRender* render,
+              stdptr<IDescriptorSetLayout> frameAndLightDSL,
+              stdptr<IDescriptorSetLayout> skinningDSL);
+    void init(IRender* render) override { init(render, nullptr, nullptr); }
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
     void execute(const RenderStageContext& ctx) override;
 
     void setFrameInputs(FrameInputs frameInputs) { _frameInputs = frameInputs; }
-    [[nodiscard]] const stdptr<IBuffer>& getSkinningBufferOwner(uint32_t flightIndex) const { return _skinningSSBO[flightIndex]; }
-    [[nodiscard]] IBuffer* getSkinningBuffer(uint32_t flightIndex) const { return _skinningSSBO[flightIndex].get(); }
     void                                       refreshPipelineFormats(const DeferredAttachmentFormats& formats);
     [[nodiscard]] IGraphicsPipeline*           getPBRPipeline() const { return _pbr.pipeline.get(); }
     [[nodiscard]] IGraphicsPipeline*           getPBRSkinnedPipeline() const { return _pbrSkinned.pipeline.get(); }
@@ -114,14 +113,12 @@ struct GBufferStage : public IRenderStage
     [[nodiscard]] IGraphicsPipeline*           getUnlitSkinnedPipeline() const { return _unlitSkinned.pipeline.get(); }
 
   private:
-    void initSharedResources(stdptr<IDescriptorSetLayout> frameAndLightDSL);
+    void initSharedResources(stdptr<IDescriptorSetLayout> frameAndLightDSL,
+                             stdptr<IDescriptorSetLayout> skinningDSL);
     void initPBR();
     void initPhong();
     void initUnlit();
     void initFallbackMaterial();
-    void ensureSkinningCapacity(uint32_t paletteCount);
-    void updateSkinningBuffer(const RenderStageContext& ctx);
-
     void preparePBR(const RenderFrameData& frameData);
     void preparePhong(const RenderFrameData& frameData);
     void prepareUnlit(const RenderFrameData& frameData);

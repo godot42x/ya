@@ -57,6 +57,20 @@
 - commit：`[runtime/deferred] centralize frame and light resources`（本提交）
 - 下一任务：FG-202，迁移 Deferred skinning buffer owner。
 
+### 2026-08-03：FG-202 实现进行中
+
+- 状态：开始
+- 代码事实：`GBufferStage` 当前同时拥有 skinning descriptor layout/pool、per-flight SSBO、capacity 和 CPU upload；扩容时会直接 reset 全部旧 owner，不满足其他 flight command buffer 仍可能引用旧 descriptor/buffer 的 completion-safe 生命周期。
+- 提交边界：将 skinning resource owner、capacity replacement 和 CPU upload 迁到 `DeferredFrameResourceSet`；`GBufferStage` 只接收当前 skinning descriptor binding，`DeferredRenderPipeline` 从 resource set import owner-backed skinning buffer。保留用户已有的 `DescriptorVector.h` 删除。
+
+### 2026-08-03：FG-202 完成
+
+- 实现：`DeferredFrameResourceSet` 接管 skinning DSL、descriptor pool、per-flight SSBO、容量增长和 palette upload；扩容先完整创建新 pool/buffer/descriptor，再原子发布 binding，旧 pool/buffer 经 `DeferredDeletionQueue` 保活到 GPU completion。`GBufferStage` 删除 SSBO/pool/capacity/upload owner，仅接收当前 descriptor binding；`DeferredRenderPipeline` 从 frame resource binding import skinning buffer。
+- 验收：新增容量策略测试，覆盖零 palette 的最小容量、倍增扩容及 32-bit buffer-size 溢出拒绝；无 palette 时仍具备有效 descriptor/buffer binding。
+- 测试：`xmake b ya-editor` 通过；`python3 Script/ya.py test --target ya --filter 'DeferredFrameResourceSetTest.*:DeferredRenderPipelineTest.*:RenderGraphCoreTest.*:ResourceStateTrackerTest.*'` 通过（4 suites，95 tests）；`python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject -- --exit-after-frame=300 --log-level=warn --log-detail-level=error` 以 exit code 0 退出。
+- 日志：`Engine/Saved/Logs/YA-2026-08-03_17-31-54.log` 未发现 `Validation Error`、`VUID-`、`VK_ERROR` 或 `[Error]`。
+- 下一任务：FG-203，迁移 Deferred SSAO frame buffer owner。
+
 ## 初始代码审计
 
 ### 已完成基础

@@ -9,6 +9,7 @@
 #include "DeferredRender.LightPass.slang.h"
 
 #include <array>
+#include <optional>
 
 namespace ya
 {
@@ -18,11 +19,14 @@ namespace ya
  *
  * The descriptor set layout and descriptor sets are pipeline resources. The
  * frame and light payloads are frame-local slices in a per-flight upload arena;
- * the graph imports those slices' backing buffer after this object has written
- * them for the current flight.
+ * skinning uses capacity-managed per-flight storage buffers. The graph imports
+ * those owner-backed resources after this object has prepared the current
+ * flight.
  */
 class DeferredFrameResourceSet
 {
+    friend class DeferredFrameResourceSetTestAccess;
+
   public:
     using FrameData = slang_types::DeferredRender::GBufferPass_PBR::FrameData;
     using LightData = slang_types::DeferredRender::LightPass::LightData;
@@ -30,12 +34,15 @@ class DeferredFrameResourceSet
     struct Binding
     {
         DescriptorSetHandle             frameAndLightDescriptorSet{};
+        DescriptorSetHandle             skinningDescriptorSet{};
         FrameUploadArena::Allocation    frame;
         FrameUploadArena::Allocation    light;
+        stdptr<IBuffer>                  skinningBuffer;
 
         [[nodiscard]] bool isValid() const
         {
-            return frameAndLightDescriptorSet && frame.valid() && light.valid();
+            return frameAndLightDescriptorSet && skinningDescriptorSet &&
+                   frame.valid() && light.valid() && skinningBuffer;
         }
     };
 
@@ -51,6 +58,7 @@ class DeferredFrameResourceSet
     bool prepare(const RenderStageContext& ctx);
 
     [[nodiscard]] stdptr<IDescriptorSetLayout> getFrameAndLightDSL() const { return _frameAndLightDSL; }
+    [[nodiscard]] stdptr<IDescriptorSetLayout> getSkinningDSL() const { return _skinningDSL; }
     [[nodiscard]] const Binding&               getBinding(uint32_t flightIndex) const;
     [[nodiscard]] uint32_t getMaxShadowedPointLights() const { return _shadowState.maxShadowedPointLights; }
     [[nodiscard]] uint32_t getLastShadowedPointLights() const { return _lastShadowedPointLights; }
@@ -60,11 +68,19 @@ class DeferredFrameResourceSet
     std::unique_ptr<FrameUploadArena> _uploadArena;
     stdptr<IDescriptorSetLayout>      _frameAndLightDSL;
     stdptr<IDescriptorPool>           _frameAndLightDSP;
+    stdptr<IDescriptorSetLayout>      _skinningDSL;
+    stdptr<IDescriptorPool>           _skinningDSP;
     std::array<Binding, MAX_FLIGHTS_IN_FLIGHT> _bindings{};
     ShadowRuntimeState _shadowState{};
+    uint32_t _skinningCapacity = 0;
     uint32_t _lastShadowedPointLights = 0;
 
     [[nodiscard]] LightData buildLightData(const RenderFrameData& frameData) const;
+    [[nodiscard]] static std::optional<uint32_t> calculateSkinningCapacity(
+        uint32_t currentCapacity,
+        uint32_t paletteCount);
+    bool ensureSkinningCapacity(uint32_t paletteCount);
+    bool prepareSkinning(const RenderStageContext& ctx);
     void updateDescriptorSet(uint32_t flightIndex, const Binding& binding);
 };
 

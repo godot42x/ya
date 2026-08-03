@@ -124,7 +124,7 @@
   - smoke：Deferred baseline、shutdown
   - 提交：`[runtime/deferred] centralize frame and light buffers`
 
-- [ ] `FG-202` 迁移 Deferred skinning buffer owner 与 capacity replacement
+- [x] `FG-202` 迁移 Deferred skinning buffer owner 与 capacity replacement
   - 依赖：FG-201
   - 修改：DeferredFrameResourceSet、GBufferStage、deferred tests/smoke
   - 实现：owner 负责 capacity；replacement 只在 frame boundary；旧 owner保活到 completion

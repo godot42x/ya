@@ -37,10 +37,12 @@ void refreshShadingPipelineFormats(IGraphicsPipeline* pipeline, const DeferredAt
 // Init
 // ═══════════════════════════════════════════════════════════════════════
 
-void GBufferStage::init(IRender* render, stdptr<IDescriptorSetLayout> frameAndLightDSL)
+void GBufferStage::init(IRender* render,
+                        stdptr<IDescriptorSetLayout> frameAndLightDSL,
+                        stdptr<IDescriptorSetLayout> skinningDSL)
 {
     _render = render;
-    initSharedResources(std::move(frameAndLightDSL));
+    initSharedResources(std::move(frameAndLightDSL), std::move(skinningDSL));
     initPBR();
     initPhong();
     initUnlit();
@@ -57,19 +59,13 @@ void GBufferStage::refreshPipelineFormats(const DeferredAttachmentFormats& forma
     refreshShadingPipelineFormats(_unlitSkinned.pipeline.get(), formats);
 }
 
-void GBufferStage::initSharedResources(stdptr<IDescriptorSetLayout> frameAndLightDSL)
+void GBufferStage::initSharedResources(stdptr<IDescriptorSetLayout> frameAndLightDSL,
+                                       stdptr<IDescriptorSetLayout> skinningDSL)
 {
     _frameAndLightDSL = std::move(frameAndLightDSL);
     YA_CORE_ASSERT(_frameAndLightDSL != nullptr, "GBufferStage requires frame/light DSL");
-
-    _skinningDSL = IDescriptorSetLayout::create(
-        _render,
-        DescriptorSetLayoutDesc{
-            .label    = "Deferred_Skinning_DSL",
-            .set      = 3,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::StorageBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
-        });
-
+    _skinningDSL = std::move(skinningDSL);
+    YA_CORE_ASSERT(_skinningDSL != nullptr, "GBufferStage requires skinning DSL");
 }
 
 void GBufferStage::initPBR()
@@ -339,64 +335,6 @@ void GBufferStage::initFallbackMaterial()
     _fallbackMaterial->setResourceDirty();
 }
 
-void GBufferStage::ensureSkinningCapacity(uint32_t paletteCount)
-{
-    const uint32_t requiredCount = std::max(1u, paletteCount);
-    if (_skinningDSP && requiredCount <= _skinningCapacity) {
-        return;
-    }
-
-    _skinningDSP.reset();
-    for (auto& ds : _skinningDS) {
-        ds = {};
-    }
-
-    _skinningCapacity = std::max(requiredCount, _skinningCapacity == 0 ? 16u : _skinningCapacity);
-    while (_skinningCapacity < requiredCount) {
-        _skinningCapacity *= 2;
-    }
-
-    _skinningDSP = IDescriptorPool::create(
-        _render,
-        DescriptorPoolCreateInfo{
-            .label     = "GBufferStage_Skinning_DSP",
-            .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
-            .poolSizes = {{.type = EPipelineDescriptorType::StorageBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT}},
-        });
-
-    const uint32_t bufferSize = static_cast<uint32_t>(static_cast<uint64_t>(_skinningCapacity) * sizeof(RenderSkinningPalette));
-    for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _skinningSSBO[i] = _render->getResourceFactory()->createBuffer(
-            BufferCreateInfo{
-                .label       = std::format("GBuffer_Skinning_SSBO_{}", i),
-                .usage       = EBufferUsage::StorageBuffer,
-                .size        = bufferSize,
-                .memoryUsage = EMemoryUsage::CpuToGpu,
-            });
-        _skinningDS[i] = _skinningDSP->allocateDescriptorSets(_skinningDSL);
-        _render->getDescriptorHelper()->updateDescriptorSets(
-            {IDescriptorSetHelper::genSingleBufferWrite(_skinningDS[i], 0, EPipelineDescriptorType::StorageBuffer, _skinningSSBO[i].get())},
-            {});
-    }
-}
-
-void GBufferStage::updateSkinningBuffer(const RenderStageContext& ctx)
-{
-    if (!ctx.frameData) {
-        return;
-    }
-
-    const auto& palettes = ctx.frameData->skinningPalettes;
-    ensureSkinningCapacity(static_cast<uint32_t>(palettes.size()));
-    if (palettes.empty()) {
-        return;
-    }
-
-    auto& buffer = _skinningSSBO[ctx.flightIndex];
-    buffer->writeData(palettes.data(), palettes.size() * sizeof(RenderSkinningPalette), 0);
-    buffer->flush();
-}
-
 void GBufferStage::destroy()
 {
     _pbrMatPool   = {};
@@ -410,10 +348,7 @@ void GBufferStage::destroy()
     _unlit        = {};
     _unlitSkinned = {};
 
-    for (auto& ssbo : _skinningSSBO) ssbo.reset();
-    _skinningDSP.reset();
     _skinningDSL.reset();
-    _skinningCapacity = 0;
     _frameAndLightDSL.reset();
     _frameInputs = {};
     _render = nullptr;
@@ -446,7 +381,6 @@ void GBufferStage::prepare(const RenderStageContext& ctx)
     }
 
     if (!ctx.frameData) return;
-    updateSkinningBuffer(ctx);
     preparePBR(*ctx.frameData);
     preparePhong(*ctx.frameData);
     prepareUnlit(*ctx.frameData);
@@ -618,7 +552,8 @@ void GBufferStage::drawPBR(const RenderStageContext& ctx)
         for (const auto& item : items) {
             if (!item.mesh || !item.material) continue;
             if (bSkinned) {
-                cmdBuf->bindDescriptorSets(layout, 0, {ds0, _pbrMatPool.resourceDS(item.materialIndex), _pbrMatPool.paramDS(item.materialIndex), _skinningDS[ctx.flightIndex]});
+                YA_CORE_ASSERT(_frameInputs.skinningDescriptorSet, "GBufferStage missing skinning descriptor set");
+                cmdBuf->bindDescriptorSets(layout, 0, {ds0, _pbrMatPool.resourceDS(item.materialIndex), _pbrMatPool.paramDS(item.materialIndex), _frameInputs.skinningDescriptorSet});
             }
             else {
                 cmdBuf->bindDescriptorSets(layout, 0, {ds0, _pbrMatPool.resourceDS(item.materialIndex), _pbrMatPool.paramDS(item.materialIndex)});
@@ -655,7 +590,8 @@ void GBufferStage::drawPhong(const RenderStageContext& ctx)
             if (!item.mesh || !item.material) continue;
 
             if (bSkinned) {
-                cmdBuf->bindDescriptorSets(layout, 0, {ds0, _phongMatPool.resourceDS(item.materialIndex), _phongMatPool.paramDS(item.materialIndex), _skinningDS[ctx.flightIndex]});
+                YA_CORE_ASSERT(_frameInputs.skinningDescriptorSet, "GBufferStage missing skinning descriptor set");
+                cmdBuf->bindDescriptorSets(layout, 0, {ds0, _phongMatPool.resourceDS(item.materialIndex), _phongMatPool.paramDS(item.materialIndex), _frameInputs.skinningDescriptorSet});
             }
             else {
                 cmdBuf->bindDescriptorSets(layout, 0, {ds0, _phongMatPool.resourceDS(item.materialIndex), _phongMatPool.paramDS(item.materialIndex)});
@@ -692,7 +628,8 @@ void GBufferStage::drawUnlit(const RenderStageContext& ctx)
         for (const auto& item : items) {
             if (!item.mesh || !item.material) continue;
             if (bSkinned) {
-                cmdBuf->bindDescriptorSets(layout, 0, {ds0, _unlitMatPool.resourceDS(item.materialIndex), _unlitMatPool.paramDS(item.materialIndex), _skinningDS[ctx.flightIndex]});
+                YA_CORE_ASSERT(_frameInputs.skinningDescriptorSet, "GBufferStage missing skinning descriptor set");
+                cmdBuf->bindDescriptorSets(layout, 0, {ds0, _unlitMatPool.resourceDS(item.materialIndex), _unlitMatPool.paramDS(item.materialIndex), _frameInputs.skinningDescriptorSet});
             }
             else {
                 cmdBuf->bindDescriptorSets(layout, 0, {ds0, _unlitMatPool.resourceDS(item.materialIndex), _unlitMatPool.paramDS(item.materialIndex)});
@@ -733,7 +670,8 @@ void GBufferStage::drawFallback(const RenderStageContext& ctx)
         auto* layout   = bSkinned ? _unlitSkinned.pipelineLayout.get() : _unlit.pipelineLayout.get();
         cmdBuf->bindPipeline(pipeline);
         if (bSkinned) {
-            cmdBuf->bindDescriptorSets(layout, 0, {ds0, _unlitMatPool.resourceDS(fbIdx), _unlitMatPool.paramDS(fbIdx), _skinningDS[ctx.flightIndex]});
+            YA_CORE_ASSERT(_frameInputs.skinningDescriptorSet, "GBufferStage missing skinning descriptor set");
+            cmdBuf->bindDescriptorSets(layout, 0, {ds0, _unlitMatPool.resourceDS(fbIdx), _unlitMatPool.paramDS(fbIdx), _frameInputs.skinningDescriptorSet});
         }
         else {
             cmdBuf->bindDescriptorSets(layout, 0, {ds0, _unlitMatPool.resourceDS(fbIdx), _unlitMatPool.paramDS(fbIdx)});
