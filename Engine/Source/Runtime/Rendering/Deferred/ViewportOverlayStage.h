@@ -9,6 +9,8 @@
 #include "Runtime/Rendering/Services/DebugRenderSystem.h"
 #include "Runtime/Rendering/Common/RenderOverlay.h"
 
+#include "GLSL.Skybox.glsl.h"
+
 #include <functional>
 #include <glm/glm.hpp>
 
@@ -50,9 +52,10 @@ struct ViewportOverlayStage : public IRenderStage
 
         struct SkyboxInput
         {
-            bool                bAvailable    = false;
-            DescriptorSetHandle descriptorSet = nullptr;
-            Mesh*               mesh          = nullptr;
+            bool                bAvailable         = false;
+            DescriptorSetHandle descriptorSet      = nullptr;
+            DescriptorSetHandle frameDescriptorSet = nullptr;
+            Mesh*               mesh               = nullptr;
         };
 
         std::vector<BillboardInput>      billboards{};
@@ -60,11 +63,7 @@ struct ViewportOverlayStage : public IRenderStage
         SkyboxInput            skybox{};
     };
 
-    struct SkyboxFrameUBO
-    {
-        glm::mat4 projection;
-        glm::mat4 view;
-    };
+    using SkyboxFrameUBO = glsl_types::GLSL::Skybox::FrameUBO;
 
     struct OverlayPushConstant
     {
@@ -101,10 +100,6 @@ struct ViewportOverlayStage : public IRenderStage
     stdptr<IPipelineLayout>      _skyboxPPL;
     stdptr<IDescriptorSetLayout> _skyboxFrameDSL;
     stdptr<IDescriptorSetLayout> _skyboxResourceDSL;
-    stdptr<IDescriptorPool>      _skyboxDSP;
-
-    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _skyboxFrameDS{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _skyboxFrameUBO{};
 
     stdptr<IGraphicsPipeline>    _billboardPipeline;
     stdptr<IPipelineLayout>      _billboardPPL;
@@ -136,7 +131,8 @@ struct ViewportOverlayStage : public IRenderStage
     // ── IRenderStage ─────────────────────────────────────────────
     ViewportOverlayStage() : IRenderStage("ViewportOverlay") {}
 
-    void init(IRender* render) override;
+    void init(IRender* render, stdptr<IDescriptorSetLayout> skyboxFrameDSL);
+    void init(IRender* render) override { init(render, nullptr); }
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
     void execute(const RenderStageContext& ctx) override;
@@ -145,6 +141,11 @@ struct ViewportOverlayStage : public IRenderStage
     void refreshPipelineFormats(const DeferredAttachmentFormats& formats);
     void setServices(Services services);
     void setFrameInputs(FrameInputs frameInputs);
+    void setSkyboxFrameDescriptorSet(DescriptorSetHandle descriptorSet)
+    {
+        _frameInputs.skybox.frameDescriptorSet = descriptorSet;
+    }
+    [[nodiscard]] SkyboxFrameUBO buildSkyboxFrameData(const RenderStageContext& ctx) const;
     [[nodiscard]] IGraphicsPipeline* getSkyboxPipeline() const { return _skyboxPipeline.get(); }
     [[nodiscard]] IGraphicsPipeline* getOverlayPipeline() const { return _overlayPipeline.get(); }
     [[nodiscard]] DebugRenderSystem* getDebugRenderSystem() const { return _debugRenderSystem; }
@@ -152,7 +153,7 @@ struct ViewportOverlayStage : public IRenderStage
     [[nodiscard]] const DebugSkinning& getDebugSkinning() const { return _debugSkinning; }
 
   private:
-    void initSkybox();
+    void initSkybox(stdptr<IDescriptorSetLayout> skyboxFrameDSL);
     void initOverlay();
     void initBillboards();
     void updateBillboardTextures();

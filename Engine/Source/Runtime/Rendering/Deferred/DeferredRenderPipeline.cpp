@@ -744,7 +744,7 @@ void DeferredRenderPipeline::initStages()
     _overlayStage->setServices(ViewportOverlayStage::Services{
         .getDebugRenderSystem = _getDebugRenderSystem,
     });
-    _overlayStage->init(_render);
+    _overlayStage->init(_render, _frameResources->getSkyboxFrameDSL());
 
     refreshGBufferStageState();
     refreshViewportStageState();
@@ -920,6 +920,9 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
 
     if (_overlayStage) {
         ViewportOverlayStage::FrameInputs frameInputs{};
+        frameInputs.skybox.frameDescriptorSet = _frameResources
+            ? _frameResources->getBinding(frame.flightIndex).skyboxFrameDescriptorSet
+            : DescriptorSetHandle{};
         auto* resourceResolveSystem = _getResourceResolveSystem ? _getResourceResolveSystem() : nullptr;
 
         if (activeScene) {
@@ -1150,6 +1153,9 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     if (bUseSSAO && !_frameResources->prepareSSAO(stageCtx, _ssaoStage->buildFrameData(stageCtx))) {
         return;
     }
+    if (_overlayStage && !_frameResources->prepareSkybox(stageCtx, _overlayStage->buildSkyboxFrameData(stageCtx))) {
+        return;
+    }
 
     const auto& frameBinding = _frameResources->getBinding(frame.flightIndex);
     _gBufferStage->setFrameInputs(GBufferStage::FrameInputs{
@@ -1161,6 +1167,9 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             .descriptorSet = frameBinding.ssaoFrameDescriptorSet,
             .frame         = frameBinding.ssaoFrame,
         });
+    }
+    if (_overlayStage) {
+        _overlayStage->setSkyboxFrameDescriptorSet(frameBinding.skyboxFrameDescriptorSet);
     }
     _gBufferStage->prepare(stageCtx);
 
@@ -1216,6 +1225,12 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             frameBinding.ssaoFrame.offset,
             frameBinding.ssaoFrame.size);
     }
+    const auto skyboxFrameBuffer = importHostWrittenBuffer(
+        frameBinding.skyboxFrame.buffer,
+        "Deferred.SkyboxFrameUBO",
+        EBufferUsage::UniformBuffer,
+        frameBinding.skyboxFrame.offset,
+        frameBinding.skyboxFrame.size);
 
     std::array<RGTextureHandle, 4> gbufferColors{};
     for (uint32_t attachmentIndex = 0; attachmentIndex < gbufferColors.size(); ++attachmentIndex) {
@@ -1410,6 +1425,10 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     [[maybe_unused]] const auto skyboxPass = graph.addPass(
             "Deferred Skybox",
         [&](RGPassBuilder& passBuilder) {
+            passBuilder.uniformRead(skyboxFrameBuffer, RGBufferRange{
+                .offset = frameBinding.skyboxFrame.offset,
+                .size   = frameBinding.skyboxFrame.size,
+            });
             passBuilder.declareRaster({
                 .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
                 .layerCount = 1,

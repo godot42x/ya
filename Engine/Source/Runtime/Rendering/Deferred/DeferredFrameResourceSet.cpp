@@ -61,6 +61,22 @@ void DeferredFrameResourceSet::init(IRender* render)
             .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT}},
         });
 
+    _skyboxFrameDSL = IDescriptorSetLayout::create(
+        _render,
+        DescriptorSetLayoutDesc{
+            .label    = "Deferred_Skybox_Frame_DSL",
+            .set      = 0,
+            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
+        });
+
+    _skyboxFrameDSP = IDescriptorPool::create(
+        _render,
+        DescriptorPoolCreateInfo{
+            .label     = "Deferred_Skybox_Frame_DSP",
+            .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
+            .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT}},
+        });
+
     _uploadArena = std::make_unique<FrameUploadArena>(
         *render->getResourceFactory(),
         MAX_FLIGHTS_IN_FLIGHT,
@@ -72,6 +88,7 @@ void DeferredFrameResourceSet::init(IRender* render)
         _bindings[flightIndex] = Binding{
             .frameAndLightDescriptorSet = _frameAndLightDSP->allocateDescriptorSets(_frameAndLightDSL),
             .ssaoFrameDescriptorSet     = _ssaoFrameDSP->allocateDescriptorSets(_ssaoFrameDSL),
+            .skyboxFrameDescriptorSet   = _skyboxFrameDSP->allocateDescriptorSets(_skyboxFrameDSL),
         };
     }
 
@@ -86,6 +103,8 @@ void DeferredFrameResourceSet::destroy()
     _skinningDSL.reset();
     _ssaoFrameDSP.reset();
     _ssaoFrameDSL.reset();
+    _skyboxFrameDSP.reset();
+    _skyboxFrameDSL.reset();
     _frameAndLightDSP.reset();
     _frameAndLightDSL.reset();
     _shadowState = {};
@@ -308,6 +327,26 @@ void DeferredFrameResourceSet::updateSSAODescriptorSet(uint32_t flightIndex, con
     });
 }
 
+void DeferredFrameResourceSet::updateSkyboxDescriptorSet(uint32_t flightIndex, const Binding& binding)
+{
+    const auto& previous = _bindings[flightIndex];
+    const bool bChanged = previous.skyboxFrame.buffer.get() != binding.skyboxFrame.buffer.get() ||
+                          previous.skyboxFrame.offset != binding.skyboxFrame.offset ||
+                          previous.skyboxFrame.size != binding.skyboxFrame.size;
+    if (!bChanged) {
+        return;
+    }
+
+    _render->getDescriptorHelper()->updateDescriptorSets({
+        IDescriptorSetHelper::genBufferWrite(
+            binding.skyboxFrameDescriptorSet,
+            0,
+            0,
+            EPipelineDescriptorType::UniformBuffer,
+            {binding.skyboxFrame.descriptor()}),
+    });
+}
+
 bool DeferredFrameResourceSet::prepare(const RenderStageContext& ctx)
 {
     if (!_render || !_uploadArena || !ctx.frameData || ctx.flightIndex >= MAX_FLIGHTS_IN_FLIGHT) {
@@ -402,6 +441,30 @@ bool DeferredFrameResourceSet::prepareSSAO(
     Binding next   = _bindings[ctx.flightIndex];
     next.ssaoFrame = *ssaoFrame;
     updateSSAODescriptorSet(ctx.flightIndex, next);
+    _bindings[ctx.flightIndex] = std::move(next);
+    return true;
+}
+
+bool DeferredFrameResourceSet::prepareSkybox(
+    const RenderStageContext& ctx,
+    const SkyboxFrameData& frameData)
+{
+    if (!_render || !_uploadArena || ctx.flightIndex >= MAX_FLIGHTS_IN_FLIGHT) {
+        return false;
+    }
+
+    const uint32_t alignment = std::max(_render->getUniformBufferOffsetAlignment(), 1u);
+    const auto skyboxFrame = _uploadArena->allocate(
+        ctx.flightIndex,
+        sizeof(SkyboxFrameData),
+        alignment);
+    if (!skyboxFrame.has_value() || !skyboxFrame->write(&frameData, sizeof(frameData))) {
+        return false;
+    }
+
+    Binding next     = _bindings[ctx.flightIndex];
+    next.skyboxFrame = *skyboxFrame;
+    updateSkyboxDescriptorSet(ctx.flightIndex, next);
     _bindings[ctx.flightIndex] = std::move(next);
     return true;
 }

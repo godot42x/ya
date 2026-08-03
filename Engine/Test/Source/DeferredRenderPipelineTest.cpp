@@ -153,6 +153,26 @@ TEST(SSAOStageTest, BuildsFrameDataWithoutOwningGpuResources)
     EXPECT_FLOAT_EQ(payload.invProjectMat[0][0], 0.5f);
 }
 
+TEST(ViewportOverlayStageTest, BuildsSkyboxFrameDataWithoutCameraTranslation)
+{
+    ViewportOverlayStage stage;
+
+    RenderFrameData frameData{};
+    frameData.projection = glm::mat4(2.0f);
+    frameData.view       = glm::mat4(1.0f);
+    frameData.view[3]    = glm::vec4(5.0f, 6.0f, 7.0f, 1.0f);
+    RenderStageContext ctx{
+        .frameData = &frameData,
+    };
+
+    const auto payload = stage.buildSkyboxFrameData(ctx);
+    EXPECT_FLOAT_EQ(payload.proj[0][0], 2.0f);
+    EXPECT_FLOAT_EQ(payload.view[3][0], 0.0f);
+    EXPECT_FLOAT_EQ(payload.view[3][1], 0.0f);
+    EXPECT_FLOAT_EQ(payload.view[3][2], 0.0f);
+    EXPECT_FLOAT_EQ(payload.view[3][3], 1.0f);
+}
+
 TEST_F(DeferredRenderPipelineSettingsTest, PersistentShadowSettingsSeedFirstFrameState)
 {
     ConfigManager::get().set("runtime", "render.deferred.shadow.enableShadowMapping", true);
