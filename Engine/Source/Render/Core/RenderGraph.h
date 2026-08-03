@@ -95,6 +95,9 @@ struct RGBufferDesc
     EBufferUsage usage       = EBufferUsage::None;
     uint32_t     size        = 0;
     EMemoryUsage memoryUsage = EMemoryUsage::Auto;
+    // Alignment is an explicit backend-neutral contract for future suballocation.
+    // A value of one means that the resource has no stronger requirement.
+    uint32_t     alignment   = 1;
 };
 
 struct RGBufferRange
@@ -289,14 +292,30 @@ struct RGTransientBufferLifetimePlan
     }
 };
 
+struct RGTransientBufferAssignment
+{
+    RGBufferHandle buffer{};
+    uint32_t       slotIndex = ~0u;
+};
+
+struct RGTransientBufferSlotPlan
+{
+    uint32_t                 slotIndex = ~0u;
+    RGBufferDesc             desc{};
+    std::vector<RGBufferHandle> buffers;
+};
+
 struct RGTransientBufferDiagnostics
 {
-    uint32_t logicalCount      = 0;
-    uint64_t logicalBytes      = 0;
-    uint32_t usedCount         = 0;
-    uint64_t usedBytes         = 0;
-    uint32_t unusedCount       = 0;
-    uint64_t unusedBytes       = 0;
+    uint32_t logicalCount       = 0;
+    uint64_t logicalBytes       = 0;
+    uint32_t usedCount          = 0;
+    uint64_t usedBytes          = 0;
+    uint32_t unusedCount        = 0;
+    uint64_t unusedBytes        = 0;
+    uint32_t physicalSlotCount  = 0;
+    uint64_t physicalBytes      = 0;
+    uint32_t aliasedBufferCount = 0;
 };
 
 struct RGCompileIssue
@@ -325,6 +344,8 @@ struct RGCompiledGraph
     std::vector<RGImportedTextureFinalizePlan> importedTextureFinalizes;
     std::vector<RGImportedBufferFinalizePlan>  importedBufferFinalizes;
     std::vector<RGTransientBufferLifetimePlan> transientBufferLifetimes;
+    std::vector<RGTransientBufferAssignment>   transientBufferAssignments;
+    std::vector<RGTransientBufferSlotPlan>     transientBufferSlots;
     RGTransientBufferDiagnostics               transientBufferDiagnostics;
     std::vector<RGCompileIssue>               issues;
 

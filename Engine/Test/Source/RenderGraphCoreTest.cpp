@@ -774,7 +774,8 @@ TEST(RenderGraphCoreTest, CompileBuildsTransientBufferLifetimeMetadata)
     EXPECT_NE(dump.find("transientBufferDiagnostics logicalCount=3 logicalBytes=448 "
                         "usedCount=2 usedBytes=384 unusedCount=1 unusedBytes=64"),
               std::string::npos);
-    EXPECT_NE(dump.find("physicalReuse=not-materialized"), std::string::npos);
+    EXPECT_NE(dump.find("physicalSlotCount=2 physicalBytes=384 aliasedBufferCount=0"), std::string::npos);
+    EXPECT_NE(dump.find("physicalReuse=compiler-plan"), std::string::npos);
 }
 
 TEST(RenderGraphCoreTest, CompileOrdersTransientBufferLifetimesByTopologicalUse)
@@ -899,6 +900,152 @@ TEST(RenderGraphCoreTest, CompileTransientBufferLifetimesFollowExplicitDependenc
     EXPECT_EQ(compiled.transientBufferLifetimes[0].buffer, rightLifetime->buffer);
     EXPECT_EQ(compiled.transientBufferLifetimes[1].buffer, leftLifetime->buffer);
     EXPECT_EQ(compiled.transientBufferLifetimes[2].buffer, unusedLifetime->buffer);
+}
+
+TEST(RenderGraphCoreTest, CompileAllocatesDeterministicTransientBufferSlots)
+{
+    RenderGraph graph;
+    const auto first = graph.createBuffer(RGBufferDesc{
+        .label     = "transient.first",
+        .usage     = EBufferUsage::TransferDst,
+        .size      = 32,
+        .alignment = 16,
+    });
+    const auto second = graph.createBuffer(RGBufferDesc{
+        .label       = "transient.second",
+        .usage       = EBufferUsage::TransferDst,
+        .size        = 128,
+        .memoryUsage = EMemoryUsage::Auto,
+        .alignment   = 64,
+    });
+    const auto third = graph.createBuffer(RGBufferDesc{
+        .label       = "transient.third",
+        .usage       = EBufferUsage::StorageBuffer,
+        .size        = 64,
+        .memoryUsage = EMemoryUsage::Auto,
+        .alignment   = 32,
+    });
+
+    graph.addPass("write-first", [&](RGPassBuilder& pass) {
+        pass.transferDst(first);
+    });
+    graph.addPass("write-second", [&](RGPassBuilder& pass) {
+        pass.transferDst(second);
+    });
+    graph.addPass("write-third", [&](RGPassBuilder& pass) {
+        pass.storageWrite(third);
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid());
+    ASSERT_EQ(compiled.transientBufferSlots.size(), 1u);
+    ASSERT_EQ(compiled.transientBufferAssignments.size(), 3u);
+
+    const auto& slot = compiled.transientBufferSlots.front();
+    EXPECT_EQ(slot.slotIndex, 0u);
+    EXPECT_EQ(slot.desc.size, 128u);
+    EXPECT_EQ(slot.desc.alignment, 64u);
+    EXPECT_EQ(slot.desc.usage, EBufferUsage::TransferDst | EBufferUsage::StorageBuffer);
+    ASSERT_EQ(slot.buffers.size(), 3u);
+    EXPECT_EQ(slot.buffers[0], first);
+    EXPECT_EQ(slot.buffers[1], second);
+    EXPECT_EQ(slot.buffers[2], third);
+
+    EXPECT_EQ(compiled.transientBufferAssignments[0].buffer, first);
+    EXPECT_EQ(compiled.transientBufferAssignments[0].slotIndex, 0u);
+    EXPECT_EQ(compiled.transientBufferAssignments[1].buffer, second);
+    EXPECT_EQ(compiled.transientBufferAssignments[1].slotIndex, 0u);
+    EXPECT_EQ(compiled.transientBufferAssignments[2].buffer, third);
+    EXPECT_EQ(compiled.transientBufferAssignments[2].slotIndex, 0u);
+
+    EXPECT_EQ(compiled.transientBufferDiagnostics.physicalSlotCount, 1u);
+    EXPECT_EQ(compiled.transientBufferDiagnostics.physicalBytes, 128u);
+    EXPECT_EQ(compiled.transientBufferDiagnostics.aliasedBufferCount, 2u);
+}
+
+TEST(RenderGraphCoreTest, CompileDoesNotAliasOverlappingOrIncompatibleTransientBuffers)
+{
+    RenderGraph graph;
+    const auto overlapA = graph.createBuffer(RGBufferDesc{
+        .label       = "transient.overlap.a",
+        .usage       = EBufferUsage::StorageBuffer,
+        .size        = 64,
+        .memoryUsage = EMemoryUsage::GpuOnly,
+    });
+    const auto overlapB = graph.createBuffer(RGBufferDesc{
+        .label       = "transient.overlap.b",
+        .usage       = EBufferUsage::StorageBuffer,
+        .size        = 96,
+        .memoryUsage = EMemoryUsage::GpuOnly,
+    });
+    const auto incompatible = graph.createBuffer(RGBufferDesc{
+        .label       = "transient.incompatible",
+        .usage       = EBufferUsage::StorageBuffer,
+        .size        = 48,
+        .memoryUsage = EMemoryUsage::CpuToGpu,
+    });
+    const auto persistent = graph.createPersistentBuffer(
+        RGBufferDesc{
+            .label       = "persistent.buffer",
+            .usage       = EBufferUsage::StorageBuffer,
+            .size        = 64,
+            .memoryUsage = EMemoryUsage::GpuOnly,
+        },
+        RGPersistentBufferKey{"persistent.buffer"});
+    const auto imported = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label       = "imported.buffer",
+            .usage       = EBufferUsage::StorageBuffer,
+            .size        = 64,
+            .memoryUsage = EMemoryUsage::GpuOnly,
+        },
+        .buffer       = reinterpret_cast<IBuffer*>(0x1),
+        .initialState = BufferResourceState{
+            .stages = EPipelineStage::ComputeShader,
+            .access = EResourceAccess::ShaderRead,
+        },
+    });
+
+    graph.addPass("write-a", [&](RGPassBuilder& pass) {
+        pass.storageWrite(overlapA);
+    });
+    graph.addPass("write-b", [&](RGPassBuilder& pass) {
+        pass.storageRead(overlapA);
+        pass.storageWrite(overlapB);
+    });
+    graph.addPass("read-b", [&](RGPassBuilder& pass) {
+        pass.storageRead(overlapB);
+    });
+    graph.addPass("write-incompatible", [&](RGPassBuilder& pass) {
+        pass.storageWrite(incompatible);
+        pass.storageWrite(persistent);
+        pass.storageRead(imported);
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid());
+    ASSERT_EQ(compiled.transientBufferAssignments.size(), 3u);
+    ASSERT_EQ(compiled.transientBufferSlots.size(), 3u);
+
+    const auto findAssignment = [&](RGBufferHandle handle) {
+        return std::find_if(compiled.transientBufferAssignments.begin(),
+                            compiled.transientBufferAssignments.end(),
+                            [handle](const RGTransientBufferAssignment& assignment) {
+                                return assignment.buffer == handle;
+                            });
+    };
+    const auto aAssignment = findAssignment(overlapA);
+    const auto bAssignment = findAssignment(overlapB);
+    const auto incompatibleAssignment = findAssignment(incompatible);
+    ASSERT_NE(aAssignment, compiled.transientBufferAssignments.end());
+    ASSERT_NE(bAssignment, compiled.transientBufferAssignments.end());
+    ASSERT_NE(incompatibleAssignment, compiled.transientBufferAssignments.end());
+    EXPECT_NE(aAssignment->slotIndex, bAssignment->slotIndex);
+    EXPECT_NE(aAssignment->slotIndex, incompatibleAssignment->slotIndex);
+    EXPECT_NE(bAssignment->slotIndex, incompatibleAssignment->slotIndex);
+
+    EXPECT_EQ(compiled.transientBufferDiagnostics.physicalSlotCount, 3u);
+    EXPECT_EQ(compiled.transientBufferDiagnostics.aliasedBufferCount, 0u);
 }
 
 TEST(RenderGraphCoreTest, CompileBuildsImportedFinalizePlans)
