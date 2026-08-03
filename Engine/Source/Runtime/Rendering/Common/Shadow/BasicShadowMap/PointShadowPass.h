@@ -2,6 +2,7 @@
 
 #include "BasicShadowPayload.h"
 #include "PointShadowIndirectRenderer.h"
+#include "Runtime/Rendering/Common/Shadow/ShadowFrameResources.h"
 #include "Runtime/Rendering/Common/Shadow/ShadowTypes.h"
 
 #include "Render/Core/Buffer.h"
@@ -39,7 +40,7 @@ class PointShadowPass
     using PointFaceUBO      = BasicShadowFramePayload::PointFaceUBO;
     using ModelPushConstant = slang_types::CombineShadowMappingGenerate::PushConstants;
 
-    void init(IRender* render, Extent2D shadowExtent);
+    void init(IRender* render, Extent2D shadowExtent, ShadowFrameResources& frameResources);
     void destroy();
     void prepare(const BasicShadowFramePayload& payload);
     void execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload);
@@ -58,27 +59,14 @@ class PointShadowPass
     void rebuildFaceTextures(std::shared_ptr<IImage> shadowImage);
 
   private:
-    // ─── Frame UBO per face ──────────────────────────────────────────
-    struct PerFlightResources
-    {
-        // Per-face UBOs (one UBO per light×face)
-        std::array<stdptr<IBuffer>, ShadowConstants::POINT_SHADOW_FACE_COUNT>     faceUBO{};
-        std::array<DescriptorSetHandle, ShadowConstants::POINT_SHADOW_FACE_COUNT> faceDS{};
-
-        // Skinning
-        stdptr<IBuffer>     skinningSSBO;
-        DescriptorSetHandle skinningDS = nullptr;
-
-    };
-
     // ─── Rendering helpers ───────────────────────────────
     void renderFaceDirect(ICommandBuffer*                 cmdBuf,
                           const BasicShadowFramePayload& payload,
                           const PointShadowFacePayload&  facePayload) const;
 
-    void ensureSkinningCapacity(uint32_t paletteCount);
     // ─── State ─────────────────────────────────────────────────
     IRender* _render       = nullptr;
+    ShadowFrameResources* _frameResources = nullptr;
     Extent2D _shadowExtent = {.width = 1024, .height = 1024};
 
     // Pipeline: direct draw (reuses CombineShadowMappingGenerate)
@@ -93,7 +81,6 @@ class PointShadowPass
     // Shared descriptor set layouts
     stdptr<IDescriptorSetLayout> _frameDSL;
     stdptr<IDescriptorSetLayout> _skinningDSL;
-    stdptr<IDescriptorPool>      _dsp;
 
     GraphicsPipelineCreateInfo _directPipelineCI{};
 
@@ -104,9 +91,6 @@ class PointShadowPass
 
     PointShadowIndirectRenderer _indirectRenderer;
 
-    // Per-flight
-    std::array<PerFlightResources, MAX_FLIGHTS_IN_FLIGHT> _perFlight{};
-    uint32_t _skinningCapacity = 0;
 };
 
 } // namespace ya

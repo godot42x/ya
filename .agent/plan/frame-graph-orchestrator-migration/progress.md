@@ -99,6 +99,14 @@
 - 日志：`Engine/Saved/Logs/YA-2026-08-03_19-23-35.log` 未发现 `Validation Error`、`VUID-`、`VK_ERROR` 或 `[Error]`。
 - 下一任务：FG-205，调查并迁移 shadow raster/cull/indirect per-flight buffer owner。
 
+### 2026-08-03：FG-205 第一批次完成
+
+- 实现：新增 `ShadowFrameResources`，统一持有 directional/point shadow 的 frame DSL、skinning DSL、descriptor pool、per-flight upload arena 与 capacity-managed skinning buffer。两个 raster pass 删除各自的 frame UBO、skinning SSBO、descriptor pool 和上传逻辑；graph 通过实际 arena `offset/size` 声明 UBO range，并在执行回调中消费 owner binding。
+- 边界：point indirect renderer 的 instance buffer、draw command、visible instance、frustum/cull buffer 仍保留在原模块，下一批次再分类为 GPU-only scratch 或 host staging。
+- 测试：`xmake b ya-editor` 通过；定向渲染/graph 测试 95 tests 通过；`python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject -- --exit-after-frame=300 --log-level=warn --log-detail-level=error` 以 exit code 0 退出。
+- 日志：`Engine/Saved/Logs/YA-2026-08-03_19-42-24.log` 未发现 `Validation Error`、`VUID-`、`VK_ERROR` 或 `[Error]`。
+- 下一步：继续 FG-205，迁移 point indirect/cull 的 per-flight instance 与 command resources，并保留 capacity growth 的延迟退休语义。
+
 ## 初始代码审计
 
 ### 已完成基础

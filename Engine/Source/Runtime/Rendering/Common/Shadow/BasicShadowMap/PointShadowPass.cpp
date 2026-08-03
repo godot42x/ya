@@ -26,24 +26,15 @@ namespace ya
 // Init / Destroy
 // ═══════════════════════════════════════════════════════════════════════════
 
-void PointShadowPass::init(IRender* render, Extent2D shadowExtent)
+void PointShadowPass::init(IRender* render, Extent2D shadowExtent, ShadowFrameResources& frameResources)
 {
-    _render       = render;
-    _shadowExtent = shadowExtent;
+    _render         = render;
+    _frameResources = &frameResources;
+    _shadowExtent   = shadowExtent;
     _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
 
-    // ─── Descriptor set layouts ──────────────────────────────────────
-    _frameDSL = IDescriptorSetLayout::create(_render, DescriptorSetLayoutDesc{
-        .label    = "PointShadow_Frame_DSL",
-        .set      = 0,
-        .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment}},
-    });
-
-    _skinningDSL = IDescriptorSetLayout::create(_render, DescriptorSetLayoutDesc{
-        .label    = "PointShadow_Skinning_DSL",
-        .set      = 1,
-        .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::StorageBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
-    });
+    _frameDSL    = _frameResources->getFrameDSL();
+    _skinningDSL = _frameResources->getSkinningDSL();
 
     // ─── Pipeline: direct draw (CombineShadowMappingGenerate.slang) ──
     _directPipelineCI = GraphicsPipelineCreateInfo{
@@ -104,51 +95,12 @@ void PointShadowPass::init(IRender* render, Extent2D shadowExtent)
 
     _indirectRenderer.init(_render, _frameDSL);
 
-    // ─── Descriptor pool ─────────────────────────────────────────────
-    const uint32_t faceCount   = ShadowConstants::POINT_SHADOW_FACE_COUNT;
-    const uint32_t maxSets     = MAX_FLIGHTS_IN_FLIGHT * (faceCount + 1); // face UBOs + skinning
-    const uint32_t uboCount    = MAX_FLIGHTS_IN_FLIGHT * faceCount;
-    const uint32_t ssboCount   = MAX_FLIGHTS_IN_FLIGHT;
-    _dsp = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-        .label     = "PointShadow_DSP",
-        .maxSets   = maxSets,
-        .poolSizes = {
-            {.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = uboCount},
-            {.type = EPipelineDescriptorType::StorageBuffer, .descriptorCount = ssboCount},
-        },
-    });
-
-    // ─── Per-flight resources ────────────────────────────────────────
-    PointFaceUBO initialData{};
-    for (uint32_t fi = 0; fi < MAX_FLIGHTS_IN_FLIGHT; ++fi) {
-        auto& flight = _perFlight[fi];
-        for (uint32_t face = 0; face < faceCount; ++face) {
-            flight.faceUBO[face] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-                .label       = std::format("PointShadow_FaceUBO_{}_{}", fi, face),
-                .usage       = EBufferUsage::UniformBuffer,
-                .size        = sizeof(PointFaceUBO),
-                .memoryUsage = EMemoryUsage::CpuToGpu,
-            });
-            flight.faceUBO[face]->writeData(&initialData, sizeof(PointFaceUBO), 0);
-
-            flight.faceDS[face] = _dsp->allocateDescriptorSets(_frameDSL);
-            _render->getDescriptorHelper()->updateDescriptorSets({
-                IDescriptorSetHelper::writeOneUniformBuffer(flight.faceDS[face], 0, flight.faceUBO[face].get()),
-            });
-        }
-    }
 }
 
 void PointShadowPass::destroy()
 {
     _indirectRenderer.destroy();
 
-    for (auto& flight : _perFlight) {
-        for (auto& ubo : flight.faceUBO) ubo.reset();
-        flight.skinningSSBO.reset();
-        flight.skinningDS  = nullptr;
-    }
-    _dsp.reset();
     _shadowImage.reset();
     _graphExecutor.reset();
     for (auto& faceViewArr : _faceDepthViews) {
@@ -158,7 +110,7 @@ void PointShadowPass::destroy()
     _directSkinnedVariant = {};
     _skinningDSL.reset();
     _frameDSL.reset();
-    _skinningCapacity = 0;
+    _frameResources = nullptr;
     _render = nullptr;
 }
 
@@ -171,8 +123,6 @@ void PointShadowPass::prepare(const BasicShadowFramePayload& payload)
     YA_PROFILE_FUNCTION();
     if (!payload.frameData) return;
 
-    auto& flight = _perFlight[payload.flightIndex];
-
     {
         YA_PROFILE_SCOPE("PointShadowPass::BeginFrame");
         if (_directStaticVariant.pipeline)  _directStaticVariant.pipeline->beginFrame();
@@ -181,32 +131,6 @@ void PointShadowPass::prepare(const BasicShadowFramePayload& payload)
     }
 
     if (payload.pointLightCount == 0) return;
-
-    {
-        YA_PROFILE_SCOPE("PointShadowPass::FaceUBO");
-        for (uint32_t lightIndex = 0; lightIndex < payload.pointLightCount; ++lightIndex) {
-            for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
-                PointFaceUBO faceData{
-                    .viewProj  = payload.frameUBO.pointLights[lightIndex].matrix[faceIndex],
-                    .lightPos  = payload.frameUBO.pointLights[lightIndex].pos,
-                    .farPlane  = payload.frameUBO.pointLights[lightIndex].farPlane,
-                };
-
-                const uint32_t faceGlobal = lightIndex * 6 + faceIndex;
-                flight.faceUBO[faceGlobal]->writeData(&faceData, sizeof(PointFaceUBO), 0);
-            }
-        }
-    }
-
-    {
-        YA_PROFILE_SCOPE("PointShadowPass::SkinningUpload");
-        const auto& palettes = payload.frameData->skinningPalettes;
-        ensureSkinningCapacity(static_cast<uint32_t>(palettes.size()));
-        if (!palettes.empty()) {
-            flight.skinningSSBO->writeData(palettes.data(), palettes.size() * sizeof(RenderSkinningPalette), 0);
-            flight.skinningSSBO->flush();
-        }
-    }
 
     {
         YA_PROFILE_SCOPE("PointShadowPass::IndirectPrepare");
@@ -236,12 +160,13 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
 {
     if (!payload.frameData || payload.pointLightCount == 0 || !_shadowImage) return std::nullopt;
 
-    auto& flight = _perFlight[payload.flightIndex];
     const bool useIndirect = payload.pointIndirectRequested() && _indirectRenderer.hasRenderableInstances(payload.flightIndex);
 
     std::optional<RGPassHandle> rasterDependency = dependency;
 
-    YA_CORE_ASSERT(flight.skinningSSBO, "Point shadow graph requires a skinning buffer");
+    YA_CORE_ASSERT(_frameResources != nullptr, "Point shadow graph requires frame resources");
+    const auto& binding = _frameResources->getBinding(payload.flightIndex);
+    YA_CORE_ASSERT(binding.skinningBuffer, "Point shadow graph requires a skinning buffer");
 
     const auto importBuffer = [&](const std::shared_ptr<IBuffer>& buffer,
                                   std::string label,
@@ -264,7 +189,7 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
         .access = EResourceAccess::HostWrite,
     };
     const auto skinningBuffer = importBuffer(
-        flight.skinningSSBO, "PointShadow.SkinningSSBO", EBufferUsage::StorageBuffer, hostWriteState);
+        binding.skinningBuffer, "PointShadow.SkinningSSBO", EBufferUsage::StorageBuffer, hostWriteState);
 
     std::optional<RGBufferHandle> drawCommands;
     std::optional<RGBufferHandle> visibleInstances;
@@ -287,6 +212,7 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
         PointShadowFacePayload payload{};
         RGTextureHandle        depth{};
         RGBufferHandle         faceBuffer{};
+        RGBufferRange          faceRange{};
     };
     auto graphFaces = std::make_shared<std::vector<GraphFace>>();
     graphFaces->reserve(payload.pointLightCount * 6);
@@ -299,12 +225,12 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
                 .faceGlobalIndex = lightIndex * 6 + faceIndex,
                 .layerIndex      = getShadowPointLightBaseLayer(lightIndex) + faceIndex,
             };
-            facePayload.faceDS = flight.faceDS[facePayload.faceGlobalIndex];
+            facePayload.faceDS = binding.pointFaceDS[facePayload.faceGlobalIndex];
             facePayload.depthImage = _shadowImage.get();
             facePayload.depthView  = _faceDepthViews[lightIndex][faceIndex].get();
             auto faceDepthView = _faceDepthViews[lightIndex][faceIndex];
-            auto* faceUBO = flight.faceUBO[facePayload.faceGlobalIndex].get();
-            if (!facePayload.depthView || !faceDepthView || !faceUBO) continue;
+            const auto& faceAllocation = binding.pointFaces[facePayload.faceGlobalIndex];
+            if (!facePayload.depthView || !faceDepthView || !faceAllocation) continue;
 
             const auto depth = graph.importTexture(makeImportedTextureDesc(
                 _shadowImage,
@@ -314,15 +240,21 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
                 EImageUsage::DepthStencilAttachment,
                 Extent3D{_shadowExtent.width, _shadowExtent.height, 1}));
             const auto faceBuffer = importBuffer(
-                flight.faceUBO[facePayload.faceGlobalIndex],
+                faceAllocation.buffer,
                 std::format("PointShadow.FaceUBO.{}.{}", lightIndex, faceIndex),
                 EBufferUsage::UniformBuffer,
-                hostWriteState);
+                BufferResourceState{
+                    .stages = EPipelineStage::Host,
+                    .access = EResourceAccess::HostWrite,
+                    .offset = faceAllocation.offset,
+                    .size   = faceAllocation.size,
+                });
 
             graphFaces->push_back({
                 .payload    = facePayload,
                 .depth      = depth,
                 .faceBuffer = faceBuffer,
+                .faceRange  = {.offset = faceAllocation.offset, .size = faceAllocation.size},
             });
         }
     }
@@ -337,11 +269,11 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
             if (drawCommands.has_value()) pass.indirectRead(*drawCommands);
             if (visibleInstances.has_value()) pass.storageRead(*visibleInstances);
             for (const auto& face : *graphFaces) {
-                pass.uniformRead(face.faceBuffer);
+                pass.uniformRead(face.faceBuffer, face.faceRange);
                 pass.useDepthAttachment(face.depth);
             }
         },
-        [this, payload, useIndirect, graphFaces](RGRenderContext& ctx) {
+        [this, payload, useIndirect, graphFaces, skinningDS = binding.skinningDS](RGRenderContext& ctx) {
             YA_PERF_SCOPE(perf::sample::shadowPoint(), perf::metric::cpuTimeMs(), perf::domain::render());
             YA_PROFILE_SCOPE("PointShadowPass::RenderFaces");
             YA_PERF_SCOPE(perf::sample::shadowPointFaceLoop(), perf::metric::cpuTimeMs(), perf::domain::render());
@@ -380,12 +312,11 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
                 {
                     YA_PROFILE_SCOPE("PointShadowPass::DrawFaceSkinned");
                     YA_PERF_SCOPE(perf::sample::shadowPointFaceSkinned(), perf::metric::cpuTimeMs(), perf::domain::render());
-                    const auto& passFlight = _perFlight[payload.flightIndex];
                     ShadowDrawHelper::PassResources skinnedRes{
                         .pipeline       = _directSkinnedVariant.pipeline.get(),
                         .pipelineLayout = _directSkinnedVariant.pipelineLayout.get(),
-                        .frameDS        = passFlight.faceDS[facePayload.faceGlobalIndex],
-                        .skinningDS     = passFlight.skinningDS,
+                        .frameDS        = facePayload.faceDS,
+                        .skinningDS     = skinningDS,
                     };
                     ShadowDrawHelper::drawSkinnedBuckets(
                         &commandBuffer, skinnedRes, payload.frameData->drawBuckets.skinnedMeshes);
@@ -406,11 +337,10 @@ void PointShadowPass::renderFaceDirect(ICommandBuffer*                 cmdBuf,
                                         const PointShadowFacePayload&  facePayload) const
 {
     YA_PROFILE_FUNCTION();
-    const auto& flight = _perFlight[payload.flightIndex];
     ShadowDrawHelper::PassResources staticRes{
         .pipeline       = _directStaticVariant.pipeline.get(),
         .pipelineLayout = _directStaticVariant.pipelineLayout.get(),
-        .frameDS        = flight.faceDS[facePayload.faceGlobalIndex],
+        .frameDS        = facePayload.faceDS,
     };
     ShadowDrawHelper::drawStaticBuckets(cmdBuf, staticRes, payload.frameData->drawBuckets.staticMeshes);
 }
@@ -418,31 +348,6 @@ void PointShadowPass::renderFaceDirect(ICommandBuffer*                 cmdBuf,
 // ═══════════════════════════════════════════════════════════════════════
 // Buffer management
 // ═══════════════════════════════════════════════════════════════════════
-void PointShadowPass::ensureSkinningCapacity(uint32_t paletteCount)
-{
-    const uint32_t required = std::max(1u, paletteCount);
-    if (_dsp && required <= _skinningCapacity && _perFlight[0].skinningDS) return;
-
-    uint32_t newCap = _skinningCapacity == 0 ? 4u : _skinningCapacity;
-    while (newCap < required) newCap *= 2;
-    _skinningCapacity = newCap;
-
-    const uint32_t bufferSize = _skinningCapacity * sizeof(RenderSkinningPalette);
-    for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        auto& flight = _perFlight[i];
-        flight.skinningSSBO = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-            .label       = std::format("PointShadow_Skinning_SSBO_{}", i),
-            .usage       = EBufferUsage::StorageBuffer,
-            .size        = bufferSize,
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
-        if (!flight.skinningDS) {
-            flight.skinningDS = _dsp->allocateDescriptorSets(_skinningDSL);
-        }
-        _render->getDescriptorHelper()->updateDescriptorSets(
-            {IDescriptorSetHelper::writeOneStorageBuffer(flight.skinningDS, 0, flight.skinningSSBO.get())}, {});
-    }
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Pipeline refresh

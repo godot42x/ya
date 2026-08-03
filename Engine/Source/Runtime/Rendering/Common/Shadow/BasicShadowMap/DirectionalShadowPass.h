@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BasicShadowPayload.h"
+#include "Runtime/Rendering/Common/Shadow/ShadowFrameResources.h"
 #include "Runtime/Rendering/Common/Shadow/ShadowTypes.h"
 
 #include "Render/Core/Buffer.h"
@@ -32,7 +33,7 @@ class DirectionalShadowPass
     using FrameUBO          = slang_types::CombineShadowMappingGenerate::FrameData;
     using ModelPushConstant = slang_types::CombineShadowMappingGenerate::PushConstants;
 
-    void init(IRender* render, Extent2D shadowExtent);
+    void init(IRender* render, Extent2D shadowExtent, ShadowFrameResources& frameResources);
     void destroy();
 
     void prepare(const BasicShadowFramePayload& payload);
@@ -58,37 +59,26 @@ class DirectionalShadowPass
         stdptr<IPipelineLayout>   pipelineLayout;
     };
 
-    struct PerFlightResources
-    {
-        std::array<stdptr<IBuffer>, MAX_DIRECTIONAL_CASCADES>     frameUBOs{};
-        std::array<DescriptorSetHandle, MAX_DIRECTIONAL_CASCADES> frameDSs{};
-        stdptr<IBuffer>     skinningSSBO;
-        DescriptorSetHandle skinningDS    = nullptr;
-    };
-
-    void ensureSkinningCapacity(uint32_t paletteCount);
     [[nodiscard]] std::optional<RGPassHandle> appendCascadePass(
         RenderGraph& graph,
         const BasicShadowFramePayload& payload,
         uint32_t cascadeIndex,
         std::optional<RGPassHandle> dependency);
 
-    IRender* _render       = nullptr;
+    IRender* _render = nullptr;
+    ShadowFrameResources* _frameResources = nullptr;
     Extent2D _shadowExtent = {.width = 1024, .height = 1024};
 
     ShadowPipelineVariant        _staticVariant;
     ShadowPipelineVariant        _skinnedVariant;
     stdptr<IDescriptorSetLayout> _frameDSL;
     stdptr<IDescriptorSetLayout> _skinningDSL;
-    stdptr<IDescriptorPool>      _dsp;
     GraphicsPipelineCreateInfo   _pipelineCI{};
 
     stdptr<IImage> _depthImage;
     std::array<stdptr<IImageView>, MAX_DIRECTIONAL_CASCADES> _depthViews{};
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
-    std::array<PerFlightResources, MAX_FLIGHTS_IN_FLIGHT> _perFlight{};
-    uint32_t _skinningCapacity = 0;
 };
 
 } // namespace ya
