@@ -718,7 +718,10 @@ void DeferredRenderPipeline::initStages()
     _frameResources->init(_render);
 
     _gBufferStage = ya::makeShared<GBufferStage>();
-    _gBufferStage->init(_render, _frameResources->getFrameAndLightDSL());
+    _gBufferStage->init(
+        _render,
+        _frameResources->getFrameAndLightDSL(),
+        _frameResources->getSkinningDSL());
 
     _ssaoStage = ya::makeShared<SSAOStage>();
     _ssaoStage->setup(_currentGBufferResources);
@@ -908,6 +911,9 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
         _gBufferStage->setFrameInputs(GBufferStage::FrameInputs{
             .frameAndLightDescriptorSet = _frameResources
                 ? _frameResources->getBinding(frame.flightIndex).frameAndLightDescriptorSet
+                : DescriptorSetHandle{},
+            .skinningDescriptorSet = _frameResources
+                ? _frameResources->getBinding(frame.flightIndex).skinningDescriptorSet
                 : DescriptorSetHandle{},
         });
     }
@@ -1144,6 +1150,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     const auto& frameBinding = _frameResources->getBinding(frame.flightIndex);
     _gBufferStage->setFrameInputs(GBufferStage::FrameInputs{
         .frameAndLightDescriptorSet = frameBinding.frameAndLightDescriptorSet,
+        .skinningDescriptorSet      = frameBinding.skinningDescriptorSet,
     });
     _gBufferStage->prepare(stageCtx);
 
@@ -1187,7 +1194,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         frameBinding.light.offset,
         frameBinding.light.size);
     const auto skinningBuffer = importHostWrittenBuffer(
-        _gBufferStage->getSkinningBufferOwner(frame.flightIndex),
+        frameBinding.skinningBuffer,
         "Deferred.SkinningSSBO",
         EBufferUsage::StorageBuffer);
 

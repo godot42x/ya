@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 
 #include <filesystem>
+#include <limits>
 #include <string>
 
 namespace ya
@@ -22,6 +23,19 @@ class DeferredRenderPipelineTestAccess
     static void loadPersistentSettings(DeferredRenderPipeline& pipeline)
     {
         pipeline.loadPersistentSettings();
+    }
+};
+
+class DeferredFrameResourceSetTestAccess
+{
+  public:
+    static std::optional<uint32_t> calculateSkinningCapacity(
+        uint32_t currentCapacity,
+        uint32_t paletteCount)
+    {
+        return DeferredFrameResourceSet::calculateSkinningCapacity(
+            currentCapacity,
+            paletteCount);
     }
 };
 
@@ -92,6 +106,26 @@ TEST(DeferredRenderPipelineTest, SettingsCommandsApplyLatestSnapshotAtFrameBound
     EXPECT_TRUE(afterApply.postProcessing.bEnableInversion);
     EXPECT_FALSE(afterApply.postProcessing.bEnableBloom);
     EXPECT_EQ(afterApply.shadow.quality, EShadowQuality::Ultra);
+}
+
+TEST(DeferredFrameResourceSetTest, SkinningCapacityStartsSmallGrowsAndRejectsOverflow)
+{
+    const auto initialCapacity =
+        DeferredFrameResourceSetTestAccess::calculateSkinningCapacity(0, 0);
+    ASSERT_TRUE(initialCapacity.has_value());
+    EXPECT_EQ(*initialCapacity, 16u);
+
+    const auto grownCapacity =
+        DeferredFrameResourceSetTestAccess::calculateSkinningCapacity(16, 17);
+    ASSERT_TRUE(grownCapacity.has_value());
+    EXPECT_EQ(*grownCapacity, 32u);
+
+    constexpr uint32_t maxPaletteCount = std::numeric_limits<uint32_t>::max() / sizeof(RenderSkinningPalette);
+    EXPECT_FALSE(
+        DeferredFrameResourceSetTestAccess::calculateSkinningCapacity(
+            maxPaletteCount,
+            maxPaletteCount + 1u)
+            .has_value());
 }
 
 TEST_F(DeferredRenderPipelineSettingsTest, PersistentShadowSettingsSeedFirstFrameState)
