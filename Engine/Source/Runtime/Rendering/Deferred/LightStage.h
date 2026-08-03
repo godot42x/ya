@@ -1,7 +1,6 @@
 #pragma once
 
 #include "DeferredAttachmentFormats.h"
-#include "DeferredGBufferResources.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowRuntimeState.h"
 
 #include "Render/Core/DescriptorSet.h"
@@ -53,8 +52,6 @@ struct ENGINE_API LightStage : public IRenderStage
 
     IRender*                  _render           = nullptr;
     stdptr<IDescriptorSetLayout> _frameAndLightDSL;
-    DeferredGBufferResources     _gBufferResources{};
-    std::shared_ptr<RenderImage> _ssaoTextureOwner = nullptr;
 
     // Pipeline (shared across flights)
     stdptr<IGraphicsPipeline>    _pipeline;
@@ -97,11 +94,17 @@ struct ENGINE_API LightStage : public IRenderStage
     LightStage() : IRenderStage("LightPass") {}
 
     /// @param sharedInputs  Provides frame+light descriptor layout for set 0
-    /// @param gBufferResources Provides GBuffer textures for sampling
-    void setup(SharedInputs sharedInputs, const DeferredGBufferResources& gBufferResources);
+    void setup(SharedInputs sharedInputs);
     void setEnvironmentLightingInput(EnvironmentLightingInput input);
     void setFrameInputs(FrameInputs frameInputs);
-    void setSSAOTexture(std::shared_ptr<RenderImage> ssaoTexture);
+    /// Update set 1 (GBuffer texture DS) from textures resolved in the light
+    /// graph pass. `ssao` may be null to bind the white fallback texture.
+    void updateGBufferTextureDescriptors(const RenderImage* albedo,
+                                         const RenderImage* normal,
+                                         const RenderImage* orm,
+                                         const RenderImage* shading,
+                                         const RenderImage* depth,
+                                         const RenderImage* ssao);
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecularIBL);
     void refreshPipelineFormats(const DeferredAttachmentFormats& formats);
@@ -117,6 +120,9 @@ struct ENGINE_API LightStage : public IRenderStage
     void init(IRender* render) override;
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
+    /// Graph pass entry: explicit current-flight binding. Does not read stage members.
+    void execute(const RenderStageContext& ctx, DescriptorSetHandle frameAndLight, DescriptorSetHandle environmentLighting);
+    /// IRenderStage conformance; graph passes must use the parameterized overload.
     void execute(const RenderStageContext& ctx) override;
 
 };

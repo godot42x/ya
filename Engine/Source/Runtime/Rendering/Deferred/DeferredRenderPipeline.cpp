@@ -731,12 +731,11 @@ void DeferredRenderPipeline::initStages()
     _lightStage = ya::makeShared<LightStage>();
     _lightStage->setup(LightStage::SharedInputs{
         .frameAndLightDSL = _frameResources->getFrameAndLightDSL(),
-    }, _currentGBufferResources);
+    });
     _lightStage->setEnvironmentLightingInput(LightStage::EnvironmentLightingInput{
         .environmentLightingDSL = _environmentLightingDSL,
         .getSceneEnvironmentLightingDescriptorSet = _getSceneEnvironmentLightingDescriptorSet,
     });
-    _lightStage->setSSAOTexture(_currentSSAOOutput);
     _lightStage->init(_render);
     syncShadowSettings();
 
@@ -1056,7 +1055,6 @@ void DeferredRenderPipeline::refreshGBufferStageState()
     invalidateGBufferDependentViews();
 
     if (_ssaoStage) {
-        _ssaoStage->setup(_currentGBufferResources);
         _ssaoStage->refreshPipelineFormat();
     }
 
@@ -1067,14 +1065,13 @@ void DeferredRenderPipeline::refreshGBufferStageState()
     if (_lightStage) {
         _lightStage->setup(LightStage::SharedInputs{
             .frameAndLightDSL = _frameResources ? _frameResources->getFrameAndLightDSL() : nullptr,
-        }, _currentGBufferResources);
+        });
     }
 }
 
 void DeferredRenderPipeline::refreshViewportStageState()
 {
     if (_lightStage) {
-        _lightStage->setSSAOTexture(_currentSSAOOutput);
         _lightStage->refreshPipelineFormats(_currentViewportResources.formats);
     }
 
@@ -1086,10 +1083,6 @@ void DeferredRenderPipeline::refreshViewportStageState()
 void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
 {
     (void)frame;
-
-    if (_lightStage) {
-        _lightStage->setSSAOTexture(_bEnableSSAO ? _currentSSAOOutput : nullptr);
-    }
 
     if (_ssaoStage) {
         _ssaoStage->setSettings(_ssaoStage->getRadius(),
@@ -1329,11 +1322,14 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         graphResources.textures.ssao = _ssaoStage->appendGraphPass(
             graph,
             stageCtx,
-            *graphResources.buffers.ssaoFrame,
-            RGBufferRange{.offset = frameBinding.ssaoFrame.offset, .size = frameBinding.ssaoFrame.size},
-            graphResources.textures.gBufferColors[0],
-            graphResources.textures.gBufferColors[1],
-            graphResources.textures.gBufferDepth);
+            DeferredSSAOPassParams{
+                .frame      = *graphResources.buffers.ssaoFrame,
+                .frameRange = RGBufferRange{.offset = frameBinding.ssaoFrame.offset, .size = frameBinding.ssaoFrame.size},
+                .albedo     = graphResources.textures.gBufferColors[0],
+                .normal     = graphResources.textures.gBufferColors[1],
+                .depth      = graphResources.textures.gBufferDepth,
+                .frameDescriptorSet = frameBinding.ssaoFrameDescriptorSet,
+            });
     }
 
     if (_currentEnvironmentLightingTextures.isComplete()) {
@@ -1372,46 +1368,70 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
                 EImageUsage::Sampled));
     }
 
+    // Single typed pass parameters: drives both graph setup and execute resolve;
+    // GBuffer/SSAO descriptor inputs are updated from resolved graph textures
+    // inside the pass, removing the resolved-image back-injection (FG-303).
+    DeferredLightPassParams lightParams{
+        .frame = {
+            .handle = graphResources.buffers.frame,
+            .range  = RGBufferRange{.offset = frameBinding.frame.offset, .size = frameBinding.frame.size},
+        },
+        .light = {
+            .handle = graphResources.buffers.light,
+            .range  = RGBufferRange{.offset = frameBinding.light.offset, .size = frameBinding.light.size},
+        },
+        .gBufferColors = graphResources.textures.gBufferColors,
+        .gBufferDepth  = graphResources.textures.gBufferDepth,
+        .ssao          = graphResources.textures.ssao,
+        .environmentCubemap    = graphResources.textures.environmentCubemap,
+        .environmentIrradiance = graphResources.textures.environmentIrradiance,
+        .environmentPrefilter  = graphResources.textures.environmentPrefilter,
+        .environmentBrdfLut    = graphResources.textures.environmentBrdfLut,
+        .shadowDepth           = graphResources.textures.shadowDepth,
+        .viewportColor         = graphResources.textures.viewportColor,
+        .renderArea            = Rect2D{.pos = {0, 0}, .extent = viewportExtent.toVec2()},
+        .layerCount            = 1,
+        .frameAndLightDescriptorSet = frameBinding.frameAndLightDescriptorSet,
+        .environmentLightingDescriptorSet = _getSceneEnvironmentLightingDescriptorSet
+            ? _getSceneEnvironmentLightingDescriptorSet(_getActiveScene ? _getActiveScene() : nullptr)
+            : DescriptorSetHandle{},
+    };
+
     [[maybe_unused]] const auto lightPass = graph.addPass(
         "Deferred Light",
-        [&](RGPassBuilder& passBuilder) {
+        [&lightParams, &graphResources](RGPassBuilder& passBuilder) {
             if (graphResources.passes.shadow.has_value()) {
                 passBuilder.dependsOn(*graphResources.passes.shadow);
             }
-            passBuilder.uniformRead(graphResources.buffers.frame, RGBufferRange{
-                .offset = frameBinding.frame.offset,
-                .size   = frameBinding.frame.size,
-            });
-            passBuilder.uniformRead(graphResources.buffers.light, RGBufferRange{
-                .offset = frameBinding.light.offset,
-                .size   = frameBinding.light.size,
-            });
-            for (const auto handle : graphResources.textures.gBufferColors) {
+            passBuilder.uniformRead(lightParams.frame.handle, lightParams.frame.range);
+            passBuilder.uniformRead(lightParams.light.handle, lightParams.light.range);
+            for (const auto handle : lightParams.gBufferColors) {
                 passBuilder.read(handle);
             }
-            if (graphResources.textures.ssao.has_value()) {
-                passBuilder.read(*graphResources.textures.ssao);
+            passBuilder.read(lightParams.gBufferDepth);
+            if (lightParams.ssao.has_value()) {
+                passBuilder.read(*lightParams.ssao);
             }
-            if (graphResources.textures.shadowDepth.has_value()) {
-                passBuilder.read(*graphResources.textures.shadowDepth);
+            if (lightParams.shadowDepth.has_value()) {
+                passBuilder.read(*lightParams.shadowDepth);
             }
-            if (graphResources.textures.environmentCubemap.has_value()) {
-                passBuilder.read(*graphResources.textures.environmentCubemap);
+            if (lightParams.environmentCubemap.has_value()) {
+                passBuilder.read(*lightParams.environmentCubemap);
             }
-            if (graphResources.textures.environmentIrradiance.has_value()) {
-                passBuilder.read(*graphResources.textures.environmentIrradiance);
+            if (lightParams.environmentIrradiance.has_value()) {
+                passBuilder.read(*lightParams.environmentIrradiance);
             }
-            if (graphResources.textures.environmentPrefilter.has_value()) {
-                passBuilder.read(*graphResources.textures.environmentPrefilter);
+            if (lightParams.environmentPrefilter.has_value()) {
+                passBuilder.read(*lightParams.environmentPrefilter);
             }
-            if (graphResources.textures.environmentBrdfLut.has_value()) {
-                passBuilder.read(*graphResources.textures.environmentBrdfLut);
+            if (lightParams.environmentBrdfLut.has_value()) {
+                passBuilder.read(*lightParams.environmentBrdfLut);
             }
             passBuilder.declareRaster({
-                .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
-                .layerCount = 1,
+                .renderArea = lightParams.renderArea,
+                .layerCount = lightParams.layerCount,
                 .colors = {{
-                    .color       = graphResources.textures.viewportColor,
+                    .color       = lightParams.viewportColor,
                     .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
                     .loadOp      = EAttachmentLoadOp::Clear,
                     .storeOp     = EAttachmentStoreOp::Store,
@@ -1419,12 +1439,23 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
                 }},
             });
         },
-        [&](RGRenderContext& rgCtx) {
+        [&lightParams, this, &stageCtx](RGRenderContext& rgCtx) {
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
+
+            // FG-103 resolve validation + FG-303: GBuffer/SSAO inputs resolve
+            // from the graph and drive the texture DS instead of stage snapshots.
+            [[maybe_unused]] const RenderImage* albedo  = rgCtx.resolveTexture(lightParams.gBufferColors[0]);
+            [[maybe_unused]] const RenderImage* normal  = rgCtx.resolveTexture(lightParams.gBufferColors[1]);
+            [[maybe_unused]] const RenderImage* orm     = rgCtx.resolveTexture(lightParams.gBufferColors[2]);
+            [[maybe_unused]] const RenderImage* shading = rgCtx.resolveTexture(lightParams.gBufferColors[3]);
+            [[maybe_unused]] const RenderImage* depth   = rgCtx.resolveTexture(lightParams.gBufferDepth);
+            const RenderImage* ssao = lightParams.ssao.has_value() ? rgCtx.resolveTexture(*lightParams.ssao) : nullptr;
+            _lightStage->updateGBufferTextureDescriptors(albedo, normal, orm, shading, depth, ssao);
+
             rgCtx.beginDeclaredRasterRendering();
 
             YA_PERF_SCOPE(perf::sample::deferredLight(), perf::metric::cpuTimeMs(), perf::domain::render());
-            _lightStage->execute(stageCtx);
+            _lightStage->execute(stageCtx, lightParams.frameAndLightDescriptorSet, lightParams.environmentLightingDescriptorSet);
             rgCtx.endRendering();
         });
     graphResources.passes.light = lightPass;
@@ -1566,9 +1597,6 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     if (!_graphExecutor->prepare(graph, compiled, &result)) {
         _currentSSAOOutput.reset();
         _currentPostprocessOutput.reset();
-        if (_lightStage) {
-            _lightStage->setSSAOTexture({});
-        }
         _postProcessStage.clearPreparedResources();
         return;
     }
@@ -1579,17 +1607,13 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         _ssaoStage->prepare(stageCtx);
     }
 
+    // Owner snapshot for the editor debug SSAO view; the light pass resolves the
+    // SSAO texture from the graph itself (FG-303), so no stage back-injection.
     if (graphResources.textures.ssao.has_value()) {
         _currentSSAOOutput = result.getExportedTextureShared(kDeferredSSAOExportName);
-        if (_lightStage) {
-            _lightStage->setSSAOTexture(_currentSSAOOutput);
-        }
     }
     else {
         _currentSSAOOutput.reset();
-        if (_lightStage) {
-            _lightStage->setSSAOTexture({});
-        }
     }
 
     if (_lightStage) {
@@ -1604,9 +1628,6 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     if (!bExecuted) {
         _currentSSAOOutput.reset();
         _currentPostprocessOutput.reset();
-        if (_lightStage) {
-            _lightStage->setSSAOTexture({});
-        }
         _postProcessStage.clearPreparedResources();
         return;
     }

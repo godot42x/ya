@@ -78,4 +78,50 @@ struct DeferredGBufferPassParams
     DescriptorSetHandle            skinningDescriptorSet{};
 };
 
+/// Typed pass parameters for the Deferred SSAO graph pass.
+///
+/// Same object drives graph setup (declaration) and execute (resolve + binding);
+/// the pass resolves its GBuffer inputs from the graph instead of reading
+/// resolved-image snapshots back from the stage.
+struct DeferredSSAOPassParams
+{
+    RGBufferHandle     frame{};
+    RGBufferRange      frameRange{};
+    RGTextureHandle    albedo{};
+    RGTextureHandle    normal{};
+    RGTextureHandle    depth{};
+    RGTextureHandle    output{};
+    DescriptorSetHandle frameDescriptorSet{};
+};
+
+/// Typed pass parameters for the Deferred Light graph pass.
+///
+/// Same object drives graph setup (declaration) and execute (resolve + binding);
+/// GBuffer/SSAO descriptor inputs are updated from resolved graph textures
+/// inside the pass, removing the resolved-image back-injection into LightStage.
+struct DeferredLightPassParams
+{
+    struct BufferInput
+    {
+        RGBufferHandle handle{};
+        RGBufferRange  range{};
+    };
+
+    BufferInput                    frame{};
+    BufferInput                    light{};
+    std::array<RGTextureHandle, 4> gBufferColors{};
+    RGTextureHandle                gBufferDepth{};
+    std::optional<RGTextureHandle> ssao{};
+    std::optional<RGTextureHandle> environmentCubemap{};
+    std::optional<RGTextureHandle> environmentIrradiance{};
+    std::optional<RGTextureHandle> environmentPrefilter{};
+    std::optional<RGTextureHandle> environmentBrdfLut{};
+    std::optional<RGTextureHandle> shadowDepth{};
+    RGTextureHandle                viewportColor{};
+    Rect2D                         renderArea{};
+    uint32_t                       layerCount = 1;
+    DescriptorSetHandle            frameAndLightDescriptorSet{};
+    DescriptorSetHandle            environmentLightingDescriptorSet{};
+};
+
 } // namespace ya
