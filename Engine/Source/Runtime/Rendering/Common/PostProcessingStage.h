@@ -67,7 +67,7 @@ struct PostProcessingStage
                                       RGTextureHandle input,
                                       Extent2D        inputExtent,
                                       FrameContext*   ctx);
-    void     resolvePreparedResources(const RenderGraphResourceRegistry& registry);
+    void     capturePreparedResources(const RenderGraphExecutionResult& result);
     void     clearPreparedResources();
     RenderImage* execute(ICommandBuffer* cmdBuf,
                          Texture*        inputTexture,

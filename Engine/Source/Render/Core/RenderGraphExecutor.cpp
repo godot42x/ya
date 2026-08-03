@@ -19,17 +19,24 @@ BufferResourceState normalizeBufferState(const BufferResourceState& state, const
 
 bool RenderGraphExecutor::prepare(
     const RenderGraph& graph,
-    RGCompiledGraph&   outCompiled)
+    RGCompiledGraph&   outCompiled,
+    RenderGraphExecutionResult* outResult)
 {
     _bufferStates.clear();
 
     outCompiled = graph.compile();
     if (!outCompiled.isValid()) {
+        if (outResult) {
+            outResult->clear();
+        }
         YA_CORE_ERROR("RenderGraph compile failed:\n{}", graph.debugDump(outCompiled));
         return false;
     }
 
     _registry.sync(graph);
+    if (outResult) {
+        captureExecutionResult(outCompiled, *outResult);
+    }
     return true;
 }
 
@@ -160,10 +167,11 @@ void RenderGraphExecutor::finalizeImportedTextureStates(const RGCompiledGraph& c
 bool RenderGraphExecutor::execute(
     const RenderGraph& graph,
     ICommandBuffer& cmdBuf,
-    RGCompiledGraph* outCompiled)
+    RGCompiledGraph* outCompiled,
+    RenderGraphExecutionResult* outResult)
 {
     RGCompiledGraph compiled{};
-    if (!prepare(graph, compiled)) {
+    if (!prepare(graph, compiled, outResult)) {
         if (outCompiled) {
             *outCompiled = compiled;
         }
@@ -176,6 +184,14 @@ bool RenderGraphExecutor::execute(
         return false;
     }
     return true;
+}
+
+void RenderGraphExecutor::captureExecutionResult(const RGCompiledGraph& compiled, RenderGraphExecutionResult& outResult) const
+{
+    outResult.clear();
+    for (const auto& exported : compiled.exportedTextures) {
+        outResult.bindExportedTexture(exported.name, _registry.resolveTextureShared(exported.texture));
+    }
 }
 
 void RenderGraphExecutor::clear()

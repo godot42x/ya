@@ -178,6 +178,36 @@ physical slot 数少于 logical transient buffer 数，真实 Deferred consumer 
 - 下一任务：
   - 进入 `FG-105`，定义 frame graph execution result/export owner，避免 graph 外继续隐式抓 registry 内部 owner
 
+### 2026-08-03：FG-105 完成
+
+- 状态：完成
+- 代码事实：
+  - `DeferredRenderPipeline`、`PostProcessingStage`、`BloomPostprocessing` 此前都在 graph prepare/execute 后直接回头查询 `RenderGraphExecutor` 内部 registry，把 graph-owned `RenderImage` owner 偷渡给 graph 外状态。
+  - 这种模式让“哪些输出允许逃逸 graph”没有显式契约，调用方也必须知道 executor 内部有一个可查询 registry。
+- 实现：
+  - `RenderGraph` 新增显式 `exportTexture()` 声明；`RGCompiledGraph` 记录已验证的 exported texture plan。
+  - 新增 `RenderGraphExecutionResult`，只发布按名称导出的 texture shared owner，不再把 registry 本身暴露为跨边界契约。
+  - `RenderGraphExecutor::prepare()` / `execute()` 现在可同步产出 execution result；compile 阶段会拒绝无效 exported handle 和重复 export 名称。
+  - Deferred 主图改为显式 export：
+    - GBuffer Color0..3
+    - GBuffer Depth
+    - Viewport Color
+    - SSAO Output（存在时）
+  - `PostProcessingStage` / `BloomPostprocessing` 改为通过 `RenderGraphExecutionResult` 捕获 prepared resources；standalone execute 路径不再依赖 executor registry 内部查询。
+- 未做：
+  - 这一步没有删除 `RenderGraphExecutor::getRegistry()`；registry 仍保留给 graph 内部同步与现有低层测试使用，但不再是 Deferred/PostProcess 这条 owner 逃逸链的公开依赖。
+  - 还没有把其他潜在 graph 外 consumer 全部迁到 exported-result 契约；本提交只收口当前已知的 Deferred/PostProcess/Bloom 主路径。
+- 测试：
+  - `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`
+  - 结果：82 tests passed
+  - `xmake b ya-editor`
+  - 结果：build ok
+- artifacts：
+  - `RenderGraphCoreTest.PrepareCapturesExplicitExportedTexturesOnly`
+  - `RenderGraphCoreTest.ExportedTextureOwnerSurvivesReplacementAcrossPrepare`
+- 下一任务：
+  - 进入 `FG-106`，为 transient buffer 编译 first/last-use lifetime interval，给后续 physical slot allocation 提供确定性输入
+
 ## 任务记录模板
 
 ```text

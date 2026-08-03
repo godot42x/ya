@@ -32,6 +32,16 @@ namespace ya
 namespace
 {
 
+constexpr std::string_view kDeferredGBufferColorExportNames[4] = {
+    "Deferred.GBuffer.Color0",
+    "Deferred.GBuffer.Color1",
+    "Deferred.GBuffer.Color2",
+    "Deferred.GBuffer.Color3",
+};
+constexpr std::string_view kDeferredGBufferDepthExportName  = "Deferred.GBuffer.Depth";
+constexpr std::string_view kDeferredViewportColorExportName = "Deferred.Viewport.Color";
+constexpr std::string_view kDeferredSSAOExportName          = "Deferred.SSAO.Output";
+
 bool shouldRenderBillboard(const BillboardComponent& billboard)
 {
     if (!billboard.bVisible) {
@@ -963,21 +973,18 @@ void DeferredRenderPipeline::invalidateGBufferDependentViews()
 }
 
 void DeferredRenderPipeline::syncGraphAttachmentSnapshots(
-    const RenderGraphResourceRegistry& registry,
-    const std::array<RGTextureHandle, 4>& gbufferColors,
-    RGTextureHandle gbufferDepth,
-    RGTextureHandle viewportColor)
+    const RenderGraphExecutionResult& result)
 {
     DeferredGBufferResources nextGBuffer{};
-    for (uint32_t attachmentIndex = 0; attachmentIndex < gbufferColors.size(); ++attachmentIndex) {
-        nextGBuffer.colorOwners[attachmentIndex] = registry.resolveTextureShared(gbufferColors[attachmentIndex]);
+    for (uint32_t attachmentIndex = 0; attachmentIndex < std::size(kDeferredGBufferColorExportNames); ++attachmentIndex) {
+        nextGBuffer.colorOwners[attachmentIndex] = result.getExportedTextureShared(kDeferredGBufferColorExportNames[attachmentIndex]);
     }
-    nextGBuffer.depthOwner = registry.resolveTextureShared(gbufferDepth);
+    nextGBuffer.depthOwner = result.getExportedTextureShared(kDeferredGBufferDepthExportName);
     nextGBuffer.formats    = buildGBufferSnapshotFormats();
     nextGBuffer.syncRawViews();
 
     DeferredViewportResources nextViewport{};
-    nextViewport.colorOwner = registry.resolveTextureShared(viewportColor);
+    nextViewport.colorOwner = result.getExportedTextureShared(kDeferredViewportColorExportName);
     nextViewport.depthOwner = nextGBuffer.depthOwner;
     nextViewport.formats    = buildViewportSnapshotFormats();
     nextViewport.syncRawViews();
@@ -1430,9 +1437,19 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         viewportExtent,
         &_lastTickCtx);
 
+    for (uint32_t attachmentIndex = 0; attachmentIndex < gbufferColors.size(); ++attachmentIndex) {
+        graph.exportTexture(gbufferColors[attachmentIndex], std::string(kDeferredGBufferColorExportNames[attachmentIndex]));
+    }
+    graph.exportTexture(gbufferDepthHandle, std::string(kDeferredGBufferDepthExportName));
+    graph.exportTexture(color, std::string(kDeferredViewportColorExportName));
+    if (ssao.has_value()) {
+        graph.exportTexture(*ssao, std::string(kDeferredSSAOExportName));
+    }
+
     YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");
     RGCompiledGraph compiled{};
-    if (!_graphExecutor->prepare(graph, compiled)) {
+    RenderGraphExecutionResult result;
+    if (!_graphExecutor->prepare(graph, compiled, &result)) {
         _currentSSAOOutput.reset();
         _currentPostprocessOutput.reset();
         if (_lightStage) {
@@ -1442,18 +1459,14 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         return;
     }
 
-    syncGraphAttachmentSnapshots(
-        _graphExecutor->getRegistry(),
-        gbufferColors,
-        gbufferDepthHandle,
-        color);
+    syncGraphAttachmentSnapshots(result);
 
     if (_bEnableSSAO && _ssaoStage) {
         _ssaoStage->prepare(stageCtx);
     }
 
     if (ssao.has_value()) {
-        _currentSSAOOutput = _graphExecutor->getRegistry().resolveTextureShared(*ssao);
+        _currentSSAOOutput = result.getExportedTextureShared(kDeferredSSAOExportName);
         if (_lightStage) {
             _lightStage->setSSAOTexture(_currentSSAOOutput);
         }
@@ -1471,7 +1484,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     if (_overlayStage) {
         _overlayStage->prepare(stageCtx);
     }
-    _postProcessStage.resolvePreparedResources(_graphExecutor->getRegistry());
+    _postProcessStage.capturePreparedResources(result);
 
     [[maybe_unused]] const bool bExecuted = _graphExecutor->executeCompiled(graph, compiled, *frame.cmdBuf);
     if (!bExecuted) {

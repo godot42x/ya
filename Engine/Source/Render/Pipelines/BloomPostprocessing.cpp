@@ -16,6 +16,11 @@ namespace ya
 namespace
 {
 
+constexpr std::string_view kBloomOutputExportName   = "Bloom.Output";
+constexpr std::string_view kBloomExtractExportName  = "Bloom.Extract";
+constexpr std::string_view kBloomBlurPingExportName = "Bloom.BlurPing";
+constexpr std::string_view kBloomBlurPongExportName = "Bloom.BlurPong";
+
 RGImportedTextureDesc makeBloomImportedTextureDesc(const Texture& texture,
                                                    std::string_view label,
                                                    EImageLayout::T finalLayout)
@@ -143,20 +148,12 @@ void BloomPostprocessing::clearPreparedResources()
     _compositeImage.reset();
 }
 
-void BloomPostprocessing::resolvePreparedResources(const RenderGraphResourceRegistry& registry)
+void BloomPostprocessing::capturePreparedResources(const RenderGraphExecutionResult& result)
 {
-    _extractImage = _preparedGraphResources.extract.isValid()
-        ? registry.resolveTextureShared(_preparedGraphResources.extract)
-        : nullptr;
-    _blurPingImage = _preparedGraphResources.blurPing.isValid()
-        ? registry.resolveTextureShared(_preparedGraphResources.blurPing)
-        : nullptr;
-    _blurPongImage = _preparedGraphResources.blurPong.isValid()
-        ? registry.resolveTextureShared(_preparedGraphResources.blurPong)
-        : nullptr;
-    _compositeImage = _preparedGraphResources.output.isValid()
-        ? registry.resolveTextureShared(_preparedGraphResources.output)
-        : nullptr;
+    _extractImage   = result.getExportedTextureShared(kBloomExtractExportName);
+    _blurPingImage  = result.getExportedTextureShared(kBloomBlurPingExportName);
+    _blurPongImage  = result.getExportedTextureShared(kBloomBlurPongExportName);
+    _compositeImage = result.getExportedTextureShared(kBloomOutputExportName);
 }
 
 void BloomPostprocessing::initExtractPipeline()
@@ -322,6 +319,16 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
     _preparedGraphResources.extract       = bloomExtract.value_or(RGTextureHandle{});
     _preparedGraphResources.blurPing      = blurPing.value_or(RGTextureHandle{});
     _preparedGraphResources.blurPong      = blurPong.value_or(RGTextureHandle{});
+    graph.exportTexture(output, std::string(kBloomOutputExportName));
+    if (bloomExtract.has_value()) {
+        graph.exportTexture(*bloomExtract, std::string(kBloomExtractExportName));
+    }
+    if (blurPing.has_value()) {
+        graph.exportTexture(*blurPing, std::string(kBloomBlurPingExportName));
+    }
+    if (blurPong.has_value()) {
+        graph.exportTexture(*blurPong, std::string(kBloomBlurPongExportName));
+    }
 
     if (bBloomEnabled) {
         slang_types::Misc::BloomExtract::PushConstants extractPC{};
@@ -470,13 +477,14 @@ void BloomPostprocessing::render(const RenderDesc& desc)
     }
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "BloomPostprocessing graph executor is not initialized");
-    [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *desc.cmdBuf);
+    RenderGraphExecutionResult result;
+    [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *desc.cmdBuf, nullptr, &result);
     if (!bExecuted) {
         clearPreparedResources();
         return;
     }
 
-    resolvePreparedResources(_graphExecutor->getRegistry());
+    capturePreparedResources(result);
 }
 
 } // namespace ya

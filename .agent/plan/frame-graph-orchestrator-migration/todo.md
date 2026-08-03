@@ -63,7 +63,7 @@
   - 禁止：多 queue ownership、通用 hazard optimizer
   - 提交：`[render/graph] track graph buffer ranges`
 
-- [ ] `FG-105` 定义 frame graph execution result/export owner
+- [x] `FG-105` 定义 frame graph execution result/export owner
   - 依赖：FG-102、FG-103
   - 修改：RenderGraph/Executor 公共内部 API、tests
   - 实现：构图时标记 viewport/debug/export texture；execute result 返回 completion-safe shared owner；不暴露 registry map
