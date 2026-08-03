@@ -5,7 +5,7 @@
 - 计划建立日期：2026-07-18
 - 当前阶段：P1 RenderGraph 核心前置
 - 当前执行任务：无
-- 下一可执行任务：FG-109
+- 下一可执行任务：FG-110
 
 ## 初始代码审计
 
@@ -295,6 +295,36 @@ physical slot 数少于 logical transient buffer 数，真实 Deferred consumer 
 - commit：待提交
 - 下一任务：
   - 进入 `FG-109`，实现 buffer alias boundary barrier 与 state reset
+
+### 2026-08-03：FG-109 完成
+
+- 状态：完成
+- 代码事实：
+  - 同一 compiled physical slot 的多个 logical buffer 共享 `IBuffer*` 后，executor 只按 physical pointer 记录 state；如果前后 logical buffer 恰好使用相同 state，单纯比较 stage/access/range 会跳过必要同步。
+  - alias 切换还必须覆盖整个 physical slot，不能只使用下一个 logical buffer 的局部 range，否则前一个 logical range 的写入可能泄漏到后一个 identity。
+- 实现：
+  - `RGCompiledGraph` 增加 `RGTransientBufferAliasBoundaryPlan`，记录 slot、previous/next logical handle 和 next pass。
+  - compiler 按每个 slot 的 lifetime 顺序生成 boundary，并断言 slot 成员 lifetime 不重叠。
+  - executor 在 boundary 的首个 pass 强制发出 buffer barrier；barrier 使用 physical buffer 全范围，之后再把 state 更新为 next logical access state。
+  - 同一 pass 内若一个 logical buffer声明多个 usage，只对该 buffer的 alias boundary 强制一次，避免重复 boundary barrier。
+  - debug dump 与 diagnostics 增加 alias boundary 数量和成员切换位置。
+- 未做：
+  - 还没有统一的 physical slot pool hit/miss/reuse ratio runtime diagnostics；这属于 `FG-110`。
+  - 仍然只覆盖单 queue；没有扩展 queue ownership 或跨 queue alias synchronization。
+- 测试：
+  - `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:ResourceStateTrackerTest.*'`
+  - 结果：89 tests passed
+  - 新增/覆盖：
+    - `CompileAllocatesDeterministicTransientBufferSlots` 校验 alias boundary plan
+    - `ExecutorForcesBarrierAtTransientAliasBoundary` 校验相同 access state 仍发出 physical 全范围 barrier
+  - 额外烟测：`xmake b ya-editor`
+  - 结果：build ok
+- artifacts：
+  - `RGTransientBufferAliasBoundaryPlan`
+  - executor alias boundary barrier path
+- commit：待提交
+- 下一任务：
+  - 进入 `FG-110`，增加 buffer reuse diagnostics 和完成门禁
 
 ## 任务记录模板
 

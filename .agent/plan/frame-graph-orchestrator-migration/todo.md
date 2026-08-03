@@ -92,7 +92,7 @@
   - 验收：创建顺序变化、optional pass、连续 frame、clear/shutdown、deferred deletion tests
   - 提交：`[render/graph] pool transient buffer slots`
 
-- [ ] `FG-109` 实现 buffer alias boundary barrier 与 state reset
+- [x] `FG-109` 实现 buffer alias boundary barrier 与 state reset
   - 依赖：FG-103、FG-108
   - 修改：compiled state plan、executor、ResourceStateTracker、tests
   - 实现：同 physical slot 切换 logical identity 时插入 memory barrier；不能让前一 logical state 泄漏到后一 logical resource

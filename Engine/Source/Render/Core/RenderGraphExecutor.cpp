@@ -1,5 +1,8 @@
 #include "RenderGraphExecutor.h"
 
+#include <algorithm>
+#include <unordered_set>
+
 namespace ya
 {
 
@@ -13,6 +16,17 @@ BufferResourceState normalizeBufferState(const BufferResourceState& state, const
         normalized.size = buffer.getSize();
     }
     return normalized;
+}
+
+bool isTransientAliasBoundary(const RGCompiledGraph& compiled,
+                              RGPassHandle pass,
+                              RGBufferHandle buffer)
+{
+    return std::any_of(compiled.transientBufferAliasBoundaries.begin(),
+                       compiled.transientBufferAliasBoundaries.end(),
+                       [pass, buffer](const RGTransientBufferAliasBoundaryPlan& boundary) {
+                           return boundary.nextPass == pass && boundary.nextBuffer == buffer;
+                       });
 }
 
 } // namespace
@@ -48,6 +62,7 @@ bool RenderGraphExecutor::executeCompiled(
     for (const auto& passPlan : compiled.passPlans) {
         const auto* pass = graph.getPass(passPlan.pass);
         YA_CORE_ASSERT(pass != nullptr, "RenderGraphExecutor encountered invalid pass handle {}", passPlan.pass.index);
+        std::unordered_set<RGBufferHandle> aliasBoundaryBarriersEmitted;
 
         for (const auto& statePlan : passPlan.textureStates) {
 
@@ -81,21 +96,30 @@ bool RenderGraphExecutor::executeCompiled(
                 oldState = normalizeBufferState(resource->imported->initialState, *buffer);
             }
 
+            const bool bAliasBoundary =
+                !aliasBoundaryBarriersEmitted.contains(statePlan.buffer) &&
+                isTransientAliasBoundary(compiled, passPlan.pass, statePlan.buffer);
             const bool bNeedsBarrier =
+                bAliasBoundary ||
                 oldState.stages != newState.stages ||
                 oldState.access != newState.access ||
                 oldState.offset != newState.offset ||
                 oldState.size != newState.size;
 
             if (bNeedsBarrier) {
+                const auto barrierOffset = bAliasBoundary ? 0 : newState.offset;
+                const auto barrierSize = bAliasBoundary ? buffer->getSize() : newState.size;
                 cmdBuf.bufferMemoryBarrier(
                     buffer,
                     oldState.stages,
                     newState.stages,
                     oldState.access,
                     newState.access,
-                    newState.offset,
-                    newState.size);
+                    barrierOffset,
+                    barrierSize);
+                if (bAliasBoundary) {
+                    aliasBoundaryBarriersEmitted.insert(statePlan.buffer);
+                }
             }
 
             _bufferStates[buffer] = newState;

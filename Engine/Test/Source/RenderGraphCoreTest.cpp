@@ -961,6 +961,12 @@ TEST(RenderGraphCoreTest, CompileAllocatesDeterministicTransientBufferSlots)
     EXPECT_EQ(compiled.transientBufferDiagnostics.physicalSlotCount, 1u);
     EXPECT_EQ(compiled.transientBufferDiagnostics.physicalBytes, 128u);
     EXPECT_EQ(compiled.transientBufferDiagnostics.aliasedBufferCount, 2u);
+    EXPECT_EQ(compiled.transientBufferDiagnostics.aliasBoundaryCount, 2u);
+    ASSERT_EQ(compiled.transientBufferAliasBoundaries.size(), 2u);
+    EXPECT_EQ(compiled.transientBufferAliasBoundaries[0].previousBuffer, first);
+    EXPECT_EQ(compiled.transientBufferAliasBoundaries[0].nextBuffer, second);
+    EXPECT_EQ(compiled.transientBufferAliasBoundaries[1].previousBuffer, second);
+    EXPECT_EQ(compiled.transientBufferAliasBoundaries[1].nextBuffer, third);
 }
 
 TEST(RenderGraphCoreTest, CompileDoesNotAliasOverlappingOrIncompatibleTransientBuffers)
@@ -1550,6 +1556,42 @@ TEST(RenderGraphCoreTest, ResourceRegistryReusesTransientBufferPoolAcrossFramesA
     registry.sync(graphD, &compiledD);
     EXPECT_NE(registry.resolveBuffer(bufferD), nullptr);
     EXPECT_EQ(factory.createdBuffers, 3u);
+}
+
+TEST(RenderGraphCoreTest, ExecutorForcesBarrierAtTransientAliasBoundary)
+{
+    RenderGraph graph;
+    const auto first = graph.createBuffer(RGBufferDesc{
+        .label = "alias.first",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 64,
+    });
+    const auto second = graph.createBuffer(RGBufferDesc{
+        .label = "alias.second",
+        .usage = EBufferUsage::StorageBuffer,
+        .size  = 128,
+    });
+    graph.addPass("write-first", [&](RGPassBuilder& pass) {
+        pass.storageWrite(first);
+    });
+    graph.addPass("write-second", [&](RGPassBuilder& pass) {
+        pass.storageWrite(second);
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid());
+    ASSERT_EQ(compiled.transientBufferSlots.size(), 1u);
+    ASSERT_EQ(compiled.transientBufferAliasBoundaries.size(), 1u);
+
+    TestResourceFactory factory;
+    TestCommandBuffer   commandBuffer;
+    RenderGraphExecutor executor(factory);
+    ASSERT_TRUE(executor.execute(graph, commandBuffer));
+
+    ASSERT_EQ(commandBuffer.bufferBarriers.size(), 2u);
+    EXPECT_EQ(commandBuffer.bufferBarriers[0].size, 64u);
+    EXPECT_EQ(commandBuffer.bufferBarriers[1].offset, 0u);
+    EXPECT_EQ(commandBuffer.bufferBarriers[1].size, 128u);
 }
 
 TEST(RenderGraphCoreTest, ResourceRegistryCanImportExistingImageWithCustomViewDesc)
