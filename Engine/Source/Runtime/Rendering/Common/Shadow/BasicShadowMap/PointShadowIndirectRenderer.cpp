@@ -1,6 +1,7 @@
 #include "PointShadowIndirectRenderer.h"
 
 #include "Core/Profiling/Instrumentor.h"
+#include "Resource/DeferredDeletionQueue.h"
 
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/RenderResourceFactory.h"
@@ -10,6 +11,7 @@
 
 #include <algorithm>
 #include <format>
+#include <limits>
 #include <unordered_map>
 #include <utility>
 
@@ -91,7 +93,6 @@ void PointShadowIndirectRenderer::destroy()
     _pipelineLayout.reset();
     _indirectDSL.reset();
     _frameDSL.reset();
-    _instanceCapacity = 0;
     _bSupported       = false;
     _render           = nullptr;
 }
@@ -127,13 +128,13 @@ void PointShadowIndirectRenderer::prepare(const BasicShadowFramePayload& payload
     if (!collectBatches(payload, instances)) return;
 
     // ── Step 2: upload instance buffer ──────────────────────────────
-    uploadInstances(payload.flightIndex, instances);
+    if (!uploadInstances(payload.flightIndex, instances)) return;
 
     // ── Step 3: build cmd templates (1 cmd / bucket) ────────────────
     auto cmdTemplates = buildCmdTemplates(payload.flightIndex);
 
     const uint32_t bucketCount = static_cast<uint32_t>(cmdTemplates.size());
-    _cullPass.ensureCapacity(bucketCount);
+    if (!_cullPass.ensureCapacity(payload.flightIndex, bucketCount)) return;
 
     // ── Step 4: fill the cull data — either via GPU dispatch or CPU ─
     if (flight.useGpuCull) {
@@ -208,15 +209,20 @@ bool PointShadowIndirectRenderer::collectBatches(const BasicShadowFramePayload& 
     return flight.totalInstances > 0;
 }
 
-void PointShadowIndirectRenderer::uploadInstances(uint32_t                                    flightIndex,
+bool PointShadowIndirectRenderer::uploadInstances(uint32_t                                    flightIndex,
                                                   const std::vector<PointShadowInstanceData>& instances)
 {
     YA_PROFILE_FUNCTION();
-    ensureInstanceCapacity(static_cast<uint32_t>(instances.size()));
+    if (!ensureInstanceCapacity(flightIndex, static_cast<uint32_t>(instances.size()))) return false;
     auto& flight = _perFlight[flightIndex];
-    YA_CORE_ASSERT(flight.instanceBuffer, "Point shadow indirect instance buffer is missing for flight {}", flightIndex);
-    flight.instanceBuffer->writeData(instances.data(), instances.size() * sizeof(PointShadowInstanceData), 0);
-    flight.instanceBuffer->flush();
+    if (!flight.instanceBuffer) return false;
+    const uint64_t bytes = static_cast<uint64_t>(instances.size()) * sizeof(PointShadowInstanceData);
+    if (bytes > std::numeric_limits<uint32_t>::max() ||
+        !flight.instanceBuffer->writeData(instances.data(), static_cast<uint32_t>(bytes), 0) ||
+        !flight.instanceBuffer->flush(static_cast<uint32_t>(bytes), 0)) {
+        return false;
+    }
+    return true;
 }
 
 std::vector<PointShadowIndirectCommand> PointShadowIndirectRenderer::buildCmdTemplates(uint32_t flightIndex) const
@@ -354,27 +360,56 @@ bool PointShadowIndirectRenderer::hasRenderableInstances(uint32_t flightIndex) c
 // Helpers
 // ════════════════════════════════════════════════════════════════════════
 
-void PointShadowIndirectRenderer::ensureInstanceCapacity(uint32_t requiredCount)
+bool PointShadowIndirectRenderer::ensureInstanceCapacity(uint32_t flightIndex, uint32_t requiredCount)
 {
-    if (requiredCount <= _instanceCapacity) return;
+    if (flightIndex >= _perFlight.size()) return false;
+    auto& flight = _perFlight[flightIndex];
+    if (requiredCount <= flight.instanceCapacity && flight.instanceBuffer) return true;
 
-    uint32_t newCap = _instanceCapacity == 0 ? 256u : _instanceCapacity;
-    while (newCap < requiredCount) newCap *= 2;
-    _instanceCapacity = newCap;
-
-    const uint32_t bufferSize = _instanceCapacity * static_cast<uint32_t>(sizeof(PointShadowInstanceData));
-    for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _perFlight[i].instanceBuffer = _render->getResourceFactory()->createBuffer(
-            BufferCreateInfo{
-                .label       = std::format("PointShadow_Instance_{}", i),
-                .usage       = EBufferUsage::StorageBuffer,
-                .size        = bufferSize,
-                .memoryUsage = EMemoryUsage::CpuToGpu,
-            });
-        YA_CORE_ASSERT(_perFlight[i].instanceBuffer && _perFlight[i].instanceBuffer->getHandle(),
-                       "Failed to create point shadow indirect per-flight instance buffer {}",
-                       i);
+    const uint32_t maxInstanceCount = std::numeric_limits<uint32_t>::max() / sizeof(PointShadowInstanceData);
+    if (requiredCount > maxInstanceCount) {
+        YA_CORE_ERROR("Point shadow instance count {} exceeds buffer size limit", requiredCount);
+        return false;
     }
+    uint32_t newCap = flight.instanceCapacity == 0 ? 256u : flight.instanceCapacity;
+    while (newCap < requiredCount) {
+        if (newCap > maxInstanceCount / 2u) {
+            newCap = requiredCount;
+            break;
+        }
+        newCap *= 2u;
+    }
+
+    const uint64_t bufferSize64 = static_cast<uint64_t>(newCap) * sizeof(PointShadowInstanceData);
+    if (bufferSize64 > std::numeric_limits<uint32_t>::max()) {
+        YA_CORE_ERROR("Point shadow instance buffer for {} entries exceeds 32-bit size", newCap);
+        return false;
+    }
+    auto nextBuffer = _render->getResourceFactory()->createBuffer(
+        BufferCreateInfo{
+            .label       = std::format("PointShadow_Instance_{}", flightIndex),
+            .usage       = EBufferUsage::StorageBuffer,
+            .size        = static_cast<uint32_t>(bufferSize64),
+            .memoryUsage = EMemoryUsage::CpuToGpu,
+        });
+    if (!nextBuffer || !nextBuffer->getHandle()) {
+        YA_CORE_ERROR("Failed to create point shadow indirect instance buffer for flight {}", flightIndex);
+        return false;
+    }
+
+    auto oldBuffer = std::move(flight.instanceBuffer);
+    flight.instanceBuffer = std::move(nextBuffer);
+    flight.instanceCapacity = newCap;
+    _cullPass.bindInstanceBuffer(flightIndex, flight.instanceBuffer);
+    if (flight.indirectDS) {
+        _render->getDescriptorHelper()->updateDescriptorSets({
+            IDescriptorSetHelper::writeOneStorageBuffer(flight.indirectDS, 0, flight.instanceBuffer.get()),
+        });
+    }
+    if (DeferredDeletionQueue::get().isInitialized()) {
+        DeferredDeletionQueue::get().retireResource(std::move(oldBuffer));
+    }
+    return true;
 }
 
 void PointShadowIndirectRenderer::updateIndirectDescriptors(uint32_t flightIndex)

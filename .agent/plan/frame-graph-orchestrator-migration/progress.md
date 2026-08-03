@@ -107,6 +107,13 @@
 - 日志：`Engine/Saved/Logs/YA-2026-08-03_19-42-24.log` 未发现 `Validation Error`、`VUID-`、`VK_ERROR` 或 `[Error]`。
 - 下一步：继续 FG-205，迁移 point indirect/cull 的 per-flight instance 与 command resources，并保留 capacity growth 的延迟退休语义。
 
+### 2026-08-03：FG-205 第二批次完成
+
+- 实现：`PointShadowIndirectRenderer` 与 `PointShadowCullPass` 的容量从全局改为 per-flight；扩容只在当前已等待 fence 的 flight 上创建并发布新 instance/cull/command/visible/frustum buffer，descriptor 只更新当前 flight，旧 GPU buffer 经 `DeferredDeletionQueue` 退休。增加 32-bit buffer size 检查和失败返回，避免半完成状态继续进入 graph。
+- 边界：这些资源仍是 imported per-flight buffers，尚未改成 graph transient slot；它们跨 compute cull 与 point raster pass，需要先完成跨 pass 参数对象后再决定 transient 化。
+- 测试：`xmake b ya-editor` 通过；`python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:DeferredRenderPipelineTest.*'` 通过（85 tests）；默认 smoke 与开启 `pointLightUseIndirect/pointLightIndirectCullEnabled` 的 smoke 均 exit code 0，后者日志 `Engine/Saved/Logs/YA-2026-08-03_19-51-10.log` 未发现 `Validation Error`、`VUID-`、`VK_ERROR` 或 `[Error]`。
+- 下一步：FG-205 收尾审计 Forward/Deferred shadow owner 共享边界，并为 cull/indirect imported resource 增加明确 range/descriptor snapshot 测试；确认后进入 FG-206 的真实 graph transient consumer。
+
 ## 初始代码审计
 
 ### 已完成基础

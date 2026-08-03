@@ -146,7 +146,7 @@
 - [-] `FG-205` 迁移 shadow raster/cull/indirect per-flight buffer owner
   - 依赖：FG-202、FG-104
   - 修改：DeferredFrameResourceSet 或经调查确认的 common shadow frame owner；Directional/Point/Cull/Indirect passes
-  - 实现：先分类 host-prewritten 与 GPU-only scratch；前者进入 frame owner/arena，后者改为 graph transient slot；按 directional、point raster、point cull 三个小批次。当前完成 directional/point raster 的 host-written frame UBO 与 skinning owner，point indirect/cull 仍待后续小批次
+  - 实现：先分类 host-prewritten 与 GPU-only scratch；前者进入 frame owner/arena，后者改为 graph transient slot；按 directional、point raster、point cull 三个小批次。当前完成 directional/point raster 的 host-written frame UBO 与 skinning owner，以及 point indirect/cull 的 per-flight 容量安全替换；graph transient 化仍待资源依赖稳定后推进
   - 验收：shadow resolution/enable、NoCull/compute cull、capacity growth、shutdown smoke
   - 停止线：若 Forward 同时依赖 owner，先抽最小 `ShadowFrameResources`，不把整个 Deferred owner 公共化
   - 提交：2-3 个 `[runtime/shadow] ...` 提交
