@@ -176,21 +176,12 @@ std::optional<RGPassHandle> DirectionalShadowPass::appendCascadePass(
         Extent3D{_shadowExtent.width, _shadowExtent.height, 1}));
     const auto importHostWrittenBuffer = [&](const FrameUploadArena::Allocation& allocation, std::string label, EBufferUsage usage) {
         YA_CORE_ASSERT(allocation && allocation.buffer, "Directional shadow graph requires imported buffer '{}'", label);
-        return graph.importBuffer(RGImportedBufferDesc{
-            .desc = RGBufferDesc{
-                .label = std::move(label),
-                .usage = usage,
-                .size  = allocation.buffer->getSize(),
-            },
-            .buffer = allocation.buffer.get(),
-            .initialState = BufferResourceState{
-                .stages = EPipelineStage::Host,
-                .access = EResourceAccess::HostWrite,
-                .offset = allocation.offset,
-                .size   = allocation.size,
-            },
-            .retainedResources = {allocation.buffer},
-        });
+        return graph.importBuffer(makeHostWrittenImportedBufferDesc(
+            allocation.buffer,
+            label,
+            usage,
+            allocation.offset,
+            allocation.size));
     };
     const auto frameBuffer = importHostWrittenBuffer(
         binding.directionalFrames[cascadeIndex],

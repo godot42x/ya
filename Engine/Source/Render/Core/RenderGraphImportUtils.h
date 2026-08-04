@@ -52,4 +52,26 @@ namespace ya
     EImageLayout::T finalLayout,
     EImageUsage::T requiredUsage = EImageUsage::None);
 
+[[nodiscard]] ENGINE_API RGImportedBufferDesc makeImportedBufferDesc(
+    const std::shared_ptr<IBuffer>& buffer,
+    std::string_view label,
+    BufferResourceState initialState,
+    EBufferUsage requiredUsage = EBufferUsage::None,
+    std::optional<BufferResourceState> finalState = std::nullopt);
+
+[[nodiscard]] ENGINE_API RGImportedBufferDesc makeHostWrittenImportedBufferDesc(
+    const std::shared_ptr<IBuffer>& buffer,
+    std::string_view label,
+    EBufferUsage requiredUsage = EBufferUsage::None,
+    uint64_t rangeOffset = 0,
+    uint64_t rangeSize = 0,
+    std::optional<BufferResourceState> finalState = std::nullopt);
+
+[[nodiscard]] ENGINE_API RGImportedBufferDesc makeReadbackImportedBufferDesc(
+    const std::shared_ptr<IBuffer>& buffer,
+    std::string_view label,
+    EBufferUsage requiredUsage = EBufferUsage::TransferDst,
+    uint64_t rangeOffset = 0,
+    uint64_t rangeSize = 0);
+
 } // namespace ya

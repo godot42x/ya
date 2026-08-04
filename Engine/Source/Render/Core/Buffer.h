@@ -104,6 +104,9 @@ struct IBuffer
     // Get buffer size
     virtual uint32_t getSize() const = 0;
 
+    // Get declared buffer usage flags
+    virtual EBufferUsage getUsage() const = 0;
+
     // Check if buffer is host visible
     virtual bool isHostVisible() const = 0;
 

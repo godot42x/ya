@@ -201,20 +201,7 @@ BufferImageCopy makeScreenshotReadbackRegion(Extent2D extent)
 RGImportedBufferDesc makeImportedReadbackBufferDesc(const std::shared_ptr<IBuffer>& buffer)
 {
     YA_CORE_ASSERT(buffer != nullptr, "Screenshot readback buffer must not be null");
-    return RGImportedBufferDesc{
-        .desc = RGBufferDesc{
-            .label = buffer->getName(),
-            .usage = EBufferUsage::TransferDst,
-            .size  = buffer->getSize(),
-        },
-        .buffer = buffer.get(),
-        .finalState = BufferResourceState{
-            .stages = EPipelineStage::Host,
-            .access = EResourceAccess::HostRead,
-            .size   = buffer->getSize(),
-        },
-        .retainedResources = {buffer},
-    };
+    return makeReadbackImportedBufferDesc(buffer, buffer->getName());
 }
 
 bool executeScreenshotCopyGraph(RenderGraphExecutor& executor,

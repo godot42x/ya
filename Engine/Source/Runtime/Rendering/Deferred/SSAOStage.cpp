@@ -312,21 +312,12 @@ void SSAOStage::execute(const RenderStageContext& ctx)
     const auto  normal = graph.importTexture(makeSSAOImportedTextureDesc(*gbufferNormal, "SSAO.GBufferNormal", EImageLayout::ShaderReadOnlyOptimal));
     const auto  depth = graph.importTexture(makeSSAOImportedTextureDesc(*gbufferDepth, "SSAO.GBufferDepth", EImageLayout::ShaderReadOnlyOptimal));
     YA_CORE_ASSERT(_frameInputs.isValid(), "SSAOStage standalone execution requires a frame-resource binding");
-    const auto frameBuffer = graph.importBuffer(RGImportedBufferDesc{
-        .desc = RGBufferDesc{
-            .label = "SSAO.FrameUBO",
-            .usage = EBufferUsage::UniformBuffer,
-            .size  = _frameInputs.frame.buffer->getSize(),
-        },
-        .buffer = _frameInputs.frame.buffer.get(),
-        .initialState = BufferResourceState{
-            .stages = EPipelineStage::Host,
-            .access = EResourceAccess::HostWrite,
-            .offset = _frameInputs.frame.offset,
-            .size   = _frameInputs.frame.size,
-        },
-        .retainedResources = {_frameInputs.frame.buffer},
-    });
+    const auto frameBuffer = graph.importBuffer(makeHostWrittenImportedBufferDesc(
+        _frameInputs.frame.buffer,
+        "SSAO.FrameUBO",
+        EBufferUsage::UniformBuffer,
+        _frameInputs.frame.offset,
+        _frameInputs.frame.size));
     const auto output = appendGraphPass(
         graph,
         ctx,
