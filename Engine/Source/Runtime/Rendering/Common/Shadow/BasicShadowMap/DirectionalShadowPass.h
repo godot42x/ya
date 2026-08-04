@@ -8,7 +8,6 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Core/Image.h"
-#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Stage/IRenderStage.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
@@ -21,6 +20,7 @@ struct ICommandBuffer;
 struct RenderFrameData;
 struct RenderShadingDrawBuckets;
 struct RenderDrawItem;
+class RenderGraphExecutor;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DirectionalShadowPass
@@ -33,7 +33,10 @@ class DirectionalShadowPass
     using FrameUBO          = slang_types::CombineShadowMappingGenerate::FrameData;
     using ModelPushConstant = slang_types::CombineShadowMappingGenerate::PushConstants;
 
-    void init(IRender* render, Extent2D shadowExtent, ShadowFrameResources& frameResources);
+    void init(IRender* render,
+              Extent2D shadowExtent,
+              ShadowFrameResources& frameResources,
+              RenderGraphExecutor* standaloneGraphExecutor);
     void destroy();
 
     void prepare(const BasicShadowFramePayload& payload);
@@ -77,7 +80,7 @@ class DirectionalShadowPass
 
     stdptr<IImage> _depthImage;
     std::array<stdptr<IImageView>, MAX_DIRECTIONAL_CASCADES> _depthViews{};
-    std::unique_ptr<RenderGraphExecutor> _graphExecutor;
+    RenderGraphExecutor* _standaloneGraphExecutor = nullptr;
 
 };
 

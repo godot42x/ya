@@ -8,6 +8,7 @@
 #include "Runtime/Rendering/Common/Shadow/ShadowTypes.h"
 
 #include "Render/Core/Image.h"
+#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Shadow/IShadowTechnique.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
@@ -56,6 +57,7 @@ class BasicShadowMapTechnique : public IShadowTechnique
 
     ShadowSettings _settings;
     uint32_t       _lastPreparedPointLightCount = 0;
+    std::unique_ptr<RenderGraphExecutor> _standaloneGraphExecutor;
 
     ShadowFrameResources _frameResources;
     DirectionalShadowPass _directionalPass;

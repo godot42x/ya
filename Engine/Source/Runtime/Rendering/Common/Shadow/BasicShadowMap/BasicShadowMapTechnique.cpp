@@ -23,16 +23,18 @@ void BasicShadowMapTechnique::init(IRender* render, const ShadowSettings& settin
     _render   = render;
     _settings = settings;
     _shadowExtent = {.width = settings.resolution, .height = settings.resolution};
+    _standaloneGraphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
 
     _frameResources.init(render);
-    _directionalPass.init(render, _shadowExtent, _frameResources);
-    _pointPass.init(render, _shadowExtent, _frameResources);
+    _directionalPass.init(render, _shadowExtent, _frameResources, _standaloneGraphExecutor.get());
+    _pointPass.init(render, _shadowExtent, _frameResources, _standaloneGraphExecutor.get());
 }
 
 void BasicShadowMapTechnique::destroy()
 {
     _directionalPass.destroy();
     _pointPass.destroy();
+    _standaloneGraphExecutor.reset();
     _frameResources.destroy();
     _depthImage.reset();
     _shadowDepthArrayView.reset();
