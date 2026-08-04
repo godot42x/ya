@@ -1341,25 +1341,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
                                     EImageLayout::ShaderReadOnlyOptimal));
     }
 
-    if (auto shadowDepthImage = getShadowDepthImage();
-        shadowDepthImage && _shadowResources.directionalDepthIV && isShadowMappingEnabled()) {
-        graphResources.textures.shadowDepth = graph.importTexture(
-            makeImportedSubresourceTextureDesc(
-                shadowDepthImage,
-                ImageViewCreateInfo{
-                    .label          = "DeferredLight.ShadowDepth.FullArrayView",
-                    .viewType       = EImageViewType::View2DArray,
-                    .aspectFlags    = EImageAspect::Depth,
-                    .baseMipLevel   = 0,
-                    .levelCount     = 1,
-                    .baseArrayLayer = 0,
-                    .layerCount     = _shadowResources.layerCount,
-                },
-                Extent3D{_shadowResources.extent.width, _shadowResources.extent.height, 1},
-                "DeferredLight.ShadowDepth",
-                EImageLayout::ShaderReadOnlyOptimal,
-                EImageUsage::Sampled));
-    }
+    graphResources.textures.shadowDepth = graphResources.passes.shadow.shadowDepth;
 
     // Single typed pass parameters: drives both graph setup and execute resolve;
     // GBuffer/SSAO descriptor inputs are updated from resolved graph textures
@@ -1393,8 +1375,8 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     [[maybe_unused]] const auto lightPass = graph.addPass(
         "Deferred Light",
         [&lightParams, &graphResources](RGPassBuilder& passBuilder) {
-            if (graphResources.passes.shadow.has_value()) {
-                passBuilder.dependsOn(*graphResources.passes.shadow);
+            if (graphResources.passes.shadow.lastPass.has_value()) {
+                passBuilder.dependsOn(*graphResources.passes.shadow.lastPass);
             }
             passBuilder.uniformRead(lightParams.frame.handle, lightParams.frame.range);
             passBuilder.uniformRead(lightParams.light.handle, lightParams.light.range);

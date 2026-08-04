@@ -5,6 +5,7 @@
 #include "Render/Shadow/IShadowTechnique.h"
 #include "Render/Shadow/ShadowSettings.h"
 #include "Render/Stage/IRenderStage.h"
+#include "Runtime/Rendering/Common/Shadow/ShadowGraphOutputs.h"
 
 #include <memory>
 
@@ -33,7 +34,7 @@ struct ShadowStage : public IRenderStage
 
     // ─── Public API ──────────────────────────────────────────────────
     void refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent);
-    [[nodiscard]] std::optional<RGPassHandle> appendGraphPasses(
+    [[nodiscard]] ShadowGraphOutputs appendGraphPasses(
         RenderGraph& graph,
         const RenderStageContext& ctx);
 

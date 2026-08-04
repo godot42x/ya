@@ -14,6 +14,7 @@ do -- grab all cpp file under test folder as a target
             end
             set_group("test")
             set_kind("binary")
+            add_deps("ya-engine")
             add_files(filepath)
             target_end()
         end

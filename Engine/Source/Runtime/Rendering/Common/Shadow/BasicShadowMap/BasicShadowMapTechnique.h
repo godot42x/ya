@@ -3,6 +3,7 @@
 #include "BasicShadowPayload.h"
 #include "DirectionalShadowPass.h"
 #include "PointShadowPass.h"
+#include "Runtime/Rendering/Common/Shadow/ShadowGraphOutputs.h"
 #include "Runtime/Rendering/Common/Shadow/ShadowFrameResources.h"
 #include "Runtime/Rendering/Common/Shadow/ShadowTypes.h"
 
@@ -38,7 +39,7 @@ class BasicShadowMapTechnique : public IShadowTechnique
     [[nodiscard]] uint32_t                     getLastPreparedPointLightCount() const { return _lastPreparedPointLightCount; }
 
     void refreshShadowResources(const std::shared_ptr<IImage>& depthImage, EFormat::T depthFormat, Extent2D shadowExtent) override;
-    [[nodiscard]] std::optional<RGPassHandle> appendGraphPasses(
+    [[nodiscard]] ShadowGraphOutputs appendGraphPasses(
         RenderGraph& graph,
         uint32_t flightIndex,
         const RenderFrameData& frameData);
@@ -50,6 +51,8 @@ class BasicShadowMapTechnique : public IShadowTechnique
 
     IRender* _render       = nullptr;
     Extent2D _shadowExtent = {.width = 1024, .height = 1024};
+    stdptr<IImage> _depthImage;
+    stdptr<IImageView> _shadowDepthArrayView;
 
     ShadowSettings _settings;
     uint32_t       _lastPreparedPointLightCount = 0;
