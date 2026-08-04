@@ -39,6 +39,12 @@ class TestBuffer final : public IBuffer
     void mapInternal(void** ptr) override { *ptr = nullptr; }
 };
 
+class TestSampler final : public Sampler
+{
+  public:
+    SamplerHandle getHandle() const override { return SamplerHandle{reinterpret_cast<void*>(0x1234)}; }
+};
+
 class TestImage final : public IImage
 {
   private:
@@ -3304,6 +3310,108 @@ TEST(RenderGraphCoreTest, ResolveTextureRetainsImportedTextureKeepAliveResources
     EXPECT_EQ(cmdBuf.retainedResources[0].get(), existingImage.get());
     EXPECT_EQ(cmdBuf.retainedResources[1].get(), existingView.get());
     EXPECT_EQ(cmdBuf.retainedResources[2].get(), owner.get());
+}
+
+TEST(RenderGraphCoreTest, PassBindingContextResolvesTextureDescriptorAndRetainsOwners)
+{
+    TestResourceFactory factory;
+    TestCommandBuffer   cmdBuf;
+    RenderGraphExecutor executor(factory);
+    RenderGraph         graph;
+    TestSampler         sampler;
+
+    auto existingImage = std::make_shared<TestImage>(ImageCreateInfo{
+        .label       = "binding.input",
+        .format      = EFormat::R16G16B16A16_SFLOAT,
+        .extent      = {.width = 128, .height = 128, .depth = 1},
+        .mipLevels   = 1,
+        .arrayLayers = 1,
+        .usage       = EImageUsage::Sampled,
+    });
+    auto existingView = factory.createImageView(existingImage, ImageViewCreateInfo{
+        .label       = "binding.input.view",
+        .viewType    = EImageViewType::View2D,
+        .aspectFlags = EImageAspect::Color,
+    });
+    auto owner = std::make_shared<int>(99);
+
+    const auto imported = graph.importTexture(RGImportedTextureDesc{
+        .desc = RGTextureDesc{
+            .label  = "binding.input",
+            .format = EFormat::R16G16B16A16_SFLOAT,
+            .extent = Extent3D{128, 128, 1},
+            .usage  = EImageUsage::Sampled,
+        },
+        .importDesc = ImportedImageDesc{
+            .label        = "binding.input",
+            .nativeHandle = static_cast<void*>(existingImage->getHandle()),
+            .format       = EFormat::R16G16B16A16_SFLOAT,
+            .usage        = EImageUsage::Sampled,
+            .extent       = Extent3D{128, 128, 1},
+        },
+        .image             = existingImage,
+        .imageView         = existingView,
+        .retainedResources = {owner},
+    });
+
+    std::optional<DescriptorImageInfo> resolved;
+    graph.addPass(
+        "binding-reader",
+        [=](RGPassBuilder& pass) { pass.read(imported); },
+        [&](RGRenderContext& ctx) {
+            resolved = ctx.getBindingContext().resolveTextureDescriptor(imported, &sampler);
+        });
+
+    ASSERT_TRUE(executor.execute(graph, cmdBuf));
+    ASSERT_TRUE(resolved.has_value());
+    EXPECT_EQ(resolved->imageView, existingView->getHandle());
+    EXPECT_EQ(resolved->sampler, sampler.getHandle());
+    EXPECT_EQ(resolved->imageLayout, EImageLayout::ShaderReadOnlyOptimal);
+
+    ASSERT_EQ(cmdBuf.retainedResources.size(), 3u);
+    EXPECT_EQ(cmdBuf.retainedResources[0].get(), existingImage.get());
+    EXPECT_EQ(cmdBuf.retainedResources[1].get(), existingView.get());
+    EXPECT_EQ(cmdBuf.retainedResources[2].get(), owner.get());
+}
+
+TEST(RenderGraphCoreTest, PassBindingContextResolvesBufferDescriptorWithDeclaredRange)
+{
+    TestResourceFactory factory;
+    TestCommandBuffer   cmdBuf;
+    RenderGraphExecutor executor(factory);
+    RenderGraph         graph;
+    TestBuffer          backing(BufferCreateInfo{
+        .label = "binding.ubo",
+        .usage = EBufferUsage::UniformBuffer,
+        .size  = 256,
+    });
+    auto owner = std::make_shared<int>(123);
+
+    const auto imported = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "binding.ubo",
+            .usage = EBufferUsage::UniformBuffer,
+            .size  = 256,
+        },
+        .buffer            = &backing,
+        .retainedResources = {owner},
+    });
+
+    std::optional<DescriptorBufferInfo> resolved;
+    graph.addPass(
+        "binding-ubo",
+        [=](RGPassBuilder& pass) { pass.uniformRead(imported, RGBufferRange{.offset = 64, .size = 128}); },
+        [&](RGRenderContext& ctx) {
+            resolved = ctx.getBindingContext().resolveBufferDescriptor(imported);
+        });
+
+    ASSERT_TRUE(executor.execute(graph, cmdBuf));
+    ASSERT_TRUE(resolved.has_value());
+    EXPECT_EQ(resolved->buffer, backing.getHandle());
+    EXPECT_EQ(resolved->offset, 64u);
+    EXPECT_EQ(resolved->range, 128u);
+    ASSERT_EQ(cmdBuf.retainedResources.size(), 1u);
+    EXPECT_EQ(cmdBuf.retainedResources[0].get(), owner.get());
 }
 
 TEST(RenderGraphCoreTest, ResourceRegistryRefreshesImportedBufferKeepAliveWithoutReplacingBuffer)
