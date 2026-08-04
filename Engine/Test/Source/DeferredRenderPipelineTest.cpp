@@ -253,6 +253,17 @@ TEST(DeferredPassParamsTest, SkyboxOverlayDefaultsAreEmptyAndCallbacksRemainExpl
     EXPECT_FALSE(viewportOverlay.recordViewportOverlays);
 }
 
+TEST(PostProcessingStageTest, FinalizeParamsDefaultsStayEmpty)
+{
+    PostProcessingStage::FinalizePassParams params{};
+    EXPECT_FALSE(params.input.isValid());
+    EXPECT_FALSE(params.output.isValid());
+    EXPECT_EQ(params.inputExtent.width, 0u);
+    EXPECT_EQ(params.inputExtent.height, 0u);
+    EXPECT_FALSE(params.bOutputIsSRGB);
+    EXPECT_EQ(params.postContext, nullptr);
+}
+
 TEST(SSAOStageTest, BuildsFrameDataWithoutOwningGpuResources)
 {
     SSAOStage stage;

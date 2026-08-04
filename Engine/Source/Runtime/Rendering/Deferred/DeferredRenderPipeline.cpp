@@ -1598,11 +1598,13 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         });
     graphResources.passes.viewportOverlay = viewportOverlayPass;
 
-    const auto postprocessOutput = _postProcessStage.appendFinalizeGraphPasses(
-        graph,
-        graphResources.textures.overlayInput,
-        viewportExtent,
-        &_lastTickCtx);
+    const auto postprocessOutput = _postProcessStage.appendFinalizeGraphPasses(graph, PostProcessingStage::FinalizePassParams{
+                                                                                      .input       = graphResources.textures.overlayInput,
+                                                                                      .output      = graphResources.textures.postprocessOutput.value_or(RGTextureHandle{}),
+                                                                                      .inputExtent = viewportExtent,
+                                                                                      .bOutputIsSRGB = EFormat::isSRGB(_render->getSwapchain()->getFormat()),
+                                                                                      .postContext = &_lastTickCtx,
+                                                                                  });
     if (postprocessOutput.isValid()) {
         graphResources.textures.postprocessOutput = postprocessOutput;
     }
@@ -1647,7 +1649,6 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     if (_overlayStage) {
         _overlayStage->prepare(stageCtx);
     }
-    _postProcessStage.capturePreparedResources(result);
 
     [[maybe_unused]] const bool bExecuted = _graphExecutor->executeCompiled(graph, compiled, *frame.cmdBuf);
     if (!bExecuted) {
@@ -1658,10 +1659,8 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     }
 
     if (graphResources.textures.postprocessOutput.has_value()) {
-        if (auto preparedOutput = _postProcessStage.getPreparedOutputImageShared()) {
-            _currentPostprocessOutput = std::move(preparedOutput);
-            return;
-        }
+        _currentPostprocessOutput = result.getExportedTextureShared("Postprocessing.Output");
+        return;
     }
 
     _currentPostprocessOutput.reset();
