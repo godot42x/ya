@@ -71,6 +71,7 @@ struct VulkanBuffer : public ya::IBuffer
     void               unmap() override;
     BufferHandle       getHandle() const override { return BufferHandle(_handle); }
     uint32_t           getSize() const override { return static_cast<uint32_t>(_size); }
+    EBufferUsage       getUsage() const override { return fromVk(_usageFlags); }
     bool               isHostVisible() const override { return bHostVisible; }
     const std::string &getName() const override { return name; }
 

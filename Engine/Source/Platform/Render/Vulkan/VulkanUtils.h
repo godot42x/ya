@@ -364,6 +364,30 @@ inline VkBufferUsageFlags toVk(EBufferUsage usage)
     return vkUsage;
 }
 
+inline EBufferUsage fromVk(VkBufferUsageFlags usage)
+{
+    EBufferUsage bufferUsage = EBufferUsage::None;
+    if ((usage & VK_BUFFER_USAGE_TRANSFER_SRC_BIT) != 0)
+        bufferUsage = bufferUsage | EBufferUsage::TransferSrc;
+    if ((usage & VK_BUFFER_USAGE_TRANSFER_DST_BIT) != 0)
+        bufferUsage = bufferUsage | EBufferUsage::TransferDst;
+    if ((usage & VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT) != 0)
+        bufferUsage = bufferUsage | EBufferUsage::UniformTexelBuffer;
+    if ((usage & VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT) != 0)
+        bufferUsage = bufferUsage | EBufferUsage::StorageTexelBuffer;
+    if ((usage & VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT) != 0)
+        bufferUsage = bufferUsage | EBufferUsage::UniformBuffer;
+    if ((usage & VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) != 0)
+        bufferUsage = bufferUsage | EBufferUsage::StorageBuffer;
+    if ((usage & VK_BUFFER_USAGE_INDEX_BUFFER_BIT) != 0)
+        bufferUsage = bufferUsage | EBufferUsage::IndexBuffer;
+    if ((usage & VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) != 0)
+        bufferUsage = bufferUsage | EBufferUsage::VertexBuffer;
+    if ((usage & VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT) != 0)
+        bufferUsage = bufferUsage | EBufferUsage::IndirectBuffer;
+    return bufferUsage;
+}
+
 namespace EBlendOp
 {
 inline auto toVk(T op) -> VkBlendOp

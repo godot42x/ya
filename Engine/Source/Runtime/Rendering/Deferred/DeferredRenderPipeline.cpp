@@ -1167,21 +1167,12 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
                                        uint64_t rangeOffset = 0,
                                        uint64_t rangeSize = 0) {
         YA_CORE_ASSERT(buffer != nullptr, "Deferred graph requires imported buffer '{}'", label);
-        return graph.importBuffer(RGImportedBufferDesc{
-            .desc = RGBufferDesc{
-                .label = std::move(label),
-                .usage = usage,
-                .size  = buffer->getSize(),
-            },
-            .buffer = buffer.get(),
-            .initialState = BufferResourceState{
-                .stages = EPipelineStage::Host,
-                .access = EResourceAccess::HostWrite,
-                .offset = rangeOffset,
-                .size   = rangeSize == 0 ? buffer->getSize() : rangeSize,
-            },
-            .retainedResources = {buffer},
-        });
+        return graph.importBuffer(makeHostWrittenImportedBufferDesc(
+            buffer,
+            label,
+            usage,
+            rangeOffset,
+            rangeSize));
     };
     graphResources.buffers.frame = importHostWrittenBuffer(
         frameBinding.frame.buffer,

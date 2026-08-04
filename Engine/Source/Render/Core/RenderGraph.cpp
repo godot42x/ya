@@ -94,6 +94,59 @@ bool hasBufferUsage(EBufferUsage haystack, EBufferUsage needle)
     return (haystack & needle) == needle;
 }
 
+std::string formatImageUsageFlags(EImageUsage::T usage)
+{
+    if (usage == EImageUsage::None) {
+        return "None";
+    }
+
+    std::vector<const char*> parts;
+    if ((usage & EImageUsage::TransferSrc) == EImageUsage::TransferSrc) parts.push_back("TransferSrc");
+    if ((usage & EImageUsage::TransferDst) == EImageUsage::TransferDst) parts.push_back("TransferDst");
+    if ((usage & EImageUsage::Sampled) == EImageUsage::Sampled) parts.push_back("Sampled");
+    if ((usage & EImageUsage::Storage) == EImageUsage::Storage) parts.push_back("Storage");
+    if ((usage & EImageUsage::ColorAttachment) == EImageUsage::ColorAttachment) parts.push_back("ColorAttachment");
+    if ((usage & EImageUsage::DepthStencilAttachment) == EImageUsage::DepthStencilAttachment) parts.push_back("DepthStencilAttachment");
+    if ((usage & EImageUsage::TransientAttachment) == EImageUsage::TransientAttachment) parts.push_back("TransientAttachment");
+    if ((usage & EImageUsage::InputAttachment) == EImageUsage::InputAttachment) parts.push_back("InputAttachment");
+
+    std::ostringstream oss;
+    for (size_t index = 0; index < parts.size(); ++index) {
+        if (index > 0) {
+            oss << "|";
+        }
+        oss << parts[index];
+    }
+    return oss.str();
+}
+
+std::string formatBufferUsageFlags(EBufferUsage usage)
+{
+    if (usage == EBufferUsage::None) {
+        return "None";
+    }
+
+    std::vector<const char*> parts;
+    if ((usage & EBufferUsage::TransferSrc) == EBufferUsage::TransferSrc) parts.push_back("TransferSrc");
+    if ((usage & EBufferUsage::TransferDst) == EBufferUsage::TransferDst) parts.push_back("TransferDst");
+    if ((usage & EBufferUsage::UniformTexelBuffer) == EBufferUsage::UniformTexelBuffer) parts.push_back("UniformTexelBuffer");
+    if ((usage & EBufferUsage::StorageTexelBuffer) == EBufferUsage::StorageTexelBuffer) parts.push_back("StorageTexelBuffer");
+    if ((usage & EBufferUsage::UniformBuffer) == EBufferUsage::UniformBuffer) parts.push_back("UniformBuffer");
+    if ((usage & EBufferUsage::StorageBuffer) == EBufferUsage::StorageBuffer) parts.push_back("StorageBuffer");
+    if ((usage & EBufferUsage::IndexBuffer) == EBufferUsage::IndexBuffer) parts.push_back("IndexBuffer");
+    if ((usage & EBufferUsage::VertexBuffer) == EBufferUsage::VertexBuffer) parts.push_back("VertexBuffer");
+    if ((usage & EBufferUsage::IndirectBuffer) == EBufferUsage::IndirectBuffer) parts.push_back("IndirectBuffer");
+
+    std::ostringstream oss;
+    for (size_t index = 0; index < parts.size(); ++index) {
+        if (index > 0) {
+            oss << "|";
+        }
+        oss << parts[index];
+    }
+    return oss.str();
+}
+
 bool isTransferTextureAccess(ERGPassResourceAccess access)
 {
     return access == ERGPassResourceAccess::TransferSrc || access == ERGPassResourceAccess::TransferDst;
@@ -187,13 +240,42 @@ ImageSubresourceRange makeImportedViewRange(const RGTextureResource& resource)
 
 void normalizeImportedTextureDesc(RGImportedTextureDesc& importedDesc)
 {
+    auto validateRange = [](const IImage& image, const ImageSubresourceRange& range, std::string_view label) {
+        YA_CORE_ASSERT(range.levelCount > 0 && range.layerCount > 0,
+                       "Imported texture '{}' subresource range must be non-empty",
+                       label);
+        YA_CORE_ASSERT(range.baseMipLevel < image.getMipLevels(),
+                       "Imported texture '{}' base mip {} exceeds backing mip count {}",
+                       label,
+                       range.baseMipLevel,
+                       image.getMipLevels());
+        YA_CORE_ASSERT(range.baseArrayLayer < image.getArrayLayers(),
+                       "Imported texture '{}' base layer {} exceeds backing layer count {}",
+                       label,
+                       range.baseArrayLayer,
+                       image.getArrayLayers());
+        YA_CORE_ASSERT(range.baseMipLevel + range.levelCount <= image.getMipLevels(),
+                       "Imported texture '{}' mip range [{}..{}) exceeds backing mip count {}",
+                       label,
+                       range.baseMipLevel,
+                       range.baseMipLevel + range.levelCount,
+                       image.getMipLevels());
+        YA_CORE_ASSERT(range.baseArrayLayer + range.layerCount <= image.getArrayLayers(),
+                       "Imported texture '{}' layer range [{}..{}) exceeds backing layer count {}",
+                       label,
+                       range.baseArrayLayer,
+                       range.baseArrayLayer + range.layerCount,
+                       image.getArrayLayers());
+    };
+
     if (importedDesc.image) {
         const IImage& image = *importedDesc.image;
         const auto    nativeHandle = static_cast<void*>(image.getHandle());
+        const std::string_view label = importedDesc.importDesc.label.empty() ? importedDesc.desc.label : importedDesc.importDesc.label;
 
         YA_CORE_ASSERT(importedDesc.importDesc.nativeHandle == nullptr || importedDesc.importDesc.nativeHandle == nativeHandle,
                        "Imported texture image/native handle mismatch for '{}'",
-                       importedDesc.importDesc.label.empty() ? importedDesc.desc.label : importedDesc.importDesc.label);
+                       label);
         YA_CORE_ASSERT(importedDesc.importDesc.format == EFormat::Undefined || importedDesc.importDesc.format == image.getFormat(),
                        "Imported texture image/format mismatch");
         YA_CORE_ASSERT(importedDesc.importDesc.usage == EImageUsage::None || hasImageUsage(image.getUsage(), importedDesc.importDesc.usage),
@@ -207,6 +289,25 @@ void normalizeImportedTextureDesc(RGImportedTextureDesc& importedDesc)
                        "Imported texture image/mip mismatch");
         YA_CORE_ASSERT(importedDesc.importDesc.arrayLayers == 1 || importedDesc.importDesc.arrayLayers == image.getArrayLayers(),
                        "Imported texture image/array-layer mismatch");
+
+        if (importedDesc.imageView) {
+            YA_CORE_ASSERT(importedDesc.imageView->getImage() == &image,
+                           "Imported texture '{}' image view does not reference the backing image",
+                           label);
+        }
+        if (importedDesc.subresourceRange) {
+            validateRange(image, *importedDesc.subresourceRange, label);
+        }
+        if (importedDesc.imageView && importedDesc.subresourceRange) {
+            const auto& viewRange = importedDesc.imageView->getSubresourceRange();
+            YA_CORE_ASSERT(viewRange.aspectMask == importedDesc.subresourceRange->aspectMask &&
+                               viewRange.baseMipLevel == importedDesc.subresourceRange->baseMipLevel &&
+                               viewRange.levelCount == importedDesc.subresourceRange->levelCount &&
+                               viewRange.baseArrayLayer == importedDesc.subresourceRange->baseArrayLayer &&
+                               viewRange.layerCount == importedDesc.subresourceRange->layerCount,
+                           "Imported texture '{}' image-view range does not match declared subresource range",
+                           label);
+        }
 
         importedDesc.importDesc.nativeHandle = nativeHandle;
         importedDesc.importDesc.format       = image.getFormat();
@@ -229,12 +330,61 @@ void normalizeImportedTextureDesc(RGImportedTextureDesc& importedDesc)
     if (desc.label.empty()) {
         desc.label = importedDesc.importDesc.label;
     }
-    if (desc.mipLevels == 1 && importedDesc.importDesc.mipLevels != 1) {
+    const bool hasExplicitSubresourceRange = importedDesc.subresourceRange.has_value() || importedDesc.viewDesc.has_value();
+    if (!hasExplicitSubresourceRange && desc.mipLevels == 1 && importedDesc.importDesc.mipLevels != 1) {
         desc.mipLevels = importedDesc.importDesc.mipLevels;
     }
-    if (desc.arrayLayers == 1 && importedDesc.importDesc.arrayLayers != 1) {
+    if (!hasExplicitSubresourceRange && desc.arrayLayers == 1 && importedDesc.importDesc.arrayLayers != 1) {
         desc.arrayLayers = importedDesc.importDesc.arrayLayers;
     }
+    if (importedDesc.subresourceRange) {
+        YA_CORE_ASSERT(desc.mipLevels == importedDesc.subresourceRange->levelCount,
+                       "Imported texture '{}' graph mip count {} does not match imported subresource level count {}",
+                       desc.label,
+                       desc.mipLevels,
+                       importedDesc.subresourceRange->levelCount);
+        YA_CORE_ASSERT(desc.arrayLayers == importedDesc.subresourceRange->layerCount,
+                       "Imported texture '{}' graph layer count {} does not match imported subresource layer count {}",
+                       desc.label,
+                       desc.arrayLayers,
+                       importedDesc.subresourceRange->layerCount);
+    }
+
+    if (importedDesc.image) {
+        const EImageUsage::T backingUsage = importedDesc.image->getUsage();
+        YA_CORE_ASSERT(hasImageUsage(backingUsage, desc.usage),
+                       "Imported texture '{}' graph usage {} is not supported by backing image usage {}",
+                       desc.label,
+                       formatImageUsageFlags(desc.usage),
+                       formatImageUsageFlags(backingUsage));
+    }
+}
+
+void normalizeImportedBufferDesc(RGImportedBufferDesc& importedDesc)
+{
+    YA_CORE_ASSERT(importedDesc.buffer != nullptr, "Imported buffer requires a backing buffer");
+
+    auto& desc = importedDesc.desc;
+    if (desc.label.empty()) {
+        desc.label = importedDesc.buffer->getName();
+    }
+    if (desc.size == 0) {
+        desc.size = importedDesc.buffer->getSize();
+    }
+    if (desc.usage == EBufferUsage::None) {
+        desc.usage = importedDesc.buffer->getUsage();
+    }
+
+    YA_CORE_ASSERT(desc.size == importedDesc.buffer->getSize(),
+                   "Imported buffer '{}' size mismatch: graph desc={} backing={}",
+                   desc.label,
+                   desc.size,
+                   importedDesc.buffer->getSize());
+    YA_CORE_ASSERT(hasBufferUsage(importedDesc.buffer->getUsage(), desc.usage),
+                   "Imported buffer '{}' graph usage {} is not supported by backing buffer usage {}",
+                   desc.label,
+                   formatBufferUsageFlags(desc.usage),
+                   formatBufferUsageFlags(importedDesc.buffer->getUsage()));
 }
 
 ImageResourceState makeTextureState(const RGTextureResource& resource, ERGPassResourceAccess access)
@@ -403,6 +553,34 @@ bool validateBufferUsageFlags(const RGBufferResource& resource, ERGBufferAccess 
             return hasBufferUsage(resource.desc.usage, EBufferUsage::TransferDst);
     }
     return false;
+}
+
+std::string describeRequiredImageUsage(ERGPassResourceAccess access)
+{
+    switch (access) {
+        case ERGPassResourceAccess::Read: return "Sampled";
+        case ERGPassResourceAccess::Write: return "Storage";
+        case ERGPassResourceAccess::ColorAttachment: return "ColorAttachment";
+        case ERGPassResourceAccess::DepthAttachment: return "DepthStencilAttachment";
+        case ERGPassResourceAccess::TransferSrc: return "TransferSrc";
+        case ERGPassResourceAccess::TransferDst: return "TransferDst";
+    }
+    return "<unknown>";
+}
+
+std::string describeRequiredBufferUsage(ERGBufferAccess access)
+{
+    switch (access) {
+        case ERGBufferAccess::UniformRead: return "UniformBuffer";
+        case ERGBufferAccess::StorageRead:
+        case ERGBufferAccess::StorageWrite:
+        case ERGBufferAccess::StorageReadWrite:
+            return "StorageBuffer";
+        case ERGBufferAccess::IndirectRead: return "IndirectBuffer";
+        case ERGBufferAccess::TransferRead: return "TransferSrc";
+        case ERGBufferAccess::TransferWrite: return "TransferDst";
+    }
+    return "<unknown>";
 }
 
 std::string formatBufferRange(const RGBufferRange& range)
@@ -934,6 +1112,9 @@ RGBufferHandle RenderGraph::importBuffer(const RGImportedBufferDesc& importedDes
 {
     YA_CORE_ASSERT(importedDesc.buffer != nullptr, "Imported buffer must not be null");
 
+    auto normalizedImported = importedDesc;
+    normalizeImportedBufferDesc(normalizedImported);
+
     RGBufferHandle handle{
         .index      = static_cast<uint32_t>(_buffers.size()),
         .generation = _nextBufferGeneration++,
@@ -941,8 +1122,8 @@ RGBufferHandle RenderGraph::importBuffer(const RGImportedBufferDesc& importedDes
     _buffers.push_back(RGBufferResource{
         .handle   = handle,
         .lifetime = ERGResourceLifetime::Imported,
-        .desc     = importedDesc.desc,
-        .imported = importedDesc,
+        .desc     = normalizedImported.desc,
+        .imported = normalizedImported,
     });
     return handle;
 }
@@ -1181,8 +1362,16 @@ RGCompiledGraph RenderGraph::compile() const
                 return EImageUsage::None;
             }();
             if (requiredUsage != EImageUsage::None && !hasImageUsage(resource->desc.usage, requiredUsage)) {
+                const std::string backingUsage = resource->imported.has_value()
+                    ? formatImageUsageFlags(resource->imported->importDesc.usage)
+                    : formatImageUsageFlags(resource->desc.usage);
                 addIssue(RGCompileIssue::EKind::InvalidUsage, pass.handle,
-                         std::format("pass {} uses texture {} with incompatible usage flags", pass.name, resource->desc.label));
+                         std::format("pass {} uses texture {} as {} but graph usage is {} (backing usage: {})",
+                                     pass.name,
+                                     resource->desc.label,
+                                     describeRequiredImageUsage(usage.access),
+                                     formatImageUsageFlags(resource->desc.usage),
+                                     backingUsage));
                 continue;
             }
 
@@ -1223,9 +1412,38 @@ RGCompiledGraph RenderGraph::compile() const
             }
 
             const bool bCompatibleUsage = validateBufferUsageFlags(*resource, usage.access);
+            const bool bBackingUsageCompatible =
+                !resource->imported.has_value() ||
+                validateBufferUsageFlags(RGBufferResource{
+                    .desc = RGBufferDesc{
+                        .label = resource->desc.label,
+                        .usage = resource->imported->buffer ? resource->imported->buffer->getUsage() : resource->desc.usage,
+                        .size  = resource->desc.size,
+                    },
+                }, usage.access);
             if (!bCompatibleUsage) {
                 addIssue(RGCompileIssue::EKind::InvalidUsage, pass.handle,
-                         std::format("pass {} uses buffer {} with unsupported usage flags", pass.name, resource->desc.label));
+                         std::format("pass {} uses buffer {} as {} but graph usage is {}{}",
+                                     pass.name,
+                                     resource->desc.label,
+                                     describeRequiredBufferUsage(usage.access),
+                                     formatBufferUsageFlags(resource->desc.usage),
+                                     resource->imported.has_value() && resource->imported->buffer
+                                         ? std::format(" (backing usage: {})",
+                                                       formatBufferUsageFlags(resource->imported->buffer->getUsage()))
+                                         : ""));
+                continue;
+            }
+            if (!bBackingUsageCompatible) {
+                addIssue(RGCompileIssue::EKind::InvalidUsage, pass.handle,
+                         std::format("pass {} uses imported buffer {} as {} and graph usage is {}, but backing buffer usage is {}",
+                                     pass.name,
+                                     resource->desc.label,
+                                     describeRequiredBufferUsage(usage.access),
+                                     formatBufferUsageFlags(resource->desc.usage),
+                                     resource->imported && resource->imported->buffer
+                                         ? formatBufferUsageFlags(resource->imported->buffer->getUsage())
+                                         : std::string("None")));
                 continue;
             }
 

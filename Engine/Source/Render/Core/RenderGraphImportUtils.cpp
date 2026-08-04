@@ -11,6 +11,23 @@ EImageUsage::T mergeImportedUsage(EImageUsage::T usage, EImageUsage::T requiredU
     return static_cast<EImageUsage::T>(usage | requiredUsage);
 }
 
+EBufferUsage mergeImportedUsage(EBufferUsage usage, EBufferUsage requiredUsage)
+{
+    return usage | requiredUsage;
+}
+
+EImageLayout::T getImportedInitialLayout(const IImage& image, const ImageSubresourceRange* range)
+{
+    if (!range) {
+        return image.getCompatibilityLayout();
+    }
+
+    return image.getCompatibilityLayout(
+        range->aspectMask,
+        range->baseMipLevel,
+        range->baseArrayLayer);
+}
+
 RGImportedTextureDesc makeImportedTextureDesc(
     const std::shared_ptr<IImage>& image,
     const std::shared_ptr<IImageView>& imageView,
@@ -24,14 +41,15 @@ RGImportedTextureDesc makeImportedTextureDesc(
     YA_CORE_ASSERT(imageView != nullptr, "Render graph import requires a backing image view");
 
     const EImageUsage::T usage = mergeImportedUsage(image->getUsage(), requiredUsage);
+    const auto&          viewRange = imageView->getSubresourceRange();
 
     return RGImportedTextureDesc{
         .desc = RGTextureDesc{
             .label       = std::string(label),
             .format      = format,
             .extent      = extent,
-            .mipLevels   = image->getMipLevels(),
-            .arrayLayers = image->getArrayLayers(),
+            .mipLevels   = viewRange.levelCount,
+            .arrayLayers = viewRange.layerCount,
             .usage       = usage,
         },
         .importDesc = ImportedImageDesc{
@@ -42,7 +60,7 @@ RGImportedTextureDesc makeImportedTextureDesc(
             .extent        = extent,
             .mipLevels     = image->getMipLevels(),
             .arrayLayers   = image->getArrayLayers(),
-            .initialLayout = image->getCompatibilityLayout(),
+            .initialLayout = getImportedInitialLayout(*image, imageView ? &imageView->getSubresourceRange() : nullptr),
             .finalLayout   = finalLayout,
         },
         .image = image,
@@ -83,7 +101,7 @@ RGImportedTextureDesc makeImportedSubresourceTextureDesc(
             .extent        = Extent3D{image->getWidth(), image->getHeight(), 1},
             .mipLevels     = image->getMipLevels(),
             .arrayLayers   = image->getArrayLayers(),
-            .initialLayout = image->getCompatibilityLayout(),
+            .initialLayout = getImportedInitialLayout(*image, &imageView->getSubresourceRange()),
             .finalLayout   = finalLayout,
         },
         .image = image,
@@ -105,6 +123,13 @@ RGImportedTextureDesc makeImportedSubresourceTextureDesc(
     YA_CORE_ASSERT(image != nullptr, "Render graph subresource import requires a backing image");
 
     const EImageUsage::T usage = mergeImportedUsage(image->getUsage(), requiredUsage);
+    const ImageSubresourceRange subresourceRange{
+        .aspectMask     = viewDesc.aspectFlags,
+        .baseMipLevel   = viewDesc.baseMipLevel,
+        .levelCount     = viewDesc.levelCount,
+        .baseArrayLayer = viewDesc.baseArrayLayer,
+        .layerCount     = viewDesc.layerCount,
+    };
 
     return RGImportedTextureDesc{
         .desc = RGTextureDesc{
@@ -123,22 +148,76 @@ RGImportedTextureDesc makeImportedSubresourceTextureDesc(
             .extent        = Extent3D{image->getWidth(), image->getHeight(), 1},
             .mipLevels     = image->getMipLevels(),
             .arrayLayers   = image->getArrayLayers(),
-            .initialLayout = image->getCompatibilityLayout(),
+            .initialLayout = getImportedInitialLayout(*image, &subresourceRange),
             .finalLayout   = finalLayout,
         },
         .image = image,
-        .subresourceRange = ImageSubresourceRange{
-            .aspectMask     = viewDesc.aspectFlags,
-            .baseMipLevel   = viewDesc.baseMipLevel,
-            .levelCount     = viewDesc.levelCount,
-            .baseArrayLayer = viewDesc.baseArrayLayer,
-            .layerCount     = viewDesc.layerCount,
-        },
+        .subresourceRange = subresourceRange,
         .viewDesc = viewDesc,
     };
 }
 
 } // namespace
+
+RGImportedBufferDesc makeImportedBufferDesc(const std::shared_ptr<IBuffer>& buffer,
+                                            std::string_view label,
+                                            BufferResourceState initialState,
+                                            EBufferUsage requiredUsage,
+                                            std::optional<BufferResourceState> finalState)
+{
+    YA_CORE_ASSERT(buffer != nullptr, "Render graph import requires a backing buffer");
+
+    return RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = std::string(label),
+            .usage = mergeImportedUsage(buffer->getUsage(), requiredUsage),
+            .size  = buffer->getSize(),
+        },
+        .buffer            = buffer.get(),
+        .initialState      = initialState,
+        .finalState        = finalState,
+        .retainedResources = {buffer},
+    };
+}
+
+RGImportedBufferDesc makeHostWrittenImportedBufferDesc(const std::shared_ptr<IBuffer>& buffer,
+                                                       std::string_view label,
+                                                       EBufferUsage requiredUsage,
+                                                       uint64_t rangeOffset,
+                                                       uint64_t rangeSize,
+                                                       std::optional<BufferResourceState> finalState)
+{
+    return makeImportedBufferDesc(
+        buffer,
+        label,
+        BufferResourceState{
+            .stages = EPipelineStage::Host,
+            .access = EResourceAccess::HostWrite,
+            .offset = rangeOffset,
+            .size   = rangeSize == 0 ? (buffer ? buffer->getSize() : 0) : rangeSize,
+        },
+        requiredUsage,
+        finalState);
+}
+
+RGImportedBufferDesc makeReadbackImportedBufferDesc(const std::shared_ptr<IBuffer>& buffer,
+                                                    std::string_view label,
+                                                    EBufferUsage requiredUsage,
+                                                    uint64_t rangeOffset,
+                                                    uint64_t rangeSize)
+{
+    return makeImportedBufferDesc(
+        buffer,
+        label,
+        BufferResourceState{},
+        requiredUsage,
+        BufferResourceState{
+            .stages = EPipelineStage::Host,
+            .access = EResourceAccess::HostRead,
+            .offset = rangeOffset,
+            .size   = rangeSize == 0 ? (buffer ? buffer->getSize() : 0) : rangeSize,
+        });
+}
 
 RGImportedTextureDesc makeImportedTextureDesc(const Texture& texture,
                                               std::string_view label,
