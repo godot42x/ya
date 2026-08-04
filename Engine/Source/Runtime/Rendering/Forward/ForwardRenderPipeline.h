@@ -3,6 +3,7 @@
 #include "Core/Base.h"
 #include "ForwardViewportStage.h"
 #include "ForwardViewportResources.h"
+#include "Runtime/Rendering/Forward/ForwardFrameResourceSet.h"
 #include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderAttachmentFormats.h"
 #include "Render/Core/RenderTargetCreateInfo.h"
@@ -81,6 +82,7 @@ struct ENGINE_API ForwardRenderPipeline : public IRenderPipeline
     stdptr<ForwardViewportStage> _viewportStage;
     PostProcessingStage          _postProcessStage;
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
+    stdptr<ForwardFrameResourceSet> _frameResources;
 
     bool                    bMSAA                    = false;
     std::shared_ptr<RenderImage> _currentPostprocessOutput = nullptr;

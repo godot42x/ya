@@ -295,6 +295,9 @@ void ForwardRenderPipeline::initShadowResources()
 
 void ForwardRenderPipeline::initStageResources()
 {
+    _frameResources = ya::makeShared<ForwardFrameResourceSet>();
+    _frameResources->init(_render);
+
     _shadowStage = ya::makeShared<ShadowStage>();
     _shadowStage->init(_render);
     if (_shadowResources.depthImage) {
@@ -314,6 +317,7 @@ void ForwardRenderPipeline::initStageResources()
         .render                             = _render,
         .renderPass                         = nullptr,
         .pipelineRenderingInfo              = viewportPRI,
+        .skinningDSL                        = _frameResources ? _frameResources->getSkinningDSL() : nullptr,
         .depthBufferShadowDS                = depthBufferShadowDS,
         .shadowState                        = buildShadowState(),
         .getFrameIndex                      = _getFrameIndex,
@@ -642,6 +646,10 @@ void ForwardRenderPipeline::executeShadowPass(RenderStageContext& stageCtx)
 
 void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx)
 {
+    if (_frameResources && !_frameResources->prepareSkinning(stageCtx)) {
+        YA_CORE_ERROR("Forward viewport skinning resource prepare failed");
+    }
+
     _viewportStage->prepare(stageCtx);
 
     YA_CORE_ASSERT(_viewportResources.colorOwner && _viewportResources.colorImage,
@@ -688,6 +696,10 @@ void ForwardRenderPipeline::shutdown()
     getSceneSkyboxDescriptorSet = {};
     getSceneEnvironmentLightingDescriptorSet = {};
     _currentPostprocessOutput.reset();
+    if (_frameResources) {
+        _frameResources->destroy();
+        _frameResources.reset();
+    }
     _postProcessStage.setGraphExecutor(nullptr);
     _graphExecutor.reset();
     _pendingViewportExtent = {};
@@ -761,7 +773,9 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
             rgCtx.beginDeclaredRasterRendering();
 
             stageCtx.viewportExtent = viewportExtent;
-            _viewportStage->execute(stageCtx);
+            _viewportStage->execute(
+                stageCtx,
+                _frameResources ? _frameResources->getBinding(stageCtx.flightIndex).skinningDescriptorSet : DescriptorSetHandle{});
             if (_lastFrameInput.recordViewportOverlays) {
                 YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
                 _lastFrameInput.recordViewportOverlays(&rgCtx.getCommandBuffer(), viewportExtent, _lastTickCtx);

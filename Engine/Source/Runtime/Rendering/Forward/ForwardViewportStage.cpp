@@ -23,75 +23,6 @@ static const std::vector<VertexAttribute> kSkinningVertexAttributes = {
     {.bufferSlot = 1, .location = 5, .format = EVertexAttributeFormat::Float4, .offset = offsetof(ya::SkeletonMeshVertex, weights)},
 };
 
-void ForwardViewportStage::initSkinningResources()
-{
-    _skinningDSL = IDescriptorSetLayout::create(
-        _render,
-        DescriptorSetLayoutDesc{
-            .label    = "Forward_Skinning_DSL",
-            .set      = 5,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::StorageBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
-        });
-}
-
-void ForwardViewportStage::ensureSkinningCapacity(uint32_t paletteCount)
-{
-    const uint32_t requiredCount = std::max(1u, paletteCount);
-    if (_skinningDSP && requiredCount <= _skinningCapacity) {
-        return;
-    }
-
-    _skinningDSP.reset();
-    for (auto& ds : _skinningDS) {
-        ds = {};
-    }
-
-    _skinningCapacity = std::max(requiredCount, _skinningCapacity == 0 ? 16u : _skinningCapacity);
-    while (_skinningCapacity < requiredCount) {
-        _skinningCapacity *= 2;
-    }
-
-    _skinningDSP = IDescriptorPool::create(
-        _render,
-        DescriptorPoolCreateInfo{
-            .label     = "Forward_Skinning_DSP",
-            .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
-            .poolSizes = {{.type = EPipelineDescriptorType::StorageBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT}},
-        });
-
-    const uint32_t bufferSize = static_cast<uint32_t>(static_cast<uint64_t>(_skinningCapacity) * sizeof(RenderSkinningPalette));
-    for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _skinningSSBO[i] = _render->getResourceFactory()->createBuffer(
-            BufferCreateInfo{
-                .label       = std::format("Forward_Skinning_SSBO_{}", i),
-                .usage       = EBufferUsage::StorageBuffer,
-                .size        = bufferSize,
-                .memoryUsage = EMemoryUsage::CpuToGpu,
-            });
-        _skinningDS[i] = _skinningDSP->allocateDescriptorSets(_skinningDSL);
-        _render->getDescriptorHelper()->updateDescriptorSets(
-            {IDescriptorSetHelper::genSingleBufferWrite(_skinningDS[i], 0, EPipelineDescriptorType::StorageBuffer, _skinningSSBO[i].get())},
-            {});
-    }
-}
-
-void ForwardViewportStage::updateSkinningBuffer(const RenderStageContext& ctx)
-{
-    if (!ctx.frameData) {
-        return;
-    }
-
-    const auto& palettes = ctx.frameData->skinningPalettes;
-    ensureSkinningCapacity(static_cast<uint32_t>(palettes.size()));
-    if (palettes.empty()) {
-        return;
-    }
-
-    auto& buffer = _skinningSSBO[ctx.flightIndex];
-    buffer->writeData(palettes.data(), palettes.size() * sizeof(RenderSkinningPalette), 0);
-    buffer->flush();
-}
-
 // ═══════════════════════════════════════════════════════════════════════
 // Init
 // ═══════════════════════════════════════════════════════════════════════
@@ -105,6 +36,7 @@ void ForwardViewportStage::init(IRender* render)
 void ForwardViewportStage::initWithDesc(const InitDesc& desc)
 {
     _render                                   = desc.render;
+    _skinningDSL                              = desc.skinningDSL;
     _depthBufferShadowDS                      = desc.depthBufferShadowDS;
     _shadowState                              = desc.shadowState;
     _getFrameIndex                            = desc.getFrameIndex;
@@ -114,7 +46,6 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
     _getSceneSkyboxDescriptorSet              = desc.getSceneSkyboxDescriptorSet;
     _getSceneEnvironmentLightingDescriptorSet = desc.getSceneEnvironmentLightingDescriptorSet;
 
-    initSkinningResources();
     _litPasses.init(ForwardViewportLitPasses::InitDesc{
         .render = desc.render,
         .renderPass = desc.renderPass,
@@ -165,10 +96,7 @@ void ForwardViewportStage::destroy()
     _litPasses.destroy();
     _unlitPass.destroy();
     _auxPasses.destroy();
-    for (auto& u : _skinningSSBO) u.reset();
-    _skinningDSP.reset();
     _skinningDSL.reset();
-    _skinningCapacity = 0;
     _getFrameIndex = {};
     _getElapsedTimeSeconds = {};
     _getActiveScene = {};
@@ -191,7 +119,6 @@ void ForwardViewportStage::prepare(const RenderStageContext& ctx)
 
     if (!ctx.frameData) return;
 
-    updateSkinningBuffer(ctx);
     _litPasses.prepare(ctx);
     _unlitPass.prepare(ctx);
     _auxPasses.prepare(ctx);
@@ -205,7 +132,18 @@ void ForwardViewportStage::execute(const RenderStageContext& ctx)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    executePasses(buildPassContext(ctx));
+    auto passCtx      = buildPassContext(ctx);
+    passCtx.skinningDescriptorSet = {};
+    executePasses(passCtx);
+}
+
+void ForwardViewportStage::execute(const RenderStageContext& ctx, DescriptorSetHandle skinningDS)
+{
+    if (!ctx.cmdBuf || !ctx.frameData) return;
+
+    auto passCtx      = buildPassContext(ctx);
+    passCtx.skinningDescriptorSet = skinningDS;
+    executePasses(passCtx);
 }
 
 ForwardViewportStage::PassContext ForwardViewportStage::buildPassContext(const RenderStageContext& ctx)
@@ -312,7 +250,7 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
                 .stageCtx = passCtx.stageCtx,
                 .environmentLightingDescriptorSet = passCtx.sceneEnvironmentLightingDescriptorSet,
                 .depthBufferShadowDS = _depthBufferShadowDS,
-                .skinningDS = _skinningDS[passCtx.stageCtx.flightIndex],
+                .skinningDS = passCtx.skinningDescriptorSet,
                 .setViewportAndScissor = [this](ICommandBuffer* cmdBuf, uint32_t w, uint32_t h)
                 {
                     setViewportAndScissor(cmdBuf, w, h);
@@ -324,7 +262,7 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
                 .stageCtx = passCtx.stageCtx,
                 .skyboxDescriptorSet = passCtx.skybox.descriptorSet,
                 .depthBufferShadowDS = _depthBufferShadowDS,
-                .skinningDS = _skinningDS[passCtx.stageCtx.flightIndex],
+                .skinningDS = passCtx.skinningDescriptorSet,
                 .setViewportAndScissor = [this](ICommandBuffer* cmdBuf, uint32_t w, uint32_t h)
                 {
                     setViewportAndScissor(cmdBuf, w, h);
@@ -334,7 +272,7 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
         case EPass::Unlit:
             _unlitPass.draw(ForwardViewportUnlitPass::DrawContext{
                 .stageCtx = passCtx.stageCtx,
-                .skinningDS = _skinningDS[passCtx.stageCtx.flightIndex],
+                .skinningDS = passCtx.skinningDescriptorSet,
                 .setViewportAndScissor = [this](ICommandBuffer* cmdBuf, uint32_t w, uint32_t h)
                 {
                     setViewportAndScissor(cmdBuf, w, h);
