@@ -50,7 +50,6 @@ struct GBufferStage : public IRenderStage
     // ── Shared frame + light binding (owned by pipeline resource set) ──
     IRender*                     _render = nullptr;
     stdptr<IDescriptorSetLayout> _frameAndLightDSL;
-    DescriptorSetHandle           _frameAndLightDescriptorSet{};
 
     // ── Per-shading-model pipeline + material pool ───────────────
     struct ShadingPipeline
