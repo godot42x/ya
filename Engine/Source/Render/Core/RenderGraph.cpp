@@ -94,6 +94,11 @@ bool hasBufferUsage(EBufferUsage haystack, EBufferUsage needle)
     return (haystack & needle) == needle;
 }
 
+bool usesExplicitImportedTextureSubresource(const RGImportedTextureDesc& importedDesc)
+{
+    return importedDesc.subresourceRange.has_value() || importedDesc.viewDesc.has_value();
+}
+
 std::string formatImageUsageFlags(EImageUsage::T usage)
 {
     if (usage == EImageUsage::None) {
@@ -330,11 +335,11 @@ void normalizeImportedTextureDesc(RGImportedTextureDesc& importedDesc)
     if (desc.label.empty()) {
         desc.label = importedDesc.importDesc.label;
     }
-    const bool hasExplicitSubresourceRange = importedDesc.subresourceRange.has_value() || importedDesc.viewDesc.has_value();
-    if (!hasExplicitSubresourceRange && desc.mipLevels == 1 && importedDesc.importDesc.mipLevels != 1) {
+    const bool bUsesExplicitSubresource = usesExplicitImportedTextureSubresource(importedDesc);
+    if (!bUsesExplicitSubresource && desc.mipLevels == 1 && importedDesc.importDesc.mipLevels != 1) {
         desc.mipLevels = importedDesc.importDesc.mipLevels;
     }
-    if (!hasExplicitSubresourceRange && desc.arrayLayers == 1 && importedDesc.importDesc.arrayLayers != 1) {
+    if (!bUsesExplicitSubresource && desc.arrayLayers == 1 && importedDesc.importDesc.arrayLayers != 1) {
         desc.arrayLayers = importedDesc.importDesc.arrayLayers;
     }
     if (importedDesc.subresourceRange) {

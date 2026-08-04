@@ -1397,6 +1397,45 @@ TEST(RenderGraphCoreTest, ImportedSubresourceHelperKeepsProvidedViewAndCompileRa
     EXPECT_EQ(factory.createdViews, createdViewsBeforeSync);
 }
 
+TEST(RenderGraphCoreTest, ImportTexturePreservesExplicitSubresourceViewDimensions)
+{
+    TestResourceFactory factory;
+    auto existingImage = std::make_shared<TestImage>(ImageCreateInfo{
+        .label       = "shadow.array",
+        .format      = EFormat::D32_SFLOAT,
+        .extent      = {.width = 1024, .height = 1024, .depth = 1},
+        .mipLevels   = 1,
+        .arrayLayers = 42,
+        .usage       = EImageUsage::DepthStencilAttachment | EImageUsage::Sampled,
+    });
+    auto existingView = factory.createImageView(existingImage, ImageViewCreateInfo{
+        .label          = "shadow.array.slice0",
+        .viewType       = EImageViewType::View2D,
+        .aspectFlags    = EImageAspect::Depth,
+        .baseMipLevel   = 0,
+        .levelCount     = 1,
+        .baseArrayLayer = 0,
+        .layerCount     = 1,
+    });
+
+    RenderGraph graph;
+    const auto  imported = graph.importTexture(makeImportedTextureDesc(
+        existingImage,
+        existingView,
+        "shadow.array.slice0",
+        EImageLayout::ShaderReadOnlyOptimal,
+        EImageUsage::DepthStencilAttachment));
+
+    const auto* resource = graph.getTexture(imported);
+    ASSERT_NE(resource, nullptr);
+    EXPECT_EQ(resource->desc.mipLevels, 1u);
+    EXPECT_EQ(resource->desc.arrayLayers, 1u);
+    ASSERT_TRUE(resource->imported.has_value());
+    ASSERT_TRUE(resource->imported->subresourceRange.has_value());
+    EXPECT_EQ(resource->imported->subresourceRange->levelCount, 1u);
+    EXPECT_EQ(resource->imported->subresourceRange->layerCount, 1u);
+}
+
 TEST(RenderGraphCoreTest, ResourceRegistryCreatesTransientAndImportedResources)
 {
     RenderGraph graph;
