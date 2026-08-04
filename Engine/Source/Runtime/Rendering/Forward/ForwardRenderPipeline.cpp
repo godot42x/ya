@@ -718,15 +718,37 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
         makeForwardViewportImportedDesc(*_viewportResources.depthImage,
                                         "ForwardViewport.Depth",
                                         _viewportRTSpec.attachments.depthAttach->finalLayout));
+    std::optional<RGTextureHandle> shadowDepth;
+    if (_shadowResources.depthImage && currentShadowSettings().isEnabled()) {
+        shadowDepth = graph.importTexture(
+            makeImportedSubresourceTextureDesc(
+                _shadowResources.depthImage,
+                ImageViewCreateInfo{
+                    .label          = "ForwardViewport.ShadowDepth.FullArrayView",
+                    .viewType       = EImageViewType::View2DArray,
+                    .aspectFlags    = EImageAspect::Depth,
+                    .baseMipLevel   = 0,
+                    .levelCount     = 1,
+                    .baseArrayLayer = 0,
+                    .layerCount     = _shadowResources.layerCount,
+                },
+                Extent3D{_shadowResources.extent.width, _shadowResources.extent.height, 1},
+                "ForwardViewport.ShadowDepth",
+                EImageLayout::ShaderReadOnlyOptimal,
+                EImageUsage::Sampled));
+    }
     const auto viewportExtent = _viewportResources.extent;
     const auto colorAttachment = _viewportRTSpec.attachments.colorAttach[0];
     const auto depthAttachment = *_viewportRTSpec.attachments.depthAttach;
 
     [[maybe_unused]] const auto pass = graph.addPass(
         "Forward Viewport",
-        [color, resolve, depth, shadowPass, viewportExtent, colorAttachment, depthAttachment](RGPassBuilder& passBuilder) {
+        [color, resolve, depth, shadowDepth, shadowPass, viewportExtent, colorAttachment, depthAttachment](RGPassBuilder& passBuilder) {
             if (shadowPass.has_value()) {
                 passBuilder.dependsOn(*shadowPass);
+            }
+            if (shadowDepth.has_value()) {
+                passBuilder.read(*shadowDepth);
             }
             passBuilder.declareRaster({
                 .renderArea = Rect2D{.pos = {0, 0}, .extent = viewportExtent.toVec2()},
