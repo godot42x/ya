@@ -28,6 +28,18 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     YA_PROFILE_SCOPE("RenderRuntime::renderFrame");
     YA_PERF_SCOPE(perf::sample::renderRuntime(), perf::metric::cpuTimeMs(), perf::domain::render());
 
+    // Frame lifecycle (FG-603):
+    //   1. prepareFrame: acquire swapchain image + begin command buffer (graph-external).
+    //   2. renderWorldFrame: Deferred/Forward world graph via the pipeline-owned executor.
+    //   3. renderPresentationPass: per-swapchain-image presentation graph; screenshot
+    //      readback is appended inside that graph (FG-601), never recorded outside.
+    //   4. submitFrame: submit + present (graph-external).
+    //
+    // Presentation intentionally keeps its own executor (FG-602 decision): the
+    // swapchain-image scope and acquire/present lifecycle stay outside the world
+    // graph, so merging the two executors would only spread swapchain semantics
+    // into the render pipelines without removing real duplicated state.
+
     int32_t                         imageIndex = -1;
     std::shared_ptr<ICommandBuffer> cmdBuf;
     if (!prepareFrame(input, imageIndex, cmdBuf)) {

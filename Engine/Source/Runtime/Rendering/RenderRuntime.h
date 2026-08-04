@@ -202,6 +202,10 @@ struct ENGINE_API RenderRuntime
                                                   const std::function<void(ICommandBuffer*)>& recordPresentationExtensions,
                                                   const std::function<bool(RenderGraph&, RGTextureHandle, Extent2D)>& appendPresentationCapture,
                                                   ICommandBuffer* cmdBuf);
+    /// Presentation resources (per-swapchain-image executors + imported images)
+    /// are intentionally kept independent from the world-frame executor:
+    /// swapchain acquire/present and recreate stay outside the world graph.
+    /// Capture readback is appended inside the presentation graph (FG-601/603).
     void                   submitFrame(int32_t imageIndex, ICommandBuffer* cmdBuf);
 
     void buildViewportDebugCatalog(RenderViewportDebugCatalog& catalog) const;
