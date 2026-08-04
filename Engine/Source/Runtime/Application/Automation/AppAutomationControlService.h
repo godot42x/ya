@@ -78,6 +78,8 @@ class ENGINE_API AppAutomationControlService
     void handlePing(const std::shared_ptr<PendingCall>& call);
     void handleGetPointLightPos(App& app, const std::shared_ptr<PendingCall>& call);
     void handleGetDirectionalLightInfo(App& app, const std::shared_ptr<PendingCall>& call);
+    void handleSetRenderPipeline(App& app, const std::shared_ptr<PendingCall>& call);
+    void handleSetShadowSettings(App& app, const std::shared_ptr<PendingCall>& call);
     void handleSetEditorCamera(App& app, const std::shared_ptr<PendingCall>& call);
     void handleCaptureScreenshot(App& app, const std::shared_ptr<PendingCall>& call);
     void handleQuit(App& app, const std::shared_ptr<PendingCall>& call);

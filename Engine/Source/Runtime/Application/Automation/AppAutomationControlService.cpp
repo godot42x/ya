@@ -549,6 +549,14 @@ void AppAutomationControlService::handleCall(App& app, const std::shared_ptr<Pen
         handleGetDirectionalLightInfo(app, call);
         return;
     }
+    if (call->method == "set_render_pipeline") {
+        handleSetRenderPipeline(app, call);
+        return;
+    }
+    if (call->method == "set_shadow_settings") {
+        handleSetShadowSettings(app, call);
+        return;
+    }
     if (call->method == "set_editor_camera") {
         handleSetEditorCamera(app, call);
         return;
@@ -663,6 +671,65 @@ void AppAutomationControlService::handleGetDirectionalLightInfo(App& app, const 
     }
 
     completeCall(call, makeSuccess(*call, std::move(result)));
+}
+
+void AppAutomationControlService::handleSetRenderPipeline(App& app, const std::shared_ptr<PendingCall>& call)
+{
+    auto* renderRuntime = app.getRenderServices().getRenderRuntime();
+    if (!renderRuntime) {
+        completeCall(call, makeError(*call, "render runtime is unavailable"));
+        return;
+    }
+
+    const auto targetText = call->params.value("target", std::string{});
+    EAutomationRenderPipeline target{};
+    if (!tryParseAutomationRenderPipeline(targetText, target)) {
+        completeCall(call, makeError(*call, "set_render_pipeline requires target 'forward' or 'deferred'"));
+        return;
+    }
+
+    const auto runtimeTarget = target == EAutomationRenderPipeline::Forward
+                                  ? RenderRuntime::ERenderPipeline::Forward
+                                  : RenderRuntime::ERenderPipeline::Deferred;
+    renderRuntime->setPendingRenderPipeline(runtimeTarget);
+    completeCall(call,
+                 makeSuccess(*call,
+                             {
+                                 {"target", target == EAutomationRenderPipeline::Forward ? "forward" : "deferred"},
+                                 {"applied", renderRuntime->getRenderPipeline() == runtimeTarget},
+                             }));
+}
+
+void AppAutomationControlService::handleSetShadowSettings(App& app, const std::shared_ptr<PendingCall>& call)
+{
+    auto& settings = app.getRenderServices().getShadowSettings();
+    const auto setBool = [&](const char* key, bool& target) -> bool {
+        if (!call->params.contains(key)) {
+            return true;
+        }
+        if (!call->params[key].is_boolean()) {
+            completeCall(call, makeError(*call, std::string("set_shadow_settings requires boolean '") + key + "'"));
+            return false;
+        }
+        target = call->params[key].get<bool>();
+        return true;
+    };
+
+    if (!setBool("pointLightEnabled", settings.pointLightEnabled) ||
+        !setBool("pointLightUseIndirect", settings.pointLightUseIndirect) ||
+        !setBool("pointLightIndirectCullEnabled", settings.pointLightIndirectCullEnabled) ||
+        !setBool("directionalEnabled", settings.directionalEnabled)) {
+        return;
+    }
+
+    completeCall(call,
+                 makeSuccess(*call,
+                             {
+                                 {"pointLightEnabled", settings.pointLightEnabled},
+                                 {"pointLightUseIndirect", settings.pointLightUseIndirect},
+                                 {"pointLightIndirectCullEnabled", settings.pointLightIndirectCullEnabled},
+                                 {"directionalEnabled", settings.directionalEnabled},
+                             }));
 }
 
 void AppAutomationControlService::handleSetEditorCamera(App& app, const std::shared_ptr<PendingCall>& call)
