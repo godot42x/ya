@@ -62,11 +62,6 @@ void ViewportOverlayStage::setServices(Services services)
     _getDebugRenderSystem        = std::move(services.getDebugRenderSystem);
 }
 
-void ViewportOverlayStage::setFrameInputs(FrameInputs frameInputs)
-{
-    _frameInputs = std::move(frameInputs);
-}
-
 void ViewportOverlayStage::refreshPipelineFormats(const DeferredAttachmentFormats& formats)
 {
     if (!formats.hasColor()) {
@@ -316,7 +311,6 @@ void ViewportOverlayStage::destroy()
     _debugRenderSystem = nullptr;
     _debugSkinning.destroy();
     _getDebugRenderSystem        = {};
-    _frameInputs                 = {};
     _render = nullptr;
 }
 
@@ -348,7 +342,6 @@ void ViewportOverlayStage::prepare(const RenderStageContext& ctx)
         .view           = ctx.frameData->view,
     };
     _billboardFrameUBO[ctx.flightIndex]->writeData(&billboardUbo, sizeof(billboardUbo), 0);
-    updateBillboardTextures();
 }
 
 ViewportOverlayStage::SkyboxFrameUBO ViewportOverlayStage::buildSkyboxFrameData(const RenderStageContext& ctx) const
@@ -366,16 +359,7 @@ ViewportOverlayStage::SkyboxFrameUBO ViewportOverlayStage::buildSkyboxFrameData(
 
 void ViewportOverlayStage::execute(const RenderStageContext& ctx)
 {
-    YA_PROFILE_FUNCTION();
-    if (!ctx.cmdBuf || !ctx.frameData) return;
-
-    executeSkybox(ctx, _frameInputs.skybox);
-    executeOverlay(ctx, _frameInputs);
-}
-
-void ViewportOverlayStage::executeSkybox(const RenderStageContext& ctx)
-{
-    executeSkybox(ctx, _frameInputs.skybox);
+    YA_CORE_WARN("ViewportOverlayStage::execute(ctx) is a conformance stub; graph passes must use the parameterized overloads");
 }
 
 void ViewportOverlayStage::executeSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput)
@@ -383,11 +367,6 @@ void ViewportOverlayStage::executeSkybox(const RenderStageContext& ctx, const Fr
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
     drawSkybox(ctx, skyboxInput);
-}
-
-void ViewportOverlayStage::executeOverlay(const RenderStageContext& ctx)
-{
-    executeOverlay(ctx, _frameInputs);
 }
 
 void ViewportOverlayStage::executeOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs)
@@ -420,7 +399,7 @@ uint32_t ViewportOverlayStage::resolveBillboardTextureIndex(const TextureBinding
     return static_cast<uint32_t>(_billboardTextureBindings.size() - 1);
 }
 
-void ViewportOverlayStage::updateBillboardTextures()
+void ViewportOverlayStage::updateBillboardTextures(const FrameInputs& frameInputs)
 {
     _billboardTextureBindings.clear();
     _billboardTextureBindings.push_back(TextureBinding{
@@ -431,7 +410,7 @@ void ViewportOverlayStage::updateBillboardTextures()
         return;
     }
 
-    for (const auto& billboard : _frameInputs.billboards) {
+    for (const auto& billboard : frameInputs.billboards) {
         resolveBillboardTextureIndex(billboard.textureBinding);
     }
 

@@ -978,7 +978,6 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
         }
 
         _currentOverlayFrameInputs = frameInputs;
-        _overlayStage->setFrameInputs(std::move(frameInputs));
     }
 }
 
@@ -1243,6 +1242,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     }
     if (_overlayStage) {
         _overlayStage->prepare(stageCtx);
+        _overlayStage->updateBillboardTextures(_currentOverlayFrameInputs);
     }
 
     [[maybe_unused]] const bool bExecuted = _graphExecutor->executeCompiled(graph, compiled, *frame.cmdBuf);
