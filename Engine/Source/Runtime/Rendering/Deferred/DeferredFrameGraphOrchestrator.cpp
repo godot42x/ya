@@ -364,13 +364,14 @@ void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const 
         },
         [stageCtx, lightParams, lightStage = deps.lightStage](RGRenderContext& rgCtx) {
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
-            [[maybe_unused]] const RenderImage* albedo  = rgCtx.resolveTexture(lightParams.gBufferColors[0]);
-            [[maybe_unused]] const RenderImage* normal  = rgCtx.resolveTexture(lightParams.gBufferColors[1]);
-            [[maybe_unused]] const RenderImage* orm     = rgCtx.resolveTexture(lightParams.gBufferColors[2]);
-            [[maybe_unused]] const RenderImage* shading = rgCtx.resolveTexture(lightParams.gBufferColors[3]);
-            [[maybe_unused]] const RenderImage* depth   = rgCtx.resolveTexture(lightParams.gBufferDepth);
-            const RenderImage* ssao = lightParams.ssao.has_value() ? rgCtx.resolveTexture(*lightParams.ssao) : nullptr;
-            lightStage->updateGBufferTextureDescriptors(albedo, normal, orm, shading, depth, ssao);
+            lightStage->updateGBufferTextureDescriptors(
+                rgCtx.getBindingContext(),
+                lightParams.gBufferColors[0],
+                lightParams.gBufferColors[1],
+                lightParams.gBufferColors[2],
+                lightParams.gBufferColors[3],
+                lightParams.gBufferDepth,
+                lightParams.ssao);
 
             rgCtx.beginDeclaredRasterRendering();
 

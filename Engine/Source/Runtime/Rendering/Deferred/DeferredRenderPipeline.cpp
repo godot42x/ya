@@ -988,12 +988,6 @@ void DeferredRenderPipeline::invalidateGBufferDependentViews()
     _debugAlbedoRGBView.reset();
     _debugSpecularAlphaView.reset();
 
-    if (_ssaoStage) {
-        _ssaoStage->invalidateInputDescriptors();
-    }
-    if (_lightStage) {
-        _lightStage->invalidateGBufferDescriptors();
-    }
 }
 
 void DeferredRenderPipeline::clearPublishedGraphOutputs()

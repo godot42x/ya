@@ -51,9 +51,6 @@ struct ENGINE_API SSAOStage : public IRenderStage
 
     stdptr<Texture> _noiseTexture;
 
-    std::array<ImageViewHandle, 4> _lastGBufferImageViewHandles{};
-    ImageViewHandle                _lastGBufferDepthImageViewHandle = nullptr;
-    bool                           _bInputDescriptorsInitialized    = false;
     uint32_t                       _lastInputDescriptorWriteCount   = 0;
     RenderGraphExecutor*                 _graphExecutor = nullptr;
 
@@ -67,7 +64,6 @@ struct ENGINE_API SSAOStage : public IRenderStage
 
     void setup(const DeferredGBufferResources& gBufferResources);
     void refreshPipelineFormat();
-    void invalidateInputDescriptors();
 
     void init(IRender* render, stdptr<IDescriptorSetLayout> frameDSL);
     void init(IRender* render) override { init(render, nullptr); }
@@ -96,10 +92,6 @@ struct ENGINE_API SSAOStage : public IRenderStage
 
   private:
     void initNoiseTexture();
-    void updateInputDescriptors();
-    /// Update set 1 (input DS) from GBuffer textures resolved in the SSAO graph
-    /// pass, instead of reading resolved-image snapshots back from the stage.
-    void updateInputDescriptors(const RenderImage* albedo, const RenderImage* normal, const RenderImage* depth);
 };
 
 } // namespace ya

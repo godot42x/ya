@@ -6,12 +6,14 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/FrameBuffer.h"
 #include "Render/Core/Pipeline.h"
+#include "Render/Core/RenderGraph.h"
 #include "Render/Stage/IRenderStage.h"
 
 #include "DeferredRender.LightPass.slang.h"
 
 #include <array>
 #include <functional>
+#include <optional>
 
 namespace ya
 {
@@ -69,12 +71,8 @@ struct ENGINE_API LightStage : public IRenderStage
     DescriptorSetHandle          _shadowDS = nullptr;
     Mesh*                        _fullscreenQuad = nullptr;
 
-    std::array<ImageViewHandle, 4> _lastGBufferImageViewHandles{};
-    ImageViewHandle                _lastGBufferDepthImageViewHandle = nullptr;
-    ImageViewHandle _lastSSAOImageViewHandle = nullptr;
     ImageViewHandle _lastShadowDirectionalImageViewHandle = nullptr;
     std::array<ImageViewHandle, MAX_POINT_LIGHTS> _lastShadowPointCubeImageViewHandles{};
-    bool _bGBufferDescriptorsInitialized = false;
     bool _bShadowDescriptorsInitialized = false;
     uint32_t _lastGBufferDescriptorWriteCount = 0;
     uint32_t _lastShadowDescriptorWriteCount = 0;
@@ -97,18 +95,21 @@ struct ENGINE_API LightStage : public IRenderStage
     void setup(SharedInputs sharedInputs);
     void setEnvironmentLightingInput(EnvironmentLightingInput input);
     void setFrameInputs(FrameInputs frameInputs);
-    /// Update set 1 (GBuffer texture DS) from textures resolved in the light
-    /// graph pass. `ssao` may be null to bind the white fallback texture.
-    void updateGBufferTextureDescriptors(const RenderImage* albedo,
-                                         const RenderImage* normal,
-                                         const RenderImage* orm,
-                                         const RenderImage* shading,
-                                         const RenderImage* depth,
-                                         const RenderImage* ssao);
+    /// Update set 1 (GBuffer texture DS) from graph handles resolved through
+    /// the pass binding context. `ssao` may be empty to bind the white
+    /// fallback texture. No graph-owned image-view handle is cached across
+    /// frames; resolved owners are retained by the binding context.
+    void updateGBufferTextureDescriptors(
+        const RGRenderContext::RGPassBindingContext& binding,
+        RGTextureHandle                              albedo,
+        RGTextureHandle                              normal,
+        RGTextureHandle                              orm,
+        RGTextureHandle                              shading,
+        RGTextureHandle                              depth,
+        std::optional<RGTextureHandle>               ssao);
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setIBLSettings(bool bEnablePBRDiffuseIBL, bool bEnablePBRSpecularIBL);
     void refreshPipelineFormats(const DeferredAttachmentFormats& formats);
-    void invalidateGBufferDescriptors();
     void invalidateShadowDescriptors();
     [[nodiscard]] bool shouldRefreshShadowDescriptors() const;
     [[nodiscard]] bool isPBRDiffuseIBLEnabled() const { return _bEnablePBRDiffuseIBL; }

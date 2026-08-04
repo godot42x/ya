@@ -67,7 +67,6 @@ RGImportedTextureDesc makeSSAOImportedTextureDesc(const RenderImage& image,
 void SSAOStage::setup(const DeferredGBufferResources& gBufferResources)
 {
     _gBufferResources = gBufferResources;
-    invalidateInputDescriptors();
 }
 
 void SSAOStage::refreshPipelineFormat()
@@ -80,14 +79,6 @@ void SSAOStage::refreshPipelineFormat()
     ci.pipelineRenderingInfo.colorAttachmentFormats = {AO_FORMAT};
     ci.pipelineRenderingInfo.depthAttachmentFormat  = EFormat::Undefined;
     _pipeline->updateDesc(std::move(ci));
-}
-
-void SSAOStage::invalidateInputDescriptors()
-{
-    _lastGBufferImageViewHandles.fill(nullptr);
-    _lastGBufferDepthImageViewHandle = nullptr;
-    _bInputDescriptorsInitialized    = false;
-    _lastInputDescriptorWriteCount   = 0;
 }
 
 void SSAOStage::setSettings(float radius, float bias, float power, float intensity, bool bReverseY)
@@ -180,9 +171,6 @@ void SSAOStage::destroy()
     _render                       = nullptr;
     _graphExecutor                = nullptr;
     _gBufferResources             = {};
-    _lastGBufferImageViewHandles.fill(nullptr);
-    _lastGBufferDepthImageViewHandle = nullptr;
-    _bInputDescriptorsInitialized = false;
     _lastInputDescriptorWriteCount = 0;
 }
 
@@ -203,91 +191,12 @@ SSAOStage::FrameData SSAOStage::buildFrameData(const RenderStageContext& ctx) co
     return frameData;
 }
 
-void SSAOStage::updateInputDescriptors()
-{
-    if (!_gBufferResources.isComplete() || !_noiseTexture) {
-        return;
-    }
-
-    auto* albedo = _gBufferResources.color[0];
-    auto* normal = _gBufferResources.color[1];
-    auto* depth  = _gBufferResources.depth;
-    if (!albedo || !normal || !depth) {
-        return;
-    }
-
-    const std::array<ImageViewHandle, 4> gbufferImageViewHandles = {
-        albedo->getImageView() ? albedo->getImageView()->getHandle() : ImageViewHandle{},
-        normal->getImageView() ? normal->getImageView()->getHandle() : ImageViewHandle{},
-        _gBufferResources.color[2] && _gBufferResources.color[2]->getImageView() ? _gBufferResources.color[2]->getImageView()->getHandle() : ImageViewHandle{},
-        _gBufferResources.color[3] && _gBufferResources.color[3]->getImageView() ? _gBufferResources.color[3]->getImageView()->getHandle() : ImageViewHandle{},
-    };
-    const auto depthHandle = depth->getImageView() ? depth->getImageView()->getHandle() : ImageViewHandle{};
-    if (_bInputDescriptorsInitialized &&
-        _lastGBufferImageViewHandles == gbufferImageViewHandles &&
-        _lastGBufferDepthImageViewHandle == depthHandle) {
-        _lastInputDescriptorWriteCount = 0;
-        return;
-    }
-
-    auto sampler = TextureLibrary::get().getDefaultSampler();
-    _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::writeOneImage(_inputDS, 0, albedo->getImageView(), sampler.get()),
-        IDescriptorSetHelper::writeOneImage(_inputDS, 1, normal->getImageView(), sampler.get()),
-        IDescriptorSetHelper::writeOneImage(_inputDS, 2, depth->getImageView(), sampler.get()),
-        IDescriptorSetHelper::writeOneImage(_inputDS, 3, _noiseTexture->getImageView(), sampler.get()),
-    });
-
-    _lastGBufferImageViewHandles     = gbufferImageViewHandles;
-    _lastGBufferDepthImageViewHandle = depthHandle;
-    _bInputDescriptorsInitialized    = true;
-    _lastInputDescriptorWriteCount   = 4;
-}
-
-void SSAOStage::updateInputDescriptors(const RenderImage* albedo,
-                                       const RenderImage* normal,
-                                       const RenderImage* depth)
-{
-    if (!_render || !_inputDS || !_noiseTexture || !albedo || !normal || !depth) {
-        return;
-    }
-
-    auto sampler = TextureLibrary::get().getDefaultSampler();
-    const auto albedoHandle = albedo->getImageView() ? albedo->getImageView()->getHandle() : ImageViewHandle{};
-    const auto normalHandle = normal->getImageView() ? normal->getImageView()->getHandle() : ImageViewHandle{};
-    const auto depthHandle  = depth->getImageView() ? depth->getImageView()->getHandle() : ImageViewHandle{};
-    if (_bInputDescriptorsInitialized &&
-        _lastGBufferImageViewHandles[0] == albedoHandle &&
-        _lastGBufferImageViewHandles[1] == normalHandle &&
-        _lastGBufferDepthImageViewHandle == depthHandle) {
-        _lastInputDescriptorWriteCount = 0;
-        return;
-    }
-
-    _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::writeOneImage(_inputDS, 0, albedo->getImageView(), sampler.get()),
-        IDescriptorSetHelper::writeOneImage(_inputDS, 1, normal->getImageView(), sampler.get()),
-        IDescriptorSetHelper::writeOneImage(_inputDS, 2, depth->getImageView(), sampler.get()),
-        IDescriptorSetHelper::writeOneImage(_inputDS, 3, _noiseTexture->getImageView(), sampler.get()),
-    });
-
-    _lastGBufferImageViewHandles     = {albedoHandle, normalHandle, {}, {}};
-    _lastGBufferDepthImageViewHandle = depthHandle;
-    _bInputDescriptorsInitialized    = true;
-    _lastInputDescriptorWriteCount   = 4;
-}
-
 void SSAOStage::prepare(const RenderStageContext& ctx)
 {
     YA_PROFILE_FUNCTION();
     if (_pipeline) {
         _pipeline->beginFrame();
     }
-    if (!ctx.frameData || !_frameInputs.isValid()) {
-        return;
-    }
-
-    updateInputDescriptors();
 }
 
 void SSAOStage::execute(const RenderStageContext& ctx)
@@ -367,13 +276,26 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
                 }},
             });
         },
-        [this, &params](RGRenderContext& rgCtx) {
-            // FG-103 resolve validation + FG-303: GBuffer inputs resolve from the
-            // graph pass instead of a resolved-image snapshot stored on the stage.
-            [[maybe_unused]] const RenderImage* albedo = rgCtx.resolveTexture(params.albedo);
-            [[maybe_unused]] const RenderImage* normal = rgCtx.resolveTexture(params.normal);
-            [[maybe_unused]] const RenderImage* depth  = rgCtx.resolveTexture(params.depth);
-            updateInputDescriptors(albedo, normal, depth);
+        [this, &params, noise](RGRenderContext& rgCtx) {
+            // FG-502: set 1 (input DS) is written each pass from the graph
+            // binding context, so no image-view handles are cached across
+            // frames. Resolved image/view owners are retained on the command
+            // buffer by the binding context.
+            const auto binding = rgCtx.getBindingContext();
+            auto sampler       = TextureLibrary::get().getDefaultSampler();
+            const auto albedo = binding.resolveTextureDescriptor(params.albedo, sampler.get());
+            const auto normal = binding.resolveTextureDescriptor(params.normal, sampler.get());
+            const auto depth  = binding.resolveTextureDescriptor(params.depth, sampler.get());
+            const auto noiseDescriptor = binding.resolveTextureDescriptor(noise, sampler.get());
+            YA_CORE_ASSERT(albedo && normal && depth && noiseDescriptor,
+                           "SSAO pass failed to resolve input textures");
+            _render->getDescriptorHelper()->updateDescriptorSets({
+                IDescriptorSetHelper::genImageWrite(_inputDS, 0, 0, EPipelineDescriptorType::CombinedImageSampler, {*albedo}),
+                IDescriptorSetHelper::genImageWrite(_inputDS, 1, 0, EPipelineDescriptorType::CombinedImageSampler, {*normal}),
+                IDescriptorSetHelper::genImageWrite(_inputDS, 2, 0, EPipelineDescriptorType::CombinedImageSampler, {*depth}),
+                IDescriptorSetHelper::genImageWrite(_inputDS, 3, 0, EPipelineDescriptorType::CombinedImageSampler, {*noiseDescriptor}),
+            });
+            _lastInputDescriptorWriteCount = 4;
 
             const auto rasterParams  = rgCtx.getRasterPassExecutionParams();
             const auto renderExtent  = rasterParams.getRenderExtent();
