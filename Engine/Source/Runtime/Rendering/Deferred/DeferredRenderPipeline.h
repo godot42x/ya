@@ -3,6 +3,7 @@
 #include "Core/Math/Geometry.h"
 #include "DeferredGBufferResources.h"
 #include "DeferredFrameGraphResources.h"
+#include "DeferredFrameGraphOrchestrator.h"
 #include "DeferredFrameResourceSet.h"
 #include "DeferredPipelineDebugViews.h"
 #include "DeferredViewportResources.h"
@@ -123,6 +124,7 @@ struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
 
     // ── Render stages ─────────────────────────────────────────────────
     stdptr<ShadowStage>          _shadowStage;
+    DeferredFrameGraphOrchestrator _frameGraphOrchestrator;
     stdptr<DeferredFrameResourceSet> _frameResources;
     stdptr<GBufferStage>         _gBufferStage;
     stdptr<SSAOStage>            _ssaoStage;
@@ -155,6 +157,7 @@ struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
     DeferredGBufferResources   _currentGBufferResources{};
     DeferredViewportResources  _currentViewportResources{};
     ViewportOverlayStage::FrameInputs _currentOverlayFrameInputs{};
+    DescriptorSetHandle        _currentEnvironmentLightingDescriptorSet{};
     FrameContext               _lastTickCtx{};
     RenderPipelineFrameContext _lastFrameInput{};
     ShadowSettings             _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
