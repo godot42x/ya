@@ -119,7 +119,6 @@ void PostProcessingStage::beginFrame()
 
 void PostProcessingStage::clearPreparedResources()
 {
-    _preparedGraphResources = {};
     _preparedOutputImage.reset();
     if (_bloomProcessor) {
         _bloomProcessor->clearPreparedResources();
@@ -190,10 +189,12 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
     clearPreparedResources();
 
     const auto compositeInput = appendBloomGraphPasses(graph, input, inputExtent, ctx);
-    return appendFinalizeGraphPasses(graph,
-                                     compositeInput.isValid() ? compositeInput : input,
-                                     inputExtent,
-                                     ctx);
+    return appendFinalizeGraphPasses(graph, FinalizePassParams{
+                                                .input         = compositeInput.isValid() ? compositeInput : input,
+                                                .inputExtent   = inputExtent,
+                                                .bOutputIsSRGB = EFormat::isSRGB(_render->getSwapchain()->getFormat()),
+                                                .postContext   = ctx,
+                                            });
 }
 
 RGTextureHandle PostProcessingStage::appendBloomGraphPasses(RenderGraph&   graph,
@@ -218,26 +219,21 @@ RGTextureHandle PostProcessingStage::appendBloomGraphPasses(RenderGraph&   graph
     return input;
 }
 
-RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph&   graph,
-                                                               RGTextureHandle input,
-                                                               Extent2D        inputExtent,
-                                                               FrameContext*   ctx)
+RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph& graph, const FinalizePassParams& params)
 {
-    if (!bEnabled || !_postProcessor || !input.isValid() || inputExtent.width == 0 || inputExtent.height == 0) {
+    if (!bEnabled || !_postProcessor || !params.input.isValid() || params.inputExtent.width == 0 || params.inputExtent.height == 0) {
         return {};
     }
 
-    const auto swapchainFormat = _render->getSwapchain()->getFormat();
-    const bool bOutputIsSRGB   = EFormat::isSRGB(swapchainFormat);
-    const auto output = graph.createTexture(RGTextureDesc{
+    const auto output = params.output.isValid() ? params.output : graph.createTexture(RGTextureDesc{
         .label  = "Postprocessing.Output",
         .format = _colorFormat,
-        .extent = Extent3D{inputExtent.width, inputExtent.height, 1},
+        .extent = Extent3D{params.inputExtent.width, params.inputExtent.height, 1},
         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
     });
     [[maybe_unused]] const auto pass = graph.addPass(
         "Postprocessing",
-        [input, output, inputExtent](RGPassBuilder& pass) {
+        [input = params.input, output, inputExtent = params.inputExtent](RGPassBuilder& pass) {
             pass.read(input);
             pass.declareRaster({
                 .renderArea  = Rect2D{.pos = {0.0f, 0.0f}, .extent = inputExtent.toVec2()},
@@ -249,7 +245,7 @@ RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph&   gr
                 }},
             });
         },
-        [this, input, inputExtent, bOutputIsSRGB, state = &_state, postContext = ctx](RGRenderContext& rgCtx) {
+        [this, input = params.input, inputExtent = params.inputExtent, bOutputIsSRGB = params.bOutputIsSRGB, state = &_state, postContext = params.postContext](RGRenderContext& rgCtx) {
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             rgCtx.beginDeclaredRasterRendering();
 
@@ -268,8 +264,6 @@ RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph&   gr
             rgCtx.endRendering();
         });
 
-    _preparedGraphResources.input  = input;
-    _preparedGraphResources.output = output;
     graph.exportTexture(output, std::string(kPostprocessingOutputExportName));
     return output;
 }

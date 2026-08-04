@@ -20,15 +20,6 @@ struct BloomPostprocessing
 {
     static constexpr EFormat::T BLOOM_FORMAT = EFormat::R16G16B16A16_SFLOAT;
 
-    struct GraphBuildResult
-    {
-        RGTextureHandle output{};
-        RGTextureHandle extract{};
-        RGTextureHandle blurPing{};
-        RGTextureHandle blurPong{};
-        bool            bBloomEnabled = false;
-    };
-
     struct InitDesc
     {
         IRender*              render                = nullptr;
@@ -76,7 +67,6 @@ struct BloomPostprocessing
     stdptr<RenderImage> _blurPongImage;
     stdptr<RenderImage> _compositeImage;
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
-    GraphBuildResult _preparedGraphResources{};
 
     void init(const InitDesc& initDesc);
     void shutdown();

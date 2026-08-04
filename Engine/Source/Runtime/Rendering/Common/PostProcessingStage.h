@@ -16,10 +16,13 @@ namespace ya
 
 struct PostProcessingStage
 {
-    struct GraphBuildResult
+    struct FinalizePassParams
     {
         RGTextureHandle input{};
         RGTextureHandle output{};
+        Extent2D        inputExtent{};
+        bool            bOutputIsSRGB = false;
+        FrameContext*   postContext    = nullptr;
     };
 
     struct InitDesc
@@ -37,7 +40,6 @@ struct PostProcessingStage
     stdptr<BloomPostprocessing> _bloomProcessor     = nullptr;
     stdptr<BasicPostprocessing> _postProcessor      = nullptr;
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
-    GraphBuildResult            _preparedGraphResources{};
     stdptr<RenderImage>         _preparedOutputImage = nullptr;
 
     void     init(const InitDesc& desc);
@@ -51,10 +53,7 @@ struct PostProcessingStage
                                            RGTextureHandle input,
                                            Extent2D        inputExtent,
                                            FrameContext*   ctx);
-    RGTextureHandle appendFinalizeGraphPasses(RenderGraph&   graph,
-                                              RGTextureHandle input,
-                                              Extent2D        inputExtent,
-                                              FrameContext*   ctx);
+    RGTextureHandle appendFinalizeGraphPasses(RenderGraph& graph, const FinalizePassParams& params);
     RGTextureHandle appendGraphPasses(RenderGraph& graph,
                                       Texture*      inputTexture,
                                       glm::vec2     viewportExtent,

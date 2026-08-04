@@ -123,7 +123,6 @@ void BloomPostprocessing::shutdown()
     _blurPingImage.reset();
     _blurPongImage.reset();
     _compositeImage.reset();
-    _preparedGraphResources        = {};
 }
 
 void BloomPostprocessing::beginFrame()
@@ -141,7 +140,6 @@ void BloomPostprocessing::beginFrame()
 
 void BloomPostprocessing::clearPreparedResources()
 {
-    _preparedGraphResources = {};
     _extractImage.reset();
     _blurPingImage.reset();
     _blurPongImage.reset();
@@ -314,11 +312,6 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
         });
     }
 
-    _preparedGraphResources.output        = output;
-    _preparedGraphResources.bBloomEnabled = bBloomEnabled;
-    _preparedGraphResources.extract       = bloomExtract.value_or(RGTextureHandle{});
-    _preparedGraphResources.blurPing      = blurPing.value_or(RGTextureHandle{});
-    _preparedGraphResources.blurPong      = blurPong.value_or(RGTextureHandle{});
     graph.exportTexture(output, std::string(kBloomOutputExportName));
     if (bloomExtract.has_value()) {
         graph.exportTexture(*bloomExtract, std::string(kBloomExtractExportName));
