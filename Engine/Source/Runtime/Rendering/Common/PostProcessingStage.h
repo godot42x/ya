@@ -10,12 +10,16 @@
 #include "Render/RenderDefines.h"
 #include "Runtime/Rendering/Common/PostProcessingState.h"
 
+#include <string_view>
+
 
 namespace ya
 {
 
 struct PostProcessingStage
 {
+    static constexpr std::string_view kOutputExportName = "Postprocessing.Output";
+
     struct FinalizePassParams
     {
         RGTextureHandle input{};
@@ -39,7 +43,7 @@ struct PostProcessingStage
     PostProcessingState         _state              = {};
     stdptr<BloomPostprocessing> _bloomProcessor     = nullptr;
     stdptr<BasicPostprocessing> _postProcessor      = nullptr;
-    std::unique_ptr<RenderGraphExecutor> _graphExecutor;
+    RenderGraphExecutor*                 _graphExecutor      = nullptr;
     stdptr<RenderImage>         _preparedOutputImage = nullptr;
 
     void     init(const InitDesc& desc);
@@ -49,6 +53,7 @@ struct PostProcessingStage
     void     setBloomEnabled(bool enabled) { _state.bEnableBloom = enabled; }
     void     setToneMappingEnabled(bool enabled) { _state.bEnableToneMapping = enabled; }
     void     setToneMappingCurve(PostProcessingState::EToneMappingCurve curve) { _state.toneMappingCurve = curve; }
+    void     setGraphExecutor(RenderGraphExecutor* executor) { _graphExecutor = executor; }
     RGTextureHandle appendBloomGraphPasses(RenderGraph&   graph,
                                            RGTextureHandle input,
                                            Extent2D        inputExtent,

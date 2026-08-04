@@ -12,8 +12,6 @@ namespace ya
 namespace
 {
 
-constexpr std::string_view kPostprocessingOutputExportName = "Postprocessing.Output";
-
 stdptr<RenderImage> createPostprocessRenderImage(IRender* render,
                                                  std::string_view label,
                                                  Extent2D extent,
@@ -63,7 +61,6 @@ void PostProcessingStage::init(const InitDesc& desc)
 {
     _render      = desc.render;
     _colorFormat = desc.colorFormat;
-    _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
 
     _bloomProcessor = ya::makeShared<BloomPostprocessing>();
     _bloomProcessor->init(BloomPostprocessing::InitDesc{
@@ -93,7 +90,6 @@ void PostProcessingStage::init(const InitDesc& desc)
 
 void PostProcessingStage::shutdown()
 {
-    _graphExecutor.reset();
     if (_bloomProcessor) {
         _bloomProcessor->shutdown();
         _bloomProcessor.reset();
@@ -105,6 +101,7 @@ void PostProcessingStage::shutdown()
 
     clearPreparedResources();
     _render = nullptr;
+    _graphExecutor = nullptr;
 }
 
 void PostProcessingStage::beginFrame()
@@ -127,7 +124,7 @@ void PostProcessingStage::clearPreparedResources()
 
 void PostProcessingStage::capturePreparedResources(const RenderGraphExecutionResult& result)
 {
-    _preparedOutputImage = result.getExportedTextureShared(kPostprocessingOutputExportName);
+    _preparedOutputImage = result.getExportedTextureShared(kOutputExportName);
     if (_bloomProcessor) {
         _bloomProcessor->capturePreparedResources(result);
     }
@@ -264,7 +261,7 @@ RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph& grap
             rgCtx.endRendering();
         });
 
-    graph.exportTexture(output, std::string(kPostprocessingOutputExportName));
+    graph.exportTexture(output, std::string(kOutputExportName));
     return output;
 }
 
