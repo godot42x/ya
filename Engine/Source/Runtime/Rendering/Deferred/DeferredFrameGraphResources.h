@@ -2,6 +2,7 @@
 
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/RenderGraph.h"
+#include "Runtime/Rendering/Common/Shadow/ShadowGraphOutputs.h"
 #include "Runtime/Rendering/Deferred/ViewportOverlayStage.h"
 
 #include <array>
@@ -45,7 +46,7 @@ struct DeferredFrameGraphResources
 
     struct Passes
     {
-        std::optional<RGPassHandle> shadow{};
+        ShadowGraphOutputs          shadow{};
         std::optional<RGPassHandle> gBuffer{};
         std::optional<RGPassHandle> light{};
         std::optional<RGPassHandle> skybox{};

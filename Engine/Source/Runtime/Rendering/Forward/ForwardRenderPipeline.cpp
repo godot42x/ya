@@ -700,9 +700,9 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
     YA_CORE_ASSERT(_graphExecutor != nullptr, "ForwardRenderPipeline graph executor is not initialized");
 
     RenderGraph graph;
-    std::optional<RGPassHandle> shadowPass;
+    ShadowGraphOutputs shadowOutputs;
     if (_shadowStage && currentShadowSettings().isEnabled()) {
-        shadowPass = _shadowStage->appendGraphPasses(graph, stageCtx);
+        shadowOutputs = _shadowStage->appendGraphPasses(graph, stageCtx);
     }
     const auto  color = graph.importTexture(
         makeForwardViewportImportedDesc(*_viewportResources.colorImage,
@@ -718,34 +718,16 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
         makeForwardViewportImportedDesc(*_viewportResources.depthImage,
                                         "ForwardViewport.Depth",
                                         _viewportRTSpec.attachments.depthAttach->finalLayout));
-    std::optional<RGTextureHandle> shadowDepth;
-    if (_shadowResources.depthImage && currentShadowSettings().isEnabled()) {
-        shadowDepth = graph.importTexture(
-            makeImportedSubresourceTextureDesc(
-                _shadowResources.depthImage,
-                ImageViewCreateInfo{
-                    .label          = "ForwardViewport.ShadowDepth.FullArrayView",
-                    .viewType       = EImageViewType::View2DArray,
-                    .aspectFlags    = EImageAspect::Depth,
-                    .baseMipLevel   = 0,
-                    .levelCount     = 1,
-                    .baseArrayLayer = 0,
-                    .layerCount     = _shadowResources.layerCount,
-                },
-                Extent3D{_shadowResources.extent.width, _shadowResources.extent.height, 1},
-                "ForwardViewport.ShadowDepth",
-                EImageLayout::ShaderReadOnlyOptimal,
-                EImageUsage::Sampled));
-    }
+    const auto shadowDepth = shadowOutputs.shadowDepth;
     const auto viewportExtent = _viewportResources.extent;
     const auto colorAttachment = _viewportRTSpec.attachments.colorAttach[0];
     const auto depthAttachment = *_viewportRTSpec.attachments.depthAttach;
 
     [[maybe_unused]] const auto pass = graph.addPass(
         "Forward Viewport",
-        [color, resolve, depth, shadowDepth, shadowPass, viewportExtent, colorAttachment, depthAttachment](RGPassBuilder& passBuilder) {
-            if (shadowPass.has_value()) {
-                passBuilder.dependsOn(*shadowPass);
+        [color, resolve, depth, shadowDepth, shadowOutputs, viewportExtent, colorAttachment, depthAttachment](RGPassBuilder& passBuilder) {
+            if (shadowOutputs.lastPass.has_value()) {
+                passBuilder.dependsOn(*shadowOutputs.lastPass);
             }
             if (shadowDepth.has_value()) {
                 passBuilder.read(*shadowDepth);

@@ -3,6 +3,7 @@
 #include "Core/Profiling/Instrumentor.h"
 
 #include "Render/Core/CommandBuffer.h"
+#include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
@@ -33,6 +34,8 @@ void BasicShadowMapTechnique::destroy()
     _directionalPass.destroy();
     _pointPass.destroy();
     _frameResources.destroy();
+    _depthImage.reset();
+    _shadowDepthArrayView.reset();
     _render      = nullptr;
 }
 
@@ -87,24 +90,33 @@ void BasicShadowMapTechnique::execute(ICommandBuffer* cmdBuf, uint32_t flightInd
     cmdBuf->debugEndLabel();
 }
 
-std::optional<RGPassHandle> BasicShadowMapTechnique::appendGraphPasses(
+ShadowGraphOutputs BasicShadowMapTechnique::appendGraphPasses(
     RenderGraph& graph,
     uint32_t flightIndex,
     const RenderFrameData& frameData)
 {
-    if (!_settings.isEnabled()) return std::nullopt;
+    ShadowGraphOutputs outputs{};
+    if (!_settings.isEnabled()) return outputs;
 
     auto payload = buildFramePayload(flightIndex, frameData);
     payload.pointLightCount = std::min(_lastPreparedPointLightCount, static_cast<uint32_t>(MAX_POINT_LIGHTS));
 
-    std::optional<RGPassHandle> lastPass;
+    if (_depthImage && _shadowDepthArrayView) {
+        outputs.shadowDepth = graph.importTexture(makeImportedTextureDesc(
+            _depthImage,
+            _shadowDepthArrayView,
+            "BasicShadowMap.Depth",
+            EImageLayout::ShaderReadOnlyOptimal,
+            EImageUsage::Sampled));
+    }
+
     if (payload.directionalEnabled()) {
-        lastPass = _directionalPass.appendGraphPasses(graph, payload, lastPass);
+        outputs.lastPass = _directionalPass.appendGraphPasses(graph, payload, outputs.lastPass);
     }
     if (payload.pointEnabled()) {
-        lastPass = _pointPass.appendGraphPasses(graph, payload, lastPass);
+        outputs.lastPass = _pointPass.appendGraphPasses(graph, payload, outputs.lastPass);
     }
-    return lastPass;
+    return outputs;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -115,6 +127,7 @@ void BasicShadowMapTechnique::refreshShadowResources(const std::shared_ptr<IImag
 {
     if (!_render || !depthImage) return;
 
+    _depthImage   = depthImage;
     _shadowExtent = shadowExtent;
     _directionalPass.setShadowExtent(_shadowExtent);
     _pointPass.setShadowExtent(_shadowExtent);
@@ -130,6 +143,17 @@ void BasicShadowMapTechnique::rebuildLayerTextures(const std::shared_ptr<IImage>
 
     // Directional cascades: reserved layers 0..MAX_DIRECTIONAL_CASCADES-1.
     auto* resourceFactory = _render->getResourceFactory();
+    _shadowDepthArrayView = resourceFactory->createImageView(
+        shadowImage,
+        ImageViewCreateInfo{
+            .label          = "BasicShadowMap_ShadowDepthArrayView",
+            .viewType       = EImageViewType::View2DArray,
+            .aspectFlags    = EImageAspect::Depth,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = getShadowTotalLayerCount(),
+        });
     std::array<stdptr<IImageView>, MAX_DIRECTIONAL_CASCADES> directionalViews{};
     for (uint32_t cascadeIndex = 0; cascadeIndex < MAX_DIRECTIONAL_CASCADES; ++cascadeIndex) {
         directionalViews[cascadeIndex] = resourceFactory->createImageView(
