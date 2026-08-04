@@ -55,7 +55,7 @@ struct ENGINE_API SSAOStage : public IRenderStage
     ImageViewHandle                _lastGBufferDepthImageViewHandle = nullptr;
     bool                           _bInputDescriptorsInitialized    = false;
     uint32_t                       _lastInputDescriptorWriteCount   = 0;
-    std::unique_ptr<RenderGraphExecutor> _graphExecutor;
+    RenderGraphExecutor*                 _graphExecutor = nullptr;
 
     float _radius = 0.6f;
     float _bias   = 0.025f;
@@ -74,6 +74,7 @@ struct ENGINE_API SSAOStage : public IRenderStage
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
     void execute(const RenderStageContext& ctx) override;
+    void setGraphExecutor(RenderGraphExecutor* executor) { _graphExecutor = executor; }
 
     [[nodiscard]] FrameData buildFrameData(const RenderStageContext& ctx) const;
     void setFrameInputs(FrameInputs frameInputs)

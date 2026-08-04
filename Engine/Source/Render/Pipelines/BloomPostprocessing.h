@@ -11,6 +11,8 @@
 #include "Misc.BloomComposite.slang.h"
 #include "Misc.BloomExtract.slang.h"
 
+#include <string_view>
+
 namespace ya
 {
 
@@ -19,6 +21,10 @@ constexpr uint32_t MAX_BLOOM_BLUR_DESCRIPTOR_SETS = 64;
 struct BloomPostprocessing
 {
     static constexpr EFormat::T BLOOM_FORMAT = EFormat::R16G16B16A16_SFLOAT;
+    static constexpr std::string_view kOutputExportName   = "Bloom.Output";
+    static constexpr std::string_view kExtractExportName  = "Bloom.Extract";
+    static constexpr std::string_view kBlurPingExportName = "Bloom.BlurPing";
+    static constexpr std::string_view kBlurPongExportName = "Bloom.BlurPong";
 
     struct InitDesc
     {

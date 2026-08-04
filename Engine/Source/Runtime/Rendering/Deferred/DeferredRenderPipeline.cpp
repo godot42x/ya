@@ -14,6 +14,7 @@
 #include "Render/Core/Sampler.h"
 #include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/RenderImage.h"
+#include "Render/Core/Swapchain.h"
 #include "Render/Core/Texture.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Runtime/Application/App.h"
@@ -463,7 +464,7 @@ DeferredPipelineDebugViews DeferredRenderPipeline::buildDebugViews() const
     return DeferredPipelineDebugViews{
         .gBufferResources  = _currentGBufferResources,
         .viewportResources = _currentViewportResources,
-        .ssaoTextureOwner  = _currentSSAOOutput,
+        .ssaoTextureOwner  = _publishedGraphOutputs.ssao,
     };
 }
 
@@ -673,8 +674,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     _getResourceResolveSystem     = desc.getResourceResolveSystem;
     _pendingSettings.reset();
     _pendingResourceRefreshMask   = 0;
-    _currentSSAOOutput.reset();
-    _currentPostprocessOutput.reset();
+    clearPublishedGraphOutputs();
     if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
     }
@@ -702,6 +702,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
         .width       = extent.width,
         .height      = extent.height,
     });
+    _postProcessStage.setGraphExecutor(_graphExecutor.get());
 }
 
 void DeferredRenderPipeline::initStages()
@@ -727,6 +728,7 @@ void DeferredRenderPipeline::initStages()
     _ssaoStage->setup(_currentGBufferResources);
     _ssaoStage->setSettings(_ssaoStage->getRadius(), _ssaoStage->getBias(), _ssaoStage->getPower(), _ssaoStage->getIntensity(), _bReverseViewportY);
     _ssaoStage->init(_render, _frameResources->getSSAOFrameDSL());
+    _ssaoStage->setGraphExecutor(_graphExecutor.get());
 
     _lightStage = ya::makeShared<LightStage>();
     _lightStage->setup(LightStage::SharedInputs{
@@ -758,11 +760,14 @@ void DeferredRenderPipeline::shutdown()
     _cachedAlbedoSpecImageViewHandle = nullptr;
     _pendingViewportExtent           = {};
     _pendingResourceRefreshMask      = 0;
-    _currentSSAOOutput.reset();
-    _currentPostprocessOutput.reset();
+    clearPublishedGraphOutputs();
     _currentGBufferResources         = {};
     _currentViewportResources        = {};
     _currentEnvironmentLightingTextures = {};
+    if (_ssaoStage) {
+        _ssaoStage->setGraphExecutor(nullptr);
+    }
+    _postProcessStage.setGraphExecutor(nullptr);
     _graphExecutor.reset();
 
     if (_overlayStage) {
@@ -991,8 +996,14 @@ void DeferredRenderPipeline::invalidateGBufferDependentViews()
     }
 }
 
-void DeferredRenderPipeline::syncGraphAttachmentSnapshots(
-    const RenderGraphExecutionResult& result)
+void DeferredRenderPipeline::clearPublishedGraphOutputs()
+{
+    _publishedGraphOutputs.clear();
+}
+
+void DeferredRenderPipeline::publishGraphExecutionResult(
+    const RenderGraphExecutionResult& result,
+    const DeferredFrameGraphResources& graphResources)
 {
     DeferredGBufferResources nextGBuffer{};
     for (uint32_t attachmentIndex = 0; attachmentIndex < std::size(kDeferredGBufferColorExportNames); ++attachmentIndex) {
@@ -1026,6 +1037,19 @@ void DeferredRenderPipeline::syncGraphAttachmentSnapshots(
     if (bViewportChanged) {
         refreshViewportStageState();
     }
+
+    _publishedGraphOutputs.ssao = graphResources.textures.ssao.has_value()
+        ? result.getExportedTextureShared(kDeferredSSAOExportName)
+        : nullptr;
+    _publishedGraphOutputs.bloomExtract   = result.getExportedTextureShared(BloomPostprocessing::kExtractExportName);
+    _publishedGraphOutputs.bloomBlur      = result.getExportedTextureShared(BloomPostprocessing::kBlurPongExportName);
+    if (!_publishedGraphOutputs.bloomBlur) {
+        _publishedGraphOutputs.bloomBlur = result.getExportedTextureShared(BloomPostprocessing::kBlurPingExportName);
+    }
+    _publishedGraphOutputs.bloomComposite = result.getExportedTextureShared(BloomPostprocessing::kOutputExportName);
+    _publishedGraphOutputs.postprocess = graphResources.textures.postprocessOutput.has_value()
+        ? result.getExportedTextureShared(PostProcessingStage::kOutputExportName)
+        : nullptr;
 }
 
 DeferredAttachmentFormats DeferredRenderPipeline::buildGBufferSnapshotFormats() const
@@ -1131,8 +1155,7 @@ void DeferredRenderPipeline::prepareShadowPass(RenderStageContext& stageCtx)
 
 void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t vpW, uint32_t vpH)
 {
-    _currentSSAOOutput.reset();
-    _currentPostprocessOutput.reset();
+    clearPublishedGraphOutputs();
     YA_CORE_ASSERT(_frameResources != nullptr, "Deferred pipeline frame resources are not initialized");
     if (!_frameResources->prepare(stageCtx)) {
         return;
@@ -1211,25 +1234,14 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     RGCompiledGraph compiled{};
     RenderGraphExecutionResult result;
     if (!_graphExecutor->prepare(graph, compiled, &result)) {
-        _currentSSAOOutput.reset();
-        _currentPostprocessOutput.reset();
-        _postProcessStage.clearPreparedResources();
+        clearPublishedGraphOutputs();
         return;
     }
 
-    syncGraphAttachmentSnapshots(result);
+    publishGraphExecutionResult(result, graphResources);
 
     if (_bEnableSSAO && _ssaoStage) {
         _ssaoStage->prepare(stageCtx);
-    }
-
-    // Owner snapshot for the editor debug SSAO view; the light pass resolves the
-    // SSAO texture from the graph itself (FG-303), so no stage back-injection.
-    if (graphResources.textures.ssao.has_value()) {
-        _currentSSAOOutput = result.getExportedTextureShared(kDeferredSSAOExportName);
-    }
-    else {
-        _currentSSAOOutput.reset();
     }
 
     if (_lightStage) {
@@ -1241,18 +1253,9 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
 
     [[maybe_unused]] const bool bExecuted = _graphExecutor->executeCompiled(graph, compiled, *frame.cmdBuf);
     if (!bExecuted) {
-        _currentSSAOOutput.reset();
-        _currentPostprocessOutput.reset();
-        _postProcessStage.clearPreparedResources();
+        clearPublishedGraphOutputs();
         return;
     }
-
-    if (graphResources.textures.postprocessOutput.has_value()) {
-        _currentPostprocessOutput = result.getExportedTextureShared("Postprocessing.Output");
-        return;
-    }
-
-    _currentPostprocessOutput.reset();
 }
 
 // ═══════════════════════════════════════════════════════════════════════

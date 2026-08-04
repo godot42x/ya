@@ -16,11 +16,6 @@ namespace ya
 namespace
 {
 
-constexpr std::string_view kBloomOutputExportName   = "Bloom.Output";
-constexpr std::string_view kBloomExtractExportName  = "Bloom.Extract";
-constexpr std::string_view kBloomBlurPingExportName = "Bloom.BlurPing";
-constexpr std::string_view kBloomBlurPongExportName = "Bloom.BlurPong";
-
 RGImportedTextureDesc makeBloomImportedTextureDesc(const Texture& texture,
                                                    std::string_view label,
                                                    EImageLayout::T finalLayout)
@@ -148,10 +143,10 @@ void BloomPostprocessing::clearPreparedResources()
 
 void BloomPostprocessing::capturePreparedResources(const RenderGraphExecutionResult& result)
 {
-    _extractImage   = result.getExportedTextureShared(kBloomExtractExportName);
-    _blurPingImage  = result.getExportedTextureShared(kBloomBlurPingExportName);
-    _blurPongImage  = result.getExportedTextureShared(kBloomBlurPongExportName);
-    _compositeImage = result.getExportedTextureShared(kBloomOutputExportName);
+    _extractImage   = result.getExportedTextureShared(kExtractExportName);
+    _blurPingImage  = result.getExportedTextureShared(kBlurPingExportName);
+    _blurPongImage  = result.getExportedTextureShared(kBlurPongExportName);
+    _compositeImage = result.getExportedTextureShared(kOutputExportName);
 }
 
 void BloomPostprocessing::initExtractPipeline()
@@ -312,15 +307,15 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
         });
     }
 
-    graph.exportTexture(output, std::string(kBloomOutputExportName));
+    graph.exportTexture(output, std::string(kOutputExportName));
     if (bloomExtract.has_value()) {
-        graph.exportTexture(*bloomExtract, std::string(kBloomExtractExportName));
+        graph.exportTexture(*bloomExtract, std::string(kExtractExportName));
     }
     if (blurPing.has_value()) {
-        graph.exportTexture(*blurPing, std::string(kBloomBlurPingExportName));
+        graph.exportTexture(*blurPing, std::string(kBlurPingExportName));
     }
     if (blurPong.has_value()) {
-        graph.exportTexture(*blurPong, std::string(kBloomBlurPongExportName));
+        graph.exportTexture(*blurPong, std::string(kBlurPongExportName));
     }
 
     if (bBloomEnabled) {

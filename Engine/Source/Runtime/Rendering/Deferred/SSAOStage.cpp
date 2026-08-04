@@ -108,7 +108,6 @@ void SSAOStage::initNoiseTexture()
 void SSAOStage::init(IRender* render, stdptr<IDescriptorSetLayout> frameDSL)
 {
     _render = render;
-    _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
 
     auto& config = ConfigManager::get();
     _radius = config.getOr<float>(SSAO_CONFIG_DOC_NAME, SSAO_CONFIG_KEY_RADIUS, _radius);
@@ -170,7 +169,6 @@ void SSAOStage::init(IRender* render, stdptr<IDescriptorSetLayout> frameDSL)
 
 void SSAOStage::destroy()
 {
-    _graphExecutor.reset();
     _noiseTexture.reset();
     _descriptorPool.reset();
     _inputDSL.reset();
@@ -180,6 +178,7 @@ void SSAOStage::destroy()
     _pipelineLayout.reset();
 
     _render                       = nullptr;
+    _graphExecutor                = nullptr;
     _gBufferResources             = {};
     _lastGBufferImageViewHandles.fill(nullptr);
     _lastGBufferDepthImageViewHandle = nullptr;

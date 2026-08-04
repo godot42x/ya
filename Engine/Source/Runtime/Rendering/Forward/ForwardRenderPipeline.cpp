@@ -247,6 +247,7 @@ void ForwardRenderPipeline::initPostProcessResources(const InitDesc& desc)
         .width       = static_cast<uint32_t>(desc.windowW),
         .height      = static_cast<uint32_t>(desc.windowH),
     });
+    _postProcessStage.setGraphExecutor(_graphExecutor.get());
     _deleter.push("PostProcessStage", [this](void*)
                   { _postProcessStage.shutdown(); });
 }
@@ -687,6 +688,7 @@ void ForwardRenderPipeline::shutdown()
     getSceneSkyboxDescriptorSet = {};
     getSceneEnvironmentLightingDescriptorSet = {};
     _currentPostprocessOutput.reset();
+    _postProcessStage.setGraphExecutor(nullptr);
     _graphExecutor.reset();
     _pendingViewportExtent = {};
     _pendingResourceRefreshMask = 0;

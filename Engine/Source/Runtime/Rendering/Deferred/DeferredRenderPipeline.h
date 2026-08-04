@@ -94,6 +94,24 @@ struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
         ShadowSettings shadow{};
         PostProcessingState postProcessing{};
     };
+
+    struct PublishedGraphOutputs
+    {
+        std::shared_ptr<RenderImage> ssao{};
+        std::shared_ptr<RenderImage> bloomExtract{};
+        std::shared_ptr<RenderImage> bloomBlur{};
+        std::shared_ptr<RenderImage> bloomComposite{};
+        std::shared_ptr<RenderImage> postprocess{};
+
+        void clear()
+        {
+            ssao.reset();
+            bloomExtract.reset();
+            bloomBlur.reset();
+            bloomComposite.reset();
+            postprocess.reset();
+        }
+    };
     using InitDesc = DeferredRenderInitDesc;
 
     IRender* _render = nullptr;
@@ -150,8 +168,7 @@ struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
     ImageViewHandle    _cachedAlbedoSpecImageViewHandle = nullptr;
     Extent2D           _pendingViewportExtent{};
     uint32_t           _pendingResourceRefreshMask = 0;
-    stdptr<RenderImage> _currentSSAOOutput;
-    stdptr<RenderImage> _currentPostprocessOutput;
+    PublishedGraphOutputs _publishedGraphOutputs{};
 
     // ── Frame state ───────────────────────────────────────────────────
     DeferredGBufferResources   _currentGBufferResources{};
@@ -191,10 +208,10 @@ struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
     const DeferredGBufferResources& getCurrentGBufferResources() const { return _currentGBufferResources; }
     const DeferredViewportResources& getCurrentViewportResources() const { return _currentViewportResources; }
     std::shared_ptr<RenderImage> getViewportOutputImageShared() const { return _currentViewportResources.colorOwner; }
-    std::shared_ptr<RenderImage> getPostprocessOutputImageShared() const { return _currentPostprocessOutput; }
-    std::shared_ptr<RenderImage> getBloomExtractImageShared() const { return _postProcessStage.getBloomExtractImageShared(); }
-    std::shared_ptr<RenderImage> getBloomBlurImageShared() const { return _postProcessStage.getBloomBlurImageShared(); }
-    std::shared_ptr<RenderImage> getBloomCompositeImageShared() const { return _postProcessStage.getBloomCompositeImageShared(); }
+    std::shared_ptr<RenderImage> getPostprocessOutputImageShared() const { return _publishedGraphOutputs.postprocess; }
+    std::shared_ptr<RenderImage> getBloomExtractImageShared() const { return _publishedGraphOutputs.bloomExtract; }
+    std::shared_ptr<RenderImage> getBloomBlurImageShared() const { return _publishedGraphOutputs.bloomBlur; }
+    std::shared_ptr<RenderImage> getBloomCompositeImageShared() const { return _publishedGraphOutputs.bloomComposite; }
     void setSSAOEnabled(bool enabled)
     {
         _bEnableSSAO = enabled;
@@ -230,8 +247,9 @@ struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
     [[nodiscard]] bool shouldSkipTick(const RenderPipelineFrameContext& frame) const;
     void               beginTick(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx, uint32_t& vpW, uint32_t& vpH);
     void               invalidateGBufferDependentViews();
-    void               syncGraphAttachmentSnapshots(
-                           const RenderGraphExecutionResult& result);
+    void               publishGraphExecutionResult(const RenderGraphExecutionResult& result,
+                                                   const DeferredFrameGraphResources& graphResources);
+    void               clearPublishedGraphOutputs();
     void               refreshGBufferStageState();
     void               refreshViewportStageState();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);
