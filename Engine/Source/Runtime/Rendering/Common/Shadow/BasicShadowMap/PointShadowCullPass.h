@@ -37,6 +37,10 @@ class PointShadowCullPass
   public:
     struct GraphResources
     {
+        // The indirect vertex shader reads instance data even when the GPU
+        // cull dispatch is disabled. Keep that read in the graph so the
+        // per-flight host upload is visible to the raster pass.
+        RGBufferHandle              instanceData{};
         RGBufferHandle             drawCommands{};
         RGBufferHandle             visibleInstances{};
         std::optional<RGPassHandle> cullPass{};
@@ -91,9 +95,12 @@ class PointShadowCullPass
 
     struct PerFlightResources
     {
-        stdptr<IBuffer>     faceFrustumBuffer;
-        stdptr<IBuffer>     drawCommandBuffer;
-        stdptr<IBuffer>     visibleInstancesBuf;
+        stdptr<IBuffer>     faceFrustumUploadBuffer;
+        stdptr<IBuffer>     faceFrustumExecBuffer;
+        stdptr<IBuffer>     drawCommandUploadBuffer;
+        stdptr<IBuffer>     drawCommandExecBuffer;
+        stdptr<IBuffer>     visibleInstancesUploadBuffer;
+        stdptr<IBuffer>     visibleInstancesExecBuffer;
         stdptr<IBuffer>     instanceBuffer;
         DescriptorSetHandle cullDS = nullptr;
         uint32_t            allocatedBucketCount = 0;

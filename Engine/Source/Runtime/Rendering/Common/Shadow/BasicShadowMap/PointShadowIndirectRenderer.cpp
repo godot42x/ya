@@ -403,7 +403,7 @@ bool PointShadowIndirectRenderer::ensureInstanceCapacity(uint32_t flightIndex, u
     auto nextBuffer = _render->getResourceFactory()->createBuffer(
         BufferCreateInfo{
             .label       = std::format("PointShadow_Instance_{}", flightIndex),
-            .usage       = EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
+            .usage       = EBufferUsage::StorageBuffer,
             .size        = static_cast<uint32_t>(bufferSize64),
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
