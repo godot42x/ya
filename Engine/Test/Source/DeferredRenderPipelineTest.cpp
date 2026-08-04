@@ -137,7 +137,8 @@ TEST(DeferredFrameGraphResourcesTest, KeepsOptionalInputsExplicitAndHandlesFrame
     EXPECT_FALSE(resources.textures.environmentCubemap.has_value());
     EXPECT_FALSE(resources.textures.shadowDepth.has_value());
     EXPECT_FALSE(resources.textures.postprocessOutput.has_value());
-    EXPECT_FALSE(resources.passes.shadow.has_value());
+    EXPECT_FALSE(resources.passes.shadow.lastPass.has_value());
+    EXPECT_FALSE(resources.passes.shadow.shadowDepth.has_value());
 
     resources.buffers.frame = RGBufferHandle{.index = 2, .generation = 7};
     resources.textures.gBufferColors[0] = RGTextureHandle{.index = 3, .generation = 9};

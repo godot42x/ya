@@ -349,6 +349,11 @@ TEST(RenderGraphCoreTest, ImportTextureStoresImportedDescriptor)
 TEST(RenderGraphCoreTest, CreateAndImportBufferTrackSeparateResources)
 {
     RenderGraph graph;
+    auto importedBacking = std::make_shared<TestBuffer>(BufferCreateInfo{
+        .label = "external.readback",
+        .size = 512,
+        .usage = EBufferUsage::TransferDst,
+    });
 
     const auto transientHandle = graph.createBuffer(RGBufferDesc{
         .label = "frame.uniforms",
@@ -361,7 +366,7 @@ TEST(RenderGraphCoreTest, CreateAndImportBufferTrackSeparateResources)
             .usage = EBufferUsage::TransferDst,
             .size  = 512,
         },
-        .buffer = reinterpret_cast<IBuffer*>(0x1),
+        .buffer = importedBacking.get(),
     });
 
     const auto* transient = graph.getBuffer(transientHandle);
@@ -371,7 +376,7 @@ TEST(RenderGraphCoreTest, CreateAndImportBufferTrackSeparateResources)
     EXPECT_EQ(transient->lifetime, ERGResourceLifetime::Transient);
     EXPECT_EQ(imported->lifetime, ERGResourceLifetime::Imported);
     ASSERT_TRUE(imported->imported.has_value());
-    EXPECT_EQ(imported->imported->buffer, reinterpret_cast<IBuffer*>(0x1));
+    EXPECT_EQ(imported->imported->buffer, importedBacking.get());
 }
 
 TEST(RenderGraphCoreTest, InvalidHandleLookupReturnsNull)
@@ -547,13 +552,23 @@ TEST(RenderGraphCoreTest, DebugDumpIncludesPassOrderDependenciesAndIssues)
 TEST(RenderGraphCoreTest, CompileInfersCopyPassKindForTransferOnlyPass)
 {
     RenderGraph graph;
+    auto srcBacking = std::make_shared<TestBuffer>(BufferCreateInfo{
+        .label = "readback.src",
+        .size = 128,
+        .usage = EBufferUsage::TransferSrc,
+    });
+    auto dstBacking = std::make_shared<TestBuffer>(BufferCreateInfo{
+        .label = "readback.dst",
+        .size = 128,
+        .usage = EBufferUsage::TransferDst,
+    });
     const auto src = graph.importBuffer(RGImportedBufferDesc{
         .desc = RGBufferDesc{
             .label = "readback.src",
             .usage = EBufferUsage::TransferSrc,
             .size  = 128,
         },
-        .buffer = reinterpret_cast<IBuffer*>(0x1),
+        .buffer = srcBacking.get(),
     });
     const auto dst = graph.importBuffer(RGImportedBufferDesc{
         .desc = RGBufferDesc{
@@ -561,7 +576,7 @@ TEST(RenderGraphCoreTest, CompileInfersCopyPassKindForTransferOnlyPass)
             .usage = EBufferUsage::TransferDst,
             .size  = 128,
         },
-        .buffer = reinterpret_cast<IBuffer*>(0x2),
+        .buffer = dstBacking.get(),
     });
 
     graph.addPass("copy", [&](RGPassBuilder& pass) {
@@ -823,13 +838,18 @@ TEST(RenderGraphCoreTest, CompileOrdersTransientBufferLifetimesByTopologicalUse)
 TEST(RenderGraphCoreTest, CompileTransientBufferLifetimesFollowExplicitDependenciesAndIgnoreNonTransientBuffers)
 {
     RenderGraph graph;
+    auto importedBacking = std::make_shared<TestBuffer>(BufferCreateInfo{
+        .label = "imported.buffer",
+        .size = 64,
+        .usage = EBufferUsage::StorageBuffer,
+    });
     const auto imported = graph.importBuffer(RGImportedBufferDesc{
         .desc = RGBufferDesc{
             .label = "imported.buffer",
             .usage = EBufferUsage::StorageBuffer,
             .size  = 64,
         },
-        .buffer       = reinterpret_cast<IBuffer*>(0x1),
+        .buffer       = importedBacking.get(),
         .initialState = BufferResourceState{
             .stages = EPipelineStage::ComputeShader,
             .access = EResourceAccess::ShaderRead,
@@ -1000,6 +1020,12 @@ TEST(RenderGraphCoreTest, CompileDoesNotAliasOverlappingOrIncompatibleTransientB
             .memoryUsage = EMemoryUsage::GpuOnly,
         },
         RGPersistentBufferKey{"persistent.buffer"});
+    auto importedBacking = std::make_shared<TestBuffer>(BufferCreateInfo{
+        .label = "imported.buffer",
+        .size = 64,
+        .usage = EBufferUsage::StorageBuffer,
+        .memoryUsage = EMemoryUsage::GpuOnly,
+    });
     const auto imported = graph.importBuffer(RGImportedBufferDesc{
         .desc = RGBufferDesc{
             .label       = "imported.buffer",
@@ -1007,7 +1033,7 @@ TEST(RenderGraphCoreTest, CompileDoesNotAliasOverlappingOrIncompatibleTransientB
             .size        = 64,
             .memoryUsage = EMemoryUsage::GpuOnly,
         },
-        .buffer       = reinterpret_cast<IBuffer*>(0x1),
+        .buffer       = importedBacking.get(),
         .initialState = BufferResourceState{
             .stages = EPipelineStage::ComputeShader,
             .access = EResourceAccess::ShaderRead,
@@ -1172,13 +1198,18 @@ TEST(RenderGraphCoreTest, CompileBuildsBufferAndDepthStatePlans)
 TEST(RenderGraphCoreTest, CompileTracksExplicitUniformAndStorageBufferStates)
 {
     RenderGraph graph;
+    auto uniformBacking = std::make_shared<TestBuffer>(BufferCreateInfo{
+        .label = "frame.uniform",
+        .size = 256,
+        .usage = EBufferUsage::UniformBuffer,
+    });
     const auto uniformBuffer = graph.importBuffer(RGImportedBufferDesc{
         .desc = RGBufferDesc{
             .label = "frame.uniform",
             .usage = EBufferUsage::UniformBuffer,
             .size  = 256,
         },
-        .buffer = reinterpret_cast<IBuffer*>(0x1),
+        .buffer = uniformBacking.get(),
     });
     const auto storageBuffer = graph.createBuffer(RGBufferDesc{
         .label = "cull.storage",
@@ -1280,13 +1311,18 @@ TEST(RenderGraphCoreTest, CompileModelsComputeReadWriteToIndirectReadDependency)
 TEST(RenderGraphCoreTest, CompileDoesNotAddDependenciesForNonOverlappingImportedBufferRanges)
 {
     RenderGraph graph;
+    auto readbackBacking = std::make_shared<TestBuffer>(BufferCreateInfo{
+        .label = "readback",
+        .size = 256,
+        .usage = EBufferUsage::TransferSrc | EBufferUsage::TransferDst,
+    });
     const auto readback = graph.importBuffer(RGImportedBufferDesc{
         .desc = RGBufferDesc{
             .label = "readback",
             .usage = EBufferUsage::TransferSrc | EBufferUsage::TransferDst,
             .size  = 256,
         },
-        .buffer = reinterpret_cast<IBuffer*>(0x1),
+        .buffer = readbackBacking.get(),
     });
 
     const auto writer = graph.addPass("writer-low", [&](RGPassBuilder& pass) {
@@ -1327,13 +1363,18 @@ TEST(RenderGraphCoreTest, CompileAddsDependenciesForOverlappingBufferRanges)
 TEST(RenderGraphCoreTest, CompileRejectsIndirectReadWithoutIndirectUsage)
 {
     RenderGraph graph;
+    auto commandsBacking = std::make_shared<TestBuffer>(BufferCreateInfo{
+        .label = "storage-only.commands",
+        .size = 128,
+        .usage = EBufferUsage::StorageBuffer,
+    });
     const auto commands = graph.importBuffer(RGImportedBufferDesc{
         .desc = RGBufferDesc{
             .label = "storage-only.commands",
             .usage = EBufferUsage::StorageBuffer,
             .size  = 128,
         },
-        .buffer = reinterpret_cast<IBuffer*>(0x1),
+        .buffer = commandsBacking.get(),
     });
     graph.addPass("draw", [&](RGPassBuilder& pass) {
         pass.indirectRead(commands);
