@@ -5,7 +5,6 @@
 #include "Render/Core/Buffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
-#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Stage/IRenderStage.h"
 
 namespace ya
@@ -13,6 +12,7 @@ namespace ya
 
 struct IRender;
 struct ICommandBuffer;
+class RenderGraphExecutor;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PointShadowCullPass
@@ -46,7 +46,7 @@ class PointShadowCullPass
         std::optional<RGPassHandle> cullPass{};
     };
 
-    void init(IRender* render);
+    void init(IRender* render, RenderGraphExecutor* standaloneGraphExecutor);
     void destroy();
 
     /// Ensure the current flight's (frustum / cmd / lookup) buffers can hold `bucketCount`.
@@ -115,7 +115,7 @@ class PointShadowCullPass
     stdptr<IPipelineLayout>      _pipelineLayout;
     stdptr<IDescriptorSetLayout> _cullDSL;
     stdptr<IDescriptorPool>      _dsp;
-    std::unique_ptr<RenderGraphExecutor> _graphExecutor;
+    RenderGraphExecutor* _standaloneGraphExecutor = nullptr;
 
     std::array<PerFlightResources, MAX_FLIGHTS_IN_FLIGHT> _perFlight{};
 };

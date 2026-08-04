@@ -10,6 +10,7 @@
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowDrawHelper.h"
 
 #include "Render/Core/CommandBuffer.h"
+#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Mesh.h"
 #include "Render/RenderFrameData.h"
@@ -24,12 +25,15 @@ namespace ya
 // Init / Destroy
 // ═══════════════════════════════════════════════════════════════════════════
 
-void DirectionalShadowPass::init(IRender* render, Extent2D shadowExtent, ShadowFrameResources& frameResources)
+void DirectionalShadowPass::init(IRender* render,
+                                 Extent2D shadowExtent,
+                                 ShadowFrameResources& frameResources,
+                                 RenderGraphExecutor* standaloneGraphExecutor)
 {
     _render         = render;
     _frameResources = &frameResources;
     _shadowExtent   = shadowExtent;
-    _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
+    _standaloneGraphExecutor = standaloneGraphExecutor;
 
     _frameDSL    = _frameResources->getFrameDSL();
     _skinningDSL = _frameResources->getSkinningDSL();
@@ -97,7 +101,7 @@ void DirectionalShadowPass::destroy()
 {
     _depthImage.reset();
     for (auto& depthView : _depthViews) depthView.reset();
-    _graphExecutor.reset();
+    _standaloneGraphExecutor = nullptr;
     _staticVariant  = {};
     _skinnedVariant = {};
     _skinningDSL.reset();
@@ -129,11 +133,11 @@ void DirectionalShadowPass::prepare(const BasicShadowFramePayload& payload)
 void DirectionalShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload)
 {
     YA_PROFILE_FUNCTION();
-    if (!cmdBuf || !_graphExecutor) return;
+    if (!cmdBuf || !_standaloneGraphExecutor) return;
 
     RenderGraph graph;
     if (!appendGraphPasses(graph, payload).has_value()) return;
-    YA_CORE_ASSERT(_graphExecutor->execute(graph, *cmdBuf),
+    YA_CORE_ASSERT(_standaloneGraphExecutor->execute(graph, *cmdBuf),
                    "Failed to execute directional shadow graph");
 }
 

@@ -19,6 +19,7 @@ struct ICommandBuffer;
 struct IDescriptorSetLayout;
 struct Mesh;
 struct RenderDrawItem;
+class RenderGraphExecutor;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PointShadowIndirectRenderer
@@ -44,7 +45,9 @@ struct RenderDrawItem;
 class PointShadowIndirectRenderer
 {
   public:
-    void init(IRender* render, stdptr<IDescriptorSetLayout> frameDSL);
+    void init(IRender* render,
+              stdptr<IDescriptorSetLayout> frameDSL,
+              RenderGraphExecutor* standaloneGraphExecutor);
     void destroy();
 
     void beginFrame();

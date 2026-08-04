@@ -6,6 +6,7 @@
 #include "Resource/DeferredDeletionQueue.h"
 
 #include "Render/Core/CommandBuffer.h"
+#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
@@ -16,10 +17,10 @@
 namespace ya
 {
 
-void PointShadowCullPass::init(IRender* render)
+void PointShadowCullPass::init(IRender* render, RenderGraphExecutor* standaloneGraphExecutor)
 {
     _render = render;
-    _graphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
+    _standaloneGraphExecutor = standaloneGraphExecutor;
 
     _cullDSL = IDescriptorSetLayout::create(
         _render,
@@ -74,7 +75,7 @@ void PointShadowCullPass::destroy()
     _pipeline.reset();
     _pipelineLayout.reset();
     _cullDSL.reset();
-    _graphExecutor.reset();
+    _standaloneGraphExecutor = nullptr;
     _render               = nullptr;
 }
 
@@ -237,12 +238,12 @@ void PointShadowCullPass::prepareNoCull(uint32_t flightIndex, uint32_t activeFac
 void PointShadowCullPass::dispatch(ICommandBuffer* cmdBuf, uint32_t flightIndex)
 {
     YA_PROFILE_FUNCTION();
-    if (!cmdBuf || !_graphExecutor) return;
+    if (!cmdBuf || !_standaloneGraphExecutor) return;
 
     RenderGraph graph;
     if (!appendGraphPass(graph, flightIndex, true).has_value()) return;
 
-    YA_CORE_ASSERT(_graphExecutor->execute(graph, *cmdBuf),
+    YA_CORE_ASSERT(_standaloneGraphExecutor->execute(graph, *cmdBuf),
                    "Failed to execute point shadow cull graph");
 }
 

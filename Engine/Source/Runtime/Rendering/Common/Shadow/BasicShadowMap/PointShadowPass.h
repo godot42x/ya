@@ -9,7 +9,6 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Image.h"
 #include "Render/Core/Pipeline.h"
-#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Stage/IRenderStage.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
@@ -26,6 +25,7 @@ struct RenderFrameData;
 struct RenderShadingDrawBuckets;
 struct RenderDrawItem;
 struct Mesh;
+class RenderGraphExecutor;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PointShadowPass
@@ -40,7 +40,10 @@ class PointShadowPass
     using PointFaceUBO      = BasicShadowFramePayload::PointFaceUBO;
     using ModelPushConstant = slang_types::CombineShadowMappingGenerate::PushConstants;
 
-    void init(IRender* render, Extent2D shadowExtent, ShadowFrameResources& frameResources);
+    void init(IRender* render,
+              Extent2D shadowExtent,
+              ShadowFrameResources& frameResources,
+              RenderGraphExecutor* standaloneGraphExecutor);
     void destroy();
     void prepare(const BasicShadowFramePayload& payload);
     void execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload);
@@ -85,7 +88,7 @@ class PointShadowPass
     GraphicsPipelineCreateInfo _directPipelineCI{};
 
     stdptr<IImage> _shadowImage;
-    std::unique_ptr<RenderGraphExecutor> _graphExecutor;
+    RenderGraphExecutor* _standaloneGraphExecutor = nullptr;
 
     std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS> _faceDepthViews{};
 

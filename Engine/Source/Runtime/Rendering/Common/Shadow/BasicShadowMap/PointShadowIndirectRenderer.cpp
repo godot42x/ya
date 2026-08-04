@@ -24,7 +24,9 @@ namespace Addr = PointShadowAddressing;
 // Init / Destroy / Lifecycle
 // ════════════════════════════════════════════════════════════════════════
 
-void PointShadowIndirectRenderer::init(IRender* render, stdptr<IDescriptorSetLayout> frameDSL)
+void PointShadowIndirectRenderer::init(IRender* render,
+                                       stdptr<IDescriptorSetLayout> frameDSL,
+                                       RenderGraphExecutor* standaloneGraphExecutor)
 {
     _render   = render;
     _frameDSL = std::move(frameDSL);
@@ -76,7 +78,7 @@ void PointShadowIndirectRenderer::init(IRender* render, stdptr<IDescriptorSetLay
             .poolSizes = {{.type = EPipelineDescriptorType::StorageBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT * 2}},
         });
 
-    _cullPass.init(_render);
+    _cullPass.init(_render, standaloneGraphExecutor);
 }
 
 void PointShadowIndirectRenderer::destroy()
