@@ -18,10 +18,11 @@ class TestBuffer final : public IBuffer
   private:
     std::string _name;
     uint32_t    _size = 0;
+    EBufferUsage _usage = EBufferUsage::None;
 
   public:
     explicit TestBuffer(const BufferCreateInfo& desc)
-        : _name(desc.label), _size(desc.size)
+        : _name(desc.label), _size(desc.size), _usage(desc.usage)
     {}
 
     bool writeData(const void*, uint32_t = 0, uint32_t = 0) override { return true; }
@@ -29,6 +30,7 @@ class TestBuffer final : public IBuffer
     void unmap() override {}
     BufferHandle getHandle() const override { return {}; }
     uint32_t getSize() const override { return _size; }
+    EBufferUsage getUsage() const override { return _usage; }
     bool isHostVisible() const override { return true; }
     const std::string& getName() const override { return _name; }
 
