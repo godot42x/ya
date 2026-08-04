@@ -173,16 +173,7 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
                                   EBufferUsage usage,
                                   BufferResourceState initialState) {
         YA_CORE_ASSERT(buffer != nullptr, "Point shadow graph requires imported buffer '{}'", label);
-        return graph.importBuffer(RGImportedBufferDesc{
-            .desc = RGBufferDesc{
-                .label = std::move(label),
-                .usage = usage,
-                .size  = buffer->getSize(),
-            },
-            .buffer            = buffer.get(),
-            .initialState      = initialState,
-            .retainedResources = {buffer},
-        });
+        return graph.importBuffer(makeImportedBufferDesc(buffer, label, initialState, usage));
     };
     const BufferResourceState hostWriteState{
         .stages = EPipelineStage::Host,
@@ -193,6 +184,7 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
 
     std::optional<RGBufferHandle> drawCommands;
     std::optional<RGBufferHandle> visibleInstances;
+    std::optional<RGBufferHandle> instanceData;
     if (useIndirect) {
         auto& cullPass = _indirectRenderer.getCullPass();
         const bool gpuCullEnabled = payload.pointIndirectCullEnabled();
@@ -202,6 +194,7 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
                        "Point shadow graph requires cull resources");
         drawCommands     = cullResources->drawCommands;
         visibleInstances = cullResources->visibleInstances;
+        instanceData     = cullResources->instanceData;
         if (cullResources->cullPass.has_value()) {
             rasterDependency = cullResources->cullPass;
         }
@@ -263,9 +256,10 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
 
     const auto rasterPass = graph.addPass(
         "Point Shadow Faces",
-        [graphFaces, skinningBuffer, drawCommands, visibleInstances, rasterDependency](RGPassBuilder& pass) {
+        [graphFaces, skinningBuffer, instanceData, drawCommands, visibleInstances, rasterDependency](RGPassBuilder& pass) {
             if (rasterDependency.has_value()) pass.dependsOn(*rasterDependency);
             pass.storageRead(skinningBuffer);
+            if (instanceData.has_value()) pass.storageRead(*instanceData);
             if (drawCommands.has_value()) pass.indirectRead(*drawCommands);
             if (visibleInstances.has_value()) pass.storageRead(*visibleInstances);
             for (const auto& face : *graphFaces) {
