@@ -143,11 +143,6 @@ struct ViewportOverlayStage : public IRenderStage
     void refreshPipelineFormats(const DeferredAttachmentFormats& formats);
     void setServices(Services services);
     void setFrameInputs(FrameInputs frameInputs);
-    [[nodiscard]] const FrameInputs& getFrameInputs() const { return _frameInputs; }
-    void setSkyboxFrameDescriptorSet(DescriptorSetHandle descriptorSet)
-    {
-        _frameInputs.skybox.frameDescriptorSet = descriptorSet;
-    }
     [[nodiscard]] SkyboxFrameUBO buildSkyboxFrameData(const RenderStageContext& ctx) const;
     [[nodiscard]] IGraphicsPipeline* getSkyboxPipeline() const { return _skyboxPipeline.get(); }
     [[nodiscard]] IGraphicsPipeline* getOverlayPipeline() const { return _overlayPipeline.get(); }
