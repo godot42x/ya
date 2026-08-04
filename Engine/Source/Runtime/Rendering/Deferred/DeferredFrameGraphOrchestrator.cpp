@@ -1,9 +1,16 @@
 #include "DeferredFrameGraphOrchestrator.h"
 
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
 #include "Render/Core/RenderGraphImportUtils.h"
+#include "Render/Core/RenderTargetCreateInfo.h"
 #include "Render/Core/Swapchain.h"
 #include "Render/Render.h"
+#include "Runtime/Rendering/Common/PostProcessingStage.h"
 #include "Runtime/Rendering/Common/Shadow/ShadowStage.h"
+#include "Runtime/Rendering/Deferred/GBufferStage.h"
+#include "Runtime/Rendering/Deferred/LightStage.h"
+#include "Runtime/Rendering/Deferred/SSAOStage.h"
 
 #include <format>
 
@@ -12,6 +19,16 @@ namespace ya
 
 namespace
 {
+
+constexpr std::string_view kTopologyPassShadow          = "Shadow Subgraph";
+constexpr std::string_view kTopologyPassGBuffer         = "Deferred GBuffer";
+constexpr std::string_view kTopologyPassSSAO            = "SSAO Pass";
+constexpr std::string_view kTopologyPassLight           = "Deferred Light";
+constexpr std::string_view kTopologyPassSkybox          = "Deferred Skybox";
+constexpr std::string_view kTopologyPassSceneOverlay    = "Deferred Scene Overlay";
+constexpr std::string_view kTopologyPassViewportOverlay = "Deferred Viewport Overlay";
+constexpr std::string_view kTopologyPassBloom           = "Bloom Subgraph";
+constexpr std::string_view kTopologyPassPostprocessing  = "Postprocessing";
 
 RGImportedTextureDesc makeDeferredOrchestratorEnvironmentImportedDesc(const ImageResourceRef& resource,
                                                                       std::string_view       label)
@@ -52,6 +69,50 @@ RGBufferHandle importDeferredOrchestratorHostWrittenBuffer(RenderGraph&         
 }
 
 } // namespace
+
+DeferredFrameGraphOrchestrator::TopologyDescription DeferredFrameGraphOrchestrator::describeTopology(const TopologyInputs& inputs)
+{
+    TopologyDescription topology{};
+    if (inputs.bHasShadowSubgraph) {
+        topology.passOrder.push_back(kTopologyPassShadow);
+    }
+    topology.passOrder.push_back(kTopologyPassGBuffer);
+    if (inputs.bUseSSAO) {
+        topology.passOrder.push_back(kTopologyPassSSAO);
+    }
+    topology.passOrder.push_back(kTopologyPassLight);
+    topology.passOrder.push_back(kTopologyPassSkybox);
+    topology.passOrder.push_back(kTopologyPassSceneOverlay);
+    topology.passOrder.push_back(kTopologyPassViewportOverlay);
+    if (inputs.bHasBloomSubgraph) {
+        topology.passOrder.push_back(kTopologyPassBloom);
+    }
+    if (inputs.bHasPostprocessPass) {
+        topology.passOrder.push_back(kTopologyPassPostprocessing);
+    }
+
+    topology.dependencies.emplace_back(kTopologyPassGBuffer, kTopologyPassLight);
+    topology.dependencies.emplace_back(kTopologyPassLight, kTopologyPassSkybox);
+    topology.dependencies.emplace_back(kTopologyPassSkybox, kTopologyPassSceneOverlay);
+    topology.dependencies.emplace_back(kTopologyPassSceneOverlay, kTopologyPassViewportOverlay);
+    if (inputs.bHasShadowSubgraph) {
+        topology.dependencies.emplace_back(kTopologyPassShadow, kTopologyPassLight);
+    }
+    if (inputs.bUseSSAO) {
+        topology.dependencies.emplace_back(kTopologyPassSSAO, kTopologyPassLight);
+    }
+    if (inputs.bHasBloomSubgraph) {
+        topology.dependencies.emplace_back(kTopologyPassViewportOverlay, kTopologyPassBloom);
+        if (inputs.bHasPostprocessPass) {
+            topology.dependencies.emplace_back(kTopologyPassBloom, kTopologyPassPostprocessing);
+        }
+    }
+    else if (inputs.bHasPostprocessPass) {
+        topology.dependencies.emplace_back(kTopologyPassViewportOverlay, kTopologyPassPostprocessing);
+    }
+
+    return topology;
+}
 
 void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const BuildInputs& inputs) const
 {

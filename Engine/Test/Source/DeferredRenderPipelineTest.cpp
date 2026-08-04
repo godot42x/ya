@@ -5,6 +5,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <limits>
 #include <string>
@@ -263,6 +264,66 @@ TEST(PostProcessingStageTest, FinalizeParamsDefaultsStayEmpty)
     EXPECT_EQ(params.inputExtent.height, 0u);
     EXPECT_FALSE(params.bOutputIsSRGB);
     EXPECT_EQ(params.postContext, nullptr);
+}
+
+TEST(DeferredFrameGraphOrchestratorTest, DescribesFullDeferredTopologyWithOptionalPasses)
+{
+    const auto topology = DeferredFrameGraphOrchestrator::describeTopology({
+        .bHasShadowSubgraph  = true,
+        .bUseSSAO            = true,
+        .bHasBloomSubgraph   = true,
+        .bHasPostprocessPass = true,
+    });
+
+    EXPECT_EQ(topology.passOrder.size(), 9u);
+    EXPECT_EQ(topology.passOrder[0], "Shadow Subgraph");
+    EXPECT_EQ(topology.passOrder[1], "Deferred GBuffer");
+    EXPECT_EQ(topology.passOrder[2], "SSAO Pass");
+    EXPECT_EQ(topology.passOrder[3], "Deferred Light");
+    EXPECT_EQ(topology.passOrder[4], "Deferred Skybox");
+    EXPECT_EQ(topology.passOrder[5], "Deferred Scene Overlay");
+    EXPECT_EQ(topology.passOrder[6], "Deferred Viewport Overlay");
+    EXPECT_EQ(topology.passOrder[7], "Bloom Subgraph");
+    EXPECT_EQ(topology.passOrder[8], "Postprocessing");
+
+    EXPECT_NE(std::find(topology.dependencies.begin(),
+                        topology.dependencies.end(),
+                        std::pair<std::string_view, std::string_view>{"Shadow Subgraph", "Deferred Light"}),
+              topology.dependencies.end());
+    EXPECT_NE(std::find(topology.dependencies.begin(),
+                        topology.dependencies.end(),
+                        std::pair<std::string_view, std::string_view>{"SSAO Pass", "Deferred Light"}),
+              topology.dependencies.end());
+    EXPECT_NE(std::find(topology.dependencies.begin(),
+                        topology.dependencies.end(),
+                        std::pair<std::string_view, std::string_view>{"Bloom Subgraph", "Postprocessing"}),
+              topology.dependencies.end());
+}
+
+TEST(DeferredFrameGraphOrchestratorTest, OmitsDisabledOptionalStagesFromTopology)
+{
+    const auto topology = DeferredFrameGraphOrchestrator::describeTopology({
+        .bHasShadowSubgraph  = false,
+        .bUseSSAO            = false,
+        .bHasBloomSubgraph   = false,
+        .bHasPostprocessPass = true,
+    });
+
+    EXPECT_EQ(topology.passOrder.size(), 6u);
+    EXPECT_EQ(topology.passOrder[0], "Deferred GBuffer");
+    EXPECT_EQ(topology.passOrder[1], "Deferred Light");
+    EXPECT_EQ(topology.passOrder[2], "Deferred Skybox");
+    EXPECT_EQ(topology.passOrder[3], "Deferred Scene Overlay");
+    EXPECT_EQ(topology.passOrder[4], "Deferred Viewport Overlay");
+    EXPECT_EQ(topology.passOrder[5], "Postprocessing");
+
+    EXPECT_EQ(std::find(topology.passOrder.begin(), topology.passOrder.end(), "Shadow Subgraph"), topology.passOrder.end());
+    EXPECT_EQ(std::find(topology.passOrder.begin(), topology.passOrder.end(), "SSAO Pass"), topology.passOrder.end());
+    EXPECT_EQ(std::find(topology.passOrder.begin(), topology.passOrder.end(), "Bloom Subgraph"), topology.passOrder.end());
+    EXPECT_NE(std::find(topology.dependencies.begin(),
+                        topology.dependencies.end(),
+                        std::pair<std::string_view, std::string_view>{"Deferred Viewport Overlay", "Postprocessing"}),
+              topology.dependencies.end());
 }
 
 TEST(SSAOStageTest, BuildsFrameDataWithoutOwningGpuResources)
