@@ -2,7 +2,9 @@
 
 #include "Render/Core/Buffer.h"
 #include "Render/Core/CommandBuffer.h"
+#include "Render/Core/DescriptorSet.h"
 #include "Render/Core/RenderResourceFactory.h"
+#include "Render/Core/Sampler.h"
 #include "Render/RenderDefines.h"
 #include "Core/Api.h"
 
@@ -484,8 +486,46 @@ class RGRenderContext
         : _graph(graph), _pass(pass), _registry(registry), _cmdBuf(cmdBuf), _compiledPassPlan(compiledPassPlan)
     {}
 
+    /// Pass-scoped binding helpers.
+    ///
+    /// Resolves a declared graph handle to the descriptor info needed by
+    /// existing descriptor update paths, and retains every resource the
+    /// descriptor refers to until the command buffer completes. The context is
+    /// backend-neutral: callers stay responsible for binding/set layout and
+    /// descriptor type, while the graph guarantees the handle was declared and
+    /// the resolved GPU object stays alive during command recording.
+    class RGPassBindingContext
+    {
+      public:
+        RGPassBindingContext(const RenderGraphResourceRegistry& registry,
+                             const RenderGraph&                  graph,
+                             const RGPass&                       pass,
+                             ICommandBuffer&                    cmdBuf)
+            : _registry(registry), _graph(graph), _pass(pass), _cmdBuf(cmdBuf)
+        {}
+
+        [[nodiscard]] ENGINE_API std::optional<DescriptorImageInfo> resolveTextureDescriptor(
+            RGTextureHandle handle,
+            Sampler*        sampler) const;
+        [[nodiscard]] ENGINE_API std::optional<DescriptorBufferInfo> resolveBufferDescriptor(
+            RGBufferHandle handle) const;
+
+      private:
+        [[nodiscard]] const RGTextureUsage* findDeclaredTextureUsage(RGTextureHandle handle) const;
+        [[nodiscard]] const RGBufferUsage* findDeclaredBufferUsage(RGBufferHandle handle) const;
+
+        const RenderGraphResourceRegistry& _registry;
+        const RenderGraph&                  _graph;
+        const RGPass&                       _pass;
+        ICommandBuffer&                    _cmdBuf;
+    };
+
     [[nodiscard]] const RGPass& getPass() const { return _pass; }
     [[nodiscard]] ICommandBuffer& getCommandBuffer() const { return _cmdBuf; }
+    [[nodiscard]] RGPassBindingContext getBindingContext() const
+    {
+        return RGPassBindingContext(_registry, _graph, _pass, _cmdBuf);
+    }
     [[nodiscard]] ENGINE_API const RGTextureResource& getTexture(RGTextureHandle handle) const;
     [[nodiscard]] ENGINE_API const RGBufferResource& getBuffer(RGBufferHandle handle) const;
     [[nodiscard]] ENGINE_API const RGTextureDesc& getTextureDesc(RGTextureHandle handle) const;
