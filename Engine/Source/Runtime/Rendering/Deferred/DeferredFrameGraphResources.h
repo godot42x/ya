@@ -2,12 +2,16 @@
 
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/RenderGraph.h"
+#include "Runtime/Rendering/Deferred/ViewportOverlayStage.h"
 
 #include <array>
+#include <functional>
 #include <optional>
 
 namespace ya
 {
+
+struct ICommandBuffer;
 
 // Frame-local logical resources used by the Deferred graph. Handles are valid
 // only for the graph that produced them; resolved GPU objects must stay inside
@@ -122,6 +126,53 @@ struct DeferredLightPassParams
     uint32_t                       layerCount = 1;
     DescriptorSetHandle            frameAndLightDescriptorSet{};
     DescriptorSetHandle            environmentLightingDescriptorSet{};
+};
+
+/// Typed pass parameters for the Deferred skybox graph pass.
+///
+/// The pass declaration and execute path both consume this object, so execute
+/// no longer queries skybox inputs back from ViewportOverlayStage state.
+struct DeferredSkyboxPassParams
+{
+    struct BufferInput
+    {
+        RGBufferHandle handle{};
+        RGBufferRange  range{};
+    };
+
+    BufferInput                                   frame{};
+    RGTextureHandle                               viewportColor{};
+    RGTextureHandle                               depth{};
+    Rect2D                                        renderArea{};
+    uint32_t                                      layerCount = 1;
+    ViewportOverlayStage::FrameInputs::SkyboxInput skybox{};
+};
+
+/// Typed pass parameters for the Deferred scene overlay graph pass.
+///
+/// The overlay snapshot that was prepared during frame extraction is carried
+/// directly into the graph execute callback, removing the need to read it back
+/// from ViewportOverlayStage-owned mutable state.
+struct DeferredSceneOverlayPassParams
+{
+    RGTextureHandle                    color{};
+    RGTextureHandle                    depth{};
+    Rect2D                             renderArea{};
+    uint32_t                           layerCount = 1;
+    ViewportOverlayStage::FrameInputs  overlay{};
+};
+
+/// Typed pass parameters for the Deferred viewport overlay graph pass.
+///
+/// The pass receives an explicit callback input instead of capturing the
+/// pipeline member directly inside the graph lambda.
+struct DeferredViewportOverlayPassParams
+{
+    RGTextureHandle                                     color{};
+    RGTextureHandle                                     depth{};
+    Rect2D                                              renderArea{};
+    uint32_t                                            layerCount = 1;
+    std::function<void(ICommandBuffer*, Extent2D)>      recordViewportOverlays{};
 };
 
 } // namespace ya

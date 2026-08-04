@@ -1151,8 +1151,10 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             .frame         = frameBinding.ssaoFrame,
         });
     }
+    ViewportOverlayStage::FrameInputs overlayInputs{};
     if (_overlayStage) {
         _overlayStage->setSkyboxFrameDescriptorSet(frameBinding.skyboxFrameDescriptorSet);
+        overlayInputs = _overlayStage->getFrameInputs();
     }
     _gBufferStage->prepare(stageCtx);
 
@@ -1451,36 +1453,48 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         });
     graphResources.passes.light = lightPass;
 
-    [[maybe_unused]] const auto skyboxPass = graph.addPass(
-            "Deferred Skybox",
-        [&](RGPassBuilder& passBuilder) {
-            passBuilder.uniformRead(graphResources.buffers.skyboxFrame, RGBufferRange{
+    DeferredSkyboxPassParams skyboxParams{
+        .frame = {
+            .handle = graphResources.buffers.skyboxFrame,
+            .range  = RGBufferRange{
                 .offset = frameBinding.skyboxFrame.offset,
                 .size   = frameBinding.skyboxFrame.size,
-            });
+            },
+        },
+        .viewportColor = graphResources.textures.viewportColor,
+        .depth         = graphResources.textures.gBufferDepth,
+        .renderArea    = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
+        .layerCount    = 1,
+        .skybox        = overlayInputs.skybox,
+    };
+
+    [[maybe_unused]] const auto skyboxPass = graph.addPass(
+        "Deferred Skybox",
+        [&](RGPassBuilder& passBuilder) {
+            passBuilder.uniformRead(skyboxParams.frame.handle, skyboxParams.frame.range);
             passBuilder.declareRaster({
-                .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
-                .layerCount = 1,
+                .renderArea = skyboxParams.renderArea,
+                .layerCount = skyboxParams.layerCount,
                 .colors = {{
-                    .color       = graphResources.textures.viewportColor,
+                    .color       = skyboxParams.viewportColor,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 }},
                 .depth = RGDepthAttachmentDesc{
-                    .depth       = graphResources.textures.gBufferDepth,
+                    .depth       = skyboxParams.depth,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 },
             });
         },
-        [&](RGRenderContext& rgCtx) {
+        [this, &stageCtx, &skyboxParams](RGRenderContext& rgCtx) {
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             rgCtx.beginDeclaredRasterRendering();
 
             {
-                _overlayStage->executeSkybox(stageCtx);
+                _overlayStage->executeSkybox(stageCtx, skyboxParams.skybox);
             }
 
             rgCtx.endRendering();
@@ -1497,67 +1511,87 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     }
     graphResources.textures.overlayInput = bloomComposite.isValid() ? bloomComposite : graphResources.textures.viewportColor;
 
+    DeferredSceneOverlayPassParams sceneOverlayParams{
+        .color      = graphResources.textures.overlayInput,
+        .depth      = graphResources.textures.gBufferDepth,
+        .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
+        .layerCount = 1,
+        .overlay    = overlayInputs,
+    };
+
     [[maybe_unused]] const auto overlayPass = graph.addPass(
         "Deferred Scene Overlay",
         [&](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
-                .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
-                .layerCount = 1,
+                .renderArea = sceneOverlayParams.renderArea,
+                .layerCount = sceneOverlayParams.layerCount,
                 .colors = {{
-                    .color       = graphResources.textures.overlayInput,
+                    .color       = sceneOverlayParams.color,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 }},
                 .depth = RGDepthAttachmentDesc{
-                    .depth       = graphResources.textures.gBufferDepth,
+                    .depth       = sceneOverlayParams.depth,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 },
             });
         },
-        [&](RGRenderContext& rgCtx) {
+        [this, &stageCtx, &sceneOverlayParams](RGRenderContext& rgCtx) {
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             rgCtx.beginDeclaredRasterRendering();
 
             {
                 YA_PERF_SCOPE(perf::sample::deferredOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
-                _overlayStage->executeOverlay(stageCtx);
+                _overlayStage->executeOverlay(stageCtx, sceneOverlayParams.overlay);
             }
 
             rgCtx.endRendering();
         });
     graphResources.passes.sceneOverlay = overlayPass;
 
+    DeferredViewportOverlayPassParams viewportOverlayParams{
+        .color      = graphResources.textures.overlayInput,
+        .depth      = graphResources.textures.gBufferDepth,
+        .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
+        .layerCount = 1,
+        .recordViewportOverlays = _lastFrameInput.recordViewportOverlays
+            ? [this](ICommandBuffer* overlayCmdBuf, Extent2D viewportExtent) {
+                  _lastFrameInput.recordViewportOverlays(overlayCmdBuf, viewportExtent, _lastTickCtx);
+              }
+            : std::function<void(ICommandBuffer*, Extent2D)>{},
+    };
+
     [[maybe_unused]] const auto viewportOverlayPass = graph.addPass(
         "Deferred Viewport Overlay",
         [&](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
-                .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
-                .layerCount = 1,
+                .renderArea = viewportOverlayParams.renderArea,
+                .layerCount = viewportOverlayParams.layerCount,
                 .colors = {{
-                    .color       = graphResources.textures.overlayInput,
+                    .color       = viewportOverlayParams.color,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 }},
                 .depth = RGDepthAttachmentDesc{
-                    .depth       = graphResources.textures.gBufferDepth,
+                    .depth       = viewportOverlayParams.depth,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 },
             });
         },
-        [&](RGRenderContext& rgCtx) {
+        [&viewportOverlayParams](RGRenderContext& rgCtx) {
             const auto rasterParams   = rgCtx.getRasterPassExecutionParams();
             const auto viewportExtent = rasterParams.getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
 
-            if (_lastFrameInput.recordViewportOverlays) {
+            if (viewportOverlayParams.recordViewportOverlays) {
                 YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
-                _lastFrameInput.recordViewportOverlays(&rgCtx.getCommandBuffer(), viewportExtent, _lastTickCtx);
+                viewportOverlayParams.recordViewportOverlays(&rgCtx.getCommandBuffer(), viewportExtent);
             }
 
             rgCtx.endRendering();

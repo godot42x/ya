@@ -227,6 +227,32 @@ TEST(DeferredPassParamsTest, SSAOAndLightDefaultsAreEmptyAndHandlesRemainFrameLo
     EXPECT_EQ(light.ssao->index, 9u);
 }
 
+TEST(DeferredPassParamsTest, SkyboxOverlayDefaultsAreEmptyAndCallbacksRemainExplicit)
+{
+    DeferredSkyboxPassParams skybox{};
+    EXPECT_FALSE(skybox.frame.handle.isValid());
+    EXPECT_FALSE(skybox.viewportColor.isValid());
+    EXPECT_FALSE(skybox.depth.isValid());
+    EXPECT_EQ(skybox.layerCount, 1u);
+    EXPECT_FALSE(skybox.skybox.bAvailable);
+    EXPECT_FALSE(skybox.skybox.frameDescriptorSet);
+    EXPECT_FALSE(skybox.skybox.descriptorSet);
+    EXPECT_EQ(skybox.skybox.mesh, nullptr);
+
+    DeferredSceneOverlayPassParams sceneOverlay{};
+    EXPECT_FALSE(sceneOverlay.color.isValid());
+    EXPECT_FALSE(sceneOverlay.depth.isValid());
+    EXPECT_EQ(sceneOverlay.layerCount, 1u);
+    EXPECT_TRUE(sceneOverlay.overlay.billboards.empty());
+    EXPECT_TRUE(sceneOverlay.overlay.directionGizmos.empty());
+
+    DeferredViewportOverlayPassParams viewportOverlay{};
+    EXPECT_FALSE(viewportOverlay.color.isValid());
+    EXPECT_FALSE(viewportOverlay.depth.isValid());
+    EXPECT_EQ(viewportOverlay.layerCount, 1u);
+    EXPECT_FALSE(viewportOverlay.recordViewportOverlays);
+}
+
 TEST(SSAOStageTest, BuildsFrameDataWithoutOwningGpuResources)
 {
     SSAOStage stage;
