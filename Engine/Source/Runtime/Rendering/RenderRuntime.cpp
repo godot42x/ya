@@ -44,7 +44,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     renderPresentationPass(input.pipeline.deltaTime,
                            input.recordBeforePresentationExtensions,
                            input.recordPresentationExtensions,
-                           input.automation.recordPresentationCapture,
+                           input.automation.appendPresentationCapture,
                            cmdBuf.get());
     {
         YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());

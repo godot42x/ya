@@ -151,16 +151,16 @@ void RenderRuntime::initDiagnostics(const AppDesc& appDesc)
 
 void RenderRuntime::initRenderBackend(const AppDesc& appDesc)
 {
-    const bool bNeedPresentationTransferSrc = appDesc.automation.screenshotPath.has_value() &&
-                                              appDesc.automation.screenshotTarget == EAutomationScreenshotTarget::Presentation;
-
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
         .swapchainCI = SwapchainCreateInfo{
             .imageFormat        = EFormat::R8G8B8A8_UNORM,
             .bVsync             = false,
             .minImageCount      = 3,
-            .bEnableTransferSrc = bNeedPresentationTransferSrc,
+            // Presentation readback must be available even when the screenshot
+            // is requested at runtime through the control port, not only when
+            // a startup automation screenshot path was configured.
+            .bEnableTransferSrc = true,
             .width              = static_cast<uint32_t>(appDesc.width),
             .height             = static_cast<uint32_t>(appDesc.height),
         },
@@ -324,4 +324,3 @@ void RenderRuntime::resetEnvironmentLightingPool()
 }
 
 } // namespace ya
-

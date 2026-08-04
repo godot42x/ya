@@ -503,32 +503,31 @@ void AppFrameLoop::tickRender(App& app, float dt)
             .screenSprites = &screenOverlaySprites,
         },
         .automation = {
-            .recordPresentationCapture = [&app](ICommandBuffer* cmdBuf)
+            .appendPresentationCapture = [&app](RenderGraph& graph, RGTextureHandle presentationOutput, Extent2D presentationExtent)
             {
-                auto* renderRuntime = app.getRenderServices().getRenderRuntime();
-                if (!renderRuntime) {
-                    return;
-                }
-
-                AppAutomation::recordPresentationCapture(app.getFrameIndex(),
-                                                         cmdBuf);
+                bool bAppended = AppAutomation::appendPresentationCapture(app.getFrameIndex(),
+                                                                          graph,
+                                                                          presentationOutput,
+                                                                          presentationExtent);
                 if (auto* automationControl = app.getAutomationControlService()) {
-                    automationControl->recordPresentationCapture(app.getFrameIndex(), cmdBuf);
+                    bAppended = automationControl->appendPresentationCapture(app.getFrameIndex(),
+                                                                             graph,
+                                                                             presentationOutput,
+                                                                             presentationExtent) || bAppended;
                 }
+                return bAppended;
             },
         },
         .recordBeforePresentationExtensions = [&app, dt](ICommandBuffer* commandBuffer)
         {
             if (commandBuffer) {
                 app.recordModuleBeforePresentation(*commandBuffer, dt);
-            }
-        },
+            } },
         .recordPresentationExtensions = [&app, dt](ICommandBuffer* commandBuffer)
         {
             if (commandBuffer) {
                 app.recordModulePresentation(*commandBuffer, dt);
-            }
-        },
+            } },
         .pipeline = pipelineFrame,
     });
 }

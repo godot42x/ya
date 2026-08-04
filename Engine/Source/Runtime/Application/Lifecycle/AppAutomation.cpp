@@ -652,11 +652,18 @@ void AppAutomation::applyRuntimeOverrides(App& app)
     }
 }
 
-void AppAutomation::recordPresentationCapture(uint64_t frameIndex,
-                                              ICommandBuffer* cmdBuf)
+bool AppAutomation::appendPresentationCapture(uint64_t frameIndex,
+                                              RenderGraph&    graph,
+                                              RGTextureHandle presentationOutput,
+                                              Extent2D        presentationExtent)
 {
     auto& runtimeState = getAutomationRuntimeState();
-    AppScreenshotCapture::recordPresentationCapture(frameIndex, runtimeState.screenshot, cmdBuf);
+    return AppScreenshotCapture::appendPresentationCapture(
+        frameIndex,
+        runtimeState.screenshot,
+        graph,
+        presentationOutput,
+        presentationExtent);
 }
 
 OffscreenJobQueueService AppAutomation::buildOffscreenJobQueueService(App& app)

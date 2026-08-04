@@ -81,7 +81,9 @@ struct ENGINE_API RenderRuntime
 
         struct AutomationInput
         {
-            std::function<void(ICommandBuffer*)> recordPresentationCapture;
+            /// Append a presentation readback copy to the presentation graph.
+            /// Called while the graph is still being built, before execute.
+            std::function<bool(RenderGraph&, RGTextureHandle, Extent2D)> appendPresentationCapture;
         } automation{};
 
         std::function<void(ICommandBuffer*)> recordBeforePresentationExtensions;
@@ -198,7 +200,7 @@ struct ENGINE_API RenderRuntime
     void                   renderPresentationPass(float deltaTime,
                                                   const std::function<void(ICommandBuffer*)>& recordBeforePresentationExtensions,
                                                   const std::function<void(ICommandBuffer*)>& recordPresentationExtensions,
-                                                  const std::function<void(ICommandBuffer*)>& recordPresentationCapture,
+                                                  const std::function<bool(RenderGraph&, RGTextureHandle, Extent2D)>& appendPresentationCapture,
                                                   ICommandBuffer* cmdBuf);
     void                   submitFrame(int32_t imageIndex, ICommandBuffer* cmdBuf);
 
