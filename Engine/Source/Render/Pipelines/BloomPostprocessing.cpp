@@ -283,35 +283,35 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
         : desc.sceneImage
             ? graph.importTexture(makeBloomImportedTextureDesc(*desc.sceneImage, "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal))
             : graph.importTexture(makeBloomImportedTextureDesc(*desc.sceneTexture, "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal));
-    const auto output = graph.createPersistentTexture(RGTextureDesc{
+    const auto output = graph.createTexture(RGTextureDesc{
          .label  = "Bloom.CompositeOutput",
          .format = BloomPostprocessing::BLOOM_FORMAT,
          .extent = Extent3D{desc.renderExtent.width, desc.renderExtent.height, 1},
          .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-    }, RGPersistentTextureKey{.value = "Bloom.CompositeOutput"});
+    });
     std::optional<RGTextureHandle> bloomExtract{};
     std::optional<RGTextureHandle> blurPing{};
     std::optional<RGTextureHandle> blurPong{};
 
     if (bBloomEnabled) {
-        bloomExtract = graph.createPersistentTexture(RGTextureDesc{
+        bloomExtract = graph.createTexture(RGTextureDesc{
             .label  = "Bloom.Extract",
             .format = BloomPostprocessing::BLOOM_FORMAT,
             .extent = Extent3D{desc.renderExtent.width, desc.renderExtent.height, 1},
             .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        }, RGPersistentTextureKey{.value = "Bloom.Extract"});
-        blurPing = graph.createPersistentTexture(RGTextureDesc{
+        });
+        blurPing = graph.createTexture(RGTextureDesc{
             .label  = "Bloom.BlurPing",
             .format = BloomPostprocessing::BLOOM_FORMAT,
             .extent = Extent3D{desc.renderExtent.width, desc.renderExtent.height, 1},
             .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        }, RGPersistentTextureKey{.value = "Bloom.BlurPing"});
-        blurPong = graph.createPersistentTexture(RGTextureDesc{
+        });
+        blurPong = graph.createTexture(RGTextureDesc{
             .label  = "Bloom.BlurPong",
             .format = BloomPostprocessing::BLOOM_FORMAT,
             .extent = Extent3D{desc.renderExtent.width, desc.renderExtent.height, 1},
             .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-        }, RGPersistentTextureKey{.value = "Bloom.BlurPong"});
+        });
     }
 
     _preparedGraphResources.output        = output;
