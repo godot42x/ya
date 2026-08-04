@@ -33,6 +33,7 @@ struct ForwardViewportStage : public IRenderStage
         IRender*                              render                               = nullptr;
         IRenderPass*                          renderPass                           = nullptr;
         PipelineRenderingInfo                pipelineRenderingInfo                = {};
+        stdptr<IDescriptorSetLayout>          skinningDSL;
         DescriptorSetHandle                  depthBufferShadowDS                  = nullptr;
         ShadowRuntimeState                   shadowState                          = {};
         std::function<uint64_t()>            getFrameIndex;
@@ -80,6 +81,7 @@ struct ForwardViewportStage : public IRenderStage
         Scene*                    activeScene             = nullptr;
         ResourceResolveSystem*    resourceResolveSystem   = nullptr;
         DescriptorSetHandle       sceneEnvironmentLightingDescriptorSet = nullptr;
+        DescriptorSetHandle       skinningDescriptorSet   = nullptr;
         SkyboxInput               skybox{};
         DebugDrawInput            debugDraw{};
     };
@@ -104,11 +106,9 @@ struct ForwardViewportStage : public IRenderStage
     std::function<DescriptorSetHandle(Scene*)> _getSceneSkyboxDescriptorSet;
     std::function<DescriptorSetHandle(Scene*)> _getSceneEnvironmentLightingDescriptorSet;
 
+    // Kept alive for graphics pipeline layouts; storage buffers, descriptor
+    // sets and capacity are owned by ForwardFrameResourceSet.
     stdptr<IDescriptorSetLayout> _skinningDSL;
-    stdptr<IDescriptorPool>      _skinningDSP;
-    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _skinningDS{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _skinningSSBO{};
-    uint32_t                                           _skinningCapacity = 0;
 
     // ═══════════════════════════════════════════════════════════════
     // IRenderStage interface
@@ -121,6 +121,9 @@ struct ForwardViewportStage : public IRenderStage
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
     void execute(const RenderStageContext& ctx) override;
+    /// Graph pass entry: explicit current-flight skinning binding. Does not
+    /// read stage members for per-flight resources (FG-701).
+    void execute(const RenderStageContext& ctx, DescriptorSetHandle skinningDS);
 
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setDepthBufferShadowDescriptorSet(DescriptorSetHandle depthBufferShadowDS);
