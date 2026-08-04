@@ -126,7 +126,6 @@ struct ViewportOverlayStage : public IRenderStage
     DebugSkinning                          _debugSkinning;
 
     std::function<DebugRenderSystem&()>        _getDebugRenderSystem;
-    FrameInputs                                _frameInputs{};
 
     // ── IRenderStage ─────────────────────────────────────────────
     ViewportOverlayStage() : IRenderStage("ViewportOverlay") {}
@@ -135,14 +134,17 @@ struct ViewportOverlayStage : public IRenderStage
     void init(IRender* render) override { init(render, nullptr); }
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
+    /// IRenderStage conformance; graph passes must use the parameterized
+    /// executeSkybox/executeOverlay overloads.
     void execute(const RenderStageContext& ctx) override;
-    void executeSkybox(const RenderStageContext& ctx);
     void executeSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput);
-    void executeOverlay(const RenderStageContext& ctx);
     void executeOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs);
+    /// Rebuild the billboard texture descriptor set from this frame's
+    /// overlay inputs. Must be called before the overlay pass begins command
+    /// recording (descriptor updates are not allowed inside a render pass).
+    void updateBillboardTextures(const FrameInputs& frameInputs);
     void refreshPipelineFormats(const DeferredAttachmentFormats& formats);
     void setServices(Services services);
-    void setFrameInputs(FrameInputs frameInputs);
     [[nodiscard]] SkyboxFrameUBO buildSkyboxFrameData(const RenderStageContext& ctx) const;
     [[nodiscard]] IGraphicsPipeline* getSkyboxPipeline() const { return _skyboxPipeline.get(); }
     [[nodiscard]] IGraphicsPipeline* getOverlayPipeline() const { return _overlayPipeline.get(); }
@@ -154,7 +156,6 @@ struct ViewportOverlayStage : public IRenderStage
     void initSkybox(stdptr<IDescriptorSetLayout> skyboxFrameDSL);
     void initOverlay();
     void initBillboards();
-    void updateBillboardTextures();
     uint32_t resolveBillboardTextureIndex(const TextureBinding& binding);
     void drawBillboards(const RenderStageContext& ctx, const FrameInputs& frameInputs);
     void drawSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput);
