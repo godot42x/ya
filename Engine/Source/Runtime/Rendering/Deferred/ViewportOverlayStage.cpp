@@ -369,23 +369,33 @@ void ViewportOverlayStage::execute(const RenderStageContext& ctx)
     YA_PROFILE_FUNCTION();
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    executeSkybox(ctx);
-    executeOverlay(ctx);
+    executeSkybox(ctx, _frameInputs.skybox);
+    executeOverlay(ctx, _frameInputs);
 }
 
 void ViewportOverlayStage::executeSkybox(const RenderStageContext& ctx)
 {
+    executeSkybox(ctx, _frameInputs.skybox);
+}
+
+void ViewportOverlayStage::executeSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput)
+{
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    drawSkybox(ctx);
+    drawSkybox(ctx, skyboxInput);
 }
 
 void ViewportOverlayStage::executeOverlay(const RenderStageContext& ctx)
 {
+    executeOverlay(ctx, _frameInputs);
+}
+
+void ViewportOverlayStage::executeOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs)
+{
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    drawBillboards(ctx);
-    drawOverlay(ctx);
+    drawBillboards(ctx, frameInputs);
+    drawOverlay(ctx, frameInputs);
 }
 
 uint32_t ViewportOverlayStage::resolveBillboardTextureIndex(const TextureBinding& binding)
@@ -442,9 +452,9 @@ void ViewportOverlayStage::updateBillboardTextures()
     });
 }
 
-void ViewportOverlayStage::drawBillboards(const RenderStageContext& ctx)
+void ViewportOverlayStage::drawBillboards(const RenderStageContext& ctx, const FrameInputs& frameInputs)
 {
-    if (_frameInputs.billboards.empty() || !_billboardPipeline || !_billboardPPL || !_billboardMesh) {
+    if (frameInputs.billboards.empty() || !_billboardPipeline || !_billboardPPL || !_billboardMesh) {
         return;
     }
 
@@ -468,7 +478,7 @@ void ViewportOverlayStage::drawBillboards(const RenderStageContext& ctx)
     cmdBuf->setScissor(0, 0, vpW, vpH);
     cmdBuf->bindDescriptorSets(_billboardPPL.get(), 0, {_billboardFrameDS[ctx.flightIndex], _billboardTextureDS});
 
-    for (const auto& billboard : _frameInputs.billboards) {
+    for (const auto& billboard : frameInputs.billboards) {
         BillboardPushConstant pc{};
         pc.worldCenter    = billboard.worldCenter;
         pc.worldDirection = billboard.worldDirection;
@@ -483,7 +493,7 @@ void ViewportOverlayStage::drawBillboards(const RenderStageContext& ctx)
     cmdBuf->debugEndLabel();
 }
 
-void ViewportOverlayStage::drawSkybox(const RenderStageContext& ctx)
+void ViewportOverlayStage::drawSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput)
 {
     auto* cmdBuf = ctx.cmdBuf;
     auto  vpW    = ctx.viewportExtent.width;
@@ -491,7 +501,7 @@ void ViewportOverlayStage::drawSkybox(const RenderStageContext& ctx)
     if (vpW == 0 || vpH == 0) return;
 
     // Check if skybox is available
-    if (!_frameInputs.skybox.bAvailable || !_frameInputs.skybox.mesh || !_frameInputs.skybox.frameDescriptorSet) return;
+    if (!skyboxInput.bAvailable || !skyboxInput.mesh || !skyboxInput.frameDescriptorSet) return;
 
     cmdBuf->debugBeginLabel("Skybox");
 
@@ -506,13 +516,13 @@ void ViewportOverlayStage::drawSkybox(const RenderStageContext& ctx)
     cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(vpW), viewportHeight, 0.0f, 1.0f);
     cmdBuf->setScissor(0, 0, vpW, vpH);
 
-    cmdBuf->bindDescriptorSets(_skyboxPPL.get(), 0, {_frameInputs.skybox.frameDescriptorSet, _frameInputs.skybox.descriptorSet});
-    _frameInputs.skybox.mesh->draw(cmdBuf);
+    cmdBuf->bindDescriptorSets(_skyboxPPL.get(), 0, {skyboxInput.frameDescriptorSet, skyboxInput.descriptorSet});
+    skyboxInput.mesh->draw(cmdBuf);
 
     cmdBuf->debugEndLabel();
 }
 
-void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
+void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs)
 {
     auto* cmdBuf = ctx.cmdBuf;
     auto  vpW    = ctx.viewportExtent.width;
@@ -538,7 +548,7 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
                              hasDebugSkinningDrawItem(skinnedBuckets.fallbackDrawItems) ||
                              hasDebugSkinningDrawItem(skinnedBuckets.pbrDrawItems));
 
-    const bool hasDirection = !_frameInputs.directionGizmos.empty();
+    const bool hasDirection = !frameInputs.directionGizmos.empty();
 
     if (!hasSimple && !hasDirection && !hasDebugSkinning) return;
 
@@ -589,7 +599,7 @@ void ViewportOverlayStage::drawOverlay(const RenderStageContext& ctx)
     if (hasDirection && (!_directionCone || !_directionCylinder)) return;
 
     _overlayPC.colorType = _defaultColorType;
-    for (const auto& gizmo : _frameInputs.directionGizmos) {
+    for (const auto& gizmo : frameInputs.directionGizmos) {
         _overlayPC.model = gizmo.coneModel;
         cmdBuf->pushConstants(_overlayPPL.get(), EShaderStage::Vertex, 0, sizeof(OverlayPushConstant), &_overlayPC);
         _directionCone->draw(cmdBuf);

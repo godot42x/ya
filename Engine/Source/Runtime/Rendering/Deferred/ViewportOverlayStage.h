@@ -137,10 +137,13 @@ struct ViewportOverlayStage : public IRenderStage
     void prepare(const RenderStageContext& ctx) override;
     void execute(const RenderStageContext& ctx) override;
     void executeSkybox(const RenderStageContext& ctx);
+    void executeSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput);
     void executeOverlay(const RenderStageContext& ctx);
+    void executeOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs);
     void refreshPipelineFormats(const DeferredAttachmentFormats& formats);
     void setServices(Services services);
     void setFrameInputs(FrameInputs frameInputs);
+    [[nodiscard]] const FrameInputs& getFrameInputs() const { return _frameInputs; }
     void setSkyboxFrameDescriptorSet(DescriptorSetHandle descriptorSet)
     {
         _frameInputs.skybox.frameDescriptorSet = descriptorSet;
@@ -158,9 +161,9 @@ struct ViewportOverlayStage : public IRenderStage
     void initBillboards();
     void updateBillboardTextures();
     uint32_t resolveBillboardTextureIndex(const TextureBinding& binding);
-    void drawBillboards(const RenderStageContext& ctx);
-    void drawSkybox(const RenderStageContext& ctx);
-    void drawOverlay(const RenderStageContext& ctx);
+    void drawBillboards(const RenderStageContext& ctx, const FrameInputs& frameInputs);
+    void drawSkybox(const RenderStageContext& ctx, const FrameInputs::SkyboxInput& skyboxInput);
+    void drawOverlay(const RenderStageContext& ctx, const FrameInputs& frameInputs);
 };
 
 } // namespace ya
