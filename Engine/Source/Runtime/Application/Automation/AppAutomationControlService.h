@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Render/Core/RenderGraph.h"
 #include "Runtime/Application/AppOptions.h"
 #include "Runtime/Application/Utility/AppScreenshotCapture.h"
 
@@ -44,7 +45,10 @@ class ENGINE_API AppAutomationControlService
                           std::shared_ptr<RenderImage> viewportImage,
                           std::shared_ptr<RenderImage> presentationImage,
                           uint64_t frameIndex);
-    void recordPresentationCapture(uint64_t frameIndex, ICommandBuffer* cmdBuf);
+    bool appendPresentationCapture(uint64_t frameIndex,
+                                   RenderGraph&    graph,
+                                   RGTextureHandle presentationOutput,
+                                   Extent2D        presentationExtent);
 
   private:
     struct ServerState;

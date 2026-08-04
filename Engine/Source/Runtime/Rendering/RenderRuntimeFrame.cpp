@@ -25,7 +25,11 @@ RGImportedTextureDesc makePresentationImportedTextureDesc(const RenderImage& ima
                                                           std::string_view   label,
                                                           EImageLayout::T    finalLayout)
 {
-    auto desc                     = makeImportedTextureDesc(image, label, finalLayout, EImageUsage::ColorAttachment);
+    auto desc                     = makeImportedTextureDesc(
+        image,
+        label,
+        finalLayout,
+        static_cast<EImageUsage::T>(EImageUsage::ColorAttachment | EImageUsage::TransferSrc));
     desc.importDesc.initialLayout = EImageLayout::PresentSrcKHR;
     return desc;
 }
@@ -195,7 +199,7 @@ void RenderRuntime::renderViewportPassOverlays(const RenderPipelineFrameContext&
 void RenderRuntime::renderPresentationPass(float                                       deltaTime,
                                            const std::function<void(ICommandBuffer*)>& recordBeforePresentationExtensions,
                                            const std::function<void(ICommandBuffer*)>& recordPresentationExtensions,
-                                           const std::function<void(ICommandBuffer*)>& recordPresentationCapture,
+                                           const std::function<bool(RenderGraph&, RGTextureHandle, Extent2D)>& appendPresentationCapture,
                                            ICommandBuffer*                             cmdBuf)
 {
     YA_PROFILE_FUNCTION();
@@ -276,10 +280,11 @@ void RenderRuntime::renderPresentationPass(float                                
             rgCtx.endRendering();
         });
 
-    [[maybe_unused]] const bool bExecuted = presentationExecutor->execute(graph, *cmdBuf);
-    if (recordPresentationCapture) {
-        recordPresentationCapture(cmdBuf);
+    if (appendPresentationCapture) {
+        appendPresentationCapture(graph, output, presentationExtent);
     }
+
+    [[maybe_unused]] const bool bExecuted = presentationExecutor->execute(graph, *cmdBuf);
 }
 
 void RenderRuntime::submitFrame(int32_t imageIndex, ICommandBuffer* cmdBuf)

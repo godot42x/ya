@@ -241,6 +241,30 @@ bool executeScreenshotCopyGraph(RenderGraphExecutor& executor,
     return executor.execute(graph, cmdBuf);
 }
 
+bool appendScreenshotCopyPass(RenderGraph&        graph,
+                              RGTextureHandle     src,
+                              const std::shared_ptr<IBuffer>& readbackBuffer,
+                              Extent2D            extent,
+                              std::string_view    passLabel)
+{
+    if (!src.isValid() || !readbackBuffer) {
+        return false;
+    }
+
+    const auto dst = graph.importBuffer(makeImportedReadbackBufferDesc(readbackBuffer));
+    [[maybe_unused]] const auto pass = graph.addPass(
+        std::string(passLabel),
+        [src, dst](RGPassBuilder& passBuilder) {
+            passBuilder.declareCopy();
+            passBuilder.transferSrc(src);
+            passBuilder.transferDst(dst);
+        },
+        [src, dst, extent](RGRenderContext& ctx) {
+            ctx.copyTextureToBuffer(src, dst, {makeScreenshotReadbackRegion(extent)});
+        });
+    return true;
+}
+
 bool writePngFromReadback(const AppScreenshotCaptureState& state)
 {
     if (!state.readbackBuffer || state.width == 0 || state.height == 0) {
@@ -394,11 +418,13 @@ bool AppScreenshotCapture::request(IRender*                        render,
     return true;
 }
 
-bool AppScreenshotCapture::recordPresentationCapture(uint64_t frameIndex,
+bool AppScreenshotCapture::appendPresentationCapture(uint64_t frameIndex,
                                                      AppScreenshotCaptureState& state,
-                                                     ICommandBuffer* cmdBuf)
+                                                     RenderGraph&               graph,
+                                                     RGTextureHandle            presentationOutput,
+                                                     Extent2D                   presentationExtent)
 {
-    if (!cmdBuf || !state.bPendingPresentationCapture || state.target != EAutomationScreenshotTarget::Presentation || !state.readbackBuffer) {
+    if (!state.bPendingPresentationCapture || state.target != EAutomationScreenshotTarget::Presentation || !state.readbackBuffer) {
         return false;
     }
 
@@ -409,28 +435,21 @@ bool AppScreenshotCapture::recordPresentationCapture(uint64_t frameIndex,
     }
 
     const auto& sourceRenderImage = state.presentationSourceImage;
-    if (!sourceRenderImage->getImageShared()) {
-        state.bFailed                     = true;
-        state.bPendingPresentationCapture = false;
-        return false;
-    }
-
     const Extent2D extent = sourceRenderImage->getExtent();
-    if (extent.width != state.width || extent.height != state.height || sourceRenderImage->getFormat() != state.sourceFormat) {
+    if (extent.width != state.width || extent.height != state.height ||
+        sourceRenderImage->getFormat() != state.sourceFormat ||
+        presentationExtent.width != extent.width || presentationExtent.height != extent.height) {
         YA_CORE_ERROR("Presentation screenshot source changed before capture recording");
         state.bFailed                     = true;
         state.bPendingPresentationCapture = false;
         return false;
     }
 
-    if (!state.copyExecutor ||
-        !executeScreenshotCopyGraph(*state.copyExecutor,
-                                    *cmdBuf,
-                                    *sourceRenderImage,
-                                    EImageLayout::PresentSrcKHR,
-                                    EImageLayout::PresentSrcKHR,
-                                    state.readbackBuffer,
-                                    "AutomationScreenshot.PresentationCopy")) {
+    if (!appendScreenshotCopyPass(graph,
+                                  presentationOutput,
+                                  state.readbackBuffer,
+                                  extent,
+                                  "AutomationScreenshot.PresentationCopy")) {
         state.bFailed                     = true;
         state.bPendingPresentationCapture = false;
         return false;

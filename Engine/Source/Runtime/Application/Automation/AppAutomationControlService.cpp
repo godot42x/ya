@@ -526,13 +526,21 @@ void AppAutomationControlService::onFrameCompleted(App&                         
     }
 }
 
-void AppAutomationControlService::recordPresentationCapture(uint64_t frameIndex, ICommandBuffer* cmdBuf)
+bool AppAutomationControlService::appendPresentationCapture(uint64_t frameIndex,
+                                                            RenderGraph&    graph,
+                                                            RGTextureHandle presentationOutput,
+                                                            Extent2D        presentationExtent)
 {
     if (!_pendingScreenshot) {
-        return;
+        return false;
     }
 
-    AppScreenshotCapture::recordPresentationCapture(frameIndex, _pendingScreenshot->state, cmdBuf);
+    return AppScreenshotCapture::appendPresentationCapture(
+        frameIndex,
+        _pendingScreenshot->state,
+        graph,
+        presentationOutput,
+        presentationExtent);
 }
 
 void AppAutomationControlService::handleCall(App& app, const std::shared_ptr<PendingCall>& call)

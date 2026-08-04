@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Render/Core/RenderGraph.h"
 #include "Render/RenderDefines.h"
 #include "Core/Api.h"
 
@@ -49,9 +50,13 @@ class ENGINE_API AppScreenshotCapture
                         AppScreenshotCaptureState& state,
                         const std::string& outputPath,
                         EAutomationScreenshotTarget target);
-    static bool recordPresentationCapture(uint64_t frameIndex,
+    /// Append a presentation readback copy pass to the live presentation
+    /// graph, instead of recording a standalone copy outside the graph.
+    static bool appendPresentationCapture(uint64_t frameIndex,
                                           AppScreenshotCaptureState& state,
-                                          ICommandBuffer* cmdBuf);
+                                          RenderGraph&               graph,
+                                          RGTextureHandle            presentationOutput,
+                                          Extent2D                   presentationExtent);
     static bool tryFinalize(uint64_t currentFrameIndex, AppScreenshotCaptureState& state);
     static void reset(AppScreenshotCaptureState& state);
 };

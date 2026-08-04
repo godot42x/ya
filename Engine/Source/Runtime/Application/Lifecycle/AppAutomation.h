@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Api.h"
+#include "Render/Core/RenderGraph.h"
 
 #include <cstdint>
 #include <functional>
@@ -43,8 +44,10 @@ class ENGINE_API AppAutomation
     static void applyRuntimeOverrides(App& app);
     static bool shouldDeferQuit(const App& app);
     static OffscreenJobQueueService buildOffscreenJobQueueService(App& app);
-    static void recordPresentationCapture(uint64_t frameIndex,
-                                          ICommandBuffer* cmdBuf);
+    static bool appendPresentationCapture(uint64_t frameIndex,
+                                          RenderGraph&    graph,
+                                          RGTextureHandle presentationOutput,
+                                          Extent2D        presentationExtent);
     static void onFrameCompleted(App& app, const AppAutomationFrameContext& frameContext);
 };
 
