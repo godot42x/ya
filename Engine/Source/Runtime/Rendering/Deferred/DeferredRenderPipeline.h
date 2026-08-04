@@ -154,6 +154,7 @@ struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
     // ── Frame state ───────────────────────────────────────────────────
     DeferredGBufferResources   _currentGBufferResources{};
     DeferredViewportResources  _currentViewportResources{};
+    ViewportOverlayStage::FrameInputs _currentOverlayFrameInputs{};
     FrameContext               _lastTickCtx{};
     RenderPipelineFrameContext _lastFrameInput{};
     ShadowSettings             _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);

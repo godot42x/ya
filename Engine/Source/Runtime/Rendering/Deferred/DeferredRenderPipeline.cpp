@@ -909,6 +909,7 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
     // GBufferStage no longer receives frame inputs here: its current-flight
     // binding travels with DeferredGBufferPassParams in the graph pass (FG-302).
 
+    _currentOverlayFrameInputs = {};
     if (_overlayStage) {
         ViewportOverlayStage::FrameInputs frameInputs{};
         frameInputs.skybox.frameDescriptorSet = _frameResources
@@ -970,6 +971,7 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
             }
         }
 
+        _currentOverlayFrameInputs = frameInputs;
         _overlayStage->setFrameInputs(std::move(frameInputs));
     }
 }
@@ -1150,11 +1152,6 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             .descriptorSet = frameBinding.ssaoFrameDescriptorSet,
             .frame         = frameBinding.ssaoFrame,
         });
-    }
-    ViewportOverlayStage::FrameInputs overlayInputs{};
-    if (_overlayStage) {
-        _overlayStage->setSkyboxFrameDescriptorSet(frameBinding.skyboxFrameDescriptorSet);
-        overlayInputs = _overlayStage->getFrameInputs();
     }
     _gBufferStage->prepare(stageCtx);
 
@@ -1447,7 +1444,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         .depth         = graphResources.textures.gBufferDepth,
         .renderArea    = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
         .layerCount    = 1,
-        .skybox        = overlayInputs.skybox,
+        .skybox        = _currentOverlayFrameInputs.skybox,
     };
 
     [[maybe_unused]] const auto skyboxPass = graph.addPass(
@@ -1498,7 +1495,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         .depth      = graphResources.textures.gBufferDepth,
         .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
         .layerCount = 1,
-        .overlay    = overlayInputs,
+        .overlay    = _currentOverlayFrameInputs,
     };
 
     [[maybe_unused]] const auto overlayPass = graph.addPass(
