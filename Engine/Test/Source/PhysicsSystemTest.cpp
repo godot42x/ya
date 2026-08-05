@@ -44,12 +44,11 @@ TEST(PhysicsSystemTest, BodiesResetWhenPlaySessionStops)
     authoringTc->setPosition({0.0f, 5.0f, 0.0f});
     sceneManager.activateScene(authoringScene);
 
-    bool bSimulationActive = false;
+    MulticastDelegate<void(AppState)> appStateEvents;
 
     PhysicsSystem system;
     system.setSceneManager(&sceneManager);
-    system.setActiveSceneProvider([&]() -> Scene* { return sceneManager.getActiveScene(); });
-    system.setSimulationActiveProvider([&]() -> bool { return bSimulationActive; });
+    system.setAppStateChangedSource(&appStateEvents);
     system.init();
 
     // --- Session 1 ---
@@ -57,7 +56,7 @@ TEST(PhysicsSystemTest, BodiesResetWhenPlaySessionStops)
     ASSERT_NE(playScene, nullptr);
     sceneManager.activateScene(playScene);
 
-    bSimulationActive = true;
+    appStateEvents.broadcast(AppState::Runtime);
     system.onUpdate(1.0f / 60.0f);
     auto* playTc = findFirstPhysicsTransform(*playScene);
     ASSERT_NE(playTc, nullptr);
@@ -70,7 +69,7 @@ TEST(PhysicsSystemTest, BodiesResetWhenPlaySessionStops)
     EXPECT_NEAR(authoringTc->getPosition().y, 5.0f, 0.001f); // authoring untouched
 
     // --- Stop session 1 (mirrors EditorPlaySession::end) ---
-    bSimulationActive = false;
+    appStateEvents.broadcast(AppState::Stopped);
     sceneManager.activateScene(authoringScene); // onSceneActivated(authoring) -> bodies dropped
     sceneManager.destroyScene(playScene);       // onSceneDestroy(play)
 
@@ -79,14 +78,14 @@ TEST(PhysicsSystemTest, BodiesResetWhenPlaySessionStops)
     ASSERT_NE(playScene2, nullptr);
     sceneManager.activateScene(playScene2);
 
-    bSimulationActive = true;
+    appStateEvents.broadcast(AppState::Runtime);
     system.onUpdate(1.0f / 60.0f);
     auto* playTc2 = findFirstPhysicsTransform(*playScene2);
     ASSERT_NE(playTc2, nullptr);
     EXPECT_NEAR(playTc2->getPosition().x, 0.0f, 0.01f);
     EXPECT_NEAR(playTc2->getPosition().y, 5.0f, 0.01f); // NOT the previous session's y
 
-    bSimulationActive = false;
+    appStateEvents.broadcast(AppState::Stopped);
     sceneManager.activateScene(authoringScene);
     sceneManager.destroyScene(playScene2);
 
