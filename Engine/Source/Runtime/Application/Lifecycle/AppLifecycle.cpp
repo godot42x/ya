@@ -78,8 +78,15 @@ void configureBundledVulkanRuntimeEnv()
         return;
     }
 
-    const auto sdkRoot = executableDir / "Engine" / "ThirdParty" / "VulkanSDK";
-    if (!std::filesystem::is_directory(sdkRoot)) {
+    std::filesystem::path sdkRoot;
+    for (auto current = executableDir; !current.empty(); current = current.parent_path()) {
+        const auto candidate = current / "Engine" / "ThirdParty" / "VulkanSDK";
+        if (std::filesystem::is_directory(candidate)) {
+            sdkRoot = candidate;
+            break;
+        }
+    }
+    if (sdkRoot.empty()) {
         return;
     }
 
@@ -105,8 +112,10 @@ void configureBundledVulkanRuntimeEnv()
     const auto icdJson = selectedSdkDir / "share" / "vulkan" / "icd.d" / "MoltenVK_icd.json";
     const auto layerDir = selectedSdkDir / "share" / "vulkan" / "explicit_layer.d";
     const auto sdkPath = selectedSdkDir.string();
+    const auto libPath = (selectedSdkDir / "lib").string();
 
     setenv("VULKAN_SDK", sdkPath.c_str(), 0);
+    setenv("DYLD_LIBRARY_PATH", libPath.c_str(), 0);
     setenv("VK_ICD_FILENAMES", icdJson.string().c_str(), 0);
     if (std::filesystem::is_directory(layerDir)) {
         setenv("VK_LAYER_PATH", layerDir.string().c_str(), 0);

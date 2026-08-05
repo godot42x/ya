@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import platform
 import subprocess
 import sys
@@ -39,12 +40,29 @@ def _fail_command(command_name: str, message: str):
 
 
 def _run(cmd: list[str], *, cwd: Path = WORKSPACE_ROOT) -> None:
-    subprocess.run(cmd, cwd=cwd, check=True)
+    subprocess.run(cmd, cwd=cwd, check=True, env=_build_subprocess_env())
 
 
 def _capture(cmd: list[str], *, cwd: Path = WORKSPACE_ROOT) -> str:
-    result = subprocess.run(cmd, cwd=cwd, check=True, text=True, capture_output=True)
+    result = subprocess.run(cmd, cwd=cwd, check=True, text=True, capture_output=True, env=_build_subprocess_env())
     return result.stdout
+
+
+def _build_subprocess_env() -> dict[str, str]:
+    env = dict(os.environ)
+    if platform.system() == "Darwin":
+        sdk_lib_dirs = sorted(
+            {
+                str(path)
+                for path in (WORKSPACE_ROOT / "Engine" / "ThirdParty" / "VulkanSDK").glob("*/macOS/lib")
+                if path.is_dir()
+            }
+        )
+        if sdk_lib_dirs:
+            existing = env.get("DYLD_LIBRARY_PATH", "")
+            merged = sdk_lib_dirs + ([existing] if existing else [])
+            env["DYLD_LIBRARY_PATH"] = ":".join(merged)
+    return env
 
 
 def _normalize_engine_args(engine_args: list[str]) -> list[str]:
