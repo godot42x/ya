@@ -5,7 +5,7 @@
 #include "Core/Profiling/PerfState.h"
 #include "Resource/DeferredDeletionQueue.h"
 
-#include "Render/Core/RenderGraphImportUtils.h"
+#include "Render/Core/Graph/RenderGraphImportUtils.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
 

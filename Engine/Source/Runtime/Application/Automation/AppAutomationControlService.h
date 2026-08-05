@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Render/Core/RenderGraph.h"
+#include "Render/Core/Graph/RenderGraph.h"
 #include "Runtime/Application/AppOptions.h"
 #include "Runtime/Application/Utility/AppScreenshotCapture.h"
 

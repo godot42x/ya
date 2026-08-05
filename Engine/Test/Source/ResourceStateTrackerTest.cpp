@@ -1,5 +1,5 @@
 #include "Render/Core/Image.h"
-#include "Render/Core/ResourceStateTracker.h"
+#include "Render/Core/Graph/ResourceStateTracker.h"
 #include "Platform/Render/Vulkan/VulkanUtils.h"
 
 #include <gtest/gtest.h>

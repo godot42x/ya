@@ -6,7 +6,7 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/FrameBuffer.h"
 #include "Render/Core/Pipeline.h"
-#include "Render/Core/RenderGraph.h"
+#include "Render/Core/Graph/RenderGraph.h"
 #include "Render/Stage/IRenderStage.h"
 
 #include "DeferredRender.LightPass.slang.h"

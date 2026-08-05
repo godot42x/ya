@@ -1,9 +1,9 @@
 #pragma once
 
 #include "RenderGraph.h"
-#include "ImageResourceRef.h"
-#include "RenderImage.h"
-#include "Texture.h"
+#include "Render/Core/ImageResourceRef.h"
+#include "Render/Core/RenderImage.h"
+#include "Render/Core/Texture.h"
 #include "Core/Api.h"
 
 namespace ya

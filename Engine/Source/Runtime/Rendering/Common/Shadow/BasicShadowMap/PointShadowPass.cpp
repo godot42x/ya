@@ -1,6 +1,6 @@
 #include "PointShadowPass.h"
 
-#include "Render/Core/RenderGraphImportUtils.h"
+#include "Render/Core/Graph/RenderGraphImportUtils.h"
 
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Profiling/PerfKeys.h"
