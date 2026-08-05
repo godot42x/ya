@@ -1186,6 +1186,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     _frameGraphOrchestrator.build(
         DeferredFrameGraphOrchestrator::BuildDependencies{
             .shadowStage      = _shadowStage.get(),
+            .gBufferStage     = _gBufferStage.get(),
             .lightStage       = _lightStage.get(),
             .overlayStage     = _overlayStage.get(),
             .postProcessStage = &_postProcessStage,
