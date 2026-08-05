@@ -57,9 +57,9 @@ void drawDebugSkinningItems(DebugSkinning&                     debugSkinning,
 
 } // namespace
 
-void ViewportOverlayStage::setServices(Services services)
+void ViewportOverlayStage::setDebugRenderSystem(DebugRenderSystem* debugRenderSystem)
 {
-    _getDebugRenderSystem        = std::move(services.getDebugRenderSystem);
+    _debugRenderSystem = debugRenderSystem;
 }
 
 void ViewportOverlayStage::refreshPipelineFormats(const DeferredAttachmentFormats& formats)
@@ -110,12 +110,10 @@ void ViewportOverlayStage::init(IRender* render, stdptr<IDescriptorSetLayout> sk
     YA_CORE_ASSERT(_billboardMesh != nullptr, "ViewportOverlayStage requires billboard quad mesh");
     YA_CORE_ASSERT(_directionCone != nullptr, "ViewportOverlayStage requires direction cone mesh");
     YA_CORE_ASSERT(_directionCylinder != nullptr, "ViewportOverlayStage requires direction cylinder mesh");
+    YA_CORE_ASSERT(_debugRenderSystem != nullptr, "ViewportOverlayStage requires debug render system instance");
     initSkybox(std::move(skyboxFrameDSL));
     initBillboards();
     initOverlay();
-    YA_CORE_ASSERT(_getDebugRenderSystem, "ViewportOverlayStage requires debug render system service");
-    _debugRenderSystem = &_getDebugRenderSystem();
-    YA_CORE_ASSERT(_debugRenderSystem != nullptr, "ViewportOverlayStage requires debug render system instance");
     _debugRenderSystem->init(_render);
     _debugRenderSystem->setReverseViewportY(bReverseViewportY);
     _debugSkinning.init(_render);
@@ -310,7 +308,6 @@ void ViewportOverlayStage::destroy()
     _directionCylinder = nullptr;
     _debugRenderSystem = nullptr;
     _debugSkinning.destroy();
-    _getDebugRenderSystem        = {};
     _render = nullptr;
 }
 
