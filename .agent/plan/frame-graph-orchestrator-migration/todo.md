@@ -14,9 +14,9 @@
 
 - 架构主线仍按本文件推进；P3/P4 已全部落地，P5 的 FG-501~FG-503 已提交，
   FG-504 调查已完成（plan-only），P6 的 FG-601/FG-603 已提交、FG-602 调查已完成（plan-only），
-  P7 的 FG-701~FG-705 已完成（skinning + frame/light + 全 viewport pass 独立
-  graph pass + postprocess/export 收口），下一实现任务为 FG-706（Forward
-  FrameGraphOrchestrator 与 executePasses 删除）。
+  P7 的 FG-701~FG-706 已完成（skinning + frame/light + 全 viewport pass 独立
+  graph pass + postprocess/export 收口 + ForwardFrameGraphOrchestrator），
+  下一实现任务为 FG-707（Forward graph structure tests 和 pipeline switch matrix）。
 - control-port 真实 `pipeline switch` smoke 暴露的 shadow sampled-layout/subresource tracking
   回归已修复并完成回归；`FG-002` 仍需补齐正式的截图/hash 基线记录，但不再阻塞 `FG-304`。
 
@@ -317,7 +317,7 @@
   - 依赖：FG-702、FG-703、FG-704
   - 验收：复用 common postprocess append contract；viewport/debug output 由 execution result 导出
 
-- [ ] `FG-706` 新建 ForwardFrameGraphOrchestrator 并删除 executePasses 固定顺序
+- [x] `FG-706` 新建 ForwardFrameGraphOrchestrator 并删除 executePasses 固定顺序
   - 依赖：FG-702、FG-703、FG-704、FG-705
   - 验收：顶层可读完整 Forward 流程；一个 world-frame executor；删除 dirty refresh compatibility path
   - 提交：`[runtime/forward] expose top-level frame graph orchestration`

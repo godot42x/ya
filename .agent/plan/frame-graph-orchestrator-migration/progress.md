@@ -4,8 +4,34 @@
 
 - 计划建立日期：2026-07-18
 - 当前阶段：P7 Forward 全量迁移
-  - 当前执行任务：FG-706（ForwardFrameGraphOrchestrator 与 executePasses 删除）
-  - 下一架构任务：FG-706
+  - 当前执行任务：FG-707（Forward graph structure tests 和 pipeline switch matrix）
+  - 下一架构任务：FG-707
+
+### 2026-08-05：FG-706 完成
+
+- 实现：
+  - 新增 `ForwardFrameGraphOrchestrator`（h/cpp），Forward 顶层图构建整体从
+    `executeViewportPassGraph` 迁出：shadow subgraph、Skybox/PBR/Phong/Unlit/
+    Simple/Direction/Debug/Viewport Overlay 八个 viewport pass、bloom/finalize
+    postprocess 全部由 orchestrator 按固定顺序构建。
+  - `executeViewportPassGraph` 缩为薄封装：构建 direction gizmo 快照 -> 组装
+    BuildDependencies/BuildInputs -> orchestrator.build -> executor
+    prepare/execute -> 按 `PostProcessingStage::kOutputExportName` 发布
+    `_currentPostprocessOutput`。
+  - 新增 `describeTopology()`（与 DeferredFrameGraphOrchestrator 同构），
+    为 FG-707 结构测试提供 pass order / dependency 描述。
+  - 一个 world-frame executor：Forward 帧链只有 `_graphExecutor` 一个执行器；
+    `executePasses` 固定顺序此前已在 FG-702 删除，本任务确认无残留。
+- 未做：
+  - `applyPendingResourceRefreshes()`（resize / RT format / shadow refresh）
+    按 2026-07-16 旧计划复核结论保留——它是真实资源刷新 orchestration，
+    不是 compat 外壳。
+  - `ForwardViewportStage::execute(ctx)` conformance stub 保留（IRenderStage
+    纯虚要求），与 Deferred 各 stage 的 stub 语义一致。
+- 测试：
+  - `xmake b ya-engine` / `xmake b ya-editor` 通过。
+  - 定向单测 103 tests passed。
+  - GUI smoke 仍受无窗口会话限制，待有 GUI 环境补跑。
 
 ### 2026-08-05：FG-705 完成
 
