@@ -68,6 +68,28 @@ class DrawCandidateView
     std::span<const value_type> _candidates{};
 };
 
+/// Backend-neutral draw grouping metadata.
+///
+/// This is intentionally not an indirect command mirror. The graph/draw
+/// consumer still owns command encoding, while the packet describes the
+/// candidate range and the bindings that make the range homogeneous.
+struct DrawPacket
+{
+    DrawCandidateView candidates{};
+    Mesh*             mesh            = nullptr;
+    Material*         material        = nullptr;
+    uint32_t          materialIndex   = 0;
+    uint32_t          firstInstance   = 0;
+    uint32_t          instanceCount   = 0;
+    float             sortKey         = 0.0f;
+    bool              bSkinned        = false;
+
+    [[nodiscard]] bool isValid() const
+    {
+        return mesh != nullptr && !candidates.empty() && instanceCount > 0;
+    }
+};
+
 struct RenderShadingDrawBuckets
 {
     std::vector<RenderDrawItem> pbrDrawItems;
