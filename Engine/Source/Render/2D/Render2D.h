@@ -230,9 +230,71 @@ struct ENGINE_API FQuadRender
                                   const glm::vec2& uvScale);
 };
 
+/**
+ * @brief FLineRender - World-space debug line rendering used by Render2D.
+ *
+ * A minimal line-list pipeline sharing the camera view-projection convention
+ * of the world-space sprite pipeline. Used for debug overlays such as
+ * physics collision boxes.
+ */
+struct ENGINE_API FLineRender
+{
+    struct Vertex
+    {
+        glm::vec3 pos;
+        glm::vec4 color;
+    };
+
+    static constexpr size_t MaxVertexCount = 8192; // 4096 line segments
+
+    using FrameUBO = FQuadRender::FrameUBO;
+
+    IRender* _render = nullptr;
+
+    PipelineLayoutDesc _pipelineDesc = PipelineLayoutDesc{
+        .pushConstants        = {},
+        .descriptorSetLayouts = {
+            DescriptorSetLayoutDesc{
+                .label    = "Frame_UBO",
+                .set      = 0,
+                .bindings = {
+                    DescriptorSetLayoutBinding{
+                        .binding         = 0,
+                        .descriptorType  = EPipelineDescriptorType::UniformBuffer,
+                        .descriptorCount = 1,
+                        .stageFlags      = EShaderStage::Vertex,
+                    },
+                },
+            },
+        },
+    };
+
+    std::shared_ptr<IDescriptorPool>   _descriptorPool;
+    std::shared_ptr<IDescriptorSetLayout> _frameUboDSL;
+    DescriptorSetHandle                _frameUboDS;
+    std::shared_ptr<IBuffer>           _frameUBOBuffer;
+    std::shared_ptr<IPipelineLayout>   _pipelineLayout;
+    std::shared_ptr<IGraphicsPipeline> _pipeline;
+
+    std::shared_ptr<IBuffer> _vertexBuffer;
+    Vertex*                  vertexPtr     = nullptr;
+    Vertex*                  vertexPtrHead = nullptr;
+    uint32_t                 vertexCount   = 0;
+
+    void init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat);
+    void destroy();
+    void begin();
+    void flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj);
+
+    void addLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color);
+    void addWireBox(const glm::mat4& model, const glm::vec3& halfExtent, const glm::vec4& color);
+    void addWireSphere(const glm::vec3& center, float radius, const glm::vec4& color);
+};
+
 struct ENGINE_API Render2D
 {
     static FQuadRender*  quadData;
+    static FLineRender*  lineData;
     static FRender2dData data;
 
     Render2D()          = default;
@@ -245,13 +307,7 @@ struct ENGINE_API Render2D
     static void onRender();
 
     static void begin(const FRender2dContext& ctx);
-    static void end()
-    {
-        quadData->end();
-        data.curCmdBuf    = nullptr;
-        data.windowWidth  = 0;
-        data.windowHeight = 0;
-    }
+    static void end();
 
     static void makeSprite(const glm::vec3& position,
                            const glm::vec2& size,
@@ -278,6 +334,27 @@ struct ENGINE_API Render2D
                                 const glm::vec2& uvScale = {1.0f, 1.0f})
     {
         quadData->drawWorldTexture(worldCenter, worldDirection, worldSize, texture, tint, uvScale);
+    }
+
+    static void makeWorldLine(const glm::vec3& from,
+                              const glm::vec3& to,
+                              const glm::vec4& color = {1.0f, 1.0f, 1.0f, 1.0f})
+    {
+        lineData->addLine(from, to, color);
+    }
+
+    static void makeWireBox(const glm::mat4& model,
+                            const glm::vec3& halfExtent,
+                            const glm::vec4& color = {0.2f, 0.9f, 0.3f, 1.0f})
+    {
+        lineData->addWireBox(model, halfExtent, color);
+    }
+
+    static void makeWireSphere(const glm::vec3& center,
+                               float            radius,
+                               const glm::vec4& color = {0.3f, 0.6f, 1.0f, 1.0f})
+    {
+        lineData->addWireSphere(center, radius, color);
     }
 
     static void makeText(const std::string& text, const glm::vec3& position, const glm::vec4& color, Font* font)
