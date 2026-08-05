@@ -10,6 +10,30 @@
 namespace ya
 {
 
+// ═══════════════════════════════════════════════════════════════════════
+// Resource spec / replacement contract (FG-801)
+//
+// * All public creation specs (BufferCreateInfo, ImageCreateInfo,
+//   ImageViewCreateInfo, SamplerDesc, ImportedImageDesc) are immutable and
+//   backend-agnostic: no Vulkan/GL types leak into them.
+// * Spec comparison is the single source for "does this resource need
+//   replacement": isSameBufferCreateInfo / isSameImageCreateInfo /
+//   isSameImageViewCreateInfo / SamplerDesc::operator== /
+//   isSameImportedImageDesc.
+// * Replacement always creates a new backend object and retires the old
+//   owner through a completion-safe queue (e.g. DeferredDeletionQueue).
+//   Backend resources never resize/mutate in place.
+//
+// Compat adapters with explicit deletion points:
+// * Texture::createRenderTexture / Texture::getResourceFactory — deleted by
+//   FG-803/FG-804 (texture upload service + factory removal).
+// * FrameBuffer legacy Texture-backed views — deleted with the texture
+//   attachment path (FG-804).
+// * RenderGraphExecutor::getRegistry() — kept only for graph-internal sync
+//   and low-level tests; graph-external owner escape removed by FG-105,
+//   final deletion tracked by FG-901.
+// ═══════════════════════════════════════════════════════════════════════
+
 struct ImageViewCreateInfo
 {
     std::string       label;

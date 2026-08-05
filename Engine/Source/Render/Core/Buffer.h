@@ -54,6 +54,21 @@ struct BufferCreateInfo
     EMemoryUsage          memoryUsage = EMemoryUsage::Auto;
 };
 
+/// Immutable buffer creation spec.
+///
+/// `isSameBufferCreateInfo` compares the resource identity/spec only: label,
+/// usage, size and memory class. The transient `data` upload pointer is
+/// deliberately excluded — it is a creation-time hint, not part of the
+/// persistent spec. Replacement must create a new IBuffer (and retire the old
+/// one through a completion-safe owner), never resize an existing object.
+inline bool isSameBufferCreateInfo(const BufferCreateInfo& lhs, const BufferCreateInfo& rhs)
+{
+    return lhs.label == rhs.label &&
+           lhs.usage == rhs.usage &&
+           lhs.size == rhs.size &&
+           lhs.memoryUsage == rhs.memoryUsage;
+}
+
 
 struct BufferHandleTag
 {};
