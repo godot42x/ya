@@ -18,8 +18,10 @@ class RenderGraphResourceRegistry
     {
         std::shared_ptr<RenderImage> resource;
         RGTextureDesc                desc{};
+        RGTextureDesc                allocationDesc{};
         std::optional<RGPersistentTextureKey> persistentKey{};
         std::optional<RGImportedTextureDesc> imported{};
+        bool                         pooledTransient = false;
     };
 
     struct OwnedBufferEntry
@@ -39,6 +41,7 @@ class RenderGraphResourceRegistry
     IRenderResourceFactory& _factory;
     std::unordered_map<RGTextureHandle, std::shared_ptr<TextureEntry>> _textures;
     std::unordered_map<std::string, std::shared_ptr<TextureEntry>> _persistentTextures;
+    std::vector<std::shared_ptr<TextureEntry>> _transientTexturePool;
     std::unordered_map<RGBufferHandle, std::shared_ptr<OwnedBufferEntry>> _ownedBuffers;
     std::unordered_map<std::string, std::shared_ptr<OwnedBufferEntry>> _persistentOwnedBuffers;
     std::vector<std::shared_ptr<OwnedBufferEntry>> _transientBufferPool;
@@ -55,6 +58,10 @@ class RenderGraphResourceRegistry
     static void releaseTextureBinding(std::shared_ptr<TextureEntry>& entry);
     static void releaseOwnedBufferBinding(std::shared_ptr<OwnedBufferEntry>& entry);
     static bool canReuseTransientSlot(const OwnedBufferEntry& entry, const RGTransientBufferSlotPlan& slot);
+    static bool canReuseTransientTexture(const TextureEntry& entry, const RGTextureDesc& desc);
+    std::shared_ptr<TextureEntry> acquireTransientTexture(
+        const RGTextureDesc& desc,
+        std::unordered_set<TextureEntry*>& usedPoolEntries);
     std::shared_ptr<OwnedBufferEntry> acquireTransientSlot(
         const RGTransientBufferSlotPlan& slot,
         std::unordered_set<OwnedBufferEntry*>& usedPoolEntries);
