@@ -62,6 +62,7 @@ struct EditorLayer
     bool bFullscreen     = true;
     bool bPadding        = true;
     bool bShowDemoWindow = false;
+    bool bShowRenderGraphWindow = false;
     // bool bShowSettingsWindow = true;
     // bool bShowRenderStats    = true;
 
@@ -280,6 +281,7 @@ struct EditorLayer
     void toolbar();
     void projectBrowserWindow();
     void runtimeToolsWindow();
+    void renderGraphWindow();
     void statsWindow();
     void renderAuxiliaryUi();
     // void settingsWindow();
@@ -330,4 +332,3 @@ struct EditorLayer
 };
 
 } // namespace ya
-

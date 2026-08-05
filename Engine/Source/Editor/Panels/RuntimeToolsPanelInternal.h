@@ -64,6 +64,8 @@ inline void renderPerfTree(const char* label, float valueMs, Fn&& body)
 }
 
 void renderPerfLeaf(const char* label, float valueMs, float parentMs = -1.0f);
+void renderRenderGraphTopology(const RGTopologyDescription& topology);
+void renderRenderGraphWindowContent(App& app, bool* pOpen);
 void renderFrameStatsContent(const App& app, float dt);
 void renderGraphicsPipelineInspector(const char* label, IGraphicsPipeline* pipeline);
 void renderSessionContent(App& app);
