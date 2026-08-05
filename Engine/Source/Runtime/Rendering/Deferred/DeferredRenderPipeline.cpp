@@ -1211,9 +1211,11 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
     RGCompiledGraph compiled{};
     RenderGraphExecutionResult result;
     if (!_graphExecutor->prepare(graph, compiled, &result)) {
+        _lastFrameGraphTopology = {};
         clearPublishedGraphOutputs();
         return;
     }
+    _lastFrameGraphTopology = graph.describeCompiledTopology(compiled);
 
     publishGraphExecutionResult(result, graphResources);
 
@@ -1231,6 +1233,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
 
     [[maybe_unused]] const bool bExecuted = _graphExecutor->executeCompiled(graph, compiled, *frame.cmdBuf);
     if (!bExecuted) {
+        _lastFrameGraphTopology = {};
         clearPublishedGraphOutputs();
         return;
     }

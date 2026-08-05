@@ -746,7 +746,11 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
     RenderGraphExecutionResult result;
     const bool bExecuted = _graphExecutor->execute(graph, *frame.cmdBuf, &compiled, &result);
     if (bExecuted) {
+        _lastFrameGraphTopology = graph.describeCompiledTopology(compiled);
         _currentPostprocessOutput = result.getExportedTextureShared(PostProcessingStage::kOutputExportName);
+    }
+    else {
+        _lastFrameGraphTopology = {};
     }
     return bExecuted;
 }
