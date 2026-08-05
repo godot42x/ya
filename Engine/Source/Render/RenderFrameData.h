@@ -90,6 +90,51 @@ struct DrawPacket
     }
 };
 
+/// Group an already deterministic candidate range into contiguous packets.
+///
+/// The extractor currently sorts opaque candidates by material and mesh. This
+/// helper preserves that order and only groups adjacent candidates with the
+/// same binding identity; it never reorders or owns the candidate snapshot.
+[[nodiscard]] inline std::vector<DrawPacket> buildDrawPackets(DrawCandidateView candidates,
+                                                               bool               bSkinned)
+{
+    std::vector<DrawPacket> packets;
+    if (candidates.empty()) {
+        return packets;
+    }
+
+    size_t groupBegin = 0;
+    while (groupBegin < candidates.size()) {
+        const auto& first = candidates[groupBegin];
+        size_t      groupEnd = groupBegin + 1;
+        while (groupEnd < candidates.size()) {
+            const auto& current = candidates[groupEnd];
+            if (current.mesh != first.mesh ||
+                current.material != first.material ||
+                current.materialIndex != first.materialIndex) {
+                break;
+            }
+            ++groupEnd;
+        }
+
+        const auto group = DrawCandidateView{
+            std::span<const RenderDrawItem>(candidates.data() + groupBegin, groupEnd - groupBegin)};
+        packets.push_back(DrawPacket{
+            .candidates    = group,
+            .mesh          = first.mesh,
+            .material      = first.material,
+            .materialIndex = first.materialIndex,
+            .firstInstance = static_cast<uint32_t>(groupBegin),
+            .instanceCount = static_cast<uint32_t>(groupEnd - groupBegin),
+            .sortKey       = first.sortKey,
+            .bSkinned      = bSkinned,
+        });
+        groupBegin = groupEnd;
+    }
+
+    return packets;
+}
+
 struct RenderShadingDrawBuckets
 {
     std::vector<RenderDrawItem> pbrDrawItems;

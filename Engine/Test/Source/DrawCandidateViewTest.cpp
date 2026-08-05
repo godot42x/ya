@@ -57,6 +57,37 @@ TEST(DrawCandidateViewTest, DrawPacketCarriesGroupingContractWithoutOwningCandid
     EXPECT_TRUE(packet.bSkinned);
 }
 
+TEST(DrawCandidateViewTest, DrawPacketGroupingPreservesSortedOrder)
+{
+    auto* meshA = reinterpret_cast<Mesh*>(static_cast<uintptr_t>(1));
+    auto* meshB = reinterpret_cast<Mesh*>(static_cast<uintptr_t>(2));
+    auto* matA  = reinterpret_cast<Material*>(static_cast<uintptr_t>(3));
+    auto* matB  = reinterpret_cast<Material*>(static_cast<uintptr_t>(4));
+
+    std::vector<RenderDrawItem> candidates(4);
+    candidates[0] = RenderDrawItem{.mesh = meshA, .material = matA, .materialIndex = 1, .sortKey = 1.0f};
+    candidates[1] = RenderDrawItem{.mesh = meshA, .material = matA, .materialIndex = 1, .sortKey = 2.0f};
+    candidates[2] = RenderDrawItem{.mesh = meshB, .material = matB, .materialIndex = 2, .sortKey = 3.0f};
+    candidates[3] = RenderDrawItem{.mesh = meshA, .material = matA, .materialIndex = 1, .sortKey = 4.0f};
+
+    const auto packets = buildDrawPackets(
+        DrawCandidateView{std::span<const RenderDrawItem>(candidates)},
+        false);
+
+    ASSERT_EQ(packets.size(), 3u);
+    EXPECT_EQ(packets[0].candidates.size(), 2u);
+    EXPECT_EQ(packets[0].firstInstance, 0u);
+    EXPECT_EQ(packets[0].instanceCount, 2u);
+    EXPECT_EQ(packets[0].mesh, meshA);
+    EXPECT_EQ(packets[1].candidates.size(), 1u);
+    EXPECT_EQ(packets[1].firstInstance, 2u);
+    EXPECT_EQ(packets[1].mesh, meshB);
+    EXPECT_EQ(packets[2].candidates.size(), 1u);
+    EXPECT_EQ(packets[2].firstInstance, 3u);
+    EXPECT_EQ(packets[2].mesh, meshA);
+    EXPECT_FALSE(packets[0].bSkinned);
+}
+
 static_assert(std::is_same_v<decltype(std::declval<DrawCandidateView>()[0]),
                              const RenderDrawItem&>);
 

@@ -548,36 +548,38 @@ void GBufferStage::drawPBR(const RenderStageContext& ctx, const FrameInputs& inp
     auto* cmdBuf = ctx.cmdBuf;
     auto  ds0    = inputs.frameAndLightDescriptorSet;
 
-    auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
+    auto drawBucket = [&](DrawCandidateView items, bool bSkinned)
     {
         if (items.empty()) return;
 
         auto* pipeline = bSkinned ? _pbrSkinned.pipeline.get() : _pbr.pipeline.get();
         auto* layout   = bSkinned ? _pbrSkinned.pipelineLayout.get() : _pbr.pipelineLayout.get();
         cmdBuf->bindPipeline(pipeline);
-        for (const auto& item : items) {
-            if (!item.mesh || !item.material) continue;
+        for (const auto& packet : buildDrawPackets(items, bSkinned)) {
+            if (!packet.isValid() || !packet.material) continue;
             if (bSkinned) {
                 YA_CORE_ASSERT(inputs.skinningDescriptorSet, "GBufferStage missing skinning descriptor set");
-                cmdBuf->bindDescriptorSets(layout, 0, {ds0, _pbrMatPool.resourceDS(item.materialIndex), _pbrMatPool.paramDS(item.materialIndex), inputs.skinningDescriptorSet});
+                cmdBuf->bindDescriptorSets(layout, 0, {ds0, _pbrMatPool.resourceDS(packet.materialIndex), _pbrMatPool.paramDS(packet.materialIndex), inputs.skinningDescriptorSet});
             }
             else {
-                cmdBuf->bindDescriptorSets(layout, 0, {ds0, _pbrMatPool.resourceDS(item.materialIndex), _pbrMatPool.paramDS(item.materialIndex)});
+                cmdBuf->bindDescriptorSets(layout, 0, {ds0, _pbrMatPool.resourceDS(packet.materialIndex), _pbrMatPool.paramDS(packet.materialIndex)});
             }
 
-            PBRPushConstant pc{.modelMat = item.worldMatrix, .skinningPaletteIndex = item.skinningPaletteIndex};
-            cmdBuf->pushConstants(layout, EShaderStage::Vertex, 0, sizeof(pc), &pc);
-            if (bSkinned) {
-                item.mesh->drawSkinned(cmdBuf);
-            }
-            else {
-                item.mesh->drawStatic(cmdBuf);
+            for (const auto& item : packet.candidates) {
+                PBRPushConstant pc{.modelMat = item.worldMatrix, .skinningPaletteIndex = item.skinningPaletteIndex};
+                cmdBuf->pushConstants(layout, EShaderStage::Vertex, 0, sizeof(pc), &pc);
+                if (bSkinned) {
+                    item.mesh->drawSkinned(cmdBuf);
+                }
+                else {
+                    item.mesh->drawStatic(cmdBuf);
+                }
             }
         }
     };
 
-    drawBucket(ctx.frameData->drawBuckets.staticMeshes.pbrDrawItems, false);
-    drawBucket(ctx.frameData->drawBuckets.skinnedMeshes.pbrDrawItems, true);
+    drawBucket(DrawCandidateView{std::span<const RenderDrawItem>(ctx.frameData->drawBuckets.staticMeshes.pbrDrawItems)}, false);
+    drawBucket(DrawCandidateView{std::span<const RenderDrawItem>(ctx.frameData->drawBuckets.skinnedMeshes.pbrDrawItems)}, true);
 }
 
 void GBufferStage::drawPhong(const RenderStageContext& ctx, const FrameInputs& inputs)
