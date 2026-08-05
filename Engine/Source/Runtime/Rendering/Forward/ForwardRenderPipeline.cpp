@@ -334,14 +334,8 @@ void ForwardRenderPipeline::initStageResources()
         .depthBufferShadowDS                = depthBufferShadowDS,
         .shadowState                        = buildShadowState(),
         .runtimeServices                    = _runtimeServices,
-        .getFrameIndex                      = [services = _runtimeServices]() -> uint64_t
-        {
-            return services ? services->getFrameIndex() : 0;
-        },
-        .getElapsedTimeSeconds              = [services = _runtimeServices]() -> double
-        {
-            return services ? services->getElapsedTimeSeconds() : 0.0;
-        },
+        .getFrameIndex                      = [services = _runtimeServices]() -> uint64_t { return services ? services->getFrameIndex() : 0; },
+        .getElapsedTimeSeconds              = [services = _runtimeServices]() -> double { return services ? services->getElapsedTimeSeconds() : 0.0; },
     });
 
     _deleter.push("Stages", [this](void*)

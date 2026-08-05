@@ -69,8 +69,7 @@ void ForwardViewportLitPasses::init(const InitDesc& desc)
     _skinningDSL           = desc.skinningDSL;
     _pbrFrameDSL           = desc.pbrFrameDSL;
     _phongFrameDSL         = desc.phongFrameDSL;
-    _getFrameIndex         = desc.getFrameIndex;
-    _getElapsedTimeSeconds = desc.getElapsedTimeSeconds;
+    _runtimeServices       = desc.runtimeServices;
 
     initPBR(desc);
     initPhong(desc);
@@ -92,8 +91,7 @@ void ForwardViewportLitPasses::destroy()
     _phongResourceDSL.reset();
     _phongParamDSL.reset();
 
-    _getFrameIndex = {};
-    _getElapsedTimeSeconds = {};
+    _runtimeServices = nullptr;
     _skinningDSL.reset();
     _render = nullptr;
 }
@@ -412,8 +410,8 @@ void ForwardViewportLitPasses::preparePhong(const RenderStageContext& ctx,
     outFrame.projMat    = fd.projection;
     outFrame.viewMat    = fd.view;
     outFrame.resolution = glm::ivec2(ctx.viewportExtent.width, ctx.viewportExtent.height);
-    outFrame.frameIdx   = _getFrameIndex ? static_cast<int32_t>(_getFrameIndex()) : 0;
-    outFrame.time       = _getElapsedTimeSeconds ? static_cast<float>(_getElapsedTimeSeconds()) : 0.0f;
+    outFrame.frameIdx   = _runtimeServices ? static_cast<int32_t>(_runtimeServices->getFrameIndex()) : 0;
+    outFrame.time       = _runtimeServices ? static_cast<float>(_runtimeServices->getElapsedTimeSeconds()) : 0.0f;
     outFrame.cameraPos  = fd.cameraPos;
 
     fillPhongLightFromFrameData(fd, outLight);

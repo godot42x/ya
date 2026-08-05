@@ -5,6 +5,7 @@
 #include "Render/Core/Pipeline.h"
 #include "Render/Material/MaterialDescPool.h"
 #include "Render/Material/UnlitMaterial.h"
+#include "Runtime/Rendering/Common/IRenderRuntimeServices.h"
 #include "Runtime/Rendering/Forward/ForwardViewportLitPasses.h"
 
 #include "Test.Unlit.glsl.h"
@@ -45,8 +46,7 @@ class ForwardViewportUnlitPass
         PipelineRenderingInfo        pipelineRenderingInfo = {};
         stdptr<IDescriptorSetLayout> skinningDSL;
         stdptr<IDescriptorSetLayout> unlitFrameDSL;
-        std::function<uint64_t()>    getFrameIndex;
-        std::function<double()>      getElapsedTimeSeconds;
+        IRenderRuntimeServices*      runtimeServices = nullptr;
     };
 
     struct DrawContext
@@ -74,8 +74,7 @@ class ForwardViewportUnlitPass
 
     IRender* _render = nullptr;
     stdptr<IDescriptorSetLayout> _skinningDSL;
-    std::function<uint64_t()> _getFrameIndex;
-    std::function<double()>   _getElapsedTimeSeconds;
+    IRenderRuntimeServices* _runtimeServices = nullptr;
 
     stdptr<IDescriptorSetLayout> _unlitFrameDSL;
     stdptr<IDescriptorSetLayout> _unlitParamDSL;

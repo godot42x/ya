@@ -28,9 +28,9 @@ static const VertexBufferDescription kAuxVBDesc{.slot = 0, .pitch = sizeof(ya::V
 
 void ForwardViewportAuxPasses::init(const InitDesc& desc)
 {
-    _render                = desc.render;
-    _getElapsedTimeSeconds = desc.getElapsedTimeSeconds;
-    _skyboxFrameDSL        = desc.skyboxFrameDSL;
+    _render          = desc.render;
+    _runtimeServices = desc.runtimeServices;
+    _skyboxFrameDSL  = desc.skyboxFrameDSL;
     initSimple(desc);
     initSkybox(desc);
     initDebug(desc);
@@ -52,7 +52,7 @@ void ForwardViewportAuxPasses::destroy()
     _debugDSP.reset();
     _debugUboBuffer.reset();
 
-    _getElapsedTimeSeconds = {};
+    _runtimeServices = nullptr;
     _render = nullptr;
 }
 
@@ -367,7 +367,7 @@ void ForwardViewportAuxPasses::drawDebug(const DrawContext& drawCtx)
     _debugUBO.projection = fd.projection;
     _debugUBO.view       = fd.view;
     _debugUBO.resolution = glm::ivec2(static_cast<int>(vpW), static_cast<int>(vpH));
-    _debugUBO.time       = _getElapsedTimeSeconds ? static_cast<float>(_getElapsedTimeSeconds()) : 0.0f;
+    _debugUBO.time       = _runtimeServices ? static_cast<float>(_runtimeServices->getElapsedTimeSeconds()) : 0.0f;
     _debugUboBuffer->writeData(&_debugUBO, sizeof(DebugUBO), 0);
 
     cmdBuf->debugBeginLabel("ForwardDebug");
