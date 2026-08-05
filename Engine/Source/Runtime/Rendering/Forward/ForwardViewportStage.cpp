@@ -184,13 +184,29 @@ void ForwardViewportStage::executeUnlit(const RenderStageContext& ctx,
     executePass(EPass::Unlit, passCtx);
 }
 
-void ForwardViewportStage::executeRest(const RenderStageContext& ctx)
+void ForwardViewportStage::executeSimple(const RenderStageContext& ctx)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
     auto passCtx = buildPassContext(ctx);
     executePass(EPass::Simple, passCtx);
+}
+
+void ForwardViewportStage::executeDirection(const RenderStageContext& ctx,
+                                            std::vector<ForwardDirectionGizmoInput> directionGizmos)
+{
+    if (!ctx.cmdBuf || !ctx.frameData) return;
+
+    auto passCtx = buildPassContext(ctx);
+    passCtx.directionGizmos = std::move(directionGizmos);
     executePass(EPass::DirectionOverlay, passCtx);
+}
+
+void ForwardViewportStage::executeDebug(const RenderStageContext& ctx)
+{
+    if (!ctx.cmdBuf || !ctx.frameData) return;
+
+    auto passCtx = buildPassContext(ctx);
     executePass(EPass::Debug, passCtx);
 }
 

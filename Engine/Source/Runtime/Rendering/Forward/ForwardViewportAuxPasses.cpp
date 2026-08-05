@@ -1,8 +1,6 @@
 #include "ForwardViewportAuxPasses.h"
 
 #include "Core/Math/Math.h"
-#include "ECS/Component/DirectionComponent.h"
-#include "ECS/Component/TransformComponent.h"
 #include "Render/Core/Buffer.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
@@ -326,11 +324,7 @@ void ForwardViewportAuxPasses::drawSimple(const DrawContext& drawCtx)
 
 void ForwardViewportAuxPasses::drawDirectionOverlay(const DrawContext& drawCtx)
 {
-    auto* scene = drawCtx.activeScene;
-    if (!scene) return;
-
-    const auto& dirView = scene->getRegistry().view<TransformComponent, DirectionComponent>();
-    if (dirView.begin() == dirView.end()) return;
+    if (drawCtx.directionGizmos.empty()) return;
 
     const auto& ctx = drawCtx.stageCtx;
     auto* cmdBuf = ctx.cmdBuf;
@@ -345,25 +339,13 @@ void ForwardViewportAuxPasses::drawDirectionOverlay(const DrawContext& drawCtx)
     auto* cone     = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cone);
     auto* cylinder = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cylinder);
 
-    glm::mat4 coneLocalTransf =
-        glm::rotate(glm::mat4(1.0), glm::radians(90.0f), glm::vec3(1, 0, 0)) *
-        glm::scale(glm::mat4(1.0), glm::vec3(0.3f, 1.0f, 0.3f));
-    glm::mat4 cylinderLocalTransf =
-        glm::rotate(glm::mat4(1.0), glm::radians(90.0f), glm::vec3(1, 0, 0)) *
-        glm::scale(glm::mat4(1.0), glm::vec3(0.1f, 1.0f, 0.1f));
-
     pc.colorType = _simpleDefaultColorType;
-    for (auto entity : dirView) {
-        const auto& [tc, dc] = dirView.get(entity);
-
-        glm::mat4 worldTransform = glm::translate(glm::mat4(1.0), tc.getWorldPosition()) *
-                                   glm::mat4_cast(glm::quat(glm::radians(tc.getRotation())));
-
-        pc.model = glm::translate(glm::mat4(1.0), -tc.getForward()) * coneLocalTransf * worldTransform;
+    for (const auto& gizmo : drawCtx.directionGizmos) {
+        pc.model = gizmo.coneModel;
         cmdBuf->pushConstants(_simplePPL.get(), EShaderStage::Vertex, 0, sizeof(SimplePC), &pc);
         cone->draw(cmdBuf);
 
-        pc.model = worldTransform * cylinderLocalTransf;
+        pc.model = gizmo.cylinderModel;
         cmdBuf->pushConstants(_simplePPL.get(), EShaderStage::Vertex, 0, sizeof(SimplePC), &pc);
         cylinder->draw(cmdBuf);
     }
