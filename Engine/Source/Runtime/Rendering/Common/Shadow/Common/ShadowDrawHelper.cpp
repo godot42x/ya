@@ -17,7 +17,7 @@ void drawStaticBuckets(ICommandBuffer* cmdBuf,
 {
     YA_PERF_SCOPE(perf::sample::shadowPointDirectDrawStatic(), perf::metric::cpuTimeMs(), perf::domain::render());
 
-    auto drawItems = [&](const std::vector<RenderDrawItem>& items)
+    auto drawItems = [&](DrawCandidateView items)
     {
         if (items.empty()) return;
         cmdBuf->bindPipeline(res.pipeline);
@@ -30,18 +30,18 @@ void drawStaticBuckets(ICommandBuffer* cmdBuf,
         }
     };
 
-    drawItems(buckets.pbrDrawItems);
-    drawItems(buckets.phongDrawItems);
-    drawItems(buckets.unlitDrawItems);
-    drawItems(buckets.simpleDrawItems);
-    drawItems(buckets.fallbackDrawItems);
+    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.pbrDrawItems)});
+    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.phongDrawItems)});
+    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.unlitDrawItems)});
+    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.simpleDrawItems)});
+    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.fallbackDrawItems)});
 }
 
 void drawSkinnedBuckets(ICommandBuffer* cmdBuf,
                         const PassResources& res,
                         const RenderShadingDrawBuckets& buckets)
 {
-    auto drawItems = [&](const std::vector<RenderDrawItem>& items)
+    auto drawItems = [&](DrawCandidateView items)
     {
         if (items.empty()) return;
         cmdBuf->bindPipeline(res.pipeline);
@@ -54,11 +54,11 @@ void drawSkinnedBuckets(ICommandBuffer* cmdBuf,
         }
     };
 
-    drawItems(buckets.pbrDrawItems);
-    drawItems(buckets.phongDrawItems);
-    drawItems(buckets.unlitDrawItems);
-    drawItems(buckets.simpleDrawItems);
-    drawItems(buckets.fallbackDrawItems);
+    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.pbrDrawItems)});
+    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.phongDrawItems)});
+    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.unlitDrawItems)});
+    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.simpleDrawItems)});
+    drawItems(DrawCandidateView{std::span<const RenderDrawItem>(buckets.fallbackDrawItems)});
 }
 
 } // namespace ya::ShadowDrawHelper
