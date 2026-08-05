@@ -234,6 +234,8 @@ struct ENGINE_API RenderRuntime
     // Internal pipeline / presentation helpers
     // =========================================================================
     void                   initActivePipeline();
+    void                   initForwardPipeline(int windowWidth, int windowHeight);
+    void                   initDeferredPipeline(int windowWidth, int windowHeight);
     void                   shutdownActivePipeline();
     void                   applyPendingRenderPipelineSwitch();
     void                   applyPendingRenderTargetFormatCommands();
