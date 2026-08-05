@@ -356,10 +356,13 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
     if (!scene) return;
 
     auto view = scene->getRegistry().view<LuaScriptComponent>();
-    for (auto entityHandle : view) {
-        auto &luaComp = view.get<LuaScriptComponent>(entityHandle);
+    for (const auto &[entityHandle, luaComp] : view->each()) {
 
-        Entity entity(entityHandle, scene);
+        Entity* entity = scene->getEntityByEnttID(entityHandle);
+        if (!entity) {
+            YA_CORE_WARN("LuaScriptingSystem: Entity {} no longer exists in scene", static_cast<uint32_t>(entityHandle));
+            continue;
+        }
 
         // 遍历所有脚本实例
         for (auto &script : luaComp.scripts) {
@@ -390,7 +393,7 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
                         script.onDisable = scriptTable["onDisable"];
 
                         // 设置 entity 引用
-                        script.self["entity"] = &entity;
+                        script.self["entity"] = entity;
 
                         // 刷新属性列表并应用编辑器修改的覆盖值
                         script.refreshProperties();
@@ -421,7 +424,7 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
                 YA_PROFILE_SCOPE("LuaScriptingSystem::scriptOnUpdate");
                 try {
                     // 更新 entity 引用（防止 entity 被移动）
-                    script.self["entity"] = &entity;
+                    script.self["entity"] = entity;
 
                     script.onUpdate(script.self, deltaTime);
                 }
@@ -527,7 +530,12 @@ void LuaScriptingSystem::reloadScript(const std::string &scriptPath)
     auto view = scene->getRegistry().view<LuaScriptComponent>();
     for (auto entityHandle : view) {
         auto  &luaComp = view.get<LuaScriptComponent>(entityHandle);
-        Entity entity(entityHandle, scene);
+        Entity* entity = scene->getEntityByEnttID(entityHandle);
+        if (!entity) {
+            YA_CORE_WARN("LuaScriptingSystem: Entity {} no longer exists in scene during reload",
+                         static_cast<uint32_t>(entityHandle));
+            continue;
+        }
 
         for (auto &script : luaComp.scripts) {
             script.scriptPath = LuaScriptComponent::ScriptInstance::normalizeScriptPath(script.scriptPath);
@@ -565,7 +573,7 @@ void LuaScriptingSystem::reloadScript(const std::string &scriptPath)
                     script.onDisable = scriptTable["onDisable"];
 
                     // 设置 entity 引用
-                    script.self["entity"] = &entity;
+                    script.self["entity"] = entity;
 
                     // 刷新属性并恢复值
                     script.refreshProperties();
