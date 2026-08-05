@@ -73,6 +73,7 @@ struct ENGINE_API ForwardRenderPipeline : public IRenderPipeline
     ForwardFrameGraphOrchestrator _frameGraphOrchestrator{};
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
     stdptr<ForwardFrameResourceSet> _frameResources;
+    RGTopologyDescription        _lastFrameGraphTopology{};
 
     bool                    bMSAA                    = false;
     std::shared_ptr<RenderImage> _currentPostprocessOutput = nullptr;
@@ -122,6 +123,7 @@ struct ENGINE_API ForwardRenderPipeline : public IRenderPipeline
     {
         return _postProcessStage.getBloomCompositeImageShared();
     }
+    [[nodiscard]] const RGTopologyDescription& getLastFrameGraphTopology() const { return _lastFrameGraphTopology; }
     void appendRenderTargetEntries(RenderTargetCatalog& catalog) const override;
 
     [[nodiscard]] bool           isShadowMappingEnabled() const override;

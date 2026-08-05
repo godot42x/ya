@@ -167,6 +167,7 @@ struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
     ShadowSettings             _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
     EnvironmentLightingSceneResources _currentEnvironmentLightingTextures{};
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
+    RGTopologyDescription               _lastFrameGraphTopology{};
 
     DeferredRenderPipeline() = default;
     ~DeferredRenderPipeline();
@@ -199,6 +200,7 @@ struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
     std::shared_ptr<RenderImage> getBloomExtractImageShared() const { return _publishedGraphOutputs.bloomExtract; }
     std::shared_ptr<RenderImage> getBloomBlurImageShared() const { return _publishedGraphOutputs.bloomBlur; }
     std::shared_ptr<RenderImage> getBloomCompositeImageShared() const { return _publishedGraphOutputs.bloomComposite; }
+    const RGTopologyDescription& getLastFrameGraphTopology() const { return _lastFrameGraphTopology; }
     void setSSAOEnabled(bool enabled)
     {
         _bEnableSSAO = enabled;
