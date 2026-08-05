@@ -121,6 +121,23 @@ Observed result on 2026-07-16:
 - sha1: `24578fd8b15569e66fbcfb53be888a3cf04b7bbd`
 - visual check: screenshot shows the runtime settled in Forward mode and the PBR sphere still carries visible environment reflection
 
+Correction on 2026-08-04:
+
+- The versioned automation entry above remains useful as a historical CLI/config baseline, but it is no longer sufficient evidence that
+  real pipeline switching is healthy.
+- A control-port smoke that uses `AppAutomationControlService::set_render_pipeline("forward")` did confirm the runtime log
+  `Switching render pipeline: Deferred -> Forward`, but it also reproduced a shadow regression:
+  `Shadow Map Depth` sampled views hit Vulkan validation because some subresources were still tracked in attachment layout after the switch.
+- Treat the 2026-07-16 artifact as "the config path existed and produced a Forward screenshot", not as a currently trusted
+  no-validation pipeline-switch baseline.
+
+Resolution on 2026-08-04:
+
+- The Forward viewport graph now declares a sampled read for the full shadow atlas after the shadow pass.
+- The real control-port switch was rerun after the fix with `info/error` logging, viewport screenshot, and graceful quit;
+  no `VUID-vkCmdDraw-None-09600`, `Validation Error`, or `VK_ERROR` was reported.
+- The old 2026-07-16 screenshot remains historical; a new hash should be recorded when `FG-002` formalizes the current baseline.
+
 Editor screenshot readback + graceful shutdown smoke also has a versioned automation entry now:
 
 ```bash

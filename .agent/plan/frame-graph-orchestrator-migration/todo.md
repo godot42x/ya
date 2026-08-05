@@ -344,19 +344,45 @@
   - 修改：Resource/Texture、Render/Core/Texture；先迁 2D 资产，后迁 cubemap/fallback
   - 验收：Texture 不自行 begin/end isolate commands；上传服务显式依赖 factory/command submission
 
-- [ ] `FG-804` 删除 Texture 全局 factory 与 render attachment API
+- [x] `FG-804` 删除 Texture 全局 factory 与 render attachment API
   - 依赖：FG-803、FG-706
   - 验收：删除 `Texture::getResourceFactory()`、`Texture::createRenderTexture()`；资源创建路径无 `App::get()`；GPU intermediate 无资产 Texture
 
-- [ ] `FG-805` 审计所有 GPU 资源创建和 owner
+- [x] `FG-805` 审计所有 GPU 资源创建和 owner
   - 依赖：FG-804
   - 验收：新增资源走 factory；owner 分类符合 plan；view-before-image 和 submit-time lifetime tests 通过
+  - 记录：FG-805 专属门禁 `RenderGraphCoreTest.*` + `OffscreenAsyncTest.*` 共 102 tests 全通过；完整 `ya-testing` 为 266/267，唯一失败是既有 `AssetPathNormalizationTest.VfsSeparatesLogicalPathsFromIoTranslation`，与本阶段改动无关
 
 ## P9 完成清理
 
-- [ ] `FG-901` 删除 obsolete Stage resource getter/setter、局部 executor 和 compatibility execute 入口
-- [ ] `FG-902` 检查 pass execute 中无 create/resize/destroy/waitIdle/App::get/scene query/未声明 transition
+- [x] `FG-901` 删除 obsolete Stage resource getter/setter、局部 executor 和 compatibility execute 入口
+  - 实现：PostProcessingStage/SSAOStage 不再持有或注入局部 RenderGraphExecutor；
+    删除两者的 standalone execute 入口。Shadow 主链统一由
+    ShadowStage::appendGraphPasses() 接入顶层 graph，删除 IShadowTechnique、
+    BasicShadowMapTechnique、Directional/Point shadow pass 及 PointShadowCullPass
+    的局部 executor/compatibility execute/dispatch API；IRenderStage execute 保留
+    空 conformance stub。
+  - 验收：`xmake b ya-engine`、`xmake b ya-editor` 通过；RenderGraphCore +
+    Deferred/Forward orchestrator 定向测试 93/93 通过。
+- [x] `FG-902` 检查 pass execute 中无 create/resize/destroy/waitIdle/App::get/scene query/未声明 transition
+  - 实现：Forward graph 在构图前生成 `ForwardViewportStage::PassContext`
+    snapshot，graph execute callback 只消费该 snapshot；不再在 callback 内通过
+    `buildPassContext()` 查询 active scene、registry 或 ResourceResolveSystem。
+    Deferred/Shadow/Postprocess pass 已审计为显式 params/handles + graph state
+    contract；offscreen pipeline 的 layout 操作属于独立 utility command scope，
+    不属于 world graph pass。
+  - 验收：`xmake b ya-engine`、`xmake b ya-editor` 通过；
+    `ForwardFrameGraphOrchestratorTest.*` 3/3 通过。
 - [ ] `FG-903` 完成 Deferred/Forward graph dump 与视觉基线对比
-- [ ] `FG-904` 运行完整 unit/build/editor smoke matrix 并记录 artifacts
-- [ ] `FG-905` 更新 `render-arch`、`resource-system`、`debug-review` 和旧计划状态
-- [ ] `FG-906` 独立规划 DrawList/ShaderParameterBlock/Editor Extension 后续，不混入本计划收尾
+- [~] `FG-904` 运行完整 unit/build/editor smoke matrix 并记录 artifacts
+  - 已完成：`xmake b ya-engine`、`xmake b ya-editor`；完整 `xmake r ya-testing`
+    为 266/267 通过。
+  - 延后：唯一失败为既有 `AssetPathNormalizationTest.VfsSeparatesLogicalPathsFromIoTranslation`
+    的 macOS `/private/var` 与 `/var` 路径语义差异；GUI smoke 受当前无窗口环境限制。
+- [x] `FG-905` 更新 `render-arch`、`resource-system`、`debug-review` 和旧计划状态
+  - 已补充 graph execute snapshot、单一 world-frame executor、显式 resource/offscreen
+    owner 与 execute callback review 规则；旧计划顶部已指向当前迁移计划。
+- [x] `FG-906` 独立规划 DrawList/ShaderParameterBlock/Editor Extension 后续，不混入本计划收尾
+  - 产物：`follow-up-roadmap.md`
+  - 结论：三条路线均拆出独立 consumer、生成链/资源边界和停止线；本计划不继续扩大
+    到 draw submission、generated binder 或 editor plugin protocol。

@@ -3,9 +3,119 @@
 ## 当前状态
 
 - 计划建立日期：2026-07-18
-- 当前阶段：P8 GPU Resource API 收尾
-  - 当前执行任务：FG-804（删除 Texture 全局 factory 与 render attachment API）
-  - 下一架构任务：FG-804
+- 当前阶段：P9 完成清理
+  - 当前执行任务：FG-902（检查 pass execute 中的资源创建、等待、全局查询和未声明 transition）
+  - 下一架构任务：FG-902
+
+### 2026-08-05：FG-901 完成
+
+- 主图已经是唯一的 world-frame graph executor：
+  - `PostProcessingStage::execute(...)` standalone 入口与 `setGraphExecutor()`
+    删除；postprocess 只负责 append graph passes。
+  - `SSAOStage` 删除局部 executor 注入和旧 standalone graph execute 路径；
+    `IRenderStage::execute()` 保留空 conformance stub。
+  - Shadow graph 统一经 `ShadowStage::appendGraphPasses()` 接入顶层图；
+    删除 `IShadowTechnique::execute()`、BasicShadowMapTechnique 的旧执行入口、
+    Directional/Point shadow pass 的局部 executor、PointShadowCullPass 的
+    standalone dispatch，以及相关 executor plumbing。
+- 保留的 `RenderGraphExecutor` 均有明确 owner：Deferred/Forward world frame、
+  RenderRuntime presentation、独立 BRDF/offscreen utility。
+- 验证：
+  - `xmake b ya-engine`：通过
+  - `xmake b ya-editor`：通过
+  - `xmake r ya-testing --gtest_filter='RenderGraphCoreTest.*:ForwardFrameGraphOrchestratorTest.*:DeferredFrameGraphOrchestratorTest.*'`：93/93 通过
+- 下一步：FG-902，检查 graph execute callback 的资源创建/替换、waitIdle、
+  `App::get()`/scene query 与手写 transition。
+
+### 2026-08-05：FG-902 完成
+
+- 审计结果：
+  - Deferred/Forward/Shadow/Postprocess graph callback 未发现资源创建、替换、
+    destroy、`waitIdle()` 或 `App::get()`。
+  - Forward 原有 per-pass execute 会在 callback 内调用 `buildPassContext()`，
+    间接查询 active scene、skybox/resource resolve 和 ECS registry；已改为
+    graph build 前生成 `ForwardViewportStage::PassContext`，callback 通过显式
+    snapshot 消费。
+  - Deferred pipeline 的 scene/ECS 快照仍在 graph build 前完成；presentation
+    callback 只记录已声明资源与外部 overlay callback。
+  - Equidistant/Cubemap/BRDF 的 layout 操作属于独立 offscreen/utility command
+    scope；world graph pass 本身没有绕过 graph state tracker 的 transition。
+- 验证：
+  - `xmake b ya-engine`：通过
+  - `xmake b ya-editor`：通过
+  - `xmake r ya-testing --gtest_filter='ForwardFrameGraphOrchestratorTest.*'`：
+    3/3 通过
+- 下一步：FG-903，补齐 Deferred/Forward graph dump 与视觉基线对比。
+
+### 2026-08-05：FG-903 调查
+
+- 现有结构基线已由 `DeferredFrameGraphOrchestratorTest`、
+  `ForwardFrameGraphOrchestratorTest` 和 `RenderGraphCoreTest` 覆盖；
+  Deferred/Forward 的 pass order、可选 pass 依赖与 compiled graph dump 契约均有
+  可重复的无 GPU 测试入口。
+- 视觉/真实 GUI 基线沿用
+  `.agent/plan/render-resource-and-graph-refactor/{deferred-baseline,forward-baseline,pipeline-switch-smoke}.automation.json`
+  与历史截图/hash；2026-08-05 当前会话没有可用窗口环境，因此未重新生成
+  当前态截图或宣称视觉对比完成。FG-903 保持未勾选，待 GUI 会话补跑。
+- `git diff --check`：通过。
+
+### 2026-08-05：FG-904 / FG-905 收口
+
+- 完整测试矩阵：
+  - `xmake r ya-testing`：267 tests，266 passed，1 failed。
+  - 唯一失败仍为 `AssetPathNormalizationTest.VfsSeparatesLogicalPathsFromIoTranslation`；
+    失败路径为 macOS `/private/var` 与 `/var` 的临时目录 realpath 表现，与本轮
+    RenderGraph/Stage 清理无关。
+  - `xmake b ya-engine`、`xmake b ya-editor` 均通过；GUI editor smoke 因当前
+    会话无窗口环境未执行。
+- FG-905 已更新 `render-arch`、`resource-system`、`debug-review` 规则，以及旧
+  resource/graph 计划的当前入口说明。
+- P9 下一项：FG-906，独立规划 DrawList / ShaderParameterBlock / Editor Extension，
+  不再扩大本轮资源与 graph 清理范围。
+
+### 2026-08-05：FG-906 完成
+
+- 新增 `follow-up-roadmap.md`，拆分三条后续路线：
+  - DrawCandidateView -> DrawPacket -> deterministic grouping/sorting；
+  - generated shader metadata -> internal binder -> ShaderParameterBlock；
+  - immutable editor extension input -> declared graph pass -> runtime-owned binding。
+- 每条路线都记录了当前代码事实、依赖、真实 consumer 要求和停止线；本轮不实现
+  DrawList、shader binder 或 Editor Extension public protocol。
+- FrameGraph 迁移主计划的实现范围至此收口；剩余 FG-903/FG-904 是 GUI 环境与既有
+  VFS 测试失败导致的验证债务，不再通过额外代码变更规避。
+
+### 2026-08-05：FG-805 继续推进
+
+- `ResourceResolveSystem` 改为由生命周期入口显式注入 `IRender*`，初始化三个
+  environment preprocess pipeline 时不再通过 `App::get()` 查找 render。
+- Skybox / environment cubemap、irradiance、prefilter 的 image-view 创建与
+  cubemap Texture 创建均使用 system 持有的 render 依赖。
+- offscreen preprocess job 入队改为注入 `OffscreenJobQueueService`；`ResourceResolveSystem`
+  内部不再通过 `App::get()` 间接拿 task queue / render。
+- `Mesh` GPU buffer 创建改为显式依赖 `IRender&`；terrain mesh、imported model mesh、
+  primitive mesh cache 均改为由 owner 传入 render，不再在 `Mesh.cpp` 中走
+  `App::get()`。
+- `ISwapchain::create()` 改为使用传入的 `render` 决定后端 API，不再回查全局 app。
+- `FontManager::getAdaptiveFont()` 改为显式传入 `IRender&`；texture import helper 的
+  runtime format-support 判断改为使用 `AssetManager` 注入的 render，不再依赖
+  `App::get()`。
+- `ResourceResolveSystem::onUpdate()` 改为注入 active-scene provider 获取场景，
+  system 内部不再直接通过 `App::get()` 访问 scene manager。
+- `xmake b ya-engine` / `xmake b ya-editor` 通过。
+- FG-805 验收测试已补齐：`RenderGraphCoreTest.RenderImageDestroysViewBeforeImage`
+  与 `OffscreenAsyncTest.QueueOffscreenJobKeepsRecordedResourcesAliveThroughGpuCompletion`，
+  连同两套相关测试共 102 tests 全通过；完整 `ya-testing` 当前为 266/267，
+  唯一失败为既有 `AssetPathNormalizationTest.VfsSeparatesLogicalPathsFromIoTranslation`。
+- FG-804 / FG-805 已完成，下一阶段切入 P9 的 FG-901。
+- 审计结论：
+  - 剩余 `App::get()` 命中大多属于 runtime/service 访问（Lua、automation、scene
+    orchestration、input/time query），不再属于 FG-805 的 GPU resource owner 泄漏。
+  - 当前 GPU 资源创建热点已统一为 owner 显式持有 `IRender*` 或直接持有
+    `IRenderResourceFactory*` 后创建，未再发现 texture / mesh / skybox /
+    environment / swapchain 这类主路径上的隐藏 render 入口。
+  - 但 FG-805 todo 里要求的 `view-before-image` 与 `submit-time lifetime`
+    验收测试当前未见对应新增测试，因此任务更准确地说是“实现与 owner 审计基本完成，
+    仍缺显式验收测试/记录”。
 
 ### 2026-08-05：FG-803 完成
 

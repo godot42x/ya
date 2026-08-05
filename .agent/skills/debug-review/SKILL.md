@@ -64,6 +64,9 @@ description: YA Engine 崩溃排查、变更自检与提交前 review 清单。
 5. 临时调试代码、一次性文件、无效分支在提交前清理掉。
 6. 若改到 Vulkan 资源，确认没有在 frame recording 中途重建正在使用的对象。
 7. 若改到 image view、descriptor、render graph import、offscreen job，确认保活边界覆盖到 queue submit / GPU completion。
+8. 检查 RenderGraph execute callback 是否只使用 immutable frame snapshot 和 declared
+   handles；若 callback 查询 scene、registry、App 或 resource resolve，应先移到 graph
+   build 阶段。
 
 ## 常见高风险点
 
