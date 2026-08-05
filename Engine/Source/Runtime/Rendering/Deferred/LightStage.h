@@ -32,7 +32,6 @@ struct ENGINE_API LightStage : public IRenderStage
     struct EnvironmentLightingInput
     {
         stdptr<IDescriptorSetLayout> environmentLightingDSL = nullptr;
-        std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
     };
 
     struct SharedInputs
@@ -78,7 +77,6 @@ struct ENGINE_API LightStage : public IRenderStage
     uint32_t _lastShadowDescriptorWriteCount = 0;
 
     stdptr<IDescriptorSetLayout> _environmentLightingDSL;
-    std::function<DescriptorSetHandle(Scene*)> _getSceneEnvironmentLightingDescriptorSet;
     FrameInputs _frameInputs{};
 
     // Vertex attributes (for fullscreen quad)

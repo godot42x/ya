@@ -734,15 +734,12 @@ void DeferredRenderPipeline::initStages()
     });
     _lightStage->setEnvironmentLightingInput(LightStage::EnvironmentLightingInput{
         .environmentLightingDSL = _environmentLightingDSL,
-        .getSceneEnvironmentLightingDescriptorSet = _getSceneEnvironmentLightingDescriptorSet,
     });
     _lightStage->init(_render);
     syncShadowSettings();
 
     _overlayStage = ya::makeShared<ViewportOverlayStage>();
-    _overlayStage->setServices(ViewportOverlayStage::Services{
-        .getDebugRenderSystem = _getDebugRenderSystem,
-    });
+    _overlayStage->setDebugRenderSystem(_getDebugRenderSystem ? &_getDebugRenderSystem() : nullptr);
     _overlayStage->init(_render, _frameResources->getSkyboxFrameDSL());
 
     refreshGBufferStageState();

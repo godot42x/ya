@@ -74,7 +74,6 @@ void LightStage::setup(SharedInputs sharedInputs)
 void LightStage::setEnvironmentLightingInput(EnvironmentLightingInput input)
 {
     _environmentLightingDSL = std::move(input.environmentLightingDSL);
-    _getSceneEnvironmentLightingDescriptorSet = std::move(input.getSceneEnvironmentLightingDescriptorSet);
 }
 
 void LightStage::setFrameInputs(FrameInputs frameInputs)
@@ -262,7 +261,6 @@ void LightStage::destroy()
     _frameAndLightDSL.reset();
     _fullscreenQuad           = nullptr;
     _environmentLightingDSL.reset();
-    _getSceneEnvironmentLightingDescriptorSet = {};
     _frameInputs = {};
     _shadowState              = {};
     _lastShadowDirectionalImageViewHandle = nullptr;

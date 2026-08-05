@@ -26,11 +26,6 @@ struct BillboardComponent;
 /// Overlay: push constant only (view/proj/model/colorType), no UBO/DS.
 struct ViewportOverlayStage : public IRenderStage
 {
-    struct Services
-    {
-        std::function<DebugRenderSystem&()>        getDebugRenderSystem;
-    };
-
     struct FrameInputs
     {
         struct BillboardInput
@@ -125,8 +120,6 @@ struct ViewportOverlayStage : public IRenderStage
     DebugRenderSystem*                     _debugRenderSystem = nullptr;
     DebugSkinning                          _debugSkinning;
 
-    std::function<DebugRenderSystem&()>        _getDebugRenderSystem;
-
     // ── IRenderStage ─────────────────────────────────────────────
     ViewportOverlayStage() : IRenderStage("ViewportOverlay") {}
 
@@ -144,7 +137,7 @@ struct ViewportOverlayStage : public IRenderStage
     /// recording (descriptor updates are not allowed inside a render pass).
     void updateBillboardTextures(const FrameInputs& frameInputs);
     void refreshPipelineFormats(const DeferredAttachmentFormats& formats);
-    void setServices(Services services);
+    void setDebugRenderSystem(DebugRenderSystem* debugRenderSystem);
     [[nodiscard]] SkyboxFrameUBO buildSkyboxFrameData(const RenderStageContext& ctx) const;
     [[nodiscard]] IGraphicsPipeline* getSkyboxPipeline() const { return _skyboxPipeline.get(); }
     [[nodiscard]] IGraphicsPipeline* getOverlayPipeline() const { return _overlayPipeline.get(); }
