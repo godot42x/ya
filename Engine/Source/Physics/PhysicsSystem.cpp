@@ -247,6 +247,10 @@ void PhysicsSystem::init()
     // Scene lifecycle events drive body cleanup: leaving a play session
     // activates/destroys the play scene, which drops every body immediately
     // instead of detecting the transition by polling in onUpdate().
+    if (_appStateChangedSource) {
+        _onAppStateChangedHandle = _appStateChangedSource->addLambda(this, [this](AppState state)
+                                                                     { onAppStateChanged(state); });
+    }
     if (_sceneManager) {
         _onSceneActivatedHandle = _sceneManager->onSceneActivated.addLambda(this, [this](Scene* scene)
                                                                             { onSceneActivated(scene); });
@@ -257,12 +261,13 @@ void PhysicsSystem::init()
 
 void PhysicsSystem::onUpdate(float dt)
 {
-    const bool bSimulationActive = _simulationActiveProvider ? _simulationActiveProvider() : true;
+    // App-mode driven; defaults to active when no source is wired.
+    const bool bSimulationActive = _appStateChangedSource ? _bSimulationActive : true;
     if (!bSimulationActive || !_world) {
         return;
     }
 
-    Scene* const scene = _activeSceneProvider ? _activeSceneProvider() : nullptr;
+    Scene* const scene = _sceneManager ? _sceneManager->getActiveScene() : nullptr;
     if (scene == nullptr) {
         return;
     }
@@ -286,6 +291,19 @@ void PhysicsSystem::onUpdate(float dt)
     }
 
     writebackTransforms(registry);
+}
+
+void PhysicsSystem::onAppStateChanged(AppState state)
+{
+    _bSimulationActive = (state == AppState::Runtime || state == AppState::Simulation);
+
+    // Leaving game / simulation mode: drop every body immediately so the next
+    // session starts from the freshly cloned scene transforms.
+    if (!_bSimulationActive) {
+        clearAllBodies();
+        _bodyOwnerScene = nullptr;
+        _accumulator    = 0.0f;
+    }
 }
 
 void PhysicsSystem::onSceneActivated(Scene* scene)
@@ -404,6 +422,13 @@ void PhysicsSystem::clearAllBodies()
 
 void PhysicsSystem::shutdown()
 {
+    if (_appStateChangedSource) {
+        if (_onAppStateChangedHandle != INVALID_HANDLE) {
+            _appStateChangedSource->remove(_onAppStateChangedHandle);
+            _onAppStateChangedHandle = INVALID_HANDLE;
+        }
+        _appStateChangedSource->removeAll(this);
+    }
     if (_sceneManager) {
         if (_onSceneActivatedHandle != INVALID_HANDLE) {
             _sceneManager->onSceneActivated.remove(_onSceneActivatedHandle);

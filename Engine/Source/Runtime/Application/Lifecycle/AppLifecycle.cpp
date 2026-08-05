@@ -363,10 +363,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
     app._systems.push_back(sys5);
     auto sysPhysics = ya::makeShared<PhysicsSystem>();
     sysPhysics->setSceneManager(app.getSceneServices().getSceneManager());
-    sysPhysics->setActiveSceneProvider([&app]() -> Scene*
-                                       { return app.getSceneServices().getActiveScene(); });
-    sysPhysics->setSimulationActiveProvider([&app]() -> bool
-                                            { return app.isRuntimeMode() || app.isSimulationMode(); });
+    sysPhysics->setAppStateChangedSource(&app.onAppStateChanged);
     sysPhysics->init();
     app._systems.push_back(sysPhysics);
     app._deleter.push("Systems", [&app](void*)
@@ -622,6 +619,7 @@ void AppLifecycle::startRuntime(App& app)
 
     const AppState previousState = app._appState;
     app._appState = AppState::Runtime;
+    app.onAppStateChanged.broadcast(app._appState);
     app.notifyModulesAfterAppStateChange(previousState);
 
     app.onEnterRuntime();
@@ -646,6 +644,7 @@ void AppLifecycle::startSimulation(App& app)
 
     const AppState previousState = app._appState;
     app._appState = AppState::Simulation;
+    app.onAppStateChanged.broadcast(app._appState);
     app.notifyModulesAfterAppStateChange(previousState);
 
     app.onEnterSimulation();
@@ -671,6 +670,7 @@ void AppLifecycle::stopRuntime(App& app)
     }
     const AppState previousState = app._appState;
     app._appState = AppState::Stopped;
+    app.onAppStateChanged.broadcast(app._appState);
     app.getSceneServices().refreshActiveSceneDerivedState();
     app.notifyModulesAfterAppStateChange(previousState);
 }
@@ -695,6 +695,7 @@ void AppLifecycle::stopSimulation(App& app)
     }
     const AppState previousState = app._appState;
     app._appState = AppState::Stopped;
+    app.onAppStateChanged.broadcast(app._appState);
     app.getSceneServices().refreshActiveSceneDerivedState();
     app.notifyModulesAfterAppStateChange(previousState);
 
