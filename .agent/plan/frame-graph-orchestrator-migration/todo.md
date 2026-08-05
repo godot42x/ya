@@ -16,9 +16,9 @@
   FG-504 调查已完成（plan-only），P6 的 FG-601/FG-603 已提交、FG-602 调查已完成（plan-only），
   P7 的 FG-701~FG-707 已完成（skinning + frame/light + 全 viewport pass 独立
   graph pass + postprocess/export 收口 + ForwardFrameGraphOrchestrator +
-  structure tests），P8 的 FG-801/FG-802 已完成（resource desc spec 比较
-  契约 + buffer map/write/flush 统一失败语义与 readback），下一实现任务为
-  FG-803（TextureUploadService）。
+  structure tests），P8 的 FG-801~FG-803 已完成（resource desc spec 比较
+  契约 + buffer map/write/flush 统一失败语义与 readback + TextureUploadService），
+  下一实现任务为 FG-804（删除 Texture 全局 factory 与 render attachment API）。
 - control-port 真实 `pipeline switch` smoke 暴露的 shadow sampled-layout/subresource tracking
   回归已修复并完成回归；`FG-002` 仍需补齐正式的截图/hash 基线记录，但不再阻塞 `FG-304`。
 
@@ -339,7 +339,7 @@
   - 依赖：FG-104、FG-801
   - 验收：unit tests 覆盖 host visible/non-visible、越界、flush/readback
 
-- [ ] `FG-803` 提取 Texture decode/import 与 TextureUploadService
+- [x] `FG-803` 提取 Texture decode/import 与 TextureUploadService
   - 依赖：FG-801
   - 修改：Resource/Texture、Render/Core/Texture；先迁 2D 资产，后迁 cubemap/fallback
   - 验收：Texture 不自行 begin/end isolate commands；上传服务显式依赖 factory/command submission

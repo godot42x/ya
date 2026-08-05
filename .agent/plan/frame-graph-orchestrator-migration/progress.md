@@ -4,8 +4,35 @@
 
 - 计划建立日期：2026-07-18
 - 当前阶段：P8 GPU Resource API 收尾
-  - 当前执行任务：FG-803（Texture decode/import 与 TextureUploadService）
-  - 下一架构任务：FG-803
+  - 当前执行任务：FG-804（删除 Texture 全局 factory 与 render attachment API）
+  - 下一架构任务：FG-804
+
+### 2026-08-05：FG-803 完成
+
+- 实现：
+  - 新增 `TextureUploadService`（Render/Core/TextureUploadService.h/.cpp）：
+    - `TextureUploadRequest` 携带 image/staging/regions/uploadRange/
+      finalizeRange/bGenerateMipmaps/finalLayout/label；
+    - `upload(IRender&, request, outMipLevels)` 在单个 isolate command
+      scope 内录制 Undefined->TransferDst 转换、全部 copyBufferToImage、
+      final 转换与可选 GPU mip 生成；mip 生成失败时只把 base level 转成
+      final 并回传 1；
+    - 显式依赖 IRender 的 isolate command 提交，不触达全局 render/App。
+  - Texture.cpp 四个上传路径全部迁到服务：
+    - `initFromData`（含多 mip 与 GPU mip gen）、`initFallbackTexture`、
+      `createSolidCubeMap`、`initCubeMapFromMemory`；
+    - Texture.cpp 不再出现 `beginIsolateCommands`/`endIsolateCommands`。
+  - 审计确认 Resource/Texture 资产管线无其他 isolate 上传路径。
+- 未做：
+  - `Texture::getResourceFactory()` / `createRenderTexture()` 全局路径仍保留，
+    删除属 FG-804；cubemap/fallback 的 decode（stbi）仍留在 Texture，迁移属
+    FG-804/805 范畴。
+- 测试：
+  - 新增 `TextureUploadServiceTest`（5 tests，录制型 command buffer 双实现）：
+    transitions/copies 录制、subresource range 透传、非法请求拒绝、mip gen
+    失败回退 base level、成功保持 mip 数。
+  - 定向全集 123 tests passed；`xmake b ya-engine` / `xmake b ya-editor`
+    通过。
 
 ### 2026-08-05：FG-802 完成
 

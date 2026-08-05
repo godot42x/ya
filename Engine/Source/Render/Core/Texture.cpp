@@ -12,6 +12,7 @@
 #include "Render/Core/Buffer.h"
 #include "Render/Core/Image.h"
 #include "Render/Core/RenderResourceFactory.h"
+#include "Render/Core/TextureUploadService.h"
 #include "Render/Render.h"
 
 #include "ktx.h"
@@ -316,8 +317,6 @@ std::shared_ptr<Texture> Texture::createSolidCubeMap(const ColorU8_t& color, con
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
-    auto* cmdBuf = render->beginIsolateCommands(std::format("CubeMapUpload:{}:1x1", texture->_label));
-
     ImageSubresourceRange cubeRange{
         .aspectMask     = EImageAspect::Color,
         .baseMipLevel   = 0,
@@ -326,30 +325,39 @@ std::shared_ptr<Texture> Texture::createSolidCubeMap(const ColorU8_t& color, con
         .layerCount     = CubeFace_Count,
     };
 
-    cmdBuf->transitionImageLayout(texture->image.get(), EImageLayout::Undefined, EImageLayout::TransferDst, &cubeRange);
-
-    BufferImageCopy region{
-        .bufferOffset      = 0,
-        .bufferRowLength   = 0,
-        .bufferImageHeight = 0,
-        .imageSubresource  = {
-             .aspectMask     = EImageAspect::Color,
-             .mipLevel       = 0,
-             .baseArrayLayer = 0,
-             .layerCount     = CubeFace_Count,
-        },
-        .imageOffsetX      = 0,
-        .imageOffsetY      = 0,
-        .imageOffsetZ      = 0,
-        .imageExtentWidth  = 1,
-        .imageExtentHeight = 1,
-        .imageExtentDepth  = 1,
-    };
-
-    cmdBuf->copyBufferToImage(stagingBuffer.get(), texture->image.get(), EImageLayout::TransferDst, {region});
-    cmdBuf->transitionImageLayout(texture->image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal, &cubeRange);
-
-    render->endIsolateCommands(cmdBuf);
+    TextureUploadService uploadService;
+    if (!uploadService.upload(
+            *render,
+            TextureUploadRequest{
+                .image   = texture->image,
+                .staging = stagingBuffer,
+                .regions = {{
+                    .bufferOffset      = 0,
+                    .bufferRowLength   = 0,
+                    .bufferImageHeight = 0,
+                    .imageSubresource  = {
+                         .aspectMask     = EImageAspect::Color,
+                         .mipLevel       = 0,
+                         .baseArrayLayer = 0,
+                         .layerCount     = CubeFace_Count,
+                    },
+                    .imageOffsetX      = 0,
+                    .imageOffsetY      = 0,
+                    .imageOffsetZ      = 0,
+                    .imageExtentWidth  = 1,
+                    .imageExtentHeight = 1,
+                    .imageExtentDepth  = 1,
+                }},
+                .uploadRange   = cubeRange,
+                .finalizeRange = cubeRange,
+                .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                .label         = std::format("CubeMapUpload:{}:1x1", texture->_label),
+            })) {
+        YA_CORE_ERROR("Failed to upload solid cubemap: {}", texture->_label);
+        texture->image.reset();
+        texture->imageView.reset();
+        return nullptr;
+    }
 
     return texture->isValid() ? texture : nullptr;
 }
@@ -498,15 +506,7 @@ void Texture::initFromData(const void* pixels,
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
-    auto* cmdBuf = render->beginIsolateCommands(std::format(
-        "TextureUpload:{}:{}x{}:mips{}",
-        _filepath.empty() ? _label : _filepath,
-        texWidth,
-        texHeight,
-        _mipLevels));
-
-    cmdBuf->transitionImageLayout(image.get(), EImageLayout::Undefined, EImageLayout::TransferDst);
-
+    std::vector<BufferImageCopy> regions;
     const bool isCompressed = EFormat::isBlockCompressed(format);
 
     if (mipLevels > 1 && dataSize > 0) {
@@ -534,7 +534,7 @@ void Texture::initFromData(const void* pixels,
                 break;
             }
 
-            BufferImageCopy region{
+            regions.push_back(BufferImageCopy{
                 .bufferOffset      = bufferOffset,
                 .bufferRowLength   = 0,
                 .bufferImageHeight = 0,
@@ -550,9 +550,7 @@ void Texture::initFromData(const void* pixels,
                 .imageExtentWidth  = currentWidth,
                 .imageExtentHeight = currentHeight,
                 .imageExtentDepth  = 1,
-            };
-
-            cmdBuf->copyBufferToImage(stagingBuffer.get(), image.get(), EImageLayout::TransferDst, {region});
+            });
 
             bufferOffset += levelSize;
             currentWidth /= 2;
@@ -560,7 +558,7 @@ void Texture::initFromData(const void* pixels,
         }
     }
     else {
-        BufferImageCopy region{
+        regions.push_back(BufferImageCopy{
             .bufferOffset      = 0,
             .bufferRowLength   = 0,
             .bufferImageHeight = 0,
@@ -576,31 +574,41 @@ void Texture::initFromData(const void* pixels,
             .imageExtentWidth  = texWidth,
             .imageExtentHeight = texHeight,
             .imageExtentDepth  = 1,
-        };
-
-        cmdBuf->copyBufferToImage(stagingBuffer.get(), image.get(), EImageLayout::TransferDst, {region});
+        });
     }
 
-    if (bGenerateMipmaps) {
-        if (!cmdBuf->generateMipmaps(image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal)) {
-            YA_CORE_ERROR("GPU mip generation failed for texture '{}'; using base level only",
-                          _filepath.empty() ? _label : _filepath);
-            const ImageSubresourceRange baseLevelRange{
-                .aspectMask     = EImageAspect::Color,
-                .baseMipLevel   = 0,
-                .levelCount     = 1,
-                .baseArrayLayer = 0,
-                .layerCount     = 1,
-            };
-            cmdBuf->transitionImageLayout(image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal, &baseLevelRange);
-            _mipLevels = 1;
-        }
+    TextureUploadService uploadService;
+    uint32_t uploadedMipLevels = _mipLevels;
+    if (!uploadService.upload(
+            *render,
+            TextureUploadRequest{
+                .image            = image,
+                .staging          = stagingBuffer,
+                .regions          = std::move(regions),
+                .bGenerateMipmaps = bGenerateMipmaps,
+                .finalLayout      = EImageLayout::ShaderReadOnlyOptimal,
+                .label            = std::format(
+                    "{}:{}x{}:mips{}",
+                    _filepath.empty() ? _label : _filepath,
+                    texWidth,
+                    texHeight,
+                    _mipLevels),
+            },
+            &uploadedMipLevels)) {
+        YA_CORE_ERROR("Failed to upload texture: {} (format: {}, {}x{})",
+                      _filepath.empty() ? _label : _filepath,
+                      static_cast<int>(format),
+                      texWidth,
+                      texHeight);
+        image.reset();
+        const auto fallbackPixels = buildMissingTexturePixels();
+        initFallbackTexture(fallbackPixels.data(),
+                            fallbackPixels.size() * sizeof(ColorRGBA<uint8_t>),
+                            8,
+                            8);
+        return;
     }
-    else {
-        cmdBuf->transitionImageLayout(image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal);
-    }
-
-    render->endIsolateCommands(cmdBuf);
+    _mipLevels = uploadedMipLevels;
 
     ImageViewCreateInfo viewCI{
         .label       = std::format("Texture_ImageView_{}", _label),
@@ -674,36 +682,41 @@ void Texture::initFallbackTexture(const void* pixels, size_t dataSize, uint32_t 
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
-    auto* cmdBuf = render->beginIsolateCommands(std::format(
-        "FallbackTextureUpload:{}:{}x{}",
-        _filepath.empty() ? _label : _filepath,
-        texWidth,
-        texHeight));
-
-    cmdBuf->transitionImageLayout(image.get(), EImageLayout::Undefined, EImageLayout::TransferDst);
-
-    BufferImageCopy region{
-        .bufferOffset      = 0,
-        .bufferRowLength   = 0,
-        .bufferImageHeight = 0,
-        .imageSubresource  = {
-             .aspectMask     = EImageAspect::Color,
-             .mipLevel       = 0,
-             .baseArrayLayer = 0,
-             .layerCount     = 1,
-        },
-        .imageOffsetX      = 0,
-        .imageOffsetY      = 0,
-        .imageOffsetZ      = 0,
-        .imageExtentWidth  = texWidth,
-        .imageExtentHeight = texHeight,
-        .imageExtentDepth  = 1,
-    };
-    cmdBuf->copyBufferToImage(stagingBuffer.get(), image.get(), EImageLayout::TransferDst, {region});
-
-    cmdBuf->transitionImageLayout(image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal);
-
-    render->endIsolateCommands(cmdBuf);
+    TextureUploadService uploadService;
+    if (!uploadService.upload(
+            *render,
+            TextureUploadRequest{
+                .image   = image,
+                .staging = stagingBuffer,
+                .regions = {{
+                    .bufferOffset      = 0,
+                    .bufferRowLength   = 0,
+                    .bufferImageHeight = 0,
+                    .imageSubresource  = {
+                         .aspectMask     = EImageAspect::Color,
+                         .mipLevel       = 0,
+                         .baseArrayLayer = 0,
+                         .layerCount     = 1,
+                    },
+                    .imageOffsetX      = 0,
+                    .imageOffsetY      = 0,
+                    .imageOffsetZ      = 0,
+                    .imageExtentWidth  = texWidth,
+                    .imageExtentHeight = texHeight,
+                    .imageExtentDepth  = 1,
+                }},
+                .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                .label       = std::format(
+                    "FallbackTexture:{}:{}x{}",
+                    _filepath.empty() ? _label : _filepath,
+                    texWidth,
+                    texHeight),
+            })) {
+        YA_CORE_ERROR("Failed to upload fallback texture for '{}'!", _filepath.empty() ? _label : _filepath);
+        image = nullptr;
+        imageView = nullptr;
+        return;
+    }
 
     YA_CORE_WARN("Created fallback texture ({}x{}) for: {}", texWidth, texHeight, _filepath.empty() ? _label : _filepath);
 }
@@ -795,12 +808,6 @@ void Texture::initCubeMapFromMemory(const CubeMapMemoryCreateInfo& ci)
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
-    auto* cmdBuf = render->beginIsolateCommands(std::format(
-        "CubeMapUpload:{}:{}x{}",
-        _label,
-        _width,
-        _height));
-
     ImageSubresourceRange cubeRange{
         .aspectMask     = EImageAspect::Color,
         .baseMipLevel   = 0,
@@ -809,30 +816,39 @@ void Texture::initCubeMapFromMemory(const CubeMapMemoryCreateInfo& ci)
         .layerCount     = CubeFace_Count,
     };
 
-    cmdBuf->transitionImageLayout(image.get(), EImageLayout::Undefined, EImageLayout::TransferDst, &cubeRange);
-
-    BufferImageCopy region{
-        .bufferOffset      = 0,
-        .bufferRowLength   = 0,
-        .bufferImageHeight = 0,
-        .imageSubresource  = {
-             .aspectMask     = EImageAspect::Color,
-             .mipLevel       = 0,
-             .baseArrayLayer = 0,
-             .layerCount     = CubeFace_Count,
-        },
-        .imageOffsetX      = 0,
-        .imageOffsetY      = 0,
-        .imageOffsetZ      = 0,
-        .imageExtentWidth  = _width,
-        .imageExtentHeight = _height,
-        .imageExtentDepth  = 1,
-    };
-
-    cmdBuf->copyBufferToImage(stagingBuffer.get(), image.get(), EImageLayout::TransferDst, {region});
-    cmdBuf->transitionImageLayout(image.get(), EImageLayout::TransferDst, EImageLayout::ShaderReadOnlyOptimal, &cubeRange);
-
-    render->endIsolateCommands(cmdBuf);
+    TextureUploadService uploadService;
+    if (!uploadService.upload(
+            *render,
+            TextureUploadRequest{
+                .image   = image,
+                .staging = stagingBuffer,
+                .regions = {{
+                    .bufferOffset      = 0,
+                    .bufferRowLength   = 0,
+                    .bufferImageHeight = 0,
+                    .imageSubresource  = {
+                         .aspectMask     = EImageAspect::Color,
+                         .mipLevel       = 0,
+                         .baseArrayLayer = 0,
+                         .layerCount     = CubeFace_Count,
+                    },
+                    .imageOffsetX      = 0,
+                    .imageOffsetY      = 0,
+                    .imageOffsetZ      = 0,
+                    .imageExtentWidth  = _width,
+                    .imageExtentHeight = _height,
+                    .imageExtentDepth  = 1,
+                }},
+                .uploadRange   = cubeRange,
+                .finalizeRange = cubeRange,
+                .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
+                .label         = std::format("CubeMapUpload:{}:{}x{}", _label, _width, _height),
+            })) {
+        YA_CORE_ERROR("Failed to upload cubemap: {}", _label);
+        image.reset();
+        imageView.reset();
+        return;
+    }
 
     YA_CORE_INFO("Created cubemap: {} ({}x{}x{})", _label, _width, _height, static_cast<int>(CubeFace_Count));
 }
