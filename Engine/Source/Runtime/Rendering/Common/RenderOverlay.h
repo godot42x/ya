@@ -4,6 +4,7 @@
 
 #include <glm/glm.hpp>
 #include <string>
+#include <vector>
 
 namespace ya
 {
@@ -34,6 +35,18 @@ struct RenderOverlayText2D
     glm::vec4   color       = glm::vec4(1.0f);
     uint32_t    fontSize    = 16;
     float       depth       = 0.0f;
+};
+
+struct RenderViewportOverlaySnapshot
+{
+    std::vector<RenderOverlaySprite2D> screenSprites{};
+    std::vector<RenderOverlaySprite3D> worldSprites{};
+    std::vector<RenderOverlayText2D>   screenTexts{};
+
+    [[nodiscard]] bool empty() const
+    {
+        return screenSprites.empty() && worldSprites.empty() && screenTexts.empty();
+    }
 };
 
 } // namespace ya

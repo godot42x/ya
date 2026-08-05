@@ -2,6 +2,7 @@
 
 #include "Render/RenderDefines.h"
 #include "Render/Shadow/ShadowSettings.h"
+#include "Runtime/Rendering/Common/RenderOverlay.h"
 #include "Runtime/Rendering/Common/RenderTargetCatalog.h"
 
 #include <functional>
@@ -32,7 +33,7 @@ struct RenderPipelineFrameContext
     float            viewportFrameBufferScale = 1.0f;
     RenderFrameData* frameData                = nullptr;
     const ShadowSettings* shadowSettings      = nullptr;
-    std::function<void(ICommandBuffer*, Extent2D, const struct FrameContext&)> recordViewportOverlays;
+    std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
 };
 
 struct IRenderPipelineExecution

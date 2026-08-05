@@ -213,7 +213,6 @@ struct ENGINE_API RenderRuntime : IRenderRuntimeServices
     void                   ensureViewportRectInitialized(const FrameInput& input);
     bool                   beginFrameCommandBuffer(int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   beginViewportPassAndTickPipeline(const FrameInput& input, ICommandBuffer* cmdBuf);
-    void                   renderViewportPassOverlays(const RenderPipelineFrameContext& pipelineFrame, const FrameInput::OverlayInput& overlay, ICommandBuffer* cmdBuf);
     void                   renderPresentationPass(float deltaTime,
                                                   const std::function<void(ICommandBuffer*)>& recordBeforePresentationExtensions,
                                                   const std::function<void(ICommandBuffer*)>& recordPresentationExtensions,
