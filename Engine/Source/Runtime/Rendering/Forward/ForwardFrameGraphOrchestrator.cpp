@@ -215,13 +215,13 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
                 },
             });
         },
-        [viewportStage = deps.viewportStage, &stageCtx, frameBinding](RGRenderContext& rgCtx) {
+        [viewportStage = deps.viewportStage, &stageCtx, frameBinding, passContext = inputs.viewportPassContext](RGRenderContext& rgCtx) {
             const auto rasterParams   = rgCtx.getRasterPassExecutionParams();
             const auto viewportExtent = rasterParams.getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
 
             stageCtx.viewportExtent = viewportExtent;
-            viewportStage->executeSkybox(stageCtx, frameBinding);
+            viewportStage->executeSkybox(stageCtx, frameBinding, passContext);
             rgCtx.endRendering();
         });
 
@@ -251,13 +251,13 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
                 },
             });
         },
-        [viewportStage = deps.viewportStage, &stageCtx, frameBinding](RGRenderContext& rgCtx) {
+        [viewportStage = deps.viewportStage, &stageCtx, frameBinding, passContext = inputs.viewportPassContext](RGRenderContext& rgCtx) {
             const auto rasterParams   = rgCtx.getRasterPassExecutionParams();
             const auto viewportExtent = rasterParams.getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
 
             stageCtx.viewportExtent = viewportExtent;
-            viewportStage->executePBR(stageCtx, frameBinding);
+            viewportStage->executePBR(stageCtx, frameBinding, passContext);
             rgCtx.endRendering();
         });
 
@@ -287,13 +287,13 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
                 },
             });
         },
-        [viewportStage = deps.viewportStage, &stageCtx, frameBinding](RGRenderContext& rgCtx) {
+        [viewportStage = deps.viewportStage, &stageCtx, frameBinding, passContext = inputs.viewportPassContext](RGRenderContext& rgCtx) {
             const auto rasterParams   = rgCtx.getRasterPassExecutionParams();
             const auto viewportExtent = rasterParams.getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
 
             stageCtx.viewportExtent = viewportExtent;
-            viewportStage->executePhong(stageCtx, frameBinding);
+            viewportStage->executePhong(stageCtx, frameBinding, passContext);
             rgCtx.endRendering();
         });
 
@@ -317,13 +317,13 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
                 },
             });
         },
-        [viewportStage = deps.viewportStage, &stageCtx, frameBinding](RGRenderContext& rgCtx) {
+        [viewportStage = deps.viewportStage, &stageCtx, frameBinding, passContext = inputs.viewportPassContext](RGRenderContext& rgCtx) {
             const auto rasterParams   = rgCtx.getRasterPassExecutionParams();
             const auto viewportExtent = rasterParams.getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
 
             stageCtx.viewportExtent = viewportExtent;
-            viewportStage->executeUnlit(stageCtx, frameBinding);
+            viewportStage->executeUnlit(stageCtx, frameBinding, passContext);
             rgCtx.endRendering();
         });
 
@@ -347,13 +347,13 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
                 },
             });
         },
-        [viewportStage = deps.viewportStage, &stageCtx](RGRenderContext& rgCtx) {
+        [viewportStage = deps.viewportStage, &stageCtx, passContext = inputs.viewportPassContext](RGRenderContext& rgCtx) {
             const auto rasterParams   = rgCtx.getRasterPassExecutionParams();
             const auto viewportExtent = rasterParams.getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
 
             stageCtx.viewportExtent = viewportExtent;
-            viewportStage->executeSimple(stageCtx);
+            viewportStage->executeSimple(stageCtx, passContext);
             rgCtx.endRendering();
         });
 
@@ -377,13 +377,13 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
                 },
             });
         },
-        [viewportStage = deps.viewportStage, &stageCtx, directionParams](RGRenderContext& rgCtx) {
+        [viewportStage = deps.viewportStage, &stageCtx, directionParams, passContext = inputs.viewportPassContext](RGRenderContext& rgCtx) {
             const auto rasterParams   = rgCtx.getRasterPassExecutionParams();
             const auto viewportExtent = rasterParams.getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
 
             stageCtx.viewportExtent = viewportExtent;
-            viewportStage->executeDirection(stageCtx, std::move(directionParams.directionGizmos));
+            viewportStage->executeDirection(stageCtx, std::move(directionParams.directionGizmos), passContext);
             rgCtx.endRendering();
         });
 
@@ -407,13 +407,13 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
                 },
             });
         },
-        [viewportStage = deps.viewportStage, &stageCtx](RGRenderContext& rgCtx) {
+        [viewportStage = deps.viewportStage, &stageCtx, passContext = inputs.viewportPassContext](RGRenderContext& rgCtx) {
             const auto rasterParams   = rgCtx.getRasterPassExecutionParams();
             const auto viewportExtent = rasterParams.getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
 
             stageCtx.viewportExtent = viewportExtent;
-            viewportStage->executeDebug(stageCtx);
+            viewportStage->executeDebug(stageCtx, passContext);
             rgCtx.endRendering();
         });
 

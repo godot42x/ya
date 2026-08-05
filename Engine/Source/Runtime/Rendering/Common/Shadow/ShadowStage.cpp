@@ -40,9 +40,8 @@ void ShadowStage::prepare(const RenderStageContext& ctx)
 
 void ShadowStage::execute(const RenderStageContext& ctx)
 {
-    YA_PROFILE_FUNCTION();
-    if (!ctx.cmdBuf || !ctx.frameData || !_technique || !_settings.isEnabled()) return;
-    _technique->execute(ctx.cmdBuf, ctx.flightIndex, *ctx.frameData);
+    (void)ctx;
+    // Shadow commands are recorded exclusively by the frame-graph orchestrator.
 }
 
 ShadowGraphOutputs ShadowStage::appendGraphPasses(

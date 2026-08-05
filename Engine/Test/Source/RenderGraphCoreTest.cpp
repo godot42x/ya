@@ -91,6 +91,65 @@ class TestImageView final : public IImageView
     void setDebugName(const std::string& name) override { _desc.label = name; }
 };
 
+class TrackedImage final : public IImage
+{
+  public:
+    explicit TrackedImage(std::vector<std::string>* destructionOrder)
+        : _destructionOrder(destructionOrder)
+    {}
+
+    ~TrackedImage() override
+    {
+        if (_destructionOrder) {
+            _destructionOrder->push_back("image");
+        }
+    }
+
+    ImageHandle getHandle() const override { return ImageHandle{reinterpret_cast<void*>(0x101)}; }
+    uint32_t getWidth() const override { return 1; }
+    uint32_t getHeight() const override { return 1; }
+    EFormat::T getFormat() const override { return EFormat::R8G8B8A8_UNORM; }
+    uint32_t getMipLevels() const override { return 1; }
+    uint32_t getArrayLayers() const override { return 1; }
+    EImageUsage::T getUsage() const override { return EImageUsage::Sampled; }
+    EImageLayout::T getCompatibilityLayout() const override { return EImageLayout::ShaderReadOnlyOptimal; }
+    void setDebugName(const std::string&) override {}
+
+  private:
+    std::vector<std::string>* _destructionOrder = nullptr;
+};
+
+class TrackedImageView final : public IImageView
+{
+  public:
+    TrackedImageView(IImage* image, std::vector<std::string>* destructionOrder)
+        : _destructionOrder(destructionOrder)
+    {
+        _image = image;
+        _subresourceRange = ImageSubresourceRange{
+            .aspectMask     = EImageAspect::Color,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1,
+        };
+    }
+
+    ~TrackedImageView() override
+    {
+        if (_destructionOrder) {
+            _destructionOrder->push_back("view");
+        }
+    }
+
+    ImageViewHandle getHandle() const override { return ImageViewHandle{reinterpret_cast<void*>(0x202)}; }
+    EFormat::T getFormat() const override { return _image ? _image->getFormat() : EFormat::Undefined; }
+    void setDebugName(const std::string&) override {}
+
+  private:
+    std::vector<std::string>* _destructionOrder = nullptr;
+};
+
 class TestResourceFactory final : public IRenderResourceFactory
 {
   public:
@@ -2579,6 +2638,25 @@ TEST(RenderGraphCoreTest, ImageViewDoesNotOwnImageLifetime)
     ASSERT_NE(view, nullptr);
     EXPECT_EQ(view->getImage(), image.get());
     EXPECT_EQ(image.use_count(), 1);
+}
+
+TEST(RenderGraphCoreTest, RenderImageDestroysViewBeforeImage)
+{
+    std::vector<std::string> destructionOrder;
+
+    {
+        auto image = std::make_shared<TrackedImage>(&destructionOrder);
+        auto view  = std::make_shared<TrackedImageView>(image.get(), &destructionOrder);
+
+        auto renderImage         = std::make_shared<RenderImage>();
+        renderImage->label       = "ordered.render.image";
+        renderImage->image       = std::move(image);
+        renderImage->defaultView = std::move(view);
+    }
+
+    ASSERT_EQ(destructionOrder.size(), 2u);
+    EXPECT_EQ(destructionOrder[0], "view");
+    EXPECT_EQ(destructionOrder[1], "image");
 }
 
 TEST(RenderGraphCoreTest, AttachmentImageSpecRetainsSharedOwnersAndSubresourceRange)

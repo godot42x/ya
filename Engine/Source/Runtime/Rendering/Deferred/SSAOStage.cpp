@@ -3,10 +3,6 @@
 #include "Core/Profiling/Instrumentor.h"
 
 #include "Config/ConfigManager.h"
-#include "Render/Core/CommandBuffer.h"
-#include "Render/Core/FrameBuffer.h"
-#include "Render/Core/RenderGraphExecutor.h"
-#include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
 #include "Resource/Texture/TextureLibrary.h"
@@ -93,7 +89,7 @@ void SSAOStage::setSettings(float radius, float bias, float power, float intensi
 void SSAOStage::initNoiseTexture()
 {
     auto noisePixels = buildNoisePixels();
-    _noiseTexture = Texture::fromData(4, 4, std::vector<ColorRGBA<uint8_t>>(noisePixels.begin(), noisePixels.end()), "ssao-noise");
+    _noiseTexture = Texture::fromData(*_render, 4, 4, std::vector<ColorRGBA<uint8_t>>(noisePixels.begin(), noisePixels.end()), "ssao-noise");
 }
 
 void SSAOStage::init(IRender* render, stdptr<IDescriptorSetLayout> frameDSL)
@@ -169,7 +165,6 @@ void SSAOStage::destroy()
     _pipelineLayout.reset();
 
     _render                       = nullptr;
-    _graphExecutor                = nullptr;
     _gBufferResources             = {};
     _lastInputDescriptorWriteCount = 0;
 }
@@ -201,47 +196,8 @@ void SSAOStage::prepare(const RenderStageContext& ctx)
 
 void SSAOStage::execute(const RenderStageContext& ctx)
 {
-    YA_PROFILE_FUNCTION();
-    if (!ctx.cmdBuf || !_pipeline || !_gBufferResources.isComplete()) {
-        return;
-    }
-
-    auto* gbufferAlbedo = _gBufferResources.color[0];
-    auto* gbufferNormal = _gBufferResources.color[1];
-    auto* gbufferDepth  = _gBufferResources.depth;
-    if (!gbufferAlbedo || !gbufferNormal || !gbufferDepth || !_noiseTexture) {
-        return;
-    }
-
-    ICommandBuffer::LabelScope labelScope(ctx.cmdBuf, "SSAOStage");
-
-    RenderGraph graph;
-    const auto  albedo = graph.importTexture(makeSSAOImportedTextureDesc(*gbufferAlbedo, "SSAO.GBufferAlbedo", EImageLayout::ShaderReadOnlyOptimal));
-    const auto  normal = graph.importTexture(makeSSAOImportedTextureDesc(*gbufferNormal, "SSAO.GBufferNormal", EImageLayout::ShaderReadOnlyOptimal));
-    const auto  depth = graph.importTexture(makeSSAOImportedTextureDesc(*gbufferDepth, "SSAO.GBufferDepth", EImageLayout::ShaderReadOnlyOptimal));
-    YA_CORE_ASSERT(_frameInputs.isValid(), "SSAOStage standalone execution requires a frame-resource binding");
-    const auto frameBuffer = graph.importBuffer(makeHostWrittenImportedBufferDesc(
-        _frameInputs.frame.buffer,
-        "SSAO.FrameUBO",
-        EBufferUsage::UniformBuffer,
-        _frameInputs.frame.offset,
-        _frameInputs.frame.size));
-    const auto output = appendGraphPass(
-        graph,
-        ctx,
-        DeferredSSAOPassParams{
-            .frame      = frameBuffer,
-            .frameRange = RGBufferRange{.offset = _frameInputs.frame.offset, .size = _frameInputs.frame.size},
-            .albedo     = albedo,
-            .normal     = normal,
-            .depth      = depth,
-            .frameDescriptorSet = _frameInputs.descriptorSet,
-        });
-
-    YA_CORE_ASSERT(_graphExecutor != nullptr, "SSAOStage graph executor is not initialized");
-    [[maybe_unused]] const bool bExecuted = _graphExecutor->execute(graph, *ctx.cmdBuf);
-    (void)output;
-    (void)bExecuted;
+    (void)ctx;
+    // SSAO is recorded exclusively by DeferredFrameGraphOrchestrator.
 }
 
 RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,

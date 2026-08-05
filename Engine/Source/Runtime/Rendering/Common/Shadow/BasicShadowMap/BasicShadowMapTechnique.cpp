@@ -2,7 +2,6 @@
 
 #include "Core/Profiling/Instrumentor.h"
 
-#include "Render/Core/CommandBuffer.h"
 #include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
@@ -23,18 +22,15 @@ void BasicShadowMapTechnique::init(IRender* render, const ShadowSettings& settin
     _render   = render;
     _settings = settings;
     _shadowExtent = {.width = settings.resolution, .height = settings.resolution};
-    _standaloneGraphExecutor = std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory());
-
     _frameResources.init(render);
-    _directionalPass.init(render, _shadowExtent, _frameResources, _standaloneGraphExecutor.get());
-    _pointPass.init(render, _shadowExtent, _frameResources, _standaloneGraphExecutor.get());
+    _directionalPass.init(render, _shadowExtent, _frameResources);
+    _pointPass.init(render, _shadowExtent, _frameResources);
 }
 
 void BasicShadowMapTechnique::destroy()
 {
     _directionalPass.destroy();
     _pointPass.destroy();
-    _standaloneGraphExecutor.reset();
     _frameResources.destroy();
     _depthImage.reset();
     _shadowDepthArrayView.reset();
@@ -70,26 +66,6 @@ void BasicShadowMapTechnique::prepare(uint32_t flightIndex, const RenderFrameDat
     if (payload.pointEnabled()) {
         _pointPass.prepare(payload);
     }
-}
-
-void BasicShadowMapTechnique::execute(ICommandBuffer* cmdBuf, uint32_t flightIndex, const RenderFrameData& frameData)
-{
-    YA_PROFILE_FUNCTION();
-    if (!_settings.isEnabled()) return;
-
-    auto payload = buildFramePayload(flightIndex, frameData);
-    payload.pointLightCount = std::min(_lastPreparedPointLightCount, static_cast<uint32_t>(MAX_POINT_LIGHTS));
-
-    cmdBuf->debugBeginLabel("BasicShadowMap");
-
-    if (payload.directionalEnabled()) {
-        _directionalPass.execute(cmdBuf, payload);
-    }
-    if (payload.pointEnabled()) {
-        _pointPass.execute(cmdBuf, payload);
-    }
-
-    cmdBuf->debugEndLabel();
 }
 
 ShadowGraphOutputs BasicShadowMapTechnique::appendGraphPasses(

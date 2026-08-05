@@ -9,8 +9,6 @@
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowDrawHelper.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowMapResources.h"
 
-#include "Render/Core/CommandBuffer.h"
-#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Core/Texture.h"
 #include "Render/Mesh.h"
@@ -29,13 +27,11 @@ namespace ya
 
 void PointShadowPass::init(IRender* render,
                            Extent2D shadowExtent,
-                           ShadowFrameResources& frameResources,
-                           RenderGraphExecutor* standaloneGraphExecutor)
+                           ShadowFrameResources& frameResources)
 {
     _render         = render;
     _frameResources = &frameResources;
     _shadowExtent   = shadowExtent;
-    _standaloneGraphExecutor = standaloneGraphExecutor;
 
     _frameDSL    = _frameResources->getFrameDSL();
     _skinningDSL = _frameResources->getSkinningDSL();
@@ -97,7 +93,7 @@ void PointShadowPass::init(IRender* render,
     YA_CORE_ASSERT(_directSkinnedVariant.pipeline && _directSkinnedVariant.pipeline->recreate(directSkinnedCI),
                    "Failed to create point shadow direct skinned pipeline");
 
-    _indirectRenderer.init(_render, _frameDSL, standaloneGraphExecutor);
+    _indirectRenderer.init(_render, _frameDSL);
 
 }
 
@@ -106,7 +102,6 @@ void PointShadowPass::destroy()
     _indirectRenderer.destroy();
 
     _shadowImage.reset();
-    _standaloneGraphExecutor = nullptr;
     for (auto& faceViewArr : _faceDepthViews) {
         for (auto& view : faceViewArr) view.reset();
     }
@@ -145,17 +140,6 @@ void PointShadowPass::prepare(const BasicShadowFramePayload& payload)
 // ═══════════════════════════════════════════════════════════════════════════
 // Execute
 // ═══════════════════════════════════════════════════════════════════════════
-
-void PointShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload)
-{
-    YA_PROFILE_FUNCTION();
-    if (!cmdBuf || !_standaloneGraphExecutor) return;
-
-    RenderGraph graph;
-    if (!appendGraphPasses(graph, payload).has_value()) return;
-    YA_CORE_ASSERT(_standaloneGraphExecutor->execute(graph, *cmdBuf),
-                   "Failed to execute point shadow graph");
-}
 
 std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
     RenderGraph& graph,

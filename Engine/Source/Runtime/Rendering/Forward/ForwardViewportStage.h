@@ -138,14 +138,14 @@ struct ForwardViewportStage : public IRenderStage
     /// skybox / PBR / Phong / rest as separate passes, so the stage no longer
     /// hides pass order inside one fixed loop. Explicit current-flight binding,
     /// does not read stage members for per-flight resources.
-    void executeSkybox(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
-    void executePBR(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
-    void executePhong(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
-    void executeUnlit(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
-    void executeSimple(const RenderStageContext& ctx);
+    void executeSkybox(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding, const PassContext* snapshot = nullptr);
+    void executePBR(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding, const PassContext* snapshot = nullptr);
+    void executePhong(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding, const PassContext* snapshot = nullptr);
+    void executeUnlit(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding, const PassContext* snapshot = nullptr);
+    void executeSimple(const RenderStageContext& ctx, const PassContext* snapshot = nullptr);
     /// Direction overlay draws only the prebuilt gizmo snapshot (FG-704).
-    void executeDirection(const RenderStageContext& ctx, std::vector<ForwardDirectionGizmoInput> directionGizmos);
-    void executeDebug(const RenderStageContext& ctx);
+    void executeDirection(const RenderStageContext& ctx, std::vector<ForwardDirectionGizmoInput> directionGizmos, const PassContext* snapshot = nullptr);
+    void executeDebug(const RenderStageContext& ctx, const PassContext* snapshot = nullptr);
 
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setDepthBufferShadowDescriptorSet(DescriptorSetHandle depthBufferShadowDS);
@@ -157,9 +157,9 @@ struct ForwardViewportStage : public IRenderStage
     [[nodiscard]] ForwardViewportUnlitPass&       getUnlitPass() { return _unlitPass; }
     [[nodiscard]] const ForwardViewportUnlitPass& getUnlitPass() const { return _unlitPass; }
     [[nodiscard]] const ForwardFrameResourceSet::FramePayloads& getFramePayloads() const { return _framePayloads; }
+    [[nodiscard]] PassContext buildPassContext(const RenderStageContext& ctx);
 
   private:
-    [[nodiscard]] PassContext buildPassContext(const RenderStageContext& ctx);
     void                      executePass(EPass pass, const PassContext& passCtx);
 
     // Helpers

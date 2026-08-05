@@ -6,7 +6,6 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/FrameUploadArena.h"
 #include "Render/Core/Pipeline.h"
-#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderImage.h"
 #include "Render/Core/Texture.h"
 #include "Render/Stage/IRenderStage.h"
@@ -52,8 +51,6 @@ struct ENGINE_API SSAOStage : public IRenderStage
     stdptr<Texture> _noiseTexture;
 
     uint32_t                       _lastInputDescriptorWriteCount   = 0;
-    RenderGraphExecutor*                 _graphExecutor = nullptr;
-
     float _radius = 0.6f;
     float _bias   = 0.025f;
     float _power  = 1.5f;
@@ -70,7 +67,6 @@ struct ENGINE_API SSAOStage : public IRenderStage
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
     void execute(const RenderStageContext& ctx) override;
-    void setGraphExecutor(RenderGraphExecutor* executor) { _graphExecutor = executor; }
 
     [[nodiscard]] FrameData buildFrameData(const RenderStageContext& ctx) const;
     void setFrameInputs(FrameInputs frameInputs)

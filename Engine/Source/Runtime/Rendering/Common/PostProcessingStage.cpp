@@ -1,7 +1,5 @@
 #include "Runtime/Rendering/Common/PostProcessingStage.h"
 
-#include "Render/Core/CommandBuffer.h"
-#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderGraphImportUtils.h"
 #include "Render/Core/Swapchain.h"
 #include <algorithm>
@@ -101,7 +99,6 @@ void PostProcessingStage::shutdown()
 
     clearPreparedResources();
     _render = nullptr;
-    _graphExecutor = nullptr;
 }
 
 void PostProcessingStage::beginFrame()
@@ -265,57 +262,4 @@ RGTextureHandle PostProcessingStage::appendFinalizeGraphPasses(RenderGraph& grap
     return output;
 }
 
-RenderImage* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
-                                          Texture*        inputTexture,
-                                          glm::vec2       viewportExtent,
-                                          FrameContext*   ctx)
-{
-    if (!cmdBuf || !inputTexture) {
-        return nullptr;
-    }
-
-    ICommandBuffer::LabelScope labelScope(cmdBuf, "Postprocessing");
-    RenderGraph graph;
-    const auto  output = appendGraphPasses(graph, inputTexture, viewportExtent, ctx);
-    if (!output.isValid()) {
-        return nullptr;
-    }
-
-    YA_CORE_ASSERT(_graphExecutor != nullptr, "PostProcessingStage graph executor is not initialized");
-    RenderGraphExecutionResult result;
-    if (!_graphExecutor->execute(graph, *cmdBuf, nullptr, &result)) {
-        clearPreparedResources();
-        return nullptr;
-    }
-
-    capturePreparedResources(result);
-    return output.isValid() ? _preparedOutputImage.get() : nullptr;
-}
-
-RenderImage* PostProcessingStage::execute(ICommandBuffer* cmdBuf,
-                                          RenderImage*    inputImage,
-                                          glm::vec2       viewportExtent,
-                                          FrameContext*   ctx)
-{
-    if (!cmdBuf || !inputImage) {
-        return nullptr;
-    }
-
-    ICommandBuffer::LabelScope labelScope(cmdBuf, "Postprocessing");
-    RenderGraph graph;
-    const auto  output = appendGraphPasses(graph, inputImage, viewportExtent, ctx);
-    if (!output.isValid()) {
-        return nullptr;
-    }
-
-    YA_CORE_ASSERT(_graphExecutor != nullptr, "PostProcessingStage graph executor is not initialized");
-    RenderGraphExecutionResult result;
-    if (!_graphExecutor->execute(graph, *cmdBuf, nullptr, &result)) {
-        clearPreparedResources();
-        return nullptr;
-    }
-
-    capturePreparedResources(result);
-    return output.isValid() ? _preparedOutputImage.get() : nullptr;
-}
 } // namespace ya

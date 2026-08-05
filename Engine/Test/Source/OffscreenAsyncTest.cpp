@@ -354,6 +354,51 @@ TEST(OffscreenAsyncTest, QueueOffscreenJobPublishesRecordedKeepAliveResources)
     EXPECT_EQ(job->result->retainedResources[0].get(), keepAlive.get());
 }
 
+TEST(OffscreenAsyncTest, QueueOffscreenJobKeepsRecordedResourcesAliveThroughGpuCompletion)
+{
+    App               app;
+    TestCommandBuffer cmdBuf;
+    auto              job       = makeJob();
+    auto              keepAlive = std::make_shared<int>(11);
+    std::weak_ptr<int> keepAliveWeak = keepAlive;
+
+    job->createOutputFn = [](IRender*) -> std::shared_ptr<RenderImage> { return makeFakeRenderImage(); };
+    job->executeFn      = [keepAlive](ICommandBuffer* cmdBuf, RenderImage* output) -> bool {
+        if (!cmdBuf || !output) {
+            return false;
+        }
+        cmdBuf->retainResource(keepAlive);
+        return true;
+    };
+
+    queueOffscreenJob(&app, reinterpret_cast<IRender*>(0x1), job);
+
+    std::vector<std::shared_ptr<OffscreenJobState>> submittedJobs;
+    app.getTaskManager().updateOffscreenTasks(&cmdBuf, &submittedJobs);
+
+    ASSERT_EQ(job->phase, EOffscreenJobPhase::Recorded);
+    ASSERT_NE(job->result, nullptr);
+    ASSERT_NE(job->result->outputImage, nullptr);
+    ASSERT_EQ(job->result->retainedResources.size(), 1u);
+    ASSERT_EQ(job->result->outputImage->retainedResources.size(), 1u);
+    EXPECT_FALSE(keepAliveWeak.expired());
+
+    keepAlive.reset();
+    EXPECT_FALSE(keepAliveWeak.expired());
+
+    finalizeSubmittedOffscreenJobs(submittedJobs);
+    EXPECT_EQ(job->phase, EOffscreenJobPhase::GpuCompleted);
+    EXPECT_FALSE(keepAliveWeak.expired());
+
+    job->result->retainedResources.clear();
+    EXPECT_FALSE(keepAliveWeak.expired());
+
+    job->executeFn = {};
+    cmdBuf.clearRetainedResources();
+    job->result->outputImage.reset();
+    EXPECT_TRUE(keepAliveWeak.expired());
+}
+
 TEST(OffscreenAsyncTest, QueueOffscreenJobMarksExecutionFailure)
 {
     App               app;

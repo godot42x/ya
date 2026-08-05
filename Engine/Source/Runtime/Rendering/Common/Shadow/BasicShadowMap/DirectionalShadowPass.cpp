@@ -9,8 +9,6 @@
 #include "Render/RenderDefines.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowDrawHelper.h"
 
-#include "Render/Core/CommandBuffer.h"
-#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Mesh.h"
 #include "Render/RenderFrameData.h"
@@ -27,13 +25,11 @@ namespace ya
 
 void DirectionalShadowPass::init(IRender* render,
                                  Extent2D shadowExtent,
-                                 ShadowFrameResources& frameResources,
-                                 RenderGraphExecutor* standaloneGraphExecutor)
+                                 ShadowFrameResources& frameResources)
 {
     _render         = render;
     _frameResources = &frameResources;
     _shadowExtent   = shadowExtent;
-    _standaloneGraphExecutor = standaloneGraphExecutor;
 
     _frameDSL    = _frameResources->getFrameDSL();
     _skinningDSL = _frameResources->getSkinningDSL();
@@ -101,7 +97,6 @@ void DirectionalShadowPass::destroy()
 {
     _depthImage.reset();
     for (auto& depthView : _depthViews) depthView.reset();
-    _standaloneGraphExecutor = nullptr;
     _staticVariant  = {};
     _skinnedVariant = {};
     _skinningDSL.reset();
@@ -129,17 +124,6 @@ void DirectionalShadowPass::prepare(const BasicShadowFramePayload& payload)
 // ═══════════════════════════════════════════════════════════════════════════
 // Execute
 // ═══════════════════════════════════════════════════════════════════════════
-
-void DirectionalShadowPass::execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload)
-{
-    YA_PROFILE_FUNCTION();
-    if (!cmdBuf || !_standaloneGraphExecutor) return;
-
-    RenderGraph graph;
-    if (!appendGraphPasses(graph, payload).has_value()) return;
-    YA_CORE_ASSERT(_standaloneGraphExecutor->execute(graph, *cmdBuf),
-                   "Failed to execute directional shadow graph");
-}
 
 std::optional<RGPassHandle> DirectionalShadowPass::appendGraphPasses(
     RenderGraph& graph,

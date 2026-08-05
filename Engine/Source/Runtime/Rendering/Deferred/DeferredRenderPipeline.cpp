@@ -702,7 +702,6 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
         .width       = extent.width,
         .height      = extent.height,
     });
-    _postProcessStage.setGraphExecutor(_graphExecutor.get());
 }
 
 void DeferredRenderPipeline::initStages()
@@ -728,7 +727,6 @@ void DeferredRenderPipeline::initStages()
     _ssaoStage->setup(_currentGBufferResources);
     _ssaoStage->setSettings(_ssaoStage->getRadius(), _ssaoStage->getBias(), _ssaoStage->getPower(), _ssaoStage->getIntensity(), _bReverseViewportY);
     _ssaoStage->init(_render, _frameResources->getSSAOFrameDSL());
-    _ssaoStage->setGraphExecutor(_graphExecutor.get());
 
     _lightStage = ya::makeShared<LightStage>();
     _lightStage->setup(LightStage::SharedInputs{
@@ -765,9 +763,7 @@ void DeferredRenderPipeline::shutdown()
     _currentViewportResources        = {};
     _currentEnvironmentLightingTextures = {};
     if (_ssaoStage) {
-        _ssaoStage->setGraphExecutor(nullptr);
     }
-    _postProcessStage.setGraphExecutor(nullptr);
     _graphExecutor.reset();
 
     if (_overlayStage) {

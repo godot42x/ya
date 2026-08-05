@@ -3,7 +3,6 @@
 #include "Core/Profiling/Instrumentor.h"
 #include "Resource/DeferredDeletionQueue.h"
 
-#include "Render/Core/CommandBuffer.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Mesh.h"
 #include "Render/Render.h"
@@ -25,8 +24,7 @@ namespace Addr = PointShadowAddressing;
 // ════════════════════════════════════════════════════════════════════════
 
 void PointShadowIndirectRenderer::init(IRender* render,
-                                       stdptr<IDescriptorSetLayout> frameDSL,
-                                       RenderGraphExecutor* standaloneGraphExecutor)
+                                       stdptr<IDescriptorSetLayout> frameDSL)
 {
     _render   = render;
     _frameDSL = std::move(frameDSL);
@@ -78,7 +76,7 @@ void PointShadowIndirectRenderer::init(IRender* render,
             .poolSizes = {{.type = EPipelineDescriptorType::StorageBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT * 2}},
         });
 
-    _cullPass.init(_render, standaloneGraphExecutor);
+    _cullPass.init(_render);
 }
 
 void PointShadowIndirectRenderer::destroy()
@@ -307,14 +305,6 @@ void PointShadowIndirectRenderer::fillCullDataNoCull(uint32_t                   
 // ════════════════════════════════════════════════════════════════════════
 // GPU recording
 // ════════════════════════════════════════════════════════════════════════
-
-void PointShadowIndirectRenderer::dispatchCull(ICommandBuffer* cmdBuf, uint32_t flightIndex)
-{
-    YA_PROFILE_FUNCTION();
-    const auto& flight = _perFlight[flightIndex];
-    if (!flight.ready || !flight.useGpuCull) return;
-    _cullPass.dispatch(cmdBuf, flightIndex);
-}
 
 void PointShadowIndirectRenderer::bindGraphVisibleInstances(uint32_t flightIndex, IBuffer* visibleBuffer)
 {

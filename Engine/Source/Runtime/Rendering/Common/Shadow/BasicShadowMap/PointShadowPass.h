@@ -25,7 +25,6 @@ struct RenderFrameData;
 struct RenderShadingDrawBuckets;
 struct RenderDrawItem;
 struct Mesh;
-class RenderGraphExecutor;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PointShadowPass
@@ -42,11 +41,9 @@ class PointShadowPass
 
     void init(IRender* render,
               Extent2D shadowExtent,
-              ShadowFrameResources& frameResources,
-              RenderGraphExecutor* standaloneGraphExecutor);
+              ShadowFrameResources& frameResources);
     void destroy();
     void prepare(const BasicShadowFramePayload& payload);
-    void execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload);
     [[nodiscard]] std::optional<RGPassHandle> appendGraphPasses(
         RenderGraph& graph,
         const BasicShadowFramePayload& payload,
@@ -88,8 +85,6 @@ class PointShadowPass
     GraphicsPipelineCreateInfo _directPipelineCI{};
 
     stdptr<IImage> _shadowImage;
-    RenderGraphExecutor* _standaloneGraphExecutor = nullptr;
-
     std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS> _faceDepthViews{};
 
     PointShadowIndirectRenderer _indirectRenderer;

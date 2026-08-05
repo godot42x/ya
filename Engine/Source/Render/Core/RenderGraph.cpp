@@ -54,12 +54,12 @@ bool isHandleDeterministicallyBefore(const HandleT& lhs, const HandleT& rhs)
 const char* toString(ERGPassResourceAccess access)
 {
     switch (access) {
-        case ERGPassResourceAccess::Read: return "Read";
-        case ERGPassResourceAccess::Write: return "Write";
-        case ERGPassResourceAccess::ColorAttachment: return "ColorAttachment";
-        case ERGPassResourceAccess::DepthAttachment: return "DepthAttachment";
-        case ERGPassResourceAccess::TransferSrc: return "TransferSrc";
-        case ERGPassResourceAccess::TransferDst: return "TransferDst";
+    case ERGPassResourceAccess::Read:            return "Read";
+    case ERGPassResourceAccess::Write:           return "Write";
+    case ERGPassResourceAccess::ColorAttachment: return "ColorAttachment";
+    case ERGPassResourceAccess::DepthAttachment: return "DepthAttachment";
+    case ERGPassResourceAccess::TransferSrc:     return "TransferSrc";
+    case ERGPassResourceAccess::TransferDst:     return "TransferDst";
     }
     return "<unknown>";
 }
@@ -67,13 +67,13 @@ const char* toString(ERGPassResourceAccess access)
 const char* toString(ERGBufferAccess access)
 {
     switch (access) {
-        case ERGBufferAccess::UniformRead: return "UniformRead";
-        case ERGBufferAccess::StorageRead: return "StorageRead";
-        case ERGBufferAccess::StorageWrite: return "StorageWrite";
-        case ERGBufferAccess::StorageReadWrite: return "StorageReadWrite";
-        case ERGBufferAccess::IndirectRead: return "IndirectRead";
-        case ERGBufferAccess::TransferRead: return "TransferRead";
-        case ERGBufferAccess::TransferWrite: return "TransferWrite";
+    case ERGBufferAccess::UniformRead:      return "UniformRead";
+    case ERGBufferAccess::StorageRead:      return "StorageRead";
+    case ERGBufferAccess::StorageWrite:     return "StorageWrite";
+    case ERGBufferAccess::StorageReadWrite: return "StorageReadWrite";
+    case ERGBufferAccess::IndirectRead:     return "IndirectRead";
+    case ERGBufferAccess::TransferRead:     return "TransferRead";
+    case ERGBufferAccess::TransferWrite:    return "TransferWrite";
     }
     return "<unknown>";
 }
@@ -195,10 +195,10 @@ bool rangesOverlap(const RGBufferRange& lhs, const RGBufferRange& rhs)
 const char* toString(ERGPassKind kind)
 {
     switch (kind) {
-        case ERGPassKind::Unknown: return "Unknown";
-        case ERGPassKind::Raster: return "Raster";
-        case ERGPassKind::Compute: return "Compute";
-        case ERGPassKind::Copy: return "Copy";
+    case ERGPassKind::Unknown: return "Unknown";
+    case ERGPassKind::Raster:  return "Raster";
+    case ERGPassKind::Compute: return "Compute";
+    case ERGPassKind::Copy:    return "Copy";
     }
     return "Unknown";
 }
@@ -211,7 +211,7 @@ uint32_t graphDefaultAspectMask(EFormat::T format)
     if (EFormat::isDepthFormat(format)) {
         return EImageAspect::Depth;
     }
-        return EImageAspect::Color;
+    return EImageAspect::Color;
 }
 
 ImageSubresourceRange makeFullRange(const RGTextureDesc& desc)
@@ -245,7 +245,8 @@ ImageSubresourceRange makeImportedViewRange(const RGTextureResource& resource)
 
 void normalizeImportedTextureDesc(RGImportedTextureDesc& importedDesc)
 {
-    auto validateRange = [](const IImage& image, const ImageSubresourceRange& range, std::string_view label) {
+    auto validateRange = [](const IImage& image, const ImageSubresourceRange& range, std::string_view label)
+    {
         YA_CORE_ASSERT(range.levelCount > 0 && range.layerCount > 0,
                        "Imported texture '{}' subresource range must be non-empty",
                        label);
@@ -274,9 +275,9 @@ void normalizeImportedTextureDesc(RGImportedTextureDesc& importedDesc)
     };
 
     if (importedDesc.image) {
-        const IImage& image = *importedDesc.image;
-        const auto    nativeHandle = static_cast<void*>(image.getHandle());
-        const std::string_view label = importedDesc.importDesc.label.empty() ? importedDesc.desc.label : importedDesc.importDesc.label;
+        const IImage&          image        = *importedDesc.image;
+        const auto             nativeHandle = static_cast<void*>(image.getHandle());
+        const std::string_view label        = importedDesc.importDesc.label.empty() ? importedDesc.desc.label : importedDesc.importDesc.label;
 
         YA_CORE_ASSERT(importedDesc.importDesc.nativeHandle == nullptr || importedDesc.importDesc.nativeHandle == nativeHandle,
                        "Imported texture image/native handle mismatch for '{}'",
@@ -399,37 +400,37 @@ ImageResourceState makeTextureState(const RGTextureResource& resource, ERGPassRe
     };
 
     switch (access) {
-        case ERGPassResourceAccess::Read:
-            state.stages = EPipelineStage::FragmentShader;
-            state.access = EResourceAccess::ShaderRead;
-            state.layout = EImageLayout::ShaderReadOnlyOptimal;
-            break;
-        case ERGPassResourceAccess::Write:
-            state.stages = EPipelineStage::ComputeShader;
-            state.access = EResourceAccess::ShaderWrite;
-            state.layout = EImageLayout::General;
-            break;
-        case ERGPassResourceAccess::ColorAttachment:
-            state.stages = EPipelineStage::ColorAttachmentOutput;
-            state.access = EResourceAccess::ColorAttachmentWrite;
-            state.layout = EImageLayout::ColorAttachmentOptimal;
-            break;
-        case ERGPassResourceAccess::DepthAttachment:
-            state.stages = static_cast<EPipelineStage::T>(EPipelineStage::EarlyFragmentTests | EPipelineStage::LateFragmentTests);
-            state.access = static_cast<EResourceAccess::T>(
-                EResourceAccess::DepthStencilAttachmentRead | EResourceAccess::DepthStencilAttachmentWrite);
-            state.layout = EImageLayout::DepthStencilAttachmentOptimal;
-            break;
-        case ERGPassResourceAccess::TransferSrc:
-            state.stages = EPipelineStage::Transfer;
-            state.access = EResourceAccess::TransferRead;
-            state.layout = EImageLayout::TransferSrc;
-            break;
-        case ERGPassResourceAccess::TransferDst:
-            state.stages = EPipelineStage::Transfer;
-            state.access = EResourceAccess::TransferWrite;
-            state.layout = EImageLayout::TransferDst;
-            break;
+    case ERGPassResourceAccess::Read:
+        state.stages = EPipelineStage::FragmentShader;
+        state.access = EResourceAccess::ShaderRead;
+        state.layout = EImageLayout::ShaderReadOnlyOptimal;
+        break;
+    case ERGPassResourceAccess::Write:
+        state.stages = EPipelineStage::ComputeShader;
+        state.access = EResourceAccess::ShaderWrite;
+        state.layout = EImageLayout::General;
+        break;
+    case ERGPassResourceAccess::ColorAttachment:
+        state.stages = EPipelineStage::ColorAttachmentOutput;
+        state.access = EResourceAccess::ColorAttachmentWrite;
+        state.layout = EImageLayout::ColorAttachmentOptimal;
+        break;
+    case ERGPassResourceAccess::DepthAttachment:
+        state.stages = static_cast<EPipelineStage::T>(EPipelineStage::EarlyFragmentTests | EPipelineStage::LateFragmentTests);
+        state.access = static_cast<EResourceAccess::T>(
+            EResourceAccess::DepthStencilAttachmentRead | EResourceAccess::DepthStencilAttachmentWrite);
+        state.layout = EImageLayout::DepthStencilAttachmentOptimal;
+        break;
+    case ERGPassResourceAccess::TransferSrc:
+        state.stages = EPipelineStage::Transfer;
+        state.access = EResourceAccess::TransferRead;
+        state.layout = EImageLayout::TransferSrc;
+        break;
+    case ERGPassResourceAccess::TransferDst:
+        state.stages = EPipelineStage::Transfer;
+        state.access = EResourceAccess::TransferWrite;
+        state.layout = EImageLayout::TransferDst;
+        break;
     }
 
     return state;
@@ -437,41 +438,41 @@ ImageResourceState makeTextureState(const RGTextureResource& resource, ERGPassRe
 
 BufferResourceState makeBufferState(ERGPassKind passKind, const RGBufferResource& resource, const RGBufferUsage& usage)
 {
-    const auto normalizedRange = normalizeBufferRange(resource, usage.range);
+    const auto          normalizedRange = normalizeBufferRange(resource, usage.range);
     BufferResourceState state{
         .offset = normalizedRange.offset,
         .size   = normalizedRange.size,
     };
 
     switch (usage.access) {
-        case ERGBufferAccess::UniformRead:
-            state.stages = EPipelineStage::AllCommands;
-            state.access = EResourceAccess::ShaderRead;
-            break;
-        case ERGBufferAccess::StorageRead:
-            state.stages = passKind == ERGPassKind::Compute ? EPipelineStage::ComputeShader : EPipelineStage::AllCommands;
-            state.access = EResourceAccess::ShaderRead;
-            break;
-        case ERGBufferAccess::StorageWrite:
-            state.stages = passKind == ERGPassKind::Compute ? EPipelineStage::ComputeShader : EPipelineStage::AllCommands;
-            state.access = EResourceAccess::ShaderWrite;
-            break;
-        case ERGBufferAccess::StorageReadWrite:
-            state.stages = passKind == ERGPassKind::Compute ? EPipelineStage::ComputeShader : EPipelineStage::AllCommands;
-            state.access = static_cast<EResourceAccess::T>(EResourceAccess::ShaderRead | EResourceAccess::ShaderWrite);
-            break;
-        case ERGBufferAccess::IndirectRead:
-            state.stages = EPipelineStage::DrawIndirect;
-            state.access = EResourceAccess::IndirectCommandRead;
-            break;
-        case ERGBufferAccess::TransferRead:
-            state.stages = EPipelineStage::Transfer;
-            state.access = EResourceAccess::TransferRead;
-            break;
-        case ERGBufferAccess::TransferWrite:
-            state.stages = EPipelineStage::Transfer;
-            state.access = EResourceAccess::TransferWrite;
-            break;
+    case ERGBufferAccess::UniformRead:
+        state.stages = EPipelineStage::AllCommands;
+        state.access = EResourceAccess::ShaderRead;
+        break;
+    case ERGBufferAccess::StorageRead:
+        state.stages = passKind == ERGPassKind::Compute ? EPipelineStage::ComputeShader : EPipelineStage::AllCommands;
+        state.access = EResourceAccess::ShaderRead;
+        break;
+    case ERGBufferAccess::StorageWrite:
+        state.stages = passKind == ERGPassKind::Compute ? EPipelineStage::ComputeShader : EPipelineStage::AllCommands;
+        state.access = EResourceAccess::ShaderWrite;
+        break;
+    case ERGBufferAccess::StorageReadWrite:
+        state.stages = passKind == ERGPassKind::Compute ? EPipelineStage::ComputeShader : EPipelineStage::AllCommands;
+        state.access = static_cast<EResourceAccess::T>(EResourceAccess::ShaderRead | EResourceAccess::ShaderWrite);
+        break;
+    case ERGBufferAccess::IndirectRead:
+        state.stages = EPipelineStage::DrawIndirect;
+        state.access = EResourceAccess::IndirectCommandRead;
+        break;
+    case ERGBufferAccess::TransferRead:
+        state.stages = EPipelineStage::Transfer;
+        state.access = EResourceAccess::TransferRead;
+        break;
+    case ERGBufferAccess::TransferWrite:
+        state.stages = EPipelineStage::Transfer;
+        state.access = EResourceAccess::TransferWrite;
+        break;
     }
 
     return state;
@@ -480,15 +481,15 @@ BufferResourceState makeBufferState(ERGPassKind passKind, const RGBufferResource
 bool isBufferReadAccess(ERGBufferAccess access)
 {
     switch (access) {
-        case ERGBufferAccess::UniformRead:
-        case ERGBufferAccess::StorageRead:
-        case ERGBufferAccess::StorageReadWrite:
-        case ERGBufferAccess::IndirectRead:
-        case ERGBufferAccess::TransferRead:
-            return true;
-        case ERGBufferAccess::StorageWrite:
-        case ERGBufferAccess::TransferWrite:
-            return false;
+    case ERGBufferAccess::UniformRead:
+    case ERGBufferAccess::StorageRead:
+    case ERGBufferAccess::StorageReadWrite:
+    case ERGBufferAccess::IndirectRead:
+    case ERGBufferAccess::TransferRead:
+        return true;
+    case ERGBufferAccess::StorageWrite:
+    case ERGBufferAccess::TransferWrite:
+        return false;
     }
     return false;
 }
@@ -496,15 +497,15 @@ bool isBufferReadAccess(ERGBufferAccess access)
 bool isBufferWriteAccess(ERGBufferAccess access)
 {
     switch (access) {
-        case ERGBufferAccess::StorageWrite:
-        case ERGBufferAccess::StorageReadWrite:
-        case ERGBufferAccess::TransferWrite:
-            return true;
-        case ERGBufferAccess::UniformRead:
-        case ERGBufferAccess::StorageRead:
-        case ERGBufferAccess::IndirectRead:
-        case ERGBufferAccess::TransferRead:
-            return false;
+    case ERGBufferAccess::StorageWrite:
+    case ERGBufferAccess::StorageReadWrite:
+    case ERGBufferAccess::TransferWrite:
+        return true;
+    case ERGBufferAccess::UniformRead:
+    case ERGBufferAccess::StorageRead:
+    case ERGBufferAccess::IndirectRead:
+    case ERGBufferAccess::TransferRead:
+        return false;
     }
     return false;
 }
@@ -528,7 +529,8 @@ void appendBufferUsage(RGPass& pass, RGBufferHandle handle, ERGBufferAccess acce
 
 bool isUniformOnlyBufferUsage(EBufferUsage usage)
 {
-    return hasBufferUsage(usage, EBufferUsage::UniformBuffer) && !hasBufferUsage(usage, EBufferUsage::StorageBuffer);
+    return hasBufferUsage(usage, EBufferUsage::UniformBuffer) &&
+           !hasBufferUsage(usage, EBufferUsage::StorageBuffer);
 }
 
 bool isStorageCapableBufferUsage(EBufferUsage usage)
@@ -544,18 +546,18 @@ bool isUniformCapableBufferUsage(EBufferUsage usage)
 bool validateBufferUsageFlags(const RGBufferResource& resource, ERGBufferAccess access)
 {
     switch (access) {
-        case ERGBufferAccess::UniformRead:
-            return isUniformCapableBufferUsage(resource.desc.usage);
-        case ERGBufferAccess::StorageRead:
-        case ERGBufferAccess::StorageWrite:
-        case ERGBufferAccess::StorageReadWrite:
-            return isStorageCapableBufferUsage(resource.desc.usage);
-        case ERGBufferAccess::IndirectRead:
-            return hasBufferUsage(resource.desc.usage, EBufferUsage::IndirectBuffer);
-        case ERGBufferAccess::TransferRead:
-            return hasBufferUsage(resource.desc.usage, EBufferUsage::TransferSrc);
-        case ERGBufferAccess::TransferWrite:
-            return hasBufferUsage(resource.desc.usage, EBufferUsage::TransferDst);
+    case ERGBufferAccess::UniformRead:
+        return isUniformCapableBufferUsage(resource.desc.usage);
+    case ERGBufferAccess::StorageRead:
+    case ERGBufferAccess::StorageWrite:
+    case ERGBufferAccess::StorageReadWrite:
+        return isStorageCapableBufferUsage(resource.desc.usage);
+    case ERGBufferAccess::IndirectRead:
+        return hasBufferUsage(resource.desc.usage, EBufferUsage::IndirectBuffer);
+    case ERGBufferAccess::TransferRead:
+        return hasBufferUsage(resource.desc.usage, EBufferUsage::TransferSrc);
+    case ERGBufferAccess::TransferWrite:
+        return hasBufferUsage(resource.desc.usage, EBufferUsage::TransferDst);
     }
     return false;
 }
@@ -563,12 +565,12 @@ bool validateBufferUsageFlags(const RGBufferResource& resource, ERGBufferAccess 
 std::string describeRequiredImageUsage(ERGPassResourceAccess access)
 {
     switch (access) {
-        case ERGPassResourceAccess::Read: return "Sampled";
-        case ERGPassResourceAccess::Write: return "Storage";
-        case ERGPassResourceAccess::ColorAttachment: return "ColorAttachment";
-        case ERGPassResourceAccess::DepthAttachment: return "DepthStencilAttachment";
-        case ERGPassResourceAccess::TransferSrc: return "TransferSrc";
-        case ERGPassResourceAccess::TransferDst: return "TransferDst";
+    case ERGPassResourceAccess::Read:            return "Sampled";
+    case ERGPassResourceAccess::Write:           return "Storage";
+    case ERGPassResourceAccess::ColorAttachment: return "ColorAttachment";
+    case ERGPassResourceAccess::DepthAttachment: return "DepthStencilAttachment";
+    case ERGPassResourceAccess::TransferSrc:     return "TransferSrc";
+    case ERGPassResourceAccess::TransferDst:     return "TransferDst";
     }
     return "<unknown>";
 }
@@ -576,14 +578,14 @@ std::string describeRequiredImageUsage(ERGPassResourceAccess access)
 std::string describeRequiredBufferUsage(ERGBufferAccess access)
 {
     switch (access) {
-        case ERGBufferAccess::UniformRead: return "UniformBuffer";
-        case ERGBufferAccess::StorageRead:
-        case ERGBufferAccess::StorageWrite:
-        case ERGBufferAccess::StorageReadWrite:
-            return "StorageBuffer";
-        case ERGBufferAccess::IndirectRead: return "IndirectBuffer";
-        case ERGBufferAccess::TransferRead: return "TransferSrc";
-        case ERGBufferAccess::TransferWrite: return "TransferDst";
+    case ERGBufferAccess::UniformRead: return "UniformBuffer";
+    case ERGBufferAccess::StorageRead:
+    case ERGBufferAccess::StorageWrite:
+    case ERGBufferAccess::StorageReadWrite:
+        return "StorageBuffer";
+    case ERGBufferAccess::IndirectRead:  return "IndirectBuffer";
+    case ERGBufferAccess::TransferRead:  return "TransferSrc";
+    case ERGBufferAccess::TransferWrite: return "TransferDst";
     }
     return "<unknown>";
 }
@@ -674,17 +676,19 @@ bool RGRenderContext::hasDeclaredBufferAccess(RGBufferHandle handle, ERGBufferAc
 
 const RGTextureUsage* RGRenderContext::findDeclaredTextureUsage(RGTextureHandle handle) const
 {
-    const auto it = std::find_if(_pass.textures.begin(), _pass.textures.end(), [handle](const RGTextureUsage& usage) {
-        return usage.handle == handle;
-    });
+    const auto it = std::find_if(_pass.textures.begin(),
+                                 _pass.textures.end(),
+                                 [handle](const RGTextureUsage& usage)
+                                 { return usage.handle == handle; });
     return it != _pass.textures.end() ? &*it : nullptr;
 }
 
 const RGBufferUsage* RGRenderContext::findDeclaredBufferUsage(RGBufferHandle handle) const
 {
-    const auto it = std::find_if(_pass.buffers.begin(), _pass.buffers.end(), [handle](const RGBufferUsage& usage) {
-        return usage.handle == handle;
-    });
+    const auto it = std::find_if(_pass.buffers.begin(),
+                                 _pass.buffers.end(),
+                                 [handle](const RGBufferUsage& usage)
+                                 { return usage.handle == handle; });
     return it != _pass.buffers.end() ? &*it : nullptr;
 }
 
@@ -708,9 +712,9 @@ void RGRenderContext::assertBufferDeclared(RGBufferHandle handle, const char* op
                    handle.index);
 }
 
-void RGRenderContext::assertTextureAccess(RGTextureHandle handle,
+void RGRenderContext::assertTextureAccess(RGTextureHandle                              handle,
                                           std::initializer_list<ERGPassResourceAccess> allowed,
-                                          const char* operation) const
+                                          const char*                                  operation) const
 {
     const auto* usage = findDeclaredTextureUsage(handle);
     YA_CORE_ASSERT(usage != nullptr,
@@ -727,9 +731,9 @@ void RGRenderContext::assertTextureAccess(RGTextureHandle handle,
                    toString(usage->access));
 }
 
-void RGRenderContext::assertBufferAccess(RGBufferHandle handle,
+void RGRenderContext::assertBufferAccess(RGBufferHandle                         handle,
                                          std::initializer_list<ERGBufferAccess> allowed,
-                                         const char* operation) const
+                                         const char*                            operation) const
 {
     const auto* usage = findDeclaredBufferUsage(handle);
     YA_CORE_ASSERT(usage != nullptr,
@@ -789,12 +793,12 @@ void RGRenderContext::beginColorRendering(const ColorRenderingDesc& desc) const
     beginRasterRendering(RasterRenderingDesc{
         .renderArea = desc.renderArea,
         .layerCount = desc.layerCount,
-        .colors = {{
-            .color       = desc.color,
-            .clearValue  = desc.clearValue,
-            .loadOp      = desc.loadOp,
-            .storeOp     = desc.storeOp,
-            .finalLayout = desc.finalLayout,
+        .colors     = {{
+                .color       = desc.color,
+                .clearValue  = desc.clearValue,
+                .loadOp      = desc.loadOp,
+                .storeOp     = desc.storeOp,
+                .finalLayout = desc.finalLayout,
         }},
     });
 }
@@ -813,7 +817,8 @@ void RGRenderContext::beginDeclaredRasterRendering() const
 void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) const
 {
     YA_CORE_ASSERT(!desc.colors.empty() || desc.depth.has_value(),
-                   "RGRenderContext pass {} requires at least one attachment", _pass.name);
+                   "RGRenderContext pass {} requires at least one attachment",
+                   _pass.name);
 
     RenderAttachmentSet attachments{
         .renderArea = desc.renderArea,
@@ -825,7 +830,9 @@ void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) cons
         const auto* color = resolveTexture(colorDesc.color);
         YA_CORE_ASSERT(color != nullptr, "RGRenderContext pass {} failed to resolve color target {}", _pass.name, colorDesc.color.index);
         YA_CORE_ASSERT(color->getImage() != nullptr && color->getImageView() != nullptr,
-                       "RGRenderContext pass {} color target {} is missing image/view", _pass.name, colorDesc.color.index);
+                       "RGRenderContext pass {} color target {} is missing image/view",
+                       _pass.name,
+                       colorDesc.color.index);
         retainResolvedRenderImage(_cmdBuf, *color);
         auto attachment = makeRenderAttachment(
             color->getImageView(),
@@ -856,7 +863,9 @@ void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) cons
         const auto* depth = resolveTexture(desc.depth->depth);
         YA_CORE_ASSERT(depth != nullptr, "RGRenderContext pass {} failed to resolve depth target {}", _pass.name, desc.depth->depth.index);
         YA_CORE_ASSERT(depth->getImage() != nullptr && depth->getImageView() != nullptr,
-                       "RGRenderContext pass {} depth target {} is missing image/view", _pass.name, desc.depth->depth.index);
+                       "RGRenderContext pass {} depth target {} is missing image/view",
+                       _pass.name,
+                       desc.depth->depth.index);
         retainResolvedRenderImage(_cmdBuf, *depth);
 
         attachments.depth = makeRenderAttachment(
@@ -893,8 +902,8 @@ void RGRenderContext::copyBuffer(RGBufferHandle src, RGBufferHandle dst, uint64_
 }
 
 void RGRenderContext::copyTextureToBuffer(
-    RGTextureHandle src,
-    RGBufferHandle  dst,
+    RGTextureHandle                     src,
+    RGBufferHandle                      dst,
     const std::vector<BufferImageCopy>& regions) const
 {
     assertTextureAccess(src, {ERGPassResourceAccess::TransferSrc}, "copyTextureToBuffer(src)");
@@ -1001,8 +1010,8 @@ void RGPassBuilder::declareCopy()
 
 void RGPassBuilder::declareRaster(const RGRasterPassDesc& desc)
 {
-    auto& currentPass = pass();
-    currentPass.kind = ERGPassKind::Raster;
+    auto& currentPass      = pass();
+    currentPass.kind       = ERGPassKind::Raster;
     currentPass.rasterDesc = desc;
 
     for (const auto& color : desc.colors) {
@@ -1060,7 +1069,7 @@ RGTextureHandle RenderGraph::createPersistentTexture(const RGTextureDesc& desc, 
 {
     YA_CORE_ASSERT(key.isValid(), "Persistent texture key must not be empty for '{}'", desc.label);
 
-    const auto handle = createTexture(desc, ERGResourceLifetime::Persistent);
+    const auto handle              = createTexture(desc, ERGResourceLifetime::Persistent);
     _textures.back().persistentKey = key;
     return handle;
 }
@@ -1108,7 +1117,7 @@ RGBufferHandle RenderGraph::createPersistentBuffer(const RGBufferDesc& desc, con
 {
     YA_CORE_ASSERT(key.isValid(), "Persistent buffer key must not be empty for '{}'", desc.label);
 
-    const auto handle = createBuffer(desc, ERGResourceLifetime::Persistent);
+    const auto handle             = createBuffer(desc, ERGResourceLifetime::Persistent);
     _buffers.back().persistentKey = key;
     return handle;
 }
@@ -1149,8 +1158,8 @@ const RGPass* RenderGraph::getPass(RGPassHandle handle) const
 }
 
 RGPassHandle RenderGraph::addPass(
-    const std::string& name,
-    const std::function<void(RGPassBuilder&)>& setup,
+    const std::string&                           name,
+    const std::function<void(RGPassBuilder&)>&   setup,
     const std::function<void(RGRenderContext&)>& execute)
 {
     RGPassHandle handle{
@@ -1196,18 +1205,19 @@ RGCompiledGraph RenderGraph::compile() const
         ERGBufferAccess access = ERGBufferAccess::StorageRead;
     };
     std::unordered_map<RGBufferHandle, std::vector<TrackedBufferAccess>> bufferAccesses;
-    std::unordered_map<std::string, const RGTextureResource*> persistentTexturesByKey;
-    std::unordered_map<std::string, const RGBufferResource*>  persistentBuffersByKey;
-    std::vector<std::vector<uint32_t>> adjacency(_passes.size());
-    std::vector<uint32_t> indegree(_passes.size(), 0);
-    std::vector<RGCompiledPassPlan> passPlans(_passes.size());
+    std::unordered_map<std::string, const RGTextureResource*>            persistentTexturesByKey;
+    std::unordered_map<std::string, const RGBufferResource*>             persistentBuffersByKey;
+    std::vector<std::vector<uint32_t>>                                   adjacency(_passes.size());
+    std::vector<uint32_t>                                                indegree(_passes.size(), 0);
+    std::vector<RGCompiledPassPlan>                                      passPlans(_passes.size());
 
     for (size_t i = 0; i < _passes.size(); ++i) {
-        passPlans[i].pass = _passes[i].handle;
+        passPlans[i].pass       = _passes[i].handle;
         passPlans[i].rasterPlan = _passes[i].rasterDesc;
     }
 
-    const auto addDependency = [&](RGPassHandle from, RGPassHandle to) {
+    const auto addDependency = [&](RGPassHandle from, RGPassHandle to)
+    {
         if (!from.isValid() || !to.isValid() || from == to) {
             return;
         }
@@ -1220,7 +1230,8 @@ RGCompiledGraph RenderGraph::compile() const
         ++indegree[to.index];
     };
 
-    const auto addIssue = [&](RGCompileIssue::EKind kind, RGPassHandle pass, std::string message) {
+    const auto addIssue = [&](RGCompileIssue::EKind kind, RGPassHandle pass, std::string message)
+    {
         compiled.issues.push_back({
             .kind    = kind,
             .pass    = pass,
@@ -1228,7 +1239,8 @@ RGCompiledGraph RenderGraph::compile() const
         });
     };
 
-    const auto resolvePassKind = [](const RGPass& pass) {
+    const auto resolvePassKind = [](const RGPass& pass)
+    {
         if (pass.kind != ERGPassKind::Unknown) {
             return pass.kind;
         }
@@ -1271,7 +1283,8 @@ RGCompiledGraph RenderGraph::compile() const
         return ERGPassKind::Compute;
     };
 
-    const auto validatePassKind = [&](const RGPass& pass, ERGPassKind kind) {
+    const auto validatePassKind = [&](const RGPass& pass, ERGPassKind kind)
+    {
         bool hasRasterUsage   = false;
         bool hasTransferUsage = false;
         bool hasOtherUsage    = false;
@@ -1298,34 +1311,34 @@ RGCompiledGraph RenderGraph::compile() const
         }
 
         switch (kind) {
-            case ERGPassKind::Raster:
-                if (!pass.rasterDesc.has_value() && !hasRasterUsage) {
-                    addIssue(RGCompileIssue::EKind::InvalidPassKind,
-                             pass.handle,
-                             std::format("pass {} is Raster but has no raster declaration or raster attachment usage", pass.name));
-                }
-                break;
-            case ERGPassKind::Compute:
-                if (pass.rasterDesc.has_value() || hasRasterUsage) {
-                    addIssue(RGCompileIssue::EKind::InvalidPassKind,
-                             pass.handle,
-                             std::format("pass {} is Compute but declares raster attachments", pass.name));
-                }
-                break;
-            case ERGPassKind::Copy:
-                if (pass.rasterDesc.has_value() || hasRasterUsage || hasOtherUsage) {
-                    addIssue(RGCompileIssue::EKind::InvalidPassKind,
-                             pass.handle,
-                             std::format("pass {} is Copy but uses non-transfer resources", pass.name));
-                }
-                if (!hasTransferUsage) {
-                    addIssue(RGCompileIssue::EKind::InvalidPassKind,
-                             pass.handle,
-                             std::format("pass {} is Copy but has no transfer resource usage", pass.name));
-                }
-                break;
-            case ERGPassKind::Unknown:
-                break;
+        case ERGPassKind::Raster:
+            if (!pass.rasterDesc.has_value() && !hasRasterUsage) {
+                addIssue(RGCompileIssue::EKind::InvalidPassKind,
+                         pass.handle,
+                         std::format("pass {} is Raster but has no raster declaration or raster attachment usage", pass.name));
+            }
+            break;
+        case ERGPassKind::Compute:
+            if (pass.rasterDesc.has_value() || hasRasterUsage) {
+                addIssue(RGCompileIssue::EKind::InvalidPassKind,
+                         pass.handle,
+                         std::format("pass {} is Compute but declares raster attachments", pass.name));
+            }
+            break;
+        case ERGPassKind::Copy:
+            if (pass.rasterDesc.has_value() || hasRasterUsage || hasOtherUsage) {
+                addIssue(RGCompileIssue::EKind::InvalidPassKind,
+                         pass.handle,
+                         std::format("pass {} is Copy but uses non-transfer resources", pass.name));
+            }
+            if (!hasTransferUsage) {
+                addIssue(RGCompileIssue::EKind::InvalidPassKind,
+                         pass.handle,
+                         std::format("pass {} is Copy but has no transfer resource usage", pass.name));
+            }
+            break;
+        case ERGPassKind::Unknown:
+            break;
         }
     };
 
@@ -1335,8 +1348,7 @@ RGCompiledGraph RenderGraph::compile() const
 
         for (const RGHandle<RGPassHandleTag> dependency : pass.dependencies) {
             if (!getPass(dependency)) {
-                addIssue(RGCompileIssue::EKind::InvalidResource, pass.handle,
-                         std::format("pass {} depends on invalid pass handle", pass.name));
+                addIssue(RGCompileIssue::EKind::InvalidResource, pass.handle, std::format("pass {} depends on invalid pass handle", pass.name));
                 continue;
             }
             addDependency(dependency, pass.handle);
@@ -1349,27 +1361,28 @@ RGCompiledGraph RenderGraph::compile() const
                 continue;
             }
 
-            const auto requiredUsage = [&]() {
+            const auto requiredUsage = [&]()
+            {
                 switch (usage.access) {
-                    case ERGPassResourceAccess::Read:
-                        return EImageUsage::Sampled;
-                    case ERGPassResourceAccess::Write:
-                        return EImageUsage::Storage;
-                    case ERGPassResourceAccess::ColorAttachment:
-                        return EImageUsage::ColorAttachment;
-                    case ERGPassResourceAccess::DepthAttachment:
-                        return EImageUsage::DepthStencilAttachment;
-                    case ERGPassResourceAccess::TransferSrc:
-                        return EImageUsage::TransferSrc;
-                    case ERGPassResourceAccess::TransferDst:
-                        return EImageUsage::TransferDst;
+                case ERGPassResourceAccess::Read:
+                    return EImageUsage::Sampled;
+                case ERGPassResourceAccess::Write:
+                    return EImageUsage::Storage;
+                case ERGPassResourceAccess::ColorAttachment:
+                    return EImageUsage::ColorAttachment;
+                case ERGPassResourceAccess::DepthAttachment:
+                    return EImageUsage::DepthStencilAttachment;
+                case ERGPassResourceAccess::TransferSrc:
+                    return EImageUsage::TransferSrc;
+                case ERGPassResourceAccess::TransferDst:
+                    return EImageUsage::TransferDst;
                 }
                 return EImageUsage::None;
             }();
             if (requiredUsage != EImageUsage::None && !hasImageUsage(resource->desc.usage, requiredUsage)) {
                 const std::string backingUsage = resource->imported.has_value()
-                    ? formatImageUsageFlags(resource->imported->importDesc.usage)
-                    : formatImageUsageFlags(resource->desc.usage);
+                                                   ? formatImageUsageFlags(resource->imported->importDesc.usage)
+                                                   : formatImageUsageFlags(resource->desc.usage);
                 addIssue(RGCompileIssue::EKind::InvalidUsage, pass.handle,
                          std::format("pass {} uses texture {} as {} but graph usage is {} (backing usage: {})",
                                      pass.name,
@@ -1395,9 +1408,9 @@ RGCompiledGraph RenderGraph::compile() const
             if (!bWrite) {
                 const auto writerIt = textureWriters.find(usage.handle);
                 if (writerIt == textureWriters.end() && resource->lifetime != ERGResourceLifetime::Imported) {
-                    addIssue(RGCompileIssue::EKind::ReadBeforeWrite, pass.handle,
-                             std::format("pass {} reads texture {} before any writer", pass.name, resource->desc.label));
-                } else if (writerIt != textureWriters.end()) {
+                    addIssue(RGCompileIssue::EKind::ReadBeforeWrite, pass.handle, std::format("pass {} reads texture {} before any writer", pass.name, resource->desc.label));
+                }
+                else if (writerIt != textureWriters.end()) {
                     addDependency(writerIt->second, pass.handle);
                 }
                 continue;
@@ -1420,35 +1433,19 @@ RGCompiledGraph RenderGraph::compile() const
             const bool bBackingUsageCompatible =
                 !resource->imported.has_value() ||
                 validateBufferUsageFlags(RGBufferResource{
-                    .desc = RGBufferDesc{
-                        .label = resource->desc.label,
-                        .usage = resource->imported->buffer ? resource->imported->buffer->getUsage() : resource->desc.usage,
-                        .size  = resource->desc.size,
-                    },
-                }, usage.access);
+                                             .desc = RGBufferDesc{
+                                                 .label = resource->desc.label,
+                                                 .usage = resource->imported->buffer ? resource->imported->buffer->getUsage() : resource->desc.usage,
+                                                 .size  = resource->desc.size,
+                                             },
+                                         },
+                                         usage.access);
             if (!bCompatibleUsage) {
-                addIssue(RGCompileIssue::EKind::InvalidUsage, pass.handle,
-                         std::format("pass {} uses buffer {} as {} but graph usage is {}{}",
-                                     pass.name,
-                                     resource->desc.label,
-                                     describeRequiredBufferUsage(usage.access),
-                                     formatBufferUsageFlags(resource->desc.usage),
-                                     resource->imported.has_value() && resource->imported->buffer
-                                         ? std::format(" (backing usage: {})",
-                                                       formatBufferUsageFlags(resource->imported->buffer->getUsage()))
-                                         : ""));
+                addIssue(RGCompileIssue::EKind::InvalidUsage, pass.handle, std::format("pass {} uses buffer {} as {} but graph usage is {}{}", pass.name, resource->desc.label, describeRequiredBufferUsage(usage.access), formatBufferUsageFlags(resource->desc.usage), resource->imported.has_value() && resource->imported->buffer ? std::format(" (backing usage: {})", formatBufferUsageFlags(resource->imported->buffer->getUsage())) : ""));
                 continue;
             }
             if (!bBackingUsageCompatible) {
-                addIssue(RGCompileIssue::EKind::InvalidUsage, pass.handle,
-                         std::format("pass {} uses imported buffer {} as {} and graph usage is {}, but backing buffer usage is {}",
-                                     pass.name,
-                                     resource->desc.label,
-                                     describeRequiredBufferUsage(usage.access),
-                                     formatBufferUsageFlags(resource->desc.usage),
-                                     resource->imported && resource->imported->buffer
-                                         ? formatBufferUsageFlags(resource->imported->buffer->getUsage())
-                                         : std::string("None")));
+                addIssue(RGCompileIssue::EKind::InvalidUsage, pass.handle, std::format("pass {} uses imported buffer {} as {} and graph usage is {}, but backing buffer usage is {}", pass.name, resource->desc.label, describeRequiredBufferUsage(usage.access), formatBufferUsageFlags(resource->desc.usage), resource->imported && resource->imported->buffer ? formatBufferUsageFlags(resource->imported->buffer->getUsage()) : std::string("None")));
                 continue;
             }
 
@@ -1460,8 +1457,8 @@ RGCompiledGraph RenderGraph::compile() const
                 .requiredState = makeBufferState(passPlans[pass.handle.index].kind, *resource, usage),
             });
 
-            const bool bRead  = isBufferReadAccess(usage.access);
-            const bool bWrite = isBufferWriteAccess(usage.access);
+            const bool bRead         = isBufferReadAccess(usage.access);
+            const bool bWrite        = isBufferWriteAccess(usage.access);
             auto&      priorAccesses = bufferAccesses[usage.handle];
 
             bool bHasOverlappingWriter = false;
@@ -1675,7 +1672,8 @@ RGCompiledGraph RenderGraph::compile() const
 
         std::sort(compiled.transientBufferLifetimes.begin(),
                   compiled.transientBufferLifetimes.end(),
-                  [](const RGTransientBufferLifetimePlan& lhs, const RGTransientBufferLifetimePlan& rhs) {
+                  [](const RGTransientBufferLifetimePlan& lhs, const RGTransientBufferLifetimePlan& rhs)
+                  {
                       const bool lhsUsed = lhs.isUsed();
                       const bool rhsUsed = rhs.isUsed();
                       if (lhsUsed != rhsUsed) {
@@ -1703,11 +1701,13 @@ RGCompiledGraph RenderGraph::compile() const
             }
         }
 
-        const auto findLifetime = [&](RGBufferHandle handle) -> const RGTransientBufferLifetimePlan* {
+        const auto findLifetime = [&](RGBufferHandle handle) -> const RGTransientBufferLifetimePlan*
+        {
             const auto lifetimeIt = std::find_if(
                 compiled.transientBufferLifetimes.begin(),
                 compiled.transientBufferLifetimes.end(),
-                [handle](const RGTransientBufferLifetimePlan& candidate) {
+                [handle](const RGTransientBufferLifetimePlan& candidate)
+                {
                     return candidate.buffer == handle;
                 });
             return lifetimeIt != compiled.transientBufferLifetimes.end() ? &*lifetimeIt : nullptr;
@@ -1722,18 +1722,19 @@ RGCompiledGraph RenderGraph::compile() const
             auto slotIt = std::find_if(
                 compiled.transientBufferSlots.begin(),
                 compiled.transientBufferSlots.end(),
-                [&](const RGTransientBufferSlotPlan& slot) {
+                [&](const RGTransientBufferSlotPlan& slot)
+                {
                     if (slot.desc.memoryUsage != lifetime.desc.memoryUsage) {
                         return false;
                     }
-                    return std::none_of(slot.buffers.begin(), slot.buffers.end(), [&](RGBufferHandle member) {
+                    return std::none_of(slot.buffers.begin(), slot.buffers.end(), [&](RGBufferHandle member)
+                                        {
                         const auto* memberLifetime = findLifetime(member);
-                        return memberLifetime != nullptr && transientLifetimesOverlap(*memberLifetime, lifetime);
-                    });
+                        return memberLifetime != nullptr && transientLifetimesOverlap(*memberLifetime, lifetime); });
                 });
 
             if (slotIt == compiled.transientBufferSlots.end()) {
-                const auto slotIndex = static_cast<uint32_t>(compiled.transientBufferSlots.size());
+                const auto                slotIndex = static_cast<uint32_t>(compiled.transientBufferSlots.size());
                 RGTransientBufferSlotPlan slot{
                     .slotIndex = slotIndex,
                     .desc      = lifetime.desc,
@@ -1941,24 +1942,24 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
         const auto* pass = getPass(issue.pass);
         oss << "  ";
         switch (issue.kind) {
-            case RGCompileIssue::EKind::ReadBeforeWrite:
-                oss << "ReadBeforeWrite";
-                break;
-            case RGCompileIssue::EKind::InvalidResource:
-                oss << "InvalidResource";
-                break;
-            case RGCompileIssue::EKind::InvalidUsage:
-                oss << "InvalidUsage";
-                break;
-            case RGCompileIssue::EKind::InvalidPassKind:
-                oss << "InvalidPassKind";
-                break;
-            case RGCompileIssue::EKind::InvalidPersistentIdentity:
-                oss << "InvalidPersistentIdentity";
-                break;
-            case RGCompileIssue::EKind::Cycle:
-                oss << "Cycle";
-                break;
+        case RGCompileIssue::EKind::ReadBeforeWrite:
+            oss << "ReadBeforeWrite";
+            break;
+        case RGCompileIssue::EKind::InvalidResource:
+            oss << "InvalidResource";
+            break;
+        case RGCompileIssue::EKind::InvalidUsage:
+            oss << "InvalidUsage";
+            break;
+        case RGCompileIssue::EKind::InvalidPassKind:
+            oss << "InvalidPassKind";
+            break;
+        case RGCompileIssue::EKind::InvalidPersistentIdentity:
+            oss << "InvalidPersistentIdentity";
+            break;
+        case RGCompileIssue::EKind::Cycle:
+            oss << "Cycle";
+            break;
         }
         if (pass) {
             oss << "@" << pass->name;

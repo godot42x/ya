@@ -1,6 +1,8 @@
 #pragma once
 
 #include "ForwardFrameGraphResources.h"
+#include "Runtime/Rendering/Forward/ForwardFrameResourceSet.h"
+#include "Runtime/Rendering/Forward/ForwardViewportStage.h"
 #include "Runtime/Rendering/Common/IRenderPipeline.h"
 
 #include <functional>
@@ -11,7 +13,6 @@
 namespace ya
 {
 
-struct ForwardViewportStage;
 struct ForwardViewportResources;
 struct ShadowStage;
 struct PostProcessingStage;
@@ -53,6 +54,7 @@ struct ForwardFrameGraphOrchestrator
         const RenderTargetCreateInfo*                    viewportRTSpec      = nullptr;
         const ForwardViewportResources*                  viewportResources   = nullptr;
         std::vector<ForwardDirectionGizmoInput>          directionGizmos     = {};
+        ForwardViewportStage::PassContext*              viewportPassContext = nullptr;
         FrameContext*                                    postContext         = nullptr;
         bool                                             bEnableShadow       = false;
         bool                                             bPostprocessOutputIsSRGB = false;

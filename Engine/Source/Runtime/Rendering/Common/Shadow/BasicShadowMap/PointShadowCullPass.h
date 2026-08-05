@@ -12,7 +12,6 @@ namespace ya
 
 struct IRender;
 struct ICommandBuffer;
-class RenderGraphExecutor;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PointShadowCullPass
@@ -46,7 +45,7 @@ class PointShadowCullPass
         std::optional<RGPassHandle> cullPass{};
     };
 
-    void init(IRender* render, RenderGraphExecutor* standaloneGraphExecutor);
+    void init(IRender* render);
     void destroy();
 
     /// Ensure the current flight's (frustum / cmd / lookup) buffers can hold `bucketCount`.
@@ -79,8 +78,6 @@ class PointShadowCullPass
                                const uint32_t* data,
                                uint32_t count);
 
-    /// Compute path - record dispatch and buffer state transitions through RenderGraph.
-    void dispatch(ICommandBuffer* cmdBuf, uint32_t flightIndex);
     [[nodiscard]] std::optional<GraphResources> appendGraphPass(
         RenderGraph& graph,
         uint32_t flightIndex,
@@ -115,8 +112,6 @@ class PointShadowCullPass
     stdptr<IPipelineLayout>      _pipelineLayout;
     stdptr<IDescriptorSetLayout> _cullDSL;
     stdptr<IDescriptorPool>      _dsp;
-    RenderGraphExecutor* _standaloneGraphExecutor = nullptr;
-
     std::array<PerFlightResources, MAX_FLIGHTS_IN_FLIGHT> _perFlight{};
 };
 
