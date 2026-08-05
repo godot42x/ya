@@ -96,19 +96,9 @@ IRenderPipeline* RenderRuntime::getActivePipeline() const
     return nullptr;
 }
 
-IRenderPipelineExecution* RenderRuntime::getActivePipelineExecution() const
-{
-    return getActivePipeline();
-}
-
-IRenderPipelineDebugOutputs* RenderRuntime::getActivePipelineDebugOutputs() const
-{
-    return getActivePipeline();
-}
-
 bool RenderRuntime::isShadowMappingEnabled() const
 {
-    if (auto* pipeline = getActivePipelineDebugOutputs()) {
+    if (auto* pipeline = getActivePipeline()) {
         return pipeline->isShadowMappingEnabled();
     }
     return false;
@@ -126,7 +116,7 @@ bool RenderRuntime::hasMirrorRenderResult() const
 
 IImageView* RenderRuntime::getShadowDirectionalDepthIV() const
 {
-    if (auto* pipeline = getActivePipelineDebugOutputs()) {
+    if (auto* pipeline = getActivePipeline()) {
         return pipeline->getShadowDirectionalDepthIV();
     }
     return nullptr;
@@ -134,7 +124,7 @@ IImageView* RenderRuntime::getShadowDirectionalDepthIV() const
 
 IImageView* RenderRuntime::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
 {
-    if (auto* pipeline = getActivePipelineDebugOutputs()) {
+    if (auto* pipeline = getActivePipeline()) {
         return pipeline->getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
     }
     return nullptr;
@@ -182,7 +172,7 @@ uint32_t RenderRuntime::getCurrentPresentationImageIndex() const
 
 bool RenderRuntime::isPostprocessingEnabled() const
 {
-    if (auto* pipeline = getActivePipelineDebugOutputs()) {
+    if (auto* pipeline = getActivePipeline()) {
         return pipeline->isPostprocessingEnabled();
     }
     return false;
@@ -191,7 +181,7 @@ bool RenderRuntime::isPostprocessingEnabled() const
 RenderPipelineDebugOutputCatalog RenderRuntime::buildPipelineDebugOutputCatalog() const
 {
     RenderPipelineDebugOutputCatalog catalog{};
-    auto* pipeline = getActivePipelineDebugOutputs();
+    auto* pipeline = getActivePipeline();
     if (!pipeline) {
         return catalog;
     }
@@ -224,7 +214,7 @@ RenderPipelineDebugOutputCatalog RenderRuntime::buildPipelineDebugOutputCatalog(
 
 Extent2D RenderRuntime::getViewportExtent() const
 {
-    if (auto* pipeline = getActivePipelineExecution()) {
+    if (auto* pipeline = getActivePipeline()) {
         return pipeline->getViewportExtent();
     }
     if (_viewportRect.extent.x > 0 && _viewportRect.extent.y > 0) {
@@ -384,7 +374,7 @@ void RenderRuntime::initActivePipeline()
         });
     }
 
-    if (auto* pipeline = getActivePipelineExecution()) {
+    if (auto* pipeline = getActivePipeline()) {
         Render2D::init(_render, pipeline->getViewportColorFormat(), pipeline->getViewportDepthFormat());
     }
 }

@@ -40,7 +40,6 @@ struct Sampler;
 struct EnvironmentLightingComponent;
 struct RenderFrameData;
 struct DebugRenderSystem;
-struct RenderDiagnosticsService;
 
 struct RenderPipelineDebugOutputCatalog
 {
@@ -58,6 +57,9 @@ struct RenderPipelineDebugOutputCatalog
 
 struct ENGINE_API RenderRuntime
 {
+    // =========================================================================
+    // Public protocol
+    // =========================================================================
     enum class ERenderPipeline
     {
         Forward,
@@ -127,7 +129,11 @@ struct ENGINE_API RenderRuntime
     void init(const InitDesc& desc);
     void shutdown(bool bRenderAlreadyIdle = false);
     void renderFrame(const FrameInput& input);
+
   public:
+    // =========================================================================
+    // Runtime control / services
+    // =========================================================================
     void onViewportResized(Rect2D rect);
     void resetSkyboxPool();
     void resetEnvironmentLightingPool();
@@ -135,8 +141,6 @@ struct ENGINE_API RenderRuntime
     [[nodiscard]] IRender*                       getRender() const { return _render; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
     [[nodiscard]] IRenderPipeline*               getActivePipeline() const;
-    [[nodiscard]] IRenderPipelineExecution*      getActivePipelineExecution() const;
-    [[nodiscard]] IRenderPipelineDebugOutputs*   getActivePipelineDebugOutputs() const;
     [[nodiscard]] bool                           isShadowMappingEnabled() const;
     [[nodiscard]] bool                           isMirrorRenderingEnabled() const;
     [[nodiscard]] bool                           hasMirrorRenderResult() const;
@@ -148,6 +152,9 @@ struct ENGINE_API RenderRuntime
     [[nodiscard]] RenderDiagnosticsService&      getDiagnosticsService() { return _diagnostics; }
     [[nodiscard]] const RenderDiagnosticsService& getDiagnosticsService() const { return _diagnostics; }
 
+    // =========================================================================
+    // Runtime outputs / debug inspection
+    // =========================================================================
     [[nodiscard]] std::shared_ptr<RenderImage> getPostprocessOutputImageShared() const;
     [[nodiscard]] std::shared_ptr<RenderImage> getActiveViewportImageShared() const;
     [[nodiscard]] std::shared_ptr<RenderImage> getPresentationImageShared() const;
@@ -179,6 +186,9 @@ struct ENGINE_API RenderRuntime
     void requestRenderTargetFormat(const RenderTargetFormatCommand& command);
 
   private:
+    // =========================================================================
+    // Lifecycle / startup
+    // =========================================================================
     void                   initRuntimeState(const InitDesc& desc);
     void                   initShaderSystems();
     void                   initDiagnostics(const AppDesc& appDesc);
@@ -191,6 +201,10 @@ struct ENGINE_API RenderRuntime
     void                   initFrameServices();
     void                   shutdownRuntimeServices();
     void                   destroyRenderBackend();
+
+    // =========================================================================
+    // Per-frame orchestration
+    // =========================================================================
     bool                   prepareFrame(const FrameInput& input, int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   renderWorldFrame(const FrameInput& input, ICommandBuffer* cmdBuf);
     void                   ensureViewportRectInitialized(const FrameInput& input);
@@ -208,11 +222,17 @@ struct ENGINE_API RenderRuntime
     /// Capture readback is appended inside the presentation graph (FG-601/603).
     void                   submitFrame(int32_t imageIndex, ICommandBuffer* cmdBuf);
 
+    // =========================================================================
+    // Debug viewport catalog
+    // =========================================================================
     void buildViewportDebugCatalog(RenderViewportDebugCatalog& catalog) const;
     [[nodiscard]] size_t buildViewportDebugCatalogSignature() const;
     void ensureViewportDebugCatalog() const;
     [[nodiscard]] std::shared_ptr<RenderImage> getViewportSnapshotImageShared() const;
 
+    // =========================================================================
+    // Internal pipeline / presentation helpers
+    // =========================================================================
     void                   initActivePipeline();
     void                   shutdownActivePipeline();
     void                   applyPendingRenderPipelineSwitch();
