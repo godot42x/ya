@@ -218,7 +218,6 @@ struct PhysicsSystem::World
     std::unordered_map<entt::entity, JPH::BodyID> bodyIds;
 };
 
-PhysicsSystem::PhysicsSystem() = default;
 PhysicsSystem::~PhysicsSystem() = default;
 
 void PhysicsSystem::init()
