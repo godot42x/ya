@@ -88,7 +88,7 @@ struct OpenGLRender : public IRender
     IDescriptorSetHelper *getDescriptorHelper() override;
 
     // OpenGL-specific methods
-    IWindowProvider *getWindowProvider() const { return _windowProvider; }
+    IWindowProvider *getWindowProvider() const override { return _windowProvider; }
 
     template <typename T>
     T *getNativeWindow()

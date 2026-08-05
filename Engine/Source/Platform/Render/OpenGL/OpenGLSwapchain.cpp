@@ -9,12 +9,7 @@ OpenGLSwapchain::OpenGLSwapchain(OpenGLRender *render)
     : _render(render)
 {
     YA_CORE_ASSERT(render, "OpenGLRender is null");
-
-#if USE_SDL
-    _window = _render->getNativeWindow<SDL_Window>();
-#elif USE_GLFW
-    _window = _render->getNativeWindow<GLFWwindow>();
-#endif
+    _windowProvider = _render->getWindowProvider();
 }
 
 bool OpenGLSwapchain::recreate(const SwapchainCreateInfo &ci)
@@ -57,13 +52,13 @@ void OpenGLSwapchain::setVsync(bool enabled)
     _vsyncEnabled = enabled;
 
 #if USE_SDL
-    if (_window) {
+    if (_windowProvider) {
         // SDL3 uses SDL_GL_SetSwapInterval
         int interval = enabled ? 1 : 0;
         SDL_GL_SetSwapInterval(interval);
     }
 #elif USE_GLFW
-    if (_window) {
+    if (_windowProvider) {
         glfwSwapInterval(enabled ? 1 : 0);
     }
 #endif
@@ -92,19 +87,19 @@ void OpenGLSwapchain::cleanup()
 
 void OpenGLSwapchain::updateExtent()
 {
-    if (!_window) {
+    if (!_windowProvider) {
         YA_CORE_ERROR("Window is null");
         return;
     }
 
 #if USE_SDL
     int width, height;
-    SDL_GetWindowSize(_window, &width, &height);
+    SDL_GetWindowSize(static_cast<SDL_Window *>(_windowProvider->getNativeWindowHandle()), &width, &height);
     _extent.width  = static_cast<uint32_t>(width);
     _extent.height = static_cast<uint32_t>(height);
 #elif USE_GLFW
     int width, height;
-    glfwGetFramebufferSize(_window, &width, &height);
+    glfwGetFramebufferSize(static_cast<GLFWwindow *>(_windowProvider->getNativeWindowHandle()), &width, &height);
     _extent.width  = static_cast<uint32_t>(width);
     _extent.height = static_cast<uint32_t>(height);
 #endif

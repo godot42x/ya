@@ -26,6 +26,7 @@ struct OpenGLSwapchain : public ISwapchain
 {
   private:
     OpenGLRender *_render = nullptr;
+    IWindowProvider *_windowProvider = nullptr;
 
     // Swapchain configuration
     SwapchainCreateInfo _ci;
@@ -33,12 +34,6 @@ struct OpenGLSwapchain : public ISwapchain
     EFormat::T          _format;
     EPresentMode::T     _presentMode = EPresentMode::FIFO; // VSync on by default
     bool                _vsyncEnabled = true;
-
-#if USE_SDL
-    SDL_Window *_window = nullptr;
-#elif USE_GLFW
-    GLFWwindow *_window = nullptr;
-#endif
 
   public:
     OpenGLSwapchain(OpenGLRender *render);
