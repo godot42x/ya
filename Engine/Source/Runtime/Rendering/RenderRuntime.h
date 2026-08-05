@@ -8,6 +8,7 @@
 #include "Render/Render.h"
 #include "Render/Shader.h"
 #include "Runtime/Rendering/Common/IRenderPipeline.h"
+#include "Runtime/Rendering/Common/IRenderRuntimeServices.h"
 #include "Runtime/Rendering/Common/PostProcessingState.h"
 #include "Runtime/Rendering/Common/RenderOverlay.h"
 #include "Runtime/Rendering/Common/RenderTargetCatalog.h"
@@ -55,7 +56,7 @@ struct RenderPipelineDebugOutputCatalog
     bool                         bPostprocessingEnabled      = false;
 };
 
-struct ENGINE_API RenderRuntime
+struct ENGINE_API RenderRuntime : IRenderRuntimeServices
 {
     // =========================================================================
     // Public protocol
@@ -141,6 +142,10 @@ struct ENGINE_API RenderRuntime
     [[nodiscard]] IRender*                       getRender() const { return _render; }
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
     [[nodiscard]] IRenderPipeline*               getActivePipeline() const;
+    [[nodiscard]] uint64_t                       getFrameIndex() const override;
+    [[nodiscard]] double                         getElapsedTimeSeconds() const override;
+    [[nodiscard]] Scene*                         getActiveScene() const override;
+    [[nodiscard]] ResourceResolveSystem*         getResourceResolveSystem() const override;
     [[nodiscard]] bool                           isShadowMappingEnabled() const;
     [[nodiscard]] IImageView*                    getShadowDirectionalDepthIV() const;
     [[nodiscard]] IImageView*                    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
@@ -167,11 +172,11 @@ struct ENGINE_API RenderRuntime
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxDescriptorSetLayout() const { return _sharedResourceProvider.getSkyboxDescriptorSetLayout(); }
     [[nodiscard]] Sampler*                     getSkyboxSampler() const { return _sharedResourceProvider.getSkyboxSampler(); }
     [[nodiscard]] DescriptorSetHandle          getFallbackSkyboxDescriptorSet() const { return _sharedResourceProvider.getFallbackSkyboxDescriptorSet(); }
-    [[nodiscard]] DescriptorSetHandle          getSceneSkyboxDescriptorSet(Scene* scene = nullptr);
+    [[nodiscard]] DescriptorSetHandle          getSceneSkyboxDescriptorSet(Scene* scene = nullptr) override;
     [[nodiscard]] stdptr<IDescriptorSetLayout> getEnvironmentLightingDescriptorSetLayout() const { return _sharedResourceProvider.getEnvironmentLightingDescriptorSetLayout(); }
-    [[nodiscard]] DescriptorSetHandle          getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr);
-    [[nodiscard]] EnvironmentLightingSceneResources resolveSceneEnvironmentLightingResources(Scene* scene = nullptr) const;
-    [[nodiscard]] DebugRenderSystem&           getDebugRenderSystem() const;
+    [[nodiscard]] DescriptorSetHandle          getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr) override;
+    [[nodiscard]] EnvironmentLightingSceneResources resolveSceneEnvironmentLightingResources(Scene* scene = nullptr) const override;
+    [[nodiscard]] DebugRenderSystem&           getDebugRenderSystem() const override;
 
 
     [[nodiscard]] const Rect2D& getViewportRect() const { return _viewportRect; }

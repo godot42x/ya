@@ -17,6 +17,7 @@
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
 #include "Runtime/Rendering/Common/IRenderPipeline.h"
+#include "Runtime/Rendering/Common/IRenderRuntimeServices.h"
 #include "Runtime/Rendering/Common/PostProcessingStage.h"
 #include "Runtime/Rendering/Common/PostProcessingState.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowMapResources.h"
@@ -39,13 +40,9 @@ namespace ya
 {
 
 struct AppAutomationShadowOverrides;
-struct SceneManager;
-struct Scene;
 struct Sampler;
-struct DebugRenderSystem;
 struct Mesh;
 struct RenderTargetCatalog;
-class ResourceResolveSystem;
 class DeferredRenderPipelineTestAccess;
 
 enum class EDeferredPendingResourceRefresh : uint32_t
@@ -75,12 +72,7 @@ struct DeferredRenderInitDesc
     ShadowSettings* shadowSettings = nullptr;
     const AppAutomationShadowOverrides* automationShadowOverrides = nullptr;
     stdptr<IDescriptorSetLayout> environmentLightingDSL = nullptr;
-    std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
-    std::function<EnvironmentLightingSceneResources(Scene*)> resolveSceneEnvironmentLightingResources;
-    std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet;
-    std::function<DebugRenderSystem&()> getDebugRenderSystem;
-    std::function<Scene*()> getActiveScene;
-    std::function<ResourceResolveSystem*()> getResourceResolveSystem;
+    IRenderRuntimeServices* runtimeServices = nullptr;
 };
 
 struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
@@ -118,12 +110,7 @@ struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
     ShadowSettings* _shadowSettings = nullptr;
     const AppAutomationShadowOverrides* _automationShadowOverrides = nullptr;
     stdptr<IDescriptorSetLayout> _environmentLightingDSL = nullptr;
-    std::function<DescriptorSetHandle(Scene*)> _getSceneEnvironmentLightingDescriptorSet;
-    std::function<EnvironmentLightingSceneResources(Scene*)> _resolveSceneEnvironmentLightingResources;
-    std::function<DescriptorSetHandle(Scene*)> _getSceneSkyboxDescriptorSet;
-    std::function<DebugRenderSystem&()> _getDebugRenderSystem;
-    std::function<Scene*()> _getActiveScene;
-    std::function<ResourceResolveSystem*()> _getResourceResolveSystem;
+    IRenderRuntimeServices* _runtimeServices = nullptr;
 
     // ── Render targets ────────────────────────────────────────────────
     RenderTargetCreateInfo _gBufferRTSpec;
