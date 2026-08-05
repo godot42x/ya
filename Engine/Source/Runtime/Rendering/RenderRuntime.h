@@ -224,6 +224,8 @@ struct ENGINE_API RenderRuntime
     // Debug viewport catalog
     // =========================================================================
     void buildViewportDebugCatalog(RenderViewportDebugCatalog& catalog) const;
+    void appendViewportDebugImages(std::vector<RenderViewportDebugImageSlot>& images,
+                                   RenderViewportDebugCatalog*                catalog) const;
     [[nodiscard]] size_t buildViewportDebugCatalogSignature() const;
     void ensureViewportDebugCatalog() const;
     [[nodiscard]] std::shared_ptr<RenderImage> getViewportSnapshotImageShared() const;
