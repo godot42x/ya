@@ -82,7 +82,10 @@ FInputReply routeViewportToolInput(
     const FEditorInputSnapshot& snapshot,
     const FInputEvent& event)
 {
-    if (!app.isStopped()) {
+    // Viewport editing (selection, gizmo, editor camera control) is available
+    // in edit mode and in simulation, where the editor camera stays active.
+    // Full runtime (PIE) hands the viewport over to the game instead.
+    if (app.isRuntimeMode()) {
         return {};
     }
 
@@ -107,7 +110,9 @@ FInputReply routeGameplayViewportInput(
     const FEditorInputSnapshot& snapshot,
     const FInputEvent& event)
 {
-    if (app.isStopped()) {
+    // Game input and pointer capture only exist in full runtime (PIE).
+    // Simulation keeps the editor camera and never captures the viewport mouse.
+    if (!app.isRuntimeMode()) {
         return {};
     }
 

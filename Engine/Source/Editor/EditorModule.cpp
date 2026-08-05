@@ -449,7 +449,9 @@ class EditorModule final : public IModule, public IEditorAutomationControl
         if (auto* renderRuntime = renderServices.getRenderRuntime()) {
             auto&          editorCamera   = _layer->getCamera();
             const Extent2D viewportExtent = renderRuntime->getViewportExtent();
-            if (app.isStopped() && _layer->shouldCaptureInput()) {
+            // Keep the editor camera controllable during simulation; only full
+            // runtime (PIE) hands viewport input over to the game.
+            if (!app.isRuntimeMode() && _layer->shouldCaptureInput()) {
                 _cameraController.update(editorCamera, app.getInputManager(), dt);
             }
             if (viewportExtent.height > 0) {
