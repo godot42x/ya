@@ -377,6 +377,28 @@ struct RGCompiledGraph
     }
 };
 
+struct RGTopologyPassInfo
+{
+    RGPassHandle     pass{};
+    std::string_view name{};
+    ERGPassKind      kind = ERGPassKind::Unknown;
+    uint32_t         orderIndex = ~0u;
+};
+
+struct RGTopologyDependencyInfo
+{
+    RGPassHandle     from{};
+    RGPassHandle     to{};
+    std::string_view fromName{};
+    std::string_view toName{};
+};
+
+struct RGTopologyDescription
+{
+    std::vector<RGTopologyPassInfo>       passOrder;
+    std::vector<RGTopologyDependencyInfo> dependencies;
+};
+
 class ENGINE_API RenderGraphExecutionResult
 {
   private:
@@ -627,6 +649,7 @@ class RenderGraph
         const std::function<void(RGPassBuilder&)>& setup,
         const std::function<void(RGRenderContext&)>& execute = {});
     [[nodiscard]] ENGINE_API RGCompiledGraph compile() const;
+    [[nodiscard]] ENGINE_API RGTopologyDescription describeCompiledTopology(const RGCompiledGraph& compiled) const;
     [[nodiscard]] ENGINE_API std::optional<RGPassContext> createPassContext(RGPassHandle handle) const;
     [[nodiscard]] ENGINE_API std::string debugDump(const RGCompiledGraph& compiled) const;
     ENGINE_API void exportTexture(RGTextureHandle handle, std::string name);
