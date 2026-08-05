@@ -216,7 +216,7 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
 
     [[maybe_unused]] const auto pass = graph.addPass(
         "SSAO Pass",
-        [&params, noise, output, viewportExtent = ctx.viewportExtent](RGPassBuilder& passBuilder) {
+        [params, noise, output, viewportExtent = ctx.viewportExtent](RGPassBuilder& passBuilder) {
             passBuilder.uniformRead(params.frame, params.frameRange);
             passBuilder.read(params.albedo);
             passBuilder.read(params.normal);
@@ -232,7 +232,7 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
                 }},
             });
         },
-        [this, &params, noise](RGRenderContext& rgCtx) {
+        [this, params, noise](RGRenderContext& rgCtx) {
             // FG-502: set 1 (input DS) is written each pass from the graph
             // binding context, so no image-view handles are cached across
             // frames. Resolved image/view owners are retained on the command
