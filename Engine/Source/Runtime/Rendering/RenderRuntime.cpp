@@ -14,6 +14,16 @@
 namespace ya
 {
 
+namespace
+{
+
+const char* toString(RenderRuntime::ERenderPipeline pipeline)
+{
+    return pipeline == RenderRuntime::ERenderPipeline::Forward ? "Forward" : "Deferred";
+}
+
+} // namespace
+
 void RenderRuntime::onViewportResized(Rect2D rect)
 {
     _viewportRect = rect;
@@ -299,90 +309,100 @@ DeferredRenderPipeline* RenderRuntime::getSelectedDeferredPipeline() const
 
 void RenderRuntime::initActivePipeline()
 {
-    int winW = 0;
-    int winH = 0;
-    _render->getWindowSize(winW, winH);
+    int windowWidth = 0;
+    int windowHeight = 0;
+    _render->getWindowSize(windowWidth, windowHeight);
 
     if (_renderPipeline == ERenderPipeline::Forward) {
-        _forwardPipeline = ya::makeShared<ForwardRenderPipeline>();
-        _forwardPipeline->init(ForwardRenderPipeline::InitDesc{
-            .render                       = _render,
-            .windowW                      = winW,
-            .windowH                      = winH,
-            .shadowSettings               = _app ? &_app->getRenderServices().getShadowSettings() : nullptr,
-            .getFrameIndex                = _app
-                ? [this]() -> uint64_t { return _app ? _app->getFrameIndex() : 0; }
-                : std::function<uint64_t()>{},
-            .getElapsedTimeSeconds        = _app
-                ? [this]() -> double { return _app ? static_cast<double>(_app->getElapsedTimeMS()) / 1000.0 : 0.0; }
-                : std::function<double()>{},
-            .getActiveScene               = _app
-                ? [this]() -> Scene*
-                  {
-                      if (!_app || !_app->getSceneServices().getSceneManager()) {
-                          return nullptr;
-                      }
-                      return _app->getSceneServices().getActiveScene();
-                  }
-                : std::function<Scene*()>{},
-            .getResourceResolveSystem     = _app
-                ? [this]() -> ResourceResolveSystem*
-                  {
-                      return _app ? _app->getResourceResolveSystem() : nullptr;
-                  }
-                : std::function<ResourceResolveSystem*()>{},
-            .getSceneSkyboxDescriptorSet  = [this](Scene* scene)
-            {
-                return getSceneSkyboxDescriptorSet(scene);
-            },
-            .getSceneEnvironmentLightingDescriptorSet = [this](Scene* scene)
-            {
-                return getSceneEnvironmentLightingDescriptorSet(scene);
-            },
-        });
+        initForwardPipeline(windowWidth, windowHeight);
     }
     else {
-        _deferredPipeline = ya::makeShared<DeferredRenderPipeline>();
-        _deferredPipeline->init(DeferredRenderPipeline::InitDesc{
-            .render                   = _render,
-            .windowW                  = winW,
-            .windowH                  = winH,
-            .shadowSettings           = _app ? &_app->getRenderServices().getShadowSettings() : nullptr,
-            .automationShadowOverrides = _app ? &_app->getDesc().automation.shadow : nullptr,
-            .environmentLightingDSL = _sharedResourceProvider.getEnvironmentLightingDescriptorSetLayout(),
-            .getSceneEnvironmentLightingDescriptorSet = [this](Scene* scene)
-            {
-                return getSceneEnvironmentLightingDescriptorSet(scene);
-            },
-            .resolveSceneEnvironmentLightingResources = [this](Scene* scene)
-            {
-                return resolveSceneEnvironmentLightingResources(scene);
-            },
-            .getSceneSkyboxDescriptorSet = [this](Scene* scene)
-            {
-                return getSceneSkyboxDescriptorSet(scene);
-            },
-            .getDebugRenderSystem = [this]() -> DebugRenderSystem&
-            {
-                return getDebugRenderSystem();
-            },
-            .getActiveScene = [this]() -> Scene*
-            {
-                if (!_app || !_app->getSceneServices().getSceneManager()) {
-                    return nullptr;
-                }
-                return _app->getSceneServices().getActiveScene();
-            },
-            .getResourceResolveSystem = [this]() -> ResourceResolveSystem*
-            {
-                return _app ? _app->getResourceResolveSystem() : nullptr;
-            },
-        });
+        initDeferredPipeline(windowWidth, windowHeight);
     }
 
     if (auto* pipeline = getActivePipeline()) {
         Render2D::init(_render, pipeline->getViewportColorFormat(), pipeline->getViewportDepthFormat());
     }
+}
+
+void RenderRuntime::initForwardPipeline(int windowWidth, int windowHeight)
+{
+    _forwardPipeline = ya::makeShared<ForwardRenderPipeline>();
+    _forwardPipeline->init(ForwardRenderPipeline::InitDesc{
+        .render                       = _render,
+        .windowW                      = windowWidth,
+        .windowH                      = windowHeight,
+        .shadowSettings               = _app ? &_app->getRenderServices().getShadowSettings() : nullptr,
+        .getFrameIndex                = _app
+            ? [this]() -> uint64_t { return _app ? _app->getFrameIndex() : 0; }
+            : std::function<uint64_t()>{},
+        .getElapsedTimeSeconds        = _app
+            ? [this]() -> double { return _app ? static_cast<double>(_app->getElapsedTimeMS()) / 1000.0 : 0.0; }
+            : std::function<double()>{},
+        .getActiveScene               = _app
+            ? [this]() -> Scene*
+              {
+                  if (!_app || !_app->getSceneServices().getSceneManager()) {
+                      return nullptr;
+                  }
+                  return _app->getSceneServices().getActiveScene();
+              }
+            : std::function<Scene*()>{},
+        .getResourceResolveSystem     = _app
+            ? [this]() -> ResourceResolveSystem*
+              {
+                  return _app ? _app->getResourceResolveSystem() : nullptr;
+              }
+            : std::function<ResourceResolveSystem*()>{},
+        .getSceneSkyboxDescriptorSet  = [this](Scene* scene)
+        {
+            return getSceneSkyboxDescriptorSet(scene);
+        },
+        .getSceneEnvironmentLightingDescriptorSet = [this](Scene* scene)
+        {
+            return getSceneEnvironmentLightingDescriptorSet(scene);
+        },
+    });
+}
+
+void RenderRuntime::initDeferredPipeline(int windowWidth, int windowHeight)
+{
+    _deferredPipeline = ya::makeShared<DeferredRenderPipeline>();
+    _deferredPipeline->init(DeferredRenderPipeline::InitDesc{
+        .render                   = _render,
+        .windowW                  = windowWidth,
+        .windowH                  = windowHeight,
+        .shadowSettings           = _app ? &_app->getRenderServices().getShadowSettings() : nullptr,
+        .automationShadowOverrides = _app ? &_app->getDesc().automation.shadow : nullptr,
+        .environmentLightingDSL = _sharedResourceProvider.getEnvironmentLightingDescriptorSetLayout(),
+        .getSceneEnvironmentLightingDescriptorSet = [this](Scene* scene)
+        {
+            return getSceneEnvironmentLightingDescriptorSet(scene);
+        },
+        .resolveSceneEnvironmentLightingResources = [this](Scene* scene)
+        {
+            return resolveSceneEnvironmentLightingResources(scene);
+        },
+        .getSceneSkyboxDescriptorSet = [this](Scene* scene)
+        {
+            return getSceneSkyboxDescriptorSet(scene);
+        },
+        .getDebugRenderSystem = [this]() -> DebugRenderSystem&
+        {
+            return getDebugRenderSystem();
+        },
+        .getActiveScene = [this]() -> Scene*
+        {
+            if (!_app || !_app->getSceneServices().getSceneManager()) {
+                return nullptr;
+            }
+            return _app->getSceneServices().getActiveScene();
+        },
+        .getResourceResolveSystem = [this]() -> ResourceResolveSystem*
+        {
+            return _app ? _app->getResourceResolveSystem() : nullptr;
+        },
+    });
 }
 
 void RenderRuntime::shutdownActivePipeline()
@@ -408,8 +428,8 @@ void RenderRuntime::applyPendingRenderPipelineSwitch()
 
     YA_CORE_INFO("{} render pipeline: {} -> {}",
                  _pendingActivePipelineReload ? "Reloading" : "Switching",
-                 _renderPipeline == ERenderPipeline::Forward ? "Forward" : "Deferred",
-                 _pendingRenderPipeline == ERenderPipeline::Forward ? "Forward" : "Deferred");
+                 toString(_renderPipeline),
+                 toString(_pendingRenderPipeline));
 
     shutdownActivePipeline();
     _renderPipeline = _pendingRenderPipeline;
