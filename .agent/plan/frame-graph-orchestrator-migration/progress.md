@@ -4,8 +4,22 @@
 
 - 计划建立日期：2026-07-18
 - 当前阶段：P9 完成清理
-  - 当前执行任务：FG-902（检查 pass execute 中的资源创建、等待、全局查询和未声明 transition）
-  - 下一架构任务：FG-902
+  - 当前执行任务：无；RenderGraph 迁移主计划实现项已收口
+  - 下一架构任务：`follow-up-roadmap.md` 中的 DrawCandidateView -> DrawPacket
+
+### 2026-08-05：FG-603 完成
+
+- `RenderRuntime::renderFrame()` 的顶层生命周期固定为：
+  `prepare/acquire -> world graph -> presentation graph -> submit/present`。
+- presentation 继续使用按 swapchain image 分配的独立 `RenderGraphExecutor`；
+  acquire、command buffer begin/end、queue submit 和 present 不建模为普通 graph pass。
+- presentation capture 只在 presentation graph 构建阶段通过
+  `appendPresentationCapture(graph, output, extent)` 添加 copy/readback pass，
+  source/output dependency 和最终 `PresentSrcKHR` 状态由 graph 声明。
+- 验证：
+  - `xmake b ya-testing`：通过
+  - `xmake r ya-testing --gtest_filter='RenderGraphCoreTest.*:ForwardFrameGraphOrchestratorTest.*:DeferredFrameGraphOrchestratorTest.*:AppScreenshotCaptureTest.*'`：95/95 通过
+- 代码提交：`55ab761e [runtime] clarify frame graph and presentation flow`
 
 ### 2026-08-05：FG-901 完成
 
