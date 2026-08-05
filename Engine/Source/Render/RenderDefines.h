@@ -1408,6 +1408,28 @@ struct ImageCreateInfo
     // EImageLayout::T finalLayout           = EImageLayout::ShaderReadOnlyOptimal;
 };
 
+/// Immutable image creation spec.
+///
+/// `isSameImageCreateInfo` compares the resource identity/spec only. The
+/// queue-family sharing configuration is excluded from the comparison: it is
+/// transient creation context (raw pointer identity, not a comparable spec).
+/// Replacement must create a new IImage and retire the old owner
+/// completion-safely, never mutate an existing image in place.
+inline bool isSameImageCreateInfo(const ImageCreateInfo& lhs, const ImageCreateInfo& rhs)
+{
+    return lhs.label == rhs.label &&
+           lhs.format == rhs.format &&
+           lhs.extent.width == rhs.extent.width &&
+           lhs.extent.height == rhs.extent.height &&
+           lhs.extent.depth == rhs.extent.depth &&
+           lhs.mipLevels == rhs.mipLevels &&
+           lhs.arrayLayers == rhs.arrayLayers &&
+           lhs.samples == rhs.samples &&
+           lhs.usage == rhs.usage &&
+           lhs.initialLayout == rhs.initialLayout &&
+           lhs.flags == rhs.flags;
+}
+
 
 
 namespace EFilter
@@ -1524,11 +1546,13 @@ struct SamplerDesc
 
     BorderColor borderColor = {.type = EBorderColor::IntOpaqueBlack, .color = glm::vec4(1.0f)};
 
-
-
+    /// Immutable sampler spec comparison. `label` is included (consistent with
+    /// buffer/image specs); borderColor affects actual sampling and is part of
+    /// the spec. Replacement creates a new Sampler, never mutates one in place.
     bool operator==(const SamplerDesc& other) const
     {
-        return minFilter == other.minFilter &&
+        return label == other.label &&
+               minFilter == other.minFilter &&
                magFilter == other.magFilter &&
                mipmapMode == other.mipmapMode &&
                addressModeU == other.addressModeU &&
@@ -1541,7 +1565,9 @@ struct SamplerDesc
                compareOp == other.compareOp &&
                minLod == other.minLod &&
                maxLod == other.maxLod &&
-               unnormalizedCoordinates == other.unnormalizedCoordinates;
+               unnormalizedCoordinates == other.unnormalizedCoordinates &&
+               borderColor.type == other.borderColor.type &&
+               borderColor.color == other.borderColor.color;
     }
 };
 

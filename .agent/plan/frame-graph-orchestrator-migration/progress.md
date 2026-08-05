@@ -3,9 +3,34 @@
 ## 当前状态
 
 - 计划建立日期：2026-07-18
-- 当前阶段：P7 Forward 全量迁移
-  - 当前执行任务：P8 GPU Resource API 收尾（FG-801）
-  - 下一架构任务：FG-801
+- 当前阶段：P8 GPU Resource API 收尾
+  - 当前执行任务：FG-802（统一 buffer map/write/flush range 与失败行为）
+  - 下一架构任务：FG-802
+
+### 2026-08-05：FG-801 完成
+
+- 实现：
+  - 新增基础 resource spec 比较契约：
+    - `isSameBufferCreateInfo`（Buffer.h）：label/usage/size/memoryUsage，
+      显式排除 transient `data` 上传指针。
+    - `isSameImageCreateInfo`（RenderDefines.h）：label/format/extent/
+      mipLevels/arrayLayers/samples/usage/initialLayout/flags，显式排除
+      queue-family sharing 上下文（raw pointer 不可比）。
+    - `SamplerDesc::operator==` 补全 label 与 borderColor（此前遗漏
+      borderColor，会把不同 border 语义判等）。
+  - `RenderResourceFactory.h` 增加 FG-801 契约注释：spec 不可变、
+    backend-agnostic（无 Vulkan 类型泄漏）、replacement 一律新建对象 +
+    completion-safe 退休（不做对象内部 resize）；列出兼容 adapter 的明确
+    删除点（Texture::createRenderTexture/getResourceFactory -> FG-803/804、
+    FrameBuffer legacy Texture views -> FG-804、Executor::getRegistry ->
+    FG-901）。
+- 未做：
+  - buffer map/write/flush range 与失败行为属于 FG-802。
+  - Texture 上传服务与全局 factory 删除属于 FG-803/804。
+- 测试：
+  - 新增 4 tests（Buffer/Image/Sampler/ImageView spec 比较）；
+    定向全集 111 tests passed。
+  - `xmake b ya-engine` / `xmake b ya-editor` 通过。
 
 ### 2026-08-05：FG-707 完成
 
