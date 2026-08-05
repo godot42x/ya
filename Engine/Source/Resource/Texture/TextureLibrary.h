@@ -86,7 +86,7 @@ class ENGINE_API TextureLibrary : public IResourceCache
     TextureLibrary &operator=(const TextureLibrary &) = delete;
 
     void createSamplers(IRender* render);
-    void createTextures();
+    void createTextures(IRender* render);
 
     // Textures
     std::shared_ptr<Texture> _whiteTexture;

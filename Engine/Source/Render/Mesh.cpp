@@ -1,21 +1,20 @@
 #include "Mesh.h"
-#include "Platform/Render/Vulkan/VulkanRender.h"
+#include "Render/Render.h"
 #include "Render/Core/RenderResourceFactory.h"
-#include "Runtime/Application/App.h"
 
 namespace ya
 {
 
-stdptr<Mesh> Mesh::create(const EngineMeshData& meshData)
+stdptr<Mesh> Mesh::create(IRender& render, const EngineMeshData& meshData)
 {
-    return makeShared<Mesh>(Mesh(meshData));
+    return makeShared<Mesh>(Mesh(render, meshData));
 }
 
-Mesh::Mesh(const EngineMeshData& meshData)
+Mesh::Mesh(IRender& render, const EngineMeshData& meshData)
 {
     _name = meshData.name;
-
-    auto render = App::get()->getRenderServices().getRender<VulkanRender>();
+    auto* resourceFactory = render.getResourceFactory();
+    YA_CORE_ASSERT(resourceFactory, "Mesh requires a render resource factory");
 
     std::ranges::for_each(meshData.vertices, [&](const ya::Vertex& v)
                           { boundingBox.expand(v.position); });
@@ -23,7 +22,7 @@ Mesh::Mesh(const EngineMeshData& meshData)
     _vertexCount = static_cast<uint32_t>(meshData.vertices.size());
     _indexCount  = static_cast<uint32_t>(meshData.indices.size());
 
-    _vertexBuffer = render->getResourceFactory()->createBuffer(
+    _vertexBuffer = resourceFactory->createBuffer(
         {
             .label       = _name.empty() ? _name : std::format("{}_VertexBuffer", _name),
             .usage       = EBufferUsage::VertexBuffer,
@@ -32,7 +31,7 @@ Mesh::Mesh(const EngineMeshData& meshData)
             .memoryUsage = EMemoryUsage::GpuOnly,
         });
 
-    _indexBuffer = render->getResourceFactory()->createBuffer(
+    _indexBuffer = resourceFactory->createBuffer(
         {
             .label       = _name.empty() ? _name : std::format("{}_IndexBuffer", _name),
             .usage       = EBufferUsage::IndexBuffer,
@@ -42,7 +41,7 @@ Mesh::Mesh(const EngineMeshData& meshData)
         });
 
     if (!meshData.skeletonVertices.empty()) {
-        _optVertexBuffers.push_back(render->getResourceFactory()->createBuffer(
+        _optVertexBuffers.push_back(resourceFactory->createBuffer(
             {
                 .label       = _name.empty() ? _name : std::format("{}_VertexBuffer_Skeleton", _name),
                 .usage       = EBufferUsage::VertexBuffer,

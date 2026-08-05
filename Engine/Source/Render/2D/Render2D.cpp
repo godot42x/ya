@@ -634,7 +634,8 @@ void FQuadRender::drawText(const std::string& text, const glm::vec3& position, c
     float cursorY = position.y;
 
     YA_CORE_ASSERT(font != nullptr, "TODO: font is null in Render2D::drawText, should make a default font");
-    FontManager::get()->ensureGlyphs(*font, text);
+    YA_CORE_ASSERT(_render, "Render2D requires a render backend");
+    FontManager::get()->ensureGlyphs(*_render, *font, text);
 
     const auto codePoints = utf8::decode(text);
     for (uint32_t codePoint : codePoints) {

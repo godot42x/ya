@@ -27,7 +27,7 @@ ImportedModelData ImportedModelData::decode(const std::string& filepath)
     return model_importer::getAssimpImporter().import(normalizedFilepath);
 }
 
-std::shared_ptr<Model> ImportedModelData::createModel() const
+std::shared_ptr<Model> ImportedModelData::createModel(IRender& render) const
 {
     auto model      = makeShared<Model>();
     model->filepath = filepath;
@@ -35,7 +35,7 @@ std::shared_ptr<Model> ImportedModelData::createModel() const
 
     for (size_t meshIndex = 0; meshIndex < meshes.size(); ++meshIndex) {
         auto engineMeshData = buildEngineMeshData(*this, meshIndex);
-        auto mesh           = Mesh::create(engineMeshData);
+        auto mesh           = Mesh::create(render, engineMeshData);
         model->meshes.push_back(std::move(mesh));
     }
 

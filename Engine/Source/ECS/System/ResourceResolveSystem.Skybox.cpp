@@ -82,7 +82,7 @@ std::shared_ptr<SkyboxDerivedResource> snapshotSkyboxResource(const SkyboxRuntim
 namespace detail
 {
 
-void rebuildSkyboxViews(SkyboxRuntimeState& state)
+void rebuildSkyboxViews(IRender* render, SkyboxRuntimeState& state)
 {
     clearSkyboxViews(state);
     const auto cubemapImage = getImageShared(state.cubemapRenderImage, state.cubemapTexture);
@@ -90,8 +90,6 @@ void rebuildSkyboxViews(SkyboxRuntimeState& state)
         return;
     }
 
-    auto* const app             = App::get();
-    auto* const render          = app ? app->getRenderServices().getRender() : nullptr;
     auto* const resourceFactory = render ? render->getResourceFactory() : nullptr;
     if (!resourceFactory) {
         return;
@@ -277,7 +275,8 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
                     };
                 }
 
-                auto cubemap = Texture::createCubeMapFromMemory(createInfo);
+                auto* render = getRender();
+                auto cubemap = render ? Texture::createCubeMapFromMemory(*render, createInfo) : nullptr;
                 if (!cubemap || !cubemap->isValid()) {
                     detail::retireSkyboxResources(pendingState);
                     transition.fail("cubemap creation failed");
@@ -286,7 +285,7 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
 
                 pendingState.cubemapTexture = std::move(cubemap);
                 pendingState.cubemapRenderImage.reset();
-                detail::rebuildSkyboxViews(pendingState);
+                detail::rebuildSkyboxViews(getRender(), pendingState);
                 pendingState.boundResource.reset();
                 pendingState.derivedKey = derivedKey;
                 ++pendingState.resultVersion;
@@ -371,7 +370,7 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
             }
 
             if (pendingState.pendingOffscreenProcess->phase == EOffscreenJobPhase::Pending) {
-                detail::tryQueueJob(pendingState.pendingOffscreenProcess);
+                detail::tryQueueJob(getOffscreenJobQueueService(), getRender(), pendingState.pendingOffscreenProcess);
                 break;
             }
 
@@ -396,7 +395,7 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
             pendingState.cubemapRenderImage = pendingState.pendingOffscreenProcess->result->outputImage;
             detail::retireTextureNow(pendingState.cubemapTexture);
             pendingState.pendingOffscreenProcess.reset();
-            detail::rebuildSkyboxViews(pendingState);
+            detail::rebuildSkyboxViews(getRender(), pendingState);
             pendingState.boundResource.reset();
             pendingState.derivedKey = derivedKey;
             ++pendingState.resultVersion;

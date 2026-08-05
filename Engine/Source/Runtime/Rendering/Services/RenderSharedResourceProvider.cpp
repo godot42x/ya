@@ -328,7 +328,7 @@ void RenderSharedResourceProvider::initSkyboxResources()
             },
         });
 
-    _skybox.fallbackTexture = Texture::createSolidCubeMap(ColorU8_t{0, 0, 0, 255}, "App_FallbackSkybox");
+    _skybox.fallbackTexture = Texture::createSolidCubeMap(*_render, ColorU8_t{0, 0, 0, 255}, "App_FallbackSkybox");
     YA_CORE_ASSERT(_skybox.fallbackTexture && _skybox.fallbackTexture->getImageView(),
                    "Failed to create fallback skybox cubemap");
 
@@ -365,10 +365,10 @@ void RenderSharedResourceProvider::initEnvironmentLightingResources()
             },
         });
 
-    _environmentLighting.fallbackIrradianceTexture = Texture::createSolidCubeMap(ColorU8_t{0, 0, 0, 255}, "App_FallbackIrradiance");
+    _environmentLighting.fallbackIrradianceTexture = Texture::createSolidCubeMap(*_render, ColorU8_t{0, 0, 0, 255}, "App_FallbackIrradiance");
     YA_CORE_ASSERT(_environmentLighting.fallbackIrradianceTexture && _environmentLighting.fallbackIrradianceTexture->getImageView(),
                    "Failed to create fallback irradiance cubemap");
-    _environmentLighting.fallbackPrefilterTexture = Texture::createSolidCubeMap(ColorU8_t{0, 0, 0, 255}, "App_FallbackPrefilter");
+    _environmentLighting.fallbackPrefilterTexture = Texture::createSolidCubeMap(*_render, ColorU8_t{0, 0, 0, 255}, "App_FallbackPrefilter");
     YA_CORE_ASSERT(_environmentLighting.fallbackPrefilterTexture && _environmentLighting.fallbackPrefilterTexture->getImageView(),
                    "Failed to create fallback prefilter cubemap");
 

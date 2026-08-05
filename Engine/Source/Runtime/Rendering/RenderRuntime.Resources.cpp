@@ -194,6 +194,8 @@ void RenderRuntime::initRenderBackend(const AppDesc& appDesc)
 void RenderRuntime::initResourceCaches()
 {
     TextureLibrary::get().init(_render);
+    AssetManager::get()->setRender(_render);
+    PrimitiveMeshCache::get().setRender(_render);
 
     ResourceRegistry::get().registerCache(&PrimitiveMeshCache::get(), 100);
     ResourceRegistry::get().registerCache(&TextureLibrary::get(), 90);
@@ -316,6 +318,8 @@ void RenderRuntime::shutdownRuntimeServices()
     YA_CORE_ASSERT(_forwardPipeline == nullptr && _deferredPipeline == nullptr,
                    "shutdownRuntimeServices requires active pipelines to be torn down first");
 
+    AssetManager::get()->setRender(nullptr);
+    PrimitiveMeshCache::get().setRender(nullptr);
     ResourceRegistry::get().clearAll();
 }
 

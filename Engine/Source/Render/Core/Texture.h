@@ -13,6 +13,7 @@
 namespace ya
 {
 
+struct IRender;
 struct IRenderResourceFactory;
 
 // Forward declaration
@@ -119,26 +120,26 @@ struct ENGINE_API Texture
 
   public:
 
-    static std::shared_ptr<Texture> fromMemory(const TextureMemoryCreateInfo& ci);
+    static std::shared_ptr<Texture> fromMemory(IRender& render, const TextureMemoryCreateInfo& ci);
 
-    static std::shared_ptr<Texture> fromData(uint32_t                               width,
+    static std::shared_ptr<Texture> fromData(IRender&                           render,
+                                             uint32_t                           width,
                                              uint32_t                               height,
                                              const std::vector<ColorRGBA<uint8_t>>& data,
                                              const std::string&                     label = "");
 
-    static std::shared_ptr<Texture> fromData(uint32_t           width,
+    static std::shared_ptr<Texture> fromData(IRender&           render,
+                                             uint32_t           width,
                                              uint32_t           height,
                                              const void*        data,
                                              size_t             dataSize,
                                              EFormat::T         format,
                                              const std::string& label = "");
 
-    static std::shared_ptr<Texture> createCubeMap(const CubeMapCreateInfo& ci);
-    static std::shared_ptr<Texture> createCubeMapFromMemory(const CubeMapMemoryCreateInfo& ci);
-    static std::shared_ptr<Texture> createSolidCubeMap(const ColorU8_t&   color,
+    static std::shared_ptr<Texture> createCubeMap(IRender& render, const CubeMapCreateInfo& ci);
+    static std::shared_ptr<Texture> createCubeMapFromMemory(IRender& render, const CubeMapMemoryCreateInfo& ci);
+    static std::shared_ptr<Texture> createSolidCubeMap(IRender& render, const ColorU8_t&   color,
                                                        const std::string& label = "");
-
-    static std::shared_ptr<Texture> createRenderTexture(const RenderTextureCreateInfo& ci);
 
     /**
      * @brief Wrap existing IImage/IImageView into a Texture
@@ -166,16 +167,16 @@ struct ENGINE_API Texture
     static std::shared_ptr<Texture> createShared() { return ya::make_shared<Texture>(dummy{}); }
 
     // Internal initialization methods (called by factory)
-    void initFromData(const void* pixels,
+    void initFromData(IRender& render,
+                      const void* pixels,
                       size_t dataSize,
                       uint32_t texWidth,
                       uint32_t texHeight,
                       EFormat::T format,
                       uint32_t mipLevels = 1,
                       bool generateMipmaps = false);
-    void initCubeMap(const CubeMapCreateInfo& ci);
-    void initCubeMapFromMemory(const CubeMapMemoryCreateInfo& ci);
-    void initFallbackTexture(const void* pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight);
+    void initCubeMapFromMemory(IRender& render, const CubeMapMemoryCreateInfo& ci);
+    void initFallbackTexture(IRender& render, const void* pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight);
 
   public:
     virtual ~Texture() = default;
@@ -205,8 +206,6 @@ struct ENGINE_API Texture
 
     bool isValid() const { return image && imageView && _width > 0 && _height > 0; }
 
-  private:
-    static struct IRenderResourceFactory* getResourceFactory();
 };
 
 /**

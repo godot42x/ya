@@ -26,16 +26,16 @@ OffscreenJobState::CreateOutputFn makeCubemapOutputFn(const std::string& label,
                                                       EFormat::T         format,
                                                       int                mipLevels = 1);
 
-void tryQueueJob(const std::shared_ptr<OffscreenJobState>& job);
+void tryQueueJob(const OffscreenJobQueueService& queueService, IRender* render, const std::shared_ptr<OffscreenJobState>& job);
 
-void rebuildSkyboxViews(SkyboxRuntimeState& state);
+void rebuildSkyboxViews(IRender* render, SkyboxRuntimeState& state);
 void retireSkyboxResources(SkyboxRuntimeState& state);
 void resetSkyboxPending(SkyboxRuntimeState& state);
 void resetSkyboxState(SkyboxRuntimeState& state);
 
-void rebuildEnvironmentCubemapViews(EnvironmentLightingRuntimeState& state);
-void rebuildEnvironmentIrradianceViews(EnvironmentLightingRuntimeState& state);
-void rebuildPrefilterViews(EnvironmentLightingRuntimeState& state);
+void rebuildEnvironmentCubemapViews(IRender* render, EnvironmentLightingRuntimeState& state);
+void rebuildEnvironmentIrradianceViews(IRender* render, EnvironmentLightingRuntimeState& state);
+void rebuildPrefilterViews(IRender* render, EnvironmentLightingRuntimeState& state);
 void retireEnvTextures(EnvironmentLightingRuntimeState& state);
 void resetEnvPending(EnvironmentLightingRuntimeState& state);
 void resetEnvState(EnvironmentLightingRuntimeState& state);

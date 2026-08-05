@@ -21,7 +21,7 @@ void TextureLibrary::init(IRender* render)
 
     YA_CORE_ASSERT(render && render->getResourceFactory(), "TextureLibrary requires a resource factory");
     createSamplers(render);
-    createTextures();
+    createTextures(render);
 
     _initialized = true;
     YA_CORE_INFO("TextureLibrary initialized");
@@ -82,7 +82,7 @@ void TextureLibrary::createSamplers(IRender* render)
     _defaultSampler = _linearSampler;
 }
 
-void TextureLibrary::createTextures()
+void TextureLibrary::createTextures(IRender* render)
 {
     using color_t = ColorRGBA<uint8_t>;
 
@@ -91,13 +91,13 @@ void TextureLibrary::createTextures()
     color_t blue{.r = 0, .g = 0, .b = 255, .a = 255};
 
     // Create 1x1 white texture
-    _whiteTexture = Texture::fromData(1, 1, std::vector<color_t>{white}, "white");
+    _whiteTexture = Texture::fromData(*render, 1, 1, std::vector<color_t>{white}, "white");
 
     // Create 1x1 black texture
-    _blackTexture = Texture::fromData(1, 1, std::vector<color_t>{black}, "black");
+    _blackTexture = Texture::fromData(*render, 1, 1, std::vector<color_t>{black}, "black");
 
     // Create 2x2 multi-pixel texture with pattern: white, blue, blue, white
-    _multiPixelTexture = Texture::fromData(2, 2, std::vector<color_t>{
+    _multiPixelTexture = Texture::fromData(*render, 2, 2, std::vector<color_t>{
                                                        white,
                                                        blue,
                                                        blue,
@@ -114,7 +114,7 @@ void TextureLibrary::createTextures()
                 pixels[y * size + x] = ((x + y) % 2 == 0) ? purple : black;
             }
         }
-        _checkerboardTexture = Texture::fromData(size, size, pixels, "checkerboard");
+        _checkerboardTexture = Texture::fromData(*render, size, size, pixels, "checkerboard");
     }
 }
 

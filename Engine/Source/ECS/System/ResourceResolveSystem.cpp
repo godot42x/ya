@@ -178,9 +178,10 @@ void copyEnvironmentResourceToRuntime(const std::shared_ptr<EnvironmentLightingD
 
 void ResourceResolveSystem::init()
 {
-    _equidistantCylindrical2CubeMap.init(App::get()->getRenderServices().getRender());
-    _cubeMap2IrradianceMap.init(App::get()->getRenderServices().getRender());
-    _cubeMap2PrefilterPipeline.init(App::get()->getRenderServices().getRender());
+    YA_CORE_ASSERT(_render, "ResourceResolveSystem requires render before init");
+    _equidistantCylindrical2CubeMap.init(_render);
+    _cubeMap2IrradianceMap.init(_render);
+    _cubeMap2PrefilterPipeline.init(_render);
 }
 
 void ResourceResolveSystem::clearSceneResolveWork()
@@ -525,6 +526,9 @@ void ResourceResolveSystem::shutdown()
     _cubeMap2PrefilterPipeline.shutdown();
     _cubeMap2IrradianceMap.shutdown();
     _equidistantCylindrical2CubeMap.shutdown();
+    _getActiveScene = {};
+    _offscreenQueueService = {};
+    _render = nullptr;
 }
 
 void ResourceResolveSystem::onUpdate(float dt)
@@ -533,8 +537,7 @@ void ResourceResolveSystem::onUpdate(float dt)
 
     (void)dt;
 
-    auto* const sceneManager = App::get()->getSceneServices().getSceneManager();
-    auto* const scene        = sceneManager->getActiveScene();
+    auto* const scene = _getActiveScene ? _getActiveScene() : nullptr;
     if (!scene) {
         clearSceneResolveWork();
         return;
@@ -756,7 +759,9 @@ void ResourceResolveSystem::resolvePendingTerrain(Scene* scene)
         });
 
         auto resource            = std::make_shared<TerrainDerivedResource>();
-        resource->mesh           = Mesh::create(meshData);
+        auto* render = getRender();
+        YA_CORE_ASSERT(render, "ResourceResolveSystem terrain mesh creation requires render backend");
+        resource->mesh           = Mesh::create(*render, meshData);
         resource->heightMapVersion = heightMapVersion;
         resource->lastUsedFrame  = currentFrame;
         _terrainDerivedResources[derivedKey] = resource;

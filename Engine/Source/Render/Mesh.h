@@ -13,6 +13,7 @@ namespace ya
 
 // Forward declaration
 enum class CoordinateSystem;
+struct IRender;
 
 struct Mesh
 {
@@ -34,7 +35,7 @@ struct Mesh
     AABB boundingBox;
 
   public:
-    static stdptr<Mesh> create(const EngineMeshData& meshData);
+    static stdptr<Mesh> create(IRender& render, const EngineMeshData& meshData);
 
     ~Mesh() = default;
 
@@ -78,7 +79,7 @@ struct Mesh
     const std::string& getName() const { return _name; }
 
   private:
-    explicit Mesh(const EngineMeshData& meshData);
+    Mesh(IRender& render, const EngineMeshData& meshData);
 };
 
 } // namespace ya

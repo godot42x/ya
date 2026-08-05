@@ -20,6 +20,7 @@ namespace ya
 
 class AssetModelManager;
 class AssetTextureManager;
+struct IRender;
 
 // Asset type taxonomy is defined once by EAssetType (Core/Common/AssetRef.h).
 
@@ -67,6 +68,7 @@ class ENGINE_API AssetManager : public IResourceCache
 
     std::unique_ptr<AssetTextureManager> _textureManager;
     std::unique_ptr<AssetModelManager>   _modelManager;
+    IRender*                             _render = nullptr;
 
   public:
     static AssetManager* get();
@@ -77,6 +79,9 @@ class ENGINE_API AssetManager : public IResourceCache
 
     AssetManager();
     ~AssetManager();
+
+    void    setRender(IRender* render) { _render = render; }
+    IRender* getRender() const { return _render; }
 
     // ── Meta system ─────────────────────────────────────────────────────
 
@@ -213,4 +218,3 @@ class ENGINE_API AssetManager : public IResourceCache
 };
 
 } // namespace ya
-
