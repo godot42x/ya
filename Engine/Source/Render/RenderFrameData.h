@@ -7,6 +7,7 @@
 
 #include <glm/glm.hpp>
 #include <array>
+#include <span>
 #include <vector>
 
 namespace ya
@@ -33,6 +34,38 @@ struct RenderDrawItem
     uint32_t  materialIndex;   // material->getIndex(), used for descriptor set lookup
     float     sortKey;         // distance to camera (or other sort criterion)
     int32_t   skinningPaletteIndex = -1; // -1 means static draw, otherwise index into RenderFrameData::skinningPalettes
+};
+
+/// Read-only view over extracted draw candidates.
+///
+/// The view wraps the existing RenderDrawItem snapshot instead of introducing
+/// another ownership or shader-facing representation.
+class DrawCandidateView
+{
+  public:
+    using value_type     = RenderDrawItem;
+    using const_iterator = std::span<const value_type>::iterator;
+
+    DrawCandidateView() = default;
+
+    explicit DrawCandidateView(std::span<const value_type> candidates)
+        : _candidates(candidates)
+    {}
+
+    [[nodiscard]] const value_type* data() const { return _candidates.data(); }
+    [[nodiscard]] size_t            size() const { return _candidates.size(); }
+    [[nodiscard]] bool              empty() const { return _candidates.empty(); }
+
+    [[nodiscard]] const value_type& operator[](size_t index) const
+    {
+        return _candidates[index];
+    }
+
+    [[nodiscard]] const_iterator begin() const { return _candidates.begin(); }
+    [[nodiscard]] const_iterator end() const { return _candidates.end(); }
+
+  private:
+    std::span<const value_type> _candidates{};
 };
 
 struct RenderShadingDrawBuckets
