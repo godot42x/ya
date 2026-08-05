@@ -1,6 +1,5 @@
 
 #include "Swapchain.h"
-#include "Runtime/Application/App.h"
 #include "Platform/Render/Vulkan/VulkanSwapChain.h"
 
 namespace ya
@@ -8,7 +7,9 @@ namespace ya
 
 stdptr<ISwapchain> ISwapchain::create(IRender *render, const SwapchainCreateInfo &createInfo)
 {
-    auto api = App::get()->getRenderServices().getRender()->getAPI();
+    (void)createInfo;
+    YA_CORE_ASSERT(render, "ISwapchain::create requires render backend");
+    auto api = render->getAPI();
     switch (api) {
     case ERenderAPI::None:
     case ERenderAPI::OpenGL:

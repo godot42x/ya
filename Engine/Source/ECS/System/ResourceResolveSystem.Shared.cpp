@@ -202,15 +202,13 @@ OffscreenJobState::CreateOutputFn makeCubemapOutputFn(const std::string& label,
     };
 }
 
-void tryQueueJob(const std::shared_ptr<OffscreenJobState>& job)
+void tryQueueJob(const OffscreenJobQueueService& queueService, IRender* render, const std::shared_ptr<OffscreenJobState>& job)
 {
     if (!job || !job->isReadyToQueue()) {
         return;
     }
 
-    auto* const app    = App::get();
-    auto* const render = app ? app->getRenderServices().getRender() : nullptr;
-    queueOffscreenJob(app, render, job);
+    queueOffscreenJob(queueService, render, job);
 }
 
 } // namespace ya::detail

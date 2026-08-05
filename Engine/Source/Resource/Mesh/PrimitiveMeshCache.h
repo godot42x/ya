@@ -9,6 +9,7 @@
 
 namespace ya
 {
+struct IRender;
 
 /**
  * @brief PrimitiveMeshCache - Singleton cache for primitive geometry meshes
@@ -28,6 +29,8 @@ class PrimitiveMeshCache : public IResourceCache
 {
   public:
     static PrimitiveMeshCache &get();
+    void setRender(IRender* render) { _render = render; }
+    [[nodiscard]] IRender* getRender() const { return _render; }
 
     /**
      * @brief Get or create a primitive mesh
@@ -61,6 +64,7 @@ class PrimitiveMeshCache : public IResourceCache
 
     stdptr<Mesh> createMesh(EPrimitiveGeometry type);
 
+    IRender*                                             _render = nullptr;
     mutable std::mutex                                   _mutex;
     std::unordered_map<EPrimitiveGeometry, stdptr<Mesh>> _cache;
 };

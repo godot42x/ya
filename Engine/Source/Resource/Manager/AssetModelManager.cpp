@@ -167,7 +167,20 @@ void AssetModelManager::submitModelLoad(const std::string& filepath, const std::
                 return;
             }
 
-            auto model = decoded.createModel();
+            auto* render = _owner.getRender();
+            if (!render) {
+                YA_CORE_WARN("Async GPU mesh creation skipped for '{}' because render is unavailable", filepath);
+                {
+                    std::lock_guard lock(_mutex);
+                    _pendingModelLoads.erase(filepath);
+                    _failedModelLoads.insert(filepath);
+                    callbacks = takeModelCallbacks(filepath);
+                }
+                dispatchModelCallbacks(callbacks, nullptr);
+                return;
+            }
+
+            auto model = decoded.createModel(*render);
             if (!model) {
                 YA_CORE_WARN("Async GPU mesh creation failed for '{}'", filepath);
                 {
@@ -245,7 +258,15 @@ std::shared_ptr<Model> AssetModelManager::loadModelImpl(const std::string& filep
         return nullptr;
     }
 
-    auto model = decoded.createModel();
+    auto* render = _owner.getRender();
+    if (!render) {
+        YA_CORE_ERROR("loadModelImpl: Render backend unavailable for GPU mesh creation: {}", normalizedFilepath);
+        std::lock_guard lock(_mutex);
+        _failedModelLoads.insert(normalizedFilepath);
+        return nullptr;
+    }
+
+    auto model = decoded.createModel(*render);
     if (!model) {
         YA_CORE_ERROR("loadModelImpl: Failed to create GPU meshes for: {}", normalizedFilepath);
         std::lock_guard lock(_mutex);

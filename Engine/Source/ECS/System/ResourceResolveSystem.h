@@ -7,12 +7,14 @@
 #include "ECS/Component/Terrain/TerrainComponent.h"
 #include "Render/Core/OffscreenJob.h"
 #include "Render/Core/ImageResourceRef.h"
+#include "Runtime/Application/Utility/OffscreenJobRunner.h"
 #include "Render/Pipelines/CubeMap2PBRIrradianceMap.h"
 #include "Render/Pipelines/CubeMap2PBRPrefilteredEnv.h"
 #include "Render/Pipelines/EquidistantCylindrical2CubeMap.h"
 #include "Resource/AssetManager.h"
 
 #include <deque>
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -23,6 +25,7 @@ namespace ya
 {
 
 // Forward declarations
+struct IRender;
 struct PhongMaterialComponent;
 struct PBRMaterialComponent;
 struct RenderImage;
@@ -234,6 +237,9 @@ struct ENGINE_API ResourceResolveSystem : public ISystem
 {
 
   private:
+    IRender*                                                         _render = nullptr;
+    OffscreenJobQueueService                                         _offscreenQueueService{};
+    std::function<Scene*()>                                          _getActiveScene;
     EquidistantCylindrical2CubeMap                                    _equidistantCylindrical2CubeMap;
     CubeMap2PBRIrradianceMap                                          _cubeMap2IrradianceMap;
     CubeMap2PBRPrefilteredEnv                                         _cubeMap2PrefilterPipeline;
@@ -270,6 +276,11 @@ struct ENGINE_API ResourceResolveSystem : public ISystem
     [[nodiscard]] bool isEnvironmentQueuedOrActive(entt::entity entity) const;
 
   public:
+    void setRender(IRender* render) { _render = render; }
+    [[nodiscard]] IRender* getRender() const { return _render; }
+    void setOffscreenJobQueueService(OffscreenJobQueueService queueService) { _offscreenQueueService = std::move(queueService); }
+    [[nodiscard]] const OffscreenJobQueueService& getOffscreenJobQueueService() const { return _offscreenQueueService; }
+    void setActiveSceneProvider(std::function<Scene*()> provider) { _getActiveScene = std::move(provider); }
     void init() override;
 
     /**

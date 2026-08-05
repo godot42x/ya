@@ -4,7 +4,7 @@
 #include "Core/System/PathUtils.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Render/Render.h"
-#include "Runtime/Application/App.h"
+#include "Resource/AssetManager.h"
 #include "ktx.h"
 #include "stb/stb_image.h"
 
@@ -70,12 +70,12 @@ bool supportsTextureUploadFormat(EFormat::T format)
         return false;
     }
 
-    auto* app = App::get();
-    if (!app || !app->getRenderServices().getRender()) {
+    auto* render = AssetManager::get() ? AssetManager::get()->getRender() : nullptr;
+    if (!render) {
         return true;
     }
 
-    return app->getRenderServices().getRender()->isTextureFormatSupported(
+    return render->isTextureFormatSupported(
         format,
         static_cast<EImageUsage::T>(EImageUsage::Sampled | EImageUsage::TransferDst));
 }

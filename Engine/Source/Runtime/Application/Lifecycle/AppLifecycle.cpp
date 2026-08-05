@@ -328,6 +328,17 @@ void AppLifecycle::init(App& app, AppDesc ci)
     sys->init();
     app._systems.push_back(sys);
     auto sys2 = ya::makeShared<ResourceResolveSystem>();
+    sys2->setRender(app.getRenderServices().getRender());
+    sys2->setOffscreenJobQueueService(OffscreenJobQueueService{
+        .enqueue = [&app](const std::shared_ptr<OffscreenJobState>& job, std::function<void(ICommandBuffer*)> task)
+        {
+            app.getTaskManager().enqueueOffscreenTask(job, std::move(task));
+        },
+    });
+    sys2->setActiveSceneProvider([&app]() -> Scene*
+    {
+        return app.getSceneServices().getActiveScene();
+    });
     sys2->init();
     app._resourceResolveSystem = sys2.get();
     app._systems.push_back(sys2);
@@ -438,8 +449,10 @@ void AppLifecycle::onInit(App& app, const AppDesc& ci)
     (void)app;
     (void)ci;
     if (const std::string runtimeFontPath = findRuntimeDefaultFontPath(); !runtimeFontPath.empty()) {
-        FontManager::get()->loadFont(runtimeFontPath, DEFAULT_RUNTIME_FONT_NAME, DEFAULT_RUNTIME_FONT_SIZE);
-        FontManager::get()->loadFont(runtimeFontPath, DEFAULT_RUNTIME_FONT_NAME, 16);
+        auto* render = app.getRenderServices().getRender();
+        YA_CORE_ASSERT(render, "AppLifecycle::onInit requires a render backend");
+        FontManager::get()->loadFont(*render, runtimeFontPath, DEFAULT_RUNTIME_FONT_NAME, DEFAULT_RUNTIME_FONT_SIZE);
+        FontManager::get()->loadFont(*render, runtimeFontPath, DEFAULT_RUNTIME_FONT_NAME, 16);
     }
 
     auto mgr = UIManager::get();

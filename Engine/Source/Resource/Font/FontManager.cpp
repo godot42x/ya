@@ -31,7 +31,7 @@ Character makeGlyphCharacter(FT_GlyphSlot glyph)
     return character;
 }
 
-bool appendStandaloneGlyph(Font& font, FT_Face face, uint32_t codePoint)
+bool appendStandaloneGlyph(IRender& render, Font& font, FT_Face face, uint32_t codePoint)
 {
     if (font.characters.contains(codePoint)) {
         return true;
@@ -57,7 +57,8 @@ bool appendStandaloneGlyph(Font& font, FT_Face face, uint32_t codePoint)
             }
         }
 
-        character.standaloneTexture = Texture::fromData(glyph->bitmap.width,
+        character.standaloneTexture = Texture::fromData(render,
+                                                        glyph->bitmap.width,
                                                         glyph->bitmap.rows,
                                                         glyphPixels.data(),
                                                         glyphPixels.size() * sizeof(ColorU8_t),
@@ -108,7 +109,7 @@ void FontManager::clearCache()
     YA_CORE_INFO("Cleared all font cache");
 }
 
-std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const FName &fontName, uint32_t fontSize)
+std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &fontPath, const FName &fontName, uint32_t fontSize)
 {
     YA_PROFILE_FUNCTION_LOG();
     FT_Library ft{};
@@ -242,7 +243,8 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
     FT_Done_FreeType(ft);
 
     // Create atlas texture
-    font->atlasTexture = Texture::fromData(atlasWidth,
+    font->atlasTexture = Texture::fromData(render,
+                                           atlasWidth,
                                            atlasHeight,
                                            atlasData.data(),
                                            atlasData.size() * sizeof(ColorU8_t),
@@ -260,7 +262,7 @@ std::shared_ptr<Font> FontManager::loadFont(const std::string &fontPath, const F
     return font;
 }
 
-void FontManager::ensureGlyphs(Font& font, std::string_view text)
+void FontManager::ensureGlyphs(IRender& render, Font& font, std::string_view text)
 {
     std::vector<uint32_t> missing;
     for (uint32_t codePoint : utf8::decode(text)) {
@@ -294,14 +296,15 @@ void FontManager::ensureGlyphs(Font& font, std::string_view text)
 
     FT_Set_Pixel_Sizes(face, 0, static_cast<uint32_t>(font.fontSize));
     for (uint32_t codePoint : missing) {
-        appendStandaloneGlyph(font, face, codePoint);
+        appendStandaloneGlyph(render, font, face, codePoint);
     }
 
     FT_Done_Face(face);
     FT_Done_FreeType(ft);
 }
 
-std::shared_ptr<Font> FontManager::getAdaptiveFont(const std::string &fontPath,
+std::shared_ptr<Font> FontManager::getAdaptiveFont(IRender&            render,
+                                                   const std::string &fontPath,
                                                    const FName       &fontName,
                                                    uint32_t           baseSize,
                                                    uint32_t           windowHeight,
@@ -321,7 +324,7 @@ std::shared_ptr<Font> FontManager::getAdaptiveFont(const std::string &fontPath,
     }
 
     // Not in cache, load it
-    return loadFont(fontPath, fontName, adaptedSize);
+    return loadFont(render, fontPath, fontName, adaptedSize);
 }
 
 } // namespace ya

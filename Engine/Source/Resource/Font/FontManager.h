@@ -13,6 +13,8 @@
 namespace ya
 {
 
+struct IRender;
+
 inline constexpr const char* DEFAULT_RUNTIME_FONT_NAME = "RuntimeDefault";
 inline constexpr uint32_t    DEFAULT_RUNTIME_FONT_SIZE = 48;
 
@@ -187,7 +189,7 @@ struct ENGINE_API FontManager : public IResourceCache
      * @param fontSize Font size in pixels
      * @return Shared pointer to loaded font, or nullptr on failure
      */
-    std::shared_ptr<Font> loadFont(const std::string &fontPath, const FName &fontName, uint32_t fontSize);
+    std::shared_ptr<Font> loadFont(IRender& render, const std::string &fontPath, const FName &fontName, uint32_t fontSize);
 
     std::shared_ptr<Font> getFont(const FName &fontName, uint32_t fontSize);
 
@@ -202,13 +204,14 @@ struct ENGINE_API FontManager : public IResourceCache
      * @param referenceHeight Reference height (default: 1080)
      * @return Adapted font
      */
-    std::shared_ptr<Font> getAdaptiveFont(const std::string &fontPath,
+    std::shared_ptr<Font> getAdaptiveFont(IRender&            render,
+                                          const std::string &fontPath,
                                           const FName       &fontName,
                                           uint32_t           baseSize,
                                           uint32_t           windowHeight,
                                           uint32_t           referenceHeight = 1080);
 
-    void ensureGlyphs(Font& font, std::string_view text);
+    void ensureGlyphs(IRender& render, Font& font, std::string_view text);
 
     // TODO: optimize key generation
     static std::string makeCacheKey(const FName &fontName, uint32_t fontSize)

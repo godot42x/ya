@@ -313,9 +313,15 @@ std::shared_ptr<Texture> AssetTextureManager::loadTextureSync(const std::string&
         return nullptr;
     }
 
+    auto* render = _owner.getRender();
+    if (!render) {
+        YA_CORE_WARN("loadTextureSync: Render backend is not available for '{}'", normalizedFilepath);
+        return nullptr;
+    }
+
     std::shared_ptr<Texture> texture;
     try {
-        texture = Texture::fromMemory(TextureMemoryCreateInfo{
+        texture = Texture::fromMemory(*render, TextureMemoryCreateInfo{
             .filepath = decoded.filepath,
             .label    = name.empty() ? decoded.filepath : name,
             .memory   = TextureMemoryView{
@@ -413,7 +419,8 @@ void AssetTextureManager::submitTextureLoad(const std::string&                  
 
             std::shared_ptr<Texture> texture;
             try {
-                texture = Texture::fromMemory(TextureMemoryCreateInfo{
+                auto* asyncRender = _owner.getRender();
+                texture = asyncRender ? Texture::fromMemory(*asyncRender, TextureMemoryCreateInfo{
                     .filepath = decoded.filepath,
                     .label    = decoded.filepath,
                     .memory   = TextureMemoryView{
@@ -426,7 +433,7 @@ void AssetTextureManager::submitTextureLoad(const std::string&                  
                         .data      = decoded.data(),
                         .dataSize  = decoded.dataSize(),
                     },
-                });
+                }) : nullptr;
             }
             catch (const std::exception& e) {
                 YA_CORE_WARN("Async GPU upload failed for '{}' with exception: {}", filepath, e.what());

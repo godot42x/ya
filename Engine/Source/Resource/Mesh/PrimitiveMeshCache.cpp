@@ -56,7 +56,8 @@ stdptr<Mesh> PrimitiveMeshCache::createMesh(EPrimitiveGeometry type)
         return nullptr;
     }
 
-    return Mesh::create(PrimitiveGeometryFactory::createEngineMeshData(type));
+    YA_CORE_ASSERT(_render, "PrimitiveMeshCache requires render before mesh creation");
+    return Mesh::create(*_render, PrimitiveGeometryFactory::createEngineMeshData(type));
 }
 
 } // namespace ya

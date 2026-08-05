@@ -14,6 +14,7 @@ namespace ya
 {
 
 struct Model;
+struct IRender;
 
 struct ImportedModelData
 {
@@ -35,7 +36,7 @@ struct ImportedModelData
     [[nodiscard]] bool isValid() const { return !meshes.empty(); }
 
     static ImportedModelData decode(const std::string& filepath);
-    std::shared_ptr<Model>   createModel() const;
+    std::shared_ptr<Model>   createModel(IRender& render) const;
 
     bool hasSkinningDataForMesh(size_t meshIndex, size_t vertexCount) const
     {
