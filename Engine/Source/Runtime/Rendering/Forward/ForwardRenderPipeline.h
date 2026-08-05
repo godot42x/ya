@@ -161,7 +161,6 @@ struct ENGINE_API ForwardRenderPipeline : public IRenderPipeline
     void               refreshViewportSnapshot();
     void               refreshViewportStageState();
     void               refreshShadowStageState();
-    void               finalizeViewportPass(ICommandBuffer* cmdBuf);
     bool               executeViewportPassGraph(const RenderPipelineFrameContext& frame, RenderStageContext& stageCtx);
     void               syncShadowSettings();
     void               captureShadowSettings(const RenderPipelineFrameContext& frame);

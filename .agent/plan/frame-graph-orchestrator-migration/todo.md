@@ -14,9 +14,9 @@
 
 - 架构主线仍按本文件推进；P3/P4 已全部落地，P5 的 FG-501~FG-503 已提交，
   FG-504 调查已完成（plan-only），P6 的 FG-601/FG-603 已提交、FG-602 调查已完成（plan-only），
-  P7 的 FG-701~FG-704 已完成（skinning + frame/light + PBR/Phong/Unlit/Simple/
-  Direction/Debug/Viewport Overlay 独立 graph pass），下一实现任务为 FG-705
-  （Forward postprocess 和 output export）。
+  P7 的 FG-701~FG-705 已完成（skinning + frame/light + 全 viewport pass 独立
+  graph pass + postprocess/export 收口），下一实现任务为 FG-706（Forward
+  FrameGraphOrchestrator 与 executePasses 删除）。
 - control-port 真实 `pipeline switch` smoke 暴露的 shadow sampled-layout/subresource tracking
   回归已修复并完成回归；`FG-002` 仍需补齐正式的截图/hash 基线记录，但不再阻塞 `FG-304`。
 
@@ -313,7 +313,7 @@
   - 依赖：FG-701
   - 验收：每个逻辑 pass 在 graph dump 可见；scene input 来自 frame snapshot
 
-- [ ] `FG-705` 迁移 Forward postprocess 和 output export
+- [x] `FG-705` 迁移 Forward postprocess 和 output export
   - 依赖：FG-702、FG-703、FG-704
   - 验收：复用 common postprocess append contract；viewport/debug output 由 execution result 导出
 
