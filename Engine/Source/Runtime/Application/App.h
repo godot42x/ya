@@ -2,6 +2,7 @@
 
 #include "Core/Api.h"
 #include "Core/Base.h"
+#include "Core/Delegate.h"
 #include "Core/Input/InputManager.h"
 #include "Core/Input/InputRouter.h"
 #include "Core/MessageBus.h"
@@ -182,6 +183,8 @@ struct ENGINE_API App
     [[nodiscard]] bool     isStopped() const { return _appState == AppState::Stopped; }
     [[nodiscard]] bool     isSimulationMode() const { return _appState == AppState::Simulation; }
     [[nodiscard]] bool     isRuntimeMode() const { return _appState == AppState::Runtime; }
+    /// Broadcast after every app mode transition (Runtime / Simulation / Stopped).
+    MulticastDelegate<void(AppState)> onAppStateChanged;
     bool                   isPaused() const { return _bPause; }
 
     void startRuntime();

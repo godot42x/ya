@@ -3,6 +3,7 @@
 #include "Core/Base.h"
 #include "Core/Delegate.h"
 #include "Core/System/System.h"
+#include "Runtime/Application/AppState.h"
 
 #include <functional>
 #include <memory>
@@ -28,43 +29,45 @@ struct SceneManager;
  */
 struct ENGINE_API PhysicsSystem : public ISystem
 {
-    using ActiveSceneProvider = std::function<Scene*()>;
-    using SimulationActiveProvider = std::function<bool()>;
+  public:
+    struct World;
 
+  private:
+    std::unique_ptr<World> _world;
+
+    MulticastDelegate<void(AppState)>* _appStateChangedSource = nullptr;
+    SceneManager*                      _sceneManager         = nullptr;
+    // The scene whose bodies currently live in the Jolt world. Cleaned up
+    // through SceneManager lifecycle events instead of polling in onUpdate().
+    Scene*         _bodyOwnerScene         = nullptr;
+    DelegateHandle _onAppStateChangedHandle = INVALID_HANDLE;
+    DelegateHandle _onSceneActivatedHandle = INVALID_HANDLE;
+    DelegateHandle _onSceneDestroyHandle   = INVALID_HANDLE;
+    bool           _bSimulationActive      = false;
+
+    float                  _accumulator    = 0.0f;
+    static constexpr float kFixedDeltaTime = 1.0f / 60.0f;
+
+  public:
     PhysicsSystem();
     ~PhysicsSystem() override;
 
     void setSceneManager(SceneManager* manager) { _sceneManager = manager; }
-    void setActiveSceneProvider(ActiveSceneProvider provider) { _activeSceneProvider = std::move(provider); }
-    /// When set, simulation only runs while the provider returns true
-    /// (editor: PIE / simulate mode; standalone games are always in runtime).
-    void setSimulationActiveProvider(SimulationActiveProvider provider) { _simulationActiveProvider = std::move(provider); }
+    /// Simulation follows app mode transitions (Runtime / Simulation on,
+    /// Stopped off). Without a source the system defaults to always active.
+    void setAppStateChangedSource(MulticastDelegate<void(AppState)>* source) { _appStateChangedSource = source; }
 
     void init() override;
     void onUpdate(float dt) override;
     void shutdown() override;
 
   private:
+    void onAppStateChanged(AppState state);
     void onSceneActivated(Scene* scene);
     void onSceneDestroyed(Scene* scene);
     void reconcileBodies(entt::registry& registry);
     void writebackTransforms(entt::registry& registry);
     void clearAllBodies();
-
-    struct World;
-    std::unique_ptr<World> _world;
-
-    ActiveSceneProvider     _activeSceneProvider;
-    SimulationActiveProvider _simulationActiveProvider;
-    SceneManager*           _sceneManager = nullptr;
-    // The scene whose bodies currently live in the Jolt world. Cleaned up
-    // through SceneManager lifecycle events instead of polling in onUpdate().
-    Scene*                  _bodyOwnerScene = nullptr;
-    DelegateHandle          _onSceneActivatedHandle = INVALID_HANDLE;
-    DelegateHandle          _onSceneDestroyHandle   = INVALID_HANDLE;
-
-    float               _accumulator    = 0.0f;
-    static constexpr float kFixedDeltaTime = 1.0f / 60.0f;
 };
 
 } // namespace ya
