@@ -1,7 +1,273 @@
 #include "Editor/Panels/RuntimeToolsPanelInternal.h"
 
+#include <format>
+#include <numeric>
+
 namespace ya
 {
+
+void renderRenderGraphTopology(const RGTopologyDescription& topology)
+{
+    ImGui::Text("Passes: %u", static_cast<uint32_t>(topology.passOrder.size()));
+    ImGui::SameLine();
+    ImGui::Text("Dependencies: %u", static_cast<uint32_t>(topology.dependencies.size()));
+
+    if (topology.passOrder.empty()) {
+        ImGui::TextDisabled("No compiled frame graph captured yet.");
+        return;
+    }
+
+    constexpr float kNodeWidth     = 210.0f;
+    constexpr float kNodeHeight    = 64.0f;
+    constexpr float kColumnSpacing = 110.0f;
+    constexpr float kRowSpacing    = 26.0f;
+    constexpr float kCanvasMinH    = 420.0f;
+
+    if (!ImGui::BeginChild("RenderGraphTopologyCanvas", ImVec2(0.0f, kCanvasMinH), true, ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImGui::EndChild();
+        return;
+    }
+
+    const ImVec2 canvasOrigin = ImGui::GetCursorScreenPos();
+    ImDrawList*  drawList     = ImGui::GetWindowDrawList();
+    const float  availableWidth = std::max(ImGui::GetContentRegionAvail().x, 1.0f);
+
+    struct NodeLayout
+    {
+        const RGTopologyPassInfo* pass = nullptr;
+        uint32_t                  level = 0u;
+        uint32_t                  row   = 0u;
+        ImVec2 min;
+        ImVec2 max;
+        std::string title;
+        std::string subtitle;
+    };
+
+    auto kindColor = [](ERGPassKind kind) {
+        switch (kind) {
+            case ERGPassKind::Raster: return IM_COL32(66, 135, 245, 255);
+            case ERGPassKind::Compute: return IM_COL32(133, 66, 245, 255);
+            case ERGPassKind::Copy: return IM_COL32(66, 181, 129, 255);
+            case ERGPassKind::Unknown: break;
+        }
+        return IM_COL32(120, 120, 120, 255);
+    };
+    auto kindLabel = [](ERGPassKind kind) -> const char* {
+        switch (kind) {
+            case ERGPassKind::Raster: return "Raster";
+            case ERGPassKind::Compute: return "Compute";
+            case ERGPassKind::Copy: return "Copy";
+            case ERGPassKind::Unknown: break;
+        }
+        return "Unknown";
+    };
+
+    std::unordered_map<uint32_t, uint32_t> orderIndexByPass;
+    orderIndexByPass.reserve(topology.passOrder.size());
+    for (const auto& passInfo : topology.passOrder) {
+        orderIndexByPass.emplace(passInfo.pass.index, passInfo.orderIndex);
+    }
+
+    std::unordered_map<uint32_t, uint32_t> indegreeByPass;
+    std::unordered_map<uint32_t, uint32_t> levelByPass;
+    std::unordered_map<uint32_t, std::vector<uint32_t>> outgoingEdges;
+    indegreeByPass.reserve(topology.passOrder.size());
+    levelByPass.reserve(topology.passOrder.size());
+    outgoingEdges.reserve(topology.passOrder.size());
+    for (const auto& passInfo : topology.passOrder) {
+        indegreeByPass.emplace(passInfo.pass.index, 0u);
+        levelByPass.emplace(passInfo.pass.index, 0u);
+        outgoingEdges.emplace(passInfo.pass.index, std::vector<uint32_t>{});
+    }
+    for (const auto& edge : topology.dependencies) {
+        ++indegreeByPass[edge.to.index];
+        outgoingEdges[edge.from.index].push_back(edge.to.index);
+    }
+
+    std::vector<uint32_t> ready;
+    ready.reserve(topology.passOrder.size());
+    for (const auto& passInfo : topology.passOrder) {
+        if (indegreeByPass[passInfo.pass.index] == 0u) {
+            ready.push_back(passInfo.pass.index);
+        }
+    }
+    std::sort(ready.begin(), ready.end(), [&](uint32_t lhs, uint32_t rhs) {
+        return orderIndexByPass[lhs] < orderIndexByPass[rhs];
+    });
+
+    for (size_t cursor = 0; cursor < ready.size(); ++cursor) {
+        const uint32_t passIndex = ready[cursor];
+        auto&          edges     = outgoingEdges[passIndex];
+        std::sort(edges.begin(), edges.end(), [&](uint32_t lhs, uint32_t rhs) {
+            return orderIndexByPass[lhs] < orderIndexByPass[rhs];
+        });
+        for (const uint32_t nextIndex : edges) {
+            levelByPass[nextIndex] = std::max(levelByPass[nextIndex], levelByPass[passIndex] + 1u);
+            auto& nextIndegree = indegreeByPass[nextIndex];
+            YA_CORE_ASSERT(nextIndegree > 0u, "Render graph topology indegree underflow");
+            --nextIndegree;
+            if (nextIndegree == 0u) {
+                ready.push_back(nextIndex);
+            }
+        }
+    }
+
+    std::unordered_map<uint32_t, std::vector<const RGTopologyPassInfo*>> passesByLevel;
+    passesByLevel.reserve(topology.passOrder.size());
+    uint32_t maxLevel = 0u;
+    for (const auto& passInfo : topology.passOrder) {
+        const uint32_t level = levelByPass[passInfo.pass.index];
+        maxLevel = std::max(maxLevel, level);
+        passesByLevel[level].push_back(&passInfo);
+    }
+    for (auto& [_, passes] : passesByLevel) {
+        std::sort(passes.begin(), passes.end(), [](const RGTopologyPassInfo* lhs, const RGTopologyPassInfo* rhs) {
+            return lhs->orderIndex < rhs->orderIndex;
+        });
+    }
+
+    std::unordered_map<uint32_t, std::vector<uint32_t>> incomingEdges;
+    incomingEdges.reserve(topology.passOrder.size());
+    for (const auto& passInfo : topology.passOrder) {
+        incomingEdges.emplace(passInfo.pass.index, std::vector<uint32_t>{});
+    }
+    for (const auto& edge : topology.dependencies) {
+        incomingEdges[edge.to.index].push_back(edge.from.index);
+    }
+
+    std::unordered_map<uint32_t, uint32_t> rowByPass;
+    rowByPass.reserve(topology.passOrder.size());
+    for (uint32_t level = 0; level <= maxLevel; ++level) {
+        auto& passes = passesByLevel[level];
+        if (level > 0u) {
+            std::stable_sort(passes.begin(), passes.end(), [&](const RGTopologyPassInfo* lhs, const RGTopologyPassInfo* rhs) {
+                auto averageParentRow = [&](const RGTopologyPassInfo* passInfo) {
+                    const auto& parents = incomingEdges[passInfo->pass.index];
+                    if (parents.empty()) {
+                        return static_cast<float>(passInfo->orderIndex);
+                    }
+
+                    float total = 0.0f;
+                    for (const uint32_t parentIndex : parents) {
+                        total += static_cast<float>(rowByPass[parentIndex]);
+                    }
+                    return total / static_cast<float>(parents.size());
+                };
+
+                const float lhsCenter = averageParentRow(lhs);
+                const float rhsCenter = averageParentRow(rhs);
+                if (lhsCenter != rhsCenter) {
+                    return lhsCenter < rhsCenter;
+                }
+                return lhs->orderIndex < rhs->orderIndex;
+            });
+        }
+
+        for (uint32_t row = 0; row < passes.size(); ++row) {
+            rowByPass[passes[row]->pass.index] = row;
+        }
+    }
+
+    const uint32_t columnCount = maxLevel + 1u;
+    size_t         maxRows     = 0u;
+    for (const auto& [_, passes] : passesByLevel) {
+        maxRows = std::max(maxRows, passes.size());
+    }
+    const float canvasWidth = std::max(
+        availableWidth,
+        40.0f + columnCount * kNodeWidth + std::max(0u, columnCount - 1u) * kColumnSpacing);
+    const float canvasHeight = std::max(
+        kCanvasMinH - 24.0f,
+        40.0f + static_cast<float>(maxRows) * kNodeHeight + std::max<size_t>(0u, maxRows > 0 ? maxRows - 1u : 0u) * kRowSpacing);
+
+    std::unordered_map<uint32_t, NodeLayout> nodes;
+    nodes.reserve(topology.passOrder.size());
+    for (const auto& passInfo : topology.passOrder) {
+        const uint32_t column      = levelByPass[passInfo.pass.index];
+        const auto&    columnPasses = passesByLevel[column];
+        const uint32_t row         = rowByPass[passInfo.pass.index];
+        const float    columnHeight = static_cast<float>(columnPasses.size()) * kNodeHeight +
+                                   std::max(0.0f, static_cast<float>(columnPasses.size() > 0 ? columnPasses.size() - 1u : 0u) * kRowSpacing);
+        const float columnOffsetY = 20.0f + std::max(0.0f, (canvasHeight - 40.0f - columnHeight) * 0.5f);
+        const ImVec2 nodeMin{
+            canvasOrigin.x + 20.0f + column * (kNodeWidth + kColumnSpacing),
+            canvasOrigin.y + columnOffsetY + row * (kNodeHeight + kRowSpacing),
+        };
+        const ImVec2 nodeMax{nodeMin.x + kNodeWidth, nodeMin.y + kNodeHeight};
+        auto& node = nodes[passInfo.pass.index];
+        node.pass = &passInfo;
+        node.level = column;
+        node.row = row;
+        node.min = nodeMin;
+        node.max = nodeMax;
+        node.title = std::string(passInfo.name);
+        node.subtitle = std::format("#{} {}", passInfo.orderIndex, kindLabel(passInfo.kind));
+
+        drawList->AddRectFilled(nodeMin, nodeMax, IM_COL32(28, 28, 32, 255), 8.0f);
+        drawList->AddRect(nodeMin, nodeMax, kindColor(passInfo.kind), 8.0f, 0, 2.0f);
+        drawList->AddText(ImVec2(nodeMin.x + 10.0f, nodeMin.y + 8.0f), IM_COL32(235, 235, 235, 255), node.title.c_str());
+        drawList->AddText(ImVec2(nodeMin.x + 10.0f, nodeMin.y + 30.0f),
+                          IM_COL32(170, 170, 170, 255),
+                          node.subtitle.c_str());
+    }
+
+    for (const auto& edge : topology.dependencies) {
+        const auto fromIt = nodes.find(edge.from.index);
+        const auto toIt   = nodes.find(edge.to.index);
+        if (fromIt == nodes.end() || toIt == nodes.end()) {
+            continue;
+        }
+
+        const ImVec2 p1{fromIt->second.max.x, 0.5f * (fromIt->second.min.y + fromIt->second.max.y)};
+        const ImVec2 p2{toIt->second.min.x, 0.5f * (toIt->second.min.y + toIt->second.max.y)};
+        const float  tangentOffset = std::max(30.0f, 0.45f * std::max(p2.x - p1.x, 20.0f));
+        drawList->AddBezierCubic(
+            p1,
+            ImVec2(p1.x + tangentOffset, p1.y),
+            ImVec2(p2.x - tangentOffset, p2.y),
+            p2,
+            IM_COL32(120, 200, 255, 190),
+            2.0f);
+    }
+
+    ImGui::Dummy(ImVec2(canvasWidth - 24.0f, std::max(canvasHeight - 24.0f, 0.0f)));
+    ImGui::EndChild();
+
+    if (ImGui::TreeNode("Dependency List")) {
+        for (const auto& edge : topology.dependencies) {
+            const std::string fromName(edge.fromName);
+            const std::string toName(edge.toName);
+            ImGui::BulletText("%s -> %s", fromName.c_str(), toName.c_str());
+        }
+        ImGui::TreePop();
+    }
+}
+
+void renderRenderGraphWindowContent(App& app, bool* pOpen)
+{
+    if (!pOpen || !*pOpen) {
+        return;
+    }
+
+    if (!ImGui::Begin("Render Graph", pOpen)) {
+        ImGui::End();
+        return;
+    }
+
+    if (auto* deferred = getDeferredPipeline(app)) {
+        ImGui::TextUnformatted("Pipeline: Deferred");
+        renderRenderGraphTopology(deferred->getLastFrameGraphTopology());
+    }
+    else if (auto* forward = getForwardPipeline(app)) {
+        ImGui::TextUnformatted("Pipeline: Forward");
+        renderRenderGraphTopology(forward->getLastFrameGraphTopology());
+    }
+    else {
+        ImGui::TextDisabled("No active render pipeline.");
+    }
+
+    ImGui::End();
+}
 
 void renderDeferredPerformanceContent(DeferredRenderPipeline& pipeline)
 {
@@ -624,6 +890,7 @@ void renderRenderingInternalsContent(App& app)
             renderPostProcessingTechnicalContent(pipeline._postProcessStage);
             ImGui::TreePop();
         }
+
     };
 
     auto renderForwardStageInternals = [&](ForwardRenderPipeline& pipeline) {
@@ -696,6 +963,7 @@ void renderRenderingInternalsContent(App& app)
             renderPostProcessingTechnicalContent(pipeline._postProcessStage);
             ImGui::TreePop();
         }
+
     };
 
     if (auto* deferred = getDeferredPipeline(app)) {

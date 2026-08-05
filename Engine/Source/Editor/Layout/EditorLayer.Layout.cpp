@@ -1,4 +1,5 @@
 #include "Editor/EditorLayerInternal.h"
+#include "Editor/Panels/RuntimeToolsPanelInternal.h"
 
 namespace ya
 {
@@ -205,6 +206,7 @@ void EditorLayer::menuBar()
         ImGui::MenuItem("Fullscreen", nullptr, &bFullscreen);
         ImGui::MenuItem("Padding", nullptr, &bPadding);
         ImGui::MenuItem("Show Demo Window", nullptr, &bShowDemoWindow);
+        ImGui::MenuItem("Render Graph", nullptr, &bShowRenderGraphWindow);
 
         ImGui::Separator();
 
@@ -411,6 +413,14 @@ void EditorLayer::runtimeToolsWindow()
     _runtimeToolsPanel.onImGuiRender(*_app, _lastDeltaTime);
 }
 
+void EditorLayer::renderGraphWindow()
+{
+    if (!_app || !bShowRenderGraphWindow) {
+        return;
+    }
+    renderRenderGraphWindowContent(*_app, &bShowRenderGraphWindow);
+}
+
 void EditorLayer::statsWindow()
 {
     if (!ImGui::Begin("Frame Stats")){
@@ -425,6 +435,7 @@ void EditorLayer::statsWindow()
 void EditorLayer::renderAuxiliaryUi()
 {
     _filePicker.render();
+    renderGraphWindow();
 
     if (bShowDemoWindow)
     {
