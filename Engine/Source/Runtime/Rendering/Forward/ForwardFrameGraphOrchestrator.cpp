@@ -16,6 +16,21 @@ namespace ya
 namespace
 {
 
+enum class EForwardTopologyPass : uint8_t
+{
+    Shadow,
+    Skybox,
+    PBR,
+    Phong,
+    Unlit,
+    Simple,
+    Direction,
+    Debug,
+    ViewportOverlay,
+    Bloom,
+    Postprocessing,
+};
+
 constexpr std::string_view kForwardTopologyPassShadow          = "Shadow Subgraph";
 constexpr std::string_view kForwardTopologyPassSkybox          = "Forward Skybox";
 constexpr std::string_view kForwardTopologyPassPBR             = "Forward PBR";
@@ -27,6 +42,89 @@ constexpr std::string_view kForwardTopologyPassDebug           = "Forward Debug"
 constexpr std::string_view kForwardTopologyPassViewportOverlay = "Forward Viewport Overlay";
 constexpr std::string_view kForwardTopologyPassBloom           = "Bloom Subgraph";
 constexpr std::string_view kForwardTopologyPassPostprocessing  = "Postprocessing";
+
+struct ForwardTopologyEdge
+{
+    EForwardTopologyPass from;
+    EForwardTopologyPass to;
+};
+
+struct ForwardTopologyPlan
+{
+    std::vector<EForwardTopologyPass> order{};
+    std::vector<ForwardTopologyEdge>  dependencies{};
+};
+
+std::string_view getForwardTopologyPassName(EForwardTopologyPass pass)
+{
+    switch (pass) {
+        case EForwardTopologyPass::Shadow: return kForwardTopologyPassShadow;
+        case EForwardTopologyPass::Skybox: return kForwardTopologyPassSkybox;
+        case EForwardTopologyPass::PBR: return kForwardTopologyPassPBR;
+        case EForwardTopologyPass::Phong: return kForwardTopologyPassPhong;
+        case EForwardTopologyPass::Unlit: return kForwardTopologyPassUnlit;
+        case EForwardTopologyPass::Simple: return kForwardTopologyPassSimple;
+        case EForwardTopologyPass::Direction: return kForwardTopologyPassDirection;
+        case EForwardTopologyPass::Debug: return kForwardTopologyPassDebug;
+        case EForwardTopologyPass::ViewportOverlay: return kForwardTopologyPassViewportOverlay;
+        case EForwardTopologyPass::Bloom: return kForwardTopologyPassBloom;
+        case EForwardTopologyPass::Postprocessing: return kForwardTopologyPassPostprocessing;
+    }
+
+    YA_CORE_ASSERT(false, "Unhandled forward topology pass");
+    return {};
+}
+
+ForwardTopologyPlan buildForwardTopologyPlan(const ForwardFrameGraphOrchestrator::TopologyInputs& inputs)
+{
+    ForwardTopologyPlan plan{};
+    if (inputs.bHasShadowSubgraph) {
+        plan.order.push_back(EForwardTopologyPass::Shadow);
+    }
+    plan.order.insert(plan.order.end(),
+                      {
+                          EForwardTopologyPass::Skybox,
+                          EForwardTopologyPass::PBR,
+                          EForwardTopologyPass::Phong,
+                          EForwardTopologyPass::Unlit,
+                          EForwardTopologyPass::Simple,
+                          EForwardTopologyPass::Direction,
+                          EForwardTopologyPass::Debug,
+                          EForwardTopologyPass::ViewportOverlay,
+                      });
+    if (inputs.bHasBloomSubgraph) {
+        plan.order.push_back(EForwardTopologyPass::Bloom);
+    }
+    if (inputs.bHasPostprocessPass) {
+        plan.order.push_back(EForwardTopologyPass::Postprocessing);
+    }
+
+    plan.dependencies.insert(plan.dependencies.end(),
+                             {
+                                 {EForwardTopologyPass::Skybox, EForwardTopologyPass::PBR},
+                                 {EForwardTopologyPass::PBR, EForwardTopologyPass::Phong},
+                                 {EForwardTopologyPass::Phong, EForwardTopologyPass::Unlit},
+                                 {EForwardTopologyPass::Unlit, EForwardTopologyPass::Simple},
+                                 {EForwardTopologyPass::Simple, EForwardTopologyPass::Direction},
+                                 {EForwardTopologyPass::Direction, EForwardTopologyPass::Debug},
+                                 {EForwardTopologyPass::Debug, EForwardTopologyPass::ViewportOverlay},
+                             });
+    if (inputs.bHasShadowSubgraph) {
+        plan.dependencies.push_back({EForwardTopologyPass::Shadow, EForwardTopologyPass::PBR});
+        plan.dependencies.push_back({EForwardTopologyPass::Shadow, EForwardTopologyPass::Phong});
+    }
+    if (inputs.bHasBloomSubgraph) {
+        plan.dependencies.push_back({EForwardTopologyPass::ViewportOverlay, EForwardTopologyPass::Bloom});
+        if (inputs.bHasPostprocessPass) {
+            plan.dependencies.push_back({EForwardTopologyPass::Bloom, EForwardTopologyPass::Postprocessing});
+        }
+    }
+    else if (inputs.bHasPostprocessPass) {
+        plan.dependencies.push_back({EForwardTopologyPass::ViewportOverlay, EForwardTopologyPass::Postprocessing});
+    }
+
+    return plan;
+}
 
 RGImportedTextureDesc makeForwardViewportImportedDesc(const RenderImage& image,
                                                       std::string_view   label,
@@ -40,44 +138,15 @@ RGImportedTextureDesc makeForwardViewportImportedDesc(const RenderImage& image,
 ForwardFrameGraphOrchestrator::TopologyDescription ForwardFrameGraphOrchestrator::describeTopology(
     const TopologyInputs& inputs)
 {
+    const auto plan = buildForwardTopologyPlan(inputs);
     TopologyDescription topology{};
-    if (inputs.bHasShadowSubgraph) {
-        topology.passOrder.push_back(kForwardTopologyPassShadow);
+    topology.passOrder.reserve(plan.order.size());
+    for (const auto pass : plan.order) {
+        topology.passOrder.push_back(getForwardTopologyPassName(pass));
     }
-    topology.passOrder.push_back(kForwardTopologyPassSkybox);
-    topology.passOrder.push_back(kForwardTopologyPassPBR);
-    topology.passOrder.push_back(kForwardTopologyPassPhong);
-    topology.passOrder.push_back(kForwardTopologyPassUnlit);
-    topology.passOrder.push_back(kForwardTopologyPassSimple);
-    topology.passOrder.push_back(kForwardTopologyPassDirection);
-    topology.passOrder.push_back(kForwardTopologyPassDebug);
-    topology.passOrder.push_back(kForwardTopologyPassViewportOverlay);
-    if (inputs.bHasBloomSubgraph) {
-        topology.passOrder.push_back(kForwardTopologyPassBloom);
-    }
-    if (inputs.bHasPostprocessPass) {
-        topology.passOrder.push_back(kForwardTopologyPassPostprocessing);
-    }
-
-    topology.dependencies.emplace_back(kForwardTopologyPassSkybox, kForwardTopologyPassPBR);
-    topology.dependencies.emplace_back(kForwardTopologyPassPBR, kForwardTopologyPassPhong);
-    topology.dependencies.emplace_back(kForwardTopologyPassPhong, kForwardTopologyPassUnlit);
-    topology.dependencies.emplace_back(kForwardTopologyPassUnlit, kForwardTopologyPassSimple);
-    topology.dependencies.emplace_back(kForwardTopologyPassSimple, kForwardTopologyPassDirection);
-    topology.dependencies.emplace_back(kForwardTopologyPassDirection, kForwardTopologyPassDebug);
-    topology.dependencies.emplace_back(kForwardTopologyPassDebug, kForwardTopologyPassViewportOverlay);
-    if (inputs.bHasShadowSubgraph) {
-        topology.dependencies.emplace_back(kForwardTopologyPassShadow, kForwardTopologyPassPBR);
-        topology.dependencies.emplace_back(kForwardTopologyPassShadow, kForwardTopologyPassPhong);
-    }
-    if (inputs.bHasBloomSubgraph) {
-        topology.dependencies.emplace_back(kForwardTopologyPassViewportOverlay, kForwardTopologyPassBloom);
-        if (inputs.bHasPostprocessPass) {
-            topology.dependencies.emplace_back(kForwardTopologyPassBloom, kForwardTopologyPassPostprocessing);
-        }
-    }
-    else if (inputs.bHasPostprocessPass) {
-        topology.dependencies.emplace_back(kForwardTopologyPassViewportOverlay, kForwardTopologyPassPostprocessing);
+    topology.dependencies.reserve(plan.dependencies.size());
+    for (const auto& edge : plan.dependencies) {
+        topology.dependencies.emplace_back(getForwardTopologyPassName(edge.from), getForwardTopologyPassName(edge.to));
     }
 
     return topology;
@@ -123,6 +192,70 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
     const auto colorAttachment = viewportRTSpec.attachments.colorAttach[0];
     const auto depthAttachment = *viewportRTSpec.attachments.depthAttach;
     const Rect2D renderArea{.pos = {0, 0}, .extent = viewportExtent.toVec2()};
+    const auto topologyPlan = buildForwardTopologyPlan({
+        .bHasShadowSubgraph  = deps.shadowStage && inputs.bEnableShadow,
+        .bHasBloomSubgraph   = true,
+        .bHasPostprocessPass = true,
+    });
+    std::optional<RGPassHandle> forwardSkyboxPassHandle;
+    std::optional<RGPassHandle> forwardPbrPassHandle;
+    std::optional<RGPassHandle> forwardPhongPassHandle;
+    std::optional<RGPassHandle> forwardUnlitPassHandle;
+    std::optional<RGPassHandle> forwardSimplePassHandle;
+    std::optional<RGPassHandle> forwardDirectionPassHandle;
+    std::optional<RGPassHandle> forwardDebugPassHandle;
+    auto applyTopologyDependencies = [&](RGPassBuilder& passBuilder, EForwardTopologyPass currentPass)
+    {
+        for (const auto& edge : topologyPlan.dependencies) {
+            if (edge.to != currentPass) {
+                continue;
+            }
+            switch (edge.from) {
+                case EForwardTopologyPass::Shadow:
+                    if (shadowOutputs.lastPass.has_value()) {
+                        passBuilder.dependsOn(*shadowOutputs.lastPass);
+                    }
+                    break;
+                case EForwardTopologyPass::Skybox:
+                    if (forwardSkyboxPassHandle.has_value()) {
+                        passBuilder.dependsOn(*forwardSkyboxPassHandle);
+                    }
+                    break;
+                case EForwardTopologyPass::PBR:
+                    if (forwardPbrPassHandle.has_value()) {
+                        passBuilder.dependsOn(*forwardPbrPassHandle);
+                    }
+                    break;
+                case EForwardTopologyPass::Phong:
+                    if (forwardPhongPassHandle.has_value()) {
+                        passBuilder.dependsOn(*forwardPhongPassHandle);
+                    }
+                    break;
+                case EForwardTopologyPass::Unlit:
+                    if (forwardUnlitPassHandle.has_value()) {
+                        passBuilder.dependsOn(*forwardUnlitPassHandle);
+                    }
+                    break;
+                case EForwardTopologyPass::Simple:
+                    if (forwardSimplePassHandle.has_value()) {
+                        passBuilder.dependsOn(*forwardSimplePassHandle);
+                    }
+                    break;
+                case EForwardTopologyPass::Direction:
+                    if (forwardDirectionPassHandle.has_value()) {
+                        passBuilder.dependsOn(*forwardDirectionPassHandle);
+                    }
+                    break;
+                case EForwardTopologyPass::Debug:
+                    if (forwardDebugPassHandle.has_value()) {
+                        passBuilder.dependsOn(*forwardDebugPassHandle);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+    };
 
     // FG-702~704: the Forward viewport sequence is declared as separate graph
     // passes (Skybox -> PBR -> Phong -> Unlit -> Simple -> Direction -> Debug
@@ -194,8 +327,9 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
     };
 
     [[maybe_unused]] const auto skyboxPass = graph.addPass(
-        "Forward Skybox",
-        [&skyboxParams, colorAttachment, depthAttachment](RGPassBuilder& passBuilder) {
+        std::string(kForwardTopologyPassSkybox),
+        [&skyboxParams, colorAttachment, depthAttachment, &applyTopologyDependencies](RGPassBuilder& passBuilder) {
+            applyTopologyDependencies(passBuilder, EForwardTopologyPass::Skybox);
             passBuilder.declareRaster({
                 .renderArea = skyboxParams.renderArea,
                 .layerCount = skyboxParams.layerCount,
@@ -226,11 +360,9 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
         });
 
     [[maybe_unused]] const auto pbrPass = graph.addPass(
-        "Forward PBR",
-        [&pbrParams, shadowDepth, shadowOutputs, depthAttachment](RGPassBuilder& passBuilder) {
-            if (shadowOutputs.lastPass.has_value()) {
-                passBuilder.dependsOn(*shadowOutputs.lastPass);
-            }
+        std::string(kForwardTopologyPassPBR),
+        [&pbrParams, shadowDepth, depthAttachment, &applyTopologyDependencies](RGPassBuilder& passBuilder) {
+            applyTopologyDependencies(passBuilder, EForwardTopologyPass::PBR);
             if (shadowDepth.has_value()) {
                 passBuilder.read(*shadowDepth);
             }
@@ -262,11 +394,9 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
         });
 
     [[maybe_unused]] const auto phongPass = graph.addPass(
-        "Forward Phong",
-        [&phongParams, shadowDepth, shadowOutputs, depthAttachment](RGPassBuilder& passBuilder) {
-            if (shadowOutputs.lastPass.has_value()) {
-                passBuilder.dependsOn(*shadowOutputs.lastPass);
-            }
+        std::string(kForwardTopologyPassPhong),
+        [&phongParams, shadowDepth, depthAttachment, &applyTopologyDependencies](RGPassBuilder& passBuilder) {
+            applyTopologyDependencies(passBuilder, EForwardTopologyPass::Phong);
             if (shadowDepth.has_value()) {
                 passBuilder.read(*shadowDepth);
             }
@@ -298,8 +428,9 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
         });
 
     [[maybe_unused]] const auto unlitPass = graph.addPass(
-        "Forward Unlit",
-        [&unlitParams, depthAttachment](RGPassBuilder& passBuilder) {
+        std::string(kForwardTopologyPassUnlit),
+        [&unlitParams, depthAttachment, &applyTopologyDependencies](RGPassBuilder& passBuilder) {
+            applyTopologyDependencies(passBuilder, EForwardTopologyPass::Unlit);
             passBuilder.declareRaster({
                 .renderArea = unlitParams.renderArea,
                 .layerCount = unlitParams.layerCount,
@@ -328,8 +459,9 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
         });
 
     [[maybe_unused]] const auto simplePass = graph.addPass(
-        "Forward Simple",
-        [&simpleParams, depthAttachment](RGPassBuilder& passBuilder) {
+        std::string(kForwardTopologyPassSimple),
+        [&simpleParams, depthAttachment, &applyTopologyDependencies](RGPassBuilder& passBuilder) {
+            applyTopologyDependencies(passBuilder, EForwardTopologyPass::Simple);
             passBuilder.declareRaster({
                 .renderArea = simpleParams.renderArea,
                 .layerCount = simpleParams.layerCount,
@@ -358,8 +490,9 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
         });
 
     [[maybe_unused]] const auto directionPass = graph.addPass(
-        "Forward Direction",
-        [&directionParams, depthAttachment](RGPassBuilder& passBuilder) {
+        std::string(kForwardTopologyPassDirection),
+        [&directionParams, depthAttachment, &applyTopologyDependencies](RGPassBuilder& passBuilder) {
+            applyTopologyDependencies(passBuilder, EForwardTopologyPass::Direction);
             passBuilder.declareRaster({
                 .renderArea = directionParams.renderArea,
                 .layerCount = directionParams.layerCount,
@@ -388,8 +521,9 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
         });
 
     [[maybe_unused]] const auto debugPass = graph.addPass(
-        "Forward Debug",
-        [&debugParams, depthAttachment](RGPassBuilder& passBuilder) {
+        std::string(kForwardTopologyPassDebug),
+        [&debugParams, depthAttachment, &applyTopologyDependencies](RGPassBuilder& passBuilder) {
+            applyTopologyDependencies(passBuilder, EForwardTopologyPass::Debug);
             passBuilder.declareRaster({
                 .renderArea = debugParams.renderArea,
                 .layerCount = debugParams.layerCount,
@@ -418,8 +552,9 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
         });
 
     [[maybe_unused]] const auto viewportOverlayPass = graph.addPass(
-        "Forward Viewport Overlay",
-        [&viewportOverlayParams, resolve, depthAttachment](RGPassBuilder& passBuilder) {
+        std::string(kForwardTopologyPassViewportOverlay),
+        [&viewportOverlayParams, resolve, depthAttachment, &applyTopologyDependencies](RGPassBuilder& passBuilder) {
+            applyTopologyDependencies(passBuilder, EForwardTopologyPass::ViewportOverlay);
             passBuilder.declareRaster({
                 .renderArea = viewportOverlayParams.renderArea,
                 .layerCount = viewportOverlayParams.layerCount,
@@ -450,6 +585,13 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
             }
             rgCtx.endRendering();
         });
+    forwardSkyboxPassHandle = skyboxPass;
+    forwardPbrPassHandle = pbrPass;
+    forwardPhongPassHandle = phongPass;
+    forwardUnlitPassHandle = unlitPass;
+    forwardSimplePassHandle = simplePass;
+    forwardDirectionPassHandle = directionPass;
+    forwardDebugPassHandle = debugPass;
 
     // FG-705: bloom + finalize stay inside the same graph. The postprocess
     // input is the resolved viewport (the MSAA resolve target when present);

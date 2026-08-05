@@ -20,6 +20,19 @@ namespace ya
 namespace
 {
 
+enum class EDeferredTopologyPass : uint8_t
+{
+    Shadow,
+    GBuffer,
+    SSAO,
+    Light,
+    Skybox,
+    SceneOverlay,
+    ViewportOverlay,
+    Bloom,
+    Postprocessing,
+};
+
 constexpr std::string_view kTopologyPassShadow          = "Shadow Subgraph";
 constexpr std::string_view kTopologyPassGBuffer         = "Deferred GBuffer";
 constexpr std::string_view kTopologyPassSSAO            = "SSAO Pass";
@@ -29,6 +42,86 @@ constexpr std::string_view kTopologyPassSceneOverlay    = "Deferred Scene Overla
 constexpr std::string_view kTopologyPassViewportOverlay = "Deferred Viewport Overlay";
 constexpr std::string_view kTopologyPassBloom           = "Bloom Subgraph";
 constexpr std::string_view kTopologyPassPostprocessing  = "Postprocessing";
+
+struct DeferredTopologyEdge
+{
+    EDeferredTopologyPass from;
+    EDeferredTopologyPass to;
+};
+
+struct DeferredTopologyPlan
+{
+    std::vector<EDeferredTopologyPass> order{};
+    std::vector<DeferredTopologyEdge>  dependencies{};
+};
+
+std::string_view getDeferredTopologyPassName(EDeferredTopologyPass pass)
+{
+    switch (pass) {
+        case EDeferredTopologyPass::Shadow: return kTopologyPassShadow;
+        case EDeferredTopologyPass::GBuffer: return kTopologyPassGBuffer;
+        case EDeferredTopologyPass::SSAO: return kTopologyPassSSAO;
+        case EDeferredTopologyPass::Light: return kTopologyPassLight;
+        case EDeferredTopologyPass::Skybox: return kTopologyPassSkybox;
+        case EDeferredTopologyPass::SceneOverlay: return kTopologyPassSceneOverlay;
+        case EDeferredTopologyPass::ViewportOverlay: return kTopologyPassViewportOverlay;
+        case EDeferredTopologyPass::Bloom: return kTopologyPassBloom;
+        case EDeferredTopologyPass::Postprocessing: return kTopologyPassPostprocessing;
+    }
+
+    YA_CORE_ASSERT(false, "Unhandled deferred topology pass");
+    return {};
+}
+
+DeferredTopologyPlan buildDeferredTopologyPlan(const DeferredFrameGraphOrchestrator::TopologyInputs& inputs)
+{
+    DeferredTopologyPlan plan{};
+    if (inputs.bHasShadowSubgraph) {
+        plan.order.push_back(EDeferredTopologyPass::Shadow);
+    }
+    plan.order.push_back(EDeferredTopologyPass::GBuffer);
+    if (inputs.bUseSSAO) {
+        plan.order.push_back(EDeferredTopologyPass::SSAO);
+    }
+    plan.order.insert(plan.order.end(),
+                      {
+                          EDeferredTopologyPass::Light,
+                          EDeferredTopologyPass::Skybox,
+                          EDeferredTopologyPass::SceneOverlay,
+                          EDeferredTopologyPass::ViewportOverlay,
+                      });
+    if (inputs.bHasBloomSubgraph) {
+        plan.order.push_back(EDeferredTopologyPass::Bloom);
+    }
+    if (inputs.bHasPostprocessPass) {
+        plan.order.push_back(EDeferredTopologyPass::Postprocessing);
+    }
+
+    plan.dependencies.insert(plan.dependencies.end(),
+                             {
+                                 {EDeferredTopologyPass::GBuffer, EDeferredTopologyPass::Light},
+                                 {EDeferredTopologyPass::Light, EDeferredTopologyPass::Skybox},
+                                 {EDeferredTopologyPass::Skybox, EDeferredTopologyPass::SceneOverlay},
+                                 {EDeferredTopologyPass::SceneOverlay, EDeferredTopologyPass::ViewportOverlay},
+                             });
+    if (inputs.bHasShadowSubgraph) {
+        plan.dependencies.push_back({EDeferredTopologyPass::Shadow, EDeferredTopologyPass::Light});
+    }
+    if (inputs.bUseSSAO) {
+        plan.dependencies.push_back({EDeferredTopologyPass::SSAO, EDeferredTopologyPass::Light});
+    }
+    if (inputs.bHasBloomSubgraph) {
+        plan.dependencies.push_back({EDeferredTopologyPass::ViewportOverlay, EDeferredTopologyPass::Bloom});
+        if (inputs.bHasPostprocessPass) {
+            plan.dependencies.push_back({EDeferredTopologyPass::Bloom, EDeferredTopologyPass::Postprocessing});
+        }
+    }
+    else if (inputs.bHasPostprocessPass) {
+        plan.dependencies.push_back({EDeferredTopologyPass::ViewportOverlay, EDeferredTopologyPass::Postprocessing});
+    }
+
+    return plan;
+}
 
 RGImportedTextureDesc makeDeferredOrchestratorEnvironmentImportedDesc(const ImageResourceRef& resource,
                                                                       std::string_view       label)
@@ -72,43 +165,15 @@ RGBufferHandle importDeferredOrchestratorHostWrittenBuffer(RenderGraph&         
 
 DeferredFrameGraphOrchestrator::TopologyDescription DeferredFrameGraphOrchestrator::describeTopology(const TopologyInputs& inputs)
 {
+    const auto plan = buildDeferredTopologyPlan(inputs);
     TopologyDescription topology{};
-    if (inputs.bHasShadowSubgraph) {
-        topology.passOrder.push_back(kTopologyPassShadow);
+    topology.passOrder.reserve(plan.order.size());
+    for (const auto pass : plan.order) {
+        topology.passOrder.push_back(getDeferredTopologyPassName(pass));
     }
-    topology.passOrder.push_back(kTopologyPassGBuffer);
-    if (inputs.bUseSSAO) {
-        topology.passOrder.push_back(kTopologyPassSSAO);
-    }
-    topology.passOrder.push_back(kTopologyPassLight);
-    topology.passOrder.push_back(kTopologyPassSkybox);
-    topology.passOrder.push_back(kTopologyPassSceneOverlay);
-    topology.passOrder.push_back(kTopologyPassViewportOverlay);
-    if (inputs.bHasBloomSubgraph) {
-        topology.passOrder.push_back(kTopologyPassBloom);
-    }
-    if (inputs.bHasPostprocessPass) {
-        topology.passOrder.push_back(kTopologyPassPostprocessing);
-    }
-
-    topology.dependencies.emplace_back(kTopologyPassGBuffer, kTopologyPassLight);
-    topology.dependencies.emplace_back(kTopologyPassLight, kTopologyPassSkybox);
-    topology.dependencies.emplace_back(kTopologyPassSkybox, kTopologyPassSceneOverlay);
-    topology.dependencies.emplace_back(kTopologyPassSceneOverlay, kTopologyPassViewportOverlay);
-    if (inputs.bHasShadowSubgraph) {
-        topology.dependencies.emplace_back(kTopologyPassShadow, kTopologyPassLight);
-    }
-    if (inputs.bUseSSAO) {
-        topology.dependencies.emplace_back(kTopologyPassSSAO, kTopologyPassLight);
-    }
-    if (inputs.bHasBloomSubgraph) {
-        topology.dependencies.emplace_back(kTopologyPassViewportOverlay, kTopologyPassBloom);
-        if (inputs.bHasPostprocessPass) {
-            topology.dependencies.emplace_back(kTopologyPassBloom, kTopologyPassPostprocessing);
-        }
-    }
-    else if (inputs.bHasPostprocessPass) {
-        topology.dependencies.emplace_back(kTopologyPassViewportOverlay, kTopologyPassPostprocessing);
+    topology.dependencies.reserve(plan.dependencies.size());
+    for (const auto& edge : plan.dependencies) {
+        topology.dependencies.emplace_back(getDeferredTopologyPassName(edge.from), getDeferredTopologyPassName(edge.to));
     }
 
     return topology;
@@ -133,6 +198,56 @@ void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const 
     const auto& stageCtx       = *inputs.stageCtx;
     const auto& frameBinding   = *inputs.frameBinding;
     const bool  bReverseViewportY = inputs.bReverseViewportY;
+    const auto topologyPlan = buildDeferredTopologyPlan({
+        .bHasShadowSubgraph  = deps.shadowStage != nullptr,
+        .bUseSSAO            = inputs.bUseSSAO,
+        .bHasBloomSubgraph   = true,
+        .bHasPostprocessPass = true,
+    });
+    std::optional<RGPassHandle> deferredGBufferPassHandle;
+    std::optional<RGPassHandle> deferredSsaoPassHandle;
+    std::optional<RGPassHandle> deferredLightPassHandle;
+    std::optional<RGPassHandle> deferredSkyboxPassHandle;
+    std::optional<RGPassHandle> deferredSceneOverlayPassHandle;
+    auto applyTopologyDependencies = [&](RGPassBuilder& passBuilder, EDeferredTopologyPass currentPass)
+    {
+        for (const auto& edge : topologyPlan.dependencies) {
+            if (edge.to != currentPass) {
+                continue;
+            }
+            switch (edge.from) {
+                case EDeferredTopologyPass::Shadow:
+                    if (graphResources.passes.shadow.lastPass.has_value()) {
+                        passBuilder.dependsOn(*graphResources.passes.shadow.lastPass);
+                    }
+                    break;
+                case EDeferredTopologyPass::GBuffer:
+                    if (deferredGBufferPassHandle.has_value()) {
+                        passBuilder.dependsOn(*deferredGBufferPassHandle);
+                    }
+                    break;
+                case EDeferredTopologyPass::SSAO:
+                    break;
+                case EDeferredTopologyPass::Light:
+                    if (deferredLightPassHandle.has_value()) {
+                        passBuilder.dependsOn(*deferredLightPassHandle);
+                    }
+                    break;
+                case EDeferredTopologyPass::Skybox:
+                    if (deferredSkyboxPassHandle.has_value()) {
+                        passBuilder.dependsOn(*deferredSkyboxPassHandle);
+                    }
+                    break;
+                case EDeferredTopologyPass::SceneOverlay:
+                    if (deferredSceneOverlayPassHandle.has_value()) {
+                        passBuilder.dependsOn(*deferredSceneOverlayPassHandle);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+    };
 
     if (deps.shadowStage) {
         graphResources.passes.shadow = deps.shadowStage->appendGraphPasses(graph, stageCtx);
@@ -207,8 +322,9 @@ void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const 
     };
 
     graphResources.passes.gBuffer = graph.addPass(
-        "Deferred GBuffer",
-        [&gbufferParams](RGPassBuilder& passBuilder) {
+        std::string(kTopologyPassGBuffer),
+        [&gbufferParams, &applyTopologyDependencies](RGPassBuilder& passBuilder) {
+            applyTopologyDependencies(passBuilder, EDeferredTopologyPass::GBuffer);
             passBuilder.uniformRead(gbufferParams.frame.handle, gbufferParams.frame.range);
             passBuilder.uniformRead(gbufferParams.light.handle, gbufferParams.light.range);
             passBuilder.storageRead(gbufferParams.skinning);
@@ -321,11 +437,9 @@ void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const 
     };
 
     graphResources.passes.light = graph.addPass(
-        "Deferred Light",
-        [&lightParams, &graphResources](RGPassBuilder& passBuilder) {
-            if (graphResources.passes.shadow.lastPass.has_value()) {
-                passBuilder.dependsOn(*graphResources.passes.shadow.lastPass);
-            }
+        std::string(kTopologyPassLight),
+        [&lightParams, &applyTopologyDependencies](RGPassBuilder& passBuilder) {
+            applyTopologyDependencies(passBuilder, EDeferredTopologyPass::Light);
             passBuilder.uniformRead(lightParams.frame.handle, lightParams.frame.range);
             passBuilder.uniformRead(lightParams.light.handle, lightParams.light.range);
             for (const auto handle : lightParams.gBufferColors) {
@@ -396,8 +510,9 @@ void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const 
     };
 
     graphResources.passes.skybox = graph.addPass(
-        "Deferred Skybox",
-        [&skyboxParams](RGPassBuilder& passBuilder) {
+        std::string(kTopologyPassSkybox),
+        [&skyboxParams, &applyTopologyDependencies](RGPassBuilder& passBuilder) {
+            applyTopologyDependencies(passBuilder, EDeferredTopologyPass::Skybox);
             passBuilder.uniformRead(skyboxParams.frame.handle, skyboxParams.frame.range);
             passBuilder.declareRaster({
                 .renderArea = skyboxParams.renderArea,
@@ -442,8 +557,9 @@ void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const 
     };
 
     graphResources.passes.sceneOverlay = graph.addPass(
-        "Deferred Scene Overlay",
-        [&sceneOverlayParams](RGPassBuilder& passBuilder) {
+        std::string(kTopologyPassSceneOverlay),
+        [&sceneOverlayParams, &applyTopologyDependencies](RGPassBuilder& passBuilder) {
+            applyTopologyDependencies(passBuilder, EDeferredTopologyPass::SceneOverlay);
             passBuilder.declareRaster({
                 .renderArea = sceneOverlayParams.renderArea,
                 .layerCount = sceneOverlayParams.layerCount,
@@ -480,8 +596,9 @@ void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const 
     };
 
     graphResources.passes.viewportOverlay = graph.addPass(
-        "Deferred Viewport Overlay",
-        [&viewportOverlayParams](RGPassBuilder& passBuilder) {
+        std::string(kTopologyPassViewportOverlay),
+        [&viewportOverlayParams, &applyTopologyDependencies](RGPassBuilder& passBuilder) {
+            applyTopologyDependencies(passBuilder, EDeferredTopologyPass::ViewportOverlay);
             passBuilder.declareRaster({
                 .renderArea = viewportOverlayParams.renderArea,
                 .layerCount = viewportOverlayParams.layerCount,
@@ -511,6 +628,10 @@ void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const 
 
             rgCtx.endRendering();
         });
+    deferredGBufferPassHandle = graphResources.passes.gBuffer;
+    deferredLightPassHandle = graphResources.passes.light;
+    deferredSkyboxPassHandle = graphResources.passes.skybox;
+    deferredSceneOverlayPassHandle = graphResources.passes.sceneOverlay;
 
     const auto postprocessOutput = deps.postProcessStage->appendFinalizeGraphPasses(graph, PostProcessingStage::FinalizePassParams{
         .input         = graphResources.textures.overlayInput,
