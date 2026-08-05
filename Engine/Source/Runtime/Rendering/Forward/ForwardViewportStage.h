@@ -5,6 +5,7 @@
 #include "Render/Core/Pipeline.h"
 #include "Render/Stage/IRenderStage.h"
 #include "Runtime/Rendering/Forward/ForwardViewportAuxPasses.h"
+#include "Runtime/Rendering/Forward/ForwardFrameResourceSet.h"
 #include "Runtime/Rendering/Forward/ForwardViewportLitPasses.h"
 #include "Runtime/Rendering/Forward/ForwardViewportUnlitPass.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowRuntimeState.h"
@@ -34,6 +35,10 @@ struct ForwardViewportStage : public IRenderStage
         IRenderPass*                          renderPass                           = nullptr;
         PipelineRenderingInfo                pipelineRenderingInfo                = {};
         stdptr<IDescriptorSetLayout>          skinningDSL;
+        stdptr<IDescriptorSetLayout>          pbrFrameDSL;
+        stdptr<IDescriptorSetLayout>          phongFrameDSL;
+        stdptr<IDescriptorSetLayout>          unlitFrameDSL;
+        stdptr<IDescriptorSetLayout>          skyboxFrameDSL;
         DescriptorSetHandle                  depthBufferShadowDS                  = nullptr;
         ShadowRuntimeState                   shadowState                          = {};
         std::function<uint64_t()>            getFrameIndex;
@@ -82,6 +87,10 @@ struct ForwardViewportStage : public IRenderStage
         ResourceResolveSystem*    resourceResolveSystem   = nullptr;
         DescriptorSetHandle       sceneEnvironmentLightingDescriptorSet = nullptr;
         DescriptorSetHandle       skinningDescriptorSet   = nullptr;
+        DescriptorSetHandle       pbrFrameDescriptorSet   = nullptr;
+        DescriptorSetHandle       phongFrameDescriptorSet = nullptr;
+        DescriptorSetHandle       unlitFrameDescriptorSet = nullptr;
+        DescriptorSetHandle       skyboxFrameDescriptorSet = nullptr;
         SkyboxInput               skybox{};
         DebugDrawInput            debugDraw{};
     };
@@ -99,6 +108,7 @@ struct ForwardViewportStage : public IRenderStage
     ForwardViewportUnlitPass _unlitPass{};
 
     DescriptorSetHandle _depthBufferShadowDS = nullptr;
+    ForwardFrameResourceSet::FramePayloads _framePayloads{};
     std::function<uint64_t()>            _getFrameIndex;
     std::function<double()>              _getElapsedTimeSeconds;
     std::function<Scene*()>              _getActiveScene;
@@ -121,9 +131,9 @@ struct ForwardViewportStage : public IRenderStage
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
     void execute(const RenderStageContext& ctx) override;
-    /// Graph pass entry: explicit current-flight skinning binding. Does not
-    /// read stage members for per-flight resources (FG-701).
-    void execute(const RenderStageContext& ctx, DescriptorSetHandle skinningDS);
+    /// Graph pass entry: explicit current-flight binding. Does not read stage
+    /// members for per-flight resources (FG-701).
+    void execute(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
 
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setDepthBufferShadowDescriptorSet(DescriptorSetHandle depthBufferShadowDS);
@@ -134,12 +144,9 @@ struct ForwardViewportStage : public IRenderStage
     [[nodiscard]] const ForwardViewportLitPasses& getLitPasses() const { return _litPasses; }
     [[nodiscard]] ForwardViewportUnlitPass&       getUnlitPass() { return _unlitPass; }
     [[nodiscard]] const ForwardViewportUnlitPass& getUnlitPass() const { return _unlitPass; }
+    [[nodiscard]] const ForwardFrameResourceSet::FramePayloads& getFramePayloads() const { return _framePayloads; }
 
   private:
-    void initSkinningResources();
-    void ensureSkinningCapacity(uint32_t paletteCount);
-
-    void updateSkinningBuffer(const RenderStageContext& ctx);
     [[nodiscard]] PassContext buildPassContext(const RenderStageContext& ctx);
     void                      executePasses(const PassContext& passCtx);
     void                      executePass(EPass pass, const PassContext& passCtx);

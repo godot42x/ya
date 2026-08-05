@@ -5,6 +5,7 @@
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Render.h"
+#include "Runtime/Rendering/Forward/ForwardFrameResourceSet.h"
 
 namespace ya
 {
@@ -66,6 +67,8 @@ void ForwardViewportLitPasses::init(const InitDesc& desc)
     _render                = desc.render;
     _shadowState           = desc.shadowState;
     _skinningDSL           = desc.skinningDSL;
+    _pbrFrameDSL           = desc.pbrFrameDSL;
+    _phongFrameDSL         = desc.phongFrameDSL;
     _getFrameIndex         = desc.getFrameIndex;
     _getElapsedTimeSeconds = desc.getElapsedTimeSeconds;
 
@@ -81,9 +84,6 @@ void ForwardViewportLitPasses::destroy()
     _pbrFrameDSL.reset();
     _pbrResourceDSL.reset();
     _pbrParamDSL.reset();
-    _pbrFrameDSP.reset();
-    for (auto& u : _pbrFrameUBO) u.reset();
-    for (auto& u : _pbrLightUBO) u.reset();
 
     _phongMatPool = {};
     _phongStatic = {};
@@ -91,10 +91,6 @@ void ForwardViewportLitPasses::destroy()
     _phongFrameDSL.reset();
     _phongResourceDSL.reset();
     _phongParamDSL.reset();
-    _phongFrameDSP.reset();
-    for (auto& u : _phongFrameUBO) u.reset();
-    for (auto& u : _phongLightUBO) u.reset();
-    for (auto& u : _phongDebugUBO) u.reset();
 
     _getFrameIndex = {};
     _getElapsedTimeSeconds = {};
@@ -140,14 +136,15 @@ void ForwardViewportLitPasses::refreshPipelineFormats(const RenderAttachmentForm
     refreshVariant(_phongSkinned);
 }
 
-void ForwardViewportLitPasses::prepare(const RenderStageContext& ctx)
+void ForwardViewportLitPasses::prepare(const RenderStageContext& ctx,
+                                       ForwardFrameResourceSet::FramePayloads& outPayloads)
 {
     if (!ctx.frameData) {
         return;
     }
 
-    preparePBR(ctx);
-    preparePhong(ctx);
+    preparePBR(ctx, outPayloads.pbrFrame, outPayloads.pbrLight);
+    preparePhong(ctx, outPayloads.phongFrame, outPayloads.phongLight, outPayloads.phongDebug);
 }
 
 void ForwardViewportLitPasses::initPBR(const InitDesc& desc)
@@ -159,14 +156,6 @@ void ForwardViewportLitPasses::initPBR(const InitDesc& desc)
     auto dsls = IDescriptorSetLayout::create(
         _render,
         {
-            DescriptorSetLayoutDesc{
-                .label    = "FwdPBR_Frame_DSL",
-                .set      = 0,
-                .bindings = {
-                    {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment},
-                    {.binding = 1, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment},
-                },
-            },
             DescriptorSetLayoutDesc{
                 .label    = "FwdPBR_Resource_DSL",
                 .set      = 1,
@@ -204,15 +193,17 @@ void ForwardViewportLitPasses::initPBR(const InitDesc& desc)
                 },
             },
         });
-    _pbrFrameDSL    = dsls[0];
-    _pbrResourceDSL = dsls[1];
-    _pbrParamDSL    = dsls[2];
+    _pbrResourceDSL = dsls[0];
+    _pbrParamDSL    = dsls[1];
+
+    auto pipelineDsls = dsls;
+    pipelineDsls.insert(pipelineDsls.begin(), _pbrFrameDSL);
 
     _pbrStatic.pipelineLayout = IPipelineLayout::create(
         _render,
         "FwdPBR_Static_PPL",
         {PushConstantRange{.offset = 0, .size = sizeof(PBRPushConstant), .stageFlags = EShaderStage::Vertex}},
-        dsls);
+        pipelineDsls);
 
     _pbrStatic.pipelineCI = GraphicsPipelineCreateInfo{
         .renderPass            = desc.renderPass,
@@ -245,7 +236,7 @@ void ForwardViewportLitPasses::initPBR(const InitDesc& desc)
     _pbrStatic.pipeline = IGraphicsPipeline::create(_render);
     _pbrStatic.pipeline->recreate(_pbrStatic.pipelineCI);
 
-    auto skinnedDsls = dsls;
+    auto skinnedDsls = pipelineDsls;
     skinnedDsls.push_back(_skinningDSL);
     _pbrSkinned.pipelineLayout = IPipelineLayout::create(
         _render,
@@ -266,33 +257,6 @@ void ForwardViewportLitPasses::initPBR(const InitDesc& desc)
     _pbrSkinned.pipeline = IGraphicsPipeline::create(_render);
     _pbrSkinned.pipeline->recreate(_pbrSkinned.pipelineCI);
 
-    _pbrFrameDSP = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-                                                        .label     = "FwdPBR_Frame_DSP",
-                                                        .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
-                                                        .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT * 2}},
-                                                    });
-
-    for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _pbrFrameUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-                                                       .label       = std::format("FwdPBR_Frame_UBO_{}", i),
-                                                       .usage       = EBufferUsage::UniformBuffer,
-                                                       .size        = sizeof(PBRFrameUBO),
-                                                       .memoryUsage = EMemoryUsage::CpuToGpu,
-                                                   });
-        _pbrLightUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-                                                       .label       = std::format("FwdPBR_Light_UBO_{}", i),
-                                                       .usage       = EBufferUsage::UniformBuffer,
-                                                       .size        = sizeof(PBRLightUBO),
-                                                       .memoryUsage = EMemoryUsage::CpuToGpu,
-                                                   });
-
-        _pbrFrameDS[i] = _pbrFrameDSP->allocateDescriptorSets(_pbrFrameDSL);
-        _render->getDescriptorHelper()->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneUniformBuffer(_pbrFrameDS[i], 0, _pbrFrameUBO[i].get()),
-            IDescriptorSetHelper::writeOneUniformBuffer(_pbrFrameDS[i], 1, _pbrLightUBO[i].get()),
-        });
-    }
-
     constexpr uint32_t pbrTextureCount = 5;
     _pbrMatPool.init(
         _render, _pbrParamDSL, _pbrResourceDSL, [pbrTextureCount](uint32_t n) -> std::vector<DescriptorPoolSize>
@@ -309,15 +273,6 @@ void ForwardViewportLitPasses::initPhong(const InitDesc& desc)
     auto dsls = IDescriptorSetLayout::create(
         _render,
         {
-            DescriptorSetLayoutDesc{
-                .label    = "FwdPhong_Frame_DSL",
-                .set      = 0,
-                .bindings = {
-                    {.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment},
-                    {.binding = 1, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment},
-                    {.binding = 2, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment},
-                },
-            },
             DescriptorSetLayoutDesc{
                 .label    = "FwdPhong_Resource_DSL",
                 .set      = 1,
@@ -351,12 +306,14 @@ void ForwardViewportLitPasses::initPhong(const InitDesc& desc)
                 },
             },
         });
-    _phongFrameDSL    = dsls[0];
-    _phongResourceDSL = dsls[1];
-    _phongParamDSL    = dsls[2];
+    _phongResourceDSL = dsls[0];
+    _phongParamDSL    = dsls[1];
+
+    auto pipelineDsls = dsls;
+    pipelineDsls.insert(pipelineDsls.begin(), _phongFrameDSL);
 
     _phongStatic.pipelineLayout = IPipelineLayout::create(
-        _render, "FwdPhong_Static_PPL", {PushConstantRange{.offset = 0, .size = sizeof(PhongModelPC), .stageFlags = EShaderStage::Vertex}}, dsls);
+        _render, "FwdPhong_Static_PPL", {PushConstantRange{.offset = 0, .size = sizeof(PhongModelPC), .stageFlags = EShaderStage::Vertex}}, pipelineDsls);
 
     _phongStatic.pipelineCI = GraphicsPipelineCreateInfo{
         .renderPass            = desc.renderPass,
@@ -389,7 +346,7 @@ void ForwardViewportLitPasses::initPhong(const InitDesc& desc)
     _phongStatic.pipeline = IGraphicsPipeline::create(_render);
     _phongStatic.pipeline->recreate(_phongStatic.pipelineCI);
 
-    auto skinnedDsls = dsls;
+    auto skinnedDsls = pipelineDsls;
     skinnedDsls.push_back(_skinningDSL);
     _phongSkinned.pipelineLayout = IPipelineLayout::create(
         _render, "FwdPhong_Skinned_PPL", {PushConstantRange{.offset = 0, .size = sizeof(PhongModelPC), .stageFlags = EShaderStage::Vertex}}, skinnedDsls);
@@ -407,40 +364,6 @@ void ForwardViewportLitPasses::initPhong(const InitDesc& desc)
     _phongSkinned.pipeline = IGraphicsPipeline::create(_render);
     _phongSkinned.pipeline->recreate(_phongSkinned.pipelineCI);
 
-    _phongFrameDSP = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-                                                          .label     = "FwdPhong_Frame_DSP",
-                                                          .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
-                                                          .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT * 3}},
-                                                      });
-
-    for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _phongFrameUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-                                                         .label       = std::format("FwdPhong_Frame_UBO_{}", i),
-                                                         .usage       = EBufferUsage::UniformBuffer,
-                                                         .size        = sizeof(PhongFrameUBO),
-                                                         .memoryUsage = EMemoryUsage::CpuToGpu,
-                                                     });
-        _phongLightUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-                                                         .label       = std::format("FwdPhong_Light_UBO_{}", i),
-                                                         .usage       = EBufferUsage::UniformBuffer,
-                                                         .size        = sizeof(PhongLightUBO),
-                                                         .memoryUsage = EMemoryUsage::CpuToGpu,
-                                                     });
-        _phongDebugUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-                                                         .label       = std::format("FwdPhong_Debug_UBO_{}", i),
-                                                         .usage       = EBufferUsage::UniformBuffer,
-                                                         .size        = sizeof(PhongDebugUBO),
-                                                         .memoryUsage = EMemoryUsage::CpuToGpu,
-                                                     });
-
-        _phongFrameDS[i] = _phongFrameDSP->allocateDescriptorSets(_phongFrameDSL);
-        _render->getDescriptorHelper()->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneUniformBuffer(_phongFrameDS[i], 0, _phongFrameUBO[i].get()),
-            IDescriptorSetHelper::writeOneUniformBuffer(_phongFrameDS[i], 1, _phongLightUBO[i].get()),
-            IDescriptorSetHelper::writeOneUniformBuffer(_phongFrameDS[i], 2, _phongDebugUBO[i].get()),
-        });
-    }
-
     constexpr uint32_t phongTextureCount = 4;
     _phongMatPool.init(
         _render, _phongParamDSL, _phongResourceDSL, [phongTextureCount](uint32_t n) -> std::vector<DescriptorPoolSize>
@@ -453,51 +376,48 @@ void ForwardViewportLitPasses::initPhong(const InitDesc& desc)
     _phongDebug = {};
 }
 
-void ForwardViewportLitPasses::preparePBR(const RenderStageContext& ctx)
+void ForwardViewportLitPasses::preparePBR(const RenderStageContext& ctx,
+                                          PBRFrameUBO& outFrame,
+                                          PBRLightUBO& outLight)
 {
     const auto& fd = *ctx.frameData;
-    uint32_t    fi = ctx.flightIndex;
 
     uint32_t materialCount = MaterialFactory::get()->getMaterialSize<PBRMaterial>();
     if (_pbrMatPool.ensureCapacity(materialCount)) {
         _pbrPoolRecreated = true;
     }
 
-    PBRFrameUBO frameUBO{};
-    frameUBO.projMat   = fd.projection;
-    frameUBO.viewMat   = fd.view;
-    frameUBO.cameraPos = fd.cameraPos;
-    _pbrFrameUBO[fi]->writeData(&frameUBO, sizeof(PBRFrameUBO), 0);
+    outFrame.projMat   = fd.projection;
+    outFrame.viewMat   = fd.view;
+    outFrame.cameraPos = fd.cameraPos;
 
-    fillPBRLightFromFrameData(fd);
-    _pbrLightUBO[fi]->writeData(&_pbrLight, sizeof(PBRLightUBO), 0);
+    fillPBRLightFromFrameData(fd, outLight);
 
     preparePBRMaterials(fd);
     _pbrPoolRecreated = false;
 }
 
-void ForwardViewportLitPasses::preparePhong(const RenderStageContext& ctx)
+void ForwardViewportLitPasses::preparePhong(const RenderStageContext& ctx,
+                                            PhongFrameUBO& outFrame,
+                                            PhongLightUBO& outLight,
+                                            PhongDebugUBO& outDebug)
 {
     const auto& fd = *ctx.frameData;
-    uint32_t    fi = ctx.flightIndex;
 
     uint32_t materialCount = MaterialFactory::get()->getMaterialSize<PhongMaterial>();
     if (_phongMatPool.ensureCapacity(materialCount)) {
         _phongPoolRecreated = true;
     }
 
-    PhongFrameUBO frameUBO{};
-    frameUBO.projMat    = fd.projection;
-    frameUBO.viewMat    = fd.view;
-    frameUBO.resolution = glm::ivec2(ctx.viewportExtent.width, ctx.viewportExtent.height);
-    frameUBO.frameIdx   = _getFrameIndex ? static_cast<int32_t>(_getFrameIndex()) : 0;
-    frameUBO.time       = _getElapsedTimeSeconds ? static_cast<float>(_getElapsedTimeSeconds()) : 0.0f;
-    frameUBO.cameraPos  = fd.cameraPos;
-    _phongFrameUBO[fi]->writeData(&frameUBO, sizeof(PhongFrameUBO), 0);
+    outFrame.projMat    = fd.projection;
+    outFrame.viewMat    = fd.view;
+    outFrame.resolution = glm::ivec2(ctx.viewportExtent.width, ctx.viewportExtent.height);
+    outFrame.frameIdx   = _getFrameIndex ? static_cast<int32_t>(_getFrameIndex()) : 0;
+    outFrame.time       = _getElapsedTimeSeconds ? static_cast<float>(_getElapsedTimeSeconds()) : 0.0f;
+    outFrame.cameraPos  = fd.cameraPos;
 
-    fillPhongLightFromFrameData(fd);
-    _phongLightUBO[fi]->writeData(&_phongLight, sizeof(PhongLightUBO), 0);
-    _phongDebugUBO[fi]->writeData(&_phongDebug, sizeof(PhongDebugUBO), 0);
+    fillPhongLightFromFrameData(fd, outLight);
+    outDebug = _phongDebug;
 
     preparePhongMaterials(fd);
     _phongPoolRecreated = false;
@@ -607,7 +527,6 @@ void ForwardViewportLitPasses::drawPBR(const DrawContext& drawCtx)
     const auto& staticItems  = fd.drawBuckets.staticMeshes.pbrDrawItems;
     const auto& skinnedItems = fd.drawBuckets.skinnedMeshes.pbrDrawItems;
     auto*       cmdBuf       = ctx.cmdBuf;
-    uint32_t    fi           = ctx.flightIndex;
 
     if (staticItems.empty() && skinnedItems.empty()) {
         return;
@@ -632,7 +551,7 @@ void ForwardViewportLitPasses::drawPBR(const DrawContext& drawCtx)
             cmdBuf->bindPipeline(pipelineVariant.pipeline.get());
             if (bSkinned) {
                 cmdBuf->bindDescriptorSets(layout, 0, {
-                    _pbrFrameDS[fi],
+                    drawCtx.pbrFrameDescriptorSet,
                     resourceDS,
                     paramDS,
                     drawCtx.environmentLightingDescriptorSet,
@@ -642,7 +561,7 @@ void ForwardViewportLitPasses::drawPBR(const DrawContext& drawCtx)
             }
             else {
                 cmdBuf->bindDescriptorSets(layout, 0, {
-                    _pbrFrameDS[fi],
+                    drawCtx.pbrFrameDescriptorSet,
                     resourceDS,
                     paramDS,
                     drawCtx.environmentLightingDescriptorSet,
@@ -673,7 +592,6 @@ void ForwardViewportLitPasses::drawPhong(const DrawContext& drawCtx)
     const auto& staticItems  = fd.drawBuckets.staticMeshes.phongDrawItems;
     const auto& skinnedItems = fd.drawBuckets.skinnedMeshes.phongDrawItems;
     auto*       cmdBuf       = ctx.cmdBuf;
-    uint32_t    fi           = ctx.flightIndex;
 
     if (staticItems.empty() && skinnedItems.empty()) {
         return;
@@ -698,7 +616,7 @@ void ForwardViewportLitPasses::drawPhong(const DrawContext& drawCtx)
             cmdBuf->bindPipeline(pipelineVariant.pipeline.get());
             if (bSkinned) {
                 cmdBuf->bindDescriptorSets(layout, 0, {
-                    _phongFrameDS[fi],
+                    drawCtx.phongFrameDescriptorSet,
                     resourceDS,
                     paramDS,
                     drawCtx.skyboxDescriptorSet,
@@ -708,7 +626,7 @@ void ForwardViewportLitPasses::drawPhong(const DrawContext& drawCtx)
             }
             else {
                 cmdBuf->bindDescriptorSets(layout, 0, {
-                    _phongFrameDS[fi],
+                    drawCtx.phongFrameDescriptorSet,
                     resourceDS,
                     paramDS,
                     drawCtx.skyboxDescriptorSet,
@@ -768,29 +686,30 @@ void ForwardViewportLitPasses::applyShadowState(const ShadowRuntimeState& shadow
     }
 }
 
-void ForwardViewportLitPasses::fillPBRLightFromFrameData(const RenderFrameData& fd)
+void ForwardViewportLitPasses::fillPBRLightFromFrameData(const RenderFrameData& fd,
+                                                         PBRLightUBO& outLight)
 {
-    _pbrLight             = {};
-    _pbrLight.hasDirLight = false;
+    outLight              = {};
+    outLight.hasDirLight  = false;
     if (fd.bHasDirectionalLight) {
-        _pbrLight.dirLight.dir          = fd.directionalLight.direction;
-        _pbrLight.dirLight.color        = fd.directionalLight.color;
-        _pbrLight.dirLight.intensity    = fd.directionalLight.intensity;
-        _pbrLight.dirLight.cascadeCount = fd.directionalLight.cascadeCount;
+        outLight.dirLight.dir          = fd.directionalLight.direction;
+        outLight.dirLight.color        = fd.directionalLight.color;
+        outLight.dirLight.intensity    = fd.directionalLight.intensity;
+        outLight.dirLight.cascadeCount = fd.directionalLight.cascadeCount;
         for (uint32_t cascadeIndex = 0; cascadeIndex < MAX_DIRECTIONAL_CASCADES; ++cascadeIndex) {
-            _pbrLight.dirLight.shadowMatrices[cascadeIndex] = fd.directionalLight.cascadeViewProjections[cascadeIndex];
-            _pbrLight.dirLight.cascadeSplits[cascadeIndex]  = fd.directionalLight.cascadeSplits[cascadeIndex];
+            outLight.dirLight.shadowMatrices[cascadeIndex] = fd.directionalLight.cascadeViewProjections[cascadeIndex];
+            outLight.dirLight.cascadeSplits[cascadeIndex]  = fd.directionalLight.cascadeSplits[cascadeIndex];
         }
-        _pbrLight.hasDirLight           = true;
+        outLight.hasDirLight            = true;
     }
 
-    _pbrLight.numPointLight                 = fd.numPointLights;
+    outLight.numPointLight                  = fd.numPointLights;
     const uint32_t shadowedPointLightBudget = _shadowState.bEnablePointLightShadow
         ? std::min(_shadowState.maxShadowedPointLights, fd.numPointLights)
         : 0u;
     for (uint32_t i = 0; i < fd.numPointLights; ++i) {
         const auto& src = fd.pointLights[i];
-        auto&       dst = _pbrLight.pointLights[i];
+        auto&       dst = outLight.pointLights[i];
         dst             = {};
         dst.pos         = src.position;
         dst.color       = src.color;
@@ -799,24 +718,25 @@ void ForwardViewportLitPasses::fillPBRLightFromFrameData(const RenderFrameData& 
     }
 }
 
-void ForwardViewportLitPasses::fillPhongLightFromFrameData(const RenderFrameData& fd)
+void ForwardViewportLitPasses::fillPhongLightFromFrameData(const RenderFrameData& fd,
+                                                           PhongLightUBO& outLight)
 {
-    _phongLight.hasDirectionalLight = fd.bHasDirectionalLight;
+    outLight.hasDirectionalLight = fd.bHasDirectionalLight;
     if (fd.bHasDirectionalLight) {
-        _phongLight.dirLight.direction    = fd.directionalLight.direction;
-        _phongLight.dirLight.color        = fd.directionalLight.color;
-        _phongLight.dirLight.intensity    = fd.directionalLight.intensity;
-        _phongLight.dirLight.cascadeCount = fd.directionalLight.cascadeCount;
+        outLight.dirLight.direction    = fd.directionalLight.direction;
+        outLight.dirLight.color        = fd.directionalLight.color;
+        outLight.dirLight.intensity    = fd.directionalLight.intensity;
+        outLight.dirLight.cascadeCount = fd.directionalLight.cascadeCount;
         for (uint32_t cascadeIndex = 0; cascadeIndex < MAX_DIRECTIONAL_CASCADES; ++cascadeIndex) {
-            _phongLight.dirLight.shadowMatrices[cascadeIndex] = fd.directionalLight.cascadeViewProjections[cascadeIndex];
-            _phongLight.dirLight.cascadeSplits[cascadeIndex]  = fd.directionalLight.cascadeSplits[cascadeIndex];
+            outLight.dirLight.shadowMatrices[cascadeIndex] = fd.directionalLight.cascadeViewProjections[cascadeIndex];
+            outLight.dirLight.cascadeSplits[cascadeIndex]  = fd.directionalLight.cascadeSplits[cascadeIndex];
         }
     }
 
-    _phongLight.numPointLights = fd.numPointLights;
+    outLight.numPointLights = fd.numPointLights;
     for (uint32_t i = 0; i < fd.numPointLights; ++i) {
         const auto& pl  = fd.pointLights[i];
-        auto&       dst = _phongLight.pointLights[i];
+        auto&       dst = outLight.pointLights[i];
         dst             = {};
         dst.type        = pl.type;
         dst.constant    = pl.constant;

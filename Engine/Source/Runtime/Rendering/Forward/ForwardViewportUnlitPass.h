@@ -18,6 +18,7 @@ namespace ya
 
 struct RenderStageContext;
 struct RenderFrameData;
+class ForwardFrameResourceSet;
 class ICommandBuffer;
 class IRenderPass;
 class IBuffer;
@@ -43,6 +44,7 @@ class ForwardViewportUnlitPass
         IRenderPass*                 renderPass = nullptr;
         PipelineRenderingInfo        pipelineRenderingInfo = {};
         stdptr<IDescriptorSetLayout> skinningDSL;
+        stdptr<IDescriptorSetLayout> unlitFrameDSL;
         std::function<uint64_t()>    getFrameIndex;
         std::function<double()>      getElapsedTimeSeconds;
     };
@@ -51,20 +53,23 @@ class ForwardViewportUnlitPass
     {
         const RenderStageContext& stageCtx;
         DescriptorSetHandle       skinningDS = nullptr;
+        DescriptorSetHandle       unlitFrameDescriptorSet = nullptr;
         std::function<void(ICommandBuffer*, uint32_t, uint32_t)> setViewportAndScissor;
     };
 
     void init(const InitDesc& desc);
     void destroy();
     void beginFrame();
-    void prepare(const RenderStageContext& ctx);
+    /// Build the current frame's Unlit CPU payload; the pipeline uploads it
+    /// through ForwardFrameResourceSet (FG-701).
+    void prepare(const RenderStageContext& ctx, UnlitFrameUBO& outFrame);
     void refreshPipelineFormats(const RenderAttachmentFormats& formats);
     void draw(const DrawContext& ctx);
     [[nodiscard]] const ShadingPipelineVariant& getStaticVariant() const { return _unlitStatic; }
     [[nodiscard]] const ShadingPipelineVariant& getSkinnedVariant() const { return _unlitSkinned; }
   private:
     void initUnlit(const InitDesc& desc);
-    void prepareUnlit(const RenderStageContext& ctx);
+    void prepareUnlit(const RenderStageContext& ctx, UnlitFrameUBO& outFrame);
     void prepareUnlitMaterials(const RenderFrameData& fd);
 
     IRender* _render = nullptr;
@@ -77,12 +82,6 @@ class ForwardViewportUnlitPass
     stdptr<IDescriptorSetLayout> _unlitResourceDSL;
     ShadingPipelineVariant       _unlitStatic;
     ShadingPipelineVariant       _unlitSkinned;
-
-    static constexpr uint32_t UNLIT_FRAME_SLOTS = 8;
-    uint32_t                  _unlitFrameSlot = 0;
-    stdptr<IDescriptorPool>   _unlitFrameDSP;
-    DescriptorSetHandle       _unlitFrameDSs[UNLIT_FRAME_SLOTS]{};
-    stdptr<IBuffer>           _unlitFrameUBOs[UNLIT_FRAME_SLOTS]{};
 
     MaterialDescPool<UnlitMaterial, UnlitMaterial::ParamUBO> _unlitMatPool;
     bool _unlitPoolRecreated = false;

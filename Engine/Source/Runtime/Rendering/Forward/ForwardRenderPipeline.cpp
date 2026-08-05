@@ -318,6 +318,10 @@ void ForwardRenderPipeline::initStageResources()
         .renderPass                         = nullptr,
         .pipelineRenderingInfo              = viewportPRI,
         .skinningDSL                        = _frameResources ? _frameResources->getSkinningDSL() : nullptr,
+        .pbrFrameDSL                        = _frameResources ? _frameResources->getPBRFrameDSL() : nullptr,
+        .phongFrameDSL                      = _frameResources ? _frameResources->getPhongFrameDSL() : nullptr,
+        .unlitFrameDSL                      = _frameResources ? _frameResources->getUnlitFrameDSL() : nullptr,
+        .skyboxFrameDSL                     = _frameResources ? _frameResources->getSkyboxFrameDSL() : nullptr,
         .depthBufferShadowDS                = depthBufferShadowDS,
         .shadowState                        = buildShadowState(),
         .getFrameIndex                      = _getFrameIndex,
@@ -651,6 +655,9 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
     }
 
     _viewportStage->prepare(stageCtx);
+    if (_frameResources && !_frameResources->prepareFramePayloads(stageCtx, _viewportStage->getFramePayloads())) {
+        YA_CORE_ERROR("Forward viewport frame payload upload failed");
+    }
 
     YA_CORE_ASSERT(_viewportResources.colorOwner && _viewportResources.colorImage,
                    "Forward viewport pass requires a color attachment snapshot");
@@ -775,7 +782,7 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
             stageCtx.viewportExtent = viewportExtent;
             _viewportStage->execute(
                 stageCtx,
-                _frameResources ? _frameResources->getBinding(stageCtx.flightIndex).skinningDescriptorSet : DescriptorSetHandle{});
+                _frameResources ? _frameResources->getBinding(stageCtx.flightIndex) : ForwardFrameResourceSet::Binding{});
             if (_lastFrameInput.recordViewportOverlays) {
                 YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
                 _lastFrameInput.recordViewportOverlays(&rgCtx.getCommandBuffer(), viewportExtent, _lastTickCtx);
