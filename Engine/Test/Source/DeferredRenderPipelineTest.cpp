@@ -240,18 +240,18 @@ TEST(DeferredPassParamsTest, SkyboxOverlayDefaultsAreEmptyAndCallbacksRemainExpl
     EXPECT_FALSE(skybox.skybox.descriptorSet);
     EXPECT_EQ(skybox.skybox.mesh, nullptr);
 
-    DeferredSceneOverlayPassParams sceneOverlay{};
-    EXPECT_FALSE(sceneOverlay.color.isValid());
-    EXPECT_FALSE(sceneOverlay.depth.isValid());
-    EXPECT_EQ(sceneOverlay.layerCount, 1u);
-    EXPECT_TRUE(sceneOverlay.overlay.billboards.empty());
-    EXPECT_TRUE(sceneOverlay.overlay.directionGizmos.empty());
+    DeferredForwardTransparentPassParams transparent{};
+    EXPECT_FALSE(transparent.color.isValid());
+    EXPECT_FALSE(transparent.depth.isValid());
+    EXPECT_EQ(transparent.layerCount, 1u);
+    EXPECT_TRUE(transparent.overlay.billboards.empty());
+    EXPECT_TRUE(transparent.overlay.directionGizmos.empty());
 
-    DeferredViewportOverlayPassParams viewportOverlay{};
-    EXPECT_FALSE(viewportOverlay.color.isValid());
-    EXPECT_FALSE(viewportOverlay.depth.isValid());
-    EXPECT_EQ(viewportOverlay.layerCount, 1u);
-    EXPECT_FALSE(viewportOverlay.recordViewportOverlays);
+    DeferredOverlayPassParams overlay{};
+    EXPECT_FALSE(overlay.color.isValid());
+    EXPECT_FALSE(overlay.depth.isValid());
+    EXPECT_EQ(overlay.layerCount, 1u);
+    EXPECT_FALSE(overlay.overlaySnapshot);
 }
 
 TEST(PostProcessingStageTest, FinalizeParamsDefaultsStayEmpty)

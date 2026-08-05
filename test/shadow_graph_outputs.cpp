@@ -4,12 +4,13 @@
 int main()
 {
     ya::ShadowGraphOutputs outputs{};
-    if (outputs.lastPass.has_value() || outputs.shadowDepth.has_value()) {
+    if (outputs.shadowDepth.has_value()) {
         return 1;
     }
 
     ya::DeferredFrameGraphResources::Passes passes{};
-    if (passes.shadow.lastPass.has_value() || passes.shadow.shadowDepth.has_value()) {
+    if (passes.shadow.shadowDepth.has_value() || passes.gBuffer.has_value() || passes.light.has_value() ||
+        passes.skybox.has_value() || passes.sceneOverlay.has_value() || passes.viewportOverlay.has_value()) {
         return 2;
     }
 
