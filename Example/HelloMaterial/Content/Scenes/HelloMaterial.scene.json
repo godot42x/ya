@@ -847,8 +847,7 @@
                     "_playing": true,
                     "_skeletonIndex": 0,
                     "_sourceModelPath": "Engine/ThirdParty/LearnOpenGL/resources/objects/vampire/dancing_vampire.dae",
-                    "_speed": 1.0,
-                    "_time": 92828.467925
+                    "_speed": 1.0
                 },
                 "TransformComponent": {
                     "_position": [
@@ -4926,6 +4925,84 @@
         },
         {
             "components": {
+                "BillboardComponent": {
+                    "bVisible": true,
+                    "image": {
+                        "bEnable": true,
+                        "samplerConfig": {
+                            "addressMode": "Repeat",
+                            "filterMode": "Linear"
+                        },
+                        "textureRef": {
+                            "__base__": {
+                                "AssetRefBase": {
+                                    "_path": "Engine:Content/TestTextures/icons8-light-64.png"
+                                }
+                            }
+                        },
+                        "uvOffset": [
+                            0.0,
+                            0.0
+                        ],
+                        "uvRotation": 0.0,
+                        "uvScale": [
+                            1.0,
+                            1.0
+                        ]
+                    },
+                    "minWorldScale": 0.4,
+                    "screenSizePixels": 30.0,
+                    "tint": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "worldDirection": [
+                        0.0,
+                        0.0,
+                        -1.0
+                    ]
+                },
+                "PointLightComponent": {
+                    "_constant": 1.0,
+                    "_innerConeAngle": 30.0,
+                    "_linear": 0.09,
+                    "_outerConeAngle": 45.0,
+                    "_quadratic": 0.032,
+                    "_type": 0,
+                    "color": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "farPlane": 100.0,
+                    "intensity": 1.0,
+                    "nearPlane": 0.1
+                },
+                "TransformComponent": {
+                    "_position": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "_rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "_scale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                }
+            },
+            "id": 7400527066740844087,
+            "name": "Point Light"
+        },
+        {
+            "components": {
                 "PBRMaterialComponent": {
                     "__base__": {
                         "ya::MaterialComponent<ya::PBRMaterial>": {
@@ -8038,7 +8115,7 @@
         {
             "components": {
                 "CameraComponent": {
-                    "_aspectRatio": 1.830751,
+                    "_aspectRatio": 1.585421,
                     "_distance": 6.0,
                     "_farClip": 1000.0,
                     "_fixedAspectRatio": false,
@@ -8229,6 +8306,160 @@
             },
             "id": 12141867235829558271,
             "name": "PhongSample_3_pearl"
+        },
+        {
+            "components": {
+                "PhongMaterialComponent": {
+                    "__base__": {
+                        "ya::MaterialComponent<ya::PhongMaterial>": {
+                            "_materialPath": ""
+                        }
+                    },
+                    "_diffuseSlot": {
+                        "bEnable": true,
+                        "samplerConfig": {
+                            "addressMode": "Repeat",
+                            "filterMode": "Linear"
+                        },
+                        "textureRef": {
+                            "__base__": {
+                                "AssetRefBase": {
+                                    "_path": ""
+                                }
+                            }
+                        },
+                        "uvOffset": [
+                            0.0,
+                            0.0
+                        ],
+                        "uvRotation": 0.0,
+                        "uvScale": [
+                            1.0,
+                            1.0
+                        ]
+                    },
+                    "_normalSlot": {
+                        "bEnable": true,
+                        "samplerConfig": {
+                            "addressMode": "Repeat",
+                            "filterMode": "Linear"
+                        },
+                        "textureRef": {
+                            "__base__": {
+                                "AssetRefBase": {
+                                    "_path": ""
+                                }
+                            }
+                        },
+                        "uvOffset": [
+                            0.0,
+                            0.0
+                        ],
+                        "uvRotation": 0.0,
+                        "uvScale": [
+                            1.0,
+                            1.0
+                        ]
+                    },
+                    "_params": {
+                        "ambient": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "diffuse": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "shininess": 32.0,
+                        "specular": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ]
+                    },
+                    "_reflectionSlot": {
+                        "bEnable": true,
+                        "samplerConfig": {
+                            "addressMode": "Repeat",
+                            "filterMode": "Linear"
+                        },
+                        "textureRef": {
+                            "__base__": {
+                                "AssetRefBase": {
+                                    "_path": ""
+                                }
+                            }
+                        },
+                        "uvOffset": [
+                            0.0,
+                            0.0
+                        ],
+                        "uvRotation": 0.0,
+                        "uvScale": [
+                            1.0,
+                            1.0
+                        ]
+                    },
+                    "_specularSlot": {
+                        "bEnable": true,
+                        "samplerConfig": {
+                            "addressMode": "Repeat",
+                            "filterMode": "Linear"
+                        },
+                        "textureRef": {
+                            "__base__": {
+                                "AssetRefBase": {
+                                    "_path": ""
+                                }
+                            }
+                        },
+                        "uvOffset": [
+                            0.0,
+                            0.0
+                        ],
+                        "uvRotation": 0.0,
+                        "uvScale": [
+                            1.0,
+                            1.0
+                        ]
+                    }
+                },
+                "PhysicsBodyComponent": {
+                    "_isDynamic": false,
+                    "_shape": "Box"
+                },
+                "RenderComponent": {
+                    "RenderingLayer": "Opaque"
+                },
+                "StaticMeshComponent": {
+                    "_mesh": {
+                        "_meshIndex": 0,
+                        "_primitiveGeometry": "Quad",
+                        "_sourceModelPath": ""
+                    }
+                },
+                "TransformComponent": {
+                    "_position": [
+                        0.0,
+                        -2.999659,
+                        -4.789577
+                    ],
+                    "_rotation": [
+                        92.014236,
+                        0.0,
+                        0.0
+                    ],
+                    "_scale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                }
+            },
+            "id": 12277759658922171115,
+            "name": "Plane"
         },
         {
             "components": {
@@ -8679,6 +8910,10 @@
                         ]
                     }
                 },
+                "PhysicsBodyComponent": {
+                    "_isDynamic": true,
+                    "_shape": "Box"
+                },
                 "RenderComponent": {
                     "RenderingLayer": "Opaque"
                 },
@@ -8692,8 +8927,8 @@
                 "TransformComponent": {
                     "_position": [
                         0.0,
-                        0.0,
-                        -5.0
+                        0.923693,
+                        -4.346159
                     ],
                     "_rotation": [
                         0.0,
@@ -10796,7 +11031,7 @@
                         "textureRef": {
                             "__base__": {
                                 "AssetRefBase": {
-                                    "_path": ""
+                                    "_path": "Engine:Content/TestTextures/icons8-light-64.png"
                                 }
                             }
                         },
@@ -14308,6 +14543,14 @@
                 "children": [],
                 "entityRef": 1325285700919779996,
                 "name": "Vampire"
+            },
+            {
+                "entityRef": 12277759658922171115,
+                "name": "Plane"
+            },
+            {
+                "entityRef": 7400527066740844087,
+                "name": "Point Light"
             }
         ],
         "name": "scene_root"

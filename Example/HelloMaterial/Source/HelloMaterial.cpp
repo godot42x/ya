@@ -37,7 +37,21 @@
 #include "Scene/SceneManager.h"
 
 #include "Core/System/VirtualFileSystem.h"
+#include "Runtime/Application/App.h"
 
+
+void HelloMaterialModule::onAttach(ya::App& app)
+{
+    render = app.getRenderServices().getRender();
+    createCubeMesh();
+    loadResources();
+}
+
+void HelloMaterialModule::onDetach(ya::App&)
+{
+    cubeMesh.reset();
+    render = nullptr;
+}
 
 void HelloMaterialModule::createCubeMesh()
 {
@@ -47,8 +61,9 @@ void HelloMaterialModule::createCubeMesh()
 
 void HelloMaterialModule::loadResources()
 {
-
-    ya::FontManager::get()->loadFont("Engine/Content/Fonts/JetBrainsMono-Medium.ttf", "JetBrainsMono-Medium", 18);
+    if (render) {
+        ya::FontManager::get()->loadFont(*render, "Engine/Content/Fonts/JetBrainsMono-Medium.ttf", "JetBrainsMono-Medium", 18);
+    }
     auto tex = ya::AssetManager::get()->loadTexture(ya::AssetManager::TextureLoadRequest{
         .filepath = "Engine/Content/TestTextures/icons8-light-64.png",
         .name     = "light",

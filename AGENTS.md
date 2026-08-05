@@ -66,6 +66,7 @@ xmake project -k compile_commands
 7. 命令录制期引用到的 GPU 资源、image view、descriptor 数据必须至少活到 queue submit 完成。
 8. `Render2D` 使用左上角原点坐标系。
 9. 日志只用 `YA_CORE_TRACE/DEBUG/INFO/WARN/ERROR/ASSERT`。
+10. 代码风格倾向成员变量在函数声明之前(data-orient-programming)
 
 ## Repo Facts
 
