@@ -72,11 +72,19 @@ bool VulkanBuffer::writeData(const void* data, uint32_t size, uint32_t offset)
         return false;
     }
 
-    VkDeviceSize writeSize   = size == 0 ? _size : size;
-    VkDeviceSize writeOffset = offset;
-    YA_CORE_ASSERT(writeOffset + writeSize <= _size, "Write data out of range!");
-    if (size == 0) {
-        YA_CORE_ASSERT(offset == 0, "If size is 0, offset must be 0");
+    const VkDeviceSize writeSize   = size == 0 ? _size : size;
+    const VkDeviceSize writeOffset = offset;
+    if (size == 0 && offset != 0) {
+        YA_CORE_ERROR("Write data to buffer {} failed: size==0 requires offset==0", name);
+        return false;
+    }
+    if (writeOffset + writeSize > _size) {
+        YA_CORE_ERROR("Write data to buffer {} failed: range [{}, {}) exceeds size {}",
+                      name,
+                      static_cast<uint64_t>(writeOffset),
+                      static_cast<uint64_t>(writeOffset + writeSize),
+                      static_cast<uint64_t>(_size));
+        return false;
     }
 
     void* mappedData = nullptr;
@@ -96,15 +104,35 @@ bool VulkanBuffer::writeData(const void* data, uint32_t size, uint32_t offset)
 
 bool VulkanBuffer::flush(uint32_t size, uint32_t offset)
 {
-    YA_CORE_ASSERT(bHostVisible, "Buffer is not host visible, cannot flush!");
+    if (!bHostVisible) {
+        YA_CORE_ERROR("Flush buffer {} failed: buffer is not host visible", name);
+        return false;
+    }
 
     if (bHostCoherent) {
         return true;
     }
 
-    YA_CORE_ASSERT(bMemoryMapped, "Buffer memory must be mapped before flush!");
+    if (!bMemoryMapped) {
+        YA_CORE_ERROR("Flush buffer {} failed: buffer memory must be mapped before flush", name);
+        return false;
+    }
 
-    vmaFlushAllocation(_render->getVmaAllocator(), _allocation, offset, size == 0 ? VK_WHOLE_SIZE : size);
+    const VkDeviceSize flushSize = size == 0 ? _size : size;
+    if (size == 0 && offset != 0) {
+        YA_CORE_ERROR("Flush buffer {} failed: size==0 requires offset==0", name);
+        return false;
+    }
+    if (static_cast<VkDeviceSize>(offset) + flushSize > _size) {
+        YA_CORE_ERROR("Flush buffer {} failed: range [{}, {}) exceeds size {}",
+                      name,
+                      static_cast<uint64_t>(offset),
+                      static_cast<uint64_t>(static_cast<VkDeviceSize>(offset) + flushSize),
+                      static_cast<uint64_t>(_size));
+        return false;
+    }
+
+    vmaFlushAllocation(_render->getVmaAllocator(), _allocation, offset, flushSize);
     return true;
 }
 
@@ -115,6 +143,11 @@ void VulkanBuffer::mapInternal(void** ptr)
     YA_CORE_ASSERT(!bMemoryMapped, "Buffer memory is already mapped!");
     VK_CALL(vmaMapMemory(_render->getVmaAllocator(), _allocation, ptr));
     bMemoryMapped = true;
+    if (!bHostCoherent) {
+        // Readback contract (FG-802): make prior GPU writes visible to the CPU
+        // before the caller reads mapped memory. Harmless for write-only maps.
+        vmaInvalidateAllocation(_render->getVmaAllocator(), _allocation, 0, VK_WHOLE_SIZE);
+    }
 }
 
 void VulkanBuffer::setupDebugName(const std::string& inName)

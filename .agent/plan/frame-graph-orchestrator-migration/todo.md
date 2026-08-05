@@ -16,8 +16,9 @@
   FG-504 调查已完成（plan-only），P6 的 FG-601/FG-603 已提交、FG-602 调查已完成（plan-only），
   P7 的 FG-701~FG-707 已完成（skinning + frame/light + 全 viewport pass 独立
   graph pass + postprocess/export 收口 + ForwardFrameGraphOrchestrator +
-  structure tests），P8 的 FG-801 已完成（resource desc spec 比较契约 +
-  replacement/兼容删除点文档），下一实现任务为 FG-802。
+  structure tests），P8 的 FG-801/FG-802 已完成（resource desc spec 比较
+  契约 + buffer map/write/flush 统一失败语义与 readback），下一实现任务为
+  FG-803（TextureUploadService）。
 - control-port 真实 `pipeline switch` smoke 暴露的 shadow sampled-layout/subresource tracking
   回归已修复并完成回归；`FG-002` 仍需补齐正式的截图/hash 基线记录，但不再阻塞 `FG-304`。
 
@@ -334,7 +335,7 @@
   - 修改：RenderResourceFactory、Buffer/Image/View/Sampler desc；保持兼容 adapter 有明确删除点
   - 验收：resource spec 可比较；replacement 不做对象内部 resize；无 Vulkan 类型泄漏
 
-- [ ] `FG-802` 统一 buffer map/write/flush range 与失败行为
+- [x] `FG-802` 统一 buffer map/write/flush range 与失败行为
   - 依赖：FG-104、FG-801
   - 验收：unit tests 覆盖 host visible/non-visible、越界、flush/readback
 
