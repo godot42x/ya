@@ -749,14 +749,15 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
         : ForwardFrameResourceSet::Binding{};
     const Rect2D renderArea{.pos = {0, 0}, .extent = viewportExtent.toVec2()};
 
-    // FG-702: the Forward viewport sequence is declared as separate graph
-    // passes (Skybox -> PBR -> Phong -> Rest). The stage exposes one entry per
-    // pass; the graph owns the order and the attachment lifetimes. Skybox is
-    // the first pass and clears the viewport; Rest is the last pass and owns
-    // the MSAA resolve attachment plus the editor viewport overlays. The
-    // attachment chain stays in attachment-optimal layout between passes; only
-    // Rest applies the final consumer layout (`EImageLayout::ShaderReadOnlyOptimal`,
-    // matching the imported final layout used by postprocess outside the graph).
+    // FG-702/703: the Forward viewport sequence is declared as separate graph
+    // passes (Skybox -> PBR -> Phong -> Unlit -> Rest). The stage exposes one
+    // entry per pass; the graph owns the order and the attachment lifetimes.
+    // Skybox is the first pass and clears the viewport; Rest is the last pass
+    // and owns the MSAA resolve attachment plus the editor viewport overlays.
+    // The attachment chain stays in attachment-optimal layout between passes;
+    // only Rest applies the final consumer layout
+    // (`EImageLayout::ShaderReadOnlyOptimal`, matching the imported final
+    // layout used by postprocess outside the graph).
     ForwardSkyboxPassParams skyboxParams{
         .viewportColor = color,
         .viewportDepth = depth,
@@ -772,6 +773,13 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
         .finalLayout   = EImageLayout::ColorAttachmentOptimal,
     };
     ForwardPhongPassParams phongParams{
+        .viewportColor = color,
+        .viewportDepth = depth,
+        .renderArea    = renderArea,
+        .layerCount    = 1,
+        .finalLayout   = EImageLayout::ColorAttachmentOptimal,
+    };
+    ForwardUnlitPassParams unlitParams{
         .viewportColor = color,
         .viewportDepth = depth,
         .renderArea    = renderArea,
@@ -896,6 +904,36 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
             rgCtx.endRendering();
         });
 
+    [[maybe_unused]] const auto unlitPass = graph.addPass(
+        "Forward Unlit",
+        [&unlitParams, depthAttachment](RGPassBuilder& passBuilder) {
+            passBuilder.declareRaster({
+                .renderArea = unlitParams.renderArea,
+                .layerCount = unlitParams.layerCount,
+                .colors = {{
+                    .color       = unlitParams.viewportColor,
+                    .loadOp      = EAttachmentLoadOp::Load,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = unlitParams.finalLayout,
+                }},
+                .depth = RGDepthAttachmentDesc{
+                    .depth       = unlitParams.viewportDepth,
+                    .loadOp      = EAttachmentLoadOp::Load,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = depthAttachment.finalLayout,
+                },
+            });
+        },
+        [this, &stageCtx, frameBinding](RGRenderContext& rgCtx) {
+            const auto rasterParams   = rgCtx.getRasterPassExecutionParams();
+            const auto viewportExtent = rasterParams.getRenderExtent();
+            rgCtx.beginDeclaredRasterRendering();
+
+            stageCtx.viewportExtent = viewportExtent;
+            _viewportStage->executeUnlit(stageCtx, frameBinding);
+            rgCtx.endRendering();
+        });
+
     [[maybe_unused]] const auto restPass = graph.addPass(
         "Forward Rest",
         [&restParams, resolve, depthAttachment](RGPassBuilder& passBuilder) {
@@ -918,13 +956,13 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
                 },
             });
         },
-        [this, &stageCtx, restParams, frameBinding](RGRenderContext& rgCtx) {
+        [this, &stageCtx, restParams](RGRenderContext& rgCtx) {
             const auto rasterParams   = rgCtx.getRasterPassExecutionParams();
             const auto viewportExtent = rasterParams.getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
 
             stageCtx.viewportExtent = viewportExtent;
-            _viewportStage->executeRest(stageCtx, frameBinding);
+            _viewportStage->executeRest(stageCtx);
             if (restParams.recordViewportOverlays) {
                 restParams.recordViewportOverlays(&rgCtx.getCommandBuffer(), viewportExtent);
             }

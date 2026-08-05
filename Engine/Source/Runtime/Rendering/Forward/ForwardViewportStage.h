@@ -140,7 +140,10 @@ struct ForwardViewportStage : public IRenderStage
     void executeSkybox(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
     void executePBR(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
     void executePhong(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
-    void executeRest(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
+    void executeUnlit(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
+    /// Simple / Direction / Debug + editor viewport overlays. Draws no
+    /// per-flight resources, so no explicit binding is required.
+    void executeRest(const RenderStageContext& ctx);
 
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setDepthBufferShadowDescriptorSet(DescriptorSetHandle depthBufferShadowDS);

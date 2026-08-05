@@ -14,8 +14,9 @@
 
 - 架构主线仍按本文件推进；P3/P4 已全部落地，P5 的 FG-501~FG-503 已提交，
   FG-504 调查已完成（plan-only），P6 的 FG-601/FG-603 已提交、FG-602 调查已完成（plan-only），
-  P7 的 FG-701/FG-702 已完成（skinning + frame/light + PBR/Phong 独立 graph pass），
-  下一实现任务为 FG-703（Forward Unlit pass 独立 graph pass）。
+  P7 的 FG-701/FG-702/FG-703 已完成（skinning + frame/light + PBR/Phong/Unlit
+  独立 graph pass），下一实现任务为 FG-704（Skybox/Simple/Direction/Debug/
+  Viewport Overlay 迁移）。
 - control-port 真实 `pipeline switch` smoke 暴露的 shadow sampled-layout/subresource tracking
   回归已修复并完成回归；`FG-002` 仍需补齐正式的截图/hash 基线记录，但不再阻塞 `FG-304`。
 
@@ -304,7 +305,7 @@
   - 验收：顶层 graph 分别可见 PBR/Phong pass 和资源；Stage 不再隐藏顺序
   - smoke：PBR sphere IBL、Phong object、shadow
 
-- [ ] `FG-703` 迁移 Forward Unlit pass
+- [x] `FG-703` 迁移 Forward Unlit pass
   - 依赖：FG-701
   - 验收：Unlit 独立 graph pass/params；截图一致
 

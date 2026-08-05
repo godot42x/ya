@@ -173,8 +173,8 @@ void ForwardViewportStage::executePhong(const RenderStageContext& ctx,
     executePass(EPass::Phong, passCtx);
 }
 
-void ForwardViewportStage::executeRest(const RenderStageContext& ctx,
-                                       const ForwardFrameResourceSet::Binding& binding)
+void ForwardViewportStage::executeUnlit(const RenderStageContext& ctx,
+                                        const ForwardFrameResourceSet::Binding& binding)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
@@ -182,6 +182,13 @@ void ForwardViewportStage::executeRest(const RenderStageContext& ctx,
     passCtx.skinningDescriptorSet   = binding.skinningDescriptorSet;
     passCtx.unlitFrameDescriptorSet = binding.unlitFrameDescriptorSet;
     executePass(EPass::Unlit, passCtx);
+}
+
+void ForwardViewportStage::executeRest(const RenderStageContext& ctx)
+{
+    if (!ctx.cmdBuf || !ctx.frameData) return;
+
+    auto passCtx = buildPassContext(ctx);
     executePass(EPass::Simple, passCtx);
     executePass(EPass::DirectionOverlay, passCtx);
     executePass(EPass::Debug, passCtx);
