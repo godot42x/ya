@@ -34,6 +34,9 @@ description: YA Engine 资源加载、运行时 resolve 与 environment lighting
 5. `TextureSlot` 的 authoring 语义归 component；这里只关心它如何变成 runtime binding。
 6. 材质上传依赖 `paramVersion/resourceVersion` 与 consumer 自己的 uploaded version，不依赖“一次性全局 dirty”。
 7. `EnvironmentLighting` 是 source / irradiance / prefilter 三段分支；运行时纹理、pending job、`resultVersion` 属于 runtime state，不回写 authoring 数据。
+8. GPU 资源创建与 offscreen job 提交必须由 owner 显式提供 `IRender` /
+   `IRenderResourceFactory` / `OffscreenJobQueueService`；资源 resolve 阶段不回查
+   全局 App 获取 render 或 queue。
 
 ## 主链路
 

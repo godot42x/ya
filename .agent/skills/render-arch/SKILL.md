@@ -16,6 +16,11 @@ description: YA Engine 渲染架构、RenderRuntime 边界与 shader 生成链�
 3. `IRenderPass` / `IRenderTarget` 仍然是有效抽象，不要假设项目已经完全去掉 render pass 概念。
 4. 离屏预处理（如 cylindrical -> cubemap、cubemap -> irradiance）由 `ResourceResolveSystem` + `OffscreenJobRunner` 编排，不要把这类流程重新塞回组件里。
 5. 资源时序仍是 Vulkan 改动时的第一检查项：避免在 frame recording 中途重建正在使用的 GPU 资源，必要时延迟到下一帧。
+6. FrameGraph execute callback 只消费构图阶段生成的 immutable snapshot、typed params
+   和 graph-resolved handles；active scene、ECS registry、ResourceResolveSystem 查询
+   必须在 graph build 前完成。
+7. Deferred/Forward world frame 各自只保留一个顶层 executor；Stage/pass helper 只
+   append graph pass 或记录当前 pass，不自行 execute 子图。
 
 ## 目录锚点
 

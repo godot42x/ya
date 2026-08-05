@@ -4,6 +4,9 @@
 > parameters、descriptor binding 和全量迁移任务已转入
 > `../frame-graph-orchestrator-migration/todo.md`。本清单中的 Phase 7 `[x]` 表示已有
 > graph-backed execution，不表示 Stage 隐藏资源和顶层编排已经完成。
+>
+> 2026-08-05：P9 的清理与收尾继续记录在
+> `../frame-graph-orchestrator-migration/todo.md`；本清单不再作为当前任务入口。
 
 ## 使用说明
 
