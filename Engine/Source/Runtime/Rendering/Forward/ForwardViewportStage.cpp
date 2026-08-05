@@ -39,12 +39,9 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
     _skinningDSL                              = desc.skinningDSL;
     _depthBufferShadowDS                      = desc.depthBufferShadowDS;
     _shadowState                              = desc.shadowState;
+    _runtimeServices                          = desc.runtimeServices;
     _getFrameIndex                            = desc.getFrameIndex;
     _getElapsedTimeSeconds                    = desc.getElapsedTimeSeconds;
-    _getActiveScene                           = desc.getActiveScene;
-    _getResourceResolveSystem                 = desc.getResourceResolveSystem;
-    _getSceneSkyboxDescriptorSet              = desc.getSceneSkyboxDescriptorSet;
-    _getSceneEnvironmentLightingDescriptorSet = desc.getSceneEnvironmentLightingDescriptorSet;
 
     _litPasses.init(ForwardViewportLitPasses::InitDesc{
         .render = desc.render,
@@ -101,12 +98,9 @@ void ForwardViewportStage::destroy()
     _unlitPass.destroy();
     _auxPasses.destroy();
     _skinningDSL.reset();
+    _runtimeServices = nullptr;
     _getFrameIndex = {};
     _getElapsedTimeSeconds = {};
-    _getActiveScene = {};
-    _getResourceResolveSystem = {};
-    _getSceneSkyboxDescriptorSet = {};
-    _getSceneEnvironmentLightingDescriptorSet = {};
 
     _render = nullptr;
 }
@@ -217,16 +211,16 @@ void ForwardViewportStage::executeDebug(const RenderStageContext& ctx, const Pas
 
 ForwardViewportStage::PassContext ForwardViewportStage::buildPassContext(const RenderStageContext& ctx)
 {
-    auto* activeScene           = _getActiveScene ? _getActiveScene() : nullptr;
-    auto* resourceResolveSystem = _getResourceResolveSystem ? _getResourceResolveSystem() : nullptr;
+    auto* activeScene           = _runtimeServices ? _runtimeServices->getActiveScene() : nullptr;
+    auto* resourceResolveSystem = _runtimeServices ? _runtimeServices->getResourceResolveSystem() : nullptr;
     PassContext::SkyboxInput skybox{};
     PassContext::DebugDrawInput debugDraw{};
 
-    if (activeScene && _getSceneSkyboxDescriptorSet) {
-        skybox.descriptorSet = _getSceneSkyboxDescriptorSet(activeScene);
+    if (activeScene && _runtimeServices) {
+        skybox.descriptorSet = _runtimeServices->getSceneSkyboxDescriptorSet(activeScene);
     }
 
-    if (activeScene && resourceResolveSystem && _getSceneSkyboxDescriptorSet) {
+    if (activeScene && resourceResolveSystem && _runtimeServices) {
         const auto* skyboxState = resourceResolveSystem->findFirstSceneSkyboxState(activeScene);
         if (skyboxState && skyboxState->hasRenderableCubemap()) {
             skybox.mesh          = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
@@ -270,8 +264,8 @@ ForwardViewportStage::PassContext ForwardViewportStage::buildPassContext(const R
         .stageCtx = ctx,
         .activeScene = activeScene,
         .resourceResolveSystem = resourceResolveSystem,
-        .sceneEnvironmentLightingDescriptorSet = (_getSceneEnvironmentLightingDescriptorSet && activeScene)
-            ? _getSceneEnvironmentLightingDescriptorSet(activeScene)
+        .sceneEnvironmentLightingDescriptorSet = (_runtimeServices && activeScene)
+            ? _runtimeServices->getSceneEnvironmentLightingDescriptorSet(activeScene)
             : DescriptorSetHandle{},
         .skybox = skybox,
         .debugDraw = debugDraw,

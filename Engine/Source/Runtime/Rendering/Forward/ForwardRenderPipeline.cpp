@@ -333,6 +333,7 @@ void ForwardRenderPipeline::initStageResources()
         .skyboxFrameDSL                     = _frameResources ? _frameResources->getSkyboxFrameDSL() : nullptr,
         .depthBufferShadowDS                = depthBufferShadowDS,
         .shadowState                        = buildShadowState(),
+        .runtimeServices                    = _runtimeServices,
         .getFrameIndex                      = [services = _runtimeServices]() -> uint64_t
         {
             return services ? services->getFrameIndex() : 0;
@@ -340,22 +341,6 @@ void ForwardRenderPipeline::initStageResources()
         .getElapsedTimeSeconds              = [services = _runtimeServices]() -> double
         {
             return services ? services->getElapsedTimeSeconds() : 0.0;
-        },
-        .getActiveScene                     = [services = _runtimeServices]() -> Scene*
-        {
-            return services ? services->getActiveScene() : nullptr;
-        },
-        .getResourceResolveSystem           = [services = _runtimeServices]() -> ResourceResolveSystem*
-        {
-            return services ? services->getResourceResolveSystem() : nullptr;
-        },
-        .getSceneSkyboxDescriptorSet        = [services = _runtimeServices](Scene* scene)
-        {
-            return services ? services->getSceneSkyboxDescriptorSet(scene) : DescriptorSetHandle{};
-        },
-        .getSceneEnvironmentLightingDescriptorSet = [services = _runtimeServices](Scene* scene)
-        {
-            return services ? services->getSceneEnvironmentLightingDescriptorSet(scene) : DescriptorSetHandle{};
         },
     });
 
