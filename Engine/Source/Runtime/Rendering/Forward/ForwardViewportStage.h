@@ -4,6 +4,7 @@
 #include "Render/Core/RenderAttachmentFormats.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Stage/IRenderStage.h"
+#include "Runtime/Rendering/Common/IRenderRuntimeServices.h"
 #include "Runtime/Rendering/Forward/ForwardViewportAuxPasses.h"
 #include "Runtime/Rendering/Forward/ForwardFrameResourceSet.h"
 #include "Runtime/Rendering/Forward/ForwardViewportLitPasses.h"
@@ -16,10 +17,6 @@
 
 namespace ya
 {
-
-struct Scene;
-class ResourceResolveSystem;
-
 /// Forward viewport stage — renders PBR / Phong / Unlit / Simple / Skybox / Debug into the viewport.
 ///
 /// Internalizes all the logic that was previously spread across
@@ -41,12 +38,9 @@ struct ForwardViewportStage : public IRenderStage
         stdptr<IDescriptorSetLayout>          skyboxFrameDSL;
         DescriptorSetHandle                  depthBufferShadowDS                  = nullptr;
         ShadowRuntimeState                   shadowState                          = {};
+        IRenderRuntimeServices*              runtimeServices                      = nullptr;
         std::function<uint64_t()>            getFrameIndex;
         std::function<double()>              getElapsedTimeSeconds;
-        std::function<Scene*()>              getActiveScene;
-        std::function<ResourceResolveSystem*()> getResourceResolveSystem;
-        std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet;
-        std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
     };
 
     enum class EPass : uint8_t
@@ -110,12 +104,9 @@ struct ForwardViewportStage : public IRenderStage
 
     DescriptorSetHandle _depthBufferShadowDS = nullptr;
     ForwardFrameResourceSet::FramePayloads _framePayloads{};
+    IRenderRuntimeServices* _runtimeServices = nullptr;
     std::function<uint64_t()>            _getFrameIndex;
     std::function<double()>              _getElapsedTimeSeconds;
-    std::function<Scene*()>              _getActiveScene;
-    std::function<ResourceResolveSystem*()> _getResourceResolveSystem;
-    std::function<DescriptorSetHandle(Scene*)> _getSceneSkyboxDescriptorSet;
-    std::function<DescriptorSetHandle(Scene*)> _getSceneEnvironmentLightingDescriptorSet;
 
     // Kept alive for graphics pipeline layouts; storage buffers, descriptor
     // sets and capacity are owned by ForwardFrameResourceSet.
