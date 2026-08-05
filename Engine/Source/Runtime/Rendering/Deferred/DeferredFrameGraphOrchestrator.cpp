@@ -1,5 +1,6 @@
 #include "DeferredFrameGraphOrchestrator.h"
 
+#include "Core/Profiling/Instrumentor.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Render/Core/Graph/RenderGraphImportUtils.h"
@@ -68,31 +69,11 @@ RGBufferHandle importDeferredOrchestratorHostWrittenBuffer(RenderGraph&         
         rangeSize));
 }
 
-} // namespace
-
-void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const BuildInputs& inputs) const
+void importDeferredFrameBuffers(RenderGraph&                                   graph,
+                                DeferredFrameGraphResources&                   graphResources,
+                                const DeferredFrameGraphOrchestrator::BuildInputs& inputs)
 {
-    YA_CORE_ASSERT(inputs.graph != nullptr, "DeferredFrameGraphOrchestrator requires a render graph");
-    YA_CORE_ASSERT(inputs.graphResources != nullptr, "DeferredFrameGraphOrchestrator requires graph resources");
-    YA_CORE_ASSERT(inputs.stageCtx != nullptr, "DeferredFrameGraphOrchestrator requires a stage context");
-    YA_CORE_ASSERT(inputs.frameBinding != nullptr, "DeferredFrameGraphOrchestrator requires frame bindings");
-    YA_CORE_ASSERT(inputs.gBufferRTSpec != nullptr, "DeferredFrameGraphOrchestrator requires a GBuffer render target spec");
-    YA_CORE_ASSERT(inputs.viewportRTSpec != nullptr, "DeferredFrameGraphOrchestrator requires a viewport render target spec");
-    YA_CORE_ASSERT(inputs.postContext != nullptr, "DeferredFrameGraphOrchestrator requires a postprocess context");
-    YA_CORE_ASSERT(deps.gBufferStage != nullptr, "DeferredFrameGraphOrchestrator requires a GBuffer stage");
-    YA_CORE_ASSERT(deps.lightStage != nullptr, "DeferredFrameGraphOrchestrator requires a light stage");
-    YA_CORE_ASSERT(deps.overlayStage != nullptr, "DeferredFrameGraphOrchestrator requires an overlay stage");
-    YA_CORE_ASSERT(deps.postProcessStage != nullptr, "DeferredFrameGraphOrchestrator requires a postprocess stage");
-
-    auto&       graph          = *inputs.graph;
-    auto&       graphResources = *inputs.graphResources;
-    const auto& stageCtx       = *inputs.stageCtx;
-    const auto& frameBinding   = *inputs.frameBinding;
-    const bool  bReverseViewportY = inputs.bReverseViewportY;
-    if (deps.shadowStage) {
-        graphResources.passes.shadow = deps.shadowStage->appendGraphPasses(graph, stageCtx);
-    }
-
+    const auto& frameBinding = *inputs.frameBinding;
     graphResources.buffers.frame = importDeferredOrchestratorHostWrittenBuffer(
         graph,
         frameBinding.frame.buffer,
@@ -128,7 +109,12 @@ void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const 
         EBufferUsage::UniformBuffer,
         frameBinding.skyboxFrame.offset,
         frameBinding.skyboxFrame.size);
+}
 
+void createDeferredAttachmentTextures(RenderGraph&                                   graph,
+                                      DeferredFrameGraphResources&                   graphResources,
+                                      const DeferredFrameGraphOrchestrator::BuildInputs& inputs)
+{
     for (uint32_t attachmentIndex = 0; attachmentIndex < graphResources.textures.gBufferColors.size(); ++attachmentIndex) {
         graphResources.textures.gBufferColors[attachmentIndex] = graph.createPersistentTexture(
             makeDeferredOrchestratorGraphAttachmentDesc(
@@ -141,7 +127,22 @@ void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const 
     graphResources.textures.gBufferDepth = graph.createPersistentTexture(
         makeDeferredOrchestratorGraphAttachmentDesc(*inputs.gBufferRTSpec, *inputs.gBufferRTSpec->attachments.depthAttach, "DeferredGBuffer.Depth"),
         RGPersistentTextureKey{.value = "DeferredGBuffer.Depth"});
-    const Extent2D gbufferExtent = inputs.gBufferRTSpec->extent;
+
+    YA_CORE_ASSERT(!inputs.viewportRTSpec->attachments.colorAttach.empty(), "Deferred viewport graph requires a color attachment spec");
+    graphResources.textures.viewportColor = graph.createPersistentTexture(
+        makeDeferredOrchestratorGraphAttachmentDesc(*inputs.viewportRTSpec, inputs.viewportRTSpec->attachments.colorAttach.front(), "DeferredViewport.Color"),
+        RGPersistentTextureKey{.value = "DeferredViewport.Color"});
+}
+
+void appendDeferredGBufferPass(RenderGraph&                                   graph,
+                               DeferredFrameGraphResources&                   graphResources,
+                               const DeferredFrameGraphOrchestrator::BuildInputs& inputs,
+                               GBufferStage&                                 gBufferStage,
+                               bool                                          bReverseViewportY)
+{
+    const auto& frameBinding  = *inputs.frameBinding;
+    const auto& stageCtx      = *inputs.stageCtx;
+    const auto  gbufferExtent = inputs.gBufferRTSpec->extent;
 
     DeferredGBufferPassParams gbufferParams{
         .frame = {
@@ -185,7 +186,7 @@ void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const 
                 },
             });
         },
-        [stageCtx, gbufferParams, gBufferStage = deps.gBufferStage, bReverseViewportY](RGRenderContext& rgCtx) {
+        [stageCtx, gbufferParams, &gBufferStage, bReverseViewportY](RGRenderContext& rgCtx) {
             const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             [[maybe_unused]] IBuffer* const frameBuffer    = rgCtx.resolveBuffer(gbufferParams.frame.handle);
             [[maybe_unused]] IBuffer* const lightBuffer    = rgCtx.resolveBuffer(gbufferParams.light.handle);
@@ -205,17 +206,21 @@ void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const 
             rgCtx.getCommandBuffer().setViewport(0.0f, gbVpY, static_cast<float>(vpW), gbVpH);
             rgCtx.getCommandBuffer().setScissor(0, 0, vpW, vpH);
 
-            gBufferStage->execute(stageCtx, GBufferStage::FrameInputs{
+            gBufferStage.execute(stageCtx, GBufferStage::FrameInputs{
                 .frameAndLightDescriptorSet = gbufferParams.frameAndLightDescriptorSet,
                 .skinningDescriptorSet      = gbufferParams.skinningDescriptorSet,
             });
             rgCtx.endRendering();
         });
+}
 
-    YA_CORE_ASSERT(!inputs.viewportRTSpec->attachments.colorAttach.empty(), "Deferred viewport graph requires a color attachment spec");
-    graphResources.textures.viewportColor = graph.createPersistentTexture(
-        makeDeferredOrchestratorGraphAttachmentDesc(*inputs.viewportRTSpec, inputs.viewportRTSpec->attachments.colorAttach.front(), "DeferredViewport.Color"),
-        RGPersistentTextureKey{.value = "DeferredViewport.Color"});
+void appendDeferredLightingAndPostprocess(RenderGraph&                                   graph,
+                                          DeferredFrameGraphResources&                   graphResources,
+                                          const DeferredFrameGraphOrchestrator::BuildInputs& inputs,
+                                          const DeferredFrameGraphOrchestrator::BuildDependencies& deps)
+{
+    const auto& frameBinding = *inputs.frameBinding;
+    const auto& stageCtx     = *inputs.stageCtx;
 
     if (inputs.bUseSSAO) {
         YA_CORE_ASSERT(graphResources.buffers.ssaoFrame.has_value(), "Deferred SSAO requires an imported frame buffer");
@@ -473,6 +478,36 @@ void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const 
     if (postprocessOutput.isValid()) {
         graphResources.textures.postprocessOutput = postprocessOutput;
     }
+}
+
+} // namespace
+
+void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const BuildInputs& inputs) const
+{
+    YA_PROFILE_FUNCTION();
+    YA_CORE_ASSERT(inputs.graph != nullptr, "DeferredFrameGraphOrchestrator requires a render graph");
+    YA_CORE_ASSERT(inputs.graphResources != nullptr, "DeferredFrameGraphOrchestrator requires graph resources");
+    YA_CORE_ASSERT(inputs.stageCtx != nullptr, "DeferredFrameGraphOrchestrator requires a stage context");
+    YA_CORE_ASSERT(inputs.frameBinding != nullptr, "DeferredFrameGraphOrchestrator requires frame bindings");
+    YA_CORE_ASSERT(inputs.gBufferRTSpec != nullptr, "DeferredFrameGraphOrchestrator requires a GBuffer render target spec");
+    YA_CORE_ASSERT(inputs.viewportRTSpec != nullptr, "DeferredFrameGraphOrchestrator requires a viewport render target spec");
+    YA_CORE_ASSERT(inputs.postContext != nullptr, "DeferredFrameGraphOrchestrator requires a postprocess context");
+    YA_CORE_ASSERT(deps.gBufferStage != nullptr, "DeferredFrameGraphOrchestrator requires a GBuffer stage");
+    YA_CORE_ASSERT(deps.lightStage != nullptr, "DeferredFrameGraphOrchestrator requires a light stage");
+    YA_CORE_ASSERT(deps.overlayStage != nullptr, "DeferredFrameGraphOrchestrator requires an overlay stage");
+    YA_CORE_ASSERT(deps.postProcessStage != nullptr, "DeferredFrameGraphOrchestrator requires a postprocess stage");
+
+    auto&       graph          = *inputs.graph;
+    auto&       graphResources = *inputs.graphResources;
+    const auto& stageCtx       = *inputs.stageCtx;
+    const bool  bReverseViewportY = inputs.bReverseViewportY;
+    if (deps.shadowStage) {
+        graphResources.passes.shadow = deps.shadowStage->appendGraphPasses(graph, stageCtx);
+    }
+    importDeferredFrameBuffers(graph, graphResources, inputs);
+    createDeferredAttachmentTextures(graph, graphResources, inputs);
+    appendDeferredGBufferPass(graph, graphResources, inputs, *deps.gBufferStage, bReverseViewportY);
+    appendDeferredLightingAndPostprocess(graph, graphResources, inputs, deps);
 }
 
 } // namespace ya
