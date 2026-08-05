@@ -666,12 +666,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     _shadowSettings               = desc.shadowSettings;
     _automationShadowOverrides    = desc.automationShadowOverrides;
     _environmentLightingDSL       = desc.environmentLightingDSL;
-    _getSceneEnvironmentLightingDescriptorSet = desc.getSceneEnvironmentLightingDescriptorSet;
-    _resolveSceneEnvironmentLightingResources = desc.resolveSceneEnvironmentLightingResources;
-    _getSceneSkyboxDescriptorSet  = desc.getSceneSkyboxDescriptorSet;
-    _getDebugRenderSystem         = desc.getDebugRenderSystem;
-    _getActiveScene               = desc.getActiveScene;
-    _getResourceResolveSystem     = desc.getResourceResolveSystem;
+    _runtimeServices              = desc.runtimeServices;
     _pendingSettings.reset();
     _pendingResourceRefreshMask   = 0;
     clearPublishedGraphOutputs();
@@ -739,7 +734,7 @@ void DeferredRenderPipeline::initStages()
     syncShadowSettings();
 
     _overlayStage = ya::makeShared<ViewportOverlayStage>();
-    _overlayStage->setDebugRenderSystem(_getDebugRenderSystem ? &_getDebugRenderSystem() : nullptr);
+    _overlayStage->setDebugRenderSystem(_runtimeServices ? &_runtimeServices->getDebugRenderSystem() : nullptr);
     _overlayStage->init(_render, _frameResources->getSkyboxFrameDSL());
 
     refreshGBufferStageState();
@@ -788,12 +783,7 @@ void DeferredRenderPipeline::shutdown()
     _defaultSkyboxMesh = nullptr;
     _pendingSettings.reset();
     _environmentLightingDSL.reset();
-    _getSceneEnvironmentLightingDescriptorSet = {};
-    _resolveSceneEnvironmentLightingResources = {};
-    _getSceneSkyboxDescriptorSet = {};
-    _getDebugRenderSystem = {};
-    _getActiveScene = {};
-    _getResourceResolveSystem = {};
+    _runtimeServices = nullptr;
     _render                       = nullptr;
 }
 
@@ -888,15 +878,15 @@ void DeferredRenderPipeline::captureShadowSettings(const RenderPipelineFrameCont
 
 void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameContext& frame)
 {
-    Scene* activeScene = _getActiveScene ? _getActiveScene() : nullptr;
+    Scene* activeScene = _runtimeServices ? _runtimeServices->getActiveScene() : nullptr;
     _currentEnvironmentLightingTextures =
-        _resolveSceneEnvironmentLightingResources
-        ? _resolveSceneEnvironmentLightingResources(activeScene)
+        _runtimeServices
+        ? _runtimeServices->resolveSceneEnvironmentLightingResources(activeScene)
         : EnvironmentLightingSceneResources{};
 
     if (_lightStage) {
-        _currentEnvironmentLightingDescriptorSet = _getSceneEnvironmentLightingDescriptorSet
-            ? _getSceneEnvironmentLightingDescriptorSet(activeScene)
+        _currentEnvironmentLightingDescriptorSet = _runtimeServices
+            ? _runtimeServices->getSceneEnvironmentLightingDescriptorSet(activeScene)
             : DescriptorSetHandle{};
         _lightStage->setFrameInputs(LightStage::FrameInputs{
             .frameAndLightDescriptorSet = _frameResources
@@ -914,7 +904,7 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
         frameInputs.skybox.frameDescriptorSet = _frameResources
             ? _frameResources->getBinding(frame.flightIndex).skyboxFrameDescriptorSet
             : DescriptorSetHandle{};
-        auto* resourceResolveSystem = _getResourceResolveSystem ? _getResourceResolveSystem() : nullptr;
+        auto* resourceResolveSystem = _runtimeServices ? _runtimeServices->getResourceResolveSystem() : nullptr;
 
         if (activeScene) {
             const float viewportHeight = static_cast<float>(frame.viewportRect.extent.y);
@@ -955,10 +945,10 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
             }
         }
 
-        if (activeScene && resourceResolveSystem && _getSceneSkyboxDescriptorSet) {
+        if (activeScene && resourceResolveSystem && _runtimeServices) {
             const auto* skyboxState = resourceResolveSystem->findFirstSceneSkyboxState(activeScene);
             if (skyboxState && skyboxState->hasRenderableCubemap()) {
-                frameInputs.skybox.descriptorSet = _getSceneSkyboxDescriptorSet(activeScene);
+                frameInputs.skybox.descriptorSet = _runtimeServices->getSceneSkyboxDescriptorSet(activeScene);
                 frameInputs.skybox.mesh          = _defaultSkyboxMesh;
                 for (const auto& [entity, sc, mc] : activeScene->getRegistry().view<SkyboxComponent, StaticMeshComponent>().each()) {
                     if (mc.isResolved() && mc.getMesh()) {

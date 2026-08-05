@@ -228,12 +228,7 @@ void ForwardRenderPipeline::init(const InitDesc& desc)
     _render                 = desc.render;
     _graphExecutor          = _render ? std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory()) : nullptr;
     _shadowSettings         = desc.shadowSettings;
-    _getFrameIndex          = desc.getFrameIndex;
-    _getElapsedTimeSeconds  = desc.getElapsedTimeSeconds;
-    getActiveScene          = desc.getActiveScene;
-    getResourceResolveSystem = desc.getResourceResolveSystem;
-    getSceneSkyboxDescriptorSet = desc.getSceneSkyboxDescriptorSet;
-    getSceneEnvironmentLightingDescriptorSet = desc.getSceneEnvironmentLightingDescriptorSet;
+    _runtimeServices        = desc.runtimeServices;
     if (_shadowSettings) {
         _frameShadowSettings = *_shadowSettings;
     }
@@ -338,12 +333,30 @@ void ForwardRenderPipeline::initStageResources()
         .skyboxFrameDSL                     = _frameResources ? _frameResources->getSkyboxFrameDSL() : nullptr,
         .depthBufferShadowDS                = depthBufferShadowDS,
         .shadowState                        = buildShadowState(),
-        .getFrameIndex                      = _getFrameIndex,
-        .getElapsedTimeSeconds              = _getElapsedTimeSeconds,
-        .getActiveScene                     = getActiveScene,
-        .getResourceResolveSystem           = getResourceResolveSystem,
-        .getSceneSkyboxDescriptorSet        = getSceneSkyboxDescriptorSet,
-        .getSceneEnvironmentLightingDescriptorSet = getSceneEnvironmentLightingDescriptorSet,
+        .getFrameIndex                      = [services = _runtimeServices]() -> uint64_t
+        {
+            return services ? services->getFrameIndex() : 0;
+        },
+        .getElapsedTimeSeconds              = [services = _runtimeServices]() -> double
+        {
+            return services ? services->getElapsedTimeSeconds() : 0.0;
+        },
+        .getActiveScene                     = [services = _runtimeServices]() -> Scene*
+        {
+            return services ? services->getActiveScene() : nullptr;
+        },
+        .getResourceResolveSystem           = [services = _runtimeServices]() -> ResourceResolveSystem*
+        {
+            return services ? services->getResourceResolveSystem() : nullptr;
+        },
+        .getSceneSkyboxDescriptorSet        = [services = _runtimeServices](Scene* scene)
+        {
+            return services ? services->getSceneSkyboxDescriptorSet(scene) : DescriptorSetHandle{};
+        },
+        .getSceneEnvironmentLightingDescriptorSet = [services = _runtimeServices](Scene* scene)
+        {
+            return services ? services->getSceneEnvironmentLightingDescriptorSet(scene) : DescriptorSetHandle{};
+        },
     });
 
     _deleter.push("Stages", [this](void*)
@@ -692,12 +705,7 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
 
 void ForwardRenderPipeline::shutdown()
 {
-    _getFrameIndex = {};
-    _getElapsedTimeSeconds = {};
-    getActiveScene = {};
-    getResourceResolveSystem = {};
-    getSceneSkyboxDescriptorSet = {};
-    getSceneEnvironmentLightingDescriptorSet = {};
+    _runtimeServices = nullptr;
     _currentPostprocessOutput.reset();
     if (_frameResources) {
         _frameResources->destroy();
@@ -718,7 +726,7 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
     // FG-704: build the direction gizmo snapshot before graph construction so
     // passes never query the ECS during execute.
     std::vector<ForwardDirectionGizmoInput> directionGizmos;
-    if (auto* activeScene = getActiveScene ? getActiveScene() : nullptr) {
+    if (auto* activeScene = _runtimeServices ? _runtimeServices->getActiveScene() : nullptr) {
         const auto& dirView = activeScene->getRegistry().view<TransformComponent, DirectionComponent>();
         for (auto entity : dirView) {
             const auto& [tc, direction] = dirView.get(entity);

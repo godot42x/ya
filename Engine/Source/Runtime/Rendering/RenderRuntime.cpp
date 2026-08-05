@@ -106,6 +106,29 @@ IRenderPipeline* RenderRuntime::getActivePipeline() const
     return nullptr;
 }
 
+uint64_t RenderRuntime::getFrameIndex() const
+{
+    return _app ? _app->getFrameIndex() : 0;
+}
+
+double RenderRuntime::getElapsedTimeSeconds() const
+{
+    return _app ? static_cast<double>(_app->getElapsedTimeMS()) / 1000.0 : 0.0;
+}
+
+Scene* RenderRuntime::getActiveScene() const
+{
+    if (!_app || !_app->getSceneServices().getSceneManager()) {
+        return nullptr;
+    }
+    return _app->getSceneServices().getActiveScene();
+}
+
+ResourceResolveSystem* RenderRuntime::getResourceResolveSystem() const
+{
+    return _app ? _app->getResourceResolveSystem() : nullptr;
+}
+
 bool RenderRuntime::isShadowMappingEnabled() const
 {
     if (auto* pipeline = getActivePipeline()) {
@@ -333,35 +356,7 @@ void RenderRuntime::initForwardPipeline(int windowWidth, int windowHeight)
         .windowW                      = windowWidth,
         .windowH                      = windowHeight,
         .shadowSettings               = _app ? &_app->getRenderServices().getShadowSettings() : nullptr,
-        .getFrameIndex                = _app
-            ? [this]() -> uint64_t { return _app ? _app->getFrameIndex() : 0; }
-            : std::function<uint64_t()>{},
-        .getElapsedTimeSeconds        = _app
-            ? [this]() -> double { return _app ? static_cast<double>(_app->getElapsedTimeMS()) / 1000.0 : 0.0; }
-            : std::function<double()>{},
-        .getActiveScene               = _app
-            ? [this]() -> Scene*
-              {
-                  if (!_app || !_app->getSceneServices().getSceneManager()) {
-                      return nullptr;
-                  }
-                  return _app->getSceneServices().getActiveScene();
-              }
-            : std::function<Scene*()>{},
-        .getResourceResolveSystem     = _app
-            ? [this]() -> ResourceResolveSystem*
-              {
-                  return _app ? _app->getResourceResolveSystem() : nullptr;
-              }
-            : std::function<ResourceResolveSystem*()>{},
-        .getSceneSkyboxDescriptorSet  = [this](Scene* scene)
-        {
-            return getSceneSkyboxDescriptorSet(scene);
-        },
-        .getSceneEnvironmentLightingDescriptorSet = [this](Scene* scene)
-        {
-            return getSceneEnvironmentLightingDescriptorSet(scene);
-        },
+        .runtimeServices              = this,
     });
 }
 
@@ -375,33 +370,7 @@ void RenderRuntime::initDeferredPipeline(int windowWidth, int windowHeight)
         .shadowSettings           = _app ? &_app->getRenderServices().getShadowSettings() : nullptr,
         .automationShadowOverrides = _app ? &_app->getDesc().automation.shadow : nullptr,
         .environmentLightingDSL = _sharedResourceProvider.getEnvironmentLightingDescriptorSetLayout(),
-        .getSceneEnvironmentLightingDescriptorSet = [this](Scene* scene)
-        {
-            return getSceneEnvironmentLightingDescriptorSet(scene);
-        },
-        .resolveSceneEnvironmentLightingResources = [this](Scene* scene)
-        {
-            return resolveSceneEnvironmentLightingResources(scene);
-        },
-        .getSceneSkyboxDescriptorSet = [this](Scene* scene)
-        {
-            return getSceneSkyboxDescriptorSet(scene);
-        },
-        .getDebugRenderSystem = [this]() -> DebugRenderSystem&
-        {
-            return getDebugRenderSystem();
-        },
-        .getActiveScene = [this]() -> Scene*
-        {
-            if (!_app || !_app->getSceneServices().getSceneManager()) {
-                return nullptr;
-            }
-            return _app->getSceneServices().getActiveScene();
-        },
-        .getResourceResolveSystem = [this]() -> ResourceResolveSystem*
-        {
-            return _app ? _app->getResourceResolveSystem() : nullptr;
-        },
+        .runtimeServices          = this,
     });
 }
 

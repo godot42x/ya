@@ -11,6 +11,7 @@
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
 #include "Runtime/Rendering/Common/IRenderPipeline.h"
+#include "Runtime/Rendering/Common/IRenderRuntimeServices.h"
 #include "Runtime/Rendering/Common/PostProcessingStage.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowMapResources.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowRuntimeState.h"
@@ -32,11 +33,8 @@ enum class EForwardPendingResourceRefresh : uint32_t
     AttachmentFormat = 1 << 2,
 };
 
-struct SceneManager;
-struct Scene;
 struct Texture;
 struct Sampler;
-class ResourceResolveSystem;
 
 struct ENGINE_API ForwardRenderPipeline : public IRenderPipeline
 {
@@ -51,24 +49,14 @@ struct ENGINE_API ForwardRenderPipeline : public IRenderPipeline
         int      windowW = 0;
         int      windowH = 0;
         ShadowSettings* shadowSettings = nullptr;
-        std::function<uint64_t()> getFrameIndex;
-        std::function<double()> getElapsedTimeSeconds;
-        std::function<Scene*()> getActiveScene;
-        std::function<ResourceResolveSystem*()> getResourceResolveSystem;
-        std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet;
-        std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
+        IRenderRuntimeServices* runtimeServices = nullptr;
     };
 
     Deleter _deleter;
 
-    IRender* _render = nullptr;
-    ShadowSettings* _shadowSettings = nullptr;
-    std::function<uint64_t()> _getFrameIndex;
-    std::function<double()> _getElapsedTimeSeconds;
-    std::function<Scene*()> getActiveScene;
-    std::function<ResourceResolveSystem*()> getResourceResolveSystem;
-    std::function<DescriptorSetHandle(Scene*)> getSceneSkyboxDescriptorSet;
-    std::function<DescriptorSetHandle(Scene*)> getSceneEnvironmentLightingDescriptorSet;
+    IRender*                 _render          = nullptr;
+    ShadowSettings*          _shadowSettings  = nullptr;
+    IRenderRuntimeServices*  _runtimeServices = nullptr;
 
     stdptr<IDescriptorPool> _descriptorPool = nullptr;
 
