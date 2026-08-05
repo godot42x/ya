@@ -142,8 +142,6 @@ struct ENGINE_API RenderRuntime
     [[nodiscard]] std::shared_ptr<ShaderStorage> getShaderStorage() const { return _shaderStorage; }
     [[nodiscard]] IRenderPipeline*               getActivePipeline() const;
     [[nodiscard]] bool                           isShadowMappingEnabled() const;
-    [[nodiscard]] bool                           isMirrorRenderingEnabled() const;
-    [[nodiscard]] bool                           hasMirrorRenderResult() const;
     [[nodiscard]] IImageView*                    getShadowDirectionalDepthIV() const;
     [[nodiscard]] IImageView*                    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
     [[nodiscard]] bool                           isOffscreenPending() const { return _offscreen.isPending(); }
@@ -237,6 +235,8 @@ struct ENGINE_API RenderRuntime
     void                   shutdownActivePipeline();
     void                   applyPendingRenderPipelineSwitch();
     void                   applyPendingRenderTargetFormatCommands();
+    [[nodiscard]] ForwardRenderPipeline*         getSelectedForwardPipeline() const;
+    [[nodiscard]] DeferredRenderPipeline*        getSelectedDeferredPipeline() const;
     [[nodiscard]] std::shared_ptr<RenderImage> getCurrentPresentationImageShared() const;
     [[nodiscard]] uint32_t                     getCurrentPresentationImageIndex() const;
 };
