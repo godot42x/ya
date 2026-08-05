@@ -487,6 +487,50 @@ TEST(RenderGraphCoreTest, CompileBuildsStableDependencyOrder)
     EXPECT_EQ(textureStates[1].requiredState.layout, EImageLayout::ShaderReadOnlyOptimal);
 }
 
+TEST(RenderGraphCoreTest, CompileTracksTextureReadersBeforeSubsequentWrite)
+{
+    RenderGraph graph;
+    const auto  texture = graph.createTexture(RGTextureDesc{
+         .label  = "shared",
+         .format = EFormat::R16G16B16A16_SFLOAT,
+         .extent = Extent3D{1280, 720, 1},
+         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    });
+
+    const auto firstWriter = graph.addPass("first-writer", [&](RGPassBuilder& pass) {
+        pass.useColorAttachment(texture);
+    });
+    const auto firstReader = graph.addPass("first-reader", [&](RGPassBuilder& pass) {
+        pass.read(texture);
+    });
+    const auto secondReader = graph.addPass("second-reader", [&](RGPassBuilder& pass) {
+        pass.read(texture);
+    });
+    const auto secondWriter = graph.addPass("second-writer", [&](RGPassBuilder& pass) {
+        pass.useColorAttachment(texture);
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid());
+    ASSERT_EQ(compiled.order.size(), 4u);
+    EXPECT_EQ(compiled.order[0], firstWriter);
+    EXPECT_EQ(compiled.order[1], firstReader);
+    EXPECT_EQ(compiled.order[2], secondReader);
+    EXPECT_EQ(compiled.order[3], secondWriter);
+
+    const auto hasDependency = [&compiled](RGPassHandle from, RGPassHandle to)
+    {
+        return std::find(compiled.dependencies.begin(),
+                         compiled.dependencies.end(),
+                         RGDependencyEdge{from, to}) != compiled.dependencies.end();
+    };
+    EXPECT_TRUE(hasDependency(firstWriter, firstReader));
+    EXPECT_TRUE(hasDependency(firstWriter, secondReader));
+    EXPECT_TRUE(hasDependency(firstWriter, secondWriter));
+    EXPECT_TRUE(hasDependency(firstReader, secondWriter));
+    EXPECT_TRUE(hasDependency(secondReader, secondWriter));
+}
+
 TEST(RenderGraphCoreTest, CompileIncludesExplicitPassDependency)
 {
     RenderGraph graph;
