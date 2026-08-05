@@ -19,6 +19,7 @@ add_requires(
     , "sol2"
     , "glad"
     , "ktx"
+    ,"joltphysics v5.5.0"
 )
 add_requireconfs("freetype", {
     system = false,
@@ -125,6 +126,7 @@ do
         add_files("./Source/Render/**.cpp", { unity_group = "Renderer" })
         add_files("./Source/ECS/**.cpp", { unity_group = "ECS" })
         add_files("./Source/Scene/**.cpp", { unity_group = "Scene" })
+        add_files("./Source/Physics/**.cpp", { unity_group = "Physics" })
         -- add_files("./Source/Runtime/**.cpp", { unity_group = "Runtime" })
         add_files("./Source/Runtime/Rendering/**.cpp", { unity_group = "Runtime.Rendering" })
         add_files("./Source/Runtime/GUI/**.cpp", { unity_group = "Runtime.GUI" })
@@ -197,6 +199,7 @@ do
     add_packages("freetype")
     add_packages("nlohmann_json", { public = true })
     add_packages("sol2", { public = true })
+    add_packages("joltphysics")
 
     -- add_deps("shader")
 
