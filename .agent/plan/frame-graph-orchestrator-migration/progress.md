@@ -21,6 +21,28 @@
   - `xmake r ya-testing --gtest_filter='RenderGraphCoreTest.*:ForwardFrameGraphOrchestratorTest.*:DeferredFrameGraphOrchestratorTest.*:AppScreenshotCaptureTest.*'`：95/95 通过
 - 代码提交：`55ab761e [runtime] clarify frame graph and presentation flow`
 
+### 2026-08-05：DrawCandidateView / DrawPacket 首批 consumer 完成
+
+- 新增只读 `DrawCandidateView`，包装现有 `RenderDrawItem` contiguous snapshot；
+  不改变 shader-facing layout、资源 owner 或 frame extractor 的所有权。
+- Shadow draw helper 已改为消费 `DrawCandidateView`。
+- 新增 backend-neutral `DrawPacket` 与 deterministic contiguous grouping helper；
+  packet 只携带 mesh/material binding、instance range、sort key、skinning flag 和
+  candidate view，不镜像 indirect command，也不拥有 GPU 资源。
+- Deferred GBuffer PBR 已作为首个 pipeline consumer 使用 packet grouping：
+  保持原有 candidate 顺序和逐实例 push constant/draw 行为，只把 descriptor bind
+  收敛到 packet 边界。
+- 验证：
+  - `xmake b ya-testing`：通过
+  - `xmake r ya-testing --gtest_filter='DrawCandidateViewTest.*:DeferredFrameGraphOrchestratorTest.*'`：6/6 通过
+  - `xmake b ya-editor`：通过
+- 代码提交：
+  - `8990c484 [render/draw] add immutable draw candidate view`
+  - `772f68f2 [render/draw] define draw packet contract`
+  - `179bd5e5 [deferred] consume grouped draw packets in gbuffer`
+- 下一步：为 Forward 选择第二个真实 consumer，并补跨 Deferred/Forward 的
+  deterministic sort/group contract；暂不接 ShaderParameterBlock 或 Editor Extension。
+
 ### 2026-08-05：FG-901 完成
 
 - 主图已经是唯一的 world-frame graph executor：
