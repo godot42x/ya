@@ -89,7 +89,7 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
 {
     YA_PROFILE_FUNCTION();
 
-    auto* pipeline = getActivePipelineExecution();
+    auto* pipeline = getActivePipeline();
     YA_CORE_ASSERT(pipeline, "Active render pipeline is null while ticking viewport pass");
 
     const auto overlayInput = input.overlay;
