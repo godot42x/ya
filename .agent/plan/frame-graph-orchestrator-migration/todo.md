@@ -18,7 +18,9 @@
   graph pass + postprocess/export 收口 + ForwardFrameGraphOrchestrator +
   structure tests），P8 的 FG-801~FG-803 已完成（resource desc spec 比较
   契约 + buffer map/write/flush 统一失败语义与 readback + TextureUploadService），
-  下一实现任务为 FG-804（删除 Texture 全局 factory 与 render attachment API）。
+  P8 的 FG-804~FG-805、P9 的 FG-901~FG-902 以及 presentation 的 FG-601~FG-603
+  均已完成；后续实现转入 `follow-up-roadmap.md`，首项为 DrawCandidateView /
+  DrawPacket。
 - control-port 真实 `pipeline switch` smoke 暴露的 shadow sampled-layout/subresource tracking
   回归已修复并完成回归；`FG-002` 仍需补齐正式的截图/hash 基线记录，但不再阻塞 `FG-304`。
 
@@ -289,9 +291,14 @@
   - 默认：保持独立，除非能删除真实重复状态/executor 且不复杂化 swapchain scope
   - 提交：plan-only
 
-- [ ] `FG-603` 按 FG-602 决策收口 presentation orchestrator
+- [x] `FG-603` 按 FG-602 决策收口 presentation orchestrator
   - 依赖：FG-602
-  - 验收：顶层 `renderFrame()` 顺序清晰；acquire/submit/present 仍在 graph 外；capture dependency 显式
+  - 实现：`RenderRuntime::renderFrame()` 明确按 prepare/acquire、world graph、
+    独立 presentation graph、submit/present 四阶段编排；presentation executor
+    按 swapchain image 保持独立，capture 通过 graph build 阶段的
+    `appendPresentationCapture(graph, output, extent)` 接入。
+  - 验收：acquire/submit/present 仍在 graph 外；presentation capture dependency
+    显式；RenderGraph/Deferred/Forward/AppScreenshot 定向测试 95/95 通过。
   - 提交：`[runtime] clarify frame graph and presentation flow`
 
 ## P7 Forward 全量迁移
