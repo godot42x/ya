@@ -4,8 +4,11 @@
 #include "Render/Mesh.h"
 #include "Runtime/Application/AppState.h"
 
+namespace ya { struct IRender; }
+
 struct HelloMaterialModule final : ya::IModule
 {
+    ya::IRender* render = nullptr;
     std::shared_ptr<ya::Mesh> cubeMesh;
 
     std::vector<std::string> _pongMaterialNames;
@@ -15,13 +18,8 @@ struct HelloMaterialModule final : ya::IModule
     void onStop() override {}
     void onUnload() override {}
 
-    void onAttach(ya::App&) override
-    {
-        createCubeMesh();
-        loadResources();
-    }
-
-    void onDetach(ya::App&) override { cubeMesh.reset(); }
+    void onAttach(ya::App&) override;
+    void onDetach(ya::App&) override;
 
     void onSceneActivated(ya::App&, ya::Scene*) override
     {

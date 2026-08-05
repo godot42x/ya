@@ -1,5 +1,7 @@
 # GitHub Copilot 项目指南
 
+@AGENTS.md
+
 主入口请先读仓库根 `./AGENTS.md`，再按需进入 `./.agent/AGENTS.md`。
 
 ## 读取原则

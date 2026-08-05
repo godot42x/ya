@@ -24,7 +24,7 @@ struct SkeletonAnimatorComponent : public IComponent
     YA_REFLECT_FIELD(_meshIndex)
     YA_REFLECT_FIELD(_skeletonIndex)
     YA_REFLECT_FIELD(_clipIndex)
-    YA_REFLECT_FIELD(_time)
+    YA_REFLECT_FIELD(_time, .notSerialized())
     YA_REFLECT_FIELD(_speed)
     YA_REFLECT_FIELD(_loop)
     YA_REFLECT_FIELD(_playing)
