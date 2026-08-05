@@ -4,8 +4,28 @@
 
 - 计划建立日期：2026-07-18
 - 当前阶段：P7 Forward 全量迁移
-  - 当前执行任务：FG-707（Forward graph structure tests 和 pipeline switch matrix）
-  - 下一架构任务：FG-707
+  - 当前执行任务：P8 GPU Resource API 收尾（FG-801）
+  - 下一架构任务：FG-801
+
+### 2026-08-05：FG-707 完成
+
+- 实现：
+  - 新增 `Engine/Test/Source/ForwardFrameGraphOrchestratorTest.cpp`：
+    - `ForwardFrameGraphOrchestratorTest.*`：全量拓扑（shadow + bloom +
+      postprocess，11 个 pass 与 Shadow->PBR/Phong、Overlay->Bloom->
+      Postprocessing 依赖）、可选 pass 关闭（无 shadow/bloom 时 9 个 pass、
+      Overlay->Postprocessing 直连）、postprocess 关闭（8 个 viewport pass）。
+    - `ForwardPassParamsTest.ViewportPassParamsDefaultsStayEmpty`：锁住
+      Skybox/PBR/Phong/Unlit/Simple/Direction/Debug/Overlay 8 组 typed params
+      的默认结构（handle 无效、layerCount=1、finalLayout 默认
+      ColorAttachmentOptimal、directionGizmos 为空、overlay 回调为空）。
+- 未做：
+  - Deferred/Forward pipeline switch、resize/shutdown 真实矩阵 smoke 仍属
+    GUI 会话验证项（同 FG-002 基线），当前环境无窗口无法执行；
+    结构层面的 pass presence/dependency 已由 topology 单测覆盖。
+- 测试：
+  - 新增 4 tests；定向全集 107 tests passed。
+  - `xmake b ya-engine` / `xmake b ya-editor` 通过。
 
 ### 2026-08-05：FG-706 完成
 
