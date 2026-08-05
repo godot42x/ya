@@ -6,8 +6,6 @@
 #include "Runtime/Rendering/Common/IRenderPipeline.h"
 
 #include <functional>
-#include <string_view>
-#include <utility>
 #include <vector>
 
 namespace ya
@@ -26,19 +24,6 @@ struct RenderTargetCreateInfo;
 /// and publishing exported outputs.
 struct ForwardFrameGraphOrchestrator
 {
-    struct TopologyDescription
-    {
-        std::vector<std::string_view>                     passOrder{};
-        std::vector<std::pair<std::string_view, std::string_view>> dependencies{};
-    };
-
-    struct TopologyInputs
-    {
-        bool bHasShadowSubgraph  = false;
-        bool bHasBloomSubgraph   = false;
-        bool bHasPostprocessPass = true;
-    };
-
     struct BuildDependencies
     {
         ForwardViewportStage* viewportStage    = nullptr;
@@ -61,7 +46,6 @@ struct ForwardFrameGraphOrchestrator
         std::function<void(ICommandBuffer*, Extent2D)>   recordViewportOverlays{};
     };
 
-    [[nodiscard]] static TopologyDescription describeTopology(const TopologyInputs& inputs);
     void build(const BuildDependencies& deps, const BuildInputs& inputs) const;
 };
 

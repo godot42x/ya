@@ -78,6 +78,7 @@ ShadowGraphOutputs BasicShadowMapTechnique::appendGraphPasses(
 
     auto payload = buildFramePayload(flightIndex, frameData);
     payload.pointLightCount = std::min(_lastPreparedPointLightCount, static_cast<uint32_t>(MAX_POINT_LIGHTS));
+    std::optional<RGPassHandle> lastPass;
 
     if (_depthImage && _shadowDepthArrayView) {
         outputs.shadowDepth = graph.importTexture(makeImportedTextureDesc(
@@ -89,10 +90,10 @@ ShadowGraphOutputs BasicShadowMapTechnique::appendGraphPasses(
     }
 
     if (payload.directionalEnabled()) {
-        outputs.lastPass = _directionalPass.appendGraphPasses(graph, payload, outputs.lastPass);
+        lastPass = _directionalPass.appendGraphPasses(graph, payload, lastPass);
     }
     if (payload.pointEnabled()) {
-        outputs.lastPass = _pointPass.appendGraphPasses(graph, payload, outputs.lastPass);
+        lastPass = _pointPass.appendGraphPasses(graph, payload, lastPass);
     }
     return outputs;
 }
