@@ -3,8 +3,8 @@
 #include "Runtime/Application/Utility/OffscreenJobRunner.h"
 
 #include "Core/Log.h"
-#include "Render/Core/RenderGraphExecutor.h"
-#include "Render/Core/RenderGraphImportUtils.h"
+#include "Render/Core/Graph/RenderGraphExecutor.h"
+#include "Render/Core/Graph/RenderGraphImportUtils.h"
 #include "Platform/Render/Vulkan/VulkanBuffer.h"
 #include "Platform/Render/Vulkan/VulkanMemoryAllocator.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"

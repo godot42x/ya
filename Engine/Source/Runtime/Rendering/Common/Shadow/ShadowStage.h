@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Render/Core/Image.h"
-#include "Render/Core/RenderGraph.h"
+#include "Render/Core/Graph/RenderGraph.h"
 #include "Render/Shadow/IShadowTechnique.h"
 #include "Render/Shadow/ShadowSettings.h"
 #include "Render/Stage/IRenderStage.h"

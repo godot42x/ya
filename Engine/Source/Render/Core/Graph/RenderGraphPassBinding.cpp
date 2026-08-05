@@ -1,5 +1,5 @@
-#include "Render/Core/RenderGraph.h"
-#include "Render/Core/RenderGraphResourceRegistry.h"
+#include "Render/Core/Graph/RenderGraph.h"
+#include "Render/Core/Graph/RenderGraphResourceRegistry.h"
 
 #include <algorithm>
 

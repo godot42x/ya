@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Render/Core/DescriptorSet.h"
-#include "Render/Core/RenderGraph.h"
+#include "Render/Core/Graph/RenderGraph.h"
 #include "Runtime/Rendering/Common/Shadow/ShadowGraphOutputs.h"
 #include "Runtime/Rendering/Deferred/ViewportOverlayStage.h"
 

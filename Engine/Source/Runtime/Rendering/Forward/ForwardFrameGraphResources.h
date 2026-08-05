@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Math/Geometry.h"
-#include "Render/Core/RenderGraph.h"
+#include "Render/Core/Graph/RenderGraph.h"
 #include "Runtime/Rendering/Forward/ForwardViewportAuxPasses.h"
 
 #include <functional>

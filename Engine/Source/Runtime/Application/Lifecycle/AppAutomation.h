@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Api.h"
-#include "Render/Core/RenderGraph.h"
+#include "Render/Core/Graph/RenderGraph.h"
 
 #include <cstdint>
 #include <functional>
