@@ -4,8 +4,27 @@
 
 - 计划建立日期：2026-07-18
 - 当前阶段：P7 Forward 全量迁移
-  - 当前执行任务：FG-703（Forward Unlit pass 独立 graph pass）
-  - 下一架构任务：FG-703
+  - 当前执行任务：FG-704（Skybox/Simple/Direction/Debug/Viewport Overlay 迁移）
+  - 下一架构任务：FG-704
+
+### 2026-08-05：FG-703 完成
+
+- 实现：
+  - Forward 顶层图新增独立 `Forward Unlit` graph pass，位于
+    Phong 之后、Rest 之前，序列变为 Skybox -> PBR -> Phong -> Unlit -> Rest。
+  - 新增 `ForwardUnlitPassParams`（`ForwardFrameGraphResources.h`），
+    setup/execute 共用同一 params，layout 在 pass 链中保持
+    `ColorAttachmentOptimal`。
+  - `ForwardViewportStage` 新增 `executeUnlit(ctx, Binding)` per-pass 入口；
+    `executeRest(ctx)` 只保留 Simple / Direction / Debug + editor overlays，
+    因这些子 pass 不消费 per-flight binding，签名不再携带 Binding。
+- 未做：
+  - Simple / Direction / Debug 仍合并于 Rest pass，独立为 graph pass 是 FG-704。
+- 测试：
+  - `xmake b ya-engine` / `xmake b ya-editor` 通过。
+  - 定向单测 103 tests passed（RenderGraphCore / ResourceStateTracker /
+    Deferred 系列 / AppScreenshotCapture）。
+  - GUI smoke 仍受无窗口会话限制，待有 GUI 环境补跑（同 FG-002 基线）。
 
 ### 2026-08-05：FG-702 完成
 

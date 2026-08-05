@@ -41,9 +41,19 @@ struct ForwardPhongPassParams
     EImageLayout::T     finalLayout = EImageLayout::ColorAttachmentOptimal;
 };
 
+/// Typed parameters for the Forward Unlit graph pass.
+struct ForwardUnlitPassParams
+{
+    RGTextureHandle     viewportColor{};
+    RGTextureHandle     viewportDepth{};
+    Rect2D              renderArea{};
+    uint32_t            layerCount = 1;
+    EImageLayout::T     finalLayout = EImageLayout::ColorAttachmentOptimal;
+};
+
 /// Typed parameters for the remaining Forward viewport passes
-/// (Unlit / Simple / Direction / Debug + editor overlays). This is the last
-/// Forward pass, so it owns the MSAA resolve attachment.
+/// (Simple / Direction / Debug + editor overlays). This is the last Forward
+/// pass, so it owns the MSAA resolve attachment.
 struct ForwardRestPassParams
 {
     RGTextureHandle     viewportColor{};
