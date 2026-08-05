@@ -4,8 +4,33 @@
 
 - 计划建立日期：2026-07-18
 - 当前阶段：P8 GPU Resource API 收尾
-  - 当前执行任务：FG-802（统一 buffer map/write/flush range 与失败行为）
-  - 下一架构任务：FG-802
+  - 当前执行任务：FG-803（Texture decode/import 与 TextureUploadService）
+  - 下一架构任务：FG-803
+
+### 2026-08-05：FG-802 完成
+
+- 实现：
+  - `IBuffer` 增加统一 data-access 契约文档（Buffer.h）：writeData 对
+    null / non-host-visible / 越界 / size==0 且 offset!=0 返回 false 且零写入；
+    flush 对 non-host-visible / 未 map / 越界返回 false，coherent 内存为
+    no-op 成功；map 要求 host-visible 且无活动 map；unmap 幂等。
+  - VulkanBuffer 加固：
+    - `writeData` 越界与 `size==0 && offset!=0` 由 assert 改为运行时
+      `YA_CORE_ERROR` + false（保留零写入语义）；
+    - `flush` 同样改为运行时失败返回，并校验 range；
+    - `mapInternal` 对 non-coherent 内存增加 `vmaInvalidateAllocation`，
+      满足 GpuToCpu readback 契约。
+  - OpenGLBuffer 审计：writeData/flush/map 已符合契约（flush 为 GL 语义
+    no-op），无需改动。
+- 未做：
+  - 跨后端 invalidate/readback 的统一 API（如显式 invalidateRange）不在
+    当前 API 面内；现有 map 语义已覆盖 readback。
+- 测试：
+  - 新增 `RenderBufferContractTest`（7 tests）：host visible/non-visible、
+    越界（writeData/flush）、size==0 语义、flush 依赖 mapped 状态、coherent
+    no-op、readback map、unmap 幂等、map 拒绝 non-host-visible。
+  - 定向全集 118 tests passed；`xmake b ya-engine` / `xmake b ya-editor`
+    通过。
 
 ### 2026-08-05：FG-801 完成
 

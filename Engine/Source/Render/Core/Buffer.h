@@ -88,7 +88,26 @@ struct IBuffer
     IBuffer(IBuffer &&)            = default;
     IBuffer &operator=(IBuffer &&) = default;
 
-    // Write data to buffer
+    // ═══════════════════════════════════════════════════════════════════
+    // Data-access contract (FG-802). Backends must follow these semantics:
+    //
+    // * writeData(data, size, offset):
+    //     - returns false (and writes nothing) when data is null, the buffer
+    //       is not host visible, or offset+size exceeds the buffer size;
+    //     - size == 0 means "whole buffer" and requires offset == 0;
+    //     - otherwise performs a full range write and returns true.
+    // * flush(size, offset):
+    //     - returns false when the buffer is not host visible, is not
+    //       currently mapped, or the range is out of bounds;
+    //     - is a no-op success on coherent memory;
+    //     - size == 0 means "whole buffer" and requires offset == 0.
+    // * map<T>() / unmap():
+    //     - map requires a host-visible buffer with no active map (backends
+    //       report this via assert/error and return null);
+    //     - unmap is idempotent;
+    //     - for non-coherent readback (GpuToCpu), map makes prior GPU writes
+    //       visible to the CPU (backend invalidates on map).
+    // ═══════════════════════════════════════════════════════════════════
     virtual bool writeData(const void *data, uint32_t size = 0, uint32_t offset = 0) = 0;
 
     // Flush memory (for non-coherent memory)
