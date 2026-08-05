@@ -5,6 +5,7 @@
 #include "Render/Core/Graph/RenderGraphImportUtils.h"
 #include "Render/Core/RenderTargetCreateInfo.h"
 #include "Runtime/Rendering/Common/PostProcessingStage.h"
+#include "Runtime/Rendering/Common/RenderViewportOverlayRecorder.h"
 #include "Runtime/Rendering/Common/Shadow/ShadowStage.h"
 #include "Runtime/Rendering/Forward/ForwardViewportStage.h"
 
@@ -17,14 +18,10 @@ namespace
 {
 
 constexpr std::string_view kForwardTopologyPassShadow          = "Shadow Subgraph";
+constexpr std::string_view kForwardTopologyPassOpaque          = "Forward Opaque";
 constexpr std::string_view kForwardTopologyPassSkybox          = "Forward Skybox";
-constexpr std::string_view kForwardTopologyPassPBR             = "Forward PBR";
-constexpr std::string_view kForwardTopologyPassPhong           = "Forward Phong";
-constexpr std::string_view kForwardTopologyPassUnlit           = "Forward Unlit";
-constexpr std::string_view kForwardTopologyPassSimple          = "Forward Simple";
-constexpr std::string_view kForwardTopologyPassDirection       = "Forward Direction";
-constexpr std::string_view kForwardTopologyPassDebug           = "Forward Debug";
-constexpr std::string_view kForwardTopologyPassViewportOverlay = "Forward Viewport Overlay";
+constexpr std::string_view kForwardTopologyPassTransparent     = "Forward Transparent";
+constexpr std::string_view kForwardTopologyPassOverlay         = "Forward Overlay";
 constexpr std::string_view kForwardTopologyPassBloom           = "Bloom Subgraph";
 constexpr std::string_view kForwardTopologyPassPostprocessing  = "Postprocessing";
 
@@ -49,14 +46,10 @@ struct ForwardImportedViewportResources
 
 struct ForwardViewportPassBundle
 {
-    ForwardSkyboxPassParams          skybox{};
-    ForwardPBRPassParams             pbr{};
-    ForwardPhongPassParams           phong{};
-    ForwardUnlitPassParams           unlit{};
-    ForwardSimplePassParams          simple{};
-    ForwardDirectionPassParams       direction{};
-    ForwardDebugPassParams           debug{};
-    ForwardViewportOverlayPassParams viewportOverlay{};
+    ForwardOpaquePassParams      opaque{};
+    ForwardSkyboxPassParams      skybox{};
+    ForwardTransparentPassParams transparent{};
+    ForwardOverlayPassParams     overlay{};
 };
 
 ForwardImportedViewportResources importForwardViewportResources(RenderGraph&                               graph,
@@ -97,42 +90,7 @@ ForwardViewportPassBundle buildForwardViewportPassBundle(const ForwardFrameGraph
                                                          const ForwardImportedViewportResources&            resources)
 {
     return ForwardViewportPassBundle{
-        .skybox = {
-            .viewportColor = resources.color,
-            .viewportDepth = resources.depth,
-            .renderArea    = resources.renderArea,
-            .layerCount    = 1,
-            .finalLayout   = EImageLayout::ColorAttachmentOptimal,
-        },
-        .pbr = {
-            .viewportColor = resources.color,
-            .viewportDepth = resources.depth,
-            .renderArea    = resources.renderArea,
-            .layerCount    = 1,
-            .finalLayout   = EImageLayout::ColorAttachmentOptimal,
-        },
-        .phong = {
-            .viewportColor = resources.color,
-            .viewportDepth = resources.depth,
-            .renderArea    = resources.renderArea,
-            .layerCount    = 1,
-            .finalLayout   = EImageLayout::ColorAttachmentOptimal,
-        },
-        .unlit = {
-            .viewportColor = resources.color,
-            .viewportDepth = resources.depth,
-            .renderArea    = resources.renderArea,
-            .layerCount    = 1,
-            .finalLayout   = EImageLayout::ColorAttachmentOptimal,
-        },
-        .simple = {
-            .viewportColor = resources.color,
-            .viewportDepth = resources.depth,
-            .renderArea    = resources.renderArea,
-            .layerCount    = 1,
-            .finalLayout   = EImageLayout::ColorAttachmentOptimal,
-        },
-        .direction = {
+        .opaque = {
             .viewportColor   = resources.color,
             .viewportDepth   = resources.depth,
             .renderArea      = resources.renderArea,
@@ -140,20 +98,28 @@ ForwardViewportPassBundle buildForwardViewportPassBundle(const ForwardFrameGraph
             .finalLayout     = EImageLayout::ColorAttachmentOptimal,
             .directionGizmos = inputs.directionGizmos,
         },
-        .debug = {
+        .skybox = {
             .viewportColor = resources.color,
             .viewportDepth = resources.depth,
             .renderArea    = resources.renderArea,
             .layerCount    = 1,
             .finalLayout   = EImageLayout::ColorAttachmentOptimal,
         },
-        .viewportOverlay = {
-            .viewportColor          = resources.color,
-            .viewportDepth          = resources.depth,
-            .renderArea             = resources.renderArea,
-            .layerCount             = 1,
-            .finalLayout            = resources.colorAttachment.finalLayout,
-            .recordViewportOverlays = inputs.recordViewportOverlays,
+        .transparent = {
+            .viewportColor = resources.color,
+            .viewportDepth = resources.depth,
+            .renderArea    = resources.renderArea,
+            .layerCount    = 1,
+            .finalLayout   = EImageLayout::ColorAttachmentOptimal,
+        },
+        .overlay = {
+            .viewportColor   = resources.color,
+            .viewportDepth   = resources.depth,
+            .renderArea      = resources.renderArea,
+            .layerCount      = 1,
+            .finalLayout     = resources.colorAttachment.finalLayout,
+            .overlaySnapshot = inputs.viewportOverlaySnapshot,
+            .frameCtx        = inputs.postContext ? *inputs.postContext : FrameContext{},
         },
     };
 }
@@ -167,24 +133,60 @@ void appendForwardViewportPasses(RenderGraph&                                   
                                  std::optional<RGTextureHandle>                       shadowDepth,
                                  ForwardViewportPassBundle                            params)
 {
+    [[maybe_unused]] const auto opaquePass = graph.addPass(
+        std::string(kForwardTopologyPassOpaque),
+        [&opaqueParams = params.opaque, shadowDepth, colorAttachment = resources.colorAttachment, depthAttachment = resources.depthAttachment](RGPassBuilder& passBuilder) {
+            if (shadowDepth.has_value()) {
+                passBuilder.read(*shadowDepth);
+            }
+            passBuilder.declareRaster({
+                .renderArea = opaqueParams.renderArea,
+                .layerCount = opaqueParams.layerCount,
+                .colors = {{
+                    .color       = opaqueParams.viewportColor,
+                    .clearValue  = ClearValue::Black(),
+                    .loadOp      = colorAttachment.loadOp,
+                    .storeOp     = colorAttachment.storeOp,
+                    .finalLayout = opaqueParams.finalLayout,
+                }},
+                .depth = RGDepthAttachmentDesc{
+                    .depth       = opaqueParams.viewportDepth,
+                    .clearValue  = ClearValue(1.0f, 0),
+                    .loadOp      = depthAttachment.loadOp,
+                    .storeOp     = depthAttachment.storeOp,
+                    .finalLayout = depthAttachment.finalLayout,
+                },
+            });
+        },
+        [&viewportStage, &stageCtx, frameBinding, directionGizmos = std::move(params.opaque.directionGizmos), passContext](RGRenderContext& rgCtx) mutable {
+            const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
+            rgCtx.beginDeclaredRasterRendering();
+            stageCtx.viewportExtent = viewportExtent;
+            viewportStage.executePBR(stageCtx, frameBinding, passContext);
+            viewportStage.executePhong(stageCtx, frameBinding, passContext);
+            viewportStage.executeUnlit(stageCtx, frameBinding, passContext);
+            viewportStage.executeSimple(stageCtx, passContext);
+            viewportStage.executeDirection(stageCtx, std::move(directionGizmos), passContext);
+            viewportStage.executeDebug(stageCtx, passContext);
+            rgCtx.endRendering();
+        });
+
     [[maybe_unused]] const auto skyboxPass = graph.addPass(
         std::string(kForwardTopologyPassSkybox),
-        [&skyboxParams = params.skybox, colorAttachment = resources.colorAttachment, depthAttachment = resources.depthAttachment](RGPassBuilder& passBuilder) {
+        [&skyboxParams = params.skybox, depthAttachment = resources.depthAttachment](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
                 .renderArea = skyboxParams.renderArea,
                 .layerCount = skyboxParams.layerCount,
                 .colors = {{
                     .color       = skyboxParams.viewportColor,
-                    .clearValue  = ClearValue::Black(),
-                    .loadOp      = colorAttachment.loadOp,
-                    .storeOp     = colorAttachment.storeOp,
+                    .loadOp      = EAttachmentLoadOp::Load,
+                    .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = skyboxParams.finalLayout,
                 }},
                 .depth = RGDepthAttachmentDesc{
                     .depth       = skyboxParams.viewportDepth,
-                    .clearValue  = ClearValue(1.0f, 0),
-                    .loadOp      = depthAttachment.loadOp,
-                    .storeOp     = depthAttachment.storeOp,
+                    .loadOp      = EAttachmentLoadOp::Load,
+                    .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = depthAttachment.finalLayout,
                 },
             });
@@ -197,209 +199,63 @@ void appendForwardViewportPasses(RenderGraph&                                   
             rgCtx.endRendering();
         });
 
-    [[maybe_unused]] const auto pbrPass = graph.addPass(
-        std::string(kForwardTopologyPassPBR),
-        [&pbrParams = params.pbr, shadowDepth, depthAttachment = resources.depthAttachment](RGPassBuilder& passBuilder) {
-            if (shadowDepth.has_value()) {
-                passBuilder.read(*shadowDepth);
-            }
+    [[maybe_unused]] const auto transparentPass = graph.addPass(
+        std::string(kForwardTopologyPassTransparent),
+        [&transparentParams = params.transparent, depthAttachment = resources.depthAttachment](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
-                .renderArea = pbrParams.renderArea,
-                .layerCount = pbrParams.layerCount,
+                .renderArea = transparentParams.renderArea,
+                .layerCount = transparentParams.layerCount,
                 .colors = {{
-                    .color       = pbrParams.viewportColor,
+                    .color       = transparentParams.viewportColor,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = pbrParams.finalLayout,
+                    .finalLayout = transparentParams.finalLayout,
                 }},
                 .depth = RGDepthAttachmentDesc{
-                    .depth       = pbrParams.viewportDepth,
+                    .depth       = transparentParams.viewportDepth,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = depthAttachment.finalLayout,
                 },
             });
         },
-        [&viewportStage, &stageCtx, frameBinding, passContext](RGRenderContext& rgCtx) {
+        [&stageCtx](RGRenderContext& rgCtx) {
             const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
             stageCtx.viewportExtent = viewportExtent;
-            viewportStage.executePBR(stageCtx, frameBinding, passContext);
             rgCtx.endRendering();
         });
 
-    [[maybe_unused]] const auto phongPass = graph.addPass(
-        std::string(kForwardTopologyPassPhong),
-        [&phongParams = params.phong, shadowDepth, depthAttachment = resources.depthAttachment](RGPassBuilder& passBuilder) {
-            if (shadowDepth.has_value()) {
-                passBuilder.read(*shadowDepth);
-            }
+    [[maybe_unused]] const auto overlayPass = graph.addPass(
+        std::string(kForwardTopologyPassOverlay),
+        [&overlayParams = params.overlay, resolve = resources.resolve, depthAttachment = resources.depthAttachment](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
-                .renderArea = phongParams.renderArea,
-                .layerCount = phongParams.layerCount,
+                .renderArea = overlayParams.renderArea,
+                .layerCount = overlayParams.layerCount,
                 .colors = {{
-                    .color       = phongParams.viewportColor,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = phongParams.finalLayout,
-                }},
-                .depth = RGDepthAttachmentDesc{
-                    .depth       = phongParams.viewportDepth,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = depthAttachment.finalLayout,
-                },
-            });
-        },
-        [&viewportStage, &stageCtx, frameBinding, passContext](RGRenderContext& rgCtx) {
-            const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
-            rgCtx.beginDeclaredRasterRendering();
-            stageCtx.viewportExtent = viewportExtent;
-            viewportStage.executePhong(stageCtx, frameBinding, passContext);
-            rgCtx.endRendering();
-        });
-
-    [[maybe_unused]] const auto unlitPass = graph.addPass(
-        std::string(kForwardTopologyPassUnlit),
-        [&unlitParams = params.unlit, depthAttachment = resources.depthAttachment](RGPassBuilder& passBuilder) {
-            passBuilder.declareRaster({
-                .renderArea = unlitParams.renderArea,
-                .layerCount = unlitParams.layerCount,
-                .colors = {{
-                    .color       = unlitParams.viewportColor,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = unlitParams.finalLayout,
-                }},
-                .depth = RGDepthAttachmentDesc{
-                    .depth       = unlitParams.viewportDepth,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = depthAttachment.finalLayout,
-                },
-            });
-        },
-        [&viewportStage, &stageCtx, frameBinding, passContext](RGRenderContext& rgCtx) {
-            const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
-            rgCtx.beginDeclaredRasterRendering();
-            stageCtx.viewportExtent = viewportExtent;
-            viewportStage.executeUnlit(stageCtx, frameBinding, passContext);
-            rgCtx.endRendering();
-        });
-
-    [[maybe_unused]] const auto simplePass = graph.addPass(
-        std::string(kForwardTopologyPassSimple),
-        [&simpleParams = params.simple, depthAttachment = resources.depthAttachment](RGPassBuilder& passBuilder) {
-            passBuilder.declareRaster({
-                .renderArea = simpleParams.renderArea,
-                .layerCount = simpleParams.layerCount,
-                .colors = {{
-                    .color       = simpleParams.viewportColor,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = simpleParams.finalLayout,
-                }},
-                .depth = RGDepthAttachmentDesc{
-                    .depth       = simpleParams.viewportDepth,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = depthAttachment.finalLayout,
-                },
-            });
-        },
-        [&viewportStage, &stageCtx, passContext](RGRenderContext& rgCtx) {
-            const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
-            rgCtx.beginDeclaredRasterRendering();
-            stageCtx.viewportExtent = viewportExtent;
-            viewportStage.executeSimple(stageCtx, passContext);
-            rgCtx.endRendering();
-        });
-
-    [[maybe_unused]] const auto directionPass = graph.addPass(
-        std::string(kForwardTopologyPassDirection),
-        [&directionParams = params.direction, depthAttachment = resources.depthAttachment](RGPassBuilder& passBuilder) {
-            passBuilder.declareRaster({
-                .renderArea = directionParams.renderArea,
-                .layerCount = directionParams.layerCount,
-                .colors = {{
-                    .color       = directionParams.viewportColor,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = directionParams.finalLayout,
-                }},
-                .depth = RGDepthAttachmentDesc{
-                    .depth       = directionParams.viewportDepth,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = depthAttachment.finalLayout,
-                },
-            });
-        },
-        [&viewportStage, &stageCtx, directionParams = std::move(params.direction), passContext](RGRenderContext& rgCtx) mutable {
-            const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
-            rgCtx.beginDeclaredRasterRendering();
-            stageCtx.viewportExtent = viewportExtent;
-            viewportStage.executeDirection(stageCtx, std::move(directionParams.directionGizmos), passContext);
-            rgCtx.endRendering();
-        });
-
-    [[maybe_unused]] const auto debugPass = graph.addPass(
-        std::string(kForwardTopologyPassDebug),
-        [&debugParams = params.debug, depthAttachment = resources.depthAttachment](RGPassBuilder& passBuilder) {
-            passBuilder.declareRaster({
-                .renderArea = debugParams.renderArea,
-                .layerCount = debugParams.layerCount,
-                .colors = {{
-                    .color       = debugParams.viewportColor,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = debugParams.finalLayout,
-                }},
-                .depth = RGDepthAttachmentDesc{
-                    .depth       = debugParams.viewportDepth,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = depthAttachment.finalLayout,
-                },
-            });
-        },
-        [&viewportStage, &stageCtx, passContext](RGRenderContext& rgCtx) {
-            const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
-            rgCtx.beginDeclaredRasterRendering();
-            stageCtx.viewportExtent = viewportExtent;
-            viewportStage.executeDebug(stageCtx, passContext);
-            rgCtx.endRendering();
-        });
-
-    [[maybe_unused]] const auto viewportOverlayPass = graph.addPass(
-        std::string(kForwardTopologyPassViewportOverlay),
-        [&viewportOverlayParams = params.viewportOverlay, resolve = resources.resolve, depthAttachment = resources.depthAttachment](RGPassBuilder& passBuilder) {
-            passBuilder.declareRaster({
-                .renderArea = viewportOverlayParams.renderArea,
-                .layerCount = viewportOverlayParams.layerCount,
-                .colors = {{
-                    .color       = viewportOverlayParams.viewportColor,
+                    .color       = overlayParams.viewportColor,
                     .resolve     = resolve,
                     .resolveMode = resolve.isValid() ? EResolveMode::Average : EResolveMode::None,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = viewportOverlayParams.finalLayout,
+                    .finalLayout = overlayParams.finalLayout,
                 }},
                 .depth = RGDepthAttachmentDesc{
-                    .depth       = viewportOverlayParams.viewportDepth,
+                    .depth       = overlayParams.viewportDepth,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = depthAttachment.finalLayout,
                 },
             });
         },
-        [&stageCtx, viewportOverlayParams = params.viewportOverlay](RGRenderContext& rgCtx) {
+        [&stageCtx, overlayParams = params.overlay](RGRenderContext& rgCtx) mutable {
             const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
             stageCtx.viewportExtent = viewportExtent;
-            if (viewportOverlayParams.recordViewportOverlays) {
-                viewportOverlayParams.recordViewportOverlays(&rgCtx.getCommandBuffer(), viewportExtent);
-            }
+            overlayParams.frameCtx.extent = viewportExtent;
+            recordRenderViewportOverlayPass(overlayParams.frameCtx,
+                                            overlayParams.overlaySnapshot,
+                                            &rgCtx.getCommandBuffer());
             rgCtx.endRendering();
         });
 }

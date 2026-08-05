@@ -6,7 +6,7 @@
 #include "Runtime/Rendering/Deferred/ViewportOverlayStage.h"
 
 #include <array>
-#include <functional>
+#include <memory>
 #include <optional>
 
 namespace ya
@@ -149,12 +149,21 @@ struct DeferredSkyboxPassParams
     ViewportOverlayStage::FrameInputs::SkyboxInput skybox{};
 };
 
-/// Typed pass parameters for the Deferred scene overlay graph pass.
+/// Typed pass parameters for the Deferred forward-opaque placeholder graph pass.
+struct DeferredForwardOpaquePassParams
+{
+    RGTextureHandle color{};
+    RGTextureHandle depth{};
+    Rect2D          renderArea{};
+    uint32_t        layerCount = 1;
+};
+
+/// Typed pass parameters for the Deferred forward-transparent graph pass.
 ///
 /// The overlay snapshot that was prepared during frame extraction is carried
 /// directly into the graph execute callback, removing the need to read it back
 /// from ViewportOverlayStage-owned mutable state.
-struct DeferredSceneOverlayPassParams
+struct DeferredForwardTransparentPassParams
 {
     RGTextureHandle                    color{};
     RGTextureHandle                    depth{};
@@ -163,17 +172,18 @@ struct DeferredSceneOverlayPassParams
     ViewportOverlayStage::FrameInputs  overlay{};
 };
 
-/// Typed pass parameters for the Deferred viewport overlay graph pass.
+/// Typed pass parameters for the Deferred final overlay graph pass.
 ///
 /// The pass receives an explicit callback input instead of capturing the
 /// pipeline member directly inside the graph lambda.
-struct DeferredViewportOverlayPassParams
+struct DeferredOverlayPassParams
 {
     RGTextureHandle                                     color{};
     RGTextureHandle                                     depth{};
     Rect2D                                              renderArea{};
     uint32_t                                            layerCount = 1;
-    std::function<void(ICommandBuffer*, Extent2D)>      recordViewportOverlays{};
+    std::shared_ptr<const RenderViewportOverlaySnapshot> overlaySnapshot = nullptr;
+    FrameContext                                         frameCtx{};
 };
 
 } // namespace ya

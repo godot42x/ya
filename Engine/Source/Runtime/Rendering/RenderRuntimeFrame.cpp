@@ -2,11 +2,8 @@
 
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
-#include "Core/UI/UIManager.h"
-#include "Render/2D/Render2D.h"
 #include "Render/Core/Graph/RenderGraphImportUtils.h"
 #include "Render/Core/Swapchain.h"
-#include "Resource/Font/FontManager.h"
 #include "Runtime/Application/App.h"
 #include "Runtime/Rendering/Deferred/DeferredRenderPipeline.h"
 #include "Runtime/Rendering/Forward/ForwardRenderPipeline.h"
@@ -32,6 +29,21 @@ RGImportedTextureDesc makePresentationImportedTextureDesc(const RenderImage& ima
         static_cast<EImageUsage::T>(EImageUsage::ColorAttachment | EImageUsage::TransferSrc));
     desc.importDesc.initialLayout = EImageLayout::PresentSrcKHR;
     return desc;
+}
+
+std::shared_ptr<RenderViewportOverlaySnapshot> buildViewportOverlaySnapshot(const RenderRuntime::FrameInput::OverlayInput& overlay)
+{
+    auto snapshot = std::make_shared<RenderViewportOverlaySnapshot>();
+    if (overlay.screenSprites) {
+        snapshot->screenSprites = *overlay.screenSprites;
+    }
+    if (overlay.worldSprites) {
+        snapshot->worldSprites = *overlay.worldSprites;
+    }
+    if (overlay.screenTexts) {
+        snapshot->screenTexts = *overlay.screenTexts;
+    }
+    return snapshot->empty() ? nullptr : snapshot;
 }
 
 } // namespace
@@ -92,7 +104,7 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
     auto* pipeline = getActivePipeline();
     YA_CORE_ASSERT(pipeline, "Active render pipeline is null while ticking viewport pass");
 
-    const auto overlayInput = input.overlay;
+    auto overlaySnapshot = buildViewportOverlaySnapshot(input.overlay);
     pipeline->tick(RenderPipelineFrameContext{
         .flightIndex              = input.pipeline.flightIndex,
         .cmdBuf                   = cmdBuf,
@@ -104,19 +116,7 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
         .viewportFrameBufferScale = _viewportFrameBufferScale,
         .frameData                = input.pipeline.frameData,
         .shadowSettings           = input.pipeline.shadowSettings,
-        .recordViewportOverlays   = [this, overlayInput, input](ICommandBuffer* overlayCmdBuf, Extent2D viewportExtent, const FrameContext& frameCtx)
-        {
-            RenderPipelineFrameContext overlayFrame = input.pipeline;
-            overlayFrame.cmdBuf                     = overlayCmdBuf;
-            overlayFrame.view                       = frameCtx.view;
-            overlayFrame.projection                 = frameCtx.projection;
-            overlayFrame.cameraPos                  = frameCtx.cameraPos;
-            overlayFrame.viewportRect               = Rect2D{
-                              .pos    = {0.0f, 0.0f},
-                              .extent = {static_cast<float>(viewportExtent.width), static_cast<float>(viewportExtent.height)},
-            };
-            renderViewportPassOverlays(overlayFrame, overlayInput, overlayCmdBuf);
-        },
+        .viewportOverlaySnapshot   = std::move(overlaySnapshot),
     });
 }
 
@@ -129,71 +129,6 @@ std::shared_ptr<RenderImage> RenderRuntime::getActiveViewportImageShared() const
         return pipeline->getViewportOutputImageShared();
     }
     return nullptr;
-}
-
-void RenderRuntime::renderViewportPassOverlays(const RenderPipelineFrameContext& pipelineFrame, const FrameInput::OverlayInput& overlay, ICommandBuffer* cmdBuf)
-{
-    YA_PROFILE_FUNCTION();
-
-    YA_PROFILE_SCOPE("Render2D");
-    YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
-
-    const Extent2D viewportExtent = Extent2D{
-        .width  = static_cast<uint32_t>(pipelineFrame.viewportRect.extent.x),
-        .height = static_cast<uint32_t>(pipelineFrame.viewportRect.extent.y),
-    };
-    FRender2dContext render2dCtx{
-        .cmdBuf       = cmdBuf,
-        .windowWidth  = viewportExtent.width,
-        .windowHeight = viewportExtent.height,
-        .cam          = {
-                     .position       = pipelineFrame.cameraPos,
-                     .view           = pipelineFrame.view,
-                     .projection     = pipelineFrame.projection,
-                     .viewProjection = pipelineFrame.projection * pipelineFrame.view,
-        },
-    };
-
-    Render2D::begin(render2dCtx);
-
-    if (overlay.screenSprites) {
-        for (const auto& sprite : *overlay.screenSprites) {
-            Render2D::makeSprite(glm::vec3(sprite.viewportPos, 0.0f), sprite.size, sprite.texture, sprite.tint);
-        }
-    }
-
-    if (overlay.worldSprites) {
-        // YA_CORE_INFO("Rendering {} world overlay sprites", overlay.worldSprites->size());
-        for (const auto& sprite : *overlay.worldSprites) {
-            Render2D::makeWorldSprite(sprite.worldCenter,
-                                      sprite.worldDirection,
-                                      sprite.worldSize,
-                                      sprite.texture,
-                                      sprite.tint);
-        }
-    }
-
-    if (overlay.screenTexts) {
-        for (const auto& text : *overlay.screenTexts) {
-            if (text.text.empty()) {
-                continue;
-            }
-
-            auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, text.fontSize);
-            if (!font) {
-                continue;
-            }
-
-            Render2D::makeText(text.text,
-                               glm::vec3(text.viewportPos, text.depth),
-                               text.color,
-                               font.get());
-        }
-    }
-
-    Render2D::onRender();
-    UIManager::get()->render();
-    Render2D::end();
 }
 
 void RenderRuntime::renderPresentationPass(float                                       deltaTime,

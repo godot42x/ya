@@ -734,12 +734,7 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
             .postContext              = &_lastTickCtx,
             .bEnableShadow            = _shadowStage && currentShadowSettings().isEnabled(),
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(_render->getSwapchain()->getFormat()),
-            .recordViewportOverlays   = _lastFrameInput.recordViewportOverlays
-                ? [this](ICommandBuffer* cmdBuf, Extent2D viewportExtent) {
-                      YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
-                      _lastFrameInput.recordViewportOverlays(cmdBuf, viewportExtent, _lastTickCtx);
-                  }
-                : std::function<void(ICommandBuffer*, Extent2D)>{},
+            .viewportOverlaySnapshot  = _lastFrameInput.viewportOverlaySnapshot,
         });
 
     RGCompiledGraph compiled{};

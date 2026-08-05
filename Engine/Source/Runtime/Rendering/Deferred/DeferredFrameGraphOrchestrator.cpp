@@ -8,6 +8,7 @@
 #include "Render/Core/Swapchain.h"
 #include "Render/Render.h"
 #include "Runtime/Rendering/Common/PostProcessingStage.h"
+#include "Runtime/Rendering/Common/RenderViewportOverlayRecorder.h"
 #include "Runtime/Rendering/Common/Shadow/ShadowStage.h"
 #include "Runtime/Rendering/Deferred/GBufferStage.h"
 #include "Runtime/Rendering/Deferred/LightStage.h"
@@ -21,15 +22,16 @@ namespace ya
 namespace
 {
 
-constexpr std::string_view kTopologyPassShadow          = "Shadow Subgraph";
-constexpr std::string_view kTopologyPassGBuffer         = "Deferred GBuffer";
-constexpr std::string_view kTopologyPassSSAO            = "SSAO Pass";
-constexpr std::string_view kTopologyPassLight           = "Deferred Light";
-constexpr std::string_view kTopologyPassSkybox          = "Deferred Skybox";
-constexpr std::string_view kTopologyPassSceneOverlay    = "Deferred Scene Overlay";
-constexpr std::string_view kTopologyPassViewportOverlay = "Deferred Viewport Overlay";
-constexpr std::string_view kTopologyPassBloom           = "Bloom Subgraph";
-constexpr std::string_view kTopologyPassPostprocessing  = "Postprocessing";
+constexpr std::string_view kTopologyPassShadow            = "Shadow Subgraph";
+constexpr std::string_view kTopologyPassGBuffer           = "Deferred GBuffer";
+constexpr std::string_view kTopologyPassSSAO              = "SSAO Pass";
+constexpr std::string_view kTopologyPassLight             = "Deferred Light";
+constexpr std::string_view kTopologyPassForwardOpaque     = "Deferred Forward Opaque";
+constexpr std::string_view kTopologyPassSkybox            = "Deferred Skybox";
+constexpr std::string_view kTopologyPassForwardTransparent = "Deferred Forward Transparent";
+constexpr std::string_view kTopologyPassOverlay           = "Deferred Overlay";
+constexpr std::string_view kTopologyPassBloom             = "Bloom Subgraph";
+constexpr std::string_view kTopologyPassPostprocessing    = "Postprocessing";
 
 RGImportedTextureDesc makeDeferredOrchestratorEnvironmentImportedDesc(const ImageResourceRef& resource,
                                                                       std::string_view       label)
@@ -337,6 +339,38 @@ void appendDeferredLightingAndPostprocess(RenderGraph&                          
             rgCtx.endRendering();
         });
 
+    DeferredForwardOpaquePassParams forwardOpaqueParams{
+        .color      = graphResources.textures.viewportColor,
+        .depth      = graphResources.textures.gBufferDepth,
+        .renderArea = {.pos = {0, 0}, .extent = inputs.viewportExtent.toVec2()},
+        .layerCount = 1,
+    };
+
+    [[maybe_unused]] const auto forwardOpaquePass = graph.addPass(
+        std::string(kTopologyPassForwardOpaque),
+        [&forwardOpaqueParams](RGPassBuilder& passBuilder) {
+            passBuilder.declareRaster({
+                .renderArea = forwardOpaqueParams.renderArea,
+                .layerCount = forwardOpaqueParams.layerCount,
+                .colors = {{
+                    .color       = forwardOpaqueParams.color,
+                    .loadOp      = EAttachmentLoadOp::Load,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                }},
+                .depth = RGDepthAttachmentDesc{
+                    .depth       = forwardOpaqueParams.depth,
+                    .loadOp      = EAttachmentLoadOp::Load,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                },
+            });
+        },
+        [](RGRenderContext& rgCtx) {
+            rgCtx.beginDeclaredRasterRendering();
+            rgCtx.endRendering();
+        });
+
     DeferredSkyboxPassParams skyboxParams{
         .frame = {
             .handle = graphResources.buffers.skyboxFrame,
@@ -390,7 +424,7 @@ void appendDeferredLightingAndPostprocess(RenderGraph&                          
     }
     graphResources.textures.overlayInput = bloomComposite.isValid() ? bloomComposite : graphResources.textures.viewportColor;
 
-    DeferredSceneOverlayPassParams sceneOverlayParams{
+    DeferredForwardTransparentPassParams forwardTransparentParams{
         .color      = graphResources.textures.overlayInput,
         .depth      = graphResources.textures.gBufferDepth,
         .renderArea = {.pos = {0, 0}, .extent = inputs.viewportExtent.toVec2()},
@@ -399,73 +433,72 @@ void appendDeferredLightingAndPostprocess(RenderGraph&                          
     };
 
     graphResources.passes.sceneOverlay = graph.addPass(
-        std::string(kTopologyPassSceneOverlay),
-        [&sceneOverlayParams](RGPassBuilder& passBuilder) {
+        std::string(kTopologyPassForwardTransparent),
+        [&forwardTransparentParams](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
-                .renderArea = sceneOverlayParams.renderArea,
-                .layerCount = sceneOverlayParams.layerCount,
+                .renderArea = forwardTransparentParams.renderArea,
+                .layerCount = forwardTransparentParams.layerCount,
                 .colors = {{
-                    .color       = sceneOverlayParams.color,
+                    .color       = forwardTransparentParams.color,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 }},
                 .depth = RGDepthAttachmentDesc{
-                    .depth       = sceneOverlayParams.depth,
+                    .depth       = forwardTransparentParams.depth,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 },
             });
         },
-        [stageCtx, sceneOverlayParams, overlayStage = deps.overlayStage](RGRenderContext& rgCtx) {
+        [stageCtx, forwardTransparentParams, overlayStage = deps.overlayStage](RGRenderContext& rgCtx) {
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             rgCtx.beginDeclaredRasterRendering();
 
             YA_PERF_SCOPE(perf::sample::deferredOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
-            overlayStage->executeOverlay(stageCtx, sceneOverlayParams.overlay);
+            overlayStage->executeOverlay(stageCtx, forwardTransparentParams.overlay);
 
             rgCtx.endRendering();
         });
 
-    DeferredViewportOverlayPassParams viewportOverlayParams{
-        .color      = graphResources.textures.overlayInput,
-        .depth      = graphResources.textures.gBufferDepth,
-        .renderArea = {.pos = {0, 0}, .extent = inputs.viewportExtent.toVec2()},
-        .layerCount = 1,
-        .recordViewportOverlays = inputs.recordViewportOverlays,
+    DeferredOverlayPassParams overlayParams{
+        .color          = graphResources.textures.overlayInput,
+        .depth          = graphResources.textures.gBufferDepth,
+        .renderArea     = {.pos = {0, 0}, .extent = inputs.viewportExtent.toVec2()},
+        .layerCount     = 1,
+        .overlaySnapshot = inputs.viewportOverlaySnapshot,
+        .frameCtx       = inputs.postContext ? *inputs.postContext : FrameContext{},
     };
 
     graphResources.passes.viewportOverlay = graph.addPass(
-        std::string(kTopologyPassViewportOverlay),
-        [&viewportOverlayParams](RGPassBuilder& passBuilder) {
+        std::string(kTopologyPassOverlay),
+        [&overlayParams](RGPassBuilder& passBuilder) {
             passBuilder.declareRaster({
-                .renderArea = viewportOverlayParams.renderArea,
-                .layerCount = viewportOverlayParams.layerCount,
+                .renderArea = overlayParams.renderArea,
+                .layerCount = overlayParams.layerCount,
                 .colors = {{
-                    .color       = viewportOverlayParams.color,
+                    .color       = overlayParams.color,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 }},
                 .depth = RGDepthAttachmentDesc{
-                    .depth       = viewportOverlayParams.depth,
+                    .depth       = overlayParams.depth,
                     .loadOp      = EAttachmentLoadOp::Load,
                     .storeOp     = EAttachmentStoreOp::Store,
                     .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
                 },
             });
         },
-        [viewportOverlayParams](RGRenderContext& rgCtx) {
+        [overlayParams](RGRenderContext& rgCtx) mutable {
             const auto rasterParams   = rgCtx.getRasterPassExecutionParams();
             const auto viewportExtent = rasterParams.getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
-
-            if (viewportOverlayParams.recordViewportOverlays) {
-                YA_PERF_SCOPE(perf::sample::renderViewportOverlay(), perf::metric::cpuTimeMs(), perf::domain::render());
-                viewportOverlayParams.recordViewportOverlays(&rgCtx.getCommandBuffer(), viewportExtent);
-            }
-
+            overlayParams.frameCtx.extent = viewportExtent;
+            recordRenderViewportOverlayPass(overlayParams.frameCtx,
+                                            overlayParams.overlaySnapshot,
+                                            &rgCtx.getCommandBuffer());
             rgCtx.endRendering();
         });
     const auto postprocessOutput = deps.postProcessStage->appendFinalizeGraphPasses(graph, PostProcessingStage::FinalizePassParams{

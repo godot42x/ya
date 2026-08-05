@@ -1162,12 +1162,6 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
         .extent     = {.width = vpW, .height = vpH},
     };
     _lastFrameInput = frame;
-    auto recordViewportOverlays = _lastFrameInput.recordViewportOverlays
-        ? [recordViewportOverlays = _lastFrameInput.recordViewportOverlays, frameCtx = _lastTickCtx](ICommandBuffer* overlayCmdBuf, Extent2D viewportExtent) {
-              recordViewportOverlays(overlayCmdBuf, viewportExtent, frameCtx);
-          }
-        : std::function<void(ICommandBuffer*, Extent2D)>{};
-
     RenderGraph graph;
     DeferredFrameGraphResources graphResources{};
     _frameGraphOrchestrator.build(
@@ -1195,7 +1189,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             .bUseSSAO                 = bUseSSAO,
             .bReverseViewportY        = _bReverseViewportY,
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(_render->getSwapchain()->getFormat()),
-            .recordViewportOverlays   = std::move(recordViewportOverlays),
+            .viewportOverlaySnapshot  = _lastFrameInput.viewportOverlaySnapshot,
         });
 
     for (uint32_t attachmentIndex = 0; attachmentIndex < graphResources.textures.gBufferColors.size(); ++attachmentIndex) {

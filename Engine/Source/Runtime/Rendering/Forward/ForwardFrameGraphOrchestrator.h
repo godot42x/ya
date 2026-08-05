@@ -43,7 +43,7 @@ struct ForwardFrameGraphOrchestrator
         FrameContext*                                    postContext         = nullptr;
         bool                                             bEnableShadow       = false;
         bool                                             bPostprocessOutputIsSRGB = false;
-        std::function<void(ICommandBuffer*, Extent2D)>   recordViewportOverlays{};
+        std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
     };
 
     void build(const BuildDependencies& deps, const BuildInputs& inputs) const;
