@@ -165,7 +165,7 @@ void RenderGraphResourceRegistry::releaseTextureBinding(std::shared_ptr<TextureE
     if (!entry) {
         return;
     }
-    if (!entry->persistentKey.has_value()) {
+    if (!entry->persistentKey.has_value() && !entry->pooledTransient) {
         retireSharedResource(entry->resource);
     }
     entry.reset();
@@ -191,6 +191,51 @@ bool RenderGraphResourceRegistry::canReuseTransientSlot(const OwnedBufferEntry& 
            entry.desc.size >= slot.desc.size &&
            entry.desc.alignment >= slot.desc.alignment &&
            hasRequestedBufferUsage(entry.desc.usage, slot.desc.usage);
+}
+
+bool RenderGraphResourceRegistry::canReuseTransientTexture(const TextureEntry& entry,
+                                                           const RGTextureDesc& desc)
+{
+    if (!entry.pooledTransient || !entry.resource || !entry.resource->isValid()) {
+        return false;
+    }
+
+    const auto& allocation = entry.allocationDesc;
+    return allocation.format == desc.format &&
+           allocation.extent.width == desc.extent.width &&
+           allocation.extent.height == desc.extent.height &&
+           allocation.extent.depth == desc.extent.depth &&
+           allocation.mipLevels == desc.mipLevels &&
+           allocation.arrayLayers == desc.arrayLayers &&
+           allocation.samples == desc.samples &&
+           allocation.flags == desc.flags &&
+           (allocation.usage & desc.usage) == desc.usage;
+}
+
+std::shared_ptr<RenderGraphResourceRegistry::TextureEntry> RenderGraphResourceRegistry::acquireTransientTexture(
+    const RGTextureDesc& desc,
+    std::unordered_set<TextureEntry*>& usedPoolEntries)
+{
+    for (const auto& entry : _transientTexturePool) {
+        if (!entry || usedPoolEntries.contains(entry.get()) || !canReuseTransientTexture(*entry, desc)) {
+            continue;
+        }
+        usedPoolEntries.insert(entry.get());
+        return entry;
+    }
+
+    auto entry = std::make_shared<TextureEntry>(TextureEntry{
+        .resource        = createRenderImage(_factory, makeRenderImageDesc(desc)),
+        .desc            = desc,
+        .allocationDesc  = desc,
+        .pooledTransient = true,
+    });
+    YA_CORE_ASSERT(entry->resource != nullptr && entry->resource->isValid(),
+                   "RenderGraph registry failed to create transient texture '{}'",
+                   desc.label);
+    _transientTexturePool.push_back(entry);
+    usedPoolEntries.insert(entry.get());
+    return entry;
 }
 
 std::shared_ptr<RenderGraphResourceRegistry::OwnedBufferEntry> RenderGraphResourceRegistry::acquireTransientSlot(
@@ -407,6 +452,9 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompile
     _transientPoolDiagnostics.lastMissCount = 0;
     pruneUnusedResources(graph);
 
+    std::unordered_set<TextureEntry*> usedTransientTextureEntries;
+    usedTransientTextureEntries.reserve(graph.getTextures().size());
+
     for (const auto& texture : graph.getTextures()) {
         if (texture.lifetime == ERGResourceLifetime::Persistent) {
             YA_CORE_ASSERT(texture.persistentKey.has_value(),
@@ -427,7 +475,9 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompile
                 }
                 persistentEntry->resource = createRenderImage(_factory, makeRenderImageDesc(texture.desc));
                 persistentEntry->desc = texture.desc;
+                persistentEntry->allocationDesc = texture.desc;
                 persistentEntry->imported.reset();
+                persistentEntry->pooledTransient = false;
             }
 
             if (auto existing = _textures.find(texture.handle); existing != _textures.end() &&
@@ -440,6 +490,9 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompile
 
         const auto existing = _textures.find(texture.handle);
         if (existing != _textures.end() && !needsTextureReplacement(*existing->second, texture)) {
+            if (texture.lifetime == ERGResourceLifetime::Transient && existing->second->pooledTransient) {
+                usedTransientTextureEntries.insert(existing->second.get());
+            }
             if (texture.lifetime == ERGResourceLifetime::Imported) {
                 if (existing->second->imported.has_value()) {
                     refreshRetainedResources(existing->second->imported->retainedResources,
@@ -464,17 +517,18 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompile
         if (texture.lifetime == ERGResourceLifetime::Imported) {
             YA_CORE_ASSERT(texture.imported.has_value(), "Imported render graph texture '{}' is missing import desc", texture.desc.label);
             _textures[texture.handle] = std::make_shared<TextureEntry>(TextureEntry{
-                .resource = createImportedTexture(*texture.imported),
-                .desc = texture.desc,
-                .imported = texture.imported,
+                .resource        = createImportedTexture(*texture.imported),
+                .desc            = texture.desc,
+                .allocationDesc  = texture.desc,
+                .imported        = texture.imported,
+                .pooledTransient = false,
             });
             continue;
         }
 
-        _textures[texture.handle] = std::make_shared<TextureEntry>(TextureEntry{
-            .resource = createRenderImage(_factory, makeRenderImageDesc(texture.desc)),
-            .desc = texture.desc,
-        });
+        auto transientEntry = acquireTransientTexture(texture.desc, usedTransientTextureEntries);
+        transientEntry->desc = texture.desc;
+        _textures[texture.handle] = std::move(transientEntry);
     }
 
     if (compiled != nullptr) {
@@ -593,6 +647,9 @@ void RenderGraphResourceRegistry::clear()
     for (auto& buffer : _transientBufferPool) {
         retireSharedResource(buffer->resource);
     }
+    for (auto& texture : _transientTexturePool) {
+        retireSharedResource(texture->resource);
+    }
     for (auto& [handle, texture] : _textures) {
         (void)handle;
         releaseTextureBinding(texture);
@@ -603,6 +660,7 @@ void RenderGraphResourceRegistry::clear()
     }
     _persistentTextures.clear();
     _persistentOwnedBuffers.clear();
+    _transientTexturePool.clear();
     _transientBufferPool.clear();
     _transientPoolDiagnostics = {};
     _textures.clear();
