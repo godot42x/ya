@@ -1,14 +1,15 @@
 #include "Editor/EditorModule.h"
 
-#include "Editor/EditorLayer.h"
-#include "Editor/Input/EditorInputNode.h"
-#include "Editor/EditorPlaySession.h"
 #include "Config/ConfigManager.h"
 #include "Core/Camera/FreeCameraController.h"
 #include "Core/Profiling/Profiling.h"
+#include "Editor/EditorLayer.h"
+#include "Editor/EditorPlaySession.h"
 #include "Editor/EditorProfilingSettings.h"
 #include "Editor/EditorRuntimeSettings.h"
+#include "Editor/Input/EditorInputNode.h"
 #include "Editor/Inspector/TypeRenderer.h"
+#include "Physics/PhysicsDebugDraw.h"
 #include "Render/2D/Render2D.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/RenderImage.h"
@@ -29,7 +30,7 @@ namespace ya
 namespace
 {
 
-EditorLayer* gEditorLayer = nullptr;
+EditorLayer* gEditorLayer          = nullptr;
 Scene*       gEditorAuthoringScene = nullptr;
 
 glm::vec3 resolveInitialEditorCameraPosition(const App& app)
@@ -105,7 +106,11 @@ class EditorViewportCompositor
         return _composedViewportImage;
     }
 
-    void compose(IRender& render, ICommandBuffer& commandBuffer, const RenderViewportSnapshot& snapshot, const EditorLayer& layer)
+    void compose(IRender&                      render,
+                 ICommandBuffer&               commandBuffer,
+                 const RenderViewportSnapshot& snapshot,
+                 const EditorLayer&            layer,
+                 const AppRenderFrameState&    renderFrame)
     {
         auto source = snapshot.viewportImageOwner;
         if (!source || !source->getImageShared() || !source->getImageView()) {
@@ -126,6 +131,18 @@ class EditorViewportCompositor
 
         commandBuffer.transitionImageLayoutAuto(source->getImage(), EImageLayout::ShaderReadOnlyOptimal);
         commandBuffer.transitionImageLayoutAuto(_composedViewportImage->getImage(), EImageLayout::ColorAttachmentOptimal);
+
+        // Attach the scene depth buffer when available so debug overlays
+        // (collision wireframes) can be depth-tested against the world.
+        const auto  depthOwner   = snapshot.viewportDepthOwner;
+        const bool  bAttachDepth = depthOwner && depthOwner->isValid() &&
+                                   depthOwner->getExtent() == _composedViewportImage->getExtent();
+        if (bAttachDepth) {
+            commandBuffer.retainResource(depthOwner->getImageShared());
+            commandBuffer.retainResource(depthOwner->getImageViewShared());
+            commandBuffer.retainResources(depthOwner->getRetainedResources());
+            commandBuffer.transitionImageLayoutAuto(depthOwner->getImage(), EImageLayout::DepthStencilAttachmentOptimal);
+        }
 
         const Extent2D extent = _composedViewportImage->getExtent();
         commandBuffer.beginRendering(RenderingInfo{
@@ -150,6 +167,16 @@ class EditorViewportCompositor
                         .finalLayout   = EImageLayout::ColorAttachmentOptimal,
                     },
                 },
+                .depth = bAttachDepth
+                             ? std::optional<RenderAttachment>{RenderAttachment{
+                                   .image         = depthOwner->getImage(),
+                                   .imageView     = depthOwner->getImageView(),
+                                   .loadOp        = EAttachmentLoadOp::Load,
+                                   .storeOp       = EAttachmentStoreOp::Store,
+                                   .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
+                                   .finalLayout   = EImageLayout::DepthStencilAttachmentOptimal,
+                               }}
+                             : std::nullopt,
             },
         });
 
@@ -158,10 +185,10 @@ class EditorViewportCompositor
             .windowWidth  = extent.width,
             .windowHeight = extent.height,
             .cam          = {
-                         .position       = layer.getCamera().getPosition(),
-                         .view           = layer.getCamera().getViewMatrix(),
-                         .projection     = layer.getCamera().getProjectionMatrix(),
-                         .viewProjection = layer.getCamera().getProjectionMatrix() * layer.getCamera().getViewMatrix(),
+                         .position       = renderFrame.cameraPos,
+                         .view           = renderFrame.view,
+                         .projection     = renderFrame.projection,
+                         .viewProjection = renderFrame.projection * renderFrame.view,
             },
         };
         Render2D::begin(render2dCtx);
@@ -189,11 +216,23 @@ class EditorViewportCompositor
                                text.color,
                                font.get());
         }
+        // Draw physics collision wireframes on top of the composed viewport,
+        // depth-tested against the scene depth attached above.
+        if (bAttachDepth) {
+            if (Scene* scene = layer.getViewportInteractionScene()) {
+                drawPhysicsCollisionDebug(*scene);
+            }
+        }
         Render2D::onRender();
         Render2D::end();
 
         commandBuffer.endRendering();
         commandBuffer.transitionImageLayoutAuto(_composedViewportImage->getImage(), EImageLayout::ShaderReadOnlyOptimal);
+        if (bAttachDepth) {
+            // Restore a sampled-friendly layout for the same-frame debug UI;
+            // the next world frame transitions it back as its own pass needs.
+            commandBuffer.transitionImageLayoutAuto(depthOwner->getImage(), EImageLayout::ShaderReadOnlyOptimal);
+        }
     }
 
   private:
@@ -241,11 +280,11 @@ class EditorViewportCompositor
 class EditorModule final : public IModule, public IEditorAutomationControl
 {
   private:
-    std::unique_ptr<EditorLayer> _layer;
-    EditorPlaySession            _playSession;
-    FreeCameraController         _cameraController;
-    EditorViewportCompositor     _viewportCompositor;
-    EditorInputNode               _inputNode;
+    std::unique_ptr<EditorLayer>   _layer;
+    EditorPlaySession              _playSession;
+    FreeCameraController           _cameraController;
+    EditorViewportCompositor       _viewportCompositor;
+    EditorInputNode                _inputNode;
     InputRouter::FNodeRegistration _inputNodeRegistration;
 
   public:
@@ -275,7 +314,7 @@ class EditorModule final : public IModule, public IEditorAutomationControl
     void onAttach(App& app) override
     {
         auto& renderServices = app.getRenderServices();
-        auto* renderRuntime = renderServices.getRenderRuntime();
+        auto* renderRuntime  = renderServices.getRenderRuntime();
         YA_CORE_ASSERT(renderRuntime, "Editor extension requires an initialized RenderRuntime");
 
         GuiSystem::get().init(renderServices.getRender(), nullptr);
@@ -288,7 +327,7 @@ class EditorModule final : public IModule, public IEditorAutomationControl
         _layer->onAttach();
         _inputNode.bind(app, *_layer);
         _inputNodeRegistration = app.getInputRouter().registerNode(_inputNode);
-        gEditorLayer = _layer.get();
+        gEditorLayer           = _layer.get();
     }
 
     void* queryInterface(FInterfaceId interfaceId) override
@@ -314,19 +353,19 @@ class EditorModule final : public IModule, public IEditorAutomationControl
     }
 
     bool focusEditorCameraOnWorldPoint(const glm::vec3& target,
-                                       float             distance,
-                                       float             heightOffset) override
+                                       float            distance,
+                                       float            heightOffset) override
     {
         if (!_layer) {
             return false;
         }
 
         const float safeDistance = std::max(distance, 0.2f);
-        glm::vec3 offset = glm::normalize(glm::vec3(1.0f, 0.35f, 1.0f));
-        glm::vec3 position = target + offset * safeDistance + glm::vec3(0.0f, heightOffset, 0.0f);
+        glm::vec3   offset       = glm::normalize(glm::vec3(1.0f, 0.35f, 1.0f));
+        glm::vec3   position     = target + offset * safeDistance + glm::vec3(0.0f, heightOffset, 0.0f);
 
-        glm::vec3 toTarget = glm::normalize(target - position);
-        float pitch = glm::degrees(std::asin(glm::clamp(toTarget.y, -1.0f, 1.0f)));
+        glm::vec3 toTarget  = glm::normalize(target - position);
+        float     pitch     = glm::degrees(std::asin(glm::clamp(toTarget.y, -1.0f, 1.0f)));
         glm::vec3 yawVector = toTarget;
         if constexpr (FMath::Vector::IsRightHanded) {
             yawVector.z = -yawVector.z;
@@ -443,8 +482,8 @@ class EditorModule final : public IModule, public IEditorAutomationControl
         }
 
         auto& renderServices = app.getRenderServices();
-        auto* renderRuntime = renderServices.getRenderRuntime();
-        auto* render        = renderServices.getRender();
+        auto* renderRuntime  = renderServices.getRenderRuntime();
+        auto* render         = renderServices.getRender();
         if (!renderRuntime || !render) {
             _layer->setViewportDisplayImage(nullptr);
             return;
@@ -452,7 +491,11 @@ class EditorModule final : public IModule, public IEditorAutomationControl
 
         const auto snapshot = renderRuntime->buildViewportSnapshot();
         _layer->setViewportContext(snapshot);
-        _viewportCompositor.compose(*render, commandBuffer, snapshot, *_layer);
+        _viewportCompositor.compose(*render,
+                                    commandBuffer,
+                                    snapshot,
+                                    *_layer,
+                                    app.getRenderServices().getRenderFrameState());
         _layer->setViewportDisplayImage(_viewportCompositor.getOutputImage());
     }
 
@@ -489,5 +532,3 @@ Scene* getEditorAuthoringScene()
 }
 
 } // namespace ya
-
-

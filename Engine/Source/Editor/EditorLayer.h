@@ -42,6 +42,8 @@ using EditorViewportDebugCatalog = RenderViewportDebugCatalog;
 
 struct EditorLayer
 {
+    friend class  EditorViewportCompositor;
+
   private:
     App*                 _app                = nullptr;
     uint64_t             _selectedEntityUUID = 0;
@@ -269,7 +271,6 @@ struct EditorLayer
 
   private:
     Scene* getEditableScene() const;
-    Scene* getViewportInteractionScene() const;
     void   syncEditorSettingsFromConfig();
     [[nodiscard]] bool hasProjectLoaded() const;
     void refreshProjectBrowser();
@@ -328,6 +329,8 @@ struct EditorLayer
     const std::vector<Entity*>& getSelections() const { return _selections; }
     Entity*                     getSelectedEntity() const { return _sceneHierarchyPanel.getSelectedEntity(); }
     uint64_t                    getSelectedEntityUUID() const { return _selectedEntityUUID; }
+    /// Active scene shown in the viewport (play scene during PIE, authoring scene otherwise).
+    Scene* getViewportInteractionScene() const;
     // void      setViewportImage(stdptr<IImageView> image) { _viewportImage = getOrCreateImGuiTextureID(image); }
 };
 
