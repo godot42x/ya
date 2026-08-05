@@ -35,6 +35,7 @@ namespace ya
 
 struct IImageView;
 struct Sampler;
+struct IWindowProvider;
 
 struct ENGINE_API ImGuiManager
 {
@@ -53,10 +54,10 @@ struct ENGINE_API ImGuiManager
     static ImGuiManager& get();
 
     void init(IRender* render, IRenderPass* renderPass);
-    void initVulkan(SDL_Window* window, IRender* render, IRenderPass* renderPass);
+    void initVulkan(IWindowProvider* window, IRender* render, IRenderPass* renderPass);
 
 #if IMGUI_SDL3_GPU
-    void initSDLGPU(SDL_Window* window, SDL_GPUDevice* device);
+    void initSDLGPU(IWindowProvider* window, SDL_GPUDevice* device);
 #endif
 
     void shutdown();

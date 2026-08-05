@@ -33,6 +33,7 @@ struct ICommandBuffer;
 struct LuaScriptingSystem;
 struct FProjectDescriptor;
 struct AppRenderState;
+class WindowManager;
 class ResourceResolveSystem;
 class AppLifecycle;
 class AppFrameLoop;
@@ -62,6 +63,7 @@ struct ENGINE_API App
     Deleter _deleter;
 
     SceneManager*                   _sceneManager = nullptr;
+    std::unique_ptr<WindowManager>  _windowManager;
     std::unique_ptr<AppRenderState> _renderState;
     AppRenderServices                            _renderServices;
     AppSceneServices                             _sceneServices;
@@ -157,6 +159,8 @@ struct ENGINE_API App
 
     [[nodiscard]] AppRenderServices&       getRenderServices() { return _renderServices; }
     [[nodiscard]] const AppRenderServices& getRenderServices() const { return _renderServices; }
+    [[nodiscard]] WindowManager*           getWindowManager() { return _windowManager.get(); }
+    [[nodiscard]] const WindowManager*     getWindowManager() const { return _windowManager.get(); }
     [[nodiscard]] AppSceneServices&        getSceneServices() { return _sceneServices; }
     [[nodiscard]] const AppSceneServices&  getSceneServices() const { return _sceneServices; }
     [[nodiscard]] AppAutomationControlService*       getAutomationControlService() { return _automationControlService.get(); }
@@ -226,4 +230,3 @@ struct ENGINE_API App
 };
 
 } // namespace ya
-

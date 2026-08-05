@@ -1,6 +1,7 @@
 #include "RenderRuntime.h"
 
 #include "Runtime/Application/App.h"
+#include "Runtime/Application/WindowManager.h"
 #include "Runtime/Rendering/Services/DebugRenderSystem.h"
 #include "Platform/Render/Vulkan/VulkanSwapChain.h"
 #include "Render/Core/RenderResourceFactory.h"
@@ -151,6 +152,10 @@ void RenderRuntime::initDiagnostics(const AppDesc& appDesc)
 
 void RenderRuntime::initRenderBackend(const AppDesc& appDesc)
 {
+    YA_CORE_ASSERT(_app != nullptr, "RenderRuntime requires App before initializing render backend");
+    auto* windowManager = _app->getWindowManager();
+    YA_CORE_ASSERT(windowManager != nullptr, "WindowManager must exist before initializing render backend");
+
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
         .swapchainCI = SwapchainCreateInfo{
@@ -166,10 +171,24 @@ void RenderRuntime::initRenderBackend(const AppDesc& appDesc)
         },
     };
 
+    if (!windowManager->getMainWindow()) {
+        renderCI.windowProvider = windowManager->createMainWindow(WindowCreateInfo{
+            .index      = 0,
+            .renderAPI  = currentRenderAPI,
+            .title      = appDesc.title,
+            .width      = static_cast<uint32_t>(appDesc.width),
+            .height     = static_cast<uint32_t>(appDesc.height),
+            .scale      = 1.0f,
+            .bResizable = true,
+        });
+    }
+    else {
+        renderCI.windowProvider = windowManager->getMainWindow();
+    }
+
     _render = IRender::create(renderCI);
     YA_CORE_ASSERT(_render, "Failed to create IRender instance");
     _render->init(renderCI);
-
 }
 
 void RenderRuntime::initResourceCaches()

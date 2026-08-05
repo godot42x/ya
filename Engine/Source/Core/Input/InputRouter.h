@@ -119,7 +119,7 @@ class ENGINE_API InputRouter
     };
 
     App*                    _app         = nullptr;
-    SDL_Window*             _window      = nullptr;
+    void*                   _window      = nullptr;
     IInputNode*             _defaultNode = nullptr;
     std::vector<FNodeEntry> _nodeStack;
     FPointerCaptureState    _pointerCapture;
@@ -129,8 +129,8 @@ class ENGINE_API InputRouter
     InputRouter() = default;
 
     void setApp(App& app) { _app = &app; }
-    void setWindow(SDL_Window* window) { _window = window; }
-    [[nodiscard]] SDL_Window* getWindow() const { return _window; }
+    void setWindow(void* window) { _window = window; }
+    [[nodiscard]] void* getWindow() const { return _window; }
 
     void setDefaultNode(IInputNode& node);
     [[nodiscard]] FNodeRegistration registerNode(IInputNode& node);

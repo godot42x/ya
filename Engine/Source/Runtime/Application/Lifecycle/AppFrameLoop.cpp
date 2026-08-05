@@ -3,15 +3,15 @@
 #include "Runtime/Application/App.h"
 #include "Runtime/Application/AppRenderFrameState.h"
 #include "Runtime/Application/AppRenderState.h"
-#include "Runtime/Application/Lifecycle/AppAutomation.h"
 #include "Runtime/Application/Automation/AppAutomationControlService.h"
-#include "Runtime/Rendering/Services/RenderDiagnosticsService.h"
+#include "Runtime/Application/Lifecycle/AppAutomation.h"
 #include "Runtime/Application/Utility/FPSCtrl.h"
+#include "Runtime/Rendering/Services/RenderDiagnosticsService.h"
 
 #include "Core/Async/TaskQueue.h"
+#include "Core/Manager/Facade.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
-#include "Core/Manager/Facade.h"
 #include "Core/System/FileWatcher.h"
 
 #include "ECS/Component/2D/BillboardComponent.h"
@@ -20,6 +20,7 @@
 #include "ECS/System/LuaScriptingSystem.h"
 
 #include "Platform/Render/Vulkan//VulkanRender.h"
+#include "WindowProvider.h"
 
 #include "Render/2D/Render2D.h"
 #include "Render/Material/Material.h"
@@ -192,7 +193,7 @@ int AppFrameLoop::iterate(App& app, float dt)
     ++App::_frameIndex;
 
     auto& renderServices = app.getRenderServices();
-    auto* renderRuntime = renderServices.getRenderRuntime();
+    auto* renderRuntime  = renderServices.getRenderRuntime();
     if (auto* automationControl = app.getAutomationControlService()) {
         automationControl->onFrameCompleted(app,
                                             renderServices.getRender(),
@@ -214,21 +215,26 @@ int AppFrameLoop::iterate(App& app, float dt)
                                             .viewportImage              = renderRuntime ? renderRuntime->getActiveViewportImageShared() : nullptr,
                                             .presentationImage          = renderRuntime ? renderRuntime->getPresentationImageShared() : nullptr,
                                             .requestRenderDocCapture    = diagnosticsService
-                                                ? [diagnosticsService]() { return diagnosticsService->requestAutomationRenderDocCapture(); }
-                                                : std::function<bool()>{},
+                                                                            ? [diagnosticsService]()
+                                                                           { return diagnosticsService->requestAutomationRenderDocCapture(); }
+                                                                            : std::function<bool()>{},
                                             .isRenderDocCapturePending  = diagnosticsService
-                                                ? [diagnosticsService]() { return diagnosticsService->isAutomationRenderDocCapturePending(); }
-                                                : std::function<bool()>{},
+                                                                            ? [diagnosticsService]()
+                                                                             { return diagnosticsService->isAutomationRenderDocCapturePending(); }
+                                                                            : std::function<bool()>{},
                                             .isRenderDocCaptureTerminal = diagnosticsService
-                                                ? [diagnosticsService]() { return diagnosticsService->isAutomationRenderDocCaptureTerminal(); }
-                                                : std::function<bool()>{},
+                                                                            ? [diagnosticsService]()
+                                                                              { return diagnosticsService->isAutomationRenderDocCaptureTerminal(); }
+                                                                            : std::function<bool()>{},
                                             .getRenderDocCapturePath    = diagnosticsService
-                                                ? [diagnosticsService]() -> const std::string& { return diagnosticsService->getAutomationRenderDocCapturePath(); }
-                                                : std::function<const std::string&()>{},
+                                            ? [diagnosticsService]() -> const std::string&
+                                            { return diagnosticsService->getAutomationRenderDocCapturePath(); }
+                                            : std::function<const std::string&()>{},
                                             .getRenderDocPassSummaryPath = diagnosticsService
-                                                ? [diagnosticsService]() -> const std::string& { return diagnosticsService->getAutomationRenderDocPassSummaryPath(); }
-                                                : std::function<const std::string&()>{},
-                                            .frameIndex                 = App::_frameIndex,
+                                            ? [diagnosticsService]() -> const std::string&
+                                            { return diagnosticsService->getAutomationRenderDocPassSummaryPath(); }
+                                            : std::function<const std::string&()>{},
+                                            .frameIndex = App::_frameIndex,
                                         });
     }
 
@@ -246,14 +252,16 @@ void AppFrameLoop::tickLogic(App& app, float dt)
         YA_PROFILE_SCOPE("Logic/TimerManager");
         Facade.timerManager.onUpdate(dt);
     }
-    if (auto* automationControl = app.getAutomationControlService()) {
-        automationControl->update(app);
+    {
+        YA_PROFILE_SCOPE("Logic/AppAutomationControlService");
+        if (auto* automationControl = app.getAutomationControlService()) {
+            automationControl->update(app);
+        }
     }
     {
         YA_PROFILE_SCOPE("Logic/ViewportSync");
         syncViewportState(app);
     }
-
     {
         YA_PROFILE_SCOPE("Logic/Systems");
         for (auto& sys : app._systems) {
@@ -304,10 +312,11 @@ void AppFrameLoop::tickLogic(App& app, float dt)
         return;
     }
     auto        vkRender       = render->as<VulkanRender>();
-    auto        windowProvider = vkRender->_windowProvider;
+    auto        windowProvider = vkRender->getWindowProvider();
     std::string title          = std::format("{}({})", app._ci.title, vkRender->_selectedDeviceInfo.deviceName);
-    SDL_SetWindowTitle(windowProvider->getNativeWindowPtr<SDL_Window>(), title.c_str());
-
+    if (windowProvider) {
+        windowProvider->setTitle(title);
+    }
 }
 
 void AppFrameLoop::syncViewportState(App& app)
@@ -380,11 +389,11 @@ void AppFrameLoop::prepareRenderFrameState(App& app, float dt)
     frameState.viewportRect             = viewportRect;
     frameState.viewportFrameBufferScale = renderRuntime->getViewportFrameBufferScale();
     if (bUseRuntimeCamera) {
-        auto cc                        = runtimeCamera->getComponent<CameraComponent>();
-        auto tc                        = runtimeCamera->getComponent<TransformComponent>();
-        frameState.view       = cc->getFreeView();
-        frameState.projection = cc->getProjection();
-        frameState.cameraPos  = tc->getWorldPosition();
+        auto cc                      = runtimeCamera->getComponent<CameraComponent>();
+        auto tc                      = runtimeCamera->getComponent<TransformComponent>();
+        frameState.view              = cc->getFreeView();
+        frameState.projection        = cc->getProjection();
+        frameState.cameraPos         = tc->getWorldPosition();
         app._renderState->frameState = frameState;
         return;
     }
@@ -416,11 +425,11 @@ std::vector<RenderOverlaySprite2D> AppFrameLoop::buildScreenOverlaySprites(const
 
     sprites.reserve(app.clicked.size());
     for (size_t idx = 0; idx < app.clicked.size(); ++idx) {
-        const auto& screenPos = app.clicked[idx];
-        auto textureHandle = idx % 2 == 0
-                               ? AssetManager::get()->getTextureByName("uv1")
-                               : AssetManager::get()->getTextureByName("face");
-        auto* texture = textureHandle.get();
+        const auto& screenPos     = app.clicked[idx];
+        auto        textureHandle = idx % 2 == 0
+                                      ? AssetManager::get()->getTextureByName("uv1")
+                                      : AssetManager::get()->getTextureByName("face");
+        auto*       texture       = textureHandle.get();
         YA_CORE_ASSERT(texture, "Texture not found");
 
         RenderOverlaySprite2D sprite;
@@ -513,7 +522,8 @@ void AppFrameLoop::tickRender(App& app, float dt)
                     bAppended = automationControl->appendPresentationCapture(app.getFrameIndex(),
                                                                              graph,
                                                                              presentationOutput,
-                                                                             presentationExtent) || bAppended;
+                                                                             presentationExtent) ||
+                                bAppended;
                 }
                 return bAppended;
             },

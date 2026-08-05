@@ -1,6 +1,7 @@
 #include "Runtime/Application/App.h"
 #include "Runtime/Application/AppRenderState.h"
 #include "Runtime/Application/Automation/AppAutomationControlService.h"
+#include "Runtime/Application/WindowManager.h"
 
 #include "Core/Module/ProjectDescriptor.h"
 #include "Core/Profiling/Profiling.h"
@@ -242,4 +243,3 @@ bool App::openProject(const FProjectDescriptor& descriptor)
 }
 
 } // namespace ya
-

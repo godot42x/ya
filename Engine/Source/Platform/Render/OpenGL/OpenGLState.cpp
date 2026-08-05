@@ -43,7 +43,7 @@ void OpenGLState::init(const ya::RenderCreateInfo &renderCI)
         .width     = renderCI.swapchainCI.width,
         .height    = renderCI.swapchainCI.height,
     });
-    m_Window = _window->getNativeWindowPtr<SDL_Window>();
+    m_Window = static_cast<SDL_Window *>(_window->getNativeWindowHandle());
 
     // EFormat::T      imageFormat = EFormat::R8G8B8A8_UNORM; // TODO: rename to surfaceFormat
     // EColorSpace::T  colorSpace  = EColorSpace::SRGB_NONLINEAR;
@@ -168,7 +168,7 @@ void OpenGLState::makeCurrent()
 {
 #if USE_SDL
     if (_window && m_GLContext) {
-        SDL_GL_MakeCurrent(_window->getNativeWindowPtr<SDL_Window>(), m_GLContext);
+        SDL_GL_MakeCurrent(static_cast<SDL_Window *>(_window->getNativeWindowHandle()), m_GLContext);
     }
 #elif USE_GLFW
     if (m_Window) {

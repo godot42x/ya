@@ -239,7 +239,8 @@ void ImGuiManager::init(IRender* render, IRenderPass* renderPass)
 
     switch (api) {
     case ERenderAPI::Vulkan: {
-        SDL_Window* window = render->getNativeWindow<SDL_Window*>();
+        auto* window = render->getWindowProvider();
+        YA_CORE_ASSERT(window, "Render must provide a window for ImGui Vulkan backend");
         initVulkan(window, render, renderPass);
     } break;
 

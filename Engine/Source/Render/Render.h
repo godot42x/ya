@@ -12,6 +12,7 @@ struct ISwapchain;
 struct IDescriptorSetHelper;
 struct IRenderResourceFactory;
 struct RenderTargetCreateInfo;
+struct IWindowProvider;
 
 
 enum class ERenderObject : uint32_t
@@ -144,6 +145,8 @@ struct IRender : public plat_base<IRender>
      * @brief Get the swapchain interface
      */
     virtual ISwapchain* getSwapchain() = 0;
+
+    virtual IWindowProvider* getWindowProvider() const { return nullptr; }
 
     /**
      * @brief Get the descriptor set helper for updating descriptor sets

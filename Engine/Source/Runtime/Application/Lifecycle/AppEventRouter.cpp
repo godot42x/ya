@@ -22,29 +22,46 @@ int AppEventRouter::onEvent(App& app, const Event& event)
     YA_PROFILE_FUNCTION()
     YA_PERF_SCOPE(perf::sample::appEventRoute(), perf::metric::cpuTimeMs(), perf::domain::game());
 
+    const auto* windowManager = app.getWindowManager();
+    const uint32_t mainWindowID = windowManager ? windowManager->getMainWindowID() : 0;
+
+    auto isMainWindowEvent = [&](const WindowEvent& windowEvent)
+    {
+        return mainWindowID == 0 || windowEvent.getWindowID() == mainWindowID;
+    };
+
     EEvent::T ty       = event.getEventType();
     switch (ty) {
     case EEvent::MouseMoved:
         onMouseMoved(app, static_cast<const MouseMoveEvent&>(event));
         break;
     case EEvent::WindowResize:
-        onWindowResized(app, static_cast<const WindowResizeEvent&>(event));
+        if (isMainWindowEvent(static_cast<const WindowResizeEvent&>(event))) {
+            onWindowResized(app, static_cast<const WindowResizeEvent&>(event));
+        }
         break;
     case EEvent::None:
         break;
     case EEvent::WindowClose:
-        app.requestQuit();
+        if (isMainWindowEvent(static_cast<const WindowCloseEvent&>(event))) {
+            app.requestQuit();
+        }
         break;
     case EEvent::WindowRestore:
-        app._bMinimized = false;
+        if (isMainWindowEvent(static_cast<const WindowRestoreEvent&>(event))) {
+            app._bMinimized = false;
+        }
         break;
     case EEvent::WindowMinimize:
-        app._bMinimized = true;
+        if (isMainWindowEvent(static_cast<const WindowMinimizeEvent&>(event))) {
+            app._bMinimized = true;
+        }
         break;
     case EEvent::WindowFocus:
     case EEvent::WindowFocusLost:
     {
-        if (ty == EEvent::WindowFocusLost) {
+        const auto& windowEvent = static_cast<const WindowEvent&>(event);
+        if (isMainWindowEvent(windowEvent) && ty == EEvent::WindowFocusLost) {
             app.inputRouter.cancelInput(EInputCancelReason::WindowFocusLost);
         }
     } break;
@@ -83,6 +100,11 @@ int AppEventRouter::onEvent(App& app, const Event& event)
 
 bool AppEventRouter::onWindowResized(App& app, const WindowResizeEvent& event)
 {
+    const auto* windowManager = app.getWindowManager();
+    if (windowManager && windowManager->getMainWindowID() != 0 && event.getWindowID() != windowManager->getMainWindowID()) {
+        return false;
+    }
+
     auto  w           = event.GetWidth();
     auto  h           = event.GetHeight();
     float aspectRatio = h > 0 ? static_cast<float>(w) / static_cast<float>(h) : 1.f;

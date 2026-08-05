@@ -18,7 +18,7 @@ constexpr uint32_t IMGUI_DESCRIPTOR_POOL_SIZE = 512;
 
 } // namespace
 
-void ImGuiManager::initVulkan(SDL_Window* window, IRender* render, IRenderPass* renderPass)
+void ImGuiManager::initVulkan(IWindowProvider* window, IRender* render, IRenderPass* renderPass)
 {
     YA_CORE_ASSERT(!_initialized, "ImGuiManager already initialized");
 
@@ -78,7 +78,7 @@ void ImGuiManager::initVulkan(SDL_Window* window, IRender* render, IRenderPass* 
         .CustomShaderFragCreateInfo = {},
     };
 
-    ImGui_ImplSDL3_InitForVulkan(window);
+    ImGui_ImplSDL3_InitForVulkan(static_cast<SDL_Window*>(window->getNativeWindowHandle()));
     ImGui_ImplVulkan_Init(&initInfo);
 
     _initialized = true;
@@ -86,15 +86,16 @@ void ImGuiManager::initVulkan(SDL_Window* window, IRender* render, IRenderPass* 
 }
 
 #if IMGUI_SDL3_GPU
-void ImGuiManager::initSDLGPU(SDL_Window* window, SDL_GPUDevice* device)
+void ImGuiManager::initSDLGPU(IWindowProvider* window, SDL_GPUDevice* device)
 {
     YA_CORE_ASSERT(!_initialized, "ImGuiManager already initialized");
 
     initImGuiCore();
 
-    ImGui_ImplSDL3_InitForSDLGPU(window);
-    SDL_WaitForGPUSwapchain(device, window);
-    auto swapChainFormat = SDL_GetGPUSwapchainTextureFormat(device, window);
+    auto* nativeWindow = static_cast<SDL_Window*>(window->getNativeWindowHandle());
+    ImGui_ImplSDL3_InitForSDLGPU(nativeWindow);
+    SDL_WaitForGPUSwapchain(device, nativeWindow);
+    auto swapChainFormat = SDL_GetGPUSwapchainTextureFormat(device, nativeWindow);
     YA_CORE_DEBUG("Swapchain format: {}, device: {}, window: {}",
                   static_cast<int>(swapChainFormat),
                   (uintptr_t)device,

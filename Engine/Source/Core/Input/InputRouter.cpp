@@ -164,19 +164,20 @@ void InputRouter::applyPointerCapture(const FPointerCaptureRequest& request)
     const bool bWillCapture = nextState.isCaptured();
 
     if (_window) {
+        auto* window = static_cast<SDL_Window*>(_window);
         if (nextState.confine) {
-            if (!SDL_SetWindowMouseRect(_window, &nextState.confinement)) {
+            if (!SDL_SetWindowMouseRect(window, &nextState.confinement)) {
                 YA_CORE_WARN("InputRouter: failed to confine mouse to rect: {}", SDL_GetError());
             }
         }
         else if (_pointerCapture.confine) {
-            if (!SDL_SetWindowMouseRect(_window, nullptr)) {
+            if (!SDL_SetWindowMouseRect(window, nullptr)) {
                 YA_CORE_WARN("InputRouter: failed to clear mouse confinement: {}", SDL_GetError());
             }
         }
 
         if (_pointerCapture.relative != nextState.relative) {
-            if (!SDL_SetWindowRelativeMouseMode(_window, nextState.relative)) {
+            if (!SDL_SetWindowRelativeMouseMode(window, nextState.relative)) {
                 YA_CORE_WARN("InputRouter: failed to set relative mouse mode to {}: {}",
                              nextState.relative,
                              SDL_GetError());
@@ -184,7 +185,7 @@ void InputRouter::applyPointerCapture(const FPointerCaptureRequest& request)
         }
 
         if (bWasCaptured != bWillCapture) {
-            if (!SDL_SetWindowMouseGrab(_window, bWillCapture)) {
+            if (!SDL_SetWindowMouseGrab(window, bWillCapture)) {
                 YA_CORE_WARN("InputRouter: failed to set mouse grab to {}: {}", bWillCapture, SDL_GetError());
             }
         }

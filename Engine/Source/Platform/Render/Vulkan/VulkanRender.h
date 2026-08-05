@@ -165,7 +165,8 @@ struct VulkanRender : public IRender
 
 
   public:
-    IWindowProvider* _windowProvider = nullptr;
+    IWindowProvider*                     _windowProvider = nullptr;
+    std::unique_ptr<IWindowProvider>     _ownedWindowProvider = nullptr;
 
     Delegate<bool(VkInstance, VkSurfaceKHR* inSurface)> onCreateSurface;
     Delegate<void(VkInstance, VkSurfaceKHR* inSurface)> onReleaseSurface;
@@ -290,7 +291,7 @@ struct VulkanRender : public IRender
     bool initInternal(const RenderCreateInfo& ci)
     {
         initWindow(ci);
-        nativeWindow = _windowProvider->getNativeWindowPtr<SDL_Window>();
+        nativeWindow = _windowProvider ? _windowProvider->getNativeWindowHandle() : nullptr;
 
         createInstance();
 
@@ -384,7 +385,7 @@ struct VulkanRender : public IRender
   public:
 
     [[nodiscard]] uint32_t         getApiVersion() const { return apiVersion; }
-    [[nodiscard]] IWindowProvider* getWindowProvider() const { return _windowProvider; }
+    [[nodiscard]] IWindowProvider* getWindowProvider() const override { return _windowProvider; }
     [[nodiscard]] VkInstance       getInstance() const { return _instance; }
     [[nodiscard]] VkSurfaceKHR     getSurface() const { return _surface; }
     [[nodiscard]] VkDevice         getDevice() const { return m_LogicalDevice; }

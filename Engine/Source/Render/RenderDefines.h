@@ -17,6 +17,8 @@
 namespace ya
 {
 
+struct IWindowProvider;
+
 // using glsl_types::Common::Limits::MAX_POINT_LIGHTS;
 using slang_types::Common::Limits::MAX_BONE_COUNT;
 using slang_types::Common::Limits::MAX_BONE_WEIGHT_PER_VERTEX;
@@ -1382,6 +1384,7 @@ struct RenderCreateInfo
 {
     ERenderAPI::T       renderAPI = ERenderAPI::Vulkan;
     SwapchainCreateInfo swapchainCI;
+    IWindowProvider*    windowProvider = nullptr;
 };
 
 

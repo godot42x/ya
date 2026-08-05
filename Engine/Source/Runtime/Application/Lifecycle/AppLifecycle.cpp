@@ -33,6 +33,8 @@
 #include "Runtime/Rendering/Systems/Animation/AnimationSystem.h"
 
 #include "Scene/SceneManager.h"
+#include "WindowProvider.h"
+#include "Runtime/Application/WindowManager.h"
 
 #include <array>
 #include <csignal>
@@ -288,6 +290,9 @@ void AppLifecycle::init(App& app, AppDesc ci)
         }
     }
 
+    app._windowManager = std::make_unique<WindowManager>();
+    YA_CORE_ASSERT(app._windowManager->init(), "Failed to initialize WindowManager");
+
     app._renderState->runtime = std::make_unique<RenderRuntime>();
     app._renderState->runtime->init(RenderRuntime::InitDesc{
         .app     = &app,
@@ -301,7 +306,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
         render->getWindowSize(winW, winH);
         app._windowSize.x = static_cast<float>(winW);
         app._windowSize.y = static_cast<float>(winH);
-        app.inputRouter.setWindow(render->getNativeWindow<SDL_Window*>());
+        app.inputRouter.setWindow(render->getWindowProvider() ? render->getWindowProvider()->getNativeWindowHandle() : nullptr);
     }
 
     app._sceneManager = new SceneManager();
@@ -479,6 +484,10 @@ void AppLifecycle::quit(App& app)
     if (app._renderState->runtime) {
         app._renderState->runtime->shutdown(/*bRenderAlreadyIdle=*/true);
         app._renderState->runtime.reset();
+    }
+    if (app._windowManager) {
+        app._windowManager->shutdown();
+        app._windowManager.reset();
     }
 
     MaterialFactory::get()->destroy();
@@ -662,4 +671,3 @@ void AppLifecycle::stopSimulation(App& app)
 }
 
 } // namespace ya
-
