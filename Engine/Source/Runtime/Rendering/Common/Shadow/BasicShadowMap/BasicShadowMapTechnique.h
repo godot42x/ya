@@ -8,7 +8,6 @@
 #include "Runtime/Rendering/Common/Shadow/ShadowTypes.h"
 
 #include "Render/Core/Image.h"
-#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Shadow/IShadowTechnique.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
@@ -31,7 +30,6 @@ class BasicShadowMapTechnique : public IShadowTechnique
     void destroy() override;
     void applySettings(const ShadowSettings& settings) override;
     void prepare(uint32_t flightIndex, const RenderFrameData& frameData) override;
-    void execute(ICommandBuffer* cmdBuf, uint32_t flightIndex, const RenderFrameData& frameData) override;
     [[nodiscard]] DirectionalShadowPass& getDirectionalPass() { return _directionalPass; }
     [[nodiscard]] PointShadowPass&       getPointPass() { return _pointPass; }
     [[nodiscard]] const DirectionalShadowPass& getDirectionalPass() const { return _directionalPass; }
@@ -57,8 +55,6 @@ class BasicShadowMapTechnique : public IShadowTechnique
 
     ShadowSettings _settings;
     uint32_t       _lastPreparedPointLightCount = 0;
-    std::unique_ptr<RenderGraphExecutor> _standaloneGraphExecutor;
-
     ShadowFrameResources _frameResources;
     DirectionalShadowPass _directionalPass;
     PointShadowPass       _pointPass;

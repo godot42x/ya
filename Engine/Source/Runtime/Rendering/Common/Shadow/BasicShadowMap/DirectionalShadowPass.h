@@ -20,7 +20,6 @@ struct ICommandBuffer;
 struct RenderFrameData;
 struct RenderShadingDrawBuckets;
 struct RenderDrawItem;
-class RenderGraphExecutor;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DirectionalShadowPass
@@ -35,13 +34,11 @@ class DirectionalShadowPass
 
     void init(IRender* render,
               Extent2D shadowExtent,
-              ShadowFrameResources& frameResources,
-              RenderGraphExecutor* standaloneGraphExecutor);
+              ShadowFrameResources& frameResources);
     void destroy();
 
     void prepare(const BasicShadowFramePayload& payload);
 
-    void execute(ICommandBuffer* cmdBuf, const BasicShadowFramePayload& payload);
     [[nodiscard]] std::optional<RGPassHandle> appendGraphPasses(
         RenderGraph& graph,
         const BasicShadowFramePayload& payload,
@@ -80,8 +77,6 @@ class DirectionalShadowPass
 
     stdptr<IImage> _depthImage;
     std::array<stdptr<IImageView>, MAX_DIRECTIONAL_CASCADES> _depthViews{};
-    RenderGraphExecutor* _standaloneGraphExecutor = nullptr;
-
 };
 
 } // namespace ya

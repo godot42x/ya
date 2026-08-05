@@ -11,7 +11,6 @@ namespace ya
 {
 
 struct IRender;
-struct ICommandBuffer;
 struct RenderFrameData;
 struct IImage;
 
@@ -46,9 +45,6 @@ struct IShadowTechnique
 
     /// Per-frame data upload (UBOs, instance buffers, frustum data).
     virtual void prepare(uint32_t flightIndex, const RenderFrameData& frameData) = 0;
-
-    /// Record GPU commands (compute dispatch, render passes).
-    virtual void execute(ICommandBuffer* cmdBuf, uint32_t flightIndex, const RenderFrameData& frameData) = 0;
 
 };
 

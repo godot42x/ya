@@ -262,7 +262,6 @@ void ForwardRenderPipeline::initPostProcessResources(const InitDesc& desc)
         .width       = static_cast<uint32_t>(desc.windowW),
         .height      = static_cast<uint32_t>(desc.windowH),
     });
-    _postProcessStage.setGraphExecutor(_graphExecutor.get());
     _deleter.push("PostProcessStage", [this](void*)
                   { _postProcessStage.shutdown(); });
 }
@@ -704,7 +703,6 @@ void ForwardRenderPipeline::shutdown()
         _frameResources->destroy();
         _frameResources.reset();
     }
-    _postProcessStage.setGraphExecutor(nullptr);
     _graphExecutor.reset();
     _pendingViewportExtent = {};
     _pendingResourceRefreshMask = 0;
@@ -730,6 +728,7 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
     }
 
     RenderGraph graph;
+    auto viewportPassContext = _viewportStage->buildPassContext(stageCtx);
     _frameGraphOrchestrator.build(
         ForwardFrameGraphOrchestrator::BuildDependencies{
             .viewportStage    = _viewportStage.get(),
@@ -744,6 +743,7 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
             .viewportRTSpec           = &_viewportRTSpec,
             .viewportResources        = &_viewportResources,
             .directionGizmos          = std::move(directionGizmos),
+            .viewportPassContext      = &viewportPassContext,
             .postContext              = &_lastTickCtx,
             .bEnableShadow            = _shadowStage && currentShadowSettings().isEnabled(),
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(_render->getSwapchain()->getFormat()),

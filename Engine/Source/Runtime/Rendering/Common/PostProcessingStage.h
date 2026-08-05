@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Render/Core/RenderGraphExecutor.h"
 #include "Render/Core/RenderImage.h"
 #include "Render/Core/Texture.h"
 #include "Render/Pipelines/BasicPostprocessing.h"
@@ -43,7 +42,6 @@ struct PostProcessingStage
     PostProcessingState         _state              = {};
     stdptr<BloomPostprocessing> _bloomProcessor     = nullptr;
     stdptr<BasicPostprocessing> _postProcessor      = nullptr;
-    RenderGraphExecutor*                 _graphExecutor      = nullptr;
     stdptr<RenderImage>         _preparedOutputImage = nullptr;
 
     void     init(const InitDesc& desc);
@@ -53,7 +51,6 @@ struct PostProcessingStage
     void     setBloomEnabled(bool enabled) { _state.bEnableBloom = enabled; }
     void     setToneMappingEnabled(bool enabled) { _state.bEnableToneMapping = enabled; }
     void     setToneMappingCurve(PostProcessingState::EToneMappingCurve curve) { _state.toneMappingCurve = curve; }
-    void     setGraphExecutor(RenderGraphExecutor* executor) { _graphExecutor = executor; }
     RGTextureHandle appendBloomGraphPasses(RenderGraph&   graph,
                                            RGTextureHandle input,
                                            Extent2D        inputExtent,
@@ -73,15 +70,6 @@ struct PostProcessingStage
                                       FrameContext*   ctx);
     void     capturePreparedResources(const RenderGraphExecutionResult& result);
     void     clearPreparedResources();
-    RenderImage* execute(ICommandBuffer* cmdBuf,
-                         Texture*        inputTexture,
-                         glm::vec2       viewportExtent,
-                         FrameContext*   ctx);
-    RenderImage* execute(ICommandBuffer* cmdBuf,
-                         RenderImage*    inputImage,
-                         glm::vec2       viewportExtent,
-                         FrameContext*   ctx);
-
     [[nodiscard]] bool                       isEnabled() const { return bEnabled; }
     [[nodiscard]] stdptr<RenderImage>        getBloomExtractImageShared() const { return _bloomProcessor ? _bloomProcessor->getExtractImageShared() : nullptr; }
     [[nodiscard]] stdptr<RenderImage>        getBloomBlurImageShared() const { return _bloomProcessor ? _bloomProcessor->getBlurImageShared() : nullptr; }

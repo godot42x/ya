@@ -142,71 +142,76 @@ void ForwardViewportStage::execute(const RenderStageContext& ctx)
 }
 
 void ForwardViewportStage::executeSkybox(const RenderStageContext& ctx,
-                                         const ForwardFrameResourceSet::Binding& binding)
+                                         const ForwardFrameResourceSet::Binding& binding,
+                                         const PassContext* snapshot)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    auto passCtx = buildPassContext(ctx);
+    auto passCtx = snapshot ? *snapshot : buildPassContext(ctx);
     passCtx.skyboxFrameDescriptorSet = binding.skyboxFrameDescriptorSet;
     executePass(EPass::Skybox, passCtx);
 }
 
 void ForwardViewportStage::executePBR(const RenderStageContext& ctx,
-                                      const ForwardFrameResourceSet::Binding& binding)
+                                      const ForwardFrameResourceSet::Binding& binding,
+                                      const PassContext* snapshot)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    auto passCtx = buildPassContext(ctx);
+    auto passCtx = snapshot ? *snapshot : buildPassContext(ctx);
     passCtx.skinningDescriptorSet   = binding.skinningDescriptorSet;
     passCtx.pbrFrameDescriptorSet   = binding.pbrFrameDescriptorSet;
     executePass(EPass::PBR, passCtx);
 }
 
 void ForwardViewportStage::executePhong(const RenderStageContext& ctx,
-                                        const ForwardFrameResourceSet::Binding& binding)
+                                        const ForwardFrameResourceSet::Binding& binding,
+                                        const PassContext* snapshot)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    auto passCtx = buildPassContext(ctx);
+    auto passCtx = snapshot ? *snapshot : buildPassContext(ctx);
     passCtx.skinningDescriptorSet    = binding.skinningDescriptorSet;
     passCtx.phongFrameDescriptorSet  = binding.phongFrameDescriptorSet;
     executePass(EPass::Phong, passCtx);
 }
 
 void ForwardViewportStage::executeUnlit(const RenderStageContext& ctx,
-                                        const ForwardFrameResourceSet::Binding& binding)
+                                        const ForwardFrameResourceSet::Binding& binding,
+                                        const PassContext* snapshot)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    auto passCtx = buildPassContext(ctx);
+    auto passCtx = snapshot ? *snapshot : buildPassContext(ctx);
     passCtx.skinningDescriptorSet   = binding.skinningDescriptorSet;
     passCtx.unlitFrameDescriptorSet = binding.unlitFrameDescriptorSet;
     executePass(EPass::Unlit, passCtx);
 }
 
-void ForwardViewportStage::executeSimple(const RenderStageContext& ctx)
+void ForwardViewportStage::executeSimple(const RenderStageContext& ctx, const PassContext* snapshot)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    auto passCtx = buildPassContext(ctx);
+    auto passCtx = snapshot ? *snapshot : buildPassContext(ctx);
     executePass(EPass::Simple, passCtx);
 }
 
 void ForwardViewportStage::executeDirection(const RenderStageContext& ctx,
-                                            std::vector<ForwardDirectionGizmoInput> directionGizmos)
+                                            std::vector<ForwardDirectionGizmoInput> directionGizmos,
+                                            const PassContext* snapshot)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    auto passCtx = buildPassContext(ctx);
+    auto passCtx = snapshot ? *snapshot : buildPassContext(ctx);
     passCtx.directionGizmos = std::move(directionGizmos);
     executePass(EPass::DirectionOverlay, passCtx);
 }
 
-void ForwardViewportStage::executeDebug(const RenderStageContext& ctx)
+void ForwardViewportStage::executeDebug(const RenderStageContext& ctx, const PassContext* snapshot)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    auto passCtx = buildPassContext(ctx);
+    auto passCtx = snapshot ? *snapshot : buildPassContext(ctx);
     executePass(EPass::Debug, passCtx);
 }
 
