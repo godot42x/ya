@@ -93,6 +93,7 @@ struct ForwardViewportStage : public IRenderStage
         DescriptorSetHandle       skyboxFrameDescriptorSet = nullptr;
         SkyboxInput               skybox{};
         DebugDrawInput            debugDraw{};
+        std::vector<ForwardDirectionGizmoInput> directionGizmos{};
     };
 
     // ═══════════════════════════════════════════════════════════════
@@ -141,9 +142,10 @@ struct ForwardViewportStage : public IRenderStage
     void executePBR(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
     void executePhong(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
     void executeUnlit(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
-    /// Simple / Direction / Debug + editor viewport overlays. Draws no
-    /// per-flight resources, so no explicit binding is required.
-    void executeRest(const RenderStageContext& ctx);
+    void executeSimple(const RenderStageContext& ctx);
+    /// Direction overlay draws only the prebuilt gizmo snapshot (FG-704).
+    void executeDirection(const RenderStageContext& ctx, std::vector<ForwardDirectionGizmoInput> directionGizmos);
+    void executeDebug(const RenderStageContext& ctx);
 
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setDepthBufferShadowDescriptorSet(DescriptorSetHandle depthBufferShadowDS);

@@ -4,8 +4,31 @@
 
 - 计划建立日期：2026-07-18
 - 当前阶段：P7 Forward 全量迁移
-  - 当前执行任务：FG-704（Skybox/Simple/Direction/Debug/Viewport Overlay 迁移）
-  - 下一架构任务：FG-704
+  - 当前执行任务：FG-705（Forward postprocess 和 output export）
+  - 下一架构任务：FG-705
+
+### 2026-08-05：FG-704 完成
+
+- 实现：
+  - Forward 顶层图进一步拆分，序列变为 Skybox -> PBR -> Phong -> Unlit ->
+    Simple -> Direction -> Debug -> Viewport Overlay，每个逻辑 pass 在 graph
+    dump 中独立可见。
+  - 新增 typed params：`ForwardSimplePassParams` / `ForwardDirectionPassParams` /
+    `ForwardDebugPassParams` / `ForwardViewportOverlayPassParams`；删除
+    `ForwardRestPassParams`。
+  - Viewport Overlay 成为最后一个 pass，独占 MSAA resolve attachment、最终
+    consumer layout 与 editor viewport overlays 回调。
+  - Direction gizmo 改为 graph 构建前从 activeScene 预建
+    `ForwardDirectionGizmoInput` 快照（镜像 Deferred overlay 快照模式），
+    aux pass 只消费快照，不再在 execute 期查询 ECS。
+- 未做：
+  - Skybox 的 scene 输入仍经 runtime services（`getSceneSkyboxDescriptorSet` /
+    resource resolve）在 stage prepare 期解析，与 FG-702 验收一致；
+    环境光照 descriptor 仍由 stage execute 时查询（P5 binding 收口范围）。
+- 测试：
+  - `xmake b ya-engine` / `xmake b ya-editor` 通过。
+  - 定向单测 103 tests passed。
+  - GUI smoke 仍受无窗口会话限制，待有 GUI 环境补跑。
 
 ### 2026-08-05：FG-703 完成
 

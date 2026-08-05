@@ -8,6 +8,7 @@
 
 #include <array>
 #include <functional>
+#include <vector>
 #include <glm/glm.hpp>
 
 namespace ya
@@ -24,6 +25,17 @@ class IDescriptorSetLayout;
 class IDescriptorPool;
 class IRenderPass;
 class IRender;
+
+/// Direction gizmo snapshot built before graph execution (FG-704). Mirrors
+/// the Deferred overlay snapshot: the pass draws only from this prebuilt
+/// input, never by querying the ECS during execute.
+struct ForwardDirectionGizmoInput
+{
+    glm::mat4 coneModel     = glm::mat4(1.0f);
+    glm::mat4 cylinderModel = glm::mat4(1.0f);
+    glm::vec3 lineStart     = glm::vec3(0.0f);
+    glm::vec3 lineEnd       = glm::vec3(0.0f);
+};
 
 class ENGINE_API ForwardViewportAuxPasses
 {
@@ -97,6 +109,7 @@ class ENGINE_API ForwardViewportAuxPasses
         Scene*                    activeScene = nullptr;
         SkyboxInput               skybox{};
         DebugDrawInput            debugDraw{};
+        std::vector<ForwardDirectionGizmoInput> directionGizmos{};
         DescriptorSetHandle       skyboxFrameDescriptorSet = nullptr;
         std::function<void(ICommandBuffer*, uint32_t, uint32_t)> setViewportAndScissor;
     };
