@@ -381,10 +381,6 @@ void ForwardRenderPipeline::tick(const RenderPipelineFrameContext& frame)
         YA_PROFILE_SCOPE("ForwardPipeline/ViewportPass");
         executeViewportPass(frame, stageCtx);
     }
-    {
-        YA_PROFILE_SCOPE("ForwardPipeline/FinalizeViewport");
-        finalizeViewportPass(frame.cmdBuf);
-    }
 }
 
 bool ForwardRenderPipeline::shouldSkipTick(const RenderPipelineFrameContext& frame) const
@@ -700,20 +696,6 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
 
     [[maybe_unused]] const bool bExecuted = executeViewportPassGraph(frame, stageCtx);
     YA_CORE_ASSERT(bExecuted, "Forward viewport graph execution failed");
-}
-
-void ForwardRenderPipeline::finalizeViewportPass(ICommandBuffer* cmdBuf)
-{
-    auto* inputImage = bMSAA ? _viewportResources.resolveImage : _viewportResources.colorImage;
-
-    if (_postProcessStage.execute(cmdBuf, inputImage, _lastFrameInput.viewportRect.extent, &_lastTickCtx)) {
-        _currentPostprocessOutput = _postProcessStage.getPreparedOutputImageShared();
-    }
-    else {
-        _currentPostprocessOutput.reset();
-    }
-
-    YA_CORE_ASSERT(inputImage, "Failed to get viewport image for postprocessing");
 }
 
 void ForwardRenderPipeline::shutdown()
@@ -1111,7 +1093,28 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
             rgCtx.endRendering();
         });
 
-    return _graphExecutor->execute(graph, *frame.cmdBuf);
+    // FG-705: bloom + finalize stay inside the same graph. The postprocess
+    // input is the resolved viewport (the MSAA resolve target when present);
+    // the finalize pass creates its output texture and exports it under
+    // PostProcessingStage::kOutputExportName, which the execution result
+    // publishes to graph-external consumers.
+    const auto postprocessInput = resolve.isValid() ? resolve : color;
+    const auto bloomComposite  = _postProcessStage.appendBloomGraphPasses(graph, postprocessInput, viewportExtent, &_lastTickCtx);
+    const auto finalizeInput   = bloomComposite.isValid() ? bloomComposite : postprocessInput;
+    [[maybe_unused]] const auto postprocessOutput = _postProcessStage.appendFinalizeGraphPasses(graph, PostProcessingStage::FinalizePassParams{
+        .input         = finalizeInput,
+        .inputExtent   = viewportExtent,
+        .bOutputIsSRGB = EFormat::isSRGB(_render->getSwapchain()->getFormat()),
+        .postContext   = &_lastTickCtx,
+    });
+
+    RGCompiledGraph compiled{};
+    RenderGraphExecutionResult result;
+    const bool bExecuted = _graphExecutor->execute(graph, *frame.cmdBuf, &compiled, &result);
+    if (bExecuted) {
+        _currentPostprocessOutput = result.getExportedTextureShared(PostProcessingStage::kOutputExportName);
+    }
+    return bExecuted;
 }
 
 void ForwardRenderPipeline::onViewportResized(Rect2D rect)

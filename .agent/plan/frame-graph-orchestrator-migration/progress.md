@@ -4,8 +4,31 @@
 
 - 计划建立日期：2026-07-18
 - 当前阶段：P7 Forward 全量迁移
-  - 当前执行任务：FG-705（Forward postprocess 和 output export）
-  - 下一架构任务：FG-705
+  - 当前执行任务：FG-706（ForwardFrameGraphOrchestrator 与 executePasses 删除）
+  - 下一架构任务：FG-706
+
+### 2026-08-05：FG-705 完成
+
+- 实现：
+  - Forward 删除图外 `finalizeViewportPass`（原 `_postProcessStage.execute`
+    standalone 路径）与 tick 中的 FinalizeViewport 阶段；postprocess 收进
+    Forward 主图。
+  - graph 尾部按 Deferred 同款 common contract 追加：
+    `appendBloomGraphPasses` -> `appendFinalizeGraphPasses`；postprocess 输入
+    为 MSAA resolve 目标（无 MSAA 时用 color），finalize 自建输出纹理并
+    export 为 `PostProcessingStage::kOutputExportName`。
+  - `executeViewportPassGraph` 改走带 `RGCompiledGraph` /
+    `RenderGraphExecutionResult` 的 executor execute，`_currentPostprocessOutput`
+    由 execution result 按导出名捕获，不再依赖 `getPreparedOutputImageShared()`。
+  - postprocess 输入尺寸从 viewport resource extent 取，与图内一致（替代旧的
+    `viewportRect.extent` 直接传参）。
+- 未做：
+  - `PostProcessingStage::execute(...)` standalone 入口仍保留给 Deferred /
+    utility 兼容路径，删除属于 FG-901。
+- 测试：
+  - `xmake b ya-engine` / `xmake b ya-editor` 通过。
+  - 定向单测 103 tests passed。
+  - GUI smoke 仍受无窗口会话限制，待有 GUI 环境补跑。
 
 ### 2026-08-05：FG-704 完成
 
