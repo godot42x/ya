@@ -52,6 +52,8 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
         .shadowState = desc.shadowState,
         .skinningDSL = _skinningDSL,
+        .pbrFrameDSL = desc.pbrFrameDSL,
+        .phongFrameDSL = desc.phongFrameDSL,
         .getFrameIndex = desc.getFrameIndex,
         .getElapsedTimeSeconds = desc.getElapsedTimeSeconds,
     });
@@ -60,6 +62,7 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
         .renderPass = desc.renderPass,
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
         .skinningDSL = _skinningDSL,
+        .unlitFrameDSL = desc.unlitFrameDSL,
         .getFrameIndex = desc.getFrameIndex,
         .getElapsedTimeSeconds = desc.getElapsedTimeSeconds,
     });
@@ -67,6 +70,7 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
         .render = desc.render,
         .renderPass = desc.renderPass,
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
+        .skyboxFrameDSL = desc.skyboxFrameDSL,
         .getElapsedTimeSeconds = desc.getElapsedTimeSeconds,
     });
 }
@@ -119,9 +123,10 @@ void ForwardViewportStage::prepare(const RenderStageContext& ctx)
 
     if (!ctx.frameData) return;
 
-    _litPasses.prepare(ctx);
-    _unlitPass.prepare(ctx);
-    _auxPasses.prepare(ctx);
+    _framePayloads = {};
+    _litPasses.prepare(ctx, _framePayloads);
+    _unlitPass.prepare(ctx, _framePayloads.unlitFrame);
+    _auxPasses.prepare(ctx, _framePayloads.skyboxFrame);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -132,17 +137,20 @@ void ForwardViewportStage::execute(const RenderStageContext& ctx)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    auto passCtx      = buildPassContext(ctx);
-    passCtx.skinningDescriptorSet = {};
-    executePasses(passCtx);
+    execute(ctx, ForwardFrameResourceSet::Binding{});
 }
 
-void ForwardViewportStage::execute(const RenderStageContext& ctx, DescriptorSetHandle skinningDS)
+void ForwardViewportStage::execute(const RenderStageContext& ctx,
+                                   const ForwardFrameResourceSet::Binding& binding)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
     auto passCtx      = buildPassContext(ctx);
-    passCtx.skinningDescriptorSet = skinningDS;
+    passCtx.skinningDescriptorSet    = binding.skinningDescriptorSet;
+    passCtx.pbrFrameDescriptorSet    = binding.pbrFrameDescriptorSet;
+    passCtx.phongFrameDescriptorSet  = binding.phongFrameDescriptorSet;
+    passCtx.unlitFrameDescriptorSet  = binding.unlitFrameDescriptorSet;
+    passCtx.skyboxFrameDescriptorSet = binding.skyboxFrameDescriptorSet;
     executePasses(passCtx);
 }
 
@@ -239,6 +247,7 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
                     .mesh = passCtx.skybox.mesh,
                 },
                 .debugDraw = {},
+                .skyboxFrameDescriptorSet = passCtx.skyboxFrameDescriptorSet,
                 .setViewportAndScissor = [this](ICommandBuffer* cmdBuf, uint32_t w, uint32_t h)
                 {
                     setViewportAndScissor(cmdBuf, w, h);
@@ -251,6 +260,7 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
                 .environmentLightingDescriptorSet = passCtx.sceneEnvironmentLightingDescriptorSet,
                 .depthBufferShadowDS = _depthBufferShadowDS,
                 .skinningDS = passCtx.skinningDescriptorSet,
+                .pbrFrameDescriptorSet = passCtx.pbrFrameDescriptorSet,
                 .setViewportAndScissor = [this](ICommandBuffer* cmdBuf, uint32_t w, uint32_t h)
                 {
                     setViewportAndScissor(cmdBuf, w, h);
@@ -263,6 +273,7 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
                 .skyboxDescriptorSet = passCtx.skybox.descriptorSet,
                 .depthBufferShadowDS = _depthBufferShadowDS,
                 .skinningDS = passCtx.skinningDescriptorSet,
+                .phongFrameDescriptorSet = passCtx.phongFrameDescriptorSet,
                 .setViewportAndScissor = [this](ICommandBuffer* cmdBuf, uint32_t w, uint32_t h)
                 {
                     setViewportAndScissor(cmdBuf, w, h);
@@ -273,6 +284,7 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
             _unlitPass.draw(ForwardViewportUnlitPass::DrawContext{
                 .stageCtx = passCtx.stageCtx,
                 .skinningDS = passCtx.skinningDescriptorSet,
+                .unlitFrameDescriptorSet = passCtx.unlitFrameDescriptorSet,
                 .setViewportAndScissor = [this](ICommandBuffer* cmdBuf, uint32_t w, uint32_t h)
                 {
                     setViewportAndScissor(cmdBuf, w, h);

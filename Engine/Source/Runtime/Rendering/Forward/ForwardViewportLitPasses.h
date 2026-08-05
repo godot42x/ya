@@ -7,6 +7,7 @@
 #include "Render/Material/PBRMaterial.h"
 #include "Render/Material/PhongMaterial.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowRuntimeState.h"
+#include "Runtime/Rendering/Forward/ForwardFrameResourceSet.h"
 
 #include "PBRForward.slang.h"
 #include "PhongLit.slang.h"
@@ -59,6 +60,8 @@ class ForwardViewportLitPasses
         PipelineRenderingInfo      pipelineRenderingInfo = {};
         ShadowRuntimeState         shadowState = {};
         stdptr<IDescriptorSetLayout> skinningDSL;
+        stdptr<IDescriptorSetLayout> pbrFrameDSL;
+        stdptr<IDescriptorSetLayout> phongFrameDSL;
         std::function<uint64_t()>  getFrameIndex;
         std::function<double()>    getElapsedTimeSeconds;
     };
@@ -70,13 +73,17 @@ class ForwardViewportLitPasses
         DescriptorSetHandle       skyboxDescriptorSet = nullptr;
         DescriptorSetHandle       depthBufferShadowDS = nullptr;
         DescriptorSetHandle       skinningDS = nullptr;
+        DescriptorSetHandle       pbrFrameDescriptorSet = nullptr;
+        DescriptorSetHandle       phongFrameDescriptorSet = nullptr;
         std::function<void(ICommandBuffer*, uint32_t, uint32_t)> setViewportAndScissor;
     };
 
     void init(const InitDesc& desc);
     void destroy();
     void beginFrame();
-    void prepare(const RenderStageContext& ctx);
+    /// Build the current frame's PBR/Phong CPU payloads; the pipeline uploads
+    /// them through ForwardFrameResourceSet (FG-701).
+    void prepare(const RenderStageContext& ctx, ForwardFrameResourceSet::FramePayloads& outPayloads);
     void refreshPipelineFormats(const RenderAttachmentFormats& formats);
     void applyShadowState(const ShadowRuntimeState& shadowState);
 
@@ -93,12 +100,12 @@ class ForwardViewportLitPasses
   private:
     void initPBR(const InitDesc& desc);
     void initPhong(const InitDesc& desc);
-    void preparePBR(const RenderStageContext& ctx);
-    void preparePhong(const RenderStageContext& ctx);
+    void preparePBR(const RenderStageContext& ctx, PBRFrameUBO& outFrame, PBRLightUBO& outLight);
+    void preparePhong(const RenderStageContext& ctx, PhongFrameUBO& outFrame, PhongLightUBO& outLight, PhongDebugUBO& outDebug);
     void preparePBRMaterials(const RenderFrameData& fd);
     void preparePhongMaterials(const RenderFrameData& fd);
-    void fillPBRLightFromFrameData(const RenderFrameData& fd);
-    void fillPhongLightFromFrameData(const RenderFrameData& fd);
+    void fillPBRLightFromFrameData(const RenderFrameData& fd, PBRLightUBO& outLight);
+    void fillPhongLightFromFrameData(const RenderFrameData& fd, PhongLightUBO& outLight);
 
     [[nodiscard]] DescriptorImageInfo getDescriptorImageInfo(const TextureBinding& tb) const;
 
@@ -109,13 +116,8 @@ class ForwardViewportLitPasses
     stdptr<IDescriptorSetLayout> _pbrParamDSL;
     ShadingPipelineVariant       _pbrStatic;
     ShadingPipelineVariant       _pbrSkinned;
-    stdptr<IDescriptorPool>      _pbrFrameDSP;
-    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _pbrFrameDS{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _pbrFrameUBO{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _pbrLightUBO{};
     MaterialDescPool<PBRMaterial, PBRParamUBO>             _pbrMatPool;
     bool                                                   _pbrPoolRecreated = false;
-    PBRLightUBO                                            _pbrLight{};
     bool                                                   _bEnablePBRDiffuseIBL = true;
     bool                                                   _bEnablePBRSpecularIBL = true;
 
@@ -124,14 +126,8 @@ class ForwardViewportLitPasses
     stdptr<IDescriptorSetLayout> _phongParamDSL;
     ShadingPipelineVariant       _phongStatic;
     ShadingPipelineVariant       _phongSkinned;
-    stdptr<IDescriptorPool>      _phongFrameDSP;
-    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _phongFrameDS{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _phongFrameUBO{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _phongLightUBO{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _phongDebugUBO{};
     MaterialDescPool<PhongMaterial, PhongMaterial::ParamUBO> _phongMatPool;
     bool                                                     _phongPoolRecreated = false;
-    PhongLightUBO                                            _phongLight{};
     PhongDebugUBO                                            _phongDebug{};
 
     ShadowRuntimeState      _shadowState{};

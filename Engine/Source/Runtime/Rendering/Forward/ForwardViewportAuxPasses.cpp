@@ -32,6 +32,7 @@ void ForwardViewportAuxPasses::init(const InitDesc& desc)
 {
     _render                = desc.render;
     _getElapsedTimeSeconds = desc.getElapsedTimeSeconds;
+    _skyboxFrameDSL        = desc.skyboxFrameDSL;
     initSimple(desc);
     initSkybox(desc);
     initDebug(desc);
@@ -46,8 +47,6 @@ void ForwardViewportAuxPasses::destroy()
     _skyboxPPL.reset();
     _skyboxFrameDSL.reset();
     _skyboxResourceDSL.reset();
-    _skyboxDSP.reset();
-    for (auto& u : _skyboxFrameUBO) u.reset();
 
     _debugPipeline.reset();
     _debugPPL.reset();
@@ -120,17 +119,17 @@ void ForwardViewportAuxPasses::refreshPipelineFormats(const RenderAttachmentForm
     }
 }
 
-void ForwardViewportAuxPasses::prepare(const RenderStageContext& ctx)
+void ForwardViewportAuxPasses::prepare(const RenderStageContext& ctx,
+                                       SkyboxFrameUBO& outFrame)
 {
     if (!ctx.frameData) {
         return;
     }
 
-    SkyboxFrameUBO skyboxUBO{
-        .projection = ctx.frameData->projection,
+    outFrame = SkyboxFrameUBO{
+        .proj = ctx.frameData->projection,
         .view       = FMath::dropTranslation(ctx.frameData->view),
     };
-    _skyboxFrameUBO[ctx.flightIndex]->writeData(&skyboxUBO, sizeof(SkyboxFrameUBO), 0);
 }
 
 void ForwardViewportAuxPasses::initSimple(const InitDesc& desc)
@@ -171,22 +170,18 @@ void ForwardViewportAuxPasses::initSimple(const InitDesc& desc)
 
 void ForwardViewportAuxPasses::initSkybox(const InitDesc& desc)
 {
-    auto dsls = IDescriptorSetLayout::create(_render, {
-        DescriptorSetLayoutDesc{
-            .label    = "FwdSkybox_PerFrame_DSL",
-            .set      = 0,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex}},
-        },
+    auto dsls = IDescriptorSetLayout::create(_render, std::vector<DescriptorSetLayoutDesc>{
         DescriptorSetLayoutDesc{
             .label    = "FwdSkybox_Resource_DSL",
             .set      = 1,
             .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::CombinedImageSampler, .descriptorCount = 1, .stageFlags = EShaderStage::Fragment}},
         },
     });
-    _skyboxFrameDSL    = dsls[0];
-    _skyboxResourceDSL = dsls[1];
+    _skyboxResourceDSL = dsls[0];
 
-    _skyboxPPL = IPipelineLayout::create(_render, "FwdSkybox_PPL", {}, dsls);
+    auto pipelineDsls = dsls;
+    pipelineDsls.insert(pipelineDsls.begin(), _skyboxFrameDSL);
+    _skyboxPPL = IPipelineLayout::create(_render, "FwdSkybox_PPL", {}, pipelineDsls);
 
     GraphicsPipelineCreateInfo ci{
         .renderPass            = desc.renderPass,
@@ -207,27 +202,6 @@ void ForwardViewportAuxPasses::initSkybox(const InitDesc& desc)
     _skyboxPipeline = IGraphicsPipeline::create(_render);
     YA_CORE_ASSERT(_skyboxPipeline && _skyboxPipeline->recreate(ci), "Failed to create Forward Skybox pipeline");
 
-    _skyboxDSP = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-        .label     = "FwdSkybox_DSP",
-        .maxSets   = MAX_FLIGHTS_IN_FLIGHT,
-        .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = MAX_FLIGHTS_IN_FLIGHT}},
-    });
-
-    SkyboxFrameUBO initialData{};
-    for (uint32_t i = 0; i < MAX_FLIGHTS_IN_FLIGHT; ++i) {
-        _skyboxFrameUBO[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-            .label       = std::format("FwdSkybox_Frame_UBO_{}", i),
-            .usage       = EBufferUsage::UniformBuffer,
-            .size        = sizeof(SkyboxFrameUBO),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
-        _skyboxFrameUBO[i]->writeData(&initialData, sizeof(SkyboxFrameUBO), 0);
-
-        _skyboxFrameDS[i] = _skyboxDSP->allocateDescriptorSets(_skyboxFrameDSL);
-        _render->getDescriptorHelper()->updateDescriptorSets({
-            IDescriptorSetHelper::writeOneUniformBuffer(_skyboxFrameDS[i], 0, _skyboxFrameUBO[i].get()),
-        });
-    }
 }
 
 void ForwardViewportAuxPasses::initDebug(const InitDesc& desc)
@@ -305,7 +279,7 @@ void ForwardViewportAuxPasses::drawSkybox(const DrawContext& drawCtx)
     cmdBuf->debugBeginLabel("ForwardSkybox");
     cmdBuf->bindPipeline(_skyboxPipeline.get());
     drawCtx.setViewportAndScissor(cmdBuf, vpW, vpH);
-    cmdBuf->bindDescriptorSets(_skyboxPPL.get(), 0, {_skyboxFrameDS[ctx.flightIndex], drawCtx.skybox.descriptorSet});
+    cmdBuf->bindDescriptorSets(_skyboxPPL.get(), 0, {drawCtx.skyboxFrameDescriptorSet, drawCtx.skybox.descriptorSet});
     drawCtx.skybox.mesh->draw(cmdBuf);
     cmdBuf->debugEndLabel();
 }

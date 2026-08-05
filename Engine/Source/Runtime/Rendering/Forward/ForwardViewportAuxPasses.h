@@ -4,6 +4,7 @@
 #include "Render/Core/RenderAttachmentFormats.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Material/SimpleMaterial.h"
+#include "GLSL.Skybox.glsl.h"
 
 #include <array>
 #include <functional>
@@ -14,6 +15,7 @@ namespace ya
 
 struct RenderStageContext;
 struct RenderDrawItem;
+class ForwardFrameResourceSet;
 class Scene;
 class Mesh;
 class ICommandBuffer;
@@ -34,11 +36,7 @@ class ENGINE_API ForwardViewportAuxPasses
         uint32_t  colorType  = 0;
     };
 
-    struct SkyboxFrameUBO
-    {
-        glm::mat4 projection;
-        glm::mat4 view;
-    };
+    using SkyboxFrameUBO = glsl_types::GLSL::Skybox::FrameUBO;
 
     struct DebugUBO
     {
@@ -69,6 +67,7 @@ class ENGINE_API ForwardViewportAuxPasses
         IRender*               render = nullptr;
         IRenderPass*           renderPass = nullptr;
         PipelineRenderingInfo  pipelineRenderingInfo = {};
+        stdptr<IDescriptorSetLayout> skyboxFrameDSL;
         std::function<double()> getElapsedTimeSeconds;
     };
 
@@ -98,6 +97,7 @@ class ENGINE_API ForwardViewportAuxPasses
         Scene*                    activeScene = nullptr;
         SkyboxInput               skybox{};
         DebugDrawInput            debugDraw{};
+        DescriptorSetHandle       skyboxFrameDescriptorSet = nullptr;
         std::function<void(ICommandBuffer*, uint32_t, uint32_t)> setViewportAndScissor;
     };
 
@@ -105,7 +105,9 @@ class ENGINE_API ForwardViewportAuxPasses
     void destroy();
     void beginFrame();
     void refreshPipelineFormats(const RenderAttachmentFormats& formats);
-    void prepare(const RenderStageContext& ctx);
+    /// Build the current frame's skybox payload; the pipeline uploads it
+    /// through ForwardFrameResourceSet (FG-701).
+    void prepare(const RenderStageContext& ctx, SkyboxFrameUBO& outFrame);
 
     void drawSkybox(const DrawContext& ctx);
     void drawSimple(const DrawContext& ctx);
@@ -140,9 +142,6 @@ class ENGINE_API ForwardViewportAuxPasses
     stdptr<IDescriptorSetLayout> _skyboxResourceDSL;
     stdptr<IPipelineLayout>      _skyboxPPL;
     stdptr<IGraphicsPipeline>    _skyboxPipeline;
-    stdptr<IDescriptorPool>      _skyboxDSP;
-    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _skyboxFrameDS{};
-    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _skyboxFrameUBO{};
 
     stdptr<IDescriptorSetLayout> _debugDSL;
     stdptr<IPipelineLayout>      _debugPPL;

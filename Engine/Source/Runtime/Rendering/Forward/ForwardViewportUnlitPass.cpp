@@ -4,6 +4,7 @@
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Render.h"
+#include "Runtime/Rendering/Forward/ForwardFrameResourceSet.h"
 
 namespace ya
 {
@@ -32,6 +33,7 @@ void ForwardViewportUnlitPass::init(const InitDesc& desc)
     _skinningDSL           = desc.skinningDSL;
     _getFrameIndex         = desc.getFrameIndex;
     _getElapsedTimeSeconds = desc.getElapsedTimeSeconds;
+    _unlitFrameDSL         = desc.unlitFrameDSL;
     initUnlit(desc);
 }
 
@@ -43,8 +45,6 @@ void ForwardViewportUnlitPass::destroy()
     _unlitFrameDSL.reset();
     _unlitParamDSL.reset();
     _unlitResourceDSL.reset();
-    _unlitFrameDSP.reset();
-    for (auto& u : _unlitFrameUBOs) u.reset();
 
     _getFrameIndex = {};
     _getElapsedTimeSeconds = {};
@@ -81,22 +81,18 @@ void ForwardViewportUnlitPass::refreshPipelineFormats(const RenderAttachmentForm
     }
 }
 
-void ForwardViewportUnlitPass::prepare(const RenderStageContext& ctx)
+void ForwardViewportUnlitPass::prepare(const RenderStageContext& ctx,
+                                       UnlitFrameUBO& outFrame)
 {
     if (!ctx.frameData) {
         return;
     }
-    prepareUnlit(ctx);
+    prepareUnlit(ctx, outFrame);
 }
 
 void ForwardViewportUnlitPass::initUnlit(const InitDesc& desc)
 {
     auto dsls = IDescriptorSetLayout::create(_render, {
-        DescriptorSetLayoutDesc{
-            .label    = "FwdUnlit_Frame_DSL",
-            .set      = 0,
-            .bindings = {{.binding = 0, .descriptorType = EPipelineDescriptorType::UniformBuffer, .descriptorCount = 1, .stageFlags = EShaderStage::Vertex | EShaderStage::Fragment}},
-        },
         DescriptorSetLayoutDesc{
             .label    = "FwdUnlit_Param_DSL",
             .set      = 1,
@@ -111,12 +107,14 @@ void ForwardViewportUnlitPass::initUnlit(const InitDesc& desc)
             },
         },
     });
-    _unlitFrameDSL    = dsls[0];
-    _unlitParamDSL    = dsls[1];
-    _unlitResourceDSL = dsls[2];
+    _unlitParamDSL    = dsls[0];
+    _unlitResourceDSL = dsls[1];
+
+    auto pipelineDsls = dsls;
+    pipelineDsls.insert(pipelineDsls.begin(), _unlitFrameDSL);
 
     _unlitStatic.pipelineLayout = IPipelineLayout::create(
-        _render, "FwdUnlit_Static_PPL", {PushConstantRange{.offset = 0, .size = sizeof(UnlitPC), .stageFlags = EShaderStage::Vertex}}, dsls);
+        _render, "FwdUnlit_Static_PPL", {PushConstantRange{.offset = 0, .size = sizeof(UnlitPC), .stageFlags = EShaderStage::Vertex}}, pipelineDsls);
 
     _unlitStatic.pipelineCI = GraphicsPipelineCreateInfo{
         .renderPass            = desc.renderPass,
@@ -148,7 +146,7 @@ void ForwardViewportUnlitPass::initUnlit(const InitDesc& desc)
     _unlitStatic.pipeline = IGraphicsPipeline::create(_render);
     _unlitStatic.pipeline->recreate(_unlitStatic.pipelineCI);
 
-    auto skinnedDsls = dsls;
+    auto skinnedDsls = pipelineDsls;
     skinnedDsls.push_back(_skinningDSL);
     _unlitSkinned.pipelineLayout = IPipelineLayout::create(
         _render, "FwdUnlit_Skinned_PPL", {PushConstantRange{.offset = 0, .size = sizeof(UnlitPC), .stageFlags = EShaderStage::Vertex}}, skinnedDsls);
@@ -165,22 +163,6 @@ void ForwardViewportUnlitPass::initUnlit(const InitDesc& desc)
     _unlitSkinned.pipeline = IGraphicsPipeline::create(_render);
     _unlitSkinned.pipeline->recreate(_unlitSkinned.pipelineCI);
 
-    _unlitFrameDSP = IDescriptorPool::create(_render, DescriptorPoolCreateInfo{
-        .maxSets   = UNLIT_FRAME_SLOTS,
-        .poolSizes = {{.type = EPipelineDescriptorType::UniformBuffer, .descriptorCount = UNLIT_FRAME_SLOTS}},
-    });
-    std::vector<DescriptorSetHandle> sets;
-    _unlitFrameDSP->allocateDescriptorSets(_unlitFrameDSL, UNLIT_FRAME_SLOTS, sets);
-    for (uint32_t i = 0; i < UNLIT_FRAME_SLOTS; ++i) {
-        _unlitFrameDSs[i]  = sets[i];
-        _unlitFrameUBOs[i] = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-            .label       = std::format("FwdUnlit_Frame_UBO_{}", i),
-            .usage       = EBufferUsage::UniformBuffer,
-            .size        = sizeof(UnlitFrameUBO),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
-    }
-
     constexpr uint32_t unlitTextureCount = 2;
     _unlitMatPool.init(
         _render, _unlitParamDSL, _unlitResourceDSL, [unlitTextureCount](uint32_t n) -> std::vector<DescriptorPoolSize>
@@ -192,7 +174,8 @@ void ForwardViewportUnlitPass::initUnlit(const InitDesc& desc)
     _unlitPoolRecreated = true;
 }
 
-void ForwardViewportUnlitPass::prepareUnlit(const RenderStageContext& ctx)
+void ForwardViewportUnlitPass::prepareUnlit(const RenderStageContext& ctx,
+                                            UnlitFrameUBO& outFrame)
 {
     const auto& fd = *ctx.frameData;
     uint32_t materialCount = MaterialFactory::get()->getMaterialSize<UnlitMaterial>();
@@ -200,20 +183,11 @@ void ForwardViewportUnlitPass::prepareUnlit(const RenderStageContext& ctx)
         _unlitPoolRecreated = true;
     }
 
-    UnlitFrameUBO ubo{};
-    ubo.projMat    = ctx.frameData->projection;
-    ubo.viewMat    = ctx.frameData->view;
-    ubo.resolution = glm::ivec2(ctx.viewportExtent.width, ctx.viewportExtent.height);
-    ubo.frameIdx   = _getFrameIndex ? static_cast<int32_t>(_getFrameIndex()) : 0;
-    ubo.time       = _getElapsedTimeSeconds ? static_cast<float>(_getElapsedTimeSeconds()) : 0.0f;
-
-    uint32_t slot = _unlitFrameSlot;
-    _unlitFrameUBOs[slot]->writeData(&ubo, sizeof(ubo), 0);
-
-    DescriptorBufferInfo bufferInfo(BufferHandle(_unlitFrameUBOs[slot]->getHandle()), 0, sizeof(UnlitFrameUBO));
-    _render->getDescriptorHelper()->updateDescriptorSets({
-        IDescriptorSetHelper::genBufferWrite(_unlitFrameDSs[slot], 0, 0, EPipelineDescriptorType::UniformBuffer, {bufferInfo}),
-    }, {});
+    outFrame.projMat    = ctx.frameData->projection;
+    outFrame.viewMat    = ctx.frameData->view;
+    outFrame.resolution = glm::ivec2(ctx.viewportExtent.width, ctx.viewportExtent.height);
+    outFrame.frameIdx   = _getFrameIndex ? static_cast<int32_t>(_getFrameIndex()) : 0;
+    outFrame.time       = _getElapsedTimeSeconds ? static_cast<float>(_getElapsedTimeSeconds()) : 0.0f;
 
     prepareUnlitMaterials(fd);
     _unlitPoolRecreated = false;
@@ -291,10 +265,10 @@ void ForwardViewportUnlitPass::draw(const DrawContext& drawCtx)
             auto* layout = pipelineVariant.pipelineLayout.get();
             cmdBuf->bindPipeline(pipelineVariant.pipeline.get());
             if (bSkinned) {
-                cmdBuf->bindDescriptorSets(layout, 0, {_unlitFrameDSs[_unlitFrameSlot], paramDS, resourceDS, drawCtx.skinningDS});
+                cmdBuf->bindDescriptorSets(layout, 0, {drawCtx.unlitFrameDescriptorSet, paramDS, resourceDS, drawCtx.skinningDS});
             }
             else {
-                cmdBuf->bindDescriptorSets(layout, 0, {_unlitFrameDSs[_unlitFrameSlot], paramDS, resourceDS});
+                cmdBuf->bindDescriptorSets(layout, 0, {drawCtx.unlitFrameDescriptorSet, paramDS, resourceDS});
             }
 
             UnlitPC pc{.modelMatrix = item.worldMatrix, .skinningPaletteIndex = item.skinningPaletteIndex};
@@ -311,8 +285,6 @@ void ForwardViewportUnlitPass::draw(const DrawContext& drawCtx)
 
     drawBucket(staticItems, false);
     drawBucket(skinnedItems, true);
-
-    _unlitFrameSlot = (_unlitFrameSlot + 1) % UNLIT_FRAME_SLOTS;
     cmdBuf->debugEndLabel();
 }
 
