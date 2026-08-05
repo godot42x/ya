@@ -478,27 +478,10 @@ void appendEnvironmentDebugSlots(const RenderRuntime& runtime, ViewportDebugBuil
 
 std::shared_ptr<RenderImage> RenderRuntime::getViewportSnapshotImageShared() const
 {
-    if (_renderPipeline == ERenderPipeline::Forward) {
-        if (!_forwardPipeline) {
-            return nullptr;
-        }
-        if (auto postprocessOutput = _forwardPipeline->getPostprocessOutputImageShared()) {
-            return postprocessOutput;
-        }
-        return _forwardPipeline->getViewportOutputImageShared();
+    if (auto postprocessOutput = getPostprocessOutputImageShared()) {
+        return postprocessOutput;
     }
-
-    if (_renderPipeline == ERenderPipeline::Deferred) {
-        if (!_deferredPipeline) {
-            return nullptr;
-        }
-        if (auto postprocessOutput = _deferredPipeline->getPostprocessOutputImageShared()) {
-            return postprocessOutput;
-        }
-        return _deferredPipeline->getViewportOutputImageShared();
-    }
-
-    return nullptr;
+    return getActiveViewportImageShared();
 }
 
 size_t RenderRuntime::buildViewportDebugCatalogSignature() const

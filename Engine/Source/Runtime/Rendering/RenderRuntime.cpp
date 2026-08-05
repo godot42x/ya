@@ -81,11 +81,11 @@ void RenderRuntime::renderWorldFrame(const FrameInput& input, ICommandBuffer* cm
 
 IRenderPipeline* RenderRuntime::getActivePipeline() const
 {
-    if (_renderPipeline == ERenderPipeline::Forward && _forwardPipeline) {
-        return _forwardPipeline.get();
+    if (auto* pipeline = getSelectedForwardPipeline()) {
+        return pipeline;
     }
-    if (_renderPipeline == ERenderPipeline::Deferred && _deferredPipeline) {
-        return _deferredPipeline.get();
+    if (auto* pipeline = getSelectedDeferredPipeline()) {
+        return pipeline;
     }
     if (_forwardPipeline) {
         return _forwardPipeline.get();
@@ -101,16 +101,6 @@ bool RenderRuntime::isShadowMappingEnabled() const
     if (auto* pipeline = getActivePipeline()) {
         return pipeline->isShadowMappingEnabled();
     }
-    return false;
-}
-
-bool RenderRuntime::isMirrorRenderingEnabled() const
-{
-    return false;
-}
-
-bool RenderRuntime::hasMirrorRenderResult() const
-{
     return false;
 }
 
@@ -132,11 +122,11 @@ IImageView* RenderRuntime::getShadowPointFaceDepthIV(uint32_t pointLightIndex, u
 
 std::shared_ptr<RenderImage> RenderRuntime::getPostprocessOutputImageShared() const
 {
-    if (_renderPipeline == ERenderPipeline::Forward && _forwardPipeline) {
-        return _forwardPipeline->getPostprocessOutputImageShared();
+    if (auto* pipeline = getSelectedForwardPipeline()) {
+        return pipeline->getPostprocessOutputImageShared();
     }
-    if (_renderPipeline == ERenderPipeline::Deferred && _deferredPipeline) {
-        return _deferredPipeline->getPostprocessOutputImageShared();
+    if (auto* pipeline = getSelectedDeferredPipeline()) {
+        return pipeline->getPostprocessOutputImageShared();
     }
     return nullptr;
 }
@@ -192,21 +182,21 @@ RenderPipelineDebugOutputCatalog RenderRuntime::buildPipelineDebugOutputCatalog(
     catalog.shadowDirectionalDepth = pipeline->getShadowDirectionalDepthIV();
     catalog.bPostprocessingEnabled = pipeline->isPostprocessingEnabled();
 
-    if (_renderPipeline == ERenderPipeline::Forward && _forwardPipeline) {
-        catalog.viewportOutputImageOwner    = _forwardPipeline->getViewportOutputImageShared();
-        catalog.postprocessOutputImageOwner = _forwardPipeline->getPostprocessOutputImageShared();
-        catalog.bloomExtractOwner           = _forwardPipeline->getBloomExtractImageShared();
-        catalog.bloomBlurOwner              = _forwardPipeline->getBloomBlurImageShared();
-        catalog.bloomCompositeOwner         = _forwardPipeline->getBloomCompositeImageShared();
+    if (auto* selectedForward = getSelectedForwardPipeline()) {
+        catalog.viewportOutputImageOwner    = selectedForward->getViewportOutputImageShared();
+        catalog.postprocessOutputImageOwner = selectedForward->getPostprocessOutputImageShared();
+        catalog.bloomExtractOwner           = selectedForward->getBloomExtractImageShared();
+        catalog.bloomBlurOwner              = selectedForward->getBloomBlurImageShared();
+        catalog.bloomCompositeOwner         = selectedForward->getBloomCompositeImageShared();
         return catalog;
     }
 
-    if (_renderPipeline == ERenderPipeline::Deferred && _deferredPipeline) {
-        catalog.viewportOutputImageOwner    = _deferredPipeline->getViewportOutputImageShared();
-        catalog.postprocessOutputImageOwner = _deferredPipeline->getPostprocessOutputImageShared();
-        catalog.bloomExtractOwner           = _deferredPipeline->getBloomExtractImageShared();
-        catalog.bloomBlurOwner              = _deferredPipeline->getBloomBlurImageShared();
-        catalog.bloomCompositeOwner         = _deferredPipeline->getBloomCompositeImageShared();
+    if (auto* selectedDeferred = getSelectedDeferredPipeline()) {
+        catalog.viewportOutputImageOwner    = selectedDeferred->getViewportOutputImageShared();
+        catalog.postprocessOutputImageOwner = selectedDeferred->getPostprocessOutputImageShared();
+        catalog.bloomExtractOwner           = selectedDeferred->getBloomExtractImageShared();
+        catalog.bloomBlurOwner              = selectedDeferred->getBloomBlurImageShared();
+        catalog.bloomCompositeOwner         = selectedDeferred->getBloomCompositeImageShared();
     }
 
     return catalog;
@@ -225,8 +215,8 @@ Extent2D RenderRuntime::getViewportExtent() const
 
 DeferredPipelineDebugViews RenderRuntime::getDeferredPipelineDebugViews() const
 {
-    if (_renderPipeline == ERenderPipeline::Deferred && _deferredPipeline) {
-        return _deferredPipeline->buildDebugViews();
+    if (auto* pipeline = getSelectedDeferredPipeline()) {
+        return pipeline->buildDebugViews();
     }
     return {};
 }
@@ -289,6 +279,22 @@ void RenderRuntime::applyPendingRenderTargetFormatCommands()
 DebugRenderSystem& RenderRuntime::getDebugRenderSystem() const
 {
     return DebugRenderSystem::get();
+}
+
+ForwardRenderPipeline* RenderRuntime::getSelectedForwardPipeline() const
+{
+    if (_renderPipeline == ERenderPipeline::Forward && _forwardPipeline) {
+        return _forwardPipeline.get();
+    }
+    return nullptr;
+}
+
+DeferredRenderPipeline* RenderRuntime::getSelectedDeferredPipeline() const
+{
+    if (_renderPipeline == ERenderPipeline::Deferred && _deferredPipeline) {
+        return _deferredPipeline.get();
+    }
+    return nullptr;
 }
 
 void RenderRuntime::initActivePipeline()

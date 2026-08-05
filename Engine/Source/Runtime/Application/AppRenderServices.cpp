@@ -51,16 +51,6 @@ bool AppRenderServices::isShadowMappingEnabled() const
     return _state && _state->runtime && _state->runtime->isShadowMappingEnabled();
 }
 
-bool AppRenderServices::isMirrorRenderingEnabled() const
-{
-    return _state && _state->runtime && _state->runtime->isMirrorRenderingEnabled();
-}
-
-bool AppRenderServices::hasMirrorRenderResult() const
-{
-    return _state && _state->runtime && _state->runtime->hasMirrorRenderResult();
-}
-
 IImageView* AppRenderServices::getShadowDirectionalDepthIV() const
 {
     return _state && _state->runtime ? _state->runtime->getShadowDirectionalDepthIV() : nullptr;

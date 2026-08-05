@@ -122,11 +122,11 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
 
 std::shared_ptr<RenderImage> RenderRuntime::getActiveViewportImageShared() const
 {
-    if (_renderPipeline == ERenderPipeline::Forward && _forwardPipeline) {
-        return _forwardPipeline->getViewportOutputImageShared();
+    if (auto* pipeline = getSelectedForwardPipeline()) {
+        return pipeline->getViewportOutputImageShared();
     }
-    if (_renderPipeline == ERenderPipeline::Deferred && _deferredPipeline) {
-        return _deferredPipeline->getViewportOutputImageShared();
+    if (auto* pipeline = getSelectedDeferredPipeline()) {
+        return pipeline->getViewportOutputImageShared();
     }
     return nullptr;
 }
