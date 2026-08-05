@@ -1197,7 +1197,12 @@ RGCompiledGraph RenderGraph::compile() const
     compiled.importedBufferFinalizes.reserve(_buffers.size());
     compiled.transientBufferLifetimes.reserve(_buffers.size());
 
-    std::unordered_map<RGTextureHandle, RGPassHandle> textureWriters;
+    struct TrackedTextureAccess
+    {
+        std::optional<RGPassHandle> writer{};
+        std::vector<RGPassHandle>   readers{};
+    };
+    std::unordered_map<RGTextureHandle, TrackedTextureAccess> textureAccesses;
     struct TrackedBufferAccess
     {
         RGPassHandle    pass{};
@@ -1405,21 +1410,26 @@ RGCompiledGraph RenderGraph::compile() const
                 usage.access == ERGPassResourceAccess::DepthAttachment ||
                 usage.access == ERGPassResourceAccess::TransferDst;
 
+            auto& textureAccess = textureAccesses[usage.handle];
             if (!bWrite) {
-                const auto writerIt = textureWriters.find(usage.handle);
-                if (writerIt == textureWriters.end() && resource->lifetime != ERGResourceLifetime::Imported) {
+                if (!textureAccess.writer.has_value() && resource->lifetime != ERGResourceLifetime::Imported) {
                     addIssue(RGCompileIssue::EKind::ReadBeforeWrite, pass.handle, std::format("pass {} reads texture {} before any writer", pass.name, resource->desc.label));
                 }
-                else if (writerIt != textureWriters.end()) {
-                    addDependency(writerIt->second, pass.handle);
+                else if (textureAccess.writer.has_value()) {
+                    addDependency(*textureAccess.writer, pass.handle);
                 }
+                textureAccess.readers.push_back(pass.handle);
                 continue;
             }
 
-            if (const auto writerIt = textureWriters.find(usage.handle); writerIt != textureWriters.end()) {
-                addDependency(writerIt->second, pass.handle);
+            if (textureAccess.writer.has_value()) {
+                addDependency(*textureAccess.writer, pass.handle);
             }
-            textureWriters[usage.handle] = pass.handle;
+            for (const auto reader : textureAccess.readers) {
+                addDependency(reader, pass.handle);
+            }
+            textureAccess.readers.clear();
+            textureAccess.writer = pass.handle;
         }
 
         for (const auto& usage : pass.buffers) {
