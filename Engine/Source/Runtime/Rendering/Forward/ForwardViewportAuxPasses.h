@@ -4,6 +4,7 @@
 #include "Render/Core/RenderAttachmentFormats.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Material/SimpleMaterial.h"
+#include "Runtime/Rendering/Common/IRenderRuntimeServices.h"
 #include "GLSL.Skybox.glsl.h"
 
 #include <array>
@@ -80,7 +81,7 @@ class ENGINE_API ForwardViewportAuxPasses
         IRenderPass*           renderPass = nullptr;
         PipelineRenderingInfo  pipelineRenderingInfo = {};
         stdptr<IDescriptorSetLayout> skyboxFrameDSL;
-        std::function<double()> getElapsedTimeSeconds;
+        IRenderRuntimeServices* runtimeServices = nullptr;
     };
 
     struct DrawContext
@@ -145,7 +146,7 @@ class ENGINE_API ForwardViewportAuxPasses
     void initDebug(const InitDesc& desc);
 
     IRender* _render = nullptr;
-    std::function<double()> _getElapsedTimeSeconds;
+    IRenderRuntimeServices* _runtimeServices = nullptr;
 
     stdptr<IPipelineLayout>   _simplePPL;
     stdptr<IGraphicsPipeline> _simplePipeline;

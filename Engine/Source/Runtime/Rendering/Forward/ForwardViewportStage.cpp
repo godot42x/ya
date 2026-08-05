@@ -51,8 +51,7 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
         .skinningDSL = _skinningDSL,
         .pbrFrameDSL = desc.pbrFrameDSL,
         .phongFrameDSL = desc.phongFrameDSL,
-        .getFrameIndex = desc.getFrameIndex,
-        .getElapsedTimeSeconds = desc.getElapsedTimeSeconds,
+        .runtimeServices = _runtimeServices,
     });
     _unlitPass.init(ForwardViewportUnlitPass::InitDesc{
         .render = desc.render,
@@ -60,15 +59,14 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
         .skinningDSL = _skinningDSL,
         .unlitFrameDSL = desc.unlitFrameDSL,
-        .getFrameIndex = desc.getFrameIndex,
-        .getElapsedTimeSeconds = desc.getElapsedTimeSeconds,
+        .runtimeServices = _runtimeServices,
     });
     _auxPasses.init(ForwardViewportAuxPasses::InitDesc{
         .render = desc.render,
         .renderPass = desc.renderPass,
         .pipelineRenderingInfo = desc.pipelineRenderingInfo,
         .skyboxFrameDSL = desc.skyboxFrameDSL,
-        .getElapsedTimeSeconds = desc.getElapsedTimeSeconds,
+        .runtimeServices = _runtimeServices,
     });
 }
 

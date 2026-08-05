@@ -6,6 +6,7 @@
 #include "Render/Material/MaterialDescPool.h"
 #include "Render/Material/PBRMaterial.h"
 #include "Render/Material/PhongMaterial.h"
+#include "Runtime/Rendering/Common/IRenderRuntimeServices.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowRuntimeState.h"
 #include "Runtime/Rendering/Forward/ForwardFrameResourceSet.h"
 
@@ -62,8 +63,7 @@ class ForwardViewportLitPasses
         stdptr<IDescriptorSetLayout> skinningDSL;
         stdptr<IDescriptorSetLayout> pbrFrameDSL;
         stdptr<IDescriptorSetLayout> phongFrameDSL;
-        std::function<uint64_t()>  getFrameIndex;
-        std::function<double()>    getElapsedTimeSeconds;
+        IRenderRuntimeServices*    runtimeServices = nullptr;
     };
 
     struct DrawContext
@@ -132,8 +132,7 @@ class ForwardViewportLitPasses
 
     ShadowRuntimeState      _shadowState{};
     stdptr<IDescriptorSetLayout> _skinningDSL;
-    std::function<uint64_t()> _getFrameIndex;
-    std::function<double()>   _getElapsedTimeSeconds;
+    IRenderRuntimeServices* _runtimeServices = nullptr;
 };
 
 } // namespace ya
