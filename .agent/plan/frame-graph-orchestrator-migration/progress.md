@@ -5,7 +5,24 @@
 - 计划建立日期：2026-07-18
 - 当前阶段：P9 完成清理
   - 当前执行任务：无；RenderGraph 迁移主计划实现项已收口
-  - 下一架构任务：`follow-up-roadmap.md` 中的 DrawCandidateView -> DrawPacket
+  - 下一架构任务：无；后续路线和 GUI 验证均为可选/延后项
+
+### 2026-08-05：最小闭环最终验证
+
+- 完整测试：`xmake r ya-testing`，271 tests，270 passed，1 failed。
+- 唯一失败仍为 `AssetPathNormalizationTest.VfsSeparatesLogicalPathsFromIoTranslation`，
+  仅涉及 macOS 临时目录 `/private/var` 与 `/var` 的 realpath 表现，不涉及本轮
+  RenderGraph、启动或资源生命周期改动。
+- 构建：
+  - `xmake b ya-engine`：通过
+  - `xmake b ya-editor`：通过
+- 启动 smoke：
+  - `python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject -- --exit-after-frame=10 --log-level=warn --log-detail-level=error`
+    正常退出。
+  - 最新日志无 `RenderGraph compile failed`、VUID、断言或错误。
+- 结论：ECS snapshot -> world graph -> presentation graph/capture ->
+  submit/present 的最小 RenderGraph 闭环已完成；FG-903/FG-904 只剩 GUI
+  视觉基线和环境验证债务，不再新增架构代码。
 
 ### 2026-08-05：FG-603 完成
 
