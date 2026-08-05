@@ -24,6 +24,7 @@
 #include "ECS/System/ModelInstantiationSystem.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "ECS/System/TransformSystem.h"
+#include "Physics/PhysicsSystem.h"
 
 #include "Resource/AssetManager.h"
 #include "Resource/Font/FontManager.h"
@@ -360,6 +361,14 @@ void AppLifecycle::init(App& app, AppDesc ci)
     auto sys5 = ya::makeShared<ComponentLinkageSystem>();
     sys5->init();
     app._systems.push_back(sys5);
+    auto sysPhysics = ya::makeShared<PhysicsSystem>();
+    sysPhysics->setSceneManager(app.getSceneServices().getSceneManager());
+    sysPhysics->setActiveSceneProvider([&app]() -> Scene*
+                                       { return app.getSceneServices().getActiveScene(); });
+    sysPhysics->setSimulationActiveProvider([&app]() -> bool
+                                            { return app.isRuntimeMode() || app.isSimulationMode(); });
+    sysPhysics->init();
+    app._systems.push_back(sysPhysics);
     app._deleter.push("Systems", [&app](void*)
                       {
         for (auto& sys : app._systems) {
