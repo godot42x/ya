@@ -531,6 +531,45 @@ TEST(RenderGraphCoreTest, CompileTracksTextureReadersBeforeSubsequentWrite)
     EXPECT_TRUE(hasDependency(secondReader, secondWriter));
 }
 
+TEST(RenderGraphCoreTest, DescribeCompiledTopologyExportsRealPassOrderAndDependencies)
+{
+    RenderGraph graph;
+    const auto  texture = graph.createTexture(RGTextureDesc{
+         .label  = "topology",
+         .format = EFormat::R16G16B16A16_SFLOAT,
+         .extent = Extent3D{320, 180, 1},
+         .usage  = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+    });
+
+    const auto writer = graph.addPass("writer", [&](RGPassBuilder& pass) {
+        pass.useColorAttachment(texture);
+    });
+    const auto reader = graph.addPass("reader", [&](RGPassBuilder& pass) {
+        pass.read(texture);
+        pass.declareCompute();
+    });
+
+    const auto compiled = graph.compile();
+    ASSERT_TRUE(compiled.isValid());
+
+    const auto topology = graph.describeCompiledTopology(compiled);
+    ASSERT_EQ(topology.passOrder.size(), 2u);
+    EXPECT_EQ(topology.passOrder[0].pass, writer);
+    EXPECT_EQ(topology.passOrder[0].name, "writer");
+    EXPECT_EQ(topology.passOrder[0].kind, ERGPassKind::Raster);
+    EXPECT_EQ(topology.passOrder[0].orderIndex, 0u);
+    EXPECT_EQ(topology.passOrder[1].pass, reader);
+    EXPECT_EQ(topology.passOrder[1].name, "reader");
+    EXPECT_EQ(topology.passOrder[1].kind, ERGPassKind::Compute);
+    EXPECT_EQ(topology.passOrder[1].orderIndex, 1u);
+
+    ASSERT_EQ(topology.dependencies.size(), 1u);
+    EXPECT_EQ(topology.dependencies[0].from, writer);
+    EXPECT_EQ(topology.dependencies[0].to, reader);
+    EXPECT_EQ(topology.dependencies[0].fromName, "writer");
+    EXPECT_EQ(topology.dependencies[0].toName, "reader");
+}
+
 TEST(RenderGraphCoreTest, CompileIncludesExplicitPassDependency)
 {
     RenderGraph graph;

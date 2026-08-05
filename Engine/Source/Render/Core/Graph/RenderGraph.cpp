@@ -1814,27 +1814,56 @@ std::optional<RGPassContext> RenderGraph::createPassContext(RGPassHandle handle)
     return RGPassContext(*this, *pass);
 }
 
+RGTopologyDescription RenderGraph::describeCompiledTopology(const RGCompiledGraph& compiled) const
+{
+    RGTopologyDescription topology{};
+    topology.passOrder.reserve(compiled.passPlans.size());
+    topology.dependencies.reserve(compiled.dependencies.size());
+
+    for (uint32_t orderIndex = 0; orderIndex < compiled.passPlans.size(); ++orderIndex) {
+        const auto& passPlan = compiled.passPlans[orderIndex];
+        const auto* pass     = getPass(passPlan.pass);
+        topology.passOrder.push_back({
+            .pass       = passPlan.pass,
+            .name       = pass ? std::string_view(pass->name) : std::string_view{},
+            .kind       = passPlan.kind,
+            .orderIndex = orderIndex,
+        });
+    }
+
+    for (const auto& edge : compiled.dependencies) {
+        const auto* from = getPass(edge.from);
+        const auto* to   = getPass(edge.to);
+        topology.dependencies.push_back({
+            .from     = edge.from,
+            .to       = edge.to,
+            .fromName = from ? std::string_view(from->name) : std::string_view{},
+            .toName   = to ? std::string_view(to->name) : std::string_view{},
+        });
+    }
+
+    return topology;
+}
+
 std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
 {
     std::ostringstream oss;
+    const auto         topology = describeCompiledTopology(compiled);
     oss << "passes(" << _passes.size() << ")\n";
     for (const auto& pass : _passes) {
         oss << "  [" << pass.handle.index << ":" << pass.handle.generation << "] " << pass.name << "\n";
     }
 
-    oss << "order(" << compiled.order.size() << ")\n";
-    for (const auto& handle : compiled.order) {
-        const auto* pass = getPass(handle);
-        oss << "  [" << handle.index << ":" << handle.generation << "] "
-            << (pass ? pass->name : "<invalid-pass>") << "\n";
+    oss << "order(" << topology.passOrder.size() << ")\n";
+    for (const auto& passInfo : topology.passOrder) {
+        oss << "  [" << passInfo.pass.index << ":" << passInfo.pass.generation << "] "
+            << (!passInfo.name.empty() ? passInfo.name : std::string_view{"<invalid-pass>"}) << "\n";
     }
 
-    oss << "dependencies(" << compiled.dependencies.size() << ")\n";
-    for (const auto& edge : compiled.dependencies) {
-        const auto* from = getPass(edge.from);
-        const auto* to   = getPass(edge.to);
-        oss << "  " << (from ? from->name : "<invalid-pass>")
-            << " -> " << (to ? to->name : "<invalid-pass>") << "\n";
+    oss << "dependencies(" << topology.dependencies.size() << ")\n";
+    for (const auto& edge : topology.dependencies) {
+        oss << "  " << (!edge.fromName.empty() ? edge.fromName : std::string_view{"<invalid-pass>"})
+            << " -> " << (!edge.toName.empty() ? edge.toName : std::string_view{"<invalid-pass>"}) << "\n";
     }
 
     oss << "passPlans(" << compiled.passPlans.size() << ")\n";
