@@ -20,7 +20,8 @@
   契约 + buffer map/write/flush 统一失败语义与 readback + TextureUploadService），
   P8 的 FG-804~FG-805、P9 的 FG-901~FG-902 以及 presentation 的 FG-601~FG-603
   均已完成；后续实现转入 `follow-up-roadmap.md`，首项为 DrawCandidateView /
-  DrawPacket。
+  DrawPacket。当前没有必须继续实现的 RenderGraph 架构任务；FG-903/FG-904
+  只剩 GUI 视觉基线和环境相关验证债务。
 - control-port 真实 `pipeline switch` smoke 暴露的 shadow sampled-layout/subresource tracking
   回归已修复并完成回归；`FG-002` 仍需补齐正式的截图/hash 基线记录，但不再阻塞 `FG-304`。
 
@@ -383,7 +384,7 @@
 - [ ] `FG-903` 完成 Deferred/Forward graph dump 与视觉基线对比
 - [~] `FG-904` 运行完整 unit/build/editor smoke matrix 并记录 artifacts
   - 已完成：`xmake b ya-engine`、`xmake b ya-editor`；完整 `xmake r ya-testing`
-    为 266/267 通过。
+    为 270/271 通过；HelloMaterial 10 帧启动 smoke 正常退出。
   - 延后：唯一失败为既有 `AssetPathNormalizationTest.VfsSeparatesLogicalPathsFromIoTranslation`
     的 macOS `/private/var` 与 `/var` 路径语义差异；GUI smoke 受当前无窗口环境限制。
 - [x] `FG-905` 更新 `render-arch`、`resource-system`、`debug-review` 和旧计划状态
