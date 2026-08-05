@@ -10,7 +10,19 @@
 
 状态：`[ ]` 未开始，`[-]` 进行中，`[x]` 完成，`[~]` 延后，`[-x]` 停止。
 
+当前备注（2026-08-05）：
+
+- 架构主线仍按本文件推进；P3/P4 已全部落地，P5 的 FG-501~FG-503 已提交，
+  FG-504 调查已完成（plan-only），P6 的 FG-601/FG-603 已提交、FG-602 调查已完成（plan-only），
+  P7 的 FG-701/FG-702 已完成（skinning + frame/light + PBR/Phong 独立 graph pass），
+  下一实现任务为 FG-703（Forward Unlit pass 独立 graph pass）。
+- control-port 真实 `pipeline switch` smoke 暴露的 shadow sampled-layout/subresource tracking
+  回归已修复并完成回归；`FG-002` 仍需补齐正式的截图/hash 基线记录，但不再阻塞 `FG-304`。
+
 ## P0 基线与计划接替
+
+- 说明：`FG-001~FG-003` 现在属于“历史基线/文档口径回补”任务。`FG-101~FG-303`
+  已先按代码现实推进完成，因此这三项不再是后续实现的硬前置阻塞，而是需要补齐的计划债务。
 
 - [ ] `FG-001` 记录当前 Deferred/Forward graph dump、pass 顺序、frame buffer owner、局部 executor 和 graph 外 descriptor 更新 inventory
   - 依赖：无
@@ -19,13 +31,15 @@
   - 提交：`[plan/render] baseline frame graph orchestration gaps`
 
 - [ ] `FG-002` 固化 Deferred/Forward 固定机位截图、draw count、validation 和 pipeline-switch 基线
-  - 依赖：FG-001
+  - 依赖：FG-001（建议，但不阻塞后续 FG-304+ 实现）
   - 修改：复用旧计划 automation；仅缺失时补配置或测试
+  - 备注：旧 `pipeline-switch-smoke.automation.json` 只能证明版本化入口存在；当前必须以
+    `AppAutomationControlService` 的真实切换与日志/validation 结果为准
   - 验收：1500 帧内退出；日志无 Validation Error/VUID/[Error]；记录截图 hash 与相机参数
   - 提交：可与 FG-001 合并为一个 plan/validation 提交
 
 - [ ] `FG-003` 修正旧计划的完成表述并添加接替入口
-  - 依赖：FG-001
+  - 依赖：FG-001（建议，但不阻塞后续 FG-304+ 实现）
   - 修改：`../render-resource-and-graph-refactor/plan.md`、`todo.md`、`progress.md`
   - 验收：旧 Phase 7 明确为 graph-backed execution；Forward/顶层 orchestrator 工作链接到本计划
   - 提交：与 FG-001/002 合并
@@ -33,7 +47,7 @@
 ## P1 RenderGraph 核心前置
 
 - [x] `FG-101` 为 persistent texture/buffer 定义稳定 resource key 契约
-  - 依赖：FG-001
+  - 依赖：FG-001（历史审计项；实际实现已先落地）
   - 修改：`RenderGraph.h/.cpp`、core tests
   - 实现：新增 typed key；拒绝空 key、同帧重复 key 的 type/desc 冲突；handle 仍为 frame-local
   - 验收：同 key 同 desc 跨两张 graph 复用；创建顺序变化仍复用；不同 key 不混用
@@ -207,52 +221,52 @@
 
 ## P4 Deferred 顶层 Orchestrator
 
-- [ ] `FG-401` 新建 DeferredFrameGraphOrchestrator 并搬迁纯 build 顺序
+- [x] `FG-401` 新建 DeferredFrameGraphOrchestrator 并搬迁纯 build 顺序
   - 依赖：FG-302、FG-303、FG-304、FG-305、FG-306
   - 修改：新增 orchestrator 文件；缩短 `DeferredRenderPipeline::executeDeferredMainGraph()`
   - 实现：build 函数按 Shadow -> GBuffer -> SSAO -> Light -> Overlay -> Postprocess 顺序；pipeline 负责 frame boundary 和 execute
   - 验收：单个入口可读出完整流程；不改变截图/draw count；无公共虚基类
   - 提交：`[runtime/deferred] expose top-level frame graph orchestration`
 
-- [ ] `FG-402` 删除 Deferred 主链内局部 RenderGraphExecutor
+- [x] `FG-402` 删除 Deferred 主链内局部 RenderGraphExecutor
   - 依赖：FG-401
   - 修改：SSAO/Postprocess/Bloom/Directional/Point/Cull 独立 execute compatibility path
   - 实现：主链 append helper 不持有/调用 executor；确需 utility standalone 的入口由独立 utility owner 明确持有
   - 验收：Deferred world frame 只有 pipeline/orchestrator 一个 executor；shutdown order 明确
   - 提交：按 shadow/postprocess 两批清理
 
-- [ ] `FG-403` 使用 execution result 导出 viewport/debug resources
+- [x] `FG-403` 使用 execution result 导出 viewport/debug resources
   - 依赖：FG-401、FG-105
   - 验收：`DeferredGBufferResources`/`DeferredViewportResources` 不再作为 owner snapshot 双写；editor/debug API 不反查 Stage/registry
   - smoke：render target editor、screenshot、resize
   - 提交：`[runtime/deferred] publish frame graph outputs`
 
-- [ ] `FG-404` 增加 Deferred orchestrator 结构测试和 graph dump baseline
+- [x] `FG-404` 增加 Deferred orchestrator 结构测试和 graph dump baseline
   - 依赖：FG-401、FG-402、FG-403
   - 验收：可选 SSAO/shadow/postprocess 的 pass presence/dependency；固定 dump 不依赖 GPU/App 启动
   - 提交：`[test/render] lock deferred frame graph structure`
 
 ## P5 Pass binding 收口
 
-- [ ] `FG-501` 实现内部 RGPassBindingContext
+- [x] `FG-501` 实现内部 RGPassBindingContext
   - 依赖：FG-103、FG-401
   - 修改：RenderGraph internal API 与 tests
   - 实现：resolve declared handles 并辅助写现有 descriptor；生命周期挂到 command buffer completion
   - 禁止：公开 Vulkan/set/binding；手写 shader layout mirror
   - 提交：`[render/graph] add pass-scoped resource binding`
 
-- [ ] `FG-502` 迁移 SSAO/Light/Skybox descriptor binding
+- [x] `FG-502` 迁移 SSAO/Light/Skybox descriptor binding
   - 依赖：FG-501
   - 验收：这些 pass 不缓存 graph-owned image view handle；输入变化由当帧 params 驱动
   - smoke：SSAO、IBL、pipeline switch、resize
   - 提交：按 SSAO+Light、Skybox 两批
 
-- [ ] `FG-503` 迁移 GBuffer frame/skinning binding
+- [x] `FG-503` 迁移 GBuffer frame/skinning binding
   - 依赖：FG-501、FG-302
   - 验收：frame/skinning descriptor 来自 current-flight params；material descriptor cache 保持独立
   - 提交：`[runtime/deferred] bind gbuffer frame resources from graph`
 
-- [ ] `FG-504` 调查并设计 generated ShaderParameterBlock
+- [x] `FG-504` 调查并设计 generated ShaderParameterBlock
   - 依赖：FG-502、FG-503
   - 产物：在 `progress.md` 写真实 shader generation/layout inventory 和最小方案
   - 停止线：没有第二个实际 consumer 前不实现通用 public API
@@ -260,13 +274,13 @@
 
 ## P6 Presentation 与 Capture
 
-- [ ] `FG-601` 将 presentation capture 声明为 graph copy/readback pass
+- [x] `FG-601` 将 presentation capture 声明为 graph copy/readback pass
   - 依赖：FG-105
   - 修改：RenderRuntimeFrame、AppScreenshotCapture
   - 验收：无 graph 外裸 `recordPresentationCapture(cmdBuf)`；source/final state 在图中可见
   - 提交：`[runtime/capture] declare presentation readback in graph`
 
-- [ ] `FG-602` 调查 presentation 合图收益与状态边界
+- [x] `FG-602` 调查 presentation 合图收益与状态边界
   - 依赖：FG-401、FG-601
   - 产物：记录合并/保持独立决定、swapchain identity、ImGui 和 multi-image executor 约束
   - 默认：保持独立，除非能删除真实重复状态/executor 且不复杂化 swapchain scope
@@ -279,13 +293,13 @@
 
 ## P7 Forward 全量迁移
 
-- [ ] `FG-701` 建立 ForwardFrameResourceSet 和 typed graph resources
+- [x] `FG-701` 建立 ForwardFrameResourceSet 和 typed graph resources
   - 依赖：FG-404、FG-501
   - 实现：复用经 Deferred 证明的公共部分；先迁 frame/light/skinning owner
   - 验收：ForwardViewportStage 不持有这些 per-flight buffer
   - 提交：2 个 `[runtime/forward] ...` 提交
 
-- [ ] `FG-702` 迁移 Forward PBR/Phong passes
+- [x] `FG-702` 迁移 Forward PBR/Phong passes
   - 依赖：FG-701
   - 验收：顶层 graph 分别可见 PBR/Phong pass 和资源；Stage 不再隐藏顺序
   - smoke：PBR sphere IBL、Phong object、shadow

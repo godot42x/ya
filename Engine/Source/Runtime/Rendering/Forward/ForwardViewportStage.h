@@ -130,10 +130,17 @@ struct ForwardViewportStage : public IRenderStage
     void init(IRender* render) override;
     void destroy() override;
     void prepare(const RenderStageContext& ctx) override;
+    /// IRenderStage conformance entry. Graph passes must use the per-pass
+    /// overloads below (FG-702); this bare entry has no current-flight binding.
     void execute(const RenderStageContext& ctx) override;
-    /// Graph pass entry: explicit current-flight binding. Does not read stage
-    /// members for per-flight resources (FG-701).
-    void execute(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
+    /// Per-pass graph entries (FG-702): the top-level Forward graph declares
+    /// skybox / PBR / Phong / rest as separate passes, so the stage no longer
+    /// hides pass order inside one fixed loop. Explicit current-flight binding,
+    /// does not read stage members for per-flight resources.
+    void executeSkybox(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
+    void executePBR(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
+    void executePhong(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
+    void executeRest(const RenderStageContext& ctx, const ForwardFrameResourceSet::Binding& binding);
 
     void applyShadowState(const ShadowRuntimeState& shadowState);
     void setDepthBufferShadowDescriptorSet(DescriptorSetHandle depthBufferShadowDS);
@@ -148,7 +155,6 @@ struct ForwardViewportStage : public IRenderStage
 
   private:
     [[nodiscard]] PassContext buildPassContext(const RenderStageContext& ctx);
-    void                      executePasses(const PassContext& passCtx);
     void                      executePass(EPass pass, const PassContext& passCtx);
 
     // Helpers

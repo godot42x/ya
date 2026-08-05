@@ -135,23 +135,56 @@ void ForwardViewportStage::prepare(const RenderStageContext& ctx)
 
 void ForwardViewportStage::execute(const RenderStageContext& ctx)
 {
-    if (!ctx.cmdBuf || !ctx.frameData) return;
-
-    execute(ctx, ForwardFrameResourceSet::Binding{});
+    // Conformance stub: the top-level Forward graph calls the per-pass
+    // overloads (FG-702) with an explicit current-flight binding. A bare
+    // IRenderStage execute has no binding and must not hide the pass order.
+    YA_CORE_WARN("ForwardViewportStage::execute(ctx) is a conformance stub; graph passes must use the per-pass overloads");
 }
 
-void ForwardViewportStage::execute(const RenderStageContext& ctx,
-                                   const ForwardFrameResourceSet::Binding& binding)
+void ForwardViewportStage::executeSkybox(const RenderStageContext& ctx,
+                                         const ForwardFrameResourceSet::Binding& binding)
 {
     if (!ctx.cmdBuf || !ctx.frameData) return;
 
-    auto passCtx      = buildPassContext(ctx);
-    passCtx.skinningDescriptorSet    = binding.skinningDescriptorSet;
-    passCtx.pbrFrameDescriptorSet    = binding.pbrFrameDescriptorSet;
-    passCtx.phongFrameDescriptorSet  = binding.phongFrameDescriptorSet;
-    passCtx.unlitFrameDescriptorSet  = binding.unlitFrameDescriptorSet;
+    auto passCtx = buildPassContext(ctx);
     passCtx.skyboxFrameDescriptorSet = binding.skyboxFrameDescriptorSet;
-    executePasses(passCtx);
+    executePass(EPass::Skybox, passCtx);
+}
+
+void ForwardViewportStage::executePBR(const RenderStageContext& ctx,
+                                      const ForwardFrameResourceSet::Binding& binding)
+{
+    if (!ctx.cmdBuf || !ctx.frameData) return;
+
+    auto passCtx = buildPassContext(ctx);
+    passCtx.skinningDescriptorSet   = binding.skinningDescriptorSet;
+    passCtx.pbrFrameDescriptorSet   = binding.pbrFrameDescriptorSet;
+    executePass(EPass::PBR, passCtx);
+}
+
+void ForwardViewportStage::executePhong(const RenderStageContext& ctx,
+                                        const ForwardFrameResourceSet::Binding& binding)
+{
+    if (!ctx.cmdBuf || !ctx.frameData) return;
+
+    auto passCtx = buildPassContext(ctx);
+    passCtx.skinningDescriptorSet    = binding.skinningDescriptorSet;
+    passCtx.phongFrameDescriptorSet  = binding.phongFrameDescriptorSet;
+    executePass(EPass::Phong, passCtx);
+}
+
+void ForwardViewportStage::executeRest(const RenderStageContext& ctx,
+                                       const ForwardFrameResourceSet::Binding& binding)
+{
+    if (!ctx.cmdBuf || !ctx.frameData) return;
+
+    auto passCtx = buildPassContext(ctx);
+    passCtx.skinningDescriptorSet   = binding.skinningDescriptorSet;
+    passCtx.unlitFrameDescriptorSet = binding.unlitFrameDescriptorSet;
+    executePass(EPass::Unlit, passCtx);
+    executePass(EPass::Simple, passCtx);
+    executePass(EPass::DirectionOverlay, passCtx);
+    executePass(EPass::Debug, passCtx);
 }
 
 ForwardViewportStage::PassContext ForwardViewportStage::buildPassContext(const RenderStageContext& ctx)
@@ -215,23 +248,6 @@ ForwardViewportStage::PassContext ForwardViewportStage::buildPassContext(const R
         .skybox = skybox,
         .debugDraw = debugDraw,
     };
-}
-
-void ForwardViewportStage::executePasses(const PassContext& passCtx)
-{
-    static constexpr std::array<EPass, 7> PASS_ORDER = {
-        EPass::Skybox,
-        EPass::PBR,
-        EPass::Phong,
-        EPass::Unlit,
-        EPass::Simple,
-        EPass::DirectionOverlay,
-        EPass::Debug,
-    };
-
-    for (EPass pass : PASS_ORDER) {
-        executePass(pass, passCtx);
-    }
 }
 
 void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
