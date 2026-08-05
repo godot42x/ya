@@ -9,7 +9,6 @@ namespace ya
 
 struct ShadowGraphOutputs
 {
-    std::optional<RGPassHandle>   lastPass{};
     std::optional<RGTextureHandle> shadowDepth{};
 };
 
