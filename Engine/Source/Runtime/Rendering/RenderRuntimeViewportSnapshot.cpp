@@ -23,6 +23,9 @@ RenderViewportSnapshot RenderRuntime::buildViewportSnapshot() const
     snapshot.viewportImageView      = snapshot.viewportImageOwner && snapshot.viewportImageOwner->getImageView()
                                         ? snapshot.viewportImageOwner->getImageView()
                                         : nullptr;
+    if (auto* pipeline = getActivePipeline()) {
+        snapshot.viewportDepthOwner = pipeline->getViewportDepthImageShared();
+    }
 
     ensureViewportDebugCatalog();
     snapshot.debugCatalog = _viewportDebugCatalog;
