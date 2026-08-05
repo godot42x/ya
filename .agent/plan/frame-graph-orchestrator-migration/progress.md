@@ -3,9 +3,109 @@
 ## 当前状态
 
 - 计划建立日期：2026-07-18
-- 当前阶段：P3 Typed resources 与 pass parameters
-- 当前执行任务：FG-304
-- 下一可执行任务：FG-304
+- 当前阶段：P7 Forward 全量迁移
+  - 当前执行任务：FG-703（Forward Unlit pass 独立 graph pass）
+  - 下一架构任务：FG-703
+
+### 2026-08-05：FG-702 完成
+
+- 实现：
+  - Forward 顶层图从单个 `Forward Viewport` pass 拆成四个独立 graph pass：
+    `Forward Skybox`（首个 pass，负责 clear）-> `Forward PBR` -> `Forward Phong`
+    -> `Forward Rest`（Unlit/Simple/Direction/Debug + editor viewport overlays，
+    最后一个 pass，独占 MSAA resolve attachment）。
+  - 新增 typed pass params（`ForwardFrameGraphResources.h`）：
+    `ForwardSkyboxPassParams` / `ForwardPBRPassParams` / `ForwardPhongPassParams` /
+    `ForwardRestPassParams`；每个 params 驱动对应 pass 的 setup 与 execute。
+  - `ForwardViewportStage` 暴露 per-pass 入口（`executeSkybox/executePBR/
+    executePhong/executeRest`），删除 `execute(ctx, Binding)` 组合入口与
+    `executePasses()` 固定顺序循环；`execute(ctx)` 变为 conformance stub，
+    不再隐藏 pass 顺序。
+  - attachment 链在 Skybox/PBR/Phong 之间保持 `ColorAttachmentOptimal`，
+    Rest 应用 `finalLayout`（imported 图在 graph 结束统一 finalize 到
+    ShaderReadOnlyOptimal）；editor overlays 随 Rest pass 录制。
+- 未做：
+  - Forward frame/light/skinning buffer 的 graph 内 resolve/binding 收口
+    仍属于后续统一 binding 工作（P5/FG-501 风格），本任务不改 descriptor contract。
+  - Unlit/Simple/Direction/Debug 仍合并在 Rest pass 中，独立为 graph pass 是 FG-703。
+- 测试：
+  - `xmake b ya-engine` / `xmake b ya-editor` / `xmake b ya-testing` 通过。
+  - `python3 Script/ya.py test --target ya --filter 'RenderGraphCoreTest.*:
+    ResourceStateTrackerTest.*:DeferredRenderPipelineTest.*:
+    DeferredFrameResourceSetTest.*:SSAOStageTest.*:DeferredPassParamsTest.*:
+    AppScreenshotCaptureTest.*'` 103 tests passed。
+  - GUI smoke 受当前无窗口会话限制未能执行（SDL 启动即退出 133）；构建与
+    graph 结构由编译期检查和既有单测覆盖，真实截图/validation 冒烟待有 GUI
+    会话环境补跑（同 FG-002 基线）。
+
+### 2026-08-05：FG-601 完成
+
+- 实现：
+  - presentation capture 从图外裸 `recordPresentationCapture(cmdBuf)` 收进 presentation 主图，
+    通过 `RenderRuntime::FrameInput::AutomationInput::appendPresentationCapture(graph, output, extent)`
+    在 graph 构建阶段 append copy/readback pass。
+  - `AppScreenshotCapture::appendPresentationCapture()` 校验 pending 状态、presentation 源图
+    extent/format 一致后，向同一 `RenderGraph` 添加
+    `AutomationScreenshot.PresentationCopy`（transferSrc + transferDst + copyTextureToBuffer）。
+  - `AppAutomation` / `AppAutomationControlService` 改为 `appendPresentationCapture(...)` 入口，
+    不再向引擎暴露裸 command-buffer 回调。
+  - presentation 输出图 import 显式合并 `TransferSrc`；swapchain `bEnableTransferSrc` 改为
+    恒定开启，保证运行时 control-port 请求 presentation 截图也可用（不依赖启动参数）。
+- 未做：presentation 与 world frame 的 executor 合并（见 FG-602）。
+- 测试：`RenderGraphCoreTest.*:DeferredRenderPipelineTest.*:SSAOStageTest.*:
+  DeferredPassParamsTest.*:DeferredFrameGraphOrchestratorTest.*:DeferredFrameResourceSetTest.*:
+  AppScreenshotCaptureTest.*` 96 tests passed。
+- commit：`[runtime/capture] declare presentation readback in graph`
+- 下一任务：FG-602（plan-only 调查）。
+
+### 2026-08-05：FG-602 完成（plan-only）
+
+- 代码事实：
+  - presentation 资源按 swapchain image 持有独立 `RenderGraphExecutor`
+    （`_presentationGraphExecutors`，size == swapchain image count），并在 swapchain recreate
+    （extent / image / present mode 变化）时整体 rebuild。
+  - presentation pass 输入为当前 swapchain image（imported `PresentSrcKHR`），
+    输出经 presentation post-processor 后进入 present；world frame 的
+    Deferred/Forward pipeline 只输出 viewport/postprocess 图像，二者共享的是
+    `getPostprocessOutputImageShared()` 快照，不是同一个 executor。
+  - ImGui / UI 在 viewport overlay 阶段录制，presentation 阶段只有
+    `recordPresentationExtensions`（模块扩展）与现在的 graph 内 capture。
+- 决策：**保持 presentation 独立 executor**。
+  - swapchain identity / multi-image（每 swapchain image 一个 executor）是 presentation
+    特有的 scope；并入 world-frame executor 需要把 acquire/present 生命周期和
+    swapchain recreate 语义全部拉进 pipeline，复杂度大于收益。
+  - FG-601 已经消除了“图外裸 capture”，presentation 图本身完整可见；
+    没有可删除的真实重复状态。
+- 未做：不改变 presentation 独立 executor；后续 FG-603 只做顶层流程收口与文档化。
+- commit：plan-only（本进度文件）
+- 下一任务：FG-603。
+
+### 2026-08-04：shadow pipeline-switch 回归修复
+
+- 根因：Forward viewport graph 只声明了 shadow pass 的 depth attachment 写入，没有声明 viewport 内
+  PBR/Phong 对 shadow atlas 的 sampled read；因此 imported finalization 发生在 viewport draw 之后，
+  atlas 的部分层仍处于 `DEPTH_STENCIL_ATTACHMENT_OPTIMAL`。
+- 修复：Forward viewport graph 导入整张 shadow atlas 并在 viewport pass 中声明 `read()`，让同一张图
+  在 shadow pass -> viewport pass 之间生成完整的 sampled-layout 转换；移除此前为规避问题而加入的
+  `ShadowMapResources::clearAndPrimeDepthImage()` isolate 初始化补丁。
+- 验证：`xmake b ya-editor` 通过；96 个 RenderGraph/ResourceState/Deferred/SSAO 定向测试通过；
+  control-port 真实 `Deferred -> Forward` 切换、viewport screenshot 和 graceful quit 通过，
+  info/error 会话未出现 `VUID-vkCmdDraw-None-09600`、`Validation Error` 或 `VK_ERROR`。
+
+### 2026-08-04：计划现状整理
+
+- 主计划 owner 仍是本目录；`render-resource-and-graph-refactor` 保留为历史基线/资源模型收口记录，
+  `render-graph-clarity-refactor` 保留为 graph core 子计划归档，二者都不再作为新的实现主入口。
+- `AppAutomationControlService` 的真实 `Deferred -> Forward` 切换 smoke 曾暴露出
+  `Shadow Map Depth` 的 sampled layout / subresource tracking 回归；该回归已在上面的
+  `2026-08-04：shadow pipeline-switch 回归修复` 中解决并完成验证。
+- 因此 P3 可以继续推进 `FG-304`；正式的截图/hash pipeline-switch 基线仍由 `FG-002` 补齐，
+  但不再把已修复的 shadow validation 回归当作架构任务的运行阻塞。
+- 对计划文件的影响：
+  - 本目录继续作为唯一主 TODO / progress；
+  - 旧 `render-resource-and-graph-refactor` 中“pipeline-switch smoke 已确认稳定”的表述需要降级为历史 CLI 证据，
+    不能再当作当前有效基线；
+  - `render-graph-clarity-refactor` 与 `render-architecture-refactor` 当前口径基本正确，无需再扩散新待办。
 
 ### 2026-08-03：FG-301 开始
 
