@@ -9,6 +9,26 @@
 namespace ya
 {
 
+struct RGBufferCopyRegion
+{
+    RGBufferHandle source;
+    RGBufferHandle destination;
+    uint64_t       size = 0;
+    uint64_t       sourceOffset = 0;
+    uint64_t       destinationOffset = 0;
+};
+
+struct RGBufferCopyParams
+{
+    std::string_view            label;
+    std::vector<RGBufferCopyRegion> copies;
+    std::optional<RGPassHandle> dependency{};
+};
+
+[[nodiscard]] ENGINE_API RGPassHandle addBufferCopyPass(
+    RenderGraph& graph,
+    const RGBufferCopyParams& params);
+
 [[nodiscard]] ENGINE_API RGImportedTextureDesc makeImportedTextureDesc(
     const Texture& texture,
     std::string_view label,
