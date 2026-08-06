@@ -1,4 +1,5 @@
 #include "Runtime/Rendering/Deferred/DeferredRenderPipeline.h"
+#include "Runtime/Rendering/Deferred/DeferredFrameGraphPasses.h"
 
 #include "Config/ConfigManager.h"
 #include "Core/System/VirtualFileSystem.h"
