@@ -1,4 +1,5 @@
 #include "Core/Profiling/Instrumentor.h"
+#include "Core/Reflection/ReflectionSerializer.h"
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/2D/UIComponent.h"
 #include "ECS/Component/DirectionalLightComponent.h"
@@ -23,6 +24,84 @@
 namespace ya
 {
 
+namespace
+{
+
+/// Walk a dotted reflection path (e.g. "_params.albedo") from a root instance,
+/// resolving own + base-class properties, and return the instance that OWNS
+/// the leaf property together with the leaf property. Base-class fields render
+/// without a "__base__" path prefix, so parents are searched transparently.
+bool resolveReflectionPath(void*               rootInstance,
+                           type_index_t        rootTypeIndex,
+                           const std::string&  propPath,
+                           void*&              outOwningInstance,
+                           const Property*&    outProperty)
+{
+    auto&       registry = ClassRegistry::instance();
+    const Class* cls     = registry.getClass(rootTypeIndex);
+    void*       owner    = rootInstance;
+
+    std::string remaining = propPath;
+    while (cls && owner && !remaining.empty()) {
+        const auto    dot     = remaining.find('.');
+        const std::string segment = remaining.substr(0, dot);
+        const bool    bLast   = (dot == std::string::npos);
+        remaining             = bLast ? std::string{} : remaining.substr(dot + 1);
+
+        // Find the property in this class or any base class, adjusting the
+        // owning pointer as we descend into parents.
+        const Property* prop         = nullptr;
+        void*           segmentOwner = owner;
+        {
+            const Class* searchCls  = cls;
+            void*        searchOwner = owner;
+            while (searchCls) {
+                if (const Property* p = searchCls->getProperty(segment)) {
+                    prop         = p;
+                    segmentOwner = searchOwner;
+                    break;
+                }
+                bool bFoundParent = false;
+                for (auto parentTypeId : searchCls->parents) {
+                    if (Class* parentCls = registry.getClass(parentTypeId)) {
+                        if (void* parentPtr = searchCls->getParentPointer(searchOwner, parentTypeId)) {
+                            searchCls   = parentCls;
+                            searchOwner = parentPtr;
+                            bFoundParent = true;
+                            break;
+                        }
+                    }
+                }
+                if (!bFoundParent) {
+                    searchCls = nullptr;
+                }
+            }
+            if (!prop) {
+                return false;
+            }
+        }
+
+        if (bLast) {
+            outOwningInstance = segmentOwner;
+            outProperty       = prop;
+            return true;
+        }
+
+        // Descend into the property value for the next segment.
+        owner = prop->getMutableAddress(segmentOwner);
+        if (prop->bPointer) {
+            owner = owner ? *static_cast<void**>(owner) : nullptr;
+            cls   = registry.getClass(prop->pointeeTypeIndex);
+        }
+        else {
+            cls = registry.getClass(prop->typeIndex);
+        }
+    }
+    return false;
+}
+
+} // namespace
+
 void DetailsView::onImGuiRender()
 {
     YA_PROFILE_FUNCTION();
@@ -32,14 +111,45 @@ void DetailsView::onImGuiRender()
         return;
     }
 
-    if (!_owner->getSelections().empty()) {
-        if (auto* firstEntity = _owner->getSelections()[0]; firstEntity->isValid()) {
+    const auto& selections = _owner->getSelections();
+    if (selections.size() > 1) {
+        drawMultiComponents(selections);
+    }
+    else if (!selections.empty()) {
+        if (auto* firstEntity = selections[0]; firstEntity->isValid()) {
             drawComponents(*firstEntity);
         }
     }
 
     ImGui::End();
     _filePicker.render();
+}
+
+void DetailsView::applyModificationsToInstances(const std::vector<RenderModificationRecord>& modifications,
+                                                type_index_t                               rootTypeIndex,
+                                                const std::vector<void*>&                  instances)
+{
+    if (instances.size() < 2) {
+        return;
+    }
+
+    for (const auto& mod : modifications) {
+        void*           leafOwner = nullptr;
+        const Property* leafProp  = nullptr;
+        if (!resolveReflectionPath(instances.front(), rootTypeIndex, mod.propPath, leafOwner, leafProp)) {
+            YA_CORE_WARN("Multi-edit: cannot resolve property path '{}'; skipped", mod.propPath);
+            continue;
+        }
+
+        const nlohmann::json value = ReflectionSerializer::serializeProperty(leafOwner, *leafProp);
+        for (size_t i = 1; i < instances.size(); ++i) {
+            void*           otherOwner = nullptr;
+            const Property* otherProp  = nullptr;
+            if (resolveReflectionPath(instances[i], rootTypeIndex, mod.propPath, otherOwner, otherProp)) {
+                ReflectionSerializer::deserializeProperty(*otherProp, otherOwner, value);
+            }
+        }
+    }
 }
 
 void DetailsView::drawComponents(Entity& entity)
@@ -121,9 +231,9 @@ void DetailsView::drawComponents(Entity& entity)
     drawSkyboxComponent(entity);
     drawEnvironmentLightingComponent(entity);
 
-    drawMaterialComponent<UnlitMaterialComponent>("Unlit Material", entity);
-    drawMaterialComponent<PhongMaterialComponent>("Phong Material", entity);
-    drawMaterialComponent<PBRMaterialComponent>("PBR Material", entity, "Invalidate##PBR");
+    drawMaterialComponent<UnlitMaterialComponent>("Unlit Material", {&entity});
+    drawMaterialComponent<PhongMaterialComponent>("Phong Material", {&entity});
+    drawMaterialComponent<PBRMaterialComponent>("PBR Material", {&entity}, "Invalidate##PBR");
 
     drawComponent<LuaScriptComponent>("Lua Script", entity, [this](LuaScriptComponent* lsc) {
         if (ImGui::Button("+ Add Script")) {
@@ -238,6 +348,113 @@ void DetailsView::drawComponents(Entity& entity)
     });
 
     drawReflectedFallbackComponents(entity);
+}
+
+void DetailsView::drawMultiComponents(const std::vector<Entity*>& entities)
+{
+    YA_PROFILE_FUNCTION();
+    if (entities.empty()) {
+        return;
+    }
+
+    ImGui::Text("Selected: %zu entities", entities.size());
+    ImGui::SameLine();
+    drawAddComponentButton(entities);
+    ImGui::Separator();
+
+    // Name is editable only when every selected entity shares the same name;
+    // otherwise show a disabled "(multiple values)" input.
+    {
+        const std::string firstName = entities.front()->getName();
+        const bool        bSameName = std::all_of(entities.begin() + 1, entities.end(), [&](Entity* entity) {
+            return entity->getName() == firstName;
+        });
+
+        ImGuiStyleScope style;
+        style.pushColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.5f, 1.0f));
+        ImGui::PushID("Name");
+        char buffer[256];
+        if (bSameName) {
+            strncpy_s(buffer, firstName.c_str(), sizeof(buffer) - 1);
+            buffer[sizeof(buffer) - 1] = '\0';
+        }
+        else {
+            strncpy_s(buffer, "", 1);
+            ImGui::BeginDisabled();
+        }
+
+        if (ImGui::InputText("Name", buffer, sizeof(buffer))) {
+            for (Entity* entity : entities) {
+                entity->setName(buffer);
+            }
+        }
+        if (!bSameName) {
+            ImGui::EndDisabled();
+        }
+        ImGui::PopID();
+    }
+
+    // Components shared by every selection (intersection). Edits to a shared
+    // component are written back to every instance by drawReflectedComponents.
+    drawReflectedComponents<TransformComponent>("Transform", entities, [](std::vector<TransformComponent*>& tcs, const ya::RenderContext&) {
+        for (TransformComponent* tc : tcs) {
+            tc->markLocalDirty();
+            tc->propagateWorldDirtyToChildren();
+        }
+    });
+    drawReflectedComponents<ModelComponent>("Model", entities, [](std::vector<ModelComponent*>& mcs, const ya::RenderContext& ctx) {
+        if (ctx.hasModifications()) {
+            for (ModelComponent* mc : mcs) {
+                mc->invalidate();
+            }
+        }
+    });
+    drawReflectedComponents<StaticMeshComponent>("Static Mesh", entities, [](std::vector<StaticMeshComponent*>& mcs, const ya::RenderContext& ctx) {
+        if (ctx.hasModifications()) {
+            for (StaticMeshComponent* mc : mcs) {
+                mc->invalidate();
+            }
+        }
+    });
+    drawReflectedComponents<SkinnedMeshComponent>("Skinned Mesh", entities, [](std::vector<SkinnedMeshComponent*>& mcs, const ya::RenderContext& ctx) {
+        if (ctx.hasModifications()) {
+            for (SkinnedMeshComponent* mc : mcs) {
+                mc->invalidate();
+            }
+        }
+    });
+    drawReflectedComponents<TerrainComponent>("Terrain", entities, [](std::vector<TerrainComponent*>& terrains, const ya::RenderContext& ctx) {
+        if (!ctx.hasModifications()) {
+            return;
+        }
+        for (TerrainComponent* terrain : terrains) {
+            terrain->invalidate(App::currentFrameIndex() + 8);
+            if (auto* resolver = App::get()->getResourceResolveSystem()) {
+                if (Entity* owner = terrain->getOwner()) {
+                    resolver->markTerrainDirty(static_cast<entt::entity>(*owner),
+                                               "editor terrain modified",
+                                               App::currentFrameIndex() + 8);
+                }
+            }
+        }
+    });
+    drawReflectedComponents<UIComponent>("UI Component", entities, [](std::vector<UIComponent*>&, const ya::RenderContext&) {});
+    drawReflectedComponents<DirectionalLightComponent>("Directional Light", entities, [](std::vector<DirectionalLightComponent*>&, const ya::RenderContext&) {});
+    drawReflectedComponents<PointLightComponent>("Point Light", entities, [](std::vector<PointLightComponent*>&, const ya::RenderContext&) {});
+    drawReflectedComponents<RenderComponent>("Render Component", entities, [](std::vector<RenderComponent*>&, const ya::RenderContext&) {});
+    drawReflectedComponents<BillboardComponent>("Billboard", entities, [](std::vector<BillboardComponent*>& bcs, const ya::RenderContext& ctx) {
+        if (ctx.hasModifications()) {
+            for (BillboardComponent* bc : bcs) {
+                bc->invalidate();
+            }
+        }
+    });
+
+    drawMaterialComponent<UnlitMaterialComponent>("Unlit Material", entities);
+    drawMaterialComponent<PhongMaterialComponent>("Phong Material", entities);
+    drawMaterialComponent<PBRMaterialComponent>("PBR Material", entities, "Invalidate##PBR");
+
+    drawReflectedFallbackComponents(entities);
 }
 
 } // namespace ya

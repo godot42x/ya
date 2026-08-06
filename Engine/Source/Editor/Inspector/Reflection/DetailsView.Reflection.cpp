@@ -48,12 +48,14 @@ bool DetailsView::canAddComponent(Entity& entity, type_index_t typeIndex) const
 
 void DetailsView::drawReflectedFallbackComponents(Entity& entity)
 {
-    Scene* scene = entity.getScene();
-    if (!scene) {
+    drawReflectedFallbackComponents(std::vector<Entity*>{&entity});
+}
+
+void DetailsView::drawReflectedFallbackComponents(const std::vector<Entity*>& entities)
+{
+    if (entities.empty()) {
         return;
     }
-    auto& registry = scene->getRegistry();
-
     static const std::unordered_set<type_index_t> kHandwrittenTypes = [] {
         return std::unordered_set<type_index_t>{
             type_index_v<TransformComponent>,
@@ -88,44 +90,70 @@ void DetailsView::drawReflectedFallbackComponents(Entity& entity)
     std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
 
     for (const auto& [name, ti] : entries) {
-        void* component = ECSRegistry::get().getComponent(ti, registry, entity.getHandle());
-        if (!component) {
+        std::vector<void*> instances;
+        bool              bShared = true;
+        for (Entity* entity : entities) {
+            if (!entity || !entity->isValid() || !entity->getScene()) {
+                bShared = false;
+                break;
+            }
+            void* component = ECSRegistry::get().getComponent(ti, entity->getScene()->getRegistry(), entity->getHandle());
+            if (!component) {
+                bShared = false;
+                break;
+            }
+            instances.push_back(component);
+        }
+        if (!bShared || instances.empty()) {
             continue;
         }
-        drawReflectedFallbackOne(name, ti, component, entity);
+        drawReflectedFallbackOne(name, ti, instances, entities);
     }
 }
 
 void DetailsView::drawReflectedFallbackOne(const std::string& name,
                                            type_index_t       typeIndex,
-                                           void*              component,
-                                           Entity&            entity)
+                                           std::vector<void*>& instances,
+                                           const std::vector<Entity*>& entities)
 {
     const std::string label = name + "  (auto)";
+    const bool        bCanRemove = std::all_of(entities.begin(), entities.end(), [&](Entity* entity) {
+        return canRemoveComponent(*entity, typeIndex);
+    });
 
     componentSectionShell(
         label,
         reinterpret_cast<const void*>(static_cast<uintptr_t>(typeIndex)),
-        canRemoveComponent(entity, typeIndex),
+        bCanRemove,
         [&] {
             const auto* cls = ClassRegistry::instance().getClass(typeIndex);
             if (cls) {
                 ya::RenderContext ctx;
-                ctx.beginInstance(component);
-                ya::renderReflectedType(name, typeIndex, component, ctx, 0);
+                ctx.beginInstance(instances.front());
+                ya::renderReflectedType(name, typeIndex, instances.front(), ctx, 0);
+                if (ctx.hasModifications() && instances.size() > 1) {
+                    applyModificationsToInstances(ctx.modifications, typeIndex, instances);
+                }
             }
             else {
                 ImGui::TextDisabled("No reflection info; fields not editable.");
             }
         },
         [&] {
-            if (Scene* scene = entity.getScene()) {
-                ECSRegistry::get().removeComponent(typeIndex, *scene, entity.getHandle());
+            for (size_t i = 0; i < entities.size() && i < instances.size(); ++i) {
+                if (Scene* scene = entities[i]->getScene()) {
+                    ECSRegistry::get().removeComponent(typeIndex, *scene, entities[i]->getHandle());
+                }
             }
         });
 }
 
 void DetailsView::drawAddComponentButton(Entity& entity)
+{
+    drawAddComponentButton(std::vector<Entity*>{&entity});
+}
+
+void DetailsView::drawAddComponentButton(const std::vector<Entity*>& entities)
 {
     float buttonWidth = 200.0f;
     float windowWidth = ImGui::GetContentRegionAvail().x;
@@ -159,24 +187,43 @@ void DetailsView::drawAddComponentButton(Entity& entity)
                 }
             }
 
-            auto* scene = entity.getScene();
-            if (ecsRegistry.hasComponent(typeIndex, *scene, entity.getHandle())) {
-                ImGui::BeginDisabled();
-                ImGui::MenuItem(componentName.c_str());
-                ImGui::EndDisabled();
-            }
-            else if (!canAddComponent(entity, typeIndex)) {
-                ImGui::BeginDisabled();
-                ImGui::MenuItem(componentName.c_str());
-                ImGui::EndDisabled();
-            }
-            else {
-                if (ImGui::MenuItem(componentName.c_str())) {
-                    if (void* compPtr = ecsRegistry.addComponent(typeIndex, *scene, entity.getHandle())) {
-                        YA_CORE_INFO("Added component '{}' to entity '{}' {}", componentName, entity.getName(), compPtr);
-                    }
-                    ImGui::CloseCurrentPopup();
+            bool bAllHave    = true;
+            bool bAnyAddable = false;
+            for (Entity* entity : entities) {
+                if (!entity || !entity->isValid() || !entity->getScene()) {
+                    bAllHave = false;
+                    continue;
                 }
+                if (ecsRegistry.hasComponent(typeIndex, *entity->getScene(), entity->getHandle())) {
+                    continue;
+                }
+                bAllHave = false;
+                if (canAddComponent(*entity, typeIndex)) {
+                    bAnyAddable = true;
+                }
+            }
+
+            if (bAllHave || !bAnyAddable) {
+                ImGui::BeginDisabled();
+                ImGui::MenuItem(componentName.c_str());
+                ImGui::EndDisabled();
+            }
+            else if (ImGui::MenuItem(componentName.c_str())) {
+                for (Entity* entity : entities) {
+                    if (!entity || !entity->isValid() || !entity->getScene()) {
+                        continue;
+                    }
+                    if (ecsRegistry.hasComponent(typeIndex, *entity->getScene(), entity->getHandle())) {
+                        continue;
+                    }
+                    if (!canAddComponent(*entity, typeIndex)) {
+                        continue;
+                    }
+                    if (void* compPtr = ecsRegistry.addComponent(typeIndex, *entity->getScene(), entity->getHandle())) {
+                        YA_CORE_INFO("Added component '{}' to entity '{}' {}", componentName, entity->getName(), compPtr);
+                    }
+                }
+                ImGui::CloseCurrentPopup();
             }
         }
 
