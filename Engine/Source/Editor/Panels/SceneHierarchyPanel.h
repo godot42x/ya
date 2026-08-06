@@ -6,6 +6,8 @@
 #include <memory>
 #include <sol/sol.hpp>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 
@@ -31,7 +33,6 @@ struct SceneHierarchyPanel
 
     static constexpr const char *NODE_DRAG_DROP_PAYLOAD = "SCENE_HIERARCHY_NODE";
     static constexpr size_t      SEARCH_BUFFER_SIZE     = 128;
-    static constexpr size_t      RENAME_BUFFER_SIZE     = 256;
 
     EditorLayer *_owner;
     Scene       *_context       = nullptr;
@@ -40,18 +41,16 @@ struct SceneHierarchyPanel
     std::vector<Entity*> _selections;      // Click order; primary kept at front on notify
     Entity*              _primarySelection = nullptr;
     Entity*              _rangeAnchor      = nullptr;
-    Node*                _selectedFolder   = nullptr; // Single folder selection (organizational only)
 
     std::vector<Entity*> _flatEntities;    // DFS tree order + standalone entities, rebuilt per frame
+    std::unordered_map<Node*, bool> _lastNodeOpenState; // Last rendered open state per node
+    std::unordered_set<Node*>       _pendingTreeToggle; // Label click => toggle collapse next frame
 
     // === Search state ===
     char    _searchBuffer[SEARCH_BUFFER_SIZE] = "";
     std::string _searchLower;
 
-    // === Pending folder actions (deferred to keep tree iteration safe) ===
-    Node* _renamingFolder      = nullptr;
-    char  _renameBuffer[RENAME_BUFFER_SIZE] = "";
-    Node* _pendingFolderDelete = nullptr;
+    // === Pending batch actions (deferred to keep tree iteration safe) ===
     std::vector<Node*>   _pendingNodeDuplicate;
     std::vector<Entity*> _pendingEntityDelete;
 
@@ -83,7 +82,6 @@ struct SceneHierarchyPanel
 
     // Node hierarchy rendering
     void drawNodeRecursive(Node *node);
-    void drawFolderNode(Node *node);
     void drawNodeDropTarget(Node *node, ImVec2 itemMin, ImVec2 itemMax, bool isHovered);
     void renderStandaloneEntities();
 
@@ -106,9 +104,6 @@ struct SceneHierarchyPanel
     bool subtreeMatchesFilter(Node *node) const;
     void drawCreateMenuItems(Node *parentNode);
     void drawEntityNodeContextMenu(Node *node, Entity *entity);
-    void drawFolderContextMenu(Node *folder);
-    void drawFolderRenamePopup();
-    void drawFolderDeletePopup();
     void flushPendingActions();
 };
 

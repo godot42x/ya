@@ -20,8 +20,6 @@
 #include "Scene/Scene.h"
 #include <algorithm>
 #include <cctype>
-#include <cstdint>
-#include <cstdio>
 #include <iterator>
 #include <string>
 #include <glm/gtc/type_ptr.hpp>
@@ -55,14 +53,13 @@ void SceneHierarchyPanel::setContext(Scene* scene)
         _rangeAnchor = nullptr;
     }
 
-    _selectedFolder        = nullptr;
-    _renamingFolder        = nullptr;
-    _pendingFolderDelete   = nullptr;
     _pendingScrollSelection = nullptr;
     _pendingDraggedNode    = nullptr;
     _pendingDropTarget     = nullptr;
     _pendingNodeDuplicate.clear();
     _pendingEntityDelete.clear();
+    _lastNodeOpenState.clear();
+    _pendingTreeToggle.clear();
     _searchBuffer[0] = '\0';
 
     if (bSelectionChanged || !_primarySelection) {
@@ -72,7 +69,6 @@ void SceneHierarchyPanel::setContext(Scene* scene)
 
 void SceneHierarchyPanel::setSelection(Entity* entity)
 {
-    _selectedFolder = nullptr;
     if (entity && entity->isValid()) {
         _selections       = {entity};
         _primarySelection = entity;
@@ -92,7 +88,6 @@ void SceneHierarchyPanel::handleEntityClick(Entity* entity)
     if (!entity || !entity->isValid()) {
         return;
     }
-    _selectedFolder = nullptr;
 
     const bool bMulti = ImGui::GetIO().KeyCtrl || ImGui::GetIO().KeySuper;
     const bool bRange = ImGui::GetIO().KeyShift;
@@ -145,7 +140,6 @@ void SceneHierarchyPanel::replaceSelection(const std::vector<Entity*>& entities,
     _selections       = entities;
     _primarySelection = primary ? primary : (_selections.empty() ? nullptr : _selections.front());
     _rangeAnchor      = _primarySelection;
-    _selectedFolder   = nullptr;
     _pendingScrollSelection = _primarySelection;
     notifyOwnerSelection();
 }
@@ -265,12 +259,6 @@ void SceneHierarchyPanel::sceneTree()
             Node* parentNode = getSelectedNode();
             ContextMenu ctx("SceneHierarchyContextMenu", ContextMenu::Type::BlankSpace);
             if (ctx.begin()) {
-                if (ctx.menuItem("Create Folder")) {
-                    if (Node* folder = _context->createFolder("New Folder", parentNode)) {
-                        _selectedFolder = folder;
-                    }
-                }
-                ctx.separator();
                 drawCreateMenuItems(parentNode);
                 ctx.end();
             }
@@ -287,8 +275,6 @@ void SceneHierarchyPanel::sceneTree()
     // Deferred batch actions and modals run after the tree render so node
     // mutation never happens while a parent's child list is being iterated.
     flushPendingActions();
-    drawFolderRenamePopup();
-    drawFolderDeletePopup();
 
     ImGui::End();
 }
@@ -359,11 +345,6 @@ void SceneHierarchyPanel::drawNodeRecursive(Node* node)
         return;
     }
 
-    if (node->isFolder()) {
-        drawFolderNode(node);
-        return;
-    }
-
     Entity* entity = node->getEntity();
     if (!entity) {
         return;
@@ -389,12 +370,16 @@ void SceneHierarchyPanel::drawNodeRecursive(Node* node)
         flags |= ImGuiTreeNodeFlags_Selected;
     }
 
-    // While searching, auto-expand any node that leads to a match.
-    if (bSearching && subtreeMatchesFilter(node)) {
+    // While searching, auto-expand any node that leads to a match. Otherwise a
+    // single click on a parent row toggles collapse/expand next frame (arrow
+    // clicks are handled by ImGui itself).
+    const bool bForceOpen = (bSearching && subtreeMatchesFilter(node)) || shouldAutoOpenForSelection(node);
+    if (bForceOpen) {
         ImGui::SetNextItemOpen(true, ImGuiCond_Always);
     }
-    if (shouldAutoOpenForSelection(node)) {
-        ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+    else if (_pendingTreeToggle.erase(node) > 0) {
+        const bool wasOpen = _lastNodeOpenState.contains(node) ? _lastNodeOpenState[node] : false;
+        ImGui::SetNextItemOpen(!wasOpen, ImGuiCond_Always);
     }
 
     if (bSelfMatch) {
@@ -404,6 +389,7 @@ void SceneHierarchyPanel::drawNodeRecursive(Node* node)
     if (bSelfMatch) {
         ImGui::PopStyleColor();
     }
+    _lastNodeOpenState[node] = opened;
     ImVec2 itemMin   = ImGui::GetItemRectMin();
     ImVec2 itemMax   = ImGui::GetItemRectMax();
     bool   isHovered = ImGui::IsItemHovered();
@@ -414,6 +400,9 @@ void SceneHierarchyPanel::drawNodeRecursive(Node* node)
 
     if (ImGui::IsItemClicked()) {
         handleEntityClick(entity);
+        if (hadChildren && !ImGui::IsItemToggledOpen()) {
+            _pendingTreeToggle.insert(node);
+        }
     }
     // Right-click selects the item first so the context menu acts on the
     // whole selection when the item is already part of it.
@@ -430,71 +419,6 @@ void SceneHierarchyPanel::drawNodeRecursive(Node* node)
 
     drawNodeDropTarget(node, itemMin, itemMax, isHovered);
     drawEntityNodeContextMenu(node, entity);
-
-    if (opened && hadChildren) {
-        for (Node* child : node->getChildren()) {
-            drawNodeRecursive(child);
-        }
-        ImGui::TreePop();
-    }
-}
-
-void SceneHierarchyPanel::drawFolderNode(Node* node)
-{
-    if (!node) {
-        return;
-    }
-
-    const bool bSearching = isSearchActive();
-    const bool bSelfMatch = bSearching && matchesFilter(getNodeName(node));
-    if (bSearching && !bSelfMatch && !subtreeMatchesFilter(node)) {
-        return;
-    }
-
-    const bool selected    = (node == _selectedFolder);
-    const bool hadChildren = node->hasChildren();
-
-    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
-    if (!hadChildren) {
-        flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-    }
-    if (selected) {
-        flags |= ImGuiTreeNodeFlags_Selected;
-    }
-    if (bSearching && subtreeMatchesFilter(node)) {
-        ImGui::SetNextItemOpen(true, ImGuiCond_Always);
-    }
-
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.78f, 0.32f, 1.0f));
-    bool opened = ImGui::TreeNodeEx((void*)(intptr_t)node, flags, "[Folder] %s", node->getName().c_str());
-    ImGui::PopStyleColor();
-
-    ImVec2 itemMin   = ImGui::GetItemRectMin();
-    ImVec2 itemMax   = ImGui::GetItemRectMax();
-    bool   isHovered = ImGui::IsItemHovered();
-
-    if (ImGui::IsItemClicked()) {
-        // Folder selection is organizational only: it replaces the entity
-        // selection and never enters the entity selection bus.
-        _selections.clear();
-        _primarySelection = nullptr;
-        _rangeAnchor      = nullptr;
-        _selectedFolder   = node;
-        notifyOwnerSelection();
-    }
-    if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && node != _selectedFolder) {
-        _selectedFolder = node;
-    }
-
-    if (ImGui::BeginDragDropSource()) {
-        Node* draggedNode = node;
-        ImGui::SetDragDropPayload(NODE_DRAG_DROP_PAYLOAD, &draggedNode, sizeof(draggedNode));
-        ImGui::TextUnformatted(node->getName().c_str());
-        ImGui::EndDragDropSource();
-    }
-
-    drawNodeDropTarget(node, itemMin, itemMax, isHovered);
-    drawFolderContextMenu(node);
 
     if (opened && hadChildren) {
         for (Node* child : node->getChildren()) {
@@ -653,33 +577,6 @@ void SceneHierarchyPanel::drawEntityNodeContextMenu(Node* node, Entity* entity)
     }
 }
 
-void SceneHierarchyPanel::drawFolderContextMenu(Node* folder)
-{
-    ContextMenu ctx("FolderContextMenu##" + std::to_string(reinterpret_cast<uintptr_t>(folder)),
-                    ContextMenu::Type::EntityItem);
-    if (ctx.begin()) {
-        if (ctx.menuItem("Rename")) {
-            _renamingFolder = folder;
-            std::snprintf(_renameBuffer, sizeof(_renameBuffer), "%s", folder->getName().c_str());
-            ImGui::OpenPopup("Rename Folder##rename");
-        }
-        ctx.separator();
-        if (ctx.menuItem("Create Child Folder")) {
-            _context->createFolder("New Folder", folder);
-        }
-        drawCreateMenuItems(folder);
-        ctx.separator();
-        if (ctx.menuItem("Duplicate")) {
-            _pendingNodeDuplicate = {folder};
-        }
-        if (ctx.menuItem("Delete")) {
-            _pendingFolderDelete = folder;
-            ImGui::OpenPopup("Delete Folder##confirm");
-        }
-        ctx.end();
-    }
-}
-
 void SceneHierarchyPanel::renderStandaloneEntities()
 {
     auto view = _context->getRegistry().view<TransformComponent>();
@@ -731,9 +628,6 @@ void SceneHierarchyPanel::drawFlatEntity(Entity& entity)
 
 Node* SceneHierarchyPanel::getSelectedNode() const
 {
-    if (_selectedFolder) {
-        return _selectedFolder;
-    }
     if (!_context || !_primarySelection) {
         return nullptr;
     }
@@ -822,13 +716,8 @@ bool SceneHierarchyPanel::moveNode(Node* draggedNode, Node* targetNode, ENodeDro
     }
 
     bool moved = _context->moveNode(draggedNode, newParent, childIndex);
-    if (moved) {
-        if (Entity* entity = draggedNode->getEntity()) {
-            setSelection(entity);
-        }
-        else {
-            _selectedFolder = draggedNode;
-        }
+    if (moved && draggedNode->getEntity()) {
+        setSelection(draggedNode->getEntity());
     }
     return moved;
 }
@@ -858,28 +747,19 @@ void SceneHierarchyPanel::flushPendingActions()
     // parent's child list is being iterated during tree rendering.
     if (!_pendingNodeDuplicate.empty()) {
         std::vector<Entity*> duplicated;
-        Node*                primaryFolder = nullptr;
         for (Node* node : _pendingNodeDuplicate) {
             if (!node) {
                 continue;
             }
             Node* parent = node->getParent();
             if (Node* newNode = _context->duplicateNode(node, parent)) {
-                if (newNode->isFolder()) {
-                    if (!primaryFolder) {
-                        primaryFolder = newNode;
-                    }
-                }
-                else if (Entity* newEntity = newNode->getEntity()) {
+                if (Entity* newEntity = newNode->getEntity()) {
                     duplicated.push_back(newEntity);
                 }
             }
         }
         _pendingNodeDuplicate.clear();
-        if (primaryFolder) {
-            _selectedFolder = primaryFolder;
-        }
-        else if (!duplicated.empty()) {
+        if (!duplicated.empty()) {
             replaceSelection(duplicated, duplicated.front());
         }
     }
@@ -894,63 +774,6 @@ void SceneHierarchyPanel::flushPendingActions()
             _context->destroyEntity(entity);
         }
         _pendingEntityDelete.clear();
-    }
-}
-
-void SceneHierarchyPanel::drawFolderRenamePopup()
-{
-    if (!_renamingFolder) {
-        return;
-    }
-    if (ImGui::BeginPopupModal("Rename Folder##rename", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("Rename folder");
-        const bool bEnter = ImGui::InputText("Name",
-                                             _renameBuffer,
-                                             sizeof(_renameBuffer),
-                                             ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
-        if (ImGui::Button("Apply", ImVec2(120, 0)) || bEnter) {
-            _renamingFolder->setName(_renameBuffer);
-            _renamingFolder = nullptr;
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-            _renamingFolder = nullptr;
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
-}
-
-void SceneHierarchyPanel::drawFolderDeletePopup()
-{
-    if (!_pendingFolderDelete) {
-        return;
-    }
-    if (ImGui::BeginPopupModal("Delete Folder##confirm", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("Delete folder '%s' and all its contents?", _pendingFolderDelete->getName().c_str());
-        ImGui::Separator();
-        if (ImGui::Button("Delete", ImVec2(120, 0))) {
-            Node* folder = _pendingFolderDelete;
-            _pendingFolderDelete = nullptr;
-            if (_selectedFolder == folder) {
-                _selectedFolder = nullptr;
-            }
-            if (_renamingFolder == folder) {
-                _renamingFolder = nullptr;
-            }
-            std::erase(_pendingNodeDuplicate, folder);
-            if (_context) {
-                _context->destroyNode(folder);
-            }
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-            _pendingFolderDelete = nullptr;
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
     }
 }
 
