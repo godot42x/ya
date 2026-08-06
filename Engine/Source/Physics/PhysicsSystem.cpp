@@ -1,5 +1,6 @@
 #include "PhysicsSystem.h"
 
+#include "Core/Common/FWD-std.h"
 #include "Core/Log.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Physics/PhysicsBodyComponent.h"
@@ -20,10 +21,6 @@
 #include <Jolt/RegisterTypes.h>
 
 #include "entt/entt.hpp"
-
-#include <algorithm>
-#include <thread>
-#include <unordered_map>
 
 // Explicitly import the Jolt length / scalar literal operators instead of
 // pulling the whole JPH::literals namespace into this translation unit.
@@ -185,7 +182,7 @@ PhysicsSystem::PhysicsSystem() = default;
 // Callback for traces, connect this to your own trace function if you have one
 static void TraceImpl(const char* inFMT, ...)
 {
-    va_list list;
+    va_list list = nullptr;
     va_start(list, inFMT);
     char buffer[1024];
     vsnprintf(buffer, sizeof(buffer), inFMT, list);

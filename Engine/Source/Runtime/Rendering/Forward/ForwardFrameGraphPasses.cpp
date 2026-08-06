@@ -102,8 +102,8 @@ AttachmentDescription makeEntityIdAttachmentDesc()
         .samples  = ESampleCount::Sample_1,
         .loadOp   = EAttachmentLoadOp::Clear,
         .storeOp  = EAttachmentStoreOp::Store,
-        .usage    = EImageUsage::ColorAttachment | EImageUsage::TransferSrc,
         .finalLayout = EImageLayout::ColorAttachmentOptimal,
+        .usage    = EImageUsage::ColorAttachment | EImageUsage::TransferSrc,
     };
 }
 

@@ -13,6 +13,7 @@
 - `./ibl_visual_regression_baseline.md`：IBL / environment lighting 视觉回归的固定观察基线
 - `./rendergraph_point_shadow_indirect_cull_regression.md`：point shadow indirect cull、RenderGraph compile fail、旧帧冻结与 usage contract 回归
 - `./windows_dll_boundary.md`：Windows 下 DLL boundary、单例/注册表重复实例、ImGui/反射状态分裂等问题
+- `./windows_msvc_compile_portability.md`：从 macOS 切到 Windows/MSVC 的编译/链接故障清单（C7560、ENGINE_API 导出、class/struct 修饰名、POSIX 头、__VA_OPT__）
 
 ## 边界
 

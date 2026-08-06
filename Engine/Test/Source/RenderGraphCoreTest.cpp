@@ -416,8 +416,8 @@ TEST(RenderGraphCoreTest, CreateAndImportBufferTrackSeparateResources)
     RenderGraph graph;
     auto importedBacking = std::make_shared<TestBuffer>(BufferCreateInfo{
         .label = "external.readback",
-        .size = 512,
         .usage = EBufferUsage::TransferDst,
+        .size = 512,
     });
 
     const auto transientHandle = graph.createBuffer(RGBufferDesc{
@@ -702,13 +702,13 @@ TEST(RenderGraphCoreTest, CompileInfersCopyPassKindForTransferOnlyPass)
     RenderGraph graph;
     auto srcBacking = std::make_shared<TestBuffer>(BufferCreateInfo{
         .label = "readback.src",
-        .size = 128,
         .usage = EBufferUsage::TransferSrc,
+        .size = 128,
     });
     auto dstBacking = std::make_shared<TestBuffer>(BufferCreateInfo{
         .label = "readback.dst",
-        .size = 128,
         .usage = EBufferUsage::TransferDst,
+        .size = 128,
     });
     const auto src = graph.importBuffer(RGImportedBufferDesc{
         .desc = RGBufferDesc{
@@ -988,8 +988,8 @@ TEST(RenderGraphCoreTest, CompileTransientBufferLifetimesFollowExplicitDependenc
     RenderGraph graph;
     auto importedBacking = std::make_shared<TestBuffer>(BufferCreateInfo{
         .label = "imported.buffer",
-        .size = 64,
         .usage = EBufferUsage::StorageBuffer,
+        .size = 64,
     });
     const auto imported = graph.importBuffer(RGImportedBufferDesc{
         .desc = RGBufferDesc{
@@ -1170,8 +1170,8 @@ TEST(RenderGraphCoreTest, CompileDoesNotAliasOverlappingOrIncompatibleTransientB
         RGPersistentBufferKey{"persistent.buffer"});
     auto importedBacking = std::make_shared<TestBuffer>(BufferCreateInfo{
         .label = "imported.buffer",
-        .size = 64,
         .usage = EBufferUsage::StorageBuffer,
+        .size = 64,
         .memoryUsage = EMemoryUsage::GpuOnly,
     });
     const auto imported = graph.importBuffer(RGImportedBufferDesc{
@@ -1348,8 +1348,8 @@ TEST(RenderGraphCoreTest, CompileTracksExplicitUniformAndStorageBufferStates)
     RenderGraph graph;
     auto uniformBacking = std::make_shared<TestBuffer>(BufferCreateInfo{
         .label = "frame.uniform",
-        .size = 256,
         .usage = EBufferUsage::UniformBuffer,
+        .size = 256,
     });
     const auto uniformBuffer = graph.importBuffer(RGImportedBufferDesc{
         .desc = RGBufferDesc{
@@ -1461,8 +1461,8 @@ TEST(RenderGraphCoreTest, CompileDoesNotAddDependenciesForNonOverlappingImported
     RenderGraph graph;
     auto readbackBacking = std::make_shared<TestBuffer>(BufferCreateInfo{
         .label = "readback",
-        .size = 256,
         .usage = EBufferUsage::TransferSrc | EBufferUsage::TransferDst,
+        .size = 256,
     });
     const auto readback = graph.importBuffer(RGImportedBufferDesc{
         .desc = RGBufferDesc{
@@ -1513,8 +1513,8 @@ TEST(RenderGraphCoreTest, CompileRejectsIndirectReadWithoutIndirectUsage)
     RenderGraph graph;
     auto commandsBacking = std::make_shared<TestBuffer>(BufferCreateInfo{
         .label = "storage-only.commands",
-        .size = 128,
         .usage = EBufferUsage::StorageBuffer,
+        .size = 128,
     });
     const auto commands = graph.importBuffer(RGImportedBufferDesc{
         .desc = RGBufferDesc{

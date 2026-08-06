@@ -27,6 +27,9 @@
 3. 资源、材质、渲染、代码组织等专项问题：只进入对应单个 skill
 4. 历史坑与回归：按需补充 memory
 
+跨平台（Windows/MSVC 与 macOS/Clang 切换、DLL 导出、平台差异导致的编译/链接报错）：
+`./skills/cross-platform/SKILL.md`
+
 ## 维护规则
 
 - 稳定规则优先写 skill。

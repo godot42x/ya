@@ -4,7 +4,7 @@
 
 ## 推荐顺序
 
-`ya-build` > `profiling` > `vscode` > `resource-system` > `material-flow` > `render-arch` > `cpp-style` > `code-reorganize` > `debug-review`
+`ya-build` > `cross-platform` > `profiling` > `vscode` > `resource-system` > `material-flow` > `render-arch` > `cpp-style` > `code-reorganize` > `debug-review`
 
 若问题描述不清晰，先读 `soul`，澄清后再切到主 skill。
 
@@ -12,6 +12,7 @@
 
 - `soul`：需求不清晰、方向未收敛时先做澄清
 - `ya-build`：XMake 构建、目标、shader 生成、测试
+- `cross-platform`：Windows/MSVC 与 macOS/Clang 跨平台编译规则、DLL 导出、平台差异
 - `profiling`：profile 模式、automation trace、低噪音性能冒烟
 - `speedscope-analysis`：speedscope trace 抽样转文本、热点定位、交给 AI 分析
 - `vscode`：VS Code 任务、调试、clangd、compile_commands

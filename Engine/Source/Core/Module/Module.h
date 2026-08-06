@@ -6,9 +6,9 @@
 namespace ya
 {
 
-class App;
+struct App;
 struct AppDesc;
-struct Event;
+class Event;
 struct ICommandBuffer;
 struct Scene;
 enum class AppState;

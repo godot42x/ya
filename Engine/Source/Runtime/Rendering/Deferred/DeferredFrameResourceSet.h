@@ -25,7 +25,7 @@ namespace ya
  * those owner-backed resources after this object has prepared the current
  * flight.
  */
-class DeferredFrameResourceSet
+class ENGINE_API DeferredFrameResourceSet
 {
     friend class DeferredFrameResourceSetTestAccess;
 

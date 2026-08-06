@@ -42,9 +42,10 @@ xmake project -k compile_commands
 
 ## Skill Routing
 
-默认优先级：`ya-build > profiling > vscode > resource-system > material-flow > render-arch > cpp-style > code-reorganize > debug-review`
+默认优先级：`ya-build > cross-platform > profiling > vscode > resource-system > material-flow > render-arch > cpp-style > code-reorganize > debug-review`
 
 - 构建、目标、编译、shader 生成、测试：`./.agent/skills/ya-build/SKILL.md`
+- 跨平台（Windows/MSVC 与 macOS/Clang 切换、DLL 导出、designated initializer 顺序、平台差异编译/链接报错）：`./.agent/skills/cross-platform/SKILL.md`
 - profiling、automation trace、性能冒烟：`./.agent/skills/profiling/SKILL.md`
 - VS Code、clangd、launch、tasks：`./.agent/skills/vscode/SKILL.md`
 - 资源加载、resolve、dirty queue、environment lighting：`./.agent/skills/resource-system/SKILL.md`
