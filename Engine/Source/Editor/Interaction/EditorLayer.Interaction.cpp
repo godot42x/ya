@@ -192,8 +192,8 @@ void EditorLayer::onEvent(const Event& event)
 
         if (keyEvent.getKeyCode() == EKey::K_F) {
             // Focus camera on selected entity
-            if (auto* selectedEntity = _sceneHierarchyPanel.getSelectedEntity(); selectedEntity && selectedEntity->isValid()) {
-                focusCameraOnEntity(_sceneHierarchyPanel.getSelectedEntity());
+            if (auto* selectedEntity = getSelectedEntity(); selectedEntity && selectedEntity->isValid()) {
+                focusCameraOnEntity(selectedEntity);
             }
         }
 
@@ -215,8 +215,9 @@ bool EditorLayer::isGizmoActive() const
 void EditorLayer::renderGizmo()
 {
     YA_PROFILE_FUNCTION();
-    // Get selected entity from hierarchy panel
-    Entity* selectedEntity = _sceneHierarchyPanel.getSelectedEntity();
+    // Primary selection drives the gizmo; other selected entities follow the
+    // same world delta (see the manipulation block below).
+    Entity* selectedEntity = getSelectedEntity();
 
     // CRITICAL: Do NOT call selectedEntity->isValid() before null check!
     // The entity pointer may point to destroyed memory after scene switch.
@@ -267,7 +268,8 @@ void EditorLayer::renderGizmo()
     // Get parent world matrix for hierarchy transform calculations
 
     // Use WORLD matrix for gizmo display (so gizmo appears at actual world position)
-    glm::mat4 worldTransform = tc->getTransform();
+    glm::mat4 worldTransform          = tc->getTransform();
+    const glm::mat4 originalWorldTransform = worldTransform;
 
     // Snap settings (can be toggled with Ctrl key)
     float snap[3] = {0.0f, 0.0f, 0.0f};     // No snap by default
@@ -304,6 +306,25 @@ void EditorLayer::renderGizmo()
         // Gizmo was used - worldTransform now contains the NEW world matrix after manipulation
         // Use TransformSystem to update transform (ensures proper computation and propagation)
         TransformSystem::setWorldTransform(tc, worldTransform);
+
+        // Apply the same world-space delta to every other selected entity so
+        // translation moves them together and rotation/scale pivot on the
+        // primary entity.
+        const auto& selections = getSelections();
+        if (selections.size() > 1) {
+            const glm::mat4 delta = worldTransform * glm::inverse(originalWorldTransform);
+            for (Entity* other : selections) {
+                if (!other || other == selectedEntity || !other->isValid()) {
+                    continue;
+                }
+                auto* otherTc = other->getComponent<TransformComponent>();
+                if (!otherTc) {
+                    continue;
+                }
+                const glm::mat4 otherWorld = delta * otherTc->getTransform();
+                TransformSystem::setWorldTransform(otherTc, otherWorld);
+            }
+        }
 
         // Decompose LOCAL matrix back to position/rotation/scale
         // glm::vec3 position, rotation, scale;
@@ -366,7 +387,9 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
 
     // Update selection
     if (pickedEntity) {
-        _sceneHierarchyPanel.setSelection(pickedEntity);
+        // Ctrl/Cmd toggles membership, Shift extends from the anchor; plain
+        // clicks replace the selection.
+        _sceneHierarchyPanel.handleEntityClick(pickedEntity);
         YA_CORE_INFO("Picked entity: {}", pickedEntity->getName());
     }
     else {

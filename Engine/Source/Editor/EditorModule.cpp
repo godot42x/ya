@@ -89,15 +89,17 @@ std::shared_ptr<RenderImage> createEditorViewportImage(IRender& render, const Re
         });
 }
 
-void drawSelectedEntityBounds(const EditorLayer& layer)
+void drawEntityBounds(Entity* entity, const glm::vec4& color)
 {
-    Entity* selectedEntity = layer.getSelectedEntity();
-    Scene*  scene          = layer.getViewportInteractionScene();
-    if (!selectedEntity || !selectedEntity->isValid() || !scene || selectedEntity->getScene() != scene) {
+    if (!entity || !entity->isValid()) {
+        return;
+    }
+    Scene* scene = entity->getScene();
+    if (!scene) {
         return;
     }
 
-    auto* tc = selectedEntity->getComponent<TransformComponent>();
+    auto* tc = entity->getComponent<TransformComponent>();
     if (!tc) {
         return;
     }
@@ -106,7 +108,7 @@ void drawSelectedEntityBounds(const EditorLayer& layer)
     const glm::mat4 worldMatrix = tc->getWorldMatrix();
 
     const auto& registry = scene->getRegistry();
-    const auto  handle   = selectedEntity->getHandle();
+    const auto  handle   = entity->getHandle();
 
     AABB worldBounds;
     bool hasBounds = false;
@@ -133,10 +135,25 @@ void drawSelectedEntityBounds(const EditorLayer& layer)
         return;
     }
 
-    constexpr glm::vec4 kSelectionColor = {0.98f, 0.69f, 0.23f, 1.0f};
     Render2D::makeWireBox(glm::translate(glm::mat4(1.0f), worldBounds.getCenter()),
                           (worldBounds.max - worldBounds.min) * 0.5f,
-                          kSelectionColor);
+                          color);
+}
+
+void drawSelectedEntityBounds(const EditorLayer& layer)
+{
+    const auto& selections = layer.getSelections();
+    if (selections.empty()) {
+        return;
+    }
+
+    // Primary selection stays at index 0 (see EditorLayer::setSelections).
+    constexpr glm::vec4 kPrimarySelectionColor   = {0.98f, 0.69f, 0.23f, 1.0f};
+    constexpr glm::vec4 kSecondarySelectionColor = {0.78f, 0.60f, 0.28f, 1.0f};
+
+    for (size_t i = 0; i < selections.size(); ++i) {
+        drawEntityBounds(selections[i], i == 0 ? kPrimarySelectionColor : kSecondarySelectionColor);
+    }
 }
 
 class EditorViewportCompositor
