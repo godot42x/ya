@@ -5,6 +5,7 @@
 #include "Core/Reflection/Reflection.h"
 #include "Core/System/VirtualFileSystem.h"
 #include <algorithm>
+#include <limits>
 #include <memory>
 #include <string>
 #include <utility>
@@ -56,6 +57,11 @@ struct AssetRefBase
 
   protected:
     std::string _path; // Serialized data: asset path
+
+    // Resource-version epoch observed at the last staleness check. An
+    // unchanged epoch guarantees no resource version changed, so per-frame
+    // staleness checks can skip the per-path version query entirely.
+    mutable uint64_t _lastCheckedEpoch = std::numeric_limits<uint64_t>::max();
 
   public:
     MulticastDelegate<void()> onModified;
@@ -414,7 +420,13 @@ inline void TextureRef::set(const std::string& path, ya::Ptr<Texture> ptr)
 inline bool TextureRef::isStale() const
 {
     if (_resolveState != EAssetResolveState::Ready || _path.empty()) return false;
-    return _resolvedVersion != AssetManager::get()->getResourceVersion(_path);
+    auto* const assets     = AssetManager::get();
+    const auto  epoch      = assets->getResourceVersionEpoch();
+    if (_lastCheckedEpoch == epoch) {
+        return false;
+    }
+    _lastCheckedEpoch = epoch;
+    return _resolvedVersion != assets->getResourceVersion(_path);
 }
 
 inline void ModelRef::invalidate()
@@ -433,7 +445,13 @@ inline void ModelRef::set(const std::string& path, ya::Ptr<Model> ptr)
 inline bool ModelRef::isStale() const
 {
     if (_resolveState != EAssetResolveState::Ready || _path.empty()) return false;
-    return _resolvedVersion != AssetManager::get()->getResourceVersion(_path);
+    auto* const assets     = AssetManager::get();
+    const auto  epoch      = assets->getResourceVersionEpoch();
+    if (_lastCheckedEpoch == epoch) {
+        return false;
+    }
+    _lastCheckedEpoch = epoch;
+    return _resolvedVersion != assets->getResourceVersion(_path);
 }
 
 inline void MeshRef::invalidate()
@@ -452,7 +470,13 @@ inline void MeshRef::set(const std::string& path, ya::Ptr<Mesh> ptr)
 inline bool MeshRef::isStale() const
 {
     if (_resolveState != EAssetResolveState::Ready || _path.empty()) return false;
-    return _resolvedVersion != AssetManager::get()->getResourceVersion(_path);
+    auto* const assets     = AssetManager::get();
+    const auto  epoch      = assets->getResourceVersionEpoch();
+    if (_lastCheckedEpoch == epoch) {
+        return false;
+    }
+    _lastCheckedEpoch = epoch;
+    return _resolvedVersion != assets->getResourceVersion(_path);
 }
 
 

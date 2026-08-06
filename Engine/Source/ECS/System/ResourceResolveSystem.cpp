@@ -99,21 +99,6 @@ std::vector<float> extractTerrainHeights(const AssetManager::TextureMemoryBlock&
     return heights;
 }
 
-template <typename TMaterialComponent>
-void resolvePendingMaterialComponents(entt::registry& registry)
-{
-    YA_PROFILE_FUNCTION();
-    registry.view<TMaterialComponent>().each([](auto entity, TMaterialComponent& materialComponent) {
-        (void)entity;
-        if (materialComponent.needsResolve()) {
-            materialComponent.resolve();
-        }
-        else if (materialComponent.isResolved()) {
-            materialComponent.checkTexturesStaleness();
-        }
-    });
-}
-
 std::string buildTerrainDerivedKey(const TerrainComponent& terrain, uint64_t heightMapVersion)
 {
     return std::format("terrain|{}|{}|{:.6f}|{:.6f}|{:.6f}|{}|{}",
@@ -205,12 +190,15 @@ void ResourceResolveSystem::clearSceneResolveWork()
     _dirtyTerrainQueue.clear();
     _dirtySkyboxQueue.clear();
     _dirtyEnvironmentQueue.clear();
+    _dirtyMaterialQueue.clear();
     _dirtyTerrainSet.clear();
     _dirtySkyboxSet.clear();
     _dirtyEnvironmentSet.clear();
+    _dirtyMaterialSet.clear();
     _activeTerrain.clear();
     _activeSkybox.clear();
     _activeEnvironment.clear();
+    _activeMaterial.clear();
     _sceneSkyboxEnvironmentDependents.clear();
     _nextResolveAuditFrame = 0;
     _pendingStateScene = nullptr;
@@ -270,6 +258,18 @@ void ResourceResolveSystem::seedSceneResolveWork(Scene* scene)
         }
         markEnvironmentLightingDirty(entity, "scene seed");
     }
+    for (auto&& [entity, unused] : registry.view<PhongMaterialComponent>().each()) {
+        (void)unused;
+        markMaterialDirty(entity, "scene seed");
+    }
+    for (auto&& [entity, unused] : registry.view<PBRMaterialComponent>().each()) {
+        (void)unused;
+        markMaterialDirty(entity, "scene seed");
+    }
+    for (auto&& [entity, unused] : registry.view<UnlitMaterialComponent>().each()) {
+        (void)unused;
+        markMaterialDirty(entity, "scene seed");
+    }
 }
 
 bool ResourceResolveSystem::isTerrainQueuedOrActive(entt::entity entity) const
@@ -285,6 +285,11 @@ bool ResourceResolveSystem::isSkyboxQueuedOrActive(entt::entity entity) const
 bool ResourceResolveSystem::isEnvironmentQueuedOrActive(entt::entity entity) const
 {
     return _dirtyEnvironmentSet.contains(entity) || _activeEnvironment.contains(entity);
+}
+
+bool ResourceResolveSystem::isMaterialQueuedOrActive(entt::entity entity) const
+{
+    return _dirtyMaterialSet.contains(entity) || _activeMaterial.contains(entity);
 }
 
 void ResourceResolveSystem::auditResolveWork(Scene* scene)
@@ -351,6 +356,46 @@ void ResourceResolveSystem::auditResolveWork(Scene* scene)
             markEnvironmentLightingDirty(entity, "audit: missed environment enqueue");
         }
     }
+
+}
+
+void ResourceResolveSystem::auditMaterialWork(Scene* scene)
+{
+    if (!scene) {
+        return;
+    }
+
+    const uint64_t currentFrame = App::currentFrameIndex();
+    if (_nextMaterialAuditFrame != 0 && currentFrame < _nextMaterialAuditFrame) {
+        return;
+    }
+    _nextMaterialAuditFrame = currentFrame + MATERIAL_AUDIT_INTERVAL_FRAMES;
+
+    auto& registry = scene->getRegistry();
+
+    const auto auditMaterial = [&](auto&& view) {
+        for (auto&& [entity, material] : view.each()) {
+            (void)material;
+            // The per-frame needsResolve sweep should have queued every
+            // component that needs work. A component still unqueued here
+            // means a modification path bypassed the dirty queue — surface
+            // it in dev builds, self-heal in release.
+            if (material.needsResolve() && !isMaterialQueuedOrActive(entity)) {
+                YA_CORE_ASSERT(false, "ResourceResolve audit: material needs resolve but was not queued");
+                YA_CORE_WARN("ResourceResolve audit re-queued Material entity {}: missed enqueue",
+                             static_cast<uint32_t>(entity));
+                markMaterialDirty(entity, "audit: missed material enqueue");
+            }
+            // Texture staleness (hot reload) is only detected by the periodic
+            // audit; mark dirty so the next pump re-resolves the component.
+            if (material.isResolved() && material.checkTexturesStaleness()) {
+                markMaterialDirty(entity, "audit: texture stale");
+            }
+        }
+    };
+    auditMaterial(registry.view<PhongMaterialComponent>());
+    auditMaterial(registry.view<PBRMaterialComponent>());
+    auditMaterial(registry.view<UnlitMaterialComponent>());
 }
 
 void ResourceResolveSystem::markAllSceneSkyboxEnvironmentDependentsDirty(const char* reason)
@@ -455,6 +500,13 @@ void ResourceResolveSystem::cleanupEnvironmentLightingState(entt::entity entity)
     std::erase(_dirtyEnvironmentQueue, entity);
 }
 
+void ResourceResolveSystem::cleanupMaterialState(entt::entity entity)
+{
+    _dirtyMaterialSet.erase(entity);
+    _activeMaterial.erase(entity);
+    std::erase(_dirtyMaterialQueue, entity);
+}
+
 void ResourceResolveSystem::markTerrainDirty(entt::entity entity, const char* reason, uint64_t rebuildNotBeforeFrame)
 {
     if (!_pendingStateScene) {
@@ -543,6 +595,27 @@ void ResourceResolveSystem::markEnvironmentLightingDirty(entt::entity entity, co
     }
 }
 
+void ResourceResolveSystem::markMaterialDirty(entt::entity entity, const char* reason)
+{
+    if (!_pendingStateScene) {
+        return;
+    }
+
+    auto& registry = _pendingStateScene->getRegistry();
+    if (!registry.valid(entity) ||
+        (!registry.all_of<PhongMaterialComponent>(entity) &&
+         !registry.all_of<PBRMaterialComponent>(entity) &&
+         !registry.all_of<UnlitMaterialComponent>(entity))) {
+        cleanupMaterialState(entity);
+        return;
+    }
+
+    (void)reason;
+    if (_dirtyMaterialSet.insert(entity).second) {
+        _dirtyMaterialQueue.push_back(entity);
+    }
+}
+
 void ResourceResolveSystem::shutdown()
 {
     clearAllResolveState();
@@ -586,6 +659,10 @@ void ResourceResolveSystem::onUpdate(float dt)
     {
         YA_PROFILE_SCOPE("ResourceResolve/Materials");
         resolvePendingMaterials(scene);
+        // Periodic staleness / missed-enqueue audit runs after the per-frame
+        // sweep so freshly modified components are already queued and only
+        // true bypasses trip the dev assertion.
+        auditMaterialWork(scene);
     }
     {
         YA_PROFILE_SCOPE("ResourceResolve/UI");
@@ -816,9 +893,84 @@ void ResourceResolveSystem::resolvePendingMaterials(Scene* scene)
 {
     auto& registry = scene->getRegistry();
 
-    resolvePendingMaterialComponents<PhongMaterialComponent>(registry);
-    resolvePendingMaterialComponents<PBRMaterialComponent>(registry);
-    resolvePendingMaterialComponents<UnlitMaterialComponent>(registry);
+    // Per-frame O(1) sweep: components that were just created or modified
+    // (constructor / invalidate / reflection setter set the Dirty state
+    // without notifying the resolver) are enqueued here so they resolve on
+    // the next frame. No string normalization or staleness work happens in
+    // this sweep — that stays in the periodic audit.
+    const auto sweepNeedsResolve = [&](auto&& view) {
+        for (auto&& [entity, material] : view.each()) {
+            (void)material;
+            if (material.needsResolve() && !isMaterialQueuedOrActive(entity)) {
+                markMaterialDirty(entity, "needs-resolve sweep");
+            }
+        }
+    };
+    sweepNeedsResolve(registry.view<PhongMaterialComponent>());
+    sweepNeedsResolve(registry.view<PBRMaterialComponent>());
+    sweepNeedsResolve(registry.view<UnlitMaterialComponent>());
+
+    auto pumpOne = [&](entt::entity entity) {
+        if (!registry.valid(entity)) {
+            cleanupMaterialState(entity);
+            return;
+        }
+
+        auto pumpComponent = [&](auto& materialComponent) {
+            if (materialComponent.needsResolve()) {
+                materialComponent.resolve();
+            }
+            else if (materialComponent.isResolved()) {
+                materialComponent.checkTexturesStaleness();
+            }
+        };
+
+        bool bHandled = false;
+        if (auto* phong = registry.try_get<PhongMaterialComponent>(entity)) {
+            pumpComponent(*phong);
+            bHandled = true;
+        }
+        if (auto* pbr = registry.try_get<PBRMaterialComponent>(entity)) {
+            pumpComponent(*pbr);
+            bHandled = true;
+        }
+        if (auto* unlit = registry.try_get<UnlitMaterialComponent>(entity)) {
+            pumpComponent(*unlit);
+            bHandled = true;
+        }
+        if (!bHandled) {
+            cleanupMaterialState(entity);
+            return;
+        }
+
+        // A component stuck in the async Resolving state must keep being
+        // pumped every frame until its textures arrive.
+        const bool bStillResolving =
+            (registry.all_of<PhongMaterialComponent>(entity) &&
+             registry.get<PhongMaterialComponent>(entity).needsResolve()) ||
+            (registry.all_of<PBRMaterialComponent>(entity) &&
+             registry.get<PBRMaterialComponent>(entity).needsResolve()) ||
+            (registry.all_of<UnlitMaterialComponent>(entity) &&
+             registry.get<UnlitMaterialComponent>(entity).needsResolve());
+        if (bStillResolving) {
+            _activeMaterial.insert(entity);
+        }
+        else {
+            _activeMaterial.erase(entity);
+        }
+    };
+
+    while (!_dirtyMaterialQueue.empty()) {
+        const auto entity = _dirtyMaterialQueue.front();
+        _dirtyMaterialQueue.pop_front();
+        _dirtyMaterialSet.erase(entity);
+        pumpOne(entity);
+    }
+
+    std::vector<entt::entity> activeEntities(_activeMaterial.begin(), _activeMaterial.end());
+    for (const auto entity : activeEntities) {
+        pumpOne(entity);
+    }
 }
 
 void ResourceResolveSystem::resolvePendingUI(Scene* scene)
