@@ -333,8 +333,11 @@ void AppLifecycle::init(App& app, AppDesc ci)
         delete app._sceneManager;
         app._sceneManager = nullptr; });
 
-    FPSControl::get()->bEnable = true;
-    FPSControl::get()->setFPSLimit(120.f);
+    // Restore persisted frame pacing (saved by the editor's runtime tools).
+    // The defaults preserve the previous engine behavior when nothing was
+    // persisted; in editor runs the "editor" document is already open here.
+    FPSControl::get()->bEnable = ConfigManager::get().getOr<bool>("editor", "runtime.framePacing.enabled", true);
+    FPSControl::get()->setFPSLimit(ConfigManager::get().getOr<float>("editor", "runtime.framePacing.fpsLimit", 120.0f));
 
     auto sys = ya::makeShared<ModelInstantiationSystem>();
     sys->init();
