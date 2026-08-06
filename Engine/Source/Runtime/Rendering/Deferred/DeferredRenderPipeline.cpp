@@ -973,23 +973,45 @@ void DeferredRenderPipeline::publishGraphExecutionResult(
     const RenderGraphExecutionResult& result,
     const DeferredFrameGraphResources& graphResources)
 {
-    DeferredGBufferResources nextGBuffer{};
+    auto nextGBuffer = buildPublishedGBufferResources(result);
+    auto nextViewport = buildPublishedViewportResources(result, nextGBuffer.depthOwner);
+    publishAttachmentResources(std::move(nextGBuffer), std::move(nextViewport));
+    publishPostprocessOutputs(result, graphResources);
+}
+
+DeferredGBufferResources DeferredRenderPipeline::buildPublishedGBufferResources(
+    const RenderGraphExecutionResult& result) const
+{
     std::array<std::shared_ptr<RenderImage>, 4> nextGBufferColors{};
     for (uint32_t attachmentIndex = 0; attachmentIndex < std::size(deferred_graph_exports::gBufferColor); ++attachmentIndex) {
         nextGBufferColors[attachmentIndex] = result.getExportedTextureShared(deferred_graph_exports::gBufferColor[attachmentIndex]);
     }
-    nextGBuffer.publish(
+
+    DeferredGBufferResources resources{};
+    resources.publish(
         std::move(nextGBufferColors),
         result.getExportedTextureShared(deferred_graph_exports::gBufferDepth),
         buildGBufferSnapshotFormats());
+    return resources;
+}
 
-    DeferredViewportResources nextViewport{};
-    nextViewport.publish(
+DeferredViewportResources DeferredRenderPipeline::buildPublishedViewportResources(
+    const RenderGraphExecutionResult& result,
+    const std::shared_ptr<RenderImage>& depthOwner) const
+{
+    DeferredViewportResources resources{};
+    resources.publish(
         result.getExportedTextureShared(deferred_graph_exports::viewportColor),
-        nextGBuffer.depthOwner,
+        depthOwner,
         result.getExportedTextureShared(deferred_graph_exports::entityId),
         buildViewportSnapshotFormats());
+    return resources;
+}
 
+void DeferredRenderPipeline::publishAttachmentResources(
+    DeferredGBufferResources nextGBuffer,
+    DeferredViewportResources nextViewport)
+{
     const bool bGBufferChanged = _currentGBufferResources.colorOwners != nextGBuffer.colorOwners ||
                                  _currentGBufferResources.depthOwner != nextGBuffer.depthOwner ||
                                  _currentGBufferResources.formats.colorFormats != nextGBuffer.formats.colorFormats ||
@@ -1008,7 +1030,12 @@ void DeferredRenderPipeline::publishGraphExecutionResult(
     if (bViewportChanged) {
         refreshViewportStageState();
     }
+}
 
+void DeferredRenderPipeline::publishPostprocessOutputs(
+    const RenderGraphExecutionResult& result,
+    const DeferredFrameGraphResources& graphResources)
+{
     _publishedGraphOutputs.ssao = graphResources.textures.ssao.has_value()
         ? result.getExportedTextureShared(deferred_graph_exports::ssao)
         : nullptr;

@@ -2,6 +2,7 @@
 
 #include "DeferredFrameGraphResources.h"
 #include "DeferredFrameResourceSet.h"
+#include "ViewportOverlayStage.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "Runtime/Rendering/Common/IRenderPipeline.h"
 
@@ -54,6 +55,9 @@ struct DeferredFrameGraphOrchestrator
     };
 
     void build(const BuildDependencies& deps, const BuildInputs& inputs) const;
+
+  private:
+    void exportGraphOutputs(RenderGraph& graph, const DeferredFrameGraphResources& resources) const;
 };
 
 } // namespace ya

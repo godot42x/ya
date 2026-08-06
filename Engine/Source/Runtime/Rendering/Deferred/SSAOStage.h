@@ -18,6 +18,7 @@ namespace ya
 {
 
 struct IFrameBuffer;
+struct DeferredSSAOPassParams;
 
 struct ENGINE_API SSAOStage : public IRenderStage
 {

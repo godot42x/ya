@@ -241,6 +241,14 @@ struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
     void               invalidateGBufferDependentViews();
     void               publishGraphExecutionResult(const RenderGraphExecutionResult& result,
                                                    const DeferredFrameGraphResources& graphResources);
+    [[nodiscard]] DeferredGBufferResources buildPublishedGBufferResources(const RenderGraphExecutionResult& result) const;
+    [[nodiscard]] DeferredViewportResources buildPublishedViewportResources(
+        const RenderGraphExecutionResult& result,
+        const std::shared_ptr<RenderImage>& depthOwner) const;
+    void publishAttachmentResources(DeferredGBufferResources nextGBuffer,
+                                    DeferredViewportResources nextViewport);
+    void publishPostprocessOutputs(const RenderGraphExecutionResult& result,
+                                   const DeferredFrameGraphResources& graphResources);
     void               clearPublishedGraphOutputs();
     void               refreshGBufferStageState();
     void               refreshViewportStageState();
