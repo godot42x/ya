@@ -2,6 +2,8 @@
 
 #include "ECS/System/RayCastMousePickingSystem.h"
 #include "ECS/System/TransformSystem.h"
+#include "ECS/Component/Mesh/SkinnedMeshComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "Render/Core/Buffer.h"
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/RenderImage.h"
@@ -386,13 +388,43 @@ void EditorLayer::focusCameraOnEntity(Entity* entity)
     if (!app) {
         return;
     }
-    constexpr float distance = 10.0f; // Fixed distance from entity, can be adjusted
-
     // Focus the world position, not the local one: hierarchical children would
     // otherwise pull the camera to their local origin. No-op when already clean.
     TransformSystem::computeWorldMatrix(tc);
-    const glm::vec3 entityPos = glm::vec3(tc->getWorldMatrix()[3]);
-    const glm::vec3 camPos    = _camera.getPosition();
+    const glm::mat4 worldMatrix = tc->getWorldMatrix();
+
+    // Frame the entity's world bounds so large and small objects both fit the
+    // viewport, instead of using a fixed distance.
+    glm::vec3 entityPos    = glm::vec3(worldMatrix[3]);
+    float     boundingRadius = 0.0f;
+    if (auto* scene = getViewportInteractionScene()) {
+        const auto& registry = scene->getRegistry();
+        const auto  handle   = entity->getHandle();
+        const auto  addBounds = [&](const AABB& bounds)
+        {
+            if (bounds.max.x < bounds.min.x) {
+                return;
+            }
+            const auto worldAABB = bounds.transformed(worldMatrix);
+            entityPos       = (worldAABB.min + worldAABB.max) * 0.5f;
+            boundingRadius  = std::max(boundingRadius, glm::length(worldAABB.max - worldAABB.min) * 0.5f);
+        };
+        if (const auto* mesh = registry.try_get<StaticMeshComponent>(handle)) {
+            if (auto* m = mesh->getMesh()) {
+                addBounds(m->boundingBox);
+            }
+        }
+        if (const auto* mesh = registry.try_get<SkinnedMeshComponent>(handle)) {
+            if (auto* m = mesh->getMesh()) {
+                addBounds(m->boundingBox);
+            }
+        }
+    }
+
+    const float distance = boundingRadius > 0.001f
+                               ? boundingRadius / std::tan(glm::radians(_camera.getFov() * 0.5f)) * 1.2f
+                               : 10.0f; // Fallback when the entity has no mesh bounds.
+    const glm::vec3 camPos = _camera.getPosition();
 
     glm::vec3 camToEntity = entityPos - camPos;
     if (glm::length2(camToEntity) < 1e-6f) {
