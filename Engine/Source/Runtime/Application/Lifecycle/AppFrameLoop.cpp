@@ -511,8 +511,18 @@ void AppFrameLoop::tickRender(App& app, float dt)
         .overlay = {
             .screenSprites = &screenOverlaySprites,
         },
-        .automation = {
-            .appendPresentationCapture = [&app](RenderGraph& graph, RGTextureHandle presentationOutput, Extent2D presentationExtent)
+        .presentationExtensions = {
+            .recordBeforeExtensions = [&app, dt](ICommandBuffer* commandBuffer)
+            {
+                if (commandBuffer) {
+                    app.recordModuleBeforePresentation(*commandBuffer, dt);
+                } },
+            .recordExtensions = [&app, dt](ICommandBuffer* commandBuffer)
+            {
+                if (commandBuffer) {
+                    app.recordModulePresentation(*commandBuffer, dt);
+                } },
+            .appendCapture = [&app](RenderGraph& graph, RGTextureHandle presentationOutput, Extent2D presentationExtent)
             {
                 bool bAppended = AppAutomation::appendPresentationCapture(app.getFrameIndex(),
                                                                           graph,
@@ -528,16 +538,6 @@ void AppFrameLoop::tickRender(App& app, float dt)
                 return bAppended;
             },
         },
-        .recordBeforePresentationExtensions = [&app, dt](ICommandBuffer* commandBuffer)
-        {
-            if (commandBuffer) {
-                app.recordModuleBeforePresentation(*commandBuffer, dt);
-            } },
-        .recordPresentationExtensions = [&app, dt](ICommandBuffer* commandBuffer)
-        {
-            if (commandBuffer) {
-                app.recordModulePresentation(*commandBuffer, dt);
-            } },
         .pipeline = pipelineFrame,
     });
 }

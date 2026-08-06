@@ -63,11 +63,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         YA_PERF_SCOPE(perf::sample::renderWorld(), perf::metric::cpuTimeMs(), perf::domain::render());
         renderWorldFrame(input, cmdBuf.get());
     }
-    renderPresentationPass(input.pipeline.deltaTime,
-                           input.recordBeforePresentationExtensions,
-                           input.recordPresentationExtensions,
-                           input.automation.appendPresentationCapture,
-                           cmdBuf.get());
+    renderPresentationPass(input.pipeline.deltaTime, input.presentationExtensions, cmdBuf.get());
     {
         YA_PERF_SCOPE(perf::sample::renderSubmit(), perf::metric::cpuTimeMs(), perf::domain::render());
         submitFrame(imageIndex, cmdBuf.get());
