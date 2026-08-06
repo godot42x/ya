@@ -73,6 +73,21 @@ struct ENGINE_API RenderRuntime : IRenderRuntimeServices
         const AppDesc* appDesc = nullptr;
     };
 
+    /// Presentation graph extension points recorded by the app. A single
+    /// descriptor object keeps the presentation boundary explicit instead of
+    /// threading several parallel callbacks through FrameInput.
+    struct PresentationExtensions
+    {
+        std::function<void(ICommandBuffer*)>                         recordBeforeExtensions;
+        std::function<void(ICommandBuffer*)>                         recordExtensions;
+        std::function<bool(RenderGraph&, RGTextureHandle, Extent2D)> appendCapture;
+
+        [[nodiscard]] bool empty() const
+        {
+            return !recordBeforeExtensions && !recordExtensions && !appendCapture;
+        }
+    };
+
     struct FrameInput
     {
         struct OverlayInput
@@ -82,16 +97,7 @@ struct ENGINE_API RenderRuntime : IRenderRuntimeServices
             const std::vector<RenderOverlayText2D>*   screenTexts   = nullptr;
         } overlay{};
 
-        struct AutomationInput
-        {
-            /// Append a presentation readback copy to the presentation graph.
-            /// Called while the graph is still being built, before execute.
-            std::function<bool(RenderGraph&, RGTextureHandle, Extent2D)> appendPresentationCapture;
-        } automation{};
-
-        std::function<void(ICommandBuffer*)> recordBeforePresentationExtensions;
-        std::function<void(ICommandBuffer*)> recordPresentationExtensions;
-
+        PresentationExtensions     presentationExtensions{};
         RenderPipelineFrameContext pipeline{};
     };
 
@@ -214,9 +220,7 @@ struct ENGINE_API RenderRuntime : IRenderRuntimeServices
     bool                   beginFrameCommandBuffer(int32_t& imageIndex, std::shared_ptr<ICommandBuffer>& cmdBuf);
     void                   beginViewportPassAndTickPipeline(const FrameInput& input, ICommandBuffer* cmdBuf);
     void                   renderPresentationPass(float deltaTime,
-                                                  const std::function<void(ICommandBuffer*)>& recordBeforePresentationExtensions,
-                                                  const std::function<void(ICommandBuffer*)>& recordPresentationExtensions,
-                                                  const std::function<bool(RenderGraph&, RGTextureHandle, Extent2D)>& appendPresentationCapture,
+                                                  const PresentationExtensions& presentationExtensions,
                                                   ICommandBuffer* cmdBuf);
     /// Presentation resources (per-swapchain-image executors + imported images)
     /// are intentionally kept independent from the world-frame executor:

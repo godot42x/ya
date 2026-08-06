@@ -131,11 +131,9 @@ std::shared_ptr<RenderImage> RenderRuntime::getActiveViewportImageShared() const
     return nullptr;
 }
 
-void RenderRuntime::renderPresentationPass(float                                       deltaTime,
-                                           const std::function<void(ICommandBuffer*)>& recordBeforePresentationExtensions,
-                                           const std::function<void(ICommandBuffer*)>& recordPresentationExtensions,
-                                           const std::function<bool(RenderGraph&, RGTextureHandle, Extent2D)>& appendPresentationCapture,
-                                           ICommandBuffer*                             cmdBuf)
+void RenderRuntime::renderPresentationPass(float                              deltaTime,
+                                           const PresentationExtensions&      presentationExtensions,
+                                           ICommandBuffer*                    cmdBuf)
 {
     YA_PROFILE_FUNCTION();
 
@@ -163,8 +161,8 @@ void RenderRuntime::renderPresentationPass(float                                
         _presentationPostProcessor->beginFrame();
     }
 
-    if (recordBeforePresentationExtensions) {
-        recordBeforePresentationExtensions(cmdBuf);
+    if (presentationExtensions.recordBeforeExtensions) {
+        presentationExtensions.recordBeforeExtensions(cmdBuf);
     }
 
     const Extent2D presentationExtent = presentationImage->getExtent();
@@ -192,7 +190,7 @@ void RenderRuntime::renderPresentationPass(float                                
                 }},
             });
         },
-        [this, sourceImage, output, presentationExtent, recordPresentationExtensions, deltaTime](RGRenderContext& rgCtx)
+        [this, sourceImage, output, presentationExtent, presentationExtensions, deltaTime](RGRenderContext& rgCtx)
         {
             [[maybe_unused]] const auto rasterParams = rgCtx.getRasterPassExecutionParams();
             rgCtx.beginDeclaredRasterRendering();
@@ -208,15 +206,15 @@ void RenderRuntime::renderPresentationPass(float                                
                 });
             }
 
-            if (recordPresentationExtensions) {
-                recordPresentationExtensions(&rgCtx.getCommandBuffer());
+            if (presentationExtensions.recordExtensions) {
+                presentationExtensions.recordExtensions(&rgCtx.getCommandBuffer());
             }
 
             rgCtx.endRendering();
         });
 
-    if (appendPresentationCapture) {
-        appendPresentationCapture(graph, output, presentationExtent);
+    if (presentationExtensions.appendCapture) {
+        presentationExtensions.appendCapture(graph, output, presentationExtent);
     }
 
     [[maybe_unused]] const bool bExecuted = presentationExecutor->execute(graph, *cmdBuf);
