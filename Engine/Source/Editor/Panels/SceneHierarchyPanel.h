@@ -2,8 +2,11 @@
 
 #include "ECS/Entity.h"
 #include "Editor/FilePicker.h"
+#include <cstddef>
 #include <memory>
 #include <sol/sol.hpp>
+#include <string>
+#include <vector>
 
 
 namespace ya
@@ -27,31 +30,52 @@ struct SceneHierarchyPanel
     };
 
     static constexpr const char *NODE_DRAG_DROP_PAYLOAD = "SCENE_HIERARCHY_NODE";
+    static constexpr size_t      SEARCH_BUFFER_SIZE     = 128;
+    static constexpr size_t      RENAME_BUFFER_SIZE     = 256;
 
     EditorLayer *_owner;
     Scene       *_context       = nullptr;
-    Entity      *_selection     = {};
-    Entity      *_pendingScrollSelection = {};
-    Node        *_pendingDraggedNode = nullptr;
-    Node        *_pendingDropTarget  = nullptr;
+
+    // === Multi-select state ===
+    std::vector<Entity*> _selections;      // Click order; primary kept at front on notify
+    Entity*              _primarySelection = nullptr;
+    Entity*              _rangeAnchor      = nullptr;
+    Node*                _selectedFolder   = nullptr; // Single folder selection (organizational only)
+
+    std::vector<Entity*> _flatEntities;    // DFS tree order + standalone entities, rebuilt per frame
+
+    // === Search state ===
+    char    _searchBuffer[SEARCH_BUFFER_SIZE] = "";
+    std::string _searchLower;
+
+    // === Pending folder actions (deferred to keep tree iteration safe) ===
+    Node* _renamingFolder      = nullptr;
+    char  _renameBuffer[RENAME_BUFFER_SIZE] = "";
+    Node* _pendingFolderDelete = nullptr;
+    std::vector<Node*>   _pendingNodeDuplicate;
+    std::vector<Entity*> _pendingEntityDelete;
+
+    // === Scroll / drag-drop state ===
+    Entity* _pendingScrollSelection = {};
+    Node*   _pendingDraggedNode     = nullptr;
+    Node*   _pendingDropTarget      = nullptr;
     ENodeDropPosition _pendingDropPosition = ENodeDropPosition::Into;
 
   public:
     SceneHierarchyPanel(EditorLayer *owner) : _owner(owner) {}
 
-    void setContext(Scene *scene)
-    {
-        _context = scene;
-        // 清空选中实体，防止指向已销毁场景中的实体
-        if (_selection && (!_selection->isValid() || _selection->getScene() != scene)) {
-            _selection              = nullptr;
-            _pendingScrollSelection = nullptr;
-        }
-    }
+    void setContext(Scene *scene);
     void onImGuiRender();
 
-    [[nodiscard]] Entity *getSelectedEntity() const { return _selection; }
+    [[nodiscard]] Entity *getSelectedEntity() const { return _primarySelection; }
     void                  setSelection(Entity *entity);
+    /// Plain / Ctrl-toggle / Shift-range click semantics (reads ImGui IO).
+    void                  handleEntityClick(Entity *entity);
+    /// Replace the whole entity selection and notify the owner.
+    void                  replaceSelection(const std::vector<Entity*> &entities, Entity *primary);
+    /// Batch duplicate/delete of the current selection (deferred, safe).
+    void                  duplicateSelection();
+    void                  deleteSelection();
 
 
     void sceneTree();
@@ -59,15 +83,33 @@ struct SceneHierarchyPanel
 
     // Node hierarchy rendering
     void drawNodeRecursive(Node *node);
+    void drawFolderNode(Node *node);
+    void drawNodeDropTarget(Node *node, ImVec2 itemMin, ImVec2 itemMax, bool isHovered);
     void renderStandaloneEntities();
 
     void               drawFlatEntity(Entity &entity);
-    const std::string &getNodeName(Node *node);
+    const std::string &getNodeName(Node *node) const;
     Node               *getSelectedNode() const;
     ENodeDropPosition   getDropPosition(float itemMinY, float itemMaxY) const;
     void                queueMoveNode(Node *draggedNode, Node *targetNode, ENodeDropPosition dropPosition);
     void                flushPendingNodeMove();
     bool                moveNode(Node *draggedNode, Node *targetNode, ENodeDropPosition dropPosition);
+
+    // Multi-select / search helpers
+    bool isSelected(Entity *entity) const;
+    void notifyOwnerSelection();
+    void validateSelections();
+    void buildFlatEntityList();
+    void collectEntities(Node *node);
+    bool isSearchActive() const { return _searchBuffer[0] != '\0'; }
+    bool matchesFilter(const std::string &name) const;
+    bool subtreeMatchesFilter(Node *node) const;
+    void drawCreateMenuItems(Node *parentNode);
+    void drawEntityNodeContextMenu(Node *node, Entity *entity);
+    void drawFolderContextMenu(Node *folder);
+    void drawFolderRenamePopup();
+    void drawFolderDeletePopup();
+    void flushPendingActions();
 };
 
 } // namespace ya

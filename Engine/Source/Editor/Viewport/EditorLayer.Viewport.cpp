@@ -264,20 +264,35 @@ void EditorLayer::viewportWindow()
 
             ctx.separator();
 
-            // Duplicate selected entity
-            Entity* selectedEntity = _sceneHierarchyPanel.getSelectedEntity();
-            if (selectedEntity && selectedEntity->isValid())
+            // Duplicate / delete the whole selection (primary first).
+            const auto& selections = getSelections();
+            if (!selections.empty())
             {
                 if (ctx.menuItem("Duplicate Selected"))
                 {
                     if (auto scene = getEditableScene())
                     {
-                        if (auto newNode = scene->duplicateNode(scene->getNodeByEntity(selectedEntity))) {
-                            YA_CORE_INFO("Duplicated entity: {}", newNode->getName());
+                        std::vector<Entity*> duplicated;
+                        for (Entity* entity : selections) {
+                            if (!entity || !entity->isValid()) {
+                                continue;
+                            }
+                            Node* node = scene->getNodeByEntity(entity);
+                            if (!node) {
+                                continue;
+                            }
+                            if (auto newNode = scene->duplicateNode(node, node->getParent())) {
+                                if (auto* newEntity = newNode->getEntity()) {
+                                    duplicated.push_back(newEntity);
+                                }
+                            }
+                        }
+                        if (!duplicated.empty()) {
+                            YA_CORE_INFO("Duplicated {} entit{}", duplicated.size(), duplicated.size() > 1 ? "ies" : "y");
                             Facade.timerManager.delayCall(
                                 1,
-                                [this, newNode]() {
-                                    setSelectedEntity(newNode->getEntity());
+                                [this, duplicated]() {
+                                    _sceneHierarchyPanel.replaceSelection(duplicated, duplicated.front());
                                 });
                         }
                     }
@@ -286,8 +301,9 @@ void EditorLayer::viewportWindow()
                 {
                     if (auto scene = getEditableScene())
                     {
-                        scene->destroyNode(scene->getNodeByEntity(selectedEntity));
-                        setSelectedEntity(nullptr);
+                        // Deferred through the hierarchy panel so destruction
+                        // never happens while the tree is rendering.
+                        _sceneHierarchyPanel.deleteSelection();
                     }
                 }
             }

@@ -24,6 +24,7 @@
 #include "Editor/EditorCommon.h"
 
 #include <ImGuizmo.h>
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -179,18 +180,34 @@ struct EditorLayer
     // Entity selection bus - notifies DetailsView of selection changes
     void setSelectedEntity(Entity* entity)
     {
-        if (entity && entity->isValid()) {
-            _selections = {entity};
-            if (auto* idComponent = entity->getComponent<IDComponent>()) {
-                _selectedEntityUUID = idComponent->_id.value;
-            }
-            else {
-                _selectedEntityUUID = 0;
+        setSelections(entity && entity->isValid() ? std::vector<Entity*>{entity} : std::vector<Entity*>{},
+                      entity);
+    }
+
+    /// Multi-select bus. `primary` is guaranteed to end up at `_selections[0]`
+    /// so existing single-selection consumers (gizmo, details, focus) keep working.
+    void setSelections(const std::vector<Entity*>& selections, Entity* primary = nullptr)
+    {
+        _selections.clear();
+        for (Entity* entity : selections) {
+            if (entity && entity->isValid() &&
+                std::find(_selections.begin(), _selections.end(), entity) == _selections.end()) {
+                _selections.push_back(entity);
             }
         }
-        else {
-            _selections.clear();
-            _selectedEntityUUID = 0;
+        if (primary && primary->isValid()) {
+            auto it = std::find(_selections.begin(), _selections.end(), primary);
+            if (it != _selections.end()) {
+                _selections.erase(it);
+            }
+            _selections.insert(_selections.begin(), primary);
+        }
+
+        _selectedEntityUUID = 0;
+        if (!_selections.empty()) {
+            if (auto* idComponent = _selections.front()->getComponent<IDComponent>()) {
+                _selectedEntityUUID = idComponent->_id.value;
+            }
         }
     }
 
@@ -330,7 +347,7 @@ struct EditorLayer
     bool                        isGizmoActive() const; // Check if ImGuizmo is being used or hovered
     bool                        isRightMouseDragging() const { return _bRightMouseDragging; }
     const std::vector<Entity*>& getSelections() const { return _selections; }
-    Entity*                     getSelectedEntity() const { return _sceneHierarchyPanel.getSelectedEntity(); }
+    Entity*                     getSelectedEntity() const { return _selections.empty() ? nullptr : _selections.front(); }
     uint64_t                    getSelectedEntityUUID() const { return _selectedEntityUUID; }
     /// Active scene shown in the viewport (play scene during PIE, authoring scene otherwise).
     Scene* getViewportInteractionScene() const;
