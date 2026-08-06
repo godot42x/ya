@@ -7,6 +7,7 @@
 #include "Render/Core/RenderTargetCreateInfo.h"
 #include "Render/Core/Swapchain.h"
 #include "Render/Render.h"
+#include "Runtime/Rendering/Common/EntityIdViewportPass.h"
 #include "Runtime/Rendering/Common/PostProcessingStage.h"
 #include "Runtime/Rendering/Common/RenderViewportOverlayRecorder.h"
 #include "Runtime/Rendering/Common/Shadow/ShadowStage.h"
@@ -134,6 +135,17 @@ void createDeferredAttachmentTextures(RenderGraph&                              
     graphResources.textures.viewportColor = graph.createPersistentTexture(
         makeDeferredOrchestratorGraphAttachmentDesc(*inputs.viewportRTSpec, inputs.viewportRTSpec->attachments.colorAttach.front(), "DeferredViewport.Color"),
         RGPersistentTextureKey{.value = "DeferredViewport.Color"});
+
+    AttachmentDescription entityIdDesc{};
+    entityIdDesc.format      = EFormat::R32_UINT;
+    entityIdDesc.samples     = ESampleCount::Sample_1;
+    entityIdDesc.loadOp      = EAttachmentLoadOp::Clear;
+    entityIdDesc.storeOp     = EAttachmentStoreOp::Store;
+    entityIdDesc.usage       = EImageUsage::ColorAttachment | EImageUsage::TransferSrc;
+    entityIdDesc.finalLayout = EImageLayout::ColorAttachmentOptimal;
+    graphResources.textures.entityId = graph.createPersistentTexture(
+        makeDeferredOrchestratorGraphAttachmentDesc(*inputs.viewportRTSpec, entityIdDesc, "DeferredViewport.EntityId"),
+        RGPersistentTextureKey{.value = "DeferredViewport.EntityId"});
 }
 
 void appendDeferredGBufferPass(RenderGraph&                                   graph,
@@ -462,6 +474,44 @@ void appendDeferredLightingAndPostprocess(RenderGraph&                          
             rgCtx.endRendering();
         });
 
+    // Entity-id pick pass: write every draw item's entity id, depth-tested
+    // against the viewport (gBuffer) depth so ids match what is visible.
+    [[maybe_unused]] const auto entityIdPassHandle = graph.addPass(
+        std::string("Deferred EntityId"),
+        [&entityIdHandle = graphResources.textures.entityId, &depthHandle = graphResources.textures.gBufferDepth, viewportExtent = inputs.viewportExtent](RGPassBuilder& passBuilder) {
+            passBuilder.declareRaster({
+                .renderArea = {.pos = {0, 0}, .extent = viewportExtent.toVec2()},
+                .layerCount = 1,
+                .colors = {{
+                    .color       = entityIdHandle,
+                    .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
+                    .loadOp      = EAttachmentLoadOp::Clear,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ColorAttachmentOptimal,
+                }},
+                .depth = RGDepthAttachmentDesc{
+                    .depth       = depthHandle,
+                    .loadOp      = EAttachmentLoadOp::Load,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
+                },
+            });
+        },
+        [stageCtx, entityIdPass = deps.entityIdPass, frameBinding](RGRenderContext& rgCtx) {
+            const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
+            rgCtx.beginDeclaredRasterRendering();
+            if (entityIdPass && stageCtx.frameData) {
+                entityIdPass->execute(&rgCtx.getCommandBuffer(),
+                                      viewportExtent.width,
+                                      viewportExtent.height,
+                                      stageCtx.frameData->projection * stageCtx.frameData->view,
+                                      stageCtx.frameData->view,
+                                      *stageCtx.frameData,
+                                      frameBinding.skinningDescriptorSet);
+            }
+            rgCtx.endRendering();
+        });
+
     DeferredOverlayPassParams overlayParams{
         .color          = graphResources.textures.overlayInput,
         .depth          = graphResources.textures.gBufferDepth,
@@ -547,6 +597,7 @@ void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const 
     }
     graph.exportTexture(graphResources.textures.gBufferDepth, std::string(deferred_graph_exports::gBufferDepth));
     graph.exportTexture(graphResources.textures.viewportColor, std::string(deferred_graph_exports::viewportColor));
+    graph.exportTexture(graphResources.textures.entityId, std::string(deferred_graph_exports::entityId));
     if (graphResources.textures.ssao.has_value()) {
         graph.exportTexture(*graphResources.textures.ssao, std::string(deferred_graph_exports::ssao));
     }

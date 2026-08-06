@@ -18,6 +18,7 @@
 #include "Render/RenderFrameData.h"
 #include "Runtime/Rendering/Common/IRenderPipeline.h"
 #include "Runtime/Rendering/Common/IRenderRuntimeServices.h"
+#include "Runtime/Rendering/Common/EntityIdViewportPass.h"
 #include "Runtime/Rendering/Common/PostProcessingStage.h"
 #include "Runtime/Rendering/Common/PostProcessingState.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowMapResources.h"
@@ -160,6 +161,7 @@ struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
     // ── Frame state ───────────────────────────────────────────────────
     DeferredGBufferResources   _currentGBufferResources{};
     DeferredViewportResources  _currentViewportResources{};
+    EntityIdViewportPass       _entityIdPass{};
     ViewportOverlayStage::FrameInputs _currentOverlayFrameInputs{};
     DescriptorSetHandle        _currentEnvironmentLightingDescriptorSet{};
     FrameContext               _lastTickCtx{};
@@ -214,6 +216,7 @@ struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
 
     std::shared_ptr<IImage> getShadowDepthImage() const override { return _shadowResources.depthImage; }
     std::shared_ptr<RenderImage> getViewportDepthImageShared() const override { return _currentViewportResources.depthOwner; }
+    std::shared_ptr<RenderImage> getEntityIdImageShared() const override { return _currentViewportResources.entityIdOwner; }
     bool           isShadowMappingEnabled() const override;
     IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override

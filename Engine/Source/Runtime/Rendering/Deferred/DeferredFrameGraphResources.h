@@ -24,6 +24,7 @@ inline constexpr std::string_view gBufferColor[4] = {
 inline constexpr std::string_view gBufferDepth  = "Deferred.GBuffer.Depth";
 inline constexpr std::string_view viewportColor = "Deferred.Viewport.Color";
 inline constexpr std::string_view ssao          = "Deferred.SSAO.Output";
+inline constexpr std::string_view entityId      = "Deferred.Viewport.EntityId";
 
 } // namespace deferred_graph_exports
 
@@ -57,6 +58,7 @@ struct DeferredFrameGraphResources
         std::optional<RGTextureHandle>  bloomComposite{};
         RGTextureHandle                 overlayInput{};
         std::optional<RGTextureHandle>  postprocessOutput{};
+        RGTextureHandle                 entityId{};
     } textures{};
 
     struct Passes
