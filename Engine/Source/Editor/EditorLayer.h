@@ -335,7 +335,8 @@ struct EditorLayer
     void removeImGuiTexture(const ImGuiImageEntry* entry);
     void renderGizmo();
     void pickEntity(float viewportX, float viewportY);
-    void focusCameraOnEntity(Entity* entity);
+    /// Frame the camera on the merged world bounds of the whole selection.
+    void focusCameraOnSelection();
 
   public:
     // Public getters
