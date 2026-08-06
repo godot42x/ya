@@ -165,10 +165,10 @@ struct DetailsView
             if (!entity || !entity->isValid()) {
                 return;
             }
-            T *component = entity->getComponent<T>();
-            if (!component) {
+            if (!entity->hasComponent<T>()) {
                 return; // Not shared by every selection -> skip the section.
             }
+            T *component = entity->getComponent<T>();
             instances.push_back(component);
         }
         if (instances.empty()) {

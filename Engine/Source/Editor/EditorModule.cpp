@@ -99,6 +99,9 @@ void drawEntityBounds(Entity* entity, const glm::vec4& color)
         return;
     }
 
+    if (!entity->hasComponent<TransformComponent>()) {
+        return;
+    }
     auto* tc = entity->getComponent<TransformComponent>();
     if (!tc) {
         return;
