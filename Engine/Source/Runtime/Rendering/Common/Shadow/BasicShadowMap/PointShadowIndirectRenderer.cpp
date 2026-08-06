@@ -47,7 +47,7 @@ void PointShadowIndirectRenderer::init(IRender* render,
                  });
 
     _pipelineLayout = IPipelineLayout::create(
-        _render, "PointShadow_Indirect_PPL", {PushConstantRange{.offset = 0, .size = sizeof(VsPushConstants), .stageFlags = EShaderStage::Vertex}}, {_frameDSL, _indirectDSL});
+        _render, "PointShadow_Indirect_PPL", {}, {_frameDSL, _indirectDSL});
 
     _pipelineCI = GraphicsPipelineCreateInfo{
         .pipelineRenderingInfo = {.label = "Point Shadow Indirect", .depthAttachmentFormat = EFormat::D32_SFLOAT},
@@ -243,7 +243,9 @@ std::vector<PointShadowIndirectCommand> PointShadowIndirectRenderer::buildCmdTem
                 .instanceCount = 0, // populated by cull or NoCull below
                 .firstIndex    = 0,
                 .vertexOffset  = 0,
-                .firstInstance = 0,
+                // Bucket base rides firstInstance so the VS can locate its
+                // visible-instance segment without a per-draw push constant.
+                .firstInstance = Addr::bucketBaseSlot(Addr::bucketIndex(batch, face, faceCount)),
             };
         }
     }
@@ -347,8 +349,6 @@ void PointShadowIndirectRenderer::renderFace(ICommandBuffer*                cmdB
         const uint32_t bucket    = Addr::bucketIndex(batch, face, faceCount);
         const uint64_t cmdOffset = static_cast<uint64_t>(bucket) * sizeof(PointShadowIndirectCommand);
 
-        VsPushConstants pc{.bucketBase = Addr::bucketBaseSlot(bucket)};
-        cmdBuf->pushConstants(_pipelineLayout.get(), EShaderStage::Vertex, 0, sizeof(pc), &pc);
         cmdBuf->drawIndexedIndirect(cmdBuffer, cmdOffset, 1, sizeof(PointShadowIndirectCommand));
     }
 }
