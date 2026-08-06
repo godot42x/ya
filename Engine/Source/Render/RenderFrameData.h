@@ -32,6 +32,7 @@ struct RenderDrawItem
     Mesh*     mesh;            // raw pointer: Mesh lifetime is managed by AssetManager
     Material* material;        // raw pointer: Material lifetime is managed by MaterialFactory
     uint32_t  materialIndex;   // material->getIndex(), used for descriptor set lookup
+    uint32_t  entityId  = 0;   // raw entt entity handle, written by the entity-id pick pass
     float     sortKey;         // distance to camera (or other sort criterion)
     int32_t   skinningPaletteIndex = -1; // -1 means static draw, otherwise index into RenderFrameData::skinningPalettes
 };
