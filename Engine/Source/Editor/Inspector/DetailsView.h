@@ -53,7 +53,11 @@ struct DetailsView
 
   private:
     void drawComponents(Entity &entity);
+    /// Multi-select mode: draw the intersection of components shared by all
+    /// selected entities; edits write back to every instance.
+    void drawMultiComponents(const std::vector<Entity*> &entities);
     void drawAddComponentButton(Entity &entity); // Add component popup
+    void drawAddComponentButton(const std::vector<Entity*> &entities);
     void drawEnvironmentLightingComponent(Entity& entity);
     void drawEnvironmentLightingStatus(EEnvironmentLightingSourceResolveState sourceState, EEnvironmentLightingIrradianceResolveState irradianceState, EEnvironmentLightingPrefilterResolveState prefilterState, bool bUsesSceneSkybox);
     void drawSkyboxComponent(Entity& entity);
@@ -68,7 +72,17 @@ struct DetailsView
     // 兜底：用纯反射 UI 绘制一个已知类型和实例指针的组件，避免重复渲染手写过的类型。
     // 被 drawReflectedFallbackComponents 调用，遍历 ECSRegistry 中所有已注册组件类型。
     void drawReflectedFallbackComponents(Entity &entity);
-    void drawReflectedFallbackOne(const std::string &name, type_index_t typeIndex, void *component, Entity &entity);
+    void drawReflectedFallbackComponents(const std::vector<Entity*> &entities);
+    void drawReflectedFallbackOne(const std::string &name,
+                                  type_index_t typeIndex,
+                                  std::vector<void*> &instances,
+                                  const std::vector<Entity*> &entities);
+
+    /// Copy the value of every modified reflected property (path recorded by
+    /// RenderContext) from the first instance to all other instances.
+    void applyModificationsToInstances(const std::vector<RenderModificationRecord> &modifications,
+                                       type_index_t                               rootTypeIndex,
+                                       const std::vector<void*> &                 instances);
 
     // 画一个通用的「组件分节」标题：Separator + TreeNode + 右上角 "+" 弹出 Remove 菜单。
     // body 在 TreeNode 展开时执行；onRemove 在用户点了 Remove Component 时执行。
@@ -139,26 +153,70 @@ struct DetailsView
             [&] { entity.removeComponent<T>(); });
     }
 
-    template <typename T>
-    void drawReflectedComponent(const std::string &name, Entity &entity, auto &&onComponentDirty)
+    /// Shared reflected component section: renders the primary instance, then
+    /// propagates every modified property path to all instances and notifies
+    /// the caller with the full instance list (single and multi selection).
+    template <typename T, typename Fn>
+    void drawReflectedComponents(const std::string &name, const std::vector<Entity*> &entities, Fn onComponentDirty)
     {
-        // YA_PROFILE_SCOPE(std::format("DetailsView::drawReflectedComponent<{}>", name).c_str());
-        componentWrapper<T>(name, entity, [this, &onComponentDirty, &name](T *component) {
-            auto typeIndex = ya::type_index_v<T>;
-            auto cls       = ClassRegistry::instance().getClass(typeIndex);
-            if (!cls) {
+        std::vector<T*> instances;
+        instances.reserve(entities.size());
+        for (Entity *entity : entities) {
+            if (!entity || !entity->isValid()) {
                 return;
             }
-            ya::RenderContext ctx;
-            ctx.beginInstance(component);
-            ya::renderReflectedType(name, typeIndex, component, ctx, 0);
-            bool bComponentDirty = ctx.hasModifications();
-            if constexpr (std::is_invocable_v<decltype(onComponentDirty), T *, const ya::RenderContext &>) {
-                onComponentDirty(component, ctx);
+            T *component = entity->getComponent<T>();
+            if (!component) {
+                return; // Not shared by every selection -> skip the section.
             }
-            else if constexpr (std::is_invocable_v<decltype(onComponentDirty), T *>) {
-                if (bComponentDirty) {
-                    onComponentDirty(component);
+            instances.push_back(component);
+        }
+        if (instances.empty()) {
+            return;
+        }
+
+        const bool bCanRemove = std::all_of(entities.begin(), entities.end(), [this](Entity *entity) {
+            return canRemoveComponent(*entity, ya::type_index_v<T>);
+        });
+
+        componentSectionShell(
+            name,
+            static_cast<const void *>(name.c_str()),
+            bCanRemove,
+            [&] {
+                auto typeIndex = ya::type_index_v<T>;
+                auto cls       = ClassRegistry::instance().getClass(typeIndex);
+                if (!cls) {
+                    return;
+                }
+                ya::RenderContext ctx;
+                ctx.beginInstance(instances.front());
+                ya::renderReflectedType(name, typeIndex, instances.front(), ctx, 0);
+                if (ctx.hasModifications() && instances.size() > 1) {
+                    applyModificationsToInstances(ctx.modifications, typeIndex,
+                                                  std::vector<void *>(instances.begin(), instances.end()));
+                }
+                onComponentDirty(instances, ctx);
+            },
+            [&] {
+                for (Entity *entity : entities) {
+                    entity->removeComponent<T>();
+                }
+            });
+    }
+
+    template <typename T, typename Fn>
+    void drawReflectedComponent(const std::string &name, Entity &entity, Fn onComponentDirty)
+    {
+        drawReflectedComponents<T>(name, {&entity}, [onComponentDirty](std::vector<T*> &instances, const ya::RenderContext &ctx) {
+            for (T *component : instances) {
+                if constexpr (std::is_invocable_v<Fn, T *, const ya::RenderContext &>) {
+                    onComponentDirty(component, ctx);
+                }
+                else if constexpr (std::is_invocable_v<Fn, T *>) {
+                    if (ctx.hasModifications()) {
+                        onComponentDirty(component);
+                    }
                 }
             }
         });
@@ -178,14 +236,18 @@ struct DetailsView
     // "Invalidate" button. `invalidateButtonId` disambiguates the button label
     // when ImGui IDs would otherwise collide across multiple material sections.
     template <typename T>
-    void drawMaterialComponent(const std::string &name, Entity &entity, const char *invalidateButtonId = "Invalidate")
+    void drawMaterialComponent(const std::string &name, const std::vector<Entity*> &entities, const char *invalidateButtonId = "Invalidate")
     {
-        drawReflectedComponent<T>(name, entity, [invalidateButtonId](T *mat, const ya::RenderContext &ctx) {
+        drawReflectedComponents<T>(name, entities, [invalidateButtonId](std::vector<T*> &materials, const ya::RenderContext &ctx) {
             if (ctx.hasModifications()) {
-                mat->onPropertiesChanged(ctx.getModificationPaths());
+                for (T *mat : materials) {
+                    mat->onPropertiesChanged(ctx.getModificationPaths());
+                }
             }
             if (ImGui::Button(invalidateButtonId)) {
-                mat->invalidate();
+                for (T *mat : materials) {
+                    mat->invalidate();
+                }
             }
         });
     }
