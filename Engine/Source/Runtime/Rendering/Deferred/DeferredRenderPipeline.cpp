@@ -922,6 +922,7 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
                     input.worldDirection = billboard.worldDirection;
                     input.worldSize      = glm::vec2(size, size);
                     input.tint           = billboard.tint;
+                    input.entityId       = static_cast<uint32_t>(entity);
                     if (billboard.image.isReady()) {
                         input.textureBinding = billboard.image.toTextureBinding();
                     }

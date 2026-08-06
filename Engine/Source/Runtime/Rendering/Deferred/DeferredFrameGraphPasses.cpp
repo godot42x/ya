@@ -491,6 +491,21 @@ void appendEntityId(DeferredFrameGraphPassContext& context)
     const auto frameBinding = context.frameBinding;
     auto* const entityIdPass = context.entityIdPass;
 
+    // Billboards are only rendered by the overlay pass (which runs after this
+    // pass), so carry their camera-facing quads into the id pass to keep the
+    // id target aligned with what is visible.
+    std::vector<EntityIdBillboard> billboards;
+    if (context.overlayInputs) {
+        billboards.reserve(context.overlayInputs->billboards.size());
+        for (const auto& billboard : context.overlayInputs->billboards) {
+            billboards.push_back(EntityIdBillboard{
+                .worldCenter = billboard.worldCenter,
+                .worldSize   = billboard.worldSize,
+                .entityId    = billboard.entityId,
+            });
+        }
+    }
+
     context.graph.addPass(
         "Deferred EntityId",
         [entityId, depth, extent](RGPassBuilder& passBuilder) {
@@ -512,7 +527,7 @@ void appendEntityId(DeferredFrameGraphPassContext& context)
                 },
             });
         },
-        [stageCtx, entityIdPass, frameBinding](RGRenderContext& rgCtx) {
+        [stageCtx, entityIdPass, frameBinding, billboards = std::move(billboards)](RGRenderContext& rgCtx) {
             const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
             rgCtx.beginDeclaredRasterRendering();
             if (entityIdPass && stageCtx.frameData) {
@@ -522,7 +537,8 @@ void appendEntityId(DeferredFrameGraphPassContext& context)
                                       stageCtx.frameData->projection * stageCtx.frameData->view,
                                       stageCtx.frameData->view,
                                       *stageCtx.frameData,
-                                      frameBinding.skinningDescriptorSet);
+                                      frameBinding.skinningDescriptorSet,
+                                      billboards);
             }
             rgCtx.endRendering();
         });

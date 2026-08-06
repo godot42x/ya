@@ -35,6 +35,7 @@ struct ViewportOverlayStage : public IRenderStage
             glm::vec2      worldSize      = glm::vec2(1.0f);
             glm::vec4      tint           = glm::vec4(1.0f);
             TextureBinding textureBinding{};
+            uint32_t       entityId       = 0; // Raw entt handle, used by the entity-id pick pass
         };
 
         struct DirectionGizmoInput
