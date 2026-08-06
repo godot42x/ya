@@ -1,8 +1,13 @@
 #include "Editor/EditorModule.h"
 
 #include "Config/ConfigManager.h"
+#include "Core/Math/AABB.h"
 #include "Core/Camera/FreeCameraController.h"
 #include "Core/Profiling/Profiling.h"
+#include "ECS/Component/Mesh/SkinnedMeshComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
+#include "ECS/Component/TransformComponent.h"
+#include "ECS/System/TransformSystem.h"
 #include "Editor/EditorLayer.h"
 #include "Editor/EditorPlaySession.h"
 #include "Editor/EditorProfilingSettings.h"
@@ -82,6 +87,56 @@ std::shared_ptr<RenderImage> createEditorViewportImage(IRender& render, const Re
                 .aspectFlags = EImageAspect::Color,
             },
         });
+}
+
+void drawSelectedEntityBounds(const EditorLayer& layer)
+{
+    Entity* selectedEntity = layer.getSelectedEntity();
+    Scene*  scene          = layer.getViewportInteractionScene();
+    if (!selectedEntity || !selectedEntity->isValid() || !scene || selectedEntity->getScene() != scene) {
+        return;
+    }
+
+    auto* tc = selectedEntity->getComponent<TransformComponent>();
+    if (!tc) {
+        return;
+    }
+
+    TransformSystem::computeWorldMatrix(tc);
+    const glm::mat4 worldMatrix = tc->getWorldMatrix();
+
+    const auto& registry = scene->getRegistry();
+    const auto  handle   = selectedEntity->getHandle();
+
+    AABB worldBounds;
+    bool hasBounds = false;
+    const auto addBounds = [&](const AABB& bounds) {
+        if (bounds.max.x < bounds.min.x) {
+            return;
+        }
+        worldBounds.merge(bounds.transformed(worldMatrix));
+        hasBounds = true;
+    };
+
+    if (const auto* mesh = registry.try_get<StaticMeshComponent>(handle)) {
+        if (auto* resolvedMesh = mesh->getMesh()) {
+            addBounds(resolvedMesh->boundingBox);
+        }
+    }
+    if (const auto* mesh = registry.try_get<SkinnedMeshComponent>(handle)) {
+        if (auto* resolvedMesh = mesh->getMesh()) {
+            addBounds(resolvedMesh->boundingBox);
+        }
+    }
+
+    if (!hasBounds) {
+        return;
+    }
+
+    constexpr glm::vec4 kSelectionColor = {0.98f, 0.69f, 0.23f, 1.0f};
+    Render2D::makeWireBox(glm::translate(glm::mat4(1.0f), worldBounds.getCenter()),
+                          (worldBounds.max - worldBounds.min) * 0.5f,
+                          kSelectionColor);
 }
 
 class EditorViewportCompositor
@@ -222,6 +277,7 @@ class EditorViewportCompositor
             if (Scene* scene = layer.getViewportInteractionScene()) {
                 drawPhysicsCollisionDebug(*scene);
             }
+            drawSelectedEntityBounds(layer);
         }
         Render2D::onRender();
         Render2D::end();
