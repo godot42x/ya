@@ -188,13 +188,8 @@ void TransformSystem::updateNodeTree(Node *node, const glm::mat4 *parentWorldMat
         updateNode3D(node3D, parentWorldMatrix);
     }
 
-    // Determine parent world matrix for children
-    // const glm::mat4 *childParentWorldMatrix = parentWorldMatrix;
-    // if (tc) {
-    //     // Use this node's world matrix as parent for children
-    //     childParentWorldMatrix = &tc->_worldMatrix;
-    // }
-    const glm::mat4 *childParentWorldMatrix = &tc->_worldMatrix;
+    // Use this node's world matrix as the parent matrix for children.
+    const glm::mat4 *childParentWorldMatrix = tc ? &tc->_worldMatrix : parentWorldMatrix;
 
     // Recursively update children
     for (auto *child : node->getChildren()) {
