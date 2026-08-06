@@ -113,6 +113,7 @@ struct FreeCamera : public Camera
     }
 
     const glm::vec3 &getPosition() const { return _position; }
+    [[nodiscard]] float getFov() const { return _fov; }
     void             setPosition(const glm::vec3 &position_)
     {
         _position = position_;
