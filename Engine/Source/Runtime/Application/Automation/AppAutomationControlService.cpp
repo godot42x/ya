@@ -566,6 +566,10 @@ void AppAutomationControlService::handleCall(App& app, const std::shared_ptr<Pen
         handleSetShadowSettings(app, call);
         return;
     }
+    if (call->method == "set_app_state") {
+        handleSetAppState(app, call);
+        return;
+    }
     if (call->method == "set_editor_camera") {
         handleSetEditorCamera(app, call);
         return;
@@ -798,6 +802,34 @@ void AppAutomationControlService::handleSetShadowSettings(App& app, const std::s
                                  {"pointLightIndirectCullEnabled", settings.pointLightIndirectCullEnabled},
                                  {"directionalEnabled", settings.directionalEnabled},
                              }));
+}
+
+void AppAutomationControlService::handleSetAppState(App& app, const std::shared_ptr<PendingCall>& call)
+{
+    const std::string state = call->params.value("state", std::string{});
+    if (state != "runtime" && state != "simulation" && state != "stopped") {
+        completeCall(call, makeError(*call, "set_app_state requires state 'runtime', 'simulation' or 'stopped'"));
+        return;
+    }
+
+    app.getTaskManager().registerFrameTask([&app, state]() {
+        if (state == "runtime" && app.isStopped()) {
+            app.startRuntime();
+        }
+        else if (state == "simulation" && app.isStopped()) {
+            app.startSimulation();
+        }
+        else if (state == "stopped") {
+            if (app.isRuntimeMode()) {
+                app.stopRuntime();
+            }
+            else if (app.isSimulationMode()) {
+                app.stopSimulation();
+            }
+        }
+    });
+
+    completeCall(call, makeSuccess(*call, {{"state", state}}));
 }
 
 void AppAutomationControlService::handleSetEditorCamera(App& app, const std::shared_ptr<PendingCall>& call)
