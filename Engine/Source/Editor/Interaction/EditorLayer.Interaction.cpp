@@ -1,9 +1,88 @@
 #include "Editor/EditorLayerInternal.h"
 
+#include "ECS/System/RayCastMousePickingSystem.h"
 #include "ECS/System/TransformSystem.h"
+#include "Render/Core/Buffer.h"
+#include "Render/Core/CommandBuffer.h"
+#include "Render/Core/RenderImage.h"
+#include "Render/Render.h"
+
+#include <cmath>
 
 namespace ya
 {
+
+namespace
+{
+
+/// Pixel-accurate pick: read the entity id written by the viewport graph's
+/// entity-id pass at the cursor position, then map the id back to an entity.
+Entity* pickEntityFromEntityIdImage(IRender*                             render,
+                                    const std::shared_ptr<RenderImage>& idImage,
+                                    Scene*                              scene,
+                                    float                               viewportX,
+                                    float                               viewportY)
+{
+    if (!render || !idImage || !idImage->getImage() || !scene) {
+        return nullptr;
+    }
+
+    const Extent2D extent = idImage->getExtent();
+    if (extent.width == 0 || extent.height == 0) {
+        return nullptr;
+    }
+
+    const int32_t pixelX = std::clamp(static_cast<int32_t>(viewportX), 0, static_cast<int32_t>(extent.width - 1));
+    const int32_t pixelY = std::clamp(static_cast<int32_t>(viewportY), 0, static_cast<int32_t>(extent.height - 1));
+
+    auto readback = render->getResourceFactory()->createBuffer(BufferCreateInfo{
+        .label       = "EditorEntityIdPickReadback",
+        .usage       = EBufferUsage::TransferDst,
+        .size        = sizeof(uint32_t),
+        .memoryUsage = EMemoryUsage::GpuToCpu,
+    });
+    if (!readback) {
+        return nullptr;
+    }
+
+    auto* cmdBuf = render->beginIsolateCommands("EditorEntityPick");
+    cmdBuf->transitionImageLayoutAuto(idImage->getImage(), EImageLayout::TransferSrc);
+    cmdBuf->copyImageToBuffer(
+        idImage->getImage(),
+        EImageLayout::TransferSrc,
+        readback.get(),
+        {BufferImageCopy{
+            .bufferOffset      = 0,
+            .bufferRowLength   = 0,
+            .bufferImageHeight = 0,
+            .imageSubresource  = {
+                .aspectMask     = EImageAspect::Color,
+                .mipLevel       = 0,
+                .baseArrayLayer = 0,
+                .layerCount     = 1,
+            },
+            .imageOffsetX      = pixelX,
+            .imageOffsetY      = pixelY,
+            .imageOffsetZ      = 0,
+            .imageExtentWidth  = 1,
+            .imageExtentHeight = 1,
+            .imageExtentDepth  = 1,
+        }});
+    render->endIsolateCommands(cmdBuf);
+
+    const uint32_t* mapped = readback->map<uint32_t>();
+    if (!mapped) {
+        return nullptr;
+    }
+    const uint32_t entityId = *mapped;
+    if (entityId == 0) {
+        return nullptr;
+    }
+    return scene->getEntityByEnttID(entt::entity{entityId});
+}
+
+} // namespace
+
 void EditorLayer::onEvent(const Event& event)
 {
     if (_app && !_app->isStopped()) {
@@ -255,16 +334,25 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
     glm::mat4   view       = frameState.view;
     glm::mat4   projection = frameState.projection;
 
-    // Use RayCastMousePickingSystem to pick entity
-    // viewportLocalX/Y are in viewport space (0,0 = top-left of viewport)
-    Entity* pickedEntity = RayCastMousePickingSystem::pickEntity(
+    // Pixel-accurate picking: read the entity id the viewport graph wrote at
+    // the cursor position. Falls back to the CPU raycast when the id target is
+    // unavailable (e.g. before the first rendered frame) or misses.
+    Entity* pickedEntity = pickEntityFromEntityIdImage(
+        app->getRenderServices().getRender(),
+        getEntityIdPickImage(),
         scene,
         viewportLocalX,
-        viewportLocalY,
-        _viewportSize.x,
-        _viewportSize.y,
-        view,
-        projection);
+        viewportLocalY);
+    if (!pickedEntity) {
+        pickedEntity = RayCastMousePickingSystem::pickEntity(
+            scene,
+            viewportLocalX,
+            viewportLocalY,
+            _viewportSize.x,
+            _viewportSize.y,
+            view,
+            projection);
+    }
 
     // Update selection
     if (pickedEntity) {

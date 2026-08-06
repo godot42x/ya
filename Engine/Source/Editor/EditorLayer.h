@@ -113,6 +113,7 @@ struct EditorLayer
     // Render resources explicitly passed in from App each frame
     EditorViewportContext          _viewportCtx;
     std::shared_ptr<RenderImage>   _viewportDisplayImage = nullptr;
+    std::shared_ptr<RenderImage>   _entityIdPickImage    = nullptr;
     FreeCamera                     _camera;
     float                          _lastDeltaTime = 0.0f;
 
@@ -155,6 +156,8 @@ struct EditorLayer
     // Set viewport render context before ImGui render - called from App each frame
     void setViewportContext(const EditorViewportContext& ctx) { _viewportCtx = ctx; }
     void setViewportDisplayImage(std::shared_ptr<RenderImage> image) { _viewportDisplayImage = std::move(image); }
+    void setEntityIdPickImage(std::shared_ptr<RenderImage> image) { _entityIdPickImage = std::move(image); }
+    [[nodiscard]] const std::shared_ptr<RenderImage>& getEntityIdPickImage() const { return _entityIdPickImage; }
     [[nodiscard]] FreeCamera& getCamera() { return _camera; }
     [[nodiscard]] const FreeCamera& getCamera() const { return _camera; }
     [[nodiscard]] std::vector<RenderOverlayText2D> buildViewportCameraOverlayTexts() const;
