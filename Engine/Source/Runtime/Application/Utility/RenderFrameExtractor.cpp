@@ -285,6 +285,7 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
                 .mesh                 = mc.getMesh(),
                 .material             = mat,
                 .materialIndex        = static_cast<uint32_t>(mat->getIndex()),
+                .entityId             = static_cast<uint32_t>(e),
                 .sortKey              = 0.0f,
                 .skinningPaletteIndex = registerSkinningPalette(ctx, e, mc.getMesh()),
             });
@@ -315,6 +316,7 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
                     .mesh                 = mesh,
                     .material             = mat,
                     .materialIndex        = static_cast<uint32_t>(mat->getIndex()),
+                    .entityId             = static_cast<uint32_t>(e),
                     .sortKey              = 0.0f,
                     .skinningPaletteIndex = registerSkinningPalette(ctx, e, mesh),
                 });
@@ -350,6 +352,7 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
                 .mesh                 = mc.getMesh(),
                 .material             = nullptr,
                 .materialIndex        = 0,
+                .entityId             = static_cast<uint32_t>(e),
                 .sortKey              = 0.0f,
                 .skinningPaletteIndex = registerSkinningPalette(ctx, e, mc.getMesh()),
             });
@@ -374,6 +377,7 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
                 .mesh                 = mesh,
                 .material             = nullptr,
                 .materialIndex        = 0,
+                .entityId             = static_cast<uint32_t>(e),
                 .sortKey              = 0.0f,
                 .skinningPaletteIndex = registerSkinningPalette(ctx, e, mesh),
             });
