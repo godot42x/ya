@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BasicShadowPayload.h"
+#include "Render/Core/Graph/RenderGraph.h"
 #include "Runtime/Rendering/Common/Shadow/ShadowFrameResources.h"
 #include "Runtime/Rendering/Common/Shadow/ShadowTypes.h"
 

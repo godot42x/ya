@@ -11,11 +11,7 @@
 
 #include <gtest/gtest.h>
 
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/select.h>
-#include <sys/socket.h>
-#include <unistd.h>
+#include <asio.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -33,19 +29,17 @@ namespace
 /// Picks a currently-free TCP port by binding port 0 and releasing it.
 uint16_t pickFreePort()
 {
-    const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
-    EXPECT_GE(fd, 0);
+    asio::io_context        io;
+    asio::ip::tcp::acceptor acceptor(io);
+    asio::error_code        ec;
 
-    sockaddr_in addr{};
-    addr.sin_family      = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port        = 0;
-    EXPECT_EQ(::bind(fd, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)), 0);
+    acceptor.open(asio::ip::tcp::v4(), ec);
+    EXPECT_FALSE(ec);
+    acceptor.bind(asio::ip::tcp::endpoint(asio::ip::address_v4::loopback(), 0), ec);
+    EXPECT_FALSE(ec);
 
-    socklen_t len = sizeof(addr);
-    EXPECT_EQ(::getsockname(fd, reinterpret_cast<sockaddr*>(&addr), &len), 0);
-    const uint16_t port = ntohs(addr.sin_port);
-    ::close(fd);
+    const uint16_t port = acceptor.local_endpoint(ec).port();
+    EXPECT_FALSE(ec);
     return port;
 }
 
@@ -70,12 +64,18 @@ class AutomationRpcClient
     {
         const std::string payload = line + "\n";
         size_t            offset  = 0;
+        asio::error_code  ec;
         while (offset < payload.size()) {
-            const ssize_t n = ::send(_fd, payload.data() + offset, payload.size() - offset, 0);
-            if (n <= 0) {
+            const size_t n = _socket.write_some(asio::buffer(payload.data() + offset, payload.size() - offset), ec);
+            if (ec == asio::error::would_block || ec == asio::error::try_again) {
+                ec.clear();
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            }
+            if (ec || n == 0) {
                 return false;
             }
-            offset += static_cast<size_t>(n);
+            offset += n;
         }
         return true;
     }
@@ -84,65 +84,74 @@ class AutomationRpcClient
     /// partial data stays buffered across calls.
     bool tryReadLine(std::string& out, int timeoutMs)
     {
-        fd_set readSet;
-        FD_ZERO(&readSet);
-        FD_SET(_fd, &readSet);
-        timeval tv{timeoutMs / 1000, (timeoutMs % 1000) * 1000};
-        if (::select(_fd + 1, &readSet, nullptr, nullptr, &tv) <= 0) {
+        asio::error_code ec;
+        _socket.non_blocking(true, ec);
+        if (ec) {
             return false;
         }
 
-        char chunk[4096];
-        const ssize_t n = ::recv(_fd, chunk, sizeof(chunk), 0);
-        if (n <= 0) {
-            return false;
-        }
-        _buffer.append(chunk, static_cast<size_t>(n));
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
+        for (;;) {
+            char chunk[4096];
+            const size_t n = _socket.read_some(asio::buffer(chunk), ec);
+            if (!ec && n > 0) {
+                _buffer.append(chunk, n);
 
-        const size_t newline = _buffer.find('\n');
-        if (newline == std::string::npos) {
+                const size_t newline = _buffer.find('\n');
+                if (newline == std::string::npos) {
+                    return false;
+                }
+                out = _buffer.substr(0, newline);
+                if (!out.empty() && out.back() == '\r') {
+                    out.pop_back();
+                }
+                _buffer.erase(0, newline + 1);
+                return true;
+            }
+            if (ec == asio::error::would_block || ec == asio::error::try_again) {
+                ec.clear();
+                if (std::chrono::steady_clock::now() >= deadline) {
+                    return false;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            }
             return false;
         }
-        out = _buffer.substr(0, newline);
-        if (!out.empty() && out.back() == '\r') {
-            out.pop_back();
-        }
-        _buffer.erase(0, newline + 1);
-        return true;
     }
 
     void close()
     {
-        if (_fd >= 0) {
-            ::close(_fd);
-            _fd = -1;
+        if (_socket.is_open()) {
+            asio::error_code ec;
+            _socket.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+            _socket.close(ec);
         }
     }
 
   private:
     bool connectOnce(uint16_t port)
     {
-        if (_fd < 0) {
-            _fd = ::socket(AF_INET, SOCK_STREAM, 0);
-        }
-        if (_fd < 0) {
-            return false;
+        asio::error_code ec;
+        if (!_socket.is_open()) {
+            _socket.open(asio::ip::tcp::v4(), ec);
+            if (ec) {
+                return false;
+            }
         }
 
-        sockaddr_in addr{};
-        addr.sin_family      = AF_INET;
-        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        addr.sin_port        = htons(port);
-        if (::connect(_fd, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) == 0) {
+        const auto endpoint = asio::ip::tcp::endpoint(asio::ip::address_v4::loopback(), port);
+        _socket.connect(endpoint, ec);
+        if (!ec) {
             return true;
         }
-        ::close(_fd);
-        _fd = -1;
+        _socket.close(ec);
         return false;
     }
 
-    int         _fd = -1;
-    std::string _buffer;
+    asio::io_context      _io;
+    asio::ip::tcp::socket _socket{_io};
+    std::string           _buffer;
 };
 
 /// Sends one request and pumps the automation service until the listener

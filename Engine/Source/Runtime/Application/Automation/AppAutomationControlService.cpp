@@ -24,6 +24,7 @@
 #include "ECS/System/ComponentLinkageSystem.h"
 #include "ECS/System/TransformSystem.h"
 
+#include "Runtime/Rendering/RenderRuntime.h"
 #include "Scene/Scene.h"
 
 #include <asio.hpp>

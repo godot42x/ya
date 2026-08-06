@@ -8,6 +8,7 @@
 #include "Render/RenderFrameData.h"
 
 #include "Core/Math/Math.h"
+#include "Runtime/Rendering/Common/Shadow/Common/ShadowMapResources.h"
 #include <format>
 
 namespace ya

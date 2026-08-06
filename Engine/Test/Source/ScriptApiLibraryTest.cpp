@@ -14,7 +14,11 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#ifdef _WIN32
+#include <process.h>
+#else
 #include <unistd.h>
+#endif
 
 namespace ya
 {
@@ -23,6 +27,15 @@ namespace
 {
 
 using Json = ScriptApiRegistry::Json;
+
+unsigned long currentProcessId()
+{
+#ifdef _WIN32
+    return static_cast<unsigned long>(::_getpid());
+#else
+    return static_cast<unsigned long>(::getpid());
+#endif
+}
 
 class ScriptApiLibraryFixture : public ::testing::Test
 {
@@ -59,7 +72,7 @@ class ScriptApiLibraryFixture : public ::testing::Test
 std::filesystem::path tempAssetPath(const std::string& name)
 {
     return std::filesystem::temp_directory_path() /
-           std::format("ya_library_test_{}_{}", static_cast<unsigned long>(getpid()), name);
+           std::format("ya_library_test_{}_{}", currentProcessId(), name);
 }
 
 } // namespace

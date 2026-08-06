@@ -28,7 +28,7 @@ namespace ya
 class ENGINE_API FrameUploadArena
 {
   public:
-    struct Allocation
+    struct ENGINE_API Allocation
     {
         stdptr<IBuffer> buffer;
         uint64_t         offset = 0;

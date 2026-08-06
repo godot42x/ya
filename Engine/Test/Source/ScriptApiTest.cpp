@@ -10,7 +10,11 @@
 #include <algorithm>
 #include <filesystem>
 #include <format>
+#ifdef _WIN32
+#include <process.h>
+#else
 #include <unistd.h>
+#endif
 
 namespace ya
 {
@@ -19,6 +23,15 @@ namespace
 {
 
 using Json = ScriptApiRegistry::Json;
+
+unsigned long currentProcessId()
+{
+#ifdef _WIN32
+    return static_cast<unsigned long>(::_getpid());
+#else
+    return static_cast<unsigned long>(::getpid());
+#endif
+}
 
 class ScriptApiFixture : public ::testing::Test
 {
@@ -45,7 +58,7 @@ class ScriptApiFixture : public ::testing::Test
 std::filesystem::path tempScenePath()
 {
     return std::filesystem::temp_directory_path() /
-           std::format("ya_script_api_test_{}.scene.json", static_cast<unsigned long>(getpid()));
+           std::format("ya_script_api_test_{}.scene.json", currentProcessId());
 }
 
 } // namespace
