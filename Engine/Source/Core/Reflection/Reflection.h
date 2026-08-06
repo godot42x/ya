@@ -8,6 +8,7 @@
 
 #include "Core/Reflection/DeferredInitializer.h"
 #include "Core/Reflection/MetadataSupport.h"
+#include "Core/Reflection/MethodReflection.h"
 
 #include "Core/Macro/VariadicMacros.h"
 #include "Core/Reflection/PropertyExtensions.h"
@@ -189,15 +190,28 @@ struct Visitor<void>
             if constexpr (has_base_class) {                                                                                                       \
                 reg->template parentClass<base_t>();                                                                                              \
             }                                                                                                                                     \
-            visit_static_fields([&reg](const char* name, auto fieldPtr, auto meta) {                                                              \
-                reg->property(name, fieldPtr, meta);                                                                                              \
+            visit_static_fields([&reg](const char* name, auto member, auto meta) {                                                               \
+                using MemberType = std::decay_t<decltype(member)>;                                                                                \
+                if constexpr (std::is_member_function_pointer_v<MemberType>) {                                                                    \
+                    /* Reflected member function -> plugin Function with a JSON                                                                   \
+                       call path for scripts (see MethodReflection.h). */                                                                         \
+                    reg->function(name, member);                                                                                                  \
+                    if (auto* cls = ClassRegistry::instance().getClass(ya::type_index_v<class_t>)) {                                              \
+                        if (auto it = cls->functions.find(name); it != cls->functions.end()) {                                                    \
+                            ::ya::reflection::detail::registerReflectedMethod<class_t>(it->second, member, meta);                                 \
+                        }                                                                                                                         \
+                    }                                                                                                                             \
+                }                                                                                                                                 \
+                else {                                                                                                                            \
+                    reg->property(name, member, meta);                                                                                            \
                                                                                                                                                   \
-                /* TODO: Move into reflects-core*/                                                                                                \
-                using FieldType = std::decay_t<decltype(std::declval<class_t>().*fieldPtr)>;                                                      \
-                auto& registry  = ClassRegistry::instance();                                                                                      \
-                if (auto* cls = registry.getClass(ya::type_index_v<class_t>)) {                                                                   \
-                    if (auto* prop = cls->getProperty(name)) {                                                                                    \
-                        ::ya::reflection::PropertyContainerHelper::tryRegisterContainer<FieldType>(*prop);                                        \
+                    /* TODO: Move into reflects-core*/                                                                                            \
+                    using FieldType = std::decay_t<decltype(std::declval<class_t>().*member)>;                                                    \
+                    auto& registry  = ClassRegistry::instance();                                                                                  \
+                    if (auto* cls = registry.getClass(ya::type_index_v<class_t>)) {                                                               \
+                        if (auto* prop = cls->getProperty(name)) {                                                                                \
+                            ::ya::reflection::PropertyContainerHelper::tryRegisterContainer<FieldType>(*prop);                                    \
+                        }                                                                                                                         \
                     }                                                                                                                             \
                 }                                                                                                                                 \
             });                                                                                                                                   \
@@ -210,11 +224,17 @@ struct Visitor<void>
         template <typename Visitor>                                                                                                               \
         static void visit_fields(void* obj, Visitor&& visitor)                                                                                    \
         {                                                                                                                                         \
-            visit_static_fields([&obj, &visitor](const char* name, auto fieldPtr, auto /*meta*/) {                                                \
-                using ClassType     = class_t;                                                                                                    \
-                using FieldType     = std::decay_t<decltype(std::declval<ClassType&>().*fieldPtr)>;                                               \
-                FieldType& fieldRef = static_cast<ClassType*>(obj)->*fieldPtr;                                                                    \
-                std::forward<Visitor>(visitor)(name, fieldRef);                                                                                   \
+            visit_static_fields([&obj, &visitor](const char* name, auto member, auto /*meta*/) {                                                  \
+                using MemberType = std::decay_t<decltype(member)>;                                                                                \
+                if constexpr (std::is_member_function_pointer_v<MemberType>) {                                                                    \
+                    (void)name; /* functions are not part of the runtime field visit */                                                            \
+                }                                                                                                                                 \
+                else {                                                                                                                            \
+                    using ClassType     = class_t;                                                                                                \
+                    using FieldType     = std::decay_t<decltype(std::declval<ClassType&>().*member)>;                                             \
+                    FieldType& fieldRef = static_cast<ClassType*>(obj)->*member;                                                                  \
+                    std::forward<Visitor>(visitor)(name, fieldRef);                                                                               \
+                }                                                                                                                                 \
             });                                                                                                                                   \
         }                                                                                                                                         \
                                                                                                                                                   \
@@ -264,6 +284,10 @@ struct Visitor<void>
 
 #define YA_REFLECT_FIELD_SPEC(FieldName, Field, ...) \
     std::forward<Visitor>(visitor)(#FieldName, &Field, ::ya::reflection::MetaBuilder<decltype(Field)>() __VA_ARGS__);
+
+// YA_REFLECT_METHOD: collect compile-time member function list (+ metadata)
+#define YA_REFLECT_METHOD(MethodName, ...) \
+    std::forward<Visitor>(visitor)(#MethodName, &class_t::MethodName, ::ya::reflection::MetaBuilder<void>() __VA_ARGS__);
 
 // Macro for easy constructor registration
 // Usage: YA_REGISTER_CONSTRUCTOR(MyClass, int, float)
