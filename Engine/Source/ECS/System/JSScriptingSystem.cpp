@@ -5,6 +5,7 @@
 #include "Core/Reflection/InstanceRef.h"
 #include "Core/Reflection/MethodReflection.h"
 #include "Core/Reflection/ReflectionSerializer.h"
+#include "Core/Scripting/ScriptApiAsset.h"
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
 #include "Scene/Scene.h"
@@ -13,6 +14,7 @@
 
 #include <format>
 #include <unordered_map>
+#include <vector>
 
 namespace ya
 {
@@ -388,6 +390,118 @@ JSValue entityListFunction(JSContext* ctx,
     return array;
 }
 
+// ============================================================================
+// Registry -> JS namespace export ("function library" objects)
+// ============================================================================
+//
+// Every ScriptApiRegistry command "ns.fn" becomes `ya.ns.fn(...)` so libraries
+// like EditAssetLibrary surface as plain JS objects. Hand-written module
+// functions (ya.entity.create / ya.scene.active) take precedence - the
+// registry entry for the same name is skipped, never overwritten.
+//
+// Argument convention (derived from the command's argSchema):
+//   - no schema keys            -> fn()
+//   - exactly one schema key    -> fn(value)   positional
+//   - multiple schema keys      -> fn({key: value, ...}) params object
+
+struct LibraryFunctionBinding
+{
+    std::string              name;
+    std::vector<std::string> argNames;
+};
+
+void libraryFunctionFinalizer(void* opaque)
+{
+    delete static_cast<LibraryFunctionBinding*>(opaque);
+}
+
+JSValue libraryFunctionClosure(JSContext* ctx,
+                               JSValueConst /*this_val*/,
+                               int argc,
+                               JSValueConst* argv,
+                               int /*magic*/,
+                               void* opaque)
+{
+    const auto* binding = static_cast<const LibraryFunctionBinding*>(opaque);
+
+    Json args = Json::object();
+    if (binding->argNames.size() == 1) {
+        args[binding->argNames[0]] = argc >= 1 ? jsonFromJsValue(ctx, argv[0]) : nullptr;
+    }
+    else if (binding->argNames.size() > 1) {
+        if (argc == 0) {
+            // Leave the defaults to the callable.
+        }
+        else if (argc == 1 && JS_IsObject(argv[0])) {
+            args = jsonFromJsValue(ctx, argv[0]);
+        }
+        else {
+            return throwError(ctx,
+                              "command '" + binding->name +
+                                  "' takes multiple params; pass a single object {key: value, ...}");
+        }
+    }
+
+    Json   result;
+    std::string error;
+    if (!ScriptApiRegistry::get().invoke(binding->name, args, result, error)) {
+        return throwError(ctx, error);
+    }
+    return jsonToJsWithHandles(ctx, result);
+}
+
+/// Creates `ya.<namespace>.<fn>` objects for every registered command.
+void buildRegistryLibraryObjects(JSContext* ctx, JSValue yaGlobal)
+{
+    for (const auto& [name, info] : ScriptApiRegistry::get().functions()) {
+        std::vector<std::string> parts;
+        size_t start = 0;
+        while (start <= name.size()) {
+            const size_t dot = name.find('.', start);
+            parts.push_back(name.substr(start, dot == std::string::npos ? std::string::npos : dot - start));
+            if (dot == std::string::npos) {
+                break;
+            }
+            start = dot + 1;
+        }
+
+        // Walk/create the namespace chain.
+        JSValue current = JS_DupValue(ctx, yaGlobal);
+        for (size_t i = 0; i + 1 < parts.size(); ++i) {
+            JSValue child = JS_GetPropertyStr(ctx, current, parts[i].c_str());
+            if (JS_IsUndefined(child)) {
+                JS_FreeValue(ctx, child);
+                child = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, current, parts[i].c_str(), child); // steals ref
+                child = JS_GetPropertyStr(ctx, current, parts[i].c_str());
+            }
+            JS_FreeValue(ctx, current);
+            current = child;
+        }
+
+        // Leaf: skip names already provided by hand-written module functions.
+        const std::string& leaf = parts.back();
+        JSValue existing = JS_GetPropertyStr(ctx, current, leaf.c_str());
+        const bool bShadowed = !JS_IsUndefined(existing);
+        JS_FreeValue(ctx, existing);
+        if (!bShadowed) {
+            std::vector<std::string> argNames;
+            for (auto it = info.argSchema.begin(); it != info.argSchema.end(); ++it) {
+                argNames.push_back(it.key());
+            }
+            JSValue fn = JS_NewCClosure(ctx,
+                                        libraryFunctionClosure,
+                                        name.c_str(),
+                                        libraryFunctionFinalizer,
+                                        0,
+                                        0,
+                                        new LibraryFunctionBinding{name, std::move(argNames)});
+            JS_SetPropertyStr(ctx, current, leaf.c_str(), fn);
+        }
+        JS_FreeValue(ctx, current);
+    }
+}
+
 /**
  * @brief ProtoBuilder - quickjspp-style chained class/prototype registration.
  *
@@ -499,6 +613,7 @@ void JSScriptingSystem::init()
 
     // Core authoring API for the JSON/RPC transport (scene/entity/component).
     registerCoreScriptApis(ScriptApiRegistry::get());
+    registerAssetScriptApis(ScriptApiRegistry::get());
 
     // Single wrapper class: every wrapped C++ object carries a ScriptHandle.
     JS_NewClassID(_impl->runtime, &gWrapperClassId);
@@ -543,6 +658,9 @@ void JSScriptingSystem::init()
     JS_SetPropertyStr(_impl->context, entityModule, "list",
                       JS_NewCFunction(_impl->context, entityListFunction, "list", 0));
     JS_SetPropertyStr(_impl->context, yaGlobal, "entity", entityModule);
+
+    // Function libraries: every registered command becomes ya.<ns>.<fn>.
+    buildRegistryLibraryObjects(_impl->context, yaGlobal);
 
     JS_SetPropertyStr(_impl->context, yaGlobal, "__commands",
                       jsonToJs(_impl->context, ScriptApiRegistry::get().buildCommandList()));

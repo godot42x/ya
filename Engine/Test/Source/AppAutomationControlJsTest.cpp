@@ -432,6 +432,26 @@ TEST_F(AppAutomationControlJsTest, EvalJsHandleCompositionWorksThroughRpc)
     EXPECT_EQ(result[1], nlohmann::json::array({7.0, 8.0, 9.0}));
 }
 
+TEST_F(AppAutomationControlJsTest, EvalJsCallsLibraryNamespaceOverRpc)
+{
+    AutomationRpcClient client;
+    ASSERT_TRUE(client.connectWithRetry(_port));
+
+    const auto response = rpc(_app, client,
+                              {{"method", "eval_js"},
+                               {"id", 21},
+                               {"params",
+                                {{"source",
+                                  R"(
+                                    const types = ya.component.list_types();
+                                    const scene = ya.scene.get_active();
+                                    [types.includes("TransformComponent"), scene.name, typeof ya.asset.get_info]
+                                  )"}}}});
+    ASSERT_TRUE(response["ok"].get<bool>()) << response.dump();
+    EXPECT_EQ(response["result"]["result"],
+              nlohmann::json::array({true, "AutomationJs", "function"}));
+}
+
 // ============================================================================
 // invoke
 // ============================================================================
