@@ -40,8 +40,6 @@ void ForwardViewportStage::initWithDesc(const InitDesc& desc)
     _depthBufferShadowDS                      = desc.depthBufferShadowDS;
     _shadowState                              = desc.shadowState;
     _runtimeServices                          = desc.runtimeServices;
-    _getFrameIndex                            = desc.getFrameIndex;
-    _getElapsedTimeSeconds                    = desc.getElapsedTimeSeconds;
 
     _litPasses.init(ForwardViewportLitPasses::InitDesc{
         .render = desc.render,
@@ -97,8 +95,6 @@ void ForwardViewportStage::destroy()
     _auxPasses.destroy();
     _skinningDSL.reset();
     _runtimeServices = nullptr;
-    _getFrameIndex = {};
-    _getElapsedTimeSeconds = {};
 
     _render = nullptr;
 }
@@ -284,10 +280,7 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
                 },
                 .debugDraw = {},
                 .skyboxFrameDescriptorSet = passCtx.skyboxFrameDescriptorSet,
-                .setViewportAndScissor = [this](ICommandBuffer* cmdBuf, uint32_t w, uint32_t h)
-                {
-                    setViewportAndScissor(cmdBuf, w, h);
-                },
+                .bReverseViewportY = bReverseViewportY,
             });
             break;
         case EPass::PBR:
@@ -297,10 +290,7 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
                 .depthBufferShadowDS = _depthBufferShadowDS,
                 .skinningDS = passCtx.skinningDescriptorSet,
                 .pbrFrameDescriptorSet = passCtx.pbrFrameDescriptorSet,
-                .setViewportAndScissor = [this](ICommandBuffer* cmdBuf, uint32_t w, uint32_t h)
-                {
-                    setViewportAndScissor(cmdBuf, w, h);
-                },
+                .bReverseViewportY = bReverseViewportY,
             });
             break;
         case EPass::Phong:
@@ -310,10 +300,7 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
                 .depthBufferShadowDS = _depthBufferShadowDS,
                 .skinningDS = passCtx.skinningDescriptorSet,
                 .phongFrameDescriptorSet = passCtx.phongFrameDescriptorSet,
-                .setViewportAndScissor = [this](ICommandBuffer* cmdBuf, uint32_t w, uint32_t h)
-                {
-                    setViewportAndScissor(cmdBuf, w, h);
-                },
+                .bReverseViewportY = bReverseViewportY,
             });
             break;
         case EPass::Unlit:
@@ -321,10 +308,7 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
                 .stageCtx = passCtx.stageCtx,
                 .skinningDS = passCtx.skinningDescriptorSet,
                 .unlitFrameDescriptorSet = passCtx.unlitFrameDescriptorSet,
-                .setViewportAndScissor = [this](ICommandBuffer* cmdBuf, uint32_t w, uint32_t h)
-                {
-                    setViewportAndScissor(cmdBuf, w, h);
-                },
+                .bReverseViewportY = bReverseViewportY,
             });
             break;
         case EPass::Simple:
@@ -333,10 +317,7 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
                 .activeScene = passCtx.activeScene,
                 .skybox = {},
                 .debugDraw = {},
-                .setViewportAndScissor = [this](ICommandBuffer* cmdBuf, uint32_t w, uint32_t h)
-                {
-                    setViewportAndScissor(cmdBuf, w, h);
-                },
+                .bReverseViewportY = bReverseViewportY,
             });
             break;
         case EPass::DirectionOverlay:
@@ -345,10 +326,7 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
                 .activeScene = passCtx.activeScene,
                 .skybox = {},
                 .debugDraw = {},
-                .setViewportAndScissor = [this](ICommandBuffer* cmdBuf, uint32_t w, uint32_t h)
-                {
-                    setViewportAndScissor(cmdBuf, w, h);
-                },
+                .bReverseViewportY = bReverseViewportY,
             });
             break;
         case EPass::Debug:
@@ -368,18 +346,11 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
                     }
                     return debugDraw;
                 }(),
-                .setViewportAndScissor = [this](ICommandBuffer* cmdBuf, uint32_t w, uint32_t h)
-                {
-                    setViewportAndScissor(cmdBuf, w, h);
-                },
+                .bReverseViewportY = bReverseViewportY,
             });
             break;
     }
 }
-
-// ═══════════════════════════════════════════════════════════════════════
-// GUI
-// ═══════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════
 // Shadow mapping toggle
@@ -389,22 +360,6 @@ void ForwardViewportStage::applyShadowState(const ShadowRuntimeState& shadowStat
 {
     _shadowState = shadowState;
     _litPasses.applyShadowState(shadowState);
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// Helpers
-// ═══════════════════════════════════════════════════════════════════════
-
-void ForwardViewportStage::setViewportAndScissor(ICommandBuffer* cmdBuf, uint32_t w, uint32_t h)
-{
-    float viewportY      = 0.0f;
-    float viewportHeight = static_cast<float>(h);
-    if (bReverseViewportY) {
-        viewportY      = static_cast<float>(h);
-        viewportHeight = -static_cast<float>(h);
-    }
-    cmdBuf->setViewport(0.0f, viewportY, static_cast<float>(w), viewportHeight, 0.0f, 1.0f);
-    cmdBuf->setScissor(0, 0, w, h);
 }
 
 } // namespace ya

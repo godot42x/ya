@@ -5,6 +5,7 @@
 #include "Render/Core/Pipeline.h"
 #include "Render/Stage/IRenderStage.h"
 #include "Runtime/Rendering/Common/IRenderRuntimeServices.h"
+#include "Runtime/Rendering/Common/RenderViewportUtils.h"
 #include "Runtime/Rendering/Forward/ForwardViewportAuxPasses.h"
 #include "Runtime/Rendering/Forward/ForwardFrameResourceSet.h"
 #include "Runtime/Rendering/Forward/ForwardViewportLitPasses.h"
@@ -12,7 +13,6 @@
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowRuntimeState.h"
 
 #include <array>
-#include <functional>
 #include <glm/glm.hpp>
 
 namespace ya
@@ -39,8 +39,6 @@ struct ForwardViewportStage : public IRenderStage
         DescriptorSetHandle                  depthBufferShadowDS                  = nullptr;
         ShadowRuntimeState                   shadowState                          = {};
         IRenderRuntimeServices*              runtimeServices                      = nullptr;
-        std::function<uint64_t()>            getFrameIndex;
-        std::function<double()>              getElapsedTimeSeconds;
     };
 
     enum class EPass : uint8_t
@@ -71,7 +69,7 @@ struct ForwardViewportStage : public IRenderStage
                 bool                               bSkinned = false;
             };
 
-            std::array<Bucket, 10> buckets{};
+    std::array<Bucket, 10> buckets{};
             uint32_t               count     = 0;
             bool                   bHasDraws = false;
         };
@@ -105,8 +103,6 @@ struct ForwardViewportStage : public IRenderStage
     DescriptorSetHandle _depthBufferShadowDS = nullptr;
     ForwardFrameResourceSet::FramePayloads _framePayloads{};
     IRenderRuntimeServices* _runtimeServices = nullptr;
-    std::function<uint64_t()>            _getFrameIndex;
-    std::function<double()>              _getElapsedTimeSeconds;
 
     // Kept alive for graphics pipeline layouts; storage buffers, descriptor
     // sets and capacity are owned by ForwardFrameResourceSet.
@@ -152,9 +148,6 @@ struct ForwardViewportStage : public IRenderStage
 
   private:
     void                      executePass(EPass pass, const PassContext& passCtx);
-
-    // Helpers
-    void setViewportAndScissor(ICommandBuffer* cmdBuf, uint32_t w, uint32_t h);
 };
 
 } // namespace ya

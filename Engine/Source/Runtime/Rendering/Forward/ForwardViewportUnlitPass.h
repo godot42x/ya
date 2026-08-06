@@ -11,7 +11,6 @@
 #include "Test.Unlit.glsl.h"
 
 #include <array>
-#include <functional>
 #include <glm/glm.hpp>
 
 namespace ya
@@ -20,7 +19,6 @@ namespace ya
 struct RenderStageContext;
 struct RenderFrameData;
 class ForwardFrameResourceSet;
-class ICommandBuffer;
 class IRenderPass;
 class IBuffer;
 class IDescriptorSetLayout;
@@ -54,7 +52,7 @@ class ForwardViewportUnlitPass
         const RenderStageContext& stageCtx;
         DescriptorSetHandle       skinningDS = nullptr;
         DescriptorSetHandle       unlitFrameDescriptorSet = nullptr;
-        std::function<void(ICommandBuffer*, uint32_t, uint32_t)> setViewportAndScissor;
+        bool                      bReverseViewportY = true;
     };
 
     void init(const InitDesc& desc);

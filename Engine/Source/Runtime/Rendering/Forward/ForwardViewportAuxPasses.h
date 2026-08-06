@@ -8,7 +8,6 @@
 #include "GLSL.Skybox.glsl.h"
 
 #include <array>
-#include <functional>
 #include <vector>
 #include <glm/glm.hpp>
 
@@ -20,7 +19,6 @@ struct RenderDrawItem;
 class ForwardFrameResourceSet;
 class Scene;
 class Mesh;
-class ICommandBuffer;
 class IBuffer;
 class IDescriptorSetLayout;
 class IDescriptorPool;
@@ -112,7 +110,7 @@ class ENGINE_API ForwardViewportAuxPasses
         DebugDrawInput            debugDraw{};
         std::vector<ForwardDirectionGizmoInput> directionGizmos{};
         DescriptorSetHandle       skyboxFrameDescriptorSet = nullptr;
-        std::function<void(ICommandBuffer*, uint32_t, uint32_t)> setViewportAndScissor;
+        bool                      bReverseViewportY = true;
     };
 
     void init(const InitDesc& desc);
