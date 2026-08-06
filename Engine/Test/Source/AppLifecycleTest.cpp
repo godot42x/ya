@@ -1,5 +1,7 @@
 #include "Runtime/Application/Lifecycle/AppLifecycle.h"
 
+#include "AppModuleTestAccess.h"
+
 #include "Runtime/Application/App.h"
 
 #include "Core/System/VirtualFileSystem.h"
@@ -15,21 +17,6 @@
 
 namespace ya
 {
-
-class AppModuleTestAccess
-{
-  public:
-    static void configure(App& app) { app.configureModules(); }
-    static void attach(App& app) { app.attachModules(); }
-    static void detach(App& app) { app.detachModules(); }
-    static void setSceneManager(App& app, SceneManager* sceneManager) { app._sceneManager = sceneManager; }
-    static void setAppState(App& app, AppState state) { app._appState = state; }
-    static bool dispatchEvent(App& app, const Event& event) { return app.dispatchHostModuleEvent(event); }
-    static void tick(App& app, float dt) { app.tickModules(dt); }
-    static void prepareRender(App& app, float dt) { app.prepareModulesForRender(dt); }
-    static void recordPresentation(App& app, ICommandBuffer& commandBuffer, float dt) { app.recordModulePresentation(commandBuffer, dt); }
-};
-
 namespace
 {
 
