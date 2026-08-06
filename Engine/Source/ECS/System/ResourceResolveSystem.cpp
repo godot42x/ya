@@ -362,6 +362,29 @@ void ResourceResolveSystem::markAllSceneSkyboxEnvironmentDependentsDirty(const c
     }
 }
 
+void ResourceResolveSystem::touchDerivedResourceUsage()
+{
+    const uint64_t currentFrame = App::currentFrameIndex();
+    for (const auto& [entity, state] : _skyboxStates) {
+        (void)entity;
+        if (state.boundResource) {
+            state.boundResource->lastUsedFrame = currentFrame;
+        }
+    }
+    for (const auto& [entity, state] : _environmentStates) {
+        (void)entity;
+        if (state.boundResource) {
+            state.boundResource->lastUsedFrame = currentFrame;
+        }
+    }
+    for (const auto& [entity, state] : _terrainStates) {
+        (void)entity;
+        if (state.boundResource) {
+            state.boundResource->lastUsedFrame = currentFrame;
+        }
+    }
+}
+
 void ResourceResolveSystem::gcDerivedResources(uint64_t currentFrame)
 {
     const auto shouldKeep = [currentFrame](uint64_t lastUsedFrame) {
@@ -580,6 +603,7 @@ void ResourceResolveSystem::onUpdate(float dt)
         YA_PROFILE_SCOPE("ResourceResolve/EnvironmentLighting");
         resolvePendingEnvironmentLighting(scene);
     }
+    touchDerivedResourceUsage();
 }
 
 Mesh* ResourceResolveSystem::getTerrainMesh(entt::entity entity) const

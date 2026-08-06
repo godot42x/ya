@@ -186,8 +186,13 @@ void completeEnvironmentSource(IRender*                         render,
 
 void completeEnvironmentSourceFromDependency(EnvironmentLightingComponent&    component,
                                              EnvironmentLightingRuntimeState& state,
+                                             const SkyboxRuntimeState*       sceneSkyboxState,
                                              const char*                      reason)
 {
+    if (sceneSkyboxState) {
+        state.cubemapRenderImage = sceneSkyboxState->cubemapRenderImage;
+        state.cubemapTexture     = sceneSkyboxState->cubemapTexture;
+    }
     makeTransition(state.sourceState, "EnvironmentLighting.Source")
         .to(EEnvironmentLightingSourceResolveState::Ready, reason);
     ++state.resultVersion;
@@ -1139,7 +1144,7 @@ void ResourceResolveSystem::resolvePendingEnvironmentLighting(Scene* scene)
         syncEnvironmentDerivedBranchEnablement(getRender(), elc, pendingState);
 
         if (const auto* sourceSkyboxState = syncEnvSkybox(elc, pendingState, sceneSkyboxState)) {
-            completeEnvironmentSourceFromDependency(elc, pendingState, "scene skybox source resolved");
+            completeEnvironmentSourceFromDependency(elc, pendingState, sourceSkyboxState, "scene skybox source resolved");
         }
 
         {

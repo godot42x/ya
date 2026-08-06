@@ -286,10 +286,11 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
                 pendingState.cubemapTexture = std::move(cubemap);
                 pendingState.cubemapRenderImage.reset();
                 detail::rebuildSkyboxViews(getRender(), pendingState);
-                pendingState.boundResource.reset();
                 pendingState.derivedKey = derivedKey;
                 ++pendingState.resultVersion;
-                _skyboxDerivedResources[derivedKey] = snapshotSkyboxResource(pendingState);
+                auto resource = snapshotSkyboxResource(pendingState);
+                _skyboxDerivedResources[derivedKey] = resource;
+                pendingState.boundResource = resource;
                 transition.to(ESkyboxResolveState::Ready, "cubemap source resolved");
                 break;
             }
@@ -396,10 +397,11 @@ void ResourceResolveSystem::resolvePendingSkybox(Scene* scene)
             detail::retireTextureNow(pendingState.cubemapTexture);
             pendingState.pendingOffscreenProcess.reset();
             detail::rebuildSkyboxViews(getRender(), pendingState);
-            pendingState.boundResource.reset();
             pendingState.derivedKey = derivedKey;
             ++pendingState.resultVersion;
-            _skyboxDerivedResources[derivedKey] = snapshotSkyboxResource(pendingState);
+            auto resource = snapshotSkyboxResource(pendingState);
+            _skyboxDerivedResources[derivedKey] = resource;
+            pendingState.boundResource = resource;
             makeTransition(pendingState.resolveState, "Skybox")
                 .to(ESkyboxResolveState::Ready, "preprocess completed");
         } break;

@@ -263,6 +263,7 @@ struct ENGINE_API ResourceResolveSystem : public ISystem
     uint64_t                                                          _nextResolveAuditFrame = 0;
 
     void seedSceneResolveWork(Scene* scene);
+    void touchDerivedResourceUsage();
     void gcDerivedResources(uint64_t currentFrame);
     void auditResolveWork(Scene* scene);
     void markAllSceneSkyboxEnvironmentDependentsDirty(const char* reason);
