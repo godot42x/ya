@@ -14,7 +14,6 @@
 #include "PhongLit.slang.h"
 
 #include <array>
-#include <functional>
 #include <glm/glm.hpp>
 
 namespace ya
@@ -22,7 +21,6 @@ namespace ya
 
 struct RenderStageContext;
 struct RenderFrameData;
-class ICommandBuffer;
 class IRenderPass;
 class IBuffer;
 class IDescriptorSetLayout;
@@ -75,7 +73,7 @@ class ForwardViewportLitPasses
         DescriptorSetHandle       skinningDS = nullptr;
         DescriptorSetHandle       pbrFrameDescriptorSet = nullptr;
         DescriptorSetHandle       phongFrameDescriptorSet = nullptr;
-        std::function<void(ICommandBuffer*, uint32_t, uint32_t)> setViewportAndScissor;
+        bool                      bReverseViewportY = true;
     };
 
     void init(const InitDesc& desc);

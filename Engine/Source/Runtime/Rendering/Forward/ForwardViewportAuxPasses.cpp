@@ -4,6 +4,7 @@
 #include "Render/Core/Buffer.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
+#include "Runtime/Rendering/Common/RenderViewportUtils.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Scene/Scene.h"
 
@@ -276,7 +277,7 @@ void ForwardViewportAuxPasses::drawSkybox(const DrawContext& drawCtx)
 
     cmdBuf->debugBeginLabel("ForwardSkybox");
     cmdBuf->bindPipeline(_skyboxPipeline.get());
-    drawCtx.setViewportAndScissor(cmdBuf, vpW, vpH);
+    setViewportAndScissor(*cmdBuf, vpW, vpH, drawCtx.bReverseViewportY);
     cmdBuf->bindDescriptorSets(_skyboxPPL.get(), 0, {drawCtx.skyboxFrameDescriptorSet, drawCtx.skybox.descriptorSet});
     drawCtx.skybox.mesh->draw(cmdBuf);
     cmdBuf->debugEndLabel();
@@ -294,7 +295,7 @@ void ForwardViewportAuxPasses::drawSimple(const DrawContext& drawCtx)
 
     cmdBuf->debugBeginLabel("ForwardSimple");
     cmdBuf->bindPipeline(_simplePipeline.get());
-    drawCtx.setViewportAndScissor(cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height);
+    setViewportAndScissor(*cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height, drawCtx.bReverseViewportY);
 
     SimplePC pc{};
     pc.view       = fd.view;
@@ -330,7 +331,7 @@ void ForwardViewportAuxPasses::drawDirectionOverlay(const DrawContext& drawCtx)
     auto* cmdBuf = ctx.cmdBuf;
     cmdBuf->debugBeginLabel("ForwardDirectionOverlay");
     cmdBuf->bindPipeline(_simplePipeline.get());
-    drawCtx.setViewportAndScissor(cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height);
+    setViewportAndScissor(*cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height, drawCtx.bReverseViewportY);
 
     SimplePC pc{};
     pc.view       = ctx.frameData->view;
@@ -372,7 +373,7 @@ void ForwardViewportAuxPasses::drawDebug(const DrawContext& drawCtx)
 
     cmdBuf->debugBeginLabel("ForwardDebug");
     cmdBuf->bindPipeline(_debugPipeline.get());
-    drawCtx.setViewportAndScissor(cmdBuf, vpW, vpH);
+    setViewportAndScissor(*cmdBuf, vpW, vpH, drawCtx.bReverseViewportY);
 
     auto drawItems = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
     {

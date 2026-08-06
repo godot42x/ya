@@ -6,6 +6,7 @@
 #include "Render/Material/MaterialFactory.h"
 #include "Render/Render.h"
 #include "Runtime/Rendering/Forward/ForwardFrameResourceSet.h"
+#include "Runtime/Rendering/Common/RenderViewportUtils.h"
 
 namespace ya
 {
@@ -531,7 +532,7 @@ void ForwardViewportLitPasses::drawPBR(const DrawContext& drawCtx)
     }
 
     cmdBuf->debugBeginLabel("ForwardPBR");
-    drawCtx.setViewportAndScissor(cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height);
+    setViewportAndScissor(*cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height, drawCtx.bReverseViewportY);
 
     auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
     {
@@ -596,7 +597,7 @@ void ForwardViewportLitPasses::drawPhong(const DrawContext& drawCtx)
     }
 
     cmdBuf->debugBeginLabel("ForwardPhong");
-    drawCtx.setViewportAndScissor(cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height);
+    setViewportAndScissor(*cmdBuf, ctx.viewportExtent.width, ctx.viewportExtent.height, drawCtx.bReverseViewportY);
 
     auto drawBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
     {
