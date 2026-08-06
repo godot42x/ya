@@ -21,7 +21,9 @@ Entity* pickEntityFromEntityIdImage(IRender*                             render,
                                     const std::shared_ptr<RenderImage>& idImage,
                                     Scene*                              scene,
                                     float                               viewportX,
-                                    float                               viewportY)
+                                    float                               viewportY,
+                                    float                               viewportWidth,
+                                    float                               viewportHeight)
 {
     if (!render || !idImage || !idImage->getImage() || !scene) {
         return nullptr;
@@ -32,8 +34,12 @@ Entity* pickEntityFromEntityIdImage(IRender*                             render,
         return nullptr;
     }
 
-    const int32_t pixelX = std::clamp(static_cast<int32_t>(viewportX), 0, static_cast<int32_t>(extent.width - 1));
-    const int32_t pixelY = std::clamp(static_cast<int32_t>(viewportY), 0, static_cast<int32_t>(extent.height - 1));
+    // The id target may be rendered at a different resolution than the ImGui
+    // viewport panel (frame buffer scale); map the cursor through the ratio.
+    const float scaleX = static_cast<float>(extent.width) / std::max(viewportWidth, 1.0f);
+    const float scaleY = static_cast<float>(extent.height) / std::max(viewportHeight, 1.0f);
+    const int32_t pixelX = std::clamp(static_cast<int32_t>(viewportX * scaleX), 0, static_cast<int32_t>(extent.width - 1));
+    const int32_t pixelY = std::clamp(static_cast<int32_t>(viewportY * scaleY), 0, static_cast<int32_t>(extent.height - 1));
 
     auto readback = render->getResourceFactory()->createBuffer(BufferCreateInfo{
         .label       = "EditorEntityIdPickReadback",
@@ -342,7 +348,9 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
         getEntityIdPickImage(),
         scene,
         viewportLocalX,
-        viewportLocalY);
+        viewportLocalY,
+        _viewportSize.x,
+        _viewportSize.y);
     if (!pickedEntity) {
         pickedEntity = RayCastMousePickingSystem::pickEntity(
             scene,
