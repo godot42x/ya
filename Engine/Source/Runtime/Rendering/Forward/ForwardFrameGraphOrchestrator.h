@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ForwardFrameGraphResources.h"
+#include "ForwardFrameGraphPasses.h"
 #include "Runtime/Rendering/Forward/ForwardFrameResourceSet.h"
 #include "Runtime/Rendering/Forward/ForwardViewportStage.h"
 #include "Runtime/Rendering/Common/IRenderPipeline.h"
@@ -12,9 +12,6 @@ namespace ya
 {
 
 struct ShadowStage;
-struct PostProcessingStage;
-struct RenderTargetCreateInfo;
-struct EntityIdViewportPass;
 
 /// Top-level Forward frame graph orchestration (FG-706).
 ///
@@ -32,19 +29,7 @@ struct ForwardFrameGraphOrchestrator
         PostProcessingStage*  postProcessStage = nullptr;
     };
 
-    struct BuildInputs
-    {
-        RenderGraph*                                     graph               = nullptr;
-        RenderStageContext*                              stageCtx            = nullptr;
-        ForwardFrameResourceSet::Binding                 frameBinding        = {};
-        const RenderTargetCreateInfo*                    viewportRTSpec      = nullptr;
-        std::vector<ForwardDirectionGizmoInput>          directionGizmos     = {};
-        ForwardViewportStage::PassContext*              viewportPassContext = nullptr;
-        FrameContext*                                    postContext         = nullptr;
-        bool                                             bEnableShadow       = false;
-        bool                                             bPostprocessOutputIsSRGB = false;
-        std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
-    };
+    using BuildInputs = forward_frame_graph::BuildInputs;
 
     void build(const BuildDependencies& deps, const BuildInputs& inputs) const;
 };

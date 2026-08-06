@@ -5,33 +5,24 @@
 namespace ya
 {
 
-TEST(ForwardPassParamsTest, ViewportPassParamsDefaultsStayEmpty)
+TEST(ForwardGraphInputsTest, BuildInputsDefaultsStayEmpty)
 {
-    ForwardSkyboxPassParams skybox{};
-    EXPECT_FALSE(skybox.viewportColor.isValid());
-    EXPECT_FALSE(skybox.viewportDepth.isValid());
-    EXPECT_EQ(skybox.layerCount, 1u);
-    EXPECT_EQ(skybox.finalLayout, EImageLayout::ColorAttachmentOptimal);
+    const forward_frame_graph::BuildInputs inputs{};
+    EXPECT_EQ(inputs.graph, nullptr);
+    EXPECT_EQ(inputs.stageCtx, nullptr);
+    EXPECT_EQ(inputs.viewportRTSpec, nullptr);
+    EXPECT_EQ(inputs.postContext, nullptr);
+    EXPECT_TRUE(inputs.directionGizmos.empty());
+    EXPECT_FALSE(inputs.bEnableShadow);
+    EXPECT_FALSE(inputs.bPostprocessOutputIsSRGB);
+    EXPECT_FALSE(inputs.viewportOverlaySnapshot);
 
-    ForwardOpaquePassParams opaque{};
-    EXPECT_FALSE(opaque.viewportColor.isValid());
-    EXPECT_FALSE(opaque.viewportDepth.isValid());
-    EXPECT_EQ(opaque.layerCount, 1u);
-    EXPECT_EQ(opaque.finalLayout, EImageLayout::ColorAttachmentOptimal);
-    EXPECT_TRUE(opaque.directionGizmos.empty());
-
-    ForwardTransparentPassParams transparent{};
-    EXPECT_FALSE(transparent.viewportColor.isValid());
-    EXPECT_FALSE(transparent.viewportDepth.isValid());
-    EXPECT_EQ(transparent.layerCount, 1u);
-    EXPECT_EQ(transparent.finalLayout, EImageLayout::ColorAttachmentOptimal);
-
-    ForwardOverlayPassParams overlay{};
-    EXPECT_FALSE(overlay.viewportColor.isValid());
-    EXPECT_FALSE(overlay.viewportDepth.isValid());
-    EXPECT_EQ(overlay.layerCount, 1u);
-    EXPECT_EQ(overlay.finalLayout, EImageLayout::ColorAttachmentOptimal);
-    EXPECT_FALSE(overlay.overlaySnapshot);
+    const forward_frame_graph::ViewportGraphResources resources{};
+    EXPECT_FALSE(resources.color.isValid());
+    EXPECT_FALSE(resources.resolve.isValid());
+    EXPECT_FALSE(resources.depth.isValid());
+    EXPECT_FALSE(resources.entityId.isValid());
+    EXPECT_FALSE(resources.shadowDepth.has_value());
 }
 
 } // namespace ya
