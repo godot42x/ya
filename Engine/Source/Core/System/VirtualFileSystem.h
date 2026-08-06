@@ -30,6 +30,16 @@ struct VirtualFileSystem
   private:
     static VirtualFileSystem* instance;
 
+    /// One canonical physical form for roots/mounts so translatePath() output
+    /// does not depend on how the path was provided (e.g. symlinked temp dirs:
+    /// /var -> /private/var on macOS).
+    static stdpath normalizePhysicalPath(const stdpath& path)
+    {
+        std::error_code ec;
+        const stdpath canonicalPath = std::filesystem::weakly_canonical(path, ec);
+        return ec ? path.lexically_normal() : canonicalPath;
+    }
+
     stdpath projectRoot;
     stdpath engineRoot;
     stdpath gameRoot;       // Current game/example root
@@ -51,7 +61,7 @@ struct VirtualFileSystem
 
     VirtualFileSystem()
     {
-        projectRoot = std::filesystem::current_path();
+        projectRoot = normalizePhysicalPath(std::filesystem::current_path());
         engineRoot  = projectRoot / "Engine";
         mount("Engine", engineRoot);
         thirdPartyRoot = engineRoot / "ThirdParty";
@@ -75,15 +85,15 @@ struct VirtualFileSystem
     // Set the active game root (should be called from game entry point)
     void setGameRoot(const stdpath& path)
     {
-        gameRoot = path;
-        mount("Game", path);
+        gameRoot = normalizePhysicalPath(path);
+        mount("Game", gameRoot);
     }
 
     // Register custom mount point: "MyData" -> "path/to/data"
     void mount(const std::string& mountName, const stdpath& physicalPath)
     {
-        mountPoints[mountName] = physicalPath;
-        YA_CORE_INFO("VirtualFileSystem::mount - Mounted {} -> {}", mountName, physicalPath.string());
+        mountPoints[mountName] = normalizePhysicalPath(physicalPath);
+        YA_CORE_INFO("VirtualFileSystem::mount - Mounted {} -> {}", mountName, mountPoints[mountName].string());
         onMountPointChanged.broadcast();
     }
 

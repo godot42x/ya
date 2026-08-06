@@ -64,9 +64,12 @@ TEST_F(AssetPathNormalizationTest, VfsSeparatesLogicalPathsFromIoTranslation)
     auto* vfs = VirtualFileSystem::get();
     ASSERT_NE(vfs, nullptr);
 
-    const auto engineContentAbs = (_tempRoot / "Engine" / "Content" / "Textures" / "sky.hdr").lexically_normal();
-    const auto gameContentAbs   = (_gameRoot / "Content" / "Textures" / "albedo.png").lexically_normal();
-    const auto thirdPartyAbs    = (_tempRoot / "Engine" / "ThirdParty" / "Assets" / "mesh.obj").lexically_normal();
+    // VFS roots are captured from current_path(), which resolves symlinks
+    // (e.g. /var -> /private/var on macOS). Compare against the resolved
+    // physical path so the test is symlink-agnostic.
+    const auto engineContentAbs = std::filesystem::weakly_canonical(_tempRoot / "Engine" / "Content" / "Textures" / "sky.hdr");
+    const auto gameContentAbs   = std::filesystem::weakly_canonical(_gameRoot / "Content" / "Textures" / "albedo.png");
+    const auto thirdPartyAbs    = std::filesystem::weakly_canonical(_tempRoot / "Engine" / "ThirdParty" / "Assets" / "mesh.obj");
 
     EXPECT_EQ(vfs->toVfsPath(engineContentAbs.generic_string()), "Engine:Content/Textures/sky.hdr");
     EXPECT_EQ(vfs->toVfsPath(gameContentAbs.generic_string()), "Content/Textures/albedo.png");
