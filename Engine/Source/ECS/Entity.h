@@ -2,6 +2,8 @@
 #include "Core/Base.h"
 #include "Core/FName.h"
 #include "Core/Log.h"
+#include "Core/Reflection/InstanceRef.h"
+#include "Core/Reflection/Reflection.h"
 
 #include <entt/entt.hpp>
 
@@ -68,6 +70,28 @@ struct ENGINE_API Entity
 
     const std::string& getName() const { return name; }
     void               setName(const std::string& newName);
+
+    // === Script-facing reflected API ===
+    // Non-template wrappers so the reflection system can export them to
+    // scripts (template methods cannot be reflected). Component access
+    // returns an InstanceRef; the script bridge materializes it into a
+    // wrapped object with the concrete component prototype.
+    [[nodiscard]] bool               hasComponentByName(const std::string& typeName) const;
+    InstanceRef                      componentByName(const std::string& typeName);
+    InstanceRef                      addComponentByName(const std::string& typeName);
+    [[nodiscard]] bool               removeComponentByName(const std::string& typeName);
+    [[nodiscard]] nlohmann::json     components() const;
+
+    YA_REFLECT_BEGIN(Entity)
+    YA_REFLECT_METHOD(getId, .tooltip("Entity id in the active scene"))
+    YA_REFLECT_METHOD(getName, .tooltip("Entity display name"))
+    YA_REFLECT_METHOD(setName, .tooltip("Rename the entity"))
+    YA_REFLECT_METHOD(hasComponentByName, .tooltip("True when the entity has the component type"))
+    YA_REFLECT_METHOD(componentByName, .tooltip("Returns the component instance or null"))
+    YA_REFLECT_METHOD(addComponentByName, .tooltip("Adds (or returns) the component instance"))
+    YA_REFLECT_METHOD(removeComponentByName, .tooltip("Removes the component; true when it existed"))
+    YA_REFLECT_METHOD(components, .tooltip("Map of component type name -> instance"))
+    YA_REFLECT_END()
 };
 
 } // namespace ya

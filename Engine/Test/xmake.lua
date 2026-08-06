@@ -14,6 +14,7 @@ do
 
     add_deps("ya-engine", "ya-module-fixture")
     add_packages("gtest")
+    add_packages("quickjs-ng")
 
     if is_plat("windows") then
         -- /utf-8

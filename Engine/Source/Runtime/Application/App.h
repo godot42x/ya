@@ -32,6 +32,7 @@ struct SceneManager;
 struct Entity;
 struct ICommandBuffer;
 struct LuaScriptingSystem;
+struct JSScriptingSystem;
 struct FProjectDescriptor;
 struct AppRenderState;
 class WindowManager;
@@ -107,6 +108,7 @@ struct ENGINE_API App
     bool                     _modulesAttached = false;
 
     LuaScriptingSystem* _luaScriptingSystem = nullptr;
+    JSScriptingSystem*  _jsScriptingSystem  = nullptr;
 
   public:
     App();
@@ -166,6 +168,7 @@ struct ENGINE_API App
     [[nodiscard]] const AppSceneServices&  getSceneServices() const { return _sceneServices; }
     [[nodiscard]] AppAutomationControlService*       getAutomationControlService() { return _automationControlService.get(); }
     [[nodiscard]] const AppAutomationControlService* getAutomationControlService() const { return _automationControlService.get(); }
+    [[nodiscard]] JSScriptingSystem*                  getJSScriptingSystem() const { return _jsScriptingSystem; }
 
     [[nodiscard]] const AppDesc&                 getDesc() const { return _ci; }
     [[nodiscard]] ResourceResolveSystem*         getResourceResolveSystem() const { return _resourceResolveSystem; }
