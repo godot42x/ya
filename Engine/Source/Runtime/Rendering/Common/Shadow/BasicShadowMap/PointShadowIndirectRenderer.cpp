@@ -7,6 +7,7 @@
 #include "Render/Mesh.h"
 #include "Render/Render.h"
 #include "Render/RenderFrameData.h"
+#include "Runtime/Rendering/Common/Shadow/BasicShadowMap/PointShadowBufferUtils.h"
 
 #include <algorithm>
 #include <format>
@@ -392,13 +393,11 @@ bool PointShadowIndirectRenderer::ensureInstanceCapacity(uint32_t flightIndex, u
         YA_CORE_ERROR("Point shadow instance buffer for {} entries exceeds 32-bit size", newCap);
         return false;
     }
-    auto nextBuffer = _render->getResourceFactory()->createBuffer(
-        BufferCreateInfo{
-            .label       = std::format("PointShadow_Instance_{}", flightIndex),
-            .usage       = EBufferUsage::StorageBuffer,
-            .size        = static_cast<uint32_t>(bufferSize64),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
+    auto nextBuffer = createPointShadowBuffer(_render,
+                                              std::format("PointShadow_Instance_{}", flightIndex),
+                                              EBufferUsage::StorageBuffer,
+                                              static_cast<uint32_t>(bufferSize64),
+                                              EMemoryUsage::CpuToGpu);
     if (!nextBuffer || !nextBuffer->getHandle()) {
         YA_CORE_ERROR("Failed to create point shadow indirect instance buffer for flight {}", flightIndex);
         return false;

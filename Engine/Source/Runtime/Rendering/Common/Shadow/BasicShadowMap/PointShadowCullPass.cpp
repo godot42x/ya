@@ -8,6 +8,7 @@
 #include "Render/Core/Graph/RenderGraphImportUtils.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
+#include "Runtime/Rendering/Common/Shadow/BasicShadowMap/PointShadowBufferUtils.h"
 
 #include <format>
 #include <limits>
@@ -98,42 +99,36 @@ bool PointShadowCullPass::ensureCapacity(uint32_t flightIndex, uint32_t bucketCo
         return false;
     }
 
-    auto nextFrustumUpload = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-            .label       = std::format("PointShadowCull_Frustum_{}", flightIndex),
-            .usage       = EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
-            .size        = static_cast<uint32_t>(frustumBytes),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
-    auto nextFrustumExec = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-            .label       = std::format("PointShadowCull_FrustumExec_{}", flightIndex),
-            .usage       = EBufferUsage::StorageBuffer | EBufferUsage::TransferDst,
-            .size        = static_cast<uint32_t>(frustumBytes),
-            .memoryUsage = EMemoryUsage::GpuOnly,
-        });
-    auto nextDrawCommandsUpload = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-            .label       = std::format("PointShadowCull_DrawCmd_{}", flightIndex),
-            .usage       = EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
-            .size        = static_cast<uint32_t>(cmdBytes),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
-    auto nextDrawCommandsExec = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-            .label       = std::format("PointShadowCull_DrawCmdExec_{}", flightIndex),
-            .usage       = EBufferUsage::StorageBuffer | EBufferUsage::IndirectBuffer | EBufferUsage::TransferDst,
-            .size        = static_cast<uint32_t>(cmdBytes),
-            .memoryUsage = EMemoryUsage::GpuOnly,
-        });
-    auto nextVisibleInstancesUpload = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-            .label       = std::format("PointShadowCull_VisInst_{}", flightIndex),
-            .usage       = EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
-            .size        = static_cast<uint32_t>(visibleBytes64),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
-    auto nextVisibleInstancesExec = _render->getResourceFactory()->createBuffer(BufferCreateInfo{
-            .label       = std::format("PointShadowCull_VisInstExec_{}", flightIndex),
-            .usage       = EBufferUsage::StorageBuffer | EBufferUsage::TransferDst,
-            .size        = static_cast<uint32_t>(visibleBytes64),
-            .memoryUsage = EMemoryUsage::GpuOnly,
-        });
+    auto nextFrustumUpload = createPointShadowBuffer(_render,
+                                                     std::format("PointShadowCull_Frustum_{}", flightIndex),
+                                                     EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
+                                                     static_cast<uint32_t>(frustumBytes),
+                                                     EMemoryUsage::CpuToGpu);
+    auto nextFrustumExec = createPointShadowBuffer(_render,
+                                                   std::format("PointShadowCull_FrustumExec_{}", flightIndex),
+                                                   EBufferUsage::StorageBuffer | EBufferUsage::TransferDst,
+                                                   static_cast<uint32_t>(frustumBytes),
+                                                   EMemoryUsage::GpuOnly);
+    auto nextDrawCommandsUpload = createPointShadowBuffer(_render,
+                                                          std::format("PointShadowCull_DrawCmd_{}", flightIndex),
+                                                          EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
+                                                          static_cast<uint32_t>(cmdBytes),
+                                                          EMemoryUsage::CpuToGpu);
+    auto nextDrawCommandsExec = createPointShadowBuffer(_render,
+                                                        std::format("PointShadowCull_DrawCmdExec_{}", flightIndex),
+                                                        EBufferUsage::StorageBuffer | EBufferUsage::IndirectBuffer | EBufferUsage::TransferDst,
+                                                        static_cast<uint32_t>(cmdBytes),
+                                                        EMemoryUsage::GpuOnly);
+    auto nextVisibleInstancesUpload = createPointShadowBuffer(_render,
+                                                              std::format("PointShadowCull_VisInst_{}", flightIndex),
+                                                              EBufferUsage::StorageBuffer | EBufferUsage::TransferSrc,
+                                                              static_cast<uint32_t>(visibleBytes64),
+                                                              EMemoryUsage::CpuToGpu);
+    auto nextVisibleInstancesExec = createPointShadowBuffer(_render,
+                                                            std::format("PointShadowCull_VisInstExec_{}", flightIndex),
+                                                            EBufferUsage::StorageBuffer | EBufferUsage::TransferDst,
+                                                            static_cast<uint32_t>(visibleBytes64),
+                                                            EMemoryUsage::GpuOnly);
     if (!nextFrustumUpload || !nextFrustumExec ||
         !nextDrawCommandsUpload || !nextDrawCommandsExec ||
         !nextVisibleInstancesUpload || !nextVisibleInstancesExec) {
