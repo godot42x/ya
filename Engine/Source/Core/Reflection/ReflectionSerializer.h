@@ -18,10 +18,18 @@
 namespace ya
 {
 
+namespace reflection::detail
+{
+struct JsonMethodInvoker;
+}
 
 
 struct ENGINE_API ReflectionSerializer
 {
+    // MethodReflection bridges reflected member functions to JSON and needs
+    // the generic type <-> JSON conversion primitives.
+    friend struct ::ya::reflection::detail::JsonMethodInvoker;
+
     struct CustomTypeHook
     {
         std::function<nlohmann::json(const void*)>        serialize;

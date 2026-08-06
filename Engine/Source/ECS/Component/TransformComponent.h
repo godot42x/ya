@@ -33,6 +33,14 @@ struct TransformComponent : public IComponent
     YA_REFLECT_FIELD(_position)
     YA_REFLECT_FIELD(_rotation)
     YA_REFLECT_FIELD(_scale)
+    // Reflected members are auto-exported to scripts as component methods
+    // (e.g. `comp.setPosition(1, 2, 3)` / `comp.getPosition()`).
+    YA_REFLECT_METHOD(setPosition, .tooltip("Set local position"))
+    YA_REFLECT_METHOD(getPosition, .tooltip("Get local position"))
+    YA_REFLECT_METHOD(setRotation, .tooltip("Set local rotation (euler degrees)"))
+    YA_REFLECT_METHOD(getRotation, .tooltip("Get local rotation (euler degrees)"))
+    YA_REFLECT_METHOD(setScale, .tooltip("Set local scale"))
+    YA_REFLECT_METHOD(getScale, .tooltip("Get local scale"))
     YA_REFLECT_END()
 
     // === USER DATA (modifiable) ===
