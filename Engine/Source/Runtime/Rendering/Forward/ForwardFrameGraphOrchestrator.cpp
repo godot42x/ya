@@ -24,15 +24,24 @@ constexpr std::string_view kForwardTopologyPassTransparent     = "Forward Transp
 constexpr std::string_view kForwardTopologyPassOverlay         = "Forward Overlay";
 constexpr std::string_view kForwardTopologyPassBloom           = "Bloom Subgraph";
 constexpr std::string_view kForwardTopologyPassPostprocessing  = "Postprocessing";
-
-RGImportedTextureDesc makeForwardViewportImportedDesc(const RenderImage& image,
-                                                      std::string_view   label,
-                                                      EImageLayout::T    finalLayout)
+RGTextureDesc makeForwardViewportTextureDesc(const AttachmentDescription& attachment,
+                                             Extent2D                    extent,
+                                             uint32_t                    layerCount,
+                                             std::string                  label)
 {
-    return makeImportedTextureDesc(image, label, finalLayout);
+    return RGTextureDesc{
+        .label       = std::move(label),
+        .format      = attachment.format,
+        .extent      = Extent3D{extent.width, extent.height, 1},
+        .mipLevels   = 1,
+        .arrayLayers = layerCount,
+        .samples     = attachment.samples,
+        .usage       = attachment.usage,
+        .flags       = attachment.imageCreateFlags,
+    };
 }
 
-struct ForwardImportedViewportResources
+struct ForwardViewportGraphResources
 {
     RGTextureHandle         color{};
     RGTextureHandle         resolve{};
@@ -52,42 +61,43 @@ struct ForwardViewportPassBundle
     ForwardOverlayPassParams     overlay{};
 };
 
-ForwardImportedViewportResources importForwardViewportResources(RenderGraph&                               graph,
-                                                               const ForwardViewportResources&            viewportResources,
-                                                               const RenderTargetCreateInfo&             viewportRTSpec,
-                                                               const ShadowGraphOutputs&                 shadowOutputs)
+ForwardViewportGraphResources createForwardViewportResources(RenderGraph&                   graph,
+                                                             const RenderTargetCreateInfo& viewportRTSpec,
+                                                             const ShadowGraphOutputs&      shadowOutputs)
 {
     const auto colorAttachment = viewportRTSpec.attachments.colorAttach[0];
     const auto depthAttachment = *viewportRTSpec.attachments.depthAttach;
-    const auto color = graph.importTexture(
-        makeForwardViewportImportedDesc(*viewportResources.colorImage,
-                                        "ForwardViewport.Color",
-                                        colorAttachment.finalLayout));
-    const RGTextureHandle resolve = viewportResources.resolveImage
-        ? graph.importTexture(
-              makeForwardViewportImportedDesc(*viewportResources.resolveImage,
-                                              "ForwardViewport.Resolve",
-                                              colorAttachment.finalLayout))
+    const uint32_t layerCount = viewportRTSpec.layerCount;
+    const auto color = graph.createPersistentTexture(
+        makeForwardViewportTextureDesc(colorAttachment, viewportRTSpec.extent, layerCount, "ForwardViewport.Color"),
+        RGPersistentTextureKey{.value = "ForwardViewport.Color"});
+    const RGTextureHandle resolve = viewportRTSpec.attachments.resolveAttach.has_value()
+        ? graph.createPersistentTexture(
+              makeForwardViewportTextureDesc(
+                  *viewportRTSpec.attachments.resolveAttach,
+                  viewportRTSpec.extent,
+                  layerCount,
+                  "ForwardViewport.Resolve"),
+              RGPersistentTextureKey{.value = "ForwardViewport.Resolve"})
         : RGTextureHandle{};
-    const auto depth = graph.importTexture(
-        makeForwardViewportImportedDesc(*viewportResources.depthImage,
-                                        "ForwardViewport.Depth",
-                                        depthAttachment.finalLayout));
+    const auto depth = graph.createPersistentTexture(
+        makeForwardViewportTextureDesc(depthAttachment, viewportRTSpec.extent, layerCount, "ForwardViewport.Depth"),
+        RGPersistentTextureKey{.value = "ForwardViewport.Depth"});
 
-    return ForwardImportedViewportResources{
+    return ForwardViewportGraphResources{
         .color           = color,
         .resolve         = resolve,
         .depth           = depth,
         .shadowDepth     = shadowOutputs.shadowDepth,
-        .viewportExtent  = viewportResources.extent,
+        .viewportExtent  = viewportRTSpec.extent,
         .colorAttachment = colorAttachment,
         .depthAttachment = depthAttachment,
-        .renderArea      = Rect2D{.pos = {0, 0}, .extent = viewportResources.extent.toVec2()},
+        .renderArea      = Rect2D{.pos = {0, 0}, .extent = viewportRTSpec.extent.toVec2()},
     };
 }
 
 ForwardViewportPassBundle buildForwardViewportPassBundle(const ForwardFrameGraphOrchestrator::BuildInputs& inputs,
-                                                         const ForwardImportedViewportResources&            resources)
+                                                         const ForwardViewportGraphResources&               resources)
 {
     return ForwardViewportPassBundle{
         .opaque = {
@@ -129,7 +139,7 @@ void appendForwardViewportPasses(RenderGraph&                                   
                                  RenderStageContext&                                  stageCtx,
                                  const ForwardFrameResourceSet::Binding&              frameBinding,
                                  ForwardViewportStage::PassContext*                   passContext,
-                                 const ForwardImportedViewportResources&              resources,
+                                    const ForwardViewportGraphResources&                 resources,
                                  std::optional<RGTextureHandle>                       shadowDepth,
                                  ForwardViewportPassBundle                            params)
 {
@@ -262,7 +272,7 @@ void appendForwardViewportPasses(RenderGraph&                                   
 
 void appendForwardPostprocessPasses(RenderGraph&                 graph,
                                     PostProcessingStage&         postProcessStage,
-                                    const ForwardImportedViewportResources& resources,
+                                    const ForwardViewportGraphResources& resources,
                                     FrameContext*                postContext,
                                     bool                         bOutputIsSRGB)
 {
@@ -284,7 +294,6 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
     YA_CORE_ASSERT(inputs.graph != nullptr, "ForwardFrameGraphOrchestrator requires a render graph");
     YA_CORE_ASSERT(inputs.stageCtx != nullptr, "ForwardFrameGraphOrchestrator requires a stage context");
     YA_CORE_ASSERT(inputs.viewportRTSpec != nullptr, "ForwardFrameGraphOrchestrator requires a viewport render target spec");
-    YA_CORE_ASSERT(inputs.viewportResources != nullptr, "ForwardFrameGraphOrchestrator requires viewport resources");
     YA_CORE_ASSERT(inputs.postContext != nullptr, "ForwardFrameGraphOrchestrator requires a postprocess context");
     YA_CORE_ASSERT(deps.viewportStage != nullptr, "ForwardFrameGraphOrchestrator requires a viewport stage");
     YA_CORE_ASSERT(deps.postProcessStage != nullptr, "ForwardFrameGraphOrchestrator requires a postprocess stage");
@@ -292,7 +301,6 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
     auto&       graph        = *inputs.graph;
     auto&       stageCtx     = *inputs.stageCtx;
     const auto  frameBinding      = inputs.frameBinding;
-    const auto& viewportResources = *inputs.viewportResources;
     const auto& viewportRTSpec    = *inputs.viewportRTSpec;
 
     ShadowGraphOutputs shadowOutputs;
@@ -300,23 +308,29 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
         shadowOutputs = deps.shadowStage->appendGraphPasses(graph, stageCtx);
     }
 
-    const auto importedResources = importForwardViewportResources(graph, viewportResources, viewportRTSpec, shadowOutputs);
-    auto       viewportPasses    = buildForwardViewportPassBundle(inputs, importedResources);
+    const auto graphResources = createForwardViewportResources(graph, viewportRTSpec, shadowOutputs);
+    auto       viewportPasses = buildForwardViewportPassBundle(inputs, graphResources);
 
     appendForwardViewportPasses(graph,
                                 *deps.viewportStage,
                                 stageCtx,
                                 frameBinding,
                                 inputs.viewportPassContext,
-                                importedResources,
-                                importedResources.shadowDepth,
+                                graphResources,
+                                graphResources.shadowDepth,
                                 std::move(viewportPasses));
     appendForwardPostprocessPasses(
         graph,
         *deps.postProcessStage,
-        importedResources,
+        graphResources,
         inputs.postContext,
         inputs.bPostprocessOutputIsSRGB);
+
+    graph.exportTexture(graphResources.color, std::string(forward_graph_exports::viewportColor));
+    graph.exportTexture(graphResources.depth, std::string(forward_graph_exports::viewportDepth));
+    if (graphResources.resolve.isValid()) {
+        graph.exportTexture(graphResources.resolve, std::string(forward_graph_exports::viewportResolve));
+    }
 }
 
 } // namespace ya

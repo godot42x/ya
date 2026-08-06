@@ -5,13 +5,12 @@
 #include "Runtime/Rendering/Forward/ForwardViewportStage.h"
 #include "Runtime/Rendering/Common/IRenderPipeline.h"
 
-#include <functional>
+#include <memory>
 #include <vector>
 
 namespace ya
 {
 
-struct ForwardViewportResources;
 struct ShadowStage;
 struct PostProcessingStage;
 struct RenderTargetCreateInfo;
@@ -37,7 +36,6 @@ struct ForwardFrameGraphOrchestrator
         RenderStageContext*                              stageCtx            = nullptr;
         ForwardFrameResourceSet::Binding                 frameBinding        = {};
         const RenderTargetCreateInfo*                    viewportRTSpec      = nullptr;
-        const ForwardViewportResources*                  viewportResources   = nullptr;
         std::vector<ForwardDirectionGizmoInput>          directionGizmos     = {};
         ForwardViewportStage::PassContext*              viewportPassContext = nullptr;
         FrameContext*                                    postContext         = nullptr;

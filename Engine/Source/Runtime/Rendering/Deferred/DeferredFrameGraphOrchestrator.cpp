@@ -541,6 +541,15 @@ void DeferredFrameGraphOrchestrator::build(const BuildDependencies& deps, const 
     createDeferredAttachmentTextures(graph, graphResources, inputs);
     appendDeferredGBufferPass(graph, graphResources, inputs, *deps.gBufferStage, bReverseViewportY);
     appendDeferredLightingAndPostprocess(graph, graphResources, inputs, deps);
+
+    for (uint32_t attachmentIndex = 0; attachmentIndex < graphResources.textures.gBufferColors.size(); ++attachmentIndex) {
+        graph.exportTexture(graphResources.textures.gBufferColors[attachmentIndex], std::string(deferred_graph_exports::gBufferColor[attachmentIndex]));
+    }
+    graph.exportTexture(graphResources.textures.gBufferDepth, std::string(deferred_graph_exports::gBufferDepth));
+    graph.exportTexture(graphResources.textures.viewportColor, std::string(deferred_graph_exports::viewportColor));
+    if (graphResources.textures.ssao.has_value()) {
+        graph.exportTexture(*graphResources.textures.ssao, std::string(deferred_graph_exports::ssao));
+    }
 }
 
 } // namespace ya
