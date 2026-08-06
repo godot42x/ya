@@ -1,5 +1,7 @@
 #include "Editor/EditorLayerInternal.h"
 
+#include "ECS/System/TransformSystem.h"
+
 namespace ya
 {
 void EditorLayer::onEvent(const Event& event)
@@ -288,15 +290,23 @@ void EditorLayer::focusCameraOnEntity(Entity* entity)
     if (!app) {
         return;
     }
-    float distance = 10.0f; // Fixed distance from entity, can be adjusted
+    constexpr float distance = 10.0f; // Fixed distance from entity, can be adjusted
 
-    glm::vec3 entityPos = tc->getPosition();
-    glm::vec3 camPos    = _camera.getPosition();
+    // Focus the world position, not the local one: hierarchical children would
+    // otherwise pull the camera to their local origin. No-op when already clean.
+    TransformSystem::computeWorldMatrix(tc);
+    const glm::vec3 entityPos = glm::vec3(tc->getWorldMatrix()[3]);
+    const glm::vec3 camPos    = _camera.getPosition();
 
-    glm::vec3 camToEntity = glm::normalize(entityPos - camPos);
+    glm::vec3 camToEntity = entityPos - camPos;
+    if (glm::length2(camToEntity) < 1e-6f) {
+        // Camera sits exactly on the entity: keep the current view direction.
+        camToEntity = -glm::vec3(_camera.getViewMatrix()[2]);
+    }
+    camToEntity = glm::normalize(camToEntity);
 
     // Position camera behind entity at fixed distance
-    glm::vec3 newCamPos = entityPos - camToEntity * distance;
+    const glm::vec3 newCamPos = entityPos - camToEntity * distance;
 
     glm::vec3 newCamRotation{};
     {
