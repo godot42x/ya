@@ -97,6 +97,9 @@ class ENGINE_API AppAutomationControlService
     void handleSetEditorConfigValue(App& app, const std::shared_ptr<PendingCall>& call);
     void handleEntityRemoveComponent(App& app, const std::shared_ptr<PendingCall>& call);
     void handleEntitySetMeshVisible(App& app, const std::shared_ptr<PendingCall>& call);
+    void handleEvalJS(App& app, const std::shared_ptr<PendingCall>& call);
+    void handleInvoke(App& app, const std::shared_ptr<PendingCall>& call);
+    void handleListCommands(App& app, const std::shared_ptr<PendingCall>& call);
 
     void completeCall(const std::shared_ptr<PendingCall>& call, nlohmann::json response);
     [[nodiscard]] nlohmann::json makeSuccess(const PendingCall& call, nlohmann::json result = nlohmann::json::object()) const;

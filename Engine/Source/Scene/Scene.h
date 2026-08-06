@@ -4,6 +4,7 @@
 #include "Core/Common/Types.h"
 #include "Core/Log.h"
 #include "Core/Profiling/Instrumentor.h"
+#include "Core/Reflection/Reflection.h"
 #include "Core/TypeIndex.h"
 #include "ECS/Component.h"
 #include "ECS/ComponentMutation.h"
@@ -119,6 +120,7 @@ struct ENGINE_API [[refl]] Scene
     // Getters
     const std::string& getName() const { return _name; }
     void               setName(const std::string& name) { _name = name; }
+    uint32_t           entityCount() const { return static_cast<uint32_t>(_entityMap.size()); }
 
     // Registry access
     entt::registry&       getRegistry() { return _registry; }
@@ -141,6 +143,13 @@ struct ENGINE_API [[refl]] Scene
 
     Node* duplicateNode(Node* node, Node* parent = nullptr);
     bool  moveNode(Node* node, Node* newParent, size_t childIndex);
+
+    // === Script-facing reflected API ===
+    YA_REFLECT_BEGIN(Scene)
+    YA_REFLECT_METHOD(getName, .tooltip("Scene display name"))
+    YA_REFLECT_METHOD(setName, .tooltip("Rename the scene"))
+    YA_REFLECT_METHOD(entityCount, .tooltip("Number of entities in the scene"))
+    YA_REFLECT_END()
 
   private:
     // === Internal ECS API (Engine Systems Only) ===

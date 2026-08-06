@@ -1,6 +1,7 @@
 #include "Runtime/Application/Automation/AppAutomationControlService.h"
 
 #include "Runtime/Application/App.h"
+#include "ECS/System/JSScriptingSystem.h"
 #include "Runtime/Application/AppSceneServices.h"
 #include "Runtime/Application/Automation/EditorAutomationControl.h"
 #include "Runtime/Application/Lifecycle/AppAutomation.h"
@@ -617,8 +618,67 @@ void AppAutomationControlService::handleCall(App& app, const std::shared_ptr<Pen
         handleEntitySetMeshVisible(app, call);
         return;
     }
+    if (call->method == "eval_js") {
+        handleEvalJS(app, call);
+        return;
+    }
+    if (call->method == "invoke") {
+        handleInvoke(app, call);
+        return;
+    }
+    if (call->method == "list_commands") {
+        handleListCommands(app, call);
+        return;
+    }
 
     completeCall(call, makeError(*call, std::string("unknown method: ") + call->method));
+}
+
+void AppAutomationControlService::handleEvalJS(App& app, const std::shared_ptr<PendingCall>& call)
+{
+    auto* scripting = app.getJSScriptingSystem();
+    if (scripting == nullptr) {
+        completeCall(call, makeError(*call, "js scripting unavailable"));
+        return;
+    }
+
+    const std::string source = call->params.value("source", "");
+    auto              result = scripting->evalJS(source, "<rpc>");
+    if (!result.ok) {
+        completeCall(call, makeError(*call, result.error));
+        return;
+    }
+    completeCall(call, makeSuccess(*call, {{"result", std::move(result.value)}}));
+}
+
+void AppAutomationControlService::handleInvoke(App& app, const std::shared_ptr<PendingCall>& call)
+{
+    auto* scripting = app.getJSScriptingSystem();
+    if (scripting == nullptr) {
+        completeCall(call, makeError(*call, "js scripting unavailable"));
+        return;
+    }
+
+    const std::string name = call->params.value("name", "");
+    nlohmann::json args = call->params.contains("args") ? call->params["args"] : nlohmann::json::object();
+
+    nlohmann::json result;
+    std::string    error;
+    if (!scripting->invoke(name, args, result, error)) {
+        completeCall(call, makeError(*call, error));
+        return;
+    }
+    completeCall(call, makeSuccess(*call, {{"result", std::move(result)}}));
+}
+
+void AppAutomationControlService::handleListCommands(App& app, const std::shared_ptr<PendingCall>& call)
+{
+    auto* scripting = app.getJSScriptingSystem();
+    if (scripting == nullptr) {
+        completeCall(call, makeError(*call, "js scripting unavailable"));
+        return;
+    }
+    completeCall(call, makeSuccess(*call, {{"commands", scripting->buildCommandList()}}));
 }
 
 void AppAutomationControlService::handlePing(const std::shared_ptr<PendingCall>& call)

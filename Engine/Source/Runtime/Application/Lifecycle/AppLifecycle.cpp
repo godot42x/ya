@@ -21,6 +21,8 @@
 
 #include "ECS/System/ComponentLinkageSystem.h"
 #include "ECS/System/LuaScriptingSystem.h"
+#include "ECS/System/JSScriptingSystem.h"
+#include "Core/Scripting/ScriptApiRegistry.h"
 #include "ECS/System/ModelInstantiationSystem.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "ECS/System/TransformSystem.h"
@@ -388,6 +390,24 @@ void AppLifecycle::init(App& app, AppDesc ci)
         app._luaScriptingSystem->shutdown();
         delete app._luaScriptingSystem;
         app._luaScriptingSystem = nullptr; });
+
+    // Engine-level JS scripting: the ScriptApiRegistry is the single capability
+    // catalog shared by JS scripts and the automation RPC. Providers wire the
+    // registry to this app's scene services.
+    {
+        auto& api = ScriptApiRegistry::get();
+        api.setActiveSceneProvider([&app]() -> Scene* { return app.getSceneServices().getActiveScene(); });
+        api.setSaveSceneFn([&app](const std::string& path, Scene& scene) -> bool
+                           { return app._sceneManager->serializeToFile(path, &scene); });
+        api.setLoadSceneFn([&app](const std::string& path) -> bool { return AppLifecycle::loadScene(app, path); });
+    }
+    app._jsScriptingSystem = new JSScriptingSystem();
+    app._jsScriptingSystem->init();
+    app._deleter.push("JSScriptingSystem", [&app](void*)
+                      {
+        app._jsScriptingSystem->shutdown();
+        delete app._jsScriptingSystem;
+        app._jsScriptingSystem = nullptr; });
 
     {
         YA_PROFILE_SCOPE_LOG("Inheritance Init");

@@ -20,6 +20,7 @@ add_requires(
     , "glad"
     , "ktx"
     ,"joltphysics v5.5.0"
+    ,"quickjs-ng v0.15.1"
 )
 add_requireconfs("freetype", {
     system = false,
@@ -200,6 +201,7 @@ do
     add_packages("nlohmann_json", { public = true })
     add_packages("sol2", { public = true })
     add_packages("joltphysics")
+    add_packages("quickjs-ng")
 
     -- add_deps("shader")
 
