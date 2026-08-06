@@ -18,6 +18,7 @@ struct LightStage;
 struct SSAOStage;
 struct PostProcessingStage;
 struct RenderTargetCreateInfo;
+struct EntityIdViewportPass;
 
 struct DeferredFrameGraphOrchestrator
 {
@@ -29,6 +30,7 @@ struct DeferredFrameGraphOrchestrator
         ViewportOverlayStage* overlayStage         = nullptr;
         PostProcessingStage*  postProcessStage     = nullptr;
         SSAOStage*            ssaoStage            = nullptr;
+        EntityIdViewportPass* entityIdPass         = nullptr;
     };
 
     struct BuildInputs

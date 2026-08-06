@@ -16,6 +16,7 @@ namespace forward_graph_exports
 inline constexpr std::string_view viewportColor   = "ForwardViewport.Color";
 inline constexpr std::string_view viewportDepth   = "ForwardViewport.Depth";
 inline constexpr std::string_view viewportResolve = "ForwardViewport.Resolve";
+inline constexpr std::string_view entityId        = "ForwardViewport.EntityId";
 
 } // namespace forward_graph_exports
 
@@ -40,6 +41,20 @@ struct ForwardSkyboxPassParams
     Rect2D              renderArea{};
     uint32_t            layerCount = 1;
     EImageLayout::T     finalLayout = EImageLayout::ColorAttachmentOptimal;
+};
+
+/// Typed parameters for the Forward entity-id pick graph pass.
+///
+/// The pass renders every draw item's entity id into an R32_UINT target,
+/// depth-tested against the already-written viewport depth, so a cursor
+/// readback selects exactly what is visible.
+struct ForwardEntityIdPassParams
+{
+    RGTextureHandle viewportColor{};
+    RGTextureHandle viewportDepth{};
+    Rect2D          renderArea{};
+    uint32_t        layerCount = 1;
+    EImageLayout::T finalLayout = EImageLayout::ColorAttachmentOptimal;
 };
 
 /// Typed parameters for the Forward transparent graph pass.

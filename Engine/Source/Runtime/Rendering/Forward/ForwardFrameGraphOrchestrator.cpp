@@ -5,6 +5,7 @@
 #include "Render/Core/Graph/RenderGraphImportUtils.h"
 #include "Render/Core/RenderTargetCreateInfo.h"
 #include "Runtime/Rendering/Common/PostProcessingStage.h"
+#include "Runtime/Rendering/Common/EntityIdViewportPass.h"
 #include "Runtime/Rendering/Common/RenderViewportOverlayRecorder.h"
 #include "Runtime/Rendering/Common/Shadow/ShadowStage.h"
 #include "Runtime/Rendering/Forward/ForwardViewportStage.h"
@@ -46,10 +47,12 @@ struct ForwardViewportGraphResources
     RGTextureHandle         color{};
     RGTextureHandle         resolve{};
     RGTextureHandle         depth{};
+    RGTextureHandle         entityId{};
     std::optional<RGTextureHandle> shadowDepth{};
     Extent2D                viewportExtent{};
     AttachmentDescription   colorAttachment{};
     AttachmentDescription   depthAttachment{};
+    AttachmentDescription   entityIdAttachment{};
     Rect2D                  renderArea{};
 };
 
@@ -58,8 +61,21 @@ struct ForwardViewportPassBundle
     ForwardOpaquePassParams      opaque{};
     ForwardSkyboxPassParams      skybox{};
     ForwardTransparentPassParams transparent{};
+    ForwardEntityIdPassParams    entityId{};
     ForwardOverlayPassParams     overlay{};
 };
+
+AttachmentDescription makeEntityIdAttachmentDesc()
+{
+    return AttachmentDescription{
+        .format   = EFormat::R32_UINT,
+        .samples  = ESampleCount::Sample_1,
+        .loadOp   = EAttachmentLoadOp::Clear,
+        .storeOp  = EAttachmentStoreOp::Store,
+        .usage    = EImageUsage::ColorAttachment | EImageUsage::TransferSrc,
+        .finalLayout = EImageLayout::ColorAttachmentOptimal,
+    };
+}
 
 ForwardViewportGraphResources createForwardViewportResources(RenderGraph&                   graph,
                                                              const RenderTargetCreateInfo& viewportRTSpec,
@@ -83,15 +99,21 @@ ForwardViewportGraphResources createForwardViewportResources(RenderGraph&       
     const auto depth = graph.createPersistentTexture(
         makeForwardViewportTextureDesc(depthAttachment, viewportRTSpec.extent, layerCount, "ForwardViewport.Depth"),
         RGPersistentTextureKey{.value = "ForwardViewport.Depth"});
+    const auto entityIdAttachment = makeEntityIdAttachmentDesc();
+    const auto entityId = graph.createPersistentTexture(
+        makeForwardViewportTextureDesc(entityIdAttachment, viewportRTSpec.extent, layerCount, "ForwardViewport.EntityId"),
+        RGPersistentTextureKey{.value = "ForwardViewport.EntityId"});
 
     return ForwardViewportGraphResources{
         .color           = color,
         .resolve         = resolve,
         .depth           = depth,
+        .entityId        = entityId,
         .shadowDepth     = shadowOutputs.shadowDepth,
         .viewportExtent  = viewportRTSpec.extent,
         .colorAttachment = colorAttachment,
         .depthAttachment = depthAttachment,
+        .entityIdAttachment = entityIdAttachment,
         .renderArea      = Rect2D{.pos = {0, 0}, .extent = viewportRTSpec.extent.toVec2()},
     };
 }
@@ -122,6 +144,13 @@ ForwardViewportPassBundle buildForwardViewportPassBundle(const ForwardFrameGraph
             .layerCount    = 1,
             .finalLayout   = EImageLayout::ColorAttachmentOptimal,
         },
+        .entityId = {
+            .viewportColor = resources.entityId,
+            .viewportDepth = resources.depth,
+            .renderArea    = resources.renderArea,
+            .layerCount    = 1,
+            .finalLayout   = EImageLayout::ColorAttachmentOptimal,
+        },
         .overlay = {
             .viewportColor   = resources.color,
             .viewportDepth   = resources.depth,
@@ -136,6 +165,7 @@ ForwardViewportPassBundle buildForwardViewportPassBundle(const ForwardFrameGraph
 
 void appendForwardViewportPasses(RenderGraph&                                         graph,
                                  ForwardViewportStage&                                viewportStage,
+                                 EntityIdViewportPass&                                entityIdPass,
                                  RenderStageContext&                                  stageCtx,
                                  const ForwardFrameResourceSet::Binding&              frameBinding,
                                  ForwardViewportStage::PassContext*                   passContext,
@@ -236,6 +266,46 @@ void appendForwardViewportPasses(RenderGraph&                                   
             rgCtx.endRendering();
         });
 
+    // Entity-id pick pass: writes every draw item's entity id into an R32_UINT
+    // target, depth-tested against the viewport depth so ids match what is
+    // visible. A cursor readback of this target yields the picked entity.
+    [[maybe_unused]] const auto entityIdPassHandle = graph.addPass(
+        std::string("Forward EntityId"),
+        [&entityIdParams = params.entityId, entityIdAttachment = resources.entityIdAttachment, depthAttachment = resources.depthAttachment](RGPassBuilder& passBuilder) {
+            passBuilder.declareRaster({
+                .renderArea = entityIdParams.renderArea,
+                .layerCount = entityIdParams.layerCount,
+                .colors = {{
+                    .color       = entityIdParams.viewportColor,
+                    .clearValue  = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
+                    .loadOp      = entityIdAttachment.loadOp,
+                    .storeOp     = entityIdAttachment.storeOp,
+                    .finalLayout = entityIdParams.finalLayout,
+                }},
+                .depth = RGDepthAttachmentDesc{
+                    .depth       = entityIdParams.viewportDepth,
+                    .loadOp      = EAttachmentLoadOp::Load,
+                    .storeOp     = EAttachmentStoreOp::Store,
+                    .finalLayout = depthAttachment.finalLayout,
+                },
+            });
+        },
+        [&entityIdPass, &stageCtx, frameBinding](RGRenderContext& rgCtx) {
+            const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
+            rgCtx.beginDeclaredRasterRendering();
+            stageCtx.viewportExtent = viewportExtent;
+            if (stageCtx.frameData) {
+                entityIdPass.execute(&rgCtx.getCommandBuffer(),
+                                     viewportExtent.width,
+                                     viewportExtent.height,
+                                      stageCtx.frameData->projection * stageCtx.frameData->view,
+                                      stageCtx.frameData->view,
+                                      *stageCtx.frameData,
+                                      frameBinding.skinningDescriptorSet);
+            }
+            rgCtx.endRendering();
+        });
+
     [[maybe_unused]] const auto overlayPass = graph.addPass(
         std::string(kForwardTopologyPassOverlay),
         [&overlayParams = params.overlay, resolve = resources.resolve, depthAttachment = resources.depthAttachment](RGPassBuilder& passBuilder) {
@@ -296,6 +366,7 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
     YA_CORE_ASSERT(inputs.viewportRTSpec != nullptr, "ForwardFrameGraphOrchestrator requires a viewport render target spec");
     YA_CORE_ASSERT(inputs.postContext != nullptr, "ForwardFrameGraphOrchestrator requires a postprocess context");
     YA_CORE_ASSERT(deps.viewportStage != nullptr, "ForwardFrameGraphOrchestrator requires a viewport stage");
+    YA_CORE_ASSERT(deps.entityIdPass != nullptr, "ForwardFrameGraphOrchestrator requires an entity-id pass");
     YA_CORE_ASSERT(deps.postProcessStage != nullptr, "ForwardFrameGraphOrchestrator requires a postprocess stage");
 
     auto&       graph        = *inputs.graph;
@@ -313,6 +384,7 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
 
     appendForwardViewportPasses(graph,
                                 *deps.viewportStage,
+                                *deps.entityIdPass,
                                 stageCtx,
                                 frameBinding,
                                 inputs.viewportPassContext,
@@ -331,6 +403,7 @@ void ForwardFrameGraphOrchestrator::build(const BuildDependencies& deps, const B
     if (graphResources.resolve.isValid()) {
         graph.exportTexture(graphResources.resolve, std::string(forward_graph_exports::viewportResolve));
     }
+    graph.exportTexture(graphResources.entityId, std::string(forward_graph_exports::entityId));
 }
 
 } // namespace ya

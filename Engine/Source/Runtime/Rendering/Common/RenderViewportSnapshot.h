@@ -66,6 +66,8 @@ struct RenderViewportSnapshot
     // Scene depth of the same viewport render, exposed so editor overlays
     // (e.g. collision debug wireframes) can depth-test against the world.
     std::shared_ptr<RenderImage>              viewportDepthOwner = nullptr;
+    // R32 viewport target holding per-pixel entity ids (editor picking).
+    std::shared_ptr<RenderImage>              entityIdImageOwner = nullptr;
     bool                                      bPostprocessingEnabled = false;
     std::shared_ptr<const RenderViewportDebugCatalog> debugCatalog = nullptr;
     std::vector<RenderViewportDebugImageSlot>         debugImages;

@@ -14,6 +14,7 @@ namespace ya
 struct ShadowStage;
 struct PostProcessingStage;
 struct RenderTargetCreateInfo;
+struct EntityIdViewportPass;
 
 /// Top-level Forward frame graph orchestration (FG-706).
 ///
@@ -26,6 +27,7 @@ struct ForwardFrameGraphOrchestrator
     struct BuildDependencies
     {
         ForwardViewportStage* viewportStage    = nullptr;
+        EntityIdViewportPass* entityIdPass     = nullptr;
         ShadowStage*          shadowStage      = nullptr;
         PostProcessingStage*  postProcessStage = nullptr;
     };

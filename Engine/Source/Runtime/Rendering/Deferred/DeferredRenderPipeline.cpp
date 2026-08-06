@@ -675,6 +675,7 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     };
 
     initRenderTargetSpecs(extent);
+    _entityIdPass.init(_render, EFormat::R32_UINT, _sharedDepthFormat);
     _currentGBufferResources.reset(buildGBufferSnapshotFormats());
     _currentViewportResources.reset(buildViewportSnapshotFormats());
     if (currentShadowSettings().isEnabled()) {
@@ -733,6 +734,7 @@ void DeferredRenderPipeline::initStages()
 
 void DeferredRenderPipeline::shutdown()
 {
+    _entityIdPass.destroy();
     _postProcessStage.shutdown();
 
     _debugAlbedoRGBView.reset();
@@ -985,6 +987,7 @@ void DeferredRenderPipeline::publishGraphExecutionResult(
     nextViewport.publish(
         result.getExportedTextureShared(deferred_graph_exports::viewportColor),
         nextGBuffer.depthOwner,
+        result.getExportedTextureShared(deferred_graph_exports::entityId),
         buildViewportSnapshotFormats());
 
     const bool bGBufferChanged = _currentGBufferResources.colorOwners != nextGBuffer.colorOwners ||
@@ -1164,6 +1167,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             .overlayStage     = _overlayStage.get(),
             .postProcessStage = &_postProcessStage,
             .ssaoStage        = _ssaoStage.get(),
+            .entityIdPass     = &_entityIdPass,
         },
         DeferredFrameGraphOrchestrator::BuildInputs{
             .graph                    = &graph,

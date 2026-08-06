@@ -166,6 +166,7 @@ void ForwardRenderPipeline::initViewportResources(const InitDesc& desc)
         {.width = static_cast<uint32_t>(desc.windowW), .height = static_cast<uint32_t>(desc.windowH)},
         VIEWPORT_COLOR_FORMAT,
         DEPTH_FORMAT);
+    _entityIdPass.init(_render, EFormat::R32_UINT, DEPTH_FORMAT);
     recreateViewportResources();
     refreshViewportSnapshot();
 }
@@ -596,6 +597,7 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
 
 void ForwardRenderPipeline::shutdown()
 {
+    _entityIdPass.destroy();
     _runtimeServices = nullptr;
     _currentPostprocessOutput.reset();
     if (_frameResources) {
@@ -631,6 +633,7 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
     _frameGraphOrchestrator.build(
         ForwardFrameGraphOrchestrator::BuildDependencies{
             .viewportStage    = _viewportStage.get(),
+            .entityIdPass     = &_entityIdPass,
             .shadowStage      = _shadowStage.get(),
             .postProcessStage = &_postProcessStage,
         },
@@ -657,6 +660,7 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
             result.getExportedTextureShared(forward_graph_exports::viewportColor),
             result.getExportedTextureShared(forward_graph_exports::viewportDepth),
             result.getExportedTextureShared(forward_graph_exports::viewportResolve),
+            result.getExportedTextureShared(forward_graph_exports::entityId),
             _viewportRTSpec.extent);
         _currentPostprocessOutput = result.getExportedTextureShared(PostProcessingStage::kOutputExportName);
     }

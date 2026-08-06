@@ -13,6 +13,7 @@
 #include "Runtime/Rendering/Common/IRenderPipeline.h"
 #include "Runtime/Rendering/Common/IRenderRuntimeServices.h"
 #include "Runtime/Rendering/Common/PostProcessingStage.h"
+#include "Runtime/Rendering/Common/EntityIdViewportPass.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowMapResources.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowRuntimeState.h"
 #include "Runtime/Rendering/Common/Shadow/ShadowStage.h"
@@ -84,6 +85,7 @@ struct ENGINE_API ForwardRenderPipeline : public IRenderPipeline
     RenderTargetCreateInfo _viewportRTSpec{};
     RenderAttachmentFormats _viewportFormats{};
     ForwardViewportResources _viewportResources{};
+    EntityIdViewportPass     _entityIdPass{};
     FrameContext  _lastTickCtx{};
     RenderPipelineFrameContext _lastFrameInput{};
     ShadowSettings _frameShadowSettings = ShadowSettings::fromQuality(EShadowQuality::Off);
@@ -129,6 +131,7 @@ struct ENGINE_API ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] bool           isShadowMappingEnabled() const override;
     [[nodiscard]] std::shared_ptr<IImage> getShadowDepthImage() const override { return _shadowResources.depthImage; }
     [[nodiscard]] std::shared_ptr<RenderImage> getViewportDepthImageShared() const override { return _viewportResources.depthOwner; }
+    [[nodiscard]] std::shared_ptr<RenderImage> getEntityIdImageShared() const override { return _viewportResources.entityIdOwner; }
     [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
     [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override;
     [[nodiscard]] bool           isPostprocessingEnabled() const override { return _postProcessStage.isEnabled(); }
