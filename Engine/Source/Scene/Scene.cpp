@@ -179,6 +179,22 @@ Node3D *Scene::createNode3D(const std::string &name, Node *parent, Entity *entit
     return static_cast<Node3D *>(_nodeMap[entity->getHandle()].get());
 }
 
+Node *Scene::createFolder(const std::string &name, Node *parent)
+{
+    YA_PROFILE_FUNCTION();
+
+    auto node = makeShared<Node>(name, nullptr);
+    _folderNodes.push_back(node);
+
+    if (parent) {
+        parent->addChild(node.get());
+    }
+    else {
+        addToScene(node.get());
+    }
+
+    return node.get();
+}
 
 void Scene::destroyNode(Node *node)
 {
@@ -186,9 +202,37 @@ void Scene::destroyNode(Node *node)
         return;
     }
 
+    if (node->isFolder()) {
+        destroyNodeSubtree(node);
+        return;
+    }
+
     // Cast to Node3D to access Entity
     auto entity = node->getEntity();
     if (entity) {
+        destroyEntity(entity);
+    }
+}
+
+void Scene::destroyNodeSubtree(Node *node)
+{
+    if (!node) {
+        return;
+    }
+
+    // Copy the children list first: destroying a child mutates the parent's
+    // child vector while we iterate.
+    const auto children = node->getChildren();
+    for (Node *child : children) {
+        destroyNodeSubtree(child);
+    }
+
+    if (node->isFolder()) {
+        node->removeFromParent();
+        std::erase_if(_folderNodes,
+                      [node](const std::shared_ptr<Node> &owner) { return owner.get() == node; });
+    }
+    else if (Entity *entity = node->getEntity()) {
         destroyEntity(entity);
     }
 }
@@ -289,6 +333,7 @@ void Scene::clear()
 
     _entityMap.clear();
     _nodeMap.clear();
+    _folderNodes.clear();
     _rootNode.reset();
     _registry.clear();
     _entityCounter = 0;
@@ -392,7 +437,8 @@ static Node *cloneReferencedNodeTree(Node *srcNode, Scene *dstScene, Node *dstPa
         }
     }
 
-    Node *dstNode = dstScene->createNode(srcNode->getName(), dstParent, dstEntity);
+    Node *dstNode = dstEntity ? dstScene->createNode(srcNode->getName(), dstParent, dstEntity)
+                              : dstScene->createFolder(srcNode->getName(), dstParent);
     if (!dstNode) {
         YA_CORE_ERROR("Failed to clone node '{}'", srcNode->getName());
         return nullptr;
