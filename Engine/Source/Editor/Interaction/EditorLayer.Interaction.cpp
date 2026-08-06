@@ -317,10 +317,10 @@ void EditorLayer::renderGizmo()
                 if (!other || other == selectedEntity || !other->isValid()) {
                     continue;
                 }
-                auto* otherTc = other->getComponent<TransformComponent>();
-                if (!otherTc) {
+                if (!other->hasComponent<TransformComponent>()) {
                     continue;
                 }
+                auto* otherTc = other->getComponent<TransformComponent>();
                 const glm::mat4 otherWorld = delta * otherTc->getTransform();
                 TransformSystem::setWorldTransform(otherTc, otherWorld);
             }
@@ -416,10 +416,10 @@ void EditorLayer::focusCameraOnSelection()
         return;
     }
 
-    auto* primaryTc = primary->getComponent<TransformComponent>();
-    if (!primaryTc) {
+    if (!primary->hasComponent<TransformComponent>()) {
         return;
     }
+    auto* primaryTc = primary->getComponent<TransformComponent>();
     // Focus the world position, not the local one: hierarchical children would
     // otherwise pull the camera to their local origin. No-op when already clean.
     TransformSystem::computeWorldMatrix(primaryTc);
