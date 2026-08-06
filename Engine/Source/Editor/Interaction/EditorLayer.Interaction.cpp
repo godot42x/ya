@@ -191,9 +191,9 @@ void EditorLayer::onEvent(const Event& event)
         }
 
         if (keyEvent.getKeyCode() == EKey::K_F) {
-            // Focus camera on selected entity
-            if (auto* selectedEntity = getSelectedEntity(); selectedEntity && selectedEntity->isValid()) {
-                focusCameraOnEntity(selectedEntity);
+            // Focus camera on the whole selection (merged bounds)
+            if (!getSelections().empty()) {
+                focusCameraOnSelection();
             }
         }
 
@@ -398,55 +398,78 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
     }
 }
 
-void EditorLayer::focusCameraOnEntity(Entity* entity)
+void EditorLayer::focusCameraOnSelection()
 {
-    if (!entity || !entity->isValid()) {
+    const auto& selections = getSelections();
+    if (selections.empty()) {
         return;
     }
-    auto* tc = entity->getComponent<TransformComponent>();
-    if (!tc) {
+
+    // Primary selection drives the fallback pivot; bounds are merged across
+    // every valid selected entity so multi-select frames the whole group.
+    Entity* primary = selections.front();
+    if (!primary || !primary->isValid()) {
         return;
     }
     auto* app = App::get();
     if (!app) {
         return;
     }
+
+    auto* primaryTc = primary->getComponent<TransformComponent>();
+    if (!primaryTc) {
+        return;
+    }
     // Focus the world position, not the local one: hierarchical children would
     // otherwise pull the camera to their local origin. No-op when already clean.
-    TransformSystem::computeWorldMatrix(tc);
-    const glm::mat4 worldMatrix = tc->getWorldMatrix();
+    TransformSystem::computeWorldMatrix(primaryTc);
+    const glm::mat4 primaryWorldMatrix = primaryTc->getWorldMatrix();
 
-    // Frame the entity's world bounds so large and small objects both fit the
-    // viewport, instead of using a fixed distance.
-    glm::vec3 entityPos    = glm::vec3(worldMatrix[3]);
+    glm::vec3 entityPos      = glm::vec3(primaryWorldMatrix[3]);
     float     boundingRadius = 0.0f;
-    if (auto* scene = getViewportInteractionScene()) {
-        const auto& registry = scene->getRegistry();
-        const auto  handle   = entity->getHandle();
-        const auto  addBounds = [&](const AABB& bounds)
-        {
-            if (bounds.max.x < bounds.min.x) {
-                return;
-            }
-            const auto worldAABB = bounds.transformed(worldMatrix);
-            entityPos       = (worldAABB.min + worldAABB.max) * 0.5f;
-            boundingRadius  = std::max(boundingRadius, glm::length(worldAABB.max - worldAABB.min) * 0.5f);
-        };
-        if (const auto* mesh = registry.try_get<StaticMeshComponent>(handle)) {
-            if (auto* m = mesh->getMesh()) {
-                addBounds(m->boundingBox);
-            }
+    AABB      mergedBounds;
+    bool      bHasBounds = false;
+
+    for (Entity* entity : selections) {
+        if (!entity || !entity->isValid() || !entity->hasComponent<TransformComponent>()) {
+            continue;
         }
-        if (const auto* mesh = registry.try_get<SkinnedMeshComponent>(handle)) {
-            if (auto* m = mesh->getMesh()) {
-                addBounds(m->boundingBox);
+        auto* tc = entity->getComponent<TransformComponent>();
+        TransformSystem::computeWorldMatrix(tc);
+        const glm::mat4 worldMatrix = tc->getWorldMatrix();
+
+        if (auto* scene = entity->getScene()) {
+            const auto& registry = scene->getRegistry();
+            const auto  handle   = entity->getHandle();
+            const auto  addBounds = [&](const AABB& bounds)
+            {
+                if (bounds.max.x < bounds.min.x) {
+                    return;
+                }
+                mergedBounds.merge(bounds.transformed(worldMatrix));
+                bHasBounds = true;
+            };
+            if (const auto* mesh = registry.try_get<StaticMeshComponent>(handle)) {
+                if (auto* m = mesh->getMesh()) {
+                    addBounds(m->boundingBox);
+                }
+            }
+            if (const auto* mesh = registry.try_get<SkinnedMeshComponent>(handle)) {
+                if (auto* m = mesh->getMesh()) {
+                    addBounds(m->boundingBox);
+                }
             }
         }
     }
 
+    if (bHasBounds) {
+        entityPos      = mergedBounds.getCenter();
+        boundingRadius = glm::length(mergedBounds.max - mergedBounds.min) * 0.5f;
+    }
+
     const float distance = boundingRadius > 0.001f
                                ? boundingRadius / std::tan(glm::radians(_camera.getFov() * 0.5f)) * 1.2f
-                               : 10.0f; // Fallback when the entity has no mesh bounds.
+                               : 10.0f; // Fallback when the selection has no mesh bounds.
     const glm::vec3 camPos = _camera.getPosition();
 
     glm::vec3 camToEntity = entityPos - camPos;
