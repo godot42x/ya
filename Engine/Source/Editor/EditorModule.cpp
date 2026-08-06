@@ -493,6 +493,7 @@ class EditorModule final : public IModule, public IEditorAutomationControl
 
         const auto snapshot = renderRuntime->buildViewportSnapshot();
         _layer->setViewportContext(snapshot);
+        _layer->setEntityIdPickImage(snapshot.entityIdImageOwner);
         _viewportCompositor.compose(*render,
                                     commandBuffer,
                                     snapshot,
