@@ -37,8 +37,9 @@ struct RenderDrawItem;
 //
 //   3. renderFace()    — GPU graphics, called once per (light, cube face)
 //        for each batch:
-//          bind VB/IB → push bucketBase → drawIndexedIndirect(1 cmd)
-//        VS reads visibleInstances[bucketBase + SV_InstanceID].
+//          bind VB/IB → drawIndexedIndirect(1 cmd)
+//        VS reads visibleInstances[bucketBase + SV_InstanceID], where
+//        bucketBase rides the indirect command's firstInstance field.
 // ═══════════════════════════════════════════════════════════════════════════
 
 class PointShadowIndirectRenderer
@@ -82,8 +83,6 @@ class PointShadowIndirectRenderer
         bool                   useGpuCull      = false;
         bool                   ready           = false;
     };
-
-    struct VsPushConstants { uint32_t bucketBase; };
 
     // ─── prepare() sub-steps (all operate on _perFlight[payload.flightIndex]) ─
     bool collectBatches(const BasicShadowFramePayload& payload,
