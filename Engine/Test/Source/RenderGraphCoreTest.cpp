@@ -3980,6 +3980,101 @@ TEST(RenderGraphCoreTest, ExecutorSmokeRunsClearAndCopyCallbacks)
     EXPECT_EQ(cmdBuf.bufferBarriers[1].dstAccess, EResourceAccess::TransferWrite);
 }
 
+TEST(RenderGraphCoreTest, BufferCopyHelperDeclaresDependencyRangeAndExecutesCopy)
+{
+    TestResourceFactory factory;
+    TestCommandBuffer   cmdBuf;
+    RenderGraphExecutor executor(factory);
+    RenderGraph         graph;
+
+    TestBuffer srcBacking(BufferCreateInfo{
+        .label = "copy.src",
+        .usage = EBufferUsage::TransferSrc,
+        .size  = 128,
+    });
+    TestBuffer dstBacking(BufferCreateInfo{
+        .label = "copy.dst",
+        .usage = EBufferUsage::TransferDst,
+        .size  = 256,
+    });
+
+    const auto src = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "copy.src",
+            .usage = EBufferUsage::TransferSrc,
+            .size  = 128,
+        },
+        .buffer = &srcBacking,
+    });
+    const auto dst = graph.importBuffer(RGImportedBufferDesc{
+        .desc = RGBufferDesc{
+            .label = "copy.dst",
+            .usage = EBufferUsage::TransferDst,
+            .size  = 256,
+        },
+        .buffer = &dstBacking,
+    });
+
+    const auto dependency = graph.addPass(
+        "copy.prepare",
+        [](RGPassBuilder& pass) {
+            pass.declareCompute();
+        });
+    const auto copy = addBufferCopyPass(graph, RGBufferCopyParams{
+        .label = "copy.helper",
+        .copies = {
+            RGBufferCopyRegion{
+                .source            = src,
+                .destination       = dst,
+                .size              = 32,
+                .sourceOffset      = 16,
+                .destinationOffset = 64,
+            },
+            RGBufferCopyRegion{
+                .source            = src,
+                .destination       = dst,
+                .size              = 16,
+                .sourceOffset      = 80,
+                .destinationOffset = 128,
+            },
+        },
+        .dependency = dependency,
+    });
+
+    const auto* copyPass = graph.getPass(copy);
+    ASSERT_NE(copyPass, nullptr);
+    EXPECT_EQ(copyPass->name, "copy.helper");
+    EXPECT_EQ(copyPass->kind, ERGPassKind::Copy);
+    ASSERT_EQ(copyPass->dependencies.size(), 1u);
+    EXPECT_EQ(copyPass->dependencies[0], dependency);
+    ASSERT_EQ(copyPass->buffers.size(), 4u);
+    EXPECT_EQ(copyPass->buffers[0].handle, src);
+    EXPECT_EQ(copyPass->buffers[0].access, ERGBufferAccess::TransferRead);
+    EXPECT_EQ(copyPass->buffers[0].range.offset, 16u);
+    EXPECT_EQ(copyPass->buffers[0].range.size, 32u);
+    EXPECT_EQ(copyPass->buffers[1].handle, dst);
+    EXPECT_EQ(copyPass->buffers[1].access, ERGBufferAccess::TransferWrite);
+    EXPECT_EQ(copyPass->buffers[1].range.offset, 64u);
+    EXPECT_EQ(copyPass->buffers[1].range.size, 32u);
+    EXPECT_EQ(copyPass->buffers[2].handle, src);
+    EXPECT_EQ(copyPass->buffers[2].access, ERGBufferAccess::TransferRead);
+    EXPECT_EQ(copyPass->buffers[2].range.offset, 80u);
+    EXPECT_EQ(copyPass->buffers[2].range.size, 16u);
+    EXPECT_EQ(copyPass->buffers[3].handle, dst);
+    EXPECT_EQ(copyPass->buffers[3].access, ERGBufferAccess::TransferWrite);
+    EXPECT_EQ(copyPass->buffers[3].range.offset, 128u);
+    EXPECT_EQ(copyPass->buffers[3].range.size, 16u);
+
+    ASSERT_TRUE(executor.execute(graph, cmdBuf));
+    ASSERT_EQ(cmdBuf.copyBuffers.size(), 2u);
+    EXPECT_EQ(cmdBuf.copyBuffers[0].size, 32u);
+    EXPECT_EQ(cmdBuf.copyBuffers[0].srcOffset, 16u);
+    EXPECT_EQ(cmdBuf.copyBuffers[0].dstOffset, 64u);
+    EXPECT_EQ(cmdBuf.copyBuffers[1].size, 16u);
+    EXPECT_EQ(cmdBuf.copyBuffers[1].srcOffset, 80u);
+    EXPECT_EQ(cmdBuf.copyBuffers[1].dstOffset, 128u);
+}
+
 TEST(RenderGraphCoreTest, ExecutorRestoresImportedTextureFinalLayoutAfterTransferPass)
 {
     TestResourceFactory factory;

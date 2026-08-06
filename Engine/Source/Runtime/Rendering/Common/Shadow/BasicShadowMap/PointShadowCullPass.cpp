@@ -319,34 +319,38 @@ std::optional<PointShadowCullPass::GraphResources> PointShadowCullPass::appendGr
             EBufferUsage::StorageBuffer | EBufferUsage::TransferDst,
             executionInitialState);
     }
-    const auto frustumHandle = frustumBuffer.value_or(RGBufferHandle{});
-    const auto uploadPass = graph.addPass(
-        "Point Shadow Cull Upload",
-        [drawCommandUpload, drawCommands, visibleInstancesUpload, visibleInstances,
-         frustumUpload, frustumBuffer, bDispatchCull, dependency](RGPassBuilder& pass) {
-            if (dependency.has_value()) pass.dependsOn(*dependency);
-            pass.declareCopy();
-            pass.transferSrc(drawCommandUpload);
-            pass.transferDst(drawCommands);
-            if (!bDispatchCull) {
-                pass.transferSrc(visibleInstancesUpload);
-                pass.transferDst(visibleInstances);
-            }
-            if (bDispatchCull) {
-                pass.transferSrc(*frustumUpload);
-                pass.transferDst(*frustumBuffer);
-            }
-        },
-        [drawCommandUpload, drawCommands, visibleInstancesUpload, visibleInstances,
-         frustumUpload, frustumBuffer, bDispatchCull, commandBytes, visibleBytes, frustumBytes](RGRenderContext& ctx) {
-            ctx.copyBuffer(drawCommandUpload, drawCommands, commandBytes);
-            if (!bDispatchCull) {
-                ctx.copyBuffer(visibleInstancesUpload, visibleInstances, visibleBytes);
-            }
-            if (bDispatchCull) {
-                ctx.copyBuffer(*frustumUpload, *frustumBuffer, frustumBytes);
-            }
+    const auto appendCopy = [&graph](std::string_view label,
+                                     std::vector<RGBufferCopyRegion> copies,
+                                     std::optional<RGPassHandle> dependency) {
+        return addBufferCopyPass(graph, RGBufferCopyParams{
+            .label      = label,
+            .copies     = std::move(copies),
+            .dependency = dependency,
         });
+    };
+
+    std::vector<RGBufferCopyRegion> uploadCopies{
+        RGBufferCopyRegion{
+            .source      = drawCommandUpload,
+            .destination = drawCommands,
+            .size        = commandBytes,
+        },
+    };
+    if (!bDispatchCull) {
+        uploadCopies.push_back(RGBufferCopyRegion{
+            .source      = visibleInstancesUpload,
+            .destination = visibleInstances,
+            .size        = visibleBytes,
+        });
+    } else {
+        uploadCopies.push_back(RGBufferCopyRegion{
+            .source      = *frustumUpload,
+            .destination = *frustumBuffer,
+            .size        = frustumBytes,
+        });
+    }
+    const auto uploadPass = appendCopy("Point Shadow Cull Upload", std::move(uploadCopies), dependency);
+    const auto frustumHandle = frustumBuffer.value_or(RGBufferHandle{});
 
     if (!bDispatchCull) {
         resources.cullPass = uploadPass;

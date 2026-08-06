@@ -3,6 +3,50 @@
 namespace ya
 {
 
+RGPassHandle addBufferCopyPass(RenderGraph& graph, const RGBufferCopyParams& params)
+{
+    YA_CORE_ASSERT(!params.copies.empty(), "Render graph buffer copy pass requires at least one copy");
+    for (const auto& copy : params.copies) {
+        YA_CORE_ASSERT(copy.source.isValid(), "Render graph buffer copy source handle must be valid");
+        YA_CORE_ASSERT(copy.destination.isValid(), "Render graph buffer copy destination handle must be valid");
+        YA_CORE_ASSERT(graph.getBuffer(copy.source) != nullptr,
+                       "Render graph buffer copy source handle does not belong to this graph");
+        YA_CORE_ASSERT(graph.getBuffer(copy.destination) != nullptr,
+                       "Render graph buffer copy destination handle does not belong to this graph");
+        YA_CORE_ASSERT(copy.size > 0, "Render graph buffer copy size must be non-zero");
+    }
+
+    return graph.addPass(
+        std::string(params.label),
+        [copies = params.copies,
+         dependency = params.dependency](RGPassBuilder& pass) {
+            if (dependency.has_value()) {
+                pass.dependsOn(*dependency);
+            }
+            pass.declareCopy();
+            for (const auto& copy : copies) {
+                pass.transferSrc(copy.source, RGBufferRange{
+                    .offset = copy.sourceOffset,
+                    .size   = copy.size,
+                });
+                pass.transferDst(copy.destination, RGBufferRange{
+                    .offset = copy.destinationOffset,
+                    .size   = copy.size,
+                });
+            }
+        },
+        [copies = params.copies](RGRenderContext& ctx) {
+            for (const auto& copy : copies) {
+                ctx.copyBuffer(
+                    copy.source,
+                    copy.destination,
+                    copy.size,
+                    copy.sourceOffset,
+                    copy.destinationOffset);
+            }
+        });
+}
+
 namespace
 {
 
