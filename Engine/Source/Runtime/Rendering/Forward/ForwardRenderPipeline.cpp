@@ -3,7 +3,6 @@
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/Core/Buffer.h"
 #include "Core/Profiling/Profiling.h"
-#include "Render/Core/Graph/RenderGraphImportUtils.h"
 #include "Render/Core/RenderingInfoUtils.h"
 #include "Render/Core/Sampler.h"
 #include "ECS/Component/DirectionComponent.h"
@@ -86,84 +85,6 @@ RenderTargetCreateInfo buildForwardViewportRenderTargetSpec(Extent2D extent, EFo
             },
         },
     };
-}
-
-ImageViewCreateInfo makeForwardViewportViewDesc(std::string_view label,
-                                                EFormat::T       format,
-                                                uint32_t         layerCount)
-{
-    const bool bCube    = layerCount == 6;
-    const bool bArray2D = layerCount > 1 && !bCube;
-    return ImageViewCreateInfo{
-        .label          = std::string(label),
-        .viewType       = bCube ? EImageViewType::ViewCube : bArray2D ? EImageViewType::View2DArray : EImageViewType::View2D,
-        .aspectFlags    = EFormat::isDepthStencilFormat(format) ? EImageAspect::DepthStencil :
-                          EFormat::isDepthFormat(format) ? EImageAspect::Depth : EImageAspect::Color,
-        .baseMipLevel   = 0,
-        .levelCount     = 1,
-        .baseArrayLayer = 0,
-        .layerCount     = layerCount,
-    };
-}
-
-std::shared_ptr<RenderImage> createForwardViewportAttachment(IRender& render,
-                                                             const AttachmentDescription& attachment,
-                                                             Extent2D extent,
-                                                             uint32_t layerCount,
-                                                             std::string label)
-{
-    return createRenderImage(
-        *render.getResourceFactory(),
-        RenderImageDesc{
-            .image = ImageCreateInfo{
-                .label       = label,
-                .format      = attachment.format,
-                .extent      = {.width = extent.width, .height = extent.height, .depth = 1},
-                .mipLevels   = 1,
-                .arrayLayers = layerCount,
-                .samples     = attachment.samples,
-                .usage       = attachment.usage,
-                .initialLayout = attachment.initialLayout,
-                .flags       = attachment.imageCreateFlags,
-            },
-            .defaultView = makeForwardViewportViewDesc(std::format("{}.DefaultView", label), attachment.format, layerCount),
-        });
-}
-
-ForwardViewportResources buildForwardViewportResources(IRender& render, const RenderTargetCreateInfo& spec)
-{
-    ForwardViewportResources resources{};
-    resources.extent = spec.extent;
-
-    if (!spec.attachments.colorAttach.empty()) {
-        resources.colorOwner = createForwardViewportAttachment(
-            render,
-            spec.attachments.colorAttach[0],
-            spec.extent,
-            spec.layerCount,
-            std::format("{}.Color0", spec.label));
-    }
-
-    if (spec.attachments.depthAttach.has_value()) {
-        resources.depthOwner = createForwardViewportAttachment(
-            render,
-            *spec.attachments.depthAttach,
-            spec.extent,
-            spec.layerCount,
-            std::format("{}.Depth", spec.label));
-    }
-
-    if (spec.attachments.resolveAttach.has_value()) {
-        resources.resolveOwner = createForwardViewportAttachment(
-            render,
-            *spec.attachments.resolveAttach,
-            spec.extent,
-            spec.layerCount,
-            std::format("{}.Resolve", spec.label));
-    }
-
-    resources.syncRawViews();
-    return resources;
 }
 
 } // namespace
@@ -520,10 +441,7 @@ void ForwardRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& 
 
 void ForwardRenderPipeline::recreateViewportResources()
 {
-    YA_CORE_ASSERT(_render != nullptr, "ForwardRenderPipeline requires a valid render backend to create viewport resources");
-    _viewportResources = buildForwardViewportResources(*_render, _viewportRTSpec);
-    YA_CORE_ASSERT(_viewportResources.colorOwner && _viewportResources.depthOwner,
-                   "Failed to recreate forward viewport attachment owners");
+    _viewportResources.reset(_viewportRTSpec.extent);
 }
 
 void ForwardRenderPipeline::refreshViewportSnapshot()
@@ -661,10 +579,6 @@ void ForwardRenderPipeline::executeViewportPass(const RenderPipelineFrameContext
         YA_CORE_ERROR("Forward viewport frame payload upload failed");
     }
 
-    YA_CORE_ASSERT(_viewportResources.colorOwner && _viewportResources.colorImage,
-                   "Forward viewport pass requires a color attachment snapshot");
-    YA_CORE_ASSERT(_viewportResources.depthOwner && _viewportResources.depthImage,
-                   "Forward viewport pass requires a depth attachment snapshot");
     YA_CORE_ASSERT(!_viewportRTSpec.attachments.colorAttach.empty(),
                    "Forward viewport pass requires a color attachment spec");
     YA_CORE_ASSERT(_viewportRTSpec.attachments.depthAttach.has_value(),
@@ -694,7 +608,7 @@ void ForwardRenderPipeline::shutdown()
     _pendingViewportExtent = {};
     _pendingResourceRefreshMask = 0;
     _viewportFormats = {};
-    _viewportResources = {};
+    _viewportResources.reset();
     _deleter.clear();
 }
 
@@ -728,7 +642,6 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
             .frameBinding             = _frameResources ? _frameResources->getBinding(stageCtx.flightIndex)
                                                         : ForwardFrameResourceSet::Binding{},
             .viewportRTSpec           = &_viewportRTSpec,
-            .viewportResources        = &_viewportResources,
             .directionGizmos          = std::move(directionGizmos),
             .viewportPassContext      = &viewportPassContext,
             .postContext              = &_lastTickCtx,
@@ -742,6 +655,11 @@ bool ForwardRenderPipeline::executeViewportPassGraph(const RenderPipelineFrameCo
     const bool bExecuted = _graphExecutor->execute(graph, *frame.cmdBuf, &compiled, &result);
     if (bExecuted) {
         _lastFrameGraphTopology = graph.describeCompiledTopology(compiled);
+        _viewportResources.publish(
+            result.getExportedTextureShared(forward_graph_exports::viewportColor),
+            result.getExportedTextureShared(forward_graph_exports::viewportDepth),
+            result.getExportedTextureShared(forward_graph_exports::viewportResolve),
+            _viewportRTSpec.extent);
         _currentPostprocessOutput = result.getExportedTextureShared(PostProcessingStage::kOutputExportName);
     }
     else {

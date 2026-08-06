@@ -12,6 +12,21 @@
 namespace ya
 {
 
+namespace deferred_graph_exports
+{
+
+inline constexpr std::string_view gBufferColor[4] = {
+    "Deferred.GBuffer.Color0",
+    "Deferred.GBuffer.Color1",
+    "Deferred.GBuffer.Color2",
+    "Deferred.GBuffer.Color3",
+};
+inline constexpr std::string_view gBufferDepth  = "Deferred.GBuffer.Depth";
+inline constexpr std::string_view viewportColor = "Deferred.Viewport.Color";
+inline constexpr std::string_view ssao          = "Deferred.SSAO.Output";
+
+} // namespace deferred_graph_exports
+
 struct ICommandBuffer;
 
 // Frame-local logical resources used by the Deferred graph. Handles are valid

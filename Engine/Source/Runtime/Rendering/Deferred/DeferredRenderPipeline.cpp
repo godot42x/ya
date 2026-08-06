@@ -33,16 +33,6 @@ namespace ya
 namespace
 {
 
-constexpr std::string_view kDeferredGBufferColorExportNames[4] = {
-    "Deferred.GBuffer.Color0",
-    "Deferred.GBuffer.Color1",
-    "Deferred.GBuffer.Color2",
-    "Deferred.GBuffer.Color3",
-};
-constexpr std::string_view kDeferredGBufferDepthExportName  = "Deferred.GBuffer.Depth";
-constexpr std::string_view kDeferredViewportColorExportName = "Deferred.Viewport.Color";
-constexpr std::string_view kDeferredSSAOExportName          = "Deferred.SSAO.Output";
-
 bool shouldRenderBillboard(const BillboardComponent& billboard)
 {
     if (!billboard.bVisible) {
@@ -685,8 +675,8 @@ void DeferredRenderPipeline::initPipelineState(const InitDesc& desc)
     };
 
     initRenderTargetSpecs(extent);
-    _currentGBufferResources.formats  = buildGBufferSnapshotFormats();
-    _currentViewportResources.formats = buildViewportSnapshotFormats();
+    _currentGBufferResources.reset(buildGBufferSnapshotFormats());
+    _currentViewportResources.reset(buildViewportSnapshotFormats());
     if (currentShadowSettings().isEnabled()) {
         initShadowResources();
     }
@@ -751,8 +741,8 @@ void DeferredRenderPipeline::shutdown()
     _pendingViewportExtent           = {};
     _pendingResourceRefreshMask      = 0;
     clearPublishedGraphOutputs();
-    _currentGBufferResources         = {};
-    _currentViewportResources        = {};
+    _currentGBufferResources.reset();
+    _currentViewportResources.reset();
     _currentEnvironmentLightingTextures = {};
     if (_ssaoStage) {
     }
@@ -982,18 +972,20 @@ void DeferredRenderPipeline::publishGraphExecutionResult(
     const DeferredFrameGraphResources& graphResources)
 {
     DeferredGBufferResources nextGBuffer{};
-    for (uint32_t attachmentIndex = 0; attachmentIndex < std::size(kDeferredGBufferColorExportNames); ++attachmentIndex) {
-        nextGBuffer.colorOwners[attachmentIndex] = result.getExportedTextureShared(kDeferredGBufferColorExportNames[attachmentIndex]);
+    std::array<std::shared_ptr<RenderImage>, 4> nextGBufferColors{};
+    for (uint32_t attachmentIndex = 0; attachmentIndex < std::size(deferred_graph_exports::gBufferColor); ++attachmentIndex) {
+        nextGBufferColors[attachmentIndex] = result.getExportedTextureShared(deferred_graph_exports::gBufferColor[attachmentIndex]);
     }
-    nextGBuffer.depthOwner = result.getExportedTextureShared(kDeferredGBufferDepthExportName);
-    nextGBuffer.formats    = buildGBufferSnapshotFormats();
-    nextGBuffer.syncRawViews();
+    nextGBuffer.publish(
+        std::move(nextGBufferColors),
+        result.getExportedTextureShared(deferred_graph_exports::gBufferDepth),
+        buildGBufferSnapshotFormats());
 
     DeferredViewportResources nextViewport{};
-    nextViewport.colorOwner = result.getExportedTextureShared(kDeferredViewportColorExportName);
-    nextViewport.depthOwner = nextGBuffer.depthOwner;
-    nextViewport.formats    = buildViewportSnapshotFormats();
-    nextViewport.syncRawViews();
+    nextViewport.publish(
+        result.getExportedTextureShared(deferred_graph_exports::viewportColor),
+        nextGBuffer.depthOwner,
+        buildViewportSnapshotFormats());
 
     const bool bGBufferChanged = _currentGBufferResources.colorOwners != nextGBuffer.colorOwners ||
                                  _currentGBufferResources.depthOwner != nextGBuffer.depthOwner ||
@@ -1015,7 +1007,7 @@ void DeferredRenderPipeline::publishGraphExecutionResult(
     }
 
     _publishedGraphOutputs.ssao = graphResources.textures.ssao.has_value()
-        ? result.getExportedTextureShared(kDeferredSSAOExportName)
+        ? result.getExportedTextureShared(deferred_graph_exports::ssao)
         : nullptr;
     _publishedGraphOutputs.bloomExtract   = result.getExportedTextureShared(BloomPostprocessing::kExtractExportName);
     _publishedGraphOutputs.bloomBlur      = result.getExportedTextureShared(BloomPostprocessing::kBlurPongExportName);
@@ -1191,15 +1183,6 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(_render->getSwapchain()->getFormat()),
             .viewportOverlaySnapshot  = _lastFrameInput.viewportOverlaySnapshot,
         });
-
-    for (uint32_t attachmentIndex = 0; attachmentIndex < graphResources.textures.gBufferColors.size(); ++attachmentIndex) {
-        graph.exportTexture(graphResources.textures.gBufferColors[attachmentIndex], std::string(kDeferredGBufferColorExportNames[attachmentIndex]));
-    }
-    graph.exportTexture(graphResources.textures.gBufferDepth, std::string(kDeferredGBufferDepthExportName));
-    graph.exportTexture(graphResources.textures.viewportColor, std::string(kDeferredViewportColorExportName));
-    if (graphResources.textures.ssao.has_value()) {
-        graph.exportTexture(*graphResources.textures.ssao, std::string(kDeferredSSAOExportName));
-    }
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");
     RGCompiledGraph compiled{};

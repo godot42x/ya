@@ -22,10 +22,24 @@ struct DeferredViewportResources
         return color != nullptr && depth != nullptr;
     }
 
-    void syncRawViews()
+    void reset(const DeferredAttachmentFormats& nextFormats = {})
     {
-        color = colorOwner.get();
-        depth = depthOwner.get();
+        colorOwner.reset();
+        depthOwner.reset();
+        color   = nullptr;
+        depth   = nullptr;
+        formats = nextFormats;
+    }
+
+    void publish(std::shared_ptr<RenderImage> nextColorOwner,
+                 std::shared_ptr<RenderImage> nextDepthOwner,
+                 const DeferredAttachmentFormats& nextFormats)
+    {
+        colorOwner = std::move(nextColorOwner);
+        depthOwner = std::move(nextDepthOwner);
+        color      = colorOwner.get();
+        depth      = depthOwner.get();
+        formats    = nextFormats;
     }
 };
 
