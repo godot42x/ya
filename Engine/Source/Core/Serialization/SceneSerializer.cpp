@@ -441,9 +441,7 @@ void SceneSerializer::deserializeNodeTree(const nlohmann::json& j, Node* parent,
         }
     }
 
-    // Nodes without an entityRef are pure organizational folders.
-    Node* node = entity ? _scene->createNode(name, parent, entity)
-                        : _scene->createFolder(name, parent);
+    Node* node = _scene->createNode(name, parent, entity);
 
     if (!node) {
         YA_CORE_ERROR("Failed to create node '{}'", name);
@@ -458,5 +456,4 @@ void SceneSerializer::deserializeNodeTree(const nlohmann::json& j, Node* parent,
 }
 
 } // namespace ya
-
 

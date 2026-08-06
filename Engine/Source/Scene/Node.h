@@ -81,8 +81,6 @@ struct ENGINE_API Node : public disable_copy
 
     [[nodiscard]] Entity       *getEntity() { return _entity; }
     [[nodiscard]] const Entity *getEntity() const { return _entity; }
-    /// Folder nodes are pure organizational hierarchy nodes without an Entity.
-    [[nodiscard]] bool isFolder() const { return _entity == nullptr; }
     // void                        setEntity(Entity *entity) { _entity = entity; }
 
     /**

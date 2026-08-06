@@ -33,7 +33,6 @@ struct ENGINE_API [[refl]] Scene
 
     std::unordered_map<entt::entity, Entity>                _entityMap;
     std::unordered_map<entt::entity, std::shared_ptr<Node>> _nodeMap; // Entity -> Node mapping
-    std::vector<std::shared_ptr<Node>>                      _folderNodes; // Owns entity-less folder nodes
     std::shared_ptr<Node>                                   _rootNode = nullptr;
 
   public:
@@ -52,8 +51,6 @@ struct ENGINE_API [[refl]] Scene
     // === Public Node API (Application Layer) ===
     Node*   createNode(const std::string& name = "Entity", Node* parent = nullptr, Entity* entity = nullptr);
     Node3D* createNode3D(const std::string& name = "Entity", Node* parent = nullptr, Entity* entity = nullptr);
-    /// Create a pure organizational node without an Entity (folder).
-    Node*   createFolder(const std::string& name = "Folder", Node* parent = nullptr);
 
 
     template <typename ComponentType, typename... Args>
@@ -156,9 +153,6 @@ struct ENGINE_API [[refl]] Scene
 
   private:
     // === Internal ECS API (Engine Systems Only) ===
-    /// Destroy a node and every descendant (entities and folders).
-    void destroyNodeSubtree(Node* node);
-
     /**
      * @brief Create raw Entity without Node wrapper
      * @note Only for internal systems (Serialization, ModelInstantiation, ResourceResolve, etc.)
