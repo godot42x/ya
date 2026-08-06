@@ -227,6 +227,7 @@ void AssetManager::bumpResourceVersion(const std::string& assetPath)
 {
     const auto normalizedAssetPath = normalizeAssetPath(assetPath);
     const auto newVersion = ++_resourceVersion[normalizedAssetPath];
+    ++_resourceVersionEpoch;
     YA_CORE_TRACE("bumpResourceVersion: '{}' → v{}", normalizedAssetPath, newVersion);
 }
 

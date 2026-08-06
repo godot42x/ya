@@ -253,28 +253,40 @@ struct ENGINE_API ResourceResolveSystem : public ISystem
     std::deque<entt::entity>                                          _dirtyTerrainQueue;
     std::deque<entt::entity>                                          _dirtySkyboxQueue;
     std::deque<entt::entity>                                          _dirtyEnvironmentQueue;
+    std::deque<entt::entity>                                          _dirtyMaterialQueue;
     std::unordered_set<entt::entity>                                  _dirtyTerrainSet;
     std::unordered_set<entt::entity>                                  _dirtySkyboxSet;
     std::unordered_set<entt::entity>                                  _dirtyEnvironmentSet;
+    std::unordered_set<entt::entity>                                  _dirtyMaterialSet;
     std::unordered_set<entt::entity>                                  _activeTerrain;
     std::unordered_set<entt::entity>                                  _activeSkybox;
     std::unordered_set<entt::entity>                                  _activeEnvironment;
+    std::unordered_set<entt::entity>                                  _activeMaterial;
     std::unordered_set<entt::entity>                                  _sceneSkyboxEnvironmentDependents;
     uint64_t                                                          _nextResolveAuditFrame = 0;
+    uint64_t                                                          _nextMaterialAuditFrame = 0;
+
+    /// How often the material staleness audit runs (frames). Materials get a
+    /// shorter interval than the shared 120-frame resolve audit so texture
+    /// hot-reloads resolve promptly without per-frame staleness cost.
+    static constexpr uint64_t MATERIAL_AUDIT_INTERVAL_FRAMES = 30;
 
     void seedSceneResolveWork(Scene* scene);
     void touchDerivedResourceUsage();
     void gcDerivedResources(uint64_t currentFrame);
     void auditResolveWork(Scene* scene);
+    void auditMaterialWork(Scene* scene);
     void markAllSceneSkyboxEnvironmentDependentsDirty(const char* reason);
     void clearSceneResolveWork();
     void clearAllResolveState();
     void cleanupTerrainState(entt::entity entity);
     void cleanupSkyboxState(entt::entity entity);
     void cleanupEnvironmentLightingState(entt::entity entity);
+    void cleanupMaterialState(entt::entity entity);
     [[nodiscard]] bool isTerrainQueuedOrActive(entt::entity entity) const;
     [[nodiscard]] bool isSkyboxQueuedOrActive(entt::entity entity) const;
     [[nodiscard]] bool isEnvironmentQueuedOrActive(entt::entity entity) const;
+    [[nodiscard]] bool isMaterialQueuedOrActive(entt::entity entity) const;
 
   public:
     void setRender(IRender* render) { _render = render; }
@@ -297,6 +309,7 @@ struct ENGINE_API ResourceResolveSystem : public ISystem
     void markTerrainDirty(entt::entity entity, const char* reason, uint64_t rebuildNotBeforeFrame = 0);
     void markSkyboxDirty(entt::entity entity, const char* reason);
     void markEnvironmentLightingDirty(entt::entity entity, const char* reason);
+    void markMaterialDirty(entt::entity entity, const char* reason);
     void resolvePendingMeshes(Scene* scene);
     void resolvePendingTerrain(Scene* scene);
     void resolvePendingMaterials(Scene* scene);

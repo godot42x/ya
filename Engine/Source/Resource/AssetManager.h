@@ -66,6 +66,12 @@ class ENGINE_API AssetManager : public IResourceCache
     // Resource version: incremented on reload/invalidate. TAssetRef compares against this.
     std::unordered_map<std::string, uint64_t> _resourceVersion;
 
+    // Monotonic epoch bumped whenever any resource version changes. Asset refs
+    // use this as an O(1) fast path: an unchanged epoch means no per-path
+    // version query can differ, so per-frame staleness checks skip path
+    // normalization entirely.
+    uint64_t _resourceVersionEpoch = 0;
+
     std::unique_ptr<AssetTextureManager> _textureManager;
     std::unique_ptr<AssetModelManager>   _modelManager;
     IRender*                             _render = nullptr;
@@ -169,6 +175,9 @@ class ENGINE_API AssetManager : public IResourceCache
      *        its cached version to detect stale pointers.
      */
     uint64_t getResourceVersion(const std::string& assetPath) const;
+
+    /// O(1) fast path for per-frame staleness checks; see `_resourceVersionEpoch`.
+    uint64_t getResourceVersionEpoch() const { return _resourceVersionEpoch; }
 
     /**
      * @brief Force-bump the version for a resource path.
