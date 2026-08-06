@@ -207,53 +207,6 @@ ForwardViewportStage::PassContext ForwardViewportStage::buildPassContext(const R
 {
     auto* activeScene           = _runtimeServices ? _runtimeServices->getActiveScene() : nullptr;
     auto* resourceResolveSystem = _runtimeServices ? _runtimeServices->getResourceResolveSystem() : nullptr;
-    PassContext::SkyboxInput skybox{};
-    PassContext::DebugDrawInput debugDraw{};
-
-    if (activeScene && _runtimeServices) {
-        skybox.descriptorSet = _runtimeServices->getSceneSkyboxDescriptorSet(activeScene);
-    }
-
-    if (activeScene && resourceResolveSystem && _runtimeServices) {
-        const auto* skyboxState = resourceResolveSystem->findFirstSceneSkyboxState(activeScene);
-        if (skyboxState && skyboxState->hasRenderableCubemap()) {
-            skybox.mesh          = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
-            for (const auto& [entity, sc, mc] : activeScene->getRegistry().view<SkyboxComponent, StaticMeshComponent>().each()) {
-                if (mc.isResolved() && mc.getMesh()) {
-                    skybox.mesh = mc.getMesh();
-                }
-                break;
-            }
-            skybox.bAvailable = skybox.descriptorSet && skybox.mesh;
-        }
-    }
-
-    if (ctx.frameData) {
-        auto appendDebugBucket = [&](const std::vector<RenderDrawItem>& items, bool bSkinned)
-        {
-            if (items.empty()) {
-                return;
-            }
-            YA_CORE_ASSERT(debugDraw.count < debugDraw.buckets.size(), "Forward debug bucket inventory overflow");
-            debugDraw.buckets[debugDraw.count++] = PassContext::DebugDrawInput::Bucket{
-                .items     = &items,
-                .bSkinned  = bSkinned,
-            };
-            debugDraw.bHasDraws = true;
-        };
-
-        appendDebugBucket(ctx.frameData->drawBuckets.staticMeshes.pbrDrawItems, false);
-        appendDebugBucket(ctx.frameData->drawBuckets.staticMeshes.phongDrawItems, false);
-        appendDebugBucket(ctx.frameData->drawBuckets.staticMeshes.unlitDrawItems, false);
-        appendDebugBucket(ctx.frameData->drawBuckets.staticMeshes.simpleDrawItems, false);
-        appendDebugBucket(ctx.frameData->drawBuckets.staticMeshes.fallbackDrawItems, false);
-        appendDebugBucket(ctx.frameData->drawBuckets.skinnedMeshes.pbrDrawItems, true);
-        appendDebugBucket(ctx.frameData->drawBuckets.skinnedMeshes.phongDrawItems, true);
-        appendDebugBucket(ctx.frameData->drawBuckets.skinnedMeshes.unlitDrawItems, true);
-        appendDebugBucket(ctx.frameData->drawBuckets.skinnedMeshes.simpleDrawItems, true);
-        appendDebugBucket(ctx.frameData->drawBuckets.skinnedMeshes.fallbackDrawItems, true);
-    }
-
     return PassContext{
         .stageCtx = ctx,
         .activeScene = activeScene,
@@ -261,8 +214,125 @@ ForwardViewportStage::PassContext ForwardViewportStage::buildPassContext(const R
         .sceneEnvironmentLightingDescriptorSet = (_runtimeServices && activeScene)
             ? _runtimeServices->getSceneEnvironmentLightingDescriptorSet(activeScene)
             : DescriptorSetHandle{},
-        .skybox = skybox,
-        .debugDraw = debugDraw,
+        .skybox = buildSkyboxInput(activeScene, resourceResolveSystem),
+        .debugDraw = buildDebugDrawInput(ctx.frameData),
+    };
+}
+
+ForwardViewportStage::PassContext::SkyboxInput ForwardViewportStage::buildSkyboxInput(
+    Scene* activeScene,
+    ResourceResolveSystem* resourceResolveSystem) const
+{
+    PassContext::SkyboxInput input{};
+    if (!activeScene || !_runtimeServices) {
+        return input;
+    }
+
+    input.descriptorSet = _runtimeServices->getSceneSkyboxDescriptorSet(activeScene);
+    if (!resourceResolveSystem) {
+        return input;
+    }
+
+    const auto* skyboxState = resourceResolveSystem->findFirstSceneSkyboxState(activeScene);
+    if (!skyboxState || !skyboxState->hasRenderableCubemap()) {
+        return input;
+    }
+
+    input.mesh = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
+    for (const auto& [entity, skybox, mesh] : activeScene->getRegistry().view<SkyboxComponent, StaticMeshComponent>().each()) {
+        (void)entity;
+        (void)skybox;
+        if (mesh.isResolved() && mesh.getMesh()) {
+            input.mesh = mesh.getMesh();
+        }
+        break;
+    }
+    input.bAvailable = input.descriptorSet && input.mesh;
+    return input;
+}
+
+ForwardViewportStage::PassContext::DebugDrawInput ForwardViewportStage::buildDebugDrawInput(
+    const RenderFrameData* frameData) const
+{
+    PassContext::DebugDrawInput input{};
+    if (!frameData) {
+        return input;
+    }
+
+    const auto appendBucket = [&input](const std::vector<RenderDrawItem>& items, bool bSkinned)
+    {
+        if (items.empty()) {
+            return;
+        }
+        YA_CORE_ASSERT(input.count < input.buckets.size(), "Forward debug bucket inventory overflow");
+        input.buckets[input.count++] = {
+            .items    = &items,
+            .bSkinned = bSkinned,
+        };
+        input.bHasDraws = true;
+    };
+
+    appendBucket(frameData->drawBuckets.staticMeshes.pbrDrawItems, false);
+    appendBucket(frameData->drawBuckets.staticMeshes.phongDrawItems, false);
+    appendBucket(frameData->drawBuckets.staticMeshes.unlitDrawItems, false);
+    appendBucket(frameData->drawBuckets.staticMeshes.simpleDrawItems, false);
+    appendBucket(frameData->drawBuckets.staticMeshes.fallbackDrawItems, false);
+    appendBucket(frameData->drawBuckets.skinnedMeshes.pbrDrawItems, true);
+    appendBucket(frameData->drawBuckets.skinnedMeshes.phongDrawItems, true);
+    appendBucket(frameData->drawBuckets.skinnedMeshes.unlitDrawItems, true);
+    appendBucket(frameData->drawBuckets.skinnedMeshes.simpleDrawItems, true);
+    appendBucket(frameData->drawBuckets.skinnedMeshes.fallbackDrawItems, true);
+    return input;
+}
+
+ForwardViewportAuxPasses::DrawContext ForwardViewportStage::makeAuxDrawContext(
+    const PassContext& passCtx,
+    bool               bIncludeSkybox,
+    bool               bIncludeDebug,
+    bool               bIncludeDirection) const
+{
+    return ForwardViewportAuxPasses::DrawContext{
+        .stageCtx = passCtx.stageCtx,
+        .activeScene = passCtx.activeScene,
+        .skybox = bIncludeSkybox ? passCtx.skybox : ForwardViewportAuxPasses::DrawContext::SkyboxInput{},
+        .debugDraw = bIncludeDebug ? passCtx.debugDraw : ForwardViewportAuxPasses::DrawContext::DebugDrawInput{},
+        .directionGizmos = bIncludeDirection ? passCtx.directionGizmos : std::vector<ForwardDirectionGizmoInput>{},
+        .skyboxFrameDescriptorSet = bIncludeSkybox ? passCtx.skyboxFrameDescriptorSet : nullptr,
+        .bReverseViewportY = bReverseViewportY,
+    };
+}
+
+ForwardViewportLitPasses::DrawContext ForwardViewportStage::makePBRDrawContext(const PassContext& passCtx) const
+{
+    return ForwardViewportLitPasses::DrawContext{
+        .stageCtx = passCtx.stageCtx,
+        .environmentLightingDescriptorSet = passCtx.sceneEnvironmentLightingDescriptorSet,
+        .depthBufferShadowDS = _depthBufferShadowDS,
+        .skinningDS = passCtx.skinningDescriptorSet,
+        .pbrFrameDescriptorSet = passCtx.pbrFrameDescriptorSet,
+        .bReverseViewportY = bReverseViewportY,
+    };
+}
+
+ForwardViewportLitPasses::DrawContext ForwardViewportStage::makePhongDrawContext(const PassContext& passCtx) const
+{
+    return ForwardViewportLitPasses::DrawContext{
+        .stageCtx = passCtx.stageCtx,
+        .skyboxDescriptorSet = passCtx.skybox.descriptorSet,
+        .depthBufferShadowDS = _depthBufferShadowDS,
+        .skinningDS = passCtx.skinningDescriptorSet,
+        .phongFrameDescriptorSet = passCtx.phongFrameDescriptorSet,
+        .bReverseViewportY = bReverseViewportY,
+    };
+}
+
+ForwardViewportUnlitPass::DrawContext ForwardViewportStage::makeUnlitDrawContext(const PassContext& passCtx) const
+{
+    return ForwardViewportUnlitPass::DrawContext{
+        .stageCtx = passCtx.stageCtx,
+        .skinningDS = passCtx.skinningDescriptorSet,
+        .unlitFrameDescriptorSet = passCtx.unlitFrameDescriptorSet,
+        .bReverseViewportY = bReverseViewportY,
     };
 }
 
@@ -270,84 +340,25 @@ void ForwardViewportStage::executePass(EPass pass, const PassContext& passCtx)
 {
     switch (pass) {
         case EPass::Skybox:
-            _auxPasses.drawSkybox(ForwardViewportAuxPasses::DrawContext{
-                .stageCtx = passCtx.stageCtx,
-                .activeScene = passCtx.activeScene,
-                .skybox = {
-                    .bAvailable = passCtx.skybox.bAvailable,
-                    .descriptorSet = passCtx.skybox.descriptorSet,
-                    .mesh = passCtx.skybox.mesh,
-                },
-                .debugDraw = {},
-                .skyboxFrameDescriptorSet = passCtx.skyboxFrameDescriptorSet,
-                .bReverseViewportY = bReverseViewportY,
-            });
+            _auxPasses.drawSkybox(makeAuxDrawContext(passCtx, true));
             break;
         case EPass::PBR:
-            _litPasses.drawPBR(ForwardViewportLitPasses::DrawContext{
-                .stageCtx = passCtx.stageCtx,
-                .environmentLightingDescriptorSet = passCtx.sceneEnvironmentLightingDescriptorSet,
-                .depthBufferShadowDS = _depthBufferShadowDS,
-                .skinningDS = passCtx.skinningDescriptorSet,
-                .pbrFrameDescriptorSet = passCtx.pbrFrameDescriptorSet,
-                .bReverseViewportY = bReverseViewportY,
-            });
+            _litPasses.drawPBR(makePBRDrawContext(passCtx));
             break;
         case EPass::Phong:
-            _litPasses.drawPhong(ForwardViewportLitPasses::DrawContext{
-                .stageCtx = passCtx.stageCtx,
-                .skyboxDescriptorSet = passCtx.skybox.descriptorSet,
-                .depthBufferShadowDS = _depthBufferShadowDS,
-                .skinningDS = passCtx.skinningDescriptorSet,
-                .phongFrameDescriptorSet = passCtx.phongFrameDescriptorSet,
-                .bReverseViewportY = bReverseViewportY,
-            });
+            _litPasses.drawPhong(makePhongDrawContext(passCtx));
             break;
         case EPass::Unlit:
-            _unlitPass.draw(ForwardViewportUnlitPass::DrawContext{
-                .stageCtx = passCtx.stageCtx,
-                .skinningDS = passCtx.skinningDescriptorSet,
-                .unlitFrameDescriptorSet = passCtx.unlitFrameDescriptorSet,
-                .bReverseViewportY = bReverseViewportY,
-            });
+            _unlitPass.draw(makeUnlitDrawContext(passCtx));
             break;
         case EPass::Simple:
-            _auxPasses.drawSimple(ForwardViewportAuxPasses::DrawContext{
-                .stageCtx = passCtx.stageCtx,
-                .activeScene = passCtx.activeScene,
-                .skybox = {},
-                .debugDraw = {},
-                .bReverseViewportY = bReverseViewportY,
-            });
+            _auxPasses.drawSimple(makeAuxDrawContext(passCtx));
             break;
         case EPass::DirectionOverlay:
-            _auxPasses.drawDirectionOverlay(ForwardViewportAuxPasses::DrawContext{
-                .stageCtx = passCtx.stageCtx,
-                .activeScene = passCtx.activeScene,
-                .skybox = {},
-                .debugDraw = {},
-                .bReverseViewportY = bReverseViewportY,
-            });
+            _auxPasses.drawDirectionOverlay(makeAuxDrawContext(passCtx, false, false, true));
             break;
         case EPass::Debug:
-            _auxPasses.drawDebug(ForwardViewportAuxPasses::DrawContext{
-                .stageCtx = passCtx.stageCtx,
-                .activeScene = passCtx.activeScene,
-                .skybox = {},
-                .debugDraw = [&]() {
-                    ForwardViewportAuxPasses::DrawContext::DebugDrawInput debugDraw{};
-                    debugDraw.count = passCtx.debugDraw.count;
-                    debugDraw.bHasDraws = passCtx.debugDraw.bHasDraws;
-                    for (uint32_t i = 0; i < passCtx.debugDraw.count; ++i) {
-                        debugDraw.buckets[i] = {
-                            .items = passCtx.debugDraw.buckets[i].items,
-                            .bSkinned = passCtx.debugDraw.buckets[i].bSkinned,
-                        };
-                    }
-                    return debugDraw;
-                }(),
-                .bReverseViewportY = bReverseViewportY,
-            });
+            _auxPasses.drawDebug(makeAuxDrawContext(passCtx, false, true));
             break;
     }
 }

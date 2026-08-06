@@ -54,25 +54,8 @@ struct ForwardViewportStage : public IRenderStage
 
     struct PassContext
     {
-        struct SkyboxInput
-        {
-            bool                bAvailable     = false;
-            DescriptorSetHandle descriptorSet  = nullptr;
-            Mesh*               mesh           = nullptr;
-        };
-
-        struct DebugDrawInput
-        {
-            struct Bucket
-            {
-                const std::vector<RenderDrawItem>* items = nullptr;
-                bool                               bSkinned = false;
-            };
-
-    std::array<Bucket, 10> buckets{};
-            uint32_t               count     = 0;
-            bool                   bHasDraws = false;
-        };
+        using SkyboxInput    = ForwardViewportAuxPasses::DrawContext::SkyboxInput;
+        using DebugDrawInput = ForwardViewportAuxPasses::DrawContext::DebugDrawInput;
 
         const RenderStageContext& stageCtx;
         Scene*                    activeScene             = nullptr;
@@ -147,7 +130,17 @@ struct ForwardViewportStage : public IRenderStage
     [[nodiscard]] PassContext buildPassContext(const RenderStageContext& ctx);
 
   private:
-    void                      executePass(EPass pass, const PassContext& passCtx);
+    [[nodiscard]] PassContext::SkyboxInput buildSkyboxInput(Scene* activeScene, ResourceResolveSystem* resourceResolveSystem) const;
+    [[nodiscard]] PassContext::DebugDrawInput buildDebugDrawInput(const RenderFrameData* frameData) const;
+    [[nodiscard]] ForwardViewportAuxPasses::DrawContext makeAuxDrawContext(
+        const PassContext& passCtx,
+        bool               bIncludeSkybox = false,
+        bool               bIncludeDebug = false,
+        bool               bIncludeDirection = false) const;
+    [[nodiscard]] ForwardViewportLitPasses::DrawContext makePBRDrawContext(const PassContext& passCtx) const;
+    [[nodiscard]] ForwardViewportLitPasses::DrawContext makePhongDrawContext(const PassContext& passCtx) const;
+    [[nodiscard]] ForwardViewportUnlitPass::DrawContext makeUnlitDrawContext(const PassContext& passCtx) const;
+    void                                            executePass(EPass pass, const PassContext& passCtx);
 };
 
 } // namespace ya
