@@ -143,6 +143,42 @@ void EntityIdViewportPass::init(IRender* render, EFormat::T colorFormat, EFormat
                                                         _pipelineLayout.get())),
                    "Failed to create entity-id pipeline");
 
+    // Billboard pipeline: no vertex buffer, the quad is generated from the
+    // vertex id in shader space using the same camera-facing math as the
+    // BillboardWorld overlay shader.
+    _billboardPipelineLayout = IPipelineLayout::create(render, "EntityId_Billboard_PipelineLayout", {pushConstantRange}, {_frameDSL});
+    GraphicsPipelineCreateInfo billboardCI{};
+    billboardCI.pipelineRenderingInfo = {
+        .label                  = "EntityIdBillboardPipeline",
+        .viewMask               = 0,
+        .colorAttachmentFormats = {colorFormat},
+        .depthAttachmentFormat  = depthFormat,
+    };
+    billboardCI.pipelineLayout = _billboardPipelineLayout.get();
+    billboardCI.shaderDesc = {
+        .sourceMode = ShaderDesc::ESourceMode::StageFiles,
+        .stageFiles = {
+            ShaderDesc::StageFile{.stage = EShaderStage::Vertex, .file = "EntityId.slang", .entryName = "billboardVertMain"},
+            ShaderDesc::StageFile{.stage = EShaderStage::Fragment, .file = "EntityId.slang", .entryName = "fragMain"},
+        },
+        .vertexBufferDescs = {},
+        .vertexAttributes  = {},
+    };
+    billboardCI.dynamicFeatures    = {EPipelineDynamicFeature::Viewport, EPipelineDynamicFeature::Scissor};
+    billboardCI.primitiveType      = EPrimitiveType::TriangleList;
+    billboardCI.rasterizationState = {.polygonMode = EPolygonMode::Fill, .cullMode = ECullMode::None, .frontFace = EFrontFaceType::CounterClockWise};
+    billboardCI.depthStencilState  = {
+        .bDepthTestEnable  = true,
+        .bDepthWriteEnable = false,
+        .depthCompareOp    = ECompareOp::LessOrEqual,
+    };
+    billboardCI.colorBlendState = {.attachments = {{.index          = 0,
+                                                    .bBlendEnable   = false,
+                                                    .colorWriteMask = EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A}}};
+    billboardCI.viewportState   = {.viewports = {Viewport::defaults()}, .scissors = {Scissor::defaults()}};
+    _billboardPipeline = IGraphicsPipeline::create(render);
+    YA_CORE_ASSERT(_billboardPipeline->recreate(billboardCI), "Failed to create entity-id billboard pipeline");
+
     _skinnedPipeline = IGraphicsPipeline::create(render);
     YA_CORE_ASSERT(_skinnedPipeline->recreate(buildPipelineCI(
                                                    "EntityIdSkinnedPipeline",
@@ -159,6 +195,8 @@ void EntityIdViewportPass::init(IRender* render, EFormat::T colorFormat, EFormat
 
 void EntityIdViewportPass::destroy()
 {
+    _billboardPipeline.reset();
+    _billboardPipelineLayout.reset();
     _skinnedPipeline.reset();
     _skinnedPipelineLayout.reset();
     _pipeline.reset();
@@ -177,7 +215,8 @@ void EntityIdViewportPass::execute(ICommandBuffer*        cmdBuf,
                                    const glm::mat4&       viewProj,
                                    const glm::mat4&       view,
                                    const RenderFrameData& frameData,
-                                   DescriptorSetHandle    skinningDescriptorSet)
+                                   DescriptorSetHandle    skinningDescriptorSet,
+                                   const std::vector<EntityIdBillboard>& billboards)
 {
     if (!_render || !cmdBuf || viewportWidth == 0 || viewportHeight == 0) {
         return;
@@ -227,6 +266,13 @@ void EntityIdViewportPass::execute(ICommandBuffer*        cmdBuf,
         drawSkinnedBucket(cmdBuf, buckets.skinnedMeshes.simpleDrawItems);
         drawSkinnedBucket(cmdBuf, buckets.skinnedMeshes.fallbackDrawItems);
     }
+
+    if (!billboards.empty()) {
+        cmdBuf->bindPipeline(_billboardPipeline.get());
+        applyViewport(_billboardPipelineLayout.get());
+        cmdBuf->bindDescriptorSets(_billboardPipelineLayout.get(), 0, {_frameDS});
+        drawBillboards(cmdBuf, billboards);
+    }
 }
 
 void EntityIdViewportPass::drawStaticBucket(ICommandBuffer* cmdBuf, const std::vector<RenderDrawItem>& items)
@@ -254,6 +300,21 @@ void EntityIdViewportPass::drawSkinnedBucket(ICommandBuffer* cmdBuf, const std::
         PushConstants pc{.modelMat = item.worldMatrix, .entityId = item.entityId, .skinningPaletteIndex = item.skinningPaletteIndex};
         cmdBuf->pushConstants(_skinnedPipelineLayout.get(), EShaderStage::Vertex | EShaderStage::Fragment, 0, sizeof(PushConstants), &pc);
         item.mesh->drawSkinned(cmdBuf);
+    }
+}
+
+void EntityIdViewportPass::drawBillboards(ICommandBuffer* cmdBuf, const std::vector<EntityIdBillboard>& billboards)
+{
+    for (const auto& billboard : billboards) {
+        if (billboard.entityId == 0) {
+            continue;
+        }
+        PushConstants pc{};
+        pc.entityId    = billboard.entityId;
+        pc.worldCenter = billboard.worldCenter;
+        pc.worldSize   = billboard.worldSize;
+        cmdBuf->pushConstants(_billboardPipelineLayout.get(), EShaderStage::Vertex | EShaderStage::Fragment, 0, sizeof(PushConstants), &pc);
+        cmdBuf->draw(6, 1, 0, 0);
     }
 }
 

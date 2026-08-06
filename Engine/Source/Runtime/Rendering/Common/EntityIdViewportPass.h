@@ -4,6 +4,7 @@
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
+#include "EntityId.slang.h"
 
 #include <glm/glm.hpp>
 #include <memory>
@@ -15,24 +16,24 @@ struct IRender;
 struct RenderDrawItem;
 struct RenderFrameData;
 
+/// Camera-facing billboard quad written into the entity-id target, mirroring
+/// the world-size math of the billboard overlay pass so the id under the
+/// cursor matches what is actually visible.
+struct EntityIdBillboard
+{
+    glm::vec3 worldCenter = glm::vec3(0.0f);
+    glm::vec2 worldSize   = glm::vec2(1.0f);
+    uint32_t  entityId    = 0;
+};
+
 /// Renders every draw item into an R32_UINT target using its entity id as the
 /// pixel value. Depth-testing against the viewport depth keeps the ids aligned
 /// with what is actually visible, so a readback at a screen position yields the
 /// exact entity under the cursor.
 struct EntityIdViewportPass
 {
-    struct FrameUBO
-    {
-        glm::mat4 viewProj = glm::mat4(1.0f);
-        glm::mat4 view     = glm::mat4(1.0f);
-    };
-
-    struct PushConstants
-    {
-        glm::mat4 modelMat           = glm::mat4(1.0f);
-        uint32_t  entityId            = 0;
-        int32_t  skinningPaletteIndex = -1;
-    };
+    using FrameUBO      = slang_types::EntityId::FrameData;
+    using PushConstants = slang_types::EntityId::PushConstants;
 
     void init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat);
     void destroy();
@@ -43,11 +44,13 @@ struct EntityIdViewportPass
                  const glm::mat4& viewProj,
                  const glm::mat4& view,
                  const RenderFrameData& frameData,
-                 DescriptorSetHandle    skinningDescriptorSet);
+                 DescriptorSetHandle    skinningDescriptorSet,
+                 const std::vector<EntityIdBillboard>& billboards = {});
 
   private:
     void drawStaticBucket(ICommandBuffer* cmdBuf, const std::vector<RenderDrawItem>& items);
     void drawSkinnedBucket(ICommandBuffer* cmdBuf, const std::vector<RenderDrawItem>& items);
+    void drawBillboards(ICommandBuffer* cmdBuf, const std::vector<EntityIdBillboard>& billboards);
 
     IRender* _render = nullptr;
 
@@ -58,6 +61,8 @@ struct EntityIdViewportPass
     std::shared_ptr<IBuffer>               _frameUBO;
     std::shared_ptr<IPipelineLayout>       _pipelineLayout;
     std::shared_ptr<IGraphicsPipeline>     _pipeline;
+    std::shared_ptr<IPipelineLayout>       _billboardPipelineLayout;
+    std::shared_ptr<IGraphicsPipeline>     _billboardPipeline;
     std::shared_ptr<IPipelineLayout>       _skinnedPipelineLayout;
     std::shared_ptr<IGraphicsPipeline>     _skinnedPipeline;
 };
