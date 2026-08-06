@@ -391,6 +391,7 @@ enum T
     B8G8R8A8_SNORM,
     B8G8R8A8_SRGB,
     R32_SFLOAT,
+    R32_UINT,
     R16G16B16A16_SFLOAT,
     D16_UNORM,
     D32_SFLOAT,
@@ -488,6 +489,7 @@ inline constexpr size_t getPixelSize(T format)
     case R8G8_UNORM:
         return 2;
     case R32_SFLOAT:
+    case R32_UINT:
         return 4;
     case R16G16B16A16_SFLOAT:
         return 8;
