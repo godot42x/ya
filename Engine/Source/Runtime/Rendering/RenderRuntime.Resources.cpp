@@ -9,10 +9,10 @@
 #include "Render/Pipelines/BasicPostprocessing.h"
 #include "Resource/AssetManager.h"
 #include "Resource/DeferredDeletionQueue.h"
-#include "Resource/Font/FontManager.h"
+#include "UI/Resource/FontManager.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Resource/ResourceRegistry.h"
-#include "Resource/Texture/TextureLibrary.h"
+#include "UI/Resource/TextureLibrary.h"
 
 namespace ya
 {

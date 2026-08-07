@@ -8,7 +8,7 @@
 #include "ECS/Component/ManagedChildComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/Component/LuaScriptComponent.h"
-#include "Scene/Node2D.h"
+#include "UI/Scene/Node2D.h"
 #include "Scene/Scene.h"
 
 #include <algorithm>

@@ -1,7 +1,7 @@
 #include "LightStage.h"
 #include "Render/Core/RenderImage.h"
 #include "Render/Render.h"
-#include "Resource/Texture/TextureLibrary.h"
+#include "UI/Resource/TextureLibrary.h"
 
 #include "Config/ConfigManager.h"
 #include "Core/Profiling/PerfKeys.h"

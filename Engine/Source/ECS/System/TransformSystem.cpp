@@ -4,6 +4,7 @@
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "Scene/Node.h"
+#include "Scene/Node3D.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneManager.h"
 

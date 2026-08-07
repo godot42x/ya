@@ -248,28 +248,7 @@ struct ENGINE_API FQuadRender
     void drawText(const std::string& text, const glm::vec3& position, const glm::vec4& color, Font* font);
 
   private:
-    uint32_t findOrAddTexture(ya::Ptr<Texture> texture)
-    {
-        uint32_t textureIdx = 0;
-        if (texture) {
-            auto it = _textureLabel2Idx.find(texture->getLabel());
-            if (it != _textureLabel2Idx.end()) {
-                textureIdx = it->second;
-            }
-            else {
-                _textureBindings.push_back(TextureBinding{
-                    .texture = texture,
-                    .sampler = TextureLibrary::get().getDefaultSampler(),
-                });
-                auto idx                               = static_cast<uint32_t>(_textureBindings.size() - 1);
-                _textureLabel2Idx[texture->getLabel()] = idx;
-                textureIdx                             = idx;
-                _lastPushTextureSlot                   = static_cast<int>(idx);
-                ++_resourceVersion;
-            }
-        }
-        return textureIdx;
-    }
+    uint32_t findOrAddTexture(ya::Ptr<Texture> texture);
 
     void drawTextureInternal(const glm::mat4& transform,
                              uint32_t textureIdx,

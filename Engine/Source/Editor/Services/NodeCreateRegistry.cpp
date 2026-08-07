@@ -1,7 +1,7 @@
 #include "Editor/Services/NodeCreateRegistry.h"
 
 #include "Scene/Node.h"
-#include "Scene/Node2D.h"
+#include "UI/Scene/Node2D.h"
 #include "Scene/Scene.h"
 
 #include <algorithm>

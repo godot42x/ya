@@ -1,6 +1,6 @@
-#include "Runtime/Rendering/Common/UISceneRenderer.h"
+#include "UI/UISceneRenderer.h"
 
-#include "Scene/Node2D.h"
+#include "UI/Scene/Node2D.h"
 
 #include <algorithm>
 

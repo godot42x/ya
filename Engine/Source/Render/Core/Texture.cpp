@@ -1,6 +1,6 @@
 #include "Texture.h"
 
-#include "Resource/Texture/TextureLibrary.h"
+#include "UI/Resource/TextureLibrary.h"
 #include "stb/stb_image.h"
 
 #include <bit>

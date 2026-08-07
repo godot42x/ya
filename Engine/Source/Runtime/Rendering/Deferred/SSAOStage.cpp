@@ -5,7 +5,7 @@
 #include "Config/ConfigManager.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Render/Render.h"
-#include "Resource/Texture/TextureLibrary.h"
+#include "UI/Resource/TextureLibrary.h"
 
 #include <array>
 #include <vector>

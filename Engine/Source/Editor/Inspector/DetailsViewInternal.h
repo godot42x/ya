@@ -2,7 +2,7 @@
 
 #include "Editor/Inspector/DetailsView.h"
 
-#include "Resource/Texture/TextureLibrary.h"
+#include "UI/Resource/TextureLibrary.h"
 #include "Resource/AssetManager.h"
 #include "Runtime/GUI/ImGui/ImGuiSystem.h"
 

@@ -1,6 +1,8 @@
 ﻿#pragma once
 
 #include "Core/Base.h"
+#include "Core/Common/Types.h"
+
 
 #include "Core/Handle.h"
 #include "reflects-core/enum.h"
@@ -1009,18 +1011,6 @@ struct Scissor
     uint32_t height  = 600;
 
     static Scissor defaults() { return Scissor{}; }
-};
-
-struct Rect2D
-{
-    union
-    {
-        glm::vec2 pos;
-        glm::vec2 offset;
-    };
-    glm::vec2 extent;
-
-    Extent2D extent2D() { return Extent2D::fromVec2(extent); }
 };
 
 struct ViewportState

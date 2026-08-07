@@ -6,7 +6,7 @@
 #include "Core/System/VirtualFileSystem.h"
 #include "Editor/ImGui/ImGuiHelper.h"
 #include "Resource/AssetManager.h"
-#include "Resource/Texture/TextureLibrary.h"
+#include "UI/Resource/TextureLibrary.h"
 #include "Runtime/Application/App.h"
 #include <imgui.h>
 

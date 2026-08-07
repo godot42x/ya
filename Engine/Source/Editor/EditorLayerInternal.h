@@ -21,7 +21,7 @@
 #include "Render/Core/RenderImage.h"
 #include "Render/Core/RenderResourceFactory.h"
 #include "Resource/AssetManager.h"
-#include "Resource/Texture/TextureLibrary.h"
+#include "UI/Resource/TextureLibrary.h"
 #include "Runtime/Application/App.h"
 #include "Scene/Node.h"
 #include "Scene/Scene.h"

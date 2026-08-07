@@ -5,7 +5,7 @@
 #include "Render/Core/Graph/RenderGraphExecutor.h"
 #include "Render/Core/Graph/RenderGraphImportUtils.h"
 #include "Render/Render.h"
-#include "Resource/Texture/TextureLibrary.h"
+#include "UI/Resource/TextureLibrary.h"
 
 #include <algorithm>
 #include <string>

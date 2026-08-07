@@ -1,7 +1,7 @@
 #include "Editor/Input/EditorInputNode.h"
 
 #include "Editor/EditorLayer.h"
-#include "Runtime/Rendering/Common/UISceneRenderer.h"
+#include "UI/UISceneRenderer.h"
 #include "Runtime/Application/App.h"
 #include "Runtime/GUI/GuiSystem.h"
 

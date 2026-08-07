@@ -11,8 +11,8 @@
 
 #include "Resource/AssetManager.h"
 #include "Resource/DeferredDeletionQueue.h"
-#include "Resource/Font/FontManager.h"
-#include "Resource/Texture/TextureLibrary.h"
+#include "UI/Resource/FontManager.h"
+#include "UI/Resource/TextureLibrary.h"
 
 #include "utility.cc/ranges.h"
 
@@ -1032,6 +1032,29 @@ void FQuadRender::updateResources(DescriptorSetHandle dsHandle)
                                                 imageInfos),
         },
         {});
+}
+
+uint32_t FQuadRender::findOrAddTexture(ya::Ptr<Texture> texture)
+{
+    uint32_t textureIdx = 0;
+    if (texture) {
+        auto it = _textureLabel2Idx.find(texture->getLabel());
+        if (it != _textureLabel2Idx.end()) {
+            textureIdx = it->second;
+        }
+        else {
+            _textureBindings.push_back(TextureBinding{
+                .texture = texture,
+                .sampler = TextureLibrary::get().getDefaultSampler(),
+            });
+            auto idx                               = static_cast<uint32_t>(_textureBindings.size() - 1);
+            _textureLabel2Idx[texture->getLabel()] = idx;
+            textureIdx                             = idx;
+            _lastPushTextureSlot                   = static_cast<int>(idx);
+            ++_resourceVersion;
+        }
+    }
+    return textureIdx;
 }
 
 void FQuadRender::drawTextureInternal(const glm::mat4& transform,

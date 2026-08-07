@@ -10,7 +10,8 @@
 #include "ECS/ComponentMutation.h"
 #include "ECS/Entity.h"
 #include "Node.h"
-#include "Node2D.h"
+#include "UI/Scene/Node2D.h"
+#include "Node3D.h"
 #include "Render/Model.h"
 #include <entt/entt.hpp>
 #include <concepts>

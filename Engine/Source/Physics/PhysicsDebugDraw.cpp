@@ -2,7 +2,7 @@
 
 #include "ECS/Component/TransformComponent.h"
 #include "Physics/PhysicsBodyComponent.h"
-#include "Render/2D/Render2D.h"
+#include "UI/2D/Render2D.h"
 #include "Scene/Scene.h"
 
 namespace ya

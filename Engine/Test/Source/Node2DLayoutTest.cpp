@@ -1,7 +1,7 @@
 #include "Core/Event.h"
-#include "Core/UI/UIBase.h"
-#include "Runtime/Rendering/Common/UISceneRenderer.h"
-#include "Scene/Node2D.h"
+#include "UI/UIBase.h"
+#include "UI/UISceneRenderer.h"
+#include "UI/Scene/Node2D.h"
 #include "Scene/Scene.h"
 
 #include <gtest/gtest.h>

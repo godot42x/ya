@@ -27,6 +27,18 @@ struct Extent2D
     }
 };
 
+struct Rect2D
+{
+    union
+    {
+        glm::vec2 pos;
+        glm::vec2 offset;
+    };
+    glm::vec2 extent;
+
+    Extent2D extent2D() { return Extent2D::fromVec2(extent); }
+};
+
 struct Extent3D
 {
     uint32_t width{0};

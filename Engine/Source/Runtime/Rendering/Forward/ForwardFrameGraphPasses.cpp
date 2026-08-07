@@ -3,7 +3,7 @@
 #include "Render/Core/RenderTargetCreateInfo.h"
 #include "Runtime/Rendering/Common/EntityIdViewportPass.h"
 #include "Runtime/Rendering/Common/PostProcessingStage.h"
-#include "Runtime/Rendering/Common/RenderViewportOverlayRecorder.h"
+#include "UI/RenderViewportOverlayRecorder.h"
 
 #include <string>
 #include <string_view>

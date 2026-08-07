@@ -2,7 +2,7 @@
 
 #include "Core/Math/Math.h"
 #include "Render/Material/MaterialFactory.h"
-#include "Resource/Texture/TextureLibrary.h"
+#include "UI/Resource/TextureLibrary.h"
 
 namespace ya
 

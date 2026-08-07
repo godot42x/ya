@@ -8,8 +8,8 @@
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/RenderImage.h"
 #include "Render/Render.h"
-#include "Runtime/Rendering/Common/UISceneRenderer.h"
-#include "Scene/Node2D.h"
+#include "UI/UISceneRenderer.h"
+#include "UI/Scene/Node2D.h"
 
 #include <cmath>
 #include <functional>

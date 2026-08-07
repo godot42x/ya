@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Render/RenderDefines.h"
+#include "Core/Common/Types.h"
 #include <glm/glm.hpp>
 
 namespace ya

@@ -4,7 +4,7 @@
 #include "Core/Profiling/PerfState.h"
 #include "Render/Core/Graph/RenderGraphImportUtils.h"
 #include "Runtime/Rendering/Common/PostProcessingStage.h"
-#include "Runtime/Rendering/Common/RenderViewportOverlayRecorder.h"
+#include "UI/RenderViewportOverlayRecorder.h"
 #include "Runtime/Rendering/Common/Shadow/ShadowStage.h"
 
 #include <string>

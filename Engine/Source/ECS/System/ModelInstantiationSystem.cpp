@@ -2,6 +2,7 @@
 
 #include "Runtime/Application/App.h"
 #include "Scene/Node.h"
+#include "Scene/Node3D.h"
 #include "Scene/SceneManager.h"
 
 #include "ECS/Component/ManagedChildComponent.h"

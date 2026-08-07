@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Core/Api.h"
+#include "Core/Common/Types.h"
 #include "Core/Event.h"
 #include "Core/Input/InputMode.h"
-#include "Render/RenderDefines.h"
 
 #include <SDL3/SDL.h>
 

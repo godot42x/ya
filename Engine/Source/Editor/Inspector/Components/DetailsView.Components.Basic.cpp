@@ -17,7 +17,7 @@
 #include "Editor/EditorLayer.h"
 #include "Editor/Inspector/DetailsViewInternal.h"
 #include "Runtime/GUI/ImGui/ImGuiSystem.h"
-#include "Scene/Node2D.h"
+#include "UI/Scene/Node2D.h"
 #include "Scene/Node.h"
 #include "Scene/Scene.h"
 #include "Runtime/Application/App.h"

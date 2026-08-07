@@ -4,7 +4,7 @@
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Sampler.h"
 #include "Render/Render.h"
-#include "Resource/Texture/TextureLibrary.h"
+#include "UI/Resource/TextureLibrary.h"
 
 #include <algorithm>
 

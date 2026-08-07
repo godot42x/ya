@@ -27,7 +27,7 @@
 #include "Physics/PhysicsSystem.h"
 
 #include "Resource/AssetManager.h"
-#include "Resource/Font/FontManager.h"
+#include "UI/Resource/FontManager.h"
 
 #include "Render/Material/MaterialFactory.h"
 

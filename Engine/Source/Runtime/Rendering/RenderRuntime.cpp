@@ -5,9 +5,9 @@
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Runtime/Rendering/Deferred/DeferredRenderPipeline.h"
-#include "Runtime/Rendering/Common/RenderViewportOverlayRecorder.h"
+#include "UI/RenderViewportOverlayRecorder.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
-#include "Render/2D/Render2D.h"
+#include "UI/2D/Render2D.h"
 #include "Runtime/Rendering/Forward/ForwardRenderPipeline.h"
 
 #include <limits>

@@ -2,7 +2,7 @@
 
 #include "Editor/ImGui/ImGuiHelper.h"
 #include "Render/Core/RenderImage.h"
-#include "Resource/Texture/TextureLibrary.h"
+#include "UI/Resource/TextureLibrary.h"
 #include "Runtime/Application/App.h"
 #include "Runtime/Rendering/RenderRuntime.h"
 
