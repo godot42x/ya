@@ -17,8 +17,6 @@
 #include "Core/System/FileWatcher.h"
 #include "Core/System/VirtualFileSystem.h"
 
-#include "Core/UI/UIManager.h"
-
 #include "ECS/System/ComponentLinkageSystem.h"
 #include "ECS/System/LuaScriptingSystem.h"
 #include "ECS/System/JSScriptingSystem.h"
@@ -493,8 +491,6 @@ void AppLifecycle::onInit(App& app, const AppDesc& ci)
         FontManager::get()->loadFont(*render, runtimeFontPath, DEFAULT_RUNTIME_FONT_NAME, 16);
     }
 
-    auto mgr = UIManager::get();
-    (void)mgr;
 }
 
 void AppLifecycle::onPostInit(App& app)
