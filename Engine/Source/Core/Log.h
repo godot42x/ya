@@ -11,11 +11,11 @@
 
 struct Logger
 {
-    static ENGINE_API void init();
+    static YA_CORE_API void init();
 
-    static ENGINE_API logcc::SyncLogger& core();
-    static ENGINE_API logcc::SyncLogger& app();
-    static ENGINE_API logcc::SyncLogger& getLazyLog();
+    static YA_CORE_API logcc::SyncLogger& core();
+    static YA_CORE_API logcc::SyncLogger& app();
+    static YA_CORE_API logcc::SyncLogger& getLazyLog();
 };
 
 

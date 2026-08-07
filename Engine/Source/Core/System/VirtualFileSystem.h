@@ -56,8 +56,8 @@ struct VirtualFileSystem
     MulticastDelegate<void()> onMountPointChanged;
 
   public:
-    static ENGINE_API void              init();
-    static ENGINE_API VirtualFileSystem* get();
+    static YA_CORE_API void              init();
+    static YA_CORE_API VirtualFileSystem* get();
 
     VirtualFileSystem()
     {
@@ -148,12 +148,12 @@ struct VirtualFileSystem
         return std::filesystem::relative(p, to);
     }
 
-    ENGINE_API stdpath translatePath(std::string_view virtualPath) const;
-    ENGINE_API std::string toVfsPath(std::string_view path) const;
+    YA_CORE_API stdpath translatePath(std::string_view virtualPath) const;
+    YA_CORE_API std::string toVfsPath(std::string_view path) const;
 
 
-    ENGINE_API std::vector<uint8_t> loadFileToMemory(std::string_view filepath) const;
-    ENGINE_API bool                 readFileToString(std::string_view filepath, std::string& output) const;
+    YA_CORE_API std::vector<uint8_t> loadFileToMemory(std::string_view filepath) const;
+    YA_CORE_API bool                 readFileToString(std::string_view filepath, std::string& output) const;
 
     bool isFileExists(const std::string& filepath) const
     {

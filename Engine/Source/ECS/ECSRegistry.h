@@ -40,7 +40,7 @@ struct ECSRegistry
 
   public:
 
-    static ENGINE_API ECSRegistry& get();
+    static YA_ECS_API ECSRegistry& get();
 
 
 
@@ -123,7 +123,7 @@ struct ECSRegistry
         }
     }
 
-    ENGINE_API ~ECSRegistry()
+    YA_ECS_API ~ECSRegistry()
     {
         for (auto& [_, opsPtr] : _componentOps) {
             delete opsPtr;
@@ -159,8 +159,8 @@ struct ECSRegistry
         }
         return false;
     }
-    ENGINE_API bool hasComponent(ya::type_index_t typeIndex, const Scene& scene, entt::entity entity);
-    ENGINE_API bool hasComponent(FName name, const Scene& scene, entt::entity entity);
+    YA_ECS_API bool hasComponent(ya::type_index_t typeIndex, const Scene& scene, entt::entity entity);
+    YA_ECS_API bool hasComponent(FName name, const Scene& scene, entt::entity entity);
 
     void* getComponent(ya::type_index_t typeIndex, const entt::registry& registry, entt::entity entity)
     {
@@ -176,13 +176,13 @@ struct ECSRegistry
         }
         return nullptr;
     }
-    ENGINE_API void* getComponent(ya::type_index_t typeIndex, const Scene& scene, entt::entity entity);
-    ENGINE_API void* getComponent(FName name, const Scene& scene, entt::entity entity);
+    YA_ECS_API void* getComponent(ya::type_index_t typeIndex, const Scene& scene, entt::entity entity);
+    YA_ECS_API void* getComponent(FName name, const Scene& scene, entt::entity entity);
 
-    ENGINE_API void* addComponent(ya::type_index_t typeIndex, Scene& scene, entt::entity entity);
-    ENGINE_API void* addComponent(FName name, Scene& scene, entt::entity entity);
-    ENGINE_API bool removeComponent(ya::type_index_t typeIndex, Scene& scene, entt::entity entity);
-    ENGINE_API bool removeComponent(FName name, Scene& scene, entt::entity entity);
+    YA_ECS_API void* addComponent(ya::type_index_t typeIndex, Scene& scene, entt::entity entity);
+    YA_ECS_API void* addComponent(FName name, Scene& scene, entt::entity entity);
+    YA_ECS_API bool removeComponent(ya::type_index_t typeIndex, Scene& scene, entt::entity entity);
+    YA_ECS_API bool removeComponent(FName name, Scene& scene, entt::entity entity);
 
     /**
      * @brief Clone component from srcEntity to dstEntity.

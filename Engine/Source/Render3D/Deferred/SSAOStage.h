@@ -20,7 +20,7 @@ namespace ya
 struct IFrameBuffer;
 struct DeferredSSAOPassParams;
 
-struct ENGINE_API SSAOStage : public IRenderStage
+struct YA_RENDER_3D_API SSAOStage : public IRenderStage
 {
     using FrameData = slang_types::DeferredRender::SSAO::FrameData;
 

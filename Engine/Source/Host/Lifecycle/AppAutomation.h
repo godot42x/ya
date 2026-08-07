@@ -34,7 +34,7 @@ struct AppAutomationFrameContext
     uint64_t                                frameIndex                        = 0;
 };
 
-class ENGINE_API AppAutomation
+class YA_HOST_API AppAutomation
 {
   public:
     static bool isFrameAutomationEnabled(const App& app);

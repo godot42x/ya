@@ -57,7 +57,7 @@ struct RenderPipelineDebugOutputCatalog
     bool                         bPostprocessingEnabled      = false;
 };
 
-struct ENGINE_API RenderRuntime : IRenderRuntimeServices
+struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
 {
     // =========================================================================
     // Public protocol

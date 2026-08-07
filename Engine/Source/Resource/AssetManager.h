@@ -24,7 +24,7 @@ struct IRender;
 
 // Asset type taxonomy is defined once by EAssetType (Core/Common/AssetRef.h).
 
-class ENGINE_API AssetManager : public IResourceCache
+class YA_RESOURCE_API AssetManager : public IResourceCache
 {
   public:
     using TextureBatchMemoryHandle      = AssetTextureBatchMemoryHandle;

@@ -19,11 +19,12 @@ function ya_module(name, root, opts)
 
     target(name)
         set_kind("static")
-        -- Export plumbing: every module is compiled into the single shared
-        -- aggregate (ya-engine); consumers only see the import side. xmake
-        -- stamps both defines, so no module hand-writes dllexport/dllimport.
-        add_defines("BUILD_LIBRARY=1")
-        add_defines("BUILD_SHARED_YA=1", { public = true })
+        -- Export plumbing (see Core/Api.h): every module is compiled into the
+        -- single shared aggregate (ya-engine); consumers only see the import
+        -- side. xmake stamps both defines, so no module hand-writes
+        -- dllexport/dllimport.
+        add_defines("YA_SHARED=1")
+        add_defines("YA_MODULE_BUILD=1")
         add_includedirs(includeRoot, { public = true })
 
         if opts.shader_generated then

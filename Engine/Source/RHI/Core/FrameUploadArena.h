@@ -25,10 +25,10 @@ namespace ya
  * The arena deliberately does not infer backend alignment limits. Callers pass
  * the alignment required by the descriptor or storage-buffer contract.
  */
-class ENGINE_API FrameUploadArena
+class YA_RHI_API FrameUploadArena
 {
   public:
-    struct ENGINE_API Allocation
+    struct YA_RHI_API Allocation
     {
         stdptr<IBuffer> buffer;
         uint64_t         offset = 0;

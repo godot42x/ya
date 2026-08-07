@@ -16,7 +16,7 @@ namespace ya
 
 struct SceneBus : public disable_copy
 {
-    static ENGINE_API SceneBus& get();
+    static YA_ECS_API SceneBus& get();
 
     MulticastDelegate<void(entt::registry&, const entt::entity, ya::type_index_t)> onComponentRemoved;
 };

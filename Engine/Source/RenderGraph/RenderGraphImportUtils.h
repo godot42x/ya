@@ -25,29 +25,29 @@ struct RGBufferCopyParams
     std::optional<RGPassHandle> dependency{};
 };
 
-[[nodiscard]] ENGINE_API RGPassHandle addBufferCopyPass(
+[[nodiscard]] YA_RENDER_GRAPH_API RGPassHandle addBufferCopyPass(
     RenderGraph& graph,
     const RGBufferCopyParams& params);
 
-[[nodiscard]] ENGINE_API RGImportedTextureDesc makeImportedTextureDesc(
+[[nodiscard]] YA_RENDER_GRAPH_API RGImportedTextureDesc makeImportedTextureDesc(
     const Texture& texture,
     std::string_view label,
     EImageLayout::T finalLayout,
     EImageUsage::T requiredUsage = EImageUsage::None);
 
-[[nodiscard]] ENGINE_API RGImportedTextureDesc makeImportedTextureDesc(
+[[nodiscard]] YA_RENDER_GRAPH_API RGImportedTextureDesc makeImportedTextureDesc(
     const RenderImage& image,
     std::string_view label,
     EImageLayout::T finalLayout,
     EImageUsage::T requiredUsage = EImageUsage::None);
 
-[[nodiscard]] ENGINE_API RGImportedTextureDesc makeImportedTextureDesc(
+[[nodiscard]] YA_RENDER_GRAPH_API RGImportedTextureDesc makeImportedTextureDesc(
     const ImageResourceRef& resource,
     std::string_view label,
     EImageLayout::T finalLayout,
     EImageUsage::T requiredUsage = EImageUsage::None);
 
-[[nodiscard]] ENGINE_API RGImportedTextureDesc makeImportedTextureDesc(
+[[nodiscard]] YA_RENDER_GRAPH_API RGImportedTextureDesc makeImportedTextureDesc(
     const std::shared_ptr<IImage>& image,
     const std::shared_ptr<IImageView>& imageView,
     std::string_view label,
@@ -55,7 +55,7 @@ struct RGBufferCopyParams
     EImageUsage::T requiredUsage = EImageUsage::None,
     std::optional<Extent3D> logicalExtent = std::nullopt);
 
-[[nodiscard]] ENGINE_API RGImportedTextureDesc makeImportedSubresourceTextureDesc(
+[[nodiscard]] YA_RENDER_GRAPH_API RGImportedTextureDesc makeImportedSubresourceTextureDesc(
     const std::shared_ptr<IImage>& image,
     const std::shared_ptr<IImageView>& imageView,
     const ImageViewCreateInfo& viewDesc,
@@ -64,7 +64,7 @@ struct RGBufferCopyParams
     EImageLayout::T finalLayout,
     EImageUsage::T requiredUsage = EImageUsage::None);
 
-[[nodiscard]] ENGINE_API RGImportedTextureDesc makeImportedSubresourceTextureDesc(
+[[nodiscard]] YA_RENDER_GRAPH_API RGImportedTextureDesc makeImportedSubresourceTextureDesc(
     const std::shared_ptr<IImage>& image,
     const ImageViewCreateInfo& viewDesc,
     Extent3D logicalExtent,
@@ -72,14 +72,14 @@ struct RGBufferCopyParams
     EImageLayout::T finalLayout,
     EImageUsage::T requiredUsage = EImageUsage::None);
 
-[[nodiscard]] ENGINE_API RGImportedBufferDesc makeImportedBufferDesc(
+[[nodiscard]] YA_RENDER_GRAPH_API RGImportedBufferDesc makeImportedBufferDesc(
     const std::shared_ptr<IBuffer>& buffer,
     std::string_view label,
     BufferResourceState initialState,
     EBufferUsage requiredUsage = EBufferUsage::None,
     std::optional<BufferResourceState> finalState = std::nullopt);
 
-[[nodiscard]] ENGINE_API RGImportedBufferDesc makeHostWrittenImportedBufferDesc(
+[[nodiscard]] YA_RENDER_GRAPH_API RGImportedBufferDesc makeHostWrittenImportedBufferDesc(
     const std::shared_ptr<IBuffer>& buffer,
     std::string_view label,
     EBufferUsage requiredUsage = EBufferUsage::None,
@@ -87,7 +87,7 @@ struct RGBufferCopyParams
     uint64_t rangeSize = 0,
     std::optional<BufferResourceState> finalState = std::nullopt);
 
-[[nodiscard]] ENGINE_API RGImportedBufferDesc makeReadbackImportedBufferDesc(
+[[nodiscard]] YA_RENDER_GRAPH_API RGImportedBufferDesc makeReadbackImportedBufferDesc(
     const std::shared_ptr<IBuffer>& buffer,
     std::string_view label,
     EBufferUsage requiredUsage = EBufferUsage::TransferDst,

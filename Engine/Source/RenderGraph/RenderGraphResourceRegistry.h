@@ -71,14 +71,14 @@ class RenderGraphResourceRegistry
     explicit RenderGraphResourceRegistry(IRenderResourceFactory& factory)
         : _factory(factory)
     {}
-    ENGINE_API ~RenderGraphResourceRegistry();
+    YA_RENDER_GRAPH_API ~RenderGraphResourceRegistry();
 
-    ENGINE_API void sync(const RenderGraph& graph, const RGCompiledGraph* compiled = nullptr);
-    ENGINE_API void clear();
+    YA_RENDER_GRAPH_API void sync(const RenderGraph& graph, const RGCompiledGraph* compiled = nullptr);
+    YA_RENDER_GRAPH_API void clear();
 
-    [[nodiscard]] ENGINE_API const RenderImage* resolveTexture(RGTextureHandle handle) const;
-    [[nodiscard]] ENGINE_API std::shared_ptr<RenderImage> resolveTextureShared(RGTextureHandle handle) const;
-    [[nodiscard]] ENGINE_API IBuffer* resolveBuffer(RGBufferHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API const RenderImage* resolveTexture(RGTextureHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API std::shared_ptr<RenderImage> resolveTextureShared(RGTextureHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API IBuffer* resolveBuffer(RGBufferHandle handle) const;
     [[nodiscard]] const RGTransientBufferPoolDiagnostics& getTransientBufferPoolDiagnostics() const
     {
         return _transientPoolDiagnostics;

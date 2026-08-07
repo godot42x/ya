@@ -32,8 +32,8 @@
 namespace ya
 {
 
-extern ENGINE_API ClearValue colorClearValue;
-extern ENGINE_API ClearValue depthClearValue;
+extern YA_EDITOR_API ClearValue colorClearValue;
+extern YA_EDITOR_API ClearValue depthClearValue;
 
 inline constexpr const char* kCullModeLabels       = "None\0Front\0Back\0FrontAndBack\0";
 inline constexpr const char* kPolygonModeLabels    = "Fill\0Line\0Point\0";

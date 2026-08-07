@@ -8,7 +8,7 @@
 namespace ya
 {
 
-struct ENGINE_API TerrainComponent : public IComponent
+struct YA_ECS_API TerrainComponent : public IComponent
 {
     YA_REFLECT_BEGIN(TerrainComponent, IComponent)
     YA_REFLECT_FIELD(_heightMapRef)

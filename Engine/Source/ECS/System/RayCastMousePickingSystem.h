@@ -29,7 +29,7 @@ struct RaycastHit
  * Handles conversion from screen coordinates to world-space rays
  * and collision detection with scene entities.
  */
-class ENGINE_API RayCastMousePickingSystem
+class YA_ECS_API RayCastMousePickingSystem
 {
   public:
     RayCastMousePickingSystem()  = default;

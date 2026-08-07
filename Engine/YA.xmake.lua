@@ -121,8 +121,10 @@ end
 target("ya-engine")
 do
     set_kind("shared")
-    add_defines("BUILD_LIBRARY=1")
-    add_defines("BUILD_SHARED_YA=1", { public = true })
+    add_defines("YA_SHARED=1")
+    add_defines("YA_MODULE_BUILD=1")
+    -- Consumers (editor / examples / tests) link the import side.
+    add_defines("YA_SHARED=1", { public = true })
     before_build(function(target)
         check_runtime_source_isolation()
     end)
@@ -202,4 +204,3 @@ do
         os.rm("$(projectdir)/ya.*-*-*.log")
     end)
 end
-

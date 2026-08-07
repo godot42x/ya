@@ -76,7 +76,7 @@ struct DeferredRenderInitDesc
     IRenderRuntimeServices* runtimeServices = nullptr;
 };
 
-struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
+struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
 {
     friend class DeferredRenderPipelineTestAccess;
 

@@ -23,8 +23,8 @@ struct FProjectDescriptor
     std::unordered_map<std::string, std::vector<std::string>> inputActions;
     std::filesystem::path              sourcePath;
 
-    [[nodiscard]] static ENGINE_API FProjectDescriptor load(const std::filesystem::path& path);
-    [[nodiscard]] ENGINE_API std::filesystem::path resolvePath(const std::filesystem::path& value) const;
+    [[nodiscard]] static YA_CORE_API FProjectDescriptor load(const std::filesystem::path& path);
+    [[nodiscard]] YA_CORE_API std::filesystem::path resolvePath(const std::filesystem::path& value) const;
 };
 
 } // namespace ya

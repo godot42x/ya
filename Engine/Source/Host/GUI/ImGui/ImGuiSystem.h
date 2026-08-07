@@ -37,7 +37,7 @@ struct IImageView;
 struct Sampler;
 struct IWindowProvider;
 
-struct ENGINE_API ImGuiManager
+struct YA_HOST_API ImGuiManager
 {
   private:
     ImDrawData* _drawData    = nullptr;
@@ -90,9 +90,9 @@ using ImguiState = ImGuiManager;
 namespace ImGuiHelper
 {
 
-ENGINE_API void BeginFrame();
+YA_HOST_API void BeginFrame();
 
-ENGINE_API bool Image(IImageView*        imageView,
+YA_HOST_API bool Image(IImageView*        imageView,
                       Sampler*           sampler,
                       const std::string& alt,
                       const ImVec2&      size,
@@ -101,7 +101,7 @@ ENGINE_API bool Image(IImageView*        imageView,
                       const ImVec4&      tint   = ImVec4(1, 1, 1, 1),
                       const ImVec4&      border = ImVec4(0, 0, 0, 0));
 
-ENGINE_API void ClearImageCache();
+YA_HOST_API void ClearImageCache();
 
 } // namespace ImGuiHelper
 

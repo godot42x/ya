@@ -117,7 +117,7 @@ struct AppAutomationOptions
                                                        PostProcessingState::EToneMappingCurve& outValue);
 [[nodiscard]] bool tryParseLogLevel(const std::string& text, logcc::LogLevel::T& outValue);
 
-struct ENGINE_API AppDesc
+struct YA_HOST_API AppDesc
 {
     CliParams params = CliParams("Yet Another Game Engine", "Command line options");
 

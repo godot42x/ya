@@ -19,7 +19,7 @@ namespace detail
 template <template <typename> typename HashFunctor>
 struct MaterialFactoryInternal
 {
-    static ENGINE_API MaterialFactoryInternal *_instance;
+    static YA_RENDER_3D_API MaterialFactoryInternal *_instance;
 
     std::unordered_map<uint32_t, std::vector<std::shared_ptr<Material>>> _materials;
     std::unordered_map<FName, Material *>                                _materialNameMap;

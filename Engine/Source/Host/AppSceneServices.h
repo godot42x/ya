@@ -12,7 +12,7 @@ struct Scene;
 struct SceneManager;
 struct Entity;
 
-class ENGINE_API AppSceneServices
+class YA_HOST_API AppSceneServices
 {
   private:
     App* _app = nullptr;

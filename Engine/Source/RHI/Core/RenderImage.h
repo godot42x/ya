@@ -34,7 +34,7 @@ struct RenderImage
     [[nodiscard]] bool isValid() const { return image && defaultView; }
 };
 
-[[nodiscard]] ENGINE_API std::shared_ptr<RenderImage> createRenderImage(
+[[nodiscard]] YA_RHI_API std::shared_ptr<RenderImage> createRenderImage(
     IRenderResourceFactory& factory,
     const RenderImageDesc& desc);
 

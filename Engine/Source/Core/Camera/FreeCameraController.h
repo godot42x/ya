@@ -13,7 +13,7 @@ namespace ya
 {
 
 
-struct ENGINE_API FreeCameraController : public CameraController
+struct YA_CORE_API FreeCameraController : public CameraController
 {
     float _moveSpeed     = 5.0f;  // Units per second
     float _rotationSpeed = 45.0f; // Degrees per mouse unit

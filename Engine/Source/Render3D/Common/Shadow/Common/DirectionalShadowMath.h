@@ -15,7 +15,7 @@ struct CascadeData
     uint32_t                                        count = 1;
 };
 
-[[nodiscard]] ENGINE_API CascadeData buildCascades(const glm::vec3& lightDirection,
+[[nodiscard]] YA_RENDER_3D_API CascadeData buildCascades(const glm::vec3& lightDirection,
                                         const glm::mat4& cameraView,
                                         const glm::mat4& cameraProjection,
                                         float            shadowDistance,

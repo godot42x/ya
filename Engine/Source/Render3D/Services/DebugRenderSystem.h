@@ -9,7 +9,7 @@ namespace ya
 
 struct RenderRuntime;
 
-struct ENGINE_API DebugRenderSystem
+struct YA_RENDER_3D_API DebugRenderSystem
 {
     static DebugRenderSystem& get();
 

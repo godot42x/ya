@@ -27,7 +27,7 @@ struct SceneManager;
  * All Jolt state lives behind the World pimpl so this header (and every TU
  * that includes it) stays free of Jolt headers and its global allocator hooks.
  */
-struct ENGINE_API PhysicsSystem : public ISystem
+struct YA_PHYSICS_API PhysicsSystem : public ISystem
 {
   public:
     struct World;

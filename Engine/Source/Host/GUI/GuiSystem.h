@@ -7,7 +7,7 @@
 namespace ya
 {
 
-class ENGINE_API GuiSystem
+class YA_HOST_API GuiSystem
 {
   public:
     static GuiSystem& get();

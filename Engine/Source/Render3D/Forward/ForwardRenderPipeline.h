@@ -37,7 +37,7 @@ enum class EForwardPendingResourceRefresh : uint32_t
 struct Texture;
 struct Sampler;
 
-struct ENGINE_API ForwardRenderPipeline : public IRenderPipeline
+struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
 {
     static constexpr auto VIEWPORT_COLOR_FORMAT              = EFormat::R16G16B16A16_SFLOAT;
     static constexpr auto POSTPROCESS_COLOR_FORMAT           = EFormat::R8G8B8A8_UNORM;

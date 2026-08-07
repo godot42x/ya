@@ -58,11 +58,11 @@ class NameRegistry
     mutable std::shared_mutex                                                 _mutex;
 
   public:
-    static ENGINE_API NameRegistry& get();
+    static YA_CORE_API NameRegistry& get();
     static NameRegistry* getP() { return &get(); }
 
-    ENGINE_API index_t           indexing(std::string_view name);
-    ENGINE_API std::string_view  view(index_t index) const;
+    YA_CORE_API index_t           indexing(std::string_view name);
+    YA_CORE_API std::string_view  view(index_t index) const;
         const char*       c_str(index_t index) const { return view(index).data(); }
         std::string       toString(index_t index) const { return std::string(view(index)); }
 };

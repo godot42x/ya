@@ -27,7 +27,7 @@ struct Mesh;
 ///
 /// Uses the frame+light DS from GBufferStage (set 0), its own GBuffer texture DS (set 1),
 /// and the environment lighting DS from RenderRuntime (set 2).
-struct ENGINE_API LightStage : public IRenderStage
+struct YA_RENDER_3D_API LightStage : public IRenderStage
 {
     struct EnvironmentLightingInput
     {

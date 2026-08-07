@@ -24,7 +24,7 @@ struct JsonMethodInvoker;
 }
 
 
-struct ENGINE_API ReflectionSerializer
+struct YA_CORE_API ReflectionSerializer
 {
     // MethodReflection bridges reflected member functions to JSON and needs
     // the generic type <-> JSON conversion primitives.

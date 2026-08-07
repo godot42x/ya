@@ -42,7 +42,7 @@ struct TextureUploadRequest
 ///
 /// Explicitly depends on IRender for the resource factory and isolate-command
 /// submission; it never reaches for a global render or App.
-struct ENGINE_API TextureUploadService
+struct YA_RHI_API TextureUploadService
 {
     /// Records and submits one upload. Returns false when the command scope
     /// cannot be opened or recording fails.

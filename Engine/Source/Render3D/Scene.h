@@ -22,7 +22,7 @@
 
 namespace ya
 {
-struct ENGINE_API [[refl]] Scene
+struct YA_RENDER_3D_API [[refl]] Scene
 {
     friend struct Entity;
 

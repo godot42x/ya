@@ -70,7 +70,7 @@ struct FRender2dContext
     FRender2dCamera     cam;
 };
 
-struct ENGINE_API FQuadRender
+struct YA_UI_API FQuadRender
 {
     struct Vertex
     {
@@ -271,7 +271,7 @@ struct ENGINE_API FQuadRender
  * of the world-space sprite pipeline. Used for debug overlays such as
  * physics collision boxes.
  */
-struct ENGINE_API FLineRender
+struct YA_UI_API FLineRender
 {
     struct Vertex
     {
@@ -336,7 +336,7 @@ struct ENGINE_API FLineRender
     void addWireSphere(const glm::vec3& center, float radius, const glm::vec4& color);
 };
 
-struct ENGINE_API Render2D
+struct YA_UI_API Render2D
 {
     static FQuadRender*  quadData;
     static FLineRender*  lineData;

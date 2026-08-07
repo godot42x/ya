@@ -25,8 +25,8 @@
 namespace ya
 {
 
-extern ENGINE_API ClearValue colorClearValue;
-extern ENGINE_API ClearValue depthClearValue;
+extern YA_HOST_API ClearValue colorClearValue;
+extern YA_HOST_API ClearValue depthClearValue;
 
 struct Scene;
 enum class EUIRouteResult : uint8_t;
@@ -52,7 +52,7 @@ enum AppMode : int
     Drawing,
 };
 
-struct ENGINE_API App
+struct YA_HOST_API App
 {
     friend class AppLifecycle;
     friend class AppFrameLoop;

@@ -23,7 +23,7 @@ struct TerrainMeshBuildDesc
     std::span<const float> heights;
 };
 
-[[nodiscard]] ENGINE_API uint32_t clampTerrainGridResolution(uint32_t value);
-[[nodiscard]] ENGINE_API EngineMeshData buildTerrainMeshData(const TerrainMeshBuildDesc& desc);
+[[nodiscard]] YA_RENDER_3D_API uint32_t clampTerrainGridResolution(uint32_t value);
+[[nodiscard]] YA_RENDER_3D_API EngineMeshData buildTerrainMeshData(const TerrainMeshBuildDesc& desc);
 
 } // namespace ya

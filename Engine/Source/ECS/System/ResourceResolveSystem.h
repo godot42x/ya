@@ -233,7 +233,7 @@ struct EnvironmentLightingSceneResources
 };
 
 
-struct ENGINE_API ResourceResolveSystem : public ISystem
+struct YA_ECS_API ResourceResolveSystem : public ISystem
 {
 
   private:

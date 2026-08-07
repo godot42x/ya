@@ -108,23 +108,23 @@ struct ConfigManager : public disable_copy
     };
 
 
-    static ENGINE_API ConfigManager& get();
+    static YA_HOST_API ConfigManager& get();
 
-    ENGINE_API void init();
-    ENGINE_API void shutdown();
-    ENGINE_API void flushAll();
-    ENGINE_API void markDirty(const std::string& docName);
+    YA_HOST_API void init();
+    YA_HOST_API void shutdown();
+    YA_HOST_API void flushAll();
+    YA_HOST_API void markDirty(const std::string& docName);
 
-    ENGINE_API Document& openDocument(const std::string& name, const std::string& path, Config::OpenDocumentOptions options = {});
-    ENGINE_API bool      closeDocument(const std::string& name, bool bFlush = true);
+    YA_HOST_API Document& openDocument(const std::string& name, const std::string& path, Config::OpenDocumentOptions options = {});
+    YA_HOST_API bool      closeDocument(const std::string& name, bool bFlush = true);
 
-    [[nodiscard]] ENGINE_API bool hasDocument(const std::string& name) const;
-    ENGINE_API Document*          findDocument(const std::string& name);
-    ENGINE_API const Document*    findDocument(const std::string& name) const;
+    [[nodiscard]] YA_HOST_API bool hasDocument(const std::string& name) const;
+    YA_HOST_API Document*          findDocument(const std::string& name);
+    YA_HOST_API const Document*    findDocument(const std::string& name) const;
 
-    [[nodiscard]] ENGINE_API bool hasValue(const std::string& docName, std::string_view key) const;
-    ENGINE_API void               removeValue(const std::string& docName, std::string_view key);
-    ENGINE_API bool               pruneEmptyParents(const std::string& docName, std::string_view key);
+    [[nodiscard]] YA_HOST_API bool hasValue(const std::string& docName, std::string_view key) const;
+    YA_HOST_API void               removeValue(const std::string& docName, std::string_view key);
+    YA_HOST_API bool               pruneEmptyParents(const std::string& docName, std::string_view key);
 
     template <typename T>
     bool tryGet(const std::string& docName, std::string_view key, T& out) const
@@ -172,15 +172,15 @@ struct ConfigManager : public disable_copy
         }
     }
 
-    ENGINE_API bool flushDocument(const std::string& docName);
+    YA_HOST_API bool flushDocument(const std::string& docName);
 
   private:
     std::unordered_map<std::string, Document> _documents;
     bool                                      _initialized = false;
 
-    [[nodiscard]] ENGINE_API const nlohmann::json* findNode(const std::string& docName, std::string_view key) const;
-    ENGINE_API nlohmann::json*                     ensureNode(const std::string& docName, std::string_view key);
-    static ENGINE_API nlohmann::json::json_pointer toJsonPointer(std::string_view key);
+    [[nodiscard]] YA_HOST_API const nlohmann::json* findNode(const std::string& docName, std::string_view key) const;
+    YA_HOST_API nlohmann::json*                     ensureNode(const std::string& docName, std::string_view key);
+    static YA_HOST_API nlohmann::json::json_pointer toJsonPointer(std::string_view key);
 };
 
 } // namespace ya

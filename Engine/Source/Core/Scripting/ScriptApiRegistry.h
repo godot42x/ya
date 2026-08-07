@@ -26,7 +26,7 @@ struct Scene;
  * registrations in ScriptApiCore.cpp build on the existing ECSRegistry
  * (name -> component ops) and ReflectionSerializer (component <-> JSON).
  */
-struct ENGINE_API ScriptApiRegistry
+struct YA_CORE_API ScriptApiRegistry
 {
     using Json     = nlohmann::json;
     using Callable = std::function<Json(const Json& args)>;
@@ -80,6 +80,6 @@ struct ENGINE_API ScriptApiRegistry
 };
 
 /// Idempotent registration of the core authoring API (scene / entity / component).
-ENGINE_API void registerCoreScriptApis(ScriptApiRegistry& registry);
+YA_CORE_API void registerCoreScriptApis(ScriptApiRegistry& registry);
 
 } // namespace ya

@@ -20,7 +20,7 @@ struct DebugRenderSystem;
 struct RenderRuntime;
 struct AppRenderState;
 
-class ENGINE_API AppRenderServices
+class YA_HOST_API AppRenderServices
 {
   public:
     AppRenderServices() = default;

@@ -107,7 +107,7 @@ struct StateTraits<EEnvironmentLightingPrefilterResolveState>
     }
 };
 
-struct ENGINE_API EnvironmentLightingComponent : public IComponent
+struct YA_ECS_API EnvironmentLightingComponent : public IComponent
 {
     struct CubemapSource
     {

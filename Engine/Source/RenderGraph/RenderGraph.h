@@ -399,7 +399,7 @@ struct RGTopologyDescription
     std::vector<RGTopologyDependencyInfo> dependencies;
 };
 
-class ENGINE_API RenderGraphExecutionResult
+class YA_RENDER_GRAPH_API RenderGraphExecutionResult
 {
   private:
     std::unordered_map<std::string, std::shared_ptr<RenderImage>> _exportedTextures;
@@ -427,10 +427,10 @@ class RGPassContext
     {}
 
     [[nodiscard]] const RGPass& getPass() const { return _pass; }
-    [[nodiscard]] ENGINE_API const RGTextureResource& getTexture(RGTextureHandle handle) const;
-    [[nodiscard]] ENGINE_API const RGBufferResource& getBuffer(RGBufferHandle handle) const;
-    [[nodiscard]] ENGINE_API const RGTextureDesc& getTextureDesc(RGTextureHandle handle) const;
-    [[nodiscard]] ENGINE_API const RGBufferDesc& getBufferDesc(RGBufferHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API const RGTextureResource& getTexture(RGTextureHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API const RGBufferResource& getBuffer(RGBufferHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API const RGTextureDesc& getTextureDesc(RGTextureHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API const RGBufferDesc& getBufferDesc(RGBufferHandle handle) const;
 };
 
 class RGRenderContext
@@ -487,14 +487,14 @@ class RGRenderContext
     const RGCompiledPassPlan*          _compiledPassPlan = nullptr;
     mutable std::optional<RenderingInfo> _activeRenderingInfo;
 
-    [[nodiscard]] ENGINE_API const RGTextureUsage* findDeclaredTextureUsage(RGTextureHandle handle) const;
-    [[nodiscard]] ENGINE_API const RGBufferUsage* findDeclaredBufferUsage(RGBufferHandle handle) const;
-    ENGINE_API void assertTextureDeclared(RGTextureHandle handle, const char* operation) const;
-    ENGINE_API void assertBufferDeclared(RGBufferHandle handle, const char* operation) const;
-    ENGINE_API void assertTextureAccess(RGTextureHandle handle,
+    [[nodiscard]] YA_RENDER_GRAPH_API const RGTextureUsage* findDeclaredTextureUsage(RGTextureHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API const RGBufferUsage* findDeclaredBufferUsage(RGBufferHandle handle) const;
+    YA_RENDER_GRAPH_API void assertTextureDeclared(RGTextureHandle handle, const char* operation) const;
+    YA_RENDER_GRAPH_API void assertBufferDeclared(RGBufferHandle handle, const char* operation) const;
+    YA_RENDER_GRAPH_API void assertTextureAccess(RGTextureHandle handle,
                                        std::initializer_list<ERGPassResourceAccess> allowed,
                                        const char* operation) const;
-    ENGINE_API void assertBufferAccess(RGBufferHandle handle,
+    YA_RENDER_GRAPH_API void assertBufferAccess(RGBufferHandle handle,
                                       std::initializer_list<ERGBufferAccess> allowed,
                                       const char* operation) const;
 
@@ -526,10 +526,10 @@ class RGRenderContext
             : _registry(registry), _graph(graph), _pass(pass), _cmdBuf(cmdBuf)
         {}
 
-        [[nodiscard]] ENGINE_API std::optional<DescriptorImageInfo> resolveTextureDescriptor(
+        [[nodiscard]] YA_RENDER_GRAPH_API std::optional<DescriptorImageInfo> resolveTextureDescriptor(
             RGTextureHandle handle,
             Sampler*        sampler) const;
-        [[nodiscard]] ENGINE_API std::optional<DescriptorBufferInfo> resolveBufferDescriptor(
+        [[nodiscard]] YA_RENDER_GRAPH_API std::optional<DescriptorBufferInfo> resolveBufferDescriptor(
             RGBufferHandle handle) const;
 
       private:
@@ -548,28 +548,28 @@ class RGRenderContext
     {
         return RGPassBindingContext(_registry, _graph, _pass, _cmdBuf);
     }
-    [[nodiscard]] ENGINE_API const RGTextureResource& getTexture(RGTextureHandle handle) const;
-    [[nodiscard]] ENGINE_API const RGBufferResource& getBuffer(RGBufferHandle handle) const;
-    [[nodiscard]] ENGINE_API const RGTextureDesc& getTextureDesc(RGTextureHandle handle) const;
-    [[nodiscard]] ENGINE_API const RGBufferDesc& getBufferDesc(RGBufferHandle handle) const;
-    [[nodiscard]] ENGINE_API bool hasDeclaredTextureUsage(RGTextureHandle handle) const;
-    [[nodiscard]] ENGINE_API bool hasDeclaredBufferUsage(RGBufferHandle handle) const;
-    [[nodiscard]] ENGINE_API bool hasDeclaredTextureAccess(RGTextureHandle handle, ERGPassResourceAccess access) const;
-    [[nodiscard]] ENGINE_API bool hasDeclaredBufferAccess(RGBufferHandle handle, ERGBufferAccess access) const;
-    [[nodiscard]] ENGINE_API const RenderImage* resolveTexture(RGTextureHandle handle) const;
-    [[nodiscard]] ENGINE_API IBuffer* resolveBuffer(RGBufferHandle handle) const;
-    [[nodiscard]] ENGINE_API const RGRasterPassDesc* getDeclaredRasterPlan() const;
-    [[nodiscard]] ENGINE_API RasterPassExecutionParams getRasterPassExecutionParams() const;
-    ENGINE_API void beginRasterRendering(const RasterRenderingDesc& desc) const;
-    ENGINE_API void beginDeclaredRasterRendering() const;
-    ENGINE_API void beginColorRendering(const ColorRenderingDesc& desc) const;
-    ENGINE_API void endRendering() const;
-    ENGINE_API void copyBuffer(RGBufferHandle src, RGBufferHandle dst, uint64_t size, uint64_t srcOffset = 0, uint64_t dstOffset = 0) const;
-    ENGINE_API void copyTextureToBuffer(
+    [[nodiscard]] YA_RENDER_GRAPH_API const RGTextureResource& getTexture(RGTextureHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API const RGBufferResource& getBuffer(RGBufferHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API const RGTextureDesc& getTextureDesc(RGTextureHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API const RGBufferDesc& getBufferDesc(RGBufferHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API bool hasDeclaredTextureUsage(RGTextureHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API bool hasDeclaredBufferUsage(RGBufferHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API bool hasDeclaredTextureAccess(RGTextureHandle handle, ERGPassResourceAccess access) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API bool hasDeclaredBufferAccess(RGBufferHandle handle, ERGBufferAccess access) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API const RenderImage* resolveTexture(RGTextureHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API IBuffer* resolveBuffer(RGBufferHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API const RGRasterPassDesc* getDeclaredRasterPlan() const;
+    [[nodiscard]] YA_RENDER_GRAPH_API RasterPassExecutionParams getRasterPassExecutionParams() const;
+    YA_RENDER_GRAPH_API void beginRasterRendering(const RasterRenderingDesc& desc) const;
+    YA_RENDER_GRAPH_API void beginDeclaredRasterRendering() const;
+    YA_RENDER_GRAPH_API void beginColorRendering(const ColorRenderingDesc& desc) const;
+    YA_RENDER_GRAPH_API void endRendering() const;
+    YA_RENDER_GRAPH_API void copyBuffer(RGBufferHandle src, RGBufferHandle dst, uint64_t size, uint64_t srcOffset = 0, uint64_t dstOffset = 0) const;
+    YA_RENDER_GRAPH_API void copyTextureToBuffer(
         RGTextureHandle src,
         RGBufferHandle  dst,
         const std::vector<BufferImageCopy>& regions) const;
-    ENGINE_API void copyTexture(RGTextureHandle src, RGTextureHandle dst, const ImageCopy& region) const;
+    YA_RENDER_GRAPH_API void copyTexture(RGTextureHandle src, RGTextureHandle dst, const ImageCopy& region) const;
 };
 
 class RGPassBuilder
@@ -585,23 +585,23 @@ class RGPassBuilder
         : _graph(graph), _passIndex(passIndex)
     {}
 
-    ENGINE_API void read(RGTextureHandle handle);
-    ENGINE_API void write(RGTextureHandle handle);
-    ENGINE_API void uniformRead(RGBufferHandle handle, RGBufferRange range = {});
-    ENGINE_API void storageRead(RGBufferHandle handle, RGBufferRange range = {});
-    ENGINE_API void storageWrite(RGBufferHandle handle, RGBufferRange range = {});
-    ENGINE_API void storageReadWrite(RGBufferHandle handle, RGBufferRange range = {});
-    ENGINE_API void indirectRead(RGBufferHandle handle, RGBufferRange range = {});
-    ENGINE_API void transferSrc(RGBufferHandle handle, RGBufferRange range = {});
-    ENGINE_API void transferDst(RGBufferHandle handle, RGBufferRange range = {});
-    ENGINE_API void dependsOn(RGPassHandle handle);
-    ENGINE_API void declareCompute();
-    ENGINE_API void declareCopy();
-    ENGINE_API void declareRaster(const RGRasterPassDesc& desc);
-    ENGINE_API void useColorAttachment(RGTextureHandle handle);
-    ENGINE_API void useDepthAttachment(RGTextureHandle handle);
-    ENGINE_API void transferSrc(RGTextureHandle handle);
-    ENGINE_API void transferDst(RGTextureHandle handle);
+    YA_RENDER_GRAPH_API void read(RGTextureHandle handle);
+    YA_RENDER_GRAPH_API void write(RGTextureHandle handle);
+    YA_RENDER_GRAPH_API void uniformRead(RGBufferHandle handle, RGBufferRange range = {});
+    YA_RENDER_GRAPH_API void storageRead(RGBufferHandle handle, RGBufferRange range = {});
+    YA_RENDER_GRAPH_API void storageWrite(RGBufferHandle handle, RGBufferRange range = {});
+    YA_RENDER_GRAPH_API void storageReadWrite(RGBufferHandle handle, RGBufferRange range = {});
+    YA_RENDER_GRAPH_API void indirectRead(RGBufferHandle handle, RGBufferRange range = {});
+    YA_RENDER_GRAPH_API void transferSrc(RGBufferHandle handle, RGBufferRange range = {});
+    YA_RENDER_GRAPH_API void transferDst(RGBufferHandle handle, RGBufferRange range = {});
+    YA_RENDER_GRAPH_API void dependsOn(RGPassHandle handle);
+    YA_RENDER_GRAPH_API void declareCompute();
+    YA_RENDER_GRAPH_API void declareCopy();
+    YA_RENDER_GRAPH_API void declareRaster(const RGRasterPassDesc& desc);
+    YA_RENDER_GRAPH_API void useColorAttachment(RGTextureHandle handle);
+    YA_RENDER_GRAPH_API void useDepthAttachment(RGTextureHandle handle);
+    YA_RENDER_GRAPH_API void transferSrc(RGTextureHandle handle);
+    YA_RENDER_GRAPH_API void transferDst(RGTextureHandle handle);
 };
 
 class RenderGraph
@@ -632,27 +632,27 @@ class RenderGraph
     }
 
   public:
-    [[nodiscard]] ENGINE_API RGTextureHandle createTexture(const RGTextureDesc& desc, ERGResourceLifetime lifetime = ERGResourceLifetime::Transient);
-    [[nodiscard]] ENGINE_API RGTextureHandle createPersistentTexture(const RGTextureDesc& desc, const RGPersistentTextureKey& key);
-    [[nodiscard]] ENGINE_API RGTextureHandle importTexture(const RGImportedTextureDesc& desc);
+    [[nodiscard]] YA_RENDER_GRAPH_API RGTextureHandle createTexture(const RGTextureDesc& desc, ERGResourceLifetime lifetime = ERGResourceLifetime::Transient);
+    [[nodiscard]] YA_RENDER_GRAPH_API RGTextureHandle createPersistentTexture(const RGTextureDesc& desc, const RGPersistentTextureKey& key);
+    [[nodiscard]] YA_RENDER_GRAPH_API RGTextureHandle importTexture(const RGImportedTextureDesc& desc);
 
-    [[nodiscard]] ENGINE_API RGBufferHandle createBuffer(const RGBufferDesc& desc, ERGResourceLifetime lifetime = ERGResourceLifetime::Transient);
-    [[nodiscard]] ENGINE_API RGBufferHandle createPersistentBuffer(const RGBufferDesc& desc, const RGPersistentBufferKey& key);
-    [[nodiscard]] ENGINE_API RGBufferHandle importBuffer(const RGImportedBufferDesc& desc);
+    [[nodiscard]] YA_RENDER_GRAPH_API RGBufferHandle createBuffer(const RGBufferDesc& desc, ERGResourceLifetime lifetime = ERGResourceLifetime::Transient);
+    [[nodiscard]] YA_RENDER_GRAPH_API RGBufferHandle createPersistentBuffer(const RGBufferDesc& desc, const RGPersistentBufferKey& key);
+    [[nodiscard]] YA_RENDER_GRAPH_API RGBufferHandle importBuffer(const RGImportedBufferDesc& desc);
 
-    [[nodiscard]] ENGINE_API const RGTextureResource* getTexture(RGTextureHandle handle) const;
-    [[nodiscard]] ENGINE_API const RGBufferResource* getBuffer(RGBufferHandle handle) const;
-    [[nodiscard]] ENGINE_API const RGPass* getPass(RGPassHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API const RGTextureResource* getTexture(RGTextureHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API const RGBufferResource* getBuffer(RGBufferHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API const RGPass* getPass(RGPassHandle handle) const;
 
-    [[nodiscard]] ENGINE_API RGPassHandle addPass(
+    [[nodiscard]] YA_RENDER_GRAPH_API RGPassHandle addPass(
         const std::string& name,
         const std::function<void(RGPassBuilder&)>& setup,
         const std::function<void(RGRenderContext&)>& execute = {});
-    [[nodiscard]] ENGINE_API RGCompiledGraph compile() const;
-    [[nodiscard]] ENGINE_API RGTopologyDescription describeCompiledTopology(const RGCompiledGraph& compiled) const;
-    [[nodiscard]] ENGINE_API std::optional<RGPassContext> createPassContext(RGPassHandle handle) const;
-    [[nodiscard]] ENGINE_API std::string debugDump(const RGCompiledGraph& compiled) const;
-    ENGINE_API void exportTexture(RGTextureHandle handle, std::string name);
+    [[nodiscard]] YA_RENDER_GRAPH_API RGCompiledGraph compile() const;
+    [[nodiscard]] YA_RENDER_GRAPH_API RGTopologyDescription describeCompiledTopology(const RGCompiledGraph& compiled) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API std::optional<RGPassContext> createPassContext(RGPassHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API std::string debugDump(const RGCompiledGraph& compiled) const;
+    YA_RENDER_GRAPH_API void exportTexture(RGTextureHandle handle, std::string name);
 
     [[nodiscard]] const std::vector<RGTextureResource>& getTextures() const { return _textures; }
     [[nodiscard]] const std::vector<RGBufferResource>& getBuffers() const { return _buffers; }

@@ -23,7 +23,7 @@ namespace ya
  * 4. 支持资源引用（Texture, Mesh 等）
  */
 
-struct ENGINE_API SceneSerializer
+struct YA_RENDER_3D_API SceneSerializer
 {
   private:
     Scene *_scene = nullptr;

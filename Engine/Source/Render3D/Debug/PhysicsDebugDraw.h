@@ -14,6 +14,6 @@ struct Scene;
  * editor viewport composition pass). Shapes and sizes stay in sync with the
  * body creation rules in PhysicsSystem via PhysicsBodyComponent constants.
  */
-ENGINE_API void drawPhysicsCollisionDebug(Scene& scene);
+YA_RENDER_3D_API void drawPhysicsCollisionDebug(Scene& scene);
 
 } // namespace ya

@@ -11,7 +11,7 @@ struct App;
 struct AppDesc;
 struct Scene;
 
-class ENGINE_API AppLifecycle
+class YA_HOST_API AppLifecycle
 {
   public:
     static void init(App& app, AppDesc ci);

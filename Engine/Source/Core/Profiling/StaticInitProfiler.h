@@ -41,8 +41,8 @@ class StaticInitProfiler
 #endif
     }
 
-    static ENGINE_API void ensureStarted();
-    static ENGINE_API void reset();
+    static YA_CORE_API void ensureStarted();
+    static YA_CORE_API void reset();
 
 
     // ========================================================================
@@ -50,26 +50,26 @@ class StaticInitProfiler
     // ========================================================================
 
     /// 记录静态初始化开始时间（编译器保证最早执行）
-    static ENGINE_API void recordStart();
+    static YA_CORE_API void recordStart();
 
     /// 记录静态初始化结束时间（编译器保证最晚执行）
-    static ENGINE_API void recordEnd();
+    static YA_CORE_API void recordEnd();
 
     /// 获取总耗时（纳秒）
-    static ENGINE_API uint64_t getTotalNanoseconds();
+    static YA_CORE_API uint64_t getTotalNanoseconds();
 
     /// 获取总耗时（毫秒）
-    static ENGINE_API double getTotalMilliseconds();
+    static YA_CORE_API double getTotalMilliseconds();
 
     /// 打印统计报告
-    static ENGINE_API void printReport();
+    static YA_CORE_API void printReport();
 
     // ========================================================================
     // 单个变量耗时统计（可选）
     // ========================================================================
 
     /// 记录单个变量初始化耗时
-    static ENGINE_API void recordVariable(const std::string &name, uint64_t nanoseconds);
+    static YA_CORE_API void recordVariable(const std::string &name, uint64_t nanoseconds);
 
     /// 获取所有变量的初始化记录
     struct VariableRecord
@@ -78,7 +78,7 @@ class StaticInitProfiler
         uint64_t    nanoseconds;
         double      milliseconds;
     };
-    static ENGINE_API std::vector<VariableRecord> getVariableRecords();
+    static YA_CORE_API std::vector<VariableRecord> getVariableRecords();
 
   private:
     // 原子变量存储时间戳（线程安全）
@@ -112,8 +112,8 @@ class StaticInitProfiler
 class StaticInitTimer
 {
   public:
-    explicit ENGINE_API StaticInitTimer(const std::string &varName);
-    ENGINE_API ~StaticInitTimer();
+    explicit YA_CORE_API StaticInitTimer(const std::string &varName);
+    YA_CORE_API ~StaticInitTimer();
 
   private:
     std::string                                    _varName;

@@ -25,10 +25,10 @@ struct FModuleManifest
     std::vector<FModuleDependency> dependencies;
     std::filesystem::path          sourcePath;
 
-    [[nodiscard]] static ENGINE_API FModuleManifest load(const std::filesystem::path& path);
+    [[nodiscard]] static YA_CORE_API FModuleManifest load(const std::filesystem::path& path);
 };
 
-[[nodiscard]] ENGINE_API const char* moduleKindName(EModuleKind kind);
+[[nodiscard]] YA_CORE_API const char* moduleKindName(EModuleKind kind);
 
 } // namespace ya
 

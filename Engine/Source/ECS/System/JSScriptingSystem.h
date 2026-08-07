@@ -21,7 +21,7 @@ namespace ya
  * The quickjs runtime lives behind a pimpl so this header stays free of
  * quickjs headers.
  */
-struct ENGINE_API JSScriptingSystem : public ISystem
+struct YA_ECS_API JSScriptingSystem : public ISystem
 {
     struct EvalResult
     {

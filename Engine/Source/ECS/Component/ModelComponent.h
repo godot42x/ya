@@ -39,7 +39,7 @@ enum class EModelMaterialType : uint8_t
 };
 
 
-struct ENGINE_API ModelComponent : public IComponent
+struct YA_ECS_API ModelComponent : public IComponent
 {
     YA_REFLECT_BEGIN(ModelComponent)
     YA_REFLECT_FIELD(_modelRef)

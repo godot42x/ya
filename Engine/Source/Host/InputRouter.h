@@ -41,7 +41,7 @@ struct FInputReply
     std::optional<FPointerCaptureRequest> pointerCapture;
 };
 
-class ENGINE_API InputRouter;
+class YA_HOST_API InputRouter;
 
 struct FInputRouteContext
 {
@@ -57,7 +57,7 @@ struct IInputNode
     virtual void                     cancelInput(FInputRouteContext& context, EInputCancelReason reason) = 0;
 };
 
-class ENGINE_API GameInputNode final : public IInputNode
+class YA_HOST_API GameInputNode final : public IInputNode
 {
   private:
     InputManager* _inputManager = nullptr;
@@ -72,7 +72,7 @@ class ENGINE_API GameInputNode final : public IInputNode
     void                     cancelInput(FInputRouteContext& context, EInputCancelReason reason) override;
 };
 
-class ENGINE_API InputRouter
+class YA_HOST_API InputRouter
 {
   public:
     class FNodeRegistration
@@ -92,11 +92,11 @@ class ENGINE_API InputRouter
         FNodeRegistration(const FNodeRegistration&)            = delete;
         FNodeRegistration& operator=(const FNodeRegistration&) = delete;
 
-        ENGINE_API FNodeRegistration(FNodeRegistration&& other) noexcept;
-        ENGINE_API FNodeRegistration& operator=(FNodeRegistration&& other) noexcept;
-        ENGINE_API ~FNodeRegistration();
+        YA_HOST_API FNodeRegistration(FNodeRegistration&& other) noexcept;
+        YA_HOST_API FNodeRegistration& operator=(FNodeRegistration&& other) noexcept;
+        YA_HOST_API ~FNodeRegistration();
 
-        ENGINE_API void reset();
+        YA_HOST_API void reset();
     };
 
   private:

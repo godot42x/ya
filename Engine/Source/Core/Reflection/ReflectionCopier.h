@@ -12,7 +12,7 @@ struct Property;
 namespace ya
 {
 
-struct ENGINE_API ReflectionCopier
+struct YA_CORE_API ReflectionCopier
 {
     static bool copyByRuntimeReflection(void* dstObj, const void* srcObj, type_index_t typeIndex, const std::string& className = "");
 

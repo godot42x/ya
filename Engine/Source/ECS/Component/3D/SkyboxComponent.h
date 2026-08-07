@@ -43,7 +43,7 @@ struct StateTraits<ESkyboxResolveState>
     }
 };
 
-struct ENGINE_API SkyboxComponent : public IComponent
+struct YA_ECS_API SkyboxComponent : public IComponent
 {
     struct CubemapSource
     {

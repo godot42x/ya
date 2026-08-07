@@ -10,7 +10,7 @@
 namespace ya
 {
 
-class ENGINE_API WindowManager
+class YA_HOST_API WindowManager
 {
   public:
     WindowManager() = default;

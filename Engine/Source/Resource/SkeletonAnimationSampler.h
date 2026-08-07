@@ -26,7 +26,7 @@ struct SkeletonPose
     std::vector<uint32_t>  animatedNodeIndices;
 };
 
-struct ENGINE_API SkeletonAnimationSampler
+struct YA_RESOURCE_API SkeletonAnimationSampler
 {
     static double wrapTime(double time, double duration);
 

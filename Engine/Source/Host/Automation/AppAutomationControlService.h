@@ -24,7 +24,7 @@ struct ICommandBuffer;
 struct IRender;
 struct RenderImage;
 
-class ENGINE_API AppAutomationControlService
+class YA_HOST_API AppAutomationControlService
 {
   public:
     AppAutomationControlService() = default;

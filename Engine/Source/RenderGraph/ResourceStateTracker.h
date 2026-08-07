@@ -27,7 +27,7 @@ struct ImageLayoutExpectationMismatch
     ImageSubresourceRange range{};
 };
 
-class ENGINE_API ResourceStateTracker
+class YA_RENDER_GRAPH_API ResourceStateTracker
 {
   private:
     struct ImageSubresourceKey

@@ -168,7 +168,7 @@ struct Font
     }
 };
 
-struct ENGINE_API FontManager : public IResourceCache
+struct YA_UI_API FontManager : public IResourceCache
 {
 
   private:

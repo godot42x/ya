@@ -11,7 +11,7 @@
 namespace ya
 {
 
-class ENGINE_API RenderGraphExecutor
+class YA_RENDER_GRAPH_API RenderGraphExecutor
 {
   private:
     std::unordered_map<IBuffer*, std::vector<BufferResourceState>> _bufferStates;

@@ -75,7 +75,7 @@ enum class EUIVisibility : uint8_t
     SelfHitTestInvisible // renders; the whole subtree is not hittable
 };
 
-struct ENGINE_API Node2D : public Node
+struct YA_UI_SCENE_API Node2D : public Node
 {
     YA_REFLECT_BEGIN(Node2D, Node)
     YA_REFLECT_FIELD(_position)
@@ -225,7 +225,7 @@ struct ENGINE_API Node2D : public Node
 
 /// Canvas root: fills the viewport / assigned area. Children are laid out in
 /// its space.
-struct ENGINE_API UICanvasNode : public Node2D
+struct YA_UI_SCENE_API UICanvasNode : public Node2D
 {
     YA_REFLECT_BEGIN(UICanvasNode, Node2D)
     YA_REFLECT_END()
@@ -240,7 +240,7 @@ struct ENGINE_API UICanvasNode : public Node2D
 };
 
 /// Flat panel: solid color and/or image, optional 9-slice border.
-struct ENGINE_API UIPanelNode : public Node2D
+struct YA_UI_SCENE_API UIPanelNode : public Node2D
 {
     YA_REFLECT_BEGIN(UIPanelNode, Node2D)
     YA_REFLECT_FIELD(_color)
@@ -263,7 +263,7 @@ struct ENGINE_API UIPanelNode : public Node2D
 };
 
 /// Text element rendered through the font atlas.
-struct ENGINE_API UITextNode : public Node2D
+struct YA_UI_SCENE_API UITextNode : public Node2D
 {
     YA_REFLECT_BEGIN(UITextNode, Node2D)
     YA_REFLECT_FIELD(_text)
@@ -292,7 +292,7 @@ struct ENGINE_API UITextNode : public Node2D
 
 /// Button: panel style with hover/pressed states. Click callback is runtime-only
 /// (not serialized); hit testing is driven by the UI walker.
-struct ENGINE_API UIButtonNode : public Node2D
+struct YA_UI_SCENE_API UIButtonNode : public Node2D
 {
     YA_REFLECT_BEGIN(UIButtonNode, Node2D)
     YA_REFLECT_FIELD(_normalColor)
@@ -331,7 +331,7 @@ enum class EUIBoxLayout : uint8_t
 /// Box container: arranges children left-to-right (Horizontal) or top-to-bottom
 /// (Vertical) by their desired sizes, with uniform spacing and padding.
 /// Children can be clipped to the content rect via _bClipChildren.
-struct ENGINE_API UIContainerNode : public Node2D
+struct YA_UI_SCENE_API UIContainerNode : public Node2D
 {
     YA_REFLECT_BEGIN(UIContainerNode, Node2D)
     YA_REFLECT_FIELD(_direction)

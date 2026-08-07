@@ -39,7 +39,7 @@ struct AppScreenshotCaptureState
     bool                               bPresentationCopyRecorded     = false;
 };
 
-class ENGINE_API AppScreenshotCapture
+class YA_HOST_API AppScreenshotCapture
 {
   public:
     static bool request(IRender* render,

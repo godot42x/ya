@@ -102,7 +102,7 @@ enum T : uint32_t
     virtual uint32_t getCategory() const override { return category; }
 
 
-class ENGINE_API Event
+class YA_CORE_API Event
 {
   public:
     virtual ~Event() = default;
@@ -157,13 +157,13 @@ class ENGINE_API Event
 
 // MARK: ApplicationEvent
 
-struct ENGINE_API AppEvent : public Event
+struct YA_CORE_API AppEvent : public Event
 {
   public:
     EVENT_CLASS_CATEGORY(EEventCategory::Application)
 };
 
-struct ENGINE_API AppQuitEvent : public AppEvent
+struct YA_CORE_API AppQuitEvent : public AppEvent
 {
   public:
     EVENT_CLASS_CATEGORY(EEventCategory::Application)
@@ -171,7 +171,7 @@ struct ENGINE_API AppQuitEvent : public AppEvent
 };
 
 
-struct ENGINE_API WindowEvent : public Event
+struct YA_CORE_API WindowEvent : public Event
 {
     uint32_t _windowID;
 
@@ -184,7 +184,7 @@ struct ENGINE_API WindowEvent : public Event
     EVENT_CLASS_CATEGORY(EEventCategory::Application)
 };
 
-class ENGINE_API WindowResizeEvent : public WindowEvent
+class YA_CORE_API WindowResizeEvent : public WindowEvent
 {
   private:
     int32_t _h, _w;
@@ -207,7 +207,7 @@ class ENGINE_API WindowResizeEvent : public WindowEvent
 
 
 
-struct ENGINE_API WindowCloseEvent : public WindowEvent
+struct YA_CORE_API WindowCloseEvent : public WindowEvent
 {
 
     WindowCloseEvent(uint32_t windowID) : WindowEvent(windowID) {}
@@ -293,7 +293,7 @@ struct WindowMinimizeEvent : public WindowEvent
 
 
 // MARK: KeyEvent
-struct ENGINE_API KeyEvent : public Event
+struct YA_CORE_API KeyEvent : public Event
 {
     uint32_t _mod;
 
@@ -311,7 +311,7 @@ struct ENGINE_API KeyEvent : public Event
 
 
 
-struct ENGINE_API KeyPressedEvent : public KeyEvent
+struct YA_CORE_API KeyPressedEvent : public KeyEvent
 {
     EVENT_CLASS_CATEGORY(EEventCategory::Keyboard | EEventCategory::Input);
     EVENT_CLASS_TYPE(KeyPressed)
@@ -328,7 +328,7 @@ struct ENGINE_API KeyPressedEvent : public KeyEvent
     }
 };
 
-class ENGINE_API KeyReleasedEvent : public KeyEvent
+class YA_CORE_API KeyReleasedEvent : public KeyEvent
 {
   public:
 
@@ -341,7 +341,7 @@ class ENGINE_API KeyReleasedEvent : public KeyEvent
   protected:
 };
 
-class ENGINE_API KeyTypedEvent : public KeyEvent
+class YA_CORE_API KeyTypedEvent : public KeyEvent
 {
   private:
     std::string _text;
@@ -362,7 +362,7 @@ class ENGINE_API KeyTypedEvent : public KeyEvent
 
 // MARK: MouseEvent
 
-class ENGINE_API MouseMoveEvent : public Event
+class YA_CORE_API MouseMoveEvent : public Event
 {
   private:
     float _mouseX, _mouseY;
@@ -394,7 +394,7 @@ class ENGINE_API MouseMoveEvent : public Event
     EVENT_CLASS_CATEGORY(EEventCategory::Mouse | EEventCategory::Input);
 };
 
-struct ENGINE_API MouseScrolledEvent : public Event
+struct YA_CORE_API MouseScrolledEvent : public Event
 {
     float _offsetX, _offsetY;
 
@@ -413,7 +413,7 @@ struct ENGINE_API MouseScrolledEvent : public Event
 
 
 
-class ENGINE_API MouseButtonEvent : public Event
+class YA_CORE_API MouseButtonEvent : public Event
 {
   public:
     inline int GetMouseButton() const { return m_Button; }
@@ -426,7 +426,7 @@ class ENGINE_API MouseButtonEvent : public Event
     int m_Button;
 };
 
-class ENGINE_API MouseButtonPressedEvent : public MouseButtonEvent
+class YA_CORE_API MouseButtonPressedEvent : public MouseButtonEvent
 {
   public:
     explicit MouseButtonPressedEvent(int keycode) : MouseButtonEvent(keycode) {};
@@ -437,7 +437,7 @@ class ENGINE_API MouseButtonPressedEvent : public MouseButtonEvent
 };
 
 
-class ENGINE_API MouseButtonReleasedEvent : public MouseButtonEvent
+class YA_CORE_API MouseButtonReleasedEvent : public MouseButtonEvent
 {
   public:
     explicit MouseButtonReleasedEvent(int keycode) : MouseButtonEvent(keycode) {};

@@ -13,7 +13,7 @@ namespace ya
 {
 struct Scene;
 
-struct ENGINE_API Entity
+struct YA_ECS_API Entity
 {
   private:
     entt::entity    _entityHandle = {entt::null};

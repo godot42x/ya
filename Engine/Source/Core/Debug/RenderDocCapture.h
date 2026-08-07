@@ -10,7 +10,7 @@ namespace ya
 {
 
 
-struct ENGINE_API RenderDocCapture
+struct YA_CORE_API RenderDocCapture
 {
     struct CaptureResult
     {

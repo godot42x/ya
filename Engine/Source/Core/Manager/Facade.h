@@ -15,7 +15,7 @@ struct FacadeMode
     ClockManager clockManager;
 };
 
-extern ENGINE_API FacadeMode Facade;
+extern YA_CORE_API FacadeMode Facade;
 
 
 }; // namespace ya

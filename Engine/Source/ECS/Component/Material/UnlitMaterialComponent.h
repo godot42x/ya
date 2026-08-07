@@ -40,7 +40,7 @@ enum class EMaterialResolveState : uint8_t;
  * Holds material parameters and texture slots for serialization.
  * Runtime material instance is managed separately.
  */
-struct ENGINE_API UnlitMaterialComponent : public MaterialComponent<UnlitMaterial>
+struct YA_ECS_API UnlitMaterialComponent : public MaterialComponent<UnlitMaterial>
 {
     struct AuthoringParams
     {

@@ -12,12 +12,12 @@ struct AppAutomationShadowOverrides;
 namespace shadow_settings
 {
 
-ENGINE_API void           loadAutomationOverridesFromConfig(AppAutomationShadowOverrides& overrides);
-ENGINE_API void           applyAutomationOverrides(const AppAutomationShadowOverrides& overrides, ShadowSettings& shadowSettings);
-[[nodiscard]] ENGINE_API bool hasRuntimeSettings();
-[[nodiscard]] ENGINE_API ShadowSettings loadSettingsFromDocument(const std::string& documentName, const ShadowSettings& baseline);
-[[nodiscard]] ENGINE_API ShadowSettings loadRuntimeSettings(const ShadowSettings& baseline);
-ENGINE_API void saveRuntimeSettings(const ShadowSettings& shadowSettings);
+YA_RENDER_3D_API void           loadAutomationOverridesFromConfig(AppAutomationShadowOverrides& overrides);
+YA_RENDER_3D_API void           applyAutomationOverrides(const AppAutomationShadowOverrides& overrides, ShadowSettings& shadowSettings);
+[[nodiscard]] YA_RENDER_3D_API bool hasRuntimeSettings();
+[[nodiscard]] YA_RENDER_3D_API ShadowSettings loadSettingsFromDocument(const std::string& documentName, const ShadowSettings& baseline);
+[[nodiscard]] YA_RENDER_3D_API ShadowSettings loadRuntimeSettings(const ShadowSettings& baseline);
+YA_RENDER_3D_API void saveRuntimeSettings(const ShadowSettings& shadowSettings);
 
 } // namespace shadow_settings
 

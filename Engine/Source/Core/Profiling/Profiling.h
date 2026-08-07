@@ -124,32 +124,32 @@ struct RuntimeSessionPaths
 #endif
 }
 
-[[nodiscard]] ENGINE_API const char* getCompileModeLabel();
+[[nodiscard]] YA_CORE_API const char* getCompileModeLabel();
 
-[[nodiscard]] ENGINE_API RuntimeState getRuntimeState();
-ENGINE_API void                       setRuntimeState(const RuntimeState& state);
+[[nodiscard]] YA_CORE_API RuntimeState getRuntimeState();
+YA_CORE_API void                       setRuntimeState(const RuntimeState& state);
 
-[[nodiscard]] ENGINE_API bool isCpuTraceEnabled();
-ENGINE_API void               setCpuTraceEnabled(bool enabled);
+[[nodiscard]] YA_CORE_API bool isCpuTraceEnabled();
+YA_CORE_API void               setCpuTraceEnabled(bool enabled);
 
-[[nodiscard]] ENGINE_API bool isPerfMetricsEnabled();
-ENGINE_API void               setPerfMetricsEnabled(bool enabled);
+[[nodiscard]] YA_CORE_API bool isPerfMetricsEnabled();
+YA_CORE_API void               setPerfMetricsEnabled(bool enabled);
 
-[[nodiscard]] ENGINE_API bool isStaticInitEnabled();
-ENGINE_API void               setStaticInitEnabled(bool enabled);
+[[nodiscard]] YA_CORE_API bool isStaticInitEnabled();
+YA_CORE_API void               setStaticInitEnabled(bool enabled);
 
-ENGINE_API void beginRuntimeSession(const AppDesc& appDesc);
-ENGINE_API void endRuntimeSession();
+YA_CORE_API void beginRuntimeSession(const AppDesc& appDesc);
+YA_CORE_API void endRuntimeSession();
 
-ENGINE_API void applyAppOverrides(AppDesc& appDesc);
+YA_CORE_API void applyAppOverrides(AppDesc& appDesc);
 
-[[nodiscard]] ENGINE_API RuntimeSessionPaths getRuntimeSessionPaths();
-ENGINE_API void                              setGpuCapturePath(std::string path);
-ENGINE_API void                              setPassSummaryPath(std::string path);
-ENGINE_API void                              setScreenshotPath(std::string path);
-ENGINE_API void                              flushRuntimeArtifacts();
+[[nodiscard]] YA_CORE_API RuntimeSessionPaths getRuntimeSessionPaths();
+YA_CORE_API void                              setGpuCapturePath(std::string path);
+YA_CORE_API void                              setPassSummaryPath(std::string path);
+YA_CORE_API void                              setScreenshotPath(std::string path);
+YA_CORE_API void                              flushRuntimeArtifacts();
 
-ENGINE_API Instrumentor& cpuTrace();
-ENGINE_API PerfState&    metrics();
+YA_CORE_API Instrumentor& cpuTrace();
+YA_CORE_API PerfState&    metrics();
 
 } // namespace ya::profiling

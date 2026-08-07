@@ -8,7 +8,7 @@
 namespace ya
 {
 
-struct ENGINE_API FPSControl
+struct YA_HOST_API FPSControl
 {
     float fps     = 0.0f;
     bool  bEnable = false;
