@@ -35,14 +35,6 @@ struct ENGINE_API Node : public disable_copy
     std::vector<Node *> _children;
     Entity             *_entity = nullptr;
 
-    // TODO: reduce the dynamical cast from Node to Node3D!
-    enum
-    {
-        Ty_Normal,
-        Ty_2D,
-        Ty_3D,
-    };
-
   public:
     explicit Node(std::string name, Entity *entity) : _name(std::move(name)), _entity(entity) {}
     virtual ~Node() = default;
@@ -82,6 +74,10 @@ struct ENGINE_API Node : public disable_copy
     [[nodiscard]] Entity       *getEntity() { return _entity; }
     [[nodiscard]] const Entity *getEntity() const { return _entity; }
     // void                        setEntity(Entity *entity) { _entity = entity; }
+
+    /// True for Node2D (UI) nodes. Used by UI walkers to avoid dynamic_cast
+    /// when traversing the mixed scene tree.
+    [[nodiscard]] virtual bool is2D() const { return false; }
 
     /**
      * @brief Called when this node's parent changes

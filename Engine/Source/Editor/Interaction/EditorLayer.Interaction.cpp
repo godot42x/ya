@@ -8,6 +8,7 @@
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/RenderImage.h"
 #include "Render/Render.h"
+#include "Runtime/Rendering/Common/UISceneRenderer.h"
 #include "Scene/Node2D.h"
 
 #include <cmath>
@@ -473,31 +474,11 @@ void EditorLayer::pickNode2D(float viewportLocalX, float viewportLocalY)
         return;
     }
 
-    // Topmost-first hit test (same ordering as UISceneRenderer): collect all
-    // Node2D under the scene root, sort by zOrder ascending, test reversed.
-    std::vector<Node2D*> nodes;
-    std::function<void(Node*)> collect = [&](Node* node) {
-        if (!node) {
-            return;
-        }
-        for (Node* child : node->getChildren()) {
-            if (auto* node2D = dynamic_cast<Node2D*>(child)) {
-                nodes.push_back(node2D);
-            }
-            collect(child);
-        }
-    };
-    collect(scene->getRootNode());
-    std::stable_sort(nodes.begin(), nodes.end(), [](const Node2D* a, const Node2D* b) {
-        return a->_zOrder < b->_zOrder;
-    });
-
-    for (auto it = nodes.rbegin(); it != nodes.rend(); ++it) {
-        if ((*it)->hitTest(canvasPoint)) {
-            _sceneHierarchyPanel.setSelectedNode2D(*it);
-            YA_CORE_INFO("Picked Node2D: {}", (*it)->getName());
-            return;
-        }
+    // Topmost-first pick, shared walker with UISceneRenderer (paint order).
+    if (Node2D* picked = UISceneRenderer::pickNodeAt(scene->getRootNode(), canvasPoint)) {
+        _sceneHierarchyPanel.setSelectedNode2D(picked);
+        YA_CORE_INFO("Picked Node2D: {}", picked->getName());
+        return;
     }
 
     _sceneHierarchyPanel.setSelectedNode2D(nullptr);

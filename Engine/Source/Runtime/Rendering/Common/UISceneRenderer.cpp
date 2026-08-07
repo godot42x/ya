@@ -1,7 +1,5 @@
 #include "Runtime/Rendering/Common/UISceneRenderer.h"
 
-#include "Render/2D/Render2D.h"
-#include "Resource/Font/FontManager.h"
 #include "Scene/Node2D.h"
 
 #include <algorithm>
@@ -12,99 +10,131 @@ namespace ya
 namespace
 {
 
-void collectNode2D(Node* node, std::vector<Node2D*>& out)
+constexpr float kCanvasMinSize = 1.0f;
+
+/// Children in paint order at any tree level: stable sort by zOrder ascending
+/// (non-2D children key 0). Matches Node2D::getChildrenInPaintOrder.
+std::vector<Node*> childrenInPaintOrder(Node* node)
+{
+    std::vector<Node*> children = node->getChildren();
+    std::stable_sort(children.begin(), children.end(), [](const Node* a, const Node* b) {
+        const int zA = a->is2D() ? static_cast<const Node2D*>(a)->_zOrder : 0;
+        const int zB = b->is2D() ? static_cast<const Node2D*>(b)->_zOrder : 0;
+        return zA < zB;
+    });
+    return children;
+}
+
+/// Layout + paint a 2D root against the canvas rect; non-2D branches are
+/// traversed with the same rect (Node3D ancestors contribute no 2D transform).
+void renderSubtree(Node* node, const Rect2D& canvasRect, const UIPaintContext& ctx)
+{
+    for (Node* child : childrenInPaintOrder(node)) {
+        if (!child) {
+            continue;
+        }
+        if (child->is2D()) {
+            auto* node2D = static_cast<Node2D*>(child);
+            node2D->layout(canvasRect);
+            node2D->paint(ctx);
+        }
+        else {
+            renderSubtree(child, canvasRect, ctx);
+        }
+    }
+}
+
+/// Clear transient input state on every Node2D (e.g. button hover).
+void resetHoverSubtree(Node* node)
 {
     if (!node) {
         return;
     }
+    if (node->is2D()) {
+        static_cast<Node2D*>(node)->resetHoverState();
+    }
     for (Node* child : node->getChildren()) {
-        if (auto* node2D = dynamic_cast<Node2D*>(child)) {
-            out.push_back(node2D);
-        }
-        collectNode2D(child, out);
+        resetHoverSubtree(child);
     }
 }
 
-std::vector<Node2D*> collectSorted(Node* sceneRoot)
+/// Topmost-first hit test: children (zOrder descending) before self.
+bool hitTestSubtree(Node* node, const Event& event, const UIEventContext& ctx)
 {
-    std::vector<Node2D*> nodes;
-    collectNode2D(sceneRoot, nodes);
-    // Stable sort: lower zOrder first (drawn earlier), DFS order preserved for
-    // equal zOrder, so later siblings draw on top of earlier ones.
-    std::stable_sort(nodes.begin(), nodes.end(), [](const Node2D* a, const Node2D* b) {
-        return a->_zOrder < b->_zOrder;
-    });
-    return nodes;
+    if (!node) {
+        return false;
+    }
+    if (node->is2D()) {
+        auto* node2D = static_cast<Node2D*>(node);
+        if (!node2D->_visible) {
+            return false; // Subtree cull, matching paint.
+        }
+        const auto children = childrenInPaintOrder(node);
+        for (auto it = children.rbegin(); it != children.rend(); ++it) {
+            if (hitTestSubtree(*it, event, ctx)) {
+                return true;
+            }
+        }
+        return node2D->handleInputEvent(event, ctx);
+    }
+    const auto children = childrenInPaintOrder(node);
+    for (auto it = children.rbegin(); it != children.rend(); ++it) {
+        if (hitTestSubtree(*it, event, ctx)) {
+            return true;
+        }
+    }
+    return false;
 }
 
-glm::vec2 transformCanvasPoint(const glm::vec2& point, const UICanvasTransform& canvas)
+/// Topmost-first pick of any visible Node2D under the canvas point.
+Node2D* pickSubtree(Node* node, const UIEventContext& ctx)
 {
-    return point * canvas.zoom + canvas.pan;
-}
-
-glm::vec2 transformCanvasSize(const glm::vec2& size, const UICanvasTransform& canvas)
-{
-    return size * canvas.zoom;
-}
-
-void drawNode2D(Node2D* node, const glm::vec2& uiScale, const UICanvasTransform& canvas)
-{
-    if (!node || !node->_visible) {
-        return;
+    if (!node) {
+        return nullptr;
     }
-
-    const glm::vec2 pos  = transformCanvasPoint(node->getScreenPosition(), canvas) * uiScale;
-    const glm::vec2 size = transformCanvasSize(node->_size, canvas) * uiScale;
-    const glm::vec3 screenPos(pos, 0.0f);
-
-    if (auto* panel = dynamic_cast<UIPanelNode*>(node)) {
-        Texture* texture = panel->_image.isLoaded() ? panel->_image.getShared().get() : nullptr;
-        Render2D::makeSprite(screenPos, size, texture, panel->_color);
-        return;
+    if (node->is2D()) {
+        auto* node2D = static_cast<Node2D*>(node);
+        if (!node2D->_visible) {
+            return nullptr;
+        }
+        const auto children = childrenInPaintOrder(node);
+        for (auto it = children.rbegin(); it != children.rend(); ++it) {
+            if (Node2D* hit = pickSubtree(*it, ctx)) {
+                return hit;
+            }
+        }
+        return node2D->hitTestLayoutRect(ctx.canvasPoint) ? node2D : nullptr;
     }
-
-    if (auto* text = dynamic_cast<UITextNode*>(node)) {
-        auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, text->_fontSize);
-        if (!font) {
-            return;
+    const auto children = childrenInPaintOrder(node);
+    for (auto it = children.rbegin(); it != children.rend(); ++it) {
+        if (Node2D* hit = pickSubtree(*it, ctx)) {
+            return hit;
         }
-        glm::vec2 drawPos = pos;
-        const float textWidth = font->measureText(text->_text);
-        const float textScale = canvas.zoom * uiScale.x;
-        if (text->_hAlign == EUIAlignH::Center) {
-            drawPos.x += (size.x - textWidth * textScale) * 0.5f;
-        }
-        else if (text->_hAlign == EUIAlignH::Right) {
-            drawPos.x += size.x - textWidth * textScale;
-        }
-        // VAlign: approximate with the font line height for v1.
-        if (text->_vAlign == EUIAlignV::Center) {
-            drawPos.y += (size.y - font->lineHeight * canvas.zoom * uiScale.y) * 0.5f;
-        }
-        else if (text->_vAlign == EUIAlignV::Bottom) {
-            drawPos.y += size.y - font->lineHeight * canvas.zoom * uiScale.y;
-        }
-        Render2D::makeText(text->_text, glm::vec3(drawPos, 0.0f), text->_color, font.get());
-        return;
     }
-
-    if (auto* button = dynamic_cast<UIButtonNode*>(node)) {
-        const glm::vec4 color = button->_bPressed
-                                    ? button->_pressedColor
-                                    : (button->_bHovered ? button->_hoveredColor : button->_normalColor);
-        Render2D::makeSprite(screenPos, size, nullptr, color);
-        return;
-    }
+    return nullptr;
 }
 
 } // namespace
 
-void UISceneRenderer::render(Node* sceneRoot, const glm::vec2& uiScale, const UICanvasTransform& canvas)
+void UISceneRenderer::render(Node* sceneRoot,
+                             const glm::vec2& uiScale,
+                             const UICanvasTransform& canvas,
+                             const Extent2D& logicalViewportExtent)
 {
-    const auto nodes = collectSorted(sceneRoot);
-    for (Node2D* node : nodes) {
-        drawNode2D(node, uiScale, canvas);
+    if (!sceneRoot) {
+        return;
     }
+
+    const Rect2D canvasRect{
+        .pos = {0.0f, 0.0f},
+        .extent = {std::max(static_cast<float>(logicalViewportExtent.width), kCanvasMinSize),
+                   std::max(static_cast<float>(logicalViewportExtent.height), kCanvasMinSize)},
+    };
+    const UIPaintContext ctx{
+        .uiScale = uiScale,
+        .canvas  = canvas,
+    };
+    renderSubtree(sceneRoot, canvasRect, ctx);
 }
 
 bool UISceneRenderer::handleEvent(const Event& event, const UIAppCtx& ctx, Node* sceneRoot)
@@ -120,53 +150,29 @@ bool UISceneRenderer::handleEvent(const Event& event, const UIAppCtx& ctx, Node*
         return false;
     }
 
-    auto nodes = collectSorted(sceneRoot);
-    if (nodes.empty()) {
-        return false;
-    }
-
+    // Viewport-local point in canvas logical space (uiScale conversion is a
+    // known follow-up, see game-ui-rendering plan §5.4).
     const glm::vec2 point = ctx.lastMousePos - ctx.viewportRect.pos;
 
     if (eventType == EEvent::MouseMoved) {
-        for (Node2D* node : nodes) {
-            if (auto* button = dynamic_cast<UIButtonNode*>(node)) {
-                button->_bHovered = false;
-            }
-        }
+        resetHoverSubtree(sceneRoot);
     }
 
-    // Topmost first (draw order reversed). Only interactive nodes (buttons, v1)
-    // consume events; panels/canvas/text are passive so a full-screen canvas
-    // does not block gameplay clicks.
-    for (auto it = nodes.rbegin(); it != nodes.rend(); ++it) {
-        Node2D* node = *it;
-        if (!node->_visible || !node->hitTest(point)) {
-            continue;
-        }
+    const UIEventContext uiCtx{
+        .canvasPoint = point,
+    };
+    return hitTestSubtree(sceneRoot, event, uiCtx);
+}
 
-        if (auto* button = dynamic_cast<UIButtonNode*>(node)) {
-            if (eventType == EEvent::MouseButtonPressed) {
-                button->_bPressed = true;
-            }
-            else if (eventType == EEvent::MouseButtonReleased) {
-                if (button->_bPressed) {
-                    button->_bPressed = false;
-                    if (button->hitTest(point)) {
-                        YA_CORE_INFO("UIButton '{}' clicked", button->getName());
-                        if (button->_onClick) {
-                            button->_onClick();
-                        }
-                    }
-                }
-            }
-            else if (eventType == EEvent::MouseMoved) {
-                button->_bHovered = true;
-            }
-            return true;
-        }
+Node2D* UISceneRenderer::pickNodeAt(Node* sceneRoot, const glm::vec2& canvasPoint)
+{
+    if (!sceneRoot) {
+        return nullptr;
     }
-
-    return false;
+    const UIEventContext ctx{
+        .canvasPoint = canvasPoint,
+    };
+    return pickSubtree(sceneRoot, ctx);
 }
 
 } // namespace ya

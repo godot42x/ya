@@ -184,7 +184,8 @@ void recordUICompositorPass(ICommandBuffer* cmdBuf,
                             UICanvasTransform{
                                 .pan  = canvasPan,
                                 .zoom = std::max(canvasZoom, 0.01f),
-                            });
+                            },
+                            logicalViewportExtent);
     Render2D::end();
 
     cmdBuf->endRendering();

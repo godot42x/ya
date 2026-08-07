@@ -21,6 +21,19 @@ UIAppCtx makeUICtx(float mouseX, float mouseY)
     return ctx;
 }
 
+/// Mirror UISceneRenderer::render's layout pass without a Render2D session.
+void layoutRoots(Node* node, const Rect2D& canvasRect)
+{
+    for (Node* child : node->getChildren()) {
+        if (child->is2D()) {
+            static_cast<Node2D*>(child)->layout(canvasRect);
+        }
+        else {
+            layoutRoots(child, canvasRect);
+        }
+    }
+}
+
 } // namespace
 
 TEST(UISceneRendererTest, ButtonClickInsideConsumesAndFires)
@@ -36,6 +49,7 @@ TEST(UISceneRendererTest, ButtonClickInsideConsumesAndFires)
 
     int clickCount = 0;
     button->_onClick = [&] { ++clickCount; };
+    layoutRoots(scene.getRootNode(), {.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}});
 
     // Move outside: not consumed, no hover.
     EXPECT_FALSE(UISceneRenderer::handleEvent(MouseMoveEvent(10.0f, 10.0f), makeUICtx(10.0f, 10.0f), scene.getRootNode()));
@@ -64,6 +78,7 @@ TEST(UISceneRendererTest, PressOutsideDoesNotArmButton)
 
     int clickCount = 0;
     button->_onClick = [&] { ++clickCount; };
+    layoutRoots(scene.getRootNode(), {.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}});
 
     // Press outside: not consumed and the button is not armed.
     EXPECT_FALSE(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0), makeUICtx(10.0f, 10.0f), scene.getRootNode()));
@@ -82,6 +97,7 @@ TEST(UISceneRendererTest, InvisibleNodeDoesNotConsume)
     button->_position = {100.0f, 100.0f};
     button->_size     = {80.0f, 32.0f};
     button->_visible  = false;
+    layoutRoots(scene.getRootNode(), {.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}});
 
     EXPECT_FALSE(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0), makeUICtx(120.0f, 110.0f), scene.getRootNode()));
     EXPECT_FALSE(button->_bPressed);
@@ -99,6 +115,7 @@ TEST(UISceneRendererTest, TopmostZOrderConsumesFirst)
     front->_position = {0.0f, 0.0f};
     front->_size     = {80.0f, 32.0f};
     front->_zOrder   = 10;
+    layoutRoots(scene.getRootNode(), {.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}});
 
     EXPECT_TRUE(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0), makeUICtx(120.0f, 110.0f), scene.getRootNode()));
     EXPECT_FALSE(behind->_bPressed);
