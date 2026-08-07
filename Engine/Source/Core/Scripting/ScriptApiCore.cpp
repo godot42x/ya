@@ -427,13 +427,39 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
 
     registry.registerFunction(
         "node.move",
-        "Moves a node under a new parent. Args: {path, parent_path?, index?} (root when parent_path omitted).",
+        "Moves a node. Args: {path, parent_path?, index?} (root when parent_path omitted), "
+        "or relative placement {path, before_path} / {path, after_path} against a sibling.",
         Json{{"path", {{"type", "string"}}},
              {"parent_path", {{"type", "string"}}},
-             {"index", {{"type", "integer"}}}},
+             {"index", {{"type", "integer"}}},
+             {"before_path", {{"type", "string"}}},
+             {"after_path", {{"type", "string"}}}},
         [](const Json& args) -> Json {
             Scene& scene = requireActiveScene();
             Node*  node  = requireNodeByPath(scene, args);
+
+            // Relative placement against a sibling (same parent).
+            if (args.contains("before_path") || args.contains("after_path")) {
+                const bool     bBefore  = args.contains("before_path");
+                const std::string relPath = args.value(bBefore ? "before_path" : "after_path", "");
+                Node* const    sibling = scene.findNodeByPath(relPath);
+                if (!sibling) {
+                    throw Error(std::format("sibling path not found: {}", relPath));
+                }
+                Node* parent = sibling->getParent() ? sibling->getParent() : scene.getRootNode();
+                size_t index = parent->getChildIndex(sibling);
+                if (index == Node::NPOS) {
+                    index = parent->getChildCount();
+                }
+                else if (!bBefore) {
+                    ++index;
+                }
+                if (!scene.moveNode(node, parent, index)) {
+                    throw Error(std::format("failed to move node '{}'", args.at("path").get<std::string>()));
+                }
+                return Json{{"path", scene.getNodePath(node)}};
+            }
+
             Node*  parent = nullptr;
             if (const auto it = args.find("parent_path"); it != args.end() && !it->is_null()) {
                 parent = scene.findNodeByPath(it->get<std::string>());
