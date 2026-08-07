@@ -3,9 +3,10 @@
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
-#include "Core/UI/UIManager.h"
 #include "Render/2D/Render2D.h"
 #include "Resource/Font/FontManager.h"
+#include "Runtime/Rendering/Common/UISceneRenderer.h"
+#include "Scene/Node2D.h"
 
 namespace ya
 {
@@ -68,7 +69,29 @@ void recordRenderViewportOverlayPass(const FrameContext& frameCtx,
     }
 
     Render2D::onRender();
-    UIManager::get()->render();
+    Render2D::end();
+}
+
+void recordRenderUIPass(Node* uiSceneRoot, ICommandBuffer* cmdBuf, const Extent2D& viewportExtent)
+{
+    if (!uiSceneRoot || !cmdBuf || viewportExtent.width == 0 || viewportExtent.height == 0) {
+        return;
+    }
+
+    FRender2dContext render2dCtx{
+        .cmdBuf       = cmdBuf,
+        .windowWidth  = viewportExtent.width,
+        .windowHeight = viewportExtent.height,
+        .cam          = {
+            .position       = glm::vec3(0.0f),
+            .view           = glm::mat4(1.0f),
+            .projection     = glm::mat4(1.0f),
+            .viewProjection = glm::mat4(1.0f),
+        },
+    };
+
+    Render2D::begin(render2dCtx);
+    UISceneRenderer::render(uiSceneRoot);
     Render2D::end();
 }
 

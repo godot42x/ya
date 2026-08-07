@@ -27,6 +27,10 @@ struct FRender2dData
     bool            bReverseViewport = true;
     ICommandBuffer* curCmdBuf        = nullptr;
 
+    // Active screen-space clip rects (top-left origin, Y down). The top entry
+    // is applied as the scissor on the next screen-batch flush.
+    std::vector<Rect2D> clipStack;
+
     struct Camera
     {
         glm::vec3 position;
@@ -308,6 +312,11 @@ struct ENGINE_API Render2D
 
     static void begin(const FRender2dContext& ctx);
     static void end();
+
+    /// Push a clip rect (intersected with the current clip). Changes are applied
+    /// as a command-level scissor on the next screen batch flush.
+    static void pushClipRect(const Rect2D& rect);
+    static void popClipRect();
 
     static void makeSprite(const glm::vec3& position,
                            const glm::vec2& size,

@@ -61,6 +61,7 @@ void Render2D::begin(const FRender2dContext& ctx)
     data.cam          = ctx.cam;
     data.windowHeight = ctx.windowHeight;
     data.windowWidth  = ctx.windowWidth;
+    data.clipStack.clear();
     Extent2D extent{.width = data.windowWidth, .height = data.windowHeight};
     quadData->begin(extent);
     lineData->begin();
@@ -74,6 +75,40 @@ void Render2D::end()
     data.curCmdBuf    = nullptr;
     data.windowWidth  = 0;
     data.windowHeight = 0;
+}
+
+void Render2D::pushClipRect(const Rect2D& rect)
+{
+    // Intersect with the current clip so nested clips never exceed their parent.
+    Rect2D clipped = rect;
+    if (!data.clipStack.empty()) {
+        const Rect2D& current = data.clipStack.back();
+        const glm::vec2 curMax = current.pos + current.extent;
+        const glm::vec2 rectMax = rect.pos + rect.extent;
+        clipped.pos    = glm::max(rect.pos, current.pos);
+        clipped.extent = glm::max(glm::vec2(0.0f), glm::min(rectMax, curMax) - clipped.pos);
+    }
+
+    const bool bClipChanged = data.clipStack.empty() ||
+                              data.clipStack.back().pos != clipped.pos ||
+                              data.clipStack.back().extent != clipped.extent;
+    data.clipStack.push_back(clipped);
+    if (bClipChanged && quadData && data.curCmdBuf) {
+        // Flush so the pending vertices are drawn with the OLD scissor; the
+        // next flush picks up the new clip.
+        quadData->flush(data.curCmdBuf);
+    }
+}
+
+void Render2D::popClipRect()
+{
+    if (data.clipStack.empty()) {
+        return;
+    }
+    data.clipStack.pop_back();
+    if (quadData && data.curCmdBuf) {
+        quadData->flush(data.curCmdBuf);
+    }
 }
 
 void FLineRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
@@ -686,7 +721,16 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
                         static_cast<float>(Render2D::data.windowHeight),
                         0.0f,
                         1.0f);
-    cmdBuf->setScissor(0, 0, Render2D::data.windowWidth, Render2D::data.windowHeight);
+    if (!Render2D::data.clipStack.empty()) {
+        const Rect2D& clip = Render2D::data.clipStack.back();
+        cmdBuf->setScissor(static_cast<int32_t>(clip.pos.x),
+                           static_cast<int32_t>(clip.pos.y),
+                           static_cast<int32_t>(clip.extent.x),
+                           static_cast<int32_t>(clip.extent.y));
+    }
+    else {
+        cmdBuf->setScissor(0, 0, Render2D::data.windowWidth, Render2D::data.windowHeight);
+    }
     cmdBuf->setCullMode(data2D.screenCullMode);
 
     std::vector<DescriptorSetHandle> descriptorSets = {_frameUboDS, _resourceDS};

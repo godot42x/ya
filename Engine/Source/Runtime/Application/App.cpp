@@ -6,7 +6,8 @@
 #include "Core/Module/ProjectDescriptor.h"
 #include "Core/Profiling/Profiling.h"
 #include "Core/System/VirtualFileSystem.h"
-#include "Core/UI/UIManager.h"
+#include "Runtime/Rendering/Common/UISceneRenderer.h"
+#include "Scene/Scene.h"
 #include "Runtime/Rendering/Services/DebugRenderSystem.h"
 
 namespace ya
@@ -143,8 +144,10 @@ bool App::dispatchInputFallbackEvent(const Event& event)
         .bInViewport  = bInViewport,
         .viewportRect = viewportRect,
     };
-    UIManager::get()->onEvent(event, ctx);
-    return true;
+    // Game UI (Node2D subtree of the active scene) consumes viewport events on
+    // hit; misses fall through to gameplay.
+    Scene* scene = getSceneServices().getActiveScene();
+    return UISceneRenderer::handleEvent(event, ctx, scene ? scene->getRootNode() : nullptr);
 }
 
 void App::tickModules(float dt)

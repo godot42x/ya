@@ -890,6 +890,7 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
     // GBufferStage no longer receives frame inputs here: its current-flight
     // binding travels with DeferredGBufferPassParams in the graph pass (FG-302).
 
+    _currentUISceneRoot = activeScene ? activeScene->getRootNode() : nullptr;
     _currentOverlayFrameInputs = {};
     if (_overlayStage) {
         ViewportOverlayStage::FrameInputs frameInputs{};
@@ -1214,6 +1215,7 @@ void DeferredRenderPipeline::executeDeferredMainGraph(const RenderPipelineFrameC
             .bReverseViewportY        = _bReverseViewportY,
             .bPostprocessOutputIsSRGB = EFormat::isSRGB(_render->getSwapchain()->getFormat()),
             .viewportOverlaySnapshot  = _lastFrameInput.viewportOverlaySnapshot,
+            .uiSceneRoot              = _currentUISceneRoot,
         });
 
     YA_CORE_ASSERT(_graphExecutor != nullptr, "DeferredRenderPipeline graph executor is not initialized");
