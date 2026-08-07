@@ -168,6 +168,13 @@ void App::prepareModulesForRender(float dt)
     }
 }
 
+void App::recordModuleViewportCompose(ICommandBuffer& commandBuffer, float dt)
+{
+    for (const auto& slot : _modules) {
+        slot.module->onViewportCompose(*this, commandBuffer, dt);
+    }
+}
+
 void App::recordModuleBeforePresentation(ICommandBuffer& commandBuffer, float dt)
 {
     for (const auto& slot : _modules) {

@@ -222,6 +222,7 @@ struct ENGINE_API App
     [[nodiscard]] bool dispatchInputFallbackEvent(const Event& event);
     void tickModules(float dt);
     void prepareModulesForRender(float dt);
+    void recordModuleViewportCompose(ICommandBuffer& commandBuffer, float dt);
     void recordModuleBeforePresentation(ICommandBuffer& commandBuffer, float dt);
     void recordModulePresentation(ICommandBuffer& commandBuffer, float dt);
     [[nodiscard]] bool notifyModulesBeforeAppStateChange(AppState nextState);

@@ -511,6 +511,13 @@ void AppFrameLoop::tickRender(App& app, float dt)
         .overlay = {
             .screenSprites = &screenOverlaySprites,
         },
+        .viewportCompose = {
+            .recordCompose = [&app, dt](ICommandBuffer* commandBuffer)
+            {
+                if (commandBuffer) {
+                    app.recordModuleViewportCompose(*commandBuffer, dt);
+                } },
+        },
         .presentationExtensions = {
             .recordBeforeExtensions = [&app, dt](ICommandBuffer* commandBuffer)
             {

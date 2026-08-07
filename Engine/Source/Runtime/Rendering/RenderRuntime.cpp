@@ -59,13 +59,13 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     // format (for example HDR R16G16B16A16_SFLOAT), so resolve it from the
     // active pipeline before beginning this frame's command buffer.
     if (input.uiSceneRoot) {
-        auto uiTarget = getPostprocessOutputImageShared();
-        if (!uiTarget) {
-            uiTarget = getActiveViewportImageShared();
-        }
+        auto uiTarget = getViewportDisplayImageShared();
         if (uiTarget) {
-            Render2D::ensureUICompositorPipeline(ERender2DPassDomain::GameUICompositor,
-                                                   uiTarget->getFormat());
+            prepareRender2DComposePassPipeline(
+                FRender2DComposePassDesc{
+                    .kind = ERender2DComposePassKind::RuntimeUIComposite,
+                },
+                uiTarget->getFormat());
         }
     }
 
@@ -77,24 +77,34 @@ void RenderRuntime::renderFrame(const FrameInput& input)
 
     {
         YA_PERF_SCOPE(perf::sample::renderWorld(), perf::metric::cpuTimeMs(), perf::domain::render());
-        renderWorldFrame(input, cmdBuf.get());
+        if (_bWorldSceneRenderEnabled) {
+            renderWorldFrame(input, cmdBuf.get());
+        }
     }
     // Game UI composites AFTER the world graph and its post-processing, so UI
     // never enters bloom or tonemapping (graph-external, manual transitions).
     if (input.uiSceneRoot) {
-        auto uiTarget = getPostprocessOutputImageShared();
-        if (!uiTarget) {
-            uiTarget = getActiveViewportImageShared();
-        }
+        auto uiTarget = getViewportDisplayImageShared();
         if (uiTarget) {
-            recordUICompositorPass(cmdBuf.get(),
-                                   *uiTarget,
-                                   Extent2D{
-                                       .width  = static_cast<uint32_t>(input.pipeline.viewportRect.extent.x),
-                                       .height = static_cast<uint32_t>(input.pipeline.viewportRect.extent.y),
-                                   },
-                                   input.uiSceneRoot);
+            recordRender2DComposePass(cmdBuf.get(),
+                                      *uiTarget,
+                                      nullptr,
+                                      input.uiSceneRoot,
+                                      FRender2DComposePassDesc{
+                                          .kind = ERender2DComposePassKind::RuntimeUIComposite,
+                                          .logicalViewportExtent = Extent2D{
+                                              .width  = static_cast<uint32_t>(input.pipeline.viewportRect.extent.x),
+                                              .height = static_cast<uint32_t>(input.pipeline.viewportRect.extent.y),
+                                          },
+            });
         }
+    }
+    // Module viewport composition (editor overlays) records after the world
+    // graph and the runtime game UI pass, still before the presentation graph.
+    // This keeps every manual compose segment in one place inside renderFrame;
+    // modules only provide content through the registered callback.
+    if (input.viewportCompose.recordCompose) {
+        input.viewportCompose.recordCompose(cmdBuf.get());
     }
     renderPresentationPass(input.pipeline.deltaTime, input.presentationExtensions, cmdBuf.get());
     {

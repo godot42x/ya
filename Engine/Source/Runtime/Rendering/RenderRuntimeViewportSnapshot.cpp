@@ -4,14 +4,6 @@
 namespace ya
 {
 
-std::shared_ptr<RenderImage> RenderRuntime::getViewportSnapshotImageShared() const
-{
-    if (auto postprocessOutput = getPostprocessOutputImageShared()) {
-        return postprocessOutput;
-    }
-    return getActiveViewportImageShared();
-}
-
 RenderViewportSnapshot RenderRuntime::buildViewportSnapshot() const
 {
     const auto debugOutputs = buildPipelineDebugOutputCatalog();
@@ -19,7 +11,7 @@ RenderViewportSnapshot RenderRuntime::buildViewportSnapshot() const
     RenderViewportSnapshot snapshot;
     snapshot.bForwardPipeline       = (_renderPipeline == ERenderPipeline::Forward);
     snapshot.bPostprocessingEnabled = debugOutputs.bPostprocessingEnabled;
-    snapshot.viewportImageOwner     = getViewportSnapshotImageShared();
+    snapshot.viewportImageOwner     = getViewportDisplayImageShared();
     snapshot.viewportImageView      = snapshot.viewportImageOwner && snapshot.viewportImageOwner->getImageView()
                                         ? snapshot.viewportImageOwner->getImageView()
                                         : nullptr;

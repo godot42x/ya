@@ -131,6 +131,19 @@ std::shared_ptr<RenderImage> RenderRuntime::getActiveViewportImageShared() const
     return nullptr;
 }
 
+std::shared_ptr<RenderImage> RenderRuntime::getViewportDisplayImageShared() const
+{
+    if (!_bWorldSceneRenderEnabled) {
+        // World output is stale (or absent) while the world scene graph is
+        // disabled; never present or composite a leftover image.
+        return nullptr;
+    }
+    if (auto postprocessOutput = getPostprocessOutputImageShared()) {
+        return postprocessOutput;
+    }
+    return getActiveViewportImageShared();
+}
+
 void RenderRuntime::renderPresentationPass(float                              deltaTime,
                                            const PresentationExtensions&      presentationExtensions,
                                            ICommandBuffer*                    cmdBuf)
@@ -162,14 +175,16 @@ void RenderRuntime::renderPresentationPass(float                              de
     }
 
     if (presentationExtensions.recordBeforeExtensions) {
+        // Contract: this hook runs before the presentation graph is built and
+        // recorded, inside the already-open frame command buffer. Content
+        // recorded here (e.g. ImGui draw data consumed later by the graph) must
+        // not recreate GPU resources; layout transitions must go through the
+        // shared resource state tracker.
         presentationExtensions.recordBeforeExtensions(cmdBuf);
     }
 
     const Extent2D presentationExtent = presentationImage->getExtent();
-    auto           sourceImage        = getPostprocessOutputImageShared();
-    if (!sourceImage) {
-        sourceImage = getActiveViewportImageShared();
-    }
+    auto           sourceImage        = getViewportDisplayImageShared();
     RenderGraph graph;
     const auto  output = graph.importTexture(
         makePresentationImportedTextureDesc(*presentationImage,

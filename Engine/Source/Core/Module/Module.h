@@ -141,6 +141,17 @@ struct IModule
         (void)app;
         (void)dt;
     }
+    /// Called by RenderRuntime after the world graph and the runtime game UI
+    /// compose pass, before the presentation graph is recorded. Modules use it
+    /// to record their own viewport composition (e.g. editor overlays) into the
+    /// same command buffer. Command recording is already active, so GPU
+    /// resources must not be recreated here.
+    virtual void onViewportCompose(App& app, ICommandBuffer& commandBuffer, float dt)
+    {
+        (void)app;
+        (void)commandBuffer;
+        (void)dt;
+    }
     virtual void onBeforePresentation(App& app, ICommandBuffer& commandBuffer, float dt)
     {
         (void)app;

@@ -91,6 +91,19 @@ struct ENGINE_API RenderRuntime : IRenderRuntimeServices
 
     struct FrameInput
     {
+        /// Optional module viewport composition (e.g. editor overlays). Recorded
+        /// after the world graph and the runtime game UI pass, before the
+        /// presentation graph; modules must not recreate GPU resources here.
+        struct ViewportComposeExtensions
+        {
+            std::function<void(ICommandBuffer*)> recordCompose;
+
+            [[nodiscard]] bool empty() const
+            {
+                return !recordCompose;
+            }
+        };
+
         struct OverlayInput
         {
             const std::vector<RenderOverlaySprite2D>* screenSprites = nullptr;
@@ -99,6 +112,7 @@ struct ENGINE_API RenderRuntime : IRenderRuntimeServices
         } overlay{};
 
         PresentationExtensions     presentationExtensions{};
+        ViewportComposeExtensions  viewportCompose{};
         RenderPipelineFrameContext pipeline{};
 
         /// Node2D (UI) subtree of the active scene; composited onto the final
@@ -127,6 +141,7 @@ struct ENGINE_API RenderRuntime : IRenderRuntimeServices
 
     Rect2D _viewportRect{};
     float  _viewportFrameBufferScale = 1.0f;
+    bool   _bWorldSceneRenderEnabled = true;
 
     std::vector<std::unique_ptr<RenderGraphExecutor>> _presentationGraphExecutors;
     std::vector<std::shared_ptr<RenderImage>>         _presentationImages;
@@ -171,6 +186,11 @@ struct ENGINE_API RenderRuntime : IRenderRuntimeServices
     // =========================================================================
     [[nodiscard]] std::shared_ptr<RenderImage> getPostprocessOutputImageShared() const;
     [[nodiscard]] std::shared_ptr<RenderImage> getActiveViewportImageShared() const;
+    /// The image shown as the final viewport result: post-process output when
+    /// present, otherwise the raw viewport output. Game UI composition, the
+    /// presentation graph and the editor viewport snapshot must all read this
+    /// single source so UI never renders into an image that is not presented.
+    [[nodiscard]] std::shared_ptr<RenderImage> getViewportDisplayImageShared() const;
     [[nodiscard]] std::shared_ptr<RenderImage> getPresentationImageShared() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;
     [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog() const;
@@ -178,6 +198,11 @@ struct ENGINE_API RenderRuntime : IRenderRuntimeServices
     [[nodiscard]] ERenderPipeline getPendingRenderPipeline() const { return _pendingRenderPipeline; }
     void setPendingRenderPipeline(ERenderPipeline renderPipeline) { _pendingRenderPipeline = renderPipeline; }
     void requestActivePipelineReload() { _pendingActivePipelineReload = true; }
+    /// Enable/disable the world scene graph for the current frame. The editor
+    /// 2D canvas mode disables it: only the UI compose pass and the editor
+    /// viewport panel need rendering in that mode.
+    void setWorldSceneRenderEnabled(bool bEnabled) { _bWorldSceneRenderEnabled = bEnabled; }
+    [[nodiscard]] bool isWorldSceneRenderEnabled() const { return _bWorldSceneRenderEnabled; }
 
     [[nodiscard]] stdptr<IDescriptorPool>      getSkyboxDescriptorPool() const { return _sharedResourceProvider.getSkyboxDescriptorPool(); }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getSkyboxDescriptorSetLayout() const { return _sharedResourceProvider.getSkyboxDescriptorSetLayout(); }
@@ -241,7 +266,6 @@ struct ENGINE_API RenderRuntime : IRenderRuntimeServices
                                    RenderViewportDebugCatalog*                catalog) const;
     [[nodiscard]] size_t buildViewportDebugCatalogSignature() const;
     void ensureViewportDebugCatalog() const;
-    [[nodiscard]] std::shared_ptr<RenderImage> getViewportSnapshotImageShared() const;
 
     // =========================================================================
     // Internal pipeline / presentation helpers
