@@ -1,7 +1,11 @@
 #pragma once
 
+#include "Core/Common/Types.h"
+#include "Render/Core/Texture.h"
+#include "Render/RenderDefines.h"
 #include "Runtime/Rendering/Common/RenderOverlay.h"
 
+#include <functional>
 #include <memory>
 
 namespace ya
@@ -11,25 +15,57 @@ struct FrameContext;
 struct ICommandBuffer;
 struct Node;
 struct RenderImage;
-struct Extent2D;
+
+/// Shared 2D compose pass used by every viewport-facing UI/overlay path:
+/// runtime game UI composite, editor 2D canvas preview, and the editor 3D
+/// viewport composition (scene color + overlay + debug lines).
+enum class ERender2DComposePassKind : uint8_t
+{
+    RuntimeUIComposite = 0,
+    EditorCanvasPreview,
+    EditorViewportCompose,
+};
+
+struct FRender2DComposePassDesc
+{
+    ERender2DComposePassKind kind = ERender2DComposePassKind::RuntimeUIComposite;
+    Extent2D                 logicalViewportExtent{};
+    glm::vec2                canvasPan  = glm::vec2(0.0f);
+    float                    canvasZoom = 1.0f;
+
+    /// EditorViewportCompose: full-screen scene color sampled as a sprite.
+    std::shared_ptr<Texture> sceneSourceTexture = nullptr;
+
+    /// EditorViewportCompose: camera used by world-space content (debug
+    /// lines). UI-only passes leave this at identity.
+    struct Camera
+    {
+        glm::vec3 position      = glm::vec3(0.0f);
+        glm::mat4 view          = glm::mat4(1.0f);
+        glm::mat4 projection    = glm::mat4(1.0f);
+        glm::mat4 viewProjection = glm::mat4(1.0f);
+    } camera;
+};
 
 void recordRenderViewportOverlayPass(const FrameContext& frameCtx,
                                      const std::shared_ptr<const RenderViewportOverlaySnapshot>& overlaySnapshot,
                                      ICommandBuffer* cmdBuf);
 
-/// Composite the game UI (Node2D subtree of the scene tree) onto the FINAL
-/// viewport image, after the world graph and its post-processing. Runs
-/// graph-external with manual layout transitions, so UI never enters bloom or
-/// tonemapping. UI coordinates are authored in logical viewport pixels and
-/// mapped to the render-target pixels (frame buffer scale).
-/// When `bDrawCanvasGrid` is set the target is cleared to a dark canvas color
-/// and a grid is drawn behind the UI (editor 2D preview mode).
-void recordUICompositorPass(ICommandBuffer*    cmdBuf,
-                            RenderImage&       target,
-                            const Extent2D&    logicalViewportExtent,
-                            Node*              uiSceneRoot,
-                            bool               bDrawCanvasGrid = false,
-                            const glm::vec2&   canvasPan = glm::vec2(0.0f),
-                            float              canvasZoom = 1.0f);
+/// Prepare the Render2D pipeline variant required by one shared compose pass.
+/// Must be called before command recording begins.
+void prepareRender2DComposePassPipeline(const FRender2DComposePassDesc& passDesc,
+                                        EFormat::T                      colorFormat,
+                                        EFormat::T                      depthFormat = EFormat::Undefined);
+
+/// Record one shared 2D compose pass into `target`. `depthTarget` is optional
+/// (the editor viewport depth-tests debug overlays against it). `extraContent`
+/// runs inside the Render2D recording window for caller-owned content such as
+/// camera overlay text and physics debug lines.
+void recordRender2DComposePass(ICommandBuffer*                  cmdBuf,
+                               RenderImage&                     target,
+                               RenderImage*                     depthTarget,
+                               Node*                            uiSceneRoot,
+                               const FRender2DComposePassDesc&  passDesc,
+                               const std::function<void()>&     extraContent = {});
 
 } // namespace ya
