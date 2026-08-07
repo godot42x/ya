@@ -199,8 +199,12 @@ class EditorViewportCompositor
     {
         // 2D canvas preview does not consume the world output (the world scene
         // graph is disabled in this mode); create the target from the viewport
-        // rect instead of the world image.
-        const bool bCanvasPreview = layer.isViewportMode2D() && uiPreviewRoot;
+        // rect instead of the world image. 2D mode ALWAYS takes this path: with
+        // the world graph disabled, falling through to the world-sourced
+        // compose would leave the viewport with no image during the startup
+        // frames before the editable scene is wired up (a null preview root
+        // simply renders the grid without nodes).
+        const bool bCanvasPreview = layer.isViewportMode2D();
         if (bCanvasPreview) {
             ensureCanvasTarget(render, canvasTargetExtent);
             if (!_composedViewportImage || !_composedViewportImage->isValid()) {
@@ -829,7 +833,12 @@ class EditorModule final : public IModule, public IEditorAutomationControl
                                     app.getRenderServices().getRenderFrameState(),
                                     uiPreviewRoot,
                                     renderRuntime->getViewportExtent());
-        _layer->setViewportDisplayImage(_viewportCompositor.getOutputImage());
+        // Keep the last valid frame instead of clobbering the display with a
+        // transiently null output (startup / mode-switch / resize gaps).
+        if (auto output = _viewportCompositor.getOutputImage();
+            output && output->isValid() && output->getImageView()) {
+            _layer->setViewportDisplayImage(std::move(output));
+        }
     }
 
     void onPresentation(App& app, ICommandBuffer& commandBuffer, float dt) override
