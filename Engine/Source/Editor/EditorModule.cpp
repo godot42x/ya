@@ -66,23 +66,18 @@ void initializeEditorCamera(App& app, EditorLayer& layer)
                                         resolveInitialEditorCameraRotation(app));
 }
 
-std::shared_ptr<RenderImage> createEditorViewportImage(IRender& render, const RenderImage& source)
+std::shared_ptr<RenderImage> createEditorViewportImage(IRender& render, const Extent2D& extent)
 {
-    const Extent2D extent = source.getExtent();
     if (extent.width == 0 || extent.height == 0) {
         return nullptr;
     }
-
-    const EFormat::T targetFormat = source.getFormat() == EFormat::R16G16B16A16_SFLOAT
-                                      ? source.getFormat()
-                                      : EFormat::R16G16B16A16_SFLOAT;
 
     return createRenderImage(
         *render.getResourceFactory(),
         RenderImageDesc{
             .image = ImageCreateInfo{
                 .label         = "EditorViewportComposed",
-                .format        = targetFormat,
+                .format        = EFormat::R16G16B16A16_SFLOAT,
                 .extent        = {.width = extent.width, .height = extent.height, .depth = 1},
                 .mipLevels     = 1,
                 .arrayLayers   = 1,
@@ -95,6 +90,11 @@ std::shared_ptr<RenderImage> createEditorViewportImage(IRender& render, const Re
                 .aspectFlags = EImageAspect::Color,
             },
         });
+}
+
+std::shared_ptr<RenderImage> createEditorViewportImage(IRender& render, const RenderImage& source)
+{
+    return createEditorViewportImage(render, source.getExtent());
 }
 
 void drawEntityBounds(Entity* entity, const glm::vec4& color)
@@ -194,8 +194,36 @@ class EditorViewportCompositor
                  const RenderViewportSnapshot& snapshot,
                  const EditorLayer&            layer,
                  const AppRenderFrameState&    renderFrame,
-                 Node*                         uiPreviewRoot)
+                 Node*                         uiPreviewRoot,
+                 const Extent2D&               canvasTargetExtent)
     {
+        // 2D canvas preview does not consume the world output (the world scene
+        // graph is disabled in this mode); create the target from the viewport
+        // rect instead of the world image.
+        const bool bCanvasPreview = layer.isViewportMode2D() && uiPreviewRoot;
+        if (bCanvasPreview) {
+            ensureCanvasTarget(render, canvasTargetExtent);
+            if (!_composedViewportImage || !_composedViewportImage->isValid()) {
+                return;
+            }
+
+            const glm::vec2 logicalViewport = layer.getViewportSize();
+            recordRender2DComposePass(&commandBuffer,
+                                      *_composedViewportImage,
+                                      nullptr,
+                                      uiPreviewRoot,
+                                      FRender2DComposePassDesc{
+                                          .kind = ERender2DComposePassKind::EditorCanvasPreview,
+                                          .logicalViewportExtent = Extent2D{
+                                              .width  = static_cast<uint32_t>(std::max(logicalViewport.x, 0.0f)),
+                                              .height = static_cast<uint32_t>(std::max(logicalViewport.y, 0.0f)),
+                                          },
+                                          .canvasPan  = layer.getCanvasPan(),
+                                          .canvasZoom = layer.getCanvasZoom(),
+                                      });
+            return;
+        }
+
         auto source = snapshot.viewportImageOwner;
         if (!source || !source->getImageShared() || !source->getImageView()) {
             _composedViewportImage.reset();
@@ -216,15 +244,11 @@ class EditorViewportCompositor
         commandBuffer.transitionImageLayoutAuto(source->getImage(), EImageLayout::ShaderReadOnlyOptimal);
         commandBuffer.transitionImageLayoutAuto(_composedViewportImage->getImage(), EImageLayout::ColorAttachmentOptimal);
 
-        // 2D canvas preview does not consume the world depth buffer.
-        const bool bCanvasPreview = layer.isViewportMode2D() && uiPreviewRoot;
-
         // Attach the scene depth buffer when available so debug overlays
         // (collision wireframes) can be depth-tested against the world.
         const auto  depthOwner   = snapshot.viewportDepthOwner;
         const bool  bAttachDepth = depthOwner && depthOwner->isValid() &&
-                                   depthOwner->getExtent() == _composedViewportImage->getExtent() &&
-                                   !bCanvasPreview;
+                                   depthOwner->getExtent() == _composedViewportImage->getExtent();
         if (bAttachDepth) {
             commandBuffer.retainResource(depthOwner->getImageShared());
             commandBuffer.retainResource(depthOwner->getImageViewShared());
@@ -232,118 +256,49 @@ class EditorViewportCompositor
             commandBuffer.transitionImageLayoutAuto(depthOwner->getImage(), EImageLayout::DepthStencilAttachmentOptimal);
         }
 
-        const Extent2D extent = _composedViewportImage->getExtent();
-
-        // 2D canvas preview: hide the 3D world and composite the Node2D tree
-        // over a canvas grid instead (Godot-style development-time viewing).
-        // The game itself always renders 3D + 2D together. During PIE/sim the
-        // runtime already composites the UI, so the editor falls back to the
-        // plain 3D presentation (no double draw, no frozen 2D canvas).
-        if (bCanvasPreview) {
-            const glm::vec2 logicalViewport = layer.getViewportSize();
-            recordUICompositorPass(&commandBuffer,
-                                   *_composedViewportImage,
-                                   Extent2D{
-                                       .width  = static_cast<uint32_t>(std::max(logicalViewport.x, 0.0f)),
-                                       .height = static_cast<uint32_t>(std::max(logicalViewport.y, 0.0f)),
-                                   },
-                                   uiPreviewRoot,
-                                   true,
-                                   layer.getCanvasPan(),
-                                   layer.getCanvasZoom());
-            return;
-        }
-
-        commandBuffer.beginRendering(RenderingInfo{
-            .label                         = "EditorViewportComposition",
-            .bExternalTransitionManagement = true,
-            //
-            .attachments = RenderAttachmentSet{
-                .renderArea = Rect2D{
-                    .pos    = {0.0f, 0.0f},
-                    .extent = {static_cast<float>(extent.width), static_cast<float>(extent.height)},
+        recordRender2DComposePass(
+            &commandBuffer,
+            *_composedViewportImage,
+            bAttachDepth ? depthOwner.get() : nullptr,
+            nullptr,
+            FRender2DComposePassDesc{
+                .kind               = ERender2DComposePassKind::EditorViewportCompose,
+                .sceneSourceTexture = resolveSourceTexture(*source),
+                .camera             = {
+                    .position       = renderFrame.cameraPos,
+                    .view           = renderFrame.view,
+                    .projection     = renderFrame.projection,
+                    .viewProjection = renderFrame.projection * renderFrame.view,
                 },
-                .layerCount = 1,
-                .colors     = {
-
-                    RenderAttachment{
-                        .image         = _composedViewportImage->getImage(),
-                        .imageView     = _composedViewportImage->getImageView(),
-                        .loadOp        = EAttachmentLoadOp::Clear,
-                        .storeOp       = EAttachmentStoreOp::Store,
-                        .clearValue    = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
-                        .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                        .finalLayout   = EImageLayout::ColorAttachmentOptimal,
-                    },
-                },
-                .depth = bAttachDepth
-                             ? std::optional<RenderAttachment>{RenderAttachment{
-                                   .image         = depthOwner->getImage(),
-                                   .imageView     = depthOwner->getImageView(),
-                                   .loadOp        = EAttachmentLoadOp::Load,
-                                   .storeOp       = EAttachmentStoreOp::Store,
-                                   .initialLayout = EImageLayout::DepthStencilAttachmentOptimal,
-                                   .finalLayout   = EImageLayout::DepthStencilAttachmentOptimal,
-                               }}
-                             : std::nullopt,
             },
-        });
-
-        FRender2dContext render2dCtx{
-            .cmdBuf       = &commandBuffer,
-            .windowWidth  = extent.width,
-            .windowHeight = extent.height,
-            .passDomain   = ERender2DPassDomain::EditorViewport,
-            .cam          = {
-                         .position       = renderFrame.cameraPos,
-                         .view           = renderFrame.view,
-                         .projection     = renderFrame.projection,
-                         .viewProjection = renderFrame.projection * renderFrame.view,
-            },
-        };
-        Render2D::begin(render2dCtx);
-
-        auto sourceTexture = resolveSourceTexture(*source);
-        Render2D::makeSprite(glm::vec3(0.0f, 0.0f, 0.0f),
-                             glm::vec2(static_cast<float>(extent.width), static_cast<float>(extent.height)),
-                             sourceTexture.get(),
-                             glm::vec4(1.0f));
-
-        const auto texts = layer.buildViewportCameraOverlayTexts();
-        if (!texts.empty()) {
-            Render2D::makeSprite(glm::vec3(6.0f, 6.0f, 0.0f),
-                                 glm::vec2(240.0f, 46.0f),
-                                 TextureLibrary::get().getWhiteTexture().get(),
-                                 glm::vec4(0.0f, 0.0f, 0.0f, 0.36f));
-        }
-        for (const auto& text : texts) {
-            auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, text.fontSize);
-            if (!font) {
-                continue;
-            }
-            Render2D::makeText(text.text,
-                               glm::vec3(text.viewportPos, text.depth),
-                               text.color,
-                               font.get());
-        }
-        // Draw physics collision wireframes on top of the composed viewport,
-        // depth-tested against the scene depth attached above.
-        if (bAttachDepth) {
-            if (Scene* scene = layer.getViewportInteractionScene()) {
-                drawPhysicsCollisionDebug(*scene);
-            }
-            drawSelectedEntityBounds(layer);
-        }
-        Render2D::onRender();
-        Render2D::end();
-
-        commandBuffer.endRendering();
-        commandBuffer.transitionImageLayoutAuto(_composedViewportImage->getImage(), EImageLayout::ShaderReadOnlyOptimal);
-        if (bAttachDepth) {
-            // Restore a sampled-friendly layout for the same-frame debug UI;
-            // the next world frame transitions it back as its own pass needs.
-            commandBuffer.transitionImageLayoutAuto(depthOwner->getImage(), EImageLayout::ShaderReadOnlyOptimal);
-        }
+            [&]() {
+                // Camera overlay text on top of the composed viewport.
+                const auto texts = layer.buildViewportCameraOverlayTexts();
+                if (!texts.empty()) {
+                    Render2D::makeSprite(glm::vec3(6.0f, 6.0f, 0.0f),
+                                         glm::vec2(240.0f, 46.0f),
+                                         TextureLibrary::get().getWhiteTexture().get(),
+                                         glm::vec4(0.0f, 0.0f, 0.0f, 0.36f));
+                }
+                for (const auto& text : texts) {
+                    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, text.fontSize);
+                    if (!font) {
+                        continue;
+                    }
+                    Render2D::makeText(text.text,
+                                       glm::vec3(text.viewportPos, text.depth),
+                                       text.color,
+                                       font.get());
+                }
+                // Physics collision wireframes on top of the composed viewport,
+                // depth-tested against the scene depth attached above.
+                if (bAttachDepth) {
+                    if (Scene* scene = layer.getViewportInteractionScene()) {
+                        drawPhysicsCollisionDebug(*scene);
+                    }
+                    drawSelectedEntityBounds(layer);
+                }
+            });
     }
 
   private:
@@ -385,6 +340,18 @@ class EditorViewportCompositor
         }
 
         _composedViewportImage = createEditorViewportImage(render, source);
+    }
+
+    void ensureCanvasTarget(IRender& render, const Extent2D& extent)
+    {
+        if (_composedViewportImage &&
+            _composedViewportImage->getWidth() == extent.width &&
+            _composedViewportImage->getHeight() == extent.height &&
+            _composedViewportImage->getFormat() == EFormat::R16G16B16A16_SFLOAT) {
+            return;
+        }
+
+        _composedViewportImage = createEditorViewportImage(render, extent);
     }
 };
 
@@ -767,6 +734,11 @@ class EditorModule final : public IModule, public IEditorAutomationControl
 
         auto& renderServices = app.getRenderServices();
         if (auto* renderRuntime = renderServices.getRenderRuntime()) {
+            // The 2D canvas workspace only needs the UI compose pass and the
+            // editor viewport panel; skip the whole world scene graph there.
+            // PIE/sim already forced the viewport back to 3D above.
+            renderRuntime->setWorldSceneRenderEnabled(!_layer->isViewportMode2D());
+
             auto&          editorCamera   = _layer->getCamera();
             const Extent2D viewportExtent = renderRuntime->getViewportExtent();
             // Keep the editor camera controllable during simulation; only full
@@ -795,16 +767,22 @@ class EditorModule final : public IModule, public IEditorAutomationControl
             const EFormat::T depthFormat = activePipeline
                                                ? activePipeline->getViewportDepthFormat()
                                                : EFormat::Undefined;
-            Render2D::ensureScreenPipeline(ERender2DPassDomain::EditorViewport,
-                                           EFormat::R16G16B16A16_SFLOAT,
-                                           depthFormat);
+            prepareRender2DComposePassPipeline(
+                FRender2DComposePassDesc{
+                    .kind = ERender2DComposePassKind::EditorViewportCompose,
+                },
+                EFormat::R16G16B16A16_SFLOAT,
+                depthFormat);
 
             // The editor 2D canvas pass records into the composed viewport
-            // image (always R16G16B16A16_SFLOAT); ensure the depth-less UI
-            // pipeline exists outside command recording.
+            // image (always R16G16B16A16_SFLOAT); ensure the shared UI scene
+            // pass exists outside command recording.
             if (_layer->isViewportMode2D()) {
-                Render2D::ensureUICompositorPipeline(ERender2DPassDomain::EditorCanvas,
-                                                       EFormat::R16G16B16A16_SFLOAT);
+                prepareRender2DComposePassPipeline(
+                    FRender2DComposePassDesc{
+                        .kind = ERender2DComposePassKind::EditorCanvasPreview,
+                    },
+                    EFormat::R16G16B16A16_SFLOAT);
             }
         }
 
@@ -817,7 +795,7 @@ class EditorModule final : public IModule, public IEditorAutomationControl
         }
     }
 
-    void onBeforePresentation(App& app, ICommandBuffer& commandBuffer, float dt) override
+    void onViewportCompose(App& app, ICommandBuffer& commandBuffer, float dt) override
     {
         (void)dt;
         if (!_layer) {
@@ -849,7 +827,8 @@ class EditorModule final : public IModule, public IEditorAutomationControl
                                     snapshot,
                                     *_layer,
                                     app.getRenderServices().getRenderFrameState(),
-                                    uiPreviewRoot);
+                                    uiPreviewRoot,
+                                    renderRuntime->getViewportExtent());
         _layer->setViewportDisplayImage(_viewportCompositor.getOutputImage());
     }
 
