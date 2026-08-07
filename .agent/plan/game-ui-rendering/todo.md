@@ -18,8 +18,13 @@
 - [x] 1.7 事件语义：`UISceneRenderer::handleEvent` 返回消费；fallback 仅在
       交互节点命中时吞事件（面板/canvas passive）；`UIButtonNode` hitTest +
       坐标（viewportRect 偏移，scale 换算待 FrameBufferScale 接入）
-- [ ] 1.8 编辑器：Hierarchy Node2D 行 + 节点级选择通道；Inspector 反射编辑；
-      创建菜单 "2D" 子菜单
+- [x] 1.8 编辑器：Hierarchy Node2D 行 + 节点级选择通道；Inspector 反射编辑；
+      创建菜单反射自动收集（2D 子菜单 + 3D 预设注册表 NodeCreateRegistry）
+- [x] 1.9b 编辑器 2D/3D 视口模式（Godot 风格开发期查看；运行时 3D+2D 叠加不变）：
+      Mode2D = 网格画布 + Node2D screen-space 合成 + 轻量 pan/zoom 导航；
+      CLI：viewport.set_mode / viewport.pan_zoom
+- [x] 1.10b 场景树 CLI：node.types/list/get/create/set/move/destroy + scene.create_preset
+      （ScriptApiRegistry → RPC/MCP/JS 自动暴露）
 - [x] 1.9 测试：混合树 roundtrip、clone、hitTest/zOrder/visible；
       HelloMaterial 运行时 UI 演示（HUD 面板 + 文本 + 可点击按钮）
 - [x] 1.10 提交：`6421b08d [scene]` + `361dc13b [render/ui]` +
