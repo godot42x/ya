@@ -8,6 +8,8 @@
 #include "ECS/Component/ManagedChildComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/Component/LuaScriptComponent.h"
+#include "Scene/Node2D.h"
+#include "Scene/Scene.h"
 
 #include <algorithm>
 #include <cmath>
@@ -399,6 +401,11 @@ nlohmann::json SceneSerializer::serializeNodeTree(Node* node)
             j["entityRef"] = idComp->_id.value;
         }
     }
+    else if (const auto* node2D = dynamic_cast<const Node2D*>(node)) {
+        // Entity-less 2D/UI nodes serialize their type and reflected fields.
+        j["nodeType"] = node2D->getUITypeName();
+        j["fields"]   = node2D->serializeFields();
+    }
 
     // ★ 递归序列化子节点（跳过被动态管理的子节点）
     if (node->hasChildren()) {
@@ -441,7 +448,21 @@ void SceneSerializer::deserializeNodeTree(const nlohmann::json& j, Node* parent,
         }
     }
 
-    Node* node = _scene->createNode(name, parent, entity);
+    Node* node = nullptr;
+    if (!entity && j.contains("nodeType")) {
+        node = _scene->createUINode(j["nodeType"].get<std::string>(), name, parent);
+        if (node) {
+            if (j.contains("fields")) {
+                static_cast<Node2D*>(node)->deserializeFields(j["fields"]);
+            }
+        }
+        else {
+            YA_CORE_WARN("NodeTree: unknown UI node type '{}'", j["nodeType"].get<std::string>());
+        }
+    }
+    if (!node) {
+        node = _scene->createNode(name, parent, entity);
+    }
 
     if (!node) {
         YA_CORE_ERROR("Failed to create node '{}'", name);
@@ -456,4 +477,3 @@ void SceneSerializer::deserializeNodeTree(const nlohmann::json& j, Node* parent,
 }
 
 } // namespace ya
-
