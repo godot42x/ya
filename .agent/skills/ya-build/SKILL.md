@@ -106,35 +106,40 @@ python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
 
 ## 共享缓存（多 worktree / 多 agent 并行）
 
-大体积产物（Vulkan SDK、重型 submodule）统一装在**主项目下**的共享缓存
-`<主项目>/.ya-cache/`，各 checkout 通过目录链接（macOS/Linux symlink，
-Windows junction）指向同一份，避免每个 worktree 各自下载/存储。缓存跟着
-项目走：删除主项目目录即整体清理，不会在系统里（~/Library/Caches 等）
-留垃圾。
+大体积产物（Vulkan SDK、重型 submodule）以**真实文件**存放在主项目自己的
+`Engine/ThirdParty` 里（SDK 在 `Engine/ThirdParty/VulkanSDK/`），其他
+worktree 通过目录链接（macOS/Linux symlink，Windows junction）指回主项目
+的同一份，避免各自下载/存储。系统目录（~/Library/Caches 等）从不写入：
+删除主项目目录即整体清理，不留垃圾。
 
-- 缓存根解析：`$YA_CACHE_ROOT` → `git config ya.cacheRoot`（独立 clone
-  想共享时设成主项目路径）→ 自动推导 `<主项目>/.ya-cache`（git worktree
-  的 `--git-common-dir` 指向主项目，所以所有 worktree 自动共享，零配置）。
-- 旧版用户级系统缓存（`~/Library/Caches/ya-engine` 等）会在首次运行时
-  自动迁移进主项目，不会重新下载。
+- 主项目解析：`$YA_CACHE_ROOT` → `git config ya.cacheRoot`（独立 clone 想
+  共享时设成主项目路径）→ 自动推导（git worktree 的 `--git-common-dir`
+  指向主项目，所有 worktree 自动共享，零配置）。
+- 主项目本身保持标准 git 语义：submodule 是真实 checkout，
+  `git submodule status/update` 正常可用；只有链接的 worktree 需要
+  skip-worktree。
+- 旧版布局（系统缓存 `~/Library/Caches/ya-engine`、`<主>/.ya-cache`、以及
+  非主 checkout 里的真实目录）会在首次运行时自动迁移回主项目原位，不会
+  重新下载。
 - macOS Vulkan SDK：`Script/setup_vulkan_sdk_macos.py` 装到
-  `<cache>/VulkanSDK`（`YA_VULKAN_SDK_ROOT` 可单独覆盖），checkout 内
-  `Engine/ThirdParty/VulkanSDK/<version>` 是指向共享缓存的 symlink；安装
-  原子化（pid 唯一临时目录 + rename），并发执行不会损坏。旧仓库内真实目录
-  会在下次运行时自动迁入共享缓存。
+  主项目的 `Engine/ThirdParty/VulkanSDK/`（`YA_VULKAN_SDK_ROOT` 可单独
+  覆盖），主项目内是真实目录，worktree 内是指向它的 symlink；安装原子化
+  （pid 唯一临时目录 + rename），并发执行不会损坏。
 - 重型 submodule（`Vulkan-Samples-Assets` ~1GB、`LearnOpenGL` ~250MB）：
-  `Script/setup_submodules.py` 维护共享缓存里的 canonical checkout，并把它
-  pin 到当前 checkout index 记录的 gitlink SHA；checkout 内路径是链接，
-  通过 `git update-index --skip-worktree` 保持 `git status` 干净。
+  `Script/setup_submodules.py` 在主项目里保持真实 checkout（标准 git），
+  worktree 内路径是指回主项目的链接，通过 `git update-index --skip-worktree`
+  保持 `git status` 干净。worktree 看到的 submodule 内容跟随主项目。
 
 注意：
-- 重型 submodule 路径上不要跑裸 `git submodule status/update`（会报
-  "expected submodule path ... not to be a symbolic link"）；刷新走
-  `python3 Script/ya.py cfg`。小 submodule（ImGui 等）保持标准 git 语义。
+- 在**链接的 worktree** 里，重型 submodule 路径上不要跑裸
+  `git submodule status/update`（会报 "expected submodule path ... not to be
+  a symbolic link"）；主项目里完全正常。小 submodule（ImGui 等）到处都保持
+  标准 git 语义。
 - 新 clone 先跑 `ya.py cfg` 再手动 `git submodule update`，否则重型
   submodule 会先被完整拉下来；脚本会把干净的 checkout 自动转回链接。
-- 不要在含共享缓存的 checkout 里跑 `git clean -fdx`（会清掉 `.ya-cache/`
-  触发重新下载）；误清后重跑 `ya.py cfg` 即可恢复。
+- 不要在主项目里跑 `git clean -fdx`（会清掉 gitignore 的
+  `Engine/ThirdParty/VulkanSDK/` 触发重新下载）；误清后重跑
+  `python3 Script/ya.py vulkan-sdk-macos` 即可恢复。
 - 若链接目标异常，先跑 `python3 Script/ya.py cfg` 再看构建。
 
 ## 相关 skills

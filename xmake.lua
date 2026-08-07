@@ -2,13 +2,13 @@ add_rules("mode.debug", "mode.releasedbg", "mode.release", "mode.profile")
 set_languages("c++20")
 
 -- NOTE (macOS Vulkan SDK): installed by Script/setup_vulkan_sdk_macos.py into
--- the project-local shared cache (<main project>/.ya-cache/VulkanSDK;
--- $YA_CACHE_ROOT / git config ya.cacheRoot / $YA_VULKAN_SDK_ROOT override);
--- each checkout exposes it as a symlink at
+-- the MAIN project's repo-local dir Engine/ThirdParty/VulkanSDK (real files;
+-- $YA_CACHE_ROOT / git config ya.cacheRoot / $YA_VULKAN_SDK_ROOT override the
+-- main project); linked worktrees expose it as a symlink at
 -- Engine/ThirdParty/VulkanSDK/<version>/macOS, auto-discovered by
 -- Xmake/package/vulkan/xmake.lua so multiple worktrees / parallel agents
--- share one SDK copy. Deleting the project removes the cache too.
--- No setup-env.sh sync step is required.
+-- share one SDK copy. Deleting the main project removes everything; nothing
+-- is written to system directories. No setup-env.sh sync step is required.
 
 if is_plat("windows") then
     set_exceptions("cxx")

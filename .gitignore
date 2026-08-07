@@ -45,7 +45,3 @@ Saved
 Engine/ThirdParty/VulkanSDK/
 setup-env.sh
 setup-env.fish
-
-# Project-local shared cache (Vulkan SDK + heavy submodule checkouts);
-# lives under the main project so deleting the project cleans everything.
-.ya-cache/

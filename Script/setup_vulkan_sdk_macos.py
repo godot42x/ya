@@ -15,10 +15,11 @@ Why shared + symlink (multi-agent / multi-worktree safe)?
 
 Shared root resolution (first match wins):
 1. $YA_VULKAN_SDK_ROOT -- explicit override (e.g. a team CI cache dir)
-2. <shared cache>/VulkanSDK, where <shared cache> follows
-   Script/ya_shared_cache.py: $YA_CACHE_ROOT, else git config ya.cacheRoot,
-   else <main project>/.ya-cache (git worktrees share the main project's
-   cache automatically; deleting the project removes everything).
+2. <main project>/Engine/ThirdParty/VulkanSDK, where the main project
+   follows Script/ya_shared_cache.py ($YA_CACHE_ROOT / git config
+   ya.cacheRoot / git worktrees' common git dir). The real files stay in the
+   main project; linked worktrees point back at them, so deleting the main
+   project removes everything (nothing is left in system directories).
 
 Layout produced
 ---------------
@@ -50,7 +51,12 @@ import urllib.request
 from pathlib import Path
 from typing import Iterable
 
-from ya_shared_cache import cache_root, migrate_legacy_cache
+from ya_shared_cache import (
+    is_main_repo,
+    migrate_legacy_payloads,
+    rmtree_writable,
+    sdk_payload_root,
+)
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -68,11 +74,11 @@ def ensure_macos() -> None:
 
 
 def shared_root() -> Path:
-    """Shared SDK root shared by all checkouts of this user."""
+    """The main project's repo-local SDK root (real files)."""
     env_root = os.environ.get("YA_VULKAN_SDK_ROOT")
     if env_root:
         return Path(env_root).expanduser().resolve()
-    return cache_root() / "VulkanSDK"
+    return sdk_payload_root()
 
 
 def repo_sdk_root() -> Path:
@@ -261,91 +267,21 @@ def install_into_shared(version: str, installer_app: Path) -> Path:
     return final
 
 
-def migrate_legacy_local(version: str) -> None:
-    """Fold a checkout-local real SDK dir into the shared root.
+def ensure_checkout_sdk(version: str) -> None:
+    """Make this checkout see the main project's SDK install.
 
-    Real dirs are the pre-symlink layout where every checkout had its own
-    copy. Move (or copy+remove on a different volume) so all checkouts can
-    share one install.
+    Main project: keeps the real install (no link). Linked worktrees: the
+    checkout-local path is a link into the main project's dir. Idempotent;
+    safe to run from every worktree / agent.
     """
-    local = repo_sdk_root() / version
-    if not local.exists() or local.is_symlink():
-        return
-    shared = shared_root() / version
-    try:
-        validate_install(local)
-    except RuntimeError:
-        # Broken leftover; it would shadow a shared symlink of the same name.
-        print(f"-- Removing broken checkout-local install at {local}")
-        shutil.rmtree(local, ignore_errors=True)
-        return
-
-    if shared.exists():
-        try:
-            validate_install(shared)
-        except RuntimeError:
-            shutil.rmtree(shared, ignore_errors=True)
-        else:
-            print(f"-- Removing checkout-local duplicate at {local} (shared copy exists)")
-            shutil.rmtree(local, ignore_errors=True)
-            return
-
-    shared.parent.mkdir(parents=True, exist_ok=True)
-    tmp = shared.parent / f".migrating-{version}-{os.getpid()}"
-    if tmp.exists():
-        shutil.rmtree(tmp, ignore_errors=True)
-    try:
-        try:
-            os.rename(local, tmp)
-        except OSError:
-            # Different volume: copy, validate, then drop the local copy.
-            print(f"-- Copying {local} to shared cache (cross-volume migration)")
-            shutil.copytree(local, tmp, symlinks=True)
-            validate_install(tmp)
-            shutil.rmtree(local, ignore_errors=True)
-        try:
-            os.rename(tmp, shared)
-        except OSError:
-            # Concurrent agent installed the same version first.
-            validate_install(shared)
-            shutil.rmtree(tmp, ignore_errors=True)
-    except Exception:
-        shutil.rmtree(tmp, ignore_errors=True)
-        raise
-    print(f"-- Migrated {local} -> {shared}")
-
-
-def migrate_repo_download_cache() -> None:
-    """Fold zip files from the legacy checkout-local .cache into the shared
-    cache, so each worktree stops keeping its own ~350 MB download."""
-    repo_cache = repo_sdk_root() / ".cache"
-    if not repo_cache.exists():
-        return
-    shared_cache = shared_root() / ".cache"
-    moved = 0
-    for zip_path in repo_cache.glob("*.zip"):
-        shared_cache.mkdir(parents=True, exist_ok=True)
-        target = shared_cache / zip_path.name
-        if not target.exists():
-            print(f"-- Reusing cached download {zip_path}")
-            os.replace(zip_path, target)
-            moved += 1
-    if moved:
-        print(f"-- Moved {moved} download cache file(s) into {shared_cache}")
-    try:
-        # Drop the legacy cache dir once empty; leftover extract dirs are
-        # disposable and kept only if something is still in there.
-        remaining = list(repo_cache.iterdir())
-        if not remaining:
-            repo_cache.rmdir()
-    except OSError:
-        pass
-
-
-def ensure_worktree_symlink(version: str) -> None:
-    """Make <repo>/Engine/ThirdParty/VulkanSDK/<version> a symlink into the
-    shared root. Idempotent; safe to run from every worktree / agent."""
     link = repo_sdk_root() / version
+    if is_main_repo():
+        if link.is_symlink():
+            # Should not happen post-migration; repair by pointing at the
+            # real payload the migration restored.
+            print(f"   warn: {link} is a link in the main project; replacing")
+            link.unlink()
+        return
     target = shared_root() / version
     if link.is_symlink():
         try:
@@ -373,7 +309,7 @@ def print_update_hint() -> None:
 
 def main() -> int:
     ensure_macos()
-    migrate_legacy_cache(cache_root())
+    migrate_legacy_payloads()
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
     version_group = parser.add_mutually_exclusive_group()
@@ -403,9 +339,7 @@ def main() -> int:
         existing = find_latest_valid_install()
         if existing and not args.force:
             version, install_dest = existing
-            migrate_legacy_local(version)
-            migrate_repo_download_cache()
-            ensure_worktree_symlink(version)
+            ensure_checkout_sdk(version)
             print(f"-- Using installed Vulkan SDK: {version}")
             print(f"-- SDK path: {install_dest}")
             print_update_hint()
@@ -427,10 +361,10 @@ def main() -> int:
 
     if args.force:
         print(f"-- Removing existing install at {install_dest}")
-        shutil.rmtree(install_dest, ignore_errors=True)
+        rmtree_writable(install_dest)
         local = repo_sdk_root() / version
         if local.exists() and not local.is_symlink():
-            shutil.rmtree(local, ignore_errors=True)
+            rmtree_writable(local)
 
     if install_dest.exists():
         try:
@@ -438,7 +372,7 @@ def main() -> int:
             print(f"-- SDK already installed at {install_dest} (use --force to redo)")
         except RuntimeError as e:
             print(f"-- Existing install is incomplete ({e}); reinstalling")
-            shutil.rmtree(install_dest, ignore_errors=True)
+            rmtree_writable(install_dest)
             zip_path = ensure_download(version, shared_cache, repo_sdk_root() / ".cache")
             extract_dir = shared_cache / f"extract-{version}-{os.getpid()}"
             installer_app = unzip(zip_path, extract_dir)
@@ -459,9 +393,7 @@ def main() -> int:
             if not args.keep_extracted and extract_dir.exists():
                 shutil.rmtree(extract_dir, ignore_errors=True)
 
-    migrate_legacy_local(version)
-    migrate_repo_download_cache()
-    ensure_worktree_symlink(version)
+    ensure_checkout_sdk(version)
     validate_install(install_dest)
     print(f"-- SDK installed at: {install_dest}")
     print(f"-- worktree link: {repo_sdk_root() / version} -> {install_dest}")
