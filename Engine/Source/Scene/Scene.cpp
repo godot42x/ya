@@ -515,6 +515,20 @@ Node *Scene::duplicateNode(Node *node, Node *parent)
     if (!node) {
         return nullptr;
     }
+
+    // Entity-less Node2D: recreate by type and deep-copy the reflected fields.
+    if (!node->getEntity()) {
+        if (auto* node2D = dynamic_cast<Node2D*>(node)) {
+            if (Node2D* copy = createUINode(node2D->getUITypeName(),
+                                            node2D->getName() + " Duplicate",
+                                            parent)) {
+                copy->deserializeFields(node2D->serializeFields());
+                return copy;
+            }
+        }
+        return nullptr;
+    }
+
     Node   *newNode   = nullptr;
     Entity *newEntity = nullptr;
 
@@ -546,6 +560,60 @@ Node *Scene::duplicateNode(Node *node, Node *parent)
     newNode = createNode(node->getName() + " Duplicate", parent, newEntity);
 
     return newNode;
+}
+
+Node* Scene::findNodeByPath(const std::string& path)
+{
+    Node* rootNode = getRootNode();
+    if (!rootNode) {
+        return nullptr;
+    }
+    if (path.empty() || path == "/") {
+        return rootNode;
+    }
+
+    Node* current = rootNode;
+    size_t start  = 0;
+    while (start < path.size()) {
+        if (path[start] == '/') {
+            ++start;
+            continue;
+        }
+        const size_t end = path.find('/', start);
+        const std::string segment = path.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        Node* next = nullptr;
+        for (Node* child : current->getChildren()) {
+            if (child->getName() == segment) {
+                next = child;
+                break;
+            }
+        }
+        if (!next) {
+            return nullptr;
+        }
+        current = next;
+        start   = end == std::string::npos ? path.size() : end;
+    }
+    return current;
+}
+
+std::string Scene::getNodePath(const Node* node) const
+{
+    if (!node || node == _rootNode.get()) {
+        return {};
+    }
+
+    std::vector<std::string> segments;
+    for (const Node* current = node; current && current != _rootNode.get(); current = current->getParent()) {
+        segments.push_back(current->getName());
+    }
+
+    std::string path;
+    for (auto it = segments.rbegin(); it != segments.rend(); ++it) {
+        path += "/";
+        path += *it;
+    }
+    return path;
 }
 
 bool Scene::moveNode(Node* node, Node* newParent, size_t childIndex)

@@ -6,6 +6,8 @@
 
 #include <functional>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace ya
 {
@@ -152,5 +154,9 @@ struct ENGINE_API UIButtonNode : public Node2D
 /// Create a Node2D subclass by its UI type name (used by scene deserialization
 /// and PIE clone). Returns nullptr for unknown types.
 std::shared_ptr<Node2D> createNode2DByTypeName(const std::string& typeName, const std::string& name);
+
+/// Every registered Node2D subclass, as short type names, sorted. Driven by
+/// ClassRegistry so new node types appear without touching this file.
+std::vector<std::string> getRegisteredUINodeTypeNames();
 
 } // namespace ya

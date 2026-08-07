@@ -167,6 +167,14 @@ struct ENGINE_API [[refl]] Scene
     Node* duplicateNode(Node* node, Node* parent = nullptr);
     bool  moveNode(Node* node, Node* newParent, size_t childIndex);
 
+    /// Resolve a slash-separated node path ("/Canvas/Panel") from the scene
+    /// root. Empty path or "/" resolves to the root node itself.
+    Node* findNodeByPath(const std::string& path);
+    /// Build the "/"-separated path of a node under this scene (root children
+    /// are "/Name", nested nodes "/A/B/C"). Empty when the node is not in the
+    /// tree.
+    std::string getNodePath(const Node* node) const;
+
     // === Script-facing reflected API ===
     YA_REFLECT_BEGIN(Scene)
     YA_REFLECT_METHOD(getName, .tooltip("Scene display name"))
