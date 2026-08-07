@@ -8,7 +8,8 @@ Why?
   repos; with parallel agents across multiple worktrees every extra
   checkout costs minutes of network plus GBs of disk.
 - One canonical checkout lives in the shared cache (Script/ya_shared_cache.py,
-  root overridable via $YA_CACHE_ROOT); every checkout links to it.
+  project-local under <main project>/.ya-cache by default, root overridable
+  via $YA_CACHE_ROOT or git config ya.cacheRoot); every checkout links to it.
   `git update-index --skip-worktree` keeps `git status` clean for those paths.
 
 Git caveats (by design):
@@ -41,7 +42,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from ya_shared_cache import cache_root, is_dir_link, make_dir_link
+from ya_shared_cache import cache_root, is_dir_link, make_dir_link, migrate_legacy_cache
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -280,6 +281,7 @@ def main() -> int:
     if not is_git_repo(REPO_ROOT):
         print("-- Not a git checkout; skipping submodule setup")
         return 0
+    migrate_legacy_cache(cache_root())
 
     for path in HEAVY_SUBMODULES:
         sha = index_gitlink_sha(path)

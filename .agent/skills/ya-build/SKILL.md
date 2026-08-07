@@ -106,12 +106,17 @@ python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
 
 ## 共享缓存（多 worktree / 多 agent 并行）
 
-大体积产物（Vulkan SDK、重型 submodule）统一装在用户级共享缓存里，各
-checkout 通过目录链接（macOS/Linux symlink，Windows junction）指向同一份，
-避免每个 worktree 各自下载/存储：
+大体积产物（Vulkan SDK、重型 submodule）统一装在**主项目下**的共享缓存
+`<主项目>/.ya-cache/`，各 checkout 通过目录链接（macOS/Linux symlink，
+Windows junction）指向同一份，避免每个 worktree 各自下载/存储。缓存跟着
+项目走：删除主项目目录即整体清理，不会在系统里（~/Library/Caches 等）
+留垃圾。
 
-- 缓存根：`$YA_CACHE_ROOT` 优先，否则 macOS `~/Library/Caches/ya-engine`、
-  Windows `%LOCALAPPDATA%\ya-engine\Cache`、Linux `~/.cache/ya-engine`。
+- 缓存根解析：`$YA_CACHE_ROOT` → `git config ya.cacheRoot`（独立 clone
+  想共享时设成主项目路径）→ 自动推导 `<主项目>/.ya-cache`（git worktree
+  的 `--git-common-dir` 指向主项目，所以所有 worktree 自动共享，零配置）。
+- 旧版用户级系统缓存（`~/Library/Caches/ya-engine` 等）会在首次运行时
+  自动迁移进主项目，不会重新下载。
 - macOS Vulkan SDK：`Script/setup_vulkan_sdk_macos.py` 装到
   `<cache>/VulkanSDK`（`YA_VULKAN_SDK_ROOT` 可单独覆盖），checkout 内
   `Engine/ThirdParty/VulkanSDK/<version>` 是指向共享缓存的 symlink；安装
@@ -128,6 +133,8 @@ checkout 通过目录链接（macOS/Linux symlink，Windows junction）指向同
   `python3 Script/ya.py cfg`。小 submodule（ImGui 等）保持标准 git 语义。
 - 新 clone 先跑 `ya.py cfg` 再手动 `git submodule update`，否则重型
   submodule 会先被完整拉下来；脚本会把干净的 checkout 自动转回链接。
+- 不要在含共享缓存的 checkout 里跑 `git clean -fdx`（会清掉 `.ya-cache/`
+  触发重新下载）；误清后重跑 `ya.py cfg` 即可恢复。
 - 若链接目标异常，先跑 `python3 Script/ya.py cfg` 再看构建。
 
 ## 相关 skills

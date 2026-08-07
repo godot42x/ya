@@ -15,9 +15,10 @@ Why shared + symlink (multi-agent / multi-worktree safe)?
 
 Shared root resolution (first match wins):
 1. $YA_VULKAN_SDK_ROOT -- explicit override (e.g. a team CI cache dir)
-2. <shared cache>/VulkanSDK, where <shared cache> follows Script/ya_shared_cache.py:
-   $YA_CACHE_ROOT, else ~/Library/Caches/ya-engine (macOS), else
-   %LOCALAPPDATA%/ya-engine/Cache (Windows), else ~/.cache/ya-engine (Linux)
+2. <shared cache>/VulkanSDK, where <shared cache> follows
+   Script/ya_shared_cache.py: $YA_CACHE_ROOT, else git config ya.cacheRoot,
+   else <main project>/.ya-cache (git worktrees share the main project's
+   cache automatically; deleting the project removes everything).
 
 Layout produced
 ---------------
@@ -49,7 +50,7 @@ import urllib.request
 from pathlib import Path
 from typing import Iterable
 
-from ya_shared_cache import cache_root
+from ya_shared_cache import cache_root, migrate_legacy_cache
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -372,6 +373,7 @@ def print_update_hint() -> None:
 
 def main() -> int:
     ensure_macos()
+    migrate_legacy_cache(cache_root())
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
     version_group = parser.add_mutually_exclusive_group()
