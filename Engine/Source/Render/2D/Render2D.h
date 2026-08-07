@@ -151,10 +151,13 @@ struct ENGINE_API FQuadRender
 
     DescriptorSetHandle      _worldFrameUboDS     = {};
     std::shared_ptr<IBuffer> _worldFrameUBOBuffer = nullptr;
+    DescriptorSetHandle      _uiFrameUboDS        = {};
+    std::shared_ptr<IBuffer> _uiFrameUBOBuffer    = nullptr;
 
     std::shared_ptr<IDescriptorSetLayout>      _resourceDSL      = nullptr;
     DescriptorSetHandle                        _resourceDS       = {};
     DescriptorSetHandle                        _worldResourceDS  = {};
+    DescriptorSetHandle                        _uiResourceDS     = {};
     std::vector<TextureBinding>                _textureBindings;
     std::unordered_map<std::string, uint32_t>  _textureLabel2Idx;
     static constexpr size_t                    TEXTURE_SET_SIZE     = 16;

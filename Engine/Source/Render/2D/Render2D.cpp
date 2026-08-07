@@ -524,15 +524,15 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
     _descriptorPool = IDescriptorPool::create(
         render,
         DescriptorPoolCreateInfo{
-            .maxSets   = 4,
+            .maxSets   = 6,
             .poolSizes = {
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::UniformBuffer,
-                    .descriptorCount = 2,
+                    .descriptorCount = 3,
                 },
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::CombinedImageSampler,
-                    .descriptorCount = 32,
+                    .descriptorCount = 48,
                 },
             },
         });
@@ -560,11 +560,23 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
             .memoryUsage = EMemoryUsage::CpuToGpu,
         });
 
+    descriptorSets.clear();
+    _descriptorPool->allocateDescriptorSets(_frameUboDSL, 1, descriptorSets);
+    _uiFrameUboDS     = descriptorSets[0];
+    _uiFrameUBOBuffer = render->getResourceFactory()->createBuffer(
+        ya::BufferCreateInfo{
+            .label       = "Sprite2D_UI_FrameUBO",
+            .usage       = EBufferUsage::UniformBuffer,
+            .size        = sizeof(FrameUBO),
+            .memoryUsage = EMemoryUsage::CpuToGpu,
+        });
+
     _resourceDSL = IDescriptorSetLayout::create(render, _pipelineDesc.descriptorSetLayouts[1]);
     descriptorSets.clear();
-    _descriptorPool->allocateDescriptorSets(_resourceDSL, 2, descriptorSets);
+    _descriptorPool->allocateDescriptorSets(_resourceDSL, 3, descriptorSets);
     _resourceDS      = descriptorSets[0];
     _worldResourceDS = descriptorSets[1];
+    _uiResourceDS    = descriptorSets[2];
 
     std::vector<std::shared_ptr<IDescriptorSetLayout>> dslVec = {_frameUboDSL, _resourceDSL};
     _pipelineLayout = IPipelineLayout::create(render, "Sprite2D_PipelineLayout", _pipelineDesc.pushConstants, dslVec);
@@ -746,8 +758,18 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
         return;
     }
 
-    updateResources(_resourceDS);
-    updateFrameUBO(_frameUBOBuffer, _frameUboDS, _screenOrthoProj, glm::mat4(1.0f));
+    // The UI compositor uses its OWN descriptor sets: it records in the same
+    // command buffer as the world graph's overlay pass, and updating a
+    // descriptor set that is already bound in an earlier region would
+    // invalidate that region (no UPDATE_AFTER_BIND).
+    if (data2D.bUICompositorMode) {
+        updateResources(_uiResourceDS);
+        updateFrameUBO(_uiFrameUBOBuffer, _uiFrameUboDS, _screenOrthoProj, glm::mat4(1.0f));
+    }
+    else {
+        updateResources(_resourceDS);
+        updateFrameUBO(_frameUBOBuffer, _frameUboDS, _screenOrthoProj, glm::mat4(1.0f));
+    }
     _vertexBuffer->flush();
 
     cmdBuf->bindPipeline(data2D.bUICompositorMode && _uiPipeline ? _uiPipeline.get() : _pipeline.get());
@@ -769,7 +791,9 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
     }
     cmdBuf->setCullMode(data2D.screenCullMode);
 
-    std::vector<DescriptorSetHandle> descriptorSets = {_frameUboDS, _resourceDS};
+    const std::vector<DescriptorSetHandle> descriptorSets = data2D.bUICompositorMode
+        ? std::vector<DescriptorSetHandle>{_uiFrameUboDS, _uiResourceDS}
+        : std::vector<DescriptorSetHandle>{_frameUboDS, _resourceDS};
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descriptorSets);
     cmdBuf->bindVertexBuffer(0, _vertexBuffer.get(), 0);
     cmdBuf->bindIndexBuffer(_indexBuffer.get(), 0, false);
