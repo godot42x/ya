@@ -42,7 +42,22 @@
       UICanvas/UIPanel/UITextBlock/UIBase.cpp/Others + ECS WidgetComponent
       stub）；UIBase.h 保留 UIAppCtx/FUIHelper 并新增
       UICanvasTransform/UIPaintContext/UIEventContext
-- [ ] 9-slice 封装、字形缓存上限、字体 fallback、焦点/键盘导航
+- [x] 输入模式控制（UE 三态 + Godot 节点过滤 + 模态栈）：
+      EInputMode（GameAndUI/GameOnly/UIOnly）+ App::set/push/popInputMode
+      （CLI：input.set_mode/push_mode/pop_mode/get_mode）；路由改为
+      "UI 优先、Stop 独占"（GameInputNode/EditorInputNode，capture 期间 UI
+      挂起）；Node2D::_hitFilter（Pass/Stop/Ignore = Godot mouse_filter）；
+      光标基线随模式切换（GameOnly 隐藏）；进入 Runtime/Sim 时重置模式
+- [x] 可见性重构（UMG Visibility 五态，渲染/命中/布局打包）：
+      EUIVisibility（Visible/Hidden/Collapsed/HitTestInvisible/
+      SelfHitTestInvisible）替换 _visible；_hitFilter 收窄为 Pass/Stop
+      （Ignore 并入 HitTestInvisible）；语义谓词集中在 Node2D
+      （isVisibleForRender/isHitTestableSelf/isHitTestableSubtree/
+      participatesInLayout + 树感知 isVisibleInTree/isHitTestableInTree，
+      Godot is_visible_in_tree 语义）；容器布局跳过 Collapsed；
+      旧场景 "_visible": true 自动兼容（未知字段跳过，默认 Visible）
+- [ ] 焦点/键盘导航（键盘轴：UIOnly/焦点节点 + tab/enter，待做）
+- [ ] 9-slice 封装、字形缓存上限、字体 fallback
 - [ ] Node2D world-space 模式（Godot Sprite2D 语义）→ 2D 实体入同一棵树
 - [ ] 编辑器 UI 树面板完善
 
