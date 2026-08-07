@@ -37,9 +37,19 @@ struct App;
 struct IImageView;
 struct IImage;
 struct RenderImage;
+struct Node2D;
 
 using EditorViewportContext      = RenderViewportSnapshot;
 using EditorViewportDebugCatalog = RenderViewportDebugCatalog;
+
+/// Editor viewport viewing mode (development-time only; the game always
+/// renders 3D + 2D together). Mode2D previews the Node2D canvas over a grid,
+/// hiding the 3D world - Godot-style 2D/3D separation.
+enum class EViewportMode : uint8_t
+{
+    Mode3D = 0,
+    Mode2D = 1,
+};
 
 struct EditorLayer
 {
@@ -49,6 +59,7 @@ struct EditorLayer
     App*                 _app                = nullptr;
     uint64_t             _selectedEntityUUID = 0;
     std::vector<Entity*> _selections;
+    Node2D*              _selectedNode2D = nullptr; // Mutually exclusive with _selections
 
     // Editor panels
     SceneHierarchyPanel _sceneHierarchyPanel;
@@ -82,6 +93,15 @@ struct EditorLayer
     int       _projectBrowserSelection = -1;
     std::vector<std::string> _discoveredProjects;
     std::string              _projectBrowserError;
+
+    // 2D canvas preview state (Mode2D): pan in viewport pixels, zoom scale
+    // around the viewport center. Lightweight navigation state - no camera
+    // entity (Unity Scene-view 2D mode semantics).
+    EViewportMode _viewportMode = EViewportMode::Mode3D;
+    glm::vec2     _canvasPan    = {0.0f, 0.0f};
+    float         _canvasZoom   = 1.0f;
+    bool          _bCanvasPanning = false;
+    glm::vec2     _canvasPanLastMouse = {0.0f, 0.0f};
 
     // Editor settings
     glm::vec4 _clearColor = {0.1f, 0.1f, 0.1f, 1.0f};
@@ -177,6 +197,17 @@ struct EditorLayer
         _sceneHierarchyPanel.setSelection(entity);
     }
 
+    /// Node-level selection (entity-less Node2D); clears entity selection.
+    void setSelectedNode2D(Node2D* node)
+    {
+        _selectedNode2D = node;
+        if (node) {
+            _selections.clear();
+            _selectedEntityUUID = 0;
+        }
+    }
+    [[nodiscard]] Node2D* getSelectedNode2D() const { return _selectedNode2D; }
+
     // Entity selection bus - notifies DetailsView of selection changes
     void setSelectedEntity(Entity* entity)
     {
@@ -188,6 +219,7 @@ struct EditorLayer
     /// so existing single-selection consumers (gizmo, details, focus) keep working.
     void setSelections(const std::vector<Entity*>& selections, Entity* primary = nullptr)
     {
+        _selectedNode2D = nullptr;
         _selections.clear();
         for (Entity* entity : selections) {
             if (entity && entity->isValid() &&
@@ -210,6 +242,19 @@ struct EditorLayer
             }
         }
     }
+
+    // === 2D canvas preview mode ===
+    [[nodiscard]] EViewportMode getViewportMode() const { return _viewportMode; }
+    void setViewportMode(EViewportMode mode, bool bPersist = true);
+    [[nodiscard]] bool isViewportMode2D() const { return _viewportMode == EViewportMode::Mode2D; }
+    [[nodiscard]] const glm::vec2& getCanvasPan() const { return _canvasPan; }
+    [[nodiscard]] float            getCanvasZoom() const { return _canvasZoom; }
+    void setCanvasPan(const glm::vec2& pan) { _canvasPan = pan; }
+    void setCanvasZoom(float zoom) { _canvasZoom = std::clamp(zoom, 0.1f, 16.0f); }
+    /// Map a viewport-local pixel to canvas logical pixels under the current
+    /// 2D pan/zoom transform. Returns false when the point is outside the
+    /// visible canvas region.
+    bool viewportToCanvas(const glm::vec2& viewportLocal, glm::vec2& outCanvas) const;
 
     /**
      * @brief Check if viewport should capture input events
@@ -335,6 +380,8 @@ struct EditorLayer
     void removeImGuiTexture(const ImGuiImageEntry* entry);
     void renderGizmo();
     void pickEntity(float viewportX, float viewportY);
+    /// 2D mode picking: hit-test the Node2D tree under the canvas transform.
+    void pickNode2D(float viewportX, float viewportY);
     /// Frame the camera on the merged world bounds of the whole selection.
     void focusCameraOnSelection();
 

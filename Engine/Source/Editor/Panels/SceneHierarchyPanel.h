@@ -21,6 +21,7 @@ struct Scene;
 struct EditorLayer;
 struct LuaScriptComponent;
 struct Node;
+struct Node2D;
 
 struct SceneHierarchyPanel
 {
@@ -42,6 +43,10 @@ struct SceneHierarchyPanel
     Entity*              _primarySelection = nullptr;
     Entity*              _rangeAnchor      = nullptr;
 
+    // Node-level (entity-less Node2D) selection; mutually exclusive with the
+    // entity selection above (selecting one clears the other).
+    Node2D* _selectedNode2D = nullptr;
+
     std::vector<Entity*> _flatEntities;    // DFS tree order + standalone entities, rebuilt per frame
     std::unordered_map<Node*, bool> _lastNodeOpenState; // Last rendered open state per node
     std::unordered_set<Node*>       _pendingTreeToggle; // Label click => toggle collapse next frame
@@ -53,6 +58,7 @@ struct SceneHierarchyPanel
     // === Pending batch actions (deferred to keep tree iteration safe) ===
     std::vector<Node*>   _pendingNodeDuplicate;
     std::vector<Entity*> _pendingEntityDelete;
+    std::vector<Node*>   _pendingNodeDelete;
 
     // === Scroll / drag-drop state ===
     Entity* _pendingScrollSelection = {};
@@ -68,6 +74,8 @@ struct SceneHierarchyPanel
 
     [[nodiscard]] Entity *getSelectedEntity() const { return _primarySelection; }
     void                  setSelection(Entity *entity);
+    [[nodiscard]] Node2D *getSelectedNode2D() const { return _selectedNode2D; }
+    void                  setSelectedNode2D(Node2D *node);
     /// Plain / Ctrl-toggle / Shift-range click semantics (reads ImGui IO).
     void                  handleEntityClick(Entity *entity);
     /// Replace the whole entity selection and notify the owner.
@@ -82,6 +90,7 @@ struct SceneHierarchyPanel
 
     // Node hierarchy rendering
     void drawNodeRecursive(Node *node);
+    void drawNode2DRecursive(Node2D *node);
     void drawNodeDropTarget(Node *node, ImVec2 itemMin, ImVec2 itemMax, bool isHovered);
     void renderStandaloneEntities();
 
@@ -96,6 +105,7 @@ struct SceneHierarchyPanel
     // Multi-select / search helpers
     bool isSelected(Entity *entity) const;
     void notifyOwnerSelection();
+    void notifyOwnerNodeSelection();
     void validateSelections();
     void buildFlatEntityList();
     void collectEntities(Node *node);
@@ -104,6 +114,7 @@ struct SceneHierarchyPanel
     bool subtreeMatchesFilter(Node *node) const;
     void drawCreateMenuItems(Node *parentNode);
     void drawEntityNodeContextMenu(Node *node, Entity *entity);
+    void drawNode2DContextMenu(Node2D *node);
     void flushPendingActions();
 };
 

@@ -22,6 +22,7 @@ struct EditorLayer;
 struct LuaScriptComponent;
 struct SkyboxPreviewInfo;
 struct Texture;
+struct Node2D;
 
 // ============================================================================
 // MARK: Details View
@@ -53,6 +54,8 @@ struct DetailsView
 
   private:
     void drawComponents(Entity &entity);
+    /// Node-level inspector: reflected fields of an entity-less Node2D node.
+    void drawNode2D(Node2D &node);
     /// Multi-select mode: draw the intersection of components shared by all
     /// selected entities; edits write back to every instance.
     void drawMultiComponents(const std::vector<Entity*> &entities);
