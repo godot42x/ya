@@ -37,14 +37,24 @@ std::vector<Node2D*> collectSorted(Node* sceneRoot)
     return nodes;
 }
 
-void drawNode2D(Node2D* node, const glm::vec2& uiScale)
+glm::vec2 transformCanvasPoint(const glm::vec2& point, const UICanvasTransform& canvas)
+{
+    return point * canvas.zoom + canvas.pan;
+}
+
+glm::vec2 transformCanvasSize(const glm::vec2& size, const UICanvasTransform& canvas)
+{
+    return size * canvas.zoom;
+}
+
+void drawNode2D(Node2D* node, const glm::vec2& uiScale, const UICanvasTransform& canvas)
 {
     if (!node || !node->_visible) {
         return;
     }
 
-    const glm::vec2 pos = node->getScreenPosition() * uiScale;
-    const glm::vec2 size = node->_size * uiScale;
+    const glm::vec2 pos  = transformCanvasPoint(node->getScreenPosition(), canvas) * uiScale;
+    const glm::vec2 size = transformCanvasSize(node->_size, canvas) * uiScale;
     const glm::vec3 screenPos(pos, 0.0f);
 
     if (auto* panel = dynamic_cast<UIPanelNode*>(node)) {
@@ -60,18 +70,19 @@ void drawNode2D(Node2D* node, const glm::vec2& uiScale)
         }
         glm::vec2 drawPos = pos;
         const float textWidth = font->measureText(text->_text);
+        const float textScale = canvas.zoom * uiScale.x;
         if (text->_hAlign == EUIAlignH::Center) {
-            drawPos.x += (size.x - textWidth * uiScale.x) * 0.5f;
+            drawPos.x += (size.x - textWidth * textScale) * 0.5f;
         }
         else if (text->_hAlign == EUIAlignH::Right) {
-            drawPos.x += size.x - textWidth * uiScale.x;
+            drawPos.x += size.x - textWidth * textScale;
         }
         // VAlign: approximate with the font line height for v1.
         if (text->_vAlign == EUIAlignV::Center) {
-            drawPos.y += (size.y - font->lineHeight * uiScale.y) * 0.5f;
+            drawPos.y += (size.y - font->lineHeight * canvas.zoom * uiScale.y) * 0.5f;
         }
         else if (text->_vAlign == EUIAlignV::Bottom) {
-            drawPos.y += size.y - font->lineHeight * uiScale.y;
+            drawPos.y += size.y - font->lineHeight * canvas.zoom * uiScale.y;
         }
         Render2D::makeText(text->_text, glm::vec3(drawPos, 0.0f), text->_color, font.get());
         return;
@@ -88,11 +99,11 @@ void drawNode2D(Node2D* node, const glm::vec2& uiScale)
 
 } // namespace
 
-void UISceneRenderer::render(Node* sceneRoot, const glm::vec2& uiScale)
+void UISceneRenderer::render(Node* sceneRoot, const glm::vec2& uiScale, const UICanvasTransform& canvas)
 {
     const auto nodes = collectSorted(sceneRoot);
     for (Node2D* node : nodes) {
-        drawNode2D(node, uiScale);
+        drawNode2D(node, uiScale, canvas);
     }
 }
 

@@ -1108,7 +1108,11 @@ void DeferredRenderPipeline::refreshViewportStageState()
 
 void DeferredRenderPipeline::syncFrameSettings(const RenderPipelineFrameContext& frame)
 {
-    (void)frame;
+    const float frameBufferScale = std::max(frame.viewportFrameBufferScale, 1.0f);
+    const Extent2D desiredExtent  = Extent2D::fromVec2(frame.viewportRect.extent / frameBufferScale);
+    if (desiredExtent.width > 0 && desiredExtent.height > 0 && desiredExtent != _viewportRTSpec.extent) {
+        requestViewportResize(desiredExtent);
+    }
 
     if (_ssaoStage) {
         _ssaoStage->setSettings(_ssaoStage->getRadius(),

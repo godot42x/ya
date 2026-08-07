@@ -7,6 +7,12 @@
 namespace ya
 {
 
+struct UICanvasTransform
+{
+    glm::vec2 pan  = {0.0f, 0.0f};
+    float     zoom = 1.0f;
+};
+
 /// Walks the unified scene tree, collecting Node2D (UI) nodes, and renders /
 /// dispatches events for them. Screen-space top-left origin, Y down — the same
 /// convention as Render2D and UIAppCtx.
@@ -16,7 +22,9 @@ struct UISceneRenderer
     /// (must be called inside Render2D::begin/end), sorted by zOrder.
     /// `uiScale` maps logical viewport pixels to render-target pixels (frame
     /// buffer scale).
-    static void render(Node* sceneRoot, const glm::vec2& uiScale = glm::vec2(1.0f));
+    static void render(Node* sceneRoot,
+                       const glm::vec2& uiScale = glm::vec2(1.0f),
+                       const UICanvasTransform& canvas = {});
 
     /// Hit-test the Node2D subtree and dispatch mouse events. Returns true when
     /// the UI consumed the event (caller should not pass it to gameplay).

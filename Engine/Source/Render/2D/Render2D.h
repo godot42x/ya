@@ -11,12 +11,24 @@
 #include "Render/Core/Texture.h"
 #include "Render/Render.h"
 #include "Render/RenderDefines.h"
+#include "Render/Stage/IRenderStage.h"
 #include "Resource/Font/FontManager.h"
 #include "Resource/Texture/TextureLibrary.h"
 #include "Runtime/Rendering/Common/RenderOverlay.h"
 
+#include <array>
+
 namespace ya
 {
+
+enum class ERender2DPassDomain : uint8_t
+{
+    RuntimeOverlay = 0,
+    EditorViewport,
+    GameUICompositor,
+    EditorCanvas,
+    Count,
+};
 
 struct FRender2dData
 {
@@ -27,6 +39,7 @@ struct FRender2dData
     bool            bReverseViewport = true;
     ICommandBuffer* curCmdBuf        = nullptr;
     bool            bUICompositorMode = false; // flush uses the depth-less UI pipeline
+    ERender2DPassDomain passDomain    = ERender2DPassDomain::RuntimeOverlay;
 
     // Active screen-space clip rects (top-left origin, Y down). The top entry
     // is applied as the scissor on the next screen-batch flush.
@@ -49,6 +62,7 @@ struct FRender2dContext
     uint32_t        windowWidth  = 800;
     uint32_t        windowHeight = 600;
     bool            bUICompositorMode = false; // flush uses the depth-less UI pipeline
+    ERender2DPassDomain passDomain = ERender2DPassDomain::RuntimeOverlay;
 
     FRender2dData::Camera cam;
 };
@@ -92,7 +106,6 @@ struct ENGINE_API FQuadRender
 
     glm::mat4 _screenOrthoProj = glm::mat4(1.0f);
 
-    std::shared_ptr<IBuffer> _vertexBuffer;
     std::shared_ptr<IBuffer> _indexBuffer;
 
     FQuadRender::Vertex* vertexPtr     = nullptr;
@@ -100,11 +113,10 @@ struct ENGINE_API FQuadRender
     uint32_t             vertexCount   = 0;
     uint32_t             indexCount    = 0;
 
-    std::shared_ptr<IBuffer> _worldVertexBuffer;
-    FQuadRender::Vertex*     worldVertexPtr     = nullptr;
-    FQuadRender::Vertex*     worldVertexPtrHead = nullptr;
-    uint32_t                 worldVertexCount   = 0;
-    uint32_t                 worldIndexCount    = 0;
+    FQuadRender::Vertex* worldVertexPtr     = nullptr;
+    FQuadRender::Vertex* worldVertexPtrHead = nullptr;
+    uint32_t             worldVertexCount   = 0;
+    uint32_t             worldIndexCount    = 0;
 
     PipelineLayoutDesc _pipelineDesc = PipelineLayoutDesc{
         .pushConstants        = {},
@@ -137,27 +149,47 @@ struct ENGINE_API FQuadRender
     };
 
     std::shared_ptr<IPipelineLayout>   _pipelineLayout = nullptr;
-    std::shared_ptr<IGraphicsPipeline> _pipeline       = nullptr;
-    std::shared_ptr<IGraphicsPipeline> _uiPipeline     = nullptr;
     std::shared_ptr<IGraphicsPipeline> _worldPipeline  = nullptr;
-    EFormat::T                         _uiPipelineFormat = EFormat::Undefined;
+    struct PassPipelines
+    {
+        std::shared_ptr<IGraphicsPipeline> screenPipeline{};
+        EFormat::T                         screenColorFormat = EFormat::Undefined;
+        EFormat::T                         screenDepthFormat = EFormat::Undefined;
+        std::shared_ptr<IGraphicsPipeline> uiPipeline{};
+        EFormat::T                         uiColorFormat = EFormat::Undefined;
+    };
+    std::array<PassPipelines, static_cast<size_t>(ERender2DPassDomain::Count)> _passPipelines{};
 
     std::shared_ptr<IDescriptorPool> _descriptorPool = nullptr;
 
     std::shared_ptr<IDescriptorSetLayout> _frameUboDSL = nullptr;
 
-    DescriptorSetHandle      _frameUboDS     = {};
-    std::shared_ptr<IBuffer> _frameUBOBuffer = nullptr;
-
-    DescriptorSetHandle      _worldFrameUboDS     = {};
-    std::shared_ptr<IBuffer> _worldFrameUBOBuffer = nullptr;
-    DescriptorSetHandle      _uiFrameUboDS        = {};
-    std::shared_ptr<IBuffer> _uiFrameUBOBuffer    = nullptr;
-
     std::shared_ptr<IDescriptorSetLayout>      _resourceDSL      = nullptr;
-    DescriptorSetHandle                        _resourceDS       = {};
-    DescriptorSetHandle                        _worldResourceDS  = {};
-    DescriptorSetHandle                        _uiResourceDS     = {};
+    struct FlightResources
+    {
+        DescriptorSetHandle      frameUboDS{};
+        std::shared_ptr<IBuffer> frameUBOBuffer{};
+        DescriptorSetHandle      worldFrameUboDS{};
+        std::shared_ptr<IBuffer> worldFrameUBOBuffer{};
+        DescriptorSetHandle      resourceDS{};
+        DescriptorSetHandle      worldResourceDS{};
+        std::shared_ptr<IBuffer> vertexBuffer{};
+        Vertex*                  vertexPtrHead = nullptr;
+        std::shared_ptr<IBuffer> worldVertexBuffer{};
+        Vertex*                  worldVertexPtrHead = nullptr;
+    };
+    struct PassResources
+    {
+        std::array<FlightResources, MAX_FLIGHTS_IN_FLIGHT> flights{};
+    };
+    std::array<PassResources, static_cast<size_t>(ERender2DPassDomain::Count)> _passResources{};
+    ERender2DPassDomain _activePassDomain = ERender2DPassDomain::RuntimeOverlay;
+    uint32_t            _activeFlightIndex = 0;
+    uint64_t            _resourceVersion = 0;
+    uint64_t            _uploadedScreenResourceVersion = 0;
+    uint64_t            _uploadedWorldResourceVersion = 0;
+    bool                _frameUboUploaded = false;
+    bool                _worldFrameUboUploaded = false;
     std::vector<TextureBinding>                _textureBindings;
     std::unordered_map<std::string, uint32_t>  _textureLabel2Idx;
     static constexpr size_t                    TEXTURE_SET_SIZE     = 16;
@@ -167,9 +199,12 @@ struct ENGINE_API FQuadRender
     void destroy();
     void begin(const Extent2D& extent);
     void end();
-    /// Lazily create the depth-less UI compositor pipeline for the given
-    /// final-image color format. NOT safe while recording a command buffer.
-    void ensureUICompositorPipeline(EFormat::T colorFormat);
+    /// Ensure the depth-less UI compositor pipeline for one pass domain.
+    /// Must be called before command recording begins.
+    void ensureUICompositorPipeline(ERender2DPassDomain domain, EFormat::T colorFormat);
+    /// Ensure a pass domain's regular screen-space pipeline matches its target
+    /// attachment formats. Must be called before command recording begins.
+    void ensureScreenPipeline(ERender2DPassDomain domain, EFormat::T colorFormat, EFormat::T depthFormat);
 
     bool shouldFlush() { return vertexCount >= MaxVertexCount - 4 || _lastPushTextureSlot + 1 >= (int)TEXTURE_SET_SIZE; }
     bool shouldFlushWorld() { return worldVertexCount >= MaxVertexCount - 4 || _lastPushTextureSlot + 1 >= (int)TEXTURE_SET_SIZE; }
@@ -178,6 +213,11 @@ struct ENGINE_API FQuadRender
 
     void updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer, DescriptorSetHandle dsHandle, const glm::mat4& viewProj, const glm::mat4& view);
     void updateResources(DescriptorSetHandle dsHandle);
+    FlightResources& activeFlightResources()
+    {
+        return _passResources[static_cast<size_t>(_activePassDomain)].flights[_activeFlightIndex];
+    }
+    PassPipelines& activePassPipelines() { return _passPipelines[static_cast<size_t>(_activePassDomain)]; }
 
   public:
     void drawTexture(const glm::vec3& position,
@@ -224,6 +264,7 @@ struct ENGINE_API FQuadRender
                 _textureLabel2Idx[texture->getLabel()] = idx;
                 textureIdx                             = idx;
                 _lastPushTextureSlot                   = static_cast<int>(idx);
+                ++_resourceVersion;
             }
         }
         return textureIdx;
@@ -282,21 +323,32 @@ struct ENGINE_API FLineRender
         },
     };
 
-    std::shared_ptr<IDescriptorPool>   _descriptorPool;
+    std::shared_ptr<IDescriptorPool>      _descriptorPool;
     std::shared_ptr<IDescriptorSetLayout> _frameUboDSL;
-    DescriptorSetHandle                _frameUboDS;
-    std::shared_ptr<IBuffer>           _frameUBOBuffer;
-    std::shared_ptr<IPipelineLayout>   _pipelineLayout;
-    std::shared_ptr<IGraphicsPipeline> _pipeline;
+    std::shared_ptr<IPipelineLayout>      _pipelineLayout;
+    std::shared_ptr<IGraphicsPipeline>    _pipeline;
 
-    std::shared_ptr<IBuffer> _vertexBuffer;
-    Vertex*                  vertexPtr     = nullptr;
-    Vertex*                  vertexPtrHead = nullptr;
-    uint32_t                 vertexCount   = 0;
+    struct FlightResources
+    {
+        DescriptorSetHandle      frameUboDS{};
+        std::shared_ptr<IBuffer> frameUBOBuffer{};
+        std::shared_ptr<IBuffer> vertexBuffer{};
+        Vertex*                  vertexPtrHead = nullptr;
+    };
+    struct PassResources
+    {
+        std::array<FlightResources, MAX_FLIGHTS_IN_FLIGHT> flights{};
+    };
+    std::array<PassResources, static_cast<size_t>(ERender2DPassDomain::Count)> _passResources{};
+    ERender2DPassDomain _activePassDomain = ERender2DPassDomain::RuntimeOverlay;
+    uint32_t            _activeFlightIndex = 0;
+    Vertex*             vertexPtr          = nullptr;
+    Vertex*             vertexPtrHead      = nullptr;
+    uint32_t            vertexCount        = 0;
 
     void init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat);
     void destroy();
-    void begin();
+    void begin(ERender2DPassDomain domain);
     void flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj);
 
     void addLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color);
@@ -330,7 +382,8 @@ struct ENGINE_API Render2D
     /// Lazily create the UI compositor pipeline for the given final-image
     /// color format (depth-less, no post-processing). Must NOT be called while
     /// recording a command buffer.
-    static void ensureUICompositorPipeline(EFormat::T colorFormat);
+    static void ensureUICompositorPipeline(ERender2DPassDomain domain, EFormat::T colorFormat);
+    static void ensureScreenPipeline(ERender2DPassDomain domain, EFormat::T colorFormat, EFormat::T depthFormat);
 
     static void makeSprite(const glm::vec3& position,
                            const glm::vec2& size,

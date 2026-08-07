@@ -28,6 +28,8 @@ void recordUICompositorPass(ICommandBuffer*    cmdBuf,
                             RenderImage&       target,
                             const Extent2D&    logicalViewportExtent,
                             Node*              uiSceneRoot,
-                            bool               bDrawCanvasGrid = false);
+                            bool               bDrawCanvasGrid = false,
+                            const glm::vec2&   canvasPan = glm::vec2(0.0f),
+                            float              canvasZoom = 1.0f);
 
 } // namespace ya

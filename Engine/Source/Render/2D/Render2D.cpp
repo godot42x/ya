@@ -10,6 +10,7 @@
 #include "Render/RenderDefines.h"
 
 #include "Resource/AssetManager.h"
+#include "Resource/DeferredDeletionQueue.h"
 
 #include "utility.cc/ranges.h"
 
@@ -209,9 +210,10 @@ void Render2D::begin(const FRender2dContext& ctx)
     data.windowWidth  = ctx.windowWidth;
     data.clipStack.clear();
     data.bUICompositorMode = ctx.bUICompositorMode;
+    data.passDomain        = ctx.passDomain;
     Extent2D extent{.width = data.windowWidth, .height = data.windowHeight};
     quadData->begin(extent);
-    lineData->begin();
+    lineData->begin(ctx.passDomain);
 }
 
 void Render2D::end()
@@ -224,10 +226,17 @@ void Render2D::end()
     data.windowHeight = 0;
 }
 
-void Render2D::ensureUICompositorPipeline(EFormat::T colorFormat)
+void Render2D::ensureUICompositorPipeline(ERender2DPassDomain domain, EFormat::T colorFormat)
 {
     if (quadData) {
-        quadData->ensureUICompositorPipeline(colorFormat);
+        quadData->ensureUICompositorPipeline(domain, colorFormat);
+    }
+}
+
+void Render2D::ensureScreenPipeline(ERender2DPassDomain domain, EFormat::T colorFormat, EFormat::T depthFormat)
+{
+    if (quadData) {
+        quadData->ensureScreenPipeline(domain, colorFormat, depthFormat);
     }
 }
 
@@ -268,28 +277,45 @@ void Render2D::popClipRect()
 void FLineRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
 {
     _render = render;
+    constexpr uint32_t resourceCount =
+        static_cast<uint32_t>(ERender2DPassDomain::Count) * MAX_FLIGHTS_IN_FLIGHT;
 
     _descriptorPool = IDescriptorPool::create(
         render,
         DescriptorPoolCreateInfo{
-            .maxSets   = 1,
+            .maxSets   = resourceCount,
             .poolSizes = {
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::UniformBuffer,
-                    .descriptorCount = 1,
+                    .descriptorCount = resourceCount,
                 },
             },
         });
 
     _frameUboDSL = IDescriptorSetLayout::create(render, _pipelineDesc.descriptorSetLayouts[0]);
-    _frameUboDS  = _descriptorPool->allocateDescriptorSets(_frameUboDSL);
-    _frameUBOBuffer = render->getResourceFactory()->createBuffer(
-        ya::BufferCreateInfo{
-            .label       = "Sprite2D_Line_FrameUBO",
-            .usage       = EBufferUsage::UniformBuffer,
-            .size        = sizeof(FrameUBO),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
+    std::vector<DescriptorSetHandle> descriptorSets;
+    _descriptorPool->allocateDescriptorSets(_frameUboDSL, resourceCount, descriptorSets);
+    for (size_t domain = 0; domain < static_cast<size_t>(ERender2DPassDomain::Count); ++domain) {
+        for (uint32_t flight = 0; flight < MAX_FLIGHTS_IN_FLIGHT; ++flight) {
+            auto& resources = _passResources[domain].flights[flight];
+            resources.frameUboDS = descriptorSets[domain * MAX_FLIGHTS_IN_FLIGHT + flight];
+            resources.frameUBOBuffer = render->getResourceFactory()->createBuffer(
+                ya::BufferCreateInfo{
+                    .label       = std::format("Sprite2D_Line_{}_{}_FrameUBO", domain, flight),
+                    .usage       = EBufferUsage::UniformBuffer,
+                    .size        = sizeof(FrameUBO),
+                    .memoryUsage = EMemoryUsage::CpuToGpu,
+                });
+            resources.vertexBuffer = render->getResourceFactory()->createBuffer(
+                ya::BufferCreateInfo{
+                    .label       = std::format("Sprite2D_Line_{}_{}_VertexBuffer", domain, flight),
+                    .usage       = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
+                    .size        = sizeof(FLineRender::Vertex) * MaxVertexCount,
+                    .memoryUsage = EMemoryUsage::CpuToGpu,
+                });
+            resources.vertexPtrHead = resources.vertexBuffer->map<FLineRender::Vertex>();
+        }
+    }
 
     std::vector<std::shared_ptr<IDescriptorSetLayout>> dslVec = {_frameUboDSL};
     _pipelineLayout = IPipelineLayout::create(render, "Sprite2D_Line_PipelineLayout", _pipelineDesc.pushConstants, dslVec);
@@ -398,29 +424,32 @@ void FLineRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
         .viewportState = buildQuadViewportState(),
     });
 
-    _vertexBuffer = render->getResourceFactory()->createBuffer(
-        ya::BufferCreateInfo{
-            .label       = "Sprite2D_Line_VertexBuffer",
-            .usage       = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
-            .size        = sizeof(FLineRender::Vertex) * MaxVertexCount,
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
-    vertexPtr     = _vertexBuffer->map<FLineRender::Vertex>();
-    vertexPtrHead = vertexPtr;
 }
 
 void FLineRender::destroy()
 {
-    _vertexBuffer.reset();
-    _frameUBOBuffer.reset();
+    for (auto& pass : _passResources) {
+        for (auto& resources : pass.flights) {
+            resources.vertexBuffer.reset();
+            resources.vertexPtrHead = nullptr;
+            resources.frameUBOBuffer.reset();
+            resources.frameUboDS = {};
+        }
+    }
+    vertexPtr     = nullptr;
+    vertexPtrHead = nullptr;
     _frameUboDSL.reset();
     _descriptorPool.reset();
     _pipeline.reset();
     _pipelineLayout.reset();
 }
 
-void FLineRender::begin()
+void FLineRender::begin(ERender2DPassDomain domain)
 {
+    _activePassDomain  = domain;
+    _activeFlightIndex = _render ? _render->getCurrentFrameIndex() % MAX_FLIGHTS_IN_FLIGHT : 0;
+    auto& resources    = _passResources[static_cast<size_t>(_activePassDomain)].flights[_activeFlightIndex];
+    vertexPtrHead      = resources.vertexPtrHead;
     vertexPtr   = vertexPtrHead;
     vertexCount = 0;
 }
@@ -435,19 +464,23 @@ void FLineRender::flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj)
         .viewProj = viewProj,
         .view     = Render2D::data.cam.view,
     };
-    _frameUBOBuffer->writeData(&ubo, sizeof(ubo), 0);
+    auto& resources = _passResources[static_cast<size_t>(_activePassDomain)].flights[_activeFlightIndex];
+    resources.frameUBOBuffer->writeData(&ubo, sizeof(ubo), 0);
 
-    DescriptorBufferInfo bufferInfo(BufferHandle(_frameUBOBuffer->getHandle()), 0, static_cast<uint64_t>(sizeof(FrameUBO)));
+    DescriptorBufferInfo bufferInfo(
+        BufferHandle(resources.frameUBOBuffer->getHandle()),
+        0,
+        static_cast<uint64_t>(sizeof(FrameUBO)));
     _render->getDescriptorHelper()->updateDescriptorSets(
         {
-            IDescriptorSetHelper::genBufferWrite(_frameUboDS,
+            IDescriptorSetHelper::genBufferWrite(resources.frameUboDS,
                                                  0,
                                                  0,
                                                  EPipelineDescriptorType::UniformBuffer,
                                                  {bufferInfo}),
         },
         {});
-    _vertexBuffer->flush();
+    resources.vertexBuffer->flush();
 
     cmdBuf->bindPipeline(_pipeline.get());
     cmdBuf->setViewport(0.0f,
@@ -458,8 +491,8 @@ void FLineRender::flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj)
                         1.0f);
     cmdBuf->setScissor(0, 0, Render2D::data.windowWidth, Render2D::data.windowHeight);
 
-    cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {_frameUboDS});
-    cmdBuf->bindVertexBuffer(0, _vertexBuffer.get(), 0);
+    cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {resources.frameUboDS});
+    cmdBuf->bindVertexBuffer(0, resources.vertexBuffer.get(), 0);
     cmdBuf->draw(vertexCount, 1, 0, 0);
 
     vertexPtr   = vertexPtrHead;
@@ -520,73 +553,74 @@ void FLineRender::addWireSphere(const glm::vec3& center, float radius, const glm
 void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
 {
     _render = render;
+    constexpr uint32_t domainCount = static_cast<uint32_t>(ERender2DPassDomain::Count);
+    constexpr uint32_t resourceCount = domainCount * MAX_FLIGHTS_IN_FLIGHT;
 
     _descriptorPool = IDescriptorPool::create(
         render,
         DescriptorPoolCreateInfo{
-            .maxSets   = 6,
+            .maxSets   = resourceCount * 4,
             .poolSizes = {
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::UniformBuffer,
-                    .descriptorCount = 3,
+                    .descriptorCount = resourceCount * 2,
                 },
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::CombinedImageSampler,
-                    .descriptorCount = 48,
+                    .descriptorCount = resourceCount * TEXTURE_SET_SIZE * 2,
                 },
             },
         });
 
     _frameUboDSL = IDescriptorSetLayout::create(render, _pipelineDesc.descriptorSetLayouts[0]);
     std::vector<ya::DescriptorSetHandle> descriptorSets;
-    _descriptorPool->allocateDescriptorSets(_frameUboDSL, 1, descriptorSets);
-    _frameUboDS     = descriptorSets[0];
-    _frameUBOBuffer = render->getResourceFactory()->createBuffer(
-        ya::BufferCreateInfo{
-            .label       = "Sprite2D_Screen_FrameUBO",
-            .usage       = EBufferUsage::UniformBuffer,
-            .size        = sizeof(FrameUBO),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
-
-    descriptorSets.clear();
-    _descriptorPool->allocateDescriptorSets(_frameUboDSL, 1, descriptorSets);
-    _worldFrameUboDS     = descriptorSets[0];
-    _worldFrameUBOBuffer = render->getResourceFactory()->createBuffer(
-        ya::BufferCreateInfo{
-            .label       = "Sprite2D_World_FrameUBO",
-            .usage       = EBufferUsage::UniformBuffer,
-            .size        = sizeof(FrameUBO),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
-
-    descriptorSets.clear();
-    _descriptorPool->allocateDescriptorSets(_frameUboDSL, 1, descriptorSets);
-    _uiFrameUboDS     = descriptorSets[0];
-    _uiFrameUBOBuffer = render->getResourceFactory()->createBuffer(
-        ya::BufferCreateInfo{
-            .label       = "Sprite2D_UI_FrameUBO",
-            .usage       = EBufferUsage::UniformBuffer,
-            .size        = sizeof(FrameUBO),
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
+    _descriptorPool->allocateDescriptorSets(
+        _frameUboDSL,
+        resourceCount * 2,
+        descriptorSets);
+    for (size_t domain = 0; domain < static_cast<size_t>(ERender2DPassDomain::Count); ++domain) {
+        for (uint32_t flight = 0; flight < MAX_FLIGHTS_IN_FLIGHT; ++flight) {
+            const size_t resourceIndex = domain * MAX_FLIGHTS_IN_FLIGHT + flight;
+            auto& resources = _passResources[domain].flights[flight];
+            resources.frameUboDS      = descriptorSets[resourceIndex * 2];
+            resources.worldFrameUboDS = descriptorSets[resourceIndex * 2 + 1];
+            resources.frameUBOBuffer = render->getResourceFactory()->createBuffer(
+                ya::BufferCreateInfo{
+                    .label       = std::format("Sprite2D_{}_{}_FrameUBO", domain, flight),
+                    .usage       = EBufferUsage::UniformBuffer,
+                    .size        = sizeof(FrameUBO),
+                    .memoryUsage = EMemoryUsage::CpuToGpu,
+                });
+            resources.worldFrameUBOBuffer = render->getResourceFactory()->createBuffer(
+                ya::BufferCreateInfo{
+                    .label       = std::format("Sprite2D_{}_{}_WorldFrameUBO", domain, flight),
+                    .usage       = EBufferUsage::UniformBuffer,
+                    .size        = sizeof(FrameUBO),
+                    .memoryUsage = EMemoryUsage::CpuToGpu,
+                });
+        }
+    }
 
     _resourceDSL = IDescriptorSetLayout::create(render, _pipelineDesc.descriptorSetLayouts[1]);
     descriptorSets.clear();
-    _descriptorPool->allocateDescriptorSets(_resourceDSL, 3, descriptorSets);
-    _resourceDS      = descriptorSets[0];
-    _worldResourceDS = descriptorSets[1];
-    _uiResourceDS    = descriptorSets[2];
+    _descriptorPool->allocateDescriptorSets(
+        _resourceDSL,
+        resourceCount * 2,
+        descriptorSets);
+    for (size_t domain = 0; domain < static_cast<size_t>(ERender2DPassDomain::Count); ++domain) {
+        for (uint32_t flight = 0; flight < MAX_FLIGHTS_IN_FLIGHT; ++flight) {
+            const size_t resourceIndex = domain * MAX_FLIGHTS_IN_FLIGHT + flight;
+            auto& resources = _passResources[domain].flights[flight];
+            resources.resourceDS      = descriptorSets[resourceIndex * 2];
+            resources.worldResourceDS = descriptorSets[resourceIndex * 2 + 1];
+        }
+    }
 
     std::vector<std::shared_ptr<IDescriptorSetLayout>> dslVec = {_frameUboDSL, _resourceDSL};
     _pipelineLayout = IPipelineLayout::create(render, "Sprite2D_PipelineLayout", _pipelineDesc.pushConstants, dslVec);
 
-    _pipeline = IGraphicsPipeline::create(render);
-    _pipeline->recreate(buildQuadScreenPipelineCI(_pipelineLayout.get(), "Sprite2D_Pipeline", colorFormat, depthFormat));
-
-    _uiPipeline = IGraphicsPipeline::create(render);
-    _uiPipeline->recreate(buildQuadScreenPipelineCI(_pipelineLayout.get(), "Sprite2D_UI_Pipeline", colorFormat, EFormat::Undefined));
-    _uiPipelineFormat = colorFormat;
+    ensureScreenPipeline(ERender2DPassDomain::RuntimeOverlay, colorFormat, depthFormat);
+    ensureUICompositorPipeline(ERender2DPassDomain::GameUICompositor, colorFormat);
 
     _worldPipeline = IGraphicsPipeline::create(render);
     _worldPipeline->recreate(GraphicsPipelineCreateInfo{
@@ -656,25 +690,28 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
         .viewportState = buildQuadViewportState(),
     });
 
-    _vertexBuffer = render->getResourceFactory()->createBuffer(
-        ya::BufferCreateInfo{
-            .label       = "Sprite2D_Screen_VertexBuffer",
-            .usage       = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
-            .size        = sizeof(FQuadRender::Vertex) * MaxVertexCount,
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
-    vertexPtr     = _vertexBuffer->map<FQuadRender::Vertex>();
-    vertexPtrHead = vertexPtr;
+    for (size_t domain = 0; domain < static_cast<size_t>(ERender2DPassDomain::Count); ++domain) {
+        for (uint32_t flight = 0; flight < MAX_FLIGHTS_IN_FLIGHT; ++flight) {
+            auto& resources = _passResources[domain].flights[flight];
+            resources.vertexBuffer = render->getResourceFactory()->createBuffer(
+                ya::BufferCreateInfo{
+                    .label       = std::format("Sprite2D_{}_{}_Screen_VertexBuffer", domain, flight),
+                    .usage       = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
+                    .size        = sizeof(FQuadRender::Vertex) * MaxVertexCount,
+                    .memoryUsage = EMemoryUsage::CpuToGpu,
+                });
+            resources.vertexPtrHead = resources.vertexBuffer->map<FQuadRender::Vertex>();
 
-    _worldVertexBuffer = render->getResourceFactory()->createBuffer(
-        ya::BufferCreateInfo{
-            .label       = "Sprite2D_World_VertexBuffer",
-            .usage       = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
-            .size        = sizeof(FQuadRender::Vertex) * MaxVertexCount,
-            .memoryUsage = EMemoryUsage::CpuToGpu,
-        });
-    worldVertexPtr     = _worldVertexBuffer->map<FQuadRender::Vertex>();
-    worldVertexPtrHead = worldVertexPtr;
+            resources.worldVertexBuffer = render->getResourceFactory()->createBuffer(
+                ya::BufferCreateInfo{
+                    .label       = std::format("Sprite2D_{}_{}_World_VertexBuffer", domain, flight),
+                    .usage       = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
+                    .size        = sizeof(FQuadRender::Vertex) * MaxVertexCount,
+                    .memoryUsage = EMemoryUsage::CpuToGpu,
+                });
+            resources.worldVertexPtrHead = resources.worldVertexBuffer->map<FQuadRender::Vertex>();
+        }
+    }
 
     std::vector<uint32_t> indices(MaxIndexCount);
     for (uint32_t i = 0; i < MaxIndexCount; i += 6) {
@@ -699,33 +736,109 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
 
 void FQuadRender::destroy()
 {
-    _vertexBuffer.reset();
-    _worldVertexBuffer.reset();
     _indexBuffer.reset();
 
-    _frameUBOBuffer.reset();
-    _worldFrameUBOBuffer.reset();
+    for (auto& pass : _passResources) {
+        for (auto& resources : pass.flights) {
+            resources.vertexBuffer.reset();
+            resources.vertexPtrHead = nullptr;
+            resources.worldVertexBuffer.reset();
+            resources.worldVertexPtrHead = nullptr;
+            resources.frameUBOBuffer.reset();
+            resources.worldFrameUBOBuffer.reset();
+            resources.frameUboDS      = {};
+            resources.worldFrameUboDS = {};
+            resources.resourceDS      = {};
+            resources.worldResourceDS = {};
+        }
+    }
+    vertexPtr         = nullptr;
+    vertexPtrHead     = nullptr;
+    worldVertexPtr    = nullptr;
+    worldVertexPtrHead = nullptr;
     _frameUboDSL.reset();
 
     _descriptorPool.reset();
-    _pipeline.reset();
-    _uiPipeline.reset();
-    _uiPipelineFormat = EFormat::Undefined;
+    for (auto& pipelines : _passPipelines) {
+        pipelines.screenPipeline.reset();
+        pipelines.screenColorFormat = EFormat::Undefined;
+        pipelines.screenDepthFormat = EFormat::Undefined;
+        pipelines.uiPipeline.reset();
+        pipelines.uiColorFormat = EFormat::Undefined;
+    }
     _worldPipeline.reset();
     _pipelineLayout.reset();
 }
 
-void FQuadRender::ensureUICompositorPipeline(EFormat::T colorFormat)
+void FQuadRender::ensureUICompositorPipeline(ERender2DPassDomain domain, EFormat::T colorFormat)
 {
-    if (!_render || colorFormat == EFormat::Undefined || _uiPipelineFormat == colorFormat) {
+    if (!_render || colorFormat == EFormat::Undefined) {
         return;
     }
-    _uiPipeline->recreate(buildQuadScreenPipelineCI(_pipelineLayout.get(), "Sprite2D_UI_Pipeline", colorFormat, EFormat::Undefined));
-    _uiPipelineFormat = colorFormat;
+
+    auto& pipelines = _passPipelines[static_cast<size_t>(domain)];
+    if (pipelines.uiPipeline && pipelines.uiColorFormat == colorFormat) {
+        return;
+    }
+
+    auto pipeline = IGraphicsPipeline::create(_render);
+    pipeline->recreate(buildQuadScreenPipelineCI(_pipelineLayout.get(),
+                                                 std::format("Sprite2D_{}_UI_Pipeline", static_cast<size_t>(domain)),
+                                                 colorFormat,
+                                                 EFormat::Undefined));
+    auto retired = std::move(pipelines.uiPipeline);
+    pipelines.uiPipeline = std::move(pipeline);
+    pipelines.uiColorFormat = colorFormat;
+    if (DeferredDeletionQueue::get().isInitialized()) {
+        DeferredDeletionQueue::get().retireResource(std::move(retired));
+    }
+}
+
+void FQuadRender::ensureScreenPipeline(ERender2DPassDomain domain, EFormat::T colorFormat, EFormat::T depthFormat)
+{
+    if (!_render || colorFormat == EFormat::Undefined) {
+        return;
+    }
+
+    auto& pipelines = _passPipelines[static_cast<size_t>(domain)];
+    if (pipelines.screenPipeline &&
+        pipelines.screenColorFormat == colorFormat &&
+        pipelines.screenDepthFormat == depthFormat) {
+        return;
+    }
+
+    auto pipeline = IGraphicsPipeline::create(_render);
+    pipeline->recreate(buildQuadScreenPipelineCI(_pipelineLayout.get(),
+                                                 std::format("Sprite2D_{}_Screen_Pipeline", static_cast<size_t>(domain)),
+                                                 colorFormat,
+                                                 depthFormat));
+    auto retired = std::move(pipelines.screenPipeline);
+    pipelines.screenPipeline = std::move(pipeline);
+    pipelines.screenColorFormat = colorFormat;
+    pipelines.screenDepthFormat = depthFormat;
+    if (DeferredDeletionQueue::get().isInitialized()) {
+        DeferredDeletionQueue::get().retireResource(std::move(retired));
+    }
 }
 
 void FQuadRender::begin(const Extent2D& extent)
 {
+    _activePassDomain = data2D.passDomain;
+    _activeFlightIndex = _render ? _render->getCurrentFrameIndex() % MAX_FLIGHTS_IN_FLIGHT : 0;
+    auto& resources = activeFlightResources();
+    vertexPtrHead      = resources.vertexPtrHead;
+    vertexPtr          = vertexPtrHead;
+    worldVertexPtrHead = resources.worldVertexPtrHead;
+    worldVertexPtr     = worldVertexPtrHead;
+    vertexCount        = 0;
+    indexCount         = 0;
+    worldVertexCount   = 0;
+    worldIndexCount    = 0;
+    _resourceVersion                    = 1;
+    _uploadedScreenResourceVersion      = 0;
+    _uploadedWorldResourceVersion       = 0;
+    _frameUboUploaded                   = false;
+    _worldFrameUboUploaded              = false;
     _textureBindings.clear();
     _textureLabel2Idx.clear();
     _textureBindings.push_back(TextureBinding{
@@ -762,17 +875,17 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
     // command buffer as the world graph's overlay pass, and updating a
     // descriptor set that is already bound in an earlier region would
     // invalidate that region (no UPDATE_AFTER_BIND).
-    if (data2D.bUICompositorMode) {
-        updateResources(_uiResourceDS);
-        updateFrameUBO(_uiFrameUBOBuffer, _uiFrameUboDS, _screenOrthoProj, glm::mat4(1.0f));
-    }
-    else {
-        updateResources(_resourceDS);
-        updateFrameUBO(_frameUBOBuffer, _frameUboDS, _screenOrthoProj, glm::mat4(1.0f));
-    }
-    _vertexBuffer->flush();
+    auto& resources = activeFlightResources();
+    resources.vertexBuffer->flush();
 
-    cmdBuf->bindPipeline(data2D.bUICompositorMode && _uiPipeline ? _uiPipeline.get() : _pipeline.get());
+    auto& pipelines = activePassPipelines();
+    IGraphicsPipeline* pipeline = data2D.bUICompositorMode
+                                      ? pipelines.uiPipeline.get()
+                                      : pipelines.screenPipeline.get();
+    YA_CORE_ASSERT(pipeline != nullptr,
+                   "Render2D pipeline for pass domain {} was not prepared before command recording",
+                   static_cast<size_t>(_activePassDomain));
+    cmdBuf->bindPipeline(pipeline);
     cmdBuf->setViewport(0.0f,
                         0.0f,
                         static_cast<float>(Render2D::data.windowWidth),
@@ -791,11 +904,21 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
     }
     cmdBuf->setCullMode(data2D.screenCullMode);
 
-    const std::vector<DescriptorSetHandle> descriptorSets = data2D.bUICompositorMode
-        ? std::vector<DescriptorSetHandle>{_uiFrameUboDS, _uiResourceDS}
-        : std::vector<DescriptorSetHandle>{_frameUboDS, _resourceDS};
+    if (_uploadedScreenResourceVersion != _resourceVersion) {
+        updateResources(resources.resourceDS);
+        _uploadedScreenResourceVersion = _resourceVersion;
+    }
+    if (!_frameUboUploaded) {
+        updateFrameUBO(resources.frameUBOBuffer, resources.frameUboDS, _screenOrthoProj, glm::mat4(1.0f));
+        _frameUboUploaded = true;
+    }
+
+    const std::vector<DescriptorSetHandle> descriptorSets = {
+        resources.frameUboDS,
+        resources.resourceDS,
+    };
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descriptorSets);
-    cmdBuf->bindVertexBuffer(0, _vertexBuffer.get(), 0);
+    cmdBuf->bindVertexBuffer(0, resources.vertexBuffer.get(), 0);
     cmdBuf->bindIndexBuffer(_indexBuffer.get(), 0, false);
     cmdBuf->drawIndexed(static_cast<uint32_t>(indexCount), 1, 0, 0, 0);
 
@@ -813,9 +936,19 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
     // YA_CORE_INFO("World overlay flush: {} vertices ({} quads), {} indices",
     //                worldVertexCount, worldVertexCount / 4, worldIndexCount);
 
-    updateResources(_worldResourceDS);
-    updateFrameUBO(_worldFrameUBOBuffer, _worldFrameUboDS, data2D.cam.viewProjection, data2D.cam.view);
-    _worldVertexBuffer->flush();
+    auto& resources = activeFlightResources();
+    if (_uploadedWorldResourceVersion != _resourceVersion) {
+        updateResources(resources.worldResourceDS);
+        _uploadedWorldResourceVersion = _resourceVersion;
+    }
+    if (!_worldFrameUboUploaded) {
+        updateFrameUBO(resources.worldFrameUBOBuffer,
+                       resources.worldFrameUboDS,
+                       data2D.cam.viewProjection,
+                       data2D.cam.view);
+        _worldFrameUboUploaded = true;
+    }
+    resources.worldVertexBuffer->flush();
 
     cmdBuf->bindPipeline(_worldPipeline.get());
     cmdBuf->setViewport(0.0f,
@@ -827,9 +960,12 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
     cmdBuf->setCullMode(Render2D::data.worldCullMode);
     cmdBuf->setScissor(0, 0, Render2D::data.windowWidth, Render2D::data.windowHeight);
 
-    std::vector<DescriptorSetHandle> descriptorSets = {_worldFrameUboDS, _worldResourceDS};
+    std::vector<DescriptorSetHandle> descriptorSets = {
+        resources.worldFrameUboDS,
+        resources.worldResourceDS,
+    };
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descriptorSets);
-    cmdBuf->bindVertexBuffer(0, _worldVertexBuffer.get(), 0);
+    cmdBuf->bindVertexBuffer(0, resources.worldVertexBuffer.get(), 0);
     cmdBuf->bindIndexBuffer(_indexBuffer.get(), 0, false);
     cmdBuf->drawIndexed(static_cast<uint32_t>(worldIndexCount), 1, 0, 0, 0);
 

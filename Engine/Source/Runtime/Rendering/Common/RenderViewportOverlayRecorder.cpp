@@ -29,6 +29,7 @@ void recordRenderViewportOverlayPass(const FrameContext& frameCtx,
         .cmdBuf       = cmdBuf,
         .windowWidth  = viewportExtent.width,
         .windowHeight = viewportExtent.height,
+        .passDomain   = ERender2DPassDomain::RuntimeOverlay,
         .cam          = {
             .position       = frameCtx.cameraPos,
             .view           = frameCtx.view,
@@ -77,7 +78,9 @@ void recordUICompositorPass(ICommandBuffer* cmdBuf,
                             RenderImage&    target,
                             const Extent2D& logicalViewportExtent,
                             Node*           uiSceneRoot,
-                            bool            bDrawCanvasGrid)
+                            bool            bDrawCanvasGrid,
+                            const glm::vec2& canvasPan,
+                            float             canvasZoom)
 {
     if (!uiSceneRoot || !cmdBuf) {
         return;
@@ -128,6 +131,8 @@ void recordUICompositorPass(ICommandBuffer* cmdBuf,
         .windowWidth  = rtExtent.width,
         .windowHeight = rtExtent.height,
         .bUICompositorMode = true,
+        .passDomain   = bDrawCanvasGrid ? ERender2DPassDomain::EditorCanvas
+                                        : ERender2DPassDomain::GameUICompositor,
         .cam          = {
             .position       = glm::vec3(0.0f),
             .view           = glm::mat4(1.0f),
@@ -138,20 +143,35 @@ void recordUICompositorPass(ICommandBuffer* cmdBuf,
 
     Render2D::begin(render2dCtx);
     if (bDrawCanvasGrid) {
-        // Canvas grid in logical pixels, scaled to the render target. Drawn as
-        // 1px quads so it shares the screen-space quad pipeline.
+        // Canvas grid is authored in logical pixels and transformed by the
+        // same pan/zoom as the UI nodes. This keeps right-drag panning and
+        // wheel zoom coherent instead of stretching a precomposed texture.
         constexpr float kGridStepLogical = 32.0f;
         const glm::vec4 gridColor(0.16f, 0.17f, 0.19f, 1.0f);
-        const float     gridStepPx = kGridStepLogical * uiScale.x;
+        const float     safeZoom = std::max(canvasZoom, 0.01f);
+        const float     gridStepX = kGridStepLogical * safeZoom * uiScale.x;
+        const float     gridStepY = kGridStepLogical * safeZoom * uiScale.y;
+        const float     panPxX = canvasPan.x * uiScale.x;
+        const float     panPxY = canvasPan.y * uiScale.y;
         auto*           white      = TextureLibrary::get().getWhiteTexture().get();
         if (white) {
-            for (float x = gridStepPx; x < static_cast<float>(rtExtent.width); x += gridStepPx) {
+            const int32_t firstX = static_cast<int32_t>(std::floor(-panPxX / std::max(gridStepX, 1.0f))) - 1;
+            const int32_t firstY = static_cast<int32_t>(std::floor(-panPxY / std::max(gridStepY, 1.0f))) - 1;
+            for (int32_t i = firstX; i * gridStepX + panPxX < static_cast<float>(rtExtent.width); ++i) {
+                const float x = i * gridStepX + panPxX;
+                if (x < 0.0f) {
+                    continue;
+                }
                 Render2D::makeSprite(glm::vec3(x, 0.0f, 0.0f),
                                      glm::vec2(1.0f, static_cast<float>(rtExtent.height)),
                                      white,
                                      gridColor);
             }
-            for (float y = gridStepPx; y < static_cast<float>(rtExtent.height); y += gridStepPx) {
+            for (int32_t i = firstY; i * gridStepY + panPxY < static_cast<float>(rtExtent.height); ++i) {
+                const float y = i * gridStepY + panPxY;
+                if (y < 0.0f) {
+                    continue;
+                }
                 Render2D::makeSprite(glm::vec3(0.0f, y, 0.0f),
                                      glm::vec2(static_cast<float>(rtExtent.width), 1.0f),
                                      white,
@@ -159,7 +179,12 @@ void recordUICompositorPass(ICommandBuffer* cmdBuf,
             }
         }
     }
-    UISceneRenderer::render(uiSceneRoot, uiScale);
+    UISceneRenderer::render(uiSceneRoot,
+                            uiScale,
+                            UICanvasTransform{
+                                .pan  = canvasPan,
+                                .zoom = std::max(canvasZoom, 0.01f),
+                            });
     Render2D::end();
 
     cmdBuf->endRendering();

@@ -51,14 +51,29 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     // graph, so merging the two executors would only spread swapchain semantics
     // into the render pipelines without removing real duplicated state.
 
+    applyPendingRenderPipelineSwitch();
+    applyPendingRenderTargetFormatCommands();
+
+    // All Render2D pipeline changes must happen before command recording. The
+    // post-process/viewport target format can differ from the initial viewport
+    // format (for example HDR R16G16B16A16_SFLOAT), so resolve it from the
+    // active pipeline before beginning this frame's command buffer.
+    if (input.uiSceneRoot) {
+        auto uiTarget = getPostprocessOutputImageShared();
+        if (!uiTarget) {
+            uiTarget = getActiveViewportImageShared();
+        }
+        if (uiTarget) {
+            Render2D::ensureUICompositorPipeline(ERender2DPassDomain::GameUICompositor,
+                                                   uiTarget->getFormat());
+        }
+    }
+
     int32_t                         imageIndex = -1;
     std::shared_ptr<ICommandBuffer> cmdBuf;
     if (!prepareFrame(input, imageIndex, cmdBuf)) {
         return;
     }
-
-    applyPendingRenderPipelineSwitch();
-    applyPendingRenderTargetFormatCommands();
 
     {
         YA_PERF_SCOPE(perf::sample::renderWorld(), perf::metric::cpuTimeMs(), perf::domain::render());
@@ -72,9 +87,6 @@ void RenderRuntime::renderFrame(const FrameInput& input)
             uiTarget = getActiveViewportImageShared();
         }
         if (uiTarget) {
-            // The postprocess output only exists after the world graph; ensure
-            // the depth-less UI pipeline matches its format here (one-time).
-            Render2D::ensureUICompositorPipeline(uiTarget->getFormat());
             recordUICompositorPass(cmdBuf.get(),
                                    *uiTarget,
                                    Extent2D{
