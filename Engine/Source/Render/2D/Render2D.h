@@ -3,23 +3,20 @@
 #include "glm/glm.hpp"
 
 #include "Core/Base.h"
-#include "Core/System/System.h"
 
 #include "Render/Core/Buffer.h"
 #include "Render/Core/DescriptorSet.h"
 #include "Render/Core/Pipeline.h"
 #include "Render/Core/Texture.h"
-#include "Render/Render.h"
 #include "Render/RenderDefines.h"
-#include "Render/Stage/IRenderStage.h"
-#include "Resource/Font/FontManager.h"
-#include "Resource/Texture/TextureLibrary.h"
-#include "Runtime/Rendering/Common/RenderOverlay.h"
 
 #include <array>
 
 namespace ya
 {
+
+struct IRender;
+struct Font;
 
 enum class ERender2DPassDomain : uint8_t
 {

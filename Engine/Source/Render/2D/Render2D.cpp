@@ -11,6 +11,8 @@
 
 #include "Resource/AssetManager.h"
 #include "Resource/DeferredDeletionQueue.h"
+#include "Resource/Font/FontManager.h"
+#include "Resource/Texture/TextureLibrary.h"
 
 #include "utility.cc/ranges.h"
 

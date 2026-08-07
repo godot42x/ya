@@ -19,6 +19,11 @@ namespace ya
 
 struct IWindowProvider;
 
+/// Maximum number of frames that can be in-flight simultaneously.
+/// UBOs and descriptor sets that change per-frame must be allocated in arrays
+/// of this size. Shared by the 2D batch renderer and the 3D render stages.
+constexpr uint32_t MAX_FLIGHTS_IN_FLIGHT = 2;
+
 // using glsl_types::Common::Limits::MAX_POINT_LIGHTS;
 using slang_types::Common::Limits::MAX_BONE_COUNT;
 using slang_types::Common::Limits::MAX_BONE_WEIGHT_PER_VERTEX;

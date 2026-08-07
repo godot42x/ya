@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Common/Types.h"
+#include "Render/RenderDefines.h"
 #include "Render/RenderFrameData.h"
 
 #include <string>
@@ -10,10 +11,6 @@ namespace ya
 
 struct IRender;
 struct ICommandBuffer;
-
-/// Maximum number of frames that can be in-flight simultaneously.
-/// UBOs and descriptor sets that change per-frame must be allocated in arrays of this size.
-constexpr uint32_t MAX_FLIGHTS_IN_FLIGHT = 2;
 
 /// Context passed to every RenderStage each frame.
 struct RenderStageContext
