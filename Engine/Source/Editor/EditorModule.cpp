@@ -720,9 +720,9 @@ class EditorModule final : public IModule, public IEditorAutomationControl
 
         const uint64_t selectedUUID = _layer->getSelectedEntityUUID();
         _layer->setEditableScene(_playSession.getAuthoringScene());
-        Scene* const authoringScene = _playSession.getAuthoringScene() ? _playSession.getAuthoringScene() : scene;
-        _layer->setSceneContext(authoringScene);
-        _layer->selectEntity(authoringScene && selectedUUID != 0 ? authoringScene->getEntityByUUID(selectedUUID) : nullptr);
+        _layer->setSceneContext(_layer->getViewportInteractionScene());
+        Scene* const interactionScene = _layer->getViewportInteractionScene();
+        _layer->selectEntity(interactionScene && selectedUUID != 0 ? interactionScene->getEntityByUUID(selectedUUID) : nullptr);
     }
 
     void onSceneDestroyed(App& app, Scene* scene) override
@@ -732,7 +732,7 @@ class EditorModule final : public IModule, public IEditorAutomationControl
         gEditorAuthoringScene = _playSession.getAuthoringScene();
         if (_layer) {
             _layer->setEditableScene(_playSession.getAuthoringScene());
-            _layer->setSceneContext(_playSession.getAuthoringScene());
+            _layer->setSceneContext(_layer->getViewportInteractionScene());
             _layer->selectEntity(nullptr);
         }
     }
@@ -763,7 +763,7 @@ class EditorModule final : public IModule, public IEditorAutomationControl
             _viewportModeBeforePlay.reset();
         }
         _bWasRunning = bRunning;
-        _layer->setSceneContext(_playSession.getAuthoringScene());
+        _layer->setSceneContext(_layer->getViewportInteractionScene());
 
         auto& renderServices = app.getRenderServices();
         if (auto* renderRuntime = renderServices.getRenderRuntime()) {

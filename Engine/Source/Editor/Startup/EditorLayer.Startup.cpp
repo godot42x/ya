@@ -11,13 +11,15 @@ Scene* EditorLayer::getEditableScene() const
 
 Scene* EditorLayer::getSceneHierarchyContext() const
 {
-    if (_editableScene) {
+    if (isViewportMode2D() && _editableScene) {
         return _editableScene;
     }
     if (_app) {
-        return _app->getSceneServices().getActiveScene();
+        if (Scene* activeScene = _app->getSceneServices().getActiveScene()) {
+            return activeScene;
+        }
     }
-    return nullptr;
+    return _editableScene;
 }
 
 Scene* EditorLayer::getViewportInteractionScene() const
