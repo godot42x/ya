@@ -16,11 +16,11 @@
 #include "ECS/System/ResourceResolveSystem.h"
 #include "Editor/EditorLayer.h"
 #include "Editor/Inspector/DetailsViewInternal.h"
-#include "Runtime/GUI/ImGui/ImGuiSystem.h"
+#include "Host/GUI/ImGui/ImGuiSystem.h"
 #include "UI/Scene/Node2D.h"
 #include "Scene/Node.h"
-#include "Scene/Scene.h"
-#include "Runtime/Application/App.h"
+#include "Render3D/Scene.h"
+#include "Host/App.h"
 
 namespace ya
 {

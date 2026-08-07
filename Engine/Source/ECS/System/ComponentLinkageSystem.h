@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Config/ConfigManager.h"
+#include "Host/Config/ConfigManager.h"
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/DirectionalLightComponent.h"
 #include "Core/System/System.h"
@@ -13,10 +13,10 @@
 #include "ECS/Component/RenderComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/TransformSystem.h"
-#include "Scene/Scene.h"
+#include "Render3D/Scene.h"
 
-#include "Runtime/Application/App.h"
-#include "Scene/SceneManager.h"
+#include "Host/App.h"
+#include "Render3D/SceneManager.h"
 #include <algorithm>
 #include "entt/entt.hpp"
 

@@ -2,7 +2,7 @@
 
 #include "Editor/Panels/RuntimeToolsPanel.h"
 
-#include "Config/ConfigManager.h"
+#include "Host/Config/ConfigManager.h"
 #include "Core/Camera/FreeCameraController.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
@@ -12,17 +12,17 @@
 #include "Editor/EditorRuntimeSettings.h"
 #include "Editor/Panels/RenderTargetInspector.h"
 #include "UI/2D/Render2D.h"
-#include "Render/Core/Swapchain.h"
-#include "Runtime/Application/App.h"
-#include "Runtime/Rendering/Common/PostProcessingStage.h"
-#include "Runtime/Rendering/Common/Shadow/BasicShadowMap/BasicShadowMapTechnique.h"
-#include "Runtime/Rendering/Common/Shadow/Common/ShadowSettingsConfig.h"
-#include "Runtime/Rendering/Common/Shadow/ShadowStage.h"
-#include "Runtime/Rendering/Services/DebugRenderSystem.h"
-#include "Runtime/Rendering/Deferred/DeferredRenderPipeline.h"
-#include "Runtime/Rendering/Forward/ForwardRenderPipeline.h"
-#include "Runtime/Rendering/RenderRuntime.h"
-#include "Runtime/Application/Utility/FPSCtrl.h"
+#include "RHI/Core/Swapchain.h"
+#include "Host/App.h"
+#include "Render3D/Common/PostProcessingStage.h"
+#include "Render3D/Common/Shadow/BasicShadowMap/BasicShadowMapTechnique.h"
+#include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
+#include "Render3D/Common/Shadow/ShadowStage.h"
+#include "Render3D/Services/DebugRenderSystem.h"
+#include "Render3D/Deferred/DeferredRenderPipeline.h"
+#include "Render3D/Forward/ForwardRenderPipeline.h"
+#include "Render3D/RenderRuntime.h"
+#include "Host/Utility/FPSCtrl.h"
 
 #include <algorithm>
 #include <array>

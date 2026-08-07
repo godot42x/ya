@@ -1,5 +1,5 @@
 #include "ComponentLinkageSystem.h"
-#include "Runtime/Application/App.h"
+#include "Host/App.h"
 
 namespace ya
 

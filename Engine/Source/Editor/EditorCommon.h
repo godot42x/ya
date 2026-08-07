@@ -2,8 +2,8 @@
 
 #include "Core/Base.h"
 #include "imgui.h"
-#include "Render/Core/DescriptorSet.h"
-#include "Render/Core/Image.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/Image.h"
 
 namespace ya
 {

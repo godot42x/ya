@@ -1,7 +1,7 @@
 #include "LuaScriptingSystem.h"
-#include "Runtime/Application/App.h"
+#include "Host/App.h"
 #include "Core/Input/InputManager.h"
-#include "Core/Input/InputRouter.h"
+#include "Host/InputRouter.h"
 #include "Core/Log.h"
 #include "Core/Reflection/MetadataSupport.h"
 #include "Core/System/VirtualFileSystem.h"
@@ -11,7 +11,7 @@
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
-#include "Scene/SceneManager.h"
+#include "Render3D/SceneManager.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 

@@ -1,6 +1,6 @@
 #include "Core/Math/Math.h"
-#include "Render/Shadow/ShadowSettings.h"
-#include "Runtime/Rendering/Common/Shadow/Common/DirectionalShadowMath.h"
+#include "Render3D/Shadow/ShadowSettings.h"
+#include "Render3D/Common/Shadow/Common/DirectionalShadowMath.h"
 
 #include <gtest/gtest.h>
 

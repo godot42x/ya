@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Math/Geometry.h"
-#include "Render/Mesh.h"
+#include "Resource/Mesh.h"
 #include "Resource/ResourceRegistry.h"
 #include <mutex>
 #include <unordered_map>

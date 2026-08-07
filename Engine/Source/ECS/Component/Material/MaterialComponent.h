@@ -4,8 +4,8 @@
 #include "Core/Common/AssetRef.h"
 #include "Core/Reflection/Reflection.h"
 #include "ECS/Component.h"
-#include "Render/Material/Material.h"
-#include "Render/Material/MaterialFactory.h"
+#include "Render3D/Material/Material.h"
+#include "Render3D/Material/MaterialFactory.h"
 
 
 namespace ya

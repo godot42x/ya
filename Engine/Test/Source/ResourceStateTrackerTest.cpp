@@ -1,6 +1,6 @@
-#include "Render/Core/Image.h"
-#include "Render/Core/Graph/ResourceStateTracker.h"
-#include "Platform/Render/Vulkan/VulkanUtils.h"
+#include "RHI/Core/Image.h"
+#include "RenderGraph/ResourceStateTracker.h"
+#include "RHI/Backend/Vulkan/VulkanUtils.h"
 
 #include <gtest/gtest.h>
 #include <unordered_map>

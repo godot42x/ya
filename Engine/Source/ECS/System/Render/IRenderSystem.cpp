@@ -1,10 +1,9 @@
 #include "IRenderSystem.h"
 
-#include "Runtime/Application/App.h"
+#include "Host/App.h"
 #include "ECS/Component/CameraComponent.h"
-#include "Platform/Render/Vulkan/VulkanRender.h"
-#include "Render/Render.h"
-#include "Scene/SceneManager.h"
+#include "RHI/Render.h"
+#include "Render3D/SceneManager.h"
 
 
 namespace ya

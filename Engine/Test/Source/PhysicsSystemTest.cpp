@@ -1,8 +1,8 @@
 #include "ECS/Component/TransformComponent.h"
 #include "Physics/PhysicsBodyComponent.h"
 #include "Physics/PhysicsSystem.h"
-#include "Scene/Scene.h"
-#include "Scene/SceneManager.h"
+#include "Render3D/Scene.h"
+#include "Render3D/SceneManager.h"
 
 #include <gtest/gtest.h>
 

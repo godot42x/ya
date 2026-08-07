@@ -1,7 +1,7 @@
 #include "Core/Reflection/DeferredInitializer.h"
-#include "Core/Serialization/SceneSerializer.h"
+#include "Render3D/SceneSerializer.h"
 #include "UI/Scene/Node2D.h"
-#include "Scene/Scene.h"
+#include "Render3D/Scene.h"
 
 #include <gtest/gtest.h>
 

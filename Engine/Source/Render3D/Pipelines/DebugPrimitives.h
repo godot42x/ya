@@ -1,0 +1,148 @@
+#pragma once
+
+#include "Core/Math/Geometry.h"
+#include "RHI/Core/RenderAttachmentFormats.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/Pipeline.h"
+#include "Render3D/Stage/IRenderStage.h"
+
+#include <array>
+#include <glm/glm.hpp>
+#include <vector>
+
+namespace ya
+{
+
+struct Mesh;
+
+struct DebugPrimitives
+{
+    struct SettingsSnapshot
+    {
+        bool bEnabled   = true;
+        bool bDepthTest = true;
+        bool bDrawLines = true;
+        bool bDrawShapes = true;
+
+        size_t pendingLineCount   = 0;
+        size_t pendingShapeCount  = 0;
+        size_t frameLineCount     = 0;
+        size_t frameShapeCount    = 0;
+        size_t immediateLineCount = 0;
+        size_t immediateShapeCount = 0;
+    };
+
+    struct LineVertex
+    {
+        glm::vec3 position{0.0f};
+        glm::vec4 color{1.0f};
+    };
+
+    struct ShapeInstance
+    {
+        glm::mat4 model{1.0f};
+        glm::vec4 color{1.0f};
+        EPrimitiveGeometry primitive = EPrimitiveGeometry::None;
+    };
+
+    struct ShapePushConstant
+    {
+        glm::mat4 model{1.0f};
+        glm::vec4 color{1.0f};
+    };
+
+    struct FrameUBO
+    {
+        glm::mat4 projection{1.0f};
+        glm::mat4 view{1.0f};
+    };
+
+    static constexpr EFormat::T LINEAR_FORMAT   = EFormat::R16G16B16A16_SFLOAT;
+    static constexpr EFormat::T DEPTH_FORMAT    = EFormat::D32_SFLOAT;
+    static constexpr uint32_t   MAX_LINE_VERTICES = 8192;
+
+    IRender*                     _render = nullptr;
+    stdptr<IDescriptorSetLayout> _frameDSL;
+    stdptr<IDescriptorPool>      _frameDSP;
+    std::array<DescriptorSetHandle, MAX_FLIGHTS_IN_FLIGHT> _frameDS{};
+    std::array<stdptr<IBuffer>, MAX_FLIGHTS_IN_FLIGHT>     _frameUBO{};
+    stdptr<IGraphicsPipeline>    _linePipeline;
+    stdptr<IPipelineLayout>   _linePipelineLayout;
+    stdptr<IGraphicsPipeline> _shapePipeline;
+    stdptr<IPipelineLayout>   _shapePipelineLayout;
+    stdptr<IBuffer>           _lineVertexBuffer;
+    uint32_t                  _lineVertexCapacity = 0;
+
+    // Game-thread collected debug primitives, consumed by render thread next frame.
+    std::vector<LineVertex>    _queuedLineVertices;
+    std::vector<ShapeInstance> _queuedShapeInstances;
+    std::vector<LineVertex>    _frameLineVertices;
+    std::vector<ShapeInstance> _frameShapeInstances;
+
+    // Render-thread only: visible in the same frame.
+    std::vector<LineVertex>    _immediateLineVertices;
+    std::vector<ShapeInstance> _immediateShapeInstances;
+    FrameUBO                   _frameData{};
+
+    void init(IRender* render);
+    void destroy();
+    void beginFrame();
+    void clear();
+    void refreshPipelineFormats(const RenderAttachmentFormats& formats);
+
+    // Game-thread submission path: consumed by render thread on next beginFrame().
+    void addLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color = glm::vec4(1.0f));
+    void addSphere(const glm::vec3& center, float radius, const glm::vec4& color = glm::vec4(1.0f));
+    void addCylinder(const glm::mat4& model, const glm::vec4& color = glm::vec4(1.0f));
+    void addCone(const glm::mat4& model, const glm::vec4& color = glm::vec4(1.0f));
+
+    // Render-thread submission path: shows up in the same frame.
+    void addLineImmediate(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color = glm::vec4(1.0f));
+    void addSphereImmediate(const glm::vec3& center, float radius, const glm::vec4& color = glm::vec4(1.0f));
+    void addCylinderImmediate(const glm::mat4& model, const glm::vec4& color = glm::vec4(1.0f));
+    void addConeImmediate(const glm::mat4& model, const glm::vec4& color = glm::vec4(1.0f));
+
+    void draw(ICommandBuffer*  cmdBuf,
+              uint32_t         viewportWidth,
+              uint32_t         viewportHeight,
+              const glm::mat4& projection,
+              const glm::mat4& view);
+
+    [[nodiscard]] SettingsSnapshot buildSettingsSnapshot() const;
+    void requestSettings(const SettingsSnapshot& settings);
+    void setReverseViewportY(bool enabled) { _bReverseViewportY = enabled; }
+
+  private:
+    bool _bEnabled          = true;
+    bool _bReverseViewportY = true;
+    bool _bDepthTest        = true;
+    bool _bDrawLines        = true;
+    bool _bDrawShapes       = true;
+    bool _bSettingsPending  = false;
+    SettingsSnapshot _pendingSettings{};
+
+    void applyPendingSettings();
+    void initFrameResources();
+    void initLinePipeline();
+    void initShapePipeline();
+    void updateFrameUBO();
+    void ensureLineBufferCapacity(uint32_t requiredVertexCount);
+    void applyPipelineFormats(stdptr<IGraphicsPipeline>& pipeline, const RenderAttachmentFormats& formats);
+    void updateDepthState();
+    void clearImmediate();
+    void setViewportAndScissor(ICommandBuffer* cmdBuf, uint32_t viewportWidth, uint32_t viewportHeight) const;
+    void drawLines(ICommandBuffer* cmdBuf,
+                   uint32_t viewportWidth,
+                   uint32_t viewportHeight,
+                   uint32_t flightIndex,
+                   const std::vector<LineVertex>& vertices);
+    void drawShapes(ICommandBuffer* cmdBuf,
+                    uint32_t viewportWidth,
+                    uint32_t viewportHeight,
+                    uint32_t flightIndex,
+                    const std::vector<ShapeInstance>& shapes);
+    static glm::mat4 buildSphereModel(const glm::vec3& center, float radius);
+};
+
+} // namespace ya

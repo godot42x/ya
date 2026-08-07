@@ -1,10 +1,10 @@
 #include "Editor/Panels/RenderTargetInspector.h"
 
 #include "Editor/ImGui/ImGuiHelper.h"
-#include "Render/Core/RenderImage.h"
+#include "RHI/Core/RenderImage.h"
 #include "UI/Resource/TextureLibrary.h"
-#include "Runtime/Application/App.h"
-#include "Runtime/Rendering/RenderRuntime.h"
+#include "Host/App.h"
+#include "Render3D/RenderRuntime.h"
 
 #include <algorithm>
 #include <array>

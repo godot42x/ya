@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Math/Geometry.h"
-#include "Render/EngineMeshData.h"
+#include "Resource/EngineMeshData.h"
 
 namespace ya
 {

@@ -19,6 +19,7 @@
 #include "Core/Common/AssetRef.h"
 #include "Core/Reflection/Reflection.h"
 #include "ECS/Component.h"
+#include "Resource/Model.h"
 
 #include <unordered_map>
 

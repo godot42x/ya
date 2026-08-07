@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Bus/SceneBus.h"
+#include "ECS/SceneBus.h"
 #include "Core/TypeIndex.h"
 
 #include <concepts>

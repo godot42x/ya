@@ -13,7 +13,7 @@
 
 #include "Core/Base.h"
 #include "Core/Reflection/Reflection.h"
-#include "Render/Mesh.h"
+#include "Resource/Mesh.h"
 
 namespace ya
 {

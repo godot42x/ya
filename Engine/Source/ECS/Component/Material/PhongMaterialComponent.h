@@ -22,8 +22,8 @@
 #pragma once
 
 #include "MaterialComponent.h"
-#include "Render/Material/PhongMaterial.h"
-#include "Render/Model/MaterialData.h"
+#include "Render3D/Material/PhongMaterial.h"
+#include "Resource/Model/MaterialData.h"
 
 #include <array>
 #include <vector>

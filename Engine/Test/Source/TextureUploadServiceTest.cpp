@@ -1,9 +1,9 @@
-#include "Render/Core/TextureUploadService.h"
+#include "RHI/Core/TextureUploadService.h"
 
-#include "Render/Core/Buffer.h"
-#include "Render/Core/CommandBuffer.h"
-#include "Render/Core/Image.h"
-#include "Render/Render.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/Image.h"
+#include "RHI/Render.h"
 
 #include <gtest/gtest.h>
 

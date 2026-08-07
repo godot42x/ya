@@ -1,6 +1,6 @@
 #include "PrimitiveGeometryFactory.h"
 
-#include "Render/EngineGeometryNormalizer.h"
+#include "Resource/EngineGeometryNormalizer.h"
 
 #include "Core/Log.h"
 

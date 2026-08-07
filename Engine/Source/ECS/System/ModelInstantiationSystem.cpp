@@ -1,9 +1,9 @@
 #include "ModelInstantiationSystem.h"
 
-#include "Runtime/Application/App.h"
+#include "Host/App.h"
 #include "Scene/Node.h"
-#include "Scene/Node3D.h"
-#include "Scene/SceneManager.h"
+#include "Scene/3D/Node3D.h"
+#include "Render3D/SceneManager.h"
 
 #include "ECS/Component/ManagedChildComponent.h"
 
@@ -16,10 +16,10 @@
 #include "ECS/Component/SkeletonAnimatorComponent.h"
 #include "ECS/Entity.h"
 
-#include "Render/Material/MaterialFactory.h"
-#include "Render/Material/PBRMaterial.h"
-#include "Render/Material/PhongMaterial.h"
-#include "Render/Model.h"
+#include "Render3D/Material/MaterialFactory.h"
+#include "Render3D/Material/PBRMaterial.h"
+#include "Render3D/Material/PhongMaterial.h"
+#include "Resource/Model.h"
 
 #include <format>
 

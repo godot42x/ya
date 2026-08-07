@@ -4,7 +4,7 @@
 #include "Core/Common/AssetRef.h"
 #include "Core/Common/FWD-std.h"
 #include "ECS/Component.h"
-#include "Render/Material/Material.h"
+#include "Render3D/Material/Material.h"
 
 
 namespace ya

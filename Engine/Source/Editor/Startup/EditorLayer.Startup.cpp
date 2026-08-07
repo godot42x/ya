@@ -1,6 +1,6 @@
 #include "Editor/EditorLayerInternal.h"
 
-#include "Runtime/GUI/GuiSystem.h"
+#include "Host/GUI/GuiSystem.h"
 
 namespace ya
 {

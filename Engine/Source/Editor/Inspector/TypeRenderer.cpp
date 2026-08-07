@@ -3,7 +3,7 @@
 #include "Editor/EditorLayer.h"
 
 #include "Editor/Inspector/ContainerPropertyRenderer.h"
-#include "Runtime/Application/App.h"
+#include "Host/App.h"
 #include "Core/Common/AssetRef.h"
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"
@@ -11,7 +11,7 @@
 #include "Editor/Inspector/ReflectionCache.h"
 #include "Editor/ImGui/ImGuiHelper.h"
 #include "Editor/EditorModule.h"
-#include "Render/Material/Material.h"
+#include "Render3D/Material/Material.h"
 #include "UI/Resource/TextureLibrary.h"
 #include "Resource/AssetManager.h"
 #include "reflects-core/lib.h"

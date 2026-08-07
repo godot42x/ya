@@ -5,9 +5,9 @@
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
-#include "Render/Model.h"
-#include "Runtime/Application/App.h"
-#include "Scene/Scene.h"
+#include "Resource/Model.h"
+#include "Host/App.h"
+#include "Render3D/Scene.h"
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace ya

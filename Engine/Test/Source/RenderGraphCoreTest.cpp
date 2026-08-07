@@ -1,9 +1,9 @@
-#include "Render/Core/Graph/RenderGraph.h"
-#include "Render/Core/Graph/RenderGraphExecutor.h"
-#include "Render/Core/Graph/RenderGraphImportUtils.h"
-#include "Render/Core/Graph/RenderGraphResourceRegistry.h"
-#include "Render/Core/RenderingInfoUtils.h"
-#include "Render/Core/FrameUploadArena.h"
+#include "RenderGraph/RenderGraph.h"
+#include "RenderGraph/RenderGraphExecutor.h"
+#include "RenderGraph/RenderGraphImportUtils.h"
+#include "RenderGraph/RenderGraphResourceRegistry.h"
+#include "RHI/Core/RenderingInfoUtils.h"
+#include "RHI/Core/FrameUploadArena.h"
 #include "Resource/DeferredDeletionQueue.h"
 
 #include <gtest/gtest.h>

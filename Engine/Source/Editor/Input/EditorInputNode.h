@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Core/Input/InputRouter.h"
+#include "Host/InputRouter.h"
 
 namespace ya
 {

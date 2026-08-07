@@ -1,6 +1,6 @@
 #include "MeshSource.h"
 
-#include "Render/Model.h"
+#include "Resource/Model.h"
 #include "Resource/AssetManager.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 

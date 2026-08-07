@@ -1,11 +1,11 @@
 #include "Editor/Panels/AssetInspectorPanel.h"
 
 #include "Editor/EditorLayer.h"
-#include "Render/Core/RenderResourceFactory.h"
+#include "RHI/Core/RenderResourceFactory.h"
 #include "Resource/AssetManager.h"
 #include "Resource/Meta/AssetMeta.h"
 #include "UI/Resource/TextureLibrary.h"
-#include "Runtime/Application/App.h"
+#include "Host/App.h"
 
 #include <algorithm>
 #include <imgui.h>

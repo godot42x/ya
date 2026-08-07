@@ -4,7 +4,7 @@
 #include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/MirrorComponent.h"
 #include "Resource/AssetManager.h"
-#include "Resource/Font/FontManager.h"
+#include "UI/Resource/FontManager.h"
 
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/DirectionalLightComponent.h"
@@ -25,20 +25,20 @@
 
 #include "Core/Math/Geometry.h"
 
-#include "Render/Material/MaterialFactory.h"
-#include "Render/Material/PBRMaterial.h"
-#include "Render/Material/PhongMaterial.h"
-#include "Resource/Texture/TextureLibrary.h"
-#include "Scene/Node2D.h"
-#include "Scene/Scene.h"
+#include "Render3D/Material/MaterialFactory.h"
+#include "Render3D/Material/PBRMaterial.h"
+#include "Render3D/Material/PhongMaterial.h"
+#include "UI/Resource/TextureLibrary.h"
+#include "UI/Scene/Node2D.h"
+#include "Render3D/Scene.h"
 #include <format>
 
 
 
-#include "Scene/SceneManager.h"
+#include "Render3D/SceneManager.h"
 
 #include "Core/System/VirtualFileSystem.h"
-#include "Runtime/Application/App.h"
+#include "Host/App.h"
 
 
 void HelloMaterialModule::onAttach(ya::App& app)
@@ -62,7 +62,7 @@ void HelloMaterialModule::onSceneActivated(ya::App& app, ya::Scene* scene)
     // activated makes the same Node2D tree visible in the editor's 2D
     // workspace and lets PIE clone it normally. Play-mode activation is
     // idempotent because the cloned scene already contains the HUD.
-    createUIDemo(scene);
+    // createUIDemo(scene);
 }
 
 namespace

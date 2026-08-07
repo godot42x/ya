@@ -4,11 +4,11 @@
 
 #include "Core/Base.h"
 
-#include "Render/Core/Buffer.h"
-#include "Render/Core/DescriptorSet.h"
-#include "Render/Core/Pipeline.h"
-#include "Render/Core/Texture.h"
-#include "Render/RenderDefines.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/Pipeline.h"
+#include "RHI/Core/Texture.h"
+#include "RHI/RenderDefines.h"
 
 #include <array>
 

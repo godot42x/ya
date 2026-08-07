@@ -411,4 +411,4 @@ struct Visitor<void>
 // clang-format on
 
 // TODO: should not be in core?
-#include "Core/Reflection/ECSRegistry.h"
+#include "ECS/ECSRegistry.h"

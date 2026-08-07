@@ -5,12 +5,12 @@
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/Terrain/TerrainComponent.h"
-#include "Render/Core/OffscreenJob.h"
-#include "Render/Core/ImageResourceRef.h"
-#include "Runtime/Application/Utility/OffscreenJobRunner.h"
-#include "Render/Pipelines/CubeMap2PBRIrradianceMap.h"
-#include "Render/Pipelines/CubeMap2PBRPrefilteredEnv.h"
-#include "Render/Pipelines/EquidistantCylindrical2CubeMap.h"
+#include "RHI/Core/OffscreenJob.h"
+#include "RHI/Core/ImageResourceRef.h"
+#include "Host/Utility/OffscreenJobRunner.h"
+#include "Render3D/Pipelines/CubeMap2PBRIrradianceMap.h"
+#include "Render3D/Pipelines/CubeMap2PBRPrefilteredEnv.h"
+#include "Render3D/Pipelines/EquidistantCylindrical2CubeMap.h"
 #include "Resource/AssetManager.h"
 
 #include <deque>

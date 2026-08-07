@@ -4,7 +4,7 @@
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/System/System.h"
 
-#include "Render/Core/CommandBuffer.h"
+#include "RHI/Core/CommandBuffer.h"
 #include "glm/mat4x4.hpp"
 #include <any>
 #include <unordered_map>

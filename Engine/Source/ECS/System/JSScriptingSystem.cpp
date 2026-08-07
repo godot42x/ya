@@ -1,14 +1,14 @@
 #include "JSScriptingSystem.h"
 
 #include "Core/Log.h"
-#include "Core/Reflection/ECSRegistry.h"
+#include "ECS/ECSRegistry.h"
 #include "Core/Reflection/InstanceRef.h"
 #include "Core/Reflection/MethodReflection.h"
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "Core/Scripting/ScriptApiAsset.h"
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
-#include "Scene/Scene.h"
+#include "Render3D/Scene.h"
 
 #include <quickjs.h>
 

@@ -1,6 +1,6 @@
-#include "Render/Core/Buffer.h"
-#include "Render/Core/RenderResourceFactory.h"
-#include "Render/RenderDefines.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/RenderDefines.h"
 
 #include <gtest/gtest.h>
 

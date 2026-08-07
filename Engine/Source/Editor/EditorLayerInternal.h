@@ -2,7 +2,7 @@
 
 #include "Editor/EditorLayer.h"
 
-#include "Config/ConfigManager.h"
+#include "Host/Config/ConfigManager.h"
 #include "Core/KeyCode.h"
 #include "Core/Manager/Facade.h"
 #include "Core/Math/Math.h"
@@ -18,14 +18,14 @@
 #include "ECS/System/TransformSystem.h"
 #include "Editor/EditorCommon.h"
 #include "Editor/ImGui/ImGuiHelper.h"
-#include "Render/Core/RenderImage.h"
-#include "Render/Core/RenderResourceFactory.h"
+#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderResourceFactory.h"
 #include "Resource/AssetManager.h"
 #include "UI/Resource/TextureLibrary.h"
-#include "Runtime/Application/App.h"
+#include "Host/App.h"
 #include "Scene/Node.h"
-#include "Scene/Scene.h"
-#include "Scene/SceneManager.h"
+#include "Render3D/Scene.h"
+#include "Render3D/SceneManager.h"
 
 #include <ImGuizmo.h>
 #include <filesystem>

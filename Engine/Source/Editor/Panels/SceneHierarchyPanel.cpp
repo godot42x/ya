@@ -19,8 +19,8 @@
 #include "Editor/Services/NodeCreateRegistry.h"
 #include "UI/Scene/Node2D.h"
 #include "Scene/Node.h"
-#include "Scene/Node3D.h"
-#include "Scene/Scene.h"
+#include "Scene/3D/Node3D.h"
+#include "Render3D/Scene.h"
 #include <algorithm>
 #include <cctype>
 #include <iterator>

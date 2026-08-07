@@ -2,8 +2,8 @@
 
 #include "Core/Base.h"
 #include "Resource/ResourceRegistry.h"
-#include "Render/Core/Sampler.h"
-#include "Render/Core/Texture.h"
+#include "RHI/Core/Sampler.h"
+#include "RHI/Core/Texture.h"
 #include <memory>
 
 

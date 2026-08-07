@@ -1,8 +1,8 @@
 #include "Editor/EditorPlaySession.h"
 
 #include "Core/Log.h"
-#include "Runtime/Application/App.h"
-#include "Scene/SceneManager.h"
+#include "Host/App.h"
+#include "Render3D/SceneManager.h"
 
 namespace ya
 {

@@ -1,9 +1,9 @@
-#include "Runtime/Application/Utility/AppScreenshotCapture.h"
-#include "Runtime/Application/Utility/OffscreenJobRunner.h"
-#include "Runtime/Application/App.h"
+#include "Host/Utility/AppScreenshotCapture.h"
+#include "Host/Utility/OffscreenJobRunner.h"
+#include "Host/App.h"
 
-#include "Render/Render.h"
-#include "Render/Core/RenderImage.h"
+#include "RHI/Render.h"
+#include "RHI/Core/RenderImage.h"
 
 #include <gtest/gtest.h>
 

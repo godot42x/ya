@@ -14,10 +14,10 @@
 #include "Editor/Inspector/DetailsView.h"
 #include "Editor/FilePicker.h"
 #include "Editor/ImGui/ImGuiHelper.h"
-#include "Runtime/Rendering/Common/RenderOverlay.h"
-#include "Render/Core/Image.h"
-#include "Render/Core/RenderImage.h"
-#include "Runtime/Rendering/Common/RenderViewportSnapshot.h"
+#include "Render3D/Common/RenderOverlay.h"
+#include "RHI/Core/Image.h"
+#include "RHI/Core/RenderImage.h"
+#include "Render3D/Common/RenderViewportSnapshot.h"
 #include "Editor/Panels/SceneHierarchyPanel.h"
 #include <imgui.h>
 

@@ -7,7 +7,7 @@
 #include "Core/Log.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Resource/DeferredDeletionQueue.h"
-#include "Runtime/Application/App.h"
+#include "Host/App.h"
 
 #include <algorithm>
 #include <cctype>

@@ -1,7 +1,7 @@
 #include "BillboardComponent.h"
 
 #include "Core/Math/Math.h"
-#include "Render/Material/MaterialFactory.h"
+#include "Render3D/Material/MaterialFactory.h"
 #include "UI/Resource/TextureLibrary.h"
 
 namespace ya

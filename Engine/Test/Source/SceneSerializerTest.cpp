@@ -1,5 +1,5 @@
 #include "Core/Reflection/DeferredInitializer.h"
-#include "Core/Serialization/SceneSerializer.h"
+#include "Render3D/SceneSerializer.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Entity.h"

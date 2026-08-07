@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
-#include "Render/Core/Texture.h"
-#include "Render/Model.h"
+#include "RHI/Core/Texture.h"
+#include "Resource/Model.h"
 
 namespace ya
 {

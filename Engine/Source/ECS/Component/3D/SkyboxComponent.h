@@ -6,7 +6,7 @@
 #include <array>
 
 #include "ECS/Component.h"
-#include "Render/Core/Texture.h"
+#include "RHI/Core/Texture.h"
 
 namespace ya
 {

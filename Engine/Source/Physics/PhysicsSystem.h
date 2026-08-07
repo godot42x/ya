@@ -3,7 +3,7 @@
 #include "Core/Base.h"
 #include "Core/Delegate.h"
 #include "Core/System/System.h"
-#include "Runtime/Application/AppState.h"
+#include "Host/AppState.h"
 
 #include <functional>
 #include <memory>

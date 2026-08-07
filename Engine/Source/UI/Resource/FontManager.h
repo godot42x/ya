@@ -3,7 +3,7 @@
 #include "Core/Base.h"
 #include "Core/FName.h"
 #include "Resource/ResourceRegistry.h"
-#include "Render/Core/Texture.h"
+#include "RHI/Core/Texture.h"
 
 #include <algorithm>
 #include <cstdint>

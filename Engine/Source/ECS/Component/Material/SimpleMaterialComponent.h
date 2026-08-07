@@ -4,7 +4,7 @@
 
 #include "ECS/Component.h"
 #include "MaterialComponent.h"
-#include "Render/Material/SimpleMaterial.h"
+#include "Render3D/Material/SimpleMaterial.h"
 
 namespace ya
 {

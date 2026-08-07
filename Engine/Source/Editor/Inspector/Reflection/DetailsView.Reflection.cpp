@@ -14,7 +14,7 @@
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/RenderComponent.h"
-#include "Scene/Scene.h"
+#include "Render3D/Scene.h"
 
 namespace ya
 {

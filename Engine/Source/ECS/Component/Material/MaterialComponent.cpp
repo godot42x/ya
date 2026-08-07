@@ -1,5 +1,5 @@
 #include "MaterialComponent.h"
-#include "Render/Material/MaterialFactory.h"
+#include "Render3D/Material/MaterialFactory.h"
 
 namespace ya
 {

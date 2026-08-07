@@ -4,11 +4,11 @@
 #include "ECS/System/TransformSystem.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
-#include "Render/Core/Buffer.h"
-#include "Render/Core/CommandBuffer.h"
-#include "Render/Core/RenderImage.h"
-#include "Render/Render.h"
-#include "UI/UISceneRenderer.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/RenderImage.h"
+#include "RHI/Render.h"
+#include "UI/Scene/UISceneRenderer.h"
 #include "UI/Scene/Node2D.h"
 
 #include <cmath>

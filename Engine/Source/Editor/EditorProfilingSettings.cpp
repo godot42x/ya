@@ -1,6 +1,6 @@
 #include "Editor/EditorProfilingSettings.h"
 
-#include "Config/ConfigManager.h"
+#include "Host/Config/ConfigManager.h"
 #include "Core/Profiling/Profiling.h"
 
 namespace ya::editor_profiling_settings

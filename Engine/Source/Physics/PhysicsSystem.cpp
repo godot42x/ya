@@ -4,8 +4,8 @@
 #include "Core/Log.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Physics/PhysicsBodyComponent.h"
-#include "Scene/Scene.h"
-#include "Scene/SceneManager.h"
+#include "Render3D/Scene.h"
+#include "Render3D/SceneManager.h"
 
 // Jolt headers stay inside this translation unit (behind the World pimpl).
 #include <Jolt/Jolt.h>

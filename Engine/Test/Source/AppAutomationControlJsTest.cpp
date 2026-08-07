@@ -4,10 +4,10 @@
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/System/JSScriptingSystem.h"
-#include "Runtime/Application/App.h"
-#include "Runtime/Application/Automation/AppAutomationControlService.h"
-#include "Scene/Scene.h"
-#include "Scene/SceneManager.h"
+#include "Host/App.h"
+#include "Host/Automation/AppAutomationControlService.h"
+#include "Render3D/Scene.h"
+#include "Render3D/SceneManager.h"
 
 #include <gtest/gtest.h>
 

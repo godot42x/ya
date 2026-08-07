@@ -1,0 +1,25 @@
+ya_module("ya-render-3d", "RENDER_3D", {
+    deps = {
+        "ya-ui-scene",
+        "ya-resource",
+        "ya-render-graph",
+        "ya-scene-core",
+        "ya-scene-3d",
+        "ya-ecs",
+        "ya-physics",
+    },
+    packages = {
+        "glm",
+        "entt",
+        "cxxopts",
+        "vulkan-memory-allocator",
+        "glad",
+        "lua",
+        "sol2",
+        "quickjs-ng",
+        "vulkansdk",
+        "nlohmann_json",
+        "ktx",
+        "stb",
+    },
+})
