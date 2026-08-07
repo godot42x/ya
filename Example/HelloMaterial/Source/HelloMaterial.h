@@ -22,13 +22,10 @@ struct HelloMaterialModule final : ya::IModule
     void onDetach(ya::App&) override;
 
     void onSceneActivated(ya::App&, ya::Scene*) override;
-    void onLogic(ya::App&, float) override;
 
     void createCubeMesh();
     void loadResources();
     void createMaterials();
     void createEntities(ya::Scene* scene);
     void createUIDemo(ya::Scene* scene);
-
-    ya::Scene* _uiDemoScene = nullptr;
 };

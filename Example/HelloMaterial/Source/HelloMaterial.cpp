@@ -58,21 +58,10 @@ void HelloMaterialModule::onSceneActivated(ya::App& app, ya::Scene* scene)
 {
     (void)app;
     YA_INFO("HelloMaterial scene initialized.");
-    // Any scene activation invalidates the cached demo-scene pointer (the
-    // play scene is recreated per PIE session).
-    _uiDemoScene = nullptr;
-}
-
-void HelloMaterialModule::onLogic(ya::App& app, float)
-{
-    if (!app.isRuntimeMode() && !app.isSimulationMode()) {
-        return;
-    }
-    ya::Scene* scene = app.getSceneServices().getActiveScene();
-    if (!scene || scene == _uiDemoScene) {
-        return;
-    }
-    _uiDemoScene = scene;
+    // The demo UI is authoring data. Creating it when the source scene is
+    // activated makes the same Node2D tree visible in the editor's 2D
+    // workspace and lets PIE clone it normally. Play-mode activation is
+    // idempotent because the cloned scene already contains the HUD.
     createUIDemo(scene);
 }
 
