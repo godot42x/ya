@@ -185,7 +185,7 @@ struct EditorLayer
 
     void onUpdate(float dt);
     void setCameraController(FreeCameraController* controller) { _runtimeToolsPanel.setCameraController(controller); }
-    void setEditableScene(Scene* scene) { _editableScene = scene; }
+    void setEditableScene(Scene* scene);
     void setCurrentScenePath(std::string scenePath) { _currentScenePath = std::move(scenePath); }
     [[nodiscard]] const std::string& getCurrentScenePath() const { return _currentScenePath; }
     void setSceneContext(Scene* scene)
@@ -204,6 +204,9 @@ struct EditorLayer
         if (node) {
             _selections.clear();
             _selectedEntityUUID = 0;
+            if (isViewportMode2D() == false) {
+                setViewportMode(EViewportMode::Mode2D, /*bPersist=*/false);
+            }
         }
     }
     [[nodiscard]] Node2D* getSelectedNode2D() const { return _selectedNode2D; }
@@ -240,6 +243,10 @@ struct EditorLayer
             if (auto* idComponent = _selections.front()->getComponent<IDComponent>()) {
                 _selectedEntityUUID = idComponent->_id.value;
             }
+        }
+
+        if (!_selections.empty() && isViewportMode2D()) {
+            setViewportMode(EViewportMode::Mode3D, /*bPersist=*/false);
         }
     }
 
@@ -336,6 +343,7 @@ struct EditorLayer
 
   private:
     Scene* getEditableScene() const;
+    Scene* getSceneHierarchyContext() const;
     void   syncEditorSettingsFromConfig();
     [[nodiscard]] bool hasProjectLoaded() const;
     void refreshProjectBrowser();
@@ -397,7 +405,9 @@ struct EditorLayer
     const std::vector<Entity*>& getSelections() const { return _selections; }
     Entity*                     getSelectedEntity() const { return _selections.empty() ? nullptr : _selections.front(); }
     uint64_t                    getSelectedEntityUUID() const { return _selectedEntityUUID; }
-    /// Active scene shown in the viewport (play scene during PIE, authoring scene otherwise).
+    /// Active scene used for viewport interaction. In the 2D workspace this is
+    /// always the authoring scene so runtime UI editing never mutates the play
+    /// clone. In the 3D workspace it follows the active scene.
     Scene* getViewportInteractionScene() const;
     // void      setViewportImage(stdptr<IImageView> image) { _viewportImage = getOrCreateImGuiTextureID(image); }
 };

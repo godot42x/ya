@@ -9,13 +9,23 @@ Scene* EditorLayer::getEditableScene() const
     return _editableScene;
 }
 
+Scene* EditorLayer::getSceneHierarchyContext() const
+{
+    if (_editableScene) {
+        return _editableScene;
+    }
+    if (_app) {
+        return _app->getSceneServices().getActiveScene();
+    }
+    return nullptr;
+}
+
 Scene* EditorLayer::getViewportInteractionScene() const
 {
-    if (!_app) {
-        return nullptr;
+    if (isViewportMode2D()) {
+        return _editableScene;
     }
-
-    return _app->getSceneServices().getActiveScene();
+    return _app ? _app->getSceneServices().getActiveScene() : nullptr;
 }
 
 void EditorLayer::syncEditorSettingsFromConfig()
@@ -28,6 +38,7 @@ void EditorLayer::syncEditorSettingsFromConfig()
                                                                    _bShowViewportCameraOverlay);
     const std::string viewportMode = ConfigManager::get().getOr<std::string>("editor", "viewport.mode", "3d");
     _viewportMode                  = viewportMode == "2d" ? EViewportMode::Mode2D : EViewportMode::Mode3D;
+    _sceneHierarchyPanel.setContext(getSceneHierarchyContext());
 }
 
 bool EditorLayer::hasProjectLoaded() const

@@ -39,6 +39,10 @@ void SceneHierarchyPanel::onImGuiRender()
 
 void SceneHierarchyPanel::setContext(Scene* scene)
 {
+    if (_context == scene) {
+        return;
+    }
+
     _context = scene;
 
     bool bSelectionChanged = false;

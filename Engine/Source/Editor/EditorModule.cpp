@@ -216,11 +216,15 @@ class EditorViewportCompositor
         commandBuffer.transitionImageLayoutAuto(source->getImage(), EImageLayout::ShaderReadOnlyOptimal);
         commandBuffer.transitionImageLayoutAuto(_composedViewportImage->getImage(), EImageLayout::ColorAttachmentOptimal);
 
+        // 2D canvas preview does not consume the world depth buffer.
+        const bool bCanvasPreview = layer.isViewportMode2D() && uiPreviewRoot;
+
         // Attach the scene depth buffer when available so debug overlays
         // (collision wireframes) can be depth-tested against the world.
         const auto  depthOwner   = snapshot.viewportDepthOwner;
         const bool  bAttachDepth = depthOwner && depthOwner->isValid() &&
-                                   depthOwner->getExtent() == _composedViewportImage->getExtent();
+                                   depthOwner->getExtent() == _composedViewportImage->getExtent() &&
+                                   !bCanvasPreview;
         if (bAttachDepth) {
             commandBuffer.retainResource(depthOwner->getImageShared());
             commandBuffer.retainResource(depthOwner->getImageViewShared());
@@ -235,7 +239,7 @@ class EditorViewportCompositor
         // The game itself always renders 3D + 2D together. During PIE/sim the
         // runtime already composites the UI, so the editor falls back to the
         // plain 3D presentation (no double draw, no frozen 2D canvas).
-        if (layer.isViewportMode2D() && uiPreviewRoot) {
+        if (bCanvasPreview) {
             const glm::vec2 logicalViewport = layer.getViewportSize();
             recordUICompositorPass(&commandBuffer,
                                    *_composedViewportImage,
@@ -244,7 +248,9 @@ class EditorViewportCompositor
                                        .height = static_cast<uint32_t>(std::max(logicalViewport.y, 0.0f)),
                                    },
                                    uiPreviewRoot,
-                                   true);
+                                   true,
+                                   layer.getCanvasPan(),
+                                   layer.getCanvasZoom());
             return;
         }
 
@@ -287,6 +293,7 @@ class EditorViewportCompositor
             .cmdBuf       = &commandBuffer,
             .windowWidth  = extent.width,
             .windowHeight = extent.height,
+            .passDomain   = ERender2DPassDomain::EditorViewport,
             .cam          = {
                          .position       = renderFrame.cameraPos,
                          .view           = renderFrame.view,
@@ -713,8 +720,9 @@ class EditorModule final : public IModule, public IEditorAutomationControl
 
         const uint64_t selectedUUID = _layer->getSelectedEntityUUID();
         _layer->setEditableScene(_playSession.getAuthoringScene());
-        _layer->setSceneContext(scene);
-        _layer->selectEntity(scene && selectedUUID != 0 ? scene->getEntityByUUID(selectedUUID) : nullptr);
+        Scene* const authoringScene = _playSession.getAuthoringScene() ? _playSession.getAuthoringScene() : scene;
+        _layer->setSceneContext(authoringScene);
+        _layer->selectEntity(authoringScene && selectedUUID != 0 ? authoringScene->getEntityByUUID(selectedUUID) : nullptr);
     }
 
     void onSceneDestroyed(App& app, Scene* scene) override
@@ -724,6 +732,7 @@ class EditorModule final : public IModule, public IEditorAutomationControl
         gEditorAuthoringScene = _playSession.getAuthoringScene();
         if (_layer) {
             _layer->setEditableScene(_playSession.getAuthoringScene());
+            _layer->setSceneContext(_playSession.getAuthoringScene());
             _layer->selectEntity(nullptr);
         }
     }
@@ -741,9 +750,9 @@ class EditorModule final : public IModule, public IEditorAutomationControl
             return;
         }
 
-        // Playing/simulating always presents in 3D (the game renders 3D + UI
-        // together); when the session ends, restore the viewport mode the user
-        // was editing in (e.g. back to the 2D canvas).
+        // Entering runtime from the UI workspace mirrors Godot-style flow:
+        // runtime starts in the 3D workspace, but the user may switch back to
+        // the 2D authoring workspace while the play session keeps running.
         const bool bRunning = app.isRuntimeMode() || app.isSimulationMode();
         if (bRunning && !_bWasRunning && _layer->isViewportMode2D()) {
             _viewportModeBeforePlay = _layer->getViewportMode();
@@ -754,6 +763,7 @@ class EditorModule final : public IModule, public IEditorAutomationControl
             _viewportModeBeforePlay.reset();
         }
         _bWasRunning = bRunning;
+        _layer->setSceneContext(_playSession.getAuthoringScene());
 
         auto& renderServices = app.getRenderServices();
         if (auto* renderRuntime = renderServices.getRenderRuntime()) {
@@ -777,11 +787,24 @@ class EditorModule final : public IModule, public IEditorAutomationControl
                 .cameraPos  = editorCamera.getPosition(),
             });
 
+            // The editor compositor always targets an HDR color image. Keep
+            // the screen-space sprite pipeline's dynamic-rendering formats in
+            // sync before presentation starts; recreating a pipeline while a
+            // command buffer is recording invalidates that command buffer.
+            const auto* activePipeline = renderRuntime->getActivePipeline();
+            const EFormat::T depthFormat = activePipeline
+                                               ? activePipeline->getViewportDepthFormat()
+                                               : EFormat::Undefined;
+            Render2D::ensureScreenPipeline(ERender2DPassDomain::EditorViewport,
+                                           EFormat::R16G16B16A16_SFLOAT,
+                                           depthFormat);
+
             // The editor 2D canvas pass records into the composed viewport
             // image (always R16G16B16A16_SFLOAT); ensure the depth-less UI
             // pipeline exists outside command recording.
-            if (_layer->isViewportMode2D() && !app.isRuntimeMode() && !app.isSimulationMode()) {
-                Render2D::ensureUICompositorPipeline(EFormat::R16G16B16A16_SFLOAT);
+            if (_layer->isViewportMode2D()) {
+                Render2D::ensureUICompositorPipeline(ERender2DPassDomain::EditorCanvas,
+                                                       EFormat::R16G16B16A16_SFLOAT);
             }
         }
 
@@ -816,7 +839,7 @@ class EditorModule final : public IModule, public IEditorAutomationControl
         // during PIE/sim the runtime already composites UI, so the editor
         // preview stays in 3D presentation (no double-draw).
         Node* uiPreviewRoot = nullptr;
-        if (_layer->isViewportMode2D() && !app.isRuntimeMode() && !app.isSimulationMode()) {
+        if (_layer->isViewportMode2D()) {
             if (Scene* scene = _layer->getViewportInteractionScene()) {
                 uiPreviewRoot = scene->getRootNode();
             }

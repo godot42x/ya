@@ -77,9 +77,25 @@ void EditorLayer::onUpdate(float dt)
     _lastDeltaTime = dt;
 }
 
+void EditorLayer::setEditableScene(Scene* scene)
+{
+    _editableScene = scene;
+    _sceneHierarchyPanel.setContext(getSceneHierarchyContext());
+}
+
 void EditorLayer::setViewportMode(EViewportMode mode, bool bPersist)
 {
+    if (_viewportMode == mode) {
+        return;
+    }
+
     _viewportMode = mode;
+    _sceneHierarchyPanel.setContext(getSceneHierarchyContext());
+
+    if (_app && mode == EViewportMode::Mode2D) {
+        _app->getInputRouter().cancelInput(EInputCancelReason::CaptureReleased);
+    }
+
     if (bPersist) {
         ConfigManager::Editor(kEditorConfigDocument)
             .set("viewport.mode", mode == EViewportMode::Mode2D ? "2d" : "3d")

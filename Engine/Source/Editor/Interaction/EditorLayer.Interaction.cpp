@@ -95,7 +95,7 @@ Entity* pickEntityFromEntityIdImage(IRender*                             render,
 
 void EditorLayer::onEvent(const Event& event)
 {
-    if (_app && !_app->isStopped()) {
+    if (_app && !_app->isStopped() && !isViewportMode2D()) {
         return;
     }
 

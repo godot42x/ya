@@ -65,10 +65,11 @@ FInputReply routeGuiInput(const FEditorInputSnapshot& snapshot, const FInputEven
 
 FInputReply routeCapturedViewportInput(
     App& app,
+    EditorLayer& layer,
     FInputRouteContext& context,
     const FInputEvent& event)
 {
-    if (app.isStopped() || !context.router.isMouseCaptured()) {
+    if (app.isStopped() || layer.isViewportMode2D() || !context.router.isMouseCaptured()) {
         return {};
     }
 
@@ -82,14 +83,22 @@ FInputReply routeViewportToolInput(
     const FEditorInputSnapshot& snapshot,
     const FInputEvent& event)
 {
-    // Viewport editing (selection, gizmo, editor camera control) is available
-    // in edit mode and in simulation, where the editor camera stays active.
-    // Full runtime (PIE) hands the viewport over to the game instead.
-    if (app.isRuntimeMode()) {
+    // The 2D workspace always routes input to editor authoring, even during a
+    // play session. The 3D workspace keeps the old rule: edit/sim authoring is
+    // handled here, full runtime hands the viewport over to the game.
+    if (app.isRuntimeMode() && !layer.isViewportMode2D()) {
         return {};
     }
 
     layer.onEvent(event);
+
+    if (layer.isViewportMode2D()) {
+        if ((snapshot.pointerEvent && snapshot.viewportMouse) ||
+            (snapshot.keyboardEvent && snapshot.viewportKeyboard && !snapshot.guiClaim.text)) {
+            return FInputReply{.handled = true};
+        }
+        return {};
+    }
 
     if (snapshot.pointerEvent && snapshot.viewportMouse) {
         app.getInputManager().processEvent(event);
@@ -112,7 +121,7 @@ FInputReply routeGameplayViewportInput(
 {
     // Game input and pointer capture only exist in full runtime (PIE).
     // Simulation keeps the editor camera and never captures the viewport mouse.
-    if (!app.isRuntimeMode()) {
+    if (!app.isRuntimeMode() || layer.isViewportMode2D()) {
         return {};
     }
 
@@ -182,7 +191,7 @@ FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEven
         return reply;
     }
 
-    reply = routeCapturedViewportInput(*_app, context, event);
+    reply = routeCapturedViewportInput(*_app, *_layer, context, event);
     if (shouldStopRouting(reply)) {
         return reply;
     }
