@@ -29,6 +29,7 @@
 #include "Render/Material/PBRMaterial.h"
 #include "Render/Material/PhongMaterial.h"
 #include "Resource/Texture/TextureLibrary.h"
+#include "Scene/Node2D.h"
 #include "Scene/Scene.h"
 #include <format>
 
@@ -51,6 +52,71 @@ void HelloMaterialModule::onDetach(ya::App&)
 {
     cubeMesh.reset();
     render = nullptr;
+}
+
+void HelloMaterialModule::onSceneActivated(ya::App&, ya::Scene* scene)
+{
+    YA_INFO("HelloMaterial scene initialized.");
+    createUIDemo(scene);
+}
+
+namespace
+{
+
+bool sceneHasNode2D(ya::Node* node, const std::string& name)
+{
+    for (ya::Node* child : node->getChildren()) {
+        if (auto* node2D = dynamic_cast<ya::Node2D*>(child)) {
+            if (node2D->getName() == name) {
+                return true;
+            }
+        }
+        if (sceneHasNode2D(child, name)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
+
+void HelloMaterialModule::createUIDemo(ya::Scene* scene)
+{
+    // Game UI demo: Node2D nodes live in the unified scene tree (Godot style)
+    // and are rendered by the dedicated UI pass. Idempotent across PIE enters.
+    if (!scene || sceneHasNode2D(scene->getRootNode(), "HUD")) {
+        return;
+    }
+
+    auto* canvas = scene->createUINode<ya::UICanvasNode>("HUD");
+    if (!canvas) {
+        return;
+    }
+
+    auto* panel = scene->createUINode<ya::UIPanelNode>("Panel", canvas);
+    panel->_position = {20.0f, 20.0f};
+    panel->_size     = {300.0f, 120.0f};
+    panel->_color    = {0.12f, 0.14f, 0.22f, 0.88f};
+
+    auto* title = scene->createUINode<ya::UITextNode>("Title", canvas);
+    title->_position = {36.0f, 30.0f};
+    title->_size     = {260.0f, 26.0f};
+    title->_text     = "Game UI (Node2D)";
+    title->_fontSize = 16; // Only preloaded sizes (16/48) resolve today; see Phase 2 font policy
+    title->_color    = {1.0f, 0.85f, 0.4f, 1.0f};
+
+    auto* label = scene->createUINode<ya::UITextNode>("Label", canvas);
+    label->_position = {36.0f, 66.0f};
+    label->_size     = {260.0f, 20.0f};
+    label->_text     = "Click the button below";
+    label->_fontSize = 16;
+
+    auto* button = scene->createUINode<ya::UIButtonNode>("Click Me", canvas);
+    button->_position = {36.0f, 96.0f};
+    button->_size     = {140.0f, 30.0f};
+    button->_onClick  = [label]() {
+        label->_text = (label->_text == "Button clicked!") ? "Click the button below" : "Button clicked!";
+    };
 }
 
 void HelloMaterialModule::createCubeMesh()

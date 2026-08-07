@@ -21,13 +21,11 @@ struct HelloMaterialModule final : ya::IModule
     void onAttach(ya::App&) override;
     void onDetach(ya::App&) override;
 
-    void onSceneActivated(ya::App&, ya::Scene*) override
-    {
-        YA_INFO("HelloMaterial scene initialized.");
-    }
+    void onSceneActivated(ya::App&, ya::Scene*) override;
 
     void createCubeMesh();
     void loadResources();
     void createMaterials();
     void createEntities(ya::Scene* scene);
+    void createUIDemo(ya::Scene* scene);
 };
