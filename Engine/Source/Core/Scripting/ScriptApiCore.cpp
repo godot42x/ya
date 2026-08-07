@@ -5,6 +5,7 @@
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
+#include "Scene/Node2D.h"
 #include "Scene/Scene.h"
 
 #include <algorithm>
@@ -76,6 +77,66 @@ Json entityToJson(const Scene& scene, const Entity& entity)
         {"name", entity.getName()},
         {"components", std::move(components)},
     };
+}
+
+Json nodeToJson(const Scene& scene, const Node* node)
+{
+    Json entry{
+        {"path", scene.getNodePath(node)},
+        {"name", node->getName()},
+    };
+
+    if (const auto* node2D = dynamic_cast<const Node2D*>(node)) {
+        entry["type"]   = node2D->getUITypeName();
+        entry["fields"] = node2D->serializeFields();
+    }
+    else if (const Entity* entity = node->getEntity()) {
+        entry["type"]      = "Node3D";
+        entry["entity_id"] = static_cast<uint32_t>(entity->getHandle());
+    }
+    else {
+        entry["type"] = "Node";
+    }
+
+    Json children = Json::array();
+    for (const Node* child : node->getChildren()) {
+        children.push_back(nodeToJson(scene, child));
+    }
+    if (!children.empty()) {
+        entry["children"] = std::move(children);
+    }
+    return entry;
+}
+
+Node* requireNodeByPath(Scene& scene, const Json& args)
+{
+    const std::string path = args.at("path").get<std::string>();
+    Node* const       node = scene.findNodeByPath(path);
+    if (!node) {
+        throw Error(std::format("node path not found: {}", path));
+    }
+    return node;
+}
+
+/// Serialized reflected objects nest base-class fields under
+/// `__base__.<BaseClass>`, so a flat field name like `_position` must be
+/// resolved to its actual (possibly nested) location before writing.
+bool setFieldDeep(Json& root, const std::string& key, const Json& value)
+{
+    if (root.is_object()) {
+        if (auto it = root.find(key); it != root.end()) {
+            *it = value;
+            return true;
+        }
+        for (auto& [childKey, childValue] : root.items()) {
+            if (childKey == "__base__" || childKey == "Node2D" || childValue.is_object()) {
+                if (setFieldDeep(childValue, key, value)) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 } // namespace
@@ -280,6 +341,124 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
             ReflectionSerializer::deserializeByRuntimeReflection(ptr, *typeIndex, merged, typeName);
             static_cast<IComponent*>(ptr)->onPostSerialize();
             return merged;
+        });
+
+    // ========================================================================
+    // Scene tree / Node2D (unified node tree, path-addressed)
+    // ========================================================================
+    registry.registerFunction(
+        "node.types",
+        "Lists every creatable Node2D type (auto-collected from reflection).",
+        Json::object(),
+        [](const Json&) -> Json {
+            Json types = Json::array();
+            for (const std::string& name : getRegisteredUINodeTypeNames()) {
+                types.push_back(name);
+            }
+            return types;
+        });
+
+    registry.registerFunction(
+        "node.list",
+        "Lists the unified scene tree: [{path, name, type, entity_id?, fields?, children?}].",
+        Json::object(),
+        [](const Json&) -> Json {
+            Scene& scene = requireActiveScene();
+            Json   tree  = Json::array();
+            for (Node* child : scene.getRootNode()->getChildren()) {
+                tree.push_back(nodeToJson(scene, child));
+            }
+            return Json{{"count", tree.size()}, {"nodes", std::move(tree)}};
+        });
+
+    registry.registerFunction(
+        "node.get",
+        "Returns one scene-tree node by slash path, e.g. /HUD/Panel.",
+        Json{{"path", {{"type", "string"}}}},
+        [](const Json& args) -> Json {
+            Scene& scene = requireActiveScene();
+            return nodeToJson(scene, requireNodeByPath(scene, args));
+        });
+
+    registry.registerFunction(
+        "node.create",
+        "Creates a Node2D node. Args: {type, name?, parent_path?}. Types come from node.types.",
+        Json{{"type", {{"type", "string"}}},
+             {"name", {{"type", "string"}}},
+             {"parent_path", {{"type", "string"}}}},
+        [](const Json& args) -> Json {
+            Scene&       scene    = requireActiveScene();
+            const auto   typeName = args.at("type").get<std::string>();
+            const auto   name     = args.value("name", typeName);
+            Node*        parent   = nullptr;
+            if (const auto it = args.find("parent_path"); it != args.end() && !it->is_null()) {
+                parent = scene.findNodeByPath(it->get<std::string>());
+                if (!parent) {
+                    throw Error(std::format("parent_path not found: {}", it->get<std::string>()));
+                }
+            }
+            Node2D* node = scene.createUINode(typeName, name, parent);
+            if (!node) {
+                throw Error(std::format("unknown Node2D type '{}' (see node.types)", typeName));
+            }
+            return Json{{"path", scene.getNodePath(node)}, {"name", node->getName()}};
+        });
+
+    registry.registerFunction(
+        "node.set",
+        "Updates reflected fields of a Node2D node. Args: {path, fields:{name: value}}.",
+        Json{{"path", {{"type", "string"}}}, {"fields", {{"type", "object"}}}},
+        [](const Json& args) -> Json {
+            Scene& scene = requireActiveScene();
+            Node*  node  = requireNodeByPath(scene, args);
+            auto*  node2D = dynamic_cast<Node2D*>(node);
+            if (!node2D) {
+                throw Error("node.set only supports Node2D nodes");
+            }
+            Json merged = node2D->serializeFields();
+            for (const auto& [key, value] : args.at("fields").items()) {
+                if (!setFieldDeep(merged, key, value)) {
+                    throw Error(std::format("unknown Node2D field '{}'", key));
+                }
+            }
+            node2D->deserializeFields(merged);
+            return nodeToJson(scene, node);
+        });
+
+    registry.registerFunction(
+        "node.move",
+        "Moves a node under a new parent. Args: {path, parent_path?, index?} (root when parent_path omitted).",
+        Json{{"path", {{"type", "string"}}},
+             {"parent_path", {{"type", "string"}}},
+             {"index", {{"type", "integer"}}}},
+        [](const Json& args) -> Json {
+            Scene& scene = requireActiveScene();
+            Node*  node  = requireNodeByPath(scene, args);
+            Node*  parent = nullptr;
+            if (const auto it = args.find("parent_path"); it != args.end() && !it->is_null()) {
+                parent = scene.findNodeByPath(it->get<std::string>());
+                if (!parent) {
+                    throw Error(std::format("parent_path not found: {}", it->get<std::string>()));
+                }
+            }
+            const size_t index = args.contains("index")
+                                     ? args.at("index").get<size_t>()
+                                     : (parent ? parent->getChildCount() : scene.getRootNode()->getChildCount());
+            if (!scene.moveNode(node, parent, index)) {
+                throw Error(std::format("failed to move node '{}'", args.at("path").get<std::string>()));
+            }
+            return Json{{"path", scene.getNodePath(node)}};
+        });
+
+    registry.registerFunction(
+        "node.destroy",
+        "Destroys a scene-tree node by path (Node2D or entity-backed).",
+        Json{{"path", {{"type", "string"}}}},
+        [](const Json& args) -> Json {
+            Scene& scene = requireActiveScene();
+            Node*  node  = requireNodeByPath(scene, args);
+            scene.destroyNode(node);
+            return Json{{"destroyed", true}};
         });
 }
 
