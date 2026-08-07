@@ -475,7 +475,12 @@ void AppFrameLoop::tickRender(App& app, float dt)
     const uint32_t flightIndex = resolveFlightIndex(app);
 
     auto* scene = app._sceneManager ? app._sceneManager->getActiveScene() : nullptr;
-    {
+    // The extracted snapshot (draw items / lights / skinning palettes) is only
+    // consumed by the world pipeline; 2D canvas mode disables the world scene
+    // graph, so extraction would be pure waste. Drop the stale per-flight
+    // snapshot instead, mirroring the world output handling in
+    // getViewportDisplayImageShared.
+    if (renderRuntime->isWorldSceneRenderEnabled()) {
         YA_PERF_SCOPE(perf::sample::renderExtract(), perf::metric::cpuTimeMs(), perf::domain::render());
         YA_PROFILE_SCOPE("RenderFrameExtractor::extract");
         RenderFrameExtractor::extract(
@@ -491,6 +496,9 @@ void AppFrameLoop::tickRender(App& app, float dt)
                 .shadowSettings = &app.getRenderServices().getShadowSettings(),
             },
             app._renderState->frameDataPerFlight[flightIndex]);
+    }
+    else {
+        app._renderState->frameDataPerFlight[flightIndex].clear();
     }
 
     RenderPipelineFrameContext pipelineFrame{

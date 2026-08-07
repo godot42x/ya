@@ -3,6 +3,7 @@
 #include "ECS/Component/SkeletonAnimatorComponent.h"
 #include "Render/SkeletonAnimationSampler.h"
 #include "Runtime/Application/App.h"
+#include "Runtime/Rendering/RenderRuntime.h"
 #include "Scene/Scene.h"
 #include "Scene/SceneManager.h"
 
@@ -20,6 +21,15 @@ void SkeletonAnimationSystem::onUpdate(float deltaTime)
 {
     App* app = App::get();
     if (!app || !app->getSceneServices().getSceneManager()) {
+        return;
+    }
+
+    // Skin poses are only consumed by the world pipeline's skinning palettes.
+    // The editor 2D canvas mode disables the world scene graph, so sampling
+    // every frame would be pure waste; the pose simply freezes while the
+    // canvas is shown and resumes on the next enabled frame.
+    auto* renderRuntime = app->getRenderServices().getRenderRuntime();
+    if (renderRuntime && !renderRuntime->isWorldSceneRenderEnabled()) {
         return;
     }
 
