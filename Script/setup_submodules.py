@@ -119,6 +119,15 @@ def all_submodule_paths() -> list[str]:
     return [line.partition(" ")[2].strip() for line in result.stdout.splitlines()]
 
 
+def _git_worktree_roots() -> list[Path]:
+    result = _git("worktree", "list", "--porcelain", cwd=REPO_ROOT, check=False)
+    roots: list[Path] = []
+    for line in result.stdout.splitlines():
+        if line.startswith("worktree "):
+            roots.append(Path(line.split(maxsplit=1)[1]))
+    return roots
+
+
 def missing_tracked_files(path: Path) -> bool:
     """True when tracked files are missing from the working tree (HEAD vs
     worktree deletions). Catches interrupted checkouts, including the empty-
@@ -211,8 +220,20 @@ def setup_main_project() -> int:
                 "local changes are left untouched):\n"
                 f"   {result.stderr.strip()}"
             )
-    # Migrated payloads may carry standalone gitdirs; absorb them into the
-    # main project's .git/modules for standard submodule bookkeeping.
+    # Migrated payloads may carry standalone gitdirs, while stale absorbed
+    # gitdirs from the pre-sharing layout may still linger in .git/modules
+    # (absorbgitdirs would fail with "Directory not empty"). Drop stale ones
+    # that no checkout references, then absorb the standalone gitdirs for
+    # standard submodule bookkeeping.
+    worktrees = _git_worktree_roots()
+    for heavy in HEAVY_SUBMODULES:
+        modules_gitdir = REPO_ROOT / ".git" / "modules" / heavy
+        sub_git = REPO_ROOT / heavy / ".git"
+        if modules_gitdir.exists() and sub_git.is_dir() and not sub_git.is_symlink():
+            referenced = any((wt / heavy / ".git").is_file() for wt in worktrees)
+            if not referenced:
+                print(f"-- Removing stale absorbed gitdir {modules_gitdir}")
+                rmtree_writable(modules_gitdir)
     _git("submodule", "absorbgitdirs", "--", *HEAVY_SUBMODULES, cwd=REPO_ROOT, check=False)
     return 0
 

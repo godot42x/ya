@@ -221,7 +221,11 @@ def migrate_legacy_payloads() -> None:
         elif dst.exists():
             if src.resolve() == dst.resolve():
                 return
-            print(f"-- Dropping duplicate cache copy {src} (payload exists at {dst})")
+            if src.is_dir() and not any(src.iterdir()):
+                # Empty placeholder created by `git worktree add` / clone.
+                print(f"-- Removing empty placeholder {src} (payload exists at {dst})")
+            else:
+                print(f"-- Dropping duplicate cache copy {src} (payload exists at {dst})")
             rmtree_writable(src)
             return
         dst.parent.mkdir(parents=True, exist_ok=True)

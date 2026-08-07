@@ -20,6 +20,10 @@ def set_readonly_recursive(path):
         # canonical checkout (read-only .git would break future updates).
         return
     for root, dirs, files in os.walk(path):
+        if ".git" in dirs:
+            dirs.remove(".git")
+        if ".git" in files:
+            files.remove(".git")
         # Set directory permissions
         os.chmod(root, READ_ONLY)
         # Set file permissions
