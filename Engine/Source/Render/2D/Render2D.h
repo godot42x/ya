@@ -30,41 +30,47 @@ enum class ERender2DPassDomain : uint8_t
     Count,
 };
 
-struct FRender2dData
+struct FRender2dCamera
 {
-    uint32_t        windowWidth      = 800;
-    uint32_t        windowHeight     = 600;
-    ECullMode::T    screenCullMode   = ECullMode::None;
-    ECullMode::T    worldCullMode    = ECullMode::None;
-    bool            bReverseViewport = true;
-    ICommandBuffer* curCmdBuf        = nullptr;
-    bool            bUICompositorMode = false; // flush uses the depth-less UI pipeline
-    ERender2DPassDomain passDomain    = ERender2DPassDomain::RuntimeOverlay;
+    glm::vec3 position;
+    glm::mat4 view;
+    glm::mat4 projection;
+    glm::mat4 viewProjection;
+};
+
+/// Diagnostics state adjusted live from the runtime tools panel. These are
+/// draw-time parameters only; they are not part of a recording session.
+struct FRender2dDebugState
+{
+    ECullMode::T screenCullMode   = ECullMode::None;
+    ECullMode::T worldCullMode    = ECullMode::None;
+    bool         bReverseViewport = true;
+    int          TextLayoutMode   = 0;
+};
+
+/// State of one Render2D recording session, valid between begin()/end().
+/// After end() the command buffer is cleared; any draw call outside a session
+/// is asserted instead of silently no-op'ing.
+struct FRender2dSession
+{
+    ICommandBuffer*     curCmdBuf   = nullptr;
+    uint32_t            windowWidth  = 800;
+    uint32_t            windowHeight = 600;
+    ERender2DPassDomain passDomain   = ERender2DPassDomain::RuntimeOverlay;
+    FRender2dCamera     cam;
 
     // Active screen-space clip rects (top-left origin, Y down). The top entry
     // is applied as the scissor on the next screen-batch flush.
     std::vector<Rect2D> clipStack;
-
-    struct Camera
-    {
-        glm::vec3 position;
-        glm::mat4 view;
-        glm::mat4 projection;
-        glm::mat4 viewProjection;
-    } cam;
-
-    int TextLayoutMode = 0;
 };
 
 struct FRender2dContext
 {
-    ICommandBuffer* cmdBuf       = nullptr;
-    uint32_t        windowWidth  = 800;
-    uint32_t        windowHeight = 600;
-    bool            bUICompositorMode = false; // flush uses the depth-less UI pipeline
-    ERender2DPassDomain passDomain = ERender2DPassDomain::RuntimeOverlay;
-
-    FRender2dData::Camera cam;
+    ICommandBuffer*     cmdBuf       = nullptr;
+    uint32_t            windowWidth  = 800;
+    uint32_t            windowHeight = 600;
+    ERender2DPassDomain passDomain   = ERender2DPassDomain::RuntimeOverlay;
+    FRender2dCamera     cam;
 };
 
 struct ENGINE_API FQuadRender
@@ -199,12 +205,10 @@ struct ENGINE_API FQuadRender
     void destroy();
     void begin(const Extent2D& extent);
     void end();
-    /// Ensure the depth-less UI compositor pipeline for one pass domain.
+    /// Ensure a pass domain's screen-space pipeline matches its target
+    /// attachment formats. UI-like domains resolve to a depth-less variant.
     /// Must be called before command recording begins.
-    void ensureUICompositorPipeline(ERender2DPassDomain domain, EFormat::T colorFormat);
-    /// Ensure a pass domain's regular screen-space pipeline matches its target
-    /// attachment formats. Must be called before command recording begins.
-    void ensureScreenPipeline(ERender2DPassDomain domain, EFormat::T colorFormat, EFormat::T depthFormat);
+    void preparePassPipeline(ERender2DPassDomain domain, EFormat::T colorFormat, EFormat::T depthFormat);
 
     bool shouldFlush() { return vertexCount >= MaxVertexCount - 4 || _lastPushTextureSlot + 1 >= (int)TEXTURE_SET_SIZE; }
     bool shouldFlushWorld() { return worldVertexCount >= MaxVertexCount - 4 || _lastPushTextureSlot + 1 >= (int)TEXTURE_SET_SIZE; }
@@ -360,7 +364,8 @@ struct ENGINE_API Render2D
 {
     static FQuadRender*  quadData;
     static FLineRender*  lineData;
-    static FRender2dData data;
+    static FRender2dDebugState debug;
+    static FRender2dSession    session;
 
     Render2D()          = default;
     virtual ~Render2D() = default;
@@ -379,11 +384,11 @@ struct ENGINE_API Render2D
     static void pushClipRect(const Rect2D& rect);
     static void popClipRect();
 
-    /// Lazily create the UI compositor pipeline for the given final-image
-    /// color format (depth-less, no post-processing). Must NOT be called while
-    /// recording a command buffer.
-    static void ensureUICompositorPipeline(ERender2DPassDomain domain, EFormat::T colorFormat);
-    static void ensureScreenPipeline(ERender2DPassDomain domain, EFormat::T colorFormat, EFormat::T depthFormat);
+    /// Lazily create the screen-space pipeline variant required by one
+    /// Render2D pass domain. UI composite / canvas domains use a depth-less
+    /// variant; viewport/overlay domains use the depth-aware screen variant.
+    /// Must NOT be called while recording a command buffer.
+    static void preparePassPipeline(ERender2DPassDomain domain, EFormat::T colorFormat, EFormat::T depthFormat);
 
     static void makeSprite(const glm::vec3& position,
                            const glm::vec2& size,

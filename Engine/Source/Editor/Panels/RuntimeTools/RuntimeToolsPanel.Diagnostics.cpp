@@ -5,7 +5,7 @@ namespace ya
 
 void renderRender2DDebugContent()
 {
-    auto& data = Render2D::data;
+    auto& data = Render2D::debug;
     ImGui::Checkbox("Reverse Viewport Y", &data.bReverseViewport);
 
     int worldCullMode = static_cast<int>(data.worldCullMode);
@@ -19,7 +19,8 @@ void renderRender2DDebugContent()
     }
 
     ImGui::InputInt("Text Layout Mode", &data.TextLayoutMode);
-    ImGui::TextDisabled("Viewport: %u x %u", data.windowWidth, data.windowHeight);
+    const auto& session = Render2D::session;
+    ImGui::TextDisabled("Viewport: %u x %u", session.windowWidth, session.windowHeight);
 }
 
 void renderDiagnosticsContent(App& app)

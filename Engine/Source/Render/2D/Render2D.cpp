@@ -24,6 +24,20 @@ namespace ya
 namespace
 {
 
+bool passUsesDepthlessScreenPipeline(ERender2DPassDomain domain)
+{
+    switch (domain) {
+        case ERender2DPassDomain::GameUICompositor:
+        case ERender2DPassDomain::EditorCanvas:
+            return true;
+        case ERender2DPassDomain::RuntimeOverlay:
+        case ERender2DPassDomain::EditorViewport:
+        case ERender2DPassDomain::Count:
+            return false;
+    }
+    return false;
+}
+
 std::vector<VertexAttribute> buildQuadVertexAttributes()
 {
     return std::vector<VertexAttribute>{
@@ -78,16 +92,16 @@ ViewportState buildQuadViewportState()
         .viewports = {Viewport{
             .x        = 0.0f,
             .y        = 0.0f,
-            .width    = static_cast<float>(Render2D::data.windowWidth),
-            .height   = static_cast<float>(Render2D::data.windowHeight),
+            .width    = static_cast<float>(Render2D::session.windowWidth),
+            .height   = static_cast<float>(Render2D::session.windowHeight),
             .minDepth = 0.0f,
             .maxDepth = 1.0f,
         }},
         .scissors = {Scissor{
             .offsetX = 0,
             .offsetY = 0,
-            .width   = Render2D::data.windowWidth,
-            .height  = Render2D::data.windowHeight,
+            .width   = Render2D::session.windowWidth,
+            .height  = Render2D::session.windowHeight,
         }},
     };
 }
@@ -167,11 +181,10 @@ GraphicsPipelineCreateInfo buildQuadScreenPipelineCI(IPipelineLayout* pipelineLa
 
 } // namespace
 
-FRender2dData Render2D::data;
-FQuadRender*  Render2D::quadData = nullptr;
-FLineRender*  Render2D::lineData = nullptr;
-
-auto& data2D = Render2D::data;
+FRender2dDebugState Render2D::debug;
+FRender2dSession    Render2D::session;
+FQuadRender*        Render2D::quadData = nullptr;
+FLineRender*        Render2D::lineData = nullptr;
 
 void Render2D::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
 {
@@ -204,14 +217,17 @@ void Render2D::onRender()
 
 void Render2D::begin(const FRender2dContext& ctx)
 {
-    data.curCmdBuf    = ctx.cmdBuf;
-    data.cam          = ctx.cam;
-    data.windowHeight = ctx.windowHeight;
-    data.windowWidth  = ctx.windowWidth;
-    data.clipStack.clear();
-    data.bUICompositorMode = ctx.bUICompositorMode;
-    data.passDomain        = ctx.passDomain;
-    Extent2D extent{.width = data.windowWidth, .height = data.windowHeight};
+    // A stale session means an earlier pass forgot to call end(); fail loudly
+    // instead of leaking clip state and command buffer into the next pass.
+    YA_CORE_ASSERT(session.curCmdBuf == nullptr,
+                   "Render2D::begin called while a recording session is still active (missing end()?)");
+    session.curCmdBuf    = ctx.cmdBuf;
+    session.cam          = ctx.cam;
+    session.windowHeight = ctx.windowHeight;
+    session.windowWidth  = ctx.windowWidth;
+    session.clipStack.clear();
+    session.passDomain = ctx.passDomain;
+    Extent2D extent{.width = session.windowWidth, .height = session.windowHeight};
     quadData->begin(extent);
     lineData->begin(ctx.passDomain);
 }
@@ -219,24 +235,17 @@ void Render2D::begin(const FRender2dContext& ctx)
 void Render2D::end()
 {
     quadData->end();
-    lineData->flush(data.curCmdBuf, data.cam.viewProjection);
+    lineData->flush(session.curCmdBuf, session.cam.viewProjection);
 
-    data.curCmdBuf    = nullptr;
-    data.windowWidth  = 0;
-    data.windowHeight = 0;
+    session.curCmdBuf    = nullptr;
+    session.windowWidth  = 0;
+    session.windowHeight = 0;
 }
 
-void Render2D::ensureUICompositorPipeline(ERender2DPassDomain domain, EFormat::T colorFormat)
+void Render2D::preparePassPipeline(ERender2DPassDomain domain, EFormat::T colorFormat, EFormat::T depthFormat)
 {
     if (quadData) {
-        quadData->ensureUICompositorPipeline(domain, colorFormat);
-    }
-}
-
-void Render2D::ensureScreenPipeline(ERender2DPassDomain domain, EFormat::T colorFormat, EFormat::T depthFormat)
-{
-    if (quadData) {
-        quadData->ensureScreenPipeline(domain, colorFormat, depthFormat);
+        quadData->preparePassPipeline(domain, colorFormat, depthFormat);
     }
 }
 
@@ -244,33 +253,33 @@ void Render2D::pushClipRect(const Rect2D& rect)
 {
     // Intersect with the current clip so nested clips never exceed their parent.
     Rect2D clipped = rect;
-    if (!data.clipStack.empty()) {
-        const Rect2D& current = data.clipStack.back();
+    if (!session.clipStack.empty()) {
+        const Rect2D& current = session.clipStack.back();
         const glm::vec2 curMax = current.pos + current.extent;
         const glm::vec2 rectMax = rect.pos + rect.extent;
         clipped.pos    = glm::max(rect.pos, current.pos);
         clipped.extent = glm::max(glm::vec2(0.0f), glm::min(rectMax, curMax) - clipped.pos);
     }
 
-    const bool bClipChanged = data.clipStack.empty() ||
-                              data.clipStack.back().pos != clipped.pos ||
-                              data.clipStack.back().extent != clipped.extent;
-    data.clipStack.push_back(clipped);
-    if (bClipChanged && quadData && data.curCmdBuf) {
+    const bool bClipChanged = session.clipStack.empty() ||
+                              session.clipStack.back().pos != clipped.pos ||
+                              session.clipStack.back().extent != clipped.extent;
+    session.clipStack.push_back(clipped);
+    if (bClipChanged && quadData && session.curCmdBuf) {
         // Flush so the pending vertices are drawn with the OLD scissor; the
         // next flush picks up the new clip.
-        quadData->flush(data.curCmdBuf);
+        quadData->flush(session.curCmdBuf);
     }
 }
 
 void Render2D::popClipRect()
 {
-    if (data.clipStack.empty()) {
+    if (session.clipStack.empty()) {
         return;
     }
-    data.clipStack.pop_back();
-    if (quadData && data.curCmdBuf) {
-        quadData->flush(data.curCmdBuf);
+    session.clipStack.pop_back();
+    if (quadData && session.curCmdBuf) {
+        quadData->flush(session.curCmdBuf);
     }
 }
 
@@ -344,16 +353,16 @@ void FLineRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
             .viewports = {Viewport{
                 .x        = 0.0f,
                 .y        = 0.0f,
-                .width    = static_cast<float>(Render2D::data.windowWidth),
-                .height   = static_cast<float>(Render2D::data.windowHeight),
+                .width    = static_cast<float>(Render2D::session.windowWidth),
+                .height   = static_cast<float>(Render2D::session.windowHeight),
                 .minDepth = 0.0f,
                 .maxDepth = 1.0f,
             }},
             .scissors  = {Scissor{
                 .offsetX = 0,
                 .offsetY = 0,
-                .width   = Render2D::data.windowWidth,
-                .height  = Render2D::data.windowHeight,
+                .width   = Render2D::session.windowWidth,
+                .height  = Render2D::session.windowHeight,
             }},
         };
     };
@@ -462,7 +471,7 @@ void FLineRender::flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj)
 
     FrameUBO ubo{
         .viewProj = viewProj,
-        .view     = Render2D::data.cam.view,
+        .view     = Render2D::session.cam.view,
     };
     auto& resources = _passResources[static_cast<size_t>(_activePassDomain)].flights[_activeFlightIndex];
     resources.frameUBOBuffer->writeData(&ubo, sizeof(ubo), 0);
@@ -484,12 +493,12 @@ void FLineRender::flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj)
 
     cmdBuf->bindPipeline(_pipeline.get());
     cmdBuf->setViewport(0.0f,
-                        static_cast<float>(Render2D::data.windowHeight),
-                        static_cast<float>(Render2D::data.windowWidth),
-                        -static_cast<float>(Render2D::data.windowHeight),
+                        static_cast<float>(Render2D::session.windowHeight),
+                        static_cast<float>(Render2D::session.windowWidth),
+                        -static_cast<float>(Render2D::session.windowHeight),
                         0.0f,
                         1.0f);
-    cmdBuf->setScissor(0, 0, Render2D::data.windowWidth, Render2D::data.windowHeight);
+    cmdBuf->setScissor(0, 0, Render2D::session.windowWidth, Render2D::session.windowHeight);
 
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {resources.frameUboDS});
     cmdBuf->bindVertexBuffer(0, resources.vertexBuffer.get(), 0);
@@ -502,7 +511,7 @@ void FLineRender::flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj)
 void FLineRender::addLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color)
 {
     if (vertexCount + 2 > MaxVertexCount) {
-        flush(Render2D::data.curCmdBuf, Render2D::data.cam.viewProjection);
+        flush(Render2D::session.curCmdBuf, Render2D::session.cam.viewProjection);
     }
 
     *vertexPtr++ = Vertex{.pos = from, .color = color};
@@ -619,8 +628,8 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
     std::vector<std::shared_ptr<IDescriptorSetLayout>> dslVec = {_frameUboDSL, _resourceDSL};
     _pipelineLayout = IPipelineLayout::create(render, "Sprite2D_PipelineLayout", _pipelineDesc.pushConstants, dslVec);
 
-    ensureScreenPipeline(ERender2DPassDomain::RuntimeOverlay, colorFormat, depthFormat);
-    ensureUICompositorPipeline(ERender2DPassDomain::GameUICompositor, colorFormat);
+    preparePassPipeline(ERender2DPassDomain::RuntimeOverlay, colorFormat, depthFormat);
+    preparePassPipeline(ERender2DPassDomain::GameUICompositor, colorFormat, depthFormat);
 
     _worldPipeline = IGraphicsPipeline::create(render);
     _worldPipeline->recreate(GraphicsPipelineCreateInfo{
@@ -770,37 +779,32 @@ void FQuadRender::destroy()
     _pipelineLayout.reset();
 }
 
-void FQuadRender::ensureUICompositorPipeline(ERender2DPassDomain domain, EFormat::T colorFormat)
+void FQuadRender::preparePassPipeline(ERender2DPassDomain domain, EFormat::T colorFormat, EFormat::T depthFormat)
 {
     if (!_render || colorFormat == EFormat::Undefined) {
         return;
     }
 
     auto& pipelines = _passPipelines[static_cast<size_t>(domain)];
-    if (pipelines.uiPipeline && pipelines.uiColorFormat == colorFormat) {
+    if (passUsesDepthlessScreenPipeline(domain)) {
+        if (pipelines.uiPipeline && pipelines.uiColorFormat == colorFormat) {
+            return;
+        }
+
+        auto pipeline = IGraphicsPipeline::create(_render);
+        pipeline->recreate(buildQuadScreenPipelineCI(_pipelineLayout.get(),
+                                                     std::format("Sprite2D_{}_UI_Pipeline", static_cast<size_t>(domain)),
+                                                     colorFormat,
+                                                     EFormat::Undefined));
+        auto retired = std::move(pipelines.uiPipeline);
+        pipelines.uiPipeline = std::move(pipeline);
+        pipelines.uiColorFormat = colorFormat;
+        if (DeferredDeletionQueue::get().isInitialized()) {
+            DeferredDeletionQueue::get().retireResource(std::move(retired));
+        }
         return;
     }
 
-    auto pipeline = IGraphicsPipeline::create(_render);
-    pipeline->recreate(buildQuadScreenPipelineCI(_pipelineLayout.get(),
-                                                 std::format("Sprite2D_{}_UI_Pipeline", static_cast<size_t>(domain)),
-                                                 colorFormat,
-                                                 EFormat::Undefined));
-    auto retired = std::move(pipelines.uiPipeline);
-    pipelines.uiPipeline = std::move(pipeline);
-    pipelines.uiColorFormat = colorFormat;
-    if (DeferredDeletionQueue::get().isInitialized()) {
-        DeferredDeletionQueue::get().retireResource(std::move(retired));
-    }
-}
-
-void FQuadRender::ensureScreenPipeline(ERender2DPassDomain domain, EFormat::T colorFormat, EFormat::T depthFormat)
-{
-    if (!_render || colorFormat == EFormat::Undefined) {
-        return;
-    }
-
-    auto& pipelines = _passPipelines[static_cast<size_t>(domain)];
     if (pipelines.screenPipeline &&
         pipelines.screenColorFormat == colorFormat &&
         pipelines.screenDepthFormat == depthFormat) {
@@ -823,7 +827,7 @@ void FQuadRender::ensureScreenPipeline(ERender2DPassDomain domain, EFormat::T co
 
 void FQuadRender::begin(const Extent2D& extent)
 {
-    _activePassDomain = data2D.passDomain;
+    _activePassDomain = Render2D::session.passDomain;
     _activeFlightIndex = _render ? _render->getCurrentFrameIndex() % MAX_FLIGHTS_IN_FLIGHT : 0;
     auto& resources = activeFlightResources();
     vertexPtrHead      = resources.vertexPtrHead;
@@ -861,8 +865,8 @@ void FQuadRender::begin(const Extent2D& extent)
 
 void FQuadRender::end()
 {
-    flushWorld(Render2D::data.curCmdBuf);
-    flush(Render2D::data.curCmdBuf);
+    flushWorld(Render2D::session.curCmdBuf);
+    flush(Render2D::session.curCmdBuf);
 }
 
 void FQuadRender::flush(ICommandBuffer* cmdBuf)
@@ -879,7 +883,7 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
     resources.vertexBuffer->flush();
 
     auto& pipelines = activePassPipelines();
-    IGraphicsPipeline* pipeline = data2D.bUICompositorMode
+    IGraphicsPipeline* pipeline = passUsesDepthlessScreenPipeline(_activePassDomain)
                                       ? pipelines.uiPipeline.get()
                                       : pipelines.screenPipeline.get();
     YA_CORE_ASSERT(pipeline != nullptr,
@@ -888,21 +892,21 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
     cmdBuf->bindPipeline(pipeline);
     cmdBuf->setViewport(0.0f,
                         0.0f,
-                        static_cast<float>(Render2D::data.windowWidth),
-                        static_cast<float>(Render2D::data.windowHeight),
+                        static_cast<float>(Render2D::session.windowWidth),
+                        static_cast<float>(Render2D::session.windowHeight),
                         0.0f,
                         1.0f);
-    if (!Render2D::data.clipStack.empty()) {
-        const Rect2D& clip = Render2D::data.clipStack.back();
+    if (!Render2D::session.clipStack.empty()) {
+        const Rect2D& clip = Render2D::session.clipStack.back();
         cmdBuf->setScissor(static_cast<int32_t>(clip.pos.x),
                            static_cast<int32_t>(clip.pos.y),
                            static_cast<int32_t>(clip.extent.x),
                            static_cast<int32_t>(clip.extent.y));
     }
     else {
-        cmdBuf->setScissor(0, 0, Render2D::data.windowWidth, Render2D::data.windowHeight);
+        cmdBuf->setScissor(0, 0, Render2D::session.windowWidth, Render2D::session.windowHeight);
     }
-    cmdBuf->setCullMode(data2D.screenCullMode);
+    cmdBuf->setCullMode(Render2D::debug.screenCullMode);
 
     if (_uploadedScreenResourceVersion != _resourceVersion) {
         updateResources(resources.resourceDS);
@@ -944,21 +948,21 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
     if (!_worldFrameUboUploaded) {
         updateFrameUBO(resources.worldFrameUBOBuffer,
                        resources.worldFrameUboDS,
-                       data2D.cam.viewProjection,
-                       data2D.cam.view);
+                       Render2D::session.cam.viewProjection,
+                       Render2D::session.cam.view);
         _worldFrameUboUploaded = true;
     }
     resources.worldVertexBuffer->flush();
 
     cmdBuf->bindPipeline(_worldPipeline.get());
     cmdBuf->setViewport(0.0f,
-                        static_cast<float>(Render2D::data.windowHeight),
-                        static_cast<float>(Render2D::data.windowWidth),
-                        -static_cast<float>(Render2D::data.windowHeight),
+                        static_cast<float>(Render2D::session.windowHeight),
+                        static_cast<float>(Render2D::session.windowWidth),
+                        -static_cast<float>(Render2D::session.windowHeight),
                         0.0f,
                         1.0f);
-    cmdBuf->setCullMode(Render2D::data.worldCullMode);
-    cmdBuf->setScissor(0, 0, Render2D::data.windowWidth, Render2D::data.windowHeight);
+    cmdBuf->setCullMode(Render2D::debug.worldCullMode);
+    cmdBuf->setScissor(0, 0, Render2D::session.windowWidth, Render2D::session.windowHeight);
 
     std::vector<DescriptorSetHandle> descriptorSets = {
         resources.worldFrameUboDS,
@@ -1085,8 +1089,10 @@ void FQuadRender::drawTexture(const glm::vec3& position,
                               const glm::vec4& tint,
                               const glm::vec2& uvScale)
 {
+    YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
+                   "Render2D draw called outside a begin()/end() recording session");
     if (shouldFlush()) {
-        flush(Render2D::data.curCmdBuf);
+        flush(Render2D::session.curCmdBuf);
     }
 
     glm::mat4 model = glm::translate(glm::mat4(1.f), {position.x, position.y, position.z}) *
@@ -1101,8 +1107,10 @@ void FQuadRender::drawTexture(const glm::mat4& transform,
                               const glm::vec4& tint,
                               const glm::vec2& uvScale)
 {
+    YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
+                   "Render2D draw called outside a begin()/end() recording session");
     if (shouldFlush()) {
-        flush(Render2D::data.curCmdBuf);
+        flush(Render2D::session.curCmdBuf);
     }
 
     uint32_t textureIdx = findOrAddTexture(texture);
@@ -1116,8 +1124,10 @@ void FQuadRender::drawWorldTexture(const glm::vec3&            center,
                                    const glm::vec4&            tint,
                                    const glm::vec2&            uvScale)
 {
+    YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
+                   "Render2D draw called outside a begin()/end() recording session");
     if (shouldFlushWorld()) {
-        flushWorld(Render2D::data.curCmdBuf);
+        flushWorld(Render2D::session.curCmdBuf);
     }
 
     uint32_t textureIdx = findOrAddTexture(texture);
@@ -1130,8 +1140,10 @@ void FQuadRender::drawSubTexture(const glm::vec3& position,
                                  const glm::vec4& tint,
                                  const glm::vec4& uvRect)
 {
+    YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
+                   "Render2D draw called outside a begin()/end() recording session");
     if (shouldFlush()) {
-        flush(Render2D::data.curCmdBuf);
+        flush(Render2D::session.curCmdBuf);
     }
 
     uint32_t textureIdx = findOrAddTexture(texture);
@@ -1144,6 +1156,8 @@ void FQuadRender::drawSubTexture(const glm::vec3& position,
 
 void FQuadRender::drawText(const std::string& text, const glm::vec3& position, const glm::vec4& color, Font* font)
 {
+    YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
+                   "Render2D draw called outside a begin()/end() recording session");
     float cursorX = position.x;
     float cursorY = position.y;
 
