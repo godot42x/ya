@@ -48,16 +48,31 @@ enum class EUIAlignV : uint8_t
     Bottom,
 };
 
-/// Per-node game-UI event routing policy (Godot mouse_filter semantics):
-/// Pass nodes respond but never block; Stop nodes consume exclusively;
-/// Ignore nodes are skipped entirely (including editor picking).
+/// Per-node game-UI event routing policy at the game boundary (Godot
+/// mouse_filter semantics, minus hit-test gating which lives in
+/// EUIVisibility): Pass nodes respond but never block; Stop nodes consume
+/// exclusively.
 enum class EUIHitFilter : uint8_t
 {
     Pass,   // (default) hit-testable, responds, but the event keeps flowing
             // to lower nodes and the game (panels, text, canvas).
     Stop,   // hit = exclusively consume: neither lower UI nodes nor the game
             // receive the event (buttons).
-    Ignore, // not hit-testable at all (decorative overlays).
+};
+
+/// Render / hit-test / layout state (UMG Visibility semantics). The three
+/// axes are packed into curated states so no illegal combination is
+/// expressible; per-axis predicates live on Node2D:
+///   render:  isVisibleForRender()
+///   hit:     isHitTestableSelf() / isHitTestableSubtree()
+///   layout:  participatesInLayout()
+enum class EUIVisibility : uint8_t
+{
+    Visible,             // render + self hit + children hit + layout space
+    Hidden,              // no render, no hit; keeps layout space
+    Collapsed,           // no render, no hit; no layout space
+    HitTestInvisible,    // renders; self not hittable, children still are
+    SelfHitTestInvisible // renders; the whole subtree is not hittable
 };
 
 struct ENGINE_API Node2D : public Node
@@ -65,7 +80,7 @@ struct ENGINE_API Node2D : public Node
     YA_REFLECT_BEGIN(Node2D, Node)
     YA_REFLECT_FIELD(_position)
     YA_REFLECT_FIELD(_size)
-    YA_REFLECT_FIELD(_visible)
+    YA_REFLECT_FIELD(_visibility)
     YA_REFLECT_FIELD(_zOrder)
     YA_REFLECT_FIELD(_anchorMin)
     YA_REFLECT_FIELD(_anchorMax)
@@ -75,7 +90,7 @@ struct ENGINE_API Node2D : public Node
 
     glm::vec2 _position = {0.0f, 0.0f}; // Offset (px) from the anchor point within the parent rect
     glm::vec2 _size     = {100.0f, 50.0f};
-    bool      _visible  = true;
+    EUIVisibility _visibility = EUIVisibility::Visible;
     int       _zOrder   = 0;
 
     // Anchored layout (Godot Control semantics). Default {0,0} keeps the
@@ -116,8 +131,8 @@ struct ENGINE_API Node2D : public Node
     [[nodiscard]] virtual glm::vec2 computeDesiredSize() const;
 
     // === Paint (after layout; records commands into the active batch) ===
-    /// Checks _visible (subtree cull), draws self via paintSelf(), then
-    /// recursively paints children in paint order.
+    /// Checks isVisibleForRender() (subtree cull), draws self via
+    /// paintSelf(), then recursively paints children in paint order.
     virtual void paint(const UIPaintContext& ctx);
 
     // === Events (hit-tested by the renderer's topmost-first walker) ===
@@ -130,9 +145,51 @@ struct ENGINE_API Node2D : public Node
     virtual void resetHoverState() {}
 
     // === Screen-space helpers (top-left origin, Y down) ===
+    /// Whether this node is drawn (Hidden / Collapsed cull the subtree).
+    [[nodiscard]] bool isVisibleForRender() const
+    {
+        return _visibility != EUIVisibility::Hidden && _visibility != EUIVisibility::Collapsed;
+    }
+
+    /// Whether this node itself can receive hits (Visible only; ancestors
+    /// are handled by the walker's subtree cull).
+    [[nodiscard]] bool isHitTestableSelf() const
+    {
+        return _visibility == EUIVisibility::Visible;
+    }
+
+    /// Whether hits can land anywhere in this subtree (Hidden, Collapsed and
+    /// SelfHitTestInvisible cull the whole subtree).
+    [[nodiscard]] bool isHitTestableSubtree() const
+    {
+        return _visibility == EUIVisibility::Visible ||
+               _visibility == EUIVisibility::HitTestInvisible;
+    }
+
+    /// Whether this node participates in container layout (Collapsed takes
+    /// no space; Hidden keeps its space, UMG semantics).
+    [[nodiscard]] bool participatesInLayout() const
+    {
+        return _visibility != EUIVisibility::Collapsed;
+    }
+
+    /// Whether this node is effectively rendered: itself and every 2D
+    /// ancestor pass isVisibleForRender() (Godot is_visible_in_tree
+    /// semantics; Node3D ancestors have no visibility concept).
+    [[nodiscard]] bool isVisibleInTree() const;
+
+    /// Whether the UI walker would descend into this node's subtree given
+    /// the ancestor chain: self passes isHitTestableSubtree() and no 2D
+    /// ancestor culls hits (Hidden / Collapsed / SelfHitTestInvisible).
+    /// Note: the paint/hit/pick walkers already enforce this by construction;
+    /// this query is for game code that needs the effective state.
+    [[nodiscard]] bool isHitTestableInTree() const;
+
     /// Accumulated position along the ancestor Node2D chain.
     [[nodiscard]] glm::vec2 getScreenPosition() const;
-    /// Own-rect hit test in screen space; children are handled by the walker.
+    /// Own-rect hit test in screen space. Pure geometry: only checks this
+    /// node's own state and rect — ancestor visibility/hit culling belongs
+    /// to the walkers (see isVisibleInTree / isHitTestableInTree).
     [[nodiscard]] bool hitTest(const glm::vec2& screenPoint) const;
     /// Hit test against the cached layout rect (canvas logical space).
     [[nodiscard]] bool hitTestLayoutRect(const glm::vec2& canvasPoint) const;

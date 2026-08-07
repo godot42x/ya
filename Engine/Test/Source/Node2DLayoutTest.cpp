@@ -267,25 +267,32 @@ TEST(Node2DLayoutTest, PassHitRespondsButFallsThrough)
     EXPECT_EQ(clickCount, 1);
 }
 
-TEST(Node2DLayoutTest, IgnoreNodeIsNotHitTestedButChildrenStillAre)
+TEST(Node2DLayoutTest, HitTestInvisibleSkipsSelfButChildrenStillHit)
 {
     Scene scene("FilterTest");
     auto* panel = scene.createUINode<UIPanelNode>("Overlay");
-    panel->_position  = {0.0f, 0.0f};
-    panel->_size      = {400.0f, 300.0f};
-    panel->_hitFilter = EUIHitFilter::Ignore;
+    panel->_position   = {0.0f, 0.0f};
+    panel->_size       = {400.0f, 300.0f};
+    panel->_visibility = EUIVisibility::HitTestInvisible;
 
     auto* button = scene.createUINode<UIButtonNode>("Btn", panel);
     button->_position = {100.0f, 100.0f};
     button->_size     = {80.0f, 32.0f};
     layoutRoots(scene.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
 
-    // The Ignore overlay does not block, and its Stop child still receives hits.
+    // The HitTestInvisible overlay does not receive hits itself, and its
+    // Stop child still does.
     EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0),
                                            makeUICtx(120.0f, 110.0f),
                                            scene.getRootNode()),
               EUIRouteResult::HandledExclusive);
     EXPECT_TRUE(button->_bPressed);
+
+    // A click on the overlay itself (outside the child) is not consumed.
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0),
+                                           makeUICtx(300.0f, 250.0f),
+                                           scene.getRootNode()),
+              EUIRouteResult::NotHandled);
 }
 
 TEST(Node2DLayoutTest, PassOverlayDoesNotBlockStopChild)
@@ -307,6 +314,157 @@ TEST(Node2DLayoutTest, PassOverlayDoesNotBlockStopChild)
                                            scene.getRootNode()),
               EUIRouteResult::HandledExclusive);
     EXPECT_TRUE(button->_bPressed);
+}
+
+TEST(Node2DLayoutTest, SelfHitTestInvisibleBlocksWholeSubtree)
+{
+    Scene scene("FilterTest");
+    auto* panel = scene.createUINode<UIPanelNode>("Overlay");
+    panel->_position   = {0.0f, 0.0f};
+    panel->_size       = {400.0f, 300.0f};
+    panel->_visibility = EUIVisibility::SelfHitTestInvisible;
+
+    auto* button = scene.createUINode<UIButtonNode>("Btn", panel);
+    button->_position = {100.0f, 100.0f};
+    button->_size     = {80.0f, 32.0f};
+    layoutRoots(scene.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
+
+    // Neither the overlay nor its Stop child receive hits.
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0),
+                                           makeUICtx(120.0f, 110.0f),
+                                           scene.getRootNode()),
+              EUIRouteResult::NotHandled);
+    EXPECT_FALSE(button->_bPressed);
+}
+
+TEST(Node2DLayoutTest, HiddenKeepsLayoutSpace)
+{
+    Scene scene("LayoutTest");
+    auto* container = scene.createUINode<UIContainerNode>("Box");
+    container->_direction = EUIBoxLayout::Horizontal;
+    container->_spacing   = 10.0f;
+    container->_size      = {300.0f, 80.0f};
+
+    auto* a = scene.createUINode<UIPanelNode>("A", container);
+    a->_size = {100.0f, 30.0f};
+    auto* b = scene.createUINode<UIPanelNode>("B", container);
+    b->_size       = {50.0f, 40.0f};
+    b->_visibility = EUIVisibility::Hidden;
+
+    container->layout(makeRect(0.0f, 0.0f, 300.0f, 80.0f));
+
+    // Hidden keeps its space (UMG semantics): B still occupies 50px.
+    EXPECT_TRUE(rectEq(a->_layoutRect, makeRect(0.0f, 0.0f, 100.0f, 80.0f)));
+    EXPECT_TRUE(rectEq(b->_layoutRect, makeRect(110.0f, 0.0f, 50.0f, 80.0f)));
+}
+
+TEST(Node2DLayoutTest, CollapsedTakesNoLayoutSpace)
+{
+    Scene scene("LayoutTest");
+    auto* container = scene.createUINode<UIContainerNode>("Box");
+    container->_direction = EUIBoxLayout::Horizontal;
+    container->_spacing   = 10.0f;
+    container->_size      = {300.0f, 80.0f};
+
+    auto* a = scene.createUINode<UIPanelNode>("A", container);
+    a->_size = {100.0f, 30.0f};
+    auto* b = scene.createUINode<UIPanelNode>("B", container);
+    b->_size       = {50.0f, 40.0f};
+    b->_visibility = EUIVisibility::Collapsed;
+
+    container->layout(makeRect(0.0f, 0.0f, 300.0f, 80.0f));
+
+    // Collapsed is removed from layout: A stays at the start, no gap for B.
+    EXPECT_TRUE(rectEq(a->_layoutRect, makeRect(0.0f, 0.0f, 100.0f, 80.0f)));
+
+    // Desired size excludes the collapsed child.
+    EXPECT_NEAR(container->computeDesiredSize().x, 100.0f, 0.001f);
+}
+
+// ============================================================================
+// Effective state queries (isVisibleInTree / isHitTestableInTree).
+// ============================================================================
+
+TEST(Node2DLayoutTest, VisibleChildUnderHiddenParentIsNotEffective)
+{
+    Scene scene("VisibilityTest");
+    auto* panel = scene.createUINode<UIPanelNode>("Panel");
+    panel->_visibility = EUIVisibility::Hidden;
+    auto* button = scene.createUINode<UIButtonNode>("Btn", panel);
+
+    // The child itself is Visible, but the hidden ancestor culls the subtree.
+    EXPECT_TRUE(button->isVisibleForRender());
+    EXPECT_FALSE(button->isVisibleInTree());
+    EXPECT_FALSE(button->isHitTestableInTree());
+
+    // The walker agrees: no hit can land in the subtree.
+    layoutRoots(scene.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0),
+                                           makeUICtx(50.0f, 50.0f),
+                                           scene.getRootNode()),
+              EUIRouteResult::NotHandled);
+}
+
+TEST(Node2DLayoutTest, VisibleChildUnderVisibleAncestorsIsEffective)
+{
+    Scene scene("VisibilityTest");
+    auto* panel = scene.createUINode<UIPanelNode>("Panel");
+    auto* button = scene.createUINode<UIButtonNode>("Btn", panel);
+    button->_position = {10.0f, 10.0f};
+    button->_size     = {80.0f, 32.0f};
+
+    EXPECT_TRUE(button->isVisibleInTree());
+    EXPECT_TRUE(button->isHitTestableInTree());
+}
+
+TEST(Node2DLayoutTest, HitTestInvisibleAncestorKeepsChildrenEffective)
+{
+    Scene scene("VisibilityTest");
+    auto* panel = scene.createUINode<UIPanelNode>("Panel");
+    panel->_visibility = EUIVisibility::HitTestInvisible;
+    auto* button = scene.createUINode<UIButtonNode>("Btn", panel);
+    button->_position = {10.0f, 10.0f};
+    button->_size     = {80.0f, 32.0f};
+
+    // The panel itself is not hittable, but the walker still descends into
+    // its subtree, so the child remains effective.
+    EXPECT_FALSE(panel->isHitTestableSelf());
+    EXPECT_TRUE(panel->isHitTestableInTree());
+    EXPECT_TRUE(button->isHitTestableInTree());
+}
+
+TEST(Node2DLayoutTest, SelfHitTestInvisibleAncestorCullsChildren)
+{
+    Scene scene("VisibilityTest");
+    auto* panel = scene.createUINode<UIPanelNode>("Panel");
+    panel->_visibility = EUIVisibility::SelfHitTestInvisible;
+    auto* button = scene.createUINode<UIButtonNode>("Btn", panel);
+
+    // Still rendered, but the whole subtree is not hittable.
+    EXPECT_TRUE(button->isVisibleInTree());
+    EXPECT_FALSE(button->isHitTestableInTree());
+}
+
+TEST(Node2DLayoutTest, CollapsedAncestorCullsRenderAndHit)
+{
+    Scene scene("VisibilityTest");
+    auto* panel = scene.createUINode<UIPanelNode>("Panel");
+    panel->_visibility = EUIVisibility::Collapsed;
+    auto* button = scene.createUINode<UIButtonNode>("Btn", panel);
+
+    EXPECT_FALSE(button->isVisibleInTree());
+    EXPECT_FALSE(button->isHitTestableInTree());
+}
+
+TEST(Node2DLayoutTest, Node3DAncestorsAreTransparentToVisibility)
+{
+    Scene scene("VisibilityTest");
+    Node3D* holder = scene.createNode3D("Holder");
+    auto*   button = scene.createUINode<UIButtonNode>("Btn", holder);
+
+    // Node3D has no UI visibility concept: the chain stays effective.
+    EXPECT_TRUE(button->isVisibleInTree());
+    EXPECT_TRUE(button->isHitTestableInTree());
 }
 
 } // namespace ya

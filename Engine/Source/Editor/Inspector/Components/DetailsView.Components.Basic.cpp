@@ -144,7 +144,7 @@ void DetailsView::drawNode2D(Node2D& node)
         }
     }
 
-    // Reflected fields: base Node2D (_position/_size/_visible/_zOrder) plus
+    // Reflected fields: base Node2D (_position/_size/_visibility/_zOrder) plus
     // the concrete subtype's own fields. Edits apply immediately (the UI pass
     // re-renders every frame).
     ya::RenderContext ctx;

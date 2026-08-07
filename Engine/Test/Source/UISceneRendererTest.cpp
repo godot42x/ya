@@ -103,7 +103,7 @@ TEST(UISceneRendererTest, InvisibleNodeDoesNotConsume)
     auto* button = scene.createUINode<UIButtonNode>("OK");
     button->_position = {100.0f, 100.0f};
     button->_size     = {80.0f, 32.0f};
-    button->_visible  = false;
+    button->_visibility = EUIVisibility::Hidden;
     layoutRoots(scene.getRootNode(), {.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}});
 
     EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0), makeUICtx(120.0f, 110.0f), scene.getRootNode()),

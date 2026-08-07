@@ -69,8 +69,8 @@ EUIRouteResult hitTestSubtree(Node* node, const Event& event, const UIEventConte
     }
     if (node->is2D()) {
         auto* node2D = static_cast<Node2D*>(node);
-        if (!node2D->_visible) {
-            return EUIRouteResult::NotHandled; // Subtree cull, matching paint.
+        if (!node2D->isHitTestableSubtree()) {
+            return EUIRouteResult::NotHandled; // Hidden/Collapsed/SelfHitTestInvisible cull the subtree.
         }
 
         EUIRouteResult result = EUIRouteResult::NotHandled;
@@ -85,7 +85,7 @@ EUIRouteResult hitTestSubtree(Node* node, const Event& event, const UIEventConte
             }
         }
 
-        if (node2D->_hitFilter == EUIHitFilter::Ignore ||
+        if (!node2D->isHitTestableSelf() ||
             !node2D->hitTestLayoutRect(ctx.canvasPoint) ||
             !node2D->handleInputEvent(event, ctx)) {
             return result;
@@ -116,10 +116,10 @@ Node2D* pickSubtree(Node* node, const UIEventContext& ctx)
     }
     if (node->is2D()) {
         auto* node2D = static_cast<Node2D*>(node);
-        if (!node2D->_visible) {
+        if (!node2D->isHitTestableSubtree()) {
             return nullptr;
         }
-        const bool bSelfSkipped = node2D->_hitFilter == EUIHitFilter::Ignore;
+        const bool bSelfSkipped = !node2D->isHitTestableSelf();
         const auto children = childrenInPaintOrder(node);
         for (auto it = children.rbegin(); it != children.rend(); ++it) {
             if (Node2D* hit = pickSubtree(*it, ctx)) {

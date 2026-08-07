@@ -90,7 +90,7 @@ glm::vec2 Node2D::getScreenPosition() const
 
 bool Node2D::hitTest(const glm::vec2& screenPoint) const
 {
-    if (!_visible) {
+    if (!isHitTestableSelf()) {
         return false;
     }
     const glm::vec2 pos = getScreenPosition();
@@ -102,6 +102,34 @@ bool Node2D::hitTestLayoutRect(const glm::vec2& canvasPoint) const
 {
     return canvasPoint.x >= _layoutRect.pos.x && canvasPoint.x <= _layoutRect.pos.x + _layoutRect.extent.x &&
            canvasPoint.y >= _layoutRect.pos.y && canvasPoint.y <= _layoutRect.pos.y + _layoutRect.extent.y;
+}
+
+bool Node2D::isVisibleInTree() const
+{
+    for (const Node* node = this; node != nullptr; node = node->getParent()) {
+        if (node->is2D() && !static_cast<const Node2D*>(node)->isVisibleForRender()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool Node2D::isHitTestableInTree() const
+{
+    if (!isHitTestableSubtree()) {
+        return false;
+    }
+    for (const Node* node = getParent(); node != nullptr; node = node->getParent()) {
+        if (node->is2D()) {
+            const auto* node2D = static_cast<const Node2D*>(node);
+            // Hidden / Collapsed cull rendering and hits; SelfHitTestInvisible
+            // culls hits only. HitTestInvisible ancestors do not block children.
+            if (!node2D->isVisibleForRender() || !node2D->isHitTestableSubtree()) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 // === Layout ===
@@ -141,7 +169,10 @@ void Node2D::layoutChildren(const Rect2D& layoutRect)
 {
     for (Node* child : getChildrenInPaintOrder()) {
         if (child->is2D()) {
-            static_cast<Node2D*>(child)->layout(layoutRect);
+            auto* child2D = static_cast<Node2D*>(child);
+            if (child2D->participatesInLayout()) {
+                child2D->layout(layoutRect);
+            }
         }
         else {
             layoutTransparent(child, layoutRect);
@@ -181,7 +212,7 @@ std::vector<Node*> Node2D::getChildrenInPaintOrder() const
 
 void Node2D::paint(const UIPaintContext& ctx)
 {
-    if (!_visible) {
+    if (!isVisibleForRender()) {
         return;
     }
     paintSelf(ctx);
@@ -344,7 +375,10 @@ void UIContainerNode::arrangeChildren(const Rect2D& contentRect)
 
     for (Node* child : getChildrenInPaintOrder()) {
         if (child->is2D()) {
-            auto*       child2D = static_cast<Node2D*>(child);
+            auto* child2D = static_cast<Node2D*>(child);
+            if (!child2D->participatesInLayout()) {
+                continue;
+            }
             const glm::vec2 desired = child2D->computeDesiredSize();
             Rect2D childRect;
             if (bHorizontal) {
@@ -371,7 +405,7 @@ void UIContainerNode::arrangeChildren(const Rect2D& contentRect)
 
 void UIContainerNode::paint(const UIPaintContext& ctx)
 {
-    if (!_visible) {
+    if (!isVisibleForRender()) {
         return;
     }
     paintSelf(ctx);
@@ -397,7 +431,11 @@ glm::vec2 UIContainerNode::computeDesiredSize() const
         if (!child->is2D()) {
             continue;
         }
-        const glm::vec2 desired = static_cast<Node2D*>(child)->computeDesiredSize();
+        auto* child2D = static_cast<Node2D*>(child);
+        if (!child2D->participatesInLayout()) {
+            continue;
+        }
+        const glm::vec2 desired = child2D->computeDesiredSize();
         if (bHorizontal) {
             content += desired.x;
             cross = std::max(cross, desired.y);
@@ -470,7 +508,14 @@ YA_REFLECT_ENUM_END()
 YA_REFLECT_ENUM_BEGIN(ya::EUIHitFilter)
 YA_REFLECT_ENUM_VALUE(Pass)
 YA_REFLECT_ENUM_VALUE(Stop)
-YA_REFLECT_ENUM_VALUE(Ignore)
+YA_REFLECT_ENUM_END()
+
+YA_REFLECT_ENUM_BEGIN(ya::EUIVisibility)
+YA_REFLECT_ENUM_VALUE(Visible)
+YA_REFLECT_ENUM_VALUE(Hidden)
+YA_REFLECT_ENUM_VALUE(Collapsed)
+YA_REFLECT_ENUM_VALUE(HitTestInvisible)
+YA_REFLECT_ENUM_VALUE(SelfHitTestInvisible)
 YA_REFLECT_ENUM_END()
 
 YA_REFLECT_ENUM_BEGIN(ya::EUIBoxLayout)
