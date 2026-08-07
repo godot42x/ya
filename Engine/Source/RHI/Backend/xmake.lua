@@ -9,7 +9,12 @@ ya_module("ya-rhi-backend", "RHI_BACKEND", {
         "cxxopts",
     },
     -- OpenGL backend is kept in-tree for reference but not built (Vulkan is
-    -- the active development backend).
-    exclude = "OpenGL/**.cpp",
+    -- the active development backend). VMA/STB single-header implementations
+    -- live here too, compiled outside unity batches.
+    exclude = "OpenGL/**.cpp|Vulkan/VulkanMemoryAllocator.cpp|STB.cpp",
+    unity_ignored = {
+        "Vulkan/VulkanMemoryAllocator.cpp",
+        "STB.cpp",
+    },
     include_root = "../..",
 })

@@ -2,7 +2,7 @@
 #pragma once
 #include "RHI/Core/Buffer.h"
 #include "RHI/Core/CommandBuffer.h"
-#include "RenderGraph/ResourceStateTracker.h"
+#include "RHI/Core/ResourceStateTracker.h"
 #include "VulkanUtils.h"
 
 

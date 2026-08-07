@@ -8,7 +8,7 @@
 #include "RHI/Core/Swapchain.h"
 #include "Render3D/Pipelines/BasicPostprocessing.h"
 #include "Resource/AssetManager.h"
-#include "Resource/DeferredDeletionQueue.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 #include "UI/Resource/FontManager.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Resource/ResourceRegistry.h"

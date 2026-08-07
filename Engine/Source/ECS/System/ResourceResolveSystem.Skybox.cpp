@@ -2,7 +2,7 @@
 
 #include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Render.h"
-#include "Resource/DeferredDeletionQueue.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 #include "Host/App.h"
 #include "Host/Utility/OffscreenJobRunner.h"
 #include "Render3D/Scene.h"

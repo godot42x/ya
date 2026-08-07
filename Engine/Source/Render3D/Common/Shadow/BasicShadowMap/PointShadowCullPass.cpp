@@ -3,7 +3,7 @@
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
-#include "Resource/DeferredDeletionQueue.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 
 #include "RenderGraph/RenderGraphImportUtils.h"
 #include "RHI/Core/RenderResourceFactory.h"

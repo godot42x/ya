@@ -6,7 +6,7 @@
 
 #include "Core/Math/Math.h"
 #include "RHI/Render.h"
-#include "Resource/DeferredDeletionQueue.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 
 #include <algorithm>

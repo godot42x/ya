@@ -3,7 +3,7 @@
 #include "Host/App.h"
 
 #include "RHI/Core/OffscreenJob.h"
-#include "Resource/DeferredDeletionQueue.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 
 namespace ya
 {

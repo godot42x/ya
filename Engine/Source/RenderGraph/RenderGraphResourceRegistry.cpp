@@ -1,6 +1,6 @@
 #include "RenderGraphResourceRegistry.h"
 
-#include "Resource/DeferredDeletionQueue.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 
 #include <unordered_set>
 

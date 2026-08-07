@@ -1,7 +1,7 @@
 #include "PointShadowIndirectRenderer.h"
 
 #include "Core/Profiling/Instrumentor.h"
-#include "Resource/DeferredDeletionQueue.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 
 #include "RHI/Core/RenderResourceFactory.h"
 #include "Resource/Mesh.h"

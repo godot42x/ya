@@ -4,7 +4,7 @@
 #include "Core/Log.h"
 #include "Resource/Model/ImportedModelData.h"
 
-#include "Resource/DeferredDeletionQueue.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 
 namespace ya
 {

@@ -6,7 +6,7 @@
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Log.h"
 #include "Core/System/VirtualFileSystem.h"
-#include "Resource/DeferredDeletionQueue.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 #include "Host/App.h"
 
 #include <algorithm>

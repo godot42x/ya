@@ -49,6 +49,14 @@ function ya_module(name, root, opts)
         end
         add_headerfiles("**.h")
 
+        -- Single-header third-party implementations (VMA / STB / TinyGLTF)
+        -- must stay out of unity batches: a sibling TU in the same batch can
+        -- include the header first, which blocks the _IMPLEMENTATION macro
+        -- expansion via the include guard.
+        for _, f in ipairs(opts.unity_ignored or {}) do
+            add_files(f, { unity_ignored = true })
+        end
+
         for _, dep in ipairs(opts.deps or {}) do
             add_deps(dep, { public = true })
         end

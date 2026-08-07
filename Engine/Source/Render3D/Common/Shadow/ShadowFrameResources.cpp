@@ -1,7 +1,7 @@
 #include "ShadowFrameResources.h"
 
 #include "Core/Log.h"
-#include "Resource/DeferredDeletionQueue.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 #include "RHI/Render.h"
 #include "Render3D/RenderFrameData.h"
 

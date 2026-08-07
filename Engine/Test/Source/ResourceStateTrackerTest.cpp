@@ -1,5 +1,5 @@
 #include "RHI/Core/Image.h"
-#include "RenderGraph/ResourceStateTracker.h"
+#include "RHI/Core/ResourceStateTracker.h"
 #include "RHI/Backend/Vulkan/VulkanUtils.h"
 
 #include <gtest/gtest.h>

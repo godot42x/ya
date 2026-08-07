@@ -3,7 +3,7 @@
 #include "RenderGraph/RenderGraph.h"
 #include "Core/Api.h"
 #include "RenderGraph/RenderGraphResourceRegistry.h"
-#include "RenderGraph/ResourceStateTracker.h"
+#include "RHI/Core/ResourceStateTracker.h"
 
 #include <unordered_map>
 #include <vector>

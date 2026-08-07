@@ -129,12 +129,9 @@ do
         check_runtime_source_isolation()
     end)
 
-    -- Only third-party glue is compiled by the aggregate itself; every engine
-    -- module is a static library collected by Source/xmake.lua. The shims are
-    -- unity_ignored so their single-header _IMPLEMENTATION macros stay intact.
-    add_files("./Source/Implementaion/VulkanMemoryAllocator.cpp", { unity_ignored = true })
-    add_files("./Source/Implementaion/STB.cpp", { unity_ignored = true })
-    add_files("./Source/Implementaion/TinyGLTF.cpp", { unity_ignored = true })
+    -- Every engine source lives in a module target collected by
+    -- Source/xmake.lua (single-header third-party implementations are owned
+    -- by their consuming modules). The aggregate only carries the ImGui demo.
     add_files("./ThirdParty/ImGui/imgui_demo.cpp", { unity_ignored = true })
 
     add_headerfiles("./Source/**.h")

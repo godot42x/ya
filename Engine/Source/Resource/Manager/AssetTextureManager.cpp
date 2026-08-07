@@ -6,7 +6,7 @@
 
 #include <atomic>
 
-#include "Resource/DeferredDeletionQueue.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 
 namespace ya
 {

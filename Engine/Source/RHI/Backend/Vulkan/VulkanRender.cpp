@@ -15,7 +15,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <vector>
 
-#include "Resource/DeferredDeletionQueue.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 #include "Host/App.h"
 #include "VulkanUtils.h"
 

@@ -4,7 +4,7 @@
 #include "RenderGraph/RenderGraphResourceRegistry.h"
 #include "RHI/Core/RenderingInfoUtils.h"
 #include "RHI/Core/FrameUploadArena.h"
-#include "Resource/DeferredDeletionQueue.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 
 #include <gtest/gtest.h>
 

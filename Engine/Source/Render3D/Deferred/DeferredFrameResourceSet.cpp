@@ -2,7 +2,7 @@
 
 #include "Core/Log.h"
 #include "RHI/Render.h"
-#include "Resource/DeferredDeletionQueue.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 
 #include <algorithm>
 #include <format>

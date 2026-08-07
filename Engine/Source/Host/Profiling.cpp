@@ -160,24 +160,6 @@ class RuntimeArtifactWriter
     bool                              _bStopping           = false;
 };
 
-RuntimeState& runtimeStateStorage()
-{
-#if defined(YA_PROFILING_ENABLED)
-    static RuntimeState state{
-        .cpuTraceEnabled    = true,
-        .perfMetricsEnabled = true,
-        .staticInitEnabled  = true,
-    };
-#else
-    static RuntimeState state{
-        .cpuTraceEnabled    = false,
-        .perfMetricsEnabled = true,
-        .staticInitEnabled  = true,
-    };
-#endif
-    return state;
-}
-
 RuntimeArtifactState& runtimeArtifactStateStorage()
 {
     static RuntimeArtifactState state;
@@ -194,24 +176,6 @@ RuntimeArtifactWriter& runtimeArtifactWriter()
 {
     static RuntimeArtifactWriter writer;
     return writer;
-}
-
-[[nodiscard]] bool normalizeRuntimeToggle(bool enabled)
-{
-    if constexpr (isAlwaysEnabled()) {
-        return true;
-    }
-    if constexpr (isCompiledOut()) {
-        return false;
-    }
-    return enabled;
-}
-
-void applyRuntimeState(RuntimeState& state)
-{
-    state.cpuTraceEnabled    = normalizeRuntimeToggle(state.cpuTraceEnabled);
-    state.perfMetricsEnabled = normalizeRuntimeToggle(state.perfMetricsEnabled);
-    state.staticInitEnabled  = normalizeRuntimeToggle(state.staticInitEnabled);
 }
 
 std::string sanitizePathSegment(std::string text)
@@ -557,57 +521,6 @@ const char* getCompileModeLabel()
     }
 }
 
-RuntimeState getRuntimeState()
-{
-    auto state = runtimeStateStorage();
-    applyRuntimeState(state);
-    return state;
-}
-
-void setRuntimeState(const RuntimeState& state)
-{
-    auto normalized = state;
-    applyRuntimeState(normalized);
-    runtimeStateStorage() = normalized;
-    metrics().setEnabled(normalized.perfMetricsEnabled);
-}
-
-bool isCpuTraceEnabled()
-{
-    return getRuntimeState().cpuTraceEnabled;
-}
-
-void setCpuTraceEnabled(bool enabled)
-{
-    auto state            = getRuntimeState();
-    state.cpuTraceEnabled = enabled;
-    setRuntimeState(state);
-}
-
-bool isPerfMetricsEnabled()
-{
-    return getRuntimeState().perfMetricsEnabled;
-}
-
-void setPerfMetricsEnabled(bool enabled)
-{
-    auto state               = getRuntimeState();
-    state.perfMetricsEnabled = enabled;
-    setRuntimeState(state);
-}
-
-bool isStaticInitEnabled()
-{
-    return getRuntimeState().staticInitEnabled;
-}
-
-void setStaticInitEnabled(bool enabled)
-{
-    auto state             = getRuntimeState();
-    state.staticInitEnabled = enabled;
-    setRuntimeState(state);
-}
-
 void applyAppOverrides(AppDesc& appDesc)
 {
     auto& configManager = ConfigManager::get();
@@ -726,16 +639,6 @@ void setScreenshotPath(std::string path)
 void flushRuntimeArtifacts()
 {
     flushRuntimeArtifactsInternal(EArtifactFlushMode::Async);
-}
-
-Instrumentor& cpuTrace()
-{
-    return Instrumentor::Get();
-}
-
-PerfState& metrics()
-{
-    return PerfState::Get();
 }
 
 } // namespace ya::profiling
