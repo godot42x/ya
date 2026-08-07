@@ -46,6 +46,7 @@ struct SceneHierarchyPanel
     // Node-level (entity-less Node2D) selection; mutually exclusive with the
     // entity selection above (selecting one clears the other).
     Node2D* _selectedNode2D = nullptr;
+    Node2D* _pendingScrollNode2D = nullptr; // Auto-scroll/expand target after create/select
 
     std::vector<Entity*> _flatEntities;    // DFS tree order + standalone entities, rebuilt per frame
     std::unordered_map<Node*, bool> _lastNodeOpenState; // Last rendered open state per node

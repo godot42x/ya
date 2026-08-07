@@ -65,6 +65,7 @@ void SceneHierarchyPanel::setContext(Scene* scene)
     _pendingTreeToggle.clear();
     _searchBuffer[0] = '\0';
     _selectedNode2D  = nullptr;
+    _pendingScrollNode2D = nullptr;
 
     if (bSelectionChanged || !_primarySelection) {
         notifyOwnerSelection();
@@ -94,6 +95,7 @@ void SceneHierarchyPanel::setSelectedNode2D(Node2D* node)
     _primarySelection = nullptr;
     _rangeAnchor      = nullptr;
     _selectedNode2D   = node;
+    _pendingScrollNode2D = node;
     notifyOwnerNodeSelection();
 }
 
@@ -383,6 +385,12 @@ void SceneHierarchyPanel::drawNodeRecursive(Node* node)
         return;
     }
 
+    // Auto-expand ancestors of a pending Node2D scroll target so newly
+    // created UI nodes nested under collapsed parents become visible.
+    if (_pendingScrollNode2D && _pendingScrollNode2D != node && node->isAncestorOf(_pendingScrollNode2D)) {
+        ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+    }
+
     const bool bSearching = isSearchActive();
     const bool bSelfMatch = bSearching && matchesFilter(getNodeName(node));
     if (bSearching && !bSelfMatch && !subtreeMatchesFilter(node)) {
@@ -467,6 +475,11 @@ void SceneHierarchyPanel::drawNode2DRecursive(Node2D* node)
         return;
     }
 
+    // Auto-expand ancestors of the pending scroll target.
+    if (_pendingScrollNode2D && _pendingScrollNode2D != node && node->isAncestorOf(_pendingScrollNode2D)) {
+        ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+    }
+
     const bool bSearching = isSearchActive();
     const bool bSelfMatch = bSearching && matchesFilter(node->getName());
     if (bSearching && !bSelfMatch && !subtreeMatchesFilter(node)) {
@@ -486,6 +499,11 @@ void SceneHierarchyPanel::drawNode2DRecursive(Node2D* node)
 
     if (bSearching && subtreeMatchesFilter(node)) {
         ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+    }
+
+    if (_pendingScrollNode2D == node) {
+        ImGui::SetScrollHereY(0.5f);
+        _pendingScrollNode2D = nullptr;
     }
 
     // Distinguish 2D rows with a small marker and a distinct text color.
