@@ -2,6 +2,9 @@ import os
 import subprocess
 import sys
 import time
+from pathlib import Path
+
+from ya_shared_cache import is_dir_link
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -12,6 +15,10 @@ READ_ONLY = 0o555
 
 def set_readonly_recursive(path):
     """Recursively set directory and files to read-only."""
+    if is_dir_link(Path(path)):
+        # Linked submodules point into the shared cache; never chmod the
+        # canonical checkout (read-only .git would break future updates).
+        return
     for root, dirs, files in os.walk(path):
         # Set directory permissions
         os.chmod(root, READ_ONLY)
@@ -29,7 +36,7 @@ def disable_submodule_filemode(submodule_path):
     `git status` ignore mode-only diffs so VS Code's SCM view stays clean.
     This is a local-only config, never committed upstream.
     """
-    if not os.path.isdir(submodule_path):
+    if not os.path.isdir(submodule_path) or is_dir_link(Path(submodule_path)):
         return
     # Submodules have a .git FILE (gitlink) pointing to a gitdir under the
     # parent's .git/modules. `git -C <path> config` handles that indirection.

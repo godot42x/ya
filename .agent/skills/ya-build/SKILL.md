@@ -104,6 +104,32 @@ python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
 2. 确认 `--gtest_filter` / `r_args` 写法正确。
 3. 若只是单测不过，构建链路没问题时再转去具体模块 skill。
 
+## 共享缓存（多 worktree / 多 agent 并行）
+
+大体积产物（Vulkan SDK、重型 submodule）统一装在用户级共享缓存里，各
+checkout 通过目录链接（macOS/Linux symlink，Windows junction）指向同一份，
+避免每个 worktree 各自下载/存储：
+
+- 缓存根：`$YA_CACHE_ROOT` 优先，否则 macOS `~/Library/Caches/ya-engine`、
+  Windows `%LOCALAPPDATA%\ya-engine\Cache`、Linux `~/.cache/ya-engine`。
+- macOS Vulkan SDK：`Script/setup_vulkan_sdk_macos.py` 装到
+  `<cache>/VulkanSDK`（`YA_VULKAN_SDK_ROOT` 可单独覆盖），checkout 内
+  `Engine/ThirdParty/VulkanSDK/<version>` 是指向共享缓存的 symlink；安装
+  原子化（pid 唯一临时目录 + rename），并发执行不会损坏。旧仓库内真实目录
+  会在下次运行时自动迁入共享缓存。
+- 重型 submodule（`Vulkan-Samples-Assets` ~1GB、`LearnOpenGL` ~250MB）：
+  `Script/setup_submodules.py` 维护共享缓存里的 canonical checkout，并把它
+  pin 到当前 checkout index 记录的 gitlink SHA；checkout 内路径是链接，
+  通过 `git update-index --skip-worktree` 保持 `git status` 干净。
+
+注意：
+- 重型 submodule 路径上不要跑裸 `git submodule status/update`（会报
+  "expected submodule path ... not to be a symbolic link"）；刷新走
+  `python3 Script/ya.py cfg`。小 submodule（ImGui 等）保持标准 git 语义。
+- 新 clone 先跑 `ya.py cfg` 再手动 `git submodule update`，否则重型
+  submodule 会先被完整拉下来；脚本会把干净的 checkout 自动转回链接。
+- 若链接目标异常，先跑 `python3 Script/ya.py cfg` 再看构建。
+
 ## 相关 skills
 
 - `vscode`：处理任务、launch 配置、compile_commands 与调试链路

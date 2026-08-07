@@ -1,10 +1,33 @@
 """
-Install the LunarG Vulkan SDK for macOS into a repo-local directory.
+Install the LunarG Vulkan SDK for macOS into a shared per-user cache and
+expose it to this checkout through a symlink.
 
-Why repo-local?
-- Keeps the toolchain reproducible per-checkout and avoids polluting the system.
-- xmake auto-discovers the repo-local SDK from Engine/ThirdParty/VulkanSDK,
-  so no separate shell env sync step is required.
+Why shared + symlink (multi-agent / multi-worktree safe)?
+- Parallel agents and multiple worktrees share ONE SDK copy (~2 GB installed
+  + ~350 MB zip cache) instead of each downloading and installing its own.
+- The checkout-local discovery contract stays the same: xmake and ya.py still
+  look under Engine/ThirdParty/VulkanSDK/<version>/macOS, but those entries
+  are now symlinks into the shared install root, so no other tooling needs
+  to change.
+- Installs are atomic (install into a pid-unique temp dir, then rename into
+  place) and all temp paths are pid-unique, so concurrent agents never
+  observe or produce a half-installed SDK.
+
+Shared root resolution (first match wins):
+1. $YA_VULKAN_SDK_ROOT -- explicit override (e.g. a team CI cache dir)
+2. <shared cache>/VulkanSDK, where <shared cache> follows Script/ya_shared_cache.py:
+   $YA_CACHE_ROOT, else ~/Library/Caches/ya-engine (macOS), else
+   %LOCALAPPDATA%/ya-engine/Cache (Windows), else ~/.cache/ya-engine (Linux)
+
+Layout produced
+---------------
+    <shared>/<version>/macOS/                   # installed SDK root
+        bin/  include/  lib/  share/ ...
+    <shared>/.cache/<version>.zip               # download cache (retained)
+    <checkout>/Engine/ThirdParty/VulkanSDK/<version> -> <shared>/<version>
+
+Legacy checkout-local installs (real directories from before this change)
+are folded into the shared root on the next run, so nothing is re-downloaded.
 
 Usage
 -----
@@ -14,13 +37,6 @@ Usage
     python3 Script/setup_vulkan_sdk_macos.py --force      # reinstall selected SDK even if present
 
 Requires: Python 3.8+, macOS, curl, unzip (ship with macOS).
-
-Layout produced
----------------
-    Engine/ThirdParty/VulkanSDK/<version>/           # installed SDK root
-        macOS/
-            bin/  include/  lib/  share/ ...
-    Engine/ThirdParty/VulkanSDK/.cache/<version>.zip # download cache (retained)
 """
 from __future__ import annotations
 
@@ -33,12 +49,11 @@ import urllib.request
 from pathlib import Path
 from typing import Iterable
 
+from ya_shared_cache import cache_root
+
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
-
-SDK_INSTALL_ROOT = REPO_ROOT / "Engine" / "ThirdParty" / "VulkanSDK"
-DOWNLOAD_CACHE = SDK_INSTALL_ROOT / ".cache"
 
 LATEST_VERSION_URL = "https://vulkan.lunarg.com/sdk/latest/mac.txt"
 SDK_URL_TEMPLATE = (
@@ -49,6 +64,19 @@ SDK_URL_TEMPLATE = (
 def ensure_macos() -> None:
     if sys.platform != "darwin":
         sys.exit(f"This script only supports macOS. Current platform: {sys.platform}")
+
+
+def shared_root() -> Path:
+    """Shared SDK root shared by all checkouts of this user."""
+    env_root = os.environ.get("YA_VULKAN_SDK_ROOT")
+    if env_root:
+        return Path(env_root).expanduser().resolve()
+    return cache_root() / "VulkanSDK"
+
+
+def repo_sdk_root() -> Path:
+    """Checkout-local discovery path; entries here are symlinks into shared_root()."""
+    return REPO_ROOT / "Engine" / "ThirdParty" / "VulkanSDK"
 
 
 def fetch_latest_version() -> str:
@@ -64,9 +92,14 @@ def version_key(version: str) -> tuple[int | str, ...]:
 
 
 def download_with_progress(url: str, dst: Path) -> None:
-    """Download URL to dst using curl so we get a progress bar + resume support."""
+    """Download URL to dst using curl so we get a progress bar + resume support.
+
+    The .part file is pid-unique so concurrent agents never write the same
+    temp file; os.replace makes the final file appear atomically. If two
+    agents race, the last rename wins with identical bytes.
+    """
     dst.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dst.with_suffix(dst.suffix + ".part")
+    tmp = dst.with_name(dst.name + f".{os.getpid()}.part")
     cmd = [
         "curl",
         "-L",
@@ -80,7 +113,7 @@ def download_with_progress(url: str, dst: Path) -> None:
     ]
     print(f"-- Downloading {url}")
     subprocess.run(cmd, check=True)
-    tmp.replace(dst)
+    os.replace(tmp, dst)
 
 
 def unzip(zip_path: Path, extract_to: Path) -> Path:
@@ -146,13 +179,19 @@ def validate_install(install_dest: Path) -> None:
         )
 
 
-def iter_installed_versions() -> Iterable[tuple[str, Path]]:
-    if not SDK_INSTALL_ROOT.exists():
+def iter_installed_versions(
+    root: Path, *, skip_symlinks: bool = False
+) -> Iterable[tuple[str, Path]]:
+    if not root.exists():
         return []
 
     installs: list[tuple[str, Path]] = []
-    for child in SDK_INSTALL_ROOT.iterdir():
-        if not child.is_dir() or child.name.startswith("."):
+    for child in root.iterdir():
+        if child.name.startswith("."):
+            continue
+        if not child.is_dir():
+            continue
+        if skip_symlinks and child.is_symlink():
             continue
         installs.append((child.name, child))
 
@@ -161,7 +200,19 @@ def iter_installed_versions() -> Iterable[tuple[str, Path]]:
 
 
 def find_latest_valid_install() -> tuple[str, Path] | None:
-    for version, install_dest in iter_installed_versions():
+    """Latest valid install across the shared root and any legacy
+    checkout-local real directories (pre-symlink installs)."""
+    shared_versions = {version for version, _ in iter_installed_versions(shared_root())}
+    candidates = list(iter_installed_versions(shared_root()))
+    candidates += [
+        (version, install_dest)
+        for version, install_dest in iter_installed_versions(
+            repo_sdk_root(), skip_symlinks=True
+        )
+        if version not in shared_versions
+    ]
+    candidates.sort(key=lambda item: version_key(item[0]), reverse=True)
+    for version, install_dest in candidates:
         try:
             validate_install(install_dest)
             return version, install_dest
@@ -170,11 +221,153 @@ def find_latest_valid_install() -> tuple[str, Path] | None:
     return None
 
 
+def ensure_download(version: str, shared_cache: Path, repo_cache: Path) -> Path:
+    """Return a zip for version, reusing the checkout-local cache if present."""
+    zip_path = shared_cache / f"vulkansdk-macos-{version}.zip"
+    if zip_path.exists():
+        return zip_path
+    legacy_zip = repo_cache / f"vulkansdk-macos-{version}.zip"
+    if legacy_zip.exists():
+        print(f"-- Reusing cached download {legacy_zip}")
+        shared_cache.mkdir(parents=True, exist_ok=True)
+        os.replace(legacy_zip, zip_path)
+        return zip_path
+    download_with_progress(SDK_URL_TEMPLATE.format(version=version), zip_path)
+    return zip_path
+
+
+def install_into_shared(version: str, installer_app: Path) -> Path:
+    """Atomically install into shared_root()/<version>: build in a pid-unique
+    temp dir, validate, then rename into place. Concurrent agents racing here
+    are safe: the first rename wins, losers validate the winner and clean up."""
+    shared = shared_root()
+    final = shared / version
+    tmp = shared / f".installing-{version}-{os.getpid()}"
+    if tmp.exists():
+        shutil.rmtree(tmp, ignore_errors=True)
+    try:
+        run_installer(installer_app, tmp)
+    except Exception:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+    validate_install(tmp)
+    try:
+        os.rename(tmp, final)
+    except OSError:
+        # Someone else installed the same version first.
+        validate_install(final)
+        shutil.rmtree(tmp, ignore_errors=True)
+    return final
+
+
+def migrate_legacy_local(version: str) -> None:
+    """Fold a checkout-local real SDK dir into the shared root.
+
+    Real dirs are the pre-symlink layout where every checkout had its own
+    copy. Move (or copy+remove on a different volume) so all checkouts can
+    share one install.
+    """
+    local = repo_sdk_root() / version
+    if not local.exists() or local.is_symlink():
+        return
+    shared = shared_root() / version
+    try:
+        validate_install(local)
+    except RuntimeError:
+        # Broken leftover; it would shadow a shared symlink of the same name.
+        print(f"-- Removing broken checkout-local install at {local}")
+        shutil.rmtree(local, ignore_errors=True)
+        return
+
+    if shared.exists():
+        try:
+            validate_install(shared)
+        except RuntimeError:
+            shutil.rmtree(shared, ignore_errors=True)
+        else:
+            print(f"-- Removing checkout-local duplicate at {local} (shared copy exists)")
+            shutil.rmtree(local, ignore_errors=True)
+            return
+
+    shared.parent.mkdir(parents=True, exist_ok=True)
+    tmp = shared.parent / f".migrating-{version}-{os.getpid()}"
+    if tmp.exists():
+        shutil.rmtree(tmp, ignore_errors=True)
+    try:
+        try:
+            os.rename(local, tmp)
+        except OSError:
+            # Different volume: copy, validate, then drop the local copy.
+            print(f"-- Copying {local} to shared cache (cross-volume migration)")
+            shutil.copytree(local, tmp, symlinks=True)
+            validate_install(tmp)
+            shutil.rmtree(local, ignore_errors=True)
+        try:
+            os.rename(tmp, shared)
+        except OSError:
+            # Concurrent agent installed the same version first.
+            validate_install(shared)
+            shutil.rmtree(tmp, ignore_errors=True)
+    except Exception:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+    print(f"-- Migrated {local} -> {shared}")
+
+
+def migrate_repo_download_cache() -> None:
+    """Fold zip files from the legacy checkout-local .cache into the shared
+    cache, so each worktree stops keeping its own ~350 MB download."""
+    repo_cache = repo_sdk_root() / ".cache"
+    if not repo_cache.exists():
+        return
+    shared_cache = shared_root() / ".cache"
+    moved = 0
+    for zip_path in repo_cache.glob("*.zip"):
+        shared_cache.mkdir(parents=True, exist_ok=True)
+        target = shared_cache / zip_path.name
+        if not target.exists():
+            print(f"-- Reusing cached download {zip_path}")
+            os.replace(zip_path, target)
+            moved += 1
+    if moved:
+        print(f"-- Moved {moved} download cache file(s) into {shared_cache}")
+    try:
+        # Drop the legacy cache dir once empty; leftover extract dirs are
+        # disposable and kept only if something is still in there.
+        remaining = list(repo_cache.iterdir())
+        if not remaining:
+            repo_cache.rmdir()
+    except OSError:
+        pass
+
+
+def ensure_worktree_symlink(version: str) -> None:
+    """Make <repo>/Engine/ThirdParty/VulkanSDK/<version> a symlink into the
+    shared root. Idempotent; safe to run from every worktree / agent."""
+    link = repo_sdk_root() / version
+    target = shared_root() / version
+    if link.is_symlink():
+        try:
+            if link.resolve() == target.resolve():
+                return
+        except OSError:
+            pass
+        link.unlink()
+    elif link.exists():
+        raise RuntimeError(
+            f"{link} is a real directory; run --force to replace it with a shared-cache symlink"
+        )
+    repo_sdk_root().mkdir(parents=True, exist_ok=True)
+    link.symlink_to(target, target_is_directory=True)
+    print(f"-- Linked {link} -> {target}")
+
+
 def print_update_hint() -> None:
     print("-- To update the SDK explicitly, run one of:")
     print("   make vulkan-sdk-macos")
     print("   python3 Script/setup_vulkan_sdk_macos.py --latest")
     print("   python3 Script/setup_vulkan_sdk_macos.py --version <version>")
+    print(f"-- Shared cache root: {shared_root()}")
 
 
 def main() -> int:
@@ -208,6 +401,9 @@ def main() -> int:
         existing = find_latest_valid_install()
         if existing and not args.force:
             version, install_dest = existing
+            migrate_legacy_local(version)
+            migrate_repo_download_cache()
+            ensure_worktree_symlink(version)
             print(f"-- Using installed Vulkan SDK: {version}")
             print(f"-- SDK path: {install_dest}")
             print_update_hint()
@@ -221,46 +417,53 @@ def main() -> int:
         version = fetch_latest_version()
 
     print(f"-- Vulkan SDK version: {version}")
+    print(f"-- Shared cache root: {shared_root()}")
 
-    install_dest = SDK_INSTALL_ROOT / version
-    if install_dest.exists() and not args.force:
+    shared = shared_root()
+    shared_cache = shared / ".cache"
+    install_dest = shared / version
+
+    if args.force:
+        print(f"-- Removing existing install at {install_dest}")
+        shutil.rmtree(install_dest, ignore_errors=True)
+        local = repo_sdk_root() / version
+        if local.exists() and not local.is_symlink():
+            shutil.rmtree(local, ignore_errors=True)
+
+    if install_dest.exists():
         try:
             validate_install(install_dest)
             print(f"-- SDK already installed at {install_dest} (use --force to redo)")
-            if args.latest:
-                print_update_hint()
-            return 0
         except RuntimeError as e:
             print(f"-- Existing install is incomplete ({e}); reinstalling")
-
-    if args.force and install_dest.exists():
-        print(f"-- Removing existing install at {install_dest}")
-        shutil.rmtree(install_dest)
-
-    zip_path = DOWNLOAD_CACHE / f"vulkansdk-macos-{version}.zip"
-    if not zip_path.exists():
-        download_with_progress(SDK_URL_TEMPLATE.format(version=version), zip_path)
+            shutil.rmtree(install_dest, ignore_errors=True)
+            zip_path = ensure_download(version, shared_cache, repo_sdk_root() / ".cache")
+            extract_dir = shared_cache / f"extract-{version}-{os.getpid()}"
+            installer_app = unzip(zip_path, extract_dir)
+            try:
+                install_into_shared(version, installer_app)
+            finally:
+                if not args.keep_extracted and extract_dir.exists():
+                    shutil.rmtree(extract_dir, ignore_errors=True)
     else:
-        print(f"-- Using cached download {zip_path}")
-
-    extract_dir = DOWNLOAD_CACHE / f"extract-{version}"
-    if extract_dir.exists():
-        shutil.rmtree(extract_dir)
-    installer_app = unzip(zip_path, extract_dir)
-
-    try:
-        run_installer(installer_app, install_dest)
-        validate_install(install_dest)
-    finally:
-        if not args.keep_extracted and extract_dir.exists():
+        zip_path = ensure_download(version, shared_cache, repo_sdk_root() / ".cache")
+        extract_dir = shared_cache / f"extract-{version}-{os.getpid()}"
+        if extract_dir.exists():
             shutil.rmtree(extract_dir, ignore_errors=True)
+        installer_app = unzip(zip_path, extract_dir)
+        try:
+            install_into_shared(version, installer_app)
+        finally:
+            if not args.keep_extracted and extract_dir.exists():
+                shutil.rmtree(extract_dir, ignore_errors=True)
 
+    migrate_legacy_local(version)
+    migrate_repo_download_cache()
+    ensure_worktree_symlink(version)
+    validate_install(install_dest)
     print(f"-- SDK installed at: {install_dest}")
+    print(f"-- worktree link: {repo_sdk_root() / version} -> {install_dest}")
     print_update_hint()
-    print()
-    print("Next steps:")
-    print("  make cfg && make b t=ya")
-    print("  or: xmake f -m debug -y && xmake b ya")
     return 0
 
 

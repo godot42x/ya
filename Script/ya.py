@@ -162,6 +162,7 @@ def _require_project_path(project: str | None, command_name: str) -> Path:
 
 
 def _setup_workspace() -> None:
+    _run([sys.executable, str(SCRIPT_DIR / "setup_submodules.py")])
     _run([sys.executable, str(SCRIPT_DIR / "setup_3rd_party.py")])
     if platform.system() == "Darwin":
         _run([sys.executable, str(SCRIPT_DIR / "setup_vulkan_sdk_macos.py")])
@@ -371,7 +372,10 @@ def build_parser() -> argparse.ArgumentParser:
     test.add_argument("--build-arg", action="append", default=[], help="Extra argument forwarded to `xmake b`.")
     test.set_defaults(func=cmd_test)
 
-    vulkan = subparsers.add_parser("vulkan-sdk-macos", help="Install or refresh the repo-local macOS Vulkan SDK.")
+    vulkan = subparsers.add_parser(
+        "vulkan-sdk-macos",
+        help="Install or refresh the shared macOS Vulkan SDK (symlinked into this checkout).",
+    )
     SUBCOMMAND_PARSERS["vulkan-sdk-macos"] = vulkan
     vulkan.add_argument("--version", help="Requested Vulkan SDK version.")
     vulkan.add_argument("--force", action="store_true", help="Reinstall even if already present.")
