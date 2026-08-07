@@ -6,6 +6,10 @@
 #include "Core/Profiling/Profiling.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
+#include "ECS/Component/Terrain/TerrainComponent.h"
+#include "ECS/Component/PointLightComponent.h"
+#include "ECS/Component/DirectionalLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/TransformSystem.h"
 #include "Editor/EditorLayer.h"
@@ -14,6 +18,7 @@
 #include "Editor/EditorRuntimeSettings.h"
 #include "Editor/Input/EditorInputNode.h"
 #include "Editor/Inspector/TypeRenderer.h"
+#include "Editor/Services/NodeCreateRegistry.h"
 #include "Physics/PhysicsDebugDraw.h"
 #include "Render/2D/Render2D.h"
 #include "Render/Core/CommandBuffer.h"
@@ -24,9 +29,12 @@
 #include "Runtime/Application/Automation/EditorAutomationControl.h"
 #include "Runtime/GUI/GuiSystem.h"
 #include "Runtime/Rendering/Common/Shadow/Common/ShadowSettingsConfig.h"
+#include "Runtime/Rendering/Common/RenderViewportOverlayRecorder.h"
 #include "Runtime/Rendering/RenderRuntime.h"
+#include "Scene/Scene.h"
+#include "Core/Scripting/ScriptApiRegistry.h"
 
-
+#include <format>
 #include <string_view>
 
 namespace ya
@@ -185,7 +193,8 @@ class EditorViewportCompositor
                  ICommandBuffer&               commandBuffer,
                  const RenderViewportSnapshot& snapshot,
                  const EditorLayer&            layer,
-                 const AppRenderFrameState&    renderFrame)
+                 const AppRenderFrameState&    renderFrame,
+                 Node*                         uiPreviewRoot)
     {
         auto source = snapshot.viewportImageOwner;
         if (!source || !source->getImageShared() || !source->getImageView()) {
@@ -220,6 +229,23 @@ class EditorViewportCompositor
         }
 
         const Extent2D extent = _composedViewportImage->getExtent();
+
+        // 2D canvas preview: hide the 3D world and composite the Node2D tree
+        // over a canvas grid instead (Godot-style development-time viewing).
+        // The game itself always renders 3D + 2D together.
+        if (layer.isViewportMode2D()) {
+            const glm::vec2 logicalViewport = layer.getViewportSize();
+            recordUICompositorPass(&commandBuffer,
+                                   *_composedViewportImage,
+                                   Extent2D{
+                                       .width  = static_cast<uint32_t>(std::max(logicalViewport.x, 0.0f)),
+                                       .height = static_cast<uint32_t>(std::max(logicalViewport.y, 0.0f)),
+                                   },
+                                   uiPreviewRoot,
+                                   true);
+            return;
+        }
+
         commandBuffer.beginRendering(RenderingInfo{
             .label                         = "EditorViewportComposition",
             .bExternalTransitionManagement = true,
@@ -363,6 +389,194 @@ class EditorModule final : public IModule, public IEditorAutomationControl
     EditorInputNode                _inputNode;
     InputRouter::FNodeRegistration _inputNodeRegistration;
 
+    void registerEditorPresets()
+    {
+        auto& registry = editor::NodeCreateRegistry::get();
+
+        registry.registerPreset(
+            "3D Object",
+            "Cube",
+            "Static cube with a Phong material",
+            [](Scene& scene, const std::string& name, Node* parent) -> Node* {
+                Node* node = scene.createNode3D(name, parent);
+                if (node) {
+                    if (auto* node3D = dynamic_cast<Node3D*>(node)) {
+                        Entity* entity = node3D->getEntity();
+                        auto*   mc     = entity->addComponent<StaticMeshComponent>();
+                        mc->setPrimitiveGeometry(EPrimitiveGeometry::Cube);
+                        entity->addComponent<PhongMaterialComponent>();
+                    }
+                }
+                return node;
+            });
+
+        registry.registerPreset(
+            "3D Object",
+            "Sphere",
+            "Static sphere with a Phong material",
+            [](Scene& scene, const std::string& name, Node* parent) -> Node* {
+                Node* node = scene.createNode3D(name, parent);
+                if (node) {
+                    if (auto* node3D = dynamic_cast<Node3D*>(node)) {
+                        Entity* entity = node3D->getEntity();
+                        auto*   mc     = entity->addComponent<StaticMeshComponent>();
+                        mc->setPrimitiveGeometry(EPrimitiveGeometry::Sphere);
+                        entity->addComponent<PhongMaterialComponent>();
+                    }
+                }
+                return node;
+            });
+
+        registry.registerPreset(
+            "3D Object",
+            "Plane",
+            "Static quad with a Phong material",
+            [](Scene& scene, const std::string& name, Node* parent) -> Node* {
+                Node* node = scene.createNode3D(name, parent);
+                if (node) {
+                    if (auto* node3D = dynamic_cast<Node3D*>(node)) {
+                        Entity* entity = node3D->getEntity();
+                        auto*   mc     = entity->addComponent<StaticMeshComponent>();
+                        mc->setPrimitiveGeometry(EPrimitiveGeometry::Quad);
+                        entity->addComponent<PhongMaterialComponent>();
+                    }
+                }
+                return node;
+            });
+
+        registry.registerPreset(
+            "3D Object",
+            "Terrain",
+            "Height-map terrain with a Phong material",
+            [](Scene& scene, const std::string& name, Node* parent) -> Node* {
+                Node* node = scene.createNode3D(name, parent);
+                if (node) {
+                    if (auto* node3D = dynamic_cast<Node3D*>(node)) {
+                        Entity* entity = node3D->getEntity();
+                        entity->addComponent<TerrainComponent>();
+                        entity->addComponent<PhongMaterialComponent>();
+                    }
+                }
+                return node;
+            });
+
+        registry.registerPreset(
+            "Light",
+            "Point Light",
+            "Omnidirectional point light",
+            [](Scene& scene, const std::string& name, Node* parent) -> Node* {
+                Node* node = scene.createNode3D(name, parent);
+                if (node) {
+                    if (auto* node3D = dynamic_cast<Node3D*>(node)) {
+                        node3D->getEntity()->addComponent<PointLightComponent>();
+                    }
+                }
+                return node;
+            });
+
+        registry.registerPreset(
+            "Light",
+            "Directional Light",
+            "Sun-style directional light",
+            [](Scene& scene, const std::string& name, Node* parent) -> Node* {
+                Node* node = scene.createNode3D(name, parent);
+                if (node) {
+                    if (auto* node3D = dynamic_cast<Node3D*>(node)) {
+                        node3D->getEntity()->addComponent<DirectionalLightComponent>();
+                    }
+                }
+                return node;
+            });
+    }
+
+    void registerEditorScriptApis()
+    {
+        using Json = ScriptApiRegistry::Json;
+        auto& api  = ScriptApiRegistry::get();
+
+        api.registerFunction(
+            "viewport.set_mode",
+            "Switches the editor viewport between '3d' (world) and '2d' (Node2D canvas preview).",
+            Json{{"mode", {{"type", "string"}}}},
+            [this](const Json& args) -> Json {
+                const std::string mode = args.value("mode", "3d");
+                if (mode == "2d") {
+                    _layer->setViewportMode(EViewportMode::Mode2D);
+                }
+                else if (mode == "3d") {
+                    _layer->setViewportMode(EViewportMode::Mode3D);
+                }
+                else {
+                    throw ScriptApiRegistry::Error("viewport.set_mode: mode must be '3d' or '2d'");
+                }
+                return Json{{"mode", _layer->isViewportMode2D() ? "2d" : "3d"}};
+            });
+
+        api.registerFunction(
+            "viewport.get_mode",
+            "Returns the current editor viewport mode: {mode: '3d'|'2d'}.",
+            Json::object(),
+            [this](const Json&) -> Json {
+                return Json{{"mode", _layer->isViewportMode2D() ? "2d" : "3d"}};
+            });
+
+        api.registerFunction(
+            "viewport.pan_zoom",
+            "Sets the 2D canvas preview navigation. Args: {pan_x?, pan_y?, zoom?}.",
+            Json{{"pan_x", {{"type", "number"}}}, {"pan_y", {{"type", "number"}}}, {"zoom", {{"type", "number"}}}},
+            [this](const Json& args) -> Json {
+                if (args.contains("pan_x") || args.contains("pan_y")) {
+                    glm::vec2 pan = _layer->getCanvasPan();
+                    pan.x = args.value("pan_x", pan.x);
+                    pan.y = args.value("pan_y", pan.y);
+                    _layer->setCanvasPan(pan);
+                }
+                if (args.contains("zoom")) {
+                    _layer->setCanvasZoom(args.at("zoom").get<float>());
+                }
+                return Json{{"pan_x", _layer->getCanvasPan().x},
+                            {"pan_y", _layer->getCanvasPan().y},
+                            {"zoom", _layer->getCanvasZoom()}};
+            });
+
+        api.registerFunction(
+            "scene.create_preset",
+            "Creates a node from the editor create registry. Args: {preset, name?, parent_path?}. "
+            "Presets: Cube, Sphere, Plane, Terrain, Point Light, Directional Light, plus every Node2D type.",
+            Json{{"preset", {{"type", "string"}}},
+                 {"name", {{"type", "string"}}},
+                 {"parent_path", {{"type", "string"}}}},
+            [this](const Json& args) -> Json {
+                Scene* scene = ScriptApiRegistry::get().getActiveScene();
+                if (!scene) {
+                    throw ScriptApiRegistry::Error("no active scene");
+                }
+                const std::string preset = args.at("preset").get<std::string>();
+                const std::string name   = args.value("name", preset);
+
+                Node* parent = nullptr;
+                if (const auto it = args.find("parent_path"); it != args.end() && !it->is_null()) {
+                    parent = scene->findNodeByPath(it->get<std::string>());
+                    if (!parent) {
+                        throw ScriptApiRegistry::Error(std::format("parent_path not found: {}", it->get<std::string>()));
+                    }
+                }
+
+                Node* node = nullptr;
+                if (Node* presetNode = editor::NodeCreateRegistry::get().createPreset(preset, *scene, name, parent)) {
+                    node = presetNode;
+                }
+                else {
+                    // Fall back to reflection-driven Node2D types.
+                    node = scene->createUINode(preset, name, parent);
+                }
+                if (!node) {
+                    throw ScriptApiRegistry::Error(std::format("unknown create preset: {}", preset));
+                }
+                return Json{{"path", scene->getNodePath(node)}, {"name", node->getName()}};
+            });
+    }
+
   public:
     bool onLoad(FModuleContext&) override { return true; }
     bool onStart(const FEngineContext&) override { return true; }
@@ -404,6 +618,8 @@ class EditorModule final : public IModule, public IEditorAutomationControl
         _inputNode.bind(app, *_layer);
         _inputNodeRegistration = app.getInputRouter().registerNode(_inputNode);
         gEditorLayer           = _layer.get();
+        registerEditorPresets();
+        registerEditorScriptApis();
     }
 
     void* queryInterface(FInterfaceId interfaceId) override
@@ -526,8 +742,9 @@ class EditorModule final : public IModule, public IEditorAutomationControl
             auto&          editorCamera   = _layer->getCamera();
             const Extent2D viewportExtent = renderRuntime->getViewportExtent();
             // Keep the editor camera controllable during simulation; only full
-            // runtime (PIE) hands viewport input over to the game.
-            if (!app.isRuntimeMode() && _layer->shouldCaptureInput()) {
+            // runtime (PIE) hands viewport input over to the game. 2D canvas
+            // preview uses its own pan/zoom navigation instead of the camera.
+            if (!app.isRuntimeMode() && !_layer->isViewportMode2D() && _layer->shouldCaptureInput()) {
                 _cameraController.update(editorCamera, app.getInputManager(), dt);
             }
             if (viewportExtent.height > 0) {
@@ -541,6 +758,13 @@ class EditorModule final : public IModule, public IEditorAutomationControl
                 .projection = editorCamera.getProjectionMatrix(),
                 .cameraPos  = editorCamera.getPosition(),
             });
+
+            // The editor 2D canvas pass records into the composed viewport
+            // image (always R16G16B16A16_SFLOAT); ensure the depth-less UI
+            // pipeline exists outside command recording.
+            if (_layer->isViewportMode2D() && !app.isRuntimeMode() && !app.isSimulationMode()) {
+                Render2D::ensureUICompositorPipeline(EFormat::R16G16B16A16_SFLOAT);
+            }
         }
 
         _layer->onUpdate(dt);
@@ -570,11 +794,21 @@ class EditorModule final : public IModule, public IEditorAutomationControl
         const auto snapshot = renderRuntime->buildViewportSnapshot();
         _layer->setViewportContext(snapshot);
         _layer->setEntityIdPickImage(snapshot.entityIdImageOwner);
+        // 2D preview composites the authoring scene's Node2D tree over a grid;
+        // during PIE/sim the runtime already composites UI, so the editor
+        // preview stays in 3D presentation (no double-draw).
+        Node* uiPreviewRoot = nullptr;
+        if (_layer->isViewportMode2D() && !app.isRuntimeMode() && !app.isSimulationMode()) {
+            if (Scene* scene = _layer->getViewportInteractionScene()) {
+                uiPreviewRoot = scene->getRootNode();
+            }
+        }
         _viewportCompositor.compose(*render,
                                     commandBuffer,
                                     snapshot,
                                     *_layer,
-                                    app.getRenderServices().getRenderFrameState());
+                                    app.getRenderServices().getRenderFrameState(),
+                                    uiPreviewRoot);
         _layer->setViewportDisplayImage(_viewportCompositor.getOutputImage());
     }
 

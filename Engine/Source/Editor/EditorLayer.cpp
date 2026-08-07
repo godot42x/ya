@@ -76,4 +76,25 @@ void EditorLayer::onUpdate(float dt)
     YA_PROFILE_FUNCTION();
     _lastDeltaTime = dt;
 }
+
+void EditorLayer::setViewportMode(EViewportMode mode, bool bPersist)
+{
+    _viewportMode = mode;
+    if (bPersist) {
+        ConfigManager::Editor(kEditorConfigDocument)
+            .set("viewport.mode", mode == EViewportMode::Mode2D ? "2d" : "3d")
+            .flush();
+    }
+}
+
+bool EditorLayer::viewportToCanvas(const glm::vec2& viewportLocal, glm::vec2& outCanvas) const
+{
+    if (_canvasZoom <= 0.0f) {
+        return false;
+    }
+    outCanvas = (viewportLocal - _canvasPan) / _canvasZoom;
+    return outCanvas.x >= 0.0f && outCanvas.y >= 0.0f &&
+           outCanvas.x <= _viewportSize.x && outCanvas.y <= _viewportSize.y;
+}
+
 } // namespace ya

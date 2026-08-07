@@ -4,6 +4,7 @@
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Render/2D/Render2D.h"
+#include "Resource/Texture/TextureLibrary.h"
 #include "Resource/Font/FontManager.h"
 #include "Runtime/Rendering/Common/UISceneRenderer.h"
 #include "Scene/Node2D.h"
@@ -72,7 +73,11 @@ void recordRenderViewportOverlayPass(const FrameContext& frameCtx,
     Render2D::end();
 }
 
-void recordUICompositorPass(ICommandBuffer* cmdBuf, RenderImage& target, const Extent2D& logicalViewportExtent, Node* uiSceneRoot)
+void recordUICompositorPass(ICommandBuffer* cmdBuf,
+                            RenderImage&    target,
+                            const Extent2D& logicalViewportExtent,
+                            Node*           uiSceneRoot,
+                            bool            bDrawCanvasGrid)
 {
     if (!uiSceneRoot || !cmdBuf) {
         return;
@@ -106,9 +111,10 @@ void recordUICompositorPass(ICommandBuffer* cmdBuf, RenderImage& target, const E
                 RenderAttachment{
                     .image         = target.getImage(),
                     .imageView     = target.getImageView(),
-                    .loadOp        = EAttachmentLoadOp::Load,
+                    .loadOp        = bDrawCanvasGrid ? EAttachmentLoadOp::Clear : EAttachmentLoadOp::Load,
                     .storeOp       = EAttachmentStoreOp::Store,
-                    .clearValue    = ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
+                    .clearValue    = bDrawCanvasGrid ? ClearValue(0.055f, 0.06f, 0.07f, 1.0f)
+                                                     : ClearValue(0.0f, 0.0f, 0.0f, 0.0f),
                     .initialLayout = EImageLayout::ColorAttachmentOptimal,
                     .finalLayout   = EImageLayout::ColorAttachmentOptimal,
                 },
@@ -131,6 +137,28 @@ void recordUICompositorPass(ICommandBuffer* cmdBuf, RenderImage& target, const E
     };
 
     Render2D::begin(render2dCtx);
+    if (bDrawCanvasGrid) {
+        // Canvas grid in logical pixels, scaled to the render target. Drawn as
+        // 1px quads so it shares the screen-space quad pipeline.
+        constexpr float kGridStepLogical = 32.0f;
+        const glm::vec4 gridColor(0.16f, 0.17f, 0.19f, 1.0f);
+        const float     gridStepPx = kGridStepLogical * uiScale.x;
+        auto*           white      = TextureLibrary::get().getWhiteTexture().get();
+        if (white) {
+            for (float x = gridStepPx; x < static_cast<float>(rtExtent.width); x += gridStepPx) {
+                Render2D::makeSprite(glm::vec3(x, 0.0f, 0.0f),
+                                     glm::vec2(1.0f, static_cast<float>(rtExtent.height)),
+                                     white,
+                                     gridColor);
+            }
+            for (float y = gridStepPx; y < static_cast<float>(rtExtent.height); y += gridStepPx) {
+                Render2D::makeSprite(glm::vec3(0.0f, y, 0.0f),
+                                     glm::vec2(static_cast<float>(rtExtent.width), 1.0f),
+                                     white,
+                                     gridColor);
+            }
+        }
+    }
     UISceneRenderer::render(uiSceneRoot, uiScale);
     Render2D::end();
 

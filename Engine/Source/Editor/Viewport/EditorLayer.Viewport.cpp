@@ -113,14 +113,29 @@ void EditorLayer::viewportWindow()
                                        ? _viewportDisplayImage->getImageView()
                                        : _viewportCtx.viewportImageView;
         if (viewportImageView) {
-            if (ImGuiHelper::Image(viewportImageView,
-                                   sampler,
-                                   "Viewport Texture ",
-                                   viewportPanelSize,
-                                   ImVec2(0, 0),
-                                   ImVec2(1, 1)))
-            {
-                renderGizmo();
+            if (isViewportMode2D()) {
+                // 2D canvas preview: pan/zoom via UV mapping (canvas UV =
+                // screen UV / zoom + panUV). The composed image stays at 1:1
+                // logical pixels; navigation is pure display-space math.
+                const glm::vec2 panUV = _canvasPan / glm::vec2(std::max(_viewportSize.x, 1.0f),
+                                                               std::max(_viewportSize.y, 1.0f));
+                const float     invZoom = 1.0f / std::max(_canvasZoom, 0.01f);
+                const ImVec2    uv0(std::clamp(panUV.x, 0.0f, 1.0f),
+                                    std::clamp(panUV.y, 0.0f, 1.0f));
+                const ImVec2    uv1(std::clamp(panUV.x + invZoom, 0.0f, 1.0f),
+                                    std::clamp(panUV.y + invZoom, 0.0f, 1.0f));
+                ImGuiHelper::Image(viewportImageView, sampler, "Viewport Texture 2D ", viewportPanelSize, uv0, uv1);
+            }
+            else {
+                if (ImGuiHelper::Image(viewportImageView,
+                                       sampler,
+                                       "Viewport Texture ",
+                                       viewportPanelSize,
+                                       ImVec2(0, 0),
+                                       ImVec2(1, 1)))
+                {
+                    renderGizmo();
+                }
             }
         }
         else {

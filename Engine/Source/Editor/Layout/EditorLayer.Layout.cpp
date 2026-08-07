@@ -317,6 +317,29 @@ void EditorLayer::toolbar()
         ImGui::Button(modeLabel, ImVec2(80.0f, size));
     }
 
+    ImGui::SameLine();
+    ImGui::Dummy(ImVec2(8.0f, 0.0f));
+    ImGui::SameLine();
+
+    // 2D/3D viewport mode toggle (development-time viewing only; the game
+    // always renders 3D + 2D together). CLI: viewport.set_mode.
+    {
+        const bool b2D   = isViewportMode2D();
+        const char* label = b2D ? "2D" : "3D";
+        ya::ImGuiStyleScope modeStyle;
+        modeStyle.pushColor(ImGuiCol_Button, b2D ? ImVec4(0.28f, 0.52f, 0.32f, 0.95f)
+                                                 : ImVec4(0.22f, 0.22f, 0.24f, 0.92f));
+        modeStyle.pushColor(ImGuiCol_ButtonHovered, ImVec4(0.34f, 0.62f, 0.40f, 0.95f));
+        if (ImGui::Button(label, ImVec2(40.0f, size))) {
+            setViewportMode(b2D ? EViewportMode::Mode3D : EViewportMode::Mode2D);
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+            ImGui::SetTooltip("%s",
+                              b2D ? "2D canvas preview (Node2D + grid); switch back to 3D world"
+                                  : "3D world view; switch to 2D canvas preview (Node2D)");
+        }
+    }
+
     // style RAII auto-pop
     ImGui::End();
 }

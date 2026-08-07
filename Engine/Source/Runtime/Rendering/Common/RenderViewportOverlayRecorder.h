@@ -22,9 +22,12 @@ void recordRenderViewportOverlayPass(const FrameContext& frameCtx,
 /// graph-external with manual layout transitions, so UI never enters bloom or
 /// tonemapping. UI coordinates are authored in logical viewport pixels and
 /// mapped to the render-target pixels (frame buffer scale).
+/// When `bDrawCanvasGrid` is set the target is cleared to a dark canvas color
+/// and a grid is drawn behind the UI (editor 2D preview mode).
 void recordUICompositorPass(ICommandBuffer*    cmdBuf,
                             RenderImage&       target,
                             const Extent2D&    logicalViewportExtent,
-                            Node*              uiSceneRoot);
+                            Node*              uiSceneRoot,
+                            bool               bDrawCanvasGrid = false);
 
 } // namespace ya

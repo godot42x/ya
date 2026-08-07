@@ -8,8 +8,10 @@
 #include "Render/Core/CommandBuffer.h"
 #include "Render/Core/RenderImage.h"
 #include "Render/Render.h"
+#include "Scene/Node2D.h"
 
 #include <cmath>
+#include <functional>
 
 namespace ya
 {
@@ -120,6 +122,23 @@ void EditorLayer::onEvent(const Event& event)
                 _bRightMouseDragging = true;
             }
         }
+
+        // 2D canvas panning (right or middle drag).
+        if (isViewportMode2D() && bViewportHovered) {
+            const bool bPanning = ImGui::IsMouseDown(ImGuiMouseButton_Right) ||
+                                  ImGui::IsMouseDown(ImGuiMouseButton_Middle);
+            if (bPanning) {
+                const glm::vec2 currentPos = _app->getLastMousePos();
+                if (_bCanvasPanning) {
+                    _canvasPan += currentPos - _canvasPanLastMouse;
+                }
+                _bCanvasPanning     = true;
+                _canvasPanLastMouse = currentPos;
+            }
+            else {
+                _bCanvasPanning = false;
+            }
+        }
     } break;
     case EEvent::MouseButtonReleased:
     {
@@ -138,6 +157,49 @@ void EditorLayer::onEvent(const Event& event)
 
     if (!bViewportFocused) {
         return; // Only process other events when viewport is focused
+    }
+
+    // 2D/3D viewport mode shortcuts work in both modes.
+    if (event.getEventType() == EEvent::KeyPressed) {
+        const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
+        if (keyEvent._keyCode == EKey::K_2) {
+            setViewportMode(EViewportMode::Mode2D);
+            return;
+        }
+        if (keyEvent._keyCode == EKey::K_3) {
+            setViewportMode(EViewportMode::Mode3D);
+            return;
+        }
+    }
+
+    if (isViewportMode2D()) {
+        switch (event.getEventType()) {
+        case EEvent::MouseButtonReleased:
+        {
+            auto& mouseEvent = static_cast<const MouseButtonReleasedEvent&>(event);
+            if (mouseEvent.GetMouseButton() == EMouse::Left && !_bCanvasPanning) {
+                float localX{}, localY{};
+                auto  cursorPos = _app->getLastMousePos();
+                if (screenToViewport(cursorPos.x, cursorPos.y, localX, localY)) {
+                    pickNode2D(localX, localY);
+                }
+            }
+        } break;
+        case EEvent::MouseScrolled:
+        {
+            auto& scrollEvent = static_cast<const MouseScrolledEvent&>(event);
+            const float zoomFactor = std::exp(scrollEvent.getOffsetY() * 0.12f);
+            // Zoom around the viewport center so the canvas point under the
+            // cursor stays fixed.
+            const glm::vec2 center(_viewportSize.x * 0.5f, _viewportSize.y * 0.5f);
+            const glm::vec2 newPan = center - (center - _canvasPan) * zoomFactor;
+            setCanvasZoom(_canvasZoom * zoomFactor);
+            _canvasPan = newPan;
+        } break;
+        default:
+            break;
+        }
+        return;
     }
 
     // Example event handling (extend as needed):
@@ -396,6 +458,49 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
         _sceneHierarchyPanel.setSelection(nullptr);
         YA_CORE_INFO("No entity picked");
     }
+}
+
+void EditorLayer::pickNode2D(float viewportLocalX, float viewportLocalY)
+{
+    Scene* scene = getViewportInteractionScene();
+    if (!scene) {
+        return;
+    }
+
+    glm::vec2 canvasPoint{viewportLocalX, viewportLocalY};
+    if (!viewportToCanvas(canvasPoint, canvasPoint)) {
+        _sceneHierarchyPanel.setSelectedNode2D(nullptr);
+        return;
+    }
+
+    // Topmost-first hit test (same ordering as UISceneRenderer): collect all
+    // Node2D under the scene root, sort by zOrder ascending, test reversed.
+    std::vector<Node2D*> nodes;
+    std::function<void(Node*)> collect = [&](Node* node) {
+        if (!node) {
+            return;
+        }
+        for (Node* child : node->getChildren()) {
+            if (auto* node2D = dynamic_cast<Node2D*>(child)) {
+                nodes.push_back(node2D);
+            }
+            collect(child);
+        }
+    };
+    collect(scene->getRootNode());
+    std::stable_sort(nodes.begin(), nodes.end(), [](const Node2D* a, const Node2D* b) {
+        return a->_zOrder < b->_zOrder;
+    });
+
+    for (auto it = nodes.rbegin(); it != nodes.rend(); ++it) {
+        if ((*it)->hitTest(canvasPoint)) {
+            _sceneHierarchyPanel.setSelectedNode2D(*it);
+            YA_CORE_INFO("Picked Node2D: {}", (*it)->getName());
+            return;
+        }
+    }
+
+    _sceneHierarchyPanel.setSelectedNode2D(nullptr);
 }
 
 void EditorLayer::focusCameraOnSelection()
