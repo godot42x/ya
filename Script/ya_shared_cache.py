@@ -285,6 +285,22 @@ def migrate_legacy_payloads() -> None:
         for heavy in HEAVY_SUBMODULES:
             src = REPO_ROOT / heavy
             if src.exists() and not src.is_symlink():
+                if (src / ".git").exists():
+                    try:
+                        result = subprocess.run(
+                            ["git", "-C", str(src), "status", "--porcelain"],
+                            capture_output=True,
+                            text=True,
+                            check=False,
+                        )
+                    except OSError:
+                        result = None
+                    if result is not None and result.stdout.strip():
+                        print(
+                            f"   warn: {src} has local changes; leaving the real "
+                            "checkout alone"
+                        )
+                        continue
                 _replace_with_move(src, main / heavy)
 
     # v2 left skip-worktree set in the main project's index; clear it so the
