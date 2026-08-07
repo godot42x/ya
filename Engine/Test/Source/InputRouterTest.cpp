@@ -70,6 +70,71 @@ TEST(GameInputNodeTest, ForwardsMouseDeltaFromRoutedEvents)
     EXPECT_FLOAT_EQ(delta.y, 2.0f);
 }
 
+TEST(GameInputNodeTest, UIOnlyBlocksGameInput)
+{
+    InputManager inputManager;
+    GameInputNode root(inputManager);
+    App          app;
+    InputRouter  router;
+    router.setApp(app);
+    FInputRouteContext context{.app = app, .router = router};
+    app.setInputMode(EInputMode::UIOnly);
+
+    KeyPressedEvent pressed;
+    pressed._keyCode = EKey::K_W;
+    pressed._mod     = 0;
+
+    root.route(context, pressed);
+    EXPECT_FALSE(inputManager.isKeyPressed(EKey::K_W));
+}
+
+TEST(GameInputNodeTest, GameOnlyStillFeedsGame)
+{
+    InputManager inputManager;
+    GameInputNode root(inputManager);
+    App          app;
+    InputRouter  router;
+    router.setApp(app);
+    FInputRouteContext context{.app = app, .router = router};
+    app.setInputMode(EInputMode::GameOnly);
+
+    KeyPressedEvent pressed;
+    pressed._keyCode = EKey::K_W;
+    pressed._mod     = 0;
+
+    root.route(context, pressed);
+    EXPECT_TRUE(inputManager.isKeyPressed(EKey::K_W));
+}
+
+TEST(InputModeStackTest, PushPopRestoresPreviousMode)
+{
+    App app;
+    EXPECT_EQ(app.getInputMode(), EInputMode::GameAndUI);
+
+    app.pushInputMode(EInputMode::UIOnly);
+    EXPECT_EQ(app.getInputMode(), EInputMode::UIOnly);
+
+    app.pushInputMode(EInputMode::GameOnly);
+    EXPECT_EQ(app.getInputMode(), EInputMode::GameOnly);
+
+    app.popInputMode();
+    EXPECT_EQ(app.getInputMode(), EInputMode::UIOnly);
+
+    app.popInputMode();
+    EXPECT_EQ(app.getInputMode(), EInputMode::GameAndUI);
+}
+
+TEST(InputModeStackTest, HardSetClearsStack)
+{
+    App app;
+    app.pushInputMode(EInputMode::UIOnly);
+    app.setInputMode(EInputMode::GameAndUI);
+
+    // The stack was cleared by the hard set: popping is a no-op.
+    app.popInputMode();
+    EXPECT_EQ(app.getInputMode(), EInputMode::GameAndUI);
+}
+
 TEST(InputRouterTest, AppliesCaptureReplyAndCancelsOnRelease)
 {
     RecordingInputNode root;

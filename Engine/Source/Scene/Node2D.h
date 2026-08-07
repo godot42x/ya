@@ -48,6 +48,18 @@ enum class EUIAlignV : uint8_t
     Bottom,
 };
 
+/// Per-node game-UI event routing policy (Godot mouse_filter semantics):
+/// Pass nodes respond but never block; Stop nodes consume exclusively;
+/// Ignore nodes are skipped entirely (including editor picking).
+enum class EUIHitFilter : uint8_t
+{
+    Pass,   // (default) hit-testable, responds, but the event keeps flowing
+            // to lower nodes and the game (panels, text, canvas).
+    Stop,   // hit = exclusively consume: neither lower UI nodes nor the game
+            // receive the event (buttons).
+    Ignore, // not hit-testable at all (decorative overlays).
+};
+
 struct ENGINE_API Node2D : public Node
 {
     YA_REFLECT_BEGIN(Node2D, Node)
@@ -58,6 +70,7 @@ struct ENGINE_API Node2D : public Node
     YA_REFLECT_FIELD(_anchorMin)
     YA_REFLECT_FIELD(_anchorMax)
     YA_REFLECT_FIELD(_pivot)
+    YA_REFLECT_FIELD(_hitFilter)
     YA_REFLECT_END()
 
     glm::vec2 _position = {0.0f, 0.0f}; // Offset (px) from the anchor point within the parent rect
@@ -70,6 +83,7 @@ struct ENGINE_API Node2D : public Node
     glm::vec2 _anchorMin = {0.0f, 0.0f}; // Fraction of the parent rect (clamped 0..1)
     glm::vec2 _anchorMax = {0.0f, 0.0f};
     glm::vec2 _pivot     = {0.5f, 0.5f}; // Reserved; unused until rotation/scale exists
+    EUIHitFilter _hitFilter = EUIHitFilter::Pass;
 
     // Layout cache: final rect in canvas logical space, computed by the layout
     // pass each frame. Not reflected / serialized.
@@ -238,7 +252,10 @@ struct ENGINE_API UIButtonNode : public Node2D
     bool                   _bPressed = false;
     std::function<void()>  _onClick;
 
-    explicit UIButtonNode(std::string name = "Button") : Node2D(std::move(name)) {}
+    explicit UIButtonNode(std::string name = "Button") : Node2D(std::move(name))
+    {
+        _hitFilter = EUIHitFilter::Stop;
+    }
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIButtonNode>; }
     [[nodiscard]] const char*  getUITypeName() const override { return "UIButtonNode"; }

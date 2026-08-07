@@ -5,18 +5,17 @@
 namespace ya
 {
 
+/// Runtime input mode: who receives input and the cursor baseline. Owned by
+/// App (runtime layer); game code toggles it via App::setInputMode /
+/// pushInputMode / popInputMode (script API: input.*).
 enum class EInputMode : uint8_t
 {
-    Editor,     // Editor tools receive input (Stopped state)
-    Game,       // Game receives all input, editor tools do not respond
-    GameAndUI,  // Game receives input, but editor UI overlays can also receive (e.g. pause menu)
-};
-
-enum class EMouseCapture : uint8_t
-{
-    None,            // Cursor visible, free to move in/out of viewport
-    Captured,        // Cursor hidden + relative mode, all mouse events go to game
-    CaptureOnClick,  // Wait for viewport click, then auto-capture
+    GameAndUI, // (default) game-UI picking first; a Stop hit consumes
+               // exclusively, misses / Pass hits fall through to the game.
+               // Cursor visible.
+    GameOnly,  // game-UI picking disabled; everything goes to the game.
+               // Cursor hidden.
+    UIOnly,    // game input disabled; UI receives everything. Cursor visible.
 };
 
 } // namespace ya

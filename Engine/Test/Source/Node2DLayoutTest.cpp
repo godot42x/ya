@@ -227,15 +227,86 @@ TEST(Node2DLayoutTest, MouseMovedClearsHoverWhenLeavingButton)
     button->_size     = {80.0f, 32.0f};
     layoutRoots(scene.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
 
-    EXPECT_TRUE(UISceneRenderer::handleEvent(MouseMoveEvent(120.0f, 110.0f),
-                                             makeUICtx(120.0f, 110.0f),
-                                             scene.getRootNode()));
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseMoveEvent(120.0f, 110.0f),
+                                           makeUICtx(120.0f, 110.0f),
+                                           scene.getRootNode()),
+              EUIRouteResult::HandledExclusive);
     EXPECT_TRUE(button->_bHovered);
 
-    EXPECT_FALSE(UISceneRenderer::handleEvent(MouseMoveEvent(10.0f, 10.0f),
-                                              makeUICtx(10.0f, 10.0f),
-                                              scene.getRootNode()));
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseMoveEvent(10.0f, 10.0f),
+                                           makeUICtx(10.0f, 10.0f),
+                                           scene.getRootNode()),
+              EUIRouteResult::NotHandled);
     EXPECT_FALSE(button->_bHovered);
+}
+
+// ============================================================================
+// Hit-filter routing (Godot mouse_filter semantics).
+// ============================================================================
+
+TEST(Node2DLayoutTest, PassHitRespondsButFallsThrough)
+{
+    Scene scene("FilterTest");
+    auto* button = scene.createUINode<UIButtonNode>("Btn");
+    button->_position  = {100.0f, 100.0f};
+    button->_size      = {80.0f, 32.0f};
+    button->_hitFilter = EUIHitFilter::Pass;
+
+    int clickCount = 0;
+    button->_onClick = [&] { ++clickCount; };
+    layoutRoots(scene.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
+
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0),
+                                           makeUICtx(120.0f, 110.0f),
+                                           scene.getRootNode()),
+              EUIRouteResult::HandledPass);
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonReleasedEvent(0),
+                                           makeUICtx(120.0f, 110.0f),
+                                           scene.getRootNode()),
+              EUIRouteResult::HandledPass);
+    EXPECT_EQ(clickCount, 1);
+}
+
+TEST(Node2DLayoutTest, IgnoreNodeIsNotHitTestedButChildrenStillAre)
+{
+    Scene scene("FilterTest");
+    auto* panel = scene.createUINode<UIPanelNode>("Overlay");
+    panel->_position  = {0.0f, 0.0f};
+    panel->_size      = {400.0f, 300.0f};
+    panel->_hitFilter = EUIHitFilter::Ignore;
+
+    auto* button = scene.createUINode<UIButtonNode>("Btn", panel);
+    button->_position = {100.0f, 100.0f};
+    button->_size     = {80.0f, 32.0f};
+    layoutRoots(scene.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
+
+    // The Ignore overlay does not block, and its Stop child still receives hits.
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0),
+                                           makeUICtx(120.0f, 110.0f),
+                                           scene.getRootNode()),
+              EUIRouteResult::HandledExclusive);
+    EXPECT_TRUE(button->_bPressed);
+}
+
+TEST(Node2DLayoutTest, PassOverlayDoesNotBlockStopChild)
+{
+    Scene scene("FilterTest");
+    auto* panel = scene.createUINode<UIPanelNode>("Overlay");
+    panel->_position = {0.0f, 0.0f};
+    panel->_size     = {400.0f, 300.0f}; // Pass by default (panel)
+
+    auto* button = scene.createUINode<UIButtonNode>("Btn", panel);
+    button->_position = {100.0f, 100.0f};
+    button->_size     = {80.0f, 32.0f};
+    layoutRoots(scene.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
+
+    // Topmost-first: panel is visited first but a passive Pass node does not
+    // respond, so the walk continues to the button (Stop, exclusive).
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0),
+                                           makeUICtx(120.0f, 110.0f),
+                                           scene.getRootNode()),
+              EUIRouteResult::HandledExclusive);
+    EXPECT_TRUE(button->_bPressed);
 }
 
 } // namespace ya

@@ -4,6 +4,7 @@
 #include "Core/Base.h"
 #include "Core/Delegate.h"
 #include "Core/Input/InputManager.h"
+#include "Core/Input/InputMode.h"
 #include "Core/Input/InputRouter.h"
 #include "Core/MessageBus.h"
 #include "Core/Module/Module.h"
@@ -28,6 +29,7 @@ extern ENGINE_API ClearValue colorClearValue;
 extern ENGINE_API ClearValue depthClearValue;
 
 struct Scene;
+enum class EUIRouteResult : uint8_t;
 struct SceneManager;
 struct Entity;
 struct ICommandBuffer;
@@ -91,6 +93,8 @@ struct ENGINE_API App
     InputRouter  inputRouter;
     TaskManager  taskManager;
 
+    EInputMode                _inputMode = EInputMode::GameAndUI;
+    std::vector<EInputMode>   _inputModeStack;
     AppMode   _appMode      = AppMode::Control;
     glm::vec2 _lastMousePos = {0, 0};
 
@@ -189,6 +193,18 @@ struct ENGINE_API App
     /// Broadcast after every app mode transition (Runtime / Simulation / Stopped).
     MulticastDelegate<void(AppState)> onAppStateChanged;
     bool                   isPaused() const { return _bPause; }
+
+    // === Input mode (game / UI routing + cursor baseline) ===
+    [[nodiscard]] EInputMode getInputMode() const { return _inputMode; }
+    /// Hard-set the input mode and clear the mode stack.
+    void setInputMode(EInputMode mode);
+    /// Push a mode (e.g. open a pause menu with UIOnly); pop restores the
+    /// previous mode, so "forgot to restore" bugs cannot happen.
+    void pushInputMode(EInputMode mode);
+    void popInputMode();
+    /// Dispatch the event to the game UI (Node2D) tree under the current
+    /// mode. Returns NotHandled when UI is disabled / nothing was hit.
+    [[nodiscard]] EUIRouteResult dispatchUIInputEvent(const Event& event);
 
     void startRuntime();
     void startSimulation();

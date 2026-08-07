@@ -52,19 +52,23 @@ TEST(UISceneRendererTest, ButtonClickInsideConsumesAndFires)
     layoutRoots(scene.getRootNode(), {.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}});
 
     // Move outside: not consumed, no hover.
-    EXPECT_FALSE(UISceneRenderer::handleEvent(MouseMoveEvent(10.0f, 10.0f), makeUICtx(10.0f, 10.0f), scene.getRootNode()));
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseMoveEvent(10.0f, 10.0f), makeUICtx(10.0f, 10.0f), scene.getRootNode()),
+              EUIRouteResult::NotHandled);
     EXPECT_FALSE(button->_bHovered);
 
     // Move onto the button: consumed + hovered.
-    EXPECT_TRUE(UISceneRenderer::handleEvent(MouseMoveEvent(120.0f, 110.0f), makeUICtx(120.0f, 110.0f), scene.getRootNode()));
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseMoveEvent(120.0f, 110.0f), makeUICtx(120.0f, 110.0f), scene.getRootNode()),
+              EUIRouteResult::HandledExclusive);
     EXPECT_TRUE(button->_bHovered);
 
     // Press inside: consumed + pressed.
-    EXPECT_TRUE(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0), makeUICtx(120.0f, 110.0f), scene.getRootNode()));
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0), makeUICtx(120.0f, 110.0f), scene.getRootNode()),
+              EUIRouteResult::HandledExclusive);
     EXPECT_TRUE(button->_bPressed);
 
     // Release inside: consumed + click fired.
-    EXPECT_TRUE(UISceneRenderer::handleEvent(MouseButtonReleasedEvent(0), makeUICtx(120.0f, 110.0f), scene.getRootNode()));
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonReleasedEvent(0), makeUICtx(120.0f, 110.0f), scene.getRootNode()),
+              EUIRouteResult::HandledExclusive);
     EXPECT_FALSE(button->_bPressed);
     EXPECT_EQ(clickCount, 1);
 }
@@ -81,12 +85,15 @@ TEST(UISceneRendererTest, PressOutsideDoesNotArmButton)
     layoutRoots(scene.getRootNode(), {.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}});
 
     // Press outside: not consumed and the button is not armed.
-    EXPECT_FALSE(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0), makeUICtx(10.0f, 10.0f), scene.getRootNode()));
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0), makeUICtx(10.0f, 10.0f), scene.getRootNode()),
+              EUIRouteResult::NotHandled);
     EXPECT_FALSE(button->_bPressed);
 
     // Move onto the button then release: no click (was never pressed).
-    EXPECT_TRUE(UISceneRenderer::handleEvent(MouseMoveEvent(120.0f, 110.0f), makeUICtx(120.0f, 110.0f), scene.getRootNode()));
-    EXPECT_TRUE(UISceneRenderer::handleEvent(MouseButtonReleasedEvent(0), makeUICtx(120.0f, 110.0f), scene.getRootNode()));
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseMoveEvent(120.0f, 110.0f), makeUICtx(120.0f, 110.0f), scene.getRootNode()),
+              EUIRouteResult::HandledExclusive);
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonReleasedEvent(0), makeUICtx(120.0f, 110.0f), scene.getRootNode()),
+              EUIRouteResult::HandledExclusive);
     EXPECT_EQ(clickCount, 0);
 }
 
@@ -99,7 +106,8 @@ TEST(UISceneRendererTest, InvisibleNodeDoesNotConsume)
     button->_visible  = false;
     layoutRoots(scene.getRootNode(), {.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}});
 
-    EXPECT_FALSE(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0), makeUICtx(120.0f, 110.0f), scene.getRootNode()));
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0), makeUICtx(120.0f, 110.0f), scene.getRootNode()),
+              EUIRouteResult::NotHandled);
     EXPECT_FALSE(button->_bPressed);
 }
 
@@ -117,7 +125,8 @@ TEST(UISceneRendererTest, TopmostZOrderConsumesFirst)
     front->_zOrder   = 10;
     layoutRoots(scene.getRootNode(), {.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}});
 
-    EXPECT_TRUE(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0), makeUICtx(120.0f, 110.0f), scene.getRootNode()));
+    EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0), makeUICtx(120.0f, 110.0f), scene.getRootNode()),
+              EUIRouteResult::HandledExclusive);
     EXPECT_FALSE(behind->_bPressed);
     EXPECT_TRUE(front->_bPressed);
 }

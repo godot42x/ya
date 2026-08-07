@@ -131,12 +131,62 @@ bool App::dispatchInputFallbackEvent(const Event& event)
         }
     }
 
+    // Game-UI (Node2D) picking no longer lives here: it is dispatched by the
+    // input node chain (GameInputNode / EditorInputNode) so that an exclusive
+    // UI hit can keep the event away from gameplay.
+    return false;
+}
+
+void App::setInputMode(EInputMode mode)
+{
+    _inputModeStack.clear();
+    _inputMode = mode;
+    inputRouter.applyInputMode(mode);
+}
+
+void App::pushInputMode(EInputMode mode)
+{
+    _inputModeStack.push_back(_inputMode);
+    _inputMode = mode;
+    inputRouter.applyInputMode(mode);
+}
+
+void App::popInputMode()
+{
+    if (_inputModeStack.empty()) {
+        YA_CORE_WARN("App::popInputMode: mode stack is empty");
+        return;
+    }
+    _inputMode = _inputModeStack.back();
+    _inputModeStack.pop_back();
+    inputRouter.applyInputMode(_inputMode);
+}
+
+EUIRouteResult App::dispatchUIInputEvent(const Event& event)
+{
+    if (isStopped() || _inputMode == EInputMode::GameOnly) {
+        return EUIRouteResult::NotHandled;
+    }
+
+    const EEvent::T eventType = event.getEventType();
+    if (eventType != EEvent::MouseButtonPressed &&
+        eventType != EEvent::MouseButtonReleased &&
+        eventType != EEvent::MouseMoved) {
+        return EUIRouteResult::NotHandled;
+    }
+
+    // While the game holds the mouse (relative capture) it owns all input:
+    // game-UI picking is suspended, matching the editor layout lock.
+    if (inputRouter.isMouseCaptured()) {
+        return EUIRouteResult::NotHandled;
+    }
+
     Rect2D viewportRect = _renderState && _renderState->runtime
                             ? _renderState->runtime->getViewportRect()
                             : Rect2D{};
     const bool bInViewport = FUIHelper::isPointInRect(_lastMousePos, viewportRect.pos, viewportRect.extent);
     if (!bInViewport) {
-        return false;
+        return EUIRouteResult::NotHandled;
     }
 
     UIAppCtx ctx{
@@ -144,8 +194,6 @@ bool App::dispatchInputFallbackEvent(const Event& event)
         .bInViewport  = bInViewport,
         .viewportRect = viewportRect,
     };
-    // Game UI (Node2D subtree of the active scene) consumes viewport events on
-    // hit; misses fall through to gameplay.
     Scene* scene = getSceneServices().getActiveScene();
     return UISceneRenderer::handleEvent(event, ctx, scene ? scene->getRootNode() : nullptr);
 }

@@ -5,6 +5,7 @@
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
+#include "Runtime/Application/App.h"
 #include "Scene/Node2D.h"
 #include "Scene/Scene.h"
 
@@ -485,6 +486,76 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
             Node*  node  = requireNodeByPath(scene, args);
             scene.destroyNode(node);
             return Json{{"destroyed", true}};
+        });
+
+    // ========================================================================
+    // Input mode (game / UI routing + cursor baseline)
+    // ========================================================================
+    auto& api = registry;
+    const auto parseInputMode = [](const std::string& mode) -> EInputMode {
+        if (mode == "gameandui") {
+            return EInputMode::GameAndUI;
+        }
+        if (mode == "gameonly") {
+            return EInputMode::GameOnly;
+        }
+        if (mode == "uionly") {
+            return EInputMode::UIOnly;
+        }
+        throw Error("input mode must be 'gameandui' | 'gameonly' | 'uionly'");
+    };
+    const auto modeToString = [](EInputMode mode) -> std::string {
+        switch (mode) {
+            case EInputMode::GameAndUI: return "gameandui";
+            case EInputMode::GameOnly: return "gameonly";
+            case EInputMode::UIOnly: return "uionly";
+        }
+        return "gameandui";
+    };
+    const auto requireApp = []() -> App& {
+        App* app = App::get();
+        if (!app) {
+            throw Error("input.*: app not available");
+        }
+        return *app;
+    };
+
+    api.registerFunction(
+        "input.set_mode",
+        "Hard-sets the runtime input mode ('gameandui'|'gameonly'|'uionly') and clears the mode stack.",
+        Json{{"mode", {{"type", "string"}}}},
+        [&](const Json& args) -> Json {
+            App& app = requireApp();
+            app.setInputMode(parseInputMode(args.value("mode", "gameandui")));
+            return Json{{"mode", modeToString(app.getInputMode())}};
+        });
+
+    api.registerFunction(
+        "input.push_mode",
+        "Pushes a runtime input mode (e.g. 'uionly' for a pause menu); pop restores the previous one.",
+        Json{{"mode", {{"type", "string"}}}},
+        [&](const Json& args) -> Json {
+            App& app = requireApp();
+            app.pushInputMode(parseInputMode(args.value("mode", "gameandui")));
+            return Json{{"mode", modeToString(app.getInputMode())}};
+        });
+
+    api.registerFunction(
+        "input.pop_mode",
+        "Restores the input mode active before the last push.",
+        Json::object(),
+        [&](const Json&) -> Json {
+            App& app = requireApp();
+            app.popInputMode();
+            return Json{{"mode", modeToString(app.getInputMode())}};
+        });
+
+    api.registerFunction(
+        "input.get_mode",
+        "Returns the current runtime input mode: {mode: 'gameandui'|'gameonly'|'uionly'}.",
+        Json::object(),
+        [&](const Json&) -> Json {
+            return Json{{"mode", modeToString(requireApp().getInputMode())}};
         });
 }
 

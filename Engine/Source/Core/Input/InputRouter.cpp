@@ -2,6 +2,7 @@
 
 #include "Core/Input/InputManager.h"
 #include "Core/Log.h"
+#include "Runtime/Rendering/Common/UISceneRenderer.h"
 #include "Runtime/Application/App.h"
 
 namespace ya
@@ -19,7 +20,25 @@ bool isInputEvent(const FInputEvent& event)
 
 FInputReply GameInputNode::route(FInputRouteContext& context, const FInputEvent& event)
 {
-    if (_inputManager && isInputEvent(event)) {
+    if (!isInputEvent(event)) {
+        return {};
+    }
+
+    // Game-UI picking runs before the game: GameAndUI dispatches UI first and
+    // an exclusive Stop hit keeps the event away from gameplay; GameOnly
+    // disables UI; UIOnly disables gameplay entirely.
+    const EInputMode  mode     = context.app.getInputMode();
+    const EUIRouteResult uiResult =
+        mode == EInputMode::GameOnly ? EUIRouteResult::NotHandled
+                                     : context.app.dispatchUIInputEvent(event);
+    if (mode == EInputMode::UIOnly) {
+        return FInputReply{.handled = uiResult != EUIRouteResult::NotHandled};
+    }
+    if (uiResult == EUIRouteResult::HandledExclusive) {
+        return FInputReply{.handled = true};
+    }
+
+    if (_inputManager) {
         _inputManager->processEvent(event);
     }
     return FInputReply{
@@ -127,6 +146,22 @@ void InputRouter::cancelInput(EInputCancelReason reason)
     if (IInputNode* node = getActiveNode(); node && _app) {
         FInputRouteContext context = makeRouteContext();
         node->cancelInput(context, reason);
+    }
+}
+
+void InputRouter::applyInputMode(EInputMode mode)
+{
+    // A mode switch takes the mouse away from the game: release any active
+    // capture, then apply the mode's cursor baseline (GameOnly hides).
+    applyPointerCapture({});
+    if (!_window) {
+        return;
+    }
+    if (mode == EInputMode::GameOnly) {
+        SDL_HideCursor();
+    }
+    else {
+        SDL_ShowCursor();
     }
 }
 

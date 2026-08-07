@@ -1,6 +1,7 @@
 #include "Editor/Input/EditorInputNode.h"
 
 #include "Editor/EditorLayer.h"
+#include "Runtime/Rendering/Common/UISceneRenderer.h"
 #include "Runtime/Application/App.h"
 #include "Runtime/GUI/GuiSystem.h"
 
@@ -153,6 +154,23 @@ FInputReply routeGameplayViewportInput(
     return {};
 }
 
+FInputReply routeGameUIInput(App& app, EditorLayer& layer, const FInputEvent& event)
+{
+    // The 2D workspace is authoring-only: game UI stays inert so canvas
+    // editing tools own every viewport event (Godot-style 2D editor).
+    if (app.isStopped() || layer.isViewportMode2D()) {
+        return {};
+    }
+
+    // Game UI (Node2D) picking runs before gameplay: an exclusive Stop hit
+    // keeps the event away from the game (mode semantics live in App).
+    const EUIRouteResult result = app.dispatchUIInputEvent(event);
+    if (result == EUIRouteResult::NotHandled) {
+        return {};
+    }
+    return FInputReply{.handled = true};
+}
+
 FInputReply routeModulePostInput(FInputRouteContext& context, const FInputEvent& event)
 {
     return FInputReply{
@@ -192,6 +210,11 @@ FInputReply EditorInputNode::route(FInputRouteContext& context, const FInputEven
     }
 
     reply = routeCapturedViewportInput(*_app, *_layer, context, event);
+    if (shouldStopRouting(reply)) {
+        return reply;
+    }
+
+    reply = routeGameUIInput(*_app, *_layer, event);
     if (shouldStopRouting(reply)) {
         return reply;
     }

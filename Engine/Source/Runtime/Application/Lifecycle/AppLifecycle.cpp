@@ -638,6 +638,7 @@ void AppLifecycle::startRuntime(App& app)
 
     const AppState previousState = app._appState;
     app._appState = AppState::Runtime;
+    app.setInputMode(EInputMode::GameAndUI); // fresh session defaults
     app.onAppStateChanged.broadcast(app._appState);
     app.notifyModulesAfterAppStateChange(previousState);
 
@@ -663,6 +664,7 @@ void AppLifecycle::startSimulation(App& app)
 
     const AppState previousState = app._appState;
     app._appState = AppState::Simulation;
+    app.setInputMode(EInputMode::GameAndUI);
     app.onAppStateChanged.broadcast(app._appState);
     app.notifyModulesAfterAppStateChange(previousState);
 

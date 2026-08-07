@@ -58,32 +58,54 @@ void resetHoverSubtree(Node* node)
     }
 }
 
-/// Topmost-first hit test: children (zOrder descending) before self.
-bool hitTestSubtree(Node* node, const Event& event, const UIEventContext& ctx)
+/// Topmost-first hit test: children (zOrder descending) before self. Ignore
+/// nodes skip their own hit test but still pass the event to their children;
+/// Stop hits short-circuit with HandledExclusive; Pass hits accumulate a
+/// HandledPass result while the walk continues.
+EUIRouteResult hitTestSubtree(Node* node, const Event& event, const UIEventContext& ctx)
 {
     if (!node) {
-        return false;
+        return EUIRouteResult::NotHandled;
     }
     if (node->is2D()) {
         auto* node2D = static_cast<Node2D*>(node);
         if (!node2D->_visible) {
-            return false; // Subtree cull, matching paint.
+            return EUIRouteResult::NotHandled; // Subtree cull, matching paint.
         }
+
+        EUIRouteResult result = EUIRouteResult::NotHandled;
         const auto children = childrenInPaintOrder(node);
         for (auto it = children.rbegin(); it != children.rend(); ++it) {
-            if (hitTestSubtree(*it, event, ctx)) {
-                return true;
+            const EUIRouteResult childResult = hitTestSubtree(*it, event, ctx);
+            if (childResult == EUIRouteResult::HandledExclusive) {
+                return EUIRouteResult::HandledExclusive;
+            }
+            if (childResult == EUIRouteResult::HandledPass) {
+                result = EUIRouteResult::HandledPass;
             }
         }
-        return node2D->handleInputEvent(event, ctx);
+
+        if (node2D->_hitFilter == EUIHitFilter::Ignore ||
+            !node2D->hitTestLayoutRect(ctx.canvasPoint) ||
+            !node2D->handleInputEvent(event, ctx)) {
+            return result;
+        }
+        return node2D->_hitFilter == EUIHitFilter::Stop ? EUIRouteResult::HandledExclusive
+                                                        : EUIRouteResult::HandledPass;
     }
+
+    EUIRouteResult result = EUIRouteResult::NotHandled;
     const auto children = childrenInPaintOrder(node);
     for (auto it = children.rbegin(); it != children.rend(); ++it) {
-        if (hitTestSubtree(*it, event, ctx)) {
-            return true;
+        const EUIRouteResult childResult = hitTestSubtree(*it, event, ctx);
+        if (childResult == EUIRouteResult::HandledExclusive) {
+            return EUIRouteResult::HandledExclusive;
+        }
+        if (childResult == EUIRouteResult::HandledPass) {
+            result = EUIRouteResult::HandledPass;
         }
     }
-    return false;
+    return result;
 }
 
 /// Topmost-first pick of any visible Node2D under the canvas point.
@@ -97,13 +119,17 @@ Node2D* pickSubtree(Node* node, const UIEventContext& ctx)
         if (!node2D->_visible) {
             return nullptr;
         }
+        const bool bSelfSkipped = node2D->_hitFilter == EUIHitFilter::Ignore;
         const auto children = childrenInPaintOrder(node);
         for (auto it = children.rbegin(); it != children.rend(); ++it) {
             if (Node2D* hit = pickSubtree(*it, ctx)) {
                 return hit;
             }
         }
-        return node2D->hitTestLayoutRect(ctx.canvasPoint) ? node2D : nullptr;
+        if (!bSelfSkipped && node2D->hitTestLayoutRect(ctx.canvasPoint)) {
+            return node2D;
+        }
+        return nullptr;
     }
     const auto children = childrenInPaintOrder(node);
     for (auto it = children.rbegin(); it != children.rend(); ++it) {
@@ -137,17 +163,17 @@ void UISceneRenderer::render(Node* sceneRoot,
     renderSubtree(sceneRoot, canvasRect, ctx);
 }
 
-bool UISceneRenderer::handleEvent(const Event& event, const UIAppCtx& ctx, Node* sceneRoot)
+EUIRouteResult UISceneRenderer::handleEvent(const Event& event, const UIAppCtx& ctx, Node* sceneRoot)
 {
     if (!sceneRoot || !ctx.bInViewport) {
-        return false;
+        return EUIRouteResult::NotHandled;
     }
 
     const EEvent::T eventType = event.getEventType();
     if (eventType != EEvent::MouseButtonPressed &&
         eventType != EEvent::MouseButtonReleased &&
         eventType != EEvent::MouseMoved) {
-        return false;
+        return EUIRouteResult::NotHandled;
     }
 
     // Viewport-local point in canvas logical space (uiScale conversion is a

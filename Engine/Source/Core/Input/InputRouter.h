@@ -2,6 +2,7 @@
 
 #include "Core/Api.h"
 #include "Core/Event.h"
+#include "Core/Input/InputMode.h"
 #include "Render/RenderDefines.h"
 
 #include <SDL3/SDL.h>
@@ -138,6 +139,9 @@ class ENGINE_API InputRouter
     [[nodiscard]] bool routeEvent(const FInputEvent& event);
     [[nodiscard]] bool routeUnhandledInput(const FInputEvent& event);
     void               cancelInput(EInputCancelReason reason);
+    /// Apply the cursor baseline of an input-mode switch: releases any active
+    /// game capture, then shows/hides the cursor per mode.
+    void applyInputMode(EInputMode mode);
 
     [[nodiscard]] bool isMouseCaptured() const { return _pointerCapture.isCaptured(); }
 
