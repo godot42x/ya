@@ -826,13 +826,22 @@ class EditorModule final : public IModule, public IEditorAutomationControl
                 uiPreviewRoot = scene->getRootNode();
             }
         }
+        // 2D mode disables the world scene graph, so the runtime pipeline never
+        // publishes viewport resources and getViewportExtent() stays 0x0;
+        // size the canvas target from the editor panel instead (same fallback
+        // guards a degenerate pipeline extent in 3D).
+        Extent2D canvasTargetExtent = renderRuntime->getViewportExtent();
+        if (_layer->isViewportMode2D() ||
+            canvasTargetExtent.width == 0 || canvasTargetExtent.height == 0) {
+            canvasTargetExtent = Extent2D::fromVec2(_layer->getViewportSize());
+        }
         _viewportCompositor.compose(*render,
                                     commandBuffer,
                                     snapshot,
                                     *_layer,
                                     app.getRenderServices().getRenderFrameState(),
                                     uiPreviewRoot,
-                                    renderRuntime->getViewportExtent());
+                                    canvasTargetExtent);
         // Keep the last valid frame instead of clobbering the display with a
         // transiently null output (startup / mode-switch / resize gaps).
         if (auto output = _viewportCompositor.getOutputImage();
