@@ -20,7 +20,6 @@ namespace ya
 
 struct ShadowStage;
 struct PostProcessingStage;
-struct Node;
 
 struct DeferredFrameGraphPassContext
 {
@@ -39,7 +38,6 @@ struct DeferredFrameGraphPassContext
     bool                                     bReverseViewportY = true;
     bool                                     bPostprocessOutputIsSRGB = false;
     std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
-    Node*                                    uiSceneRoot = nullptr; // Node2D UI subtree of the active scene
 
     ShadowStage*          shadowStage = nullptr;
     GBufferStage&         gBufferStage;
@@ -162,7 +160,6 @@ void appendBloom(DeferredFrameGraphPassContext& context);
 void appendForwardTransparent(DeferredFrameGraphPassContext& context);
 void appendEntityId(DeferredFrameGraphPassContext& context);
 void appendOverlay(DeferredFrameGraphPassContext& context);
-void appendUI(DeferredFrameGraphPassContext& context);
 void appendPostprocess(DeferredFrameGraphPassContext& context);
 
 } // namespace deferred_frame_graph_passes

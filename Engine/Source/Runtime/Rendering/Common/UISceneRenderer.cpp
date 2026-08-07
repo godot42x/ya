@@ -37,18 +37,19 @@ std::vector<Node2D*> collectSorted(Node* sceneRoot)
     return nodes;
 }
 
-void drawNode2D(Node2D* node)
+void drawNode2D(Node2D* node, const glm::vec2& uiScale)
 {
     if (!node || !node->_visible) {
         return;
     }
 
-    const glm::vec2 pos = node->getScreenPosition();
+    const glm::vec2 pos = node->getScreenPosition() * uiScale;
+    const glm::vec2 size = node->_size * uiScale;
     const glm::vec3 screenPos(pos, 0.0f);
 
     if (auto* panel = dynamic_cast<UIPanelNode*>(node)) {
         Texture* texture = panel->_image.isLoaded() ? panel->_image.getShared().get() : nullptr;
-        Render2D::makeSprite(screenPos, panel->_size, texture, panel->_color);
+        Render2D::makeSprite(screenPos, size, texture, panel->_color);
         return;
     }
 
@@ -60,17 +61,17 @@ void drawNode2D(Node2D* node)
         glm::vec2 drawPos = pos;
         const float textWidth = font->measureText(text->_text);
         if (text->_hAlign == EUIAlignH::Center) {
-            drawPos.x += (text->_size.x - textWidth) * 0.5f;
+            drawPos.x += (size.x - textWidth * uiScale.x) * 0.5f;
         }
         else if (text->_hAlign == EUIAlignH::Right) {
-            drawPos.x += text->_size.x - textWidth;
+            drawPos.x += size.x - textWidth * uiScale.x;
         }
         // VAlign: approximate with the font line height for v1.
         if (text->_vAlign == EUIAlignV::Center) {
-            drawPos.y += (text->_size.y - font->lineHeight) * 0.5f;
+            drawPos.y += (size.y - font->lineHeight * uiScale.y) * 0.5f;
         }
         else if (text->_vAlign == EUIAlignV::Bottom) {
-            drawPos.y += text->_size.y - font->lineHeight;
+            drawPos.y += size.y - font->lineHeight * uiScale.y;
         }
         Render2D::makeText(text->_text, glm::vec3(drawPos, 0.0f), text->_color, font.get());
         return;
@@ -80,18 +81,18 @@ void drawNode2D(Node2D* node)
         const glm::vec4 color = button->_bPressed
                                     ? button->_pressedColor
                                     : (button->_bHovered ? button->_hoveredColor : button->_normalColor);
-        Render2D::makeSprite(screenPos, button->_size, nullptr, color);
+        Render2D::makeSprite(screenPos, size, nullptr, color);
         return;
     }
 }
 
 } // namespace
 
-void UISceneRenderer::render(Node* sceneRoot)
+void UISceneRenderer::render(Node* sceneRoot, const glm::vec2& uiScale)
 {
     const auto nodes = collectSorted(sceneRoot);
     for (Node2D* node : nodes) {
-        drawNode2D(node);
+        drawNode2D(node, uiScale);
     }
 }
 

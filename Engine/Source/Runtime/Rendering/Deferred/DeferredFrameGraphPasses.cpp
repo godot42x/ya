@@ -587,45 +587,6 @@ void appendOverlay(DeferredFrameGraphPassContext& context)
         });
 }
 
-void appendUI(DeferredFrameGraphPassContext& context)
-{
-    if (!context.uiSceneRoot) {
-        return;
-    }
-
-    const auto color  = context.graphResources.textures.overlayInput;
-    const auto depth  = context.graphResources.textures.gBufferDepth;
-    const auto extent = context.viewportExtent;
-    const auto uiRoot = context.uiSceneRoot;
-
-    context.graph.addPass(
-        "Deferred UI",
-        [color, depth, extent](RGPassBuilder& passBuilder) {
-            passBuilder.declareRaster({
-                .renderArea = {.pos = {0, 0}, .extent = extent.toVec2()},
-                .layerCount = 1,
-                .colors = {{
-                    .color       = color,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-                }},
-                .depth = RGDepthAttachmentDesc{
-                    .depth       = depth,
-                    .loadOp      = EAttachmentLoadOp::Load,
-                    .storeOp     = EAttachmentStoreOp::Store,
-                    .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
-                },
-            });
-        },
-        [uiRoot](RGRenderContext& rgCtx) {
-            const auto viewportExtent = rgCtx.getRasterPassExecutionParams().getRenderExtent();
-            rgCtx.beginDeclaredRasterRendering();
-            recordRenderUIPass(uiRoot, &rgCtx.getCommandBuffer(), viewportExtent);
-            rgCtx.endRendering();
-        });
-}
-
 void appendPostprocess(DeferredFrameGraphPassContext& context)
 {
     const auto postprocessOutput = context.postProcessStage.appendFinalizeGraphPasses(

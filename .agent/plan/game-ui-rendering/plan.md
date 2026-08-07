@@ -170,8 +170,12 @@ Scene::_rootNode（统一 node tree，唯一组织结构）
 
 ### 5.5 编辑器（v1 最小）
 
-- Hierarchy：Node2D 行显示（图标/文本区分 2D），节点级选择通道
-  （复用 folder 时期 `_selectedNode` 模式；单击折叠交互保留）。
+- **视口模式（用户决策 2026-08-07，Godot 风格）**：编辑器视口加 `3D / 2D /
+  Mixed` 切换——`3D`（默认）只渲染 Node3D 世界、跳过 UI pass；`2D` 画布视图只
+  渲染 Node2D（轻量 canvas-only 渲染路径：清屏 + UI pass，不跑 GBuffer/Light）；
+  `Mixed` 仅供 PIE/runtime 使用（2D over 3D 真混合）。运行时始终 Mixed。
+- Hierarchy：Node2D 行显示（图标/文本区分 2D），节点级选择通道（复用 folder
+  时期 `_selectedNode` 模式；单击折叠交互保留）；选中 Node2D 节点自动切 2D 视图。
 - Inspector：Node2D 选中时反射绘制字段（新增轻量节点检查器，不动实体流）。
 - 创建菜单：SceneHierarchy 空白菜单加 "2D" 子菜单（Canvas/Text/Button/Panel）。
 

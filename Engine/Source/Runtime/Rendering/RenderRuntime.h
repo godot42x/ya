@@ -41,6 +41,7 @@ struct Sampler;
 struct EnvironmentLightingComponent;
 struct RenderFrameData;
 struct DebugRenderSystem;
+struct Node;
 
 struct RenderPipelineDebugOutputCatalog
 {
@@ -99,6 +100,10 @@ struct ENGINE_API RenderRuntime : IRenderRuntimeServices
 
         PresentationExtensions     presentationExtensions{};
         RenderPipelineFrameContext pipeline{};
+
+        /// Node2D (UI) subtree of the active scene; composited onto the final
+        /// viewport image after the world graph (graph-external UI pass).
+        Node* uiSceneRoot = nullptr;
     };
 
     App* _app = nullptr;

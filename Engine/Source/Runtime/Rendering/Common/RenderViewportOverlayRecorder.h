@@ -10,13 +10,21 @@ namespace ya
 struct FrameContext;
 struct ICommandBuffer;
 struct Node;
+struct RenderImage;
+struct Extent2D;
 
 void recordRenderViewportOverlayPass(const FrameContext& frameCtx,
                                      const std::shared_ptr<const RenderViewportOverlaySnapshot>& overlaySnapshot,
                                      ICommandBuffer* cmdBuf);
 
-/// Record the game UI (Node2D subtree of the scene tree) into the active
-/// Render2D batch inside a dedicated UI pass.
-void recordRenderUIPass(Node* uiSceneRoot, ICommandBuffer* cmdBuf, const Extent2D& viewportExtent);
+/// Composite the game UI (Node2D subtree of the scene tree) onto the FINAL
+/// viewport image, after the world graph and its post-processing. Runs
+/// graph-external with manual layout transitions, so UI never enters bloom or
+/// tonemapping. UI coordinates are authored in logical viewport pixels and
+/// mapped to the render-target pixels (frame buffer scale).
+void recordUICompositorPass(ICommandBuffer*    cmdBuf,
+                            RenderImage&       target,
+                            const Extent2D&    logicalViewportExtent,
+                            Node*              uiSceneRoot);
 
 } // namespace ya

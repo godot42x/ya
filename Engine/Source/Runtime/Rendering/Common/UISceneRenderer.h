@@ -14,7 +14,9 @@ struct UISceneRenderer
 {
     /// Render every visible Node2D in the tree into the active Render2D batch
     /// (must be called inside Render2D::begin/end), sorted by zOrder.
-    static void render(Node* sceneRoot);
+    /// `uiScale` maps logical viewport pixels to render-target pixels (frame
+    /// buffer scale).
+    static void render(Node* sceneRoot, const glm::vec2& uiScale = glm::vec2(1.0f));
 
     /// Hit-test the Node2D subtree and dispatch mouse events. Returns true when
     /// the UI consumed the event (caller should not pass it to gameplay).

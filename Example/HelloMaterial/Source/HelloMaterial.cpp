@@ -54,9 +54,25 @@ void HelloMaterialModule::onDetach(ya::App&)
     render = nullptr;
 }
 
-void HelloMaterialModule::onSceneActivated(ya::App&, ya::Scene* scene)
+void HelloMaterialModule::onSceneActivated(ya::App& app, ya::Scene* scene)
 {
+    (void)app;
     YA_INFO("HelloMaterial scene initialized.");
+    // Any scene activation invalidates the cached demo-scene pointer (the
+    // play scene is recreated per PIE session).
+    _uiDemoScene = nullptr;
+}
+
+void HelloMaterialModule::onLogic(ya::App& app, float)
+{
+    if (!app.isRuntimeMode() && !app.isSimulationMode()) {
+        return;
+    }
+    ya::Scene* scene = app.getSceneServices().getActiveScene();
+    if (!scene || scene == _uiDemoScene) {
+        return;
+    }
+    _uiDemoScene = scene;
     createUIDemo(scene);
 }
 

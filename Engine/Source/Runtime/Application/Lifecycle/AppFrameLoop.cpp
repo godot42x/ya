@@ -539,6 +539,10 @@ void AppFrameLoop::tickRender(App& app, float dt)
             },
         },
         .pipeline = pipelineFrame,
+        // Game UI only composites in runtime/simulation (standalone game and
+        // PIE); the editor's 3D authoring viewport skips Node2D entirely
+        // (Godot-style 3D/2D separation).
+        .uiSceneRoot = (app.isRuntimeMode() || app.isSimulationMode()) && scene ? scene->getRootNode() : nullptr,
     });
 }
 

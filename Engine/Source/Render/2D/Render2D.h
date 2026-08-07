@@ -26,6 +26,7 @@ struct FRender2dData
     ECullMode::T    worldCullMode    = ECullMode::None;
     bool            bReverseViewport = true;
     ICommandBuffer* curCmdBuf        = nullptr;
+    bool            bUICompositorMode = false; // flush uses the depth-less UI pipeline
 
     // Active screen-space clip rects (top-left origin, Y down). The top entry
     // is applied as the scissor on the next screen-batch flush.
@@ -47,6 +48,7 @@ struct FRender2dContext
     ICommandBuffer* cmdBuf       = nullptr;
     uint32_t        windowWidth  = 800;
     uint32_t        windowHeight = 600;
+    bool            bUICompositorMode = false; // flush uses the depth-less UI pipeline
 
     FRender2dData::Camera cam;
 };
@@ -136,7 +138,9 @@ struct ENGINE_API FQuadRender
 
     std::shared_ptr<IPipelineLayout>   _pipelineLayout = nullptr;
     std::shared_ptr<IGraphicsPipeline> _pipeline       = nullptr;
+    std::shared_ptr<IGraphicsPipeline> _uiPipeline     = nullptr;
     std::shared_ptr<IGraphicsPipeline> _worldPipeline  = nullptr;
+    EFormat::T                         _uiPipelineFormat = EFormat::Undefined;
 
     std::shared_ptr<IDescriptorPool> _descriptorPool = nullptr;
 
@@ -158,9 +162,11 @@ struct ENGINE_API FQuadRender
 
     void init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat);
     void destroy();
-
     void begin(const Extent2D& extent);
     void end();
+    /// Lazily create the depth-less UI compositor pipeline for the given
+    /// final-image color format. NOT safe while recording a command buffer.
+    void ensureUICompositorPipeline(EFormat::T colorFormat);
 
     bool shouldFlush() { return vertexCount >= MaxVertexCount - 4 || _lastPushTextureSlot + 1 >= (int)TEXTURE_SET_SIZE; }
     bool shouldFlushWorld() { return worldVertexCount >= MaxVertexCount - 4 || _lastPushTextureSlot + 1 >= (int)TEXTURE_SET_SIZE; }
@@ -317,6 +323,11 @@ struct ENGINE_API Render2D
     /// as a command-level scissor on the next screen batch flush.
     static void pushClipRect(const Rect2D& rect);
     static void popClipRect();
+
+    /// Lazily create the UI compositor pipeline for the given final-image
+    /// color format (depth-less, no post-processing). Must NOT be called while
+    /// recording a command buffer.
+    static void ensureUICompositorPipeline(EFormat::T colorFormat);
 
     static void makeSprite(const glm::vec3& position,
                            const glm::vec2& size,

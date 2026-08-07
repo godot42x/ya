@@ -5,6 +5,7 @@
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Runtime/Rendering/Deferred/DeferredRenderPipeline.h"
+#include "Runtime/Rendering/Common/RenderViewportOverlayRecorder.h"
 #include "Platform/Render/Vulkan/VulkanRender.h"
 #include "Render/2D/Render2D.h"
 #include "Runtime/Rendering/Forward/ForwardRenderPipeline.h"
@@ -62,6 +63,26 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     {
         YA_PERF_SCOPE(perf::sample::renderWorld(), perf::metric::cpuTimeMs(), perf::domain::render());
         renderWorldFrame(input, cmdBuf.get());
+    }
+    // Game UI composites AFTER the world graph and its post-processing, so UI
+    // never enters bloom or tonemapping (graph-external, manual transitions).
+    if (input.uiSceneRoot) {
+        auto uiTarget = getPostprocessOutputImageShared();
+        if (!uiTarget) {
+            uiTarget = getActiveViewportImageShared();
+        }
+        if (uiTarget) {
+            // The postprocess output only exists after the world graph; ensure
+            // the depth-less UI pipeline matches its format here (one-time).
+            Render2D::ensureUICompositorPipeline(uiTarget->getFormat());
+            recordUICompositorPass(cmdBuf.get(),
+                                   *uiTarget,
+                                   Extent2D{
+                                       .width  = static_cast<uint32_t>(input.pipeline.viewportRect.extent.x),
+                                       .height = static_cast<uint32_t>(input.pipeline.viewportRect.extent.y),
+                                   },
+                                   input.uiSceneRoot);
+        }
     }
     renderPresentationPass(input.pipeline.deltaTime, input.presentationExtensions, cmdBuf.get());
     {

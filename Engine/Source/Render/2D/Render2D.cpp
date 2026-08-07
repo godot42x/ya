@@ -20,6 +20,152 @@
 namespace ya
 {
 
+namespace
+{
+
+std::vector<VertexAttribute> buildQuadVertexAttributes()
+{
+    return std::vector<VertexAttribute>{
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 0,
+            .format     = EVertexAttributeFormat::Float3,
+            .offset     = offsetof(FQuadRender::Vertex, pos),
+        },
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 1,
+            .format     = EVertexAttributeFormat::Float4,
+            .offset     = offsetof(FQuadRender::Vertex, color),
+        },
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 2,
+            .format     = EVertexAttributeFormat::Float2,
+            .offset     = offsetof(FQuadRender::Vertex, texCoord),
+        },
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 3,
+            .format     = EVertexAttributeFormat::Uint,
+            .offset     = offsetof(FQuadRender::Vertex, textureIdx),
+        },
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 4,
+            .format     = EVertexAttributeFormat::Float3,
+            .offset     = offsetof(FQuadRender::Vertex, worldCenter),
+        },
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 5,
+            .format     = EVertexAttributeFormat::Float3,
+            .offset     = offsetof(FQuadRender::Vertex, worldDirection),
+        },
+        VertexAttribute{
+            .bufferSlot = 0,
+            .location   = 6,
+            .format     = EVertexAttributeFormat::Float2,
+            .offset     = offsetof(FQuadRender::Vertex, worldSize),
+        },
+    };
+}
+
+ViewportState buildQuadViewportState()
+{
+    return ViewportState{
+        .viewports = {Viewport{
+            .x        = 0.0f,
+            .y        = 0.0f,
+            .width    = static_cast<float>(Render2D::data.windowWidth),
+            .height   = static_cast<float>(Render2D::data.windowHeight),
+            .minDepth = 0.0f,
+            .maxDepth = 1.0f,
+        }},
+        .scissors = {Scissor{
+            .offsetX = 0,
+            .offsetY = 0,
+            .width   = Render2D::data.windowWidth,
+            .height  = Render2D::data.windowHeight,
+        }},
+    };
+}
+
+GraphicsPipelineCreateInfo buildQuadScreenPipelineCI(IPipelineLayout* pipelineLayout,
+                                                     const std::string& label,
+                                                     EFormat::T colorFormat,
+                                                     EFormat::T depthFormat)
+{
+    return GraphicsPipelineCreateInfo{
+        .subPassRef            = 0,
+        .renderPass            = nullptr,
+        .pipelineRenderingInfo = PipelineRenderingInfo{
+            .label                  = label,
+            .viewMask               = 0,
+            .colorAttachmentFormats = {colorFormat},
+            .depthAttachmentFormat  = depthFormat,
+        },
+        .pipelineLayout = pipelineLayout,
+        .shaderDesc = ShaderDesc{
+            .sourceMode        = ShaderDesc::ESourceMode::StageFiles,
+            .stageFiles        = {
+                ShaderDesc::StageFile{.stage = EShaderStage::Vertex, .file = "Sprite2D.slang", .entryName = "vertMain"},
+                ShaderDesc::StageFile{.stage = EShaderStage::Fragment, .file = "Sprite2D.slang", .entryName = "fragMain"},
+            },
+            .vertexBufferDescs = {
+                VertexBufferDescription{
+                    .slot  = 0,
+                    .pitch = sizeof(FQuadRender::Vertex),
+                },
+            },
+            .vertexAttributes = buildQuadVertexAttributes(),
+            .defines          = {
+                std::format("TEXTURE_SET_SIZE {}", FQuadRender::TEXTURE_SET_SIZE),
+            },
+        },
+        .dynamicFeatures = {
+            EPipelineDynamicFeature::Viewport,
+            EPipelineDynamicFeature::Scissor,
+            EPipelineDynamicFeature::CullMode,
+        },
+        .primitiveType      = EPrimitiveType::TriangleList,
+        .rasterizationState = RasterizationState{
+            .polygonMode = EPolygonMode::Fill,
+            .cullMode    = ECullMode::Back,
+            .frontFace   = EFrontFaceType::CounterClockWise,
+        },
+        .multisampleState  = MultisampleState{},
+        .depthStencilState = DepthStencilState{
+            .bDepthTestEnable       = false,
+            .bDepthWriteEnable      = false,
+            .depthCompareOp         = ECompareOp::Always,
+            .bDepthBoundsTestEnable = false,
+            .bStencilTestEnable     = false,
+            .minDepthBounds         = 0.0f,
+            .maxDepthBounds         = 1.0f,
+        },
+        .colorBlendState = ColorBlendState{
+            .bLogicOpEnable = false,
+            .attachments    = {
+                ColorBlendAttachmentState{
+                    .index               = 0,
+                    .bBlendEnable        = true,
+                    .srcColorBlendFactor = EBlendFactor::SrcAlpha,
+                    .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
+                    .colorBlendOp        = EBlendOp::Add,
+                    .srcAlphaBlendFactor = EBlendFactor::One,
+                    .dstAlphaBlendFactor = EBlendFactor::Zero,
+                    .alphaBlendOp        = EBlendOp::Add,
+                    .colorWriteMask      = static_cast<EColorComponent::T>(EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A),
+                },
+            },
+        },
+        .viewportState = buildQuadViewportState(),
+    };
+}
+
+} // namespace
+
 FRender2dData Render2D::data;
 FQuadRender*  Render2D::quadData = nullptr;
 FLineRender*  Render2D::lineData = nullptr;
@@ -62,6 +208,7 @@ void Render2D::begin(const FRender2dContext& ctx)
     data.windowHeight = ctx.windowHeight;
     data.windowWidth  = ctx.windowWidth;
     data.clipStack.clear();
+    data.bUICompositorMode = ctx.bUICompositorMode;
     Extent2D extent{.width = data.windowWidth, .height = data.windowHeight};
     quadData->begin(extent);
     lineData->begin();
@@ -75,6 +222,13 @@ void Render2D::end()
     data.curCmdBuf    = nullptr;
     data.windowWidth  = 0;
     data.windowHeight = 0;
+}
+
+void Render2D::ensureUICompositorPipeline(EFormat::T colorFormat)
+{
+    if (quadData) {
+        quadData->ensureUICompositorPipeline(colorFormat);
+    }
 }
 
 void Render2D::pushClipRect(const Rect2D& rect)
@@ -241,7 +395,7 @@ void FLineRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
                 },
             },
         },
-        .viewportState = buildViewportState(),
+        .viewportState = buildQuadViewportState(),
     });
 
     _vertexBuffer = render->getResourceFactory()->createBuffer(
@@ -415,141 +569,12 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
     std::vector<std::shared_ptr<IDescriptorSetLayout>> dslVec = {_frameUboDSL, _resourceDSL};
     _pipelineLayout = IPipelineLayout::create(render, "Sprite2D_PipelineLayout", _pipelineDesc.pushConstants, dslVec);
 
-    const auto buildVertexAttributes = []()
-    {
-        return std::vector<VertexAttribute>{
-            VertexAttribute{
-                .bufferSlot = 0,
-                .location   = 0,
-                .format     = EVertexAttributeFormat::Float3,
-                .offset     = offsetof(Vertex, pos),
-            },
-            VertexAttribute{
-                .bufferSlot = 0,
-                .location   = 1,
-                .format     = EVertexAttributeFormat::Float4,
-                .offset     = offsetof(Vertex, color),
-            },
-            VertexAttribute{
-                .bufferSlot = 0,
-                .location   = 2,
-                .format     = EVertexAttributeFormat::Float2,
-                .offset     = offsetof(Vertex, texCoord),
-            },
-            VertexAttribute{
-                .bufferSlot = 0,
-                .location   = 3,
-                .format     = EVertexAttributeFormat::Uint,
-                .offset     = offsetof(Vertex, textureIdx),
-            },
-            VertexAttribute{
-                .bufferSlot = 0,
-                .location   = 4,
-                .format     = EVertexAttributeFormat::Float3,
-                .offset     = offsetof(Vertex, worldCenter),
-            },
-            VertexAttribute{
-                .bufferSlot = 0,
-                .location   = 5,
-                .format     = EVertexAttributeFormat::Float3,
-                .offset     = offsetof(Vertex, worldDirection),
-            },
-            VertexAttribute{
-                .bufferSlot = 0,
-                .location   = 6,
-                .format     = EVertexAttributeFormat::Float2,
-                .offset     = offsetof(Vertex, worldSize),
-            },
-        };
-    };
-
-    const auto buildViewportState = []()
-    {
-        return ViewportState{
-            .viewports = {Viewport{
-                .x        = 0.0f,
-                .y        = 0.0f,
-                .width    = static_cast<float>(Render2D::data.windowWidth),
-                .height   = static_cast<float>(Render2D::data.windowHeight),
-                .minDepth = 0.0f,
-                .maxDepth = 1.0f,
-            }},
-            .scissors  = {Scissor{
-                .offsetX = 0,
-                .offsetY = 0,
-                .width   = Render2D::data.windowWidth,
-                .height  = Render2D::data.windowHeight,
-            }},
-        };
-    };
-
     _pipeline = IGraphicsPipeline::create(render);
-    _pipeline->recreate(GraphicsPipelineCreateInfo{
-        .subPassRef            = 0,
-        .renderPass            = nullptr,
-        .pipelineRenderingInfo = PipelineRenderingInfo{
-            .label                  = "Sprite2D_Pipeline",
-            .viewMask               = 0,
-            .colorAttachmentFormats = {colorFormat},
-            .depthAttachmentFormat  = depthFormat,
-        },
-        .pipelineLayout = _pipelineLayout.get(),
-        .shaderDesc = ShaderDesc{
-            .sourceMode        = ShaderDesc::ESourceMode::StageFiles,
-            .stageFiles        = {
-                ShaderDesc::StageFile{.stage = EShaderStage::Vertex, .file = "Sprite2D.slang", .entryName = "vertMain"},
-                ShaderDesc::StageFile{.stage = EShaderStage::Fragment, .file = "Sprite2D.slang", .entryName = "fragMain"},
-            },
-            .vertexBufferDescs = {
-                VertexBufferDescription{
-                    .slot  = 0,
-                    .pitch = sizeof(FQuadRender::Vertex),
-                },
-            },
-            .vertexAttributes = buildVertexAttributes(),
-            .defines          = {
-                std::format("TEXTURE_SET_SIZE {}", TEXTURE_SET_SIZE),
-            },
-        },
-        .dynamicFeatures = {
-            EPipelineDynamicFeature::Viewport,
-            EPipelineDynamicFeature::Scissor,
-            EPipelineDynamicFeature::CullMode,
-        },
-        .primitiveType      = EPrimitiveType::TriangleList,
-        .rasterizationState = RasterizationState{
-            .polygonMode = EPolygonMode::Fill,
-            .cullMode    = ECullMode::Back,
-            .frontFace   = EFrontFaceType::CounterClockWise,
-        },
-        .multisampleState  = MultisampleState{},
-        .depthStencilState = DepthStencilState{
-            .bDepthTestEnable       = false,
-            .bDepthWriteEnable      = false,
-            .depthCompareOp         = ECompareOp::Always,
-            .bDepthBoundsTestEnable = false,
-            .bStencilTestEnable     = false,
-            .minDepthBounds         = 0.0f,
-            .maxDepthBounds         = 1.0f,
-        },
-        .colorBlendState = ColorBlendState{
-            .bLogicOpEnable = false,
-            .attachments    = {
-                ColorBlendAttachmentState{
-                    .index               = 0,
-                    .bBlendEnable        = true,
-                    .srcColorBlendFactor = EBlendFactor::SrcAlpha,
-                    .dstColorBlendFactor = EBlendFactor::OneMinusSrcAlpha,
-                    .colorBlendOp        = EBlendOp::Add,
-                    .srcAlphaBlendFactor = EBlendFactor::One,
-                    .dstAlphaBlendFactor = EBlendFactor::Zero,
-                    .alphaBlendOp        = EBlendOp::Add,
-                    .colorWriteMask      = static_cast<EColorComponent::T>(EColorComponent::R | EColorComponent::G | EColorComponent::B | EColorComponent::A),
-                },
-            },
-        },
-        .viewportState = buildViewportState(),
-    });
+    _pipeline->recreate(buildQuadScreenPipelineCI(_pipelineLayout.get(), "Sprite2D_Pipeline", colorFormat, depthFormat));
+
+    _uiPipeline = IGraphicsPipeline::create(render);
+    _uiPipeline->recreate(buildQuadScreenPipelineCI(_pipelineLayout.get(), "Sprite2D_UI_Pipeline", colorFormat, EFormat::Undefined));
+    _uiPipelineFormat = colorFormat;
 
     _worldPipeline = IGraphicsPipeline::create(render);
     _worldPipeline->recreate(GraphicsPipelineCreateInfo{
@@ -574,7 +599,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
                     .pitch = sizeof(FQuadRender::Vertex),
                 },
             },
-            .vertexAttributes = buildVertexAttributes(),
+            .vertexAttributes = buildQuadVertexAttributes(),
             .defines          = {
                 std::format("TEXTURE_SET_SIZE {}", TEXTURE_SET_SIZE),
             },
@@ -616,7 +641,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
                 },
             },
         },
-        .viewportState = buildViewportState(),
+        .viewportState = buildQuadViewportState(),
     });
 
     _vertexBuffer = render->getResourceFactory()->createBuffer(
@@ -672,8 +697,19 @@ void FQuadRender::destroy()
 
     _descriptorPool.reset();
     _pipeline.reset();
+    _uiPipeline.reset();
+    _uiPipelineFormat = EFormat::Undefined;
     _worldPipeline.reset();
     _pipelineLayout.reset();
+}
+
+void FQuadRender::ensureUICompositorPipeline(EFormat::T colorFormat)
+{
+    if (!_render || colorFormat == EFormat::Undefined || _uiPipelineFormat == colorFormat) {
+        return;
+    }
+    _uiPipeline->recreate(buildQuadScreenPipelineCI(_pipelineLayout.get(), "Sprite2D_UI_Pipeline", colorFormat, EFormat::Undefined));
+    _uiPipelineFormat = colorFormat;
 }
 
 void FQuadRender::begin(const Extent2D& extent)
@@ -714,7 +750,7 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
     updateFrameUBO(_frameUBOBuffer, _frameUboDS, _screenOrthoProj, glm::mat4(1.0f));
     _vertexBuffer->flush();
 
-    cmdBuf->bindPipeline(_pipeline.get());
+    cmdBuf->bindPipeline(data2D.bUICompositorMode && _uiPipeline ? _uiPipeline.get() : _pipeline.get());
     cmdBuf->setViewport(0.0f,
                         0.0f,
                         static_cast<float>(Render2D::data.windowWidth),

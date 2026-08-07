@@ -43,7 +43,6 @@ namespace ya
 struct AppAutomationShadowOverrides;
 struct Sampler;
 struct Mesh;
-struct Node;
 struct RenderTargetCatalog;
 class DeferredRenderPipelineTestAccess;
 
@@ -164,7 +163,6 @@ struct ENGINE_API DeferredRenderPipeline : public IRenderPipeline
     DeferredViewportResources  _currentViewportResources{};
     EntityIdViewportPass       _entityIdPass{};
     ViewportOverlayStage::FrameInputs _currentOverlayFrameInputs{};
-    Node*                            _currentUISceneRoot = nullptr; // Node2D UI subtree of the active scene
     DescriptorSetHandle        _currentEnvironmentLightingDescriptorSet{};
     FrameContext               _lastTickCtx{};
     RenderPipelineFrameContext _lastFrameInput{};

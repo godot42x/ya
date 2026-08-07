@@ -48,7 +48,6 @@ void DeferredFrameGraphOrchestrator::build(
         .bReverseViewportY        = inputs.bReverseViewportY,
         .bPostprocessOutputIsSRGB = inputs.bPostprocessOutputIsSRGB,
         .viewportOverlaySnapshot  = inputs.viewportOverlaySnapshot,
-        .uiSceneRoot              = inputs.uiSceneRoot,
         .shadowStage              = deps.shadowStage,
         .gBufferStage             = *deps.gBufferStage,
         .lightStage               = *deps.lightStage,
@@ -69,7 +68,6 @@ void DeferredFrameGraphOrchestrator::build(
     deferred_frame_graph_passes::appendForwardTransparent(context);
     deferred_frame_graph_passes::appendEntityId(context);
     deferred_frame_graph_passes::appendOverlay(context);
-    deferred_frame_graph_passes::appendUI(context);
     deferred_frame_graph_passes::appendPostprocess(context);
 
     exportGraphOutputs(graph, graphResources);

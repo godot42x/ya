@@ -13,7 +13,6 @@ namespace ya
 {
 
 struct FrameContext;
-struct Node;
 struct ShadowStage;
 struct GBufferStage;
 struct LightStage;
@@ -53,7 +52,6 @@ struct DeferredFrameGraphOrchestrator
         bool                                   bReverseViewportY         = true;
         bool                                   bPostprocessOutputIsSRGB  = false;
         std::shared_ptr<const RenderViewportOverlaySnapshot> viewportOverlaySnapshot = nullptr;
-        Node*                                  uiSceneRoot               = nullptr; // Node2D UI subtree of the active scene
     };
 
     void build(const BuildDependencies& deps, const BuildInputs& inputs) const;
