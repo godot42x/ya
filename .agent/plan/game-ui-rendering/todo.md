@@ -32,7 +32,16 @@
 
 ## Phase 2 —— 布局、文本与 2D 世界空间
 
-- [ ] anchor/pivot、百分比尺寸、HBox/VBox/Stack、文本驱动尺寸
+- [x] anchor（_anchorMin/_anchorMax，stretch = 百分比尺寸）、pivot 字段
+      （暂不参与变换）、HBox/VBox 容器（UIContainerNode + spacing/padding/
+      clip）、文本驱动尺寸（UITextNode::_bAutoSize）
+- [x] 流水线重构：collect+dynamic_cast 平铺导出 → 递归 layout() + paint()
+      （Slate 风格单树模型）；zOrder 改为同级排序；事件/编辑器 pick 共用
+      topmost-first walker（UISceneRenderer::pickNodeAt）
+- [x] Core/UI 收窄：删除死代码 UIElement 树（UIElement/UIManager/UIButton/
+      UICanvas/UIPanel/UITextBlock/UIBase.cpp/Others + ECS WidgetComponent
+      stub）；UIBase.h 保留 UIAppCtx/FUIHelper 并新增
+      UICanvasTransform/UIPaintContext/UIEventContext
 - [ ] 9-slice 封装、字形缓存上限、字体 fallback、焦点/键盘导航
 - [ ] Node2D world-space 模式（Godot Sprite2D 语义）→ 2D 实体入同一棵树
 - [ ] 编辑器 UI 树面板完善
