@@ -71,8 +71,16 @@ void EditorLayer::setupDockspace()
 
     if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
     {
+        ImGuiDockNodeFlags flags = _dockspaceFlags;
+        if (_app && _app->getInputRouter().isMouseCaptured())
+        {
+            // While the game holds the mouse (PIE input capture) the editor
+            // layout is locked: splitter drags must not resize the viewport
+            // under a running game. Releasing capture restores layout edits.
+            flags |= ImGuiDockNodeFlags_NoResize;
+        }
         ImGuiID dockspaceId = ImGui::GetID("MainDockSpace");
-        ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), _dockspaceFlags);
+        ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), flags);
     }
 
     style.WindowMinSize.x = savedMinW;
