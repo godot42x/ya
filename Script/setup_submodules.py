@@ -78,11 +78,15 @@ def _git_ok(*args: str, cwd: Path | None = None) -> bool:
 
 
 def is_git_repo(path: Path) -> bool:
+    """True only when `path` is itself a git checkout (has its own .git).
+
+    `git rev-parse` must not be used here: it walks up and would report the
+    parent repo for an empty submodule placeholder dir.
+    """
     try:
-        return _git("rev-parse", "--git-dir", cwd=path, check=False).returncode == 0
+        return (path / ".git").exists()
     except OSError:
         return False
-
 
 def index_gitlink_sha(path: str) -> str | None:
     """Gitlink SHA recorded in the current checkout's index."""
@@ -132,6 +136,16 @@ def all_submodule_paths() -> list[str]:
 
 def canonical_dir(path: str) -> Path:
     return cache_root() / "Submodules" / Path(path).name
+
+
+def missing_tracked_files(path: Path) -> bool:
+    """True when tracked files are missing from the working tree (HEAD vs
+    worktree deletions). Catches interrupted checkouts, including the empty-
+    index case that `git ls-files --deleted` misses."""
+    result = _git(
+        "diff", "HEAD", "--name-only", "--diff-filter=D", cwd=path, check=False
+    )
+    return bool(result.stdout.strip())
 
 
 def _rmtree(path: Path) -> None:
@@ -205,6 +219,12 @@ def ensure_canonical(path: str, url: str, sha: str, seed: Path | None) -> Path:
             # nothing to fetch).
             if shutil.which("git-lfs"):
                 _git("lfs", "pull", cwd=target, check=False)
+        elif missing_tracked_files(target):
+            # HEAD matches but the tree is incomplete (agent killed mid-
+            # checkout); repair without touching the network.
+            print(f"-- Restoring missing files in {target.name}")
+            _git("checkout", "-f", "--quiet", "--detach", sha, cwd=target, check=False)
+            _git("clean", "-fdx", "--quiet", cwd=target, check=False)
     else:
         print(f"   warn: pinned commit {sha[:12]} not available; keeping cached content")
     return target
@@ -290,6 +310,17 @@ def main() -> int:
                 "   warn: `git submodule update --init` for small submodules failed:\n"
                 f"   {result.stderr.strip()}"
             )
+        for path in small:
+            sub = REPO_ROOT / path
+            if not is_git_repo(sub):
+                continue
+            # Self-heal interrupted checkouts: `git submodule update` skips
+            # repos whose HEAD already matches, even if the working tree was
+            # left empty by a killed agent. Missing tracked files are safe to
+            # restore (third-party content only); modified files are untouched.
+            if missing_tracked_files(sub):
+                print(f"-- Restoring missing files in {path} (interrupted checkout?)")
+                _git("checkout", "-f", "HEAD", cwd=sub, check=False)
     return 0
 
 
