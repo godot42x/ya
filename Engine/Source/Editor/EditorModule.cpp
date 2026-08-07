@@ -232,8 +232,10 @@ class EditorViewportCompositor
 
         // 2D canvas preview: hide the 3D world and composite the Node2D tree
         // over a canvas grid instead (Godot-style development-time viewing).
-        // The game itself always renders 3D + 2D together.
-        if (layer.isViewportMode2D()) {
+        // The game itself always renders 3D + 2D together. During PIE/sim the
+        // runtime already composites the UI, so the editor falls back to the
+        // plain 3D presentation (no double draw, no frozen 2D canvas).
+        if (layer.isViewportMode2D() && uiPreviewRoot) {
             const glm::vec2 logicalViewport = layer.getViewportSize();
             recordUICompositorPass(&commandBuffer,
                                    *_composedViewportImage,
@@ -388,6 +390,8 @@ class EditorModule final : public IModule, public IEditorAutomationControl
     EditorViewportCompositor       _viewportCompositor;
     EditorInputNode                _inputNode;
     InputRouter::FNodeRegistration _inputNodeRegistration;
+    bool                           _bWasRunning     = false;
+    std::optional<EViewportMode>   _viewportModeBeforePlay;
 
     void registerEditorPresets()
     {
@@ -736,6 +740,20 @@ class EditorModule final : public IModule, public IEditorAutomationControl
         if (!_layer) {
             return;
         }
+
+        // Playing/simulating always presents in 3D (the game renders 3D + UI
+        // together); when the session ends, restore the viewport mode the user
+        // was editing in (e.g. back to the 2D canvas).
+        const bool bRunning = app.isRuntimeMode() || app.isSimulationMode();
+        if (bRunning && !_bWasRunning && _layer->isViewportMode2D()) {
+            _viewportModeBeforePlay = _layer->getViewportMode();
+            _layer->setViewportMode(EViewportMode::Mode3D, /*bPersist=*/false);
+        }
+        else if (!bRunning && _bWasRunning && _viewportModeBeforePlay.has_value()) {
+            _layer->setViewportMode(*_viewportModeBeforePlay, /*bPersist=*/false);
+            _viewportModeBeforePlay.reset();
+        }
+        _bWasRunning = bRunning;
 
         auto& renderServices = app.getRenderServices();
         if (auto* renderRuntime = renderServices.getRenderRuntime()) {

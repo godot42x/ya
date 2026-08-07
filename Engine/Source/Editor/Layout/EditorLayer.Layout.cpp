@@ -321,24 +321,26 @@ void EditorLayer::toolbar()
     ImGui::Dummy(ImVec2(8.0f, 0.0f));
     ImGui::SameLine();
 
-    // 2D/3D viewport mode toggle (development-time viewing only; the game
-    // always renders 3D + 2D together). CLI: viewport.set_mode.
-    {
-        const bool b2D   = isViewportMode2D();
-        const char* label = b2D ? "2D" : "3D";
+    // 2D / 3D are separate viewport entries (Godot-style): clicking "2D"
+    // opens the UI canvas editor, clicking "3D" returns to the world view.
+    // Development-time viewing only - the game always renders 3D + 2D
+    // together (CLI: viewport.set_mode).
+    auto drawModeEntry = [&](const char* label, EViewportMode mode, const char* tooltip) {
+        const bool bActive = _viewportMode == mode;
         ya::ImGuiStyleScope modeStyle;
-        modeStyle.pushColor(ImGuiCol_Button, b2D ? ImVec4(0.28f, 0.52f, 0.32f, 0.95f)
-                                                 : ImVec4(0.22f, 0.22f, 0.24f, 0.92f));
+        modeStyle.pushColor(ImGuiCol_Button, bActive ? ImVec4(0.28f, 0.52f, 0.32f, 0.95f)
+                                                     : ImVec4(0.22f, 0.22f, 0.24f, 0.92f));
         modeStyle.pushColor(ImGuiCol_ButtonHovered, ImVec4(0.34f, 0.62f, 0.40f, 0.95f));
         if (ImGui::Button(label, ImVec2(40.0f, size))) {
-            setViewportMode(b2D ? EViewportMode::Mode3D : EViewportMode::Mode2D);
+            setViewportMode(mode);
         }
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
-            ImGui::SetTooltip("%s",
-                              b2D ? "2D canvas preview (Node2D + grid); switch back to 3D world"
-                                  : "3D world view; switch to 2D canvas preview (Node2D)");
+            ImGui::SetTooltip("%s", tooltip);
         }
-    }
+    };
+    drawModeEntry("3D", EViewportMode::Mode3D, "3D world view (edit the scene)");
+    ImGui::SameLine();
+    drawModeEntry("2D", EViewportMode::Mode2D, "2D canvas view (edit the Node2D UI tree)");
 
     // style RAII auto-pop
     ImGui::End();
