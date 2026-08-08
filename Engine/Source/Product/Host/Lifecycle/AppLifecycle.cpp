@@ -31,12 +31,13 @@
 
 #include "Render3D/Material/MaterialFactory.h"
 
-#include "Render3D/Systems/Animation/AnimationSystem.h"
+#include "Gameplay/Animation/AnimationSystem.h"
 
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
 #include "RHI/WindowProvider.h"
 #include "Host/WindowManager.h"
+#include "Render3D/RenderRuntime.h"
 
 #include <array>
 #include <format>
@@ -365,6 +366,17 @@ void AppLifecycle::init(App& app, AppDesc ci)
     sys3->init();
     app._systems.push_back(sys3);
     auto sys4 = ya::makeShared<SkeletonAnimationSystem>();
+    sys4->setSceneProvider([&app]() -> Scene*
+    {
+        return app.getSceneServices().getActiveScene();
+    });
+    // World-render tick policy: poses are only consumed by the world pipeline;
+    // freeze sampling while the editor 2D canvas mode disables world rendering.
+    sys4->setTickPolicy([&app]()
+    {
+        auto* renderRuntime = app.getRenderServices().getRenderRuntime();
+        return !renderRuntime || renderRuntime->isWorldSceneRenderEnabled();
+    });
     sys4->init();
     app._systems.push_back(sys4);
     auto sys5 = ya::makeShared<ComponentLinkageSystem>();

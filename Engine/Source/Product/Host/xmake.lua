@@ -8,5 +8,7 @@ target("ya-host")
     -- Host binds the scene lifecycle sink and drives Scene/SceneManager from
     -- its own TUs; public headers only forward-declare scene types.
     add_deps("ya-scene-core", "ya-scene-runtime")
+    -- Host constructs and binds the gameplay systems (animation, ...).
+    add_deps("ya-gameplay-animation")
     add_packages("libsdl3", "glm", "nlohmann_json", "cxxopts", { public = true })
     add_packages("asio", "vulkan-memory-allocator", "glad", "lua", "sol2", "quickjs-ng", "vulkansdk")

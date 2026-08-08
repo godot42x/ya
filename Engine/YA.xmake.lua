@@ -164,6 +164,7 @@ do
         "ya-scene-runtime",
         "ya-scene-serialization",
         "ya-scene-3d",
+        "ya-gameplay-animation",
         "ya-gameplay-ecs",
         "ya-resource",
         "ya-render-graph",

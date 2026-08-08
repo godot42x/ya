@@ -1,11 +1,8 @@
-#include "Render3D/Systems/Animation/AnimationSystem.h"
+#include "Gameplay/Animation/AnimationSystem.h"
 
 #include "ECS/Component/SkeletonAnimatorComponent.h"
 #include "Resource/SkeletonAnimationSampler.h"
-#include "Host/App.h"
-#include "Render3D/RenderRuntime.h"
 #include "Scene/Core/Scene.h"
-#include "Scene/Runtime/SceneManager.h"
 
 namespace ya
 {
@@ -19,22 +16,20 @@ double resolveTicksPerSecond(const SkeletonAnimationClip& clip)
 
 void SkeletonAnimationSystem::onUpdate(float deltaTime)
 {
-    App* app = App::get();
-    if (!app || !app->getSceneServices().getSceneManager()) {
+    if (!_sceneProvider) {
         return;
     }
 
-    // Skin poses are only consumed by the world pipeline's skinning palettes.
-    // The editor 2D canvas mode disables the world scene graph, so sampling
-    // every frame would be pure waste; the pose simply freezes while the
-    // canvas is shown and resumes on the next enabled frame.
-    auto* renderRuntime = app->getRenderServices().getRenderRuntime();
-    if (renderRuntime && !renderRuntime->isWorldSceneRenderEnabled()) {
-        return;
-    }
-
-    Scene* scene = app->getSceneServices().getActiveScene();
+    Scene* scene = _sceneProvider();
     if (!scene) {
+        return;
+    }
+
+    // Explicit tick policy (bound by the Host): skin poses are only consumed
+    // by the world pipeline's skinning palettes; when world rendering is
+    // disabled (editor 2D canvas mode) sampling every frame would be pure
+    // waste. The pose freezes while the policy says "don't tick".
+    if (_tickPolicy && !_tickPolicy()) {
         return;
     }
 
@@ -61,6 +56,16 @@ void SkeletonAnimationSystem::onUpdate(float deltaTime)
                                              skeletonComp._pose);
         skeletonComp.markPoseClean();
     });
+}
+
+void SkeletonAnimationSystem::setSceneProvider(SceneProvider provider)
+{
+    _sceneProvider = std::move(provider);
+}
+
+void SkeletonAnimationSystem::setTickPolicy(TickPolicy policy)
+{
+    _tickPolicy = std::move(policy);
 }
 
 } // namespace ya
