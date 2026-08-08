@@ -45,6 +45,7 @@ struct Node3D : public Node
 
   protected:
     // === Virtual Hook Implementations ===
+    void onNameChanged(const std::string &name) override;
     void onParentChanged() override;
     void onHierarchyDirty() override;
 

@@ -1,4 +1,5 @@
 #include "Product/Host/Utility/AppScreenshotCapture.h"
+#include "Product/Host/AppOptions.h"
 
 #include "Product/Host/Utility/OffscreenJobRunner.h"
 

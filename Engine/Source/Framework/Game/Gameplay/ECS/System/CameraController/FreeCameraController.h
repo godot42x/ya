@@ -1,6 +1,6 @@
 #pragma once
 #include "Foundation/Core/Api.h"
-#include "CameraController.h"
+#include "Foundation/Core/Camera/CameraController.h"
 #include "Foundation/Core/Camera/Camera.h"
 #include "Foundation/Core/Input/InputManager.h"
 #include "Foundation/Core/KeyCode.h"
@@ -13,7 +13,7 @@ namespace ya
 {
 
 
-struct YA_CORE_API FreeCameraController : public CameraController
+struct YA_GAMEPLAY_ECS_API FreeCameraController : public CameraController
 {
     float _moveSpeed     = 5.0f;  // Units per second
     float _rotationSpeed = 45.0f; // Degrees per mouse unit

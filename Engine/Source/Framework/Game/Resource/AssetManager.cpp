@@ -7,6 +7,7 @@
 #include "Foundation/Core/Log.h"
 #include "Foundation/Core/System/VirtualFileSystem.h"
 #include "Foundation/Core/Common/DeferredDeletionQueue.h"
+#include "Foundation/Core/Common/AssetRef.h"
 #include "Product/Host/App.h"
 
 #include <algorithm>
@@ -42,52 +43,7 @@ AssetManager::~AssetManager()
 
 std::string AssetManager::canonicalizeAssetPath(std::string path)
 {
-    if (path.empty()) {
-        return path;
-    }
-
-    std::replace(path.begin(), path.end(), '\\', '/');
-    path = std::filesystem::path(path).lexically_normal().generic_string();
-
-    const auto normalizeMountedPath = [](std::string value) -> std::string
-    {
-        const auto separator = value.find(':');
-        if (separator == std::string::npos || value.find('/') <= separator) {
-            return value;
-        }
-
-        const auto mount = value.substr(0, separator + 1);
-        const auto tail  = std::filesystem::path(value.substr(separator + 1)).lexically_normal().generic_string();
-        return mount + tail;
-    };
-
-    path = normalizeMountedPath(std::move(path));
-
-    if (path == "Engine/Content" || path.starts_with("Engine/Content/")) {
-        path = "Engine:" + path.substr(std::string("Engine/").size());
-    }
-
-    if (path == "Game:Content") {
-        path = "Content";
-    }
-    else if (path.starts_with("Game:Content/")) {
-        path = path.substr(std::string("Game:").size());
-    }
-
-    if (path.starts_with("Engine:Content/Content/")) {
-        path = "Engine:Content/" + path.substr(std::string("Engine:Content/Content/").size());
-    }
-    if (path.starts_with("Content/Content/")) {
-        path = "Content/" + path.substr(std::string("Content/Content/").size());
-    }
-
-    if (auto* vfs = VirtualFileSystem::get()) {
-        path = vfs->toVfsPath(path);
-        std::replace(path.begin(), path.end(), '\\', '/');
-        path = normalizeMountedPath(std::move(path));
-    }
-
-    return path;
+    return ya::canonicalizeAssetPath(std::move(path));
 }
 
 std::string AssetManager::normalizeAssetPath(std::string path)

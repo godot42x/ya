@@ -16,7 +16,9 @@ std::shared_ptr<IBuffer> VulkanRenderResourceFactory::createBuffer(const BufferC
 
 std::shared_ptr<Sampler> VulkanRenderResourceFactory::createSampler(const SamplerDesc& desc)
 {
-    return makeShared<VulkanSampler>(_render, desc);
+    auto sampler = makeShared<VulkanSampler>(_render, desc);
+    _render->trackSampler(sampler);
+    return sampler;
 }
 
 std::shared_ptr<IImage> VulkanRenderResourceFactory::createImage(const ImageCreateInfo& desc)

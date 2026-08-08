@@ -1,6 +1,7 @@
 #include "Product/Host/Lifecycle/AppEventRouter.h"
 
 #include "Product/Host/App.h"
+#include "Product/Host/WindowManager.h"
 
 #include "Foundation/Core/Profiling/PerfKeys.h"
 #include "Foundation/Core/Profiling/PerfState.h"

@@ -1,5 +1,7 @@
 #include "DebugPrimitives.h"
 
+#include "Foundation/RHI/Render.h"
+
 #include "Foundation/Core/Math/Math.h"
 #include "Foundation/RHI/Core/RenderResourceFactory.h"
 #include "Framework/Game/Resource/Mesh/PrimitiveMeshCache.h"

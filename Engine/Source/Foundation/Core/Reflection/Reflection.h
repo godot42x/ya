@@ -139,10 +139,13 @@ struct Visitor<void>
 
 // Notes:
 // - Invoked inside a scope where `class_t` and `type_name` exist.
-// - Keep extensions (profiling, ECS serializer, custom registry hooks) here.
-#ifndef YA_REFLECT_EXTENSION
-    #define ___YA_REFLECT_EXTENSION(type_name) \
-        ::ya::ECSRegistry::get().registerComponent<type_name>(#type_name);
+// - The default extension is a no-op. Consumers may override it by redefining
+//   ___YA_REFLECT_EXTENSION AFTER including this header and BEFORE their
+//   reflected type definitions (the ECS layer does exactly that for
+//   IComponent registration, see ECS/Component.h). This keeps core reflection
+//   free of any ECS / game-layer dependency.
+#ifndef ___YA_REFLECT_EXTENSION
+    #define ___YA_REFLECT_EXTENSION(type_name) ((void)0);
 #endif
 
 // #define ___YA_CREATE_REGISTER(ClassName)                   \
@@ -409,6 +412,3 @@ struct Visitor<void>
     };                                        \
     } /* close ya::reflection::detail */
 // clang-format on
-
-// TODO: should not be in core?
-#include "Framework/Game/Gameplay/ECS/ECSRegistry.h"

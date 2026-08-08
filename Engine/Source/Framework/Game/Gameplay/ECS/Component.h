@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Foundation/Core/Base.h"
+#include "Framework/Game/Gameplay/ECS/ECSRegistry.h"
 
 
 #include <nlohmann/json.hpp>
@@ -10,6 +11,16 @@
 
 namespace ya
 {
+
+// Component reflection extension: every reflected IComponent type registered
+// with ECSRegistry during static init. Must appear after Reflection.h (which
+// defines the no-op default) and before any component type definition, which
+// every component header guarantees by including this file.
+#ifdef ___YA_REFLECT_EXTENSION
+    #undef ___YA_REFLECT_EXTENSION
+#endif
+#define ___YA_REFLECT_EXTENSION(type_name) \
+    ::ya::ECSRegistry::get().registerComponent<type_name>(#type_name);
 
 
 struct Entity;

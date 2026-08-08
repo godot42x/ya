@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Framework/Game/Render/Render3D/Common/Shadow/ShadowTypes.h"
+#include "Framework/Game/Render/Graph/RenderGraph.h"
 
 #include "Foundation/RHI/Core/Buffer.h"
 #include "Foundation/RHI/Core/DescriptorSet.h"

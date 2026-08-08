@@ -9,7 +9,6 @@
 #include "Foundation/RHI/Render.h"
 #include "Foundation/RHI/RenderDefines.h"
 
-#include "Framework/Game/Resource/AssetManager.h"
 #include "Foundation/Core/Common/DeferredDeletionQueue.h"
 #include "Framework/GUI/Runtime/Resource/FontManager.h"
 #include "Framework/GUI/Runtime/Resource/TextureLibrary.h"

@@ -22,3 +22,23 @@ do
         add_cxxflags("/utf-8")
     end
 end
+
+-- GUI closure test: links ONLY the GUI framework closure
+-- (foundation + RHI + backend + gui-runtime). It is the regression guard for
+-- the "pure GUI host" product line: if GUI code ever reaches into
+-- resource / ecs / render-3d / physics / host / editor again, this target
+-- fails to link.
+target("ya-gui-closure-test")
+do
+    set_kind("binary")
+    add_files("./Source/Node2DLayoutTest.cpp")
+    add_files("./Source/UISceneRendererTest.cpp")
+    add_files("./Source/TestEntry.cpp")
+
+    add_deps("ya-gui-framework")
+    add_packages("gtest")
+
+    if is_plat("windows") then
+        add_cxxflags("/utf-8")
+    end
+end

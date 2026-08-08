@@ -83,11 +83,10 @@ class ResourceRegistry
 
 
   public:
-    static ResourceRegistry &get()
-    {
-        static ResourceRegistry instance;
-        return instance;
-    }
+    /// Defined in ResourceRegistry.cpp: the singleton must have a single
+    /// strong symbol across dylibs (a header-inline static would be copied
+    /// per image and split registered caches between modules).
+    static YA_CORE_API ResourceRegistry &get();
 
     void registerCache(IResourceCache *cache, int priority = 0);
     void clearAll();

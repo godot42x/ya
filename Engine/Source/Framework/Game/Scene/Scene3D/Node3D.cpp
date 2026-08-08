@@ -10,6 +10,15 @@ namespace ya
 // Node3D Implementation (With ECS/Transform)
 // ============================================================================
 
+void Node3D::onNameChanged(const std::string &name)
+{
+    // Keep the ECS entity name in sync with the scene-tree node name (the
+    // base Node class is ECS-free and delegates here).
+    if (_entity) {
+        _entity->name = name;
+    }
+}
+
 TransformComponent *Node3D::getTransformComponent()
 {
     if (_entity) {

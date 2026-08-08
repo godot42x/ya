@@ -7,7 +7,7 @@
 #include "Foundation/Core/Common/AssetFuture.h"
 #include "Framework/Game/Resource/AssetManagerTypes.h"
 #include "Framework/Game/Resource/Meta/AssetMeta.h"
-#include "Framework/Game/Resource/ResourceRegistry.h"
+#include "Foundation/Core/ResourceRegistry.h"
 
 
 namespace Assimp

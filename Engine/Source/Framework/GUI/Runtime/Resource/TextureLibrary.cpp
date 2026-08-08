@@ -20,6 +20,7 @@ void TextureLibrary::init(IRender* render)
     }
 
     YA_CORE_ASSERT(render && render->getResourceFactory(), "TextureLibrary requires a resource factory");
+    setBuiltinTextureSource(this);
     createSamplers(render);
     createTextures(render);
 
@@ -46,6 +47,11 @@ void TextureLibrary::clearCache()
 
     _initialized = false;
     YA_CORE_INFO("TextureLibrary cleared");
+}
+
+void TextureLibrary::shutdown()
+{
+    clearCache();
 }
 
 void TextureLibrary::createSamplers(IRender* render)
@@ -118,10 +124,10 @@ void TextureLibrary::createTextures(IRender* render)
     }
 }
 
-ya::Ptr<Texture> TextureLibrary::getWhiteTexture()
+std::shared_ptr<Texture> TextureLibrary::getWhiteTexture()
 {
     YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
-    return ya::Ptr<Texture>(_whiteTexture);
+    return _whiteTexture;
 }
 
 ya::Ptr<Texture> TextureLibrary::getBlackTexture()
@@ -142,10 +148,10 @@ ya::Ptr<Texture> TextureLibrary::getCheckerboardTexture()
     return ya::Ptr<Texture>(_checkerboardTexture);
 }
 
-ya::Ptr<Sampler> TextureLibrary::getDefaultSampler()
+std::shared_ptr<Sampler> TextureLibrary::getDefaultSampler()
 {
     YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
-    return ya::Ptr<Sampler>(_defaultSampler);
+    return _defaultSampler;
 }
 
 ya::Ptr<Sampler> TextureLibrary::getLinearSampler()

@@ -1,8 +1,5 @@
 #include "Node.h"
 
-#include "Framework/Game/Gameplay/ECS/Component/TransformComponent.h"
-#include "Framework/Game/Gameplay/ECS/Entity.h"
-
 
 namespace ya
 {
@@ -13,18 +10,13 @@ namespace ya
 
 const std::string &Node::getName() const
 {
-    if (_entity && !_entity->name.empty()) {
-        return _entity->name;
-    }
     return _name;
 }
 
 void Node::setName(const std::string &name)
 {
     _name = name;
-    if (_entity) {
-        _entity->name = name;
-    }
+    onNameChanged(_name);
 }
 
 size_t Node::getChildIndex(const Node *child) const

@@ -78,6 +78,11 @@ struct YA_GUI_API Node : public disable_copy
     /// when traversing the mixed scene tree.
     [[nodiscard]] virtual bool is2D() const { return false; }
 
+    /// Called after this node's display name changes. Derived classes that
+    /// mirror the name into an external owner (e.g. Node3D syncing the ECS
+    /// entity name) override this hook; the base class stays ECS-free.
+    virtual void onNameChanged(const std::string &name) {}
+
     /**
      * @brief Called when this node's parent changes
      * @note Override in Node3D to update cached parent TransformComponent

@@ -1,6 +1,7 @@
 #include "Foundation/RHI/Core/Texture.h"
+#include <vulkan/vulkan.h>
 
-#include "Framework/GUI/Runtime/Resource/TextureLibrary.h"
+#include "Foundation/RHI/Core/BuiltinTextureSource.h"
 #include "stb/stb_image.h"
 
 #include <bit>
@@ -802,7 +803,12 @@ ImageViewHandle TextureBinding::getImageViewHandle() const
     if (texture && texture->getImageView()) {
         return texture->getImageView()->getHandle();
     }
-    return TextureLibrary::get().getWhiteTexture()->getImageView()->getHandle();
+    if (auto* source = getBuiltinTextureSource()) {
+        if (auto white = source->getWhiteTexture(); white && white->getImageView()) {
+            return white->getImageView()->getHandle();
+        }
+    }
+    return ImageViewHandle{};
 }
 
 SamplerHandle TextureBinding::getSamplerHandle() const
@@ -810,7 +816,12 @@ SamplerHandle TextureBinding::getSamplerHandle() const
     if (sampler) {
         return sampler->getHandle();
     }
-    return TextureLibrary::get().getDefaultSampler()->getHandle();
+    if (auto* source = getBuiltinTextureSource()) {
+        if (auto defaultSampler = source->getDefaultSampler()) {
+            return defaultSampler->getHandle();
+        }
+    }
+    return SamplerHandle{};
 }
 
 } // namespace ya

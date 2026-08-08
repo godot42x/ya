@@ -11,7 +11,7 @@
 #include "Foundation/Core/Common/DeferredDeletionQueue.h"
 #include "Framework/GUI/Runtime/Resource/FontManager.h"
 #include "Framework/Game/Resource/Mesh/PrimitiveMeshCache.h"
-#include "Framework/Game/Resource/ResourceRegistry.h"
+#include "Foundation/Core/ResourceRegistry.h"
 #include "Framework/GUI/Runtime/Resource/TextureLibrary.h"
 
 namespace ya
@@ -169,6 +169,7 @@ void RenderRuntime::initRenderBackend(const AppDesc& appDesc)
             .width              = static_cast<uint32_t>(appDesc.width),
             .height             = static_cast<uint32_t>(appDesc.height),
         },
+        .disabledGraphicsCards = appDesc.disabledGraphicsCards,
     };
 
     if (!windowManager->getMainWindow()) {
@@ -188,6 +189,10 @@ void RenderRuntime::initRenderBackend(const AppDesc& appDesc)
 
     _render = IRender::create(renderCI);
     YA_CORE_ASSERT(_render, "Failed to create IRender instance");
+    // The backend consumes the shader service while building pipelines; the
+    // runtime injects it right after backend creation so RHI/backend stay free
+    // of host-layer lookups (initShaderSystems runs before this point).
+    _render->setShaderStorage(_shaderStorage);
     _render->init(renderCI);
 }
 

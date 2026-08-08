@@ -948,9 +948,8 @@ void ReflectionSerializer::deserializeProperty(const Property &prop, void *obj, 
 
     // TODO: async in another thread?
     // ★ NEW: After deserialization, resolve asset references if applicable
-    auto &resolver = DefaultAssetRefResolver::instance();
-    if (resolver.isAssetRefType(prop.typeIndex)) {
-        resolver.resolveAssetRef(prop.typeIndex, nestedObjPtr);
+    if (const auto* resolver = getAssetRefResolver(); resolver && resolver->isAssetRefType(prop.typeIndex)) {
+        resolver->resolveAssetRef(prop.typeIndex, nestedObjPtr);
     }
 }
 

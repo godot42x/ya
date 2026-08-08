@@ -27,7 +27,7 @@ struct RenderImage;
 class YA_HOST_API AppAutomationControlService
 {
   public:
-    AppAutomationControlService() = default;
+    AppAutomationControlService();
     AppAutomationControlService(const AppAutomationControlService&) = delete;
     AppAutomationControlService& operator=(const AppAutomationControlService&) = delete;
     ~AppAutomationControlService();

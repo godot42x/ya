@@ -13,6 +13,7 @@ struct IDescriptorSetHelper;
 struct IRenderResourceFactory;
 struct RenderTargetCreateInfo;
 struct IWindowProvider;
+struct ShaderStorage;
 
 
 enum class ERenderObject : uint32_t
@@ -69,6 +70,11 @@ struct IRender : public plat_base<IRender>
         return true;
     }
     virtual void destroy() = 0;
+
+    /// Shader compile/cache service consumed by the backend when building
+    /// pipelines (created and injected by the render-runtime layer).
+    virtual void                                 setShaderStorage(std::shared_ptr<ShaderStorage> shaderStorage) = 0;
+    [[nodiscard]] virtual std::shared_ptr<ShaderStorage> getShaderStorage()                                   = 0;
 
     virtual bool begin(int32_t* imageIndex)                                 = 0;
     virtual bool end(int32_t imageIndex, std::vector<void*> CommandBuffers) = 0;

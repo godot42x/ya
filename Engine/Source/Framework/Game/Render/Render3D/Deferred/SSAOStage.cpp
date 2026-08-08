@@ -1,5 +1,7 @@
 #include "SSAOStage.h"
 
+#include "Framework/Game/Render/Render3D/Deferred/DeferredFrameGraphPasses.h"
+#include "Framework/Game/Render/Graph/RenderGraphImportUtils.h"
 #include "Foundation/Core/Profiling/Instrumentor.h"
 
 #include "Product/Host/Config/ConfigManager.h"

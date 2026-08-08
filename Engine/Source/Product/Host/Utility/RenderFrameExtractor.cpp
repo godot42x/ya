@@ -1,5 +1,8 @@
 #include "RenderFrameExtractor.h"
 
+#include "Product/Host/App.h"
+#include "Framework/Game/Gameplay/ECS/System/ResourceResolveSystem.h"
+
 #include "Framework/Game/Gameplay/ECS/Component/DirectionalLightComponent.h"
 #include "Framework/Game/Gameplay/ECS/Component/2D/BillboardComponent.h"
 #include "Framework/Game/Gameplay/ECS/Component/Material/PBRMaterialComponent.h"

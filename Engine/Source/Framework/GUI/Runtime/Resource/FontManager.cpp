@@ -3,8 +3,6 @@
 #include "Foundation/Core/System/VirtualFileSystem.h"
 #include "freetype/freetype.h"
 
-#include "Framework/Game/Resource/AssetManager.h"
-
 #include <array>
 
 namespace ya
@@ -75,6 +73,11 @@ FontManager *FontManager::get()
 {
     static FontManager instance;
     return &instance;
+}
+
+void FontManager::setFontAtlasTextureSink(FontAtlasTextureSink sink)
+{
+    get()->_fontAtlasTextureSink = std::move(sink);
 }
 
 std::shared_ptr<Font> FontManager::getFont(const FName &fontName, uint32_t fontSize)
@@ -250,7 +253,9 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
                                            atlasData.size() * sizeof(ColorU8_t),
                                            EFormat::R8G8B8A8_UNORM,
                                            std::format("FontAtlas_{}", fontName.toString()));
-    AssetManager::get()->registerTexture(std::format("FontAtlas_{}:{}", fontName.toString(), fontSize), font->atlasTexture);
+    if (_fontAtlasTextureSink) {
+        _fontAtlasTextureSink(fontName, fontSize, font->atlasTexture);
+    }
 
     // Cache the loaded font
     std::string cacheKey = makeCacheKey(fontName, fontSize);

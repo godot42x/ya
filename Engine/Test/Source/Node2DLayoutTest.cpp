@@ -2,9 +2,10 @@
 #include "Framework/GUI/Runtime/UIBase.h"
 #include "Framework/GUI/Runtime/Scene/UISceneRenderer.h"
 #include "Framework/GUI/Runtime/Scene/Node2D.h"
-#include "Framework/Game/Render/Render3D/Scene.h"
 
 #include <gtest/gtest.h>
+
+#include <memory>
 
 #include <cmath>
 
@@ -48,6 +49,34 @@ UIAppCtx makeUICtx(float mouseX, float mouseY)
     ctx.viewportRect = {.pos = {0.0f, 0.0f}, .extent = {800.0f, 600.0f}};
     return ctx;
 }
+
+/// Minimal UI tree root replacing the engine Scene container: GUI closure
+/// tests build the tree directly on Node/Node2D and keep nodes alive via
+/// shared ownership (the engine Scene owns UI nodes in _entityLessNodes).
+struct TestUIRoot
+{
+    Node root{"SceneRoot", nullptr};
+
+    template <typename T, typename... Args>
+        requires(sizeof...(Args) < 2 || !std::is_convertible_v<std::tuple_element_t<sizeof...(Args) - 1, std::tuple<Args...>>, Node*>)
+    std::shared_ptr<T> createUINode(Args&&... args)
+    {
+        auto node = std::make_shared<T>(std::forward<Args>(args)...);
+        root.addChild(node.get());
+        return node;
+    }
+
+    template <typename T>
+    std::shared_ptr<T> createUINode(const std::string& name, Node* parent)
+    {
+        auto node = std::make_shared<T>(name);
+        parent->addChild(node.get());
+        return node;
+    }
+
+    Node* getRootNode() { return &root; }
+    void  addChild(Node* node) { root.addChild(node); }
+};
 
 } // namespace
 
@@ -97,16 +126,16 @@ TEST(Node2DLayoutTest, StretchAnchorsFillParent)
 
 TEST(Node2DLayoutTest, HBoxArrangesChildrenInPaintOrder)
 {
-    Scene scene("LayoutTest");
-    auto* container = scene.createUINode<UIContainerNode>("Box");
+    TestUIRoot root;
+    auto container = root.createUINode<UIContainerNode>("Box");
     container->_direction = EUIBoxLayout::Horizontal;
     container->_spacing   = 10.0f;
     container->_padding   = 5.0f;
     container->_size      = {300.0f, 80.0f};
 
-    auto* a = scene.createUINode<UIPanelNode>("A", container);
+    auto a = root.createUINode<UIPanelNode>("A", container.get());
     a->_size = {100.0f, 30.0f};
-    auto* b = scene.createUINode<UIPanelNode>("B", container);
+    auto b = root.createUINode<UIPanelNode>("B", container.get());
     b->_size = {50.0f, 40.0f};
 
     container->layout(makeRect(0.0f, 0.0f, 300.0f, 80.0f));
@@ -118,15 +147,15 @@ TEST(Node2DLayoutTest, HBoxArrangesChildrenInPaintOrder)
 
 TEST(Node2DLayoutTest, VBoxArrangesChildrenTopToBottom)
 {
-    Scene scene("LayoutTest");
-    auto* container = scene.createUINode<UIContainerNode>("Box");
+    TestUIRoot root;
+    auto container = root.createUINode<UIContainerNode>("Box");
     container->_direction = EUIBoxLayout::Vertical;
     container->_spacing   = 6.0f;
     container->_size      = {200.0f, 200.0f};
 
-    auto* a = scene.createUINode<UIPanelNode>("A", container);
+    auto a = root.createUINode<UIPanelNode>("A", container.get());
     a->_size = {30.0f, 40.0f};
-    auto* b = scene.createUINode<UIPanelNode>("B", container);
+    auto b = root.createUINode<UIPanelNode>("B", container.get());
     b->_size = {50.0f, 20.0f};
 
     container->layout(makeRect(0.0f, 0.0f, 200.0f, 200.0f));
@@ -137,15 +166,15 @@ TEST(Node2DLayoutTest, VBoxArrangesChildrenTopToBottom)
 
 TEST(Node2DLayoutTest, ContainerDesiredSizeAggregatesChildren)
 {
-    Scene scene("LayoutTest");
-    auto* container = scene.createUINode<UIContainerNode>("Box");
+    TestUIRoot root;
+    auto container = root.createUINode<UIContainerNode>("Box");
     container->_direction = EUIBoxLayout::Horizontal;
     container->_spacing   = 10.0f;
     container->_padding   = 5.0f;
 
-    auto* a = scene.createUINode<UIPanelNode>("A", container);
+    auto a = root.createUINode<UIPanelNode>("A", container.get());
     a->_size = {100.0f, 30.0f};
-    auto* b = scene.createUINode<UIPanelNode>("B", container);
+    auto b = root.createUINode<UIPanelNode>("B", container.get());
     b->_size = {50.0f, 40.0f};
 
     const glm::vec2 desired = container->computeDesiredSize();
@@ -155,30 +184,30 @@ TEST(Node2DLayoutTest, ContainerDesiredSizeAggregatesChildren)
 
 TEST(Node2DLayoutTest, SiblingZOrderDefinesPaintOrder)
 {
-    Scene scene("LayoutTest");
-    auto* parent = scene.createUINode<UICanvasNode>("Canvas");
-    auto* low    = scene.createUINode<UIPanelNode>("Low", parent);
+    TestUIRoot root;
+    auto parent = root.createUINode<UICanvasNode>("Canvas");
+    auto low     = root.createUINode<UIPanelNode>("Low", parent.get());
     low->_zOrder = 5;
-    auto* high = scene.createUINode<UIPanelNode>("High", parent);
+    auto high = root.createUINode<UIPanelNode>("High", parent.get());
     high->_zOrder = 1;
-    auto* mid = scene.createUINode<UIPanelNode>("Mid", parent);
+    auto mid = root.createUINode<UIPanelNode>("Mid", parent.get());
     mid->_zOrder = 3;
 
     const auto order = parent->getChildrenInPaintOrder();
     ASSERT_EQ(order.size(), 3u);
-    EXPECT_EQ(order[0], high); // zOrder 1 first
-    EXPECT_EQ(order[1], mid);  // zOrder 3
-    EXPECT_EQ(order[2], low);  // zOrder 5 last (drawn on top)
+    EXPECT_EQ(order[0], high.get()); // zOrder 1 first
+    EXPECT_EQ(order[1], mid.get());  // zOrder 3
+    EXPECT_EQ(order[2], low.get());  // zOrder 5 last (drawn on top)
 }
 
 TEST(Node2DLayoutTest, CanvasFillsAssignedArea)
 {
-    Scene scene("LayoutTest");
-    auto* canvas = scene.createUINode<UICanvasNode>("Canvas");
+    TestUIRoot root;
+    auto canvas = root.createUINode<UICanvasNode>("Canvas");
     canvas->_position = {10.0f, 10.0f};
     canvas->_size     = {100.0f, 50.0f};
 
-    layoutRoots(scene.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
+    layoutRoots(root.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
     EXPECT_TRUE(rectEq(canvas->_layoutRect, makeRect(0.0f, 0.0f, 800.0f, 600.0f)));
 }
 
@@ -203,39 +232,39 @@ TEST(Node2DLayoutTest, TextAutoSizeFallsBackToFixedSizeWithoutFont)
 
 TEST(Node2DLayoutTest, PickNodeAtReturnsTopmostVisibleNode)
 {
-    Scene scene("PickTest");
-    auto* back = scene.createUINode<UIButtonNode>("Back");
+    TestUIRoot root;
+    auto back = root.createUINode<UIButtonNode>("Back");
     back->_position = {10.0f, 10.0f};
     back->_size     = {100.0f, 50.0f};
     back->_zOrder   = 0;
-    auto* front = scene.createUINode<UIButtonNode>("Front");
+    auto front = root.createUINode<UIButtonNode>("Front");
     front->_position = {10.0f, 10.0f};
     front->_size     = {100.0f, 50.0f};
     front->_zOrder   = 10;
 
-    layoutRoots(scene.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
+    layoutRoots(root.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
 
-    EXPECT_EQ(UISceneRenderer::pickNodeAt(scene.getRootNode(), {50.0f, 30.0f}), front);
-    EXPECT_EQ(UISceneRenderer::pickNodeAt(scene.getRootNode(), {500.0f, 500.0f}), nullptr);
+    EXPECT_EQ(UISceneRenderer::pickNodeAt(root.getRootNode(), {50.0f, 30.0f}), front.get());
+    EXPECT_EQ(UISceneRenderer::pickNodeAt(root.getRootNode(), {500.0f, 500.0f}), nullptr);
 }
 
 TEST(Node2DLayoutTest, MouseMovedClearsHoverWhenLeavingButton)
 {
-    Scene scene("HoverTest");
-    auto* button = scene.createUINode<UIButtonNode>("Btn");
+    TestUIRoot root;
+    auto button = root.createUINode<UIButtonNode>("Btn");
     button->_position = {100.0f, 100.0f};
     button->_size     = {80.0f, 32.0f};
-    layoutRoots(scene.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
+    layoutRoots(root.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
 
     EXPECT_EQ(UISceneRenderer::handleEvent(MouseMoveEvent(120.0f, 110.0f),
                                            makeUICtx(120.0f, 110.0f),
-                                           scene.getRootNode()),
+                                           root.getRootNode()),
               EUIRouteResult::HandledExclusive);
     EXPECT_TRUE(button->_bHovered);
 
     EXPECT_EQ(UISceneRenderer::handleEvent(MouseMoveEvent(10.0f, 10.0f),
                                            makeUICtx(10.0f, 10.0f),
-                                           scene.getRootNode()),
+                                           root.getRootNode()),
               EUIRouteResult::NotHandled);
     EXPECT_FALSE(button->_bHovered);
 }
@@ -246,108 +275,108 @@ TEST(Node2DLayoutTest, MouseMovedClearsHoverWhenLeavingButton)
 
 TEST(Node2DLayoutTest, PassHitRespondsButFallsThrough)
 {
-    Scene scene("FilterTest");
-    auto* button = scene.createUINode<UIButtonNode>("Btn");
+    TestUIRoot root;
+    auto button = root.createUINode<UIButtonNode>("Btn");
     button->_position  = {100.0f, 100.0f};
     button->_size      = {80.0f, 32.0f};
     button->_hitFilter = EUIHitFilter::Pass;
 
     int clickCount = 0;
     button->_onClick = [&] { ++clickCount; };
-    layoutRoots(scene.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
+    layoutRoots(root.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
 
     EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0),
                                            makeUICtx(120.0f, 110.0f),
-                                           scene.getRootNode()),
+                                           root.getRootNode()),
               EUIRouteResult::HandledPass);
     EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonReleasedEvent(0),
                                            makeUICtx(120.0f, 110.0f),
-                                           scene.getRootNode()),
+                                           root.getRootNode()),
               EUIRouteResult::HandledPass);
     EXPECT_EQ(clickCount, 1);
 }
 
 TEST(Node2DLayoutTest, HitTestInvisibleSkipsSelfButChildrenStillHit)
 {
-    Scene scene("FilterTest");
-    auto* panel = scene.createUINode<UIPanelNode>("Overlay");
+    TestUIRoot root;
+    auto panel = root.createUINode<UIPanelNode>("Overlay");
     panel->_position   = {0.0f, 0.0f};
     panel->_size       = {400.0f, 300.0f};
     panel->_visibility = EUIVisibility::HitTestInvisible;
 
-    auto* button = scene.createUINode<UIButtonNode>("Btn", panel);
+    auto button = root.createUINode<UIButtonNode>("Btn", panel.get());
     button->_position = {100.0f, 100.0f};
     button->_size     = {80.0f, 32.0f};
-    layoutRoots(scene.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
+    layoutRoots(root.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
 
     // The HitTestInvisible overlay does not receive hits itself, and its
     // Stop child still does.
     EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0),
                                            makeUICtx(120.0f, 110.0f),
-                                           scene.getRootNode()),
+                                           root.getRootNode()),
               EUIRouteResult::HandledExclusive);
     EXPECT_TRUE(button->_bPressed);
 
     // A click on the overlay itself (outside the child) is not consumed.
     EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0),
                                            makeUICtx(300.0f, 250.0f),
-                                           scene.getRootNode()),
+                                           root.getRootNode()),
               EUIRouteResult::NotHandled);
 }
 
 TEST(Node2DLayoutTest, PassOverlayDoesNotBlockStopChild)
 {
-    Scene scene("FilterTest");
-    auto* panel = scene.createUINode<UIPanelNode>("Overlay");
+    TestUIRoot root;
+    auto panel = root.createUINode<UIPanelNode>("Overlay");
     panel->_position = {0.0f, 0.0f};
     panel->_size     = {400.0f, 300.0f}; // Pass by default (panel)
 
-    auto* button = scene.createUINode<UIButtonNode>("Btn", panel);
+    auto button = root.createUINode<UIButtonNode>("Btn", panel.get());
     button->_position = {100.0f, 100.0f};
     button->_size     = {80.0f, 32.0f};
-    layoutRoots(scene.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
+    layoutRoots(root.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
 
     // Topmost-first: panel is visited first but a passive Pass node does not
     // respond, so the walk continues to the button (Stop, exclusive).
     EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0),
                                            makeUICtx(120.0f, 110.0f),
-                                           scene.getRootNode()),
+                                           root.getRootNode()),
               EUIRouteResult::HandledExclusive);
     EXPECT_TRUE(button->_bPressed);
 }
 
 TEST(Node2DLayoutTest, SelfHitTestInvisibleBlocksWholeSubtree)
 {
-    Scene scene("FilterTest");
-    auto* panel = scene.createUINode<UIPanelNode>("Overlay");
+    TestUIRoot root;
+    auto panel = root.createUINode<UIPanelNode>("Overlay");
     panel->_position   = {0.0f, 0.0f};
     panel->_size       = {400.0f, 300.0f};
     panel->_visibility = EUIVisibility::SelfHitTestInvisible;
 
-    auto* button = scene.createUINode<UIButtonNode>("Btn", panel);
+    auto button = root.createUINode<UIButtonNode>("Btn", panel.get());
     button->_position = {100.0f, 100.0f};
     button->_size     = {80.0f, 32.0f};
-    layoutRoots(scene.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
+    layoutRoots(root.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
 
     // Neither the overlay nor its Stop child receive hits.
     EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0),
                                            makeUICtx(120.0f, 110.0f),
-                                           scene.getRootNode()),
+                                           root.getRootNode()),
               EUIRouteResult::NotHandled);
     EXPECT_FALSE(button->_bPressed);
 }
 
 TEST(Node2DLayoutTest, HiddenKeepsLayoutSpace)
 {
-    Scene scene("LayoutTest");
-    auto* container = scene.createUINode<UIContainerNode>("Box");
+    TestUIRoot root;
+    auto container = root.createUINode<UIContainerNode>("Box");
     container->_direction = EUIBoxLayout::Horizontal;
     container->_spacing   = 10.0f;
     container->_size      = {300.0f, 80.0f};
 
-    auto* a = scene.createUINode<UIPanelNode>("A", container);
+    auto a = root.createUINode<UIPanelNode>("A", container.get());
     a->_size = {100.0f, 30.0f};
-    auto* b = scene.createUINode<UIPanelNode>("B", container);
+    auto b = root.createUINode<UIPanelNode>("B", container.get());
     b->_size       = {50.0f, 40.0f};
     b->_visibility = EUIVisibility::Hidden;
 
@@ -360,15 +389,15 @@ TEST(Node2DLayoutTest, HiddenKeepsLayoutSpace)
 
 TEST(Node2DLayoutTest, CollapsedTakesNoLayoutSpace)
 {
-    Scene scene("LayoutTest");
-    auto* container = scene.createUINode<UIContainerNode>("Box");
+    TestUIRoot root;
+    auto container = root.createUINode<UIContainerNode>("Box");
     container->_direction = EUIBoxLayout::Horizontal;
     container->_spacing   = 10.0f;
     container->_size      = {300.0f, 80.0f};
 
-    auto* a = scene.createUINode<UIPanelNode>("A", container);
+    auto a = root.createUINode<UIPanelNode>("A", container.get());
     a->_size = {100.0f, 30.0f};
-    auto* b = scene.createUINode<UIPanelNode>("B", container);
+    auto b = root.createUINode<UIPanelNode>("B", container.get());
     b->_size       = {50.0f, 40.0f};
     b->_visibility = EUIVisibility::Collapsed;
 
@@ -387,10 +416,10 @@ TEST(Node2DLayoutTest, CollapsedTakesNoLayoutSpace)
 
 TEST(Node2DLayoutTest, VisibleChildUnderHiddenParentIsNotEffective)
 {
-    Scene scene("VisibilityTest");
-    auto* panel = scene.createUINode<UIPanelNode>("Panel");
+    TestUIRoot root;
+    auto panel = root.createUINode<UIPanelNode>("Panel");
     panel->_visibility = EUIVisibility::Hidden;
-    auto* button = scene.createUINode<UIButtonNode>("Btn", panel);
+    auto button = root.createUINode<UIButtonNode>("Btn", panel.get());
 
     // The child itself is Visible, but the hidden ancestor culls the subtree.
     EXPECT_TRUE(button->isVisibleForRender());
@@ -398,18 +427,18 @@ TEST(Node2DLayoutTest, VisibleChildUnderHiddenParentIsNotEffective)
     EXPECT_FALSE(button->isHitTestableInTree());
 
     // The walker agrees: no hit can land in the subtree.
-    layoutRoots(scene.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
+    layoutRoots(root.getRootNode(), makeRect(0.0f, 0.0f, 800.0f, 600.0f));
     EXPECT_EQ(UISceneRenderer::handleEvent(MouseButtonPressedEvent(0),
                                            makeUICtx(50.0f, 50.0f),
-                                           scene.getRootNode()),
+                                           root.getRootNode()),
               EUIRouteResult::NotHandled);
 }
 
 TEST(Node2DLayoutTest, VisibleChildUnderVisibleAncestorsIsEffective)
 {
-    Scene scene("VisibilityTest");
-    auto* panel = scene.createUINode<UIPanelNode>("Panel");
-    auto* button = scene.createUINode<UIButtonNode>("Btn", panel);
+    TestUIRoot root;
+    auto panel = root.createUINode<UIPanelNode>("Panel");
+    auto button = root.createUINode<UIButtonNode>("Btn", panel.get());
     button->_position = {10.0f, 10.0f};
     button->_size     = {80.0f, 32.0f};
 
@@ -419,10 +448,10 @@ TEST(Node2DLayoutTest, VisibleChildUnderVisibleAncestorsIsEffective)
 
 TEST(Node2DLayoutTest, HitTestInvisibleAncestorKeepsChildrenEffective)
 {
-    Scene scene("VisibilityTest");
-    auto* panel = scene.createUINode<UIPanelNode>("Panel");
+    TestUIRoot root;
+    auto panel = root.createUINode<UIPanelNode>("Panel");
     panel->_visibility = EUIVisibility::HitTestInvisible;
-    auto* button = scene.createUINode<UIButtonNode>("Btn", panel);
+    auto button = root.createUINode<UIButtonNode>("Btn", panel.get());
     button->_position = {10.0f, 10.0f};
     button->_size     = {80.0f, 32.0f};
 
@@ -435,10 +464,10 @@ TEST(Node2DLayoutTest, HitTestInvisibleAncestorKeepsChildrenEffective)
 
 TEST(Node2DLayoutTest, SelfHitTestInvisibleAncestorCullsChildren)
 {
-    Scene scene("VisibilityTest");
-    auto* panel = scene.createUINode<UIPanelNode>("Panel");
+    TestUIRoot root;
+    auto panel = root.createUINode<UIPanelNode>("Panel");
     panel->_visibility = EUIVisibility::SelfHitTestInvisible;
-    auto* button = scene.createUINode<UIButtonNode>("Btn", panel);
+    auto button = root.createUINode<UIButtonNode>("Btn", panel.get());
 
     // Still rendered, but the whole subtree is not hittable.
     EXPECT_TRUE(button->isVisibleInTree());
@@ -447,22 +476,23 @@ TEST(Node2DLayoutTest, SelfHitTestInvisibleAncestorCullsChildren)
 
 TEST(Node2DLayoutTest, CollapsedAncestorCullsRenderAndHit)
 {
-    Scene scene("VisibilityTest");
-    auto* panel = scene.createUINode<UIPanelNode>("Panel");
+    TestUIRoot root;
+    auto panel = root.createUINode<UIPanelNode>("Panel");
     panel->_visibility = EUIVisibility::Collapsed;
-    auto* button = scene.createUINode<UIButtonNode>("Btn", panel);
+    auto button = root.createUINode<UIButtonNode>("Btn", panel.get());
 
     EXPECT_FALSE(button->isVisibleInTree());
     EXPECT_FALSE(button->isHitTestableInTree());
 }
 
-TEST(Node2DLayoutTest, Node3DAncestorsAreTransparentToVisibility)
+TEST(Node2DLayoutTest, NodeAncestorsAreTransparentToVisibility)
 {
-    Scene scene("VisibilityTest");
-    Node3D* holder = scene.createNode3D("Holder");
-    auto*   button = scene.createUINode<UIButtonNode>("Btn", holder);
+    TestUIRoot root;
+    auto holder = std::make_shared<Node>("Holder", nullptr);
+    root.addChild(holder.get());
+    auto button = root.createUINode<UIButtonNode>("Btn", holder.get());
 
-    // Node3D has no UI visibility concept: the chain stays effective.
+    // Non-UI ancestors (Node3D in the engine scene) have no UI visibility: the chain stays effective.
     EXPECT_TRUE(button->isVisibleInTree());
     EXPECT_TRUE(button->isHitTestableInTree());
 }

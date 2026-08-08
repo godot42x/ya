@@ -1,8 +1,14 @@
-#include "Framework/Game/Resource/ResourceRegistry.h"
+#include "Foundation/Core/ResourceRegistry.h"
 #include "Foundation/Core/Log.h"
 
 namespace ya
 {
+
+ResourceRegistry &ResourceRegistry::get()
+{
+    static ResourceRegistry instance;
+    return instance;
+}
 
 /**
 

@@ -108,5 +108,14 @@ VulkanSampler::~VulkanSampler()
     VK_DESTROY_A(Sampler, _device, _handle, _allocator);
 }
 
+void VulkanSampler::destroyNow()
+{
+    if (_device == VK_NULL_HANDLE || _handle == VK_NULL_HANDLE) {
+        return;
+    }
+    VK_DESTROY_A(Sampler, _device, _handle, _allocator);
+    _handle = VK_NULL_HANDLE;
+}
+
 // namespace ya
 } // namespace ya

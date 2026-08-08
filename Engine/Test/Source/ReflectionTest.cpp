@@ -5,6 +5,7 @@
 
 #include "Foundation/Core/Reflection/Reflection.h"
 #include "Foundation/Core/Base.h"
+#include "Framework/Game/Gameplay/ECS/ECSRegistry.h"
 
 namespace ya::test
 {

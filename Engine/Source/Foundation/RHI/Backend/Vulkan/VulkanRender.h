@@ -12,6 +12,7 @@
 
 
 #include "Foundation/RHI/Core/Swapchain.h"
+#include "Foundation/RHI/Core/BuiltinTextureSource.h"
 #include "Foundation/RHI/Render.h"
 #include "VulkanCommandBuffer.h"
 #include "VulkanDescriptorSet.h"
@@ -34,6 +35,8 @@
 
 namespace ya
 {
+
+struct VulkanSampler;
 
 // Forward declarations
 
@@ -150,6 +153,16 @@ struct VulkanRender : public IRender
 
     void* nativeWindow = nullptr;
 
+    // Host-injected shader compile/cache service (see IRender::setShaderStorage).
+    std::shared_ptr<ShaderStorage> _shaderStorage = nullptr;
+    // Graphics cards excluded from device selection (host-provided via RenderCreateInfo).
+    std::vector<std::string> _disabledGraphicsCards;
+    // Backend-owned frame counter used for deferred deletion pacing.
+    uint64_t _frameIndex = 0;
+    // Every sampler created through this render's factory, kept alive until
+    // device teardown so handles are released before the device dies (some
+    // owners may outlive the device via static destruction).
+    std::vector<std::weak_ptr<VulkanSampler>> _trackedSamplers;
 
     // used for GPU-CPU(fame), GPU internal(image) sync
     static constexpr uint32_t flightFrameSize = 1;
@@ -187,6 +200,7 @@ struct VulkanRender : public IRender
     {
         IRender::init(ci);
         YA_PROFILE_FUNCTION_LOG();
+        _disabledGraphicsCards = ci.disabledGraphicsCards;
 
         bool success = initInternal(ci);
         YA_CORE_ASSERT(success, "Failed to initialize Vulkan render!");
@@ -199,6 +213,12 @@ struct VulkanRender : public IRender
     {
         destroyInternal();
     }
+
+    void setShaderStorage(std::shared_ptr<ShaderStorage> shaderStorage) override { _shaderStorage = std::move(shaderStorage); }
+    std::shared_ptr<ShaderStorage> getShaderStorage() override { return _shaderStorage; }
+
+    void trackSampler(const std::shared_ptr<VulkanSampler>& sampler) { _trackedSamplers.emplace_back(sampler); }
+    void releaseTrackedSamplers();
 
     bool begin(int32_t* imageIndex) override;
     bool end(int32_t imageIndex, std::vector<void*> CommandBuffers) override;
@@ -364,6 +384,16 @@ struct VulkanRender : public IRender
         // }
 
         // MARK: destroy device
+
+        // Release host-provided default resources (e.g. the GUI texture
+        // library) while the device is still alive: their static destructors
+        // would otherwise run after device teardown.
+        if (auto* source = getBuiltinTextureSource()) {
+            source->shutdown();
+        }
+
+        // Force-release every factory-created sampler before the device dies.
+        releaseTrackedSamplers();
 
         if (_vmaAllocator) {
             vmaDestroyAllocator(_vmaAllocator);

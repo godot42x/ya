@@ -2,7 +2,7 @@
 
 #include "Product/Host/Config/ConfigManager.h"
 #include "Foundation/Core/Math/AABB.h"
-#include "Foundation/Core/Camera/FreeCameraController.h"
+#include "Framework/Game/Gameplay/ECS/System/CameraController/FreeCameraController.h"
 #include "Foundation/Core/Profiling/Profiling.h"
 #include "Framework/Game/Gameplay/ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "Framework/Game/Gameplay/ECS/Component/Mesh/StaticMeshComponent.h"

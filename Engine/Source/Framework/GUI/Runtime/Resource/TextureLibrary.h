@@ -1,7 +1,8 @@
 #pragma once
 
 #include "Foundation/Core/Base.h"
-#include "Framework/Game/Resource/ResourceRegistry.h"
+#include "Foundation/Core/ResourceRegistry.h"
+#include "Foundation/RHI/Core/BuiltinTextureSource.h"
 #include "Foundation/RHI/Core/Sampler.h"
 #include "Foundation/RHI/Core/Texture.h"
 #include <memory>
@@ -25,7 +26,7 @@ struct IRender;
  *   TextureLibrary::get().init();
  *   auto whiteTexture = TextureLibrary::get().getWhiteTexture();
  */
-class YA_GUI_API TextureLibrary : public IResourceCache
+class YA_GUI_API TextureLibrary : public IResourceCache, public IBuiltinTextureSource
 {
   public:
     static TextureLibrary &get();
@@ -40,10 +41,13 @@ class YA_GUI_API TextureLibrary : public IResourceCache
     void  clearCache() override;
     FName getCacheName() const override { return "TextureLibrary"; }
 
+    // IBuiltinTextureSource
+    void shutdown() override;
+
     /**
      * @brief Get a 1x1 white texture (RGBA: 255,255,255,255)
      */
-    ya::Ptr<Texture> getWhiteTexture();
+    std::shared_ptr<Texture> getWhiteTexture();
 
     /**
      * @brief Get a 1x1 black texture (RGBA: 0,0,0,255)
@@ -65,7 +69,7 @@ class YA_GUI_API TextureLibrary : public IResourceCache
     /**
      * @brief Get the default sampler (linear filtering)
      */
-    ya::Ptr<Sampler> getDefaultSampler();
+    std::shared_ptr<Sampler> getDefaultSampler();
 
     /**
      * @brief Get a linear filtering sampler

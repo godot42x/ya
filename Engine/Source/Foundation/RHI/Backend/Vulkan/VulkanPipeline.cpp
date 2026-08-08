@@ -6,7 +6,6 @@
 #include "Foundation/Core/Log.h"
 #include "Foundation/RHI/Core/DescriptorSet.h"
 #include "Foundation/RHI/RenderDefines.h"
-#include "Product/Host/App.h"
 #include "VulkanPipeline.h"
 #include "VulkanRender.h"
 #include "VulkanUtils.h"
@@ -369,7 +368,7 @@ bool VulkanPipeline::createPipelineInternal()
     YA_CORE_ASSERT(!shaderCacheKey.empty(), "Shader cache key is empty");
     _name = shaderCacheKey;
     YA_CORE_INFO("Creating pipeline for: {}", _name.toString());
-    auto                                                shaderStorage = ya::App::get()->getRenderServices().getShaderStorage();
+    auto                                                shaderStorage = _render->getShaderStorage();
     std::shared_ptr<const ShaderStorage::stage2spirv_t> stage2Spirv;
     try {
         stage2Spirv = shaderStorage->getOrLoad(_ci.shaderDesc, _forceShaderReload);
@@ -867,7 +866,7 @@ bool VulkanComputePipeline::createPipelineInternal()
     _name = shaderCacheKey;
     YA_CORE_INFO("Creating compute pipeline for: {}", _name);
 
-    auto                                                shaderStorage = ya::App::get()->getRenderServices().getShaderStorage();
+    auto                                                shaderStorage = _render->getShaderStorage();
     std::shared_ptr<const ShaderStorage::stage2spirv_t> stage2Spirv;
     try {
         stage2Spirv = shaderStorage->getOrLoad(_ci.shaderDesc);

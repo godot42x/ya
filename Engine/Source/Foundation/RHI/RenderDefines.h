@@ -8,6 +8,7 @@
 #include "reflects-core/enum.h"
 
 #include <glm/glm.hpp>
+#include <entt/entt.hpp>
 #include <memory>
 #include <type_traits>
 
@@ -1382,6 +1383,10 @@ struct RenderCreateInfo
     ERenderAPI::T       renderAPI = ERenderAPI::Vulkan;
     SwapchainCreateInfo swapchainCI;
     IWindowProvider*    windowProvider = nullptr;
+
+    /// Graphics cards excluded from physical-device selection by name
+    /// (host-provided; consumed by the backend during device picking).
+    std::vector<std::string> disabledGraphicsCards;
 };
 
 

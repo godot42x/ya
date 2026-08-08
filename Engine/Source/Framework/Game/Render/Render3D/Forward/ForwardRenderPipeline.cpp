@@ -8,6 +8,7 @@
 #include "Framework/Game/Gameplay/ECS/Component/DirectionComponent.h"
 #include "Framework/Game/Gameplay/ECS/Component/TransformComponent.h"
 #include "Framework/Game/Render/Render3D/Forward/ForwardFrameGraphOrchestrator.h"
+#include "Framework/Game/Render/Render3D/Scene.h"
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace ya

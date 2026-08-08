@@ -247,6 +247,8 @@ Scene* createBillboardRegressionScene(App& app)
 
 } // namespace
 
+AppAutomationControlService::AppAutomationControlService() = default;
+
 AppAutomationControlService::~AppAutomationControlService()
 {
     shutdown();

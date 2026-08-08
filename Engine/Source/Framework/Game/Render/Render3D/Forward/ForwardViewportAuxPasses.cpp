@@ -7,6 +7,7 @@
 #include "Framework/Game/Render/Render3D/Common/RenderViewportUtils.h"
 #include "Framework/Game/Resource/Mesh/PrimitiveMeshCache.h"
 #include "Framework/Game/Render/Render3D/Scene.h"
+#include "Framework/Game/Render/Render3D/Stage/IRenderStage.h"
 
 #include "glm/gtc/type_ptr.hpp"
 #include <glm/gtc/matrix_transform.hpp>

@@ -22,6 +22,11 @@ struct VulkanSampler : public ya::Sampler
     VulkanSampler(VulkanRender* render, const ya::SamplerDesc& ci);
     virtual ~VulkanSampler();
 
+    /// Destroy the platform sampler immediately (used at device teardown so
+    /// the handle is released while the device is still alive, regardless of
+    /// how many shared_ptr owners outlive the render device).
+    void destroyNow();
+
     // Override base class interface - returns void* for platform abstraction
     SamplerHandle getHandle() const override { return SamplerHandle(_handle); }
 

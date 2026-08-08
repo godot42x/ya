@@ -2,11 +2,12 @@
 
 #include "Foundation/Core/Base.h"
 #include "Foundation/Core/FName.h"
-#include "Framework/Game/Resource/ResourceRegistry.h"
+#include "Foundation/Core/ResourceRegistry.h"
 #include "Foundation/RHI/Core/Texture.h"
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <string_view>
 #include <vector>
 
@@ -171,12 +172,24 @@ struct Font
 struct YA_GUI_API FontManager : public IResourceCache
 {
 
+    /// Injected sink receiving freshly created font atlas textures. The GUI
+    /// framework stays decoupled from the game-side asset manager: hosts
+    /// (engine runtime / editor) register a sink that forwards the texture to
+    /// their own registry (e.g. AssetManager::registerTexture). Pure GUI hosts
+    /// leave it unset and the texture simply stays owned by the Font.
+    using FontAtlasTextureSink = std::function<void(const FName& fontName, uint32_t fontSize, const std::shared_ptr<Texture>& atlasTexture)>;
+
   private:
     // Key: "fontName:fontSize" -> Font
     std::unordered_map<std::string, stdptr<Font>> _fontCache;
+    FontAtlasTextureSink                           _fontAtlasTextureSink;
 
   public:
     static FontManager *get();
+
+    /// Install the host-provided font atlas texture sink (called once at host
+    /// startup; passing nullptr clears it).
+    static void setFontAtlasTextureSink(FontAtlasTextureSink sink);
 
     // IResourceCache interface
     void  clearCache() override;

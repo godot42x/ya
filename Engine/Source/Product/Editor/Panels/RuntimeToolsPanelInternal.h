@@ -3,7 +3,7 @@
 #include "Product/Editor/Panels/RuntimeToolsPanel.h"
 
 #include "Product/Host/Config/ConfigManager.h"
-#include "Foundation/Core/Camera/FreeCameraController.h"
+#include "Framework/Game/Gameplay/ECS/System/CameraController/FreeCameraController.h"
 #include "Foundation/Core/Profiling/PerfKeys.h"
 #include "Foundation/Core/Profiling/PerfState.h"
 #include "Foundation/Core/Profiling/Profiling.h"

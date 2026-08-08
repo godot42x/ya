@@ -38,6 +38,7 @@
 #include "Product/Host/WindowManager.h"
 
 #include <array>
+#include <format>
 #include <csignal>
 #include <cstdlib>
 #include <filesystem>
@@ -484,6 +485,14 @@ void AppLifecycle::onInit(App& app, const AppDesc& ci)
 {
     (void)app;
     (void)ci;
+    // Forward font atlas textures produced by the GUI framework into the
+    // engine's asset registry (dependency inversion: the GUI stays decoupled
+    // from AssetManager; the host wires the two together).
+    FontManager::setFontAtlasTextureSink(
+        [](const FName& fontName, uint32_t fontSize, const std::shared_ptr<Texture>& atlasTexture) {
+            AssetManager::get()->registerTexture(std::format("FontAtlas_{}:{}", fontName.toString(), fontSize),
+                                                 atlasTexture);
+        });
     if (const std::string runtimeFontPath = findRuntimeDefaultFontPath(); !runtimeFontPath.empty()) {
         auto* render = app.getRenderServices().getRender();
         YA_CORE_ASSERT(render, "AppLifecycle::onInit requires a render backend");

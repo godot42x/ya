@@ -137,6 +137,8 @@ class UploadTestRender final : public IRender
     RecordingCommandBuffer* recorded = nullptr;
 
     void destroy() override {}
+    void setShaderStorage(std::shared_ptr<ShaderStorage>) override {}
+    std::shared_ptr<ShaderStorage> getShaderStorage() override { return nullptr; }
     bool begin(int32_t*) override { return false; }
     bool end(int32_t, std::vector<void*>) override { return false; }
     void getWindowSize(int& width, int& height) const override

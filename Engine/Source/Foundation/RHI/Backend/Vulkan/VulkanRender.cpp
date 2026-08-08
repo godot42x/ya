@@ -1,6 +1,7 @@
 #include "VulkanRender.h"
 #include "VulkanCommandBuffer.h"
 #include "VulkanDescriptorSet.h"
+#include "VulkanSampler.h"
 #include "Foundation/RHI/WindowProvider.h"
 
 #include <Foundation/Core/Base.h>
@@ -16,7 +17,6 @@
 #include <vector>
 
 #include "Foundation/Core/Common/DeferredDeletionQueue.h"
-#include "Product/Host/App.h"
 #include "VulkanUtils.h"
 
 
@@ -30,6 +30,16 @@
 
 namespace ya
 {
+
+void VulkanRender::releaseTrackedSamplers()
+{
+    for (auto& weakSampler : _trackedSamplers) {
+        if (auto sampler = weakSampler.lock()) {
+            sampler->destroyNow();
+        }
+    }
+    _trackedSamplers.clear();
+}
 
 namespace
 {
@@ -365,8 +375,6 @@ void VulkanRender::findPhysicalDevice()
         return score;
     };
 
-    auto desc = App::get()->getDesc();
-
     for (const auto& device : devices) {
         PhysicalDeviceCandidate candidate;
 
@@ -385,7 +393,7 @@ void VulkanRender::findPhysicalDevice()
         logAstcSupport(device, candidate.properties);
 
         bool bSkip = false;
-        for (const auto& disabledCard : desc.disabledGraphicsCards) {
+        for (const auto& disabledCard : _disabledGraphicsCards) {
             if (std::string(candidate.properties.deviceName).find(disabledCard) != std::string::npos) {
                 YA_CORE_WARN("Skipping device {} because it matches disabled graphics card '{}'", candidate.properties.deviceName, disabledCard);
                 bSkip = true;
@@ -1249,7 +1257,8 @@ bool VulkanRender::begin(int32_t* outImageIndex)
 
     // GPU has finished with the previous frame at this slot — safe to destroy
     // any GPU resources that were deferred-deleted during that frame.
-    DeferredDeletionQueue::get().flush(App::currentFrameIndex());
+    ++_frameIndex;
+    DeferredDeletionQueue::get().flush(_frameIndex);
 
     auto vkSwapChain = this->getSwapchain<VulkanSwapChain>();
 

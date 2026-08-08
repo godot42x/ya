@@ -20,6 +20,10 @@ struct Texture;
 struct Model;
 struct Mesh;
 
+/// Canonical asset-path form shared by AssetRef and the resource layer
+/// (mount-style `Engine:` prefixes, `\` -> `/`, lexical normalization).
+YA_CORE_API std::string canonicalizeAssetPath(std::string path);
+
 /**
  * @brief Asset type enumeration
  */
@@ -77,6 +81,11 @@ struct AssetRefBase
     // resolve path from abs to engine?
     // }
     virtual void invalidate() = 0;
+
+    /// Staleness-epoch bookkeeping shared with the asset-ref resolver
+    /// (keeps the mutable cache field encapsulated in the base class).
+    [[nodiscard]] bool hasCheckedAt(uint64_t epoch) const { return _lastCheckedEpoch == epoch; }
+    void               markCheckedAt(uint64_t epoch) const { _lastCheckedEpoch = epoch; }
 
     const std::string &getPath() const { return _path; }
     bool               hasPath() const { return !_path.empty(); }
@@ -267,23 +276,24 @@ struct IAssetRefResolver
     virtual bool isAssetRefType(type_index_t typeIndex) const = 0;
 
     /**
-     * @brief Resolve an asset reference (load the asset from path)
+     * @brief Resolve an asset reference (load the asset from path). The
+     *        resolver owns the resource-layer logic (AssetManager access)
+     *        and updates the concrete ref's state fields directly.
      * @param typeIndex Type index of the concrete asset ref
      * @param assetRefPtr Pointer to the asset ref instance
      */
     virtual void resolveAssetRef(type_index_t typeIndex, void *assetRefPtr) const = 0;
+
+    /**
+     * @brief Query whether a ready asset ref's resource version is stale.
+     *        Only invoked by Core's isStale() when a resolver is installed.
+     */
+    virtual bool isAssetRefStale(type_index_t typeIndex, const void *assetRefPtr) const = 0;
 };
 
-/**
- * @brief Default asset reference resolver implementation
- */
-struct DefaultAssetRefResolver : public IAssetRefResolver
-{
-    static DefaultAssetRefResolver &instance();
-
-    bool isAssetRefType(type_index_t typeIndex) const override;
-    void resolveAssetRef(type_index_t typeIndex, void *assetRefPtr) const override;
-};
+/// Currently installed asset-ref resolver (null in pure-GUI hosts). The
+/// resource layer installs its engine implementation at static-init time.
+YA_CORE_API const IAssetRefResolver *getAssetRefResolver();
+YA_CORE_API void                    setAssetRefResolver(const IAssetRefResolver *resolver);
 
 } // namespace ya
-
