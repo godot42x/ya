@@ -1,6 +1,7 @@
 #include "PBRMaterialComponent.h"
 
 #include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "GUI/Runtime/Resource/TextureSlotBinding.h"
 
 #include <string_view>
 
@@ -106,7 +107,7 @@ void PBRMaterialComponent::syncTextureSlot(PBRMaterial::EResource resourceEnum)
     if (!slot) return;
 
     if (slot->isReady()) {
-        getMaterial()->setTextureBinding(resourceEnum, slot->toTextureBinding());
+        getMaterial()->setTextureBinding(resourceEnum, ya::slotToTextureBinding(*slot));
 
         TextureSlot effectiveSlot = *slot;
         effectiveSlot.bEnable     = slot->isEnabledEffective();

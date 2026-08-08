@@ -2,6 +2,7 @@
 
 #include "Core/Math/Math.h"
 #include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "GUI/Runtime/Resource/TextureSlotBinding.h"
 
 #include <string_view>
 
@@ -134,7 +135,7 @@ void PhongMaterialComponent::syncTextureSlot(PhongMaterial::EResource resourceEn
     }
 
     if (slot->isReady()) {
-        getMaterial()->setTextureBinding(resourceEnum, slot->toTextureBinding());
+        getMaterial()->setTextureBinding(resourceEnum, ya::slotToTextureBinding(*slot));
         getMaterial()->setTextureParam(
             resourceEnum,
             slot->isEnabledEffective(),

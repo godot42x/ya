@@ -4,6 +4,7 @@
 #include "Core/Reflection/Reflection.h"
 #include "Material.h"
 #include "RHI/Core/Std140Types.h"
+#include "RHI/Core/Texture.h"
 
 #include "PhongLit.Types.glsl.h"
 

@@ -2,6 +2,7 @@
 
 #include "Core/Base.h"
 #include "Core/Common/Types.h"
+#include "Core/Common/SamplerEnums.h"
 
 
 #include "RHI/Core/Handle.h"
@@ -1437,17 +1438,6 @@ inline bool isSameImageCreateInfo(const ImageCreateInfo& lhs, const ImageCreateI
 
 
 
-namespace EFilter
-{
-enum T
-{
-    Nearest,
-    Linear,
-    CubicExt,
-    CubicImg,
-};
-} // namespace EFilter
-
 namespace ESamplerMipmapMode
 {
 enum T
@@ -1456,19 +1446,6 @@ enum T
     Linear,
 };
 } // namespace ESamplerMipmapMode
-
-namespace ESamplerAddressMode
-{
-enum T
-{
-    Repeat,
-    MirroredRepeat,
-    ClampToEdge,
-    ClampToBorder,
-};
-
-
-} // namespace ESamplerAddressMode
 
 // Component swizzle for image view channel remapping
 namespace EComponentSwizzle

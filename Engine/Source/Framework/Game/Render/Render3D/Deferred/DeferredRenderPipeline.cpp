@@ -10,6 +10,7 @@
 #include "ECS/Component/DirectionComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
+#include "GUI/Runtime/Resource/TextureSlotBinding.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Core/Sampler.h"
 #include "Graph/RenderGraphImportUtils.h"
@@ -924,7 +925,7 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
                     input.tint           = billboard.tint;
                     input.entityId       = static_cast<uint32_t>(entity);
                     if (billboard.image.isReady()) {
-                        input.textureBinding = billboard.image.toTextureBinding();
+                        input.textureBinding = ya::slotToTextureBinding(billboard.image);
                     }
                     frameInputs.billboards.push_back(std::move(input));
                 }

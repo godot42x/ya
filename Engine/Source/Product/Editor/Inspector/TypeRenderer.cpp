@@ -13,6 +13,7 @@
 #include "Editor/EditorModule.h"
 #include "Render3D/Material/Material.h"
 #include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "GUI/Runtime/Resource/TextureSlotBinding.h"
 #include "Resource/AssetManager.h"
 #include "reflects-core/lib.h"
 
@@ -208,7 +209,7 @@ static void renderTextureSlotPreview(TextureSlot& slot)
         return;
     }
 
-    auto texture = slot.getResolvedTexture();
+    auto texture = ya::resolveSlotTexture(slot);
     if (!texture || !texture->getImageView()) {
         ImGui::TextDisabled("Preview unavailable until loaded");
         return;

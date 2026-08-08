@@ -1,5 +1,7 @@
 #include "MaterialFactory.h"
 
+#include "Core/Base.h"
+
 namespace ya
 {
 

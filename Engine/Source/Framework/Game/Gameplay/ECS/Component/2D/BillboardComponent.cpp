@@ -3,6 +3,7 @@
 #include "Core/Math/Math.h"
 #include "Render3D/Material/MaterialFactory.h"
 #include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "GUI/Runtime/Resource/TextureSlotBinding.h"
 
 namespace ya
 
@@ -33,7 +34,7 @@ bool BillboardComponent::resolve()
     }
 
     if (image.isReady()) {
-        _material->setTextureBinding(UnlitMaterial::BaseColor0, image.toTextureBinding());
+        _material->setTextureBinding(UnlitMaterial::BaseColor0, ya::slotToTextureBinding(image));
         _material->setTextureParam(UnlitMaterial::BaseColor0, true, FMath::build_transform_mat3(image.uvOffset, image.uvRotation, image.uvScale));
         bDirty = false;
         return true;
@@ -41,7 +42,7 @@ bool BillboardComponent::resolve()
 
     const auto result = image.resolve();
     if (result == EAssetResolveResult::Ready) {
-        _material->setTextureBinding(UnlitMaterial::BaseColor0, image.toTextureBinding());
+        _material->setTextureBinding(UnlitMaterial::BaseColor0, ya::slotToTextureBinding(image));
         _material->setTextureParam(UnlitMaterial::BaseColor0, true, FMath::build_transform_mat3(image.uvOffset, image.uvRotation, image.uvScale));
         bDirty = false;
         return true;
