@@ -1,4 +1,4 @@
-#include "Render3D/Adapters/Material/MaterialRenderLinkageRule.h"
+#include "Render/Adapters/Material/MaterialRenderLinkageRule.h"
 
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"

@@ -21,7 +21,7 @@
 #include "ECS/Component/RenderComponent.h"
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Component/CameraComponent.h"
-#include "Render3D/Adapters/LightBillboard/LightBillboardLinkageRule.h"
+#include "Render/Adapters/LightBillboard/LightBillboardLinkageRule.h"
 #include "Gameplay/Systems/TransformSystem.h"
 
 #include "Render3D/RenderRuntime.h"

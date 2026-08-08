@@ -10,5 +10,7 @@ target("ya-host")
     add_deps("ya-scene-core", "ya-scene-runtime")
     -- Host constructs and binds the gameplay systems (animation, ...).
     add_deps("ya-gameplay-animation")
+    -- Host composes the render ECS adapters (linkage rules).
+    add_deps("ya-render-ecs-adapters")
     add_packages("libsdl3", "glm", "nlohmann_json", "cxxopts", { public = true })
     add_packages("asio", "vulkan-memory-allocator", "glad", "lua", "sol2", "quickjs-ng", "vulkansdk")

@@ -1,4 +1,4 @@
-#include "Render3D/Adapters/LightBillboard/LightBillboardLinkageRule.h"
+#include "Render/Adapters/LightBillboard/LightBillboardLinkageRule.h"
 
 #include "Core/Base.h"
 #include "ECS/Component/2D/BillboardComponent.h"

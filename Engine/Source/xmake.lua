@@ -66,7 +66,7 @@ function ya_engine_defines()
         "YA_CORE_API", "YA_RHI_API", "YA_RHI_BACKEND_API", "YA_GUI_API",
         "YA_SCENE_CORE_API", "YA_SCENE_RUNTIME_API", "YA_SCENE_SERIALIZATION_API",
         "YA_SCENE_3D_API", "YA_RESOURCE_API", "YA_RENDER_GRAPH_API",
-        "YA_RENDER_3D_API", "YA_ECS_CORE_API", "YA_GAMEPLAY_ECS_API", "YA_GAMEPLAY_SYSTEMS_API", "YA_COMPONENT_LINKAGE_API", "YA_GAMEPLAY_ANIMATION_API", "YA_PHYSICS_API",
+        "YA_RENDER_3D_API", "YA_RENDER_ECS_ADAPTERS_API", "YA_ECS_CORE_API", "YA_GAMEPLAY_ECS_API", "YA_GAMEPLAY_SYSTEMS_API", "YA_COMPONENT_LINKAGE_API", "YA_GAMEPLAY_ANIMATION_API", "YA_PHYSICS_API",
         "YA_HOST_API", "YA_EDITOR_API",
     }
     for _, macro in ipairs(macros) do
@@ -94,6 +94,7 @@ includes("./Framework/Game/Gameplay/ECS/xmake.lua")
 includes("./Framework/Game/Gameplay/Linkage/xmake.lua")
 includes("./Framework/Game/Gameplay/Systems/xmake.lua")
 includes("./Framework/Game/Physics/xmake.lua")
+includes("./Framework/Game/Render/Adapters/xmake.lua")
 
 -- Product tier: assembled runtimes.
 includes("./Product/Host/xmake.lua")

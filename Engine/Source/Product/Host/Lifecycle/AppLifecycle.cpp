@@ -18,8 +18,8 @@
 #include "Core/System/VirtualFileSystem.h"
 
 #include "Gameplay/Linkage/LinkageFramework.h"
-#include "Render3D/Adapters/LightBillboard/LightBillboardLinkageRule.h"
-#include "Render3D/Adapters/Material/MaterialRenderLinkageRule.h"
+#include "Render/Adapters/LightBillboard/LightBillboardLinkageRule.h"
+#include "Render/Adapters/Material/MaterialRenderLinkageRule.h"
 #include "ECS/System/LuaScriptingSystem.h"
 #include "Gameplay/Systems/JSScriptingSystem.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
