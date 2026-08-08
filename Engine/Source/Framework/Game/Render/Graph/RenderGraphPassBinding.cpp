@@ -1,5 +1,5 @@
-#include "Framework/Game/Render/Graph/RenderGraph.h"
-#include "Framework/Game/Render/Graph/RenderGraphResourceRegistry.h"
+#include "Graph/RenderGraph.h"
+#include "Graph/RenderGraphResourceRegistry.h"
 
 #include <algorithm>
 

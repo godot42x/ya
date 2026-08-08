@@ -1,14 +1,14 @@
-#include "Foundation/Core/Scripting/ScriptApiRegistry.h"
+#include "Core/Scripting/ScriptApiRegistry.h"
 
-#include "Foundation/Core/FName.h"
-#include "Framework/Game/Gameplay/ECS/ECSRegistry.h"
-#include "Foundation/Core/Reflection/ReflectionSerializer.h"
-#include "Framework/Game/Gameplay/ECS/Component.h"
-#include "Framework/Game/Gameplay/ECS/Entity.h"
-#include "Product/Host/App.h"
-#include "Framework/GUI/Runtime/Scene/Node2D.h"
-#include "Framework/Game/Scene/Scene3D/Node3D.h"
-#include "Framework/Game/Render/Render3D/Scene.h"
+#include "Core/FName.h"
+#include "ECS/ECSRegistry.h"
+#include "Core/Reflection/ReflectionSerializer.h"
+#include "ECS/Component.h"
+#include "ECS/Entity.h"
+#include "Host/App.h"
+#include "GUI/Runtime/Scene/Node2D.h"
+#include "Scene3D/Node3D.h"
+#include "Render3D/Scene.h"
 
 #include <algorithm>
 #include <format>

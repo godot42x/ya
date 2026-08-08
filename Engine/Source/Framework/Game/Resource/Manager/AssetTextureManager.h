@@ -3,10 +3,10 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "Foundation/Core/Async/TaskQueue.h"
-#include "Framework/Game/Resource/AssetManager.h"
-#include "Framework/Game/Resource/Handle/ResourceTable.h"
-#include "Framework/Game/Resource/Handle/ResourceTable.h"
+#include "Core/Async/TaskQueue.h"
+#include "Resource/AssetManager.h"
+#include "Resource/Handle/ResourceTable.h"
+#include "Resource/Handle/ResourceTable.h"
 
 namespace ya
 {

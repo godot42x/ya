@@ -1,5 +1,5 @@
 #include "VirtualFileSystem.h"
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 #include "utility.cc/file_utils.h"
 
 VirtualFileSystem *VirtualFileSystem::instance = nullptr;

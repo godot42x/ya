@@ -1,7 +1,7 @@
 #include "PrimitiveMeshCache.h"
 #include "PrimitiveGeometryFactory.h"
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 
 namespace ya
 {

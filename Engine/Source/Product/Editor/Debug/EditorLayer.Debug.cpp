@@ -1,4 +1,4 @@
-#include "Product/Editor/EditorLayerInternal.h"
+#include "Editor/EditorLayerInternal.h"
 
 namespace ya
 {

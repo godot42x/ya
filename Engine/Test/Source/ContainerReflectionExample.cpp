@@ -5,7 +5,7 @@
  * 展示如何使用统一的反射系统来处理容器
  */
 
-#include "Foundation/Core/Reflection/Reflection.h"
+#include "Core/Reflection/Reflection.h"
 #include <gtest/gtest.h>
 #include <iostream>
 

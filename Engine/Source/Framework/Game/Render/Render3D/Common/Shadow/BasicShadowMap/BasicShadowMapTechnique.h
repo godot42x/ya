@@ -3,12 +3,12 @@
 #include "BasicShadowPayload.h"
 #include "DirectionalShadowPass.h"
 #include "PointShadowPass.h"
-#include "Framework/Game/Render/Render3D/Common/Shadow/ShadowGraphOutputs.h"
-#include "Framework/Game/Render/Render3D/Common/Shadow/ShadowFrameResources.h"
-#include "Framework/Game/Render/Render3D/Common/Shadow/ShadowTypes.h"
+#include "Render3D/Common/Shadow/ShadowGraphOutputs.h"
+#include "Render3D/Common/Shadow/ShadowFrameResources.h"
+#include "Render3D/Common/Shadow/ShadowTypes.h"
 
-#include "Foundation/RHI/Core/Image.h"
-#include "Framework/Game/Render/Render3D/Shadow/IShadowTechnique.h"
+#include "RHI/Core/Image.h"
+#include "Render3D/Shadow/IShadowTechnique.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
 

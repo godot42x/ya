@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/Core/Api.h"
-#include "Foundation/RHI/Core/CommandBuffer.h"
+#include "Core/Api.h"
+#include "RHI/Core/CommandBuffer.h"
 
 #include <functional>
 #include <memory>

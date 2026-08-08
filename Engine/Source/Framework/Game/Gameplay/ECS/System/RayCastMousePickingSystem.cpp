@@ -1,13 +1,13 @@
 #include "RayCastMousePickingSystem.h"
-#include "Foundation/Core/Camera/Camera.h"
-#include "Framework/Game/Gameplay/ECS/Component/2D/BillboardComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Mesh/SkinnedMeshComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Mesh/StaticMeshComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/TransformComponent.h"
-#include "Framework/Game/Gameplay/ECS/Entity.h"
-#include "Framework/Game/Resource/Model.h"
-#include "Product/Host/App.h"
-#include "Framework/Game/Render/Render3D/Scene.h"
+#include "Core/Camera/Camera.h"
+#include "ECS/Component/2D/BillboardComponent.h"
+#include "ECS/Component/Mesh/SkinnedMeshComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
+#include "ECS/Component/TransformComponent.h"
+#include "ECS/Entity.h"
+#include "Resource/Model.h"
+#include "Host/App.h"
+#include "Render3D/Scene.h"
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace ya

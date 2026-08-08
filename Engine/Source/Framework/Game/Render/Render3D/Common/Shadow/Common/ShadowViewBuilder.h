@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
+#include "RHI/Core/RenderResourceFactory.h"
 
 #include <array>
 #include <memory>

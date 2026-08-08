@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Foundation/RHI/Render.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/Render.h"
 
 namespace ya
 {

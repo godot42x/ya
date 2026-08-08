@@ -1,6 +1,6 @@
-#include "Product/Host/AppOptions.h"
+#include "Host/AppOptions.h"
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 
 #include <algorithm>
 #include <cctype>

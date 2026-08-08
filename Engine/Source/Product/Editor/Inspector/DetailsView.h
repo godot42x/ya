@@ -1,15 +1,15 @@
 #pragma once
 
-#include "Foundation/Core/TypeIndex.h"
-#include "Framework/Game/Gameplay/ECS/Entity.h"
-#include "Product/Editor/FilePicker.h"
-#include "Product/Editor/Inspector/TypeRenderer.h"
-#include "Framework/Game/Gameplay/ECS/Component/3D/SkyboxComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/3D/EnvironmentLightingComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Material/PBRMaterialComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Material/PhongMaterialComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Material/UnlitMaterialComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Material/SimpleMaterialComponent.h"
+#include "Core/TypeIndex.h"
+#include "ECS/Entity.h"
+#include "Editor/FilePicker.h"
+#include "Editor/Inspector/TypeRenderer.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
+#include "ECS/Component/3D/EnvironmentLightingComponent.h"
+#include "ECS/Component/Material/PBRMaterialComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
+#include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include <imgui.h>
 #include <sol/sol.hpp>
 #include <type_traits>

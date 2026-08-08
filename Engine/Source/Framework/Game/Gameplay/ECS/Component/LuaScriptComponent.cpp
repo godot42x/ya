@@ -1,6 +1,6 @@
 #include "LuaScriptComponent.h"
-#include "Foundation/Core/System/PathUtils.h"
-#include "Framework/Game/Resource/AssetManager.h"
+#include "Core/System/PathUtils.h"
+#include "Resource/AssetManager.h"
 #include <cmath>
 #include <glm/glm.hpp>
 #include <limits>

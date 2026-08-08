@@ -1,4 +1,4 @@
-#include "Foundation/Core/Base.h"
+#include "Core/Base.h"
 
 #if USE_STB_IMG
 

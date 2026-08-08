@@ -1,16 +1,16 @@
 #include "Scene.h"
-#include "Framework/Game/Gameplay/ECS/Component.h"
-#include "Framework/Game/Gameplay/ECS/Component/ManagedChildComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/TransformComponent.h"
-#include "Framework/Game/Gameplay/ECS/Entity.h"
+#include "ECS/Component.h"
+#include "ECS/Component/ManagedChildComponent.h"
+#include "ECS/Component/TransformComponent.h"
+#include "ECS/Entity.h"
 
-#include "Framework/Game/Gameplay/ECS/ECSRegistry.h"
-#include "Foundation/Core/Profiling/Profiling.h"
+#include "ECS/ECSRegistry.h"
+#include "Core/Profiling/Profiling.h"
 
-#include "Product/Host/App.h"
-#include "Framework/Game/Render/Render3D/SceneManager.h"
+#include "Host/App.h"
+#include "Render3D/SceneManager.h"
 
-#include "Foundation/Core/UUID.h"
+#include "Core/UUID.h"
 
 
 namespace ya

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/FName.h"
-#include "Foundation/Core/ResourceRegistry.h"
-#include "Foundation/RHI/Core/Texture.h"
+#include "Core/Base.h"
+#include "Core/FName.h"
+#include "Core/ResourceRegistry.h"
+#include "RHI/Core/Texture.h"
 
 #include <algorithm>
 #include <cstdint>

@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Profiling/Instrumentor.h"
-#include "Foundation/Core/System/System.h"
+#include "Core/Base.h"
+#include "Core/Profiling/Instrumentor.h"
+#include "Core/System/System.h"
 
-#include "Foundation/RHI/Core/CommandBuffer.h"
+#include "RHI/Core/CommandBuffer.h"
 #include "glm/mat4x4.hpp"
 #include <any>
 #include <unordered_map>

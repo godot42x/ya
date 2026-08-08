@@ -1,6 +1,6 @@
-#include "Product/Editor/Inspector/DetailsViewInternal.h"
-#include "Framework/Game/Gameplay/ECS/Component/LuaScriptComponent.h"
-#include "Foundation/Core/System/VirtualFileSystem.h"
+#include "Editor/Inspector/DetailsViewInternal.h"
+#include "ECS/Component/LuaScriptComponent.h"
+#include "Core/System/VirtualFileSystem.h"
 
 namespace ya
 {

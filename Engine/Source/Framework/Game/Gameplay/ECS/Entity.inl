@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Framework/Game/Gameplay/ECS/ComponentMutation.h"
+#include "ECS/ComponentMutation.h"
 
 namespace ya
 {

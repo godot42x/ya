@@ -1,6 +1,6 @@
-#include "Product/Host/Bootstrap/AutomationSceneBootstrapModule.h"
+#include "Host/Bootstrap/AutomationSceneBootstrapModule.h"
 
-#include "Product/Host/App.h"
+#include "Host/App.h"
 
 namespace ya
 {

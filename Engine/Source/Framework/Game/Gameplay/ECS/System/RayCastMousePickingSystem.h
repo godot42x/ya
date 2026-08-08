@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/Core/Api.h"
-#include "Foundation/Core/Math/GLM.h"
-#include "Foundation/Core/Math/Ray.h"
-#include "Product/Host/AppState.h"
+#include "Core/Api.h"
+#include "Core/Math/GLM.h"
+#include "Core/Math/Ray.h"
+#include "Host/AppState.h"
 #include <optional>
 
 namespace ya

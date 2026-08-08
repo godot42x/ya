@@ -1,14 +1,14 @@
 #include "Model.h"
 
-#include "Framework/Game/Resource/EngineGeometryNormalizer.h"
-#include "Framework/Game/Resource/Model/AssimpImporter.h"
-#include "Framework/Game/Resource/Model/GltfImporter.h"
-#include "Framework/Game/Resource/Model/ImportedModelData.h"
-#include "Framework/Game/Resource/Model/ModelImporterCommon.h"
-#include "Framework/Game/Resource/Model/ModelImporterRegistry.h"
-#include "Framework/Game/Resource/Skeleton.h"
+#include "Resource/EngineGeometryNormalizer.h"
+#include "Resource/Model/AssimpImporter.h"
+#include "Resource/Model/GltfImporter.h"
+#include "Resource/Model/ImportedModelData.h"
+#include "Resource/Model/ModelImporterCommon.h"
+#include "Resource/Model/ModelImporterRegistry.h"
+#include "Resource/Skeleton.h"
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 
 #include <algorithm>
 #include <filesystem>

@@ -1,5 +1,5 @@
 #pragma once
-#include "Foundation/Core/Base.h"
+#include "Core/Base.h"
 
 #include "reflects-core/enum.h"
 

@@ -1,7 +1,7 @@
 #include "UnlitMaterialComponent.h"
 
-#include "Foundation/Core/Math/Math.h"
-#include "Framework/GUI/Runtime/Resource/TextureLibrary.h"
+#include "Core/Math/Math.h"
+#include "GUI/Runtime/Resource/TextureLibrary.h"
 
 #include <string_view>
 

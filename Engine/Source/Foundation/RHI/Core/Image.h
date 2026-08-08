@@ -2,7 +2,7 @@
 
 #include "Handle.h"
 
-#include "Foundation/RHI/RenderDefines.h"
+#include "RHI/RenderDefines.h"
 
 namespace ya
 {

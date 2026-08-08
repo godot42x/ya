@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 
-#include "Foundation/RHI/Render.h"
-#include "Foundation/RHI/WindowProvider.h"
+#include "RHI/Render.h"
+#include "RHI/WindowProvider.h"
 #include "glad/glad.h"
 #include <string>
 #include <unordered_map>

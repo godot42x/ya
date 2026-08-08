@@ -1,7 +1,9 @@
 target("ya-resource")
     set_kind("shared")
     ya_std_module("YA_RESOURCE_API")
-    add_includedirs("../../..", { public = true })
+    -- Transition: AssetManager.cpp reaches Host App services and Host public
+    -- headers re-expose Render3D types (plan §10.6).
+    ya_tier_include("Game", "Product", "Render")
     add_files("**.cpp|Model/TinyGLTF.cpp")
     add_files("Model/TinyGLTF.cpp", { unity_ignored = true })
     add_headerfiles("**.h")

@@ -1,4 +1,4 @@
-#include "Foundation/Core/Module/Module.h"
+#include "Core/Module/Module.h"
 
 namespace
 {

@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-#include "Product/Editor/EditorCommon.h"
+#include "Editor/EditorCommon.h"
 
 namespace ya
 {

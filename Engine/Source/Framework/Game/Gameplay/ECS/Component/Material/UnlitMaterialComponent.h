@@ -19,9 +19,9 @@
  */
 #pragma once
 
-#include "Framework/Game/Gameplay/ECS/Component/Material/PhongMaterialComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "MaterialComponent.h"
-#include "Framework/Game/Render/Render3D/Material/UnlitMaterial.h"
+#include "Render3D/Material/UnlitMaterial.h"
 
 #include <array>
 #include <vector>

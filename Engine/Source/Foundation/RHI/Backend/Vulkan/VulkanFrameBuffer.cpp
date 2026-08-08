@@ -1,5 +1,5 @@
-#include "Foundation/RHI/Backend/Vulkan/VulkanFrameBuffer.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
+#include "RHI/Backend/Vulkan/VulkanFrameBuffer.h"
+#include "RHI/Core/RenderResourceFactory.h"
 
 namespace ya
 {

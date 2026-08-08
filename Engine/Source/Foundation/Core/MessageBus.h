@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Event.h"
+#include "Core/Base.h"
+#include "Core/Event.h"
 #include "FName.h"
 #include <algorithm>
 #include <functional>

@@ -4,10 +4,10 @@
 #include <string>
 #include <unordered_map>
 
-#include "Foundation/Core/Common/AssetFuture.h"
-#include "Framework/Game/Resource/AssetManagerTypes.h"
-#include "Framework/Game/Resource/Meta/AssetMeta.h"
-#include "Foundation/Core/ResourceRegistry.h"
+#include "Core/Common/AssetFuture.h"
+#include "Resource/AssetManagerTypes.h"
+#include "Resource/Meta/AssetMeta.h"
+#include "Core/ResourceRegistry.h"
 
 
 namespace Assimp

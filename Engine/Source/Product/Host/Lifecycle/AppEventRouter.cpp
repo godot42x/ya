@@ -1,10 +1,10 @@
-#include "Product/Host/Lifecycle/AppEventRouter.h"
+#include "Host/Lifecycle/AppEventRouter.h"
 
-#include "Product/Host/App.h"
-#include "Product/Host/WindowManager.h"
+#include "Host/App.h"
+#include "Host/WindowManager.h"
 
-#include "Foundation/Core/Profiling/PerfKeys.h"
-#include "Foundation/Core/Profiling/PerfState.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
 
 namespace ya
 {

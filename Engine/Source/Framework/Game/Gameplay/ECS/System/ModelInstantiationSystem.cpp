@@ -1,25 +1,25 @@
 #include "ModelInstantiationSystem.h"
 
-#include "Product/Host/App.h"
-#include "Framework/GUI/Runtime/Scene/Node.h"
-#include "Framework/Game/Scene/Scene3D/Node3D.h"
-#include "Framework/Game/Render/Render3D/SceneManager.h"
+#include "Host/App.h"
+#include "GUI/Runtime/Scene/Node.h"
+#include "Scene3D/Node3D.h"
+#include "Render3D/SceneManager.h"
 
-#include "Framework/Game/Gameplay/ECS/Component/ManagedChildComponent.h"
+#include "ECS/Component/ManagedChildComponent.h"
 
-#include "Framework/Game/Gameplay/ECS/Component/Material/PBRMaterialComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Material/PhongMaterialComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Material/UnlitMaterialComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Mesh/SkinnedMeshComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Mesh/StaticMeshComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/ModelComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/SkeletonAnimatorComponent.h"
-#include "Framework/Game/Gameplay/ECS/Entity.h"
+#include "ECS/Component/Material/PBRMaterialComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
+#include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "ECS/Component/Mesh/SkinnedMeshComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
+#include "ECS/Component/ModelComponent.h"
+#include "ECS/Component/SkeletonAnimatorComponent.h"
+#include "ECS/Entity.h"
 
-#include "Framework/Game/Render/Render3D/Material/MaterialFactory.h"
-#include "Framework/Game/Render/Render3D/Material/PBRMaterial.h"
-#include "Framework/Game/Render/Render3D/Material/PhongMaterial.h"
-#include "Framework/Game/Resource/Model.h"
+#include "Render3D/Material/MaterialFactory.h"
+#include "Render3D/Material/PBRMaterial.h"
+#include "Render3D/Material/PhongMaterial.h"
+#include "Resource/Model.h"
 
 #include <format>
 

@@ -1,6 +1,6 @@
-#include "Framework/Game/Gameplay/ECS/System/ResourceResolveSystem.h"
-#include "Product/Editor/Inspector/DetailsViewInternal.h"
-#include "Product/Host/App.h"
+#include "ECS/System/ResourceResolveSystem.h"
+#include "Editor/Inspector/DetailsViewInternal.h"
+#include "Host/App.h"
 
 namespace ya
 {

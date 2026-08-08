@@ -1,6 +1,6 @@
 #include "FontManager.h"
-#include "Foundation/Core/Profiling/Instrumentor.h"
-#include "Foundation/Core/System/VirtualFileSystem.h"
+#include "Core/Profiling/Instrumentor.h"
+#include "Core/System/VirtualFileSystem.h"
 #include "freetype/freetype.h"
 
 #include <array>

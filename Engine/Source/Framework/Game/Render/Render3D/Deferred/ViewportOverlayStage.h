@@ -1,13 +1,13 @@
 #pragma once
 
 #include "DeferredAttachmentFormats.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/Pipeline.h"
-#include "Framework/Game/Render/Render3D/Material/UnlitMaterial.h"
-#include "Framework/Game/Render/Render3D/Pipelines/DebugSkinning.h"
-#include "Framework/Game/Render/Render3D/Stage/IRenderStage.h"
-#include "Framework/Game/Render/Render3D/Services/DebugRenderSystem.h"
-#include "Framework/Game/Render/Render3D/Common/RenderOverlay.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/Pipeline.h"
+#include "Render3D/Material/UnlitMaterial.h"
+#include "Render3D/Pipelines/DebugSkinning.h"
+#include "Render3D/Stage/IRenderStage.h"
+#include "Render3D/Services/DebugRenderSystem.h"
+#include "Render3D/Common/RenderOverlay.h"
 
 #include "GLSL.Skybox.glsl.h"
 

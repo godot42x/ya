@@ -1,18 +1,18 @@
 #include "DirectionalShadowPass.h"
 
-#include "Framework/Game/Render/Graph/RenderGraphImportUtils.h"
+#include "Graph/RenderGraphImportUtils.h"
 
-#include "Foundation/Core/Profiling/Instrumentor.h"
-#include "Foundation/Core/Profiling/PerfKeys.h"
-#include "Foundation/Core/Profiling/PerfState.h"
+#include "Core/Profiling/Instrumentor.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
 
-#include "Foundation/RHI/RenderDefines.h"
-#include "Framework/Game/Render/Render3D/Common/Shadow/Common/ShadowDrawHelper.h"
+#include "RHI/RenderDefines.h"
+#include "Render3D/Common/Shadow/Common/ShadowDrawHelper.h"
 
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Framework/Game/Resource/Mesh.h"
-#include "Framework/Game/Render/Render3D/RenderFrameData.h"
-#include "Foundation/RHI/Render.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "Resource/Mesh.h"
+#include "Render3D/RenderFrameData.h"
+#include "RHI/Render.h"
 
 #include <format>
 

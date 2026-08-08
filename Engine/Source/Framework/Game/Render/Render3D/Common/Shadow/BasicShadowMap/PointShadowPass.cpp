@@ -1,19 +1,19 @@
 #include "PointShadowPass.h"
 
-#include "Framework/Game/Render/Graph/RenderGraphImportUtils.h"
+#include "Graph/RenderGraphImportUtils.h"
 
-#include "Foundation/Core/Profiling/Instrumentor.h"
-#include "Foundation/Core/Profiling/PerfKeys.h"
-#include "Foundation/Core/Profiling/PerfState.h"
+#include "Core/Profiling/Instrumentor.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
 
-#include "Framework/Game/Render/Render3D/Common/Shadow/Common/ShadowDrawHelper.h"
-#include "Framework/Game/Render/Render3D/Common/Shadow/Common/ShadowMapResources.h"
+#include "Render3D/Common/Shadow/Common/ShadowDrawHelper.h"
+#include "Render3D/Common/Shadow/Common/ShadowMapResources.h"
 
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Foundation/RHI/Core/Texture.h"
-#include "Framework/Game/Resource/Mesh.h"
-#include "Foundation/RHI/Render.h"
-#include "Framework/Game/Render/Render3D/RenderFrameData.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/Core/Texture.h"
+#include "Resource/Mesh.h"
+#include "RHI/Render.h"
+#include "Render3D/RenderFrameData.h"
 
 #include <format>
 #include <vector>

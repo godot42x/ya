@@ -2,11 +2,11 @@
 
 #include "BasicShadowMap/BasicShadowMapTechnique.h"
 
-#include "Foundation/Core/Profiling/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Foundation/RHI/Render.h"
-#include "Framework/Game/Render/Render3D/RenderFrameData.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Render.h"
+#include "Render3D/RenderFrameData.h"
 
 namespace ya
 {

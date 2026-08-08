@@ -1,12 +1,12 @@
 #pragma once
 
-#include "Foundation/Core/Common/StateTransition.h"
-#include "Foundation/Core/Reflection/Reflection.h"
+#include "Core/Common/StateTransition.h"
+#include "Core/Reflection/Reflection.h"
 
 #include <array>
 
-#include "Framework/Game/Gameplay/ECS/Component.h"
-#include "Foundation/RHI/Core/Texture.h"
+#include "ECS/Component.h"
+#include "RHI/Core/Texture.h"
 
 namespace ya
 {

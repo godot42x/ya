@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/RHI/RenderDefines.h"
-#include "Framework/Game/Render/Render3D/Shadow/ShadowSettings.h"
-#include "Framework/Game/Render/Render3D/Common/RenderOverlay.h"
-#include "Framework/Game/Render/Render3D/Common/RenderTargetCatalog.h"
+#include "RHI/RenderDefines.h"
+#include "Render3D/Shadow/ShadowSettings.h"
+#include "Render3D/Common/RenderOverlay.h"
+#include "Render3D/Common/RenderTargetCatalog.h"
 
 #include <functional>
 #include <glm/glm.hpp>

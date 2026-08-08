@@ -1,9 +1,9 @@
 #include "ShadowFrameResources.h"
 
-#include "Foundation/Core/Log.h"
-#include "Foundation/Core/Common/DeferredDeletionQueue.h"
-#include "Foundation/RHI/Render.h"
-#include "Framework/Game/Render/Render3D/RenderFrameData.h"
+#include "Core/Log.h"
+#include "Core/Common/DeferredDeletionQueue.h"
+#include "RHI/Render.h"
+#include "Render3D/RenderFrameData.h"
 
 #include <algorithm>
 #include <format>

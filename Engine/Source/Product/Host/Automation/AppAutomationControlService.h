@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Framework/Game/Render/Graph/RenderGraph.h"
-#include "Product/Host/AppOptions.h"
-#include "Product/Host/Utility/AppScreenshotCapture.h"
+#include "Graph/RenderGraph.h"
+#include "Host/AppOptions.h"
+#include "Host/Utility/AppScreenshotCapture.h"
 
 #include <atomic>
 #include <condition_variable>

@@ -1,8 +1,8 @@
-#include "Product/Editor/FilePicker.h"
-#include "Product/Host/Config/ConfigManager.h"
-#include "Foundation/Core/Log.h"
-#include "Foundation/Core/System/PathUtils.h"
-#include "Product/Editor/ImGui/ImGuiHelper.h"
+#include "Editor/FilePicker.h"
+#include "Host/Config/ConfigManager.h"
+#include "Core/Log.h"
+#include "Core/System/PathUtils.h"
+#include "Editor/ImGui/ImGuiHelper.h"
 #include <format>
 #include <imgui.h>
 

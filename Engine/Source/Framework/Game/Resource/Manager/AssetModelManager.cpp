@@ -1,10 +1,10 @@
-#include "Framework/Game/Resource/Manager/AssetModelManager.h"
+#include "Resource/Manager/AssetModelManager.h"
 
 
-#include "Foundation/Core/Log.h"
-#include "Framework/Game/Resource/Model/ImportedModelData.h"
+#include "Core/Log.h"
+#include "Resource/Model/ImportedModelData.h"
 
-#include "Foundation/Core/Common/DeferredDeletionQueue.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 
 namespace ya
 {

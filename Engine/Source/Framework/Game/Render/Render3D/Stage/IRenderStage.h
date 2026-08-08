@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/Core/Common/Types.h"
-#include "Foundation/RHI/RenderDefines.h"
-#include "Framework/Game/Render/Render3D/RenderFrameData.h"
+#include "Core/Common/Types.h"
+#include "RHI/RenderDefines.h"
+#include "Render3D/RenderFrameData.h"
 
 #include <string>
 

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Framework/Game/Render/Render3D/RenderFrameData.h"
-#include "Framework/Game/Render/Render3D/Shadow/ShadowSettings.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "Render3D/RenderFrameData.h"
+#include "Render3D/Shadow/ShadowSettings.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
 #include "Shadow.PointShadowIndirect.slang.h"

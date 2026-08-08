@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Framework/Game/Resource/Skeleton.h"
-#include "Foundation/Core/Api.h"
+#include "Resource/Skeleton.h"
+#include "Core/Api.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>

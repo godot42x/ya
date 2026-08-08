@@ -1,8 +1,8 @@
-#include "Foundation/RHI/Core/Pipeline.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanPipeline.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanRender.h"
-#include "Foundation/RHI/Render.h"
-#include "Foundation/RHI/Core/RenderPass.h"
+#include "RHI/Core/Pipeline.h"
+#include "RHI/Backend/Vulkan/VulkanPipeline.h"
+#include "RHI/Backend/Vulkan/VulkanRender.h"
+#include "RHI/Render.h"
+#include "RHI/Core/RenderPass.h"
 
 
 namespace ya

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Framework/Game/Resource/Handle/ResourceHandle.h"
+#include "Resource/Handle/ResourceHandle.h"
 
 #include <mutex>
 #include <string>

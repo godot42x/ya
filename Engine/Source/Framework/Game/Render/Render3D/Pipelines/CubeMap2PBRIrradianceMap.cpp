@@ -1,13 +1,13 @@
 #include "CubeMap2PBRIrradianceMap.h"
-#include "Framework/Game/Render/Graph/RenderGraphExecutor.h"
-#include "Framework/Game/Render/Graph/RenderGraphImportUtils.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Foundation/RHI/Core/RenderingInfoUtils.h"
+#include "Graph/RenderGraphExecutor.h"
+#include "Graph/RenderGraphImportUtils.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/Core/RenderingInfoUtils.h"
 
-#include "Foundation/Core/Math/Math.h"
-#include "Foundation/RHI/Render.h"
-#include "Foundation/Core/Common/DeferredDeletionQueue.h"
-#include "Framework/Game/Resource/Mesh/PrimitiveMeshCache.h"
+#include "Core/Math/Math.h"
+#include "RHI/Render.h"
+#include "Core/Common/DeferredDeletionQueue.h"
+#include "Resource/Mesh/PrimitiveMeshCache.h"
 
 namespace ya
 {

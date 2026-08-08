@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Product/Editor/FileExplorer.h"
+#include "Editor/FileExplorer.h"
 
-#include "Product/Host/Config/ConfigManager.h"
-#include "Foundation/Core/System/PathUtils.h"
-#include "Foundation/Core/System/VirtualFileSystem.h"
-#include "Product/Editor/ImGui/ImGuiHelper.h"
+#include "Host/Config/ConfigManager.h"
+#include "Core/System/PathUtils.h"
+#include "Core/System/VirtualFileSystem.h"
+#include "Editor/ImGui/ImGuiHelper.h"
 
 #include <algorithm>
 #include <format>

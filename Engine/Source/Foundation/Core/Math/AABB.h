@@ -2,7 +2,7 @@
 
 #include <limits>
 
-#include "Foundation/Core/Math/GLM.h"
+#include "Core/Math/GLM.h"
 
 namespace ya
 {

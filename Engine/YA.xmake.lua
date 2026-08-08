@@ -78,7 +78,7 @@ end
 
 local function check_runtime_source_isolation()
     local forbiddenIncludes = {
-        { pattern = "#include%s*[<\"]%s*editor/", label = "Editor" },
+        { pattern = "#include%s*[<\"]%s*Editor/", label = "Editor" },
     }
     local sourceRoot = path.join(os.scriptdir(), "Source")
     local sourceFiles = os.files(path.join(sourceRoot, "**.h"))
@@ -141,7 +141,6 @@ do
     add_headerfiles("./Source/**.h")
     set_pcheader("./Source/Foundation/Core/Common/FWD.h")
 
-    add_includedirs("./Source", { public = true })
     add_includedirs("./Shader/Slang/Generated", { public = true })
     add_includedirs("./Shader/GLSL/Generated", { public = true })
 

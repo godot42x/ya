@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Reflection/Reflection.h"
+#include "Core/Base.h"
+#include "Core/Reflection/Reflection.h"
 
 #include <glm/glm.hpp>
 

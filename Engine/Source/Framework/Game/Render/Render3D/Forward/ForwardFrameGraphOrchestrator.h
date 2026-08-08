@@ -1,9 +1,9 @@
 #pragma once
 
 #include "ForwardFrameGraphPasses.h"
-#include "Framework/Game/Render/Render3D/Forward/ForwardFrameResourceSet.h"
-#include "Framework/Game/Render/Render3D/Forward/ForwardViewportStage.h"
-#include "Framework/Game/Render/Render3D/Common/IRenderPipeline.h"
+#include "Render3D/Forward/ForwardFrameResourceSet.h"
+#include "Render3D/Forward/ForwardViewportStage.h"
+#include "Render3D/Common/IRenderPipeline.h"
 
 #include <memory>
 #include <vector>

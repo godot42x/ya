@@ -8,12 +8,12 @@
 #include <thread>
 #include <unordered_map>
 
-#include "Foundation/RHI/Render.h"
+#include "RHI/Render.h"
 
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 
-#include "Foundation/Core/Profiling/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 #include "reflects-core/enum.h"
 #include <spirv_cross/spirv_cross.hpp>
 #include <utility>

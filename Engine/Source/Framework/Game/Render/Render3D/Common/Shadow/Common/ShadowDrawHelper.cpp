@@ -1,12 +1,12 @@
 #include "ShadowDrawHelper.h"
 
-#include "Foundation/Core/Profiling/PerfKeys.h"
-#include "Foundation/Core/Profiling/PerfState.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
 
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Foundation/RHI/Core/Pipeline.h"
-#include "Framework/Game/Resource/Mesh.h"
-#include "Framework/Game/Render/Render3D/RenderFrameData.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/Pipeline.h"
+#include "Resource/Mesh.h"
+#include "Render3D/RenderFrameData.h"
 
 namespace ya::ShadowDrawHelper
 {

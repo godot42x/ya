@@ -1,4 +1,4 @@
-#include "Foundation/RHI/Shader.h"
+#include "RHI/Shader.h"
 
 #include <algorithm>
 #include <format>

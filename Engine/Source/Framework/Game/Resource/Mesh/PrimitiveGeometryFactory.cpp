@@ -1,8 +1,8 @@
 #include "PrimitiveGeometryFactory.h"
 
-#include "Framework/Game/Resource/EngineGeometryNormalizer.h"
+#include "Resource/EngineGeometryNormalizer.h"
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 
 namespace ya
 {

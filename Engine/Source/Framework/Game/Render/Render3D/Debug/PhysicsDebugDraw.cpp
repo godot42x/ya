@@ -1,9 +1,9 @@
 #include "PhysicsDebugDraw.h"
 
-#include "Framework/Game/Gameplay/ECS/Component/TransformComponent.h"
-#include "Framework/Game/Physics/PhysicsBodyComponent.h"
-#include "Framework/GUI/Runtime/Draw2D/Render2D.h"
-#include "Framework/Game/Render/Render3D/Scene.h"
+#include "ECS/Component/TransformComponent.h"
+#include "Physics/PhysicsBodyComponent.h"
+#include "GUI/Runtime/Draw2D/Render2D.h"
+#include "Render3D/Scene.h"
 
 namespace ya
 {

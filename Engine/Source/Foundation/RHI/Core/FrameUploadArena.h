@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/Core/Api.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
+#include "Core/Api.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/RenderResourceFactory.h"
 
 #include <cstdint>
 #include <memory>

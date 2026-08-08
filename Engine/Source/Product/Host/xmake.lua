@@ -1,7 +1,7 @@
 target("ya-host")
     set_kind("shared")
     ya_std_module("YA_HOST_API")
-    add_includedirs("../..", { public = true })
+    ya_tier_include("Product")
     add_files("**.cpp")
     add_headerfiles("**.h")
     add_deps("ya-render-3d", "imgui-local", "imguizmo-local", { public = true })

@@ -1,6 +1,6 @@
 #include "InputManager.h"
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 
 #include <SDL3/SDL.h>
 
@@ -9,8 +9,8 @@
 #include <cctype>
 #include <optional>
 
-#include "Foundation/Core/Event.h"
-#include "Foundation/Core/MessageBus.h"
+#include "Core/Event.h"
+#include "Core/MessageBus.h"
 
 namespace ya
 {

@@ -1,12 +1,12 @@
 
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Reflection/Reflection.h"
+#include "Core/Base.h"
+#include "Core/Reflection/Reflection.h"
 
-#include "Foundation/Core/Api.h"
-#include "Product/Host/App.h"
-#include "Framework/Game/Render/Render3D/SceneManager.h"
+#include "Core/Api.h"
+#include "Host/App.h"
+#include "Render3D/SceneManager.h"
 
 #include <algorithm>
 #include <sol/sol.hpp>

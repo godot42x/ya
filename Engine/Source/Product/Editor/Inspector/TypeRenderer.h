@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
+#include "Core/Base.h"
 #include "reflects-core/lib.h"
 
-#include "Foundation/Core/Reflection/ContainerProperty.h"
-#include "Foundation/Core/Reflection/MetadataSupport.h"
+#include "Core/Reflection/ContainerProperty.h"
+#include "Core/Reflection/MetadataSupport.h"
 #include <functional>
 #include <mutex>
 #include <string>
@@ -12,7 +12,7 @@
 #include <unordered_set>
 
 
-#include "Product/Editor/Inspector/ReflectionCache.h"
+#include "Editor/Inspector/ReflectionCache.h"
 
 #include <imgui.h>
 namespace ya

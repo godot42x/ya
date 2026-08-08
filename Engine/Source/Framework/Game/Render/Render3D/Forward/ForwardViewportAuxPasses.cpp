@@ -1,13 +1,13 @@
 #include "ForwardViewportAuxPasses.h"
 
-#include "Foundation/Core/Math/Math.h"
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Foundation/RHI/Render.h"
-#include "Framework/Game/Render/Render3D/Common/RenderViewportUtils.h"
-#include "Framework/Game/Resource/Mesh/PrimitiveMeshCache.h"
-#include "Framework/Game/Render/Render3D/Scene.h"
-#include "Framework/Game/Render/Render3D/Stage/IRenderStage.h"
+#include "Core/Math/Math.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/Render.h"
+#include "Render3D/Common/RenderViewportUtils.h"
+#include "Resource/Mesh/PrimitiveMeshCache.h"
+#include "Render3D/Scene.h"
+#include "Render3D/Stage/IRenderStage.h"
 
 #include "glm/gtc/type_ptr.hpp"
 #include <glm/gtc/matrix_transform.hpp>

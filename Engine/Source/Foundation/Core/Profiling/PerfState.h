@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/Core/Profiling/Profiling.h"
+#include "Core/Profiling/Profiling.h"
 
-#include "Foundation/Core/FName.h"
-#include "Foundation/Core/Macro/VariadicMacros.h"
+#include "Core/FName.h"
+#include "Core/Macro/VariadicMacros.h"
 
 #include <atomic>
 #include <chrono>

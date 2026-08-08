@@ -11,9 +11,9 @@
  */
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Reflection/Reflection.h"
-#include "Framework/Game/Resource/Mesh.h"
+#include "Core/Base.h"
+#include "Core/Reflection/Reflection.h"
+#include "Resource/Mesh.h"
 
 namespace ya
 {

@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include "Foundation/Core/Profiling/Profiling.h"
+#include "Core/Profiling/Profiling.h"
 
 #include <atomic>
 #include <chrono>
@@ -18,8 +18,8 @@
 #include <thread>
 #include <vector>
 
-#include "Foundation/Core/Log.h"
-#include "Foundation/Core/Macro/VariadicMacros.h"
+#include "Core/Log.h"
+#include "Core/Macro/VariadicMacros.h"
 
 namespace ya
 {

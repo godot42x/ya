@@ -1,7 +1,7 @@
 #include "TextureLibrary.h"
-#include "Foundation/Core/Log.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Foundation/RHI/Render.h"
+#include "Core/Log.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/Render.h"
 
 namespace ya
 {

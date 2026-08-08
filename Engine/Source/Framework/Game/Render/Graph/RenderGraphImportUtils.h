@@ -1,10 +1,10 @@
 #pragma once
 
 #include "RenderGraph.h"
-#include "Foundation/RHI/Core/ImageResourceRef.h"
-#include "Foundation/RHI/Core/RenderImage.h"
-#include "Foundation/RHI/Core/Texture.h"
-#include "Foundation/Core/Api.h"
+#include "RHI/Core/ImageResourceRef.h"
+#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/Texture.h"
+#include "Core/Api.h"
 
 namespace ya
 {

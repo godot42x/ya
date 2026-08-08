@@ -1,12 +1,12 @@
 #include "RenderRuntime.h"
 
-#include "Foundation/Core/Profiling/PerfKeys.h"
-#include "Foundation/Core/Profiling/PerfState.h"
-#include "Framework/Game/Render/Graph/RenderGraphImportUtils.h"
-#include "Foundation/RHI/Core/Swapchain.h"
-#include "Product/Host/App.h"
-#include "Framework/Game/Render/Render3D/Deferred/DeferredRenderPipeline.h"
-#include "Framework/Game/Render/Render3D/Forward/ForwardRenderPipeline.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
+#include "Graph/RenderGraphImportUtils.h"
+#include "RHI/Core/Swapchain.h"
+#include "Host/App.h"
+#include "Render3D/Deferred/DeferredRenderPipeline.h"
+#include "Render3D/Forward/ForwardRenderPipeline.h"
 #include "utility.cc/ranges.h"
 #include <functional>
 

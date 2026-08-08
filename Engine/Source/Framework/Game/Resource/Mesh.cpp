@@ -1,6 +1,6 @@
-#include "Framework/Game/Resource/Mesh.h"
-#include "Foundation/RHI/Render.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
+#include "Resource/Mesh.h"
+#include "RHI/Render.h"
+#include "RHI/Core/RenderResourceFactory.h"
 
 namespace ya
 {

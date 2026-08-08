@@ -1,12 +1,12 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Framework/Game/Gameplay/ECS/ECSRegistry.h"
+#include "Core/Base.h"
+#include "ECS/ECSRegistry.h"
 
 
 #include <nlohmann/json.hpp>
 
-#include "Foundation/Core/UUID.h"
+#include "Core/UUID.h"
 
 
 namespace ya

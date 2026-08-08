@@ -1,14 +1,14 @@
 #pragma once
 
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/RenderAttachmentFormats.h"
-#include "Foundation/RHI/Core/Pipeline.h"
-#include "Framework/Game/Render/Render3D/Material/MaterialDescPool.h"
-#include "Framework/Game/Render/Render3D/Material/PBRMaterial.h"
-#include "Framework/Game/Render/Render3D/Material/PhongMaterial.h"
-#include "Framework/Game/Render/Render3D/Common/IRenderRuntimeServices.h"
-#include "Framework/Game/Render/Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
-#include "Framework/Game/Render/Render3D/Forward/ForwardFrameResourceSet.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/RenderAttachmentFormats.h"
+#include "RHI/Core/Pipeline.h"
+#include "Render3D/Material/MaterialDescPool.h"
+#include "Render3D/Material/PBRMaterial.h"
+#include "Render3D/Material/PhongMaterial.h"
+#include "Render3D/Common/IRenderRuntimeServices.h"
+#include "Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
+#include "Render3D/Forward/ForwardFrameResourceSet.h"
 
 #include "PBRForward.slang.h"
 #include "PhongLit.slang.h"

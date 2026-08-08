@@ -1,7 +1,7 @@
 #pragma once
 
 
-#include "Foundation/RHI/RenderDefines.h"
+#include "RHI/RenderDefines.h"
 #include <memory>
 #include <vector>
 

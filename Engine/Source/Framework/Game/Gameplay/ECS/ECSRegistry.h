@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/Core/Api.h"
+#include "Core/Api.h"
 
 #include <concepts>
 #include <entt/entt.hpp>
@@ -9,9 +9,9 @@
 #include <string>
 #include <unordered_map>
 
-#include "Foundation/Core/FName.h"
-#include "Foundation/Core/TypeIndex.h"
-#include "Framework/Game/Gameplay/ECS/ComponentMutation.h"
+#include "Core/FName.h"
+#include "Core/TypeIndex.h"
+#include "ECS/ComponentMutation.h"
 
 
 namespace ya
@@ -214,8 +214,8 @@ struct ECSRegistry
 // ComponentOps<T>::clone — defined after ECSRegistry to keep the class body clean.
 // Needs ReflectionCopier / ReflectionSerializer only for the Reflection path.
 // ============================================================================
-#include "Foundation/Core/Reflection/ReflectionSerializer.h"
-#include "Foundation/Core/Reflection/ReflectionCopier.h"
+#include "Core/Reflection/ReflectionSerializer.h"
+#include "Core/Reflection/ReflectionCopier.h"
 #include "reflects-core/lib.h"
 
 namespace ya

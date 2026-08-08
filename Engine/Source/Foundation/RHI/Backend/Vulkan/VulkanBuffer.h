@@ -1,9 +1,9 @@
 // OneLineFormatOffRegex: ^(// NOLINT)
 
 #pragma once
-#include "Foundation/Core/Base.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanUtils.h"
-#include "Foundation/RHI/Core/Buffer.h"
+#include "Core/Base.h"
+#include "RHI/Backend/Vulkan/VulkanUtils.h"
+#include "RHI/Core/Buffer.h"
 
 
 #include <vulkan/vulkan.h>

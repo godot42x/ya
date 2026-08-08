@@ -1,15 +1,15 @@
 #include "ForwardViewportStage.h"
 
-#include "Framework/Game/Gameplay/ECS/Component/3D/SkyboxComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Mesh/StaticMeshComponent.h"
-#include "Framework/Game/Gameplay/ECS/System/ResourceResolveSystem.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanRender.h"
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Foundation/RHI/Core/Swapchain.h"
-#include "Foundation/RHI/Render.h"
-#include "Framework/Game/Resource/Mesh/PrimitiveMeshCache.h"
-#include "Framework/Game/Render/Render3D/Scene.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
+#include "ECS/System/ResourceResolveSystem.h"
+#include "RHI/Backend/Vulkan/VulkanRender.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/Core/Swapchain.h"
+#include "RHI/Render.h"
+#include "Resource/Mesh/PrimitiveMeshCache.h"
+#include "Render3D/Scene.h"
 
 namespace ya
 {

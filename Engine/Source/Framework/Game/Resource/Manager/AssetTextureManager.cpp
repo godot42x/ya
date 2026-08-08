@@ -1,12 +1,12 @@
-#include "Framework/Game/Resource/Manager/AssetTextureManager.h"
+#include "Resource/Manager/AssetTextureManager.h"
 
-#include "Framework/Game/Resource/Texture/AssetTextureInternal.h"
+#include "Resource/Texture/AssetTextureInternal.h"
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 
 #include <atomic>
 
-#include "Foundation/Core/Common/DeferredDeletionQueue.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 
 namespace ya
 {

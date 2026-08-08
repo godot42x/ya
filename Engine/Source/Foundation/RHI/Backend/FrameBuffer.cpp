@@ -1,6 +1,6 @@
 
-#include "Foundation/RHI/Core/FrameBuffer.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanFrameBuffer.h"
+#include "RHI/Core/FrameBuffer.h"
+#include "RHI/Backend/Vulkan/VulkanFrameBuffer.h"
 
 #include <format>
 

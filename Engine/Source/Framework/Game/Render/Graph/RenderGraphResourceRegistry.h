@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Framework/Game/Render/Graph/RenderGraph.h"
-#include "Foundation/Core/Api.h"
-#include "Foundation/RHI/Core/RenderImage.h"
+#include "Graph/RenderGraph.h"
+#include "Core/Api.h"
+#include "RHI/Core/RenderImage.h"
 
 #include <memory>
 #include <unordered_map>

@@ -1,15 +1,15 @@
-#include "Product/Editor/EditorLayerInternal.h"
+#include "Editor/EditorLayerInternal.h"
 
-#include "Framework/Game/Gameplay/ECS/System/RayCastMousePickingSystem.h"
-#include "Framework/Game/Gameplay/ECS/System/TransformSystem.h"
-#include "Framework/Game/Gameplay/ECS/Component/Mesh/SkinnedMeshComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Mesh/StaticMeshComponent.h"
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Foundation/RHI/Core/RenderImage.h"
-#include "Foundation/RHI/Render.h"
-#include "Framework/GUI/Runtime/Scene/UISceneRenderer.h"
-#include "Framework/GUI/Runtime/Scene/Node2D.h"
+#include "ECS/System/RayCastMousePickingSystem.h"
+#include "ECS/System/TransformSystem.h"
+#include "ECS/Component/Mesh/SkinnedMeshComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/RenderImage.h"
+#include "RHI/Render.h"
+#include "GUI/Runtime/Scene/UISceneRenderer.h"
+#include "GUI/Runtime/Scene/Node2D.h"
 
 #include <cmath>
 #include <functional>

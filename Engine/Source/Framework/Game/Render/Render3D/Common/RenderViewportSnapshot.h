@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/RHI/Core/Image.h"
+#include "RHI/Core/Image.h"
 
 #include <memory>
 #include <string>

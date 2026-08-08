@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/Core/Common/Types.h"
-#include "Foundation/RHI/Core/Texture.h"
-#include "Foundation/RHI/RenderDefines.h"
+#include "Core/Common/Types.h"
+#include "RHI/Core/Texture.h"
+#include "RHI/RenderDefines.h"
 
 #include <functional>
 #include <memory>

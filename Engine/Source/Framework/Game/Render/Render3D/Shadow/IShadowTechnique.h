@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/Core/Math/Geometry.h"
-#include "Foundation/RHI/RenderDefines.h"
+#include "Core/Math/Geometry.h"
+#include "RHI/RenderDefines.h"
 #include "ShadowSettings.h"
 
 #include <cstdint>

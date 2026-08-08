@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/Core/Module/Module.h"
+#include "Core/Module/Module.h"
 
 #include <memory>
 #include <string>

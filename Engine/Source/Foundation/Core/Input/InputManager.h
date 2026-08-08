@@ -10,8 +10,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "Foundation/Core/Event.h"
-#include "Foundation/Core/KeyCode.h"
+#include "Core/Event.h"
+#include "Core/KeyCode.h"
 
 namespace ya
 {

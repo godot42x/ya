@@ -3,7 +3,6 @@ do
     set_kind("shared")
     add_files("Source/*.cpp")
     add_deps("ya-engine")
-    add_includedirs("../../Engine/Source", { public = true })
 end
 
 

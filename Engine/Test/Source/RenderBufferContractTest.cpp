@@ -1,4 +1,4 @@
-#include "Foundation/RHI/Core/Buffer.h"
+#include "RHI/Core/Buffer.h"
 
 #include <gtest/gtest.h>
 

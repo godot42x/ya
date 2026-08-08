@@ -1,12 +1,12 @@
 #include "TransformSystem.h"
 
-#include "Product/Host/App.h"
-#include "Framework/Game/Gameplay/ECS/Component/TransformComponent.h"
-#include "Framework/Game/Gameplay/ECS/Entity.h"
-#include "Framework/GUI/Runtime/Scene/Node.h"
-#include "Framework/Game/Scene/Scene3D/Node3D.h"
-#include "Framework/Game/Render/Render3D/Scene.h"
-#include "Framework/Game/Render/Render3D/SceneManager.h"
+#include "Host/App.h"
+#include "ECS/Component/TransformComponent.h"
+#include "ECS/Entity.h"
+#include "GUI/Runtime/Scene/Node.h"
+#include "Scene3D/Node3D.h"
+#include "Render3D/Scene.h"
+#include "Render3D/SceneManager.h"
 
 #include <glm/gtx/matrix_decompose.hpp>
 

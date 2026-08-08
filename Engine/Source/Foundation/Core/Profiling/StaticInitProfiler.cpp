@@ -1,11 +1,11 @@
 #include "StaticInitProfiler.h"
-#include "Foundation/Core/Log.h"
-#include "Foundation/Core/Profiling/Profiling.h"
+#include "Core/Log.h"
+#include "Core/Profiling/Profiling.h"
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
 
-#include "Foundation/Core/Manager/Facade.h"
+#include "Core/Manager/Facade.h"
 
 namespace ya::profiling
 {

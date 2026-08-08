@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/Core/Common/Types.h"
-#include "Foundation/Core/Delegate.h"
-#include "Foundation/Core/Reflection/Reflection.h"
-#include "Foundation/Core/System/VirtualFileSystem.h"
+#include "Core/Common/Types.h"
+#include "Core/Delegate.h"
+#include "Core/Reflection/Reflection.h"
+#include "Core/System/VirtualFileSystem.h"
 #include <algorithm>
 #include <limits>
 #include <memory>

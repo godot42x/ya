@@ -1,6 +1,6 @@
 #include "VulkanSwapChain.h"
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 
 #include "VulkanRender.h"
 #include "VulkanUtils.h"

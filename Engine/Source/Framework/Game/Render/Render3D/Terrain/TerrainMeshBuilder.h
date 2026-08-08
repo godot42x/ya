@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Framework/Game/Resource/EngineMeshData.h"
-#include "Foundation/Core/Api.h"
+#include "Resource/EngineMeshData.h"
+#include "Core/Api.h"
 
 #include <span>
 #include <string>

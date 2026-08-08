@@ -1,8 +1,8 @@
 
 #pragma once
 
-#include "Foundation/Core/Log.h"
-#include "Foundation/RHI/Render.h"
+#include "Core/Log.h"
+#include "RHI/Render.h"
 
 #include <string>
 #include <vector>

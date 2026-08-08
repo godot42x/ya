@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/Core/Common/Types.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/FrameUploadArena.h"
-#include "Framework/Game/Render/Render3D/Stage/IRenderStage.h"
+#include "Core/Common/Types.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/FrameUploadArena.h"
+#include "Render3D/Stage/IRenderStage.h"
 
 #include "GLSL.Skybox.glsl.h"
 #include "PBRForward.slang.h"

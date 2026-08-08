@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Product/Editor/Inspector/DetailsView.h"
+#include "Editor/Inspector/DetailsView.h"
 
-#include "Framework/GUI/Runtime/Resource/TextureLibrary.h"
-#include "Framework/Game/Resource/AssetManager.h"
-#include "Product/Host/GUI/ImGui/ImGuiSystem.h"
+#include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "Resource/AssetManager.h"
+#include "Host/GUI/ImGui/ImGuiSystem.h"
 
 #include <algorithm>
 #include <array>

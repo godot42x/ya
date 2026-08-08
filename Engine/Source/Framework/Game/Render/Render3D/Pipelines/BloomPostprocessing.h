@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/Pipeline.h"
-#include "Framework/Game/Render/Graph/RenderGraphExecutor.h"
-#include "Foundation/RHI/Core/RenderImage.h"
-#include "Framework/Game/Render/Render3D/Common/PostProcessingState.h"
+#include "Core/Base.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/Pipeline.h"
+#include "Graph/RenderGraphExecutor.h"
+#include "RHI/Core/RenderImage.h"
+#include "Render3D/Common/PostProcessingState.h"
 
 #include "Misc.BloomBlur.slang.h"
 #include "Misc.BloomComposite.slang.h"

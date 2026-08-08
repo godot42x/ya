@@ -1,9 +1,9 @@
 #include "EntityIdViewportPass.h"
 
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Foundation/RHI/Render.h"
-#include "Framework/Game/Render/Render3D/RenderFrameData.h"
-#include "Foundation/RHI/RenderDefines.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/Render.h"
+#include "Render3D/RenderFrameData.h"
+#include "RHI/RenderDefines.h"
 
 namespace ya
 {

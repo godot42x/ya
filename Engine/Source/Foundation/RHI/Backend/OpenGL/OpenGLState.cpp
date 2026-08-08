@@ -1,5 +1,5 @@
 #include "OpenGLState.h"
-#include "Foundation/Core/Base.h"
+#include "Core/Base.h"
 
 
 namespace ya

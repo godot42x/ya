@@ -1,8 +1,8 @@
 #include "EquidistantCylindrical2CubeMap.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Foundation/RHI/Core/RenderingInfoUtils.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/Core/RenderingInfoUtils.h"
 
-#include "Foundation/RHI/Render.h"
+#include "RHI/Render.h"
 
 namespace ya
 {

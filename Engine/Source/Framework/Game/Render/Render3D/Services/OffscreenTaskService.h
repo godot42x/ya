@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
+#include "Core/Base.h"
 
-#include "Foundation/RHI/Core/OffscreenJob.h"
+#include "RHI/Core/OffscreenJob.h"
 
 #include <memory>
 #include <vector>

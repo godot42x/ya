@@ -1,11 +1,11 @@
 #pragma once
-#include "Foundation/Core/Api.h"
-#include "Foundation/Core/Camera/CameraController.h"
-#include "Foundation/Core/Camera/Camera.h"
-#include "Foundation/Core/Input/InputManager.h"
-#include "Foundation/Core/KeyCode.h"
-#include "Framework/Game/Gameplay/ECS/Component/CameraComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/TransformComponent.h"
+#include "Core/Api.h"
+#include "Core/Camera/CameraController.h"
+#include "Core/Camera/Camera.h"
+#include "Core/Input/InputManager.h"
+#include "Core/KeyCode.h"
+#include "ECS/Component/CameraComponent.h"
+#include "ECS/Component/TransformComponent.h"
 
 
 

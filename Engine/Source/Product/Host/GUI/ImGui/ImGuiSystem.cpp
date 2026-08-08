@@ -1,6 +1,6 @@
-#include "Product/Host/GUI/ImGui/ImGuiSystem.h"
+#include "Host/GUI/ImGui/ImGuiSystem.h"
 
-#include "Foundation/Core/Profiling/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 
 #include <cfloat>
 #include <array>

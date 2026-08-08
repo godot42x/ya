@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/Core/Reflection/Reflection.h"
+#include "Core/Reflection/Reflection.h"
 #include <cstdint>
 #include <string>
 #include <unordered_map>

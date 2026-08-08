@@ -1,4 +1,4 @@
-#include "Foundation/Core/FName.h"
+#include "Core/FName.h"
 #include <chrono>
 #include <gtest/gtest.h>
 #include <thread>

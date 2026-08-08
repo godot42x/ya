@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Framework/Game/Resource/AssetManager.h"
+#include "Resource/AssetManager.h"
 
 namespace ya::asset_manager_texture_detail
 {

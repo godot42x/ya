@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/Core/Reflection/DeferredInitializer.h"
-#include "Foundation/Core/Reflection/InstanceRef.h"
-#include "Foundation/Core/Reflection/ReflectionSerializer.h"
-#include "Foundation/Core/TypeIndex.h"
+#include "Core/Reflection/DeferredInitializer.h"
+#include "Core/Reflection/InstanceRef.h"
+#include "Core/Reflection/ReflectionSerializer.h"
+#include "Core/TypeIndex.h"
 
 #include <reflects-core/lib.h>
 

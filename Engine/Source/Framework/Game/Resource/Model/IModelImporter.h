@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Framework/Game/Resource/Model/ImportedModelData.h"
+#include "Resource/Model/ImportedModelData.h"
 
 #include <string_view>
 

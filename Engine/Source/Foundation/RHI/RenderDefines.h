@@ -1,10 +1,10 @@
 ﻿#pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Common/Types.h"
+#include "Core/Base.h"
+#include "Core/Common/Types.h"
 
 
-#include "Foundation/RHI/Core/Handle.h"
+#include "RHI/Core/Handle.h"
 #include "reflects-core/enum.h"
 
 #include <glm/glm.hpp>

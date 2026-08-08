@@ -1,7 +1,7 @@
-#include "Product/Editor/EditorProfilingSettings.h"
+#include "Editor/EditorProfilingSettings.h"
 
-#include "Product/Host/Config/ConfigManager.h"
-#include "Foundation/Core/Profiling/Profiling.h"
+#include "Host/Config/ConfigManager.h"
+#include "Core/Profiling/Profiling.h"
 
 namespace ya::editor_profiling_settings
 {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/Core/Input/InputManager.h"
+#include "Core/Input/InputManager.h"
 #include "SDL3/SDL_events.h"
 
 namespace ya

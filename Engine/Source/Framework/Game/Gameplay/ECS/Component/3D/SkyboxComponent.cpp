@@ -1,5 +1,5 @@
 #include "SkyboxComponent.h"
-#include "Framework/Game/Resource/AssetManager.h"
+#include "Resource/AssetManager.h"
 
 namespace ya
 {

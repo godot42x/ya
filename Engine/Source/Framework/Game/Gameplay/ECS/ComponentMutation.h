@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Framework/Game/Gameplay/ECS/SceneBus.h"
-#include "Foundation/Core/TypeIndex.h"
+#include "ECS/SceneBus.h"
+#include "Core/TypeIndex.h"
 
 #include <concepts>
 #include <entt/entt.hpp>

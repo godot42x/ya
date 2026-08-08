@@ -4,14 +4,14 @@
 
 #include "reflects-core/lib.h"
 
-#include "Foundation/Core/Delegate.h"
-#include "Foundation/Core/Trait.h"
+#include "Core/Delegate.h"
+#include "Core/Trait.h"
 
 
 
-#include "Foundation/Core/Common/Types.h"
-#include "Foundation/Core/Log.h"
-#include "Foundation/Core/Math/Math.h"
-#include "Foundation/Core/Reflection/Reflection.h"
-#include "Foundation/Core/TypeIndex.h"
-#include "Foundation/Core/Common/Helper.h"
+#include "Core/Common/Types.h"
+#include "Core/Log.h"
+#include "Core/Math/Math.h"
+#include "Core/Reflection/Reflection.h"
+#include "Core/TypeIndex.h"
+#include "Core/Common/Helper.h"

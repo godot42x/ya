@@ -1,7 +1,7 @@
 target("ya-render-3d")
     set_kind("shared")
     ya_std_module("YA_RENDER_3D_API")
-    add_includedirs("../../../..", { public = true })
+    ya_tier_include("Render")
     add_files("**.cpp")
     add_headerfiles("**.h")
     add_deps(

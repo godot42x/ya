@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/Core/System/System.h"
+#include "Core/System/System.h"
 
 #include <cstdint>
 #include <string>

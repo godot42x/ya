@@ -1,9 +1,9 @@
 #include "IRenderSystem.h"
 
-#include "Product/Host/App.h"
-#include "Framework/Game/Gameplay/ECS/Component/CameraComponent.h"
-#include "Foundation/RHI/Render.h"
-#include "Framework/Game/Render/Render3D/SceneManager.h"
+#include "Host/App.h"
+#include "ECS/Component/CameraComponent.h"
+#include "RHI/Render.h"
+#include "Render3D/SceneManager.h"
 
 
 namespace ya

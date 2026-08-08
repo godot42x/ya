@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Delegate.h"
-#include "Framework/Game/Render/Render3D/Scene.h"
+#include "Core/Base.h"
+#include "Core/Delegate.h"
+#include "Render3D/Scene.h"
 #include <functional>
 #include <memory>
 #include <string>

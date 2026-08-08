@@ -1,6 +1,6 @@
 #include "AssetMeta.h"
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 
 #include <filesystem>
 #include <fstream>

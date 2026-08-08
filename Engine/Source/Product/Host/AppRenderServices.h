@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Product/Host/AppRenderFrameState.h"
-#include "Framework/Game/Render/Render3D/Common/RenderOverlay.h"
+#include "Host/AppRenderFrameState.h"
+#include "Render3D/Common/RenderOverlay.h"
 
 #include <cstdint>
 #include <memory>

@@ -1,8 +1,8 @@
-#include "Product/Editor/Services/NodeCreateRegistry.h"
+#include "Editor/Services/NodeCreateRegistry.h"
 
-#include "Framework/GUI/Runtime/Scene/Node.h"
-#include "Framework/GUI/Runtime/Scene/Node2D.h"
-#include "Framework/Game/Render/Render3D/Scene.h"
+#include "GUI/Runtime/Scene/Node.h"
+#include "GUI/Runtime/Scene/Node2D.h"
+#include "Render3D/Scene.h"
 
 #include <algorithm>
 

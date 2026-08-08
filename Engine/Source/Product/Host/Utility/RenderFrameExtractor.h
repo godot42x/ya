@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Framework/Game/Render/Render3D/RenderFrameData.h"
-#include "Framework/Game/Render/Render3D/Shadow/ShadowSettings.h"
+#include "Render3D/RenderFrameData.h"
+#include "Render3D/Shadow/ShadowSettings.h"
 
 #include <unordered_map>
 

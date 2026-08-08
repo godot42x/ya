@@ -1,12 +1,12 @@
 
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Math/AABB.h"
-#include "Foundation/Core/Math/Geometry.h"
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Framework/Game/Resource/EngineMeshData.h"
+#include "Core/Base.h"
+#include "Core/Math/AABB.h"
+#include "Core/Math/Geometry.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "Resource/EngineMeshData.h"
 
 namespace ya
 {

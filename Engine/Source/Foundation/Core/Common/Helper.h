@@ -1,6 +1,6 @@
 
 #pragma once
-#include "Foundation/Core/Common/FWD-std.h"
+#include "Core/Common/FWD-std.h"
 #include "utility.cc/stack_deleter.h"
 
 namespace ya

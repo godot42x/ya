@@ -1,7 +1,7 @@
 target("ya-foundation-core")
     set_kind("shared")
     ya_std_module("YA_CORE_API")
-    add_includedirs("../..", { public = true })
+    ya_tier_include("Foundation")
     add_files("**.cpp")
     add_headerfiles("**.h")
     add_deps("utility.cc", "log.cc", "reflects-core", { public = true })

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/RHI/RenderDefines.h"
-#include "Foundation/Core/Api.h"
+#include "RHI/RenderDefines.h"
+#include "Core/Api.h"
 
 #include <array>
 

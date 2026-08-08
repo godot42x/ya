@@ -1,10 +1,10 @@
 #include "BasicPostprocessing.h"
 
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/Sampler.h"
-#include "Foundation/RHI/Render.h"
-#include "Framework/GUI/Runtime/Resource/TextureLibrary.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/Sampler.h"
+#include "RHI/Render.h"
+#include "GUI/Runtime/Resource/TextureLibrary.h"
 
 #include <algorithm>
 

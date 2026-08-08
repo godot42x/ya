@@ -1,10 +1,10 @@
 #include "ResourceResolveSystem.Detail.h"
 
-#include "Foundation/RHI/Render.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Foundation/Core/Common/DeferredDeletionQueue.h"
-#include "Product/Host/App.h"
-#include "Product/Host/Utility/OffscreenJobRunner.h"
+#include "RHI/Render.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "Core/Common/DeferredDeletionQueue.h"
+#include "Host/App.h"
+#include "Host/Utility/OffscreenJobRunner.h"
 
 
 #include <algorithm>

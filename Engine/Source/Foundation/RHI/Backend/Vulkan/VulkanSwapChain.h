@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/Core/Delegate.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanUtils.h"
-#include "Foundation/RHI/Core/Swapchain.h"
-#include "Foundation/RHI/WindowProvider.h"
+#include "Core/Delegate.h"
+#include "RHI/Backend/Vulkan/VulkanUtils.h"
+#include "RHI/Core/Swapchain.h"
+#include "RHI/WindowProvider.h"
 #include <vector>
 
 #include <vulkan/vulkan_core.h>

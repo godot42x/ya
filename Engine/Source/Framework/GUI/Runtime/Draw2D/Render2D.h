@@ -2,13 +2,13 @@
 
 #include "glm/glm.hpp"
 
-#include "Foundation/Core/Base.h"
+#include "Core/Base.h"
 
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/Pipeline.h"
-#include "Foundation/RHI/Core/Texture.h"
-#include "Foundation/RHI/RenderDefines.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/Pipeline.h"
+#include "RHI/Core/Texture.h"
+#include "RHI/RenderDefines.h"
 
 #include <array>
 

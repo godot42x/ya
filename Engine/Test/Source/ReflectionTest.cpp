@@ -3,9 +3,9 @@
  * 展示侵入式和非侵入式两种用法
  */
 
-#include "Foundation/Core/Reflection/Reflection.h"
-#include "Foundation/Core/Base.h"
-#include "Framework/Game/Gameplay/ECS/ECSRegistry.h"
+#include "Core/Reflection/Reflection.h"
+#include "Core/Base.h"
+#include "ECS/ECSRegistry.h"
 
 namespace ya::test
 {

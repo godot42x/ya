@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/RHI/Core/DescriptorSet.h"
+#include "RHI/Core/DescriptorSet.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
 

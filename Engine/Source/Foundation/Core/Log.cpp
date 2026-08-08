@@ -1,6 +1,6 @@
 #include "Log.h"
 
-#include "Foundation/Core/System/VirtualFileSystem.h"
+#include "Core/System/VirtualFileSystem.h"
 
 #include <algorithm>
 #include <chrono>

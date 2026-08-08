@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Math/Geometry.h"
+#include "Core/Base.h"
+#include "Core/Math/Geometry.h"
 
 #include <string>
 #include <vector>

@@ -1,8 +1,8 @@
 #include "OffscreenTaskService.h"
 
-#include "Product/Host/App.h"
+#include "Host/App.h"
 
-#include "Foundation/RHI/Backend/Vulkan/VulkanRender.h"
+#include "RHI/Backend/Vulkan/VulkanRender.h"
 
 namespace ya
 {

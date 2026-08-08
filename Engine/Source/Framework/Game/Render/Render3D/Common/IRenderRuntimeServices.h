@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Framework/Game/Gameplay/ECS/System/ResourceResolveSystem.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "ECS/System/ResourceResolveSystem.h"
 
 #include <cstdint>
 

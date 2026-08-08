@@ -1,6 +1,6 @@
 #pragma once
-#include "Foundation/Core/Reflection/Reflection.h"
-#include "Framework/Game/Gameplay/ECS/Component.h"
+#include "Core/Reflection/Reflection.h"
+#include "ECS/Component.h"
 
 
 namespace ya

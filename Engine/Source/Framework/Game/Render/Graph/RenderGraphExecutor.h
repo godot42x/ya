@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Framework/Game/Render/Graph/RenderGraph.h"
-#include "Foundation/Core/Api.h"
-#include "Framework/Game/Render/Graph/RenderGraphResourceRegistry.h"
-#include "Foundation/RHI/Core/ResourceStateTracker.h"
+#include "Graph/RenderGraph.h"
+#include "Core/Api.h"
+#include "Graph/RenderGraphResourceRegistry.h"
+#include "RHI/Core/ResourceStateTracker.h"
 
 #include <unordered_map>
 #include <vector>

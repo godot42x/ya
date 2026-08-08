@@ -1,13 +1,13 @@
-#include "Foundation/Core/Profiling/Profiling.h"
+#include "Core/Profiling/Profiling.h"
 
-#include "Product/Host/App.h"
+#include "Host/App.h"
 
-#include "Product/Host/Config/ConfigManager.h"
+#include "Host/Config/ConfigManager.h"
 
-#include "Foundation/Core/Log.h"
-#include "Foundation/Core/Profiling/Instrumentor.h"
-#include "Foundation/Core/Profiling/PerfKeys.h"
-#include "Foundation/Core/Profiling/PerfState.h"
+#include "Core/Log.h"
+#include "Core/Profiling/Instrumentor.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
 
 #include <nlohmann/json.hpp>
 

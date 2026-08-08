@@ -1,7 +1,7 @@
 #include "SingletonManager.h"
 #include <algorithm>
 #include <mutex>
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 
 namespace ya
 {

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/RHI/RenderDefines.h"
+#include "RHI/RenderDefines.h"
 
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/Pipeline.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/Pipeline.h"
 #include <cstdint>
 #include <cstring>
 #include <memory>

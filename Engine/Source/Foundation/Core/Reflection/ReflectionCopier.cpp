@@ -1,6 +1,6 @@
 #include "ReflectionCopier.h"
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 #include "PropertyExtensions.h"
 #include "ReflectionSerializer.h"
 

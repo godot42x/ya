@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/RHI/Render.h"
-#include "Framework/Game/Render/Render3D/Common/IRenderPipeline.h"
-#include "Framework/Game/Render/Render3D/Common/RenderOverlay.h"
+#include "RHI/Render.h"
+#include "Render3D/Common/IRenderPipeline.h"
+#include "Render3D/Common/RenderOverlay.h"
 
 namespace ya
 {

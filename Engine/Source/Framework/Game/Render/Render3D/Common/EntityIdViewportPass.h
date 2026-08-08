@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/Pipeline.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/Pipeline.h"
 #include "EntityId.slang.h"
 
 #include <glm/glm.hpp>

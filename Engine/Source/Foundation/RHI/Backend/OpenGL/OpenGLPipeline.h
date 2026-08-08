@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/FName.h"
-#include "Foundation/RHI/Core/Pipeline.h"
-#include "Foundation/RHI/RenderDefines.h"
-#include "Foundation/RHI/Shader.h"
+#include "Core/Base.h"
+#include "Core/FName.h"
+#include "RHI/Core/Pipeline.h"
+#include "RHI/RenderDefines.h"
+#include "RHI/Shader.h"
 #include "glad/glad.h"
 
 #include <memory>

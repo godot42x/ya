@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Foundation/RHI/Core/Image.h"
-#include "Framework/Game/Render/Graph/RenderGraph.h"
-#include "Framework/Game/Render/Render3D/Shadow/IShadowTechnique.h"
-#include "Framework/Game/Render/Render3D/Shadow/ShadowSettings.h"
-#include "Framework/Game/Render/Render3D/Stage/IRenderStage.h"
-#include "Framework/Game/Render/Render3D/Common/Shadow/ShadowGraphOutputs.h"
+#include "RHI/Core/Image.h"
+#include "Graph/RenderGraph.h"
+#include "Render3D/Shadow/IShadowTechnique.h"
+#include "Render3D/Shadow/ShadowSettings.h"
+#include "Render3D/Stage/IRenderStage.h"
+#include "Render3D/Common/Shadow/ShadowGraphOutputs.h"
 
 #include <memory>
 

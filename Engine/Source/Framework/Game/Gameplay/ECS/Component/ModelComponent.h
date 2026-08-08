@@ -16,10 +16,10 @@
  */
 #pragma once
 
-#include "Foundation/Core/Common/AssetRef.h"
-#include "Foundation/Core/Reflection/Reflection.h"
-#include "Framework/Game/Gameplay/ECS/Component.h"
-#include "Framework/Game/Resource/Model.h"
+#include "Core/Common/AssetRef.h"
+#include "Core/Reflection/Reflection.h"
+#include "ECS/Component.h"
+#include "Resource/Model.h"
 
 #include <unordered_map>
 

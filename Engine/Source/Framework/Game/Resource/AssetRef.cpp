@@ -1,11 +1,11 @@
-#include "Foundation/Core/Common/AssetRef.h"
-#include "Framework/Game/Resource/AssetManager.h"
-#include "Framework/GUI/Runtime/Resource/TextureLibrary.h"
-#include "Foundation/Core/Log.h"
-#include "Foundation/Core/TypeIndex.h"
-#include "Foundation/RHI/Core/Texture.h"
-#include "Framework/Game/Resource/Mesh.h"
-#include "Framework/Game/Resource/Model.h"
+#include "Core/Common/AssetRef.h"
+#include "Resource/AssetManager.h"
+#include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "Core/Log.h"
+#include "Core/TypeIndex.h"
+#include "RHI/Core/Texture.h"
+#include "Resource/Mesh.h"
+#include "Resource/Model.h"
 
 namespace ya
 {

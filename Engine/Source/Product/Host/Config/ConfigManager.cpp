@@ -1,7 +1,7 @@
 #include "ConfigManager.h"
 
-#include "Foundation/Core/Log.h"
-#include "Foundation/Core/System/VirtualFileSystem.h"
+#include "Core/Log.h"
+#include "Core/System/VirtualFileSystem.h"
 
 namespace ya
 {

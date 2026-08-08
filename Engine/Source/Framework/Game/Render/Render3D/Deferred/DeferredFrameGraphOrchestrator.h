@@ -3,8 +3,8 @@
 #include "DeferredFrameGraphResources.h"
 #include "DeferredFrameResourceSet.h"
 #include "ViewportOverlayStage.h"
-#include "Framework/Game/Gameplay/ECS/System/ResourceResolveSystem.h"
-#include "Framework/Game/Render/Render3D/Common/IRenderPipeline.h"
+#include "ECS/System/ResourceResolveSystem.h"
+#include "Render3D/Common/IRenderPipeline.h"
 
 #include <functional>
 #include <vector>

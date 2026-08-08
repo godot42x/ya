@@ -1,8 +1,8 @@
 #include "ShadowMapResources.h"
 
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Foundation/RHI/Render.h"
-#include "Framework/Game/Render/Render3D/Common/Shadow/Common/ShadowViewBuilder.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/Render.h"
+#include "Render3D/Common/Shadow/Common/ShadowViewBuilder.h"
 
 namespace ya
 {

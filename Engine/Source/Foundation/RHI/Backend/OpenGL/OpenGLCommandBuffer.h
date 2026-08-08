@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/RHI/Core/CommandBuffer.h"
+#include "RHI/Core/CommandBuffer.h"
 #include "glad/glad.h"
 
 #include <vector>

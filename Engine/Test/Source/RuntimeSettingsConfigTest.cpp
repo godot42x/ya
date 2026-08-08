@@ -1,7 +1,7 @@
-#include "Framework/Game/Render/Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
+#include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 
-#include "Product/Host/Config/ConfigManager.h"
-#include "Foundation/Core/System/VirtualFileSystem.h"
+#include "Host/Config/ConfigManager.h"
+#include "Core/System/VirtualFileSystem.h"
 
 #include <gtest/gtest.h>
 

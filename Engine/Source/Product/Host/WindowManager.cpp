@@ -1,6 +1,6 @@
-#include "Product/Host/WindowManager.h"
+#include "Host/WindowManager.h"
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 
 #if USE_SDL
     #include <SDL3/SDL.h>

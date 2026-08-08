@@ -8,13 +8,13 @@
 
 #include <vulkan/vulkan.h>
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/FName.h"
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Foundation/RHI/Core/Pipeline.h"
-#include "Foundation/RHI/Render.h"
-#include "Foundation/RHI/RenderDefines.h"
-#include "Foundation/RHI/Shader.h"
+#include "Core/Base.h"
+#include "Core/FName.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/Pipeline.h"
+#include "RHI/Render.h"
+#include "RHI/RenderDefines.h"
+#include "RHI/Shader.h"
 
 
 

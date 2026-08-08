@@ -1,4 +1,4 @@
-#include "Product/Editor/FileExplorerInternal.h"
+#include "Editor/FileExplorerInternal.h"
 
 namespace ya
 {

@@ -1,7 +1,7 @@
 #pragma once
-#include "Foundation/Core/Math/Math.h"
-#include "Foundation/Core/Reflection/Reflection.h"
-#include "Framework/Game/Gameplay/ECS/Component.h"
+#include "Core/Math/Math.h"
+#include "Core/Reflection/Reflection.h"
+#include "ECS/Component.h"
 
 #include <functional>
 

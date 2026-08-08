@@ -1,7 +1,7 @@
 #include "PerfState.h"
 
-#include "Foundation/Core/Profiling/Profiling.h"
-#include "Foundation/Core/Profiling/Instrumentor.h"
+#include "Core/Profiling/Profiling.h"
+#include "Core/Profiling/Instrumentor.h"
 
 #include <algorithm>
 #include <iterator>

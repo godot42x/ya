@@ -1,7 +1,7 @@
-#include "Product/Host/GUI/ImGui/ImGuiSystem.h"
+#include "Host/GUI/ImGui/ImGuiSystem.h"
 
-#include "Foundation/RHI/Backend/Vulkan/VulkanRender.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanUtils.h"
+#include "RHI/Backend/Vulkan/VulkanRender.h"
+#include "RHI/Backend/Vulkan/VulkanUtils.h"
 
 #include <vulkan/vulkan.h>
 

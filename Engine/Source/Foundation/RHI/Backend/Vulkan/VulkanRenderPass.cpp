@@ -1,9 +1,9 @@
 #include "VulkanRenderPass.h"
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 #include "VulkanUtils.h"
 #include <array>
 
-#include "Foundation/RHI/Backend/Vulkan/VulkanFrameBuffer.h"
+#include "RHI/Backend/Vulkan/VulkanFrameBuffer.h"
 #include <ranges>
 
 

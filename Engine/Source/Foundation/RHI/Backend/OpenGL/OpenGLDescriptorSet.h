@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
+#include "Core/Base.h"
+#include "RHI/Core/DescriptorSet.h"
 #include "glad/glad.h"
 
 #include <memory>

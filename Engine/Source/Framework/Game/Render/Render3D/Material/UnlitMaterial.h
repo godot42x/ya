@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/Core/Common/AssetRef.h"
-#include "Foundation/Core/Reflection/Reflection.h"
+#include "Core/Common/AssetRef.h"
+#include "Core/Reflection/Reflection.h"
 #include "Material.h"
-#include "Foundation/RHI/Core/Std140Types.h"
+#include "RHI/Core/Std140Types.h"
 
 #include "Test.Unlit.glsl.h"
 

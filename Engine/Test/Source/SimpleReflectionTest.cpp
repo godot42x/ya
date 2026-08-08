@@ -1,5 +1,5 @@
 // 简单测试新反射系统
-#include "Foundation/Core/Reflection/Reflection.h"
+#include "Core/Reflection/Reflection.h"
 #include <gtest/gtest.h>
 #include <cassert>
 

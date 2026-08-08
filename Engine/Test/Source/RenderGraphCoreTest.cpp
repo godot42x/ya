@@ -1,10 +1,10 @@
-#include "Framework/Game/Render/Graph/RenderGraph.h"
-#include "Framework/Game/Render/Graph/RenderGraphExecutor.h"
-#include "Framework/Game/Render/Graph/RenderGraphImportUtils.h"
-#include "Framework/Game/Render/Graph/RenderGraphResourceRegistry.h"
-#include "Foundation/RHI/Core/RenderingInfoUtils.h"
-#include "Foundation/RHI/Core/FrameUploadArena.h"
-#include "Foundation/Core/Common/DeferredDeletionQueue.h"
+#include "Graph/RenderGraph.h"
+#include "Graph/RenderGraphExecutor.h"
+#include "Graph/RenderGraphImportUtils.h"
+#include "Graph/RenderGraphResourceRegistry.h"
+#include "RHI/Core/RenderingInfoUtils.h"
+#include "RHI/Core/FrameUploadArena.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 
 #include <gtest/gtest.h>
 

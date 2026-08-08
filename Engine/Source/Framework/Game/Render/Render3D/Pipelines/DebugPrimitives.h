@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Foundation/Core/Math/Geometry.h"
-#include "Foundation/RHI/Core/RenderAttachmentFormats.h"
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Foundation/RHI/Core/Pipeline.h"
-#include "Framework/Game/Render/Render3D/Stage/IRenderStage.h"
+#include "Core/Math/Geometry.h"
+#include "RHI/Core/RenderAttachmentFormats.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/Pipeline.h"
+#include "Render3D/Stage/IRenderStage.h"
 
 #include <array>
 #include <glm/glm.hpp>

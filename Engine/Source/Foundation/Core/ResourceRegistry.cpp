@@ -1,5 +1,5 @@
-#include "Foundation/Core/ResourceRegistry.h"
-#include "Foundation/Core/Log.h"
+#include "Core/ResourceRegistry.h"
+#include "Core/Log.h"
 
 namespace ya
 {

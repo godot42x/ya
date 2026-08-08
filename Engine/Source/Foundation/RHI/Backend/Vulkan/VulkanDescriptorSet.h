@@ -1,8 +1,8 @@
 
 #pragma once
-#include "Foundation/Core/Base.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/RenderDefines.h"
+#include "Core/Base.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/RenderDefines.h"
 
 
 #include "vulkan/vulkan.h"

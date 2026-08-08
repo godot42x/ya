@@ -1,7 +1,7 @@
 #include "Node3D.h"
 
-#include "Framework/Game/Gameplay/ECS/Component/TransformComponent.h"
-#include "Framework/Game/Gameplay/ECS/Entity.h"
+#include "ECS/Component/TransformComponent.h"
+#include "ECS/Entity.h"
 
 namespace ya
 {

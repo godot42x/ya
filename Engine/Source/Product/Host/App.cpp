@@ -1,14 +1,14 @@
-#include "Product/Host/App.h"
-#include "Product/Host/AppRenderState.h"
-#include "Product/Host/Automation/AppAutomationControlService.h"
-#include "Product/Host/WindowManager.h"
+#include "Host/App.h"
+#include "Host/AppRenderState.h"
+#include "Host/Automation/AppAutomationControlService.h"
+#include "Host/WindowManager.h"
 
-#include "Foundation/Core/Module/ProjectDescriptor.h"
-#include "Foundation/Core/Profiling/Profiling.h"
-#include "Foundation/Core/System/VirtualFileSystem.h"
-#include "Framework/GUI/Runtime/Scene/UISceneRenderer.h"
-#include "Framework/Game/Render/Render3D/Scene.h"
-#include "Framework/Game/Render/Render3D/Services/DebugRenderSystem.h"
+#include "Core/Module/ProjectDescriptor.h"
+#include "Core/Profiling/Profiling.h"
+#include "Core/System/VirtualFileSystem.h"
+#include "GUI/Runtime/Scene/UISceneRenderer.h"
+#include "Render3D/Scene.h"
+#include "Render3D/Services/DebugRenderSystem.h"
 
 namespace ya
 {

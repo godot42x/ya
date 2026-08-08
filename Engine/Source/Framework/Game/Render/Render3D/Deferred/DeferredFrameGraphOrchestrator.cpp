@@ -1,9 +1,9 @@
 #include "DeferredFrameGraphOrchestrator.h"
 
-#include "Foundation/Core/Profiling/Instrumentor.h"
-#include "Foundation/Core/Profiling/Profiling.h"
-#include "Framework/Game/Render/Render3D/Common/Shadow/ShadowStage.h"
-#include "Framework/Game/Render/Render3D/Deferred/DeferredFrameGraphPasses.h"
+#include "Core/Profiling/Instrumentor.h"
+#include "Core/Profiling/Profiling.h"
+#include "Render3D/Common/Shadow/ShadowStage.h"
+#include "Render3D/Deferred/DeferredFrameGraphPasses.h"
 
 namespace ya
 {

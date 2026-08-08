@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/Pipeline.h"
-#include "Foundation/RHI/Core/RenderImage.h"
-#include "Foundation/RHI/Core/Sampler.h"
-#include "Foundation/RHI/Core/Texture.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/Pipeline.h"
+#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/Sampler.h"
+#include "RHI/Core/Texture.h"
 
 #include "Misc.CubeMap2PBRIrradianceMap.slang.h"
 

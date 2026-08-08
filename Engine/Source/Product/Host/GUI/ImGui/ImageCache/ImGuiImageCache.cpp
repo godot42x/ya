@@ -1,8 +1,8 @@
-#include "Product/Host/GUI/ImGui/ImGuiSystem.h"
+#include "Host/GUI/ImGui/ImGuiSystem.h"
 
-#include "Foundation/RHI/Backend/Vulkan/VulkanUtils.h"
-#include "Foundation/RHI/Core/Image.h"
-#include "Foundation/RHI/Core/Sampler.h"
+#include "RHI/Backend/Vulkan/VulkanUtils.h"
+#include "RHI/Core/Image.h"
+#include "RHI/Core/Sampler.h"
 
 #include <unordered_map>
 #include <vector>

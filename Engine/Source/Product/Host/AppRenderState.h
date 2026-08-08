@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Framework/Game/Render/Render3D/RenderFrameData.h"
-#include "Framework/Game/Render/Render3D/Shadow/ShadowSettings.h"
-#include "Framework/Game/Render/Render3D/Stage/IRenderStage.h"
-#include "Product/Host/AppRenderFrameState.h"
-#include "Framework/Game/Render/Render3D/Common/RenderOverlay.h"
-#include "Framework/Game/Render/Render3D/RenderRuntime.h"
+#include "Render3D/RenderFrameData.h"
+#include "Render3D/Shadow/ShadowSettings.h"
+#include "Render3D/Stage/IRenderStage.h"
+#include "Host/AppRenderFrameState.h"
+#include "Render3D/Common/RenderOverlay.h"
+#include "Render3D/RenderRuntime.h"
 
 #include <array>
 #include <memory>

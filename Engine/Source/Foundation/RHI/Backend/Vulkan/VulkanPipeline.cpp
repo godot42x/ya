@@ -3,9 +3,9 @@
 #include <cstdint>
 #include <optional>
 
-#include "Foundation/Core/Log.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/RenderDefines.h"
+#include "Core/Log.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/RenderDefines.h"
 #include "VulkanPipeline.h"
 #include "VulkanRender.h"
 #include "VulkanUtils.h"

@@ -1,13 +1,13 @@
-#include "Product/Editor/Panels/ContentBrowserPanel.h"
+#include "Editor/Panels/ContentBrowserPanel.h"
 
-#include "Product/Editor/EditorLayer.h"
-#include "Foundation/Core/System/PathUtils.h"
-#include "Foundation/Core/Profiling/Instrumentor.h"
-#include "Foundation/Core/System/VirtualFileSystem.h"
-#include "Product/Editor/ImGui/ImGuiHelper.h"
-#include "Framework/Game/Resource/AssetManager.h"
-#include "Framework/GUI/Runtime/Resource/TextureLibrary.h"
-#include "Product/Host/App.h"
+#include "Editor/EditorLayer.h"
+#include "Core/System/PathUtils.h"
+#include "Core/Profiling/Instrumentor.h"
+#include "Core/System/VirtualFileSystem.h"
+#include "Editor/ImGui/ImGuiHelper.h"
+#include "Resource/AssetManager.h"
+#include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "Host/App.h"
 #include <imgui.h>
 
 

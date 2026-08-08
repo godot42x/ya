@@ -1,12 +1,12 @@
-#include "Product/Host/Lifecycle/AppLifecycle.h"
+#include "Host/Lifecycle/AppLifecycle.h"
 
 #include "AppModuleTestAccess.h"
 
-#include "Product/Host/App.h"
+#include "Host/App.h"
 
-#include "Foundation/Core/System/VirtualFileSystem.h"
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Framework/Game/Render/Render3D/SceneManager.h"
+#include "Core/System/VirtualFileSystem.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "Render3D/SceneManager.h"
 
 #include <gtest/gtest.h>
 

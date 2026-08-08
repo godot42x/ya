@@ -1,6 +1,6 @@
 #include "PBRMaterialComponent.h"
 
-#include "Framework/GUI/Runtime/Resource/TextureLibrary.h"
+#include "GUI/Runtime/Resource/TextureLibrary.h"
 
 #include <string_view>
 

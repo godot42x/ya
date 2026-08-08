@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/Core/Event.h"
-#include "Framework/GUI/Runtime/UIBase.h"
-#include "Framework/GUI/Runtime/Scene/Node.h"
+#include "Core/Event.h"
+#include "GUI/Runtime/UIBase.h"
+#include "GUI/Runtime/Scene/Node.h"
 
 namespace ya
 {

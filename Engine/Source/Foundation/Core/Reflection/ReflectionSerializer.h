@@ -1,11 +1,11 @@
 
 #pragma once
 
-#include "Foundation/Core/Api.h"
+#include "Core/Api.h"
 #include "ContainerProperty.h"
-#include "Foundation/Core/Macro/VariadicMacros.h"
-#include "Foundation/Core/Reflection/DeferredInitializer.h"
-#include "Foundation/Core/TypeIndex.h"
+#include "Core/Macro/VariadicMacros.h"
+#include "Core/Reflection/DeferredInitializer.h"
+#include "Core/TypeIndex.h"
 #include "reflects-core/lib.h"
 #include <functional>
 #include <nlohmann/json.hpp>

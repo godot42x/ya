@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/Core/Module/Module.h"
-#include "Framework/Game/Resource/Mesh.h"
-#include "Product/Host/AppState.h"
+#include "Core/Module/Module.h"
+#include "Resource/Mesh.h"
+#include "Host/AppState.h"
 
 namespace ya { struct IRender; }
 

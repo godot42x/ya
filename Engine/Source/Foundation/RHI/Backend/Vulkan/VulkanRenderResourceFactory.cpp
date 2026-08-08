@@ -1,10 +1,10 @@
 #include "VulkanRenderResourceFactory.h"
 
-#include "Foundation/RHI/Backend/Vulkan/VulkanBuffer.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanImage.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanImageView.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanRender.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanSampler.h"
+#include "RHI/Backend/Vulkan/VulkanBuffer.h"
+#include "RHI/Backend/Vulkan/VulkanImage.h"
+#include "RHI/Backend/Vulkan/VulkanImageView.h"
+#include "RHI/Backend/Vulkan/VulkanRender.h"
+#include "RHI/Backend/Vulkan/VulkanSampler.h"
 
 namespace ya
 {

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/Core/Log.h"
-#include "Foundation/Core/System/VirtualFileSystem.h"
-#include "Framework/Game/Resource/AssetManager.h"
-#include "Framework/Game/Resource/Model/ImportedModelData.h"
+#include "Core/Log.h"
+#include "Core/System/VirtualFileSystem.h"
+#include "Resource/AssetManager.h"
+#include "Resource/Model/ImportedModelData.h"
 
 #include <algorithm>
 #include <cctype>

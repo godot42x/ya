@@ -1,14 +1,14 @@
 #include "JSScriptingSystem.h"
 
-#include "Foundation/Core/Log.h"
-#include "Framework/Game/Gameplay/ECS/ECSRegistry.h"
-#include "Foundation/Core/Reflection/InstanceRef.h"
-#include "Foundation/Core/Reflection/MethodReflection.h"
-#include "Foundation/Core/Reflection/ReflectionSerializer.h"
-#include "Foundation/Core/Scripting/ScriptApiAsset.h"
-#include "Framework/Game/Gameplay/ECS/Component.h"
-#include "Framework/Game/Gameplay/ECS/Entity.h"
-#include "Framework/Game/Render/Render3D/Scene.h"
+#include "Core/Log.h"
+#include "ECS/ECSRegistry.h"
+#include "Core/Reflection/InstanceRef.h"
+#include "Core/Reflection/MethodReflection.h"
+#include "Core/Reflection/ReflectionSerializer.h"
+#include "Core/Scripting/ScriptApiAsset.h"
+#include "ECS/Component.h"
+#include "ECS/Entity.h"
+#include "Render3D/Scene.h"
 
 #include <quickjs.h>
 

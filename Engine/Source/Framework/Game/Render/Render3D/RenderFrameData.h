@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Framework/Game/Render/Render3D/Material/Material.h"
-#include "Framework/Game/Resource/Mesh.h"
-#include "Foundation/RHI/RenderDefines.h"
+#include "Render3D/Material/Material.h"
+#include "Resource/Mesh.h"
+#include "RHI/RenderDefines.h"
 #include "Common.Limits.slang.h"
 
 #include <glm/glm.hpp>

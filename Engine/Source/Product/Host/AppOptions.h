@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Foundation/Core/Api.h"
-#include "Foundation/Core/Log.h"
-#include "Foundation/Core/Profiling/Profiling.h"
-#include "Framework/Game/Render/Render3D/Shadow/ShadowSettings.h"
-#include "Product/Host/Utility/ClLIParams.h"
-#include "Framework/Game/Render/Render3D/Common/PostProcessingState.h"
+#include "Core/Api.h"
+#include "Core/Log.h"
+#include "Core/Profiling/Profiling.h"
+#include "Render3D/Shadow/ShadowSettings.h"
+#include "Host/Utility/ClLIParams.h"
+#include "Render3D/Common/PostProcessingState.h"
 
 #include <array>
 #include <cstdint>

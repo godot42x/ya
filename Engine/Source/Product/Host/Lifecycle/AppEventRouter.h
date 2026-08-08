@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/Core/Event.h"
+#include "Core/Event.h"
 
 namespace ya
 {

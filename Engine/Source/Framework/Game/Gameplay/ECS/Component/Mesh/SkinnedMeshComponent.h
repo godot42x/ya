@@ -9,11 +9,11 @@
  */
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Reflection/Reflection.h"
-#include "Framework/Game/Gameplay/ECS/Component.h"
-#include "Framework/Game/Gameplay/ECS/Component/Mesh/MeshSource.h"
-#include "Framework/Game/Resource/Mesh.h"
+#include "Core/Base.h"
+#include "Core/Reflection/Reflection.h"
+#include "ECS/Component.h"
+#include "ECS/Component/Mesh/MeshSource.h"
+#include "Resource/Mesh.h"
 
 namespace ya
 {

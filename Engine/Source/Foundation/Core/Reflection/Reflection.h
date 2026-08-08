@@ -1,17 +1,17 @@
 #pragma once
 
-#include "Foundation/Core/Common/FWD-std.h"
+#include "Core/Common/FWD-std.h"
 
 
 
-#include "Foundation/Core/Profiling/StaticInitProfiler.h"
+#include "Core/Profiling/StaticInitProfiler.h"
 
-#include "Foundation/Core/Reflection/DeferredInitializer.h"
-#include "Foundation/Core/Reflection/MetadataSupport.h"
-#include "Foundation/Core/Reflection/MethodReflection.h"
+#include "Core/Reflection/DeferredInitializer.h"
+#include "Core/Reflection/MetadataSupport.h"
+#include "Core/Reflection/MethodReflection.h"
 
-#include "Foundation/Core/Macro/VariadicMacros.h"
-#include "Foundation/Core/Reflection/PropertyExtensions.h"
+#include "Core/Macro/VariadicMacros.h"
+#include "Core/Reflection/PropertyExtensions.h"
 
 namespace ya
 {

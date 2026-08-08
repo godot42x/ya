@@ -1,7 +1,7 @@
-#include "Foundation/RHI/Core/RenderPass.h"
+#include "RHI/Core/RenderPass.h"
 
-#include "Foundation/RHI/Backend/Vulkan/VulkanRender.h"
-#include "Foundation/RHI/Render.h"
+#include "RHI/Backend/Vulkan/VulkanRender.h"
+#include "RHI/Render.h"
 
 
 namespace ya

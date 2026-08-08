@@ -1,7 +1,7 @@
-#include "Framework/Game/Render/Render3D/Common/PostProcessingStage.h"
+#include "Render3D/Common/PostProcessingStage.h"
 
-#include "Framework/Game/Render/Graph/RenderGraphImportUtils.h"
-#include "Foundation/RHI/Core/Swapchain.h"
+#include "Graph/RenderGraphImportUtils.h"
+#include "RHI/Core/Swapchain.h"
 #include <algorithm>
 
 namespace ya

@@ -1,7 +1,7 @@
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanDescriptorSet.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanRender.h"
-#include "Foundation/RHI/Render.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Backend/Vulkan/VulkanDescriptorSet.h"
+#include "RHI/Backend/Vulkan/VulkanRender.h"
+#include "RHI/Render.h"
 
 
 namespace ya

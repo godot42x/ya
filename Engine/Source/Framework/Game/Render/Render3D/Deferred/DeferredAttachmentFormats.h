@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/RHI/Core/RenderAttachmentFormats.h"
+#include "RHI/Core/RenderAttachmentFormats.h"
 
 namespace ya
 {

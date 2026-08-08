@@ -1,12 +1,12 @@
 #pragma once
 
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/RenderAttachmentFormats.h"
-#include "Foundation/RHI/Core/Pipeline.h"
-#include "Framework/Game/Render/Render3D/Material/MaterialDescPool.h"
-#include "Framework/Game/Render/Render3D/Material/UnlitMaterial.h"
-#include "Framework/Game/Render/Render3D/Common/IRenderRuntimeServices.h"
-#include "Framework/Game/Render/Render3D/Forward/ForwardViewportLitPasses.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/RenderAttachmentFormats.h"
+#include "RHI/Core/Pipeline.h"
+#include "Render3D/Material/MaterialDescPool.h"
+#include "Render3D/Material/UnlitMaterial.h"
+#include "Render3D/Common/IRenderRuntimeServices.h"
+#include "Render3D/Forward/ForwardViewportLitPasses.h"
 
 #include "Test.Unlit.glsl.h"
 

@@ -1,6 +1,6 @@
 #include "OpenGLCommandBuffer.h"
-#include "Foundation/Core/Log.h"
-#include "Foundation/RHI/Core/Image.h"
+#include "Core/Log.h"
+#include "RHI/Core/Image.h"
 #include "OpenGLBuffer.h"
 #include "OpenGLPipeline.h"
 #include "OpenGLRender.h"

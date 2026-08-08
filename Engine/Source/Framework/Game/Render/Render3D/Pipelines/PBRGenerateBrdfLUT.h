@@ -1,10 +1,10 @@
 
 #pragma once
 
-#include "Framework/Game/Render/Graph/RenderGraphExecutor.h"
-#include "Foundation/RHI/Core/Pipeline.h"
-#include "Foundation/RHI/Core/RenderImage.h"
-#include "Foundation/RHI/Render.h"
+#include "Graph/RenderGraphExecutor.h"
+#include "RHI/Core/Pipeline.h"
+#include "RHI/Core/RenderImage.h"
+#include "RHI/Render.h"
 
 namespace ya
 {

@@ -11,9 +11,9 @@
 
 #pragma once
 
-#include "Foundation/Core/Profiling/Profiling.h"
+#include "Core/Profiling/Profiling.h"
 
-#include "Foundation/Core/Common/FWD-std.h"
+#include "Core/Common/FWD-std.h"
 namespace ya::profiling
 {
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Trait.h"
+#include "Core/Base.h"
+#include "Core/Trait.h"
 #include <memory>
 #include <mutex>
 

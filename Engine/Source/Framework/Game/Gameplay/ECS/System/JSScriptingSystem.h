@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/Core/Api.h"
-#include "Foundation/Core/Scripting/ScriptApiRegistry.h"
-#include "Foundation/Core/System/System.h"
+#include "Core/Api.h"
+#include "Core/Scripting/ScriptApiRegistry.h"
+#include "Core/System/System.h"
 
 #include <memory>
 #include <string>

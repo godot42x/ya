@@ -2,7 +2,7 @@
 
 #include "DeferredGBufferResources.h"
 #include "DeferredViewportResources.h"
-#include "Foundation/RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderImage.h"
 
 namespace ya
 {

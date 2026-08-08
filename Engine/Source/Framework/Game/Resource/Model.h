@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Math/AABB.h"
-#include "Framework/Game/Resource/Mesh.h"
-#include "Framework/Game/Resource/Model/MaterialData.h"
-#include "Framework/Game/Resource/Skeleton.h"
+#include "Core/Base.h"
+#include "Core/Math/AABB.h"
+#include "Resource/Mesh.h"
+#include "Resource/Model/MaterialData.h"
+#include "Resource/Skeleton.h"
 
 namespace ya
 {

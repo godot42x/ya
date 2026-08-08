@@ -1,8 +1,8 @@
-#include "Foundation/Core/Scripting/ScriptApiAsset.h"
+#include "Core/Scripting/ScriptApiAsset.h"
 
-#include "Foundation/Core/Scripting/ScriptApiRegistry.h"
-#include "Foundation/Core/System/VirtualFileSystem.h"
-#include "Framework/Game/Resource/AssetManager.h"
+#include "Core/Scripting/ScriptApiRegistry.h"
+#include "Core/System/VirtualFileSystem.h"
+#include "Resource/AssetManager.h"
 
 #include <format>
 

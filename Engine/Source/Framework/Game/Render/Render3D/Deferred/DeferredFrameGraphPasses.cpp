@@ -1,11 +1,11 @@
 #include "DeferredFrameGraphPasses.h"
 
-#include "Foundation/Core/Profiling/PerfKeys.h"
-#include "Foundation/Core/Profiling/PerfState.h"
-#include "Framework/Game/Render/Graph/RenderGraphImportUtils.h"
-#include "Framework/Game/Render/Render3D/Common/PostProcessingStage.h"
-#include "Framework/Game/Render/Render3D/Common/RenderOverlay.h"
-#include "Framework/Game/Render/Render3D/Common/Shadow/ShadowStage.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
+#include "Graph/RenderGraphImportUtils.h"
+#include "Render3D/Common/PostProcessingStage.h"
+#include "Render3D/Common/RenderOverlay.h"
+#include "Render3D/Common/Shadow/ShadowStage.h"
 
 #include <string>
 

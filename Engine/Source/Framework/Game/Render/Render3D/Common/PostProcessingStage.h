@@ -1,13 +1,13 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/RHI/Core/RenderImage.h"
-#include "Foundation/RHI/Core/Texture.h"
-#include "Framework/Game/Render/Render3D/Pipelines/BasicPostprocessing.h"
-#include "Framework/Game/Render/Render3D/Pipelines/BloomPostprocessing.h"
-#include "Foundation/RHI/Render.h"
-#include "Foundation/RHI/RenderDefines.h"
-#include "Framework/Game/Render/Render3D/Common/PostProcessingState.h"
+#include "Core/Base.h"
+#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/Texture.h"
+#include "Render3D/Pipelines/BasicPostprocessing.h"
+#include "Render3D/Pipelines/BloomPostprocessing.h"
+#include "RHI/Render.h"
+#include "RHI/RenderDefines.h"
+#include "Render3D/Common/PostProcessingState.h"
 
 #include <string_view>
 

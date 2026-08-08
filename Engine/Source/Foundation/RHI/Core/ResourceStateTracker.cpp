@@ -1,6 +1,6 @@
 #include "ResourceStateTracker.h"
 
-#include "Foundation/RHI/Core/Image.h"
+#include "RHI/Core/Image.h"
 
 #include <functional>
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Framework/Game/Render/Graph/RenderGraph.h"
+#include "Graph/RenderGraph.h"
 
 namespace ya
 {

@@ -1,13 +1,13 @@
 #include "PointShadowIndirectRenderer.h"
 
-#include "Foundation/Core/Profiling/Instrumentor.h"
-#include "Foundation/Core/Common/DeferredDeletionQueue.h"
+#include "Core/Profiling/Instrumentor.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Framework/Game/Resource/Mesh.h"
-#include "Foundation/RHI/Render.h"
-#include "Framework/Game/Render/Render3D/RenderFrameData.h"
-#include "Framework/Game/Render/Render3D/Common/Shadow/BasicShadowMap/PointShadowBufferUtils.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "Resource/Mesh.h"
+#include "RHI/Render.h"
+#include "Render3D/RenderFrameData.h"
+#include "Render3D/Common/Shadow/BasicShadowMap/PointShadowBufferUtils.h"
 
 #include <algorithm>
 #include <format>

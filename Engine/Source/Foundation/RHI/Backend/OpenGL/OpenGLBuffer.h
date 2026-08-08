@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/RHI/Core/Buffer.h"
+#include "Core/Base.h"
+#include "RHI/Core/Buffer.h"
 #include "glad/glad.h"
 
 #include <memory>

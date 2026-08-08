@@ -12,8 +12,8 @@
 #pragma once
 
 #include "ContainerTraits.h"
-#include "Foundation/Core/Common/Warnings.h"
-#include "Foundation/Core/TypeIndex.h"
+#include "Core/Common/Warnings.h"
+#include "Core/TypeIndex.h"
 #include <array>
 #include <memory>
 #include <set>

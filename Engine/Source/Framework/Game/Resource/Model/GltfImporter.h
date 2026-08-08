@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Framework/Game/Resource/Model/IModelImporter.h"
+#include "Resource/Model/IModelImporter.h"
 
 namespace ya::model_importer
 {

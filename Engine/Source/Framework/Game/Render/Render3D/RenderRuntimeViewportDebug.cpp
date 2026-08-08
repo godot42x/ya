@@ -1,14 +1,14 @@
-#include "Foundation/RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderImage.h"
 #include "RenderRuntime.h"
 
-#include "Product/Host/App.h"
-#include "Framework/Game/Render/Render3D/Deferred/DeferredRenderPipeline.h"
-#include "Framework/Game/Gameplay/ECS/Component/3D/EnvironmentLightingComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/3D/SkyboxComponent.h"
-#include "Framework/Game/Gameplay/ECS/System/ResourceResolveSystem.h"
-#include "Framework/Game/Render/Render3D/Forward/ForwardRenderPipeline.h"
-#include "Framework/Game/Render/Render3D/Scene.h"
-#include "Framework/Game/Render/Render3D/SceneManager.h"
+#include "Host/App.h"
+#include "Render3D/Deferred/DeferredRenderPipeline.h"
+#include "ECS/Component/3D/EnvironmentLightingComponent.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
+#include "ECS/System/ResourceResolveSystem.h"
+#include "Render3D/Forward/ForwardRenderPipeline.h"
+#include "Render3D/Scene.h"
+#include "Render3D/SceneManager.h"
 
 #include <bit>
 

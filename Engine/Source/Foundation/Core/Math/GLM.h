@@ -30,8 +30,8 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
 
-#include "Foundation/Core/Reflection/Reflection.h"
-#include "Foundation/Core/Reflection/ReflectionSerializer.h"
+#include "Core/Reflection/Reflection.h"
+#include "Core/Reflection/ReflectionSerializer.h"
 
 // GLM 类型反射支持
 YA_REFLECT_BEGIN_EXTERNAL(glm::vec2)

@@ -1,10 +1,10 @@
-#include "Framework/Game/Resource/Texture/AssetTextureInternal.h"
+#include "Resource/Texture/AssetTextureInternal.h"
 
-#include "Foundation/Core/Log.h"
-#include "Foundation/Core/System/PathUtils.h"
-#include "Foundation/Core/System/VirtualFileSystem.h"
-#include "Foundation/RHI/Render.h"
-#include "Framework/Game/Resource/AssetManager.h"
+#include "Core/Log.h"
+#include "Core/System/PathUtils.h"
+#include "Core/System/VirtualFileSystem.h"
+#include "RHI/Render.h"
+#include "Resource/AssetManager.h"
 #include "ktx.h"
 #include "stb/stb_image.h"
 

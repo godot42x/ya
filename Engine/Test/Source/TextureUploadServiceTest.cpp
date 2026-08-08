@@ -1,9 +1,9 @@
-#include "Foundation/RHI/Core/TextureUploadService.h"
+#include "RHI/Core/TextureUploadService.h"
 
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Foundation/RHI/Core/Image.h"
-#include "Foundation/RHI/Render.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/Image.h"
+#include "RHI/Render.h"
 
 #include <gtest/gtest.h>
 

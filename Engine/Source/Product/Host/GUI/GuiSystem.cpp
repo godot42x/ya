@@ -1,8 +1,8 @@
-#include "Product/Host/GUI/GuiSystem.h"
+#include "Host/GUI/GuiSystem.h"
 
-#include "Product/Host/GUI/ImGui/ImGuiSystem.h"
+#include "Host/GUI/ImGui/ImGuiSystem.h"
 
-#include "Foundation/RHI/Core/CommandBuffer.h"
+#include "RHI/Core/CommandBuffer.h"
 
 namespace ya
 {

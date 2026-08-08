@@ -1,12 +1,12 @@
 #include "LightStage.h"
-#include "Foundation/RHI/Core/RenderImage.h"
-#include "Foundation/RHI/Render.h"
-#include "Framework/GUI/Runtime/Resource/TextureLibrary.h"
+#include "RHI/Core/RenderImage.h"
+#include "RHI/Render.h"
+#include "GUI/Runtime/Resource/TextureLibrary.h"
 
-#include "Product/Host/Config/ConfigManager.h"
-#include "Foundation/Core/Profiling/PerfKeys.h"
-#include "Foundation/Core/Profiling/PerfState.h"
-#include "Framework/Game/Resource/Mesh/PrimitiveMeshCache.h"
+#include "Host/Config/ConfigManager.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
+#include "Resource/Mesh/PrimitiveMeshCache.h"
 
 #include <string>
 #include <vector>

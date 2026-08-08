@@ -1,13 +1,13 @@
 #pragma once
 
-#include <Foundation/Core/Log.h>
+#include <Core/Log.h>
 
 #include <vulkan/vulkan.h>
 
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/Image.h"
-#include "Foundation/RHI/Render.h"
-#include "Foundation/RHI/RenderDefines.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/Image.h"
+#include "RHI/Render.h"
+#include "RHI/RenderDefines.h"
 
 
 

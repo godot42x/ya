@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Delegate.h"
+#include "Core/Base.h"
+#include "Core/Delegate.h"
 #include "Image.h"
-#include "Foundation/RHI/RenderDefines.h"
+#include "RHI/RenderDefines.h"
 #include "Sampler.h"
 #include "TextureCreateInfo.h"
 

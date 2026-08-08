@@ -1,21 +1,21 @@
 #include "ViewportOverlayStage.h"
 
-#include "Foundation/Core/Profiling/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 
-#include "Foundation/Core/Math/Geometry.h"
-#include "Foundation/Core/Math/Math.h"
-#include "Framework/GUI/Runtime/Resource/TextureLibrary.h"
-#include "Framework/Game/Gameplay/ECS/Component/DirectionComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Material/SimpleMaterialComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Mesh/StaticMeshComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/TransformComponent.h"
-#include "Framework/Game/Gameplay/ECS/System/ResourceResolveSystem.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanRender.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
+#include "Core/Math/Geometry.h"
+#include "Core/Math/Math.h"
+#include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "ECS/Component/DirectionComponent.h"
+#include "ECS/Component/Material/SimpleMaterialComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
+#include "ECS/Component/TransformComponent.h"
+#include "ECS/System/ResourceResolveSystem.h"
+#include "RHI/Backend/Vulkan/VulkanRender.h"
+#include "RHI/Core/RenderResourceFactory.h"
 
-#include "Framework/Game/Resource/Mesh/PrimitiveMeshCache.h"
+#include "Resource/Mesh/PrimitiveMeshCache.h"
 
-#include "Framework/Game/Render/Render3D/Scene.h"
+#include "Render3D/Scene.h"
 
 
 #include <algorithm>

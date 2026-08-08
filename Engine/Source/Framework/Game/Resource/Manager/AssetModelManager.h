@@ -1,12 +1,12 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
+#include "Core/Base.h"
 
 #include <mutex>
 
-#include "Foundation/Core/Async/TaskQueue.h"
-#include "Framework/Game/Resource/Model/ImportedModelData.h"
-#include "Framework/Game/Resource/AssetManager.h"
+#include "Core/Async/TaskQueue.h"
+#include "Resource/Model/ImportedModelData.h"
+#include "Resource/AssetManager.h"
 
 namespace ya
 {

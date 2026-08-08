@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/Core/Math/Geometry.h"
-#include "Framework/Game/Resource/Mesh.h"
-#include "Foundation/Core/ResourceRegistry.h"
+#include "Core/Math/Geometry.h"
+#include "Resource/Mesh.h"
+#include "Core/ResourceRegistry.h"
 #include <mutex>
 #include <unordered_map>
 

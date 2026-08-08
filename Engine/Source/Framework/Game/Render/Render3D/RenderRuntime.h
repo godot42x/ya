@@ -1,22 +1,22 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
+#include "Core/Base.h"
 
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/Pipeline.h"
-#include "Framework/Game/Render/Graph/RenderGraphExecutor.h"
-#include "Foundation/RHI/Render.h"
-#include "Foundation/RHI/Shader.h"
-#include "Framework/Game/Render/Render3D/Common/IRenderPipeline.h"
-#include "Framework/Game/Render/Render3D/Common/IRenderRuntimeServices.h"
-#include "Framework/Game/Render/Render3D/Common/PostProcessingState.h"
-#include "Framework/Game/Render/Render3D/Common/RenderOverlay.h"
-#include "Framework/Game/Render/Render3D/Common/RenderTargetCatalog.h"
-#include "Framework/Game/Render/Render3D/Common/RenderViewportSnapshot.h"
-#include "Framework/Game/Render/Render3D/Deferred/DeferredPipelineDebugViews.h"
-#include "Framework/Game/Render/Render3D/Services/OffscreenTaskService.h"
-#include "Framework/Game/Render/Render3D/Services/RenderDiagnosticsService.h"
-#include "Framework/Game/Render/Render3D/Services/RenderSharedResourceProvider.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/Pipeline.h"
+#include "Graph/RenderGraphExecutor.h"
+#include "RHI/Render.h"
+#include "RHI/Shader.h"
+#include "Render3D/Common/IRenderPipeline.h"
+#include "Render3D/Common/IRenderRuntimeServices.h"
+#include "Render3D/Common/PostProcessingState.h"
+#include "Render3D/Common/RenderOverlay.h"
+#include "Render3D/Common/RenderTargetCatalog.h"
+#include "Render3D/Common/RenderViewportSnapshot.h"
+#include "Render3D/Deferred/DeferredPipelineDebugViews.h"
+#include "Render3D/Services/OffscreenTaskService.h"
+#include "Render3D/Services/RenderDiagnosticsService.h"
+#include "Render3D/Services/RenderSharedResourceProvider.h"
 
 #include <functional>
 #include <glm/glm.hpp>

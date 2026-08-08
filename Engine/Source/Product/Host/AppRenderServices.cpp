@@ -1,9 +1,9 @@
-#include "Product/Host/AppRenderServices.h"
+#include "Host/AppRenderServices.h"
 
-#include "Product/Host/AppRenderState.h"
+#include "Host/AppRenderState.h"
 
-#include "Foundation/Core/Log.h"
-#include "Framework/Game/Render/Render3D/Services/DebugRenderSystem.h"
+#include "Core/Log.h"
+#include "Render3D/Services/DebugRenderSystem.h"
 
 namespace ya
 {

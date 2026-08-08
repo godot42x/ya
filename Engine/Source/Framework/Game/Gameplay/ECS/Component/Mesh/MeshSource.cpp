@@ -1,8 +1,8 @@
 #include "MeshSource.h"
 
-#include "Framework/Game/Resource/Model.h"
-#include "Framework/Game/Resource/AssetManager.h"
-#include "Framework/Game/Resource/Mesh/PrimitiveMeshCache.h"
+#include "Resource/Model.h"
+#include "Resource/AssetManager.h"
+#include "Resource/Mesh/PrimitiveMeshCache.h"
 
 namespace ya
 {

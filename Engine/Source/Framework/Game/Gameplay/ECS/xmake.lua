@@ -1,7 +1,10 @@
 target("ya-gameplay-ecs")
     set_kind("shared")
     ya_std_module("YA_GAMEPLAY_ECS_API")
-    add_includedirs("../../../..", { public = true })
+    -- Fat-module transition: ECS headers still reach render/resource/GUI/host
+    -- headers without a corresponding dep edge (see plan.md §10.6); once
+    -- ya-gameplay is split these extra tiers move out with the files.
+    ya_tier_include("Gameplay", "Game", "Scene", "Render", "Framework", "Product")
     add_files("**.cpp")
     add_headerfiles("**.h")
     -- Fat module for now: ECS components/systems reference render + resource

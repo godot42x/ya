@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Framework/Game/Render/Graph/RenderGraph.h"
-#include "Framework/Game/Render/Render3D/Common/Shadow/ShadowGraphOutputs.h"
+#include "Graph/RenderGraph.h"
+#include "Render3D/Common/Shadow/ShadowGraphOutputs.h"
 
 #include <array>
 #include <optional>

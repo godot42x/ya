@@ -4,7 +4,7 @@
 target("ya-foundation-rhi")
     set_kind("shared")
     ya_std_module("YA_RHI_API")
-    add_includedirs("../..", { public = true })
+    ya_tier_include("Foundation")
     add_includedirs(path.join(os.scriptdir(), "../../../Shader/Slang/Generated"), { public = true })
     add_includedirs(path.join(os.scriptdir(), "../../../Shader/GLSL/Generated"), { public = true })
     add_files("**.cpp|Backend/**.cpp")

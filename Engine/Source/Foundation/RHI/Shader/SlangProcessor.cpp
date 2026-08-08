@@ -1,8 +1,8 @@
-#include "Foundation/RHI/Shader.h"
+#include "RHI/Shader.h"
 
-#include "Foundation/RHI/Shader/ShaderInternal.h"
+#include "RHI/Shader/ShaderInternal.h"
 
-#include "Foundation/Core/System/VirtualFileSystem.h"
+#include "Core/System/VirtualFileSystem.h"
 
 #include "utility.cc/string_utils.h"
 

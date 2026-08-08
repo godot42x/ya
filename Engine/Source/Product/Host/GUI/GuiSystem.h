@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Product/Host/GUI/GuiBackend.h"
+#include "Host/GUI/GuiBackend.h"
 
 #include <memory>
 

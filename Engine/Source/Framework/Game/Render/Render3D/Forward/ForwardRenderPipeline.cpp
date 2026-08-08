@@ -1,14 +1,14 @@
-#include "Framework/Game/Render/Render3D/Forward/ForwardRenderPipeline.h"
+#include "Render3D/Forward/ForwardRenderPipeline.h"
 
-#include "Foundation/RHI/Backend/Vulkan/VulkanRender.h"
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/Core/Profiling/Profiling.h"
-#include "Foundation/RHI/Core/RenderingInfoUtils.h"
-#include "Foundation/RHI/Core/Sampler.h"
-#include "Framework/Game/Gameplay/ECS/Component/DirectionComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/TransformComponent.h"
-#include "Framework/Game/Render/Render3D/Forward/ForwardFrameGraphOrchestrator.h"
-#include "Framework/Game/Render/Render3D/Scene.h"
+#include "RHI/Backend/Vulkan/VulkanRender.h"
+#include "RHI/Core/Buffer.h"
+#include "Core/Profiling/Profiling.h"
+#include "RHI/Core/RenderingInfoUtils.h"
+#include "RHI/Core/Sampler.h"
+#include "ECS/Component/DirectionComponent.h"
+#include "ECS/Component/TransformComponent.h"
+#include "Render3D/Forward/ForwardFrameGraphOrchestrator.h"
+#include "Render3D/Scene.h"
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace ya

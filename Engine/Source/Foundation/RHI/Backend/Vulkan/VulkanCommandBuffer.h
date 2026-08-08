@@ -1,8 +1,8 @@
 
 #pragma once
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Foundation/RHI/Core/ResourceStateTracker.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/ResourceStateTracker.h"
 #include "VulkanUtils.h"
 
 

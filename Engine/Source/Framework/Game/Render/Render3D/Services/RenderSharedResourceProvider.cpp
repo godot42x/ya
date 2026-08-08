@@ -1,10 +1,10 @@
 #include "RenderSharedResourceProvider.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Foundation/RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/Core/RenderImage.h"
 
-#include "Product/Host/App.h"
-#include "Framework/Game/Gameplay/ECS/System/ResourceResolveSystem.h"
-#include "Foundation/RHI/Core/Sampler.h"
+#include "Host/App.h"
+#include "ECS/System/ResourceResolveSystem.h"
+#include "RHI/Core/Sampler.h"
 
 namespace ya
 {

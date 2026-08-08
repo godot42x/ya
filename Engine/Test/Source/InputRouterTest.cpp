@@ -1,6 +1,6 @@
-#include "Foundation/Core/Input/InputManager.h"
-#include "Product/Host/InputRouter.h"
-#include "Product/Host/App.h"
+#include "Core/Input/InputManager.h"
+#include "Host/InputRouter.h"
+#include "Host/App.h"
 
 #include <gtest/gtest.h>
 

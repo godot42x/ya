@@ -5,7 +5,7 @@
 target("ya-gui-runtime")
     set_kind("shared")
     ya_std_module("YA_GUI_API")
-    add_includedirs("../..", { public = true })
+    ya_tier_include("Framework")
     add_files("**.cpp")
     add_headerfiles("**.h")
     -- The 2D renderer instantiates descriptor pools / pipeline layouts via

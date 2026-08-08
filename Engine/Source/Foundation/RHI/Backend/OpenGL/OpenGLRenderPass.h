@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/RHI/Core/RenderPass.h"
+#include "Core/Base.h"
+#include "RHI/Core/RenderPass.h"
 #include "glad/glad.h"
 
 namespace ya

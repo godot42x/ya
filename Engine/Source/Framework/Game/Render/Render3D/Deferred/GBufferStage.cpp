@@ -1,13 +1,13 @@
 #include "GBufferStage.h"
 
-#include "Foundation/Core/Profiling/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Framework/Game/Render/Render3D/Material/MaterialFactory.h"
-#include "Framework/Game/Render/Render3D/RenderFrameData.h"
-#include "Framework/GUI/Runtime/Resource/TextureLibrary.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "Render3D/Material/MaterialFactory.h"
+#include "Render3D/RenderFrameData.h"
+#include "GUI/Runtime/Resource/TextureLibrary.h"
 
-#include "Foundation/Core/Math/Geometry.h"
+#include "Core/Math/Geometry.h"
 
 
 #include <algorithm>

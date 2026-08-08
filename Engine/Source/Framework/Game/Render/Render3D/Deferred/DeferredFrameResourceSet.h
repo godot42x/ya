@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/FrameUploadArena.h"
-#include "Framework/Game/Render/Render3D/Stage/IRenderStage.h"
-#include "Framework/Game/Render/Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/FrameUploadArena.h"
+#include "Render3D/Stage/IRenderStage.h"
+#include "Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
 
 #include "DeferredRender.GBufferPass_PBR.slang.h"
 #include "DeferredRender.LightPass.slang.h"

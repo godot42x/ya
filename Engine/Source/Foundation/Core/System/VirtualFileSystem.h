@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Foundation/Core/Api.h"
-#include "Foundation/Core/System/System.h"
+#include "Core/Api.h"
+#include "Core/System/System.h"
 
-#include "Foundation/Core/Delegate.h"
-#include "Foundation/Core/Log.h"
+#include "Core/Delegate.h"
+#include "Core/Log.h"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>

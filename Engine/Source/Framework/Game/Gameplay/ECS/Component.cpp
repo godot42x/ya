@@ -1,4 +1,4 @@
-#include "Framework/Game/Gameplay/ECS/Component.h"
+#include "ECS/Component.h"
 
 namespace ya
 {

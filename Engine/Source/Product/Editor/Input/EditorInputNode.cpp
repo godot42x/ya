@@ -1,9 +1,9 @@
-#include "Product/Editor/Input/EditorInputNode.h"
+#include "Editor/Input/EditorInputNode.h"
 
-#include "Product/Editor/EditorLayer.h"
-#include "Framework/GUI/Runtime/Scene/UISceneRenderer.h"
-#include "Product/Host/App.h"
-#include "Product/Host/GUI/GuiSystem.h"
+#include "Editor/EditorLayer.h"
+#include "GUI/Runtime/Scene/UISceneRenderer.h"
+#include "Host/App.h"
+#include "Host/GUI/GuiSystem.h"
 
 namespace ya
 {

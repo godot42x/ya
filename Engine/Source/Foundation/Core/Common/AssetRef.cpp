@@ -1,8 +1,8 @@
-#include "Foundation/Core/Common/AssetRef.h"
+#include "Core/Common/AssetRef.h"
 
-#include "Foundation/Core/Log.h"
-#include "Foundation/Core/System/VirtualFileSystem.h"
-#include "Foundation/Core/TypeIndex.h"
+#include "Core/Log.h"
+#include "Core/System/VirtualFileSystem.h"
+#include "Core/TypeIndex.h"
 
 #include <algorithm>
 #include <filesystem>

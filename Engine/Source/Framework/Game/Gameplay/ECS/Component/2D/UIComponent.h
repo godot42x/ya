@@ -1,10 +1,10 @@
 
 #pragma once
 
-#include "Foundation/Core/Common/AssetRef.h"
-#include "Foundation/Core/Common/FWD-std.h"
-#include "Framework/Game/Gameplay/ECS/Component.h"
-#include "Framework/Game/Render/Render3D/Material/Material.h"
+#include "Core/Common/AssetRef.h"
+#include "Core/Common/FWD-std.h"
+#include "ECS/Component.h"
+#include "Render3D/Material/Material.h"
 
 
 namespace ya

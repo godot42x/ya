@@ -1,16 +1,16 @@
 #include "ResourceResolveSystem.Detail.h"
 
-#include "Framework/Game/Gameplay/ECS/Component/2D/BillboardComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/2D/UIComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Material/PBRMaterialComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Material/PhongMaterialComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Material/UnlitMaterialComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Mesh/SkinnedMeshComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Mesh/StaticMeshComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Terrain/TerrainComponent.h"
-#include "Product/Host/App.h"
-#include "Framework/Game/Render/Render3D/SceneManager.h"
-#include "Framework/Game/Render/Render3D/Terrain/TerrainMeshBuilder.h"
+#include "ECS/Component/2D/BillboardComponent.h"
+#include "ECS/Component/2D/UIComponent.h"
+#include "ECS/Component/Material/PBRMaterialComponent.h"
+#include "ECS/Component/Material/PhongMaterialComponent.h"
+#include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "ECS/Component/Mesh/SkinnedMeshComponent.h"
+#include "ECS/Component/Mesh/StaticMeshComponent.h"
+#include "ECS/Component/Terrain/TerrainComponent.h"
+#include "Host/App.h"
+#include "Render3D/SceneManager.h"
+#include "Render3D/Terrain/TerrainMeshBuilder.h"
 
 #include <algorithm>
 #include <cstring>

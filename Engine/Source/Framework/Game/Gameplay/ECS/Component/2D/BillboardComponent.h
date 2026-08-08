@@ -1,9 +1,9 @@
 #pragma once
-#include "Framework/Game/Gameplay/ECS/Component.h"
-#include "Framework/Game/Render/Render3D/Material/MaterialFactory.h"
-#include "Framework/Game/Render/Render3D/Material/UnlitMaterial.h"
-#include "Framework/Game/Render/Render3D/Material/Material.h"
-#include "Framework/Game/Render/Render3D/Common/RenderOverlay.h"
+#include "ECS/Component.h"
+#include "Render3D/Material/MaterialFactory.h"
+#include "Render3D/Material/UnlitMaterial.h"
+#include "Render3D/Material/Material.h"
+#include "Render3D/Common/RenderOverlay.h"
 
 
 namespace ya

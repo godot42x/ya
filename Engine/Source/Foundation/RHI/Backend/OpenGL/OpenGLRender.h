@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Delegate.h"
-#include "Foundation/RHI/Render.h"
-#include "Foundation/RHI/WindowProvider.h"
+#include "Core/Base.h"
+#include "Core/Delegate.h"
+#include "RHI/Render.h"
+#include "RHI/WindowProvider.h"
 #include "glad/glad.h"
 
 #include <memory>

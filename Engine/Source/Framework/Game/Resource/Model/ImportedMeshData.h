@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/Core/Math/Geometry.h"
+#include "Core/Math/Geometry.h"
 
 #include <string>
 #include <vector>

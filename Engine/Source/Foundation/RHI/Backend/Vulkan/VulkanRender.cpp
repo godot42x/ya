@@ -2,12 +2,12 @@
 #include "VulkanCommandBuffer.h"
 #include "VulkanDescriptorSet.h"
 #include "VulkanSampler.h"
-#include "Foundation/RHI/WindowProvider.h"
+#include "RHI/WindowProvider.h"
 
-#include <Foundation/Core/Base.h>
-#include <Foundation/Core/Profiling/PerfKeys.h>
-#include <Foundation/Core/Profiling/PerfState.h>
-#include <Foundation/Core/Log.h>
+#include <Core/Base.h>
+#include <Core/Profiling/PerfKeys.h>
+#include <Core/Profiling/PerfState.h>
+#include <Core/Log.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -16,7 +16,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <vector>
 
-#include "Foundation/Core/Common/DeferredDeletionQueue.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 #include "VulkanUtils.h"
 
 

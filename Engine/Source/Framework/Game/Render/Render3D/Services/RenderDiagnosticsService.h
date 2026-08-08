@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
+#include "Core/Base.h"
 
-#include "Foundation/Core/Debug/RenderDocCapture.h"
+#include "Core/Debug/RenderDocCapture.h"
 
 #include <memory>
 #include <string>

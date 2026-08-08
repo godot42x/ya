@@ -2,9 +2,9 @@
 #pragma once
 
 
-#include "Framework/Game/Gameplay/ECS/Component.h"
+#include "ECS/Component.h"
 #include "MaterialComponent.h"
-#include "Framework/Game/Render/Render3D/Material/SimpleMaterial.h"
+#include "Render3D/Material/SimpleMaterial.h"
 
 namespace ya
 {

@@ -1,14 +1,14 @@
-#include "Product/Host/AppSceneServices.h"
+#include "Host/AppSceneServices.h"
 
-#include "Product/Host/App.h"
-#include "Product/Host/Lifecycle/AppFrameLoop.h"
-#include "Product/Host/Lifecycle/AppLifecycle.h"
+#include "Host/App.h"
+#include "Host/Lifecycle/AppFrameLoop.h"
+#include "Host/Lifecycle/AppLifecycle.h"
 
-#include "Foundation/Core/Log.h"
-#include "Framework/Game/Gameplay/ECS/Component/3D/EnvironmentLightingComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/3D/SkyboxComponent.h"
-#include "Framework/Game/Gameplay/ECS/System/ResourceResolveSystem.h"
-#include "Framework/Game/Render/Render3D/SceneManager.h"
+#include "Core/Log.h"
+#include "ECS/Component/3D/EnvironmentLightingComponent.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
+#include "ECS/System/ResourceResolveSystem.h"
+#include "Render3D/SceneManager.h"
 
 namespace ya
 {

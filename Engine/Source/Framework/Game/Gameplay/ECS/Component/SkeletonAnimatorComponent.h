@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/Core/Reflection/Reflection.h"
-#include "Framework/Game/Gameplay/ECS/Component.h"
-#include "Framework/Game/Resource/Skeleton.h"
-#include "Framework/Game/Resource/SkeletonAnimationSampler.h"
+#include "Core/Reflection/Reflection.h"
+#include "ECS/Component.h"
+#include "Resource/Skeleton.h"
+#include "Resource/SkeletonAnimationSampler.h"
 
 #include <limits>
 #include <memory>

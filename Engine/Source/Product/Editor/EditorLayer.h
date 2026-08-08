@@ -1,27 +1,27 @@
 #pragma once
 
-#include "Foundation/Core/Common/FWD.h"
+#include "Core/Common/FWD.h"
 
-#include "Product/Editor/Panels/AssetInspectorPanel.h"
-#include "Product/Editor/Panels/ContentBrowserPanel.h"
-#include "Product/Editor/Panels/RuntimeToolsPanel.h"
-#include "Foundation/Core/Base.h"
+#include "Editor/Panels/AssetInspectorPanel.h"
+#include "Editor/Panels/ContentBrowserPanel.h"
+#include "Editor/Panels/RuntimeToolsPanel.h"
+#include "Core/Base.h"
 
-#include "Foundation/Core/Camera/Camera.h"
+#include "Core/Camera/Camera.h"
 
-#include "Foundation/Core/Event.h"
-#include "Foundation/Core/Profiling/Instrumentor.h"
-#include "Product/Editor/Inspector/DetailsView.h"
-#include "Product/Editor/FilePicker.h"
-#include "Product/Editor/ImGui/ImGuiHelper.h"
-#include "Framework/Game/Render/Render3D/Common/RenderOverlay.h"
-#include "Foundation/RHI/Core/Image.h"
-#include "Foundation/RHI/Core/RenderImage.h"
-#include "Framework/Game/Render/Render3D/Common/RenderViewportSnapshot.h"
-#include "Product/Editor/Panels/SceneHierarchyPanel.h"
+#include "Core/Event.h"
+#include "Core/Profiling/Instrumentor.h"
+#include "Editor/Inspector/DetailsView.h"
+#include "Editor/FilePicker.h"
+#include "Editor/ImGui/ImGuiHelper.h"
+#include "Render3D/Common/RenderOverlay.h"
+#include "RHI/Core/Image.h"
+#include "RHI/Core/RenderImage.h"
+#include "Render3D/Common/RenderViewportSnapshot.h"
+#include "Editor/Panels/SceneHierarchyPanel.h"
 #include <imgui.h>
 
-#include "Product/Editor/EditorCommon.h"
+#include "Editor/EditorCommon.h"
 
 #include <ImGuizmo.h>
 #include <algorithm>

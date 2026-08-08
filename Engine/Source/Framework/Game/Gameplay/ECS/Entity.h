@@ -1,13 +1,13 @@
 #pragma once
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/FName.h"
-#include "Foundation/Core/Log.h"
-#include "Foundation/Core/Reflection/InstanceRef.h"
-#include "Foundation/Core/Reflection/Reflection.h"
+#include "Core/Base.h"
+#include "Core/FName.h"
+#include "Core/Log.h"
+#include "Core/Reflection/InstanceRef.h"
+#include "Core/Reflection/Reflection.h"
 
 #include <entt/entt.hpp>
 
-#include "Framework/Game/Gameplay/ECS/Component.h"
+#include "ECS/Component.h"
 
 namespace ya
 {
@@ -96,4 +96,4 @@ struct YA_GAMEPLAY_ECS_API Entity
 
 } // namespace ya
 
-#include "Framework/Game/Gameplay/ECS/Entity.inl"
+#include "ECS/Entity.inl"

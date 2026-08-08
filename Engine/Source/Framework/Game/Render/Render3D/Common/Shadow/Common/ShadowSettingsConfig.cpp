@@ -1,8 +1,8 @@
 #include "ShadowSettingsConfig.h"
 
-#include "Product/Host/Config/ConfigManager.h"
-#include "Foundation/Core/Log.h"
-#include "Product/Host/App.h"
+#include "Host/Config/ConfigManager.h"
+#include "Core/Log.h"
+#include "Host/App.h"
 
 #include <algorithm>
 #include <cctype>

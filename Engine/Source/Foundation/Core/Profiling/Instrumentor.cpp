@@ -4,7 +4,7 @@
 
 #include "Instrumentor.h"
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 #include <algorithm>
 #include <filesystem>
 

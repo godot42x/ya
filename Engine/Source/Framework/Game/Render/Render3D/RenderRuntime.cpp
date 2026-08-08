@@ -1,14 +1,14 @@
 #include "RenderRuntime.h"
 
-#include "Product/Host/App.h"
-#include "Framework/Game/Render/Render3D/Services/DebugRenderSystem.h"
-#include "Foundation/Core/Profiling/PerfKeys.h"
-#include "Foundation/Core/Profiling/PerfState.h"
-#include "Framework/Game/Render/Render3D/Deferred/DeferredRenderPipeline.h"
-#include "Framework/GUI/Runtime/Compose/Render2DComposePass.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanRender.h"
-#include "Framework/GUI/Runtime/Draw2D/Render2D.h"
-#include "Framework/Game/Render/Render3D/Forward/ForwardRenderPipeline.h"
+#include "Host/App.h"
+#include "Render3D/Services/DebugRenderSystem.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
+#include "Render3D/Deferred/DeferredRenderPipeline.h"
+#include "GUI/Runtime/Compose/Render2DComposePass.h"
+#include "RHI/Backend/Vulkan/VulkanRender.h"
+#include "GUI/Runtime/Draw2D/Render2D.h"
+#include "Render3D/Forward/ForwardRenderPipeline.h"
 
 #include <limits>
 

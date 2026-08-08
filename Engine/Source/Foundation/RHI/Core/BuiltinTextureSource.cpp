@@ -1,4 +1,4 @@
-#include "Foundation/RHI/Core/BuiltinTextureSource.h"
+#include "RHI/Core/BuiltinTextureSource.h"
 
 namespace ya
 {

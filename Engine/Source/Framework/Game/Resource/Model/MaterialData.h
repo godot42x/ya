@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/Core/FName.h"
+#include "Core/FName.h"
 
 #include <glm/glm.hpp>
 

@@ -1,17 +1,17 @@
 
 #pragma once
 
-#include "Foundation/Core/System/System.h"
-#include "Framework/Game/Gameplay/ECS/Component/3D/EnvironmentLightingComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/3D/SkyboxComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Terrain/TerrainComponent.h"
-#include "Foundation/RHI/Core/OffscreenJob.h"
-#include "Foundation/RHI/Core/ImageResourceRef.h"
-#include "Product/Host/Utility/OffscreenJobRunner.h"
-#include "Framework/Game/Render/Render3D/Pipelines/CubeMap2PBRIrradianceMap.h"
-#include "Framework/Game/Render/Render3D/Pipelines/CubeMap2PBRPrefilteredEnv.h"
-#include "Framework/Game/Render/Render3D/Pipelines/EquidistantCylindrical2CubeMap.h"
-#include "Framework/Game/Resource/AssetManager.h"
+#include "Core/System/System.h"
+#include "ECS/Component/3D/EnvironmentLightingComponent.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
+#include "ECS/Component/Terrain/TerrainComponent.h"
+#include "RHI/Core/OffscreenJob.h"
+#include "RHI/Core/ImageResourceRef.h"
+#include "Host/Utility/OffscreenJobRunner.h"
+#include "Render3D/Pipelines/CubeMap2PBRIrradianceMap.h"
+#include "Render3D/Pipelines/CubeMap2PBRPrefilteredEnv.h"
+#include "Render3D/Pipelines/EquidistantCylindrical2CubeMap.h"
+#include "Resource/AssetManager.h"
 
 #include <deque>
 #include <functional>

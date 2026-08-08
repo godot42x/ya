@@ -1,10 +1,10 @@
 #pragma once
-#include "Foundation/Core/Base.h"
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Foundation/RHI/Render.h"
-#include "Foundation/RHI/RenderDefines.h"
+#include "Core/Base.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/Render.h"
+#include "RHI/RenderDefines.h"
 #include <format>
 #include <functional>
 #include <vector>

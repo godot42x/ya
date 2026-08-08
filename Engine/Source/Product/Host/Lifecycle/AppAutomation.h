@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/Core/Api.h"
-#include "Framework/Game/Render/Graph/RenderGraph.h"
+#include "Core/Api.h"
+#include "Graph/RenderGraph.h"
 
 #include <cstdint>
 #include <functional>

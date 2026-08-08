@@ -1,5 +1,5 @@
 #include "OpenGLSwapchain.h"
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 #include "OpenGLRender.h"
 
 namespace ya

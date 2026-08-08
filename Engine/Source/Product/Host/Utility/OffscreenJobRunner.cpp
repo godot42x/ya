@@ -1,9 +1,9 @@
 #include "OffscreenJobRunner.h"
 
-#include "Product/Host/App.h"
+#include "Host/App.h"
 
-#include "Foundation/RHI/Core/OffscreenJob.h"
-#include "Foundation/Core/Common/DeferredDeletionQueue.h"
+#include "RHI/Core/OffscreenJob.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 
 namespace ya
 {

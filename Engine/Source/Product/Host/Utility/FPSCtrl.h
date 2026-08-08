@@ -3,7 +3,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
-#include "Foundation/Core/Api.h"
+#include "Core/Api.h"
 
 namespace ya
 {

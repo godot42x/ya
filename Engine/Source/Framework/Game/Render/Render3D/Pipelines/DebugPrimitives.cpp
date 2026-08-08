@@ -1,10 +1,10 @@
 #include "DebugPrimitives.h"
 
-#include "Foundation/RHI/Render.h"
+#include "RHI/Render.h"
 
-#include "Foundation/Core/Math/Math.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Framework/Game/Resource/Mesh/PrimitiveMeshCache.h"
+#include "Core/Math/Math.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "Resource/Mesh/PrimitiveMeshCache.h"
 
 #include <algorithm>
 #include <glm/gtc/matrix_transform.hpp>

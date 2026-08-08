@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
+#include "Core/Base.h"
 
-#include "Foundation/RHI/Backend/Vulkan/VulkanUtils.h"
+#include "RHI/Backend/Vulkan/VulkanUtils.h"
 #include "reflects-core/enum.h"
 #include <mutex>
 #include <string>

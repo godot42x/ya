@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
+#include "Core/Base.h"
 #include "imgui.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/Image.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/Image.h"
 
 namespace ya
 {

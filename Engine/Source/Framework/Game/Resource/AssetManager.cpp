@@ -1,14 +1,14 @@
-#include "Framework/Game/Resource/AssetManager.h"
+#include "Resource/AssetManager.h"
 
-#include "Framework/Game/Resource/Manager/AssetModelManager.h"
-#include "Framework/Game/Resource/Manager/AssetTextureManager.h"
+#include "Resource/Manager/AssetModelManager.h"
+#include "Resource/Manager/AssetTextureManager.h"
 
-#include "Foundation/Core/Profiling/Instrumentor.h"
-#include "Foundation/Core/Log.h"
-#include "Foundation/Core/System/VirtualFileSystem.h"
-#include "Foundation/Core/Common/DeferredDeletionQueue.h"
-#include "Foundation/Core/Common/AssetRef.h"
-#include "Product/Host/App.h"
+#include "Core/Profiling/Instrumentor.h"
+#include "Core/Log.h"
+#include "Core/System/VirtualFileSystem.h"
+#include "Core/Common/DeferredDeletionQueue.h"
+#include "Core/Common/AssetRef.h"
+#include "Host/App.h"
 
 #include <algorithm>
 #include <cctype>

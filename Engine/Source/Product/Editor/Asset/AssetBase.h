@@ -1,7 +1,7 @@
 
 #pragma once
 
-#include "Foundation/Core/Base.h"
+#include "Core/Base.h"
 
 namespace ya
 {

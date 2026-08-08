@@ -1,4 +1,4 @@
-#include "Product/Editor/Panels/RuntimeToolsPanelInternal.h"
+#include "Editor/Panels/RuntimeToolsPanelInternal.h"
 
 #include <format>
 #include <numeric>

@@ -1,14 +1,14 @@
 #pragma once
 
 #include "DeferredAttachmentFormats.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/Pipeline.h"
-#include "Framework/Game/Render/Render3D/Material/MaterialDescPool.h"
-#include "Framework/Game/Render/Render3D/Material/PBRMaterial.h"
-#include "Framework/Game/Render/Render3D/Material/PhongMaterial.h"
-#include "Framework/Game/Render/Render3D/Material/UnlitMaterial.h"
-#include "Framework/Game/Render/Render3D/Shadow/ShadowSettings.h"
-#include "Framework/Game/Render/Render3D/Stage/IRenderStage.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/Pipeline.h"
+#include "Render3D/Material/MaterialDescPool.h"
+#include "Render3D/Material/PBRMaterial.h"
+#include "Render3D/Material/PhongMaterial.h"
+#include "Render3D/Material/UnlitMaterial.h"
+#include "Render3D/Shadow/ShadowSettings.h"
+#include "Render3D/Stage/IRenderStage.h"
 
 #include "DeferredFrameResourceSet.h"
 #include "DeferredRender.GBufferPass_PBR.slang.h"

@@ -1,4 +1,4 @@
-#include "Product/Editor/ImGui/ImGuiHelper.h"
+#include "Editor/ImGui/ImGuiHelper.h"
 
 namespace ya::ImGuiHelper
 {

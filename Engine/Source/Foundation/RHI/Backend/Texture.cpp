@@ -1,19 +1,19 @@
-#include "Foundation/RHI/Core/Texture.h"
+#include "RHI/Core/Texture.h"
 #include <vulkan/vulkan.h>
 
-#include "Foundation/RHI/Core/BuiltinTextureSource.h"
+#include "RHI/Core/BuiltinTextureSource.h"
 #include "stb/stb_image.h"
 
 #include <bit>
 #include <cstddef>
 #include <cstring>
 
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Foundation/RHI/Core/Image.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Foundation/RHI/Core/TextureUploadService.h"
-#include "Foundation/RHI/Render.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/Image.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/Core/TextureUploadService.h"
+#include "RHI/Render.h"
 
 #include "ktx.h"
 

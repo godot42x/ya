@@ -1,6 +1,6 @@
-#include "Foundation/Core/Reflection/DeferredInitializer.h"
-#include "Foundation/Core/Reflection/ReflectionSerializer.h"
-#include "Framework/Game/Gameplay/ECS/Component/ModelComponent.h"
+#include "Core/Reflection/DeferredInitializer.h"
+#include "Core/Reflection/ReflectionSerializer.h"
+#include "ECS/Component/ModelComponent.h"
 
 #include <gtest/gtest.h>
 

@@ -1,9 +1,9 @@
 #pragma once
 
 #include "ForwardFrameGraphResources.h"
-#include "Framework/Game/Render/Render3D/Common/RenderOverlay.h"
-#include "Framework/Game/Render/Render3D/Forward/ForwardFrameResourceSet.h"
-#include "Framework/Game/Render/Render3D/Forward/ForwardViewportStage.h"
+#include "Render3D/Common/RenderOverlay.h"
+#include "Render3D/Forward/ForwardFrameResourceSet.h"
+#include "Render3D/Forward/ForwardViewportStage.h"
 
 #include <memory>
 #include <optional>

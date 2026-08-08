@@ -1,12 +1,12 @@
-#include "Framework/Game/Render/Render3D/Common/RenderOverlay.h"
+#include "Render3D/Common/RenderOverlay.h"
 
-#include "Foundation/Core/Profiling/Instrumentor.h"
-#include "Foundation/Core/Profiling/PerfKeys.h"
-#include "Foundation/Core/Profiling/PerfState.h"
-#include "Foundation/RHI/RenderDefines.h"
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Framework/GUI/Runtime/Draw2D/Render2D.h"
-#include "Framework/GUI/Runtime/Resource/FontManager.h"
+#include "Core/Profiling/Instrumentor.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
+#include "RHI/RenderDefines.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "GUI/Runtime/Draw2D/Render2D.h"
+#include "GUI/Runtime/Resource/FontManager.h"
 
 namespace ya
 {

@@ -1,4 +1,4 @@
-#include "Foundation/RHI/Core/Texture.h"
+#include "RHI/Core/Texture.h"
 
 #include <gtest/gtest.h>
 

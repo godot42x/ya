@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Framework/Game/Gameplay/ECS/Entity.h"
-#include "Product/Editor/FilePicker.h"
+#include "ECS/Entity.h"
+#include "Editor/FilePicker.h"
 #include <cstddef>
 #include <memory>
 #include <sol/sol.hpp>

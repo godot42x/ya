@@ -1,4 +1,4 @@
-#include "Product/Editor/EditorModule.h"
+#include "Editor/EditorModule.h"
 
 namespace ya
 {

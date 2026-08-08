@@ -1,4 +1,4 @@
-#include "Foundation/RHI/WindowProvider.h"
+#include "RHI/WindowProvider.h"
 
 #include "SDL3/SDL.h"
 

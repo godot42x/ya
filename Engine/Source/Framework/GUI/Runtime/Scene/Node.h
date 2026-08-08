@@ -2,9 +2,9 @@
 
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Math/Math.h"
-#include "Foundation/Core/UUID.h"
+#include "Core/Base.h"
+#include "Core/Math/Math.h"
+#include "Core/UUID.h"
 
 
 namespace ya

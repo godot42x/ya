@@ -1,12 +1,12 @@
 #pragma once
 
-#include "Foundation/Core/Common/AssetRef.h"
-#include "Foundation/RHI/Core/Texture.h"
+#include "Core/Common/AssetRef.h"
+#include "RHI/Core/Texture.h"
 
 #include <atomic>
 #include <unordered_map>
 
-#include "Framework/GUI/Runtime/Resource/TextureLibrary.h"
+#include "GUI/Runtime/Resource/TextureLibrary.h"
 namespace ya
 {
 

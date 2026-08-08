@@ -1,9 +1,9 @@
-#include "Framework/Game/Resource/Model/GltfImporter.h"
-#include "Framework/Game/Resource/Model/ModelImporterCommon.h"
+#include "Resource/Model/GltfImporter.h"
+#include "Resource/Model/ModelImporterCommon.h"
 
-#include "Framework/Game/Resource/Model/TinyGLTFSupport.h"
+#include "Resource/Model/TinyGLTFSupport.h"
 
-#include "Foundation/Core/System/PathUtils.h"
+#include "Core/System/PathUtils.h"
 
 #include <cstdint>
 #include <cstring>

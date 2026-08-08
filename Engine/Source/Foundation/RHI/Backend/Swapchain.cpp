@@ -1,6 +1,6 @@
 
-#include "Foundation/RHI/Core/Swapchain.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanSwapChain.h"
+#include "RHI/Core/Swapchain.h"
+#include "RHI/Backend/Vulkan/VulkanSwapChain.h"
 
 namespace ya
 {

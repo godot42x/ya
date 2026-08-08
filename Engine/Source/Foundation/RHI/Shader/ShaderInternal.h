@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/RHI/Shader.h"
+#include "RHI/Shader.h"
 
 #include <filesystem>
 #include <string>

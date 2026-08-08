@@ -1,8 +1,8 @@
 // Buffer.h - Generic buffer interface for multi-backend rendering
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/RHI/Core/Handle.h"
+#include "Core/Base.h"
+#include "RHI/Core/Handle.h"
 #include <cstdint>
 #include <memory>
 #include <optional>

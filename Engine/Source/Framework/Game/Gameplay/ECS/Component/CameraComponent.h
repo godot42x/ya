@@ -1,12 +1,12 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Framework/Game/Gameplay/ECS/Component.h"
-#include "Framework/Game/Gameplay/ECS/Entity.h"
+#include "Core/Base.h"
+#include "ECS/Component.h"
+#include "ECS/Entity.h"
 
-#include "Foundation/Core/Math/Math.h"
+#include "Core/Math/Math.h"
 
-#include "Foundation/Core/Reflection/Reflection.h"
+#include "Core/Reflection/Reflection.h"
 
 namespace ya
 {

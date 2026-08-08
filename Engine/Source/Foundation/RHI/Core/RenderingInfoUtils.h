@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/RHI/Core/Image.h"
-#include "Foundation/RHI/Core/RenderImage.h"
-#include "Foundation/RHI/RenderDefines.h"
+#include "RHI/Core/Image.h"
+#include "RHI/Core/RenderImage.h"
+#include "RHI/RenderDefines.h"
 
 namespace ya
 {

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/RHI/Core/Image.h"
-#include "Foundation/RHI/Render.h"
-#include "Foundation/RHI/Core/Sampler.h"
-#include "Foundation/RHI/Render.h"
+#include "RHI/Core/Image.h"
+#include "RHI/Render.h"
+#include "RHI/Core/Sampler.h"
+#include "RHI/Render.h"
 
 #include <array>
 #include <string_view>

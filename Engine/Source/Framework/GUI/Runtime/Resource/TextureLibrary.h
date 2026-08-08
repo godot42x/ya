@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/ResourceRegistry.h"
-#include "Foundation/RHI/Core/BuiltinTextureSource.h"
-#include "Foundation/RHI/Core/Sampler.h"
-#include "Foundation/RHI/Core/Texture.h"
+#include "Core/Base.h"
+#include "Core/ResourceRegistry.h"
+#include "RHI/Core/BuiltinTextureSource.h"
+#include "RHI/Core/Sampler.h"
+#include "RHI/Core/Texture.h"
 #include <memory>
 
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Framework/Game/Resource/Model/ImportedAnimationData.h"
+#include "Core/Base.h"
+#include "Resource/Model/ImportedAnimationData.h"
 
 #include <limits>
 #include <string>

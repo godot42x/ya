@@ -1,6 +1,6 @@
 #include "DirectionalShadowMath.h"
 
-#include "Foundation/Core/Math/Math.h"
+#include "Core/Math/Math.h"
 
 #include <algorithm>
 #include <cmath>

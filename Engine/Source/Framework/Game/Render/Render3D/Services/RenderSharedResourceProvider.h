@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Framework/Game/Gameplay/ECS/System/ResourceResolveSystem.h"
-#include "Framework/Game/Render/Render3D/Pipelines/PBRGenerateBrdfLUT.h"
+#include "Core/Base.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "ECS/System/ResourceResolveSystem.h"
+#include "Render3D/Pipelines/PBRGenerateBrdfLUT.h"
 
 namespace ya
 {

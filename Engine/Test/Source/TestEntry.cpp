@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include "reflects-core/lib.h"
-#include "Foundation/Core/Reflection/DeferredInitializer.h"
+#include "Core/Reflection/DeferredInitializer.h"
 
 // Main 函数
 int main(int argc, char **argv)

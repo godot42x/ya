@@ -1,11 +1,11 @@
-#include "Framework/Game/Render/Render3D/Systems/Animation/AnimationSystem.h"
+#include "Render3D/Systems/Animation/AnimationSystem.h"
 
-#include "Framework/Game/Gameplay/ECS/Component/SkeletonAnimatorComponent.h"
-#include "Framework/Game/Resource/SkeletonAnimationSampler.h"
-#include "Product/Host/App.h"
-#include "Framework/Game/Render/Render3D/RenderRuntime.h"
-#include "Framework/Game/Render/Render3D/Scene.h"
-#include "Framework/Game/Render/Render3D/SceneManager.h"
+#include "ECS/Component/SkeletonAnimatorComponent.h"
+#include "Resource/SkeletonAnimationSampler.h"
+#include "Host/App.h"
+#include "Render3D/RenderRuntime.h"
+#include "Render3D/Scene.h"
+#include "Render3D/SceneManager.h"
 
 namespace ya
 {

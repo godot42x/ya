@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/Core/Api.h"
-#include "Foundation/Core/Module/ModuleManifest.h"
+#include "Core/Api.h"
+#include "Core/Module/ModuleManifest.h"
 
 #include <filesystem>
 #include <memory>

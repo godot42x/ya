@@ -1,7 +1,7 @@
-#include "Framework/Game/Resource/Model/AssimpImporter.h"
-#include "Framework/Game/Resource/Model/ModelImporterCommon.h"
+#include "Resource/Model/AssimpImporter.h"
+#include "Resource/Model/ModelImporterCommon.h"
 
-#include "Foundation/Core/System/VirtualFileSystem.h"
+#include "Core/System/VirtualFileSystem.h"
 
 #include "assimp/Importer.hpp"
 #include "assimp/material.h"

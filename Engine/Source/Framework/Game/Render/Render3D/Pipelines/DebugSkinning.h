@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Foundation/Core/Math/Geometry.h"
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Foundation/RHI/Core/RenderAttachmentFormats.h"
-#include "Foundation/RHI/Core/Pipeline.h"
-#include "Framework/Game/Resource/Mesh.h"
+#include "Core/Math/Geometry.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/RenderAttachmentFormats.h"
+#include "RHI/Core/Pipeline.h"
+#include "Resource/Mesh.h"
 
 #include <glm/glm.hpp>
 

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Delegate.h"
-#include "Foundation/Core/System/System.h"
-#include "Product/Host/AppState.h"
+#include "Core/Base.h"
+#include "Core/Delegate.h"
+#include "Core/System/System.h"
+#include "Host/AppState.h"
 
 #include <functional>
 #include <memory>

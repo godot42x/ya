@@ -2,9 +2,9 @@
 
 #include "Buffer.h"
 #include "Handle.h"
-#include "Foundation/RHI/Core/Sampler.h"
-#include "Foundation/RHI/Core/Texture.h"
-#include "Foundation/RHI/RenderDefines.h"
+#include "RHI/Core/Sampler.h"
+#include "RHI/Core/Texture.h"
+#include "RHI/RenderDefines.h"
 #include <cstdint>
 #include <memory>
 #include <vector>

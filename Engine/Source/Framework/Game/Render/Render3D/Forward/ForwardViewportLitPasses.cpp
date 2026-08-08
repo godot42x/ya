@@ -1,12 +1,12 @@
 #include "ForwardViewportLitPasses.h"
 
-#include "Product/Host/Config/ConfigManager.h"
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Framework/Game/Render/Render3D/Material/MaterialFactory.h"
-#include "Foundation/RHI/Render.h"
-#include "Framework/Game/Render/Render3D/Forward/ForwardFrameResourceSet.h"
-#include "Framework/Game/Render/Render3D/Common/RenderViewportUtils.h"
+#include "Host/Config/ConfigManager.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "Render3D/Material/MaterialFactory.h"
+#include "RHI/Render.h"
+#include "Render3D/Forward/ForwardFrameResourceSet.h"
+#include "Render3D/Common/RenderViewportUtils.h"
 
 namespace ya
 {

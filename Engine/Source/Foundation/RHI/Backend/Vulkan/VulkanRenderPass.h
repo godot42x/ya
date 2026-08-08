@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Delegate.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanPipeline.h"
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Foundation/RHI/Core/RenderPass.h"
+#include "Core/Base.h"
+#include "Core/Delegate.h"
+#include "RHI/Backend/Vulkan/VulkanPipeline.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/RenderPass.h"
 #include <vector>
 #include <vulkan/vulkan.h>
 

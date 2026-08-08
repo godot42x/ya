@@ -1,9 +1,9 @@
-#include "Framework/Game/Resource/EngineGeometryNormalizer.h"
+#include "Resource/EngineGeometryNormalizer.h"
 
-#include "Framework/Game/Resource/Model.h"
-#include "Framework/Game/Resource/Model/ImportedModelData.h"
+#include "Resource/Model.h"
+#include "Resource/Model/ImportedModelData.h"
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 
 #include <algorithm>
 

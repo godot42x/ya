@@ -1,6 +1,6 @@
-#include "Product/Editor/Inspector/ReflectionCache.h"
+#include "Editor/Inspector/ReflectionCache.h"
 
-#include "Foundation/Core/Profiling/Instrumentor.h"
+#include "Core/Profiling/Instrumentor.h"
 #include "reflects-core/lib.h"
 
 #include "utility.cc/ranges.h"

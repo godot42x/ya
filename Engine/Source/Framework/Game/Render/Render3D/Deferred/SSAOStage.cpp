@@ -1,13 +1,13 @@
 #include "SSAOStage.h"
 
-#include "Framework/Game/Render/Render3D/Deferred/DeferredFrameGraphPasses.h"
-#include "Framework/Game/Render/Graph/RenderGraphImportUtils.h"
-#include "Foundation/Core/Profiling/Instrumentor.h"
+#include "Render3D/Deferred/DeferredFrameGraphPasses.h"
+#include "Graph/RenderGraphImportUtils.h"
+#include "Core/Profiling/Instrumentor.h"
 
-#include "Product/Host/Config/ConfigManager.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Foundation/RHI/Render.h"
-#include "Framework/GUI/Runtime/Resource/TextureLibrary.h"
+#include "Host/Config/ConfigManager.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/Render.h"
+#include "GUI/Runtime/Resource/TextureLibrary.h"
 
 #include <array>
 #include <vector>

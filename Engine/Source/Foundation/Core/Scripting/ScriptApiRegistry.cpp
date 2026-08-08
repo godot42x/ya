@@ -1,6 +1,6 @@
 #include "ScriptApiRegistry.h"
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 
 namespace ya
 {

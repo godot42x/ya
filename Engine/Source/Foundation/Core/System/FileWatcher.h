@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Delegate.h"
+#include "Core/Base.h"
+#include "Core/Delegate.h"
 #include <filesystem>
 #include <memory>
 #include <string>

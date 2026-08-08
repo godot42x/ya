@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/Core/Event.h"
-#include "Foundation/RHI/RenderDefines.h"
+#include "Core/Event.h"
+#include "RHI/RenderDefines.h"
 
 namespace ya
 {

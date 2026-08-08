@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Framework/Game/Render/Graph/RenderGraph.h"
-#include "Foundation/RHI/RenderDefines.h"
-#include "Foundation/Core/Api.h"
+#include "Graph/RenderGraph.h"
+#include "RHI/RenderDefines.h"
+#include "Core/Api.h"
 
 #include <cstdint>
 #include <memory>

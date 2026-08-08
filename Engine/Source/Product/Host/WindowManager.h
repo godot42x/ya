@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/Core/Api.h"
-#include "Foundation/RHI/WindowProvider.h"
+#include "Core/Api.h"
+#include "RHI/WindowProvider.h"
 
 #include <memory>
 #include <unordered_map>

@@ -1,9 +1,9 @@
-#include "Foundation/Core/Reflection/DeferredInitializer.h"
-#include "Framework/Game/Render/Render3D/SceneSerializer.h"
-#include "Framework/Game/Gameplay/ECS/Component/3D/SkyboxComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Material/PBRMaterialComponent.h"
-#include "Framework/Game/Gameplay/ECS/Entity.h"
-#include "Framework/GUI/Runtime/Scene/Node2D.h"
+#include "Core/Reflection/DeferredInitializer.h"
+#include "Render3D/SceneSerializer.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
+#include "ECS/Component/Material/PBRMaterialComponent.h"
+#include "ECS/Entity.h"
+#include "GUI/Runtime/Scene/Node2D.h"
 #include <gtest/gtest.h>
 
 namespace ya

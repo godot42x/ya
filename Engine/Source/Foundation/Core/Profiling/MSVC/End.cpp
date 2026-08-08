@@ -1,4 +1,4 @@
-#include "Foundation/Core/Profiling/StaticInitProfiler.h"
+#include "Core/Profiling/StaticInitProfiler.h"
 
 #ifdef _MSC_VER
 

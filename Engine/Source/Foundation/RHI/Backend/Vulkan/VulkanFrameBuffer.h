@@ -1,9 +1,9 @@
 
 #pragma once
 
-#include "Foundation/RHI/Backend/Vulkan/VulkanImageView.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanRender.h"
-#include "Foundation/RHI/Core/FrameBuffer.h"
+#include "RHI/Backend/Vulkan/VulkanImageView.h"
+#include "RHI/Backend/Vulkan/VulkanRender.h"
+#include "RHI/Core/FrameBuffer.h"
 #include "VulkanImage.h"
 #include <vulkan/vulkan.h>
 

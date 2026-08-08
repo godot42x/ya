@@ -1,11 +1,11 @@
 #include "RenderDiagnosticsService.h"
 
-#include "Product/Host/App.h"
+#include "Host/App.h"
 
-#include "Foundation/Core/Async/TaskQueue.h"
-#include "Foundation/Core/Debug/RenderDocCapture.h"
+#include "Core/Async/TaskQueue.h"
+#include "Core/Debug/RenderDocCapture.h"
 
-#include "Foundation/RHI/Backend/Vulkan/VulkanRender.h"
+#include "RHI/Backend/Vulkan/VulkanRender.h"
 
 #include <SDL3/SDL.h>
 #include <cstdlib>

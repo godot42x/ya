@@ -1,9 +1,9 @@
-#include "Product/Host/InputRouter.h"
+#include "Host/InputRouter.h"
 
-#include "Foundation/Core/Input/InputManager.h"
-#include "Foundation/Core/Log.h"
-#include "Framework/GUI/Runtime/Scene/UISceneRenderer.h"
-#include "Product/Host/App.h"
+#include "Core/Input/InputManager.h"
+#include "Core/Log.h"
+#include "GUI/Runtime/Scene/UISceneRenderer.h"
+#include "Host/App.h"
 
 namespace ya
 {

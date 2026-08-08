@@ -12,7 +12,7 @@
 //     } while (false);
 
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 #define VMA_LEAK_LOG_FORMAT(format, ...)                           \
     do {                                                           \
         int len = snprintf(nullptr, 0, format, __VA_ARGS__);       \

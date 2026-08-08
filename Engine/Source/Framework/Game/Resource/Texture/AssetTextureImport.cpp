@@ -1,6 +1,6 @@
-#include "Framework/Game/Resource/Texture/AssetTextureInternal.h"
+#include "Resource/Texture/AssetTextureInternal.h"
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 #include "stb/stb_image.h"
 
 namespace ya

@@ -1,5 +1,5 @@
 #include "VulkanImage.h"
-#include "Foundation/RHI/Backend/Vulkan/VulkanBuffer.h"
+#include "RHI/Backend/Vulkan/VulkanBuffer.h"
 #include "VulkanRender.h"
 #include "VulkanUtils.h"
 

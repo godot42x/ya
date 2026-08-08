@@ -1,12 +1,12 @@
 #pragma once
 
-#include "Framework/Game/Render/Render3D/Common/Shadow/ShadowTypes.h"
-#include "Framework/Game/Render/Graph/RenderGraph.h"
+#include "Render3D/Common/Shadow/ShadowTypes.h"
+#include "Graph/RenderGraph.h"
 
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/Pipeline.h"
-#include "Framework/Game/Render/Render3D/Stage/IRenderStage.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/Pipeline.h"
+#include "Render3D/Stage/IRenderStage.h"
 
 namespace ya
 {

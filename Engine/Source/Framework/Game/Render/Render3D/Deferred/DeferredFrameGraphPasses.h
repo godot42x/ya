@@ -2,14 +2,14 @@
 
 #include "DeferredFrameGraphResources.h"
 #include "DeferredFrameResourceSet.h"
-#include "Framework/Game/Gameplay/ECS/System/ResourceResolveSystem.h"
-#include "Foundation/RHI/Core/RenderTargetCreateInfo.h"
-#include "Framework/Game/Render/Render3D/Common/EntityIdViewportPass.h"
-#include "Framework/Game/Render/Render3D/Common/IRenderPipeline.h"
-#include "Framework/Game/Render/Render3D/Deferred/GBufferStage.h"
-#include "Framework/Game/Render/Render3D/Deferred/LightStage.h"
-#include "Framework/Game/Render/Render3D/Deferred/SSAOStage.h"
-#include "Framework/Game/Render/Render3D/Deferred/ViewportOverlayStage.h"
+#include "ECS/System/ResourceResolveSystem.h"
+#include "RHI/Core/RenderTargetCreateInfo.h"
+#include "Render3D/Common/EntityIdViewportPass.h"
+#include "Render3D/Common/IRenderPipeline.h"
+#include "Render3D/Deferred/GBufferStage.h"
+#include "Render3D/Deferred/LightStage.h"
+#include "Render3D/Deferred/SSAOStage.h"
+#include "Render3D/Deferred/ViewportOverlayStage.h"
 
 #include <array>
 #include <memory>

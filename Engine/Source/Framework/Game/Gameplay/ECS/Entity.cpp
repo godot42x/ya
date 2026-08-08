@@ -1,7 +1,7 @@
 #include "Entity.h"
 #include "Component.h"
-#include "Framework/Game/Gameplay/ECS/ECSRegistry.h"
-#include "Framework/Game/Render/Render3D/Scene.h"
+#include "ECS/ECSRegistry.h"
+#include "Render3D/Scene.h"
 
 #include <stdexcept>
 

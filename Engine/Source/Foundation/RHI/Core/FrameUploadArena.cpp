@@ -1,7 +1,7 @@
 #include "FrameUploadArena.h"
 
-#include "Foundation/Core/Log.h"
-#include "Foundation/Core/Common/DeferredDeletionQueue.h"
+#include "Core/Log.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 
 #include <algorithm>
 #include <limits>

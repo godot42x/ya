@@ -1,7 +1,7 @@
 #include "TaskQueue.h"
 
-#include "Foundation/Core/Log.h"
-#include "Foundation/Core/Profiling/Instrumentor.h"
+#include "Core/Log.h"
+#include "Core/Profiling/Instrumentor.h"
 
 namespace ya
 {

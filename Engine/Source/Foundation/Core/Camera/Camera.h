@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 
-#include "Foundation/Core/Math/Math.h"
+#include "Core/Math/Math.h"
 
 
 namespace ya

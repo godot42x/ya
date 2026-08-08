@@ -1,6 +1,6 @@
-#include "Framework/Game/Resource/Skeleton.h"
+#include "Resource/Skeleton.h"
 
-#include "Framework/Game/Resource/Model/ImportedModelData.h"
+#include "Resource/Model/ImportedModelData.h"
 
 namespace ya
 {

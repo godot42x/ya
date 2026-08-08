@@ -9,10 +9,10 @@
  * - 嵌套容器
  */
 
-#include "Foundation/Core/Math/GLM.h"
-#include "Foundation/Core/Reflection/Reflection.h"
-#include "Foundation/Core/Reflection/ReflectionSerializer.h"
-#include "Foundation/Core/Reflection/DeferredInitializer.h"
+#include "Core/Math/GLM.h"
+#include "Core/Reflection/Reflection.h"
+#include "Core/Reflection/ReflectionSerializer.h"
+#include "Core/Reflection/DeferredInitializer.h"
 #include <chrono>
 #include <gtest/gtest.h>
 #include <map>

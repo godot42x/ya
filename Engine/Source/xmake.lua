@@ -16,6 +16,32 @@
 -- xmake.lua so the build shape is readable without jumping through helpers.
 -- ============================================================================
 
+-- Engine/Source, captured before module files are included below.
+local YA_SOURCE_ROOT = os.scriptdir()
+
+-- Product-tier include roots keyed by short name. Headers are addressed by
+-- module-name prefix (`Core/Base.h`, `GUI/Scene/Node2D.h`, `Host/App.h`,
+-- `Render3D/Scene.h`, ...) instead of full physical paths under Engine/Source.
+local YA_TIER_ROOTS = {
+    Foundation = "Foundation",
+    Framework  = "Framework",
+    Game       = "Framework/Game",
+    Scene      = "Framework/Game/Scene",
+    Render     = "Framework/Game/Render",
+    Gameplay   = "Framework/Game/Gameplay",
+    Product    = "Product",
+}
+
+--- Exposes the product-tier include roots of THIS module (public, so the
+--- roots propagate to dependents through add_deps). A module only declares
+--- the tier it physically owns; other modules' tiers arrive via deps.
+--- @param ... string tier names, e.g. ya_tier_include("Foundation", "Framework")
+function ya_tier_include(...)
+    for _, tier in ipairs({ ... }) do
+        add_includedirs(path.join(YA_SOURCE_ROOT, YA_TIER_ROOTS[tier]), { public = true })
+    end
+end
+
 --- Injects the shared module plumbing into the current target:
 ---   * the module's own export macro (api_macro) as a preprocessor alias to
 ---     YA_API_EXPORT -- no hand-written macros, no central macro table;

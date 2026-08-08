@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Foundation/Core/Common/Types.h"
+#include "Core/Common/Types.h"
 
 namespace ya
 {

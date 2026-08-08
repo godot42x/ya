@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Foundation/Core/Common/Warnings.h"
+#include "Core/Common/Warnings.h"
 
 #include "Common/FWD-std.h"
 #include "Common/FWD.h"
-#include "Foundation/Core/Api.h"
+#include "Core/Api.h"
 
 
 #if _WIN32

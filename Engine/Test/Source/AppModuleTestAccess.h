@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Product/Host/App.h"
-#include "Framework/Game/Render/Render3D/SceneManager.h"
+#include "Host/App.h"
+#include "Render3D/SceneManager.h"
 
 namespace ya
 {

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/Core/Api.h"
-#include "Foundation/RHI/Core/RenderAttachmentFormats.h"
-#include "Framework/Game/Render/Render3D/Pipelines/DebugPrimitives.h"
+#include "Core/Api.h"
+#include "RHI/Core/RenderAttachmentFormats.h"
+#include "Render3D/Pipelines/DebugPrimitives.h"
 
 namespace ya
 {

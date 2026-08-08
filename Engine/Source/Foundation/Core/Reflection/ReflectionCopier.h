@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/Core/Api.h"
-#include "Foundation/Core/TypeIndex.h"
+#include "Core/Api.h"
+#include "Core/TypeIndex.h"
 
 #include <string>
 #include <unordered_set>

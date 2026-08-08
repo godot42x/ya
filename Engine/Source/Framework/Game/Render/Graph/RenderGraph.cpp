@@ -1,6 +1,6 @@
 #include "RenderGraph.h"
 #include "RenderGraphResourceRegistry.h"
-#include "Foundation/RHI/Core/RenderingInfoUtils.h"
+#include "RHI/Core/RenderingInfoUtils.h"
 
 #include <algorithm>
 #include <deque>

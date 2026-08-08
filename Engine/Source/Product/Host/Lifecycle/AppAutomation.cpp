@@ -1,25 +1,25 @@
-#include "Product/Host/Lifecycle/AppAutomation.h"
+#include "Host/Lifecycle/AppAutomation.h"
 
-#include "Framework/Game/Render/Render3D/Forward/ForwardRenderPipeline.h"
-#include "Product/Host/App.h"
-#include "Framework/Game/Render/Render3D/Common/PostProcessingStage.h"
-#include "Framework/Game/Render/Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
-#include "Framework/Game/Render/Render3D/Deferred/DeferredRenderPipeline.h"
-#include "Framework/Game/Render/Render3D/RenderRuntime.h"
-#include "Product/Host/Utility/AppScreenshotCapture.h"
-#include "Product/Host/Utility/OffscreenJobRunner.h"
+#include "Render3D/Forward/ForwardRenderPipeline.h"
+#include "Host/App.h"
+#include "Render3D/Common/PostProcessingStage.h"
+#include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
+#include "Render3D/Deferred/DeferredRenderPipeline.h"
+#include "Render3D/RenderRuntime.h"
+#include "Host/Utility/AppScreenshotCapture.h"
+#include "Host/Utility/OffscreenJobRunner.h"
 
-#include "Product/Host/Config/ConfigManager.h"
+#include "Host/Config/ConfigManager.h"
 
-#include "Foundation/Core/Log.h"
-#include "Foundation/Core/Profiling/Profiling.h"
+#include "Core/Log.h"
+#include "Core/Profiling/Profiling.h"
 
-#include "Framework/Game/Gameplay/ECS/Component/3D/EnvironmentLightingComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/3D/SkyboxComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/ModelComponent.h"
-#include "Framework/Game/Gameplay/ECS/Component/Terrain/TerrainComponent.h"
+#include "ECS/Component/3D/EnvironmentLightingComponent.h"
+#include "ECS/Component/3D/SkyboxComponent.h"
+#include "ECS/Component/ModelComponent.h"
+#include "ECS/Component/Terrain/TerrainComponent.h"
 
-#include "Framework/Game/Render/Render3D/Scene.h"
+#include "Render3D/Scene.h"
 
 #include <algorithm>
 #include <string_view>

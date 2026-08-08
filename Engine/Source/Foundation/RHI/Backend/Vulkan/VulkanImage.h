@@ -4,9 +4,9 @@
 
 #include <vulkan/vulkan.h>
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/RHI/Core/Image.h"
-#include "Foundation/RHI/Render.h"
+#include "Core/Base.h"
+#include "RHI/Core/Image.h"
+#include "RHI/Render.h"
 
 #include "VulkanUtils.h"
 

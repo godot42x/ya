@@ -8,7 +8,7 @@
  */
 #include "Shader.h"
 
-#include "Foundation/RHI/Shader/ShaderInternal.h"
+#include "RHI/Shader/ShaderInternal.h"
 
 #include <algorithm>
 #include <array>
@@ -32,7 +32,7 @@
 
 #include <SDL3/SDL_gpu.h>
 
-#include "Foundation/Core/System/VirtualFileSystem.h"
+#include "Core/System/VirtualFileSystem.h"
 
 // Slang runtime API
 #include <slang/slang-com-ptr.h>

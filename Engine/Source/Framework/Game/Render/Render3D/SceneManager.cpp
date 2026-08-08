@@ -1,7 +1,7 @@
 #include "SceneManager.h"
 
-#include "Foundation/Core/Log.h"
-#include "Framework/Game/Render/Render3D/SceneSerializer.h"
+#include "Core/Log.h"
+#include "Render3D/SceneSerializer.h"
 
 namespace ya
 {

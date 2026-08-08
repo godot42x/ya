@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Delegate.h"
-#include "Foundation/RHI/Core/Swapchain.h"
+#include "Core/Base.h"
+#include "Core/Delegate.h"
+#include "RHI/Core/Swapchain.h"
 #include "glad/glad.h"
 
 #if USE_SDL

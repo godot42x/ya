@@ -4,12 +4,12 @@
     #define IMGUI_SDL3_GPU 0
 #endif
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Event.h"
-#include "Foundation/Core/Log.h"
-#include "Foundation/RHI/Core/RenderPass.h"
-#include "Foundation/RHI/Render.h"
-#include "Product/Host/GUI/GuiBackend.h"
+#include "Core/Base.h"
+#include "Core/Event.h"
+#include "Core/Log.h"
+#include "RHI/Core/RenderPass.h"
+#include "RHI/Render.h"
+#include "Host/GUI/GuiBackend.h"
 
 #include <SDL3/SDL.h>
 

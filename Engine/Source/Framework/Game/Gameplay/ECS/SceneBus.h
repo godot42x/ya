@@ -2,10 +2,10 @@
 #pragma once
 
 
-#include "Foundation/Core/Api.h"
-#include "Foundation/Core/Delegate.h"
-#include "Foundation/Core/Trait.h"
-#include "Foundation/Core/TypeIndex.h"
+#include "Core/Api.h"
+#include "Core/Delegate.h"
+#include "Core/Trait.h"
+#include "Core/TypeIndex.h"
 
 #include <entt/fwd.hpp>
 

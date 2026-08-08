@@ -13,12 +13,12 @@
 
 #pragma once
 
-#include "Foundation/Core/Profiling/Instrumentor.h"
-#include "Foundation/Core/Reflection/ContainerProperty.h"
-#include "Foundation/Core/Reflection/PropertyExtensions.h"
-#include "Foundation/Core/Reflection/ReflectionHelper.h"
+#include "Core/Profiling/Instrumentor.h"
+#include "Core/Reflection/ContainerProperty.h"
+#include "Core/Reflection/PropertyExtensions.h"
+#include "Core/Reflection/ReflectionHelper.h"
 
-#include "Product/Editor/Inspector/TypeRenderer.h"
+#include "Editor/Inspector/TypeRenderer.h"
 #include "utility.cc/ranges.h"
 #include <imgui.h>
 #include <string>

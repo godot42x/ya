@@ -2,11 +2,11 @@
 
 #include "BasicShadowMap/BasicShadowPayload.h"
 
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/FrameUploadArena.h"
-#include "Framework/Game/Render/Render3D/Stage/IRenderStage.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/FrameUploadArena.h"
+#include "Render3D/Stage/IRenderStage.h"
 
-#include "Framework/Game/Render/Render3D/Common/Shadow/ShadowTypes.h"
+#include "Render3D/Common/Shadow/ShadowTypes.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
 #include "Shadow.PointShadowIndirect.slang.h"

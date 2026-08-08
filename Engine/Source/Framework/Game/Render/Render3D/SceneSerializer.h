@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/Core/Api.h"
-#include "Framework/Game/Render/Render3D/Scene.h"
+#include "Core/Api.h"
+#include "Render3D/Scene.h"
 #include <fstream>
 #include <glm/glm.hpp>
 #include <nlohmann/json.hpp>

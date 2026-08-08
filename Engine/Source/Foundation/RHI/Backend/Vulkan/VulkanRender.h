@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
+#include "Core/Base.h"
 
-#include "Foundation/Core/Delegate.h"
+#include "Core/Delegate.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -11,9 +11,9 @@
 
 
 
-#include "Foundation/RHI/Core/Swapchain.h"
-#include "Foundation/RHI/Core/BuiltinTextureSource.h"
-#include "Foundation/RHI/Render.h"
+#include "RHI/Core/Swapchain.h"
+#include "RHI/Core/BuiltinTextureSource.h"
+#include "RHI/Render.h"
 #include "VulkanCommandBuffer.h"
 #include "VulkanDescriptorSet.h"
 #include "VulkanExt.h"
@@ -26,7 +26,7 @@
 
 
 
-#include <Foundation/RHI/Shader.h>
+#include <RHI/Shader.h>
 
 #include "VulkanMemoryAllocator.h"
 

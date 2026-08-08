@@ -1,8 +1,8 @@
 #include "ForwardFrameGraphOrchestrator.h"
 
-#include "Framework/Game/Render/Graph/RenderGraphImportUtils.h"
-#include "Framework/Game/Render/Render3D/Common/Shadow/ShadowStage.h"
-#include "Framework/Game/Render/Render3D/Forward/ForwardFrameGraphPasses.h"
+#include "Graph/RenderGraphImportUtils.h"
+#include "Render3D/Common/Shadow/ShadowStage.h"
+#include "Render3D/Forward/ForwardFrameGraphPasses.h"
 
 namespace ya
 {

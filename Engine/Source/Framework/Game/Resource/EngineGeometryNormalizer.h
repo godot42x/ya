@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Framework/Game/Resource/EngineMeshData.h"
+#include "Resource/EngineMeshData.h"
 
 #include <cstddef>
 #include <string>

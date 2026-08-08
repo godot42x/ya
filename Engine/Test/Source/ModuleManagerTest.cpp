@@ -1,5 +1,5 @@
-#include "Foundation/Core/Module/ModuleManager.h"
-#include "Foundation/Core/TypeIndex.h"
+#include "Core/Module/ModuleManager.h"
+#include "Core/TypeIndex.h"
 
 #include <gtest/gtest.h>
 #include <SDL3/SDL_loadso.h>

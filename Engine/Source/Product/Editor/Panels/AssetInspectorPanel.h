@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Framework/Game/Resource/Meta/AssetMeta.h"
-#include "Foundation/RHI/Core/Texture.h"
+#include "Resource/Meta/AssetMeta.h"
+#include "RHI/Core/Texture.h"
 
 #include <array>
 #include <string>

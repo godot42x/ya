@@ -1,7 +1,7 @@
 target("ya-physics")
     set_kind("shared")
     ya_std_module("YA_PHYSICS_API")
-    add_includedirs("../../..", { public = true })
+    ya_tier_include("Game")
     add_files("**.cpp")
     add_headerfiles("**.h")
     add_deps("ya-foundation-core", "ya-gameplay-ecs", { public = true })

@@ -1,5 +1,5 @@
-#include "Product/Editor/EditorLayerInternal.h"
-#include "Product/Editor/Panels/RuntimeToolsPanelInternal.h"
+#include "Editor/EditorLayerInternal.h"
+#include "Editor/Panels/RuntimeToolsPanelInternal.h"
 
 namespace ya
 {

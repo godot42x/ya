@@ -1,13 +1,13 @@
 target("ya-editor")
     set_kind("shared")
     ya_std_module("YA_EDITOR_API")
+    ya_tier_include("Product")
     add_files("**.cpp")
     add_deps("ya-engine")
     add_links("ya-engine")
     -- imgui/imguizmo are now single shared libraries (global ImGui state);
     -- the editor consumes the same images as host.
     add_deps("imgui-local", "imguizmo-local")
-    add_includedirs("../../..", { public = true })
     add_includedirs("../../../ThirdParty/ImGui", { public = true })
     add_includedirs("../../../ThirdParty/ImGui/Backends", { public = true })
     add_includedirs("../../../ThirdParty/ImGui/misc/cpp", { public = true })

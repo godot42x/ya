@@ -2,8 +2,8 @@
 #pragma once
 
 
-#include "Foundation/Core/System/System.h"
-#include "Foundation/RHI/Core/CommandBuffer.h"
+#include "Core/System/System.h"
+#include "RHI/Core/CommandBuffer.h"
 
 namespace ya
 {

@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Foundation/Core/Base.h"
-#include "Foundation/Core/Common/AssetRef.h"
-#include "Foundation/Core/Reflection/Reflection.h"
-#include "Framework/Game/Gameplay/ECS/Component.h"
-#include "Framework/Game/Render/Render3D/Material/Material.h"
-#include "Framework/Game/Render/Render3D/Material/MaterialFactory.h"
+#include "Core/Base.h"
+#include "Core/Common/AssetRef.h"
+#include "Core/Reflection/Reflection.h"
+#include "ECS/Component.h"
+#include "Render3D/Material/Material.h"
+#include "Render3D/Material/MaterialFactory.h"
 
 
 namespace ya

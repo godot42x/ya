@@ -23,8 +23,8 @@
 #pragma once
 
 #include "MaterialComponent.h"
-#include "Framework/Game/Render/Render3D/Material/PBRMaterial.h"
-#include "Framework/Game/Resource/Model/MaterialData.h"
+#include "Render3D/Material/PBRMaterial.h"
+#include "Resource/Model/MaterialData.h"
 
 #include <array>
 #include <vector>

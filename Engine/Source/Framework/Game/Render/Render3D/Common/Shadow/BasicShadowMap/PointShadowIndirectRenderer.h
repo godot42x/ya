@@ -2,11 +2,11 @@
 
 #include "BasicShadowPayload.h"
 #include "PointShadowCullPass.h"
-#include "Framework/Game/Render/Render3D/Common/Shadow/ShadowTypes.h"
+#include "Render3D/Common/Shadow/ShadowTypes.h"
 
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/Pipeline.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/Pipeline.h"
 
 #include <array>
 #include <vector>

@@ -1,9 +1,9 @@
 #include "PBRGenerateBrdfLUT.h"
 
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Framework/Game/Render/Graph/RenderGraphExecutor.h"
-#include "Framework/Game/Render/Graph/RenderGraphImportUtils.h"
-#include "Foundation/RHI/Render.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "Graph/RenderGraphExecutor.h"
+#include "Graph/RenderGraphImportUtils.h"
+#include "RHI/Render.h"
 
 namespace ya
 {

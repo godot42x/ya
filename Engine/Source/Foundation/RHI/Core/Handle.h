@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <type_traits>
 
-#include "Foundation/Core/Common/Types.h"
+#include "Core/Common/Types.h"
 
 // C++20 Concepts for type checking
 template <typename T>

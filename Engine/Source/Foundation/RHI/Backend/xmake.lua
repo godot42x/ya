@@ -1,7 +1,7 @@
 target("ya-foundation-rhi-backend")
     set_kind("shared")
     ya_std_module("YA_RHI_BACKEND_API")
-    add_includedirs("../../..", { public = true })
+    ya_tier_include("Foundation")
     -- OpenGL backend stays in-tree for reference but is not built (Vulkan is
     -- the active development backend). VMA/STB single-header implementations
     -- are compiled outside unity batches.

@@ -1,14 +1,14 @@
 #include "PointShadowCullPass.h"
 
-#include "Foundation/Core/Profiling/Instrumentor.h"
-#include "Foundation/Core/Profiling/PerfKeys.h"
-#include "Foundation/Core/Profiling/PerfState.h"
-#include "Foundation/Core/Common/DeferredDeletionQueue.h"
+#include "Core/Profiling/Instrumentor.h"
+#include "Core/Profiling/PerfKeys.h"
+#include "Core/Profiling/PerfState.h"
+#include "Core/Common/DeferredDeletionQueue.h"
 
-#include "Framework/Game/Render/Graph/RenderGraphImportUtils.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Foundation/RHI/Render.h"
-#include "Framework/Game/Render/Render3D/Common/Shadow/BasicShadowMap/PointShadowBufferUtils.h"
+#include "Graph/RenderGraphImportUtils.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/Render.h"
+#include "Render3D/Common/Shadow/BasicShadowMap/PointShadowBufferUtils.h"
 
 #include <format>
 #include <limits>

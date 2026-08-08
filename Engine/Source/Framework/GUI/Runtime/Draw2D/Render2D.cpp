@@ -1,17 +1,17 @@
 #include "Render2D.h"
 
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/Pipeline.h"
-#include "Foundation/RHI/Core/RenderPass.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Foundation/RHI/Render.h"
-#include "Foundation/RHI/RenderDefines.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/Pipeline.h"
+#include "RHI/Core/RenderPass.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/Render.h"
+#include "RHI/RenderDefines.h"
 
-#include "Foundation/Core/Common/DeferredDeletionQueue.h"
-#include "Framework/GUI/Runtime/Resource/FontManager.h"
-#include "Framework/GUI/Runtime/Resource/TextureLibrary.h"
+#include "Core/Common/DeferredDeletionQueue.h"
+#include "GUI/Runtime/Resource/FontManager.h"
+#include "GUI/Runtime/Resource/TextureLibrary.h"
 
 #include "utility.cc/ranges.h"
 

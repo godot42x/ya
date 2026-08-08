@@ -1,12 +1,12 @@
 #pragma once
 
-#include "Foundation/RHI/Core/Buffer.h"
-#include "Foundation/RHI/Core/CommandBuffer.h"
-#include "Foundation/RHI/Core/DescriptorSet.h"
-#include "Foundation/RHI/Core/RenderResourceFactory.h"
-#include "Foundation/RHI/Core/Sampler.h"
-#include "Foundation/RHI/RenderDefines.h"
-#include "Foundation/Core/Api.h"
+#include "RHI/Core/Buffer.h"
+#include "RHI/Core/CommandBuffer.h"
+#include "RHI/Core/DescriptorSet.h"
+#include "RHI/Core/RenderResourceFactory.h"
+#include "RHI/Core/Sampler.h"
+#include "RHI/RenderDefines.h"
+#include "Core/Api.h"
 
 #include <cstdint>
 #include <functional>

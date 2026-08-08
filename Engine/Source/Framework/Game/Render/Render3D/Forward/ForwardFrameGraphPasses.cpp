@@ -1,9 +1,9 @@
 #include "ForwardFrameGraphPasses.h"
 
-#include "Foundation/RHI/Core/RenderTargetCreateInfo.h"
-#include "Framework/Game/Render/Render3D/Common/EntityIdViewportPass.h"
-#include "Framework/Game/Render/Render3D/Common/PostProcessingStage.h"
-#include "Framework/Game/Render/Render3D/Common/RenderOverlay.h"
+#include "RHI/Core/RenderTargetCreateInfo.h"
+#include "Render3D/Common/EntityIdViewportPass.h"
+#include "Render3D/Common/PostProcessingStage.h"
+#include "Render3D/Common/RenderOverlay.h"
 
 #include <string>
 #include <string_view>

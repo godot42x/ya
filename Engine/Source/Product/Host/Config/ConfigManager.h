@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Foundation/Core/Api.h"
-#include "Foundation/Core/Trait.h"
+#include "Core/Api.h"
+#include "Core/Trait.h"
 
 #include <nlohmann/json.hpp>
 

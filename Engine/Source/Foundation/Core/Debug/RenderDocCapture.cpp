@@ -1,6 +1,6 @@
 #include "RenderDocCapture.h"
 
-#include "Foundation/Core/Log.h"
+#include "Core/Log.h"
 
 #include <algorithm>
 #include <filesystem>

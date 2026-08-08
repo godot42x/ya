@@ -2,10 +2,10 @@
 #pragma once
 
 #include "CommandBuffer.h"
-#include "Foundation/Core/Base.h"
-#include "Foundation/RHI/Core/RenderImage.h"
-#include "Foundation/RHI/Core/Texture.h"
-#include "Foundation/RHI/RenderDefines.h"
+#include "Core/Base.h"
+#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/Texture.h"
+#include "RHI/RenderDefines.h"
 
 #include <memory>
 

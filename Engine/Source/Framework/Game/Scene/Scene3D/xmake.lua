@@ -1,7 +1,7 @@
 target("ya-scene-3d")
     set_kind("shared")
     ya_std_module("YA_SCENE_3D_API")
-    add_includedirs("../../../..", { public = true })
+    ya_tier_include("Scene")
     add_files("**.cpp")
     add_headerfiles("**.h")
     -- Node3D extends the GUI scene-tree base (Node) and reaches the ECS

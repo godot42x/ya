@@ -1,6 +1,6 @@
 #include "ECSRegistry.h"
 
-#include "Framework/Game/Render/Render3D/Scene.h"
+#include "Render3D/Scene.h"
 
 namespace ya
 {

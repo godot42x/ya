@@ -1,7 +1,7 @@
 
 #pragma once
 
-#include "Foundation/Core/Reflection/Reflection.h"
+#include "Core/Reflection/Reflection.h"
 #include "glm/glm.hpp"
 
 namespace ya

@@ -1,11 +1,11 @@
 #include "PhysicsSystem.h"
 
-#include "Foundation/Core/Common/FWD-std.h"
-#include "Foundation/Core/Log.h"
-#include "Framework/Game/Gameplay/ECS/Component/TransformComponent.h"
-#include "Framework/Game/Physics/PhysicsBodyComponent.h"
-#include "Framework/Game/Render/Render3D/Scene.h"
-#include "Framework/Game/Render/Render3D/SceneManager.h"
+#include "Core/Common/FWD-std.h"
+#include "Core/Log.h"
+#include "ECS/Component/TransformComponent.h"
+#include "Physics/PhysicsBodyComponent.h"
+#include "Render3D/Scene.h"
+#include "Render3D/SceneManager.h"
 
 // Jolt headers stay inside this translation unit (behind the World pimpl).
 #include <Jolt/Jolt.h>

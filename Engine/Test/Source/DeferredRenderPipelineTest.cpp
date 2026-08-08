@@ -1,8 +1,8 @@
-#include "Framework/Game/Render/Render3D/Deferred/DeferredRenderPipeline.h"
-#include "Framework/Game/Render/Render3D/Deferred/DeferredFrameGraphPasses.h"
+#include "Render3D/Deferred/DeferredRenderPipeline.h"
+#include "Render3D/Deferred/DeferredFrameGraphPasses.h"
 
-#include "Product/Host/Config/ConfigManager.h"
-#include "Foundation/Core/System/VirtualFileSystem.h"
+#include "Host/Config/ConfigManager.h"
+#include "Core/System/VirtualFileSystem.h"
 
 #include <gtest/gtest.h>
 
