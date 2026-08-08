@@ -11,4 +11,4 @@ target("ya-scene-core")
     -- references Resource model types. All public because Scene.h is public.
     -- ECS reach is the core infrastructure only (ecs-core); the entity-scene
     -- contract (EntitySceneBridge.cpp) is implemented here.
-    add_deps("ya-foundation-core", "ya-ecs-core", "ya-hierarchy", "ya-gui-runtime", "ya-scene-3d", "ya-resource-core", "ya-resource-loader", "ya-resource-runtime", { public = true })
+    add_deps("ya-foundation-core", "ya-ecs-core", "ya-hierarchy", "ya-gui-scene", "ya-scene-3d", "ya-resource-core", "ya-resource-loader", "ya-resource-runtime", { public = true })

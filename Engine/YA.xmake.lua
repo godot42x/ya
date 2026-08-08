@@ -161,7 +161,7 @@ do
         "ya-rhi-backend-common",
         "ya-rhi-vulkan",
         "ya-hierarchy",
-        "ya-gui-runtime",
+        "ya-gui-framework",
         "ya-scene-core",
         "ya-scene-runtime",
         "ya-scene-serialization",

@@ -1,10 +1,10 @@
-#include "GUI/Runtime/Compose/Render2DComposePass.h"
+#include "GUI/Compose/Render2DComposePass.h"
 
-#include "GUI/Runtime/Draw2D/Render2D.h"
+#include "GUI/Draw2D/Render2D.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderImage.h"
 #include "RHI/Backend/TextureLibrary.h"
-#include "GUI/Runtime/Scene/UISceneRenderer.h"
+#include "GUI/Scene/UISceneRenderer.h"
 
 namespace ya
 {

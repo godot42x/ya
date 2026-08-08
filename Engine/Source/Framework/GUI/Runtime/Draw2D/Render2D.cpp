@@ -10,7 +10,7 @@
 #include "RHI/RenderDefines.h"
 
 #include "Core/Common/DeferredDeletionQueue.h"
-#include "GUI/Runtime/Resource/FontManager.h"
+#include "GUI/Resources/FontManager.h"
 #include "RHI/Backend/TextureLibrary.h"
 
 #include "utility.cc/ranges.h"

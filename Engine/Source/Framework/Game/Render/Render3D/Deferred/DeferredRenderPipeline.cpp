@@ -10,7 +10,7 @@
 #include "Gameplay/Systems/Components/DirectionComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "Scene3D/TransformComponent.h"
-#include "GUI/Runtime/Resource/TextureSlotBinding.h"
+#include "GUI/Resources/TextureSlotBinding.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Core/Sampler.h"
 #include "Graph/RenderGraphImportUtils.h"

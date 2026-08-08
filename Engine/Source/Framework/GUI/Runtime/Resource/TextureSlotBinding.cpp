@@ -1,4 +1,4 @@
-#include "GUI/Runtime/Resource/TextureSlotBinding.h"
+#include "GUI/Resources/TextureSlotBinding.h"
 
 #include "RHI/Backend/TextureLibrary.h"
 #include "RHI/Core/Texture.h"

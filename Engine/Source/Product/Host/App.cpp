@@ -6,7 +6,7 @@
 #include "Core/Module/ProjectDescriptor.h"
 #include "Core/Profiling/Profiling.h"
 #include "Core/System/VirtualFileSystem.h"
-#include "GUI/Runtime/Scene/UISceneRenderer.h"
+#include "GUI/Scene/UISceneRenderer.h"
 #include "Scene/Core/Scene.h"
 #include "Render3D/Services/DebugRenderSystem.h"
 

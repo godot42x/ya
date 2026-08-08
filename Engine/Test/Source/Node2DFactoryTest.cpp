@@ -1,6 +1,6 @@
 #include "Core/Reflection/DeferredInitializer.h"
 #include "Scene/Serialization/SceneSerializer.h"
-#include "GUI/Runtime/Scene/Node2D.h"
+#include "GUI/Scene/Node2D.h"
 #include "Scene/Core/Scene.h"
 
 #include <gtest/gtest.h>

@@ -11,7 +11,7 @@
 #include "Editor/EditorProfilingSettings.h"
 #include "Editor/EditorRuntimeSettings.h"
 #include "Editor/Panels/RenderTargetInspector.h"
-#include "GUI/Runtime/Draw2D/Render2D.h"
+#include "GUI/Draw2D/Render2D.h"
 #include "RHI/Core/Swapchain.h"
 #include "Host/App.h"
 #include "Render3D/Common/PostProcessingStage.h"

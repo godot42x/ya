@@ -22,7 +22,7 @@
 #include "RHI/Backend/Vulkan//VulkanRender.h"
 #include "RHI/WindowProvider.h"
 
-#include "GUI/Runtime/Draw2D/Render2D.h"
+#include "GUI/Draw2D/Render2D.h"
 #include "Render3D/Material/Material.h"
 
 #include "Host/Utility/RenderFrameExtractor.h"

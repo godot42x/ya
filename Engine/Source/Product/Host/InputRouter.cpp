@@ -2,7 +2,7 @@
 
 #include "Core/Input/InputManager.h"
 #include "Core/Log.h"
-#include "GUI/Runtime/Scene/UISceneRenderer.h"
+#include "GUI/Scene/UISceneRenderer.h"
 #include "Host/App.h"
 
 namespace ya

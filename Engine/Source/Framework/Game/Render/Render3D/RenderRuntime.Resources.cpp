@@ -9,7 +9,7 @@
 #include "Render3D/Pipelines/BasicPostprocessing.h"
 #include "Resource/AssetManager.h"
 #include "Core/Common/DeferredDeletionQueue.h"
-#include "GUI/Runtime/Resource/FontManager.h"
+#include "GUI/Resources/FontManager.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Core/ResourceRegistry.h"
 #include "RHI/Backend/TextureLibrary.h"

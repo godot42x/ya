@@ -3,7 +3,7 @@
 #include "Core/Common/AssetRef.h"
 #include "Core/Event.h"
 #include "Core/Reflection/Reflection.h"
-#include "GUI/Runtime/UIBase.h"
+#include "GUI/Scene/UIBase.h"
 #include "Hierarchy/Node.h"
 
 #include <functional>

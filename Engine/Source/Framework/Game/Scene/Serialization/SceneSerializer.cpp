@@ -7,7 +7,7 @@
 #include "Resource/AssetManager.h"
 #include "Scene3D/ManagedChildComponent.h"
 #include "ECS/Entity.h"
-#include "GUI/Runtime/Scene/Node2D.h"
+#include "GUI/Scene/Node2D.h"
 #include "Scene/Core/Scene.h"
 
 #include <algorithm>

@@ -3,7 +3,7 @@
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Entity.h"
-#include "GUI/Runtime/Scene/Node2D.h"
+#include "GUI/Scene/Node2D.h"
 #include <gtest/gtest.h>
 
 namespace ya

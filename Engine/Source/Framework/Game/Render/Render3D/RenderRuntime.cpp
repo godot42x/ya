@@ -5,9 +5,9 @@
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
-#include "GUI/Runtime/Compose/Render2DComposePass.h"
+#include "GUI/Compose/Render2DComposePass.h"
 #include "RHI/Backend/Vulkan/VulkanRender.h"
-#include "GUI/Runtime/Draw2D/Render2D.h"
+#include "GUI/Draw2D/Render2D.h"
 #include "Render3D/Forward/ForwardRenderPipeline.h"
 
 #include <limits>

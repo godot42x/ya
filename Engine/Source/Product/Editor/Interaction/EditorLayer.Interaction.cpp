@@ -8,8 +8,8 @@
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderImage.h"
 #include "RHI/Render.h"
-#include "GUI/Runtime/Scene/UISceneRenderer.h"
-#include "GUI/Runtime/Scene/Node2D.h"
+#include "GUI/Scene/UISceneRenderer.h"
+#include "GUI/Scene/Node2D.h"
 
 #include <cmath>
 #include <functional>

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Event.h"
-#include "GUI/Runtime/UIBase.h"
+#include "GUI/Scene/UIBase.h"
 #include "Hierarchy/Node.h"
 
 namespace ya

@@ -1,9 +1,9 @@
-#include "GUI/Runtime/Scene/Node2D.h"
+#include "GUI/Scene/Node2D.h"
 
 #include "Core/Log.h"
 #include "Core/Reflection/ReflectionSerializer.h"
-#include "GUI/Runtime/Draw2D/Render2D.h"
-#include "GUI/Runtime/Resource/FontManager.h"
+#include "GUI/Draw2D/Render2D.h"
+#include "GUI/Resources/FontManager.h"
 #include "reflects-core/lib.h"
 
 #include <algorithm>
