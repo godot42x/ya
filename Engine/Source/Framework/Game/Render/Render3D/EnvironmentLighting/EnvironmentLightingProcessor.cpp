@@ -4,14 +4,11 @@
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
-#include "Gameplay/Systems/Components/TerrainComponent.h"
 #include "RHI/Render.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "Core/Common/DeferredDeletionQueue.h"
-#include "Host/App.h"
 #include "RHI/Core/OffscreenJob.h"
 #include "Scene/Core/Scene.h"
-#include "Render3D/Terrain/TerrainMeshBuilder.h"
 
 #include <algorithm>
 #include <cstring>
@@ -58,61 +55,6 @@ float halfToFloat(uint16_t value)
     float result = 0.0f;
     std::memcpy(&result, &bits, sizeof(result));
     return result;
-}
-
-std::vector<float> extractTerrainHeights(const AssetManager::TextureMemoryBlock& texture)
-{
-    std::vector<float> heights;
-    if (!texture.isValid() || texture.channels == 0) {
-        return heights;
-    }
-
-    const size_t pixelCount = static_cast<size_t>(texture.width) * texture.height;
-    heights.resize(pixelCount, 0.0f);
-
-    switch (texture.payloadType) {
-    case AssetManager::ETexturePayloadType::U8: {
-        const auto* data = texture.bytes.data();
-        for (size_t i = 0; i < pixelCount; ++i) {
-            heights[i] = static_cast<float>(data[i * texture.channels]) / 255.0f;
-        }
-        break;
-    }
-    case AssetManager::ETexturePayloadType::F16: {
-        const auto* data = reinterpret_cast<const uint16_t*>(texture.bytes.data());
-        for (size_t i = 0; i < pixelCount; ++i) {
-            heights[i] = halfToFloat(data[i * texture.channels]);
-        }
-        break;
-    }
-    case AssetManager::ETexturePayloadType::F32: {
-        const auto* data = reinterpret_cast<const float*>(texture.bytes.data());
-        for (size_t i = 0; i < pixelCount; ++i) {
-            heights[i] = data[i * texture.channels];
-        }
-        break;
-    }
-    default:
-        heights.clear();
-        break;
-    }
-
-    for (auto& height : heights) {
-        height = std::clamp(height, 0.0f, 1.0f);
-    }
-    return heights;
-}
-
-std::string buildTerrainDerivedKey(const TerrainComponent& terrain, uint64_t heightMapVersion)
-{
-    return std::format("terrain|{}|{}|{:.6f}|{:.6f}|{:.6f}|{}|{}",
-                       AssetManager::normalizeAssetPath(terrain._heightMapRef.getPath()),
-                       heightMapVersion,
-                       terrain._size.x,
-                       terrain._size.y,
-                       terrain._heightScale,
-                       terrain._heightOffset,
-                       terrain._gridResolution);
 }
 
 void copySkyboxResourceToRuntime(const std::shared_ptr<SkyboxDerivedResource>& resource,
@@ -177,7 +119,6 @@ void EnvironmentLightingProcessor::init()
 void EnvironmentLightingProcessor::clearAllResolveState()
 {
     clearSceneResolveWork();
-    _terrainDerivedResources.clear();
 
     for (auto& [key, resource] : _skyboxDerivedResources) {
         (void)key;
@@ -226,12 +167,8 @@ void EnvironmentLightingProcessor::onUpdate(float dt)
     }
 
     auditResolveWork(scene);
-    gcDerivedResources(App::currentFrameIndex());
+    gcDerivedResources(_getFrameIndex ? _getFrameIndex() : 0);
 
-    {
-        YA_PROFILE_SCOPE("ResourceResolve/Terrain");
-        resolvePendingTerrain(scene);
-    }
     {
         YA_PROFILE_SCOPE("ResourceResolve/Skybox");
         resolvePendingSkybox(scene);
@@ -245,10 +182,6 @@ void EnvironmentLightingProcessor::onUpdate(float dt)
 
 void EnvironmentLightingProcessor::clearSceneResolveWork()
 {
-    for (auto& [entity, pendingState] : _terrainStates) {
-        (void)entity;
-        pendingState = TerrainRuntimeState{};
-    }
     for (auto& [entity, pendingState] : _skyboxStates) {
         (void)entity;
         detail::resetSkyboxState(pendingState);
@@ -258,16 +191,12 @@ void EnvironmentLightingProcessor::clearSceneResolveWork()
         detail::resetEnvState(pendingState);
     }
 
-    _terrainStates.clear();
     _skyboxStates.clear();
     _environmentStates.clear();
-    _dirtyTerrainQueue.clear();
     _dirtySkyboxQueue.clear();
     _dirtyEnvironmentQueue.clear();
-    _dirtyTerrainSet.clear();
     _dirtySkyboxSet.clear();
     _dirtyEnvironmentSet.clear();
-    _activeTerrain.clear();
     _activeSkybox.clear();
     _activeEnvironment.clear();
     _sceneSkyboxEnvironmentDependents.clear();
@@ -282,10 +211,6 @@ void EnvironmentLightingProcessor::seedSceneResolveWork(Scene* scene)
     }
 
     auto& registry = scene->getRegistry();
-    for (auto&& [entity, terrain] : registry.view<TerrainComponent>().each()) {
-        (void)terrain;
-        markTerrainDirty(entity, "scene seed", terrain.getRebuildNotBeforeFrame());
-    }
     for (auto&& [entity, skybox] : registry.view<SkyboxComponent>().each()) {
         (void)skybox;
         markSkyboxDirty(entity, "scene seed");
@@ -296,11 +221,6 @@ void EnvironmentLightingProcessor::seedSceneResolveWork(Scene* scene)
         }
         markEnvironmentLightingDirty(entity, "scene seed");
     }
-}
-
-bool EnvironmentLightingProcessor::isTerrainQueuedOrActive(entt::entity entity) const
-{
-    return _dirtyTerrainSet.contains(entity) || _activeTerrain.contains(entity);
 }
 
 bool EnvironmentLightingProcessor::isSkyboxQueuedOrActive(entt::entity entity) const
@@ -319,7 +239,7 @@ void EnvironmentLightingProcessor::auditResolveWork(Scene* scene)
         return;
     }
 
-    const uint64_t currentFrame = App::currentFrameIndex();
+    const uint64_t currentFrame = _getFrameIndex ? _getFrameIndex() : 0;
     if (_nextResolveAuditFrame != 0 && currentFrame < _nextResolveAuditFrame) {
         return;
     }
@@ -327,27 +247,6 @@ void EnvironmentLightingProcessor::auditResolveWork(Scene* scene)
 
     auto& registry = scene->getRegistry();
     auto* assets   = AssetManager::get();
-
-    for (auto&& [entity, terrain] : registry.view<TerrainComponent>().each()) {
-        auto& state = _terrainStates[entity];
-        const bool bVersionNotCompleted = terrain.getAuthoringVersion() > state.lastCompletedAuthoringVersion;
-        bool       bHeightMapStale      = false;
-        if (assets && terrain.hasHeightMap() &&
-            state.state == TerrainRuntimeState::EResolveState::Ready) {
-            bHeightMapStale = state.lastBuiltHeightMapVersion !=
-                              assets->getResourceVersion(terrain._heightMapRef.getPath());
-        }
-
-        if ((bVersionNotCompleted || bHeightMapStale) && !isTerrainQueuedOrActive(entity)) {
-            YA_CORE_WARN("ResourceResolve audit re-queued Terrain entity {}: completedVersion={}, authoringVersion={}, stale={}",
-                         static_cast<uint32_t>(entity),
-                         state.lastCompletedAuthoringVersion,
-                         terrain.getAuthoringVersion(),
-                         bHeightMapStale);
-            markTerrainDirty(entity, bHeightMapStale ? "audit: height map stale" : "audit: missed terrain enqueue",
-                             terrain.getRebuildNotBeforeFrame());
-        }
-    }
 
     for (auto&& [entity, skybox] : registry.view<SkyboxComponent>().each()) {
         auto& state = _skyboxStates[entity];
@@ -391,7 +290,7 @@ void EnvironmentLightingProcessor::markAllSceneSkyboxEnvironmentDependentsDirty(
 
 void EnvironmentLightingProcessor::touchDerivedResourceUsage()
 {
-    const uint64_t currentFrame = App::currentFrameIndex();
+    const uint64_t currentFrame = _getFrameIndex ? _getFrameIndex() : 0;
     for (const auto& [entity, state] : _skyboxStates) {
         (void)entity;
         if (state.boundResource) {
@@ -404,12 +303,6 @@ void EnvironmentLightingProcessor::touchDerivedResourceUsage()
             state.boundResource->lastUsedFrame = currentFrame;
         }
     }
-    for (const auto& [entity, state] : _terrainStates) {
-        (void)entity;
-        if (state.boundResource) {
-            state.boundResource->lastUsedFrame = currentFrame;
-        }
-    }
 }
 
 void EnvironmentLightingProcessor::gcDerivedResources(uint64_t currentFrame)
@@ -417,14 +310,6 @@ void EnvironmentLightingProcessor::gcDerivedResources(uint64_t currentFrame)
     const auto shouldKeep = [currentFrame](uint64_t lastUsedFrame) {
         return lastUsedFrame + DERIVED_RESOURCE_GC_DELAY_FRAMES > currentFrame;
     };
-
-    for (auto it = _terrainDerivedResources.begin(); it != _terrainDerivedResources.end();) {
-        if (!it->second || shouldKeep(it->second->lastUsedFrame)) {
-            ++it;
-            continue;
-        }
-        it = _terrainDerivedResources.erase(it);
-    }
 
     for (auto it = _skyboxDerivedResources.begin(); it != _skyboxDerivedResources.end();) {
         if (!it->second || shouldKeep(it->second->lastUsedFrame)) {
@@ -451,14 +336,6 @@ void EnvironmentLightingProcessor::gcDerivedResources(uint64_t currentFrame)
     }
 }
 
-void EnvironmentLightingProcessor::cleanupTerrainState(entt::entity entity)
-{
-    _terrainStates.erase(entity);
-    _dirtyTerrainSet.erase(entity);
-    _activeTerrain.erase(entity);
-    std::erase(_dirtyTerrainQueue, entity);
-}
-
 void EnvironmentLightingProcessor::cleanupSkyboxState(entt::entity entity)
 {
     if (auto it = _skyboxStates.find(entity); it != _skyboxStates.end()) {
@@ -480,34 +357,6 @@ void EnvironmentLightingProcessor::cleanupEnvironmentLightingState(entt::entity 
     _activeEnvironment.erase(entity);
     _sceneSkyboxEnvironmentDependents.erase(entity);
     std::erase(_dirtyEnvironmentQueue, entity);
-}
-
-void EnvironmentLightingProcessor::markTerrainDirty(entt::entity entity, const char* reason, uint64_t rebuildNotBeforeFrame)
-{
-    if (!_pendingStateScene) {
-        return;
-    }
-
-    auto& registry = _pendingStateScene->getRegistry();
-    if (!registry.valid(entity) || !registry.all_of<TerrainComponent>(entity)) {
-        cleanupTerrainState(entity);
-        return;
-    }
-
-    auto& terrain = registry.get<TerrainComponent>(entity);
-    if (rebuildNotBeforeFrame > terrain.getRebuildNotBeforeFrame()) {
-        terrain.setRebuildNotBeforeFrame(rebuildNotBeforeFrame);
-    }
-
-    auto& state = _terrainStates[entity];
-    state.state                      = terrain.hasHeightMap() ? TerrainRuntimeState::EResolveState::Dirty
-                                                              : TerrainRuntimeState::EResolveState::Empty;
-    state.pendingHeightMapHandle     = 0;
-    state.lastQueuedAuthoringVersion = terrain.getAuthoringVersion();
-    state.lastDirtyReason            = reason ? reason : "dirty";
-    if (_dirtyTerrainSet.insert(entity).second) {
-        _dirtyTerrainQueue.push_back(entity);
-    }
 }
 
 void EnvironmentLightingProcessor::markSkyboxDirty(entt::entity entity, const char* reason)
@@ -581,21 +430,6 @@ void EnvironmentLightingProcessor::shutdown()
     _render = nullptr;
 }
 
-Mesh* EnvironmentLightingProcessor::getTerrainMesh(entt::entity entity) const
-{
-    const auto it = _terrainStates.find(entity);
-    if (it == _terrainStates.end() || !it->second.boundResource) {
-        return nullptr;
-    }
-    return it->second.boundResource->mesh.get();
-}
-
-const TerrainRuntimeState* EnvironmentLightingProcessor::findTerrainState(entt::entity entity) const
-{
-    const auto it = _terrainStates.find(entity);
-    return it == _terrainStates.end() ? nullptr : &it->second;
-}
-
 ESkyboxResolveState EnvironmentLightingProcessor::getSkyboxResolveState(entt::entity entity) const
 {
     const auto it = _skyboxStates.find(entity);
@@ -615,156 +449,10 @@ const SkyboxRuntimeState* EnvironmentLightingProcessor::findSkyboxState(entt::en
 }
 
 
-void EnvironmentLightingProcessor::resolvePendingTerrain(Scene* scene)
+EEnvironmentLightingSourceResolveState EnvironmentLightingProcessor::getEnvironmentSourceState(entt::entity entity) const
 {
-    auto& registry = scene->getRegistry();
-    auto* assets   = AssetManager::get();
-    if (!assets) {
-        return;
-    }
-
-    auto pumpOne = [&](entt::entity entity) {
-        if (!registry.valid(entity) || !registry.all_of<TerrainComponent>(entity)) {
-            cleanupTerrainState(entity);
-            return;
-        }
-
-        auto& terrain = registry.get<TerrainComponent>(entity);
-        auto& state   = _terrainStates[entity];
-        const uint64_t currentFrame = App::currentFrameIndex();
-
-        if (terrain.getRebuildNotBeforeFrame() > currentFrame) {
-            _activeTerrain.insert(entity);
-            return;
-        }
-
-        if (!terrain.hasHeightMap()) {
-            state.state = TerrainRuntimeState::EResolveState::Empty;
-            state.pendingHeightMapHandle = 0;
-            state.lastBuiltHeightMapVersion = 0;
-            state.currentDerivedKey.clear();
-            state.boundResource.reset();
-            state.lastCompletedAuthoringVersion = terrain.getAuthoringVersion();
-            _activeTerrain.erase(entity);
-            return;
-        }
-
-        const uint64_t heightMapVersion = assets->getResourceVersion(terrain._heightMapRef.getPath());
-        const std::string derivedKey = buildTerrainDerivedKey(terrain, heightMapVersion);
-        if (!state.currentDerivedKey.empty() &&
-            state.currentDerivedKey != derivedKey &&
-            state.state == TerrainRuntimeState::EResolveState::Ready) {
-            state.state = TerrainRuntimeState::EResolveState::Dirty;
-        }
-
-        if (auto it = _terrainDerivedResources.find(derivedKey); it != _terrainDerivedResources.end() &&
-            it->second && it->second->mesh) {
-            it->second->lastUsedFrame = currentFrame;
-            state.currentDerivedKey   = derivedKey;
-            state.boundResource       = it->second;
-            state.lastBuiltHeightMapVersion = it->second->heightMapVersion;
-            state.pendingHeightMapHandle    = 0;
-            state.state                     = TerrainRuntimeState::EResolveState::Ready;
-            state.lastCompletedAuthoringVersion = terrain.getAuthoringVersion();
-            _activeTerrain.erase(entity);
-            return;
-        }
-
-        if (state.state == TerrainRuntimeState::EResolveState::Ready &&
-            state.lastBuiltHeightMapVersion != heightMapVersion) {
-            state.state = TerrainRuntimeState::EResolveState::Dirty;
-        }
-
-        if (state.state != TerrainRuntimeState::EResolveState::Dirty &&
-            state.state != TerrainRuntimeState::EResolveState::LoadingHeightMap) {
-            state.currentDerivedKey = derivedKey;
-            state.lastCompletedAuthoringVersion = terrain.getAuthoringVersion();
-            _activeTerrain.erase(entity);
-            return;
-        }
-
-        if (state.pendingHeightMapHandle == 0) {
-            const auto handle = assets->loadTextureBatchIntoMemory(AssetManager::TextureBatchMemoryLoadRequest{
-                .filepaths   = {terrain._heightMapRef.getPath()},
-                .colorSpace  = AssetManager::ETextureColorSpace::Linear,
-            });
-            state.pendingHeightMapHandle = handle;
-            state.state                  = TerrainRuntimeState::EResolveState::LoadingHeightMap;
-            state.lastStartedAuthoringVersion = terrain.getAuthoringVersion();
-            _activeTerrain.insert(entity);
-            return;
-        }
-
-        AssetManager::TextureBatchMemory batchMemory;
-        if (!assets->consumeTextureBatchMemory(state.pendingHeightMapHandle, batchMemory)) {
-            _activeTerrain.insert(entity);
-            return;
-        }
-        state.pendingHeightMapHandle = 0;
-
-        if (!batchMemory.isValid() || batchMemory.textures.empty()) {
-            YA_CORE_WARN("Terrain height map decode failed: {}", terrain._heightMapRef.getPath());
-            state.state = TerrainRuntimeState::EResolveState::Failed;
-            state.lastCompletedAuthoringVersion = terrain.getAuthoringVersion();
-            _activeTerrain.erase(entity);
-            return;
-        }
-
-        const auto& texture = batchMemory.textures.front();
-        if (AssetManager::normalizeAssetPath(texture.filepath) != AssetManager::normalizeAssetPath(terrain._heightMapRef.getPath())) {
-            state.state = TerrainRuntimeState::EResolveState::Dirty;
-            markTerrainDirty(entity, "terrain stale async result", terrain.getRebuildNotBeforeFrame());
-            return;
-        }
-
-        auto heights = extractTerrainHeights(texture);
-        if (heights.empty()) {
-            YA_CORE_WARN("Terrain height map has unsupported payload: {}", terrain._heightMapRef.getPath());
-            state.state = TerrainRuntimeState::EResolveState::Failed;
-            state.lastCompletedAuthoringVersion = terrain.getAuthoringVersion();
-            _activeTerrain.erase(entity);
-            return;
-        }
-
-        auto meshData = buildTerrainMeshData(TerrainMeshBuildDesc{
-            .name           = std::format("terrain_{}", terrain._heightMapRef.getPath()),
-            .size           = terrain._size,
-            .heightScale    = terrain._heightScale,
-            .heightOffset   = terrain._heightOffset,
-            .gridResolution = terrain._gridResolution,
-            .heightWidth    = texture.width,
-            .heightHeight   = texture.height,
-            .heights        = heights,
-        });
-
-        auto resource            = std::make_shared<TerrainDerivedResource>();
-        auto* render = getRender();
-        YA_CORE_ASSERT(render, "EnvironmentLightingProcessor terrain mesh creation requires render backend");
-        resource->mesh           = Mesh::create(*render, meshData);
-        resource->heightMapVersion = heightMapVersion;
-        resource->lastUsedFrame  = currentFrame;
-        _terrainDerivedResources[derivedKey] = resource;
-
-        state.currentDerivedKey  = derivedKey;
-        state.boundResource      = resource;
-        state.pendingHeightMapHandle   = 0;
-        state.lastBuiltHeightMapVersion = heightMapVersion;
-        state.state                    = TerrainRuntimeState::EResolveState::Ready;
-        state.lastCompletedAuthoringVersion = terrain.getAuthoringVersion();
-        _activeTerrain.erase(entity);
-    };
-
-    while (!_dirtyTerrainQueue.empty()) {
-        const auto entity = _dirtyTerrainQueue.front();
-        _dirtyTerrainQueue.pop_front();
-        _dirtyTerrainSet.erase(entity);
-        pumpOne(entity);
-    }
-
-    std::vector<entt::entity> activeEntities(_activeTerrain.begin(), _activeTerrain.end());
-    for (const auto entity : activeEntities) {
-        pumpOne(entity);
-    }
+    const auto it = _environmentStates.find(entity);
+    return it == _environmentStates.end() ? EEnvironmentLightingSourceResolveState::Empty : it->second.sourceState;
 }
 
 const SkyboxRuntimeState* EnvironmentLightingProcessor::findFirstSceneSkyboxState(Scene* scene) const
@@ -781,12 +469,6 @@ const SkyboxRuntimeState* EnvironmentLightingProcessor::findFirstSceneSkyboxStat
     }
 
     return nullptr;
-}
-
-EEnvironmentLightingSourceResolveState EnvironmentLightingProcessor::getEnvironmentSourceState(entt::entity entity) const
-{
-    const auto it = _environmentStates.find(entity);
-    return it == _environmentStates.end() ? EEnvironmentLightingSourceResolveState::Empty : it->second.sourceState;
 }
 
 EEnvironmentLightingIrradianceResolveState EnvironmentLightingProcessor::getEnvironmentIrradianceState(entt::entity entity) const
@@ -972,7 +654,6 @@ EnvironmentLightingPreviewInfo EnvironmentLightingProcessor::getEnvironmentLight
 #include "RHI/Render.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "Core/Common/DeferredDeletionQueue.h"
-#include "Host/App.h"
 #include "RHI/Core/OffscreenJob.h"
 
 
@@ -1186,7 +867,6 @@ void tryQueueJob(const OffscreenJobQueueService& queueService, IRender* render, 
 #include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Render.h"
 #include "Core/Common/DeferredDeletionQueue.h"
-#include "Host/App.h"
 #include "RHI/Core/OffscreenJob.h"
 #include "Scene/Core/Scene.h"
 
@@ -1249,14 +929,14 @@ void applySkyboxResource(const std::shared_ptr<SkyboxDerivedResource>& resource,
     }
 }
 
-std::shared_ptr<SkyboxDerivedResource> snapshotSkyboxResource(const SkyboxRuntimeState& state)
+std::shared_ptr<SkyboxDerivedResource> snapshotSkyboxResource(const SkyboxRuntimeState& state, uint64_t currentFrame)
 {
     auto resource                    = std::make_shared<SkyboxDerivedResource>();
     resource->cubemapRenderImage     = state.cubemapRenderImage;
     resource->cubemapTexture         = state.cubemapTexture;
     resource->sourcePreviewTexture   = state.sourcePreviewTexture;
     resource->cubemapFacePreviewViews = state.cubemapFacePreviewViews;
-    resource->lastUsedFrame          = App::currentFrameIndex();
+    resource->lastUsedFrame          = currentFrame;
     return resource;
 }
 
@@ -1369,7 +1049,7 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(Scene* scene)
                                            pendingState.derivedKey != derivedKey ||
                                            pendingState.boundResource.get() != it->second.get() ||
                                            pendingState.resolveState != ESkyboxResolveState::Ready;
-                it->second->lastUsedFrame = App::currentFrameIndex();
+                it->second->lastUsedFrame = _getFrameIndex ? _getFrameIndex() : 0;
                 applySkyboxResource(it->second, pendingState);
                 pendingState.derivedKey = derivedKey;
                 if (bCacheRebound) {
@@ -1471,7 +1151,7 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(Scene* scene)
                 detail::rebuildSkyboxViews(getRender(), pendingState);
                 pendingState.derivedKey = derivedKey;
                 ++pendingState.resultVersion;
-                auto resource = snapshotSkyboxResource(pendingState);
+                auto resource = snapshotSkyboxResource(pendingState, _getFrameIndex ? _getFrameIndex() : 0);
                 _skyboxDerivedResources[derivedKey] = resource;
                 pendingState.boundResource = resource;
                 transition.to(ESkyboxResolveState::Ready, "cubemap source resolved");
@@ -1582,7 +1262,7 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(Scene* scene)
             detail::rebuildSkyboxViews(getRender(), pendingState);
             pendingState.derivedKey = derivedKey;
             ++pendingState.resultVersion;
-            auto resource = snapshotSkyboxResource(pendingState);
+            auto resource = snapshotSkyboxResource(pendingState, _getFrameIndex ? _getFrameIndex() : 0);
             _skyboxDerivedResources[derivedKey] = resource;
             pendingState.boundResource = resource;
             makeTransition(pendingState.resolveState, "Skybox")
@@ -1630,7 +1310,6 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(Scene* scene)
 #include "RHI/Render.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "Core/Common/DeferredDeletionQueue.h"
-#include "Host/App.h"
 #include "RHI/Core/OffscreenJob.h"
 #include "Scene/Core/Scene.h"
 
@@ -1760,7 +1439,7 @@ void applyEnvironmentResource(const std::shared_ptr<EnvironmentLightingDerivedRe
     }
 }
 
-std::shared_ptr<EnvironmentLightingDerivedResource> snapshotEnvironmentResource(const EnvironmentLightingRuntimeState& state)
+std::shared_ptr<EnvironmentLightingDerivedResource> snapshotEnvironmentResource(const EnvironmentLightingRuntimeState& state, uint64_t currentFrame)
 {
     auto resource                         = std::make_shared<EnvironmentLightingDerivedResource>();
     resource->cubemapRenderImage         = state.cubemapRenderImage;
@@ -1771,7 +1450,7 @@ std::shared_ptr<EnvironmentLightingDerivedResource> snapshotEnvironmentResource(
     resource->prefilterRenderImage       = state.prefilterRenderImage;
     resource->prefilterMipFacePreviewViews = state.prefilterMipFacePreviewViews;
     resource->prefilterPreviewMipCount   = state.prefilterPreviewMipCount;
-    resource->lastUsedFrame              = App::currentFrameIndex();
+    resource->lastUsedFrame              = currentFrame;
     return resource;
 }
 
@@ -2738,7 +2417,7 @@ void EnvironmentLightingProcessor::resolvePendingEnvironmentLighting(Scene* scen
                                            pendingState.sourceState != EEnvironmentLightingSourceResolveState::Ready ||
                                            (elc.bEnableIrradiance && pendingState.irradianceState != EEnvironmentLightingIrradianceResolveState::Ready) ||
                                            (elc.bEnablePrefilter && pendingState.prefilterState != EEnvironmentLightingPrefilterResolveState::Ready);
-                it->second->lastUsedFrame = App::currentFrameIndex();
+                it->second->lastUsedFrame = _getFrameIndex ? _getFrameIndex() : 0;
                 applyEnvironmentResource(it->second, pendingState);
                 pendingState.derivedKey = derivedKey;
                 if (bCacheRebound) {
@@ -2789,7 +2468,7 @@ void EnvironmentLightingProcessor::resolvePendingEnvironmentLighting(Scene* scen
 
         if (!derivedKey.empty() && isEnvironmentResolveComplete(elc, pendingState)) {
             pendingState.derivedKey = derivedKey;
-            auto resource = snapshotEnvironmentResource(pendingState);
+            auto resource = snapshotEnvironmentResource(pendingState, _getFrameIndex ? _getFrameIndex() : 0);
             _environmentDerivedResources[derivedKey] = resource;
             pendingState.boundResource = resource;
         }

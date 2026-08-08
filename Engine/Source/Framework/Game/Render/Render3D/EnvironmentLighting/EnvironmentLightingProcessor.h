@@ -44,13 +44,6 @@ struct SkyboxPendingBatchLoadState
     AssetManager::TextureBatchMemoryHandle batchHandle = 0;
 };
 
-struct TerrainDerivedResource
-{
-    stdptr<Mesh> mesh = nullptr;
-    uint64_t     heightMapVersion = 0;
-    uint64_t     lastUsedFrame    = 0;
-};
-
 struct SkyboxDerivedResource
 {
     std::shared_ptr<RenderImage>                   cubemapRenderImage   = nullptr;
@@ -176,28 +169,6 @@ struct EnvironmentLightingRuntimeState
     }
 };
 
-struct TerrainRuntimeState
-{
-    enum class EResolveState : uint8_t
-    {
-        Empty = 0,
-        Dirty,
-        LoadingHeightMap,
-        Ready,
-        Failed,
-    };
-
-    EResolveState state = EResolveState::Empty;
-    AssetManager::TextureBatchMemoryHandle pendingHeightMapHandle = 0;
-    uint64_t    lastBuiltHeightMapVersion  = 0;
-    uint64_t    lastQueuedAuthoringVersion    = 0;
-    uint64_t    lastStartedAuthoringVersion   = 0;
-    uint64_t    lastCompletedAuthoringVersion = 0;
-    std::string lastDirtyReason;
-    std::string currentDerivedKey;
-    std::shared_ptr<TerrainDerivedResource> boundResource;
-};
-
 // ── Read-only preview types for tooling and debug rendering ───────────
 
 struct SkyboxPreviewInfo
@@ -247,23 +218,20 @@ struct YA_RENDER_3D_API EnvironmentLightingProcessor : public ISystem
     IRender*                                                         _render = nullptr;
     OffscreenJobQueueService                                         _offscreenQueueService{};
     std::function<Scene*()>                                          _getActiveScene;
+    std::function<uint64_t()>                                        _getFrameIndex;
+
     EquidistantCylindrical2CubeMap                                    _equidistantCylindrical2CubeMap;
     CubeMap2PBRIrradianceMap                                          _cubeMap2IrradianceMap;
     CubeMap2PBRPrefilteredEnv                                         _cubeMap2PrefilterPipeline;
     Scene*                                                            _pendingStateScene = nullptr;
-    std::unordered_map<entt::entity, TerrainRuntimeState>             _terrainStates;
     std::unordered_map<entt::entity, SkyboxRuntimeState>              _skyboxStates;
     std::unordered_map<entt::entity, EnvironmentLightingRuntimeState> _environmentStates;
-    std::unordered_map<std::string, std::shared_ptr<TerrainDerivedResource>> _terrainDerivedResources;
     std::unordered_map<std::string, std::shared_ptr<SkyboxDerivedResource>> _skyboxDerivedResources;
     std::unordered_map<std::string, std::shared_ptr<EnvironmentLightingDerivedResource>> _environmentDerivedResources;
-    std::deque<entt::entity>                                          _dirtyTerrainQueue;
     std::deque<entt::entity>                                          _dirtySkyboxQueue;
     std::deque<entt::entity>                                          _dirtyEnvironmentQueue;
-    std::unordered_set<entt::entity>                                  _dirtyTerrainSet;
     std::unordered_set<entt::entity>                                  _dirtySkyboxSet;
     std::unordered_set<entt::entity>                                  _dirtyEnvironmentSet;
-    std::unordered_set<entt::entity>                                  _activeTerrain;
     std::unordered_set<entt::entity>                                  _activeSkybox;
     std::unordered_set<entt::entity>                                  _activeEnvironment;
     std::unordered_set<entt::entity>                                  _sceneSkyboxEnvironmentDependents;
@@ -276,10 +244,8 @@ struct YA_RENDER_3D_API EnvironmentLightingProcessor : public ISystem
     void markAllSceneSkyboxEnvironmentDependentsDirty(const char* reason);
     void clearSceneResolveWork();
     void clearAllResolveState();
-    void cleanupTerrainState(entt::entity entity);
     void cleanupSkyboxState(entt::entity entity);
     void cleanupEnvironmentLightingState(entt::entity entity);
-    [[nodiscard]] bool isTerrainQueuedOrActive(entt::entity entity) const;
     [[nodiscard]] bool isSkyboxQueuedOrActive(entt::entity entity) const;
     [[nodiscard]] bool isEnvironmentQueuedOrActive(entt::entity entity) const;
 
@@ -289,6 +255,7 @@ struct YA_RENDER_3D_API EnvironmentLightingProcessor : public ISystem
     void setOffscreenJobQueueService(OffscreenJobQueueService queueService) { _offscreenQueueService = std::move(queueService); }
     [[nodiscard]] const OffscreenJobQueueService& getOffscreenJobQueueService() const { return _offscreenQueueService; }
     void setActiveSceneProvider(std::function<Scene*()> provider) { _getActiveScene = std::move(provider); }
+    void setFrameIndexProvider(std::function<uint64_t()> provider) { _getFrameIndex = std::move(provider); }
     void init() override;
 
     /// Resolve all pending skybox / environment / terrain derived GPU work.
@@ -297,10 +264,8 @@ struct YA_RENDER_3D_API EnvironmentLightingProcessor : public ISystem
     void shutdown() override;
 
     void clearPendingResolveStates();
-    void markTerrainDirty(entt::entity entity, const char* reason, uint64_t rebuildNotBeforeFrame = 0);
     void markSkyboxDirty(entt::entity entity, const char* reason);
     void markEnvironmentLightingDirty(entt::entity entity, const char* reason);
-    void resolvePendingTerrain(Scene* scene);
     void resolvePendingSkybox(Scene* scene);
     void resolvePendingEnvironmentLighting(Scene* scene);
 
@@ -310,8 +275,6 @@ struct YA_RENDER_3D_API EnvironmentLightingProcessor : public ISystem
     EquidistantCylindrical2CubeMap& getCylindrical2CubePipeline() { return _equidistantCylindrical2CubeMap; }
     CubeMap2PBRIrradianceMap&       getCube2IrradiancePipeline() { return _cubeMap2IrradianceMap; }
     CubeMap2PBRPrefilteredEnv&      getCube2PrefilterPipeline() { return _cubeMap2PrefilterPipeline; }
-    [[nodiscard]] Mesh*                   getTerrainMesh(entt::entity entity) const;
-    [[nodiscard]] const TerrainRuntimeState* findTerrainState(entt::entity entity) const;
     [[nodiscard]] ESkyboxResolveState getSkyboxResolveState(entt::entity entity) const;
     [[nodiscard]] bool isSkyboxLoading(entt::entity entity) const;
     [[nodiscard]] const SkyboxRuntimeState* findSkyboxState(entt::entity entity) const;

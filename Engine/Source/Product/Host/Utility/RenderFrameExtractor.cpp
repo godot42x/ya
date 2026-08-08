@@ -6,6 +6,8 @@
 #include "Render3D/Material/SimpleMaterial.h"
 #include "Render3D/Material/UnlitMaterial.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
+#include "Render3D/Terrain/TerrainProcessor.h"
+#include "Render3D/Terrain/TerrainProcessor.h"
 
 #include "Gameplay/Systems/Components/DirectionalLightComponent.h"
 #include "ECS/Component/2D/BillboardComponent.h"
@@ -304,16 +306,16 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
     emitTyped.template operator()<StaticMeshComponent, UnlitMaterialComponent>(staticBuckets.unlitDrawItems);
     emitTyped.template operator()<StaticMeshComponent, SimpleMaterialComponent>(staticBuckets.simpleDrawItems);
 
-    // Terrain draw items: mesh lives in the environment processor runtime
-    // state, not on the component.
-    auto* const envProcessor = App::get() ? App::get()->getEnvironmentLightingProcessor() : nullptr;
-    if (envProcessor) {
+    // Terrain draw items: mesh lives in the terrain processor runtime state,
+    // not on the component.
+    auto* const terrainProcessor = App::get() ? App::get()->getTerrainProcessor() : nullptr;
+    if (terrainProcessor) {
         auto emitTerrain = [&]<typename MatComp>(std::vector<RenderDrawItem>& bucket)
         {
             for (const auto& [e, terrain, tc, matComp] :
                  reg.view<TerrainComponent, TransformComponent, MatComp>().each()) {
                 if (e == viewOwner) continue;
-                auto* mesh = envProcessor->getTerrainMesh(e);
+                auto* mesh = terrainProcessor->getTerrainMesh(e);
                 if (!mesh) continue;
 
                 auto* mat = matComp.getMaterial();
@@ -371,10 +373,10 @@ void RenderFrameExtractor::extractDrawItems(DrawItemExtractionContext& ctx)
     emitFallback.template operator()<SkinnedMeshComponent>(skinnedBuckets.fallbackDrawItems);
 
     // Terrain fallback: no material component
-    if (envProcessor) {
+    if (terrainProcessor) {
         for (const auto& [e, terrain, tc] : reg.view<TerrainComponent, TransformComponent>().each()) {
             if (e == viewOwner) continue;
-            auto* mesh = envProcessor->getTerrainMesh(e);
+            auto* mesh = terrainProcessor->getTerrainMesh(e);
             if (!mesh) continue;
             if (reg.any_of<PBRMaterialComponent, PhongMaterialComponent, UnlitMaterialComponent, SimpleMaterialComponent>(e)) {
                 continue;

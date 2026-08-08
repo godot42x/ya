@@ -2,6 +2,7 @@
 
 #include "Render3D/Forward/ForwardRenderPipeline.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
+#include "Render3D/Terrain/TerrainProcessor.h"
 #include "Host/App.h"
 #include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
@@ -314,7 +315,8 @@ bool hasPendingTerrainResolve(const Scene& scene)
             continue;
         }
 
-        const auto* state = envProcessor->findTerrainState(entity);
+        auto* terrainProcessor = App::get() ? App::get()->getTerrainProcessor() : nullptr;
+        const auto* state = terrainProcessor ? terrainProcessor->findTerrainState(entity) : nullptr;
         if (!state) {
             return true;
         }

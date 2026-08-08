@@ -15,6 +15,7 @@
 #include "Gameplay/Systems/Components/TerrainComponent.h"
 #include "Scene3D/TransformComponent.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
+#include "Render3D/Terrain/TerrainProcessor.h"
 #include "Editor/EditorLayer.h"
 #include "Editor/Inspector/DetailsViewInternal.h"
 #include "Host/GUI/ImGui/ImGuiSystem.h"
@@ -226,10 +227,10 @@ void DetailsView::drawComponents(Entity& entity)
     drawReflectedComponent<TerrainComponent>("Terrain", entity, [&entity](TerrainComponent* terrain, const ya::RenderContext& ctx) {
         if (ctx.hasModifications()) {
             terrain->invalidate(App::currentFrameIndex() + 8);
-            if (auto* envProcessor = App::get()->getEnvironmentLightingProcessor()) {
-                envProcessor->markTerrainDirty(static_cast<entt::entity>(entity),
-                                           "editor terrain modified",
-                                           App::currentFrameIndex() + 8);
+            if (auto* terrainProcessor = App::get()->getTerrainProcessor()) {
+                terrainProcessor->markTerrainDirty(static_cast<entt::entity>(entity),
+                                                   "editor terrain modified",
+                                                   App::currentFrameIndex() + 8);
             }
         }
     });
@@ -457,11 +458,11 @@ void DetailsView::drawMultiComponents(const std::vector<Entity*>& entities)
         }
         for (TerrainComponent* terrain : terrains) {
             terrain->invalidate(App::currentFrameIndex() + 8);
-            if (auto* envProcessor = App::get()->getEnvironmentLightingProcessor()) {
+            if (auto* terrainProcessor = App::get()->getTerrainProcessor()) {
                 if (Entity* owner = terrain->getOwner()) {
-                    envProcessor->markTerrainDirty(static_cast<entt::entity>(*owner),
-                                               "editor terrain modified",
-                                               App::currentFrameIndex() + 8);
+                    terrainProcessor->markTerrainDirty(static_cast<entt::entity>(*owner),
+                                                       "editor terrain modified",
+                                                       App::currentFrameIndex() + 8);
                 }
             }
         }

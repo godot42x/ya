@@ -28,6 +28,7 @@
 #include "Render/Adapters/ModelInstantiationSystem.h"
 #include "Render/Adapters/ResourceResolveSystem.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
+#include "Render3D/Terrain/TerrainProcessor.h"
 #include "Gameplay/Systems/TransformSystem.h"
 #include "Physics/PhysicsSystem.h"
 
@@ -388,9 +389,30 @@ void AppLifecycle::init(App& app, AppDesc ci)
     {
         return app.getSceneServices().getActiveScene();
     });
+    envProcessor->setFrameIndexProvider([]() -> uint64_t
+    {
+        return App::currentFrameIndex();
+    });
     envProcessor->init();
     app._environmentLightingProcessor = envProcessor.get();
     app._systems.push_back(envProcessor);
+
+    // Terrain derived processing (height-map decode + mesh build) is a
+    // separate processor from environment lighting; both share only the
+    // injected render/scene/frame services.
+    auto terrainProcessor = ya::makeShared<TerrainProcessor>();
+    terrainProcessor->setRender(app.getRenderServices().getRender());
+    terrainProcessor->setActiveSceneProvider([&app]() -> Scene*
+    {
+        return app.getSceneServices().getActiveScene();
+    });
+    terrainProcessor->setFrameIndexProvider([]() -> uint64_t
+    {
+        return App::currentFrameIndex();
+    });
+    terrainProcessor->init();
+    app._terrainProcessor = terrainProcessor.get();
+    app._systems.push_back(terrainProcessor);
     auto sys3 = ya::makeShared<TransformSystem>();
     sys3->setSceneProvider([&app]() -> Scene*
     {
@@ -447,6 +469,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
         }
         app._systems.clear();
         app._resourceResolveSystem = nullptr;
+        app._terrainProcessor            = nullptr;
         app._environmentLightingProcessor = nullptr; });
 
     app.attachModules();
