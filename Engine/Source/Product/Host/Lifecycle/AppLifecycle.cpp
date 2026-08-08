@@ -28,6 +28,7 @@
 #include "Render/Adapters/ModelInstantiationSystem.h"
 #include "Render/Adapters/ResourceResolveSystem.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
+#include "Render3D/Services/EnvironmentLightingResultProvider.h"
 #include "Render3D/Terrain/TerrainProcessor.h"
 #include "Gameplay/Systems/TransformSystem.h"
 #include "Physics/PhysicsSystem.h"
@@ -320,6 +321,21 @@ void AppLifecycle::init(App& app, AppDesc ci)
     app._renderState->runtime->init(RenderRuntime::InitDesc{
         .app     = &app,
         .appDesc = &app._ci,
+        // Narrow read-only environment-lighting result provider: Render3D
+        // consumes derived-resource handles through this contract instead of
+        // locating the processor via the App singleton.
+        .environmentLightingProvider = EnvironmentLightingResultProvider{
+            .resolveSceneSkyboxResource = [&app](Scene* scene) -> ImageResourceRef {
+                auto* envProcessor = app.getEnvironmentLightingProcessor();
+                return envProcessor ? envProcessor->resolveSceneSkyboxResource(scene) : ImageResourceRef{};
+            },
+            .resolveSceneEnvironmentLightingResources = [&app](Scene* scene) -> EnvironmentLightingSceneResources {
+                auto* envProcessor = app.getEnvironmentLightingProcessor();
+                return envProcessor ? envProcessor->resolveSceneEnvironmentLightingResources(scene)
+                                    : EnvironmentLightingSceneResources{};
+            },
+        },
+        .activeSceneProvider = [&app]() -> Scene* { return app.getSceneServices().getActiveScene(); },
     });
     if (ConfigManager::get().hasDocument("automation")) {
         AppAutomation::applyRuntimeOverrides(app);

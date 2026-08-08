@@ -93,6 +93,8 @@ void RenderRuntime::init(const InitDesc& desc)
 void RenderRuntime::initRuntimeState(const InitDesc& desc)
 {
     _app = desc.app;
+    _environmentLightingProvider = desc.environmentLightingProvider;
+    _activeSceneProvider         = desc.activeSceneProvider;
 
     const AppDesc& appDesc = *desc.appDesc;
     currentRenderAPI       = ERenderAPI::Vulkan;
@@ -210,7 +212,7 @@ void RenderRuntime::initResourceCaches()
 
 void RenderRuntime::initSharedRenderResources()
 {
-    _sharedResourceProvider.init(_render, _app);
+    _sharedResourceProvider.init(_render, _environmentLightingProvider, _activeSceneProvider);
 
     _deleter.push("RenderBindings", [this](void*)
                   { _sharedResourceProvider.shutdown(); });

@@ -11,6 +11,7 @@
 #include "Render3D/Common/IRenderRuntimeServices.h"
 #include "Render3D/Common/PostProcessingState.h"
 #include "Render3D/Common/RenderOverlay.h"
+#include "Render3D/Services/EnvironmentLightingResultProvider.h"
 #include "Render3D/Common/RenderTargetCatalog.h"
 #include "Render3D/Common/RenderViewportSnapshot.h"
 #include "Render3D/Deferred/DeferredPipelineDebugViews.h"
@@ -71,8 +72,12 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
 
     struct InitDesc
     {
-        App*           app     = nullptr;
-        const AppDesc* appDesc = nullptr;
+        App*                              app     = nullptr;
+        const AppDesc*                    appDesc = nullptr;
+        /// Injected narrow environment-lighting result provider (bound by the
+        /// Host; Render3D never locates the processor through App).
+        EnvironmentLightingResultProvider environmentLightingProvider;
+        std::function<Scene*()>           activeSceneProvider;
     };
 
     /// Presentation graph extension points recorded by the app. A single
@@ -122,6 +127,8 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     };
 
     App* _app = nullptr;
+    EnvironmentLightingResultProvider _environmentLightingProvider;
+    std::function<Scene*()>           _activeSceneProvider;
 
     ut::StackDeleter _deleter;
 

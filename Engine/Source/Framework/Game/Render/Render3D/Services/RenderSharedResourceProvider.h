@@ -2,13 +2,12 @@
 
 #include "Core/Base.h"
 #include "RHI/Core/DescriptorSet.h"
-#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Pipelines/PBRGenerateBrdfLUT.h"
+#include "Render3D/Services/EnvironmentLightingResultProvider.h"
 
 namespace ya
 {
 
-struct App;
 struct Scene;
 struct Texture;
 struct RenderImage;
@@ -19,7 +18,10 @@ struct IImageView;
 struct RenderSharedResourceProvider
 {
     IRender* _render = nullptr;
-    App*     _app    = nullptr;
+
+    /// Injected seams (bound by the Host composition; no App access here).
+    std::function<Scene*()>               _getActiveScene;
+    EnvironmentLightingResultProvider     _environmentLightingProvider;
 
     struct SkyboxResources
     {
@@ -56,8 +58,13 @@ struct RenderSharedResourceProvider
     stdptr<Sampler>              _cubemapSampler = nullptr;
     PBRGenerateBrdfLUT           _pbrGenerateBrdfLUT{};
 
-    void init(IRender* render, App* app);
+    void init(IRender* render,
+              EnvironmentLightingResultProvider environmentLightingProvider = {},
+              std::function<Scene*()>          activeSceneProvider         = {});
     void shutdown();
+
+    void setEnvironmentLightingProvider(EnvironmentLightingResultProvider provider) { _environmentLightingProvider = std::move(provider); }
+    void setActiveSceneProvider(std::function<Scene*()> provider) { _getActiveScene = std::move(provider); }
 
     void resetSkyboxPool();
     void resetEnvironmentLightingPool();

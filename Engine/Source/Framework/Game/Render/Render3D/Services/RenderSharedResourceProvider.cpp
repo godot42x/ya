@@ -136,12 +136,13 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneSkyboxDescriptorSet(Sc
         return _skybox.fallbackDS;
     }
 
-    if (!scene && _app) {
-        scene = _app->getSceneServices().getActiveScene();
+    if (!scene && _getActiveScene) {
+        scene = _getActiveScene();
     }
 
-    auto* envProcessor = (_app ? _app->getEnvironmentLightingProcessor() : nullptr);
-    auto  skyboxResource = envProcessor ? envProcessor->resolveSceneSkyboxResource(scene) : ImageResourceRef{};
+    auto skyboxResource = _environmentLightingProvider.resolveSceneSkyboxResource
+                              ? _environmentLightingProvider.resolveSceneSkyboxResource(scene)
+                              : ImageResourceRef{};
     auto* descriptorImageView = skyboxResource.getImageView();
     if (!descriptorImageView) {
         _skybox.boundSceneImageView = nullptr;
@@ -219,13 +220,12 @@ EnvironmentLightingSceneResources RenderSharedResourceProvider::resolveSceneEnvi
 {
     EnvironmentLightingSceneResources resources{};
 
-    if (!scene && _app) {
-        scene = _app->getSceneServices().getActiveScene();
+    if (!scene && _getActiveScene) {
+        scene = _getActiveScene();
     }
 
-    if (_app && _app->getEnvironmentLightingProcessor()) {
-        auto* envProcessor = _app->getEnvironmentLightingProcessor();
-        resources = envProcessor->resolveSceneEnvironmentLightingResources(scene);
+    if (_environmentLightingProvider.resolveSceneEnvironmentLightingResources) {
+        resources = _environmentLightingProvider.resolveSceneEnvironmentLightingResources(scene);
     }
     resources.brdfLut = _sharedResources.pbrLUT;
     if (!resources.cubemap.isValid()) {
@@ -241,10 +241,13 @@ EnvironmentLightingSceneResources RenderSharedResourceProvider::resolveSceneEnvi
     return resources;
 }
 
-void RenderSharedResourceProvider::init(IRender* render, App* app)
+void RenderSharedResourceProvider::init(IRender* render,
+                                        EnvironmentLightingResultProvider environmentLightingProvider,
+                                        std::function<Scene*()>          activeSceneProvider)
 {
     _render = render;
-    _app    = app;
+    _environmentLightingProvider = std::move(environmentLightingProvider);
+    _getActiveScene              = std::move(activeSceneProvider);
 
     initSharedPipelineResources();
     initSkyboxResources();
@@ -254,7 +257,6 @@ void RenderSharedResourceProvider::init(IRender* render, App* app)
 void RenderSharedResourceProvider::shutdown()
 {
     releaseRenderOwnedResources();
-    _app    = nullptr;
     _render = nullptr;
 }
 
