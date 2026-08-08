@@ -1,14 +1,14 @@
 #include "HelloMaterial.h"
 #include "Core/Math/Math.h"
 #include "ECS/Component/2D/BillboardComponent.h"
-#include "ECS/Component/CameraComponent.h"
-#include "ECS/Component/MirrorComponent.h"
+#include "Gameplay/Systems/Components/CameraComponent.h"
+#include "Gameplay/Systems/Components/MirrorComponent.h"
 #include "Resource/AssetManager.h"
 #include "GUI/Runtime/Resource/FontManager.h"
 
 #include "ECS/Component/3D/SkyboxComponent.h"
-#include "ECS/Component/DirectionalLightComponent.h"
-#include "ECS/Component/LuaScriptComponent.h"
+#include "Gameplay/Systems/Components/DirectionalLightComponent.h"
+#include "Gameplay/Systems/Components/LuaScriptComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
@@ -18,7 +18,7 @@
 #include "Render3D/Material/PhongMaterial.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
-#include "ECS/Component/PointLightComponent.h"
+#include "Gameplay/Systems/Components/PointLightComponent.h"
 #include "Scene3D/TransformComponent.h"
 
 
