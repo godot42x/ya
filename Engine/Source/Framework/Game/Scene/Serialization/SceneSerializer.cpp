@@ -7,7 +7,6 @@
 #include "Resource/AssetManager.h"
 #include "Scene3D/ManagedChildComponent.h"
 #include "ECS/Entity.h"
-#include "ECS/Component/LuaScriptComponent.h"
 #include "GUI/Runtime/Scene/Node2D.h"
 #include "Scene/Core/Scene.h"
 
@@ -64,7 +63,7 @@ void normalizeSceneJsonPaths(nlohmann::json& json)
         }
 
         value = bAssetPath ? AssetManager::normalizeAssetPath(path)
-                           : LuaScriptComponent::ScriptInstance::normalizeScriptPath(path);
+                           : AssetManager::normalizeScriptAssetPath(path);
     };
 
     if (json.is_array()) {

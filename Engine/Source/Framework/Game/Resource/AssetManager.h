@@ -53,6 +53,11 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
     static std::string canonicalizeAssetPath(std::string path);
     static std::string normalizeAssetPath(std::string path);
 
+    /// Normalize a script asset path (lexical + VFS) without depending on the
+    /// Lua script component; shared by scene serialization and the script
+    /// runtime.
+    static std::string normalizeScriptAssetPath(std::string_view path);
+
   private:
     friend class AssetTextureManager;
     friend class AssetModelManager;

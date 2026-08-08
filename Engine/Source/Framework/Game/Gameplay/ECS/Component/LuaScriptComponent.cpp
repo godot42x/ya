@@ -11,14 +11,7 @@ namespace ya
 
 std::string LuaScriptComponent::ScriptInstance::normalizeScriptPath(std::string_view path)
 {
-    if (path.empty()) {
-        return {};
-    }
-
-    auto normalizedString = path_utils::pathToGenericUtf8String(std::filesystem::path(std::string(path)).lexically_normal());
-    std::replace(normalizedString.begin(), normalizedString.end(), '\\', '/');
-
-    return AssetManager::normalizeAssetPath(normalizedString);
+    return AssetManager::normalizeScriptAssetPath(path);
 }
 void LuaScriptComponent::ScriptInstance::refreshProperties()
 {
@@ -163,5 +156,4 @@ void LuaScriptComponent::ScriptInstance::applyPropertyOverrides(sol::state &lua)
 
 
 } // namespace ya
-
 

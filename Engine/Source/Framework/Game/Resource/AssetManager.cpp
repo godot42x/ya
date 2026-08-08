@@ -6,6 +6,7 @@
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/Log.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "Core/System/PathUtils.h"
 #include "Core/Common/DeferredDeletionQueue.h"
 #include "Core/Common/AssetRef.h"
 #include "Host/App.h"
@@ -49,6 +50,18 @@ std::string AssetManager::canonicalizeAssetPath(std::string path)
 std::string AssetManager::normalizeAssetPath(std::string path)
 {
     return canonicalizeAssetPath(std::move(path));
+}
+
+std::string AssetManager::normalizeScriptAssetPath(std::string_view path)
+{
+    if (path.empty()) {
+        return {};
+    }
+
+    auto normalizedString = path_utils::pathToGenericUtf8String(std::filesystem::path(std::string(path)).lexically_normal());
+    std::replace(normalizedString.begin(), normalizedString.end(), '\\', '/');
+
+    return normalizeAssetPath(std::move(normalizedString));
 }
 
 void AssetManager::clearCache()

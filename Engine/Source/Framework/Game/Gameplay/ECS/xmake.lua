@@ -1,17 +1,21 @@
 target("ya-gameplay-ecs")
     set_kind("shared")
     ya_std_module("YA_GAMEPLAY_ECS_API")
-    -- Fat-module transition: ECS headers still reach render/resource/GUI/host
-    -- headers without a corresponding dep edge (see plan.md §10.6); once
-    -- ya-gameplay is split these extra tiers move out with the files.
-    ya_tier_include("Gameplay", "Game", "Scene", "Render", "Framework", "Product")
+    -- Fat-module transition: the module's own source tree is exposed through
+    -- the Gameplay tier root ("ECS/..."); render reach is compile-time only
+    -- (the .cpp files still use Render3D material types) until the fat module
+    -- dissolves into gameplay-systems / render-ecs-adapters.
+    ya_tier_include("Gameplay", "Render")
     -- Core ECS infrastructure lives in ya-ecs-core (ECS/Core/); this target
     -- keeps the gameplay components/systems until the Phase 2 split into
     -- ya-gameplay-systems / ya-component-linkage / ya-render-ecs-adapters.
     add_files("**.cpp|Core/**.cpp")
     add_headerfiles("**.h|Core/**.h")
-    -- Scene3D types (TransformComponent/Node3D) are consumed by the systems.
-    add_deps("ya-scene-3d")
+    -- Scene line types (Scene data / lifecycle / Node3D) are consumed by the
+    -- systems.
+    add_deps("ya-scene-3d", "ya-scene-core", "ya-scene-runtime")
+    -- Resource/GUI headers are reached from the components' resolve code.
+    add_deps("ya-resource", "ya-gui-runtime")
     -- Public headers reference the gameplay systems (ScriptingSystem base).
     add_deps("ya-gameplay-systems", { public = true })
     -- Fat module for now: ECS components/systems reference render + resource
@@ -22,11 +26,9 @@ target("ya-gameplay-ecs")
     -- include root; a dep edge would cycle with ya-scene-core (Scene.h owns an
     -- entt registry). Phase 2 (ya-ecs-core) resolves this: scene deps on the
     -- ECS core, ECS systems lose their scene/render reach.
-    -- Transition: the fat ECS module still compiles render/resource/host
-    -- headers (App services, Mesh/Material pipeline types). Planned
-    -- decoupling: split ya-gameplay behind an app-services interface (see
-    -- plan.md §10); until then every engine export macro is injected here.
-    ya_engine_defines()
+    -- Render3D headers are compiled from the component/system .cpp files
+    -- (render tier include); inject the render-side export macros only.
+    add_defines("YA_RENDER_3D_API=YA_API_EXPORT", "YA_GUI_API=YA_API_EXPORT", "YA_RESOURCE_API=YA_API_EXPORT")
     add_packages("entt", "glm", "nlohmann_json", "sol2", { public = true })
     add_packages("lua", "quickjs-ng", "cxxopts")
     if is_plat("macosx") then
