@@ -2,8 +2,8 @@
 
 #include "Core/Reflection/Reflection.h"
 #include "ECS/Component.h"
-#include "Resource/Skeleton.h"
-#include "Resource/SkeletonAnimationSampler.h"
+#include "Resource/Core/Skeleton.h"
+#include "Resource/Core/SkeletonAnimationSampler.h"
 
 #include <limits>
 #include <memory>

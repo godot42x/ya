@@ -8,7 +8,7 @@ target("ya-render-3d")
     add_headerfiles("**.h")
     add_deps(
         "ya-gui-runtime",
-        "ya-resource",
+        "ya-resource-core", "ya-resource-loader", "ya-resource-runtime",
         "ya-render-graph",
         "ya-scene-3d",
         "ya-gameplay-ecs",

@@ -1,7 +1,7 @@
 #include "Gameplay/Systems/AnimationSystem.h"
 
 #include "Gameplay/Systems/SkeletonAnimatorComponent.h"
-#include "Resource/SkeletonAnimationSampler.h"
+#include "Resource/Core/SkeletonAnimationSampler.h"
 #include "Scene/Core/Scene.h"
 
 namespace ya

@@ -5,7 +5,7 @@
 #include <mutex>
 
 #include "Core/Async/TaskQueue.h"
-#include "Resource/Model/ImportedModelData.h"
+#include "Resource/Core/Model/ImportedModelData.h"
 #include "Resource/AssetManager.h"
 
 namespace ya

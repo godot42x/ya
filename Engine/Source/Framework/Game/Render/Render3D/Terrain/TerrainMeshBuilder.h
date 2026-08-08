@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Resource/EngineMeshData.h"
+#include "Resource/Core/EngineMeshData.h"
 #include "Core/Api.h"
 
 #include <span>

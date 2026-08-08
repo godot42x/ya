@@ -6,7 +6,7 @@
 
 #include "Core/Common/AssetFuture.h"
 #include "Resource/AssetManagerTypes.h"
-#include "Resource/Meta/AssetMeta.h"
+#include "Resource/Core/Meta/AssetMeta.h"
 #include "Core/ResourceRegistry.h"
 
 

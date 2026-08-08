@@ -3,8 +3,8 @@
 #include "Core/Base.h"
 #include "Core/Math/AABB.h"
 #include "Resource/Mesh.h"
-#include "Resource/Model/MaterialData.h"
-#include "Resource/Skeleton.h"
+#include "Resource/Core/Model/MaterialData.h"
+#include "Resource/Core/Skeleton.h"
 
 namespace ya
 {

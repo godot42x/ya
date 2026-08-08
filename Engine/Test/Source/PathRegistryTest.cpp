@@ -1,5 +1,5 @@
-#include "Resource/Handle/PathRegistry.h"
-#include "Resource/Handle/ResourceTable.h"
+#include "Resource/Core/Handle/PathRegistry.h"
+#include "Resource/Core/Handle/ResourceTable.h"
 
 #include <gtest/gtest.h>
 #include <memory>

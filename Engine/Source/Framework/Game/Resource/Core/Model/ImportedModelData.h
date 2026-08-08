@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Core/Math/Geometry.h"
-#include "Resource/Model/ImportedMeshData.h"
-#include "Resource/Model/ImportedSkeletonData.h"
-#include "Resource/Model/MaterialData.h"
+#include "Resource/Core/Model/ImportedMeshData.h"
+#include "Resource/Core/Model/ImportedSkeletonData.h"
+#include "Resource/Core/Model/MaterialData.h"
 
 #include <algorithm>
 #include <memory>

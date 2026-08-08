@@ -1,7 +1,7 @@
-#include "Resource/Model/ModelImporterRegistry.h"
+#include "Resource/Loader/Model/ModelImporterRegistry.h"
 
-#include "Resource/Model/AssimpImporter.h"
-#include "Resource/Model/GltfImporter.h"
+#include "Resource/Loader/Model/AssimpImporter.h"
+#include "Resource/Loader/Model/GltfImporter.h"
 
 namespace ya::model_importer
 {

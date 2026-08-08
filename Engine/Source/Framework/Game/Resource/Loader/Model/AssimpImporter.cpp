@@ -1,5 +1,5 @@
-#include "Resource/Model/AssimpImporter.h"
-#include "Resource/Model/ModelImporterCommon.h"
+#include "Resource/Loader/Model/AssimpImporter.h"
+#include "Resource/Core/Model/ModelImporterCommon.h"
 
 #include "Core/System/VirtualFileSystem.h"
 

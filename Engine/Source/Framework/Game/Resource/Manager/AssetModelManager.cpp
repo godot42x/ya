@@ -2,7 +2,7 @@
 
 
 #include "Core/Log.h"
-#include "Resource/Model/ImportedModelData.h"
+#include "Resource/Core/Model/ImportedModelData.h"
 
 #include "Core/Common/DeferredDeletionQueue.h"
 

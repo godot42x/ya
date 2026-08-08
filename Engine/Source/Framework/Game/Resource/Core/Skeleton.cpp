@@ -1,6 +1,6 @@
-#include "Resource/Skeleton.h"
+#include "Resource/Core/Skeleton.h"
 
-#include "Resource/Model/ImportedModelData.h"
+#include "Resource/Core/Model/ImportedModelData.h"
 
 namespace ya
 {

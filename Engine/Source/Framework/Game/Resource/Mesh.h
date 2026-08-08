@@ -6,7 +6,7 @@
 #include "Core/Math/Geometry.h"
 #include "RHI/Core/Buffer.h"
 #include "RHI/Core/CommandBuffer.h"
-#include "Resource/EngineMeshData.h"
+#include "Resource/Core/EngineMeshData.h"
 
 namespace ya
 {

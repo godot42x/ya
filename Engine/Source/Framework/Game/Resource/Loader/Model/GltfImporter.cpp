@@ -1,7 +1,7 @@
-#include "Resource/Model/GltfImporter.h"
-#include "Resource/Model/ModelImporterCommon.h"
+#include "Resource/Loader/Model/GltfImporter.h"
+#include "Resource/Core/Model/ModelImporterCommon.h"
 
-#include "Resource/Model/TinyGLTFSupport.h"
+#include "Resource/Loader/Model/TinyGLTFSupport.h"
 
 #include "Core/System/PathUtils.h"
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Resource/Skeleton.h"
+#include "Resource/Core/Skeleton.h"
 #include "Core/Api.h"
 
 #include <glm/glm.hpp>
@@ -26,7 +26,7 @@ struct SkeletonPose
     std::vector<uint32_t>  animatedNodeIndices;
 };
 
-struct YA_RESOURCE_API SkeletonAnimationSampler
+struct YA_RESOURCE_CORE_API SkeletonAnimationSampler
 {
     static double wrapTime(double time, double duration);
 

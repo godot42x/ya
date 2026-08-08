@@ -1,12 +1,12 @@
 #include "Model.h"
 
 #include "Resource/EngineGeometryNormalizer.h"
-#include "Resource/Model/AssimpImporter.h"
-#include "Resource/Model/GltfImporter.h"
-#include "Resource/Model/ImportedModelData.h"
-#include "Resource/Model/ModelImporterCommon.h"
-#include "Resource/Model/ModelImporterRegistry.h"
-#include "Resource/Skeleton.h"
+#include "Resource/Loader/Model/AssimpImporter.h"
+#include "Resource/Loader/Model/GltfImporter.h"
+#include "Resource/Core/Model/ImportedModelData.h"
+#include "Resource/Core/Model/ModelImporterCommon.h"
+#include "Resource/Loader/Model/ModelImporterRegistry.h"
+#include "Resource/Core/Skeleton.h"
 
 #include "Core/Log.h"
 

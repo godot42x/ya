@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Core/Log.h"
+#include "Core/Common/AssetRef.h"
 #include "Core/System/VirtualFileSystem.h"
-#include "Resource/AssetManager.h"
-#include "Resource/Model/ImportedModelData.h"
+#include "Resource/Core/Model/ImportedModelData.h"
 
 #include <algorithm>
 #include <cctype>
@@ -55,7 +55,7 @@ inline std::string normalizeImportedPathString(std::string_view path)
 
 inline std::string normalizeImportedAssetPath(std::string_view path)
 {
-    return AssetManager::normalizeAssetPath(normalizeImportedPathString(path));
+    return canonicalizeAssetPath(normalizeImportedPathString(path));
 }
 
 inline std::string resolveImportedIoPath(std::string_view path)
@@ -106,21 +106,21 @@ inline std::string resolveImportedAssetPath(std::string_view directory, std::str
     const auto normalizedRawPath = normalizeImportedPathString(rawPath);
     const std::filesystem::path sourcePath(normalizedRawPath);
     if (sourcePath.is_absolute()) {
-        return AssetManager::normalizeAssetPath(sourcePath.generic_string());
+        return canonicalizeAssetPath(sourcePath.generic_string());
     }
 
     if (isMountedAssetPath(normalizedRawPath) || isProjectRelativeAssetPath(normalizedRawPath)) {
-        return AssetManager::normalizeAssetPath(normalizedRawPath);
+        return canonicalizeAssetPath(normalizedRawPath);
     }
 
     const auto normalizedDirectory = normalizeImportedPathString(directory);
     if (!normalizedDirectory.empty() &&
         (normalizedRawPath == normalizedDirectory || normalizedRawPath.starts_with(normalizedDirectory + "/"))) {
-        return AssetManager::normalizeAssetPath(normalizedRawPath);
+        return canonicalizeAssetPath(normalizedRawPath);
     }
 
     const auto resolvedPath = (std::filesystem::path(normalizedDirectory) / sourcePath).lexically_normal();
-    return AssetManager::normalizeAssetPath(resolvedPath.generic_string());
+    return canonicalizeAssetPath(resolvedPath.generic_string());
 }
 
 inline void setTextureAlias(MaterialData& matData, const FName& primary, const FName& alias, const std::string& path)

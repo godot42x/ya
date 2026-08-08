@@ -15,7 +15,7 @@ target("ya-gameplay-ecs")
     -- systems.
     add_deps("ya-scene-3d", "ya-scene-core", "ya-scene-runtime")
     -- Resource/GUI headers are reached from the components' resolve code.
-    add_deps("ya-resource", "ya-gui-runtime")
+    add_deps("ya-resource-core", "ya-resource-loader", "ya-resource-runtime", "ya-gui-runtime")
     -- Public headers reference the gameplay systems (ScriptingSystem base).
     add_deps("ya-gameplay-systems", { public = true })
     -- Fat module for now: ECS components/systems reference render + resource

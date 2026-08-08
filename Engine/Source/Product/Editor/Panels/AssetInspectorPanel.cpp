@@ -3,7 +3,7 @@
 #include "Editor/EditorLayer.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "Resource/AssetManager.h"
-#include "Resource/Meta/AssetMeta.h"
+#include "Resource/Core/Meta/AssetMeta.h"
 #include "GUI/Runtime/Resource/TextureLibrary.h"
 #include "Host/App.h"
 

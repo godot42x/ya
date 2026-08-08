@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Resource/Handle/ResourceHandle.h"
+#include "Resource/Core/Handle/ResourceHandle.h"
 
 #include <memory>
 #include <vector>

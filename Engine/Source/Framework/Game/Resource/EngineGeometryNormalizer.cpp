@@ -1,7 +1,7 @@
 #include "Resource/EngineGeometryNormalizer.h"
 
 #include "Resource/Model.h"
-#include "Resource/Model/ImportedModelData.h"
+#include "Resource/Core/Model/ImportedModelData.h"
 
 #include "Core/Log.h"
 

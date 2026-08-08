@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Resource/Model/ImportedAnimationData.h"
+#include "Resource/Core/Model/ImportedAnimationData.h"
 
 #include <limits>
 #include <string>

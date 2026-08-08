@@ -5,8 +5,8 @@
 
 #include "Core/Async/TaskQueue.h"
 #include "Resource/AssetManager.h"
-#include "Resource/Handle/ResourceTable.h"
-#include "Resource/Handle/ResourceTable.h"
+#include "Resource/Core/Handle/ResourceTable.h"
+#include "Resource/Core/Handle/ResourceTable.h"
 
 namespace ya
 {

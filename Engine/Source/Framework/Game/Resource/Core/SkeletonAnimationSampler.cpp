@@ -1,4 +1,4 @@
-#include "Resource/SkeletonAnimationSampler.h"
+#include "Resource/Core/SkeletonAnimationSampler.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 

@@ -5,7 +5,7 @@
 #include "GUI/Runtime/Resource/TextureSlotBinding.h"
 #include "Render3D/Material/MaterialFactory.h"
 #include "Render3D/Material/PhongMaterial.h"
-#include "Resource/Model/MaterialData.h"
+#include "Resource/Core/Model/MaterialData.h"
 
 #include <string_view>
 
