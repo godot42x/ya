@@ -25,6 +25,22 @@ if is_plat("macosx") then
     add_shflags("-flat_namespace", { force = true })
 end
 
+-- Shared xmake packages (SDL3, freetype, ...) are linked via @rpath; copy
+-- them next to the produced binaries so the existing @loader_path rpath
+-- resolves them without manual DYLD setup. New shared engine packages must
+-- be registered here.
+after_build(function(target)
+    if not is_plat("macosx") then
+        return
+    end
+    local pkgroot = path.join(os.getenv("HOME") or "", ".xmake", "packages")
+    for _, name in ipairs({ "libsdl3", "freetype" }) do
+        for _, libfile in ipairs(os.files(path.join(pkgroot, name:sub(1, 1), name, "**/*.dylib"))) do
+            os.cp(libfile, target:targetdir())
+        end
+    end
+end)
+
 
 set_policy("build.warning", true)
 set_warnings("all", "extra")

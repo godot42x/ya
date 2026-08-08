@@ -16,7 +16,7 @@ target("ya-render-3d")
     -- Planned decoupling: app-service interface injection (see plan.md §10).
     ya_engine_defines()
     add_packages("glm", "entt", "nlohmann_json", { public = true })
-    add_packages("cxxopts", "vulkan-memory-allocator", "glad", "lua", "sol2", "quickjs-ng", "vulkansdk", "ktx", "stb")
+    add_packages("cxxopts", "vulkan-memory-allocator", "glad", "lua", "sol2", "quickjs-ng", "vulkansdk", "stb")
     if is_plat("macosx") then
         -- Transition: render-3d calls host App services (see plan.md §10);
         -- symbols resolve from the final binary until the app-services

@@ -24,6 +24,11 @@ add_requires(
 )
 add_requireconfs("freetype", {
     system = false,
+    configs = {
+        -- FontManager (GUI) and the imgui freetype extension both use
+        -- freetype; a shared image avoids duplicating the library.
+        shared = true,
+    },
 })
 -- TEMP(unblock install): pin to cached versions while github downloads stall
 add_requireconfs("cmake", {
@@ -34,6 +39,10 @@ add_requireconfs("cmake", {
 add_requires("libsdl3", {
     configs = {
         debug = is_mode("debug"),
+        -- Single shared SDL image: several module dylibs (core window/input,
+        -- imgui backend) consume SDL. A static copy per dylib duplicates the
+        -- whole library (incl. ObjC classes) and splits global state.
+        shared = true,
     }
 })
 add_requires("assimp v6.0.4", {
