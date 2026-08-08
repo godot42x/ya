@@ -1,0 +1,113 @@
+The information of target(ya-gameplay-ecs):
+    at: /Users/mark/1/craft/ya/Engine/Source/Framework/Game/Gameplay/ECS/xmake.lua
+    kind: shared
+    targetfile: build/macosx/arm64/debug/libya-gameplay-ecs.dylib
+    deps:
+      -> ya-foundation-core -> ./Engine/Source/Framework/Game/Gameplay/ECS/xmake.lua:12
+      -> ya-foundation-rhi -> ./Engine/Source/Framework/Game/Gameplay/ECS/xmake.lua:12
+    rules:
+      -> mode.debug -> ./xmake.lua:1
+      -> mode.releasedbg -> ./xmake.lua:1
+      -> mode.release -> ./xmake.lua:1
+      -> mode.profile -> ./xmake.lua:1
+      -> plugin.compile_commands.autoupdate -> ./xmake.lua:100
+      -> c++.unity_build -> ./Engine/Source/xmake.lua:57
+    packages:
+      -> entt -> ./Engine/Source/Framework/Game/Gameplay/ECS/xmake.lua:18
+      -> glm -> ./Engine/Source/Framework/Game/Gameplay/ECS/xmake.lua:18
+      -> nlohmann_json -> ./Engine/Source/Framework/Game/Gameplay/ECS/xmake.lua:18
+      -> sol2 -> ./Engine/Source/Framework/Game/Gameplay/ECS/xmake.lua:18
+      -> lua -> ./Engine/Source/Framework/Game/Gameplay/ECS/xmake.lua:19
+      -> quickjs-ng -> ./Engine/Source/Framework/Game/Gameplay/ECS/xmake.lua:19
+      -> cxxopts -> ./Engine/Source/Framework/Game/Gameplay/ECS/xmake.lua:19
+    links:
+      -> qjs -> package(quickjs-ng) -> 
+      -> lua -> package(lua) -> 
+      -> vulkan -> dep(ya-foundation-rhi) -> packages -> 
+      -> SDL3 -> dep(ya-foundation-core) -> packages -> 
+      -> spirv-cross-util -> dep(ya-foundation-rhi) -> packages -> 
+      -> shaderc -> dep(ya-foundation-rhi) -> packages -> 
+      -> shaderc_shared -> dep(ya-foundation-rhi) -> packages -> 
+      -> shaderc_util -> dep(ya-foundation-rhi) -> packages -> 
+      -> shaderc_combined -> dep(ya-foundation-rhi) -> packages -> 
+      -> spirv-cross-core -> dep(ya-foundation-rhi) -> packages -> 
+      -> spirv-cross-glsl -> dep(ya-foundation-rhi) -> packages -> 
+      -> slang -> dep(ya-foundation-rhi) -> packages -> 
+      -> spirv-cross-reflect -> dep(ya-foundation-rhi) -> packages -> 
+    syslinks:
+      -> dl -> package(lua) -> 
+      -> m -> package(lua) -> 
+    ldflags:
+      -> -flat_namespace -> ./xmake.lua:24
+    shflags:
+      -> -flat_namespace -> ./xmake.lua:25
+      -> -undefined -> ./Engine/Source/Framework/Game/Gameplay/ECS/xmake.lua:24
+      -> dynamic_lookup -> ./Engine/Source/Framework/Game/Gameplay/ECS/xmake.lua:24
+    defines:
+      -> YA_BUILD_MODE_DEBUG -> ./xmake.lua:68
+      -> BUILD_DEBUG -> ./xmake.lua:78
+      -> YA_PROFILING_CONDITIONAL -> ./xmake.lua:84
+      -> YA_SHARED=1 -> ./Engine/Source/xmake.lua:54
+      -> YA_MODULE_BUILD=1 -> ./Engine/Source/xmake.lua:53
+      -> YA_GAMEPLAY_ECS_API=YA_API_EXPORT -> ./Engine/Source/xmake.lua:72
+      -> YA_CORE_API=YA_API_EXPORT -> ./Engine/Source/xmake.lua:72
+      -> YA_RHI_API=YA_API_EXPORT -> ./Engine/Source/xmake.lua:72
+      -> YA_RHI_BACKEND_API=YA_API_EXPORT -> ./Engine/Source/xmake.lua:72
+      -> YA_GUI_API=YA_API_EXPORT -> ./Engine/Source/xmake.lua:72
+      -> YA_SCENE_3D_API=YA_API_EXPORT -> ./Engine/Source/xmake.lua:72
+      -> YA_RESOURCE_API=YA_API_EXPORT -> ./Engine/Source/xmake.lua:72
+      -> YA_RENDER_GRAPH_API=YA_API_EXPORT -> ./Engine/Source/xmake.lua:72
+      -> YA_RENDER_3D_API=YA_API_EXPORT -> ./Engine/Source/xmake.lua:72
+      -> YA_PHYSICS_API=YA_API_EXPORT -> ./Engine/Source/xmake.lua:72
+      -> YA_HOST_API=YA_API_EXPORT -> ./Engine/Source/xmake.lua:72
+      -> YA_EDITOR_API=YA_API_EXPORT -> ./Engine/Source/xmake.lua:72
+      -> BUILD_SHARED_REFLECTS_CORE=1 -> dep(reflects-core) -> 
+      -> YA_RHI_API=YA_API_EXPORT -> dep(ya-foundation-rhi) -> 
+      -> YA_SHARED=1 -> dep(ya-foundation-core) -> 
+      -> YA_CORE_API=YA_API_EXPORT -> dep(ya-foundation-core) -> 
+    headerfiles:
+      -> Engine/Source/Framework/Game/Gameplay/ECS/**.h -> ./Engine/Source/Framework/Game/Gameplay/ECS/xmake.lua:9
+      -> Engine/Plugins/utility.cc/src/**.h -> dep(utility.cc) -> 
+    linkdirs:
+      -> /Users/mark/.xmake/packages/q/quickjs-ng/v0.15.1/2a25d0f8bd7642ceb7b5a5c6b3580597/lib -> package(quickjs-ng) -> 
+      -> /Users/mark/.xmake/packages/l/lua/v5.4.8/0ead44f082a9434588cde7253d065903/lib -> package(lua) -> 
+      -> /Users/mark/1/craft/ya/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/lib -> dep(ya-foundation-rhi) -> packages -> 
+      -> /Users/mark/.xmake/packages/l/libsdl3/3.4.12/960bb66c5c52410e9eb2244f55b43df9/lib -> dep(ya-foundation-core) -> packages -> 
+    includedirs:
+      -> /Users/mark/1/craft/ya/Engine/Source/Framework/Game/Gameplay -> ./Engine/Source/xmake.lua:41
+      -> /Users/mark/1/craft/ya/Engine/Source/Framework/Game -> ./Engine/Source/xmake.lua:41
+      -> /Users/mark/1/craft/ya/Engine/Source/Framework/Game/Scene -> ./Engine/Source/xmake.lua:41
+      -> /Users/mark/1/craft/ya/Engine/Source/Framework/Game/Render -> ./Engine/Source/xmake.lua:41
+      -> /Users/mark/1/craft/ya/Engine/Source/Framework -> ./Engine/Source/xmake.lua:41
+      -> /Users/mark/1/craft/ya/Engine/Source/Product -> ./Engine/Source/xmake.lua:41
+      -> /Users/mark/1/craft/ya/Engine/Source/Foundation/RHI/../../../Shader/Slang/Generated -> dep(ya-foundation-rhi) -> 
+      -> Engine/Plugins/log.cc/src/include -> dep(log.cc) -> 
+      -> Engine/Plugins/reflects/core/includes -> dep(reflects-core) -> 
+      -> Engine/Plugins/utility.cc/src/include -> dep(utility.cc) -> 
+      -> /Users/mark/1/craft/ya/Engine/Source/Foundation/RHI/../../../Shader/GLSL/Generated -> dep(ya-foundation-rhi) -> 
+      -> /Users/mark/1/craft/ya/Engine/Source/Foundation -> dep(ya-foundation-core) -> 
+    sysincludedirs:
+      -> /Users/mark/.xmake/packages/s/sol2/v3.5.0/d7df5e1a04454236869a53686d4fdd49/include -> package(sol2) -> 
+      -> /Users/mark/.xmake/packages/l/lua/v5.4.8/0ead44f082a9434588cde7253d065903/include/lua -> package(lua) -> 
+      -> /Users/mark/.xmake/packages/c/cxxopts/v3.3.1/9fd3f3e6528043a4b5120635ad48d633/include -> package(cxxopts) -> 
+      -> /Users/mark/.xmake/packages/g/glm/1.0.3/809056d7ad4b4d1d8d9df26d1bf9faed/include -> package(glm) -> 
+      -> /Users/mark/.xmake/packages/n/nlohmann_json/v3.12.0/3b425cf7b9154348b2259d59ddf47f26/include -> package(nlohmann_json) -> 
+      -> /Users/mark/.xmake/packages/q/quickjs-ng/v0.15.1/2a25d0f8bd7642ceb7b5a5c6b3580597/include -> package(quickjs-ng) -> 
+      -> /Users/mark/.xmake/packages/e/entt/v3.15.0/d612b0e9693345e9af8353e87a2451b9/include -> package(entt) -> 
+      -> /Users/mark/.xmake/packages/o/opengl-headers/2024.01.04/bbc26f0283d24abdb1a6b19e861376f2/include -> dep(ya-foundation-core) -> packages -> 
+      -> /Users/mark/1/craft/ya/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/include -> dep(ya-foundation-rhi) -> packages -> 
+      -> /Users/mark/.xmake/packages/e/egl-headers/2023.12.16/fd46ac16f3e442c4a79a6b8b9c4e66d4/include -> dep(ya-foundation-core) -> packages -> 
+      -> /Users/mark/.xmake/packages/g/glm/1.0.3/809056d7ad4b4d1d8d9df26d1bf9faed/include -> dep(ya-foundation-core) -> packages -> 
+      -> /Users/mark/.xmake/packages/l/libsdl3/3.4.12/960bb66c5c52410e9eb2244f55b43df9/include -> dep(ya-foundation-core) -> packages -> 
+      -> /Users/mark/.xmake/packages/n/nlohmann_json/v3.12.0/3b425cf7b9154348b2259d59ddf47f26/include -> dep(ya-foundation-core) -> packages -> 
+      -> /Users/mark/.xmake/packages/e/entt/v3.15.0/d612b0e9693345e9af8353e87a2451b9/include -> dep(ya-foundation-rhi) -> packages -> 
+    files:
+      -> Engine/Source/Framework/Game/Gameplay/ECS/**.cpp -> ./Engine/Source/Framework/Game/Gameplay/ECS/xmake.lua:8
+    compiler (cxx): /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++
+      -> -Qunused-arguments -target arm64-apple-macos26.5 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk -fPIC -Wall -Wextra -std=c++20 -I/Users/mark/1/craft/ya/Engine/Source/Framework/Game/Gameplay -I/Users/mark/1/craft/ya/Engine/Source/Framework/Game -I/Users/mark/1/craft/ya/Engine/Source/Framework/Game/Scene -I/Users/mark/1/craft/ya/Engine/Source/Framework/Game/Render -I/Users/mark/1/craft/ya/Engine/Source/Framework -I/Users/mark/1/craft/ya/Engine/Source/Product -I/Users/mark/1/craft/ya/Engine/Source/Foundation/RHI/../../../Shader/Slang/Generated -I/Users/mark/1/craft/ya/Engine/Source/Foundation/RHI/../../../Shader/GLSL/Generated -I/Users/mark/1/craft/ya/Engine/Source/Foundation -IEngine/Plugins/log.cc/src/include -IEngine/Plugins/reflects/core/includes -IEngine/Plugins/utility.cc/src/include -DYA_BUILD_MODE_DEBUG -DBUILD_DEBUG -DYA_PROFILING_CONDITIONAL -DYA_MODULE_BUILD=1 -DYA_GAMEPLAY_ECS_API=YA_API_EXPORT -DYA_RHI_BACKEND_API=YA_API_EXPORT -DYA_GUI_API=YA_API_EXPORT -DYA_SCENE_3D_API=YA_API_EXPORT -DYA_RESOURCE_API=YA_API_EXPORT -DYA_RENDER_GRAPH_API=YA_API_EXPORT -DYA_RENDER_3D_API=YA_API_EXPORT -DYA_PHYSICS_API=YA_API_EXPORT -DYA_HOST_API=YA_API_EXPORT -DYA_EDITOR_API=YA_API_EXPORT -DYA_RHI_API=YA_API_EXPORT -DYA_SHARED=1 -DYA_CORE_API=YA_API_EXPORT -DBUILD_SHARED_REFLECTS_CORE=1 -isystem /Users/mark/.xmake/packages/s/sol2/v3.5.0/d7df5e1a04454236869a53686d4fdd49/include -isystem /Users/mark/.xmake/packages/l/lua/v5.4.8/0ead44f082a9434588cde7253d065903/include/lua -isystem /Users/mark/.xmake/packages/q/quickjs-ng/v0.15.1/2a25d0f8bd7642ceb7b5a5c6b3580597/include -isystem /Users/mark/.xmake/packages/c/cxxopts/v3.3.1/9fd3f3e6528043a4b5120635ad48d633/include -isystem /Users/mark/.xmake/packages/e/entt/v3.15.0/d612b0e9693345e9af8353e87a2451b9/include -isystem /Users/mark/1/craft/ya/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/include -isystem /Users/mark/.xmake/packages/g/glm/1.0.3/809056d7ad4b4d1d8d9df26d1bf9faed/include -isystem /Users/mark/.xmake/packages/n/nlohmann_json/v3.12.0/3b425cf7b9154348b2259d59ddf47f26/include -isystem /Users/mark/.xmake/packages/l/libsdl3/3.4.12/960bb66c5c52410e9eb2244f55b43df9/include -isystem /Users/mark/.xmake/packages/o/opengl-headers/2024.01.04/bbc26f0283d24abdb1a6b19e861376f2/include -isystem /Users/mark/.xmake/packages/e/egl-headers/2023.12.16/fd46ac16f3e442c4a79a6b8b9c4e66d4/include
+    compflags (cxx):
+      -> -Qunused-arguments -target arm64-apple-macos26.5 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk -fPIC -Wall -Wextra -std=c++20 -I/Users/mark/1/craft/ya/Engine/Source/Framework/Game/Gameplay -I/Users/mark/1/craft/ya/Engine/Source/Framework/Game -I/Users/mark/1/craft/ya/Engine/Source/Framework/Game/Scene -I/Users/mark/1/craft/ya/Engine/Source/Framework/Game/Render -I/Users/mark/1/craft/ya/Engine/Source/Framework -I/Users/mark/1/craft/ya/Engine/Source/Product -I/Users/mark/1/craft/ya/Engine/Source/Foundation/RHI/../../../Shader/Slang/Generated -I/Users/mark/1/craft/ya/Engine/Source/Foundation/RHI/../../../Shader/GLSL/Generated -I/Users/mark/1/craft/ya/Engine/Source/Foundation -IEngine/Plugins/log.cc/src/include -IEngine/Plugins/reflects/core/includes -IEngine/Plugins/utility.cc/src/include -DYA_BUILD_MODE_DEBUG -DBUILD_DEBUG -DYA_PROFILING_CONDITIONAL -DYA_MODULE_BUILD=1 -DYA_GAMEPLAY_ECS_API=YA_API_EXPORT -DYA_RHI_BACKEND_API=YA_API_EXPORT -DYA_GUI_API=YA_API_EXPORT -DYA_SCENE_3D_API=YA_API_EXPORT -DYA_RESOURCE_API=YA_API_EXPORT -DYA_RENDER_GRAPH_API=YA_API_EXPORT -DYA_RENDER_3D_API=YA_API_EXPORT -DYA_PHYSICS_API=YA_API_EXPORT -DYA_HOST_API=YA_API_EXPORT -DYA_EDITOR_API=YA_API_EXPORT -DYA_RHI_API=YA_API_EXPORT -DYA_SHARED=1 -DYA_CORE_API=YA_API_EXPORT -DBUILD_SHARED_REFLECTS_CORE=1 -isystem /Users/mark/.xmake/packages/s/sol2/v3.5.0/d7df5e1a04454236869a53686d4fdd49/include -isystem /Users/mark/.xmake/packages/l/lua/v5.4.8/0ead44f082a9434588cde7253d065903/include/lua -isystem /Users/mark/.xmake/packages/q/quickjs-ng/v0.15.1/2a25d0f8bd7642ceb7b5a5c6b3580597/include -isystem /Users/mark/.xmake/packages/c/cxxopts/v3.3.1/9fd3f3e6528043a4b5120635ad48d633/include -isystem /Users/mark/.xmake/packages/e/entt/v3.15.0/d612b0e9693345e9af8353e87a2451b9/include -isystem /Users/mark/1/craft/ya/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/include -isystem /Users/mark/.xmake/packages/g/glm/1.0.3/809056d7ad4b4d1d8d9df26d1bf9faed/include -isystem /Users/mark/.xmake/packages/n/nlohmann_json/v3.12.0/3b425cf7b9154348b2259d59ddf47f26/include -isystem /Users/mark/.xmake/packages/l/libsdl3/3.4.12/960bb66c5c52410e9eb2244f55b43df9/include -isystem /Users/mark/.xmake/packages/o/opengl-headers/2024.01.04/bbc26f0283d24abdb1a6b19e861376f2/include -isystem /Users/mark/.xmake/packages/e/egl-headers/2023.12.16/fd46ac16f3e442c4a79a6b8b9c4e66d4/include
+    linker (sh): /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++
+      -> -shared -target arm64-apple-macos26.5 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk -lz -fPIC -L/Users/mark/.xmake/packages/l/lua/v5.4.8/0ead44f082a9434588cde7253d065903/lib -L/Users/mark/.xmake/packages/q/quickjs-ng/v0.15.1/2a25d0f8bd7642ceb7b5a5c6b3580597/lib -L/Users/mark/1/craft/ya/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/lib -L/Users/mark/.xmake/packages/l/libsdl3/3.4.12/960bb66c5c52410e9eb2244f55b43df9/lib -llua -lqjs -lslang -lshaderc -lshaderc_util -lshaderc_combined -lshaderc_shared -lspirv-cross-core -lspirv-cross-util -lspirv-cross-reflect -lspirv-cross-glsl -lvulkan -lSDL3 -ldl -lm -flat_namespace -undefined dynamic_lookup
+    linkflags (sh):
+      -> -shared -target arm64-apple-macos26.5 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk -lz -fPIC -L/Users/mark/.xmake/packages/l/lua/v5.4.8/0ead44f082a9434588cde7253d065903/lib -L/Users/mark/.xmake/packages/q/quickjs-ng/v0.15.1/2a25d0f8bd7642ceb7b5a5c6b3580597/lib -L/Users/mark/1/craft/ya/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/lib -L/Users/mark/.xmake/packages/l/libsdl3/3.4.12/960bb66c5c52410e9eb2244f55b43df9/lib -llua -lqjs -lslang -lshaderc -lshaderc_util -lshaderc_combined -lshaderc_shared -lspirv-cross-core -lspirv-cross-util -lspirv-cross-reflect -lspirv-cross-glsl -lvulkan -lSDL3 -ldl -lm -flat_namespace -undefined dynamic_lookup

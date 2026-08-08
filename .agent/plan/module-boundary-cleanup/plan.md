@@ -3,10 +3,11 @@
 > 建立日期：2026-08-08  
 > 来源：最近一轮模块拆分、目录分层、导出宏和 include 重构 review。  
 > 状态：执行中；关键架构决策已由用户确认。  
-> 进度：Phase 0、Phase 1 完成（2026-08-08）；Phase 2 已推进第一步——
-> `ya-ecs-core` 落地（2026-08-09），ECS↔Scene 的核心依赖环已在基础设施层
-> 切断；剩余 Phase 2 任务（gameplay-systems / component-linkage /
-> render-ecs-adapters 拆分与 component API 去 Render3D 化）按下文继续。  
+> 进度：Phase 0、Phase 1 完成（2026-08-08）；Phase 2 主体完成（2026-08-09）：
+> `ya-ecs-core` 落地、component 头去 Render3D 化、Transform 组件归位
+> scene-3d（ECS↔Scene 环在 xmake 层完全切断）、`ya-gameplay-systems`
+> 建立、`ya-component-linkage` 拆分落地；剩余为 render-ecs-adapters 目标
+> 建立（render 组件/规则归位）与 fat 模块溶解。  
 > 关系：本计划补充并修正 `gui-framework-module-split`；涉及 ECS、Scene、
 > Resource、Render3D、Host 和 XMake 边界的内容，以本计划为后续执行顺序。
 
@@ -363,33 +364,64 @@ Phase 1 完成（2026-08-08），提交：
       （`Scene/Core/EntitySceneBridge.cpp`）。GUI-only 等无 scene 模块的构建
       自动退化为 registry-only 语义；Windows 下无跨 DLL 成员定义问题。
   - `ya-scene-core` 依赖从 `ya-gameplay-ecs` 改为 `ya-ecs-core`（public）；
-    仍保留一条私有 `ya-gameplay-ecs` 过渡边（Scene.cpp 的 node 创建还用到
-    TransformComponent / ManagedChildComponent，随 Phase 4 scene-3d 归位
-    移除）。
+    TransformComponent / ManagedChildComponent 已随 scene-3d 归位，私有
+    fat-ecs 过渡边已删除（2026-08-09）。
   - `ya-gameplay-ecs`（fat）改为依赖 `ya-ecs-core`（public），并排除
     `Core/**` 源与头文件 glob。
   - 验证：`ya.py cfg` 通过；全目标构建通过；350 测试全通过；运行时 120 帧 +
     编辑器 60 帧冒烟通过。
-- [ ] 新建 `ya-gameplay-systems`：Transform、Animation、Scripting、
-      ModelInstantiation、ResourceResolve。
-- [ ] 新建 `ya-component-linkage`（顶层 framework）：rule registry、component
-      signal bridge、scene lifecycle hook、deferred frame-task scheduler；
-      不依赖 Render3D、GUI、Material 或 Host implementation。
-- [ ] 新建 `ya-render-ecs-adapters`：Material/mesh/model 到 render runtime 的桥接。
-- [ ] 将 `LightBillboardLinkageRule` 放入 `ya-render-ecs-adapters` 的
-      `LightBillboard/` 子域（或独立 `ya-render-light-billboard-adapter`），而不是
-      让 `ya-component-linkage` 反向依赖 billboard。
-- [ ] 将 `MaterialRenderLinkageRule` 放入 render adapter 的 `Material/` 子域；
-      material component 的存在/移除与 `RenderComponent` 的拓扑同步不属于
-      linkage framework 本身。
-- [ ] ECS 原始 component 头文件继续放在源码目录，公共访问通过 `include/ECS/`
-      转发头；公共 component API 只保留：
-      value types、asset handles、entity ids、轻量 descriptor。
-- [ ] 将具体 `Render3D::Material`、`Resource::Model`、GPU image/view 等类型从
-      ECS public header 移除。
-- [ ] 需要实现类型的地方使用前置声明、内部原始头文件或 adapter cpp。
-- [ ] 取消 ECS 中 `ya_engine_defines()` 全量注入，改为仅注入本模块宏和实际依赖宏。
+- [x] 新建 `ya-gameplay-systems`：TransformSystem / ScriptingSystem /
+      JSScriptingSystem 已迁入（`Framework/Game/Gameplay/Systems/`，依赖
+      ecs-core + scene 线，无 Host/Render3D）。Animation / ModelInstantiation /
+      ResourceResolve / LuaScripting 待 fat 模块溶解时并入（依赖 fat 组件或
+      Host 服务注入）。
+  - TransformSystem 增加 `setSceneProvider` 注入缝（Host 在 AppLifecycle
+    绑定），移除 `Host/App.h`。
+  - JS 脚本 API 目录注册（core/asset）从 JSScriptingSystem::init 移到 Host
+    组合层；测试组合层同样自注册。
+  - 消费者 include 从 `ECS/System/*` 改为 `Gameplay/Systems/*`。
+- [x] 新建 `ya-component-linkage`（`Framework/Game/Gameplay/Linkage/`）：
+      `LinkageFramework` = scene lifecycle hook（SceneManager::onSceneInit）+
+      SceneBus 组件移除分发 + rule registry + 延迟 frame-task 调度（带 scene
+      有效性守卫）。依赖 ecs-core + scene 线；Host 注入 SceneManager 与
+      frame-task sink；不持有业务状态。
+- [ ] 新建 `ya-render-ecs-adapters`：Material/mesh/model 到 render runtime 的
+      桥接（规则已落在 Render3D/Adapters/，独立 target 与组件归位待 fat 溶解）。
+- [x] `ComponentLinkageSystem` 拆分为两个 render adapter 规则：
+  - `LightBillboardLinkageRule`（`Render3D/Adapters/LightBillboard/`）：
+    light ↔ billboard + `LightBillboardPolicy`（setter 归属规则，不再挂在
+    framework 全局状态；policy 当前仍为规则静态存储，待 automation RPC 拿到
+    实例后转实例成员）；
+  - `MaterialRenderLinkageRule`（`Render3D/Adapters/Material/`）：
+    material 组件 ↔ RenderComponent 拓扑同步；
+  - 两者经 framework 延迟调度，不再 include `Host/App.h`；
+    AppLifecycle 组合 framework + 规则并注入服务。
+- [x] ECS 原始 component 头文件继续放在源码目录（fat 模块内），公共访问经
+      `include/ECS/` 转发头（组件转发头随 fat 溶解补齐）。
+- [x] 将具体 `Render3D::Material`、`Resource::Mesh/Model` 等类型从 ECS
+      component public header 移除（2026-08-09）：
+  - 组件头不再 include Render3D/Resource/GUI/RHI 头；运行时指针改为前置声明的
+    不透明句柄（沿用 Core AssetRef 模式）。
+  - `MaterialComponent` 模板改为继承非模板 `MaterialComponentBase`：运行时
+    material 存储/析构经 fat 模块 out-of-line 实现（MaterialFactory），
+    scene/serialization/ecs-core TU 构造/销毁材质组件不再触达 Render3D。
+  - material 组件公共 API 改用组件本地槽位枚举（EPBRMaterialTextureSlot /
+    EPhongMaterialTextureSlot / EUnlitMaterialTextureSlot，与 Render3D
+    EResource 顺序 1:1，cpp 内映射）。
+  - `TextureSlot`/`SamplerConfig`/采样器枚举下沉 Core
+    （`Core/Common/TextureSlot.h` / `SamplerEnums.h`）；GPU 侧转换移到 GUI
+    `TextureSlotBinding.h`（白纹理/棋盘格/默认采样器回退）。
+  - 遗留：Skybox/EnvironmentLighting（RHI 纹理描述符，Phase 3）、
+    SkeletonAnimator（SkeletonPose 值成员，Phase 3 资源分层）。
+- [x] 需要实现类型的地方使用前置声明、内部原始头文件或 adapter cpp。
+- [ ] 取消 ECS 中 `ya_engine_defines()` 全量注入（ecs-core / gameplay-systems
+      已无；fat 模块待溶解时移除）。
 - [ ] ECS target 不得声明 Host、Render3D、GUI 的 public deps。
+
+> Phase 2 提前落地的 Phase 4 归属调整（2026-08-09）：
+> `TransformComponent` / `ManagedChildComponent` 移入 `ya-scene-3d`（与 Node3D
+> 同属 scene 线）；`ya-scene-3d` 依赖收敛为 gui + ecs-core + core；
+> `ya-scene-core` 移除最后一条 fat-ecs 依赖边——ECS↔Scene 环在 xmake 层完全切断。
 
 验收：
 
@@ -876,23 +908,28 @@ python3 Script/ya.py test --target ya --filter Physics
 
 ## 8. 当前执行入口
 
-Phase 0、Phase 1 已完成；Phase 2 第一步（`ya-ecs-core`）已完成（2026-08-09，
-提交 `[ecs] split core ECS infrastructure into ya-ecs-core`）。
+Phase 0、Phase 1 已完成；Phase 2 主体已完成（2026-08-09）：
 
-Phase 2 剩余执行顺序：
+1. `[ecs] split core ECS infrastructure into ya-ecs-core`（85e4f48a）
+2. `[core] move texture-slot descriptor out of Render3D into Core`（e7d03c93）
+3. `[ecs] make component headers renderer-independent`（36bae349）
+4. `[scene] move TransformComponent/ManagedChildComponent into scene-3d`（fd02a454）
+5. `[gameplay] create ya-gameplay-systems ...`（4e55fbc9）
+6. `[gameplay] split component linkage framework from render rules`（5b1f70c4）
 
-1. `ya-gameplay-systems`：先做系统级依赖注入（LuaScripting / ModelInstantiation /
-   ResourceResolve / Transform / IRender 目前仍 include `Host/App.h`，需改为
-   scene/服务注入），再把 Transform/Scripting/ModelInstantiation/ResourceResolve/
-   Animation 系统物理迁入新 target；Animation target 并入。
-2. `ya-component-linkage`：从 `Render3D/Adapters/LightBillboard/ComponentLinkageSystem`
-   抽出通用 framework（rule registry / signal bridge / scene lifecycle hook /
-   deferred scheduler），业务规则拆为 `LightBillboardLinkageRule`（render
-   adapter 侧）与 `MaterialRenderLinkageRule`；framework 不依赖 Render3D/Host。
-3. `ya-render-ecs-adapters`：先落实决策 3-A（公共 component 只用 value types /
-   asset handles / entity ids / 轻量 descriptor，移除 `Render3D::Material*`、
-   `Resource::Mesh*` 等具体类型），再把 Material/mesh/model 桥接迁入。
-4. 收尾：fat `ya-gameplay-ecs` 溶解、`ya_engine_defines()` 移除、转发头补齐。
+Phase 2 剩余：
+
+1. `ya-render-ecs-adapters` 独立 target：把 Material/Mesh/Billboard/Model
+   组件（含 resolve 桥接 cpp）与两个 linkage 规则从 fat/render-3d 归位到
+   adapter target（依赖 ecs-core + Resource + Render3D）；消费者 include
+   相应更新。
+2. 剩余系统迁入 `ya-gameplay-systems`：ResourceResolve（注入 frame-index
+   提供者）、ModelInstantiation（注入 scene 提供者 + 迁出 Render3D 材质
+   创建）、LuaScripting（注入 input/time/scene 服务）、Animation 并入
+   （SkeletonAnimator 的 SkeletonPose 值成员需 Phase 3 资源分层后迁移）。
+3. fat `ya-gameplay-ecs` 溶解：纯 gameplay 组件归 gameplay 层；移除
+   `ya_engine_defines()` 与 tier include；组件转发头补齐。
+4. Phase 2 验收收尾：`xmake show -t ya-render-ecs-adapters` 等。
 
 随后进入 Phase 3，把当前仍处于过渡态的 ResourceResolve/EnvironmentLighting/
 Terrain/OffscreenJobQueue 边界闭合。Phase 5.5 再基于稳定的 Core/RHI/GUI 边界

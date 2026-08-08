@@ -1,0 +1,115 @@
+The information of target(ya-foundation-rhi-backend):
+    at: /Users/mark/1/craft/ya/Engine/Source/Foundation/RHI/Backend/xmake.lua
+    kind: shared
+    targetfile: build/macosx/arm64/debug/libya-foundation-rhi-backend.dylib
+    deps:
+      -> ya-foundation-rhi -> ./Engine/Source/Foundation/RHI/Backend/xmake.lua:12
+    rules:
+      -> mode.debug -> ./xmake.lua:1
+      -> mode.releasedbg -> ./xmake.lua:1
+      -> mode.release -> ./xmake.lua:1
+      -> mode.profile -> ./xmake.lua:1
+      -> plugin.compile_commands.autoupdate -> ./xmake.lua:100
+      -> c++.unity_build -> ./Engine/Source/xmake.lua:57
+    packages:
+      -> vulkansdk -> ./Engine/Source/Foundation/RHI/Backend/xmake.lua:13
+      -> vulkan-memory-allocator -> ./Engine/Source/Foundation/RHI/Backend/xmake.lua:13
+      -> glad -> ./Engine/Source/Foundation/RHI/Backend/xmake.lua:14
+      -> stb -> ./Engine/Source/Foundation/RHI/Backend/xmake.lua:14
+      -> ktx -> ./Engine/Source/Foundation/RHI/Backend/xmake.lua:14
+      -> cxxopts -> ./Engine/Source/Foundation/RHI/Backend/xmake.lua:14
+    links:
+      -> shaderc_util -> package(vulkansdk) -> 
+      -> shaderc_shared -> package(vulkansdk) -> 
+      -> vulkan -> package(vulkansdk) -> 
+      -> slang -> package(vulkansdk) -> 
+      -> spirv-cross-core -> package(vulkansdk) -> 
+      -> zstd -> package(ktx) -> 
+      -> shaderc -> package(vulkansdk) -> 
+      -> astcenc-avx2-static -> package(ktx) -> 
+      -> astcenc-neon-static -> package(ktx) -> 
+      -> astcenc-sse4.1-static -> package(ktx) -> 
+      -> spirv-cross-util -> package(vulkansdk) -> 
+      -> ktx -> package(ktx) -> 
+      -> glad -> package(glad) -> 
+      -> spirv-cross-glsl -> package(vulkansdk) -> 
+      -> shaderc_combined -> package(vulkansdk) -> 
+      -> spirv-cross-reflect -> package(vulkansdk) -> 
+      -> shaderc_util -> dep(ya-foundation-rhi) -> packages -> 
+      -> shaderc_shared -> dep(ya-foundation-rhi) -> packages -> 
+      -> vulkan -> dep(ya-foundation-rhi) -> packages -> 
+      -> slang -> dep(ya-foundation-rhi) -> packages -> 
+      -> spirv-cross-core -> dep(ya-foundation-rhi) -> packages -> 
+      -> shaderc -> dep(ya-foundation-rhi) -> packages -> 
+      -> spirv-cross-util -> dep(ya-foundation-rhi) -> packages -> 
+      -> shaderc_combined -> dep(ya-foundation-rhi) -> packages -> 
+      -> spirv-cross-glsl -> dep(ya-foundation-rhi) -> packages -> 
+      -> SDL3 -> dep(ya-foundation-core) -> packages -> 
+      -> spirv-cross-reflect -> dep(ya-foundation-rhi) -> packages -> 
+    ldflags:
+      -> -flat_namespace -> ./xmake.lua:24
+    shflags:
+      -> -flat_namespace -> ./xmake.lua:25
+    defines:
+      -> YA_BUILD_MODE_DEBUG -> ./xmake.lua:68
+      -> BUILD_DEBUG -> ./xmake.lua:78
+      -> YA_PROFILING_CONDITIONAL -> ./xmake.lua:84
+      -> YA_SHARED=1 -> ./Engine/Source/xmake.lua:54
+      -> YA_MODULE_BUILD=1 -> ./Engine/Source/xmake.lua:53
+      -> YA_RHI_BACKEND_API=YA_API_EXPORT -> ./Engine/Source/xmake.lua:55
+      -> KHRONOS_STATIC -> package(ktx) -> 
+      -> KTX_FEATURE_KTX2 -> package(ktx) -> 
+      -> KTX_FEATURE_KTX1 -> package(ktx) -> 
+      -> YA_CORE_API=YA_API_EXPORT -> dep(ya-foundation-core) -> 
+      -> BUILD_SHARED_REFLECTS_CORE=1 -> dep(reflects-core) -> 
+      -> YA_SHARED=1 -> dep(ya-foundation-core) -> 
+      -> YA_RHI_API=YA_API_EXPORT -> dep(ya-foundation-rhi) -> 
+    linkdirs:
+      -> /Users/mark/1/craft/ya/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/lib -> package(vulkansdk) -> 
+      -> /Users/mark/.xmake/packages/g/glad/v0.1.36/c524bacf762d48ce82ff4648b8cf352e/lib -> package(glad) -> 
+      -> /Users/mark/.xmake/packages/z/zstd/v1.5.7/8c50f6dddf834f6b9cc11778f590fdec/lib -> package(ktx) -> 
+      -> /Users/mark/.xmake/packages/k/ktx/v4.4.2/e5976e21259243f6a38885275a7179a2/lib -> package(ktx) -> 
+      -> /Users/mark/.xmake/packages/a/astc-encoder/5.3.0/a6c75ea41d7648de8664063125dbd588/lib -> package(ktx) -> 
+      -> /Users/mark/.xmake/packages/l/libsdl3/3.4.12/960bb66c5c52410e9eb2244f55b43df9/lib -> dep(ya-foundation-core) -> packages -> 
+      -> /Users/mark/1/craft/ya/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/lib -> dep(ya-foundation-rhi) -> packages -> 
+    includedirs:
+      -> /Users/mark/1/craft/ya/Engine/Source/Foundation -> ./Engine/Source/xmake.lua:41
+      -> Engine/Plugins/utility.cc/src/include -> dep(utility.cc) -> 
+      -> Engine/Plugins/log.cc/src/include -> dep(log.cc) -> 
+      -> /Users/mark/1/craft/ya/Engine/Source/Foundation/RHI/../../../Shader/Slang/Generated -> dep(ya-foundation-rhi) -> 
+      -> Engine/Plugins/reflects/core/includes -> dep(reflects-core) -> 
+      -> /Users/mark/1/craft/ya/Engine/Source/Foundation -> dep(ya-foundation-core) -> 
+      -> /Users/mark/1/craft/ya/Engine/Source/Foundation/RHI/../../../Shader/GLSL/Generated -> dep(ya-foundation-rhi) -> 
+    sysincludedirs:
+      -> /Users/mark/.xmake/packages/g/glad/v0.1.36/c524bacf762d48ce82ff4648b8cf352e/include -> package(glad) -> 
+      -> /Users/mark/.xmake/packages/v/vulkan-headers/1.4.335+0/d65d0adbd00b4c368a17c228329cbe03/include -> package(vulkan-memory-allocator) -> 
+      -> /Users/mark/.xmake/packages/s/stb/2026.03.18/5a142dc04ed4408bb23577a4d3bc3715/include/stb -> package(stb) -> 
+      -> /Users/mark/1/craft/ya/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/include -> package(vulkansdk) -> 
+      -> /Users/mark/.xmake/packages/s/stb/2026.03.18/5a142dc04ed4408bb23577a4d3bc3715/include -> package(stb) -> 
+      -> /Users/mark/.xmake/packages/z/zstd/v1.5.7/8c50f6dddf834f6b9cc11778f590fdec/include -> package(ktx) -> 
+      -> /Users/mark/.xmake/packages/v/vulkan-memory-allocator/v3.3.0/d7bea9c0cf8c426a8cdbb156750b57a1/include -> package(vulkan-memory-allocator) -> 
+      -> /Users/mark/.xmake/packages/c/cxxopts/v3.3.1/9fd3f3e6528043a4b5120635ad48d633/include -> package(cxxopts) -> 
+      -> /Users/mark/.xmake/packages/k/ktx/v4.4.2/e5976e21259243f6a38885275a7179a2/include -> package(ktx) -> 
+      -> /Users/mark/.xmake/packages/a/astc-encoder/5.3.0/a6c75ea41d7648de8664063125dbd588/include -> package(ktx) -> 
+      -> /Users/mark/.xmake/packages/g/glm/1.0.3/809056d7ad4b4d1d8d9df26d1bf9faed/include -> dep(ya-foundation-core) -> packages -> 
+      -> /Users/mark/.xmake/packages/n/nlohmann_json/v3.12.0/3b425cf7b9154348b2259d59ddf47f26/include -> dep(ya-foundation-core) -> packages -> 
+      -> /Users/mark/.xmake/packages/o/opengl-headers/2024.01.04/bbc26f0283d24abdb1a6b19e861376f2/include -> dep(ya-foundation-core) -> packages -> 
+      -> /Users/mark/.xmake/packages/l/libsdl3/3.4.12/960bb66c5c52410e9eb2244f55b43df9/include -> dep(ya-foundation-core) -> packages -> 
+      -> /Users/mark/.xmake/packages/e/egl-headers/2023.12.16/fd46ac16f3e442c4a79a6b8b9c4e66d4/include -> dep(ya-foundation-core) -> packages -> 
+      -> /Users/mark/.xmake/packages/e/entt/v3.15.0/d612b0e9693345e9af8353e87a2451b9/include -> dep(ya-foundation-rhi) -> packages -> 
+      -> /Users/mark/1/craft/ya/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/include -> dep(ya-foundation-rhi) -> packages -> 
+    headerfiles:
+      -> Engine/Source/Foundation/RHI/Backend/**.h -> ./Engine/Source/Foundation/RHI/Backend/xmake.lua:11
+      -> Engine/Plugins/utility.cc/src/**.h -> dep(utility.cc) -> 
+    files:
+      -> Engine/Source/Foundation/RHI/Backend/**.cpp|OpenGL/**.cpp|Vulkan/VulkanMemoryAllocator.cpp|STB.cpp -> ./Engine/Source/Foundation/RHI/Backend/xmake.lua:8
+      -> Engine/Source/Foundation/RHI/Backend/Vulkan/VulkanMemoryAllocator.cpp -> ./Engine/Source/Foundation/RHI/Backend/xmake.lua:9
+      -> Engine/Source/Foundation/RHI/Backend/STB.cpp -> ./Engine/Source/Foundation/RHI/Backend/xmake.lua:10
+    compiler (cxx): /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++
+      -> -Qunused-arguments -target arm64-apple-macos26.5 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk -fPIC -Wall -Wextra -std=c++20 -I/Users/mark/1/craft/ya/Engine/Source/Foundation/RHI/../../../Shader/Slang/Generated -I/Users/mark/1/craft/ya/Engine/Source/Foundation/RHI/../../../Shader/GLSL/Generated -I/Users/mark/1/craft/ya/Engine/Source/Foundation -IEngine/Plugins/log.cc/src/include -IEngine/Plugins/reflects/core/includes -IEngine/Plugins/utility.cc/src/include -DYA_BUILD_MODE_DEBUG -DBUILD_DEBUG -DYA_PROFILING_CONDITIONAL -DYA_MODULE_BUILD=1 -DYA_RHI_BACKEND_API=YA_API_EXPORT -DKHRONOS_STATIC -DKTX_FEATURE_KTX1 -DKTX_FEATURE_KTX2 -DYA_RHI_API=YA_API_EXPORT -DYA_SHARED=1 -DYA_CORE_API=YA_API_EXPORT -DBUILD_SHARED_REFLECTS_CORE=1 -isystem /Users/mark/.xmake/packages/v/vulkan-memory-allocator/v3.3.0/d7bea9c0cf8c426a8cdbb156750b57a1/include -isystem /Users/mark/.xmake/packages/v/vulkan-headers/1.4.335+0/d65d0adbd00b4c368a17c228329cbe03/include -isystem /Users/mark/.xmake/packages/g/glad/v0.1.36/c524bacf762d48ce82ff4648b8cf352e/include -isystem /Users/mark/.xmake/packages/s/stb/2026.03.18/5a142dc04ed4408bb23577a4d3bc3715/include -isystem /Users/mark/.xmake/packages/s/stb/2026.03.18/5a142dc04ed4408bb23577a4d3bc3715/include/stb -isystem /Users/mark/.xmake/packages/k/ktx/v4.4.2/e5976e21259243f6a38885275a7179a2/include -isystem /Users/mark/.xmake/packages/a/astc-encoder/5.3.0/a6c75ea41d7648de8664063125dbd588/include -isystem /Users/mark/.xmake/packages/z/zstd/v1.5.7/8c50f6dddf834f6b9cc11778f590fdec/include -isystem /Users/mark/.xmake/packages/c/cxxopts/v3.3.1/9fd3f3e6528043a4b5120635ad48d633/include -isystem /Users/mark/.xmake/packages/e/entt/v3.15.0/d612b0e9693345e9af8353e87a2451b9/include -isystem /Users/mark/1/craft/ya/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/include -isystem /Users/mark/.xmake/packages/g/glm/1.0.3/809056d7ad4b4d1d8d9df26d1bf9faed/include -isystem /Users/mark/.xmake/packages/n/nlohmann_json/v3.12.0/3b425cf7b9154348b2259d59ddf47f26/include -isystem /Users/mark/.xmake/packages/l/libsdl3/3.4.12/960bb66c5c52410e9eb2244f55b43df9/include -isystem /Users/mark/.xmake/packages/o/opengl-headers/2024.01.04/bbc26f0283d24abdb1a6b19e861376f2/include -isystem /Users/mark/.xmake/packages/e/egl-headers/2023.12.16/fd46ac16f3e442c4a79a6b8b9c4e66d4/include
+    compflags (cxx):
+      -> -Qunused-arguments -target arm64-apple-macos26.5 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk -fPIC -Wall -Wextra -std=c++20 -I/Users/mark/1/craft/ya/Engine/Source/Foundation/RHI/../../../Shader/Slang/Generated -I/Users/mark/1/craft/ya/Engine/Source/Foundation/RHI/../../../Shader/GLSL/Generated -I/Users/mark/1/craft/ya/Engine/Source/Foundation -IEngine/Plugins/log.cc/src/include -IEngine/Plugins/reflects/core/includes -IEngine/Plugins/utility.cc/src/include -DYA_BUILD_MODE_DEBUG -DBUILD_DEBUG -DYA_PROFILING_CONDITIONAL -DYA_MODULE_BUILD=1 -DYA_RHI_BACKEND_API=YA_API_EXPORT -DKHRONOS_STATIC -DKTX_FEATURE_KTX1 -DKTX_FEATURE_KTX2 -DYA_RHI_API=YA_API_EXPORT -DYA_SHARED=1 -DYA_CORE_API=YA_API_EXPORT -DBUILD_SHARED_REFLECTS_CORE=1 -isystem /Users/mark/.xmake/packages/v/vulkan-memory-allocator/v3.3.0/d7bea9c0cf8c426a8cdbb156750b57a1/include -isystem /Users/mark/.xmake/packages/v/vulkan-headers/1.4.335+0/d65d0adbd00b4c368a17c228329cbe03/include -isystem /Users/mark/.xmake/packages/g/glad/v0.1.36/c524bacf762d48ce82ff4648b8cf352e/include -isystem /Users/mark/.xmake/packages/s/stb/2026.03.18/5a142dc04ed4408bb23577a4d3bc3715/include -isystem /Users/mark/.xmake/packages/s/stb/2026.03.18/5a142dc04ed4408bb23577a4d3bc3715/include/stb -isystem /Users/mark/.xmake/packages/k/ktx/v4.4.2/e5976e21259243f6a38885275a7179a2/include -isystem /Users/mark/.xmake/packages/a/astc-encoder/5.3.0/a6c75ea41d7648de8664063125dbd588/include -isystem /Users/mark/.xmake/packages/z/zstd/v1.5.7/8c50f6dddf834f6b9cc11778f590fdec/include -isystem /Users/mark/.xmake/packages/c/cxxopts/v3.3.1/9fd3f3e6528043a4b5120635ad48d633/include -isystem /Users/mark/.xmake/packages/e/entt/v3.15.0/d612b0e9693345e9af8353e87a2451b9/include -isystem /Users/mark/1/craft/ya/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/include -isystem /Users/mark/.xmake/packages/g/glm/1.0.3/809056d7ad4b4d1d8d9df26d1bf9faed/include -isystem /Users/mark/.xmake/packages/n/nlohmann_json/v3.12.0/3b425cf7b9154348b2259d59ddf47f26/include -isystem /Users/mark/.xmake/packages/l/libsdl3/3.4.12/960bb66c5c52410e9eb2244f55b43df9/include -isystem /Users/mark/.xmake/packages/o/opengl-headers/2024.01.04/bbc26f0283d24abdb1a6b19e861376f2/include -isystem /Users/mark/.xmake/packages/e/egl-headers/2023.12.16/fd46ac16f3e442c4a79a6b8b9c4e66d4/include
+    linker (sh): /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++
+      -> -shared -target arm64-apple-macos26.5 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk -lz -fPIC -L/Users/mark/.xmake/packages/g/glad/v0.1.36/c524bacf762d48ce82ff4648b8cf352e/lib -L/Users/mark/.xmake/packages/k/ktx/v4.4.2/e5976e21259243f6a38885275a7179a2/lib -L/Users/mark/.xmake/packages/a/astc-encoder/5.3.0/a6c75ea41d7648de8664063125dbd588/lib -L/Users/mark/.xmake/packages/z/zstd/v1.5.7/8c50f6dddf834f6b9cc11778f590fdec/lib -L/Users/mark/1/craft/ya/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/lib -L/Users/mark/.xmake/packages/l/libsdl3/3.4.12/960bb66c5c52410e9eb2244f55b43df9/lib -lglad -lktx -lastcenc-sse4.1-static -lastcenc-neon-static -lastcenc-avx2-static -lzstd -lslang -lshaderc -lshaderc_util -lshaderc_combined -lshaderc_shared -lspirv-cross-core -lspirv-cross-util -lspirv-cross-reflect -lspirv-cross-glsl -lvulkan -lSDL3 -flat_namespace
+    linkflags (sh):
+      -> -shared -target arm64-apple-macos26.5 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk -lz -fPIC -L/Users/mark/.xmake/packages/g/glad/v0.1.36/c524bacf762d48ce82ff4648b8cf352e/lib -L/Users/mark/.xmake/packages/k/ktx/v4.4.2/e5976e21259243f6a38885275a7179a2/lib -L/Users/mark/.xmake/packages/a/astc-encoder/5.3.0/a6c75ea41d7648de8664063125dbd588/lib -L/Users/mark/.xmake/packages/z/zstd/v1.5.7/8c50f6dddf834f6b9cc11778f590fdec/lib -L/Users/mark/1/craft/ya/Engine/ThirdParty/VulkanSDK/1.4.341.1/macOS/lib -L/Users/mark/.xmake/packages/l/libsdl3/3.4.12/960bb66c5c52410e9eb2244f55b43df9/lib -lglad -lktx -lastcenc-sse4.1-static -lastcenc-neon-static -lastcenc-avx2-static -lzstd -lslang -lshaderc -lshaderc_util -lshaderc_combined -lshaderc_shared -lspirv-cross-core -lspirv-cross-util -lspirv-cross-reflect -lspirv-cross-glsl -lvulkan -lSDL3 -flat_namespace
