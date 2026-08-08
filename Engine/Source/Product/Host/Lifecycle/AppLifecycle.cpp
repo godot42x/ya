@@ -35,7 +35,7 @@
 
 #include "Render3D/Material/MaterialFactory.h"
 
-#include "Gameplay/Animation/AnimationSystem.h"
+#include "Gameplay/Systems/AnimationSystem.h"
 
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"

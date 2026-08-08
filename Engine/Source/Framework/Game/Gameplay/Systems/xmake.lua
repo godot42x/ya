@@ -7,5 +7,7 @@ target("ya-gameplay-systems")
     ya_tier_include("Gameplay")
     add_files("**.cpp")
     add_headerfiles("**.h")
-    add_deps("ya-foundation-core", "ya-ecs-core", "ya-scene-core", "ya-scene-3d", { public = true })
+    -- Public headers reach Resource types (SkeletonAnimatorComponent holds
+    -- skeleton data); ECS + scene line for the systems.
+    add_deps("ya-foundation-core", "ya-ecs-core", "ya-resource", "ya-scene-core", "ya-scene-3d", { public = true })
     add_packages("quickjs-ng", "nlohmann_json", "entt", "glm")

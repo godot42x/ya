@@ -8,8 +8,6 @@ target("ya-host")
     -- Host binds the scene lifecycle sink and drives Scene/SceneManager from
     -- its own TUs; public headers only forward-declare scene types.
     add_deps("ya-scene-core", "ya-scene-runtime")
-    -- Host constructs and binds the gameplay systems (animation, ...).
-    add_deps("ya-gameplay-animation")
     -- Host composes the render ECS adapters (linkage rules).
     add_deps("ya-render-ecs-adapters")
     add_packages("libsdl3", "glm", "nlohmann_json", "cxxopts", { public = true })

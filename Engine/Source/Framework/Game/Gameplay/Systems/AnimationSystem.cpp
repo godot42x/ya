@@ -1,6 +1,6 @@
-#include "Gameplay/Animation/AnimationSystem.h"
+#include "Gameplay/Systems/AnimationSystem.h"
 
-#include "ECS/Component/SkeletonAnimatorComponent.h"
+#include "Gameplay/Systems/SkeletonAnimatorComponent.h"
 #include "Resource/SkeletonAnimationSampler.h"
 #include "Scene/Core/Scene.h"
 

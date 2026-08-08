@@ -16,7 +16,7 @@
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/PointLightComponent.h"
-#include "ECS/Component/SkeletonAnimatorComponent.h"
+#include "Gameplay/Systems/SkeletonAnimatorComponent.h"
 #include "ECS/Component/Terrain/TerrainComponent.h"
 #include "Scene3D/TransformComponent.h"
 #include "Gameplay/Systems/TransformSystem.h"
