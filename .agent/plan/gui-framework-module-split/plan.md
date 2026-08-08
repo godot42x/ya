@@ -360,3 +360,46 @@ VulkanRender 持有 `nativeWindow + IWindowProvider`，rhi-backend 不能反向�
 
 解耦完成后再恢复 `ya-gui-closure-test` target（测试代码已起草：
 Node 树/绘制序/pickNodeAt 可见性，纯 UI 逻辑）。
+
+### 10.5 二次重构：动态库优先 + 产品线分层（2026-08-08 执行）
+
+**目录**：`Engine/Source` 按产品线物理分层——
+`Foundation/`（Core、RHI、RHI/Backend）、`Framework/GUI/Runtime/`
+（Draw2D、Resource、Scene、Compose；`Node` 场景树基类随 GUI）、
+`Framework/Game/`（Scene/Scene3D、Resource、Render/Graph、Render/Render3D、
+Gameplay/ECS、Physics）、`Product/`（Host、Editor）。每个模块独立
+`xmake.lua`（glob 源码 + 显式 deps/packages/include），`Source/xmake.lua`
+只保留薄封装 `ya_std_module()`（导出宏注入 + unity）与 `ya_engine_defines()`。
+
+**构建形态**：模块全部 `set_kind("shared")`；`ya-engine` 降级为 public-deps
+聚合兼容层；`Api.h` 只保留平台判定 `YA_API_EXPORT`，模块宏由 xmake 按模块
+注入（`YA_CORE_API=YA_API_EXPORT`）；`ModuleAnchor` 机制整体删除。
+macOS 多 dylib 基建：flat namespace（weak vtable/typeinfo 跨镜像合并）、
+imgui-local/imguizmo-local 改单一 shared（ImGui 全局状态唯一）。
+
+**GUI 闭包达成**：`ya-gui-runtime` 只依赖 core+rhi+rhi-backend；
+`ya-gui-closure-test` target 只链闭包运行 27 个 Node2D 测试。切断动作：
+Reflection 反射钩子移入 ECS 侧 opt-in；AssetRef 具体类型与 vtable 归 Core +
+`IAssetRefResolver` 注入（Resource 静态注册）；`ResourceRegistry` 下沉 Core
+（cpp 强符号）；Node 基类 ECS-free（`onNameChanged` 钩子）；FontManager 图集
+注册改 sink 注入；backend 经 `IRender`/`RenderCreateInfo` 拿 frame index、
+设备选择配置与 ShaderStorage；默认纹理回退改 `IBuiltinTextureSource`；
+相机控制器移入 Gameplay/ECS/System。
+
+**验证**：350 全量测试 + 27 闭包测试全绿；editor 与游戏路径 8 帧干净退出
+（exit=0，无 Vulkan validation 泄漏）。运行需
+`DYLD_LIBRARY_PATH=build/macosx/arm64/debug:Engine/ThirdParty/VulkanSDK/.../lib`
+（既有行为）。
+
+### 10.6 剩余解耦（下一轮）
+
+- **Game 层 → Host 符号延迟解析**：ECS/Resource/Render3D/Physics 仍直接调用
+  `App` 服务（AppLifecycle 初始化链），macOS 上以
+  `-undefined dynamic_lookup` + flat namespace 过渡；计划以 app-services
+  接口注入替换（App 服务的 `registerFrameTask`/`getRenderServices` 等下沉
+  接口），完成后移除该过渡标志并解锁 Windows 构建。
+- **ya-gameplay 拆分**：ECS 系统与 render-3d/host 深度耦合，暂为胖模块
+  （注入全部引擎导出宏编译）；拆分时随文件迁出。
+- **RenderRuntime.h 对 DeferredPipelineDebugViews 的 include 解耦**（同模块）。
+- **最小 GUI 宿主示例**：只链 `ya-gui-framework` 聚合（core+rhi+backend+
+  gui-runtime）的可运行窗口示例。
