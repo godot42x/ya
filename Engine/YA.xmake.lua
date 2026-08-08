@@ -141,10 +141,20 @@ do
     add_includedirs("./Shader/Slang/Generated", { public = true })
     add_includedirs("./Shader/GLSL/Generated", { public = true })
 
-    add_deps("ya-core", "ya-rhi", "ya-rhi-backend", "ya-render-graph", "ya-ui", "ya-ui-scene", "ya-scene-core", "ya-scene-3d", "ya-ecs", "ya-resource", "ya-render-3d", "ya-physics", "ya-host", { public = true })
+    -- Module deps are intentionally non-public: consumers must link exactly
+    -- one shared library (this aggregate). Public config (include dirs /
+    -- defines / packages) is carried by the aggregate itself below.
+    add_deps("ya-core", "ya-rhi", "ya-rhi-backend", "ya-render-graph", "ya-ui", "ya-ui-scene", "ya-scene-core", "ya-scene-3d", "ya-ecs", "ya-resource", "ya-render-3d", "ya-physics", "ya-host")
     add_deps("utility.cc", "log.cc", "reflects-core", { public = true })
     add_deps("imgui-local")
     add_deps("imguizmo-local")
+
+    -- The aggregate compiles no engine TU of its own, so the linker would
+    -- pull nothing from the module archives and the dylib would export no
+    -- engine symbols. ModuleAnchors.cpp below references one anchor function
+    -- per module; with unity builds (the default) each module is a single
+    -- object, so one reference pulls the whole module into the aggregate.
+    add_files("./Source/ModuleAnchors.cpp")
 
     if is_plat("windows") then
         add_defines("IMGUI_API=__declspec(dllexport)")

@@ -3,6 +3,9 @@
 > 对应 `plan.md`（2026-08-08 建立：RHI 命名、GUI 闭包独立、3D/gameplay 模块化）。
 > 2026-08-08 review 迭代：修正 DeferredDeletionQueue 归属、补充
 > Physics/IWindowProvider/RenderRuntime 耦合、固化 §9 决策。
+> 2026-08-08 执行迭代（reset 到 a27b0034 重做）：目录随模块物理拆分、
+> 每模块 glob 收集源码、导出宏单点化；闭包纯链接验证暴露跨层耦合，
+> 列为后续解耦迭代（见 plan.md §10）。
 
 ## 已完成的前置（2026-08-08 提交）
 
@@ -31,25 +34,49 @@
 - [x] 新增 GUI 自有库 ya-ui（含 Font/Texture）/ ya-ui-scene
 - [x] ya-engine 保持 shared 聚合导出（§9-B），内部拆 static
 - [x] unity_group 按 target 分组
-- [x] 导出宏按库拆分（BUILD_SHARED_YA 传递）
+- [x] 导出宏按库拆分：Api.h 单点定义 YA_*_API，xmake 统一注入
+      （YA_SHARED + YA_MODULE_BUILD，模块零手写导出逻辑）
 - [x] 单例归属固定（Render2D / FontManager / TextureLibrary → ya-ui）
 - [x] 包依赖按库收敛（GUI 闭包：sdl3/glm/freetype/vulkansdk/vma/glad）
 - [ ] GUI 闭包测试 target（Node2D/UISceneRenderer 测试只链闭包）
+      —— 阻塞：纯链接验证暴露跨层耦合，见 plan.md §10；解耦完成前
+      该 target 无法诚实链接（会级联拉入 resource/ecs/host/render-3d）
 
 ## Phase 3 —— 3D / gameplay 拆库
 
-- [ ] ya-resource / ya-ecs / ya-scene-core / ya-scene-3d
-- [ ] ya-render-graph（RDG 迁出 Render/Core/Graph）
+- [x] ya-resource / ya-ecs / ya-scene-core / ya-scene-3d
+- [x] ya-render-graph（RDG 迁出到 RenderGraph/）
 - [ ] ya-gameplay / ya-physics
-- [ ] ya-render-3d（先解耦 RenderRuntime.h 对 DeferredPipelineDebugViews 的 include）
-- [ ] RenderFrameExtractor 数据桥归位
-- [ ] PhysicsDebugDraw 改注入 line 收集器（§9-E）
+- [x] ya-render-3d（RenderRuntime + pipeline + stage）
+- [x] ya-physics（PhysicsDebugDraw 随目录归位到 Render3D/Debug，Physics
+      不再触碰 Render2D；§9-E 以归位方式解决）
+- [x] RenderFrameExtractor 随 Runtime/Application 归位到 Host
+- [ ] ya-gameplay 拆分（Transform/Animation/Scripting/ResourceResolve）：
+      ECS 组件/系统与 render-3d/host 深度耦合（ScriptApi 注册、离线
+      cubemap 预处理），依赖图手术留待后续迭代；ya-ecs 暂为胖模块
+- [ ] RenderRuntime.h 对 DeferredPipelineDebugViews 的 include 解耦
+      （同模块内，优先级低）
 
 ## Phase 4 —— 宿主与验证
 
-- [ ] ya-host / ya-editor
+- [x] ya-host / ya-editor（各自独立 xmake.lua）
 - [ ] 最小 GUI 宿主示例（仅链 GUI 闭包）
 - [ ] shader 生成按消费方分组
+
+## 执行迭代补充（2026-08-08）
+
+- [x] Source 按模块目录物理拆分（Core/RHI/RHI+Backend/RenderGraph/UI/
+      UI+Scene/Scene/Scene+3D/ECS/Resource/Render3D/Physics/Host/Editor），
+      Render/Runtime/Platform/Bus 溶解
+- [x] 每模块独立 xmake.lua + add_files("**.cpp") glob；Source/xmake.lua
+      提供统一 ya_module() helper（导出宏/include 根/unity 分组单点化）
+- [x] Shader 运行时（Slang/shaderc/spirv-cross）归入 RHI
+- [x] 单头第三方实现归位：VMA/STB → RHI/Backend，TinyGLTF → Resource
+- [x] ResourceStateTracker → RHI/Core；DeferredDeletionQueue → Core/Common；
+      profiling 运行时状态/查询 → Core/Profiling
+- [x] RenderViewportOverlayRecorder 拆分：compose pass → UI/Scene/
+      Render2DComposePass，overlay pass → Render3D/Common/RenderOverlay
+- [x] 删除全注释死代码 UIRender.* / UIComponentSytstem.* / SceneRenderer.h
 
 ## 验证命令
 

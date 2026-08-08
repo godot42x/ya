@@ -285,3 +285,70 @@ VulkanRender 持有 `nativeWindow + IWindowProvider`，rhi-backend 不能反向�
 - GUI 闭包测试 target 全绿（Node2D 布局/渲染/事件测试只链闭包，证明无
   3D/physics/ECS 链接依赖）
 - `xmake f -y` 后 `build --editor`：验证文件列表变更后 unity 重新生成
+
+## 10. 执行迭代记录（2026-08-08，reset 后重做）
+
+### 10.1 已落地（3 个 commit）
+
+- `8d90b9c8` 目录按模块物理拆分 + 每模块独立 xmake.lua（`add_files("**.cpp")`
+  glob），`ya_module()` helper 单点化导出宏/include 根/unity 分组；
+  `ya-engine` 收敛为纯聚合导出。跨层文件归位见 §10.3。
+- `9bd32c87` 导出宏单点化：`Core/Api.h` 一张宏表（`YA_CORE_API`…`YA_EDITOR_API`），
+  xmake 按 target 注入 `YA_SHARED=1` + `YA_MODULE_BUILD=1`，消费方只拿
+  `YA_SHARED=1`（import 侧）；`ENGINE_API` 保留聚合别名。模块零手写导出逻辑。
+- `ce1f045c` 模块边界修正：ResourceStateTracker → RHI/Core、
+  DeferredDeletionQueue → Core/Common、profiling 运行时状态/查询 → Core。
+
+### 10.2 决策更新（覆盖 §9 旧决策）
+
+- **§9-C 目录迁移**：改为"目录随模块走"——每个模块一个物理目录 + 一个
+  `xmake.lua`，禁止跨目录 `add_files("../X/**.cpp")`；include 根统一为
+  `Engine/Source`，路径全量重映射。
+- **源码收集**：模块一律 glob（`add_files("**.cpp")`），不维护文件清单；
+  嵌套模块（RHI/Backend、UI/Scene、Scene/3D）由父 xmake.lua exclude +
+  includes 组合。
+- **导出宏机制**：`Core/Api.h` 是唯一导出事实源（平台逻辑 + 每模块一行宏表），
+  xmake 承担"每个模块不手写宏"的职责——`ya_module()` 统一注入两个 define；
+  未来若单模块独立成 DLL，只需把该模块的 `YA_<M>_API` 独立解析。
+- **Shader 运行时**（Shader.h/.cpp + Shader/ 编译/反射机制）归 RHI：Vulkan/
+  OpenGL pipeline 与 RenderRuntime 共同消费，属渲染抽象层而非 3D 管线。
+- **单头第三方实现归位**：VMA/STB → RHI/Backend（unity_ignored），
+  TinyGLTF → Resource/Model；`Implementaion/` 目录溶解。
+- **§9-E PhysicsDebugDraw**：以"归位"替代注入重构——PhysicsDebugDraw 移入
+  Render3D/Debug（render-3d → ui 为允许边），Physics 模块不再触碰 Render2D。
+- **§9-B 聚合导出**：维持；`ya-engine` 自身源码仅剩 ImGui demo。
+
+### 10.3 跨层文件归属（执行迭代）
+
+- 头在下层/实现归上层：`AssetRef.h` 留 Core/Common（轻量句柄），
+  `AssetRef.cpp` → Resource；`InputRouter`/`ScriptApi*`/`Profiling.cpp` 实现
+  → Host；`ECSRegistry`/`SceneBus` → ECS；`Scene`/`SceneManager`/
+  `SceneSerializer`/`PhysicsDebugDraw` → Render3D。
+- `RenderViewportOverlayRecorder` 拆分：`recordRender2DComposePass` 进框架
+  （UI/Scene/Render2DComposePass），`recordRenderViewportOverlayPass` 留引擎
+  （Render3D/Common/RenderOverlay）。
+- 死代码删除：全注释 `UIRender.*`、`UIComponentSytstem.*`、空壳
+  `Render/RHI/SceneRenderer.h`。
+
+### 10.4 GUI 闭包纯链接验证暴露的跨层耦合（阻塞项，后续迭代）
+
+闭包测试 target（只链 core+rhi+backend+ui+ui-scene+scene-core）无法诚实链接，
+级联会拉入 resource/ecs/host/render-3d。逐项清单：
+
+1. **Reflection.h → ECS 注册钩子**：`YA_REFLECT_BEGIN` 宏内嵌
+   `ECSRegistry::get().registerComponent<T>()`（代码自带
+   `// TODO: should not be in core?`），每个反射 TU 都引用 ECSRegistry。
+   解耦方向：钩子从 Core 宏中移出（ECS 组件侧显式 opt-in 注册），或
+   Core 提供类型擦除回调并解决静态初始化顺序。
+2. **AssetRef 生命周期 → Resource**：`AssetRef.h` 内联代码 +
+   `ReflectionSerializer` 引用 `DefaultAssetRefResolver` 与其派生 ref 的
+   vtable（实现都在 Resource/AssetRef.cpp）。
+3. **UI FontManager → AssetManager**：字体图集注册进资源系统
+   （`AssetManager::registerTexture`），闭包需带 Resource。
+4. **backend → Host**：`VulkanRender` 取 App 描述/帧号、
+   `VulkanPipeline` 取 App 的 ShaderStorage——应改为经 IRender 注入/持有。
+5. **Resource/ECS 胖模块**：`AssetManager`/`ResourceResolveSystem` 引用 App；
+   拆 gameplay 时一并处理。
+
+解耦完成后再恢复 `ya-gui-closure-test` target（测试代码已起草：
+Node 树/绘制序/pickNodeAt 可见性，纯 UI 逻辑）。
