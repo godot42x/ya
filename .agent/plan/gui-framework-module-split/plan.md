@@ -317,6 +317,14 @@ VulkanRender 持有 `nativeWindow + IWindowProvider`，rhi-backend 不能反向�
 - **§9-E PhysicsDebugDraw**：以"归位"替代注入重构——PhysicsDebugDraw 移入
   Render3D/Debug（render-3d → ui 为允许边），Physics 模块不再触碰 Render2D。
 - **§9-B 聚合导出**：维持；`ya-engine` 自身源码仅剩 ImGui demo。
+- **聚合导出机制（关键）**：聚合库自身不编译引擎源码时，静态归档按需
+  拉取（pull-on-demand）会让 dylib 不导出任何引擎符号，消费方被迫内嵌
+  静态副本（VFS/AssetManager 等多份单例，启动即崩）。方案：每模块新增
+  `ModuleAnchor.cpp`（extern "C" 锚点），聚合库 `ModuleAnchors.cpp` 引用
+  全部锚点；unity 构建下每模块为单对象，一次引用即拉入整个模块。
+  已排除：`-force_load`（ld64 对已通过 `-l` 见过的归档忽略该标志）、
+  `{links = false}`（模块不再产出归档）。消费方 deps 非 public，只链
+  `libya-engine.dylib` 一个共享库。
 
 ### 10.3 跨层文件归属（执行迭代）
 
