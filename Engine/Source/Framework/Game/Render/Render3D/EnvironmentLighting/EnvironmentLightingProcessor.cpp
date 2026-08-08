@@ -9,7 +9,7 @@
 #include "RHI/Core/RenderResourceFactory.h"
 #include "Core/Common/DeferredDeletionQueue.h"
 #include "Host/App.h"
-#include "Host/Utility/OffscreenJobRunner.h"
+#include "RHI/Core/OffscreenJob.h"
 #include "Scene/Core/Scene.h"
 #include "Render3D/Terrain/TerrainMeshBuilder.h"
 
@@ -973,7 +973,7 @@ EnvironmentLightingPreviewInfo EnvironmentLightingProcessor::getEnvironmentLight
 #include "RHI/Core/RenderResourceFactory.h"
 #include "Core/Common/DeferredDeletionQueue.h"
 #include "Host/App.h"
-#include "Host/Utility/OffscreenJobRunner.h"
+#include "RHI/Core/OffscreenJob.h"
 
 
 #include <algorithm>
@@ -1187,7 +1187,7 @@ void tryQueueJob(const OffscreenJobQueueService& queueService, IRender* render, 
 #include "RHI/Render.h"
 #include "Core/Common/DeferredDeletionQueue.h"
 #include "Host/App.h"
-#include "Host/Utility/OffscreenJobRunner.h"
+#include "RHI/Core/OffscreenJob.h"
 #include "Scene/Core/Scene.h"
 
 #include <format>
@@ -1631,7 +1631,7 @@ void EnvironmentLightingProcessor::resolvePendingSkybox(Scene* scene)
 #include "RHI/Core/RenderResourceFactory.h"
 #include "Core/Common/DeferredDeletionQueue.h"
 #include "Host/App.h"
-#include "Host/Utility/OffscreenJobRunner.h"
+#include "RHI/Core/OffscreenJob.h"
 #include "Scene/Core/Scene.h"
 
 

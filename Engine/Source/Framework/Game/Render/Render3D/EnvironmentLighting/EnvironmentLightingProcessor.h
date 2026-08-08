@@ -15,7 +15,7 @@
 #include "Gameplay/Systems/Components/TerrainComponent.h"
 #include "RHI/Core/OffscreenJob.h"
 #include "RHI/Core/ImageResourceRef.h"
-#include "Host/Utility/OffscreenJobRunner.h"
+#include "RHI/Core/OffscreenJob.h"
 #include "Render3D/Pipelines/CubeMap2PBRIrradianceMap.h"
 #include "Render3D/Pipelines/CubeMap2PBRPrefilteredEnv.h"
 #include "Render3D/Pipelines/EquidistantCylindrical2CubeMap.h"

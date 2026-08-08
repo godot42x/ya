@@ -1,25 +1,14 @@
 #pragma once
 
 #include "Core/Api.h"
-#include "RHI/Core/CommandBuffer.h"
-
-#include <functional>
-#include <memory>
+#include "RHI/Core/OffscreenJob.h"
 
 namespace ya
 {
 
 struct App;
 struct IRender;
-struct OffscreenJobState;
-
-struct OffscreenJobQueueService
-{
-    std::function<void(const std::shared_ptr<OffscreenJobState>&, std::function<void(ICommandBuffer*)>)> enqueue;
-};
 
 YA_HOST_API void queueOffscreenJob(App* app, IRender* render, const std::shared_ptr<OffscreenJobState>& job);
-YA_HOST_API void queueOffscreenJob(const OffscreenJobQueueService& queueService, IRender* render, const std::shared_ptr<OffscreenJobState>& job);
-YA_HOST_API void cancelOffscreenJob(std::shared_ptr<OffscreenJobState>& job);
 
 } // namespace ya
