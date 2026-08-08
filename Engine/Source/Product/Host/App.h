@@ -12,7 +12,7 @@
 #include "Host/AppOptions.h"
 #include "Host/AppRenderServices.h"
 #include "Host/AppSceneServices.h"
-#include "Host/AppState.h"
+#include "Core/Common/AppState.h"
 #include "Host/AppTaskManager.h"
 #include "Host/Lifecycle/AppAutomation.h"
 

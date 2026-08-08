@@ -21,6 +21,7 @@
 #include "Render/Adapters/LightBillboard/LightBillboardLinkageRule.h"
 #include "Render/Adapters/Material/MaterialRenderLinkageRule.h"
 #include "ECS/System/LuaScriptingSystem.h"
+#include "ECS/System/RayCastMousePickingSystem.h"
 #include "Gameplay/Systems/JSScriptingSystem.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
 #include "Core/Scripting/ScriptApiAsset.h"
@@ -465,6 +466,10 @@ void AppLifecycle::init(App& app, AppDesc ci)
         app._luaScriptingSystem->shutdown();
         delete app._luaScriptingSystem;
         app._luaScriptingSystem = nullptr; });
+
+    RayCastMousePickingSystem::setAppStateProvider([]() {
+        return App::get() ? App::get()->getAppState() : AppState::Stopped;
+    });
 
     // Engine-level JS scripting: the ScriptApiRegistry is the single capability
     // catalog shared by JS scripts and the automation RPC. Providers wire the

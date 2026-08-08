@@ -6,12 +6,21 @@
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "Resource/Model.h"
-#include "Host/App.h"
 #include "Scene/Core/Scene.h"
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace ya
 {
+
+namespace
+{
+RayCastMousePickingSystem::AppStateProvider g_appStateProvider;
+}
+
+void RayCastMousePickingSystem::setAppStateProvider(AppStateProvider provider)
+{
+    g_appStateProvider = std::move(provider);
+}
 
 std::optional<RaycastHit> RayCastMousePickingSystem::raycast(Scene *scene, const Ray &ray)
 {
@@ -161,7 +170,7 @@ Entity *RayCastMousePickingSystem::pickEntity(
                                           viewMatrix,
                                           glm::vec3(glm::inverse(viewMatrix)[3]),
                                           viewportHeight,
-                                          App::get() ? App::get()->getAppState() : AppState::Stopped);
+                                          g_appStateProvider ? g_appStateProvider() : AppState::Stopped);
     auto meshHit = raycast(scene, ray);
 
     if (billboardHit && (!meshHit || billboardHit->distance <= meshHit->distance)) {

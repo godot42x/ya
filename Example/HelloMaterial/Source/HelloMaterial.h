@@ -2,7 +2,7 @@
 
 #include "Core/Module/Module.h"
 #include "Resource/Mesh.h"
-#include "Host/AppState.h"
+#include "Core/Common/AppState.h"
 
 namespace ya { struct IRender; }
 

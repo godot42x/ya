@@ -3,7 +3,8 @@
 #include "Core/Api.h"
 #include "Core/Math/GLM.h"
 #include "Core/Math/Ray.h"
-#include "Host/AppState.h"
+#include "Core/Common/AppState.h"
+#include <functional>
 #include <optional>
 
 namespace ya
@@ -32,8 +33,14 @@ struct RaycastHit
 class YA_GAMEPLAY_ECS_API RayCastMousePickingSystem
 {
   public:
+    using AppStateProvider = std::function<AppState()>;
+
     RayCastMousePickingSystem()  = default;
     ~RayCastMousePickingSystem() = default;
+
+    /// Injected seam (bound by the Host at startup); used for the editor
+    /// billboard picking gate. No App access from here.
+    static void setAppStateProvider(AppStateProvider provider);
 
     /**
      * @brief Perform raycast against scene entities
