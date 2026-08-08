@@ -3,7 +3,7 @@
 #include "Core/Math/Math.h"
 #include "Render3D/Material/MaterialFactory.h"
 #include "Render3D/Material/UnlitMaterial.h"
-#include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "RHI/Backend/TextureLibrary.h"
 #include "GUI/Runtime/Resource/TextureSlotBinding.h"
 
 namespace ya

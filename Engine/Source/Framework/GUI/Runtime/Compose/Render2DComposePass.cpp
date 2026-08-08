@@ -3,7 +3,7 @@
 #include "GUI/Runtime/Draw2D/Render2D.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderImage.h"
-#include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "RHI/Backend/TextureLibrary.h"
 #include "GUI/Runtime/Scene/UISceneRenderer.h"
 
 namespace ya

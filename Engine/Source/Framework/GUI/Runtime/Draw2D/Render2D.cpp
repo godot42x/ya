@@ -11,7 +11,7 @@
 
 #include "Core/Common/DeferredDeletionQueue.h"
 #include "GUI/Runtime/Resource/FontManager.h"
-#include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "RHI/Backend/TextureLibrary.h"
 
 #include "utility.cc/ranges.h"
 

@@ -4,7 +4,7 @@
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/Sampler.h"
 #include "RHI/Render.h"
-#include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "RHI/Backend/TextureLibrary.h"
 
 #include <algorithm>
 

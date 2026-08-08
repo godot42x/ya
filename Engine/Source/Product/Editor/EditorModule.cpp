@@ -24,7 +24,7 @@
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderImage.h"
 #include "GUI/Runtime/Resource/FontManager.h"
-#include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "RHI/Backend/TextureLibrary.h"
 #include "Host/App.h"
 #include "Host/Automation/EditorAutomationControl.h"
 #include "Host/GUI/GuiSystem.h"

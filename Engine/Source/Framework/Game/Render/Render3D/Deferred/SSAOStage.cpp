@@ -7,7 +7,7 @@
 #include "Host/Config/ConfigManager.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Render.h"
-#include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "RHI/Backend/TextureLibrary.h"
 
 #include <array>
 #include <vector>

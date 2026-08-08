@@ -12,7 +12,7 @@
 #include "Editor/ImGui/ImGuiHelper.h"
 #include "Editor/EditorModule.h"
 #include "Render3D/Material/Material.h"
-#include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "RHI/Backend/TextureLibrary.h"
 #include "GUI/Runtime/Resource/TextureSlotBinding.h"
 #include "Resource/AssetManager.h"
 #include "reflects-core/lib.h"

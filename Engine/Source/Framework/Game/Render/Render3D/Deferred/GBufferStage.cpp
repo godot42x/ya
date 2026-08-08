@@ -5,7 +5,7 @@
 #include "RHI/Core/RenderResourceFactory.h"
 #include "Render3D/Material/MaterialFactory.h"
 #include "Render3D/RenderFrameData.h"
-#include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "RHI/Backend/TextureLibrary.h"
 
 #include "Core/Math/Geometry.h"
 

@@ -1,6 +1,6 @@
 #include "Core/Common/AssetRef.h"
 #include "Resource/AssetManager.h"
-#include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "RHI/Backend/TextureLibrary.h"
 #include "Core/Log.h"
 #include "Core/TypeIndex.h"
 #include "RHI/Core/Texture.h"

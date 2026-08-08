@@ -12,7 +12,7 @@
 #include "GUI/Runtime/Resource/FontManager.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
 #include "Core/ResourceRegistry.h"
-#include "GUI/Runtime/Resource/TextureLibrary.h"
+#include "RHI/Backend/TextureLibrary.h"
 
 namespace ya
 {

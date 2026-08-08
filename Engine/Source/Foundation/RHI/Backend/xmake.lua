@@ -8,7 +8,10 @@ target("ya-rhi-backend-common")
     set_kind("shared")
     ya_std_module("YA_RHI_BACKEND_API")
     ya_tier_include("Foundation")
-    add_files("Texture.cpp")
+    -- BuiltinTextureLibrary provides the standard white/black/checkerboard
+    -- textures and samplers; it lives with the backend because it builds
+    -- them through Texture::fromData (resource-factory driven).
+    add_files("Texture.cpp", "TextureLibrary.cpp")
     add_files("STB.cpp", { unity_ignored = true })
     add_deps("ya-rhi", { public = true })
     add_packages("vulkansdk", "stb", "ktx")
