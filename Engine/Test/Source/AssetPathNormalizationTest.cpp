@@ -1,5 +1,5 @@
-#include "Core/System/VirtualFileSystem.h"
-#include "Resource/AssetManager.h"
+#include "Foundation/Core/System/VirtualFileSystem.h"
+#include "Framework/Game/Resource/AssetManager.h"
 
 #include <gtest/gtest.h>
 

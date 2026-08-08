@@ -1,4 +1,4 @@
-#include "Core/Module/ProjectDescriptor.h"
+#include "Foundation/Core/Module/ProjectDescriptor.h"
 
 #include <gtest/gtest.h>
 

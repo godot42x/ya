@@ -1,0 +1,241 @@
+
+#pragma once
+#include "Foundation/RHI/Core/Buffer.h"
+#include "Foundation/RHI/Core/CommandBuffer.h"
+#include "Foundation/RHI/Core/ResourceStateTracker.h"
+#include "VulkanUtils.h"
+
+
+#include <vulkan/vulkan.h>
+
+
+namespace ya
+{
+
+struct VulkanRender;
+struct VulkanQueue;
+
+
+/**
+ * @brief Vulkan implementation of ICommandBuffer
+ */
+class VulkanCommandBuffer : public ICommandBuffer
+{
+  private:
+    VulkanRender*   _render        = nullptr;
+    VkCommandBuffer _commandBuffer = VK_NULL_HANDLE;
+    bool            _isRecording   = false;
+    uint32_t        _debugLabelDepth = 0;
+    std::string     _debugName;
+    ResourceStateTracker _resourceStateTracker;
+
+    // Track current rendering mode for proper endRendering() call
+    ERenderingMode::T _currentRenderingMode = ERenderingMode::None;
+
+    // Static function pointers for VK_KHR_dynamic_rendering
+    static PFN_vkCmdBeginRenderingKHR s_vkCmdBeginRenderingKHR;
+    static PFN_vkCmdEndRenderingKHR   s_vkCmdEndRenderingKHR;
+
+    // Static function pointer for VK_EXT_extended_dynamic_state3
+    static PFN_vkCmdSetPolygonModeEXT s_vkCmdSetPolygonModeEXT;
+    static PFN_vkCmdBeginDebugUtilsLabelEXT s_vkCmdBeginDebugUtilsLabelEXT;
+    static PFN_vkCmdEndDebugUtilsLabelEXT   s_vkCmdEndDebugUtilsLabelEXT;
+
+    friend struct VulkanRender; // Allow VulkanRender to initialize the function pointers
+
+
+    void executeBindPipeline(IGraphicsPipeline* pipeline);
+    void executeBindComputePipeline(IComputePipeline* pipeline);
+    void executeBindVertexBuffer(uint32_t binding, const IBuffer* buffer, uint64_t offset);
+    void executeBindIndexBuffer(IBuffer* buffer, uint64_t offset, bool use16BitIndices);
+    void executeDraw(uint32_t vertexCount, uint32_t instanceCount,
+                     uint32_t firstVertex, uint32_t firstInstance);
+    void executeDrawIndexed(uint32_t indexCount, uint32_t instanceCount,
+                            uint32_t firstIndex, int32_t vertexOffset,
+                            uint32_t firstInstance);
+    void executeDrawIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride);
+    void executeDrawIndexedIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride);
+    void executeDrawIndexedIndirectCount(IBuffer* drawBuffer, uint64_t drawOffset,
+                                         IBuffer* countBuffer, uint64_t countOffset,
+                                         uint32_t maxDrawCount, uint32_t stride);
+    void executeFillBuffer(IBuffer* buffer, uint64_t offset, uint64_t size, uint32_t value);
+    void executeDispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
+    void executeDispatchIndirect(IBuffer* buffer, uint64_t offset);
+    void executeBufferMemoryBarrier(IBuffer* buffer,
+                                    EPipelineStage::T srcStage,
+                                    EPipelineStage::T dstStage,
+                                    EResourceAccess::T srcAccess,
+                                    EResourceAccess::T dstAccess,
+                                    uint64_t offset,
+                                    uint64_t size);
+    void executeSetViewport(float x, float y, float width, float height,
+                            float minDepth, float maxDepth);
+    void executeSetScissor(int32_t x, int32_t y, uint32_t width, uint32_t height);
+    void executeSetCullMode(ECullMode::T cullMode);
+    void executeSetPolygonMode(EPolygonMode::T polygonMode);
+    void executeSetDepthBias(float constantFactor, float clamp, float slopeFactor);
+
+    // === Rendering helpers ===
+    void beginDynamicRenderingFromManualImages(const RenderingInfo& info);
+
+    // Helper: Build depth attachment info for dynamic rendering
+    VkRenderingAttachmentInfo* buildDepthAttachmentInfo(const RenderAttachment*     attachment,
+                                                        VkRenderingAttachmentInfo&  outDepthAttach);
+
+    // Helper: Execute dynamic rendering with prepared attachments
+    void executeDynamicRendering(std::vector<VkRenderingAttachmentInfo>& colorAttachments,
+                                 VkRenderingAttachmentInfo*              pDepthAttach,
+                                 VkRenderingAttachmentInfo*              pStencilAttach,
+                                 const VkRect2D&                         renderArea,
+                                 uint32_t                                layerCount = 1);
+
+    void executeEndRendering(const RenderingInfo& info);
+
+    void executeBindDescriptorSets(IPipelineLayout*                        pipelineLayout,
+                                   uint32_t                                firstSet,
+                                   const std::vector<DescriptorSetHandle>& descriptorSets,
+                                   const std::vector<uint32_t>&            dynamicOffsets,
+                                   VkPipelineBindPoint                      bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS);
+    void executePushConstants(IPipelineLayout* pipelineLayout,
+                              EShaderStage::T  stages,
+                              uint32_t         offset,
+                              uint32_t         size,
+                              const void*      data);
+    void executeCopyBuffer(IBuffer* src, IBuffer* dst, uint64_t size, uint64_t srcOffset, uint64_t dstOffset);
+    void executeTransitionImageLayout(IImage* image, EImageLayout::T oldLayout, EImageLayout::T newLayout,
+                                      const ImageSubresourceRange* subresourceRange);
+    void validateTrackedOldLayout(IImage* image, EImageLayout::T oldLayout, const ImageSubresourceRange* subresourceRange);
+    void executeTrackedTransition(IImage* image, EImageLayout::T newLayout,
+                                  const ImageSubresourceRange* subresourceRange = nullptr);
+
+  public:
+    VulkanCommandBuffer(VulkanRender* render, VkCommandBuffer commandBuffer)
+        : _render(render), _commandBuffer(commandBuffer) {}
+
+    ~VulkanCommandBuffer() override = default;
+
+    VulkanCommandBuffer(const VulkanCommandBuffer&)            = delete;
+    VulkanCommandBuffer& operator=(const VulkanCommandBuffer&) = delete;
+    VulkanCommandBuffer(VulkanCommandBuffer&&)                 = default;
+    VulkanCommandBuffer& operator=(VulkanCommandBuffer&&)      = default;
+
+    // ICommandBuffer interface
+    CommandBufferHandle getHandle() const override { return CommandBufferHandle(_commandBuffer); }
+
+    CommandBufferHandle getTypedHandle() const override
+    {
+        return CommandBufferHandle((void*)(uintptr_t)_commandBuffer);
+    }
+
+    VkCommandBuffer getVkHandle() const { return _commandBuffer; }
+    void            setDebugName(std::string debugName) { _debugName = std::move(debugName); }
+    [[nodiscard]] const std::string& getDebugName() const { return _debugName; }
+
+    bool begin(bool oneTimeSubmit = false) override;
+    bool end() override;
+    void reset() override;
+    bool generateMipmaps(IImage* image,
+                         EImageLayout::T baseLevelLayout,
+                         EImageLayout::T finalLayout) override;
+
+#if YA_CMDBUF_RECORD_MODE
+    void executeAll() override;
+#endif
+
+    // Virtual mode: direct implementations
+    void bindPipeline(IGraphicsPipeline* pipeline) override;
+    void bindComputePipeline(IComputePipeline* pipeline) override;
+    void bindVertexBuffer(uint32_t binding, const IBuffer* buffer, uint64_t offset = 0) override;
+    void bindIndexBuffer(IBuffer* buffer, uint64_t offset = 0, bool use16BitIndices = false) override;
+    void draw(uint32_t vertexCount, uint32_t instanceCount = 1,
+              uint32_t firstVertex = 0, uint32_t firstInstance = 0) override;
+    void drawIndexed(uint32_t indexCount, uint32_t instanceCount = 1,
+                     uint32_t firstIndex = 0, int32_t vertexOffset = 0,
+                     uint32_t firstInstance = 0) override;
+    void drawIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride) override;
+    void drawIndexedIndirect(IBuffer* buffer, uint64_t offset, uint32_t drawCount, uint32_t stride) override;
+    void drawIndexedIndirectCount(IBuffer* drawBuffer, uint64_t drawOffset,
+                                  IBuffer* countBuffer, uint64_t countOffset,
+                                  uint32_t maxDrawCount, uint32_t stride) override;
+    void fillBuffer(IBuffer* buffer, uint64_t offset, uint64_t size, uint32_t value) override;
+    void bufferMemoryBarrier(IBuffer* buffer,
+                             EPipelineStage::T srcStage,
+                             EPipelineStage::T dstStage,
+                             EResourceAccess::T srcAccess,
+                             EResourceAccess::T dstAccess,
+                             uint64_t offset = 0,
+                             uint64_t size = 0) override;
+    void setViewport(float x, float y, float width, float height,
+                     float minDepth = 0.0f, float maxDepth = 1.0f) override;
+    void setScissor(int32_t x, int32_t y, uint32_t width, uint32_t height) override;
+    void setCullMode(ECullMode::T cullMode) override;
+    void setPolygonMode(EPolygonMode::T polygonMode) override;
+    void setDepthBias(float constantFactor, float clamp, float slopeFactor) override;
+    void bindDescriptorSets(IPipelineLayout*                        pipelineLayout,
+                            uint32_t                                firstSet,
+                            const std::vector<DescriptorSetHandle>& descriptorSets,
+                            const std::vector<uint32_t>&            dynamicOffsets = {}) override;
+    void bindComputeDescriptorSets(IPipelineLayout*                        pipelineLayout,
+                                   uint32_t                                firstSet,
+                                   const std::vector<DescriptorSetHandle>& descriptorSets,
+                                   const std::vector<uint32_t>&            dynamicOffsets = {}) override;
+    void pushConstants(IPipelineLayout* pipelineLayout,
+                       EShaderStage::T  stages,
+                       uint32_t         offset,
+                       uint32_t         size,
+                       const void*      data) override;
+    void copyBuffer(IBuffer* src, IBuffer* dst, uint64_t size,
+                    uint64_t srcOffset = 0, uint64_t dstOffset = 0) override;
+    void dispatch(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) override;
+    void dispatchIndirect(IBuffer* buffer, uint64_t offset = 0) override;
+    void copyBufferToImage(IBuffer* srcBuffer, IImage* dstImage, EImageLayout::T dstImageLayout,
+                           const std::vector<BufferImageCopy>& regions) override;
+    void copyImageToBuffer(IImage* srcImage, EImageLayout::T srcImageLayout,
+                           IBuffer* dstBuffer,
+                           const std::vector<BufferImageCopy>& regions) override;
+    void copyImage(IImage* srcImage, EImageLayout::T srcImageLayout,
+                   IImage* dstImage, EImageLayout::T dstImageLayout,
+                   const std::vector<ImageCopy>& regions) override;
+    void beginRendering(const RenderingInfo& info) override;
+    void endRendering(const RenderingInfo& info) override;
+    void transitionImageLayout(IImage* image, EImageLayout::T oldLayout, EImageLayout::T newLayout,
+                               const ImageSubresourceRange* subresourceRange) override;
+    void transitionImageLayoutAuto(IImage* image, EImageLayout::T newLayout, const ImageSubresourceRange* subresourceRange = nullptr) override;
+    void debugBeginLabel(const char* labelName, const float* colorRGBA = nullptr) override;
+    void debugEndLabel() override;
+
+};
+
+
+
+struct VulkanCommandPool : disable_copy
+{
+    VkCommandPool _handle = VK_NULL_HANDLE;
+
+    VulkanRender* _render = nullptr;
+    VulkanQueue*  _queue  = nullptr;
+
+    VulkanCommandPool(VulkanRender* render, VulkanQueue* queue, VkCommandPoolCreateFlags flags = 0);
+
+    bool allocateCommandBuffer(VkCommandBufferLevel level, VkCommandBuffer& outCommandBuffer);
+
+    void cleanup();
+
+    static void begin(VkCommandBuffer commandBuffer, VkCommandBufferUsageFlags flags = 0)
+    {
+        VkCommandBufferBeginInfo beginInfo{
+            .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            .pNext            = nullptr,
+            .flags            = flags,
+            .pInheritanceInfo = nullptr,
+        };
+        VK_CALL(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+    }
+
+    static void end(VkCommandBuffer commandBuffer)
+    {
+        VK_CALL(vkEndCommandBuffer(commandBuffer));
+    }
+};
+
+} // namespace ya

@@ -1,5 +1,5 @@
 // 测试Math.h中的3x3矩阵相关功能
-#include "Core/Math/Math.h"
+#include "Foundation/Core/Math/Math.h"
 #include <gtest/gtest.h>
 
 #include <cmath>

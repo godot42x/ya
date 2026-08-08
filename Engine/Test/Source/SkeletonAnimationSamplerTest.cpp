@@ -1,4 +1,4 @@
-#include "Resource/SkeletonAnimationSampler.h"
+#include "Framework/Game/Resource/SkeletonAnimationSampler.h"
 
 #include <gtest/gtest.h>
 

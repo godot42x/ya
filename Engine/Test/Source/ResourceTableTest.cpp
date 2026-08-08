@@ -1,4 +1,4 @@
-#include "Resource/Handle/ResourceTable.h"
+#include "Framework/Game/Resource/Handle/ResourceTable.h"
 
 #include <gtest/gtest.h>
 #include <memory>

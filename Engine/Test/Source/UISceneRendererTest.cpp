@@ -1,8 +1,8 @@
-#include "Core/Event.h"
-#include "UI/UIBase.h"
-#include "UI/Scene/UISceneRenderer.h"
-#include "UI/Scene/Node2D.h"
-#include "Render3D/Scene.h"
+#include "Foundation/Core/Event.h"
+#include "Framework/GUI/Runtime/UIBase.h"
+#include "Framework/GUI/Runtime/Scene/UISceneRenderer.h"
+#include "Framework/GUI/Runtime/Scene/Node2D.h"
+#include "Framework/Game/Render/Render3D/Scene.h"
 
 #include <gtest/gtest.h>
 

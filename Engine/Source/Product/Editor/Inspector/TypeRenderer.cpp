@@ -1,0 +1,553 @@
+#include "Product/Editor/Inspector/TypeRenderer.h"
+
+#include "Product/Editor/EditorLayer.h"
+
+#include "Product/Editor/Inspector/ContainerPropertyRenderer.h"
+#include "Product/Host/App.h"
+#include "Foundation/Core/Common/AssetRef.h"
+#include "Foundation/Core/Profiling/Instrumentor.h"
+#include "Foundation/Core/System/VirtualFileSystem.h"
+#include "Foundation/Core/TypeIndex.h"
+#include "Product/Editor/Inspector/ReflectionCache.h"
+#include "Product/Editor/ImGui/ImGuiHelper.h"
+#include "Product/Editor/EditorModule.h"
+#include "Framework/Game/Render/Render3D/Material/Material.h"
+#include "Framework/GUI/Runtime/Resource/TextureLibrary.h"
+#include "Framework/Game/Resource/AssetManager.h"
+#include "reflects-core/lib.h"
+
+
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <imgui.h>
+
+namespace ya
+{
+
+
+// ============================================================================
+// TypeRenderRegistry Implementation
+// ============================================================================
+
+TypeRenderRegistry& TypeRenderRegistry::instance()
+{
+    static TypeRenderRegistry inst;
+    return inst;
+}
+
+// ============================================================================
+// Type Rendering Functions - New Implementation with Context
+void renderReflectedType(const std::string& name,
+                         type_index_t typeIndex, void* instance,
+                         RenderContext& ctx, int depth, const PropertyRenderContext* propRenderCache)
+{
+    YA_PROFILE_SCOPE(std::format("renderReflectedType(ctx), {}, typeIndex: {}", name, typeIndex));
+
+    const std::string& pathSegment = propRenderCache ? propRenderCache->fieldName : std::string{};
+    RenderContext::ScopedPath scopedPath(ctx, pathSegment);
+
+    if (depth >= MAX_RECURSION_DEPTH) {
+        ImGui::TextDisabled("%s: [max recursion depth reached]", name.c_str());
+        return;
+    }
+    auto cache = getOrCreateReflectionCache(typeIndex);
+
+    if (!cache) {
+        ImGui::TextDisabled("%s: [unsupported type]", name.c_str());
+        return;
+    }
+
+
+    auto* renderer = TypeRenderRegistry::instance().getRenderer(typeIndex);
+    const PropertyRenderContext defaultPropRenderCache{};
+    const auto& propCtx = propRenderCache ? *propRenderCache : defaultPropRenderCache;
+
+    if (renderer && renderer->hasRenderOverride()) {
+        renderer->render(instance, propCtx, ctx);
+        return;
+    }
+
+    // 枚举类型
+    if (cache->bEnum && cache->enumMisc.enumPtr) {
+        int64_t currentValue = cache->enumMisc.enumPtr->getValue(instance);
+        int     currentIndex = cache->enumMisc.valueToPosition[currentValue];
+
+        if (ImGui::Combo(propRenderCache ? propRenderCache->prettyName.c_str() : name.c_str(),
+                         &currentIndex,
+                         cache->enumMisc.imguiComboString.c_str(),
+                         (int)cache->enumMisc.positionToValue.size())) {
+            int64_t newVal = cache->enumMisc.positionToValue[currentIndex];
+            cache->enumMisc.enumPtr->setValue(instance, newVal);
+            if (ctx.currentPath.empty()) {
+                ctx.addModification(nullptr, propRenderCache ? propRenderCache->fieldName : name);
+            }
+            else {
+                ctx.pushModified();
+            }
+        }
+        return;
+    }
+
+
+    if (cache->classPtr)
+    {
+        if (cache->propertyCount > 0 || cache->classPtr->parents.size() > 0)
+        {
+            auto iterateAll = [&]() {
+                // 首先递归渲染父类的属性
+                auto& registry = ClassRegistry::instance();
+                for (auto parentTypeId : cache->classPtr->parents) {
+                    // 获取父类指针
+                    void* parentPtr = cache->classPtr->getParentPointer(instance, parentTypeId);
+                    if (!parentPtr) {
+                        continue;
+                    }
+
+                    // 获取父类的 Class 信息
+                    if (auto* parentClass = registry.getClass(parentTypeId)) {
+                        // 递归渲染父类（使用父类的 typeIndex 和指针）
+                        renderReflectedType(parentClass->getName(), parentTypeId, parentPtr, ctx, depth + 1, nullptr);
+                    }
+                }
+
+                // 然后渲染当前类的属性
+                cache->classPtr->visitOwnProperties([&](const std::string& propName, Property& prop) {
+                    auto subPropInstancePtr = prop.addressGetterMutable(instance);
+
+                    // 从缓存获取属性渲染上下文
+                    const auto& propCtxCache = cache->propertyContexts[propName];
+                    const bool  isContainer  = propCtxCache.isContainer;
+                    const bool  isPointer    = propCtxCache.bPointer;
+                    const auto& prettyName   = propCtxCache.prettyName;
+
+                    auto renderProperty = [&]() {
+                        if (isContainer) {
+                            // 容器属性：使用容器渲染器
+                            // TODO: ContainerPropertyRenderer should also use RenderContext
+                            ya::editor::ContainerPropertyRenderer::renderContainer(
+                                prettyName,
+                                prop,
+                                subPropInstancePtr,
+                                depth + 2);
+                        }
+                        else if (isPointer && propCtxCache.pointeeTypeIndex != 0) {
+                            // Pointer property: dereference and render pointee object
+                            void** ptrLocation = static_cast<void**>(subPropInstancePtr);
+                            void*  pointee     = ptrLocation ? *ptrLocation : nullptr;
+
+                            if (pointee) {
+                                // Has valid pointee - render it with indirection indicator
+                                std::string ptrLabel = prettyName + " (->)";
+                                renderReflectedType(ptrLabel, propCtxCache.pointeeTypeIndex, pointee, ctx, depth + 1, &propCtxCache);
+                            }
+                            else {
+                                // Null pointer - show placeholder
+                                ImGui::TextDisabled("%s: [null]", prettyName.c_str());
+                            }
+                        }
+                        else {
+                            // 普通属性：直接传递 PropertyRenderContext
+                            renderReflectedType(prettyName, prop.typeIndex, subPropInstancePtr, ctx, depth + 1, &propCtxCache);
+                        }
+                    };
+
+                    const bool editable = propCtxCache.isEditable(instance);
+                    if (!editable) {
+                        ImGui::BeginDisabled();
+                    }
+                    renderProperty();
+                    if (!editable) {
+                        ImGui::EndDisabled();
+                        if (!propCtxCache.disabledHint.empty()) {
+                            ImGui::SameLine();
+                            ImGui::TextDisabled("[%s]", propCtxCache.disabledHint.c_str());
+                        }
+                    }
+                    if (renderer) {
+                        renderer->renderAfterProperty(propName, instance, subPropInstancePtr, propCtxCache, ctx);
+                    }
+                });
+            };
+
+            if (depth == 0)
+            {
+                iterateAll();
+                return;
+            }
+            else {
+                ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_FramePadding;
+                if (depth > 1) {
+                    flags = flags & ~ImGuiTreeNodeFlags_DefaultOpen;
+                }
+                // 优化：depth > 1 时默认折叠，减少渲染开销
+                bool isOpen = ImGui::TreeNodeEx(name.c_str(), flags, "%s", name.c_str());
+                if (isOpen) {
+                    // ImGui::Indent(CHILD_CLASS_INDENT);
+                    iterateAll();
+                    // ImGui::Unindent(CHILD_CLASS_INDENT);
+                    ImGui::TreePop();
+                }
+                return;
+            }
+        }
+
+        ImGui::TextDisabled("%s: [no editable reflected fields]", name.c_str());
+        return;
+    }
+
+    ImGui::TextDisabled("%s: [unsupported type]", name.c_str());
+}
+
+// ============================================================================
+// Builtin Type Renderers Registration
+// ============================================================================
+
+static void renderTextureSlotPreview(TextureSlot& slot)
+{
+    if (!slot.hasPath()) {
+        return;
+    }
+
+    auto texture = slot.getResolvedTexture();
+    if (!texture || !texture->getImageView()) {
+        ImGui::TextDisabled("Preview unavailable until loaded");
+        return;
+    }
+
+    const auto extent = texture->getExtent();
+    if (extent.width == 0 || extent.height == 0) {
+        ImGui::TextDisabled("Preview unavailable");
+        return;
+    }
+
+    constexpr float maxPreviewSize = 128.0f;
+    const float scale = std::min(maxPreviewSize / static_cast<float>(extent.width),
+                                 maxPreviewSize / static_cast<float>(extent.height));
+    const ImVec2 size(static_cast<float>(extent.width) * scale,
+                      static_cast<float>(extent.height) * scale);
+
+    auto sampler = TextureLibrary::get().getLinearSampler();
+    if (!sampler) {
+        ImGui::TextDisabled("Preview sampler unavailable");
+        return;
+    }
+
+    ImGui::TextDisabled("Preview");
+    ImGuiHelper::Image(texture->getImageView(), sampler.get(), "No Preview", size);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", slot.textureRef.getPath().c_str());
+    }
+}
+
+// Helper function for integer types rendering
+static bool integerRenderFunc(int& value, const PropertyRenderContext& propCtx)
+{
+    const auto& spec = propCtx.manipulateSpec;
+    switch (spec.type) {
+    case ya::reflection::Meta::ManipulateSpec::Slider:
+        return ImGui::SliderInt(propCtx.prettyName.c_str(), &value, static_cast<int>(spec.min), static_cast<int>(spec.max));
+    case ya::reflection::Meta::ManipulateSpec::Drag:
+        return ImGui::DragInt(propCtx.prettyName.c_str(), &value, static_cast<int>(spec.step), 100);
+    case ya::reflection::Meta::ManipulateSpec::Input:
+        return ImGui::InputInt(propCtx.prettyName.c_str(), &value, static_cast<int>(spec.step), 100);
+    case ya::reflection::Meta::ManipulateSpec::None:
+        return ImGui::InputInt(propCtx.prettyName.c_str(), &value, static_cast<int>(spec.step), 100);
+    }
+    return false;
+}
+
+void registerBuiltinTypeRenderers()
+{
+    auto& registry = TypeRenderRegistry::instance();
+
+    // int 类型渲染器
+    registry.registerRenderer(
+        ya::type_index_v<int>,
+        TypeRenderer{
+            .typeName   = "int",
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                auto ptr = static_cast<int*>(instance);
+                if (integerRenderFunc(*ptr, propCtx)) {
+                    ctx.pushModified();
+                }
+            },
+        });
+
+    registry.registerRenderer(
+        ya::type_index_v<uint32_t>,
+        TypeRenderer{
+            .typeName   = "uint32_t",
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                auto& value = *static_cast<uint32_t*>(instance);
+                int   temp  = static_cast<int>(value);
+                if (integerRenderFunc(temp, propCtx)) {
+                    value = static_cast<uint32_t>(temp);
+                    ctx.pushModified();
+                }
+            },
+        });
+
+    registry.registerRenderer(
+        ya::type_index_v<int32_t>,
+        TypeRenderer{
+            .typeName   = "int32_t",
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                auto& value = *static_cast<int32_t*>(instance);
+                int   temp  = static_cast<int>(value);
+                if (integerRenderFunc(temp, propCtx)) {
+                    value = static_cast<int32_t>(temp);
+                    ctx.pushModified();
+                }
+            },
+        });
+
+    registry.registerRenderer(
+        ya::type_index_v<uint64_t>,
+        TypeRenderer{
+            .typeName   = "uint64_t",
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                auto& value = *static_cast<uint64_t*>(instance);
+                int   temp  = static_cast<int>(value);
+                if (integerRenderFunc(temp, propCtx)) {
+                    value = static_cast<uint64_t>(temp);
+                    ctx.pushModified();
+                }
+            },
+        });
+
+    // bool
+    registry.registerRenderer(
+        ya::type_index_v<bool>,
+        TypeRenderer{
+            .typeName   = "bool",
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                if (ImGui::Checkbox(propCtx.prettyName.c_str(), static_cast<bool*>(instance))) {
+                    ctx.pushModified();
+                }
+            },
+        });
+
+    // float 类型渲染器
+    registry.registerRenderer(
+        ya::type_index_v<float>,
+        TypeRenderer{
+            .typeName   = "float",
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                const auto& spec     = propCtx.manipulateSpec;
+                auto        ptr      = static_cast<float*>(instance);
+                bool        modified = false;
+                switch (spec.type) {
+                case ya::reflection::Meta::ManipulateSpec::Slider:
+                    modified = ImGui::SliderFloat(propCtx.prettyName.c_str(), ptr, spec.min, spec.max);
+                    break;
+                case ya::reflection::Meta::ManipulateSpec::Drag:
+                    modified = ImGui::DragFloat(propCtx.prettyName.c_str(), ptr, spec.step);
+                    break;
+                case ya::reflection::Meta::ManipulateSpec::Input:
+                    modified = ImGui::InputFloat(propCtx.prettyName.c_str(), ptr, spec.step);
+                    break;
+                case ya::reflection::Meta::ManipulateSpec::None:
+                    modified = ImGui::DragFloat(propCtx.prettyName.c_str(), ptr);
+                    break;
+                }
+                if (modified) {
+                    ctx.pushModified();
+                }
+            },
+        });
+
+    // std::string 类型渲染器
+    registry.registerRenderer(
+        ya::type_index_v<std::string>,
+        TypeRenderer{
+            .typeName   = "std::string",
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                auto& s = *static_cast<std::string*>(instance);
+                char  buf[256];
+                std::memcpy(buf, s.c_str(), std::min(s.size() + 1, sizeof(buf)));
+                buf[sizeof(buf) - 1] = '\0';
+
+                if (ImGui::InputText(propCtx.prettyName.c_str(), buf, sizeof(buf))) {
+                    s = buf;
+                    ctx.pushModified();
+                }
+            },
+        });
+    registry.registerRenderer(
+        ya::type_index_v<glm::vec2>,
+        TypeRenderer{
+            .typeName   = "glm::vec2",
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                auto* ptr      = static_cast<float*>(instance);
+                bool  modified = false;
+                modified       = ImGui::DragFloat2(propCtx.prettyName.c_str(), ptr);
+                if (modified) {
+                    ctx.pushModified();
+                }
+            },
+        });
+
+
+    registry.registerRenderer(
+        ya::type_index_v<glm::vec3>,
+        TypeRenderer{
+            .typeName   = "glm::vec3",
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                auto* ptr      = static_cast<float*>(instance);
+                bool  modified = false;
+                if (propCtx.bColor) {
+                    modified = ImGui::ColorEdit3(propCtx.prettyName.c_str(), ptr);
+                }
+                else {
+                    modified = ImGui::DragFloat3(propCtx.prettyName.c_str(), ptr);
+                }
+                if (modified) {
+                    ctx.pushModified();
+                }
+            },
+        });
+
+    // glm::vec4 类型渲染器（颜色）
+    registry.registerRenderer(
+        ya::type_index_v<glm::vec4>,
+        TypeRenderer{
+            .typeName   = "glm::vec4",
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                float* val      = static_cast<float*>(instance);
+                bool   modified = false;
+                if (propCtx.bColor) {
+                    modified = ImGui::ColorEdit4(propCtx.prettyName.c_str(), val);
+                }
+                else {
+                    modified = ImGui::DragFloat4(propCtx.prettyName.c_str(), val);
+                }
+                if (modified) {
+                    ctx.pushModified();
+                }
+            },
+        });
+    registry.registerRenderer(
+        ya::type_index_v<glm::mat3x4>,
+        TypeRenderer{
+            .typeName   = "glm::mat3x4",
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                auto* mat      = static_cast<glm::mat3x4*>(instance);
+                bool  modified = false;
+                modified |= ImGui::DragFloat4("[0]", &mat->operator[](0).x);
+                modified |= ImGui::DragFloat4("[1]", &mat->operator[](1).x);
+                modified |= ImGui::DragFloat4("[2]", &mat->operator[](2).x);
+                if (modified) {
+                    ctx.pushModified();
+                }
+            },
+        });
+
+    registry.registerRenderer(
+        ya::type_index_v<ModelRef>,
+        TypeRenderer{
+            .typeName   = "ModelRef",
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                pathWrapper(instance, propCtx, ctx, [](void* instance, const PropertyRenderContext& propCtx) {
+                    auto& assetRef = *static_cast<AssetRefBase*>(instance);
+                    if (auto* editorLayer = getEditorLayer()) {
+                        editorLayer->_filePicker.openModelPicker(
+                            assetRef.getPath(),
+                            [&assetRef](const std::string& newPath) {
+                                assetRef.setPath(newPath);
+                            });
+                    }
+                });
+            },
+        });
+
+    registry.registerRenderer(
+        ya::type_index_v<TextureRef>,
+        TypeRenderer{
+            .typeName   = "TextureRef",
+            .renderFunc = [](void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx) {
+                pathWrapper(instance, propCtx, ctx, [](void* instance, const PropertyRenderContext& propCtx) {
+                    auto& assetRef = *static_cast<AssetRefBase*>(instance);
+                    if (auto* editorLayer = getEditorLayer()) {
+                        editorLayer->_filePicker.openTexturePicker(
+                            assetRef.getPath(),
+                            [&assetRef](const std::string& newPath) {
+                                assetRef.setPath(newPath);
+                            });
+                    }
+                });
+            },
+        });
+
+    registry.registerRenderer(
+        ya::type_index_v<TextureSlot>,
+        TypeRenderer{
+            .typeName = "TextureSlot",
+            .afterPropertyRenderers = {
+                {"textureRef",
+                 [](void* owner, void*, const PropertyRenderContext&, RenderContext&) {
+                     renderTextureSlotPreview(*static_cast<TextureSlot*>(owner));
+                 }},
+            },
+        });
+}
+
+void pathWrapper(void* instance, const PropertyRenderContext& propCtx, RenderContext& ctx, auto internal)
+{
+    auto& assetRef = *static_cast<AssetRefBase*>(instance);
+
+    // Display current path
+    const auto& p           = assetRef.getPath();
+    std::string displayPath = p.empty() ? "[No Path]" : p;
+
+    // Path input field (read-only display)
+    ImGui::Text("%s:", propCtx.prettyName.c_str());
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(-80); // Leave space for button
+
+    char buffer[256];
+    strncpy_s(buffer, displayPath.c_str(), _TRUNCATE);
+
+    if (ImGui::InputText(("##" + propCtx.prettyName).c_str(), buffer, sizeof(buffer))) {
+        assetRef.setPath(AssetManager::normalizeAssetPath(buffer));
+        ctx.pushModified();
+    }
+
+    // Browse button - access FilePicker through App::get()->_editorLayer
+    ImGui::SameLine();
+    if (ImGui::Button(("Browse##" + propCtx.prettyName).c_str())) {
+        internal(instance, propCtx);
+    }
+
+    // Locate / Inspect button — jump to Asset Inspector
+    if (!assetRef.getPath().empty()) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton((">>##locate_" + propCtx.prettyName).c_str())) {
+            if (auto* editorLayer = getEditorLayer()) {
+                editorLayer->inspectAsset(assetRef.getPath());
+            }
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Inspect asset properties");
+        }
+    }
+};
+
+struct EditorLayer* getEditor()
+{
+    return getEditorLayer();
+}
+
+struct FilePicker* getFilePicker()
+{
+    if (auto* editor = getEditor()) {
+        return &editor->_filePicker;
+    }
+    return nullptr;
+}
+
+
+
+} // namespace ya
+
+
+

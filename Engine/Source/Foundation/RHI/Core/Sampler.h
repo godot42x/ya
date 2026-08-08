@@ -1,0 +1,26 @@
+
+#pragma once
+#include "Handle.h"
+ 
+#include "Foundation/RHI/RenderDefines.h"
+
+namespace ya
+{
+
+struct SamplerHandleTag
+{};
+using SamplerHandle = Handle<SamplerHandleTag>;
+
+
+
+struct Sampler : public plat_base<Sampler>
+{
+    SamplerDesc _desc;
+
+    /**
+     * @brief Get the platform-specific handle for this sampler
+     * @return void* Platform handle (e.g., VkSampler for Vulkan)
+     */
+    virtual SamplerHandle getHandle() const = 0;
+};
+} // namespace ya

@@ -1,0 +1,87 @@
+#include "Product/Editor/Panels/ContentBrowserPanel.h"
+
+#include "Product/Editor/EditorLayer.h"
+#include "Foundation/Core/System/PathUtils.h"
+#include "Foundation/Core/Profiling/Instrumentor.h"
+#include "Foundation/Core/System/VirtualFileSystem.h"
+#include "Product/Editor/ImGui/ImGuiHelper.h"
+#include "Framework/Game/Resource/AssetManager.h"
+#include "Framework/GUI/Runtime/Resource/TextureLibrary.h"
+#include "Product/Host/App.h"
+#include <imgui.h>
+
+
+namespace ya
+{
+
+ContentBrowserPanel::ContentBrowserPanel(EditorLayer* owner)
+    : _owner(owner)
+{
+}
+
+void ContentBrowserPanel::init()
+{
+    // Load icons
+    auto am            = AssetManager::get();
+    auto fileTexture   = am->loadTextureSync("file", "Engine/Content/TestTextures/editor/file.png").get();
+    auto folderTexture = am->loadTextureSync("folder", "Engine/Content/TestTextures/editor/folder2.png").get();
+    auto sampler       = TextureLibrary::get().getDefaultSampler();
+
+    fileIcon   = _owner->getOrCreateImGuiTextureID(fileTexture->getImageView(), sampler);
+    folderIcon = _owner->getOrCreateImGuiTextureID(folderTexture->getImageView(), sampler);
+
+    // Initialize FileExplorer from VFS
+    _fileExplorer.setConfigScope("contentBrowser");
+    _fileExplorer.initFromVFS();
+    VFS::get()->onMountPointChanged.addLambda(this, [&]() {
+        _fileExplorer.initFromVFS();
+    });
+
+    _fileExplorer.setViewMode(FileExplorer::ViewMode::Icon);
+    _fileExplorer.setFilterMode(FileExplorer::FilterMode::Both);
+    _fileExplorer.setSelectionMode(FileExplorer::SelectionMode::File);
+    _fileExplorer.setLeftPanelWidth(200.0f);
+    _fileExplorer.setIcons({.folder = folderIcon, .file = fileIcon});
+    _fileExplorer.setThumbnailSize(94.0f);
+    _fileExplorer.setPadding(16.0f);
+    _fileExplorer.setShowViewModeToggle(true);
+    _fileExplorer.setShowSizeSlider(true);
+
+    // Set item action callback for opening scene files
+    _fileExplorer.setItemActionCallback([this](const std::filesystem::path& path) {
+        const std::string scenePath = path_utils::pathToUtf8String(path);
+        if (scenePath.ends_with(".scene.json"))
+        {
+            if (_pendingSceneOpenPath == scenePath) {
+                return;
+            }
+
+            _pendingSceneOpenPath = scenePath;
+            App::get()->getTaskManager().registerFrameTask(
+                [this, scenePath]() {
+                    App::get()->getSceneServices().loadScene(scenePath);
+                    if (_pendingSceneOpenPath == scenePath) {
+                        _pendingSceneOpenPath.clear();
+                    }
+                });
+        }
+    });
+}
+
+void ContentBrowserPanel::onImGuiRender()
+{
+    YA_PROFILE_FUNCTION();
+
+    if (!ImGui::Begin("Content Browser"))
+    {
+        ImGui::End();
+        return;
+    }
+
+    // FileExplorer handles everything: mount point selector, directory contents, view modes
+    _fileExplorer.render(nullptr, -1);
+
+    ImGui::End();
+}
+
+} // namespace ya

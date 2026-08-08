@@ -1,0 +1,25 @@
+ya_module("ya-render-3d", "GAME_RENDER_3D", {
+    include_root = "../../../..",
+    deps = {
+        "ya-gui-runtime",
+        "ya-resource",
+        "ya-render-graph",
+        "ya-scene-3d",
+        "ya-gameplay-ecs",
+        "ya-physics",
+    },
+    packages = {
+        "glm",
+        "entt",
+        "cxxopts",
+        "vulkan-memory-allocator",
+        "glad",
+        "lua",
+        "sol2",
+        "quickjs-ng",
+        "vulkansdk",
+        "nlohmann_json",
+        "ktx",
+        "stb",
+    },
+})

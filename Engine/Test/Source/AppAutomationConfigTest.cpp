@@ -1,11 +1,11 @@
-#include "Host/Lifecycle/AppAutomation.h"
+#include "Product/Host/Lifecycle/AppAutomation.h"
 
-#include "ECS/System/ResourceResolveSystem.h"
+#include "Framework/Game/Gameplay/ECS/System/ResourceResolveSystem.h"
 
-#include "Host/Config/ConfigManager.h"
-#include "Core/Profiling/Profiling.h"
-#include "Core/System/VirtualFileSystem.h"
-#include "Host/App.h"
+#include "Product/Host/Config/ConfigManager.h"
+#include "Foundation/Core/Profiling/Profiling.h"
+#include "Foundation/Core/System/VirtualFileSystem.h"
+#include "Product/Host/App.h"
 
 #include <gtest/gtest.h>
 

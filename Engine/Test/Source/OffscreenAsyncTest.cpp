@@ -1,7 +1,7 @@
-#include "RHI/Core/OffscreenJob.h"
-#include "RHI/Core/CommandBuffer.h"
-#include "Host/Utility/OffscreenJobRunner.h"
-#include "Host/App.h"
+#include "Foundation/RHI/Core/OffscreenJob.h"
+#include "Foundation/RHI/Core/CommandBuffer.h"
+#include "Product/Host/Utility/OffscreenJobRunner.h"
+#include "Product/Host/App.h"
 
 #include <gtest/gtest.h>
 

@@ -1,44 +1,44 @@
 #include "HelloMaterial.h"
-#include "Core/Math/Math.h"
-#include "ECS/Component/2D/BillboardComponent.h"
-#include "ECS/Component/CameraComponent.h"
-#include "ECS/Component/MirrorComponent.h"
-#include "Resource/AssetManager.h"
-#include "UI/Resource/FontManager.h"
+#include "Foundation/Core/Math/Math.h"
+#include "Framework/Game/Gameplay/ECS/Component/2D/BillboardComponent.h"
+#include "Framework/Game/Gameplay/ECS/Component/CameraComponent.h"
+#include "Framework/Game/Gameplay/ECS/Component/MirrorComponent.h"
+#include "Framework/Game/Resource/AssetManager.h"
+#include "Framework/GUI/Runtime/Resource/FontManager.h"
 
-#include "ECS/Component/3D/SkyboxComponent.h"
-#include "ECS/Component/DirectionalLightComponent.h"
-#include "ECS/Component/LuaScriptComponent.h"
-#include "ECS/Component/Material/PBRMaterialComponent.h"
-#include "ECS/Component/Material/PhongMaterialComponent.h"
-#include "ECS/Component/Material/SimpleMaterialComponent.h"
-#include "ECS/Component/Material/UnlitMaterialComponent.h"
-#include "ECS/Component/Mesh/StaticMeshComponent.h"
-#include "ECS/Component/ModelComponent.h"
-#include "ECS/Component/PointLightComponent.h"
-#include "ECS/Component/TransformComponent.h"
-
-
-
-#include "ECS/Entity.h"
+#include "Framework/Game/Gameplay/ECS/Component/3D/SkyboxComponent.h"
+#include "Framework/Game/Gameplay/ECS/Component/DirectionalLightComponent.h"
+#include "Framework/Game/Gameplay/ECS/Component/LuaScriptComponent.h"
+#include "Framework/Game/Gameplay/ECS/Component/Material/PBRMaterialComponent.h"
+#include "Framework/Game/Gameplay/ECS/Component/Material/PhongMaterialComponent.h"
+#include "Framework/Game/Gameplay/ECS/Component/Material/SimpleMaterialComponent.h"
+#include "Framework/Game/Gameplay/ECS/Component/Material/UnlitMaterialComponent.h"
+#include "Framework/Game/Gameplay/ECS/Component/Mesh/StaticMeshComponent.h"
+#include "Framework/Game/Gameplay/ECS/Component/ModelComponent.h"
+#include "Framework/Game/Gameplay/ECS/Component/PointLightComponent.h"
+#include "Framework/Game/Gameplay/ECS/Component/TransformComponent.h"
 
 
-#include "Core/Math/Geometry.h"
 
-#include "Render3D/Material/MaterialFactory.h"
-#include "Render3D/Material/PBRMaterial.h"
-#include "Render3D/Material/PhongMaterial.h"
-#include "UI/Resource/TextureLibrary.h"
-#include "UI/Scene/Node2D.h"
-#include "Render3D/Scene.h"
+#include "Framework/Game/Gameplay/ECS/Entity.h"
+
+
+#include "Foundation/Core/Math/Geometry.h"
+
+#include "Framework/Game/Render/Render3D/Material/MaterialFactory.h"
+#include "Framework/Game/Render/Render3D/Material/PBRMaterial.h"
+#include "Framework/Game/Render/Render3D/Material/PhongMaterial.h"
+#include "Framework/GUI/Runtime/Resource/TextureLibrary.h"
+#include "Framework/GUI/Runtime/Scene/Node2D.h"
+#include "Framework/Game/Render/Render3D/Scene.h"
 #include <format>
 
 
 
-#include "Render3D/SceneManager.h"
+#include "Framework/Game/Render/Render3D/SceneManager.h"
 
-#include "Core/System/VirtualFileSystem.h"
-#include "Host/App.h"
+#include "Foundation/Core/System/VirtualFileSystem.h"
+#include "Product/Host/App.h"
 
 
 void HelloMaterialModule::onAttach(ya::App& app)

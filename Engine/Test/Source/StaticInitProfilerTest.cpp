@@ -3,8 +3,8 @@
  * @brief 静态初始化性能分析器测试
  */
 
-#include "Core/Profiling/StaticInitProfiler.h"
-#include "Core/Log.h"
+#include "Foundation/Core/Profiling/StaticInitProfiler.h"
+#include "Foundation/Core/Log.h"
 #include <thread>
 #include <chrono>
 

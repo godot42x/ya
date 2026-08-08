@@ -1,9 +1,9 @@
-#include "Core/Scripting/ScriptApiRegistry.h"
-#include "ECS/Component/TransformComponent.h"
-#include "ECS/Entity.h"
-#include "ECS/System/JSScriptingSystem.h"
-#include "Render3D/Scene.h"
-#include "Render3D/SceneManager.h"
+#include "Foundation/Core/Scripting/ScriptApiRegistry.h"
+#include "Framework/Game/Gameplay/ECS/Component/TransformComponent.h"
+#include "Framework/Game/Gameplay/ECS/Entity.h"
+#include "Framework/Game/Gameplay/ECS/System/JSScriptingSystem.h"
+#include "Framework/Game/Render/Render3D/Scene.h"
+#include "Framework/Game/Render/Render3D/SceneManager.h"
 
 #include <gtest/gtest.h>
 

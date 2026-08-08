@@ -3,8 +3,8 @@
  * 展示侵入式和非侵入式两种用法
  */
 
-#include "Core/Reflection/Reflection.h"
-#include "Core/Base.h"
+#include "Foundation/Core/Reflection/Reflection.h"
+#include "Foundation/Core/Base.h"
 
 namespace ya::test
 {

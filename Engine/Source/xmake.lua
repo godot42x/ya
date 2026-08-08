@@ -1,28 +1,38 @@
 -- ============================================================================
 -- Engine module aggregator.
 --
--- Every engine module follows one shape (see `ya_module` below) and lives in
--- its own directory with its own xmake.lua; this file only wires them up.
--- The shared setup exists in exactly one place instead of being copy-pasted
--- per module:
---   * export-macro plumbing (BUILD_SHARED_YA / BUILD_LIBRARY, see Core/Api.h)
+-- Source is organized into three product tiers, each module living in its own
+-- directory with its own xmake.lua:
+--
+--   Foundation/   shared infrastructure (Core / RHI / RHI+Backend)
+--   Framework/    product lines (GUI framework; Game: scene/resource/render/
+--                 gameplay/physics)
+--   Product/      assembled products (Host runtime shell / Editor)
+--
+-- This file only wires the tiers up and provides one thin helper (`ya_module`)
+-- that removes copy-paste for the shared parts:
+--   * export-macro plumbing (YA_SHARED / YA_MODULE_BUILD, see Core/Api.h)
 --   * the common include root (Engine/Source)
---   * per-module unity grouping
+--   * per-module unity grouping + source globbing
 -- Each module globs its own sources ("**.cpp") and never reaches outside its
 -- directory, so the target list stays in sync with the directory layout.
+-- Module-specific wiring (deps / packages / shader codegen / unity exclusions)
+-- is declared in each module's own xmake.lua, not flattened here.
 -- ============================================================================
+
+-- Engine/Source, captured before module files are included below (each module
+-- xmake.lua runs with its own scriptdir, so paths must be derived from here).
+local YA_SOURCE_ROOT = os.scriptdir()
 
 function ya_module(name, root, opts)
     opts = opts or {}
-    local exclude = opts.exclude or ""
+    local exclude     = opts.exclude or ""
     local includeRoot = opts.include_root or ".."
 
     target(name)
-        set_kind("static")
-        -- Export plumbing (see Core/Api.h): every module is compiled into the
-        -- single shared aggregate (ya-engine); consumers only see the import
-        -- side. xmake stamps both defines, so no module hand-writes
-        -- dllexport/dllimport.
+        set_kind(opts.kind or "static")
+        -- Export plumbing (see Core/Api.h): xmake stamps both defines, so no
+        -- module hand-writes dllexport/dllimport.
         add_defines("YA_SHARED=1")
         add_defines("YA_MODULE_BUILD=1")
         add_includedirs(includeRoot, { public = true })
@@ -30,8 +40,9 @@ function ya_module(name, root, opts)
         if opts.shader_generated then
             -- Generated Slang/GLSL headers (Common.Limits.*, Sprite2D.*, ...)
             -- are consumed through RenderDefines.h and the UI shaders.
-            add_includedirs("../../Shader/Slang/Generated", { public = true })
-            add_includedirs("../../Shader/GLSL/Generated", { public = true })
+            local engineRoot = path.join(YA_SOURCE_ROOT, "..")
+            add_includedirs(path.join(engineRoot, "Shader/Slang/Generated"), { public = true })
+            add_includedirs(path.join(engineRoot, "Shader/GLSL/Generated"), { public = true })
         end
 
         if get_config("ya_enable_unity-build") then
@@ -66,17 +77,23 @@ function ya_module(name, root, opts)
         if opts.extra_setup then
             opts.extra_setup()
         end
-        target_end()
+    target_end()
 end
 
-includes("./Core/xmake.lua")
-includes("./RHI/xmake.lua")
-includes("./RenderGraph/xmake.lua")
-includes("./UI/xmake.lua")
-includes("./Scene/xmake.lua")
-includes("./ECS/xmake.lua")
-includes("./Resource/xmake.lua")
-includes("./Render3D/xmake.lua")
-includes("./Physics/xmake.lua")
-includes("./Host/xmake.lua")
-includes("./Editor/xmake.lua")
+-- Foundation tier: shared infrastructure consumed by every product line.
+includes("./Foundation/Core/xmake.lua")
+includes("./Foundation/RHI/xmake.lua")
+
+-- Framework tier: product lines. GUI framework first (self-contained);
+-- Game depends on Foundation + GUI (Node scene-tree base lives in GUI).
+includes("./Framework/GUI/xmake.lua")
+includes("./Framework/Game/Scene/Scene3D/xmake.lua")
+includes("./Framework/Game/Resource/xmake.lua")
+includes("./Framework/Game/Render/Graph/xmake.lua")
+includes("./Framework/Game/Render/Render3D/xmake.lua")
+includes("./Framework/Game/Gameplay/ECS/xmake.lua")
+includes("./Framework/Game/Physics/xmake.lua")
+
+-- Product tier: assembled runtimes.
+includes("./Product/Host/xmake.lua")
+includes("./Product/Editor/xmake.lua")

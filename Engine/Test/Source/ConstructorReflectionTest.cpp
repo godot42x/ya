@@ -1,4 +1,4 @@
-#include "Core/Reflection/Reflection.h"
+#include "Foundation/Core/Reflection/Reflection.h"
 #include <gtest/gtest.h>
 
 // 测试默认构造函数自动注册

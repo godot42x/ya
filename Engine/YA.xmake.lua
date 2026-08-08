@@ -113,9 +113,11 @@ end
 
 -- ==========================================================================
 -- Module libraries (engine modularization).
--- Per-module targets live next to their sources (Source/<module>/xmake.lua);
--- `ya-engine` stays the single shared aggregate export boundary, so editor /
--- examples / tests keep linking exactly one shared library.
+-- Per-module targets live next to their sources, organized in three product
+-- tiers: Foundation/ (core + RHI + backend), Framework/ (GUI, game product
+-- line), Product/ (host + editor). `ya-engine` stays the single shared
+-- aggregate export boundary, so editor / examples / tests keep linking
+-- exactly one shared library during the transition.
 -- ==========================================================================
 
 target("ya-engine")
@@ -135,7 +137,7 @@ do
     add_files("./ThirdParty/ImGui/imgui_demo.cpp", { unity_ignored = true })
 
     add_headerfiles("./Source/**.h")
-    set_pcheader("./Source//FWD.h")
+    set_pcheader("./Source/Foundation/Core/Common/FWD.h")
 
     add_includedirs("./Source", { public = true })
     add_includedirs("./Shader/Slang/Generated", { public = true })
@@ -144,7 +146,7 @@ do
     -- Module deps are intentionally non-public: consumers must link exactly
     -- one shared library (this aggregate). Public config (include dirs /
     -- defines / packages) is carried by the aggregate itself below.
-    add_deps("ya-core", "ya-rhi", "ya-rhi-backend", "ya-render-graph", "ya-ui", "ya-ui-scene", "ya-scene-core", "ya-scene-3d", "ya-ecs", "ya-resource", "ya-render-3d", "ya-physics", "ya-host")
+    add_deps("ya-foundation-core", "ya-foundation-rhi", "ya-foundation-rhi-backend", "ya-gui-runtime", "ya-scene-3d", "ya-gameplay-ecs", "ya-resource", "ya-render-graph", "ya-render-3d", "ya-physics", "ya-host")
     add_deps("utility.cc", "log.cc", "reflects-core", { public = true })
     add_deps("imgui-local")
     add_deps("imguizmo-local")
