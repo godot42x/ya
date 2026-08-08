@@ -6,7 +6,7 @@
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/PointLightComponent.h"
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include "ECS/Component/Terrain/TerrainComponent.h"
 #include "ECS/Component/2D/UIComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"

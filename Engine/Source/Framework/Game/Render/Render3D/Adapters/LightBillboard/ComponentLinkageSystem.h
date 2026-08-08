@@ -10,7 +10,7 @@
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/RenderComponent.h"
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include "ECS/System/TransformSystem.h"
 #include "Scene/Core/Scene.h"
 

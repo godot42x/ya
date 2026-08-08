@@ -15,7 +15,7 @@
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/Terrain/TerrainComponent.h"
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include "Editor/Services/NodeCreateRegistry.h"
 #include "GUI/Runtime/Scene/Node2D.h"
 #include "GUI/Runtime/Scene/Node.h"

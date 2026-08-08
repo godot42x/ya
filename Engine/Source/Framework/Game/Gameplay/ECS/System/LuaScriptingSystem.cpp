@@ -9,7 +9,7 @@
 #include "ECS/Component/CameraComponent.h"
 #include "ECS/Component/LuaScriptComponent.h"
 #include "ECS/Component/PointLightComponent.h"
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "Scene/Runtime/SceneManager.h"
 #include <glm/glm.hpp>

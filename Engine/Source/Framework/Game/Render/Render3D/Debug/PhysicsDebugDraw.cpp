@@ -1,6 +1,6 @@
 #include "PhysicsDebugDraw.h"
 
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include "Physics/PhysicsBodyComponent.h"
 #include "GUI/Runtime/Draw2D/Render2D.h"
 #include "Scene/Core/Scene.h"

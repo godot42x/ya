@@ -1,7 +1,7 @@
 #include "TransformSystem.h"
 
 #include "Host/App.h"
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "GUI/Runtime/Scene/Node.h"
 #include "Scene3D/Node3D.h"

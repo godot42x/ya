@@ -1,4 +1,4 @@
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include "Physics/PhysicsBodyComponent.h"
 #include "Physics/PhysicsSystem.h"
 #include "Scene/Core/Scene.h"

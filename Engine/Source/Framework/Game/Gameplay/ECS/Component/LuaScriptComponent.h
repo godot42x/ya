@@ -5,6 +5,7 @@
 #include "Core/Reflection/Reflection.h"
 
 #include "Core/Api.h"
+#include "ECS/Component.h"
 
 #include <algorithm>
 #include <sol/sol.hpp>

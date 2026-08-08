@@ -5,7 +5,7 @@
 #include "Scene3D/Node3D.h"
 #include "Scene/Runtime/SceneManager.h"
 
-#include "ECS/Component/ManagedChildComponent.h"
+#include "Scene3D/ManagedChildComponent.h"
 
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"

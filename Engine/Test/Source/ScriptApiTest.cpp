@@ -1,5 +1,5 @@
 #include "Core/Scripting/ScriptApiRegistry.h"
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/System/JSScriptingSystem.h"
 #include "Scene/Core/Scene.h"

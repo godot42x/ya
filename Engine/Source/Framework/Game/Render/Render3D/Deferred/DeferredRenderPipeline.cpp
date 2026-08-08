@@ -9,7 +9,7 @@
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/DirectionComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include "GUI/Runtime/Resource/TextureSlotBinding.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Core/Sampler.h"

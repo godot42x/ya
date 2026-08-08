@@ -1,6 +1,6 @@
 #include "Node3D.h"
 
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include "ECS/Entity.h"
 
 namespace ya

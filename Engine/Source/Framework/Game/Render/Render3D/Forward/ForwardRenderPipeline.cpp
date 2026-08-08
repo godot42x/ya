@@ -6,7 +6,7 @@
 #include "RHI/Core/RenderingInfoUtils.h"
 #include "RHI/Core/Sampler.h"
 #include "ECS/Component/DirectionComponent.h"
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include "Render3D/Forward/ForwardFrameGraphOrchestrator.h"
 #include "Scene/Core/Scene.h"
 #include <glm/gtc/matrix_transform.hpp>

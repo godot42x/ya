@@ -8115,7 +8115,7 @@
         {
             "components": {
                 "CameraComponent": {
-                    "_aspectRatio": 1.585421,
+                    "_aspectRatio": 1.398633,
                     "_distance": 6.0,
                     "_farClip": 1000.0,
                     "_fixedAspectRatio": false,
@@ -14551,6 +14551,166 @@
             {
                 "entityRef": 7400527066740844087,
                 "name": "Point Light"
+            },
+            {
+                "children": [
+                    {
+                        "fields": {
+                            "__base__": {
+                                "Node2D": {
+                                    "_position": [
+                                        20.0,
+                                        20.0
+                                    ],
+                                    "_size": [
+                                        300.0,
+                                        120.0
+                                    ],
+                                    "_visible": true,
+                                    "_zOrder": 0
+                                }
+                            },
+                            "_bNineSlice": false,
+                            "_color": [
+                                0.12,
+                                0.14,
+                                0.22,
+                                0.88
+                            ],
+                            "_image": {
+                                "__base__": {
+                                    "AssetRefBase": {
+                                        "_path": ""
+                                    }
+                                }
+                            },
+                            "_nineSliceBorder": [
+                                8.0,
+                                8.0,
+                                8.0,
+                                8.0
+                            ]
+                        },
+                        "name": "Panel",
+                        "nodeType": "UIPanelNode"
+                    },
+                    {
+                        "fields": {
+                            "__base__": {
+                                "Node2D": {
+                                    "_position": [
+                                        36.0,
+                                        30.0
+                                    ],
+                                    "_size": [
+                                        260.0,
+                                        26.0
+                                    ],
+                                    "_visible": true,
+                                    "_zOrder": 0
+                                }
+                            },
+                            "_color": [
+                                1.0,
+                                0.85,
+                                0.4,
+                                1.0
+                            ],
+                            "_fontSize": 16,
+                            "_hAlign": "Left",
+                            "_text": "Game UI (Node2D)",
+                            "_vAlign": "Top"
+                        },
+                        "name": "Title",
+                        "nodeType": "UITextNode"
+                    },
+                    {
+                        "fields": {
+                            "__base__": {
+                                "Node2D": {
+                                    "_position": [
+                                        36.0,
+                                        66.0
+                                    ],
+                                    "_size": [
+                                        260.0,
+                                        20.0
+                                    ],
+                                    "_visible": true,
+                                    "_zOrder": 0
+                                }
+                            },
+                            "_color": [
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0
+                            ],
+                            "_fontSize": 16,
+                            "_hAlign": "Left",
+                            "_text": "Click the button below",
+                            "_vAlign": "Top"
+                        },
+                        "name": "Label",
+                        "nodeType": "UITextNode"
+                    },
+                    {
+                        "fields": {
+                            "__base__": {
+                                "Node2D": {
+                                    "_position": [
+                                        36.0,
+                                        96.0
+                                    ],
+                                    "_size": [
+                                        140.0,
+                                        30.0
+                                    ],
+                                    "_visible": true,
+                                    "_zOrder": 0
+                                }
+                            },
+                            "_hoveredColor": [
+                                0.6,
+                                0.6,
+                                0.6,
+                                1.0
+                            ],
+                            "_normalColor": [
+                                0.8,
+                                0.8,
+                                0.8,
+                                1.0
+                            ],
+                            "_pressedColor": [
+                                0.4,
+                                0.4,
+                                0.4,
+                                1.0
+                            ]
+                        },
+                        "name": "Click Me",
+                        "nodeType": "UIButtonNode"
+                    }
+                ],
+                "fields": {
+                    "__base__": {
+                        "Node2D": {
+                            "_position": [
+                                0.0,
+                                0.0
+                            ],
+                            "_size": [
+                                100.0,
+                                50.0
+                            ],
+                            "_visible": true,
+                            "_zOrder": 0
+                        }
+                    }
+                },
+                "name": "HUD",
+                "nodeType": "UICanvasNode"
             }
         ],
         "name": "scene_root"

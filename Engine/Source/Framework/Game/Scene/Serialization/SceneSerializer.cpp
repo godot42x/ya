@@ -5,7 +5,7 @@
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Resource/AssetManager.h"
-#include "ECS/Component/ManagedChildComponent.h"
+#include "Scene3D/ManagedChildComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/Component/LuaScriptComponent.h"
 #include "GUI/Runtime/Scene/Node2D.h"

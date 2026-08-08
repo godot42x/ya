@@ -16,7 +16,7 @@
 
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/CameraComponent.h"
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include "ECS/System/LuaScriptingSystem.h"
 
 #include "RHI/Backend/Vulkan//VulkanRender.h"

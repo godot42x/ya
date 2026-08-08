@@ -18,7 +18,7 @@
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/SkeletonAnimatorComponent.h"
 #include "ECS/Component/Terrain/TerrainComponent.h"
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include "ECS/System/TransformSystem.h"
 #include "Scene/Core/Scene.h"
 #include "Render3D/Common/Shadow/Common/DirectionalShadowMath.h"

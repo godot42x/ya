@@ -2,7 +2,7 @@
 
 #include "Core/Common/FWD-std.h"
 #include "Core/Log.h"
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include "Physics/PhysicsBodyComponent.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"

@@ -13,7 +13,7 @@
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/RenderComponent.h"
 #include "ECS/Component/Terrain/TerrainComponent.h"
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Editor/EditorLayer.h"
 #include "Editor/Inspector/DetailsViewInternal.h"

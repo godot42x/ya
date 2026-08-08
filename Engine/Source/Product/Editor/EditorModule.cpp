@@ -10,7 +10,7 @@
 #include "ECS/Component/Terrain/TerrainComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/DirectionalLightComponent.h"
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include "ECS/System/TransformSystem.h"
 #include "Editor/EditorLayer.h"
 #include "Editor/EditorPlaySession.h"

@@ -19,7 +19,7 @@
 #include "ECS/Component/ModelComponent.h"
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/RenderComponent.h"
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 #include "ECS/Component/CameraComponent.h"
 #include "Render3D/Adapters/LightBillboard/ComponentLinkageSystem.h"
 #include "ECS/System/TransformSystem.h"

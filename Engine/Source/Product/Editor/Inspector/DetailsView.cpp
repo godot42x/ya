@@ -1,5 +1,5 @@
 #include "Editor/Inspector/DetailsViewInternal.h"
-#include "ECS/Component/TransformComponent.h"
+#include "Scene3D/TransformComponent.h"
 
 namespace ya
 {

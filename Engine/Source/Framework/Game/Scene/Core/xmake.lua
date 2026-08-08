@@ -12,7 +12,3 @@ target("ya-scene-core")
     -- ECS reach is the core infrastructure only (ecs-core); the entity-scene
     -- contract (EntitySceneBridge.cpp) is implemented here.
     add_deps("ya-foundation-core", "ya-ecs-core", "ya-gui-runtime", "ya-scene-3d", "ya-resource", { public = true })
-    -- Transitional: Scene.cpp node creation still touches gameplay components
-    -- (TransformComponent / ManagedChildComponent); they move into the scene
-    -- line with the ya-gameplay-systems split (Phase 2).
-    add_deps("ya-gameplay-ecs")
