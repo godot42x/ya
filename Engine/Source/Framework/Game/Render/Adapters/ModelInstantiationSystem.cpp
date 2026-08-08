@@ -2,7 +2,7 @@
 
 #include "GUI/Runtime/Scene/Node.h"
 #include "Scene3D/Node3D.h"
-#include "Scene/Runtime/SceneManager.h"
+#include "Scene/Core/Scene.h"
 
 #include "Scene3D/ManagedChildComponent.h"
 

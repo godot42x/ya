@@ -21,5 +21,5 @@ target("ya-render-ecs-adapters")
     -- The bridge layer is allowed to reach the resource and Render3D layers
     -- (Phase 2 closure: ecs-core + Resource + Render3D); resolve/binding
     -- services land here as the fat ECS module dissolves.
-    add_deps("ya-resource", "ya-render-3d")
+    add_deps("ya-resource", "ya-render-3d", "ya-gui-runtime", "ya-scene-3d", "ya-scene-runtime")
     add_packages("entt", "glm")
