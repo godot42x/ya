@@ -9,15 +9,10 @@ target("ya-render-ecs-adapters")
     add_files("**.cpp")
     add_headerfiles("./include/**.h", { public = true })
     add_headerfiles("**.h")
-    -- Rules operate on ECS components (transitional fat module) and schedule
-    -- through the generic linkage framework; they never reach Host/App.
-    add_deps(
-        "ya-foundation-core",
-        "ya-ecs-core",
-        "ya-gameplay-systems",
-        "ya-component-linkage",
-        "ya-scene-core",
-        { public = true })
+    -- Rules operate on ECS components and schedule through the generic
+    -- linkage framework; they never reach Host/App.
+    add_deps("ya-foundation-core", "ya-component-linkage", { public = true })
+    add_deps("ya-ecs-core", "ya-gameplay-systems", "ya-scene-core")
     -- The bridge layer is allowed to reach the resource and Render3D layers
     -- (Phase 2 closure: ecs-core + Resource + Render3D); resolve/binding
     -- services land here as the fat ECS module dissolves.

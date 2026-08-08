@@ -21,18 +21,11 @@ target("ya-render-3d")
         "ya-gui-compose",
         "ya-resource-core", "ya-resource-loader", "ya-resource-runtime",
         "ya-render-graph",
-        "ya-scene-3d",
-        "ya-gameplay-systems",
-        "ya-component-linkage",
-        "ya-physics",
         { public = true })
-    -- Render-facing ECS components live in this module (Component/); they
-    -- build on the ECS core infrastructure and the backend builtin textures.
-    add_deps("ya-ecs-core", "ya-rhi-backend-common")
-    -- Scene data/lifecycle types are consumed by Render3D implementation
-    -- .cpp files only (RenderRuntime pipelines, overlays); Render3D public
-    -- headers do not expose them, so the deps stay private.
-    add_deps("ya-scene-core", "ya-scene-runtime")
+    add_deps("ya-ecs-core", "ya-gameplay-systems")
+    -- Implementation-only deps: scene data/lifecycle, GUI resources/compose,
+    -- physics debug lines and the backend builtin texture library.
+    add_deps("ya-gui-resources", "ya-gui-compose", "ya-physics", "ya-rhi-backend-common", "ya-rhi-vulkan", "ya-scene-3d", "ya-scene-core", "ya-scene-runtime")
     -- Transition: render-3d still compiles host-layer headers (App services).
     -- Planned decoupling: app-service interface injection (see plan.md §10).
     ya_engine_defines()

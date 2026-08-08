@@ -9,5 +9,7 @@ target("ya-component-linkage")
     add_files("**.cpp")
     add_headerfiles("./include/**.h", { public = true })
     add_headerfiles("**.h")
-    add_deps("ya-foundation-core", "ya-ecs-core", "ya-scene-core", "ya-scene-runtime", { public = true })
+    add_deps("ya-foundation-core", { public = true })
+    -- Linkage rules operate on ECS entities and scene lifecycle; private.
+    add_deps("ya-ecs-core", "ya-scene-core", "ya-scene-runtime")
     add_packages("entt")

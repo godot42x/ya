@@ -8,7 +8,8 @@ target("ya-resource-runtime")
     add_files("**.cpp|Core/**.cpp|Loader/**.cpp")
     add_headerfiles("./include/**.h", { public = true })
     add_headerfiles("**.h|Core/**.h|Loader/**.h")
-    add_deps("ya-rhi", "ya-rhi-backend-common", "ya-rhi-vulkan", "ya-resource-core", "ya-resource-loader", { public = true })
+    add_deps("ya-foundation-core", "ya-rhi", "ya-resource-core", { public = true })
+    add_deps("ya-rhi-backend-common", "ya-rhi-vulkan", "ya-resource-loader")
     if is_plat("macosx") then
         -- Transition: Game-layer modules still call host App services at
         -- runtime (see plan.md §10). Symbols resolve from the final binary
