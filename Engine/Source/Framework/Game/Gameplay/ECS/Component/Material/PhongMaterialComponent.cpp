@@ -3,6 +3,9 @@
 #include "Core/Math/Math.h"
 #include "GUI/Runtime/Resource/TextureLibrary.h"
 #include "GUI/Runtime/Resource/TextureSlotBinding.h"
+#include "Render3D/Material/MaterialFactory.h"
+#include "Render3D/Material/PhongMaterial.h"
+#include "Resource/Model/MaterialData.h"
 
 #include <string_view>
 
@@ -14,6 +17,23 @@ namespace detail_phong
 {
 
 using TextureResource = PhongMaterial::EResource;
+using SlotEnum         = EPhongMaterialTextureSlot;
+
+TextureResource toTextureResource(SlotEnum slot)
+{
+    // Slot enum order mirrors PhongMaterial::EResource (see header).
+    return static_cast<TextureResource>(slot);
+}
+
+template <typename ComponentType, typename MaterialType>
+MaterialType* createOwnedMaterial(ComponentType& comp)
+{
+    comp.releaseMaterial();
+    std::string matLabel = typeid(MaterialType).name() + std::to_string(reinterpret_cast<uintptr_t>(&comp));
+    comp._material       = MaterialFactory::get()->createMaterial<MaterialType>(matLabel);
+    comp._bSharedMaterial = false; // Created our own material
+    return static_cast<MaterialType*>(comp._material);
+}
 
 bool containsPathToken(std::string_view propPath, std::string_view token)
 {
@@ -50,9 +70,9 @@ bool isParamPath(std::string_view propPath)
 
 } // namespace detail_phong
 
-TextureSlot* PhongMaterialComponent::getTextureSlotInternal(PhongMaterial::EResource resourceEnum)
+TextureSlot* PhongMaterialComponent::getTextureSlotInternal(EPhongMaterialTextureSlot resourceEnum)
 {
-    switch (resourceEnum) {
+    switch (detail_phong::toTextureResource(resourceEnum)) {
     case PhongMaterial::DiffuseTexture:
         return &_diffuseSlot;
     case PhongMaterial::SpecularTexture:
@@ -66,9 +86,9 @@ TextureSlot* PhongMaterialComponent::getTextureSlotInternal(PhongMaterial::EReso
     }
 }
 
-const TextureSlot* PhongMaterialComponent::getTextureSlotInternal(PhongMaterial::EResource resourceEnum) const
+const TextureSlot* PhongMaterialComponent::getTextureSlotInternal(EPhongMaterialTextureSlot resourceEnum) const
 {
-    switch (resourceEnum) {
+    switch (detail_phong::toTextureResource(resourceEnum)) {
     case PhongMaterial::DiffuseTexture:
         return &_diffuseSlot;
     case PhongMaterial::SpecularTexture:
@@ -123,7 +143,7 @@ void PhongMaterialComponent::importParamsFromDescriptor(const MaterialData& matD
     _params.shininess = matData.getParam<float>(MatParam::Shininess, 32.0f);
 }
 
-void PhongMaterialComponent::syncTextureSlot(PhongMaterial::EResource resourceEnum)
+void PhongMaterialComponent::syncTextureSlot(EPhongMaterialTextureSlot resourceEnum)
 {
     if (!getMaterial()) {
         return;
@@ -135,9 +155,9 @@ void PhongMaterialComponent::syncTextureSlot(PhongMaterial::EResource resourceEn
     }
 
     if (slot->isReady()) {
-        getMaterial()->setTextureBinding(resourceEnum, ya::slotToTextureBinding(*slot));
+        getMaterial()->setTextureBinding(detail_phong::toTextureResource(resourceEnum), ya::slotToTextureBinding(*slot));
         getMaterial()->setTextureParam(
-            resourceEnum,
+            detail_phong::toTextureResource(resourceEnum),
             slot->isEnabledEffective(),
             FMath::build_transform_mat3(slot->uvOffset, slot->uvRotation, slot->uvScale));
     }
@@ -148,16 +168,16 @@ void PhongMaterialComponent::syncTextureSlot(PhongMaterial::EResource resourceEn
         auto placeholder = TextureLibrary::get().getCheckerboardTexture();
         auto sampler     = TextureLibrary::get().getDefaultSampler();
         if (placeholder && sampler) {
-            getMaterial()->setTextureBinding(resourceEnum, TextureBinding{placeholder, sampler});
+            getMaterial()->setTextureBinding(detail_phong::toTextureResource(resourceEnum), TextureBinding{placeholder, sampler});
         }
         else {
-            getMaterial()->clearTextureBinding(resourceEnum);
-            getMaterial()->disableTextureParam(resourceEnum);
+            getMaterial()->clearTextureBinding(detail_phong::toTextureResource(resourceEnum));
+            getMaterial()->disableTextureParam(detail_phong::toTextureResource(resourceEnum));
         }
     }
     else {
-        getMaterial()->clearTextureBinding(resourceEnum);
-        getMaterial()->disableTextureParam(resourceEnum);
+        getMaterial()->clearTextureBinding(detail_phong::toTextureResource(resourceEnum));
+        getMaterial()->disableTextureParam(detail_phong::toTextureResource(resourceEnum));
     }
 }
 
@@ -174,7 +194,7 @@ EMaterialResolveResult PhongMaterialComponent::resolve()
 
     // 1. Create runtime material if not exists (skip if using shared material)
     if (!_material) {
-        createDefaultMaterial();
+        detail_phong::createOwnedMaterial<PhongMaterialComponent, PhongMaterial>(*this);
 
         if (!_material) {
             YA_CORE_ERROR("PhongMaterialComponent: Failed to create runtime material");
@@ -267,17 +287,17 @@ void PhongMaterialComponent::onPropertiesChanged(const std::vector<std::string>&
         if (!summary.touchedSlots[index]) {
             continue;
         }
-        syncTextureSlot(static_cast<PhongMaterial::EResource>(index));
+        syncTextureSlot(static_cast<EPhongMaterialTextureSlot>(index));
     }
 }
 
 
 void PhongMaterialComponent::syncTextureSlots()
 {
-    syncTextureSlot(PhongMaterial::EResource::DiffuseTexture);
-    syncTextureSlot(PhongMaterial::EResource::SpecularTexture);
-    syncTextureSlot(PhongMaterial::EResource::ReflectionTexture);
-    syncTextureSlot(PhongMaterial::EResource::NormalTexture);
+    syncTextureSlot(EPhongMaterialTextureSlot::Diffuse);
+    syncTextureSlot(EPhongMaterialTextureSlot::Specular);
+    syncTextureSlot(EPhongMaterialTextureSlot::Reflection);
+    syncTextureSlot(EPhongMaterialTextureSlot::Normal);
 }
 
 void PhongMaterialComponent::importFromDescriptor(const MaterialData& matData)

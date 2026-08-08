@@ -4,8 +4,7 @@
 #include "Core/Common/AssetRef.h"
 #include "Core/Reflection/Reflection.h"
 #include "ECS/Component.h"
-#include "Render3D/Material/Material.h"
-#include "Render3D/Material/MaterialFactory.h"
+#include "ECS/Component/Material/MaterialComponentBase.h"
 
 
 namespace ya
@@ -30,15 +29,19 @@ enum class EMaterialResolveResult : uint8_t
  * @brief Template material component base
  *
  * Provides type-safe material access and common functionality.
- * Does NOT handle mesh data - use StaticMeshComponent/SkinnedMeshComponent for that.
+ * Does NOT handle mesh data - use StaticMeshComponent/SkinnedMeshComponent for
+ * that.
  *
- * @tparam TMaterial The concrete material type (e.g., PhongMaterial)
+ * The runtime material instance is stored opaquely in MaterialComponentBase
+ * and destroyed through the render module's MaterialFactory; this header stays
+ * free of Render3D types (the concrete material type is only forward-declared
+ * and completed at instantiation sites).
+ *
+ * @tparam MaterialType The concrete material type (e.g., PhongMaterial)
  */
 template <typename MaterialType>
-struct MaterialComponent : public IComponent
+struct MaterialComponent : public MaterialComponentBase
 {
-    static_assert(std::is_base_of_v<Material, MaterialType>, "TMaterial must derive from Material");
-
     using material_t = MaterialType;
     YA_REFLECT_BEGIN(MaterialComponent<MaterialType>, IComponent)
     YA_REFLECT_FIELD(_materialPath)
@@ -47,9 +50,6 @@ struct MaterialComponent : public IComponent
     // ========================================
     // Runtime State (Not Serialized)
     // ========================================
-    MaterialType* _material        = nullptr; ///< Pointer to material instance (managed by MaterialFactory)
-    bool          _bSharedMaterial = false;   ///< If true, material is shared and should not be destroyed by this component
-
     std::string _materialPath;
 
   public:
@@ -58,10 +58,7 @@ struct MaterialComponent : public IComponent
         MaterialComponent<MaterialType>::__ensure_reflection_registered();
     }
 
-    virtual ~MaterialComponent()
-    {
-        releaseMaterial();
-    }
+    virtual ~MaterialComponent() = default; // MaterialComponentBase destroys via MaterialFactory
 
     /**
      * @brief Resolve all resources (textures, etc.)
@@ -71,11 +68,6 @@ struct MaterialComponent : public IComponent
     virtual EMaterialResolveResult resolve() { return EMaterialResolveResult::Ready; }
 
     /**
-     * @brief Check if resources have been resolved
-     */
-    // bool isResolved() const {return _material && _material}
-
-    /**
      * @brief Force re-resolve (invalidate cache)
      */
     void invalidate()
@@ -83,58 +75,22 @@ struct MaterialComponent : public IComponent
         releaseMaterial();
     }
 
-    void releaseMaterial()
-    {
-        if (_material && !_bSharedMaterial) {
-            if (auto* factory = MaterialFactory::get()) {
-                factory->destroyMaterial(_material);
-            }
-        }
-        _material        = nullptr;
-        _bSharedMaterial = false;
-    }
-
-    MaterialType* createDefaultMaterial()
-    {
-        releaseMaterial();
-        std::string matLabel = typeid(MaterialType).name() + std::to_string(reinterpret_cast<uintptr_t>(this));
-        _material            = MaterialFactory::get()->createMaterial<MaterialType>(matLabel);
-        _bSharedMaterial     = false; // Created our own material
-        return _material;
-    }
-
-
     /**
      * @brief Set a shared material (will not be destroyed by this component)
      */
     void setSharedMaterial(MaterialType* material)
     {
-        if (_material == material && _bSharedMaterial) {
-            return;
-        }
-
-        releaseMaterial();
-        _material        = material;
-        _bSharedMaterial = (_material != nullptr);
+        setSharedMaterialBase(material);
     }
 
-    MaterialType* getMaterial() const { return _material; }
-    MaterialType* getOrCreateMaterial()
-    {
-        if (!_material)
-        {
-            createDefaultMaterial();
-        }
-        return _material;
-    }
-
+    [[nodiscard]] MaterialType* getMaterial() const { return static_cast<MaterialType*>(_material); }
 
     void setMaterial(MaterialType* material)
     {
         setSharedMaterial(material);
     }
 
-    bool isUsingSharedMaterial() const { return _material != nullptr && _bSharedMaterial; }
+    [[nodiscard]] bool isUsingSharedMaterial() const { return _material != nullptr && _bSharedMaterial; }
 };
 
 

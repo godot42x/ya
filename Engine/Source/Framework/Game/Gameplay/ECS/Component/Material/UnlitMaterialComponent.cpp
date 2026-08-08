@@ -3,6 +3,8 @@
 #include "Core/Math/Math.h"
 #include "GUI/Runtime/Resource/TextureLibrary.h"
 #include "GUI/Runtime/Resource/TextureSlotBinding.h"
+#include "Render3D/Material/MaterialFactory.h"
+#include "Render3D/Material/UnlitMaterial.h"
 
 #include <string_view>
 
@@ -14,6 +16,23 @@ namespace unlit_detail
 {
 
 using TextureResource = UnlitMaterial::EResource;
+using SlotEnum         = EUnlitMaterialTextureSlot;
+
+TextureResource toTextureResource(SlotEnum slot)
+{
+    // Slot enum order mirrors UnlitMaterial::EResource (see header).
+    return static_cast<TextureResource>(slot);
+}
+
+template <typename ComponentType, typename MaterialType>
+MaterialType* createOwnedMaterial(ComponentType& comp)
+{
+    comp.releaseMaterial();
+    std::string matLabel = typeid(MaterialType).name() + std::to_string(reinterpret_cast<uintptr_t>(&comp));
+    comp._material       = MaterialFactory::get()->createMaterial<MaterialType>(matLabel);
+    comp._bSharedMaterial = false; // Created our own material
+    return static_cast<MaterialType*>(comp._material);
+}
 
 bool containsPathToken(std::string_view propPath, std::string_view token)
 {
@@ -44,9 +63,9 @@ bool isParamPath(std::string_view propPath)
 
 } // namespace unlit_detail
 
-TextureSlot* UnlitMaterialComponent::getTextureSlotInternal(UnlitMaterial::EResource resourceEnum)
+TextureSlot* UnlitMaterialComponent::getTextureSlotInternal(EUnlitMaterialTextureSlot resourceEnum)
 {
-    switch (resourceEnum) {
+    switch (unlit_detail::toTextureResource(resourceEnum)) {
     case UnlitMaterial::BaseColor0:
         return &_baseColor0Slot;
     case UnlitMaterial::BaseColor1:
@@ -56,9 +75,9 @@ TextureSlot* UnlitMaterialComponent::getTextureSlotInternal(UnlitMaterial::EReso
     }
 }
 
-const TextureSlot* UnlitMaterialComponent::getTextureSlotInternal(UnlitMaterial::EResource resourceEnum) const
+const TextureSlot* UnlitMaterialComponent::getTextureSlotInternal(EUnlitMaterialTextureSlot resourceEnum) const
 {
-    switch (resourceEnum) {
+    switch (unlit_detail::toTextureResource(resourceEnum)) {
     case UnlitMaterial::BaseColor0:
         return &_baseColor0Slot;
     case UnlitMaterial::BaseColor1:
@@ -100,7 +119,7 @@ void UnlitMaterialComponent::syncParamsToMaterial()
     getMaterial()->setParamDirty();
 }
 
-void UnlitMaterialComponent::syncTextureSlot(UnlitMaterial::EResource resourceEnum)
+void UnlitMaterialComponent::syncTextureSlot(EUnlitMaterialTextureSlot resourceEnum)
 {
     if (!getMaterial()) {
         return;
@@ -112,9 +131,9 @@ void UnlitMaterialComponent::syncTextureSlot(UnlitMaterial::EResource resourceEn
     }
 
     if (slot->isReady()) {
-        getMaterial()->setTextureBinding(resourceEnum, ya::slotToTextureBinding(*slot));
+        getMaterial()->setTextureBinding(unlit_detail::toTextureResource(resourceEnum), ya::slotToTextureBinding(*slot));
         getMaterial()->setTextureParam(
-            resourceEnum,
+            unlit_detail::toTextureResource(resourceEnum),
             slot->isEnabledEffective(),
             FMath::build_transform_mat3(slot->uvOffset, slot->uvRotation, slot->uvScale));
     }
@@ -124,20 +143,20 @@ void UnlitMaterialComponent::syncTextureSlot(UnlitMaterial::EResource resourceEn
         auto placeholder = TextureLibrary::get().getCheckerboardTexture();
         auto sampler     = TextureLibrary::get().getDefaultSampler();
         if (placeholder && sampler) {
-            getMaterial()->setTextureBinding(resourceEnum, TextureBinding{placeholder, sampler});
+            getMaterial()->setTextureBinding(unlit_detail::toTextureResource(resourceEnum), TextureBinding{placeholder, sampler});
             getMaterial()->setTextureParam(
-                resourceEnum,
+                unlit_detail::toTextureResource(resourceEnum),
                 slot->isEnabledEffective(),
                 FMath::build_transform_mat3(slot->uvOffset, slot->uvRotation, slot->uvScale));
         }
         else {
-            getMaterial()->clearTextureBinding(resourceEnum);
-            getMaterial()->disableTextureParam(resourceEnum);
+            getMaterial()->clearTextureBinding(unlit_detail::toTextureResource(resourceEnum));
+            getMaterial()->disableTextureParam(unlit_detail::toTextureResource(resourceEnum));
         }
     }
     else {
-        getMaterial()->clearTextureBinding(resourceEnum);
-        getMaterial()->disableTextureParam(resourceEnum);
+        getMaterial()->clearTextureBinding(unlit_detail::toTextureResource(resourceEnum));
+        getMaterial()->disableTextureParam(unlit_detail::toTextureResource(resourceEnum));
     }
 }
 
@@ -154,7 +173,7 @@ EMaterialResolveResult UnlitMaterialComponent::resolve()
 
     // 1. Create runtime material if not exists (skip if using shared material)
     if (!_material) {
-        createDefaultMaterial();
+        unlit_detail::createOwnedMaterial<UnlitMaterialComponent, UnlitMaterial>(*this);
 
         if (!_material) {
             YA_CORE_ERROR("UnlitMaterialComponent: Failed to create runtime material");
@@ -232,15 +251,15 @@ void UnlitMaterialComponent::onPropertiesChanged(const std::vector<std::string>&
         if (!summary.touchedSlots[index]) {
             continue;
         }
-        syncTextureSlot(static_cast<UnlitMaterial::EResource>(index));
+        syncTextureSlot(static_cast<EUnlitMaterialTextureSlot>(index));
     }
 }
 
 
 void UnlitMaterialComponent::syncTextureSlots()
 {
-    syncTextureSlot(UnlitMaterial::EResource::BaseColor0);
-    syncTextureSlot(UnlitMaterial::EResource::BaseColor1);
+    syncTextureSlot(EUnlitMaterialTextureSlot::BaseColor0);
+    syncTextureSlot(EUnlitMaterialTextureSlot::BaseColor1);
 }
 
 

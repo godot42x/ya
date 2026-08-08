@@ -19,7 +19,6 @@
 #include "Core/Common/AssetRef.h"
 #include "Core/Reflection/Reflection.h"
 #include "ECS/Component.h"
-#include "Resource/Model.h"
 
 #include <unordered_map>
 
@@ -27,6 +26,7 @@ namespace ya
 {
 
 struct Material;
+struct Model;
 
 struct Node;
 
@@ -142,10 +142,7 @@ struct YA_GAMEPLAY_ECS_API ModelComponent : public IComponent
     /**
      * @brief Get the number of meshes in the loaded Model
      */
-    size_t getMeshCount() const
-    {
-        return _modelRef.isLoaded() ? _modelRef.get()->getMeshCount() : 0;
-    }
+    size_t getMeshCount() const;
 
     /**
      * @brief Set the Model path and invalidate

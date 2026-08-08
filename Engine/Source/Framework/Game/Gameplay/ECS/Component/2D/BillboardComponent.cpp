@@ -2,12 +2,23 @@
 
 #include "Core/Math/Math.h"
 #include "Render3D/Material/MaterialFactory.h"
+#include "Render3D/Material/UnlitMaterial.h"
 #include "GUI/Runtime/Resource/TextureLibrary.h"
 #include "GUI/Runtime/Resource/TextureSlotBinding.h"
 
 namespace ya
 
 {
+
+BillboardComponent::~BillboardComponent()
+{
+    if (_material) {
+        if (auto* factory = MaterialFactory::get()) {
+            factory->destroyMaterial(_material);
+        }
+        _material = nullptr;
+    }
+}
 
 bool BillboardComponent::resolve()
 {

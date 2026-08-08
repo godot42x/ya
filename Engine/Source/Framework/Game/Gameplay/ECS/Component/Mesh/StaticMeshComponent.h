@@ -16,10 +16,11 @@
 #include "Core/Reflection/Reflection.h"
 #include "ECS/Component.h"
 #include "ECS/Component/Mesh/MeshSource.h"
-#include "Resource/Mesh.h"
 
 namespace ya
 {
+
+struct Mesh;
 
 /**
  * @brief Entity component pointing at a single non-skinned mesh.

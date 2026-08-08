@@ -1,6 +1,10 @@
 #include "RenderFrameExtractor.h"
 
 #include "Host/App.h"
+#include "Render3D/Material/PBRMaterial.h"
+#include "Render3D/Material/PhongMaterial.h"
+#include "Render3D/Material/SimpleMaterial.h"
+#include "Render3D/Material/UnlitMaterial.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 
 #include "ECS/Component/DirectionalLightComponent.h"

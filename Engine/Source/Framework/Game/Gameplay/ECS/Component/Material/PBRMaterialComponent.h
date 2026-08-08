@@ -23,14 +23,32 @@
 #pragma once
 
 #include "MaterialComponent.h"
-#include "Render3D/Material/PBRMaterial.h"
-#include "Resource/Model/MaterialData.h"
+#include "Core/Common/TextureSlot.h"
 
 #include <array>
 #include <vector>
 
 namespace ya
 {
+
+struct PBRMaterial;
+struct MaterialData;
+
+/**
+ * @brief Component-local texture slot ids (renderer-independent).
+ *
+ * Mirrors the slot order of Render3D's PBRMaterial::EResource so the adapter
+ * can map 1:1; the component header never names the Render3D enum.
+ */
+enum class EPBRMaterialTextureSlot : uint8_t
+{
+    Albedo = 0,
+    Normal,
+    Metallic,
+    Roughness,
+    AO,
+    Count,
+};
 
 /**
  * @brief PBRMaterialComponent - Serializable metallic-roughness PBR component
@@ -40,6 +58,8 @@ namespace ya
  */
 struct YA_GAMEPLAY_ECS_API PBRMaterialComponent : public MaterialComponent<PBRMaterial>
 {
+    using slot_enum_t = EPBRMaterialTextureSlot;
+
     struct AuthoringParams
     {
         YA_REFLECT_BEGIN(AuthoringParams)
@@ -82,7 +102,7 @@ struct YA_GAMEPLAY_ECS_API PBRMaterialComponent : public MaterialComponent<PBRMa
   private:
     struct PropertyChangeSummary
     {
-        std::array<bool, PBRMaterial::EResource::Count> touchedSlots{};
+        std::array<bool, static_cast<size_t>(EPBRMaterialTextureSlot::Count)> touchedSlots{};
         bool                                            hasTextureSlotChange     = false;
         bool                                            hasTextureResourceChange = false;
     };
@@ -97,10 +117,10 @@ struct YA_GAMEPLAY_ECS_API PBRMaterialComponent : public MaterialComponent<PBRMa
         _aoSlot.textureRef.onModified.addLambda(this, f);
     }
 
-    TextureSlot*       getTextureSlotInternal(PBRMaterial::EResource resourceEnum);
-    const TextureSlot* getTextureSlotInternal(PBRMaterial::EResource resourceEnum) const;
+    TextureSlot*       getTextureSlotInternal(EPBRMaterialTextureSlot resourceEnum);
+    const TextureSlot* getTextureSlotInternal(EPBRMaterialTextureSlot resourceEnum) const;
     void               syncParamsToMaterial();
-    void               syncTextureSlot(PBRMaterial::EResource resourceEnum);
+    void               syncTextureSlot(EPBRMaterialTextureSlot resourceEnum);
     void               importParamsFromDescriptor(const MaterialData& matData);
     static PropertyChangeSummary summarizePropertyChanges(const std::vector<std::string>& propPaths);
 
@@ -136,20 +156,20 @@ struct YA_GAMEPLAY_ECS_API PBRMaterialComponent : public MaterialComponent<PBRMa
         return stale;
     }
 
-    TextureSlot*       getTextureSlot(PBRMaterial::EResource r) { return getTextureSlotInternal(r); }
-    const TextureSlot* getTextureSlot(PBRMaterial::EResource r) const { return getTextureSlotInternal(r); }
+    TextureSlot*       getTextureSlot(EPBRMaterialTextureSlot r) { return getTextureSlotInternal(r); }
+    const TextureSlot* getTextureSlot(EPBRMaterialTextureSlot r) const { return getTextureSlotInternal(r); }
 
     AuthoringParams&       getParamsMut() { return _params; }
     const AuthoringParams& getParams() const { return _params; }
 
-    TextureSlot* setTextureSlot(PBRMaterial::EResource resourceEnum, const std::string& path)
+    TextureSlot* setTextureSlot(EPBRMaterialTextureSlot resourceEnum, const std::string& path)
     {
         switch (resourceEnum) {
-        case PBRMaterial::AlbedoTexture:    _albedoSlot.fromPath(path);    break;
-        case PBRMaterial::NormalTexture:    _normalSlot.fromPath(path);    break;
-        case PBRMaterial::MetallicTexture:  _metallicSlot.fromPath(path);  break;
-        case PBRMaterial::RoughnessTexture: _roughnessSlot.fromPath(path); break;
-        case PBRMaterial::AOTexture:        _aoSlot.fromPath(path);        break;
+        case EPBRMaterialTextureSlot::Albedo:    _albedoSlot.fromPath(path);    break;
+        case EPBRMaterialTextureSlot::Normal:    _normalSlot.fromPath(path);    break;
+        case EPBRMaterialTextureSlot::Metallic:  _metallicSlot.fromPath(path);  break;
+        case EPBRMaterialTextureSlot::Roughness: _roughnessSlot.fromPath(path); break;
+        case EPBRMaterialTextureSlot::AO:        _aoSlot.fromPath(path);        break;
         default: break;
         }
         invalidate();

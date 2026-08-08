@@ -12,11 +12,13 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "Core/Math/Geometry.h"
 #include "Core/Reflection/Reflection.h"
-#include "Resource/Mesh.h"
 
 namespace ya
 {
+
+struct Mesh;
 
 /**
  * @brief Reference to a concrete mesh, either from a primitive cache or a loaded Model.

@@ -1,9 +1,15 @@
 #include "ModelComponent.h"
 
 #include "Render3D/Material/MaterialFactory.h"
+#include "Resource/Model.h"
 
 namespace ya
 {
+
+size_t ModelComponent::getMeshCount() const
+{
+    return _modelRef.isLoaded() ? _modelRef.get()->getMeshCount() : 0;
+}
 
 ModelComponent::~ModelComponent()
 {

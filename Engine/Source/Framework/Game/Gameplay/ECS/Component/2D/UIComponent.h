@@ -3,8 +3,8 @@
 
 #include "Core/Common/AssetRef.h"
 #include "Core/Common/FWD-std.h"
+#include "Core/Common/TextureSlot.h"
 #include "ECS/Component.h"
-#include "Render3D/Material/Material.h"
 
 
 namespace ya

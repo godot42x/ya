@@ -2,6 +2,9 @@
 
 #include "GUI/Runtime/Resource/TextureLibrary.h"
 #include "GUI/Runtime/Resource/TextureSlotBinding.h"
+#include "Render3D/Material/MaterialFactory.h"
+#include "Render3D/Material/PBRMaterial.h"
+#include "Resource/Model/MaterialData.h"
 
 #include <string_view>
 
@@ -12,6 +15,23 @@ namespace detail_pbr
 {
 
 using TextureResource = PBRMaterial::EResource;
+using SlotEnum         = EPBRMaterialTextureSlot;
+
+TextureResource toTextureResource(SlotEnum slot)
+{
+    // Slot enum order mirrors PBRMaterial::EResource (see header).
+    return static_cast<TextureResource>(slot);
+}
+
+template <typename ComponentType, typename MaterialType>
+MaterialType* createOwnedMaterial(ComponentType& comp)
+{
+    comp.releaseMaterial();
+    std::string matLabel = typeid(MaterialType).name() + std::to_string(reinterpret_cast<uintptr_t>(&comp));
+    comp._material       = MaterialFactory::get()->createMaterial<MaterialType>(matLabel);
+    comp._bSharedMaterial = false; // Created our own material
+    return static_cast<MaterialType*>(comp._material);
+}
 
 bool containsPathToken(std::string_view propPath, std::string_view token)
 {
@@ -40,9 +60,9 @@ bool isParamPath(std::string_view propPath)
 
 } // namespace detail_pbr
 
-TextureSlot* PBRMaterialComponent::getTextureSlotInternal(PBRMaterial::EResource resourceEnum)
+TextureSlot* PBRMaterialComponent::getTextureSlotInternal(EPBRMaterialTextureSlot resourceEnum)
 {
-    switch (resourceEnum) {
+    switch (detail_pbr::toTextureResource(resourceEnum)) {
     case PBRMaterial::AlbedoTexture:    return &_albedoSlot;
     case PBRMaterial::NormalTexture:    return &_normalSlot;
     case PBRMaterial::MetallicTexture:  return &_metallicSlot;
@@ -52,9 +72,9 @@ TextureSlot* PBRMaterialComponent::getTextureSlotInternal(PBRMaterial::EResource
     }
 }
 
-const TextureSlot* PBRMaterialComponent::getTextureSlotInternal(PBRMaterial::EResource resourceEnum) const
+const TextureSlot* PBRMaterialComponent::getTextureSlotInternal(EPBRMaterialTextureSlot resourceEnum) const
 {
-    switch (resourceEnum) {
+    switch (detail_pbr::toTextureResource(resourceEnum)) {
     case PBRMaterial::AlbedoTexture:    return &_albedoSlot;
     case PBRMaterial::NormalTexture:    return &_normalSlot;
     case PBRMaterial::MetallicTexture:  return &_metallicSlot;
@@ -99,7 +119,7 @@ void PBRMaterialComponent::importParamsFromDescriptor(const MaterialData& matDat
     _params.ao        = 1.0f; // AO is typically baked in textures
 }
 
-void PBRMaterialComponent::syncTextureSlot(PBRMaterial::EResource resourceEnum)
+void PBRMaterialComponent::syncTextureSlot(EPBRMaterialTextureSlot resourceEnum)
 {
     if (!getMaterial()) return;
 
@@ -107,11 +127,11 @@ void PBRMaterialComponent::syncTextureSlot(PBRMaterial::EResource resourceEnum)
     if (!slot) return;
 
     if (slot->isReady()) {
-        getMaterial()->setTextureBinding(resourceEnum, ya::slotToTextureBinding(*slot));
+        getMaterial()->setTextureBinding(detail_pbr::toTextureResource(resourceEnum), ya::slotToTextureBinding(*slot));
 
         TextureSlot effectiveSlot = *slot;
         effectiveSlot.bEnable     = slot->isEnabledEffective();
-        getMaterial()->setTextureParam(resourceEnum, effectiveSlot);
+        getMaterial()->setTextureParam(detail_pbr::toTextureResource(resourceEnum), effectiveSlot);
     }
     else if (slot->hasPath() && slot->textureRef.isLoading()) {
         // Texture is being reloaded — old GPU resources may be destroyed.
@@ -119,20 +139,20 @@ void PBRMaterialComponent::syncTextureSlot(PBRMaterial::EResource resourceEnum)
         auto placeholder = TextureLibrary::get().getCheckerboardTexture();
         auto sampler     = TextureLibrary::get().getDefaultSampler();
         if (placeholder && sampler) {
-            getMaterial()->setTextureBinding(resourceEnum, TextureBinding{.texture = placeholder, .sampler = sampler});
+            getMaterial()->setTextureBinding(detail_pbr::toTextureResource(resourceEnum), TextureBinding{.texture = placeholder, .sampler = sampler});
 
             TextureSlot effectiveSlot = *slot;
             effectiveSlot.bEnable     = slot->isEnabledEffective();
-            getMaterial()->setTextureParam(resourceEnum, effectiveSlot);
+            getMaterial()->setTextureParam(detail_pbr::toTextureResource(resourceEnum), effectiveSlot);
         }
         else {
-            getMaterial()->disableTextureParams(resourceEnum);
-            getMaterial()->clearTextureBinding(resourceEnum);
+            getMaterial()->disableTextureParams(detail_pbr::toTextureResource(resourceEnum));
+            getMaterial()->clearTextureBinding(detail_pbr::toTextureResource(resourceEnum));
         }
     }
     else {
-        getMaterial()->disableTextureParams(resourceEnum);
-        getMaterial()->clearTextureBinding(resourceEnum);
+        getMaterial()->disableTextureParams(detail_pbr::toTextureResource(resourceEnum));
+        getMaterial()->clearTextureBinding(detail_pbr::toTextureResource(resourceEnum));
     }
 }
 
@@ -148,7 +168,7 @@ EMaterialResolveResult PBRMaterialComponent::resolve()
 
     // 1. Create runtime material if not exists
     if (!_material) {
-        createDefaultMaterial();
+        detail_pbr::createOwnedMaterial<PBRMaterialComponent, PBRMaterial>(*this);
         if (!_material) {
             YA_CORE_ERROR("PBRMaterialComponent: Failed to create runtime material");
             _resolveState = EMaterialResolveState::Failed;
@@ -224,17 +244,17 @@ void PBRMaterialComponent::onPropertiesChanged(const std::vector<std::string>& p
 
     for (size_t index = 0; index < summary.touchedSlots.size(); ++index) {
         if (!summary.touchedSlots[index]) continue;
-        syncTextureSlot(static_cast<PBRMaterial::EResource>(index));
+        syncTextureSlot(static_cast<EPBRMaterialTextureSlot>(index));
     }
 }
 
 void PBRMaterialComponent::syncTextureSlots()
 {
-    syncTextureSlot(PBRMaterial::EResource::AlbedoTexture);
-    syncTextureSlot(PBRMaterial::EResource::NormalTexture);
-    syncTextureSlot(PBRMaterial::EResource::MetallicTexture);
-    syncTextureSlot(PBRMaterial::EResource::RoughnessTexture);
-    syncTextureSlot(PBRMaterial::EResource::AOTexture);
+    syncTextureSlot(EPBRMaterialTextureSlot::Albedo);
+    syncTextureSlot(EPBRMaterialTextureSlot::Normal);
+    syncTextureSlot(EPBRMaterialTextureSlot::Metallic);
+    syncTextureSlot(EPBRMaterialTextureSlot::Roughness);
+    syncTextureSlot(EPBRMaterialTextureSlot::AO);
 }
 
 void PBRMaterialComponent::importFromDescriptor(const MaterialData& matData)

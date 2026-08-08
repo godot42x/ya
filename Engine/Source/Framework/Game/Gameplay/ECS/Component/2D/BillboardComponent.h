@@ -1,13 +1,12 @@
 #pragma once
 #include "ECS/Component.h"
-#include "Render3D/Material/MaterialFactory.h"
-#include "Render3D/Material/UnlitMaterial.h"
-#include "Render3D/Material/Material.h"
-#include "Render3D/Common/RenderOverlay.h"
+#include "Core/Common/TextureSlot.h"
 
 
 namespace ya
 {
+
+struct UnlitMaterial;
 
 class BillboardComponent : public IComponent
 {
@@ -29,15 +28,7 @@ class BillboardComponent : public IComponent
         });
     }
 
-    ~BillboardComponent() override
-    {
-        if (_material) {
-            if (auto* factory = MaterialFactory::get()) {
-                factory->destroyMaterial(_material);
-            }
-            _material = nullptr;
-        }
-    }
+    ~BillboardComponent() override;
 
     bool      bVisible          = true;
     TextureSlot image;
@@ -55,6 +46,6 @@ class BillboardComponent : public IComponent
     bool resolve();
 
   private:
-    UnlitMaterial* _material = nullptr;
+    UnlitMaterial* _material = nullptr; ///< Owned through MaterialFactory (render module)
 };
 } // namespace ya

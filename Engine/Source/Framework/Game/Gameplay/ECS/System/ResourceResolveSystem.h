@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "Core/Api.h"
 #include "Core/System/System.h"
 
 #include <deque>

@@ -13,6 +13,9 @@
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
+#include "Render3D/Material/SimpleMaterial.h"
+#include "Render3D/Material/UnlitMaterial.h"
+#include "Render3D/Material/PhongMaterial.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
 #include "ECS/Component/PointLightComponent.h"
@@ -191,7 +194,7 @@ void HelloMaterialModule::createEntities(ya::Scene* scene)
         // Material component
         // auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
         // lmc->createDefaultMaterial();
-        // lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture, "Engine/Content/Textures/Skybox/skybox.png");
+        // lmc->setTextureSlot(ya::EPhongMaterialTextureSlot::Diffuse, "Engine/Content/Textures/Skybox/skybox.png");
         if (auto* sc = entity->addComponent<ya::SkyboxComponent>()) {
             ya::CubeMapCreateInfo ci{
                 .label = "SkyboxCubemap",
@@ -226,7 +229,7 @@ void HelloMaterialModule::createEntities(ya::Scene* scene)
 
         auto lmc                    = entity->addComponent<ya::PhongMaterialComponent>();
         lmc->getParamsMut().diffuse = glm::vec3(0.8f, 0.8f, 0.8f);
-        if (auto diffuse = lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture,
+        if (auto diffuse = lmc->setTextureSlot(ya::EPhongMaterialTextureSlot::Diffuse,
                                                "Engine/ThirdParty/LearnOpenGL/resources/textures/wood.png")) {
 
             diffuse->bEnable = true;
@@ -302,11 +305,11 @@ void HelloMaterialModule::createEntities(ya::Scene* scene)
 
         // Material component with serializable texture slots
         auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
-        if (auto* diffuseSlot = lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture,
+        if (auto* diffuseSlot = lmc->setTextureSlot(ya::EPhongMaterialTextureSlot::Diffuse,
                                                     "Engine/Content/TestTextures/LearnOpenGL/container2.png")) {
             diffuseSlot->bEnable = true;
         }
-        if (auto* specularSlot = lmc->setTextureSlot(ya::PhongMaterial::SpecularTexture,
+        if (auto* specularSlot = lmc->setTextureSlot(ya::EPhongMaterialTextureSlot::Specular,
                                                      "Engine/Content/TestTextures/LearnOpenGL/container2_specular.png")) {
             specularSlot->bEnable = true;
         }
@@ -419,7 +422,7 @@ void HelloMaterialModule::createEntities(ya::Scene* scene)
 
         // Material component
         auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
-        if (auto* diffuseSlot = lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture,
+        if (auto* diffuseSlot = lmc->setTextureSlot(ya::EPhongMaterialTextureSlot::Diffuse,
                                                     "Engine/ThirdParty/LearnOpenGL/resources/textures/window.png")) {
             diffuseSlot->bEnable = true;
         }
@@ -439,9 +442,9 @@ void HelloMaterialModule::createEntities(ya::Scene* scene)
         auto umc = entity->addComponent<ya::UnlitMaterialComponent>();
 
         umc->setSharedMaterial(pointLightUnlitMat);
-        umc->setTextureSlot(ya::UnlitMaterial::BaseColor1, "Engine/Content/TestTextures/icons8-light-64.png");
+        umc->setTextureSlot(ya::EUnlitMaterialTextureSlot::BaseColor1, "Engine/Content/TestTextures/icons8-light-64.png");
         umc->getParamsMut().mixValue = 0.8f;
-        if (auto* slot = umc->getTextureSlot(ya::UnlitMaterial::BaseColor1)) {
+        if (auto* slot = umc->getTextureSlot(ya::EUnlitMaterialTextureSlot::BaseColor1)) {
             slot->bEnable    = true;
             slot->uvRotation = glm::degrees(glm::radians(90.f));
         }
@@ -467,9 +470,9 @@ void HelloMaterialModule::createEntities(ya::Scene* scene)
         auto umc = entity->addComponent<ya::UnlitMaterialComponent>();
 
         umc->setSharedMaterial(pointLightUnlitMat);
-        umc->setTextureSlot(ya::UnlitMaterial::BaseColor1, "Engine/Content/TestTextures/icons8-light-64.png");
+        umc->setTextureSlot(ya::EUnlitMaterialTextureSlot::BaseColor1, "Engine/Content/TestTextures/icons8-light-64.png");
         umc->getParamsMut().mixValue = 0.8f;
-        if (auto* slot = umc->getTextureSlot(ya::UnlitMaterial::BaseColor1)) {
+        if (auto* slot = umc->getTextureSlot(ya::EUnlitMaterialTextureSlot::BaseColor1)) {
             slot->bEnable    = true;
             slot->uvRotation = glm::degrees(glm::radians(90.f));
         }
@@ -494,11 +497,11 @@ void HelloMaterialModule::createEntities(ya::Scene* scene)
 
         // Material component
         auto lmc = entity->addComponent<ya::PhongMaterialComponent>();
-        if (auto* diffuseSlot = lmc->setTextureSlot(ya::PhongMaterial::DiffuseTexture,
+        if (auto* diffuseSlot = lmc->setTextureSlot(ya::EPhongMaterialTextureSlot::Diffuse,
                                                     "Engine/ThirdParty/LearnOpenGL/resources/textures/brickwall.jpg")) {
             diffuseSlot->bEnable = true;
         }
-        if (auto* normalSlot = lmc->setTextureSlot(ya::PhongMaterial::NormalTexture,
+        if (auto* normalSlot = lmc->setTextureSlot(ya::EPhongMaterialTextureSlot::Normal,
                                                    "Engine/ThirdParty/LearnOpenGL/resources/textures/brickwall_normal.jpg")) {
             normalSlot->bEnable = true;
         }

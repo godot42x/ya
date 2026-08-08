@@ -21,13 +21,28 @@
 
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "MaterialComponent.h"
-#include "Render3D/Material/UnlitMaterial.h"
+#include "Core/Common/TextureSlot.h"
 
 #include <array>
 #include <vector>
 
 namespace ya
 {
+
+struct UnlitMaterial;
+
+/**
+ * @brief Component-local texture slot ids (renderer-independent).
+ *
+ * Mirrors the slot order of Render3D's UnlitMaterial::EResource so the adapter
+ * can map 1:1; the component header never names the Render3D enum.
+ */
+enum class EUnlitMaterialTextureSlot : uint8_t
+{
+    BaseColor0 = 0,
+    BaseColor1,
+    Count,
+};
 
 // Forward: EMaterialResolveState is defined in PhongMaterialComponent.h
 // We reuse it here for consistency.
@@ -42,6 +57,8 @@ enum class EMaterialResolveState : uint8_t;
  */
 struct YA_GAMEPLAY_ECS_API UnlitMaterialComponent : public MaterialComponent<UnlitMaterial>
 {
+    using slot_enum_t = EUnlitMaterialTextureSlot;
+
     struct AuthoringParams
     {
         YA_REFLECT_BEGIN(AuthoringParams)
@@ -76,9 +93,9 @@ struct YA_GAMEPLAY_ECS_API UnlitMaterialComponent : public MaterialComponent<Unl
   private:
     struct PropertyChangeSummary
     {
-        std::array<bool, UnlitMaterial::EResource::Count> touchedSlots{};
-        bool                                              hasTextureSlotChange     = false;
-        bool                                              hasTextureResourceChange = false;
+        std::array<bool, static_cast<size_t>(EUnlitMaterialTextureSlot::Count)> touchedSlots{};
+        bool hasTextureSlotChange     = false;
+        bool hasTextureResourceChange = false;
     };
 
     void setupCallbacks()
@@ -91,10 +108,10 @@ struct YA_GAMEPLAY_ECS_API UnlitMaterialComponent : public MaterialComponent<Unl
         _baseColor1Slot.textureRef.onModified.addLambda(this, f);
     }
 
-    TextureSlot*       getTextureSlotInternal(UnlitMaterial::EResource resourceEnum);
-    const TextureSlot* getTextureSlotInternal(UnlitMaterial::EResource resourceEnum) const;
+    TextureSlot*       getTextureSlotInternal(EUnlitMaterialTextureSlot resourceEnum);
+    const TextureSlot* getTextureSlotInternal(EUnlitMaterialTextureSlot resourceEnum) const;
     void               syncParamsToMaterial();
-    void               syncTextureSlot(UnlitMaterial::EResource resourceEnum);
+    void               syncTextureSlot(EUnlitMaterialTextureSlot resourceEnum);
     static PropertyChangeSummary summarizePropertyChanges(const std::vector<std::string>& propPaths);
 
   public:
@@ -126,12 +143,12 @@ struct YA_GAMEPLAY_ECS_API UnlitMaterialComponent : public MaterialComponent<Unl
         return stale;
     }
 
-    TextureSlot* getTextureSlot(UnlitMaterial::EResource resourceEnum)
+    TextureSlot* getTextureSlot(EUnlitMaterialTextureSlot resourceEnum)
     {
         return getTextureSlotInternal(resourceEnum);
     }
 
-    const TextureSlot* getTextureSlot(UnlitMaterial::EResource resourceEnum) const
+    const TextureSlot* getTextureSlot(EUnlitMaterialTextureSlot resourceEnum) const
     {
         return getTextureSlotInternal(resourceEnum);
     }
@@ -139,13 +156,13 @@ struct YA_GAMEPLAY_ECS_API UnlitMaterialComponent : public MaterialComponent<Unl
     AuthoringParams& getParamsMut() { return _params; }
     const AuthoringParams& getParams() const { return _params; }
 
-    TextureSlot* setTextureSlot(UnlitMaterial::EResource resourceEnum, const std::string& path)
+    TextureSlot* setTextureSlot(EUnlitMaterialTextureSlot resourceEnum, const std::string& path)
     {
         switch (resourceEnum) {
-        case UnlitMaterial::BaseColor0:
+        case EUnlitMaterialTextureSlot::BaseColor0:
             _baseColor0Slot.fromPath(path);
             break;
-        case UnlitMaterial::BaseColor1:
+        case EUnlitMaterialTextureSlot::BaseColor1:
             _baseColor1Slot.fromPath(path);
             break;
         default:

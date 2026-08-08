@@ -4,10 +4,11 @@
 
 #include "ECS/Component.h"
 #include "MaterialComponent.h"
-#include "Render3D/Material/SimpleMaterial.h"
 
 namespace ya
 {
+
+struct SimpleMaterial;
 
 struct SimpleMaterialComponent : public MaterialComponent<SimpleMaterial>
 {

@@ -9,6 +9,7 @@
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
+#include "Render3D/Material/SimpleMaterial.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "RHI/Backend/Vulkan/VulkanRender.h"
 #include "RHI/Core/RenderResourceFactory.h"

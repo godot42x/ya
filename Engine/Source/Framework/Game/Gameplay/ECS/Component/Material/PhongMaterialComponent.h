@@ -22,14 +22,31 @@
 #pragma once
 
 #include "MaterialComponent.h"
-#include "Render3D/Material/PhongMaterial.h"
-#include "Resource/Model/MaterialData.h"
+#include "Core/Common/TextureSlot.h"
 
 #include <array>
 #include <vector>
 
 namespace ya
 {
+
+struct PhongMaterial;
+struct MaterialData;
+
+/**
+ * @brief Component-local texture slot ids (renderer-independent).
+ *
+ * Mirrors the slot order of Render3D's PhongMaterial::EResource so the adapter
+ * can map 1:1; the component header never names the Render3D enum.
+ */
+enum class EPhongMaterialTextureSlot : uint8_t
+{
+    Diffuse = 0,
+    Specular,
+    Reflection,
+    Normal,
+    Count,
+};
 
 /**
  * @brief PhongMaterialComponent - Serializable lit material component
@@ -39,6 +56,8 @@ namespace ya
  */
 struct YA_GAMEPLAY_ECS_API PhongMaterialComponent : public MaterialComponent<PhongMaterial>
 {
+    using slot_enum_t = EPhongMaterialTextureSlot;
+
     struct AuthoringParams
     {
         YA_REFLECT_BEGIN(AuthoringParams)
@@ -82,9 +101,9 @@ struct YA_GAMEPLAY_ECS_API PhongMaterialComponent : public MaterialComponent<Pho
   private:
     struct PropertyChangeSummary
     {
-        std::array<bool, PhongMaterial::EResource::Count> touchedSlots{};
-        bool                                              hasTextureSlotChange     = false;
-        bool                                              hasTextureResourceChange = false;
+        std::array<bool, static_cast<size_t>(EPhongMaterialTextureSlot::Count)> touchedSlots{};
+        bool hasTextureSlotChange     = false;
+        bool hasTextureResourceChange = false;
     };
 
     void setupCallbacks()
@@ -99,10 +118,10 @@ struct YA_GAMEPLAY_ECS_API PhongMaterialComponent : public MaterialComponent<Pho
         _normalSlot.textureRef.onModified.addLambda(this, f);
     }
 
-    TextureSlot* getTextureSlotInternal(PhongMaterial::EResource resourceEnum);
-    const TextureSlot* getTextureSlotInternal(PhongMaterial::EResource resourceEnum) const;
+    TextureSlot* getTextureSlotInternal(EPhongMaterialTextureSlot resourceEnum);
+    const TextureSlot* getTextureSlotInternal(EPhongMaterialTextureSlot resourceEnum) const;
     void syncParamsToMaterial();
-    void syncTextureSlot(PhongMaterial::EResource resourceEnum);
+    void syncTextureSlot(EPhongMaterialTextureSlot resourceEnum);
     void importParamsFromDescriptor(const MaterialData& matData);
     static PropertyChangeSummary summarizePropertyChanges(const std::vector<std::string>& propPaths);
 
@@ -143,12 +162,12 @@ struct YA_GAMEPLAY_ECS_API PhongMaterialComponent : public MaterialComponent<Pho
         return stale;
     }
 
-    TextureSlot* getTextureSlot(PhongMaterial::EResource resourceEnum)
+    TextureSlot* getTextureSlot(EPhongMaterialTextureSlot resourceEnum)
     {
         return getTextureSlotInternal(resourceEnum);
     }
 
-    const TextureSlot* getTextureSlot(PhongMaterial::EResource resourceEnum) const
+    const TextureSlot* getTextureSlot(EPhongMaterialTextureSlot resourceEnum) const
     {
         return getTextureSlotInternal(resourceEnum);
     }
@@ -163,22 +182,22 @@ struct YA_GAMEPLAY_ECS_API PhongMaterialComponent : public MaterialComponent<Pho
     //     }
     // }
 
-    TextureSlot* setTextureSlot(PhongMaterial::EResource resourceEnum, const std::string& path)
+    TextureSlot* setTextureSlot(EPhongMaterialTextureSlot resourceEnum, const std::string& path)
     {
         // _textureSlots[resourceEnum].textureRef = TextureRef(path);
         // invalidate();
         // return _textureSlots[resourceEnum];
         switch (resourceEnum) {
-        case PhongMaterial::DiffuseTexture:
+        case EPhongMaterialTextureSlot::Diffuse:
             _diffuseSlot.fromPath(path);
             break;
-        case PhongMaterial::SpecularTexture:
+        case EPhongMaterialTextureSlot::Specular:
             _specularSlot.fromPath(path);
             break;
-        case PhongMaterial::ReflectionTexture:
+        case EPhongMaterialTextureSlot::Reflection:
             _reflectionSlot.fromPath(path);
             break;
-        case PhongMaterial::NormalTexture:
+        case EPhongMaterialTextureSlot::Normal:
             _normalSlot.fromPath(path);
             break;
         default:
