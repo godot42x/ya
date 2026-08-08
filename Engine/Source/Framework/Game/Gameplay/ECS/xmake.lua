@@ -1,18 +1,21 @@
-ya_module("ya-gameplay-ecs", "GAMEPLAY_ECS", {
-    include_root = "../../../..",
-    deps = {
-        "ya-foundation-core",
-        -- Fat module: ECS components/systems reference render + resource
-        -- types (Mesh/Material/pipeline headers), so the RHI include inputs
-        -- (generated shader headers) must be visible here.
-        "ya-foundation-rhi",
-    },
-    packages = {
-        "entt",
-        "glm",
-        "lua",
-        "sol2",
-        "quickjs-ng",
-        "cxxopts",
-    },
-})
+target("ya-gameplay-ecs")
+    set_kind("shared")
+    ya_std_module("YA_GAMEPLAY_ECS_API")
+    add_includedirs("../../../..", { public = true })
+    add_files("**.cpp")
+    add_headerfiles("**.h")
+    -- Fat module for now: ECS components/systems reference render + resource
+    -- types (Mesh/Material/pipeline headers), so RHI is a visible dependency.
+    add_deps("ya-foundation-core", "ya-foundation-rhi", { public = true })
+    -- Transition: the fat ECS module still compiles render/resource/host
+    -- headers (App services, Mesh/Material pipeline types). Planned
+    -- decoupling: split ya-gameplay behind an app-services interface (see
+    -- plan.md §10); until then every engine export macro is injected here.
+    ya_engine_defines()
+    add_packages("entt", "glm", "lua", "sol2", "quickjs-ng", "cxxopts", { public = true })
+    if is_plat("macosx") then
+        -- Transition: ECS systems call host App services (see plan.md §10);
+        -- symbols resolve from the final binary until the app-services
+        -- interface lands.
+        add_shflags("-undefined", "dynamic_lookup", { force = true })
+    end

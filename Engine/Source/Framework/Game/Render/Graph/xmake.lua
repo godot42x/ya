@@ -1,4 +1,7 @@
-ya_module("ya-render-graph", "GAME_RENDER_GRAPH", {
-    include_root = "../../../..",
-    deps = { "ya-foundation-rhi" },
-})
+target("ya-render-graph")
+    set_kind("shared")
+    ya_std_module("YA_RENDER_GRAPH_API")
+    add_includedirs("../../../..", { public = true })
+    add_files("**.cpp")
+    add_headerfiles("**.h")
+    add_deps("ya-foundation-rhi", { public = true })

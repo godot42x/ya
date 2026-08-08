@@ -1,21 +1,13 @@
-ya_module("ya-foundation-rhi-backend", "FOUNDATION_RHI_BACKEND", {
-    include_root = "../../..",
-    deps = { "ya-foundation-rhi" },
-    packages = {
-        "vulkansdk",
-        "vulkan-memory-allocator",
-        "glad",
-        "stb",
-        "ktx",
-        "cxxopts",
-    },
-    -- OpenGL backend is kept in-tree for reference but not built (Vulkan is
+target("ya-foundation-rhi-backend")
+    set_kind("shared")
+    ya_std_module("YA_RHI_BACKEND_API")
+    add_includedirs("../../..", { public = true })
+    -- OpenGL backend stays in-tree for reference but is not built (Vulkan is
     -- the active development backend). VMA/STB single-header implementations
-    -- live here too, compiled outside unity batches.
-    exclude = "OpenGL/**.cpp|Vulkan/VulkanMemoryAllocator.cpp|STB.cpp",
-    unity_ignored = {
-        "Vulkan/VulkanMemoryAllocator.cpp",
-        "STB.cpp",
-    },
-    include_root = "../..",
-})
+    -- are compiled outside unity batches.
+    add_files("**.cpp|OpenGL/**.cpp|Vulkan/VulkanMemoryAllocator.cpp|STB.cpp")
+    add_files("Vulkan/VulkanMemoryAllocator.cpp", { unity_ignored = true })
+    add_files("STB.cpp", { unity_ignored = true })
+    add_headerfiles("**.h")
+    add_deps("ya-foundation-rhi", { public = true })
+    add_packages("vulkansdk", "vulkan-memory-allocator", "glad", "stb", "ktx", "cxxopts", { public = true })

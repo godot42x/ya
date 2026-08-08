@@ -1,13 +1,12 @@
 target("ya-editor")
-do
     set_kind("shared")
-    if get_config("ya_enable_unity-build") then
-        add_rules("c++.unity_build", { batchsize = 3 })
-        add_files("**.cpp", { unity_group = "Editor" })
-    end
+    ya_std_module("YA_EDITOR_API")
     add_files("**.cpp")
     add_deps("ya-engine")
     add_links("ya-engine")
+    -- imgui/imguizmo are now single shared libraries (global ImGui state);
+    -- the editor consumes the same images as host.
+    add_deps("imgui-local", "imguizmo-local")
     add_includedirs("../../..", { public = true })
     add_includedirs("../../../ThirdParty/ImGui", { public = true })
     add_includedirs("../../../ThirdParty/ImGui/Backends", { public = true })
@@ -20,4 +19,3 @@ do
         add_defines("IMGUI_IMPL_API=__declspec(dllimport)")
         add_defines("USE_IMGUI_API")
     end
-end

@@ -1,83 +1,50 @@
 -- ============================================================================
--- Engine module aggregator.
+-- Engine source root.
 --
 -- Source is organized into three product tiers, each module living in its own
--- directory with its own xmake.lua:
+-- directory with a self-describing xmake.lua:
 --
 --   Foundation/   shared infrastructure (Core / RHI / RHI+Backend)
 --   Framework/    product lines (GUI framework; Game: scene/resource/render/
 --                 gameplay/physics)
 --   Product/      assembled products (Host runtime shell / Editor)
 --
--- This file only wires the tiers up and provides one thin helper (`ya_module`)
--- that removes copy-paste for the shared parts:
---   * export-macro plumbing (YA_SHARED / YA_MODULE_BUILD, see Core/Api.h)
---   * the common include root (Engine/Source)
---   * per-module unity grouping + source globbing
--- Each module globs its own sources ("**.cpp") and never reaches outside its
--- directory, so the target list stays in sync with the directory layout.
--- Module-specific wiring (deps / packages / shader codegen / unity exclusions)
--- is declared in each module's own xmake.lua, not flattened here.
+-- This file only provides one thin helper for the genuinely shared parts
+-- (export-macro injection + unity rule) and wires the tier directories up.
+-- Everything module-specific -- target name, kind, sources, deps, packages,
+-- include roots, exclusions -- is written explicitly in each module's own
+-- xmake.lua so the build shape is readable without jumping through helpers.
 -- ============================================================================
 
--- Engine/Source, captured before module files are included below (each module
--- xmake.lua runs with its own scriptdir, so paths must be derived from here).
-local YA_SOURCE_ROOT = os.scriptdir()
+--- Injects the shared module plumbing into the current target:
+---   * the module's own export macro (api_macro) as a preprocessor alias to
+---     YA_API_EXPORT -- no hand-written macros, no central macro table;
+---   * build/import side switches (YA_SHARED / YA_MODULE_BUILD);
+---   * the unity-build rule (module sources still need add_files("**.cpp")).
+--- @param api_macro string e.g. "YA_CORE_API"
+function ya_std_module(api_macro)
+    add_defines("YA_SHARED=1")
+    add_defines("YA_MODULE_BUILD=1")
+    add_defines("YA_SHARED=1", { public = true })
+    add_defines(api_macro .. "=YA_API_EXPORT", { public = true })
+    if get_config("ya_enable_unity-build") then
+        add_rules("c++.unity_build", { batchsize = 2 })
+    end
+end
 
-function ya_module(name, root, opts)
-    opts = opts or {}
-    local exclude     = opts.exclude or ""
-    local includeRoot = opts.include_root or ".."
-
-    target(name)
-        set_kind(opts.kind or "static")
-        -- Export plumbing (see Core/Api.h): xmake stamps both defines, so no
-        -- module hand-writes dllexport/dllimport.
-        add_defines("YA_SHARED=1")
-        add_defines("YA_MODULE_BUILD=1")
-        add_includedirs(includeRoot, { public = true })
-
-        if opts.shader_generated then
-            -- Generated Slang/GLSL headers (Common.Limits.*, Sprite2D.*, ...)
-            -- are consumed through RenderDefines.h and the UI shaders.
-            local engineRoot = path.join(YA_SOURCE_ROOT, "..")
-            add_includedirs(path.join(engineRoot, "Shader/Slang/Generated"), { public = true })
-            add_includedirs(path.join(engineRoot, "Shader/GLSL/Generated"), { public = true })
-        end
-
-        if get_config("ya_enable_unity-build") then
-            add_rules("c++.unity_build", { batchsize = 2 })
-            if exclude ~= "" then
-                add_files("**.cpp|" .. exclude, { unity_group = root })
-            else
-                add_files("**.cpp", { unity_group = root })
-            end
-        end
-        if exclude ~= "" then
-            add_files("**.cpp|" .. exclude)
-        else
-            add_files("**.cpp")
-        end
-        add_headerfiles("**.h")
-
-        -- Single-header third-party implementations (VMA / STB / TinyGLTF)
-        -- must stay out of unity batches: a sibling TU in the same batch can
-        -- include the header first, which blocks the _IMPLEMENTATION macro
-        -- expansion via the include guard.
-        for _, f in ipairs(opts.unity_ignored or {}) do
-            add_files(f, { unity_ignored = true })
-        end
-
-        for _, dep in ipairs(opts.deps or {}) do
-            add_deps(dep, { public = true })
-        end
-        for _, pkg in ipairs(opts.packages or {}) do
-            add_packages(pkg, { public = true })
-        end
-        if opts.extra_setup then
-            opts.extra_setup()
-        end
-    target_end()
+--- Injects every module export macro into the aggregate (ya-engine) so its
+--- precompiled header can parse any engine header. Only the aggregate needs
+--- this; modules get their single macro via ya_std_module().
+function ya_engine_defines()
+    local macros = {
+        "YA_CORE_API", "YA_RHI_API", "YA_RHI_BACKEND_API", "YA_GUI_API",
+        "YA_SCENE_3D_API", "YA_RESOURCE_API", "YA_RENDER_GRAPH_API",
+        "YA_RENDER_3D_API", "YA_GAMEPLAY_ECS_API", "YA_PHYSICS_API",
+        "YA_HOST_API", "YA_EDITOR_API",
+    }
+    for _, macro in ipairs(macros) do
+        add_defines(macro .. "=YA_API_EXPORT")
+    end
 end
 
 -- Foundation tier: shared infrastructure consumed by every product line.

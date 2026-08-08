@@ -1,16 +1,8 @@
-ya_module("ya-foundation-core", "FOUNDATION_CORE", {
-    include_root = "../..",
-    deps = {
-        "utility.cc",
-        "log.cc",
-        "reflects-core",
-    },
-    packages = {
-        "glm",
-        "nlohmann_json",
-        "libsdl3",
-        -- Reflection.h pulls in ECS/ECSRegistry.h (pre-existing coupling,
-        -- tracked as a follow-up to decouple; see Reflection.h TODO).
-        "entt",
-    },
-})
+target("ya-foundation-core")
+    set_kind("shared")
+    ya_std_module("YA_CORE_API")
+    add_includedirs("../..", { public = true })
+    add_files("**.cpp")
+    add_headerfiles("**.h")
+    add_deps("utility.cc", "log.cc", "reflects-core", { public = true })
+    add_packages("glm", "nlohmann_json", "libsdl3", "entt", { public = true })

@@ -1,20 +1,8 @@
-ya_module("ya-host", "PRODUCT_HOST", {
-    include_root = "../..",
-    deps = {
-        "ya-render-3d",
-        "imgui-local",
-        "imguizmo-local",
-    },
-    packages = {
-        "libsdl3",
-        "asio",
-        "cxxopts",
-        "vulkan-memory-allocator",
-        "glad",
-        "lua",
-        "sol2",
-        "quickjs-ng",
-        "vulkansdk",
-        "nlohmann_json",
-    },
-})
+target("ya-host")
+    set_kind("shared")
+    ya_std_module("YA_HOST_API")
+    add_includedirs("../..", { public = true })
+    add_files("**.cpp")
+    add_headerfiles("**.h")
+    add_deps("ya-render-3d", "imgui-local", "imguizmo-local", { public = true })
+    add_packages("libsdl3", "asio", "cxxopts", "vulkan-memory-allocator", "glad", "lua", "sol2", "quickjs-ng", "vulkansdk", "nlohmann_json", { public = true })

@@ -45,7 +45,7 @@ struct IRender;
  *
  * The queue is thread-safe: enqueue() may be called from any thread.
  */
-class YA_RESOURCE_API DeferredDeletionQueue
+class YA_CORE_API DeferredDeletionQueue
 {
   public:
     static DeferredDeletionQueue& get();

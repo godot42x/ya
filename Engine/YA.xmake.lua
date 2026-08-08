@@ -115,25 +115,27 @@ end
 -- Module libraries (engine modularization).
 -- Per-module targets live next to their sources, organized in three product
 -- tiers: Foundation/ (core + RHI + backend), Framework/ (GUI, game product
--- line), Product/ (host + editor). `ya-engine` stays the single shared
--- aggregate export boundary, so editor / examples / tests keep linking
--- exactly one shared library during the transition.
+-- line), Product/ (host + editor). Modules are shared libraries themselves;
+-- `ya-engine` is the transition-period aggregate that re-exports every module
+-- as public deps so editor / examples / tests keep linking one entry point.
 -- ==========================================================================
 
 target("ya-engine")
 do
     set_kind("shared")
     add_defines("YA_SHARED=1")
-    add_defines("YA_MODULE_BUILD=1")
+    -- Every module export macro, so the precompiled header can parse any
+    -- engine header without depending on a central macro table (see Api.h).
+    ya_engine_defines()
     -- Consumers (editor / examples / tests) link the import side.
     add_defines("YA_SHARED=1", { public = true })
     before_build(function(target)
         check_runtime_source_isolation()
     end)
 
-    -- Every engine source lives in a module target collected by
-    -- Source/xmake.lua (single-header third-party implementations are owned
-    -- by their consuming modules). The aggregate only carries the ImGui demo.
+    -- The aggregate carries no engine TU of its own; every engine source
+    -- lives in a module target (single-header third-party implementations are
+    -- owned by their consuming modules). The only file here is the ImGui demo.
     add_files("./ThirdParty/ImGui/imgui_demo.cpp", { unity_ignored = true })
 
     add_headerfiles("./Source/**.h")
@@ -143,20 +145,24 @@ do
     add_includedirs("./Shader/Slang/Generated", { public = true })
     add_includedirs("./Shader/GLSL/Generated", { public = true })
 
-    -- Module deps are intentionally non-public: consumers must link exactly
-    -- one shared library (this aggregate). Public config (include dirs /
-    -- defines / packages) is carried by the aggregate itself below.
-    add_deps("ya-foundation-core", "ya-foundation-rhi", "ya-foundation-rhi-backend", "ya-gui-runtime", "ya-scene-3d", "ya-gameplay-ecs", "ya-resource", "ya-render-graph", "ya-render-3d", "ya-physics", "ya-host")
+    -- Public deps: consumers linking ya-engine transitively link every module
+    -- shared library and receive each module's public include/define config.
+    add_deps(
+        "ya-foundation-core",
+        "ya-foundation-rhi",
+        "ya-foundation-rhi-backend",
+        "ya-gui-runtime",
+        "ya-scene-3d",
+        "ya-gameplay-ecs",
+        "ya-resource",
+        "ya-render-graph",
+        "ya-render-3d",
+        "ya-physics",
+        "ya-host",
+        { public = true })
     add_deps("utility.cc", "log.cc", "reflects-core", { public = true })
     add_deps("imgui-local")
     add_deps("imguizmo-local")
-
-    -- The aggregate compiles no engine TU of its own, so the linker would
-    -- pull nothing from the module archives and the dylib would export no
-    -- engine symbols. ModuleAnchors.cpp below references one anchor function
-    -- per module; with unity builds (the default) each module is a single
-    -- object, so one reference pulls the whole module into the aggregate.
-    add_files("./Source/ModuleAnchors.cpp")
 
     if is_plat("windows") then
         add_defines("IMGUI_API=__declspec(dllexport)")

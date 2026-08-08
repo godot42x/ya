@@ -2,20 +2,21 @@
 -- stack: Draw2D batching, font/texture resources, the Node2D scene tree
 -- (including the shared `Node` hierarchy base) and the viewport compose pass.
 -- Widgets (panels/buttons/... ) become their own module here once extracted.
-ya_module("ya-gui-runtime", "GUI_RUNTIME", {
-    include_root = "../..",
-    deps = {
-        "ya-foundation-core",
-        "ya-foundation-rhi",
-        -- Phase-2 decoupling targets: FontManager/TextureLibrary currently
-        -- reach ResourceRegistry/AssetManager, Node.cpp reaches Entity.name.
-        -- Mapped honestly today so the GUI closure work is driven by the
-        -- linker (see .agent/plan/gui-framework-module-split).
-        "ya-resource",
-        "ya-gameplay-ecs",
-    },
-    packages = {
-        "freetype",
-        "glm",
-    },
-})
+target("ya-gui-runtime")
+    set_kind("shared")
+    ya_std_module("YA_GUI_API")
+    add_includedirs("../..", { public = true })
+    add_files("**.cpp")
+    add_headerfiles("**.h")
+    -- The 2D renderer instantiates descriptor pools / pipeline layouts via
+    -- the RHI factory entry points implemented by the backend, so the GUI
+    -- closure includes the platform backend (Foundation tier, per plan).
+    add_deps("ya-foundation-core", "ya-foundation-rhi", "ya-foundation-rhi-backend", { public = true })
+    add_packages("freetype", "glm", { public = true })
+
+-- GUI framework aggregate: the single link target for pure-GUI hosts. It
+-- carries no sources of its own; public deps re-export the full closure
+-- (foundation + RHI backend + GUI runtime) to consumers.
+target("ya-gui-framework")
+    set_kind("shared")
+    add_deps("ya-foundation-core", "ya-foundation-rhi", "ya-foundation-rhi-backend", "ya-gui-runtime", { public = true })

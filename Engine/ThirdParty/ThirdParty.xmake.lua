@@ -10,11 +10,15 @@ add_requires("freetype")
 
 target("imgui-local")
 do
-    set_kind("static")
+    -- Shared: ImGui keeps global context state, and several engine dylibs
+    -- (host / editor) consume it. A static copy per dylib would split that
+    -- state and crash at runtime, so the library must be a single image.
+    set_kind("shared")
 
     -- use sdl3 + vulkan + opengl
     add_packages("libsdl3")
     add_packages("vulkan-headers")
+    add_packages("vulkansdk")
     add_packages("freetype")
 
     -- add_rules("c++.unity_build", { batchsize = 2 }) -- no need to build multiple times, and sub modules cannot manage recursively dependency
@@ -61,7 +65,9 @@ end
 
 target("imguizmo-local")
 do
-    set_kind("static")
+    -- Shared for the same reason as imgui-local (ImGuizmo reads the shared
+    -- ImGui context).
+    set_kind("shared")
     -- add_rules("c++.unity_build", { batchsize = 2 })
 
     add_deps("imgui-local")

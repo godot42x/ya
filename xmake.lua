@@ -15,6 +15,16 @@ if is_plat("windows") then
     set_runtimes("MD") -- use dynamic CRT to match VulkanSDK prebuilt libs (shaderc_combined etc.)
 end
 
+if is_plat("macosx") then
+    -- Multi-dylib module build: flat namespace makes dyld merge weak symbols
+    -- (inline functions, vtables, typeinfo) across images, so RTTI and
+    -- header-inline singletons stay single-instance. Two-level namespace
+    -- would otherwise give every dylib its own copy and break cross-dylib
+    -- dynamic_cast / virtual dispatch.
+    add_ldflags("-flat_namespace", { force = true })
+    add_shflags("-flat_namespace", { force = true })
+end
+
 
 set_policy("build.warning", true)
 set_warnings("all", "extra")
