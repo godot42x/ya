@@ -298,7 +298,16 @@ class EditorViewportCompositor
                 // depth-tested against the scene depth attached above.
                 if (bAttachDepth) {
                     if (Scene* scene = layer.getViewportInteractionScene()) {
-                        drawPhysicsCollisionDebug(*scene);
+                        drawPhysicsCollisionDebug(
+                            *scene,
+                            PhysicsDebugLineCollector{
+                                .sphere = [](const glm::vec3& center, float radius, const glm::vec4& color) {
+                                    Render2D::makeWireSphere(center, radius, color);
+                                },
+                                .box = [](const glm::mat4& model, const glm::vec3& halfExtent, const glm::vec4& color) {
+                                    Render2D::makeWireBox(model, halfExtent, color);
+                                },
+                            });
                     }
                     drawSelectedEntityBounds(layer);
                 }
