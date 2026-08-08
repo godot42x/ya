@@ -10,8 +10,9 @@
 > ya_engine_defines 从 ECS 移除。fat `ya-gameplay-ecs` 仅剩 render 组件
 > 过渡容器，其溶解依赖 Phase 3 的 Render3D 消费方式重构。Phase 3 已推进：
 > Resource 拆 core/loader/runtime 三层（无 Host/ECS/Render3D 依赖）、
-> OffscreenJobQueueService contract 下沉 RHI（EnvironmentLightingProcessor
-> 不再 include Host）；剩余 environment/terrain 拆分、Render3D 只读消费。  
+> OffscreenJobQueueService contract 下沉 RHI、EnvironmentLightingProcessor 与
+> TerrainProcessor 拆分（均无 Host/App）；剩余 Render3D 只读消费与
+> feature target/profile 化（Phase 5.5）。  
 > 关系：本计划补充并修正 `gui-framework-module-split`；涉及 ECS、Scene、
 > Resource、Render3D、Host 和 XMake 边界的内容，以本计划为后续执行顺序。
 
@@ -478,10 +479,14 @@ Resource 模块下沉到应用层，而是只把“何时为哪个 scene/compone
   - 独立拥有 cylindrical→cubemap、irradiance、prefilter 和 BRDF 相关派生状态；
   - 对 Render3D 暴露只读 lighting result/provider，不暴露 Host 或 mutable scene；
   - 仅在 `engine` profile 且 environment-lighting feature 启用时进入构建图。
-- [ ] 建立独立 `ya-render-terrain`，迁出当前
-      `EnvironmentLightingProcessor` 中的 heightmap decode、mesh build、terrain
-      dirty queue/runtime state；terrain 与 environment lighting 不共享 processor，
-      只复用通用 job/cache/version 基础设施。
+- [x] terrain 处理迁出 `EnvironmentLightingProcessor`（2026-08-09）：
+      新 `TerrainProcessor`（`Render3D/Terrain/`）独立拥有 heightmap decode、
+      mesh build、dirty queue、derived cache 与 audit；environment lighting 与
+      terrain 不再共享 processor（只复用通用 job/cache 设施）。两个
+      processor 的 render/scene/frame 服务全部注入，无 Host/App。
+- [ ] 独立 `ya-render-environment-lighting` / `ya-render-terrain` target
+      （随 Phase 5.5 profile 机制建立；当前两个 processor 仍在
+      ya-render-3d 内）。
 - [ ] 将 scene-level environment binding 放入窄 adapter：负责把 scene authoring
       component 映射到 environment-lighting request/result handle，不负责 GPU
       pipeline 具体实现。
