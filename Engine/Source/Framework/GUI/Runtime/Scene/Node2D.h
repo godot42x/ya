@@ -4,7 +4,7 @@
 #include "Core/Event.h"
 #include "Core/Reflection/Reflection.h"
 #include "GUI/Runtime/UIBase.h"
-#include "GUI/Runtime/Scene/Node.h"
+#include "Hierarchy/Node.h"
 
 #include <functional>
 #include <memory>

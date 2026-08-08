@@ -20,7 +20,7 @@
 #include "Editor/Inspector/DetailsViewInternal.h"
 #include "Host/GUI/ImGui/ImGuiSystem.h"
 #include "GUI/Runtime/Scene/Node2D.h"
-#include "GUI/Runtime/Scene/Node.h"
+#include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
 #include "Host/App.h"
 

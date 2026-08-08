@@ -160,6 +160,7 @@ do
         "ya-rhi",
         "ya-rhi-backend-common",
         "ya-rhi-vulkan",
+        "ya-hierarchy",
         "ya-gui-runtime",
         "ya-scene-core",
         "ya-scene-runtime",

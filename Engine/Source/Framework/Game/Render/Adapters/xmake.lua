@@ -22,4 +22,6 @@ target("ya-render-ecs-adapters")
     -- (Phase 2 closure: ecs-core + Resource + Render3D); resolve/binding
     -- services land here as the fat ECS module dissolves.
     add_deps("ya-resource-core", "ya-resource-loader", "ya-resource-runtime", "ya-render-3d", "ya-gui-runtime", "ya-scene-3d", "ya-scene-runtime")
+    -- Model instantiation walks the scene tree base (Node) from ya-hierarchy.
+    add_deps("ya-hierarchy")
     add_packages("entt", "glm")

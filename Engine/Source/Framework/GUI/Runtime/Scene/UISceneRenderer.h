@@ -2,7 +2,7 @@
 
 #include "Core/Event.h"
 #include "GUI/Runtime/UIBase.h"
-#include "GUI/Runtime/Scene/Node.h"
+#include "Hierarchy/Node.h"
 
 namespace ya
 {

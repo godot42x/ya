@@ -23,7 +23,7 @@
 #include "Resource/AssetManager.h"
 #include "GUI/Runtime/Resource/TextureLibrary.h"
 #include "Host/App.h"
-#include "GUI/Runtime/Scene/Node.h"
+#include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
 

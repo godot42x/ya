@@ -23,7 +23,7 @@ struct Entity;
  * - Use Node for pure organizational hierarchy
  * - Use Node3D for nodes that need transform and ECS integration
  */
-struct YA_GUI_API Node : public disable_copy
+struct YA_HIERARCHY_API Node : public disable_copy
 {
     YA_REFLECT_BEGIN(Node)
     YA_REFLECT_END()

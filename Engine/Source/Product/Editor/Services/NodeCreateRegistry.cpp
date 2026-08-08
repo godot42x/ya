@@ -1,6 +1,6 @@
 #include "Editor/Services/NodeCreateRegistry.h"
 
-#include "GUI/Runtime/Scene/Node.h"
+#include "Hierarchy/Node.h"
 #include "GUI/Runtime/Scene/Node2D.h"
 #include "Scene/Core/Scene.h"
 

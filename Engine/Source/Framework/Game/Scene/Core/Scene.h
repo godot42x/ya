@@ -9,7 +9,7 @@
 #include "ECS/Component.h"
 #include "ECS/ComponentMutation.h"
 #include "ECS/Entity.h"
-#include "GUI/Runtime/Scene/Node.h"
+#include "Hierarchy/Node.h"
 #include "GUI/Runtime/Scene/Node2D.h"
 #include "Scene/Core/ISceneLifecycleHost.h"
 #include "Scene3D/Node3D.h"

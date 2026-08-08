@@ -18,7 +18,7 @@
 #include "Scene3D/TransformComponent.h"
 #include "Editor/Services/NodeCreateRegistry.h"
 #include "GUI/Runtime/Scene/Node2D.h"
-#include "GUI/Runtime/Scene/Node.h"
+#include "Hierarchy/Node.h"
 #include "Scene3D/Node3D.h"
 #include "Scene/Core/Scene.h"
 #include <algorithm>

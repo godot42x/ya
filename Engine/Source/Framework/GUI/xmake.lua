@@ -11,7 +11,8 @@ target("ya-gui-runtime")
     -- The 2D renderer instantiates descriptor pools / pipeline layouts via
     -- the RHI factory entry points implemented by the backend, so the GUI
     -- closure includes the platform backend (Foundation tier, per plan).
-    add_deps("ya-foundation-core", "ya-rhi", "ya-rhi-backend-common", "ya-rhi-vulkan", { public = true })
+    -- Node2D/UI scene extend the renderer-independent scene-tree base.
+    add_deps("ya-foundation-core", "ya-hierarchy", "ya-rhi", "ya-rhi-backend-common", "ya-rhi-vulkan", { public = true })
     add_packages("glm", { public = true })
     add_packages("freetype")
 

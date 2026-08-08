@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GUI/Runtime/Scene/Node.h"
+#include "Hierarchy/Node.h"
 
 namespace ya
 {
