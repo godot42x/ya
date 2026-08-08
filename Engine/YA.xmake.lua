@@ -167,6 +167,8 @@ do
         "ya-gameplay-animation",
         "ya-ecs-core",
         "ya-gameplay-ecs",
+        "ya-gameplay-systems",
+        "ya-component-linkage",
         "ya-resource",
         "ya-render-graph",
         "ya-render-3d",
