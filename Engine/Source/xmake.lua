@@ -19,6 +19,22 @@
 -- Engine/Source, captured before module files are included below.
 local YA_SOURCE_ROOT = os.scriptdir()
 
+--- Module target kind shared by every engine module: the same sources,
+--- deps and package lists serve both linkage forms.
+---   shared:   every module is its own shared library
+---   monolith: modules become static and link into each product exe
+--- @return string "shared" or "static"
+function ya_target_kind()
+    return (get_config("ya_linkage") or "shared") == "monolith" and "static" or "shared"
+end
+
+--- Kind for aggregate/meta facade targets that carry no sources of their
+--- own: a real shared library in shared mode (compat facade), a pure
+--- dependency group (phony, no archive) in monolith mode.
+function ya_meta_kind()
+    return (get_config("ya_linkage") or "shared") == "monolith" and "phony" or "shared"
+end
+
 -- Product-tier include roots keyed by short name. Headers are addressed by
 -- module-name prefix (`Core/Base.h`, `GUI/Scene/Node2D.h`, `Host/App.h`,
 -- `Scene/Core/Scene.h`, ...) instead of full physical paths under Engine/Source.
@@ -83,22 +99,28 @@ includes("./Foundation/RHI/xmake.lua")
 -- Foundation + Hierarchy + GUI.
 includes("./Framework/Hierarchy/xmake.lua")
 includes("./Framework/GUI/xmake.lua")
-includes("./Framework/Game/Scene/Core/xmake.lua")
-includes("./Framework/Game/Scene/Runtime/xmake.lua")
-includes("./Framework/Game/Scene/Serialization/xmake.lua")
-includes("./Framework/Game/Scene/Scene3D/xmake.lua")
-includes("./Framework/Game/Resource/Core/xmake.lua")
-includes("./Framework/Game/Resource/Loader/xmake.lua")
-includes("./Framework/Game/Resource/xmake.lua")
-includes("./Framework/Game/Render/Graph/xmake.lua")
-includes("./Framework/Game/Render/Render3D/xmake.lua")
-includes("./Framework/Game/Gameplay/ECS/Core/xmake.lua")
-includes("./Framework/Game/Gameplay/ECS/xmake.lua")
-includes("./Framework/Game/Gameplay/Linkage/xmake.lua")
-includes("./Framework/Game/Gameplay/Systems/xmake.lua")
-includes("./Framework/Game/Physics/xmake.lua")
-includes("./Framework/Game/Render/Adapters/xmake.lua")
 
--- Product tier: assembled runtimes.
-includes("./Product/Host/xmake.lua")
-includes("./Product/Editor/xmake.lua")
+-- Game product line + product tier: engine profile only. The gui profile
+-- never pulls ECS/Scene3D/Resource/RenderGraph/Render3D/Physics/Host/Editor
+-- (or their sources/packages/shader groups) into the build graph.
+if get_config("ya_profile") ~= "gui" then
+    includes("./Framework/Game/Scene/Core/xmake.lua")
+    includes("./Framework/Game/Scene/Runtime/xmake.lua")
+    includes("./Framework/Game/Scene/Serialization/xmake.lua")
+    includes("./Framework/Game/Scene/Scene3D/xmake.lua")
+    includes("./Framework/Game/Resource/Core/xmake.lua")
+    includes("./Framework/Game/Resource/Loader/xmake.lua")
+    includes("./Framework/Game/Resource/xmake.lua")
+    includes("./Framework/Game/Render/Graph/xmake.lua")
+    includes("./Framework/Game/Render/Render3D/xmake.lua")
+    includes("./Framework/Game/Gameplay/ECS/Core/xmake.lua")
+    includes("./Framework/Game/Gameplay/ECS/xmake.lua")
+    includes("./Framework/Game/Gameplay/Linkage/xmake.lua")
+    includes("./Framework/Game/Gameplay/Systems/xmake.lua")
+    includes("./Framework/Game/Physics/xmake.lua")
+    includes("./Framework/Game/Render/Adapters/xmake.lua")
+
+    -- Product tier: assembled runtimes.
+    includes("./Product/Host/xmake.lua")
+    includes("./Product/Editor/xmake.lua")
+end

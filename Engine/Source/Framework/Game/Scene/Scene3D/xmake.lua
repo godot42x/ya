@@ -1,5 +1,5 @@
 target("ya-scene-3d")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_SCENE_3D_API")
     ya_tier_include("Scene")
     add_files("**.cpp")

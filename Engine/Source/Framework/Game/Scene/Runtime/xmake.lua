@@ -2,7 +2,7 @@
 -- Host registration happens through ISceneLifecycleHost (injected by the
 -- Host via Scene::setLifecycleHost), not through App access.
 target("ya-scene-runtime")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_SCENE_RUNTIME_API")
     ya_tier_include("Scene")
     add_files("**.cpp")

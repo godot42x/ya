@@ -14,9 +14,13 @@ end
 
 -- on_load -> after_load -> on_config -> before_build -> on_build -> after_build
 
-for _, files in ipairs(os.files(os.projectdir() .. "/Example/**/*xmake.lua")) do
-    -- print("Including xmake.lua from:", files)
-    includes(files)
+-- 3D examples are engine-profile products; the gui profile never pulls
+-- their sources or their ya-engine dependency into the build graph.
+if get_config("ya_profile") ~= "gui" then
+    for _, files in ipairs(os.files(os.projectdir() .. "/Example/**/*xmake.lua")) do
+        -- print("Including xmake.lua from:", files)
+        includes(files)
+    end
 end
 -- #pragma once
 

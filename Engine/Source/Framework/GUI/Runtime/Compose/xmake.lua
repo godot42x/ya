@@ -1,7 +1,7 @@
 -- GUI compose: viewport/UI compose pass. Only needed when render-target
 -- composition is used.
 target("ya-gui-compose")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_GUI_API")
     ya_tier_include("Framework")
     add_includedirs("./include", { public = true })

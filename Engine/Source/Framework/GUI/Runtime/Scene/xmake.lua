@@ -1,7 +1,7 @@
 -- GUI scene: Node2D/UIBase and the UI scene traversal. The scene-tree base
 -- (Node) comes from the renderer-independent ya-hierarchy module.
 target("ya-gui-scene")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_GUI_API")
     ya_tier_include("Framework")
     add_includedirs("./include", { public = true })

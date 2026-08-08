@@ -1,27 +1,44 @@
+local ya_profile = get_config("ya_profile") or "engine"
+
 includes("./Plugins/Plugins.xmake.lua")
 includes("./Shader/Shader.xmake.lua")
-includes("./Test/xmake.lua")
-includes("./Programs/Programs.xmake.lua")
 includes("./ThirdParty/ThirdParty.xmake.lua")
+-- Engine test runner + GUI closure test (engine-only targets are guarded
+-- inside Engine/Test/xmake.lua; the closure test must exist in gui profile).
+includes("./Test/xmake.lua")
 includes("./Source/xmake.lua")
 
+-- Engine product line entry points (runtime, examples) are engine-profile
+-- only; the gui profile ships the GUI modules + minimal host.
+if ya_profile ~= "gui" then
+    includes("./Programs/Programs.xmake.lua")
+end
+
+-- Package closure per profile: the gui profile only resolves the packages
+-- its targets actually declare (Core/RHI/Vulkan/GUI). 3D-only packages
+-- (assimp/tinygltf/Jolt/sol2/quickjs/glad/...) never enter a gui build.
 add_requires(
     "spdlog"
-    , "libsdl3_image"
-    , "asio"
     , "glm"
-    , "stb"
-    , "tinygltf v2.9.6"
-    , "cxxopts"
-    , "lua v5.4.8"
-    , "freetype"
     , "nlohmann_json v3.12.0"
-    , "sol2"
-    , "glad"
+    , "freetype"
+    , "stb"
     , "ktx"
-    ,"joltphysics v5.5.0"
-    ,"quickjs-ng v0.15.1"
 )
+if ya_profile ~= "gui" then
+    add_requires(
+        "libsdl3_image"
+        , "asio"
+        , "cxxopts"
+        , "tinygltf v2.9.6"
+        , "lua v5.4.8"
+        , "sol2"
+        , "glad"
+        , "joltphysics v5.5.0"
+        , "quickjs-ng v0.15.1"
+    )
+end
+
 add_requireconfs("freetype", {
     system = false,
     configs = {
@@ -45,13 +62,15 @@ add_requires("libsdl3", {
         shared = true,
     }
 })
-add_requires("assimp v6.0.4", {
-    configs = {
-        shared = false,
-        runtimes = "MD",
-        cxxflags = "-std=c++20",
-    }
-})
+if ya_profile ~= "gui" then
+    add_requires("assimp v6.0.4", {
+        configs = {
+            shared = false,
+            runtimes = "MD",
+            cxxflags = "-std=c++20",
+        }
+    })
+end
 
 
 
@@ -129,9 +148,12 @@ end
 -- as public deps so editor / examples / tests keep linking one entry point.
 -- ==========================================================================
 
+-- The engine aggregate facade is an engine-profile concept; the gui profile
+-- aggregates through ya-gui-framework instead.
+if ya_profile ~= "gui" then
 target("ya-engine")
 do
-    set_kind("shared")
+    set_kind(ya_meta_kind())
     add_defines("YA_SHARED=1")
     -- Every module export macro, so the precompiled header can parse any
     -- engine header without depending on a central macro table (see Api.h).
@@ -237,4 +259,5 @@ do
         print("removing sdl log files")
         os.rm("$(projectdir)/ya.*-*-*.log")
     end)
+end
 end

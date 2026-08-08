@@ -3,7 +3,7 @@
 -- GUI / Scene3D / ECS type; public API is exposed through the module
 -- forwarding root (include/Hierarchy/...).
 target("ya-hierarchy")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_HIERARCHY_API")
     add_includedirs("./include", { public = true })
     add_files("Node.cpp")

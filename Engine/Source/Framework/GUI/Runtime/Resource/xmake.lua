@@ -2,7 +2,7 @@
 -- Core/RHI only; public API exposed through the GUI/Resources/ forwarding
 -- root.
 target("ya-gui-resources")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_GUI_API")
     ya_tier_include("Framework")
     add_includedirs("./include", { public = true })

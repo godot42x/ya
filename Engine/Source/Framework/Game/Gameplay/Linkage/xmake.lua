@@ -3,7 +3,7 @@
 -- business state; rules (light billboards, material topology, ...) are
 -- registered by the Host composition and live in the render adapters.
 target("ya-component-linkage")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_COMPONENT_LINKAGE_API")
     ya_tier_include("Gameplay")
     add_files("**.cpp")

@@ -5,7 +5,7 @@
 -- IDescriptorSetLayout::create, ...) live in ya-rhi-vulkan because they
 -- construct concrete backend types.
 target("ya-rhi-backend-common")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_RHI_BACKEND_API")
     ya_tier_include("Foundation")
     -- BuiltinTextureLibrary provides the standard white/black/checkerboard
@@ -22,7 +22,7 @@ target("ya-rhi-backend-common")
 -- dispatch RHI interface creation to the concrete Vulkan types live here,
 -- next to the implementations they construct.
 target("ya-rhi-vulkan")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_RHI_BACKEND_API")
     ya_tier_include("Foundation")
     add_files("Render.cpp", "FrameBuffer.cpp", "RenderPass.cpp", "Swapchain.cpp")

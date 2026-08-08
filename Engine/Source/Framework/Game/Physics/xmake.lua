@@ -1,5 +1,5 @@
 target("ya-physics")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_PHYSICS_API")
     ya_tier_include("Game")
     add_files("**.cpp")

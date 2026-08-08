@@ -5,7 +5,7 @@
 -- public include inputs consumed through RenderDefines.h; the paths are
 -- derived from this file's directory (Engine/Source/Foundation/RHI).
 target("ya-rhi")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_RHI_API")
     ya_tier_include("Foundation")
     add_includedirs(path.join(os.scriptdir(), "../../../Shader/Slang/Generated"), { public = true })

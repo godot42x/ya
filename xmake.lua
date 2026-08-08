@@ -1,6 +1,26 @@
 add_rules("mode.debug", "mode.releasedbg", "mode.release", "mode.profile")
 set_languages("c++20")
 
+-- Product profile: which product line enters the build graph.
+--   engine: full 3D engine (Game line + Host + Editor)
+--   gui:    lightweight 2D framework (Core/RHI/Vulkan/GUI + minimal host)
+option("ya_profile")
+    set_default("engine")
+    set_showmenu(true)
+    set_values("engine", "gui")
+    set_description("Product profile: engine (full 3D) or gui (lightweight 2D)")
+option_end()
+
+-- Module linkage: how module targets are built.
+--   shared:   every module is its own shared library (DLL/dylib)
+--   monolith: modules become static and are linked into each product exe
+option("ya_linkage")
+    set_default("shared")
+    set_showmenu(true)
+    set_values("shared", "monolith")
+    set_description("Module linkage: shared module libraries or static monolith")
+option_end()
+
 -- NOTE (macOS Vulkan SDK): installed by Script/setup_vulkan_sdk_macos.py into
 -- the MAIN project's repo-local dir Engine/ThirdParty/VulkanSDK (real files;
 -- $YA_CACHE_ROOT / git config ya.cacheRoot / $YA_VULKAN_SDK_ROOT override the
@@ -90,7 +110,11 @@ end
 includes("./Xmake/Rule.lua")
 includes("./Xmake/package/xmake.lua")
 includes("./Engine/YA.xmake.lua")
-includes("./Test/xmake.lua")
+-- Legacy standalone test targets (Test/*.cpp) depend on the full engine
+-- aggregate; they are engine-profile only.
+if get_config("ya_profile") ~= "gui" then
+    includes("./Test/xmake.lua")
+end
 
 -- add_rules("SourceFiles")
 
@@ -100,4 +124,8 @@ set_rundir(os.scriptdir())
 add_rules("plugin.compile_commands.autoupdate", { outputdir = os.scriptdir() })
 
 
-includes("./Example/xmake.lua")
+-- 3D examples are engine-profile products; the gui profile never pulls
+-- their sources or ya-engine dependency into the build graph.
+if get_config("ya_profile") ~= "gui" then
+    includes("./Example/xmake.lua")
+end

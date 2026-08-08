@@ -9,12 +9,13 @@ includes("./Runtime/Resource/xmake.lua")
 includes("./Runtime/Draw2D/xmake.lua")
 includes("./Runtime/Scene/xmake.lua")
 includes("./Runtime/Compose/xmake.lua")
+includes("./MinimalHost/xmake.lua")
 
 -- GUI framework aggregate: the single link target for pure-GUI hosts. It
 -- carries no sources of its own; public deps re-export the full closure
 -- (foundation + RHI backend + the four GUI modules) to consumers.
 target("ya-gui-framework")
-    set_kind("shared")
+    set_kind(ya_meta_kind())
     add_deps(
         "ya-foundation-core",
         "ya-hierarchy",

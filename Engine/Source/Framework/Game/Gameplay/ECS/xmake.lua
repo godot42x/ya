@@ -1,5 +1,5 @@
 target("ya-gameplay-ecs")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_GAMEPLAY_ECS_API")
     -- Fat-module transition: the module's own source tree is exposed through
     -- the Gameplay tier root ("ECS/..."); render reach is compile-time only

@@ -3,7 +3,7 @@
 -- topology) and will absorb the render-facing component resolve/binding logic
 -- as the transitional fat ECS module dissolves.
 target("ya-render-ecs-adapters")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_RENDER_ECS_ADAPTERS_API")
     ya_tier_include("Render")
     add_files("**.cpp")

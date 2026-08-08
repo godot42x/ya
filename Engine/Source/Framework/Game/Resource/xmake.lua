@@ -2,7 +2,7 @@
 -- engine asset-ref resolver. Depends on core + loader + RHI/GUI; never
 -- reaches Scene/ECS/Host/Render3D.
 target("ya-resource-runtime")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_RESOURCE_API")
     ya_tier_include("Game")
     add_files("**.cpp|Core/**.cpp|Loader/**.cpp")

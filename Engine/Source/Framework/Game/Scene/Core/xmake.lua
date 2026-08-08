@@ -2,7 +2,7 @@
 -- lifecycle registration seam (ISceneLifecycleHost) shared by scene-runtime,
 -- scene-serialization and the Host. Kept free of Render3D and Host types.
 target("ya-scene-core")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_SCENE_CORE_API")
     ya_tier_include("Scene", "Gameplay", "Framework", "Game")
     add_files("**.cpp")

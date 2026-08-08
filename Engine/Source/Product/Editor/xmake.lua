@@ -1,5 +1,5 @@
 target("ya-editor")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_EDITOR_API")
     ya_tier_include("Product")
     add_files("**.cpp")

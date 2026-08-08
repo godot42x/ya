@@ -1,7 +1,7 @@
 -- Resource loader: asset importers (Assimp / TinyGLTF / stb) producing the
 -- imported-data contracts from ya-resource-core. No RHI/GUI/Host reach.
 target("ya-resource-loader")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_RESOURCE_LOADER_API")
     ya_tier_include("Game")
     add_files("**.cpp|Model/TinyGLTF.cpp")

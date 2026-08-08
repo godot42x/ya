@@ -6,7 +6,7 @@
 -- by ya-scene-core through the entity-scene contract, so this module has no
 -- Scene dependency edge.
 target("ya-ecs-core")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_ECS_CORE_API")
     add_includedirs("./include", { public = true })
     add_files("**.cpp")

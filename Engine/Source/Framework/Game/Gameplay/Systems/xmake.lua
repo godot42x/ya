@@ -2,7 +2,7 @@
 -- the scene line. Systems never reach Host/Render3D; scene access is injected
 -- through narrow provider seams by the Host composition.
 target("ya-gameplay-systems")
-    set_kind("shared")
+    set_kind(ya_target_kind())
     ya_std_module("YA_GAMEPLAY_SYSTEMS_API")
     ya_tier_include("Gameplay")
     add_files("**.cpp")

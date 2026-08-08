@@ -1,25 +1,30 @@
 add_requires("gtest")
 
-target("ya-module-fixture")
-do
-    set_kind("shared")
-    add_files("./Fixture/ModuleFixture.cpp")
-    add_deps("ya-engine")
-end
+-- Engine test runner + module fixture depend on the full engine aggregate,
+-- so they are engine-profile only; the GUI closure test below is the single
+-- test target that also exists in the gui profile.
+if get_config("ya_profile") ~= "gui" then
+    target("ya-module-fixture")
+    do
+        set_kind("shared")
+        add_files("./Fixture/ModuleFixture.cpp")
+        add_deps("ya-engine")
+    end
 
-target("ya-testing")
-do
-    set_kind("binary")
-    add_files("./Source/**.cpp")
+    target("ya-testing")
+    do
+        set_kind("binary")
+        add_files("./Source/**.cpp")
 
-    add_deps("ya-engine", "ya-module-fixture")
-    add_packages("gtest")
-    add_packages("quickjs-ng")
-    add_packages("asio")
+        add_deps("ya-engine", "ya-module-fixture")
+        add_packages("gtest")
+        add_packages("quickjs-ng")
+        add_packages("asio")
 
-    if is_plat("windows") then
-        -- /utf-8
-        add_cxxflags("/utf-8")
+        if is_plat("windows") then
+            -- /utf-8
+            add_cxxflags("/utf-8")
+        end
     end
 end
 
