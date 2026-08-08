@@ -17,7 +17,9 @@
 #include "Core/System/FileWatcher.h"
 #include "Core/System/VirtualFileSystem.h"
 
-#include "Render3D/Adapters/LightBillboard/ComponentLinkageSystem.h"
+#include "Gameplay/Linkage/LinkageFramework.h"
+#include "Render3D/Adapters/LightBillboard/LightBillboardLinkageRule.h"
+#include "Render3D/Adapters/Material/MaterialRenderLinkageRule.h"
 #include "ECS/System/LuaScriptingSystem.h"
 #include "Gameplay/Systems/JSScriptingSystem.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
@@ -397,7 +399,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
     });
     sys4->init();
     app._systems.push_back(sys4);
-    auto sys5 = ya::makeShared<ComponentLinkageSystem>();
+    auto sys5 = ya::makeShared<LinkageFramework>();
     // Light billboard policy is injected here (Host owns the config source);
     // the adapter never reaches Host/Config.
     LightBillboardPolicy billboardPolicy;
@@ -409,7 +411,15 @@ void AppLifecycle::init(App& app, AppDesc ci)
     billboardPolicy.directional.screenSizePixels = ConfigManager::get().getOr<float>("editor", "lightBillboards.directional.screenSizePixels", billboardPolicy.directional.screenSizePixels);
     billboardPolicy.directional.minWorldScale    = ConfigManager::get().getOr<float>("editor", "lightBillboards.directional.minWorldScale", billboardPolicy.directional.minWorldScale);
     billboardPolicy.directional.texturePath      = ConfigManager::get().getOr<std::string>("editor", "lightBillboards.directional.texturePath", billboardPolicy.directional.texturePath);
-    ComponentLinkageSystem::setLightBillboardPolicy(billboardPolicy);
+    auto lightBillboardRule = ya::makeShared<LightBillboardLinkageRule>(sys5.get());
+    lightBillboardRule->setPolicy(billboardPolicy);
+    sys5->addRule(lightBillboardRule);
+    sys5->addRule(ya::makeShared<MaterialRenderLinkageRule>(sys5.get()));
+    sys5->setSceneManager(app.getSceneServices().getSceneManager());
+    sys5->setFrameTaskSink([&app](std::function<void()> task)
+    {
+        app.getTaskManager().registerFrameTask(std::move(task));
+    });
     sys5->init();
     app._systems.push_back(sys5);
     auto sysPhysics = ya::makeShared<PhysicsSystem>();

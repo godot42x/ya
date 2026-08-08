@@ -21,11 +21,12 @@
 #include "ECS/Component/RenderComponent.h"
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Component/CameraComponent.h"
-#include "Render3D/Adapters/LightBillboard/ComponentLinkageSystem.h"
+#include "Render3D/Adapters/LightBillboard/LightBillboardLinkageRule.h"
 #include "Gameplay/Systems/TransformSystem.h"
 
 #include "Render3D/RenderRuntime.h"
 #include "Scene/Core/Scene.h"
+#include "Scene/Runtime/SceneManager.h"
 
 #include <asio.hpp>
 #include <cmath>
@@ -221,7 +222,7 @@ Scene* createBillboardRegressionScene(App& app)
             light->color = glm::vec3(1.0f, 0.8f, 0.35f);
             light->intensity = 6.0f;
         }
-        ComponentLinkageSystem::applyLightBillboardLinkage(rawScene, entity->getHandle());
+        LightBillboardLinkageRule::applyLinkage(rawScene, entity->getHandle());
     }
 
     auto* directionalNode = rawScene->createNode3D("RegressionDirectionalLight");
@@ -238,7 +239,7 @@ Scene* createBillboardRegressionScene(App& app)
             light->intensity = 3.0f;
             light->bEnable = true;
         }
-        ComponentLinkageSystem::applyLightBillboardLinkage(rawScene, entity->getHandle());
+        LightBillboardLinkageRule::applyLinkage(rawScene, entity->getHandle());
     }
 
     app.getSceneServices().refreshSceneDerivedState(rawScene);
