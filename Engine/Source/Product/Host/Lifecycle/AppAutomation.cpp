@@ -1,6 +1,7 @@
 #include "Host/Lifecycle/AppAutomation.h"
 
 #include "Render3D/Forward/ForwardRenderPipeline.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Host/App.h"
 #include "Render3D/Common/PostProcessingStage.h"
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
@@ -268,11 +269,11 @@ void resetAutomationStability(AppAutomationRuntimeState& runtimeState, const Sce
 
 bool hasLoadingSkybox(const Scene& scene)
 {
-    auto* resolver = App::get() ? App::get()->getResourceResolveSystem() : nullptr;
-    if (!resolver) return false;
+    auto* envProcessor = App::get() ? App::get()->getEnvironmentLightingProcessor() : nullptr;
+    if (!envProcessor) return false;
     for (const auto& [entity, skybox] : scene.getRegistry().view<SkyboxComponent>().each()) {
         (void)skybox;
-        if (resolver->isSkyboxLoading(entity)) {
+        if (envProcessor->isSkyboxLoading(entity)) {
             return true;
         }
     }
@@ -281,11 +282,11 @@ bool hasLoadingSkybox(const Scene& scene)
 
 bool hasLoadingEnvironmentLighting(const Scene& scene)
 {
-    auto* resolver = App::get() ? App::get()->getResourceResolveSystem() : nullptr;
-    if (!resolver) return false;
+    auto* envProcessor = App::get() ? App::get()->getEnvironmentLightingProcessor() : nullptr;
+    if (!envProcessor) return false;
     for (const auto& [entity, elc] : scene.getRegistry().view<EnvironmentLightingComponent>().each()) {
         (void)elc;
-        if (resolver->isEnvironmentLightingLoading(entity)) {
+        if (envProcessor->isEnvironmentLightingLoading(entity)) {
             return true;
         }
     }
@@ -305,15 +306,15 @@ bool hasPendingModelResolve(const Scene& scene)
 
 bool hasPendingTerrainResolve(const Scene& scene)
 {
-    auto* resolver = App::get() ? App::get()->getResourceResolveSystem() : nullptr;
-    if (!resolver) return false;
+    auto* envProcessor = App::get() ? App::get()->getEnvironmentLightingProcessor() : nullptr;
+    if (!envProcessor) return false;
 
     for (const auto& [entity, terrain] : scene.getRegistry().view<TerrainComponent>().each()) {
         if (!terrain.hasHeightMap()) {
             continue;
         }
 
-        const auto* state = resolver->findTerrainState(entity);
+        const auto* state = envProcessor->findTerrainState(entity);
         if (!state) {
             return true;
         }

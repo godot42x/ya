@@ -3,7 +3,7 @@
 #include "DeferredFrameGraphResources.h"
 #include "DeferredFrameResourceSet.h"
 #include "ViewportOverlayStage.h"
-#include "ECS/System/ResourceResolveSystem.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Common/IRenderPipeline.h"
 
 #include <functional>

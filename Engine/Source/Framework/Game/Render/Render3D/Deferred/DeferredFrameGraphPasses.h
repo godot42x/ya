@@ -2,7 +2,7 @@
 
 #include "DeferredFrameGraphResources.h"
 #include "DeferredFrameResourceSet.h"
-#include "ECS/System/ResourceResolveSystem.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Core/RenderTargetCreateInfo.h"
 #include "Render3D/Common/EntityIdViewportPass.h"
 #include "Render3D/Common/IRenderPipeline.h"

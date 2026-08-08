@@ -39,6 +39,7 @@ struct FProjectDescriptor;
 struct AppRenderState;
 class WindowManager;
 class ResourceResolveSystem;
+struct EnvironmentLightingProcessor;
 class AppLifecycle;
 class AppFrameLoop;
 class AppEventRouter;
@@ -101,6 +102,7 @@ struct YA_HOST_API App
     std::vector<glm::vec2>       clicked;
     std::vector<stdptr<ISystem>> _systems;
     ResourceResolveSystem*       _resourceResolveSystem = nullptr;
+    EnvironmentLightingProcessor* _environmentLightingProcessor = nullptr;
 
     struct FModuleSlot
     {
@@ -176,6 +178,7 @@ struct YA_HOST_API App
 
     [[nodiscard]] const AppDesc&                 getDesc() const { return _ci; }
     [[nodiscard]] ResourceResolveSystem*         getResourceResolveSystem() const { return _resourceResolveSystem; }
+    [[nodiscard]] EnvironmentLightingProcessor*  getEnvironmentLightingProcessor() const { return _environmentLightingProcessor; }
     [[nodiscard]] InputManager&                  getInputManager() { return inputManager; }
     [[nodiscard]] const InputManager&            getInputManager() const { return inputManager; }
     [[nodiscard]] InputRouter&                   getInputRouter() { return inputRouter; }

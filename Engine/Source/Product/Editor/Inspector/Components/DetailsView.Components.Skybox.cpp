@@ -1,5 +1,5 @@
 #include "Editor/Inspector/DetailsViewInternal.h"
-#include "ECS/System/ResourceResolveSystem.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Host/App.h"
 
 namespace ya
@@ -74,8 +74,8 @@ void DetailsView::drawSkyboxComponent(Entity& entity)
                 if (ImGui::Button("Browse")) {
                     _filePicker.openTexturePicker(sc->cubemapSource.files[faceIndex], [sc, faceIndex, entityId](const std::string& newPath) {
                         sc->setFace(static_cast<ECubeFace>(faceIndex), newPath);
-                        if (auto* resolver = App::get()->getResourceResolveSystem()) {
-                            resolver->markSkyboxDirty(entityId, "editor skybox face picked");
+                        if (auto* envProcessor = App::get()->getEnvironmentLightingProcessor()) {
+                            envProcessor->markSkyboxDirty(entityId, "editor skybox face picked");
                         }
                     });
                 }
@@ -106,8 +106,8 @@ void DetailsView::drawSkyboxComponent(Entity& entity)
                 if (ImGui::Button("Browse##SkyboxCylindrical", ImVec2(-1.0f, 0.0f))) {
                     _filePicker.openTexturePicker(sc->cylindricalSource.filepath, [sc, entityId](const std::string& newPath) {
                         sc->setCylindricalSource(newPath);
-                        if (auto* resolver = App::get()->getResourceResolveSystem()) {
-                            resolver->markSkyboxDirty(entityId, "editor skybox cylindrical picked");
+                        if (auto* envProcessor = App::get()->getEnvironmentLightingProcessor()) {
+                            envProcessor->markSkyboxDirty(entityId, "editor skybox cylindrical picked");
                         }
                     });
                 }
@@ -115,27 +115,27 @@ void DetailsView::drawSkyboxComponent(Entity& entity)
             }
         }
 
-        auto* resolver = App::get()->getResourceResolveSystem();
+        auto* envProcessor = App::get()->getEnvironmentLightingProcessor();
 
         if (bSourceChanged) {
             sc->invalidate();
-            if (resolver) {
-                resolver->markSkyboxDirty(entityId, "editor skybox modified");
+            if (envProcessor) {
+                envProcessor->markSkyboxDirty(entityId, "editor skybox modified");
             }
         }
 
         ImGui::Separator();
-        drawSkyboxStatus(resolver ? resolver->getSkyboxResolveState(entityId) : ESkyboxResolveState::Empty);
-        if (resolver) {
-            const auto state = resolver->getSkyboxResolveState(entityId);
+        drawSkyboxStatus(envProcessor ? envProcessor->getSkyboxResolveState(entityId) : ESkyboxResolveState::Empty);
+        if (envProcessor) {
+            const auto state = envProcessor->getSkyboxResolveState(entityId);
             if (state == ESkyboxResolveState::ResolvingSource || state == ESkyboxResolveState::Preprocessing) {
             ImGui::TextDisabled("Waiting for skybox source load or preprocessing to finish");
             }
         }
         if (ImGui::Button("Invalidate##Skybox")) {
             sc->invalidate();
-            if (auto* resolver = App::get()->getResourceResolveSystem()) {
-                resolver->markSkyboxDirty(entityId, "editor skybox invalidate button");
+            if (auto* envProcessor = App::get()->getEnvironmentLightingProcessor()) {
+                envProcessor->markSkyboxDirty(entityId, "editor skybox invalidate button");
             }
         }
 
@@ -145,8 +145,8 @@ void DetailsView::drawSkyboxComponent(Entity& entity)
 
 void DetailsView::drawSkyboxPreviewSection(const Entity& entity, const SkyboxComponent& skybox)
 {
-    auto* resolver = App::get()->getResourceResolveSystem();
-    auto preview   = resolver ? resolver->getSkyboxPreview(static_cast<entt::entity>(entity)) : SkyboxPreviewInfo{};
+    auto* envProcessor = App::get()->getEnvironmentLightingProcessor();
+    auto preview   = envProcessor ? envProcessor->getSkyboxPreview(static_cast<entt::entity>(entity)) : SkyboxPreviewInfo{};
 
     ImGui::Separator();
     ImGui::TextUnformatted("Preview");

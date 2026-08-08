@@ -5,7 +5,7 @@
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
-#include "ECS/System/ResourceResolveSystem.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Forward/ForwardRenderPipeline.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
@@ -119,13 +119,13 @@ void appendSkyboxDebugSlots(const RenderRuntime& runtime, ViewportDebugBuilder& 
     }
 
     auto* scene = runtime._app->getSceneServices().getActiveScene();
-    auto* resolver = runtime._app->getResourceResolveSystem();
-    if (!scene || !resolver) {
+    auto* envProcessor = runtime._app->getEnvironmentLightingProcessor();
+    if (!scene || !envProcessor) {
         return;
     }
 
     for (auto&& [entity, sc] : scene->getRegistry().view<SkyboxComponent>().each()) {
-        auto preview = resolver->getSkyboxPreview(entity);
+        auto preview = envProcessor->getSkyboxPreview(entity);
         if (!preview.bHasRenderableCubemap || !preview.cubemapImage) {
             continue;
         }
@@ -364,14 +364,14 @@ void appendEnvironmentDebugSlots(const RenderRuntime& runtime, ViewportDebugBuil
     }
 
     if (auto* scene = runtime._app->getSceneServices().getActiveScene()) {
-        auto* resolver = runtime._app->getResourceResolveSystem();
-        if (!resolver) {
+        auto* envProcessor = runtime._app->getEnvironmentLightingProcessor();
+        if (!envProcessor) {
             return;
         }
 
         for (auto&& [entity, elc] : scene->getRegistry().view<EnvironmentLightingComponent>().each()) {
             (void)elc;
-            auto preview = resolver->getEnvironmentLightingPreview(entity);
+            auto preview = envProcessor->getEnvironmentLightingPreview(entity);
 
             if (preview.bHasRenderableCubemap && preview.cubemapImage) {
                 RenderViewportDebugCatalog::Group cubemapGroup{
@@ -530,12 +530,12 @@ size_t RenderRuntime::buildViewportDebugCatalogSignature() const
 
     if (_app && _app->getSceneServices().getSceneManager()) {
         if (auto* scene = _app->getSceneServices().getActiveScene()) {
-            auto* resolver = _app->getResourceResolveSystem();
-            if (resolver) {
+            auto* envProcessor = _app->getEnvironmentLightingProcessor();
+            if (envProcessor) {
                 bool     bHasSkybox     = false;
                 uint32_t skyboxFaceMask = 0;
                 for (auto&& [entity, sc] : scene->getRegistry().view<SkyboxComponent>().each()) {
-                    auto preview = resolver->getSkyboxPreview(entity);
+                    auto preview = envProcessor->getSkyboxPreview(entity);
                     if (preview.bHasRenderableCubemap && preview.cubemapImage) {
                         bHasSkybox = true;
                         for (uint32_t faceIndex = 0; faceIndex < CubeFace_Count; ++faceIndex) {
@@ -556,7 +556,7 @@ size_t RenderRuntime::buildViewportDebugCatalogSignature() const
                 uint32_t prefilterMipCount         = 0;
                 for (auto&& [entity, elc] : scene->getRegistry().view<EnvironmentLightingComponent>().each()) {
                     (void)elc;
-                    auto preview              = resolver->getEnvironmentLightingPreview(entity);
+                    auto preview              = envProcessor->getEnvironmentLightingPreview(entity);
                     bHasEnvironmentCubemap    = preview.bHasRenderableCubemap && preview.cubemapImage;
                     bHasEnvironmentIrradiance = preview.bHasIrradianceMap && preview.irradianceImage;
                     if (bHasEnvironmentCubemap) {

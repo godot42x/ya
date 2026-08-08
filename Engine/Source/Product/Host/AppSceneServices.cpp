@@ -7,7 +7,7 @@
 #include "Core/Log.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
-#include "ECS/System/ResourceResolveSystem.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Scene/Runtime/SceneManager.h"
 
 namespace ya
@@ -72,17 +72,17 @@ void AppSceneServices::refreshSceneDerivedState(Scene* scene)
     }
 
     auto& registry = scene->getRegistry();
-    auto* resolver = _app ? _app->getResourceResolveSystem() : nullptr;
-    registry.view<SkyboxComponent>().each([resolver](auto entity, SkyboxComponent& skybox) {
+    auto* envProcessor = _app ? _app->getEnvironmentLightingProcessor() : nullptr;
+    registry.view<SkyboxComponent>().each([envProcessor](auto entity, SkyboxComponent& skybox) {
         skybox.invalidate();
-        if (resolver) {
-            resolver->markSkyboxDirty(entity, "scene derived-state refresh");
+        if (envProcessor) {
+            envProcessor->markSkyboxDirty(entity, "scene derived-state refresh");
         }
     });
-    registry.view<EnvironmentLightingComponent>().each([resolver](auto entity, EnvironmentLightingComponent& environment) {
+    registry.view<EnvironmentLightingComponent>().each([envProcessor](auto entity, EnvironmentLightingComponent& environment) {
         environment.invalidate();
-        if (resolver) {
-            resolver->markEnvironmentLightingDirty(entity, "scene derived-state refresh");
+        if (envProcessor) {
+            envProcessor->markEnvironmentLightingDirty(entity, "scene derived-state refresh");
         }
     });
 }

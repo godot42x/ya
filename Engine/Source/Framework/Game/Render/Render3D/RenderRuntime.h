@@ -30,6 +30,7 @@ struct AppDesc;
 enum AppMode : int;
 struct SceneManager;
 struct Scene;
+struct EnvironmentLightingProcessor;
 struct ForwardRenderPipeline;
 struct Texture;
 struct RenderImage;
@@ -172,6 +173,7 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     [[nodiscard]] double                         getElapsedTimeSeconds() const override;
     [[nodiscard]] Scene*                         getActiveScene() const override;
     [[nodiscard]] ResourceResolveSystem*         getResourceResolveSystem() const override;
+    [[nodiscard]] EnvironmentLightingProcessor*  getEnvironmentLightingProcessor() const override;
     [[nodiscard]] bool                           isShadowMappingEnabled() const;
     [[nodiscard]] IImageView*                    getShadowDirectionalDepthIV() const;
     [[nodiscard]] IImageView*                    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;

@@ -13,7 +13,7 @@
 #include "ECS/Component/RenderComponent.h"
 #include "ECS/Component/Terrain/TerrainComponent.h"
 #include "ECS/Component/TransformComponent.h"
-#include "ECS/System/ResourceResolveSystem.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Editor/EditorLayer.h"
 #include "Editor/Inspector/DetailsViewInternal.h"
 #include "Host/GUI/ImGui/ImGuiSystem.h"
@@ -225,8 +225,8 @@ void DetailsView::drawComponents(Entity& entity)
     drawReflectedComponent<TerrainComponent>("Terrain", entity, [&entity](TerrainComponent* terrain, const ya::RenderContext& ctx) {
         if (ctx.hasModifications()) {
             terrain->invalidate(App::currentFrameIndex() + 8);
-            if (auto* resolver = App::get()->getResourceResolveSystem()) {
-                resolver->markTerrainDirty(static_cast<entt::entity>(entity),
+            if (auto* envProcessor = App::get()->getEnvironmentLightingProcessor()) {
+                envProcessor->markTerrainDirty(static_cast<entt::entity>(entity),
                                            "editor terrain modified",
                                            App::currentFrameIndex() + 8);
             }
@@ -456,9 +456,9 @@ void DetailsView::drawMultiComponents(const std::vector<Entity*>& entities)
         }
         for (TerrainComponent* terrain : terrains) {
             terrain->invalidate(App::currentFrameIndex() + 8);
-            if (auto* resolver = App::get()->getResourceResolveSystem()) {
+            if (auto* envProcessor = App::get()->getEnvironmentLightingProcessor()) {
                 if (Entity* owner = terrain->getOwner()) {
-                    resolver->markTerrainDirty(static_cast<entt::entity>(*owner),
+                    envProcessor->markTerrainDirty(static_cast<entt::entity>(*owner),
                                                "editor terrain modified",
                                                App::currentFrameIndex() + 8);
                 }

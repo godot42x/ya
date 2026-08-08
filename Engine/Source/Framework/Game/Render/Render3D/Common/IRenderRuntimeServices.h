@@ -1,7 +1,6 @@
 #pragma once
 
 #include "RHI/Core/DescriptorSet.h"
-#include "ECS/System/ResourceResolveSystem.h"
 
 #include <cstdint>
 
@@ -10,6 +9,9 @@ namespace ya
 
 struct Scene;
 struct DebugRenderSystem;
+struct ResourceResolveSystem;
+struct EnvironmentLightingProcessor;
+struct EnvironmentLightingSceneResources;
 
 struct IRenderRuntimeServices
 {
@@ -19,6 +21,7 @@ struct IRenderRuntimeServices
     [[nodiscard]] virtual double                           getElapsedTimeSeconds() const = 0;
     [[nodiscard]] virtual Scene*                           getActiveScene() const = 0;
     [[nodiscard]] virtual ResourceResolveSystem*           getResourceResolveSystem() const = 0;
+    [[nodiscard]] virtual EnvironmentLightingProcessor*    getEnvironmentLightingProcessor() const = 0;
     [[nodiscard]] virtual DescriptorSetHandle              getSceneSkyboxDescriptorSet(Scene* scene = nullptr) = 0;
     [[nodiscard]] virtual DescriptorSetHandle              getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr) = 0;
     [[nodiscard]] virtual EnvironmentLightingSceneResources resolveSceneEnvironmentLightingResources(Scene* scene = nullptr) const = 0;

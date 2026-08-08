@@ -10,7 +10,7 @@
 #include "ECS/Component/DirectionComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/TransformComponent.h"
-#include "ECS/System/ResourceResolveSystem.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Core/Sampler.h"
 #include "Graph/RenderGraphImportUtils.h"
 #include "RHI/Core/RenderImage.h"
@@ -896,7 +896,7 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
         frameInputs.skybox.frameDescriptorSet = _frameResources
             ? _frameResources->getBinding(frame.flightIndex).skyboxFrameDescriptorSet
             : DescriptorSetHandle{};
-        auto* resourceResolveSystem = _runtimeServices ? _runtimeServices->getResourceResolveSystem() : nullptr;
+        auto* envProcessor = _runtimeServices ? _runtimeServices->getEnvironmentLightingProcessor() : nullptr;
 
         if (activeScene) {
             const float viewportHeight = static_cast<float>(frame.viewportRect.extent.y);
@@ -938,8 +938,8 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
             }
         }
 
-        if (activeScene && resourceResolveSystem && _runtimeServices) {
-            const auto* skyboxState = resourceResolveSystem->findFirstSceneSkyboxState(activeScene);
+        if (activeScene && envProcessor && _runtimeServices) {
+            const auto* skyboxState = envProcessor->findFirstSceneSkyboxState(activeScene);
             if (skyboxState && skyboxState->hasRenderableCubemap()) {
                 frameInputs.skybox.descriptorSet = _runtimeServices->getSceneSkyboxDescriptorSet(activeScene);
                 frameInputs.skybox.mesh          = _defaultSkyboxMesh;

@@ -1,4 +1,4 @@
-#include "ECS/System/ResourceResolveSystem.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Editor/Inspector/DetailsViewInternal.h"
 #include "Host/App.h"
 
@@ -148,8 +148,8 @@ void DetailsView::drawEnvironmentLightingComponent(Entity& entity)
                 if (ImGui::Button("Browse##EnvironmentLightingFace")) {
                     _filePicker.openTexturePicker(elc->cubemapSource.files[faceIndex], [elc, faceIndex, entityId](const std::string& newPath) {
                         elc->setFace(static_cast<ECubeFace>(faceIndex), newPath);
-                        if (auto* resolver = App::get()->getResourceResolveSystem()) {
-                            resolver->markEnvironmentLightingDirty(entityId, "editor environment face picked");
+                        if (auto* envProcessor = App::get()->getEnvironmentLightingProcessor()) {
+                            envProcessor->markEnvironmentLightingDirty(entityId, "editor environment face picked");
                         }
                     });
                 }
@@ -178,8 +178,8 @@ void DetailsView::drawEnvironmentLightingComponent(Entity& entity)
                 if (ImGui::Button("Browse##EnvironmentLightingCylindrical", ImVec2(-1.0f, 0.0f))) {
                     _filePicker.openTexturePicker(elc->cylindricalSource.filepath, [elc, entityId](const std::string& newPath) {
                         elc->setCylindricalSource(newPath);
-                        if (auto* resolver = App::get()->getResourceResolveSystem()) {
-                            resolver->markEnvironmentLightingDirty(entityId, "editor environment cylindrical picked");
+                        if (auto* envProcessor = App::get()->getEnvironmentLightingProcessor()) {
+                            envProcessor->markEnvironmentLightingDirty(entityId, "editor environment cylindrical picked");
                         }
                     });
                 }
@@ -189,25 +189,25 @@ void DetailsView::drawEnvironmentLightingComponent(Entity& entity)
 
         if (bSourceChanged) {
             elc->invalidate();
-            if (auto* resolver = App::get()->getResourceResolveSystem()) {
-                resolver->markEnvironmentLightingDirty(entityId, "editor environment modified");
+            if (auto* envProcessor = App::get()->getEnvironmentLightingProcessor()) {
+                envProcessor->markEnvironmentLightingDirty(entityId, "editor environment modified");
             }
         }
 
         ImGui::Separator();
-        auto* envResolver = App::get() ? App::get()->getResourceResolveSystem() : nullptr;
+        auto* envProcessor = App::get() ? App::get()->getEnvironmentLightingProcessor() : nullptr;
         drawEnvironmentLightingStatus(
-            envResolver ? envResolver->getEnvironmentSourceState(entityId) : EEnvironmentLightingSourceResolveState::Empty,
-            envResolver ? envResolver->getEnvironmentIrradianceState(entityId) : EEnvironmentLightingIrradianceResolveState::Empty,
-            envResolver ? envResolver->getEnvironmentPrefilterState(entityId) : EEnvironmentLightingPrefilterResolveState::Empty,
+            envProcessor ? envProcessor->getEnvironmentSourceState(entityId) : EEnvironmentLightingSourceResolveState::Empty,
+            envProcessor ? envProcessor->getEnvironmentIrradianceState(entityId) : EEnvironmentLightingIrradianceResolveState::Empty,
+            envProcessor ? envProcessor->getEnvironmentPrefilterState(entityId) : EEnvironmentLightingPrefilterResolveState::Empty,
             elc->usesSceneSkybox());
         if (elc->bEnablePrefilter) {
             ImGui::TextDisabled("Prefilter cubemap will appear in DebugWindow after resolve completes.");
         }
-        if (envResolver) {
-            const auto srcState = envResolver->getEnvironmentSourceState(entityId);
-            const auto irrState = envResolver->getEnvironmentIrradianceState(entityId);
-            const auto preState = envResolver->getEnvironmentPrefilterState(entityId);
+        if (envProcessor) {
+            const auto srcState = envProcessor->getEnvironmentSourceState(entityId);
+            const auto irrState = envProcessor->getEnvironmentIrradianceState(entityId);
+            const auto preState = envProcessor->getEnvironmentPrefilterState(entityId);
             const bool bLoading = srcState == EEnvironmentLightingSourceResolveState::ResolvingSource ||
                                   srcState == EEnvironmentLightingSourceResolveState::BuildingEnvironmentCubemap ||
                                   irrState == EEnvironmentLightingIrradianceResolveState::Building ||
@@ -218,8 +218,8 @@ void DetailsView::drawEnvironmentLightingComponent(Entity& entity)
         }
         if (ImGui::Button("Invalidate##EnvironmentLighting")) {
             elc->invalidate();
-            if (auto* resolver = App::get()->getResourceResolveSystem()) {
-                resolver->markEnvironmentLightingDirty(entityId, "editor environment invalidate button");
+            if (auto* envProcessor = App::get()->getEnvironmentLightingProcessor()) {
+                envProcessor->markEnvironmentLightingDirty(entityId, "editor environment invalidate button");
             }
         }
     });

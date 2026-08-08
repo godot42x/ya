@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ResourceResolveSystem.h"
+#include "EnvironmentLightingProcessor.h"
 
 namespace ya::detail
 {

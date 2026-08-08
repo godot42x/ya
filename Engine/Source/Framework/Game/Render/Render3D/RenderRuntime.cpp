@@ -168,6 +168,11 @@ ResourceResolveSystem* RenderRuntime::getResourceResolveSystem() const
     return _app ? _app->getResourceResolveSystem() : nullptr;
 }
 
+EnvironmentLightingProcessor* RenderRuntime::getEnvironmentLightingProcessor() const
+{
+    return _app ? _app->getEnvironmentLightingProcessor() : nullptr;
+}
+
 bool RenderRuntime::isShadowMappingEnabled() const
 {
     if (auto* pipeline = getActivePipeline()) {

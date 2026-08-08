@@ -2,7 +2,7 @@
 
 #include "Core/Base.h"
 #include "RHI/Core/DescriptorSet.h"
-#include "ECS/System/ResourceResolveSystem.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Pipelines/PBRGenerateBrdfLUT.h"
 
 namespace ya

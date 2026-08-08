@@ -3,7 +3,7 @@
 #include "RHI/Core/RenderImage.h"
 
 #include "Host/App.h"
-#include "ECS/System/ResourceResolveSystem.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Core/Sampler.h"
 
 namespace ya
@@ -140,8 +140,8 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneSkyboxDescriptorSet(Sc
         scene = _app->getSceneServices().getActiveScene();
     }
 
-    auto* resolver = (_app ? _app->getResourceResolveSystem() : nullptr);
-    auto  skyboxResource = resolver ? resolver->resolveSceneSkyboxResource(scene) : ImageResourceRef{};
+    auto* envProcessor = (_app ? _app->getEnvironmentLightingProcessor() : nullptr);
+    auto  skyboxResource = envProcessor ? envProcessor->resolveSceneSkyboxResource(scene) : ImageResourceRef{};
     auto* descriptorImageView = skyboxResource.getImageView();
     if (!descriptorImageView) {
         _skybox.boundSceneImageView = nullptr;
@@ -223,9 +223,9 @@ EnvironmentLightingSceneResources RenderSharedResourceProvider::resolveSceneEnvi
         scene = _app->getSceneServices().getActiveScene();
     }
 
-    if (_app && _app->getResourceResolveSystem()) {
-        auto* resolver = _app->getResourceResolveSystem();
-        resources = resolver->resolveSceneEnvironmentLightingResources(scene);
+    if (_app && _app->getEnvironmentLightingProcessor()) {
+        auto* envProcessor = _app->getEnvironmentLightingProcessor();
+        resources = envProcessor->resolveSceneEnvironmentLightingResources(scene);
     }
     resources.brdfLut = _sharedResources.pbrLUT;
     if (!resources.cubemap.isValid()) {

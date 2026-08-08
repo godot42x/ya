@@ -23,6 +23,7 @@
 #include "Core/Scripting/ScriptApiRegistry.h"
 #include "ECS/System/ModelInstantiationSystem.h"
 #include "ECS/System/ResourceResolveSystem.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "ECS/System/TransformSystem.h"
 #include "Physics/PhysicsSystem.h"
 
@@ -348,13 +349,6 @@ void AppLifecycle::init(App& app, AppDesc ci)
     sys->init();
     app._systems.push_back(sys);
     auto sys2 = ya::makeShared<ResourceResolveSystem>();
-    sys2->setRender(app.getRenderServices().getRender());
-    sys2->setOffscreenJobQueueService(OffscreenJobQueueService{
-        .enqueue = [&app](const std::shared_ptr<OffscreenJobState>& job, std::function<void(ICommandBuffer*)> task)
-        {
-            app.getTaskManager().enqueueOffscreenTask(job, std::move(task));
-        },
-    });
     sys2->setActiveSceneProvider([&app]() -> Scene*
     {
         return app.getSceneServices().getActiveScene();
@@ -362,6 +356,25 @@ void AppLifecycle::init(App& app, AppDesc ci)
     sys2->init();
     app._resourceResolveSystem = sys2.get();
     app._systems.push_back(sys2);
+
+    // Skybox / environment / terrain derived GPU resolve moved out of the ECS
+    // resolver into the Render3D-owned processor; it is driven here with the
+    // same injected services.
+    auto envProcessor = ya::makeShared<EnvironmentLightingProcessor>();
+    envProcessor->setRender(app.getRenderServices().getRender());
+    envProcessor->setOffscreenJobQueueService(OffscreenJobQueueService{
+        .enqueue = [&app](const std::shared_ptr<OffscreenJobState>& job, std::function<void(ICommandBuffer*)> task)
+        {
+            app.getTaskManager().enqueueOffscreenTask(job, std::move(task));
+        },
+    });
+    envProcessor->setActiveSceneProvider([&app]() -> Scene*
+    {
+        return app.getSceneServices().getActiveScene();
+    });
+    envProcessor->init();
+    app._environmentLightingProcessor = envProcessor.get();
+    app._systems.push_back(envProcessor);
     auto sys3 = ya::makeShared<TransformSystem>();
     sys3->init();
     app._systems.push_back(sys3);
@@ -405,7 +418,8 @@ void AppLifecycle::init(App& app, AppDesc ci)
             sys->shutdown();
         }
         app._systems.clear();
-        app._resourceResolveSystem = nullptr; });
+        app._resourceResolveSystem = nullptr;
+        app._environmentLightingProcessor = nullptr; });
 
     app.attachModules();
     app._deleter.push("Modules", [&app](void*) { app.detachModules(); });

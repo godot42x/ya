@@ -17,6 +17,9 @@
 
 namespace ya
 {
+
+struct EnvironmentLightingProcessor;
+
 /// Forward viewport stage — renders PBR / Phong / Unlit / Simple / Skybox / Debug into the viewport.
 ///
 /// Internalizes all the logic that was previously spread across
@@ -59,7 +62,7 @@ struct ForwardViewportStage : public IRenderStage
 
         const RenderStageContext& stageCtx;
         Scene*                    activeScene             = nullptr;
-        ResourceResolveSystem*    resourceResolveSystem   = nullptr;
+        EnvironmentLightingProcessor* environmentLightingProcessor = nullptr;
         DescriptorSetHandle       sceneEnvironmentLightingDescriptorSet = nullptr;
         DescriptorSetHandle       skinningDescriptorSet   = nullptr;
         DescriptorSetHandle       pbrFrameDescriptorSet   = nullptr;
@@ -130,7 +133,7 @@ struct ForwardViewportStage : public IRenderStage
     [[nodiscard]] PassContext buildPassContext(const RenderStageContext& ctx);
 
   private:
-    [[nodiscard]] PassContext::SkyboxInput buildSkyboxInput(Scene* activeScene, ResourceResolveSystem* resourceResolveSystem) const;
+    [[nodiscard]] PassContext::SkyboxInput buildSkyboxInput(Scene* activeScene, EnvironmentLightingProcessor* envProcessor) const;
     [[nodiscard]] PassContext::DebugDrawInput buildDebugDrawInput(const RenderFrameData* frameData) const;
     [[nodiscard]] ForwardViewportAuxPasses::DrawContext makeAuxDrawContext(
         const PassContext& passCtx,

@@ -1,6 +1,6 @@
 #include "Host/Lifecycle/AppAutomation.h"
 
-#include "ECS/System/ResourceResolveSystem.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 
 #include "Host/Config/ConfigManager.h"
 #include "Core/Profiling/Profiling.h"
@@ -246,7 +246,7 @@ TEST_F(AppAutomationConfigTest, LoadConfigReadsDeferredSsaoAndPostprocessAutomat
 
 TEST_F(AppAutomationConfigTest, ResourceResolveDerivedResourceGcDelayConstantIsStable)
 {
-    EXPECT_EQ(ResourceResolveSystem::DERIVED_RESOURCE_GC_DELAY_FRAMES, 300u);
+    EXPECT_EQ(EnvironmentLightingProcessor::DERIVED_RESOURCE_GC_DELAY_FRAMES, 300u);
 }
 
 } // namespace

@@ -2,7 +2,7 @@
 
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
-#include "ECS/System/ResourceResolveSystem.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Backend/Vulkan/VulkanRender.h"
 #include "RHI/Core/Buffer.h"
 #include "RHI/Core/RenderResourceFactory.h"
@@ -206,22 +206,22 @@ void ForwardViewportStage::executeDebug(const RenderStageContext& ctx, const Pas
 ForwardViewportStage::PassContext ForwardViewportStage::buildPassContext(const RenderStageContext& ctx)
 {
     auto* activeScene           = _runtimeServices ? _runtimeServices->getActiveScene() : nullptr;
-    auto* resourceResolveSystem = _runtimeServices ? _runtimeServices->getResourceResolveSystem() : nullptr;
+    auto* envProcessor          = _runtimeServices ? _runtimeServices->getEnvironmentLightingProcessor() : nullptr;
     return PassContext{
         .stageCtx = ctx,
         .activeScene = activeScene,
-        .resourceResolveSystem = resourceResolveSystem,
+        .environmentLightingProcessor = envProcessor,
         .sceneEnvironmentLightingDescriptorSet = (_runtimeServices && activeScene)
             ? _runtimeServices->getSceneEnvironmentLightingDescriptorSet(activeScene)
             : DescriptorSetHandle{},
-        .skybox = buildSkyboxInput(activeScene, resourceResolveSystem),
+        .skybox = buildSkyboxInput(activeScene, envProcessor),
         .debugDraw = buildDebugDrawInput(ctx.frameData),
     };
 }
 
 ForwardViewportStage::PassContext::SkyboxInput ForwardViewportStage::buildSkyboxInput(
     Scene* activeScene,
-    ResourceResolveSystem* resourceResolveSystem) const
+    EnvironmentLightingProcessor* envProcessor) const
 {
     PassContext::SkyboxInput input{};
     if (!activeScene || !_runtimeServices) {
@@ -229,11 +229,11 @@ ForwardViewportStage::PassContext::SkyboxInput ForwardViewportStage::buildSkybox
     }
 
     input.descriptorSet = _runtimeServices->getSceneSkyboxDescriptorSet(activeScene);
-    if (!resourceResolveSystem) {
+    if (!envProcessor) {
         return input;
     }
 
-    const auto* skyboxState = resourceResolveSystem->findFirstSceneSkyboxState(activeScene);
+    const auto* skyboxState = envProcessor->findFirstSceneSkyboxState(activeScene);
     if (!skyboxState || !skyboxState->hasRenderableCubemap()) {
         return input;
     }
