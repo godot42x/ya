@@ -22,7 +22,7 @@
 #include "Graph/RenderGraphExecutor.h"
 #include "Host/Config/ConfigManager.h"
 
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 #include <algorithm>
 #include <chrono>
 #include <format>

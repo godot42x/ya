@@ -19,7 +19,7 @@
 #include "ECS/Component/ModelComponent.h"
 #include "ECS/Component/Terrain/TerrainComponent.h"
 
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 
 #include <algorithm>
 #include <string_view>

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Api.h"
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 #include <fstream>
 #include <glm/glm.hpp>
 #include <nlohmann/json.hpp>
@@ -23,7 +23,7 @@ namespace ya
  * 4. 支持资源引用（Texture, Mesh 等）
  */
 
-struct YA_RENDER_3D_API SceneSerializer
+struct YA_SCENE_SERIALIZATION_API SceneSerializer
 {
   private:
     Scene *_scene = nullptr;

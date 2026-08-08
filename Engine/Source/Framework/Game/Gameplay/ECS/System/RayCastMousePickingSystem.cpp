@@ -7,7 +7,7 @@
 #include "ECS/Entity.h"
 #include "Resource/Model.h"
 #include "Host/App.h"
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace ya

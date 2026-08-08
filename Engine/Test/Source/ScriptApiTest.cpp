@@ -2,8 +2,8 @@
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "ECS/System/JSScriptingSystem.h"
-#include "Render3D/Scene.h"
-#include "Render3D/SceneManager.h"
+#include "Scene/Core/Scene.h"
+#include "Scene/Runtime/SceneManager.h"
 
 #include <gtest/gtest.h>
 

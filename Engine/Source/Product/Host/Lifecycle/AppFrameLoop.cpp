@@ -28,8 +28,8 @@
 #include "Host/Utility/RenderFrameExtractor.h"
 #include "Host/Utility/SDLMisc.h"
 
-#include "Render3D/Scene.h"
-#include "Render3D/SceneManager.h"
+#include "Scene/Core/Scene.h"
+#include "Scene/Runtime/SceneManager.h"
 
 #include <SDL3/SDL.h>
 

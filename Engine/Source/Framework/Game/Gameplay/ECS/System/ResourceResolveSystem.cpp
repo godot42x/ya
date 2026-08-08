@@ -9,7 +9,7 @@
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/Terrain/TerrainComponent.h"
 #include "Host/App.h"
-#include "Render3D/SceneManager.h"
+#include "Scene/Runtime/SceneManager.h"
 #include "Render3D/Terrain/TerrainMeshBuilder.h"
 
 #include <algorithm>

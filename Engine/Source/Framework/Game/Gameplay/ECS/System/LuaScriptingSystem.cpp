@@ -11,7 +11,7 @@
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/Entity.h"
-#include "Render3D/SceneManager.h"
+#include "Scene/Runtime/SceneManager.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 

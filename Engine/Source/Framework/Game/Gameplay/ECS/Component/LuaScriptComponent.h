@@ -5,8 +5,6 @@
 #include "Core/Reflection/Reflection.h"
 
 #include "Core/Api.h"
-#include "Host/App.h"
-#include "Render3D/SceneManager.h"
 
 #include <algorithm>
 #include <sol/sol.hpp>

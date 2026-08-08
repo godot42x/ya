@@ -16,7 +16,7 @@
 #include "ECS/Component/Terrain/TerrainComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/TransformSystem.h"
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 #include "Render3D/Common/Shadow/Common/DirectionalShadowMath.h"
 
 #include <algorithm>

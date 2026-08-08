@@ -4,8 +4,8 @@
 #include "Resource/SkeletonAnimationSampler.h"
 #include "Host/App.h"
 #include "Render3D/RenderRuntime.h"
-#include "Render3D/Scene.h"
-#include "Render3D/SceneManager.h"
+#include "Scene/Core/Scene.h"
+#include "Scene/Runtime/SceneManager.h"
 
 namespace ya
 {

@@ -25,7 +25,7 @@
 #include "ECS/System/TransformSystem.h"
 
 #include "Render3D/RenderRuntime.h"
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 
 #include <asio.hpp>
 #include <cmath>

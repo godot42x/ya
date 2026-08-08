@@ -5,8 +5,8 @@
 #include "ECS/Entity.h"
 #include "GUI/Runtime/Scene/Node.h"
 #include "Scene3D/Node3D.h"
-#include "Render3D/Scene.h"
-#include "Render3D/SceneManager.h"
+#include "Scene/Core/Scene.h"
+#include "Scene/Runtime/SceneManager.h"
 
 #include <glm/gtx/matrix_decompose.hpp>
 

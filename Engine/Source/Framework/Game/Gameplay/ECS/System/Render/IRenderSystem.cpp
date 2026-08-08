@@ -3,7 +3,7 @@
 #include "Host/App.h"
 #include "ECS/Component/CameraComponent.h"
 #include "RHI/Render.h"
-#include "Render3D/SceneManager.h"
+#include "Scene/Runtime/SceneManager.h"
 
 
 namespace ya

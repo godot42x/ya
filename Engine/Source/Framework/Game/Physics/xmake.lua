@@ -5,6 +5,8 @@ target("ya-physics")
     add_files("**.cpp")
     add_headerfiles("**.h")
     add_deps("ya-foundation-core", "ya-gameplay-ecs", { public = true })
+    -- PhysicsSystem reaches the active scene/SceneManager from its .cpp only.
+    add_deps("ya-scene-core", "ya-scene-runtime")
     -- Transition: physics still compiles render/host headers (Scene, AppState).
     -- Planned decoupling: see plan.md §10.
     ya_engine_defines()

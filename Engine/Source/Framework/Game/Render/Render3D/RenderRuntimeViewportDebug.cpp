@@ -7,8 +7,8 @@
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "Render3D/Forward/ForwardRenderPipeline.h"
-#include "Render3D/Scene.h"
-#include "Render3D/SceneManager.h"
+#include "Scene/Core/Scene.h"
+#include "Scene/Runtime/SceneManager.h"
 
 #include <bit>
 

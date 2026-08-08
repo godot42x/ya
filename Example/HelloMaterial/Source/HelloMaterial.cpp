@@ -30,12 +30,12 @@
 #include "Render3D/Material/PhongMaterial.h"
 #include "GUI/Runtime/Resource/TextureLibrary.h"
 #include "GUI/Runtime/Scene/Node2D.h"
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 #include <format>
 
 
 
-#include "Render3D/SceneManager.h"
+#include "Scene/Runtime/SceneManager.h"
 
 #include "Core/System/VirtualFileSystem.h"
 #include "Host/App.h"

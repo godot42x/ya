@@ -3,7 +3,7 @@
 #include "Host/App.h"
 #include "GUI/Runtime/Scene/Node.h"
 #include "Scene3D/Node3D.h"
-#include "Render3D/SceneManager.h"
+#include "Scene/Runtime/SceneManager.h"
 
 #include "ECS/Component/ManagedChildComponent.h"
 

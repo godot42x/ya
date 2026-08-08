@@ -33,7 +33,8 @@
 
 #include "Render3D/Systems/Animation/AnimationSystem.h"
 
-#include "Render3D/SceneManager.h"
+#include "Scene/Core/Scene.h"
+#include "Scene/Runtime/SceneManager.h"
 #include "RHI/WindowProvider.h"
 #include "Host/WindowManager.h"
 
@@ -321,6 +322,9 @@ void AppLifecycle::init(App& app, AppDesc ci)
     }
 
     app._sceneManager = new SceneManager();
+    // Scene registers itself with the lifecycle host through the injected
+    // ISceneLifecycleHost seam (scene-core); no App access from Scene.
+    Scene::setLifecycleHost(app._sceneManager);
     app._sceneManager->onSceneInit.addLambda(&app, [&app](Scene* scene)
                                              { AppLifecycle::onSceneInit(app, scene); });
     app._sceneManager->onSceneActivated.addLambda(&app, [&app](Scene* scene)
@@ -329,6 +333,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
                                                 { AppLifecycle::onSceneDestroy(app, scene); });
     app._deleter.push("SceneManager", [&app](void*)
                       {
+        Scene::setLifecycleHost(nullptr);
         delete app._sceneManager;
         app._sceneManager = nullptr; });
 

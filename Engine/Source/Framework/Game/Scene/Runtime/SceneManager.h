@@ -2,7 +2,8 @@
 
 #include "Core/Base.h"
 #include "Core/Delegate.h"
-#include "Render3D/Scene.h"
+#include "Scene/Core/ISceneLifecycleHost.h"
+#include "Scene/Core/Scene.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -19,7 +20,7 @@ namespace ya
  * - Scene transitions
  * - Provide callbacks for custom scene initialization
  */
-struct YA_RENDER_3D_API SceneManager
+struct YA_SCENE_RUNTIME_API SceneManager : public ISceneLifecycleHost
 {
   public:
     using SceneInitCallback = std::function<void(Scene*)>;
@@ -70,9 +71,9 @@ struct YA_RENDER_3D_API SceneManager
     bool serializeToFile(const std::string& path, Scene* scene) const;
     bool deserializeFromFile(const std::string& path, Scene* scene);
 
-    bool isSceneValid(const Scene* ptr);
-    void registerScenePointer(const Scene* ptr);
-    void unregisterScenePointer(const Scene* ptr);
+    bool isSceneValid(const Scene* ptr) const override;
+    void registerScenePointer(const Scene* ptr) override;
+    void unregisterScenePointer(const Scene* ptr) override;
 
     stdptr<Scene> cloneScene(Scene* scene) const;
 

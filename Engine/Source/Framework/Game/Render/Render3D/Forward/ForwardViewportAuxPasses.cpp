@@ -6,7 +6,7 @@
 #include "RHI/Render.h"
 #include "Render3D/Common/RenderViewportUtils.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 #include "Render3D/Stage/IRenderStage.h"
 
 #include "glm/gtc/type_ptr.hpp"

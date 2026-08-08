@@ -10,6 +10,11 @@ target("ya-gameplay-ecs")
     -- Fat module for now: ECS components/systems reference render + resource
     -- types (Mesh/Material/pipeline headers), so RHI is a visible dependency.
     add_deps("ya-foundation-core", "ya-foundation-rhi", { public = true })
+    -- ECS public headers still reach Scene data/lifecycle (LuaScriptComponent,
+    -- ComponentLinkageSystem, ResourceResolveSystem) through the Scene tier
+    -- include root; a dep edge would cycle with ya-scene-core (Scene.h owns an
+    -- entt registry). Phase 2 (ya-ecs-core) resolves this: scene deps on the
+    -- ECS core, ECS systems lose their scene/render reach.
     -- Transition: the fat ECS module still compiles render/resource/host
     -- headers (App services, Mesh/Material pipeline types). Planned
     -- decoupling: split ya-gameplay behind an app-services interface (see

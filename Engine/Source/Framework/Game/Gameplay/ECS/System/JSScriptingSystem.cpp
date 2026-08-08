@@ -8,7 +8,7 @@
 #include "Core/Scripting/ScriptApiAsset.h"
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 
 #include <quickjs.h>
 

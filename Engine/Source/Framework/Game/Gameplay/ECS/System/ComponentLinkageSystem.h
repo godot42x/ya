@@ -13,10 +13,10 @@
 #include "ECS/Component/RenderComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "ECS/System/TransformSystem.h"
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 
 #include "Host/App.h"
-#include "Render3D/SceneManager.h"
+#include "Scene/Runtime/SceneManager.h"
 #include <algorithm>
 #include "entt/entt.hpp"
 

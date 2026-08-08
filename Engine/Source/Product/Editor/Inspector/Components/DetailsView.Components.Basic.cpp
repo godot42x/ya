@@ -19,7 +19,7 @@
 #include "Host/GUI/ImGui/ImGuiSystem.h"
 #include "GUI/Runtime/Scene/Node2D.h"
 #include "GUI/Runtime/Scene/Node.h"
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 #include "Host/App.h"
 
 namespace ya

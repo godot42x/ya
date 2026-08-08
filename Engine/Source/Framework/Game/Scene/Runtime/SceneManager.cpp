@@ -1,7 +1,7 @@
 #include "SceneManager.h"
 
 #include "Core/Log.h"
-#include "Render3D/SceneSerializer.h"
+#include "Scene/Serialization/SceneSerializer.h"
 
 namespace ya
 {
@@ -71,7 +71,7 @@ bool SceneManager::destroyScene(stdptr<Scene>& scene)
     return true;
 }
 
-bool SceneManager::isSceneValid(const Scene* ptr)
+bool SceneManager::isSceneValid(const Scene* ptr) const
 {
     return ptr && _knownScenes.contains(ptr);
 }

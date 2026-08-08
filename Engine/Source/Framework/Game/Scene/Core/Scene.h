@@ -11,6 +11,7 @@
 #include "ECS/Entity.h"
 #include "GUI/Runtime/Scene/Node.h"
 #include "GUI/Runtime/Scene/Node2D.h"
+#include "Scene/Core/ISceneLifecycleHost.h"
 #include "Scene3D/Node3D.h"
 #include "Resource/Model.h"
 #include <entt/entt.hpp>
@@ -22,9 +23,15 @@
 
 namespace ya
 {
-struct YA_RENDER_3D_API [[refl]] Scene
+struct YA_SCENE_CORE_API [[refl]] Scene
 {
     friend struct Entity;
+
+    /// Binds the lifecycle registration sink (implemented by SceneManager in
+    /// scene-runtime; bound by the Host at startup). Null disables registration.
+    static void setLifecycleHost(ISceneLifecycleHost* host);
+
+    static ISceneLifecycleHost* getLifecycleHost();
 
     // Magic number for dangling pointer detection
     // static constexpr uint32_t SCENE_MAGIC = 0x5343454E; // 'SCEN'

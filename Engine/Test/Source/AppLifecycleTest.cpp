@@ -6,7 +6,7 @@
 
 #include "Core/System/VirtualFileSystem.h"
 #include "RHI/Core/CommandBuffer.h"
-#include "Render3D/SceneManager.h"
+#include "Scene/Runtime/SceneManager.h"
 
 #include <gtest/gtest.h>
 

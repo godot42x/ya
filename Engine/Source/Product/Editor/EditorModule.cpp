@@ -31,7 +31,7 @@
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "GUI/Runtime/Compose/Render2DComposePass.h"
 #include "Render3D/RenderRuntime.h"
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
 
 #include <format>

@@ -1,7 +1,7 @@
 #include "Entity.h"
 #include "Component.h"
 #include "ECS/ECSRegistry.h"
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 
 #include <stdexcept>
 

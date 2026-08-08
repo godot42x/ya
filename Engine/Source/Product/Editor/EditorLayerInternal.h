@@ -24,8 +24,8 @@
 #include "GUI/Runtime/Resource/TextureLibrary.h"
 #include "Host/App.h"
 #include "GUI/Runtime/Scene/Node.h"
-#include "Render3D/Scene.h"
-#include "Render3D/SceneManager.h"
+#include "Scene/Core/Scene.h"
+#include "Scene/Runtime/SceneManager.h"
 
 #include <ImGuizmo.h>
 #include <filesystem>

@@ -12,6 +12,10 @@ target("ya-render-3d")
         "ya-gameplay-ecs",
         "ya-physics",
         { public = true })
+    -- Scene data/lifecycle types are consumed by Render3D implementation
+    -- .cpp files only (RenderRuntime pipelines, overlays); Render3D public
+    -- headers do not expose them, so the deps stay private.
+    add_deps("ya-scene-core", "ya-scene-runtime")
     -- Transition: render-3d still compiles host-layer headers (App services).
     -- Planned decoupling: app-service interface injection (see plan.md §10).
     ya_engine_defines()

@@ -5,5 +5,8 @@ target("ya-host")
     add_files("**.cpp")
     add_headerfiles("**.h")
     add_deps("ya-render-3d", "imgui-local", "imguizmo-local", { public = true })
+    -- Host binds the scene lifecycle sink and drives Scene/SceneManager from
+    -- its own TUs; public headers only forward-declare scene types.
+    add_deps("ya-scene-core", "ya-scene-runtime")
     add_packages("libsdl3", "glm", "nlohmann_json", "cxxopts", { public = true })
     add_packages("asio", "vulkan-memory-allocator", "glad", "lua", "sol2", "quickjs-ng", "vulkansdk")

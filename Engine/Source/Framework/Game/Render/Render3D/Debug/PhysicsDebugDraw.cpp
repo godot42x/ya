@@ -3,7 +3,7 @@
 #include "ECS/Component/TransformComponent.h"
 #include "Physics/PhysicsBodyComponent.h"
 #include "GUI/Runtime/Draw2D/Render2D.h"
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 
 namespace ya
 {

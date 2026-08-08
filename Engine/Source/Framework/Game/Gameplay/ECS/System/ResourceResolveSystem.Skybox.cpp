@@ -5,7 +5,7 @@
 #include "Core/Common/DeferredDeletionQueue.h"
 #include "Host/App.h"
 #include "Host/Utility/OffscreenJobRunner.h"
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 
 #include <format>
 #include <vector>

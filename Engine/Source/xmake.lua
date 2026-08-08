@@ -21,7 +21,7 @@ local YA_SOURCE_ROOT = os.scriptdir()
 
 -- Product-tier include roots keyed by short name. Headers are addressed by
 -- module-name prefix (`Core/Base.h`, `GUI/Scene/Node2D.h`, `Host/App.h`,
--- `Render3D/Scene.h`, ...) instead of full physical paths under Engine/Source.
+-- `Scene/Core/Scene.h`, ...) instead of full physical paths under Engine/Source.
 local YA_TIER_ROOTS = {
     Foundation = "Foundation",
     Framework  = "Framework",
@@ -64,6 +64,7 @@ end
 function ya_engine_defines()
     local macros = {
         "YA_CORE_API", "YA_RHI_API", "YA_RHI_BACKEND_API", "YA_GUI_API",
+        "YA_SCENE_CORE_API", "YA_SCENE_RUNTIME_API", "YA_SCENE_SERIALIZATION_API",
         "YA_SCENE_3D_API", "YA_RESOURCE_API", "YA_RENDER_GRAPH_API",
         "YA_RENDER_3D_API", "YA_GAMEPLAY_ECS_API", "YA_PHYSICS_API",
         "YA_HOST_API", "YA_EDITOR_API",
@@ -80,6 +81,9 @@ includes("./Foundation/RHI/xmake.lua")
 -- Framework tier: product lines. GUI framework first (self-contained);
 -- Game depends on Foundation + GUI (Node scene-tree base lives in GUI).
 includes("./Framework/GUI/xmake.lua")
+includes("./Framework/Game/Scene/Core/xmake.lua")
+includes("./Framework/Game/Scene/Runtime/xmake.lua")
+includes("./Framework/Game/Scene/Serialization/xmake.lua")
 includes("./Framework/Game/Scene/Scene3D/xmake.lua")
 includes("./Framework/Game/Resource/xmake.lua")
 includes("./Framework/Game/Render/Graph/xmake.lua")

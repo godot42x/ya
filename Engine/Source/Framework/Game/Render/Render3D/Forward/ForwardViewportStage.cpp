@@ -9,7 +9,7 @@
 #include "RHI/Core/Swapchain.h"
 #include "RHI/Render.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 
 namespace ya
 {

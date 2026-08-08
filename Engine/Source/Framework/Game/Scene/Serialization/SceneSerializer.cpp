@@ -9,7 +9,7 @@
 #include "ECS/Entity.h"
 #include "ECS/Component/LuaScriptComponent.h"
 #include "GUI/Runtime/Scene/Node2D.h"
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 
 #include <algorithm>
 #include <cmath>

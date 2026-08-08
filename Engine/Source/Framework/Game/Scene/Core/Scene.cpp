@@ -7,22 +7,32 @@
 #include "ECS/ECSRegistry.h"
 #include "Core/Profiling/Profiling.h"
 
-#include "Host/App.h"
-#include "Render3D/SceneManager.h"
-
 #include "Core/UUID.h"
 
 
 namespace ya
 {
 
+namespace
+{
+ISceneLifecycleHost* g_sceneLifecycleHost = nullptr;
+}
+
+void Scene::setLifecycleHost(ISceneLifecycleHost* host)
+{
+    g_sceneLifecycleHost = host;
+}
+
+ISceneLifecycleHost* Scene::getLifecycleHost()
+{
+    return g_sceneLifecycleHost;
+}
+
 Scene::Scene(const std::string &name)
     : _name(name)
 {
-    if (auto *app = App::get()) {
-        if (auto *sceneManager = app->getSceneServices().getSceneManager()) {
-            sceneManager->registerScenePointer(this);
-        }
+    if (auto *lifecycleHost = getLifecycleHost()) {
+        lifecycleHost->registerScenePointer(this);
     }
 }
 
@@ -30,10 +40,8 @@ Scene::~Scene()
 {
     // _magic = 0xDEADBEEF; // Mark as destroyed
 
-    if (auto *app = App::get()) {
-        if (auto *sceneManager = app->getSceneServices().getSceneManager()) {
-            sceneManager->unregisterScenePointer(this);
-        }
+    if (auto *lifecycleHost = getLifecycleHost()) {
+        lifecycleHost->unregisterScenePointer(this);
     }
 
     clear();
@@ -247,17 +255,12 @@ bool Scene::isValidEntity(const Entity *entity) const
 // Check if Scene pointer is safe to access
 bool Scene::isValid() const
 {
-    auto *app = App::get();
-    if (!app) {
+    auto *lifecycleHost = getLifecycleHost();
+    if (!lifecycleHost) {
         return true;
     }
 
-    auto *sceneManager = app->getSceneServices().getSceneManager();
-    if (!sceneManager) {
-        return true;
-    }
-
-    return sceneManager->isSceneValid(this);
+    return lifecycleHost->isSceneValid(this);
 }
 
 

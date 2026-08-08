@@ -8,7 +8,7 @@
 #include "ECS/Component/DirectionComponent.h"
 #include "ECS/Component/TransformComponent.h"
 #include "Render3D/Forward/ForwardFrameGraphOrchestrator.h"
-#include "Render3D/Scene.h"
+#include "Scene/Core/Scene.h"
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace ya

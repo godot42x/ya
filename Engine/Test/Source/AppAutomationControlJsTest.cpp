@@ -6,8 +6,8 @@
 #include "ECS/System/JSScriptingSystem.h"
 #include "Host/App.h"
 #include "Host/Automation/AppAutomationControlService.h"
-#include "Render3D/Scene.h"
-#include "Render3D/SceneManager.h"
+#include "Scene/Core/Scene.h"
+#include "Scene/Runtime/SceneManager.h"
 
 #include <gtest/gtest.h>
 
