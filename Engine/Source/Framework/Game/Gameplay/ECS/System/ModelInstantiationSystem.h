@@ -3,6 +3,7 @@
 #include "Core/System/System.h"
 
 #include <cstdint>
+#include <functional>
 #include <string>
 
 namespace ya
@@ -23,10 +24,17 @@ struct SkeletonAnimatorComponent;
  */
 struct ModelInstantiationSystem : public ISystem
 {
+    using SceneProvider = std::function<Scene*()>;
+
+    /// Injected seam (bound by the Host at startup; no App access from here).
+    void setSceneProvider(SceneProvider provider);
+
     void init() override {}
     void onUpdate(float dt) override;
 
   private:
+    SceneProvider _sceneProvider;
+
     void instantiatePendingModels(Scene* scene);
     void instantiateModel(Scene* scene, Entity* entity, ModelComponent& modelComp);
     void buildSharedMaterials(Model* model, ModelComponent& modelComp);

@@ -349,12 +349,20 @@ void AppLifecycle::init(App& app, AppDesc ci)
     FPSControl::get()->setFPSLimit(ConfigManager::get().getOr<float>("editor", "runtime.framePacing.fpsLimit", 120.0f));
 
     auto sys = ya::makeShared<ModelInstantiationSystem>();
+    sys->setSceneProvider([&app]() -> Scene*
+    {
+        return app.getSceneServices().getActiveScene();
+    });
     sys->init();
     app._systems.push_back(sys);
     auto sys2 = ya::makeShared<ResourceResolveSystem>();
     sys2->setActiveSceneProvider([&app]() -> Scene*
     {
         return app.getSceneServices().getActiveScene();
+    });
+    sys2->setFrameIndexProvider([]() -> uint64_t
+    {
+        return App::currentFrameIndex();
     });
     sys2->init();
     app._resourceResolveSystem = sys2.get();

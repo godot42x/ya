@@ -7,7 +7,6 @@
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
-#include "Host/App.h"
 #include "Scene/Core/Scene.h"
 
 #include <vector>
@@ -39,7 +38,7 @@ void ResourceResolveSystem::auditMaterialWork(Scene* scene)
         return;
     }
 
-    const uint64_t currentFrame = App::currentFrameIndex();
+    const uint64_t currentFrame = _getFrameIndex ? _getFrameIndex() : 0;
     if (_nextMaterialAuditFrame != 0 && currentFrame < _nextMaterialAuditFrame) {
         return;
     }

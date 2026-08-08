@@ -21,6 +21,7 @@ struct YA_GAMEPLAY_ECS_API ResourceResolveSystem : public ISystem
 {
   private:
     std::function<Scene*()>  _getActiveScene;
+    std::function<uint64_t()> _getFrameIndex;
     Scene*                   _pendingStateScene = nullptr;
     std::deque<entt::entity> _dirtyMaterialQueue;
     std::unordered_set<entt::entity> _dirtyMaterialSet;
@@ -37,6 +38,8 @@ struct YA_GAMEPLAY_ECS_API ResourceResolveSystem : public ISystem
 
   public:
     void setActiveSceneProvider(std::function<Scene*()> provider) { _getActiveScene = std::move(provider); }
+    /// Frame counter for the periodic staleness audit; bound by the Host.
+    void setFrameIndexProvider(std::function<uint64_t()> provider) { _getFrameIndex = std::move(provider); }
     void init() override;
 
     /**

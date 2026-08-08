@@ -1,6 +1,5 @@
 #include "ModelInstantiationSystem.h"
 
-#include "Host/App.h"
 #include "GUI/Runtime/Scene/Node.h"
 #include "Scene3D/Node3D.h"
 #include "Scene/Runtime/SceneManager.h"
@@ -191,13 +190,20 @@ void ModelInstantiationSystem::onUpdate(float dt)
 {
     (void)dt;
 
-    auto  sceneManager = App::get()->getSceneServices().getSceneManager();
-    auto* scene        = sceneManager->getActiveScene();
+    if (!_sceneProvider) {
+        return;
+    }
+    Scene* scene = _sceneProvider();
     if (!scene) {
         return;
     }
 
     instantiatePendingModels(scene);
+}
+
+void ModelInstantiationSystem::setSceneProvider(SceneProvider provider)
+{
+    _sceneProvider = std::move(provider);
 }
 
 void ModelInstantiationSystem::instantiatePendingModels(Scene* scene)
