@@ -12,7 +12,8 @@ target("ya-gui-runtime")
     -- the RHI factory entry points implemented by the backend, so the GUI
     -- closure includes the platform backend (Foundation tier, per plan).
     add_deps("ya-foundation-core", "ya-foundation-rhi", "ya-foundation-rhi-backend", { public = true })
-    add_packages("freetype", "glm", { public = true })
+    add_packages("glm", { public = true })
+    add_packages("freetype")
 
 -- GUI framework aggregate: the single link target for pure-GUI hosts. It
 -- carries no sources of its own; public deps re-export the full closure

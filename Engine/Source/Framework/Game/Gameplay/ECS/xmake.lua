@@ -15,7 +15,8 @@ target("ya-gameplay-ecs")
     -- decoupling: split ya-gameplay behind an app-services interface (see
     -- plan.md §10); until then every engine export macro is injected here.
     ya_engine_defines()
-    add_packages("entt", "glm", "lua", "sol2", "quickjs-ng", "cxxopts", { public = true })
+    add_packages("entt", "glm", "nlohmann_json", "sol2", { public = true })
+    add_packages("lua", "quickjs-ng", "cxxopts")
     if is_plat("macosx") then
         -- Transition: ECS systems call host App services (see plan.md §10);
         -- symbols resolve from the final binary until the app-services

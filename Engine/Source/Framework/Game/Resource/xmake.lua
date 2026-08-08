@@ -20,4 +20,5 @@ target("ya-resource")
     -- Planned decoupling: see plan.md §10; until then every engine export
     -- macro is injected here.
     ya_engine_defines()
-    add_packages("glm", "nlohmann_json", "stb", "ktx", "tinygltf", "assimp", "vulkansdk", "cxxopts", { public = true })
+    add_packages("glm", "nlohmann_json", "tinygltf", { public = true })
+    add_packages("stb", "ktx", "assimp", "vulkansdk", "cxxopts")
