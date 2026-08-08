@@ -1,5 +1,6 @@
 #pragma once
 #include "Gameplay/Systems/ScriptingSystem.h"
+#include "Core/Input/InputManager.h"
 #include <functional>
 #include <sol/sol.hpp>
 #include <string>
@@ -9,8 +10,24 @@
 
 namespace ya
 {
+
+struct Scene;
+
+/// Narrow runtime services for the Lua bindings, injected by the Host. The
+/// system never reaches Host/App types.
+struct LuaRuntimeServices
+{
+    const InputManager*         input            = nullptr;
+    std::function<bool()>       isMouseCaptured;   ///< Host input-router state
+    std::function<double()>     elapsedSeconds;    ///< Seconds since app start
+    std::function<uint64_t()>   frameIndex;        ///< App frame counter
+    std::function<Scene*()>     activeScene;
+};
+
 struct LuaScriptingSystem : public ScriptingSystem
 {
+    /// Injected seam (bound by the Host at startup; no App access from here).
+    void setRuntimeServices(LuaRuntimeServices services);
 
     sol::state _lua;
     // 热重载相关
@@ -39,6 +56,8 @@ struct LuaScriptingSystem : public ScriptingSystem
     void disableHotReload();
 
   private:
+    LuaRuntimeServices _services;
+
     // 自动绑定所有已注册的反射组件到Lua
     void bindReflectedComponents();
 

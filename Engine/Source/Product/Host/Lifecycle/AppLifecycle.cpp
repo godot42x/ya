@@ -452,6 +452,13 @@ void AppLifecycle::init(App& app, AppDesc ci)
     }
 
     app._luaScriptingSystem = new LuaScriptingSystem();
+    app._luaScriptingSystem->setRuntimeServices({
+        .input           = &app.getInputManager(),
+        .isMouseCaptured = [&app]() { return app.getInputRouter().isMouseCaptured(); },
+        .elapsedSeconds  = [&app]() { return static_cast<double>(app.getElapsedTimeMS()) / 1000.0; },
+        .frameIndex      = [&app]() { return app.getFrameIndex(); },
+        .activeScene     = [&app]() -> Scene* { return app.getSceneServices().getActiveScene(); },
+    });
     app._luaScriptingSystem->init();
     app._deleter.push("LuaScriptingSystem", [&app](void*)
                       {

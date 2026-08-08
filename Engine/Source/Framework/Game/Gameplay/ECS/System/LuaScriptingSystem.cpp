@@ -1,7 +1,4 @@
 #include "LuaScriptingSystem.h"
-#include "Host/App.h"
-#include "Core/Input/InputManager.h"
-#include "Host/InputRouter.h"
 #include "Core/Log.h"
 #include "Core/Reflection/MetadataSupport.h"
 #include "Core/System/VirtualFileSystem.h"
@@ -20,8 +17,8 @@ namespace
 
 struct LuaInputApi
 {
-    const ya::InputManager* input = nullptr;
-    const ya::InputRouter*  router = nullptr;
+    const ya::InputManager*      input = nullptr;
+    std::function<bool()> isMouseCapturedFn;
 
     [[nodiscard]] bool isKeyDown(ya::EKey::T key) const { return input && input->isKeyPressed(key); }
     [[nodiscard]] bool isKeyPressed(ya::EKey::T key) const { return input && input->wasKeyPressed(key); }
@@ -36,21 +33,22 @@ struct LuaInputApi
     [[nodiscard]] bool wasActionPressed(const std::string& action) const { return input && input->wasActionPressed(action); }
     [[nodiscard]] bool wasActionReleased(const std::string& action) const { return input && input->wasActionReleased(action); }
 
-    [[nodiscard]] bool isMouseCaptured() const { return router && router->isMouseCaptured(); }
+    [[nodiscard]] bool isMouseCaptured() const { return isMouseCapturedFn ? isMouseCapturedFn() : false; }
 };
 
 struct LuaTimeApi
 {
-    const ya::App* app = nullptr;
+    std::function<double()>   elapsedSeconds;
+    std::function<uint64_t()> frameIndex;
 
     [[nodiscard]] double getElapsedSeconds() const
     {
-        return app ? static_cast<double>(app->getElapsedTimeMS()) / 1000.0 : 0.0;
+        return elapsedSeconds ? elapsedSeconds() : 0.0;
     }
 
     [[nodiscard]] uint64_t getFrameIndex() const
     {
-        return app ? app->getFrameIndex() : 0;
+        return frameIndex ? frameIndex() : 0;
     }
 };
 
@@ -68,6 +66,11 @@ struct LuaLogApi
 
 namespace ya
 {
+
+void LuaScriptingSystem::setRuntimeServices(LuaRuntimeServices services)
+{
+    _services = std::move(services);
+}
 
 void LuaScriptingSystem::init()
 {
@@ -335,8 +338,8 @@ void LuaScriptingSystem::init()
             return e.hasComponent<CameraComponent>() ? e.getComponent<CameraComponent>() : nullptr;
         });
 
-    _lua["input"] = LuaInputApi{&App::get()->getInputManager(), &App::get()->getInputRouter()};
-    _lua["time"]  = LuaTimeApi{App::get()};
+    _lua["input"] = LuaInputApi{.input = _services.input, .isMouseCapturedFn = _services.isMouseCaptured};
+    _lua["time"]  = LuaTimeApi{.elapsedSeconds = _services.elapsedSeconds, .frameIndex = _services.frameIndex};
     _lua["log"]   = LuaLogApi{};
 
     // ========================================================================
@@ -352,7 +355,7 @@ void LuaScriptingSystem::onUpdate(float deltaTime)
 {
     YA_PROFILE_FUNCTION();
 
-    auto *scene = App::get()->getSceneServices().getActiveScene();
+    auto *scene = _services.activeScene ? _services.activeScene() : nullptr;
     if (!scene) return;
 
     auto view = scene->getRegistry().view<LuaScriptComponent>();
@@ -441,7 +444,7 @@ void LuaScriptingSystem::onStop()
     YA_PROFILE_FUNCTION();
 
     // TODO: let app use serialization to reload all/ recreate entity and components
-    auto *scene = App::get()->getSceneServices().getActiveScene();
+    auto *scene = _services.activeScene ? _services.activeScene() : nullptr;
     if (!scene) return;
 
     auto view = scene->getRegistry().view<LuaScriptComponent>();
@@ -523,7 +526,7 @@ void LuaScriptingSystem::reloadScript(const std::string &scriptPath)
     const auto normalizedScriptPath = LuaScriptComponent::ScriptInstance::normalizeScriptPath(scriptPath);
     YA_CORE_INFO("[Hot Reload] Reloading script: {}", normalizedScriptPath);
 
-    auto *scene = App::get()->getSceneServices().getActiveScene();
+    auto *scene = _services.activeScene ? _services.activeScene() : nullptr;
     if (!scene) return;
 
     // 查找所有使用该脚本的实体
