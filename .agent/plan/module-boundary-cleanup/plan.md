@@ -627,7 +627,7 @@ python3 Script/ya.py run ... --exit-after-frame 300          # 干净退出
 ya-rhi-vulkan`（宿主显式选择 backend）；ECS/Scene/Graph 只依赖 `ya-rhi`；
 `ya-engine` 聚合同时列出三个 RHI target。
 
-### Phase 5.5：建立可独立交付的 GUI 产品闭包
+### Phase 5.5：建立可独立交付的 GUI 产品闭包（完成 2026-08-09）
 
 目标：让 YA 可以只作为轻量 GUI/2D 框架配置、构建和交付；“没有链接 3D 模块”
 不够，未选模块的源码、package、shader codegen、测试和产品入口都不能进入该次
@@ -635,23 +635,26 @@ ya-rhi-vulkan`（宿主显式选择 backend）；ECS/Scene/Graph 只依赖 `ya-r
 
 #### 5.5.1 拆分 GUI runtime
 
-- [ ] 将当前单一 `ya-gui-runtime` 按稳定职责拆为：
+- [x] 将当前单一 `ya-gui-runtime` 按稳定职责拆为：
   - `ya-gui-resources`：Font、glyph atlas、GUI builtin texture/sampler、
-    GUI texture handle；只依赖 Core/RHI/Freetype 等 GUI 必需项；
+    GUI texture handle；只依赖 Core/RHI/Freetype 等 GUI 必需项
+    （FontManager、TextureSlotBinding）；
   - `ya-gui-draw2d`：sprite/text/line batching 与 2D pipeline；
   - `ya-gui-scene`：Node/Node2D、layout、UI scene traversal；
   - `ya-gui-compose`：viewport/UI compose；只在需要 render-target compose 时加入；
   - 后续 widgets 单独进入 `ya-gui-widgets`，不反向塞回 Core 或 Draw2D。
-- [ ] `ya-gui-framework` 改为无业务源码的 meta/facade target，显式聚合所选 GUI
-      模块；它不能是用于掩盖 unresolved symbol 的空 shared library。
-- [ ] GUI 模块公共头只通过 `include/GUI.../` forwarding headers 暴露；原始
+- [x] `ya-gui-framework` 改为无业务源码的 meta/facade target，显式聚合 GUI
+      模块；shared 模式是真实 shared 库，monolith 模式为 phony 依赖组
+      （避免空 static 库 ar 失败）。
+- [x] GUI 模块公共头只通过 `include/GUI/...` forwarding headers 暴露；原始
       header/source 保持同目录。
-- [ ] 把 Render3D 对 `GUI/Runtime/Resource/TextureLibrary.h` 的使用迁到独立
-      adapter 或 RHI builtin-resource contract；不能为了 Render3D 的白纹理/采样器
-      让 GUI 反向成为 3D 基础设施。
-- [ ] 审计 `Node` 基类归属。如果 SceneCore 需要通用树结构，则将无 2D/layout/render
-      语义的 node/tree 基础设施移到 Core 或独立 hierarchy module；Scene3D 不得因为
-      一个通用 Node 基类而依赖完整 GUI Scene。
+- [x] 把 Render3D 对 `GUI/Runtime/Resource/TextureLibrary.h` 的使用迁到 RHI
+      builtin-resource contract：TextureLibrary 下沉 `ya-rhi-backend-common`
+      （实现依赖 Texture::fromData 的资源工厂，归 backend 层；RHI 保留
+      IBuiltinTextureSource 接口），22 个消费点改 `RHI/Backend/TextureLibrary.h`。
+- [x] 审计 `Node` 基类归属：无 2D/layout/render 语义的 node/tree 基础设施
+      抽为独立 `ya-hierarchy` 模块（只依赖 Core）；Scene3D/Scene/Gameplay/
+      Editor 与 GUI scene 共用；Scene3D 不再依赖 GUI 模块。
 
 #### 5.5.2 定义 profile 闭包
 
@@ -678,7 +681,7 @@ ya_linkage=shared
 | `gui` | `shared` | Core/RHI/Vulkan/GUI 模块 DLL + GUI facade/minimal host |
 | `gui` | `monolith` | 只把 GUI 闭包 static 链入 minimal GUI exe |
 
-`gui` profile 必须纳入：
+`gui` profile 纳入：
 
 ```text
 ya-foundation-core
@@ -692,7 +695,7 @@ ya-gui-framework        # facade/meta
 ya-gui-minimal-host     # smoke/demo，可选交付目标
 ```
 
-`gui` profile 必须排除：
+`gui` profile 排除（构建图层面不 include，源码/package/shader 均不进入）：
 
 ```text
 ya-resource-core/loader/runtime（Game resource line）
@@ -721,18 +724,20 @@ package 规则：
 
 #### 5.5.3 Shader 与生成链裁剪
 
-- [ ] shader manifest 按消费模块分组，至少区分：
+- [x] shader manifest 按消费模块分组（Engine/Shader/Shader.xmake.lua）：
   - `shader-common`：真正被多个 profile 共用的 layout/limits；
   - `shader-gui`：`Sprite2D.slang`、`Sprite2DLine.slang` 及必要 GUI shader；
   - `shader-render3d`：Deferred、PBR/Phong、shadow、postprocess、environment；
   - `shader-test`：测试和 example shader。
-- [ ] `ya.shader.codegen` 接收 target/profile 对应的 manifest，不再扫描
-      `Engine/Shader/**` 全量生成。
-- [ ] RHI target 不公开整个 Slang/GLSL Generated 根；生成头按所有者通过 forwarding
-      include 或独立 generated-interface target 传播。
-- [ ] GUI profile 不生成、编译、打包 Deferred/PBR/Phong/Shadow/Environment shader。
-- [ ] GUI package 产物不包含 model、material、environment lighting 和 3D pipeline
-      的 runtime shader。
+- [x] `ya.shader.codegen` 按 profile 传 manifest 文件子集，不再全量扫描
+      `Engine/Shader/**`；GUI profile 的 depend 输入仅 common+gui 组
+      （6 个文件），删除 3D 生成头后 GUI 构建不会重建。
+- [x] RHI target 只公开 `Generated/Common` 子根（common 组生成到该子目录），
+      不再公开整个 Slang/GLSL Generated 根；render3d 组生成头由 Render3D
+      自身 public include 传播（fat ECS 过渡期显式声明）。
+- [x] GUI profile 不生成 Deferred/PBR/Phong/Shadow/Environment shader。
+- [x] GUI package 产物不包含 model、material、environment lighting 和 3D
+      pipeline 的 runtime shader（GUI 运行时只加载 Sprite2D 源 shader）。
 
 验收：
 
@@ -753,6 +758,20 @@ xmake b ya-gui-minimal-host
   并正确 shutdown；
 - 暂时重命名或禁用一个 Render3D/environment source target 后，GUI-only 配置仍成功，
   用来证明不是“目标存在但碰巧没链接”。
+
+验收结果（2026-08-09）：
+
+- gui/shared 与 gui/monolith 均成功：minimal host 30 帧、0 validation
+  error、干净 shutdown（VFS init 属 Host 组装职责，已在 minimal host 补上；
+  Render2D 管线格式使用 swapchain 真实格式 B8G8R8A8）。
+- gui/shared 下 `ya-gui-closure-test` 27 测试通过（不链接 ECS/Physics/
+  Resource/RenderGraph/Render3D/Host/Editor）。
+- `xmake show -l targets`（gui profile）无任何 Game/Render3D/Host/Editor
+  target；monolith 产物 `otool -L` 零 libya 动态依赖；GUI 构建日志无
+  assimp/tinygltf/Jolt（gui profile 的 add_requires 不含 3D 包）。
+- 注意：xmake 的 get_config 在 `f -c` 首次解析时为 nil（配置延迟一拍的
+  xmake 行为），切换 profile 后需第二次 `xmake f` 收敛；`ya.py cfg
+  --config-arg=--ya_profile=gui` 的既有三次 f 流程天然收敛。
 
 ### Phase 6：移除 tier-wide include 与隐式链接
 

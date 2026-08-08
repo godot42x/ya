@@ -6,6 +6,13 @@ target("ya-render-3d")
     ya_tier_include("Render", "Product")
     add_files("**.cpp")
     add_headerfiles("**.h")
+    -- Render3D public headers consume the generated shader-interface headers
+    -- (slang.h / glsl.h); the generated roots are propagated to consumers
+    -- as public include dirs, scoped to this module only.
+    add_includedirs(path.join(os.projectdir(), "Engine/Shader/Slang/Generated"), { public = true })
+    add_includedirs(path.join(os.projectdir(), "Engine/Shader/GLSL/Generated"), { public = true })
+    add_includedirs(path.join(os.projectdir(), "Engine/Shader/Slang/Generated/Common"), { public = true })
+    add_includedirs(path.join(os.projectdir(), "Engine/Shader/GLSL/Generated/Common"), { public = true })
     add_deps(
         "ya-gui-resources",
         "ya-gui-compose",

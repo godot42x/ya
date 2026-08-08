@@ -11,6 +11,14 @@ target("ya-gameplay-ecs")
     -- ya-gameplay-systems / ya-component-linkage / ya-render-ecs-adapters.
     add_files("**.cpp|Core/**.cpp")
     add_headerfiles("**.h|Core/**.h")
+    -- Fat-module transition: material components still compile Render3D
+    -- headers (via the Render tier root), which consume the generated
+    -- shader-interface headers; the RHI target now only exposes the common
+    -- generated sub-root, so the full generated roots are declared here.
+    add_includedirs(path.join(os.projectdir(), "Engine/Shader/Slang/Generated"), { public = true })
+    add_includedirs(path.join(os.projectdir(), "Engine/Shader/GLSL/Generated"), { public = true })
+    add_includedirs(path.join(os.projectdir(), "Engine/Shader/Slang/Generated/Common"), { public = true })
+    add_includedirs(path.join(os.projectdir(), "Engine/Shader/GLSL/Generated/Common"), { public = true })
     -- Scene line types (Scene data / lifecycle / Node3D) are consumed by the
     -- systems.
     add_deps("ya-scene-3d", "ya-scene-core", "ya-scene-runtime")
