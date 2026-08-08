@@ -18,7 +18,7 @@
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/ModelComponent.h"
-#include "ECS/Component/Terrain/TerrainComponent.h"
+#include "Gameplay/Systems/Components/TerrainComponent.h"
 
 #include "Scene/Core/Scene.h"
 

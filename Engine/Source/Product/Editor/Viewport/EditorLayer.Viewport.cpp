@@ -1,6 +1,6 @@
 #include "Editor/EditorLayerInternal.h"
 
-#include "ECS/Component/DirectionalLightComponent.h"
+#include "Gameplay/Systems/Components/DirectionalLightComponent.h"
 #include "Host/GUI/GuiSystem.h"
 
 namespace ya

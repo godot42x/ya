@@ -10,4 +10,6 @@ target("ya-gameplay-systems")
     -- Public headers reach Resource types (SkeletonAnimatorComponent holds
     -- skeleton data); ECS + scene line for the systems.
     add_deps("ya-foundation-core", "ya-ecs-core", "ya-resource", "ya-scene-core", "ya-scene-3d", { public = true })
-    add_packages("quickjs-ng", "nlohmann_json", "entt", "glm")
+    -- Lua scripting (component + system) and JS scripting.
+    add_packages("quickjs-ng", "nlohmann_json", "entt", "glm", "sol2", { public = true })
+    add_packages("lua")

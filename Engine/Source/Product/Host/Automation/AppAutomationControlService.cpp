@@ -14,13 +14,13 @@
 #include "ECS/ECSRegistry.h"
 
 #include "ECS/Component/2D/BillboardComponent.h"
-#include "ECS/Component/DirectionalLightComponent.h"
+#include "Gameplay/Systems/Components/DirectionalLightComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
-#include "ECS/Component/PointLightComponent.h"
+#include "Gameplay/Systems/Components/PointLightComponent.h"
 #include "ECS/Component/RenderComponent.h"
 #include "Scene3D/TransformComponent.h"
-#include "ECS/Component/CameraComponent.h"
+#include "Gameplay/Systems/Components/CameraComponent.h"
 #include "Render/Adapters/LightBillboard/LightBillboardLinkageRule.h"
 #include "Gameplay/Systems/TransformSystem.h"
 

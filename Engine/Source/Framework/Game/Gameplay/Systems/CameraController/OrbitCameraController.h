@@ -3,7 +3,7 @@
 
 #include "Core/Input/InputManager.h"
 #include "Core/KeyCode.h"
-#include "ECS/Component/CameraComponent.h"
+#include "Gameplay/Systems/Components/CameraComponent.h"
 #include "Scene3D/TransformComponent.h"
 
 

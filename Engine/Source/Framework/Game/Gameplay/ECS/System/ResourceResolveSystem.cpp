@@ -1,7 +1,7 @@
 #include "ResourceResolveSystem.h"
 
 #include "ECS/Component/2D/BillboardComponent.h"
-#include "ECS/Component/2D/UIComponent.h"
+#include "Gameplay/Systems/Components/UIComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"

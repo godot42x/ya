@@ -20,7 +20,7 @@
 #include "Gameplay/Linkage/LinkageFramework.h"
 #include "Render/Adapters/LightBillboard/LightBillboardLinkageRule.h"
 #include "Render/Adapters/Material/MaterialRenderLinkageRule.h"
-#include "ECS/System/LuaScriptingSystem.h"
+#include "Gameplay/Systems/LuaScriptingSystem.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
 #include "Gameplay/Systems/JSScriptingSystem.h"
 #include "Core/Scripting/ScriptApiRegistry.h"

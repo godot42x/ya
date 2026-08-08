@@ -3,12 +3,11 @@
 #include "Core/Reflection/MetadataSupport.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Core/System/FileWatcher.h"
-#include "ECS/Component/CameraComponent.h"
-#include "ECS/Component/LuaScriptComponent.h"
-#include "ECS/Component/PointLightComponent.h"
+#include "Gameplay/Systems/Components/CameraComponent.h"
+#include "Gameplay/Systems/Components/LuaScriptComponent.h"
+#include "Gameplay/Systems/Components/PointLightComponent.h"
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Entity.h"
-#include "Scene/Runtime/SceneManager.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 

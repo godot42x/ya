@@ -4,7 +4,7 @@
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
-#include "ECS/Component/Terrain/TerrainComponent.h"
+#include "Gameplay/Systems/Components/TerrainComponent.h"
 #include "RHI/Render.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "Core/Common/DeferredDeletionQueue.h"

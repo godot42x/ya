@@ -62,12 +62,12 @@ struct LuaScriptComponent : public IComponent
         bool enabled = true;
 
         // 刷新属性列表（从 self 表中读取）
-        YA_GAMEPLAY_ECS_API void refreshProperties();
+        YA_GAMEPLAY_SYSTEMS_API void refreshProperties();
 
         // 应用属性覆盖（在运行时初始化后调用）
         void applyPropertyOverrides(sol::state &lua);
 
-        static YA_GAMEPLAY_ECS_API std::string normalizeScriptPath(std::string_view path);
+        static YA_GAMEPLAY_SYSTEMS_API std::string normalizeScriptPath(std::string_view path);
 
       private:
         // 类型推断辅助函数
