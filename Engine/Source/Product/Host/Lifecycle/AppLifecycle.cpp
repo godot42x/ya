@@ -17,7 +17,7 @@
 #include "Core/System/FileWatcher.h"
 #include "Core/System/VirtualFileSystem.h"
 
-#include "ECS/System/ComponentLinkageSystem.h"
+#include "Render3D/Adapters/LightBillboard/ComponentLinkageSystem.h"
 #include "ECS/System/LuaScriptingSystem.h"
 #include "ECS/System/JSScriptingSystem.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
@@ -380,6 +380,18 @@ void AppLifecycle::init(App& app, AppDesc ci)
     sys4->init();
     app._systems.push_back(sys4);
     auto sys5 = ya::makeShared<ComponentLinkageSystem>();
+    // Light billboard policy is injected here (Host owns the config source);
+    // the adapter never reaches Host/Config.
+    LightBillboardPolicy billboardPolicy;
+    billboardPolicy.point.enabled          = ConfigManager::get().getOr<bool>("editor", "lightBillboards.point.enabled", billboardPolicy.point.enabled);
+    billboardPolicy.point.screenSizePixels = ConfigManager::get().getOr<float>("editor", "lightBillboards.point.screenSizePixels", billboardPolicy.point.screenSizePixels);
+    billboardPolicy.point.minWorldScale    = ConfigManager::get().getOr<float>("editor", "lightBillboards.point.minWorldScale", billboardPolicy.point.minWorldScale);
+    billboardPolicy.point.texturePath      = ConfigManager::get().getOr<std::string>("editor", "lightBillboards.point.texturePath", billboardPolicy.point.texturePath);
+    billboardPolicy.directional.enabled          = ConfigManager::get().getOr<bool>("editor", "lightBillboards.directional.enabled", billboardPolicy.directional.enabled);
+    billboardPolicy.directional.screenSizePixels = ConfigManager::get().getOr<float>("editor", "lightBillboards.directional.screenSizePixels", billboardPolicy.directional.screenSizePixels);
+    billboardPolicy.directional.minWorldScale    = ConfigManager::get().getOr<float>("editor", "lightBillboards.directional.minWorldScale", billboardPolicy.directional.minWorldScale);
+    billboardPolicy.directional.texturePath      = ConfigManager::get().getOr<std::string>("editor", "lightBillboards.directional.texturePath", billboardPolicy.directional.texturePath);
+    ComponentLinkageSystem::setLightBillboardPolicy(billboardPolicy);
     sys5->init();
     app._systems.push_back(sys5);
     auto sysPhysics = ya::makeShared<PhysicsSystem>();

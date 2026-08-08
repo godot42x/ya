@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Host/Config/ConfigManager.h"
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/DirectionalLightComponent.h"
 #include "Core/System/System.h"
@@ -26,47 +25,37 @@ namespace ya
 
 struct Scene;
 
+/// Render/editor adapter policy for light billboards, injected by the Host
+/// (which owns the config source). The system never reaches Host config.
+struct LightBillboardConfig
+{
+    bool        enabled          = true;
+    float       screenSizePixels = 30.0f;
+    float       minWorldScale    = 0.4f;
+    glm::vec4   tint             = glm::vec4(1.0f);
+    std::string texturePath      = "Engine:Content/TestTextures/icons8-light-64.png";
+};
+
+struct LightBillboardPolicy
+{
+    LightBillboardConfig point       = LightBillboardConfig{true, 30.0f, 0.4f, glm::vec4(1.0f, 0.95f, 0.45f, 1.0f), "Engine:Content/TestTextures/icons8-light-64.png"};
+    LightBillboardConfig directional = LightBillboardConfig{true, 42.0f, 1.0f, glm::vec4(1.0f, 0.96f, 0.72f, 1.0f), "Engine:Content/TestTextures/icons8-light-64.png"};
+};
+
 
 struct ComponentLinkageSystem : public ISystem
 {
     using Self = ComponentLinkageSystem;
-    struct LightBillboardConfig
-    {
-        bool        enabled          = true;
-        float       screenSizePixels = 30.0f;
-        float       minWorldScale    = 0.0f;
-        glm::vec4   tint             = glm::vec4(1.0f);
-        std::string texturePath{};
-    };
 
     DelegateHandle handle1;
     DelegateHandle handle2;
 
-    static const LightBillboardConfig& pointLightBillboardConfig()
-    {
-        static LightBillboardConfig config;
-        config.enabled          = ConfigManager::get().getOr<bool>("editor", "lightBillboards.point.enabled", true);
-        config.screenSizePixels = ConfigManager::get().getOr<float>("editor", "lightBillboards.point.screenSizePixels", 30.0f);
-        config.minWorldScale    = ConfigManager::get().getOr<float>("editor", "lightBillboards.point.minWorldScale", 0.4f);
-        config.texturePath      = ConfigManager::get().getOr<std::string>("editor",
-                                                                           "lightBillboards.point.texturePath",
-                                                                           "Engine:Content/TestTextures/icons8-light-64.png");
-        config.tint             = glm::vec4(1.0f, 0.95f, 0.45f, 1.0f);
-        return config;
-    }
+    /// Injected by the Host once at startup (config source stays in Host).
+    static void setLightBillboardPolicy(LightBillboardPolicy policy);
+    static const LightBillboardPolicy& lightBillboardPolicy();
 
-    static const LightBillboardConfig& directionalLightBillboardConfig()
-    {
-        static LightBillboardConfig config;
-        config.enabled          = ConfigManager::get().getOr<bool>("editor", "lightBillboards.directional.enabled", true);
-        config.screenSizePixels = ConfigManager::get().getOr<float>("editor", "lightBillboards.directional.screenSizePixels", 42.0f);
-        config.minWorldScale    = ConfigManager::get().getOr<float>("editor", "lightBillboards.directional.minWorldScale", 1.0f);
-        config.texturePath      = ConfigManager::get().getOr<std::string>("editor",
-                                                                           "lightBillboards.directional.texturePath",
-                                                                           "Engine:Content/TestTextures/icons8-light-64.png");
-        config.tint             = glm::vec4(1.0f, 0.96f, 0.72f, 1.0f);
-        return config;
-    }
+    static const LightBillboardConfig& pointLightBillboardConfig() { return lightBillboardPolicy().point; }
+    static const LightBillboardConfig& directionalLightBillboardConfig() { return lightBillboardPolicy().directional; }
 
     static void applyBillboardDefaults(BillboardComponent& billboard, const LightBillboardConfig& config)
     {
