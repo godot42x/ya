@@ -17,7 +17,7 @@ namespace ya
 
 struct Scene;
 
-struct YA_GAMEPLAY_ECS_API GameplayResourceBinding : public ISystem
+struct YA_RENDER_ECS_ADAPTERS_API GameplayResourceBinding : public ISystem
 {
   private:
     std::function<Scene*()>  _getActiveScene;

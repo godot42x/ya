@@ -2,7 +2,9 @@ target("ya-scene-3d")
     set_kind(ya_target_kind())
     ya_std_module("YA_SCENE_3D_API")
     ya_tier_include("Scene")
+    add_includedirs("./include", { public = true })
     add_files("**.cpp")
+    add_headerfiles("./include/**.h", { public = true })
     add_headerfiles("**.h")
     -- Node3D extends the renderer-independent scene-tree base (Node);
     -- TransformComponent and ManagedChildComponent (3D scene data) live here

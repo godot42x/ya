@@ -5,7 +5,9 @@ target("ya-scene-core")
     set_kind(ya_target_kind())
     ya_std_module("YA_SCENE_CORE_API")
     ya_tier_include("Scene", "Gameplay", "Framework", "Game")
+    add_includedirs("./include", { public = true })
     add_files("**.cpp")
+    add_headerfiles("./include/**.h", { public = true })
     add_headerfiles("**.h")
     -- Scene.h composes ECS entities, the GUI node tree and Node3D; it also
     -- references Resource model types. All public because Scene.h is public.

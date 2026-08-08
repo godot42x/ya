@@ -4,7 +4,9 @@ target("ya-render-3d")
     -- Transition: 14 render-3d files still compile Host headers (app
     -- services); replaced by injected service contracts (Phase 7).
     ya_tier_include("Render", "Product")
+    add_includedirs("./include", { public = true })
     add_files("**.cpp")
+    add_headerfiles("./include/**.h", { public = true })
     add_headerfiles("**.h")
     -- Render3D public headers consume the generated shader-interface headers
     -- (slang.h / glsl.h); the generated roots are propagated to consumers
@@ -19,11 +21,13 @@ target("ya-render-3d")
         "ya-resource-core", "ya-resource-loader", "ya-resource-runtime",
         "ya-render-graph",
         "ya-scene-3d",
-        "ya-gameplay-ecs",
         "ya-gameplay-systems",
         "ya-component-linkage",
         "ya-physics",
         { public = true })
+    -- Render-facing ECS components live in this module (Component/); they
+    -- build on the ECS core infrastructure and the backend builtin textures.
+    add_deps("ya-ecs-core", "ya-rhi-backend-common")
     -- Scene data/lifecycle types are consumed by Render3D implementation
     -- .cpp files only (RenderRuntime pipelines, overlays); Render3D public
     -- headers do not expose them, so the deps stay private.

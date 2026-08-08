@@ -189,7 +189,6 @@ do
         "ya-scene-serialization",
         "ya-scene-3d",
         "ya-ecs-core",
-        "ya-gameplay-ecs",
         "ya-gameplay-systems",
         "ya-component-linkage",
         "ya-render-ecs-adapters",
