@@ -39,7 +39,7 @@ inline uint64_t nextMaterialVersion()
  * Design:
  * - Component layer holds Material reference (serializable path/params)
  * - Material class is the actual data storage
- * - ResourceResolveSystem handles all resource loading
+ * - GameplayResourceBinding handles all resource loading
  *
  * Derived classes should:
  * 1. Define their EResource enum for texture slots

@@ -62,7 +62,7 @@ struct MaterialComponent : public MaterialComponentBase
 
     /**
      * @brief Resolve all resources (textures, etc.)
-     * Called by ResourceResolveSystem
+     * Called by GameplayResourceBinding
      * Derived classes should override this
      */
     virtual EMaterialResolveResult resolve() { return EMaterialResolveResult::Ready; }

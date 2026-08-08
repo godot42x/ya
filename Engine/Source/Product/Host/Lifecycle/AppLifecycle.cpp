@@ -26,7 +26,7 @@
 #include "Core/Scripting/ScriptApiRegistry.h"
 #include "Core/Scripting/ScriptApiAsset.h"
 #include "Render/Adapters/ModelInstantiationSystem.h"
-#include "Render/Adapters/ResourceResolveSystem.h"
+#include "Render/Adapters/GameplayResourceBinding.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Services/EnvironmentLightingResultProvider.h"
 #include "Render3D/Terrain/TerrainProcessor.h"
@@ -377,7 +377,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
     });
     sys->init();
     app._systems.push_back(sys);
-    auto sys2 = ya::makeShared<ResourceResolveSystem>();
+    auto sys2 = ya::makeShared<GameplayResourceBinding>();
     sys2->setActiveSceneProvider([&app]() -> Scene*
     {
         return app.getSceneServices().getActiveScene();
@@ -387,7 +387,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
         return App::currentFrameIndex();
     });
     sys2->init();
-    app._resourceResolveSystem = sys2.get();
+    app._gameplayResourceBinding = sys2.get();
     app._systems.push_back(sys2);
 
     // Skybox / environment / terrain derived GPU resolve moved out of the ECS
@@ -484,7 +484,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
             sys->shutdown();
         }
         app._systems.clear();
-        app._resourceResolveSystem = nullptr;
+        app._gameplayResourceBinding = nullptr;
         app._terrainProcessor            = nullptr;
         app._environmentLightingProcessor = nullptr; });
 

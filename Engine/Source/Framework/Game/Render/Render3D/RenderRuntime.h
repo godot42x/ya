@@ -179,7 +179,7 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     [[nodiscard]] uint64_t                       getFrameIndex() const override;
     [[nodiscard]] double                         getElapsedTimeSeconds() const override;
     [[nodiscard]] Scene*                         getActiveScene() const override;
-    [[nodiscard]] ResourceResolveSystem*         getResourceResolveSystem() const override;
+    [[nodiscard]] GameplayResourceBinding*         getGameplayResourceBinding() const override;
     [[nodiscard]] EnvironmentLightingProcessor*  getEnvironmentLightingProcessor() const override;
     [[nodiscard]] bool                           isShadowMappingEnabled() const;
     [[nodiscard]] IImageView*                    getShadowDirectionalDepthIV() const;

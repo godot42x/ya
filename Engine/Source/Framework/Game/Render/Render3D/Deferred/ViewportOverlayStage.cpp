@@ -10,7 +10,7 @@
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "Scene3D/TransformComponent.h"
 #include "Render3D/Material/SimpleMaterial.h"
-#include "Render/Adapters/ResourceResolveSystem.h"
+#include "Render/Adapters/GameplayResourceBinding.h"
 #include "RHI/Backend/Vulkan/VulkanRender.h"
 #include "RHI/Core/RenderResourceFactory.h"
 

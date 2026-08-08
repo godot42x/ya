@@ -163,9 +163,9 @@ Scene* RenderRuntime::getActiveScene() const
     return _app->getSceneServices().getActiveScene();
 }
 
-ResourceResolveSystem* RenderRuntime::getResourceResolveSystem() const
+GameplayResourceBinding* RenderRuntime::getGameplayResourceBinding() const
 {
-    return _app ? _app->getResourceResolveSystem() : nullptr;
+    return _app ? _app->getGameplayResourceBinding() : nullptr;
 }
 
 EnvironmentLightingProcessor* RenderRuntime::getEnvironmentLightingProcessor() const

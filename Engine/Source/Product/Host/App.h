@@ -38,7 +38,7 @@ struct JSScriptingSystem;
 struct FProjectDescriptor;
 struct AppRenderState;
 class WindowManager;
-class ResourceResolveSystem;
+class GameplayResourceBinding;
 struct EnvironmentLightingProcessor;
 struct TerrainProcessor;
 class AppLifecycle;
@@ -102,7 +102,7 @@ struct YA_HOST_API App
 
     std::vector<glm::vec2>       clicked;
     std::vector<stdptr<ISystem>> _systems;
-    ResourceResolveSystem*       _resourceResolveSystem = nullptr;
+    GameplayResourceBinding*       _gameplayResourceBinding = nullptr;
     EnvironmentLightingProcessor* _environmentLightingProcessor = nullptr;
     TerrainProcessor*             _terrainProcessor            = nullptr;
 
@@ -179,7 +179,7 @@ struct YA_HOST_API App
     [[nodiscard]] JSScriptingSystem*                  getJSScriptingSystem() const { return _jsScriptingSystem; }
 
     [[nodiscard]] const AppDesc&                 getDesc() const { return _ci; }
-    [[nodiscard]] ResourceResolveSystem*         getResourceResolveSystem() const { return _resourceResolveSystem; }
+    [[nodiscard]] GameplayResourceBinding*         getGameplayResourceBinding() const { return _gameplayResourceBinding; }
     [[nodiscard]] EnvironmentLightingProcessor*  getEnvironmentLightingProcessor() const { return _environmentLightingProcessor; }
     [[nodiscard]] TerrainProcessor*              getTerrainProcessor() const { return _terrainProcessor; }
     [[nodiscard]] InputManager&                  getInputManager() { return inputManager; }

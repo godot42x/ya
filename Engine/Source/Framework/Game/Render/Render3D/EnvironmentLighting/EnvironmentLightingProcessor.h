@@ -2,7 +2,7 @@
 
 // ============================================================================
 // Environment lighting derived-GPU processing (skybox cubemap, irradiance,
-// prefilter, terrain mesh). Owned by Render3D; the ECS ResourceResolveSystem
+// prefilter, terrain mesh). Owned by Render3D; the ECS GameplayResourceBinding
 // keeps plain AssetRef / mesh / material resolution only.
 //
 // Driven as an ISystem by the Host, with render, offscreen queue and active

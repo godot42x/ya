@@ -27,7 +27,7 @@ struct Mesh;
  *  1. Primitive geometry (built-in shapes).
  *  2. A mesh belonging to a Model (identified by Model path + mesh index).
  *
- * Runtime fields (_cachedMesh/_bResolved) are not serialized; ResourceResolveSystem calls resolve().
+ * Runtime fields (_cachedMesh/_bResolved) are not serialized; GameplayResourceBinding calls resolve().
  */
 struct MeshSource
 {

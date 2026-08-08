@@ -1,4 +1,4 @@
-#include "ResourceResolveSystem.h"
+#include "GameplayResourceBinding.h"
 
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "Gameplay/Systems/Components/UIComponent.h"
@@ -14,11 +14,11 @@
 namespace ya
 {
 
-void ResourceResolveSystem::init()
+void GameplayResourceBinding::init()
 {
 }
 
-void ResourceResolveSystem::clearSceneResolveWork()
+void GameplayResourceBinding::clearSceneResolveWork()
 {
     _dirtyMaterialQueue.clear();
     _dirtyMaterialSet.clear();
@@ -27,12 +27,12 @@ void ResourceResolveSystem::clearSceneResolveWork()
     _pendingStateScene = nullptr;
 }
 
-bool ResourceResolveSystem::isMaterialQueuedOrActive(entt::entity entity) const
+bool GameplayResourceBinding::isMaterialQueuedOrActive(entt::entity entity) const
 {
     return _dirtyMaterialSet.contains(entity) || _activeMaterial.contains(entity);
 }
 
-void ResourceResolveSystem::auditMaterialWork(Scene* scene)
+void GameplayResourceBinding::auditMaterialWork(Scene* scene)
 {
     if (!scene) {
         return;
@@ -71,14 +71,14 @@ void ResourceResolveSystem::auditMaterialWork(Scene* scene)
     auditMaterial(registry.view<UnlitMaterialComponent>());
 }
 
-void ResourceResolveSystem::cleanupMaterialState(entt::entity entity)
+void GameplayResourceBinding::cleanupMaterialState(entt::entity entity)
 {
     _dirtyMaterialSet.erase(entity);
     _activeMaterial.erase(entity);
     std::erase(_dirtyMaterialQueue, entity);
 }
 
-void ResourceResolveSystem::markMaterialDirty(entt::entity entity, const char* reason)
+void GameplayResourceBinding::markMaterialDirty(entt::entity entity, const char* reason)
 {
     if (!_pendingStateScene) {
         return;
@@ -99,7 +99,7 @@ void ResourceResolveSystem::markMaterialDirty(entt::entity entity, const char* r
     }
 }
 
-void ResourceResolveSystem::resolvePendingMeshes(Scene* scene)
+void GameplayResourceBinding::resolvePendingMeshes(Scene* scene)
 {
     auto& registry = scene->getRegistry();
 
@@ -119,7 +119,7 @@ void ResourceResolveSystem::resolvePendingMeshes(Scene* scene)
     });
 }
 
-void ResourceResolveSystem::resolvePendingMaterials(Scene* scene)
+void GameplayResourceBinding::resolvePendingMaterials(Scene* scene)
 {
     auto& registry = scene->getRegistry();
 
@@ -203,7 +203,7 @@ void ResourceResolveSystem::resolvePendingMaterials(Scene* scene)
     }
 }
 
-void ResourceResolveSystem::resolvePendingUI(Scene* scene)
+void GameplayResourceBinding::resolvePendingUI(Scene* scene)
 {
     auto& registry = scene->getRegistry();
 
@@ -215,7 +215,7 @@ void ResourceResolveSystem::resolvePendingUI(Scene* scene)
     });
 }
 
-void ResourceResolveSystem::resolvePendingBillboards(Scene* scene)
+void GameplayResourceBinding::resolvePendingBillboards(Scene* scene)
 {
     auto& registry = scene->getRegistry();
 
@@ -229,13 +229,13 @@ void ResourceResolveSystem::resolvePendingBillboards(Scene* scene)
 
 
 
-void ResourceResolveSystem::shutdown()
+void GameplayResourceBinding::shutdown()
 {
     clearSceneResolveWork();
     _getActiveScene = {};
 }
 
-void ResourceResolveSystem::onUpdate(float dt)
+void GameplayResourceBinding::onUpdate(float dt)
 {
     YA_PROFILE_FUNCTION();
 

@@ -20,7 +20,7 @@ struct SkeletonAnimatorComponent;
  * @brief Expand ModelComponent into mesh/material child entities.
  *
  * This system owns scene topology changes caused by ModelComponent.
- * Runtime resource loading for already-existing components stays in ResourceResolveSystem.
+ * Runtime resource loading for already-existing components stays in GameplayResourceBinding.
  */
 struct ModelInstantiationSystem : public ISystem
 {

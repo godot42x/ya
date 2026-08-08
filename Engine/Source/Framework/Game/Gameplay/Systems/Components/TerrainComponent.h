@@ -36,7 +36,7 @@ struct YA_GAMEPLAY_SYSTEMS_API TerrainComponent : public IComponent
 
     // Terrain acts as a mesh source for the frame extractor; always considered resolved.
     [[nodiscard]] bool isResolved() const { return true; }
-    // Placeholder for draw-item emission; real terrain meshes are produced by ResourceResolveSystem.
+    // Placeholder for draw-item emission; real terrain meshes are produced by GameplayResourceBinding.
     [[nodiscard]] void* getMesh() const { return nullptr; }
 
   private:

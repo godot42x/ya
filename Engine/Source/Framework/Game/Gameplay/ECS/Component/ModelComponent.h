@@ -11,7 +11,7 @@
  * Data Flow:
  * 1. User sets ModelComponent._modelRef on an Entity
  * 2. ModelInstantiationSystem loads the Model and creates child entities
- * 3. ResourceResolveSystem resolves runtime resources for those child components
+ * 3. GameplayResourceBinding resolves runtime resources for those child components
  * 4. Each child entity is self-contained (can be rendered independently)
  */
 #pragma once

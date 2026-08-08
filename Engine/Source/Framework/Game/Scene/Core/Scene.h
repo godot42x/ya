@@ -210,7 +210,7 @@ struct YA_SCENE_CORE_API [[refl]] Scene
     // Allow internal systems to access createEntity
     friend class SceneSerializer;
     friend struct ModelInstantiationSystem;
-    friend class ResourceResolveSystem;
+    friend class GameplayResourceBinding;
 };
 
 } // namespace ya

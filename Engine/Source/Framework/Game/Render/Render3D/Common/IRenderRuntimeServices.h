@@ -9,7 +9,7 @@ namespace ya
 
 struct Scene;
 struct DebugRenderSystem;
-struct ResourceResolveSystem;
+struct GameplayResourceBinding;
 struct EnvironmentLightingProcessor;
 struct EnvironmentLightingSceneResources;
 
@@ -20,7 +20,7 @@ struct IRenderRuntimeServices
     [[nodiscard]] virtual uint64_t                         getFrameIndex() const = 0;
     [[nodiscard]] virtual double                           getElapsedTimeSeconds() const = 0;
     [[nodiscard]] virtual Scene*                           getActiveScene() const = 0;
-    [[nodiscard]] virtual ResourceResolveSystem*           getResourceResolveSystem() const = 0;
+    [[nodiscard]] virtual GameplayResourceBinding*           getGameplayResourceBinding() const = 0;
     [[nodiscard]] virtual EnvironmentLightingProcessor*    getEnvironmentLightingProcessor() const = 0;
     [[nodiscard]] virtual DescriptorSetHandle              getSceneSkyboxDescriptorSet(Scene* scene = nullptr) = 0;
     [[nodiscard]] virtual DescriptorSetHandle              getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr) = 0;
