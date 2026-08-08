@@ -9,7 +9,6 @@
 #include "Core/System/PathUtils.h"
 #include "Core/Common/DeferredDeletionQueue.h"
 #include "Core/Common/AssetRef.h"
-#include "Host/App.h"
 
 #include <algorithm>
 #include <cctype>
@@ -17,6 +16,17 @@
 
 namespace ya
 {
+
+namespace
+{
+std::function<void(std::function<void()>)> g_frameTaskSink;
+}
+
+void AssetManager::setFrameTaskSink(std::function<void(std::function<void()>)> sink)
+{
+    g_frameTaskSink = std::move(sink);
+}
+
 namespace
 {
 uint64_t getCurrentFrameIdx()
@@ -176,13 +186,12 @@ void AssetManager::dispatchToGameThread(std::function<void()> task)
         return;
     }
 
-    auto* app = App::get();
-    if (!app) {
-        task();
+    if (g_frameTaskSink) {
+        g_frameTaskSink(std::move(task));
         return;
     }
 
-    app->getTaskManager().registerFrameTask(std::move(task));
+    task();
 }
 
 uint64_t AssetManager::getResourceVersion(const std::string& assetPath) const

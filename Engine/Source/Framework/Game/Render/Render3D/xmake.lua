@@ -1,7 +1,9 @@
 target("ya-render-3d")
     set_kind("shared")
     ya_std_module("YA_RENDER_3D_API")
-    ya_tier_include("Render")
+    -- Transition: 14 render-3d files still compile Host headers (app
+    -- services); replaced by injected service contracts (Phase 7).
+    ya_tier_include("Render", "Product")
     add_files("**.cpp")
     add_headerfiles("**.h")
     add_deps(

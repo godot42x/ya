@@ -301,6 +301,10 @@ void AppLifecycle::init(App& app, AppDesc ci)
         app.inputManager.init();
         FileWatcher::init();
         MaterialFactory::init();
+        AssetManager::setFrameTaskSink([&app](std::function<void()> task)
+        {
+            app.getTaskManager().registerFrameTask(std::move(task));
+        });
         TaskQueue::get().start(/*numThreads=*/2);
         profiling::beginRuntimeSession(app._ci);
         if (ConfigManager::get().hasDocument("automation")) {

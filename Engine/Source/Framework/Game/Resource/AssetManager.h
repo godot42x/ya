@@ -94,6 +94,10 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
     void    setRender(IRender* render) { _render = render; }
     IRender* getRender() const { return _render; }
 
+    /// Injected frame-task sink (bound by the Host; no App access from here).
+    /// When unset, tasks run inline (fallback for non-Host environments).
+    static void setFrameTaskSink(std::function<void(std::function<void()>)> sink);
+
     // ── Meta system ─────────────────────────────────────────────────────
 
     const AssetMeta& getOrLoadMeta(const std::string& assetPath);
@@ -222,6 +226,7 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
                                      const ResolvedTextureImportSettings& settings);
 
     static void dispatchToGameThread(std::function<void()> task);
+
 
     AssetTextureManager&       textureManager();
     const AssetTextureManager& textureManager() const;
