@@ -3,11 +3,15 @@
 > 建立日期：2026-08-08  
 > 来源：最近一轮模块拆分、目录分层、导出宏和 include 重构 review。  
 > 状态：执行中；关键架构决策已由用户确认。  
-> 进度：Phase 0、Phase 1 完成（2026-08-08）；Phase 2 主体完成（2026-08-09）：
-> `ya-ecs-core` 落地、component 头去 Render3D 化、Transform 组件归位
-> scene-3d（ECS↔Scene 环在 xmake 层完全切断）、`ya-gameplay-systems`
-> 建立、`ya-component-linkage` 拆分落地；剩余为 render-ecs-adapters 目标
-> 建立（render 组件/规则归位）与 fat 模块溶解。  
+> 进度：Phase 0/1 完成（2026-08-08）；Phase 2 完成（2026-08-09）：
+> ecs-core / gameplay-systems（含 Animation 与纯 gameplay 组件）/
+> component-linkage / render-ecs-adapters（rules + resolve 系统）四 target
+> 建立，ECS↔Scene 环在 xmake 层完全切断，组件头去 Render3D 化，
+> ya_engine_defines 从 ECS 移除。fat `ya-gameplay-ecs` 仅剩 render 组件
+> 过渡容器，其溶解依赖 Phase 3 的 Render3D 消费方式重构。Phase 3 已推进：
+> Resource 拆 core/loader/runtime 三层（无 Host/ECS/Render3D 依赖）、
+> OffscreenJobQueueService contract 下沉 RHI（EnvironmentLightingProcessor
+> 不再 include Host）；剩余 environment/terrain 拆分、Render3D 只读消费。  
 > 关系：本计划补充并修正 `gui-framework-module-split`；涉及 ECS、Scene、
 > Resource、Render3D、Host 和 XMake 边界的内容，以本计划为后续执行顺序。
 
@@ -448,20 +452,27 @@ ya-render-ecs-adapters → ecs-core + Resource + Render3D
 Resource 模块下沉到应用层，而是只把“何时为哪个 scene/component 执行解析”的
 编排留在 Gameplay/Runtime composition。
 
-- [ ] `ya-resource-core`：AssetRef、handles、metadata、resource descriptors。
-- [ ] `ya-resource-loader`：Assimp/TinyGLTF/texture import/model import。
-- [ ] `ya-resource-runtime`：AssetManager、ResourceTable、cache/version、
-      async load/decode；它不知道 Scene、ECS、Host、Render3D。
+- [x] `ya-resource-core`（`Resource/Core/`）：handles、metadata、
+      imported-data 契约、Skeleton、primitive geometry 工厂；纯 Core 依赖
+      （ModelImporterCommon 改用 Core canonicalizeAssetPath）。
+- [x] `ya-resource-loader`（`Resource/Loader/`）：Assimp/TinyGLTF import、
+      stb 解码头；无 RHI。
+- [x] `ya-resource-runtime`：AssetManager、GPU mesh/model、缓存、
+      texture import/helpers、engine AssetRef resolver；依赖
+      core+loader+RHI+GUI，不出现 Scene/ECS/Host/Render3D；tier include 仅
+      Game；`ya_engine_defines()` 移除；`dynamic_lookup` 仍在（Phase 7）。
 - [ ] `ya-gameplay-resource-binding`：扫描既有 component，把 AssetRef 绑定为
       runtime CPU/resource handle；它依赖 ResourceRuntime + ECS/Scene contract，
       不创建 scene topology，不执行 Render3D pipeline。
 - [ ] 将当前泛化的 `ResourceResolveSystem` 收缩/更名为上述 gameplay binding，
       按资源类型拆 handler，禁止继续增加 environment/terrain/render feature 分支。
-- [ ] 建立低层渲染任务 contract（暂名 `IOffscreenRenderQueue`）：
-  - contract 只依赖 RHI command buffer/job state；
-  - Host/TaskManager 实现 enqueue、取消、生命周期和 submit-safe keep-alive；
-  - Render3D feature 通过构造或 setter 注入 contract；
-  - Render3D public header 不 include `Host/Utility/OffscreenJobRunner.h`。
+- [x] 建立低层渲染任务 contract（`OffscreenJobQueueService`，2026-08-09）：
+  - contract 移入 `RHI/Core/OffscreenJob.h`（只依赖 RHI command buffer/job
+    state）；`queueOffscreenJob(queueService,...)`/`cancelOffscreenJob`
+    实现下沉 RHI（output 创建、record keep-alive、延迟删除）；
+  - Host 只保留 App 绑定 enqueue 的重载；
+  - EnvironmentLightingProcessor 公共头/cpp 不再 include
+    `Host/Utility/OffscreenJobRunner.h`。
 - [ ] 建立可选 `ya-render-environment-lighting`：
   - source texture handle/版本来自 ResourceRuntime；
   - 独立拥有 cylindrical→cubemap、irradiance、prefilter 和 BRDF 相关派生状态；
@@ -908,7 +919,7 @@ python3 Script/ya.py test --target ya --filter Physics
 
 ## 8. 当前执行入口
 
-Phase 0、Phase 1 已完成；Phase 2 主体已完成（2026-08-09）：
+Phase 0、Phase 1 已完成；Phase 2 已完成（2026-08-09）：
 
 1. `[ecs] split core ECS infrastructure into ya-ecs-core`（85e4f48a）
 2. `[core] move texture-slot descriptor out of Render3D into Core`（e7d03c93）
@@ -916,24 +927,31 @@ Phase 0、Phase 1 已完成；Phase 2 主体已完成（2026-08-09）：
 4. `[scene] move TransformComponent/ManagedChildComponent into scene-3d`（fd02a454）
 5. `[gameplay] create ya-gameplay-systems ...`（4e55fbc9）
 6. `[gameplay] split component linkage framework from render rules`（5b1f70c4）
+7. `[gameplay] absorb pure gameplay components and Lua scripting ...`（48c7cc11）
+8. `[render] move resource resolve and model instantiation ...`（e2acd4fd）
+9. `[scene] cut the last ECS<->Scene dependency edge`（a5a69627）
+10. `[resource] split core/loader/runtime resource layers`（af0901f8）
+11. `[rhi] move offscreen job queue contract into RHI`（7951987f）
 
-Phase 2 剩余：
+Phase 3 剩余执行顺序：
 
-1. `ya-render-ecs-adapters` 独立 target：把 Material/Mesh/Billboard/Model
-   组件（含 resolve 桥接 cpp）与两个 linkage 规则从 fat/render-3d 归位到
-   adapter target（依赖 ecs-core + Resource + Render3D）；消费者 include
-   相应更新。
-2. 剩余系统迁入 `ya-gameplay-systems`：ResourceResolve（注入 frame-index
-   提供者）、ModelInstantiation（注入 scene 提供者 + 迁出 Render3D 材质
-   创建）、LuaScripting（注入 input/time/scene 服务）、Animation 并入
-   （SkeletonAnimator 的 SkeletonPose 值成员需 Phase 3 资源分层后迁移）。
-3. fat `ya-gameplay-ecs` 溶解：纯 gameplay 组件归 gameplay 层；移除
-   `ya_engine_defines()` 与 tier include；组件转发头补齐。
-4. Phase 2 验收收尾：`xmake show -t ya-render-ecs-adapters` 等。
+1. `EnvironmentLightingProcessor`（~2300 行）拆成 environment lighting 与
+   terrain 两个 processor（skybox/irradiance/prefilter vs heightmap/mesh
+   build）；派生状态与 resolveState 各自独立。
+2. 可选 `ya-render-environment-lighting` / `ya-render-terrain` target（engine
+   profile 才进入构建图），Render3D 只读消费 derived handle。
+3. Render3D 消费方式重构：pipeline 不再直接 view 组件，改经窄 provider/
+   snapshot（这同时解锁 fat `ya-gameplay-ecs`（render 组件）溶解进
+   render-ecs-adapters）。
+4. ResourceResolveSystem 收缩为 gameplay resource binding（按资源类型拆
+   handler），resolveState 拆分（IO/CPU/GPU/绑定状态分离）。
+5. 剩余 Phase 3 验收：独立构建 resource-core 不需要 Vulkan backend、
+   loader 测试不启动 Host、禁用 environment/terrain 后 GUI profile 可配置、
+   删除 Resource dynamic_lookup 后可链接（后者依赖 Phase 7 app-services）。
 
-随后进入 Phase 3，把当前仍处于过渡态的 ResourceResolve/EnvironmentLighting/
-Terrain/OffscreenJobQueue 边界闭合。Phase 5.5 再基于稳定的 Core/RHI/GUI 边界
-建立 GUI-only profile，不能先用一组排除 glob 或全局 feature 宏伪造轻量构建。
+随后进入 Phase 4（Scene/Physics 边界）、Phase 5（RHI/backend 拆分）、
+Phase 5.5（GUI-only profile）。Phase 5.5 必须基于稳定的 Core/RHI/GUI 边界，
+不能先用一组排除 glob 或全局 feature 宏伪造轻量构建。
 
 任何阶段若发现必须扩大公共 API、新增反向依赖，或 GUI profile 需要重新引入完整
 Game Resource/Material，应先更新本计划的依赖规则和验收标准，再实施代码变更。
