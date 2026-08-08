@@ -3,7 +3,14 @@
 > 建立日期：2026-08-08  
 > 来源：最近一轮模块拆分、目录分层、导出宏和 include 重构 review。  
 > 状态：执行中；关键架构决策已由用户确认。  
-> 进度：Phase 0/1 完成（2026-08-08）；Phase 2 完成（2026-08-09）：
+> 进度：Phase 0/1 完成（2026-08-08）；Phase 2 完成（2026-08-09）；
+> Phase 3/4 完成（2026-08-09，含 Resource 三层拆分、
+> EnvironmentLighting/Terrain 拆分、GameplayResourceBinding 重命名、
+> PhysicsDebugLineCollector 注入）；Phase 5 完成（2026-08-09）：
+> RHI 拆为 ya-rhi（接口+平台无关）/ ya-rhi-backend-common（纹理 glue+STB）/
+> ya-rhi-vulkan（Vulkan 实现+Vulkan 分派工厂+VMA），OpenGL 彻底移出构建图，
+> 消费者显式依赖 backend（GUI/Resource 声明 rhi+backend-common+vulkan），
+> 依赖方向单向：rhi ← backend-common ← vulkan。
 > ecs-core / gameplay-systems（含 Animation 与纯 gameplay 组件）/
 > component-linkage / render-ecs-adapters（rules + resolve 系统）四 target
 > 建立，ECS↔Scene 环在 xmake 层完全切断，组件头去 Render3D 化，
@@ -559,19 +566,39 @@ python3 Script/ya.py test --target ya --filter Physics
 xmake show -t ya-physics
 ```
 
-### Phase 5：重新划分 RHI 与 backend
+### Phase 5：重新划分 RHI 与 backend（完成 2026-08-09）
 
 目标：RHI interface、backend-common、平台 backend 拆开，宿主显式选择 backend。
 
-- [ ] `ya-rhi` 只拥有接口和平台无关实现。
-- [ ] `ya-rhi-backend-common` 拥有通用 factory/descriptor/pipeline glue。
-- [ ] `ya-rhi-vulkan` 拥有 Vulkan 文件、VMA、Vulkan shader/runtime glue。
-- [ ] OpenGL 源码保留在独立目录，不与 Vulkan target 混编。
-- [ ] OpenGL 移出主构建图，只保留历史源码；本重构线不要求提供可构建 target，
+- [x] `ya-rhi` 只拥有接口和平台无关实现（Core/、Shader/、Render.h、
+      RenderDefines、Shader、WindowProvider；deps 仅 core/utility.cc）。
+- [x] `ya-rhi-backend-common` 拥有平台无关 glue：Texture 解码/上传工厂
+      （Texture::fromMemory/fromData/createCubeMap/...）与 STB 实现。
+- [x] `ya-rhi-vulkan` 拥有 Vulkan 文件、VMA 与 Vulkan 分派工厂
+      （IRender::create、IRenderPass/IFrameBuffer/IDescriptorSetLayout/
+      IPipelineLayout/...::create）。工厂因直接构造 Vulkan 类型而随实现
+      同 target，避免 backend-common ↔ vulkan 成环（与计划初稿的
+      "factory 在 backend-common" 不同，依赖方向为
+      `rhi ← backend-common ← vulkan`，见下方注）。
+- [x] OpenGL 源码保留在 `Backend/OpenGL/` 独立目录，不与 Vulkan target 混编。
+- [x] OpenGL 移出主构建图，只保留历史源码；本重构线不要求提供可构建 target，
       恢复 OpenGL 时另开专项重新审查接口兼容性。
-- [ ] `IWindowProvider` 放入 RHI public API，backend 不依赖 Host。
-- [ ] backend target 不再通过父 target 的排除 glob 间接获取源码。
-- [ ] Host/Program 主线固定选择 Vulkan。
+- [x] `IWindowProvider` 在 RHI public API（WindowProvider.h 位于 ya-rhi），
+      backend 不依赖 Host（rg 确认无 Host include）。
+- [x] backend target 不再通过父 target 的排除 glob 间接获取源码：ya-rhi
+      显式收集 Core/Shader/根文件；backend-common 显式 Texture.cpp+STB.cpp；
+      vulkan 显式工厂文件+Vulkan/**（VMA unity_ignored）。
+- [x] Host/Program 主线固定选择 Vulkan（RenderRuntime 以
+      ERenderAPI::Vulkan 调 IRender::create；ImGui 的 OpenGL 分支仅 error
+      path）。
+
+> 注：初稿设想 "backend-common 拥有通用 factory glue"；实际实现中这些
+> 分派工厂直接构造 Vulkan 类型（VulkanRender/VulkanFrameBuffer/...），且
+> VulkanPipeline 反过来调用 IDescriptorSetLayout::create 工厂，若工厂留在
+> backend-common 则 backend-common ↔ vulkan 成环。因此 Vulkan 分派工厂随
+> Vulkan 实现同 target；backend-common 收缩为真正平台无关的纹理 glue。
+> 该调整不改变任何运行时行为（工厂语义、符号名、调用点均未动），只改变
+> target 归属与链接形态。
 
 验收：
 
@@ -583,6 +610,22 @@ python3 Script/ya.py cfg
 
 必须验证 Vulkan backend；OpenGL 不要求在本重构线中恢复可用，但不能继续混在
 Vulkan target 中，也不能通过默认 glob 意外进入主构建。
+
+验收结果（2026-08-09）：
+
+```bash
+xmake show -t ya-rhi            # deps 仅 ya-foundation-core/utility.cc
+xmake show -t ya-rhi-vulkan     # deps ya-rhi + ya-rhi-backend-common
+xmake show -t ya-rhi-backend-common  # deps 仅 ya-rhi
+python3 Script/ya.py cfg        # create ok
+python3 Script/ya.py test --target ya   # 350/350 通过
+python3 Script/ya.py run-editor ... --exit-after-frame 120   # 干净退出
+python3 Script/ya.py run ... --exit-after-frame 300          # 干净退出
+```
+
+消费者更新：GUI/Resource 显式依赖 `ya-rhi + ya-rhi-backend-common +
+ya-rhi-vulkan`（宿主显式选择 backend）；ECS/Scene/Graph 只依赖 `ya-rhi`；
+`ya-engine` 聚合同时列出三个 RHI target。
 
 ### Phase 5.5：建立可独立交付的 GUI 产品闭包
 
