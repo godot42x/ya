@@ -1,7 +1,7 @@
 #include "Core/Scripting/ScriptApiRegistry.h"
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Entity.h"
-#include "ECS/System/JSScriptingSystem.h"
+#include "Gameplay/Systems/JSScriptingSystem.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
 

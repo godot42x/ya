@@ -1,12 +1,10 @@
 #include "TransformSystem.h"
 
-#include "Host/App.h"
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "GUI/Runtime/Scene/Node.h"
 #include "Scene3D/Node3D.h"
 #include "Scene/Core/Scene.h"
-#include "Scene/Runtime/SceneManager.h"
 
 #include <glm/gtx/matrix_decompose.hpp>
 
@@ -136,17 +134,11 @@ void TransformSystem::setWorldPosition(TransformComponent *tc, const glm::vec3 &
 void TransformSystem::onUpdate(float dt)
 {
     // YA_PROFILE_FUNCTION_LOG();
-    auto *app = App::get();
-    if (!app) {
+    if (!_sceneProvider) {
         return;
     }
 
-    auto *sceneManager = app->getSceneServices().getSceneManager();
-    if (!sceneManager) {
-        return;
-    }
-
-    auto *scene = sceneManager->getActiveScene();
+    Scene* scene = _sceneProvider();
     if (!scene) {
         return;
     }
@@ -158,6 +150,11 @@ void TransformSystem::onUpdate(float dt)
 
     // Step 2: Update flat entities (entities without Node hierarchy)
     updateFlatTransforms(scene);
+}
+
+void TransformSystem::setSceneProvider(SceneProvider provider)
+{
+    _sceneProvider = std::move(provider);
 }
 
 void TransformSystem::updateNodeTree(Node *node, const glm::mat4 *parentWorldMatrix)

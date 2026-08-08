@@ -1,7 +1,7 @@
 #include "Host/Automation/AppAutomationControlService.h"
 
 #include "Host/App.h"
-#include "ECS/System/JSScriptingSystem.h"
+#include "Gameplay/Systems/JSScriptingSystem.h"
 #include "Host/AppSceneServices.h"
 #include "Host/Automation/EditorAutomationControl.h"
 #include "Host/Lifecycle/AppAutomation.h"
@@ -22,7 +22,7 @@
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Component/CameraComponent.h"
 #include "Render3D/Adapters/LightBillboard/ComponentLinkageSystem.h"
-#include "ECS/System/TransformSystem.h"
+#include "Gameplay/Systems/TransformSystem.h"
 
 #include "Render3D/RenderRuntime.h"
 #include "Scene/Core/Scene.h"

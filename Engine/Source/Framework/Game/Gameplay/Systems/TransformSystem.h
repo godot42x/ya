@@ -3,6 +3,8 @@
 #include "Core/Base.h"
 #include "Core/System/System.h"
 
+#include <functional>
+
 namespace ya
 {
 
@@ -27,9 +29,14 @@ struct TransformComponent;
  * 1. If using Node Tree: Traverse from root nodes, recursively update world transforms
  * 2. If using flat Entities: Simply copy local to world (no parent)
  */
-struct YA_GAMEPLAY_ECS_API TransformSystem : public ISystem
+struct YA_GAMEPLAY_SYSTEMS_API TransformSystem : public ISystem
 {
     using Self = TransformSystem;
+    using SceneProvider = std::function<Scene*()>;
+
+    /// Injected seam (bound by the Host at startup; no App access from here).
+    void setSceneProvider(SceneProvider provider);
+
     void init() {}
 
     /**
@@ -90,6 +97,8 @@ struct YA_GAMEPLAY_ECS_API TransformSystem : public ISystem
     static void setWorldPosition(TransformComponent *tc, const glm::vec3 &worldPos);
 
   private:
+    SceneProvider _sceneProvider;
+
     /**
      * @brief Recursively update world transforms for Node tree
      * @param node Root node to start updating from

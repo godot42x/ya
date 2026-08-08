@@ -19,7 +19,7 @@
 #include "ECS/Component/SkeletonAnimatorComponent.h"
 #include "ECS/Component/Terrain/TerrainComponent.h"
 #include "Scene3D/TransformComponent.h"
-#include "ECS/System/TransformSystem.h"
+#include "Gameplay/Systems/TransformSystem.h"
 #include "Scene/Core/Scene.h"
 #include "Render3D/Common/Shadow/Common/DirectionalShadowMath.h"
 

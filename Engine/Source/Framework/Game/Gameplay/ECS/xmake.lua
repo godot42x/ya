@@ -12,6 +12,8 @@ target("ya-gameplay-ecs")
     add_headerfiles("**.h|Core/**.h")
     -- Scene3D types (TransformComponent/Node3D) are consumed by the systems.
     add_deps("ya-scene-3d")
+    -- Public headers reference the gameplay systems (ScriptingSystem base).
+    add_deps("ya-gameplay-systems", { public = true })
     -- Fat module for now: ECS components/systems reference render + resource
     -- types (Mesh/Material/pipeline headers), so RHI is a visible dependency.
     add_deps("ya-foundation-core", "ya-ecs-core", "ya-foundation-rhi", { public = true })

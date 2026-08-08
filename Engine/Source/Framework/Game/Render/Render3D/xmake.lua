@@ -10,6 +10,7 @@ target("ya-render-3d")
         "ya-render-graph",
         "ya-scene-3d",
         "ya-gameplay-ecs",
+        "ya-gameplay-systems",
         "ya-physics",
         { public = true })
     -- Scene data/lifecycle types are consumed by Render3D implementation

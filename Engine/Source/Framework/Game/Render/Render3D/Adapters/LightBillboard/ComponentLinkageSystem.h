@@ -11,7 +11,7 @@
 #include "ECS/Component/PointLightComponent.h"
 #include "ECS/Component/RenderComponent.h"
 #include "Scene3D/TransformComponent.h"
-#include "ECS/System/TransformSystem.h"
+#include "Gameplay/Systems/TransformSystem.h"
 #include "Scene/Core/Scene.h"
 
 #include "Host/App.h"

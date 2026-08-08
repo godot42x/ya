@@ -19,12 +19,13 @@
 
 #include "Render3D/Adapters/LightBillboard/ComponentLinkageSystem.h"
 #include "ECS/System/LuaScriptingSystem.h"
-#include "ECS/System/JSScriptingSystem.h"
+#include "Gameplay/Systems/JSScriptingSystem.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
+#include "Core/Scripting/ScriptApiAsset.h"
 #include "ECS/System/ModelInstantiationSystem.h"
 #include "ECS/System/ResourceResolveSystem.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
-#include "ECS/System/TransformSystem.h"
+#include "Gameplay/Systems/TransformSystem.h"
 #include "Physics/PhysicsSystem.h"
 
 #include "Resource/AssetManager.h"
@@ -376,6 +377,10 @@ void AppLifecycle::init(App& app, AppDesc ci)
     app._environmentLightingProcessor = envProcessor.get();
     app._systems.push_back(envProcessor);
     auto sys3 = ya::makeShared<TransformSystem>();
+    sys3->setSceneProvider([&app]() -> Scene*
+    {
+        return app.getSceneServices().getActiveScene();
+    });
     sys3->init();
     app._systems.push_back(sys3);
     auto sys4 = ya::makeShared<SkeletonAnimationSystem>();
@@ -445,6 +450,11 @@ void AppLifecycle::init(App& app, AppDesc ci)
         api.setSaveSceneFn([&app](const std::string& path, Scene& scene) -> bool
                            { return app._sceneManager->serializeToFile(path, &scene); });
         api.setLoadSceneFn([&app](const std::string& path) -> bool { return AppLifecycle::loadScene(app, path); });
+
+        // The app layer owns the script API catalog (scene/entity/component
+        // authoring + asset APIs); JSScriptingSystem only binds the registry.
+        registerCoreScriptApis(api);
+        registerAssetScriptApis(api);
     }
     app._jsScriptingSystem = new JSScriptingSystem();
     app._jsScriptingSystem->init();

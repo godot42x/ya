@@ -1,9 +1,10 @@
 #include "AppModuleTestAccess.h"
 
+#include "Core/Scripting/ScriptApiAsset.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Entity.h"
-#include "ECS/System/JSScriptingSystem.h"
+#include "Gameplay/Systems/JSScriptingSystem.h"
 #include "Host/App.h"
 #include "Host/Automation/AppAutomationControlService.h"
 #include "Scene/Core/Scene.h"
@@ -188,6 +189,7 @@ class AppAutomationControlJsTest : public ::testing::Test
     void SetUp() override
     {
         registerCoreScriptApis(ScriptApiRegistry::get());
+        registerAssetScriptApis(ScriptApiRegistry::get());
 
         _sceneManager = std::make_shared<SceneManager>();
         AppModuleTestAccess::setSceneManager(_app, _sceneManager.get());

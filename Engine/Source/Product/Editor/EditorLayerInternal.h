@@ -15,7 +15,7 @@
 #include "ECS/Component/Terrain/TerrainComponent.h"
 #include "Scene3D/TransformComponent.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
-#include "ECS/System/TransformSystem.h"
+#include "Gameplay/Systems/TransformSystem.h"
 #include "Editor/EditorCommon.h"
 #include "Editor/ImGui/ImGuiHelper.h"
 #include "RHI/Core/RenderImage.h"

@@ -1,5 +1,5 @@
 #pragma once
-#include "ScriptingSystem.h"
+#include "Gameplay/Systems/ScriptingSystem.h"
 #include <functional>
 #include <sol/sol.hpp>
 #include <string>

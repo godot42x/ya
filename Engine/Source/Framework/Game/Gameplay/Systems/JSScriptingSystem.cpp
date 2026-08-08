@@ -611,10 +611,6 @@ void JSScriptingSystem::init()
         return;
     }
 
-    // Core authoring API for the JSON/RPC transport (scene/entity/component).
-    registerCoreScriptApis(ScriptApiRegistry::get());
-    registerAssetScriptApis(ScriptApiRegistry::get());
-
     // Single wrapper class: every wrapped C++ object carries a ScriptHandle.
     JS_NewClassID(_impl->runtime, &gWrapperClassId);
     const JSClassDef wrapperClassDef{
