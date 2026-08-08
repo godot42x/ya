@@ -165,6 +165,7 @@ do
         "ya-scene-serialization",
         "ya-scene-3d",
         "ya-gameplay-animation",
+        "ya-ecs-core",
         "ya-gameplay-ecs",
         "ya-resource",
         "ya-render-graph",

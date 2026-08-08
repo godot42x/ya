@@ -357,7 +357,7 @@ Entity* SceneSerializer::deserializeEntity(const nlohmann::json& j)
             auto typeIndex = reg.getTypeIndex(FName(typeName));
             if (typeIndex) {
                 auto  id           = *typeIndex;
-                void* componentPtr = reg.addComponent(FName(typeName), *_scene, entity->getHandle());
+                void* componentPtr = reg.addComponent(FName(typeName), _scene->getRegistry(), entity->getHandle());
                 ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
                 auto* ops = reg.getComponentOps(id);
                 auto  cls = ClassRegistry::instance().getClass(id);

@@ -66,7 +66,7 @@ function ya_engine_defines()
         "YA_CORE_API", "YA_RHI_API", "YA_RHI_BACKEND_API", "YA_GUI_API",
         "YA_SCENE_CORE_API", "YA_SCENE_RUNTIME_API", "YA_SCENE_SERIALIZATION_API",
         "YA_SCENE_3D_API", "YA_RESOURCE_API", "YA_RENDER_GRAPH_API",
-        "YA_RENDER_3D_API", "YA_GAMEPLAY_ECS_API", "YA_GAMEPLAY_ANIMATION_API", "YA_PHYSICS_API",
+        "YA_RENDER_3D_API", "YA_ECS_CORE_API", "YA_GAMEPLAY_ECS_API", "YA_GAMEPLAY_ANIMATION_API", "YA_PHYSICS_API",
         "YA_HOST_API", "YA_EDITOR_API",
     }
     for _, macro in ipairs(macros) do
@@ -89,6 +89,7 @@ includes("./Framework/Game/Resource/xmake.lua")
 includes("./Framework/Game/Render/Graph/xmake.lua")
 includes("./Framework/Game/Render/Render3D/xmake.lua")
 includes("./Framework/Game/Gameplay/Animation/xmake.lua")
+includes("./Framework/Game/Gameplay/ECS/Core/xmake.lua")
 includes("./Framework/Game/Gameplay/ECS/xmake.lua")
 includes("./Framework/Game/Physics/xmake.lua")
 

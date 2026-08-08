@@ -59,7 +59,7 @@ Json serializeComponent(const Scene& scene, entt::entity entity, const std::stri
     if (!typeIndex) {
         throw Error("unknown component type: " + typeName);
     }
-    void* const ptr = ecs.getComponent(*typeIndex, scene, entity);
+    void* const ptr = ecs.getComponent(*typeIndex, scene.getRegistry(), entity);
     if (ptr == nullptr) {
         throw Error(std::format("entity does not have component '{}'", typeName));
     }
@@ -70,7 +70,7 @@ Json entityToJson(const Scene& scene, const Entity& entity)
 {
     Json components = Json::object();
     for (const std::string& typeName : listRegisteredComponentTypes()) {
-        if (ECSRegistry::get().hasComponent(FName(typeName), scene, entity.getHandle())) {
+        if (ECSRegistry::get().hasComponent(FName(typeName), scene.getRegistry(), entity.getHandle())) {
             components[typeName] = serializeComponent(scene, entity.getHandle(), typeName);
         }
     }
@@ -283,9 +283,9 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
             if (!typeIndex) {
                 throw Error("unknown component type: " + typeName);
             }
-            void* ptr = ecs.getComponent(*typeIndex, scene, handle);
+            void* ptr = ecs.getComponent(*typeIndex, scene.getRegistry(), handle);
             if (ptr == nullptr) {
-                ptr = ecs.addComponent(*typeIndex, scene, handle);
+                ptr = ecs.addComponent(*typeIndex, scene.getRegistry(), handle);
             }
             if (ptr == nullptr) {
                 throw Error(std::format("failed to add component '{}'", typeName));
@@ -301,7 +301,7 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
             Scene& scene = requireActiveScene();
             const entt::entity handle = requireEntityId(args, scene);
             const std::string  typeName = args.at("type").get<std::string>();
-            const bool removed = ECSRegistry::get().removeComponent(FName(typeName), scene, handle);
+            const bool removed = ECSRegistry::get().removeComponent(FName(typeName), scene.getRegistry(), handle);
             return Json{{"removed", removed}};
         });
 
@@ -329,7 +329,7 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
             if (!typeIndex) {
                 throw Error("unknown component type: " + typeName);
             }
-            void* const ptr = ecs.getComponent(*typeIndex, scene, handle);
+            void* const ptr = ecs.getComponent(*typeIndex, scene.getRegistry(), handle);
             if (ptr == nullptr) {
                 throw Error(std::format("entity does not have component '{}'", typeName));
             }

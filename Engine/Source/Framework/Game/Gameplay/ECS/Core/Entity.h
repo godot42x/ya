@@ -8,12 +8,13 @@
 #include <entt/entt.hpp>
 
 #include "ECS/Component.h"
+#include "ECS/EntitySceneContract.h"
 
 namespace ya
 {
 struct Scene;
 
-struct YA_GAMEPLAY_ECS_API Entity
+struct YA_ECS_CORE_API Entity
 {
   private:
     entt::entity    _entityHandle = {entt::null};
@@ -61,7 +62,6 @@ struct YA_GAMEPLAY_ECS_API Entity
     Scene*                 getScene() const { return _scene; }
     entt::registry*        getRegistry() const { return _registry; }
 
-    operator bool() const;
     operator entt::entity() const { return _entityHandle; }
     operator uint32_t() const { return static_cast<uint32_t>(_entityHandle); }
 
@@ -69,7 +69,9 @@ struct YA_GAMEPLAY_ECS_API Entity
     bool operator!=(const Entity& other) const { return !(*this == other); }
 
     const std::string& getName() const { return name; }
-    void               setName(const std::string& newName);
+    /// Renames the entity and keeps its scene node (if any) in sync through
+    /// the entity-scene contract implemented by ya-scene-core.
+    void setName(const std::string& newName);
 
     // === Script-facing reflected API ===
     // Non-template wrappers so the reflection system can export them to
@@ -92,8 +94,13 @@ struct YA_GAMEPLAY_ECS_API Entity
     YA_REFLECT_METHOD(removeComponentByName, .tooltip("Removes the component; true when it existed"))
     YA_REFLECT_METHOD(components, .tooltip("Map of component type name -> instance"))
     YA_REFLECT_END()
+
+    /// True when the handle is valid in its owning scene/registry. The scene
+    /// side of the check goes through the entity-scene contract (ecs-core does
+    /// not depend on Scene).
+    operator bool() const;
 };
 
 } // namespace ya
 
-#include "ECS/Entity.inl"
+#include "Entity.inl"

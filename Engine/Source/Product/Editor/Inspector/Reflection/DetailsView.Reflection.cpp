@@ -142,7 +142,7 @@ void DetailsView::drawReflectedFallbackOne(const std::string& name,
         [&] {
             for (size_t i = 0; i < entities.size() && i < instances.size(); ++i) {
                 if (Scene* scene = entities[i]->getScene()) {
-                    ECSRegistry::get().removeComponent(typeIndex, *scene, entities[i]->getHandle());
+                    ECSRegistry::get().removeComponent(typeIndex, scene->getRegistry(), entities[i]->getHandle());
                 }
             }
         });
@@ -194,7 +194,7 @@ void DetailsView::drawAddComponentButton(const std::vector<Entity*>& entities)
                     bAllHave = false;
                     continue;
                 }
-                if (ecsRegistry.hasComponent(typeIndex, *entity->getScene(), entity->getHandle())) {
+                if (ecsRegistry.hasComponent(typeIndex, entity->getScene()->getRegistry(), entity->getHandle())) {
                     continue;
                 }
                 bAllHave = false;
@@ -213,13 +213,13 @@ void DetailsView::drawAddComponentButton(const std::vector<Entity*>& entities)
                     if (!entity || !entity->isValid() || !entity->getScene()) {
                         continue;
                     }
-                    if (ecsRegistry.hasComponent(typeIndex, *entity->getScene(), entity->getHandle())) {
+                    if (ecsRegistry.hasComponent(typeIndex, entity->getScene()->getRegistry(), entity->getHandle())) {
                         continue;
                     }
                     if (!canAddComponent(*entity, typeIndex)) {
                         continue;
                     }
-                    if (void* compPtr = ecsRegistry.addComponent(typeIndex, *entity->getScene(), entity->getHandle())) {
+                    if (void* compPtr = ecsRegistry.addComponent(typeIndex, entity->getScene()->getRegistry(), entity->getHandle())) {
                         YA_CORE_INFO("Added component '{}' to entity '{}' {}", componentName, entity->getName(), compPtr);
                     }
                 }

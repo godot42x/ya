@@ -18,7 +18,6 @@ namespace ya
 {
 
 struct IComponent;
-struct Scene;
 
 /**
  * @brief How to copy a component during clone/duplicate.
@@ -40,7 +39,7 @@ struct ECSRegistry
 
   public:
 
-    static YA_GAMEPLAY_ECS_API ECSRegistry& get();
+    static YA_ECS_CORE_API ECSRegistry& get();
 
 
 
@@ -123,7 +122,7 @@ struct ECSRegistry
         }
     }
 
-    YA_GAMEPLAY_ECS_API ~ECSRegistry()
+    YA_ECS_CORE_API ~ECSRegistry()
     {
         for (auto& [_, opsPtr] : _componentOps) {
             delete opsPtr;
@@ -159,9 +158,6 @@ struct ECSRegistry
         }
         return false;
     }
-    YA_GAMEPLAY_ECS_API bool hasComponent(ya::type_index_t typeIndex, const Scene& scene, entt::entity entity);
-    YA_GAMEPLAY_ECS_API bool hasComponent(FName name, const Scene& scene, entt::entity entity);
-
     void* getComponent(ya::type_index_t typeIndex, const entt::registry& registry, entt::entity entity)
     {
         if (auto opsIt = _componentOps.find(typeIndex); opsIt != _componentOps.end()) {
@@ -176,14 +172,34 @@ struct ECSRegistry
         }
         return nullptr;
     }
-    YA_GAMEPLAY_ECS_API void* getComponent(ya::type_index_t typeIndex, const Scene& scene, entt::entity entity);
-    YA_GAMEPLAY_ECS_API void* getComponent(FName name, const Scene& scene, entt::entity entity);
-
-    YA_GAMEPLAY_ECS_API void* addComponent(ya::type_index_t typeIndex, Scene& scene, entt::entity entity);
-    YA_GAMEPLAY_ECS_API void* addComponent(FName name, Scene& scene, entt::entity entity);
-    YA_GAMEPLAY_ECS_API bool removeComponent(ya::type_index_t typeIndex, Scene& scene, entt::entity entity);
-    YA_GAMEPLAY_ECS_API bool removeComponent(FName name, Scene& scene, entt::entity entity);
-
+    void* addComponent(ya::type_index_t typeIndex, entt::registry& registry, entt::entity entity)
+    {
+        if (auto opsIt = _componentOps.find(typeIndex); opsIt != _componentOps.end()) {
+            return opsIt->second->create(registry, entity);
+        }
+        return nullptr;
+    }
+    void* addComponent(FName name, entt::registry& registry, entt::entity entity)
+    {
+        if (auto typeIndex = getTypeIndex(name)) {
+            return addComponent(typeIndex.value(), registry, entity);
+        }
+        return nullptr;
+    }
+    bool removeComponent(ya::type_index_t typeIndex, entt::registry& registry, entt::entity entity)
+    {
+        if (auto opsIt = _componentOps.find(typeIndex); opsIt != _componentOps.end()) {
+            return opsIt->second->remove(registry, entity);
+        }
+        return false;
+    }
+    bool removeComponent(FName name, entt::registry& registry, entt::entity entity)
+    {
+        if (auto typeIndex = getTypeIndex(name)) {
+            return removeComponent(typeIndex.value(), registry, entity);
+        }
+        return false;
+    }
     /**
      * @brief Clone component from srcEntity to dstEntity.
      * @param policy CopyCtor = fast via copy ctor; Reflection = safe via reflected fields only.

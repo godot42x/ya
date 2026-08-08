@@ -1233,7 +1233,7 @@ void AppAutomationControlService::handleEntityRemoveComponent(App& app, const st
     }
 
     const FName componentName(call->params["component"].get<std::string>());
-    const bool ok = ECSRegistry::get().removeComponent(componentName, *scene, handle);
+    const bool ok = ECSRegistry::get().removeComponent(componentName, scene->getRegistry(), handle);
 
     completeCall(call,
                  makeSuccess(*call,
