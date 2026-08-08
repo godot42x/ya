@@ -1,9 +1,6 @@
 target("ya-render-3d")
     set_kind(ya_target_kind())
     ya_std_module("YA_RENDER_3D_API")
-    -- Transition: 14 render-3d files still compile Host headers (app
-    -- services); replaced by injected service contracts (Phase 7).
-    ya_tier_include("Render", "Product")
     add_includedirs("./include", { public = true })
     add_files("**.cpp")
     add_headerfiles("./include/**.h", { public = true })
@@ -15,6 +12,10 @@ target("ya-render-3d")
     add_includedirs(path.join(os.projectdir(), "Engine/Shader/GLSL/Generated"), { public = true })
     add_includedirs(path.join(os.projectdir(), "Engine/Shader/Slang/Generated/Common"), { public = true })
     add_includedirs(path.join(os.projectdir(), "Engine/Shader/GLSL/Generated/Common"), { public = true })
+    -- Transition (Phase 7): 13 render-3d files still compile Host headers
+    -- (app services). Private-only so the Product tier root never propagates
+    -- to consumers; removed when the app-services interfaces land.
+    add_includedirs(path.join(os.projectdir(), "Engine/Source/Product"))
     add_deps(
         "ya-gui-resources",
         "ya-gui-compose",

@@ -26,7 +26,7 @@
 #include "Core/Scripting/ScriptApiRegistry.h"
 #include "Core/Scripting/ScriptApiAsset.h"
 #include "Render/Adapters/ModelInstantiationSystem.h"
-#include "Render/Adapters/GameplayResourceBinding.h"
+#include "Render3D/Services/GameplayResourceBinding.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Services/EnvironmentLightingResultProvider.h"
 #include "Render3D/Terrain/TerrainProcessor.h"

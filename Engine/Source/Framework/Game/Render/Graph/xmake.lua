@@ -1,7 +1,6 @@
 target("ya-render-graph")
     set_kind(ya_target_kind())
     ya_std_module("YA_RENDER_GRAPH_API")
-    ya_tier_include("Render")
     add_includedirs("./include", { public = true })
     add_files("**.cpp")
     add_headerfiles("./include/**.h", { public = true })

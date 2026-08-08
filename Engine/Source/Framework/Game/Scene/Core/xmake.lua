@@ -4,7 +4,6 @@
 target("ya-scene-core")
     set_kind(ya_target_kind())
     ya_std_module("YA_SCENE_CORE_API")
-    ya_tier_include("Scene", "Gameplay", "Framework", "Game")
     add_includedirs("./include", { public = true })
     add_files("**.cpp")
     add_headerfiles("./include/**.h", { public = true })

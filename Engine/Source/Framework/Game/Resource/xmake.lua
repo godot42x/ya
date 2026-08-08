@@ -4,7 +4,6 @@
 target("ya-resource-runtime")
     set_kind(ya_target_kind())
     ya_std_module("YA_RESOURCE_API")
-    ya_tier_include("Game")
     add_includedirs("./include", { public = true })
     add_files("**.cpp|Core/**.cpp|Loader/**.cpp")
     add_headerfiles("./include/**.h", { public = true })

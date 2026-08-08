@@ -7,7 +7,6 @@
 target("ya-rhi")
     set_kind(ya_target_kind())
     ya_std_module("YA_RHI_API")
-    ya_tier_include("Foundation")
     add_includedirs("./include", { public = true })
     -- Only the shared shader-common generated headers (Common.*.slang.h /
     -- Common.*.glsl.h) are public interface of the RHI; the render-3d group

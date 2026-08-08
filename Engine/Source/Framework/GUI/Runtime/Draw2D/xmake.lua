@@ -3,7 +3,6 @@
 target("ya-gui-draw2d")
     set_kind(ya_target_kind())
     ya_std_module("YA_GUI_API")
-    ya_tier_include("Framework")
     add_includedirs("./include", { public = true })
     add_files("*.cpp")
     add_headerfiles("./include/**.h", { public = true })
