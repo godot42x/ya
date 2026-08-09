@@ -1010,6 +1010,10 @@ Phase 3 剩余执行顺序：
 1. `EnvironmentLightingProcessor`（~2300 行）拆成 environment lighting 与
    terrain 两个 processor（skybox/irradiance/prefilter vs heightmap/mesh
    build）；派生状态与 resolveState 各自独立。
+   - [x] 拆分已完成（f5670573）；但拆分时丢失了 `resolvePendingTerrain`
+     末尾的 active 重泵循环（LoadingHeightMap 永不续泵 → terrain 不渲染），
+     已修复并验证（详见 `.agent/memories/terrain_processor_active_pump_regression.md`；
+     最小 terrain 场景自动化 stable + 截图通过，350 测试通过）。
 2. 可选 `ya-render-environment-lighting` / `ya-render-terrain` target（engine
    profile 才进入构建图），Render3D 只读消费 derived handle。
 3. Render3D 消费方式重构：pipeline 不再直接 view 组件，改经窄 provider/

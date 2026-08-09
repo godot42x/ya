@@ -412,6 +412,15 @@ void TerrainProcessor::resolvePendingTerrain(Scene* scene)
         _dirtyTerrainSet.erase(entity);
         pumpOne(entity);
     }
+
+    // Re-pump in-flight (active) terrains every frame so a pending height-map
+    // batch decode can be consumed once it completes. Without this pass a
+    // terrain left in LoadingHeightMap is never revisited: the audit skips
+    // active entities and the queue is empty, so the mesh is never built.
+    std::vector<entt::entity> activeEntities(_activeTerrain.begin(), _activeTerrain.end());
+    for (const auto entity : activeEntities) {
+        pumpOne(entity);
+    }
 }
 
 } // namespace ya
