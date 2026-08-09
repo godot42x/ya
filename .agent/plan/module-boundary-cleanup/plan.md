@@ -419,8 +419,10 @@ Phase 1 完成（2026-08-08），提交：
       SceneBus 组件移除分发 + rule registry + 延迟 frame-task 调度（带 scene
       有效性守卫）。依赖 ecs-core + scene 线；Host 注入 SceneManager 与
       frame-task sink；不持有业务状态。
-- [ ] 新建 `ya-render-ecs-adapters`：Material/mesh/model 到 render runtime 的
-      桥接（规则已落在 Render3D/Adapters/，独立 target 与组件归位待 fat 溶解）。
+- [x] 新建 `ya-render-ecs-adapters`：Material/mesh/model 到 render runtime 的
+      桥接（独立 target 已建，rules + ModelInstantiationSystem 归位；render
+      组件物理迁入 Render3D/Component/ 并保留 ECS/ 前缀转发头，fat ECS
+      溶解完成，2026-08-09）。
 - [x] `ComponentLinkageSystem` 拆分为两个 render adapter 规则：
   - `LightBillboardLinkageRule`（`Render3D/Adapters/LightBillboard/`）：
     light ↔ billboard + `LightBillboardPolicy`（setter 归属规则，不再挂在
@@ -451,7 +453,8 @@ Phase 1 完成（2026-08-08），提交：
 - [x] 取消模块中的 `ya_engine_defines()` 全量注入（ecs-core / gameplay-systems
       已无；physics / render-3d 于 2026-08-09 移除；仅 `ya-engine` 聚合
       target 保留，用于其 PCH 解析全部引擎头）。
-- [ ] ECS target 不得声明 Host、Render3D、GUI 的 public deps。
+- [x] ECS target 不得声明 Host、Render3D、GUI 的 public deps
+      （ya-ecs-core deps 仅 foundation-core + reflects-core，2026-08-09 复核）。
 
 > Phase 2 提前落地的 Phase 4 归属调整（2026-08-09）：
 > `TransformComponent` / `ManagedChildComponent` 移入 `ya-scene-3d`（与 Node3D
@@ -528,9 +531,11 @@ Resource 模块下沉到应用层，而是只把“何时为哪个 scene/compone
       pipeline 具体实现。
 - [ ] Render3D consumer 只读取稳定的 derived-resource handle/snapshot；不能经
       `App::getEnvironmentLightingProcessor()` 反向定位服务。
-- [ ] Resource public headers 不包含 Host/App。
-- [ ] Resource 只对公共 header 实际使用的 package 标记 `public = true`。
-- [ ] `tinygltf`、`assimp`、`ktx`、`stb` 等实现包保持 private。
+- [x] Resource public headers 不包含 Host/App（2026-08-09 复核）。
+- [x] Resource 只对公共 header 实际使用的 package 标记 `public = true`
+      （runtime/core 仅 glm+nlohmann_json；实现包全部 private）。
+- [x] `tinygltf`、`assimp`、`ktx`、`stb` 等实现包保持 private
+      （loader 的 assimp/tinygltf/stb 均 private）。
 
 分层后的依赖必须保持：
 
@@ -877,18 +882,20 @@ Render features 禁止 Host/；只依赖注入的 render/job service contract
 - [x] 移除根 `xmake.lua` 的全局 `-flat_namespace`（two-level namespace 下构建与运行验证通过）。
 - [x] 保留 shared 模式下的模块 DLL；无跨 DLL 对象所有权问题。
 - [x] 完成 monolith 模式：模块 static，Runtime/Editor 单体 exe；项目/编辑器插件以 `add_deps(..., {links=false})` + dynamic_lookup 从宿主 exe 解析引擎符号（单实例，宿主 `-Wl,-export_dynamic`）。
-- [ ] 调整 `ya_std_module()`、各模块 `YA_*_API` 和 Windows import/export 宏：
-      shared 模式保留 DLL export/import；monolith 模式将 API 宏解析为空或
-      static-safe 定义。
+- [x] 调整 `ya_std_module()`、各模块 `YA_*_API` 和 Windows import/export 宏：
+      shared 模式保留 DLL export/import；monolith 模式 `YA_SHARED=0` 使
+      API 宏解析为空（a24ad631，2026-08-09）。
 - [x] 两种模式单引擎实例（插件从 exe 解析；shared 模式经模块 DLL 链接边）。
-- [ ] 将 `ya-gui-framework` 改为明确的 meta target，或删除并由调用方显式
-      链接 `ya-ui`/`ya-ui-scene`。
-- [ ] 将 `ya-engine` 标记为兼容聚合入口，禁止新增代码直接依赖它的“全量闭包”。
-- [ ] shared 模式继续生成实际的 `ya-engine` shared library；monolith 模式下不生成
-      额外空 DLL，只保留等价的依赖聚合配置。
+- [x] `ya-gui-framework` 为明确 meta target（`ya_meta_kind()`，shared 真实
+      库 / monolith phony）。
+- [x] `ya-engine` 标记为兼容聚合入口：注释与 monolith phony 形态已表达；
+      新目标（最小测试集合）一律显式模块依赖，禁止默认依赖全量闭包。
+- [x] shared 模式生成实际 `ya-engine` shared library；monolith 模式为
+      phony 依赖组，不生成空 DLL。
 - [x] Editor 的聚合依赖在 monolith 分支改为 `links=false` 插件形态，shared 保持原样。
-- [ ] 逐步把 Example/Test 改成显式模块依赖；`ya-engine` 作为兼容 facade 保留，
-      但禁止新目标默认依赖它的全量闭包。
+- [x] 逐步把 Example/Test 改成显式模块依赖（最小目标集合全部显式；
+      ya-testing/YARuntime/HelloMaterial 保留 ya-engine facade 属预期——
+      它们需要全引擎符号）；禁止新目标默认依赖全量闭包。
 
 验收：
 
