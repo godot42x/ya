@@ -1093,8 +1093,15 @@ Game Resource/Material，应先更新本计划的依赖规则和验收标准，�
      `ya-rhi-backend-common` 移归 `ya-rhi-vulkan`；`ya-host` 补显式
      `ya-rhi-vulkan` 依赖（ImGui backend/截图/frame loop 直用 Vulkan 类型）。
      验证：`xmake show -t` 两个 target 的 root 归属正确；engine 全量构建 +
-     354 测试 + 运行时冒烟通过；gui profile 下 minimal-host 构建 +
-     closure-test 27 测试通过；module lint 通过。
+      354 测试 + 运行时冒烟通过；gui profile 下 minimal-host 构建 +
+      closure-test 27 测试通过；module lint 通过。
+   - [x] 收尾（2026-08-09）：反向错位同样存在——`RHI/Backend/TextureLibrary.h`
+     归 backend-common，但其公共 root 此前经 `ya-rhi-vulkan` 的 `./include`
+     顺带暴露（两 target 同在 `Backend/` 目录，`./include` 解析到同一位置）。
+     backend-common 现在自行公开 `./include`；vulkan 仅保留
+     `./Vulkan/include`。核查方法补充：`xmake show -t` 后要逐个确认模块
+     公开的每个转发头确实属于该模块，同目录多 target 时尤其小心
+     `./include` 的相对路径陷阱。
 4. **收敛重复和不必要的 public dependencies**
    - 现状：Phase 6 已按公共头使用逐项复核过一次；仍有重复
      `add_deps(..., { public = true })` 与可私有化的包（如 entt/glm 在多个
