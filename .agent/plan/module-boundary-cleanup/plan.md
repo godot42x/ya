@@ -913,11 +913,14 @@ Render features 禁止 Host/；只依赖注入的 render/job service contract
     （foundation+rhi+backend+core/loader/runtime），resource 触达
     ECS/Scene/Render3D/Host 即链接失败；
   - `ya-rhi-vulkan-smoke`：Vulkan 后端闭包独立构建/链接冒烟。
-- [ ] CI/build matrix 至少覆盖：
-  - `engine + shared`
-  - `engine + monolith`
-  - `gui + shared`
-  - `gui + monolith`
+- [x] CI/build matrix 覆盖（Script/ci.sh all，2026-08-09 全量通过）：
+  - `engine + shared`：357 测试（354 + resource-closure 2 + vulkan-smoke 1）
+    + module lint；
+  - `engine + monolith`：ya-runtime / ya-editor / HelloMaterial 链接；
+  - `gui + shared`：minimal-host + 27 closure 测试；
+  - `gui + monolith`：minimal-host 静态链接零 libya 动态依赖。
+  - 修复：xmake 3.0.8 一次 `xmake b` 只接受一个 target，ci.sh 的多 target
+    调用拆为逐 target（并纳入两个新闭包目标）。
 - [x] unity build 按 target 分组（ya_std_module per-target 规则）。
 - [x] shader codegen 按 manifest 输出（Phase 5.5.3）。
 - [x] `xmake show -t` 关键结果（deps/include root）纳入验收流程。
