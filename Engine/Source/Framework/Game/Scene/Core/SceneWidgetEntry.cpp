@@ -1,4 +1,4 @@
-#include "GUI/Widgets/SceneWidgetEntry.h"
+#include "Scene/Core/SceneWidgetEntry.h"
 
 #include "Core/Log.h"
 #include "Core/Reflection/ReflectionSerializer.h"
@@ -71,6 +71,14 @@ bool UIInstanceOverrideSet::applyTo(UIElement& widget) const
         auto* owner = cls ? findFieldOwner(cls, fieldName) : nullptr;
         if (!owner) {
             YA_CORE_ERROR("UIInstanceOverrideSet::applyTo: field '{}' does not exist on type '{}'",
+                          fieldName, widget._typeId);
+            bAllApplied = false;
+            continue;
+        }
+        const Property* prop = owner->getProperty(fieldName);
+        if (!prop || !prop->metadata.hasFlag(FieldFlags::InstanceEditable)) {
+            YA_CORE_ERROR("UIInstanceOverrideSet::applyTo: field '{}' on type '{}' is not "
+                          "InstanceEditable; entry overrides only allow instance-editable fields",
                           fieldName, widget._typeId);
             bAllApplied = false;
             continue;

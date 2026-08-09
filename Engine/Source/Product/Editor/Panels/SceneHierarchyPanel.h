@@ -2,7 +2,7 @@
 
 #include "ECS/Entity.h"
 #include "Editor/FilePicker.h"
-#include "GUI/Widgets/SceneWidgetEntry.h"
+#include "Scene/Core/SceneWidgetEntry.h"
 #include <cstddef>
 #include <memory>
 #include <sol/sol.hpp>

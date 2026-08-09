@@ -95,14 +95,16 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
 {
     YA_REFLECT_BEGIN(UIElement)
     YA_REFLECT_FIELD(_name)
-    YA_REFLECT_FIELD(_position)
-    YA_REFLECT_FIELD(_size)
-    YA_REFLECT_FIELD(_visibility)
-    YA_REFLECT_FIELD(_zOrder)
-    YA_REFLECT_FIELD(_anchorMin)
-    YA_REFLECT_FIELD(_anchorMax)
+    YA_REFLECT_FIELD(_position, .instanceEditable())
+    YA_REFLECT_FIELD(_size, .instanceEditable())
+    YA_REFLECT_FIELD(_visibility, .instanceEditable())
+    YA_REFLECT_FIELD(_zOrder, .instanceEditable())
+    YA_REFLECT_FIELD(_anchorMin, .instanceEditable())
+    YA_REFLECT_FIELD(_anchorMax, .instanceEditable())
+    // _pivot is reserved (rotation/scale not implemented): authorable but not
+    // per-instance overridable yet.
     YA_REFLECT_FIELD(_pivot)
-    YA_REFLECT_FIELD(_hitFilter)
+    YA_REFLECT_FIELD(_hitFilter, .instanceEditable())
     YA_REFLECT_END()
 
     explicit UIElement(std::string name = "Widget");

@@ -22,6 +22,7 @@
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
 #include "Host/App.h"
+#include "GUI/Widgets/UITypeRegistry.h"
 
 namespace ya
 {
@@ -138,9 +139,9 @@ void DetailsView::drawWidgetEntry(Scene& scene, SceneWidgetEntry& entry)
     ImGui::TextDisabled("(%s)", entry.entryId.c_str());
     ImGui::Separator();
 
-    ImGui::Text("Type");
-    ImGui::SameLine();
     if (entry.inlineDocument) {
+        ImGui::Text("Type");
+        ImGui::SameLine();
         ImGui::TextUnformatted(entry.inlineDocument->typeId.c_str());
         ImGui::SameLine();
         if (ImGui::SmallButton("Open in UI Designer")) {
@@ -148,7 +149,24 @@ void DetailsView::drawWidgetEntry(Scene& scene, SceneWidgetEntry& entry)
         }
     }
     else if (!entry.documentPath.empty()) {
+        ImGui::Text("Document");
+        ImGui::SameLine();
         ImGui::TextUnformatted(entry.documentPath.c_str());
+        App* app = App::get();
+        const bool bResolved = app && app->getGameUIHost() &&
+                               app->getGameUIHost()->getDocumentResolver().isResolved(entry.documentPath);
+        ImGui::SameLine();
+        ImGui::TextDisabled(bResolved ? "(resolved)" : "(not resolved)");
+        if (ImGui::SmallButton("Open in UI Designer")) {
+            _owner->getUIDesignerPanel().openDocumentPath(entry.documentPath);
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Reload")) {
+            if (app && app->getGameUIHost()) {
+                app->getGameUIHost()->getDocumentResolver().invalidate(entry.documentPath);
+                app->getGameUIHost()->reloadMountedSceneUI();
+            }
+        }
     }
     else {
         ImGui::TextDisabled("<invalid: no document>");
@@ -162,13 +180,115 @@ void DetailsView::drawWidgetEntry(Scene& scene, SceneWidgetEntry& entry)
         entry.documentPath = documentPath;
     }
 
-    ImGui::TextDisabled("Instance overrides: %zu (InstanceEditable filtering arrives "
-                        "with editor field metadata)",
-                        entry.overrides.fieldOverrides.size());
+    drawEntryOverrides(entry);
 
     if (ImGui::Button("Delete Entry")) {
         scene.removeWidgetEntry(entry.entryId);
         _owner->setSelectedWidgetEntryId("");
+    }
+}
+
+void DetailsView::drawEntryOverrides(SceneWidgetEntry& entry)
+{
+    ImGui::SeparatorText("Instance Overrides");
+    ImGui::TextDisabled("Only InstanceEditable fields may be overridden.");
+
+    // Collect the instance-editable field names of the entry's root type
+    // (cached per typeId for the editor session).
+    static std::unordered_map<std::string, std::vector<std::string>> editableFieldsCache;
+    std::shared_ptr<UIDocument> document = entry.inlineDocument;
+    if (!document && !entry.documentPath.empty()) {
+        if (App* app = App::get(); app && app->getGameUIHost()) {
+            document = app->getGameUIHost()->getDocumentResolver().load(entry.documentPath);
+        }
+    }
+    const std::string typeId = document ? document->typeId : std::string();
+    const std::vector<std::string>* editable = nullptr;
+    if (!typeId.empty()) {
+        if (auto it = editableFieldsCache.find(typeId); it != editableFieldsCache.end()) {
+            editable = &it->second;
+        }
+        else {
+            auto& fields = editableFieldsCache[typeId];
+            auto* cls = ClassRegistry::instance().getClass(typeId);
+            if (!cls && document) {
+                // Fall back through a transient instance when the registry
+                // type name differs from the C++ class name.
+                if (auto widget = UITypeRegistry::instance().createInstance(typeId)) {
+                    cls = ClassRegistry::instance().getClass(widget->getTypeIndex());
+                }
+            }
+            if (cls) {
+                std::vector<const Class*> chain{cls};
+                for (size_t i = 0; i < chain.size(); ++i) {
+                    const Class* current = chain[i];
+                    for (const auto& [name, prop] : current->properties) {
+                        (void)name;
+                        if (prop.metadata.hasFlag(FieldFlags::InstanceEditable)) {
+                            fields.push_back(prop.name);
+                        }
+                    }
+                    for (const auto parentTypeId : current->parents) {
+                        if (const Class* parent = current->getClassByTypeId(parentTypeId)) {
+                            chain.push_back(parent);
+                        }
+                    }
+                }
+                std::sort(fields.begin(), fields.end());
+            }
+            editable = &fields;
+        }
+    }
+
+    // Existing overrides with delete.
+    for (auto it = entry.overrides.fieldOverrides.begin(); it != entry.overrides.fieldOverrides.end();) {
+        ImGui::PushID(it->first.c_str());
+        ImGui::TextUnformatted(it->first.c_str());
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", it->second.dump().c_str());
+        ImGui::SameLine();
+        if (ImGui::SmallButton("X")) {
+            it = entry.overrides.fieldOverrides.erase(it);
+            ImGui::PopID();
+            continue;
+        }
+        ImGui::PopID();
+        ++it;
+    }
+
+    // Add: pick an instance-editable field not yet overridden + raw JSON value.
+    static char sOverrideField[128] = "";
+    static char sOverrideValue[256] = "";
+    ImGui::SetNextItemWidth(180.0f);
+    if (ImGui::BeginCombo("Field", sOverrideField[0] ? sOverrideField : "(select)")) {
+        if (editable) {
+            for (const std::string& name : *editable) {
+                if (entry.overrides.fieldOverrides.contains(name)) {
+                    continue;
+                }
+                const bool bSelected = sOverrideField == name;
+                if (ImGui::Selectable(name.c_str(), bSelected)) {
+                    std::strncpy(sOverrideField, name.c_str(), sizeof(sOverrideField) - 1);
+                }
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(220.0f);
+    ImGui::InputText("Value", sOverrideValue, sizeof(sOverrideValue));
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Add") && sOverrideField[0] != '\0') {
+        nlohmann::json value;
+        try {
+            value = nlohmann::json::parse(sOverrideValue);
+        }
+        catch (...) {
+            value = sOverrideValue; // store as a plain string
+        }
+        entry.overrides.fieldOverrides[sOverrideField] = std::move(value);
+        sOverrideField[0]  = '\0';
+        sOverrideValue[0]  = '\0';
     }
 }
 

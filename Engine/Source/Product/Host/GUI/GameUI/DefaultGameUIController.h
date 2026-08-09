@@ -2,7 +2,10 @@
 
 #include "Host/GUI/GameUI/IGameUIController.h"
 
+#include "Scene/Core/SceneWidgetEntry.h"
+
 #include <unordered_map>
+#include <memory>
 #include <vector>
 
 namespace ya

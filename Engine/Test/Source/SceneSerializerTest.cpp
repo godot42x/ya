@@ -5,7 +5,7 @@
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Entity.h"
 #include "GUI/Widgets/Controls/Button.h"
-#include "GUI/Widgets/SceneWidgetEntry.h"
+#include "Scene/Core/SceneWidgetEntry.h"
 #include <gtest/gtest.h>
 
 namespace ya

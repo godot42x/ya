@@ -22,6 +22,7 @@
 #include "GUI/Widgets/WidgetTree.h"
 
 #include "Host/GUI/GameUI/IGameUIController.h"
+#include "Host/GUI/GameUI/UIDocumentResolver.h"
 
 #include <memory>
 
@@ -50,8 +51,15 @@ struct GameUIHost
     void setController(std::unique_ptr<IGameUIController> controller);
     [[nodiscard]] IGameUIController* getController() const { return _controller.get(); }
 
+    /// Shared `.yaui` resolver (one resolve entry for Editor/PIE/Runtime).
+    [[nodiscard]] UIDocumentResolver& getDocumentResolver() { return _documentResolver; }
+
     /// The host's tree is only presented while a scene is mounted.
     [[nodiscard]] Scene* getMountedScene() const { return _mountedScene; }
+
+    /// Unmount + remount the currently presented scene (picks up resolver
+    /// changes after a document reload).
+    void reloadMountedSceneUI();
 
     // === Scene lifecycle ===
     void onSceneActivated(Scene& scene);
@@ -75,6 +83,7 @@ struct GameUIHost
   private:
     WidgetTree                     _tree;
     std::unique_ptr<IGameUIController> _controller;
+    UIDocumentResolver             _documentResolver;
     Scene*                         _mountedScene = nullptr;
     Rect2D                         _viewportPx{};
     glm::vec2                      _framebufferScale = {1.0f, 1.0f};

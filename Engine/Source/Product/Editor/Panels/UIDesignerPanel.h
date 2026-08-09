@@ -16,6 +16,8 @@
 
 #include "Editor/FilePicker.h"
 
+#include "Host/GUI/GameUI/UIDocumentResolver.h"
+
 #include "GUI/Widgets/UIDocument.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -83,6 +85,9 @@ struct UIDesignerPanel
     /// Scene-entry edit mode (save writes back to the entry).
     Scene*    _entryScene = nullptr;
     std::string _entryId;
+
+    /// Preview resolver: same rules as the runtime host resolver.
+    UIDocumentResolver _documentResolver;
 
     char    _savePathBuffer[512] = "";
     FilePicker _filePicker;

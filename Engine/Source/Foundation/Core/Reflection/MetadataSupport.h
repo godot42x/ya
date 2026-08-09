@@ -122,6 +122,15 @@ struct MetaBuilder
         return *this;
     }
 
+    /// Game UI: the field may be overridden per SceneWidgetEntry instance
+    /// (UIDocument / entry overrides). Fields without this flag are rejected
+    /// by UIInstanceOverrideSet::applyTo.
+    MetaBuilder& instanceEditable()
+    {
+        addFlag(FieldFlags::InstanceEditable);
+        return *this;
+    }
+
     MetaBuilder& wrapper()
     {
         addFlag(FieldFlags::EditReadOnly);

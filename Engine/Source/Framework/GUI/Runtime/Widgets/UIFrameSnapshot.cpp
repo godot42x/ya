@@ -27,7 +27,7 @@ void UIFrameBuilder::popClip()
     }
 }
 
-void UIFrameBuilder::addSprite(const Rect2D& logicalRect, const glm::vec4& color, const ya::Ptr<Texture>& texture)
+void UIFrameBuilder::addSprite(const Rect2D& logicalRect, const glm::vec4& color, const std::shared_ptr<Texture>& texture)
 {
     UIFrameDrawItem item;
     item.kind    = UIFrameDrawItem::EKind::Sprite;

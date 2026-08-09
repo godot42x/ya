@@ -11,10 +11,10 @@ namespace ya
 struct UIContainer : public UIElement
 {
     YA_REFLECT_BEGIN(UIContainer, UIElement)
-    YA_REFLECT_FIELD(_direction)
-    YA_REFLECT_FIELD(_spacing)
-    YA_REFLECT_FIELD(_padding)
-    YA_REFLECT_FIELD(_bClipChildren)
+    YA_REFLECT_FIELD(_direction, .instanceEditable())
+    YA_REFLECT_FIELD(_spacing, .instanceEditable())
+    YA_REFLECT_FIELD(_padding, .instanceEditable())
+    YA_REFLECT_FIELD(_bClipChildren, .instanceEditable())
     YA_REFLECT_END()
 
     explicit UIContainer(std::string name = "Container") : UIElement(std::move(name)) {}

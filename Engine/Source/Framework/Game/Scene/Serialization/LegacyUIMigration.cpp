@@ -1,4 +1,4 @@
-#include "GUI/Widgets/LegacyUIMigration.h"
+#include "Scene/Serialization/LegacyUIMigration.h"
 
 #include "Core/Log.h"
 

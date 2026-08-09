@@ -18,14 +18,18 @@ void DefaultGameUIController::onSceneActivated(Scene& scene, GameUIHost& host)
         if (!entry.autoMount) {
             continue;
         }
-        if (!entry.inlineDocument) {
-            YA_CORE_WARN("DefaultGameUIController: entry '{}' references document '{}' which is not "
-                         "resolved yet (yaui asset loading lands with the resource pipeline)",
-                         entry.entryId, entry.documentPath);
+        std::shared_ptr<UIDocument> document = entry.inlineDocument;
+        if (!document && !entry.documentPath.empty()) {
+            document = host.getDocumentResolver().load(entry.documentPath);
+        }
+        if (!document) {
+            YA_CORE_ERROR("DefaultGameUIController: entry '{}' has no resolvable document "
+                          "(path '{}')",
+                          entry.entryId, entry.documentPath);
             continue;
         }
 
-        UIElementRef widget = entry.inlineDocument->instantiate();
+        UIElementRef widget = document->instantiate();
         if (!widget) {
             YA_CORE_ERROR("DefaultGameUIController: entry '{}' failed to instantiate", entry.entryId);
             continue;

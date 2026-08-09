@@ -83,6 +83,7 @@ enum class FieldFlags : uint32_t
     BlueprintPure     = 1 << 9,  // Pure function (no side effects)
     Exec              = 1 << 10, // Execution function
     Wrapper           = 1 << 11, // Wrapper type(like struct A{B value}; plain display inner type B)
+    InstanceEditable  = 1 << 12, // Game UI: overridable per SceneWidgetEntry instance
 };
 
 inline FieldFlags operator|(FieldFlags a, FieldFlags b)

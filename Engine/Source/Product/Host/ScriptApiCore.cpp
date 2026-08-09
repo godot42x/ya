@@ -6,7 +6,7 @@
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
 #include "Host/App.h"
-#include "GUI/Widgets/SceneWidgetEntry.h"
+#include "Scene/Core/SceneWidgetEntry.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "Scene3D/Node3D.h"

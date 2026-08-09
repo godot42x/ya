@@ -4,6 +4,8 @@
 
 #include "Host/GUI/GameUI/DefaultGameUIController.h"
 
+#include "Resource/AssetManager.h"
+
 #include "Scene/Core/Scene.h"
 
 #include <algorithm>
@@ -32,7 +34,15 @@ void GameUIHost::setController(std::unique_ptr<IGameUIController> controller)
         YA_CORE_WARN("GameUIHost::setController: null controller ignored");
         return;
     }
+    if (_mountedScene) {
+        // Handover: the old controller unmounts what it created, then the new
+        // controller mounts the currently presented scene.
+        _controller->onSceneDeactivated(*_mountedScene, *this);
+    }
     _controller = std::move(controller);
+    if (_mountedScene) {
+        _controller->onSceneActivated(*_mountedScene, *this);
+    }
 }
 
 void GameUIHost::onSceneActivated(Scene& scene)
@@ -57,6 +67,18 @@ void GameUIHost::onSceneDeactivated(Scene& scene)
     }
     _controller->onSceneDeactivated(scene, *this);
     _mountedScene = nullptr;
+}
+
+void GameUIHost::reloadMountedSceneUI()
+{
+    if (!_mountedScene) {
+        return;
+    }
+    Scene* scene = _mountedScene;
+    _controller->onSceneDeactivated(*scene, *this);
+    _mountedScene = nullptr;
+    _controller->onSceneActivated(*scene, *this);
+    _mountedScene = scene;
 }
 
 WidgetAttachment GameUIHost::addToWorld(Scene& world, const UIElementRef& widget)
@@ -91,6 +113,11 @@ UIFrameSnapshot GameUIHost::buildSnapshot()
     UIFrameBuildContext ctx{
         .uiScale = _framebufferScale,
         .offset  = _viewportPx.pos,
+        // Strong draw-resource lifetime: the snapshot retains every texture
+        // it references through queue submit, independent of the asset cache.
+        .textureResolver = [](const std::string& assetPath) {
+            return AssetManager::get() ? AssetManager::get()->getTextureByPath(assetPath) : nullptr;
+        },
     };
     return _tree.buildSnapshot(ctx);
 }

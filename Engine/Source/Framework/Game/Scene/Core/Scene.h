@@ -10,7 +10,7 @@
 #include "ECS/ComponentMutation.h"
 #include "ECS/Entity.h"
 #include "Hierarchy/Node.h"
-#include "GUI/Widgets/SceneWidgetEntry.h"
+#include "Scene/Core/SceneWidgetEntry.h"
 #include "Scene/Core/ISceneLifecycleHost.h"
 #include "Scene3D/Node3D.h"
 #include "Resource/Model.h"

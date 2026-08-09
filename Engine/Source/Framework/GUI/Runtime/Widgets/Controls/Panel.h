@@ -11,10 +11,10 @@ namespace ya
 struct UIPanel : public UIElement
 {
     YA_REFLECT_BEGIN(UIPanel, UIElement)
-    YA_REFLECT_FIELD(_color)
-    YA_REFLECT_FIELD(_image)
-    YA_REFLECT_FIELD(_bNineSlice)
-    YA_REFLECT_FIELD(_nineSliceBorder)
+    YA_REFLECT_FIELD(_color, .instanceEditable())
+    YA_REFLECT_FIELD(_image, .instanceEditable())
+    YA_REFLECT_FIELD(_bNineSlice, .instanceEditable())
+    YA_REFLECT_FIELD(_nineSliceBorder, .instanceEditable())
     YA_REFLECT_END()
 
     explicit UIPanel(std::string name = "Panel") : UIElement(std::move(name)) {}

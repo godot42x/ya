@@ -12,9 +12,9 @@ namespace ya
 struct UIButton : public UIElement
 {
     YA_REFLECT_BEGIN(UIButton, UIElement)
-    YA_REFLECT_FIELD(_normalColor)
-    YA_REFLECT_FIELD(_hoveredColor)
-    YA_REFLECT_FIELD(_pressedColor)
+    YA_REFLECT_FIELD(_normalColor, .instanceEditable())
+    YA_REFLECT_FIELD(_hoveredColor, .instanceEditable())
+    YA_REFLECT_FIELD(_pressedColor, .instanceEditable())
     YA_REFLECT_END()
 
     explicit UIButton(std::string name = "Button") : UIElement(std::move(name))

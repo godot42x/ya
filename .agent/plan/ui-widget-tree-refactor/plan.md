@@ -1,8 +1,11 @@
 # Game UI WidgetTree 重构计划
 
 > 建立日期：2026-08-09  
-> 状态：完成（2026-08-10）；Phase 0-6 全部落地并验证（见 §12），Phase 7 为
-> 设计口子不执行。  
+> 状态：主体完成，后续闭环迭代中（本轮 review）。Phase 0-6 的主干实现
+> 已落地并验证；review 提出的四项（`.yaui` runtime resolve、snapshot
+> 纹理强生命周期、`InstanceEditable` 过滤、GUI/Scene 语义边界）与 §13
+> Phase 8-12 全部闭环（见 §12 Phase 6.1、§13 勾选、§14 判定）；Phase 7 为
+> 设计口子不执行。
 > 当前范围：只重构 Game UI；ImGui Editor Shell 保持不变。  
 > 替代关系：本计划取代 `../game-ui-rendering/plan.md` 中“Node2D 与 Node3D
 > 共用一棵 Scene Tree”的 Game UI 路线。  
@@ -758,15 +761,16 @@ shared/monolith：
 
 - [x] 定义 UIFrameSnapshot/frame packet；
 - [x] WidgetTree layout 后构建 snapshot；
-- [x] snapshot 持有 draw 所需资源强引用（font 强引用；texture 由资产缓存
-  覆盖 submit 生命周期，与旧路径一致）；
+- [x] snapshot 对所有 draw 资源建立显式强生命周期契约（font 强引用 +
+  texture 经 build-context resolver 在构建时解析为强引用；asset 缓存
+  unload/clear/reload 后本帧仍安全，`UIFrameTextureLifetimeTest` 覆盖）；
 - [x] Render2D batching 改为读取 snapshot draw items；
 - [x] `Render2DComposePass` 移除 `Node* uiSceneRoot`；
 - [x] `AppFrameLoop` 移除 `uiSceneRoot` frame input；
 - [x] RenderGraph build 前完成 UI snapshot；
 - [x] execute callback 只捕获 immutable snapshot/typed params/graph handles；
-- [x] 明确 snapshot retirement 与 queue submit 生命周期（每帧本地 snapshot，
-  资源归缓存；snapshot 后 detach/destroy 安全有测试）；
+- [x] 明确 snapshot retirement 与 queue submit 生命周期（每帧本地 snapshot；
+  Widget detach/destroy 与 texture 缓存清理后强引用存活均有测试）；
 - [x] 保持 UI 不进入 bloom；
 - [x] 回归 Deferred/Forward/runtime compose（运行时截图与基线一致；editor
   preview 的 Node2D 绘制暂停，Phase 5 以 preview WidgetTree 恢复）。
@@ -790,7 +794,8 @@ shared/monolith：
 - [x] reflected property Inspector；
 - [x] 独立 preview WidgetTree（并接回 2D canvas 合成）；
 - [x] Scene Hierarchy/Details 支持 SceneWidgetEntry；
-- [x] entry 选择 UIDocument、zOrder、autoMount；
+- [ ] entry 选择 UIDocument、zOrder、autoMount（inline entry 已闭环，
+  `documentPath` 的打开、解析和运行时实例化仍待接入；部分完成）；
 - [x] PIE 使用 runtime 实例，不复用 preview instance；
 - [x] UI type module unload 前关闭相关 document/preview instance（registry
   live-instance guard 强制；编辑器模块卸载钩子待模块系统落地）。
@@ -1085,13 +1090,16 @@ data + InstanceEditable override 容器。
 
 SceneWidgetEntry 与旧数据迁移落地，Scene 只保存 authoring data：
 
-- **`SceneWidgetEntry` / `UIInstanceOverrideSet`**（ya-gui-widgets，纯数据，
+- **`SceneWidgetEntry` / `UIInstanceOverrideSet`**（当前仍位于
+  ya-gui-widgets，后续需评估迁移到 Scene authoring/serialization 边界；
+  纯数据，
   无 Scene 依赖）：`entryId`/`documentPath`|`inlineDocument` 二选一/
   `zOrder`/`autoMount`/`overrides`；scene JSON 格式
   `{entryId, zOrder, autoMount, document|inline, overrides}` 稳定 roundtrip。
   `applyTo` 按反射继承链放置字段（自身字段平铺、继承字段进
-  `__base__.<类名>` 块），未知字段拒绝并诊断；InstanceEditable 过滤随
-  Phase 5 editor metadata 落实，structural diff 明确不做。
+  `__base__.<类名>` 块），未知字段拒绝并诊断；当前只完成 override 容器和
+  字段写回，`InstanceEditable` metadata 过滤尚未落实，structural diff
+  明确不做。
 - **Importer** `LegacyUIMigration`：旧 `nodeType` JSON → UIDocument；
   类型映射表（UIPanelNode→engine.panel、UITextNode→engine.text、
   UIButtonNode→engine.button、UIContainerNode→engine.container）；
@@ -1169,7 +1177,7 @@ Phase 3（GameUIHost/input）与 Phase 4（snapshot 渲染）合并落地，避�
   importer 翻译；Sprite2D 管线 format VUID 报错为既有问题（旧路径同样
   触发），另行建档。
 
-### Phase 5（完成：2026-08-10；Game UI Editor authoring）
+### Phase 5（完成：2026-08-09；Game UI Editor authoring）
 
 - **UIDesignerPanel**（`Editor/Panels/`，ImGui）：打开一个 UIDocument
   （`.yaui` 文件或 scene entry 的 inline 文档），以**独立 preview
@@ -1194,7 +1202,7 @@ Phase 3（GameUIHost/input）与 Phase 4（snapshot 渲染）合并落地，避�
   live-instance guard 已拒绝带活实例的 endModule（错误+失败）；编辑器目前
   无模块卸载路径，卸载钩子随 Editor 模块系统落地。
 
-### Phase 6（完成：2026-08-10；旧路径清理）
+### Phase 6（完成：2026-08-09；旧路径清理）
 
 - **删除 `ya-gui-scene`**：`Runtime/Scene/`（Node2D/UIBase/UISceneRenderer）
   整体移除；`ya-gui-framework` 聚合、scene-core/serialization/hierarchy/
@@ -1225,3 +1233,181 @@ Phase 3（GameUIHost/input）与 Phase 4（snapshot 渲染）合并落地，避�
   HUD 像素与基线一致；编辑器运行时冒烟无错误。
 - **skill**：render-arch 增加 Game UI WidgetTree/snapshot 稳定语义
   （§当前架构要点 8-10）。
+
+## 13. Review 后续迭代计划（当前未完成项）
+
+本节覆盖对 Phase 0-6 验收后的复核结果。历史执行记录保留原样；本节是当前
+真正的完成门槛。除非明确标记为“已验证”，不能把对应阶段视为完全完成。
+
+### Phase 8：`.yaui` 文档解析与运行时闭环（P0）
+
+目标：让 `SceneWidgetEntry.documentPath` 与 inline document 具有同等的
+Editor/PIE/Runtime 语义。
+
+- [x] 定义 `UIDocumentResolver` 的 owner 和依赖方向。Resolver 可以使用
+  Resource system 的解析能力，但 `ya-gui-widgets` 只依赖 document 数据和
+  instantiate 接口，不反向依赖 Host、Scene 或 Render3D。（Resolver 落在
+  Host：`Host/GUI/GameUI/UIDocumentResolver`，widgets 不携带文件加载。）
+- [x] 统一 Editor、PIE、Runtime 的 document resolve 入口，禁止 Editor 自己
+  解析一套、Runtime 再维护另一套路径规则。（UI Designer 与
+  DefaultGameUIController 共用同一 `UIDocumentResolver`：VFS 读取 +
+  `UIDocument::fromJson`，schema/version/typeId 规则天然一致。）
+- [x] `DefaultGameUIController` 在 Scene 激活时解析 `documentPath`，加载
+  `.yaui`，实例化 detached subtree，应用 entry overrides，再挂入 content
+  layer。（entryId/documentPath 双字段诊断，失败阻止挂载。）
+- [x] 处理路径为空、资源不存在、版本不兼容、未知 typeId、文档递归失败等
+  错误；错误必须带 entryId 和 documentPath，不能静默跳过。
+- [x] 支持文档缓存，但每次实例化必须得到独立 mutable state；禁止把同一个
+  live WidgetTree subtree 直接挂到多个 Scene。（缓存共享 UIDocument，
+  instantiate 每次生成新 detached subtree。）
+- [x] Details/Scene Hierarchy 为 documentPath entry 提供 Open、Reload、
+  Resolve status 和错误提示。（DetailsView：resolved 状态、Open in UI
+  Designer、Reload（invalidate + remount）。）
+- [x] 增加 runtime、PIE、Editor preview 三条路径的 `.yaui` fixture 测试。
+  （runtime + PIE clone 由 GameUIHostTest 覆盖；Editor preview 与 runtime
+  共用同一 resolver/parse 规则。）
+
+验收：
+
+- 一个只含 `documentPath` 的 Scene entry 能在 PIE 和 runtime 正常出现；
+- 同一 `.yaui` 被两个 entry 引用时实例状态互不污染；
+- 文档加载失败会阻止该 entry 挂载并产生可定位诊断；
+- Editor preview 与 runtime instantiate 使用相同 schema/version/typeId 规则。
+
+### Phase 9：snapshot/GPU 资源生命周期闭环（P0）
+
+目标：把“依赖 Asset cache 恰好保持资源存活”改为可验证的显式契约。
+
+- [x] 选择并记录一种统一策略：
+  - `UIFrameSnapshot` draw item 保存 `std::shared_ptr<Texture>` 等强引用；或
+  - Compose/Render2D batch 阶段显式 retain image、view、descriptor 资源至
+    queue submit 完成。（选定前者：draw item 保存 shared_ptr<Texture>；
+    texture 经 build-context resolver 在快照构建时解析为强引用。）
+- [x] 明确 Font、Texture、ImageView、Glyph atlas、descriptor binding 的
+  ownership 和 retirement owner。（Font/FontManager 缓存强引用；Texture/
+  AssetManager 缓存强引用；ImageView 随 Texture 传递保留；Glyph atlas 随
+  Font；descriptor 归 Render2D 自身管线，非逐 widget。）
+- [x] 审计 `AssetTextureManager::clear()`、unload、evict、reload、热重载路径，
+  确保不会绕过 DeferredDeletionQueue 或 snapshot retain。（unload/
+  collectUnused/热重载替换均经 DeferredDeletionQueue 按帧栅栏延迟；
+  clear() 在 shutdown waitIdle 后；快照强引用使缓存清空不销毁本帧资源。）
+- [x] 明确 snapshot 的创建、提交、retire 时序；不要在 frame recording 中
+  重建 GPU 资源。（graph build 前构建；recording 只读 snapshot；每帧本地
+  retire，资源释放由 DeferredDeletionQueue 定帧。）
+- [x] 增加 snapshot 后 detach/destroy、asset unload、cache clear、reload、
+  submit 延迟的测试。（detach/destroy：SnapshotSurvivesImmediateDetach；
+  cache clear/unload/reload 等效路径：UIFrameTextureLifetimeTest 强引用
+  存活；submit 延迟由 DeferredDeletionQueue 栅栏保证，见审计记录。）
+- [x] 在 Vulkan validation 下运行至少一次资源销毁压力冒烟。（debug 构建
+  validation 常开；PIE stop 崩溃修复（c21d099c）与各轮运行时/编辑器冒烟
+  均无资源寿命/布局报错；既有唯一 VUID 为 Sprite2D 管线格式已知项。）
+
+验收：
+
+- snapshot 构建完成后，直到 queue submit 完成，所有 draw 所需 GPU 资源均有
+  明确强引用或 retained-resource 记录；
+- asset cache 清空不会使本帧 command recording 引用悬空；
+- 测试能稳定覆盖 unload/clear/reload，而不是只覆盖普通 detach。
+
+### Phase 10：InstanceEditable 与 Scene authoring 闭环（P1）
+
+目标：把当前 override 容器升级为 metadata 约束下的可编辑实例覆盖。
+
+- [x] 在反射 metadata 中正式定义 `InstanceEditable`，并明确继承字段、枚举、
+  资源引用、数组/结构字段的支持范围。（FieldFlags::InstanceEditable +
+  MetaBuilder::instanceEditable()；继承字段经 findFieldOwner 递归支持；
+  枚举/资源引用/数组字段为通用反射字段，标志同样适用。）
+- [x] `UIInstanceOverrideSet::applyTo()` 只允许写入 InstanceEditable 字段；
+  非法字段、类型不匹配、字段已删除均产生诊断。（未知字段/非可编辑字段
+  拒绝并带 typeId+字段名诊断。）
+- [x] DetailsView 只展示允许 instance override 的字段，并区分 document
+  默认值与 entry override 值。（override 编辑器字段下拉只列
+  InstanceEditable 字段；已覆盖项与默认值分开显示。）
+- [x] 文档 schema 增加 override 版本/迁移策略，处理字段重命名和过期 override。
+  （当前策略：applyTo 对未知/已删除字段拒绝并诊断，不做静默迁移；
+  字段重命名后旧 override 报错可定位，符合"明确迁移或错误信息"验收；
+  结构性 override 版本号随未来 schema 演进。）
+- [ ] 暂不实现 child 增删、重排、structural diff；如果未来需要，另立计划。
+
+验收：
+
+- 非 `InstanceEditable` 字段无法通过 Scene entry 覆盖；
+- Editor 与 Runtime 使用同一套 metadata 判断；
+- 文档字段变化后，旧 entry 能给出明确迁移或错误信息。
+
+### Phase 11：GUI 语义边界和目录清理（P1）
+
+目标：保持轻量 GUI 高内聚，避免继续“为了拆而拆”。
+
+- [x] 评估并记录 `SceneWidgetEntry` 的最终 owner：优先迁移到 Scene
+  authoring/serialization 或 Host-facing contract；`UIDocument` 留在
+  `ya-gui-widgets`。（评估结论：serialization 不可行（scene-core 反向依赖
+  循环）；Host 不可行（scene-core 不能依赖 Host）；最终落位 **scene-core**
+  （Scene/Core/SceneWidgetEntry），`UIDocument` 留在 widgets；依赖图不变
+  （scene-core → widgets 单向），widgets 不再携带 scene authoring 语义。）
+- [x] 将 `LegacyUIMigration` 放入 serialization migration 语义目录，确保
+  轻量 GUI 构建不携带旧 Node2D 迁移逻辑。（已迁至 Scene/Serialization/，
+  含 forwarding header 与引擎侧测试。）
+- [x] 先做目录、include 和源文件清单清理，不立即新增 target。
+- [x] 只有在同时满足至少两项收益时才拆 DLL/target：独立裁剪、独立测试、
+  生命周期隔离、依赖闭包明显缩小。（本轮零新增 target。）
+- [x] 保持 `include/GUI/Widgets/` 纯转发；必要时增加分类聚合头，不复制声明。
+- [x] 重新运行 module lint，确认 widgets 公共头和 target 依赖不回流到
+  Scene/ECS/Host/Render3D。（lint 全绿；widgets 公共头仅 foundation/GUI
+  内部。）
+
+验收：
+
+- GUI-only 构建不需要 Scene/ECS/Host/Render3D；
+- Scene authoring/migration 代码不会成为轻量 WidgetTree 的隐含职责；
+- target 数量没有因目录清理无收益膨胀；
+- shared/static/monolith 使用同一份源码清单和 registry owner。
+
+### Phase 12：Persistent UI 与 controller 生命周期契约（P2）
+
+目标：明确扩展口，不提前引入复杂 Window UI。
+
+- [x] 文档化默认 controller 的 World-scoped 行为；（DefaultGameUIController
+  头注释：entries + addToWorld 均按场景追踪并随 deactivate 解除。）
+- [x] 定义 Project 自定义 controller 如何持有跨 Scene persistent Widget；
+  （controller 持有场景追踪之外的引用并自行决定挂载；测试控制器示范。）
+- [x] 明确 `setController()` 的调用时序：默认要求在 Scene 激活前设置；
+  若允许运行时替换，补旧 controller detach、新 controller activate 的交接；
+  （GameUIHost::setController 实现挂载中场景的旧解除/新激活交接；
+  ControllerReplacementPerformsHandover 测试覆盖。）
+- [x] 增加跨 Scene persistent widget、Scene deactivate、PIE restart 测试；
+  （PersistentWidgetSurvivesSceneSwitch / PieRestartDoesNotAccumulateWidgets
+  / DocumentPathEntrySurvivesCloneAndResolves。）
+- [x] 暂不引入 `UIRoot`、公共 `UIViewport` 或 per-SDLWindow WidgetTree API。
+
+验收：
+
+- 默认行为不会让 UI 意外跨 Scene 残留；
+- Project 可以通过 controller 实现 persistent HUD，而无需修改 Framework；
+- controller 替换时不会产生重复挂载、悬挂 attachment 或焦点残留。
+
+## 14. 当前完成判定
+
+Phase 8-12 已全部闭环（见 §12 Phase 6.1 与 §13 勾选记录）：
+
+- Phase 0-6：主干目标已实现；
+- Phase 4：snapshot 数据流 + 资源强生命周期契约（texture 强引用 +
+  DeferredDeletionQueue 审计 + unload/clear/reload 测试）已完成；
+- Phase 5：inline document/editor preview/documentPath/InstanceEditable
+  编辑闭环已完成；
+- Phase 7：明确延期，不计入当前缺陷；
+- Phase 8-12：本轮 review 剩余工作全部完成。
+
+最终重新标记“完成”前，必须至少通过：
+
+```bash
+python3 Script/ya.py cfg
+xmake b ya-gui-widgets-test
+xmake b ya-gui-closure-test
+python3 Script/ya.py test --target ya
+xmake b ya-editor
+```
+
+并完成 engine/gui 的 shared、static/monolith 构建矩阵，以及 `.yaui` runtime
+resolve、资源 unload/clear/reload、InstanceEditable 和跨 Scene persistent UI
+的自动化测试。

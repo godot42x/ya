@@ -8,6 +8,8 @@
 
 #include "GUI/Widgets/UITypeRegistry.h"
 
+#include "Resource/AssetManager.h"
+
 #include "Scene/Core/Scene.h"
 
 #include <imgui.h>
@@ -60,22 +62,10 @@ void UIDesignerPanel::openDocument(const std::shared_ptr<UIDocument>& document, 
 
 void UIDesignerPanel::openDocumentPath(const std::string& path)
 {
-    std::string content;
-    if (!VirtualFileSystem::get() || !VirtualFileSystem::get()->readFileToString(path, content)) {
-        YA_CORE_ERROR("UIDesignerPanel::openDocumentPath: failed to read '{}'", path);
-        return;
-    }
-    try {
-        const auto json = nlohmann::json::parse(content);
-        auto document   = UIDocument::fromJson(json);
-        if (!document) {
-            YA_CORE_ERROR("UIDesignerPanel::openDocumentPath: invalid document '{}'", path);
-            return;
-        }
+    // Same resolve entry as the runtime (UIDocumentResolver): identical
+    // schema/version/typeId rules for preview and PIE/runtime.
+    if (auto document = _documentResolver.load(path)) {
         openDocument(document, path);
-    }
-    catch (const std::exception& e) {
-        YA_CORE_ERROR("UIDesignerPanel::openDocumentPath: parse error in '{}': {}", path, e.what());
     }
 }
 
@@ -151,7 +141,13 @@ UIFrameSnapshot UIDesignerPanel::buildPreviewSnapshot()
     if (!_previewTree) {
         return {};
     }
-    return _previewTree->buildSnapshot(UIFrameBuildContext{});
+    UIFrameBuildContext ctx;
+    // Strong lifetime for the preview as well: the snapshot retains textures
+    // until the editor canvas compose has recorded.
+    ctx.textureResolver = [](const std::string& assetPath) {
+        return AssetManager::get() ? AssetManager::get()->getTextureByPath(assetPath) : nullptr;
+    };
+    return _previewTree->buildSnapshot(ctx);
 }
 
 UIElement* UIDesignerPanel::pickAt(const glm::vec2& logicalPoint)

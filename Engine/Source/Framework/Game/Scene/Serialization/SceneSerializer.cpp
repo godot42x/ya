@@ -7,8 +7,8 @@
 #include "Resource/AssetManager.h"
 #include "Scene3D/ManagedChildComponent.h"
 #include "ECS/Entity.h"
-#include "GUI/Widgets/LegacyUIMigration.h"
-#include "GUI/Widgets/SceneWidgetEntry.h"
+#include "Scene/Core/SceneWidgetEntry.h"
+#include "Scene/Serialization/LegacyUIMigration.h"
 #include "Scene/Core/Scene.h"
 
 #include <algorithm>
