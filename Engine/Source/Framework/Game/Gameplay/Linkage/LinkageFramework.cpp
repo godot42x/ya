@@ -7,6 +7,13 @@
 namespace ya
 {
 
+LinkageFramework::LinkageFramework()
+    : _cancelled(std::make_shared<std::atomic<bool>>(false))
+{
+}
+
+LinkageFramework::~LinkageFramework() = default;
+
 void LinkageFramework::setSceneManager(SceneManager* manager)
 {
     _sceneManager = manager;
@@ -40,7 +47,11 @@ void LinkageFramework::scheduleDeferred(Scene* scene, std::function<void()> task
         return;
     }
     SceneManager* manager = _sceneManager;
-    _frameTaskSink([scene, manager, task = std::move(task)]() {
+    auto cancelled = _cancelled;
+    _frameTaskSink([scene, manager, cancelled, task = std::move(task)]() {
+        if (cancelled->load()) {
+            return;
+        }
         if (manager && !manager->isSceneValid(scene)) {
             return;
         }
@@ -53,7 +64,11 @@ void LinkageFramework::init()
     if (!_sceneManager) {
         return;
     }
+    // A fresh cancellation generation: tasks scheduled before a previous
+    // shutdown keep their (cancelled) flag and can never run again.
+    _cancelled = std::make_shared<std::atomic<bool>>(false);
     _sceneInitHandle = _sceneManager->onSceneInit.addObject(this, &LinkageFramework::onSceneInit);
+    _sceneDestroyHandle = _sceneManager->onSceneDestroy.addObject(this, &LinkageFramework::onSceneDestroy);
     _componentRemovedHandle = SceneBus::get().onComponentRemoved.addLambda(
         this,
         [this](entt::registry& reg, const entt::entity entity, ya::type_index_t type) {
@@ -63,8 +78,10 @@ void LinkageFramework::init()
 
 void LinkageFramework::shutdown()
 {
+    _cancelled->store(true);
     if (_sceneManager) {
         _sceneManager->onSceneInit.remove(_sceneInitHandle);
+        _sceneManager->onSceneDestroy.remove(_sceneDestroyHandle);
     }
     SceneBus::get().onComponentRemoved.remove(_componentRemovedHandle);
     clearRules();
@@ -74,6 +91,13 @@ void LinkageFramework::onSceneInit(Scene* scene)
 {
     for (auto& rule : _rules) {
         rule->onSceneInit(scene);
+    }
+}
+
+void LinkageFramework::onSceneDestroy(Scene* scene)
+{
+    for (auto& rule : _rules) {
+        rule->onSceneUnload(scene);
     }
 }
 

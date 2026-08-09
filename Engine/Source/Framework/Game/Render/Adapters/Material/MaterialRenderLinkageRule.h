@@ -2,6 +2,8 @@
 
 #include "Gameplay/Linkage/LinkageRule.h"
 
+#include <unordered_set>
+
 namespace ya
 {
 
@@ -18,14 +20,20 @@ struct Scene;
 struct MaterialRenderLinkageRule : public ILinkageRule
 {
     explicit MaterialRenderLinkageRule(LinkageFramework* framework);
+    ~MaterialRenderLinkageRule() override;
 
     void onSceneInit(Scene* scene) override;
     void onComponentRemoved(entt::registry& reg, entt::entity entity, ya::type_index_t type) override;
+    void onSceneUnload(Scene* scene) override;
 
   private:
     void onMaterialEvent(entt::registry& reg, entt::entity entity);
+    void disconnectScene(entt::registry& registry);
 
     LinkageFramework* _framework = nullptr;
+    /// Registries this rule connected entt signals to; used to disconnect on
+    /// scene unload and when the rule is destroyed (framework shutdown).
+    std::unordered_set<entt::registry*> _connectedRegistries;
 };
 
 } // namespace ya

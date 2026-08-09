@@ -31,6 +31,12 @@ struct ILinkageRule
     /// Component removal dispatch (SceneBus). `type` is the removed component
     /// type index; `entity` may still be valid.
     virtual void onComponentRemoved(entt::registry& reg, entt::entity entity, ya::type_index_t type) = 0;
+
+    /// The scene is being destroyed (fired before its registry dies). Rules
+    /// must disconnect their entt signal connections for this scene's
+    /// registry so teardown events never reach a rule that may already be
+    /// gone (e.g. framework shut down before the scene).
+    virtual void onSceneUnload(Scene* scene) {}
 };
 
 } // namespace ya

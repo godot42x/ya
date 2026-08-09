@@ -138,11 +138,14 @@ void SceneManager::destroySceneIfNeeded(stdptr<Scene>& scene)
         return;
     }
 
+    // Notify lifecycle listeners BEFORE releasing the last reference. When
+    // `scene` aliases `_activeScene` (unloadScene path), resetting it first
+    // would destroy the Scene object and leave onSceneDestroyInternal with a
+    // null pointer, silently skipping the onSceneDestroy broadcast.
+    onSceneDestroyInternal(scene.get());
     if (_activeScene == scene) {
         _activeScene.reset();
     }
-
-    onSceneDestroyInternal(scene.get());
     scene.reset();
 }
 

@@ -5,6 +5,7 @@
 #include "Core/System/System.h"
 #include "Gameplay/Linkage/LinkageRule.h"
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -31,6 +32,9 @@ class LinkageFramework : public ISystem
   public:
     using FrameTaskSink = std::function<void(std::function<void()>)>;
 
+    LinkageFramework();
+    ~LinkageFramework() override;
+
     /// Injected seams (bound by the Host at startup; no App access here).
     void setSceneManager(SceneManager* manager);
     void setFrameTaskSink(FrameTaskSink sink);
@@ -51,12 +55,18 @@ class LinkageFramework : public ISystem
 
   private:
     void onSceneInit(Scene* scene);
+    void onSceneDestroy(Scene* scene);
     void onComponentRemoved(entt::registry& reg, entt::entity entity, ya::type_index_t type);
 
     SceneManager*                 _sceneManager = nullptr;
     FrameTaskSink                 _frameTaskSink;
     std::vector<std::shared_ptr<ILinkageRule>> _rules;
+    /// Cancellation flag shared with in-flight deferred tasks; set when the
+    /// framework shuts down so queued tasks no-op instead of touching scenes
+    /// or the scene manager that may be torn down afterwards.
+    std::shared_ptr<std::atomic<bool>> _cancelled;
     DelegateHandle                _sceneInitHandle;
+    DelegateHandle                _sceneDestroyHandle;
     DelegateHandle                _componentRemovedHandle;
 };
 

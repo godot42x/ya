@@ -4,6 +4,7 @@
 
 #include <glm/glm.hpp>
 #include <string>
+#include <unordered_set>
 
 namespace ya
 {
@@ -39,6 +40,7 @@ struct LightBillboardPolicy
 struct LightBillboardLinkageRule : public ILinkageRule
 {
     explicit LightBillboardLinkageRule(LinkageFramework* framework);
+    ~LightBillboardLinkageRule() override;
 
     /// Injected by the Host once at startup (config source stays in Host).
     /// Interim: stored on the rule (not the framework); the automation RPC
@@ -48,14 +50,19 @@ struct LightBillboardLinkageRule : public ILinkageRule
 
     void onSceneInit(Scene* scene) override;
     void onComponentRemoved(entt::registry& reg, entt::entity entity, ya::type_index_t type) override;
+    void onSceneUnload(Scene* scene) override;
 
     /// Immediate (non-deferred) linkage, used by the automation RPC.
     static void applyLinkage(Scene* scene, const entt::entity entity);
 
   private:
     void onLightEvent(entt::registry& reg, entt::entity entity);
+    void disconnectScene(entt::registry& registry);
 
     LinkageFramework* _framework = nullptr;
+    /// Registries this rule connected entt signals to; used to disconnect on
+    /// scene unload and when the rule is destroyed (framework shutdown).
+    std::unordered_set<entt::registry*> _connectedRegistries;
 };
 
 } // namespace ya

@@ -49,6 +49,34 @@ MaterialRenderLinkageRule::MaterialRenderLinkageRule(LinkageFramework* framework
 {
 }
 
+MaterialRenderLinkageRule::~MaterialRenderLinkageRule()
+{
+    // The rule may be destroyed while scenes are still alive (framework
+    // shutdown before scene teardown); disconnect every registry we wired so
+    // entt teardown signals never reach a dangling `this`.
+    const auto connected = _connectedRegistries;
+    for (auto* registry : connected) {
+        disconnectScene(*registry);
+    }
+}
+
+void MaterialRenderLinkageRule::disconnectScene(entt::registry& registry)
+{
+    registry.on_construct<PBRMaterialComponent>().disconnect<&MaterialRenderLinkageRule::onMaterialEvent>(this);
+    registry.on_update<PBRMaterialComponent>().disconnect<&MaterialRenderLinkageRule::onMaterialEvent>(this);
+    registry.on_destroy<PBRMaterialComponent>().disconnect<&MaterialRenderLinkageRule::onMaterialEvent>(this);
+    registry.on_construct<PhongMaterialComponent>().disconnect<&MaterialRenderLinkageRule::onMaterialEvent>(this);
+    registry.on_update<PhongMaterialComponent>().disconnect<&MaterialRenderLinkageRule::onMaterialEvent>(this);
+    registry.on_destroy<PhongMaterialComponent>().disconnect<&MaterialRenderLinkageRule::onMaterialEvent>(this);
+    registry.on_construct<UnlitMaterialComponent>().disconnect<&MaterialRenderLinkageRule::onMaterialEvent>(this);
+    registry.on_update<UnlitMaterialComponent>().disconnect<&MaterialRenderLinkageRule::onMaterialEvent>(this);
+    registry.on_destroy<UnlitMaterialComponent>().disconnect<&MaterialRenderLinkageRule::onMaterialEvent>(this);
+    registry.on_construct<SimpleMaterialComponent>().disconnect<&MaterialRenderLinkageRule::onMaterialEvent>(this);
+    registry.on_update<SimpleMaterialComponent>().disconnect<&MaterialRenderLinkageRule::onMaterialEvent>(this);
+    registry.on_destroy<SimpleMaterialComponent>().disconnect<&MaterialRenderLinkageRule::onMaterialEvent>(this);
+    _connectedRegistries.erase(&registry);
+}
+
 void MaterialRenderLinkageRule::onSceneInit(Scene* scene)
 {
     if (!scene || !_framework) {
@@ -69,6 +97,7 @@ void MaterialRenderLinkageRule::onSceneInit(Scene* scene)
     registry.on_construct<SimpleMaterialComponent>().connect<&MaterialRenderLinkageRule::onMaterialEvent>(this);
     registry.on_update<SimpleMaterialComponent>().connect<&MaterialRenderLinkageRule::onMaterialEvent>(this);
     registry.on_destroy<SimpleMaterialComponent>().connect<&MaterialRenderLinkageRule::onMaterialEvent>(this);
+    _connectedRegistries.insert(&registry);
 
     for (const auto [entity, material] : registry.view<PBRMaterialComponent>().each()) {
         (void)material;
@@ -85,6 +114,13 @@ void MaterialRenderLinkageRule::onSceneInit(Scene* scene)
     for (const auto [entity, material] : registry.view<SimpleMaterialComponent>().each()) {
         (void)material;
         onMaterialEvent(registry, entity);
+    }
+}
+
+void MaterialRenderLinkageRule::onSceneUnload(Scene* scene)
+{
+    if (scene && _connectedRegistries.contains(&scene->getRegistry())) {
+        disconnectScene(scene->getRegistry());
     }
 }
 

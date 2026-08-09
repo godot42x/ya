@@ -1051,6 +1051,20 @@ Game Resource/Material，应先更新本计划的依赖规则和验收标准，�
      销毁时仍会悬垂。
    - 目标：rule 在 scene 失效时断开 registry 信号；deferred task 捕获
      弱引用/代际校验，shutdown 时排空或作废未执行 task。
+   - [x] 已完成（2026-08-09）：
+     - 根因：`SceneManager::destroySceneIfNeeded` 在 `scene` 别名
+       `_activeScene`（unloadScene 路径）时先 `_activeScene.reset()` 再调
+       `onSceneDestroyInternal`，Scene 已被析构 → 广播拿到 nullptr 静默跳过
+       → 所有 onSceneDestroy 监听（Linkage/Physics/App）从未触发。修复：
+       先广播、后释放。
+     - `ILinkageRule::onSceneUnload` 钩子：框架监听 onSceneDestroy 通知规则
+       断开 entt 信号；规则析构器兜底断开所有已连接 registry（框架先于
+       场景销毁时不再悬垂）。
+     - `scheduleDeferred` 增加共享取消标志：shutdown 后未执行的 frame task
+       直接作废。
+     - 新增 `LinkageFrameworkTest` 4 个回归测试（unload 断开、规则先于场景
+       销毁安全、shutdown 取消、无效场景跳过）；还原修复后测试失败，确认
+       有效；354 测试 + 运行时/全场景冒烟通过。
 2. **monolith 下导出宏修正**
    - 现状：`ya_std_module()` 无条件注入 `YA_SHARED=1` + `YA_MODULE_BUILD=1`，
      `YA_*_API=YA_API_EXPORT`；monolith（static）模式下 Windows 上仍会展开为

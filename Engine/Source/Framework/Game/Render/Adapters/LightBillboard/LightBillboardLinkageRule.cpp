@@ -26,6 +26,29 @@ LightBillboardLinkageRule::LightBillboardLinkageRule(LinkageFramework* framework
 {
 }
 
+LightBillboardLinkageRule::~LightBillboardLinkageRule()
+{
+    // The rule may be destroyed while scenes are still alive (framework
+    // shutdown before scene teardown); disconnect every registry we wired so
+    // entt teardown signals never reach a dangling `this`.
+    const auto connected = _connectedRegistries;
+    for (auto* registry : connected) {
+        disconnectScene(*registry);
+    }
+}
+
+void LightBillboardLinkageRule::disconnectScene(entt::registry& registry)
+{
+    registry.on_construct<PointLightComponent>().disconnect<&LightBillboardLinkageRule::onLightEvent>(this);
+    registry.on_update<PointLightComponent>().disconnect<&LightBillboardLinkageRule::onLightEvent>(this);
+    registry.on_destroy<PointLightComponent>().disconnect<&LightBillboardLinkageRule::onLightEvent>(this);
+    registry.on_construct<DirectionalLightComponent>().disconnect<&LightBillboardLinkageRule::onLightEvent>(this);
+    registry.on_update<DirectionalLightComponent>().disconnect<&LightBillboardLinkageRule::onLightEvent>(this);
+    registry.on_destroy<DirectionalLightComponent>().disconnect<&LightBillboardLinkageRule::onLightEvent>(this);
+    registry.on_update<TransformComponent>().disconnect<&LightBillboardLinkageRule::onLightEvent>(this);
+    _connectedRegistries.erase(&registry);
+}
+
 void LightBillboardLinkageRule::setPolicy(LightBillboardPolicy policy)
 {
     g_lightBillboardPolicy = std::move(policy);
@@ -197,6 +220,7 @@ void LightBillboardLinkageRule::onSceneInit(Scene* scene)
     registry.on_update<DirectionalLightComponent>().connect<&LightBillboardLinkageRule::onLightEvent>(this);
     registry.on_destroy<DirectionalLightComponent>().connect<&LightBillboardLinkageRule::onLightEvent>(this);
     registry.on_update<TransformComponent>().connect<&LightBillboardLinkageRule::onLightEvent>(this);
+    _connectedRegistries.insert(&registry);
 
     for (const auto [entity, light] : registry.view<PointLightComponent>().each()) {
         (void)light;
@@ -205,6 +229,13 @@ void LightBillboardLinkageRule::onSceneInit(Scene* scene)
     for (const auto [entity, light] : registry.view<DirectionalLightComponent>().each()) {
         (void)light;
         onLightEvent(registry, entity);
+    }
+}
+
+void LightBillboardLinkageRule::onSceneUnload(Scene* scene)
+{
+    if (scene && _connectedRegistries.contains(&scene->getRegistry())) {
+        disconnectScene(scene->getRegistry());
     }
 }
 
