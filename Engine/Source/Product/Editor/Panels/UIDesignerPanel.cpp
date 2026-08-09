@@ -8,7 +8,7 @@
 
 #include "GUI/Widgets/UITypeRegistry.h"
 
-#include "Resource/AssetManager.h"
+#include "Host/GUI/GameUI/GameUIHost.h"
 
 #include "Scene/Core/Scene.h"
 
@@ -136,17 +136,18 @@ bool UIDesignerPanel::saveDocument()
     return true;
 }
 
-UIFrameSnapshot UIDesignerPanel::buildPreviewSnapshot()
+UIFrameSnapshot UIDesignerPanel::buildPreviewSnapshot(const glm::vec2& uiScale, const glm::vec2& offset)
 {
     if (!_previewTree) {
         return {};
     }
     UIFrameBuildContext ctx;
+    ctx.uiScale = uiScale;
+    ctx.offset  = offset;
     // Strong lifetime for the preview as well: the snapshot retains textures
-    // until the editor canvas compose has recorded.
-    ctx.textureResolver = [](const std::string& assetPath) {
-        return AssetManager::get() ? AssetManager::get()->getTextureByPath(assetPath) : nullptr;
-    };
+    // until the editor canvas compose has recorded (shared resolver rules
+    // with the runtime host).
+    ctx.textureResolver = &resolveGameUITexture;
     return _previewTree->buildSnapshot(ctx);
 }
 

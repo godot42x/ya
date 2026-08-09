@@ -9,6 +9,7 @@
 #include "Scene/Core/Scene.h"
 
 #include <algorithm>
+#include <format>
 
 namespace ya
 {
@@ -115,11 +116,59 @@ UIFrameSnapshot GameUIHost::buildSnapshot()
         .offset  = _viewportPx.pos,
         // Strong draw-resource lifetime: the snapshot retains every texture
         // it references through queue submit, independent of the asset cache.
-        .textureResolver = [](const std::string& assetPath) {
-            return AssetManager::get() ? AssetManager::get()->getTextureByPath(assetPath) : nullptr;
-        },
+        .textureResolver = &resolveGameUITexture,
     };
     return _tree.buildSnapshot(ctx);
+}
+
+std::shared_ptr<Texture> resolveGameUITexture(const std::string& assetPath)
+{
+    return AssetManager::get() ? AssetManager::get()->getTextureByPath(assetPath) : nullptr;
+}
+
+std::vector<WidgetAttachment> mountSceneAutoMountEntries(Scene&                                       scene,
+                                                         WidgetTree&                                  tree,
+                                                         UIDocumentResolver&                          resolver,
+                                                         const std::function<void(std::string_view)>& onError)
+{
+    const auto report = [&onError](const std::string& message) {
+        if (onError) {
+            onError(message);
+        }
+        else {
+            YA_CORE_ERROR("{}", message);
+        }
+    };
+
+    std::vector<WidgetAttachment> attachments;
+    for (const auto& entry : scene.getWidgetEntries()) {
+        if (!entry.autoMount) {
+            continue;
+        }
+        std::shared_ptr<UIDocument> document = entry.inlineDocument;
+        if (!document && !entry.documentPath.empty()) {
+            document = resolver.load(entry.documentPath);
+        }
+        if (!document) {
+            report(std::format("SceneWidgetEntry '{}' has no resolvable document (path '{}')",
+                               entry.entryId, entry.documentPath));
+            continue;
+        }
+
+        UIElementRef widget = document->instantiate();
+        if (!widget) {
+            report(std::format("SceneWidgetEntry '{}' failed to instantiate", entry.entryId));
+            continue;
+        }
+        widget->_zOrder = entry.zOrder;
+        entry.overrides.applyTo(*widget);
+
+        WidgetAttachment attachment = tree.attachToLayer(WidgetTree::ELayer::Content, widget);
+        if (attachment.valid()) {
+            attachments.push_back(std::move(attachment));
+        }
+    }
+    return attachments;
 }
 
 } // namespace ya

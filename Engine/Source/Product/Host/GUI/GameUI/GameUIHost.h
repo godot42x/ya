@@ -18,13 +18,19 @@
 // screen hosts own one GameUIHost (and WidgetTree) per presentation area.
 // ============================================================================
 
+#include "Core/Api.h"
+
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include "Host/GUI/GameUI/IGameUIController.h"
 #include "Host/GUI/GameUI/UIDocumentResolver.h"
 
+#include <functional>
 #include <memory>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace ya
 {
@@ -88,5 +94,24 @@ struct GameUIHost
     Rect2D                         _viewportPx{};
     glm::vec2                      _framebufferScale = {1.0f, 1.0f};
 };
+
+/// Strong texture resolver shared by every Game UI snapshot build context
+/// (runtime host, editor canvas preview, UI designer). The snapshot holds
+/// the returned shared_ptr, so draw resources survive queue submit even if
+/// the asset cache unloads/clears/reloads the texture afterwards.
+[[nodiscard]] YA_HOST_API std::shared_ptr<Texture> resolveGameUITexture(const std::string& assetPath);
+
+/// Instantiate + attach all autoMount SceneWidgetEntries of `scene` into
+/// `tree`'s content layer (entry zOrder -> widget zOrder, entry overrides
+/// applied). Single mount path shared by the default controller (keeps the
+/// returned attachments for scene-lifecycle tracking) and the editor canvas
+/// preview (stateless per-frame rebuild, drops them after the snapshot).
+/// Errors go to `onError` (entryId + documentPath included); a null sink
+/// logs through YA_CORE_ERROR.
+[[nodiscard]] YA_HOST_API std::vector<WidgetAttachment>
+mountSceneAutoMountEntries(Scene&                                       scene,
+                           WidgetTree&                                  tree,
+                           UIDocumentResolver&                          resolver,
+                           const std::function<void(std::string_view)>& onError = {});
 
 } // namespace ya

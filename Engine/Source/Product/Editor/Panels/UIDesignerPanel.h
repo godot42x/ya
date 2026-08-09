@@ -60,7 +60,11 @@ struct UIDesignerPanel
     bool saveDocument();
 
     // === Preview (independent WidgetTree, never shared with the runtime) ===
-    [[nodiscard]] UIFrameSnapshot buildPreviewSnapshot();
+    /// Build the immutable preview frame. `uiScale`/`offset` map tree-local
+    /// logical pixels to render-target pixels (the 2D canvas passes its
+    /// framebuffer scale * zoom and pan so the preview stays coherent with
+    /// the canvas grid and with canvas picking).
+    [[nodiscard]] UIFrameSnapshot buildPreviewSnapshot(const glm::vec2& uiScale, const glm::vec2& offset);
     /// Topmost widget under a canvas-logical point (for editor picking).
     [[nodiscard]] UIElement* pickAt(const glm::vec2& logicalPoint);
     void select(UIElement* widget) { _selected = widget; }

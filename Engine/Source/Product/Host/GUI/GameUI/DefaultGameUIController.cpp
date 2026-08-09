@@ -12,36 +12,9 @@ namespace ya
 void DefaultGameUIController::onSceneActivated(Scene& scene, GameUIHost& host)
 {
     auto& attachments = _sceneAttachments[&scene];
-    attachments.clear();
-
-    for (const auto& entry : scene.getWidgetEntries()) {
-        if (!entry.autoMount) {
-            continue;
-        }
-        std::shared_ptr<UIDocument> document = entry.inlineDocument;
-        if (!document && !entry.documentPath.empty()) {
-            document = host.getDocumentResolver().load(entry.documentPath);
-        }
-        if (!document) {
-            YA_CORE_ERROR("DefaultGameUIController: entry '{}' has no resolvable document "
-                          "(path '{}')",
-                          entry.entryId, entry.documentPath);
-            continue;
-        }
-
-        UIElementRef widget = document->instantiate();
-        if (!widget) {
-            YA_CORE_ERROR("DefaultGameUIController: entry '{}' failed to instantiate", entry.entryId);
-            continue;
-        }
-        widget->_zOrder = entry.zOrder;
-        entry.overrides.applyTo(*widget);
-
-        WidgetAttachment attachment = host.getTree().attachToLayer(WidgetTree::ELayer::Content, widget);
-        if (attachment.valid()) {
-            attachments.push_back(std::move(attachment));
-        }
-    }
+    // Single mount path shared with the editor canvas preview; the
+    // controller keeps the attachments for scene-lifecycle tracking.
+    attachments = mountSceneAutoMountEntries(scene, host.getTree(), host.getDocumentResolver());
 }
 
 void DefaultGameUIController::onSceneDeactivated(Scene& scene, GameUIHost& host)

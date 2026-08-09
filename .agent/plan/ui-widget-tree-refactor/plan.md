@@ -1398,6 +1398,20 @@ Phase 8-12 已全部闭环（见 §12 Phase 6.1 与 §13 勾选记录）：
 - Phase 7：明确延期，不计入当前缺陷；
 - Phase 8-12：本轮 review 剩余工作全部完成。
 
+### 后续闭环（2026-08-10，编辑器 canvas 预览修复）
+
+- 2D canvas 预览与网格/拾取同坐标系：snapshot 构建上下文统一使用
+  `framebufferScale * zoom` + `pan * framebufferScale`（`toPx =
+  offset + logical * uiScale`），网格、预览、`viewportToCanvas` 拾取三者的
+  映射一致；此前 designer 预览不随 pan/zoom，画布拖动/缩放后预览错位。
+- 场景 UI 预览回源：未打开 UI Designer 文档时，2D canvas 直接预览
+  authoring scene 的 autoMount `SceneWidgetEntry`（每帧独立实例化、
+  snapshot 后即弃，与 runtime/PIE 树零共享）；打开文档时仍优先 designer。
+- 单一挂载路径：`mountSceneAutoMountEntries` 由
+  DefaultGameUIController 与编辑器 canvas 预览共用；纹理解析统一走
+  `resolveGameUITexture`（强引用，snapshot 持有到 queue submit 之后）。
+- 验证：390 例全量测试通过；`ya-editor` 构建通过。
+
 最终重新标记“完成”前，必须至少通过：
 
 ```bash

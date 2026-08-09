@@ -1,6 +1,7 @@
 #include "Editor/EditorModule.h"
 
 #include "Core/Config/ConfigManager.h"
+#include "Core/Log.h"
 #include "Core/Math/AABB.h"
 #include "Gameplay/Systems/CameraController/FreeCameraController.h"
 #include "Core/Profiling/Profiling.h"
@@ -28,6 +29,7 @@
 #include "Host/App.h"
 #include "Host/Automation/EditorAutomationControl.h"
 #include "Host/GUI/GuiSystem.h"
+#include "Host/GUI/GameUI/GameUIHost.h"
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "GUI/Compose/Render2DComposePass.h"
 #include "Render3D/RenderRuntime.h"
@@ -175,6 +177,12 @@ class EditorViewportCompositor
     std::shared_ptr<IImage>      _sourceViewportImage     = nullptr;
     std::shared_ptr<IImageView>  _sourceViewportImageView = nullptr;
 
+    /// `.yaui` resolve cache for the scene-entries canvas preview (same
+    /// resolver rules as the runtime host / UI designer).
+    UIDocumentResolver _scenePreviewResolver;
+    /// Last reported scene-preview mount errors (dedupe: log on change only).
+    std::string        _scenePreviewErrors;
+
   public:
     void shutdown()
     {
@@ -182,11 +190,47 @@ class EditorViewportCompositor
         _sourceViewportTexture.reset();
         _sourceViewportImage.reset();
         _sourceViewportImageView.reset();
+        _scenePreviewResolver.clearCache();
+        _scenePreviewErrors.clear();
     }
 
     [[nodiscard]] std::shared_ptr<RenderImage> getOutputImage() const
     {
         return _composedViewportImage;
+    }
+
+    /// Stateless immediate-mode preview of the authoring scene's autoMount
+    /// widget entries: instances are rebuilt every frame, so hierarchy /
+    /// details / designer edits show up without any invalidation plumbing.
+    /// This tree never receives input and never shares instances with the
+    /// runtime/PIE trees.
+    [[nodiscard]] UIFrameSnapshot buildSceneEntriesPreview(Scene&           scene,
+                                                           Extent2D         logicalExtent,
+                                                           const glm::vec2& uiScale,
+                                                           const glm::vec2& offset)
+    {
+        WidgetTree  previewTree(logicalExtent);
+        std::string errors;
+        const auto  attachments =
+            mountSceneAutoMountEntries(scene, previewTree, _scenePreviewResolver,
+                                       [&errors](std::string_view message) {
+                                           errors.append(message);
+                                           errors.push_back('\n');
+                                       });
+        (void)attachments;
+        if (errors != _scenePreviewErrors) {
+            _scenePreviewErrors = std::move(errors);
+            if (!_scenePreviewErrors.empty()) {
+                YA_CORE_WARN("Editor scene UI preview mount errors:\n{}", _scenePreviewErrors);
+            }
+        }
+
+        UIFrameBuildContext ctx{
+            .uiScale         = uiScale,
+            .offset          = offset,
+            .textureResolver = &resolveGameUITexture,
+        };
+        return previewTree.buildSnapshot(ctx);
     }
 
     void compose(IRender&                      render,
@@ -211,12 +255,36 @@ class EditorViewportCompositor
             }
 
             const glm::vec2 logicalViewport = layer.getViewportSize();
-            // Game UI preview: the UI Designer's independent preview tree
-            // (never the runtime tree; PIE mounts its own instances).
-            UIFrameSnapshot          uiPreviewSnapshot;
-            const UIFrameSnapshot*   pUiPreviewSnapshot = nullptr;
+            const Extent2D  logicalExtent{
+                .width  = static_cast<uint32_t>(std::max(logicalViewport.x, 0.0f)),
+                .height = static_cast<uint32_t>(std::max(logicalViewport.y, 0.0f)),
+            };
+            // Tree-local logical px -> canvas target px: framebuffer scale
+            // (same ratio the grid uses), then canvas pan/zoom on top, so the
+            // preview stays coherent with the grid and with canvas picking
+            // (viewportToCanvas applies the inverse mapping).
+            const glm::vec2 targetScale{
+                static_cast<float>(_composedViewportImage->getExtent().width) /
+                    std::max(static_cast<float>(logicalExtent.width), 1.0f),
+                static_cast<float>(_composedViewportImage->getExtent().height) /
+                    std::max(static_cast<float>(logicalExtent.height), 1.0f),
+            };
+            const glm::vec2 uiScale = targetScale * layer.getCanvasZoom();
+            const glm::vec2 offset  = layer.getCanvasPan() * targetScale;
+
+            // Game UI preview source, in priority order:
+            //   1. the UI Designer's open document (focused authoring), or
+            //   2. the authoring scene's autoMount widget entries.
+            // Both build from independent preview trees; PIE mounts its own
+            // instances and never shares state with either.
+            UIFrameSnapshot        uiPreviewSnapshot;
+            const UIFrameSnapshot* pUiPreviewSnapshot = nullptr;
             if (layer.getUIDesignerPanel().hasDocument()) {
-                uiPreviewSnapshot  = layer.getUIDesignerPanel().buildPreviewSnapshot();
+                uiPreviewSnapshot  = layer.getUIDesignerPanel().buildPreviewSnapshot(uiScale, offset);
+                pUiPreviewSnapshot = &uiPreviewSnapshot;
+            }
+            else if (Scene* scene = layer.getViewportInteractionScene()) {
+                uiPreviewSnapshot  = buildSceneEntriesPreview(*scene, logicalExtent, uiScale, offset);
                 pUiPreviewSnapshot = &uiPreviewSnapshot;
             }
             recordRender2DComposePass(&commandBuffer,
@@ -225,10 +293,7 @@ class EditorViewportCompositor
                                       pUiPreviewSnapshot,
                                       FRender2DComposePassDesc{
                                           .kind = ERender2DComposePassKind::EditorCanvasPreview,
-                                          .logicalViewportExtent = Extent2D{
-                                              .width  = static_cast<uint32_t>(std::max(logicalViewport.x, 0.0f)),
-                                              .height = static_cast<uint32_t>(std::max(logicalViewport.y, 0.0f)),
-                                          },
+                                          .logicalViewportExtent = logicalExtent,
                                           .canvasPan  = layer.getCanvasPan(),
                                           .canvasZoom = layer.getCanvasZoom(),
                                       });
