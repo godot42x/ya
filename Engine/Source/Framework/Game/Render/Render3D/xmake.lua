@@ -24,8 +24,5 @@ target("ya-render-3d")
     -- the backend builtin texture library (GUI resources/compose are already
     -- public above: render-3d public headers expose them).
     add_deps("ya-physics", "ya-rhi-backend-common", "ya-rhi-vulkan", "ya-scene-3d", "ya-scene-core", "ya-scene-runtime")
-    -- Transition: render-3d still compiles host-layer headers (App services).
-    -- Planned decoupling: app-service interface injection (see plan.md §10).
-    ya_engine_defines()
     add_packages("glm", "entt", "nlohmann_json", { public = true })
     add_packages("cxxopts", "vulkan-memory-allocator", "glad", "lua", "sol2", "quickjs-ng", "vulkansdk", "stb")

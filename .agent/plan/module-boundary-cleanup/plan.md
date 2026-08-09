@@ -443,8 +443,9 @@ Phase 1 完成（2026-08-08），提交：
   - 遗留：Skybox/EnvironmentLighting（RHI 纹理描述符，Phase 3）、
     SkeletonAnimator（SkeletonPose 值成员，Phase 3 资源分层）。
 - [x] 需要实现类型的地方使用前置声明、内部原始头文件或 adapter cpp。
-- [ ] 取消 ECS 中 `ya_engine_defines()` 全量注入（ecs-core / gameplay-systems
-      已无；fat 模块待溶解时移除）。
+- [x] 取消模块中的 `ya_engine_defines()` 全量注入（ecs-core / gameplay-systems
+      已无；physics / render-3d 于 2026-08-09 移除；仅 `ya-engine` 聚合
+      target 保留，用于其 PCH 解析全部引擎头）。
 - [ ] ECS target 不得声明 Host、Render3D、GUI 的 public deps。
 
 > Phase 2 提前落地的 Phase 4 归属调整（2026-08-09）：
@@ -486,11 +487,15 @@ Resource 模块下沉到应用层，而是只把“何时为哪个 scene/compone
       texture import/helpers、engine AssetRef resolver；依赖
       core+loader+RHI+GUI，不出现 Scene/ECS/Host/Render3D；tier include 仅
       Game；`ya_engine_defines()` 移除；`dynamic_lookup` 仍在（Phase 7）。
-- [ ] `ya-gameplay-resource-binding`：扫描既有 component，把 AssetRef 绑定为
-      runtime CPU/resource handle；它依赖 ResourceRuntime + ECS/Scene contract，
-      不创建 scene topology，不执行 Render3D pipeline。
-- [ ] 将当前泛化的 `ResourceResolveSystem` 收缩/更名为上述 gameplay binding，
-      按资源类型拆 handler，禁止继续增加 environment/terrain/render feature 分支。
+- [x] `GameplayResourceBinding`（原 `ResourceResolveSystem`，cac6100b 更名）：
+      扫描既有 component，按资源类型拆 handler 把 AssetRef 绑定为 runtime
+      CPU/resource handle（resolvePendingMeshes/Materials/UI/Billboards）；
+      不创建 scene topology，不执行 Render3D pipeline。归属决策（2026-08-09）：
+      **保持为 `ya-render-3d` 内部 Services/**（物理位置、编译归属与
+      `YA_RENDER_3D_API` 一致，由 RenderRuntime 持有并 tick）。不再计划
+      移入 `ya-render-ecs-adapters`——那会造成 render-3d ↔ adapters 依赖环
+      （RenderRuntime 持有它 + adapters 依赖 render-3d）；除非先按 Phase 3
+      第 3 项解除 RenderRuntime 对它的持有并切断 adapters→render-3d 反向边。
 - [x] 建立低层渲染任务 contract（`OffscreenJobQueueService`，2026-08-09）：
   - contract 移入 `RHI/Core/OffscreenJob.h`（只依赖 RHI command buffer/job
     state）；`queueOffscreenJob(queueService,...)`/`cancelOffscreenJob`
@@ -564,19 +569,28 @@ Host ──composes──> binding systems + optional render features
 
 #### 4.1 Scene
 
-- [ ] `ya-scene-core` 不依赖 ECS 具体系统、Render3D 和 Host。
+- [x] `ya-scene-core` 不依赖 ECS 具体系统、Render3D 和 Host（deps 为
+      foundation/ecs-core/hierarchy/gui-scene/scene-3d/resource-runtime；
+      ecs-core 是 Scene 组织 registry 的预期依赖，见决策 14-C）。
 - [ ] `ya-scene-3d` 只增加 Node3D、Transform bridge 和 3D scene data。
-- [ ] Scene lifecycle 由 Host 注入 `ISceneServices`，不反向 include Host。
-- [ ] Scene serialization 拆成独立 target，避免 Scene core 直接依赖所有 importer。
+- [x] Scene lifecycle 由 Host 注入 `ISceneServices`/`ISceneLifecycleHost`，
+      不反向 include Host（Phase 1 完成）。
+- [x] Scene serialization 拆成独立 target（`ya-scene-serialization`），
+      避免 Scene core 直接依赖所有 importer。
 
 #### 4.2 Physics
 
-- [ ] `ya-physics` 只依赖 ECS core、Scene/Transform interface 和 Jolt。
-- [ ] 移除 `PhysicsSystem.h` 对 `Host/AppState.h` 的 include。
-- [ ] `PhysicsDebugDraw` 改为注入 line collector 或 debug draw interface。
-- [ ] Physics 不得 include `GUI/Runtime/Draw2D/Render2D.h`。
-- [ ] Render3D 侧新增 adapter，将 physics debug primitives 转换为 Render2D/world
-      overlay 输入。
+- [x] `ya-physics` 只依赖 ECS core、Scene/Transform interface 和 Jolt
+      （deps：foundation/ecs-core public + scene-core/runtime/scene-3d private；
+      `ya_engine_defines()` 已移除，2026-08-09）。
+- [x] `PhysicsSystem.h` 不再 include `Host/AppState.h`——`AppState` 已下沉
+      `Core/Common/AppState.h`（Phase 7），include 自动改为 Core。
+- [x] `PhysicsDebugDraw` 改为注入 line collector（65be4d9c）。
+- [x] Physics 不 include `GUI/Runtime/Draw2D/Render2D.h`（include 清单无
+      GUI/Render3D/Host 引用）。
+- [x] Render3D 侧 adapter 已建立：`Debug/PhysicsDebugDraw`（注入
+      `PhysicsDebugLineCollector`，把碰撞体转 wireframe overlay），由
+      EditorModule viewport 组合桥接；Physics 侧不触达 Render2D。
 
 验收：
 

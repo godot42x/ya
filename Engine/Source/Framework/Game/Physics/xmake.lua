@@ -10,7 +10,4 @@ target("ya-physics")
     add_deps("ya-scene-core", "ya-scene-runtime")
     -- PhysicsSystem consumes Node3D/TransformComponent from the scene line.
     add_deps("ya-scene-3d")
-    -- Transition: physics still compiles render/host headers (Scene, AppState).
-    -- Planned decoupling: see plan.md §10.
-    ya_engine_defines()
     add_packages("joltphysics", "glm")
