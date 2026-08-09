@@ -1002,7 +1002,9 @@ python3 Script/ya.py test --target ya --filter Physics
 - [x] 不存在 tier-wide public include root。
 - [x] 对外模块头文件均通过 `include/{模块名}/` forwarding header 暴露。
 - [x] 原始头文件和源码保持同目录，没有为构建形式机械迁移到 `src/include` 双树。
-- [x] 大模块有职责聚合头，不通过单一 `Lib.h` 无差别暴露全部符号。
+- [x] 不存在单一 `Lib.h` 无差别暴露全部符号；职责聚合头**按需提供**
+      （2026-08-09 决策：当前消费者逐文件 include，无重复聚合需求；
+      若出现真实需求再按稳定职责补，聚合头只允许连续 include 转发头）。
 - [x] ECS/Gameplay/Resource/Physics/Render3D 不使用 `dynamic_lookup`。
 - [x] 根配置不使用全局 `flat_namespace`。
 - [x] Scene lifecycle 不归 Render3D。
