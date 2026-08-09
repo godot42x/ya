@@ -38,6 +38,39 @@ if (_activeScene == scene) _activeScene.reset();
 scene.reset();
 ```
 
+## 同族变体（2026-08-10，PIE Stop 崩溃）
+
+**现象**：编辑器点 Stop（runtime stop）崩溃，栈：
+`EditorPlaySession::end -> SceneManager::destroyScene -> onSceneDestroy 广播
+-> LinkageFramework::onSceneDestroy -> LightBillboardLinkageRule::onSceneUnload
+-> disconnectScene -> entt::registry::assure -> dense_map::find -> fast_mod
+断言`（bucket_count 非 2 的幂 = 读取已释放对象）。
+
+**根因**：`destroyScene(_playScene)` 传的是 EditorPlaySession::_playScene 的
+**引用**，而播放场景已不是 active scene（end 先 activate 回 authoring），
+`_playScene` 是唯一强引用。广播期间第一个监听者
+`AppLifecycle::onSceneDestroy -> notifyModulesSceneDestroyed ->
+EditorPlaySession::onSceneDestroyed -> _playScene.reset()` 把唯一引用释放
+→ Scene 在广播中途析构 → 后续监听者（Linkage 规则断开 entt 信号）拿到
+悬垂 Scene/registry。与 2026-08-09 变体是同一类：**广播期间有人释放
+场景的最后一个强引用**。
+
+**修复**：`destroySceneIfNeeded` 在广播期间持有 keep-alive 强引用：
+
+```cpp
+const stdptr<Scene> keepAlive = scene;   // 广播期间 Scene 保证存活
+onSceneDestroyInternal(scene.get());
+if (_activeScene == scene) _activeScene.reset();
+scene.reset();                           // keepAlive 在函数尾释放
+```
+
+**护栏**：`SceneManagerLifecycleTest.DestroyBroadcastKeepsSceneAliveForLaterListeners`
+（自定义 deleter 精确断言场景不在广播中途析构；去掉 keep-alive 必失败）。
+
+**教训**：给 SceneManager 的 destroy/activate 广播加"对象存活契约"——广播
+期间管理器必须持有强引用；任何监听者在回调里 reset 外部唯一引用都会触发
+同类问题。
+
 ## 预防
 
 1. 生命周期回调必须在"最后一个强引用释放**之前**"发出；释放与通知不可交换

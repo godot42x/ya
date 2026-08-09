@@ -138,6 +138,15 @@ void SceneManager::destroySceneIfNeeded(stdptr<Scene>& scene)
         return;
     }
 
+    // The destroy contract: the Scene stays alive for the WHOLE onSceneDestroy
+    // broadcast. `scene` may be the caller's last reference (e.g. the editor
+    // play session), and a listener may drop it while the broadcast is still
+    // being delivered (EditorPlaySession clears its play scene from
+    // onSceneDestroyed). Without this keep-alive the Scene would be destroyed
+    // mid-broadcast and later listeners (linkage rules disconnecting entt
+    // signals) would dereference a freed Scene/registry.
+    const stdptr<Scene> keepAlive = scene;
+
     // Notify lifecycle listeners BEFORE releasing the last reference. When
     // `scene` aliases `_activeScene` (unloadScene path), resetting it first
     // would destroy the Scene object and leave onSceneDestroyInternal with a
@@ -147,6 +156,7 @@ void SceneManager::destroySceneIfNeeded(stdptr<Scene>& scene)
         _activeScene.reset();
     }
     scene.reset();
+    // keepAlive drops here, after every listener has run.
 }
 
 void SceneManager::onSceneInitInternal(Scene* scene)
