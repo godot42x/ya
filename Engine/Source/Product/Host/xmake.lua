@@ -13,5 +13,9 @@ target("ya-host")
     add_deps("ya-scene-core", "ya-scene-runtime")
     -- Host composes the render ECS adapters (linkage rules).
     add_deps("ya-render-ecs-adapters")
+    -- Host TUs use the Vulkan backend types directly (ImGui backend,
+    -- screenshot readback, frame loop); the include root is exposed by
+    -- ya-rhi-vulkan (backend-common no longer re-exports it).
+    add_deps("ya-rhi-vulkan")
     add_packages("libsdl3", "glm", "nlohmann_json", "cxxopts", { public = true })
     add_packages("asio", "vulkan-memory-allocator", "glad", "lua", "sol2", "quickjs-ng", "vulkansdk", "stb")

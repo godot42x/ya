@@ -7,8 +7,6 @@
 target("ya-rhi-backend-common")
     set_kind(ya_target_kind())
     ya_std_module("YA_RHI_BACKEND_API")
-    add_includedirs("./Vulkan/include", { public = true })
-    add_headerfiles("./Vulkan/include/**.h", { public = true })
     -- BuiltinTextureLibrary provides the standard white/black/checkerboard
     -- textures and samplers; it lives with the backend because it builds
     -- them through Texture::fromData (resource-factory driven).
@@ -26,6 +24,10 @@ target("ya-rhi-vulkan")
     set_kind(ya_target_kind())
     ya_std_module("YA_RHI_BACKEND_API")
     add_includedirs("./include", { public = true })
+    -- The Vulkan backend's public headers (RHI/Backend/Vulkan/*) belong to
+    -- this target, not to the platform-independent backend-common layer.
+    add_includedirs("./Vulkan/include", { public = true })
+    add_headerfiles("./Vulkan/include/**.h", { public = true })
     add_files("Render.cpp", "FrameBuffer.cpp", "RenderPass.cpp", "Swapchain.cpp")
     add_files("DescriptorSet.cpp", "Pipeline.cpp")
     add_files("Vulkan/**.cpp|Vulkan/VulkanMemoryAllocator.cpp")
