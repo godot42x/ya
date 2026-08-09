@@ -17,7 +17,6 @@
 #include "Gameplay/Systems/Components/TerrainComponent.h"
 #include "Scene3D/TransformComponent.h"
 #include "Editor/Services/NodeCreateRegistry.h"
-#include "GUI/Scene/Node2D.h"
 #include "GUI/Widgets/UIDocument.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "Hierarchy/Node.h"
@@ -67,12 +66,9 @@ void SceneHierarchyPanel::setContext(Scene* scene)
     _pendingDropTarget     = nullptr;
     _pendingNodeDuplicate.clear();
     _pendingEntityDelete.clear();
-    _pendingNodeDelete.clear();
     _lastNodeOpenState.clear();
     _pendingTreeToggle.clear();
     _searchBuffer[0] = '\0';
-    _selectedNode2D  = nullptr;
-    _pendingScrollNode2D = nullptr;
 
     if (bSelectionChanged || !_primarySelection) {
         notifyOwnerSelection();
@@ -81,7 +77,6 @@ void SceneHierarchyPanel::setContext(Scene* scene)
 
 void SceneHierarchyPanel::setSelection(Entity* entity)
 {
-    _selectedNode2D = nullptr;
     if (entity && entity->isValid()) {
         _selections       = {entity};
         _primarySelection = entity;
@@ -96,25 +91,10 @@ void SceneHierarchyPanel::setSelection(Entity* entity)
     notifyOwnerSelection();
 }
 
-void SceneHierarchyPanel::setSelectedNode2D(Node2D* node)
-{
-    _selections.clear();
-    _primarySelection = nullptr;
-    _rangeAnchor      = nullptr;
-    _selectedNode2D   = node;
-    _pendingScrollNode2D = node;
-    notifyOwnerNodeSelection();
-}
-
 void SceneHierarchyPanel::handleEntityClick(Entity* entity)
 {
     if (!entity || !entity->isValid()) {
         return;
-    }
-
-    if (_selectedNode2D) {
-        _selectedNode2D = nullptr;
-        notifyOwnerNodeSelection();
     }
 
     const bool bMulti = ImGui::GetIO().KeyCtrl || ImGui::GetIO().KeySuper;
@@ -176,13 +156,6 @@ void SceneHierarchyPanel::notifyOwnerSelection()
 {
     if (_owner) {
         _owner->setSelections(_selections, _primarySelection);
-    }
-}
-
-void SceneHierarchyPanel::notifyOwnerNodeSelection()
-{
-    if (_owner) {
-        _owner->setSelectedNode2D(_selectedNode2D);
     }
 }
 
@@ -306,9 +279,6 @@ void SceneHierarchyPanel::sceneTree()
     if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) {
         if (!ImGui::IsAnyItemHovered()) {
             replaceSelection({}, nullptr);
-            if (_selectedNode2D) {
-                setSelectedNode2D(nullptr);
-            }
             _owner->setSelectedWidgetEntryId("");
         }
     }
@@ -498,17 +468,7 @@ void SceneHierarchyPanel::drawNodeRecursive(Node* node)
 
     Entity* entity = node->getEntity();
     if (!entity) {
-        // Entity-less Node2D: node-level selection channel (no ECS entity).
-        if (auto* node2D = dynamic_cast<Node2D*>(node)) {
-            drawNode2DRecursive(node2D);
-        }
         return;
-    }
-
-    // Auto-expand ancestors of a pending Node2D scroll target so newly
-    // created UI nodes nested under collapsed parents become visible.
-    if (_pendingScrollNode2D && _pendingScrollNode2D != node && node->isAncestorOf(_pendingScrollNode2D)) {
-        ImGui::SetNextItemOpen(true, ImGuiCond_Always);
     }
 
     const bool bSearching = isSearchActive();
@@ -584,85 +544,6 @@ void SceneHierarchyPanel::drawNodeRecursive(Node* node)
     if (opened && hadChildren) {
         for (Node* child : node->getChildren()) {
             drawNodeRecursive(child);
-        }
-        ImGui::TreePop();
-    }
-}
-
-void SceneHierarchyPanel::drawNode2DRecursive(Node2D* node)
-{
-    if (!node) {
-        return;
-    }
-
-    // Auto-expand ancestors of the pending scroll target.
-    if (_pendingScrollNode2D && _pendingScrollNode2D != node && node->isAncestorOf(_pendingScrollNode2D)) {
-        ImGui::SetNextItemOpen(true, ImGuiCond_Always);
-    }
-
-    const bool bSearching = isSearchActive();
-    const bool bSelfMatch = bSearching && matchesFilter(node->getName());
-    if (bSearching && !bSelfMatch && !subtreeMatchesFilter(node)) {
-        return;
-    }
-
-    const bool bSelected    = _selectedNode2D == node;
-    const bool bHadChildren = node->hasChildren();
-
-    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
-    if (!bHadChildren) {
-        flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-    }
-    if (bSelected) {
-        flags |= ImGuiTreeNodeFlags_Selected;
-    }
-
-    if (bSearching && subtreeMatchesFilter(node)) {
-        ImGui::SetNextItemOpen(true, ImGuiCond_Always);
-    }
-
-    if (_pendingScrollNode2D == node) {
-        ImGui::SetScrollHereY(0.5f);
-        _pendingScrollNode2D = nullptr;
-    }
-
-    // Distinguish 2D rows with a small marker and a distinct text color.
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.82f, 0.65f, 1.0f));
-    const bool bOpened = ImGui::TreeNodeEx((void*)node,
-                                           flags,
-                                           "%s  [2D]",
-                                           node->getName().c_str());
-    ImGui::PopStyleColor();
-    _lastNodeOpenState[node] = bOpened;
-
-    if (ImGui::IsItemClicked()) {
-        setSelectedNode2D(node);
-    }
-    if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-        setSelectedNode2D(node);
-    }
-
-    if (ImGui::BeginDragDropSource()) {
-        Node* draggedNode = node;
-        ImGui::SetDragDropPayload(NODE_DRAG_DROP_PAYLOAD, &draggedNode, sizeof(draggedNode));
-        ImGui::TextUnformatted(node->getName().c_str());
-        ImGui::EndDragDropSource();
-    }
-
-    const ImVec2 itemMin = ImGui::GetItemRectMin();
-    const ImVec2 itemMax = ImGui::GetItemRectMax();
-    const bool   isHovered = ImGui::IsItemHovered();
-    drawNodeDropTarget(node, itemMin, itemMax, isHovered);
-    drawNode2DContextMenu(node);
-
-    if (bOpened && bHadChildren) {
-        for (Node* child : node->getChildren()) {
-            if (auto* child2D = dynamic_cast<Node2D*>(child)) {
-                drawNode2DRecursive(child2D);
-            }
-            else {
-                drawNodeRecursive(child);
-            }
         }
         ImGui::TreePop();
     }
@@ -760,28 +641,10 @@ void SceneHierarchyPanel::drawCreateMenuItems(Node* parentNode)
                 if (Entity* newEntity = newNode->getEntity()) {
                     setSelection(newEntity);
                 }
-                else if (auto* node2D = dynamic_cast<Node2D*>(newNode)) {
-                    setSelectedNode2D(node2D);
-                }
             }
         }
     }
     if (bInMenu) {
-        ImGui::EndMenu();
-    }
-
-    // Node2D entries auto-collected from the reflection registry.
-    const auto uiEntries = createRegistry.uiEntries();
-    if (!uiEntries.empty() && ImGui::BeginMenu("Create 2D")) {
-        for (const auto& entry : uiEntries) {
-            if (ImGui::MenuItem(entry.displayName.c_str())) {
-                if (Node* newNode = entry.factory(*_context, entry.displayName, parentNode)) {
-                    if (auto* node2D = dynamic_cast<Node2D*>(newNode)) {
-                        setSelectedNode2D(node2D);
-                    }
-                }
-            }
-        }
         ImGui::EndMenu();
     }
 }
@@ -790,21 +653,6 @@ void SceneHierarchyPanel::drawEntityNodeContextMenu(Node* node, Entity* entity)
 {
     (void)node;
     ContextMenu ctx("NodeContextMenu##" + std::to_string(entity->getId()), ContextMenu::Type::EntityItem);
-    if (ctx.begin()) {
-        if (ctx.menuItem("Duplicate")) {
-            duplicateSelection();
-        }
-        ctx.separator();
-        if (ctx.menuItem("Delete")) {
-            deleteSelection();
-        }
-        ctx.end();
-    }
-}
-
-void SceneHierarchyPanel::drawNode2DContextMenu(Node2D* node)
-{
-    ContextMenu ctx("Node2DContextMenu##" + std::to_string(reinterpret_cast<uintptr_t>(node)), ContextMenu::Type::EntityItem);
     if (ctx.begin()) {
         if (ctx.menuItem("Duplicate")) {
             duplicateSelection();
@@ -868,9 +716,6 @@ void SceneHierarchyPanel::drawFlatEntity(Entity& entity)
 
 Node* SceneHierarchyPanel::getSelectedNode() const
 {
-    if (_selectedNode2D) {
-        return _selectedNode2D;
-    }
     if (!_context || !_primarySelection) {
         return nullptr;
     }
@@ -968,31 +813,20 @@ bool SceneHierarchyPanel::moveNode(Node* draggedNode, Node* targetNode, ENodeDro
 void SceneHierarchyPanel::duplicateSelection()
 {
     _pendingNodeDuplicate.clear();
-    if (_selectedNode2D) {
-        _pendingNodeDuplicate.push_back(_selectedNode2D);
-    }
-    else {
-        for (Entity* entity : _selections) {
-            if (!entity || !entity->isValid()) {
-                continue;
-            }
-            if (Node* node = _context->getNodeByEntity(entity)) {
-                _pendingNodeDuplicate.push_back(node);
-            }
+    for (Entity* entity : _selections) {
+        if (!entity || !entity->isValid()) {
+            continue;
+        }
+        if (Node* node = _context->getNodeByEntity(entity)) {
+            _pendingNodeDuplicate.push_back(node);
         }
     }
 }
 
 void SceneHierarchyPanel::deleteSelection()
 {
-    if (_selectedNode2D) {
-        _pendingNodeDelete.push_back(_selectedNode2D);
-        setSelectedNode2D(nullptr);
-    }
-    else {
-        _pendingEntityDelete = _selections;
-        replaceSelection({}, nullptr);
-    }
+    _pendingEntityDelete = _selections;
+    replaceSelection({}, nullptr);
 }
 
 void SceneHierarchyPanel::flushPendingActions()
@@ -1001,7 +835,6 @@ void SceneHierarchyPanel::flushPendingActions()
     // parent's child list is being iterated during tree rendering.
     if (!_pendingNodeDuplicate.empty()) {
         std::vector<Entity*> duplicated;
-        Node2D*              duplicatedNode2D = nullptr;
         for (Node* node : _pendingNodeDuplicate) {
             if (!node) {
                 continue;
@@ -1011,16 +844,10 @@ void SceneHierarchyPanel::flushPendingActions()
                 if (Entity* newEntity = newNode->getEntity()) {
                     duplicated.push_back(newEntity);
                 }
-                else if (auto* node2D = dynamic_cast<Node2D*>(newNode)) {
-                    duplicatedNode2D = node2D;
-                }
             }
         }
         _pendingNodeDuplicate.clear();
-        if (duplicatedNode2D) {
-            setSelectedNode2D(duplicatedNode2D);
-        }
-        else if (!duplicated.empty()) {
+        if (!duplicated.empty()) {
             replaceSelection(duplicated, duplicated.front());
         }
     }
@@ -1037,16 +864,6 @@ void SceneHierarchyPanel::flushPendingActions()
         _pendingEntityDelete.clear();
     }
 
-    // Batch node (Node2D) delete: deferred for the same tree-iteration safety.
-    if (!_pendingNodeDelete.empty()) {
-        for (Node* node : _pendingNodeDelete) {
-            if (!node || node->getEntity()) {
-                continue; // entity-backed nodes go through destroyEntity
-            }
-            _context->destroyNode(node);
-        }
-        _pendingNodeDelete.clear();
-    }
 }
 
 const std::string& SceneHierarchyPanel::getNodeName(Node* node) const

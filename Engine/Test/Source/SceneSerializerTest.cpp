@@ -4,7 +4,6 @@
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Entity.h"
-#include "GUI/Scene/Node2D.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/SceneWidgetEntry.h"
 #include <gtest/gtest.h>
@@ -179,39 +178,38 @@ TEST(SceneSerializerTest, MaterialComponentBaseClassSerializedWithBaseBlock)
 }
 
 // ============================================================================
-// Node2D (UI) nodes are entity-less and live in the same scene tree as Node3D
-// entities. They serialize as nodeType + reflected fields + children, and must
-// survive both a scene round trip and the PIE clone path.
-// ============================================================================
-
-// ============================================================================
 // Game UI migration (ui-widget-tree-refactor Phase 2b): the serializer now
 // stores Game UI as widgetEntries (inline UIDocuments) instead of Node2D
-// scene-tree subtrees. Live Node2D (code-created UI) migrates to entries on
-// save; legacy nodeType data migrates to entries on load.
+// scene-tree subtrees. Legacy nodeType data migrates to entries on load.
 // ============================================================================
 
-TEST(SceneSerializerTest, CodeCreatedUIMigratesToWidgetEntriesOnSave)
+TEST(SceneSerializerTest, EntriesAndWorldTreeRoundtrip)
 {
     ensureReflectionReady();
 
     Scene scene("UIScene");
-    auto* canvas = scene.createUINode<UICanvasNode>("Canvas");
-    ASSERT_NE(canvas, nullptr);
-
-    auto* text = scene.createUINode<UITextNode>("Title", canvas);
-    ASSERT_NE(text, nullptr);
-    text->_position = {10.0f, 20.0f};
-    text->_zOrder   = 3;
-    text->_text     = "Hello UI";
-    text->_fontSize = 24;
-    text->_color    = {1.0f, 0.0f, 0.0f, 1.0f};
-    text->_hAlign   = EUIAlignH::Center;
-
-    auto* button = scene.createUINode<UIButtonNode>("OK", canvas);
-    ASSERT_NE(button, nullptr);
-    button->_position = {100.0f, 200.0f};
-    button->_size     = {80.0f, 32.0f};
+    scene.addWidgetEntry(SceneWidgetEntry{
+        .entryId        = "Title",
+        .inlineDocument = std::make_shared<UIDocument>(UIDocument{
+            .typeId = "engine.text",
+            .fields = nlohmann::json{
+                {"_text", "Hello UI"},
+                {"_fontSize", 24},
+                {"__base__", nlohmann::json{{"UIElement", nlohmann::json{{"_position", {10.0, 20.0}}, {"_zOrder", 3}}}}},
+            },
+        }),
+        .zOrder   = 3,
+        .autoMount = true,
+    });
+    scene.addWidgetEntry(SceneWidgetEntry{
+        .entryId        = "OK",
+        .inlineDocument = std::make_shared<UIDocument>(UIDocument{
+            .typeId = "engine.button",
+            .fields = nlohmann::json{
+                {"__base__", nlohmann::json{{"UIElement", nlohmann::json{{"_hitFilter", "Stop"}, {"_size", {80.0, 32.0}}}}}},
+            },
+        }),
+    });
 
     // A 3D entity sibling to verify mixed-tree serialization.
     auto* cube = scene.createNode3D("Cube", scene.getRootNode());
@@ -220,15 +218,14 @@ TEST(SceneSerializerTest, CodeCreatedUIMigratesToWidgetEntriesOnSave)
     SceneSerializer serializer(&scene);
     const nlohmann::json json = serializer.serialize();
 
-    // The world tree serializes without UI nodes: the canvas subtree was
-    // captured into widgetEntries.
+    // The world tree serializes without UI nodes.
     ASSERT_TRUE(json.contains("nodeTree"));
     const auto& children = json["nodeTree"]["children"];
     ASSERT_EQ(children.size(), 1);
     EXPECT_TRUE(children[0].contains("entityRef"));
     EXPECT_EQ(children[0]["name"], "Cube");
 
-    // Game UI became two entries (the canvas is the content layer).
+    // Entries serialize with their inline documents.
     ASSERT_TRUE(json.contains("widgetEntries"));
     const auto& entries = json["widgetEntries"];
     ASSERT_EQ(entries.size(), 2);
@@ -260,8 +257,7 @@ TEST(SceneSerializerTest, CodeCreatedUIMigratesToWidgetEntriesOnSave)
     SceneSerializer loadedSerializer(&loadedScene);
     loadedSerializer.deserialize(json);
 
-    // No live Node2D is recreated from the file; entries carry the authoring
-    // data, the world tree keeps only the 3D node.
+    // Entries carry the authoring data; the world tree keeps only the 3D node.
     Node* loadedRoot = loadedScene.getRootNode();
     ASSERT_NE(loadedRoot, nullptr);
     ASSERT_EQ(loadedRoot->getChildCount(), 1u);
@@ -288,7 +284,7 @@ TEST(SceneSerializerTest, CodeCreatedUIMigratesToWidgetEntriesOnSave)
     EXPECT_EQ(loadedOkEntry->inlineDocument->typeId, "engine.button");
 }
 
-TEST(SceneSerializerTest, ExistingEntriesDoNotDuplicateLiveUINodesOnSave)
+TEST(SceneSerializerTest, SceneSaveWritesEntriesOnly)
 {
     ensureReflectionReady();
 
@@ -299,32 +295,28 @@ TEST(SceneSerializerTest, ExistingEntriesDoNotDuplicateLiveUINodesOnSave)
         .inlineDocument = std::make_shared<UIDocument>(UIDocument{.typeId = "engine.text"}),
         .autoMount      = true,
     });
-    // Plus legacy runtime UI created in code.
-    auto* canvas = scene.createUINode<UICanvasNode>("Canvas");
-    ASSERT_NE(canvas, nullptr);
-    auto* button = scene.createUINode<UIButtonNode>("OK", canvas);
-    ASSERT_NE(button, nullptr);
+    auto* world = scene.createNode3D("World", scene.getRootNode());
+    ASSERT_NE(world, nullptr);
 
     SceneSerializer serializer(&scene);
     const nlohmann::json json = serializer.serialize();
 
-    // Only the authored entry is written; the live nodes are runtime-only and
-    // must not be migrated again (a save/load cycle would otherwise duplicate
-    // UI on every editor save).
+    // Only the authored entry is written; the world tree has no UI.
     ASSERT_TRUE(json.contains("widgetEntries"));
     ASSERT_EQ(json["widgetEntries"].size(), 1u);
     EXPECT_EQ(json["widgetEntries"][0]["entryId"], "HUD");
     EXPECT_EQ(json["widgetEntries"][0]["inline"]["typeId"], "engine.text");
+    ASSERT_TRUE(json.contains("nodeTree"));
+    ASSERT_EQ(json["nodeTree"]["children"].size(), 1u);
+    EXPECT_EQ(json["nodeTree"]["children"][0]["name"], "World");
 }
 
-TEST(SceneSerializerTest, UINodeTreeSurvivesClone)
+TEST(SceneSerializerTest, WidgetEntriesSurviveClone)
 {
     ensureReflectionReady();
 
     Scene scene("CloneUIScene");
-    // Scene-authored entries (new format) + legacy code-created Node2D: the
-    // clone copies the authoring recipe; the legacy tree path is unchanged
-    // until the runtime switches to WidgetTree (Phase 3).
+    // Scene-authored entries: the clone copies the authoring recipe.
     scene.addWidgetEntry(SceneWidgetEntry{
         .entryId        = "HUD",
         .inlineDocument = std::make_shared<UIDocument>(UIDocument{
@@ -344,15 +336,6 @@ TEST(SceneSerializerTest, UINodeTreeSurvivesClone)
         .autoMount = true,
     });
 
-    auto* canvas = scene.createUINode<UICanvasNode>("HUD");
-    ASSERT_NE(canvas, nullptr);
-
-    auto* button = scene.createUINode<UIButtonNode>("Start", canvas);
-    ASSERT_NE(button, nullptr);
-    button->_position = {50.0f, 60.0f};
-    button->_size     = {120.0f, 40.0f};
-    button->_zOrder   = 5;
-
     auto* world = scene.createNode3D("World", scene.getRootNode());
     ASSERT_NE(world, nullptr);
 
@@ -368,30 +351,9 @@ TEST(SceneSerializerTest, UINodeTreeSurvivesClone)
     EXPECT_EQ(clonedEntry.zOrder, 5);
     EXPECT_EQ(clonedEntry.inlineDocument->fields["__base__"]["UIElement"]["_position"][0], 50.0);
 
-    // Legacy runtime UI tree still clones (removed when Phase 3 switches the
-    // runtime fact source).
     Node* clonedRoot = cloned->getRootNode();
     ASSERT_NE(clonedRoot, nullptr);
-    ASSERT_EQ(clonedRoot->getChildCount(), 2u); // HUD + World
-
-    Node2D* clonedCanvas = nullptr;
-    for (Node* child : clonedRoot->getChildren()) {
-        if (!child->getEntity()) {
-            clonedCanvas = dynamic_cast<Node2D*>(child);
-            break;
-        }
-    }
-    ASSERT_NE(clonedCanvas, nullptr);
-    EXPECT_EQ(clonedCanvas->getName(), "HUD");
-    ASSERT_EQ(clonedCanvas->getChildCount(), 1u);
-
-    auto* clonedButton = dynamic_cast<UIButtonNode*>(clonedCanvas->getChild(0));
-    ASSERT_NE(clonedButton, nullptr);
-    EXPECT_EQ(clonedButton->_position.x, 50.0f);
-    EXPECT_EQ(clonedButton->_position.y, 60.0f);
-    EXPECT_EQ(clonedButton->_size.x, 120.0f);
-    EXPECT_EQ(clonedButton->_zOrder, 5);
-    EXPECT_EQ(clonedButton->getName(), "Start");
+    ASSERT_EQ(clonedRoot->getChildCount(), 1u); // World only
 }
 
 // ============================================================================

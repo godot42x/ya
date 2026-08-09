@@ -187,35 +187,9 @@ Node3D *Scene::createNode3D(const std::string &name, Node *parent, Entity *entit
     return static_cast<Node3D *>(_nodeMap[entity->getHandle()].get());
 }
 
-Node2D *Scene::createUINode(const std::string &typeName, const std::string &name, Node *parent)
-{
-    auto node = createNode2DByTypeName(typeName, name);
-    if (!node) {
-        YA_CORE_WARN("Scene: unknown UI node type '{}'", typeName);
-        return nullptr;
-    }
-    _entityLessNodes.push_back(node);
-    if (parent) {
-        parent->addChild(node.get());
-    }
-    else {
-        addToScene(node.get());
-    }
-    return node.get();
-}
-
 void Scene::destroyNode(Node *node)
 {
     if (!node) {
-        return;
-    }
-
-    if (!node->getEntity()) {
-        // Entity-less Node2D: detach and drop ownership. Children stay in the
-        // tree as individually-owned nodes (same semantics as entity deletion).
-        node->removeFromParent();
-        std::erase_if(_entityLessNodes,
-                      [node](const std::shared_ptr<Node2D> &owner) { return owner.get() == node; });
         return;
     }
 
@@ -315,7 +289,6 @@ void Scene::clear()
 
     _entityMap.clear();
     _nodeMap.clear();
-    _entityLessNodes.clear();
     _widgetEntries.clear();
     _rootNode.reset();
     _registry.clear();
@@ -414,19 +387,6 @@ static Node *cloneReferencedNodeTree(Node *srcNode, Scene *dstScene, Node *dstPa
 
     if (shouldSkipClonedNode(srcNode, srcRegistry)) {
         return nullptr;
-    }
-
-    if (const auto *src2D = dynamic_cast<const Node2D *>(srcNode)) {
-        Node2D *dst2D = dstScene->createUINode(src2D->getUITypeName(), srcNode->getName(), dstParent);
-        if (!dst2D) {
-            YA_CORE_WARN("Node '{}' failed to clone UI node of type '{}'", srcNode->getName(), src2D->getUITypeName());
-            return nullptr;
-        }
-        dst2D->deserializeFields(src2D->serializeFields());
-        for (Node *child : srcNode->getChildren()) {
-            cloneReferencedNodeTree(child, dstScene, dst2D, srcRegistry, dstEntityMap);
-        }
-        return dst2D;
     }
 
     Entity *dstEntity = nullptr;
@@ -539,19 +499,6 @@ stdptr<Scene> Scene::cloneSceneByReflection(const Scene *scene)
 Node *Scene::duplicateNode(Node *node, Node *parent)
 {
     if (!node) {
-        return nullptr;
-    }
-
-    // Entity-less Node2D: recreate by type and deep-copy the reflected fields.
-    if (!node->getEntity()) {
-        if (auto* node2D = dynamic_cast<Node2D*>(node)) {
-            if (Node2D* copy = createUINode(node2D->getUITypeName(),
-                                            node2D->getName() + " Duplicate",
-                                            parent)) {
-                copy->deserializeFields(node2D->serializeFields());
-                return copy;
-            }
-        }
         return nullptr;
     }
 

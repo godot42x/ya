@@ -1,7 +1,6 @@
 #include "Editor/Input/EditorInputNode.h"
 
 #include "Editor/EditorLayer.h"
-#include "GUI/Scene/UISceneRenderer.h"
 #include "Host/App.h"
 #include "Host/GUI/GuiSystem.h"
 
@@ -162,10 +161,10 @@ FInputReply routeGameUIInput(App& app, EditorLayer& layer, const FInputEvent& ev
         return {};
     }
 
-    // Game UI (Node2D) picking runs before gameplay: an exclusive Stop hit
-    // keeps the event away from the game (mode semantics live in App).
-    const EUIRouteResult result = app.dispatchUIInputEvent(event);
-    if (result == EUIRouteResult::NotHandled) {
+    // Game UI picking runs before gameplay: an exclusive Stop hit keeps the
+    // event away from the game (mode semantics live in App).
+    const EWidgetRouteResult result = app.dispatchUIInputEvent(event);
+    if (result == EWidgetRouteResult::NotHandled) {
         return {};
     }
     return FInputReply{.handled = true};

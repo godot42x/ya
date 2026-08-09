@@ -38,14 +38,12 @@ struct App;
 struct IImageView;
 struct IImage;
 struct RenderImage;
-struct Node2D;
-
 using EditorViewportContext      = RenderViewportSnapshot;
 using EditorViewportDebugCatalog = RenderViewportDebugCatalog;
 
 /// Editor viewport viewing mode (development-time only; the game always
-/// renders 3D + 2D together). Mode2D previews the Node2D canvas over a grid,
-/// hiding the 3D world - Godot-style 2D/3D separation.
+/// renders 3D + 2D together). Mode2D previews the Game UI designer canvas
+/// over a grid, hiding the 3D world.
 enum class EViewportMode : uint8_t
 {
     Mode3D = 0,
@@ -60,7 +58,6 @@ struct EditorLayer
     App*                 _app                = nullptr;
     uint64_t             _selectedEntityUUID = 0;
     std::vector<Entity*> _selections;
-    Node2D*              _selectedNode2D = nullptr; // Mutually exclusive with _selections
     std::string          _selectedWidgetEntryId;    // Mutually exclusive with the above
 
     // Editor panels
@@ -200,26 +197,11 @@ struct EditorLayer
         _sceneHierarchyPanel.setSelection(entity);
     }
 
-    /// Node-level selection (entity-less Node2D); clears entity selection.
-    void setSelectedNode2D(Node2D* node)
-    {
-        _selectedNode2D = node;
-        if (node) {
-            _selectedWidgetEntryId.clear();
-            _selections.clear();
-            _selectedEntityUUID = 0;
-            if (isViewportMode2D() == false) {
-                setViewportMode(EViewportMode::Mode2D, /*bPersist=*/false);
-            }
-        }
-    }
-    [[nodiscard]] Node2D* getSelectedNode2D() const { return _selectedNode2D; }
-    /// Select a SceneWidgetEntry (clears entity/Node2D selections).
+    /// Select a SceneWidgetEntry (clears entity selection).
     void setSelectedWidgetEntryId(const std::string& entryId)
     {
         _selectedWidgetEntryId = entryId;
         if (!entryId.empty()) {
-            _selectedNode2D = nullptr;
             _selections.clear();
             _selectedEntityUUID = 0;
         }
@@ -239,7 +221,6 @@ struct EditorLayer
     /// so existing single-selection consumers (gizmo, details, focus) keep working.
     void setSelections(const std::vector<Entity*>& selections, Entity* primary = nullptr)
     {
-        _selectedNode2D = nullptr;
         _selectedWidgetEntryId.clear();
         _selections.clear();
         for (Entity* entity : selections) {
@@ -407,7 +388,7 @@ struct EditorLayer
     void removeImGuiTexture(const ImGuiImageEntry* entry);
     void renderGizmo();
     void pickEntity(float viewportX, float viewportY);
-    /// 2D mode picking: hit-test the Node2D tree under the canvas transform.
+    /// 2D mode picking: hit-test the UI Designer preview tree (canvas coords).
     void pickNode2D(float viewportX, float viewportY);
     /// Frame the camera on the merged world bounds of the whole selection.
     void focusCameraOnSelection();

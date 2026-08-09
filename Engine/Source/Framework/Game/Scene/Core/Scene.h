@@ -10,7 +10,6 @@
 #include "ECS/ComponentMutation.h"
 #include "ECS/Entity.h"
 #include "Hierarchy/Node.h"
-#include "GUI/Scene/Node2D.h"
 #include "GUI/Widgets/SceneWidgetEntry.h"
 #include "Scene/Core/ISceneLifecycleHost.h"
 #include "Scene3D/Node3D.h"
@@ -44,7 +43,6 @@ struct YA_SCENE_CORE_API [[refl]] Scene
 
     std::unordered_map<entt::entity, Entity>                _entityMap;
     std::unordered_map<entt::entity, std::shared_ptr<Node>> _nodeMap; // Entity -> Node mapping
-    std::vector<std::shared_ptr<Node2D>>                    _entityLessNodes; // Owns Node2D (entity-less) UI nodes
     std::shared_ptr<Node>                                   _rootNode = nullptr;
 
     /// Top-level Game UI authoring entries (new format; the runtime instantiates
@@ -67,26 +65,6 @@ struct YA_SCENE_CORE_API [[refl]] Scene
     // === Public Node API (Application Layer) ===
     Node*   createNode(const std::string& name = "Entity", Node* parent = nullptr, Entity* entity = nullptr);
     Node3D* createNode3D(const std::string& name = "Entity", Node* parent = nullptr, Entity* entity = nullptr);
-
-    /// Create a typed Node2D (UI) node and attach it to the tree. Entity-less:
-    /// ownership is held by `_entityLessNodes`, not the ECS registry.
-    template <typename T>
-        requires std::derived_from<T, Node2D>
-    T* createUINode(const std::string& name = "Node2D", Node* parent = nullptr)
-    {
-        auto node = makeShared<T>(name);
-        _entityLessNodes.push_back(node);
-        if (parent) {
-            parent->addChild(node.get());
-        }
-        else {
-            addToScene(node.get());
-        }
-        return node.get();
-    }
-
-    /// Create a Node2D by UI type name (scene deserialization / PIE clone).
-    Node2D* createUINode(const std::string& typeName, const std::string& name, Node* parent = nullptr);
 
     // === Game UI authoring entries (SceneWidgetEntry) ===
     void addWidgetEntry(SceneWidgetEntry entry);

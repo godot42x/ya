@@ -807,17 +807,17 @@ shared/monolith：
 
 目标：在新事实源稳定后清除双语义。
 
-- [ ] `ya-gui-scene` 迁移为 `ya-gui-widgets`；
-- [ ] `Runtime/Scene` 迁移为 `Runtime/Widgets`；
-- [ ] 公共类型移除 Node2D/Scene 命名；
-- [ ] 增加 `include/GUI/Widgets/` 转发头；
-- [ ] 更新所有跨模块 include 和 `add_deps`；
-- [ ] 收敛 public deps；
-- [ ] 删除 UISceneRenderer live Scene traversal；
-- [ ] 删除新代码不再使用的 UI Node2D serialization/runtime 分支；
-- [ ] 更新 GUI minimal host，证明无 Scene/Host/Render3D 也可创建 WidgetTree；
-- [ ] shared/monolith × engine/gui matrix 验证；
-- [ ] 将稳定语义沉淀到相关 skill，plan 仅保留阶段记录。
+- [x] `ya-gui-scene` 迁移为 `ya-gui-widgets`（旧模块删除，功能并入 widgets）；
+- [x] `Runtime/Scene` 迁移为 `Runtime/Widgets`；
+- [x] 公共类型移除 Node2D/Scene 命名（`EUIRouteResult` → `EWidgetRouteResult`）；
+- [x] 增加 `include/GUI/Widgets/` 转发头；
+- [x] 更新所有跨模块 include 和 `add_deps`；
+- [x] 收敛 public deps；
+- [x] 删除 UISceneRenderer live Scene traversal；
+- [x] 删除新代码不再使用的 UI Node2D serialization/runtime 分支；
+- [x] 更新 GUI minimal host，证明无 Scene/Host/Render3D 也可创建 WidgetTree；
+- [x] shared/monolith × engine/gui matrix 验证；
+- [x] 将稳定语义沉淀到相关 skill，plan 仅保留阶段记录。
 
 验收：
 
@@ -1192,3 +1192,35 @@ Phase 3（GameUIHost/input）与 Phase 4（snapshot 渲染）合并落地，避�
 - **未落地的护栏**：UI 类型 module unload 前关闭 preview 实例——registry
   live-instance guard 已拒绝带活实例的 endModule（错误+失败）；编辑器目前
   无模块卸载路径，卸载钩子随 Editor 模块系统落地。
+
+### Phase 6（完成：2026-08-10；旧路径清理）
+
+- **删除 `ya-gui-scene`**：`Runtime/Scene/`（Node2D/UIBase/UISceneRenderer）
+  整体移除；`ya-gui-framework` 聚合、scene-core/serialization/hierarchy/
+  host xmake deps、lint MODULES/FORBIDDEN 全部更新。
+- **Scene**：`createUINode`/`_entityLessNodes`/Node2D clone 分支删除；
+  `Node::is2D` 删除。
+- **SceneSerializer**：保存侧 live-Node2D 迁移删除（entries 是唯一 authoring
+  事实源）；加载侧旧 `nodeType` importer 保留（migration fixture 路径）；
+  nodeTree 只含世界节点。
+- **Host**：`App::dispatchUIInputEvent` 返回类型改名
+  `EUIRouteResult` → `EWidgetRouteResult`（与 widgets 统一）；Script API
+  `node.create/set/types` 及 Node2D 分支删除（`ui.*` 为唯一 UI 入口）。
+- **Editor**：SceneHierarchyPanel 的 Node2D 行/选择/创建菜单删除；
+  DetailsView `drawNode2D` 删除；2D canvas picking 改为命中 UI Designer
+  preview 树（`WidgetTree::pickAt`）；`scene.create_preset` 的 Node2D
+  fallback 删除；NodeCreateRegistry `uiEntries` 删除。
+- **minimal host**：新增 WidgetTree 段（无 Scene/Host/Render3D 建树 +
+  buildSnapshot），运行输出 "WidgetTree snapshot: N draw items" 证明独立闭包。
+- **测试**：删除 Node2DLayout/UISceneRenderer/Node2DFactory 三个旧测试文件；
+  SceneSerializerTest 改写为 entries roundtrip/clone/保存-only 断言；
+  importer fixture 测试保留。
+- **验收核对**：`rg "UISceneRenderer|uiSceneRoot|UIPanelNode|UIButtonNode|
+  UITextNode|UICanvasNode|createUINode|_entityLessNodes"` 在 Engine/Source
+  与 Example 只剩 LegacyUIMigration 字符串常量（migration fixture）；
+  widgets 公共头只 include foundation/GUI 内部头；`ya_module_lint` 通过。
+- **验证**：`ya-testing` 380 例、closure 46 例、widgets 40 例全过；
+  engine/gui × shared/monolith 矩阵构建通过；HelloMaterial 运行时截图
+  HUD 像素与基线一致；编辑器运行时冒烟无错误。
+- **skill**：render-arch 增加 Game UI WidgetTree/snapshot 稳定语义
+  （§当前架构要点 8-10）。

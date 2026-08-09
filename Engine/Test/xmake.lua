@@ -89,8 +89,6 @@ end
 target("ya-gui-closure-test")
 do
     set_kind("binary")
-    add_files("./Source/Node2DLayoutTest.cpp")
-    add_files("./Source/UISceneRendererTest.cpp")
     add_files("./Source/Render2DClipTest.cpp")
     add_files("./Source/WidgetTreeTest.cpp")
     add_files("./Source/UIDocumentTest.cpp")

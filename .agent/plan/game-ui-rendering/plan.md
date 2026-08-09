@@ -1,6 +1,16 @@
-# 游戏内 UI / 2D 渲染计划（Godot 风格统一 Scene Tree）
+# 游戏内 UI / 2D 渲染计划（Godot 风格统一 Scene Tree，已被取代）
 
-> 状态：2026-08-07 建立；当日两次修订（用户决策）：
+> **状态：已被
+> [`../ui-widget-tree-refactor/plan.md`](../ui-widget-tree-refactor/plan.md)
+> 取代（2026-08-09）。**
+>
+> 本文件保留为历史决策记录，不再作为 Game UI 的执行依据。原路线把 Node2D
+> 与 Node3D 放在统一 Scene Tree，并在渲染/输入阶段扫描 active Scene root；
+> 新路线改为独立 WidgetTree、SceneWidgetEntry authoring recipe 和 immutable
+> UIFrameSnapshot。真正的 world-space 2D Node 可在未来单独规划，不再与 Game UI
+> 共用 Node2D 语义。
+>
+> 历史状态：2026-08-07 建立；当日两次修订（用户决策）：
 > 1. UI 不接入 ECS（独立于组件系统）。
 > 2. 采用 Godot 风格：**一棵统一 scene tree 混合 2D 与 3D 节点**，不做平行的
 >    UI 树，也不做 UI 组件树。

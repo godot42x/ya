@@ -6,7 +6,6 @@
 #include "ECS/Component.h"
 #include "ECS/Entity.h"
 #include "Host/App.h"
-#include "GUI/Scene/Node2D.h"
 #include "GUI/Widgets/SceneWidgetEntry.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/WidgetTree.h"
@@ -119,11 +118,7 @@ Json nodeToJson(const Scene& scene, const Node* node)
         {"name", node->getName()},
     };
 
-    if (const auto* node2D = dynamic_cast<const Node2D*>(node)) {
-        entry["type"]   = node2D->getUITypeName();
-        entry["fields"] = node2D->serializeFields();
-    }
-    else if (const Entity* entity = node->getEntity()) {
+    if (const Entity* entity = node->getEntity()) {
         entry["type"]      = "Node3D";
         entry["entity_id"] = static_cast<uint32_t>(entity->getHandle());
     }
@@ -162,7 +157,7 @@ bool setFieldDeep(Json& root, const std::string& key, const Json& value)
             return true;
         }
         for (auto& [childKey, childValue] : root.items()) {
-            if (childKey == "__base__" || childKey == "Node2D" || childValue.is_object()) {
+            if (childKey == "__base__" || childValue.is_object()) {
                 if (setFieldDeep(childValue, key, value)) {
                     return true;
                 }
@@ -377,23 +372,13 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
         });
 
     // ========================================================================
-    // Scene tree / Node2D (unified node tree, path-addressed)
+    // Scene tree (world nodes, path-addressed). Game UI authoring uses the
+    // ui.* service (WidgetTree); the legacy Node2D UI paths were removed.
     // ========================================================================
-    registry.registerFunction(
-        "node.types",
-        "Lists every creatable Node2D type (auto-collected from reflection).",
-        Json::object(),
-        [](const Json&) -> Json {
-            Json types = Json::array();
-            for (const std::string& name : getRegisteredUINodeTypeNames()) {
-                types.push_back(name);
-            }
-            return types;
-        });
 
     registry.registerFunction(
         "node.list",
-        "Lists the unified scene tree: [{path, name, type, entity_id?, fields?, children?}].",
+        "Lists the world scene tree: [{path, name, type, entity_id?, children?}].",
         Json::object(),
         [](const Json&) -> Json {
             Scene& scene = requireActiveScene();
@@ -406,56 +391,11 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
 
     registry.registerFunction(
         "node.get",
-        "Returns one scene-tree node by slash path, e.g. /HUD/Panel.",
+        "Returns one scene-tree node by slash path, e.g. /Root/Cube.",
         Json{{"path", {{"type", "string"}}}},
         [](const Json& args) -> Json {
             Scene& scene = requireActiveScene();
             return nodeToJson(scene, requireNodeByPath(scene, args));
-        });
-
-    registry.registerFunction(
-        "node.create",
-        "Creates a Node2D node. Args: {type, name?, parent_path?}. Types come from node.types.",
-        Json{{"type", {{"type", "string"}}},
-             {"name", {{"type", "string"}}},
-             {"parent_path", {{"type", "string"}}}},
-        [](const Json& args) -> Json {
-            Scene&       scene    = requireActiveScene();
-            const auto   typeName = args.at("type").get<std::string>();
-            const auto   name     = args.value("name", typeName);
-            Node*        parent   = nullptr;
-            if (const auto it = args.find("parent_path"); it != args.end() && !it->is_null()) {
-                parent = scene.findNodeByPath(it->get<std::string>());
-                if (!parent) {
-                    throw Error(std::format("parent_path not found: {}", it->get<std::string>()));
-                }
-            }
-            Node2D* node = scene.createUINode(typeName, name, parent);
-            if (!node) {
-                throw Error(std::format("unknown Node2D type '{}' (see node.types)", typeName));
-            }
-            return Json{{"path", scene.getNodePath(node)}, {"name", node->getName()}};
-        });
-
-    registry.registerFunction(
-        "node.set",
-        "Updates reflected fields of a Node2D node. Args: {path, fields:{name: value}}.",
-        Json{{"path", {{"type", "string"}}}, {"fields", {{"type", "object"}}}},
-        [](const Json& args) -> Json {
-            Scene& scene = requireActiveScene();
-            Node*  node  = requireNodeByPath(scene, args);
-            auto*  node2D = dynamic_cast<Node2D*>(node);
-            if (!node2D) {
-                throw Error("node.set only supports Node2D nodes");
-            }
-            Json merged = node2D->serializeFields();
-            for (const auto& [key, value] : args.at("fields").items()) {
-                if (!setFieldDeep(merged, key, value)) {
-                    throw Error(std::format("unknown Node2D field '{}'", key));
-                }
-            }
-            node2D->deserializeFields(merged);
-            return nodeToJson(scene, node);
         });
 
     registry.registerFunction(
@@ -511,7 +451,7 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
 
     registry.registerFunction(
         "node.destroy",
-        "Destroys a scene-tree node by path (Node2D or entity-backed).",
+        "Destroys a scene-tree node by path (entity-backed).",
         Json{{"path", {{"type", "string"}}}},
         [](const Json& args) -> Json {
             Scene& scene = requireActiveScene();
@@ -521,8 +461,8 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
         });
 
     // ========================================================================
-    // Game UI (WidgetTree / GameUIHost). The legacy node.create/set UI path is
-    // removed in the Phase 6 cleanup; scripts author UI through this service.
+    // Game UI (WidgetTree / GameUIHost); scripts author UI through this
+    // service.
     // ========================================================================
     registry.registerFunction(
         "ui.types",

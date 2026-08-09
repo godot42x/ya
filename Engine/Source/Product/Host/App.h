@@ -31,7 +31,7 @@ extern YA_HOST_API ClearValue colorClearValue;
 extern YA_HOST_API ClearValue depthClearValue;
 
 struct Scene;
-enum class EUIRouteResult : uint8_t;
+enum class EWidgetRouteResult : uint8_t;
 struct SceneManager;
 struct Entity;
 struct ICommandBuffer;
@@ -218,9 +218,9 @@ struct YA_HOST_API App : public IRenderRuntimeHostServices
     /// previous mode, so "forgot to restore" bugs cannot happen.
     void pushInputMode(EInputMode mode);
     void popInputMode();
-    /// Dispatch the event to the game UI (Node2D) tree under the current
-    /// mode. Returns NotHandled when UI is disabled / nothing was hit.
-    [[nodiscard]] EUIRouteResult dispatchUIInputEvent(const Event& event);
+    /// Dispatch the event to the Game UI WidgetTree (GameUIHost) under the
+    /// current mode. Returns NotHandled when UI is disabled / nothing hit.
+    [[nodiscard]] EWidgetRouteResult dispatchUIInputEvent(const Event& event);
 
     void startRuntime();
     void startSimulation();

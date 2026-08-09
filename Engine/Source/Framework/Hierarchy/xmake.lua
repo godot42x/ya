@@ -1,5 +1,5 @@
 -- Hierarchy: the renderer-independent scene-tree base (Node) shared by the
--- GUI scene (Node2D), the 3D scene (Node3D) and the editor. Kept free of any
+-- GUI widgets, the 3D scene (Node3D) and the editor. Kept free of any
 -- GUI / Scene3D / ECS type; public API is exposed through the module
 -- forwarding root (include/Hierarchy/...).
 target("ya-hierarchy")

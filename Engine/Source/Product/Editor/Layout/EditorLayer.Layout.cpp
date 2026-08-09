@@ -348,7 +348,7 @@ void EditorLayer::toolbar()
     };
     drawModeEntry("3D", EViewportMode::Mode3D, "3D world view (edit the scene)");
     ImGui::SameLine();
-    drawModeEntry("2D", EViewportMode::Mode2D, "2D canvas view (edit the Node2D UI tree)");
+    drawModeEntry("2D", EViewportMode::Mode2D, "2D canvas view (Game UI designer preview)");
 
     // style RAII auto-pop
     ImGui::End();

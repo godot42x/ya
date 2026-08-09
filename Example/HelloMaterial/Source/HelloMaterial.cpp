@@ -36,7 +36,6 @@
 #include "Render3D/Material/PBRMaterial.h"
 #include "Render3D/Material/PhongMaterial.h"
 #include "RHI/Backend/TextureLibrary.h"
-#include "GUI/Scene/Node2D.h"
 #include "Scene/Core/Scene.h"
 #include <format>
 

@@ -154,6 +154,11 @@ UIFrameSnapshot UIDesignerPanel::buildPreviewSnapshot()
     return _previewTree->buildSnapshot(UIFrameBuildContext{});
 }
 
+UIElement* UIDesignerPanel::pickAt(const glm::vec2& logicalPoint)
+{
+    return _previewTree ? _previewTree->pickAt(logicalPoint) : nullptr;
+}
+
 void UIDesignerPanel::applyPreviewExtent()
 {
     if (!_previewTree || !_owner) {

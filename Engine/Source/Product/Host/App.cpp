@@ -8,7 +8,6 @@
 #include "Core/Module/ProjectDescriptor.h"
 #include "Core/Profiling/Profiling.h"
 #include "Core/System/VirtualFileSystem.h"
-#include "GUI/Scene/UISceneRenderer.h"
 #include "Scene/Core/Scene.h"
 #include "Render3D/Services/DebugRenderSystem.h"
 
@@ -138,9 +137,9 @@ bool App::dispatchInputFallbackEvent(const Event& event)
         }
     }
 
-    // Game-UI (Node2D) picking no longer lives here: it is dispatched by the
-    // input node chain (GameInputNode / EditorInputNode) so that an exclusive
-    // UI hit can keep the event away from gameplay.
+    // Game-UI picking lives in the input node chain (GameInputNode /
+    // EditorInputNode) so that an exclusive UI hit can keep the event away
+    // from gameplay.
     return false;
 }
 
@@ -169,40 +168,40 @@ void App::popInputMode()
     inputRouter.applyInputMode(_inputMode);
 }
 
-EUIRouteResult App::dispatchUIInputEvent(const Event& event)
+EWidgetRouteResult App::dispatchUIInputEvent(const Event& event)
 {
     if (isStopped() || _inputMode == EInputMode::GameOnly) {
-        return EUIRouteResult::NotHandled;
+        return EWidgetRouteResult::NotHandled;
     }
 
     const EEvent::T eventType = event.getEventType();
     if (eventType != EEvent::MouseButtonPressed &&
         eventType != EEvent::MouseButtonReleased &&
         eventType != EEvent::MouseMoved) {
-        return EUIRouteResult::NotHandled;
+        return EWidgetRouteResult::NotHandled;
     }
 
     // While the game holds the mouse (relative capture) it owns all input:
     // game-UI picking is suspended, matching the editor layout lock.
     if (inputRouter.isMouseCaptured()) {
-        return EUIRouteResult::NotHandled;
+        return EWidgetRouteResult::NotHandled;
     }
 
     // Game UI input routes through the GameUIHost's WidgetTree (the single
     // live UI fact source); the scene tree no longer participates in picking.
     GameUIHost* gameUIHost = getGameUIHost();
     if (!gameUIHost || !gameUIHost->getMountedScene()) {
-        return EUIRouteResult::NotHandled;
+        return EWidgetRouteResult::NotHandled;
     }
 
     switch (gameUIHost->dispatchEvent(event, _lastMousePos)) {
     case EWidgetRouteResult::HandledExclusive:
-        return EUIRouteResult::HandledExclusive;
+        return EWidgetRouteResult::HandledExclusive;
     case EWidgetRouteResult::HandledPass:
-        return EUIRouteResult::HandledPass;
+        return EWidgetRouteResult::HandledPass;
     case EWidgetRouteResult::NotHandled:
     default:
-        return EUIRouteResult::NotHandled;
+        return EWidgetRouteResult::NotHandled;
     }
 }
 

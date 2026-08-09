@@ -84,8 +84,7 @@ class UIFrameBuilder
     /// texture draws the white texture.
     void addSprite(const Rect2D& logicalRect, const glm::vec4& color, const ya::Ptr<Texture>& texture);
 
-    /// Record text aligned inside `logicalRect` (same semantics as the legacy
-    /// UITextNode paint: h/v align via measured text).
+    /// Record text aligned inside `logicalRect` (h/v align via measured text).
     void addText(const Rect2D& logicalRect,
                  const std::string& text,
                  const glm::vec4& color,

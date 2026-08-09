@@ -2,7 +2,6 @@
 
 #include "Core/Input/InputManager.h"
 #include "Core/Log.h"
-#include "GUI/Scene/UISceneRenderer.h"
 #include "Host/App.h"
 
 namespace ya
@@ -28,13 +27,13 @@ FInputReply GameInputNode::route(FInputRouteContext& context, const FInputEvent&
     // an exclusive Stop hit keeps the event away from gameplay; GameOnly
     // disables UI; UIOnly disables gameplay entirely.
     const EInputMode  mode     = context.app.getInputMode();
-    const EUIRouteResult uiResult =
-        mode == EInputMode::GameOnly ? EUIRouteResult::NotHandled
+    const EWidgetRouteResult uiResult =
+        mode == EInputMode::GameOnly ? EWidgetRouteResult::NotHandled
                                      : context.app.dispatchUIInputEvent(event);
     if (mode == EInputMode::UIOnly) {
-        return FInputReply{.handled = uiResult != EUIRouteResult::NotHandled};
+        return FInputReply{.handled = uiResult != EWidgetRouteResult::NotHandled};
     }
-    if (uiResult == EUIRouteResult::HandledExclusive) {
+    if (uiResult == EWidgetRouteResult::HandledExclusive) {
         return FInputReply{.handled = true};
     }
 

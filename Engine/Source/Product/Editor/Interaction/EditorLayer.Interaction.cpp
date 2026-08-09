@@ -8,8 +8,6 @@
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderImage.h"
 #include "RHI/Render.h"
-#include "GUI/Scene/UISceneRenderer.h"
-#include "GUI/Scene/Node2D.h"
 
 #include <cmath>
 #include <functional>
@@ -463,25 +461,21 @@ void EditorLayer::pickEntity(float viewportLocalX, float viewportLocalY)
 
 void EditorLayer::pickNode2D(float viewportLocalX, float viewportLocalY)
 {
-    Scene* scene = getViewportInteractionScene();
-    if (!scene) {
-        return;
-    }
-
     glm::vec2 canvasPoint{viewportLocalX, viewportLocalY};
     if (!viewportToCanvas(canvasPoint, canvasPoint)) {
-        _sceneHierarchyPanel.setSelectedNode2D(nullptr);
+        _uiDesignerPanel.clearSelection();
         return;
     }
 
-    // Topmost-first pick, shared walker with UISceneRenderer (paint order).
-    if (Node2D* picked = UISceneRenderer::pickNodeAt(scene->getRootNode(), canvasPoint)) {
-        _sceneHierarchyPanel.setSelectedNode2D(picked);
-        YA_CORE_INFO("Picked Node2D: {}", picked->getName());
+    // Game UI picking hits the UI Designer's preview tree (the authoring fact
+    // source); scene entries are runtime data instantiated by GameUIHost.
+    if (UIElement* picked = _uiDesignerPanel.pickAt(canvasPoint)) {
+        _uiDesignerPanel.select(picked);
+        YA_CORE_INFO("Picked UI widget: {}", picked->_name);
         return;
     }
 
-    _sceneHierarchyPanel.setSelectedNode2D(nullptr);
+    _uiDesignerPanel.clearSelection();
 }
 
 void EditorLayer::focusCameraOnSelection()

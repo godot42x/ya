@@ -59,6 +59,10 @@ struct UIDesignerPanel
 
     // === Preview (independent WidgetTree, never shared with the runtime) ===
     [[nodiscard]] UIFrameSnapshot buildPreviewSnapshot();
+    /// Topmost widget under a canvas-logical point (for editor picking).
+    [[nodiscard]] UIElement* pickAt(const glm::vec2& logicalPoint);
+    void select(UIElement* widget) { _selected = widget; }
+    void clearSelection() { _selected = nullptr; }
 
   private:
     void drawToolbar();

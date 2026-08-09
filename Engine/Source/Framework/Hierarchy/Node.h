@@ -74,10 +74,6 @@ struct YA_HIERARCHY_API Node : public disable_copy
     [[nodiscard]] const Entity *getEntity() const { return _entity; }
     // void                        setEntity(Entity *entity) { _entity = entity; }
 
-    /// True for Node2D (UI) nodes. Used by UI walkers to avoid dynamic_cast
-    /// when traversing the mixed scene tree.
-    [[nodiscard]] virtual bool is2D() const { return false; }
-
     /// Called after this node's display name changes. Derived classes that
     /// mirror the name into an external owner (e.g. Node3D syncing the ECS
     /// entity name) override this hook; the base class stays ECS-free.

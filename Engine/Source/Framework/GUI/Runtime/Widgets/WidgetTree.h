@@ -27,7 +27,7 @@ namespace ya
 {
 
 /// Result of one game-UI event route pass. Named distinctly from the legacy
-/// EUIRouteResult while the old GUI/Scene module still exists (Phase 6 merge).
+/// EWidgetRouteResult while the old GUI/Scene module still exists (Phase 6 merge).
 enum class EWidgetRouteResult : uint8_t
 {
     NotHandled,       // no widget consumed the event
@@ -98,6 +98,12 @@ struct WidgetTree final
     /// descending, layers bottom -> top). Pointer capture overrides the walk;
     /// keyboard events route to the focused widget. Returns the route result.
     [[nodiscard]] EWidgetRouteResult dispatchEvent(const Event& event, const WidgetEventContext& ctx);
+
+    /// Topmost-first pick of the widget under `logicalPoint` (children before
+    /// self, zOrder descending, respecting subtree culling). Shared by the
+    /// editor preview picking and hit-test diagnostics; null when nothing is
+    /// hit.
+    [[nodiscard]] UIElement* pickAt(const glm::vec2& logicalPoint) const { return topmostHit(logicalPoint); }
 
     // === Focus / capture / hover ===
     void setFocus(UIElement* widget);

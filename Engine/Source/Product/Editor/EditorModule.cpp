@@ -494,7 +494,7 @@ class EditorModule final : public IModule, public IEditorAutomationControl
 
         api.registerFunction(
             "viewport.set_mode",
-            "Switches the editor viewport between '3d' (world) and '2d' (Node2D canvas preview).",
+            "Switches the editor viewport between '3d' (world) and '2d' (Game UI designer canvas).",
             Json{{"mode", {{"type", "string"}}}},
             [this](const Json& args) -> Json {
                 const std::string mode = args.value("mode", "3d");
@@ -540,7 +540,7 @@ class EditorModule final : public IModule, public IEditorAutomationControl
         api.registerFunction(
             "scene.create_preset",
             "Creates a node from the editor create registry. Args: {preset, name?, parent_path?}. "
-            "Presets: Cube, Sphere, Plane, Terrain, Point Light, Directional Light, plus every Node2D type.",
+            "Presets: Cube, Sphere, Plane, Terrain, Point Light, Directional Light.",
             Json{{"preset", {{"type", "string"}}},
                  {"name", {{"type", "string"}}},
                  {"parent_path", {{"type", "string"}}}},
@@ -561,13 +561,7 @@ class EditorModule final : public IModule, public IEditorAutomationControl
                 }
 
                 Node* node = nullptr;
-                if (Node* presetNode = editor::NodeCreateRegistry::get().createPreset(preset, *scene, name, parent)) {
-                    node = presetNode;
-                }
-                else {
-                    // Fall back to reflection-driven Node2D types.
-                    node = scene->createUINode(preset, name, parent);
-                }
+                node = editor::NodeCreateRegistry::get().createPreset(preset, *scene, name, parent);
                 if (!node) {
                     throw ScriptApiRegistry::Error(std::format("unknown create preset: {}", preset));
                 }

@@ -19,7 +19,6 @@
 #include "Editor/EditorLayer.h"
 #include "Editor/Inspector/DetailsViewInternal.h"
 #include "Host/GUI/ImGui/ImGuiSystem.h"
-#include "GUI/Scene/Node2D.h"
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
 #include "Host/App.h"
@@ -119,9 +118,6 @@ void DetailsView::onImGuiRender()
             drawWidgetEntry(*scene, *entry);
         }
     }
-    else if (Node2D* node2D = _owner->getSelectedNode2D()) {
-        drawNode2D(*node2D);
-    }
     else if (const auto& selections = _owner->getSelections(); selections.size() > 1) {
         drawMultiComponents(selections);
     }
@@ -174,30 +170,6 @@ void DetailsView::drawWidgetEntry(Scene& scene, SceneWidgetEntry& entry)
         scene.removeWidgetEntry(entry.entryId);
         _owner->setSelectedWidgetEntryId("");
     }
-}
-
-void DetailsView::drawNode2D(Node2D& node)
-{
-    ImGui::Text("Node2D");
-    ImGui::SameLine();
-    ImGui::TextDisabled("(%s)", node.getUITypeName());
-    ImGui::Separator();
-
-    {
-        char buffer[256];
-        strncpy_s(buffer, node.getName().c_str(), sizeof(buffer) - 1);
-        buffer[sizeof(buffer) - 1] = '\0';
-        if (ImGui::InputText("Name", buffer, sizeof(buffer))) {
-            node.setName(buffer);
-        }
-    }
-
-    // Reflected fields: base Node2D (_position/_size/_visibility/_zOrder) plus
-    // the concrete subtype's own fields. Edits apply immediately (the UI pass
-    // re-renders every frame).
-    ya::RenderContext ctx;
-    ctx.beginInstance(&node);
-    ya::renderReflectedType(node.getUITypeName(), node.getTypeIndex(), &node, ctx, 0);
 }
 
 void DetailsView::applyModificationsToInstances(const std::vector<RenderModificationRecord>& modifications,

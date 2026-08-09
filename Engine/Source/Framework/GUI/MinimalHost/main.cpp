@@ -18,6 +18,8 @@
 
 #include "GUI/Resources/FontManager.h"
 #include "GUI/Draw2D/Render2D.h"
+#include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/WidgetTree.h"
 
 #include <SDL3/SDL.h>
 
@@ -125,6 +127,20 @@ int main(int argc, char** argv)
     auto* swapchain = render->getSwapchain()->as<VulkanSwapChain>();
     YA_CORE_ASSERT(swapchain != nullptr, "Minimal GUI host requires VulkanSwapChain");
     Render2D::init(render, swapchain->getFormat(), EFormat::Undefined);
+
+    // 5b. Game UI WidgetTree closure: layout + immutable snapshot without any
+    //     Scene / ECS / Host / Render3D dependency. The widgets module is the
+    //     standalone Game UI fact source.
+    {
+        WidgetTree widgetTree(Extent2D{800, 600});
+        auto       panel = std::make_shared<UIPanel>("Panel");
+        panel->_position = {64.0f, 64.0f};
+        panel->_size     = {200.0f, 100.0f};
+        widgetTree.attachToLayer(WidgetTree::ELayer::Content, panel);
+        const UIFrameSnapshot snapshot = widgetTree.buildSnapshot(UIFrameBuildContext{});
+        YA_CORE_INFO("WidgetTree snapshot: {} draw items, {}x{} logical",
+                     snapshot.items.size(), snapshot.logicalExtent.width, snapshot.logicalExtent.height);
+    }
 
     std::vector<std::shared_ptr<ICommandBuffer>> commandBuffers;
     render->allocateCommandBuffers(render->getSwapchainImageCount(), commandBuffers);

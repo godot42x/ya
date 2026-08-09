@@ -13,10 +13,9 @@ struct Scene;
 namespace editor
 {
 
-/// A named node-creation capability. 2D entries are generated from the
-/// reflection registry (every Node2D subclass); 3D presets (primitive +
-/// component combinations) are registered once here instead of being
-/// hardcoded in the hierarchy panel.
+/// A named node-creation capability. 3D presets (primitive + component
+/// combinations) are registered once here instead of being hardcoded in the
+/// hierarchy panel. Game UI authoring uses the registry-driven UI Designer.
 struct NodeCreateEntry
 {
     std::string category; // "3D Object" / "Light" / "2D"
@@ -44,9 +43,6 @@ class NodeCreateRegistry
 
     /// Registered 3D presets, grouped by category (stable registration order).
     [[nodiscard]] const std::vector<NodeCreateEntry>& presets() const { return _presets; }
-
-    /// Node2D entries auto-collected from the reflection registry.
-    [[nodiscard]] std::vector<NodeCreateEntry> uiEntries() const;
 
     /// Create a registered preset by display name.
     Node* createPreset(const std::string& displayName, Scene& scene, const std::string& name, Node* parent) const;
