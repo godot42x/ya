@@ -14,13 +14,14 @@ run_engine_shared() {
     xmake f -m debug --ya_profile=engine --ya_linkage=shared -y
     xmake b -r ya-engine
     # xmake b accepts one target per invocation (xmake 3.0.8).
-    for t in ya-testing ya-gui-closure-test ya-ecs-core-test ya-resource-core-test \
+    for t in ya-testing ya-gui-closure-test ya-gui-widgets-test ya-ecs-core-test ya-resource-core-test \
              ya-resource-runtime-closure-test ya-rhi-vulkan-smoke ya-render-3d-test; do
         xmake b "$t"
     done
     xmake r ya-testing
     xmake r ya-resource-runtime-closure-test
     xmake r ya-rhi-vulkan-smoke
+    xmake r ya-gui-widgets-test
     python3 Script/ya_module_lint.py
 }
 
@@ -41,7 +42,9 @@ run_gui_shared() {
     xmake b -r ya-gui-framework
     xmake b -r ya-gui-minimal-host
     xmake b ya-gui-closure-test
+    xmake b ya-gui-widgets-test
     xmake r ya-gui-closure-test
+    xmake r ya-gui-widgets-test
 }
 
 run_gui_monolith() {

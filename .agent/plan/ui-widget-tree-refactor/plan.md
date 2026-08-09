@@ -682,16 +682,16 @@ shared/monolith：
 
 目标：先建立独立 visual tree，不接入 Scene 和最终渲染。
 
-- [ ] 从 Node2D 中提取 UIElement 的 layout/paint/input 属性；
-- [ ] UIElement 移除 Node/entity/Scene 依赖；
-- [ ] 实现 WidgetTree internal root 和 content/system layers；
-- [ ] 实现 single-parent attach/reparent/detach；
-- [ ] 实现 detached 生命周期；
-- [ ] 实现 invalidation、layout、hit path、focus/capture 基础；
-- [ ] 建立 UITypeRegistry 稳定 type ID 与 explicit registration；
-- [ ] 增加 module owner/live-instance tracking；
-- [ ] 将基础控件迁移到 UIElement hierarchy；
-- [ ] 保留旧 Node2D runtime 不接新入口，仅用于下一阶段数据迁移对照。
+- [x] 从 Node2D 中提取 UIElement 的 layout/paint/input 属性；
+- [x] UIElement 移除 Node/entity/Scene 依赖；
+- [x] 实现 WidgetTree internal root 和 content/system layers；
+- [x] 实现 single-parent attach/reparent/detach；
+- [x] 实现 detached 生命周期；
+- [x] 实现 invalidation、layout、hit path、focus/capture 基础；
+- [x] 建立 UITypeRegistry 稳定 type ID 与 explicit registration；
+- [x] 增加 module owner/live-instance tracking；
+- [x] 将基础控件迁移到 UIElement hierarchy；
+- [x] 保留旧 Node2D runtime 不接新入口，仅用于下一阶段数据迁移对照。
 
 验收：
 
@@ -1001,3 +1001,50 @@ GUI profile 必须继续排除 ECS、Game Scene、RenderGraph、Render3D、Physi
   "zOrder": int, "autoMount": bool, "overrides": {} }]`。`document` 与
   `inline` 二选一；`overrides` 只允许 InstanceEditable 字段（Phase 2 落实）。
 - 迁移期旧 scene 文件保留 `nodeType` 路径，新保存只写 `widgetEntries`。
+
+### Phase 1（完成：2026-08-09）
+
+`ya-gui-widgets` 模块建立，与旧 `ya-gui-scene` 并存、互不接线：
+
+- **新模块** `Engine/Source/Framework/GUI/Runtime/Widgets/`：
+  - `UIElement`：从 Node2D 提取的 layout/paint/input 属性（anchor 数学、
+    visibility 三轴、zOrder、Pass/Stop hit filter），无 Node/entity/Scene；
+    `UIElementRef` 共享引用，visual parent 非 owning；析构时解除子节点
+    回链 + 附树销毁断言（`_tree != nullptr` 即 bug）。
+  - `WidgetTree`：internal root + 四个稳定系统层（Content/Popup/Tooltip/
+    DragIme），root/layer 为 `HitTestInvisible` 结构元素；attach 校验
+    单父、parent 属于本树、防环；`reparent` 为显式跨树移动；detach 递归
+    解除子树 membership 并清理 focus/capture/hover；layout/hit 走
+    zOrder 稳定序；指针 capture 绕过 hit 走位（`bViaCapture`），键盘路由
+    到 focus widget；tree 析构递归断链。
+  - `UITypeRegistry`：稳定字符串 typeId + 显式工厂注册；`beginModule`/
+    `endModule` 模块所有权；`createInstance` 挂 module lease，实例存活时
+    `endModule` 失败（DLL unload guard 单测覆盖）。
+  - Controls：`UIPanel`/`UIText`/`UIButton`/`UIContainer`（含 9-slice、
+    autosize、box layout、clip push/pop）迁移到 UIElement 层级。
+  - forwarding headers：`include/GUI/Widgets/*.h` + `Controls/*.h` + 聚合
+    `Controls.h`。
+- **XMake**：`ya-gui-widgets` public 依赖仅 foundation-core（公共头只
+  include Core/Types、Core/Event、glm、AssetRef）；draw2d/resources 为
+  private 依赖；`ya-gui-framework` 聚合加入新模块。
+- **闭包证明**：新增 `ya-gui-widgets-test`（只链 `ya-gui-widgets` + gtest，
+  与 `ya-gui-closure-test` 并列），21 个 WidgetTree/Registry 单测覆盖：
+  双 Panel 挂载、detached 不参与、双父/跨树 attach 失败、显式 reparent
+  （同树+跨树）、防环、detach 保活与递归断链、系统层不可 detach、zOrder
+  命中、四层叠放顺序、Pass/Stop 路由、Hidden 裁剪、focus 键盘路由、
+  capture 点击（drag-release 语义）、模块 live-instance guard、registry
+  显式注册/未知类型诊断。
+- **lint**：`ya-gui-widgets` 禁止 Host/Editor/Scene/ECS/Resource/Render3D/
+  Physics/Gameplay/RHI include；`ya_module_lint.py` 通过。
+- **验证**：`ya-gui-closure-test` 54 例、`ya-testing` 385 例全过；
+  gui+monolith 与 engine+monolith 构建通过；`Script/ci.sh` 两个 closure
+  测试纳入 engine-shared 与 gui-shared。
+- **决策记录**：
+  - `attach`/`reparent` 不覆盖 `_zOrder`——zOrder 是 widget 自身属性，单
+    一事实源（计划 §3.1 的 `{.zOrder = 100}` 示例为语义示意，不逐字采用）。
+  - 枚举/context 命名用 `EWidget*`/`Widget*Context` 前缀，与旧 `EUI*`
+    并存避免跨模块重定义；Phase 6 删旧模块后恢复短名。
+  - Phase 1 不引入反射字段：UIDocument 序列化（Phase 2）再决定 schema，
+    type 身份由 registry 持有，与 §4.1 一致。
+  - detached 子树内 parent 回链在父销毁时由 ~UIElement 统一断开，避免
+    悬垂（测试 `TreeDestructionReleasesMembershipSafely` 覆盖）。

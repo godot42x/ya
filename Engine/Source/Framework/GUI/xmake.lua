@@ -2,12 +2,13 @@
 --   ya-gui-resources  font/glyph + texture-slot binding
 --   ya-gui-draw2d     sprite/text/line batching + 2D pipeline
 --   ya-gui-scene      Node2D/UIBase + UI scene traversal
+--   ya-gui-widgets    UIElement/WidgetTree/UITypeRegistry + basic controls
 --   ya-gui-compose    viewport/UI compose pass
--- Widgets (panels/buttons/...) become their own module once extracted.
 
 includes("./Runtime/Resource/xmake.lua")
 includes("./Runtime/Draw2D/xmake.lua")
 includes("./Runtime/Scene/xmake.lua")
+includes("./Runtime/Widgets/xmake.lua")
 includes("./Runtime/Compose/xmake.lua")
 includes("./MinimalHost/xmake.lua")
 
@@ -25,5 +26,6 @@ target("ya-gui-framework")
         "ya-gui-resources",
         "ya-gui-draw2d",
         "ya-gui-scene",
+        "ya-gui-widgets",
         "ya-gui-compose",
         { public = true })

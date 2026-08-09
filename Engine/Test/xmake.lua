@@ -92,9 +92,27 @@ do
     add_files("./Source/Node2DLayoutTest.cpp")
     add_files("./Source/UISceneRendererTest.cpp")
     add_files("./Source/Render2DClipTest.cpp")
+    add_files("./Source/WidgetTreeTest.cpp")
     add_files("./Source/TestEntry.cpp")
 
     add_deps("ya-gui-framework")
+    add_packages("gtest")
+
+    if is_plat("windows") then
+        add_cxxflags("/utf-8")
+    end
+end
+
+-- WidgetTree closure test: links ONLY ya-gui-widgets (foundation + the GUI
+-- draw2d/resources deps come in transitively). Proves the Game UI visual
+-- tree has no Scene/ECS/Render3D/Host dependency and no direct RHI headers.
+target("ya-gui-widgets-test")
+do
+    set_kind("binary")
+    add_files("./Source/WidgetTreeTest.cpp")
+    add_files("./Source/TestEntry.cpp")
+
+    add_deps("ya-gui-widgets")
     add_packages("gtest")
 
     if is_plat("windows") then
