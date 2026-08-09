@@ -1,4 +1,5 @@
 #include "Core/Reflection/DeferredInitializer.h"
+#include "Core/System/VirtualFileSystem.h"
 #include "Scene/Serialization/SceneSerializer.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
@@ -321,6 +322,61 @@ TEST(SceneSerializerTest, UINodeTreeSurvivesClone)
     EXPECT_EQ(clonedButton->_size.x, 120.0f);
     EXPECT_EQ(clonedButton->_zOrder, 5);
     EXPECT_EQ(clonedButton->getName(), "Start");
+}
+
+// ============================================================================
+// Old-format migration input fixture (Phase 0 of ui-widget-tree-refactor):
+// a committed .scene.json that stores Game UI as Node2D tree entries. It is
+// the durable input for the Phase 2 importer that migrates these entries to
+// SceneWidgetEntry + UIDocument.
+// ============================================================================
+
+TEST(SceneSerializerTest, OldFormatUISceneFixtureLoads)
+{
+    ensureReflectionReady();
+    VirtualFileSystem::init();
+    ASSERT_NE(VirtualFileSystem::get(), nullptr);
+
+    Scene scene("FixtureScene");
+    SceneSerializer serializer(&scene);
+    ASSERT_TRUE(serializer.loadFromFile("Engine/Test/Fixture/Data/OldFormatUIScene.scene.json"));
+
+    Node* root = scene.getRootNode();
+    ASSERT_NE(root, nullptr);
+    ASSERT_EQ(root->getChildCount(), 1u);
+
+    auto* canvas = dynamic_cast<UICanvasNode*>(root->getChildren().front());
+    ASSERT_NE(canvas, nullptr);
+    EXPECT_EQ(canvas->getName(), "Canvas");
+
+    ASSERT_EQ(canvas->getChildCount(), 3u);
+    Node2D* panel = dynamic_cast<Node2D*>(canvas->getChildren()[0]);
+    Node2D* title = dynamic_cast<Node2D*>(canvas->getChildren()[1]);
+    Node2D* ok    = dynamic_cast<Node2D*>(canvas->getChildren()[2]);
+    ASSERT_NE(panel, nullptr);
+    ASSERT_NE(title, nullptr);
+    ASSERT_NE(ok, nullptr);
+
+    // Base-class fields restored through the __base__ block.
+    EXPECT_EQ(panel->getName(), "Panel");
+    EXPECT_EQ(panel->_position, glm::vec2(20.0f, 20.0f));
+    EXPECT_EQ(panel->_size, glm::vec2(300.0f, 120.0f));
+
+    auto* panelNode = dynamic_cast<UIPanelNode*>(panel);
+    ASSERT_NE(panelNode, nullptr);
+    EXPECT_EQ(panelNode->_color, glm::vec4(0.12f, 0.14f, 0.22f, 0.88f));
+
+    auto* textNode = dynamic_cast<UITextNode*>(title);
+    ASSERT_NE(textNode, nullptr);
+    EXPECT_EQ(textNode->_text, "Hello UI");
+    EXPECT_EQ(textNode->_fontSize, 24u);
+    EXPECT_EQ(textNode->_zOrder, 3);
+    EXPECT_EQ(textNode->_hAlign, EUIAlignH::Center);
+
+    auto* buttonNode = dynamic_cast<UIButtonNode*>(ok);
+    ASSERT_NE(buttonNode, nullptr);
+    EXPECT_EQ(buttonNode->_hitFilter, EUIHitFilter::Stop);
+    EXPECT_EQ(buttonNode->_normalColor, glm::vec4(0.8f, 0.8f, 0.8f, 1.0f));
 }
 
 } // namespace ya

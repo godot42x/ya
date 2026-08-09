@@ -255,11 +255,7 @@ void Render2D::pushClipRect(const Rect2D& rect)
     // Intersect with the current clip so nested clips never exceed their parent.
     Rect2D clipped = rect;
     if (!session.clipStack.empty()) {
-        const Rect2D& current = session.clipStack.back();
-        const glm::vec2 curMax = current.pos + current.extent;
-        const glm::vec2 rectMax = rect.pos + rect.extent;
-        clipped.pos    = glm::max(rect.pos, current.pos);
-        clipped.extent = glm::max(glm::vec2(0.0f), glm::min(rectMax, curMax) - clipped.pos);
+        clipped = intersectClipRect(rect, session.clipStack.back());
     }
 
     const bool bClipChanged = session.clipStack.empty() ||
@@ -271,6 +267,15 @@ void Render2D::pushClipRect(const Rect2D& rect)
         // next flush picks up the new clip.
         quadData->flush(session.curCmdBuf);
     }
+}
+
+Rect2D Render2D::intersectClipRect(const Rect2D& rect, const Rect2D& parentClip)
+{
+    const glm::vec2 parentMax = parentClip.pos + parentClip.extent;
+    const glm::vec2 rectMax   = rect.pos + rect.extent;
+    const glm::vec2 clippedPos    = glm::max(rect.pos, parentClip.pos);
+    const glm::vec2 clippedExtent = glm::max(glm::vec2(0.0f), glm::min(rectMax, parentMax) - clippedPos);
+    return Rect2D{.pos = clippedPos, .extent = clippedExtent};
 }
 
 void Render2D::popClipRect()

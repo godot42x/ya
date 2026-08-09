@@ -360,6 +360,11 @@ struct YA_GUI_API Render2D
     static void pushClipRect(const Rect2D& rect);
     static void popClipRect();
 
+    /// Pure clip intersection used by the clip stack: `rect` clipped to the
+    /// current `parentClip` (empty extent when disjoint). Extracted so the
+    /// nested-clip semantics are unit-testable without a render session.
+    [[nodiscard]] static Rect2D intersectClipRect(const Rect2D& rect, const Rect2D& parentClip);
+
     /// Lazily create the screen-space pipeline variant required by one
     /// Render2D pass domain. UI composite / canvas domains use a depth-less
     /// variant; viewport/overlay domains use the depth-aware screen variant.

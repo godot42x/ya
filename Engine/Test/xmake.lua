@@ -91,6 +91,7 @@ do
     set_kind("binary")
     add_files("./Source/Node2DLayoutTest.cpp")
     add_files("./Source/UISceneRendererTest.cpp")
+    add_files("./Source/Render2DClipTest.cpp")
     add_files("./Source/TestEntry.cpp")
 
     add_deps("ya-gui-framework")
