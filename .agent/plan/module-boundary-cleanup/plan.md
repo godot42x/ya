@@ -1030,6 +1030,10 @@ Phase 3 剩余执行顺序：
 5. 剩余 Phase 3 验收：独立构建 resource-core 不需要 Vulkan backend、
    loader 测试不启动 Host、禁用 environment/terrain 后 GUI profile 可配置、
    删除 Resource dynamic_lookup 后可链接（后者依赖 Phase 7 app-services）。
+   - [x] 2026-08-09 复核：`ya-resource-core` / `ya-resource-loader` 无
+     RHI/ECS/Scene/Host 依赖（`xmake show -t` 确认）；GUI profile（shared +
+     monolith）均可配置构建；dynamic_lookup 已于 Phase 7 移除（仅 Editor
+     插件加载保留）；monolith 产物在干净输出目录下零 libya 动态依赖。
 
 随后进入 Phase 4（Scene/Physics 边界）、Phase 5（RHI/backend 拆分）、
 Phase 5.5（GUI-only profile）。Phase 5.5 必须基于稳定的 Core/RHI/GUI 边界，
