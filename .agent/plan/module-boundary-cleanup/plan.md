@@ -306,25 +306,26 @@ xmake show -t ya-editor
 
 #### 1.3 Component linkage
 
-- [ ] 将 `ComponentLinkageSystem` 定位为顶层 linkage framework/facade，而不是
-      `LightBillboard` 的专属系统。
-- [ ] 将其通用部分保留在独立的 `ya-component-linkage`（或
-      `ya-gameplay-linkage`）target：
+- [x] 将 `ComponentLinkageSystem` 定位为顶层 linkage framework/facade
+      （`LinkageFramework`），不是 `LightBillboard` 的专属系统。
+- [x] 通用部分保留在独立 `ya-component-linkage` target：
   - 监听 Scene/ECS component construct/update/destroy 和 scene init；
-  - 提供 linkage rule 注册、匹配、延迟调度、去重和生命周期解绑；
+  - 提供 linkage rule 注册、匹配、延迟调度、去重和生命周期解绑
+    （onSceneUnload 断开 + deferred 取消，2026-08-09 完成）；
   - 只依赖 ECS/Scene contract 与注入的 frame-task/scene provider；
   - 不包含 PointLight、DirectionalLight、Billboard、Material、RenderComponent
     等具体业务类型；
   - 不直接 include `Host/App.h`，Host 通过窄 service contract 组装它。
-- [ ] 将当前业务逻辑拆成可注入 rule/adapter：
-  - `LightBillboardLinkageRule`：注入 `LightBillboardPolicy`，负责 light ↔ billboard；
+- [x] 业务逻辑拆成可注入 rule/adapter：
+  - `LightBillboardLinkageRule`：注入 `LightBillboardPolicy`（实例成员，
+    2026-08-09），负责 light ↔ billboard；
   - `MaterialRenderLinkageRule`：负责 material component ↔ RenderComponent；
   - 后续可增加 gameplay tag、physics proxy、editor metadata 等 rule，但不修改
-    framework 核心。
-- [ ] `ComponentLinkageSystem` 保留为 framework 根入口/facade；规则实现放在
-      `Render3D/Adapters/LightBillboard`、`Render3D/Adapters/Material` 等业务目录。
-- [ ] Host 启动时创建 framework，分别注册所需 rules；GUI-only profile 不注册
-      Render3D rules，因而不触达 Billboard/Material 3D 类型。
+    framework 核心（扩展点已就绪，按需增加）。
+- [x] `LinkageFramework` 为 framework 根入口/facade；规则实现放在
+      `Render/Adapters/LightBillboard`、`Render/Adapters/Material` 业务目录。
+- [x] Host 启动时创建 framework，分别注册所需 rules；GUI-only profile 不含
+      Host/adapters，不触达 Billboard/Material 3D 类型。
 - [x] `LightBillboardPolicy` 由 Host 从 ConfigManager 读取后注入 rule 实例
       （2026-08-09）：policy 改为 `LightBillboardLinkageRule` 实例成员，
       移除匿名命名空间全局静态 `g_lightBillboardPolicy`；静态
@@ -576,7 +577,9 @@ Host ──composes──> binding systems + optional render features
 - [x] `ya-scene-core` 不依赖 ECS 具体系统、Render3D 和 Host（deps 为
       foundation/ecs-core/hierarchy/gui-scene/scene-3d/resource-runtime；
       ecs-core 是 Scene 组织 registry 的预期依赖，见决策 14-C）。
-- [ ] `ya-scene-3d` 只增加 Node3D、Transform bridge 和 3D scene data。
+- [x] `ya-scene-3d` 只增加 Node3D、Transform bridge 和 3D scene data
+      （deps：hierarchy/ecs-core/foundation-core；include 无
+      GUI/Render3D/Host，2026-08-09 复核）。
 - [x] Scene lifecycle 由 Host 注入 `ISceneServices`/`ISceneLifecycleHost`，
       不反向 include Host（Phase 1 完成）。
 - [x] Scene serialization 拆成独立 target（`ya-scene-serialization`），
@@ -825,9 +828,10 @@ xmake b ya-gui-minimal-host
 - [x] 所有 `add_deps(..., { public = true })` 逐项复核，默认改 private（按公共头使用推导 public/private）。
 - [x] public header 只通过 forwarding root 暴露；原始源码 include root 只对本 target private。
 - [x] 将 public `add_headerfiles("**.h")` 改为只导出 `include/{模块名}/**.h`。
-- [ ] 源码继续从现有模块目录收集；允许 scoped recursive glob，但每个 target
-      必须显式排除其他子模块、backend、test 和单头 implementation。
-- [ ] 对平台实现、单头 implementation、测试文件使用显式列表。
+- [x] 源码继续从现有模块目录收集；scoped recursive glob 已按目录边界隔离
+      （render-3d/graph 各居其目录；resource-runtime 显式排除 Core/、
+      Loader/ 子模块；单头 implementation 用 unity_ignored + 显式列表），
+      2026-08-09 复核无越界。
 - [x] 添加 forbidden include 检查（Script/ya_module_lint.py，模块×前缀表）。
 - [x] 增加统一 linkage 配置 `ya_linkage=shared|monolith`（Phase 5.5 完成）：
   - `shared`：模块 target 为 shared，保持各模块 DLL；
