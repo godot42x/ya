@@ -11,7 +11,8 @@
 #include "Host/Utility/AppScreenshotCapture.h"
 #include "Host/Utility/OffscreenJobRunner.h"
 
-#include "Host/Config/ConfigManager.h"
+#include "Core/Config/ConfigManager.h"
+#include "AppServices/ShadowSettings.h"
 
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
@@ -582,6 +583,93 @@ bool AppAutomation::shouldDeferQuit(const App& app)
     return true;
 }
 
+
+/// Host-side loader: reads the automation config document's shadow overrides
+/// (ConfigManager is a Host-owned store; Render3D consumes only the resulting
+/// AppAutomationShadowOverrides through its injected host services).
+void loadAutomationShadowOverridesFromConfig(AppAutomationShadowOverrides& overrides)
+{
+    auto& configManager = ConfigManager::get();
+    if (!configManager.hasDocument("automation")) {
+        return;
+    }
+
+    if (std::string qualityText; configManager.tryGet<std::string>("automation", "shadow.quality", qualityText)) {
+        EShadowQuality::T quality = EShadowQuality::Medium;
+        if (shadow_parse::tryParseShadowQualityValue(qualityText, quality)) {
+            overrides.quality = quality;
+        }
+        else {
+            YA_CORE_WARN("Ignoring invalid automation shadow quality override: {}", qualityText);
+        }
+    }
+    else if (uint32_t qualityValue = 0; configManager.tryGet<uint32_t>("automation", "shadow.quality", qualityValue)) {
+        if (qualityValue <= static_cast<uint32_t>(EShadowQuality::Ultra)) {
+            overrides.quality = static_cast<EShadowQuality::T>(qualityValue);
+        }
+        else {
+            YA_CORE_WARN("Ignoring invalid automation shadow quality override value: {}", qualityValue);
+        }
+    }
+
+    if (bool directionalEnabled = false; configManager.tryGet<bool>("automation", "shadow.directionalEnabled", directionalEnabled)) {
+        overrides.directionalEnabled = directionalEnabled;
+    }
+    if (uint32_t resolution = 0; configManager.tryGet<uint32_t>("automation", "shadow.resolution", resolution)) {
+        overrides.resolution = std::clamp(resolution, 128u, 8192u);
+    }
+    if (bool pointLightEnabled = false; configManager.tryGet<bool>("automation", "shadow.pointLightEnabled", pointLightEnabled)) {
+        overrides.pointLightEnabled = pointLightEnabled;
+    }
+    if (bool pointLightUseIndirect = false; configManager.tryGet<bool>("automation", "shadow.pointLightUseIndirect", pointLightUseIndirect)) {
+        overrides.pointLightUseIndirect = pointLightUseIndirect;
+    }
+    if (bool pointLightIndirectCullEnabled = false; configManager.tryGet<bool>("automation", "shadow.pointLightIndirectCullEnabled", pointLightIndirectCullEnabled)) {
+        overrides.pointLightIndirectCullEnabled = pointLightIndirectCullEnabled;
+    }
+    if (uint32_t maxPointLightShadows = 0; configManager.tryGet<uint32_t>("automation", "shadow.maxPointLightShadows", maxPointLightShadows)) {
+        overrides.maxPointLightShadows = std::min(maxPointLightShadows, static_cast<uint32_t>(MAX_POINT_LIGHTS));
+    }
+
+    if (std::string filterText; configManager.tryGet<std::string>("automation", "shadow.filter", filterText)) {
+        EShadowFilter::T filter = EShadowFilter::Hard;
+        if (shadow_parse::tryParseShadowFilterValue(filterText, filter)) {
+            overrides.filter = filter;
+        }
+        else {
+            YA_CORE_WARN("Ignoring invalid automation shadow filter override: {}", filterText);
+        }
+    }
+    else if (uint32_t filterValue = 0; configManager.tryGet<uint32_t>("automation", "shadow.filter", filterValue)) {
+        if (filterValue <= static_cast<uint32_t>(EShadowFilter::PCF_High)) {
+            overrides.filter = static_cast<EShadowFilter::T>(filterValue);
+        }
+        else {
+            YA_CORE_WARN("Ignoring invalid automation shadow filter override value: {}", filterValue);
+        }
+    }
+
+    if (float bias = 0.0f; configManager.tryGet<float>("automation", "shadow.bias", bias)) {
+        overrides.bias = bias;
+    }
+    if (float normalBias = 0.0f; configManager.tryGet<float>("automation", "shadow.normalBias", normalBias)) {
+        overrides.normalBias = normalBias;
+    }
+    if (float directionalDistance = 0.0f; configManager.tryGet<float>("automation", "shadow.directionalDistance", directionalDistance)) {
+        overrides.directionalDistance = directionalDistance;
+    }
+    if (uint32_t directionalCascades = 0; configManager.tryGet<uint32_t>("automation", "shadow.directionalCascades", directionalCascades)) {
+        overrides.directionalCascades = std::clamp(directionalCascades, 1u, static_cast<uint32_t>(MAX_DIRECTIONAL_CASCADES));
+    }
+    if (std::array<float, MAX_DIRECTIONAL_CASCADES - 1> splitRatios{};
+        configManager.tryGet("automation", "shadow.directionalCascadeSplitRatios", splitRatios)) {
+        overrides.directionalCascadeSplitRatios = splitRatios;
+    }
+    if (float depthRangeMultiplier = 0.0f; configManager.tryGet<float>("automation", "shadow.directionalDepthRangeMultiplier", depthRangeMultiplier)) {
+        overrides.directionalDepthRangeMultiplier = std::max(depthRangeMultiplier, 1.0f);
+    }
+}
+
 void AppAutomation::loadConfig(AppDesc& appDesc)
 {
     const std::string automationConfigPath = appDesc.automation.configPath && !appDesc.automation.configPath->empty()
@@ -607,7 +695,7 @@ void AppAutomation::applyStartupOverrides(AppDesc& appDesc)
     loadViewportResizeAutomationOverrides(appDesc);
     loadPipelineSwitchAutomationOverrides(appDesc);
     loadPostprocessAutomationOverrides(appDesc);
-    shadow_settings::loadAutomationOverridesFromConfig(appDesc.automation.shadow);
+    loadAutomationShadowOverridesFromConfig(appDesc.automation.shadow);
     if (appDesc.automation.renderDocCapture) {
         appDesc.bEnableRenderDoc = true;
     }

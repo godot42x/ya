@@ -11,6 +11,7 @@
 #include "Core/System/System.h"
 #include "Host/AppOptions.h"
 #include "Host/AppRenderServices.h"
+#include "AppServices/RuntimeServices.h"
 #include "Host/AppSceneServices.h"
 #include "Core/Common/AppState.h"
 #include "Host/AppTaskManager.h"
@@ -54,7 +55,7 @@ enum AppMode : int
     Drawing,
 };
 
-struct YA_HOST_API App
+struct YA_HOST_API App : public IRenderRuntimeHostServices
 {
     friend class AppLifecycle;
     friend class AppFrameLoop;
@@ -102,9 +103,6 @@ struct YA_HOST_API App
 
     std::vector<glm::vec2>       clicked;
     std::vector<stdptr<ISystem>> _systems;
-    GameplayResourceBinding*       _gameplayResourceBinding = nullptr;
-    EnvironmentLightingProcessor* _environmentLightingProcessor = nullptr;
-    TerrainProcessor*             _terrainProcessor            = nullptr;
 
     struct FModuleSlot
     {
@@ -179,9 +177,16 @@ struct YA_HOST_API App
     [[nodiscard]] JSScriptingSystem*                  getJSScriptingSystem() const { return _jsScriptingSystem; }
 
     [[nodiscard]] const AppDesc&                 getDesc() const { return _ci; }
-    [[nodiscard]] GameplayResourceBinding*         getGameplayResourceBinding() const { return _gameplayResourceBinding; }
-    [[nodiscard]] EnvironmentLightingProcessor*  getEnvironmentLightingProcessor() const { return _environmentLightingProcessor; }
-    [[nodiscard]] TerrainProcessor*              getTerrainProcessor() const { return _terrainProcessor; }
+    [[nodiscard]] GameplayResourceBinding*         getGameplayResourceBinding() const;
+    [[nodiscard]] EnvironmentLightingProcessor*  getEnvironmentLightingProcessor() const;
+    [[nodiscard]] TerrainProcessor*              getTerrainProcessor() const;
+
+    // === IRenderRuntimeHostServices implementation ===
+    IWindowProvider* getMainWindowProvider() override;
+    IWindowProvider* getOrCreateMainWindow(const WindowCreateInfo& ci) override;
+    ShadowSettings*                        getShadowSettings() override;
+    const AppAutomationShadowOverrides*  getAutomationShadowOverrides() const override;
+    OffscreenJobQueueService getOffscreenJobQueueService() override;
     [[nodiscard]] InputManager&                  getInputManager() { return inputManager; }
     [[nodiscard]] const InputManager&            getInputManager() const { return inputManager; }
     [[nodiscard]] InputRouter&                   getInputRouter() { return inputRouter; }

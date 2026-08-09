@@ -1,6 +1,6 @@
 #include "RenderDiagnosticsService.h"
 
-#include "Host/App.h"
+
 
 #include "Core/Async/TaskQueue.h"
 #include "Core/Debug/RenderDocCapture.h"
@@ -126,16 +126,18 @@ void openCaptureDirectoryInOS(const std::string& filePath)
 
 } // namespace
 
-void RenderDiagnosticsService::init(IRender* render, const AppDesc& appDesc)
+void RenderDiagnosticsService::init(IRender* render, bool bEnableRenderDoc,
+                      const std::string& renderDocDllPath,
+                      const std::string& renderDocCaptureOutputDir)
 {
     _render = render;
-    if (!appDesc.bEnableRenderDoc) {
+    if (!bEnableRenderDoc) {
         return;
     }
 
     _renderDoc.capture             = ya::makeShared<RenderDocCapture>();
-    _renderDoc.configuredDllPath   = appDesc.renderDocDllPath;
-    _renderDoc.configuredOutputDir = appDesc.renderDocCaptureOutputDir;
+    _renderDoc.configuredDllPath   = renderDocDllPath;
+    _renderDoc.configuredOutputDir = renderDocCaptureOutputDir;
     if (!_renderDoc.capture->init(_renderDoc.configuredDllPath, _renderDoc.configuredOutputDir)) {
         YA_CORE_WARN("RenderDoc unavailable: failed to initialize with dll '{}'", _renderDoc.configuredDllPath);
     }

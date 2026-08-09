@@ -4,7 +4,6 @@
 #include "Core/Profiling/PerfState.h"
 #include "Graph/RenderGraphImportUtils.h"
 #include "RHI/Core/Swapchain.h"
-#include "Host/App.h"
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
 #include "Render3D/Forward/ForwardRenderPipeline.h"
 #include "utility.cc/ranges.h"

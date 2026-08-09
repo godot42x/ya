@@ -4,7 +4,10 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstdint>
+#include <string>
+#include <string_view>
 
 namespace ya
 {
@@ -187,5 +190,64 @@ struct ShadowSettings
         return s;
     }
 };
+
+namespace shadow_parse
+{
+
+inline std::string toLowerCopy(std::string_view text)
+{
+    std::string normalized(text);
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch)
+                   { return static_cast<char>(std::tolower(ch)); });
+    return normalized;
+}
+
+/// Parse a shadow-quality token ("off"/"low"/"medium"/"high"/"ultra").
+inline bool tryParseShadowQualityValue(std::string_view text, EShadowQuality::T& outQuality)
+{
+    const std::string normalized = toLowerCopy(text);
+    if (normalized == "off") {
+        outQuality = EShadowQuality::Off;
+        return true;
+    }
+    if (normalized == "low") {
+        outQuality = EShadowQuality::Low;
+        return true;
+    }
+    if (normalized == "medium") {
+        outQuality = EShadowQuality::Medium;
+        return true;
+    }
+    if (normalized == "high") {
+        outQuality = EShadowQuality::High;
+        return true;
+    }
+    if (normalized == "ultra") {
+        outQuality = EShadowQuality::Ultra;
+        return true;
+    }
+    return false;
+}
+
+/// Parse a shadow-filter token ("hard"/"pcf_low"/"pcf_high").
+inline bool tryParseShadowFilterValue(std::string_view text, EShadowFilter::T& outFilter)
+{
+    const std::string normalized = toLowerCopy(text);
+    if (normalized == "hard") {
+        outFilter = EShadowFilter::Hard;
+        return true;
+    }
+    if (normalized == "pcf_low" || normalized == "pcflow" || normalized == "pcf-low") {
+        outFilter = EShadowFilter::PCF_Low;
+        return true;
+    }
+    if (normalized == "pcf_high" || normalized == "pcfhigh" || normalized == "pcf-high") {
+        outFilter = EShadowFilter::PCF_High;
+        return true;
+    }
+    return false;
+}
+
+} // namespace shadow_parse
 
 } // namespace ya

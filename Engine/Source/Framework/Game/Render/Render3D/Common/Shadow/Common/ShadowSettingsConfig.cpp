@@ -1,8 +1,9 @@
 #include "ShadowSettingsConfig.h"
 
-#include "Host/Config/ConfigManager.h"
+#include "Core/Config/ConfigManager.h"
+#include "AppServices/AppAutomation.h"
 #include "Core/Log.h"
-#include "Host/App.h"
+
 
 #include <algorithm>
 #include <cctype>
@@ -35,145 +36,10 @@ constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_STABLE  = 
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_SPLITS  = "render.deferred.shadow.directionalCascadeSplitRatios";
 constexpr const char* DEFERRED_PIPELINE_CONFIG_KEY_SHADOW_DIRECTIONAL_Z_RANGE = "render.deferred.shadow.directionalDepthRangeMultiplier";
 
-std::string toLowerCopy(std::string_view text)
-{
-    std::string normalized(text);
-    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch)
-                   { return static_cast<char>(std::tolower(ch)); });
-    return normalized;
-}
-
-bool tryParseShadowQualityValue(std::string_view text, EShadowQuality::T& outQuality)
-{
-    const std::string normalized = toLowerCopy(text);
-    if (normalized == "off") {
-        outQuality = EShadowQuality::Off;
-        return true;
-    }
-    if (normalized == "low") {
-        outQuality = EShadowQuality::Low;
-        return true;
-    }
-    if (normalized == "medium") {
-        outQuality = EShadowQuality::Medium;
-        return true;
-    }
-    if (normalized == "high") {
-        outQuality = EShadowQuality::High;
-        return true;
-    }
-    if (normalized == "ultra") {
-        outQuality = EShadowQuality::Ultra;
-        return true;
-    }
-    return false;
-}
-
-bool tryParseShadowFilterValue(std::string_view text, EShadowFilter::T& outFilter)
-{
-    const std::string normalized = toLowerCopy(text);
-    if (normalized == "hard") {
-        outFilter = EShadowFilter::Hard;
-        return true;
-    }
-    if (normalized == "pcf_low" || normalized == "pcflow" || normalized == "pcf-low") {
-        outFilter = EShadowFilter::PCF_Low;
-        return true;
-    }
-    if (normalized == "pcf_high" || normalized == "pcfhigh" || normalized == "pcf-high") {
-        outFilter = EShadowFilter::PCF_High;
-        return true;
-    }
-    return false;
-}
-
 } // namespace shadow_settings_config_detail
 
 namespace shadow_settings
 {
-
-void loadAutomationOverridesFromConfig(AppAutomationShadowOverrides& overrides)
-{
-    auto& configManager = ConfigManager::get();
-    if (!configManager.hasDocument(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME)) {
-        return;
-    }
-
-    if (std::string qualityText; configManager.tryGet<std::string>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.quality", qualityText)) {
-        EShadowQuality::T quality = EShadowQuality::Medium;
-        if (shadow_settings_config_detail::tryParseShadowQualityValue(qualityText, quality)) {
-            overrides.quality = quality;
-        }
-        else {
-            YA_CORE_WARN("Ignoring invalid automation shadow quality override: {}", qualityText);
-        }
-    }
-    else if (uint32_t qualityValue = 0; configManager.tryGet<uint32_t>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.quality", qualityValue)) {
-        if (qualityValue <= static_cast<uint32_t>(EShadowQuality::Ultra)) {
-            overrides.quality = static_cast<EShadowQuality::T>(qualityValue);
-        }
-        else {
-            YA_CORE_WARN("Ignoring invalid automation shadow quality override value: {}", qualityValue);
-        }
-    }
-
-    if (bool directionalEnabled = false; configManager.tryGet<bool>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.directionalEnabled", directionalEnabled)) {
-        overrides.directionalEnabled = directionalEnabled;
-    }
-    if (uint32_t resolution = 0; configManager.tryGet<uint32_t>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.resolution", resolution)) {
-        overrides.resolution = std::clamp(resolution, 128u, 8192u);
-    }
-    if (bool pointLightEnabled = false; configManager.tryGet<bool>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.pointLightEnabled", pointLightEnabled)) {
-        overrides.pointLightEnabled = pointLightEnabled;
-    }
-    if (bool pointLightUseIndirect = false; configManager.tryGet<bool>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.pointLightUseIndirect", pointLightUseIndirect)) {
-        overrides.pointLightUseIndirect = pointLightUseIndirect;
-    }
-    if (bool pointLightIndirectCullEnabled = false; configManager.tryGet<bool>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.pointLightIndirectCullEnabled", pointLightIndirectCullEnabled)) {
-        overrides.pointLightIndirectCullEnabled = pointLightIndirectCullEnabled;
-    }
-    if (uint32_t maxPointLightShadows = 0; configManager.tryGet<uint32_t>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.maxPointLightShadows", maxPointLightShadows)) {
-        overrides.maxPointLightShadows = std::min(maxPointLightShadows, static_cast<uint32_t>(MAX_POINT_LIGHTS));
-    }
-
-    if (std::string filterText; configManager.tryGet<std::string>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.filter", filterText)) {
-        EShadowFilter::T filter = EShadowFilter::Hard;
-        if (shadow_settings_config_detail::tryParseShadowFilterValue(filterText, filter)) {
-            overrides.filter = filter;
-        }
-        else {
-            YA_CORE_WARN("Ignoring invalid automation shadow filter override: {}", filterText);
-        }
-    }
-    else if (uint32_t filterValue = 0; configManager.tryGet<uint32_t>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.filter", filterValue)) {
-        if (filterValue <= static_cast<uint32_t>(EShadowFilter::PCF_High)) {
-            overrides.filter = static_cast<EShadowFilter::T>(filterValue);
-        }
-        else {
-            YA_CORE_WARN("Ignoring invalid automation shadow filter override value: {}", filterValue);
-        }
-    }
-
-    if (float bias = 0.0f; configManager.tryGet<float>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.bias", bias)) {
-        overrides.bias = bias;
-    }
-    if (float normalBias = 0.0f; configManager.tryGet<float>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.normalBias", normalBias)) {
-        overrides.normalBias = normalBias;
-    }
-    if (float directionalDistance = 0.0f; configManager.tryGet<float>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.directionalDistance", directionalDistance)) {
-        overrides.directionalDistance = directionalDistance;
-    }
-    if (uint32_t directionalCascades = 0; configManager.tryGet<uint32_t>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.directionalCascades", directionalCascades)) {
-        overrides.directionalCascades = std::clamp(directionalCascades, 1u, static_cast<uint32_t>(MAX_DIRECTIONAL_CASCADES));
-    }
-    if (std::array<float, MAX_DIRECTIONAL_CASCADES - 1> splitRatios{};
-        configManager.tryGet(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.directionalCascadeSplitRatios", splitRatios)) {
-        overrides.directionalCascadeSplitRatios = splitRatios;
-    }
-    if (float depthRangeMultiplier = 0.0f; configManager.tryGet<float>(shadow_settings_config_detail::AUTOMATION_CONFIG_DOC_NAME, "shadow.directionalDepthRangeMultiplier", depthRangeMultiplier)) {
-        overrides.directionalDepthRangeMultiplier = std::max(depthRangeMultiplier, 1.0f);
-    }
-}
 
 void applyAutomationOverrides(const AppAutomationShadowOverrides& overrides, ShadowSettings& shadowSettings)
 {

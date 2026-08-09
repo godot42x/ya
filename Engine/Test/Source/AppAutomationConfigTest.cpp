@@ -2,7 +2,7 @@
 
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 
-#include "Host/Config/ConfigManager.h"
+#include "Core/Config/ConfigManager.h"
 #include "Core/Profiling/Profiling.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Host/App.h"

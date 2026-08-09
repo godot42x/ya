@@ -1,7 +1,6 @@
 #include "RenderRuntime.h"
 
-#include "Host/App.h"
-#include "Host/WindowManager.h"
+#include "AppServices/RuntimeServices.h"
 #include "Render3D/Services/DebugRenderSystem.h"
 #include "RHI/Backend/Vulkan/VulkanSwapChain.h"
 #include "RHI/Core/RenderResourceFactory.h"
@@ -75,14 +74,12 @@ EnvironmentLightingSceneResources RenderRuntime::resolveSceneEnvironmentLighting
 void RenderRuntime::init(const InitDesc& desc)
 {
     YA_PROFILE_FUNCTION_LOG();
-    YA_CORE_ASSERT(desc.app && desc.appDesc, "RenderRuntime init requires App and AppDesc");
-
-    const AppDesc& appDesc = *desc.appDesc;
+    YA_CORE_ASSERT(desc.hostServices != nullptr, "RenderRuntime init requires host services");
 
     initRuntimeState(desc);
     initShaderSystems();
-    initRenderBackend(appDesc);
-    initDiagnostics(appDesc);
+    initRenderBackend(desc);
+    initDiagnostics(desc);
     initResourceCaches();
     initSharedRenderResources();
     initPresentationResources();
@@ -92,15 +89,15 @@ void RenderRuntime::init(const InitDesc& desc)
 
 void RenderRuntime::initRuntimeState(const InitDesc& desc)
 {
-    _app = desc.app;
+    _hostServices       = desc.hostServices;
+    _offscreenScheduler = desc.offscreenScheduler;
     _environmentLightingProvider = desc.environmentLightingProvider;
     _activeSceneProvider         = desc.activeSceneProvider;
 
-    const AppDesc& appDesc = *desc.appDesc;
-    currentRenderAPI       = ERenderAPI::Vulkan;
-    _viewportRect          = Rect2D{
+    currentRenderAPI = ERenderAPI::Vulkan;
+    _viewportRect    = Rect2D{
                  .pos    = {0.0f, 0.0f},
-                 .extent = {static_cast<float>(appDesc.width), static_cast<float>(appDesc.height)},
+                 .extent = {static_cast<float>(desc.windowWidth), static_cast<float>(desc.windowHeight)},
     };
 }
 
@@ -145,18 +142,26 @@ void RenderRuntime::initShaderSystems()
                   { _shaderStorage.reset(); });
 }
 
-void RenderRuntime::initDiagnostics(const AppDesc& appDesc)
+void RenderRuntime::initDiagnostics(const InitDesc& desc)
 {
-    _diagnostics.init(_render, appDesc);
+    _diagnostics.init(_render, desc.bEnableRenderDoc, desc.renderDocDllPath, desc.renderDocCaptureOutputDir);
     _deleter.push("RenderDiagnostics", [this](void*)
                   { _diagnostics.shutdown(); });
 }
 
-void RenderRuntime::initRenderBackend(const AppDesc& appDesc)
+void RenderRuntime::initRenderBackend(const InitDesc& desc)
 {
-    YA_CORE_ASSERT(_app != nullptr, "RenderRuntime requires App before initializing render backend");
-    auto* windowManager = _app->getWindowManager();
-    YA_CORE_ASSERT(windowManager != nullptr, "WindowManager must exist before initializing render backend");
+    YA_CORE_ASSERT(_hostServices != nullptr, "RenderRuntime requires host services before initializing render backend");
+    auto* windowProvider = _hostServices->getOrCreateMainWindow(WindowCreateInfo{
+        .index      = 0,
+        .renderAPI  = currentRenderAPI,
+        .title      = desc.windowTitle,
+        .width      = desc.windowWidth,
+        .height     = desc.windowHeight,
+        .scale      = 1.0f,
+        .bResizable = true,
+    });
+    YA_CORE_ASSERT(windowProvider != nullptr, "Window provider must exist before initializing render backend");
 
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
@@ -168,26 +173,13 @@ void RenderRuntime::initRenderBackend(const AppDesc& appDesc)
             // is requested at runtime through the control port, not only when
             // a startup automation screenshot path was configured.
             .bEnableTransferSrc = true,
-            .width              = static_cast<uint32_t>(appDesc.width),
-            .height             = static_cast<uint32_t>(appDesc.height),
+            .width              = desc.windowWidth,
+            .height             = desc.windowHeight,
         },
-        .disabledGraphicsCards = appDesc.disabledGraphicsCards,
+        .disabledGraphicsCards = {},
     };
 
-    if (!windowManager->getMainWindow()) {
-        renderCI.windowProvider = windowManager->createMainWindow(WindowCreateInfo{
-            .index      = 0,
-            .renderAPI  = currentRenderAPI,
-            .title      = appDesc.title,
-            .width      = static_cast<uint32_t>(appDesc.width),
-            .height     = static_cast<uint32_t>(appDesc.height),
-            .scale      = 1.0f,
-            .bResizable = true,
-        });
-    }
-    else {
-        renderCI.windowProvider = windowManager->getMainWindow();
-    }
+    renderCI.windowProvider = windowProvider;
 
     _render = IRender::create(renderCI);
     YA_CORE_ASSERT(_render, "Failed to create IRender instance");
@@ -305,6 +297,29 @@ void RenderRuntime::initCommandResources()
 void RenderRuntime::initFrameServices()
 {
     DeferredDeletionQueue::get().init(/*framesInFlight=*/1);
+
+    // Owned derived-processing systems: gameplay resource binding and the
+    // environment-lighting/terrain processors live with the render runtime
+    // (injected narrow services only; never located through the Host).
+    _gameplayResourceBinding = std::make_unique<GameplayResourceBinding>();
+    _gameplayResourceBinding->setActiveSceneProvider(_activeSceneProvider);
+    _gameplayResourceBinding->setFrameIndexProvider([this]() { return getFrameIndex(); });
+    _gameplayResourceBinding->init();
+
+    _environmentLightingProcessor = std::make_unique<EnvironmentLightingProcessor>();
+    _environmentLightingProcessor->setRender(_render);
+    _environmentLightingProcessor->setActiveSceneProvider(_activeSceneProvider);
+    _environmentLightingProcessor->setFrameIndexProvider([this]() { return getFrameIndex(); });
+    if (_hostServices) {
+        _environmentLightingProcessor->setOffscreenJobQueueService(_hostServices->getOffscreenJobQueueService());
+    }
+    _environmentLightingProcessor->init();
+
+    _terrainProcessor = std::make_unique<TerrainProcessor>();
+    _terrainProcessor->setRender(_render);
+    _terrainProcessor->setActiveSceneProvider(_activeSceneProvider);
+    _terrainProcessor->setFrameIndexProvider([this]() { return getFrameIndex(); });
+    _terrainProcessor->init();
 }
 
 void RenderRuntime::shutdown(bool bRenderAlreadyIdle)
@@ -314,6 +329,20 @@ void RenderRuntime::shutdown(bool bRenderAlreadyIdle)
     }
 
     shutdownActivePipeline();
+    // Owned derived-processing systems must release their GPU resources
+    // before the render backend is destroyed.
+    if (_environmentLightingProcessor) {
+        _environmentLightingProcessor->shutdown();
+        _environmentLightingProcessor.reset();
+    }
+    if (_terrainProcessor) {
+        _terrainProcessor->shutdown();
+        _terrainProcessor.reset();
+    }
+    if (_gameplayResourceBinding) {
+        _gameplayResourceBinding->shutdown();
+        _gameplayResourceBinding.reset();
+    }
     getDebugRenderSystem().destroy();
     shutdownRuntimeServices();
     _deleter.clear();

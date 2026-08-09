@@ -2,7 +2,7 @@
 
 #include "Core/Math/Geometry.h"
 #include "RHI/RenderDefines.h"
-#include "ShadowSettings.h"
+#include "AppServices/ShadowSettings.h"
 
 #include <cstdint>
 #include <memory>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Render3D/Shadow/ShadowSettings.h"
+#include "AppServices/ShadowSettings.h"
 
 #include <string>
 
@@ -12,7 +12,6 @@ struct AppAutomationShadowOverrides;
 namespace shadow_settings
 {
 
-YA_RENDER_3D_API void           loadAutomationOverridesFromConfig(AppAutomationShadowOverrides& overrides);
 YA_RENDER_3D_API void           applyAutomationOverrides(const AppAutomationShadowOverrides& overrides, ShadowSettings& shadowSettings);
 [[nodiscard]] YA_RENDER_3D_API bool hasRuntimeSettings();
 [[nodiscard]] YA_RENDER_3D_API ShadowSettings loadSettingsFromDocument(const std::string& documentName, const ShadowSettings& baseline);

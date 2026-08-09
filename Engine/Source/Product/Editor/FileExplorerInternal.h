@@ -2,7 +2,7 @@
 
 #include "Editor/FileExplorer.h"
 
-#include "Host/Config/ConfigManager.h"
+#include "Core/Config/ConfigManager.h"
 #include "Core/System/PathUtils.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Editor/ImGui/ImGuiHelper.h"

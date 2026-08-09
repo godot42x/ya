@@ -10,7 +10,7 @@
 namespace ya
 {
 
-struct App;
+struct IOffscreenTaskScheduler;
 struct IRender;
 struct ICommandBuffer;
 
@@ -18,7 +18,7 @@ struct OffscreenTaskService
 {
     void init(IRender* render);
     void shutdown();
-    void tick(App& app);
+    void tick(IOffscreenTaskScheduler& scheduler);
 
     [[nodiscard]] bool isPending() const { return _pending; }
 

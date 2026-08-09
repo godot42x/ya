@@ -1,6 +1,6 @@
 #include "OffscreenTaskService.h"
 
-#include "Host/App.h"
+#include "AppServices/RuntimeServices.h"
 
 #include "RHI/Backend/Vulkan/VulkanRender.h"
 
@@ -59,7 +59,7 @@ void OffscreenTaskService::shutdown()
     _render  = nullptr;
 }
 
-void OffscreenTaskService::tick(App& app)
+void OffscreenTaskService::tick(IOffscreenTaskScheduler& scheduler)
 {
     YA_PROFILE_FUNCTION()
     if (!_render || !_commandBuffer) {
@@ -75,7 +75,7 @@ void OffscreenTaskService::tick(App& app)
         finalizeCompletedJobs();
     }
 
-    if (!app.getTaskManager().hasOffscreenTasks()) {
+    if (!scheduler.hasOffscreenTasks()) {
         return;
     }
 
@@ -87,7 +87,7 @@ void OffscreenTaskService::tick(App& app)
     }
 
     _submittedJobs.clear();
-    app.getTaskManager().updateOffscreenTasks(cmdBuf.get(), &_submittedJobs);
+    scheduler.updateOffscreenTasks(cmdBuf.get(), &_submittedJobs);
 
     if (!cmdBuf->end()) {
         YA_CORE_ERROR("Failed to end offscreen command buffer");

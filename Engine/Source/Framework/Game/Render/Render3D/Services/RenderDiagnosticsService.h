@@ -10,7 +10,7 @@
 namespace ya
 {
 
-struct AppDesc;
+
 struct IRender;
 struct RenderDiagnosticsService
 {
@@ -28,7 +28,9 @@ struct RenderDiagnosticsService
         std::string              configuredOutputDir;
     };
 
-    void init(IRender* render, const AppDesc& appDesc);
+    void init(IRender* render, bool bEnableRenderDoc,
+                    const std::string& renderDocDllPath,
+                    const std::string& renderDocCaptureOutputDir);
     void shutdown();
 
     void onFrameBegin();

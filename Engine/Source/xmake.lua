@@ -139,6 +139,7 @@ includes("./Foundation/RHI/xmake.lua")
 -- Framework tier: product lines. Hierarchy first (renderer-independent
 -- scene-tree base); GUI framework is self-contained; Game depends on
 -- Foundation + Hierarchy + GUI.
+includes("./Framework/AppServices/xmake.lua")
 includes("./Framework/Hierarchy/xmake.lua")
 includes("./Framework/GUI/xmake.lua")
 

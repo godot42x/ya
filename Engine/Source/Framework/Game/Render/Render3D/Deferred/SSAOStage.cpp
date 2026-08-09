@@ -4,7 +4,7 @@
 #include "Graph/RenderGraphImportUtils.h"
 #include "Core/Profiling/Instrumentor.h"
 
-#include "Host/Config/ConfigManager.h"
+#include "Core/Config/ConfigManager.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Render.h"
 #include "RHI/Backend/TextureLibrary.h"

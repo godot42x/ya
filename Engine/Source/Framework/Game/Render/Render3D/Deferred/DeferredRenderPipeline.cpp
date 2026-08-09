@@ -18,10 +18,11 @@
 #include "RHI/Core/Swapchain.h"
 #include "RHI/Core/Texture.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
-#include "Host/App.h"
+
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "Graph/RenderGraphExecutor.h"
-#include "Host/Config/ConfigManager.h"
+#include "Core/Config/ConfigManager.h"
+#include "AppServices/RuntimeServices.h"
 
 #include "Scene/Core/Scene.h"
 #include <algorithm>
@@ -44,8 +45,8 @@ bool shouldRenderBillboard(const BillboardComponent& billboard)
         return true;
     }
 
-    if (const auto* app = App::get()) {
-        return app->isStopped();
+    if (const auto* host = RuntimeServices::getRenderRuntimeHost()) {
+        return host->isStopped();
     }
 
     return false;

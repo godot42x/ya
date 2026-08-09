@@ -20,7 +20,7 @@
 #include "Render3D/Common/IRenderRuntimeServices.h"
 #include "Render3D/Common/EntityIdViewportPass.h"
 #include "Render3D/Common/PostProcessingStage.h"
-#include "Render3D/Common/PostProcessingState.h"
+#include "AppServices/PostProcessingState.h"
 #include "Render3D/Common/Shadow/Common/ShadowMapResources.h"
 #include "Render3D/Common/Shadow/Common/ShadowRuntimeState.h"
 #include "Render3D/Common/Shadow/ShadowStage.h"

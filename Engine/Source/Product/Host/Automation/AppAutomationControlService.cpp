@@ -7,7 +7,7 @@
 #include "Host/Lifecycle/AppAutomation.h"
 #include "Host/Utility/OffscreenJobRunner.h"
 
-#include "Host/Config/ConfigManager.h"
+#include "Core/Config/ConfigManager.h"
 
 #include "Core/Log.h"
 #include "Core/Math/Geometry.h"

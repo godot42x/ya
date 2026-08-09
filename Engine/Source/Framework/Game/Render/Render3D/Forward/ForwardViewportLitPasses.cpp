@@ -1,6 +1,6 @@
 #include "ForwardViewportLitPasses.h"
 
-#include "Host/Config/ConfigManager.h"
+#include "Core/Config/ConfigManager.h"
 #include "RHI/Core/Buffer.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "Render3D/Material/MaterialFactory.h"

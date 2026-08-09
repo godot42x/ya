@@ -2,7 +2,6 @@
 #include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Core/RenderImage.h"
 
-#include "Host/App.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Core/Sampler.h"
 

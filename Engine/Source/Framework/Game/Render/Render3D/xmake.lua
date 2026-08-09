@@ -12,11 +12,8 @@ target("ya-render-3d")
     add_includedirs(path.join(os.projectdir(), "Engine/Shader/GLSL/Generated"), { public = true })
     add_includedirs(path.join(os.projectdir(), "Engine/Shader/Slang/Generated/Common"), { public = true })
     add_includedirs(path.join(os.projectdir(), "Engine/Shader/GLSL/Generated/Common"), { public = true })
-    -- Transition (Phase 7): 13 render-3d files still compile Host headers
-    -- (app services). Private-only so the Product tier root never propagates
-    -- to consumers; removed when the app-services interfaces land.
-    add_includedirs(path.join(os.projectdir(), "Engine/Source/Product"))
     add_deps(
+        "ya-app-services",
         "ya-gui-resources",
         "ya-gui-compose",
         "ya-resource-core", "ya-resource-loader", "ya-resource-runtime",

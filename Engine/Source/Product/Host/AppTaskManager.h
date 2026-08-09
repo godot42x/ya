@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
+#include "AppServices/RuntimeServices.h"
 
 #include <deque>
 #include <functional>
@@ -14,7 +15,7 @@ namespace ya
 struct ICommandBuffer;
 struct OffscreenJobState;
 
-struct TaskManager
+struct TaskManager : public IOffscreenTaskScheduler
 {
     std::deque<std::function<void()>> tasks;
     std::deque<std::pair<std::shared_ptr<OffscreenJobState>, std::function<void(ICommandBuffer*)>>> offscreenTasks;

@@ -9,7 +9,7 @@
 #include "RHI/Shader.h"
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Common/IRenderRuntimeServices.h"
-#include "Render3D/Common/PostProcessingState.h"
+#include "AppServices/PostProcessingState.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Services/EnvironmentLightingResultProvider.h"
 #include "Render3D/Common/RenderTargetCatalog.h"
@@ -18,6 +18,9 @@
 #include "Render3D/Services/OffscreenTaskService.h"
 #include "Render3D/Services/RenderDiagnosticsService.h"
 #include "Render3D/Services/RenderSharedResourceProvider.h"
+#include "Render3D/Services/GameplayResourceBinding.h"
+#include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
+#include "Render3D/Terrain/TerrainProcessor.h"
 
 #include <functional>
 #include <glm/glm.hpp>
@@ -26,9 +29,8 @@
 namespace ya
 {
 
-struct App;
-struct AppDesc;
-enum AppMode : int;
+struct IRenderRuntimeHostServices;
+struct IOffscreenTaskScheduler;
 struct SceneManager;
 struct Scene;
 struct EnvironmentLightingProcessor;
@@ -72,12 +74,22 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
 
     struct InitDesc
     {
-        App*                              app     = nullptr;
-        const AppDesc*                    appDesc = nullptr;
+        /// Narrow host services injected by the Host; Render3D never locates
+        /// App through globals.
+        IRenderRuntimeHostServices*       hostServices = nullptr;
+        IOffscreenTaskScheduler*          offscreenScheduler = nullptr;
         /// Injected narrow environment-lighting result provider (bound by the
         /// Host; Render3D never locates the processor through App).
         EnvironmentLightingResultProvider environmentLightingProvider;
         std::function<Scene*()>           activeSceneProvider;
+        /// Presentation/app window metrics (copied from AppDesc by the Host).
+        uint32_t    windowWidth  = 0;
+        uint32_t    windowHeight = 0;
+        std::string windowTitle;
+        /// RenderDoc diagnostics knobs (copied from AppDesc by the Host).
+        bool        bEnableRenderDoc      = false;
+        std::string renderDocDllPath;
+        std::string renderDocCaptureOutputDir;
     };
 
     /// Presentation graph extension points recorded by the app. A single
@@ -126,9 +138,16 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
         Node* uiSceneRoot = nullptr;
     };
 
-    App* _app = nullptr;
+    IRenderRuntimeHostServices* _hostServices = nullptr;
+    IOffscreenTaskScheduler*    _offscreenScheduler = nullptr;
     EnvironmentLightingResultProvider _environmentLightingProvider;
     std::function<Scene*()>           _activeSceneProvider;
+    /// Owned derived-processing systems (gameplay binding / environment
+    /// lighting / terrain); ticked by renderFrame. Created by Render3D so
+    /// the module never reaches the Host to locate them.
+    std::unique_ptr<GameplayResourceBinding>       _gameplayResourceBinding;
+    std::unique_ptr<EnvironmentLightingProcessor>  _environmentLightingProcessor;
+    std::unique_ptr<TerrainProcessor>              _terrainProcessor;
 
     ut::StackDeleter _deleter;
 
@@ -186,6 +205,7 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     [[nodiscard]] IImageView*                    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
     [[nodiscard]] bool                           isOffscreenPending() const { return _offscreen.isPending(); }
     [[nodiscard]] OffscreenTaskService&          getOffscreenTaskService() { return _offscreen; }
+    [[nodiscard]] TerrainProcessor*               getTerrainProcessor() const { return _terrainProcessor.get(); }
     [[nodiscard]] const OffscreenTaskService&    getOffscreenTaskService() const { return _offscreen; }
     [[nodiscard]] RenderDiagnosticsService&      getDiagnosticsService() { return _diagnostics; }
     [[nodiscard]] const RenderDiagnosticsService& getDiagnosticsService() const { return _diagnostics; }
@@ -239,8 +259,8 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     // =========================================================================
     void                   initRuntimeState(const InitDesc& desc);
     void                   initShaderSystems();
-    void                   initDiagnostics(const AppDesc& appDesc);
-    void                   initRenderBackend(const AppDesc& appDesc);
+    void                   initDiagnostics(const InitDesc& desc);
+    void                   initRenderBackend(const InitDesc& desc);
     void                   initResourceCaches();
     void                   initSharedRenderResources();
     void                   initPresentationResources();

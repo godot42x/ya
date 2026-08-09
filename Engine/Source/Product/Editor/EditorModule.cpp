@@ -1,6 +1,6 @@
 #include "Editor/EditorModule.h"
 
-#include "Host/Config/ConfigManager.h"
+#include "Core/Config/ConfigManager.h"
 #include "Core/Math/AABB.h"
 #include "Gameplay/Systems/CameraController/FreeCameraController.h"
 #include "Core/Profiling/Profiling.h"

@@ -2,6 +2,8 @@
 #include "Host/AppRenderState.h"
 #include "Host/Automation/AppAutomationControlService.h"
 #include "Host/WindowManager.h"
+#include "Core/Config/ConfigManager.h"
+#include "Render3D/RenderRuntime.h"
 
 #include "Core/Module/ProjectDescriptor.h"
 #include "Core/Profiling/Profiling.h"
@@ -28,6 +30,10 @@ App::App()
 {
     inputRouter.setApp(*this);
     inputRouter.setDefaultNode(gameInputNode);
+    // Register the render-runtime host services contract once; framework
+    // modules (Render3D) consume it through RuntimeServices, never through
+    // App globals.
+    RuntimeServices::setRenderRuntimeHost(this);
 }
 
 App::~App() = default;
@@ -272,6 +278,61 @@ void App::notifyModulesSceneDestroyed(Scene* scene)
     }
 }
 
+
+IWindowProvider* App::getMainWindowProvider()
+{
+    return _windowManager ? _windowManager->getMainWindow() : nullptr;
+}
+
+IWindowProvider* App::getOrCreateMainWindow(const WindowCreateInfo& ci)
+{
+    if (!_windowManager) {
+        return nullptr;
+    }
+    if (auto* window = _windowManager->getMainWindow()) {
+        return window;
+    }
+    return _windowManager->createMainWindow(ci);
+}
+
+ShadowSettings* App::getShadowSettings()
+{
+    return &getRenderServices().getShadowSettings();
+}
+
+const AppAutomationShadowOverrides* App::getAutomationShadowOverrides() const
+{
+    return &_ci.automation.shadow;
+}
+
+
+OffscreenJobQueueService App::getOffscreenJobQueueService()
+{
+    return OffscreenJobQueueService{
+        .enqueue = [this](const std::shared_ptr<OffscreenJobState>& job, std::function<void(ICommandBuffer*)> task)
+        {
+            taskManager.enqueueOffscreenTask(job, std::move(task));
+        },
+    };
+}
+
+GameplayResourceBinding* App::getGameplayResourceBinding() const
+{
+    auto* runtime = getRenderServices().getRenderRuntime();
+    return runtime ? runtime->getGameplayResourceBinding() : nullptr;
+}
+
+EnvironmentLightingProcessor* App::getEnvironmentLightingProcessor() const
+{
+    auto* runtime = getRenderServices().getRenderRuntime();
+    return runtime ? runtime->getEnvironmentLightingProcessor() : nullptr;
+}
+
+TerrainProcessor* App::getTerrainProcessor() const
+{
+    auto* runtime = getRenderServices().getRenderRuntime();
+    return runtime ? runtime->getTerrainProcessor() : nullptr;
+}
 uint64_t App::getElapsedTimeMS() const
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(clock_t::now() - _startTime).count();

@@ -2,7 +2,7 @@
 
 #include "Editor/Panels/RuntimeToolsPanel.h"
 
-#include "Host/Config/ConfigManager.h"
+#include "Core/Config/ConfigManager.h"
 #include "Gameplay/Systems/CameraController/FreeCameraController.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"

@@ -1,6 +1,6 @@
 #include "RenderRuntime.h"
+#include "AppServices/RuntimeServices.h"
 
-#include "Host/App.h"
 #include "Render3D/Services/DebugRenderSystem.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
@@ -50,6 +50,19 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     // swapchain-image scope and acquire/present lifecycle stay outside the world
     // graph, so merging the two executors would only spread swapchain semantics
     // into the render pipelines without removing real duplicated state.
+
+    // Tick owned derived-processing systems (gameplay binding / environment
+    // lighting / terrain) inside the render frame; the Host no longer drives
+    // them through its generic system list.
+    if (_environmentLightingProcessor) {
+        _environmentLightingProcessor->onUpdate(input.pipeline.deltaTime);
+    }
+    if (_terrainProcessor) {
+        _terrainProcessor->onUpdate(input.pipeline.deltaTime);
+    }
+    if (_gameplayResourceBinding) {
+        _gameplayResourceBinding->onUpdate(input.pipeline.deltaTime);
+    }
 
     applyPendingRenderPipelineSwitch();
     applyPendingRenderTargetFormatCommands();
@@ -147,30 +160,27 @@ IRenderPipeline* RenderRuntime::getActivePipeline() const
 
 uint64_t RenderRuntime::getFrameIndex() const
 {
-    return _app ? _app->getFrameIndex() : 0;
+    return _hostServices ? _hostServices->getFrameIndex() : 0;
 }
 
 double RenderRuntime::getElapsedTimeSeconds() const
 {
-    return _app ? static_cast<double>(_app->getElapsedTimeMS()) / 1000.0 : 0.0;
+    return _hostServices ? _hostServices->getElapsedTimeMS() / 1000.0 : 0.0;
 }
 
 Scene* RenderRuntime::getActiveScene() const
 {
-    if (!_app || !_app->getSceneServices().getSceneManager()) {
-        return nullptr;
-    }
-    return _app->getSceneServices().getActiveScene();
+    return _activeSceneProvider ? _activeSceneProvider() : nullptr;
 }
 
 GameplayResourceBinding* RenderRuntime::getGameplayResourceBinding() const
 {
-    return _app ? _app->getGameplayResourceBinding() : nullptr;
+    return _gameplayResourceBinding.get();
 }
 
 EnvironmentLightingProcessor* RenderRuntime::getEnvironmentLightingProcessor() const
 {
-    return _app ? _app->getEnvironmentLightingProcessor() : nullptr;
+    return _environmentLightingProcessor.get();
 }
 
 bool RenderRuntime::isShadowMappingEnabled() const
@@ -399,7 +409,7 @@ void RenderRuntime::initForwardPipeline(int windowWidth, int windowHeight)
         .render                       = _render,
         .windowW                      = windowWidth,
         .windowH                      = windowHeight,
-        .shadowSettings               = _app ? &_app->getRenderServices().getShadowSettings() : nullptr,
+        .shadowSettings               = _hostServices ? _hostServices->getShadowSettings() : nullptr,
         .runtimeServices              = this,
     });
 }
@@ -411,8 +421,8 @@ void RenderRuntime::initDeferredPipeline(int windowWidth, int windowHeight)
         .render                   = _render,
         .windowW                  = windowWidth,
         .windowH                  = windowHeight,
-        .shadowSettings           = _app ? &_app->getRenderServices().getShadowSettings() : nullptr,
-        .automationShadowOverrides = _app ? &_app->getDesc().automation.shadow : nullptr,
+        .shadowSettings           = _hostServices ? _hostServices->getShadowSettings() : nullptr,
+        .automationShadowOverrides = _hostServices ? _hostServices->getAutomationShadowOverrides() : nullptr,
         .environmentLightingDSL = _sharedResourceProvider.getEnvironmentLightingDescriptorSetLayout(),
         .runtimeServices          = this,
     });

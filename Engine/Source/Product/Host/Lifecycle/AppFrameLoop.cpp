@@ -470,7 +470,7 @@ void AppFrameLoop::tickRender(App& app, float dt)
         }
     } diagnosticsGuard{.diagnostics = &diagnostics};
 
-    renderRuntime->getOffscreenTaskService().tick(app);
+    renderRuntime->getOffscreenTaskService().tick(app.getTaskManager());
 
     const uint32_t flightIndex = resolveFlightIndex(app);
 

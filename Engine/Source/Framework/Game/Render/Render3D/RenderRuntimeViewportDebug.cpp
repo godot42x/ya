@@ -1,7 +1,7 @@
 #include "RHI/Core/RenderImage.h"
 #include "RenderRuntime.h"
 
-#include "Host/App.h"
+
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
@@ -114,12 +114,12 @@ void appendShadowDebugSlots(ViewportDebugBuilder&          builder,
 
 void appendSkyboxDebugSlots(const RenderRuntime& runtime, ViewportDebugBuilder& builder)
 {
-    if (!runtime._app) {
+    if (!runtime.getActiveScene() && !runtime.getEnvironmentLightingProcessor()) {
         return;
     }
 
-    auto* scene = runtime._app->getSceneServices().getActiveScene();
-    auto* envProcessor = runtime._app->getEnvironmentLightingProcessor();
+    auto* scene = runtime.getActiveScene();
+    auto* envProcessor = runtime.getEnvironmentLightingProcessor();
     if (!scene || !envProcessor) {
         return;
     }
@@ -359,12 +359,12 @@ void appendDeferredDebugSlots(const RenderRuntime&                    runtime,
 
 void appendEnvironmentDebugSlots(const RenderRuntime& runtime, ViewportDebugBuilder& builder)
 {
-    if (!runtime._app || !runtime._app->getSceneServices().getSceneManager()) {
+    if (!runtime.getEnvironmentLightingProcessor() && !runtime.getActiveScene()) {
         return;
     }
 
-    if (auto* scene = runtime._app->getSceneServices().getActiveScene()) {
-        auto* envProcessor = runtime._app->getEnvironmentLightingProcessor();
+    if (auto* scene = runtime.getActiveScene()) {
+        auto* envProcessor = runtime.getEnvironmentLightingProcessor();
         if (!envProcessor) {
             return;
         }
@@ -528,9 +528,9 @@ size_t RenderRuntime::buildViewportDebugCatalogSignature() const
         hashCombineValue(seed, deferredViews.ssaoTextureOwner != nullptr);
     }
 
-    if (_app && _app->getSceneServices().getSceneManager()) {
-        if (auto* scene = _app->getSceneServices().getActiveScene()) {
-            auto* envProcessor = _app->getEnvironmentLightingProcessor();
+    if (getActiveScene()) {
+        if (auto* scene = getActiveScene()) {
+            auto* envProcessor = getEnvironmentLightingProcessor();
             if (envProcessor) {
                 bool     bHasSkybox     = false;
                 uint32_t skyboxFaceMask = 0;

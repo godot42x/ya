@@ -2,7 +2,7 @@
 
 #include "Host/App.h"
 
-#include "Host/Config/ConfigManager.h"
+#include "Core/Config/ConfigManager.h"
 
 #include "Core/Log.h"
 #include "Core/Profiling/Instrumentor.h"

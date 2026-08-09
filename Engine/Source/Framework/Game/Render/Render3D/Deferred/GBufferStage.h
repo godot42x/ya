@@ -7,7 +7,7 @@
 #include "Render3D/Material/PBRMaterial.h"
 #include "Render3D/Material/PhongMaterial.h"
 #include "Render3D/Material/UnlitMaterial.h"
-#include "Render3D/Shadow/ShadowSettings.h"
+#include "AppServices/ShadowSettings.h"
 #include "Render3D/Stage/IRenderStage.h"
 
 #include "DeferredFrameResourceSet.h"

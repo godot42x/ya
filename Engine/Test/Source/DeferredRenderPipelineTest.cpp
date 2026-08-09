@@ -1,7 +1,7 @@
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
 #include "Render3D/Deferred/DeferredFrameGraphPasses.h"
 
-#include "Host/Config/ConfigManager.h"
+#include "Core/Config/ConfigManager.h"
 #include "Core/System/VirtualFileSystem.h"
 
 #include <gtest/gtest.h>

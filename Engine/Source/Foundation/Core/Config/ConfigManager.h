@@ -108,23 +108,23 @@ struct ConfigManager : public disable_copy
     };
 
 
-    static YA_HOST_API ConfigManager& get();
+    static YA_CORE_API ConfigManager& get();
 
-    YA_HOST_API void init();
-    YA_HOST_API void shutdown();
-    YA_HOST_API void flushAll();
-    YA_HOST_API void markDirty(const std::string& docName);
+    YA_CORE_API void init();
+    YA_CORE_API void shutdown();
+    YA_CORE_API void flushAll();
+    YA_CORE_API void markDirty(const std::string& docName);
 
-    YA_HOST_API Document& openDocument(const std::string& name, const std::string& path, Config::OpenDocumentOptions options = {});
-    YA_HOST_API bool      closeDocument(const std::string& name, bool bFlush = true);
+    YA_CORE_API Document& openDocument(const std::string& name, const std::string& path, Config::OpenDocumentOptions options = {});
+    YA_CORE_API bool      closeDocument(const std::string& name, bool bFlush = true);
 
-    [[nodiscard]] YA_HOST_API bool hasDocument(const std::string& name) const;
-    YA_HOST_API Document*          findDocument(const std::string& name);
-    YA_HOST_API const Document*    findDocument(const std::string& name) const;
+    [[nodiscard]] YA_CORE_API bool hasDocument(const std::string& name) const;
+    YA_CORE_API Document*          findDocument(const std::string& name);
+    YA_CORE_API const Document*    findDocument(const std::string& name) const;
 
-    [[nodiscard]] YA_HOST_API bool hasValue(const std::string& docName, std::string_view key) const;
-    YA_HOST_API void               removeValue(const std::string& docName, std::string_view key);
-    YA_HOST_API bool               pruneEmptyParents(const std::string& docName, std::string_view key);
+    [[nodiscard]] YA_CORE_API bool hasValue(const std::string& docName, std::string_view key) const;
+    YA_CORE_API void               removeValue(const std::string& docName, std::string_view key);
+    YA_CORE_API bool               pruneEmptyParents(const std::string& docName, std::string_view key);
 
     template <typename T>
     bool tryGet(const std::string& docName, std::string_view key, T& out) const
@@ -172,15 +172,15 @@ struct ConfigManager : public disable_copy
         }
     }
 
-    YA_HOST_API bool flushDocument(const std::string& docName);
+    YA_CORE_API bool flushDocument(const std::string& docName);
 
   private:
     std::unordered_map<std::string, Document> _documents;
     bool                                      _initialized = false;
 
-    [[nodiscard]] YA_HOST_API const nlohmann::json* findNode(const std::string& docName, std::string_view key) const;
-    YA_HOST_API nlohmann::json*                     ensureNode(const std::string& docName, std::string_view key);
-    static YA_HOST_API nlohmann::json::json_pointer toJsonPointer(std::string_view key);
+    [[nodiscard]] YA_CORE_API const nlohmann::json* findNode(const std::string& docName, std::string_view key) const;
+    YA_CORE_API nlohmann::json*                     ensureNode(const std::string& docName, std::string_view key);
+    static YA_CORE_API nlohmann::json::json_pointer toJsonPointer(std::string_view key);
 };
 
 } // namespace ya

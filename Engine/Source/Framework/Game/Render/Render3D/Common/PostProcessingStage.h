@@ -7,7 +7,7 @@
 #include "Render3D/Pipelines/BloomPostprocessing.h"
 #include "RHI/Render.h"
 #include "RHI/RenderDefines.h"
-#include "Render3D/Common/PostProcessingState.h"
+#include "AppServices/PostProcessingState.h"
 
 #include <string_view>
 

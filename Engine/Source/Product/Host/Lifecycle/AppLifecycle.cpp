@@ -6,7 +6,7 @@
 #include "Host/Automation/AppAutomationControlService.h"
 #include "Host/Utility/FPSCtrl.h"
 
-#include "Host/Config/ConfigManager.h"
+#include "Core/Config/ConfigManager.h"
 
 #include "Core/Async/TaskQueue.h"
 #include "Core/Log.h"
@@ -319,8 +319,8 @@ void AppLifecycle::init(App& app, AppDesc ci)
 
     app._renderState->runtime = std::make_unique<RenderRuntime>();
     app._renderState->runtime->init(RenderRuntime::InitDesc{
-        .app     = &app,
-        .appDesc = &app._ci,
+        .hostServices = &app,
+        .offscreenScheduler = &app.getTaskManager(),
         // Narrow read-only environment-lighting result provider: Render3D
         // consumes derived-resource handles through this contract instead of
         // locating the processor via the App singleton.
@@ -336,6 +336,12 @@ void AppLifecycle::init(App& app, AppDesc ci)
             },
         },
         .activeSceneProvider = [&app]() -> Scene* { return app.getSceneServices().getActiveScene(); },
+        .windowWidth  = static_cast<uint32_t>(app._ci.width),
+        .windowHeight = static_cast<uint32_t>(app._ci.height),
+        .windowTitle  = app._ci.title,
+        .bEnableRenderDoc = app._ci.bEnableRenderDoc,
+        .renderDocDllPath = app._ci.renderDocDllPath,
+        .renderDocCaptureOutputDir = app._ci.renderDocCaptureOutputDir,
     });
     if (ConfigManager::get().hasDocument("automation")) {
         AppAutomation::applyRuntimeOverrides(app);
@@ -377,58 +383,6 @@ void AppLifecycle::init(App& app, AppDesc ci)
     });
     sys->init();
     app._systems.push_back(sys);
-    auto sys2 = ya::makeShared<GameplayResourceBinding>();
-    sys2->setActiveSceneProvider([&app]() -> Scene*
-    {
-        return app.getSceneServices().getActiveScene();
-    });
-    sys2->setFrameIndexProvider([]() -> uint64_t
-    {
-        return App::currentFrameIndex();
-    });
-    sys2->init();
-    app._gameplayResourceBinding = sys2.get();
-    app._systems.push_back(sys2);
-
-    // Skybox / environment / terrain derived GPU resolve moved out of the ECS
-    // resolver into the Render3D-owned processor; it is driven here with the
-    // same injected services.
-    auto envProcessor = ya::makeShared<EnvironmentLightingProcessor>();
-    envProcessor->setRender(app.getRenderServices().getRender());
-    envProcessor->setOffscreenJobQueueService(OffscreenJobQueueService{
-        .enqueue = [&app](const std::shared_ptr<OffscreenJobState>& job, std::function<void(ICommandBuffer*)> task)
-        {
-            app.getTaskManager().enqueueOffscreenTask(job, std::move(task));
-        },
-    });
-    envProcessor->setActiveSceneProvider([&app]() -> Scene*
-    {
-        return app.getSceneServices().getActiveScene();
-    });
-    envProcessor->setFrameIndexProvider([]() -> uint64_t
-    {
-        return App::currentFrameIndex();
-    });
-    envProcessor->init();
-    app._environmentLightingProcessor = envProcessor.get();
-    app._systems.push_back(envProcessor);
-
-    // Terrain derived processing (height-map decode + mesh build) is a
-    // separate processor from environment lighting; both share only the
-    // injected render/scene/frame services.
-    auto terrainProcessor = ya::makeShared<TerrainProcessor>();
-    terrainProcessor->setRender(app.getRenderServices().getRender());
-    terrainProcessor->setActiveSceneProvider([&app]() -> Scene*
-    {
-        return app.getSceneServices().getActiveScene();
-    });
-    terrainProcessor->setFrameIndexProvider([]() -> uint64_t
-    {
-        return App::currentFrameIndex();
-    });
-    terrainProcessor->init();
-    app._terrainProcessor = terrainProcessor.get();
-    app._systems.push_back(terrainProcessor);
     auto sys3 = ya::makeShared<TransformSystem>();
     sys3->setSceneProvider([&app]() -> Scene*
     {
@@ -483,10 +437,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
         for (auto& sys : app._systems) {
             sys->shutdown();
         }
-        app._systems.clear();
-        app._gameplayResourceBinding = nullptr;
-        app._terrainProcessor            = nullptr;
-        app._environmentLightingProcessor = nullptr; });
+        app._systems.clear(); });
 
     app.attachModules();
     app._deleter.push("Modules", [&app](void*) { app.detachModules(); });
