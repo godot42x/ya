@@ -1045,10 +1045,22 @@ Phase 3 剩余执行顺序：
    见决策 14-B）：EnvironmentLighting / Terrain 保持 `ya-render-3d` 内部子目录，
    Render3D 只读消费 derived handle 的目标不变；未来按升级条件评估是否独立。
 3. Render3D 消费方式重构：pipeline 不再直接 view 组件，改经窄 provider/
-   snapshot（这同时解锁 fat `ya-gameplay-ecs`（render 组件）溶解进
-   render-ecs-adapters）。
+   snapshot。
+   - [x] 原始目标（解锁 fat `ya-gameplay-ecs` 溶解进 render-ecs-adapters）
+     已达成（cea178a3）；render 组件已物理迁入 `Render3D/Component/`，
+     保留 `ECS/Component/...` 前缀转发头维持旧 include 路径。
+   - [x] 依赖环实证（2026-08-09）：当前 adapters → render-3d 为**单向**边
+     （render 组件 + MaterialFactory 等运行时类型在 render-3d）；
+     render-3d 不依赖 adapters（GameplayResourceBinding 留在 render-3d 内部，
+     见第 4 项归属决策）。潜在环只出现在"binding 移入 adapters"方案中，
+     已规避；pipeline 窄 provider 深化为可选，按真实消费需求再评估。
 4. ResourceResolveSystem 收缩为 gameplay resource binding（按资源类型拆
    handler），resolveState 拆分（IO/CPU/GPU/绑定状态分离）。
+   - [x] 完成：`GameplayResourceBinding` 已按资源类型拆 handler
+     （resolvePendingMeshes/Materials/UI/Billboards）；IO/CPU/GPU 派生状态
+     在 EnvironmentLightingProcessor / TerrainProcessor 各自独立；
+     resolveState 与绑定状态分离。归属决策见上（保持 render-3d 内部
+     Services，2026-08-09）。
 5. 剩余 Phase 3 验收：独立构建 resource-core 不需要 Vulkan backend、
    loader 测试不启动 Host、禁用 environment/terrain 后 GUI profile 可配置、
    删除 Resource dynamic_lookup 后可链接（后者依赖 Phase 7 app-services）。
