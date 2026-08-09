@@ -10,12 +10,5 @@ target("ya-resource-runtime")
     add_headerfiles("**.h|Core/**.h|Loader/**.h")
     add_deps("ya-foundation-core", "ya-rhi", "ya-resource-core", { public = true })
     add_deps("ya-rhi-backend-common", "ya-rhi-vulkan", "ya-resource-loader")
-    if is_plat("macosx") then
-        -- Transition: Game-layer modules still call host App services at
-        -- runtime (see plan.md §10). Symbols resolve from the final binary
-        -- (ya-runtime / editor) which links ya-host. Remove once the
-        -- app-services interface replaces direct App access.
-        add_shflags("-undefined", "dynamic_lookup", { force = true })
-    end
     add_packages("glm", "nlohmann_json", { public = true })
     add_packages("stb", "ktx", "vulkansdk", "cxxopts")

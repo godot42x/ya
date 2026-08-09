@@ -14,7 +14,3 @@ target("ya-physics")
     -- Planned decoupling: see plan.md §10.
     ya_engine_defines()
     add_packages("joltphysics", "glm")
-    if is_plat("macosx") then
-        -- Transition: physics calls host App services (see plan.md §10).
-        add_shflags("-undefined", "dynamic_lookup", { force = true })
-    end
