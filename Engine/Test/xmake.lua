@@ -26,6 +26,36 @@ if get_config("ya_profile") ~= "gui" then
             add_cxxflags("/utf-8")
         end
     end
+
+    -- Minimal closure targets: fast per-module regression gates.
+    target("ya-ecs-core-test")
+    do
+        set_kind("binary")
+        add_files("./Source/TestEntry.cpp", "./Source/ECSTest.cpp")
+        add_deps("ya-ecs-core")
+        add_packages("gtest")
+    end
+
+    target("ya-resource-core-test")
+    do
+        set_kind("binary")
+        add_files("./Source/TestEntry.cpp",
+                  "./Source/PathRegistryTest.cpp",
+                  "./Source/ResourceTableTest.cpp")
+        add_deps("ya-resource-core", "ya-foundation-core")
+        add_packages("gtest")
+    end
+
+    target("ya-render-3d-test")
+    do
+        set_kind("binary")
+        add_files("./Source/TestEntry.cpp",
+                  "./Source/DeferredRenderPipelineTest.cpp",
+                  "./Source/DirectionalShadowMathTest.cpp",
+                  "./Source/RenderGraphCoreTest.cpp")
+        add_deps("ya-render-3d", "ya-render-graph", "ya-foundation-core")
+        add_packages("gtest")
+    end
 end
 
 -- GUI closure test: links ONLY the GUI framework closure

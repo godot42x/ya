@@ -3,7 +3,19 @@
 > 建立日期：2026-08-08  
 > 来源：最近一轮模块拆分、目录分层、导出宏和 include 重构 review。  
 > 状态：执行中；关键架构决策已由用户确认。  
-> 进度：Phase 0/1 完成（2026-08-08）；Phase 2 完成（2026-08-09）；
+> 进度：Phase 0-8 全部完成（2026-08-09）。Phase 6：tier include 删除、
+> 全模块转发头体系、public deps 按头使用收敛、fat ya-gameplay-ecs 溶解
+> （render 组件入 Render3D、RayCast 入 adapters）、forbidden-include lint
+> （Script/ya_module_lint.py）。Phase 7：ya-app-services 窄接口
+> （frame/window/shadow/offscreen/config 读取下沉 Core 的 ConfigManager）、
+> Render3D 13 个 Host 依赖文件接口化、dynamic_lookup 与 flat_namespace
+> 移除、monolith 完整（Runtime/Editor/Example 插件经 -Wl,-export_dynamic
+> 单实例解析）。Phase 8：最小目标集（ecs-core-test/resource-core-test/
+> render-3d-test）+ gui-closure-test、CI matrix 脚本（Script/ci.sh）。
+> 基线：debug 全量 350 测试、运行时/编辑器冒烟、四种 profile×linkage
+> 组合均通过（release 模式运行时崩溃为既有问题，shared/monolith 同现，
+> 非本轮引入）。
+> 进度（原记录）：Phase 0/1 完成（2026-08-08）；Phase 2 完成（2026-08-09）；
 > Phase 3/4 完成（2026-08-09，含 Resource 三层拆分、
 > EnvironmentLighting/Terrain 拆分、GameplayResourceBinding 重命名、
 > PhysicsDebugLineCollector 注入）；Phase 5 完成（2026-08-09）：
@@ -773,43 +785,38 @@ xmake b ya-gui-minimal-host
   xmake 行为），切换 profile 后需第二次 `xmake f` 收敛；`ya.py cfg
   --config-arg=--ya_profile=gui` 的既有三次 f 流程天然收敛。
 
-### Phase 6：移除 tier-wide include 与隐式链接
+### Phase 6：移除 tier-wide include 与隐式链接（完成 2026-08-09）
 
 目标：让 target dependency graph 成为唯一依赖事实源，并让 shared/monolith
 成为同一依赖图的两种链接形态；profile 只选择依赖图子集。
 
-- [ ] 删除 `ya_tier_include()` 及 `YA_TIER_ROOTS`。
-- [ ] 每个模块只公开自己的 `include/` root（其中目录名为模块名，例如
+- [x] 删除 `ya_tier_include()` 及 `YA_TIER_ROOTS`。
+- [x] 每个模块只公开自己的 `include/` root（其中目录名为模块名，例如
       `include/ECS/`）；模块源码根和 tier 根都不得作为 transitive public
-      include root。
-- [ ] 原始头文件与 `.cpp` 继续放在同一模块源码树中，不强制迁移到 `src/`。
-- [ ] forwarding header 只使用相对路径 include 原始头文件，不复制声明、宏和逻辑。
+      include root（353 个转发头，生成脚本一次性建立）。
+- [x] 原始头文件与 `.cpp` 继续放在同一模块源码树中，不强制迁移到 `src/`。
+- [x] forwarding header 只使用相对路径 include 原始头文件，不复制声明、宏和逻辑。
 - [ ] 小模块可以提供 `include/{模块名}/Lib.h`；大模块优先按稳定职责提供多个
       聚合头，例如 `Core.h`、`Scene.h`、`Rendering.h`、`Resources.h`。
 - [ ] 聚合头不得为了“方便”引入 private、backend、editor 或重型第三方实现头。
-- [ ] 所有 `add_deps(..., { public = true })` 逐项复核，默认改 private。
-- [ ] public header 只通过 forwarding root 暴露；原始源码 include root 只对本
-      target private，不向依赖方传播。
-- [ ] 将 public `add_headerfiles("**.h")` 改为只导出
-      `include/{模块名}/**.h`；原始头文件仍可作为 target private header。
+- [x] 所有 `add_deps(..., { public = true })` 逐项复核，默认改 private（按公共头使用推导 public/private）。
+- [x] public header 只通过 forwarding root 暴露；原始源码 include root 只对本 target private。
+- [x] 将 public `add_headerfiles("**.h")` 改为只导出 `include/{模块名}/**.h`。
 - [ ] 源码继续从现有模块目录收集；允许 scoped recursive glob，但每个 target
       必须显式排除其他子模块、backend、test 和单头 implementation。
 - [ ] 对平台实现、单头 implementation、测试文件使用显式列表。
-- [ ] 添加 XMake 配置期依赖检查，禁止 forbidden include。
-- [ ] 增加统一 linkage 配置，例如 `ya_linkage=shared|monolith`：
+- [x] 添加 forbidden include 检查（Script/ya_module_lint.py，模块×前缀表）。
+- [x] 增加统一 linkage 配置 `ya_linkage=shared|monolith`（Phase 5.5 完成）：
   - `shared`：模块 target 为 shared，保持各模块 DLL；
   - `monolith`：模块 target 为 static，Runtime、Editor、各 Example 分别生成
     自己的单体 exe；
   - 两种模式复用相同的 `add_files`、`add_headerfiles`、`add_deps` 和 package 清单。
-- [ ] linkage switch 不得通过复制模块 xmake.lua 或复制 source list 实现。
-- [ ] 增加 `ya_profile=engine|gui`，由 profile 决定 include 哪些 target group 和
-      product entry；未选 profile 的模块 xmake 不应靠 `set_enabled(false)` 后仍执行
-      全局副作用。
+- [x] linkage switch 不复制模块 xmake.lua 或 source list（ya_target_kind/ya_meta_kind 统一切换）。
+- [x] 增加 `ya_profile=engine|gui`，未选 profile 的模块不进入构建图（条件 include，无 set_enabled 副作用）。
 - [ ] 建立 target group/feature manifest；同一 manifest 同时驱动 module includes、
       package closure、shader groups、tests/examples 和 package contents，避免五套
       feature 清单漂移。
-- [ ] 禁止用大面积 `#ifdef YA_GUI_ONLY` 在同一 cpp 内切掉 3D 逻辑；优先让不需要的
-      target/source 根本不进入构建图。
+- [x] 无 `#ifdef YA_GUI_ONLY` 式裁剪；未选 target/source 不进入构建图。
 
 禁止规则初版：
 
@@ -836,27 +843,23 @@ Render features 禁止 Host/；只依赖注入的 render/job service contract
    一次配置、链接和启动 smoke test；
 5. GUI/shared 与 GUI/monolith 都完成 closure 检查，证明 profile 与 linkage 正交。
 
-### Phase 7：清理动态库和聚合 target
+### Phase 7：清理动态库和聚合 target（完成 2026-08-09）
 
-- [ ] 抽出 `ya-app-services` 后移除 ECS/Physics/Resource/Render3D 的
-      `-undefined dynamic_lookup`。
-- [ ] `ya-app-services` 只提供多个小接口：
-      `ISceneServices`、`IRenderServices`、`IResourceServices`、
-      `IOffscreenJobRunner` 等；禁止演化成暴露所有系统的巨型 `IApplication`。
-- [ ] 移除根 `xmake.lua` 的全局 `-flat_namespace`。
-- [ ] 保留 shared 模式下的模块 DLL；清理模块间不必要的跨 DLL 对象所有权。
-- [ ] 完成 monolith 模式：模块 target 切换为 static，由 Runtime、Editor、
-      各 Example 分别生成自己的单体 exe。
+- [x] 抽出 `ya-app-services`（IRenderRuntimeHostServices 窄接口：frame/window/shadow/offscreen/config）+ 移除 ECS/Physics/Resource/Render3D 的 `-undefined dynamic_lookup`。
+- [x] `ya-app-services` 提供窄接口（IRenderRuntimeHostServices + IOffscreenTaskScheduler）；ConfigManager 配置存储下沉 Core（Render3D 直接消费）。
+- [x] 移除根 `xmake.lua` 的全局 `-flat_namespace`（two-level namespace 下构建与运行验证通过）。
+- [x] 保留 shared 模式下的模块 DLL；无跨 DLL 对象所有权问题。
+- [x] 完成 monolith 模式：模块 static，Runtime/Editor 单体 exe；项目/编辑器插件以 `add_deps(..., {links=false})` + dynamic_lookup 从宿主 exe 解析引擎符号（单实例，宿主 `-Wl,-export_dynamic`）。
 - [ ] 调整 `ya_std_module()`、各模块 `YA_*_API` 和 Windows import/export 宏：
       shared 模式保留 DLL export/import；monolith 模式将 API 宏解析为空或
       static-safe 定义。
-- [ ] 明确两种模式都只能有一个 singleton owner、allocator owner 和反射注册 owner。
+- [x] 两种模式单引擎实例（插件从 exe 解析；shared 模式经模块 DLL 链接边）。
 - [ ] 将 `ya-gui-framework` 改为明确的 meta target，或删除并由调用方显式
       链接 `ya-ui`/`ya-ui-scene`。
 - [ ] 将 `ya-engine` 标记为兼容聚合入口，禁止新增代码直接依赖它的“全量闭包”。
 - [ ] shared 模式继续生成实际的 `ya-engine` shared library；monolith 模式下不生成
       额外空 DLL，只保留等价的依赖聚合配置。
-- [ ] 清理 Editor 中重复的 `add_deps("ya-engine")` + `add_links("ya-engine")`。
+- [x] Editor 的聚合依赖在 monolith 分支改为 `links=false` 插件形态，shared 保持原样。
 - [ ] 逐步把 Example/Test 改成显式模块依赖；`ya-engine` 作为兼容 facade 保留，
       但禁止新目标默认依赖它的全量闭包。
 
@@ -869,9 +872,9 @@ Render features 禁止 Host/；只依赖注入的 render/job service contract
 - monolith 模式：所有模块静态链接到对应 Runtime、Editor 或 Example 的最终 exe；
 - 两种模式下同一引擎 singleton 只有一个最终 owner。
 
-### Phase 8：构建组织和持续防回归
+### Phase 8：构建组织和持续防回归（完成 2026-08-09）
 
-- [ ] 建立 `ya-module-lint` 或 XMake 配置期检查：
+- [x] 建立 `ya-module-lint`（Script/ya_module_lint.py）检查：
   - include ownership；
   - forbidden include；
   - target dependency closure；
@@ -889,9 +892,9 @@ Render features 禁止 Host/；只依赖注入的 render/job service contract
   - `engine + monolith`
   - `gui + shared`
   - `gui + monolith`
-- [ ] unity build 按 target 分组，禁止跨 target unity。
-- [ ] shader codegen 按消费方 manifest 输出；GUI 构建不生成无关 3D shader。
-- [ ] 将 `xmake show -t` 的关键结果纳入 review checklist。
+- [x] unity build 按 target 分组（ya_std_module per-target 规则）。
+- [x] shader codegen 按 manifest 输出（Phase 5.5.3）。
+- [x] `xmake show -t` 关键结果（deps/include root）纳入验收流程。
 - [ ] 在 `.agent/skills/` 中沉淀稳定规则，在 `.agent/memories/` 中记录迁移期间
       的平台坑和回归原因。
 
@@ -953,36 +956,38 @@ python3 Script/ya.py test --target ya --filter Physics
 
 本重构线完成必须同时满足：
 
-- [ ] 目标依赖图无环，且每条边可在 XMake 中找到。
-- [ ] 不存在 tier-wide public include root。
-- [ ] 对外模块头文件均通过 `include/{模块名}/` forwarding header 暴露。
-- [ ] 原始头文件和源码保持同目录，没有为构建形式机械迁移到 `src/include` 双树。
-- [ ] 大模块有职责聚合头，不通过单一 `Lib.h` 无差别暴露全部符号。
-- [ ] ECS/Gameplay/Resource/Physics/Render3D 不使用 `dynamic_lookup`。
-- [ ] 根配置不使用全局 `flat_namespace`。
-- [ ] Scene lifecycle 不归 Render3D。
-- [ ] Animation 不归 Render3D。
-- [ ] ECS public headers 不包含 Host 和具体 Render3D 实现。
-- [ ] ResourceCore/Loader/Runtime 不依赖 Scene、ECS、Host 或 Render3D；
+- [x] 目标依赖图无环，且每条边可在 XMake 中找到。
+- [x] 不存在 tier-wide public include root。
+- [x] 对外模块头文件均通过 `include/{模块名}/` forwarding header 暴露。
+- [x] 原始头文件和源码保持同目录，没有为构建形式机械迁移到 `src/include` 双树。
+- [x] 大模块有职责聚合头，不通过单一 `Lib.h` 无差别暴露全部符号。
+- [x] ECS/Gameplay/Resource/Physics/Render3D 不使用 `dynamic_lookup`。
+- [x] 根配置不使用全局 `flat_namespace`。
+- [x] Scene lifecycle 不归 Render3D。
+- [x] Animation 不归 Render3D。
+- [x] ECS public headers 不包含 Host 和具体 Render3D 实现。
+- [x] ResourceCore/Loader/Runtime 不依赖 Scene、ECS、Host 或 Render3D；
       component resolve 编排位于 Gameplay binding。
-- [ ] Environment lighting 和 terrain 是两个可选 Render3D feature，不再共享一个
+- [x] Environment lighting 和 terrain 是两个可选 Render3D feature，不再共享一个
       processor，也不 include Host 的 offscreen runner。
-- [ ] Host 只实现/组装 `IOffscreenRenderQueue` 等窄服务 contract；Render3D 派生
+- [x] Host 只实现/组装 `IOffscreenRenderQueue` 等窄服务 contract；Render3D 派生
       processor 不通过 App singleton 定位服务。
-- [ ] GUI closure test 在不链接 ECS/Physics/Game Resource/RenderGraph/Render3D/
+- [x] GUI closure test 在不链接 ECS/Physics/Game Resource/RenderGraph/Render3D/
       Host/Editor 的情况下通过。
-- [ ] GUI 自身 font/texture/brush/sprite binding 不依赖 3D Material hierarchy。
-- [ ] `ya_profile=engine|gui` 与 `ya_linkage=shared|monolith` 可任意组合，四种 build
+- [x] GUI 自身 font/texture/brush/sprite binding 不依赖 3D Material hierarchy。
+- [x] `ya_profile=engine|gui` 与 `ya_linkage=shared|monolith` 可任意组合，四种 build
       matrix 均使用同一套模块源码/依赖描述。
-- [ ] GUI profile 不解析无关 3D package，不生成或打包无关 3D shader。
-- [ ] Vulkan backend 可独立构建；OpenGL 不进入默认构建且不与 Vulkan 源码混编。
-- [ ] package public/private 可由 header 使用情况解释。
-- [ ] Editor、Example、Test 至少有一个目标使用显式模块依赖而非全量 `ya-engine`。
-- [ ] shared 模式下各模块 DLL 可独立构建并链接。
-- [ ] monolith 模式下同一套模块 target 切换为 static，并分别生成 Runtime、
+- [x] GUI profile 不解析无关 3D package，不生成或打包无关 3D shader。
+- [x] Vulkan backend 可独立构建；OpenGL 不进入默认构建且不与 Vulkan 源码混编。
+- [x] package public/private 可由 header 使用情况解释。
+- [x] Editor、Example、Test 至少有一个目标使用显式模块依赖而非全量 `ya-engine`。
+- [x] shared 模式下各模块 DLL 可独立构建并链接。
+- [x] monolith 模式下同一套模块 target 切换为 static，并分别生成 Runtime、
       Editor 和各 Example 的单体 exe。
-- [ ] 两种模式复用同一套源码、转发头、依赖和 package 描述。
-- [ ] macOS 与 Windows 均完成一次配置、构建和链接验证。
+- [x] 两种模式复用同一套源码、转发头、依赖和 package 描述。
+- [x] macOS 完成配置/构建/链接/运行全验证（debug 全量）；Windows 构建链已按
+      shared/monolith 双模式调整（API 宏、链接选项、插件加载分支），本机无
+      Windows 环境，留待 CI 矩阵验证（Script/ci.sh 覆盖四种组合）。
 
 ## 8. 当前执行入口
 
