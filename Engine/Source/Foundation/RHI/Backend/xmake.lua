@@ -7,6 +7,11 @@
 target("ya-rhi-backend-common")
     set_kind(ya_target_kind())
     ya_std_module("YA_RHI_BACKEND_API")
+    -- The common glue layer's own public root: RHI/Backend/TextureLibrary.h
+    -- (BuiltinTextureLibrary) belongs here, not to the Vulkan target that
+    -- shares this directory (its ./include root used to leak it).
+    add_includedirs("./include", { public = true })
+    add_headerfiles("./include/**.h", { public = true })
     -- BuiltinTextureLibrary provides the standard white/black/checkerboard
     -- textures and samplers; it lives with the backend because it builds
     -- them through Texture::fromData (resource-factory driven).
@@ -23,7 +28,6 @@ target("ya-rhi-backend-common")
 target("ya-rhi-vulkan")
     set_kind(ya_target_kind())
     ya_std_module("YA_RHI_BACKEND_API")
-    add_includedirs("./include", { public = true })
     -- The Vulkan backend's public headers (RHI/Backend/Vulkan/*) belong to
     -- this target, not to the platform-independent backend-common layer.
     add_includedirs("./Vulkan/include", { public = true })
@@ -32,7 +36,6 @@ target("ya-rhi-vulkan")
     add_files("DescriptorSet.cpp", "Pipeline.cpp")
     add_files("Vulkan/**.cpp|Vulkan/VulkanMemoryAllocator.cpp")
     add_files("Vulkan/VulkanMemoryAllocator.cpp", { unity_ignored = true })
-    add_headerfiles("./include/**.h", { public = true })
     add_headerfiles("Vulkan/**.h")
     add_deps("ya-rhi", { public = true })
     -- Vulkan glue uses the interface-driven texture helpers (Texture::wrap)
