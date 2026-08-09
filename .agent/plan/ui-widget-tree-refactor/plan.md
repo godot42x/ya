@@ -1,7 +1,7 @@
 # Game UI WidgetTree 重构计划
 
 > 建立日期：2026-08-09  
-> 状态：待执行；架构语义已由用户确认。  
+> 状态：执行中；Phase 0/1/2a 已完成（见 §12），Phase 2b 起待执行。  
 > 当前范围：只重构 Game UI；ImGui Editor Shell 保持不变。  
 > 替代关系：本计划取代 `../game-ui-rendering/plan.md` 中“Node2D 与 Node3D
 > 共用一棵 Scene Tree”的 Game UI 路线。  
