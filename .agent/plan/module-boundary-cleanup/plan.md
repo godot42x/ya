@@ -325,8 +325,12 @@ xmake show -t ya-editor
       `Render3D/Adapters/LightBillboard`、`Render3D/Adapters/Material` 等业务目录。
 - [ ] Host 启动时创建 framework，分别注册所需 rules；GUI-only profile 不注册
       Render3D rules，因而不触达 Billboard/Material 3D 类型。
-- [ ] `LightBillboardPolicy` 仍由 Host 从 ConfigManager 读取后注入，但 policy 的
-      setter 属于 `LightBillboardLinkageRule`，不能继续挂在 framework 全局静态状态上。
+- [x] `LightBillboardPolicy` 由 Host 从 ConfigManager 读取后注入 rule 实例
+      （2026-08-09）：policy 改为 `LightBillboardLinkageRule` 实例成员，
+      移除匿名命名空间全局静态 `g_lightBillboardPolicy`；静态
+      `applyLinkage` 改为显式传 policy（自动化 RPC 无 rule 实例，用默认
+      policy），deferred 任务按值捕获 policy（任务可能比 rule 活得更久）。
+      验证：354 测试 + 运行时冒烟（灯光 billboard 路径）通过。
 
 当前物理路径 `Render3D/Adapters/LightBillboard/ComponentLinkageSystem.*` 视为过渡
 位置；后续应把 framework 根入口移回 linkage 模块，把 LightBillboard 代码留在业务

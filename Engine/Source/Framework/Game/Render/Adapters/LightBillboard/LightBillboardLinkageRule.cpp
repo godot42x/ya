@@ -16,11 +16,6 @@
 namespace ya
 {
 
-namespace
-{
-LightBillboardPolicy g_lightBillboardPolicy;
-}
-
 LightBillboardLinkageRule::LightBillboardLinkageRule(LinkageFramework* framework)
     : _framework(framework)
 {
@@ -51,25 +46,20 @@ void LightBillboardLinkageRule::disconnectScene(entt::registry& registry)
 
 void LightBillboardLinkageRule::setPolicy(LightBillboardPolicy policy)
 {
-    g_lightBillboardPolicy = std::move(policy);
-}
-
-const LightBillboardPolicy& LightBillboardLinkageRule::policy()
-{
-    return g_lightBillboardPolicy;
+    _policy = std::move(policy);
 }
 
 namespace
 {
 
-const LightBillboardConfig& pointConfig()
+const LightBillboardConfig& pointConfig(const LightBillboardPolicy& policy)
 {
-    return LightBillboardLinkageRule::policy().point;
+    return policy.point;
 }
 
-const LightBillboardConfig& directionalConfig()
+const LightBillboardConfig& directionalConfig(const LightBillboardPolicy& policy)
 {
-    return LightBillboardLinkageRule::policy().directional;
+    return policy.directional;
 }
 
 void applyBillboardDefaults(BillboardComponent& billboard, const LightBillboardConfig& config)
@@ -136,7 +126,7 @@ glm::vec3 resolveEntityForward(entt::registry& reg, const entt::entity entity, c
     return glm::vec3(0.0f, 0.0f, -1.0f);
 }
 
-void applyPointLightLinkage(Scene* scene, const entt::entity entity)
+void applyPointLightLinkage(Scene* scene, const entt::entity entity, const LightBillboardPolicy& policy)
 {
     auto& reg = scene->getRegistry();
     if (!reg.valid(entity) || !reg.all_of<PointLightComponent>(entity)) {
@@ -149,14 +139,14 @@ void applyPointLightLinkage(Scene* scene, const entt::entity entity)
     }
 
     const auto& light  = reg.get<PointLightComponent>(entity);
-    const auto& config = pointConfig();
+    const auto& config = pointConfig(policy);
     applyBillboardDefaults(*billboard, config);
     billboard->tint          = glm::vec4(light.color * std::max(light.intensity, 0.2f), 1.0f);
     billboard->worldDirection = glm::vec3(0.0f, 0.0f, -1.0f);
     billboard->invalidate();
 }
 
-void applyDirectionalLightLinkage(Scene* scene, const entt::entity entity)
+void applyDirectionalLightLinkage(Scene* scene, const entt::entity entity, const LightBillboardPolicy& policy)
 {
     auto& reg = scene->getRegistry();
     if (!reg.valid(entity) || !reg.all_of<DirectionalLightComponent>(entity)) {
@@ -169,7 +159,7 @@ void applyDirectionalLightLinkage(Scene* scene, const entt::entity entity)
     }
 
     const auto& light  = reg.get<DirectionalLightComponent>(entity);
-    const auto& config = directionalConfig();
+    const auto& config = directionalConfig(policy);
     applyBillboardDefaults(*billboard, config);
     billboard->tint           = glm::vec4(light._color * std::max(light.intensity, 0.2f), 1.0f);
     billboard->worldDirection = resolveEntityForward(reg, entity, light._direction);
@@ -178,7 +168,7 @@ void applyDirectionalLightLinkage(Scene* scene, const entt::entity entity)
 
 } // namespace
 
-void LightBillboardLinkageRule::applyLinkage(Scene* scene, const entt::entity entity)
+void LightBillboardLinkageRule::applyLinkage(Scene* scene, const entt::entity entity, const LightBillboardPolicy& policy)
 {
     if (!scene) {
         return;
@@ -197,11 +187,11 @@ void LightBillboardLinkageRule::applyLinkage(Scene* scene, const entt::entity en
     }
 
     if (reg.all_of<PointLightComponent>(entity)) {
-        applyPointLightLinkage(scene, entity);
+        applyPointLightLinkage(scene, entity, policy);
     }
 
     if (reg.all_of<DirectionalLightComponent>(entity)) {
-        applyDirectionalLightLinkage(scene, entity);
+        applyDirectionalLightLinkage(scene, entity, policy);
     }
 }
 
@@ -248,8 +238,9 @@ void LightBillboardLinkageRule::onLightEvent(entt::registry& reg, entt::entity e
     if (!scene) {
         return;
     }
-    _framework->scheduleDeferred(scene, [scene, entity]() {
-        LightBillboardLinkageRule::applyLinkage(scene, entity);
+    // Capture the policy by value: the deferred task may outlive the rule.
+    _framework->scheduleDeferred(scene, [scene, entity, policy = _policy]() {
+        LightBillboardLinkageRule::applyLinkage(scene, entity, policy);
     });
 }
 
@@ -262,8 +253,8 @@ void LightBillboardLinkageRule::onComponentRemoved(entt::registry& reg, entt::en
     if (type == ya::type_index_v<PointLightComponent> || type == ya::type_index_v<DirectionalLightComponent>) {
         Scene* scene = _framework->findScene(reg);
         if (scene) {
-            _framework->scheduleDeferred(scene, [scene, entity]() {
-                LightBillboardLinkageRule::applyLinkage(scene, entity);
+            _framework->scheduleDeferred(scene, [scene, entity, policy = _policy]() {
+                LightBillboardLinkageRule::applyLinkage(scene, entity, policy);
             });
         }
         return;
@@ -273,8 +264,8 @@ void LightBillboardLinkageRule::onComponentRemoved(entt::registry& reg, entt::en
         if (reg.valid(entity) && hasLightSource(reg, entity)) {
             Scene* scene = _framework->findScene(reg);
             if (scene) {
-                _framework->scheduleDeferred(scene, [scene, entity]() {
-                    LightBillboardLinkageRule::applyLinkage(scene, entity);
+                _framework->scheduleDeferred(scene, [scene, entity, policy = _policy]() {
+                    LightBillboardLinkageRule::applyLinkage(scene, entity, policy);
                 });
             }
         }

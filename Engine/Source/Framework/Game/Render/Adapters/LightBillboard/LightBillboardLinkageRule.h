@@ -42,24 +42,25 @@ struct LightBillboardLinkageRule : public ILinkageRule
     explicit LightBillboardLinkageRule(LinkageFramework* framework);
     ~LightBillboardLinkageRule() override;
 
-    /// Injected by the Host once at startup (config source stays in Host).
-    /// Interim: stored on the rule (not the framework); the automation RPC
-    /// still reaches the policy through a static accessor.
+    /// Injected by the Host once at startup (config source stays in Host);
+    /// stored on this rule instance, never on shared global state.
     void setPolicy(LightBillboardPolicy policy);
-    static const LightBillboardPolicy& policy();
+    [[nodiscard]] const LightBillboardPolicy& policy() const { return _policy; }
 
     void onSceneInit(Scene* scene) override;
     void onComponentRemoved(entt::registry& reg, entt::entity entity, ya::type_index_t type) override;
     void onSceneUnload(Scene* scene) override;
 
-    /// Immediate (non-deferred) linkage, used by the automation RPC.
-    static void applyLinkage(Scene* scene, const entt::entity entity);
+    /// Immediate (non-deferred) linkage, used by the automation RPC. The
+    /// policy is passed explicitly because the RPC path has no rule instance.
+    static void applyLinkage(Scene* scene, const entt::entity entity, const LightBillboardPolicy& policy);
 
   private:
     void onLightEvent(entt::registry& reg, entt::entity entity);
     void disconnectScene(entt::registry& registry);
 
     LinkageFramework* _framework = nullptr;
+    LightBillboardPolicy _policy;
     /// Registries this rule connected entt signals to; used to disconnect on
     /// scene unload and when the rule is destroyed (framework shutdown).
     std::unordered_set<entt::registry*> _connectedRegistries;

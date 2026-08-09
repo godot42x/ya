@@ -222,7 +222,7 @@ Scene* createBillboardRegressionScene(App& app)
             light->color = glm::vec3(1.0f, 0.8f, 0.35f);
             light->intensity = 6.0f;
         }
-        LightBillboardLinkageRule::applyLinkage(rawScene, entity->getHandle());
+        LightBillboardLinkageRule::applyLinkage(rawScene, entity->getHandle(), LightBillboardPolicy{});
     }
 
     auto* directionalNode = rawScene->createNode3D("RegressionDirectionalLight");
@@ -239,7 +239,7 @@ Scene* createBillboardRegressionScene(App& app)
             light->intensity = 3.0f;
             light->bEnable = true;
         }
-        LightBillboardLinkageRule::applyLinkage(rawScene, entity->getHandle());
+        LightBillboardLinkageRule::applyLinkage(rawScene, entity->getHandle(), LightBillboardPolicy{});
     }
 
     app.getSceneServices().refreshSceneDerivedState(rawScene);
