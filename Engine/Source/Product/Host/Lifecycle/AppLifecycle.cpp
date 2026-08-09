@@ -683,6 +683,10 @@ void AppLifecycle::onSceneInit(App& app, Scene* scene)
 
 void AppLifecycle::onSceneDestroy(App& app, Scene* scene)
 {
+    if (scene && app.getGameUIHost()) {
+        app.getGameUIHost()->onSceneDeactivated(*scene);
+    }
+
     app.notifyModulesSceneDestroyed(scene);
 
     for (auto& frameData : app._renderState->frameDataPerFlight) {
@@ -697,6 +701,10 @@ void AppLifecycle::onSceneDestroy(App& app, Scene* scene)
 
 void AppLifecycle::onSceneActivated(App& app, Scene* scene)
 {
+    if (scene && app.getGameUIHost()) {
+        app.getGameUIHost()->onSceneActivated(*scene);
+    }
+
     app.notifyModulesSceneActivated(scene);
 }
 

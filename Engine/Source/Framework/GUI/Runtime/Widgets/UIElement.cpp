@@ -124,19 +124,19 @@ glm::vec2 UIElement::computeDesiredSize() const
 
 // === Paint ===
 
-void UIElement::paint(const WidgetPaintContext& ctx)
+void UIElement::paint(UIFrameBuilder& builder)
 {
     if (!isVisibleForRender()) {
         return;
     }
-    paintSelf(ctx);
-    paintChildren(ctx);
+    paintSelf(builder);
+    paintChildren(builder);
 }
 
-void UIElement::paintChildren(const WidgetPaintContext& ctx)
+void UIElement::paintChildren(UIFrameBuilder& builder)
 {
     for (UIElement* child : getChildrenInPaintOrder()) {
-        child->paint(ctx);
+        child->paint(builder);
     }
 }
 

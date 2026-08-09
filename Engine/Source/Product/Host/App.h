@@ -13,6 +13,7 @@
 #include "Host/AppRenderServices.h"
 #include "AppServices/RuntimeServices.h"
 #include "Host/AppSceneServices.h"
+#include "Host/GUI/GameUI/GameUIHost.h"
 #include "Core/Common/AppState.h"
 #include "Host/AppTaskManager.h"
 #include "Host/Lifecycle/AppAutomation.h"
@@ -75,6 +76,9 @@ struct YA_HOST_API App : public IRenderRuntimeHostServices
     AppRenderServices                            _renderServices;
     AppSceneServices                             _sceneServices;
     std::unique_ptr<AppAutomationControlService> _automationControlService;
+    /// Game UI presentation adapter: owns the live WidgetTree of the current
+    /// game presentation area and resolves scenes/input/frames to it.
+    std::unique_ptr<GameUIHost> _gameUIHost;
 
     bool bRunning = true;
 
@@ -174,6 +178,7 @@ struct YA_HOST_API App : public IRenderRuntimeHostServices
     [[nodiscard]] const AppSceneServices&  getSceneServices() const { return _sceneServices; }
     [[nodiscard]] AppAutomationControlService*       getAutomationControlService() { return _automationControlService.get(); }
     [[nodiscard]] const AppAutomationControlService* getAutomationControlService() const { return _automationControlService.get(); }
+    [[nodiscard]] GameUIHost*                        getGameUIHost() { return _gameUIHost.get(); }
     [[nodiscard]] JSScriptingSystem*                  getJSScriptingSystem() const { return _jsScriptingSystem; }
 
     [[nodiscard]] const AppDesc&                 getDesc() const { return _ci; }

@@ -1,39 +1,18 @@
 #include "GUI/Widgets/Controls/Text.h"
 
-#include "GUI/Widgets/Controls/PaintCommon.h"
-#include "GUI/Draw2D/Render2D.h"
 #include "GUI/Resources/FontManager.h"
+#include "GUI/Widgets/UIFrameSnapshot.h"
 
 namespace ya
 {
 
-void UIText::paintSelf(const WidgetPaintContext& ctx)
+void UIText::paintSelf(UIFrameBuilder& builder)
 {
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (!font) {
         return;
     }
-
-    const glm::vec2 pos  = paint_util::toScreenPxPos(ctx, _layoutRect.pos);
-    const glm::vec2 size = paint_util::toScreenPxSize(ctx, _layoutRect.extent);
-    glm::vec2       drawPos = pos;
-
-    const float textWidth  = font->measureText(_text);
-    const float textScaleX = ctx.uiScale.x;
-    const float textScaleY = ctx.uiScale.y;
-    if (_hAlign == EWidgetAlignH::Center) {
-        drawPos.x += (size.x - textWidth * textScaleX) * 0.5f;
-    }
-    else if (_hAlign == EWidgetAlignH::Right) {
-        drawPos.x += size.x - textWidth * textScaleX;
-    }
-    if (_vAlign == EWidgetAlignV::Center) {
-        drawPos.y += (size.y - font->lineHeight * textScaleY) * 0.5f;
-    }
-    else if (_vAlign == EWidgetAlignV::Bottom) {
-        drawPos.y += size.y - font->lineHeight * textScaleY;
-    }
-    Render2D::makeText(_text, glm::vec3(drawPos, 0.0f), _color, font.get());
+    builder.addText(_layoutRect, _text, _color, font, _hAlign, _vAlign);
 }
 
 glm::vec2 UIText::computeDesiredSize() const

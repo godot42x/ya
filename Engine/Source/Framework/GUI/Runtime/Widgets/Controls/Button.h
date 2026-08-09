@@ -33,7 +33,7 @@ struct UIButton : public UIElement
     bool                  _bPressed = false;
     std::function<void()> _onClick;
 
-    void paintSelf(const WidgetPaintContext& ctx) override;
+    void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     void resetHoverState() override { _bHovered = false; }
 };

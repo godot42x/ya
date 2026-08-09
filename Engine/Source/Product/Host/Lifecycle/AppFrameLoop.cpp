@@ -515,6 +515,21 @@ void AppFrameLoop::tickRender(App& app, float dt)
 
     auto screenOverlaySprites = AppFrameLoop::buildScreenOverlaySprites(app);
 
+    // Game UI: build the immutable frame snapshot BEFORE the RenderGraph.
+    // Command recording consumes only this packet; the live WidgetTree is
+    // never touched while recording. Runtime/simulation only (standalone game
+    // and PIE); the editor's 3D authoring viewport has no game UI.
+    UIFrameSnapshot          uiFrameSnapshot;
+    const UIFrameSnapshot*   pUiFrameSnapshot = nullptr;
+    if ((app.isRuntimeMode() || app.isSimulationMode()) && scene) {
+        if (auto* gameUIHost = app.getGameUIHost()) {
+            gameUIHost->setPresentation(pipelineFrame.viewportRect,
+                                        glm::vec2(pipelineFrame.viewportFrameBufferScale));
+            uiFrameSnapshot  = gameUIHost->buildSnapshot();
+            pUiFrameSnapshot = &uiFrameSnapshot;
+        }
+    }
+
     renderRuntime->renderFrame(RenderRuntime::FrameInput{
         .overlay = {
             .screenSprites = &screenOverlaySprites,
@@ -554,10 +569,7 @@ void AppFrameLoop::tickRender(App& app, float dt)
             },
         },
         .pipeline = pipelineFrame,
-        // Game UI only composites in runtime/simulation (standalone game and
-        // PIE); the editor's 3D authoring viewport skips Node2D entirely
-        // (Godot-style 3D/2D separation).
-        .uiSceneRoot = (app.isRuntimeMode() || app.isSimulationMode()) && scene ? scene->getRootNode() : nullptr,
+        .uiFrameSnapshot = pUiFrameSnapshot,
     });
 }
 

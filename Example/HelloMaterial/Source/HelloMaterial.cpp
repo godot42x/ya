@@ -5,6 +5,10 @@
 #include "Gameplay/Systems/Components/MirrorComponent.h"
 #include "Resource/AssetManager.h"
 #include "GUI/Resources/FontManager.h"
+#include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Widgets/UITypeRegistry.h"
 
 #include "ECS/Component/3D/SkyboxComponent.h"
 #include "Gameplay/Systems/Components/DirectionalLightComponent.h"
@@ -59,72 +63,51 @@ void HelloMaterialModule::onDetach(ya::App&)
 
 void HelloMaterialModule::onSceneActivated(ya::App& app, ya::Scene* scene)
 {
-    (void)app;
     YA_INFO("HelloMaterial scene initialized.");
-    // The demo UI is authoring data. Creating it when the source scene is
-    // activated makes the same Node2D tree visible in the editor's 2D
-    // workspace and lets PIE clone it normally. Play-mode activation is
-    // idempotent because the cloned scene already contains the HUD.
-    // createUIDemo(scene);
+    createUIDemo(app, scene);
 }
 
-namespace
+void HelloMaterialModule::createUIDemo(ya::App& app, ya::Scene* scene)
 {
-
-bool sceneHasNode2D(ya::Node* node, const std::string& name)
-{
-    for (ya::Node* child : node->getChildren()) {
-        if (auto* node2D = dynamic_cast<ya::Node2D*>(child)) {
-            if (node2D->getName() == name) {
-                return true;
-            }
-        }
-        if (sceneHasNode2D(child, name)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-} // namespace
-
-void HelloMaterialModule::createUIDemo(ya::Scene* scene)
-{
-    // Game UI demo: Node2D nodes live in the unified scene tree (Godot style)
-    // and are rendered by the dedicated UI pass. Idempotent across PIE enters.
-    if (!scene || sceneHasNode2D(scene->getRootNode(), "HUD")) {
+    // Game UI demo (WidgetTree): widgets join the presented world's Game UI
+    // content layer via the host; the controller unmounts them when the scene
+    // deactivates, so re-entering (PIE) never accumulates.
+    auto* gameUIHost = app.getGameUIHost();
+    if (!scene || !gameUIHost) {
         return;
     }
 
-    auto* canvas = scene->createUINode<ya::UICanvasNode>("HUD");
-    if (!canvas) {
-        return;
-    }
-
-    auto* panel = scene->createUINode<ya::UIPanelNode>("Panel", canvas);
+    auto& registry = ya::UITypeRegistry::instance();
+    auto  panel    = registry.createInstance("engine.panel");
     panel->_position = {20.0f, 20.0f};
     panel->_size     = {300.0f, 120.0f};
-    panel->_color    = {0.12f, 0.14f, 0.22f, 0.88f};
+    static_cast<ya::UIPanel*>(panel.get())->_color = {0.12f, 0.14f, 0.22f, 0.88f};
+    gameUIHost->addToWorld(*scene, panel);
 
-    auto* title = scene->createUINode<ya::UITextNode>("Title", canvas);
+    auto title = registry.createInstance("engine.text");
     title->_position = {36.0f, 30.0f};
     title->_size     = {260.0f, 26.0f};
-    title->_text     = "Game UI (Node2D)";
-    title->_fontSize = 16; // Only preloaded sizes (16/48) resolve today; see Phase 2 font policy
-    title->_color    = {1.0f, 0.85f, 0.4f, 1.0f};
+    static_cast<ya::UIText*>(title.get())->_text     = "Game UI (WidgetTree)";
+    static_cast<ya::UIText*>(title.get())->_fontSize = 16;
+    static_cast<ya::UIText*>(title.get())->_color    = {1.0f, 0.85f, 0.4f, 1.0f};
+    gameUIHost->addToWorld(*scene, title);
 
-    auto* label = scene->createUINode<ya::UITextNode>("Label", canvas);
+    auto label = registry.createInstance("engine.text");
     label->_position = {36.0f, 66.0f};
     label->_size     = {260.0f, 20.0f};
-    label->_text     = "Click the button below";
-    label->_fontSize = 16;
+    static_cast<ya::UIText*>(label.get())->_text     = "Click the button below";
+    static_cast<ya::UIText*>(label.get())->_fontSize = 16;
+    gameUIHost->addToWorld(*scene, label);
 
-    auto* button = scene->createUINode<ya::UIButtonNode>("Click Me", canvas);
+    auto button = registry.createInstance("engine.button");
     button->_position = {36.0f, 96.0f};
     button->_size     = {140.0f, 30.0f};
-    button->_onClick  = [label]() {
-        label->_text = (label->_text == "Button clicked!") ? "Click the button below" : "Button clicked!";
+    auto* buttonWidget = static_cast<ya::UIButton*>(button.get());
+    buttonWidget->_onClick = [label]() {
+        auto* text = static_cast<ya::UIText*>(label.get());
+        text->_text = (text->_text == "Button clicked!") ? "Click the button below" : "Button clicked!";
     };
+    gameUIHost->addToWorld(*scene, button);
 }
 
 void HelloMaterialModule::createCubeMesh()

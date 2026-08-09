@@ -26,6 +26,7 @@ App::App()
     , _renderServices(_renderState.get())
     , _sceneServices(this)
     , _automationControlService(std::make_unique<AppAutomationControlService>())
+    , _gameUIHost(std::make_unique<GameUIHost>())
     , gameInputNode(inputManager)
 {
     inputRouter.setApp(*this);
@@ -187,21 +188,22 @@ EUIRouteResult App::dispatchUIInputEvent(const Event& event)
         return EUIRouteResult::NotHandled;
     }
 
-    Rect2D viewportRect = _renderState && _renderState->runtime
-                            ? _renderState->runtime->getViewportRect()
-                            : Rect2D{};
-    const bool bInViewport = FUIHelper::isPointInRect(_lastMousePos, viewportRect.pos, viewportRect.extent);
-    if (!bInViewport) {
+    // Game UI input routes through the GameUIHost's WidgetTree (the single
+    // live UI fact source); the scene tree no longer participates in picking.
+    GameUIHost* gameUIHost = getGameUIHost();
+    if (!gameUIHost || !gameUIHost->getMountedScene()) {
         return EUIRouteResult::NotHandled;
     }
 
-    UIAppCtx ctx{
-        .lastMousePos = _lastMousePos,
-        .bInViewport  = bInViewport,
-        .viewportRect = viewportRect,
-    };
-    Scene* scene = getSceneServices().getActiveScene();
-    return UISceneRenderer::handleEvent(event, ctx, scene ? scene->getRootNode() : nullptr);
+    switch (gameUIHost->dispatchEvent(event, _lastMousePos)) {
+    case EWidgetRouteResult::HandledExclusive:
+        return EUIRouteResult::HandledExclusive;
+    case EWidgetRouteResult::HandledPass:
+        return EUIRouteResult::HandledPass;
+    case EWidgetRouteResult::NotHandled:
+    default:
+        return EUIRouteResult::NotHandled;
+    }
 }
 
 void App::tickModules(float dt)

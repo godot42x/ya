@@ -3,6 +3,7 @@
 #include "Core/Common/Types.h"
 #include "RHI/Core/Texture.h"
 #include "RHI/RenderDefines.h"
+#include "GUI/Widgets/UIFrameSnapshot.h"
 
 #include <functional>
 #include <memory>
@@ -11,7 +12,6 @@ namespace ya
 {
 
 struct ICommandBuffer;
-struct Node;
 struct RenderImage;
 
 /// Shared 2D compose pass used by every viewport-facing UI/overlay path:
@@ -51,14 +51,17 @@ void prepareRender2DComposePassPipeline(const FRender2DComposePassDesc& passDesc
                                         EFormat::T                      colorFormat,
                                         EFormat::T                      depthFormat = EFormat::Undefined);
 
-/// Record one shared 2D compose pass into `target`. `depthTarget` is optional
-/// (the editor viewport depth-tests debug overlays against it). `extraContent`
-/// runs inside the Render2D recording window for caller-owned content such as
-/// camera overlay text and physics debug lines.
+/// Record one shared 2D compose pass into `target`. `uiFrameSnapshot` is the
+/// immutable per-frame Game UI packet (already resolved to render-target
+/// pixels); command recording never touches the live widget tree. May be null
+/// for passes without Game UI (editor viewport). `depthTarget` is optional
+/// (the editor viewport depth-tests debug overlays against it).
+/// `extraContent` runs inside the Render2D recording window for caller-owned
+/// content such as camera overlay text and physics debug lines.
 void recordRender2DComposePass(ICommandBuffer*                  cmdBuf,
                                RenderImage&                     target,
                                RenderImage*                     depthTarget,
-                               Node*                            uiSceneRoot,
+                               const UIFrameSnapshot*           uiFrameSnapshot,
                                const FRender2DComposePassDesc&  passDesc,
                                const std::function<void()>&     extraContent = {});
 

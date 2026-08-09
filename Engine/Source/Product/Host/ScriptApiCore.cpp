@@ -7,11 +7,15 @@
 #include "ECS/Entity.h"
 #include "Host/App.h"
 #include "GUI/Scene/Node2D.h"
+#include "GUI/Widgets/SceneWidgetEntry.h"
+#include "GUI/Widgets/UITypeRegistry.h"
+#include "GUI/Widgets/WidgetTree.h"
 #include "Scene3D/Node3D.h"
 #include "Scene/Core/Scene.h"
 
 #include <algorithm>
 #include <format>
+#include <unordered_map>
 
 namespace ya
 {
@@ -39,6 +43,33 @@ entt::entity requireEntityId(const Json& args, Scene& scene)
         throw Error(std::format("entity {} not found", id));
     }
     return entity->getHandle();
+}
+
+// Script widget handles: widgets created via ui.create are retained by the
+// script session (detached by default); the Game UI service mounts/unmounts
+// them into the presented world's WidgetTree.
+using ScriptWidgetHandle = uint64_t;
+
+std::unordered_map<ScriptWidgetHandle, UIElementRef>& scriptWidgets()
+{
+    static std::unordered_map<ScriptWidgetHandle, UIElementRef> widgets;
+    return widgets;
+}
+
+ScriptWidgetHandle nextScriptWidgetHandle()
+{
+    static ScriptWidgetHandle next = 1;
+    return next++;
+}
+
+UIElementRef requireScriptWidget(const Json& args)
+{
+    const auto handle = args.value("handle", 0ull);
+    const auto it     = scriptWidgets().find(handle);
+    if (it == scriptWidgets().end()) {
+        throw Error(std::format("ui widget handle {} not found", handle));
+    }
+    return it->second;
 }
 
 std::vector<std::string> listRegisteredComponentTypes()
@@ -486,6 +517,99 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
             Scene& scene = requireActiveScene();
             Node*  node  = requireNodeByPath(scene, args);
             scene.destroyNode(node);
+            return Json{{"destroyed", true}};
+        });
+
+    // ========================================================================
+    // Game UI (WidgetTree / GameUIHost). The legacy node.create/set UI path is
+    // removed in the Phase 6 cleanup; scripts author UI through this service.
+    // ========================================================================
+    registry.registerFunction(
+        "ui.types",
+        "Lists every registered Game UI widget type (stable registry type IDs).",
+        Json::object(),
+        [](const Json&) -> Json {
+            Json types = Json::array();
+            for (const std::string& typeId : UITypeRegistry::instance().getTypeIds()) {
+                types.push_back(typeId);
+            }
+            return types;
+        });
+
+    registry.registerFunction(
+        "ui.create",
+        "Creates a detached Game UI widget. Args: {type, name?}. Returns a script handle.",
+        Json{{"type", {{"type", "string"}}}, {"name", {{"type", "string"}}}},
+        [](const Json& args) -> Json {
+            const std::string typeId = args.at("type").get<std::string>();
+            UIElementRef widget = UITypeRegistry::instance().createInstance(typeId);
+            if (!widget) {
+                throw Error(std::format("unknown Game UI type '{}' (see ui.types)", typeId));
+            }
+            if (const auto it = args.find("name"); it != args.end() && !it->is_null()) {
+                widget->_name = it->get<std::string>();
+            }
+            const ScriptWidgetHandle handle = nextScriptWidgetHandle();
+            scriptWidgets().emplace(handle, widget);
+            return Json{{"handle", handle}, {"type", typeId}, {"name", widget->_name}};
+        });
+
+    registry.registerFunction(
+        "ui.set",
+        "Updates reflected fields of a script widget. Args: {handle, fields:{name: value}}.",
+        Json{{"handle", {{"type", "integer"}}}, {"fields", {{"type", "object"}}}},
+        [](const Json& args) -> Json {
+            UIElementRef widget = requireScriptWidget(args);
+            UIInstanceOverrideSet overrides = UIInstanceOverrideSet::fromJson(args.at("fields"));
+            if (!overrides.applyTo(*widget)) {
+                throw Error(std::format("ui.set: one or more fields do not exist on type '{}'",
+                                        widget->_typeId));
+            }
+            return Json{{"handle", args.at("handle").get<uint64_t>()}, {"type", widget->_typeId}};
+        });
+
+    registry.registerFunction(
+        "ui.add_to_world",
+        "Joins the widget to the active world's Game UI content layer. "
+        "Args: {handle}. Unmounted automatically when the scene deactivates.",
+        Json{{"handle", {{"type", "integer"}}}},
+        [](const Json& args) -> Json {
+            UIElementRef widget = requireScriptWidget(args);
+            Scene*       scene  = ScriptApiRegistry::get().getActiveScene();
+            App*         app    = App::get();
+            if (!scene || !app || !app->getGameUIHost()) {
+                throw Error("ui.add_to_world: no active world/game UI host");
+            }
+            const WidgetAttachment attachment = app->getGameUIHost()->addToWorld(*scene, widget);
+            if (!attachment.valid()) {
+                throw Error("ui.add_to_world: the active world is not presented");
+            }
+            return Json{{"handle", args.at("handle").get<uint64_t>()}, {"mounted", true}};
+        });
+
+    registry.registerFunction(
+        "ui.detach",
+        "Unmounts a script widget from its tree (widget stays alive). Args: {handle}.",
+        Json{{"handle", {{"type", "integer"}}}},
+        [](const Json& args) -> Json {
+            UIElementRef widget = requireScriptWidget(args);
+            if (WidgetTree* tree = widget->getTree()) {
+                tree->detach(*widget);
+            }
+            return Json{{"handle", args.at("handle").get<uint64_t>()}, {"detached", true}};
+        });
+
+    registry.registerFunction(
+        "ui.destroy",
+        "Detaches and releases a script widget. Args: {handle}.",
+        Json{{"handle", {{"type", "integer"}}}},
+        [](const Json& args) -> Json {
+            const auto handle = args.at("handle").get<uint64_t>();
+            UIElementRef widget = requireScriptWidget(args);
+            if (WidgetTree* tree = widget->getTree()) {
+                tree->detach(*widget);
+            }
+            scriptWidgets().erase(handle);
             return Json{{"destroyed", true}};
         });
 

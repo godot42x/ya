@@ -27,5 +27,5 @@ struct HelloMaterialModule final : ya::IModule
     void loadResources();
     void createMaterials();
     void createEntities(ya::Scene* scene);
-    void createUIDemo(ya::Scene* scene);
+    void createUIDemo(ya::App& app, ya::Scene* scene);
 };

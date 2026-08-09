@@ -71,7 +71,7 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     // post-process/viewport target format can differ from the initial viewport
     // format (for example HDR R16G16B16A16_SFLOAT), so resolve it from the
     // active pipeline before beginning this frame's command buffer.
-    if (input.uiSceneRoot) {
+    if (input.uiFrameSnapshot) {
         auto uiTarget = getViewportDisplayImageShared();
         if (uiTarget) {
             prepareRender2DComposePassPipeline(
@@ -96,13 +96,13 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     }
     // Game UI composites AFTER the world graph and its post-processing, so UI
     // never enters bloom or tonemapping (graph-external, manual transitions).
-    if (input.uiSceneRoot) {
+    if (input.uiFrameSnapshot) {
         auto uiTarget = getViewportDisplayImageShared();
         if (uiTarget) {
             recordRender2DComposePass(cmdBuf.get(),
                                       *uiTarget,
                                       nullptr,
-                                      input.uiSceneRoot,
+                                      input.uiFrameSnapshot,
                                       FRender2DComposePassDesc{
                                           .kind = ERender2DComposePassKind::RuntimeUIComposite,
                                           .logicalViewportExtent = Extent2D{

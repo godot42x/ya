@@ -4,7 +4,6 @@
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderImage.h"
 #include "RHI/Backend/TextureLibrary.h"
-#include "GUI/Scene/UISceneRenderer.h"
 
 namespace ya
 {
@@ -98,7 +97,7 @@ void prepareRender2DComposePassPipeline(const FRender2DComposePassDesc& passDesc
 void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
                                RenderImage&                    target,
                                RenderImage*                    depthTarget,
-                               Node*                           uiSceneRoot,
+                               const UIFrameSnapshot*          uiFrameSnapshot,
                                const FRender2DComposePassDesc& passDesc,
                                const std::function<void()>&    extraContent)
 {
@@ -186,14 +185,27 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
     if (passDesc.kind == ERender2DComposePassKind::EditorCanvasPreview) {
         drawEditorCanvasGrid(rtExtent, uiScale, passDesc.canvasPan, passDesc.canvasZoom);
     }
-    if (uiSceneRoot) {
-        UISceneRenderer::render(uiSceneRoot,
-                                uiScale,
-                                UICanvasTransform{
-                                    .pan  = passDesc.canvasPan,
-                                    .zoom = std::max(passDesc.canvasZoom, 0.01f),
-                                },
-                                passDesc.logicalViewportExtent);
+    if (uiFrameSnapshot) {
+        for (const auto& item : uiFrameSnapshot->items) {
+            if (item.bClipped) {
+                Render2D::pushClipRect(item.clip);
+            }
+            if (item.kind == UIFrameDrawItem::EKind::Sprite) {
+                Render2D::makeSprite(glm::vec3(item.pos, 0.0f),
+                                     item.size,
+                                     item.texture,
+                                     item.color);
+            }
+            else {
+                Render2D::makeText(item.text,
+                                   glm::vec3(item.pos, 0.0f),
+                                   item.color,
+                                   item.font.get());
+            }
+            if (item.bClipped) {
+                Render2D::popClipRect();
+            }
+        }
     }
     if (extraContent) {
         extraContent();

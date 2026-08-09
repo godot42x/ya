@@ -95,6 +95,7 @@ do
     add_files("./Source/WidgetTreeTest.cpp")
     add_files("./Source/UIDocumentTest.cpp")
     add_files("./Source/SceneWidgetEntryTest.cpp")
+    add_files("./Source/UIFrameSnapshotTest.cpp")
     add_files("./Source/TestEntry.cpp")
 
     add_deps("ya-gui-framework")
@@ -114,6 +115,7 @@ do
     add_files("./Source/WidgetTreeTest.cpp")
     add_files("./Source/UIDocumentTest.cpp")
     add_files("./Source/SceneWidgetEntryTest.cpp")
+    add_files("./Source/UIFrameSnapshotTest.cpp")
     add_files("./Source/TestEntry.cpp")
 
     add_deps("ya-gui-widgets")

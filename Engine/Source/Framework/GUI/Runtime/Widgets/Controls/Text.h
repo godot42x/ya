@@ -28,7 +28,7 @@ struct UIText : public UIElement
     EWidgetAlignV     _vAlign    = EWidgetAlignV::Top;
     bool              _bAutoSize = false; // Measure the layout rect from the text
 
-    void paintSelf(const WidgetPaintContext& ctx) override;
+    void paintSelf(UIFrameBuilder& builder) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 };
 

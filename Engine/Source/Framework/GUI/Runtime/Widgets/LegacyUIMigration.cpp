@@ -38,6 +38,15 @@ nlohmann::json translateFields(nlohmann::json fields)
         fields["__base__"]["UIElement"] = fields["__base__"]["Node2D"];
         fields["__base__"].erase("Node2D");
     }
+    // Old schemas stored `_visible` as a base-class bool inside the block.
+    if (fields.contains("__base__") && fields["__base__"].is_object() &&
+        fields["__base__"].contains("UIElement") && fields["__base__"]["UIElement"].is_object()) {
+        auto& base = fields["__base__"]["UIElement"];
+        if (base.contains("_visible") && base["_visible"].is_boolean()) {
+            base["_visibility"] = base["_visible"].get<bool>() ? "Visible" : "Hidden";
+            base.erase("_visible");
+        }
+    }
     if (fields.contains("_visible") && fields["_visible"].is_boolean()) {
         fields["_visibility"] = fields["_visible"].get<bool>() ? "Visible" : "Hidden";
         fields.erase("_visible");

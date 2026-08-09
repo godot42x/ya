@@ -77,12 +77,7 @@ struct UIElement;
 
 using UIElementRef = std::shared_ptr<UIElement>;
 
-/// Paint context passed down the tree during the paint pass. `uiScale` maps
-/// logical UI pixels to render-target pixels (host/framebuffer scale).
-struct WidgetPaintContext
-{
-    glm::vec2 uiScale = {1.0f, 1.0f};
-};
+class UIFrameBuilder;
 
 /// Event context for widget hit-testing / event dispatch. `logicalPoint` is
 /// in tree-local logical pixels (top-left origin, Y down) — the host converts
@@ -168,8 +163,10 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
     /// measured text; containers aggregate children).
     [[nodiscard]] virtual glm::vec2 computeDesiredSize() const;
 
-    // === Paint (after layout; records commands into the active batch) ===
-    virtual void paint(const WidgetPaintContext& ctx);
+    // === Paint (after layout; records resolved draw items into the frame) ===
+    /// Records this element and its subtree into `builder`. Runs before the
+    /// RenderGraph is built; never during command recording.
+    virtual void paint(UIFrameBuilder& builder);
 
     // === Events (hit-tested by WidgetTree's topmost-first walker) ===
     /// Return true to consume the event. `ctx.logicalPoint` is in tree-local
@@ -218,9 +215,9 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
     /// Lay out direct children within `layoutRect` (paint order).
     void layoutChildren(const Rect2D& layoutRect);
     /// Recursively paint children in paint order.
-    void paintChildren(const WidgetPaintContext& ctx);
+    void paintChildren(UIFrameBuilder& builder);
     /// Subclasses draw themselves here (base: no-op).
-    virtual void paintSelf(const WidgetPaintContext& ctx) {}
+    virtual void paintSelf(UIFrameBuilder& builder) { (void)builder; }
 
   private:
     friend struct WidgetTree;

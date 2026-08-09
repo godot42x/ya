@@ -18,6 +18,7 @@
 // ============================================================================
 
 #include "GUI/Widgets/UIElement.h"
+#include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetAttachment.h"
 
 #include <array>
@@ -87,6 +88,11 @@ struct WidgetTree final
     /// order, content children sort by zOrder.
     void layout();
     [[nodiscard]] bool isLayoutValid() const { return !_bLayoutDirty; }
+
+    /// Layout (if dirty) + paint the whole tree into an immutable frame
+    /// snapshot. Must be called before the RenderGraph is built; command
+    /// recording only ever consumes the returned snapshot.
+    [[nodiscard]] UIFrameSnapshot buildSnapshot(const UIFrameBuildContext& ctx);
 
     /// Topmost-first event dispatch (children before parent, zOrder
     /// descending, layers bottom -> top). Pointer capture overrides the walk;

@@ -1,6 +1,6 @@
 #include "GUI/Widgets/Controls/Container.h"
 
-#include "GUI/Draw2D/Render2D.h"
+#include "GUI/Widgets/UIFrameSnapshot.h"
 
 #include <algorithm>
 
@@ -47,21 +47,18 @@ void UIContainer::arrangeChildren(const Rect2D& contentRect)
     }
 }
 
-void UIContainer::paint(const WidgetPaintContext& ctx)
+void UIContainer::paint(UIFrameBuilder& builder)
 {
     if (!isVisibleForRender()) {
         return;
     }
-    paintSelf(ctx);
+    paintSelf(builder);
     if (_bClipChildren) {
-        Render2D::pushClipRect(Rect2D{
-            .pos    = _layoutRect.pos * ctx.uiScale,
-            .extent = _layoutRect.extent * ctx.uiScale,
-        });
+        builder.pushClip(_layoutRect);
     }
-    paintChildren(ctx);
+    paintChildren(builder);
     if (_bClipChildren) {
-        Render2D::popClipRect();
+        builder.popClip();
     }
 }
 

@@ -27,7 +27,7 @@ struct UIContainer : public UIElement
     bool             _bClipChildren = false;
 
     void layout(const Rect2D& parentRect) override;
-    void paint(const WidgetPaintContext& ctx) override;
+    void paint(UIFrameBuilder& builder) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 
   private:

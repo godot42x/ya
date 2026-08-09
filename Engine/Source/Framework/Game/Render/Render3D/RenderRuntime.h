@@ -21,6 +21,7 @@
 #include "Render3D/Services/GameplayResourceBinding.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Terrain/TerrainProcessor.h"
+#include "GUI/Widgets/UIFrameSnapshot.h"
 
 #include <functional>
 #include <glm/glm.hpp>
@@ -133,9 +134,10 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
         ViewportComposeExtensions  viewportCompose{};
         RenderPipelineFrameContext pipeline{};
 
-        /// Node2D (UI) subtree of the active scene; composited onto the final
-        /// viewport image after the world graph (graph-external UI pass).
-        Node* uiSceneRoot = nullptr;
+        /// Immutable Game UI frame packet built before the graph; composited
+        /// onto the final viewport image after the world graph. Command
+        /// recording never touches the live widget tree.
+        const UIFrameSnapshot* uiFrameSnapshot = nullptr;
     };
 
     IRenderRuntimeHostServices* _hostServices = nullptr;

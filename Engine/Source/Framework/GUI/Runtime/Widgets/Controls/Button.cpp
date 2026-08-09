@@ -2,20 +2,17 @@
 
 #include "Core/Log.h"
 
-#include "GUI/Draw2D/Render2D.h"
+#include "GUI/Widgets/UIFrameSnapshot.h"
 
 namespace ya
 {
 
-void UIButton::paintSelf(const WidgetPaintContext& ctx)
+void UIButton::paintSelf(UIFrameBuilder& builder)
 {
     const glm::vec4 color = _bPressed
                                 ? _pressedColor
                                 : (_bHovered ? _hoveredColor : _normalColor);
-    Render2D::makeSprite(glm::vec3(_layoutRect.pos * ctx.uiScale, 0.0f),
-                         _layoutRect.extent * ctx.uiScale,
-                         nullptr,
-                         color);
+    builder.addSprite(_layoutRect, color, nullptr);
 }
 
 bool UIButton::handleInputEvent(const Event& event, const WidgetEventContext& ctx)

@@ -194,7 +194,6 @@ class EditorViewportCompositor
                  const RenderViewportSnapshot& snapshot,
                  const EditorLayer&            layer,
                  const AppRenderFrameState&    renderFrame,
-                 Node*                         uiPreviewRoot,
                  const Extent2D&               canvasTargetExtent)
     {
         // 2D canvas preview does not consume the world output (the world scene
@@ -215,7 +214,7 @@ class EditorViewportCompositor
             recordRender2DComposePass(&commandBuffer,
                                       *_composedViewportImage,
                                       nullptr,
-                                      uiPreviewRoot,
+                                      nullptr, // Game UI snapshot: editor UI preview lands in Phase 5
                                       FRender2DComposePassDesc{
                                           .kind = ERender2DComposePassKind::EditorCanvasPreview,
                                           .logicalViewportExtent = Extent2D{
@@ -826,15 +825,6 @@ class EditorModule final : public IModule, public IEditorAutomationControl
         const auto snapshot = renderRuntime->buildViewportSnapshot();
         _layer->setViewportContext(snapshot);
         _layer->setEntityIdPickImage(snapshot.entityIdImageOwner);
-        // 2D preview composites the authoring scene's Node2D tree over a grid;
-        // during PIE/sim the runtime already composites UI, so the editor
-        // preview stays in 3D presentation (no double-draw).
-        Node* uiPreviewRoot = nullptr;
-        if (_layer->isViewportMode2D()) {
-            if (Scene* scene = _layer->getViewportInteractionScene()) {
-                uiPreviewRoot = scene->getRootNode();
-            }
-        }
         // 2D mode disables the world scene graph, so the runtime pipeline never
         // publishes viewport resources and getViewportExtent() stays 0x0;
         // size the canvas target from the editor panel instead (same fallback
@@ -849,7 +839,6 @@ class EditorModule final : public IModule, public IEditorAutomationControl
                                     snapshot,
                                     *_layer,
                                     app.getRenderServices().getRenderFrameState(),
-                                    uiPreviewRoot,
                                     canvasTargetExtent);
         // Keep the last valid frame instead of clobbering the display with a
         // transiently null output (startup / mode-switch / resize gaps).

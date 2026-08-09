@@ -279,6 +279,16 @@ void WidgetTree::layout()
     _bLayoutDirty = false;
 }
 
+UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
+{
+    if (_bLayoutDirty) {
+        layout();
+    }
+    UIFrameBuilder builder(ctx);
+    _root->paint(builder);
+    return builder.build(_logicalExtent);
+}
+
 EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEventContext& ctx)
 {
     const EEvent::T eventType = event.getEventType();

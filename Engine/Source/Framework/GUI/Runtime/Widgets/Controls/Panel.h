@@ -26,7 +26,7 @@ struct UIPanel : public UIElement
     bool       _bNineSlice      = false;
     glm::vec4  _nineSliceBorder = {8.0f, 8.0f, 8.0f, 8.0f}; // l, t, r, b in pixels
 
-    void paintSelf(const WidgetPaintContext& ctx) override;
+    void paintSelf(UIFrameBuilder& builder) override;
 };
 
 } // namespace ya

@@ -1,7 +1,7 @@
 # Game UI WidgetTree 重构计划
 
 > 建立日期：2026-08-09  
-> 状态：执行中；Phase 0/1/2a/2b 已完成（见 §12），Phase 3 起待执行。  
+> 状态：执行中；Phase 0/1/2a/2b/3/4 已完成（见 §12），Phase 5 起待执行。  
 > 当前范围：只重构 Game UI；ImGui Editor Shell 保持不变。  
 > 替代关系：本计划取代 `../game-ui-rendering/plan.md` 中“Node2D 与 Node3D
 > 共用一棵 Scene Tree”的 Game UI 路线。  
@@ -727,18 +727,19 @@ shared/monolith：
 
 目标：让 runtime 使用 WidgetTree，但暂不改变最终 presentation 架构。
 
-- [ ] 在 Host/GUI/GameUI 建立 GameUIHost；
-- [ ] 绑定当前 game presentation rect/extent/framebuffer scale；
-- [ ] 定义 World/Scene 到 GameUIHost 的解析规则；
-- [ ] 提供显式目标的 add-to-world 操作；
-- [ ] 可选提供 active World convenience；
-- [ ] 实现 DefaultGameUIController；
-- [ ] Scene activate 时实例化 autoMount entries；
-- [ ] Scene deactivate 时解除对应 attachments；
-- [ ] persistent UI 只能由 Project/controller 显式持有；
-- [ ] App input 从 Scene root 扫描切换到 GameUIHost；
-- [ ] Script API 切到 Widget/UIDocument/Game UI service；
-- [ ] 删除 runtime 对 `UISceneRenderer::handleEvent(sceneRoot)` 的调用。
+- [x] 在 Host/GUI/GameUI 建立 GameUIHost；
+- [x] 绑定当前 game presentation rect/extent/framebuffer scale；
+- [x] 定义 World/Scene 到 GameUIHost 的解析规则；
+- [x] 提供显式目标的 add-to-world 操作；
+- [x] 可选提供 active World convenience（未提供：单 World runtime 一律显式
+  World，避免全局便利 API）；
+- [x] 实现 DefaultGameUIController；
+- [x] Scene activate 时实例化 autoMount entries；
+- [x] Scene deactivate 时解除对应 attachments；
+- [x] persistent UI 只能由 Project/controller 显式持有；
+- [x] App input 从 Scene root 扫描切换到 GameUIHost；
+- [x] Script API 切到 Widget/UIDocument/Game UI service；
+- [x] 删除 runtime 对 `UISceneRenderer::handleEvent(sceneRoot)` 的调用。
 
 验收：
 
@@ -754,17 +755,20 @@ shared/monolith：
 
 目标：命令录制不再读取 live tree。
 
-- [ ] 定义 UIFrameSnapshot/frame packet；
-- [ ] WidgetTree layout 后构建 snapshot；
-- [ ] snapshot 持有 draw 所需资源强引用；
-- [ ] Render2D batching 改为读取 snapshot draw items；
-- [ ] `Render2DComposePass` 移除 `Node* uiSceneRoot`；
-- [ ] `AppFrameLoop` 移除 `uiSceneRoot` frame input；
-- [ ] RenderGraph build 前完成 UI snapshot；
-- [ ] execute callback 只捕获 immutable snapshot/typed params/graph handles；
-- [ ] 明确 snapshot retirement 与 queue submit 生命周期；
-- [ ] 保持 UI 不进入 bloom；
-- [ ] 回归 Deferred/Forward/runtime/editor preview compose。
+- [x] 定义 UIFrameSnapshot/frame packet；
+- [x] WidgetTree layout 后构建 snapshot；
+- [x] snapshot 持有 draw 所需资源强引用（font 强引用；texture 由资产缓存
+  覆盖 submit 生命周期，与旧路径一致）；
+- [x] Render2D batching 改为读取 snapshot draw items；
+- [x] `Render2DComposePass` 移除 `Node* uiSceneRoot`；
+- [x] `AppFrameLoop` 移除 `uiSceneRoot` frame input；
+- [x] RenderGraph build 前完成 UI snapshot；
+- [x] execute callback 只捕获 immutable snapshot/typed params/graph handles；
+- [x] 明确 snapshot retirement 与 queue submit 生命周期（每帧本地 snapshot，
+  资源归缓存；snapshot 后 detach/destroy 安全有测试）；
+- [x] 保持 UI 不进入 bloom；
+- [x] 回归 Deferred/Forward/runtime compose（运行时截图与基线一致；editor
+  preview 的 Node2D 绘制暂停，Phase 5 以 preview WidgetTree 恢复）。
 
 验收：
 
@@ -1115,3 +1119,50 @@ SceneWidgetEntry 与旧数据迁移落地，Scene 只保存 authoring data：
 - **已知迁移语义**：Node3D 嵌套在 Node2D 下在迁移时告警丢弃（新模型
   UI 与世界树分离，仓库内无此用例）；旧场景文件保持旧格式直到编辑器
   重新保存（importer 随时可加载）。
+
+### Phase 3+4（完成：2026-08-09；runtime 事实源切换）
+
+Phase 3（GameUIHost/input）与 Phase 4（snapshot 渲染）合并落地，避免
+"输入走新树、渲染走旧树"的断裂中间态（stop-line #8）：
+
+- **GameUIHost**（`Product/Host/GUI/GameUI/`，host 内高内聚子目录，非独立
+  target）：持有当前游戏呈现区域的 WidgetTree；`setPresentation` 绑定
+  viewport rect + framebuffer scale（logical extent = viewport/scale）；
+  `onSceneActivated/Deactivated` 走 controller 挂载/解除；`addToWorld`
+  显式 World 语义（非呈现 World 明确失败）；`dispatchEvent` 窗口坐标 →
+  logical（viewport 外不路由）；`buildSnapshot` 布局+绘制。
+- **IGameUIController / DefaultGameUIController**：激活时实例化
+  autoMount entries（inline 文档 → 内容层，entry zOrder → widget zOrder，
+  overrides 应用）；切场景/销毁时解除该场景全部 attachments（entries +
+  addToWorld 动态 widget 都按场景追踪，反复 PIE 不累积）；documentPath
+  引用暂告警跳过（资源管线接入后解析）。persistent UI 由 Project 持有
+  controller 外引用实现。
+- **UIFrameSnapshot**（ya-gui-widgets）：`UIFrameBuilder` 在 RenderGraph
+  前收集已解析 draw items（render px 位置/尺寸、resolve clip、颜色、
+  texture/font 引用）；控件 paint 从直接调 Render2D 改为记录 item——
+  ya-gui-widgets 由此**不再依赖 ya-gui-draw2d**（闭包更干净）；font 强
+  引用，texture 沿用资产缓存所有权（缓存生命周期覆盖 submit，与旧路径
+  一致，注释说明）；snapshot 后立即 detach/destroy widget 本帧仍安全
+  （测试覆盖）。
+- **渲染接线**：`Render2DComposePass` 签名 `Node*` → `const UIFrameSnapshot*`，
+  recording 只消费 item（clip 按 item 应用）；`RenderRuntime::FrameInput.
+  uiSceneRoot` → `uiFrameSnapshot`；`AppFrameLoop` 在 renderFrame 前
+  `host->buildSnapshot()`；UI 仍在 world graph 后合成（不进 bloom）。
+- **输入接线**：`App::dispatchUIInputEvent` → `GameUIHost::dispatchEvent`
+  （映射 EWidgetRouteResult → EUIRouteResult），Scene root 不再参与
+  picking；`UISceneRenderer::handleEvent/render` 的 runtime 调用全部移除
+  （仅编辑器 2D canvas 遗留 pickNodeAt，Phase 5 替换）。
+- **Script API**：新增 `ui.types/create/set/add_to_world/detach/destroy`
+  （脚本句柄 → registry 实例 → host 挂载）；旧 `node.create/set` UI 路径
+  保留到 Phase 6 清理。
+- **HelloMaterial 移植**：UI demo 改走 `UITypeRegistry` +
+  `gameUIHost->addToWorld`（panel/title/label/button，点击切换 label 文本），
+  证明动态创建无需 Scene authoring。
+- **验证**：全量 412 例（+GameUIHost 5、UIFrameSnapshot 5、Script ui 2）、
+  closure 73 例通过；lint 通过；engine/gui × shared/monolith 矩阵构建通过；
+  运行时截图 HUD 区域像素与 Phase 0 基线一致（panel (81,89,118) 29915px、
+  button (203,203,203)、text (213,206,160)）——snapshot 管线渲染等价。
+- **已知项**：编辑器 2D canvas 的 Node2D UI 预览暂停（grid-only），Phase 5
+  以 preview WidgetTree 恢复；`_visible` 旧字段（`__base__` 块内）已由
+  importer 翻译；Sprite2D 管线 format VUID 报错为既有问题（旧路径同样
+  触发），另行建档。

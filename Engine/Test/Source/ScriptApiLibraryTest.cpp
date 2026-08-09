@@ -122,6 +122,33 @@ TEST_F(ScriptApiLibraryFixture, SingleArgCommandMapsPositionally)
     EXPECT_EQ(result.value, Json::array({true, false}));
 }
 
+TEST_F(ScriptApiLibraryFixture, GameUIWidgetLifecycleThroughRegistry)
+{
+    const auto result = _system.evalJS(R"(
+        const types = ya.ui.types();
+        const w = ya.ui.create({type: "engine.panel", name: "HUD"});
+        const set = ya.ui.set({handle: w.handle, fields: {_color: [1, 0, 0, 1]}});
+        const det = ya.ui.detach(w.handle);
+        const destroyed = ya.ui.destroy(w.handle);
+        [types.includes("engine.panel"), w.name, set.type, det.detached, destroyed.destroyed]
+    )");
+    ASSERT_TRUE(result.ok) << result.error;
+    EXPECT_EQ(result.value,
+              Json::array({true, "HUD", "engine.panel", true, true}));
+}
+
+TEST_F(ScriptApiLibraryFixture, GameUIUnknownTypeIsDiagnosed)
+{
+    const auto result = _system.evalJS(R"(
+        let error = "";
+        try { ya.ui.create({type: "engine.never_registered"}); }
+        catch (e) { error = String(e); }
+        error
+    )");
+    ASSERT_TRUE(result.ok) << result.error;
+    EXPECT_NE(result.value.get<std::string>().find("unknown Game UI type"), std::string::npos);
+}
+
 TEST_F(ScriptApiLibraryFixture, MultiArgCommandTakesParamsObject)
 {
     const auto result = _system.evalJS(R"(
