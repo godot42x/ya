@@ -20,9 +20,10 @@ target("ya-render-3d")
         "ya-render-graph",
         { public = true })
     add_deps("ya-ecs-core", "ya-gameplay-systems")
-    -- Implementation-only deps: scene data/lifecycle, GUI resources/compose,
-    -- physics debug lines and the backend builtin texture library.
-    add_deps("ya-gui-resources", "ya-gui-compose", "ya-physics", "ya-rhi-backend-common", "ya-rhi-vulkan", "ya-scene-3d", "ya-scene-core", "ya-scene-runtime")
+    -- Implementation-only deps: scene data/lifecycle, physics debug lines and
+    -- the backend builtin texture library (GUI resources/compose are already
+    -- public above: render-3d public headers expose them).
+    add_deps("ya-physics", "ya-rhi-backend-common", "ya-rhi-vulkan", "ya-scene-3d", "ya-scene-core", "ya-scene-runtime")
     -- Transition: render-3d still compiles host-layer headers (App services).
     -- Planned decoupling: app-service interface injection (see plan.md §10).
     ya_engine_defines()

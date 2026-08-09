@@ -75,6 +75,56 @@ FORBIDDEN = {
 }
 
 INCLUDE_RE = re.compile(r'#include\s*[<"]([A-Za-z0-9_/.-]+)\.h[">]')
+DEPS_CALL_RE = re.compile(r'add_deps\s*\(')
+
+
+def _matching_block(text: str, open_paren: int) -> str:
+    """Return the text inside the add_deps(...) call starting at open_paren."""
+    depth = 1
+    i = open_paren
+    while i < len(text) and depth > 0:
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+        i += 1
+    return text[open_paren:i - 1]
+
+
+def lint_public_deps() -> list:
+    """Scan module xmake.lua files for redundant dependency declarations:
+    - the same dep listed twice inside one add_deps call;
+    - the same dep declared both public and private across calls.
+    Public is the transitive surface; a private re-declaration is noise."""
+    violations = []
+    for root, dirs, files in os.walk(os.path.join(SRC, "..")):
+        dirs[:] = [d for d in dirs if d != "build"]
+        if "xmake.lua" not in files:
+            continue
+        path = os.path.join(root, "xmake.lua")
+        rel = os.path.relpath(path, ROOT)
+        try:
+            text = open(path, encoding="utf-8", errors="ignore").read()
+        except OSError:
+            continue
+        public_deps = set()
+        private_deps = set()
+        for m in DEPS_CALL_RE.finditer(text):
+            block = _matching_block(text, m.end())
+            deps = set(re.findall(r'"([A-Za-z0-9_-]+)"', block))
+            seen = {}
+            for dep in deps:
+                seen[dep] = seen.get(dep, 0) + 1
+            for dep, count in seen.items():
+                if count > 1:
+                    violations.append(f"[ya-module-lint] duplicate dep: {rel} lists \"{dep}\" {count}x in one add_deps")
+            if re.search(r'public\s*=\s*true', block):
+                public_deps |= deps
+            else:
+                private_deps |= deps
+        for dep in sorted(public_deps & private_deps):
+            violations.append(f"[ya-module-lint] redundant dep: {rel} declares \"{dep}\" both public and private")
+    return violations
 
 
 def main() -> int:
@@ -103,8 +153,11 @@ def main() -> int:
                                 f'includes "{prefix}" ({module})'
                             )
                             violations += 1
+    for message in lint_public_deps():
+        print(message)
+        violations += 1
     if violations:
-        print(f"ya-module-lint: {violations} forbidden include violation(s)")
+        print(f"ya-module-lint: {violations} violation(s)")
         return 1
     print("ya-module-lint: ok")
     return 0

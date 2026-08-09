@@ -1098,6 +1098,10 @@ Game Resource/Material，应先更新本计划的依赖规则和验收标准，�
      "重复 public dep" 与"可私有化 dep"检查。
    - 目标：为 `Script/ya_module_lint.py` 增加重复 public dep 检测；逐模块
      收敛到"public 仅当公共头直接使用"。
+   - [x] 已完成（2026-08-09）：`ya_module_lint.py` 新增
+     `lint_public_deps()`——同一 add_deps 内重复、以及同一文件 public+private
+     双声明均报错；按报告收敛 `ya-render-3d` 的 `ya-gui-resources` /
+     `ya-gui-compose` 私有重复声明。lint/build/354 测试全部通过。
 5. **计划表述改造：模块 charter**
    - 从"拆出多少 target"改为"每个模块为什么独立、对外提供什么、禁止依赖
      什么"；charter 表见下一节，随每次模块调整同步更新。
