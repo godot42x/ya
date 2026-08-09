@@ -4,8 +4,15 @@ target("ya-editor")
     add_includedirs("./include", { public = true })
     add_headerfiles("./include/**.h", { public = true })
     add_files("**.cpp")
-    add_deps("ya-engine")
-    add_links("ya-engine")
+    if get_config("ya_linkage") == "monolith" then
+        -- Loaded by the runtime host; engine symbols resolve from the host
+        -- exe (single engine instance) instead of embedding static libs.
+        add_deps("ya-engine", { links = false })
+        add_shflags("-undefined", "dynamic_lookup", { force = true })
+    else
+        add_deps("ya-engine")
+        add_links("ya-engine")
+    end
     -- imgui/imguizmo are now single shared libraries (global ImGui state);
     -- the editor consumes the same images as host.
     add_deps("imgui-local", "imguizmo-local")
