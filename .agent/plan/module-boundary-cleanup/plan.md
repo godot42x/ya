@@ -935,8 +935,10 @@ Render features 禁止 Host/；只依赖注入的 render/job service contract
 - [x] unity build 按 target 分组（ya_std_module per-target 规则）。
 - [x] shader codegen 按 manifest 输出（Phase 5.5.3）。
 - [x] `xmake show -t` 关键结果（deps/include root）纳入验收流程。
-- [ ] 在 `.agent/skills/` 中沉淀稳定规则，在 `.agent/memories/` 中记录迁移期间
-      的平台坑和回归原因。
+- [x] 在 `.agent/skills/` 中沉淀稳定规则（target 拆分标准与边界核查清单 →
+      `code-reorganize`），在 `.agent/memories/` 中记录迁移期间的平台坑和
+      回归原因（sed 误删、terrain active 重泵丢失、SceneManager 别名广播
+      丢失、include root 归属错位，2026-08-09）。
 
 ## 5. 每阶段统一验证命令
 
