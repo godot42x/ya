@@ -1,5 +1,11 @@
 # 引擎模块化 / GUI 框架抽取计划
 
+> **状态：2026-08-09 全部条目闭合。** 本计划的目标已由
+> `module-boundary-cleanup` 计划吸收并完成（Phase 5.5 GUI 闭包拆分、
+> Phase 6 转发头体系、Phase 7 app-services、Phase 8 闭包测试与 CI matrix）；
+> 所有 [x] 条目的完成证据见该计划与 `Script/ci.sh all` 全量矩阵。
+> 剩余仅按需事项：职责聚合头（决策：不补）、统一 feature manifest
+> （决策：保持 profile 分支 + shader manifest 现状）。
 > 状态：2026-08-08 建立。
 > 2026-08-08 第二轮 review 迭代：修正 DeferredDeletionQueue 归属、补充
 > Physics/IWindowProvider/RenderRuntime 三处耦合、细化 Phase 1/2、固化争议点
@@ -160,66 +166,66 @@ VulkanRender 持有 `nativeWindow + IWindowProvider`，rhi-backend 不能反向�
 
 ### Phase 0 —— 依赖收敛（先做，低风险）
 
-- [ ] 删除 `Render2D.h` 死 include：`RenderOverlay.h`、`Render/Stage/IRenderStage.h`
+- [x] 删除 `Render2D.h` 死 include：`RenderOverlay.h`、`Render/Stage/IRenderStage.h`
       （均已确认内容未使用）
-- [ ] `Render2D.h` 瘦身：`Resource/Font/FontManager.h`、`Resource/Texture/TextureLibrary.h`
+- [x] `Render2D.h` 瘦身：`Resource/Font/FontManager.h`、`Resource/Texture/TextureLibrary.h`
       只被 cpp 使用（`TextureBinding` 在 `Texture.h`；`Font` 可前置声明），
       从头移除；`Render/Render.h` 改前置声明 `IRender*`
-- [ ] **Phase 2 默认不迁目录**（决策见 §9-C）：`Render/2D/` 与
+- [x] **Phase 2 默认不迁目录**（决策见 §9-C）：`Render/2D/` 与
       `Render/Core/Graph/` 目录暂留，仅拆 xmake target，include 路径零改动；
       目录物理收敛列为可选收尾阶段
-- [ ] 头文件卫生检查：GUI 库 public 头禁止 include 3D/physics/ECS 头
+- [x] 头文件卫生检查：GUI 库 public 头禁止 include 3D/physics/ECS 头
       （复用 xmake 现有 `check_runtime_source_isolation()` 模式）
 
 ### Phase 1 —— scene-core 剥离
 
-- [ ] **把 `Node3D` 移出 `Node.h` 到独立 `Node3D.h`**（当前两者同文件，
+- [x] **把 `Node3D` 移出 `Node.h` 到独立 `Node3D.h`**（当前两者同文件，
       Node3D 从 103 行起；Node 基类本身干净，仅前置声明 `Entity*`，但
       ui-scene include Node.h 会连带编译 Node3D 声明）
-- [ ] Node 基类 + 场景图基础归 scene-core；确认 Node2D 依赖闭包 =
+- [x] Node 基类 + 场景图基础归 scene-core；确认 Node2D 依赖闭包 =
       Node 基类 + UIBase（已验证：`Node2D.h` 只 include
       Core/AssetRef + Core/Event + Core/Reflection + Core/UI/UIBase +
       Scene/Node.h，不触达 ECS/资源系统）
-- [ ] `UISceneRenderer` / `Node2D` 头搬入 ui-scene 分组
+- [x] `UISceneRenderer` / `Node2D` 头搬入 ui-scene 分组
 
 ### Phase 2 —— GUI 闭包拆库（xmake）
 
-- [ ] `Engine/YA.xmake.lua` 新增 target：基础设施库 `ya-core` / `ya-rhi` /
+- [x] `Engine/YA.xmake.lua` 新增 target：基础设施库 `ya-core` / `ya-rhi` /
       `ya-rhi-backend`（共享，非 GUI 框架组成）+ GUI 框架自有库 `ya-ui`
       （含 FontManager/TextureLibrary）、`ya-ui-scene`（static，
       `add_deps` 表达层级）——ui-resource 不单拆（决策见 §9-A）
-- [ ] **对外导出不变**：`ya-engine` 保持 `set_kind("shared")` 聚合导出
+- [x] **对外导出不变**：`ya-engine` 保持 `set_kind("shared")` 聚合导出
       （`add_deps` 上述库），editor/example 链接方式与 `ENGINE_API` 边界不变；
       内部按模块拆库只为增量编译与按需链接（决策见 §9-B）
-- [ ] unity_group 按 target 分组，改 ui 只重编 ui 闭包
-- [ ] 导出宏按库拆分（`YA_CORE_API`/`YA_RHI_API`/`YA_UI_API`/`YA_RENDER3D_API`），
+- [x] unity_group 按 target 分组，改 ui 只重编 ui 闭包
+- [x] 导出宏按库拆分（`YA_CORE_API`/`YA_RHI_API`/`YA_UI_API`/`YA_RENDER3D_API`），
       拆分期间 `ENGINE_API` 保留为聚合导出别名
-- [ ] 单例归属固定：`Render2D::quadData`、`FontManager::get()`、
+- [x] 单例归属固定：`Render2D::quadData`、`FontManager::get()`、
       `TextureLibrary::get()` → ya-ui；`AssetManager` → ya-resource
       （遵守 windows DLL boundary；对外 shared 边界只有 ya-engine 一个，
       单例自然唯一）
-- [ ] 包依赖按库收敛（见 §6 清单）：GUI 闭包只挂
+- [x] 包依赖按库收敛（见 §6 清单）：GUI 闭包只挂
       sdl3/glm/freetype/vulkansdk/vma/glad，不挂 entt/lua/sol2/jolt 等
-- [ ] 新增 GUI 闭包测试 target（`Node2DFactoryTest`/`Node2DLayoutTest`/
+- [x] 新增 GUI 闭包测试 target（`Node2DFactoryTest`/`Node2DLayoutTest`/
       `UISceneRendererTest` 只链 GUI 闭包）——验证"无 3D 依赖"的最强手段
 
 ### Phase 3 —— 3D / gameplay 拆库
 
-- [ ] `ya-resource` / `ya-ecs` / `ya-scene-core` / `ya-scene-3d`
-- [ ] `ya-render-graph`（RDG 从 `Render/Core/Graph` 迁出）
-- [ ] `ya-gameplay` / `ya-physics`
-- [ ] `ya-render-3d`（RenderRuntime + pipeline + stage；先解耦
+- [x] `ya-resource` / `ya-ecs` / `ya-scene-core` / `ya-scene-3d`
+- [x] `ya-render-graph`（RDG 从 `Render/Core/Graph` 迁出）
+- [x] `ya-gameplay` / `ya-physics`
+- [x] `ya-render-3d`（RenderRuntime + pipeline + stage；先解耦
       RenderRuntime.h 对 DeferredPipelineDebugViews 的 include）
-- [ ] `RenderFrameExtractor` 数据桥归位（render-adapters 或 host）
-- [ ] PhysicsDebugDraw 改注入 line 收集器，移除对 Render2D.h 的 include
+- [x] `RenderFrameExtractor` 数据桥归位（render-adapters 或 host）
+- [x] PhysicsDebugDraw 改注入 line 收集器，移除对 Render2D.h 的 include
 
 ### Phase 4 —— 宿主与验证
 
-- [ ] `ya-host`（窗口/输入/App/presentation/automation）+ `ya-editor`
-- [ ] 最小 GUI 宿主示例 target：只 `add_deps` GUI 闭包 + rhi-backend，
+- [x] `ya-host`（窗口/输入/App/presentation/automation）+ `ya-editor`
+- [x] 最小 GUI 宿主示例 target：只 `add_deps` GUI 闭包 + rhi-backend，
       （链接集合 = core + rhi + rhi-backend + ui + ui-scene），
       验证不链接 physics/ECS/3D 也能运行
-- [ ] shader 生成按消费方分组，GUI 宿主构建跳过 3D shader 组
+- [x] shader 生成按消费方分组，GUI 宿主构建跳过 3D shader 组
 
 ## 6. 构建 / 链接优化
 
