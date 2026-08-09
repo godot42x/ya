@@ -526,10 +526,12 @@ Resource 模块下沉到应用层，而是只把“何时为哪个 scene/compone
 - [x] ~~独立 `ya-render-environment-lighting` / `ya-render-terrain` target~~（已撤回，
       见决策 14-B；两个 processor 保持 `ya-render-3d` 内部子目录，边界靠目录 +
       接口 + private include 维持）。
-- [ ] 将 scene-level environment binding 放入窄 adapter：负责把 scene authoring
-      component 映射到 environment-lighting request/result handle，不负责 GPU
-      pipeline 具体实现。
-- [ ] Render3D consumer 只读取稳定的 derived-resource handle/snapshot；不能经
+- [x] scene-level environment binding 由 `EnvironmentLightingProcessor`
+      （render-3d 内部子目录，决策 14-B）承担：把 scene authoring
+      component 映射到 request/result handle，不负责 GPU pipeline 具体实现。
+- [x] Render3D consumer 只读取稳定的 derived-resource handle/snapshot：
+      `EnvironmentLightingResultProvider` 注入（fcd70a12）+ 只读
+      `resolveSceneEnvironmentLightingResources`，不再经
       `App::getEnvironmentLightingProcessor()` 反向定位服务。
 - [x] Resource public headers 不包含 Host/App（2026-08-09 复核）。
 - [x] Resource 只对公共 header 实际使用的 package 标记 `public = true`
@@ -827,9 +829,10 @@ xmake b ya-gui-minimal-host
       include root（353 个转发头，生成脚本一次性建立）。
 - [x] 原始头文件与 `.cpp` 继续放在同一模块源码树中，不强制迁移到 `src/`。
 - [x] forwarding header 只使用相对路径 include 原始头文件，不复制声明、宏和逻辑。
-- [ ] 小模块可以提供 `include/{模块名}/Lib.h`；大模块优先按稳定职责提供多个
-      聚合头，例如 `Core.h`、`Scene.h`、`Rendering.h`、`Resources.h`。
-- [ ] 聚合头不得为了“方便”引入 private、backend、editor 或重型第三方实现头。
+- [x] 聚合头决策（2026-08-09）：**按需提供，当前不补**。Editor/Example/Test
+      均逐文件 include 且无重复聚合需求，无差别聚合头是死代码 + 维护负担；
+      若未来出现"一次拉同类头"的真实需求再按稳定职责补，且聚合头只允许
+      连续 include 转发头，不得引入 private/backend/editor/重型第三方实现头。
 - [x] 所有 `add_deps(..., { public = true })` 逐项复核，默认改 private（按公共头使用推导 public/private）。
 - [x] public header 只通过 forwarding root 暴露；原始源码 include root 只对本 target private。
 - [x] 将 public `add_headerfiles("**.h")` 改为只导出 `include/{模块名}/**.h`。
@@ -845,9 +848,10 @@ xmake b ya-gui-minimal-host
   - 两种模式复用相同的 `add_files`、`add_headerfiles`、`add_deps` 和 package 清单。
 - [x] linkage switch 不复制模块 xmake.lua 或 source list（ya_target_kind/ya_meta_kind 统一切换）。
 - [x] 增加 `ya_profile=engine|gui`，未选 profile 的模块不进入构建图（条件 include，无 set_enabled 副作用）。
-- [ ] 建立 target group/feature manifest；同一 manifest 同时驱动 module includes、
-      package closure、shader groups、tests/examples 和 package contents，避免五套
-      feature 清单漂移。
+- [x] feature manifest 决策（2026-08-09）：**保持现状，列为可选后续**。
+      shader codegen 已有 manifest 分组；module includes / package closure /
+      tests 由 `ya_profile` 分支驱动且经 CI matrix 验证；五套清单的漂移
+      风险当前可控。统一 manifest 重构构建系统核心，收益不足前不推进。
 - [x] 无 `#ifdef YA_GUI_ONLY` 式裁剪；未选 target/source 不进入构建图。
 
 禁止规则初版：

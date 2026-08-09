@@ -82,6 +82,46 @@ description: YA Engine 代码拆分与目录重组指南：只在收益明确时
 6. 为了“看起来更模块化”把主链路拆碎，结果阅读时必须在多个文件之间来回拼图。
 7. 新建子目录或 helper 文件只是转移视觉体积，没有实质降低理解成本。
 8. 只修本目录 include，遗漏跨模块引用，最后在 unity build 或全量构建里爆炸。
+9. 大块搬迁/删除用 sed 行号操作，导致误删函数或循环（见
+   `.agent/memories/module_split_sed_regression.md` 与
+   `terrain_processor_active_pump_regression.md`）；删除后必须核对函数与
+   循环清单（`rg -n "activeEntities|ClassName::"` 对比 HEAD）。
+
+## 模块 target 拆分标准（2026-08-09 定稿，计划决策 14-A..14-E）
+
+拆 target 前先保证职责清晰和高内聚；只有存在独立复用、独立裁剪、独立
+生命周期或明确依赖隔离价值时才拆。模块内先通过子目录 + 接口 + private
+include 保持边界；某 feature 同时满足下列条件中**至少两个**才升级为独立
+target：
+
+1. 有真实独立裁剪需求；
+2. 能形成闭合依赖、不反向引用主模块；
+3. 有独立初始化/关闭/资源生命周期；
+4. 有独立测试目标；
+5. 拆分能显著减少 package/shader/编译闭包；
+6. 未来可能被替换或独立复用。
+
+每次模块调整（拆分/合并/改名）必须先更新计划中的模块 charter（为什么
+独立、对外提供什么、禁止依赖什么），再动代码；不允许先建 target 后补理由。
+
+## 边界与构建核查清单（拆分/归位后必查）
+
+1. 公共转发头必须由**所属模块**公开：`xmake show -t <target>` 后逐个确认
+   模块公开的每个转发头确实属于该模块。同目录多个 target 时小心
+   `./include` 相对路径陷阱（如 backend-common 与 ya-rhi-vulkan 同在
+   Backend/ 目录，`./include` 会解析到同一位置，导致头从错误的 target
+   泄漏出去）。
+2. 删除模块级 `ya_engine_defines()` 前先确认该模块所有头只用自己的
+   `YA_*_API` 宏（`rg -o "YA_[A-Z_]+_API" <模块目录>` 应只有一种）。
+3. 生命周期回调必须在最后一个强引用释放**之前**发出；以引用形式传入成员
+   shared_ptr 的函数，reset 前先想清楚别名语义（见
+   `.agent/memories/scenemanager_on_scene_destroy_alias_bug.md`）。
+4. 依赖环要区分"真实环"与"潜在环"：先确认当前依赖方向（`xmake show -t`
+   的 deps 列表），潜在环可通过归属决策规避，不必强行重构。
+5. xmake 3.0.8 一次 `xmake b` 只接受一个 target；脚本里多 target 必须
+   拆成逐 target 调用。
+6. 冒烟必须覆盖真实消费路径（如含 TerrainComponent 的场景 + 自动化
+   stable 判定），不能只靠单测和"能编译"。
 
 ## 停止线
 
