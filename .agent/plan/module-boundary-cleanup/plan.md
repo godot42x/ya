@@ -54,6 +54,11 @@
 | 11 | 产品能力与链接形态正交配置 | `ya_profile=engine|gui` 决定进入构建图的模块、package、shader 和产品入口；`ya_linkage=shared|monolith` 只决定模块为 DLL/shared 还是 static，不用链接形态承担功能裁剪 |
 | 12 | GUI-only 不依赖完整 Game Resource/Material 链 | GUI 保留自己的 font/texture/brush/sprite binding 等轻量资源服务，但不依赖 3D Material、model importer、ECS、Scene3D、RenderGraph、Render3D、environment lighting 和 Physics |
 | 13 | Resource resolve 按阶段拆分，不整体下沉到应用层 | Resource Core/Loader/Runtime 保持可复用底层模块；ECS/component binding 属于 Gameplay runtime；cubemap、irradiance、prefilter、terrain mesh 等派生处理属于可选 Render3D feature；Host 只负责组装和调度服务实现 |
+| 14-A（修订） | target 拆分标准：先目录、后 target | 先保证职责清晰和高内聚；只有存在独立复用、独立裁剪、独立生命周期或明确依赖隔离价值时，才拆成模块 target。模块内先通过子目录 + 接口 + private include 保持边界（`ya-render-3d` 内部保持 `Core/ Materials/ EnvironmentLighting/ Terrain/ Forward/ Deferred/ Services/` 子目录组织），不预先为每个 feature 建 target |
+| 14-B | 撤回"立即建立四个 Render3D feature target" | EnvironmentLighting / Terrain 保持为 `ya-render-3d` 内部高内聚子目录；只有某 feature 同时满足下列条件中**至少两个**，才升级为独立 target：① 有真实独立裁剪需求；② 能形成闭合依赖、不反向引用主模块；③ 有独立初始化/关闭/资源生命周期；④ 有独立测试目标；⑤ 拆分能显著减少 package/shader/编译闭包；⑥ 未来可能被替换或独立复用 |
+| 14-C | Scene 不继续碎拆 | Scene 同时组织 ECS、Node2D、Node3D，是"完整游戏场景"的高内聚组合；target/命名调整为 `ya-game-scene` 即可，不制造 WorldCore + SceneExtensions + NodeAdapters 碎片 |
+| 14-D | render adapters 是少数跨层桥接模块 | ECS Core / Gameplay Systems / Render Adapters 方向正确；但 adapter 只给真正跨层的桥接建 target（如 linkage rules、model instantiation），不为每个 component 创建 adapter target |
+| 14-E | 模块拆分存续判断 | 已有拆分按同标准复核：Resource Core/Loader/Runtime（数据契约/CPU 导入/GPU runtime 生命周期不同）与 RHI / backend-common / Vulkan（接口/平台无关实现/平台实现有真实替换边界）保留；LinkageFramework 与 render rules（稳定机制 vs 业务策略）保留，但规则内部不再拆更小的 target |
 
 公共头文件门面采用 plugin 的既有模式：
 
@@ -493,19 +498,21 @@ Resource 模块下沉到应用层，而是只把“何时为哪个 scene/compone
   - Host 只保留 App 绑定 enqueue 的重载；
   - EnvironmentLightingProcessor 公共头/cpp 不再 include
     `Host/Utility/OffscreenJobRunner.h`。
-- [ ] 建立可选 `ya-render-environment-lighting`：
+- [x] environment lighting 派生状态独立（不再共享 processor；2026-08-09）：
   - source texture handle/版本来自 ResourceRuntime；
-  - 独立拥有 cylindrical→cubemap、irradiance、prefilter 和 BRDF 相关派生状态；
+  - `EnvironmentLightingProcessor` 独立拥有 cylindrical→cubemap、irradiance、
+    prefilter 和 BRDF 相关派生状态；
   - 对 Render3D 暴露只读 lighting result/provider，不暴露 Host 或 mutable scene；
-  - 仅在 `engine` profile 且 environment-lighting feature 启用时进入构建图。
+  - ~~独立 `ya-render-environment-lighting` target~~（已撤回，见决策 14-B；
+    保持 `ya-render-3d` 内部子目录，engine profile 裁剪按目录粒度评估）。
 - [x] terrain 处理迁出 `EnvironmentLightingProcessor`（2026-08-09）：
       新 `TerrainProcessor`（`Render3D/Terrain/`）独立拥有 heightmap decode、
       mesh build、dirty queue、derived cache 与 audit；environment lighting 与
       terrain 不再共享 processor（只复用通用 job/cache 设施）。两个
       processor 的 render/scene/frame 服务全部注入，无 Host/App。
-- [ ] 独立 `ya-render-environment-lighting` / `ya-render-terrain` target
-      （随 Phase 5.5 profile 机制建立；当前两个 processor 仍在
-      ya-render-3d 内）。
+- [x] ~~独立 `ya-render-environment-lighting` / `ya-render-terrain` target~~（已撤回，
+      见决策 14-B；两个 processor 保持 `ya-render-3d` 内部子目录，边界靠目录 +
+      接口 + private include 维持）。
 - [ ] 将 scene-level environment binding 放入窄 adapter：负责把 scene authoring
       component 映射到 environment-lighting request/result handle，不负责 GPU
       pipeline 具体实现。
@@ -716,8 +723,6 @@ ya-gameplay-*
 ya-scene-3d / game scene lifecycle/serialization
 ya-render-graph
 ya-render-3d*
-ya-render-environment-lighting
-ya-render-terrain
 ya-physics
 ya-host
 ya-editor
@@ -1014,8 +1019,9 @@ Phase 3 剩余执行顺序：
      末尾的 active 重泵循环（LoadingHeightMap 永不续泵 → terrain 不渲染），
      已修复并验证（详见 `.agent/memories/terrain_processor_active_pump_regression.md`；
      最小 terrain 场景自动化 stable + 截图通过，350 测试通过）。
-2. 可选 `ya-render-environment-lighting` / `ya-render-terrain` target（engine
-   profile 才进入构建图），Render3D 只读消费 derived handle。
+2. ~~可选 `ya-render-environment-lighting` / `ya-render-terrain` target~~（已撤回，
+   见决策 14-B）：EnvironmentLighting / Terrain 保持 `ya-render-3d` 内部子目录，
+   Render3D 只读消费 derived handle 的目标不变；未来按升级条件评估是否独立。
 3. Render3D 消费方式重构：pipeline 不再直接 view 组件，改经窄 provider/
    snapshot（这同时解锁 fat `ya-gameplay-ecs`（render 组件）溶解进
    render-ecs-adapters）。
@@ -1031,3 +1037,72 @@ Phase 5.5（GUI-only profile）。Phase 5.5 必须基于稳定的 Core/RHI/GUI �
 
 任何阶段若发现必须扩大公共 API、新增反向依赖，或 GUI profile 需要重新引入完整
 Game Resource/Material，应先更新本计划的依赖规则和验收标准，再实施代码变更。
+
+### 当前优先事项（2026-08-09 决策 14 修订后）
+
+不再以"增加模块数量"为优先；按下列顺序处理存量问题（每项独立提交）：
+
+1. **Linkage 的 Scene 回调解绑与 deferred task 生命周期**
+   - 现状：`MaterialRenderLinkageRule::onSceneInit` 在 scene registry 上
+     connect 材质类型的 on_construct/on_update/on_destroy，**没有对应
+     unconnect**；scene unload/框架 shutdown 顺序错误时产生悬垂回调。
+     `LinkageFramework::scheduleDeferred` 闭包裸持 `Scene*` 与
+     `SceneManager*`，仅靠执行期的 `isSceneValid` 守卫，manager 先于 task
+     销毁时仍会悬垂。
+   - 目标：rule 在 scene 失效时断开 registry 信号；deferred task 捕获
+     弱引用/代际校验，shutdown 时排空或作废未执行 task。
+2. **monolith 下导出宏修正**
+   - 现状：`ya_std_module()` 无条件注入 `YA_SHARED=1` + `YA_MODULE_BUILD=1`，
+     `YA_*_API=YA_API_EXPORT`；monolith（static）模式下 Windows 上仍会展开为
+     `__declspec(dllexport/dllimport)`，消费者经 `links=false` 插件路径会
+     链接失败。
+   - 目标：`ya_std_module` 按 `ya_linkage` 收敛——monolith 下
+     `YA_SHARED=0`（API 宏为空），shared 下保持现状；`ya_engine_defines`
+     同步。
+3. **backend-common 不再公开 Vulkan include root**
+   - 现状：`ya-rhi-backend-common`（平台无关层）公开
+     `add_includedirs("./Vulkan/include", { public = true })`，把
+     `RHI/Backend/Vulkan/*` 转发头（29 个消费点）经平台无关层暴露。
+   - 目标：该转发头集改由 `ya-rhi-vulkan` 公开；backend-common 只暴露
+     自己的 `include/`（`RHI/Backend/TextureLibrary.h`）；消费方显式依赖
+     `ya-rhi-vulkan`（现有 29 个消费点大部分已依赖）。
+4. **收敛重复和不必要的 public dependencies**
+   - 现状：Phase 6 已按公共头使用逐项复核过一次；仍有重复
+     `add_deps(..., { public = true })` 与可私有化的包（如 entt/glm 在多个
+     模块重复 public）。`ya-module-lint` 已覆盖 public package 泄漏，缺
+     "重复 public dep" 与"可私有化 dep"检查。
+   - 目标：为 `Script/ya_module_lint.py` 增加重复 public dep 检测；逐模块
+     收敛到"public 仅当公共头直接使用"。
+5. **计划表述改造：模块 charter**
+   - 从"拆出多少 target"改为"每个模块为什么独立、对外提供什么、禁止依赖
+     什么"；charter 表见下一节，随每次模块调整同步更新。
+
+### 当前执行入口（模块 charter 变更流程）
+
+后续任何 target 增删（含拆分、合并、改名，例如 Scene 链更名为
+`ya-game-scene`）都必须先在此计划记录 charter 变更与拆分条件命中情况，再动
+代码；不允许先建 target 后补理由。
+
+## 9. 模块 charter（为什么独立 / 对外提供什么 / 禁止依赖什么）
+
+| 模块 | 为什么独立 | 对外提供 | 禁止依赖 |
+|---|---|---|---|
+| ya-foundation-core | 全产品线共用基础设施；无任何上层概念 | 日志/反射/AssetRef/Config/输入/资源注册表 | Framework/、Product/ |
+| ya-rhi | 渲染 API 抽象，可被任何渲染/工具链复用 | IRender/IPipeline/Texture 等接口、平台无关类型 | Framework/、Product/ |
+| ya-rhi-backend-common | 平台无关纹理 glue（fromData/STB），可独立测试 | 接口驱动的纹理/内置 texture 辅助 | Vulkan/OpenGL 具体实现、Framework/、Product/ |
+| ya-rhi-vulkan | Vulkan 平台实现，有真实替换边界（OGL 历史保留） | Vulkan 后端类型、分派工厂；经它公开 `RHI/Backend/Vulkan/*` | 反向依赖 RHI 接口之外的模块 |
+| ya-gui-* | GUI 是平行产品线，需要独立闭包/裁剪 | 字体/2D draw/scene/compose | ECS、Physics、Game Resource、Render3D、Editor |
+| ya-hierarchy | 无 2D/渲染语义的 node/tree 基础设施 | Node/NodeTree | GUI/Game/Render3D |
+| ya-ecs-core | ECS 基础设施（registry/component 元数据） | entt 封装、组件反射注册 | Host/、Render3D/、GUI/ |
+| ya-gameplay-systems | 纯 gameplay 组件与帧驱动系统 | Transform/Lua/Camera/Light/Terrain 组件 | Host/App.h、RenderRuntime.h |
+| ya-component-linkage | 稳定 linkage 机制，与业务规则解耦 | LinkageFramework/ILinkageRule 注入模型 | 具体业务规则（billboard/material） |
+| ya-render-ecs-adapters | 少数真正跨层桥接（rules、model instantiation） | linkage rules、GameplayResourceBinding | 反向依赖 Host |
+| ya-scene-*（→ya-game-scene） | 完整游戏场景组合（ECS+Node2D+Node3D）高内聚 | Scene/SceneManager/SceneSerializer | Render3D implementation |
+| ya-resource-core/loader/runtime | 数据契约/CPU 导入/GPU runtime 生命周期不同 | AssetManager 分层能力 | Scene、ECS、Host、Render3D |
+| ya-render-graph | 渲染图与帧资源生命周期 | RenderGraph/ResourceRegistry | Host/、GUI/ |
+| ya-render-3d | 3D 渲染主线（含 EnvironmentLighting/Terrain 子目录） | pipeline/processor/渲染服务 | Host/App.h（只依赖注入 contract） |
+| ya-app-services | Host 能力窄接口化 | IRenderRuntimeHostServices/IOffscreenTaskScheduler | 具体模块实现 |
+| ya-host | 组装与生命周期（唯一组装点） | App/AppLifecycle/FrameLoop | 无（聚合层） |
+| ya-editor | 工具链独立于运行时 | Editor 面板/Inspector/Viewport | 无（依赖聚合 facade） |
+
+拆分/合并/改名一律按决策 14-B 的六条件复核并在此表登记。
