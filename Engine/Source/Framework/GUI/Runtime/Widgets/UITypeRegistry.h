@@ -80,6 +80,10 @@ class UITypeRegistry
     /// All registered type IDs, sorted.
     [[nodiscard]] std::vector<std::string> getTypeIds() const;
 
+    /// Register the engine built-in widget types (engine.panel/text/button/
+    /// container). Called lazily by instance(); idempotent.
+    void ensureBuiltinTypesRegistered();
+
   private:
     struct Entry
     {
@@ -90,6 +94,7 @@ class UITypeRegistry
 
     std::unordered_map<std::string, Entry>                       _types;
     std::unordered_map<std::string, std::shared_ptr<UITypeModule>> _modules;
+    bool _bBuiltinsRegistered = false;
 };
 
 } // namespace ya

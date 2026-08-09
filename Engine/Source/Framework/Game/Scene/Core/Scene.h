@@ -11,6 +11,7 @@
 #include "ECS/Entity.h"
 #include "Hierarchy/Node.h"
 #include "GUI/Scene/Node2D.h"
+#include "GUI/Widgets/SceneWidgetEntry.h"
 #include "Scene/Core/ISceneLifecycleHost.h"
 #include "Scene3D/Node3D.h"
 #include "Resource/Model.h"
@@ -45,6 +46,10 @@ struct YA_SCENE_CORE_API [[refl]] Scene
     std::unordered_map<entt::entity, std::shared_ptr<Node>> _nodeMap; // Entity -> Node mapping
     std::vector<std::shared_ptr<Node2D>>                    _entityLessNodes; // Owns Node2D (entity-less) UI nodes
     std::shared_ptr<Node>                                   _rootNode = nullptr;
+
+    /// Top-level Game UI authoring entries (new format; the runtime instantiates
+    /// them into a WidgetTree via GameUIHost, Phase 3).
+    std::vector<SceneWidgetEntry> _widgetEntries;
 
   public:
     Scene(const std::string& name = "Untitled Scene");
@@ -82,6 +87,14 @@ struct YA_SCENE_CORE_API [[refl]] Scene
 
     /// Create a Node2D by UI type name (scene deserialization / PIE clone).
     Node2D* createUINode(const std::string& typeName, const std::string& name, Node* parent = nullptr);
+
+    // === Game UI authoring entries (SceneWidgetEntry) ===
+    void addWidgetEntry(SceneWidgetEntry entry);
+    /// Remove the entry with `entryId`; returns whether it existed.
+    bool removeWidgetEntry(const std::string& entryId);
+    void clearWidgetEntries();
+    [[nodiscard]] const std::vector<SceneWidgetEntry>& getWidgetEntries() const { return _widgetEntries; }
+    [[nodiscard]] std::vector<SceneWidgetEntry>&       getWidgetEntries() { return _widgetEntries; }
 
 
     template <typename ComponentType, typename... Args>

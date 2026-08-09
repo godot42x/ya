@@ -1,7 +1,7 @@
 # Game UI WidgetTree 重构计划
 
 > 建立日期：2026-08-09  
-> 状态：执行中；Phase 0/1/2a 已完成（见 §12），Phase 2b 起待执行。  
+> 状态：执行中；Phase 0/1/2a/2b 已完成（见 §12），Phase 3 起待执行。  
 > 当前范围：只重构 Game UI；ImGui Editor Shell 保持不变。  
 > 替代关系：本计划取代 `../game-ui-rendering/plan.md` 中“Node2D 与 Node3D
 > 共用一棵 Scene Tree”的 Game UI 路线。  
@@ -709,11 +709,11 @@ shared/monolith：
 - [x] 定义 `.yaui` schema、version 和 stable type ID；
 - [x] 实现 UIDocument instantiate，返回 detached subtree；
 - [x] 实现 field metadata 与基础 serialization；
-- [ ] 实现 SceneWidgetEntry 数据结构；
-- [ ] 实现旧 Node2D Scene 数据 importer；
-- [ ] 新 Scene 保存只写 SceneWidgetEntry；
-- [ ] PIE/clone 只复制 entry authoring data；
-- [ ] 预留 InstanceEditable override 字段容器，但不做 structural diff。
+- [x] 实现 SceneWidgetEntry 数据结构；
+- [x] 实现旧 Node2D Scene 数据 importer；
+- [x] 新 Scene 保存只写 SceneWidgetEntry；
+- [x] PIE/clone 只复制 entry authoring data；
+- [x] 预留 InstanceEditable override 字段容器，但不做 structural diff。
 
 验收：
 
@@ -1074,3 +1074,44 @@ UIDocument 核心落地；SceneWidgetEntry / 旧 scene importer（2b）留到下
 Phase 2b（下一轮）：SceneWidgetEntry 数据结构 + Scene serializer
 `widgetEntries` 分支 + 旧 Node2D importer + PIE/clone 只复制 authoring
 data + InstanceEditable override 容器。
+
+### Phase 2b（完成：2026-08-09）
+
+SceneWidgetEntry 与旧数据迁移落地，Scene 只保存 authoring data：
+
+- **`SceneWidgetEntry` / `UIInstanceOverrideSet`**（ya-gui-widgets，纯数据，
+  无 Scene 依赖）：`entryId`/`documentPath`|`inlineDocument` 二选一/
+  `zOrder`/`autoMount`/`overrides`；scene JSON 格式
+  `{entryId, zOrder, autoMount, document|inline, overrides}` 稳定 roundtrip。
+  `applyTo` 按反射继承链放置字段（自身字段平铺、继承字段进
+  `__base__.<类名>` 块），未知字段拒绝并诊断；InstanceEditable 过滤随
+  Phase 5 editor metadata 落实，structural diff 明确不做。
+- **Importer** `LegacyUIMigration`：旧 `nodeType` JSON → UIDocument；
+  类型映射表（UIPanelNode→engine.panel、UITextNode→engine.text、
+  UIButtonNode→engine.button、UIContainerNode→engine.container）；
+  `__base__.Node2D` → `__base__.UIElement` 块改名；旧 `_visible` bool →
+  `_visibility` 枚举；UICanvasNode 是结构节点，其 children 成为独立顶层
+  entry（自带 name/zOrder）；未知类型报错丢弃，绝不退化为空节点。
+- **内置类型**：`engine.panel/text/button/container` 由 UITypeRegistry
+  惰性注册（importer 产物可直接实例化）。
+- **Scene**：`_widgetEntries` + add/remove/clear/get API；`clear()` 清理；
+  clone 浅拷贝 authoring recipe（文档不可变，live WidgetTree 绝不克隆）。
+- **SceneSerializer**：
+  - 保存：`widgetEntries` 直写；live Node2D 仅在场景尚无 entries 时迁移为
+    inline entries（entries 存在后 live 树是 runtime-only 过渡态，反复保存
+    不会重复累积——`ExistingEntriesDoNotDuplicateLiveUINodesOnSave` 覆盖）；
+    nodeTree 完全跳过 UI 子树。
+  - 加载：`widgetEntries` → entries；旧 `nodeType` → importer → entries，
+    不再创建 live Node2D（旧 runtime 仅保留代码创建路径，Phase 3 切换）。
+- **测试**：widgets 侧 7 个新例（entry roundtrip/override 基类与未知字段/
+  canvas 提升/嵌套递归/`_visible` 翻译/未知类型丢弃）；引擎侧改写
+  `CodeCreatedUIMigratesToWidgetEntriesOnSave`（原 UINodeTreeRoundtrip）、
+  fixture 测试改为 importer 验收（3 entry + 可实例化）、clone 测试补
+  entries 复制断言、Node2DFactory roundtrip 改为迁移断言。全量 400 例 +
+  closure 68 例通过。
+- **验证**：lint 通过；engine/gui × shared/monolith 矩阵构建通过；
+  HelloMaterial 运行时冒烟干净（旧格式场景迁移无警告、截图稳定），
+  编辑器构建通过；默认 engine+shared 已恢复。
+- **已知迁移语义**：Node3D 嵌套在 Node2D 下在迁移时告警丢弃（新模型
+  UI 与世界树分离，仓库内无此用例）；旧场景文件保持旧格式直到编辑器
+  重新保存（importer 随时可加载）。

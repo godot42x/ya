@@ -151,23 +151,26 @@ TEST(Node2DFactoryTest, SerializeDeserializeRoundtrip)
     SceneSerializer serializer(&scene);
     const nlohmann::json json = serializer.serialize();
 
+    // Game UI no longer roundtrips through the scene tree: the canvas subtree
+    // migrated to a widget entry with an inline UIDocument.
+    ASSERT_TRUE(json.contains("widgetEntries"));
+    const auto& entries = json["widgetEntries"];
+    ASSERT_EQ(entries.size(), 1u);
+    EXPECT_EQ(entries[0]["inline"]["typeId"], "engine.panel");
+    EXPECT_EQ(entries[0]["inline"]["fields"]["__base__"]["UIElement"]["_position"][0], 10.0);
+    EXPECT_NEAR(entries[0]["inline"]["fields"]["_color"][0].get<double>(), 0.3, 1e-6);
+
     Scene loadedScene("LoadedScene");
     SceneSerializer loadedSerializer(&loadedScene);
     loadedSerializer.deserialize(json);
 
-    Node* loadedCanvas = loadedScene.findNodeByPath("/Canvas");
-    ASSERT_NE(loadedCanvas, nullptr);
-    EXPECT_NE(dynamic_cast<UICanvasNode*>(loadedCanvas), nullptr);
-
-    Node* loadedPanelNode = loadedScene.findNodeByPath("/Canvas/Panel");
-    ASSERT_NE(loadedPanelNode, nullptr);
-    auto* loadedPanel = dynamic_cast<Node2D*>(loadedPanelNode);
-    ASSERT_NE(loadedPanel, nullptr);
-    EXPECT_EQ(loadedPanel->_position, glm::vec2(10.0f, 20.0f));
-    EXPECT_EQ(loadedPanel->_size, glm::vec2(200.0f, 80.0f));
-    if (auto* typed = dynamic_cast<UIPanelNode*>(loadedPanel)) {
-        EXPECT_EQ(typed->_color, glm::vec4(0.3f, 0.4f, 0.5f, 1.0f));
-    }
+    // The world tree stays empty of UI; the entry is authoring data.
+    EXPECT_EQ(loadedScene.getRootNode()->getChildCount(), 0u);
+    ASSERT_EQ(loadedScene.getWidgetEntries().size(), 1u);
+    const auto& entry = loadedScene.getWidgetEntries().front();
+    ASSERT_NE(entry.inlineDocument, nullptr);
+    EXPECT_EQ(entry.inlineDocument->typeId, "engine.panel");
+    EXPECT_EQ(entry.entryId, "Panel");
 }
 
 } // namespace ya

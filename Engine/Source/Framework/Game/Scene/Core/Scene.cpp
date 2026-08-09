@@ -316,9 +316,27 @@ void Scene::clear()
     _entityMap.clear();
     _nodeMap.clear();
     _entityLessNodes.clear();
+    _widgetEntries.clear();
     _rootNode.reset();
     _registry.clear();
     _entityCounter = 0;
+}
+
+void Scene::addWidgetEntry(SceneWidgetEntry entry)
+{
+    _widgetEntries.push_back(std::move(entry));
+}
+
+bool Scene::removeWidgetEntry(const std::string& entryId)
+{
+    const size_t before = _widgetEntries.size();
+    std::erase_if(_widgetEntries, [&](const SceneWidgetEntry& entry) { return entry.entryId == entryId; });
+    return _widgetEntries.size() != before;
+}
+
+void Scene::clearWidgetEntries()
+{
+    _widgetEntries.clear();
 }
 
 void Scene::onUpdateRuntime(float deltaTime)
@@ -509,6 +527,11 @@ stdptr<Scene> Scene::cloneSceneByReflection(const Scene *scene)
                 child, newScene.get(), dstRootNode, srcRegistry, dstEntityMap);
         }
     }
+
+    // Game UI authoring entries: copy the recipe (documents are immutable
+    // authoring data; live WidgetTree instances are created per presentation
+    // context in Phase 3, never cloned).
+    newScene->_widgetEntries = scene->_widgetEntries;
 
     return newScene;
 }

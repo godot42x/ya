@@ -5,6 +5,8 @@
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Entity.h"
 #include "GUI/Scene/Node2D.h"
+#include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/SceneWidgetEntry.h"
 #include <gtest/gtest.h>
 
 namespace ya
@@ -182,7 +184,14 @@ TEST(SceneSerializerTest, MaterialComponentBaseClassSerializedWithBaseBlock)
 // survive both a scene round trip and the PIE clone path.
 // ============================================================================
 
-TEST(SceneSerializerTest, UINodeTreeRoundtrip)
+// ============================================================================
+// Game UI migration (ui-widget-tree-refactor Phase 2b): the serializer now
+// stores Game UI as widgetEntries (inline UIDocuments) instead of Node2D
+// scene-tree subtrees. Live Node2D (code-created UI) migrates to entries on
+// save; legacy nodeType data migrates to entries on load.
+// ============================================================================
+
+TEST(SceneSerializerTest, CodeCreatedUIMigratesToWidgetEntriesOnSave)
 {
     ensureReflectionReady();
 
@@ -211,73 +220,101 @@ TEST(SceneSerializerTest, UINodeTreeRoundtrip)
     SceneSerializer serializer(&scene);
     const nlohmann::json json = serializer.serialize();
 
+    // The world tree serializes without UI nodes: the canvas subtree was
+    // captured into widgetEntries.
     ASSERT_TRUE(json.contains("nodeTree"));
     const auto& children = json["nodeTree"]["children"];
-    ASSERT_EQ(children.size(), 2);
+    ASSERT_EQ(children.size(), 1);
+    EXPECT_TRUE(children[0].contains("entityRef"));
+    EXPECT_EQ(children[0]["name"], "Cube");
 
-    // Find the canvas entry: entity-less with nodeType + fields.
-    const nlohmann::json* canvasJson = nullptr;
-    const nlohmann::json* cubeJson   = nullptr;
-    for (const auto& child : children) {
-        if (child.contains("nodeType")) {
-            canvasJson = &child;
+    // Game UI became two entries (the canvas is the content layer).
+    ASSERT_TRUE(json.contains("widgetEntries"));
+    const auto& entries = json["widgetEntries"];
+    ASSERT_EQ(entries.size(), 2);
+
+    const nlohmann::json* titleJson = nullptr;
+    const nlohmann::json* okJson    = nullptr;
+    for (const auto& entry : entries) {
+        const std::string typeId = entry["inline"]["typeId"].get<std::string>();
+        if (typeId == "engine.text") {
+            titleJson = &entry;
         }
-        else {
-            cubeJson = &child;
+        else if (typeId == "engine.button") {
+            okJson = &entry;
         }
     }
-    ASSERT_NE(canvasJson, nullptr);
-    ASSERT_NE(cubeJson, nullptr);
+    ASSERT_NE(titleJson, nullptr);
+    ASSERT_NE(okJson, nullptr);
 
-    EXPECT_EQ((*canvasJson)["name"], "Canvas");
-    EXPECT_EQ((*canvasJson)["nodeType"], "UICanvasNode");
-    EXPECT_FALSE(canvasJson->contains("entityRef"));
-    EXPECT_TRUE(canvasJson->contains("fields"));
-    EXPECT_TRUE(cubeJson->contains("entityRef"));
-
-    ASSERT_TRUE((*canvasJson).contains("children"));
-    ASSERT_EQ((*canvasJson)["children"].size(), 2);
-    const auto& titleJson = (*canvasJson)["children"][0];
-    EXPECT_EQ(titleJson["nodeType"], "UITextNode");
-    EXPECT_EQ(titleJson["fields"]["_text"], "Hello UI");
+    EXPECT_EQ((*titleJson)["entryId"], "Title");
+    EXPECT_EQ((*titleJson)["zOrder"].get<int32_t>(), 3);
+    EXPECT_TRUE((*titleJson)["autoMount"].get<bool>());
+    EXPECT_EQ((*titleJson)["inline"]["fields"]["__base__"]["UIElement"]["_position"][0], 10.0);
+    EXPECT_EQ((*titleJson)["inline"]["fields"]["_text"], "Hello UI");
+    EXPECT_EQ((*titleJson)["inline"]["fields"]["_fontSize"], 24);
+    EXPECT_EQ((*okJson)["inline"]["fields"]["__base__"]["UIElement"]["_hitFilter"], "Stop");
+    EXPECT_EQ((*okJson)["inline"]["fields"]["__base__"]["UIElement"]["_size"][1], 32.0);
 
     Scene loadedScene("LoadedUIScene");
     SceneSerializer loadedSerializer(&loadedScene);
     loadedSerializer.deserialize(json);
 
+    // No live Node2D is recreated from the file; entries carry the authoring
+    // data, the world tree keeps only the 3D node.
     Node* loadedRoot = loadedScene.getRootNode();
     ASSERT_NE(loadedRoot, nullptr);
-    ASSERT_EQ(loadedRoot->getChildCount(), 2u);
+    ASSERT_EQ(loadedRoot->getChildCount(), 1u);
+    EXPECT_EQ(loadedRoot->getChildren()[0]->getEntity()->getName(), "Cube");
 
-    Node2D* loadedCanvas = nullptr;
-    Node*   loadedCube   = nullptr;
-    for (Node* child : loadedRoot->getChildren()) {
-        if (child->getEntity()) {
-            loadedCube = child;
+    const auto& loadedEntries = loadedScene.getWidgetEntries();
+    ASSERT_EQ(loadedEntries.size(), 2);
+
+    const SceneWidgetEntry* loadedTextEntry = nullptr;
+    const SceneWidgetEntry* loadedOkEntry   = nullptr;
+    for (const auto& entry : loadedEntries) {
+        if (entry.entryId == "Title") {
+            loadedTextEntry = &entry;
         }
-        else {
-            loadedCanvas = dynamic_cast<Node2D*>(child);
+        else if (entry.entryId == "OK") {
+            loadedOkEntry = &entry;
         }
     }
-    ASSERT_NE(loadedCanvas, nullptr);
-    ASSERT_NE(loadedCube, nullptr);
-    EXPECT_EQ(loadedCanvas->getName(), "Canvas");
-    EXPECT_EQ(loadedCube->getEntity()->getName(), "Cube");
+    ASSERT_NE(loadedTextEntry, nullptr);
+    ASSERT_NE(loadedOkEntry, nullptr);
+    ASSERT_NE(loadedTextEntry->inlineDocument, nullptr);
+    EXPECT_EQ(loadedTextEntry->inlineDocument->typeId, "engine.text");
+    EXPECT_EQ(loadedTextEntry->zOrder, 3);
+    EXPECT_EQ(loadedOkEntry->inlineDocument->typeId, "engine.button");
+}
 
-    ASSERT_EQ(loadedCanvas->getChildCount(), 2u);
-    auto* loadedText = dynamic_cast<UITextNode*>(loadedCanvas->getChild(0));
-    ASSERT_NE(loadedText, nullptr);
-    EXPECT_EQ(loadedText->_text, "Hello UI");
-    EXPECT_EQ(loadedText->_fontSize, 24u);
-    EXPECT_EQ(loadedText->_hAlign, EUIAlignH::Center);
-    EXPECT_EQ(loadedText->_position.x, 10.0f);
-    EXPECT_EQ(loadedText->_position.y, 20.0f);
-    EXPECT_EQ(loadedText->_zOrder, 3);
+TEST(SceneSerializerTest, ExistingEntriesDoNotDuplicateLiveUINodesOnSave)
+{
+    ensureReflectionReady();
 
-    auto* loadedButton = dynamic_cast<UIButtonNode*>(loadedCanvas->getChild(1));
-    ASSERT_NE(loadedButton, nullptr);
-    EXPECT_EQ(loadedButton->_position.x, 100.0f);
-    EXPECT_EQ(loadedButton->_size.y, 32.0f);
+    Scene scene("NoDupScene");
+    // Scene-authored entry (the authoring fact source).
+    scene.addWidgetEntry(SceneWidgetEntry{
+        .entryId        = "HUD",
+        .inlineDocument = std::make_shared<UIDocument>(UIDocument{.typeId = "engine.text"}),
+        .autoMount      = true,
+    });
+    // Plus legacy runtime UI created in code.
+    auto* canvas = scene.createUINode<UICanvasNode>("Canvas");
+    ASSERT_NE(canvas, nullptr);
+    auto* button = scene.createUINode<UIButtonNode>("OK", canvas);
+    ASSERT_NE(button, nullptr);
+
+    SceneSerializer serializer(&scene);
+    const nlohmann::json json = serializer.serialize();
+
+    // Only the authored entry is written; the live nodes are runtime-only and
+    // must not be migrated again (a save/load cycle would otherwise duplicate
+    // UI on every editor save).
+    ASSERT_TRUE(json.contains("widgetEntries"));
+    ASSERT_EQ(json["widgetEntries"].size(), 1u);
+    EXPECT_EQ(json["widgetEntries"][0]["entryId"], "HUD");
+    EXPECT_EQ(json["widgetEntries"][0]["inline"]["typeId"], "engine.text");
 }
 
 TEST(SceneSerializerTest, UINodeTreeSurvivesClone)
@@ -285,6 +322,28 @@ TEST(SceneSerializerTest, UINodeTreeSurvivesClone)
     ensureReflectionReady();
 
     Scene scene("CloneUIScene");
+    // Scene-authored entries (new format) + legacy code-created Node2D: the
+    // clone copies the authoring recipe; the legacy tree path is unchanged
+    // until the runtime switches to WidgetTree (Phase 3).
+    scene.addWidgetEntry(SceneWidgetEntry{
+        .entryId        = "HUD",
+        .inlineDocument = std::make_shared<UIDocument>(UIDocument{
+            .typeId = "engine.button",
+            .fields = [] {
+                nlohmann::json f;
+                f["__base__"]           = nlohmann::json::object();
+                f["__base__"]["UIElement"] = nlohmann::json{
+                    {"_position", {50.0f, 60.0f}},
+                    {"_size", {120.0f, 40.0f}},
+                    {"_zOrder", 5},
+                };
+                return f;
+            }(),
+        }),
+        .zOrder   = 5,
+        .autoMount = true,
+    });
+
     auto* canvas = scene.createUINode<UICanvasNode>("HUD");
     ASSERT_NE(canvas, nullptr);
 
@@ -300,9 +359,20 @@ TEST(SceneSerializerTest, UINodeTreeSurvivesClone)
     stdptr<Scene> cloned = scene.clone();
     ASSERT_NE(cloned, nullptr);
 
+    // Authoring entries survive the clone (documents are immutable recipes).
+    ASSERT_EQ(cloned->getWidgetEntries().size(), 1u);
+    const auto& clonedEntry = cloned->getWidgetEntries().front();
+    EXPECT_EQ(clonedEntry.entryId, "HUD");
+    ASSERT_NE(clonedEntry.inlineDocument, nullptr);
+    EXPECT_EQ(clonedEntry.inlineDocument->typeId, "engine.button");
+    EXPECT_EQ(clonedEntry.zOrder, 5);
+    EXPECT_EQ(clonedEntry.inlineDocument->fields["__base__"]["UIElement"]["_position"][0], 50.0);
+
+    // Legacy runtime UI tree still clones (removed when Phase 3 switches the
+    // runtime fact source).
     Node* clonedRoot = cloned->getRootNode();
     ASSERT_NE(clonedRoot, nullptr);
-    ASSERT_EQ(clonedRoot->getChildCount(), 2u);
+    ASSERT_EQ(clonedRoot->getChildCount(), 2u); // HUD + World
 
     Node2D* clonedCanvas = nullptr;
     for (Node* child : clonedRoot->getChildren()) {
@@ -341,42 +411,58 @@ TEST(SceneSerializerTest, OldFormatUISceneFixtureLoads)
     SceneSerializer serializer(&scene);
     ASSERT_TRUE(serializer.loadFromFile("Engine/Test/Fixture/Data/OldFormatUIScene.scene.json"));
 
+    // The legacy UI subtree (Canvas -> Panel/Title/OK) becomes three authoring
+    // entries with inline UIDocuments; no live Node2D is created.
     Node* root = scene.getRootNode();
     ASSERT_NE(root, nullptr);
-    ASSERT_EQ(root->getChildCount(), 1u);
+    ASSERT_EQ(root->getChildCount(), 0u); // no UI nodes in the world tree
 
-    auto* canvas = dynamic_cast<UICanvasNode*>(root->getChildren().front());
-    ASSERT_NE(canvas, nullptr);
-    EXPECT_EQ(canvas->getName(), "Canvas");
+    const auto& entries = scene.getWidgetEntries();
+    ASSERT_EQ(entries.size(), 3u);
 
-    ASSERT_EQ(canvas->getChildCount(), 3u);
-    Node2D* panel = dynamic_cast<Node2D*>(canvas->getChildren()[0]);
-    Node2D* title = dynamic_cast<Node2D*>(canvas->getChildren()[1]);
-    Node2D* ok    = dynamic_cast<Node2D*>(canvas->getChildren()[2]);
-    ASSERT_NE(panel, nullptr);
-    ASSERT_NE(title, nullptr);
-    ASSERT_NE(ok, nullptr);
+    const SceneWidgetEntry* panelEntry = nullptr;
+    const SceneWidgetEntry* titleEntry = nullptr;
+    const SceneWidgetEntry* okEntry    = nullptr;
+    for (const auto& entry : entries) {
+        ASSERT_NE(entry.inlineDocument, nullptr);
+        if (entry.inlineDocument->typeId == "engine.panel") {
+            panelEntry = &entry;
+        }
+        else if (entry.inlineDocument->typeId == "engine.text") {
+            titleEntry = &entry;
+        }
+        else if (entry.inlineDocument->typeId == "engine.button") {
+            okEntry = &entry;
+        }
+    }
+    ASSERT_NE(panelEntry, nullptr);
+    ASSERT_NE(titleEntry, nullptr);
+    ASSERT_NE(okEntry, nullptr);
 
-    // Base-class fields restored through the __base__ block.
-    EXPECT_EQ(panel->getName(), "Panel");
-    EXPECT_EQ(panel->_position, glm::vec2(20.0f, 20.0f));
-    EXPECT_EQ(panel->_size, glm::vec2(300.0f, 120.0f));
+    // Base-class fields translated to the new __base__.UIElement block.
+    EXPECT_EQ(panelEntry->inlineDocument->fields["__base__"]["UIElement"]["_position"][0], 20.0);
+    EXPECT_EQ(panelEntry->inlineDocument->fields["__base__"]["UIElement"]["_position"][1], 20.0);
+    EXPECT_EQ(panelEntry->inlineDocument->fields["__base__"]["UIElement"]["_size"][1], 120.0);
+    EXPECT_EQ(panelEntry->inlineDocument->fields["_color"][0], 0.12);
 
-    auto* panelNode = dynamic_cast<UIPanelNode*>(panel);
-    ASSERT_NE(panelNode, nullptr);
-    EXPECT_EQ(panelNode->_color, glm::vec4(0.12f, 0.14f, 0.22f, 0.88f));
+    EXPECT_EQ(titleEntry->entryId, "Title");
+    EXPECT_EQ(titleEntry->zOrder, 3);
+    EXPECT_EQ(titleEntry->inlineDocument->fields["_text"], "Hello UI");
+    EXPECT_EQ(titleEntry->inlineDocument->fields["_fontSize"], 24);
+    EXPECT_EQ(titleEntry->inlineDocument->fields["_hAlign"], "Center");
 
-    auto* textNode = dynamic_cast<UITextNode*>(title);
-    ASSERT_NE(textNode, nullptr);
-    EXPECT_EQ(textNode->_text, "Hello UI");
-    EXPECT_EQ(textNode->_fontSize, 24u);
-    EXPECT_EQ(textNode->_zOrder, 3);
-    EXPECT_EQ(textNode->_hAlign, EUIAlignH::Center);
+    EXPECT_EQ(okEntry->entryId, "OK");
+    EXPECT_EQ(okEntry->inlineDocument->fields["__base__"]["UIElement"]["_hitFilter"], "Stop");
 
-    auto* buttonNode = dynamic_cast<UIButtonNode*>(ok);
-    ASSERT_NE(buttonNode, nullptr);
-    EXPECT_EQ(buttonNode->_hitFilter, EUIHitFilter::Stop);
-    EXPECT_EQ(buttonNode->_normalColor, glm::vec4(0.8f, 0.8f, 0.8f, 1.0f));
+    // The migrated entry can instantiate into a detached widget subtree with
+    // the correct fields (importer produces runnable documents).
+    UIElementRef okInstance = okEntry->inlineDocument->instantiate();
+    ASSERT_NE(okInstance, nullptr);
+    auto* button = dynamic_cast<UIButton*>(okInstance.get());
+    ASSERT_NE(button, nullptr);
+    EXPECT_EQ(button->_hitFilter, EWidgetHitFilter::Stop);
+    EXPECT_EQ(button->_position, glm::vec2(100.0f, 200.0f));
+    EXPECT_EQ(button->_size, glm::vec2(80.0f, 32.0f));
 }
 
 } // namespace ya

@@ -2,6 +2,11 @@
 
 #include "Core/Log.h"
 
+#include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/Text.h"
+
 #include <algorithm>
 
 namespace ya
@@ -24,7 +29,25 @@ void releaseModuleInstance(UITypeModule* module)
 UITypeRegistry& UITypeRegistry::instance()
 {
     static UITypeRegistry registry;
+    registry.ensureBuiltinTypesRegistered();
     return registry;
+}
+
+void UITypeRegistry::ensureBuiltinTypesRegistered()
+{
+    if (_bBuiltinsRegistered) {
+        return;
+    }
+    _bBuiltinsRegistered = true;
+
+    registerType({.typeId = "engine.panel", .displayName = "Panel", .category = "Basic"},
+                 [] { return std::make_shared<UIPanel>("Panel"); });
+    registerType({.typeId = "engine.text", .displayName = "Text", .category = "Basic"},
+                 [] { return std::make_shared<UIText>("Text"); });
+    registerType({.typeId = "engine.button", .displayName = "Button", .category = "Basic"},
+                 [] { return std::make_shared<UIButton>("Button"); });
+    registerType({.typeId = "engine.container", .displayName = "Container", .category = "Basic"},
+                 [] { return std::make_shared<UIContainer>("Container"); });
 }
 
 std::shared_ptr<UITypeModule> UITypeRegistry::beginModule(const std::string& moduleId)

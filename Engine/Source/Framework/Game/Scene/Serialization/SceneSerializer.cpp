@@ -8,6 +8,8 @@
 #include "Scene3D/ManagedChildComponent.h"
 #include "ECS/Entity.h"
 #include "GUI/Scene/Node2D.h"
+#include "GUI/Widgets/LegacyUIMigration.h"
+#include "GUI/Widgets/SceneWidgetEntry.h"
 #include "Scene/Core/Scene.h"
 
 #include <algorithm>
@@ -19,6 +21,92 @@ namespace ya
 
 namespace
 {
+
+/// Build the legacy (Node2D-era) UI node JSON shape for a live UI node, used
+/// by the migration path when saving: the scene tree may still carry runtime
+/// Node2D (code-created UI) while the file format stores widgetEntries.
+nlohmann::json buildLegacyUINodeJson(const Node2D* node)
+{
+    nlohmann::json j;
+    j["name"]     = node->getName();
+    j["nodeType"] = node->getUITypeName();
+    j["fields"]   = node->serializeFields();
+    if (node->hasChildren()) {
+        j["children"] = nlohmann::json::array();
+        for (Node* child : node->getChildren()) {
+            if (auto* child2D = dynamic_cast<Node2D*>(child)) {
+                j["children"].push_back(buildLegacyUINodeJson(child2D));
+            }
+            else {
+                // The new model keeps UI and world trees separate; a 3D node
+                // nested under a UI node has no place in the widget document.
+                YA_CORE_WARN("SceneSerializer: dropping Node3D child '{}' nested under UI node '{}' "
+                             "during Game UI migration",
+                             child->getName(), node->getName());
+            }
+        }
+    }
+    return j;
+}
+
+/// Collect UI subtree roots (Node2D whose parent is not Node2D) in tree order.
+void collectUISubtreeRoots(Node* node, bool bParentIsUI, std::vector<Node2D*>& roots)
+{
+    if (!node) {
+        return;
+    }
+    if (node->is2D()) {
+        if (!bParentIsUI) {
+            roots.push_back(static_cast<Node2D*>(node));
+        }
+        for (Node* child : node->getChildren()) {
+            collectUISubtreeRoots(child, true, roots);
+        }
+    }
+    else {
+        for (Node* child : node->getChildren()) {
+            collectUISubtreeRoots(child, false, roots);
+        }
+    }
+}
+
+/// Stable-ish entryId for migrated UI nodes: the node name, deduplicated
+/// against existing entries.
+std::string makeEntryId(const Scene& scene, const std::string& base)
+{
+    const auto& entries = scene.getWidgetEntries();
+    const auto  bTaken  = [&](const std::string& id) {
+        for (const auto& entry : entries) {
+            if (entry.entryId == id) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    std::string id = base;
+    int         suffix = 1;
+    while (bTaken(id)) {
+        id = base + "_" + std::to_string(suffix++);
+    }
+    return id;
+}
+
+/// Convert one legacy UI node JSON into scene widget entries (inline
+/// documents). One per produced UIDocument.
+std::vector<SceneWidgetEntry> legacyNodeToEntries(Scene& scene, const nlohmann::json& nodeJson)
+{
+    std::vector<SceneWidgetEntry> entries;
+    for (const auto& result : migrateLegacyUINode(nodeJson)) {
+        SceneWidgetEntry entry;
+        entry.entryId        = makeEntryId(scene, result.name);
+        entry.inlineDocument = result.document;
+        entry.zOrder         = result.zOrder;
+        entry.autoMount      = true;
+        entries.push_back(std::move(entry));
+    }
+    return entries;
+}
 
 constexpr double SCENE_JSON_FLOAT_EPSILON = 1e-6;
 constexpr double SCENE_JSON_FLOAT_SCALE   = 1000000.0;
@@ -213,7 +301,37 @@ nlohmann::json SceneSerializer::serialize()
 
         YA_PROFILE_SCOPE("SceneSerializer::SerializeNodeTree");
         for (Node* child : rootNode->getChildren()) {
-            j["nodeTree"]["children"].push_back(serializeNodeTree(child));
+            const nlohmann::json childJson = serializeNodeTree(child);
+            if (!childJson.empty()) {
+                j["nodeTree"]["children"].push_back(childJson);
+            }
+        }
+    }
+
+    // ★ Step 3: Game UI authoring entries. Scene-authored entries serialize
+    // directly; any live Node2D still in the tree (code-created UI) migrates
+    // to inline widget entries — but only while the scene has no entries yet.
+    // Once entries exist they are the authoring fact source; live Node2D is
+    // runtime-only transition state, so re-saving never duplicates it.
+    {
+        YA_PROFILE_SCOPE("SceneSerializer::SerializeWidgetEntries");
+        std::vector<SceneWidgetEntry> entries = _scene->_widgetEntries;
+
+        if (entries.empty() && rootNode) {
+            std::vector<Node2D*> uiRoots;
+            collectUISubtreeRoots(rootNode, false, uiRoots);
+            for (Node2D* uiRoot : uiRoots) {
+                const nlohmann::json legacyJson = buildLegacyUINodeJson(uiRoot);
+                auto migrated = legacyNodeToEntries(*_scene, legacyJson);
+                entries.insert(entries.end(), migrated.begin(), migrated.end());
+            }
+        }
+
+        if (!entries.empty()) {
+            j["widgetEntries"] = nlohmann::json::array();
+            for (const auto& entry : entries) {
+                j["widgetEntries"].push_back(entry.toJson());
+            }
         }
     }
 
@@ -262,6 +380,24 @@ void SceneSerializer::deserialize(const nlohmann::json& j)
             YA_PROFILE_SCOPE("SceneSerializer::DeserializeNodeTree");
             for (const auto& childJson : nodeTreeJson["children"]) {
                 deserializeNodeTree(childJson, node, entityMap);
+            }
+        }
+    }
+
+    // ★ Step 3: Game UI authoring entries (new format). Legacy UI stored as
+    // nodeType subtrees is converted to entries by the deserializer below.
+    if (normalizedJson.contains("widgetEntries")) {
+        YA_PROFILE_SCOPE("SceneSerializer::DeserializeWidgetEntries");
+        const auto& entriesJson = normalizedJson["widgetEntries"];
+        if (entriesJson.is_array()) {
+            for (const auto& entryJson : entriesJson) {
+                if (!entryJson.is_object()) {
+                    continue;
+                }
+                SceneWidgetEntry entry = SceneWidgetEntry::fromJson(entryJson);
+                if (!entry.entryId.empty() || entry.inlineDocument || !entry.documentPath.empty()) {
+                    _scene->addWidgetEntry(std::move(entry));
+                }
             }
         }
     }
@@ -389,6 +525,11 @@ nlohmann::json SceneSerializer::serializeNodeTree(Node* node)
     if (!node) {
         return nlohmann::json();
     }
+    // Game UI nodes are serialized as widgetEntries (Step 3), not as tree
+    // nodes: the scene tree is the world tree only.
+    if (node->is2D()) {
+        return nlohmann::json();
+    }
 
     nlohmann::json j;
     j["name"] = node->getName();
@@ -400,16 +541,13 @@ nlohmann::json SceneSerializer::serializeNodeTree(Node* node)
             j["entityRef"] = idComp->_id.value;
         }
     }
-    else if (const auto* node2D = dynamic_cast<const Node2D*>(node)) {
-        // Entity-less 2D/UI nodes serialize their type and reflected fields.
-        j["nodeType"] = node2D->getUITypeName();
-        j["fields"]   = node2D->serializeFields();
-    }
-
     // ★ 递归序列化子节点（跳过被动态管理的子节点）
     if (node->hasChildren()) {
         j["children"] = nlohmann::json::array();
         for (Node* child : node->getChildren()) {
+            if (child->is2D()) {
+                continue; // captured in widgetEntries
+            }
             if (Entity* childEntity = child->getEntity()) {
                 if (_scene->getRegistry().any_of<ManagedChildComponent>(childEntity->getHandle())) {
                     continue;
@@ -447,18 +585,17 @@ void SceneSerializer::deserializeNodeTree(const nlohmann::json& j, Node* parent,
         }
     }
 
-    Node* node = nullptr;
+    // Legacy Game UI: Node2D-era subtrees migrate to SceneWidgetEntry authoring
+    // data (inline UIDocuments) instead of live scene-tree nodes. Children are
+    // consumed by the migration (canvas children become separate entries).
     if (!entity && j.contains("nodeType")) {
-        node = _scene->createUINode(j["nodeType"].get<std::string>(), name, parent);
-        if (node) {
-            if (j.contains("fields")) {
-                static_cast<Node2D*>(node)->deserializeFields(j["fields"]);
-            }
+        for (SceneWidgetEntry& entry : legacyNodeToEntries(*_scene, j)) {
+            _scene->addWidgetEntry(std::move(entry));
         }
-        else {
-            YA_CORE_WARN("NodeTree: unknown UI node type '{}'", j["nodeType"].get<std::string>());
-        }
+        return;
     }
+
+    Node* node = nullptr;
     if (!node) {
         node = _scene->createNode(name, parent, entity);
     }
