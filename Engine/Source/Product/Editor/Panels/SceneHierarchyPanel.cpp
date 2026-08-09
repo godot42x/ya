@@ -18,6 +18,8 @@
 #include "Scene3D/TransformComponent.h"
 #include "Editor/Services/NodeCreateRegistry.h"
 #include "GUI/Scene/Node2D.h"
+#include "GUI/Widgets/UIDocument.h"
+#include "GUI/Widgets/UITypeRegistry.h"
 #include "Hierarchy/Node.h"
 #include "Scene3D/Node3D.h"
 #include "Scene/Core/Scene.h"
@@ -283,6 +285,8 @@ void SceneHierarchyPanel::sceneTree()
 
         flushPendingNodeMove();
 
+        drawWidgetEntries();
+
         ImGui::Separator();
         ImGui::TextDisabled("Standalone Entities:");
         renderStandaloneEntities();
@@ -305,6 +309,7 @@ void SceneHierarchyPanel::sceneTree()
             if (_selectedNode2D) {
                 setSelectedNode2D(nullptr);
             }
+            _owner->setSelectedWidgetEntryId("");
         }
     }
 
@@ -313,6 +318,116 @@ void SceneHierarchyPanel::sceneTree()
     flushPendingActions();
 
     ImGui::End();
+}
+
+void SceneHierarchyPanel::drawWidgetEntries()
+{
+    ImGui::SeparatorText("Game UI Entries");
+    ImGui::SameLine();
+    if (ImGui::SmallButton("+ Add")) {
+        ImGui::OpenPopup("HierarchyAddUIEntry");
+    }
+
+    ImGui::TextDisabled("Top-level widgets mounted into the presented world's "
+                        "WidgetTree on scene activation.");
+
+    auto& entries = _context->getWidgetEntries();
+    if (entries.empty()) {
+        ImGui::TextDisabled("(no entries)");
+    }
+    else {
+        for (size_t i = 0; i < entries.size(); ++i) {
+            drawWidgetEntryRow(entries[i], i);
+        }
+    }
+
+    if (ImGui::BeginPopup("HierarchyAddUIEntry")) {
+        drawAddEntryMenu();
+        ImGui::EndPopup();
+    }
+}
+
+void SceneHierarchyPanel::drawWidgetEntryRow(SceneWidgetEntry& entry, size_t index)
+{
+    ImGui::PushID(static_cast<int>(index));
+
+    const bool        bSelected = _owner->getSelectedWidgetEntryId() == entry.entryId;
+    const std::string typeId    = entry.inlineDocument
+                                      ? entry.inlineDocument->typeId
+                                      : (entry.documentPath.empty() ? "<invalid>" : entry.documentPath);
+
+    char label[512];
+    std::snprintf(label, sizeof(label), "%s  [%s]  z=%d%s",
+                  entry.entryId.c_str(), typeId.c_str(), entry.zOrder,
+                  entry.autoMount ? "" : " (no auto)");
+    if (ImGui::Selectable(label, bSelected)) {
+        _owner->setSelectedWidgetEntryId(entry.entryId);
+    }
+
+    if (ImGui::BeginPopupContextItem()) {
+        if (ImGui::MenuItem("Open in UI Designer")) {
+            if (entry.inlineDocument) {
+                _owner->getUIDesignerPanel().openSceneEntry(*_context, entry);
+            }
+        }
+        if (ImGui::MenuItem("Delete Entry")) {
+            _context->removeWidgetEntry(entry.entryId);
+            if (_owner->getSelectedWidgetEntryId() == entry.entryId) {
+                _owner->setSelectedWidgetEntryId("");
+            }
+        }
+        ImGui::EndPopup();
+    }
+
+    ImGui::PopID();
+}
+
+void SceneHierarchyPanel::drawAddEntryMenu()
+{
+    const auto& typeIds = UITypeRegistry::instance().getTypeIds();
+    if (typeIds.empty()) {
+        ImGui::TextDisabled("No widget types registered");
+        return;
+    }
+
+    const auto shortName = [](const std::string& typeId) {
+        const size_t dot = typeId.find_last_of('.');
+        return dot == std::string::npos ? typeId : typeId.substr(dot + 1);
+    };
+
+    for (const std::string& typeId : typeIds) {
+        if (!ImGui::MenuItem(typeId.c_str())) {
+            continue;
+        }
+
+        auto document    = std::make_shared<UIDocument>();
+        document->typeId = typeId;
+        document->fields = nlohmann::json::object();
+
+        std::string entryId = shortName(typeId);
+        int         suffix  = 1;
+        const auto& entries = _context->getWidgetEntries();
+        const auto  bTaken  = [&](const std::string& id) {
+            for (const auto& entry : entries) {
+                if (entry.entryId == id) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        while (bTaken(entryId)) {
+            entryId = shortName(typeId) + "_" + std::to_string(suffix++);
+        }
+
+        SceneWidgetEntry entry;
+        entry.entryId        = entryId;
+        entry.inlineDocument = document;
+        entry.zOrder         = 0;
+        entry.autoMount      = true;
+        _context->addWidgetEntry(std::move(entry));
+        _owner->setSelectedWidgetEntryId(entryId);
+        ImGui::CloseCurrentPopup();
+    }
 }
 
 void SceneHierarchyPanel::buildFlatEntityList()

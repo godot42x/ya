@@ -783,15 +783,16 @@ shared/monolith：
 
 目标：不替换 ImGui Editor 的前提下完成 Game UI 编辑闭环。
 
-- [ ] Content Browser 新建/打开 `.yaui`；
-- [ ] UIDocument WidgetTree 面板；
-- [ ] registry-driven Palette；
-- [ ] reflected property Inspector；
-- [ ] 独立 preview WidgetTree；
-- [ ] Scene Hierarchy/Details 支持 SceneWidgetEntry；
-- [ ] entry 选择 UIDocument、zOrder、autoMount；
-- [ ] PIE 使用 runtime 实例，不复用 preview instance；
-- [ ] UI type module unload 前关闭相关 document/preview instance。
+- [x] Content Browser 打开 `.yaui`（新建走 UI Designer New + Save As）；
+- [x] UIDocument WidgetTree 面板；
+- [x] registry-driven Palette；
+- [x] reflected property Inspector；
+- [x] 独立 preview WidgetTree（并接回 2D canvas 合成）；
+- [x] Scene Hierarchy/Details 支持 SceneWidgetEntry；
+- [x] entry 选择 UIDocument、zOrder、autoMount；
+- [x] PIE 使用 runtime 实例，不复用 preview instance；
+- [x] UI type module unload 前关闭相关 document/preview instance（registry
+  live-instance guard 强制；编辑器模块卸载钩子待模块系统落地）。
 
 验收：
 
@@ -1166,3 +1167,28 @@ Phase 3（GameUIHost/input）与 Phase 4（snapshot 渲染）合并落地，避�
   以 preview WidgetTree 恢复；`_visible` 旧字段（`__base__` 块内）已由
   importer 翻译；Sprite2D 管线 format VUID 报错为既有问题（旧路径同样
   触发），另行建档。
+
+### Phase 5（完成：2026-08-10；Game UI Editor authoring）
+
+- **UIDesignerPanel**（`Editor/Panels/`，ImGui）：打开一个 UIDocument
+  （`.yaui` 文件或 scene entry 的 inline 文档），以**独立 preview
+  WidgetTree** 实例化；WidgetTree 树视图（选择/删除节点）、registry
+  Palette（点选添加子节点或换根）、反射 Inspector（复用
+  `renderReflectedType` 直接编辑 preview 实例）；Save 从 preview 重建文档
+  （`fromWidget`）写回文件或 scene entry；New（palette 选根类型）+
+  Save As 完成 `.yaui` 创建闭环。
+- **Scene Hierarchy**：新增 "Game UI Entries" 区块——列出 entries
+  （entryId/type/zOrder/autoMount 标记）、+ Add（registry palette 子菜单
+  创建 inline entry，entryId 自动去重）、右键 Delete / Open in UI
+  Designer；entry 选择与 entity/Node2D 选择互斥。
+- **DetailsView**：选中 entry 时编辑 zOrder（DragInt）、autoMount、
+  documentPath、Open in UI Designer、Delete。
+- **Content Browser**：`.yaui` 双击打开进 UI Designer。
+- **编辑器 2D canvas 预览恢复**：EditorModule 的 EditorCanvasPreview 合成
+  designer 的 preview snapshot（此前 Phase 4 后为 grid-only），preview 树
+  与 runtime 树严格分离，PIE 仍由 GameUIHost 从 scene entries 现实例化。
+- **验证**：`ya-editor` 构建通过；编辑器运行时冒烟（HelloMaterial +
+  `--editor`，240 帧）无新错误/断言，截图自动化稳定；全量测试与 lint 复验。
+- **未落地的护栏**：UI 类型 module unload 前关闭 preview 实例——registry
+  live-instance guard 已拒绝带活实例的 endModule（错误+失败）；编辑器目前
+  无模块卸载路径，卸载钩子随 Editor 模块系统落地。

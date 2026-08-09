@@ -192,7 +192,7 @@ class EditorViewportCompositor
     void compose(IRender&                      render,
                  ICommandBuffer&               commandBuffer,
                  const RenderViewportSnapshot& snapshot,
-                 const EditorLayer&            layer,
+                 EditorLayer&                  layer,
                  const AppRenderFrameState&    renderFrame,
                  const Extent2D&               canvasTargetExtent)
     {
@@ -211,10 +211,18 @@ class EditorViewportCompositor
             }
 
             const glm::vec2 logicalViewport = layer.getViewportSize();
+            // Game UI preview: the UI Designer's independent preview tree
+            // (never the runtime tree; PIE mounts its own instances).
+            UIFrameSnapshot          uiPreviewSnapshot;
+            const UIFrameSnapshot*   pUiPreviewSnapshot = nullptr;
+            if (layer.getUIDesignerPanel().hasDocument()) {
+                uiPreviewSnapshot  = layer.getUIDesignerPanel().buildPreviewSnapshot();
+                pUiPreviewSnapshot = &uiPreviewSnapshot;
+            }
             recordRender2DComposePass(&commandBuffer,
                                       *_composedViewportImage,
                                       nullptr,
-                                      nullptr, // Game UI snapshot: editor UI preview lands in Phase 5
+                                      pUiPreviewSnapshot,
                                       FRender2DComposePassDesc{
                                           .kind = ERender2DComposePassKind::EditorCanvasPreview,
                                           .logicalViewportExtent = Extent2D{

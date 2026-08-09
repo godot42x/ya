@@ -30,6 +30,23 @@ Scene* EditorLayer::getViewportInteractionScene() const
     return _app ? _app->getSceneServices().getActiveScene() : nullptr;
 }
 
+SceneWidgetEntry* EditorLayer::getSelectedWidgetEntry()
+{
+    if (_selectedWidgetEntryId.empty()) {
+        return nullptr;
+    }
+    Scene* scene = getViewportInteractionScene();
+    if (!scene) {
+        return nullptr;
+    }
+    for (auto& entry : scene->getWidgetEntries()) {
+        if (entry.entryId == _selectedWidgetEntryId) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
 void EditorLayer::syncEditorSettingsFromConfig()
 {
     const std::string defaultScenePath = ConfigManager::get().getOr<std::string>("editor", "startup.defaultScenePath", "");

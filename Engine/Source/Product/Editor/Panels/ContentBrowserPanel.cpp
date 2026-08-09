@@ -65,6 +65,12 @@ void ContentBrowserPanel::init()
                     }
                 });
         }
+        else if (scenePath.ends_with(".yaui"))
+        {
+            // Open Game UI documents in the UI Designer (preview tree is
+            // separate from the runtime tree).
+            _owner->getUIDesignerPanel().openDocumentPath(scenePath);
+        }
     });
 }
 

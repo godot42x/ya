@@ -2,6 +2,7 @@
 
 #include "ECS/Entity.h"
 #include "Editor/FilePicker.h"
+#include "GUI/Widgets/SceneWidgetEntry.h"
 #include <cstddef>
 #include <memory>
 #include <sol/sol.hpp>
@@ -92,6 +93,10 @@ struct SceneHierarchyPanel
     // Node hierarchy rendering
     void drawNodeRecursive(Node *node);
     void drawNode2DRecursive(Node2D *node);
+    /// Game UI authoring entries (SceneWidgetEntry) section.
+    void drawWidgetEntries();
+    void drawWidgetEntryRow(SceneWidgetEntry& entry, size_t index);
+    void drawAddEntryMenu();
     void drawNodeDropTarget(Node *node, ImVec2 itemMin, ImVec2 itemMax, bool isHovered);
     void renderStandaloneEntities();
 

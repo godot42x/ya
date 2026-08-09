@@ -114,7 +114,12 @@ void DetailsView::onImGuiRender()
         return;
     }
 
-    if (Node2D* node2D = _owner->getSelectedNode2D()) {
+    if (SceneWidgetEntry* entry = _owner->getSelectedWidgetEntry()) {
+        if (Scene* scene = _owner->getViewportInteractionScene()) {
+            drawWidgetEntry(*scene, *entry);
+        }
+    }
+    else if (Node2D* node2D = _owner->getSelectedNode2D()) {
         drawNode2D(*node2D);
     }
     else if (const auto& selections = _owner->getSelections(); selections.size() > 1) {
@@ -128,6 +133,47 @@ void DetailsView::onImGuiRender()
 
     ImGui::End();
     _filePicker.render();
+}
+
+void DetailsView::drawWidgetEntry(Scene& scene, SceneWidgetEntry& entry)
+{
+    ImGui::Text("Game UI Entry");
+    ImGui::SameLine();
+    ImGui::TextDisabled("(%s)", entry.entryId.c_str());
+    ImGui::Separator();
+
+    ImGui::Text("Type");
+    ImGui::SameLine();
+    if (entry.inlineDocument) {
+        ImGui::TextUnformatted(entry.inlineDocument->typeId.c_str());
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Open in UI Designer")) {
+            _owner->getUIDesignerPanel().openSceneEntry(scene, entry);
+        }
+    }
+    else if (!entry.documentPath.empty()) {
+        ImGui::TextUnformatted(entry.documentPath.c_str());
+    }
+    else {
+        ImGui::TextDisabled("<invalid: no document>");
+    }
+
+    ImGui::DragInt("zOrder", &entry.zOrder, 1, -1000, 1000);
+    ImGui::Checkbox("autoMount", &entry.autoMount);
+
+    std::string documentPath = entry.documentPath;
+    if (drawPathInput("Document Path", documentPath, DETAILS_SCRIPT_INPUT_BUFFER_SIZE)) {
+        entry.documentPath = documentPath;
+    }
+
+    ImGui::TextDisabled("Instance overrides: %zu (InstanceEditable filtering arrives "
+                        "with editor field metadata)",
+                        entry.overrides.fieldOverrides.size());
+
+    if (ImGui::Button("Delete Entry")) {
+        scene.removeWidgetEntry(entry.entryId);
+        _owner->setSelectedWidgetEntryId("");
+    }
 }
 
 void DetailsView::drawNode2D(Node2D& node)

@@ -19,6 +19,7 @@
 #include "RHI/Core/RenderImage.h"
 #include "Render3D/Common/RenderViewportSnapshot.h"
 #include "Editor/Panels/SceneHierarchyPanel.h"
+#include "Editor/Panels/UIDesignerPanel.h"
 #include <imgui.h>
 
 #include "Editor/EditorCommon.h"
@@ -60,6 +61,7 @@ struct EditorLayer
     uint64_t             _selectedEntityUUID = 0;
     std::vector<Entity*> _selections;
     Node2D*              _selectedNode2D = nullptr; // Mutually exclusive with _selections
+    std::string          _selectedWidgetEntryId;    // Mutually exclusive with the above
 
     // Editor panels
     SceneHierarchyPanel _sceneHierarchyPanel;
@@ -67,6 +69,7 @@ struct EditorLayer
     ContentBrowserPanel _contentBrowserPanel;
     AssetInspectorPanel _assetInspectorPanel;
     RuntimeToolsPanel   _runtimeToolsPanel;
+    UIDesignerPanel     _uiDesignerPanel;
 
     // ImGui Docking state
     ImGuiDockNodeFlags _dockspaceFlags = ImGuiDockNodeFlags_None;
@@ -202,6 +205,7 @@ struct EditorLayer
     {
         _selectedNode2D = node;
         if (node) {
+            _selectedWidgetEntryId.clear();
             _selections.clear();
             _selectedEntityUUID = 0;
             if (isViewportMode2D() == false) {
@@ -210,6 +214,19 @@ struct EditorLayer
         }
     }
     [[nodiscard]] Node2D* getSelectedNode2D() const { return _selectedNode2D; }
+    /// Select a SceneWidgetEntry (clears entity/Node2D selections).
+    void setSelectedWidgetEntryId(const std::string& entryId)
+    {
+        _selectedWidgetEntryId = entryId;
+        if (!entryId.empty()) {
+            _selectedNode2D = nullptr;
+            _selections.clear();
+            _selectedEntityUUID = 0;
+        }
+    }
+    [[nodiscard]] const std::string& getSelectedWidgetEntryId() const { return _selectedWidgetEntryId; }
+    /// The selected SceneWidgetEntry (nullptr when none/not found).
+    SceneWidgetEntry* getSelectedWidgetEntry();
 
     // Entity selection bus - notifies DetailsView of selection changes
     void setSelectedEntity(Entity* entity)
@@ -223,6 +240,7 @@ struct EditorLayer
     void setSelections(const std::vector<Entity*>& selections, Entity* primary = nullptr)
     {
         _selectedNode2D = nullptr;
+        _selectedWidgetEntryId.clear();
         _selections.clear();
         for (Entity* entity : selections) {
             if (entity && entity->isValid() &&
@@ -319,6 +337,7 @@ struct EditorLayer
         _detailsView.onImGuiRender();
         _contentBrowserPanel.onImGuiRender();
         _assetInspectorPanel.onImGuiRender();
+        _uiDesignerPanel.onImGuiRender();
         statsWindow();
         runtimeToolsWindow();
         renderAuxiliaryUi();
@@ -403,6 +422,7 @@ struct EditorLayer
     bool                        isGizmoActive() const; // Check if ImGuizmo is being used or hovered
     bool                        isRightMouseDragging() const { return _bRightMouseDragging; }
     const std::vector<Entity*>& getSelections() const { return _selections; }
+    [[nodiscard]] UIDesignerPanel& getUIDesignerPanel() { return _uiDesignerPanel; }
     Entity*                     getSelectedEntity() const { return _selections.empty() ? nullptr : _selections.front(); }
     uint64_t                    getSelectedEntityUUID() const { return _selectedEntityUUID; }
     /// Active scene used for viewport interaction. In the 2D workspace this is
