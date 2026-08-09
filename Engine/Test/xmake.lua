@@ -56,6 +56,29 @@ if get_config("ya_profile") ~= "gui" then
         add_deps("ya-render-3d", "ya-render-graph", "ya-foundation-core")
         add_packages("gtest")
     end
+
+    -- Resource-runtime closure: links ONLY the resource line
+    -- (foundation + RHI + backend + resource core/loader/runtime). Fails to
+    -- link if resource code reaches ECS/Scene/Render3D/Host again.
+    target("ya-resource-runtime-closure-test")
+    do
+        set_kind("binary")
+        add_files("./Source/TestEntry.cpp",
+                  "./Source/ResourceRuntimeClosureTest.cpp")
+        add_deps("ya-resource-runtime")
+        add_packages("gtest")
+    end
+
+    -- Vulkan backend build/link closure: proves ya-rhi-vulkan is
+    -- independently consumable without GUI/Render3D/Host.
+    target("ya-rhi-vulkan-smoke")
+    do
+        set_kind("binary")
+        add_files("./Source/TestEntry.cpp",
+                  "./Source/RHIVulkanSmoke.cpp")
+        add_deps("ya-rhi-vulkan")
+        add_packages("gtest")
+    end
 end
 
 -- GUI closure test: links ONLY the GUI framework closure

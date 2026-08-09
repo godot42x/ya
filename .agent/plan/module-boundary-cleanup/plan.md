@@ -907,13 +907,12 @@ Render features 禁止 Host/；只依赖注入的 render/job service contract
   - target dependency closure；
   - public package 泄漏；
   - backend 互斥选择。
-- [ ] 建立最小目标集合：
-  - `ya-ecs-core-test`
-  - `ya-resource-core-test`
-  - `ya-resource-runtime-closure-test`
-  - `ya-gui-closure-test`
-  - `ya-rhi-vulkan-smoke`
-  - `ya-render-3d-test`
+- [x] 建立最小目标集合（2026-08-09 补齐）：
+  - `ya-ecs-core-test`、`ya-resource-core-test`、`ya-render-3d-test`、`ya-gui-closure-test`（已有）
+  - `ya-resource-runtime-closure-test`：只链接 resource 线
+    （foundation+rhi+backend+core/loader/runtime），resource 触达
+    ECS/Scene/Render3D/Host 即链接失败；
+  - `ya-rhi-vulkan-smoke`：Vulkan 后端闭包独立构建/链接冒烟。
 - [ ] CI/build matrix 至少覆盖：
   - `engine + shared`
   - `engine + monolith`
