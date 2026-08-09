@@ -110,6 +110,9 @@ struct WidgetTree final
     static EWidgetRouteResult dispatchSubtree(UIElement* element,
                                               const Event& event,
                                               const WidgetEventContext& ctx);
+    /// Assign tree membership to a widget and its whole subtree (invariant:
+    /// attached iff every descendant is a member of the same tree).
+    static void markSubtreeMembership(UIElement* widget, WidgetTree* tree);
 
     void onWidgetDetached(UIElement& widget);
     void clearTransientState(UIElement& widget);

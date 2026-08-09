@@ -11,10 +11,18 @@ namespace ya
 /// runtime-only (not serialized); hit testing is driven by the tree walker.
 struct UIButton : public UIElement
 {
+    YA_REFLECT_BEGIN(UIButton, UIElement)
+    YA_REFLECT_FIELD(_normalColor)
+    YA_REFLECT_FIELD(_hoveredColor)
+    YA_REFLECT_FIELD(_pressedColor)
+    YA_REFLECT_END()
+
     explicit UIButton(std::string name = "Button") : UIElement(std::move(name))
     {
         _hitFilter = EWidgetHitFilter::Stop;
     }
+
+    [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIButton>; }
 
     glm::vec4 _normalColor  = {0.8f, 0.8f, 0.8f, 1.0f};
     glm::vec4 _hoveredColor = {0.6f, 0.6f, 0.6f, 1.0f};

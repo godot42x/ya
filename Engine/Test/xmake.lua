@@ -93,6 +93,7 @@ do
     add_files("./Source/UISceneRendererTest.cpp")
     add_files("./Source/Render2DClipTest.cpp")
     add_files("./Source/WidgetTreeTest.cpp")
+    add_files("./Source/UIDocumentTest.cpp")
     add_files("./Source/TestEntry.cpp")
 
     add_deps("ya-gui-framework")
@@ -110,6 +111,7 @@ target("ya-gui-widgets-test")
 do
     set_kind("binary")
     add_files("./Source/WidgetTreeTest.cpp")
+    add_files("./Source/UIDocumentTest.cpp")
     add_files("./Source/TestEntry.cpp")
 
     add_deps("ya-gui-widgets")

@@ -5,18 +5,21 @@
 namespace ya
 {
 
-enum class EWidgetBoxLayout : uint8_t
-{
-    Horizontal,
-    Vertical,
-};
-
 /// Box container: arranges children left-to-right (Horizontal) or top-to-bottom
 /// (Vertical) by their desired sizes, with uniform spacing and padding.
 /// Children can be clipped to the content rect via _bClipChildren.
 struct UIContainer : public UIElement
 {
+    YA_REFLECT_BEGIN(UIContainer, UIElement)
+    YA_REFLECT_FIELD(_direction)
+    YA_REFLECT_FIELD(_spacing)
+    YA_REFLECT_FIELD(_padding)
+    YA_REFLECT_FIELD(_bClipChildren)
+    YA_REFLECT_END()
+
     explicit UIContainer(std::string name = "Container") : UIElement(std::move(name)) {}
+
+    [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIContainer>; }
 
     EWidgetBoxLayout _direction     = EWidgetBoxLayout::Horizontal;
     float            _spacing       = 4.0f;

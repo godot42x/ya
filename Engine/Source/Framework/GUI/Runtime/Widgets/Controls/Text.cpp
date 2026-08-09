@@ -1,25 +1,11 @@
 #include "GUI/Widgets/Controls/Text.h"
 
+#include "GUI/Widgets/Controls/PaintCommon.h"
 #include "GUI/Draw2D/Render2D.h"
 #include "GUI/Resources/FontManager.h"
 
 namespace ya
 {
-
-namespace
-{
-
-glm::vec2 toScreenPxPos(const WidgetPaintContext& ctx, const glm::vec2& point)
-{
-    return point * ctx.uiScale;
-}
-
-glm::vec2 toScreenPxSize(const WidgetPaintContext& ctx, const glm::vec2& extent)
-{
-    return extent * ctx.uiScale;
-}
-
-} // namespace
 
 void UIText::paintSelf(const WidgetPaintContext& ctx)
 {
@@ -28,8 +14,8 @@ void UIText::paintSelf(const WidgetPaintContext& ctx)
         return;
     }
 
-    const glm::vec2 pos  = toScreenPxPos(ctx, _layoutRect.pos);
-    const glm::vec2 size = toScreenPxSize(ctx, _layoutRect.extent);
+    const glm::vec2 pos  = paint_util::toScreenPxPos(ctx, _layoutRect.pos);
+    const glm::vec2 size = paint_util::toScreenPxSize(ctx, _layoutRect.extent);
     glm::vec2       drawPos = pos;
 
     const float textWidth  = font->measureText(_text);

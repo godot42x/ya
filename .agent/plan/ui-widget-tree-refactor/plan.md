@@ -706,9 +706,9 @@ shared/monolith：
 
 目标：把可复用 UI authoring 从 `.scene` 中分离。
 
-- [ ] 定义 `.yaui` schema、version 和 stable type ID；
-- [ ] 实现 UIDocument instantiate，返回 detached subtree；
-- [ ] 实现 field metadata 与基础 serialization；
+- [x] 定义 `.yaui` schema、version 和 stable type ID；
+- [x] 实现 UIDocument instantiate，返回 detached subtree；
+- [x] 实现 field metadata 与基础 serialization；
 - [ ] 实现 SceneWidgetEntry 数据结构；
 - [ ] 实现旧 Node2D Scene 数据 importer；
 - [ ] 新 Scene 保存只写 SceneWidgetEntry；
@@ -1048,3 +1048,29 @@ GUI profile 必须继续排除 ECS、Game Scene、RenderGraph、Render3D、Physi
     type 身份由 registry 持有，与 §4.1 一致。
   - detached 子树内 parent 回链在父销毁时由 ~UIElement 统一断开，避免
     悬垂（测试 `TreeDestructionReleasesMembershipSafely` 覆盖）。
+
+### Phase 2a（完成：2026-08-09；2b 待执行）
+
+UIDocument 核心落地；SceneWidgetEntry / 旧 scene importer（2b）留到下一轮：
+
+- **反射字段**：`UIElement` + 四个控件补 `YA_REFLECT` 字段元数据（复用既有
+  ReflectionSerializer，不新建 metadata 设施；`EWidget*` 枚举名与旧 `EUI*`
+  区分避免跨模块重注册）；`getTypeIndex()` 恢复为 C++ 类身份，registry 的
+  字符串 typeId 是 authoring 身份（§4.1 双轨）。
+- **`UIDocument`**（`.yaui` v1，schema 见 Phase 0 记录）：`fromWidget` 捕获
+  detached 子树 → `toJson`/`fromJson` 稳定 roundtrip → `instantiate` 经
+  UITypeRegistry 生成独立 detached 实例（fields 反射恢复 + children 递归）。
+  未知 typeId 返回 nullptr 并诊断；版本不符拒绝加载；子文档失败整体拒绝。
+- **子树 membership 不变量修正**：`attach`/`reparent` 现在递归标记整棵子树
+  `_tree`（attached ⇔ 所有后代同属一棵树）；`addDetachedChild` 作为
+  authoring-only API（UIDocument 实例化用，校验无父/无环）。
+- **测试**（`ya-gui-widgets-test` 27 例 + `ya-gui-closure-test` 60 例 +
+  `ya-testing` 391 例全过）：字段/children roundtrip、双实例互不共享可变
+  状态、JSON roundtrip、未知 typeId 诊断、版本拒绝、无 typeId 拒绝、
+  实例子树 attach 后整树成员。
+- **验证**：lint 通过；gui+monolith / engine+monolith 构建通过；默认
+  engine+shared 已恢复。
+
+Phase 2b（下一轮）：SceneWidgetEntry 数据结构 + Scene serializer
+`widgetEntries` 分支 + 旧 Node2D importer + PIE/clone 只复制 authoring
+data + InstanceEditable override 容器。

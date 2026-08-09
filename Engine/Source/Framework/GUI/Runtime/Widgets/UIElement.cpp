@@ -1,6 +1,7 @@
 #include "GUI/Widgets/UIElement.h"
 
 #include "Core/Log.h"
+#include "Core/Reflection/ReflectionSerializer.h"
 
 #include <algorithm>
 
@@ -148,4 +149,79 @@ bool UIElement::handleInputEvent(const Event& event, const WidgetEventContext& c
     return false; // Passive: base/panels/text never consume events.
 }
 
+// === Authoring ===
+
+void UIElement::addDetachedChild(const UIElementRef& child)
+{
+    if (!child) {
+        YA_CORE_ERROR("UIElement::addDetachedChild: null child");
+        return;
+    }
+    if (child.get() == this) {
+        YA_CORE_ERROR("UIElement::addDetachedChild: cannot add a widget to itself");
+        return;
+    }
+    if (child->isAttached() || child->_parent != nullptr) {
+        YA_CORE_ERROR("UIElement::addDetachedChild: child '{}' already has a parent; "
+                      "authoring requires a detached child",
+                      child->_name);
+        return;
+    }
+    child->_parent = this;
+    _children.push_back(std::move(child));
+}
+
+// === Field serialization ===
+
+nlohmann::json UIElement::serializeFields() const
+{
+    auto* cls = ClassRegistry::instance().getClass(getTypeIndex());
+    if (!cls) {
+        return nlohmann::json();
+    }
+    return ReflectionSerializer::serializeByRuntimeReflection(this, getTypeIndex(), cls->getName());
+}
+
+void UIElement::deserializeFields(const nlohmann::json& fields)
+{
+    auto* cls = ClassRegistry::instance().getClass(getTypeIndex());
+    if (!cls) {
+        return;
+    }
+    ReflectionSerializer::deserializeByRuntimeReflection(this, getTypeIndex(), fields, cls->getName());
+}
+
 } // namespace ya
+
+// Enum reflection for serialization (must register at global scope; the
+// EWidget* names are distinct from the legacy EUI* enums while both modules
+// coexist).
+YA_REFLECT_ENUM_BEGIN(ya::EWidgetAlignH)
+YA_REFLECT_ENUM_VALUE(Left)
+YA_REFLECT_ENUM_VALUE(Center)
+YA_REFLECT_ENUM_VALUE(Right)
+YA_REFLECT_ENUM_END()
+
+YA_REFLECT_ENUM_BEGIN(ya::EWidgetAlignV)
+YA_REFLECT_ENUM_VALUE(Top)
+YA_REFLECT_ENUM_VALUE(Center)
+YA_REFLECT_ENUM_VALUE(Bottom)
+YA_REFLECT_ENUM_END()
+
+YA_REFLECT_ENUM_BEGIN(ya::EWidgetHitFilter)
+YA_REFLECT_ENUM_VALUE(Pass)
+YA_REFLECT_ENUM_VALUE(Stop)
+YA_REFLECT_ENUM_END()
+
+YA_REFLECT_ENUM_BEGIN(ya::EWidgetVisibility)
+YA_REFLECT_ENUM_VALUE(Visible)
+YA_REFLECT_ENUM_VALUE(Hidden)
+YA_REFLECT_ENUM_VALUE(Collapsed)
+YA_REFLECT_ENUM_VALUE(HitTestInvisible)
+YA_REFLECT_ENUM_VALUE(SelfHitTestInvisible)
+YA_REFLECT_ENUM_END()
+
+YA_REFLECT_ENUM_BEGIN(ya::EWidgetBoxLayout)
+YA_REFLECT_ENUM_VALUE(Horizontal)
+YA_REFLECT_ENUM_VALUE(Vertical)
+YA_REFLECT_ENUM_END()

@@ -95,6 +95,19 @@ EWidgetRouteResult WidgetTree::dispatchSubtree(UIElement* element,
                                                         : EWidgetRouteResult::HandledPass;
 }
 
+void WidgetTree::markSubtreeMembership(UIElement* widget, WidgetTree* tree)
+{
+    std::vector<UIElement*> pending{widget};
+    while (!pending.empty()) {
+        UIElement* node = pending.back();
+        pending.pop_back();
+        node->_tree = tree;
+        for (const auto& child : node->_children) {
+            pending.push_back(child.get());
+        }
+    }
+}
+
 WidgetTree::~WidgetTree()
 {
     // Recursively tear down membership for every element (layers and their
@@ -157,7 +170,7 @@ WidgetAttachment WidgetTree::attach(UIElement& parent, const UIElementRef& widge
         return {};
     }
 
-    widget->_tree   = this;
+    markSubtreeMembership(widget.get(), this);
     widget->_parent = &parent;
     parent._children.push_back(widget);
     invalidateLayout();
@@ -205,7 +218,7 @@ void WidgetTree::reparent(UIElement& newParent, const UIElementRef& widget)
         }
     }
 
-    widget->_tree   = this;
+    markSubtreeMembership(widget.get(), this);
     widget->_parent = &newParent;
     newParent._children.push_back(widget);
     invalidateLayout();

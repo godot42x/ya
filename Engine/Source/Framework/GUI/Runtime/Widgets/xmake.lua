@@ -5,6 +5,7 @@
 --   WidgetAttachment - detach handle returned by attach*
 --   UITypeRegistry - stable type IDs, explicit registration, module
 --                    owner + live-instance unload guard
+--   UIDocument     - reusable `.yaui` authoring data (detached subtree)
 --   Controls/      - the basic widgets (Panel/Text/Button/Container)
 --
 -- Boundary: must never depend on Scene/ECS/Render3D/Host/Editor. Paint

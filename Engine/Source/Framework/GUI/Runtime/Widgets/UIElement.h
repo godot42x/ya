@@ -20,6 +20,7 @@
 
 #include "Core/Common/Types.h"
 #include "Core/Event.h"
+#include "Core/Reflection/Reflection.h"
 
 #include <glm/glm.hpp>
 
@@ -64,6 +65,12 @@ enum class EWidgetVisibility : uint8_t
     SelfHitTestInvisible // renders; the whole subtree is not hittable
 };
 
+enum class EWidgetBoxLayout : uint8_t
+{
+    Horizontal,
+    Vertical,
+};
+
 struct WidgetTree;
 struct WidgetAttachment;
 struct UIElement;
@@ -91,6 +98,18 @@ struct WidgetEventContext
 
 struct UIElement : public std::enable_shared_from_this<UIElement>
 {
+    YA_REFLECT_BEGIN(UIElement)
+    YA_REFLECT_FIELD(_name)
+    YA_REFLECT_FIELD(_position)
+    YA_REFLECT_FIELD(_size)
+    YA_REFLECT_FIELD(_visibility)
+    YA_REFLECT_FIELD(_zOrder)
+    YA_REFLECT_FIELD(_anchorMin)
+    YA_REFLECT_FIELD(_anchorMax)
+    YA_REFLECT_FIELD(_pivot)
+    YA_REFLECT_FIELD(_hitFilter)
+    YA_REFLECT_END()
+
     explicit UIElement(std::string name = "Widget");
     virtual ~UIElement();
 
@@ -102,6 +121,17 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
     /// Stable registry type ID, set by UITypeRegistry::createInstance (empty
     /// for framework-internal / direct make_shared instances).
     std::string _typeId;
+
+    /// Runtime type identity for reflection-based field serialization
+    /// (UIDocument). Registry owns the authoring type ID; this is the C++
+    /// class identity.
+    [[nodiscard]] virtual type_index_t getTypeIndex() const { return ya::type_index_v<UIElement>; }
+
+    // === Field serialization (UIDocument / authoring) ===
+    /// Serialize reflected fields (base + own) into a JSON object.
+    [[nodiscard]] nlohmann::json serializeFields() const;
+    /// Restore reflected fields from a JSON object (base + own).
+    void deserializeFields(const nlohmann::json& fields);
 
     // === Visual / layout / input properties ===
     glm::vec2          _position   = {0.0f, 0.0f}; // Offset (px) from the anchor point within the parent rect
@@ -176,6 +206,11 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
     /// Own-rect hit test against the cached layout rect.
     [[nodiscard]] bool hitTestLayoutRect(const glm::vec2& logicalPoint) const;
 
+    /// Authoring-only: attach a child to a detached subtree (UIDocument
+    /// instantiate). The child must not be attached anywhere; tree membership
+    /// is assigned when the subtree root is attached to a WidgetTree.
+    void addDetachedChild(const UIElementRef& child);
+
   protected:
     /// Anchor math: rect.min = parent.pos + parent.size*anchorMin + _position;
     /// rect.max = parent.pos + parent.size*anchorMax + _position + _size.
@@ -190,6 +225,7 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
   private:
     friend struct WidgetTree;
     friend class UITypeRegistry;
+    friend struct UIDocument;
 
     /// Visual parent / tree hold strong references to children; the child
     /// points back with a raw (non-owning) pointer.
