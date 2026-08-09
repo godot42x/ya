@@ -154,12 +154,13 @@ if ya_profile ~= "gui" then
 target("ya-engine")
 do
     set_kind(ya_meta_kind())
-    add_defines("YA_SHARED=1")
+    local monolith = (get_config("ya_linkage") or "shared") == "monolith"
+    add_defines(monolith and "YA_SHARED=0" or "YA_SHARED=1")
     -- Every module export macro, so the precompiled header can parse any
     -- engine header without depending on a central macro table (see Api.h).
     ya_engine_defines()
     -- Consumers (editor / examples / tests) link the import side.
-    add_defines("YA_SHARED=1", { public = true })
+    add_defines(monolith and "YA_SHARED=0" or "YA_SHARED=1", { public = true })
     before_build(function(target)
         check_runtime_source_isolation()
     end)

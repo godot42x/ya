@@ -1073,6 +1073,11 @@ Game Resource/Material，应先更新本计划的依赖规则和验收标准，�
    - 目标：`ya_std_module` 按 `ya_linkage` 收敛——monolith 下
      `YA_SHARED=0`（API 宏为空），shared 下保持现状；`ya_engine_defines`
      同步。
+   - [x] 已完成（2026-08-09）：`ya_std_module` 与 `ya-engine` 聚合按
+     `ya_linkage` 分支——monolith 注入 `YA_SHARED=0`（public），shared 保持
+     `YA_SHARED=1` + `YA_MODULE_BUILD=1`。验证：monolith 下模块 target 为
+     static、defines 为 `YA_SHARED=0` 且无 `YA_MODULE_BUILD`，`ya-runtime`
+     链接通过；shared 恢复后 defines 不变、354 测试通过。
 3. **backend-common 不再公开 Vulkan include root**
    - 现状：`ya-rhi-backend-common`（平台无关层）公开
      `add_includedirs("./Vulkan/include", { public = true })`，把

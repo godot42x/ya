@@ -104,11 +104,20 @@ end
 ---     YA_API_EXPORT -- no hand-written macros, no central macro table;
 ---   * build/import side switches (YA_SHARED / YA_MODULE_BUILD);
 ---   * the unity-build rule (module sources still need add_files("**.cpp")).
+--- The switches follow ya_linkage: in monolith mode modules are static and
+--- nothing imports/exports across DLL boundaries, so YA_SHARED=0 makes
+--- YA_API_EXPORT resolve to empty on every platform (Windows static libs
+--- must not see dllexport/dllimport on their own declarations).
 --- @param api_macro string e.g. "YA_CORE_API"
 function ya_std_module(api_macro)
-    add_defines("YA_SHARED=1")
-    add_defines("YA_MODULE_BUILD=1")
-    add_defines("YA_SHARED=1", { public = true })
+    local monolith = (get_config("ya_linkage") or "shared") == "monolith"
+    if monolith then
+        add_defines("YA_SHARED=0", { public = true })
+    else
+        add_defines("YA_SHARED=1")
+        add_defines("YA_MODULE_BUILD=1")
+        add_defines("YA_SHARED=1", { public = true })
+    end
     add_defines(api_macro .. "=YA_API_EXPORT", { public = true })
     if get_config("ya_enable_unity-build") then
         add_rules("c++.unity_build", { batchsize = 2 })
