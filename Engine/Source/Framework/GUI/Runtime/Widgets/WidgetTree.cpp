@@ -224,8 +224,80 @@ void WidgetTree::reparent(UIElement& newParent, const UIElementRef& widget)
     invalidateLayout();
 }
 
+void WidgetTree::reparentRelativeTo(WidgetTree& tree, UIElement& sibling, const UIElementRef& widget, bool bAfter)
+{
+    if (!widget || widget.get() == &sibling) {
+        return;
+    }
+    if (!tree.contains(sibling)) {
+        YA_CORE_ERROR("WidgetTree::reparentRelativeTo: sibling '{}' does not belong to this tree",
+                      sibling._name);
+        return;
+    }
+    UIElement* parent = sibling._parent;
+    if (!parent) {
+        YA_CORE_ERROR("WidgetTree::reparentRelativeTo: sibling '{}' has no parent", sibling._name);
+        return;
+    }
+
+    // Cross-tree move: detach from the old tree first.
+    if (widget->isAttached() && widget->_tree != &tree) {
+        widget->_tree->detach(*widget);
+    }
+
+    auto& children = parent->_children;
+    const auto it = std::find_if(children.begin(), children.end(),
+                                 [&](const UIElementRef& ref) { return ref.get() == &sibling; });
+    if (it == children.end()) {
+        YA_CORE_ERROR("WidgetTree::reparentRelativeTo: sibling '{}' not found in parent", sibling._name);
+        return;
+    }
+    const size_t siblingIndex = static_cast<size_t>(std::distance(children.begin(), it));
+
+    // Was the widget already a child of this parent before the sibling?
+    bool bWidgetWasBeforeSibling = false;
+    if (widget->isAttached() && widget->_parent == parent) {
+        const auto wit = std::find_if(children.begin(), children.end(),
+                                      [&](const UIElementRef& ref) { return ref.get() == widget.get(); });
+        bWidgetWasBeforeSibling = (wit != children.end()) &&
+                                  (static_cast<size_t>(std::distance(children.begin(), wit)) < siblingIndex);
+        children.erase(wit);
+        widget->_parent = nullptr;
+    }
+    else if (widget->isAttached()) {
+        // Different parent in this tree: unlink from the old parent.
+        UIElement* oldParent = widget->_parent;
+        if (oldParent) {
+            auto& oldSiblings = oldParent->_children;
+            std::erase_if(oldSiblings, [&](const UIElementRef& ref) { return ref.get() == widget.get(); });
+        }
+        widget->_parent = nullptr;
+    }
+
+    // Sibling's index after the erase: it shifted left by one only when the
+    // widget was before it in the same parent.
+    const size_t base = bWidgetWasBeforeSibling ? siblingIndex - 1 : siblingIndex;
+    const size_t insertAt = bAfter ? base + 1 : base;
+
+    tree.markSubtreeMembership(widget.get(), &tree);
+    widget->_parent = parent;
+    children.insert(children.begin() + std::min(insertAt, children.size()), widget);
+    tree.invalidateLayout();
+}
+
+void WidgetTree::reparentBefore(UIElement& sibling, const UIElementRef& widget)
+{
+    reparentRelativeTo(*this, sibling, widget, /*bAfter=*/false);
+}
+
+void WidgetTree::reparentAfter(UIElement& sibling, const UIElementRef& widget)
+{
+    reparentRelativeTo(*this, sibling, widget, /*bAfter=*/true);
+}
+
 void WidgetTree::detach(UIElement& widget)
 {
+
     if (widget._tree != this) {
         YA_CORE_WARN("WidgetTree::detach: widget '{}' is not attached to this tree", widget._name);
         return;

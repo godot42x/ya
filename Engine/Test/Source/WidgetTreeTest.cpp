@@ -163,6 +163,87 @@ TEST(WidgetTreeTest, CrossTreeReparentMovesExplicitly)
     EXPECT_EQ(child->getTree(), &treeB);
 }
 
+// Sibling-relative moves: order within the same parent is preserved and
+// cross-parent moves insert at the sibling position (designer drag-drop).
+TEST(WidgetTreeTest, ReparentAfterMovesSiblingForward)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       parent = std::make_shared<UIPanel>("Root");
+    auto       a      = makeButton("A", {}, {});
+    auto       b      = makeButton("B", {}, {});
+    auto       c      = makeButton("C", {}, {});
+    tree.attachToLayer(WidgetTree::ELayer::Content, parent);
+    tree.attach(*parent, a);
+    tree.attach(*parent, b);
+    tree.attach(*parent, c);
+
+    tree.reparentAfter(*a, c); // C after A -> A, C, B
+
+    EXPECT_EQ(parent->getChildren()[0].get(), a.get());
+    EXPECT_EQ(parent->getChildren()[1].get(), c.get());
+    EXPECT_EQ(parent->getChildren()[2].get(), b.get());
+}
+
+TEST(WidgetTreeTest, ReparentBeforeMovesSiblingBackward)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       parent = std::make_shared<UIPanel>("Root");
+    auto       a      = makeButton("A", {}, {});
+    auto       b      = makeButton("B", {}, {});
+    auto       c      = makeButton("C", {}, {});
+    tree.attachToLayer(WidgetTree::ELayer::Content, parent);
+    tree.attach(*parent, a);
+    tree.attach(*parent, b);
+    tree.attach(*parent, c);
+
+    tree.reparentBefore(*a, c); // C before A -> C, A, B
+
+    EXPECT_EQ(parent->getChildren()[0].get(), c.get());
+    EXPECT_EQ(parent->getChildren()[1].get(), a.get());
+    EXPECT_EQ(parent->getChildren()[2].get(), b.get());
+}
+
+TEST(WidgetTreeTest, ReparentAfterMovesIntoAnotherParentAtSiblingPosition)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       root    = std::make_shared<UIPanel>("Root");
+    auto       other   = std::make_shared<UIPanel>("Other");
+    auto       first   = makeButton("First", {}, {});
+    auto       second  = makeButton("Second", {}, {});
+    tree.attachToLayer(WidgetTree::ELayer::Content, root);
+    tree.attachToLayer(WidgetTree::ELayer::Content, other);
+    tree.attach(*other, first);
+    tree.attach(*other, second);
+
+    auto moved = makeButton("Moved", {}, {});
+    tree.attach(*root, moved);
+
+    // Move `moved` from root into other, after `first`.
+    tree.reparentAfter(*first, moved);
+
+    EXPECT_EQ(moved->getParent(), other.get());
+    EXPECT_EQ(other->getChildren().size(), 3u);
+    EXPECT_EQ(other->getChildren()[0].get(), first.get());
+    EXPECT_EQ(other->getChildren()[1].get(), moved.get());
+    EXPECT_EQ(other->getChildren()[2].get(), second.get());
+    EXPECT_EQ(root->getChildren().size(), 0u);
+}
+
+TEST(WidgetTreeTest, ReparentSelfIsNoOp)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       parent = std::make_shared<UIPanel>("Root");
+    auto       a      = makeButton("A", {}, {});
+    tree.attachToLayer(WidgetTree::ELayer::Content, parent);
+    tree.attach(*parent, a);
+
+    tree.reparentAfter(*a, a);
+    tree.reparentBefore(*a, a);
+
+    EXPECT_EQ(parent->getChildren().size(), 1u);
+    EXPECT_EQ(parent->getChildren()[0].get(), a.get());
+}
+
 TEST(WidgetTreeTest, ReparentUnderOwnDescendantFails)
 {
     WidgetTree tree({.width = 800, .height = 600});

@@ -74,6 +74,10 @@ struct WidgetTree final
     /// Explicit move: detach from the current parent (if any) and attach under
     /// `newParent`. The widget may come from any tree, including detached.
     void reparent(UIElement& newParent, const UIElementRef& widget);
+    /// Move `widget` under `sibling`'s parent, positioned immediately before
+    /// (after) `sibling` in paint order. No-op when `widget` is `sibling`.
+    void reparentBefore(UIElement& sibling, const UIElementRef& widget);
+    void reparentAfter(UIElement& sibling, const UIElementRef& widget);
     /// Recursively detach the whole subtree from the tree. Never destroys the
     /// widget; releases focus/capture/hover pointing into the subtree.
     void detach(UIElement& widget);
@@ -125,6 +129,9 @@ struct WidgetTree final
     /// Assign tree membership to a widget and its whole subtree (invariant:
     /// attached iff every descendant is a member of the same tree).
     static void markSubtreeMembership(UIElement* widget, WidgetTree* tree);
+    /// Shared reparentBefore/After implementation (friend access to the
+    /// widget's private parent/children state).
+    static void reparentRelativeTo(WidgetTree& tree, UIElement& sibling, const UIElementRef& widget, bool bAfter);
 
     void onWidgetDetached(UIElement& widget);
     void clearTransientState(UIElement& widget);
