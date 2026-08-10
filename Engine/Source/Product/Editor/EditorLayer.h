@@ -103,6 +103,13 @@ struct EditorLayer
     bool          _bCanvasPanning = false;
     glm::vec2     _canvasPanLastMouse = {0.0f, 0.0f};
 
+    // 2D canvas widget direct manipulation (designer preview). The drag
+    // session itself (snapshots + delta application) lives in the UI
+    // Designer panel; this layer owns the mouse mapping and handle hit test.
+    UIElement* _canvasPressHit   = nullptr;       // widget the press hit (drag target)
+    glm::vec2  _canvasPressPoint = {0.0f, 0.0f};  // canvas logical point at press
+    bool       _bCanvasPressActive = false;       // press handled selection/drag this gesture
+
     // Editor settings
     glm::vec4 _clearColor = {0.1f, 0.1f, 0.1f, 1.0f};
     float     _debugFloat = 0.0f;
@@ -261,6 +268,8 @@ struct EditorLayer
     /// 2D pan/zoom transform. Returns false when the point is outside the
     /// visible canvas region.
     bool viewportToCanvas(const glm::vec2& viewportLocal, glm::vec2& outCanvas) const;
+    /// Inverse of viewportToCanvas (viewport-local px from canvas logical px).
+    [[nodiscard]] glm::vec2 canvasToViewport(const glm::vec2& canvasPoint) const;
 
     /**
      * @brief Check if viewport should capture input events
@@ -390,6 +399,19 @@ struct EditorLayer
     void pickEntity(float viewportX, float viewportY);
     /// 2D mode picking: hit-test the UI Designer preview tree (canvas coords).
     void pickNode2D(float viewportX, float viewportY);
+
+    // === 2D canvas direct manipulation (designer preview) ===
+    /// Left-press in the 2D canvas: resize handle of the selection takes
+    /// priority, then hit the preview tree (select + start move), then clear
+    /// the selection on empty canvas.
+    void beginCanvasPress();
+    /// Left-drag while a manipulation session is active.
+    void updateCanvasDrag();
+    /// Left-release: end the manipulation session (no pick when a drag ran).
+    void endCanvasPress();
+    /// Resize-handle hit test of `widget` in viewport-local mouse pixels
+    /// (0 when the cursor is not over a handle).
+    uint8_t hitTestCanvasResizeHandles(const UIElement& widget) const;
     /// Frame the camera on the merged world bounds of the whole selection.
     void focusCameraOnSelection();
 

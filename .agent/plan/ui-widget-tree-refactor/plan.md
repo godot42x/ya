@@ -1425,3 +1425,316 @@ xmake b ya-editor
 并完成 engine/gui 的 shared、static/monolith 构建矩阵，以及 `.yaui` runtime
 resolve、资源 unload/clear/reload、InstanceEditable 和跨 Scene persistent UI
 的自动化测试。
+
+### 后续闭环（2026-08-10，UI 编辑最小闭环：canvas 直接操纵）
+
+目标：参考 UE UMG BP / Godot 2D 模式，把 2D canvas 从"只读预览"变成真正的
+编辑面，并补齐最小编辑闭环的断链。两问的答案：
+
+- **在哪里编辑 UI**：2D canvas viewport（designer canvas）是主编辑面——
+  选中、拖动移动、手柄缩放；UI Designer 面板（WidgetTree + Palette +
+  Inspector）是其结构/属性伴侣；Scene Hierarchy 的 Game UI Entries 是
+  scene 级顶层条目列表（每个 entry 展开可见其文档树）。
+- **编辑的最小组合**：Canvas（选择/移动/缩放） + WidgetTree（结构） +
+  Palette（添加） + Inspector（属性），四个件通过同一个选中状态互连。
+
+修复的断链与新增能力（均在 `Product/Editor`，Framework 零改动）：
+
+- **canvas 直接操纵**（此前只能点击选中，不可拖动/缩放）：
+  - `EditorLayer`：2D 模式按下即选中（resize 手柄优先 → preview 树命中 →
+    空处清除）；左键拖动走 `UIDesignerPanel` 的 move/resize session；
+    拖拽 3px 阈值区分 click/drag；Delete 键删除选中（文档根受保护）；
+    切模式时取消 in-flight 拖拽。
+  - `UIDesignerPanel::beginMove/beginResize/applyDragDelta`：锚点感知的
+    缩放数学——点锚轴改 `_position`/`_size`（min 边同时平移保持 max 边
+    固定、防穿越），stretch 轴改 `_anchorMin/_anchorMax`（delta/parent
+    extent），尺寸最小 1px。
+  - `EditorModule`：canvas compose 的 extraContent 绘制选中框 + 8 个
+    resize 手柄（与 EditorLayer 手柄命中测试同坐标系：offset +
+    logical*uiScale）。
+- **Inspector 编辑即时可见**（此前 `invalidateLayout` 只在 attach/detach/
+  extent 变化时触发，属性修改不刷新布局）：`drawInspector` 在
+  `renderReflectedType` 后若 `ctx.hasModifications()` 即
+  `invalidatePreview()`；拖拽路径也直接 invalidate。
+- **Palette 语义修正**（此前无选中时点击会"把旧根 reparent 到新 widget
+  下"替换根）：现在始终作为选中节点（无选中时为文档根）的子节点添加，
+  UE/Godot 语义，绝不替换根。
+- **Game UI Entries 树状显示**（此前是扁平列表）：entry 行可展开显示其
+  document 的 widget 树（inline 或 documentPath resolve）；点击任意节点
+  打开 UI Designer 对应文档并 `selectByChildPath` 定位到该 widget。
+- 顺手修复：UI Designer WidgetTree 右键 Delete 也走 `deleteWidget`
+  （保护文档根，避免根被 detach 后预览悬空）。
+
+验证：
+
+```bash
+python3 Script/ya.py cfg
+xmake b ya-editor
+xmake b ya-gui-widgets-test   # 32 例
+xmake b ya-gui-closure-test   # 38 例
+python3 Script/ya.py test --target ya   # 390 例
+python3 Script/ya_module_lint.py        # ok
+python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject \
+  -- --exit-after-frame=90   # 2D 模式冒烟（Editor.json viewport.mode=2d），无 ImGui 错误/无崩溃/Vulkan validation 干净
+```
+
+手工验收（需交互）：2D 模式打开 entry 或 New 文档 → canvas 显示选中框+手柄
+→ 拖动移动、拖手柄缩放 → Inspector 改动即时反映 → Palette 添加为选中项子
+节点 → Delete 删除（根不可删）→ Save 写回 entry/文件。已知限制：box layout
+容器内的子节点布局由容器接管，canvas 直接拖动不生效（容器布局语义，后续
+另议）。
+
+### 后续闭环（2026-08-10，Game UI Entries 拖拽重组父子关系）
+
+背景：legacy scene（Canvas > Panel/Title/Label/ClickMe 平级）按计划迁移为
+平级 entries，编辑器与运行时的“平级 vs 嵌套观感”不一致；用户明确
+“不需要 legacy migration 推倒重来”，因此不改迁移，改为给 Game UI
+Entries 增加拖拽重组能力（文档级父子编辑），让作者自己把平级 UI 拖成嵌套。
+
+- **scene-core 新增 `moveWidgetEntryDocument`**（SceneWidgetEntry.h/.cpp，
+  可单测的纯结构操作）：
+  - `srcPath`/`dstPath` 为 entry 内子索引路径（空 = entry 根文档）；
+    `Into` = 作为目标文档的子节点，`Before/After` = 作为目标文档的兄弟
+    （entry 级 Before/After = 重排 entries）。
+  - 先解析全部文档（shared_ptr，抵御 entry vector 重分配），再做变更；
+    环检测（不能拖进自己的子树）；documentPath entry 不能作为目标；
+    嵌套节点不能经 Before/After 变成顶层 entry；自身 drop 为 no-op。
+  - **位置保持**：顶层 entry 拖入另一顶层 entry（双方点锚）时，子节点
+    position 从 canvas 相对转 parent 相对（减去父节点 origin），运行时不
+    移位——覆盖“4 个平级 widgets 拖成 Panel 嵌套”的用户场景。
+- **Scene Hierarchy Game UI Entries 拖拽**：
+  - entry 行与展开后的文档树节点都可作为拖拽源/目标；Before/Into/After
+    带蓝色高亮/插入线反馈（与 3D 节点树一致的交互语言）；
+  - 拖拽 payload 为 POD（ImGui payload memcpy），drop 时队列化，树渲染
+    结束后 flush（不边遍历边改）；
+  - 拖拽后若 UI Designer 正打开被改动的文档，自动重开目标 entry，避免
+    Save 用过期 preview 覆盖结构。
+- **测试**：新增 `SceneWidgetEntryReparentTest` 10 例——顶层嵌套位置调整、
+    origin 下位置保持、entry 重排（Before/After）、跨 entry 嵌套节点移动、
+    文档内兄弟重排、环拒绝、documentPath 目标拒绝、嵌套→顶层拒绝、
+    自身 no-op、以及“平级 HUD 逐个拖入 Panel”端到端重建（位置精确断言）。
+- 验证：`ya-testing` 400 例全过（+10）；widgets 32 / closure 38 例全过；
+  `ya_module_lint` ok；`ya-editor` 构建 + 2D 冒烟干净。
+
+### 后续闭环（2026-08-10，UMG BP 风格工作流：场景引用 .yaui + hierarchy 实时更新 + 拖拽完善）
+
+方向：按 UMG BP 编辑器模型收敛——UI Designer 是"单独 tab"编辑某个 .yaui；
+主场景只引用 UI 文件（documentPath entry）；左侧 Game UI Entries 实时反映
+当前编辑。
+
+- **场景只引用文件**：Game UI Entries "+ Add" 现在创建 `Content/UI/<Type>.yaui`
+  默认文档 + 引用它的 documentPath entry（不再内联）。旧 legacy 迁移的
+  inline entries 保留（兼容路径，按用户要求不动迁移）。
+- **左侧 hierarchy 实时更新**（修复"点击 palette 添加后 hierarchy 不显示"）：
+  - `UIDesignerPanel::syncPreviewToDocument()`：结构性编辑（palette 添加、
+    树删除、designer 树拖拽重组）后把 preview 重建回文档；scene-entry 模式
+    立即写回 entry.inlineDocument，documentPath 模式由 hierarchy 的
+    "live-document path override" 读取 designer 当前文档。
+  - Scene Hierarchy 对正在编辑的 entry 优先显示 designer 的 live 文档树；
+    New/未命名的文档显示为 "Editing Document (untitled)" 区块（点击节点
+    定位到 designer 对应 widget），palette 添加立即可见。
+  - `saveDocument`（documentPath）后 invalidate designer 与 host 两个
+    resolver，PIE/runtime 重新读文件。
+- **拖拽完善**（insert / drop-on 更可靠）：
+  - WidgetTree 新增 `reparentBefore/After`（框架级，sibling-relative 移动，
+    4 个新单测覆盖同父重排/跨父插入/自身 no-op）。
+  - UI Designer 的 WidgetTree 支持拖拽（Before/Into/After、环防护、文档根
+    保护、hover 自动展开），拖拽后同步文档。
+  - Scene Hierarchy 拖拽：hover 目标自动展开 + drop 后保持展开 5 帧
+    （结果可见）；Before/After/Into 反馈不变。
+- 验证：`ya-testing` 404 例、widgets 36、closure 42 全过；`ya_module_lint` ok；
+  `ya-editor` 构建 + 2D 冒烟干净。
+
+已知边界：file 引用的 entry 目前不能作为 scene 层级拖拽源/目标（嵌套在
+.yaui 内部进行，符合 UMG 模型）；inline（legacy）entries 继续支持 scene
+层级嵌套。手工验收：进入 2D → +Add 建 .yaui 引用 → 双击在 designer 打开 →
+palette 添加 → 左侧 hierarchy 的 entry 树立即出现新节点 → designer 树内拖拽
+重组 → Save 后 PIE 生效。
+
+### 后续闭环（2026-08-10，拖拽修复：file 引用 entry 参与拖拽 + 插入按钮）
+
+用户实测 Scene Hierarchy 拖拽不可用。根因有两个：
+
+1. **上一轮的 "+ Add" 改为创建 file 引用 entry 后，拖拽对它们完全失效**：
+   - 行 drop target 有 `if (entry.inlineDocument)` 门控，file entry 没有目标；
+   - `moveWidgetEntryDocument` 拒绝 documentPath 源/目标（resolveEntryNode
+     返回 null）→ 拖拽任何新 entry 都是 no-op。
+2. **drop target 注册顺序未镜像 3D 节点树**（该树被证明可用）：rect 在
+   popup/拖拽源之后才捕获，且行 drop target 在 popup 之后注册，容易被
+   popup/工具提示改变 last-item 状态。
+
+修复：
+
+- **file 引用 entry 全面参与拖拽**：
+  - `moveWidgetEntryDocument` 增加 `resolveFile` 回调 + `changedFiles` 出参；
+    documentPath entry 经 resolver 解析参与移动；被改动的 .yaui 路径回报
+    给调用方持久化（顺带修掉 erase 后读悬垂 entry 引用的 bug）。
+  - SceneHierarchy flushUIDrag：resolveFile 优先取 designer 的 live 文档
+    （未保存编辑是事实源，避免覆盖丢失）；移动后保存 changedFiles 到 VFS、
+    invalidate host resolver、若 designer 打开该文件则 `reloadCurrentDocument()`。
+  - 行 drop target 移除 inline 门控，所有 entry 都可作为 Into 目标。
+- **插入操作**（用户建议）：在平级 entry 之间渲染细的 InvisibleButton
+  （6px）作为显式 Before/After drop target（首项前 + 每项后），拖到缝隙即
+  插入；行内仍保留 Before/Into/After 悬停区域。
+- **顺序修正**：TreeNodeEx 后立即捕获 item rect；drag source 用无 flags 的
+  `BeginDragDropSource()`（与 3D 树一致）；drop target 在 popup 之前注册。
+- 测试：`SceneWidgetEntryReparentTest` 新增 3 例（file 目标接收子节点并回报
+  文件、file 源移除节点回报文件、file 解析失败拒绝）。
+- 验证：`ya-testing` 407 例、widgets 36、closure 42 全过；lint ok；`ya-editor`
+  构建 + 2D 冒烟干净。手工验收：2D → +Add 建两个 .yaui 引用 → 拖 A 到 B 上
+  （B 的 .yaui 吸收 A 并落盘，A 条目消失）→ 拖 A 到两条目之间的缝隙（插入
+  重排）。
+
+### 后续闭环（2026-08-10，drop-on-node 修复 + 无效目标反馈 + 统一 1px 缝隙）
+
+用户实测：drop on node（Into）不能改父子关系；缝隙只对 widget 生效且 6px 太高。
+确认设计：**缝隙是唯一插入行（1px）；行仅 Into（drop on = 成为子节点）**；
+3D node 树与 Game UI Entries 统一为同一套节点交互；无效目标（环/自身/不可
+解析）在拖拽中红色拒绝。
+
+根因与修复：
+
+- **drop-on-node 不可靠**：行 drop target 用标准 `BeginDragDropTarget()`，
+  rect/id 依赖 `g.LastItemData`（popup/拖拽源 tooltip 会污染 last-item），且
+  id 是 `&entry`（vector 元素地址不稳定）；ImGui 投递要求连续两帧同一 target
+  id（`DragDropAcceptIdPrev`）+ 最小包围盒规则。改为 **`BeginDragDropTargetCustom`
+  显式 row rect + 稳定 id**（3D 节点用 entity id，entry 用 index+path 字符串
+  id），acceptance 完全脱离 last-item 状态；行收敛为仅 Into。
+- **无效目标反馈**：scene-core 新增只校验不修改的 `canMoveWidgetEntryDocument`
+  （自拖/环/不可解析/嵌套→entry-root 规则，与 move 同一套判定）；3D 树内联
+  `canParentNode`（自拖/根/子孙环）。drop 处理：hover 时计算有效性 →
+  有效蓝高亮 / **无效红高亮 + tooltip（"不能作为子节点"/"无法插入此处"），
+  delivery 时不 queue（drop no-op）**，并抑制 ImGui 默认 drop 框
+  （AcceptNoDrawDefaultRect）。
+- **统一 1px 缝隙**：共享 `drawTreeInsertGap`（`InvisibleButton(-1, 1)`，1px
+  命中 + 1px 蓝/红线反馈，payload 参数化 NODE/UI_ENTRY，有效性红/蓝）。
+  3D 树接入：顶层列表（首节点前 Before + 每节点后 After）+ 每个 children 列表
+  （drawNodeRecursive）+ 根空白 drop target 8→4px；entry 树：顶层 entry 缝隙
+  重构到共享 helper + 文档树子列表也补缝隙（drawEntryDocumentTree，路径唯一
+  ID）；行 Before/After 悬停区与 `getDropPosition` 全部移除。
+- **诊断**：drop delivery 各加一条 `YA_CORE_DEBUG` 日志（定位 source/target
+  侧问题）。
+- 测试：`canMoveWidgetEntryDocument` 新增 2 例（有效不修改、拒绝自拖/环/不可
+  解析/嵌套→顶层）。
+- 验证：`ya-testing` 409 例、widgets 36、closure 42 全过；lint ok；`ya-editor`
+  构建 + 2D 冒烟干净。手工验收：拖 A 到 B 行上 → 蓝高亮、松手 A 成为 B 子节点；
+  拖到自身/子孙 → 红拒绝；拖到 1px 缝隙 → 插入线、松手插入；3D node 与 entry
+  交互一致。
+
+已知边界：1px 命中行较薄，若实测难抓后续可加宽 hit rect（视觉线保持 1px）。
+
+### 后续闭环（2026-08-10，插入高亮 + 行距修复）
+
+用户反馈：拖拽插入时无高亮（看不见可插入位置）；entry 行距仍偏高。
+
+根因：
+- 之前 1px `InvisibleButton` 占位行既撑大了行距，又因为命中面太薄，鼠标很难
+  "悬停"触发 `BeginDragDropTarget`（要求 last-item HoveredRect）→ 插入反馈
+  几乎不可见。
+
+修复（SceneHierarchyPanel）：
+- 共享 `drawTreeInsertGapAt(edgeY, ...)`：**不再渲染占位按钮**（零布局占用，
+  行距回到树自然间距）；改用 `BeginDragDropTargetCustom` 注册以插入线为中心
+  ±4px 的隐式带状 drop band（显式 rect，不依赖 last-item hover）。
+- hover 时画 **2px 亮色插入线 + 半透明带**（蓝=有效 / 红=拒绝）+ tooltip，
+  插入位置一目了然。
+- 缝隙语义重组：每个行渲染函数在渲染完自身子树后注册 After gap（edgeY=子树
+  底部光标 y）；每个列表入口注册 Before gap（edgeY=列表起点光标 y）。覆盖
+  全部 N+1 条缝隙，且 After/Before 与行的 Into 在重叠区由 ImGui 最小包围盒
+  规则自动裁决（边界带=插入，行中间=成为子节点）。
+- 验证：`ya-testing` 409 例、lint ok、`ya-editor` 构建 + 2D 冒烟干净。
+
+### 后续闭环（2026-08-10，hover 高亮修复）
+
+用户反馈：插入/Into 高亮只在松开鼠标（drop）那一刻闪一下，drag 过程中 hover
+不显示。
+
+根因：`ImGui::AcceptDragDropPayload` 默认在非 delivery 帧返回 NULL（除非传
+`ImGuiDragDropFlags_AcceptBeforeDelivery`）。之前的 drop target 都只传了
+`AcceptNoDrawDefaultRect` → hover 帧拿不到 payload，反馈画不出来，只有 delivery
+帧返回非 NULL → "闪一下"。
+
+修复：三处 drop target（entry 行 `publishUIDragTarget`、3D 节点行
+`drawNodeDropTarget`、共享缝隙 `drawTreeInsertGapAt`）的 `AcceptDragDropPayload`
+统一加 `AcceptBeforeDelivery`。拖拽中 hover 即持续显示蓝色/红色高亮与插入线，
+delivery 帧仍以 `payload->IsDelivery()` 判定执行（语义不变）。
+
+### 后续闭环（2026-08-10，Godot 式 UI 场景节点：3D/2D 双 section + 代码实例化）
+
+方向确认：渲染/系统层保留两套（ImGui 编辑器=Slate 角色，WidgetTree 游戏
+UI=UMG 角色）；场景组织层采用"SceneHierarchy 面板内 TreeNode 分 3D/2D 双
+section"（用户拍板，优于 UI 节点混入 nodeTree）。
+
+- **双 section**（SceneHierarchyPanel::sceneTree）：
+  - `TreeNodeEx("##SceneHierarchySection3D", DefaultOpen, "3D (Scene)")`：现有
+    Node 树 + 搜索 + 插入缝隙 + 根空白 drop target + Standalone Entities +
+    右键创建菜单（原样移入）。
+  - `TreeNodeEx("##SceneHierarchySection2D", DefaultOpen, "2D (Game UI)")`：
+    drawWidgetEntries（+Add / 文档树 / 拖拽重组 / untitled 镜像）+ flushUIDrag。
+  - drawWidgetEntries 去掉冗余 SeparatorText（section 标题即分区），+Add 移行首。
+- **场景内 UI 节点编辑**（DetailsView::drawEntryTransform）：选中 UI 节点 →
+  "Scene Transform (override)" 快捷编辑 Position/Size，写 UIInstanceOverrideSet
+  （运行时与 2D canvas 预览即时生效，不改 .yaui 模板）。
+- **代码动态实例化**（ScriptApiCore）：
+  - `ui.instantiate(path)`：UIDocumentResolver 解析 .yaui → UIDocument::instantiate
+    → 返回脚本句柄（与 ui.create 同句柄表）。
+  - `ui.add_to_scene({handle, name?})`：从 widget 重建 UIDocument → 加入场景 2D
+    section 成为 authoring entry（Godot add_child 语义，运行时采集再实例化）。
+- 验证：`ya-testing` 409、widgets 36、closure 42 全过；lint ok；`ya-editor`
+  构建 + 2D 冒烟干净。
+
+### 后续闭环（2026-08-10，2D section 拖拽排查 + 诊断）
+
+用户反馈：2D (Game UI) section 内无法像 3D 那样拖拽插入/reparent，且无高亮表现。
+
+排查与对齐：
+- 诊断日志（`[uidrag]`，SceneHierarchyPanel）：2D section 渲染 + entry 数、
+  拖源开始、行/缝隙 target 注册、**target 未注册原因**（hoveredRect /
+  hoveredWin / dragActive，用 imgui_internal 读 g.HoveredWindowUnderMovingWindow）。
+  冒烟确认 2D section 渲染 4 entries（HelloMaterial 迁移），无异常。
+- 2D 拖拽实现与 3D 完全对齐：行 target 的 rowId 从 index 字符串改为行自身
+  TreeNodeEx id（`&entry` / `document.get()`，与 3D `GetID(node)` 对称，
+  自拖自动拒绝）。
+- 3D/2D section TreeNode 加 `OpenOnArrow`：点击 label 不再折叠（避免误折叠
+  导致"看不到内容/无法拖拽"的假象）。
+- 待用户复测回报 `[uidrag]` 日志定位；若为跨 section 拖拽（NODE vs UI_ENTRY
+  payload 隔离）的诉求，需另支持跨树拖拽。
+
+### 场景 UI 迁移保留父子关系 + 重复加载清理验证（2026-08-10）
+
+用户反馈两点：(a) 重复加载场景时需要清理 widget tree；(b) 首次加载
+HelloMaterial.scene.json 时 UI "明明有父子关系"但 2D 层级是平级 entry。
+
+修复与结论：
+- **父子关系保留（修复）**：`LegacyUIMigration::migrateLegacyUINode` 对
+  UICanvasNode 不再拍平 children 为顶层 entry，而是保留为 `engine.container`
+  entry（UMG 式根 widget），children 作为文档树子节点嵌套。场景 JSON 中
+  `HUD > [Panel, Title, Label, Click Me]` 现在迁移为 1 个 HUD container entry，
+  2D section 展开显示 4 个文档子节点。同步更新
+  `LegacyUIMigrationTest.LegacyCanvasBecomesContainerEntryPreservingHierarchy`
+  与 `SceneSerializerTest.OldFormatUISceneFixtureLoads`（fixture 断言 1 entry
+  container + 3 children）。
+- **重复加载清理（验证 + 防御）**：自动化 RPC（eval_js ya.scene.load 连发 3 次 +
+  [uidrag] 诊断日志）证实每次 load 都完整 unmount（HelloMaterial = 1 auto-mount
+  container + HelloMaterial.cpp createUIDemo addToWorld 4 个演示 widget = 5，
+  全部 detach），WidgetTree 无累积。`DefaultGameUIController::onSceneActivated`
+  增加防御：同 Scene 对象重复 activate 时先 detach 旧 attachments 再 mount。
+- 验证：ya-testing 409、widgets 36、closure 42、lint ok、编辑器冒烟干净。
+
+### 移除 legacy migration（2026-08-10）
+
+用户已将场景数据转为新格式（widgetEntries 内联 UIDocument），legacy Node2D
+UI 迁移不再需要，整体移除：
+
+- 删除文件：`Scene/Serialization/LegacyUIMigration.{h,cpp}`（含
+  `include/Scene/Serialization/LegacyUIMigration.h` 转发头）、
+  `Test/Source/LegacyUIMigrationTest.cpp`、`Test/Fixture/Data/OldFormatUIScene.scene.json`
+- `SceneSerializer::deserializeNodeTree` 删除 `nodeType` → entry 迁移分支与
+  `makeEntryId` helper（旧格式场景不再支持，UI 节点会退化为普通空 node）
+- 测试：`SceneSerializerTest.OldFormatUISceneFixtureLoads` 删除；widgets/closure
+  测试保持；`SceneWidgetEntryTest` 头注释更新
+- 文档：`.agent/skills/render-arch/SKILL.md` 规则 9 更新（不再有迁移器）
+- 验证：ya-testing 404（-5）、widgets 36、closure 42、lint ok、编辑器冒烟干净
+
+注：HelloMaterial.scene.json 已由用户保存为新格式（widgetEntries = HUD
+container > panel > [text, text, button] 嵌套结构），加载路径不再经过迁移。

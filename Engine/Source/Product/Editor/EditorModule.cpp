@@ -153,6 +153,46 @@ void drawEntityBounds(Entity* entity, const glm::vec4& color)
                           color);
 }
 
+/// Selection outline + resize handles for the 2D canvas (UE UMG designer /
+/// Godot 2D style). Drawn in render-target pixels on top of the preview
+/// snapshot; the widget rect is transformed with the same uiScale/offset the
+/// snapshot builder used, so the overlay stays coherent with pan/zoom.
+void drawCanvasSelectionOverlay(const Rect2D& rect, const glm::vec2& uiScale, const glm::vec2& offset)
+{
+    auto* white = TextureLibrary::get().getWhiteTexture().get();
+    if (!white) {
+        return;
+    }
+    const glm::vec2 pos  = offset + rect.pos * uiScale;
+    const glm::vec2 size = rect.extent * uiScale;
+    if (size.x <= 0.0f || size.y <= 0.0f) {
+        return;
+    }
+    const glm::vec4 color(0.25f, 0.62f, 1.0f, 1.0f);
+    const float     thickness = 2.0f;
+    // 4 edge quads (outline).
+    Render2D::makeSprite(glm::vec3(pos.x, pos.y, 0.0f), glm::vec2(size.x, thickness), white, color);
+    Render2D::makeSprite(glm::vec3(pos.x, pos.y + size.y - thickness, 0.0f), glm::vec2(size.x, thickness), white, color);
+    Render2D::makeSprite(glm::vec3(pos.x, pos.y, 0.0f), glm::vec2(thickness, size.y), white, color);
+    Render2D::makeSprite(glm::vec3(pos.x + size.x - thickness, pos.y, 0.0f), glm::vec2(thickness, size.y), white, color);
+    // 8 resize handles (fixed screen size regardless of zoom).
+    const float   handleSize = 7.0f;
+    const auto    drawHandle = [&](const glm::vec2& center) {
+        Render2D::makeSprite(glm::vec3(center.x - handleSize * 0.5f, center.y - handleSize * 0.5f, 0.0f),
+                             glm::vec2(handleSize, handleSize),
+                             white,
+                             color);
+    };
+    drawHandle({pos.x, pos.y});
+    drawHandle({pos.x + size.x, pos.y});
+    drawHandle({pos.x, pos.y + size.y});
+    drawHandle({pos.x + size.x, pos.y + size.y});
+    drawHandle({pos.x + size.x * 0.5f, pos.y});
+    drawHandle({pos.x + size.x * 0.5f, pos.y + size.y});
+    drawHandle({pos.x, pos.y + size.y * 0.5f});
+    drawHandle({pos.x + size.x, pos.y + size.y * 0.5f});
+}
+
 void drawSelectedEntityBounds(const EditorLayer& layer)
 {
     const auto& selections = layer.getSelections();
@@ -279,9 +319,13 @@ class EditorViewportCompositor
             // instances and never shares state with either.
             UIFrameSnapshot        uiPreviewSnapshot;
             const UIFrameSnapshot* pUiPreviewSnapshot = nullptr;
+            const Rect2D*          pSelectionRect     = nullptr;
             if (layer.getUIDesignerPanel().hasDocument()) {
                 uiPreviewSnapshot  = layer.getUIDesignerPanel().buildPreviewSnapshot(uiScale, offset);
                 pUiPreviewSnapshot = &uiPreviewSnapshot;
+                // Read the selection AFTER the snapshot build so layout is
+                // current (buildSnapshot re-layouts when dirty).
+                pSelectionRect = layer.getUIDesignerPanel().getSelectedLayoutRect();
             }
             else if (Scene* scene = layer.getViewportInteractionScene()) {
                 uiPreviewSnapshot  = buildSceneEntriesPreview(*scene, logicalExtent, uiScale, offset);
@@ -296,6 +340,14 @@ class EditorViewportCompositor
                                           .logicalViewportExtent = logicalExtent,
                                           .canvasPan  = layer.getCanvasPan(),
                                           .canvasZoom = layer.getCanvasZoom(),
+                                      },
+                                      [&]() {
+                                          // Selection feedback on the canvas:
+                                          // outline + resize handles (matches
+                                          // the EditorLayer handle hit test).
+                                          if (pSelectionRect) {
+                                              drawCanvasSelectionOverlay(*pSelectionRect, uiScale, offset);
+                                          }
                                       });
             return;
         }

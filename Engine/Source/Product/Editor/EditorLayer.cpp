@@ -93,6 +93,12 @@ void EditorLayer::setViewportMode(EViewportMode mode, bool bPersist)
     _viewportMode = mode;
     _sceneHierarchyPanel.setContext(getSceneHierarchyContext());
 
+    // Cancel any in-flight 2D canvas manipulation on mode switch.
+    _canvasPressHit     = nullptr;
+    _canvasPressPoint   = {0.0f, 0.0f};
+    _bCanvasPressActive = false;
+    _uiDesignerPanel.endDrag();
+
     if (_app && mode == EViewportMode::Mode2D) {
         _app->getInputRouter().cancelInput(EInputCancelReason::CaptureReleased);
     }
@@ -112,6 +118,11 @@ bool EditorLayer::viewportToCanvas(const glm::vec2& viewportLocal, glm::vec2& ou
     outCanvas = (viewportLocal - _canvasPan) / _canvasZoom;
     return outCanvas.x >= 0.0f && outCanvas.y >= 0.0f &&
            outCanvas.x <= _viewportSize.x && outCanvas.y <= _viewportSize.y;
+}
+
+glm::vec2 EditorLayer::canvasToViewport(const glm::vec2& canvasPoint) const
+{
+    return canvasPoint * _canvasZoom + _canvasPan;
 }
 
 } // namespace ya

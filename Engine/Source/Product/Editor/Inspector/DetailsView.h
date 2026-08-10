@@ -56,6 +56,8 @@ struct DetailsView
     void drawComponents(Entity &entity);
     /// Game UI entry inspector (SceneWidgetEntry authoring data).
     void drawWidgetEntry(Scene &scene, SceneWidgetEntry &entry);
+    /// Scene-level transform quick edit (position/size as instance overrides).
+    void drawEntryTransform(SceneWidgetEntry &entry);
     /// InstanceEditable-filtered override editor for a widget type.
     void drawEntryOverrides(SceneWidgetEntry &entry);
     /// Multi-select mode: draw the intersection of components shared by all

@@ -110,6 +110,11 @@ void EditorLayer::onEvent(const Event& event)
             _rightMousePressPos  = _app->getLastMousePos();
             _bRightMouseDragging = false; // Not dragging yet, just pressed
         }
+        else if (isViewportMode2D() && mouseEvent.GetMouseButton() == EMouse::Left && bViewportHovered) {
+            // 2D canvas: select on press, resize handles take priority, then
+            // hit the preview tree (select + start move), empty clears.
+            beginCanvasPress();
+        }
     } break;
     case EEvent::MouseMoved:
     {
@@ -137,6 +142,15 @@ void EditorLayer::onEvent(const Event& event)
             else {
                 _bCanvasPanning = false;
             }
+        }
+
+        // 2D canvas widget manipulation: left-drag on the designer preview
+        // (move or resize). Never fights the right/middle pan.
+        if (isViewportMode2D() && bViewportHovered && _canvasPressHit &&
+            ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
+            !ImGui::IsMouseDown(ImGuiMouseButton_Right) &&
+            !ImGui::IsMouseDown(ImGuiMouseButton_Middle)) {
+            updateCanvasDrag();
         }
     } break;
     case EEvent::MouseButtonReleased:
@@ -176,11 +190,20 @@ void EditorLayer::onEvent(const Event& event)
         case EEvent::MouseButtonReleased:
         {
             auto& mouseEvent = static_cast<const MouseButtonReleasedEvent&>(event);
-            if (mouseEvent.GetMouseButton() == EMouse::Left && !_bCanvasPanning) {
-                float localX{}, localY{};
-                auto  cursorPos = _app->getLastMousePos();
-                if (screenToViewport(cursorPos.x, cursorPos.y, localX, localY)) {
-                    pickNode2D(localX, localY);
+            if (mouseEvent.GetMouseButton() == EMouse::Left) {
+                if (_bCanvasPressActive) {
+                    // The press already selected and started the drag session;
+                    // release only ends it (no double pick).
+                    endCanvasPress();
+                }
+                else if (!_bCanvasPanning) {
+                    // Fallback for presses that began outside the viewport
+                    // (hover state was false, so beginCanvasPress never ran).
+                    float localX{}, localY{};
+                    auto  cursorPos = _app->getLastMousePos();
+                    if (screenToViewport(cursorPos.x, cursorPos.y, localX, localY)) {
+                        pickNode2D(localX, localY);
+                    }
                 }
             }
         } break;
@@ -194,6 +217,15 @@ void EditorLayer::onEvent(const Event& event)
             const glm::vec2 newPan = center - (center - _canvasPan) * zoomFactor;
             setCanvasZoom(_canvasZoom * zoomFactor);
             _canvasPan = newPan;
+        } break;
+        case EEvent::KeyPressed:
+        {
+            auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
+            if (keyEvent.getKeyCode() == EKey::Delete) {
+                // Delete the selected preview widget (root is protected).
+                endCanvasPress();
+                _uiDesignerPanel.deleteWidget(_uiDesignerPanel.getSelectedWidget());
+            }
         } break;
         default:
             break;
@@ -476,6 +508,120 @@ void EditorLayer::pickNode2D(float viewportLocalX, float viewportLocalY)
     }
 
     _uiDesignerPanel.clearSelection();
+}
+
+// === 2D canvas direct manipulation (designer preview) ===
+
+uint8_t EditorLayer::hitTestCanvasResizeHandles(const UIElement& widget) const
+{
+    glm::vec2 vpMouse{};
+    if (!screenToViewport(_app->getLastMousePos(), vpMouse)) {
+        return 0;
+    }
+    const Rect2D vpRect{
+        .pos    = widget._layoutRect.pos * _canvasZoom + _canvasPan,
+        .extent = widget._layoutRect.extent * _canvasZoom,
+    };
+
+    // Handles sit at the four corners and the four edge midpoints, drawn as
+    // fixed screen-size squares regardless of zoom (same space as the
+    // selection overlay in the canvas compose).
+    constexpr float kHalf = 5.0f; // generous grab box (10x10 px)
+    const glm::vec2 corners[4] = {
+        {vpRect.pos.x,                          vpRect.pos.y},
+        {vpRect.pos.x + vpRect.extent.x,        vpRect.pos.y},
+        {vpRect.pos.x,                          vpRect.pos.y + vpRect.extent.y},
+        {vpRect.pos.x + vpRect.extent.x,        vpRect.pos.y + vpRect.extent.y},
+    };
+    const glm::vec2 edges[4] = {
+        {vpRect.pos.x + vpRect.extent.x * 0.5f, vpRect.pos.y},                       // top
+        {vpRect.pos.x + vpRect.extent.x * 0.5f, vpRect.pos.y + vpRect.extent.y},     // bottom
+        {vpRect.pos.x,                          vpRect.pos.y + vpRect.extent.y * 0.5f}, // left
+        {vpRect.pos.x + vpRect.extent.x,        vpRect.pos.y + vpRect.extent.y * 0.5f}, // right
+    };
+    const auto hit = [&](const glm::vec2& p) {
+        return std::fabs(vpMouse.x - p.x) <= kHalf && std::fabs(vpMouse.y - p.y) <= kHalf;
+    };
+
+    uint8_t mask = 0;
+    if (hit(corners[0])) mask |= UIDesignerPanel::kResizeHandleLeft | UIDesignerPanel::kResizeHandleTop;
+    if (hit(corners[1])) mask |= UIDesignerPanel::kResizeHandleRight | UIDesignerPanel::kResizeHandleTop;
+    if (hit(corners[2])) mask |= UIDesignerPanel::kResizeHandleLeft | UIDesignerPanel::kResizeHandleBottom;
+    if (hit(corners[3])) mask |= UIDesignerPanel::kResizeHandleRight | UIDesignerPanel::kResizeHandleBottom;
+    if (hit(edges[0])) mask |= UIDesignerPanel::kResizeHandleTop;
+    if (hit(edges[1])) mask |= UIDesignerPanel::kResizeHandleBottom;
+    if (hit(edges[2])) mask |= UIDesignerPanel::kResizeHandleLeft;
+    if (hit(edges[3])) mask |= UIDesignerPanel::kResizeHandleRight;
+    return mask;
+}
+
+void EditorLayer::beginCanvasPress()
+{
+    _canvasPressHit     = nullptr;
+    _canvasPressPoint   = {0.0f, 0.0f};
+    _bCanvasPressActive = true;
+
+    glm::vec2 vpLocal{};
+    if (!screenToViewport(_app->getLastMousePos(), vpLocal)) {
+        return;
+    }
+    glm::vec2 canvasPoint = vpLocal;
+    if (!viewportToCanvas(canvasPoint, canvasPoint)) {
+        // Outside the visible canvas region: treat as empty.
+        _uiDesignerPanel.clearSelection();
+        return;
+    }
+    _canvasPressPoint = canvasPoint;
+
+    // 1) Resize handles of the current selection take priority over picking
+    //    (grab the edge/corner without de-selecting the widget).
+    if (UIElement* selected = _uiDesignerPanel.getSelectedWidget()) {
+        if (const uint8_t mask = hitTestCanvasResizeHandles(*selected)) {
+            _canvasPressHit = selected;
+            _uiDesignerPanel.beginResize(selected, canvasPoint, mask);
+            return;
+        }
+    }
+
+    // 2) Hit the preview tree: select on press and start a move session.
+    if (UIElement* picked = _uiDesignerPanel.pickAt(canvasPoint)) {
+        _uiDesignerPanel.select(picked);
+        _canvasPressHit = picked;
+        _uiDesignerPanel.beginMove(picked, canvasPoint);
+        YA_CORE_INFO("Picked UI widget: {}", picked->_name);
+        return;
+    }
+
+    // 3) Empty canvas: clear the selection.
+    _uiDesignerPanel.clearSelection();
+}
+
+void EditorLayer::updateCanvasDrag()
+{
+    if (!_canvasPressHit) {
+        return;
+    }
+    glm::vec2 vpLocal{};
+    if (!screenToViewport(_app->getLastMousePos(), vpLocal)) {
+        return;
+    }
+    glm::vec2 canvasPoint = vpLocal;
+    if (!viewportToCanvas(canvasPoint, canvasPoint)) {
+        return;
+    }
+    if (_uiDesignerPanel.isDragging(_canvasPressHit)) {
+        if (!_uiDesignerPanel.applyDragDelta(canvasPoint - _canvasPressPoint)) {
+            endCanvasPress();
+        }
+    }
+}
+
+void EditorLayer::endCanvasPress()
+{
+    _canvasPressHit     = nullptr;
+    _canvasPressPoint   = {0.0f, 0.0f};
+    _bCanvasPressActive = false;
+    _uiDesignerPanel.endDrag();
 }
 
 void EditorLayer::focusCameraOnSelection()

@@ -12,6 +12,14 @@ namespace ya
 void DefaultGameUIController::onSceneActivated(Scene& scene, GameUIHost& host)
 {
     auto& attachments = _sceneAttachments[&scene];
+    // Defensive: if this scene is activated again while its previous
+    // attachments are still mounted (e.g. a reload path that re-activates the
+    // same Scene object), unmount them first so the WidgetTree never
+    // accumulates duplicates.
+    for (auto& attachment : attachments) {
+        attachment.detach();
+    }
+    attachments.clear();
     // Single mount path shared with the editor canvas preview; the
     // controller keeps the attachments for scene-lifecycle tracking.
     attachments = mountSceneAutoMountEntries(scene, host.getTree(), host.getDocumentResolver());

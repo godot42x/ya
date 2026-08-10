@@ -540,6 +540,31 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
         });
 
     registry.registerFunction(
+        "ui.instantiate",
+        "Instantiates a .yaui document from the VFS (same resolver rules as the "
+        "editor and runtime). Returns a script widget handle. "
+        "Args: {path}.",
+        Json{{"path", {{"type", "string"}}}},
+        [](const Json& args) -> Json {
+            const std::string path = args.at("path").get<std::string>();
+            App* app = App::get();
+            if (!app || !app->getGameUIHost()) {
+                throw Error("ui.instantiate: no game UI host");
+            }
+            auto document = app->getGameUIHost()->getDocumentResolver().load(path);
+            if (!document) {
+                throw Error(std::format("ui.instantiate: failed to resolve '{}'", path));
+            }
+            UIElementRef widget = document->instantiate();
+            if (!widget) {
+                throw Error(std::format("ui.instantiate: failed to instantiate '{}'", path));
+            }
+            const ScriptWidgetHandle handle = nextScriptWidgetHandle();
+            scriptWidgets().emplace(handle, widget);
+            return Json{{"handle", handle}, {"type", widget->_typeId}, {"name", widget->_name}};
+        });
+
+    registry.registerFunction(
         "ui.destroy",
         "Detaches and releases a script widget. Args: {handle}.",
         Json{{"handle", {{"type", "integer"}}}},
@@ -551,6 +576,51 @@ void registerCoreScriptApis(ScriptApiRegistry& registry)
             }
             scriptWidgets().erase(handle);
             return Json{{"destroyed", true}};
+        });
+
+    registry.registerFunction(
+        "ui.add_to_scene",
+        "Adds a script widget into the active scene's 2D (Game UI) section as an "
+        "authoring entry (Godot add_child semantics; the runtime re-instantiates "
+        "it into the WidgetTree on scene activation). Args: {handle, name?}.",
+        Json{{"handle", {{"type", "integer"}}}, {"name", {{"type", "string"}}}},
+        [](const Json& args) -> Json {
+            UIElementRef widget = requireScriptWidget(args);
+            Scene&        scene  = requireActiveScene();
+            auto          document = UIDocument::fromWidget(*widget);
+            if (!document) {
+                throw Error("ui.add_to_scene: widget has no registry type id");
+            }
+            // Unique entry id derived from the widget name.
+            std::string entryId = widget->_name;
+            if (entryId.empty()) {
+                entryId = document->typeId;
+            }
+            const size_t dot = entryId.find_last_of('.');
+            if (dot != std::string::npos) {
+                entryId = entryId.substr(dot + 1);
+            }
+            int suffix = 1;
+            const auto& entries = scene.getWidgetEntries();
+            const auto  bTaken  = [&](const std::string& id) {
+                for (const auto& entry : entries) {
+                    if (entry.entryId == id) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            const std::string baseId = entryId;
+            while (bTaken(entryId)) {
+                entryId = baseId + "_" + std::to_string(suffix++);
+            }
+
+            SceneWidgetEntry entry;
+            entry.entryId        = entryId;
+            entry.inlineDocument = document;
+            entry.autoMount      = true;
+            scene.addWidgetEntry(std::move(entry));
+            return Json{{"entryId", entryId}, {"mounted", true}};
         });
 
     // ========================================================================

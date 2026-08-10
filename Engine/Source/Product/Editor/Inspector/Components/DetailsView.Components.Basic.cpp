@@ -23,6 +23,8 @@
 #include "Scene/Core/Scene.h"
 #include "Host/App.h"
 #include "GUI/Widgets/UITypeRegistry.h"
+#include "GUI/Widgets/UIDocument.h"
+#include <glm/gtc/type_ptr.hpp>
 
 namespace ya
 {
@@ -180,11 +182,58 @@ void DetailsView::drawWidgetEntry(Scene& scene, SceneWidgetEntry& entry)
         entry.documentPath = documentPath;
     }
 
+    // Scene-level transform editing: position/size written as instance
+    // overrides (the runtime and the 2D canvas preview apply them via
+    // UIInstanceOverrideSet::applyTo) — "manipulate the UI node in the scene"
+    // without touching the .yaui template.
+    drawEntryTransform(entry);
+
     drawEntryOverrides(entry);
 
     if (ImGui::Button("Delete Entry")) {
         scene.removeWidgetEntry(entry.entryId);
         _owner->setSelectedWidgetEntryId("");
+    }
+}
+
+void DetailsView::drawEntryTransform(SceneWidgetEntry& entry)
+{
+    std::shared_ptr<UIDocument> document = entry.inlineDocument;
+    if (!document && !entry.documentPath.empty()) {
+        if (App* app = App::get(); app && app->getGameUIHost()) {
+            document = app->getGameUIHost()->getDocumentResolver().load(entry.documentPath);
+        }
+    }
+    if (!document) {
+        return;
+    }
+    auto widget = document->instantiate();
+    if (!widget) {
+        return;
+    }
+
+    // Current value = instance override if present, else the document default.
+    const auto readVec2 = [&entry](const char* field, const glm::vec2& fallback) -> glm::vec2 {
+        const auto it = entry.overrides.fieldOverrides.find(field);
+        if (it != entry.overrides.fieldOverrides.end() && it->second.is_array() && it->second.size() == 2) {
+            return {it->second[0].get<float>(), it->second[1].get<float>()};
+        }
+        return fallback;
+    };
+    glm::vec2 pos  = readVec2("_position", widget->_position);
+    glm::vec2 size = readVec2("_size", widget->_size);
+
+    ImGui::SeparatorText("Scene Transform (override)");
+    bool bChanged = false;
+    if (ImGui::DragFloat2("Position", glm::value_ptr(pos), 1.0f)) {
+        bChanged = true;
+    }
+    if (ImGui::DragFloat2("Size", glm::value_ptr(size), 1.0f)) {
+        bChanged = true;
+    }
+    if (bChanged) {
+        entry.overrides.fieldOverrides["_position"] = nlohmann::json::array({pos.x, pos.y});
+        entry.overrides.fieldOverrides["_size"]     = nlohmann::json::array({size.x, size.y});
     }
 }
 
