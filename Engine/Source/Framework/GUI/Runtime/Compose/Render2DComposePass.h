@@ -31,6 +31,13 @@ struct FRender2DComposePassDesc
     glm::vec2                canvasPan  = glm::vec2(0.0f);
     float                    canvasZoom = 1.0f;
 
+    /// Layout the target is transitioned to after the pass. Intermediate
+    /// targets (world composite, editor preview) stay ShaderReadOnlyOptimal so
+    /// they can be sampled later; a direct-to-swapchain presentation pass
+    /// passes PresentSrcKHR (swapchain images are not created with SAMPLED
+    /// usage, so the sampled layout would be invalid).
+    EImageLayout::T finalLayout = EImageLayout::ShaderReadOnlyOptimal;
+
     /// EditorViewportCompose: full-screen scene color sampled as a sprite.
     std::shared_ptr<Texture> sceneSourceTexture = nullptr;
 

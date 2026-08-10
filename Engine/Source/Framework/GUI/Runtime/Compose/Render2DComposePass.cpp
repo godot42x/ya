@@ -213,7 +213,7 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
     Render2D::end();
 
     cmdBuf->endRendering();
-    cmdBuf->transitionImageLayoutAuto(target.getImage(), EImageLayout::ShaderReadOnlyOptimal);
+    cmdBuf->transitionImageLayoutAuto(target.getImage(), passDesc.finalLayout);
     if (depthTarget) {
         cmdBuf->transitionImageLayoutAuto(depthTarget->getImage(), EImageLayout::ShaderReadOnlyOptimal);
     }
