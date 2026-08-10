@@ -8,7 +8,6 @@
 #include "Scene3D/ManagedChildComponent.h"
 #include "ECS/Entity.h"
 #include "Scene/Core/SceneWidgetEntry.h"
-#include "Scene/Serialization/LegacyUIMigration.h"
 #include "Scene/Core/Scene.h"
 
 #include <algorithm>
@@ -20,28 +19,6 @@ namespace ya
 
 namespace
 {
-
-/// Stable-ish entryId for migrated legacy UI nodes: the node name,
-/// deduplicated against existing entries.
-std::string makeEntryId(const Scene& scene, const std::string& base)
-{
-    const auto& entries = scene.getWidgetEntries();
-    const auto  bTaken  = [&](const std::string& id) {
-        for (const auto& entry : entries) {
-            if (entry.entryId == id) {
-                return true;
-            }
-        }
-        return false;
-    };
-
-    std::string id = base;
-    int         suffix = 1;
-    while (bTaken(id)) {
-        id = base + "_" + std::to_string(suffix++);
-    }
-    return id;
-}
 
 constexpr double SCENE_JSON_FLOAT_EPSILON = 1e-6;
 constexpr double SCENE_JSON_FLOAT_SCALE   = 1000000.0;
@@ -494,21 +471,6 @@ void SceneSerializer::deserializeNodeTree(const nlohmann::json& j, Node* parent,
         else {
             YA_CORE_WARN("NodeTree: Entity with UUID {} not found in entityMap", uuid);
         }
-    }
-
-    // Legacy Game UI: Node2D-era subtrees migrate to SceneWidgetEntry authoring
-    // data (inline UIDocuments) instead of live scene-tree nodes. Children are
-    // consumed by the migration (canvas children become separate entries).
-    if (!entity && j.contains("nodeType")) {
-        for (const auto& result : migrateLegacyUINode(j)) {
-            SceneWidgetEntry entry;
-            entry.entryId        = makeEntryId(*_scene, result.name);
-            entry.inlineDocument = result.document;
-            entry.zOrder         = result.zOrder;
-            entry.autoMount      = true;
-            _scene->addWidgetEntry(std::move(entry));
-        }
-        return;
     }
 
     Node* node = nullptr;

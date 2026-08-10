@@ -8126,7 +8126,7 @@
                     ],
                     "_fov": 45.0,
                     "_nearClip": 0.1,
-                    "bPrimary": false
+                    "bPrimary": true
                 },
                 "LuaScriptComponent": {
                     "scripts": [
@@ -8138,13 +8138,13 @@
                 },
                 "TransformComponent": {
                     "_position": [
-                        0.0,
-                        0.0,
-                        0.0
+                        3.698937,
+                        4.999097,
+                        12.489553
                     ],
                     "_rotation": [
-                        0.0,
-                        0.0,
+                        -9.747074,
+                        260.859375,
                         0.0
                     ],
                     "_scale": [
@@ -8926,14 +8926,14 @@
                 },
                 "TransformComponent": {
                     "_position": [
-                        0.0,
-                        0.923693,
-                        -4.346159
+                        -0.000503,
+                        -3247.9104,
+                        22.67325
                     ],
                     "_rotation": [
-                        0.0,
-                        0.0,
-                        0.0
+                        24.747335,
+                        -1.7e-05,
+                        -0.000171
                     ],
                     "_scale": [
                         3.0,
@@ -14163,7 +14163,7 @@
             "name": "PBR_Sphere_5_5"
         }
     ],
-    "name": "HelloMaterial",
+    "name": "HelloMaterial (Play Mode)",
     "nodeTree": {
         "children": [
             {
@@ -14551,13 +14551,124 @@
             {
                 "entityRef": 7400527066740844087,
                 "name": "Point Light"
-            },
-            {
+            }
+        ],
+        "name": "scene_root"
+    },
+    "version": "1.0",
+    "widgetEntries": [
+        {
+            "autoMount": true,
+            "entryId": "HUD",
+            "inline": {
                 "children": [
                     {
+                        "children": [
+                            {
+                                "children": [],
+                                "fields": {
+                                    "__base__": {
+                                        "UIElement": {
+                                            "_position": [
+                                                36.0,
+                                                30.0
+                                            ],
+                                            "_size": [
+                                                260.0,
+                                                26.0
+                                            ],
+                                            "_visibility": "Visible",
+                                            "_zOrder": 0
+                                        }
+                                    },
+                                    "_color": [
+                                        1.0,
+                                        0.85,
+                                        0.4,
+                                        1.0
+                                    ],
+                                    "_fontSize": 16,
+                                    "_hAlign": "Left",
+                                    "_text": "Game UI (Node2D)",
+                                    "_vAlign": "Top"
+                                },
+                                "typeId": "engine.text",
+                                "version": 1
+                            },
+                            {
+                                "children": [],
+                                "fields": {
+                                    "__base__": {
+                                        "UIElement": {
+                                            "_position": [
+                                                36.0,
+                                                66.0
+                                            ],
+                                            "_size": [
+                                                260.0,
+                                                20.0
+                                            ],
+                                            "_visibility": "Visible",
+                                            "_zOrder": 0
+                                        }
+                                    },
+                                    "_color": [
+                                        1.0,
+                                        1.0,
+                                        1.0,
+                                        1.0
+                                    ],
+                                    "_fontSize": 16,
+                                    "_hAlign": "Left",
+                                    "_text": "Click the button below",
+                                    "_vAlign": "Top"
+                                },
+                                "typeId": "engine.text",
+                                "version": 1
+                            },
+                            {
+                                "children": [],
+                                "fields": {
+                                    "__base__": {
+                                        "UIElement": {
+                                            "_position": [
+                                                36.0,
+                                                96.0
+                                            ],
+                                            "_size": [
+                                                140.0,
+                                                30.0
+                                            ],
+                                            "_visibility": "Visible",
+                                            "_zOrder": 0
+                                        }
+                                    },
+                                    "_hoveredColor": [
+                                        0.6,
+                                        0.6,
+                                        0.6,
+                                        1.0
+                                    ],
+                                    "_normalColor": [
+                                        0.8,
+                                        0.8,
+                                        0.8,
+                                        1.0
+                                    ],
+                                    "_pressedColor": [
+                                        0.4,
+                                        0.4,
+                                        0.4,
+                                        1.0
+                                    ]
+                                },
+                                "typeId": "engine.button",
+                                "version": 1
+                            }
+                        ],
                         "fields": {
                             "__base__": {
-                                "Node2D": {
+                                "UIElement": {
                                     "_position": [
                                         20.0,
                                         20.0
@@ -14566,7 +14677,7 @@
                                         300.0,
                                         120.0
                                     ],
-                                    "_visible": true,
+                                    "_visibility": "Visible",
                                     "_zOrder": 0
                                 }
                             },
@@ -14591,111 +14702,13 @@
                                 8.0
                             ]
                         },
-                        "name": "Panel",
-                        "nodeType": "UIPanelNode"
-                    },
-                    {
-                        "fields": {
-                            "__base__": {
-                                "Node2D": {
-                                    "_position": [
-                                        36.0,
-                                        30.0
-                                    ],
-                                    "_size": [
-                                        260.0,
-                                        26.0
-                                    ],
-                                    "_visible": true,
-                                    "_zOrder": 0
-                                }
-                            },
-                            "_color": [
-                                1.0,
-                                0.85,
-                                0.4,
-                                1.0
-                            ],
-                            "_fontSize": 16,
-                            "_hAlign": "Left",
-                            "_text": "Game UI (Node2D)",
-                            "_vAlign": "Top"
-                        },
-                        "name": "Title",
-                        "nodeType": "UITextNode"
-                    },
-                    {
-                        "fields": {
-                            "__base__": {
-                                "Node2D": {
-                                    "_position": [
-                                        36.0,
-                                        66.0
-                                    ],
-                                    "_size": [
-                                        260.0,
-                                        20.0
-                                    ],
-                                    "_visible": true,
-                                    "_zOrder": 0
-                                }
-                            },
-                            "_color": [
-                                1.0,
-                                1.0,
-                                1.0,
-                                1.0
-                            ],
-                            "_fontSize": 16,
-                            "_hAlign": "Left",
-                            "_text": "Click the button below",
-                            "_vAlign": "Top"
-                        },
-                        "name": "Label",
-                        "nodeType": "UITextNode"
-                    },
-                    {
-                        "fields": {
-                            "__base__": {
-                                "Node2D": {
-                                    "_position": [
-                                        36.0,
-                                        96.0
-                                    ],
-                                    "_size": [
-                                        140.0,
-                                        30.0
-                                    ],
-                                    "_visible": true,
-                                    "_zOrder": 0
-                                }
-                            },
-                            "_hoveredColor": [
-                                0.6,
-                                0.6,
-                                0.6,
-                                1.0
-                            ],
-                            "_normalColor": [
-                                0.8,
-                                0.8,
-                                0.8,
-                                1.0
-                            ],
-                            "_pressedColor": [
-                                0.4,
-                                0.4,
-                                0.4,
-                                1.0
-                            ]
-                        },
-                        "name": "Click Me",
-                        "nodeType": "UIButtonNode"
+                        "typeId": "engine.panel",
+                        "version": 1
                     }
                 ],
                 "fields": {
                     "__base__": {
-                        "Node2D": {
+                        "UIElement": {
                             "_position": [
                                 0.0,
                                 0.0
@@ -14704,16 +14717,16 @@
                                 100.0,
                                 50.0
                             ],
-                            "_visible": true,
+                            "_visibility": "Visible",
                             "_zOrder": 0
                         }
                     }
                 },
-                "name": "HUD",
-                "nodeType": "UICanvasNode"
-            }
-        ],
-        "name": "scene_root"
-    },
-    "version": "1.0"
+                "typeId": "engine.container",
+                "version": 1
+            },
+            "overrides": {},
+            "zOrder": 0
+        }
+    ]
 }

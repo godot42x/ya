@@ -26,8 +26,9 @@ description: YA Engine 渲染架构、RenderRuntime 边界与 shader 生成链�
    command recording 只消费 `UIFrameSnapshot`（RenderGraph 前由
    `WidgetTree::buildSnapshot` 生成），绝不遍历 live widget 树。
 9. 旧 Node2D UI 语义已移除（Phase 6）：不要在新代码里把 UI 挂回 scene tree，
-   也不要用 `UISceneRenderer`；旧 scene 文件的 `nodeType` UI 由
-   `LegacyUIMigration`（ya-gui-widgets）在加载时转成 SceneWidgetEntry。
+   也不要用 `UISceneRenderer`；场景只保存新格式 `widgetEntries`（inline
+   UIDocument / .yaui 引用），`nodeType` legacy UI 迁移已删除（不再支持
+   旧格式 scene 文件）。
 10. `ya-gui-widgets` 无 Scene/ECS/Render3D/Host/RHI 依赖；texture 归资产缓存、
     font 由 snapshot item 强引用；UI 合成在 world graph 之后（不进 bloom）。
 
