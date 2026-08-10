@@ -1,6 +1,4 @@
-// Phase 2b regression guards: SceneWidgetEntry roundtrip and instance
-// overrides (the legacy Node2D -> UIDocument importer lives in the
-// serialization layer; see LegacyUIMigrationTest).
+// SceneWidgetEntry roundtrip and instance overrides regression guards.
 
 #include "Scene/Core/SceneWidgetEntry.h"
 #include "GUI/Widgets/UITypeRegistry.h"
