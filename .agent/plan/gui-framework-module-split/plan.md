@@ -409,3 +409,27 @@ Reflection 反射钩子移入 ECS 侧 opt-in；AssetRef 具体类型与 vtable �
 - **RenderRuntime.h 对 DeferredPipelineDebugViews 的 include 解耦**（同模块）。
 - **最小 GUI 宿主示例**：只链 `ya-gui-framework` 聚合（core+rhi+backend+
   gui-runtime）的可运行窗口示例。
+
+### 后续闭环（2026-08-11，guiapp 最小宿主完整循环）
+
+目标：把 `ya-gui-minimal-host` 从"静态 sprite+文字演示"升级为完整交互宿主，
+证明 GUI 闭包（core+rhi+backend+gui-runtime）可独立承载一个可交互应用——
+这是"gui 框架自举 editor"路线（per-window WidgetTree + 窗口合成器）的地基。
+
+- **帧循环**：SDL 事件（motion/down/up/wheel/key）→ `WidgetTree::dispatchEvent`
+  （logical 坐标换算）→ `layout()` + `buildSnapshot` → `recordRender2DComposePass`
+  到 swapchain presentation target；QUIT/Esc 退出。
+- **交互 demo**：Panel + UIText×2 + UIButton 点击计数（按钮标签为 Pass 过滤的
+  子文本，hover/press 仍达按钮）。
+- **resize**：帧首比对 swapchain image count/extent，变化则 waitIdle 后重建
+  presentation targets + command buffers + `setLogicalExtent`（swapchain 重建由
+  RHI 在 begin 时自动处理）。
+- **框架改动（唯一一处）**：`FRender2DComposePassDesc` 新增 `finalLayout`
+  （默认 `ShaderReadOnlyOptimal` 不变，所有既有调用零改动）；直接上屏传
+  `PresentSrcKHR`——swapchain 图像无 SAMPLED usage，原固定过渡触发
+  VUID-VkImageMemoryBarrier-oldLayout-01211。该字段即未来窗口合成器的接口。
+- **参数解析**：支持 `--exit-after-frame=N` 与 `--exit-after-frame N` 两种形式。
+- **验证**：30/120 帧冒烟干净（首帧快照 5 draw items / 1024x768 logical，
+  Vulkan validation 零报错）；widgets 36 / closure 42 / ya-testing 404 / lint ok /
+  editor 2D 冒烟干净。
+- 提交：`f8053391 [gui/compose]`（finalLayout）、`6db533ad [gui/host]`（full loop）。
