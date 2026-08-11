@@ -357,8 +357,17 @@ void FWorkbenchApp::syncPresentationState()
 
     const FWorkbenchItem* selected = workspace.getSelected();
 
-    for (const auto& row : _rows) {
-        row->_bSelected = (selected != nullptr && row->_itemId == selected->id);
+    // Row labels follow the workspace every frame (rename / visibility
+    // changes must reach the list immediately, plan 7.1); selection state
+    // is presenter-owned.
+    for (size_t i = 0; i < _rows.size() && i < workspace.items.size(); ++i) {
+        const FWorkbenchItem& item = workspace.items[i];
+        if (!_rows[i]->getChildren().empty()) {
+            if (auto* label = dynamic_cast<ya::UIText*>(_rows[i]->getChildren()[0].get())) {
+                label->_text = item.bVisible ? item.name : item.name + " (hidden)";
+            }
+        }
+        _rows[i]->_bSelected = (selected != nullptr && _rows[i]->_itemId == selected->id);
     }
 
     // Preview: highlight + name follow the selection.
@@ -555,12 +564,19 @@ void FWorkbenchApp::runAutomation()
         const bool bRowsSynced    = std::any_of(_rows.begin(), _rows.end(), [&](const auto& row) {
             return row->_itemId == selected->id && row->_bSelected;
         });
+        const bool bRowLabelSynced = std::any_of(_rows.begin(), _rows.end(), [&](const auto& row) {
+            if (row->_itemId != selected->id || row->getChildren().empty()) {
+                return false;
+            }
+            auto* label = dynamic_cast<ya::UIText*>(row->getChildren()[0].get());
+            return label != nullptr && label->_text == selected->name;
+        });
         const bool bPreviewSynced = _previewName->_text == selected->name;
         const bool bStatusSynced  = _commandResultText->_text == "List: navigated";
-        if (!bNameSynced || !bRowsSynced || !bPreviewSynced || !bStatusSynced) {
+        if (!bNameSynced || !bRowsSynced || !bRowLabelSynced || !bPreviewSynced || !bStatusSynced) {
             YA_CORE_ERROR("Workbench automation: presenter sync incomplete "
-                          "(name={} rows={} preview={} status={})",
-                          bNameSynced, bRowsSynced, bPreviewSynced, bStatusSynced);
+                          "(name={} rows={} labels={} preview={} status={})",
+                          bNameSynced, bRowsSynced, bRowLabelSynced, bPreviewSynced, bStatusSynced);
             _bAutomationDone = true;
             return;
         }
