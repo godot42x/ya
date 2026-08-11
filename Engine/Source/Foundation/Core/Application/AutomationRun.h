@@ -52,6 +52,8 @@ private:
 
 [[nodiscard]] YA_CORE_API bool shouldAutomationExitAfterFrame(uint64_t completedFrameCount,
                                                               uint64_t exitAfterFrame);
+[[nodiscard]] YA_CORE_API EAppAutomationExitReason evaluateAutomationExitReason(uint64_t completedFrameCount,
+                                                                                const AppAutomationRunOptions& options);
 [[nodiscard]] YA_CORE_API const char* getAutomationExitReasonName(EAppAutomationExitReason reason);
 
 } // namespace ya

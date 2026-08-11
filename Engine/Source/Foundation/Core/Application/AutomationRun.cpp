@@ -97,6 +97,14 @@ bool shouldAutomationExitAfterFrame(uint64_t completedFrameCount, uint64_t exitA
     return exitAfterFrame > 0 && completedFrameCount >= exitAfterFrame;
 }
 
+EAppAutomationExitReason evaluateAutomationExitReason(uint64_t completedFrameCount,
+                                                      const AppAutomationRunOptions& options)
+{
+    return shouldAutomationExitAfterFrame(completedFrameCount, options.exitAfterFrame)
+             ? EAppAutomationExitReason::ExitAfterFrame
+             : EAppAutomationExitReason::None;
+}
+
 const char* getAutomationExitReasonName(EAppAutomationExitReason reason)
 {
     switch (reason) {

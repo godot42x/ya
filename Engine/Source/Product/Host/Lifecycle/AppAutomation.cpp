@@ -260,7 +260,7 @@ bool isScreenshotTerminal(const AppAutomationRuntimeState& runtimeState)
 bool shouldRequestQuitAfterFrame(const App& app)
 {
     const AppAutomationOptions& automation = app.getDesc().automation;
-    return shouldAutomationExitAfterFrame(app.getFrameIndex(), automation.exitAfterFrame);
+    return evaluateAutomationExitReason(app.getFrameIndex(), automation) == EAppAutomationExitReason::ExitAfterFrame;
 }
 
 void resetAutomationStability(AppAutomationRuntimeState& runtimeState, const Scene* activeScene)
