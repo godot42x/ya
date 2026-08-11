@@ -495,6 +495,211 @@ TEST(WidgetTreeTest, PointerCaptureOverridesHitWalk)
               EWidgetRouteResult::NotHandled);
 }
 
+// === Phase 2: focus traversal + button capture semantics ===
+
+namespace
+{
+
+KeyPressedEvent makeKeyPress(EKey::T key, uint32_t mod = 0, bool bRepeat = false)
+{
+    KeyPressedEvent ev;
+    ev._keyCode = key;
+    ev._mod     = mod;
+    ev.bRepeat  = bRepeat;
+    return ev;
+}
+
+} // namespace
+
+TEST(WidgetTreeTest, TabTraversalFollowsStablePaintOrderWithWrapAround)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       a = makeButton("A", {0.0f, 0.0f}, {40.0f, 20.0f});
+    auto       b = makeButton("B", {0.0f, 40.0f}, {40.0f, 20.0f});
+    auto       c = makeButton("C", {0.0f, 80.0f}, {40.0f, 20.0f});
+    a->_zOrder   = 10;
+    b->_zOrder   = 5; // paint order: B, A, C
+    c->_zOrder   = 20;
+    tree.attachToLayer(WidgetTree::ELayer::Content, a);
+    tree.attachToLayer(WidgetTree::ELayer::Content, b);
+    tree.attachToLayer(WidgetTree::ELayer::Content, c);
+    tree.layout();
+
+    const KeyPressedEvent tab      = makeKeyPress(EKey::Tab);
+    const KeyPressedEvent shiftTab = makeKeyPress(EKey::Tab, EKeyMod::Shift);
+    const auto            at       = pointAt(0.0f, 0.0f);
+
+    // First Tab starts from the front of the stable order (B).
+    EXPECT_EQ(tree.dispatchEvent(tab, at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getFocused(), b.get());
+    EXPECT_TRUE(b->_bFocused);
+
+    EXPECT_EQ(tree.dispatchEvent(tab, at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getFocused(), a.get());
+    EXPECT_FALSE(b->_bFocused);
+
+    EXPECT_EQ(tree.dispatchEvent(tab, at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getFocused(), c.get());
+
+    // Wrap-around: C -> B.
+    EXPECT_EQ(tree.dispatchEvent(tab, at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getFocused(), b.get());
+
+    // Shift+Tab walks backwards: B -> C -> A -> B.
+    EXPECT_EQ(tree.dispatchEvent(shiftTab, at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getFocused(), c.get());
+    EXPECT_EQ(tree.dispatchEvent(shiftTab, at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getFocused(), a.get());
+    EXPECT_EQ(tree.dispatchEvent(shiftTab, at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getFocused(), b.get());
+    EXPECT_EQ(tree.dispatchEvent(shiftTab, at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getFocused(), c.get());
+}
+
+TEST(WidgetTreeTest, TabSkipsNonFocusableAndHiddenWidgets)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       plain   = std::make_shared<UIPanel>("Plain"); // never focusable
+    auto       hidden  = makeButton("Hidden", {0.0f, 0.0f}, {40.0f, 20.0f});
+    auto       visible = makeButton("Visible", {0.0f, 0.0f}, {40.0f, 20.0f});
+    hidden->_visibility = EWidgetVisibility::Hidden; // focusable but not visible
+    tree.attachToLayer(WidgetTree::ELayer::Content, plain);
+    tree.attachToLayer(WidgetTree::ELayer::Content, hidden);
+    tree.attachToLayer(WidgetTree::ELayer::Content, visible);
+    tree.layout();
+
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Tab), pointAt(0.0f, 0.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getFocused(), visible.get());
+}
+
+TEST(WidgetTreeTest, TabWithoutFocusablesIsNotHandled)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       panel = std::make_shared<UIPanel>("P");
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    tree.layout();
+
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Tab), pointAt(0.0f, 0.0f)),
+              EWidgetRouteResult::NotHandled);
+    EXPECT_EQ(tree.getFocused(), nullptr);
+}
+
+TEST(WidgetTreeTest, ButtonPressRequestsFocusAndCapture)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       button = makeButton("B", {100.0f, 100.0f}, {80.0f, 32.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, button);
+    tree.layout();
+
+    int clicks = 0;
+    button->_onClick = [&] { ++clicks; };
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_TRUE(button->_bPressed);
+    EXPECT_EQ(tree.getFocused(), button.get());
+    EXPECT_TRUE(button->_bFocused);
+    EXPECT_EQ(tree.getPointerCapture(), button.get());
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(clicks, 1);
+    EXPECT_FALSE(button->_bPressed);
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
+}
+
+TEST(WidgetTreeTest, ButtonDragOutReleaseFiresClickViaCapture)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       button = makeButton("B", {100.0f, 100.0f}, {80.0f, 32.0f});
+    auto       other  = makeButton("Other", {250.0f, 250.0f}, {80.0f, 32.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, button);
+    tree.attachToLayer(WidgetTree::ELayer::Content, other);
+    tree.layout();
+
+    int buttonClicks = 0;
+    int otherClicks  = 0;
+    button->_onClick = [&] { ++buttonClicks; };
+    other->_onClick  = [&] { ++otherClicks; };
+
+    // Press inside, drag out, release over the other button: the capture
+    // session keeps the press and completes the click on release.
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(260.0f, 260.0f), pointAt(260.0f, 260.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(button->_bHovered);
+    EXPECT_EQ(tree.getHovered(), nullptr); // hover follows the pointer, not the capture
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(260.0f, 260.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(buttonClicks, 1);
+    EXPECT_EQ(otherClicks, 0);
+    EXPECT_FALSE(button->_bPressed);
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
+}
+
+TEST(WidgetTreeTest, FocusedButtonActivatesOnEnterAndSpace)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       button = makeButton("B", {100.0f, 100.0f}, {80.0f, 32.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, button);
+    tree.layout();
+
+    int clicks = 0;
+    button->_onClick = [&] { ++clicks; };
+    tree.setFocus(button.get());
+
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Enter), pointAt(0.0f, 0.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(clicks, 1);
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Space), pointAt(0.0f, 0.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(clicks, 2);
+    // Key repeats do not re-activate.
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Enter, 0, /*bRepeat=*/true), pointAt(0.0f, 0.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(clicks, 2);
+    // Other keys are consumed by the focused button but do not activate.
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::K_A), pointAt(0.0f, 0.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(clicks, 2);
+}
+
+TEST(WidgetTreeTest, DetachWhilePressedClearsButtonTransientState)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       button = makeButton("B", {100.0f, 100.0f}, {80.0f, 32.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, button);
+    tree.layout();
+
+    int clicks = 0;
+    button->_onClick = [&] { ++clicks; };
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    ASSERT_TRUE(button->_bPressed);
+    ASSERT_EQ(tree.getPointerCapture(), button.get());
+    ASSERT_EQ(tree.getFocused(), button.get());
+
+    tree.detach(*button);
+
+    EXPECT_EQ(tree.getPointerCapture(), nullptr);
+    EXPECT_EQ(tree.getFocused(), nullptr);
+    EXPECT_FALSE(button->_bPressed);
+    EXPECT_FALSE(button->_bFocused);
+    EXPECT_FALSE(button->_bHovered);
+
+    // Re-attached button starts clean: a release without a press does not
+    // fire the click.
+    tree.attachToLayer(WidgetTree::ELayer::Content, button);
+    tree.layout();
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::NotHandled);
+    EXPECT_EQ(clicks, 0);
+}
+
 // === UITypeRegistry ===
 
 TEST(WidgetTreeTest, RegistryExplicitRegistrationAndCreate)

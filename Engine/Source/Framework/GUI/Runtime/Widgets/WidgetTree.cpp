@@ -54,6 +54,14 @@ UIElement* WidgetTree::topmostHitSubtree(UIElement* element, const glm::vec2& lo
     if (!element->isHitTestableSubtree()) {
         return nullptr;
     }
+    // Clipped containers (scroll viewports): children outside the container
+    // rect are not hittable, even though their own layout rects extend past it.
+    if (element->cullsChildHits(logicalPoint)) {
+        if (element->isHitTestableSelf() && element->hitTestLayoutRect(logicalPoint)) {
+            return element;
+        }
+        return nullptr;
+    }
     const auto children = element->getChildrenInPaintOrder();
     for (auto it = children.rbegin(); it != children.rend(); ++it) {
         if (UIElement* hit = topmostHitSubtree(*it, logicalPoint)) {
@@ -71,6 +79,19 @@ EWidgetRouteResult WidgetTree::dispatchSubtree(UIElement* element,
                                                const WidgetEventContext& ctx)
 {
     if (!element->isHitTestableSubtree()) {
+        return EWidgetRouteResult::NotHandled;
+    }
+
+    // Clipped containers: children outside the container rect never receive
+    // events; the container itself still can (e.g. wheel over its area).
+    if (element->cullsChildHits(ctx.logicalPoint)) {
+        if (element->isHitTestableSelf() && element->hitTestLayoutRect(ctx.logicalPoint)) {
+            return element->handleInputEvent(event, ctx)
+                       ? (element->_hitFilter == EWidgetHitFilter::Stop
+                              ? EWidgetRouteResult::HandledExclusive
+                              : EWidgetRouteResult::HandledPass)
+                       : EWidgetRouteResult::NotHandled;
+        }
         return EWidgetRouteResult::NotHandled;
     }
 
@@ -105,6 +126,29 @@ void WidgetTree::markSubtreeMembership(UIElement* widget, WidgetTree* tree)
         for (const auto& child : node->_children) {
             pending.push_back(child.get());
         }
+    }
+}
+
+namespace
+{
+
+void collectFocusablesSubtree(UIElement* element, std::vector<UIElement*>& outFocusables)
+{
+    if (element->_focusPolicy == EWidgetFocusPolicy::Focusable && element->isVisibleInTree()) {
+        outFocusables.push_back(element);
+    }
+    for (UIElement* child : element->getChildrenInPaintOrder()) {
+        collectFocusablesSubtree(child, outFocusables);
+    }
+}
+
+} // namespace
+
+void WidgetTree::collectFocusables(std::vector<UIElement*>& outFocusables) const
+{
+    outFocusables.clear();
+    for (const auto& layer : _layers) {
+        collectFocusablesSubtree(layer.get(), outFocusables);
     }
 }
 
@@ -365,6 +409,39 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
 {
     const EEvent::T eventType = event.getEventType();
 
+    // Tab / Shift+Tab is handled before ordinary key routing: stable
+    // paint-order traversal over attached, visible, focusable widgets with
+    // wrap-around. Repeats are ignored so holding Tab does not spin focus.
+    if (eventType == EEvent::KeyPressed) {
+        const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
+        if (keyEvent._keyCode == EKey::Tab && !keyEvent.bRepeat) {
+            std::vector<UIElement*> focusables;
+            collectFocusables(focusables);
+            if (focusables.empty()) {
+                return EWidgetRouteResult::NotHandled;
+            }
+
+            UIElement* next = nullptr;
+            if (_focused && _focused->isAttached() &&
+                _focused->_focusPolicy == EWidgetFocusPolicy::Focusable) {
+                const auto it = std::find(focusables.begin(), focusables.end(), _focused);
+                if (it != focusables.end()) {
+                    const size_t index = static_cast<size_t>(std::distance(focusables.begin(), it));
+                    const size_t count = focusables.size();
+                    const size_t delta = keyEvent.isShiftPressed() ? count - 1 : 1;
+                    next = focusables[(index + delta) % count];
+                }
+            }
+            if (!next) {
+                // Nothing focused (or focus sits outside the traversal): start
+                // from the front / back of the stable order.
+                next = keyEvent.isShiftPressed() ? focusables.back() : focusables.front();
+            }
+            setFocus(next);
+            return EWidgetRouteResult::HandledExclusive;
+        }
+    }
+
     // Keyboard events route to the focused widget (if any).
     if (eventType == EEvent::KeyPressed || eventType == EEvent::KeyReleased || eventType == EEvent::KeyTyped) {
         if (_focused && _focused->isAttached()) {
@@ -376,7 +453,8 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
 
     if (eventType != EEvent::MouseButtonPressed &&
         eventType != EEvent::MouseButtonReleased &&
-        eventType != EEvent::MouseMoved) {
+        eventType != EEvent::MouseMoved &&
+        eventType != EEvent::MouseScrolled) {
         return EWidgetRouteResult::NotHandled;
     }
 
@@ -398,8 +476,12 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
             }
             WidgetEventContext captureCtx = ctx;
             captureCtx.bViaCapture         = true;
+            // The widget may release its own capture while handling (e.g. a
+            // button release ends the press session): snapshot the filter
+            // before the call so the route result never dereferences null.
+            const EWidgetHitFilter capturedFilter = _captured->_hitFilter;
             const bool bHandled = _captured->handleInputEvent(event, captureCtx);
-            return bHandled ? (_captured->_hitFilter == EWidgetHitFilter::Stop
+            return bHandled ? (capturedFilter == EWidgetHitFilter::Stop
                                    ? EWidgetRouteResult::HandledExclusive
                                    : EWidgetRouteResult::HandledPass)
                             : EWidgetRouteResult::NotHandled;
@@ -429,7 +511,16 @@ void WidgetTree::setFocus(UIElement* widget)
                      widget->_name);
         return;
     }
+    if (_focused == widget) {
+        return;
+    }
+    if (_focused && _focused->isAttached()) {
+        _focused->onFocusLost();
+    }
     _focused = widget;
+    if (_focused) {
+        _focused->onFocusGained();
+    }
 }
 
 void WidgetTree::setPointerCapture(UIElement* widget)
@@ -453,13 +544,16 @@ void WidgetTree::releasePointerCapture(UIElement* widget)
 
 void WidgetTree::clearTransientState(UIElement& widget)
 {
-    // Clear focus/capture/hover pointing anywhere inside the subtree.
+    // Clear focus/capture/hover pointing anywhere inside the subtree and ask
+    // every widget in it to drop its own transient input state (hover /
+    // press / drag), so stale state never survives a re-attach.
     std::vector<UIElement*> pending{&widget};
     while (!pending.empty()) {
         UIElement* node = pending.back();
         pending.pop_back();
         if (_focused == node) {
             _focused = nullptr;
+            node->onFocusLost();
         }
         if (_captured == node) {
             _captured = nullptr;
@@ -467,6 +561,7 @@ void WidgetTree::clearTransientState(UIElement& widget)
         if (_hovered == node) {
             _hovered = nullptr;
         }
+        node->clearTransientInputState();
         for (const auto& child : node->_children) {
             pending.push_back(child.get());
         }

@@ -100,7 +100,9 @@ struct WidgetTree final
 
     /// Topmost-first event dispatch (children before parent, zOrder
     /// descending, layers bottom -> top). Pointer capture overrides the walk;
-    /// keyboard events route to the focused widget. Returns the route result.
+    /// keyboard events route to the focused widget; Tab / Shift+Tab is
+    /// handled by the tree first (stable paint-order focus traversal with
+    /// wrap-around). Returns the route result.
     [[nodiscard]] EWidgetRouteResult dispatchEvent(const Event& event, const WidgetEventContext& ctx);
 
     /// Topmost-first pick of the widget under `logicalPoint` (children before
@@ -110,6 +112,8 @@ struct WidgetTree final
     [[nodiscard]] UIElement* pickAt(const glm::vec2& logicalPoint) const { return topmostHit(logicalPoint); }
 
     // === Focus / capture / hover ===
+    /// Move keyboard focus. Notifies the previous/next widget through
+    /// onFocusLost / onFocusGained.
     void setFocus(UIElement* widget);
     [[nodiscard]] UIElement* getFocused() const { return _focused; }
     void setPointerCapture(UIElement* widget);
@@ -129,6 +133,9 @@ struct WidgetTree final
     /// Assign tree membership to a widget and its whole subtree (invariant:
     /// attached iff every descendant is a member of the same tree).
     static void markSubtreeMembership(UIElement* widget, WidgetTree* tree);
+    /// Collect attached, visible, focusable widgets in stable paint order
+    /// (layers bottom -> top, children zOrder ascending) for Tab traversal.
+    void collectFocusables(std::vector<UIElement*>& outFocusables) const;
     /// Shared reparentBefore/After implementation (friend access to the
     /// widget's private parent/children state).
     static void reparentRelativeTo(WidgetTree& tree, UIElement& sibling, const UIElementRef& widget, bool bAfter);

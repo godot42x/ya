@@ -71,6 +71,16 @@ enum class EWidgetBoxLayout : uint8_t
     Vertical,
 };
 
+/// Keyboard focus participation (gui-app-bootstrap Phase 2).
+///   None      - default: never focused by Tab traversal, skipped by the
+///               tree's stable-order focus walk
+///   Focusable - participates in Tab / Shift+Tab traversal
+enum class EWidgetFocusPolicy : uint8_t
+{
+    None,
+    Focusable,
+};
+
 struct WidgetTree;
 struct WidgetAttachment;
 struct UIElement;
@@ -105,6 +115,7 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
     // per-instance overridable yet.
     YA_REFLECT_FIELD(_pivot)
     YA_REFLECT_FIELD(_hitFilter, .instanceEditable())
+    YA_REFLECT_FIELD(_focusPolicy, .instanceEditable())
     YA_REFLECT_END()
 
     explicit UIElement(std::string name = "Widget");
@@ -139,6 +150,9 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
     glm::vec2          _anchorMax  = {0.0f, 0.0f};
     glm::vec2          _pivot      = {0.5f, 0.5f}; // Reserved; unused until rotation/scale exists
     EWidgetHitFilter   _hitFilter  = EWidgetHitFilter::Pass;
+    /// Keyboard focus participation (Tab traversal). Default None: plain
+    /// widgets never take focus.
+    EWidgetFocusPolicy _focusPolicy = EWidgetFocusPolicy::None;
 
     /// Layout cache: final rect in tree-local logical pixels, computed by the
     /// layout pass. Not serialized.
@@ -177,6 +191,18 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
     /// Clear transient input state (e.g. button hover) before a MouseMoved
     /// hit-test pass.
     virtual void resetHoverState() {}
+    /// Clear ALL transient input state (hover / press / drag session). Called
+    /// by WidgetTree when a subtree is detached while the tree still points
+    /// into it (focus / capture / hover), so stale input state never survives
+    /// a re-attach. Base clears hover only.
+    virtual void clearTransientInputState() { resetHoverState(); }
+    /// Focus lifecycle hooks (called by WidgetTree::setFocus).
+    virtual void onFocusGained() {}
+    virtual void onFocusLost() {}
+    /// Whether child hits are culled to this widget's own rect (scroll
+    /// viewports / clipped containers). Base: children hit-test freely, even
+    /// outside the parent rect.
+    [[nodiscard]] virtual bool cullsChildHits(const glm::vec2& /*logicalPoint*/) const { return false; }
 
     // === Effective-state queries ===
     [[nodiscard]] bool isVisibleForRender() const

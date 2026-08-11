@@ -48,6 +48,8 @@ struct GUIAppHost::FImpl
     std::vector<std::shared_ptr<ICommandBuffer>>       commandBuffers;
     std::vector<std::shared_ptr<GUIPresentationTarget>> presentationTargets;
     Extent2D cachedSwapchainExtent{};
+    float    lastMouseX = -1.0f;
+    float    lastMouseY = -1.0f;
     bool     bInitialized = false;
 };
 
@@ -177,6 +179,8 @@ void GUIAppHost::pumpEvents(bool& bRunning)
             break;
         case SDL_EVENT_MOUSE_MOTION: {
             MouseMoveEvent ev(event.motion.x, event.motion.y);
+            _impl->lastMouseX = event.motion.x;
+            _impl->lastMouseY = event.motion.y;
             dispatchToTree(ev, event.motion.x, event.motion.y);
             break;
         }
@@ -192,7 +196,10 @@ void GUIAppHost::pumpEvents(bool& bRunning)
         }
         case SDL_EVENT_MOUSE_WHEEL: {
             MouseScrolledEvent ev(event.wheel.x, event.wheel.y);
-            dispatchToTree(ev, -1.0f, -1.0f);
+            // Wheel events carry no position in SDL; route them at the last
+            // known pointer position so the tree's hit walk reaches the
+            // innermost scrollable viewport.
+            dispatchToTree(ev, _impl->lastMouseX, _impl->lastMouseY);
             break;
         }
         case SDL_EVENT_KEY_DOWN:
