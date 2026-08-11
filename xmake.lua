@@ -114,8 +114,7 @@ set_rundir(os.scriptdir())
 add_rules("plugin.compile_commands.autoupdate", { outputdir = os.scriptdir() })
 
 
--- 3D examples are engine-profile products; the gui profile never pulls
--- their sources or ya-engine dependency into the build graph.
-if get_config("ya_profile") ~= "gui" then
-    includes("./Example/xmake.lua")
-end
+-- Example products: the standalone GUI examples (GUIFrameworkSmoke /
+-- GUIWorkbench) build in both profiles; the 3D project examples are
+-- engine-profile only (guarded inside Example/xmake.lua).
+includes("./Example/xmake.lua")

@@ -9,11 +9,13 @@ includes("./Runtime/Resource/xmake.lua")
 includes("./Runtime/Draw2D/xmake.lua")
 includes("./Runtime/Widgets/xmake.lua")
 includes("./Runtime/Compose/xmake.lua")
-includes("./MinimalHost/xmake.lua")
+includes("./App/xmake.lua")
 
--- GUI framework aggregate: the single link target for pure-GUI hosts. It
+-- GUI framework aggregate: the single link target for pure-GUI code. It
 -- carries no sources of its own; public deps re-export the full closure
--- (foundation + RHI backend + the four GUI modules) to consumers.
+-- (foundation + RHI backend + the four GUI modules) to consumers. The
+-- standalone native app host (window/SDL/present) is a separate library:
+-- ya-gui-app-host. Executable consumers link that host directly.
 target("ya-gui-framework")
     set_kind(ya_meta_kind())
     add_deps(

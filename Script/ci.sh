@@ -41,6 +41,7 @@ run_gui_shared() {
     xmake f -m debug --ya_profile=gui --ya_linkage=shared -y
     xmake b -r ya-gui-framework
     xmake b -r ya-gui-minimal-host
+    xmake b -r GUIWorkbench
     xmake b ya-gui-closure-test
     xmake b ya-gui-widgets-test
     xmake r ya-gui-closure-test
@@ -52,6 +53,7 @@ run_gui_monolith() {
     xmake f -c -m debug --ya_profile=gui --ya_linkage=monolith -y
     xmake f -m debug --ya_profile=gui --ya_linkage=monolith -y
     xmake b -r ya-gui-minimal-host
+    xmake b -r GUIWorkbench
 }
 
 case "${1:-all}" in
