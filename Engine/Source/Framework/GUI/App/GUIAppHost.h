@@ -4,7 +4,7 @@
 // GUIAppHost - standalone native GUI app host (gui-app-bootstrap Phase 1).
 //
 // Owns the full presentation lifecycle of a GUI-only binary:
-//   VFS / SDL window / shader storage / IRender / builtin textures / fonts /
+//   SDL window / shader storage / IRender / builtin textures / fonts /
 //   Render2D / imported swapchain presentation targets / command buffers.
 //
 // Frame contract (single-threaded, frame-boundary only):

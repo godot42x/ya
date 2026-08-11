@@ -94,9 +94,10 @@ bool GUIAppHost::init()
 
     const FGUIAppHostConfig& config = *_impl->config;
 
-    // Shared process bootstrap: bundled graphics runtime env, deferred
-    // reflection registration and virtual file system.
-    AppBootstrap::initializeProcess();
+    // Shared process bootstrap: bundled graphics runtime env and deferred
+    // reflection registration. Standalone GUI apps intentionally do not pull
+    // in the engine/game VFS by default.
+    AppBootstrap::initializeProcessCore();
 
     // 1. Window provider (SDL3 + Vulkan surface).
     SDLWindowProvider& window = _impl->window;

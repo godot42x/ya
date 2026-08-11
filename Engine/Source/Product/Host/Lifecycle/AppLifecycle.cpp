@@ -177,7 +177,8 @@ void AppLifecycle::init(App& app, AppDesc ci)
 
         {
             YA_PROFILE_SCOPE_LOG("Process Bootstrap");
-            AppBootstrap::initializeProcess();
+            AppBootstrap::initializeProcessCore();
+            AppBootstrap::initializeVirtualFileSystem();
         }
         if (app._ci.projectPath) {
             const auto descriptor = FProjectDescriptor::load(*app._ci.projectPath);

@@ -31,16 +31,24 @@ std::filesystem::path getExecutableDir()
 
 } // namespace
 
-void AppBootstrap::initializeProcess()
+void AppBootstrap::initializeProcessCore()
 {
     configureBundledGraphicsRuntimeEnv();
     ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
-    VirtualFileSystem::init();
-    if (auto* vfs = VirtualFileSystem::get()) {
-        const auto workingRoot = std::filesystem::weakly_canonical(std::filesystem::current_path());
-        vfs->mount("Engine", workingRoot / "Engine");
-        vfs->mount("ThirdParty", workingRoot / "Engine" / "ThirdParty");
+}
+
+void AppBootstrap::initializeVirtualFileSystem()
+{
+    if (VirtualFileSystem::get() != nullptr) {
+        return;
     }
+
+    VirtualFileSystem::init();
+    auto* vfs = VirtualFileSystem::get();
+    YA_CORE_ASSERT(vfs != nullptr, "VirtualFileSystem init failed");
+    const auto workingRoot = std::filesystem::weakly_canonical(std::filesystem::current_path());
+    vfs->mount("Engine", workingRoot / "Engine");
+    vfs->mount("ThirdParty", workingRoot / "Engine" / "ThirdParty");
 }
 
 void AppBootstrap::configureBundledGraphicsRuntimeEnv()
