@@ -50,6 +50,7 @@ class FWorkbenchApp final : public ya::IGUIAppDelegate
     void buildUI(ya::WidgetTree& tree) override;
     void updateUI() override;
     void onRoutedEvent(const ya::Event& event, ya::EWidgetRouteResult result) override;
+    [[nodiscard]] bool shouldRequestClose() const override { return _bRequestClose; }
 
     /// Headless end-to-end smoke (--smoke-actions): drives the real event
     /// path (dispatch + routed-result observation) across add -> select ->
@@ -83,6 +84,7 @@ class FWorkbenchApp final : public ya::IGUIAppDelegate
     uint64_t        _frame = 0;
     bool            _bSmokePassed = false;
     bool            _bAutomationDone = false;
+    bool            _bRequestClose = false;
 
     // Shell handles.
     std::shared_ptr<ya::UIPanel>       _root;

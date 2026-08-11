@@ -1,5 +1,6 @@
 #include "Host/Lifecycle/AppAutomation.h"
 
+#include "AppServices/AppAutomationRun.h"
 #include "Render3D/Forward/ForwardRenderPipeline.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Terrain/TerrainProcessor.h"
@@ -259,7 +260,7 @@ bool isScreenshotTerminal(const AppAutomationRuntimeState& runtimeState)
 bool shouldRequestQuitAfterFrame(const App& app)
 {
     const AppAutomationOptions& automation = app.getDesc().automation;
-    return automation.exitAfterFrame > 0 && app.getFrameIndex() >= automation.exitAfterFrame;
+    return shouldAutomationExitAfterFrame(app.getFrameIndex(), automation.exitAfterFrame);
 }
 
 void resetAutomationStability(AppAutomationRuntimeState& runtimeState, const Scene* activeScene)

@@ -5,45 +5,21 @@
 
 #include "Core/Log.h"
 
+#include "AppServices/AppAutomationRun.h"
 #include "GUI/App/GUIAppHost.h"
 
 #include "GUIWorkbench.h"
 
-#include <cstdlib>
 #include <string>
-
-namespace
-{
-
-uint64_t parseExitAfterFrame(int argc, char** argv)
-{
-    uint64_t exitAfterFrame = 120;
-    for (int i = 1; i < argc; ++i) {
-        const std::string arg = argv[i];
-        if (arg == "--exit-after-frame") {
-            if (i + 1 < argc) {
-                exitAfterFrame = static_cast<uint64_t>(std::strtoull(argv[++i], nullptr, 10));
-            }
-        }
-        else if (arg.starts_with("--exit-after-frame=")) {
-            exitAfterFrame = static_cast<uint64_t>(
-                std::strtoull(arg.c_str() + std::string("--exit-after-frame=").size(), nullptr, 10));
-        }
-    }
-    return exitAfterFrame;
-}
-
-} // namespace
 
 int main(int argc, char** argv)
 {
-    const uint64_t exitAfterFrame = parseExitAfterFrame(argc, argv);
-
     ya::FGUIAppHostConfig config;
     config.title     = "YA GUI Workbench";
     config.width     = 1280;
     config.height    = 800;
     config.fontSizes = {13, 14, 16};
+    ya::applyAutomationRunArgs(argc, argv, config.automation);
 
     guiworkbench::FWorkbenchApp app;
     for (int i = 1; i < argc; ++i) {
@@ -56,7 +32,7 @@ int main(int argc, char** argv)
     if (!host.init()) {
         return 1;
     }
-    const int result = host.run(exitAfterFrame);
+    const int result = host.run();
     host.shutdown();
     if (app.bSmokeActions) {
         YA_CORE_INFO("GUIWorkbench smoke result: {}", app.getSmokePassed() ? "PASS" : "FAIL");

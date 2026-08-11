@@ -495,6 +495,12 @@ void FWorkbenchApp::dispatchKey(const ya::Event& event)
 
 void FWorkbenchApp::runAutomation()
 {
+    auto failAutomation = [this](const std::string& message) {
+        YA_CORE_ERROR("{}", message);
+        _bAutomationDone = true;
+        _bRequestClose   = true;
+    };
+
     switch (_frame) {
     case 3: {
         // 1. Add: toolbar command appends + selects a new item.
@@ -503,10 +509,9 @@ void FWorkbenchApp::runAutomation()
         dispatchPointer(ya::MouseButtonReleasedEvent(0), center);
         if (workspace.items.size() != 4u || workspace.getSelected() == nullptr ||
             workspace.getSelected()->name != "Item 4") {
-            YA_CORE_ERROR("Workbench automation: Add failed (items={}, selected='{}')",
-                          workspace.items.size(),
-                          workspace.getSelected() ? workspace.getSelected()->name : "<none>");
-            _bAutomationDone = true;
+            failAutomation(std::format("Workbench automation: Add failed (items={}, selected='{}')",
+                                       workspace.items.size(),
+                                       workspace.getSelected() ? workspace.getSelected()->name : "<none>"));
             return;
         }
         break;
@@ -524,9 +529,8 @@ void FWorkbenchApp::runAutomation()
         dispatchKey(enter);
         const FWorkbenchItem* selected = workspace.getSelected();
         if (!selected || selected->name != "Star_Item 4") {
-            YA_CORE_ERROR("Workbench automation: rename failed ('{}')",
-                          selected ? selected->name : "<none>");
-            _bAutomationDone = true;
+            failAutomation(std::format("Workbench automation: rename failed ('{}')",
+                                       selected ? selected->name : "<none>"));
             return;
         }
         break;
@@ -537,8 +541,7 @@ void FWorkbenchApp::runAutomation()
         dispatchPointer(ya::MouseButtonPressedEvent(0), center);
         dispatchPointer(ya::MouseButtonReleasedEvent(0), center);
         if (workspace.items.size() != 3u) {
-            YA_CORE_ERROR("Workbench automation: Remove failed (items={})", workspace.items.size());
-            _bAutomationDone = true;
+            failAutomation(std::format("Workbench automation: Remove failed (items={})", workspace.items.size()));
             return;
         }
         break;
@@ -550,9 +553,8 @@ void FWorkbenchApp::runAutomation()
         up._keyCode = ya::EKey::Up;
         dispatchKey(up);
         if (workspace.getSelectedIndex() != 1) {
-            YA_CORE_ERROR("Workbench automation: arrow navigation failed (index={})",
-                          workspace.getSelectedIndex());
-            _bAutomationDone = true;
+            failAutomation(std::format("Workbench automation: arrow navigation failed (index={})",
+                                       workspace.getSelectedIndex()));
             return;
         }
         break;
@@ -574,10 +576,13 @@ void FWorkbenchApp::runAutomation()
         const bool bPreviewSynced = _previewName->_text == selected->name;
         const bool bStatusSynced  = _commandResultText->_text == "List: navigated";
         if (!bNameSynced || !bRowsSynced || !bRowLabelSynced || !bPreviewSynced || !bStatusSynced) {
-            YA_CORE_ERROR("Workbench automation: presenter sync incomplete "
-                          "(name={} rows={} labels={} preview={} status={})",
-                          bNameSynced, bRowsSynced, bRowLabelSynced, bPreviewSynced, bStatusSynced);
-            _bAutomationDone = true;
+            failAutomation(std::format("Workbench automation: presenter sync incomplete "
+                                       "(name={} rows={} labels={} preview={} status={})",
+                                       bNameSynced,
+                                       bRowsSynced,
+                                       bRowLabelSynced,
+                                       bPreviewSynced,
+                                       bStatusSynced));
             return;
         }
         break;
@@ -590,8 +595,7 @@ void FWorkbenchApp::runAutomation()
             dispatchPointer(ya::MouseButtonReleasedEvent(0), center);
         }
         if (workspace.items.size() != 33u) {
-            YA_CORE_ERROR("Workbench automation: list growth failed (items={})", workspace.items.size());
-            _bAutomationDone = true;
+            failAutomation(std::format("Workbench automation: list growth failed (items={})", workspace.items.size()));
             return;
         }
         break;
@@ -602,8 +606,7 @@ void FWorkbenchApp::runAutomation()
         const glm::vec2 listPoint = _rowScroll->_layoutRect.pos + _rowScroll->_layoutRect.extent * 0.5f;
         dispatchPointer(ya::MouseScrolledEvent(0.0f, -1.0f), listPoint);
         if (_rowScroll->_scrollOffset <= 0.0f) {
-            YA_CORE_ERROR("Workbench automation: scroll failed (offset={})", _rowScroll->_scrollOffset);
-            _bAutomationDone = true;
+            failAutomation(std::format("Workbench automation: scroll failed (offset={})", _rowScroll->_scrollOffset));
             return;
         }
         break;
@@ -618,8 +621,7 @@ void FWorkbenchApp::runAutomation()
         dispatchPointer(ya::MouseMoveEvent(divider.x + 60.0f, divider.y), {divider.x + 60.0f, divider.y});
         dispatchPointer(ya::MouseButtonReleasedEvent(0), {divider.x + 60.0f, divider.y});
         if (std::abs(_mainSplit->_splitRatio - oldRatio) < 0.01f) {
-            YA_CORE_ERROR("Workbench automation: split drag failed (ratio {})", _mainSplit->_splitRatio);
-            _bAutomationDone = true;
+            failAutomation(std::format("Workbench automation: split drag failed (ratio {})", _mainSplit->_splitRatio));
             return;
         }
         break;
@@ -630,8 +632,7 @@ void FWorkbenchApp::runAutomation()
         tab._keyCode = ya::EKey::Tab;
         dispatchKey(tab);
         if (_tree->getFocused() == nullptr) {
-            YA_CORE_ERROR("Workbench automation: Tab traversal failed");
-            _bAutomationDone = true;
+            failAutomation("Workbench automation: Tab traversal failed");
             return;
         }
         break;
@@ -639,12 +640,12 @@ void FWorkbenchApp::runAutomation()
     case 12: {
         // 10. Final sync verification (scroll + drag + focus survive).
         if (_rowScroll->_scrollOffset <= 0.0f || _tree->getFocused() == nullptr) {
-            YA_CORE_ERROR("Workbench automation: final state check failed");
-            _bAutomationDone = true;
+            failAutomation("Workbench automation: final state check failed");
             return;
         }
-        _bSmokePassed   = true;
+        _bSmokePassed    = true;
         _bAutomationDone = true;
+        _bRequestClose   = true;
         YA_CORE_INFO("Workbench automation PASSED: add -> rename -> remove -> navigate -> "
                      "grow -> scroll -> split-drag -> tab -> sync");
         break;

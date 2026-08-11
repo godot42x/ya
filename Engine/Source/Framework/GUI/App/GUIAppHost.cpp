@@ -1,6 +1,7 @@
 #include "GUI/App/GUIAppHost.h"
 #include "GUI/App/GUIPresentationTarget.h"
 
+#include "AppServices/AppAutomationRun.h"
 #include "Core/FName.h"
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
@@ -118,7 +119,7 @@ bool GUIAppHost::init()
         .renderAPI = ERenderAPI::Vulkan,
         .swapchainCI = SwapchainCreateInfo{
             .imageFormat   = EFormat::R8G8B8A8_UNORM,
-            .bVsync        = false,
+            .bVsync        = config.bVsync,
             .minImageCount = 3,
             .width         = config.width != 0 ? config.width : DEFAULT_WINDOW_WIDTH,
             .height        = config.height != 0 ? config.height : DEFAULT_WINDOW_HEIGHT,
@@ -265,7 +266,7 @@ void GUIAppHost::rebuildPresentationResources()
     _impl->cachedSwapchainExtent = swapchain->getExtent();
 }
 
-int GUIAppHost::run(uint64_t exitAfterFrame)
+int GUIAppHost::run()
 {
     if (!_impl->bInitialized) {
         YA_CORE_ERROR("GUIAppHost::run called before a successful init()");
@@ -274,7 +275,8 @@ int GUIAppHost::run(uint64_t exitAfterFrame)
 
     bool bRunning             = true;
     bool bLoggedFirstSnapshot = false;
-    for (uint64_t frame = 0; frame < exitAfterFrame && bRunning; ++frame) {
+    uint64_t completedFrames  = 0;
+    while (bRunning) {
         pumpEvents(bRunning);
         if (!bRunning) {
             break;
@@ -299,7 +301,11 @@ int GUIAppHost::run(uint64_t exitAfterFrame)
             swapchainExtent.width != _impl->cachedSwapchainExtent.width ||
             swapchainExtent.height != _impl->cachedSwapchainExtent.height) {
             rebuildPresentationResources();
-            continue; // retry the next frame with the new swapchain
+            // Record THIS frame with the new targets instead of skipping:
+            // `render->begin` already acquired a valid image index against
+            // the recreated swapchain, so skipping would leave a blank
+            // frame on screen during every resize.
+            swapchain = _impl->render->getSwapchain()->as<VulkanSwapChain>();
         }
 
         // All pipeline changes and the immutable UI snapshot must be ready
@@ -377,6 +383,17 @@ int GUIAppHost::run(uint64_t exitAfterFrame)
 
         cmdBuf->end();
         _impl->render->end(imageIndex, {cmdBuf->getHandle()});
+
+        ++completedFrames;
+        if (_impl->delegate->shouldRequestClose()) {
+            YA_CORE_INFO("GUI app requested graceful shutdown");
+            bRunning = false;
+        }
+        else if (shouldAutomationExitAfterFrame(completedFrames, _impl->config->automation.exitAfterFrame)) {
+            YA_CORE_INFO("GUI automation requested graceful shutdown after frame {}",
+                         _impl->config->automation.exitAfterFrame);
+            bRunning = false;
+        }
     }
 
     return 0;

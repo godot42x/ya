@@ -9,6 +9,7 @@
 
 #include "GUI/App/GUIAppHost.h"
 
+#include "AppServices/AppAutomationRun.h"
 #include "Core/Log.h"
 
 #include "GUI/Widgets/Controls/Button.h"
@@ -16,33 +17,13 @@
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/WidgetTree.h"
 
-#include <cstdlib>
 #include <format>
 #include <memory>
-#include <string>
 
 using namespace ya;
 
 namespace
 {
-
-uint64_t parseExitAfterFrame(int argc, char** argv)
-{
-    uint64_t exitAfterFrame = 120;
-    for (int i = 1; i < argc; ++i) {
-        const std::string arg = argv[i];
-        if (arg == "--exit-after-frame") {
-            if (i + 1 < argc) {
-                exitAfterFrame = static_cast<uint64_t>(std::strtoull(argv[++i], nullptr, 10));
-            }
-        }
-        else if (arg.starts_with("--exit-after-frame=")) {
-            exitAfterFrame = static_cast<uint64_t>(
-                std::strtoull(arg.c_str() + std::string("--exit-after-frame=").size(), nullptr, 10));
-        }
-    }
-    return exitAfterFrame;
-}
 
 /// Interactive demo content: a panel with a title, a click counter label and
 /// a button. The button label is a Pass-filtered child text so hover/press
@@ -119,21 +100,26 @@ struct FSmokeApp final : IGUIAppDelegate
 
 int main(int argc, char** argv)
 {
-    const uint64_t exitAfterFrame = parseExitAfterFrame(argc, argv);
-
     FGUIAppHostConfig config;
     config.title      = "YA Minimal GUI Host";
     config.width      = 1024;
     config.height     = 768;
     config.bResizable = true;
+    applyAutomationRunArgs(argc, argv, config.automation);
 
     FSmokeApp app;
     GUIAppHost host(config, app);
     if (!host.init()) {
         return 1;
     }
-    const int result = host.run(exitAfterFrame);
+    const int result = host.run();
     host.shutdown();
-    YA_CORE_INFO("Minimal GUI host finished after {} frames", exitAfterFrame);
+    if (config.automation.exitAfterFrame > 0) {
+        YA_CORE_INFO("Minimal GUI host finished after automation frame budget {}",
+                     config.automation.exitAfterFrame);
+    }
+    else {
+        YA_CORE_INFO("Minimal GUI host finished");
+    }
     return result;
 }

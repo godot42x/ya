@@ -26,6 +26,7 @@
 
 #include "Core/Event.h"
 
+#include "AppServices/AppAutomationRun.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <cstdint>
@@ -56,6 +57,11 @@ struct IGUIAppDelegate
 
     /// Optional observation of a routed UI event (smoke logs / diagnostics).
     virtual void onRoutedEvent(const Event& /*event*/, EWidgetRouteResult /*result*/) {}
+
+    /// App-driven graceful shutdown request observed by the host at frame
+    /// boundaries. Lets tool automation finish on its own terminal state
+    /// instead of relying on an external frame budget.
+    [[nodiscard]] virtual bool shouldRequestClose() const { return false; }
 };
 
 struct FGUIAppHostConfig
@@ -65,6 +71,10 @@ struct FGUIAppHostConfig
     uint32_t    height     = 768;
     float       scale      = 1.0f;
     bool        bResizable = true;
+    /// Present with vertical sync (FIFO). Disabling it selects Immediate
+    /// mode: without vsync the direct swapchain presentation tears / 
+    /// flickers on most displays, so GUI apps should keep this enabled.
+    bool        bVsync     = true;
     /// Runtime font: loaded once per entry under DEFAULT_RUNTIME_FONT_NAME
     /// (UIText resolves fonts by exact name+size). Empty to skip font loading.
     std::string              fontPath = "Engine/Content/Fonts/JetBrainsMono-Medium.ttf";
@@ -72,9 +82,11 @@ struct FGUIAppHostConfig
     /// Whether Escape (and SDL_QUIT) stops the app loop. Host-level key
     /// handling; app widgets never see Escape while this is enabled.
     bool bEscapeQuits = true;
+    /// Shared automation run policy. Zero means "run until closed".
+    AppAutomationRunOptions automation;
 };
 
-/// Standalone GUI app host. Create, init(), run(exitAfterFrame), shutdown().
+/// Standalone GUI app host. Create, init(), run(), shutdown().
 /// The delegate must outlive the host.
 class GUIAppHost
 {
@@ -88,9 +100,9 @@ public:
     /// Create the window / backend / presentation resources and mount the
     /// delegate content. Returns false on any init failure.
     [[nodiscard]] bool init();
-    /// Run the frame loop until quit (SDL_QUIT / Escape) or `exitAfterFrame`
-    /// frames. Returns the process exit code.
-    [[nodiscard]] int run(uint64_t exitAfterFrame = 120);
+    /// Run the frame loop until quit (SDL_QUIT / Escape / requestClose()) or
+    /// the shared automation policy asks for a graceful stop.
+    [[nodiscard]] int run();
     /// Tear down in reverse order; idempotent (safe to call even after a
     /// failed init).
     void shutdown();
