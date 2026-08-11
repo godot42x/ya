@@ -8,11 +8,17 @@
 #include "Core/Module/ProjectDescriptor.h"
 #include "Core/Profiling/Profiling.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "Scene/Core/GameMounts.h"
 #include "Scene/Core/Scene.h"
 #include "Render3D/Services/DebugRenderSystem.h"
 
 namespace ya
 {
+namespace
+{
+inline const FName kContentMount = game::mounts::Content;
+inline const FName kGameRootMount = game::mounts::GameRoot;
+}
 
 App*     App::_instance        = nullptr;
 uint32_t App::App::_frameIndex = 0;
@@ -71,7 +77,11 @@ void App::applyProjectDescriptor(const FProjectDescriptor& descriptor)
     inputManager.configureActionBindings(descriptor.inputActions);
 
     if (_ci.projectRoot) {
-        VirtualFileSystem::get()->setContentRoot(*_ci.projectRoot);
+        auto* vfs = VirtualFileSystem::get();
+        YA_CORE_ASSERT(vfs != nullptr, "VirtualFileSystem must be initialized before project mounts");
+        const auto projectRoot = std::filesystem::path(*_ci.projectRoot);
+        vfs->mount(kGameRootMount, projectRoot);
+        vfs->mount(kContentMount, projectRoot / "Content");
     }
 }
 

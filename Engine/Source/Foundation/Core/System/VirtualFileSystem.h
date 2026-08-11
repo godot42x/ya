@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Api.h"
+#include "Core/FName.h"
 #include "Core/System/System.h"
 
 #include "Core/Delegate.h"
@@ -40,14 +41,10 @@ struct VirtualFileSystem
         return ec ? path.lexically_normal() : canonicalPath;
     }
 
-    stdpath projectRoot;
-    stdpath engineRoot;
-    stdpath contentRoot;    // Active root that owns the Content/ tree
-    stdpath thirdPartyRoot; // Engine/ThirdParty
+    stdpath workingRoot;
 
-
-    std::unordered_map<std::string, stdpath> mountPoints;  // Virtual path -> Physical path mapping
-    std::unordered_map<std::string, stdpath> pluginMounts; // Virtual path -> Physical path mapping
+    std::unordered_map<ya::FName, stdpath> mountPoints;  // Virtual path -> Physical path mapping
+    std::unordered_map<ya::FName, stdpath> pluginMounts; // Virtual path -> Physical path mapping
 
     Delegate<void(const std::string& filepath)>                     onFileAlreadyExistsOnSave;
     Delegate<void(const std::string& filepath, size_t bytesLoaded)> onFileLoaded;
@@ -61,51 +58,69 @@ struct VirtualFileSystem
 
     VirtualFileSystem()
     {
-        projectRoot = normalizePhysicalPath(std::filesystem::current_path());
-        engineRoot  = projectRoot / "Engine";
-        mount("Engine", engineRoot);
-        thirdPartyRoot = engineRoot / "ThirdParty";
-        mount("ThirdParty", thirdPartyRoot);
+        workingRoot = normalizePhysicalPath(std::filesystem::current_path());
     }
 
-    const stdpath& getEngineRoot() const { return engineRoot; }
-    const stdpath& getProjectRoot() const { return projectRoot; }
-    const stdpath& getContentRoot() const { return contentRoot; }
+    const stdpath& getWorkingRoot() const { return workingRoot; }
 
     const auto& getMountPoints() const { return mountPoints; }
 
-    std::optional<stdpath> getMountPoint(const std::string& mountName) const
+    std::optional<stdpath> getMountPoint(const ya::FName& mountName) const
     {
         auto it = mountPoints.find(mountName);
         if (it == mountPoints.end()) return std::nullopt;
         return it->second;
     }
-
-
-    // Set the active root that owns the runtime/editor Content/ tree.
-    void setContentRoot(const stdpath& path)
+    std::optional<stdpath> getMountPoint(std::string_view mountName) const
     {
-        contentRoot = normalizePhysicalPath(path);
-        mount("Content", contentRoot / "Content");
+        return getMountPoint(ya::FName(mountName));
+    }
+    std::optional<stdpath> getMountPoint(const char* mountName) const
+    {
+        return getMountPoint(std::string_view(mountName));
     }
 
     // Register custom mount point: "MyData" -> "path/to/data"
-    void mount(const std::string& mountName, const stdpath& physicalPath)
+    void mount(const ya::FName& mountName, const stdpath& physicalPath)
     {
         mountPoints[mountName] = normalizePhysicalPath(physicalPath);
         YA_CORE_INFO("VirtualFileSystem::mount - Mounted {} -> {}", mountName, mountPoints[mountName].string());
         onMountPointChanged.broadcast();
     }
+    void mount(std::string_view mountName, const stdpath& physicalPath)
+    {
+        mount(ya::FName(mountName), physicalPath);
+    }
+    void mount(const char* mountName, const stdpath& physicalPath)
+    {
+        mount(std::string_view(mountName), physicalPath);
+    }
 
-    void mountPlugin(const std::string& mountName, const stdpath& physicalPath)
+    void mountPlugin(const ya::FName& mountName, const stdpath& physicalPath)
     {
         pluginMounts[mountName] = physicalPath;
         mount(mountName, physicalPath);
         YA_CORE_INFO("VirtualFileSystem::mountPlugin - Mounted {} -> {}", mountName, physicalPath.string());
     }
-    void unmountPlugin(const std::string& mountName)
+    void mountPlugin(std::string_view mountName, const stdpath& physicalPath)
+    {
+        mountPlugin(ya::FName(mountName), physicalPath);
+    }
+    void mountPlugin(const char* mountName, const stdpath& physicalPath)
+    {
+        mountPlugin(std::string_view(mountName), physicalPath);
+    }
+    void unmountPlugin(const ya::FName& mountName)
     {
         pluginMounts.erase(mountName);
+    }
+    void unmountPlugin(std::string_view mountName)
+    {
+        unmountPlugin(ya::FName(mountName));
+    }
+    void unmountPlugin(const char* mountName)
+    {
+        unmountPlugin(std::string_view(mountName));
     }
 
     [[nodiscard]] auto getAllConentDir() const
@@ -113,8 +128,11 @@ struct VirtualFileSystem
         std::unordered_map<std::string, stdpath> ret;
         for (auto& [n, p] : mountPoints)
         {
-            if (std::filesystem::is_directory(p / "Content")) {
-                ret.insert({n, p / "Content"});
+            if (n == ya::FName("Content")) {
+                ret.insert({n.toString(), p});
+            }
+            else if (std::filesystem::is_directory(p / "Content")) {
+                ret.insert({n.toString(), p / "Content"});
             }
         }
         return ret;
@@ -122,9 +140,17 @@ struct VirtualFileSystem
 
 
     // Unmount a mount point
-    void unmount(const std::string& mountName)
+    void unmount(const ya::FName& mountName)
     {
         mountPoints.erase(mountName);
+    }
+    void unmount(std::string_view mountName)
+    {
+        unmount(ya::FName(mountName));
+    }
+    void unmount(const char* mountName)
+    {
+        unmount(std::string_view(mountName));
     }
 
     // from abs path to VFS mounted path?

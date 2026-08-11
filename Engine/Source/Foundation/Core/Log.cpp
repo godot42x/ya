@@ -16,7 +16,9 @@ constexpr std::size_t      MAX_HISTORY_LOG_FILES = 10;
 std::filesystem::path getLogsDirectory()
 {
     if (auto* vfs = VirtualFileSystem::get()) {
-        return vfs->getEngineRoot() / "Saved" / "Logs";
+        if (const auto engineRoot = vfs->getMountPoint("Engine"); engineRoot.has_value()) {
+            return *engineRoot / "Saved" / "Logs";
+        }
     }
 
     return std::filesystem::current_path() / "Engine" / "Saved" / "Logs";

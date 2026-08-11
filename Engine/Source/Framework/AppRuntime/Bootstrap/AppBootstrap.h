@@ -2,16 +2,13 @@
 
 #include "Core/Api.h"
 
-#include <optional>
-#include <string>
-
 namespace ya
 {
 
 class YA_APP_RUNTIME_API AppBootstrap
 {
   public:
-    static void initializeProcess(const std::optional<std::string>& contentRoot = std::nullopt);
+    static void initializeProcess();
 
   private:
     static void configureBundledGraphicsRuntimeEnv();

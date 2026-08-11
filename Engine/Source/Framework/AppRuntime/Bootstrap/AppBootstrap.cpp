@@ -31,13 +31,15 @@ std::filesystem::path getExecutableDir()
 
 } // namespace
 
-void AppBootstrap::initializeProcess(const std::optional<std::string>& contentRoot)
+void AppBootstrap::initializeProcess()
 {
     configureBundledGraphicsRuntimeEnv();
     ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
     VirtualFileSystem::init();
-    if (contentRoot) {
-        VirtualFileSystem::get()->setContentRoot(*contentRoot);
+    if (auto* vfs = VirtualFileSystem::get()) {
+        const auto workingRoot = std::filesystem::weakly_canonical(std::filesystem::current_path());
+        vfs->mount("Engine", workingRoot / "Engine");
+        vfs->mount("ThirdParty", workingRoot / "Engine" / "ThirdParty");
     }
 }
 

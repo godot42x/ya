@@ -2,6 +2,7 @@
 #include "Core/Log.h"
 #include "Core/Reflection/MetadataSupport.h"
 #include "Core/System/VirtualFileSystem.h"
+#include "Scene/Core/GameMounts.h"
 #include "Core/System/FileWatcher.h"
 #include "Gameplay/Systems/Components/CameraComponent.h"
 #include "Gameplay/Systems/Components/LuaScriptComponent.h"
@@ -91,8 +92,8 @@ void LuaScriptingSystem::init()
     _lua["IS_RUNTIME"] = true;
 
     std::string projectScriptRoot;
-    if (const auto contentRoot = VirtualFileSystem::get()->getContentRoot(); !contentRoot.empty()) {
-        projectScriptRoot = (contentRoot / "Content" / "Scripts").lexically_normal().string();
+    if (const auto contentRoot = VirtualFileSystem::get()->getMountPoint(game::mounts::Content); contentRoot.has_value()) {
+        projectScriptRoot = (*contentRoot / "Scripts").lexically_normal().string();
         std::replace(projectScriptRoot.begin(), projectScriptRoot.end(), '\\', '/');
     }
     _lua["YA_PROJECT_SCRIPT_ROOT"] = projectScriptRoot;

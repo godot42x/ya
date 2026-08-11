@@ -48,6 +48,12 @@ std::string canonicalizeAssetPath(std::string path)
     else if (path.starts_with("Game:Content/")) {
         path = path.substr(std::string("Game:").size());
     }
+    else if (path == "Content:") {
+        path = "Content";
+    }
+    else if (path.starts_with("Content:")) {
+        path = "Content/" + path.substr(std::string("Content:").size());
+    }
 
     if (path.starts_with("Engine:Content/Content/")) {
         path = "Engine:Content/" + path.substr(std::string("Engine:Content/Content/").size());

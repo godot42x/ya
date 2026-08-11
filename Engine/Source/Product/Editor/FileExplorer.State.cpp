@@ -55,8 +55,10 @@ void FileExplorer::initFromVFS()
     std::ranges::sort(_mountPoints, [](const MountPoint& a, const MountPoint& b) {
         if (a.name == "Engine") return true;
         if (b.name == "Engine") return false;
-        if (a.name == "Game") return true;
-        if (b.name == "Game") return false;
+        if (a.name == "Content") return true;
+        if (b.name == "Content") return false;
+        if (a.name == "GameRoot") return true;
+        if (b.name == "GameRoot") return false;
         return a.name < b.name;
     });
 

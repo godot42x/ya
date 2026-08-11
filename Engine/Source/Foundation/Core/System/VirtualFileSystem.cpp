@@ -14,6 +14,32 @@ VirtualFileSystem* VirtualFileSystem::get()
     return instance;
 }
 
+namespace
+{
+
+std::pair<ya::FName, std::filesystem::path> splitMountedPath(std::string_view normalizedPath)
+{
+    const auto mountSeparator = normalizedPath.find(':');
+    if (mountSeparator != std::string::npos && normalizedPath.find('/') > mountSeparator) {
+        return {
+            ya::FName(normalizedPath.substr(0, mountSeparator)),
+            std::filesystem::path(normalizedPath.substr(mountSeparator + 1)),
+        };
+    }
+
+    const auto slashSeparator = normalizedPath.find('/');
+    if (slashSeparator != std::string::npos) {
+        return {
+            ya::FName(normalizedPath.substr(0, slashSeparator)),
+            std::filesystem::path(normalizedPath.substr(slashSeparator + 1)),
+        };
+    }
+
+    return {ya::FName(normalizedPath), std::filesystem::path{}};
+}
+
+} // namespace
+
 std::filesystem::path VirtualFileSystem::translatePath(std::string_view virtualPath) const
 {
     std::string normalizedPath(virtualPath);
@@ -24,28 +50,15 @@ std::filesystem::path VirtualFileSystem::translatePath(std::string_view virtualP
         return inputPath.lexically_normal();
     }
 
-    auto index = normalizedPath.find_first_of(":");
-    if (index == std::string::npos) {
-        const auto relativePath = stdpath(normalizedPath);
-        if (!contentRoot.empty() && (normalizedPath == "Content" || normalizedPath.starts_with("Content/"))) {
-            return (contentRoot / relativePath).lexically_normal();
+    const auto [mountName, physicalPath] = splitMountedPath(normalizedPath);
+    if (mountName.isValid()) {
+        auto it = mountPoints.find(mountName);
+        if (it != mountPoints.end()) {
+            return (it->second / physicalPath).lexically_normal();
         }
-        return (projectRoot / relativePath).lexically_normal();
     }
 
-    auto mountName    = std::string_view(normalizedPath).substr(0, index);
-    auto physicalPath = std::string_view(normalizedPath).substr(index + 1);
-
-    if (mountName == "Game") {
-        mountName = "Content";
-    }
-
-    auto it = mountPoints.find(std::string(mountName));
-    if (it == mountPoints.end()) {
-        YA_CORE_ERROR("VirtualFileSystem::translatePath - Mount point not found: {}", mountName);
-        return {};
-    }
-    return (it->second / physicalPath).lexically_normal();
+    return (workingRoot / stdpath(normalizedPath)).lexically_normal();
 }
 
 std::string VirtualFileSystem::toVfsPath(std::string_view path) const
@@ -57,7 +70,7 @@ std::string VirtualFileSystem::toVfsPath(std::string_view path) const
     auto normalized = std::filesystem::path(std::string(path)).lexically_normal().generic_string();
     std::replace(normalized.begin(), normalized.end(), '\\', '/');
 
-    const auto tryMakeProjectRelative = [&](const std::filesystem::path& root) -> std::string {
+    const auto tryMakeMountRelative = [&](const std::filesystem::path& root) -> std::string {
         if (root.empty()) {
             return {};
         }
@@ -81,41 +94,33 @@ std::string VirtualFileSystem::toVfsPath(std::string_view path) const
         return relativeGeneric;
     };
 
-    if (normalized.starts_with("Game:")) {
-        normalized = "Content:" + normalized.substr(std::string("Game:").size());
-    }
-
-    if (normalized.starts_with("Engine:") || normalized.starts_with("Content:")) {
-        return normalized;
-    }
-    if (normalized.starts_with("Engine/Content/") || normalized == "Engine/Content") {
-        return std::string("Engine:") + normalized.substr(std::string("Engine/").size());
-    }
-    if (normalized.starts_with("Content/") || normalized == "Content") {
+    const auto [mountedName, mountedTail] = splitMountedPath(normalized);
+    if (mountedName.isValid() && getMountPoint(mountedName).has_value()) {
         return normalized;
     }
 
     if (std::filesystem::path(normalized).is_absolute()) {
-        if (!contentRoot.empty()) {
-            if (const auto contentRelative = tryMakeProjectRelative(contentRoot); !contentRelative.empty()) {
-                if (contentRelative == "Content" || contentRelative.starts_with("Content/")) {
-                    return contentRelative;
-                }
+        size_t      bestMountLength = 0;
+        std::string bestMountedPath;
+        for (const auto& [mountName, mountRoot] : mountPoints) {
+            const auto relative = tryMakeMountRelative(mountRoot);
+            if (relative.empty() && normalized != mountRoot.generic_string()) {
+                continue;
+            }
+
+            const size_t mountLength = mountRoot.generic_string().size();
+            if (mountLength < bestMountLength) {
+                continue;
+            }
+
+            bestMountLength = mountLength;
+            bestMountedPath = std::string(mountName.c_str()) + ":";
+            if (!relative.empty()) {
+                bestMountedPath += relative;
             }
         }
-
-        if (!engineRoot.empty()) {
-            if (const auto engineRelative = tryMakeProjectRelative(engineRoot); !engineRelative.empty()) {
-                if (engineRelative == "Content" || engineRelative.starts_with("Content/")) {
-                    return std::string("Engine:") + engineRelative;
-                }
-            }
-        }
-
-        if (!projectRoot.empty()) {
-            if (const auto projectRelative = tryMakeProjectRelative(projectRoot); !projectRelative.empty()) {
-                return projectRelative;
-            }
+        if (!bestMountedPath.empty()) {
+            return bestMountedPath;
         }
     }
 
