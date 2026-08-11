@@ -53,6 +53,25 @@ nlohmann::json makeAutomationError(const AppAutomationControlServer::Request& re
     };
 }
 
+void logGUIAppExitReason(const AppAutomationRunController& automationRun)
+{
+    switch (automationRun.getExitReason()) {
+    case EAppAutomationExitReason::AppRequestedClose:
+        YA_CORE_INFO("GUI app requested graceful shutdown");
+        break;
+    case EAppAutomationExitReason::RemoteQuit:
+        YA_CORE_INFO("GUI automation requested graceful shutdown");
+        break;
+    case EAppAutomationExitReason::ExitAfterFrame:
+        YA_CORE_INFO("GUI automation requested graceful shutdown after frame {}",
+                     automationRun.getOptions().exitAfterFrame);
+        break;
+    case EAppAutomationExitReason::None:
+    default:
+        break;
+    }
+}
+
 } // namespace
 
 struct GUIAppHost::FImpl
@@ -63,6 +82,7 @@ struct GUIAppHost::FImpl
     SDLWindowProvider        window;
     IRender*                 render  = nullptr;
     AppAutomationControlServer automationServer;
+    AppAutomationRunController automationRun;
     std::shared_ptr<ShaderStorage> shaderStorage;
     std::unique_ptr<WidgetTree> tree;
 
@@ -183,6 +203,7 @@ bool GUIAppHost::init()
         .width  = swapchain->getExtent().width,
         .height = swapchain->getExtent().height,
     });
+    _impl->automationRun.reset(config.automation);
     if (!_impl->automationServer.init(config.automation.controlPort)) {
         YA_CORE_ERROR("GUIAppHost: failed to initialize automation control server on port {}",
                       config.automation.controlPort);
@@ -298,7 +319,6 @@ int GUIAppHost::run()
 
     bool bRunning             = true;
     bool bLoggedFirstSnapshot = false;
-    uint64_t completedFrames  = 0;
     while (bRunning) {
         pumpEvents(bRunning);
         if (!bRunning) {
@@ -318,8 +338,7 @@ int GUIAppHost::run()
                 continue;
             }
             if (request->method == "quit") {
-                YA_CORE_INFO("GUI automation requested graceful shutdown");
-                bRunning = false;
+                _impl->automationRun.requestRemoteQuit();
                 _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
                 continue;
             }
@@ -327,6 +346,10 @@ int GUIAppHost::run()
             _impl->automationServer.completeRequest(
                 request,
                 makeAutomationError(*request, std::format("unknown method: {}", request->method)));
+        }
+        if (_impl->automationRun.shouldExit()) {
+            logGUIAppExitReason(_impl->automationRun);
+            break;
         }
 
         int32_t imageIndex = -1;
@@ -431,14 +454,12 @@ int GUIAppHost::run()
         cmdBuf->end();
         _impl->render->end(imageIndex, {cmdBuf->getHandle()});
 
-        ++completedFrames;
+        _impl->automationRun.markFrameCompleted();
         if (_impl->delegate->shouldRequestClose()) {
-            YA_CORE_INFO("GUI app requested graceful shutdown");
-            bRunning = false;
+            _impl->automationRun.requestAppClose();
         }
-        else if (shouldAutomationExitAfterFrame(completedFrames, _impl->config->automation.exitAfterFrame)) {
-            YA_CORE_INFO("GUI automation requested graceful shutdown after frame {}",
-                         _impl->config->automation.exitAfterFrame);
+        if (_impl->automationRun.shouldExit()) {
+            logGUIAppExitReason(_impl->automationRun);
             bRunning = false;
         }
     }

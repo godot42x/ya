@@ -6,6 +6,64 @@
 namespace ya
 {
 
+AppAutomationRunController::AppAutomationRunController(const AppAutomationRunOptions& options)
+{
+    reset(options);
+}
+
+void AppAutomationRunController::reset(const AppAutomationRunOptions& options)
+{
+    _options = options;
+    _state   = {};
+}
+
+void AppAutomationRunController::markFrameCompleted()
+{
+    ++_state.completedFrameCount;
+    if (_state.exitReason != EAppAutomationExitReason::None) {
+        return;
+    }
+    if (shouldAutomationExitAfterFrame(_state.completedFrameCount, _options.exitAfterFrame)) {
+        _state.exitReason = EAppAutomationExitReason::ExitAfterFrame;
+    }
+}
+
+void AppAutomationRunController::requestAppClose()
+{
+    if (_state.exitReason != EAppAutomationExitReason::None) {
+        return;
+    }
+    _state.exitReason = EAppAutomationExitReason::AppRequestedClose;
+}
+
+void AppAutomationRunController::requestRemoteQuit()
+{
+    if (_state.exitReason != EAppAutomationExitReason::None) {
+        return;
+    }
+    _state.exitReason = EAppAutomationExitReason::RemoteQuit;
+}
+
+bool AppAutomationRunController::shouldExit() const
+{
+    return _state.exitReason != EAppAutomationExitReason::None;
+}
+
+uint64_t AppAutomationRunController::getCompletedFrameCount() const
+{
+    return _state.completedFrameCount;
+}
+
+EAppAutomationExitReason AppAutomationRunController::getExitReason() const
+{
+    return _state.exitReason;
+}
+
+const AppAutomationRunOptions& AppAutomationRunController::getOptions() const
+{
+    return _options;
+}
+
 void applyAutomationRunArgs(int argc, char** argv, AppAutomationRunOptions& outOptions)
 {
     for (int i = 1; i < argc; ++i) {
@@ -37,6 +95,21 @@ void applyAutomationRunArgs(int argc, char** argv, AppAutomationRunOptions& outO
 bool shouldAutomationExitAfterFrame(uint64_t completedFrameCount, uint64_t exitAfterFrame)
 {
     return exitAfterFrame > 0 && completedFrameCount >= exitAfterFrame;
+}
+
+const char* getAutomationExitReasonName(EAppAutomationExitReason reason)
+{
+    switch (reason) {
+    case EAppAutomationExitReason::AppRequestedClose:
+        return "app-requested-close";
+    case EAppAutomationExitReason::RemoteQuit:
+        return "remote-quit";
+    case EAppAutomationExitReason::ExitAfterFrame:
+        return "exit-after-frame";
+    case EAppAutomationExitReason::None:
+    default:
+        return "none";
+    }
 }
 
 } // namespace ya
