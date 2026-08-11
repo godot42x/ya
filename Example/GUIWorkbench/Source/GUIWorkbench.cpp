@@ -7,12 +7,14 @@
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 
 namespace guiworkbench
@@ -159,14 +161,23 @@ void FWorkbenchApp::buildDocumentList(ya::WidgetTree& tree, ya::UIElement& paren
     header->_position = {10.0f, 8.0f};
     tree.attach(*_listPanel, header);
 
+    auto scroll = std::make_shared<ya::UIScrollViewport>("ItemScroll");
+    scroll->_anchorMin = {0.0f, 0.0f};
+    scroll->_anchorMax = {1.0f, 1.0f};
+    scroll->_position  = {0.0f, 34.0f}; // must stay inside the pane (x=0):
+                                        // any x offset overflows the pane and
+                                        // overlaps the split divider
+    scroll->_size      = {0.0f, 0.0f};
+    tree.attach(*_listPanel, scroll);
+    _rowScroll = scroll;
+
     _rowList = std::make_shared<ya::UIContainer>("RowList");
     _rowList->_anchorMin = {0.0f, 0.0f};
     _rowList->_anchorMax = {1.0f, 1.0f};
-    _rowList->_position  = {8.0f, 34.0f};
-    _rowList->_size      = {0.0f, 0.0f};
+    _rowList->_padding   = 8.0f; // visual inset; scroll owns the clip
     _rowList->_direction = ya::EWidgetBoxLayout::Vertical;
     _rowList->_spacing   = 2.0f;
-    tree.attach(*_listPanel, _rowList);
+    tree.attach(*scroll, _rowList);
 }
 
 void FWorkbenchApp::buildCanvas(ya::WidgetTree& tree, ya::UIElement& parent)
@@ -302,11 +313,10 @@ void FWorkbenchApp::rebuildItemRows()
     _rowList = std::make_shared<ya::UIContainer>("RowList");
     _rowList->_anchorMin = {0.0f, 0.0f};
     _rowList->_anchorMax = {1.0f, 1.0f};
-    _rowList->_position  = {8.0f, 34.0f};
-    _rowList->_size      = {0.0f, 0.0f};
+    _rowList->_padding   = 8.0f;
     _rowList->_direction = ya::EWidgetBoxLayout::Vertical;
     _rowList->_spacing   = 2.0f;
-    _tree->attach(*_listPanel, _rowList);
+    _tree->attach(*_rowScroll, _rowList);
     _rows.clear();
 
     for (const FWorkbenchItem& item : workspace.items) {
@@ -554,9 +564,73 @@ void FWorkbenchApp::runAutomation()
             _bAutomationDone = true;
             return;
         }
+        break;
+    }
+    case 8: {
+        // 6. Grow the list past the viewport (real scroll pressure).
+        for (int i = 0; i < 30; ++i) {
+            const glm::vec2 center = _addButton->_layoutRect.pos + _addButton->_layoutRect.extent * 0.5f;
+            dispatchPointer(ya::MouseButtonPressedEvent(0), center);
+            dispatchPointer(ya::MouseButtonReleasedEvent(0), center);
+        }
+        if (workspace.items.size() != 33u) {
+            YA_CORE_ERROR("Workbench automation: list growth failed (items={})", workspace.items.size());
+            _bAutomationDone = true;
+            return;
+        }
+        break;
+    }
+    case 9: {
+        // 7. Wheel over the list scrolls the viewport.
+        _tree->layout(); // rows were rebuilt last frame: refresh maxScroll first
+        const glm::vec2 listPoint = _rowScroll->_layoutRect.pos + _rowScroll->_layoutRect.extent * 0.5f;
+        dispatchPointer(ya::MouseScrolledEvent(0.0f, -1.0f), listPoint);
+        if (_rowScroll->_scrollOffset <= 0.0f) {
+            YA_CORE_ERROR("Workbench automation: scroll failed (offset={})", _rowScroll->_scrollOffset);
+            _bAutomationDone = true;
+            return;
+        }
+        break;
+    }
+    case 10: {
+        // 8. Split drag: the main divider moves and the ratio persists.
+        _tree->layout();
+        const float oldRatio = _mainSplit->_splitRatio;
+        const glm::vec2 divider = _mainSplit->getDividerRect().pos +
+                                  _mainSplit->getDividerRect().extent * 0.5f;
+        dispatchPointer(ya::MouseButtonPressedEvent(0), divider);
+        dispatchPointer(ya::MouseMoveEvent(divider.x + 60.0f, divider.y), {divider.x + 60.0f, divider.y});
+        dispatchPointer(ya::MouseButtonReleasedEvent(0), {divider.x + 60.0f, divider.y});
+        if (std::abs(_mainSplit->_splitRatio - oldRatio) < 0.01f) {
+            YA_CORE_ERROR("Workbench automation: split drag failed (ratio {})", _mainSplit->_splitRatio);
+            _bAutomationDone = true;
+            return;
+        }
+        break;
+    }
+    case 11: {
+        // 9. Tab traversal moves focus between focusable shell widgets.
+        ya::KeyPressedEvent tab{};
+        tab._keyCode = ya::EKey::Tab;
+        dispatchKey(tab);
+        if (_tree->getFocused() == nullptr) {
+            YA_CORE_ERROR("Workbench automation: Tab traversal failed");
+            _bAutomationDone = true;
+            return;
+        }
+        break;
+    }
+    case 12: {
+        // 10. Final sync verification (scroll + drag + focus survive).
+        if (_rowScroll->_scrollOffset <= 0.0f || _tree->getFocused() == nullptr) {
+            YA_CORE_ERROR("Workbench automation: final state check failed");
+            _bAutomationDone = true;
+            return;
+        }
         _bSmokePassed   = true;
         _bAutomationDone = true;
-        YA_CORE_INFO("Workbench automation PASSED: add -> rename -> remove -> navigate -> sync");
+        YA_CORE_INFO("Workbench automation PASSED: add -> rename -> remove -> navigate -> "
+                     "grow -> scroll -> split-drag -> tab -> sync");
         break;
     }
     default:

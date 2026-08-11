@@ -119,7 +119,14 @@ glm::vec2 UIContainer::computeDesiredSize() const
     if (count > 0) {
         content += static_cast<float>(count - 1) * _spacing;
     }
-    return {content + _padding * 2.0f, cross + _padding * 2.0f};
+    // Always return {width, height}: horizontal packs along x (content is
+    // the width), vertical packs along y (content is the height, cross is
+    // the width). Scroll viewports and split panes rely on the component
+    // order matching the axis, regardless of direction.
+    if (bHorizontal) {
+        return {content + _padding * 2.0f, cross + _padding * 2.0f};
+    }
+    return {cross + _padding * 2.0f, content + _padding * 2.0f};
 }
 
 } // namespace ya

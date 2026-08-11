@@ -150,8 +150,9 @@ TEST(ToolControlsTest, StackDesiredSizeAggregatesChildren)
     stack->addDetachedChild(a);
     stack->addDetachedChild(b);
 
-    // {main-axis packed (20+4+30) + 2*padding, cross max (120) + 2*padding}
-    EXPECT_EQ(stack->computeDesiredSize(), glm::vec2(74.0f, 140.0f));
+    // Vertical stack: width = cross max (120) + 2*padding, height = packed
+    // main axis (20+4+30) + 2*padding.
+    EXPECT_EQ(stack->computeDesiredSize(), glm::vec2(140.0f, 74.0f));
 }
 
 // === Split pane ===

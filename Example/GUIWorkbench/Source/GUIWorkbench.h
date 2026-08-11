@@ -32,6 +32,7 @@ struct UIContainer;
 struct UIPanel;
 struct UISelectableRow;
 struct UISplitPane;
+struct UIScrollViewport;
 struct UIText;
 struct UITextField;
 struct WidgetTree;
@@ -96,6 +97,7 @@ class FWorkbenchApp final : public ya::IGUIAppDelegate
     std::shared_ptr<ya::UISplitPane>       _mainSplit;
     std::shared_ptr<ya::UISplitPane>       _rightSplit;
     std::shared_ptr<ya::UIPanel>           _listPanel;
+    std::shared_ptr<ya::UIScrollViewport>  _rowScroll;
     std::shared_ptr<ya::UIContainer>      _rowList;
     std::vector<std::shared_ptr<ya::UISelectableRow>> _rows;
 
