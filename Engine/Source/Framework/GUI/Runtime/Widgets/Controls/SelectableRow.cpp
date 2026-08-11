@@ -30,8 +30,10 @@ bool UISelectableRow::handleInputEvent(const Event& event, const WidgetEventCont
             if (_onActivate) {
                 _onActivate(_itemId);
             }
+            return true;
         }
-        return true; // the focused row consumes its activation keys
+        // Other keys (arrows etc.) bubble as NotHandled for the app layer.
+        return false;
     }
 
     const bool bPointInside = hitTestLayoutRect(ctx.logicalPoint);

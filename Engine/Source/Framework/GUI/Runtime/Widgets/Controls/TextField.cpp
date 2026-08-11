@@ -18,6 +18,7 @@ namespace
 /// Previous code-point boundary at or before `byteIndex`.
 size_t previousCodePoint(const std::string& text, size_t byteIndex)
 {
+    byteIndex = std::min(byteIndex, text.size());
     if (byteIndex == 0 || text.empty()) {
         return 0;
     }

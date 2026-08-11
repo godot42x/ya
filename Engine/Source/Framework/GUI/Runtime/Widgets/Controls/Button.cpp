@@ -32,8 +32,11 @@ bool UIButton::handleInputEvent(const Event& event, const WidgetEventContext& ct
             if (_onClick) {
                 _onClick();
             }
+            return true;
         }
-        return true; // the focused button consumes its activation keys
+        // Other keys are not the button's business: they bubble as
+        // NotHandled so the app layer can route them (e.g. list navigation).
+        return false;
     }
 
     const bool bPointInside = hitTestLayoutRect(ctx.logicalPoint);

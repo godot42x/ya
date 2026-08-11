@@ -1,7 +1,7 @@
 # GUI App 自举：设计与实施计划
 
 > 建立日期：2026-08-11  
-> 状态：Phase 1 完成（2026-08-11）；Phase 2 进行中  
+> 状态：Phase 1-3 完成（2026-08-11）；Phase 4/5 待评估  
 > 承接：`../ui-widget-tree-refactor/plan.md` 已完成 Game UI WidgetTree 闭环；
 > `ya-gui-minimal-host` 已验证 SDL 输入、snapshot、直出 swapchain 合成与 resize
 > 重建。  

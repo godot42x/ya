@@ -2,6 +2,7 @@
 
 #include "GUI/Widgets/UIElement.h"
 
+#include <algorithm>
 #include <functional>
 #include <string>
 
@@ -50,6 +51,12 @@ struct UITextField : public UIElement
     /// Fired on Enter and on focus loss (commit the buffer).
     std::function<void(const std::string& text)> _onCommit;
 
+    /// Byte offset of the caret (always on a code-point boundary).
+    [[nodiscard]] size_t getCursorIndex() const { return _cursorIndex; }
+    /// Clamp the caret into the current buffer (used by presenters when they
+    /// replace the text from the workspace).
+    void clampCursor() { _cursorIndex = std::min(_cursorIndex, _text.size()); }
+
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override { return _size; }
@@ -58,8 +65,6 @@ struct UITextField : public UIElement
     void clearTransientInputState() override { _bFocused = false; }
 
   private:
-    /// Byte offset of the caret (always on a code-point boundary).
-    [[nodiscard]] size_t getCursorIndex() const { return _cursorIndex; }
     void moveCursorByCodePoint(int direction);
     void erasePreviousCodePoint();
     void insertText(const std::string& text);

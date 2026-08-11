@@ -657,13 +657,14 @@ TEST(WidgetTreeTest, FocusedButtonActivatesOnEnterAndSpace)
     EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Space), pointAt(0.0f, 0.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(clicks, 2);
-    // Key repeats do not re-activate.
+    // Key repeats do not re-activate (and bubble as NotHandled).
     EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Enter, 0, /*bRepeat=*/true), pointAt(0.0f, 0.0f)),
-              EWidgetRouteResult::HandledExclusive);
+              EWidgetRouteResult::NotHandled);
     EXPECT_EQ(clicks, 2);
-    // Other keys are consumed by the focused button but do not activate.
+    // Other keys are not the button's business: they bubble as NotHandled so
+    // the app layer can route them (e.g. list navigation).
     EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::K_A), pointAt(0.0f, 0.0f)),
-              EWidgetRouteResult::HandledExclusive);
+              EWidgetRouteResult::NotHandled);
     EXPECT_EQ(clicks, 2);
 }
 
