@@ -42,7 +42,7 @@ struct VirtualFileSystem
 
     stdpath projectRoot;
     stdpath engineRoot;
-    stdpath gameRoot;       // Current game/example root
+    stdpath contentRoot;    // Active root that owns the Content/ tree
     stdpath thirdPartyRoot; // Engine/ThirdParty
 
 
@@ -70,7 +70,7 @@ struct VirtualFileSystem
 
     const stdpath& getEngineRoot() const { return engineRoot; }
     const stdpath& getProjectRoot() const { return projectRoot; }
-    const stdpath& getGameRoot() const { return gameRoot; }
+    const stdpath& getContentRoot() const { return contentRoot; }
 
     const auto& getMountPoints() const { return mountPoints; }
 
@@ -82,11 +82,11 @@ struct VirtualFileSystem
     }
 
 
-    // Set the active game root (should be called from game entry point)
-    void setGameRoot(const stdpath& path)
+    // Set the active root that owns the runtime/editor Content/ tree.
+    void setContentRoot(const stdpath& path)
     {
-        gameRoot = normalizePhysicalPath(path);
-        mount("Game", gameRoot);
+        contentRoot = normalizePhysicalPath(path);
+        mount("Content", contentRoot / "Content");
     }
 
     // Register custom mount point: "MyData" -> "path/to/data"

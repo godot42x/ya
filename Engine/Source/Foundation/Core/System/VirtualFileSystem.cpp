@@ -27,14 +27,18 @@ std::filesystem::path VirtualFileSystem::translatePath(std::string_view virtualP
     auto index = normalizedPath.find_first_of(":");
     if (index == std::string::npos) {
         const auto relativePath = stdpath(normalizedPath);
-        if (!gameRoot.empty() && (normalizedPath == "Content" || normalizedPath.starts_with("Content/"))) {
-            return (gameRoot / relativePath).lexically_normal();
+        if (!contentRoot.empty() && (normalizedPath == "Content" || normalizedPath.starts_with("Content/"))) {
+            return (contentRoot / relativePath).lexically_normal();
         }
         return (projectRoot / relativePath).lexically_normal();
     }
 
     auto mountName    = std::string_view(normalizedPath).substr(0, index);
     auto physicalPath = std::string_view(normalizedPath).substr(index + 1);
+
+    if (mountName == "Game") {
+        mountName = "Content";
+    }
 
     auto it = mountPoints.find(std::string(mountName));
     if (it == mountPoints.end()) {
@@ -77,7 +81,11 @@ std::string VirtualFileSystem::toVfsPath(std::string_view path) const
         return relativeGeneric;
     };
 
-    if (normalized.starts_with("Engine:") || normalized.starts_with("Game:")) {
+    if (normalized.starts_with("Game:")) {
+        normalized = "Content:" + normalized.substr(std::string("Game:").size());
+    }
+
+    if (normalized.starts_with("Engine:") || normalized.starts_with("Content:")) {
         return normalized;
     }
     if (normalized.starts_with("Engine/Content/") || normalized == "Engine/Content") {
@@ -88,10 +96,10 @@ std::string VirtualFileSystem::toVfsPath(std::string_view path) const
     }
 
     if (std::filesystem::path(normalized).is_absolute()) {
-        if (!gameRoot.empty()) {
-            if (const auto gameRelative = tryMakeProjectRelative(gameRoot); !gameRelative.empty()) {
-                if (gameRelative == "Content" || gameRelative.starts_with("Content/")) {
-                    return gameRelative;
+        if (!contentRoot.empty()) {
+            if (const auto contentRelative = tryMakeProjectRelative(contentRoot); !contentRelative.empty()) {
+                if (contentRelative == "Content" || contentRelative.starts_with("Content/")) {
+                    return contentRelative;
                 }
             }
         }

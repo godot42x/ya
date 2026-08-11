@@ -71,7 +71,7 @@ void App::applyProjectDescriptor(const FProjectDescriptor& descriptor)
     inputManager.configureActionBindings(descriptor.inputActions);
 
     if (_ci.projectRoot) {
-        VirtualFileSystem::get()->setGameRoot(*_ci.projectRoot);
+        VirtualFileSystem::get()->setContentRoot(*_ci.projectRoot);
     }
 }
 

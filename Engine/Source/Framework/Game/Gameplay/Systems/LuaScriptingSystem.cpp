@@ -91,8 +91,8 @@ void LuaScriptingSystem::init()
     _lua["IS_RUNTIME"] = true;
 
     std::string projectScriptRoot;
-    if (const auto gameRoot = VirtualFileSystem::get()->getGameRoot(); !gameRoot.empty()) {
-        projectScriptRoot = (gameRoot / "Content" / "Scripts").lexically_normal().string();
+    if (const auto contentRoot = VirtualFileSystem::get()->getContentRoot(); !contentRoot.empty()) {
+        projectScriptRoot = (contentRoot / "Content" / "Scripts").lexically_normal().string();
         std::replace(projectScriptRoot.begin(), projectScriptRoot.end(), '\\', '/');
     }
     _lua["YA_PROJECT_SCRIPT_ROOT"] = projectScriptRoot;

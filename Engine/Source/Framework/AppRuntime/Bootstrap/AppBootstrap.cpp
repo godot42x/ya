@@ -31,13 +31,13 @@ std::filesystem::path getExecutableDir()
 
 } // namespace
 
-void AppBootstrap::initializeProcess(const std::optional<std::string>& gameRoot)
+void AppBootstrap::initializeProcess(const std::optional<std::string>& contentRoot)
 {
     configureBundledGraphicsRuntimeEnv();
     ::ya::reflection::DeferredInitializerQueue::instance().executeAll();
     VirtualFileSystem::init();
-    if (gameRoot) {
-        VirtualFileSystem::get()->setGameRoot(*gameRoot);
+    if (contentRoot) {
+        VirtualFileSystem::get()->setContentRoot(*contentRoot);
     }
 }
 
@@ -99,4 +99,3 @@ void AppBootstrap::configureBundledGraphicsRuntimeEnv()
 }
 
 } // namespace ya
-
