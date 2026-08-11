@@ -9,6 +9,7 @@
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
+#include "GUI/Widgets/Controls/TextField.h"
 
 #include <gtest/gtest.h>
 
@@ -409,6 +410,123 @@ TEST(ToolControlsTest, SelectableRowParticipatesInTabTraversal)
     EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Tab), pointAt(0.0f, 0.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(tree.getFocused(), second.get());
+}
+
+// === Text field ===
+
+TEST(ToolControlsTest, TextFieldTypedTextAppendsAndFiresChanged)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       field = std::make_shared<UITextField>("Name");
+    field->_position = {0.0f, 0.0f};
+    field->_size     = {200.0f, 28.0f};
+    tree.attachToLayer(WidgetTree::ELayer::Content, field);
+    tree.layout();
+
+    std::vector<std::string> changes;
+    field->_onTextChanged = [&](const std::string& text) { changes.push_back(text); };
+    tree.setFocus(field.get());
+
+    EXPECT_EQ(tree.dispatchEvent(KeyTypedEvent("YA"), pointAt(0.0f, 0.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(KeyTypedEvent(" Workbench"), pointAt(0.0f, 0.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(field->_text, "YA Workbench");
+    EXPECT_EQ(changes, std::vector<std::string>({"YA", "YA Workbench"}));
+}
+
+TEST(ToolControlsTest, TextFieldBackspaceAndCursorNavigation)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       field = std::make_shared<UITextField>("Name");
+    field->_position = {0.0f, 0.0f};
+    field->_size     = {200.0f, 28.0f};
+    tree.attachToLayer(WidgetTree::ELayer::Content, field);
+    tree.layout();
+    tree.setFocus(field.get());
+
+    const auto at = pointAt(0.0f, 0.0f);
+    // Build the buffer through typing so the caret follows the input.
+    EXPECT_EQ(tree.dispatchEvent(KeyTypedEvent("abcd"), at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(field->_text, "abcd");
+
+    // Cursor starts at the end: backspace removes the last character.
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Backspace), at),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(field->_text, "abc");
+
+    // Left moves one code point; backspace removes the character before the
+    // caret, not the one after.
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Left), at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Backspace), at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(field->_text, "ac");
+
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Home), at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Right), at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Backspace), at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(field->_text, "c");
+
+    // Insertion happens at the caret.
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Home), at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(KeyTypedEvent("X"), at), EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(field->_text, "Xc");
+}
+
+TEST(ToolControlsTest, TextFieldEnterAndFocusLossCommit)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       field = std::make_shared<UITextField>("Name");
+    field->_position = {0.0f, 0.0f};
+    field->_size     = {200.0f, 28.0f};
+    tree.attachToLayer(WidgetTree::ELayer::Content, field);
+    tree.layout();
+
+    std::vector<std::string> commits;
+    field->_onCommit = [&](const std::string& text) { commits.push_back(text); };
+    tree.setFocus(field.get());
+    EXPECT_EQ(tree.dispatchEvent(KeyTypedEvent("v1"), pointAt(0.0f, 0.0f)),
+              EWidgetRouteResult::HandledExclusive);
+
+    // Enter commits the current buffer and keeps focus.
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::Enter), pointAt(0.0f, 0.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(commits, std::vector<std::string>({"v1"}));
+
+    // Focus loss commits too.
+    tree.setFocus(nullptr);
+    EXPECT_EQ(commits, std::vector<std::string>({"v1", "v1"}));
+}
+
+TEST(ToolControlsTest, TextFieldPressRequestsFocusAndPlacesCaret)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       field = std::make_shared<UITextField>("Name");
+    field->_position = {0.0f, 0.0f};
+    field->_size     = {200.0f, 28.0f};
+    tree.attachToLayer(WidgetTree::ELayer::Content, field);
+    tree.layout();
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(150.0f, 14.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getFocused(), field.get());
+    // No font atlas in the closure test: the caret falls back to the end.
+    EXPECT_EQ(field->_text.size(), 0u);
+}
+
+TEST(ToolControlsTest, TextFieldDoesNotConsumeForeignKeys)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       field = std::make_shared<UITextField>("Name");
+    field->_position = {0.0f, 0.0f};
+    field->_size     = {200.0f, 28.0f};
+    tree.attachToLayer(WidgetTree::ELayer::Content, field);
+    tree.layout();
+    tree.setFocus(field.get());
+
+    // A-Z keys are not text-field commands: they bubble as NotHandled so the
+    // app layer can observe/route them.
+    EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::K_A), pointAt(0.0f, 0.0f)),
+              EWidgetRouteResult::NotHandled);
 }
 
 } // namespace ya

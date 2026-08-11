@@ -9,6 +9,7 @@
 #include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Widgets/Controls/TextField.h"
 
 #include <algorithm>
 
@@ -57,6 +58,8 @@ void UITypeRegistry::ensureBuiltinTypesRegistered()
                  [] { return std::make_shared<UIScrollViewport>("ScrollViewport"); });
     registerType({.typeId = "engine.selectable_row", .displayName = "Selectable Row", .category = "Selection"},
                  [] { return std::make_shared<UISelectableRow>("Row"); });
+    registerType({.typeId = "engine.text_field", .displayName = "Text Field", .category = "Input"},
+                 [] { return std::make_shared<UITextField>("TextField"); });
 }
 
 std::shared_ptr<UITypeModule> UITypeRegistry::beginModule(const std::string& moduleId)

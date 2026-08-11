@@ -94,6 +94,10 @@ bool GUIAppHost::init()
         window.destroy();
         return false;
     }
+    // Enable Unicode text input (SDL_EVENT_TEXT_INPUT -> KeyTypedEvent) so
+    // focused text fields can edit; the events are routed like every other
+    // keyboard event.
+    SDL_StartTextInput(static_cast<SDL_Window*>(window.getNativeWindowHandle()));
 
     // 2. Shader compile/cache service (Slang processor serves the GUI
     //    Sprite2D shaders; injected into the backend before pipeline build).
@@ -219,6 +223,11 @@ void GUIAppHost::pumpEvents(bool& bRunning)
             KeyReleasedEvent ev;
             ev._keyCode = EKey::fromSDLKeycode(event.key.key);
             ev._mod     = event.key.mod;
+            dispatchToTree(ev, -1.0f, -1.0f);
+            break;
+        }
+        case SDL_EVENT_TEXT_INPUT: {
+            KeyTypedEvent ev(event.text.text);
             dispatchToTree(ev, -1.0f, -1.0f);
             break;
         }
@@ -391,6 +400,7 @@ void GUIAppHost::shutdown()
     _impl->render->destroy();
     delete _impl->render;
     _impl->render = nullptr;
+    SDL_StopTextInput(static_cast<SDL_Window*>(_impl->window.getNativeWindowHandle()));
     _impl->window.destroy();
 
     _impl->tree.reset();
