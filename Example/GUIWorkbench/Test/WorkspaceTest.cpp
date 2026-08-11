@@ -1,141 +1,134 @@
-// ToolWorkspace regression tests (gui-app-bootstrap Phase 3): document
-// commands, selection transitions and inspector mutations are pure state
-// transitions, independent of UIElement/WidgetTree.
+// ToolWorkspace regression tests (gui-app-bootstrap): document commands,
+// selection transitions and flatten order are pure state transitions,
+// independent of the live WidgetTree.
 
 #include "GUIWorkbenchWorkspace.h"
+
+#include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/UITypeRegistry.h"
 
 #include <gtest/gtest.h>
 
 namespace guiworkbench
 {
 
-TEST(WorkspaceTest, NewDocumentCreatesDefaultItemAndSelectsIt)
+TEST(WorkspaceTest, NewDocumentCreatesDefaultRootAndSelectsIt)
 {
     FWorkbenchWorkspace ws;
-    ws.newDocument();
+    ws.newDocument("engine.panel");
 
-    ASSERT_EQ(ws.items.size(), 1u);
-    EXPECT_EQ(ws.items[0].name, "Untitled");
-    EXPECT_EQ(ws.selectedId, "item.untitled");
+    ASSERT_NE(ws.document, nullptr);
+    EXPECT_EQ(ws.document->typeId, "engine.panel");
+    EXPECT_TRUE(ws.documentPath.empty());
+    EXPECT_EQ(ws.selectedPath, "");
     EXPECT_FALSE(ws.bDirty);
-    EXPECT_EQ(ws.commandResult, "New: created 'Untitled'");
-    ASSERT_NE(ws.getSelected(), nullptr);
-    EXPECT_EQ(ws.getSelectedIndex(), 0);
+    EXPECT_EQ(ws.commandResult, "New: panel");
+
+    const auto rows = ws.flattenRows();
+    ASSERT_EQ(rows.size(), 1u);
+    EXPECT_EQ(rows[0].path, "");
+    EXPECT_EQ(rows[0].name, "Untitled");
+    EXPECT_EQ(rows[0].typeId, "engine.panel");
+    EXPECT_EQ(rows[0].depth, 0);
+
+    // The template's root name must survive instantiation (the presenter's
+    // preview + row labels depend on it).
+    auto root = ws.document->instantiate();
+    ASSERT_NE(root, nullptr);
+    EXPECT_EQ(root->_name, "Untitled");
 }
 
-TEST(WorkspaceTest, OpenDocumentLoadsMockAndSelectsFirst)
+TEST(WorkspaceTest, AddChildrenAppearsInFlattenOrder)
 {
     FWorkbenchWorkspace ws;
-    ws.openDocument();
+    ws.newDocument("engine.container");
 
-    ASSERT_EQ(ws.items.size(), 3u);
-    EXPECT_EQ(ws.items[0].name, "Cube");
-    EXPECT_EQ(ws.items[1].name, "Sphere");
-    EXPECT_EQ(ws.items[2].name, "Light");
-    EXPECT_EQ(ws.selectedId, "item.cube");
-    EXPECT_FALSE(ws.bDirty);
-    EXPECT_EQ(ws.commandResult, "Open: loaded mock document");
+    // Simulate the presenter's palette add: instantiate, attach, rebuild.
+    auto root = ws.document->instantiate();
+    ASSERT_NE(root, nullptr);
+    auto button = ya::UITypeRegistry::instance().createInstance("engine.button");
+    ASSERT_NE(button, nullptr);
+    root->addDetachedChild(button);
+    ws.rebuildFromPreview(*root);
+
+    const auto rows = ws.flattenRows();
+    ASSERT_EQ(rows.size(), 2u);
+    EXPECT_EQ(rows[0].path, "");
+    EXPECT_EQ(rows[1].path, "0");
+    EXPECT_EQ(rows[1].name, "Button");
+    EXPECT_EQ(rows[1].depth, 1);
 }
 
-TEST(WorkspaceTest, SaveClearsDirtyOnlyWhenChanged)
+TEST(WorkspaceTest, SaveRequiresPathAndClearsDirty)
 {
     FWorkbenchWorkspace ws;
-    ws.openDocument();
+    ws.newDocument("engine.panel");
 
-    ws.saveDocument();
-    EXPECT_EQ(ws.commandResult, "Save: nothing to save");
+    EXPECT_FALSE(ws.saveDocument()); // no path yet
+    EXPECT_EQ(ws.commandResult, "Save: no path (use Save As)");
 
-    ws.renameSelected("Renamed");
+    ws.recordMutation();
     EXPECT_TRUE(ws.bDirty);
-    ws.saveDocument();
+
+    EXPECT_TRUE(ws.saveDocumentAs("Engine/Saved/GUIWorkbench/test.yaui"));
     EXPECT_FALSE(ws.bDirty);
-    EXPECT_EQ(ws.commandResult, "Save: saved changes");
+    EXPECT_EQ(ws.documentPath, "Engine/Saved/GUIWorkbench/test.yaui");
+
+    // The written file parses back as the same document.
+    FWorkbenchWorkspace reloaded;
+    EXPECT_TRUE(reloaded.openDocument("Engine/Saved/GUIWorkbench/test.yaui"));
+    ASSERT_NE(reloaded.document, nullptr);
+    EXPECT_EQ(reloaded.document->typeId, "engine.panel");
 }
 
-TEST(WorkspaceTest, ReloadRestoresMockDocument)
+TEST(WorkspaceTest, OpenMissingFileReportsDiagnostic)
 {
     FWorkbenchWorkspace ws;
-    ws.openDocument();
-    ws.select("item.light");
-    ws.toggleSelectedVisible();
-    ws.renameSelected("Touched");
-    EXPECT_TRUE(ws.bDirty);
-
-    ws.reloadDocument();
-    EXPECT_FALSE(ws.bDirty);
-    EXPECT_EQ(ws.selectedId, "item.cube");
-    EXPECT_EQ(ws.commandResult, "Reload: restored mock document");
-    // The Light item is back to its authored hidden state.
-    EXPECT_FALSE(ws.items[2].bVisible);
-    EXPECT_EQ(ws.items[2].name, "Light");
+    EXPECT_FALSE(ws.openDocument("Engine/Saved/GUIWorkbench/does_not_exist.yaui"));
+    EXPECT_EQ(ws.document, nullptr);
+    EXPECT_FALSE(ws.commandResult.empty());
 }
 
-TEST(WorkspaceTest, SelectIgnoresUnknownIds)
+TEST(WorkspaceTest, SelectValidatesPathAndRelativeNavigationClamps)
 {
     FWorkbenchWorkspace ws;
-    ws.openDocument();
+    ws.newDocument("engine.container");
+    auto root = ws.document->instantiate();
+    auto a    = ya::UITypeRegistry::instance().createInstance("engine.button");
+    auto b    = ya::UITypeRegistry::instance().createInstance("engine.button");
+    ASSERT_NE(a, nullptr);
+    ASSERT_NE(b, nullptr);
+    root->addDetachedChild(a);
+    root->addDetachedChild(b);
+    ws.rebuildFromPreview(*root);
 
-    ws.select("item.missing");
-    EXPECT_EQ(ws.selectedId, "item.cube"); // unchanged
-    ws.select("item.light");
-    EXPECT_EQ(ws.selectedId, "item.light");
-}
-
-TEST(WorkspaceTest, SelectRelativeClampsAtBothEnds)
-{
-    FWorkbenchWorkspace ws;
-    ws.openDocument();
+    ws.select("0");
+    EXPECT_EQ(ws.selectedPath, "0");
+    ws.select("99"); // unknown path: no-op
+    EXPECT_EQ(ws.selectedPath, "0");
 
     ws.selectRelative(1);
-    EXPECT_EQ(ws.selectedId, "item.sphere");
+    EXPECT_EQ(ws.selectedPath, "1");
     ws.selectRelative(1);
-    EXPECT_EQ(ws.selectedId, "item.light");
-    ws.selectRelative(1);
-    EXPECT_EQ(ws.selectedId, "item.light"); // clamped at the end
+    EXPECT_EQ(ws.selectedPath, "1"); // clamped at the end
     ws.selectRelative(-2);
-    EXPECT_EQ(ws.selectedId, "item.cube");
+    EXPECT_EQ(ws.selectedPath, "");
     ws.selectRelative(-1);
-    EXPECT_EQ(ws.selectedId, "item.cube"); // clamped at the start
+    EXPECT_EQ(ws.selectedPath, ""); // clamped at the start
 }
 
-TEST(WorkspaceTest, InspectorMutationsMarkDirtyAndMutateSelected)
+TEST(WorkspaceTest, CloseDocumentClearsState)
 {
     FWorkbenchWorkspace ws;
-    ws.openDocument();
-    ws.select("item.sphere");
+    ws.newDocument("engine.panel");
+    ws.recordMutation();
+    ws.closeDocument();
 
-    ws.renameSelected("SphereV2");
-    EXPECT_TRUE(ws.bDirty);
-    ASSERT_NE(ws.getSelected(), nullptr);
-    EXPECT_EQ(ws.getSelected()->name, "SphereV2");
-
-    const glm::vec4 beforeColor = ws.getSelected()->color;
-    ws.cycleSelectedColor();
-    EXPECT_NE(ws.getSelected()->color, beforeColor);
-
-    const glm::vec2 beforeSize = ws.getSelected()->size;
-    ws.stepSelectedSize({20.0f, 20.0f});
-    EXPECT_EQ(ws.getSelected()->size, beforeSize + glm::vec2(20.0f));
-    ws.stepSelectedSize({-500.0f, -500.0f});
-    EXPECT_EQ(ws.getSelected()->size, glm::vec2(20.0f)); // clamped
-
-    const bool beforeVisible = ws.getSelected()->bVisible;
-    ws.toggleSelectedVisible();
-    EXPECT_NE(ws.getSelected()->bVisible, beforeVisible);
-}
-
-TEST(WorkspaceTest, MutationsWithoutSelectionAreNoOps)
-{
-    FWorkbenchWorkspace ws; // default-constructed: no document, no selection
-
-    ws.renameSelected("X");
-    ws.toggleSelectedVisible();
-    ws.cycleSelectedColor();
-    ws.stepSelectedSize({10.0f, 10.0f});
-
-    // Nothing to mutate: no dirty flag, no items.
-    EXPECT_TRUE(ws.items.empty());
+    EXPECT_EQ(ws.document, nullptr);
+    EXPECT_TRUE(ws.documentPath.empty());
+    EXPECT_TRUE(ws.selectedPath.empty());
     EXPECT_FALSE(ws.bDirty);
+    EXPECT_TRUE(ws.flattenRows().empty());
 }
 
 } // namespace guiworkbench

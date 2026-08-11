@@ -1,7 +1,8 @@
 # GUI App 自举：设计与实施计划
 
 > 建立日期：2026-08-11  
-> 状态：Phase 1-3 完成（2026-08-11）；Phase 4/5 待评估  
+> 状态：Phase 1-3 + .yaui 文档闭环完成（2026-08-11）；方向调整：不做
+> ImGui UIDesigner 渐进试点，先完成自研 GUI app 最小闭环，再整体替换  
 > 承接：`../ui-widget-tree-refactor/plan.md` 已完成 Game UI WidgetTree 闭环；
 > `ya-gui-minimal-host` 已验证 SDL 输入、snapshot、直出 swapchain 合成与 resize
 > 重建。  
@@ -459,6 +460,17 @@ widget builder 或 presenter 负责将 workspace 映射为 widget 状态：
 任何不满足上述门槛的逻辑留在 example 或 editor adapter。
 
 ## 9. Phase 5：UIDesigner 自举试点
+
+> 方向调整（2026-08-11）：原方案是"在 ImGui UIDesigner 上切一个垂直 slice
+> 试点"。已回退该试点（UIDesignerPanel.Slice / EditorLayer 路由 / compose
+> 多 snapshot 等），改为：先把自研 GUI app 的 `.yaui` 文档闭环做完整
+> （GUIWorkbench：New/Open/Save/SaveAs、palette、文档树、inspector、实时
+> 预览、自动化冒烟），然后整体替换 ImGui UIDesignerPanel。
+>
+> 回退理由：在 ImGui 外壳里嵌自研 slice 会产生双写事实源与双份保存路径，
+> 与"selection/inspector/save 各只有一个事实源"的目标相悖；自研 GUI 先
+> 独立站稳（可完整编辑 `.yaui`）后，editor 接入只是 presentation adapter
+> 的事，不需要过渡性的双 UI。
 
 ### 9.1 切口
 

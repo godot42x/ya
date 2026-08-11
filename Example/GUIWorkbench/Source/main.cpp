@@ -47,8 +47,12 @@ int main(int argc, char** argv)
 
     guiworkbench::FWorkbenchApp app;
     for (int i = 1; i < argc; ++i) {
-        if (std::string(argv[i]) == "--smoke-actions") {
+        const std::string arg = argv[i];
+        if (arg == "--smoke-actions") {
             app.bSmokeActions = true;
+        }
+        else if (arg.starts_with("--yaui=")) {
+            app.startupDocumentPath = arg.substr(std::string("--yaui=").size());
         }
     }
     ya::GUIAppHost host(config, app);

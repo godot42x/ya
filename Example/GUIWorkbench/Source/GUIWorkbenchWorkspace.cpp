@@ -1,7 +1,12 @@
 #include "GUIWorkbenchWorkspace.h"
 
+#include "Core/Log.h"
+#include "Core/System/VirtualFileSystem.h"
+
+#include <nlohmann/json.hpp>
+
 #include <algorithm>
-#include <array>
+#include <sstream>
 
 namespace guiworkbench
 {
@@ -9,152 +14,191 @@ namespace guiworkbench
 namespace
 {
 
-constexpr std::array<glm::vec4, 4> kColorPalette{
-    glm::vec4{0.35f, 0.55f, 0.90f, 1.0f},
-    glm::vec4{0.90f, 0.45f, 0.35f, 1.0f},
-    glm::vec4{0.40f, 0.85f, 0.50f, 1.0f},
-    glm::vec4{0.95f, 0.85f, 0.35f, 1.0f},
-};
+std::string shortTypeName(const std::string& typeId)
+{
+    const size_t dot = typeId.find_last_of('.');
+    return dot == std::string::npos ? typeId : typeId.substr(dot + 1);
+}
+
+/// Document root name: the reflected `_name` lives under the serialized base
+/// class section (`__base__.UIElement._name`). Falls back to a recursive
+/// search so schema tweaks do not break the row labels.
+std::string documentRootName(const ya::UIDocument& doc)
+{
+    if (const auto it = doc.fields.find("_name"); it != doc.fields.end() && it->is_string()) {
+        return it->get<std::string>();
+    }
+    if (doc.fields.contains("__base__") && doc.fields["__base__"].is_object()) {
+        for (const auto& [className, value] : doc.fields["__base__"].items()) {
+            if (value.is_object() && value.contains("_name") && value["_name"].is_string()) {
+                return value["_name"].get<std::string>();
+            }
+        }
+    }
+    return "Widget";
+}
+
+void flattenDocument(const ya::UIDocument& doc, const std::string& path, int depth,
+                     std::vector<FDocumentRow>& outRows)
+{
+    const std::string name = documentRootName(doc);
+    outRows.push_back(FDocumentRow{
+        .path   = path,
+        .name   = name,
+        .typeId = doc.typeId,
+        .depth  = depth,
+    });
+    for (size_t i = 0; i < doc.children.size(); ++i) {
+        const std::string childPath = path.empty() ? std::to_string(i)
+                                                   : path + "." + std::to_string(i);
+        flattenDocument(*doc.children[i], childPath, depth + 1, outRows);
+    }
+}
 
 } // namespace
 
-void FWorkbenchWorkspace::loadMockDocument()
+void FWorkbenchWorkspace::newDocument(const std::string& typeId)
 {
-    items = {
-        FWorkbenchItem{.id = "item.cube",   .name = "Cube",   .bVisible = true,  .color = kColorPalette[0], .size = {140.0f, 90.0f}},
-        FWorkbenchItem{.id = "item.sphere", .name = "Sphere", .bVisible = true,  .color = kColorPalette[1], .size = {110.0f, 110.0f}},
-        FWorkbenchItem{.id = "item.light",  .name = "Light",  .bVisible = false, .color = kColorPalette[3], .size = {60.0f, 60.0f}},
+    auto doc        = std::make_shared<ya::UIDocument>();
+    doc->typeId     = typeId;
+    doc->fields     = {
+        {"__base__", {{"UIElement", {{"_name", "Untitled"}}}}},
     };
-    selectedId = items.empty() ? "" : items.front().id;
-    bDirty     = false;
+    document        = std::move(doc);
+    documentPath.clear();
+    selectedPath = "";
+    bDirty       = false;
+    commandResult = "New: " + shortTypeName(typeId);
 }
 
-void FWorkbenchWorkspace::newDocument()
+bool FWorkbenchWorkspace::openDocument(const std::string& path)
 {
-    items = {FWorkbenchItem{.id = "item.untitled", .name = "Untitled", .bVisible = true,
-                            .color = kColorPalette[0], .size = {140.0f, 90.0f}}};
-    selectedId    = "item.untitled";
-    bDirty        = false;
-    commandResult = "New: created 'Untitled'";
+    auto* vfs = VirtualFileSystem::get();
+    if (!vfs) {
+        commandResult = "Open: virtual file system unavailable";
+        return false;
+    }
+    std::string content;
+    if (!vfs->readFileToString(path, content)) {
+        commandResult = "Open: cannot read " + path;
+        return false;
+    }
+    try {
+        auto parsed = ya::UIDocument::fromJson(nlohmann::json::parse(content));
+        if (!parsed) {
+            commandResult = "Open: malformed document " + path;
+            return false;
+        }
+        document    = std::move(parsed);
+        documentPath = path;
+        selectedPath = "";
+        bDirty       = false;
+        commandResult = "Open: " + path;
+        return true;
+    }
+    catch (const std::exception& e) {
+        commandResult = std::string("Open: parse error - ") + e.what();
+        return false;
+    }
 }
 
-void FWorkbenchWorkspace::openDocument()
+bool FWorkbenchWorkspace::saveDocument()
 {
-    loadMockDocument();
-    commandResult = "Open: loaded mock document";
+    if (!document) {
+        commandResult = "Save: no document";
+        return false;
+    }
+    if (documentPath.empty()) {
+        commandResult = "Save: no path (use Save As)";
+        return false;
+    }
+    return saveDocumentAs(documentPath);
 }
 
-void FWorkbenchWorkspace::saveDocument()
+bool FWorkbenchWorkspace::saveDocumentAs(const std::string& path)
 {
-    if (!bDirty) {
-        commandResult = "Save: nothing to save";
+    if (!document) {
+        commandResult = "Save: no document";
+        return false;
+    }
+    auto* vfs = VirtualFileSystem::get();
+    if (!vfs) {
+        commandResult = "Save: virtual file system unavailable";
+        return false;
+    }
+    vfs->saveToFile(path, document->toJson().dump(4));
+    if (!vfs->isFileExists(path)) {
+        commandResult = "Save: failed to write " + path;
+        return false;
+    }
+    documentPath = path;
+    bDirty       = false;
+    commandResult = "Save: " + path;
+    return true;
+}
+
+void FWorkbenchWorkspace::closeDocument()
+{
+    document.reset();
+    documentPath.clear();
+    selectedPath.clear();
+    bDirty       = false;
+    commandResult = "Closed";
+}
+
+void FWorkbenchWorkspace::rebuildFromPreview(const ya::UIElement& previewRoot)
+{
+    if (auto rebuilt = ya::UIDocument::fromWidget(previewRoot)) {
+        document = std::move(rebuilt);
+    }
+}
+
+void FWorkbenchWorkspace::select(const std::string& path)
+{
+    if (!document) {
         return;
     }
-    bDirty        = false;
-    commandResult = "Save: saved changes";
-}
-
-void FWorkbenchWorkspace::reloadDocument()
-{
-    loadMockDocument();
-    commandResult = "Reload: restored mock document";
-}
-
-void FWorkbenchWorkspace::select(const std::string& id)
-{
-    if (id.empty() || !findItem(id)) {
+    // "" always selects the root; other paths must exist in the document.
+    if (path.empty()) {
+        selectedPath = path;
         return;
     }
-    selectedId = id;
+    const auto rows = flattenRows();
+    const bool bFound = std::any_of(rows.begin(), rows.end(),
+                                    [&](const FDocumentRow& row) { return row.path == path; });
+    if (bFound) {
+        selectedPath = path;
+    }
 }
 
 void FWorkbenchWorkspace::selectRelative(int delta)
 {
-    const int index = getSelectedIndex();
-    if (index < 0 || delta == 0) {
+    if (!document || delta == 0) {
         return;
     }
-    const int next = std::clamp(index + delta, 0, static_cast<int>(items.size()) - 1);
-    if (next != index) {
-        selectedId = items[static_cast<size_t>(next)].id;
+    const auto rows = flattenRows();
+    if (rows.empty()) {
+        return;
+    }
+    auto it = std::find_if(rows.begin(), rows.end(),
+                           [&](const FDocumentRow& row) { return row.path == selectedPath; });
+    const size_t index = (it == rows.end())
+                             ? 0
+                             : static_cast<size_t>(std::distance(rows.begin(), it));
+    const int    next  = std::clamp(static_cast<int>(index) + delta,
+                                    0, static_cast<int>(rows.size()) - 1);
+    if (static_cast<size_t>(next) != index) {
+        selectedPath = rows[static_cast<size_t>(next)].path;
     }
 }
 
-const FWorkbenchItem* FWorkbenchWorkspace::getSelected() const
+std::vector<FDocumentRow> FWorkbenchWorkspace::flattenRows() const
 {
-    if (selectedId.empty()) {
-        return nullptr;
+    std::vector<FDocumentRow> rows;
+    if (document) {
+        flattenDocument(*document, "", 0, rows);
     }
-    for (const auto& item : items) {
-        if (item.id == selectedId) {
-            return &item;
-        }
-    }
-    return nullptr;
-}
-
-FWorkbenchItem* FWorkbenchWorkspace::getSelectedMutable()
-{
-    return findItem(selectedId);
-}
-
-int FWorkbenchWorkspace::getSelectedIndex() const
-{
-    for (size_t i = 0; i < items.size(); ++i) {
-        if (items[i].id == selectedId) {
-            return static_cast<int>(i);
-        }
-    }
-    return -1;
-}
-
-void FWorkbenchWorkspace::renameSelected(const std::string& name)
-{
-    if (FWorkbenchItem* item = getSelectedMutable()) {
-        if (item->name != name) {
-            item->name = name;
-            bDirty     = true;
-        }
-    }
-}
-
-void FWorkbenchWorkspace::toggleSelectedVisible()
-{
-    if (FWorkbenchItem* item = getSelectedMutable()) {
-        item->bVisible = !item->bVisible;
-        bDirty         = true;
-    }
-}
-
-void FWorkbenchWorkspace::cycleSelectedColor()
-{
-    if (FWorkbenchItem* item = getSelectedMutable()) {
-        const auto it = std::find(kColorPalette.begin(), kColorPalette.end(), item->color);
-        const size_t next = (it == kColorPalette.end())
-                                ? 0
-                                : static_cast<size_t>(std::distance(kColorPalette.begin(), it) + 1) %
-                                      kColorPalette.size();
-        item->color = kColorPalette[next];
-        bDirty      = true;
-    }
-}
-
-void FWorkbenchWorkspace::stepSelectedSize(const glm::vec2& delta)
-{
-    if (FWorkbenchItem* item = getSelectedMutable()) {
-        item->size = glm::max(glm::vec2(20.0f), item->size + delta);
-        bDirty     = true;
-    }
-}
-
-FWorkbenchItem* FWorkbenchWorkspace::findItem(const std::string& id)
-{
-    for (auto& item : items) {
-        if (item.id == id) {
-            return &item;
-        }
-    }
-    return nullptr;
+    return rows;
 }
 
 } // namespace guiworkbench

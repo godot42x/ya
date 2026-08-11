@@ -5,6 +5,7 @@
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
 #include "Core/Common/DeferredDeletionQueue.h"
+#include "Core/Reflection/DeferredInitializer.h"
 #include "Core/System/VirtualFileSystem.h"
 
 #include "RHI/Render.h"
@@ -73,8 +74,11 @@ bool GUIAppHost::init()
 
     const FGUIAppHostConfig& config = *_impl->config;
 
-    // Host composition: the virtual file system backs shader/font asset
-    // reads; initialized here exactly like the engine host does.
+    // Host composition: deferred reflection registration (ClassRegistry for
+    // UIDocument field serialization) and the virtual file system (shader /
+    // font / .yaui reads) — initialized here exactly like the engine host
+    // does in AppLifecycle.
+    ya::reflection::DeferredInitializerQueue::instance().executeAll();
     VirtualFileSystem::init();
 
     // 1. Window provider (SDL3 + Vulkan surface).
