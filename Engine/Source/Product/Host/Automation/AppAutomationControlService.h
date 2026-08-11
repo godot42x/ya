@@ -1,20 +1,12 @@
 #pragma once
 
 #include "Graph/RenderGraph.h"
+#include "Core/Application/AutomationControlServer.h"
 #include "Host/AppOptions.h"
 #include "Host/Utility/AppScreenshotCapture.h"
 
-#include <atomic>
-#include <condition_variable>
-#include <cstdint>
-#include <deque>
 #include <memory>
-#include <mutex>
 #include <optional>
-#include <string>
-#include <thread>
-
-#include <nlohmann/json.hpp>
 
 namespace ya
 {
@@ -35,8 +27,8 @@ class YA_HOST_API AppAutomationControlService
     bool init(uint16_t port);
     void shutdown();
 
-    [[nodiscard]] bool isEnabled() const { return _bEnabled; }
-    [[nodiscard]] uint16_t getPort() const { return _port; }
+    [[nodiscard]] bool isEnabled() const { return _server.isEnabled(); }
+    [[nodiscard]] uint16_t getPort() const { return _server.getPort(); }
 
     void update(App& app);
     void onFrameCompleted(App& app,
@@ -51,70 +43,46 @@ class YA_HOST_API AppAutomationControlService
                                    Extent2D        presentationExtent);
 
   private:
-    struct ServerState;
-
-    struct PendingCall
-    {
-        nlohmann::json id = nullptr;
-        std::string    method;
-        nlohmann::json params = nlohmann::json::object();
-
-        std::mutex              mutex;
-        std::condition_variable cv;
-        bool                    bCompleted = false;
-        nlohmann::json          response;
-    };
-
     struct ScreenshotRequest
     {
-        std::shared_ptr<PendingCall> waiter;
-        std::string                  outputPath;
-        EAutomationScreenshotTarget  target = EAutomationScreenshotTarget::Viewport;
-        uint64_t                     earliestFrameIndex = 0;
-        AppScreenshotCaptureState    state;
+        AppAutomationControlServer::RequestPtr waiter;
+        std::string                            outputPath;
+        EAutomationScreenshotTarget            target = EAutomationScreenshotTarget::Viewport;
+        uint64_t                               earliestFrameIndex = 0;
+        AppScreenshotCaptureState              state;
     };
 
-    bool enqueueCall(std::shared_ptr<PendingCall> call);
-    void listenerMain();
-    [[nodiscard]] nlohmann::json processRpcLine(const std::string& line);
+    void handleCall(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handlePing(const AppAutomationControlServer::RequestPtr& call);
+    void handleGetPointLightPos(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleGetDirectionalLightInfo(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleSetRenderPipeline(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleSetShadowSettings(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleSetAppState(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleSetEditorCamera(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleCaptureScreenshot(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleQuit(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleGetWorldViewState(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleListOverlaySprites(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleListBillboardComponents(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleListSceneEntities(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleGetEntityInfo(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleFindEntitiesNear(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleCreateBillboardRegressionScene(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleSetEditorConfigValue(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleEntityRemoveComponent(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleEntitySetMeshVisible(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleEvalJS(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleInvoke(App& app, const AppAutomationControlServer::RequestPtr& call);
+    void handleListCommands(App& app, const AppAutomationControlServer::RequestPtr& call);
 
-    void handleCall(App& app, const std::shared_ptr<PendingCall>& call);
-    void handlePing(const std::shared_ptr<PendingCall>& call);
-    void handleGetPointLightPos(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleGetDirectionalLightInfo(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleSetRenderPipeline(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleSetShadowSettings(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleSetAppState(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleSetEditorCamera(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleCaptureScreenshot(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleQuit(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleGetWorldViewState(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleListOverlaySprites(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleListBillboardComponents(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleListSceneEntities(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleGetEntityInfo(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleFindEntitiesNear(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleCreateBillboardRegressionScene(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleSetEditorConfigValue(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleEntityRemoveComponent(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleEntitySetMeshVisible(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleEvalJS(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleInvoke(App& app, const std::shared_ptr<PendingCall>& call);
-    void handleListCommands(App& app, const std::shared_ptr<PendingCall>& call);
+    void completeCall(const AppAutomationControlServer::RequestPtr& call, nlohmann::json response);
+    [[nodiscard]] nlohmann::json makeSuccess(const AppAutomationControlServer::Request& call,
+                                             nlohmann::json result = nlohmann::json::object()) const;
+    [[nodiscard]] nlohmann::json makeError(const AppAutomationControlServer::Request& call, std::string_view message) const;
 
-    void completeCall(const std::shared_ptr<PendingCall>& call, nlohmann::json response);
-    [[nodiscard]] nlohmann::json makeSuccess(const PendingCall& call, nlohmann::json result = nlohmann::json::object()) const;
-    [[nodiscard]] nlohmann::json makeError(const PendingCall& call, std::string_view message) const;
-
-    std::atomic<bool> _bEnabled = false;
-    std::atomic<bool> _bStopRequested = false;
-    uint16_t          _port = 0;
-    std::thread       _listenerThread;
-    std::unique_ptr<ServerState> _serverState;
-
-    std::mutex                               _incomingMutex;
-    std::deque<std::shared_ptr<PendingCall>> _incomingCalls;
-    std::optional<ScreenshotRequest>         _pendingScreenshot;
+    AppAutomationControlServer      _server;
+    std::optional<ScreenshotRequest> _pendingScreenshot;
 };
 
 } // namespace ya

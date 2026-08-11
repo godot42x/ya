@@ -1,6 +1,6 @@
 #include "Host/Lifecycle/AppAutomation.h"
 
-#include "AppServices/AppAutomationRun.h"
+#include "Core/Application/AutomationRun.h"
 #include "Render3D/Forward/ForwardRenderPipeline.h"
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Terrain/TerrainProcessor.h"

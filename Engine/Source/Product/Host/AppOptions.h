@@ -4,6 +4,7 @@
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
 #include "AppServices/AppAutomation.h"
+#include "Core/Application/AutomationRun.h"
 #include "Host/Utility/ClLIParams.h"
 #include "AppServices/PostProcessingState.h"
 
@@ -65,9 +66,8 @@ struct AppProfilingOptions
     std::optional<std::string> cpuProfileOutputPath;
 };
 
-struct AppAutomationOptions
+struct AppAutomationOptions : AppAutomationRunOptions
 {
-    uint64_t                     exitAfterFrame               = 0;
     uint64_t                     screenshotFrameIndex         = 0;
     uint64_t                     screenshotWarmupFrames       = 30;
     uint64_t                     screenshotSettleFrames       = 5;
@@ -87,7 +87,6 @@ struct AppAutomationOptions
     AppAutomationShadowOverrides shadow;
     AppAutomationDeferredOverrides deferred;
     AppAutomationPostProcessOverrides postprocess;
-    uint16_t                         controlPort = 0;
 };
 
 [[nodiscard]] bool tryParseAutomationScreenshotTarget(const std::string& text,
@@ -126,4 +125,3 @@ struct YA_HOST_API AppDesc
 };
 
 } // namespace ya
-

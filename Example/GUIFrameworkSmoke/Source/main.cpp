@@ -9,7 +9,7 @@
 
 #include "GUI/App/GUIAppHost.h"
 
-#include "AppServices/AppAutomationRun.h"
+#include "Core/Application/AutomationRun.h"
 #include "Core/Log.h"
 
 #include "GUI/Widgets/Controls/Button.h"

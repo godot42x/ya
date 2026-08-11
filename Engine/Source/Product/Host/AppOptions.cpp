@@ -127,6 +127,9 @@ void AppDesc::init(int argc, char** argv)
         executablePath = std::string(argv[0]);
     }
 
+    AppAutomationRunOptions automationRun;
+    applyAutomationRunArgs(argc, argv, automationRun);
+
     params
         .opt<int>("w", {"width"}, "Window width")
         .opt<int>("h", {"height"}, "Window height")
@@ -160,8 +163,8 @@ void AppDesc::init(int argc, char** argv)
     params.tryGet<int>("width", width);
     params.tryGet<int>("height", height);
     params.tryGet<bool>("fullscreen", fullscreen);
-    params.tryGet<uint64_t>("exit-after-frame", automation.exitAfterFrame);
-    params.tryGet<uint16_t>("automation-control-port", automation.controlPort);
+    automation.exitAfterFrame = automationRun.exitAfterFrame;
+    automation.controlPort    = automationRun.controlPort;
     if (std::string automationConfigPath; params.tryGet<std::string>("automation-config", automationConfigPath)) {
         automation.configPath = std::move(automationConfigPath);
     }
@@ -251,4 +254,3 @@ void AppDesc::init(int argc, char** argv)
 }
 
 } // namespace ya
-

@@ -1,7 +1,8 @@
 #include "GUI/App/GUIAppHost.h"
 #include "GUI/App/GUIPresentationTarget.h"
 
-#include "AppServices/AppAutomationRun.h"
+#include "Core/Application/AutomationControlServer.h"
+#include "Core/Application/AutomationRun.h"
 #include "Core/FName.h"
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
@@ -35,6 +36,25 @@ namespace
 constexpr uint32_t DEFAULT_WINDOW_WIDTH  = 1024;
 constexpr uint32_t DEFAULT_WINDOW_HEIGHT = 768;
 
+nlohmann::json makeAutomationSuccess(const AppAutomationControlServer::Request& request,
+                                     nlohmann::json result = nlohmann::json::object())
+{
+    return {
+        {"id", request.id},
+        {"ok", true},
+        {"result", std::move(result)},
+    };
+}
+
+nlohmann::json makeAutomationError(const AppAutomationControlServer::Request& request, std::string_view message)
+{
+    return {
+        {"id", request.id},
+        {"ok", false},
+        {"error", std::string(message)},
+    };
+}
+
 } // namespace
 
 struct GUIAppHost::FImpl
@@ -44,6 +64,7 @@ struct GUIAppHost::FImpl
 
     SDLWindowProvider        window;
     IRender*                 render  = nullptr;
+    AppAutomationControlServer automationServer;
     std::shared_ptr<ShaderStorage> shaderStorage;
     std::unique_ptr<WidgetTree> tree;
 
@@ -166,6 +187,12 @@ bool GUIAppHost::init()
         .width  = swapchain->getExtent().width,
         .height = swapchain->getExtent().height,
     });
+    if (!_impl->automationServer.init(config.automation.controlPort)) {
+        YA_CORE_ERROR("GUIAppHost: failed to initialize automation control server on port {}",
+                      config.automation.controlPort);
+        shutdown();
+        return false;
+    }
     _impl->delegate->buildUI(*_impl->tree);
 
     render->allocateCommandBuffers(render->getSwapchainImageCount(), _impl->commandBuffers);
@@ -280,6 +307,30 @@ int GUIAppHost::run()
         pumpEvents(bRunning);
         if (!bRunning) {
             break;
+        }
+
+        for (auto& request : _impl->automationServer.consumePendingRequests()) {
+            if (request->method == "ping") {
+                _impl->automationServer.completeRequest(
+                    request,
+                    makeAutomationSuccess(*request,
+                                          {
+                                              {"service", "gui-automation-control"},
+                                              {"port", _impl->automationServer.getPort()},
+                                              {"title", _impl->config->title},
+                                          }));
+                continue;
+            }
+            if (request->method == "quit") {
+                YA_CORE_INFO("GUI automation requested graceful shutdown");
+                bRunning = false;
+                _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
+                continue;
+            }
+
+            _impl->automationServer.completeRequest(
+                request,
+                makeAutomationError(*request, std::format("unknown method: {}", request->method)));
         }
 
         int32_t imageIndex = -1;
@@ -412,6 +463,7 @@ void GUIAppHost::shutdown()
 
     // Clean shutdown, reverse order.
     _impl->render->waitIdle();
+    _impl->automationServer.shutdown();
     Render2D::destroy();
     _impl->commandBuffers.clear();   // releases command-buffer resource retention
     _impl->presentationTargets.clear();

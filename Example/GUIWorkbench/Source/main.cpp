@@ -5,7 +5,7 @@
 
 #include "Core/Log.h"
 
-#include "AppServices/AppAutomationRun.h"
+#include "Core/Application/AutomationRun.h"
 #include "GUI/App/GUIAppHost.h"
 
 #include "GUIWorkbench.h"

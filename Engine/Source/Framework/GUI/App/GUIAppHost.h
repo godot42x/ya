@@ -26,7 +26,7 @@
 
 #include "Core/Event.h"
 
-#include "AppServices/AppAutomationRun.h"
+#include "Core/Application/AutomationRun.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <cstdint>

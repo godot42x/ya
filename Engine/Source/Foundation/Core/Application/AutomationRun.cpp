@@ -1,4 +1,4 @@
-#include "AppServices/AppAutomationRun.h"
+#include "Core/Application/AutomationRun.h"
 
 #include <cstdlib>
 #include <string>
@@ -19,6 +19,17 @@ void applyAutomationRunArgs(int argc, char** argv, AppAutomationRunOptions& outO
         if (arg.starts_with("--exit-after-frame=")) {
             outOptions.exitAfterFrame = static_cast<uint64_t>(
                 std::strtoull(arg.c_str() + std::string("--exit-after-frame=").size(), nullptr, 10));
+            continue;
+        }
+        if (arg == "--automation-control-port") {
+            if (i + 1 < argc) {
+                outOptions.controlPort = static_cast<uint16_t>(std::strtoul(argv[++i], nullptr, 10));
+            }
+            continue;
+        }
+        if (arg.starts_with("--automation-control-port=")) {
+            outOptions.controlPort = static_cast<uint16_t>(
+                std::strtoul(arg.c_str() + std::string("--automation-control-port=").size(), nullptr, 10));
         }
     }
 }

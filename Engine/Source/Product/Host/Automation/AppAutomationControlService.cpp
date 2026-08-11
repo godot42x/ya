@@ -28,24 +28,14 @@
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
 
-#include <asio.hpp>
 #include <cmath>
 #include <filesystem>
-#include <istream>
 #include <string_view>
 
 namespace ya
 {
-struct AppAutomationControlService::ServerState
-{
-    asio::io_context                         ioContext;
-    std::unique_ptr<asio::ip::tcp::acceptor> acceptor;
-};
-
 namespace
 {
-using asio::ip::tcp;
-
 struct DirectionalLightInfo
 {
     glm::vec3                direction = glm::vec3(0.0f, -1.0f, 0.0f);
@@ -257,54 +247,12 @@ AppAutomationControlService::~AppAutomationControlService()
 
 bool AppAutomationControlService::init(uint16_t port)
 {
-    shutdown();
-    if (port == 0) {
-        return true;
-    }
-
-    _port           = port;
-    _bStopRequested = false;
-    _bEnabled       = true;
-    _serverState    = std::make_unique<ServerState>();
-    _listenerThread = std::thread([this]()
-                                  { listenerMain(); });
-    YA_CORE_INFO("Automation control server listening on 127.0.0.1:{}", _port);
-    return true;
+    return _server.init(port);
 }
 
 void AppAutomationControlService::shutdown()
 {
-    _bStopRequested = true;
-    _bEnabled       = false;
-
-    if (_serverState) {
-        asio::error_code ec;
-        if (_serverState->acceptor) {
-            _serverState->acceptor->cancel(ec);
-            _serverState->acceptor->close(ec);
-        }
-        _serverState->ioContext.stop();
-    }
-
-    if (_listenerThread.joinable()) {
-        _listenerThread.join();
-    }
-
-    std::deque<std::shared_ptr<PendingCall>> pending;
-    {
-        std::scoped_lock lock(_incomingMutex);
-        pending.swap(_incomingCalls);
-    }
-
-    for (auto& call : pending) {
-        completeCall(call,
-                     {
-                         {"id", call->id},
-                         {"ok", false},
-                         {"error", "automation control server shutting down"},
-                     });
-    }
-
+    _server.shutdown();
     if (_pendingScreenshot) {
         AppScreenshotCapture::reset(_pendingScreenshot->state);
         completeCall(_pendingScreenshot->waiter,
@@ -315,166 +263,11 @@ void AppAutomationControlService::shutdown()
                      });
         _pendingScreenshot.reset();
     }
-
-    _port = 0;
-    _serverState.reset();
-}
-
-bool AppAutomationControlService::enqueueCall(std::shared_ptr<PendingCall> call)
-{
-    if (!_bEnabled || _bStopRequested) {
-        return false;
-    }
-
-    std::scoped_lock lock(_incomingMutex);
-    _incomingCalls.push_back(std::move(call));
-    return true;
-}
-
-void AppAutomationControlService::listenerMain()
-{
-    if (!_serverState) {
-        YA_CORE_ERROR("Automation control server missing runtime state");
-        _bEnabled = false;
-        return;
-    }
-
-    auto&            serverState = *_serverState;
-    asio::error_code ec;
-    const auto       address = asio::ip::make_address("127.0.0.1", ec);
-    if (ec) {
-        YA_CORE_ERROR("Automation control server failed to parse listen address: {}", ec.message());
-        _bEnabled = false;
-        return;
-    }
-
-    const tcp::endpoint endpoint(address, _port);
-    serverState.acceptor = std::make_unique<tcp::acceptor>(serverState.ioContext);
-    serverState.acceptor->open(endpoint.protocol(), ec);
-    if (ec) {
-        YA_CORE_ERROR("Automation control server failed to open acceptor: {}", ec.message());
-        _bEnabled = false;
-        return;
-    }
-
-    serverState.acceptor->set_option(tcp::acceptor::reuse_address(true), ec);
-    if (ec) {
-        YA_CORE_WARN("Automation control server failed to set reuse_address: {}", ec.message());
-    }
-
-    serverState.acceptor->bind(endpoint, ec);
-    if (ec) {
-        YA_CORE_ERROR("Automation control server failed to bind port {}: {}", _port, ec.message());
-        _bEnabled = false;
-        return;
-    }
-
-    serverState.acceptor->listen(asio::socket_base::max_listen_connections, ec);
-    if (ec) {
-        YA_CORE_ERROR("Automation control server failed to listen on port {}: {}", _port, ec.message());
-        _bEnabled = false;
-        return;
-    }
-
-    while (!_bStopRequested) {
-        tcp::socket clientSocket(serverState.ioContext);
-        serverState.acceptor->accept(clientSocket, ec);
-        if (ec) {
-            if (_bStopRequested || ec == asio::error::operation_aborted) {
-                break;
-            }
-            continue;
-        }
-
-        asio::streambuf requestBuffer;
-        while (!_bStopRequested) {
-            const size_t bytes = asio::read_until(clientSocket, requestBuffer, '\n', ec);
-            if (ec) {
-                break;
-            }
-            if (bytes == 0) {
-                continue;
-            }
-
-            std::istream input(&requestBuffer);
-            std::string  line;
-            std::getline(input, line);
-            if (!line.empty() && line.back() == '\r') {
-                line.pop_back();
-            }
-            if (line.empty()) {
-                continue;
-            }
-
-            const nlohmann::json response = processRpcLine(line);
-            const std::string    payload  = response.dump() + "\n";
-            asio::write(clientSocket, asio::buffer(payload), ec);
-            if (ec) {
-                break;
-            }
-        }
-    }
-}
-
-nlohmann::json AppAutomationControlService::processRpcLine(const std::string& line)
-{
-    nlohmann::json request;
-    try {
-        request = nlohmann::json::parse(line);
-    }
-    catch (const std::exception& e) {
-        return {
-            {"id", nullptr},
-            {"ok", false},
-            {"error", std::string("invalid json: ") + e.what()},
-        };
-    }
-
-    if (!request.is_object() || !request.contains("method") || !request["method"].is_string()) {
-        return {
-            {"id", request.value("id", nlohmann::json(nullptr))},
-            {"ok", false},
-            {"error", "request must be an object with string field 'method'"},
-        };
-    }
-
-    auto call    = std::make_shared<PendingCall>();
-    call->id     = request.value("id", nlohmann::json(nullptr));
-    call->method = request["method"].get<std::string>();
-    if (request.contains("params")) {
-        call->params = request["params"];
-    }
-
-    if (!enqueueCall(call)) {
-        return {
-            {"id", call->id},
-            {"ok", false},
-            {"error", "automation control server is not accepting requests"},
-        };
-    }
-
-    std::unique_lock lock(call->mutex);
-    call->cv.wait(lock, [&]()
-                  { return call->bCompleted || _bStopRequested.load(); });
-    if (!call->bCompleted) {
-        return {
-            {"id", call->id},
-            {"ok", false},
-            {"error", "automation control request interrupted"},
-        };
-    }
-    return call->response;
 }
 
 void AppAutomationControlService::update(App& app)
 {
-    std::deque<std::shared_ptr<PendingCall>> incoming;
-    {
-        std::scoped_lock lock(_incomingMutex);
-        incoming.swap(_incomingCalls);
-    }
-
-    for (auto& call : incoming) {
+    for (auto& call : _server.consumePendingRequests()) {
         handleCall(app, call);
     }
 }
@@ -548,7 +341,7 @@ bool AppAutomationControlService::appendPresentationCapture(uint64_t frameIndex,
         presentationExtent);
 }
 
-void AppAutomationControlService::handleCall(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleCall(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     if (call->method == "ping") {
         handlePing(call);
@@ -642,7 +435,7 @@ void AppAutomationControlService::handleCall(App& app, const std::shared_ptr<Pen
     completeCall(call, makeError(*call, std::string("unknown method: ") + call->method));
 }
 
-void AppAutomationControlService::handleEvalJS(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleEvalJS(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     auto* scripting = app.getJSScriptingSystem();
     if (scripting == nullptr) {
@@ -659,7 +452,7 @@ void AppAutomationControlService::handleEvalJS(App& app, const std::shared_ptr<P
     completeCall(call, makeSuccess(*call, {{"result", std::move(result.value)}}));
 }
 
-void AppAutomationControlService::handleInvoke(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleInvoke(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     auto* scripting = app.getJSScriptingSystem();
     if (scripting == nullptr) {
@@ -679,7 +472,7 @@ void AppAutomationControlService::handleInvoke(App& app, const std::shared_ptr<P
     completeCall(call, makeSuccess(*call, {{"result", std::move(result)}}));
 }
 
-void AppAutomationControlService::handleListCommands(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleListCommands(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     auto* scripting = app.getJSScriptingSystem();
     if (scripting == nullptr) {
@@ -689,17 +482,17 @@ void AppAutomationControlService::handleListCommands(App& app, const std::shared
     completeCall(call, makeSuccess(*call, {{"commands", scripting->buildCommandList()}}));
 }
 
-void AppAutomationControlService::handlePing(const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handlePing(const AppAutomationControlServer::RequestPtr& call)
 {
     completeCall(call,
                  makeSuccess(*call,
                              {
                                  {"service", "automation-control"},
-                                 {"port", _port},
+                                 {"port", _server.getPort()},
                              }));
 }
 
-void AppAutomationControlService::handleGetPointLightPos(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleGetPointLightPos(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     Scene* scene = resolveControlScene(app);
     if (!scene) {
@@ -720,7 +513,7 @@ void AppAutomationControlService::handleGetPointLightPos(App& app, const std::sh
                              }));
 }
 
-void AppAutomationControlService::handleGetDirectionalLightInfo(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleGetDirectionalLightInfo(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     Scene* scene = resolveControlScene(app);
     if (!scene) {
@@ -749,7 +542,7 @@ void AppAutomationControlService::handleGetDirectionalLightInfo(App& app, const 
     completeCall(call, makeSuccess(*call, std::move(result)));
 }
 
-void AppAutomationControlService::handleSetRenderPipeline(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleSetRenderPipeline(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     auto* renderRuntime = app.getRenderServices().getRenderRuntime();
     if (!renderRuntime) {
@@ -776,7 +569,7 @@ void AppAutomationControlService::handleSetRenderPipeline(App& app, const std::s
                              }));
 }
 
-void AppAutomationControlService::handleSetShadowSettings(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleSetShadowSettings(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     auto& settings = app.getRenderServices().getShadowSettings();
     const auto setBool = [&](const char* key, bool& target) -> bool {
@@ -808,7 +601,7 @@ void AppAutomationControlService::handleSetShadowSettings(App& app, const std::s
                              }));
 }
 
-void AppAutomationControlService::handleSetAppState(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleSetAppState(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     const std::string state = call->params.value("state", std::string{});
     if (state != "runtime" && state != "simulation" && state != "stopped") {
@@ -836,7 +629,7 @@ void AppAutomationControlService::handleSetAppState(App& app, const std::shared_
     completeCall(call, makeSuccess(*call, {{"state", state}}));
 }
 
-void AppAutomationControlService::handleSetEditorCamera(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleSetEditorCamera(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     auto* editorControl = getEditorAutomationControl(app);
     if (!editorControl) {
@@ -877,7 +670,7 @@ void AppAutomationControlService::handleSetEditorCamera(App& app, const std::sha
     completeCall(call, makeSuccess(*call));
 }
 
-void AppAutomationControlService::handleCaptureScreenshot(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleCaptureScreenshot(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     if (_pendingScreenshot) {
         completeCall(call, makeError(*call, "a screenshot request is already in flight"));
@@ -905,13 +698,13 @@ void AppAutomationControlService::handleCaptureScreenshot(App& app, const std::s
     };
 }
 
-void AppAutomationControlService::handleQuit(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleQuit(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     app.requestQuit();
     completeCall(call, makeSuccess(*call));
 }
 
-void AppAutomationControlService::handleGetWorldViewState(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleGetWorldViewState(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     auto* renderRuntime = app.getRenderServices().getRenderRuntime();
     if (!renderRuntime) {
@@ -940,7 +733,7 @@ void AppAutomationControlService::handleGetWorldViewState(App& app, const std::s
     completeCall(call, makeSuccess(*call, std::move(result)));
 }
 
-void AppAutomationControlService::handleListOverlaySprites(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleListOverlaySprites(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     Scene* scene = resolveControlScene(app);
     if (!scene) {
@@ -971,7 +764,7 @@ void AppAutomationControlService::handleListOverlaySprites(App& app, const std::
                              }));
 }
 
-void AppAutomationControlService::handleListBillboardComponents(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleListBillboardComponents(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     Scene* scene = resolveControlScene(app);
     if (!scene) {
@@ -1002,7 +795,7 @@ void AppAutomationControlService::handleListBillboardComponents(App& app, const 
                              }));
 }
 
-void AppAutomationControlService::handleListSceneEntities(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleListSceneEntities(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     Scene* scene = resolveControlScene(app);
     if (!scene) {
@@ -1027,7 +820,7 @@ void AppAutomationControlService::handleListSceneEntities(App& app, const std::s
                              }));
 }
 
-void AppAutomationControlService::handleGetEntityInfo(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleGetEntityInfo(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     Scene* scene = resolveControlScene(app);
     if (!scene) {
@@ -1115,7 +908,7 @@ void AppAutomationControlService::handleGetEntityInfo(App& app, const std::share
     completeCall(call, makeSuccess(*call, std::move(result)));
 }
 
-void AppAutomationControlService::handleFindEntitiesNear(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleFindEntitiesNear(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     Scene* scene = resolveControlScene(app);
     if (!scene) {
@@ -1165,7 +958,7 @@ void AppAutomationControlService::handleFindEntitiesNear(App& app, const std::sh
                              }));
 }
 
-void AppAutomationControlService::handleCreateBillboardRegressionScene(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleCreateBillboardRegressionScene(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     Scene* scene = createBillboardRegressionScene(app);
     if (!scene) {
@@ -1181,7 +974,7 @@ void AppAutomationControlService::handleCreateBillboardRegressionScene(App& app,
                              }));
 }
 
-void AppAutomationControlService::handleSetEditorConfigValue(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleSetEditorConfigValue(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     (void)app;
 
@@ -1208,7 +1001,7 @@ void AppAutomationControlService::handleSetEditorConfigValue(App& app, const std
                              }));
 }
 
-void AppAutomationControlService::handleEntityRemoveComponent(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleEntityRemoveComponent(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     Scene* scene = resolveControlScene(app);
     if (!scene) {
@@ -1245,7 +1038,7 @@ void AppAutomationControlService::handleEntityRemoveComponent(App& app, const st
                              }));
 }
 
-void AppAutomationControlService::handleEntitySetMeshVisible(App& app, const std::shared_ptr<PendingCall>& call)
+void AppAutomationControlService::handleEntitySetMeshVisible(App& app, const AppAutomationControlServer::RequestPtr& call)
 {
     Scene* scene = resolveControlScene(app);
     if (!scene) {
@@ -1284,17 +1077,13 @@ void AppAutomationControlService::handleEntitySetMeshVisible(App& app, const std
                              }));
 }
 
-void AppAutomationControlService::completeCall(const std::shared_ptr<PendingCall>& call, nlohmann::json response)
+void AppAutomationControlService::completeCall(const AppAutomationControlServer::RequestPtr& call, nlohmann::json response)
 {
-    {
-        std::scoped_lock lock(call->mutex);
-        call->response   = std::move(response);
-        call->bCompleted = true;
-    }
-    call->cv.notify_one();
+    _server.completeRequest(call, std::move(response));
 }
 
-nlohmann::json AppAutomationControlService::makeSuccess(const PendingCall& call, nlohmann::json result) const
+nlohmann::json AppAutomationControlService::makeSuccess(const AppAutomationControlServer::Request& call,
+                                                        nlohmann::json result) const
 {
     return {
         {"id", call.id},
@@ -1303,7 +1092,8 @@ nlohmann::json AppAutomationControlService::makeSuccess(const PendingCall& call,
     };
 }
 
-nlohmann::json AppAutomationControlService::makeError(const PendingCall& call, std::string_view message) const
+nlohmann::json AppAutomationControlService::makeError(const AppAutomationControlServer::Request& call,
+                                                      std::string_view message) const
 {
     return {
         {"id", call.id},
