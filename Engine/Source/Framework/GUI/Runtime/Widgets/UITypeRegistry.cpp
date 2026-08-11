@@ -5,6 +5,9 @@
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/ScrollViewport.h"
+#include "GUI/Widgets/Controls/SelectableRow.h"
+#include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Text.h"
 
 #include <algorithm>
@@ -48,6 +51,12 @@ void UITypeRegistry::ensureBuiltinTypesRegistered()
                  [] { return std::make_shared<UIButton>("Button"); });
     registerType({.typeId = "engine.container", .displayName = "Container", .category = "Basic"},
                  [] { return std::make_shared<UIContainer>("Container"); });
+    registerType({.typeId = "engine.split_pane", .displayName = "Split Pane", .category = "Layout"},
+                 [] { return std::make_shared<UISplitPane>("SplitPane"); });
+    registerType({.typeId = "engine.scroll_viewport", .displayName = "Scroll Viewport", .category = "Layout"},
+                 [] { return std::make_shared<UIScrollViewport>("ScrollViewport"); });
+    registerType({.typeId = "engine.selectable_row", .displayName = "Selectable Row", .category = "Selection"},
+                 [] { return std::make_shared<UISelectableRow>("Row"); });
 }
 
 std::shared_ptr<UITypeModule> UITypeRegistry::beginModule(const std::string& moduleId)

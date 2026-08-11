@@ -14,6 +14,7 @@ struct UIContainer : public UIElement
     YA_REFLECT_FIELD(_direction, .instanceEditable())
     YA_REFLECT_FIELD(_spacing, .instanceEditable())
     YA_REFLECT_FIELD(_padding, .instanceEditable())
+    YA_REFLECT_FIELD(_mainAxisAlignment, .instanceEditable())
     YA_REFLECT_FIELD(_bClipChildren, .instanceEditable())
     YA_REFLECT_END()
 
@@ -21,12 +22,14 @@ struct UIContainer : public UIElement
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIContainer>; }
 
-    EWidgetBoxLayout _direction     = EWidgetBoxLayout::Horizontal;
-    float            _spacing       = 4.0f;
-    float            _padding       = 0.0f;
-    bool             _bClipChildren = false;
+    EWidgetBoxLayout        _direction         = EWidgetBoxLayout::Horizontal;
+    float                   _spacing           = 4.0f;
+    float                   _padding           = 0.0f;
+    EWidgetMainAxisAlignment _mainAxisAlignment = EWidgetMainAxisAlignment::Start;
+    bool                    _bClipChildren     = false;
 
     void layout(const Rect2D& parentRect) override;
+    void layoutAssigned(const Rect2D& rect) override;
     void paint(UIFrameBuilder& builder) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 

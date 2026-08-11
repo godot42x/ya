@@ -9,8 +9,12 @@ namespace ya
 
 void UIContainer::layout(const Rect2D& parentRect)
 {
-    _layoutRect = computeAnchorRect(parentRect);
+    layoutAssigned(computeAnchorRect(parentRect));
+}
 
+void UIContainer::layoutAssigned(const Rect2D& rect)
+{
+    _layoutRect = rect;
     const float pad = _padding;
     Rect2D      content = _layoutRect;
     content.pos += glm::vec2(pad, pad);
@@ -21,7 +25,36 @@ void UIContainer::layout(const Rect2D& parentRect)
 void UIContainer::arrangeChildren(const Rect2D& contentRect)
 {
     const bool bHorizontal = _direction == EWidgetBoxLayout::Horizontal;
-    float      cursor      = bHorizontal ? contentRect.pos.x : contentRect.pos.y;
+
+    // Packed extent of all visible children + spacing along the main axis.
+    float  packedExtent = 0.0f;
+    size_t visibleCount = 0;
+    for (UIElement* child : getChildrenInPaintOrder()) {
+        if (!child->participatesInLayout()) {
+            continue;
+        }
+        const glm::vec2 desired = child->computeDesiredSize();
+        packedExtent += bHorizontal ? desired.x : desired.y;
+        ++visibleCount;
+    }
+    if (visibleCount > 0) {
+        packedExtent += static_cast<float>(visibleCount - 1) * _spacing;
+    }
+
+    // Main-axis start cursor honoring the alignment.
+    const float contentStart  = bHorizontal ? contentRect.pos.x : contentRect.pos.y;
+    const float contentExtent = bHorizontal ? contentRect.extent.x : contentRect.extent.y;
+    float       cursor        = contentStart;
+    switch (_mainAxisAlignment) {
+    case EWidgetMainAxisAlignment::Center:
+        cursor = contentStart + std::max(0.0f, (contentExtent - packedExtent) * 0.5f);
+        break;
+    case EWidgetMainAxisAlignment::End:
+        cursor = contentStart + std::max(0.0f, contentExtent - packedExtent);
+        break;
+    case EWidgetMainAxisAlignment::Start:
+        break;
+    }
 
     for (UIElement* child : getChildrenInPaintOrder()) {
         if (!child->participatesInLayout()) {

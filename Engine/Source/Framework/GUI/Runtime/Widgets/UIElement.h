@@ -71,6 +71,16 @@ enum class EWidgetBoxLayout : uint8_t
     Vertical,
 };
 
+/// Main-axis arrangement of a box container (Stack role, gui-app-bootstrap
+/// Phase 2): where the packed children sit when they do not fill the content
+/// extent.
+enum class EWidgetMainAxisAlignment : uint8_t
+{
+    Start,  // children packed at the content start (default)
+    Center, // children centered along the main axis
+    End,    // children packed at the content end
+};
+
 /// Keyboard focus participation (gui-app-bootstrap Phase 2).
 ///   None      - default: never focused by Tab traversal, skipped by the
 ///               tree's stable-order focus walk
@@ -173,8 +183,13 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
     /// Compute this element's rect within `parentRect` (anchor math), store it
     /// in `_layoutRect`, then lay out children in paint order.
     virtual void layout(const Rect2D& parentRect);
-    /// Container-assigned layout: take `rect` verbatim (no anchor math).
-    void layoutAssigned(const Rect2D& rect);
+    /// Container-assigned layout: take `rect` verbatim (no anchor math) and
+    /// run this element's own arrangement (containers re-arrange children,
+    /// scroll viewports shift their content, plain elements lay children out
+    /// with anchor math). Virtual so nested containers / split panes /
+    /// scroll viewports keep their custom layout when they receive an
+    /// assigned rect from a parent container.
+    virtual void layoutAssigned(const Rect2D& rect);
     /// Desired size for container arrangement (leaf = _size; auto-size text =
     /// measured text; containers aggregate children).
     [[nodiscard]] virtual glm::vec2 computeDesiredSize() const;
