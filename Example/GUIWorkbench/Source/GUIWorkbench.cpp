@@ -2,15 +2,13 @@
 
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
-#include "Core/System/VirtualFileSystem.h"
 
 #include "GUI/Widgets/WidgetTree.h"
-#include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Panel.h"
-#include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/SelectableRow.h"
+#include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 
@@ -31,12 +29,6 @@ constexpr glm::vec4 kButtonNormal       = {0.20f, 0.22f, 0.27f, 1.0f};
 constexpr glm::vec4 kButtonHovered      = {0.27f, 0.30f, 0.37f, 1.0f};
 constexpr glm::vec4 kButtonPressed      = {0.14f, 0.16f, 0.20f, 1.0f};
 constexpr glm::vec4 kButtonFocused      = {0.24f, 0.46f, 0.82f, 1.0f};
-
-std::string shortTypeName(const std::string& typeId)
-{
-    const size_t dot = typeId.find_last_of('.');
-    return dot == std::string::npos ? typeId : typeId.substr(dot + 1);
-}
 
 std::shared_ptr<ya::UIButton> makeToolButton(const std::string& name, const std::string& label, float width)
 {
@@ -74,11 +66,6 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
 {
     _tree = &tree;
 
-    if (!startupDocumentPath.empty()) {
-        workspace.openDocument(startupDocumentPath);
-        startupDocumentPath.clear();
-    }
-
     _root = std::make_shared<ya::UIPanel>("WorkbenchRoot");
     _root->_anchorMin = {0.0f, 0.0f};
     _root->_anchorMax = {1.0f, 1.0f};
@@ -86,10 +73,28 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
     tree.attachToLayer(ya::WidgetTree::ELayer::Content, _root);
 
     buildToolbar(tree, *_root);
-    buildDocumentList(tree, *_root);
-    buildCanvas(tree, *_root);
-    buildInspector(tree, *_root);
-    buildPalette(tree, *_root);
+
+    // Main workspace split: item list | (preview | inspector).
+    _mainSplit = std::make_shared<ya::UISplitPane>("MainSplit");
+    _mainSplit->_anchorMin = {0.0f, 0.06f};
+    _mainSplit->_anchorMax = {1.0f, 0.955f};
+    _mainSplit->_splitRatio      = 0.24f;
+    _mainSplit->_minFirstExtent  = 180.0f;
+    _mainSplit->_minSecondExtent = 420.0f;
+    tree.attach(*_root, _mainSplit);
+
+    buildDocumentList(tree, *_mainSplit);
+
+    _rightSplit = std::make_shared<ya::UISplitPane>("RightSplit");
+    _rightSplit->_anchorMin = {0.0f, 0.0f};
+    _rightSplit->_anchorMax = {1.0f, 1.0f};
+    _rightSplit->_splitRatio      = 0.66f;
+    _rightSplit->_minFirstExtent  = 240.0f;
+    _rightSplit->_minSecondExtent = 220.0f;
+    tree.attach(*_mainSplit, _rightSplit);
+
+    buildCanvas(tree, *_rightSplit);
+    buildInspector(tree, *_rightSplit);
 
     _statusText = std::make_shared<ya::UIText>("Status");
     _statusText->_anchorMin = {0.0f, 1.0f};
@@ -112,8 +117,8 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
     _commandResultText->_hAlign    = ya::EWidgetAlignH::Right;
     tree.attach(*_root, _commandResultText);
 
-    _bPreviewDirty = true;
-    _bRowsDirty    = true;
+    workspace.resetLayout();
+    _bRowsDirty = true;
 }
 
 void FWorkbenchApp::buildToolbar(ya::WidgetTree& tree, ya::UIElement& parent)
@@ -128,69 +133,47 @@ void FWorkbenchApp::buildToolbar(ya::WidgetTree& tree, ya::UIElement& parent)
     toolbar->_padding   = 8.0f;
     tree.attach(parent, toolbar);
 
-    _newButton  = makeToolButton("New", "New", 64.0f);
-    _saveButton = makeToolButton("Save", "Save", 64.0f);
-    _newButton->_onClick  = [this] { cmdNew(); };
-    _saveButton->_onClick = [this] { cmdSave(); };
-    tree.attach(*toolbar, _newButton);
-    tree.attach(*toolbar, _saveButton);
-
-    // Document path row: Open / Save As through the shared text field.
-    auto pathRow = std::make_shared<ya::UIContainer>("PathRow");
-    pathRow->_anchorMin = {0.0f, 0.0f};
-    pathRow->_anchorMax = {1.0f, 0.0f};
-    pathRow->_position  = {0.0f, 46.0f};
-    pathRow->_size      = {0.0f, 30.0f};
-    pathRow->_direction = ya::EWidgetBoxLayout::Horizontal;
-    pathRow->_spacing   = 6.0f;
-    pathRow->_padding   = 8.0f;
-    tree.attach(parent, pathRow);
-
-    _pathField = std::make_shared<ya::UITextField>("PathField");
-    _pathField->_size     = {0.0f, 26.0f};
-    _pathField->_fontSize = 13;
-    _pathField->_text     = "Engine/Saved/GUIWorkbench/untitled.yaui";
-    tree.attach(*pathRow, _pathField);
-
-    _openButton  = makeToolButton("Open", "Open", 64.0f);
-    _saveAsButton = makeToolButton("SaveAs", "Save As", 76.0f);
-    _openButton->_onClick  = [this] { cmdOpen(); };
-    _saveAsButton->_onClick = [this] { cmdSaveAs(); };
-    tree.attach(*pathRow, _openButton);
-    tree.attach(*pathRow, _saveAsButton);
+    _addButton    = makeToolButton("Add", "Add", 64.0f);
+    _removeButton = makeToolButton("Remove", "Remove", 88.0f);
+    _renameButton = makeToolButton("Rename", "Rename", 88.0f);
+    _resetButton  = makeToolButton("ResetLayout", "Reset Layout", 110.0f);
+    _addButton->_onClick    = [this] { cmdAdd(); };
+    _removeButton->_onClick = [this] { cmdRemove(); };
+    _renameButton->_onClick = [this] { cmdRename(); };
+    _resetButton->_onClick  = [this] { cmdResetLayout(); };
+    tree.attach(*toolbar, _addButton);
+    tree.attach(*toolbar, _removeButton);
+    tree.attach(*toolbar, _renameButton);
+    tree.attach(*toolbar, _resetButton);
 }
 
 void FWorkbenchApp::buildDocumentList(ya::WidgetTree& tree, ya::UIElement& parent)
 {
-    auto listPanel = std::make_shared<ya::UIPanel>("DocumentList");
-    listPanel->_anchorMin = {0.0f, 0.12f};
-    listPanel->_anchorMax = {0.24f, 0.955f};
-    listPanel->_color     = kPanelColor;
-    tree.attach(parent, listPanel);
+    _listPanel = std::make_shared<ya::UIPanel>("ItemList");
+    _listPanel->_anchorMin = {0.0f, 0.0f};
+    _listPanel->_anchorMax = {1.0f, 1.0f};
+    _listPanel->_color     = kPanelColor;
+    tree.attach(parent, _listPanel);
 
-    auto header = makeHeaderText("DOCUMENT");
+    auto header = makeHeaderText("ITEMS");
     header->_position = {10.0f, 8.0f};
-    tree.attach(*listPanel, header);
-
-    auto scroll = std::make_shared<ya::UIScrollViewport>("DocumentScroll");
-    scroll->_anchorMin = {0.0f, 0.0f};
-    scroll->_anchorMax = {1.0f, 1.0f};
-    scroll->_position  = {8.0f, 34.0f};
-    scroll->_size      = {0.0f, 0.0f};
-    tree.attach(*listPanel, scroll);
-    _rowScroll = scroll;
+    tree.attach(*_listPanel, header);
 
     _rowList = std::make_shared<ya::UIContainer>("RowList");
+    _rowList->_anchorMin = {0.0f, 0.0f};
+    _rowList->_anchorMax = {1.0f, 1.0f};
+    _rowList->_position  = {8.0f, 34.0f};
+    _rowList->_size      = {0.0f, 0.0f};
     _rowList->_direction = ya::EWidgetBoxLayout::Vertical;
     _rowList->_spacing   = 2.0f;
-    tree.attach(*scroll, _rowList);
+    tree.attach(*_listPanel, _rowList);
 }
 
 void FWorkbenchApp::buildCanvas(ya::WidgetTree& tree, ya::UIElement& parent)
 {
     _canvasPanel = std::make_shared<ya::UIPanel>("PreviewCanvas");
-    _canvasPanel->_anchorMin = {0.26f, 0.12f};
-    _canvasPanel->_anchorMax = {0.68f, 0.955f};
+    _canvasPanel->_anchorMin = {0.0f, 0.0f};
+    _canvasPanel->_anchorMax = {1.0f, 1.0f};
     _canvasPanel->_color     = kCanvasColor;
     tree.attach(parent, _canvasPanel);
 
@@ -199,26 +182,28 @@ void FWorkbenchApp::buildCanvas(ya::WidgetTree& tree, ya::UIElement& parent)
     tree.attach(*_canvasPanel, header);
 
     _highlightPanel = std::make_shared<ya::UIPanel>("SelectionHighlight");
-    _highlightPanel->_zOrder   = 1000; // above the edited document
-    _highlightPanel->_position = {0.0f, 0.0f};
-    _highlightPanel->_size     = {0.0f, 0.0f};
-    _highlightPanel->_color    = {0.90f, 0.62f, 0.15f, 0.45f};
+    _highlightPanel->_anchorMin = {0.5f, 0.5f};
+    _highlightPanel->_anchorMax = {0.5f, 0.5f};
+    _highlightPanel->_position  = {-70.0f, -45.0f};
+    _highlightPanel->_size      = {140.0f, 90.0f};
+    _highlightPanel->_color     = {0.35f, 0.55f, 0.90f, 1.0f};
     tree.attach(*_canvasPanel, _highlightPanel);
 
     _previewName = std::make_shared<ya::UIText>("PreviewName");
-    _previewName->_position = {8.0f, 8.0f};
+    _previewName->_position = {0.0f, 0.0f};
     _previewName->_size     = {400.0f, 24.0f};
     _previewName->_fontSize = 15;
-    _previewName->_text     = "(no document)";
+    _previewName->_text     = "(no selection)";
     _previewName->_color    = {0.95f, 0.96f, 0.98f, 1.0f};
-    tree.attach(*_canvasPanel, _previewName);
+    _previewName->_hAlign   = ya::EWidgetAlignH::Center;
+    tree.attach(*_highlightPanel, _previewName);
 }
 
 void FWorkbenchApp::buildInspector(ya::WidgetTree& tree, ya::UIElement& parent)
 {
     auto inspectorPanel = std::make_shared<ya::UIPanel>("Inspector");
-    inspectorPanel->_anchorMin = {0.70f, 0.12f};
-    inspectorPanel->_anchorMax = {1.0f, 0.955f};
+    inspectorPanel->_anchorMin = {0.0f, 0.0f};
+    inspectorPanel->_anchorMax = {1.0f, 1.0f};
     inspectorPanel->_color     = kPanelColor;
     tree.attach(parent, inspectorPanel);
 
@@ -234,20 +219,16 @@ void FWorkbenchApp::buildInspector(ya::WidgetTree& tree, ya::UIElement& parent)
     auto header = makeHeaderText("INSPECTOR");
     tree.attach(*form, header);
 
-    _typeValue = std::make_shared<ya::UIText>("TypeValue");
-    _typeValue->_size     = {220.0f, 18.0f};
-    _typeValue->_fontSize = 13;
-    _typeValue->_text     = "-";
-    _typeValue->_color    = kHeaderColor;
-    tree.attach(*form, _typeValue);
-
     auto nameLabel = makeHeaderText("Name");
     tree.attach(*form, nameLabel);
 
     _nameField = std::make_shared<ya::UITextField>("NameField");
     _nameField->_size     = {220.0f, 26.0f};
     _nameField->_fontSize = 14;
-    _nameField->_onCommit = [this](const std::string& text) { renameSelected(text); };
+    _nameField->_onCommit = [this](const std::string& text) {
+        workspace.renameSelected(text);
+        setCommandResult(workspace.commandResult);
+    };
     tree.attach(*form, _nameField);
 
     auto visibleLabel = makeHeaderText("Visible");
@@ -255,8 +236,29 @@ void FWorkbenchApp::buildInspector(ya::WidgetTree& tree, ya::UIElement& parent)
 
     _visibleToggle = makeToolButton("VisibleToggle", "Visible: on", 110.0f);
     _visibleToggle->_size = {110.0f, 24.0f};
-    _visibleToggle->_onClick = [this] { toggleSelectedVisible(); };
+    _visibleToggle->_onClick = [this] {
+        workspace.toggleSelectedVisible();
+        setCommandResult(workspace.commandResult);
+    };
     tree.attach(*form, _visibleToggle);
+
+    auto colorLabel = makeHeaderText("Color");
+    tree.attach(*form, colorLabel);
+
+    _colorCycle = makeToolButton("ColorCycle", "Cycle Color", 110.0f);
+    _colorCycle->_size = {110.0f, 24.0f};
+    _colorCycle->_onClick = [this] {
+        workspace.cycleSelectedColor();
+        setCommandResult(workspace.commandResult);
+    };
+    tree.attach(*form, _colorCycle);
+
+    _colorValue = std::make_shared<ya::UIText>("ColorValue");
+    _colorValue->_size     = {220.0f, 14.0f};
+    _colorValue->_fontSize = 12;
+    _colorValue->_text     = "";
+    _colorValue->_color    = kHeaderColor;
+    tree.attach(*form, _colorValue);
 
     auto sizeLabel = makeHeaderText("Size");
     tree.attach(*form, sizeLabel);
@@ -268,169 +270,68 @@ void FWorkbenchApp::buildInspector(ya::WidgetTree& tree, ya::UIElement& parent)
 
     _sizeGrow = makeToolButton("SizeGrow", "Grow +20", 90.0f);
     _sizeGrow->_size = {90.0f, 24.0f};
-    _sizeGrow->_onClick = [this] { stepSelectedSize({20.0f, 20.0f}); };
+    _sizeGrow->_onClick = [this] {
+        workspace.stepSelectedSize({20.0f, 20.0f});
+        setCommandResult(workspace.commandResult);
+    };
     tree.attach(*sizeRow, _sizeGrow);
 
     _sizeShrink = makeToolButton("SizeShrink", "Shrink -20", 100.0f);
     _sizeShrink->_size = {100.0f, 24.0f};
-    _sizeShrink->_onClick = [this] { stepSelectedSize({-20.0f, -20.0f}); };
+    _sizeShrink->_onClick = [this] {
+        workspace.stepSelectedSize({-20.0f, -20.0f});
+        setCommandResult(workspace.commandResult);
+    };
     tree.attach(*sizeRow, _sizeShrink);
 
     _sizeValue = std::make_shared<ya::UIText>("SizeValue");
     _sizeValue->_size     = {220.0f, 14.0f};
     _sizeValue->_fontSize = 12;
-    _sizeValue->_text     = "-";
+    _sizeValue->_text     = "";
     _sizeValue->_color    = kHeaderColor;
     tree.attach(*form, _sizeValue);
-
-    _deleteButton = makeToolButton("Delete", "Delete Selected", 130.0f);
-    _deleteButton->_size = {130.0f, 24.0f};
-    _deleteButton->_onClick = [this] { deleteSelected(); };
-    tree.attach(*form, _deleteButton);
 }
 
-void FWorkbenchApp::buildPalette(ya::WidgetTree& tree, ya::UIElement& parent)
-{
-    auto palettePanel = std::make_shared<ya::UIPanel>("Palette");
-    palettePanel->_anchorMin = {0.0f, 0.0f};
-    palettePanel->_anchorMax = {1.0f, 0.0f};
-    palettePanel->_position  = {0.0f, 0.0f};
-    palettePanel->_size      = {0.0f, 56.0f};
-    palettePanel->_color     = kPanelColor;
-    tree.attach(parent, palettePanel);
+// === Frame-boundary sync ===
 
-    auto header = makeHeaderText("PALETTE");
-    header->_position = {10.0f, 6.0f};
-    tree.attach(*palettePanel, header);
-
-    _paletteList = std::make_shared<ya::UIContainer>("PaletteList");
-    _paletteList->_anchorMin = {0.0f, 0.0f};
-    _paletteList->_anchorMax = {1.0f, 0.0f}; // horizontal span only; fixed 30px height
-    _paletteList->_position  = {10.0f, 26.0f};
-    _paletteList->_size      = {0.0f, 30.0f};
-    _paletteList->_direction = ya::EWidgetBoxLayout::Horizontal;
-    _paletteList->_spacing   = 6.0f;
-    tree.attach(*palettePanel, _paletteList);
-
-    for (const std::string& typeId : ya::UITypeRegistry::instance().getTypeIds()) {
-        auto button = makeToolButton("Palette_" + typeId, shortTypeName(typeId), 76.0f);
-        button->_size = {76.0f, 24.0f};
-        button->_onClick = [this, typeId] { addWidgetFromPalette(typeId); };
-        tree.attach(*_paletteList, button);
-    }
-}
-
-// === Document sync ===
-
-std::string FWorkbenchApp::widgetPathOf(const ya::UIElement& root, const ya::UIElement& widget)
-{
-    std::string path;
-    for (const ya::UIElement* node = &widget; node != nullptr; node = node->getParent()) {
-        if (node == &root) {
-            return path;
-        }
-        const ya::UIElement* parent = node->getParent();
-        if (!parent) {
-            return {};
-        }
-        size_t index = 0;
-        for (const auto& ref : parent->getChildren()) {
-            if (ref.get() == node) {
-                break;
-            }
-            ++index;
-        }
-        path = path.empty() ? std::to_string(index) : std::to_string(index) + "." + path;
-    }
-    return {};
-}
-
-ya::UIElement* FWorkbenchApp::findPreviewWidget(const std::string& path)
-{
-    if (!_previewRoot || path.empty()) {
-        return _previewRoot.get();
-    }
-    ya::UIElement* node = _previewRoot.get();
-    size_t         offset = 0;
-    while (offset < path.size()) {
-        const size_t dot = path.find('.', offset);
-        const std::string segment = path.substr(offset, dot == std::string::npos ? std::string::npos : dot - offset);
-        const size_t index = static_cast<size_t>(std::stoull(segment));
-        if (index >= node->getChildren().size()) {
-            return nullptr;
-        }
-        node = node->getChildren()[index].get();
-        offset = (dot == std::string::npos) ? path.size() : dot + 1;
-    }
-    return node;
-}
-
-ya::UIElement* FWorkbenchApp::getSelectedWidget()
-{
-    if (!workspace.document) {
-        return nullptr;
-    }
-    return findPreviewWidget(workspace.getSelectedPath());
-}
-
-void FWorkbenchApp::rebuildPreviewTree()
-{
-    if (!_bPreviewDirty) {
-        return;
-    }
-    if (_previewRoot && _previewRoot->isAttached()) {
-        _tree->detach(*_previewRoot);
-    }
-    _previewRoot.reset();
-
-    if (workspace.document) {
-        _previewRoot = workspace.document->instantiate();
-        if (_previewRoot) {
-            _tree->attach(*_canvasPanel, _previewRoot);
-            if (workspace.getSelectedPath().empty()) {
-                workspace.select("");
-            }
-        }
-    }
-    _bPreviewDirty = false;
-    _bRowsDirty    = true;
-}
-
-void FWorkbenchApp::rebuildDocumentRows()
+void FWorkbenchApp::rebuildItemRows()
 {
     if (_rowList && _rowList->isAttached()) {
         _tree->detach(*_rowList);
     }
     _rowList = std::make_shared<ya::UIContainer>("RowList");
+    _rowList->_anchorMin = {0.0f, 0.0f};
+    _rowList->_anchorMax = {1.0f, 1.0f};
+    _rowList->_position  = {8.0f, 34.0f};
+    _rowList->_size      = {0.0f, 0.0f};
     _rowList->_direction = ya::EWidgetBoxLayout::Vertical;
     _rowList->_spacing   = 2.0f;
-    _tree->attach(*_rowScroll, _rowList);
+    _tree->attach(*_listPanel, _rowList);
     _rows.clear();
 
-    for (const FDocumentRow& row : workspace.flattenRows()) {
-        auto rowWidget = std::make_shared<ya::UISelectableRow>("Row_" + row.path);
-        rowWidget->_itemId = row.path;
-        rowWidget->_size   = {240.0f, 22.0f};
-        rowWidget->_onSelect = [this](const std::string& path) {
-            workspace.select(path);
-            setCommandResult("List: selected '" + path + "'");
+    for (const FWorkbenchItem& item : workspace.items) {
+        auto row = std::make_shared<ya::UISelectableRow>("Row_" + item.id);
+        row->_itemId = item.id;
+        row->_size   = {240.0f, 22.0f};
+        row->_onSelect = [this](const std::string& id) {
+            workspace.select(id);
+            setCommandResult("List: selected '" + id + "'");
         };
-        rowWidget->_onActivate = [this](const std::string& path) {
-            workspace.select(path);
-            setCommandResult("List: activated '" + path + "'");
+        row->_onActivate = [this](const std::string& id) {
+            workspace.select(id);
+            setCommandResult("List: activated '" + id + "'");
         };
 
-        auto label = std::make_shared<ya::UIText>("RowLabel_" + row.path);
+        auto label = std::make_shared<ya::UIText>("RowLabel_" + item.id);
         label->_size     = {240.0f, 22.0f};
-        label->_position = {4.0f + static_cast<float>(row.depth) * 14.0f, 0.0f};
         label->_fontSize = 13;
-        label->_text     = row.name + "  [" + shortTypeName(row.typeId) + "]";
+        label->_text     = item.bVisible ? item.name : item.name + " (hidden)";
         label->_color    = {0.88f, 0.90f, 0.94f, 1.0f};
         label->_vAlign   = ya::EWidgetAlignV::Center;
 
-        _tree->attach(*_rowList, rowWidget);
-        _tree->attach(*rowWidget, label);
-        _rows.push_back(rowWidget);
+        _tree->attach(*_rowList, row);
+        _tree->attach(*row, label);
+        _rows.push_back(row);
     }
     _bRowsDirty = false;
 }
@@ -440,176 +341,79 @@ void FWorkbenchApp::syncPresentationState()
     if (!_tree) {
         return;
     }
-    if (_bPreviewDirty) {
-        rebuildPreviewTree();
-    }
     if (_bRowsDirty) {
-        rebuildDocumentRows();
+        rebuildItemRows();
     }
 
-    const auto rows = workspace.flattenRows();
-    if (_rows.size() == rows.size()) {
-        for (size_t i = 0; i < _rows.size(); ++i) {
-            auto* label = _rows[i]->getChildren().empty()
-                              ? nullptr
-                              : dynamic_cast<ya::UIText*>(_rows[i]->getChildren()[0].get());
-            if (label) {
-                label->_text = rows[i].name + "  [" + shortTypeName(rows[i].typeId) + "]";
-            }
-            _rows[i]->_bSelected = (rows[i].path == workspace.getSelectedPath());
-        }
+    const FWorkbenchItem* selected = workspace.getSelected();
+
+    for (const auto& row : _rows) {
+        row->_bSelected = (selected != nullptr && row->_itemId == selected->id);
     }
 
-    // Preview highlight + label.
-    ya::UIElement* selected = getSelectedWidget();
-    if (selected && _canvasPanel && selected->isAttached()) {
-        const glm::vec2 relative = selected->_layoutRect.pos - _canvasPanel->_layoutRect.pos;
+    // Preview: highlight + name follow the selection.
+    if (selected) {
         _highlightPanel->_visibility = ya::EWidgetVisibility::Visible;
-        _highlightPanel->_position   = relative;
-        _highlightPanel->_size       = selected->_layoutRect.extent;
-        _previewName->_text = selected->_name + "  [" + shortTypeName(selected->_typeId) + "]";
+        _highlightPanel->_size       = selected->size;
+        _highlightPanel->_position   = -selected->size * 0.5f;
+        _highlightPanel->_color      = selected->bVisible
+                                           ? selected->color
+                                           : glm::vec4(selected->color.r, selected->color.g,
+                                                       selected->color.b, 0.35f);
+        _previewName->_text = selected->bVisible ? selected->name : selected->name + " (hidden)";
     }
     else {
         _highlightPanel->_visibility = ya::EWidgetVisibility::Hidden;
-        _previewName->_text          = workspace.document ? "(no selection)" : "(no document)";
+        _previewName->_text          = "(no selection)";
     }
 
-    // Inspector values.
-    // Never overwrite the buffer while the user is typing (commit owns the
-    // field -> instance -> document sync).
+    // Inspector values (never overwrite the name buffer while typing).
     if (_tree->getFocused() != _nameField.get()) {
-        _nameField->_text = selected ? selected->_name : "";
+        _nameField->_text = selected ? selected->name : "";
         _nameField->clampCursor();
     }
-    if (selected) {
-        _typeValue->_text = "type: " + (selected->_typeId.empty() ? "Widget" : selected->_typeId);
-        _sizeValue->_text = std::format("{} x {}", static_cast<int>(selected->_size.x),
-                                        static_cast<int>(selected->_size.y));
-        if (!_visibleToggle->getChildren().empty()) {
-            if (auto* label = dynamic_cast<ya::UIText*>(_visibleToggle->getChildren()[0].get())) {
-                label->_text = selected->_visibility == ya::EWidgetVisibility::Visible ? "Visible: on"
-                                                                                       : "Visible: off";
-            }
+    _colorValue->_text = selected ? std::format("rgba({:.2f}, {:.2f}, {:.2f})",
+                                                selected->color.r, selected->color.g, selected->color.b)
+                                  : "-";
+    _sizeValue->_text  = selected ? std::format("{} x {}", static_cast<int>(selected->size.x),
+                                                static_cast<int>(selected->size.y))
+                                  : "-";
+    if (!_visibleToggle->getChildren().empty()) {
+        if (auto* label = dynamic_cast<ya::UIText*>(_visibleToggle->getChildren()[0].get())) {
+            label->_text = (selected && selected->bVisible) ? "Visible: on" : "Visible: off";
         }
     }
-    else {
-        _typeValue->_text = "-";
-        _sizeValue->_text = "-";
-    }
 
-    _pathField->clampCursor();
-    if (_commandResultText) {
-        _commandResultText->_text = workspace.commandResult;
-    }
+    _commandResultText->_text = workspace.commandResult;
 }
 
 // === Commands ===
 
-void FWorkbenchApp::cmdNew()
+void FWorkbenchApp::cmdAdd()
 {
-    workspace.newDocument("engine.panel");
-    _bPreviewDirty = true;
-    setCommandResult(workspace.commandResult);
-}
-
-void FWorkbenchApp::cmdOpen()
-{
-    const bool bOpened = workspace.openDocument(_pathField->_text);
-    _bPreviewDirty = bOpened;
-    setCommandResult(workspace.commandResult);
-}
-
-void FWorkbenchApp::cmdSave()
-{
-    if (workspace.document && _previewRoot) {
-        workspace.rebuildFromPreview(*_previewRoot);
-    }
-    const bool bSaved = workspace.saveDocument();
-    setCommandResult(workspace.commandResult);
-    (void)bSaved;
-}
-
-void FWorkbenchApp::cmdSaveAs()
-{
-    if (workspace.document && _previewRoot) {
-        workspace.rebuildFromPreview(*_previewRoot);
-    }
-    const bool bSaved = workspace.saveDocumentAs(_pathField->_text);
-    setCommandResult(workspace.commandResult);
-    (void)bSaved;
-}
-
-void FWorkbenchApp::addWidgetFromPalette(const std::string& typeId)
-{
-    if (!_previewRoot || !_previewRoot->isAttached()) {
-        setCommandResult("Palette: open a document first");
-        return;
-    }
-    ya::UIElementRef widget = ya::UITypeRegistry::instance().createInstance(typeId);
-    if (!widget) {
-        setCommandResult("Palette: unknown type " + typeId);
-        return;
-    }
-    ya::UIElement* parent = getSelectedWidget();
-    if (!parent) {
-        parent = _previewRoot.get();
-    }
-    widget->_name = shortTypeName(typeId);
-    _tree->attach(*parent, widget);
-    workspace.rebuildFromPreview(*_previewRoot);
-    workspace.select(widgetPathOf(*_previewRoot, *widget));
-    workspace.recordMutation();
+    workspace.addItem(std::format("Item {}", workspace.items.size() + 1));
     _bRowsDirty = true;
-    setCommandResult("Palette: added " + typeId);
+    setCommandResult(workspace.commandResult);
 }
 
-void FWorkbenchApp::deleteSelected()
+void FWorkbenchApp::cmdRemove()
 {
-    ya::UIElement* selected = getSelectedWidget();
-    if (!selected) {
-        setCommandResult("Delete: nothing selected");
-        return;
-    }
-    if (selected == _previewRoot.get()) {
-        setCommandResult("Delete: document root is protected");
-        return;
-    }
-    const std::string name = selected->_name;
-    _tree->detach(*selected);
-    workspace.rebuildFromPreview(*_previewRoot);
-    workspace.recordMutation();
+    workspace.removeSelected();
     _bRowsDirty = true;
-    setCommandResult("Delete: '" + name + "'");
+    setCommandResult(workspace.commandResult);
 }
 
-void FWorkbenchApp::renameSelected(const std::string& name)
+void FWorkbenchApp::cmdRename()
 {
-    if (ya::UIElement* selected = getSelectedWidget()) {
-        selected->_name = name;
-        workspace.rebuildFromPreview(*_previewRoot);
-        workspace.recordMutation();
-        setCommandResult("Inspector: name = '" + name + "'");
-    }
+    workspace.renameSelected(_nameField->_text);
+    setCommandResult(workspace.commandResult);
 }
 
-void FWorkbenchApp::toggleSelectedVisible()
+void FWorkbenchApp::cmdResetLayout()
 {
-    if (ya::UIElement* selected = getSelectedWidget()) {
-        selected->_visibility = (selected->_visibility == ya::EWidgetVisibility::Visible)
-                                    ? ya::EWidgetVisibility::Hidden
-                                    : ya::EWidgetVisibility::Visible;
-        workspace.recordMutation();
-        setCommandResult("Inspector: visibility toggled");
-    }
-}
-
-void FWorkbenchApp::stepSelectedSize(const glm::vec2& delta)
-{
-    if (ya::UIElement* selected = getSelectedWidget()) {
-        selected->_size = glm::max(glm::vec2(20.0f), selected->_size + delta);
-        workspace.recordMutation();
-        setCommandResult("Inspector: size changed");
-    }
+    workspace.resetLayout();
+    _bRowsDirty = true;
+    setCommandResult(workspace.commandResult);
 }
 
 void FWorkbenchApp::setCommandResult(const std::string& text)
@@ -674,106 +478,85 @@ void FWorkbenchApp::runAutomation()
 {
     switch (_frame) {
     case 3: {
-        // 1. New document.
-        const glm::vec2 center = _newButton->_layoutRect.pos + _newButton->_layoutRect.extent * 0.5f;
+        // 1. Add: toolbar command appends + selects a new item.
+        const glm::vec2 center = _addButton->_layoutRect.pos + _addButton->_layoutRect.extent * 0.5f;
         dispatchPointer(ya::MouseButtonPressedEvent(0), center);
         dispatchPointer(ya::MouseButtonReleasedEvent(0), center);
-        if (!workspace.document) {
-            YA_CORE_ERROR("Workbench automation: New failed");
+        if (workspace.items.size() != 4u || workspace.getSelected() == nullptr ||
+            workspace.getSelected()->name != "Item 4") {
+            YA_CORE_ERROR("Workbench automation: Add failed (items={}, selected='{}')",
+                          workspace.items.size(),
+                          workspace.getSelected() ? workspace.getSelected()->name : "<none>");
             _bAutomationDone = true;
             return;
         }
         break;
     }
     case 4: {
-        // 2. Palette: add a button under the selected root.
-        if (_paletteList->getChildren().empty()) {
-            YA_CORE_ERROR("Workbench automation: palette missing button type");
-            _bAutomationDone = true;
-            return;
-        }
-        // Palette rows are sorted registry type ids: engine.button is first.
-        auto* button = dynamic_cast<ya::UIButton*>(_paletteList->getChildren()[0].get());
-        if (!button) {
-            YA_CORE_ERROR("Workbench automation: palette row 2 is not a button");
-            _bAutomationDone = true;
-            return;
-        }
-        const glm::vec2 center = button->_layoutRect.pos + button->_layoutRect.extent * 0.5f;
-        dispatchPointer(ya::MouseButtonPressedEvent(0), center);
-        dispatchPointer(ya::MouseButtonReleasedEvent(0), center);
-        if (workspace.flattenRows().size() != 2u) {
-            YA_CORE_ERROR("Workbench automation: palette add failed (rows={})",
-                          workspace.flattenRows().size());
+        // 2. Rename through the inspector field (real typing + commit).
+        dispatchPointer(ya::MouseButtonPressedEvent(0),
+                        _nameField->_layoutRect.pos + _nameField->_layoutRect.extent * 0.5f);
+        ya::KeyPressedEvent home{};
+        home._keyCode = ya::EKey::Home;
+        dispatchKey(home);
+        dispatchKey(ya::KeyTypedEvent("Star_"));
+        ya::KeyPressedEvent enter{};
+        enter._keyCode = ya::EKey::Enter;
+        dispatchKey(enter);
+        const FWorkbenchItem* selected = workspace.getSelected();
+        if (!selected || selected->name != "Star_Item 4") {
+            YA_CORE_ERROR("Workbench automation: rename failed ('{}')",
+                          selected ? selected->name : "<none>");
             _bAutomationDone = true;
             return;
         }
         break;
     }
     case 5: {
-        // 3. Rename the selected (new) button through the inspector field.
-        dispatchPointer(ya::MouseButtonPressedEvent(0),
-                        _nameField->_layoutRect.pos + _nameField->_layoutRect.extent * 0.5f);
-        ya::KeyPressedEvent end{};
-        end._keyCode = ya::EKey::End;
-        dispatchKey(end);
-        dispatchKey(ya::KeyTypedEvent("_OK"));
-        // Commit through the field's own Enter path (same as a user).
-        ya::KeyPressedEvent enter{};
-        enter._keyCode = ya::EKey::Enter;
-        dispatchKey(enter);
-        if (_nameField->_text != "button_OK") {
-            ya::UIElement* selected = getSelectedWidget();
-            YA_CORE_ERROR("Workbench automation: rename failed ('{}' selected='{}' path='{}')",
-                          _nameField->_text,
-                          selected ? selected->_name : "<none>",
-                          workspace.getSelectedPath());
+        // 3. Remove the selected item (row list rebuilds).
+        const glm::vec2 center = _removeButton->_layoutRect.pos + _removeButton->_layoutRect.extent * 0.5f;
+        dispatchPointer(ya::MouseButtonPressedEvent(0), center);
+        dispatchPointer(ya::MouseButtonReleasedEvent(0), center);
+        if (workspace.items.size() != 3u) {
+            YA_CORE_ERROR("Workbench automation: Remove failed (items={})", workspace.items.size());
             _bAutomationDone = true;
             return;
         }
         break;
     }
     case 6: {
-        // 4. Save As through the path field (simulated typed path).
-        _pathField->_text = "Engine/Saved/GUIWorkbench/smoke.yaui";
-        const glm::vec2 center = _saveAsButton->_layoutRect.pos + _saveAsButton->_layoutRect.extent * 0.5f;
-        dispatchPointer(ya::MouseButtonPressedEvent(0), center);
-        if (!_saveAsButton->_bPressed) {
-            YA_CORE_ERROR("Workbench automation: SaveAs press was not consumed");
-            _bAutomationDone = true;
-            return;
-        }
-        dispatchPointer(ya::MouseButtonReleasedEvent(0), center);
-        if (workspace.bDirty || workspace.documentPath != "Engine/Saved/GUIWorkbench/smoke.yaui") {
-            YA_CORE_ERROR("Workbench automation: save failed ('{}', dirty={})",
-                          workspace.commandResult, workspace.bDirty);
-            YA_CORE_ERROR("Workbench automation: saveAs rect={} {} {}x{}",
-                          _saveAsButton->_layoutRect.pos.x, _saveAsButton->_layoutRect.pos.y,
-                          _saveAsButton->_layoutRect.extent.x, _saveAsButton->_layoutRect.extent.y);
+        // 4. Keyboard: unhandled Up arrow navigates the list (removal left
+        // the selection on the last item).
+        ya::KeyPressedEvent up{};
+        up._keyCode = ya::EKey::Up;
+        dispatchKey(up);
+        if (workspace.getSelectedIndex() != 1) {
+            YA_CORE_ERROR("Workbench automation: arrow navigation failed (index={})",
+                          workspace.getSelectedIndex());
             _bAutomationDone = true;
             return;
         }
         break;
     }
     case 7: {
-        // 5. Verify: two rows, selection on the renamed button, file on disk.
-        const auto rows = workspace.flattenRows();
-        std::string content;
-        const bool  bFile = VirtualFileSystem::get() &&
-                           VirtualFileSystem::get()->readFileToString(workspace.documentPath, content);
-        const bool bRowsOk    = rows.size() == 2u && rows[1].name == "button_OK";
-        const bool bSelected  = workspace.getSelectedPath() == "0";
-        const bool bDirty     = !workspace.bDirty;
-        if (!bFile || !bRowsOk || !bSelected || !bDirty) {
-            YA_CORE_ERROR("Workbench automation: verification failed "
-                          "(file={} rows={} selected={} clean={})",
-                          bFile, bRowsOk, bSelected, bDirty);
+        // 5. Verify the presenter synced the whole chain.
+        const FWorkbenchItem* selected = workspace.getSelected();
+        const bool bNameSynced    = _nameField->_text == selected->name;
+        const bool bRowsSynced    = std::any_of(_rows.begin(), _rows.end(), [&](const auto& row) {
+            return row->_itemId == selected->id && row->_bSelected;
+        });
+        const bool bPreviewSynced = _previewName->_text == selected->name;
+        const bool bStatusSynced  = _commandResultText->_text == "List: navigated";
+        if (!bNameSynced || !bRowsSynced || !bPreviewSynced || !bStatusSynced) {
+            YA_CORE_ERROR("Workbench automation: presenter sync incomplete "
+                          "(name={} rows={} preview={} status={})",
+                          bNameSynced, bRowsSynced, bPreviewSynced, bStatusSynced);
             _bAutomationDone = true;
             return;
         }
         _bSmokePassed   = true;
         _bAutomationDone = true;
-        YA_CORE_INFO("Workbench automation PASSED: new -> palette -> rename -> save -> verify");
+        YA_CORE_INFO("Workbench automation PASSED: add -> rename -> remove -> navigate -> sync");
         break;
     }
     default:

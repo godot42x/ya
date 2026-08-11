@@ -1,21 +1,15 @@
 #pragma once
 
 // ============================================================================
-// FWorkbenchWorkspace - the .yaui document workspace (gui-app-bootstrap
-// Phase 3 + document loop).
+// FWorkbenchWorkspace - pure app-state workspace (gui-app-bootstrap Phase 3).
 //
-// Ownership rule: the document template, selection (child-index path) and
-// command state live here; widgets only hold presentation state and report
-// actions. The workspace deliberately does not include WidgetTree headers:
-// it is testable without the live tree and is the candidate for later
-// extraction once the editor consumes the same contract.
-//
-// The live preview instance is owned by the presenter (FWorkbenchApp); the
-// workspace only rebuilds its document template from that instance
-// (rebuildFromPreview) and persists it (save*).
+// Layering rule (plan 4.2): the workspace holds stable item ids, selection,
+// field values and command results; it must NOT include GUI headers. The
+// presenter (FWorkbenchApp) is the only layer allowed to know both the
+// workspace and the widget ids/handles.
 // ============================================================================
 
-#include "GUI/Widgets/UIDocument.h"
+#include <glm/glm.hpp>
 
 #include <string>
 #include <vector>
@@ -23,58 +17,46 @@
 namespace guiworkbench
 {
 
-/// One flattened document row (pure data, mirrors the presenter's list).
-struct FDocumentRow
+/// One mock object in the workspace graph.
+struct FWorkbenchItem
 {
-    std::string path;      // child-index path from the root; "" = root
+    std::string id;
     std::string name;
-    std::string typeId;    // full registry type id (may be empty)
-    int         depth = 0;
+    bool        bVisible = true;
+    glm::vec4   color    = {1.0f, 1.0f, 1.0f, 1.0f};
+    glm::vec2   size     = {140.0f, 90.0f};
 };
 
-/// .yaui document workspace: document + selection + command state.
+/// ToolWorkspace: app state / selection / commands (no UIElement include).
 struct FWorkbenchWorkspace
 {
-    std::shared_ptr<ya::UIDocument> document;
-    std::string                     documentPath;
-    /// Selected child-index path ("" = root, empty string when nothing open
-    /// is represented by document == nullptr).
-    std::string selectedPath;
-    bool        bDirty        = false;
-    std::string commandResult = "Ready";
+    std::vector<FWorkbenchItem> items;
+    std::string                 selectedId;
+    bool                        bDirty        = false;
+    std::string                 commandResult = "Ready";
 
-    // === Document commands ===
-    /// Create a fresh document with the given root widget type.
-    void newDocument(const std::string& typeId = "engine.panel");
-    /// Load + parse a `.yaui` file. Returns false (with diagnostics) on
-    /// read/parse failure.
-    bool openDocument(const std::string& path);
-    /// Write the document back to `documentPath`. Returns false when there
-    /// is no document / no path.
-    bool saveDocument();
-    /// Write the document to `path` and remember it. Returns false on
-    /// failure.
-    bool saveDocumentAs(const std::string& path);
-    void closeDocument();
-    /// Rebuild the document template from the live preview instance
-    /// (called by the presenter on save).
-    void rebuildFromPreview(const ya::UIElement& previewRoot);
+    // === App commands (visible feedback through commandResult) ===
+    void addItem(const std::string& name = "Item");
+    void removeSelected();
+    void renameSelected(const std::string& name);
+    /// Restore the default mock object graph and select the first item.
+    void resetLayout();
 
-    // === Selection (path-based; the presenter maps paths to live widgets) ===
-    void select(const std::string& path);
-    /// Move selection by `delta` rows in the flattened document order
-    /// (clamped; no-op without a document).
+    // === Selection ===
+    void select(const std::string& id);
+    /// Move selection by `delta` rows (clamped; no-op without items).
     void selectRelative(int delta);
-    [[nodiscard]] const std::string& getSelectedPath() const { return selectedPath; }
-    /// Flatten the document into stable rows (depth-first). The presenter
-    /// rebuilds its row widgets from this; selection navigation uses the
-    /// same order.
-    [[nodiscard]] std::vector<FDocumentRow> flattenRows() const;
+    [[nodiscard]] const FWorkbenchItem* getSelected() const;
+    [[nodiscard]] FWorkbenchItem*       getSelectedMutable();
+    [[nodiscard]] int                   getSelectedIndex() const;
 
-    // === Mutations ===
-    /// Mark the document dirty (called by the presenter after editing the
-    /// live instance; rebuildFromPreview is only needed before save).
-    void recordMutation() { bDirty = true; }
+    // === Inspector mutations (mark dirty) ===
+    void toggleSelectedVisible();
+    void cycleSelectedColor();
+    void stepSelectedSize(const glm::vec2& delta);
+
+  private:
+    [[nodiscard]] FWorkbenchItem* findItem(const std::string& id);
 };
 
 } // namespace guiworkbench

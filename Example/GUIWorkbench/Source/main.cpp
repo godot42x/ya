@@ -51,9 +51,6 @@ int main(int argc, char** argv)
         if (arg == "--smoke-actions") {
             app.bSmokeActions = true;
         }
-        else if (arg.starts_with("--yaui=")) {
-            app.startupDocumentPath = arg.substr(std::string("--yaui=").size());
-        }
     }
     ya::GUIAppHost host(config, app);
     if (!host.init()) {

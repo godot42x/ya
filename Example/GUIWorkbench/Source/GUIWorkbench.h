@@ -1,19 +1,17 @@
 #pragma once
 
 // ============================================================================
-// FWorkbenchApp - GUIWorkbench delegate (gui-app-bootstrap).
+// FWorkbenchApp - GUIWorkbench presenter (gui-app-bootstrap Phase 3).
 //
-// The GUI app minimal closure: a real .yaui document editor built entirely
-// from GUI framework controls (no ImGui, no Scene):
+// Retain-mode shell built entirely from GUI framework controls (no ImGui,
+// no Scene, no .yaui): toolbar commands | item list | live preview | 
+// inspector. Layering (plan 4.2):
 //
-//   toolbar commands  | document tree | live preview canvas | inspector +
-//   palette
-//
-// Layering:
-//   FWorkbenchWorkspace - document template / selection path / commands
-//   FWorkbenchApp       - presenter: maps workspace -> live preview instance
-//                         + shell widgets; turns widget actions into
-//                         workspace mutations
+//   FWorkbenchWorkspace - app state / selection / commands (no GUI include)
+//   FWorkbenchApp       - the ONLY layer knowing workspace + widget ids:
+//                         maps workspace -> widget state and turns widget
+//                         actions back into workspace mutations
+//   Widget shell        - layout / paint / transient hover/focus/pressed
 //   GUIAppHost          - window / input / snapshot / present (engine)
 // ============================================================================
 
@@ -33,10 +31,9 @@ struct UIButton;
 struct UIContainer;
 struct UIPanel;
 struct UISelectableRow;
-struct UIScrollViewport;
+struct UISplitPane;
 struct UIText;
 struct UITextField;
-struct UIElement;
 struct WidgetTree;
 } // namespace ya
 
@@ -54,12 +51,9 @@ class FWorkbenchApp final : public ya::IGUIAppDelegate
     void onRoutedEvent(const ya::Event& event, ya::EWidgetRouteResult result) override;
 
     /// Headless end-to-end smoke (--smoke-actions): drives the real event
-    /// path (dispatch + routed-result observation) across new -> palette
-    /// add -> rename -> save, then asserts workspace + file state.
+    /// path (dispatch + routed-result observation) across add -> select ->
+    /// rename -> remove, then asserts workspace + presenter sync.
     bool bSmokeActions = false;
-    /// Document to open at startup (`--yaui=<path>`); applied in buildUI
-    /// once the host initialized the virtual file system.
-    std::string startupDocumentPath;
     [[nodiscard]] bool getSmokePassed() const { return _bSmokePassed; }
 
   private:
@@ -67,29 +61,17 @@ class FWorkbenchApp final : public ya::IGUIAppDelegate
     void buildDocumentList(ya::WidgetTree& tree, ya::UIElement& parent);
     void buildCanvas(ya::WidgetTree& tree, ya::UIElement& parent);
     void buildInspector(ya::WidgetTree& tree, ya::UIElement& parent);
-    void buildPalette(ya::WidgetTree& tree, ya::UIElement& parent);
 
-    // Document sync (frame boundary, called from updateUI).
-    void rebuildPreviewTree();
-    void rebuildDocumentRows();
+    // Frame-boundary sync (updateUI).
+    void rebuildItemRows();
     void syncPresentationState();
 
     // Commands.
-    void cmdNew();
-    void cmdOpen();
-    void cmdSave();
-    void cmdSaveAs();
-    void addWidgetFromPalette(const std::string& typeId);
-    void deleteSelected();
-    void renameSelected(const std::string& name);
-    void toggleSelectedVisible();
-    void stepSelectedSize(const glm::vec2& delta);
+    void cmdAdd();
+    void cmdRemove();
+    void cmdRename();
+    void cmdResetLayout();
     void setCommandResult(const std::string& text);
-
-    // Preview tree helpers.
-    [[nodiscard]] ya::UIElement* findPreviewWidget(const std::string& path);
-    [[nodiscard]] ya::UIElement* getSelectedWidget();
-    static std::string widgetPathOf(const ya::UIElement& root, const ya::UIElement& widget);
 
     void handleUnhandledKey(const ya::KeyPressedEvent& keyEvent);
     void runAutomation();
@@ -101,42 +83,37 @@ class FWorkbenchApp final : public ya::IGUIAppDelegate
     bool            _bSmokePassed = false;
     bool            _bAutomationDone = false;
 
-    // Shell handles (strong refs mirror the tree's ownership).
+    // Shell handles.
     std::shared_ptr<ya::UIPanel>       _root;
-    std::shared_ptr<ya::UIButton>      _newButton;
-    std::shared_ptr<ya::UIButton>      _saveButton;
-    std::shared_ptr<ya::UIButton>      _openButton;
-    std::shared_ptr<ya::UIButton>      _saveAsButton;
-    std::shared_ptr<ya::UITextField>   _pathField;
+    std::shared_ptr<ya::UIButton>      _addButton;
+    std::shared_ptr<ya::UIButton>      _removeButton;
+    std::shared_ptr<ya::UIButton>      _renameButton;
+    std::shared_ptr<ya::UIButton>      _resetButton;
     std::shared_ptr<ya::UIText>        _statusText;
     std::shared_ptr<ya::UIText>        _commandResultText;
 
-    // Document list.
-    std::shared_ptr<ya::UIScrollViewport> _rowScroll;
+    // Item list.
+    std::shared_ptr<ya::UISplitPane>       _mainSplit;
+    std::shared_ptr<ya::UISplitPane>       _rightSplit;
+    std::shared_ptr<ya::UIPanel>           _listPanel;
     std::shared_ptr<ya::UIContainer>      _rowList;
     std::vector<std::shared_ptr<ya::UISelectableRow>> _rows;
 
-    // Preview canvas (live document instance).
+    // Preview canvas.
     std::shared_ptr<ya::UIPanel>  _canvasPanel;
     std::shared_ptr<ya::UIPanel>  _highlightPanel;
     std::shared_ptr<ya::UIText>   _previewName;
-    ya::UIElementRef              _previewRoot;      // instantiated document root
-    std::vector<std::shared_ptr<ya::UIElement>> _previewPathIndex; // path-indexed mirror
 
     // Inspector.
     std::shared_ptr<ya::UITextField> _nameField;
     std::shared_ptr<ya::UIButton>    _visibleToggle;
+    std::shared_ptr<ya::UIButton>    _colorCycle;
     std::shared_ptr<ya::UIButton>    _sizeGrow;
     std::shared_ptr<ya::UIButton>    _sizeShrink;
-    std::shared_ptr<ya::UIButton>    _deleteButton;
-    std::shared_ptr<ya::UIText>      _typeValue;
+    std::shared_ptr<ya::UIText>      _colorValue;
     std::shared_ptr<ya::UIText>      _sizeValue;
 
-    // Palette.
-    std::shared_ptr<ya::UIContainer> _paletteList;
-
-    bool _bRowsDirty   = true;
-    bool _bPreviewDirty = true;
+    bool _bRowsDirty = true;
 };
 
 } // namespace guiworkbench
