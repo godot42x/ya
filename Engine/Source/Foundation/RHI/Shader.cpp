@@ -165,6 +165,42 @@ uint64_t hashString(std::string_view value)
     return hash;
 }
 
+std::filesystem::path resolveShaderPhysicalPath(std::string_view path)
+{
+    if (auto* vfs = VFS::get()) {
+        return vfs->translatePath(path);
+    }
+    return std::filesystem::path(path);
+}
+
+bool shaderPathExists(std::string_view path)
+{
+    if (auto* vfs = VFS::get()) {
+        return vfs->isFileExists(std::string(path));
+    }
+    return std::filesystem::exists(resolveShaderPhysicalPath(path));
+}
+
+bool readShaderTextFile(std::string_view path, std::string& output)
+{
+    if (auto* vfs = VirtualFileSystem::get()) {
+        return vfs->readFileToString(path, output);
+    }
+
+    std::ifstream input(resolveShaderPhysicalPath(path), std::ios::binary);
+    if (!input.is_open()) {
+        return false;
+    }
+
+    std::ostringstream stream;
+    stream << input.rdbuf();
+    if (!input.good() && !input.eof()) {
+        return false;
+    }
+    output = stream.str();
+    return true;
+}
+
 std::optional<std::string> resolveShaderIncludePath(std::string_view requestedSource, std::string_view requestingSource)
 {
     auto reqPath = std::filesystem::path(requestedSource);
@@ -174,13 +210,13 @@ std::optional<std::string> resolveShaderIncludePath(std::string_view requestedSo
                           ? reqPath
                           : (srcPath.parent_path() / reqPath).lexically_normal();
     auto resolvedName = resolvedPath.generic_string();
-    if (VFS::get()->isFileExists(resolvedName)) {
+    if (shaderPathExists(resolvedName)) {
         return resolvedName;
     }
 
     auto fallback     = (std::filesystem::path("Engine/Shader/GLSL") / reqPath).lexically_normal();
     auto fallbackName = fallback.generic_string();
-    if (VFS::get()->isFileExists(fallbackName)) {
+    if (shaderPathExists(fallbackName)) {
         return fallbackName;
     }
     return std::nullopt;
@@ -195,7 +231,7 @@ bool appendShaderDependencyHash(const std::string& filePath, std::unordered_set<
     visitedFiles.insert(normalizedPath);
 
     std::string content;
-    if (!VirtualFileSystem::get()->readFileToString(normalizedPath, content)) {
+    if (!readShaderTextFile(normalizedPath, content)) {
         return false;
     }
 
@@ -253,7 +289,7 @@ bool appendShaderDependencyHash(const std::string& filePath, std::unordered_set<
             if (!resolvedPath.has_value()) {
                 auto slangFallback    = (std::filesystem::path("Engine/Shader/Slang") / moduleFilePath).lexically_normal();
                 auto slangFallbackStr = slangFallback.generic_string();
-                if (VFS::get()->isFileExists(slangFallbackStr)) {
+                if (shaderPathExists(slangFallbackStr)) {
                     resolvedPath = slangFallbackStr;
                 }
             }

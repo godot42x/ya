@@ -85,10 +85,10 @@ struct SlangVfsFileSystem : public ISlangFileSystem
     SlangResult loadFile(const char* path, ISlangBlob** outBlob) override
     {
         std::string content;
-        if (!VFS::get()->isFileExists(path)) {
+        if (!shader_internal::shaderPathExists(path)) {
             return SLANG_E_NOT_FOUND;
         }
-        if (!VirtualFileSystem::get()->readFileToString(path, content)) {
+        if (!shader_internal::readShaderTextFile(path, content)) {
             YA_CORE_ERROR("[SlangVFS] Failed to load: {}", path);
             return SLANG_E_NOT_FOUND;
         }
@@ -272,7 +272,7 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
     auto compileStage = [&](EShaderStage::T stage, const std::string& stagePath, const std::string& entryName) -> bool
     {
         std::string source;
-        if (!VirtualFileSystem::get()->readFileToString(stagePath, source)) {
+        if (!shader_internal::readShaderTextFile(stagePath, source)) {
             YA_CORE_ERROR("[Slang] Failed to read shader source: {}", stagePath);
             return false;
         }
@@ -319,7 +319,7 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
             }
 
             std::string stageSource;
-            if (!VirtualFileSystem::get()->readFileToString(stagePath.generic_string(), stageSource)) {
+            if (!shader_internal::readShaderTextFile(stagePath.generic_string(), stageSource)) {
                 YA_CORE_ERROR("[Slang] Failed to read stage-file shader source: {}", stagePath.generic_string());
                 return {};
             }
@@ -380,7 +380,7 @@ std::optional<SlangProcessor::stage2spirv_t> SlangProcessor::process(const Shade
         curFilePath = stdpath(shaderStoragePath) / shaderName;
 
         std::string source;
-        if (!VirtualFileSystem::get()->readFileToString(curFilePath.generic_string(), source)) {
+        if (!shader_internal::readShaderTextFile(curFilePath.generic_string(), source)) {
             YA_CORE_ERROR("[Slang] Failed to read shader: {}", curFilePath.generic_string());
             return {};
         }

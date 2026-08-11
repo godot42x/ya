@@ -129,15 +129,15 @@ struct ShadercVfsIncluder : public shaderc::CompileOptions::IncluderInterface
 
         data->sourceName = resolvedPath.generic_string();
         bool ok          = false;
-        if (VFS::get()->isFileExists(data->sourceName))
+        if (shader_internal::shaderPathExists(data->sourceName))
         {
-            ok = VirtualFileSystem::get()->readFileToString(data->sourceName, data->content);
+            ok = shader_internal::readShaderTextFile(data->sourceName, data->content);
         }
 
         if (!ok) {
             auto fallback     = (std::filesystem::path(kGlslBaseDir) / reqPath).lexically_normal();
             auto fallbackName = fallback.generic_string();
-            if (VirtualFileSystem::get()->readFileToString(fallbackName, data->content)) {
+            if (shader_internal::readShaderTextFile(fallbackName, data->content)) {
                 data->sourceName = fallbackName;
                 ok               = true;
             }
@@ -242,7 +242,7 @@ std::unordered_map<EShaderStage::T, std::string> GLSLProcessor::preprocessCombin
 
     std::string contentStr;
 
-    if (!VirtualFileSystem::get()->readFileToString(filepath.string(), contentStr))
+    if (!shader_internal::readShaderTextFile(filepath.string(), contentStr))
     {
         YA_CORE_ERROR("Failed to read shader file: {}", filepath.string());
         return {};
@@ -330,7 +330,7 @@ bool GLSLProcessor::processSpvFiles(std::string_view vertFile, std::string_view 
 
     std::vector<ir_t> vertSpv;
     std::string       vertFileStr;
-    if (!VirtualFileSystem::get()->readFileToString(vertFile, vertFileStr))
+    if (!shader_internal::readShaderTextFile(vertFile, vertFileStr))
     {
         YA_CORE_WARN("Failed to read cached vertex shader file: {}", vertFile);
         return false;
@@ -343,7 +343,7 @@ bool GLSLProcessor::processSpvFiles(std::string_view vertFile, std::string_view 
 
     std::vector<ir_t> fragSpv;
     std::string       fragFileStr;
-    if (!VirtualFileSystem::get()->readFileToString(fragFile, fragFileStr))
+    if (!shader_internal::readShaderTextFile(fragFile, fragFileStr))
     {
         YA_CORE_ERROR("Failed to read cached fragment shader file: {}", fragFile);
         return false;
@@ -425,7 +425,7 @@ std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderD
 
             auto stagePathStr = stagePath.generic_string();
             std::string stageSource;
-            if (!VirtualFileSystem::get()->readFileToString(stagePathStr, stageSource)) {
+            if (!shader_internal::readShaderTextFile(stagePathStr, stageSource)) {
                 YA_CORE_ERROR("Failed to read explicit stage-file shader source: {}", stagePathStr);
                 return {};
             }
@@ -476,7 +476,7 @@ std::optional<GLSLProcessor::stage2spirv_t> GLSLProcessor::process(const ShaderD
         curFilePath = stdpath(shaderStoragePath) / shaderName;
 
         std::string shaderSource;
-        if (!VirtualFileSystem::get()->readFileToString(curFilePath.generic_string(), shaderSource)) {
+        if (!shader_internal::readShaderTextFile(curFilePath.generic_string(), shaderSource)) {
             YA_CORE_ERROR("Failed to read shader source: {}", curFilePath.generic_string());
             return {};
         }

@@ -25,5 +25,7 @@ std::string makeCacheFileName(std::string_view cacheKey);
 bool isValidSpirvModule(const std::vector<ShaderStageIr>& spirv);
 bool loadShaderDiskCache(const std::filesystem::path& cachePath, uint64_t expectedHash, ShaderStageSpirvMap& outSpvMap);
 bool saveShaderDiskCache(const std::filesystem::path& cachePath, uint64_t sourceHash, const ShaderStageSpirvMap& spvMap);
+bool shaderPathExists(std::string_view path);
+bool readShaderTextFile(std::string_view path, std::string& output);
 
 } // namespace ya::shader_internal
