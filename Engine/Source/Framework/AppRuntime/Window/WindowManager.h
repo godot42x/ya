@@ -10,7 +10,7 @@
 namespace ya
 {
 
-class YA_HOST_API WindowManager
+class YA_APP_RUNTIME_API WindowManager
 {
   public:
     WindowManager() = default;
@@ -46,3 +46,4 @@ class YA_HOST_API WindowManager
 };
 
 } // namespace ya
+

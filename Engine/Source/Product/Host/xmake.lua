@@ -5,6 +5,7 @@ target("ya-host")
     add_files("**.cpp")
     add_headerfiles("./include/**.h", { public = true })
     add_headerfiles("**.h")
+    add_deps("ya-app-runtime")
     add_deps("ya-render-3d", "imgui-local", "imguizmo-local", { public = true })
     -- Host drives GUI fonts directly; Game UI lives in the widgets module.
     add_deps("ya-gui-resources", "ya-gui-widgets")
@@ -18,4 +19,4 @@ target("ya-host")
     -- ya-rhi-vulkan (backend-common no longer re-exports it).
     add_deps("ya-rhi-vulkan")
     add_packages("libsdl3", "glm", "nlohmann_json", "cxxopts", { public = true })
-    add_packages("asio", "vulkan-memory-allocator", "glad", "lua", "sol2", "quickjs-ng", "vulkansdk", "stb")
+    add_packages("vulkan-memory-allocator", "glad", "lua", "sol2", "quickjs-ng", "vulkansdk", "stb")

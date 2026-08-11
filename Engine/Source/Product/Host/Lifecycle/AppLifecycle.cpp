@@ -43,7 +43,7 @@
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
 #include "RHI/WindowProvider.h"
-#include "Host/WindowManager.h"
+#include "AppRuntime/WindowManager.h"
 #include "Render3D/RenderRuntime.h"
 
 #include <array>

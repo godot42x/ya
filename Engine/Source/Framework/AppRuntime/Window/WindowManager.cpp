@@ -1,4 +1,4 @@
-#include "Host/WindowManager.h"
+#include "AppRuntime/WindowManager.h"
 
 #include "Core/Log.h"
 
@@ -132,3 +132,4 @@ IWindowProvider* WindowManager::addWindow(std::unique_ptr<IWindowProvider> provi
 }
 
 } // namespace ya
+

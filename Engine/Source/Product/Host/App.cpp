@@ -1,7 +1,7 @@
 #include "Host/App.h"
 #include "Host/AppRenderState.h"
 #include "Host/Automation/AppAutomationControlService.h"
-#include "Host/WindowManager.h"
+#include "AppRuntime/WindowManager.h"
 #include "Core/Config/ConfigManager.h"
 #include "Render3D/RenderRuntime.h"
 
