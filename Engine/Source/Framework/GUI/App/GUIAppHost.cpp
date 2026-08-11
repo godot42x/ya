@@ -1,15 +1,13 @@
 #include "GUI/App/GUIAppHost.h"
 #include "GUI/App/GUIPresentationTarget.h"
 
+#include "AppRuntime/AppBootstrap.h"
 #include "Core/Application/AutomationControlServer.h"
 #include "Core/Application/AutomationRun.h"
 #include "Core/FName.h"
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
 #include "Core/Common/DeferredDeletionQueue.h"
-#include "Core/Reflection/DeferredInitializer.h"
-#include "Core/System/VirtualFileSystem.h"
-
 #include "RHI/Render.h"
 #include "RHI/RenderDefines.h"
 #include "RHI/Shader.h"
@@ -96,12 +94,9 @@ bool GUIAppHost::init()
 
     const FGUIAppHostConfig& config = *_impl->config;
 
-    // Host composition: deferred reflection registration (ClassRegistry for
-    // UIDocument field serialization) and the virtual file system (shader /
-    // font / .yaui reads) — initialized here exactly like the engine host
-    // does in AppLifecycle.
-    ya::reflection::DeferredInitializerQueue::instance().executeAll();
-    VirtualFileSystem::init();
+    // Shared process bootstrap: bundled graphics runtime env, deferred
+    // reflection registration and virtual file system.
+    AppBootstrap::initializeProcess();
 
     // 1. Window provider (SDL3 + Vulkan surface).
     SDLWindowProvider& window = _impl->window;
