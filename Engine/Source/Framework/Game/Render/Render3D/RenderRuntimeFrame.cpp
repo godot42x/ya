@@ -143,6 +143,23 @@ std::shared_ptr<RenderImage> RenderRuntime::getViewportDisplayImageShared() cons
     return getActiveViewportImageShared();
 }
 
+EFormat::T RenderRuntime::getViewportDisplayImageFormat() const
+{
+    // Mirrors getViewportDisplayImageShared(): post-process output when
+    // postprocessing runs, else the raw viewport image. Both formats are
+    // pipeline-configured and stable, so they are known before the world graph
+    // creates the actual images (first-frame Render2D pipeline prep).
+    if (auto* pipeline = getSelectedForwardPipeline()) {
+        return pipeline->isPostprocessingEnabled() ? pipeline->getPostprocessColorFormat()
+                                                   : pipeline->getViewportColorFormat();
+    }
+    if (auto* pipeline = getSelectedDeferredPipeline()) {
+        return pipeline->isPostprocessingEnabled() ? pipeline->getPostprocessColorFormat()
+                                                   : pipeline->getViewportColorFormat();
+    }
+    return EFormat::Undefined;
+}
+
 void RenderRuntime::renderPresentationPass(float                              deltaTime,
                                            const PresentationExtensions&      presentationExtensions,
                                            ICommandBuffer*                    cmdBuf)

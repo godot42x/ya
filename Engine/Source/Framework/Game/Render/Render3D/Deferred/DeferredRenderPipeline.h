@@ -227,6 +227,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
         return _shadowResources.pointFaceIVs[pointLightIndex][faceIndex].get();
     }
     bool     isPostprocessingEnabled() const override { return _postProcessStage.isEnabled(); }
+    [[nodiscard]] EFormat::T getPostprocessColorFormat() const override { return POSTPROCESS_COLOR_FORMAT; }
 
   private:
     void               loadPersistentSettings();

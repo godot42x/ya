@@ -222,6 +222,12 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     /// presentation graph and the editor viewport snapshot must all read this
     /// single source so UI never renders into an image that is not presented.
     [[nodiscard]] std::shared_ptr<RenderImage> getViewportDisplayImageShared() const;
+    /// Color format of the viewport display image, mirrored from
+    /// getViewportDisplayImageShared() without needing the image to exist:
+    /// the post-process output format when postprocessing is enabled, else the
+    /// raw viewport color format. Pipeline-configured and stable per frame, so
+    /// pre-recording pipeline prep can use it before the world graph runs.
+    [[nodiscard]] EFormat::T getViewportDisplayImageFormat() const;
     [[nodiscard]] std::shared_ptr<RenderImage> getPresentationImageShared() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;
     [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog() const;

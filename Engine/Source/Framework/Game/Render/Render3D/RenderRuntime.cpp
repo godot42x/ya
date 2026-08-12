@@ -79,6 +79,19 @@ void RenderRuntime::renderFrame(const FrameInput& input)
         prepareRenderViewportOverlayPipeline(pipeline->getViewportColorFormat(),
                                              pipeline->getViewportDepthFormat());
     }
+    // The Runtime UI composite target (viewport display image) is created
+    // during the world render below, so on the first frame the gated prep
+    // cannot see it yet while the record later in this function still runs.
+    // Guarantee the UI slot pipeline exists up front with the display image's
+    // deterministic format; preparePassPipeline is cached per format and
+    // re-creates the pipeline for the actual image format if it ever differs.
+    if (auto* pipeline = getActivePipeline()) {
+        prepareRender2DComposePassPipeline(
+            FRender2DComposePassDesc{
+                .kind = ERender2DComposePassKind::RuntimeUIComposite,
+            },
+            getViewportDisplayImageFormat());
+    }
     if (input.uiFrameSnapshot) {
         auto uiTarget = getViewportDisplayImageShared();
         if (uiTarget) {

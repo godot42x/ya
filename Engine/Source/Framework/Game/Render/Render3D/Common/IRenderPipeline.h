@@ -69,6 +69,9 @@ struct IRenderPipelineDebugOutputs
     [[nodiscard]] virtual IImageView*    getShadowDirectionalDepthIV() const = 0;
     [[nodiscard]] virtual IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const = 0;
     [[nodiscard]] virtual bool     isPostprocessingEnabled() const     = 0;
+    /// Color format of the postprocess output image (stable pipeline config;
+    /// queryable before the world graph creates the actual image).
+    [[nodiscard]] virtual EFormat::T getPostprocessColorFormat() const = 0;
 };
 
 struct IRenderPipeline : IRenderPipelineExecution,
