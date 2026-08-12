@@ -16,6 +16,7 @@
 - `./windows_msvc_compile_portability.md`：从 macOS 切到 Windows/MSVC 的编译/链接故障清单（C7560、ENGINE_API 导出、class/struct 修饰名、POSIX 头、__VA_OPT__）
 - `./module_split_sed_regression.md`：模块拆分时 sed 行号错位误删成员函数 → dylib 未定义符号 → 运行时跳 0x0 崩溃；删除/核对函数清单的方法
 - `./render2d_multi_flush_vertex_overwrite.md`：Render2D 单帧多批次 flush 时 host-visible 顶点缓冲被后批次覆盖 → GUI 只渲染最后一个批次；clip 与 flush 顺序约定
+- `./gui_lifecycle_teardown_and_first_frame.md`：GUI/editor 渲染生命周期三类坑——首帧管线 prep 时序（display image 在录制期才创建）、负尺寸布局 → scissor 溢出、VMA teardown 顺序（readback buffer / 资产纹理必须在 allocator 销毁前释放）
 
 ## 边界
 

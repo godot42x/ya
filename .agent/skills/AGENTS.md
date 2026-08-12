@@ -12,6 +12,7 @@
 
 - `soul`：需求不清晰、方向未收敛时先做澄清
 - `ya-build`：XMake 构建、目标、shader 生成、测试
+- `gui-framework`：WidgetTree / 控件 / 布局契约 / Render2D pass slot / GUI host 诊断与 teardown
 - `cross-platform`：Windows/MSVC 与 macOS/Clang 跨平台编译规则、DLL 导出、平台差异
 - `profiling`：profile 模式、automation trace、低噪音性能冒烟
 - `speedscope-analysis`：speedscope trace 抽样转文本、热点定位、交给 AI 分析

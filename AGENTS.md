@@ -42,9 +42,10 @@ xmake project -k compile_commands
 
 ## Skill Routing
 
-默认优先级：`ya-build > cross-platform > profiling > vscode > resource-system > material-flow > render-arch > cpp-style > code-reorganize > debug-review`
+默认优先级：`ya-build > gui-framework > cross-platform > profiling > vscode > resource-system > material-flow > render-arch > cpp-style > code-reorganize > debug-review`
 
 - 构建、目标、编译、shader 生成、测试：`./.agent/skills/ya-build/SKILL.md`
+- GUI 框架（WidgetTree/控件/布局契约/Render2D pass slot/GUI host 诊断与 teardown）：`./.agent/skills/gui-framework/SKILL.md`
 - 跨平台（Windows/MSVC 与 macOS/Clang 切换、DLL 导出、designated initializer 顺序、平台差异编译/链接报错）：`./.agent/skills/cross-platform/SKILL.md`
 - profiling、automation trace、性能冒烟：`./.agent/skills/profiling/SKILL.md`
 - VS Code、clangd、launch、tasks：`./.agent/skills/vscode/SKILL.md`
@@ -73,11 +74,13 @@ xmake project -k compile_commands
 
 - `Engine/Source/Core/`：核心系统、日志、反射、脚本
 - `Engine/Source/Render/`：渲染抽象层
+- `Engine/Source/Framework/GUI/`：GUI 框架（widgets/compose/draw2d/resources/tooling/app-host 五模块 + 聚合 target）
 - `Engine/Source/Platform/Render/`：Vulkan / OpenGL 后端
 - `Engine/Source/Runtime/Application/`：应用入口、生命周期与自动化
 - `Engine/Source/Runtime/Rendering/`：RenderRuntime、渲染管线与渲染服务
 - `Engine/Source/Editor/`：编辑器层
 - `Engine/Shader/`：Slang / GLSL 与生成头
+- `Example/GUIWorkbench/`：retain-mode GUI demo app（页面注册进 FWorkbenchSurface）
 - `Example/`：项目 / 示例
 - `Test/`：GoogleTest
 
