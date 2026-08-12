@@ -537,7 +537,7 @@ void AppLifecycle::quit(App& app)
     // allocations) BEFORE the render backend / VMA allocator is destroyed;
     // otherwise the VkImages are freed at process exit after VMA is gone
     // ("Unfreed dedicated allocations found" assertion).
-    AssetManager::get()->textureManager().clear();
+    AssetManager::get()->clearTextures();
 
     if (app._renderState->runtime) {
         app._renderState->runtime->shutdown(/*bRenderAlreadyIdle=*/true);
