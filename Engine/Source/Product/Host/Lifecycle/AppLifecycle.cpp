@@ -491,8 +491,9 @@ void AppLifecycle::onInit(App& app, const AppDesc& ci)
     if (const std::string runtimeFontPath = findRuntimeDefaultFontPath(); !runtimeFontPath.empty()) {
         auto* render = app.getRenderServices().getRender();
         YA_CORE_ASSERT(render, "AppLifecycle::onInit requires a render backend");
-        FontManager::get()->loadFont(*render, runtimeFontPath, DEFAULT_RUNTIME_FONT_NAME, DEFAULT_RUNTIME_FONT_SIZE);
-        FontManager::get()->loadFont(*render, runtimeFontPath, DEFAULT_RUNTIME_FONT_NAME, 16);
+        for (const uint32_t fontSize : {12u, 13u, 14u, 15u, 16u, DEFAULT_RUNTIME_FONT_SIZE}) {
+            FontManager::get()->loadFont(*render, runtimeFontPath, DEFAULT_RUNTIME_FONT_NAME, fontSize);
+        }
     }
 
 }

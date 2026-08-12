@@ -2,7 +2,7 @@
 // commands, selection transitions and inspector mutations are pure state
 // transitions, independent of widgets and the live tree.
 
-#include "GUIWorkbenchWorkspace.h"
+#include "GUI/Tooling/Workbench/WorkbenchWorkspace.h"
 
 #include <gtest/gtest.h>
 

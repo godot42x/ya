@@ -25,6 +25,20 @@ namespace ya
 namespace
 {
 
+ya::Ptr<Sampler> resolveSamplerForTexture(Texture* texture)
+{
+    if (!texture) {
+        return TextureLibrary::get().getDefaultSampler();
+    }
+
+    const std::string& label = texture->getLabel();
+    if (label.starts_with("FontAtlas_") || label.starts_with("FontGlyph_")) {
+        return TextureLibrary::get().getClampLinearSampler();
+    }
+
+    return TextureLibrary::get().getDefaultSampler();
+}
+
 bool passUsesDepthlessScreenPipeline(ERender2DPassDomain domain)
 {
     switch (domain) {
@@ -37,6 +51,41 @@ bool passUsesDepthlessScreenPipeline(ERender2DPassDomain domain)
             return false;
     }
     return false;
+}
+
+bool shouldReverseWorldViewport(IRender* render)
+{
+    if (!Render2D::debug.bReverseViewport) {
+        return false;
+    }
+    return render && render->getAPI() == ERenderAPI::Vulkan;
+}
+
+void setScreenViewportAndScissor(ICommandBuffer& cmdBuf, IRender* render, uint32_t width, uint32_t height)
+{
+    // Screen-space UI still owns the app contract (top-left origin, Y-down),
+    // but Vulkan's framebuffer coordinates are Y-up. Absorb that backend
+    // detail here so layout/widgets never need to care about reverse viewport.
+    float viewportY      = 0.0f;
+    float viewportHeight = static_cast<float>(height);
+    if (render && render->getAPI() == ERenderAPI::Vulkan) {
+        viewportY      = static_cast<float>(height);
+        viewportHeight = -static_cast<float>(height);
+    }
+    cmdBuf.setViewport(0.0f, viewportY, static_cast<float>(width), viewportHeight, 0.0f, 1.0f);
+    cmdBuf.setScissor(0, 0, width, height);
+}
+
+void setWorldViewportAndScissor(ICommandBuffer& cmdBuf, IRender* render, uint32_t width, uint32_t height)
+{
+    float viewportY      = 0.0f;
+    float viewportHeight = static_cast<float>(height);
+    if (shouldReverseWorldViewport(render)) {
+        viewportY      = static_cast<float>(height);
+        viewportHeight = -static_cast<float>(height);
+    }
+    cmdBuf.setViewport(0.0f, viewportY, static_cast<float>(width), viewportHeight, 0.0f, 1.0f);
+    cmdBuf.setScissor(0, 0, width, height);
 }
 
 std::vector<VertexAttribute> buildQuadVertexAttributes()
@@ -498,13 +547,7 @@ void FLineRender::flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj)
     resources.vertexBuffer->flush();
 
     cmdBuf->bindPipeline(_pipeline.get());
-    cmdBuf->setViewport(0.0f,
-                        static_cast<float>(Render2D::session.windowHeight),
-                        static_cast<float>(Render2D::session.windowWidth),
-                        -static_cast<float>(Render2D::session.windowHeight),
-                        0.0f,
-                        1.0f);
-    cmdBuf->setScissor(0, 0, Render2D::session.windowWidth, Render2D::session.windowHeight);
+    setScreenViewportAndScissor(*cmdBuf, _render, Render2D::session.windowWidth, Render2D::session.windowHeight);
 
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {resources.frameUboDS});
     cmdBuf->bindVertexBuffer(0, resources.vertexBuffer.get(), 0);
@@ -569,20 +612,21 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
 {
     _render = render;
     constexpr uint32_t domainCount = static_cast<uint32_t>(ERender2DPassDomain::Count);
-    constexpr uint32_t resourceCount = domainCount * MAX_FLIGHTS_IN_FLIGHT;
+    constexpr uint32_t frameResourceCount = domainCount * MAX_FLIGHTS_IN_FLIGHT;
+    constexpr uint32_t imageResourceCount = domainCount * MAX_FLIGHTS_IN_FLIGHT * RESOURCE_DS_POOL_SIZE;
 
     _descriptorPool = IDescriptorPool::create(
         render,
         DescriptorPoolCreateInfo{
-            .maxSets   = resourceCount * 4,
+            .maxSets   = frameResourceCount * 2 + imageResourceCount * 2,
             .poolSizes = {
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::UniformBuffer,
-                    .descriptorCount = resourceCount * 2,
+                    .descriptorCount = frameResourceCount * 2,
                 },
                 DescriptorPoolSize{
                     .type            = EPipelineDescriptorType::CombinedImageSampler,
-                    .descriptorCount = resourceCount * TEXTURE_SET_SIZE * 2,
+                    .descriptorCount = imageResourceCount * TEXTURE_SET_SIZE * 2,
                 },
             },
         });
@@ -591,7 +635,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
     std::vector<ya::DescriptorSetHandle> descriptorSets;
     _descriptorPool->allocateDescriptorSets(
         _frameUboDSL,
-        resourceCount * 2,
+        frameResourceCount * 2,
         descriptorSets);
     for (size_t domain = 0; domain < static_cast<size_t>(ERender2DPassDomain::Count); ++domain) {
         for (uint32_t flight = 0; flight < MAX_FLIGHTS_IN_FLIGHT; ++flight) {
@@ -620,14 +664,18 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
     descriptorSets.clear();
     _descriptorPool->allocateDescriptorSets(
         _resourceDSL,
-        resourceCount * 2,
+        imageResourceCount * 2,
         descriptorSets);
     for (size_t domain = 0; domain < static_cast<size_t>(ERender2DPassDomain::Count); ++domain) {
         for (uint32_t flight = 0; flight < MAX_FLIGHTS_IN_FLIGHT; ++flight) {
-            const size_t resourceIndex = domain * MAX_FLIGHTS_IN_FLIGHT + flight;
+            const size_t resourceIndex = (domain * MAX_FLIGHTS_IN_FLIGHT + flight) * RESOURCE_DS_POOL_SIZE * 2;
             auto& resources = _passResources[domain].flights[flight];
-            resources.resourceDS      = descriptorSets[resourceIndex * 2];
-            resources.worldResourceDS = descriptorSets[resourceIndex * 2 + 1];
+            resources.screenResourceDSPool.reserve(RESOURCE_DS_POOL_SIZE);
+            resources.worldResourceDSPool.reserve(RESOURCE_DS_POOL_SIZE);
+            for (uint32_t i = 0; i < RESOURCE_DS_POOL_SIZE; ++i) {
+                resources.screenResourceDSPool.push_back(descriptorSets[resourceIndex + i * 2]);
+                resources.worldResourceDSPool.push_back(descriptorSets[resourceIndex + i * 2 + 1]);
+            }
         }
     }
 
@@ -763,8 +811,12 @@ void FQuadRender::destroy()
             resources.worldFrameUBOBuffer.reset();
             resources.frameUboDS      = {};
             resources.worldFrameUboDS = {};
-            resources.resourceDS      = {};
-            resources.worldResourceDS = {};
+            resources.screenResourceDSPool.clear();
+            resources.worldResourceDSPool.clear();
+            resources.activeScreenResourceDS = {};
+            resources.activeWorldResourceDS  = {};
+            resources.nextScreenResourceDS   = 0;
+            resources.nextWorldResourceDS    = 0;
         }
     }
     vertexPtr         = nullptr;
@@ -849,12 +901,11 @@ void FQuadRender::begin(const Extent2D& extent)
     _uploadedWorldResourceVersion       = 0;
     _frameUboUploaded                   = false;
     _worldFrameUboUploaded              = false;
-    _textureBindings.clear();
-    _textureLabel2Idx.clear();
-    _textureBindings.push_back(TextureBinding{
-        .texture = TextureLibrary::get().getWhiteTexture(),
-        .sampler = TextureLibrary::get().getDefaultSampler(),
-    });
+    resources.activeScreenResourceDS    = {};
+    resources.activeWorldResourceDS     = {};
+    resources.nextScreenResourceDS      = 0;
+    resources.nextWorldResourceDS       = 0;
+    resetTextureBatch();
 
     float w      = static_cast<float>(extent.width);
     float h      = static_cast<float>(extent.height);
@@ -866,7 +917,11 @@ void FQuadRender::begin(const Extent2D& extent)
         w = h * aspect;
     }
 
-    _screenOrthoProj = glm::orthoRH_ZO(0.0f, w, 0.0f, h, -1.0f, 1.0f);
+    // Screen-space UI owns a top-left / Y-down app-space contract.
+    // For the current Vulkan path we keep the projection top-down and also
+    // use a negative-height viewport so clip-space and framebuffer-space stay
+    // aligned with the rest of Render2D's screen-space assumptions.
+    _screenOrthoProj = glm::orthoRH_ZO(0.0f, w, h, 0.0f, -1.0f, 1.0f);
 }
 
 void FQuadRender::end()
@@ -896,12 +951,7 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
                    "Render2D pipeline for pass domain {} was not prepared before command recording",
                    static_cast<size_t>(_activePassDomain));
     cmdBuf->bindPipeline(pipeline);
-    cmdBuf->setViewport(0.0f,
-                        0.0f,
-                        static_cast<float>(Render2D::session.windowWidth),
-                        static_cast<float>(Render2D::session.windowHeight),
-                        0.0f,
-                        1.0f);
+    setScreenViewportAndScissor(*cmdBuf, _render, Render2D::session.windowWidth, Render2D::session.windowHeight);
     if (!Render2D::session.clipStack.empty()) {
         const Rect2D& clip = Render2D::session.clipStack.back();
         cmdBuf->setScissor(static_cast<int32_t>(clip.pos.x),
@@ -915,7 +965,8 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
     cmdBuf->setCullMode(Render2D::debug.screenCullMode);
 
     if (_uploadedScreenResourceVersion != _resourceVersion) {
-        updateResources(resources.resourceDS);
+        resources.activeScreenResourceDS = acquireScreenResourceDS(resources);
+        updateResources(resources.activeScreenResourceDS);
         _uploadedScreenResourceVersion = _resourceVersion;
     }
     if (!_frameUboUploaded) {
@@ -925,7 +976,7 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
 
     const std::vector<DescriptorSetHandle> descriptorSets = {
         resources.frameUboDS,
-        resources.resourceDS,
+        resources.activeScreenResourceDS,
     };
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descriptorSets);
     cmdBuf->bindVertexBuffer(0, resources.vertexBuffer.get(), 0);
@@ -948,7 +999,8 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
 
     auto& resources = activeFlightResources();
     if (_uploadedWorldResourceVersion != _resourceVersion) {
-        updateResources(resources.worldResourceDS);
+        resources.activeWorldResourceDS = acquireWorldResourceDS(resources);
+        updateResources(resources.activeWorldResourceDS);
         _uploadedWorldResourceVersion = _resourceVersion;
     }
     if (!_worldFrameUboUploaded) {
@@ -961,18 +1013,12 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
     resources.worldVertexBuffer->flush();
 
     cmdBuf->bindPipeline(_worldPipeline.get());
-    cmdBuf->setViewport(0.0f,
-                        static_cast<float>(Render2D::session.windowHeight),
-                        static_cast<float>(Render2D::session.windowWidth),
-                        -static_cast<float>(Render2D::session.windowHeight),
-                        0.0f,
-                        1.0f);
+    setWorldViewportAndScissor(*cmdBuf, _render, Render2D::session.windowWidth, Render2D::session.windowHeight);
     cmdBuf->setCullMode(Render2D::debug.worldCullMode);
-    cmdBuf->setScissor(0, 0, Render2D::session.windowWidth, Render2D::session.windowHeight);
 
     std::vector<DescriptorSetHandle> descriptorSets = {
         resources.worldFrameUboDS,
-        resources.worldResourceDS,
+        resources.activeWorldResourceDS,
     };
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descriptorSets);
     cmdBuf->bindVertexBuffer(0, resources.worldVertexBuffer.get(), 0);
@@ -982,6 +1028,27 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
     worldVertexPtr   = worldVertexPtrHead;
     worldVertexCount = 0;
     worldIndexCount  = 0;
+}
+
+void FQuadRender::resetTextureBatch()
+{
+    _textureBindings.clear();
+    _textureLabel2Idx.clear();
+    _textureBindings.push_back(TextureBinding{
+        .texture = TextureLibrary::get().getWhiteTexture(),
+        .sampler = TextureLibrary::get().getDefaultSampler(),
+    });
+    _lastPushTextureSlot              = static_cast<int>(_textureBindings.size() - 1);
+    _resourceVersion                  = std::max<uint64_t>(_resourceVersion + 1, 1);
+    _uploadedScreenResourceVersion    = 0;
+    _uploadedWorldResourceVersion     = 0;
+}
+
+void FQuadRender::flushForTextureOverflow(ICommandBuffer* cmdBuf)
+{
+    flushWorld(cmdBuf);
+    flush(cmdBuf);
+    resetTextureBatch();
 }
 
 void FQuadRender::updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer,
@@ -1038,6 +1105,24 @@ void FQuadRender::updateResources(DescriptorSetHandle dsHandle)
         {});
 }
 
+DescriptorSetHandle FQuadRender::acquireScreenResourceDS(FlightResources& resources)
+{
+    YA_CORE_ASSERT(resources.nextScreenResourceDS < resources.screenResourceDSPool.size(),
+                   "Render2D exhausted screen resource descriptor sets for pass {} flight {}",
+                   static_cast<uint32_t>(_activePassDomain),
+                   _activeFlightIndex);
+    return resources.screenResourceDSPool[resources.nextScreenResourceDS++];
+}
+
+DescriptorSetHandle FQuadRender::acquireWorldResourceDS(FlightResources& resources)
+{
+    YA_CORE_ASSERT(resources.nextWorldResourceDS < resources.worldResourceDSPool.size(),
+                   "Render2D exhausted world resource descriptor sets for pass {} flight {}",
+                   static_cast<uint32_t>(_activePassDomain),
+                   _activeFlightIndex);
+    return resources.worldResourceDSPool[resources.nextWorldResourceDS++];
+}
+
 uint32_t FQuadRender::findOrAddTexture(ya::Ptr<Texture> texture)
 {
     uint32_t textureIdx = 0;
@@ -1047,9 +1132,12 @@ uint32_t FQuadRender::findOrAddTexture(ya::Ptr<Texture> texture)
             textureIdx = it->second;
         }
         else {
+            if (_textureBindings.size() >= TEXTURE_SET_SIZE) {
+                flushForTextureOverflow(Render2D::session.curCmdBuf);
+            }
             _textureBindings.push_back(TextureBinding{
                 .texture = texture,
-                .sampler = TextureLibrary::get().getDefaultSampler(),
+                .sampler = resolveSamplerForTexture(texture.get()),
             });
             auto idx                               = static_cast<uint32_t>(_textureBindings.size() - 1);
             _textureLabel2Idx[texture->getLabel()] = idx;
@@ -1120,7 +1208,7 @@ void FQuadRender::drawTexture(const glm::vec3& position,
 {
     YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
                    "Render2D draw called outside a begin()/end() recording session");
-    if (shouldFlush()) {
+    if (vertexCount >= MaxVertexCount - 4) {
         flush(Render2D::session.curCmdBuf);
     }
 
@@ -1138,7 +1226,7 @@ void FQuadRender::drawTexture(const glm::mat4& transform,
 {
     YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
                    "Render2D draw called outside a begin()/end() recording session");
-    if (shouldFlush()) {
+    if (vertexCount >= MaxVertexCount - 4) {
         flush(Render2D::session.curCmdBuf);
     }
 
@@ -1155,7 +1243,7 @@ void FQuadRender::drawWorldTexture(const glm::vec3&            center,
 {
     YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
                    "Render2D draw called outside a begin()/end() recording session");
-    if (shouldFlushWorld()) {
+    if (worldVertexCount >= MaxVertexCount - 4) {
         flushWorld(Render2D::session.curCmdBuf);
     }
 
@@ -1171,7 +1259,7 @@ void FQuadRender::drawSubTexture(const glm::vec3& position,
 {
     YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
                    "Render2D draw called outside a begin()/end() recording session");
-    if (shouldFlush()) {
+    if (vertexCount >= MaxVertexCount - 4) {
         flush(Render2D::session.curCmdBuf);
     }
 
@@ -1183,7 +1271,11 @@ void FQuadRender::drawSubTexture(const glm::vec3& position,
     drawTextureInternal(model, textureIdx, tint, {uvRect.z, uvRect.w}, {uvRect.x, uvRect.y});
 }
 
-void FQuadRender::drawText(const std::string& text, const glm::vec3& position, const glm::vec4& color, Font* font)
+void FQuadRender::drawText(const std::string& text,
+                           const glm::vec3&   position,
+                           const glm::vec4&   color,
+                           Font*              font,
+                           const glm::vec2&   scale)
 {
     YA_CORE_ASSERT(Render2D::session.curCmdBuf != nullptr,
                    "Render2D draw called outside a begin()/end() recording session");
@@ -1201,38 +1293,39 @@ void FQuadRender::drawText(const std::string& text, const glm::vec3& position, c
         }
         if (codePoint == '\n') {
             cursorX = position.x;
-            cursorY += font->lineHeight;
+            cursorY += font->lineHeight * scale.y;
             continue;
         }
 
         const Character& character = font->getCharacter(codePoint);
         if (codePoint == ' ') {
-            cursorX += character.advance.x;
+            cursorX += character.advance.x * scale.x;
             continue;
         }
         if (codePoint == '\t') {
-            cursorX += font->getCharacter(' ').advance.x * 4.0f;
+            cursorX += font->getCharacter(' ').advance.x * 4.0f * scale.x;
             continue;
         }
 
-        float xpos = cursorX + static_cast<float>(character.bearing.x);
-        float ypos = cursorY + static_cast<float>(font->ascent - character.bearing.y);
+        float xpos = cursorX + static_cast<float>(character.bearing.x) * scale.x;
+        float ypos = cursorY + static_cast<float>(font->ascent - character.bearing.y) * scale.y;
         glm::vec3 pos  = glm::vec3(xpos, ypos, position.z);
+        const glm::vec2 scaledGlyphSize = glm::vec2(character.size) * scale;
 
         if (!character.bInAtlas) {
             if (character.standaloneTexture) {
-                drawTexture(pos, glm::vec2(character.size), character.standaloneTexture, color);
+                drawTexture(pos, scaledGlyphSize, character.standaloneTexture, color);
             }
         }
         else {
             drawSubTexture(pos,
-                           glm::vec2(character.size),
+                           scaledGlyphSize,
                            font->atlasTexture,
                            color,
                            character.uvRect);
         }
 
-        cursorX += character.advance.x;
+        cursorX += character.advance.x * scale.x;
     }
 }
 

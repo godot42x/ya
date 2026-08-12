@@ -90,6 +90,14 @@ struct VulkanSwapChain : public ISwapchain
   public:
 
     [[nodiscard]] const ya::SwapchainCreateInfo &getCreateInfo() const { return _ci; }
+    void requestRecreate()
+    {
+        markRecreateDirty(_ci);
+    }
+    void requestRecreate(const SwapchainCreateInfo& ci)
+    {
+        markRecreateDirty(ci);
+    }
 
     // Getters (Vulkan-specific, kept for backward compatibility)
     [[nodiscard]] VkSwapchainKHR   getSwapchain() const { return m_swapChain; }

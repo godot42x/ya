@@ -77,6 +77,11 @@ class YA_RHI_BACKEND_API TextureLibrary : public IResourceCache, public IBuiltin
     ya::Ptr<Sampler> getLinearSampler();
 
     /**
+     * @brief Get a clamp-to-edge linear sampler for UI/font atlases.
+     */
+    ya::Ptr<Sampler> getClampLinearSampler();
+
+    /**
      * @brief Get a nearest filtering sampler
      */
     ya::Ptr<Sampler> getNearestSampler();
@@ -101,6 +106,7 @@ class YA_RHI_BACKEND_API TextureLibrary : public IResourceCache, public IBuiltin
     // Samplers
     std::shared_ptr<Sampler> _defaultSampler;
     std::shared_ptr<Sampler> _linearSampler;
+    std::shared_ptr<Sampler> _clampLinearSampler;
     std::shared_ptr<Sampler> _nearestSampler;
 
     bool _initialized = false;

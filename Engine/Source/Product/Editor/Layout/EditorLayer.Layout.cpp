@@ -446,6 +446,11 @@ void EditorLayer::runtimeToolsWindow()
     _runtimeToolsPanel.onImGuiRender(*_app, _lastDeltaTime);
 }
 
+void renderGUIWorkbenchWindow(EditorLayer& layer)
+{
+    layer.getGUIWorkbenchPanel().onImGuiRender();
+}
+
 void EditorLayer::renderGraphWindow()
 {
     if (!_app || !bShowRenderGraphWindow) {
@@ -467,6 +472,7 @@ void EditorLayer::statsWindow()
 
 void EditorLayer::renderAuxiliaryUi()
 {
+    renderGUIWorkbenchWindow(*this);
     _filePicker.render();
     renderGraphWindow();
 

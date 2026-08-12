@@ -1,4 +1,4 @@
-#include "GUIWorkbenchWorkspace.h"
+#include "GUI/Tooling/Workbench/WorkbenchWorkspace.h"
 
 #include <algorithm>
 #include <array>
@@ -21,9 +21,9 @@ constexpr std::array<glm::vec4, 4> kColorPalette{
 void FWorkbenchWorkspace::resetLayout()
 {
     items = {
-        FWorkbenchItem{.id = "item.cube",   .name = "Cube",   .bVisible = true,  .color = kColorPalette[0], .size = {140.0f, 90.0f}},
-        FWorkbenchItem{.id = "item.sphere", .name = "Sphere", .bVisible = true,  .color = kColorPalette[1], .size = {110.0f, 110.0f}},
-        FWorkbenchItem{.id = "item.light",  .name = "Light",  .bVisible = false, .color = kColorPalette[3], .size = {60.0f, 60.0f}},
+        FWorkbenchItem{.id = "item.cube", .name = "Cube", .bVisible = true, .color = kColorPalette[0], .size = {140.0f, 90.0f}},
+        FWorkbenchItem{.id = "item.sphere", .name = "Sphere", .bVisible = true, .color = kColorPalette[1], .size = {110.0f, 110.0f}},
+        FWorkbenchItem{.id = "item.light", .name = "Light", .bVisible = false, .color = kColorPalette[3], .size = {60.0f, 60.0f}},
     };
     selectedId    = items.empty() ? "" : items.front().id;
     bDirty        = false;
@@ -34,11 +34,11 @@ void FWorkbenchWorkspace::addItem(const std::string& name)
 {
     const size_t index = items.size();
     items.push_back(FWorkbenchItem{
-        .id        = "item." + std::to_string(index + 1),
-        .name      = name,
-        .bVisible  = true,
-        .color     = kColorPalette[static_cast<size_t>(index) % kColorPalette.size()],
-        .size      = {120.0f, 80.0f},
+        .id       = "item." + std::to_string(index + 1),
+        .name     = name,
+        .bVisible = true,
+        .color    = kColorPalette[static_cast<size_t>(index) % kColorPalette.size()],
+        .size     = {120.0f, 80.0f},
     });
     selectedId    = items.back().id;
     bDirty        = true;
@@ -60,8 +60,7 @@ void FWorkbenchWorkspace::removeSelected()
     items.erase(items.begin() + index);
     if (items.empty()) {
         selectedId.clear();
-    }
-    else {
+    } else {
         selectedId = items[static_cast<size_t>(std::min(index, static_cast<int>(items.size()) - 1))].id;
     }
     bDirty        = true;
@@ -76,8 +75,7 @@ void FWorkbenchWorkspace::renameSelected(const std::string& name)
             bDirty     = true;
         }
         commandResult = "Rename: '" + name + "'";
-    }
-    else {
+    } else {
         commandResult = "Rename: nothing selected";
     }
 }
@@ -136,8 +134,7 @@ void FWorkbenchWorkspace::toggleSelectedVisible()
         item->bVisible = !item->bVisible;
         bDirty         = true;
         commandResult  = "Inspector: visibility toggled";
-    }
-    else {
+    } else {
         commandResult = "Inspector: no selection";
     }
 }
@@ -150,11 +147,10 @@ void FWorkbenchWorkspace::cycleSelectedColor()
                                 ? 0
                                 : static_cast<size_t>(std::distance(kColorPalette.begin(), it) + 1) %
                                       kColorPalette.size();
-        item->color = kColorPalette[next];
-        bDirty      = true;
+        item->color   = kColorPalette[next];
+        bDirty        = true;
         commandResult = "Inspector: color changed";
-    }
-    else {
+    } else {
         commandResult = "Inspector: no selection";
     }
 }
@@ -162,11 +158,10 @@ void FWorkbenchWorkspace::cycleSelectedColor()
 void FWorkbenchWorkspace::stepSelectedSize(const glm::vec2& delta)
 {
     if (FWorkbenchItem* item = getSelectedMutable()) {
-        item->size = glm::max(glm::vec2(20.0f), item->size + delta);
-        bDirty     = true;
-        commandResult = "Inspector: size changed";
-    }
-    else {
+        item->size     = glm::max(glm::vec2(20.0f), item->size + delta);
+        bDirty         = true;
+        commandResult  = "Inspector: size changed";
+    } else {
         commandResult = "Inspector: no selection";
     }
 }

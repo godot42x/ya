@@ -5,6 +5,7 @@
 #include "Editor/Panels/AssetInspectorPanel.h"
 #include "Editor/Panels/ContentBrowserPanel.h"
 #include "Editor/Panels/RuntimeToolsPanel.h"
+#include "Editor/Panels/GUIWorkbenchPanel.h"
 #include "Core/Base.h"
 
 #include "Core/Camera/Camera.h"
@@ -67,6 +68,7 @@ struct EditorLayer
     AssetInspectorPanel _assetInspectorPanel;
     RuntimeToolsPanel   _runtimeToolsPanel;
     UIDesignerPanel     _uiDesignerPanel;
+    GUIWorkbenchPanel   _guiWorkbenchPanel;
 
     // ImGui Docking state
     ImGuiDockNodeFlags _dockspaceFlags = ImGuiDockNodeFlags_None;
@@ -426,6 +428,7 @@ struct EditorLayer
     bool                        isRightMouseDragging() const { return _bRightMouseDragging; }
     const std::vector<Entity*>& getSelections() const { return _selections; }
     [[nodiscard]] UIDesignerPanel& getUIDesignerPanel() { return _uiDesignerPanel; }
+    [[nodiscard]] GUIWorkbenchPanel& getGUIWorkbenchPanel() { return _guiWorkbenchPanel; }
     Entity*                     getSelectedEntity() const { return _selections.empty() ? nullptr : _selections.front(); }
     uint64_t                    getSelectedEntityUUID() const { return _selectedEntityUUID; }
     /// Active scene used for viewport interaction. In the 2D workspace this is

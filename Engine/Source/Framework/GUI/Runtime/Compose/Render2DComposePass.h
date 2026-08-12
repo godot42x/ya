@@ -22,6 +22,7 @@ enum class ERender2DComposePassKind : uint8_t
     RuntimeUIComposite = 0,
     EditorCanvasPreview,
     EditorViewportCompose,
+    EditorToolSurface,
 };
 
 struct FRender2DComposePassDesc

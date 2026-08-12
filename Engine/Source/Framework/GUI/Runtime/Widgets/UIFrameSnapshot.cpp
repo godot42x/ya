@@ -82,6 +82,7 @@ void UIFrameBuilder::addText(const Rect2D& logicalRect,
     item.color = color;
     item.font  = font;
     item.text  = text;
+    item.textScale = _ctx.uiScale;
     if (!_clipStack.empty()) {
         item.bClipped = true;
         const Rect2D& clip = _clipStack.back();

@@ -11,12 +11,41 @@ namespace ya
 namespace
 {
 
+void logSnapshotItemsOnce(const UIFrameSnapshot* uiFrameSnapshot)
+{
+    static bool bLogged = false;
+    if (bLogged || !uiFrameSnapshot) {
+        return;
+    }
+
+    bLogged = true;
+    YA_CORE_INFO("Render2DCompose snapshot item count: {}", uiFrameSnapshot->items.size());
+    const size_t itemCount = std::min<size_t>(uiFrameSnapshot->items.size(), 40);
+    for (size_t i = 0; i < itemCount; ++i) {
+        const auto& item = uiFrameSnapshot->items[i];
+        YA_CORE_INFO("  [{}] kind={} pos=({}, {}) size=({}, {}) clipped={} clip=({}, {}, {}, {}) text='{}'",
+                     i,
+                     item.kind == UIFrameDrawItem::EKind::Sprite ? "Sprite" : "Text",
+                     item.pos.x,
+                     item.pos.y,
+                     item.size.x,
+                     item.size.y,
+                     item.bClipped,
+                     item.clip.pos.x,
+                     item.clip.pos.y,
+                     item.clip.extent.x,
+                     item.clip.extent.y,
+                     item.kind == UIFrameDrawItem::EKind::Text ? item.text : "");
+    }
+}
+
 ERender2DPassDomain toRender2DPassDomain(ERender2DComposePassKind kind)
 {
     switch (kind) {
         case ERender2DComposePassKind::RuntimeUIComposite: return ERender2DPassDomain::GameUICompositor;
         case ERender2DComposePassKind::EditorCanvasPreview: return ERender2DPassDomain::EditorCanvas;
         case ERender2DComposePassKind::EditorViewportCompose: return ERender2DPassDomain::EditorViewport;
+        case ERender2DComposePassKind::EditorToolSurface: return ERender2DPassDomain::EditorCanvas;
     }
     return ERender2DPassDomain::GameUICompositor;
 }
@@ -31,6 +60,9 @@ ClearValue composeClearValue(ERender2DComposePassKind kind)
     if (kind == ERender2DComposePassKind::EditorCanvasPreview) {
         return ClearValue(0.055f, 0.06f, 0.07f, 1.0f);
     }
+    if (kind == ERender2DComposePassKind::EditorToolSurface) {
+        return ClearValue(0.075f, 0.082f, 0.10f, 1.0f);
+    }
     return ClearValue(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
@@ -40,6 +72,7 @@ const char* composePassLabel(ERender2DComposePassKind kind)
         case ERender2DComposePassKind::RuntimeUIComposite: return "UI Compositor";
         case ERender2DComposePassKind::EditorCanvasPreview: return "Editor Canvas Preview";
         case ERender2DComposePassKind::EditorViewportCompose: return "EditorViewportComposition";
+        case ERender2DComposePassKind::EditorToolSurface: return "EditorToolSurface";
     }
     return "Render2D Compose";
 }
@@ -186,6 +219,7 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
         drawEditorCanvasGrid(rtExtent, uiScale, passDesc.canvasPan, passDesc.canvasZoom);
     }
     if (uiFrameSnapshot) {
+        logSnapshotItemsOnce(uiFrameSnapshot);
         for (const auto& item : uiFrameSnapshot->items) {
             if (item.bClipped) {
                 Render2D::pushClipRect(item.clip);
@@ -200,7 +234,8 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
                 Render2D::makeText(item.text,
                                    glm::vec3(item.pos, 0.0f),
                                    item.color,
-                                   item.font.get());
+                                   item.font.get(),
+                                   item.textScale);
             }
             if (item.bClipped) {
                 Render2D::popClipRect();

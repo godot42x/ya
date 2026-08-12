@@ -69,6 +69,7 @@ struct UIFrameDrawItem
     // Text:
     std::shared_ptr<Font> font;
     std::string           text;
+    glm::vec2             textScale = {1.0f, 1.0f};
 };
 
 /// Immutable frame packet consumed by the compose pass.

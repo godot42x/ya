@@ -32,6 +32,7 @@
 #include "Host/GUI/GameUI/GameUIHost.h"
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "GUI/Compose/Render2DComposePass.h"
+#include "Editor/Panels/GUIWorkbenchPanel.h"
 #include "Render3D/RenderRuntime.h"
 #include "Scene/Core/Scene.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
@@ -492,6 +493,58 @@ class EditorViewportCompositor
     }
 };
 
+class EditorToolSurfaceCompositor
+{
+  private:
+    std::shared_ptr<RenderImage> _composedImage = nullptr;
+
+  public:
+    void shutdown()
+    {
+        _composedImage.reset();
+    }
+
+    [[nodiscard]] std::shared_ptr<RenderImage> getOutputImage() const
+    {
+        return _composedImage;
+    }
+
+    void compose(IRender& render, ICommandBuffer& commandBuffer, GUIWorkbenchPanel& panel)
+    {
+        if (!panel.hasRenderableExtent()) {
+            return;
+        }
+
+        const Extent2D extent = panel.getLogicalExtent();
+        ensureTarget(render, extent);
+        if (!_composedImage || !_composedImage->isValid()) {
+            return;
+        }
+
+        const UIFrameSnapshot snapshot = panel.buildSnapshot();
+        recordRender2DComposePass(&commandBuffer,
+                                  *_composedImage,
+                                  nullptr,
+                                  &snapshot,
+                                  FRender2DComposePassDesc{
+                                      .kind = ERender2DComposePassKind::EditorToolSurface,
+                                      .logicalViewportExtent = extent,
+                                  });
+    }
+
+  private:
+    void ensureTarget(IRender& render, const Extent2D& extent)
+    {
+        if (_composedImage &&
+            _composedImage->getWidth() == extent.width &&
+            _composedImage->getHeight() == extent.height &&
+            _composedImage->getFormat() == EFormat::R16G16B16A16_SFLOAT) {
+            return;
+        }
+        _composedImage = createEditorViewportImage(render, extent);
+    }
+};
+
 class EditorModule final : public IModule, public IEditorAutomationControl
 {
   private:
@@ -499,6 +552,7 @@ class EditorModule final : public IModule, public IEditorAutomationControl
     EditorPlaySession              _playSession;
     FreeCameraController           _cameraController;
     EditorViewportCompositor       _viewportCompositor;
+    EditorToolSurfaceCompositor    _guiWorkbenchCompositor;
     EditorInputNode                _inputNode;
     InputRouter::FNodeRegistration _inputNodeRegistration;
     bool                           _bWasRunning     = false;
@@ -915,6 +969,11 @@ class EditorModule final : public IModule, public IEditorAutomationControl
                     },
                     EFormat::R16G16B16A16_SFLOAT);
             }
+            prepareRender2DComposePassPipeline(
+                FRender2DComposePassDesc{
+                    .kind = ERender2DComposePassKind::EditorToolSurface,
+                },
+                EFormat::R16G16B16A16_SFLOAT);
         }
 
         _layer->onUpdate(dt);
@@ -959,11 +1018,16 @@ class EditorModule final : public IModule, public IEditorAutomationControl
                                     *_layer,
                                     app.getRenderServices().getRenderFrameState(),
                                     canvasTargetExtent);
+        _guiWorkbenchCompositor.compose(*render, commandBuffer, _layer->getGUIWorkbenchPanel());
         // Keep the last valid frame instead of clobbering the display with a
         // transiently null output (startup / mode-switch / resize gaps).
         if (auto output = _viewportCompositor.getOutputImage();
             output && output->isValid() && output->getImageView()) {
             _layer->setViewportDisplayImage(std::move(output));
+        }
+        if (auto output = _guiWorkbenchCompositor.getOutputImage();
+            output && output->isValid() && output->getImageView()) {
+            _layer->getGUIWorkbenchPanel().setDisplayImage(std::move(output));
         }
     }
 

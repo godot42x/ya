@@ -113,7 +113,7 @@ public:
 private:
     void pumpEvents(bool& bRunning);
     void dispatchToTree(const Event& event, float mouseX, float mouseY);
-    void rebuildPresentationResources();
+    void rebuildPresentationResources(bool bWaitForGpu = true);
 
     struct FImpl;
     std::unique_ptr<FImpl> _impl;

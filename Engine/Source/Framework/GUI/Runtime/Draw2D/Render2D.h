@@ -174,8 +174,12 @@ struct YA_GUI_API FQuadRender
         std::shared_ptr<IBuffer> frameUBOBuffer{};
         DescriptorSetHandle      worldFrameUboDS{};
         std::shared_ptr<IBuffer> worldFrameUBOBuffer{};
-        DescriptorSetHandle      resourceDS{};
-        DescriptorSetHandle      worldResourceDS{};
+        std::vector<DescriptorSetHandle> screenResourceDSPool{};
+        std::vector<DescriptorSetHandle> worldResourceDSPool{};
+        uint32_t                         nextScreenResourceDS = 0;
+        uint32_t                         nextWorldResourceDS  = 0;
+        DescriptorSetHandle              activeScreenResourceDS{};
+        DescriptorSetHandle              activeWorldResourceDS{};
         std::shared_ptr<IBuffer> vertexBuffer{};
         Vertex*                  vertexPtrHead = nullptr;
         std::shared_ptr<IBuffer> worldVertexBuffer{};
@@ -196,6 +200,7 @@ struct YA_GUI_API FQuadRender
     std::vector<TextureBinding>                _textureBindings;
     std::unordered_map<std::string, uint32_t>  _textureLabel2Idx;
     static constexpr size_t                    TEXTURE_SET_SIZE     = 16;
+    static constexpr uint32_t                  RESOURCE_DS_POOL_SIZE = 64;
     int                                        _lastPushTextureSlot = -1;
 
     void init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat);
@@ -211,9 +216,13 @@ struct YA_GUI_API FQuadRender
     bool shouldFlushWorld() { return worldVertexCount >= MaxVertexCount - 4 || _lastPushTextureSlot + 1 >= (int)TEXTURE_SET_SIZE; }
     void flush(ICommandBuffer* cmdBuf);
     void flushWorld(ICommandBuffer* cmdBuf);
+    void resetTextureBatch();
+    void flushForTextureOverflow(ICommandBuffer* cmdBuf);
 
     void updateFrameUBO(std::shared_ptr<IBuffer>& uboBuffer, DescriptorSetHandle dsHandle, const glm::mat4& viewProj, const glm::mat4& view);
     void updateResources(DescriptorSetHandle dsHandle);
+    DescriptorSetHandle acquireScreenResourceDS(FlightResources& resources);
+    DescriptorSetHandle acquireWorldResourceDS(FlightResources& resources);
     FlightResources& activeFlightResources()
     {
         return _passResources[static_cast<size_t>(_activePassDomain)].flights[_activeFlightIndex];
@@ -245,7 +254,11 @@ struct YA_GUI_API FQuadRender
                         const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
                         const glm::vec4& uvRect  = glm::vec4(0.0f));
 
-    void drawText(const std::string& text, const glm::vec3& position, const glm::vec4& color, Font* font);
+    void drawText(const std::string& text,
+                  const glm::vec3&   position,
+                  const glm::vec4&   color,
+                  Font*              font,
+                  const glm::vec2&   scale = glm::vec2(1.0f));
 
   private:
     uint32_t findOrAddTexture(ya::Ptr<Texture> texture);
@@ -419,9 +432,13 @@ struct YA_GUI_API Render2D
         lineData->addWireSphere(center, radius, color);
     }
 
-    static void makeText(const std::string& text, const glm::vec3& position, const glm::vec4& color, Font* font)
+    static void makeText(const std::string& text,
+                         const glm::vec3&   position,
+                         const glm::vec4&   color,
+                         Font*              font,
+                         const glm::vec2&   scale = glm::vec2(1.0f))
     {
-        quadData->drawText(text, position, color, font);
+        quadData->drawText(text, position, color, font, scale);
     }
 };
 

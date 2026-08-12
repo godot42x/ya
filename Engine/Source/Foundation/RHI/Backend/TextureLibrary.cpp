@@ -43,6 +43,7 @@ void TextureLibrary::clearCache()
     // Cleanup samplers
     _defaultSampler.reset();
     _linearSampler.reset();
+    _clampLinearSampler.reset();
     _nearestSampler.reset();
 
     _initialized = false;
@@ -70,6 +71,21 @@ void TextureLibrary::createSamplers(IRender* render)
             .anisotropyEnable = true,
             .maxAnisotropy = 8.0f,
             .maxLod        = 1000.0f,
+        });
+
+    _clampLinearSampler = resourceFactory->createSampler(
+        SamplerDesc{
+            .label            = "linear_clamp",
+            .minFilter        = EFilter::Linear,
+            .magFilter        = EFilter::Linear,
+            .mipmapMode       = ESamplerMipmapMode::Linear,
+            .addressModeU     = ESamplerAddressMode::ClampToEdge,
+            .addressModeV     = ESamplerAddressMode::ClampToEdge,
+            .addressModeW     = ESamplerAddressMode::ClampToEdge,
+            .mipLodBias       = 0.0f,
+            .anisotropyEnable = false,
+            .maxAnisotropy    = 1.0f,
+            .maxLod           = 1000.0f,
         });
 
     _nearestSampler = resourceFactory->createSampler(
@@ -158,6 +174,12 @@ ya::Ptr<Sampler> TextureLibrary::getLinearSampler()
 {
     YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
     return ya::Ptr<Sampler>(_linearSampler);
+}
+
+ya::Ptr<Sampler> TextureLibrary::getClampLinearSampler()
+{
+    YA_CORE_ASSERT(_initialized, "TextureLibrary not initialized");
+    return ya::Ptr<Sampler>(_clampLinearSampler);
 }
 
 ya::Ptr<Sampler> TextureLibrary::getNearestSampler()

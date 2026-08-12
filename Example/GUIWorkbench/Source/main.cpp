@@ -18,7 +18,7 @@ int main(int argc, char** argv)
     config.title     = "YA GUI Workbench";
     config.width     = 1280;
     config.height    = 800;
-    config.fontSizes = {13, 14, 16};
+    config.fontSizes = {12, 13, 14, 15, 16};
     ya::applyAutomationRunArgs(argc, argv, config.automation);
 
     guiworkbench::FWorkbenchApp app;

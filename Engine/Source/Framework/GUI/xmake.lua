@@ -9,6 +9,7 @@ includes("./Runtime/Resource/xmake.lua")
 includes("./Runtime/Draw2D/xmake.lua")
 includes("./Runtime/Widgets/xmake.lua")
 includes("./Runtime/Compose/xmake.lua")
+includes("./Tooling/xmake.lua")
 includes("./App/xmake.lua")
 
 -- GUI framework aggregate: the single link target for pure-GUI code. It
@@ -28,4 +29,5 @@ target("ya-gui-framework")
         "ya-gui-draw2d",
         "ya-gui-widgets",
         "ya-gui-compose",
+        "ya-gui-tooling",
         { public = true })

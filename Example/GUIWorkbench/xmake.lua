@@ -7,13 +7,12 @@ add_requires("gtest")
 target("GUIWorkbench")
     set_kind("binary")
     add_files("./Source/**.cpp")
-    add_deps("ya-gui-app-host")
+    add_deps("ya-gui-app-host", "ya-gui-tooling")
 
 -- ToolWorkspace unit tests: the workspace is pure document/selection/command
 -- state, so this target links only the workspace TU + gtest, no GUI closure.
 target("ya-gui-workbench-workspace-test")
     set_kind("binary")
-    add_includedirs("./Source")
-    add_files("./Source/GUIWorkbenchWorkspace.cpp")
     add_files("./Test/TestEntry.cpp", "./Test/WorkspaceTest.cpp")
+    add_deps("ya-gui-tooling")
     add_packages("gtest", "glm")

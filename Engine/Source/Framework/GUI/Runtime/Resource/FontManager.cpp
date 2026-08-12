@@ -225,8 +225,8 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
 
         // Calculate UV coordinates (offset + scale format for drawSubTexture)
         float uOffset = static_cast<float>(penX) / static_cast<float>(atlasWidth);
-        float vOffset = static_cast<float>(penY) / static_cast<float>(atlasHeight);
         float uScale  = static_cast<float>(bitmap.width) / static_cast<float>(atlasWidth);
+        float vOffset = static_cast<float>(penY) / static_cast<float>(atlasHeight);
         float vScale  = static_cast<float>(bitmap.rows) / static_cast<float>(atlasHeight);
 
         Character character = makeGlyphCharacter(glyph);
@@ -252,7 +252,7 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
                                            atlasData.data(),
                                            atlasData.size() * sizeof(ColorU8_t),
                                            EFormat::R8G8B8A8_UNORM,
-                                           std::format("FontAtlas_{}", fontName.toString()));
+                                           std::format("FontAtlas_{}_{}", fontName.toString(), fontSize));
     if (_fontAtlasTextureSink) {
         _fontAtlasTextureSink(fontName, fontSize, font->atlasTexture);
     }
