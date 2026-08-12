@@ -2,6 +2,8 @@
 
 #include "Core/Base.h"
 
+#include "RHI/RenderDefines.h"
+
 #include <glm/glm.hpp>
 #include <memory>
 #include <string>
@@ -58,5 +60,10 @@ struct RenderViewportOverlaySnapshot
 void recordRenderViewportOverlayPass(const FrameContext& frameCtx,
                                      const std::shared_ptr<const RenderViewportOverlaySnapshot>& overlaySnapshot,
                                      ICommandBuffer* cmdBuf);
+
+/// Prepare the Render2D screen pipeline used by the viewport overlay pass for
+/// the given viewport attachment formats. Must be called before command
+/// recording begins; idempotent per (colorFormat, depthFormat).
+void prepareRenderViewportOverlayPipeline(EFormat::T colorFormat, EFormat::T depthFormat);
 
 } // namespace ya

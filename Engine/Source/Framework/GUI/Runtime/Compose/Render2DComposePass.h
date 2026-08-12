@@ -43,7 +43,9 @@ struct FRender2DComposePassDesc
     std::shared_ptr<Texture> sceneSourceTexture = nullptr;
 
     /// EditorViewportCompose: camera used by world-space content (debug
-    /// lines). UI-only passes leave this at identity.
+    /// lines). Only `view` / `viewProjection` are forwarded to Render2D (it
+    /// has no camera concept); `position` / `projection` stay local to this
+    /// layer. UI-only passes leave these at identity.
     struct Camera
     {
         glm::vec3 position      = glm::vec3(0.0f);

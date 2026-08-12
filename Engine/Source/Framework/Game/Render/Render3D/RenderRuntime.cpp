@@ -5,6 +5,7 @@
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
+#include "Render3D/Common/RenderOverlay.h"
 #include "GUI/Compose/Render2DComposePass.h"
 #include "RHI/Backend/Vulkan/VulkanRender.h"
 #include "GUI/Draw2D/Render2D.h"
@@ -71,6 +72,13 @@ void RenderRuntime::renderFrame(const FrameInput& input)
     // post-process/viewport target format can differ from the initial viewport
     // format (for example HDR R16G16B16A16_SFLOAT), so resolve it from the
     // active pipeline before beginning this frame's command buffer.
+    if (auto* pipeline = getActivePipeline()) {
+        // Viewport overlay (screen sprites + world debug lines) owns its own
+        // pass slot; keep its screen pipeline in sync with the viewport
+        // attachment formats.
+        prepareRenderViewportOverlayPipeline(pipeline->getViewportColorFormat(),
+                                             pipeline->getViewportDepthFormat());
+    }
     if (input.uiFrameSnapshot) {
         auto uiTarget = getViewportDisplayImageShared();
         if (uiTarget) {

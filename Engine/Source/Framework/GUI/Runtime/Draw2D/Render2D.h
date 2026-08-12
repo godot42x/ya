@@ -18,22 +18,13 @@ namespace ya
 struct IRender;
 struct Font;
 
-enum class ERender2DPassDomain : uint8_t
-{
-    RuntimeOverlay = 0,
-    EditorViewport,
-    GameUICompositor,
-    EditorCanvas,
-    Count,
-};
-
-struct FRender2dCamera
-{
-    glm::vec3 position;
-    glm::mat4 view;
-    glm::mat4 projection;
-    glm::mat4 viewProjection;
-};
+/// Opaque pass slot: Render2D keeps per-pass GPU resources (vertex buffers,
+/// descriptor sets, screen pipelines) isolated so several passes can record
+/// into one command buffer without descriptor invalidation. Callers acquire a
+/// slot once at setup and map their own pass vocabulary (runtime overlay, UI
+/// composite, editor viewport, ...) onto the returned index; Render2D itself
+/// does not know about game/editor passes.
+using Render2DPassSlot = uint32_t;
 
 /// Diagnostics state adjusted live from the runtime tools panel. These are
 /// draw-time parameters only; they are not part of a recording session.
@@ -50,11 +41,14 @@ struct FRender2dDebugState
 /// is asserted instead of silently no-op'ing.
 struct FRender2dSession
 {
-    ICommandBuffer*     curCmdBuf   = nullptr;
-    uint32_t            windowWidth  = 800;
-    uint32_t            windowHeight = 600;
-    ERender2DPassDomain passDomain   = ERender2DPassDomain::RuntimeOverlay;
-    FRender2dCamera     cam;
+    ICommandBuffer*  curCmdBuf   = nullptr;
+    uint32_t         windowWidth  = 800;
+    uint32_t         windowHeight = 600;
+    Render2DPassSlot passSlot     = 0;
+    // World-space draw transform (world sprites / debug lines). Screen-space
+    // UI never reads these; it uses its own orthographic projection.
+    glm::mat4        view          = glm::mat4(1.0f);
+    glm::mat4        viewProjection = glm::mat4(1.0f);
 
     // Active screen-space clip rects (top-left origin, Y down). The top entry
     // is applied as the scissor on the next screen-batch flush.
@@ -63,11 +57,12 @@ struct FRender2dSession
 
 struct FRender2dContext
 {
-    ICommandBuffer*     cmdBuf       = nullptr;
-    uint32_t            windowWidth  = 800;
-    uint32_t            windowHeight = 600;
-    ERender2DPassDomain passDomain   = ERender2DPassDomain::RuntimeOverlay;
-    FRender2dCamera     cam;
+    ICommandBuffer*  cmdBuf       = nullptr;
+    uint32_t         windowWidth  = 800;
+    uint32_t         windowHeight = 600;
+    Render2DPassSlot passSlot     = 0;
+    glm::mat4        view          = glm::mat4(1.0f);
+    glm::mat4        viewProjection = glm::mat4(1.0f);
 };
 
 struct YA_GUI_API FQuadRender
@@ -98,6 +93,11 @@ struct YA_GUI_API FQuadRender
 
     static constexpr size_t MaxVertexCount = 10000;
     static constexpr size_t MaxIndexCount  = MaxVertexCount * 6 / 4;
+
+    // Upper bound on concurrently used pass slots (see Render2DPassSlot).
+    // Per-slot resources are allocated lazily on first use, so a GUI app that
+    // uses one slot only allocates one slot's buffers.
+    static constexpr uint32_t kMaxPassSlots = 8;
 
     // One host-visible vertex buffer is shared by every flush of a frame, and
     // the GPU only reads it after the whole command buffer is recorded. Each
@@ -171,7 +171,7 @@ struct YA_GUI_API FQuadRender
         std::shared_ptr<IGraphicsPipeline> uiPipeline{};
         EFormat::T                         uiColorFormat = EFormat::Undefined;
     };
-    std::array<PassPipelines, static_cast<size_t>(ERender2DPassDomain::Count)> _passPipelines{};
+    std::array<PassPipelines, kMaxPassSlots> _passPipelines{};
 
     std::shared_ptr<IDescriptorPool> _descriptorPool = nullptr;
 
@@ -199,9 +199,9 @@ struct YA_GUI_API FQuadRender
     {
         std::array<FlightResources, MAX_FLIGHTS_IN_FLIGHT> flights{};
     };
-    std::array<PassResources, static_cast<size_t>(ERender2DPassDomain::Count)> _passResources{};
-    ERender2DPassDomain _activePassDomain = ERender2DPassDomain::RuntimeOverlay;
-    uint32_t            _activeFlightIndex = 0;
+    std::array<PassResources, kMaxPassSlots> _passResources{};
+    Render2DPassSlot _activePassSlot = 0;
+    uint32_t         _activeFlightIndex = 0;
     uint64_t            _resourceVersion = 0;
     uint64_t            _uploadedScreenResourceVersion = 0;
     uint64_t            _uploadedWorldResourceVersion = 0;
@@ -215,12 +215,14 @@ struct YA_GUI_API FQuadRender
 
     void init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat);
     void destroy();
-    void begin(const Extent2D& extent);
+    /// Lazily allocate one pass slot's buffers + descriptor sets (all flights).
+    void ensureSlotResources(Render2DPassSlot passSlot);
+    void begin(Render2DPassSlot passSlot, const Extent2D& extent);
     void end();
-    /// Ensure a pass domain's screen-space pipeline matches its target
-    /// attachment formats. UI-like domains resolve to a depth-less variant.
-    /// Must be called before command recording begins.
-    void preparePassPipeline(ERender2DPassDomain domain, EFormat::T colorFormat, EFormat::T depthFormat);
+    /// Ensure a pass slot's screen-space pipeline matches its target attachment
+    /// formats. A depth-less target (depthFormat == Undefined) resolves to the
+    /// depth-less UI variant. Must be called before command recording begins.
+    void preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colorFormat, EFormat::T depthFormat);
 
     bool shouldFlush() { return vertexCount >= MaxVertexCount - 4 || _lastPushTextureSlot + 1 >= (int)TEXTURE_SET_SIZE; }
     bool shouldFlushWorld() { return worldVertexCount >= MaxVertexCount - 4 || _lastPushTextureSlot + 1 >= (int)TEXTURE_SET_SIZE; }
@@ -235,9 +237,9 @@ struct YA_GUI_API FQuadRender
     DescriptorSetHandle acquireWorldResourceDS(FlightResources& resources);
     FlightResources& activeFlightResources()
     {
-        return _passResources[static_cast<size_t>(_activePassDomain)].flights[_activeFlightIndex];
+        return _passResources[static_cast<size_t>(_activePassSlot)].flights[_activeFlightIndex];
     }
-    PassPipelines& activePassPipelines() { return _passPipelines[static_cast<size_t>(_activePassDomain)]; }
+    PassPipelines& activePassPipelines() { return _passPipelines[static_cast<size_t>(_activePassSlot)]; }
 
   public:
     void drawTexture(const glm::vec3& position,
@@ -347,17 +349,19 @@ struct YA_GUI_API FLineRender
     {
         std::array<FlightResources, MAX_FLIGHTS_IN_FLIGHT> flights{};
     };
-    std::array<PassResources, static_cast<size_t>(ERender2DPassDomain::Count)> _passResources{};
-    ERender2DPassDomain _activePassDomain = ERender2DPassDomain::RuntimeOverlay;
-    uint32_t            _activeFlightIndex = 0;
-    Vertex*             vertexPtr          = nullptr;
-    Vertex*             vertexPtrHead      = nullptr;
-    uint32_t            vertexCount        = 0;
-    uint32_t            batchStartVertex   = 0; // start of the pending batch in the shared buffer
+    std::array<PassResources, FQuadRender::kMaxPassSlots> _passResources{};
+    Render2DPassSlot _activePassSlot = 0;
+    uint32_t         _activeFlightIndex = 0;
+    Vertex*          vertexPtr          = nullptr;
+    Vertex*          vertexPtrHead      = nullptr;
+    uint32_t         vertexCount        = 0;
+    uint32_t         batchStartVertex   = 0; // start of the pending batch in the shared buffer
 
     void init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat);
     void destroy();
-    void begin(ERender2DPassDomain domain);
+    /// Lazily allocate one pass slot's buffers + descriptor sets (all flights).
+    void ensureSlotResources(Render2DPassSlot passSlot);
+    void begin(Render2DPassSlot passSlot);
     void flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj);
 
     void addLine(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color);
@@ -384,6 +388,11 @@ struct YA_GUI_API Render2D
     static void begin(const FRender2dContext& ctx);
     static void end();
 
+    /// Acquire a unique pass slot for this Render2D instance. Call once at
+    /// setup; the returned index is caller-owned and maps the caller's own
+    /// pass vocabulary onto Render2D's per-pass resources.
+    [[nodiscard]] static Render2DPassSlot acquirePassSlot();
+
     /// Push a clip rect (intersected with the current clip). Changes are applied
     /// as a command-level scissor on the next screen batch flush.
     static void pushClipRect(const Rect2D& rect);
@@ -394,11 +403,11 @@ struct YA_GUI_API Render2D
     /// nested-clip semantics are unit-testable without a render session.
     [[nodiscard]] static Rect2D intersectClipRect(const Rect2D& rect, const Rect2D& parentClip);
 
-    /// Lazily create the screen-space pipeline variant required by one
-    /// Render2D pass domain. UI composite / canvas domains use a depth-less
-    /// variant; viewport/overlay domains use the depth-aware screen variant.
+    /// Lazily create the screen-space pipeline variant required by one pass
+    /// slot. A depth-less target (depthFormat == Undefined) uses the depth-less
+    /// UI variant; a depth-attached target uses the depth-aware screen variant.
     /// Must NOT be called while recording a command buffer.
-    static void preparePassPipeline(ERender2DPassDomain domain, EFormat::T colorFormat, EFormat::T depthFormat);
+    static void preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colorFormat, EFormat::T depthFormat);
 
     static void makeSprite(const glm::vec3& position,
                            const glm::vec2& size,

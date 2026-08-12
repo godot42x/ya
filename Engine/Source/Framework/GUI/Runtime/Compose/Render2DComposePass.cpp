@@ -5,6 +5,8 @@
 #include "RHI/Core/RenderImage.h"
 #include "RHI/Backend/TextureLibrary.h"
 
+#include <array>
+
 namespace ya
 {
 
@@ -39,15 +41,20 @@ void logSnapshotItemsOnce(const UIFrameSnapshot* uiFrameSnapshot)
     }
 }
 
-ERender2DPassDomain toRender2DPassDomain(ERender2DComposePassKind kind)
+/// One Render2D pass slot per compose kind. Each kind gets its own slot so
+/// that multiple compose passes recorded into the same command buffer (e.g.
+/// editor viewport + canvas preview + tool surface) never share the per-slot
+/// vertex buffers / descriptor sets within one frame.
+Render2DPassSlot composePassSlot(ERender2DComposePassKind kind)
 {
-    switch (kind) {
-        case ERender2DComposePassKind::RuntimeUIComposite: return ERender2DPassDomain::GameUICompositor;
-        case ERender2DComposePassKind::EditorCanvasPreview: return ERender2DPassDomain::EditorCanvas;
-        case ERender2DComposePassKind::EditorViewportCompose: return ERender2DPassDomain::EditorViewport;
-        case ERender2DComposePassKind::EditorToolSurface: return ERender2DPassDomain::EditorCanvas;
-    }
-    return ERender2DPassDomain::GameUICompositor;
+    static const std::array<Render2DPassSlot, 4> sSlots = []() {
+        std::array<Render2DPassSlot, 4> out{};
+        for (auto& slot : out) {
+            slot = Render2D::acquirePassSlot();
+        }
+        return out;
+    }();
+    return sSlots[static_cast<size_t>(kind)];
 }
 
 bool shouldClearComposeTarget(ERender2DComposePassKind kind)
@@ -124,7 +131,7 @@ void prepareRender2DComposePassPipeline(const FRender2DComposePassDesc& passDesc
                                         EFormat::T                      colorFormat,
                                         EFormat::T                      depthFormat)
 {
-    Render2D::preparePassPipeline(toRender2DPassDomain(passDesc.kind), colorFormat, depthFormat);
+    Render2D::preparePassPipeline(composePassSlot(passDesc.kind), colorFormat, depthFormat);
 }
 
 void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
@@ -197,13 +204,9 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
         .cmdBuf       = cmdBuf,
         .windowWidth  = rtExtent.width,
         .windowHeight = rtExtent.height,
-        .passDomain   = toRender2DPassDomain(passDesc.kind),
-        .cam          = {
-            .position       = passDesc.camera.position,
-            .view           = passDesc.camera.view,
-            .projection     = passDesc.camera.projection,
-            .viewProjection = passDesc.camera.viewProjection,
-        },
+        .passSlot     = composePassSlot(passDesc.kind),
+        .view         = passDesc.camera.view,
+        .viewProjection = passDesc.camera.viewProjection,
     };
 
     Render2D::begin(render2dCtx);

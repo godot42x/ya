@@ -11,6 +11,22 @@
 namespace ya
 {
 
+namespace
+{
+
+Render2DPassSlot viewportOverlayPassSlot()
+{
+    static const Render2DPassSlot sSlot = Render2D::acquirePassSlot();
+    return sSlot;
+}
+
+} // namespace
+
+void prepareRenderViewportOverlayPipeline(EFormat::T colorFormat, EFormat::T depthFormat)
+{
+    Render2D::preparePassPipeline(viewportOverlayPassSlot(), colorFormat, depthFormat);
+}
+
 void recordRenderViewportOverlayPass(const FrameContext& frameCtx,
                                      const std::shared_ptr<const RenderViewportOverlaySnapshot>& overlaySnapshot,
                                      ICommandBuffer* cmdBuf)
@@ -28,13 +44,9 @@ void recordRenderViewportOverlayPass(const FrameContext& frameCtx,
         .cmdBuf       = cmdBuf,
         .windowWidth  = viewportExtent.width,
         .windowHeight = viewportExtent.height,
-        .passDomain   = ERender2DPassDomain::RuntimeOverlay,
-        .cam          = {
-            .position       = frameCtx.cameraPos,
-            .view           = frameCtx.view,
-            .projection     = frameCtx.projection,
-            .viewProjection = frameCtx.projection * frameCtx.view,
-        },
+        .passSlot     = viewportOverlayPassSlot(),
+        .view         = frameCtx.view,
+        .viewProjection = frameCtx.projection * frameCtx.view,
     };
 
     Render2D::begin(render2dCtx);
