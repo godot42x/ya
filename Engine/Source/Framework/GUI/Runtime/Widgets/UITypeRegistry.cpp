@@ -3,11 +3,18 @@
 #include "Core/Log.h"
 
 #include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/CheckBox.h"
+#include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/Image.h"
+#include "GUI/Widgets/Controls/Menu.h"
+#include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/SelectableRow.h"
+#include "GUI/Widgets/Controls/Slider.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
+#include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 
@@ -60,6 +67,20 @@ void UITypeRegistry::ensureBuiltinTypesRegistered()
                  [] { return std::make_shared<UISelectableRow>("Row"); });
     registerType({.typeId = "engine.text_field", .displayName = "Text Field", .category = "Input"},
                  [] { return std::make_shared<UITextField>("TextField"); });
+    registerType({.typeId = "engine.check_box", .displayName = "Check Box", .category = "Input"},
+                 [] { return std::make_shared<UICheckBox>("CheckBox"); });
+    registerType({.typeId = "engine.slider", .displayName = "Slider", .category = "Input"},
+                 [] { return std::make_shared<UISlider>("Slider"); });
+    registerType({.typeId = "engine.combo_box", .displayName = "Combo Box", .category = "Input"},
+                 [] { return std::make_shared<UIComboBox>("ComboBox"); });
+    registerType({.typeId = "engine.image", .displayName = "Image", .category = "Basic"},
+                 [] { return std::make_shared<UIImage>("Image"); });
+    registerType({.typeId = "engine.menu_bar", .displayName = "Menu Bar", .category = "Basic"},
+                 [] { return std::make_shared<UIMenuBar>("MenuBar"); });
+    registerType({.typeId = "engine.menu", .displayName = "Menu", .category = "Basic"},
+                 [] { return std::make_shared<UIMenu>("Menu"); });
+    registerType({.typeId = "engine.tab_bar", .displayName = "Tab Bar", .category = "Layout"},
+                 [] { return std::make_shared<UITabBar>("TabBar"); });
 }
 
 std::shared_ptr<UITypeModule> UITypeRegistry::beginModule(const std::string& moduleId)
