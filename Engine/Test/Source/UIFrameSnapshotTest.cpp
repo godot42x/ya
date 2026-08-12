@@ -9,6 +9,7 @@
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Resources/FontManager.h"
 
 #include <gtest/gtest.h>
 
@@ -101,8 +102,10 @@ TEST(UIFrameSnapshotTest, TextItemsCarryFontAndText)
     text->_text     = "Hello Snapshot";
     tree.attachToLayer(WidgetTree::ELayer::Content, text);
 
-    // No font loaded in the closure test: the text item is skipped, not
+    // Drop any font cached by earlier suites (the FontManager is process-
+    // global): with no RuntimeDefault font the text item is skipped, not
     // crashy (same fallback as the legacy text paint path).
+    FontManager::get()->clearCache();
     const UIFrameSnapshot snapshot = tree.buildSnapshot({});
     EXPECT_TRUE(snapshot.items.empty());
 }
