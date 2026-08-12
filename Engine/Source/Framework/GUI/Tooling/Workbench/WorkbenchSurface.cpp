@@ -32,17 +32,25 @@ constexpr glm::vec4 kButtonHovered = {0.27f, 0.30f, 0.37f, 1.0f};
 constexpr glm::vec4 kButtonPressed = {0.14f, 0.16f, 0.20f, 1.0f};
 constexpr glm::vec4 kButtonFocused = {0.24f, 0.46f, 0.82f, 1.0f};
 
-std::shared_ptr<ya::UIButton> makeToolButton(const std::string& name, const std::string& label, float width)
+std::shared_ptr<ya::UIButton> makeToolButton(const std::string& name, const std::string& label, float width = 0.0f)
 {
     auto button = std::make_shared<ya::UIButton>(name);
-    button->_size         = {width, 28.0f};
+    if (width > 0.0f) {
+        // Explicit control (inspector form): keep the fixed width.
+        button->_size         = {width, 24.0f};
+    }
+    else {
+        // SizeToContent: the label text sizes the button (toolbar row).
+        button->_bAutoSize    = true;
+        button->_contentPadding = {10.0f, 4.0f};
+    }
     button->_normalColor  = kButtonNormal;
     button->_hoveredColor = kButtonHovered;
     button->_pressedColor = kButtonPressed;
     button->_focusedColor = kButtonFocused;
 
     auto text = std::make_shared<ya::UIText>(name + "_Label");
-    text->_size     = {width, 28.0f};
+    text->_bAutoSize = true; // label measures its own text
     text->_fontSize = 14;
     text->_text     = label;
     text->_color    = {0.92f, 0.94f, 0.97f, 1.0f};
@@ -150,10 +158,10 @@ void FWorkbenchSurface::buildToolbar(ya::WidgetTree& tree, ya::UIElement& parent
     toolbar->_padding   = 8.0f;
     tree.attach(parent, toolbar);
 
-    _addButton    = makeToolButton("Add", "Add", 64.0f);
-    _removeButton = makeToolButton("Remove", "Remove", 88.0f);
-    _renameButton = makeToolButton("Rename", "Rename", 88.0f);
-    _resetButton  = makeToolButton("ResetLayout", "Reset Layout", 110.0f);
+    _addButton    = makeToolButton("Add", "Add");
+    _removeButton = makeToolButton("Remove", "Remove");
+    _renameButton = makeToolButton("Rename", "Rename");
+    _resetButton  = makeToolButton("ResetLayout", "Reset Layout");
     _addButton->_onClick    = [this] { cmdAdd(); };
     _removeButton->_onClick = [this] { cmdRemove(); };
     _renameButton->_onClick = [this] { cmdRename(); };
@@ -259,7 +267,6 @@ void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& pare
     tree.attach(*form, visibleLabel);
 
     _visibleToggle = makeToolButton("VisibleToggle", "Visible: on", 110.0f);
-    _visibleToggle->_size = {110.0f, 24.0f};
     _visibleToggle->_onClick = [this] {
         workspace.toggleSelectedVisible();
         setCommandResult(workspace.commandResult);
@@ -270,7 +277,6 @@ void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& pare
     tree.attach(*form, colorLabel);
 
     _colorCycle = makeToolButton("ColorCycle", "Cycle Color", 110.0f);
-    _colorCycle->_size = {110.0f, 24.0f};
     _colorCycle->_onClick = [this] {
         workspace.cycleSelectedColor();
         setCommandResult(workspace.commandResult);
@@ -293,7 +299,6 @@ void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& pare
     tree.attach(*form, sizeRow);
 
     _sizeGrow = makeToolButton("SizeGrow", "Grow +20", 90.0f);
-    _sizeGrow->_size = {90.0f, 24.0f};
     _sizeGrow->_onClick = [this] {
         workspace.stepSelectedSize({20.0f, 20.0f});
         setCommandResult(workspace.commandResult);
@@ -301,7 +306,6 @@ void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& pare
     tree.attach(*sizeRow, _sizeGrow);
 
     _sizeShrink = makeToolButton("SizeShrink", "Shrink -20", 100.0f);
-    _sizeShrink->_size = {100.0f, 24.0f};
     _sizeShrink->_onClick = [this] {
         workspace.stepSelectedSize({-20.0f, -20.0f});
         setCommandResult(workspace.commandResult);
@@ -368,6 +372,11 @@ void FWorkbenchSurface::syncPresentationState()
 
     const FWorkbenchItem* selected = workspace.getSelected();
 
+    // SizeToContent widgets (auto-size buttons / highlight) need a relayout
+    // when their runtime label / size changes; track and invalidate only on
+    // geometry-affecting deltas.
+    bool bGeometryChanged = false;
+
     for (size_t i = 0; i < _rows.size() && i < workspace.items.size(); ++i) {
         const FWorkbenchItem& item = workspace.items[i];
         if (!_rows[i]->getChildren().empty()) {
@@ -386,6 +395,11 @@ void FWorkbenchSurface::syncPresentationState()
                                            ? selected->color
                                            : glm::vec4(selected->color.r, selected->color.g, selected->color.b, 0.35f);
         _previewName->_text = selected->bVisible ? selected->name : selected->name + " (hidden)";
+        if (_highlightPanel->_size != _lastHighlightSize || _highlightPanel->_position != _lastHighlightPos) {
+            bGeometryChanged     = true;
+            _lastHighlightSize   = _highlightPanel->_size;
+            _lastHighlightPos    = _highlightPanel->_position;
+        }
     } else {
         _highlightPanel->_visibility = ya::EWidgetVisibility::Hidden;
         _previewName->_text          = "(no selection)";
@@ -405,10 +419,18 @@ void FWorkbenchSurface::syncPresentationState()
     if (!_visibleToggle->getChildren().empty()) {
         if (auto* label = dynamic_cast<ya::UIText*>(_visibleToggle->getChildren()[0].get())) {
             label->_text = (selected && selected->bVisible) ? "Visible: on" : "Visible: off";
+            if (label->_text != _lastToggleText) {
+                bGeometryChanged = true;
+                _lastToggleText  = label->_text;
+            }
         }
     }
 
     _commandResultText->_text = workspace.commandResult;
+
+    if (bGeometryChanged && _tree) {
+        _tree->invalidateLayout();
+    }
 }
 
 void FWorkbenchSurface::cmdAdd()

@@ -94,6 +94,13 @@ class FWorkbenchSurface
     std::shared_ptr<ya::UIText>      _sizeValue;
 
     bool _bRowsDirty = true;
+
+    // Last-synced geometry-affecting presentation state; syncPresentationState
+    // invalidates layout only when these change (SizeToContent widgets need a
+    // relayout when their runtime label / size differs from the last layout).
+    std::string _lastToggleText;
+    glm::vec2   _lastHighlightSize{0.0f};
+    glm::vec2   _lastHighlightPos{0.0f};
 };
 
 } // namespace guiworkbench
