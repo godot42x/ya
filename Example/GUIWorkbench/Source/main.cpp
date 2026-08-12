@@ -35,7 +35,12 @@ int main(int argc, char** argv)
         ("dump-snapshot", "Dump the frame snapshot JSON to path", cxxopts::value<std::string>())
         ("dump-frame", "Frame index at which to dump the snapshot", cxxopts::value<uint32_t>())
         ("gpu-shot", "Dump a GPU frame to path", cxxopts::value<std::string>())
-        ("gpu-shot-frame", "Frame index for the GPU shot", cxxopts::value<uint32_t>());
+        ("gpu-shot-frame", "Frame index for the GPU shot", cxxopts::value<uint32_t>())
+        ("scenario", "Run a JSONL input scenario instead of the SDL pump", cxxopts::value<std::string>())
+        ("scenario-dump-dir", "Write per-checkpoint tree dumps into this dir", cxxopts::value<std::string>())
+        ("scenario-capture", "Capture the final frame swapchain to this BMP", cxxopts::value<std::string>())
+        ("scenario-golden", "Baseline BMP to diff the scenario capture against", cxxopts::value<std::string>())
+        ("scenario-diff", "Write the scenario difference image to this path", cxxopts::value<std::string>());
 
     try {
         const auto result = options.parse(argc, argv);
@@ -53,6 +58,21 @@ int main(int argc, char** argv)
         }
         if (result.count("gpu-shot-frame") > 0) {
             config.gpuShotFrame = result["gpu-shot-frame"].as<uint32_t>();
+        }
+        if (result.count("scenario") > 0) {
+            config.scenarioPath = result["scenario"].as<std::string>();
+        }
+        if (result.count("scenario-dump-dir") > 0) {
+            config.scenarioDumpDir = result["scenario-dump-dir"].as<std::string>();
+        }
+        if (result.count("scenario-capture") > 0) {
+            config.scenarioCapturePath = result["scenario-capture"].as<std::string>();
+        }
+        if (result.count("scenario-golden") > 0) {
+            config.scenarioGoldenPath = result["scenario-golden"].as<std::string>();
+        }
+        if (result.count("scenario-diff") > 0) {
+            config.scenarioDiffPath = result["scenario-diff"].as<std::string>();
         }
     }
     catch (const std::exception& e) {

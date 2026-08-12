@@ -88,6 +88,15 @@ struct FGUIAppHostConfig
     /// (orientation, fonts, compositing) — the CPU dump cannot. 0 disables.
     std::string              gpuShotPath;
     uint32_t                 gpuShotFrame = 0;
+    /// Scenario harness: when non-empty, run() drives the tree from a JSONL
+    /// scenario (via GuiEventDriver) instead of the SDL event pump. Scenario
+    /// scripts end with a frame step so the final state is rendered and
+    /// (optionally) captured + diffed against scenarioGoldenPath.
+    std::string              scenarioPath;
+    std::string              scenarioDumpDir;
+    std::string              scenarioCapturePath;
+    std::string              scenarioGoldenPath;
+    std::string              scenarioDiffPath;
     std::vector<uint32_t>    fontSizes{16, 20};
     /// Whether Escape (and SDL_QUIT) stops the app loop. Host-level key
     /// handling; app widgets never see Escape while this is enabled.
@@ -119,10 +128,15 @@ public:
 
     /// Live UI tree owned by the host (valid after init()).
     [[nodiscard]] WidgetTree& getTree();
+    /// Inject one event through the same path SDL uses (scenario driver +
+    /// automation inject_event command).
+    void injectEvent(const Event& event, const glm::vec2& logicalPoint);
 
 private:
     void pumpEvents(bool& bRunning);
     void dispatchToTree(const Event& event, float mouseX, float mouseY);
+    /// Drive scenario events until the next Frame step (or scenario end).
+    void stepScenario(bool& bRunning);
     void rebuildPresentationResources(bool bWaitForGpu = true);
 
     struct FImpl;

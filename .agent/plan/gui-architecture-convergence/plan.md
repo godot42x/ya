@@ -1,8 +1,8 @@
 # GUI 架构收敛：详细推进方案
 
 > 建立日期：2026-08-13
-> 状态：Phase 1 已开工；P1 已完成"元素树 dump + 场景驱动 + 场景驱动树闭环"
->（纯 CPU、无 RHI），离屏 presenter / 黄金 diff / headless 为下一刀
+> 状态：Phase 1 已开工；已完成 元素树 dump + 场景驱动 + BmpDiff 黄金比对 +
+> GUIAppHost 场景接线（windowed 端到端验证）。剩余：离屏 presenter + headless。
 > 承接：../gui-app-bootstrap/plan.md（已定义 shared foundation / GUI library /
 > standalone host 三角色）；本文件不再回写 GUI app 自举本身，只规划下一步的
 > "观测 harness → 单循环收敛 → SDF 字体 → 布局增强" 主线。

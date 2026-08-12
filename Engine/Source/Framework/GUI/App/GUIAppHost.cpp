@@ -2,8 +2,10 @@
 #include "GUI/App/GUIPresentationTarget.h"
 
 #include "AppRuntime/AppBootstrap.h"
+#include "Core/Application/BmpDiff.h"
 #include "Core/Application/AutomationControlServer.h"
 #include "Core/Application/AutomationRun.h"
+#include "Core/Application/GuiEventDriver.h"
 #include "Core/FName.h"
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
@@ -19,10 +21,12 @@
 #include "GUI/Compose/Render2DComposePass.h"
 #include "GUI/Resources/FontManager.h"
 #include "GUI/Draw2D/Render2D.h"
+#include "GUI/Widgets/WidgetTreeDump.h"
 
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
 #include <format>
 #include <vector>
@@ -278,6 +282,12 @@ struct GUIAppHost::FImpl
     bool     bWindowMinimized = false;
     bool     bInitialized = false;
     std::shared_ptr<IBuffer> gpuShotBuffer;
+
+    // Scenario harness state (drives the tree from a JSONL script).
+    std::vector<GuiScenarioStep> scenarioSteps;
+    size_t  scenarioIndex       = 0;
+    std::string captureRequestPath;
+    bool    bLoggedFirstSnapshot = false;
 };
 
 GUIAppHost::GUIAppHost(const FGUIAppHostConfig& config, IGUIAppDelegate& delegate)
@@ -397,6 +407,16 @@ bool GUIAppHost::init()
         return false;
     }
     _impl->delegate->buildUI(*_impl->tree);
+    if (!config.scenarioPath.empty()) {
+        std::string scenarioError;
+        _impl->scenarioSteps = loadGuiScenarioFile(config.scenarioPath, &scenarioError);
+        if (!scenarioError.empty()) {
+            YA_CORE_ERROR("GUIAppHost: failed to load scenario '{}': {}", config.scenarioPath, scenarioError);
+            shutdown();
+            return false;
+        }
+        _impl->scenarioIndex = 0;
+    }
 
     render->allocateCommandBuffers(render->getSwapchainImageCount(), _impl->commandBuffers);
 
@@ -553,10 +573,14 @@ int GUIAppHost::run()
         return 1;
     }
 
-    bool bRunning             = true;
-    bool bLoggedFirstSnapshot = false;
+    bool bRunning = true;
     while (bRunning) {
-        pumpEvents(bRunning);
+        if (!_impl->scenarioSteps.empty()) {
+            stepScenario(bRunning);
+        }
+        else {
+            pumpEvents(bRunning);
+        }
         if (!bRunning) {
             break;
         }
@@ -678,8 +702,8 @@ int GUIAppHost::run()
             .offset = {0.0f, 0.0f},
             .textureResolver = resolveBuiltinTexture,
         });
-        if (!bLoggedFirstSnapshot) {
-            bLoggedFirstSnapshot = true;
+        if (!_impl->bLoggedFirstSnapshot) {
+            _impl->bLoggedFirstSnapshot = true;
             YA_CORE_INFO("GUIAppHost first snapshot: {} draw items, {}x{} logical -> {}x{} render",
                          snapshot.items.size(),
                          snapshot.logicalExtent.width,
@@ -738,10 +762,17 @@ int GUIAppHost::run()
                 .finalLayout           = EImageLayout::PresentSrcKHR,
             });
 
-        const bool bGpuShot = (_impl->config->gpuShotFrame != 0 &&
-                               _impl->frameCount == _impl->config->gpuShotFrame &&
-                               !_impl->config->gpuShotPath.empty());
-        if (bGpuShot) {
+        std::string capturePath;
+        if (_impl->config->gpuShotFrame != 0 &&
+            _impl->frameCount == _impl->config->gpuShotFrame &&
+            !_impl->config->gpuShotPath.empty()) {
+            capturePath = _impl->config->gpuShotPath;
+        }
+        else if (!_impl->captureRequestPath.empty()) {
+            capturePath = _impl->captureRequestPath;
+            _impl->captureRequestPath.clear();
+        }
+        if (!capturePath.empty()) {
             if (!_impl->gpuShotBuffer) {
                 _impl->gpuShotBuffer = _impl->render->getResourceFactory()->createBuffer(
                     ya::BufferCreateInfo{
@@ -771,14 +802,14 @@ int GUIAppHost::run()
         cmdBuf->end();
         _impl->render->end(imageIndex, {cmdBuf->getHandle()});
 
-        if (bGpuShot) {
+        if (!capturePath.empty()) {
             _impl->render->waitIdle();
             if (uint8_t* pixels = _impl->gpuShotBuffer->map<uint8_t>()) {
                 writeRGBAtoBMP(pixels,
                                presentExtent.width,
                                presentExtent.height,
                                swapchain->getFormat() == EFormat::B8G8R8A8_UNORM,
-                               _impl->config->gpuShotPath);
+                               capturePath);
                 _impl->gpuShotBuffer->unmap();
             }
         }
@@ -793,7 +824,73 @@ int GUIAppHost::run()
         }
     }
 
+    if (!_impl->scenarioSteps.empty() &&
+        !_impl->config->scenarioGoldenPath.empty() &&
+        !_impl->config->scenarioDiffPath.empty() &&
+        !_impl->config->scenarioCapturePath.empty()) {
+        const BmpDiffResult diff = diffBmpFiles(_impl->config->scenarioGoldenPath,
+                                                _impl->config->scenarioCapturePath,
+                                                _impl->config->scenarioDiffPath,
+                                                16, 0.0f);
+        YA_CORE_INFO("GUIAppHost scenario diff: pass={} differing={} ratio={:.4f}",
+                     diff.bPass, diff.differingPixels, diff.diffRatio);
+        if (!diff.bPass) {
+            return 2;
+        }
+    }
+
     return 0;
+}
+
+void GUIAppHost::injectEvent(const Event& event, const glm::vec2& logicalPoint)
+{
+    dispatchToTree(event, logicalPoint.x, logicalPoint.y);
+}
+
+void GUIAppHost::stepScenario(bool& bRunning)
+{
+    struct Sink final : IGuiEventSink
+    {
+        GUIAppHost* host = nullptr;
+        explicit Sink(GUIAppHost* inHost) : host(inHost) {}
+        void dispatch(const Event& event, const glm::vec2& point) override
+        {
+            host->injectEvent(event, point);
+        }
+    } sink{this};
+
+    auto& steps = _impl->scenarioSteps;
+    while (_impl->scenarioIndex < steps.size()) {
+        const GuiScenarioStep& step = steps[_impl->scenarioIndex++];
+        switch (step.kind) {
+        case EGuiScenarioStepKind::Frame:
+            if (_impl->scenarioIndex == steps.size() &&
+                !_impl->config->scenarioCapturePath.empty()) {
+                _impl->captureRequestPath = _impl->config->scenarioCapturePath;
+            }
+            return;
+        case EGuiScenarioStepKind::Checkpoint:
+            if (!_impl->config->scenarioDumpDir.empty() && !step.tag.empty()) {
+                std::error_code ec;
+                std::filesystem::create_directories(_impl->config->scenarioDumpDir, ec);
+                const nlohmann::json dump = dumpWidgetTree(*_impl->tree);
+                const std::string   path  = _impl->config->scenarioDumpDir + "/" + step.tag + ".json";
+                std::ofstream       file(path);
+                if (file) {
+                    file << dump.dump(2);
+                    YA_CORE_INFO("GUIAppHost scenario checkpoint '{}' -> {}", step.tag, path);
+                }
+                else {
+                    YA_CORE_ERROR("GUIAppHost scenario checkpoint: cannot write '{}'", path);
+                }
+            }
+            break;
+        default:
+            emitGuiScenarioStep(sink, step);
+            break;
+        }
+    }
+    bRunning = false;
 }
 
 WidgetTree& GUIAppHost::getTree()
