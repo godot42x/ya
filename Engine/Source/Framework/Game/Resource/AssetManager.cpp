@@ -342,4 +342,9 @@ void AssetManager::evictCachedAsset(const std::string& assetPath)
     modelManager().evictCachedAsset(assetPath, frame);
 }
 
+void AssetManager::clearTextures()
+{
+    textureManager().clear();
+}
+
 } // namespace ya

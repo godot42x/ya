@@ -220,6 +220,11 @@ class YA_RESOURCE_API AssetManager : public IResourceCache
     /// Check whether an async model load is still in flight.
     bool isModelLoadPending(const std::string& filepath) const;
 
+    /// Release all cached textures (GPU images). Hosts call this before
+    /// tearing down the render backend / VMA allocator so dedicated image
+    /// allocations are freed while the device is still alive.
+    void clearTextures();
+
   private:
     /// Get or compute+cache the cacheKey for a filepath. Returns a stable reference.
     std::string buildTextureCacheKey(const std::string&                   requestPath,
