@@ -60,6 +60,9 @@ UIFrameSnapshot GUIWorkbenchPanel::buildSnapshot()
 
 void GUIWorkbenchPanel::onImGuiRender()
 {
+    // Open at a usable size on first use (the saved imgui.ini size wins after
+    // that); the workbench shell needs ~400px height for menu+toolbar+host.
+    ImGui::SetNextWindowSize(ImVec2(640.0f, 420.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin("GUI Workbench")) {
         ImGui::End();
         return;

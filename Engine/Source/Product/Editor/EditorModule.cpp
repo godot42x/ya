@@ -841,6 +841,10 @@ class EditorModule final : public IModule, public IEditorAutomationControl
         gEditorAuthoringScene = nullptr;
         app.getRenderServices().clearExtensionRenderFrameState();
         _viewportCompositor.shutdown();
+        // Release the tool-surface composed image BEFORE the render runtime /
+        // VMA allocator is torn down (leaking it past device destruction trips
+        // VMA's "unfreed dedicated allocations" assertion).
+        _guiWorkbenchCompositor.shutdown();
         if (_layer) {
             _layer->setViewportDisplayImage(nullptr);
             _layer->onDetach();
