@@ -56,8 +56,16 @@ void FWorkbenchWorkspace::removeSelected()
         commandResult = "Remove: nothing selected";
         return;
     }
-    const std::string name = items[static_cast<size_t>(index)].name;
+    const std::string removedId = items[static_cast<size_t>(index)].id;
+    const std::string name      = items[static_cast<size_t>(index)].name;
+    const std::string removedParent = items[static_cast<size_t>(index)].parentId;
     items.erase(items.begin() + index);
+    // Children of the removed item move up to its parent slot.
+    for (FWorkbenchItem& item : items) {
+        if (item.parentId == removedId) {
+            item.parentId = removedParent;
+        }
+    }
     if (items.empty()) {
         selectedId.clear();
     } else {
@@ -120,8 +128,9 @@ FWorkbenchItem* FWorkbenchWorkspace::getSelectedMutable()
 
 int FWorkbenchWorkspace::getSelectedIndex() const
 {
-    for (size_t i = 0; i < items.size(); ++i) {
-        if (items[i].id == selectedId) {
+    const auto ordered = orderedItems();
+    for (size_t i = 0; i < ordered.size(); ++i) {
+        if (ordered[i]->id == selectedId) {
             return static_cast<int>(i);
         }
     }
@@ -164,6 +173,84 @@ void FWorkbenchWorkspace::stepSelectedSize(const glm::vec2& delta)
     } else {
         commandResult = "Inspector: no selection";
     }
+}
+
+void FWorkbenchWorkspace::collectOrdered(std::vector<const FWorkbenchItem*>& out,
+                                         const std::string& parentId) const
+{
+    for (const FWorkbenchItem& item : items) {
+        if (item.parentId == parentId) {
+            out.push_back(&item);
+            collectOrdered(out, item.id);
+        }
+    }
+}
+
+std::vector<const FWorkbenchItem*> FWorkbenchWorkspace::orderedItems() const
+{
+    std::vector<const FWorkbenchItem*> out;
+    collectOrdered(out, "");
+    return out;
+}
+
+int FWorkbenchWorkspace::getDepth(const std::string& id) const
+{
+    const auto findById = [this](const std::string& target) -> const FWorkbenchItem*
+    {
+        for (const FWorkbenchItem& item : items) {
+            if (item.id == target) {
+                return &item;
+            }
+        }
+        return nullptr;
+    };
+
+    int depth = 0;
+    const FWorkbenchItem* start = findById(id);
+    for (std::string parent = start ? start->parentId : ""; !parent.empty();) {
+        ++depth;
+        const FWorkbenchItem* parentItem = findById(parent);
+        if (!parentItem) {
+            break;
+        }
+        parent = parentItem->parentId;
+        if (depth > static_cast<int>(items.size())) {
+            break; // cycle guard (should be unreachable; reparent prevents it)
+        }
+    }
+    return depth;
+}
+
+bool FWorkbenchWorkspace::reparent(const std::string& id, const std::string& newParentId)
+{
+    if (id.empty() || id == newParentId) {
+        return false;
+    }
+    FWorkbenchItem* item = findItem(id);
+    if (!item) {
+        return false;
+    }
+    if (!newParentId.empty() && !findItem(newParentId)) {
+        return false;
+    }
+    // Reject cycles: the new parent must not be a descendant of `id`.
+    for (std::string cursor = newParentId; !cursor.empty();) {
+        if (cursor == id) {
+            return false;
+        }
+        const FWorkbenchItem* parent = findItem(cursor);
+        if (!parent) {
+            break;
+        }
+        cursor = parent->parentId;
+    }
+    if (item->parentId == newParentId) {
+        return true; // no-op, already there
+    }
+    item->parentId = newParentId;
+    bDirty         = true;
+    commandResult  = "Reparent: '" + item->name + "'";
+    return true;
 }
 
 FWorkbenchItem* FWorkbenchWorkspace::findItem(const std::string& id)

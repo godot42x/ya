@@ -61,6 +61,38 @@ TEST(WorkspaceTest, RemoveSelectedFallsBackToNeighbor)
     EXPECT_EQ(ws.commandResult, "Remove: nothing selected");
 }
 
+TEST(WorkspaceTest, ReparentMovesItemUnderParentAndIndents)
+{
+    FWorkbenchWorkspace ws;
+    ws.resetLayout();
+
+    EXPECT_TRUE(ws.reparent("item.sphere", "item.cube"));
+    EXPECT_EQ(ws.getDepth("item.sphere"), 1);
+    EXPECT_EQ(ws.getDepth("item.cube"), 0);
+
+    // Tree order: cube first, then its child sphere, then light.
+    const auto ordered = ws.orderedItems();
+    ASSERT_EQ(ordered.size(), 3u);
+    EXPECT_EQ(ordered[0]->id, "item.cube");
+    EXPECT_EQ(ordered[1]->id, "item.sphere");
+    EXPECT_EQ(ordered[2]->id, "item.light");
+}
+
+TEST(WorkspaceTest, ReparentRejectsCyclesAndUnknownParents)
+{
+    FWorkbenchWorkspace ws;
+    ws.resetLayout();
+
+    EXPECT_TRUE(ws.reparent("item.sphere", "item.cube"));
+    // Self parenting and descendant parenting are rejected.
+    EXPECT_FALSE(ws.reparent("item.sphere", "item.sphere"));
+    EXPECT_FALSE(ws.reparent("item.cube", "item.sphere"));
+    EXPECT_FALSE(ws.reparent("item.cube", "item.missing"));
+    // Original structure is untouched.
+    EXPECT_EQ(ws.getDepth("item.sphere"), 1);
+    EXPECT_EQ(ws.getDepth("item.cube"), 0);
+}
+
 TEST(WorkspaceTest, RenameMutatesSelectedAndReports)
 {
     FWorkbenchWorkspace ws;

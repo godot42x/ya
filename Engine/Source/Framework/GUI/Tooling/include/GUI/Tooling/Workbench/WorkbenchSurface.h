@@ -5,6 +5,7 @@
 
 #include <glm/glm.hpp>
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -14,10 +15,12 @@ namespace ya
 struct UIButton;
 struct UIContainer;
 struct UIElement;
+struct UIMenuBar;
 struct UIPanel;
 struct UISelectableRow;
 struct UISplitPane;
 struct UIScrollViewport;
+struct UITabBar;
 struct UIText;
 struct UITextField;
 struct WidgetTree;
@@ -30,6 +33,29 @@ namespace guiworkbench
 class FWorkbenchSurface
 {
   public:
+    /// App-provided demo page builder: builds one page into `parent` (the
+    /// content host). `log` appends to the status line.
+    using FPageBuilder = std::function<void(ya::WidgetTree& tree,
+                                            ya::UIElement& parent,
+                                            const std::function<void(const std::string&)>& log)>;
+
+    /// Register an app page (appends a tab). Pages are example/app content:
+    /// the shell only knows their names and builders. Call before buildUI().
+    int addPage(const std::string& name, FPageBuilder builder);
+    /// Index of the built-in Editor reference page (after all registered
+    /// pages; the shell's own tool-GUI example, shared with the product
+    /// editor panel).
+    [[nodiscard]] int getEditorPageIndex() const { return _editorPageIndex; }
+    /// Switch the content page (tabs + content host). Public so apps can
+    /// drive the shell (automation, commands).
+    void selectPage(int index);
+    [[nodiscard]] int getCurrentPageIndex() const { return _currentPageIndex; }
+    /// Current status-line text (app automation asserts on it).
+    [[nodiscard]] const std::string& getStatusText() const;
+    /// Shell chrome access for app-driven automation.
+    [[nodiscard]] ya::UIMenuBar* getMenuBar() const { return _menuBar.get(); }
+    [[nodiscard]] ya::UITabBar*  getTabBar() const { return _tabBar.get(); }
+
     FWorkbenchWorkspace workspace;
 
     void buildUI(ya::WidgetTree& tree);
@@ -39,8 +65,24 @@ class FWorkbenchSurface
     void setSmokeActionsEnabled(bool bEnabled) { _bSmokeActions = bEnabled; }
     [[nodiscard]] bool isSmokeActionsEnabled() const { return _bSmokeActions; }
     [[nodiscard]] bool getSmokePassed() const { return _bSmokePassed; }
+    /// App-driven automation step for app-registered pages (called on every
+    /// smoke frame BEFORE the built-in editor automation). Return true when
+    /// the frame was handled by the app, false to fall through to the
+    /// built-in editor steps. Use failSmoke() to abort.
+    std::function<bool(int frame)> externalAutomationStep;
+    /// Abort the current smoke run with `message` (used by app automation).
+    void failSmoke(const std::string& message);
 
   private:
+    void buildMenuBar(ya::WidgetTree& tree, ya::UIElement& parent);
+    void buildTabBar(ya::WidgetTree& tree, ya::UIElement& parent);
+    void buildDemoHost(ya::WidgetTree& tree, ya::UIElement& parent);
+    void buildStatusBar(ya::WidgetTree& tree, ya::UIElement& parent);
+    void clearDemoHost();
+    void logStatus(const std::string& text);
+
+    // Editor demo page (the original workbench editor loop).
+    void buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& parent);
     void buildToolbar(ya::WidgetTree& tree, ya::UIElement& parent);
     void buildDocumentList(ya::WidgetTree& tree, ya::UIElement& parent);
     void buildCanvas(ya::WidgetTree& tree, ya::UIElement& parent);
@@ -73,6 +115,17 @@ class FWorkbenchSurface
     std::shared_ptr<ya::UIButton> _resetButton;
     std::shared_ptr<ya::UIText>   _statusText;
     std::shared_ptr<ya::UIText>   _commandResultText;
+    std::shared_ptr<ya::UIMenuBar> _menuBar;
+    std::shared_ptr<ya::UITabBar>  _tabBar;
+    std::shared_ptr<ya::UIPanel>   _demoHost;
+    struct FPage
+    {
+        std::string  name;
+        FPageBuilder build;
+    };
+    std::vector<FPage> _pages;
+    int                _editorPageIndex = -1;
+    int                _currentPageIndex = -1;
 
     std::shared_ptr<ya::UISplitPane>      _mainSplit;
     std::shared_ptr<ya::UISplitPane>      _rightSplit;

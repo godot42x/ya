@@ -5,11 +5,17 @@
 
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/Controls/Button.h"
+#include "GUI/Widgets/Controls/CheckBox.h"
+#include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/Menu.h"
+#include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/SelectableRow.h"
+#include "GUI/Widgets/Controls/Slider.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
+#include "GUI/Widgets/Controls/TabBar.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 
@@ -37,11 +43,11 @@ std::shared_ptr<ya::UIButton> makeToolButton(const std::string& name, const std:
     auto button = std::make_shared<ya::UIButton>(name);
     if (width > 0.0f) {
         // Explicit control (inspector form): keep the fixed width.
-        button->_size         = {width, 24.0f};
+        button->_size = {width, 24.0f};
     }
     else {
         // SizeToContent: the label text sizes the button (toolbar row).
-        button->_bAutoSize    = true;
+        button->_bAutoSize      = true;
         button->_contentPadding = {10.0f, 4.0f};
     }
     button->_normalColor  = kButtonNormal;
@@ -50,12 +56,12 @@ std::shared_ptr<ya::UIButton> makeToolButton(const std::string& name, const std:
     button->_focusedColor = kButtonFocused;
 
     auto text = std::make_shared<ya::UIText>(name + "_Label");
-    text->_bAutoSize = true; // label measures its own text
-    text->_fontSize = 14;
-    text->_text     = label;
-    text->_color    = {0.92f, 0.94f, 0.97f, 1.0f};
-    text->_hAlign   = ya::EWidgetAlignH::Center;
-    text->_vAlign   = ya::EWidgetAlignV::Center;
+    text->_bAutoSize = true;
+    text->_fontSize  = 14;
+    text->_text      = label;
+    text->_color     = {0.92f, 0.94f, 0.97f, 1.0f};
+    text->_hAlign    = ya::EWidgetAlignH::Center;
+    text->_vAlign    = ya::EWidgetAlignV::Center;
     button->addDetachedChild(text);
     return button;
 }
@@ -98,15 +104,199 @@ void FWorkbenchSurface::buildUI(ya::WidgetTree& tree)
     _root->_color     = kWindowColor;
     tree.attachToLayer(ya::WidgetTree::ELayer::Content, _root);
 
-    buildToolbar(tree, *_root);
+    buildMenuBar(tree, *_root);
+    // The demo host must exist before the tab bar selects its first page:
+    // selectTab() fires the page-switch callback synchronously.
+    buildDemoHost(tree, *_root);
+    buildTabBar(tree, *_root);
+    buildStatusBar(tree, *_root);
+
+    selectPage(0);
+}
+
+int FWorkbenchSurface::addPage(const std::string& name, FPageBuilder builder)
+{
+    _pages.push_back(FPage{.name = name, .build = std::move(builder)});
+    return static_cast<int>(_pages.size()) - 1;
+}
+
+void FWorkbenchSurface::failSmoke(const std::string& message)
+{
+    YA_CORE_ERROR("{}", message);
+    _bAutomationDone = true;
+}
+
+void FWorkbenchSurface::buildMenuBar(ya::WidgetTree& tree, ya::UIElement& parent)
+{
+    _menuBar = std::make_shared<ya::UIMenuBar>("MainMenu");
+    _menuBar->_anchorMin = {0.0f, 0.0f};
+    _menuBar->_anchorMax = {1.0f, 0.0f};
+    _menuBar->_position  = {0.0f, 0.0f};
+    _menuBar->_size      = {0.0f, 30.0f};
+    tree.attach(parent, _menuBar);
+
+    const auto log = [this](const std::string& text) { logStatus(text); };
+
+    _menuBar->addItem("File", [this, log]
+    {
+        return ya::UIMenu::create({
+            {"New Document", [log] { log("Menu: New Document"); }},
+            {"Open File...", [log] { log("Menu: Open File..."); }},
+            {"Save", [log] { log("Menu: Save"); }},
+            {"Save As...", [log] { log("Menu: Save As..."); }},
+            {"---", nullptr},
+            {"Exit", [log] { log("Menu: Exit"); }},
+        });
+    });
+    _menuBar->addItem("Edit", [log]
+    {
+        return ya::UIMenu::create({
+            {"Undo", [log] { log("Menu: Undo"); }},
+            {"Redo", [log] { log("Menu: Redo"); }},
+            {"---", nullptr},
+            {"Copy", [log] { log("Menu: Copy"); }},
+            {"Paste", [log] { log("Menu: Paste"); }},
+        });
+    });
+    _menuBar->addItem("View", [log]
+    {
+        return ya::UIMenu::create({
+            {"Show Grid", [log] { log("Menu: Show Grid"); }},
+            {"Show FPS", [log] { log("Menu: Show FPS"); }},
+            {"Fullscreen", [log] { log("Menu: Fullscreen"); }},
+        });
+    });
+    _menuBar->addItem("Help", [log]
+    {
+        return ya::UIMenu::create({
+            {"About", [log] { log("Menu: About"); }},
+            {"Documentation", [log] { log("Menu: Documentation"); }},
+        });
+    });
+}
+
+void FWorkbenchSurface::buildTabBar(ya::WidgetTree& tree, ya::UIElement& parent)
+{
+    _tabBar = std::make_shared<ya::UITabBar>("DemoTabs");
+    _tabBar->_anchorMin = {0.0f, 0.0f};
+    _tabBar->_anchorMax = {1.0f, 0.0f};
+    _tabBar->_position  = {0.0f, 34.0f};
+    _tabBar->_size      = {0.0f, 30.0f};
+    tree.attach(parent, _tabBar);
+
+    for (const FPage& page : _pages) {
+        _tabBar->addTab(page.name);
+    }
+    _tabBar->addTab("Editor");
+    _editorPageIndex = static_cast<int>(_pages.size());
+    _tabBar->_onTabSelected = [this](int index) { selectPage(index); };
+    _tabBar->selectTab(0);
+}
+
+void FWorkbenchSurface::buildDemoHost(ya::WidgetTree& tree, ya::UIElement& parent)
+{
+    _demoHost = std::make_shared<ya::UIPanel>("DemoHost");
+    _demoHost->_anchorMin = {0.0f, 0.085f};
+    _demoHost->_anchorMax = {1.0f, 0.94f};
+    _demoHost->_color     = kWindowColor;
+    tree.attach(parent, _demoHost);
+}
+
+void FWorkbenchSurface::buildStatusBar(ya::WidgetTree& tree, ya::UIElement& parent)
+{
+    _statusText = std::make_shared<ya::UIText>("Status");
+    _statusText->_anchorMin = {0.0f, 1.0f};
+    _statusText->_anchorMax = {0.0f, 1.0f};
+    _statusText->_position  = {12.0f, -30.0f};
+    _statusText->_size      = {420.0f, 24.0f};
+    _statusText->_fontSize  = 13;
+    _statusText->_text      = "Tab: switch demo | Click / drag / keyboard to explore";
+    _statusText->_color     = kHeaderColor;
+    tree.attach(parent, _statusText);
+
+    _commandResultText = std::make_shared<ya::UIText>("CommandResult");
+    // Bottom full-width strip: right-aligned status text that never leaves
+    // the window on resize (a corner anchor with a pixel position would).
+    _commandResultText->_anchorMin = {0.0f, 1.0f};
+    _commandResultText->_anchorMax = {1.0f, 1.0f};
+    _commandResultText->_position  = {0.0f, -30.0f};
+    _commandResultText->_size      = {0.0f, 24.0f};
+    _commandResultText->_fontSize  = 13;
+    _commandResultText->_text      = "Ready";
+    _commandResultText->_color     = {0.60f, 0.80f, 0.62f, 1.0f};
+    _commandResultText->_hAlign    = ya::EWidgetAlignH::Right;
+    tree.attach(parent, _commandResultText);
+}
+
+void FWorkbenchSurface::selectPage(int index)
+{
+    const int pageCount = static_cast<int>(_pages.size()) + 1; // + built-in Editor
+    if (index < 0 || index >= pageCount || index == _currentPageIndex) {
+        return;
+    }
+    _currentPageIndex = index;
+    clearDemoHost();
+
+    if (index == _editorPageIndex) {
+        buildEditorDemo(*_tree, *_demoHost);
+    }
+    else {
+        const auto log = [this](const std::string& text) { logStatus(text); };
+        _pages[static_cast<size_t>(index)].build(*_tree, *_demoHost, log);
+    }
+
+    if (_tree) {
+        _tree->invalidateLayout();
+    }
+}
+
+void FWorkbenchSurface::clearDemoHost()
+{
+    if (!_tree || !_demoHost) {
+        return;
+    }
+    const auto children = _demoHost->getChildren();
+    for (const auto& child : children) {
+        if (child->isAttached()) {
+            _tree->detach(*child);
+        }
+    }
+}
+
+void FWorkbenchSurface::logStatus(const std::string& text)
+{
+    if (_commandResultText) {
+        _commandResultText->_text = text;
+    }
+}
+
+const std::string& FWorkbenchSurface::getStatusText() const
+{
+    static const std::string kEmpty;
+    return _commandResultText ? _commandResultText->_text : kEmpty;
+}
+
+// === Editor demo page (the original workbench editor loop) ===
+
+void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& parent)
+{
+    auto editorPanel = std::make_shared<ya::UIPanel>("EditorDemo");
+    editorPanel->_anchorMin = {0.0f, 0.0f};
+    editorPanel->_anchorMax = {1.0f, 1.0f};
+    editorPanel->_color     = kWindowColor;
+    tree.attach(parent, editorPanel);
+
+    buildToolbar(tree, *editorPanel);
 
     _mainSplit = std::make_shared<ya::UISplitPane>("MainSplit");
-    _mainSplit->_anchorMin      = {0.0f, 0.06f};
-    _mainSplit->_anchorMax      = {1.0f, 0.955f};
-    _mainSplit->_splitRatio     = 0.24f;
-    _mainSplit->_minFirstExtent = 180.0f;
+    _mainSplit->_anchorMin       = {0.0f, 0.0f};
+    _mainSplit->_anchorMax       = {1.0f, 1.0f};
+    _mainSplit->_padding         = {0.0f, 42.0f};
+    _mainSplit->_size            = {0.0f, 0.0f};
+    _mainSplit->_splitRatio      = 0.24f;
+    _mainSplit->_minFirstExtent  = 180.0f;
     _mainSplit->_minSecondExtent = 420.0f;
-    tree.attach(*_root, _mainSplit);
+    tree.attach(*editorPanel, _mainSplit);
 
     buildDocumentList(tree, *_mainSplit);
 
@@ -121,27 +311,6 @@ void FWorkbenchSurface::buildUI(ya::WidgetTree& tree)
     buildCanvas(tree, *_rightSplit);
     buildInspector(tree, *_rightSplit);
 
-    _statusText = std::make_shared<ya::UIText>("Status");
-    _statusText->_anchorMin = {0.0f, 1.0f};
-    _statusText->_anchorMax = {0.0f, 1.0f};
-    _statusText->_position  = {16.0f, -42.0f};
-    _statusText->_size      = {600.0f, 24.0f};
-    _statusText->_fontSize  = 13;
-    _statusText->_text      = "Arrow keys: navigate list | Tab: focus | Enter: activate";
-    _statusText->_color     = kHeaderColor;
-    tree.attach(*_root, _statusText);
-
-    _commandResultText = std::make_shared<ya::UIText>("CommandResult");
-    _commandResultText->_anchorMin = {1.0f, 1.0f};
-    _commandResultText->_anchorMax = {1.0f, 1.0f};
-    _commandResultText->_position  = {-400.0f, -42.0f};
-    _commandResultText->_size      = {380.0f, 24.0f};
-    _commandResultText->_fontSize  = 13;
-    _commandResultText->_text      = workspace.commandResult;
-    _commandResultText->_color     = {0.60f, 0.80f, 0.62f, 1.0f};
-    _commandResultText->_hAlign    = ya::EWidgetAlignH::Right;
-    tree.attach(*_root, _commandResultText);
-
     workspace.resetLayout();
     _bRowsDirty = true;
 }
@@ -151,11 +320,11 @@ void FWorkbenchSurface::buildToolbar(ya::WidgetTree& tree, ya::UIElement& parent
     auto toolbar = std::make_shared<ya::UIContainer>("Toolbar");
     toolbar->_anchorMin = {0.0f, 0.0f};
     toolbar->_anchorMax = {1.0f, 0.0f};
-    toolbar->_position  = {0.0f, 8.0f};
-    toolbar->_size      = {0.0f, 34.0f};
+    toolbar->_position  = {0.0f, 6.0f};
+    toolbar->_size      = {0.0f, 32.0f};
     toolbar->_direction = ya::EWidgetBoxLayout::Horizontal;
     toolbar->_spacing   = 8.0f;
-    toolbar->_padding   = 8.0f;
+    toolbar->_padding   = {8.0f, 4.0f};
     tree.attach(parent, toolbar);
 
     _addButton    = makeToolButton("Add", "Add");
@@ -195,7 +364,7 @@ void FWorkbenchSurface::buildDocumentList(ya::WidgetTree& tree, ya::UIElement& p
     _rowList = std::make_shared<ya::UIContainer>("RowList");
     _rowList->_anchorMin = {0.0f, 0.0f};
     _rowList->_anchorMax = {1.0f, 1.0f};
-    _rowList->_padding   = 8.0f;
+    _rowList->_padding   = {8.0f, 8.0f};
     _rowList->_direction = ya::EWidgetBoxLayout::Vertical;
     _rowList->_spacing   = 2.0f;
     tree.attach(*scroll, _rowList);
@@ -242,7 +411,7 @@ void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& pare
     auto form = std::make_shared<ya::UIContainer>("InspectorForm");
     form->_anchorMin = {0.0f, 0.0f};
     form->_anchorMax = {1.0f, 1.0f};
-    form->_position  = {10.0f, 8.0f};
+    form->_padding   = {10.0f, 8.0f};
     form->_size      = {0.0f, 0.0f};
     form->_direction = ya::EWidgetBoxLayout::Vertical;
     form->_spacing   = 4.0f;
@@ -328,13 +497,14 @@ void FWorkbenchSurface::rebuildItemRows()
     _rowList = std::make_shared<ya::UIContainer>("RowList");
     _rowList->_anchorMin = {0.0f, 0.0f};
     _rowList->_anchorMax = {1.0f, 1.0f};
-    _rowList->_padding   = 8.0f;
+    _rowList->_padding   = {8.0f, 8.0f};
     _rowList->_direction = ya::EWidgetBoxLayout::Vertical;
     _rowList->_spacing   = 2.0f;
     _tree->attach(*_rowScroll, _rowList);
     _rows.clear();
 
-    for (const FWorkbenchItem& item : workspace.items) {
+    for (const FWorkbenchItem* itemPtr : workspace.orderedItems()) {
+        const FWorkbenchItem& item = *itemPtr;
         auto row = std::make_shared<ya::UISelectableRow>("Row_" + item.id);
         row->_itemId = item.id;
         row->_size   = {240.0f, 22.0f};
@@ -346,6 +516,18 @@ void FWorkbenchSurface::rebuildItemRows()
             workspace.select(id);
             setCommandResult("List: activated '" + id + "'");
         };
+        // Drag & drop reparent: rows are both sources and drop targets.
+        row->_bDraggable     = true;
+        row->_dragPayload    = item.id;
+        row->_dragGhostLabel = item.name;
+        const std::string targetId = item.id;
+        row->_onDropped = [this, targetId](const std::string& droppedId)
+        {
+            if (workspace.reparent(droppedId, targetId)) {
+                _bRowsDirty = true;
+                setCommandResult(workspace.commandResult);
+            }
+        };
 
         auto label = std::make_shared<ya::UIText>("RowLabel_" + item.id);
         label->_size     = {240.0f, 22.0f};
@@ -353,6 +535,8 @@ void FWorkbenchSurface::rebuildItemRows()
         label->_text     = item.bVisible ? item.name : item.name + " (hidden)";
         label->_color    = {0.88f, 0.90f, 0.94f, 1.0f};
         label->_vAlign   = ya::EWidgetAlignV::Center;
+        // Tree indentation: one level per parent depth.
+        label->_position = {static_cast<float>(workspace.getDepth(item.id)) * 14.0f, 0.0f};
 
         _tree->attach(*_rowList, row);
         _tree->attach(*row, label);
@@ -363,7 +547,7 @@ void FWorkbenchSurface::rebuildItemRows()
 
 void FWorkbenchSurface::syncPresentationState()
 {
-    if (!_tree) {
+    if (!_tree || _currentPageIndex != _editorPageIndex) {
         return;
     }
     if (_bRowsDirty) {
@@ -372,13 +556,11 @@ void FWorkbenchSurface::syncPresentationState()
 
     const FWorkbenchItem* selected = workspace.getSelected();
 
-    // SizeToContent widgets (auto-size buttons / highlight) need a relayout
-    // when their runtime label / size changes; track and invalidate only on
-    // geometry-affecting deltas.
     bool bGeometryChanged = false;
 
-    for (size_t i = 0; i < _rows.size() && i < workspace.items.size(); ++i) {
-        const FWorkbenchItem& item = workspace.items[i];
+    const auto ordered = workspace.orderedItems();
+    for (size_t i = 0; i < _rows.size() && i < ordered.size(); ++i) {
+        const FWorkbenchItem& item = *ordered[i];
         if (!_rows[i]->getChildren().empty()) {
             if (auto* label = dynamic_cast<ya::UIText*>(_rows[i]->getChildren()[0].get())) {
                 label->_text = item.bVisible ? item.name : item.name + " (hidden)";
@@ -388,12 +570,11 @@ void FWorkbenchSurface::syncPresentationState()
     }
 
     if (selected) {
-        _highlightPanel->_visibility = ya::EWidgetVisibility::Visible;
+        _highlightPanel->_visibility = selected->bVisible ? ya::EWidgetVisibility::Visible
+                                                          : ya::EWidgetVisibility::Hidden;
         _highlightPanel->_size       = selected->size;
         _highlightPanel->_position   = -selected->size * 0.5f;
-        _highlightPanel->_color      = selected->bVisible
-                                           ? selected->color
-                                           : glm::vec4(selected->color.r, selected->color.g, selected->color.b, 0.35f);
+        _highlightPanel->_color      = selected->color;
         _previewName->_text = selected->bVisible ? selected->name : selected->name + " (hidden)";
         if (_highlightPanel->_size != _lastHighlightSize || _highlightPanel->_position != _lastHighlightPos) {
             bGeometryChanged     = true;
@@ -425,8 +606,6 @@ void FWorkbenchSurface::syncPresentationState()
             }
         }
     }
-
-    _commandResultText->_text = workspace.commandResult;
 
     if (bGeometryChanged && _tree) {
         _tree->invalidateLayout();
@@ -463,9 +642,7 @@ void FWorkbenchSurface::cmdResetLayout()
 void FWorkbenchSurface::setCommandResult(const std::string& text)
 {
     workspace.commandResult = text;
-    if (_commandResultText) {
-        _commandResultText->_text = text;
-    }
+    logStatus(text);
 }
 
 void FWorkbenchSurface::updateUI()
@@ -490,6 +667,9 @@ void FWorkbenchSurface::onRoutedEvent(const ya::Event& event, ya::EWidgetRouteRe
 
 void FWorkbenchSurface::handleUnhandledKey(const ya::KeyPressedEvent& keyEvent)
 {
+    if (_currentPageIndex != _editorPageIndex) {
+        return;
+    }
     if (keyEvent.bRepeat) {
         return;
     }
@@ -518,27 +698,53 @@ void FWorkbenchSurface::dispatchKey(const ya::Event& event)
 
 void FWorkbenchSurface::runAutomation()
 {
+    // App-registered demo pages drive their own automation: frames the app
+    // claims (returns true) are handled entirely there; everything else falls
+    // through to the built-in Editor page automation below.
+    if (externalAutomationStep && externalAutomationStep(_frame)) {
+        return;
+    }
+
     auto failAutomation = [this](const std::string& message) {
         YA_CORE_ERROR("{}", message);
         _bAutomationDone = true;
     };
-
-    switch (_frame) {
-    case 3: {
-        const glm::vec2 center = _addButton->_layoutRect.pos + _addButton->_layoutRect.extent * 0.5f;
+    const auto centerOf = [](const ya::UIElement* element) -> glm::vec2
+    {
+        return element ? element->_layoutRect.pos + element->_layoutRect.extent * 0.5f : glm::vec2{};
+    };
+    const auto click = [this, &centerOf](const ya::UIElement* element)
+    {
+        const glm::vec2 center = centerOf(element);
         dispatchPointer(ya::MouseButtonPressedEvent(0), center);
         dispatchPointer(ya::MouseButtonReleasedEvent(0), center);
+    };
+    switch (_frame) {
+    case 19: {
+        // Switch to the Editor page.
+        const auto& children = _tabBar->getChildren();
+        click(children[static_cast<size_t>(_editorPageIndex)].get());
+        if (_currentPageIndex != _editorPageIndex) {
+            failAutomation("Demo automation: tab switch to Editor failed");
+            return;
+        }
+        break;
+    }
+    case 20: {
+        // Editor: Add.
+        click(_addButton.get());
         if (workspace.items.size() != 4u || workspace.getSelected() == nullptr ||
             workspace.getSelected()->name != "Item 4") {
-            failAutomation(std::format("Workbench automation: Add failed (items={}, selected='{}')",
+            failAutomation(std::format("Demo automation: editor Add failed (items={}, selected='{}')",
                                        workspace.items.size(),
                                        workspace.getSelected() ? workspace.getSelected()->name : "<none>"));
             return;
         }
         break;
     }
-    case 4: {
-        dispatchPointer(ya::MouseButtonPressedEvent(0), _nameField->_layoutRect.pos + _nameField->_layoutRect.extent * 0.5f);
+    case 21: {
+        // Editor: rename through the inspector field.
+        click(_nameField.get());
         ya::KeyPressedEvent home{};
         home._keyCode = ya::EKey::Home;
         home._mod     = 0;
@@ -552,109 +758,35 @@ void FWorkbenchSurface::runAutomation()
         dispatchKey(enter);
         const FWorkbenchItem* selected = workspace.getSelected();
         if (!selected || selected->name != "Star_Item 4") {
-            failAutomation(std::format("Workbench automation: rename failed ('{}')", selected ? selected->name : "<none>"));
+            failAutomation(std::format("Demo automation: editor rename failed ('{}')", selected ? selected->name : "<none>"));
             return;
         }
         break;
     }
-    case 5: {
-        const glm::vec2 center = _removeButton->_layoutRect.pos + _removeButton->_layoutRect.extent * 0.5f;
-        dispatchPointer(ya::MouseButtonPressedEvent(0), center);
-        dispatchPointer(ya::MouseButtonReleasedEvent(0), center);
-        if (workspace.items.size() != 3u) {
-            failAutomation(std::format("Workbench automation: Remove failed (items={})", workspace.items.size()));
+    case 22: {
+        // Editor: drag the first row onto the third -> reparent under it.
+        const glm::vec2 from = centerOf(_rows[0].get());
+        const glm::vec2 to   = centerOf(_rows[2].get());
+        dispatchPointer(ya::MouseButtonPressedEvent(0), from);
+        dispatchPointer(ya::MouseMoveEvent(to.x, to.y), to);
+        dispatchPointer(ya::MouseButtonReleasedEvent(0), to);
+        if (workspace.items[0].parentId != "item.light") {
+            failAutomation(std::format("Demo automation: drag reparent failed (parent='{}')",
+                                       workspace.items[0].parentId));
             return;
         }
         break;
     }
-    case 6: {
-        ya::KeyPressedEvent up{};
-        up._keyCode = ya::EKey::Up;
-        up._mod     = 0;
-        dispatchKey(up);
-        if (workspace.getSelectedIndex() != 1) {
-            failAutomation(std::format("Workbench automation: arrow navigation failed (index={})",
-                                       workspace.getSelectedIndex()));
-            return;
-        }
-        break;
-    }
-    case 7: {
-        const FWorkbenchItem* selected = workspace.getSelected();
-        const bool bNameSynced = selected && _nameField->_text == selected->name;
-        const bool bRowsSynced = selected && std::any_of(_rows.begin(), _rows.end(), [&](const auto& row) {
-            return row->_itemId == selected->id && row->_bSelected;
-        });
-        const bool bRowLabelSynced = selected && std::any_of(_rows.begin(), _rows.end(), [&](const auto& row) {
-            if (row->_itemId != selected->id || row->getChildren().empty()) {
-                return false;
-            }
-            auto* label = dynamic_cast<ya::UIText*>(row->getChildren()[0].get());
-            return label != nullptr && label->_text == selected->name;
-        });
-        const bool bPreviewSynced = selected && _previewName->_text == selected->name;
-        const bool bStatusSynced  = _commandResultText->_text == "List: navigated";
-        if (!bNameSynced || !bRowsSynced || !bRowLabelSynced || !bPreviewSynced || !bStatusSynced) {
-            failAutomation(std::format("Workbench automation: presenter sync incomplete (name={} rows={} labels={} preview={} status={})",
-                                       bNameSynced, bRowsSynced, bRowLabelSynced, bPreviewSynced, bStatusSynced));
-            return;
-        }
-        break;
-    }
-    case 8: {
-        for (int i = 0; i < 30; ++i) {
-            const glm::vec2 center = _addButton->_layoutRect.pos + _addButton->_layoutRect.extent * 0.5f;
-            dispatchPointer(ya::MouseButtonPressedEvent(0), center);
-            dispatchPointer(ya::MouseButtonReleasedEvent(0), center);
-        }
-        if (workspace.items.size() != 33u) {
-            failAutomation(std::format("Workbench automation: list growth failed (items={})", workspace.items.size()));
-            return;
-        }
-        break;
-    }
-    case 9: {
-        _tree->layout();
-        const glm::vec2 listPoint = _rowScroll->_layoutRect.pos + _rowScroll->_layoutRect.extent * 0.5f;
-        dispatchPointer(ya::MouseScrolledEvent(0.0f, -1.0f), listPoint);
-        if (_rowScroll->_scrollOffset <= 0.0f) {
-            failAutomation(std::format("Workbench automation: scroll failed (offset={})", _rowScroll->_scrollOffset));
-            return;
-        }
-        break;
-    }
-    case 10: {
-        _tree->layout();
-        const float oldRatio = _mainSplit->_splitRatio;
-        const glm::vec2 divider = _mainSplit->getDividerRect().pos + _mainSplit->getDividerRect().extent * 0.5f;
-        dispatchPointer(ya::MouseButtonPressedEvent(0), divider);
-        dispatchPointer(ya::MouseMoveEvent(divider.x + 60.0f, divider.y), {divider.x + 60.0f, divider.y});
-        dispatchPointer(ya::MouseButtonReleasedEvent(0), {divider.x + 60.0f, divider.y});
-        if (std::abs(_mainSplit->_splitRatio - oldRatio) < 0.01f) {
-            failAutomation(std::format("Workbench automation: split drag failed (ratio {})", _mainSplit->_splitRatio));
-            return;
-        }
-        break;
-    }
-    case 11: {
-        ya::KeyPressedEvent tab{};
-        tab._keyCode = ya::EKey::Tab;
-        tab._mod     = 0;
-        dispatchKey(tab);
-        if (_tree->getFocused() == nullptr) {
-            failAutomation("Workbench automation: Tab traversal failed");
-            return;
-        }
-        break;
-    }
-    case 12: {
-        if (_rowScroll->_scrollOffset <= 0.0f || _tree->getFocused() == nullptr) {
-            failAutomation("Workbench automation: final state check failed");
+    case 23: {
+        // The row rebuild (triggered by the reparent) must keep the tree
+        // structure: depth re-derives from the stored parent links.
+        if (workspace.items[0].parentId != "item.light" || workspace.getDepth("item.cube") != 1) {
+            failAutomation("Demo automation: reparent state lost after row rebuild");
             return;
         }
         _bSmokePassed    = true;
         _bAutomationDone = true;
-        YA_CORE_INFO("Workbench automation PASSED: add -> rename -> remove -> navigate -> grow -> scroll -> split-drag -> tab -> sync");
+        YA_CORE_INFO("Workbench automation PASSED: demo pages (app) -> editor (shell, incl. drag reparent)");
         break;
     }
     default:
