@@ -533,6 +533,12 @@ void AppLifecycle::quit(App& app)
 
     app._deleter.clear();
 
+    // Release cached asset textures (large images use VMA dedicated
+    // allocations) BEFORE the render backend / VMA allocator is destroyed;
+    // otherwise the VkImages are freed at process exit after VMA is gone
+    // ("Unfreed dedicated allocations found" assertion).
+    AssetManager::get()->textureManager().clear();
+
     if (app._renderState->runtime) {
         app._renderState->runtime->shutdown(/*bRenderAlreadyIdle=*/true);
         app._renderState->runtime.reset();
