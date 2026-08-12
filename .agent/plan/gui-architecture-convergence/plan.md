@@ -1,8 +1,10 @@
 # GUI 架构收敛：详细推进方案
 
 > 建立日期：2026-08-13
-> 状态：Phase 1 已开工；已完成 元素树 dump + 场景驱动 + BmpDiff 黄金比对 +
-> GUIAppHost 场景接线（windowed 端到端验证）。剩余：离屏 presenter + headless。
+> 状态：Phase 1 harness 已闭环（windowed 端到端验证通过）。Phase 2 已开工：
+> AppKernel 落地在 Foundation/Core/Application（不依赖 RHI，dedicated server 可无
+> 呈现运行），并有无 sink CLI 冒烟。剩余：GUIAppHost 迁移到 AppKernel、离屏
+> presenter、SDF、布局增强。
 > 承接：../gui-app-bootstrap/plan.md（已定义 shared foundation / GUI library /
 > standalone host 三角色）；本文件不再回写 GUI app 自举本身，只规划下一步的
 > "观测 harness → 单循环收敛 → SDF 字体 → 布局增强" 主线。
@@ -203,7 +205,10 @@ JSON 规范（不进引擎域实现）。
 
 ## 4. Phase 2 — 单循环收敛（先迁 GUI 线）
 
-### 4.1 AppKernel（AppRuntime）
+### 4.1 AppKernel（Foundation/Core/Application）
+
+注：内核不含呈现、不依赖 RHI；dedicated server / CLI 不应被迫链 GPU，因此放在
+Foundation 而不是会拉 RHI 的 AppRuntime。窗口/离屏 presenter 放 GUI/App。
 
     // Framework/AppRuntime/AppKernel.h
     struct IAppEventSource { virtual std::vector<Event> pollEvents() = 0; };
