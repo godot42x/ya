@@ -1,74 +1,62 @@
 # ============================================================================
-# YA Engine - game + GUI example launcher (thin wrapper)
+# YA Engine - two-mode launcher (thin wrapper over xmake / Script/ya.py)
 #
-# Build logic stays XMake-only (AGENTS.md rule 1): every target forwards to
-# `xmake` / `Script/ya.py`; nothing is re-implemented here.
+# Mode 1 - run a target directly (xmake):
+#   make b TARGET=GUIWorkbench
+#   make r TARGET=ya-gui-minimal-host ARGS="--exit-after-frame=30"
+#   make r TARGET=ya-testing ARGS="--gtest_filter=Suite.Test"
 #
-# Common variables:
-#   t=HelloMaterial      game project name -> Example/<t>/<t>.yaproject
-#   ARGS="..."           extra args appended to the run command
-#
-# Examples:
+# Mode 2 - engine / project / editor (Script/ya.py):
 #   make run t=HelloMaterial
-#   make run-editor t=GreedySnake
-#   make run-gui
-#   make run-gui ARGS="--run-arg=--exit-after-frame=30"
-#   make run-workbench
-#   make smoke-workbench
+#   make run-editor t=HelloMaterial
+#   make build t=HelloMaterial
+#   make package t=HelloMaterial
+#
+# The build system stays XMake-only (AGENTS.md rule 1): every target just
+# forwards to `xmake` / `Script/ya.py`.
 # ============================================================================
 
 t      := HelloMaterial
+TARGET ?= ya-runtime
 ARGS   ?=
 YA     := uv run ./Script/ya.py
 
-.PHONY: help cfg run run-editor run-gui run-workbench smoke-workbench test-gui package profile lint shader rg ed
+.PHONY: help b r run run-editor build package
 
-help: ## list available targets
-	@echo "YA Engine launcher (thin wrapper over xmake / Script/ya.py)"
+help: ## list targets
+	@echo "YA Engine launcher - two modes:"
 	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  make %-16s %s\n", $$1, $$2}'
+	@echo "Mode 1 - run a target directly (xmake):"
+	@echo "  make b TARGET=GUIWorkbench"
+	@echo "  make r TARGET=GUIWorkbench ARGS=\"--smoke-actions\""
+	@echo "  make r TARGET=ya-gui-minimal-host ARGS=\"--exit-after-frame=30\""
 	@echo ""
-	@echo "Variables: t=<game project name>  ARGS=<extra run args>"
+	@echo "Mode 2 - engine / project / editor (Script/ya.py):"
+	@echo "  make run t=HelloMaterial"
+	@echo "  make run-editor t=HelloMaterial"
+	@echo "  make build t=HelloMaterial"
+	@echo "  make package t=HelloMaterial"
+	@echo ""
+	@echo "Variables: TARGET (xmake target), t (game project), ARGS (extra args)"
 
-cfg: ## configure debug build + refresh compile_commands
-	xmake f -m debug
-	xmake project -k compile_commands
+# ---- Mode 1: direct target (xmake) ----
 
-run: ## run a game project through ya-runtime (t=HelloMaterial|GreedySnake)
+b: ## build a target directly: make b TARGET=GUIWorkbench
+	xmake b $(TARGET)
+
+r: ## run a target directly: make r TARGET=GUIWorkbench ARGS="--smoke-actions"
+	xmake r $(TARGET) $(ARGS)
+
+# ---- Mode 2: engine / project / editor (Script/ya.py) ----
+
+run: ## run a game project through the engine: make run t=HelloMaterial
 	$(YA) run --project ./Example/$(t)/$(t).yaproject -- $(ARGS)
 
-run-editor: ## run the editor for a game project (t=...)
+run-editor: ## launch the editor for a project: make run-editor t=HelloMaterial
 	$(YA) run-editor --project ./Example/$(t)/$(t).yaproject -- $(ARGS)
 
-run-gui: ## run the standalone GUI smoke/example (long-running by default)
-	$(YA) run-gui $(ARGS)
+build: ## build a project closure: make build t=HelloMaterial
+	$(YA) build --project ./Example/$(t)/$(t).yaproject
 
-run-workbench: ## run the standalone GUI workbench (retain-mode tool app)
-	$(YA) run-gui-workbench $(ARGS)
-
-smoke-workbench: ## GUIWorkbench end-to-end automation (PASS/FAIL exit code)
-	$(YA) run-gui-workbench --run-arg=--smoke-actions $(ARGS)
-
-test-gui: ## GUI closure + widgets + workbench workspace unit tests
-	xmake b ya-gui-closure-test && xmake r ya-gui-closure-test
-	xmake b ya-gui-widgets-test && xmake r ya-gui-widgets-test
-	xmake b ya-gui-workbench-workspace-test && xmake r ya-gui-workbench-workspace-test
-
-package: ## collect a minimal package for a game project (t=...)
+package: ## collect a minimal package: make package t=HelloMaterial
 	$(YA) package --project ./Example/$(t)/$(t).yaproject
-
-profile: ## profile run (editor) + speedscope trace
-	xmake f -m profile
-	$(YA) run-editor --project ./Example/$(t)/$(t).yaproject
-	npx speedscope "./Engine/Saved/Profile/profile-latest.speedscope.json"
-	xmake f -m debug
-
-lint: ## module boundary lint
-	uv run ./Script/ya_module_lint.py
-
-shader: ## regenerate shader headers
-	xmake ya-shader
-
-# Legacy aliases kept for muscle memory.
-rg: run
-ed: run-editor

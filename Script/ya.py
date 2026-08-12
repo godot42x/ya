@@ -263,23 +263,6 @@ def cmd_run_editor(args: argparse.Namespace) -> None:
     _run_runtime(project_path, True, args.run_arg, _normalize_engine_args(args.engine_args))
 
 
-def cmd_run_gui(args: argparse.Namespace) -> None:
-    """Build + run the standalone GUI framework smoke (GUIFrameworkSmoke,
-    target name ya-gui-minimal-host)."""
-    if args.force:
-        _run(["xmake", "c"])
-    _run(["xmake", "b", "ya-gui-minimal-host", *args.build_arg])
-    _run(["xmake", "r", "ya-gui-minimal-host", *args.run_arg])
-
-
-def cmd_run_gui_workbench(args: argparse.Namespace) -> None:
-    """Build + run the standalone GUI workbench (Example/GUIWorkbench)."""
-    if args.force:
-        _run(["xmake", "c"])
-    _run(["xmake", "b", "GUIWorkbench", *args.build_arg])
-    _run(["xmake", "r", "GUIWorkbench", *args.run_arg])
-
-
 def cmd_package(args: argparse.Namespace) -> None:
     project_path = _require_project_path(args.project, "package")
     if args.force:
@@ -372,36 +355,6 @@ def build_parser() -> argparse.ArgumentParser:
     run_editor.add_argument("--run-arg", action="append", default=[], help="Extra argument forwarded to `xmake r`.")
     run_editor.add_argument("engine_args", nargs=argparse.REMAINDER, help="Arguments forwarded to ya-runtime after `--`.")
     run_editor.set_defaults(func=cmd_run_editor)
-
-    run_gui = subparsers.add_parser(
-        "run-gui",
-        help="Build and run the standalone GUI smoke (GUIFrameworkSmoke / ya-gui-minimal-host).",
-    )
-    SUBCOMMAND_PARSERS["run-gui"] = run_gui
-    run_gui.add_argument("--force", action="store_true", help="Clean before build.")
-    run_gui.add_argument("--build-arg", action="append", default=[], help="Extra argument forwarded to `xmake b`.")
-    run_gui.add_argument(
-        "--run-arg",
-        action="append",
-        default=[],
-        help="Extra argument forwarded to `xmake r`, e.g. --run-arg=--exit-after-frame=30.",
-    )
-    run_gui.set_defaults(func=cmd_run_gui)
-
-    run_workbench = subparsers.add_parser(
-        "run-gui-workbench",
-        help="Build and run the standalone GUI workbench (Example/GUIWorkbench).",
-    )
-    SUBCOMMAND_PARSERS["run-gui-workbench"] = run_workbench
-    run_workbench.add_argument("--force", action="store_true", help="Clean before build.")
-    run_workbench.add_argument("--build-arg", action="append", default=[], help="Extra argument forwarded to `xmake b`.")
-    run_workbench.add_argument(
-        "--run-arg",
-        action="append",
-        default=[],
-        help="Extra argument forwarded to `xmake r`, e.g. --run-arg=--smoke-actions.",
-    )
-    run_workbench.set_defaults(func=cmd_run_gui_workbench)
 
     package = subparsers.add_parser("package", help="Build and collect a minimal package.")
     SUBCOMMAND_PARSERS["package"] = package

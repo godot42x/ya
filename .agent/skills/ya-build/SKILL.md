@@ -44,68 +44,58 @@ xmake ya-shader
 xmake b ya-testing && xmake r ya-testing --gtest_filter=Suite.Test
 ```
 
-### Makefile 快捷入口（薄包装，构建仍走 XMake）
+## 两种启动模式
 
-根目录 `Makefile` 只转发到 `xmake` / `Script/ya.py`，方便快速启动：
+仓库只有两类入口，按"是否经过引擎项目流程"区分，不要混用：
+
+### 模式 1：直接运行某个 target（xmake / make b|r）
+
+适用于 standalone 可执行 target（GUI example、测试、引擎模块），不经过
+`ya.py` 的项目流程：
 
 ```bash
-make help                    # 列出所有 target
-make run t=HelloMaterial     # 运行 game 项目（t 为 Example/<t>/<t>.yaproject）
-make run-editor t=GreedySnake
-make run-gui                # GUIFrameworkSmoke（默认长期运行）
-make run-gui ARGS="--run-arg=--exit-after-frame=30"
-make run-workbench           # GUIWorkbench
-make smoke-workbench         # GUIWorkbench 端到端自动化（退出码 = PASS/FAIL）
-make test-gui                # GUI closure + widgets + workspace 单测
-make package t=HelloMaterial
-make lint / make shader
+# GUI example（只链接 GUI closure，不依赖 Scene/ECS/Host/Editor）
+xmake b GUIWorkbench && xmake r GUIWorkbench                 # retain-mode 工具 app
+xmake r GUIWorkbench --smoke-actions                        # 端到端自动化（退出码=PASS/FAIL）
+xmake b ya-gui-minimal-host && xmake r ya-gui-minimal-host --exit-after-frame=30
+
+# GUI 测试 target
+xmake b ya-gui-widgets-test && xmake r ya-gui-widgets-test
+xmake b ya-gui-closure-test && xmake r ya-gui-closure-test
+xmake b ya-gui-workbench-workspace-test && xmake r ya-gui-workbench-workspace-test
+
+# make 等价（薄包装，TARGET/ARGS 可覆盖）
+make b TARGET=GUIWorkbench
+make r TARGET=GUIWorkbench ARGS="--smoke-actions"
 ```
 
-## Game 与 GUI Example 启动方式
+### 模式 2：项目相关 / editor（Script/ya.py）
 
-仓库有两类可运行示例，入口不同，不要混用：
-
-### Game examples（ya-runtime + project，依赖 Scene/ECS/Render3D）
+适用于 game 项目（`ya-runtime` + `.yaproject`）与 editor：
 
 ```bash
-# 3D 示例项目
 python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
-python3 Script/ya.py run --project Example/GreedSnake/GreedySnake.yaproject
-
-# editor 模式
 python3 Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject
+python3 Script/ya.py build --project Example/HelloMaterial/HelloMaterial.yaproject
+python3 Script/ya.py package --project Example/HelloMaterial/HelloMaterial.yaproject
 
 # 自动化冒烟：跑 N 帧后自动退出
 python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject \
     -- --exit-after-frame=120 --log-level=warn
+
+# make 等价
+make run t=HelloMaterial
+make run-editor t=HelloMaterial
+make build t=HelloMaterial
+make package t=HelloMaterial
 ```
 
-### GUI examples（standalone，只链接 GUI closure，不依赖 Scene/ECS/Host/Editor）
+要点：
 
-```bash
-# GUI 最小冒烟（click-counter demo，直出 swapchain）
-python3 Script/ya.py run-gui [--run-arg=--exit-after-frame=30]
-# 等价 xmake：
-xmake b ya-gui-minimal-host && xmake r ya-gui-minimal-host --exit-after-frame=30
-
-# 工具型 GUI app（retain-mode workbench：list / preview / inspector / 命令）
-python3 Script/ya.py run-gui-workbench [--run-arg=--smoke-actions]
-# 等价 xmake：
-xmake b GUIWorkbench && xmake r GUIWorkbench --smoke-actions
-
-# GUIWorkbench workspace 单元测试
-xmake b ya-gui-workbench-workspace-test && xmake r ya-gui-workbench-workspace-test
-```
-
-GUI example 要点：
-
-- 两个 GUI target（`ya-gui-minimal-host` / `GUIWorkbench`）都通过 `ya-gui-app-host`
-  共享同一个 SDL/Vulkan 帧循环，不复制 host 代码；
-- `run-gui` / `run-gui-workbench` 默认长期运行；需要 automation 帧预算时再显式传
-  `--exit-after-frame=N`；
-- `GUIWorkbench --smoke-actions` 是端到端自动化：add → rename → remove → 键盘导航
-  → 列表增长 → 滚动 → split 拖拽 → Tab 遍历，PASS/FAIL 决定退出码，并在 app
-  内部完成后主动请求关闭；
+- `ya.py` 的子命令只负责引擎项目流程（`cfg / build / run / run-editor / package /
+  test`）；GUI/模块/测试 target 一律直接 `xmake b|r`；
+- `GUIWorkbench --smoke-actions` 是端到端自动化冒烟（走真实事件路径驱动
+  workbench 交互），PASS/FAIL 决定退出码；
 - GUIAppHost 默认开启 vsync（FIFO）；关闭 vsync 会退化为 Immediate present，
   直出 swapchain 会出现撕裂/闪烁；
 - GUI example 属于 gui profile 也能构建：`xmake f --ya_profile=gui` 后构建同一批目标。
@@ -132,8 +122,9 @@ python3 Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject
 
 ## 当前仓库锚点
 
-- `Script/ya.py`：工作流入口，封装 `cfg / build / run / run-editor / run-gui /
-  run-gui-workbench / package / test`
+- `Script/ya.py`：引擎项目流程入口，封装 `cfg / build / run / run-editor / package / test`
+- `makefile`：两种模式的薄包装（模式 1：`make b|r TARGET=...`；模式 2：
+  `make run|run-editor|build|package t=...`）
 - `xmake.lua`：全局规则、`compile_commands.autoupdate`
 - `Engine/Shader/Shader.xmake.lua`：shader 生成入口
 - `Test/xmake.lua`：测试目标定义
