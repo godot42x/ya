@@ -96,6 +96,7 @@ do
     add_files("./Source/UIFrameSnapshotTest.cpp")
     add_files("./Source/WidgetLayoutTest.cpp")
     add_files("./Source/GuiEventDriverTest.cpp")
+    add_files("./Source/BmpDiffTest.cpp")
     add_files("./Source/TestEntry.cpp")
 
     add_deps("ya-gui-framework")
