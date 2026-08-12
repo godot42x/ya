@@ -15,14 +15,14 @@ namespace
 
 void logSnapshotItemsOnce(const UIFrameSnapshot* uiFrameSnapshot)
 {
-    static bool bLogged = false;
-    if (bLogged || !uiFrameSnapshot) {
+    static int sLoggedFrames = 0;
+    if (sLoggedFrames >= 3 || !uiFrameSnapshot) {
         return;
     }
 
-    bLogged = true;
+    ++sLoggedFrames;
     YA_CORE_INFO("Render2DCompose snapshot item count: {}", uiFrameSnapshot->items.size());
-    const size_t itemCount = std::min<size_t>(uiFrameSnapshot->items.size(), 40);
+    const size_t itemCount = std::min<size_t>(uiFrameSnapshot->items.size(), 200);
     for (size_t i = 0; i < itemCount; ++i) {
         const auto& item = uiFrameSnapshot->items[i];
         YA_CORE_INFO("  [{}] kind={} pos=({}, {}) size=({}, {}) clipped={} clip=({}, {}, {}, {}) text='{}'",

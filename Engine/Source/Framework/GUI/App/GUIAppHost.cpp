@@ -22,6 +22,8 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
+#include <fstream>
 #include <format>
 #include <vector>
 
@@ -83,6 +85,174 @@ Extent2D queryWindowLogicalExtent(IRender& render)
     };
 }
 
+/// Host built-in texture resolver: asset path aliases resolve to
+/// TextureLibrary entries so image widgets work without an asset system.
+/// The built-in textures live as long as the host, so the returned aliasing
+/// shared_ptrs (no-op deleter) are safe for the snapshot lifetime.
+std::shared_ptr<Texture> resolveBuiltinTexture(const std::string& assetPath)
+{
+    if (assetPath == "builtin/white") {
+        return TextureLibrary::get().getWhiteTexture();
+    }
+    const auto alias = [](ya::Ptr<Texture> texture) -> std::shared_ptr<Texture>
+    {
+        return texture ? std::shared_ptr<Texture>(texture.get(), [](Texture*) {}) : nullptr;
+    };
+    if (assetPath == "builtin/black") {
+        return alias(TextureLibrary::get().getBlackTexture());
+    }
+    if (assetPath == "builtin/multipixel") {
+        return alias(TextureLibrary::get().getMultiPixelTexture());
+    }
+    if (assetPath == "builtin/checkerboard") {
+        return alias(TextureLibrary::get().getCheckerboardTexture());
+    }
+    return nullptr;
+}
+
+/// Debug rasterizer: draws the snapshot items into a 24-bit BMP so the UI
+/// layout (positions, overlaps, bounds) can be inspected without a display.
+/// Text items are drawn as bright translucent blocks; sprites use their tint.
+void dumpSnapshotToBMP(const UIFrameSnapshot& snapshot, const std::string& path, uint64_t frame)
+{
+    const int w = static_cast<int>(snapshot.logicalExtent.width);
+    const int h = static_cast<int>(snapshot.logicalExtent.height);
+    if (w <= 0 || h <= 0) {
+        return;
+    }
+    YA_CORE_INFO("GUIAppHost snapshot dump: {} items at frame {}", snapshot.items.size(), frame);
+    for (size_t i = 0; i < snapshot.items.size(); ++i) {
+        const auto& item = snapshot.items[i];
+        YA_CORE_INFO("  [{}] kind={} pos=({}, {}) size=({}, {}) text='{}'",
+                     i,
+                     item.kind == UIFrameDrawItem::EKind::Text ? "Text" : "Sprite",
+                     item.pos.x,
+                     item.pos.y,
+                     item.size.x,
+                     item.size.y,
+                     item.text);
+    }
+    const int rowStride = ((w * 3 + 3) / 4) * 4;
+    std::vector<uint8_t> pixels(static_cast<size_t>(rowStride) * static_cast<size_t>(h), 0);
+
+    const auto blend = [&pixels, rowStride, w, h](int x, int y, glm::vec4 color)
+    {
+        if (x < 0 || y < 0 || x >= w || y >= h) {
+            return;
+        }
+        const size_t idx = static_cast<size_t>(y) * static_cast<size_t>(rowStride) + static_cast<size_t>(x) * 3;
+        const float  a   = std::clamp(color.a, 0.0f, 1.0f);
+        pixels[idx + 0] = static_cast<uint8_t>(pixels[idx + 0] * (1.0f - a) + color.b * 255.0f * a);
+        pixels[idx + 1] = static_cast<uint8_t>(pixels[idx + 1] * (1.0f - a) + color.g * 255.0f * a);
+        pixels[idx + 2] = static_cast<uint8_t>(pixels[idx + 2] * (1.0f - a) + color.r * 255.0f * a);
+    };
+
+    for (const UIFrameDrawItem& item : snapshot.items) {
+        const int x0 = std::max(0, static_cast<int>(item.pos.x));
+        const int y0 = std::max(0, static_cast<int>(item.pos.y));
+        const int x1 = std::min(w, static_cast<int>(item.pos.x + item.size.x));
+        const int y1 = std::min(h, static_cast<int>(item.pos.y + item.size.y));
+        const glm::vec4 color = item.kind == UIFrameDrawItem::EKind::Text
+                                    ? glm::vec4(1.0f, 0.95f, 0.65f, 0.85f)
+                                    : item.color;
+        for (int y = y0; y < y1; ++y) {
+            for (int x = x0; x < x1; ++x) {
+                blend(x, y, color);
+            }
+        }
+    }
+
+    std::ofstream file(path, std::ios::binary);
+    if (!file) {
+        YA_CORE_ERROR("dumpSnapshotToBMP: cannot open '{}'", path);
+        return;
+    }
+    const uint32_t fileSize = 54 + static_cast<uint32_t>(rowStride) * static_cast<uint32_t>(h);
+    const uint8_t  header[54] = {
+        'B', 'M',
+        static_cast<uint8_t>(fileSize & 0xFF), static_cast<uint8_t>((fileSize >> 8) & 0xFF),
+        static_cast<uint8_t>((fileSize >> 16) & 0xFF), static_cast<uint8_t>((fileSize >> 24) & 0xFF),
+        0, 0, 0, 0,
+        54, 0, 0, 0,
+        40, 0, 0, 0,
+        static_cast<uint8_t>(w & 0xFF), static_cast<uint8_t>((w >> 8) & 0xFF),
+        static_cast<uint8_t>((w >> 16) & 0xFF), static_cast<uint8_t>((w >> 24) & 0xFF),
+        static_cast<uint8_t>(h & 0xFF), static_cast<uint8_t>((h >> 8) & 0xFF),
+        static_cast<uint8_t>((h >> 16) & 0xFF), static_cast<uint8_t>((h >> 24) & 0xFF),
+        1, 0,
+        24, 0,
+        0, 0, 0, 0,
+        static_cast<uint8_t>(rowStride * h & 0xFF), static_cast<uint8_t>((rowStride * h >> 8) & 0xFF),
+        static_cast<uint8_t>((rowStride * h >> 16) & 0xFF), static_cast<uint8_t>((rowStride * h >> 24) & 0xFF),
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+    };
+    file.write(reinterpret_cast<const char*>(header), sizeof(header));
+    // BMP rows are bottom-up.
+    for (int y = h - 1; y >= 0; --y) {
+        file.write(reinterpret_cast<const char*>(pixels.data() + static_cast<size_t>(y) * rowStride),
+                   rowStride);
+    }
+    YA_CORE_INFO("GUIAppHost dumped snapshot to '{}' ({}x{})", path, w, h);
+}
+
+/// Write readback pixels (top-left origin) as a 24-bit bottom-up BMP.
+/// `bBgraSource` selects the byte order of the readback buffer: the image's
+/// native format byte order (BGRA8 for the macOS swapchain), not RGBA.
+void writeRGBAtoBMP(const uint8_t* rgba, uint32_t width, uint32_t height,
+                    bool bBgraSource, const std::string& path)
+{
+    const int w = static_cast<int>(width);
+    const int h = static_cast<int>(height);
+    const int rowStride = ((w * 3 + 3) / 4) * 4;
+    std::ofstream file(path, std::ios::binary);
+    if (!file) {
+        YA_CORE_ERROR("writeRGBAtoBMP: cannot open '{}'", path);
+        return;
+    }
+    const uint32_t fileSize = 54 + static_cast<uint32_t>(rowStride) * static_cast<uint32_t>(h);
+    const uint8_t  header[54] = {
+        'B', 'M',
+        static_cast<uint8_t>(fileSize & 0xFF), static_cast<uint8_t>((fileSize >> 8) & 0xFF),
+        static_cast<uint8_t>((fileSize >> 16) & 0xFF), static_cast<uint8_t>((fileSize >> 24) & 0xFF),
+        0, 0, 0, 0,
+        54, 0, 0, 0,
+        40, 0, 0, 0,
+        static_cast<uint8_t>(w & 0xFF), static_cast<uint8_t>((w >> 8) & 0xFF),
+        static_cast<uint8_t>((w >> 16) & 0xFF), static_cast<uint8_t>((w >> 24) & 0xFF),
+        static_cast<uint8_t>(h & 0xFF), static_cast<uint8_t>((h >> 8) & 0xFF),
+        static_cast<uint8_t>((h >> 16) & 0xFF), static_cast<uint8_t>((h >> 24) & 0xFF),
+        1, 0,
+        24, 0,
+        0, 0, 0, 0,
+        static_cast<uint8_t>(rowStride * h & 0xFF), static_cast<uint8_t>((rowStride * h >> 8) & 0xFF),
+        static_cast<uint8_t>((rowStride * h >> 16) & 0xFF), static_cast<uint8_t>((rowStride * h >> 24) & 0xFF),
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+    };
+    file.write(reinterpret_cast<const char*>(header), sizeof(header));
+    // BMP rows are bottom-up; the RGBA source is top-down.
+    for (int y = h - 1; y >= 0; --y) {
+        const uint8_t* src = rgba + static_cast<size_t>(y) * width * 4;
+        std::vector<uint8_t> row(static_cast<size_t>(rowStride), 0);
+        for (int x = 0; x < w; ++x) {
+            const size_t i = static_cast<size_t>(x) * 4;
+            const uint8_t r = bBgraSource ? src[i + 2] : src[i + 0];
+            const uint8_t g = src[i + 1];
+            const uint8_t b = bBgraSource ? src[i + 0] : src[i + 2];
+            row[static_cast<size_t>(x) * 3 + 0] = b;
+            row[static_cast<size_t>(x) * 3 + 1] = g;
+            row[static_cast<size_t>(x) * 3 + 2] = r;
+        }
+        file.write(reinterpret_cast<const char*>(row.data()), rowStride);
+    }
+    YA_CORE_INFO("GUIAppHost wrote GPU shot to '{}' ({}x{})", path, w, h);
+}
+
 } // namespace
 
 struct GUIAppHost::FImpl
@@ -101,11 +271,13 @@ struct GUIAppHost::FImpl
     std::vector<std::shared_ptr<GUIPresentationTarget>> presentationTargets;
     void*    cachedSwapchainHandle = nullptr;
     Extent2D cachedSwapchainExtent{};
+    uint64_t frameCount = 0;
     float    lastMouseX = -1.0f;
     float    lastMouseY = -1.0f;
     bool     bSwapchainRecreatePending = false;
     bool     bWindowMinimized = false;
     bool     bInitialized = false;
+    std::shared_ptr<IBuffer> gpuShotBuffer;
 };
 
 GUIAppHost::GUIAppHost(const FGUIAppHostConfig& config, IGUIAppDelegate& delegate)
@@ -388,6 +560,7 @@ int GUIAppHost::run()
         if (!bRunning) {
             break;
         }
+        ++_impl->frameCount;
 
         for (auto& request : _impl->automationServer.consumePendingRequests()) {
             if (request->method == "ping") {
@@ -503,6 +676,7 @@ int GUIAppHost::run()
                 static_cast<float>(presentExtent.height) / static_cast<float>(std::max(logicalExtent.height, 1u)),
             },
             .offset = {0.0f, 0.0f},
+            .textureResolver = resolveBuiltinTexture,
         });
         if (!bLoggedFirstSnapshot) {
             bLoggedFirstSnapshot = true;
@@ -512,6 +686,10 @@ int GUIAppHost::run()
                          snapshot.logicalExtent.height,
                          presentExtent.width,
                          presentExtent.height);
+        }
+        if (_impl->config && !_impl->config->dumpSnapshotPath.empty() &&
+            _impl->frameCount == _impl->config->dumpFrame) {
+            dumpSnapshotToBMP(snapshot, _impl->config->dumpSnapshotPath, _impl->frameCount);
         }
 
         auto cmdBuf = _impl->commandBuffers[static_cast<size_t>(imageIndex)];
@@ -560,8 +738,50 @@ int GUIAppHost::run()
                 .finalLayout           = EImageLayout::PresentSrcKHR,
             });
 
+        const bool bGpuShot = (_impl->config->gpuShotFrame != 0 &&
+                               _impl->frameCount == _impl->config->gpuShotFrame &&
+                               !_impl->config->gpuShotPath.empty());
+        if (bGpuShot) {
+            if (!_impl->gpuShotBuffer) {
+                _impl->gpuShotBuffer = _impl->render->getResourceFactory()->createBuffer(
+                    ya::BufferCreateInfo{
+                        .label       = "GUIAppHost_GpuShot",
+                        .usage       = EBufferUsage::TransferDst,
+                        .size        = presentExtent.width * presentExtent.height * 4,
+                        .memoryUsage = EMemoryUsage::GpuToCpu,
+                    });
+            }
+            cmdBuf->transitionImageLayoutAuto(presentation->renderImage->getImage(), EImageLayout::TransferSrc);
+            cmdBuf->copyImageToBuffer(
+                presentation->renderImage->getImage(),
+                EImageLayout::TransferSrc,
+                _impl->gpuShotBuffer.get(),
+                {ya::BufferImageCopy{
+                    .imageSubresource  = {.aspectMask = 1, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1},
+                    .imageOffsetX      = 0,
+                    .imageOffsetY      = 0,
+                    .imageOffsetZ      = 0,
+                    .imageExtentWidth  = presentExtent.width,
+                    .imageExtentHeight = presentExtent.height,
+                    .imageExtentDepth  = 1,
+                }});
+            cmdBuf->transitionImageLayoutAuto(presentation->renderImage->getImage(), EImageLayout::PresentSrcKHR);
+        }
+
         cmdBuf->end();
         _impl->render->end(imageIndex, {cmdBuf->getHandle()});
+
+        if (bGpuShot) {
+            _impl->render->waitIdle();
+            if (uint8_t* pixels = _impl->gpuShotBuffer->map<uint8_t>()) {
+                writeRGBAtoBMP(pixels,
+                               presentExtent.width,
+                               presentExtent.height,
+                               swapchain->getFormat() == EFormat::B8G8R8A8_UNORM,
+                               _impl->config->gpuShotPath);
+                _impl->gpuShotBuffer->unmap();
+            }
+        }
 
         _impl->automationRun.markFrameCompleted();
         if (_impl->delegate->shouldRequestClose()) {
@@ -587,12 +807,17 @@ void GUIAppHost::shutdown()
         return;
     }
 
-    // Clean shutdown, reverse order.
+    // Clean shutdown, reverse order. Every member owning GPU resources must be
+    // released BEFORE the Vulkan device / VMA allocator is destroyed below
+    // (a later ~VulkanBuffer would call vmaDestroyBuffer on a dead allocator).
     _impl->render->waitIdle();
     _impl->automationServer.shutdown();
     Render2D::destroy();
     _impl->commandBuffers.clear();   // releases command-buffer resource retention
     _impl->presentationTargets.clear();
+    _impl->gpuShotBuffer.reset();    // readback staging buffer (RHI-owned)
+    _impl->shaderStorage.reset();
+    _impl->tree.reset();             // widgets hold snapshot/resolver refs only, but stay ordered
     FontManager::get()->clearCache();
     TextureLibrary::get().shutdown();
     DeferredDeletionQueue::get().flushAll();
@@ -602,7 +827,6 @@ void GUIAppHost::shutdown()
     SDL_StopTextInput(static_cast<SDL_Window*>(_impl->window.getNativeWindowHandle()));
     _impl->window.destroy();
 
-    _impl->tree.reset();
     _impl->bInitialized = false;
 }
 

@@ -78,6 +78,16 @@ struct FGUIAppHostConfig
     /// Runtime font: loaded once per entry under DEFAULT_RUNTIME_FONT_NAME
     /// (UIText resolves fonts by exact name+size). Empty to skip font loading.
     std::string              fontPath = "Engine/Content/Fonts/JetBrainsMono-Medium.ttf";
+    /// Debug: dump the first UI snapshot as a BMP (CPU-side raster of the
+    /// draw items, top-left origin). Empty to disable; dumpFrame selects the
+    /// frame (0 = the first snapshot).
+    std::string              dumpSnapshotPath;
+    uint32_t                 dumpFrame = 0;
+    /// Debug: capture the swapchain image on `gpuShotFrame` (GPU readback)
+    /// and write it as a BMP. This validates the real presentation output
+    /// (orientation, fonts, compositing) — the CPU dump cannot. 0 disables.
+    std::string              gpuShotPath;
+    uint32_t                 gpuShotFrame = 0;
     std::vector<uint32_t>    fontSizes{16, 20};
     /// Whether Escape (and SDL_QUIT) stops the app loop. Host-level key
     /// handling; app widgets never see Escape while this is enabled.
