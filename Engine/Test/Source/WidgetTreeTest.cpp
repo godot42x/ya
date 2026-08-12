@@ -640,6 +640,46 @@ TEST(WidgetTreeTest, ButtonDragOutReleaseFiresClickViaCapture)
     EXPECT_EQ(tree.getPointerCapture(), nullptr);
 }
 
+TEST(WidgetTreeTest, PressRetiresStaleHoverAndReArmsPressedButton)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       first  = makeButton("First", {100.0f, 100.0f}, {80.0f, 32.0f});
+    auto       second = makeButton("Second", {250.0f, 100.0f}, {80.0f, 32.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, first);
+    tree.attachToLayer(WidgetTree::ELayer::Content, second);
+    tree.layout();
+
+    // Hover then click the first button: it stays hovered (pointer is over
+    // it) and holds focus.
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(120.0f, 110.0f), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_TRUE(first->_bHovered);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+
+    // Pressing the second button without an intervening move must retire the
+    // stale hover on the first and arm the pressed button's own hover/focus.
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(280.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(first->_bHovered);
+    EXPECT_FALSE(first->_bFocused);
+    EXPECT_TRUE(second->_bPressed);
+    EXPECT_TRUE(second->_bHovered);
+    EXPECT_TRUE(second->_bFocused);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(280.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(second->_bPressed);
+    EXPECT_TRUE(second->_bHovered);
+
+    // Moving back re-arms the first and clears the second.
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(120.0f, 110.0f), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_TRUE(first->_bHovered);
+    EXPECT_FALSE(second->_bHovered);
+}
+
 TEST(WidgetTreeTest, FocusedButtonActivatesOnEnterAndSpace)
 {
     WidgetTree tree({.width = 800, .height = 600});

@@ -24,7 +24,11 @@ struct UIContainer : public UIElement
 
     EWidgetBoxLayout        _direction         = EWidgetBoxLayout::Horizontal;
     float                   _spacing           = 4.0f;
-    float                   _padding           = 0.0f;
+    /// Content inset: {horizontal, vertical} padding on both sides. The
+    /// content rect = layout rect shrunk by padding on each edge — the
+    /// correct way to inset a full-anchor container (a full-anchor rect with
+    /// a position offset would shift the whole rect out of the parent).
+    glm::vec2               _padding           = {0.0f, 0.0f};
     EWidgetMainAxisAlignment _mainAxisAlignment = EWidgetMainAxisAlignment::Start;
     bool                    _bClipChildren     = false;
 

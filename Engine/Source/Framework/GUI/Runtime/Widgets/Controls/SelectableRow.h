@@ -45,6 +45,15 @@ struct UISelectableRow : public UIElement
     /// Presentation state, written by the presenter from the workspace
     /// selection. The row never flips this itself.
     bool _bSelected = false;
+    /// Visual drop-target feedback, written by the tree drag session.
+    bool _bDropHighlighted = false;
+
+    /// Enable drag initiation: press then move past a threshold starts a
+    /// tree drag session with `_dragPayload` (defaults to _itemId) and a
+    /// ghost labelled `_dragGhostLabel` (defaults to _itemId).
+    bool        _bDraggable     = false;
+    std::string _dragPayload;
+    std::string _dragGhostLabel;
 
     glm::vec4 _normalColor         = {0.16f, 0.17f, 0.20f, 0.0f}; // transparent by default
     glm::vec4 _hoveredColor        = {0.24f, 0.26f, 0.31f, 1.0f};
@@ -53,6 +62,14 @@ struct UISelectableRow : public UIElement
 
     std::function<void(const std::string& itemId)> _onSelect;
     std::function<void(const std::string& itemId)> _onActivate;
+    /// Fired when this row is the drop target of a completed drag (payload
+    /// = the dragged row's payload). The row stays selected as-is; the
+    /// presenter owns the model mutation (e.g. reparent).
+    std::function<void(const std::string& payload)> _onDropped;
+
+    bool canAcceptDrop(const std::string& payload, const glm::vec2&) override;
+    void onDrop(const std::string& payload, const glm::vec2&) override;
+    void setDropHighlight(bool bHighlight) override { _bDropHighlighted = bHighlight; }
 
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
@@ -62,6 +79,7 @@ struct UISelectableRow : public UIElement
   private:
     bool _bPressed = false;
     bool _bHovered = false;
+    glm::vec2 _pressPoint{};
 };
 
 } // namespace ya

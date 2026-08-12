@@ -121,6 +121,23 @@ struct WidgetTree final
     [[nodiscard]] UIElement* getPointerCapture() const { return _captured; }
     [[nodiscard]] UIElement* getHovered() const { return _hovered; }
 
+    // === Drag & drop session (gui-app-bootstrap Phase 4) ===
+    /// Whether a drag session is active. While active the tree intercepts
+    /// pointer moves (ghost + drop-target highlight), releases (drop) and
+    /// presses/Esc (cancel).
+    [[nodiscard]] bool isDragging() const { return !_dragPayload.empty(); }
+    /// Start a drag session from `source` with a string payload; a ghost
+    /// (Panel + label) follows the pointer on the DragIme layer.
+    void beginDrag(UIElement* source, std::string payload, std::string ghostLabel);
+    /// Move the drag ghost and refresh the highlighted drop target.
+    void updateDrag(const glm::vec2& logicalPoint);
+    /// Release the drag: deliver `onDrop` to the topmost accepting target.
+    void endDrag(const glm::vec2& logicalPoint);
+    /// Abort the drag without delivering a drop.
+    void cancelDrag();
+    [[nodiscard]] UIElement* getDragSource() const { return _dragSource; }
+    [[nodiscard]] const std::string& getDragPayload() const { return _dragPayload; }
+
   private:
     friend struct UIElement;
 
@@ -143,6 +160,11 @@ struct WidgetTree final
     void onWidgetDetached(UIElement& widget);
     void clearTransientState(UIElement& widget);
     [[nodiscard]] UIElement* topmostHit(const glm::vec2& logicalPoint) const;
+    /// Topmost widget accepting the active drag payload at `logicalPoint`
+    /// (walks ancestors of the hit widget).
+    [[nodiscard]] UIElement* findDropTarget(const glm::vec2& logicalPoint) const;
+    /// Release ghost + highlight + payload (shared by end/cancel).
+    void clearDragSession();
 
     UIElementRef _root;
     std::array<UIElementRef, static_cast<size_t>(ELayer::Count)> _layers;
@@ -151,6 +173,12 @@ struct WidgetTree final
     UIElement*    _focused      = nullptr;
     UIElement*    _captured     = nullptr;
     UIElement*    _hovered      = nullptr;
+
+    UIElement*        _dragSource   = nullptr;
+    std::string       _dragPayload;
+    glm::vec2         _dragPoint{};
+    UIElement*        _dragDropTarget = nullptr;
+    UIElementRef      _dragGhost;
 };
 
 } // namespace ya

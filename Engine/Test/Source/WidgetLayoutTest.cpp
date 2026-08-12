@@ -154,7 +154,7 @@ TEST(WidgetLayoutTest, ButtonAutoSizeInContainerPacksAndFills)
     toolbar->_size      = {0.0f, 40.0f};
     toolbar->_direction = EWidgetBoxLayout::Horizontal;
     toolbar->_spacing   = 8.0f;
-    toolbar->_padding   = 6.0f;
+    toolbar->_padding   = {6.0f, 6.0f};
     tree.attachToLayer(WidgetTree::ELayer::Content, toolbar);
 
     auto addBtn = makeAutoButton("Add", "Add");
@@ -234,7 +234,7 @@ TEST(WidgetLayoutTest, ContainerAutoSizesToChildrenSum)
     vbox->_bAutoSize  = true;
     vbox->_direction  = EWidgetBoxLayout::Vertical;
     vbox->_spacing    = 4.0f;
-    vbox->_padding    = 8.0f;
+    vbox->_padding    = {8.0f, 8.0f};
     tree.attachToLayer(WidgetTree::ELayer::Content, vbox);
 
     auto btnA = makeAutoButton("A", "One");
@@ -264,14 +264,14 @@ TEST(WidgetLayoutTest, NestedContainersPropagateDesiredSizes)
     hbox->_bAutoSize = true;
     hbox->_direction = EWidgetBoxLayout::Horizontal;
     hbox->_spacing   = 6.0f;
-    hbox->_padding   = 4.0f;
+    hbox->_padding   = {4.0f, 4.0f};
     tree.attachToLayer(WidgetTree::ELayer::Content, hbox);
 
     auto innerV = std::make_shared<UIContainer>("InnerV");
     innerV->_bAutoSize = true;
     innerV->_direction = EWidgetBoxLayout::Vertical;
     innerV->_spacing   = 2.0f;
-    innerV->_padding   = 0.0f;
+    innerV->_padding   = {0.0f, 0.0f};
     auto t1 = makeAutoText("AB", 16); // 2x8 = 16
     auto t2 = makeAutoText("CDE", 16); // 3x8 = 24
     innerV->addDetachedChild(t1);

@@ -5,11 +5,14 @@
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/Menu.h"
+#include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/TextField.h"
+#include "GUI/Resources/FontManager.h"
 
 #include <gtest/gtest.h>
 
@@ -37,6 +40,27 @@ KeyPressedEvent makeKeyPress(EKey::T key, uint32_t mod = 0, bool bRepeat = false
     return ev;
 }
 
+// Synthetic font: every ASCII glyph advances 8px at the given size (no GPU
+// needed). Menus measure labels through the font manager.
+std::shared_ptr<Font> registerMenuFont(float fontSize = 13.0f, float advance = 8.0f)
+{
+    auto font        = std::make_shared<Font>();
+    font->fontSize   = fontSize;
+    font->lineHeight = 17.0f;
+    font->ascent     = 13.0f;
+    font->descent    = 3.0f;
+    for (uint32_t cp = 32; cp < 127; ++cp) {
+        Character ch;
+        ch.size     = {static_cast<int>(advance), static_cast<int>(fontSize)};
+        ch.bearing  = {0, 0};
+        ch.advance  = {advance, 0.0f};
+        ch.bInAtlas = true;
+        font->characters[cp] = ch;
+    }
+    FontManager::get()->registerFont(DEFAULT_RUNTIME_FONT_NAME, static_cast<uint32_t>(fontSize), font);
+    return font;
+}
+
 } // namespace
 
 // === Stack (UIContainer) ===
@@ -48,7 +72,7 @@ TEST(ToolControlsTest, StackLaysOutChildrenWithGapAndPadding)
     stack->_direction = EWidgetBoxLayout::Vertical;
     stack->_position  = {20.0f, 20.0f};
     stack->_size      = {200.0f, 200.0f};
-    stack->_padding   = 10.0f;
+    stack->_padding   = {10.0f, 10.0f};
     stack->_spacing   = 8.0f;
 
     auto a = std::make_shared<UIPanel>("A");
@@ -141,7 +165,7 @@ TEST(ToolControlsTest, StackDesiredSizeAggregatesChildren)
 {
     auto stack = std::make_shared<UIContainer>("Stack");
     stack->_direction = EWidgetBoxLayout::Vertical;
-    stack->_padding   = 10.0f;
+    stack->_padding   = {10.0f, 10.0f};
     stack->_spacing   = 4.0f;
     auto a = std::make_shared<UIPanel>("A");
     a->_size = {100.0f, 20.0f};
@@ -528,6 +552,92 @@ TEST(ToolControlsTest, TextFieldDoesNotConsumeForeignKeys)
     // app layer can observe/route them.
     EXPECT_EQ(tree.dispatchEvent(makeKeyPress(EKey::K_A), pointAt(0.0f, 0.0f)),
               EWidgetRouteResult::NotHandled);
+}
+
+// === Popup menu ===
+
+TEST(ToolControlsTest, MenuSizesPanelFromItemLabels)
+{
+    const auto font = registerMenuFont(13.0f, 8.0f);
+
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       menu = UIMenu::create({
+        {"New Document", [] {}},
+        {"Save", [] {}},
+    });
+    menu->openAt(tree, {10.0f, 20.0f});
+    tree.layout();
+
+    // maxLabelWidth = 12 glyphs x 8px = 96. Rows are label + 20 (10px each
+    // side); the panel wraps the rows with _panelPadding (4) on both sides.
+    const auto items = menu->menuItems();
+    ASSERT_EQ(items.size(), 2u);
+    EXPECT_EQ(menu->getChildren().size(), 1u);
+    const Rect2D& panelRect = menu->getChildren()[0]->_layoutRect;
+    EXPECT_FLOAT_EQ(panelRect.pos.x, 10.0f);
+    EXPECT_FLOAT_EQ(panelRect.pos.y, 20.0f);
+    EXPECT_FLOAT_EQ(panelRect.extent.x, 96.0f + 20.0f + 8.0f);
+    EXPECT_FLOAT_EQ(panelRect.extent.y, 2.0f * 26.0f + 8.0f);
+
+    // First row: full panel width minus the padding, packed from the top.
+    const Rect2D& row = items[0]->_layoutRect;
+    EXPECT_FLOAT_EQ(row.pos.x, 14.0f);
+    EXPECT_FLOAT_EQ(row.pos.y, 24.0f);
+    EXPECT_FLOAT_EQ(row.extent.x, 96.0f + 20.0f);
+    EXPECT_FLOAT_EQ(row.extent.y, 26.0f);
+    // The label fits inside the row's 10px side padding.
+    EXPECT_GE(row.extent.x - 20.0f, font->measureText("New Document"));
+    // Second row packs directly below (no spacing between menu rows).
+    EXPECT_FLOAT_EQ(items[1]->_layoutRect.pos.y, 50.0f);
+}
+
+TEST(ToolControlsTest, MenuBarHoverSwitchesOpenMenu)
+{
+    registerMenuFont(13.0f, 8.0f);
+
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       bar = std::make_shared<UIMenuBar>("Bar");
+    bar->_anchorMin = {0.0f, 0.0f};
+    bar->_anchorMax = {1.0f, 0.0f};
+    bar->_size      = {0.0f, 30.0f};
+    tree.attachToLayer(WidgetTree::ELayer::Content, bar);
+
+    bar->addItem("File", [] { return UIMenu::create({{"New Document", [] {}}, {"Save", [] {}}}); });
+    bar->addItem("Edit", [] { return UIMenu::create({{"Undo", [] {}}, {"Redo", [] {}}}); });
+    tree.layout();
+
+    // Synthetic font: "File" = 32px + 20 -> 52px wide at x 4..56; "Edit"
+    // starts at x 58. Click File: its menu opens below the bar.
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(30.0f, 15.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    // The bar item has no press session: releases are not consumed. The
+    // menu opened by the press stays open.
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(30.0f, 15.0f)),
+              EWidgetRouteResult::NotHandled);
+    ASSERT_NE(bar->getOpenMenu(), nullptr);
+    EXPECT_EQ(bar->getOpenMenu()->menuItems().front()->_label, "New Document");
+    // The host lays out every frame; tests must too, or the freshly attached
+    // overlay keeps an empty rect and never receives hits.
+    tree.layout();
+
+    // Hover over Edit without clicking: the open menu switches to Edit's.
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(84.0f, 15.0f), pointAt(84.0f, 15.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    ASSERT_NE(bar->getOpenMenu(), nullptr);
+    EXPECT_EQ(bar->getOpenMenu()->menuItems().front()->_label, "Undo");
+
+    // Hovering back over File switches back (classic menu-bar hover: any
+    // hovered entry owns the open menu).
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(30.0f, 15.0f), pointAt(30.0f, 15.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    ASSERT_NE(bar->getOpenMenu(), nullptr);
+    EXPECT_EQ(bar->getOpenMenu()->menuItems().front()->_label, "New Document");
+    tree.layout();
+
+    // A press anywhere outside the menu dismisses it (popup shield).
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(300.0f, 300.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(bar->getOpenMenu(), nullptr);
 }
 
 } // namespace ya

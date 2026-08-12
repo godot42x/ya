@@ -11,6 +11,10 @@ namespace ya
 
 void UISelectableRow::paintSelf(UIFrameBuilder& builder)
 {
+    if (_bDropHighlighted) {
+        builder.addSprite(_layoutRect, _selectedHoveredColor, nullptr);
+        return;
+    }
     const glm::vec4 color = _bSelected
                                 ? (_bHovered ? _selectedHoveredColor : _selectedColor)
                                 : (_bHovered ? _hoveredColor : _normalColor);
@@ -44,6 +48,7 @@ bool UISelectableRow::handleInputEvent(const Event& event, const WidgetEventCont
     switch (eventType) {
     case EEvent::MouseButtonPressed:
         _bPressed = true;
+        _pressPoint = ctx.logicalPoint;
         if (WidgetTree* tree = getTree()) {
             tree->setFocus(this);
             tree->setPointerCapture(this);
@@ -52,6 +57,23 @@ bool UISelectableRow::handleInputEvent(const Event& event, const WidgetEventCont
         if (_onSelect) {
             _onSelect(_itemId);
         }
+        return true;
+    case EEvent::MouseMoved:
+        // Drag initiation: press then move past a small threshold. The row
+        // hands the session to the tree (which owns the ghost + drop target
+        // from here on) and releases its own capture.
+        if (_bDraggable && _bPressed && getTree() && !getTree()->isDragging()) {
+            const float dist = glm::length(ctx.logicalPoint - _pressPoint);
+            if (dist > 6.0f) {
+                WidgetTree* tree = getTree();
+                tree->releasePointerCapture(this);
+                tree->beginDrag(this,
+                                _dragPayload.empty() ? _itemId : _dragPayload,
+                                _dragGhostLabel.empty() ? _itemId : _dragGhostLabel);
+                _bPressed = false;
+            }
+        }
+        _bHovered = bPointInside;
         return true;
     case EEvent::MouseButtonReleased:
         if (!_bPressed) {
@@ -67,11 +89,21 @@ bool UISelectableRow::handleInputEvent(const Event& event, const WidgetEventCont
             }
         }
         return true;
-    case EEvent::MouseMoved:
-        _bHovered = bPointInside;
-        return true;
     default:
         return false;
+    }
+}
+
+bool UISelectableRow::canAcceptDrop(const std::string& payload, const glm::vec2&)
+{
+    return _bDraggable && !payload.empty() && payload != _itemId;
+}
+
+void UISelectableRow::onDrop(const std::string& payload, const glm::vec2&)
+{
+    _bDropHighlighted = false;
+    if (_onDropped) {
+        _onDropped(payload);
     }
 }
 
@@ -79,6 +111,7 @@ void UISelectableRow::clearTransientInputState()
 {
     _bHovered = false;
     _bPressed = false;
+    _bDropHighlighted = false;
 }
 
 glm::vec2 UISelectableRow::computeDesiredSize() const

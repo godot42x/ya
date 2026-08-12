@@ -15,10 +15,9 @@ void UIContainer::layout(const Rect2D& parentRect)
 void UIContainer::layoutAssigned(const Rect2D& rect)
 {
     _layoutRect = rect;
-    const float pad = _padding;
     Rect2D      content = _layoutRect;
-    content.pos += glm::vec2(pad, pad);
-    content.extent -= glm::vec2(pad * 2.0f, pad * 2.0f);
+    content.pos += _padding;
+    content.extent -= _padding * 2.0f;
     arrangeChildren(content);
 }
 
@@ -124,9 +123,9 @@ glm::vec2 UIContainer::computeDesiredSize() const
     // the width). Scroll viewports and split panes rely on the component
     // order matching the axis, regardless of direction.
     if (bHorizontal) {
-        return {content + _padding * 2.0f, cross + _padding * 2.0f};
+        return {content + _padding.x * 2.0f, cross + _padding.y * 2.0f};
     }
-    return {cross + _padding * 2.0f, content + _padding * 2.0f};
+    return {cross + _padding.x * 2.0f, content + _padding.y * 2.0f};
 }
 
 } // namespace ya

@@ -2,6 +2,7 @@
 
 #include "Core/Log.h"
 
+#include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <algorithm>
@@ -50,6 +51,9 @@ void UISplitPane::layout(const Rect2D& parentRect)
 void UISplitPane::layoutAssigned(const Rect2D& rect)
 {
     _layoutRect = rect;
+    _contentRect = _layoutRect;
+    _contentRect.pos += _padding;
+    _contentRect.extent -= _padding * 2.0f;
     const auto children = getChildrenInPaintOrder();
     if (children.size() > 2) {
         YA_CORE_WARN("UISplitPane '{}': only the first two children are laid out ({} attached)",
@@ -59,24 +63,24 @@ void UISplitPane::layoutAssigned(const Rect2D& rect)
         return;
     }
 
-    clampRatio(_layoutRect);
+    clampRatio(_contentRect);
 
     const bool     bVertical = _orientation == ESplitOrientation::Vertical;
     const float    thickness = _dividerThickness;
-    const float    contentExtent = axisExtent(_layoutRect, _orientation);
-    const float    dividerCenter = axisCoord(_layoutRect.pos, _orientation) + contentExtent * _splitRatio;
+    const float    contentExtent = axisExtent(_contentRect, _orientation);
+    const float    dividerCenter = axisCoord(_contentRect.pos, _orientation) + contentExtent * _splitRatio;
 
-    Rect2D firstRect  = _layoutRect;
-    Rect2D secondRect = _layoutRect;
+    Rect2D firstRect  = _contentRect;
+    Rect2D secondRect = _contentRect;
     if (bVertical) {
         firstRect.extent.x  = std::max(0.0f, dividerCenter - thickness * 0.5f - firstRect.pos.x);
         secondRect.pos.x    = dividerCenter + thickness * 0.5f;
-        secondRect.extent.x = std::max(0.0f, _layoutRect.pos.x + _layoutRect.extent.x - secondRect.pos.x);
+        secondRect.extent.x = std::max(0.0f, _contentRect.pos.x + _contentRect.extent.x - secondRect.pos.x);
     }
     else {
         firstRect.extent.y  = std::max(0.0f, dividerCenter - thickness * 0.5f - firstRect.pos.y);
         secondRect.pos.y    = dividerCenter + thickness * 0.5f;
-        secondRect.extent.y = std::max(0.0f, _layoutRect.pos.y + _layoutRect.extent.y - secondRect.pos.y);
+        secondRect.extent.y = std::max(0.0f, _contentRect.pos.y + _contentRect.extent.y - secondRect.pos.y);
     }
 
     children[0]->layoutAssigned(firstRect);
@@ -89,10 +93,10 @@ Rect2D UISplitPane::getDividerRect() const
 {
     const float thickness = _dividerThickness;
     const bool  bVertical = _orientation == ESplitOrientation::Vertical;
-    const float contentExtent = axisExtent(_layoutRect, _orientation);
-    const float dividerCenter = axisCoord(_layoutRect.pos, _orientation) + contentExtent * _splitRatio;
+    const float contentExtent = axisExtent(_contentRect, _orientation);
+    const float dividerCenter = axisCoord(_contentRect.pos, _orientation) + contentExtent * _splitRatio;
 
-    Rect2D divider = _layoutRect;
+    Rect2D divider = _contentRect;
     if (bVertical) {
         divider.pos.x    = dividerCenter - thickness * 0.5f;
         divider.extent.x = thickness;
@@ -104,9 +108,24 @@ Rect2D UISplitPane::getDividerRect() const
     return divider;
 }
 
+void UISplitPane::paintSelf(UIFrameBuilder& builder)
+{
+    const glm::vec4 color = _bDraggingDivider
+                                ? _dividerDraggingColor
+                                : (_bHoveredDivider ? _dividerHoveredColor : _dividerColor);
+    builder.addSprite(getDividerRect(), color, nullptr);
+}
+
 bool UISplitPane::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
 {
     const EEvent::T eventType = event.getEventType();
+
+    // Divider hover feedback without consuming the move: panes below still
+    // receive the event (split is a Stop container, children are hit first).
+    if (eventType == EEvent::MouseMoved && !_bDraggingDivider) {
+        _bHoveredDivider = pointInRect(ctx.logicalPoint, getDividerRect());
+        // Fall through: never consume, so pane content keeps its own hover.
+    }
 
     if (eventType == EEvent::MouseButtonPressed) {
         // Only a press on the divider starts a drag session; presses over a
@@ -130,7 +149,7 @@ bool UISplitPane::handleInputEvent(const Event& event, const WidgetEventContext&
     }
 
     if (eventType == EEvent::MouseMoved && _bDraggingDivider) {
-        const float  contentExtent = axisExtent(_layoutRect, _orientation);
+        const float  contentExtent = axisExtent(_contentRect, _orientation);
         if (contentExtent > 0.0f) {
             _splitRatio = _dragStartRatio +
                           (axisCoord(ctx.logicalPoint, _orientation) - _dragStartPointer) / contentExtent;
@@ -156,6 +175,7 @@ bool UISplitPane::handleInputEvent(const Event& event, const WidgetEventContext&
 void UISplitPane::clearTransientInputState()
 {
     _bDraggingDivider = false;
+    _bHoveredDivider  = false;
 }
 
 glm::vec2 UISplitPane::computeDesiredSize() const
@@ -187,7 +207,7 @@ glm::vec2 UISplitPane::computeDesiredSize() const
     else {
         desired.y += _dividerThickness;
     }
-    return desired;
+    return desired + _padding * 2.0f;
 }
 
 } // namespace ya

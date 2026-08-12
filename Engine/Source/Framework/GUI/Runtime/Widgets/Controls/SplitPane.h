@@ -47,14 +47,23 @@ struct UISplitPane : public UIElement
     float             _minFirstExtent  = 40.0f;
     float             _minSecondExtent = 40.0f;
     float             _dividerThickness = 6.0f;
+    /// Content inset (same contract as UIContainer::_padding): the panes are
+    /// arranged inside the rect shrunk by padding on each edge.
+    glm::vec2         _padding = {0.0f, 0.0f};
+
+    glm::vec4 _dividerColor          = {0.20f, 0.22f, 0.27f, 1.0f};
+    glm::vec4 _dividerHoveredColor   = {0.34f, 0.40f, 0.50f, 1.0f};
+    glm::vec4 _dividerDraggingColor  = {0.24f, 0.46f, 0.82f, 1.0f};
 
     // Drag session state (runtime only, not serialized)
     bool  _bDraggingDivider = false;
+    bool  _bHoveredDivider  = false;
     float _dragStartRatio   = 0.0f;
     float _dragStartPointer = 0.0f;
 
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
+    void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     void clearTransientInputState() override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
@@ -66,6 +75,8 @@ struct UISplitPane : public UIElement
   private:
     /// Clamp `_splitRatio` so both panes keep their minimum extent.
     void clampRatio(const Rect2D& contentRect);
+    /// Content rect (last layout) used by divider hit/drag math.
+    Rect2D _contentRect{};
 };
 
 } // namespace ya

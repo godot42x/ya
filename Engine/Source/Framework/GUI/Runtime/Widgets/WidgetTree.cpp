@@ -2,6 +2,9 @@
 
 #include "Core/Log.h"
 
+#include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/Text.h"
+
 #include <algorithm>
 
 namespace ya
@@ -442,6 +445,15 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
         }
     }
 
+    // Escape cancels an active drag session before any key routing.
+    if (isDragging() && eventType == EEvent::KeyPressed) {
+        const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
+        if (keyEvent._keyCode == EKey::Escape && !keyEvent.bRepeat) {
+            cancelDrag();
+            return EWidgetRouteResult::HandledExclusive;
+        }
+    }
+
     // Keyboard events route to the focused widget (if any).
     if (eventType == EEvent::KeyPressed || eventType == EEvent::KeyReleased || eventType == EEvent::KeyTyped) {
         if (_focused && _focused->isAttached()) {
@@ -456,6 +468,28 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
         eventType != EEvent::MouseMoved &&
         eventType != EEvent::MouseScrolled) {
         return EWidgetRouteResult::NotHandled;
+    }
+
+    // An active drag session owns pointer moves / releases / presses: the
+    // ghost follows the pointer, the release delivers the drop, any new
+    // press cancels the drag.
+    if (isDragging() &&
+        (eventType == EEvent::MouseMoved || eventType == EEvent::MouseButtonReleased ||
+         eventType == EEvent::MouseButtonPressed)) {
+        switch (eventType) {
+        case EEvent::MouseMoved:
+            updateDrag(ctx.logicalPoint);
+            break;
+        case EEvent::MouseButtonReleased:
+            endDrag(ctx.logicalPoint);
+            break;
+        case EEvent::MouseButtonPressed:
+            cancelDrag();
+            break;
+        default:
+            break;
+        }
+        return EWidgetRouteResult::HandledExclusive;
     }
 
     // Pointer capture overrides the hit walk.
@@ -490,6 +524,21 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
 
     // Hover tracking: refresh the hovered widget on mouse moves.
     if (eventType == EEvent::MouseMoved) {
+        UIElement* newHovered = topmostHit(ctx.logicalPoint);
+        if (_hovered != newHovered) {
+            if (_hovered && _hovered->isAttached()) {
+                _hovered->resetHoverState();
+            }
+            _hovered = newHovered;
+        }
+    }
+
+    // A press moves the interaction to the widget under the pointer even
+    // without an intervening move: hover left on a previously hovered widget
+    // (e.g. a button clicked just before) must clear when a press lands
+    // elsewhere. The pressed widget sets its own hover flag in its press
+    // handler; here we only retire the stale one.
+    if (eventType == EEvent::MouseButtonPressed) {
         UIElement* newHovered = topmostHit(ctx.logicalPoint);
         if (_hovered != newHovered) {
             if (_hovered && _hovered->isAttached()) {
@@ -571,11 +620,118 @@ void WidgetTree::clearTransientState(UIElement& widget)
 void WidgetTree::onWidgetDetached(UIElement& widget)
 {
     clearTransientState(widget);
+    // A drag session pointing into the detached subtree cannot continue
+    // (source or ghost removed): abort it so no stale pointers survive.
+    if (isDragging() && (_dragSource == &widget || _dragGhost.get() == &widget)) {
+        cancelDrag();
+    }
 }
 
 UIElement* WidgetTree::topmostHit(const glm::vec2& logicalPoint) const
 {
     return topmostHitSubtree(_root.get(), logicalPoint);
+}
+
+// === Drag & drop session ===
+
+void WidgetTree::beginDrag(UIElement* source, std::string payload, std::string ghostLabel)
+{
+    if (isDragging()) {
+        cancelDrag();
+    }
+    _dragSource  = source;
+    _dragPayload = std::move(payload);
+    _dragPoint   = {};
+
+    // Ghost on the DragIme layer: visible but never hit-testable.
+    auto ghost = std::make_shared<UIPanel>("DragGhost");
+    ghost->_color      = {0.24f, 0.46f, 0.82f, 0.75f};
+    ghost->_visibility = EWidgetVisibility::SelfHitTestInvisible;
+    ghost->_position   = {0.0f, 0.0f};
+    ghost->_size       = {160.0f, 24.0f};
+
+    auto label = std::make_shared<UIText>("DragGhostLabel");
+    label->_text     = std::move(ghostLabel);
+    label->_fontSize = 13;
+    label->_color    = {0.95f, 0.96f, 0.98f, 1.0f};
+    label->_anchorMin = {0.0f, 0.0f};
+    label->_anchorMax = {1.0f, 1.0f};
+    label->_size      = {0.0f, 0.0f};
+    label->_hAlign    = EWidgetAlignH::Center;
+    label->_vAlign    = EWidgetAlignV::Center;
+    ghost->addDetachedChild(label);
+
+    attachToLayer(ELayer::DragIme, ghost);
+    _dragGhost = ghost;
+    invalidateLayout();
+}
+
+UIElement* WidgetTree::findDropTarget(const glm::vec2& logicalPoint) const
+{
+    for (UIElement* node = topmostHit(logicalPoint); node != nullptr; node = node->getParent()) {
+        if (node->canAcceptDrop(_dragPayload, logicalPoint)) {
+            return node;
+        }
+    }
+    return nullptr;
+}
+
+void WidgetTree::updateDrag(const glm::vec2& logicalPoint)
+{
+    if (!isDragging()) {
+        return;
+    }
+    _dragPoint = logicalPoint;
+    if (_dragGhost) {
+        _dragGhost->_position = logicalPoint + glm::vec2(10.0f, 10.0f);
+        invalidateLayout();
+    }
+
+    UIElement* target = findDropTarget(logicalPoint);
+    if (target != _dragDropTarget) {
+        if (_dragDropTarget) {
+            _dragDropTarget->setDropHighlight(false);
+        }
+        _dragDropTarget = target;
+        if (_dragDropTarget) {
+            _dragDropTarget->setDropHighlight(true);
+        }
+    }
+}
+
+void WidgetTree::clearDragSession()
+{
+    if (_dragDropTarget) {
+        _dragDropTarget->setDropHighlight(false);
+        _dragDropTarget = nullptr;
+    }
+    _dragPayload.clear();
+    _dragSource = nullptr;
+    if (_dragGhost && _dragGhost->isAttached()) {
+        detach(*_dragGhost); // payload already cleared: no recursive cancel
+    }
+    _dragGhost.reset();
+}
+
+void WidgetTree::endDrag(const glm::vec2& logicalPoint)
+{
+    if (!isDragging()) {
+        return;
+    }
+    UIElement*       target  = findDropTarget(logicalPoint);
+    const std::string payload = _dragPayload;
+    clearDragSession();
+    if (target) {
+        target->onDrop(payload, logicalPoint);
+    }
+}
+
+void WidgetTree::cancelDrag()
+{
+    if (!isDragging()) {
+        return;
+    }
+    clearDragSession();
 }
 
 } // namespace ya

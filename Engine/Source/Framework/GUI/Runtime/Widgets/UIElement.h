@@ -229,6 +229,18 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
     /// outside the parent rect.
     [[nodiscard]] virtual bool cullsChildHits(const glm::vec2& /*logicalPoint*/) const { return false; }
 
+    // === Drag & drop target hooks (gui-app-bootstrap Phase 4) ===
+    /// Whether this widget accepts a drag payload at `logicalPoint` (the
+    /// tree highlights it as a valid drop target during a drag session).
+    [[nodiscard]] virtual bool canAcceptDrop(const std::string& /*payload*/,
+                                             const glm::vec2& /*logicalPoint*/) { return false; }
+    /// Called when a drag session is released over this target (only after
+    /// canAcceptDrop returned true for that point).
+    virtual void onDrop(const std::string& /*payload*/, const glm::vec2& /*logicalPoint*/) {}
+    /// Visual feedback while the drag hovers this target (cleared on leave /
+    /// drop / cancel).
+    virtual void setDropHighlight(bool /*bHighlight*/) {}
+
     // === Effective-state queries ===
     [[nodiscard]] bool isVisibleForRender() const
     {
