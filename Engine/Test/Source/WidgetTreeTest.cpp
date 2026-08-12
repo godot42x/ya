@@ -6,6 +6,7 @@
 
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/UITypeRegistry.h"
+#include "GUI/Widgets/WidgetTreeDump.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"
@@ -54,6 +55,36 @@ struct TestKeyWidget : public UIElement
 };
 
 } // namespace
+
+// === WidgetTreeDump ===
+
+TEST(WidgetTreeTest, DumpTreeCapturesRectAndTransientState)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       button = makeButton("B", {100.0f, 80.0f}, {80.0f, 32.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, button);
+    tree.layout();
+
+    const nlohmann::json dump = dumpWidgetTree(tree);
+    const nlohmann::json* node = findWidgetNode(dump, "B");
+    ASSERT_NE(node, nullptr);
+    EXPECT_EQ((*node)["rect"]["x"], 100.0f);
+    EXPECT_EQ((*node)["rect"]["y"], 80.0f);
+    EXPECT_EQ((*node)["rect"]["w"], 80.0f);
+    EXPECT_EQ((*node)["rect"]["h"], 32.0f);
+    EXPECT_FALSE((*node)["hovered"]);
+    EXPECT_FALSE((*node)["focused"]);
+
+    // Hover then press: the dump reflects live transient state from the tree.
+    tree.dispatchEvent(MouseMoveEvent(120.0f, 96.0f), pointAt(120.0f, 96.0f));
+    tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 96.0f));
+    const nlohmann::json pressed = dumpWidgetTree(tree);
+    const nlohmann::json* pressedNode = findWidgetNode(pressed, "B");
+    ASSERT_NE(pressedNode, nullptr);
+    EXPECT_TRUE((*pressedNode)["hovered"]);
+    EXPECT_TRUE((*pressedNode)["focused"]);
+    EXPECT_TRUE((*pressedNode)["captured"]);
+}
 
 // === Attach / reparent / detach ===
 
