@@ -42,18 +42,28 @@ std::string canonicalizeAssetPath(std::string path)
         path = "Engine:" + path.substr(std::string("Engine/").size());
     }
 
-    if (path == "Game:Content") {
-        path = "Content";
-    }
-    else if (path.starts_with("Game:Content/")) {
-        path = path.substr(std::string("Game:").size());
-    }
-    else if (path == "Content:") {
-        path = "Content";
-    }
-    else if (path.starts_with("Content:")) {
-        path = "Content/" + path.substr(std::string("Content:").size());
-    }
+    // Game content is the bare default namespace: both the legacy Game:
+    // mount form and the Content: mount form canonicalize to Content/....
+    // Applied before VFS resolution (string inputs) and again after it
+    // (absolute inputs resolve to mount:tail form), so both spellings of the
+    // same file produce one canonical path.
+    const auto normalizeGameContentMount = [](std::string value) -> std::string
+    {
+        if (value == "Game:Content") {
+            return "Content";
+        }
+        if (value.starts_with("Game:Content/")) {
+            return value.substr(std::string("Game:").size());
+        }
+        if (value == "Content:") {
+            return "Content";
+        }
+        if (value.starts_with("Content:")) {
+            return "Content/" + value.substr(std::string("Content:").size());
+        }
+        return value;
+    };
+    path = normalizeGameContentMount(std::move(path));
 
     if (path.starts_with("Engine:Content/Content/")) {
         path = "Engine:Content/" + path.substr(std::string("Engine:Content/Content/").size());
@@ -66,6 +76,7 @@ std::string canonicalizeAssetPath(std::string path)
         path = vfs->toVfsPath(path);
         std::replace(path.begin(), path.end(), '\\', '/');
         path = normalizeMountedPath(std::move(path));
+        path = normalizeGameContentMount(std::move(path));
     }
 
     return path;

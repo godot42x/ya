@@ -1,5 +1,6 @@
 #include "Core/System/VirtualFileSystem.h"
 #include "Resource/AssetManager.h"
+#include "Scene/Core/GameMounts.h"
 
 #include <gtest/gtest.h>
 
@@ -33,8 +34,15 @@ class AssetPathNormalizationTest : public ::testing::Test
         std::filesystem::current_path(_tempRoot);
 
         VirtualFileSystem::init();
-        ASSERT_NE(VirtualFileSystem::get(), nullptr);
-        VirtualFileSystem::get()->setGameRoot(_gameRoot);
+        auto* vfs = VirtualFileSystem::get();
+        ASSERT_NE(vfs, nullptr);
+        // Mirror the host bootstrap mounts: engine content under Engine/,
+        // third-party assets under their own mount, and the app-defined
+        // game roots. VFS itself knows nothing about games.
+        vfs->mount("Engine", _tempRoot / "Engine");
+        vfs->mount("ThirdParty", _tempRoot / "Engine" / "ThirdParty");
+        vfs->mount(game::mounts::GameRoot, _gameRoot);
+        vfs->mount(game::mounts::Content, _gameRoot / "Content");
     }
 
     void TearDown() override
@@ -46,9 +54,11 @@ class AssetPathNormalizationTest : public ::testing::Test
 
 TEST_F(AssetPathNormalizationTest, NormalizeAssetPathCanonicalizesLegacyAndAbsoluteForms)
 {
-    const auto engineContentAbs = (_tempRoot / "Engine" / "Content" / "Textures" / "sky.hdr").lexically_normal();
-    const auto gameContentAbs   = (_gameRoot / "Content" / "Textures" / "albedo.png").lexically_normal();
-    const auto thirdPartyAbs    = (_tempRoot / "Engine" / "ThirdParty" / "Assets" / "mesh.obj").lexically_normal();
+    // Mount roots are canonicalized by the VFS (symlinked temp dirs resolve
+    // to their physical form), so absolute inputs must be canonicalized too.
+    const auto engineContentAbs = std::filesystem::weakly_canonical(_tempRoot / "Engine" / "Content" / "Textures" / "sky.hdr");
+    const auto gameContentAbs   = std::filesystem::weakly_canonical(_gameRoot / "Content" / "Textures" / "albedo.png");
+    const auto thirdPartyAbs    = std::filesystem::weakly_canonical(_tempRoot / "Engine" / "ThirdParty" / "Assets" / "mesh.obj");
 
     EXPECT_EQ(AssetManager::normalizeAssetPath("Engine/Content/Textures/sky.hdr"), "Engine:Content/Textures/sky.hdr");
     EXPECT_EQ(AssetManager::normalizeAssetPath("Engine:Content/Content/Textures/sky.hdr"), "Engine:Content/Textures/sky.hdr");
@@ -56,7 +66,7 @@ TEST_F(AssetPathNormalizationTest, NormalizeAssetPathCanonicalizesLegacyAndAbsol
     EXPECT_EQ(AssetManager::normalizeAssetPath("Content/Content/Textures/albedo.png"), "Content/Textures/albedo.png");
     EXPECT_EQ(AssetManager::normalizeAssetPath(engineContentAbs.generic_string()), "Engine:Content/Textures/sky.hdr");
     EXPECT_EQ(AssetManager::normalizeAssetPath(gameContentAbs.generic_string()), "Content/Textures/albedo.png");
-    EXPECT_EQ(AssetManager::normalizeAssetPath(thirdPartyAbs.generic_string()), "Engine/ThirdParty/Assets/mesh.obj");
+    EXPECT_EQ(AssetManager::normalizeAssetPath(thirdPartyAbs.generic_string()), "ThirdParty:Assets/mesh.obj");
 }
 
 TEST_F(AssetPathNormalizationTest, VfsSeparatesLogicalPathsFromIoTranslation)
@@ -72,8 +82,8 @@ TEST_F(AssetPathNormalizationTest, VfsSeparatesLogicalPathsFromIoTranslation)
     const auto thirdPartyAbs    = std::filesystem::weakly_canonical(_tempRoot / "Engine" / "ThirdParty" / "Assets" / "mesh.obj");
 
     EXPECT_EQ(vfs->toVfsPath(engineContentAbs.generic_string()), "Engine:Content/Textures/sky.hdr");
-    EXPECT_EQ(vfs->toVfsPath(gameContentAbs.generic_string()), "Content/Textures/albedo.png");
-    EXPECT_EQ(vfs->toVfsPath(thirdPartyAbs.generic_string()), "Engine/ThirdParty/Assets/mesh.obj");
+    EXPECT_EQ(vfs->toVfsPath(gameContentAbs.generic_string()), "Content:Textures/albedo.png");
+    EXPECT_EQ(vfs->toVfsPath(thirdPartyAbs.generic_string()), "ThirdParty:Assets/mesh.obj");
 
     EXPECT_EQ(vfs->translatePath("Engine:Content/Textures/sky.hdr").lexically_normal(), engineContentAbs);
     EXPECT_EQ(vfs->translatePath("Content/Textures/albedo.png").lexically_normal(), gameContentAbs);
