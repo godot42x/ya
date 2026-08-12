@@ -24,12 +24,12 @@ add_requires(
     , "freetype"
     , "stb"
     , "ktx"
+    , "cxxopts"
+    , "asio"
 )
 if ya_profile ~= "gui" then
     add_requires(
         "libsdl3_image"
-        , "asio"
-        , "cxxopts"
         , "tinygltf v2.9.6"
         , "lua v5.4.8"
         , "sol2"

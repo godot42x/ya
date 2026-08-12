@@ -5,11 +5,13 @@
 
 #include "Core/Log.h"
 
-#include "Core/Application/AutomationRun.h"
 #include "GUI/App/GUIAppHost.h"
 
 #include "GUIWorkbench.h"
 
+#include <cxxopts.hpp>
+
+#include <exception>
 #include <string>
 
 int main(int argc, char** argv)
@@ -19,15 +21,44 @@ int main(int argc, char** argv)
     config.width     = 1280;
     config.height    = 800;
     config.fontSizes = {12, 13, 14, 15, 16};
-    ya::applyAutomationRunArgs(argc, argv, config.automation);
 
     guiworkbench::FWorkbenchApp app;
-    for (int i = 1; i < argc; ++i) {
-        const std::string arg = argv[i];
-        if (arg == "--smoke-actions") {
-            app.bSmokeActions = true;
+
+    // One cxxopts parser for the whole GUI app entry (shared with the
+    // engine's CliParams; no hand-written argv scanning).
+    cxxopts::Options options(argv[0], "YA GUI Workbench");
+    options.allow_unrecognised_options();
+    options.add_options()
+        ("exit-after-frame", "Quit gracefully after rendering N frames", cxxopts::value<uint64_t>()->default_value("0"))
+        ("automation-control-port", "Automation control TCP port; 0 disables the server", cxxopts::value<uint16_t>()->default_value("0"))
+        ("smoke-actions", "Run the end-to-end automation smoke")
+        ("dump-snapshot", "Dump the frame snapshot JSON to path", cxxopts::value<std::string>())
+        ("dump-frame", "Frame index at which to dump the snapshot", cxxopts::value<uint32_t>())
+        ("gpu-shot", "Dump a GPU frame to path", cxxopts::value<std::string>())
+        ("gpu-shot-frame", "Frame index for the GPU shot", cxxopts::value<uint32_t>());
+
+    try {
+        const auto result = options.parse(argc, argv);
+        config.automation.exitAfterFrame = result["exit-after-frame"].as<uint64_t>();
+        config.automation.controlPort    = result["automation-control-port"].as<uint16_t>();
+        app.bSmokeActions = result.count("smoke-actions") > 0;
+        if (result.count("dump-snapshot") > 0) {
+            config.dumpSnapshotPath = result["dump-snapshot"].as<std::string>();
+        }
+        if (result.count("dump-frame") > 0) {
+            config.dumpFrame = result["dump-frame"].as<uint32_t>();
+        }
+        if (result.count("gpu-shot") > 0) {
+            config.gpuShotPath = result["gpu-shot"].as<std::string>();
+        }
+        if (result.count("gpu-shot-frame") > 0) {
+            config.gpuShotFrame = result["gpu-shot-frame"].as<uint32_t>();
         }
     }
+    catch (const std::exception& e) {
+        YA_CORE_WARN("GUIWorkbench: failed to parse command line: {}", e.what());
+    }
+
     ya::GUIAppHost host(config, app);
     if (!host.init()) {
         return 1;

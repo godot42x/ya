@@ -1,6 +1,9 @@
 #include "Core/Application/AutomationRun.h"
 
-#include <cstdlib>
+#include "Core/Log.h"
+
+#include <cxxopts.hpp>
+
 #include <string>
 
 namespace ya
@@ -66,29 +69,22 @@ const AppAutomationRunOptions& AppAutomationRunController::getOptions() const
 
 void applyAutomationRunArgs(int argc, char** argv, AppAutomationRunOptions& outOptions)
 {
-    for (int i = 1; i < argc; ++i) {
-        const std::string arg = argv[i];
-        if (arg == "--exit-after-frame") {
-            if (i + 1 < argc) {
-                outOptions.exitAfterFrame = static_cast<uint64_t>(std::strtoull(argv[++i], nullptr, 10));
-            }
-            continue;
-        }
-        if (arg.starts_with("--exit-after-frame=")) {
-            outOptions.exitAfterFrame = static_cast<uint64_t>(
-                std::strtoull(arg.c_str() + std::string("--exit-after-frame=").size(), nullptr, 10));
-            continue;
-        }
-        if (arg == "--automation-control-port") {
-            if (i + 1 < argc) {
-                outOptions.controlPort = static_cast<uint16_t>(std::strtoul(argv[++i], nullptr, 10));
-            }
-            continue;
-        }
-        if (arg.starts_with("--automation-control-port=")) {
-            outOptions.controlPort = static_cast<uint16_t>(
-                std::strtoul(arg.c_str() + std::string("--automation-control-port=").size(), nullptr, 10));
-        }
+    // Shared automation CLI parsing through cxxopts (the same library the
+    // engine's AppOptions CliParams wraps). Unknown options are ignored so
+    // app-specific flags (GUI smokes, project paths, ...) can coexist.
+    cxxopts::Options options(argv && argv[0] ? argv[0] : "ya", "YA automation run options");
+    options.allow_unrecognised_options();
+    options.add_options()
+        ("exit-after-frame", "Quit gracefully after rendering N frames", cxxopts::value<uint64_t>()->default_value("0"))
+        ("automation-control-port", "Automation control TCP port; 0 disables the server", cxxopts::value<uint16_t>()->default_value("0"));
+
+    try {
+        const auto result = options.parse(argc, argv);
+        outOptions.exitAfterFrame = result["exit-after-frame"].as<uint64_t>();
+        outOptions.controlPort    = result["automation-control-port"].as<uint16_t>();
+    }
+    catch (const std::exception& e) {
+        YA_CORE_WARN("applyAutomationRunArgs: failed to parse automation options: {}", e.what());
     }
 }
 
