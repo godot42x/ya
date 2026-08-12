@@ -570,12 +570,18 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
                    static_cast<size_t>(_activePassSlot));
     cmdBuf->bindPipeline(pipeline);
     setScreenViewportAndScissor(*cmdBuf, _render, Render2D::session.windowWidth, Render2D::session.windowHeight);
+    // Defensive: clamp the clip-derived scissor to the window bounds. Layout
+    // already keeps rects non-negative, but a stale clip must never cast a
+    // negative extent into a uint32 (VUID offset+extent overflow).
     if (!Render2D::session.clipStack.empty()) {
         const Rect2D& clip = Render2D::session.clipStack.back();
-        cmdBuf->setScissor(static_cast<int32_t>(clip.pos.x),
-                           static_cast<int32_t>(clip.pos.y),
-                           static_cast<int32_t>(clip.extent.x),
-                           static_cast<int32_t>(clip.extent.y));
+        const int32_t sx = std::clamp(static_cast<int32_t>(clip.pos.x), 0, static_cast<int32_t>(Render2D::session.windowWidth));
+        const int32_t sy = std::clamp(static_cast<int32_t>(clip.pos.y), 0, static_cast<int32_t>(Render2D::session.windowHeight));
+        const int32_t sw = std::clamp(static_cast<int32_t>(clip.extent.x), 0,
+                                      static_cast<int32_t>(Render2D::session.windowWidth) - sx);
+        const int32_t sh = std::clamp(static_cast<int32_t>(clip.extent.y), 0,
+                                      static_cast<int32_t>(Render2D::session.windowHeight) - sy);
+        cmdBuf->setScissor(sx, sy, static_cast<uint32_t>(sw), static_cast<uint32_t>(sh));
     }
     else {
         cmdBuf->setScissor(0, 0, Render2D::session.windowWidth, Render2D::session.windowHeight);
