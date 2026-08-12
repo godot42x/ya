@@ -81,4 +81,10 @@ private:
 /// Scenario key name to EKey ("Enter", "Space", "Down", "A", ...).
 YA_CORE_API EKey::T keyFromName(std::string_view name);
 
+/// Emit the pointer/key/drag events of a step through the sink. Frame and
+/// Checkpoint are no-ops (the host owns frame stepping and dumps). Shared by
+/// GuiScenarioExecutor and host frame-loop bridges so event construction
+/// lives in exactly one place.
+YA_CORE_API void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step);
+
 } // namespace ya

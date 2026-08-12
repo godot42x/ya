@@ -179,6 +179,61 @@ GuiScenarioExecutor::GuiScenarioExecutor(IGuiEventSink& sink,
 {
 }
 
+void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step)
+{
+    switch (step.kind) {
+    case EGuiScenarioStepKind::MouseMove:
+        sink.dispatch(MouseMoveEvent(step.point.x, step.point.y), step.point);
+        break;
+    case EGuiScenarioStepKind::MousePress:
+        sink.dispatch(MouseButtonPressedEvent(step.button), step.point);
+        break;
+    case EGuiScenarioStepKind::MouseRelease:
+        sink.dispatch(MouseButtonReleasedEvent(step.button), step.point);
+        break;
+    case EGuiScenarioStepKind::MouseWheel: {
+        MouseScrolledEvent ev(step.wheel.x, step.wheel.y);
+        sink.dispatch(ev, step.point);
+        break;
+    }
+    case EGuiScenarioStepKind::KeyPress: {
+        KeyPressedEvent ev;
+        ev._keyCode = step.key;
+        ev._mod     = 0;
+        ev.bRepeat  = false;
+        sink.dispatch(ev, {-1.0f, -1.0f});
+        break;
+    }
+    case EGuiScenarioStepKind::KeyRelease: {
+        KeyReleasedEvent ev;
+        ev._keyCode = step.key;
+        ev._mod     = 0;
+        sink.dispatch(ev, {-1.0f, -1.0f});
+        break;
+    }
+    case EGuiScenarioStepKind::KeyTyped: {
+        KeyTypedEvent ev(step.text);
+        ev._mod = 0;
+        sink.dispatch(ev, {-1.0f, -1.0f});
+        break;
+    }
+    case EGuiScenarioStepKind::Drag: {
+        sink.dispatch(MouseButtonPressedEvent(step.button), step.point);
+        const int n = std::max(1, step.dragSteps);
+        for (int i = 1; i <= n; ++i) {
+            const float     t = static_cast<float>(i) / static_cast<float>(n);
+            const glm::vec2 p = step.point + (step.dragTo - step.point) * t;
+            sink.dispatch(MouseMoveEvent(p.x, p.y), p);
+        }
+        sink.dispatch(MouseButtonReleasedEvent(step.button), step.dragTo);
+        break;
+    }
+    case EGuiScenarioStepKind::Frame:
+    case EGuiScenarioStepKind::Checkpoint:
+        break;
+    }
+}
+
 bool GuiScenarioExecutor::run(const std::vector<GuiScenarioStep>& steps)
 {
     for (const GuiScenarioStep& step : steps) {
@@ -189,51 +244,15 @@ bool GuiScenarioExecutor::run(const std::vector<GuiScenarioStep>& steps)
             }
             break;
         case EGuiScenarioStepKind::MouseMove:
-            _sink.dispatch(MouseMoveEvent(step.point.x, step.point.y), step.point);
-            break;
         case EGuiScenarioStepKind::MousePress:
-            _sink.dispatch(MouseButtonPressedEvent(step.button), step.point);
-            break;
         case EGuiScenarioStepKind::MouseRelease:
-            _sink.dispatch(MouseButtonReleasedEvent(step.button), step.point);
+        case EGuiScenarioStepKind::MouseWheel:
+        case EGuiScenarioStepKind::KeyPress:
+        case EGuiScenarioStepKind::KeyRelease:
+        case EGuiScenarioStepKind::KeyTyped:
+        case EGuiScenarioStepKind::Drag:
+            emitGuiScenarioStep(_sink, step);
             break;
-        case EGuiScenarioStepKind::MouseWheel: {
-            MouseScrolledEvent ev(step.wheel.x, step.wheel.y);
-            _sink.dispatch(ev, step.point);
-            break;
-        }
-        case EGuiScenarioStepKind::KeyPress: {
-            KeyPressedEvent ev;
-            ev._keyCode = step.key;
-            ev._mod     = 0;
-            ev.bRepeat  = false;
-            _sink.dispatch(ev, {-1.0f, -1.0f});
-            break;
-        }
-        case EGuiScenarioStepKind::KeyRelease: {
-            KeyReleasedEvent ev;
-            ev._keyCode = step.key;
-            ev._mod     = 0;
-            _sink.dispatch(ev, {-1.0f, -1.0f});
-            break;
-        }
-        case EGuiScenarioStepKind::KeyTyped: {
-            KeyTypedEvent ev(step.text);
-            ev._mod = 0;
-            _sink.dispatch(ev, {-1.0f, -1.0f});
-            break;
-        }
-        case EGuiScenarioStepKind::Drag: {
-            _sink.dispatch(MouseButtonPressedEvent(step.button), step.point);
-            const int n = std::max(1, step.dragSteps);
-            for (int i = 1; i <= n; ++i) {
-                const float     t = static_cast<float>(i) / static_cast<float>(n);
-                const glm::vec2 p = step.point + (step.dragTo - step.point) * t;
-                _sink.dispatch(MouseMoveEvent(p.x, p.y), p);
-            }
-            _sink.dispatch(MouseButtonReleasedEvent(step.button), step.dragTo);
-            break;
-        }
         case EGuiScenarioStepKind::Checkpoint:
             if (_onCheckpoint) {
                 _onCheckpoint(step.tag);
