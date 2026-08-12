@@ -99,6 +99,14 @@ struct YA_GUI_API FQuadRender
     static constexpr size_t MaxVertexCount = 10000;
     static constexpr size_t MaxIndexCount  = MaxVertexCount * 6 / 4;
 
+    // One host-visible vertex buffer is shared by every flush of a frame, and
+    // the GPU only reads it after the whole command buffer is recorded. Each
+    // flush must therefore write to a DISTINCT region (advancing cursor), or
+    // later flushes would overwrite earlier batches before the GPU executes.
+    // The buffer holds up to this many full batches per frame; exceeding it
+    // is a hard error (fail loudly instead of silently dropping content).
+    static constexpr uint32_t kFrameFlushSlots = 4;
+
     struct FrameUBO
     {
         glm::mat4 viewProj = glm::mat4(1.0f);
@@ -115,11 +123,13 @@ struct YA_GUI_API FQuadRender
     FQuadRender::Vertex* vertexPtrHead = nullptr;
     uint32_t             vertexCount   = 0;
     uint32_t             indexCount    = 0;
+    uint32_t             screenBatchStartVertex = 0; // start of the pending batch in the shared buffer
 
     FQuadRender::Vertex* worldVertexPtr     = nullptr;
     FQuadRender::Vertex* worldVertexPtrHead = nullptr;
     uint32_t             worldVertexCount   = 0;
     uint32_t             worldIndexCount    = 0;
+    uint32_t             worldBatchStartVertex = 0; // start of the pending world batch
 
     PipelineLayoutDesc _pipelineDesc = PipelineLayoutDesc{
         .pushConstants        = {},
@@ -294,6 +304,11 @@ struct YA_GUI_API FLineRender
 
     static constexpr size_t MaxVertexCount = 8192; // 4096 line segments
 
+    // Same shared-buffer rule as FQuadRender: multiple flushes per frame must
+    // write to distinct regions because the GPU reads the buffer only after
+    // recording finishes.
+    static constexpr uint32_t kFrameFlushSlots = 4;
+
     using FrameUBO = FQuadRender::FrameUBO;
 
     IRender* _render = nullptr;
@@ -338,6 +353,7 @@ struct YA_GUI_API FLineRender
     Vertex*             vertexPtr          = nullptr;
     Vertex*             vertexPtrHead      = nullptr;
     uint32_t            vertexCount        = 0;
+    uint32_t            batchStartVertex   = 0; // start of the pending batch in the shared buffer
 
     void init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat);
     void destroy();

@@ -15,6 +15,7 @@
 - `./windows_dll_boundary.md`：Windows 下 DLL boundary、单例/注册表重复实例、ImGui/反射状态分裂等问题
 - `./windows_msvc_compile_portability.md`：从 macOS 切到 Windows/MSVC 的编译/链接故障清单（C7560、ENGINE_API 导出、class/struct 修饰名、POSIX 头、__VA_OPT__）
 - `./module_split_sed_regression.md`：模块拆分时 sed 行号错位误删成员函数 → dylib 未定义符号 → 运行时跳 0x0 崩溃；删除/核对函数清单的方法
+- `./render2d_multi_flush_vertex_overwrite.md`：Render2D 单帧多批次 flush 时 host-visible 顶点缓冲被后批次覆盖 → GUI 只渲染最后一个批次；clip 与 flush 顺序约定
 
 ## 边界
 

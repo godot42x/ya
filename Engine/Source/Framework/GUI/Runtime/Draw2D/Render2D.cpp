@@ -310,12 +310,13 @@ void Render2D::pushClipRect(const Rect2D& rect)
     const bool bClipChanged = session.clipStack.empty() ||
                               session.clipStack.back().pos != clipped.pos ||
                               session.clipStack.back().extent != clipped.extent;
-    session.clipStack.push_back(clipped);
     if (bClipChanged && quadData && session.curCmdBuf) {
-        // Flush so the pending vertices are drawn with the OLD scissor; the
-        // next flush picks up the new clip.
+        // Flush pending quads with the CURRENT scissor BEFORE switching to the
+        // new clip; otherwise content recorded outside the clip gets culled by
+        // the incoming clip rect.
         quadData->flush(session.curCmdBuf);
     }
+    session.clipStack.push_back(clipped);
 }
 
 Rect2D Render2D::intersectClipRect(const Rect2D& rect, const Rect2D& parentClip)
@@ -332,10 +333,12 @@ void Render2D::popClipRect()
     if (session.clipStack.empty()) {
         return;
     }
-    session.clipStack.pop_back();
     if (quadData && session.curCmdBuf) {
+        // Flush pending quads with the CURRENT (inner) scissor BEFORE popping;
+        // otherwise content recorded inside the clip escapes it.
         quadData->flush(session.curCmdBuf);
     }
+    session.clipStack.pop_back();
 }
 
 void FLineRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
@@ -374,7 +377,7 @@ void FLineRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
                 ya::BufferCreateInfo{
                     .label       = std::format("Sprite2D_Line_{}_{}_VertexBuffer", domain, flight),
                     .usage       = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
-                    .size        = sizeof(FLineRender::Vertex) * MaxVertexCount,
+                    .size        = sizeof(FLineRender::Vertex) * MaxVertexCount * kFrameFlushSlots,
                     .memoryUsage = EMemoryUsage::CpuToGpu,
                 });
             resources.vertexPtrHead = resources.vertexBuffer->map<FLineRender::Vertex>();
@@ -516,6 +519,7 @@ void FLineRender::begin(ERender2DPassDomain domain)
     vertexPtrHead      = resources.vertexPtrHead;
     vertexPtr   = vertexPtrHead;
     vertexCount = 0;
+    batchStartVertex = 0;
 }
 
 void FLineRender::flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj)
@@ -551,9 +555,13 @@ void FLineRender::flush(ICommandBuffer* cmdBuf, const glm::mat4& viewProj)
 
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, {resources.frameUboDS});
     cmdBuf->bindVertexBuffer(0, resources.vertexBuffer.get(), 0);
-    cmdBuf->draw(vertexCount, 1, 0, 0);
+    YA_CORE_ASSERT(static_cast<uint64_t>(batchStartVertex) + vertexCount <=
+                       MaxVertexCount * kFrameFlushSlots,
+                   "Render2D line frame exceeded vertex buffer capacity ({} batches)",
+                   kFrameFlushSlots);
+    cmdBuf->draw(vertexCount, 1, batchStartVertex, 0);
 
-    vertexPtr   = vertexPtrHead;
+    batchStartVertex = static_cast<uint32_t>(vertexPtr - vertexPtrHead);
     vertexCount = 0;
 }
 
@@ -760,7 +768,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
                 ya::BufferCreateInfo{
                     .label       = std::format("Sprite2D_{}_{}_Screen_VertexBuffer", domain, flight),
                     .usage       = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
-                    .size        = sizeof(FQuadRender::Vertex) * MaxVertexCount,
+                    .size        = sizeof(FQuadRender::Vertex) * MaxVertexCount * kFrameFlushSlots,
                     .memoryUsage = EMemoryUsage::CpuToGpu,
                 });
             resources.vertexPtrHead = resources.vertexBuffer->map<FQuadRender::Vertex>();
@@ -769,7 +777,7 @@ void FQuadRender::init(IRender* render, EFormat::T colorFormat, EFormat::T depth
                 ya::BufferCreateInfo{
                     .label       = std::format("Sprite2D_{}_{}_World_VertexBuffer", domain, flight),
                     .usage       = EBufferUsage::VertexBuffer | EBufferUsage::TransferDst,
-                    .size        = sizeof(FQuadRender::Vertex) * MaxVertexCount,
+                    .size        = sizeof(FQuadRender::Vertex) * MaxVertexCount * kFrameFlushSlots,
                     .memoryUsage = EMemoryUsage::CpuToGpu,
                 });
             resources.worldVertexPtrHead = resources.worldVertexBuffer->map<FQuadRender::Vertex>();
@@ -896,6 +904,8 @@ void FQuadRender::begin(const Extent2D& extent)
     indexCount         = 0;
     worldVertexCount   = 0;
     worldIndexCount    = 0;
+    screenBatchStartVertex = 0;
+    worldBatchStartVertex  = 0;
     _resourceVersion                    = 1;
     _uploadedScreenResourceVersion      = 0;
     _uploadedWorldResourceVersion       = 0;
@@ -974,6 +984,14 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
         _frameUboUploaded = true;
     }
 
+    // The shared host-visible buffer is written during recording but read by
+    // the GPU only after submission, so every batch must live at a distinct
+    // offset (see kFrameFlushSlots). Draw the pending batch at its recorded
+    // region instead of always starting at vertex 0.
+    YA_CORE_ASSERT(static_cast<uint64_t>(screenBatchStartVertex) + vertexCount <=
+                       MaxVertexCount * kFrameFlushSlots,
+                   "Render2D screen frame exceeded vertex buffer capacity ({} batches)",
+                   kFrameFlushSlots);
     const std::vector<DescriptorSetHandle> descriptorSets = {
         resources.frameUboDS,
         resources.activeScreenResourceDS,
@@ -981,9 +999,9 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descriptorSets);
     cmdBuf->bindVertexBuffer(0, resources.vertexBuffer.get(), 0);
     cmdBuf->bindIndexBuffer(_indexBuffer.get(), 0, false);
-    cmdBuf->drawIndexed(static_cast<uint32_t>(indexCount), 1, 0, 0, 0);
+    cmdBuf->drawIndexed(static_cast<uint32_t>(indexCount), 1, 0, static_cast<int32_t>(screenBatchStartVertex), 0);
 
-    vertexPtr   = vertexPtrHead;
+    screenBatchStartVertex = static_cast<uint32_t>(vertexPtr - vertexPtrHead);
     vertexCount = 0;
     indexCount  = 0;
 }
@@ -1016,6 +1034,10 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
     setWorldViewportAndScissor(*cmdBuf, _render, Render2D::session.windowWidth, Render2D::session.windowHeight);
     cmdBuf->setCullMode(Render2D::debug.worldCullMode);
 
+    YA_CORE_ASSERT(static_cast<uint64_t>(worldBatchStartVertex) + worldVertexCount <=
+                       MaxVertexCount * kFrameFlushSlots,
+                   "Render2D world frame exceeded vertex buffer capacity ({} batches)",
+                   kFrameFlushSlots);
     std::vector<DescriptorSetHandle> descriptorSets = {
         resources.worldFrameUboDS,
         resources.activeWorldResourceDS,
@@ -1023,9 +1045,9 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
     cmdBuf->bindDescriptorSets(_pipelineLayout.get(), 0, descriptorSets);
     cmdBuf->bindVertexBuffer(0, resources.worldVertexBuffer.get(), 0);
     cmdBuf->bindIndexBuffer(_indexBuffer.get(), 0, false);
-    cmdBuf->drawIndexed(static_cast<uint32_t>(worldIndexCount), 1, 0, 0, 0);
+    cmdBuf->drawIndexed(static_cast<uint32_t>(worldIndexCount), 1, 0, static_cast<int32_t>(worldBatchStartVertex), 0);
 
-    worldVertexPtr   = worldVertexPtrHead;
+    worldBatchStartVertex = static_cast<uint32_t>(worldVertexPtr - worldVertexPtrHead);
     worldVertexCount = 0;
     worldIndexCount  = 0;
 }
