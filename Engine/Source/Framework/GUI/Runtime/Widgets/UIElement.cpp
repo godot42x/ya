@@ -83,15 +83,24 @@ Rect2D UIElement::computeAnchorRect(const Rect2D& parentRect) const
     const glm::vec2 anchorMax = glm::clamp(_anchorMax, 0.0f, 1.0f);
     const glm::vec2 rectMin   = parentRect.pos + parentRect.extent * anchorMin + _position;
 
-    // Per-axis: an axis with an anchor span stretches to the parent; otherwise
-    // the axis keeps _size (default {0,0} anchors = legacy absolute layout).
-    const glm::vec2 span = (anchorMax - anchorMin) * parentRect.extent;
-    glm::vec2       size = _size;
+    // Per-axis size resolution (SizeToContent contract): an axis with an
+    // anchor span stretches to the parent; an AutoSize axis resolves from
+    // computeDesiredSize(); otherwise the axis keeps _size (default {0,0}
+    // anchors = legacy absolute layout).
+    const glm::vec2 span    = (anchorMax - anchorMin) * parentRect.extent;
+    const glm::vec2 desired = _bAutoSize ? computeDesiredSize() : _size;
+    glm::vec2       size    = _size;
     if (span.x != 0.0f) {
         size.x = span.x;
     }
+    else if (_bAutoSize) {
+        size.x = desired.x;
+    }
     if (span.y != 0.0f) {
         size.y = span.y;
+    }
+    else if (_bAutoSize) {
+        size.y = desired.y;
     }
     return Rect2D{.pos = rectMin, .extent = size};
 }

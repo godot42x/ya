@@ -94,6 +94,7 @@ do
     add_files("./Source/WidgetTreeTest.cpp")
     add_files("./Source/UIDocumentTest.cpp")
     add_files("./Source/UIFrameSnapshotTest.cpp")
+    add_files("./Source/WidgetLayoutTest.cpp")
     add_files("./Source/TestEntry.cpp")
 
     add_deps("ya-gui-framework")

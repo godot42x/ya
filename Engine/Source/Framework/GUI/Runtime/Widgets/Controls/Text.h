@@ -14,7 +14,6 @@ struct UIText : public UIElement
     YA_REFLECT_FIELD(_color, .instanceEditable())
     YA_REFLECT_FIELD(_hAlign, .instanceEditable())
     YA_REFLECT_FIELD(_vAlign, .instanceEditable())
-    YA_REFLECT_FIELD(_bAutoSize, .instanceEditable())
     YA_REFLECT_END()
 
     explicit UIText(std::string name = "Text") : UIElement(std::move(name)) {}
@@ -26,7 +25,8 @@ struct UIText : public UIElement
     glm::vec4         _color     = {1.0f, 1.0f, 1.0f, 1.0f};
     EWidgetAlignH     _hAlign    = EWidgetAlignH::Left;
     EWidgetAlignV     _vAlign    = EWidgetAlignV::Top;
-    bool              _bAutoSize = false; // Measure the layout rect from the text
+    // SizeToContent: set base UIElement::_bAutoSize to measure the layout
+    // rect from the text (desired = text width x lineHeight).
 
     void paintSelf(UIFrameBuilder& builder) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;

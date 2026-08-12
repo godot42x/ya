@@ -206,6 +206,12 @@ struct YA_GUI_API FontManager : public IResourceCache
 
     std::shared_ptr<Font> getFont(const FName &fontName, uint32_t fontSize);
 
+    /// Pre-register a font under `name:size` so getFont() returns it without
+    /// loading (rasterizer + GPU not needed). Hosts that pre-build glyph data
+    /// and layout tests injecting synthetic fonts use this; getFont already
+    /// serves cached entries first, so production loading is unchanged.
+    void registerFont(const FName &fontName, uint32_t fontSize, std::shared_ptr<Font> font);
+
     void unloadFont(const FName &fontName, uint32_t fontSize);
 
     /**

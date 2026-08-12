@@ -126,6 +126,7 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
     YA_REFLECT_FIELD(_pivot)
     YA_REFLECT_FIELD(_hitFilter, .instanceEditable())
     YA_REFLECT_FIELD(_focusPolicy, .instanceEditable())
+    YA_REFLECT_FIELD(_bAutoSize, .instanceEditable())
     YA_REFLECT_END()
 
     explicit UIElement(std::string name = "Widget");
@@ -163,6 +164,15 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
     /// Keyboard focus participation (Tab traversal). Default None: plain
     /// widgets never take focus.
     EWidgetFocusPolicy _focusPolicy = EWidgetFocusPolicy::None;
+    /// SizeToContent (Slate DesiredSize model): when set, the final size on
+    /// each axis resolves from computeDesiredSize() (recursively aggregated
+    /// from content children) instead of _size. Resolution precedence per
+    /// axis: anchor stretch (anchorMin/Max span) > AutoSize > _size. Default
+    /// off so existing explicit-size widgets are unaffected. Container packing
+    /// always uses desired size for the main axis regardless of this flag;
+    /// the flag only governs the widget's own size when it resolves its own
+    /// rect (anchor layout) or when a parent assigns an auto-sized slot.
+    bool _bAutoSize = false;
 
     /// Layout cache: final rect in tree-local logical pixels, computed by the
     /// layout pass. Not serialized.

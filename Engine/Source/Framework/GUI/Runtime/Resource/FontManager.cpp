@@ -80,6 +80,14 @@ void FontManager::setFontAtlasTextureSink(FontAtlasTextureSink sink)
     get()->_fontAtlasTextureSink = std::move(sink);
 }
 
+void FontManager::registerFont(const FName &fontName, uint32_t fontSize, std::shared_ptr<Font> font)
+{
+    if (!font) {
+        return;
+    }
+    _fontCache[makeCacheKey(fontName, fontSize)] = std::move(font);
+}
+
 std::shared_ptr<Font> FontManager::getFont(const FName &fontName, uint32_t fontSize)
 {
     std::string cacheKey = makeCacheKey(fontName, fontSize);

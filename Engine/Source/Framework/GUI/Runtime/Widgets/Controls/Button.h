@@ -26,6 +26,7 @@ struct UIButton : public UIElement
     YA_REFLECT_FIELD(_hoveredColor, .instanceEditable())
     YA_REFLECT_FIELD(_pressedColor, .instanceEditable())
     YA_REFLECT_FIELD(_focusedColor, .instanceEditable())
+    YA_REFLECT_FIELD(_contentPadding, .instanceEditable())
     YA_REFLECT_END()
 
     explicit UIButton(std::string name = "Button") : UIElement(std::move(name))
@@ -42,6 +43,11 @@ struct UIButton : public UIElement
     glm::vec4 _pressedColor = {0.4f, 0.4f, 0.4f, 1.0f};
     glm::vec4 _focusedColor = {0.26f, 0.52f, 0.90f, 1.0f};
 
+    /// Content-slot inset: the content child is arranged inside the button
+    /// rect shrunk by this padding on both sides. Also added to the content
+    /// child's desired size when the button is AutoSize.
+    glm::vec2 _contentPadding = {10.0f, 4.0f};
+
     // Runtime-only state (not serialized)
     bool                  _bHovered = false;
     bool                  _bPressed = false;
@@ -54,6 +60,15 @@ struct UIButton : public UIElement
     void clearTransientInputState() override;
     void onFocusGained() override { _bFocused = true; }
     void onFocusLost() override { _bFocused = false; }
+
+    // Content-slot layout (Slate ContentControl model): the button resolves
+    // its own rect (anchor math) and arranges its content children inside the
+    // rect minus _contentPadding via layoutAssigned (no anchor math). With
+    // base _bAutoSize set, desired size = first visible content child's
+    // desired size + padding, so a text/image label sizes the button.
+    void layout(const Rect2D& parentRect) override;
+    void layoutAssigned(const Rect2D& rect) override;
+    [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 };
 
 } // namespace ya
