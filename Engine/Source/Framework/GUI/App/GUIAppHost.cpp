@@ -238,6 +238,179 @@ void writeRGBAtoBMP(const uint8_t* rgba, uint32_t width, uint32_t height,
     YA_CORE_INFO("GUIAppHost wrote GPU shot to '{}' ({}x{})", path, w, h);
 }
 
+/// Maps SDL events to Core Events. Pointer press/release/scroll carry no
+/// position in the Core event structs; the host tracks the current pointer
+/// position from MouseMoveEvent and uses it for those.
+struct SdlEventSource final : IAppEventSource
+{
+    uint32_t hostWindowID = 0;
+
+    void pollEvents(const std::function<void(const Event&)>& emit) override
+    {
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            const bool bHostWindowEvent = [&]() {
+                switch (event.type) {
+                case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+                case SDL_EVENT_WINDOW_RESIZED:
+                case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+                case SDL_EVENT_WINDOW_METAL_VIEW_RESIZED:
+                case SDL_EVENT_WINDOW_MINIMIZED:
+                case SDL_EVENT_WINDOW_MAXIMIZED:
+                case SDL_EVENT_WINDOW_RESTORED:
+                    return hostWindowID == 0 || event.window.windowID == hostWindowID;
+                default:
+                    return true;
+                }
+            }();
+
+            switch (event.type) {
+            case SDL_EVENT_QUIT:
+                emit(AppQuitEvent{});
+                break;
+            case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+                if (bHostWindowEvent) {
+                    emit(WindowCloseEvent(event.window.windowID));
+                }
+                break;
+            case SDL_EVENT_WINDOW_RESIZED:
+                if (bHostWindowEvent) {
+                    emit(WindowResizeEvent(event.window.windowID, event.window.data1, event.window.data2));
+                }
+                break;
+            case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+            case SDL_EVENT_WINDOW_METAL_VIEW_RESIZED:
+            case SDL_EVENT_WINDOW_MAXIMIZED:
+            case SDL_EVENT_WINDOW_RESTORED:
+                if (bHostWindowEvent) {
+                    emit(WindowRestoreEvent(event.window.windowID));
+                }
+                break;
+            case SDL_EVENT_WINDOW_MINIMIZED:
+                if (bHostWindowEvent) {
+                    emit(WindowMinimizeEvent(event.window.windowID));
+                }
+                break;
+            case SDL_EVENT_MOUSE_MOTION:
+                emit(MouseMoveEvent(event.motion.x, event.motion.y));
+                break;
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+                emit(MouseButtonPressedEvent(event.button.button));
+                break;
+            case SDL_EVENT_MOUSE_BUTTON_UP:
+                emit(MouseButtonReleasedEvent(event.button.button));
+                break;
+            case SDL_EVENT_MOUSE_WHEEL:
+                emit(MouseScrolledEvent(event.wheel.x, event.wheel.y));
+                break;
+            case SDL_EVENT_KEY_DOWN: {
+                KeyPressedEvent ev;
+                ev._keyCode = EKey::fromSDLKeycode(event.key.key);
+                ev._mod     = event.key.mod;
+                ev.bRepeat  = event.key.repeat;
+                emit(ev);
+                break;
+            }
+            case SDL_EVENT_KEY_UP: {
+                KeyReleasedEvent ev;
+                ev._keyCode = EKey::fromSDLKeycode(event.key.key);
+                ev._mod     = event.key.mod;
+                emit(ev);
+                break;
+            }
+            case SDL_EVENT_TEXT_INPUT:
+                emit(KeyTypedEvent(event.text.text));
+                break;
+            default:
+                break;
+            }
+        }
+    }
+};
+
+/// Drives a JSONL scenario as an event source. Pointer steps first emit a
+/// MouseMoveEvent to their position so the host's tracked pointer follows,
+/// then the press/release/scroll. A Frame step returns (letting the caller
+/// render that frame); Checkpoint invokes the host dump hook.
+struct ScenarioEventSource final : IAppEventSource
+{
+    std::vector<GuiScenarioStep> steps;
+    size_t index = 0;
+    std::function<void(const std::string&)> onCheckpoint;
+    std::function<void()> onCaptureFinal;
+    std::function<void()> onDone;
+
+    void pollEvents(const std::function<void(const Event&)>& emit) override
+    {
+        while (index < steps.size()) {
+            const GuiScenarioStep& step = steps[index++];
+            switch (step.kind) {
+            case EGuiScenarioStepKind::Frame:
+                if (index == steps.size() && onCaptureFinal) {
+                    onCaptureFinal();
+                }
+                return;
+            case EGuiScenarioStepKind::Checkpoint:
+                if (onCheckpoint) {
+                    onCheckpoint(step.tag);
+                }
+                break;
+            case EGuiScenarioStepKind::MouseMove:
+                emit(MouseMoveEvent(step.point.x, step.point.y));
+                break;
+            case EGuiScenarioStepKind::MousePress:
+                emit(MouseMoveEvent(step.point.x, step.point.y));
+                emit(MouseButtonPressedEvent(step.button));
+                break;
+            case EGuiScenarioStepKind::MouseRelease:
+                emit(MouseMoveEvent(step.point.x, step.point.y));
+                emit(MouseButtonReleasedEvent(step.button));
+                break;
+            case EGuiScenarioStepKind::MouseWheel:
+                emit(MouseMoveEvent(step.point.x, step.point.y));
+                emit(MouseScrolledEvent(step.wheel.x, step.wheel.y));
+                break;
+            case EGuiScenarioStepKind::KeyPress: {
+                KeyPressedEvent ev;
+                ev._keyCode = step.key;
+                ev._mod     = 0;
+                ev.bRepeat  = false;
+                emit(ev);
+                break;
+            }
+            case EGuiScenarioStepKind::KeyRelease: {
+                KeyReleasedEvent ev;
+                ev._keyCode = step.key;
+                ev._mod     = 0;
+                emit(ev);
+                break;
+            }
+            case EGuiScenarioStepKind::KeyTyped: {
+                KeyTypedEvent ev(step.text);
+                ev._mod = 0;
+                emit(ev);
+                break;
+            }
+            case EGuiScenarioStepKind::Drag: {
+                emit(MouseMoveEvent(step.point.x, step.point.y));
+                emit(MouseButtonPressedEvent(step.button));
+                const int n = std::max(1, step.dragSteps);
+                for (int i = 1; i <= n; ++i) {
+                    const float     t = static_cast<float>(i) / static_cast<float>(n);
+                    const glm::vec2 p = step.point + (step.dragTo - step.point) * t;
+                    emit(MouseMoveEvent(p.x, p.y));
+                }
+                emit(MouseButtonReleasedEvent(step.button));
+                break;
+            }
+            }
+        }
+        if (onDone) {
+            onDone();
+        }
+    }
+};
+
 } // namespace
 
 struct GUIAppHost::FImpl
@@ -263,12 +436,11 @@ struct GUIAppHost::FImpl
     bool     bInitialized = false;
     std::shared_ptr<IBuffer> gpuShotBuffer;
 
-    // Scenario harness state (drives the tree from a JSONL script).
-    std::vector<GuiScenarioStep> scenarioSteps;
-    size_t  scenarioIndex       = 0;
+    std::unique_ptr<IAppEventSource> eventSource;
     std::string captureRequestPath;
     bool    bLoggedFirstSnapshot = false;
     bool    bQuitRequested       = false;
+    bool    bScenarioMode        = false;
 };
 
 GUIAppHost::GUIAppHost(const FGUIAppHostConfig& config, IGUIAppDelegate& delegate)
@@ -388,14 +560,28 @@ bool GUIAppHost::init()
     }
     _impl->delegate->buildUI(*_impl->tree);
     if (!config.scenarioPath.empty()) {
+        auto scenario = std::make_unique<ScenarioEventSource>();
         std::string scenarioError;
-        _impl->scenarioSteps = loadGuiScenarioFile(config.scenarioPath, &scenarioError);
+        scenario->steps = loadGuiScenarioFile(config.scenarioPath, &scenarioError);
         if (!scenarioError.empty()) {
             YA_CORE_ERROR("GUIAppHost: failed to load scenario '{}': {}", config.scenarioPath, scenarioError);
             shutdown();
             return false;
         }
-        _impl->scenarioIndex = 0;
+        scenario->onCheckpoint   = [this](const std::string& tag) { dumpScenarioCheckpoint(tag); };
+        scenario->onCaptureFinal = [this]() {
+            if (!_impl->config->scenarioCapturePath.empty()) {
+                _impl->captureRequestPath = _impl->config->scenarioCapturePath;
+            }
+        };
+        scenario->onDone = [this]() { _impl->bQuitRequested = true; };
+        _impl->eventSource   = std::move(scenario);
+        _impl->bScenarioMode = true;
+    }
+    else {
+        auto sdl = std::make_unique<SdlEventSource>();
+        sdl->hostWindowID = _impl->window.getWindowID();
+        _impl->eventSource = std::move(sdl);
     }
 
     render->allocateCommandBuffers(render->getSwapchainImageCount(), _impl->commandBuffers);
@@ -408,116 +594,6 @@ bool GUIAppHost::init()
 
     _impl->bInitialized = true;
     return true;
-}
-
-void GUIAppHost::pumpEvents()
-{
-    SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-        const uint32_t hostWindowID = _impl->window.getWindowID();
-        const bool bHostWindowEvent = [&]() {
-            switch (event.type) {
-            case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
-            case SDL_EVENT_WINDOW_RESIZED:
-            case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
-            case SDL_EVENT_WINDOW_METAL_VIEW_RESIZED:
-            case SDL_EVENT_WINDOW_MINIMIZED:
-            case SDL_EVENT_WINDOW_MAXIMIZED:
-            case SDL_EVENT_WINDOW_RESTORED:
-                return hostWindowID == 0 || event.window.windowID == hostWindowID;
-            default:
-                return true;
-            }
-        }();
-        switch (event.type) {
-        case SDL_EVENT_QUIT:
-            _impl->bQuitRequested = true;
-            break;
-        case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
-            if (bHostWindowEvent) {
-                _impl->bQuitRequested = true;
-            }
-            break;
-        case SDL_EVENT_WINDOW_RESIZED:
-            if (bHostWindowEvent) {
-                _impl->bWindowMinimized = event.window.data1 <= 0 || event.window.data2 <= 0;
-                _impl->bSwapchainRecreatePending = true;
-            }
-            break;
-        case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
-        case SDL_EVENT_WINDOW_METAL_VIEW_RESIZED:
-            if (bHostWindowEvent) {
-                _impl->bWindowMinimized = false;
-                _impl->bSwapchainRecreatePending = true;
-            }
-            break;
-        case SDL_EVENT_WINDOW_MINIMIZED:
-            if (bHostWindowEvent) {
-                _impl->bWindowMinimized = true;
-                _impl->bSwapchainRecreatePending = true;
-            }
-            break;
-        case SDL_EVENT_WINDOW_MAXIMIZED:
-        case SDL_EVENT_WINDOW_RESTORED:
-            if (bHostWindowEvent) {
-                _impl->bWindowMinimized = false;
-                _impl->bSwapchainRecreatePending = true;
-            }
-            break;
-        case SDL_EVENT_MOUSE_MOTION: {
-            MouseMoveEvent ev(event.motion.x, event.motion.y);
-            _impl->lastMouseX = event.motion.x;
-            _impl->lastMouseY = event.motion.y;
-            dispatchToTree(ev, event.motion.x, event.motion.y);
-            break;
-        }
-        case SDL_EVENT_MOUSE_BUTTON_DOWN: {
-            MouseButtonPressedEvent ev(event.button.button);
-            dispatchToTree(ev, event.button.x, event.button.y);
-            break;
-        }
-        case SDL_EVENT_MOUSE_BUTTON_UP: {
-            MouseButtonReleasedEvent ev(event.button.button);
-            dispatchToTree(ev, event.button.x, event.button.y);
-            break;
-        }
-        case SDL_EVENT_MOUSE_WHEEL: {
-            MouseScrolledEvent ev(event.wheel.x, event.wheel.y);
-            // Wheel events carry no position in SDL; route them at the last
-            // known pointer position so the tree's hit walk reaches the
-            // innermost scrollable viewport.
-            dispatchToTree(ev, _impl->lastMouseX, _impl->lastMouseY);
-            break;
-        }
-        case SDL_EVENT_KEY_DOWN:
-            if (_impl->config->bEscapeQuits && event.key.key == SDLK_ESCAPE) {
-                _impl->bQuitRequested = true;
-                break;
-            }
-            {
-                KeyPressedEvent ev;
-                ev._keyCode = EKey::fromSDLKeycode(event.key.key);
-                ev._mod     = event.key.mod;
-                ev.bRepeat  = event.key.repeat;
-                dispatchToTree(ev, -1.0f, -1.0f);
-            }
-            break;
-        case SDL_EVENT_KEY_UP: {
-            KeyReleasedEvent ev;
-            ev._keyCode = EKey::fromSDLKeycode(event.key.key);
-            ev._mod     = event.key.mod;
-            dispatchToTree(ev, -1.0f, -1.0f);
-            break;
-        }
-        case SDL_EVENT_TEXT_INPUT: {
-            KeyTypedEvent ev(event.text.text);
-            dispatchToTree(ev, -1.0f, -1.0f);
-            break;
-        }
-        default:
-            break;
-        }
-    }
 }
 
 void GUIAppHost::dispatchToTree(const Event& event, float mouseX, float mouseY)
@@ -553,13 +629,13 @@ int GUIAppHost::run()
         return 1;
     }
 
-    AppKernel kernel({}, *this);
+    AppKernel kernel({.eventSource = _impl->eventSource.get()}, *this);
     const int result = kernel.run(_impl->config->automation);
     if (result != 0) {
         return result;
     }
 
-    if (!_impl->scenarioSteps.empty() &&
+    if (_impl->bScenarioMode &&
         !_impl->config->scenarioGoldenPath.empty() &&
         !_impl->config->scenarioDiffPath.empty() &&
         !_impl->config->scenarioCapturePath.empty()) {
@@ -578,8 +654,58 @@ int GUIAppHost::run()
 }
 
 void GUIAppHost::onInit() {}
-void GUIAppHost::onEvent(const Event&) {}
 void GUIAppHost::onShutdown() {}
+
+void GUIAppHost::onEvent(const Event& event)
+{
+    switch (event.getEventType()) {
+    case EEvent::AppQuit:
+    case EEvent::WindowClose:
+        _impl->bQuitRequested = true;
+        return;
+    case EEvent::WindowResize: {
+        const auto& resize = static_cast<const WindowResizeEvent&>(event);
+        _impl->bWindowMinimized = resize.GetWidth() == 0 || resize.GetHeight() == 0;
+        _impl->bSwapchainRecreatePending = true;
+        return;
+    }
+    case EEvent::WindowMinimize:
+        _impl->bWindowMinimized = true;
+        _impl->bSwapchainRecreatePending = true;
+        return;
+    case EEvent::WindowRestore:
+        _impl->bWindowMinimized = false;
+        _impl->bSwapchainRecreatePending = true;
+        return;
+    case EEvent::KeyPressed: {
+        const auto& key = static_cast<const KeyPressedEvent&>(event);
+        if (_impl->config->bEscapeQuits && key.getKeyCode() == EKey::Escape && !key.isRepeat()) {
+            _impl->bQuitRequested = true;
+            return;
+        }
+        dispatchToTree(event, -1.0f, -1.0f);
+        return;
+    }
+    case EEvent::MouseMoved: {
+        const auto& move = static_cast<const MouseMoveEvent&>(event);
+        _impl->lastMouseX = move.getX();
+        _impl->lastMouseY = move.getY();
+        dispatchToTree(event, move.getX(), move.getY());
+        return;
+    }
+    case EEvent::MouseButtonPressed:
+    case EEvent::MouseButtonReleased:
+    case EEvent::MouseScrolled:
+        dispatchToTree(event, _impl->lastMouseX, _impl->lastMouseY);
+        return;
+    case EEvent::KeyReleased:
+    case EEvent::KeyTyped:
+        dispatchToTree(event, -1.0f, -1.0f);
+        return;
+    default:
+        return;
+    }
+}
 
 bool GUIAppHost::shouldClose() const
 {
@@ -588,12 +714,8 @@ bool GUIAppHost::shouldClose() const
 
 void GUIAppHost::onTick(float /*dt*/)
 {
-    if (!_impl->scenarioSteps.empty()) {
-        stepScenario();
-    }
-    else {
-        pumpEvents();
-    }
+    // Events are delivered by the kernel event phase (via onEvent) before
+    // this tick; here we only process commands and render one frame.
     if (_impl->bQuitRequested) {
         return;
     }
@@ -813,50 +935,23 @@ void GUIAppHost::injectEvent(const Event& event, const glm::vec2& logicalPoint)
     dispatchToTree(event, logicalPoint.x, logicalPoint.y);
 }
 
-void GUIAppHost::stepScenario()
+void GUIAppHost::dumpScenarioCheckpoint(const std::string& tag)
 {
-    struct Sink final : IGuiEventSink
-    {
-        GUIAppHost* host = nullptr;
-        explicit Sink(GUIAppHost* inHost) : host(inHost) {}
-        void dispatch(const Event& event, const glm::vec2& point) override
-        {
-            host->injectEvent(event, point);
-        }
-    } sink{this};
-
-    auto& steps = _impl->scenarioSteps;
-    while (_impl->scenarioIndex < steps.size()) {
-        const GuiScenarioStep& step = steps[_impl->scenarioIndex++];
-        switch (step.kind) {
-        case EGuiScenarioStepKind::Frame:
-            if (_impl->scenarioIndex == steps.size() &&
-                !_impl->config->scenarioCapturePath.empty()) {
-                _impl->captureRequestPath = _impl->config->scenarioCapturePath;
-            }
-            return;
-        case EGuiScenarioStepKind::Checkpoint:
-            if (!_impl->config->scenarioDumpDir.empty() && !step.tag.empty()) {
-                std::error_code ec;
-                std::filesystem::create_directories(_impl->config->scenarioDumpDir, ec);
-                const nlohmann::json dump = dumpWidgetTree(*_impl->tree);
-                const std::string   path  = _impl->config->scenarioDumpDir + "/" + step.tag + ".json";
-                std::ofstream       file(path);
-                if (file) {
-                    file << dump.dump(2);
-                    YA_CORE_INFO("GUIAppHost scenario checkpoint '{}' -> {}", step.tag, path);
-                }
-                else {
-                    YA_CORE_ERROR("GUIAppHost scenario checkpoint: cannot write '{}'", path);
-                }
-            }
-            break;
-        default:
-            emitGuiScenarioStep(sink, step);
-            break;
-        }
+    if (_impl->config->scenarioDumpDir.empty() || tag.empty()) {
+        return;
     }
-    _impl->bQuitRequested = true;
+    std::error_code ec;
+    std::filesystem::create_directories(_impl->config->scenarioDumpDir, ec);
+    const nlohmann::json dump = dumpWidgetTree(*_impl->tree);
+    const std::string   path  = _impl->config->scenarioDumpDir + "/" + tag + ".json";
+    std::ofstream       file(path);
+    if (file) {
+        file << dump.dump(2);
+        YA_CORE_INFO("GUIAppHost scenario checkpoint '{}' -> {}", tag, path);
+    }
+    else {
+        YA_CORE_ERROR("GUIAppHost scenario checkpoint: cannot write '{}'", path);
+    }
 }
 
 WidgetTree& GUIAppHost::getTree()

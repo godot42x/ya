@@ -141,10 +141,9 @@ public:
     [[nodiscard]] bool shouldClose() const override;
 
 private:
-    void pumpEvents();
     void dispatchToTree(const Event& event, float mouseX, float mouseY);
-    /// Drive scenario events until the next Frame step (or scenario end).
-    void stepScenario();
+    /// Write a scenario checkpoint tree dump (<scenarioDumpDir>/<tag>.json).
+    void dumpScenarioCheckpoint(const std::string& tag);
     void rebuildPresentationResources(bool bWaitForGpu = true);
 
     struct FImpl;

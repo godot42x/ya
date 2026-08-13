@@ -2,8 +2,8 @@
 
 > 建立日期：2026-08-13
 > 状态：Phase 1 harness 已闭环。Phase 2 单循环收敛已落地：AppKernel（Foundation，
-> 无 RHI）+ GUIAppHost 迁移到 AppKernel（host 即 IAppLoopDelegate，onTick 承载
-> 一帧）。剩余：把 SDL 事件源/场景抽成 IAppEventSource、离屏 presenter、SDF、布局。
+> 无 RHI）+ GUIAppHost 迁移到 AppKernel + SDL/场景抽成 IAppEventSource（事件相位
+> 统一，宿主在 onEvent 内记录鼠标位置）。剩余：离屏 presenter、SDF、布局增强。
 > 承接：../gui-app-bootstrap/plan.md（已定义 shared foundation / GUI library /
 > standalone host 三角色）；本文件不再回写 GUI app 自举本身，只规划下一步的
 > "观测 harness → 单循环收敛 → SDF 字体 → 布局增强" 主线。
