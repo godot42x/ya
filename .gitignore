@@ -45,3 +45,6 @@ Saved
 Engine/ThirdParty/VulkanSDK/
 setup-env.sh
 setup-env.fish
+
+# plan runtime artifacts (GPU captures / checkpoint dumps, not source)
+.agent/plan/gui-architecture-convergence/artifacts/

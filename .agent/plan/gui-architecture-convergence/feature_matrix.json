@@ -1,0 +1,93 @@
+{
+  "plan": "gui-architecture-convergence",
+  "updated_at": "2026-08-13",
+  "legend": {
+    "planned": "尚未开始，但已纳入主线",
+    "in_progress": "当前阶段正在推进",
+    "pass": "已有验证证据，满足当前阶段验收",
+    "fail": "已有明确回归或未通过验证",
+    "blocked": "受外部依赖或前置阶段阻塞"
+  },
+  "tracks": [
+    {
+      "id": "phase0_rendering_correctness",
+      "title": "Phase 0 - Rendering correctness gate",
+      "items": [
+        { "id": "minimal_render_page", "status": "pass", "notes": "GUIWorkbench 已新增 Render 基线页：静态文本 + button + image 占位 + 视觉 marker" },
+        { "id": "scrollsplit_clip_snapshot_evidence", "status": "pass", "notes": "ScrollSplit snapshot 证明 CPU 侧布局/clip 基本正确：标题 y=80/107，split 内容从 y=134.125 开始，左侧 clip=(16,134.125,471.24,605.875)" },
+        { "id": "render_debug_overlay", "status": "in_progress", "notes": "已落地坐标轴、render target 标记、clip bounds；batch 边界仍未接入" },
+        { "id": "single_frame_smoke", "status": "pass", "notes": "GUIWorkbench smoke 已从 Render 页起跑并断言首个 render probe click" },
+        { "id": "resize_stability", "status": "fail", "notes": "scenario resize 已能跑通且 capture 干净，但长时间交互闪屏/崩溃（含字体渲染与 Render2D 多批次）仍未归因" },
+        { "id": "top_left_coordinate_stability", "status": "fail", "notes": "历史上出现画面倒置与坐标外泄问题" },
+        { "id": "text_baseline_and_clip", "status": "fail", "notes": "历史上存在字体方向/基线/clip 异常" },
+        { "id": "render2d_multi_flush_integrity", "status": "fail", "notes": "怀疑 flush/RT 切换污染后续内容；当前已接入 session/clip/flush 诊断，待 ScrollSplit GPU shot 验证" },
+        { "id": "sdl_pointer_state_bootstrap", "status": "pass", "notes": "SdlEventSource 在 mouse-focus 下用 SDL_GetMouseState 注入首条 move；enter/leave 同步 hover，不再依赖脚本先发 move" },
+        { "id": "idle_pointer_hover_consistency", "status": "in_progress", "notes": "静止鼠标下的 pointer 状态已在 host 建立，hover 回落/焦点切换仍需交互级断言" },
+        { "id": "windowed_headless_offscreen_consistency", "status": "planned", "notes": "三路径同帧一致性检查" },
+        { "id": "validation_clean", "status": "in_progress", "notes": "capture/readback TRANSFER_SRC 已修复（swapchain bEnableTransferSrc + import usage），resize scenario 0 VUID；全应用 validation 门禁待补" }
+      ]
+    },
+    {
+      "id": "phasea_owner_chain",
+      "title": "Phase A - AppKernel / GUIApp / GUIWindowHost / WidgetTree",
+      "items": [
+        { "id": "responsibility_diagram", "status": "planned", "notes": "主链路职责图" },
+        { "id": "naming_dedup_table", "status": "planned", "notes": "App/Host/Surface/Panel 去重清单" },
+        { "id": "owner_state_split", "status": "planned", "notes": "focus/hover/capture/modal/popup/drag overlay 归属" },
+        { "id": "automation_base_placement", "status": "planned", "notes": "共享 automation 基底挂载层级与扩展点" },
+        { "id": "owner_checklist", "status": "planned", "notes": "创建/销毁/restore/dump 责任表" }
+      ]
+    },
+    {
+      "id": "phaseb_layout_slot",
+      "title": "Phase B - Layout / Slot kernel",
+      "items": [
+        { "id": "uilayout_contract", "status": "planned", "notes": "measure/arrange/invalidation 合同" },
+        { "id": "uislot_contract", "status": "planned", "notes": "parent-owned edge object 合同" },
+        { "id": "uiboxlayout_uiboxslot_api", "status": "planned", "notes": "box layout 最小 public API" },
+        { "id": "slot_lifecycle", "status": "planned", "notes": "reparent/detach/destroy 生命周期" },
+        { "id": "slot_invalidation_granularity", "status": "planned", "notes": "slot 改动对应 invalidation 粒度" },
+        { "id": "vertical_box_migration", "status": "planned", "notes": "最小 vertical box 页面迁移" },
+        { "id": "nested_box_migration", "status": "planned", "notes": "横竖组合与 reparent 验证" }
+      ]
+    },
+    {
+      "id": "phasec_event_routing",
+      "title": "Phase C - Explicit route path / route phase",
+      "items": [
+        { "id": "pointer_and_focus_path_types", "status": "planned", "notes": "pointer state / pointer path / focus path 数据结构" },
+        { "id": "hit_test_vs_route_split", "status": "planned", "notes": "拆分求 target/path 与 route 执行" },
+        { "id": "preview_target_bubble_contract", "status": "planned", "notes": "preview -> target -> bubble 合同" },
+        { "id": "route_policy_unification", "status": "planned", "notes": "capture/modal/popup/drag 归为 route policy" },
+        { "id": "persistent_pointer_state", "status": "planned", "notes": "鼠标位置收敛为 tree/window 持续状态" },
+        { "id": "event_semantics_table", "status": "planned", "notes": "menu/button/scroll/split/dragdrop 事件语义表" },
+        { "id": "route_dump_and_assertions", "status": "planned", "notes": "route dump、overlay、路径断言" }
+      ]
+    },
+    {
+      "id": "phased_workbench_tests",
+      "title": "Phase D - Workbench and tests migration",
+      "items": [
+        { "id": "page_taxonomy", "status": "planned", "notes": "基础交互/布局/树属性/overlay 调试页分层" },
+        { "id": "menu_popup_button_pages", "status": "planned", "notes": "优先迁 menu/popup/button" },
+        { "id": "scroll_split_pages", "status": "planned", "notes": "再迁 scroll/split" },
+        { "id": "tree_inspector_pages", "status": "planned", "notes": "最后迁 tree/inspector" },
+        { "id": "scenario_and_golden_per_page", "status": "planned", "notes": "每页至少一条 scenario + 一张 golden" }
+      ]
+    },
+    {
+      "id": "phaseef_specialized_and_multiwindow",
+      "title": "Phase E/F - Specialized layout and multi-window semantics",
+      "items": [
+        { "id": "split_layout", "status": "planned", "notes": "UISplitLayout" },
+        { "id": "scroll_layout", "status": "planned", "notes": "UIScrollLayout" },
+        { "id": "single_child_content_layout", "status": "planned", "notes": "单 child 内容布局抽象" },
+        { "id": "composite_vs_specialized_policy", "status": "planned", "notes": "menu/tree/inspector 组合优先，专用 layout 兜底" },
+        { "id": "multiwindow_owner_doc", "status": "planned", "notes": "多窗口 owner 边界文档" },
+        { "id": "cross_window_dragdrop_semantics", "status": "planned", "notes": "source/target/commit/cancel 语义" },
+        { "id": "modal_scope_semantics", "status": "planned", "notes": "per-window / whole-app modal" },
+        { "id": "active_window_and_focus_switch", "status": "planned", "notes": "active window / activation order / focus path 切换" }
+      ]
+    }
+  ]
+}

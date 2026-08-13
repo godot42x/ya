@@ -1,0 +1,64 @@
+# GUI 架构收敛 Session Checklist
+
+> 更新时间：2026-08-13
+> 作用：后续每次推进 `.agent/plan/gui-architecture-convergence` 时，默认先走这里的开工/收尾步骤，避免长期任务靠记忆推进。
+
+## 每轮开工前
+
+1. 先读以下工件，确认当前主线与上一轮停点：
+   - `plan.md`
+   - `todo.md`
+   - `progress.md`
+   - `feature_matrix.json`
+2. 看当前工作区状态：
+   - `git status --short`
+   - 必要时看最近 `git log --oneline -n 10`
+3. 确认当前只推进一个 phase 的一个最小切片；若已有未收口切片，优先继续而不是开新项。
+4. 运行与当前切片相关的最小验证，确认基线未坏：
+   - 文档工件改动：检查工件之间是否互相一致；
+   - GUI/代码改动：至少跑一个最小 smoke / scenario / dump / target build。
+5. 明确本轮预期产出：
+   - 结构证据是什么；
+   - 视觉或 scenario 证据是什么；
+   - 完成条件是什么。
+
+## 每轮进行中
+
+1. 优先让改动服务当前计划，不混入无关重构。
+2. 若发现当前 phase 的前提不成立，先更新 `todo.md` / `progress.md`，再调整实现。
+3. 若发现稳定规则已经超出阶段计划范畴，应该考虑把规则上收到 skill / AGENTS，而不是只留在本目录。
+4. 若需要新建验证入口，优先复用现有 GUIWorkbench scenario / dump / gpu-shot / smoke 机制。
+5. 若出现“当前能用就行”的修法，暂停并回到 plan 中检查是否违反架构收口方向。
+
+## 每轮收尾前
+
+1. 确认当前切片已经收口：
+   - 没有半套新旧模型并存；
+   - 没有来源不明的临时状态；
+   - 工作区保持可接力。
+2. 至少留下一条结构证据：
+   - tree/layout/slot/route dump；或
+   - 职责图 / 去重表 / 生命周期表。
+3. 至少留下一条视觉或 scenario 证据：
+   - golden / screenshot / gpu-shot / scenario diff / smoke log。
+4. 更新至少一个执行工件：
+   - `todo.md`
+   - `progress.md`
+   - `feature_matrix.json`
+5. 若本轮形成了长期稳定规则，补写到对应 skill 或 AGENTS。
+
+## 计划默认推进顺序
+
+1. `Phase 0`：Rendering correctness gate
+2. `Phase A`：主链路命名与 owner 收口
+3. `Phase B`：Layout / Slot 内核
+4. `Phase C`：事件路径与状态模型
+5. `Phase D`：Workbench 与测试迁移
+6. `Phase E/F`：specialized layout 与多窗口留口
+
+## 当前下一刀（建立本 checklist 时的默认接力点）
+
+1. 固定最小 workbench render correctness 页面：静态文本 + button + image 占位；
+2. 建立最小渲染 debug overlay；
+3. 建立单帧渲染 smoke 入口；
+4. 然后开始压 resize / 坐标 / 文本 / flush 正确性。
