@@ -23,6 +23,11 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
 
     // Demo pages are example content: register them into the shell. The
     // builders capture this app's demo state; the shell stays demo-agnostic.
+    surface.addPage("Render", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    {
+        demoState.resetHandles();
+        buildRenderDemo(t, p, demoState, status);
+    });
     surface.addPage("Widgets", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
     {
         demoState.resetHandles();
@@ -51,8 +56,23 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
         buildScrollSplitDemo(t, p, demoState, status);
     });
 
+    applyStartPage();
+
     surface.buildUI(tree);
     surface.externalAutomationStep = [this](int frame) { return runDemoAutomation(frame); };
+}
+
+void FWorkbenchApp::applyStartPage()
+{
+    if (startPageName.empty()) {
+        return;
+    }
+    const int index = surface.findPageIndexByName(startPageName);
+    if (index < 0) {
+        YA_CORE_WARN("GUIWorkbench: unknown start page '{}'", startPageName);
+        return;
+    }
+    surface.setInitialPageIndex(index);
 }
 
 void FWorkbenchApp::updateUI()
@@ -101,13 +121,31 @@ bool FWorkbenchApp::runDemoAutomation(int frame)
 
     switch (frame) {
     case 3: {
+        if (surface.getCurrentPageIndex() != 0) {
+            surface.failSmoke("Demo automation: render page not selected");
+        }
+        click(demoState.renderProbeButton.get());
+        if (demoState.renderProbeClicks != 1) {
+            surface.failSmoke(std::format("Demo automation: render probe click failed (count={})", demoState.renderProbeClicks));
+        }
+        return true;
+    }
+    case 4: {
+        const auto& tabs = surface.getTabBar()->getChildren();
+        click(tabs[1].get()); // Widgets tab
+        if (surface.getCurrentPageIndex() != 1) {
+            surface.failSmoke("Demo automation: tab switch to Widgets failed");
+        }
+        return true;
+    }
+    case 5: {
         click(demoState.counterButton.get());
         if (demoState.clickCount != 1) {
             surface.failSmoke(std::format("Demo automation: counter click failed (count={})", demoState.clickCount));
         }
         return true;
     }
-    case 4: {
+    case 6: {
         const auto& rect = demoState.slider->_layoutRect;
         dispatchPointer(ya::MouseButtonPressedEvent(0), {rect.pos.x + rect.extent.x * 0.8f, rect.pos.y + rect.extent.y * 0.5f});
         dispatchPointer(ya::MouseButtonReleasedEvent(0), {rect.pos.x + rect.extent.x * 0.8f, rect.pos.y + rect.extent.y * 0.5f});
@@ -116,21 +154,21 @@ bool FWorkbenchApp::runDemoAutomation(int frame)
         }
         return true;
     }
-    case 5: {
+    case 7: {
         click(demoState.checkA.get());
         if (demoState.bCheckA) {
             surface.failSmoke("Demo automation: checkbox toggle failed");
         }
         return true;
     }
-    case 6: {
+    case 8: {
         click(demoState.combo.get());
         if (!demoState.combo->getTree()) {
             surface.failSmoke("Demo automation: combo open failed");
         }
         return true;
     }
-    case 7: {
+    case 9: {
         pressKey(ya::EKey::Down);
         pressKey(ya::EKey::Down);
         pressKey(ya::EKey::Enter);
@@ -139,7 +177,7 @@ bool FWorkbenchApp::runDemoAutomation(int frame)
         }
         return true;
     }
-    case 8: {
+    case 10: {
         const auto& children = surface.getMenuBar()->getChildren();
         if (children.empty()) {
             surface.failSmoke("Demo automation: menu bar empty");
@@ -152,7 +190,7 @@ bool FWorkbenchApp::runDemoAutomation(int frame)
         }
         return true;
     }
-    case 9: {
+    case 11: {
         pressKey(ya::EKey::Down);
         pressKey(ya::EKey::Enter);
         if (surface.getStatusText() != "Menu: New Document") {
@@ -160,31 +198,31 @@ bool FWorkbenchApp::runDemoAutomation(int frame)
         }
         return true;
     }
-    case 10: {
+    case 12: {
         const auto& tabs = surface.getTabBar()->getChildren();
-        click(tabs[1].get()); // Layout tab
-        if (surface.getCurrentPageIndex() != 1) {
+        click(tabs[2].get()); // Layout tab
+        if (surface.getCurrentPageIndex() != 2) {
             surface.failSmoke("Demo automation: tab switch to Layout failed");
         }
         return true;
     }
-    case 11: {
+    case 13: {
         const auto& tabs = surface.getTabBar()->getChildren();
-        click(tabs[2].get()); // Menus tab
-        if (surface.getCurrentPageIndex() != 2) {
+        click(tabs[3].get()); // Menus tab
+        if (surface.getCurrentPageIndex() != 3) {
             surface.failSmoke("Demo automation: tab switch to Menus failed");
         }
         return true;
     }
-    case 12: {
+    case 14: {
         const auto& tabs = surface.getTabBar()->getChildren();
-        click(tabs[3].get()); // DragDrop tab
-        if (surface.getCurrentPageIndex() != 3) {
+        click(tabs[4].get()); // DragDrop tab
+        if (surface.getCurrentPageIndex() != 4) {
             surface.failSmoke("Demo automation: tab switch to DragDrop failed");
         }
         return true;
     }
-    case 13: {
+    case 15: {
         const glm::vec2 itemCenter = centerOf(demoState.dragItem.get());
         const glm::vec2 zoneCenter = centerOf(demoState.dropZone.get());
         dispatchPointer(ya::MouseButtonPressedEvent(0), itemCenter);
@@ -195,46 +233,46 @@ bool FWorkbenchApp::runDemoAutomation(int frame)
         }
         return true;
     }
-    case 14: {
+    case 16: {
         const auto& tabs = surface.getTabBar()->getChildren();
-        click(tabs[4].get()); // Modal tab
-        if (surface.getCurrentPageIndex() != 4) {
+        click(tabs[5].get()); // Modal tab
+        if (surface.getCurrentPageIndex() != 5) {
             surface.failSmoke("Demo automation: tab switch to Modal failed");
         }
         return true;
     }
-    case 15: {
+    case 17: {
         click(demoState.openModalButton.get());
         if (!demoState.bModalOpen) {
             surface.failSmoke("Demo automation: modal open failed");
         }
         return true;
     }
-    case 16: {
+    case 18: {
         pressKey(ya::EKey::Escape);
         if (demoState.bModalOpen) {
             surface.failSmoke("Demo automation: modal Esc close failed");
         }
         return true;
     }
-    case 17: {
+    case 19: {
         const auto& tabs = surface.getTabBar()->getChildren();
-        click(tabs[5].get()); // ScrollSplit tab
-        if (surface.getCurrentPageIndex() != 5) {
+        click(tabs[6].get()); // ScrollSplit tab
+        if (surface.getCurrentPageIndex() != 6) {
             surface.failSmoke("Demo automation: tab switch to ScrollSplit failed");
         }
         return true;
     }
-    case 18: {
+    case 20: {
         const auto& tabs = surface.getTabBar()->getChildren();
-        click(tabs[6].get()); // Editor tab
+        click(tabs[7].get()); // Editor tab
         if (surface.getCurrentPageIndex() != surface.getEditorPageIndex()) {
             surface.failSmoke("Demo automation: tab switch to Editor failed");
         }
         return true;
     }
     default:
-        return false; // frames >= 19: the shell's built-in Editor automation
+        return false; // later frames: the shell's built-in Editor automation
     }
 }
 

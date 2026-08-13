@@ -200,6 +200,71 @@ struct FDemoDropZone : public ya::UIElement
 
 } // namespace
 
+void buildRenderDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+                     const std::function<void(const std::string&)>& log)
+{
+    auto panel = std::make_shared<ya::UIPanel>("RenderDemo");
+    panel->_anchorMin = {0.0f, 0.0f};
+    panel->_anchorMax = {1.0f, 1.0f};
+    panel->_color     = kPanelColor;
+    tree.attach(parent, panel);
+
+    auto form = std::make_shared<ya::UIContainer>("RenderForm");
+    form->_anchorMin = {0.0f, 0.0f};
+    form->_anchorMax = {1.0f, 1.0f};
+    form->_padding   = {16.0f, 12.0f};
+    form->_size      = {0.0f, 0.0f};
+    form->_direction = ya::EWidgetBoxLayout::Vertical;
+    form->_spacing   = 10.0f;
+    tree.attach(*panel, form);
+
+    tree.attach(*form, makeLabel("Render — correctness baseline (text, button, image, edge markers)"));
+    tree.attach(*form, makeBodyText("Use this page as the first-frame render sanity target before deeper layout/event refactors."));
+
+    auto markerRow = std::make_shared<ya::UIContainer>("RenderMarkers");
+    markerRow->_direction = ya::EWidgetBoxLayout::Horizontal;
+    markerRow->_spacing   = 8.0f;
+    markerRow->_size      = {0.0f, 84.0f};
+    tree.attach(*form, markerRow);
+
+    const auto addMarker = [&](const std::string& name, const std::string& label, const glm::vec4& color)
+    {
+        auto cell = std::make_shared<ya::UIPanel>(name);
+        cell->_size  = {180.0f, 84.0f};
+        cell->_color = color;
+        tree.attach(*markerRow, cell);
+
+        auto text = makeBodyText(label);
+        text->_anchorMin = {0.0f, 0.0f};
+        text->_anchorMax = {1.0f, 1.0f};
+        text->_hAlign    = ya::EWidgetAlignH::Center;
+        text->_vAlign    = ya::EWidgetAlignV::Center;
+        tree.attach(*cell, text);
+    };
+
+    addMarker("TopLeftMarker", "Top-left", {0.37f, 0.18f, 0.18f, 1.0f});
+    addMarker("CenterMarker", "Center", {0.18f, 0.33f, 0.24f, 1.0f});
+    addMarker("BottomRightMarker", "Bottom-right", {0.18f, 0.25f, 0.38f, 1.0f});
+
+    auto imageRow = makeRow(tree, *form);
+    tree.attach(*imageRow, makeBodyText("Image placeholder"));
+    auto image = std::make_shared<ya::UIImage>("RenderProbeImage");
+    image->_size      = {128.0f, 96.0f};
+    image->_assetPath = "builtin/checkerboard";
+    tree.attach(*imageRow, image);
+
+    state.renderProbeButton = makeDemoButton("RenderProbe", "Render Probe", 160.0f);
+    state.renderProbeButton->_onClick = [&state, log]
+    {
+        ++state.renderProbeClicks;
+        state.renderLog = std::format("Render probe clicked ({})", state.renderProbeClicks);
+        log(state.renderLog);
+    };
+    tree.attach(*form, state.renderProbeButton);
+
+    tree.attach(*form, makeBodyText("Expected: readable left-to-right text, stable clipping, no inversion, no flicker on resize."));
+}
+
 void buildWidgetsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                       const std::function<void(const std::string&)>& log)
 {

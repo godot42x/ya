@@ -30,6 +30,7 @@ class FWorkbenchApp final : public ya::IGUIAppDelegate
     FWorkbenchSurface surface;
     FDemoState        demoState;
     bool              bSmokeActions = false;
+    std::string       startPageName;
 
     void buildUI(ya::WidgetTree& tree) override;
     void updateUI() override;
@@ -41,6 +42,7 @@ class FWorkbenchApp final : public ya::IGUIAppDelegate
     [[nodiscard]] bool getSmokePassed() const { return surface.getSmokePassed(); }
 
   private:
+    void applyStartPage();
     /// App-driven smoke steps for the registered demo pages (frames 3..13;
     /// frames >= 14 fall through to the shell's built-in Editor automation).
     bool runDemoAutomation(int frame);

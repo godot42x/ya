@@ -30,6 +30,10 @@ namespace guiworkbench
 /// (survives page rebuilds). Pages read/write this; the surface owns it.
 struct FDemoState
 {
+    // Render correctness page
+    int    renderProbeClicks = 0;
+    std::string renderLog;
+
     // Widgets page
     int    clickCount    = 0;
     bool   bCheckA       = true;
@@ -58,6 +62,7 @@ struct FDemoState
 
     // Live widget handles for the smoke automation (page-built, valid while
     // the page is mounted).
+    std::shared_ptr<ya::UIButton>    renderProbeButton;
     std::shared_ptr<ya::UIButton>    counterButton;
     std::shared_ptr<ya::UICheckBox>  checkA;
     std::shared_ptr<ya::UISlider>    slider;
@@ -71,6 +76,7 @@ struct FDemoState
     /// so detached demo widgets can be destroyed.
     void resetHandles()
     {
+        renderProbeButton.reset();
         counterButton.reset();
         checkA.reset();
         slider.reset();
@@ -88,6 +94,8 @@ using FDemoPageBuilder = std::function<void(ya::WidgetTree& tree,
                                             FDemoState& state,
                                             const std::function<void(const std::string&)>& log)>;
 
+void buildRenderDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+                     const std::function<void(const std::string&)>& log);
 void buildWidgetsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                       const std::function<void(const std::string&)>& log);
 void buildLayoutDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,

@@ -6,6 +6,7 @@
 #include "Core/Log.h"
 
 #include "GUI/App/GUIAppHost.h"
+#include "GUI/Draw2D/Render2D.h"
 
 #include "GUIWorkbench.h"
 
@@ -32,7 +33,7 @@ int main(int argc, char** argv)
         ("exit-after-frame", "Quit gracefully after rendering N frames", cxxopts::value<uint64_t>()->default_value("0"))
         ("automation-control-port", "Automation control TCP port; 0 disables the server", cxxopts::value<uint16_t>()->default_value("0"))
         ("smoke-actions", "Run the end-to-end automation smoke")
-        ("dump-snapshot", "Dump the frame snapshot JSON to path", cxxopts::value<std::string>())
+        ("dump-snapshot", "Dump the frame snapshot BMP to path", cxxopts::value<std::string>())
         ("dump-frame", "Frame index at which to dump the snapshot", cxxopts::value<uint32_t>())
         ("gpu-shot", "Dump a GPU frame to path", cxxopts::value<std::string>())
         ("gpu-shot-frame", "Frame index for the GPU shot", cxxopts::value<uint32_t>())
@@ -40,7 +41,11 @@ int main(int argc, char** argv)
         ("scenario-dump-dir", "Write per-checkpoint tree dumps into this dir", cxxopts::value<std::string>())
         ("scenario-capture", "Capture the final frame swapchain to this BMP", cxxopts::value<std::string>())
         ("scenario-golden", "Baseline BMP to diff the scenario capture against", cxxopts::value<std::string>())
-        ("scenario-diff", "Write the scenario difference image to this path", cxxopts::value<std::string>());
+        ("scenario-diff", "Write the scenario difference image to this path", cxxopts::value<std::string>())
+        ("start-page", "Start the workbench on a named page (Render/Widgets/Layout/Menus/DragDrop/Modal/ScrollSplit/Editor)", cxxopts::value<std::string>())
+        ("debug-render-overlay", "Inject a host-side render debug overlay into the UI snapshot")
+        ("debug-render2d-log", "Enable Render2D session/clip/flush diagnostics in the log")
+        ("debug-render2d-log-limit", "Maximum Render2D clip/flush logs per frame", cxxopts::value<uint32_t>()->default_value("16"));
 
     try {
         const auto result = options.parse(argc, argv);
@@ -73,6 +78,18 @@ int main(int argc, char** argv)
         }
         if (result.count("scenario-diff") > 0) {
             config.scenarioDiffPath = result["scenario-diff"].as<std::string>();
+        }
+        if (result.count("start-page") > 0) {
+            app.startPageName = result["start-page"].as<std::string>();
+        }
+        config.bDebugRenderOverlay = result.count("debug-render-overlay") > 0;
+        if (result.count("debug-render2d-log") > 0) {
+            ya::Render2D::debug.bLogSessionLifecycle = true;
+            ya::Render2D::debug.bLogClipStack        = true;
+            ya::Render2D::debug.bLogFlushBatches     = true;
+            const uint32_t limit = result["debug-render2d-log-limit"].as<uint32_t>();
+            ya::Render2D::debug.maxClipLogsPerFrame  = limit;
+            ya::Render2D::debug.maxFlushLogsPerFrame = limit;
         }
     }
     catch (const std::exception& e) {
