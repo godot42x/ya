@@ -59,25 +59,6 @@ nlohmann::json makeAutomationError(const AppAutomationControlServer::Request& re
     };
 }
 
-void logGUIAppExitReason(const AppAutomationRunController& automationRun)
-{
-    switch (automationRun.getExitReason()) {
-    case EAppAutomationExitReason::AppRequestedClose:
-        YA_CORE_INFO("GUI app requested graceful shutdown");
-        break;
-    case EAppAutomationExitReason::RemoteQuit:
-        YA_CORE_INFO("GUI automation requested graceful shutdown");
-        break;
-    case EAppAutomationExitReason::ExitAfterFrame:
-        YA_CORE_INFO("GUI automation requested graceful shutdown after frame {}",
-                     automationRun.getOptions().exitAfterFrame);
-        break;
-    case EAppAutomationExitReason::None:
-    default:
-        break;
-    }
-}
-
 Extent2D queryWindowLogicalExtent(IRender& render)
 {
     int width  = 0;
@@ -267,7 +248,6 @@ struct GUIAppHost::FImpl
     SDLWindowProvider        window;
     IRender*                 render  = nullptr;
     AppAutomationControlServer automationServer;
-    AppAutomationRunController automationRun;
     std::shared_ptr<ShaderStorage> shaderStorage;
     std::unique_ptr<WidgetTree> tree;
 
@@ -288,6 +268,7 @@ struct GUIAppHost::FImpl
     size_t  scenarioIndex       = 0;
     std::string captureRequestPath;
     bool    bLoggedFirstSnapshot = false;
+    bool    bQuitRequested       = false;
 };
 
 GUIAppHost::GUIAppHost(const FGUIAppHostConfig& config, IGUIAppDelegate& delegate)
@@ -399,7 +380,6 @@ bool GUIAppHost::init()
         .width  = swapchain->getExtent().width,
         .height = swapchain->getExtent().height,
     });
-    _impl->automationRun.reset(config.automation);
     if (!_impl->automationServer.init(config.automation.controlPort)) {
         YA_CORE_ERROR("GUIAppHost: failed to initialize automation control server on port {}",
                       config.automation.controlPort);
@@ -430,7 +410,7 @@ bool GUIAppHost::init()
     return true;
 }
 
-void GUIAppHost::pumpEvents(bool& bRunning)
+void GUIAppHost::pumpEvents()
 {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -451,11 +431,11 @@ void GUIAppHost::pumpEvents(bool& bRunning)
         }();
         switch (event.type) {
         case SDL_EVENT_QUIT:
-            bRunning = false;
+            _impl->bQuitRequested = true;
             break;
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             if (bHostWindowEvent) {
-                bRunning = false;
+                _impl->bQuitRequested = true;
             }
             break;
         case SDL_EVENT_WINDOW_RESIZED:
@@ -511,7 +491,7 @@ void GUIAppHost::pumpEvents(bool& bRunning)
         }
         case SDL_EVENT_KEY_DOWN:
             if (_impl->config->bEscapeQuits && event.key.key == SDLK_ESCAPE) {
-                bRunning = false;
+                _impl->bQuitRequested = true;
                 break;
             }
             {
@@ -573,255 +553,10 @@ int GUIAppHost::run()
         return 1;
     }
 
-    bool bRunning = true;
-    while (bRunning) {
-        if (!_impl->scenarioSteps.empty()) {
-            stepScenario(bRunning);
-        }
-        else {
-            pumpEvents(bRunning);
-        }
-        if (!bRunning) {
-            break;
-        }
-        ++_impl->frameCount;
-
-        for (auto& request : _impl->automationServer.consumePendingRequests()) {
-            if (request->method == "ping") {
-                _impl->automationServer.completeRequest(
-                    request,
-                    makeAutomationSuccess(*request,
-                                          {
-                                              {"service", "gui-automation-control"},
-                                              {"port", _impl->automationServer.getPort()},
-                                              {"title", _impl->config->title},
-                                          }));
-                continue;
-            }
-            if (request->method == "quit") {
-                _impl->automationRun.requestRemoteQuit();
-                _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
-                continue;
-            }
-            if (request->method == "set_window_size") {
-                const auto widthIt  = request->params.find("width");
-                const auto heightIt = request->params.find("height");
-                if (widthIt == request->params.end() || heightIt == request->params.end() ||
-                    !widthIt->is_number_integer() || !heightIt->is_number_integer()) {
-                    _impl->automationServer.completeRequest(
-                        request,
-                        makeAutomationError(*request, "set_window_size requires integer params {width,height}"));
-                    continue;
-                }
-
-                const int width  = widthIt->get<int>();
-                const int height = heightIt->get<int>();
-                if (width <= 0 || height <= 0) {
-                    _impl->automationServer.completeRequest(
-                        request,
-                        makeAutomationError(*request, "set_window_size expects positive width and height"));
-                    continue;
-                }
-                if (!_impl->window.setWindowSize(width, height)) {
-                    _impl->automationServer.completeRequest(
-                        request,
-                        makeAutomationError(*request, std::format("failed to set window size to {}x{}", width, height)));
-                    continue;
-                }
-                _impl->bSwapchainRecreatePending = true;
-                _impl->automationServer.completeRequest(
-                    request,
-                    makeAutomationSuccess(*request,
-                                          {
-                                              {"width", width},
-                                              {"height", height},
-                                          }));
-                continue;
-            }
-
-            _impl->automationServer.completeRequest(
-                request,
-                makeAutomationError(*request, std::format("unknown method: {}", request->method)));
-        }
-        if (_impl->automationRun.shouldExit()) {
-            logGUIAppExitReason(_impl->automationRun);
-            break;
-        }
-
-        if (_impl->bSwapchainRecreatePending) {
-            auto* swapchain = _impl->render->getSwapchain()->as<VulkanSwapChain>();
-            swapchain->requestRecreate();
-            _impl->bSwapchainRecreatePending = false;
-        }
-
-        if (_impl->bWindowMinimized) {
-            _impl->render->waitIdle();
-            continue;
-        }
-
-        int32_t imageIndex = -1;
-        if (!_impl->render->begin(&imageIndex)) {
-            continue;
-        }
-        if (imageIndex < 0) {
-            _impl->render->waitIdle();
-            continue;
-        }
-
-        // Swapchain recreated (resize / restore): rebuild the presentation
-        // targets and re-map the tree to the new logical extent before
-        // recording. `render->begin` applies the recreation, so compare
-        // against the swapchain's current image count and extent.
-        auto* swapchain = _impl->render->getSwapchain()->as<VulkanSwapChain>();
-        const Extent2D swapchainExtent = swapchain->getExtent();
-        if (swapchain->getHandle() != _impl->cachedSwapchainHandle ||
-            _impl->render->getSwapchainImageCount() != _impl->presentationTargets.size() ||
-            swapchainExtent.width != _impl->cachedSwapchainExtent.width ||
-            swapchainExtent.height != _impl->cachedSwapchainExtent.height) {
-            rebuildPresentationResources(/*bWaitForGpu=*/true);
-            swapchain = _impl->render->getSwapchain()->as<VulkanSwapChain>();
-        }
-        _impl->tree->setLogicalExtent(queryWindowLogicalExtent(*_impl->render));
-
-        // All pipeline changes and the immutable UI snapshot must be ready
-        // before command recording starts.
-        prepareRender2DComposePassPipeline(
-            FRender2DComposePassDesc{
-                .kind = ERender2DComposePassKind::RuntimeUIComposite,
-            },
-            swapchain->getFormat());
-        _impl->delegate->updateUI();
-        const auto& presentation = _impl->presentationTargets[static_cast<size_t>(imageIndex)];
-        const Extent2D presentExtent = presentation->renderImage->getExtent();
-        const Extent2D logicalExtent = _impl->tree->getLogicalExtent();
-        const UIFrameSnapshot snapshot = _impl->tree->buildSnapshot(UIFrameBuildContext{
-            .uiScale = {
-                static_cast<float>(presentExtent.width) / static_cast<float>(std::max(logicalExtent.width, 1u)),
-                static_cast<float>(presentExtent.height) / static_cast<float>(std::max(logicalExtent.height, 1u)),
-            },
-            .offset = {0.0f, 0.0f},
-            .textureResolver = resolveBuiltinTexture,
-        });
-        if (!_impl->bLoggedFirstSnapshot) {
-            _impl->bLoggedFirstSnapshot = true;
-            YA_CORE_INFO("GUIAppHost first snapshot: {} draw items, {}x{} logical -> {}x{} render",
-                         snapshot.items.size(),
-                         snapshot.logicalExtent.width,
-                         snapshot.logicalExtent.height,
-                         presentExtent.width,
-                         presentExtent.height);
-        }
-        if (_impl->config && !_impl->config->dumpSnapshotPath.empty() &&
-            _impl->frameCount == _impl->config->dumpFrame) {
-            dumpSnapshotToBMP(snapshot, _impl->config->dumpSnapshotPath, _impl->frameCount);
-        }
-
-        auto cmdBuf = _impl->commandBuffers[static_cast<size_t>(imageIndex)];
-        cmdBuf->reset();
-        cmdBuf->begin();
-
-        // Clear the swapchain image first (the RuntimeUIComposite pass loads
-        // the target because the game path composites over the world image).
-        cmdBuf->retainResource(presentation->renderImage->getImageShared());
-        cmdBuf->retainResource(presentation->renderImage->getImageViewShared());
-        cmdBuf->transitionImageLayoutAuto(presentation->renderImage->getImage(), EImageLayout::ColorAttachmentOptimal);
-        cmdBuf->beginRendering(RenderingInfo{
-            .label                         = "GUIApp_Clear",
-            .bExternalTransitionManagement = true,
-            .attachments                   = RenderAttachmentSet{
-                .renderArea = Rect2D{
-                    .pos    = {0.0f, 0.0f},
-                    .extent = {static_cast<float>(presentExtent.width), static_cast<float>(presentExtent.height)},
-                },
-                .layerCount = 1,
-                .colors     = {
-                    RenderAttachment{
-                        .image         = presentation->renderImage->getImage(),
-                        .imageView     = presentation->renderImage->getImageView(),
-                        .loadOp        = EAttachmentLoadOp::Clear,
-                        .storeOp       = EAttachmentStoreOp::Store,
-                        .clearValue    = ClearValue(0.05f, 0.06f, 0.07f, 1.0f),
-                        .initialLayout = EImageLayout::ColorAttachmentOptimal,
-                        .finalLayout   = EImageLayout::ColorAttachmentOptimal,
-                    },
-                },
-                .depth = std::nullopt,
-            },
-        });
-        cmdBuf->endRendering();
-
-        // Compose the immutable UI snapshot over the cleared target.
-        recordRender2DComposePass(
-            cmdBuf.get(),
-            *presentation->renderImage,
-            /*depthTarget=*/nullptr,
-            &snapshot,
-            FRender2DComposePassDesc{
-                .kind                  = ERender2DComposePassKind::RuntimeUIComposite,
-                .logicalViewportExtent = _impl->tree->getLogicalExtent(),
-                .finalLayout           = EImageLayout::PresentSrcKHR,
-            });
-
-        std::string capturePath;
-        if (_impl->config->gpuShotFrame != 0 &&
-            _impl->frameCount == _impl->config->gpuShotFrame &&
-            !_impl->config->gpuShotPath.empty()) {
-            capturePath = _impl->config->gpuShotPath;
-        }
-        else if (!_impl->captureRequestPath.empty()) {
-            capturePath = _impl->captureRequestPath;
-            _impl->captureRequestPath.clear();
-        }
-        if (!capturePath.empty()) {
-            if (!_impl->gpuShotBuffer) {
-                _impl->gpuShotBuffer = _impl->render->getResourceFactory()->createBuffer(
-                    ya::BufferCreateInfo{
-                        .label       = "GUIAppHost_GpuShot",
-                        .usage       = EBufferUsage::TransferDst,
-                        .size        = presentExtent.width * presentExtent.height * 4,
-                        .memoryUsage = EMemoryUsage::GpuToCpu,
-                    });
-            }
-            cmdBuf->transitionImageLayoutAuto(presentation->renderImage->getImage(), EImageLayout::TransferSrc);
-            cmdBuf->copyImageToBuffer(
-                presentation->renderImage->getImage(),
-                EImageLayout::TransferSrc,
-                _impl->gpuShotBuffer.get(),
-                {ya::BufferImageCopy{
-                    .imageSubresource  = {.aspectMask = 1, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1},
-                    .imageOffsetX      = 0,
-                    .imageOffsetY      = 0,
-                    .imageOffsetZ      = 0,
-                    .imageExtentWidth  = presentExtent.width,
-                    .imageExtentHeight = presentExtent.height,
-                    .imageExtentDepth  = 1,
-                }});
-            cmdBuf->transitionImageLayoutAuto(presentation->renderImage->getImage(), EImageLayout::PresentSrcKHR);
-        }
-
-        cmdBuf->end();
-        _impl->render->end(imageIndex, {cmdBuf->getHandle()});
-
-        if (!capturePath.empty()) {
-            _impl->render->waitIdle();
-            if (uint8_t* pixels = _impl->gpuShotBuffer->map<uint8_t>()) {
-                writeRGBAtoBMP(pixels,
-                               presentExtent.width,
-                               presentExtent.height,
-                               swapchain->getFormat() == EFormat::B8G8R8A8_UNORM,
-                               capturePath);
-                _impl->gpuShotBuffer->unmap();
-            }
-        }
-
-        _impl->automationRun.markFrameCompleted();
-        if (_impl->delegate->shouldRequestClose()) {
-            _impl->automationRun.requestAppClose();
-        }
-        if (_impl->automationRun.shouldExit()) {
-            logGUIAppExitReason(_impl->automationRun);
-            bRunning = false;
-        }
+    AppKernel kernel({}, *this);
+    const int result = kernel.run(_impl->config->automation);
+    if (result != 0) {
+        return result;
     }
 
     if (!_impl->scenarioSteps.empty() &&
@@ -842,12 +577,243 @@ int GUIAppHost::run()
     return 0;
 }
 
+void GUIAppHost::onInit() {}
+void GUIAppHost::onEvent(const Event&) {}
+void GUIAppHost::onShutdown() {}
+
+bool GUIAppHost::shouldClose() const
+{
+    return _impl->bQuitRequested || _impl->delegate->shouldRequestClose();
+}
+
+void GUIAppHost::onTick(float /*dt*/)
+{
+    if (!_impl->scenarioSteps.empty()) {
+        stepScenario();
+    }
+    else {
+        pumpEvents();
+    }
+    if (_impl->bQuitRequested) {
+        return;
+    }
+    ++_impl->frameCount;
+
+    for (auto& request : _impl->automationServer.consumePendingRequests()) {
+        if (request->method == "ping") {
+            _impl->automationServer.completeRequest(
+                request,
+                makeAutomationSuccess(*request,
+                                      {
+                                          {"service", "gui-automation-control"},
+                                          {"port", _impl->automationServer.getPort()},
+                                          {"title", _impl->config->title},
+                                      }));
+            continue;
+        }
+        if (request->method == "quit") {
+            _impl->bQuitRequested = true;
+            _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
+            continue;
+        }
+        if (request->method == "set_window_size") {
+            const auto widthIt  = request->params.find("width");
+            const auto heightIt = request->params.find("height");
+            if (widthIt == request->params.end() || heightIt == request->params.end() ||
+                !widthIt->is_number_integer() || !heightIt->is_number_integer()) {
+                _impl->automationServer.completeRequest(
+                    request,
+                    makeAutomationError(*request, "set_window_size requires integer params {width,height}"));
+                continue;
+            }
+            const int width  = widthIt->get<int>();
+            const int height = heightIt->get<int>();
+            if (width <= 0 || height <= 0) {
+                _impl->automationServer.completeRequest(
+                    request,
+                    makeAutomationError(*request, "set_window_size expects positive width and height"));
+                continue;
+            }
+            if (!_impl->window.setWindowSize(width, height)) {
+                _impl->automationServer.completeRequest(
+                    request,
+                    makeAutomationError(*request, std::format("failed to set window size to {}x{}", width, height)));
+                continue;
+            }
+            _impl->bSwapchainRecreatePending = true;
+            _impl->automationServer.completeRequest(
+                request,
+                makeAutomationSuccess(*request, {{"width", width}, {"height", height}}));
+            continue;
+        }
+        _impl->automationServer.completeRequest(
+            request,
+            makeAutomationError(*request, std::format("unknown method: {}", request->method)));
+    }
+
+    if (_impl->bSwapchainRecreatePending) {
+        auto* swapchain = _impl->render->getSwapchain()->as<VulkanSwapChain>();
+        swapchain->requestRecreate();
+        _impl->bSwapchainRecreatePending = false;
+    }
+    if (_impl->bWindowMinimized) {
+        _impl->render->waitIdle();
+        return;
+    }
+
+    int32_t imageIndex = -1;
+    if (!_impl->render->begin(&imageIndex)) {
+        return;
+    }
+    if (imageIndex < 0) {
+        _impl->render->waitIdle();
+        return;
+    }
+
+    auto* swapchain = _impl->render->getSwapchain()->as<VulkanSwapChain>();
+    const Extent2D swapchainExtent = swapchain->getExtent();
+    if (swapchain->getHandle() != _impl->cachedSwapchainHandle ||
+        _impl->render->getSwapchainImageCount() != _impl->presentationTargets.size() ||
+        swapchainExtent.width != _impl->cachedSwapchainExtent.width ||
+        swapchainExtent.height != _impl->cachedSwapchainExtent.height) {
+        rebuildPresentationResources(/*bWaitForGpu=*/true);
+        swapchain = _impl->render->getSwapchain()->as<VulkanSwapChain>();
+    }
+    _impl->tree->setLogicalExtent(queryWindowLogicalExtent(*_impl->render));
+
+    prepareRender2DComposePassPipeline(
+        FRender2DComposePassDesc{
+            .kind = ERender2DComposePassKind::RuntimeUIComposite,
+        },
+        swapchain->getFormat());
+    _impl->delegate->updateUI();
+    const auto&    presentation  = _impl->presentationTargets[static_cast<size_t>(imageIndex)];
+    const Extent2D presentExtent = presentation->renderImage->getExtent();
+    const Extent2D logicalExtent = _impl->tree->getLogicalExtent();
+    const UIFrameSnapshot snapshot = _impl->tree->buildSnapshot(UIFrameBuildContext{
+        .uiScale = {
+            static_cast<float>(presentExtent.width) / static_cast<float>(std::max(logicalExtent.width, 1u)),
+            static_cast<float>(presentExtent.height) / static_cast<float>(std::max(logicalExtent.height, 1u)),
+        },
+        .offset = {0.0f, 0.0f},
+        .textureResolver = resolveBuiltinTexture,
+    });
+    if (!_impl->bLoggedFirstSnapshot) {
+        _impl->bLoggedFirstSnapshot = true;
+        YA_CORE_INFO("GUIAppHost first snapshot: {} draw items, {}x{} logical -> {}x{} render",
+                     snapshot.items.size(),
+                     snapshot.logicalExtent.width,
+                     snapshot.logicalExtent.height,
+                     presentExtent.width,
+                     presentExtent.height);
+    }
+    if (_impl->config && !_impl->config->dumpSnapshotPath.empty() &&
+        _impl->frameCount == _impl->config->dumpFrame) {
+        dumpSnapshotToBMP(snapshot, _impl->config->dumpSnapshotPath, _impl->frameCount);
+    }
+
+    auto cmdBuf = _impl->commandBuffers[static_cast<size_t>(imageIndex)];
+    cmdBuf->reset();
+    cmdBuf->begin();
+
+    cmdBuf->retainResource(presentation->renderImage->getImageShared());
+    cmdBuf->retainResource(presentation->renderImage->getImageViewShared());
+    cmdBuf->transitionImageLayoutAuto(presentation->renderImage->getImage(), EImageLayout::ColorAttachmentOptimal);
+    cmdBuf->beginRendering(RenderingInfo{
+        .label                         = "GUIApp_Clear",
+        .bExternalTransitionManagement = true,
+        .attachments                   = RenderAttachmentSet{
+            .renderArea = Rect2D{
+                .pos    = {0.0f, 0.0f},
+                .extent = {static_cast<float>(presentExtent.width), static_cast<float>(presentExtent.height)},
+            },
+            .layerCount = 1,
+            .colors     = {
+                RenderAttachment{
+                    .image         = presentation->renderImage->getImage(),
+                    .imageView     = presentation->renderImage->getImageView(),
+                    .loadOp        = EAttachmentLoadOp::Clear,
+                    .storeOp       = EAttachmentStoreOp::Store,
+                    .clearValue    = ClearValue(0.05f, 0.06f, 0.07f, 1.0f),
+                    .initialLayout = EImageLayout::ColorAttachmentOptimal,
+                    .finalLayout   = EImageLayout::ColorAttachmentOptimal,
+                },
+            },
+            .depth = std::nullopt,
+        },
+    });
+    cmdBuf->endRendering();
+
+    recordRender2DComposePass(
+        cmdBuf.get(),
+        *presentation->renderImage,
+        /*depthTarget=*/nullptr,
+        &snapshot,
+        FRender2DComposePassDesc{
+            .kind                  = ERender2DComposePassKind::RuntimeUIComposite,
+            .logicalViewportExtent = _impl->tree->getLogicalExtent(),
+            .finalLayout           = EImageLayout::PresentSrcKHR,
+        });
+
+    std::string capturePath;
+    if (_impl->config->gpuShotFrame != 0 &&
+        _impl->frameCount == _impl->config->gpuShotFrame &&
+        !_impl->config->gpuShotPath.empty()) {
+        capturePath = _impl->config->gpuShotPath;
+    }
+    else if (!_impl->captureRequestPath.empty()) {
+        capturePath = _impl->captureRequestPath;
+        _impl->captureRequestPath.clear();
+    }
+    if (!capturePath.empty()) {
+        if (!_impl->gpuShotBuffer) {
+            _impl->gpuShotBuffer = _impl->render->getResourceFactory()->createBuffer(
+                ya::BufferCreateInfo{
+                    .label       = "GUIAppHost_GpuShot",
+                    .usage       = EBufferUsage::TransferDst,
+                    .size        = presentExtent.width * presentExtent.height * 4,
+                    .memoryUsage = EMemoryUsage::GpuToCpu,
+                });
+        }
+        cmdBuf->transitionImageLayoutAuto(presentation->renderImage->getImage(), EImageLayout::TransferSrc);
+        cmdBuf->copyImageToBuffer(
+            presentation->renderImage->getImage(),
+            EImageLayout::TransferSrc,
+            _impl->gpuShotBuffer.get(),
+            {ya::BufferImageCopy{
+                .imageSubresource  = {.aspectMask = 1, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1},
+                .imageOffsetX      = 0,
+                .imageOffsetY      = 0,
+                .imageOffsetZ      = 0,
+                .imageExtentWidth  = presentExtent.width,
+                .imageExtentHeight = presentExtent.height,
+                .imageExtentDepth  = 1,
+            }});
+        cmdBuf->transitionImageLayoutAuto(presentation->renderImage->getImage(), EImageLayout::PresentSrcKHR);
+    }
+
+    cmdBuf->end();
+    _impl->render->end(imageIndex, {cmdBuf->getHandle()});
+
+    if (!capturePath.empty()) {
+        _impl->render->waitIdle();
+        if (uint8_t* pixels = _impl->gpuShotBuffer->map<uint8_t>()) {
+            writeRGBAtoBMP(pixels,
+                           presentExtent.width,
+                           presentExtent.height,
+                           swapchain->getFormat() == EFormat::B8G8R8A8_UNORM,
+                           capturePath);
+            _impl->gpuShotBuffer->unmap();
+        }
+    }
+}
+
 void GUIAppHost::injectEvent(const Event& event, const glm::vec2& logicalPoint)
 {
     dispatchToTree(event, logicalPoint.x, logicalPoint.y);
 }
 
-void GUIAppHost::stepScenario(bool& bRunning)
+void GUIAppHost::stepScenario()
 {
     struct Sink final : IGuiEventSink
     {
@@ -890,7 +856,7 @@ void GUIAppHost::stepScenario(bool& bRunning)
             break;
         }
     }
-    bRunning = false;
+    _impl->bQuitRequested = true;
 }
 
 WidgetTree& GUIAppHost::getTree()

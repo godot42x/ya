@@ -1,10 +1,9 @@
 # GUI 架构收敛：详细推进方案
 
 > 建立日期：2026-08-13
-> 状态：Phase 1 harness 已闭环（windowed 端到端验证通过）。Phase 2 已开工：
-> AppKernel 落地在 Foundation/Core/Application（不依赖 RHI，dedicated server 可无
-> 呈现运行），并有无 sink CLI 冒烟。剩余：GUIAppHost 迁移到 AppKernel、离屏
-> presenter、SDF、布局增强。
+> 状态：Phase 1 harness 已闭环。Phase 2 单循环收敛已落地：AppKernel（Foundation，
+> 无 RHI）+ GUIAppHost 迁移到 AppKernel（host 即 IAppLoopDelegate，onTick 承载
+> 一帧）。剩余：把 SDL 事件源/场景抽成 IAppEventSource、离屏 presenter、SDF、布局。
 > 承接：../gui-app-bootstrap/plan.md（已定义 shared foundation / GUI library /
 > standalone host 三角色）；本文件不再回写 GUI app 自举本身，只规划下一步的
 > "观测 harness → 单循环收敛 → SDF 字体 → 布局增强" 主线。

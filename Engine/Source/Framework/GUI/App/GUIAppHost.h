@@ -26,6 +26,7 @@
 
 #include "Core/Event.h"
 
+#include "Core/Application/AppKernel.h"
 #include "Core/Application/AutomationRun.h"
 #include "GUI/Widgets/WidgetTree.h"
 
@@ -107,7 +108,7 @@ struct FGUIAppHostConfig
 
 /// Standalone GUI app host. Create, init(), run(), shutdown().
 /// The delegate must outlive the host.
-class GUIAppHost
+class GUIAppHost : public IAppLoopDelegate
 {
 public:
     GUIAppHost(const FGUIAppHostConfig& config, IGUIAppDelegate& delegate);
@@ -132,11 +133,18 @@ public:
     /// automation inject_event command).
     void injectEvent(const Event& event, const glm::vec2& logicalPoint);
 
+    // === IAppLoopDelegate (driven by AppKernel; init/shutdown stay public) ===
+    void onInit() override;
+    void onEvent(const Event& event) override;
+    void onTick(float dt) override;
+    void onShutdown() override;
+    [[nodiscard]] bool shouldClose() const override;
+
 private:
-    void pumpEvents(bool& bRunning);
+    void pumpEvents();
     void dispatchToTree(const Event& event, float mouseX, float mouseY);
     /// Drive scenario events until the next Frame step (or scenario end).
-    void stepScenario(bool& bRunning);
+    void stepScenario();
     void rebuildPresentationResources(bool bWaitForGpu = true);
 
     struct FImpl;
