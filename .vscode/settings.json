@@ -123,6 +123,7 @@
         "VKCAPTURE",
         "VUID",
         "WINDOWPOS",
+        "worktrees",
         "yalua"
     ],
     "yaml.schemas": {
