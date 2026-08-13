@@ -36,6 +36,7 @@ enum class EGuiScenarioStepKind : uint8_t
     KeyRelease,
     KeyTyped,
     Drag,
+    SetWindowSize,
     Checkpoint,
 };
 
@@ -50,6 +51,8 @@ struct GuiScenarioStep
     std::string text;
     glm::vec2  dragTo     = {0.0f, 0.0f};
     int        dragSteps  = 8;
+    uint32_t   width      = 0;
+    uint32_t   height     = 0;
     std::string tag;
 };
 
@@ -81,10 +84,9 @@ private:
 /// Scenario key name to EKey ("Enter", "Space", "Down", "A", ...).
 YA_CORE_API EKey::T keyFromName(std::string_view name);
 
-/// Emit the pointer/key/drag events of a step through the sink. Frame and
-/// Checkpoint are no-ops (the host owns frame stepping and dumps). Shared by
-/// GuiScenarioExecutor and host frame-loop bridges so event construction
-/// lives in exactly one place.
+/// Emit the pointer/key/drag events of a step through the sink. Frame,
+/// Checkpoint and SetWindowSize are no-ops here: frame stepping, checkpoint
+/// dumps and native-window control stay at the host/kernel layer.
 YA_CORE_API void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step);
 
 } // namespace ya

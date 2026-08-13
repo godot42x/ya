@@ -95,6 +95,81 @@ std::shared_ptr<Texture> resolveBuiltinTexture(const std::string& assetPath)
     return nullptr;
 }
 
+void appendDebugRenderOverlay(UIFrameSnapshot& snapshot)
+{
+    const float w = static_cast<float>(snapshot.logicalExtent.width);
+    const float h = static_cast<float>(snapshot.logicalExtent.height);
+    if (w <= 0.0f || h <= 0.0f) {
+        return;
+    }
+
+    const auto addRect = [&snapshot](glm::vec2 pos, glm::vec2 size, glm::vec4 color)
+    {
+        UIFrameDrawItem item;
+        item.kind  = UIFrameDrawItem::EKind::Sprite;
+        item.pos   = pos;
+        item.size  = size;
+        item.color = color;
+        snapshot.items.push_back(std::move(item));
+    };
+
+    const auto addOutline = [&addRect](const Rect2D& rect, glm::vec4 color)
+    {
+        if (rect.extent.x <= 0.0f || rect.extent.y <= 0.0f) {
+            return;
+        }
+        constexpr float outlineThickness = 1.0f;
+        addRect(rect.pos, {rect.extent.x, outlineThickness}, color);
+        addRect({rect.pos.x, rect.pos.y + std::max(0.0f, rect.extent.y - outlineThickness)},
+                {rect.extent.x, outlineThickness},
+                color);
+        addRect(rect.pos, {outlineThickness, rect.extent.y}, color);
+        addRect({rect.pos.x + std::max(0.0f, rect.extent.x - outlineThickness), rect.pos.y},
+                {outlineThickness, rect.extent.y},
+                color);
+    };
+
+    std::vector<Rect2D> uniqueClipRects;
+    uniqueClipRects.reserve(snapshot.items.size());
+    for (const UIFrameDrawItem& item : snapshot.items) {
+        if (!item.bClipped || item.clip.extent.x <= 0.0f || item.clip.extent.y <= 0.0f) {
+            continue;
+        }
+        const auto sameRect = [&item](const Rect2D& existing)
+        {
+            return existing.pos == item.clip.pos && existing.extent == item.clip.extent;
+        };
+        if (std::ranges::find_if(uniqueClipRects, sameRect) == uniqueClipRects.end()) {
+            uniqueClipRects.push_back(item.clip);
+        }
+    }
+
+    for (size_t i = 0; i < uniqueClipRects.size(); ++i) {
+        const glm::vec4 color =
+            (i % 5) == 0 ? glm::vec4(1.0f, 0.35f, 0.20f, 0.95f) :
+            (i % 5) == 1 ? glm::vec4(0.25f, 0.85f, 1.0f, 0.95f) :
+            (i % 5) == 2 ? glm::vec4(0.35f, 1.0f, 0.45f, 0.95f) :
+            (i % 5) == 3 ? glm::vec4(1.0f, 0.85f, 0.25f, 0.95f) :
+                           glm::vec4(0.95f, 0.45f, 1.0f, 0.95f);
+        addOutline(uniqueClipRects[i], color);
+    }
+
+    constexpr float t = 1.0f;
+    const float midX = std::max(0.0f, std::floor(w * 0.5f));
+    const float midY = std::max(0.0f, std::floor(h * 0.5f));
+
+    addRect({0.0f, 0.0f}, {w, t}, {1.0f, 0.15f, 0.15f, 0.95f});
+    addRect({0.0f, std::max(0.0f, h - t)}, {w, t}, {0.15f, 0.55f, 1.0f, 0.95f});
+    addRect({0.0f, 0.0f}, {t, h}, {1.0f, 0.15f, 0.15f, 0.95f});
+    addRect({std::max(0.0f, w - t), 0.0f}, {t, h}, {0.15f, 0.55f, 1.0f, 0.95f});
+
+    addRect({0.0f, midY}, {w, t}, {0.10f, 0.85f, 0.30f, 0.65f});
+    addRect({midX, 0.0f}, {t, h}, {0.10f, 0.85f, 0.30f, 0.65f});
+
+    addRect({0.0f, 0.0f}, {12.0f, 12.0f}, {1.0f, 0.95f, 0.20f, 0.95f});
+    addRect({midX - 3.0f, midY - 3.0f}, {7.0f, 7.0f}, {0.95f, 0.95f, 0.95f, 0.85f});
+}
+
 /// Debug rasterizer: draws the snapshot items into a 24-bit BMP so the UI
 /// layout (positions, overlaps, bounds) can be inspected without a display.
 /// Text items are drawn as bright translucent blocks; sprites use their tint.
@@ -244,9 +319,25 @@ void writeRGBAtoBMP(const uint8_t* rgba, uint32_t width, uint32_t height,
 struct SdlEventSource final : IAppEventSource
 {
     uint32_t hostWindowID = 0;
+    bool     bPointerKnown = false;
+
+    static bool isMouseFocusedHostWindow(uint32_t hostWindowID)
+    {
+        SDL_Window* focusedWindow = SDL_GetMouseFocus();
+        return focusedWindow != nullptr && hostWindowID != 0 && SDL_GetWindowID(focusedWindow) == hostWindowID;
+    }
 
     void pollEvents(const std::function<void(const Event&)>& emit) override
     {
+        SDL_PumpEvents();
+        if (!bPointerKnown && isMouseFocusedHostWindow(hostWindowID)) {
+            float mouseX = -1.0f;
+            float mouseY = -1.0f;
+            SDL_GetMouseState(&mouseX, &mouseY);
+            emit(MouseMoveEvent(mouseX, mouseY));
+            bPointerKnown = true;
+        }
+
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             const bool bHostWindowEvent = [&]() {
@@ -258,7 +349,23 @@ struct SdlEventSource final : IAppEventSource
                 case SDL_EVENT_WINDOW_MINIMIZED:
                 case SDL_EVENT_WINDOW_MAXIMIZED:
                 case SDL_EVENT_WINDOW_RESTORED:
+                case SDL_EVENT_WINDOW_MOUSE_ENTER:
+                case SDL_EVENT_WINDOW_MOUSE_LEAVE:
                     return hostWindowID == 0 || event.window.windowID == hostWindowID;
+                default:
+                    return true;
+                }
+            }();
+
+            const bool bHostPointerEvent = [&]() {
+                switch (event.type) {
+                case SDL_EVENT_MOUSE_MOTION:
+                    return hostWindowID == 0 || event.motion.windowID == hostWindowID;
+                case SDL_EVENT_MOUSE_BUTTON_DOWN:
+                case SDL_EVENT_MOUSE_BUTTON_UP:
+                    return hostWindowID == 0 || event.button.windowID == hostWindowID;
+                case SDL_EVENT_MOUSE_WHEEL:
+                    return hostWindowID == 0 || event.wheel.windowID == hostWindowID;
                 default:
                     return true;
                 }
@@ -291,17 +398,47 @@ struct SdlEventSource final : IAppEventSource
                     emit(WindowMinimizeEvent(event.window.windowID));
                 }
                 break;
+            case SDL_EVENT_WINDOW_MOUSE_ENTER:
+                if (bHostWindowEvent) {
+                    float mouseX = -1.0f;
+                    float mouseY = -1.0f;
+                    SDL_GetMouseState(&mouseX, &mouseY);
+                    emit(MouseMoveEvent(mouseX, mouseY));
+                    bPointerKnown = true;
+                }
+                break;
+            case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+                if (bHostWindowEvent) {
+                    emit(MouseMoveEvent(-1000000.0f, -1000000.0f));
+                    bPointerKnown = false;
+                }
+                break;
             case SDL_EVENT_MOUSE_MOTION:
-                emit(MouseMoveEvent(event.motion.x, event.motion.y));
+                if (bHostPointerEvent) {
+                    emit(MouseMoveEvent(event.motion.x, event.motion.y));
+                    bPointerKnown = true;
+                }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
-                emit(MouseButtonPressedEvent(event.button.button));
+                if (bHostPointerEvent) {
+                    emit(MouseMoveEvent(event.button.x, event.button.y));
+                    emit(MouseButtonPressedEvent(event.button.button));
+                    bPointerKnown = true;
+                }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
-                emit(MouseButtonReleasedEvent(event.button.button));
+                if (bHostPointerEvent) {
+                    emit(MouseMoveEvent(event.button.x, event.button.y));
+                    emit(MouseButtonReleasedEvent(event.button.button));
+                    bPointerKnown = true;
+                }
                 break;
             case SDL_EVENT_MOUSE_WHEEL:
-                emit(MouseScrolledEvent(event.wheel.x, event.wheel.y));
+                if (bHostPointerEvent) {
+                    emit(MouseMoveEvent(event.wheel.mouse_x, event.wheel.mouse_y));
+                    emit(MouseScrolledEvent(event.wheel.x, event.wheel.y));
+                    bPointerKnown = true;
+                }
                 break;
             case SDL_EVENT_KEY_DOWN: {
                 KeyPressedEvent ev;
@@ -328,20 +465,33 @@ struct SdlEventSource final : IAppEventSource
     }
 };
 
-/// Drives a JSONL scenario as an event source. Pointer steps first emit a
-/// MouseMoveEvent to their position so the host's tracked pointer follows,
-/// then the press/release/scroll. A Frame step returns (letting the caller
-/// render that frame); Checkpoint invokes the host dump hook.
+/// Drives a JSONL scenario as an event source. Frame steps return so the
+/// caller renders that frame; checkpoint and resize stay at the host layer,
+/// while pointer/key/drag steps emit the same Core events as SDL.
 struct ScenarioEventSource final : IAppEventSource
 {
     std::vector<GuiScenarioStep> steps;
     size_t index = 0;
+    bool bPendingDoneAfterLastFrame = false;
+    bool bDone = false;
     std::function<void(const std::string&)> onCheckpoint;
+    std::function<void(uint32_t, uint32_t)> onSetWindowSize;
     std::function<void()> onCaptureFinal;
     std::function<void()> onDone;
 
     void pollEvents(const std::function<void(const Event&)>& emit) override
     {
+        if (bDone) {
+            return;
+        }
+        if (bPendingDoneAfterLastFrame) {
+            bPendingDoneAfterLastFrame = false;
+            bDone                      = true;
+            if (onDone) {
+                onDone();
+            }
+            return;
+        }
         while (index < steps.size()) {
             const GuiScenarioStep& step = steps[index++];
             switch (step.kind) {
@@ -349,62 +499,48 @@ struct ScenarioEventSource final : IAppEventSource
                 if (index == steps.size() && onCaptureFinal) {
                     onCaptureFinal();
                 }
+                if (index == steps.size()) {
+                    bPendingDoneAfterLastFrame = true;
+                }
                 return;
+            case EGuiScenarioStepKind::SetWindowSize:
+                if (onSetWindowSize) {
+                    onSetWindowSize(step.width, step.height);
+                }
+                break;
             case EGuiScenarioStepKind::Checkpoint:
                 if (onCheckpoint) {
                     onCheckpoint(step.tag);
                 }
                 break;
             case EGuiScenarioStepKind::MouseMove:
-                emit(MouseMoveEvent(step.point.x, step.point.y));
-                break;
             case EGuiScenarioStepKind::MousePress:
-                emit(MouseMoveEvent(step.point.x, step.point.y));
-                emit(MouseButtonPressedEvent(step.button));
-                break;
             case EGuiScenarioStepKind::MouseRelease:
-                emit(MouseMoveEvent(step.point.x, step.point.y));
-                emit(MouseButtonReleasedEvent(step.button));
-                break;
             case EGuiScenarioStepKind::MouseWheel:
-                emit(MouseMoveEvent(step.point.x, step.point.y));
-                emit(MouseScrolledEvent(step.wheel.x, step.wheel.y));
-                break;
-            case EGuiScenarioStepKind::KeyPress: {
-                KeyPressedEvent ev;
-                ev._keyCode = step.key;
-                ev._mod     = 0;
-                ev.bRepeat  = false;
-                emit(ev);
-                break;
-            }
-            case EGuiScenarioStepKind::KeyRelease: {
-                KeyReleasedEvent ev;
-                ev._keyCode = step.key;
-                ev._mod     = 0;
-                emit(ev);
-                break;
-            }
-            case EGuiScenarioStepKind::KeyTyped: {
-                KeyTypedEvent ev(step.text);
-                ev._mod = 0;
-                emit(ev);
-                break;
-            }
+            case EGuiScenarioStepKind::KeyPress:
+            case EGuiScenarioStepKind::KeyRelease:
+            case EGuiScenarioStepKind::KeyTyped:
             case EGuiScenarioStepKind::Drag: {
-                emit(MouseMoveEvent(step.point.x, step.point.y));
-                emit(MouseButtonPressedEvent(step.button));
-                const int n = std::max(1, step.dragSteps);
-                for (int i = 1; i <= n; ++i) {
-                    const float     t = static_cast<float>(i) / static_cast<float>(n);
-                    const glm::vec2 p = step.point + (step.dragTo - step.point) * t;
-                    emit(MouseMoveEvent(p.x, p.y));
-                }
-                emit(MouseButtonReleasedEvent(step.button));
+                struct ScenarioSink final : IGuiEventSink
+                {
+                    const std::function<void(const Event&)>& emitFn;
+
+                    explicit ScenarioSink(const std::function<void(const Event&)>& inEmitFn)
+                        : emitFn(inEmitFn)
+                    {
+                    }
+
+                    void dispatch(const Event& event, const glm::vec2& /*logicalPoint*/) override
+                    {
+                        emitFn(event);
+                    }
+                } sink{emit};
+                emitGuiScenarioStep(sink, step);
                 break;
             }
             }
         }
+        bDone = true;
         if (onDone) {
             onDone();
         }
@@ -506,6 +642,7 @@ bool GUIAppHost::init()
         .swapchainCI = SwapchainCreateInfo{
             .imageFormat   = EFormat::R8G8B8A8_UNORM,
             .bVsync        = config.bVsync,
+            .bEnableTransferSrc = true,
             .minImageCount = 3,
             .width         = config.width != 0 ? config.width : DEFAULT_WINDOW_WIDTH,
             .height        = config.height != 0 ? config.height : DEFAULT_WINDOW_HEIGHT,
@@ -565,7 +702,12 @@ bool GUIAppHost::init()
             shutdown();
             return false;
         }
-        scenario->onCheckpoint   = [this](const std::string& tag) { dumpScenarioCheckpoint(tag); };
+        scenario->onCheckpoint = [this](const std::string& tag) { dumpScenarioCheckpoint(tag); };
+        scenario->onSetWindowSize = [this](uint32_t width, uint32_t height) {
+            if (!requestWindowSize(width, height, "scenario")) {
+                _impl->bQuitRequested = true;
+            }
+        };
         scenario->onCaptureFinal = [this]() {
             if (!_impl->config->scenarioCapturePath.empty()) {
                 _impl->captureRequestPath = _impl->config->scenarioCapturePath;
@@ -599,6 +741,21 @@ void GUIAppHost::dispatchToTree(const Event& event, float mouseX, float mouseY)
     ctx.logicalPoint = {mouseX, mouseY};
     const EWidgetRouteResult result = _impl->tree->dispatchEvent(event, ctx);
     _impl->delegate->onRoutedEvent(event, result);
+}
+
+bool GUIAppHost::requestWindowSize(uint32_t width, uint32_t height, std::string_view reason)
+{
+    if (width == 0 || height == 0) {
+        YA_CORE_ERROR("GUIAppHost {}: invalid window size {}x{}", reason, width, height);
+        return false;
+    }
+    if (!_impl->window.setWindowSize(static_cast<int>(width), static_cast<int>(height))) {
+        YA_CORE_ERROR("GUIAppHost {}: failed to set window size to {}x{}", reason, width, height);
+        return false;
+    }
+    _impl->bWindowMinimized          = false;
+    _impl->bSwapchainRecreatePending = true;
+    return true;
 }
 
 void GUIAppHost::rebuildPresentationResources(bool bWaitForGpu)
@@ -753,13 +910,12 @@ void GUIAppHost::onTick(float /*dt*/)
                     makeAutomationError(*request, "set_window_size expects positive width and height"));
                 continue;
             }
-            if (!_impl->window.setWindowSize(width, height)) {
+            if (!requestWindowSize(static_cast<uint32_t>(width), static_cast<uint32_t>(height), "automation")) {
                 _impl->automationServer.completeRequest(
                     request,
                     makeAutomationError(*request, std::format("failed to set window size to {}x{}", width, height)));
                 continue;
             }
-            _impl->bSwapchainRecreatePending = true;
             _impl->automationServer.completeRequest(
                 request,
                 makeAutomationSuccess(*request, {{"width", width}, {"height", height}}));
@@ -826,6 +982,9 @@ void GUIAppHost::onTick(float /*dt*/)
                      presentExtent.width,
                      presentExtent.height);
     }
+    if (_impl->config && _impl->config->bDebugRenderOverlay) {
+        appendDebugRenderOverlay(const_cast<UIFrameSnapshot&>(snapshot));
+    }
     if (_impl->config && !_impl->config->dumpSnapshotPath.empty() &&
         _impl->frameCount == _impl->config->dumpFrame) {
         dumpSnapshotToBMP(snapshot, _impl->config->dumpSnapshotPath, _impl->frameCount);
@@ -885,12 +1044,13 @@ void GUIAppHost::onTick(float /*dt*/)
         _impl->captureRequestPath.clear();
     }
     if (!capturePath.empty()) {
-        if (!_impl->gpuShotBuffer) {
+        const uint32_t requiredReadbackSize = presentExtent.width * presentExtent.height * 4;
+        if (!_impl->gpuShotBuffer || _impl->gpuShotBuffer->getSize() != requiredReadbackSize) {
             _impl->gpuShotBuffer = _impl->render->getResourceFactory()->createBuffer(
                 ya::BufferCreateInfo{
                     .label       = "GUIAppHost_GpuShot",
                     .usage       = EBufferUsage::TransferDst,
-                    .size        = presentExtent.width * presentExtent.height * 4,
+                    .size        = requiredReadbackSize,
                     .memoryUsage = EMemoryUsage::GpuToCpu,
                 });
         }

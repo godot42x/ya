@@ -21,7 +21,7 @@ void GUIPresentationTarget::buildAll(IRender&                                   
             .label         = label,
             .nativeHandle  = static_cast<void*>(swapchain.getVkImages().at(i)),
             .format        = swapchain.getFormat(),
-            .usage         = static_cast<EImageUsage::T>(EImageUsage::ColorAttachment),
+            .usage         = static_cast<EImageUsage::T>(EImageUsage::ColorAttachment | EImageUsage::TransferSrc),
             .extent        = {.width = swapchain.getExtent().width, .height = swapchain.getExtent().height, .depth = 1},
             .initialLayout = EImageLayout::Undefined,
             .finalLayout   = EImageLayout::PresentSrcKHR,

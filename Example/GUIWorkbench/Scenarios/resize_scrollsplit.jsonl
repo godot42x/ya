@@ -1,0 +1,7 @@
+{"checkpoint":"before_resize"}
+{"frame":1}
+{"window_size":{"width":960,"height":640}}
+{"checkpoint":"after_resize_request"}
+{"frame":2}
+{"checkpoint":"after_resize_present"}
+{"frame":1}

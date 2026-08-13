@@ -38,6 +38,9 @@ help: ## list targets
 	@echo ""
 	@echo "Variables: t (xmake target), t (game project), ARGS (extra args)"
 
+cfg: 
+	xmake f -m debug
+	xmake project -k compile_commands
 # ---- Mode 1: direct target (xmake) ----
 
 b: ## build a target directly: make b t=GUIWorkbench

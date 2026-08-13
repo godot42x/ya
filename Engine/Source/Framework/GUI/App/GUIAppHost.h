@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace ya
@@ -98,6 +99,10 @@ struct FGUIAppHostConfig
     std::string              scenarioCapturePath;
     std::string              scenarioGoldenPath;
     std::string              scenarioDiffPath;
+    /// Draw a host-injected snapshot overlay showing render bounds / center
+    /// lines / origin marker. Used to debug coordinate and clipping issues
+    /// without touching app widgets or Render2D internals.
+    bool                     bDebugRenderOverlay = false;
     std::vector<uint32_t>    fontSizes{16, 20};
     /// Whether Escape (and SDL_QUIT) stops the app loop. Host-level key
     /// handling; app widgets never see Escape while this is enabled.
@@ -142,6 +147,7 @@ public:
 
 private:
     void dispatchToTree(const Event& event, float mouseX, float mouseY);
+    [[nodiscard]] bool requestWindowSize(uint32_t width, uint32_t height, std::string_view reason);
     /// Write a scenario checkpoint tree dump (<scenarioDumpDir>/<tag>.json).
     void dumpScenarioCheckpoint(const std::string& tag);
     void rebuildPresentationResources(bool bWaitForGpu = true);

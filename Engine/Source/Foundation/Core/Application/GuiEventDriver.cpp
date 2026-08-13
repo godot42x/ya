@@ -90,6 +90,14 @@ std::vector<GuiScenarioStep> parseGuiScenario(std::string_view jsonl,
                 steps.push_back(std::move(step));
                 continue;
             }
+            if (obj.contains("window_size")) {
+                const auto& size = obj["window_size"];
+                step.kind   = EGuiScenarioStepKind::SetWindowSize;
+                step.width  = size.value("width", 0u);
+                step.height = size.value("height", 0u);
+                steps.push_back(std::move(step));
+                continue;
+            }
             if (obj.contains("checkpoint")) {
                 step.kind = EGuiScenarioStepKind::Checkpoint;
                 step.tag  = obj["checkpoint"].get<std::string>();
@@ -186,12 +194,15 @@ void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step)
         sink.dispatch(MouseMoveEvent(step.point.x, step.point.y), step.point);
         break;
     case EGuiScenarioStepKind::MousePress:
+        sink.dispatch(MouseMoveEvent(step.point.x, step.point.y), step.point);
         sink.dispatch(MouseButtonPressedEvent(step.button), step.point);
         break;
     case EGuiScenarioStepKind::MouseRelease:
+        sink.dispatch(MouseMoveEvent(step.point.x, step.point.y), step.point);
         sink.dispatch(MouseButtonReleasedEvent(step.button), step.point);
         break;
     case EGuiScenarioStepKind::MouseWheel: {
+        sink.dispatch(MouseMoveEvent(step.point.x, step.point.y), step.point);
         MouseScrolledEvent ev(step.wheel.x, step.wheel.y);
         sink.dispatch(ev, step.point);
         break;
@@ -218,6 +229,7 @@ void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step)
         break;
     }
     case EGuiScenarioStepKind::Drag: {
+        sink.dispatch(MouseMoveEvent(step.point.x, step.point.y), step.point);
         sink.dispatch(MouseButtonPressedEvent(step.button), step.point);
         const int n = std::max(1, step.dragSteps);
         for (int i = 1; i <= n; ++i) {
@@ -229,6 +241,7 @@ void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step)
         break;
     }
     case EGuiScenarioStepKind::Frame:
+    case EGuiScenarioStepKind::SetWindowSize:
     case EGuiScenarioStepKind::Checkpoint:
         break;
     }
@@ -242,6 +255,8 @@ bool GuiScenarioExecutor::run(const std::vector<GuiScenarioStep>& steps)
             if (_stepFrame) {
                 _stepFrame(step.frame ? step.frame : 1);
             }
+            break;
+        case EGuiScenarioStepKind::SetWindowSize:
             break;
         case EGuiScenarioStepKind::MouseMove:
         case EGuiScenarioStepKind::MousePress:
