@@ -562,34 +562,28 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
     panel->_color     = kPanelColor;
     tree.attach(parent, panel);
 
-    // Header strip: fixed height at the top (same authoring pattern as the
-    // shell toolbar); the split below insets past it with its top padding,
-    // so the header rows and the split content never overlap.
-    auto header = std::make_shared<ya::UIContainer>("ScrollSplitHeader");
-    header->_anchorMin = {0.0f, 0.0f};
-    header->_anchorMax = {1.0f, 0.0f};
-    header->_size      = {0.0f, 48.0f};
-    header->_direction = ya::EWidgetBoxLayout::Vertical;
-    header->_spacing   = 2.0f;
-    header->_padding   = {16.0f, 4.0f};
-    tree.attach(*panel, header);
+    // Structural layout: one vertical container holds the header rows and
+    // the split; the split is the stretch-last child that fills the remaining
+    // content area, so no magic top padding / fixed header band is needed.
+    auto layout = std::make_shared<ya::UIContainer>("ScrollSplitLayout");
+    layout->_anchorMin        = {0.0f, 0.0f};
+    layout->_anchorMax        = {1.0f, 1.0f};
+    layout->_size             = {0.0f, 0.0f};
+    layout->_direction        = ya::EWidgetBoxLayout::Vertical;
+    layout->_spacing          = 10.0f;
+    layout->_padding          = {16.0f, 12.0f};
+    layout->_bStretchLastChild = true;
+    tree.attach(*panel, layout);
 
-    tree.attach(*header, makeLabel("Scroll viewport + split pane — drag the divider"));
-    tree.attach(*header, makeBodyText("The split stretches with the window; hover the divider to grab it."));
+    tree.attach(*layout, makeLabel("Scroll viewport + split pane — drag the divider"));
+    tree.attach(*layout, makeBodyText("The split stretches with the window; hover the divider to grab it."));
 
-    // The split is anchored to the panel so it fills the remaining content
-    // area on window resize. The top padding is the header band (48px strip
-    // + 4px gap): fractional anchors would drift out of step with the fixed
-    // header height on resize.
     auto split = std::make_shared<ya::UISplitPane>("DemoSplit");
-    split->_anchorMin      = {0.0f, 0.0f};
-    split->_anchorMax      = {1.0f, 1.0f};
-    split->_padding        = {16.0f, 52.0f};
-    split->_size           = {0.0f, 0.0f};
-    split->_splitRatio     = 0.38f;
-    split->_minFirstExtent = 120.0f;
+    split->_size            = {0.0f, 0.0f};
+    split->_splitRatio      = 0.38f;
+    split->_minFirstExtent  = 120.0f;
     split->_minSecondExtent = 160.0f;
-    tree.attach(*panel, split);
+    tree.attach(*layout, split);
 
     // Left: scrollable list.
     auto scroll = std::make_shared<ya::UIScrollViewport>("DemoScroll");

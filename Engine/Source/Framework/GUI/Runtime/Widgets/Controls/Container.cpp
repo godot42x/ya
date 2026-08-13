@@ -55,27 +55,38 @@ void UIContainer::arrangeChildren(const Rect2D& contentRect)
         break;
     }
 
+    // When the last child stretches, it absorbs the leftover main-axis space
+    // (children that already overflow clamp to zero leftover).
+    const float stretchRemainder = (_bStretchLastChild && visibleCount > 0)
+                                       ? std::max(0.0f, contentExtent - packedExtent)
+                                       : 0.0f;
+
+    size_t index = 0;
     for (UIElement* child : getChildrenInPaintOrder()) {
         if (!child->participatesInLayout()) {
             continue;
         }
         const glm::vec2 desired = child->computeDesiredSize();
+        const float     mainExtent = (_bStretchLastChild && index == visibleCount - 1)
+                                         ? (bHorizontal ? desired.x : desired.y) + stretchRemainder
+                                         : (bHorizontal ? desired.x : desired.y);
         Rect2D          childRect;
         if (bHorizontal) {
             childRect = Rect2D{
                 .pos    = {cursor, contentRect.pos.y},
-                .extent = {desired.x, contentRect.extent.y},
+                .extent = {mainExtent, contentRect.extent.y},
             };
-            cursor += desired.x + _spacing;
+            cursor += mainExtent + _spacing;
         }
         else {
             childRect = Rect2D{
                 .pos    = {contentRect.pos.x, cursor},
-                .extent = {contentRect.extent.x, desired.y},
+                .extent = {contentRect.extent.x, mainExtent},
             };
-            cursor += desired.y + _spacing;
+            cursor += mainExtent + _spacing;
         }
         child->layoutAssigned(childRect);
+        ++index;
     }
 }
 

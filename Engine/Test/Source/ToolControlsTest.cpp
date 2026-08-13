@@ -179,6 +179,29 @@ TEST(ToolControlsTest, StackDesiredSizeAggregatesChildren)
     EXPECT_EQ(stack->computeDesiredSize(), glm::vec2(140.0f, 74.0f));
 }
 
+TEST(ToolControlsTest, ContainerStretchLastChildFillsRemainingSpace)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       box = std::make_shared<UIContainer>("Box");
+    box->_direction         = EWidgetBoxLayout::Vertical;
+    box->_spacing           = 4.0f;
+    box->_size              = {200.0f, 200.0f};
+    box->_bStretchLastChild = true;
+    tree.attachToLayer(WidgetTree::ELayer::Content, box);
+
+    auto header = std::make_shared<UIPanel>("Header");
+    header->_size = {0.0f, 30.0f};
+    auto content = std::make_shared<UIPanel>("Content");
+    content->_size = {0.0f, 50.0f};
+    tree.attach(*box, header);
+    tree.attach(*box, content);
+    tree.layout();
+
+    // Header keeps its 30px; content absorbs the remainder (200 - 30 - 4).
+    EXPECT_FLOAT_EQ(content->_layoutRect.pos.y, 34.0f);
+    EXPECT_FLOAT_EQ(content->_layoutRect.extent.y, 166.0f);
+}
+
 // === Split pane ===
 
 TEST(ToolControlsTest, SplitPaneLaysOutTwoPanesAroundDivider)

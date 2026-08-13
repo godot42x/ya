@@ -16,6 +16,7 @@ struct UIContainer : public UIElement
     YA_REFLECT_FIELD(_padding, .instanceEditable())
     YA_REFLECT_FIELD(_mainAxisAlignment, .instanceEditable())
     YA_REFLECT_FIELD(_bClipChildren, .instanceEditable())
+    YA_REFLECT_FIELD(_bStretchLastChild, .instanceEditable())
     YA_REFLECT_END()
 
     explicit UIContainer(std::string name = "Container") : UIElement(std::move(name)) {}
@@ -31,6 +32,12 @@ struct UIContainer : public UIElement
     glm::vec2               _padding           = {0.0f, 0.0f};
     EWidgetMainAxisAlignment _mainAxisAlignment = EWidgetMainAxisAlignment::Start;
     bool                    _bClipChildren     = false;
+    /// Fill: the last participating child absorbs the remaining main-axis
+    /// space instead of its desired extent. Lets a "header rows + content"
+    /// panel express the content area structurally, without magic padding.
+    /// Only meaningful when the container itself has a resolved (non-Auto)
+    /// extent along the main axis.
+    bool                    _bStretchLastChild = false;
 
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
