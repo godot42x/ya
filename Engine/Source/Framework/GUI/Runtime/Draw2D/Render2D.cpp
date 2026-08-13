@@ -1,5 +1,7 @@
 #include "Render2D.h"
 
+#include "Core/Log.h"
+
 namespace ya
 {
 
@@ -50,6 +52,17 @@ void Render2D::begin(const FRender2dContext& ctx)
     session.windowWidth   = ctx.windowWidth;
     session.passSlot      = ctx.passSlot;
     session.clipStack.clear();
+    session.debugClipLogCount    = 0;
+    session.debugScreenFlushCount = 0;
+    session.debugWorldFlushCount  = 0;
+    if (debug.bLogSessionLifecycle) {
+        YA_CORE_INFO("Render2D begin: passSlot={} extent={}x{} cmdBuf={} reverseViewport={}",
+                     static_cast<size_t>(ctx.passSlot),
+                     ctx.windowWidth,
+                     ctx.windowHeight,
+                     static_cast<const void*>(ctx.cmdBuf),
+                     debug.bReverseViewport);
+    }
     Extent2D extent{.width = session.windowWidth, .height = session.windowHeight};
     quadData->begin(ctx.passSlot, extent);
     lineData->begin(ctx.passSlot);
@@ -59,6 +72,14 @@ void Render2D::end()
 {
     quadData->end();
     lineData->flush(session.curCmdBuf, session.viewProjection);
+
+    if (debug.bLogSessionLifecycle) {
+        YA_CORE_INFO("Render2D end: passSlot={} screenFlushes={} worldFlushes={} remainingClipDepth={}",
+                     static_cast<size_t>(session.passSlot),
+                     session.debugScreenFlushCount,
+                     session.debugWorldFlushCount,
+                     session.clipStack.size());
+    }
 
     session.curCmdBuf    = nullptr;
     session.windowWidth  = 0;
@@ -100,6 +121,20 @@ void Render2D::pushClipRect(const Rect2D& rect)
         quadData->flush(session.curCmdBuf);
     }
     session.clipStack.push_back(clipped);
+    if (debug.bLogClipStack && session.debugClipLogCount < debug.maxClipLogsPerFrame) {
+        ++session.debugClipLogCount;
+        YA_CORE_INFO("Render2D pushClip: depth={} changed={} requested=({}, {}) + ({}, {}) clipped=({}, {}) + ({}, {})",
+                     session.clipStack.size(),
+                     bClipChanged,
+                     rect.pos.x,
+                     rect.pos.y,
+                     rect.extent.x,
+                     rect.extent.y,
+                     clipped.pos.x,
+                     clipped.pos.y,
+                     clipped.extent.x,
+                     clipped.extent.y);
+    }
 }
 
 Rect2D Render2D::intersectClipRect(const Rect2D& rect, const Rect2D& parentClip)
@@ -116,12 +151,22 @@ void Render2D::popClipRect()
     if (session.clipStack.empty()) {
         return;
     }
+    const Rect2D currentClip = session.clipStack.back();
     if (quadData && session.curCmdBuf) {
         // Flush pending quads with the CURRENT (inner) scissor BEFORE popping;
         // otherwise content recorded inside the clip escapes it.
         quadData->flush(session.curCmdBuf);
     }
     session.clipStack.pop_back();
+    if (debug.bLogClipStack && session.debugClipLogCount < debug.maxClipLogsPerFrame) {
+        ++session.debugClipLogCount;
+        YA_CORE_INFO("Render2D popClip: depthAfterPop={} clip=({}, {}) + ({}, {})",
+                     session.clipStack.size(),
+                     currentClip.pos.x,
+                     currentClip.pos.y,
+                     currentClip.extent.x,
+                     currentClip.extent.y);
+    }
 }
 
 } // namespace ya

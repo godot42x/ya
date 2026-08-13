@@ -31,6 +31,11 @@ struct FRender2dDebugState
     ECullMode::T worldCullMode    = ECullMode::None;
     bool         bReverseViewport = true;
     int          TextLayoutMode   = 0;
+    bool         bLogSessionLifecycle = false;
+    bool         bLogClipStack        = false;
+    bool         bLogFlushBatches     = false;
+    uint32_t     maxClipLogsPerFrame  = 16;
+    uint32_t     maxFlushLogsPerFrame = 16;
 };
 
 /// State of one Render2D recording session, valid between begin()/end().
@@ -50,6 +55,9 @@ struct FRender2dSession
     // Active screen-space clip rects (top-left origin, Y down). The top entry
     // is applied as the scissor on the next screen-batch flush.
     std::vector<Rect2D> clipStack;
+    uint32_t            debugClipLogCount = 0;
+    uint32_t            debugScreenFlushCount = 0;
+    uint32_t            debugWorldFlushCount = 0;
 };
 
 struct FRender2dContext

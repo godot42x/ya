@@ -8,6 +8,7 @@
 #include "RHI/RenderDefines.h"
 
 #include "Core/Common/DeferredDeletionQueue.h"
+#include "Core/Log.h"
 #include "Core/Math/GLM.h"
 #include "GUI/Resources/FontManager.h"
 #include "RHI/Backend/TextureLibrary.h"
@@ -20,6 +21,23 @@
 
 namespace ya
 {
+
+namespace
+{
+
+bool shouldLogFlush(uint32_t& counter)
+{
+    if (!Render2D::debug.bLogFlushBatches) {
+        return false;
+    }
+    if (counter >= Render2D::debug.maxFlushLogsPerFrame) {
+        return false;
+    }
+    ++counter;
+    return true;
+}
+
+}
 
 void setScreenViewportAndScissor(ICommandBuffer& cmdBuf, IRender* render, uint32_t width, uint32_t height)
 {
@@ -602,10 +620,46 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
     // the GPU only after submission, so every batch must live at a distinct
     // offset (see kFrameFlushSlots). Draw the pending batch at its recorded
     // region instead of always starting at vertex 0.
+    const uint32_t cursorVertex = static_cast<uint32_t>(vertexPtr - vertexPtrHead);
+    YA_CORE_ASSERT(cursorVertex == screenBatchStartVertex + vertexCount,
+                   "Render2D screen batch cursor mismatch: startVertex={} vertexCount={} cursorVertex={}",
+                   screenBatchStartVertex,
+                   vertexCount,
+                   cursorVertex);
     YA_CORE_ASSERT(static_cast<uint64_t>(screenBatchStartVertex) + vertexCount <=
                        MaxVertexCount * kFrameFlushSlots,
                    "Render2D screen frame exceeded vertex buffer capacity ({} batches)",
                    kFrameFlushSlots);
+    if (shouldLogFlush(Render2D::session.debugScreenFlushCount)) {
+        int32_t clipX = 0;
+        int32_t clipY = 0;
+        uint32_t clipW = Render2D::session.windowWidth;
+        uint32_t clipH = Render2D::session.windowHeight;
+        if (!Render2D::session.clipStack.empty()) {
+            const Rect2D& clip = Render2D::session.clipStack.back();
+            clipX = std::clamp(static_cast<int32_t>(clip.pos.x), 0, static_cast<int32_t>(Render2D::session.windowWidth));
+            clipY = std::clamp(static_cast<int32_t>(clip.pos.y), 0, static_cast<int32_t>(Render2D::session.windowHeight));
+            clipW = static_cast<uint32_t>(std::clamp(static_cast<int32_t>(clip.extent.x), 0,
+                                                     static_cast<int32_t>(Render2D::session.windowWidth) - clipX));
+            clipH = static_cast<uint32_t>(std::clamp(static_cast<int32_t>(clip.extent.y), 0,
+                                                     static_cast<int32_t>(Render2D::session.windowHeight) - clipY));
+        }
+        YA_CORE_INFO("Render2D screen flush: passSlot={} flight={} batch={} clip=({}, {}, {}, {}) startVertex={} cursorVertex={} vertexCount={} indexCount={} resourceVersion={} uploadedResourceVersion={} textures={}",
+                     static_cast<size_t>(_activePassSlot),
+                     _activeFlightIndex,
+                     Render2D::session.debugScreenFlushCount,
+                     clipX,
+                     clipY,
+                     clipW,
+                     clipH,
+                     screenBatchStartVertex,
+                     cursorVertex,
+                     vertexCount,
+                     indexCount,
+                     _resourceVersion,
+                     _uploadedScreenResourceVersion,
+                     _textureBindings.size());
+    }
     const std::vector<DescriptorSetHandle> descriptorSets = {
         resources.frameUboDS,
         resources.activeScreenResourceDS,
@@ -645,10 +699,29 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
     setWorldViewportAndScissor(*cmdBuf, _render, Render2D::session.windowWidth, Render2D::session.windowHeight);
     cmdBuf->setCullMode(Render2D::debug.worldCullMode);
 
+    const uint32_t cursorVertex = static_cast<uint32_t>(worldVertexPtr - worldVertexPtrHead);
+    YA_CORE_ASSERT(cursorVertex == worldBatchStartVertex + worldVertexCount,
+                   "Render2D world batch cursor mismatch: startVertex={} vertexCount={} cursorVertex={}",
+                   worldBatchStartVertex,
+                   worldVertexCount,
+                   cursorVertex);
     YA_CORE_ASSERT(static_cast<uint64_t>(worldBatchStartVertex) + worldVertexCount <=
                        MaxVertexCount * kFrameFlushSlots,
                    "Render2D world frame exceeded vertex buffer capacity ({} batches)",
                    kFrameFlushSlots);
+    if (shouldLogFlush(Render2D::session.debugWorldFlushCount)) {
+        YA_CORE_INFO("Render2D world flush: passSlot={} flight={} batch={} startVertex={} cursorVertex={} vertexCount={} indexCount={} resourceVersion={} uploadedResourceVersion={} textures={}",
+                     static_cast<size_t>(_activePassSlot),
+                     _activeFlightIndex,
+                     Render2D::session.debugWorldFlushCount,
+                     worldBatchStartVertex,
+                     cursorVertex,
+                     worldVertexCount,
+                     worldIndexCount,
+                     _resourceVersion,
+                     _uploadedWorldResourceVersion,
+                     _textureBindings.size());
+    }
     std::vector<DescriptorSetHandle> descriptorSets = {
         resources.worldFrameUboDS,
         resources.activeWorldResourceDS,
