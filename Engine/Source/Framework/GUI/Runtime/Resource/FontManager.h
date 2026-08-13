@@ -121,6 +121,12 @@ struct Font
     float                                   descent    = 0;         // Distance from baseline to bottom of lowest glyph
     std::string                             fontPath;               // Path to font file
     std::shared_ptr<Texture>                atlasTexture = nullptr; // Single texture atlas (optional)
+    /// Scaled view over a base font: shares the atlas texture; metrics are
+    /// pre-scaled to fontSize. baseFont is null for the base font itself.
+    std::shared_ptr<Font> baseFont;
+    float                 scale = 1.0f;
+
+    [[nodiscard]] bool isView() const { return baseFont != nullptr; }
 
     bool hasCharacter(uint32_t codePoint) const { return characters.contains(codePoint); }
     bool hasCharacter(char asciiCode) const { return hasCharacter(static_cast<uint32_t>(static_cast<uint8_t>(asciiCode))); }
@@ -182,6 +188,8 @@ struct YA_GUI_API FontManager : public IResourceCache
   private:
     // Key: "fontName:fontSize" -> Font
     std::unordered_map<std::string, stdptr<Font>> _fontCache;
+    // Base font per name (single atlas, metrics at the rasterization size).
+    std::unordered_map<FName, stdptr<Font>>       _baseFontCache;
     FontAtlasTextureSink                           _fontAtlasTextureSink;
 
   public:

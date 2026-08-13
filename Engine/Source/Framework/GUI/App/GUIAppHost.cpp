@@ -532,11 +532,8 @@ bool GUIAppHost::init()
     // 4. Builtin textures/samplers and the runtime fonts (one atlas entry per
     //    configured size; UIText resolves fonts by exact name+size).
     TextureLibrary::get().init(render);
-    for (const uint32_t fontSize : config.fontSizes) {
-        if (!FontManager::get()->loadFont(*render, config.fontPath, DEFAULT_RUNTIME_FONT_NAME, fontSize)) {
-            YA_CORE_WARN("GUIAppHost: failed to load runtime font '{}' at size {}; text drawing disabled",
-                         config.fontPath, fontSize);
-        }
+    if (!FontManager::get()->loadFont(*render, config.fontPath, DEFAULT_RUNTIME_FONT_NAME, DEFAULT_RUNTIME_FONT_SIZE)) {
+        YA_CORE_WARN("GUIAppHost: failed to load runtime font '{}'; text drawing disabled", config.fontPath);
     }
 
     // 5. GUI Draw2D renderer (screen-space sprites, depth-less pipeline),

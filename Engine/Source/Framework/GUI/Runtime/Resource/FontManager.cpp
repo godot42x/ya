@@ -3,7 +3,9 @@
 #include "Core/System/VirtualFileSystem.h"
 #include "freetype/freetype.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 
 namespace ya
 {
@@ -69,6 +71,57 @@ bool appendStandaloneGlyph(IRender& render, Font& font, FT_Face face, uint32_t c
 }
 } // namespace
 
+namespace
+{
+
+void rescaleCharacter(Character& out, const Character& in, float scale)
+{
+    out           = in;
+    out.size      = glm::ivec2(static_cast<int>(std::lround(in.size.x * scale)),
+                               static_cast<int>(std::lround(in.size.y * scale)));
+    out.bearing   = glm::ivec2(static_cast<int>(std::lround(in.bearing.x * scale)),
+                               static_cast<int>(std::lround(in.bearing.y * scale)));
+    out.advance   = in.advance * scale;
+    // The UV rect + atlas texture stay untouched: both share the base atlas.
+}
+
+std::shared_ptr<Font> makeScaledView(const std::shared_ptr<Font>& base, uint32_t size)
+{
+    const float scale = static_cast<float>(size) / std::max(base->fontSize, 0.0001f);
+    auto        view  = std::make_shared<Font>();
+    view->fontSize    = static_cast<float>(size);
+    view->lineHeight  = base->lineHeight * scale;
+    view->ascent      = base->ascent * scale;
+    view->descent     = base->descent * scale;
+    view->fontPath    = base->fontPath;
+    view->atlasTexture = base->atlasTexture;
+    view->baseFont    = base;
+    view->scale       = scale;
+    view->characters.reserve(base->characters.size());
+    for (const auto& [cp, ch] : base->characters) {
+        Character c;
+        rescaleCharacter(c, ch, scale);
+        view->characters.emplace(cp, std::move(c));
+    }
+    return view;
+}
+
+void refreshScaledView(Font& view)
+{
+    const auto base = view.baseFont;
+    if (!base) {
+        return;
+    }
+    view.characters.clear();
+    for (const auto& [cp, ch] : base->characters) {
+        Character c;
+        rescaleCharacter(c, ch, view.scale);
+        view.characters.emplace(cp, std::move(c));
+    }
+}
+
+} // namespace
+
 FontManager *FontManager::get()
 {
     static FontManager instance;
@@ -85,23 +138,26 @@ void FontManager::registerFont(const FName &fontName, uint32_t fontSize, std::sh
     if (!font) {
         return;
     }
+    font->fontSize = static_cast<float>(fontSize);
+    _baseFontCache[fontName] = font;
     _fontCache[makeCacheKey(fontName, fontSize)] = std::move(font);
 }
 
 std::shared_ptr<Font> FontManager::getFont(const FName &fontName, uint32_t fontSize)
 {
-    std::string cacheKey = makeCacheKey(fontName, fontSize);
-
-    // Check if already loaded
-    auto it = _fontCache.find(cacheKey);
-    if (it != _fontCache.end()) {
+    // Fast path: exact-size view already materialized.
+    if (auto it = _fontCache.find(makeCacheKey(fontName, fontSize)); it != _fontCache.end()) {
         return it->second;
     }
 
-    // Not in cache - need to load
-    // Note: You'll need to store fontPath somewhere or pass it here
-    YA_CORE_WARN("Font '{}' size {} not in cache. Call loadFont first.", fontName.toString(), fontSize);
-    return nullptr;
+    auto baseIt = _baseFontCache.find(fontName);
+    if (baseIt == _baseFontCache.end() || !baseIt->second) {
+        YA_CORE_WARN("Font '{}' not in cache. Call loadFont first.", fontName.toString());
+        return nullptr;
+    }
+    auto view = makeScaledView(baseIt->second, fontSize);
+    _fontCache[makeCacheKey(fontName, fontSize)] = view;
+    return view;
 }
 
 void FontManager::unloadFont(const FName &fontName, uint32_t fontSize)
@@ -117,12 +173,18 @@ void FontManager::unloadFont(const FName &fontName, uint32_t fontSize)
 void FontManager::clearCache()
 {
     _fontCache.clear();
+    _baseFontCache.clear();
     YA_CORE_INFO("Cleared all font cache");
 }
 
 std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &fontPath, const FName &fontName, uint32_t fontSize)
 {
     YA_PROFILE_FUNCTION_LOG();
+    // Idempotent: one name -> one base atlas. Callers that loop over sizes
+    // only materialize the base once; getFont() scales to any requested size.
+    if (auto it = _baseFontCache.find(fontName); it != _baseFontCache.end()) {
+        return it->second;
+    }
     FT_Library ft{};
     if (FT_Err_Ok != FT_Init_FreeType(&ft)) {
         YA_CORE_ERROR("Failed to initialize FreeType library");
@@ -265,9 +327,9 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
         _fontAtlasTextureSink(fontName, fontSize, font->atlasTexture);
     }
 
-    // Cache the loaded font
-    std::string cacheKey = makeCacheKey(fontName, fontSize);
-    _fontCache[cacheKey] = font;
+    // Cache the base font and its exact-size fast path.
+    _baseFontCache[fontName] = font;
+    _fontCache[makeCacheKey(fontName, fontSize)] = font;
 
     YA_CORE_INFO("Loaded font '{}' (size: {}, atlas: {}x{})", fontName.toString(), fontSize, atlasWidth, atlasHeight);
     YA_CORE_INFO("Memory used for font atlas: {:.2f} KB", ((float)atlasWidth * atlasHeight * sizeof(ColorU8_t)) / 1024.0f);
@@ -277,12 +339,15 @@ std::shared_ptr<Font> FontManager::loadFont(IRender& render, const std::string &
 
 void FontManager::ensureGlyphs(IRender& render, Font& font, std::string_view text)
 {
+    // Missing glyphs are rasterized into the base atlas (at its size), then
+    // the scaled view is refreshed so its metrics stay consistent.
+    Font& target = font.isView() ? *font.baseFont : font;
     std::vector<uint32_t> missing;
     for (uint32_t codePoint : utf8::decode(text)) {
         if (codePoint == '\r' || codePoint == '\n' || codePoint == '\t') {
             continue;
         }
-        if (font.characters.contains(codePoint)) {
+        if (target.characters.contains(codePoint)) {
             continue;
         }
         if (std::find(missing.begin(), missing.end(), codePoint) == missing.end()) {
@@ -301,19 +366,22 @@ void FontManager::ensureGlyphs(IRender& render, Font& font, std::string_view tex
     }
 
     FT_Face face{};
-    if (FT_New_Face(ft, font.fontPath.c_str(), 0, &face)) {
-        YA_CORE_ERROR("Failed to load font face for glyph fallback: {}", font.fontPath);
+    if (FT_New_Face(ft, target.fontPath.c_str(), 0, &face)) {
+        YA_CORE_ERROR("Failed to load font face for glyph fallback: {}", target.fontPath);
         FT_Done_FreeType(ft);
         return;
     }
 
-    FT_Set_Pixel_Sizes(face, 0, static_cast<uint32_t>(font.fontSize));
+    FT_Set_Pixel_Sizes(face, 0, static_cast<uint32_t>(target.fontSize));
     for (uint32_t codePoint : missing) {
-        appendStandaloneGlyph(render, font, face, codePoint);
+        appendStandaloneGlyph(render, target, face, codePoint);
     }
 
     FT_Done_Face(face);
     FT_Done_FreeType(ft);
+    if (&target != &font) {
+        refreshScaledView(font);
+    }
 }
 
 std::shared_ptr<Font> FontManager::getAdaptiveFont(IRender&            render,
@@ -330,14 +398,10 @@ std::shared_ptr<Font> FontManager::getAdaptiveFont(IRender&            render,
     // Clamp to reasonable range
     adaptedSize = std::clamp(adaptedSize, 8u, 256u);
 
-    // Try to get from cache first
-    auto font = getFont(fontName, adaptedSize);
-    if (font) {
-        return font;
-    }
-
-    // Not in cache, load it
-    return loadFont(render, fontPath, fontName, adaptedSize);
+    // Load the atlas once at the fixed runtime base size, then return a
+    // scaled view for the requested size (no per-window rasterization).
+    loadFont(render, fontPath, fontName, DEFAULT_RUNTIME_FONT_SIZE);
+    return getFont(fontName, adaptedSize);
 }
 
 } // namespace ya
