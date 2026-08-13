@@ -55,6 +55,8 @@ class FWorkbenchSurface
     /// Shell chrome access for app-driven automation.
     [[nodiscard]] ya::UIMenuBar* getMenuBar() const { return _menuBar.get(); }
     [[nodiscard]] ya::UITabBar*  getTabBar() const { return _tabBar.get(); }
+    [[nodiscard]] int findPageIndexByName(const std::string& name) const;
+    void setInitialPageIndex(int index) { _initialPageIndex = index; }
 
     FWorkbenchWorkspace workspace;
 
@@ -126,6 +128,7 @@ class FWorkbenchSurface
     std::vector<FPage> _pages;
     int                _editorPageIndex = -1;
     int                _currentPageIndex = -1;
+    int                _initialPageIndex = 0;
 
     std::shared_ptr<ya::UISplitPane>      _mainSplit;
     std::shared_ptr<ya::UISplitPane>      _rightSplit;

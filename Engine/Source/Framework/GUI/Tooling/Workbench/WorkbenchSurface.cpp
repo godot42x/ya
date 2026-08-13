@@ -111,7 +111,20 @@ void FWorkbenchSurface::buildUI(ya::WidgetTree& tree)
     buildTabBar(tree, *_root);
     buildStatusBar(tree, *_root);
 
-    selectPage(0);
+    selectPage(_initialPageIndex);
+}
+
+int FWorkbenchSurface::findPageIndexByName(const std::string& name) const
+{
+    for (size_t i = 0; i < _pages.size(); ++i) {
+        if (_pages[i].name == name) {
+            return static_cast<int>(i);
+        }
+    }
+    if (name == "Editor") {
+        return static_cast<int>(_pages.size());
+    }
+    return -1;
 }
 
 int FWorkbenchSurface::addPage(const std::string& name, FPageBuilder builder)
@@ -190,7 +203,6 @@ void FWorkbenchSurface::buildTabBar(ya::WidgetTree& tree, ya::UIElement& parent)
     _tabBar->addTab("Editor");
     _editorPageIndex = static_cast<int>(_pages.size());
     _tabBar->_onTabSelected = [this](int index) { selectPage(index); };
-    _tabBar->selectTab(0);
 }
 
 void FWorkbenchSurface::buildDemoHost(ya::WidgetTree& tree, ya::UIElement& parent)
@@ -233,6 +245,10 @@ void FWorkbenchSurface::selectPage(int index)
     const int pageCount = static_cast<int>(_pages.size()) + 1; // + built-in Editor
     if (index < 0 || index >= pageCount || index == _currentPageIndex) {
         return;
+    }
+
+    if (_tabBar) {
+        _tabBar->syncSelectedTab(index);
     }
     _currentPageIndex = index;
     clearDemoHost();
@@ -720,17 +736,7 @@ void FWorkbenchSurface::runAutomation()
         dispatchPointer(ya::MouseButtonReleasedEvent(0), center);
     };
     switch (_frame) {
-    case 19: {
-        // Switch to the Editor page.
-        const auto& children = _tabBar->getChildren();
-        click(children[static_cast<size_t>(_editorPageIndex)].get());
-        if (_currentPageIndex != _editorPageIndex) {
-            failAutomation("Demo automation: tab switch to Editor failed");
-            return;
-        }
-        break;
-    }
-    case 20: {
+    case 21: {
         // Editor: Add.
         click(_addButton.get());
         if (workspace.items.size() != 4u || workspace.getSelected() == nullptr ||
@@ -742,7 +748,7 @@ void FWorkbenchSurface::runAutomation()
         }
         break;
     }
-    case 21: {
+    case 22: {
         // Editor: rename through the inspector field.
         click(_nameField.get());
         ya::KeyPressedEvent home{};
@@ -763,7 +769,7 @@ void FWorkbenchSurface::runAutomation()
         }
         break;
     }
-    case 22: {
+    case 23: {
         // Editor: drag the first row onto the third -> reparent under it.
         const glm::vec2 from = centerOf(_rows[0].get());
         const glm::vec2 to   = centerOf(_rows[2].get());
@@ -777,7 +783,7 @@ void FWorkbenchSurface::runAutomation()
         }
         break;
     }
-    case 23: {
+    case 24: {
         // The row rebuild (triggered by the reparent) must keep the tree
         // structure: depth re-derives from the stored parent links.
         if (workspace.items[0].parentId != "item.light" || workspace.getDepth("item.cube") != 1) {
@@ -786,7 +792,7 @@ void FWorkbenchSurface::runAutomation()
         }
         _bSmokePassed    = true;
         _bAutomationDone = true;
-        YA_CORE_INFO("Workbench automation PASSED: demo pages (app) -> editor (shell, incl. drag reparent)");
+        YA_CORE_INFO("Workbench automation PASSED: render baseline (app) -> demo pages (app) -> editor (shell, incl. drag reparent)");
         break;
     }
     default:
