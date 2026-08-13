@@ -75,6 +75,8 @@ struct UITabBar : public UIContainer
 
     /// Select `index` (clamped; no-op when unchanged) and fire the callback.
     void selectTab(int index);
+    /// Sync selected state without firing `_onTabSelected`.
+    void syncSelectedTab(int index);
     [[nodiscard]] int getSelectedIndex() const { return _selectedIndex; }
 
     std::function<void(int selectedIndex)> _onTabSelected;
