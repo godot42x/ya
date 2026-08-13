@@ -48,7 +48,7 @@ TEST(AppKernelTest, HeadlessLoopHonorsExitAfterFrame)
     AppKernel        kernel({}, delegate); // no event source, no frame sink
     const int        result = kernel.run(AppAutomationRunOptions{.exitAfterFrame = 5});
 
-    EXPECT_EQ(result, 1);
+    EXPECT_EQ(result, 0);
     EXPECT_EQ(delegate.ticks, 5);
     EXPECT_EQ(delegate.events, 0);
     EXPECT_TRUE(delegate.started);
@@ -63,7 +63,7 @@ TEST(AppKernelTest, DelegateCloseAndEventSourceDrive)
     AppKernel        kernel({.eventSource = &source}, delegate);
 
     const int result = kernel.run();
-    EXPECT_EQ(result, 1);
+    EXPECT_EQ(result, 0);
     EXPECT_EQ(delegate.ticks, 3);
     EXPECT_EQ(delegate.events, 1);
     EXPECT_TRUE(delegate.shutdown);

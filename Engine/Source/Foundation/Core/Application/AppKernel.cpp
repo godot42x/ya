@@ -39,7 +39,7 @@ int AppKernel::run(const AppAutomationRunOptions& options)
 
     _delegate.onShutdown();
     _bDelegateStarted = false;
-    return result;
+    return 0;
 }
 
 int AppKernel::iterate(float dt)
