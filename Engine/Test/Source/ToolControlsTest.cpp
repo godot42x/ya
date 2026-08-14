@@ -13,6 +13,7 @@
 #include "GUI/Widgets/Controls/SelectableRow.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/TextField.h"
+#include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Resources/FontManager.h"
 
 #include <gtest/gtest.h>
@@ -349,6 +350,109 @@ TEST(ToolControlsTest, ButtonHoverClearsOnPointerLeave)
     EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(200.0f, 200.0f), pointAt(200.0f, 200.0f)),
               EWidgetRouteResult::NotHandled);
     EXPECT_FALSE(button->_bHovered);
+    EXPECT_EQ(tree.getHovered(), nullptr);
+}
+
+TEST(ToolControlsTest, ToolbarSiblingHoverSwitchesAndClears)
+{
+    // Reproduce the GUIWorkbench Editor toolbar: a horizontal box with several
+    // buttons separated by spacing/padding.
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       toolbar = std::make_shared<UIContainer>("Toolbar");
+    toolbar->setDirection(EWidgetBoxLayout::Horizontal);
+    toolbar->_position = {10.0f, 10.0f};
+    toolbar->_size     = {300.0f, 32.0f};
+    toolbar->setSpacing(8.0f);
+    toolbar->setPadding({8.0f, 4.0f});
+
+    auto add    = std::make_shared<UIButton>("Add");
+    add->_size  = {44.0f, 24.0f};
+    auto remove    = std::make_shared<UIButton>("Remove");
+    remove->_size  = {60.0f, 24.0f};
+
+    tree.attachToLayer(WidgetTree::ELayer::Content, toolbar);
+    tree.attach(*toolbar, add);
+    tree.attach(*toolbar, remove);
+    tree.layout();
+
+    // Hover Add (content origin 18,14; Add spans x[18,62]).
+    tree.dispatchEvent(MouseMoveEvent(40.0f, 26.0f), pointAt(40.0f, 26.0f));
+    EXPECT_TRUE(add->_bHovered);
+    EXPECT_EQ(tree.getHovered(), add.get());
+
+    // Move to Remove (Remove spans x[70,130]): Add must clear, Remove highlight.
+    tree.dispatchEvent(MouseMoveEvent(100.0f, 26.0f), pointAt(100.0f, 26.0f));
+    EXPECT_FALSE(add->_bHovered);
+    EXPECT_TRUE(remove->_bHovered);
+    EXPECT_EQ(tree.getHovered(), remove.get());
+
+    // Move to empty space (between/after buttons): no hover owner remains.
+    tree.dispatchEvent(MouseMoveEvent(200.0f, 26.0f), pointAt(200.0f, 26.0f));
+    EXPECT_FALSE(remove->_bHovered);
+    EXPECT_EQ(tree.getHovered(), nullptr);
+}
+
+TEST(ToolControlsTest, ToolbarAutoSizeButtonWithLabelHoverClears)
+{
+    // Reproduce the exact Editor toolbar: a horizontally-stretched container
+    // packing SizeToContent buttons that each carry a centered text label.
+    registerMenuFont(14.0f, 8.0f);
+    WidgetTree tree({.width = 400, .height = 300});
+
+    auto toolbar = std::make_shared<UIContainer>("Toolbar");
+    toolbar->setDirection(EWidgetBoxLayout::Horizontal);
+    toolbar->_anchorMin = {0.0f, 0.0f};
+    toolbar->_anchorMax = {1.0f, 0.0f};
+    toolbar->_position  = {0.0f, 6.0f};
+    toolbar->_size      = {0.0f, 32.0f};
+    toolbar->setSpacing(8.0f);
+    toolbar->setPadding({8.0f, 4.0f});
+
+    auto makeButton = [](const std::string& name, const std::string& label) {
+        auto button = std::make_shared<UIButton>(name);
+        button->_bAutoSize = true;
+        button->setContentPadding({10.0f, 4.0f});
+        auto text       = std::make_shared<UIText>(name + "_Label");
+        text->_bAutoSize = true;
+        text->_fontSize  = 14;
+        text->_text      = label;
+        text->_hAlign    = EWidgetAlignH::Center;
+        text->_vAlign    = EWidgetAlignV::Center;
+        button->addDetachedChild(text);
+        return button;
+    };
+
+    auto add    = makeButton("Add", "Add");
+    auto remove = makeButton("Remove", "Remove");
+
+    tree.attachToLayer(WidgetTree::ELayer::Content, toolbar);
+    tree.attach(*toolbar, add);
+    tree.attach(*toolbar, remove);
+    tree.layout();
+
+    const auto center = [](const UIElement* e) {
+        return e->_layoutRect.pos + e->_layoutRect.extent * 0.5f;
+    };
+
+    // Hover Add (over its label child: hover resolves through the text to the
+    // button).
+    const glm::vec2 addCenter = center(add.get());
+    tree.dispatchEvent(MouseMoveEvent(addCenter.x, addCenter.y), pointAt(addCenter.x, addCenter.y));
+    EXPECT_TRUE(add->_bHovered);
+    EXPECT_EQ(tree.getHovered(), add.get());
+
+    // Move to Remove: Add clears, Remove highlights.
+    const glm::vec2 removeCenter = center(remove.get());
+    tree.dispatchEvent(MouseMoveEvent(removeCenter.x, removeCenter.y), pointAt(removeCenter.x, removeCenter.y));
+    EXPECT_FALSE(add->_bHovered);
+    EXPECT_TRUE(remove->_bHovered);
+    EXPECT_EQ(tree.getHovered(), remove.get());
+
+    // Move to the toolbar's empty stretch (past the last button): no hover.
+    const glm::vec2 empty = {toolbar->_layoutRect.pos.x + toolbar->_layoutRect.extent.x - 20.0f,
+                             center(toolbar.get()).y};
+    tree.dispatchEvent(MouseMoveEvent(empty.x, empty.y), pointAt(empty.x, empty.y));
+    EXPECT_FALSE(remove->_bHovered);
     EXPECT_EQ(tree.getHovered(), nullptr);
 }
 
@@ -731,6 +835,10 @@ TEST(ToolControlsTest, MenuBarHoverSwitchesOpenMenu)
     // Hover over Edit without clicking: the open menu switches to Edit's.
     EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(84.0f, 15.0f), pointAt(84.0f, 15.0f)),
               EWidgetRouteResult::HandledExclusive);
+    // The hover-switch must close the old menu only AFTER routing: during
+    // routing the retired overlay is still alive and classifies the first
+    // (popup) route, so no hit target is ever dereferenced after destruction.
+    EXPECT_EQ(tree.getLastRouteTrace().policy, EWidgetRoutePolicy::Popup);
     ASSERT_NE(bar->getOpenMenu(), nullptr);
     EXPECT_EQ(bar->getOpenMenu()->menuItems().front()->_label, "Undo");
     {

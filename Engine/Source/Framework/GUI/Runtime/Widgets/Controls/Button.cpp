@@ -78,10 +78,10 @@ bool UIButton::handleInputEvent(const Event& event, const WidgetEventContext& ct
 
     switch (eventType) {
     case EEvent::MouseButtonPressed:
-        // The press originates on the button (hit walk): the pointer is
-        // over it, so hover follows the press even without a prior move.
-        // Via capture the point may lie outside: then it is not hovered.
-        _bHovered = bPointInside;
+        // Hover is owned exclusively by the enter/leave lifecycle
+        // (WidgetTree::updateHovered). The press only requests focus and
+        // capture; it must not write _bHovered here, or it can desync from
+        // the tree's hover owner and leave a stale highlight.
         _bPressed = true;
         if (WidgetTree* tree = getTree()) {
             tree->setFocus(this);
@@ -93,9 +93,6 @@ bool UIButton::handleInputEvent(const Event& event, const WidgetEventContext& ct
             return false; // stray release: no press session to complete
         }
         _bPressed = false;
-        // Hover reflects the release position: still inside keeps hover,
-        // a drag-out release clears it (the next move re-arms it).
-        _bHovered = bPointInside;
         if (WidgetTree* tree = getTree()) {
             tree->releasePointerCapture(this);
         }
@@ -109,7 +106,8 @@ bool UIButton::handleInputEvent(const Event& event, const WidgetEventContext& ct
         }
         return true;
     case EEvent::MouseMoved:
-        _bHovered = bPointInside;
+        // Hover is resolved by WidgetTree::updateHovered (enter/leave
+        // lifecycle) after routing; consume the move without touching state.
         return true;
     default:
         return false;

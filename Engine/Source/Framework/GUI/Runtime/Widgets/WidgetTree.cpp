@@ -148,17 +148,12 @@ EWidgetRouteResult WidgetTree::dispatchCapturedPointerEvent(const Event& event,
                          EWidgetRoutePolicy::PointerCapture, /*bAppendTrace=*/false);
 }
 
-void WidgetTree::resolvePointerTargets(EEvent::T eventType,
-                                       const WidgetEventContext& ctx,
+void WidgetTree::resolvePointerTargets(const WidgetEventContext& ctx,
                                        std::vector<UIElement*>& outTargets)
 {
     outTargets.clear();
     collectHitTargetsSubtree(_root.get(), ctx.logicalPoint, outTargets);
     refreshPointerPath(outTargets.empty() ? nullptr : outTargets.front());
-
-    if (eventType == EEvent::MouseMoved || eventType == EEvent::MouseButtonPressed) {
-        updateHovered(resolveHoverTarget(outTargets));
-    }
 }
 
 EWidgetRouteResult WidgetTree::dispatchResolvedRoute(const Event& event,
@@ -547,8 +542,17 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
     }
 
     std::vector<UIElement*> pointerTargets;
-    resolvePointerTargets(eventType, ctx, pointerTargets);
-    return dispatchResolvedRoute(event, ctx, pointerTargets);
+    resolvePointerTargets(ctx, pointerTargets);
+    const EWidgetRouteResult result = dispatchResolvedRoute(event, ctx, pointerTargets);
+
+    // Hover enter/leave may mutate the tree (menu-bar hover-switch closes and
+    // reopens overlays, and opening a new overlay destroys the retired one).
+    // Resolve/update hover only after routing so the hit targets collected
+    // above stay valid for the route above.
+    if (eventType == EEvent::MouseMoved || eventType == EEvent::MouseButtonPressed) {
+        updateHovered(resolveHoverTarget(pointerTargets));
+    }
+    return result;
 }
 
 // === Focus / capture / hover ===

@@ -111,7 +111,7 @@ struct YA_GUI_API WidgetTree final
     /// (returns invalid attachment, logs an error) when the widget is already
     /// attached anywhere — reparent() is the explicit move operation. The
     /// widget keeps its own _zOrder (set it before attaching).
-    [[nodiscard]] WidgetAttachment attach(UIElement& parent, const UIElementRef& widget);
+    [[maybe_unused]] WidgetAttachment attach(UIElement& parent, const UIElementRef& widget);
     /// Attach `widget` to a system layer (Content by default for game UI).
     [[nodiscard]] WidgetAttachment attachToLayer(ELayer layer, const UIElementRef& widget);
     /// Explicit move: detach from the current parent (if any) and attach under
@@ -221,8 +221,7 @@ struct YA_GUI_API WidgetTree final
     [[nodiscard]] EWidgetRouteResult dispatchCapturedPointerEvent(const Event& event,
                                                                   const WidgetEventContext& ctx,
                                                                   EEvent::T eventType);
-    void resolvePointerTargets(EEvent::T eventType,
-                               const WidgetEventContext& ctx,
+    void resolvePointerTargets(const WidgetEventContext& ctx,
                                std::vector<UIElement*>& outTargets);
     [[nodiscard]] EWidgetRouteResult dispatchResolvedRoute(const Event& event,
                                                            const WidgetEventContext& ctx,
