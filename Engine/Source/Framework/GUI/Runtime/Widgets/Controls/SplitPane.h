@@ -63,6 +63,12 @@ struct YA_GUI_API UISplitPane : public UIElement
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool isHoverable() const override { return true; }
+    /// The pane is hoverable only for its divider strip: hitTestSelf narrows
+    /// the split's own hit region to the divider rect, so a full-area rect
+    /// never steals hover/cursor from an overlapping child (e.g. a toolbar
+    /// button over the top padding). Pane regions are hit by their children;
+    /// padding falls through to whatever sits below.
+    bool hitTestSelf(const glm::vec2& logicalPoint) const override;
     void onPointerLeave() override { _bHoveredDivider = false; }
     void resetHoverState() override { onPointerLeave(); }
     [[nodiscard]] ECursorType getCursor() const override

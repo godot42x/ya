@@ -22,6 +22,7 @@
 #include "GUI/Widgets/WidgetAttachment.h"
 
 #include <array>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -167,9 +168,11 @@ struct YA_GUI_API WidgetTree final
     [[nodiscard]] const WidgetPointerState& getPointerState() const { return _pointerState; }
     /// Current pointer route path, root to target. For ordinary input it is
     /// the topmost hit path; while captured it terminates at the captor.
-    [[nodiscard]] const std::vector<UIElement*>& getPointerPath() const { return _pointerPath; }
+    /// Returns a snapshot of the live nodes (detached/destroyed entries are
+    /// dropped), so callers never observe a dangling pointer.
+    [[nodiscard]] std::vector<UIElement*> getPointerPath() const;
     /// Current focus path, root to focused widget. Empty without focus.
-    [[nodiscard]] const std::vector<UIElement*>& getFocusPath() const { return _focusPath; }
+    [[nodiscard]] std::vector<UIElement*> getFocusPath() const;
     [[nodiscard]] const WidgetRouteTrace& getLastRouteTrace() const { return _lastRouteTrace; }
 
     // === Drag & drop session (gui-app-bootstrap Phase 4) ===
@@ -192,17 +195,20 @@ struct YA_GUI_API WidgetTree final
   private:
     friend struct UIElement;
 
-    /// Collect deepest hit candidates in topmost-first order. Each candidate
-    /// becomes one explicit preview -> target -> bubble route attempt.
-    static void collectHitTargetsSubtree(UIElement* element,
-                                         const glm::vec2& logicalPoint,
-                                         std::vector<UIElement*>& outTargets);
-    /// Resolve the single hovered widget from the hit candidates: walk each
-    /// candidate (topmost-first) and its ancestor chain for the first
-    /// isHoverable() widget. This decouples "hover" from "topmost hit" so a
-    /// text child or a transparent popup shield never becomes the hover owner
-    /// in place of the real interactive leaf.
-    [[nodiscard]] static UIElement* resolveHoverTarget(const std::vector<UIElement*>& targets);
+    /// Single-topmost hit test: recurse zOrder-high-first, children before
+    /// self, returning the first (and only) hit. Mirrors UE Slate / WPF / Qt /
+    /// DOM: one point resolves to exactly one widget, then routing and hover
+    /// both derive from that widget's ancestor path. Returns null when nothing
+    /// is hit.
+    [[nodiscard]] static UIElement* hitTestAt(UIElement* element,
+                                              const glm::vec2& logicalPoint,
+                                              bool bForHover = false);
+    /// Resolve the single hover owner from a hit target: walk up its ancestor
+    /// chain for the first isHoverable() widget. Because the target is already
+    /// the topmost hit, this is deterministic (the deepest hoverable) with no
+    /// separate scan — a text child or a transparent popup shield can never
+    /// become the hover owner in place of the real interactive leaf.
+    [[nodiscard]] static UIElement* hoverOwnerAlongPath(UIElement* target);
     /// Assign tree membership to a widget and its whole subtree (invariant:
     /// attached iff every descendant is a member of the same tree).
     static void markSubtreeMembership(UIElement* widget, WidgetTree* tree);
@@ -221,11 +227,6 @@ struct YA_GUI_API WidgetTree final
     [[nodiscard]] EWidgetRouteResult dispatchCapturedPointerEvent(const Event& event,
                                                                   const WidgetEventContext& ctx,
                                                                   EEvent::T eventType);
-    void resolvePointerTargets(const WidgetEventContext& ctx,
-                               std::vector<UIElement*>& outTargets);
-    [[nodiscard]] EWidgetRouteResult dispatchResolvedRoute(const Event& event,
-                                                           const WidgetEventContext& ctx,
-                                                           const std::vector<UIElement*>& targets);
     [[nodiscard]] EWidgetRouteResult dispatchRoute(UIElement* target,
                                                    const Event& event,
                                                    const WidgetEventContext& ctx,
@@ -236,6 +237,11 @@ struct YA_GUI_API WidgetTree final
     [[nodiscard]] static EWidgetRoutePolicy classifyPointerRoute(const std::vector<UIElement*>& path);
     void refreshPointerPath(UIElement* target);
     void refreshFocusPath();
+    /// Unified liveness sweep at the top of each input dispatch: drops focus /
+    /// capture / hover / path entries that no longer point at a live, attached
+    /// widget. Complements detach-time clearing so no code path can leave the
+    /// tree holding a dangling transient reference (UE FocusPath semantics).
+    void pruneTransientState();
     void updateHovered(UIElement* widget);
     void beginRouteTrace(EWidgetRoutePolicy policy, UIElement* target);
     void appendRouteTraceStep(const UIElement& widget,
@@ -259,8 +265,11 @@ struct YA_GUI_API WidgetTree final
     UIElement*    _captured     = nullptr;
     UIElement*    _hovered      = nullptr;
     WidgetPointerState _pointerState;
-    std::vector<UIElement*> _pointerPath;
-    std::vector<UIElement*> _focusPath;
+    // Weak pointer paths (UE FWeakWidgetPath semantics): root-to-target live
+    // routes that survive widget destruction without dangling. Read through
+    // getPointerPath()/getFocusPath(), which lock and drop dead entries.
+    std::vector<std::weak_ptr<UIElement>> _pointerPath;
+    std::vector<std::weak_ptr<UIElement>> _focusPath;
     WidgetRouteTrace _lastRouteTrace;
 
     UIElement*        _dragSource   = nullptr;

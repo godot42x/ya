@@ -108,6 +108,15 @@ bool UISplitPane::handleInputEvent(const Event& event, const WidgetEventContext&
     return false;
 }
 
+bool UISplitPane::hitTestSelf(const glm::vec2& logicalPoint) const
+{
+    // Only the divider strip is part of this widget's own hit region; the two
+    // panes belong to their children and padding falls through to lower
+    // siblings. This keeps the split's full-area rect from stealing hover or
+    // the resize cursor from an overlapping interactive child.
+    return isHitTestableSelf() && pointInRect(logicalPoint, _splitLayout.getDividerRect());
+}
+
 void UISplitPane::clearTransientInputState()
 {
     _bDraggingDivider = false;

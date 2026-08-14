@@ -264,6 +264,14 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// hoverable widget under the pointer from this flag, so a button's text
     /// child reports the button (not the text) as the hovered widget.
     [[nodiscard]] virtual bool isHoverable() const { return false; }
+    /// Whether this widget is transparent to hover despite being hit-testable
+    /// for pointer presses. A non-modal popup shield is the canonical case: it
+    /// is drawn transparent (invisible to the user), must still swallow
+    /// presses (to dismiss the popup), but must NOT steal hover from the
+    /// visible widget beneath it (a menu bar item keeps hover-switch alive
+    /// while a menu is open). Modal shields and ordinary widgets keep the
+    /// default (false) so they block hover as well as presses.
+    [[nodiscard]] virtual bool isHoverTransparent() const { return false; }
     /// Cursor to show while this widget is hovered (queried by the host from
     /// the tree's hovered widget). Base: arrow; split panes override it.
     [[nodiscard]] virtual ECursorType getCursor() const { return ECursorType::Arrow; }
@@ -328,6 +336,18 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     [[nodiscard]] bool isHitTestableInTree() const;
     /// Own-rect hit test against the cached layout rect.
     [[nodiscard]] bool hitTestLayoutRect(const glm::vec2& logicalPoint) const;
+    /// Self hit-test contract, called by the tree's topmost-first walker to
+    /// decide whether this widget (and only this widget) is hit at
+    /// `logicalPoint`. The default is `isHitTestableSelf() &&
+    /// hitTestLayoutRect(logicalPoint)`. Layout hosts may narrow their own hit
+    /// region by overriding this (e.g. a split pane only reports a hit over
+    /// its divider strip, so its full-area rect never steals hover from an
+    /// overlapping child). Children are always tested before self, so a child
+    /// hit inside the narrowed region still wins.
+    [[nodiscard]] virtual bool hitTestSelf(const glm::vec2& logicalPoint) const
+    {
+        return isHitTestableSelf() && hitTestLayoutRect(logicalPoint);
+    }
 
     /// Authoring-only: attach a child to a detached subtree (UIDocument
     /// instantiate). The child must not be attached anywhere; tree membership

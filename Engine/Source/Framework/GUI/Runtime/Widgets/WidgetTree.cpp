@@ -53,40 +53,47 @@ WidgetTree::WidgetTree(Extent2D logicalExtent) : _logicalExtent(logicalExtent)
     }
 }
 
-void WidgetTree::collectHitTargetsSubtree(UIElement* element,
-                                          const glm::vec2& logicalPoint,
-                                          std::vector<UIElement*>& outTargets)
+UIElement* WidgetTree::hitTestAt(UIElement* element, const glm::vec2& logicalPoint, bool bForHover)
 {
     if (!element->isHitTestableSubtree()) {
-        return;
+        return nullptr;
     }
     // Clipped containers (scroll viewports): children outside the container
-    // rect are not hittable, even though their own layout rects extend past it.
+    // rect are not hittable, even though their own layout rects extend past
+    // it. Only the container itself can be hit here.
     if (element->cullsChildHits(logicalPoint)) {
-        if (element->isHitTestableSelf() && element->hitTestLayoutRect(logicalPoint)) {
-            outTargets.push_back(element);
-        }
-        return;
+        return element->hitTestSelf(logicalPoint) ? element : nullptr;
     }
 
-    const size_t targetCountBeforeChildren = outTargets.size();
+    // Children before self, zOrder high first: the topmost descendant wins and
+    // the search stops at the first hit.
     const auto children = element->getChildrenInPaintOrder();
     for (auto it = children.rbegin(); it != children.rend(); ++it) {
-        collectHitTargetsSubtree(*it, logicalPoint, outTargets);
+        if (UIElement* hit = hitTestAt(*it, logicalPoint, bForHover)) {
+            return hit;
+        }
     }
-    if (outTargets.size() == targetCountBeforeChildren &&
-        element->isHitTestableSelf() && element->hitTestLayoutRect(logicalPoint)) {
-        outTargets.push_back(element);
+    if (!element->hitTestSelf(logicalPoint)) {
+        return nullptr;
     }
+    // A hover-transparent shield (non-modal popup) swallows presses but lets
+    // the hover walk continue to a visible sibling beneath it.
+    if (bForHover && element->isHoverTransparent()) {
+        return nullptr;
+    }
+    return element;
 }
 
-UIElement* WidgetTree::resolveHoverTarget(const std::vector<UIElement*>& targets)
+UIElement* WidgetTree::hoverOwnerAlongPath(UIElement* target)
 {
-    for (UIElement* target : targets) {
-        for (UIElement* node = target; node != nullptr; node = node->getParent()) {
-            if (node->isHoverable()) {
-                return node;
-            }
+    // The target is the single topmost hit; the hover owner is simply the
+    // deepest isHoverable() widget on its ancestor chain. No separate scan, no
+    // tie-breaking: deterministically the most specific interactive widget
+    // under the pointer (a text child resolves to its hoverable button, a
+    // split divider resolves to the split pane, and so on).
+    for (UIElement* node = target; node != nullptr; node = node->getParent()) {
+        if (node->isHoverable() && node->isAttached()) {
+            return node;
         }
     }
     return nullptr;
@@ -146,37 +153,6 @@ EWidgetRouteResult WidgetTree::dispatchCapturedPointerEvent(const Event& event,
     captureCtx.bViaCapture         = true;
     return dispatchRoute(_captured, event, captureCtx,
                          EWidgetRoutePolicy::PointerCapture, /*bAppendTrace=*/false);
-}
-
-void WidgetTree::resolvePointerTargets(const WidgetEventContext& ctx,
-                                       std::vector<UIElement*>& outTargets)
-{
-    outTargets.clear();
-    collectHitTargetsSubtree(_root.get(), ctx.logicalPoint, outTargets);
-    refreshPointerPath(outTargets.empty() ? nullptr : outTargets.front());
-}
-
-EWidgetRouteResult WidgetTree::dispatchResolvedRoute(const Event& event,
-                                                     const WidgetEventContext& ctx,
-                                                     const std::vector<UIElement*>& targets)
-{
-    EWidgetRouteResult result      = EWidgetRouteResult::NotHandled;
-    bool               bFirstRoute = true;
-    for (UIElement* target : targets) {
-        const EWidgetRoutePolicy policy = classifyPointerRoute(buildPath(target));
-        const EWidgetRouteResult routeResult =
-            dispatchRoute(target, event, ctx, policy,
-                          /*bAppendTrace=*/!bFirstRoute);
-        bFirstRoute = false;
-        result      = mergeRouteResult(result, routeResult);
-        if (result == EWidgetRouteResult::HandledExclusive) {
-            return result;
-        }
-    }
-    if (targets.empty()) {
-        setRouteTrace(EWidgetRoutePolicy::HitTest, nullptr);
-    }
-    return result;
 }
 
 void WidgetTree::markSubtreeMembership(UIElement* widget, WidgetTree* tree)
@@ -445,6 +421,7 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
 
 EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEventContext& ctx)
 {
+    pruneTransientState();
     const EEvent::T eventType = event.getEventType();
     preparePointerState(eventType, ctx);
     const bool bPointerEvent = eventType == EEvent::MouseButtonPressed ||
@@ -541,16 +518,24 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
         return captureResult;
     }
 
-    std::vector<UIElement*> pointerTargets;
-    resolvePointerTargets(ctx, pointerTargets);
-    const EWidgetRouteResult result = dispatchResolvedRoute(event, ctx, pointerTargets);
+    // A hover-transparent shield (non-modal popup) is invisible to the user:
+    // pointer moves route through it to the visible widget beneath, while
+    // presses land on the shield (which dismisses the popup). Both share one
+    // single-topmost walk; only the `bForHover` flag differs between them.
+    const bool bHoverAware = eventType == EEvent::MouseMoved;
+    UIElement* target = hitTestAt(_root.get(), ctx.logicalPoint, bHoverAware);
+    refreshPointerPath(target);
+    const EWidgetRouteResult result =
+        dispatchRoute(target, event, ctx, classifyPointerRoute(buildPath(target)),
+                      /*bAppendTrace=*/false);
 
     // Hover enter/leave may mutate the tree (menu-bar hover-switch closes and
     // reopens overlays, and opening a new overlay destroys the retired one).
-    // Resolve/update hover only after routing so the hit targets collected
-    // above stay valid for the route above.
+    // Resolve/update hover only after routing so the hit target collected
+    // above stays valid for the route above.
     if (eventType == EEvent::MouseMoved || eventType == EEvent::MouseButtonPressed) {
-        updateHovered(resolveHoverTarget(pointerTargets));
+        updateHovered(hoverOwnerAlongPath(
+            hitTestAt(_root.get(), ctx.logicalPoint, /*bForHover=*/true)));
     }
     return result;
 }
@@ -615,12 +600,16 @@ void WidgetTree::clearTransientState(UIElement& widget)
         if (_hovered == node) {
             _hovered = nullptr;
         }
-        if (std::find(_pointerPath.begin(), _pointerPath.end(), node) != _pointerPath.end()) {
-            _pointerPath.clear();
-        }
-        if (std::find(_focusPath.begin(), _focusPath.end(), node) != _focusPath.end()) {
-            _focusPath.clear();
-        }
+        const auto clearPathIfContains = [&](std::vector<std::weak_ptr<UIElement>>& path) {
+            for (const auto& weak : path) {
+                if (auto p = weak.lock(); p.get() == node) {
+                    path.clear();
+                    return;
+                }
+            }
+        };
+        clearPathIfContains(_pointerPath);
+        clearPathIfContains(_focusPath);
         node->clearTransientInputState();
         for (const auto& child : node->_children) {
             pending.push_back(child.get());
@@ -640,9 +629,7 @@ void WidgetTree::onWidgetDetached(UIElement& widget)
 
 UIElement* WidgetTree::topmostHit(const glm::vec2& logicalPoint) const
 {
-    std::vector<UIElement*> targets;
-    collectHitTargetsSubtree(_root.get(), logicalPoint, targets);
-    return targets.empty() ? nullptr : targets.front();
+    return hitTestAt(_root.get(), logicalPoint);
 }
 
 std::vector<UIElement*> WidgetTree::buildPath(UIElement* target)
@@ -770,12 +757,73 @@ EWidgetRouteResult WidgetTree::dispatchRoute(UIElement* target,
 
 void WidgetTree::refreshPointerPath(UIElement* target)
 {
-    _pointerPath = target ? buildPath(target) : std::vector<UIElement*>{};
+    _pointerPath.clear();
+    for (UIElement* node = target; node != nullptr; node = node->getParent()) {
+        _pointerPath.emplace_back(node->shared_from_this());
+    }
+    std::reverse(_pointerPath.begin(), _pointerPath.end());
 }
 
 void WidgetTree::refreshFocusPath()
 {
-    _focusPath = _focused ? buildPath(_focused) : std::vector<UIElement*>{};
+    _focusPath.clear();
+    for (UIElement* node = _focused; node != nullptr; node = node->getParent()) {
+        _focusPath.emplace_back(node->shared_from_this());
+    }
+    std::reverse(_focusPath.begin(), _focusPath.end());
+}
+
+std::vector<UIElement*> WidgetTree::getPointerPath() const
+{
+    std::vector<UIElement*> path;
+    path.reserve(_pointerPath.size());
+    for (const auto& weak : _pointerPath) {
+        if (auto node = weak.lock()) {
+            path.push_back(node.get());
+        }
+    }
+    return path;
+}
+
+std::vector<UIElement*> WidgetTree::getFocusPath() const
+{
+    std::vector<UIElement*> path;
+    path.reserve(_focusPath.size());
+    for (const auto& weak : _focusPath) {
+        if (auto node = weak.lock()) {
+            path.push_back(node.get());
+        }
+    }
+    return path;
+}
+
+void WidgetTree::pruneTransientState()
+{
+    if (_focused && !_focused->isAttached()) {
+        _focused->onFocusLost();
+        _focused = nullptr;
+        _focusPath.clear();
+    }
+    if (_captured && !_captured->isAttached()) {
+        _captured = nullptr;
+    }
+    if (_hovered && !_hovered->isAttached()) {
+        _hovered = nullptr;
+    }
+    const auto prunePath = [this](std::vector<std::weak_ptr<UIElement>>& path) {
+        std::erase_if(path, [this](const std::weak_ptr<UIElement>& weak) {
+            const auto node = weak.lock();
+            if (!node) {
+                return true;
+            }
+            // The internal tree root is a legal path head but is never
+            // "attached" (it has no _tree back-pointer); keep it, drop only
+            // detached business widgets.
+            return node.get() != _root.get() && !node->isAttached();
+        });
+    };
+    prunePath(_pointerPath);
+    prunePath(_focusPath);
 }
 
 void WidgetTree::beginRouteTrace(EWidgetRoutePolicy policy, UIElement* target)
