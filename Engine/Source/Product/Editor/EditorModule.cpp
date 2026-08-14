@@ -28,6 +28,7 @@
 #include "RHI/Backend/TextureLibrary.h"
 #include "Host/App.h"
 #include "Host/Automation/EditorAutomationControl.h"
+#include "Host/IRuntimeModule.h"
 #include "Host/GUI/GuiSystem.h"
 #include "Host/GUI/GameUI/GameUIHost.h"
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
@@ -555,7 +556,7 @@ class EditorToolSurfaceCompositor
     }
 };
 
-class EditorModule final : public IModule, public IEditorAutomationControl
+class EditorModule final : public IModule, public IRuntimeModule, public IEditorAutomationControl
 {
   private:
     std::unique_ptr<EditorLayer>   _layer;
@@ -797,6 +798,9 @@ class EditorModule final : public IModule, public IEditorAutomationControl
 
     void* queryInterface(FInterfaceId interfaceId) override
     {
+        if (interfaceId == YA_RUNTIME_MODULE_INTERFACE) {
+            return static_cast<IRuntimeModule*>(this);
+        }
         if (interfaceId == YA_EDITOR_AUTOMATION_CONTROL_INTERFACE) {
             return static_cast<IEditorAutomationControl*>(this);
         }

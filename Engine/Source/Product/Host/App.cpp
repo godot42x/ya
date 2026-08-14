@@ -1,6 +1,7 @@
 #include "Host/App.h"
 #include "Host/AppRenderState.h"
 #include "Host/Automation/AppAutomationControlService.h"
+#include "Host/IRuntimeModule.h"
 #include "GUI/Host/NativeWindowManager.h"
 #include "Core/Config/ConfigManager.h"
 #include "Render3D/RenderRuntime.h"
@@ -18,6 +19,17 @@ namespace
 {
 inline const FName kContentMount = game::mounts::Content;
 inline const FName kGameRootMount = game::mounts::GameRoot;
+
+/// Resolve a module's runtime hooks. Modules that only implement the generic
+/// load lifecycle get a shared no-op instance, so call sites never null-check.
+IRuntimeModule* getRuntimeModule(IModule* module)
+{
+    if (auto* runtime = static_cast<IRuntimeModule*>(module->queryInterface(YA_RUNTIME_MODULE_INTERFACE))) {
+        return runtime;
+    }
+    static IRuntimeModule s_default;
+    return &s_default;
+}
 }
 
 App*     App::_instance        = nullptr;
@@ -91,7 +103,7 @@ void App::configureModules()
     YA_PROFILE_FUNCTION();
 
     for (const auto& slot : _modules) {
-        slot.module->onConfigure(*this, _ci);
+        getRuntimeModule(slot.module)->onConfigure(*this, _ci);
     }
 }
 
@@ -119,7 +131,7 @@ void App::attachModules()
 
     YA_CORE_ASSERT(!_modulesAttached, "Modules are already attached");
     for (const auto& slot : _modules) {
-        slot.module->onAttach(*this);
+        getRuntimeModule(slot.module)->onAttach(*this);
     }
     _modulesAttached = true;
 }
@@ -132,7 +144,7 @@ void App::detachModules()
         return;
     }
     for (auto it = _modules.rbegin(); it != _modules.rend(); ++it) {
-        it->module->onDetach(*this);
+        getRuntimeModule(it->module)->onDetach(*this);
     }
     _modulesAttached = false;
 }
@@ -140,7 +152,7 @@ void App::detachModules()
 bool App::dispatchHostModuleEvent(const Event& event)
 {
     for (const auto& slot : _modules) {
-        if (slot.module->onEvent(*this, event)) {
+        if (getRuntimeModule(slot.module)->onEvent(*this, event)) {
             return true;
         }
     }
@@ -150,7 +162,7 @@ bool App::dispatchHostModuleEvent(const Event& event)
 bool App::dispatchInputModuleEvent(const Event& event)
 {
     for (const auto& slot : _modules) {
-        if (slot.module->onEvent(*this, event)) {
+        if (getRuntimeModule(slot.module)->onEvent(*this, event)) {
             return true;
         }
     }
@@ -248,7 +260,7 @@ void App::tickModules(float dt)
     YA_PROFILE_FUNCTION();
 
     for (const auto& slot : _modules) {
-        slot.module->onLogic(*this, dt);
+        getRuntimeModule(slot.module)->onLogic(*this, dt);
     }
 }
 
@@ -257,28 +269,28 @@ void App::prepareModulesForRender(float dt)
     YA_PROFILE_FUNCTION();
 
     for (const auto& slot : _modules) {
-        slot.module->onBeforeRender(*this, dt);
+        getRuntimeModule(slot.module)->onBeforeRender(*this, dt);
     }
 }
 
 void App::recordModuleViewportCompose(ICommandBuffer& commandBuffer, float dt)
 {
     for (const auto& slot : _modules) {
-        slot.module->onViewportCompose(*this, commandBuffer, dt);
+        getRuntimeModule(slot.module)->onViewportCompose(*this, commandBuffer, dt);
     }
 }
 
 void App::recordModuleBeforePresentation(ICommandBuffer& commandBuffer, float dt)
 {
     for (const auto& slot : _modules) {
-        slot.module->onBeforePresentation(*this, commandBuffer, dt);
+        getRuntimeModule(slot.module)->onBeforePresentation(*this, commandBuffer, dt);
     }
 }
 
 void App::recordModulePresentation(ICommandBuffer& commandBuffer, float dt)
 {
     for (const auto& slot : _modules) {
-        slot.module->onPresentation(*this, commandBuffer, dt);
+        getRuntimeModule(slot.module)->onPresentation(*this, commandBuffer, dt);
     }
 }
 
@@ -287,7 +299,7 @@ bool App::notifyModulesBeforeAppStateChange(AppState nextState)
     YA_PROFILE_FUNCTION();
 
     for (const auto& slot : _modules) {
-        if (!slot.module->onBeforeAppStateChange(*this, _appState, nextState)) {
+        if (!getRuntimeModule(slot.module)->onBeforeAppStateChange(*this, _appState, nextState)) {
             return false;
         }
     }
@@ -299,21 +311,21 @@ void App::notifyModulesAfterAppStateChange(AppState previousState)
     YA_PROFILE_FUNCTION();
 
     for (const auto& slot : _modules) {
-        slot.module->onAfterAppStateChange(*this, previousState, _appState);
+        getRuntimeModule(slot.module)->onAfterAppStateChange(*this, previousState, _appState);
     }
 }
 
 void App::notifyModulesSceneActivated(Scene* scene)
 {
     for (const auto& slot : _modules) {
-        slot.module->onSceneActivated(*this, scene);
+        getRuntimeModule(slot.module)->onSceneActivated(*this, scene);
     }
 }
 
 void App::notifyModulesSceneDestroyed(Scene* scene)
 {
     for (const auto& slot : _modules) {
-        slot.module->onSceneDestroyed(*this, scene);
+        getRuntimeModule(slot.module)->onSceneDestroyed(*this, scene);
     }
 }
 

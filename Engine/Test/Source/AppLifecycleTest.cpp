@@ -3,6 +3,7 @@
 #include "AppModuleTestAccess.h"
 
 #include "Host/App.h"
+#include "Host/IRuntimeModule.h"
 
 #include "Core/System/VirtualFileSystem.h"
 #include "RHI/Core/CommandBuffer.h"
@@ -61,7 +62,7 @@ class PresentationTestCommandBuffer final : public ICommandBuffer
     void debugEndLabel() override {}
 };
 
-struct RecordingAppModule final : IModule
+struct RecordingAppModule final : IModule, IRuntimeModule
 {
     std::vector<std::string>& calls;
     std::string               name;
@@ -76,6 +77,10 @@ struct RecordingAppModule final : IModule
     bool onStart(const FEngineContext&) override { return true; }
     void onStop() override {}
     void onUnload() override {}
+    void* queryInterface(FInterfaceId interfaceId) override
+    {
+        return interfaceId == YA_RUNTIME_MODULE_INTERFACE ? static_cast<IRuntimeModule*>(this) : nullptr;
+    }
     void onConfigure(App&, AppDesc&) override { calls.push_back(name + ".configure"); }
     void onAttach(App&) override { calls.push_back(name + ".attach"); }
     void onDetach(App&) override { calls.push_back(name + ".detach"); }
@@ -95,7 +100,7 @@ struct RecordingAppModule final : IModule
     void onPresentation(App&, ICommandBuffer&, float) override { calls.push_back(name + ".presentation"); }
 };
 
-struct CountingEventModule final : IModule
+struct CountingEventModule final : IModule, IRuntimeModule
 {
     int inputEvents    = 0;
     int nonInputEvents = 0;
@@ -104,6 +109,10 @@ struct CountingEventModule final : IModule
     bool onStart(const FEngineContext&) override { return true; }
     void onStop() override {}
     void onUnload() override {}
+    void* queryInterface(FInterfaceId interfaceId) override
+    {
+        return interfaceId == YA_RUNTIME_MODULE_INTERFACE ? static_cast<IRuntimeModule*>(this) : nullptr;
+    }
     bool onEvent(App&, const Event& event) override
     {
         if (event.isInCategory(EEventCategory::Input)) {
