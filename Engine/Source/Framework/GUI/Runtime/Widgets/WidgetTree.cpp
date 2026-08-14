@@ -8,6 +8,7 @@
 #include "GUI/Widgets/Controls/Text.h"
 
 #include <algorithm>
+#include <chrono>
 
 namespace ya
 {
@@ -411,12 +412,27 @@ void WidgetTree::layout()
 
 UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
 {
+    _perfStats = GuiPerfStats{};
+
     if (_bLayoutDirty) {
+        const auto layoutStart = std::chrono::steady_clock::now();
         layout();
+        _perfStats.layoutMS = std::chrono::duration<float, std::milli>(
+                                   std::chrono::steady_clock::now() - layoutStart)
+                                   .count();
     }
+
+    const auto paintStart = std::chrono::steady_clock::now();
     UIFrameBuilder builder(ctx);
     _root->paint(builder);
-    return builder.build(_logicalExtent);
+    _perfStats.paintMS = std::chrono::duration<float, std::milli>(
+                             std::chrono::steady_clock::now() - paintStart)
+                             .count();
+    _perfStats.paintedWidgets = builder.getWidgetCount();
+
+    UIFrameSnapshot snapshot = builder.build(_logicalExtent);
+    _perfStats.drawItems      = static_cast<uint32_t>(snapshot.items.size());
+    return snapshot;
 }
 
 EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEventContext& ctx)

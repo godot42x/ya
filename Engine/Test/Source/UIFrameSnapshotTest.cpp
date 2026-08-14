@@ -153,4 +153,30 @@ TEST(UIFrameSnapshotTest, StructuralDumpAndDigestTrackVisualPacketOnly)
     EXPECT_EQ(dump["items"][0]["kind"], "sprite");
 }
 
+TEST(UIFrameSnapshotTest, PerfStatsCountPaintWalkAndDrawItems)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       behind = std::make_shared<UIPanel>("Behind");
+    behind->_size     = {100.0f, 50.0f};
+    auto front = std::make_shared<UIButton>("Front");
+    front->_size     = {80.0f, 32.0f};
+    tree.attachToLayer(WidgetTree::ELayer::Content, behind);
+    tree.attachToLayer(WidgetTree::ELayer::Content, front);
+
+    const UIFrameSnapshot first = tree.buildSnapshot(UIFrameBuildContext{});
+
+    // First build lays out (tree starts dirty) and walks root + the 4 system
+    // layers + the 2 content widgets.
+    EXPECT_GT(tree.getPerfStats().layoutMS, 0.0f);
+    EXPECT_GE(tree.getPerfStats().paintMS, 0.0f);
+    EXPECT_EQ(tree.getPerfStats().paintedWidgets, 7u);
+    EXPECT_EQ(tree.getPerfStats().drawItems, first.items.size());
+
+    // Second build reuses the clean layout: layoutMS resets to 0 and the
+    // paint-walk count stays identical.
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().layoutMS, 0.0f);
+    EXPECT_EQ(tree.getPerfStats().paintedWidgets, 7u);
+}
+
 } // namespace ya

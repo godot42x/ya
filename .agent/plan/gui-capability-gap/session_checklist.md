@@ -27,4 +27,4 @@
 
 ## 当前下一刀
 
-M0 — 性能基线：给 WidgetTree/Render2D 加最小性能计数（update/layout/paint 三段耗时 + rebuild 数 + draw item 数），用 GUIWorkbench 页面建立基线。
+M1 — 响应式内核 + 最小局部复用：`Reactive<T>`（事件驱动依赖追踪，set 时标记 dependents dirty）+ 三级 dirty 粒度（paint/arrange/measure）+ snapshot 增量复用（双缓冲）。最小验证：Text.text 绑定 Reactive（paint-dirty 路径）。验收：改 ref → 只有依赖 widget 重建（rebuild 计数），非 dirty widget draw item 计数不变；golden 零差异；单测覆盖「条件读取切换 ref」+「widget detach 后 set 不悬垂」。

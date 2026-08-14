@@ -105,6 +105,11 @@ class YA_GUI_API UIFrameBuilder
     /// Move the accumulated items into an immutable snapshot.
     [[nodiscard]] UIFrameSnapshot build(Extent2D logicalExtent);
 
+    /// Count one widget participating in the paint walk (called by
+    /// UIElement::paint before painting itself). Feeds GuiPerfStats.
+    void countWidget() { ++_widgetCount; }
+    [[nodiscard]] uint32_t getWidgetCount() const { return _widgetCount; }
+
     /// Resolve an asset path to a strong texture reference through the build
     /// context's resolver (null without a resolver or on cache miss).
     [[nodiscard]] std::shared_ptr<Texture> resolveTexture(const std::string& assetPath) const
@@ -118,6 +123,7 @@ class YA_GUI_API UIFrameBuilder
     const UIFrameBuildContext& _ctx;
     std::vector<Rect2D>        _clipStack;
     std::vector<UIFrameDrawItem> _items;
+    uint32_t                   _widgetCount = 0;
 };
 
 } // namespace ya

@@ -159,6 +159,7 @@ void UIElement::paint(UIFrameBuilder& builder)
     if (!isVisibleForRender()) {
         return;
     }
+    builder.countWidget();
     paintSelf(builder);
     paintChildren(builder);
 }

@@ -14,6 +14,7 @@ struct GUIHeadlessHost::FImpl
     glm::vec2              lastPointer = {-1.0f, -1.0f};
     bool                   bInitialized = false;
     bool                   bQuitRequested = false;
+    bool                   bLoggedFirstSnapshot = false;
 
     FImpl(const FGUIHeadlessHostConfig& inConfig, IGUIAppDelegate& inDelegate)
         : config(inConfig)
@@ -124,6 +125,15 @@ void GUIHeadlessHost::onTick(float /*dt*/)
 {
     _impl->delegate->updateUI();
     _impl->lastSnapshot = _impl->tree.buildSnapshot(_impl->config.frameBuildContext);
+    if (!_impl->bLoggedFirstSnapshot) {
+        _impl->bLoggedFirstSnapshot = true;
+        const GuiPerfStats& stats   = _impl->tree.getPerfStats();
+        YA_CORE_INFO("GUIHeadlessHost first snapshot: {} draw items, {} widgets painted, layout {:.3f}ms paint {:.3f}ms",
+                     stats.drawItems,
+                     stats.paintedWidgets,
+                     stats.layoutMS,
+                     stats.paintMS);
+    }
     if (_impl->config.onSnapshot) {
         _impl->config.onSnapshot(_impl->lastSnapshot);
     }

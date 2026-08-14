@@ -59,6 +59,18 @@ struct WidgetPointerState
     bool      bKnown       = false;
 };
 
+/// Per-frame performance counters for the most recent buildSnapshot(). A
+/// lightweight observable surface for the reactive-binding perf pipeline:
+/// layout/paint wall time, the number of widgets walked by paint, and the
+/// draw-item count of the resulting snapshot. Resolved per buildSnapshot call.
+struct GuiPerfStats
+{
+    float    layoutMS        = 0.0f; // layout() wall time (0 when layout was clean)
+    float    paintMS         = 0.0f; // paint walk wall time
+    uint32_t paintedWidgets  = 0;    // widgets that participated in the paint walk
+    uint32_t drawItems       = 0;    // draw items in the resulting snapshot
+};
+
 /// Stable diagnostic record for the most recently resolved event route.
 /// Names, not raw widget pointers, are retained so a later detach cannot make
 /// an automation dump unsafe to inspect.
@@ -141,6 +153,9 @@ struct YA_GUI_API WidgetTree final
     /// snapshot. Must be called before the RenderGraph is built; command
     /// recording only ever consumes the returned snapshot.
     [[nodiscard]] UIFrameSnapshot buildSnapshot(const UIFrameBuildContext& ctx);
+
+    /// Per-frame counters from the most recent buildSnapshot() call.
+    [[nodiscard]] const GuiPerfStats& getPerfStats() const { return _perfStats; }
 
     /// Explicit event dispatch. Pointer routes use preview (root -> parent),
     /// target, then bubble (parent -> root); Pass routes continue to lower
@@ -261,6 +276,7 @@ struct YA_GUI_API WidgetTree final
     std::array<UIElementRef, static_cast<size_t>(ELayer::Count)> _layers;
     Extent2D      _logicalExtent{};
     bool          _bLayoutDirty = true;
+    GuiPerfStats  _perfStats;
     UIElement*    _focused      = nullptr;
     UIElement*    _captured     = nullptr;
     UIElement*    _hovered      = nullptr;

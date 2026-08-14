@@ -1264,8 +1264,12 @@ void GUIWindowHost::onTick(float /*dt*/)
     });
     if (!_impl->bLoggedFirstSnapshot) {
         _impl->bLoggedFirstSnapshot = true;
-        YA_CORE_INFO("GUIAppHost first snapshot: {} draw items, {}x{} logical -> {}x{} render",
+        const GuiPerfStats& stats   = _impl->tree->getPerfStats();
+        YA_CORE_INFO("GUIAppHost first snapshot: {} draw items, {} widgets painted, layout {:.3f}ms paint {:.3f}ms, {}x{} logical -> {}x{} render",
                      snapshot.items.size(),
+                     stats.paintedWidgets,
+                     stats.layoutMS,
+                     stats.paintMS,
                      snapshot.logicalExtent.width,
                      snapshot.logicalExtent.height,
                      presentExtent.width,
