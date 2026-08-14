@@ -57,6 +57,7 @@ std::shared_ptr<ya::UIButton> makeToolButton(const std::string& name, const std:
 
     auto text = std::make_shared<ya::UIText>(name + "_Label");
     text->_bAutoSize = true;
+    text->_visibility = ya::EWidgetVisibility::SelfHitTestInvisible;
     text->_fontSize  = 14;
     text->_text      = label;
     text->_color     = {0.92f, 0.94f, 0.97f, 1.0f};
