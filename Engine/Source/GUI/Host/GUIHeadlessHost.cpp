@@ -1,4 +1,4 @@
-#include "GUI/App/GUIHeadlessHost.h"
+#include "GUI/Host/GUIHeadlessHost.h"
 
 #include "Core/Log.h"
 

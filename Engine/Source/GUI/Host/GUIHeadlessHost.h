@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Core/Application/AppKernel.h"
-#include "Core/Application/AutomationRun.h"
-#include "GUI/App/GUIAppDelegate.h"
+#include "App/Kernel/AppKernel.h"
+#include "App/Control/AutomationRun.h"
+#include "GUI/Host/GUIAppDelegate.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 
 #include <memory>

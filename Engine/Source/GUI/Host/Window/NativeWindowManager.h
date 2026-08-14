@@ -15,7 +15,7 @@ namespace ya
 /// This is intentionally just the native-window lifecycle manager. GUI
 /// activation order, multi-window routing policy, modal scope, drag across
 /// windows, and presenter orchestration belong higher up in GUI/Host.
-class YA_APP_RUNTIME_API NativeWindowManager
+class YA_GUI_API NativeWindowManager
 {
   public:
     NativeWindowManager() = default;

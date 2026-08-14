@@ -1,12 +1,8 @@
--- App runtime: reusable native app kernel pieces shared by GUI apps and the
--- engine host. This layer owns generic window/runtime mechanisms only; it
--- must not depend on product/editor/game semantics.
+-- App runtime (compat alias). The real sources moved to GUI/Host
+-- (ya-gui-host); this target keeps the legacy `AppRuntime/` include root alive
+-- for one round so stale add_deps()/includes don't break. Delete in Phase A5
+-- once no consumer references ya-app-runtime.
 target("ya-app-runtime")
-    set_kind(ya_target_kind())
-    ya_std_module("YA_APP_RUNTIME_API")
+    set_kind("phony")
     add_includedirs("./include", { public = true })
-    add_files("**.cpp")
-    add_headerfiles("./include/**.h", { public = true })
-    add_headerfiles("**.h")
-    add_deps("ya-foundation-core", "ya-rhi", { public = true })
-
+    add_deps("ya-gui-host", { public = true })

@@ -5,7 +5,7 @@
 namespace ya
 {
 
-class YA_APP_RUNTIME_API AppBootstrap
+class YA_GUI_API AppBootstrap
 {
   public:
     static void initializeProcessCore();
