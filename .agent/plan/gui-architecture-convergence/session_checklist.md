@@ -21,6 +21,8 @@
    - 结构证据是什么；
    - 视觉或 scenario 证据是什么；
    - 完成条件是什么。
+6. 若本轮涉及目录/App/GUI/Game/Editor 命名，先检查是否把“共享能力轴”和“应用形态轴”混成了一层；若混了，先回到 plan 修正语义再动手。
+7. 若本轮涉及 window、present、swapchain、RHI 边界，先检查调用者到底需要的是 `INativeWindow` 还是最小 present bridge；不要默认把完整窗口对象继续透传给 RHI。
 
 ## 每轮进行中
 
@@ -30,6 +32,7 @@
 4. 若需要新建验证入口，优先复用现有 GUIWorkbench scenario / dump / gpu-shot / smoke 机制。
 5. 若出现“当前能用就行”的修法，暂停并回到 plan 中检查是否违反架构收口方向。
 6. 若本轮影响目录/target/App 主链，必须额外检查：windowless app 是否仍能只停在 App/Kernel（按需加 App/Control），而不会被 GUI/Host 或窗口假设污染。
+7. 若本轮影响共享能力归位，必须额外检查：physics / scripting / scene / render runtime 是否被错误塞回 `Game` / `Editor` 语义桶。
 
 ## 每轮收尾前
 
@@ -47,6 +50,7 @@
    - `progress.md`
    - `feature_matrix.json`
 5. 若本轮形成了长期稳定规则，补写到对应 skill 或 AGENTS。
+6. 若本轮改动了 owner 或目录语义，确认 `plan.md`、`owner-model.md`、`directory-charter.md` 三者口径一致。
 
 ## 计划默认推进顺序
 

@@ -23,6 +23,8 @@
 11. 当前事件系统要从“边命中边执行的 DFS hit walk”逐步收敛到“显式 route path + route phase”的模型，即 pointer path / focus path / preview(target 前) / target / bubble。
 12. retain UI 的 visual hierarchy mutation（attach / detach / reparent / reorder）是正式运行时能力，不是只服务 GUI app 固定壳的 authoring 便利接口；game runtime 可以频繁改父子关系，布局与事件模型必须以此为前提。
 13. 下一阶段优先级调整为：先把目录、命名、target 依赖线与 owner 主链路收口，再继续扩张 GUI feature。否则后续所有控件、layout 与多窗口工作都会继续挂在历史壳上增长。
+14. `Game / Editor` 以后只表示应用形态或产品组合，不再作为共享能力的大桶；physics、scripting、scene、render runtime、reflection tooling 等共享能力必须按自身职责归位，而不是因为“当前主要被游戏用到”就继续塞进 `Game`。
+15. `INativeWindow` 与 RHI present/surface bridge 要显式拆语义：窗口生命周期、标题、尺寸、原生句柄属于 window owner；Vulkan surface create/destroy、required instance extensions、present binding 属于最小呈现桥。RHI 最终依赖的是 present bridge，而不是完整 window 管理语义。
 
 ## 1. 当前问题到底在哪里
 
@@ -122,7 +124,7 @@ retain UI 正式需要支持的不是一次性 attach，而是：
            │              ├─ popup layer
            │              ├─ tooltip layer
            │              └─ drag overlay layer
-           └─ Game / Editor / other modules
+           └─ app-form modules (GameRuntime / GameEditor / GuiWorkbench / other apps)
 
 职责约束：
 
@@ -147,6 +149,36 @@ retain UI 正式需要支持的不是一次性 attach，而是：
   - 只代表单窗口 live visual tree；
   - 管 focus path / hover path / capture / popup stack 等树级交互状态；
   - 不承担整个 app 工作区模型的概念。
+
+### 2.1.1 共享能力轴 vs 应用形态轴
+
+后续架构与目录都必须先区分两条轴：
+
+- 共享能力轴：`Core`、`App/Kernel`、`App/Control`、`Render/RHI`、`Render/Runtime`、`GUI`、`Scene`、`Physics`、`Scripting`、`Reflection` 等；
+- 应用形态轴：`GameRuntime`、`GameEditor`、`GuiWorkbench`、未来的 `DccEditor`、`ModelViewer`、`CLI`、`RenderServer` 等。
+
+硬约束：
+
+- `Game` / `Editor` 可以继续作为应用名或产品名存在，但不再承担“共享能力默认归宿”的语义；
+- physics、scripting、scene、render runtime、automation/control 这类能力，必须按是否共享、是否无窗口、是否与 GUI/bootstrap 耦合来归位；
+- 如果未来一个 3D editor、viewer、graphics tool 需要复用 physics / scripting / scene / GUI，它不应该因为目录语义而被迫经过 `Game`；
+- Phase A 当前不要求一次性把所有共享能力目录改名到终局，但从现在开始禁止再把新的共享能力继续堆进 `Game` / `Product` 语义桶里。
+
+### 2.1.2 Window object 与 present bridge 的正式边界
+
+当前 `NativeWindow` 实际混着两层语义：
+
+- 窗口对象：title、size、id、raw native handle、create/destroy、window-level state；
+- 呈现桥：Vulkan surface create/destroy、required instance extensions、swapchain/present 入口对接。
+
+正式方向：
+
+- `INativeWindow`：只表达原生窗口对象及其生命周期/身份；
+- `IPresentSurfaceSource`（命名可调整）：只表达 RHI 所需的最小 present/surface bridge；
+- `SDLNativeWindow` 一类 concrete 类型可以同时实现两者，但语义上必须分层；
+- `NativeWindowManager` 继续保留为多窗口 owner；错误的不再是 manager，而是把完整 window 语义直接塞给 RHI。
+
+这样可以避免未来继续出现：窗口管理、GUI 激活、title/size、raw handle、Vulkan surface extensions 全部挂在同一个接口里，导致 App/GUI/RHI 三侧边界一起变脏。
 
 ### 2.2 control plane 与共享服务归位
 
@@ -277,29 +309,48 @@ UIBoxSlot 负责：
 
 ### 3.1 目标目录形状：共享主链 + 可拆分叉
 
-上一版把未来目录写成了 Foundation / Framework / Product，这对职责讨论有帮助，但对真实物理目录不够好。现在正式改成面向未来拆仓的目标树：
+上一版把未来目录写成了 Foundation / Framework / Product，这对职责讨论有帮助，但对真实物理目录不够好。进一步收口后，未来目录至少要先表达出“两条轴”：共享能力轴与应用形态轴。
+
+语义终局：
 
     Core
-      -> App
-          -> Kernel
-          -> Control
-      -> GUI
-          -> Host
-      -> Game
-          -> Editor
+    App
+      -> Kernel
+      -> Control
+    Render
+      -> RHI
+      -> Runtime
+    GUI
+      -> Runtime
+      -> Host
+    Scene
+    Physics
+    Scripting
+    Reflection
+    Applications
+      -> GameRuntime
+      -> GameEditor
+      -> GuiWorkbench
+      -> DccEditor
+      -> ModelViewer
+      -> CLI
+      -> RenderServer
     Example/*
+
+Phase A 的立即目标不是一口气把所有目录都迁到这棵树，而是先让后续 move/rename 服从这条语义：共享能力先从 `Game / Editor / Product` 语义桶里抽出来，应用形态再在上层组合这些能力。
 
 判断标准：
 
-- 共同主链只能有一条：Core -> App/Kernel；
-- App 不是一整团；它只保留无窗口内核与共享 control plane，不再承载窗口层；
-- window/bootstrap/native event source 属于 GUI/Host；windowed GUI app、windowed game、runtime editor 都走 GUI bootstrap；
-- Game 与 Editor 仍然是独立分支；headless game / DS 可以停在 App 之上而不被 GUI 强绑；
+- 共同主链只能有一条：`App/Kernel`；
+- `App` 不是一整团；它只保留无窗口内核与共享 control plane，不再承载窗口层；
+- window/bootstrap/native event source 属于 `GUI/Host`；windowed GUI app、windowed game、runtime editor 都走 GUI bootstrap；
+- `GameRuntime`、`GameEditor`、`GuiWorkbench` 等都是应用形态，不是共享能力归宿；
+- `Render`、`Scene`、`Physics`、`Scripting`、`Reflection` 这类共享能力不能继续因为历史原因被埋在 `Game` 分支底下；
 - 不能再让 Foundation / Framework / Product 这种抽象词继续作为未来物理目录目标；
-- GUI-only 形态以后必须能看着目录直接知道：至少带走 Core + App/Kernel + App/Control + GUI；
-- CLI / DS / server / render-service 形态以后必须能看着目录直接知道：至少停在 Core + App/Kernel（按需再加 App/Control）；
-- windowed game/editor 形态以后必须能看着目录直接知道：至少带走 Core + App/Kernel + App/Control + GUI + Game + Editor；
-- headless game / DS 形态以后也必须能看着目录直接知道：至少带走 Core + App/Kernel + Game；
+- GUI-only 形态以后必须能看着目录直接知道：至少带走 `App/Kernel + App/Control + Render + GUI`；
+- CLI / DS / server / render-service 形态以后必须能看着目录直接知道：至少停在 `App/Kernel`（按需再加 `App/Control` 与相关共享能力）；
+- windowed game/editor 形态以后必须能看着目录直接知道：它们是在 `GUI + Render + Scene + ...` 之上组合出的 app，而不是共享能力本身；
+- headless game / DS 形态以后也必须能看着目录直接知道：可以停在无窗口能力链，而不是被 GUI/Window 反向强绑；
 - 不能再让 Product/Host/App、Framework/GUI/App、Foundation/Core/Application 都像真正主入口。
 
 ### 3.2 目标归位：当前目录到目标目录的映射
@@ -307,14 +358,15 @@ UIBoxSlot 负责：
 | 当前目录 / 类型 | 当前问题 | 目标归位 |
 |---|---|---|
 | Foundation/Core/*（除 Application） | 底层能力与 Application 主链混放 | 收到 Core/* |
-| Foundation/RHI/* | 共享图形底座，但被 Foundation 这个抽象桶包住 | 收到 Core/RHI/* |
+| Foundation/RHI/* | 共享图形底座，但被 Foundation 这个抽象桶包住；其中还混有 `NativeWindow` 这类跨层语义 | 收到 `Render/RHI/*`；窗口对象与 present bridge 另行拆开 |
 | Foundation/Core/Application/* | 已经是单 loop / control plane base，但物理位置还像 Core 杂项 | 按职责拆到 App/Kernel/* 与 App/Control/* |
 | Framework/AppRuntime/* | 主要是窗口/bootstrap/native event source；本质上是 GUI bootstrap 的一部分 | 收到 GUI/Host/* |
 | Framework/GUI/App/* | App 命名与唯一 App 主链冲突；读者难以判断它是 GUI 装配还是第二主循环 | 收口为 GUI/Host/*；只表达 GUI window/tree/presenter owner |
-| Framework/AppServices/* | 名字像共享 App 层，实际是 game/render runtime contract | 回收到 Game/*（候选：Game/RuntimeServices/*） |
-| Product/Host/* | Host 过于宽泛，混合 game runtime、control、window、GUI bridge、utility | 顶层 Product 取消；该目录回收到 Game/* 的 branch-local shell |
-| Product/Host/GUI/GameUI/* | 名字容易让人误读成 generic GUI framework | 保留 game 语义，但归到 Game 分支内部，而不是挂在顶层 Product |
-| Product/Editor/* | editor product 语义相对清楚，但放在 Product 下仍模糊 | 直接升格为 Editor/* |
+| Foundation/RHI/NativeWindow* | 把窗口对象、raw handle、surface/extension bridge 混在一起 | 拆成 `GUI/Host/Window/*` + `Render/RHI/Present/*`（接口名待定，方向已定） |
+| Framework/AppServices/* | 名字像共享 App 层，实际混有 game/render runtime contract | 不再默认整体落进 `Game`；按真实职责拆回 `Render/Runtime`、`Scene`、`Physics`、`Scripting` 或具体 app shell |
+| Product/Host/* | Host 过于宽泛，混合 game runtime、control、window、GUI bridge、utility | 顶层 Product 取消；仅保留 app-form shell 必要部分，其余共享能力按职责抽离 |
+| Product/Host/GUI/GameUI/* | 名字容易让人误读成 generic GUI framework | 保留 game viewport UI 语义，但归到具体 app-form shell 内部，而不是挂在顶层 Product |
+| Product/Editor/* | editor product 语义相对清楚，但放在 Product 下仍模糊 | 进入 app-form 分支（当前命名可先保持 Editor，语义视作 `GameEditor`） |
 | Example/GUIWorkbench/* | 当前定位大体正确 | 保留在 Example，不再让 GUI runtime 反向承担 demo/page 内容 |
 
 ### 3.3 GUI 与 Example 的边界
@@ -367,7 +419,7 @@ GUI 分支只放可复用 GUI 库，不放产品化 demo 内容。
 2. 先核对 xmake target 闭包：确认哪些是真边界，哪些只是历史目录名导致的假边界；
 3. 先拆清 App 子树：Foundation/Core/Application/* -> App/Kernel + App/Control；
 4. 再移动 GUI 宿主层：Framework/AppRuntime/* + Framework/GUI/App/* 一起收口到 GUI/Host/*；
-5. 最后取消顶层 Product：Product/Editor/* -> Editor/*，Product/Host/* 回收到 Game/* 分支内；
+5. 最后取消顶层 Product：先把 `Product/Host/*` 中的共享能力抽离，再把剩余壳归到具体 app-form shell；`Product/Editor/*` 进入 editor app-form 分支；
 6. 每一步都只允许做文件移动、include 修正、target/name 收口；不混入 owner 重写、layout 重构、route 重写；
 7. 每做完一层立即验证：构建目标、GUIWorkbench 链接闭包、owner-model 与目录表达是否一致。
 

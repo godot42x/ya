@@ -3,6 +3,39 @@
 > 建立日期：2026-08-13
 > 作用：记录每轮已经完成的内容、验证证据、遗留风险与下一步接力点。这个文件应该持续追加，不回写成静态总结。
 
+## 2026-08-14 — 补齐能力轴 / 应用形态轴与 Window / Present bridge 口径
+
+### 本轮完成
+
+- 更新 `plan.md`：把 `Game / Editor` 明确降级为 app-form 语义，不再允许承担共享 `Scene / Physics / Scripting / RenderRuntime / Reflection` 的默认归宿；
+- 更新 `plan.md`：补入 `INativeWindow` 与 `IPresentSurfaceSource` 的边界，明确 RHI 最终只该依赖最小 present/surface bridge；
+- 更新 `directory-charter.md`：补入“共享能力轴 vs 应用形态轴”规则，并把目标目录终局改写成 capability-first + app-form 组合口径；
+- 更新 `owner-model.md`：把 `NativeWindow` 混合接口标记为过渡对象，并补入 window identity / present bridge 的 owner 表；
+- 更新 `todo.md` 与 `feature_matrix.json`：新增能力轴映射、`NativeWindow` API 三分表两项后续工件。
+
+### 当前结论
+
+- 后续不再把 `Game` / `Editor` 当共享能力大桶使用；它们可以继续是应用名，但不能再吞共享系统；
+- `WindowManager` 概念保留；需要拆的是“窗口对象”和“RHI present bridge”的接口混合，而不是 manager owner 本身；
+- 目录迁移下一刀不能只看 move/rename，还必须同时回答：哪些是共享能力，哪些只是 app shell。
+
+### 当前未完成 / 风险
+
+- `Framework/AppServices` 之前被粗略看作 game/runtime 合同；现在需要重新按真实消费者拆分，避免再次回落到 `Game` 语义桶；
+- `Foundation/RHI/NativeWindow*` 还没做 API 三分表，真实迁移前仍存在 boundary 含混风险；
+- 目前只是计划口径更新，尚未开始对应的 no-behavior 目录迁移。
+
+### 下一轮直接接力点
+
+1. 产出共享能力轴 / 应用形态轴的目录与 owner 映射表；
+2. 产出 `NativeWindow*` API 三分表：`INativeWindow` / `IPresentSurfaceSource` / presenter-host-only；
+3. 在此基础上再做第一轮目录 -> target -> include 根闭包审计。
+
+### 本轮验证
+
+- 文档级验证：已同步更新 `plan.md`、`owner-model.md`、`directory-charter.md`、`todo.md`、`feature_matrix.json`；
+- 代码级验证：本轮未改 `Engine/Source` C++ 行为代码，仅更新计划工件。
+
 ## 2026-08-14 — AppRuntime 窗口 owner 收口为 `NativeWindowManager` + `INativeWindow`
 
 ### 本轮完成
@@ -43,7 +76,7 @@
 
 ### 当前未完成 / 风险
 
-- `Product/Host` 离开顶层 Product 已经确定，但落到 `Game/Runtime` 还是 `Game/Shell` 仍需 target/include audit；
+- `Product/Host` 离开顶层 Product 已经确定，但剩余 app-form shell 的物理叶子名仍需 target/include audit；在拆出共享能力前，不预设它必然回到 `Game` 分支；
 - `Foundation/Core/Application` 内部具体哪些文件应进 `Kernel`，哪些应进 `Control`，还未完成逐文件切图；
 - `Framework/AppRuntime` 与 `Framework/GUI/App` 在收进同一 `GUI/Host` 前，还需要补 file-level move plan，避免再次制造“两个 host 主链”。
 
@@ -51,7 +84,7 @@
 
 1. 产出“当前目录 -> 未来目录 -> target -> include 根”映射表，并把 App/Kernel、App/Control、GUI/Host 三类显式拆开；
 2. 逐文件审计 Foundation/Core/Application、Framework/AppRuntime、Framework/GUI/App，形成 App/GUI 双侧 move plan；
-3. 再决定 Product/Host 在 Game 分支内的具体 leaf 名称。
+3. 再决定 Product/Host 剩余 app-form shell 的具体 leaf 名称。
 
 ### 本轮验证
 

@@ -27,6 +27,7 @@ AppKernel                         唯一 loop / event-source / frame-time / base
 | `Foundation/Core/Application/AppKernel` | GUI windowed/headless hosts 与 `Product/Host/AppFrameLoop::run` 都已调用；提供 event source、tick 与基础 exit policy | 保留为唯一共享 loop 内核 | 保留 |
 | `Framework/GUI/App/GUIApp` | standalone GUI entry 的装配层；当前持有一个 primary window 并创建 `AppKernel` | 保留；后续在这里增长 `NativeWindowManager` 级策略与多窗口编排 | 保留 |
 | `Framework/GUI/App/GUIWindowHost` | 当前持有 SDL window、Vulkan presenter、WidgetTree、pointer state、control server | 保留为 concrete one-window owner | 保留 |
+| `Foundation/RHI/NativeWindow*` | 当前把窗口对象语义与 Vulkan/OpenGL present bridge 混在一起 | 拆成 `INativeWindow` + `IPresentSurfaceSource`（命名待最终拍板） | 过渡 / 拆分 |
 | `Framework/GUI/App/GUIAppHost` | `GUIApp` 的 compatibility alias | 只为旧 include/调用兼容；新代码不再使用 | 过渡 / 删除 |
 | `Framework/GUI/App/GUIHeadlessHost` | 无 SDL/RHI 的 AppKernel + WidgetTree + snapshot host | 保留为 GUIApp/WindowHost 的无 native-surface 验证形态；不成为另一条 product loop | 保留 / 过渡 |
 | `Framework/GUI/App/GUIRenderSurface` | 统一 imported swapchain 与 owned offscreen RenderImage 的 compose/final-layout 边界 | `GUIWindowHost` presenter/target 的底层资源对象 | 保留 |
@@ -38,11 +39,26 @@ AppKernel                         唯一 loop / event-source / frame-time / base
 | `Tooling/Workbench/WorkbenchSurface` | menu/tab/status/workspace shell | 保留为 tooling shell；非 app/host/loop | 保留 |
 | `Example/GUIWorkbench/FWorkbenchApp` | feature gallery 页面与 smoke state | 保留为 example delegate；非 framework app kernel | 保留 |
 
+## 2.1 共享能力与应用形态的 owner 口径
+
+Owner 模型默认同时遵守两条轴：
+
+- 共享能力 owner：`AppKernel`、`GUIApp`、`GUIWindowHost`、`WidgetTree`、未来的 `Render/Runtime`、`Scene`、`Physics`、`Scripting` 等；
+- 应用形态 owner：`GameRuntime`、`GameEditor`、`GuiWorkbench`、未来的 `DccEditor`、`ModelViewer`、`CLI`、`RenderServer` 等。
+
+这意味着：
+
+- `Game` / `Editor` 可以是 app-form owner，但不是 physics / scripting / scene / render runtime 的默认 owner；
+- 如果某个能力被多个 app form 共享，它就必须先在共享能力轴上找到 owner，再由上层 app form 组合；
+- `Product/Host/App` 这类历史壳后续只允许保留 app-form 组合语义，不能继续藏共享能力。
+
 ## 3. 状态归属
 
 | 状态 | 正式 owner | 当前落点 | 迁移约束 |
 |---|---|---|---|
 | native window / swapchain acquire-present / presentation target | `GUIWindowHost` | `GUIAppHost` | 一窗口一组 target；resize 只在 frame boundary rebuild |
+| native window identity / title / size / raw handle | `INativeWindow`（被 `GUIWindowHost` 持有） | `INativeWindow` | 不再把这组语义直接暴露为 RHI window provider 合同 |
+| present surface create/destroy / required instance extensions / present-source binding | `IPresentSurfaceSource`（通常与 `INativeWindow` 同 concrete 对象共存） | `INativeWindow` 上的 Vulkan hooks | RHI 最终只依赖最小 present bridge，而不是完整 window owner 接口 |
 | logical extent / pointer position / pointer buttons | `GUIWindowHost` | `GUIAppHost` 的 last mouse；`GameUIHost` 的 viewport mapping | 上层业务不得反复携带“当前鼠标点”作为隐式状态 |
 | focus / hover / pointer capture / popup / tooltip / drag overlay | `WidgetTree`（per window） | `WidgetTree` | 未来升级为 focus/pointer path，不升级为 app-global widget pointer |
 | per-window modal gating | `GUIWindowHost` + tree route policy | popup/modal 控件局部 + tree layer | Phase C 前必须明确 route policy，不把 modal 状态塞进 leaf |
@@ -58,6 +74,7 @@ AppKernel                         唯一 loop / event-source / frame-time / base
 | `AppKernel` | caller 构造，接收 event source + delegate | poll -> delegate tick -> exit policy | 不解释 GUI resize | 调 delegate shutdown | base frame stepping / exit policy |
 | `GUIApp`（目标） | 产品入口装配 GUI services + windows | 选择 active window / 跨窗口 policy | 创建/销毁 window host | 先停止 windows，再释放 app services | window-id 路由、app-scope scenario |
 | `GUIWindowHost`（目标） | 创建 native window、presenter、tree | native event -> tree; snapshot -> surface -> submit/present | wait safe point 后重建 imported targets | 先 release command retention/surface/tree，再 destroy render/window | GPU shot、surface parity、per-window tree/snapshot dump |
+| `INativeWindow` / `IPresentSurfaceSource` | GUI host 创建具体 window 对象；present bridge 可与 window 同 concrete 实现 | window message、surface source 查询、size/handle 访问 | surface rebuild 随 host/presenter 在安全点完成 | 先释放 presenter/swapchain，再销毁 native window 与 surface source | RHI 侧只看 present-source 证据，GUI 侧看 window identity/state 证据 |
 | `WidgetTree` | window host 创建 | layout dirty 时 layout + build snapshot；route event | logical extent 改动导致 layout invalidation | detach clears transient references | tree / route / hover / focus dump |
 | `GUIRenderSurface` | window host 或 editor caller于 frame boundary 创建 | prepare + record immutable snapshot | owner 替换旧 surface 前 wait submit | 在 RHI/VMA teardown 前释放 | offscreen/windowed BMP parity |
 
@@ -88,6 +105,8 @@ AppKernel                         唯一 loop / event-source / frame-time / base
 当前已知迁移缺口：`Product/Host/AppFrameLoop` 已经不再持有 while loop；它保留 SDL
 event source 和 product frame work。高级 screenshot、RenderDoc、scene-stability
 control 扩展仍属于 Product Host extension，暂不错误下沉到 GUI 或 AppKernel 基础层。
+
+当前已知迁移缺口补充：`NativeWindow` 仍然是 window object 与 present bridge 的混合接口；在真实目录迁移前，必须先给出“哪些成员留在 `INativeWindow`、哪些下沉到 `IPresentSurfaceSource`、哪些调用者只该依赖 presenter/host”这张三分表。
 
 ## 6. 多窗口默认语义（先定，不实现）
 

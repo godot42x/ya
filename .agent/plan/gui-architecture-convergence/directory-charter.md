@@ -3,6 +3,8 @@
 > 更新时间：2026-08-14
 > 作用：把 GUI / game / editor 的物理目录目标写死。这里定义的是未来真实目录树，不再把 Foundation / Framework / Product 当成目标结构；它们只代表当前历史现状。
 
+补充约束：目录规划必须同时回答两件事——共享能力放哪里、应用形态怎么组合；不能再让 `Game` / `Editor` 同时承担这两层语义。
+
 ## 1. 这次为什么要改口径
 
 上一版 charter 解决了“谁归谁”的语义问题，但目标树仍然是：
@@ -18,38 +20,58 @@
 所以本 charter 现在明确区分两件事：
 
 - Foundation / Framework / Product：只是当前 repo 的历史现状；
-- Core / App / GUI / Game / Editor / Example：才是未来物理目录目标。
+- capability-first roots + app-form roots：才是未来物理目录目标。
+
+还要补一层语义区分：
+
+- 共享能力轴：`Core`、`App`、`Render`、`GUI`、`Scene`、`Physics`、`Scripting`、`Reflection`；
+- 应用形态轴：`GameRuntime`、`GameEditor`、`GuiWorkbench`、`DccEditor`、`ModelViewer`、`CLI`、`RenderServer`。
+
+即便 Phase A 还不会一次性把所有目录都迁到这套终局命名，也必须先停止把共享能力继续堆进 `Game` / `Product` 语义桶里。
 
 ## 2. 目标物理目录树
 
-目标不是“再多分几层”，而是让目录一眼就能读出：哪些是无窗口共享主链，哪些是 GUI/windowed 分支，哪些是 game/editor 专属分支：
+目标不是“再多分几层”，而是让目录一眼就能读出：哪些是无窗口共享主链，哪些是 GUI/windowed 分支，哪些是共享能力，哪些是 app form：
 
     Core
-      -> App
-          -> Kernel
-          -> Control
-      -> GUI
-          -> Host
-      -> Game
-          -> Editor
+    App
+      -> Kernel
+      -> Control
+    Render
+      -> RHI
+      -> Runtime
+    GUI
+      -> Runtime
+      -> Host
+    Scene
+    Physics
+    Scripting
+    Reflection
+    Applications
+      -> GameRuntime
+      -> GameEditor
+      -> GuiWorkbench
+      -> DccEditor
+      -> ModelViewer
+      -> CLI
+      -> RenderServer
     Example/*
 
 解释：
 
 - Core：最低共享底座；
 - App：无窗口的共享应用主链，只保留 kernel 与 control plane；
-- GUI：retain UI 与 window/bootstrap/host 分支；
-- Game：scene / resource / render runtime / gameplay 分支；
-- Editor：编辑器壳与 editor-only 工具分支；
+- Render / GUI / Scene / Physics / Scripting / Reflection：共享能力分支；
+- Applications：应用形态组合分支；
 - Example：可执行样例、feature gallery、smoke/regression app。
 
 这条树要直接支撑未来拆仓：
 
-- GUI-only 形态应能大体带走：Core + App/Kernel + App/Control + GUI + Example/GUI*；
-- CLI / DS / server / render-service 形态应能大体带走：Core + App/Kernel（按需再加 App/Control）；
-- windowed game/editor 形态应能大体带走：Core + App/Kernel + App/Control + GUI + Game + Editor；
-- headless game / DS 形态应能大体带走：Core + App/Kernel + Game（按需再加 App/Control）；
-- 若 editor 未来使用 retain UI，很自然是 Editor 依赖 Game + GUI；但 GUI 不能反过来要求 Game 或 Editor。
+- GUI-only 形态应能大体带走：App/Kernel + App/Control + Render + GUI + Example/GUI*；
+- CLI / DS / server / render-service 形态应能大体带走：App/Kernel（按需再加 App/Control 与相关共享能力）；
+- windowed game/editor 形态应能大体带走：GUI + Render + Scene + Physics + Scripting + 具体 app form；
+- headless game / DS 形态应能大体带走：App/Kernel + Render/Runtime + Scene + 具体 app form（按需再加 App/Control）；
+- 若 editor 未来使用 retain UI，很自然是 app form 依赖 GUI + Render + Scene + 其它共享能力；但共享能力绝不反向依赖 app form。
 
 ## 3. 各物理分支 charter
 
@@ -109,15 +131,20 @@
 - retain UI 内核：widget tree、layout/slot、event route、snapshot、draw2d、compose、resource；
 - GUI window host / presenter / headless host；
 - native window、native window manager、window bootstrap、native event source；
+- `INativeWindow` 这类窗口对象及其 lifecycle/identity 语义；
 - 可被多个 GUI app 复用的 tooling 基座。
 
 禁止职责：
 
 - game scene/world/document/product 壳语义；
 - editor-specific ImGui panel glue；
+- 把完整 window 接口原样塞进 RHI 作为 present 入口；
 - demo/example 页面本体。
 
 说明：
+
+- `WindowManager` 是合理的 GUI host owner 概念；真正要拆的是“完整窗口对象”与“RHI present bridge”混在一起的接口；
+- future RHI 只依赖最小的 `PresentSurfaceSource` 一类桥接接口，而不是 title/size/raw handle/activation 这些窗口管理语义。
 
 - GUI 是未来 GUI-only repo 的主干；
 - window 属于 GUI，而不是 App：以后 game engine / editor 也走这套 GUI bootstrap；
@@ -127,20 +154,21 @@
 
 允许职责：
 
-- scene、resource、render runtime、gameplay、game-facing control 扩展；
-- game runtime 壳所需的 branch-local glue；
-- game-specific UI adapter（若它不能被 GUI-only 形态复用）。
+- `GameRuntime` 这一 app form 自己的壳与组装逻辑；
+- gameplay domain、game rule、game-only content/workflow glue；
+- 只服务 game runtime、且明确不打算被其它 app form 复用的 UI / control 扩展。
 
 禁止职责：
 
 - editor-only shell；
 - 把共享 app 能力重新复制一遍；
+- 把共享 `Scene / Physics / Scripting / RenderRuntime / Reflection` 长期藏在这里；
 - 让 GUI-only app 为了跑起来被迫依赖这一支。
 
 说明：
 
-- Game 取代原来“Framework/Game + Product/Host 的混合主干”；
-- 未来 runtime product 壳不再落在一个顶层 Product 垃圾桶里，而是回到 Game 分支内部。
+- `Game` 若作为可见目录名存在，只表达 app form，不再表达共享能力归宿；
+- 历史上落在 `Framework/Game` / `Product/Host` 的共享能力，后续需要逐步抽回能力轴，只把真正的 game runtime 壳留在这里。
 
 ### 3.5 Editor
 
@@ -153,12 +181,13 @@
 
 - 成为 GUI framework 的上游依赖；
 - 把共享 app kernel / control plane 再复制一套；
+- 把共享 `Scene / Physics / Scripting / RenderRuntime / Reflection` 长期藏在这里；
 - 承担 game runtime 主壳语义。
 
 说明：
 
-- Editor 是 branch，不是 shared framework；
-- 它可以依赖 Game，也可以按需要依赖 GUI，但反向依赖绝不成立。
+- `Editor` 若作为可见目录名存在，只表达 app form；
+- 它可以依赖 GUI、Render、Scene、Physics、Scripting 等共享能力，也可以按需要依赖 game runtime 壳，但反向依赖绝不成立。
 
 ### 3.6 Example
 
@@ -170,7 +199,7 @@
 
 禁止职责：
 
-- 被 Core / App / GUI / Game / Editor 反向依赖；
+- 被共享能力根或 app-form shell 反向依赖；
 - 承载长期共享内核类型。
 
 说明：
@@ -183,20 +212,22 @@
 | 当前目录 | 未来去向 | 说明 |
 |---|---|---|
 | Foundation/Core/*（除 Application） | Core/* | 底层共享设施归 Core |
-| Foundation/RHI/* | Core/RHI/* | RHI 仍是最底层共享基础 |
+| Foundation/RHI/* | Render/RHI/* | RHI 仍是最底层共享基础；但不再顺带拥有完整窗口对象语义 |
 | Foundation/Core/Application/* | App/Kernel/* + App/Control/* | AppKernel、共享 control plane、shared command/capture/scenario 归 App 的无窗口主链 |
 | Framework/AppRuntime/* | GUI/Host/* | 这块其实是 window/bootstrap/native event source，属于 GUI 宿主链，不属于共享 App |
 | Framework/GUI/* | GUI/* | GUI 运行时与 host/tooling 全部收回 GUI 分支 |
 | Framework/GUI/App/* | GUI/Host/* | 具体 GUI 宿主归 Host，而不是第二个 App 根 |
-| Framework/AppServices/* | Game/RuntimeServices/*（候选） | 它是 game/render runtime contract，不属于共享 App 主链 |
-| Product/Host/* | Game/* 内的 branch-local shell（首选候选：Game/Runtime/*） | 必须离开顶层 Product；确切 leaf 名由 target/include audit 决定 |
-| Product/Editor/* | Editor/* | editor product 语义直接转成显式 Editor 分支 |
+| Foundation/RHI/NativeWindow* | GUI/Host/Window/* + Render/RHI/Present/* | 把窗口对象与 present bridge 拆开；RHI 只依赖后者 |
+| Framework/AppServices/* | 按真实职责回到 Render/Runtime、Scene、Physics、Scripting 或具体 app shell | 它不是共享 App 主链；也不再默认整体落进 Game 桶 |
+| Product/Host/* | 具体 app form 内的 branch-local shell | 必须离开顶层 Product；确切 leaf 名由 target/include audit 决定 |
+| Product/Editor/* | Applications/GameEditor/*（语义） | editor product 语义进入 app-form 分支；是否保留顶层 Editor 名字由后续迁移批次决定 |
 | Example/GUIWorkbench/* | Example/GUIWorkbench/* | 位置正确，继续保留 |
 
 关键变化只有两个：
 
 1. Product 不再是目标顶层目录；
 2. Foundation/Core/Application 与 Framework/AppRuntime 不再并成一团 App；前者归 App/Kernel + App/Control，后者归 GUI/Host。
+3. `Game` / `Editor` 不再承担共享 Physics / Scripting / Scene / RenderRuntime 的默认归宿语义。
 
 ## 5. 命名禁用词与保留词
 
@@ -205,10 +236,9 @@
 - Core：最低共享底座；
 - App：无窗口应用主链；其下只保留 Kernel / Control；
 - GUI：retain UI 与 GUI 宿主分支；
-- Game：游戏运行时/场景/资源/渲染分支；
-- Editor：编辑器分支；
+- Game / Editor：若保留为可见目录名，只表示 app form；
 - Host：具体宿主对象或宿主子目录，例如 GUI/Host；
-- Shell / Runtime：只允许作为 Game 或 Editor 分支内的叶子级壳语义候选，不得再冒充顶层共享层。
+- Shell / Runtime：只允许作为具体 app form 内的叶子级壳语义候选，不得再冒充顶层共享层。
 
 ### 5.2 禁用词 / 禁止模式
 
@@ -221,13 +251,16 @@
 
 目录收口不是为了好看，而是为了可裁剪。Phase A 之后，默认以以下约束审视每次 move/rename：
 
-1. GUI 不得依赖 Game 或 Editor；
-2. App/Kernel 与 App/Control 不得依赖 GUI、Game、Editor；
+1. GUI 不得依赖任何 app form；
+2. App/Kernel 与 App/Control 不得依赖 GUI 或任何 app form；
 3. window/bootstrap/native event source 属于 GUI/Host，而不是 App；
-4. Core 不得依赖 App / GUI / Game / Editor；
-5. Editor 可以依赖 Game 与 GUI，但绝不反向；
-6. Example 只向下依赖，不能变成共享层；
-7. 如果一个 GUI app 未来抽仓时仍需要连带 Game/* 才能编译，说明当前目录/target 设计失败。
+4. Render/RHI 只依赖最小 present bridge，不依赖完整 window manager / activation / title 语义；
+5. Core 不得依赖 App / GUI / Render / Scene / Physics / Scripting / Reflection / app forms；
+6. 共享能力若被多个 app form 消费，就不得继续藏在 `Game` / `Editor` 语义分支内；
+7. Example 只向下依赖，不能变成共享层；
+8. 如果一个 GUI app 未来抽仓时仍需要连带某个 app-form shell 才能编译，说明当前目录/target 设计失败。
+
+`Editor` 若保留为可见目录名，也只表示 app form；它可以依赖共享能力，但共享能力不能反向依赖它。
 
 ## 7. 第一轮 no-behavior 迁移批次
 
@@ -235,7 +268,7 @@
 
 - 产出“当前目录 -> 未来目录 -> target -> include 根”映射表；
 - 识别哪些 target 已经形成真实边界，哪些只是历史目录名噪声；
-- 决定 Product/Host 在 Game/* 下的首个落点候选。
+- 决定 Product/Host 中哪些是共享能力、哪些才是 app-form shell，再给 shell 选首个落点候选。
 
 ### Batch 2 — App 子树拆分
 
@@ -250,13 +283,13 @@
 
 ### Batch 4 — 取消顶层 Product 垃圾桶
 
-- Product/Editor/* -> Editor/*；
-- Product/Host/* -> Game/* 内的 branch-local shell；
+- Product/Editor/* -> app-form editor shell（物理名是否保留 `Editor/*` 由批次决定）；
+- Product/Host/* -> 先拆共享能力，再把剩余壳归到具体 app form 内的 branch-local shell；
 - 首轮只做 move/include/target 闭包修正，不混入逻辑重写。
 
 ### Batch 5 — 误名层回收
 
-- Framework/AppServices/* 单独回收到 Game/*；
+- Framework/AppServices/* 单独按真实职责回收到 Render/Runtime、Scene、Physics、Scripting 或具体 app shell；
 - 不与前四批混做，避免把“共享 App 主链收口”与“game runtime contract 回收”搅在一起。
 
 ## 8. 停止线
@@ -264,6 +297,6 @@
 出现以下任一情况，就说明当前 move/rename 方案偏了：
 
 1. 为了迁目录，不得不再造一层新的 App / Host / Framework facade；
-2. GUI-only 形态仍然需要跨进 Game/* 才能完成最小链接闭包；
+2. GUI-only 形态仍然需要跨进某个 app-form shell 才能完成最小链接闭包；
 3. Product 虽然被删掉了，但同样的垃圾桶语义又在别的顶层名字下复活；
 4. 新目录树不能直接回答“只做 GUI app 时将来该带走哪几棵树”。

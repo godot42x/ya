@@ -35,12 +35,14 @@
         { "id": "naming_dedup_table", "status": "pass", "notes": "owner-model.md：App/Host/Surface/Panel 保留/改名/过渡/删除表；GUIAppHost 是 GUIApp compatibility alias" },
         { "id": "owner_state_split", "status": "pass", "notes": "owner-model.md：app/window/tree state 表与 multi-window default semantics" },
         { "id": "automation_base_placement", "status": "pass", "notes": "现口径已提升为 App control plane：AppKernel + GuiEventDriver + BmpDiff/ControlServer 为 base；GUI/game/editor 在模块层扩展，automation 只是其中一个子能力" },
+        { "id": "capability_vs_appform_semantics", "status": "pass", "notes": "plan.md / directory-charter.md 已明确两条轴：共享能力（Render/GUI/Scene/Physics/Scripting/Reflection...）与应用形态（GameRuntime/GameEditor/GuiWorkbench...）；Game/Editor 不再是共享能力大桶" },
+        { "id": "native_window_vs_present_bridge_boundary", "status": "pass", "notes": "plan.md / owner-model.md 已明确 `INativeWindow` 与 `IPresentSurfaceSource` 的语义拆分；RHI 最终只依赖最小 present/surface bridge" },
         { "id": "owner_checklist", "status": "pass", "notes": "owner-model.md 生命周期清单覆盖 create/tick/resize/shutdown/dump" },
         { "id": "runtime_visual_hierarchy_mutation_contract", "status": "pass", "notes": "plan.md 已正式定义 attach/detach/reparent/reorder 为 retain UI runtime-safe 一等能力；slot 属于 parent-child edge，tree state 在 mutation 后重新验证" },
-        { "id": "directory_convergence_charter", "status": "pass", "notes": "directory-charter.md 已改为 extraction-oriented 物理树：Core / App / GUI / Game / Editor / Example，并明确 App 只保留 Kernel / Control，window 属于 GUI/Host" },
+        { "id": "directory_convergence_charter", "status": "pass", "notes": "directory-charter.md 已明确两条轴：共享能力（App/Render/GUI/Scene/Physics/Scripting/Reflection）与应用形态（GameRuntime/GameEditor/...）；并明确 App 只保留 Kernel / Control，window 属于 GUI/Host" },
         { "id": "framework_appruntime_target_decision", "status": "pass", "notes": "唯一去向已改口径：Framework/AppRuntime -> GUI/Host；Foundation/Core/Application 按职责拆到 App/Kernel + App/Control" },
         { "id": "framework_gui_app_rename_decision", "status": "pass", "notes": "唯一去向已拍板：Framework/GUI/App -> Framework/GUI/Host；首轮保留 GUIAppHost compatibility alias" },
-        { "id": "product_host_semantics_removal", "status": "in_progress", "notes": "已确定必须离开顶层 Product，回收到 Game/* branch-local shell；具体落点在 Game/Runtime 与 Game/Shell 候选中待 include/target audit 拍板" }
+        { "id": "product_host_semantics_removal", "status": "in_progress", "notes": "已确定必须离开顶层 Product；下一轮要先区分 app-form shell 与共享能力，再决定 GameRuntime/GameEditor 等具体落点" }
       ]
     },
     {
