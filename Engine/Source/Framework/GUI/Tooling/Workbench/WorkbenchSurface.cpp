@@ -33,8 +33,8 @@ constexpr glm::vec4 kWindowColor   = {0.075f, 0.082f, 0.10f, 1.0f};
 constexpr glm::vec4 kPanelColor    = {0.11f, 0.12f, 0.15f, 1.0f};
 constexpr glm::vec4 kCanvasColor   = {0.05f, 0.055f, 0.07f, 1.0f};
 constexpr glm::vec4 kHeaderColor   = {0.55f, 0.60f, 0.68f, 1.0f};
-constexpr glm::vec4 kButtonNormal  = {0.15f, 0.19f, 0.27f, 1.0f};
-constexpr glm::vec4 kButtonHovered = {0.27f, 0.30f, 0.37f, 1.0f};
+constexpr glm::vec4 kButtonNormal  = {0.00f, 0.09f, 0.27f, 1.0f};
+constexpr glm::vec4 kButtonHovered = {0.57f, 0.30f, 0.37f, 1.0f};
 constexpr glm::vec4 kButtonPressed = {0.14f, 0.16f, 0.20f, 1.0f};
 constexpr glm::vec4 kButtonFocused = {0.24f, 0.46f, 0.82f, 1.0f};
 
