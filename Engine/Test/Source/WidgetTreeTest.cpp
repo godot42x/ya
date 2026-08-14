@@ -802,7 +802,9 @@ TEST(WidgetTreeTest, ButtonPressRequestsFocusAndCapture)
               EWidgetRouteResult::HandledExclusive);
     EXPECT_TRUE(button->_bPressed);
     EXPECT_EQ(tree.getFocused(), button.get());
-    EXPECT_TRUE(button->_bFocused);
+    // Pointer press requests logical focus but must not light the persistent
+    // keyboard-focus highlight (that stays reserved for Tab traversal).
+    EXPECT_FALSE(button->_bFocused);
     EXPECT_EQ(tree.getPointerCapture(), button.get());
 
     EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(120.0f, 110.0f)),
@@ -863,14 +865,15 @@ TEST(WidgetTreeTest, PressRetiresStaleHoverAndReArmsPressedButton)
               EWidgetRouteResult::HandledExclusive);
 
     // Pressing the second button without an intervening move must retire the
-    // stale hover on the first and arm the pressed button's own hover/focus.
+    // stale hover on the first and arm the pressed button's own hover (logical
+    // focus moves, but a pointer press does not light the keyboard highlight).
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(280.0f, 110.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_FALSE(first->_bHovered);
     EXPECT_FALSE(first->_bFocused);
     EXPECT_TRUE(second->_bPressed);
     EXPECT_TRUE(second->_bHovered);
-    EXPECT_TRUE(second->_bFocused);
+    EXPECT_FALSE(second->_bFocused);
     EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(280.0f, 110.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_FALSE(second->_bPressed);

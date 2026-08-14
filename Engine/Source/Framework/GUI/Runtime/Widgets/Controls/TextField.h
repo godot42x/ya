@@ -60,7 +60,7 @@ struct YA_GUI_API UITextField : public UIElement
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override { return _size; }
-    void onFocusGained() override { _bFocused = true; }
+    void onFocusGained(bool /*bFromKeyboard*/) override { _bFocused = true; }
     void onFocusLost() override;
     void clearTransientInputState() override { _bFocused = false; }
 

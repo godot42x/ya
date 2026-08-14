@@ -58,6 +58,7 @@ struct YA_GUI_API UISplitPane : public UIElement
     void layoutAssigned(const Rect2D& rect) override;
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
+    void resetHoverState() override { _bHoveredDivider = false; }
     void clearTransientInputState() override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 

@@ -386,7 +386,7 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
                 // from the front / back of the stable order.
                 next = keyEvent.isShiftPressed() ? focusables.back() : focusables.front();
             }
-            setFocus(next);
+            setFocus(next, /*bFromKeyboard=*/true);
             setRouteTrace(EWidgetRoutePolicy::TabTraversal, next);
             return EWidgetRouteResult::HandledExclusive;
         }
@@ -518,7 +518,7 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
 
 // === Focus / capture / hover ===
 
-void WidgetTree::setFocus(UIElement* widget)
+void WidgetTree::setFocus(UIElement* widget, bool bFromKeyboard)
 {
     if (widget && !widget->isAttached()) {
         YA_CORE_WARN("WidgetTree::setFocus: widget '{}' is not attached to this tree",
@@ -533,7 +533,7 @@ void WidgetTree::setFocus(UIElement* widget)
     }
     _focused = widget;
     if (_focused) {
-        _focused->onFocusGained();
+        _focused->onFocusGained(bFromKeyboard);
     }
     refreshFocusPath();
 }

@@ -6,12 +6,12 @@
 {"event":"mouse_press","x":480,"y":106,"button":0}
 {"event":"mouse_release","x":480,"y":106,"button":0}
 {"frame":1}
-{"assert":{"widget":"Counter","control":{"type":"button","pressed":false,"focused":true}}}
+{"assert":{"widget":"Counter","control":{"type":"button","pressed":false,"focused":false}}}
 {"assert":{"lastRoute":{"policyName":"pointerCapture","target":"Counter","resultName":"handledExclusive"}}}
 {"checkpoint":"counter_clicked"}
 {"event":"mouse_move","x":900,"y":500}
 {"frame":1}
-{"assert":{"widget":"Counter","control":{"type":"button","hovered":false,"pressed":false,"focused":true}}}
+{"assert":{"widget":"Counter","control":{"type":"button","hovered":false,"pressed":false,"focused":false}}}
 {"checkpoint":"counter_hover_retired"}
 {"event":"mouse_press","x":24,"y":138,"button":0}
 {"event":"mouse_release","x":24,"y":138,"button":0}

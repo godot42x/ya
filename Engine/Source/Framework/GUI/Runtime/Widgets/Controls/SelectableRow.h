@@ -73,6 +73,7 @@ struct YA_GUI_API UISelectableRow : public UIElement
 
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
+    void resetHoverState() override { _bHovered = false; }
     void clearTransientInputState() override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 

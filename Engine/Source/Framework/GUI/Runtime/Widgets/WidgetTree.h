@@ -156,8 +156,9 @@ struct YA_GUI_API WidgetTree final
 
     // === Focus / capture / hover ===
     /// Move keyboard focus. Notifies the previous/next widget through
-    /// onFocusLost / onFocusGained.
-    void setFocus(UIElement* widget);
+    /// onFocusLost / onFocusGained. `bFromKeyboard` marks Tab-traversal focus
+    /// (drives the button's persistent focus highlight).
+    void setFocus(UIElement* widget, bool bFromKeyboard = false);
     [[nodiscard]] UIElement* getFocused() const { return _focused; }
     void setPointerCapture(UIElement* widget);
     void releasePointerCapture(UIElement* widget);

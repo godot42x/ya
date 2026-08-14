@@ -254,8 +254,10 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// into it (focus / capture / hover), so stale input state never survives
     /// a re-attach. Base clears hover only.
     virtual void clearTransientInputState() { resetHoverState(); }
-    /// Focus lifecycle hooks (called by WidgetTree::setFocus).
-    virtual void onFocusGained() {}
+    /// Focus lifecycle hooks (called by WidgetTree::setFocus). `bFromKeyboard`
+    /// distinguishes Tab-traversal focus (drives a persistent visual highlight)
+    /// from pointer/programmatic focus (logical only, no lingering highlight).
+    virtual void onFocusGained(bool /*bFromKeyboard*/) {}
     virtual void onFocusLost() {}
     /// Whether child hits are culled to this widget's own rect (scroll
     /// viewports / clipped containers). Base: children hit-test freely, even

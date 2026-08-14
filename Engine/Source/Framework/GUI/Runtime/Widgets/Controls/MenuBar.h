@@ -42,6 +42,7 @@ struct YA_GUI_API UIMenuBarItem : public UIElement
 
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
+    void resetHoverState() override { _bHovered = false; }
     void clearTransientInputState() override { _bHovered = false; }
 
   private:

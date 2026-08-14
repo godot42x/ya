@@ -131,7 +131,7 @@ void UITabBar::navigate(int delta)
     }
     selectTab(next);
     if (WidgetTree* tree = getTree()) {
-        tree->setFocus(_tabs[static_cast<size_t>(next)]);
+        tree->setFocus(_tabs[static_cast<size_t>(next)], /*bFromKeyboard=*/true);
     }
 }
 

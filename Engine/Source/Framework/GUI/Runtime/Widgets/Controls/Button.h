@@ -59,7 +59,7 @@ struct YA_GUI_API UIButton : public UIElement
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     void resetHoverState() override { _bHovered = false; }
     void clearTransientInputState() override;
-    void onFocusGained() override { _bFocused = true; }
+    void onFocusGained(bool bFromKeyboard) override { _bFocused = bFromKeyboard; }
     void onFocusLost() override { _bFocused = false; }
 
     // Content-slot layout (Slate ContentControl model): the button resolves
