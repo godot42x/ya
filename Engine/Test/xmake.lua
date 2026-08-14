@@ -136,7 +136,7 @@ do
     add_files("./Source/GUIHeadlessHostTest.cpp")
     add_files("./Source/TestEntry.cpp")
 
-    add_deps("ya-gui-app-host")
+    add_deps("ya-gui-host")
     add_packages("gtest")
 
     if is_plat("windows") then

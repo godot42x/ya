@@ -1,12 +1,12 @@
 // GUIWorkbench: the real tool GUI app (gui-app-bootstrap Phase 3). A
-// standalone binary consuming the shared ya-gui-app-host library; the tool
+// standalone binary consuming the shared ya-gui-host library; the tool
 // workspace / shell / commands live in GUIWorkbench.* and never copy the
 // SDL/Vulkan frame loop. No Scene/ECS/Render3D/Host/Editor dependency.
 
 #include "Core/Log.h"
 
-#include "GUI/App/GUIApp.h"
-#include "GUI/App/GUIHeadlessHost.h"
+#include "GUI/Host/GUIApp.h"
+#include "GUI/Host/GUIHeadlessHost.h"
 #include "GUI/Draw2D/Render2D.h"
 #include "GUI/Resources/FontManager.h"
 #include "GUI/Widgets/UIFrameSnapshotDump.h"

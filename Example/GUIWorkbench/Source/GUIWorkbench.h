@@ -14,7 +14,7 @@
 //   GUIApp + GUIWindowHost - app assembly / window input / snapshot / present
 // ============================================================================
 
-#include "GUI/App/GUIApp.h"
+#include "GUI/Host/GUIApp.h"
 #include "GUI/Tooling/Workbench/WorkbenchSurface.h"
 
 #include "WorkbenchDemoPages.h"

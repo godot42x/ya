@@ -5,7 +5,7 @@
 #include "Host/Lifecycle/AppAutomation.h"
 #include "Host/Automation/AppAutomationControlService.h"
 #include "Host/Utility/FPSCtrl.h"
-#include "AppRuntime/AppBootstrap.h"
+#include "GUI/Host/AppBootstrap.h"
 
 #include "Core/Config/ConfigManager.h"
 
@@ -42,7 +42,7 @@
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
 #include "RHI/NativeWindow.h"
-#include "AppRuntime/NativeWindowManager.h"
+#include "GUI/Host/NativeWindowManager.h"
 #include "Render3D/RenderRuntime.h"
 
 #include <format>

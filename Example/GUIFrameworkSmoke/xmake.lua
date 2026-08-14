@@ -7,10 +7,10 @@
 --   WidgetTree -> layout + immutable UIFrameSnapshot
 --   snapshot   -> Render2D compose pass onto the swapchain presentation target
 --
--- Links only the GUI closure through ya-gui-app-host (Core/RHI/Vulkan
+-- Links only the GUI closure through ya-gui-host (Core/RHI/Vulkan
 -- backend + the four GUI modules + the standalone host); no
 -- ECS/Physics/Resource/RenderGraph/Render3D/Host/Editor.
 target("ya-gui-minimal-host")
     set_kind("binary")
     add_files("./Source/**.cpp")
-    add_deps("ya-gui-app-host")
+    add_deps("ya-gui-host")

@@ -83,3 +83,34 @@
 - 文档级验证：新增 `product-host-file-audit.md` 与 `appservices-file-audit.md`；
 - 文档级验证：todo / feature matrix 已切到 Phase A3；
 - 代码级验证：本轮仍未改 `Engine/Source` 行为代码。
+
+## 2026-08-15 — 落地 Batch 1 no-behavior 迁移
+
+### 本轮完成
+
+- 建立三个真实 owner target：`ya-app-kernel`（App/Kernel）、`ya-app-control`（App/Control）、`ya-gui-host`（GUI/Host），各自带 public include root 与导出宏（`YA_APP_KERNEL_API` / `YA_APP_CONTROL_API` / `YA_GUI_API`）；
+- `Foundation/Core/Application/*` 已 `git mv` 到 `App/Kernel` 与 `App/Control`；`AppKernel.h` 的宏由 `YA_CORE_API` 改为 `YA_APP_KERNEL_API`，4 个 control 头由 `YA_CORE_API` 改为 `YA_APP_CONTROL_API`；
+- `Framework/AppRuntime/*` + `Framework/GUI/App/*` 已 `git mv` 到 `GUI/Host`；`AppBootstrap.h` / `NativeWindowManager.h` 的宏由 `YA_APP_RUNTIME_API` 改为 `YA_GUI_API`；
+- 旧 public 头（`Core/Application/*`、`AppRuntime/*`、`GUI/App/*`）全部改写为指向新 public 头的 compat 转发头；`ya-app-runtime` / `ya-gui-app-host` 改写为 `set_kind("phony")` 的 re-export compat target，删除条件已写入注释（Phase A5 清理）；
+- `Engine/Source/xmake.lua` 增删 includes、`ya_engine_defines()` 用 `YA_APP_KERNEL_API` + `YA_APP_CONTROL_API` 替换 `YA_APP_RUNTIME_API`；`ya-gui-framework` 与 `ya-engine` 增补 `ya-app-kernel` / `ya-app-control` 依赖；
+- 切换全部消费者：GUI-only（`GUIWorkbench` / `ya-gui-minimal-host` / `ya-gui-headless-host-test` / `ya-gui-closure-test`）与 Product（`ya-host`）从旧 target 切到 `ya-gui-host`，所有旧 include 拼写迁移到 `App/Kernel`、`App/Control`、`GUI/Host`。
+
+### 当前结论
+
+- Batch 1 的目录/target/owner 物理收口已经落地：`App/Kernel (+ App/Control)` 成为无窗口主链，`GUI/Host` 成为唯一 GUI window/bootstrap/host owner；
+- 旧 include 拼写在 `Engine` / `Example` / `Test` 中已零残留（`rg` 为空）；compat 转发头与 compat target 仅作为 Phase A5 的删除候选保留；
+- `GUIWorkbench` 闭包仍只依赖 `ya-gui-host` + `ya-gui-tooling`，未被 `Product/Host` / `Game` 回灌。
+
+### 下一轮直接接力点（Batch 2）
+
+1. 依据 `product-host-file-audit.md` 拆出 `Product/Host` 内共享能力消费者；
+2. 仅把剩余 app-form shell 归到具体 runtime/editor 分支；
+3. 按 `appservices-file-audit.md` 拆回 `Framework/AppServices` 的真实 owner。
+
+### 本轮验证
+
+- 构建 checkpoint C1：`ya-app-kernel` / `ya-app-control` / `ya-gui-host` 单独构建通过；
+- 构建 checkpoint C2：`ya-gui-closure-test` / `ya-gui-headless-host-test` / `ya-gui-minimal-host` / `GUIWorkbench` 构建通过；
+- 构建 checkpoint C3：`ya-host` / `ya-editor` 构建通过；
+- 构建 checkpoint C4：`rg 'Core/Application/|AppRuntime/|GUI/App/'` 在 Engine/Example/Test 零残留；
+- 运行时：`ya-gui-closure-test` 114/114 PASS、`ya-gui-headless-host-test` 1/1 PASS、`ya-gui-minimal-host --exit-after-frame=30` EXIT=0。

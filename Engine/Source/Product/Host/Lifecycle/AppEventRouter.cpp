@@ -1,7 +1,7 @@
 #include "Host/Lifecycle/AppEventRouter.h"
 
 #include "Host/App.h"
-#include "AppRuntime/NativeWindowManager.h"
+#include "GUI/Host/NativeWindowManager.h"
 
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"

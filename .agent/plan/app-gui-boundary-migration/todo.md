@@ -1,11 +1,11 @@
 # App / GUI 边界迁移 TODO
 
-> 更新时间：2026-08-14
+> 更新时间：2026-08-15
 > 作用：只追踪还没完成的边界迁移主线；不再重复记录已在 `gui-architecture-convergence` 完成的 layout / route / workbench 收敛。
 
 ## 当前优先级
 
-当前激活切片：`phase-a3 batch-1 no-behavior migration`
+当前激活切片：`phase-a4 batch-2 Product/Host 与 AppServices 拆分`
 
 当前输入工件：
 
@@ -40,11 +40,11 @@
 
 ## P3 — Phase A3 Batch 1 no-behavior 迁移
 
-- [ ] 落地 `Foundation/Core/Application/*` -> `App/Kernel` + `App/Control`
-- [ ] 落地 `Framework/AppRuntime/*` + `Framework/GUI/App/*` -> `GUI/Host/*`
-- [ ] 修正 include 路径、公开头与 target 名称
-- [ ] 仅在必要处保留 compatibility 头，并标出删除条件
-- [ ] 构建验证 Batch 1 涉及 target
+- [x] 落地 `Foundation/Core/Application/*` -> `App/Kernel` + `App/Control`
+- [x] 落地 `Framework/AppRuntime/*` + `Framework/GUI/App/*` -> `GUI/Host/*`
+- [x] 修正 include 路径、公开头与 target 名称
+- [x] 仅在必要处保留 compatibility 头，并标出删除条件
+- [x] 构建验证 Batch 1 涉及 target
 
 ## P4 — Phase A4 Batch 2 Product/Host 与 AppServices 拆分
 
@@ -61,7 +61,7 @@
 
 ## 当前下一刀
 
-1. 建立真实 `App/Kernel`、`App/Control`、`GUI/Host` 目录 / target / include root；
-2. 增加最小 forward header 与 compat target 壳，但不保留双份实现；
-3. 先切 GUI-only consumers：`GUIWorkbench`、`ya-gui-minimal-host`、`ya-gui-headless-host-test`；
-4. 再切 `ya-host` 与 `ya-editor`，确认 Product/Host 只是在消费新主线而不是重新夺回 owner。
+1. 依据 `product-host-file-audit.md` 拆出 `Product/Host` 内的共享能力消费者；
+2. 仅把剩余 app-form shell 归到具体 runtime/editor 分支；
+3. 按 `appservices-file-audit.md` 拆回 `Framework/AppServices` 的真实 owner；
+4. 持续验证 `GUIWorkbench` 闭包不被 `Product/Host` / `Game` 语义污染。

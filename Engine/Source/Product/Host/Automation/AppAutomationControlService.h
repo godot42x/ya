@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Graph/RenderGraph.h"
-#include "Core/Application/AutomationControlServer.h"
+#include "App/Control/AutomationControlServer.h"
 #include "Host/AppOptions.h"
 #include "Host/Utility/AppScreenshotCapture.h"
 

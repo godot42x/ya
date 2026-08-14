@@ -3,7 +3,7 @@
 // null event source and null frame sink, proving presentation is not in the
 // kernel.
 
-#include "Core/Application/AppKernel.h"
+#include "App/Kernel/AppKernel.h"
 #include "Core/MessageBus.h"
 
 #include <gtest/gtest.h>

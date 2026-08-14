@@ -4,7 +4,7 @@
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
 #include "AppServices/AppAutomation.h"
-#include "Core/Application/AutomationRun.h"
+#include "App/Control/AutomationRun.h"
 #include "Host/Utility/ClLIParams.h"
 #include "AppServices/PostProcessingState.h"
 

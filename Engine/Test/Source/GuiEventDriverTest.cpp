@@ -2,7 +2,7 @@
 // Foundation-only: it emits Core Events through IGuiEventSink, so it needs no
 // WidgetTree / RHI to verify parse + execution semantics.
 
-#include "Core/Application/GuiEventDriver.h"
+#include "App/Control/GuiEventDriver.h"
 
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/WidgetTreeDump.h"

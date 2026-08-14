@@ -1,7 +1,7 @@
 // BmpDiff regression (shared app foundation, pure CPU). Exercises the golden
 // image comparison the GUI scenario harness uses for pixel assertions.
 
-#include "Core/Application/BmpDiff.h"
+#include "App/Control/BmpDiff.h"
 
 #include <gtest/gtest.h>
 

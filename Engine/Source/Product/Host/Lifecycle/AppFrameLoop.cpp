@@ -9,7 +9,7 @@
 #include "Render3D/Services/RenderDiagnosticsService.h"
 
 #include "Core/Async/TaskQueue.h"
-#include "Core/Application/AppKernel.h"
+#include "App/Kernel/AppKernel.h"
 #include "Core/Manager/Facade.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"

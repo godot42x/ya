@@ -1,5 +1,5 @@
 // GUIFrameworkSmoke: the minimal end-to-end standalone GUI smoke, now an
-// executable consumer of the ya-gui-app-host library (see ../xmake.lua).
+// executable consumer of the ya-gui-host library (see ../xmake.lua).
 //
 // The smoke only supplies host configuration, the demo content and the
 // frame-count CLI; the window / RHI / input pump / snapshot / compose /
@@ -7,9 +7,9 @@
 // product closure only (Core/RHI/Vulkan backend + the four GUI modules +
 // the app host); no ECS/Physics/Resource/RenderGraph/Render3D/Host/Editor.
 
-#include "GUI/App/GUIApp.h"
+#include "GUI/Host/GUIApp.h"
 
-#include "Core/Application/AutomationRun.h"
+#include "App/Control/AutomationRun.h"
 #include "Core/Log.h"
 
 #include "GUI/Widgets/Controls/Button.h"

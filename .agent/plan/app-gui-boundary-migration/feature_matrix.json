@@ -1,6 +1,6 @@
 {
   "plan": "app-gui-boundary-migration",
-  "updated_at": "2026-08-14",
+  "updated_at": "2026-08-15",
   "legend": {
     "planned": "尚未开始，但已纳入主线",
     "in_progress": "当前阶段正在推进",
@@ -36,10 +36,10 @@
       "id": "migration_batches",
       "title": "No-behavior migration batches",
       "items": [
-        { "id": "batch1_app_and_gui_host_move", "status": "planned", "notes": "Foundation/Core/Application -> App/*；Framework/AppRuntime + Framework/GUI/App -> GUI/Host" },
+        { "id": "batch1_app_and_gui_host_move", "status": "pass", "notes": "App/Kernel + App/Control + GUI/Host 三个真实 owner target 已建立；旧目录不再 owning 实现源文件；build C1/C2/C3 全绿" },
         { "id": "batch2_product_host_split", "status": "planned", "notes": "Product/Host 与 AppServices 依据 file-level audit 拆散归位" },
-        { "id": "compatibility_header_cleanup", "status": "planned", "notes": "删除已无消费者的过渡头与 target alias" },
-        { "id": "guiworkbench_closure_clean", "status": "planned", "notes": "GUIWorkbench 必须保持 GUI-only closure sentinel，不被 Product/Host / Game 语义反向污染" }
+        { "id": "compatibility_header_cleanup", "status": "planned", "notes": "删除已无消费者的过渡头与 target alias（Phase A5）" },
+        { "id": "guiworkbench_closure_clean", "status": "pass", "notes": "GUIWorkbench 仅依赖 ya-gui-host + ya-gui-tooling；closure test 114/114、headless 1/1、minimal-host smoke EXIT=0" }
       ]
     }
   ]

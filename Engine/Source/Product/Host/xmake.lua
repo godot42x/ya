@@ -5,7 +5,7 @@ target("ya-host")
     add_files("**.cpp")
     add_headerfiles("./include/**.h", { public = true })
     add_headerfiles("**.h")
-    add_deps("ya-app-runtime")
+    add_deps("ya-gui-host")
     add_deps("ya-render-3d", "imgui-local", "imguizmo-local", { public = true })
     -- Host drives GUI fonts directly; Game UI lives in the widgets module.
     add_deps("ya-gui-resources", "ya-gui-widgets")
