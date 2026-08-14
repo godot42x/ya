@@ -94,6 +94,14 @@ Entity* pickEntityFromEntityIdImage(IRender*                             render,
 
 void EditorLayer::onEvent(const Event& event)
 {
+    // GUIWorkbench hover is injected at frame start (before viewport compose)
+    // so the composed snapshot reflects the current cursor without the
+    // one-frame lag that the ImGui presentation stage would otherwise add.
+    if (event.getEventType() == EEvent::MouseMoved) {
+        const auto& mouseEvent = static_cast<const MouseMoveEvent&>(event);
+        _guiWorkbenchPanel.onPointerMoved({ mouseEvent.getX(), mouseEvent.getY() });
+    }
+
     if (_app && !_app->isStopped() && !isViewportMode2D()) {
         return;
     }

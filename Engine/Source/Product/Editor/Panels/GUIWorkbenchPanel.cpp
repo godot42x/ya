@@ -80,12 +80,39 @@ void GUIWorkbenchPanel::onImGuiRender()
                            contentSize,
                            ImVec2(0, 0),
                            ImVec2(1, 1));
-        routePanelInput(ImGui::GetItemRectMin(), ImGui::GetItemRectSize());
+        const ImVec2 imageMin  = ImGui::GetItemRectMin();
+        const ImVec2 imageSize = ImGui::GetItemRectSize();
+        _imageRectMin          = { imageMin.x, imageMin.y };
+        _imageRectSize         = { imageSize.x, imageSize.y };
+        _bHasImageRect         = true;
+        routePanelInput(imageMin, imageSize);
     } else {
+        _bHasImageRect = false;
         ImGui::TextDisabled("GUI workbench surface waiting for first composed frame...");
     }
 
     ImGui::End();
+}
+
+void GUIWorkbenchPanel::onPointerMoved(const glm::vec2& screenPoint)
+{
+    if (!_tree || !_bHasImageRect || _imageRectSize.x <= 0.0f || _imageRectSize.y <= 0.0f) {
+        return;
+    }
+
+    const bool bInside =
+        screenPoint.x >= _imageRectMin.x && screenPoint.x < _imageRectMin.x + _imageRectSize.x &&
+        screenPoint.y >= _imageRectMin.y && screenPoint.y < _imageRectMin.y + _imageRectSize.y;
+    if (!bInside) {
+        return;
+    }
+
+    const glm::vec2 logicalPoint = {
+        std::clamp(screenPoint.x - _imageRectMin.x, 0.0f, _imageRectSize.x),
+        std::clamp(screenPoint.y - _imageRectMin.y, 0.0f, _imageRectSize.y),
+    };
+    _lastPointerPoint = logicalPoint;
+    dispatchPointerEvent(MouseMoveEvent(logicalPoint.x, logicalPoint.y), logicalPoint);
 }
 
 void GUIWorkbenchPanel::routePanelInput(const ImVec2& imageMin, const ImVec2& imageSize)
@@ -103,14 +130,16 @@ void GUIWorkbenchPanel::routePanelInput(const ImVec2& imageMin, const ImVec2& im
         _bFocused = false;
     }
 
+    // Hover (MouseMove) is injected earlier in the frame by onPointerMoved so
+    // the composed snapshot reflects the current cursor without the one-frame
+    // lag this presentation stage would otherwise add. Here we only resolve
+    // the click/wheel position; hover ownership stays with onPointerMoved.
     glm::vec2 logicalPoint = _lastPointerPoint;
     if (bHover) {
         logicalPoint = {
             std::clamp(io.MousePos.x - imageMin.x, 0.0f, imageSize.x),
             std::clamp(io.MousePos.y - imageMin.y, 0.0f, imageSize.y),
         };
-        _lastPointerPoint = logicalPoint;
-        dispatchPointerEvent(MouseMoveEvent(logicalPoint.x, logicalPoint.y), logicalPoint);
     }
 
     if (bHover && io.MouseWheel != 0.0f) {
