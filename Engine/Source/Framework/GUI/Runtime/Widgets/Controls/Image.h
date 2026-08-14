@@ -11,7 +11,7 @@ namespace ya
 /// Without a resolver or on a cache miss the element draws a translucent
 /// placeholder block (documented limitation for resolver-less hosts), so
 /// layout and hit testing stay visible in any host.
-struct UIImage : public UIElement
+struct YA_GUI_API UIImage : public UIElement
 {
     YA_REFLECT_BEGIN(UIImage, UIElement)
     YA_REFLECT_FIELD(_assetPath, .instanceEditable())

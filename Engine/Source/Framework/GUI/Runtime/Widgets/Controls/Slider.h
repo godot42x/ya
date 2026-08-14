@@ -14,7 +14,7 @@ namespace ya
 ///     pointer capture drag session (same contract as UISplitPane divider);
 ///   - Left / Right step `_step` (with Shift stepping 10x), Home / End jump;
 ///   - Space / Enter on the focused slider step by `_step`.
-struct UISlider : public UIElement
+struct YA_GUI_API UISlider : public UIElement
 {
     YA_REFLECT_BEGIN(UISlider, UIElement)
     YA_REFLECT_FIELD(_value, .instanceEditable())

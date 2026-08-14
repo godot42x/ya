@@ -1,52 +1,46 @@
 #pragma once
 
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/UIElement.h"
 
 namespace ya
 {
 
-/// Box container: arranges children left-to-right (Horizontal) or top-to-bottom
-/// (Vertical) by their desired sizes, with uniform spacing and padding.
-/// Children can be clipped to the content rect via _bClipChildren.
-struct UIContainer : public UIElement
+/// Layout host for the first formal UIBoxLayout. UIContainer owns visual
+/// children and one layout algorithm; box configuration and child intent no
+/// longer live as fields on the container/widget itself.
+struct YA_GUI_API UIContainer : public UIElement
 {
     YA_REFLECT_BEGIN(UIContainer, UIElement)
-    YA_REFLECT_FIELD(_direction, .instanceEditable())
-    YA_REFLECT_FIELD(_spacing, .instanceEditable())
-    YA_REFLECT_FIELD(_padding, .instanceEditable())
-    YA_REFLECT_FIELD(_mainAxisAlignment, .instanceEditable())
-    YA_REFLECT_FIELD(_bClipChildren, .instanceEditable())
-    YA_REFLECT_FIELD(_bStretchLastChild, .instanceEditable())
     YA_REFLECT_END()
 
-    explicit UIContainer(std::string name = "Container") : UIElement(std::move(name)) {}
+    explicit UIContainer(std::string name = "Container");
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIContainer>; }
 
-    EWidgetBoxLayout        _direction         = EWidgetBoxLayout::Horizontal;
-    float                   _spacing           = 4.0f;
-    /// Content inset: {horizontal, vertical} padding on both sides. The
-    /// content rect = layout rect shrunk by padding on each edge — the
-    /// correct way to inset a full-anchor container (a full-anchor rect with
-    /// a position offset would shift the whole rect out of the parent).
-    glm::vec2               _padding           = {0.0f, 0.0f};
-    EWidgetMainAxisAlignment _mainAxisAlignment = EWidgetMainAxisAlignment::Start;
-    bool                    _bClipChildren     = false;
-    /// Fill: the last participating child absorbs the remaining main-axis
-    /// space instead of its desired extent. Lets a "header rows + content"
-    /// panel express the content area structurally, without magic padding.
-    /// Only meaningful when the container itself has a resolved (non-Auto)
-    /// extent along the main axis.
-    bool                    _bStretchLastChild = false;
+    [[nodiscard]] UIBoxLayout& getBoxLayout() { return _boxLayout; }
+    [[nodiscard]] const UIBoxLayout& getBoxLayout() const { return _boxLayout; }
+    void setDirection(EWidgetBoxLayout value) { _boxLayout.setDirection(value); }
+    void setSpacing(float value) { _boxLayout.setSpacing(value); }
+    void setPadding(glm::vec2 value) { _boxLayout.setPadding(value); }
+    void setMainAxisAlignment(EWidgetMainAxisAlignment value) { _boxLayout.setMainAxisAlignment(value); }
+    void setClipChildren(bool value) { _boxLayout.setClipsChildren(value); }
+    void setStretchLastChild(bool value) { _boxLayout.setStretchLastChild(value); }
+    [[nodiscard]] UIBoxSlot* getBoxSlot(const UIElement& child) const
+    {
+        return dynamic_cast<UIBoxSlot*>(getSlotForChild(child));
+    }
 
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
     void paint(UIFrameBuilder& builder) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 
+  protected:
+    [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
+
   private:
-    /// Arrange children into a box within `contentRect` (in paint order).
-    void arrangeChildren(const Rect2D& contentRect);
+    UIBoxLayout _boxLayout;
 };
 
 } // namespace ya

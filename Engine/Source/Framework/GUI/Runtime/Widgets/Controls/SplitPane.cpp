@@ -1,27 +1,14 @@
 #include "GUI/Widgets/Controls/SplitPane.h"
 
 #include "Core/Log.h"
-
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
-
-#include <algorithm>
 
 namespace ya
 {
 
 namespace
 {
-
-float axisCoord(const glm::vec2& point, ESplitOrientation orientation)
-{
-    return orientation == ESplitOrientation::Vertical ? point.x : point.y;
-}
-
-float axisExtent(const Rect2D& rect, ESplitOrientation orientation)
-{
-    return orientation == ESplitOrientation::Vertical ? rect.extent.x : rect.extent.y;
-}
 
 bool pointInRect(const glm::vec2& point, const Rect2D& rect)
 {
@@ -31,18 +18,6 @@ bool pointInRect(const glm::vec2& point, const Rect2D& rect)
 
 } // namespace
 
-void UISplitPane::clampRatio(const Rect2D& contentRect)
-{
-    const float contentExtent = axisExtent(contentRect, _orientation);
-    if (contentExtent <= 0.0f) {
-        _splitRatio = 0.5f;
-        return;
-    }
-    const float minRatio = std::clamp(_minFirstExtent / contentExtent, 0.0f, 1.0f);
-    const float maxRatio = std::clamp(1.0f - _minSecondExtent / contentExtent, 0.0f, 1.0f);
-    _splitRatio = std::clamp(_splitRatio, std::min(minRatio, maxRatio), std::max(minRatio, maxRatio));
-}
-
 void UISplitPane::layout(const Rect2D& parentRect)
 {
     layoutAssigned(computeAnchorRect(parentRect));
@@ -51,61 +26,12 @@ void UISplitPane::layout(const Rect2D& parentRect)
 void UISplitPane::layoutAssigned(const Rect2D& rect)
 {
     _layoutRect = rect;
-    _contentRect = _layoutRect;
-    _contentRect.pos += _padding;
-    _contentRect.extent -= _padding * 2.0f;
-    const auto children = getChildrenInPaintOrder();
-    if (children.size() > 2) {
-        YA_CORE_WARN("UISplitPane '{}': only the first two children are laid out ({} attached)",
-                     _name, children.size());
+    _layoutRect.extent = glm::max(_layoutRect.extent, glm::vec2(0.0f));
+    if (getChildren().size() > 2) {
+        YA_CORE_WARN("UISplitPane '{}': UISplitLayout only arranges the first two children ({} attached)",
+                     _name, getChildren().size());
     }
-    if (children.empty()) {
-        return;
-    }
-
-    clampRatio(_contentRect);
-
-    const bool     bVertical = _orientation == ESplitOrientation::Vertical;
-    const float    thickness = _dividerThickness;
-    const float    contentExtent = axisExtent(_contentRect, _orientation);
-    const float    dividerCenter = axisCoord(_contentRect.pos, _orientation) + contentExtent * _splitRatio;
-
-    Rect2D firstRect  = _contentRect;
-    Rect2D secondRect = _contentRect;
-    if (bVertical) {
-        firstRect.extent.x  = std::max(0.0f, dividerCenter - thickness * 0.5f - firstRect.pos.x);
-        secondRect.pos.x    = dividerCenter + thickness * 0.5f;
-        secondRect.extent.x = std::max(0.0f, _contentRect.pos.x + _contentRect.extent.x - secondRect.pos.x);
-    }
-    else {
-        firstRect.extent.y  = std::max(0.0f, dividerCenter - thickness * 0.5f - firstRect.pos.y);
-        secondRect.pos.y    = dividerCenter + thickness * 0.5f;
-        secondRect.extent.y = std::max(0.0f, _contentRect.pos.y + _contentRect.extent.y - secondRect.pos.y);
-    }
-
-    children[0]->layoutAssigned(firstRect);
-    if (children.size() >= 2) {
-        children[1]->layoutAssigned(secondRect);
-    }
-}
-
-Rect2D UISplitPane::getDividerRect() const
-{
-    const float thickness = _dividerThickness;
-    const bool  bVertical = _orientation == ESplitOrientation::Vertical;
-    const float contentExtent = axisExtent(_contentRect, _orientation);
-    const float dividerCenter = axisCoord(_contentRect.pos, _orientation) + contentExtent * _splitRatio;
-
-    Rect2D divider = _contentRect;
-    if (bVertical) {
-        divider.pos.x    = dividerCenter - thickness * 0.5f;
-        divider.extent.x = thickness;
-    }
-    else {
-        divider.pos.y    = dividerCenter - thickness * 0.5f;
-        divider.extent.y = thickness;
-    }
-    return divider;
+    _splitLayout.arrange(*this, _layoutRect);
 }
 
 void UISplitPane::paintSelf(UIFrameBuilder& builder)
@@ -113,29 +39,24 @@ void UISplitPane::paintSelf(UIFrameBuilder& builder)
     const glm::vec4 color = _bDraggingDivider
                                 ? _dividerDraggingColor
                                 : (_bHoveredDivider ? _dividerHoveredColor : _dividerColor);
-    builder.addSprite(getDividerRect(), color, nullptr);
+    builder.addSprite(_splitLayout.getDividerRect(), color, nullptr);
 }
 
 bool UISplitPane::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
 {
     const EEvent::T eventType = event.getEventType();
 
-    // Divider hover feedback without consuming the move: panes below still
-    // receive the event (split is a Stop container, children are hit first).
     if (eventType == EEvent::MouseMoved && !_bDraggingDivider) {
-        _bHoveredDivider = pointInRect(ctx.logicalPoint, getDividerRect());
-        // Fall through: never consume, so pane content keeps its own hover.
+        _bHoveredDivider = pointInRect(ctx.logicalPoint, _splitLayout.getDividerRect());
     }
 
     if (eventType == EEvent::MouseButtonPressed) {
-        // Only a press on the divider starts a drag session; presses over a
-        // pane fall through to the pane's own widgets.
-        if (!pointInRect(ctx.logicalPoint, getDividerRect())) {
+        if (!pointInRect(ctx.logicalPoint, _splitLayout.getDividerRect())) {
             return false;
         }
         _bDraggingDivider = true;
-        _dragStartRatio   = _splitRatio;
-        _dragStartPointer = axisCoord(ctx.logicalPoint, _orientation);
+        _dragStartRatio   = _splitLayout.getSplitRatio();
+        _dragStartPointer = _splitLayout.axisCoordinate(ctx.logicalPoint);
         if (WidgetTree* tree = getTree()) {
             tree->setFocus(this);
             tree->setPointerCapture(this);
@@ -143,20 +64,18 @@ bool UISplitPane::handleInputEvent(const Event& event, const WidgetEventContext&
         return true;
     }
 
-    // Pointer-captured events reach the split even outside its rect.
     if (!ctx.bViaCapture) {
         return false;
     }
 
     if (eventType == EEvent::MouseMoved && _bDraggingDivider) {
-        const float  contentExtent = axisExtent(_contentRect, _orientation);
+        const float contentExtent = _splitLayout.getOrientation() == ESplitOrientation::Vertical
+                                        ? _splitLayout.getContentRect().extent.x
+                                        : _splitLayout.getContentRect().extent.y;
         if (contentExtent > 0.0f) {
-            _splitRatio = _dragStartRatio +
-                          (axisCoord(ctx.logicalPoint, _orientation) - _dragStartPointer) / contentExtent;
-            clampRatio(_layoutRect);
-            if (WidgetTree* tree = getTree()) {
-                tree->invalidateLayout();
-            }
+            _splitLayout.setSplitRatio(_dragStartRatio +
+                                       (_splitLayout.axisCoordinate(ctx.logicalPoint) - _dragStartPointer) /
+                                           contentExtent);
         }
         return true;
     }
@@ -180,39 +99,7 @@ void UISplitPane::clearTransientInputState()
 
 glm::vec2 UISplitPane::computeDesiredSize() const
 {
-    const auto children = getChildren();
-    if (children.empty()) {
-        return _size;
-    }
-
-    const bool bVertical = _orientation == ESplitOrientation::Vertical;
-    glm::vec2  desired{0.0f, 0.0f};
-    for (const auto& child : children) {
-        if (!child->participatesInLayout()) {
-            continue;
-        }
-        const glm::vec2 childDesired = child->computeDesiredSize();
-        if (bVertical) {
-            desired.x += childDesired.x;
-            desired.y = std::max(desired.y, childDesired.y);
-        }
-        else {
-            desired.y += childDesired.y;
-            desired.x = std::max(desired.x, childDesired.x);
-        }
-    }
-    if (bVertical) {
-        desired.x += _dividerThickness;
-    }
-    else {
-        desired.y += _dividerThickness;
-    }
-    return desired + _padding * 2.0f;
+    return _splitLayout.measure(*this);
 }
 
 } // namespace ya
-
-YA_REFLECT_ENUM_BEGIN(ya::ESplitOrientation)
-YA_REFLECT_ENUM_VALUE(Vertical)
-YA_REFLECT_ENUM_VALUE(Horizontal)
-YA_REFLECT_ENUM_END()

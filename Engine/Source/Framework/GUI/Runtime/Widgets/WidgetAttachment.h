@@ -9,6 +9,8 @@
 // no-op, so the handle is safe to keep across scene switches.
 // ============================================================================
 
+#include "Core/Api.h"
+
 #include <memory>
 
 namespace ya
@@ -17,7 +19,7 @@ namespace ya
 struct UIElement;
 struct WidgetTree;
 
-struct WidgetAttachment
+struct YA_GUI_API WidgetAttachment
 {
     WidgetTree*             tree   = nullptr;
     std::weak_ptr<UIElement> widget;

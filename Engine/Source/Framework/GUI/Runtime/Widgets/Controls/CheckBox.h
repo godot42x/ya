@@ -16,7 +16,7 @@ namespace ya
 ///   - Space / Enter on the focused box toggles;
 ///   - the first visible content child (label text) is arranged right of the
 ///     box; with _bAutoSize the desired size = box + spacing + content.
-struct UICheckBox : public UIElement
+struct YA_GUI_API UICheckBox : public UIElement
 {
     YA_REFLECT_BEGIN(UICheckBox, UIElement)
     YA_REFLECT_FIELD(_bChecked, .instanceEditable())

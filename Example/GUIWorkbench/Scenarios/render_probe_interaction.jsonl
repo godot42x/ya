@@ -1,0 +1,12 @@
+# GUIWorkbench --start-page=Render. The probe is a minimal end-to-end
+# input-to-status regression for the render correctness page.
+{"frame":2}
+{"assert":{"widget":"RenderProbe","control":{"type":"button","pressed":false}}}
+{"checkpoint":"initial"}
+{"event":"mouse_press","x":640,"y":347,"button":0}
+{"event":"mouse_release","x":640,"y":347,"button":0}
+{"frame":2}
+{"assert":{"widget":"CommandResult","control":{"type":"text","text":"Render probe clicked (1)"}}}
+{"assert":{"lastRoute":{"policyName":"pointerCapture","target":"RenderProbe","resultName":"handledExclusive"}}}
+{"checkpoint":"render_probe_clicked"}
+{"frame":1}

@@ -45,7 +45,7 @@ struct UITypeRegisterInfo
     std::shared_ptr<UITypeModule> module;       // optional module owner
 };
 
-class UITypeRegistry
+class YA_GUI_API UITypeRegistry
 {
   public:
     /// Single shared owner of registry state.

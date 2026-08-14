@@ -110,13 +110,30 @@ struct YA_GUI_API Render2D
     /// Must NOT be called while recording a command buffer.
     static void preparePassPipeline(Render2DPassSlot passSlot, EFormat::T colorFormat, EFormat::T depthFormat);
 
+    // Accessors to the singleton primitives. These are exported functions
+    // (defined in Render2D.cpp) rather than direct references to the static
+    // quadData/lineData members: inline helpers in this header that touch the
+    // statics get expanded inside *every* consuming DLL, where the dllexport
+    // macro propagation makes the data symbol look "defined here" and linking
+    // fails (LNK2001). Routing through a function keeps the data inside the
+    // owning DLL.
+    [[nodiscard]] static FQuadRender* quadRender();
+    [[nodiscard]] static FLineRender* lineRender();
+
+    // Accessors to the diagnostic/session singletons. Same rationale as
+    // quadRender()/lineRender(): `debug`/`session` are static data members that
+    // must not be referenced directly across the DLL boundary (a dllexport data
+    // symbol cannot be imported from another DLL).
+    [[nodiscard]] static FRender2dDebugState& debugState();
+    [[nodiscard]] static FRender2dSession&    sessionState();
+
     static void makeSprite(const glm::vec3& position,
                            const glm::vec2& size,
                            ya::Ptr<Texture> texture = nullptr,
                            const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
                            const glm::vec2& uvScale = {1.0f, 1.0f})
     {
-        quadData->drawTexture(position, size, texture, tint, uvScale);
+        quadRender()->drawTexture(position, size, texture, tint, uvScale);
     }
 
     static void makeSprite(const glm::mat4& transform,
@@ -124,7 +141,7 @@ struct YA_GUI_API Render2D
                            const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
                            const glm::vec2& uvScale = {1.0f, 1.0f})
     {
-        quadData->drawTexture(transform, texture, tint, uvScale);
+        quadRender()->drawTexture(transform, texture, tint, uvScale);
     }
 
     static void makeWorldSprite(const glm::vec3& worldCenter,
@@ -134,28 +151,28 @@ struct YA_GUI_API Render2D
                                 const glm::vec4& tint    = {1.0f, 1.0f, 1.0f, 1.0f},
                                 const glm::vec2& uvScale = {1.0f, 1.0f})
     {
-        quadData->drawWorldTexture(worldCenter, worldDirection, worldSize, texture, tint, uvScale);
+        quadRender()->drawWorldTexture(worldCenter, worldDirection, worldSize, texture, tint, uvScale);
     }
 
     static void makeWorldLine(const glm::vec3& from,
                               const glm::vec3& to,
                               const glm::vec4& color = {1.0f, 1.0f, 1.0f, 1.0f})
     {
-        lineData->addLine(from, to, color);
+        lineRender()->addLine(from, to, color);
     }
 
     static void makeWireBox(const glm::mat4& model,
                             const glm::vec3& halfExtent,
                             const glm::vec4& color = {0.2f, 0.9f, 0.3f, 1.0f})
     {
-        lineData->addWireBox(model, halfExtent, color);
+        lineRender()->addWireBox(model, halfExtent, color);
     }
 
     static void makeWireSphere(const glm::vec3& center,
                                float            radius,
                                const glm::vec4& color = {0.3f, 0.6f, 1.0f, 1.0f})
     {
-        lineData->addWireSphere(center, radius, color);
+        lineRender()->addWireSphere(center, radius, color);
     }
 
     static void makeText(const std::string& text,
@@ -164,7 +181,7 @@ struct YA_GUI_API Render2D
                          Font*              font,
                          const glm::vec2&   scale = glm::vec2(1.0f))
     {
-        quadData->drawText(text, position, color, font, scale);
+        quadRender()->drawText(text, position, color, font, scale);
     }
 };
 

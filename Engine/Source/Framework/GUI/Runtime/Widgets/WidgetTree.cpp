@@ -2,7 +2,9 @@
 
 #include "Core/Log.h"
 
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/Text.h"
 
 #include <algorithm>
@@ -47,76 +49,35 @@ WidgetTree::WidgetTree(Extent2D logicalExtent) : _logicalExtent(logicalExtent)
         _layers[i]       = makeFillElement("Layer_" + std::to_string(i));
         _layers[i]->_zOrder = static_cast<int>(i);
         _layers[i]->_tree   = this;
-        _layers[i]->_parent = _root.get();
-        _root->_children.push_back(_layers[i]);
+        _root->appendChildEdge(_layers[i]);
     }
 }
 
-UIElement* WidgetTree::topmostHitSubtree(UIElement* element, const glm::vec2& logicalPoint)
+void WidgetTree::collectHitTargetsSubtree(UIElement* element,
+                                          const glm::vec2& logicalPoint,
+                                          std::vector<UIElement*>& outTargets)
 {
     if (!element->isHitTestableSubtree()) {
-        return nullptr;
+        return;
     }
     // Clipped containers (scroll viewports): children outside the container
     // rect are not hittable, even though their own layout rects extend past it.
     if (element->cullsChildHits(logicalPoint)) {
         if (element->isHitTestableSelf() && element->hitTestLayoutRect(logicalPoint)) {
-            return element;
+            outTargets.push_back(element);
         }
-        return nullptr;
+        return;
     }
+
+    const size_t targetCountBeforeChildren = outTargets.size();
     const auto children = element->getChildrenInPaintOrder();
     for (auto it = children.rbegin(); it != children.rend(); ++it) {
-        if (UIElement* hit = topmostHitSubtree(*it, logicalPoint)) {
-            return hit;
-        }
+        collectHitTargetsSubtree(*it, logicalPoint, outTargets);
     }
-    if (element->isHitTestableSelf() && element->hitTestLayoutRect(logicalPoint)) {
-        return element;
+    if (outTargets.size() == targetCountBeforeChildren &&
+        element->isHitTestableSelf() && element->hitTestLayoutRect(logicalPoint)) {
+        outTargets.push_back(element);
     }
-    return nullptr;
-}
-
-EWidgetRouteResult WidgetTree::dispatchSubtree(UIElement* element,
-                                               const Event& event,
-                                               const WidgetEventContext& ctx)
-{
-    if (!element->isHitTestableSubtree()) {
-        return EWidgetRouteResult::NotHandled;
-    }
-
-    // Clipped containers: children outside the container rect never receive
-    // events; the container itself still can (e.g. wheel over its area).
-    if (element->cullsChildHits(ctx.logicalPoint)) {
-        if (element->isHitTestableSelf() && element->hitTestLayoutRect(ctx.logicalPoint)) {
-            return element->handleInputEvent(event, ctx)
-                       ? (element->_hitFilter == EWidgetHitFilter::Stop
-                              ? EWidgetRouteResult::HandledExclusive
-                              : EWidgetRouteResult::HandledPass)
-                       : EWidgetRouteResult::NotHandled;
-        }
-        return EWidgetRouteResult::NotHandled;
-    }
-
-    EWidgetRouteResult result = EWidgetRouteResult::NotHandled;
-    const auto         children = element->getChildrenInPaintOrder();
-    for (auto it = children.rbegin(); it != children.rend(); ++it) {
-        const EWidgetRouteResult childResult = dispatchSubtree(*it, event, ctx);
-        if (childResult == EWidgetRouteResult::HandledExclusive) {
-            return EWidgetRouteResult::HandledExclusive;
-        }
-        if (childResult == EWidgetRouteResult::HandledPass) {
-            result = EWidgetRouteResult::HandledPass;
-        }
-    }
-
-    if (!element->isHitTestableSelf() ||
-        !element->hitTestLayoutRect(ctx.logicalPoint) ||
-        !element->handleInputEvent(event, ctx)) {
-        return result;
-    }
-    return element->_hitFilter == EWidgetHitFilter::Stop ? EWidgetRouteResult::HandledExclusive
-                                                        : EWidgetRouteResult::HandledPass;
 }
 
 void WidgetTree::markSubtreeMembership(UIElement* widget, WidgetTree* tree)
@@ -177,6 +138,7 @@ WidgetTree::~WidgetTree()
     _root->_tree   = nullptr;
     _root->_parent = nullptr;
     _root->_children.clear();
+    _root->_childSlots.clear();
 }
 
 void WidgetTree::setLogicalExtent(Extent2D extent)
@@ -218,8 +180,7 @@ WidgetAttachment WidgetTree::attach(UIElement& parent, const UIElementRef& widge
     }
 
     markSubtreeMembership(widget.get(), this);
-    widget->_parent = &parent;
-    parent._children.push_back(widget);
+    parent.appendChildEdge(widget);
     invalidateLayout();
     return WidgetAttachment{.tree = this, .widget = widget};
 }
@@ -258,16 +219,13 @@ void WidgetTree::reparent(UIElement& newParent, const UIElementRef& widget)
             // Within this tree: unlink from the current parent.
             UIElement* oldParent = widget->_parent;
             if (oldParent) {
-                auto& siblings = oldParent->_children;
-                std::erase_if(siblings, [&](const UIElementRef& ref) { return ref.get() == widget.get(); });
+                oldParent->removeChildEdge(*widget);
             }
-            widget->_parent = nullptr;
         }
     }
 
     markSubtreeMembership(widget.get(), this);
-    widget->_parent = &newParent;
-    newParent._children.push_back(widget);
+    newParent.appendChildEdge(widget);
     invalidateLayout();
 }
 
@@ -292,43 +250,23 @@ void WidgetTree::reparentRelativeTo(WidgetTree& tree, UIElement& sibling, const 
         widget->_tree->detach(*widget);
     }
 
-    auto& children = parent->_children;
-    const auto it = std::find_if(children.begin(), children.end(),
+    if (widget->isAttached()) {
+        if (UIElement* oldParent = widget->_parent) {
+            oldParent->removeChildEdge(*widget);
+        }
+    }
+
+    const auto it = std::find_if(parent->_children.begin(), parent->_children.end(),
                                  [&](const UIElementRef& ref) { return ref.get() == &sibling; });
-    if (it == children.end()) {
+    if (it == parent->_children.end()) {
         YA_CORE_ERROR("WidgetTree::reparentRelativeTo: sibling '{}' not found in parent", sibling._name);
         return;
     }
-    const size_t siblingIndex = static_cast<size_t>(std::distance(children.begin(), it));
-
-    // Was the widget already a child of this parent before the sibling?
-    bool bWidgetWasBeforeSibling = false;
-    if (widget->isAttached() && widget->_parent == parent) {
-        const auto wit = std::find_if(children.begin(), children.end(),
-                                      [&](const UIElementRef& ref) { return ref.get() == widget.get(); });
-        bWidgetWasBeforeSibling = (wit != children.end()) &&
-                                  (static_cast<size_t>(std::distance(children.begin(), wit)) < siblingIndex);
-        children.erase(wit);
-        widget->_parent = nullptr;
-    }
-    else if (widget->isAttached()) {
-        // Different parent in this tree: unlink from the old parent.
-        UIElement* oldParent = widget->_parent;
-        if (oldParent) {
-            auto& oldSiblings = oldParent->_children;
-            std::erase_if(oldSiblings, [&](const UIElementRef& ref) { return ref.get() == widget.get(); });
-        }
-        widget->_parent = nullptr;
-    }
-
-    // Sibling's index after the erase: it shifted left by one only when the
-    // widget was before it in the same parent.
-    const size_t base = bWidgetWasBeforeSibling ? siblingIndex - 1 : siblingIndex;
-    const size_t insertAt = bAfter ? base + 1 : base;
+    const size_t siblingIndex = static_cast<size_t>(std::distance(parent->_children.begin(), it));
+    const size_t insertAt = bAfter ? siblingIndex + 1 : siblingIndex;
 
     tree.markSubtreeMembership(widget.get(), &tree);
-    widget->_parent = parent;
-    children.insert(children.begin() + std::min(insertAt, children.size()), widget);
+    parent->insertChildEdge(insertAt, widget);
     tree.invalidateLayout();
 }
 
@@ -357,10 +295,8 @@ void WidgetTree::detach(UIElement& widget)
     }
 
     if (UIElement* oldParent = widget._parent) {
-        auto& siblings = oldParent->_children;
-        std::erase_if(siblings, [&](const UIElementRef& ref) { return ref.get() == &widget; });
+        oldParent->removeChildEdge(widget);
     }
-    widget._parent = nullptr;
 
     // Recursively clear tree membership for the whole subtree; internal
     // parent links inside the subtree remain valid (parents own children).
@@ -411,6 +347,16 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
 EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEventContext& ctx)
 {
     const EEvent::T eventType = event.getEventType();
+    const bool bPointerEvent = eventType == EEvent::MouseButtonPressed ||
+                               eventType == EEvent::MouseButtonReleased ||
+                               eventType == EEvent::MouseMoved ||
+                               eventType == EEvent::MouseScrolled;
+    if (bPointerEvent) {
+        _pointerState = {
+            .logicalPoint = ctx.logicalPoint,
+            .bKnown       = true,
+        };
+    }
 
     // Tab / Shift+Tab is handled before ordinary key routing: stable
     // paint-order traversal over attached, visible, focusable widgets with
@@ -441,6 +387,7 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
                 next = keyEvent.isShiftPressed() ? focusables.back() : focusables.front();
             }
             setFocus(next);
+            setRouteTrace(EWidgetRoutePolicy::TabTraversal, next);
             return EWidgetRouteResult::HandledExclusive;
         }
     }
@@ -450,6 +397,7 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
         const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
         if (keyEvent._keyCode == EKey::Escape && !keyEvent.bRepeat) {
             cancelDrag();
+            setRouteTrace(EWidgetRoutePolicy::DragSession, nullptr);
             return EWidgetRouteResult::HandledExclusive;
         }
     }
@@ -457,16 +405,14 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
     // Keyboard events route to the focused widget (if any).
     if (eventType == EEvent::KeyPressed || eventType == EEvent::KeyReleased || eventType == EEvent::KeyTyped) {
         if (_focused && _focused->isAttached()) {
-            return _focused->handleInputEvent(event, ctx) ? EWidgetRouteResult::HandledExclusive
-                                                          : EWidgetRouteResult::NotHandled;
+            return dispatchRoute(_focused, event, ctx, EWidgetRoutePolicy::Focus, /*bAppendTrace=*/false);
         }
+        setRouteTrace(EWidgetRoutePolicy::Focus, nullptr);
         return EWidgetRouteResult::NotHandled;
     }
 
-    if (eventType != EEvent::MouseButtonPressed &&
-        eventType != EEvent::MouseButtonReleased &&
-        eventType != EEvent::MouseMoved &&
-        eventType != EEvent::MouseScrolled) {
+    if (!bPointerEvent) {
+        setRouteTrace(EWidgetRoutePolicy::None, nullptr);
         return EWidgetRouteResult::NotHandled;
     }
 
@@ -476,11 +422,14 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
     if (isDragging() &&
         (eventType == EEvent::MouseMoved || eventType == EEvent::MouseButtonReleased ||
          eventType == EEvent::MouseButtonPressed)) {
+        UIElement* dragRouteTarget = _dragDropTarget;
         switch (eventType) {
         case EEvent::MouseMoved:
             updateDrag(ctx.logicalPoint);
+            dragRouteTarget = _dragDropTarget;
             break;
         case EEvent::MouseButtonReleased:
+            dragRouteTarget = findDropTarget(ctx.logicalPoint);
             endDrag(ctx.logicalPoint);
             break;
         case EEvent::MouseButtonPressed:
@@ -489,6 +438,7 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
         default:
             break;
         }
+        setRouteTrace(EWidgetRoutePolicy::DragSession, dragRouteTarget);
         return EWidgetRouteResult::HandledExclusive;
     }
 
@@ -498,6 +448,7 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
             _captured = nullptr;
         }
         else {
+            refreshPointerPath(_captured);
             // Hover follows the captured widget while capture is active.
             if (eventType == EEvent::MouseMoved) {
                 UIElement* newHovered = _captured->hitTestLayoutRect(ctx.logicalPoint) ? _captured : nullptr;
@@ -510,21 +461,19 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
             }
             WidgetEventContext captureCtx = ctx;
             captureCtx.bViaCapture         = true;
-            // The widget may release its own capture while handling (e.g. a
-            // button release ends the press session): snapshot the filter
-            // before the call so the route result never dereferences null.
-            const EWidgetHitFilter capturedFilter = _captured->_hitFilter;
-            const bool bHandled = _captured->handleInputEvent(event, captureCtx);
-            return bHandled ? (capturedFilter == EWidgetHitFilter::Stop
-                                   ? EWidgetRouteResult::HandledExclusive
-                                   : EWidgetRouteResult::HandledPass)
-                            : EWidgetRouteResult::NotHandled;
+            return dispatchRoute(_captured, event, captureCtx,
+                                 EWidgetRoutePolicy::PointerCapture, /*bAppendTrace=*/false);
         }
     }
 
+    std::vector<UIElement*> pointerTargets;
+    collectHitTargetsSubtree(_root.get(), ctx.logicalPoint, pointerTargets);
+    UIElement* pointerTarget = pointerTargets.empty() ? nullptr : pointerTargets.front();
+    refreshPointerPath(pointerTarget);
+
     // Hover tracking: refresh the hovered widget on mouse moves.
     if (eventType == EEvent::MouseMoved) {
-        UIElement* newHovered = topmostHit(ctx.logicalPoint);
+        UIElement* newHovered = pointerTarget;
         if (_hovered != newHovered) {
             if (_hovered && _hovered->isAttached()) {
                 _hovered->resetHoverState();
@@ -539,7 +488,7 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
     // elsewhere. The pressed widget sets its own hover flag in its press
     // handler; here we only retire the stale one.
     if (eventType == EEvent::MouseButtonPressed) {
-        UIElement* newHovered = topmostHit(ctx.logicalPoint);
+        UIElement* newHovered = pointerTarget;
         if (_hovered != newHovered) {
             if (_hovered && _hovered->isAttached()) {
                 _hovered->resetHoverState();
@@ -548,7 +497,23 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
         }
     }
 
-    return dispatchSubtree(_root.get(), event, ctx);
+    EWidgetRouteResult result = EWidgetRouteResult::NotHandled;
+    bool bFirstRoute = true;
+    for (UIElement* target : pointerTargets) {
+        const EWidgetRoutePolicy policy = classifyPointerRoute(buildPath(target));
+        const EWidgetRouteResult routeResult =
+            dispatchRoute(target, event, ctx, policy,
+                          /*bAppendTrace=*/!bFirstRoute);
+        bFirstRoute = false;
+        result = mergeRouteResult(result, routeResult);
+        if (result == EWidgetRouteResult::HandledExclusive) {
+            return result;
+        }
+    }
+    if (pointerTargets.empty()) {
+        setRouteTrace(EWidgetRoutePolicy::HitTest, nullptr);
+    }
+    return result;
 }
 
 // === Focus / capture / hover ===
@@ -570,6 +535,7 @@ void WidgetTree::setFocus(UIElement* widget)
     if (_focused) {
         _focused->onFocusGained();
     }
+    refreshFocusPath();
 }
 
 void WidgetTree::setPointerCapture(UIElement* widget)
@@ -610,6 +576,12 @@ void WidgetTree::clearTransientState(UIElement& widget)
         if (_hovered == node) {
             _hovered = nullptr;
         }
+        if (std::find(_pointerPath.begin(), _pointerPath.end(), node) != _pointerPath.end()) {
+            _pointerPath.clear();
+        }
+        if (std::find(_focusPath.begin(), _focusPath.end(), node) != _focusPath.end()) {
+            _focusPath.clear();
+        }
         node->clearTransientInputState();
         for (const auto& child : node->_children) {
             pending.push_back(child.get());
@@ -629,7 +601,166 @@ void WidgetTree::onWidgetDetached(UIElement& widget)
 
 UIElement* WidgetTree::topmostHit(const glm::vec2& logicalPoint) const
 {
-    return topmostHitSubtree(_root.get(), logicalPoint);
+    std::vector<UIElement*> targets;
+    collectHitTargetsSubtree(_root.get(), logicalPoint, targets);
+    return targets.empty() ? nullptr : targets.front();
+}
+
+std::vector<UIElement*> WidgetTree::buildPath(UIElement* target)
+{
+    std::vector<UIElement*> path;
+    for (UIElement* node = target; node != nullptr; node = node->getParent()) {
+        path.push_back(node);
+    }
+    std::reverse(path.begin(), path.end());
+    return path;
+}
+
+EWidgetRouteResult WidgetTree::mergeRouteResult(EWidgetRouteResult current,
+                                                 EWidgetRouteResult next)
+{
+    if (current == EWidgetRouteResult::HandledExclusive ||
+        next == EWidgetRouteResult::HandledExclusive) {
+        return EWidgetRouteResult::HandledExclusive;
+    }
+    if (current == EWidgetRouteResult::HandledPass ||
+        next == EWidgetRouteResult::HandledPass) {
+        return EWidgetRouteResult::HandledPass;
+    }
+    return EWidgetRouteResult::NotHandled;
+}
+
+EWidgetRoutePolicy WidgetTree::classifyPointerRoute(const std::vector<UIElement*>& path)
+{
+    for (auto it = path.rbegin(); it != path.rend(); ++it) {
+        if (const auto* popup = dynamic_cast<const UIPopupOverlay*>(*it)) {
+            return popup->_bModal ? EWidgetRoutePolicy::Modal : EWidgetRoutePolicy::Popup;
+        }
+    }
+    return EWidgetRoutePolicy::HitTest;
+}
+
+EWidgetRouteResult WidgetTree::dispatchRoute(UIElement* target,
+                                             const Event& event,
+                                             const WidgetEventContext& ctx,
+                                             EWidgetRoutePolicy policy,
+                                             bool bAppendTrace)
+{
+    const std::vector<UIElement*> path = buildPath(target);
+    if (path.empty()) {
+        if (!bAppendTrace) {
+            beginRouteTrace(policy, nullptr);
+        }
+        return EWidgetRouteResult::NotHandled;
+    }
+
+    // Route callbacks may detach/reparent widgets. Keep every initially
+    // resolved node alive for the duration, while checking membership before
+    // each delivery so subsequent phases never call a detached widget.
+    std::vector<UIElementRef> retainedPath;
+    retainedPath.reserve(path.size());
+    for (UIElement* node : path) {
+        retainedPath.push_back(node->shared_from_this());
+    }
+
+    if (!bAppendTrace) {
+        beginRouteTrace(policy, target);
+    }
+
+    const auto isLiveRouteNode = [this](const UIElement* node) {
+        return node == _root.get() || node->getTree() == this;
+    };
+    const auto invoke = [&](UIElement& node, EWidgetEventRoutePhase phase) {
+        if (!isLiveRouteNode(&node)) {
+            return EWidgetRouteResult::NotHandled;
+        }
+        WidgetEventContext routedCtx = ctx;
+        routedCtx.phase = phase;
+        bool bHandled = false;
+        switch (phase) {
+        case EWidgetEventRoutePhase::Preview:
+            bHandled = node.previewInputEvent(event, routedCtx);
+            break;
+        case EWidgetEventRoutePhase::Target:
+            bHandled = node.handleInputEvent(event, routedCtx);
+            break;
+        case EWidgetEventRoutePhase::Bubble:
+            bHandled = node.bubbleInputEvent(event, routedCtx);
+            break;
+        }
+        appendRouteTraceStep(node, phase, bHandled);
+        if (!bHandled) {
+            return EWidgetRouteResult::NotHandled;
+        }
+        // Focus is exclusive by ownership: a focused leaf that accepts a key
+        // consumes it regardless of pointer-style Pass/Stop hit filtering.
+        if (policy == EWidgetRoutePolicy::Focus && phase == EWidgetEventRoutePhase::Target) {
+            return EWidgetRouteResult::HandledExclusive;
+        }
+        return node._hitFilter == EWidgetHitFilter::Stop
+                   ? EWidgetRouteResult::HandledExclusive
+                   : EWidgetRouteResult::HandledPass;
+    };
+
+    EWidgetRouteResult result = EWidgetRouteResult::NotHandled;
+    for (size_t index = 0; index + 1 < path.size(); ++index) {
+        result = mergeRouteResult(result, invoke(*path[index], EWidgetEventRoutePhase::Preview));
+        if (result == EWidgetRouteResult::HandledExclusive) {
+            _lastRouteTrace.result = result;
+            return result;
+        }
+    }
+
+    result = mergeRouteResult(result, invoke(*path.back(), EWidgetEventRoutePhase::Target));
+    if (result == EWidgetRouteResult::HandledExclusive) {
+        _lastRouteTrace.result = result;
+        return result;
+    }
+
+    for (size_t index = path.size() - 1; index-- > 0;) {
+        result = mergeRouteResult(result, invoke(*path[index], EWidgetEventRoutePhase::Bubble));
+        if (result == EWidgetRouteResult::HandledExclusive) {
+            _lastRouteTrace.result = result;
+            return result;
+        }
+    }
+
+    _lastRouteTrace.result = result;
+    return result;
+}
+
+void WidgetTree::refreshPointerPath(UIElement* target)
+{
+    _pointerPath = target ? buildPath(target) : std::vector<UIElement*>{};
+}
+
+void WidgetTree::refreshFocusPath()
+{
+    _focusPath = _focused ? buildPath(_focused) : std::vector<UIElement*>{};
+}
+
+void WidgetTree::beginRouteTrace(EWidgetRoutePolicy policy, UIElement* target)
+{
+    _lastRouteTrace.policy = policy;
+    _lastRouteTrace.target = target ? target->_name : "";
+    _lastRouteTrace.path.clear();
+    _lastRouteTrace.steps.clear();
+    _lastRouteTrace.result = EWidgetRouteResult::NotHandled;
+    for (UIElement* node : buildPath(target)) {
+        _lastRouteTrace.path.push_back(node->_name);
+    }
+}
+
+void WidgetTree::appendRouteTraceStep(const UIElement& widget,
+                                      EWidgetEventRoutePhase phase,
+                                      bool bHandled)
+{
+    _lastRouteTrace.steps.push_back({
+        .widget = widget._name,
+        .phase = phase,
+        .bHandled = bHandled,
+        .hitFilter = widget._hitFilter,
+    });
 }
 
 // === Drag & drop session ===

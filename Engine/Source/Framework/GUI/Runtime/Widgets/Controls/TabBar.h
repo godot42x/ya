@@ -11,7 +11,7 @@ namespace ya
 
 /// One tab strip button. Selection is owned by the parent UITabBar; the
 /// button reports clicks and keyboard navigation requests.
-struct UITabButton : public UIElement
+struct YA_GUI_API UITabButton : public UIElement
 {
     YA_REFLECT_BEGIN(UITabButton, UIElement)
     YA_REFLECT_FIELD(_label, .instanceEditable())
@@ -59,13 +59,13 @@ struct UITabButton : public UIElement
 /// Tab strip (imgui-demo-style page switcher, gui-app-bootstrap Phase 4).
 /// Owns the selected index; addTab() wires buttons that select themselves.
 /// Left / Right on a focused tab moves focus + selection (wrap-around).
-struct UITabBar : public UIContainer
+struct YA_GUI_API UITabBar : public UIContainer
 {
     explicit UITabBar(std::string name = "TabBar") : UIContainer(std::move(name))
     {
-        _direction = EWidgetBoxLayout::Horizontal;
-        _spacing   = 2.0f;
-        _padding   = {4.0f, 4.0f};
+        setDirection(EWidgetBoxLayout::Horizontal);
+        setSpacing(2.0f);
+        setPadding({4.0f, 4.0f});
     }
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UITabBar>; }

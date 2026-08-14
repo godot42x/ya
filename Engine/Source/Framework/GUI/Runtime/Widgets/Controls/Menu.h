@@ -13,7 +13,7 @@ struct UIMenu;
 
 /// One popup menu entry. Hover highlighting is driven by the owning UIMenu
 /// (single highlight, keyboard sync); the item only reports hover enters.
-struct UIMenuItem : public UIElement
+struct YA_GUI_API UIMenuItem : public UIElement
 {
     YA_REFLECT_BEGIN(UIMenuItem, UIElement)
     YA_REFLECT_FIELD(_label, .instanceEditable())
@@ -51,7 +51,7 @@ struct UIMenuItem : public UIElement
 ///
 /// Build via create(); open via openAt(tree, pos) which anchors the top-left
 /// of the menu at `pos`. Selecting an item runs its action and closes.
-struct UIMenu : public UIPopupOverlay
+struct YA_GUI_API UIMenu : public UIPopupOverlay
 {
     struct FItem
     {

@@ -6,7 +6,7 @@ namespace ya
 {
 
 /// Text element rendered through the font atlas.
-struct UIText : public UIElement
+struct YA_GUI_API UIText : public UIElement
 {
     YA_REFLECT_BEGIN(UIText, UIElement)
     YA_REFLECT_FIELD(_text, .instanceEditable())

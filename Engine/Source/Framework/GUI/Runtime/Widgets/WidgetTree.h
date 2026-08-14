@@ -22,6 +22,8 @@
 #include "GUI/Widgets/WidgetAttachment.h"
 
 #include <array>
+#include <string>
+#include <vector>
 
 namespace ya
 {
@@ -35,7 +37,48 @@ enum class EWidgetRouteResult : uint8_t
     HandledExclusive, // a Stop widget consumed the event; the game must not receive it
 };
 
-struct WidgetTree final
+enum class EWidgetRoutePolicy : uint8_t
+{
+    None,
+    HitTest,
+    PointerCapture,
+    Focus,
+    TabTraversal,
+    DragSession,
+    Popup,
+    Modal,
+};
+
+/// Tree-owned pointer state. The host supplies the coordinate on each native
+/// pointer event; consumers read the retained value instead of forwarding
+/// stale business-level mouse positions between controls.
+struct WidgetPointerState
+{
+    glm::vec2 logicalPoint = {0.0f, 0.0f};
+    bool      bKnown       = false;
+};
+
+/// Stable diagnostic record for the most recently resolved event route.
+/// Names, not raw widget pointers, are retained so a later detach cannot make
+/// an automation dump unsafe to inspect.
+struct WidgetRouteTrace
+{
+    struct Step
+    {
+        std::string             widget;
+        EWidgetEventRoutePhase  phase = EWidgetEventRoutePhase::Target;
+        bool                    bHandled = false;
+        EWidgetHitFilter        hitFilter = EWidgetHitFilter::Pass;
+    };
+
+    EWidgetRoutePolicy policy = EWidgetRoutePolicy::None;
+    std::string        target;
+    std::vector<std::string> path;
+    std::vector<Step>  steps;
+    EWidgetRouteResult result = EWidgetRouteResult::NotHandled;
+};
+
+struct YA_GUI_API WidgetTree final
 {
     enum class ELayer : uint8_t
     {
@@ -98,11 +141,11 @@ struct WidgetTree final
     /// recording only ever consumes the returned snapshot.
     [[nodiscard]] UIFrameSnapshot buildSnapshot(const UIFrameBuildContext& ctx);
 
-    /// Topmost-first event dispatch (children before parent, zOrder
-    /// descending, layers bottom -> top). Pointer capture overrides the walk;
-    /// keyboard events route to the focused widget; Tab / Shift+Tab is
-    /// handled by the tree first (stable paint-order focus traversal with
-    /// wrap-around). Returns the route result.
+    /// Explicit event dispatch. Pointer routes use preview (root -> parent),
+    /// target, then bubble (parent -> root); Pass routes continue to lower
+    /// hit candidates and Stop routes terminate delivery. Pointer capture
+    /// overrides hit discovery, keyboard routes to the focused widget, and
+    /// Tab / Shift+Tab is handled by the tree first.
     [[nodiscard]] EWidgetRouteResult dispatchEvent(const Event& event, const WidgetEventContext& ctx);
 
     /// Topmost-first pick of the widget under `logicalPoint` (children before
@@ -120,6 +163,13 @@ struct WidgetTree final
     void releasePointerCapture(UIElement* widget);
     [[nodiscard]] UIElement* getPointerCapture() const { return _captured; }
     [[nodiscard]] UIElement* getHovered() const { return _hovered; }
+    [[nodiscard]] const WidgetPointerState& getPointerState() const { return _pointerState; }
+    /// Current pointer route path, root to target. For ordinary input it is
+    /// the topmost hit path; while captured it terminates at the captor.
+    [[nodiscard]] const std::vector<UIElement*>& getPointerPath() const { return _pointerPath; }
+    /// Current focus path, root to focused widget. Empty without focus.
+    [[nodiscard]] const std::vector<UIElement*>& getFocusPath() const { return _focusPath; }
+    [[nodiscard]] const WidgetRouteTrace& getLastRouteTrace() const { return _lastRouteTrace; }
 
     // === Drag & drop session (gui-app-bootstrap Phase 4) ===
     /// Whether a drag session is active. While active the tree intercepts
@@ -141,12 +191,11 @@ struct WidgetTree final
   private:
     friend struct UIElement;
 
-    /// Topmost-first hit walk (children before self, zOrder descending).
-    static UIElement* topmostHitSubtree(UIElement* element, const glm::vec2& logicalPoint);
-    /// Event dispatch walk with the legacy Pass/Stop routing semantics.
-    static EWidgetRouteResult dispatchSubtree(UIElement* element,
-                                              const Event& event,
-                                              const WidgetEventContext& ctx);
+    /// Collect deepest hit candidates in topmost-first order. Each candidate
+    /// becomes one explicit preview -> target -> bubble route attempt.
+    static void collectHitTargetsSubtree(UIElement* element,
+                                         const glm::vec2& logicalPoint,
+                                         std::vector<UIElement*>& outTargets);
     /// Assign tree membership to a widget and its whole subtree (invariant:
     /// attached iff every descendant is a member of the same tree).
     static void markSubtreeMembership(UIElement* widget, WidgetTree* tree);
@@ -160,6 +209,25 @@ struct WidgetTree final
     void onWidgetDetached(UIElement& widget);
     void clearTransientState(UIElement& widget);
     [[nodiscard]] UIElement* topmostHit(const glm::vec2& logicalPoint) const;
+    [[nodiscard]] static std::vector<UIElement*> buildPath(UIElement* target);
+    [[nodiscard]] EWidgetRouteResult dispatchRoute(UIElement* target,
+                                                    const Event& event,
+                                                    const WidgetEventContext& ctx,
+                                                    EWidgetRoutePolicy policy,
+                                                    bool bAppendTrace);
+    [[nodiscard]] static EWidgetRouteResult mergeRouteResult(EWidgetRouteResult current,
+                                                              EWidgetRouteResult next);
+    [[nodiscard]] static EWidgetRoutePolicy classifyPointerRoute(const std::vector<UIElement*>& path);
+    void refreshPointerPath(UIElement* target);
+    void refreshFocusPath();
+    void beginRouteTrace(EWidgetRoutePolicy policy, UIElement* target);
+    void appendRouteTraceStep(const UIElement& widget,
+                              EWidgetEventRoutePhase phase,
+                              bool bHandled);
+    void setRouteTrace(EWidgetRoutePolicy policy, UIElement* target)
+    {
+        beginRouteTrace(policy, target);
+    }
     /// Topmost widget accepting the active drag payload at `logicalPoint`
     /// (walks ancestors of the hit widget).
     [[nodiscard]] UIElement* findDropTarget(const glm::vec2& logicalPoint) const;
@@ -173,6 +241,10 @@ struct WidgetTree final
     UIElement*    _focused      = nullptr;
     UIElement*    _captured     = nullptr;
     UIElement*    _hovered      = nullptr;
+    WidgetPointerState _pointerState;
+    std::vector<UIElement*> _pointerPath;
+    std::vector<UIElement*> _focusPath;
+    WidgetRouteTrace _lastRouteTrace;
 
     UIElement*        _dragSource   = nullptr;
     std::string       _dragPayload;

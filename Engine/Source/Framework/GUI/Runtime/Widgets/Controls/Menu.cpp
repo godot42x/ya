@@ -80,9 +80,9 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
     addDetachedChild(panel);
 
     auto list = std::make_shared<UIContainer>("MenuList");
-    list->_direction = EWidgetBoxLayout::Vertical;
-    list->_spacing   = 0.0f;
-    list->_padding   = glm::vec2(_panelPadding);
+    list->setDirection(EWidgetBoxLayout::Vertical);
+    list->setSpacing(0.0f);
+    list->setPadding(glm::vec2(_panelPadding));
     // Fill the panel rect: the panel is assigned the menu's own content
     // size by layoutAssigned(), so the list must span it (not keep its
     // default fixed size) for rows to receive the full menu width.

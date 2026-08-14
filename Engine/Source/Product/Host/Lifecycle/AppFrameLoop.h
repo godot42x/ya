@@ -15,7 +15,10 @@ class AppFrameLoop
 {
   public:
     static int      run(App& app);
-    static int      iterate(App& app, float dt);
+    /// Run one product frame. Direct callers retain the legacy native event
+    /// pump; AppKernel-backed run() passes false because its event source has
+    /// already delivered the events for this frame.
+    static int      iterate(App& app, float dt, bool bPumpNativeEvents = true);
     static void     tickLogic(App& app, float dt);
     static void     syncViewportState(App& app);
     static Extent2D resolveViewportExtent(const App& app, RenderRuntime* renderRuntime, const Rect2D& viewportRect);

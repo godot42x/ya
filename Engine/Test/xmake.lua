@@ -127,3 +127,19 @@ do
         add_cxxflags("/utf-8")
     end
 end
+
+-- Headless GUI host regression: exercises AppKernel -> delegate -> WidgetTree
+-- -> immutable snapshot without creating SDL/Vulkan presentation resources.
+target("ya-gui-headless-host-test")
+do
+    set_kind("binary")
+    add_files("./Source/GUIHeadlessHostTest.cpp")
+    add_files("./Source/TestEntry.cpp")
+
+    add_deps("ya-gui-app-host")
+    add_packages("gtest")
+
+    if is_plat("windows") then
+        add_cxxflags("/utf-8")
+    end
+end

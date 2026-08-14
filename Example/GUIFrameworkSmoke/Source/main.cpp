@@ -3,11 +3,11 @@
 //
 // The smoke only supplies host configuration, the demo content and the
 // frame-count CLI; the window / RHI / input pump / snapshot / compose /
-// present lifecycle is owned by GUIAppHost. The binary exercises the GUI
+// present lifecycle is owned by GUIApp + GUIWindowHost. The binary exercises the GUI
 // product closure only (Core/RHI/Vulkan backend + the four GUI modules +
 // the app host); no ECS/Physics/Resource/RenderGraph/Render3D/Host/Editor.
 
-#include "GUI/App/GUIAppHost.h"
+#include "GUI/App/GUIApp.h"
 
 #include "Core/Application/AutomationRun.h"
 #include "Core/Log.h"
@@ -100,7 +100,7 @@ struct FSmokeApp final : IGUIAppDelegate
 
 int main(int argc, char** argv)
 {
-    FGUIAppHostConfig config;
+    FGUIWindowHostConfig config;
     config.title      = "YA Minimal GUI Host";
     config.width      = 1024;
     config.height     = 768;
@@ -108,12 +108,12 @@ int main(int argc, char** argv)
     applyAutomationRunArgs(argc, argv, config.automation);
 
     FSmokeApp app;
-    GUIAppHost host(config, app);
-    if (!host.init()) {
+    GUIApp guiApp(config, app);
+    if (!guiApp.init()) {
         return 1;
     }
-    const int result = host.run();
-    host.shutdown();
+    const int result = guiApp.run();
+    guiApp.shutdown();
     if (config.automation.exitAfterFrame > 0) {
         YA_CORE_INFO("Minimal GUI host finished after automation frame budget {}",
                      config.automation.exitAfterFrame);

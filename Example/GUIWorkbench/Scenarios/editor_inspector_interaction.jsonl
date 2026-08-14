@@ -1,0 +1,28 @@
+# GUIWorkbench --start-page=Editor. Exercises the reusable tree -> inspector
+# -> preview binding without putting editor demo behavior in Framework widgets.
+{"frame":3}
+{"assert":{"widget":"NameField","control":{"type":"textField","text":"Cube"}}}
+{"assert":{"widget":"PreviewName","control":{"type":"text","text":"Cube"}}}
+{"checkpoint":"initial"}
+{"event":"mouse_press","x":150,"y":187,"button":0}
+{"event":"mouse_release","x":150,"y":187,"button":0}
+{"frame":2}
+{"assert":{"widget":"NameField","control":{"type":"textField","text":"Sphere"}}}
+{"assert":{"widget":"PreviewName","control":{"type":"text","text":"Sphere"}}}
+{"checkpoint":"sphere_selected"}
+{"event":"mouse_press","x":1116,"y":232,"button":0}
+{"event":"mouse_release","x":1116,"y":232,"button":0}
+{"frame":2}
+{"assert":{"widget":"VisibleToggle_Label","control":{"type":"text","text":"Visible: off"}}}
+{"assert":{"widget":"PreviewName","control":{"type":"text","text":"Sphere (hidden)"}}}
+{"checkpoint":"visibility_toggled"}
+{"event":"mouse_press","x":1120,"y":179,"button":0}
+{"event":"mouse_release","x":1120,"y":179,"button":0}
+{"event":"key_typed","text":"2"}
+{"event":"key_press","key":"Enter"}
+{"frame":3}
+{"assert":{"widget":"NameField","control":{"type":"textField","text":"Sphere2"}}}
+{"assert":{"widget":"PreviewName","control":{"type":"text","text":"Sphere2 (hidden)"}}}
+{"assert":{"widget":"RowLabel_item.sphere","control":{"type":"text","text":"Sphere2 (hidden)"}}}
+{"checkpoint":"renamed"}
+{"frame":1}

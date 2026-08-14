@@ -11,10 +11,10 @@
 //                        built-in Editor reference page + automation
 //   FWorkbenchApp      - example layer: demo pages (WorkbenchDemoPages),
 //                        demo state + demo smoke automation
-//   GUIAppHost         - window / input / snapshot / present (engine)
+//   GUIApp + GUIWindowHost - app assembly / window input / snapshot / present
 // ============================================================================
 
-#include "GUI/App/GUIAppHost.h"
+#include "GUI/App/GUIApp.h"
 #include "GUI/Tooling/Workbench/WorkbenchSurface.h"
 
 #include "WorkbenchDemoPages.h"

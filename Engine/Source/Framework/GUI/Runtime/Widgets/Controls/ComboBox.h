@@ -14,7 +14,7 @@ namespace ya
 /// Collapsed state shows the current selection in a button-like field; a
 /// click (or Space/Enter/Down on the focused box) opens a UIMenu below the
 /// field; selecting an item fires `_onSelectionChanged` and closes the menu.
-struct UIComboBox : public UIElement
+struct YA_GUI_API UIComboBox : public UIElement
 {
     YA_REFLECT_BEGIN(UIComboBox, UIElement)
     YA_REFLECT_FIELD(_items, .instanceEditable())

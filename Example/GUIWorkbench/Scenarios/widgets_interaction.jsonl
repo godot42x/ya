@@ -1,0 +1,48 @@
+# GUIWorkbench --start-page=Widgets. Fix the logical extent first so each
+# coordinate is stable across host DPI, then exercise button, checkbox, slider,
+# combo/focus and text commit through the same route path as native input.
+{"window_size":{"width":960,"height":640}}
+{"frame":3}
+{"event":"mouse_press","x":480,"y":106,"button":0}
+{"event":"mouse_release","x":480,"y":106,"button":0}
+{"frame":1}
+{"assert":{"widget":"Counter","control":{"type":"button","pressed":false,"focused":true}}}
+{"assert":{"lastRoute":{"policyName":"pointerCapture","target":"Counter","resultName":"handledExclusive"}}}
+{"checkpoint":"counter_clicked"}
+{"event":"mouse_move","x":900,"y":500}
+{"frame":1}
+{"assert":{"widget":"Counter","control":{"type":"button","hovered":false,"pressed":false,"focused":true}}}
+{"checkpoint":"counter_hover_retired"}
+{"event":"mouse_press","x":24,"y":138,"button":0}
+{"event":"mouse_release","x":24,"y":138,"button":0}
+{"frame":1}
+{"assert":{"widget":"CheckA","control":{"type":"checkBox","checked":false}}}
+{"assert":{"widget":"Counter","control":{"type":"button","focused":false}}}
+{"assert":{"focusPath":["TreeRoot","Layer_0","WorkbenchRoot","DemoHost","WidgetsDemo","WidgetsForm","CheckA"]}}
+{"checkpoint":"checkbox_toggled"}
+{"event":"mouse_press","x":320,"y":221,"button":0}
+{"event":"mouse_release","x":320,"y":221,"button":0}
+{"frame":1}
+{"assert":{"widget":"BrightnessSlider","control":{"type":"slider"}}}
+{"assert":{"lastRoute":{"policyName":"pointerCapture","target":"BrightnessSlider","resultName":"handledExclusive"}}}
+{"checkpoint":"slider_changed"}
+{"event":"mouse_press","x":190,"y":255,"button":0}
+{"event":"mouse_release","x":190,"y":255,"button":0}
+{"frame":1}
+{"assert":{"widget":"Menu","control":{"type":"popupOverlay","modal":false}}}
+{"checkpoint":"combo_open"}
+{"event":"key_press","key":"Down"}
+{"event":"key_press","key":"Down"}
+{"event":"key_press","key":"Enter"}
+{"frame":1}
+{"assert":{"widget":"ApiCombo","control":{"type":"comboBox","selectedIndex":1,"label":"OpenGL"}}}
+{"checkpoint":"combo_selected"}
+{"event":"mouse_press","x":160,"y":365,"button":0}
+{"event":"mouse_release","x":160,"y":365,"button":0}
+{"event":"key_typed","text":" route"}
+{"event":"key_press","key":"Enter"}
+{"frame":2}
+{"assert":{"widget":"NotesField","control":{"type":"textField","text":" route"}}}
+{"assert":{"lastRoute":{"policyName":"focus","target":"NotesField","resultName":"handledExclusive"}}}
+{"checkpoint":"notes_committed"}
+{"frame":1}

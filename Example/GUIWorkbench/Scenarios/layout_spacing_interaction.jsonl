@@ -1,0 +1,14 @@
+# GUIWorkbench --start-page=Layout. Exercises the actual UIBoxLayout spacing
+# setter, rather than merely mutating demo state.
+{"frame":2}
+{"assert":{"widget":"DemoHBox","layout":{"type":"box","direction":"horizontal","spacing":8.0}}}
+{"assert":{"widget":"DemoVBox","layout":{"type":"box","direction":"vertical","mainAxisAlignment":2}}}
+{"checkpoint":"initial"}
+{"event":"mouse_press","x":250,"y":507,"button":0}
+{"event":"mouse_release","x":250,"y":507,"button":0}
+{"frame":2}
+{"assert":{"widget":"SpacingSlider","control":{"type":"slider","value":{"$gt":0.7}}}}
+{"assert":{"widget":"DemoHBox","layout":{"spacing":{"$gt":16.0}}}}
+{"assert":{"lastRoute":{"policyName":"pointerCapture","target":"SpacingSlider","resultName":"handledExclusive"}}}
+{"checkpoint":"spacing_changed"}
+{"frame":1}

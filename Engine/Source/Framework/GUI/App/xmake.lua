@@ -1,8 +1,9 @@
 -- GUI app host: standalone native GUI app lifecycle for GUI-only binaries
 -- (gui-app-bootstrap Phase 1).
---   GUIAppHost         - window / IRender / SDL input pump / frame loop /
---                        presentation target management / shutdown
---   GUIPresentationTarget - one imported swapchain image + view
+--   GUIAppHost            - window / IRender / SDL input pump / frame loop /
+--                           presentation target management / shutdown
+--   GUIPresentationTarget - imported swapchain image wrapped as a
+--                           GUIRenderSurface
 --
 -- Public surface exposes only the WidgetTree + IGUIAppDelegate contract:
 -- no command buffer / swapchain / Vulkan type reaches app delegates.

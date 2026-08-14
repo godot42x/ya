@@ -21,7 +21,7 @@ namespace ya
 ///     inside completes an activation;
 ///   - Enter / Space on the focused row activates;
 ///   - detach while pressed clears all transient state.
-struct UISelectableRow : public UIElement
+struct YA_GUI_API UISelectableRow : public UIElement
 {
     YA_REFLECT_BEGIN(UISelectableRow, UIElement)
     YA_REFLECT_FIELD(_itemId, .instanceEditable())

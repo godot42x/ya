@@ -23,7 +23,7 @@ namespace ya
 ///
 /// Lifecycle: created via make_shared, opened with open() and closed with
 /// close() / dismiss. The overlay detaches itself on close.
-struct UIPopupOverlay : public UIElement
+struct YA_GUI_API UIPopupOverlay : public UIElement
 {
     YA_REFLECT_BEGIN(UIPopupOverlay, UIElement)
     YA_REFLECT_FIELD(_bModal, .instanceEditable())

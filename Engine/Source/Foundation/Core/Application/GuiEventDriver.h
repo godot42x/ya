@@ -38,6 +38,7 @@ enum class EGuiScenarioStepKind : uint8_t
     Drag,
     SetWindowSize,
     Checkpoint,
+    Assert,
 };
 
 struct GuiScenarioStep
@@ -54,6 +55,9 @@ struct GuiScenarioStep
     uint32_t   width      = 0;
     uint32_t   height     = 0;
     std::string tag;
+    /// Serialized JSON assertion payload. Core deliberately treats this as an
+    /// opaque contract; the GUI host evaluates it against its tree dump.
+    std::string assertion;
 };
 
 YA_CORE_API std::vector<GuiScenarioStep> parseGuiScenario(std::string_view jsonl,
@@ -67,10 +71,12 @@ class YA_CORE_API GuiScenarioExecutor
 public:
     using StepFrameFn  = std::function<void(uint32_t count)>;
     using CheckpointFn = std::function<void(const std::string& tag)>;
+    using AssertFn     = std::function<bool(std::string_view assertion)>;
 
     GuiScenarioExecutor(IGuiEventSink& sink,
                         StepFrameFn   stepFrame,
-                        CheckpointFn  onCheckpoint = {});
+                        CheckpointFn  onCheckpoint = {},
+                        AssertFn      onAssert = {});
 
     bool run(const std::vector<GuiScenarioStep>& steps);
     bool runJsonl(std::string_view jsonl);
@@ -79,14 +85,16 @@ private:
     IGuiEventSink& _sink;
     StepFrameFn    _stepFrame;
     CheckpointFn   _onCheckpoint;
+    AssertFn       _onAssert;
 };
 
 /// Scenario key name to EKey ("Enter", "Space", "Down", "A", ...).
 YA_CORE_API EKey::T keyFromName(std::string_view name);
 
 /// Emit the pointer/key/drag events of a step through the sink. Frame,
-/// Checkpoint and SetWindowSize are no-ops here: frame stepping, checkpoint
-/// dumps and native-window control stay at the host/kernel layer.
+/// Checkpoint, Assert and SetWindowSize are no-ops here: frame stepping,
+/// checkpoint dumps, assertions and native-window control stay at the
+/// host/kernel layer.
 YA_CORE_API void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step);
 
 } // namespace ya

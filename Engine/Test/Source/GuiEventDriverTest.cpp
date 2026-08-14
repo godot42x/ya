@@ -56,12 +56,13 @@ TEST(GuiEventDriverTest, ParsesScenarioSteps)
 {"event":"key_press","key":"Enter"}
 {"drag":{"from":[0,0],"to":[30,30],"steps":4}}
 {"checkpoint":"after"}
+{"assert":{"widget":"Example","control":{"checked":true}}}
 )json";
 
     std::string error;
     const auto  steps = parseGuiScenario(jsonl, &error);
     ASSERT_TRUE(error.empty());
-    ASSERT_EQ(steps.size(), 6u);
+    ASSERT_EQ(steps.size(), 7u);
     EXPECT_EQ(steps[0].kind, EGuiScenarioStepKind::Frame);
     EXPECT_EQ(steps[0].frame, 2u);
     EXPECT_EQ(steps[1].kind, EGuiScenarioStepKind::MouseMove);
@@ -72,6 +73,8 @@ TEST(GuiEventDriverTest, ParsesScenarioSteps)
     EXPECT_EQ(steps[4].dragSteps, 4);
     EXPECT_EQ(steps[5].kind, EGuiScenarioStepKind::Checkpoint);
     EXPECT_EQ(steps[5].tag, "after");
+    EXPECT_EQ(steps[6].kind, EGuiScenarioStepKind::Assert);
+    EXPECT_EQ(steps[6].assertion, R"json({"control":{"checked":true},"widget":"Example"})json");
 }
 
 TEST(GuiEventDriverTest, ExecutesDragAndKeyThroughSink)
@@ -93,14 +96,37 @@ TEST(GuiEventDriverTest, ExecutesDragAndKeyThroughSink)
     EXPECT_EQ(sink.frames, 1);
     EXPECT_EQ(sink.checkpoint, "done");
 
-    // drag = press + 3 moves + release.
-    ASSERT_EQ(sink.types.size(), 6u);
-    EXPECT_EQ(sink.types[0], EEvent::MouseButtonPressed);
-    EXPECT_EQ(sink.types[1], EEvent::MouseMoved);
+    // Drag follows the same pointer contract as press/release: bootstrap the
+    // cursor with a move, then press + 3 interpolated moves + release.
+    ASSERT_EQ(sink.types.size(), 7u);
+    EXPECT_EQ(sink.types[0], EEvent::MouseMoved);
+    EXPECT_EQ(sink.types[1], EEvent::MouseButtonPressed);
     EXPECT_EQ(sink.types[2], EEvent::MouseMoved);
     EXPECT_EQ(sink.types[3], EEvent::MouseMoved);
-    EXPECT_EQ(sink.types[4], EEvent::MouseButtonReleased);
-    EXPECT_EQ(sink.types[5], EEvent::KeyPressed);
+    EXPECT_EQ(sink.types[4], EEvent::MouseMoved);
+    EXPECT_EQ(sink.types[5], EEvent::MouseButtonReleased);
+    EXPECT_EQ(sink.types[6], EEvent::KeyPressed);
+}
+
+TEST(GuiEventDriverTest, AssertionCallbackStopsExecutorOnFailure)
+{
+    RecordingSink sink;
+    std::string   assertion;
+    GuiScenarioExecutor executor(
+        sink,
+        [](uint32_t) {},
+        {},
+        [&](std::string_view value) {
+            assertion = value;
+            return false;
+        });
+
+    ASSERT_FALSE(executor.runJsonl(R"json(
+{"assert":{"lastRoute":{"target":"Missing"}}}
+{"event":"key_press","key":"Enter"}
+)json"));
+    EXPECT_EQ(assertion, R"json({"lastRoute":{"target":"Missing"}})json");
+    EXPECT_TRUE(sink.types.empty());
 }
 
 TEST(GuiEventDriverTest, ScenarioDrivesWidgetTreeAndDumpAssertsHoverContract)

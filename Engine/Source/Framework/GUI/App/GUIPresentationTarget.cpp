@@ -42,7 +42,7 @@ void GUIPresentationTarget::buildAll(IRender&                                   
         renderImage->image       = std::move(importedImage);
         renderImage->defaultView = std::move(imageView);
         outTargets.push_back(std::make_shared<GUIPresentationTarget>(GUIPresentationTarget{
-            .renderImage = std::move(renderImage),
+            .renderSurface = GUIRenderSurface::wrapExternal(std::move(renderImage), EImageLayout::PresentSrcKHR),
         }));
     }
 }

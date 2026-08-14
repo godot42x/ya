@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Core/Api.h"
+
 #include <glm/glm.hpp>
 
 #include <string>
@@ -20,7 +22,7 @@ struct FWorkbenchItem
     glm::vec2   size     = {140.0f, 90.0f};
 };
 
-struct FWorkbenchWorkspace
+struct YA_GUI_API FWorkbenchWorkspace
 {
     std::vector<FWorkbenchItem> items;
     std::string                 selectedId;

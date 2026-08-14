@@ -10,6 +10,12 @@ FRender2dSession    Render2D::session;
 FQuadRender*        Render2D::quadData = nullptr;
 FLineRender*        Render2D::lineData = nullptr;
 
+FQuadRender* Render2D::quadRender() { return quadData; }
+FLineRender* Render2D::lineRender() { return lineData; }
+
+FRender2dDebugState& Render2D::debugState() { return debug; }
+FRender2dSession&    Render2D::sessionState() { return session; }
+
 void Render2D::init(IRender* render, EFormat::T colorFormat, EFormat::T depthFormat)
 {
     quadData = new FQuadRender();

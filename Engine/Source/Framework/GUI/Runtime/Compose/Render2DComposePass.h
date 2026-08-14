@@ -15,11 +15,16 @@ struct ICommandBuffer;
 struct RenderImage;
 
 /// Shared 2D compose pass used by every viewport-facing UI/overlay path:
-/// runtime game UI composite, editor 2D canvas preview, and the editor 3D
-/// viewport composition (scene color + overlay + debug lines).
+/// runtime UI presentation/offscreen parity, editor 2D canvas preview, and
+/// the editor 3D viewport composition (scene color + overlay + debug lines).
 enum class ERender2DComposePassKind : uint8_t
 {
     RuntimeUIComposite = 0,
+    /// Same UI packet as RuntimeUIComposite, but clears and finishes as an
+    /// owned offscreen target. Kept separate so a windowed target and an
+    /// offscreen mirror can record in the same command buffer without sharing
+    /// Render2D's per-pass vertex/descriptor resources.
+    RuntimeUIOffscreen,
     EditorCanvasPreview,
     EditorViewportCompose,
     EditorToolSurface,
@@ -57,9 +62,9 @@ struct FRender2DComposePassDesc
 
 /// Prepare the Render2D pipeline variant required by one shared compose pass.
 /// Must be called before command recording begins.
-void prepareRender2DComposePassPipeline(const FRender2DComposePassDesc& passDesc,
-                                        EFormat::T                      colorFormat,
-                                        EFormat::T                      depthFormat = EFormat::Undefined);
+YA_GUI_API void prepareRender2DComposePassPipeline(const FRender2DComposePassDesc& passDesc,
+                                                   EFormat::T                      colorFormat,
+                                                   EFormat::T                      depthFormat = EFormat::Undefined);
 
 /// Record one shared 2D compose pass into `target`. `uiFrameSnapshot` is the
 /// immutable per-frame Game UI packet (already resolved to render-target
@@ -68,11 +73,11 @@ void prepareRender2DComposePassPipeline(const FRender2DComposePassDesc& passDesc
 /// (the editor viewport depth-tests debug overlays against it).
 /// `extraContent` runs inside the Render2D recording window for caller-owned
 /// content such as camera overlay text and physics debug lines.
-void recordRender2DComposePass(ICommandBuffer*                  cmdBuf,
-                               RenderImage&                     target,
-                               RenderImage*                     depthTarget,
-                               const UIFrameSnapshot*           uiFrameSnapshot,
-                               const FRender2DComposePassDesc&  passDesc,
-                               const std::function<void()>&     extraContent = {});
+YA_GUI_API void recordRender2DComposePass(ICommandBuffer*                  cmdBuf,
+                                          RenderImage&                     target,
+                                          RenderImage*                     depthTarget,
+                                          const UIFrameSnapshot*           uiFrameSnapshot,
+                                          const FRender2DComposePassDesc&  passDesc,
+                                          const std::function<void()>&     extraContent = {});
 
 } // namespace ya

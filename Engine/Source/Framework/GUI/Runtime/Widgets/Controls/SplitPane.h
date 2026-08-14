@@ -1,55 +1,48 @@
 #pragma once
 
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/UIElement.h"
 
 namespace ya
 {
 
-/// How the two panes of a split are arranged.
-enum class ESplitOrientation : uint8_t
-{
-    Vertical,   // divider runs vertically: panes sit side by side (left/right)
-    Horizontal, // divider runs horizontally: panes stack (top/bottom)
-};
-
-/// Split pane: two content children separated by a draggable divider
-/// (gui-app-bootstrap Phase 2).
+/// Split pane: interaction/paint host for UISplitLayout. The layout owns
+/// orientation, ratio, limits, padding and child geometry; this widget owns
+/// divider drag transient state and visual styling.
 ///
 /// Contract:
-///   - the first two children are the panes (extra children are not laid
-///     out); each pane is assigned its rect verbatim via layoutAssigned;
+///   - UISplitLayout arranges the first two children and owns all split
+///     geometry;
 ///   - the divider drag session owns pointer capture for its whole duration;
-///     the split ratio is control state (initialized by `_splitRatio`, kept
-///     after dragging);
 ///   - dragging only invalidates layout: the next snapshot re-lays out both
 ///     panes; GPU state is never touched by the drag;
 ///   - no dock / tab stack / floating windows in this primitive.
-struct UISplitPane : public UIElement
+struct YA_GUI_API UISplitPane : public UIElement
 {
     YA_REFLECT_BEGIN(UISplitPane, UIElement)
-    YA_REFLECT_FIELD(_orientation, .instanceEditable())
-    YA_REFLECT_FIELD(_splitRatio, .instanceEditable())
-    YA_REFLECT_FIELD(_minFirstExtent, .instanceEditable())
-    YA_REFLECT_FIELD(_minSecondExtent, .instanceEditable())
-    YA_REFLECT_FIELD(_dividerThickness, .instanceEditable())
     YA_REFLECT_END()
 
     explicit UISplitPane(std::string name = "SplitPane") : UIElement(std::move(name))
     {
         _hitFilter = EWidgetHitFilter::Stop;
+        _splitLayout.setOwner(*this);
     }
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UISplitPane>; }
 
-    ESplitOrientation _orientation     = ESplitOrientation::Vertical;
-    /// Fraction (0..1) of the content extent given to the first pane.
-    float             _splitRatio      = 0.5f;
-    float             _minFirstExtent  = 40.0f;
-    float             _minSecondExtent = 40.0f;
-    float             _dividerThickness = 6.0f;
-    /// Content inset (same contract as UIContainer::_padding): the panes are
-    /// arranged inside the rect shrunk by padding on each edge.
-    glm::vec2         _padding = {0.0f, 0.0f};
+    [[nodiscard]] UISplitLayout& getSplitLayout() { return _splitLayout; }
+    [[nodiscard]] const UISplitLayout& getSplitLayout() const { return _splitLayout; }
+    void setOrientation(ESplitOrientation value) { _splitLayout.setOrientation(value); }
+    void setSplitRatio(float value) { _splitLayout.setSplitRatio(value); }
+    void setMinFirstExtent(float value) { _splitLayout.setMinFirstExtent(value); }
+    void setMinSecondExtent(float value) { _splitLayout.setMinSecondExtent(value); }
+    void setDividerThickness(float value) { _splitLayout.setDividerThickness(value); }
+    void setPadding(glm::vec2 value) { _splitLayout.setPadding(value); }
+    [[nodiscard]] ESplitOrientation getOrientation() const { return _splitLayout.getOrientation(); }
+    [[nodiscard]] float getSplitRatio() const { return _splitLayout.getSplitRatio(); }
+    [[nodiscard]] float getMinFirstExtent() const { return _splitLayout.getMinFirstExtent(); }
+    [[nodiscard]] float getMinSecondExtent() const { return _splitLayout.getMinSecondExtent(); }
+    [[nodiscard]] float getDividerThickness() const { return _splitLayout.getDividerThickness(); }
 
     glm::vec4 _dividerColor          = {0.20f, 0.22f, 0.27f, 1.0f};
     glm::vec4 _dividerHoveredColor   = {0.34f, 0.40f, 0.50f, 1.0f};
@@ -68,15 +61,12 @@ struct UISplitPane : public UIElement
     void clearTransientInputState() override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 
-    /// Divider rect in tree-local logical pixels (depends on the last
-    /// layout + current ratio).
-    [[nodiscard]] Rect2D getDividerRect() const;
+    /// Divider rect in tree-local logical pixels (depends on UISplitLayout's
+    /// last arrangement).
+    [[nodiscard]] Rect2D getDividerRect() const { return _splitLayout.getDividerRect(); }
 
-  private:
-    /// Clamp `_splitRatio` so both panes keep their minimum extent.
-    void clampRatio(const Rect2D& contentRect);
-    /// Content rect (last layout) used by divider hit/drag math.
-    Rect2D _contentRect{};
+private:
+    UISplitLayout _splitLayout;
 };
 
 } // namespace ya

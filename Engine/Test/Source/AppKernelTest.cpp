@@ -4,6 +4,7 @@
 // kernel.
 
 #include "Core/Application/AppKernel.h"
+#include "Core/MessageBus.h"
 
 #include <gtest/gtest.h>
 
@@ -40,6 +41,16 @@ struct OneEventSource final : public IAppEventSource
     bool bEmitted = false;
 };
 
+struct DynamicMouseSubscriber
+{
+    int count = 0;
+    bool onMouseMoved(const MouseMoveEvent&)
+    {
+        ++count;
+        return true;
+    }
+};
+
 } // namespace
 
 TEST(AppKernelTest, HeadlessLoopHonorsExitAfterFrame)
@@ -67,6 +78,19 @@ TEST(AppKernelTest, DelegateCloseAndEventSourceDrive)
     EXPECT_EQ(delegate.ticks, 3);
     EXPECT_EQ(delegate.events, 1);
     EXPECT_TRUE(delegate.shutdown);
+}
+
+TEST(AppKernelTest, RuntimeTypedEventBridgePublishesConcreteEvent)
+{
+    DynamicMouseSubscriber subscriber;
+    MessageBus::get()->subscribe<MouseMoveEvent>(&subscriber, &DynamicMouseSubscriber::onMouseMoved);
+
+    MouseMoveEvent concrete(10.0f, 20.0f);
+    const Event&   erased = concrete;
+    MessageBus::get()->publishEvent(erased);
+
+    EXPECT_EQ(subscriber.count, 1);
+    MessageBus::get()->unsubscribe(&subscriber);
 }
 
 } // namespace ya

@@ -9,6 +9,7 @@
 #include "Render3D/Services/RenderDiagnosticsService.h"
 
 #include "Core/Async/TaskQueue.h"
+#include "Core/Application/AppKernel.h"
 #include "Core/Manager/Facade.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
@@ -71,15 +72,56 @@ void syncRuntimeCameraAspect(Scene& scene, const Extent2D& viewportExtent)
 namespace
 {
 
-int processNativeEvent(App& app, SDL_Event& event)
+class HostSdlEventSource final : public IAppEventSource
 {
-    YA_PROFILE_FUNCTION()
-    processSDLEvent(
-        event,
-        [&app](const auto& e)
-        { app.dispatchEvent(e); });
-    return 0;
-}
+  public:
+    void pollEvents(const std::function<void(const Event&)>& emit) override
+    {
+        SDL_Event event;
+        YA_PROFILE_SCOPE("Frame/EventPump");
+        YA_PERF_SCOPE(perf::sample::frameEventPump(), perf::metric::cpuTimeMs(), perf::domain::game());
+        while (SDL_PollEvent(&event)) {
+            processSDLEvent(
+                event,
+                [&emit](const auto& translated) {
+                    emit(translated);
+                });
+        }
+    }
+};
+
+class HostAppKernelDelegate final : public IAppLoopDelegate
+{
+  public:
+    explicit HostAppKernelDelegate(App& inApp)
+        : app(inApp)
+    {
+    }
+
+    void onInit() override
+    {
+    }
+
+    void onEvent(const Event& event) override
+    {
+        app.dispatchEvent(event);
+    }
+
+    void onTick(float dt) override
+    {
+        AppFrameLoop::iterate(app, dt, /*bPumpNativeEvents=*/false);
+    }
+
+    void onShutdown() override {}
+
+    [[nodiscard]] bool shouldClose() const override
+    {
+        return !app.isRunning();
+    }
+
+  private:
+    App& app;
+};
 
 } // namespace
 
@@ -120,25 +162,20 @@ void App::tickRender(float dt)
 
 int AppFrameLoop::run(App& app)
 {
+    // AppKernel is the only native while-loop. The product automation layer
+    // still owns scene-stability / screenshot / RenderDoc completion and
+    // therefore requests App::requestQuit() itself; do not arm the kernel's
+    // basic exit-after-frame policy in parallel during this transition.
     app._startTime = std::chrono::steady_clock::now();
     app._lastTime  = app._startTime;
 
-    while (app.bRunning) {
-        App::time_point_t now        = App::clock_t::now();
-        auto              dtMicroSec = std::chrono::duration_cast<std::chrono::microseconds>(now - app._lastTime).count();
-        float             dtSec      = (float)((double)dtMicroSec / 1000000.0);
-        dtSec                        = std::max(dtSec, 0.0001f);
-        app._lastTime                = now;
-
-        if (auto result = iterate(app, dtSec); result != 0) {
-            break;
-        }
-    }
-
-    return 0;
+    HostSdlEventSource      eventSource;
+    HostAppKernelDelegate   delegate(app);
+    AppKernel               kernel({.eventSource = &eventSource}, delegate);
+    return kernel.run();
 }
 
-int AppFrameLoop::iterate(App& app, float dt)
+int AppFrameLoop::iterate(App& app, float dt, bool bPumpNativeEvents)
 {
     YA_PROFILE_FUNCTION()
     YA_PERF_FUNCTION(perf::metric::cpuTimeMs(), perf::domain::render());
@@ -155,13 +192,11 @@ int AppFrameLoop::iterate(App& app, float dt)
         perf::sample::frameMainThreadCallbacks(),
         perf::sample::frameAutomation());
 
-    SDL_Event evt;
-    {
-        YA_PROFILE_SCOPE("Frame/EventPump");
-        YA_PERF_SCOPE(perf::sample::frameEventPump(), perf::metric::cpuTimeMs(), perf::domain::game());
-        while (SDL_PollEvent(&evt)) {
-            processNativeEvent(app, evt);
-        }
+    if (bPumpNativeEvents) {
+        HostSdlEventSource eventSource;
+        eventSource.pollEvents([&app](const Event& event) {
+            app.dispatchEvent(event);
+        });
     }
 
     {
@@ -250,7 +285,7 @@ void AppFrameLoop::tickLogic(App& app, float dt)
     }
     {
         YA_PROFILE_SCOPE("Logic/TimerManager");
-        Facade.timerManager.onUpdate(dt);
+        facade().timerManager.onUpdate(dt);
     }
     {
         YA_PROFILE_SCOPE("Logic/AppAutomationControlService");
@@ -534,13 +569,8 @@ void AppFrameLoop::tickRender(App& app, float dt)
         .overlay = {
             .screenSprites = &screenOverlaySprites,
         },
-        .viewportCompose = {
-            .recordCompose = [&app, dt](ICommandBuffer* commandBuffer)
-            {
-                if (commandBuffer) {
-                    app.recordModuleViewportCompose(*commandBuffer, dt);
-                } },
-        },
+        // Designated initializers must follow declaration order:
+        // presentationExtensions is declared before viewportCompose in FrameInput.
         .presentationExtensions = {
             .recordBeforeExtensions = [&app, dt](ICommandBuffer* commandBuffer)
             {
@@ -567,6 +597,13 @@ void AppFrameLoop::tickRender(App& app, float dt)
                 }
                 return bAppended;
             },
+        },
+        .viewportCompose = {
+            .recordCompose = [&app, dt](ICommandBuffer* commandBuffer)
+            {
+                if (commandBuffer) {
+                    app.recordModuleViewportCompose(*commandBuffer, dt);
+                } },
         },
         .pipeline = pipelineFrame,
         .uiFrameSnapshot = pUiFrameSnapshot,

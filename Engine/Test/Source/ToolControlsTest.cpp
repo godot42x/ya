@@ -3,6 +3,7 @@
 // primitives have no Scene/ECS/Render3D/Host dependency.
 
 #include "GUI/Widgets/WidgetTree.h"
+#include "GUI/Widgets/WidgetTreeDump.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Menu.h"
@@ -69,11 +70,11 @@ TEST(ToolControlsTest, StackLaysOutChildrenWithGapAndPadding)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       stack = std::make_shared<UIContainer>("Stack");
-    stack->_direction = EWidgetBoxLayout::Vertical;
+    stack->setDirection(EWidgetBoxLayout::Vertical);
     stack->_position  = {20.0f, 20.0f};
     stack->_size      = {200.0f, 200.0f};
-    stack->_padding   = {10.0f, 10.0f};
-    stack->_spacing   = 8.0f;
+    stack->setPadding({10.0f, 10.0f});
+    stack->setSpacing(8.0f);
 
     auto a = std::make_shared<UIPanel>("A");
     a->_size = {100.0f, 20.0f};
@@ -95,9 +96,9 @@ TEST(ToolControlsTest, StackCollapsedSkipsSpaceHiddenKeepsSpace)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       stack = std::make_shared<UIContainer>("Stack");
-    stack->_direction = EWidgetBoxLayout::Vertical;
+    stack->setDirection(EWidgetBoxLayout::Vertical);
     stack->_size      = {200.0f, 200.0f};
-    stack->_spacing   = 4.0f;
+    stack->setSpacing(4.0f);
 
     auto collapsed = std::make_shared<UIPanel>("Collapsed");
     collapsed->_size = {100.0f, 20.0f};
@@ -126,9 +127,9 @@ TEST(ToolControlsTest, StackMainAxisAlignmentOffsetsThePack)
 
     auto makeStack = [&](EWidgetMainAxisAlignment alignment) {
         auto stack = std::make_shared<UIContainer>("Stack");
-        stack->_direction = EWidgetBoxLayout::Horizontal;
+        stack->setDirection(EWidgetBoxLayout::Horizontal);
         stack->_size      = {300.0f, 50.0f};
-        stack->_mainAxisAlignment = alignment;
+        stack->setMainAxisAlignment(alignment);
         auto a = std::make_shared<UIPanel>("A");
         a->_size = {100.0f, 20.0f};
         auto b = std::make_shared<UIPanel>("B");
@@ -164,9 +165,9 @@ TEST(ToolControlsTest, StackMainAxisAlignmentOffsetsThePack)
 TEST(ToolControlsTest, StackDesiredSizeAggregatesChildren)
 {
     auto stack = std::make_shared<UIContainer>("Stack");
-    stack->_direction = EWidgetBoxLayout::Vertical;
-    stack->_padding   = {10.0f, 10.0f};
-    stack->_spacing   = 4.0f;
+    stack->setDirection(EWidgetBoxLayout::Vertical);
+    stack->setPadding({10.0f, 10.0f});
+    stack->setSpacing(4.0f);
     auto a = std::make_shared<UIPanel>("A");
     a->_size = {100.0f, 20.0f};
     auto b = std::make_shared<UIPanel>("B");
@@ -183,10 +184,10 @@ TEST(ToolControlsTest, ContainerStretchLastChildFillsRemainingSpace)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       box = std::make_shared<UIContainer>("Box");
-    box->_direction         = EWidgetBoxLayout::Vertical;
-    box->_spacing           = 4.0f;
+    box->setDirection(EWidgetBoxLayout::Vertical);
+    box->setSpacing(4.0f);
     box->_size              = {200.0f, 200.0f};
-    box->_bStretchLastChild = true;
+    box->setStretchLastChild(true);
     tree.attachToLayer(WidgetTree::ELayer::Content, box);
 
     auto header = std::make_shared<UIPanel>("Header");
@@ -210,8 +211,8 @@ TEST(ToolControlsTest, SplitPaneLaysOutTwoPanesAroundDivider)
     auto       split = std::make_shared<UISplitPane>("Split");
     split->_position = {0.0f, 0.0f};
     split->_size     = {300.0f, 200.0f};
-    split->_splitRatio      = 0.5f;
-    split->_dividerThickness = 6.0f;
+    split->setSplitRatio(0.5f);
+    split->setDividerThickness(6.0f);
     auto left  = std::make_shared<UIPanel>("Left");
     auto right = std::make_shared<UIPanel>("Right");
     tree.attachToLayer(WidgetTree::ELayer::Content, split);
@@ -234,7 +235,7 @@ TEST(ToolControlsTest, SplitPaneDividerDragChangesRatioAndEndsSession)
     WidgetTree tree({.width = 400, .height = 300});
     auto       split = std::make_shared<UISplitPane>("Split");
     split->_size      = {300.0f, 200.0f};
-    split->_splitRatio = 0.5f;
+    split->setSplitRatio(0.5f);
     auto left  = std::make_shared<UIPanel>("Left");
     auto right = std::make_shared<UIPanel>("Right");
     tree.attachToLayer(WidgetTree::ELayer::Content, split);
@@ -252,20 +253,20 @@ TEST(ToolControlsTest, SplitPaneDividerDragChangesRatioAndEndsSession)
     // Drag right by 30px: ratio 0.5 -> 0.6 and layout is invalidated.
     EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(180.0f, 100.0f), pointAt(180.0f, 100.0f)),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_NEAR(split->_splitRatio, 0.6f, 1e-4f);
+    EXPECT_NEAR(split->getSplitRatio(), 0.6f, 1e-4f);
     EXPECT_FALSE(tree.isLayoutValid());
 
     // Drag past the first pane minimum: ratio clamps at 40/300.
     EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(5.0f, 100.0f), pointAt(5.0f, 100.0f)),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_NEAR(split->_splitRatio, 40.0f / 300.0f, 1e-4f);
+    EXPECT_NEAR(split->getSplitRatio(), 40.0f / 300.0f, 1e-4f);
 
     // Release anywhere (capture): session ends, ratio persists.
     EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(5.0f, 100.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_FALSE(split->_bDraggingDivider);
     EXPECT_EQ(tree.getPointerCapture(), nullptr);
-    EXPECT_NEAR(split->_splitRatio, 40.0f / 300.0f, 1e-4f);
+    EXPECT_NEAR(split->getSplitRatio(), 40.0f / 300.0f, 1e-4f);
 }
 
 TEST(ToolControlsTest, SplitPanePressOnPaneFallsThroughToChild)
@@ -273,7 +274,7 @@ TEST(ToolControlsTest, SplitPanePressOnPaneFallsThroughToChild)
     WidgetTree tree({.width = 400, .height = 300});
     auto       split = std::make_shared<UISplitPane>("Split");
     split->_size      = {300.0f, 200.0f};
-    split->_splitRatio = 0.5f;
+    split->setSplitRatio(0.5f);
     auto left = std::make_shared<UIContainer>("Left");
     auto button = std::make_shared<UIButton>("Button");
     button->_position = {10.0f, 10.0f};
@@ -306,7 +307,7 @@ TEST(ToolControlsTest, ScrollViewportShiftsContentByOffset)
     WidgetTree tree({.width = 400, .height = 300});
     auto       viewport = std::make_shared<UIScrollViewport>("Scroll");
     viewport->_size        = {200.0f, 60.0f};
-    viewport->_scrollOffset = 30.0f;
+    viewport->setScrollOffset(30.0f);
     auto content = std::make_shared<UIPanel>("Content");
     content->_size = {200.0f, 100.0f}; // taller than the viewport
     tree.attachToLayer(WidgetTree::ELayer::Content, viewport);
@@ -324,7 +325,7 @@ TEST(ToolControlsTest, ScrollViewportWheelConsumesWhenScrollableBubblesAtLimit)
     WidgetTree tree({.width = 400, .height = 300});
     auto       viewport = std::make_shared<UIScrollViewport>("Scroll");
     viewport->_size = {200.0f, 60.0f};
-    viewport->_scrollStep = 40.0f;
+    viewport->setScrollStep(40.0f);
     auto content = std::make_shared<UIPanel>("Content");
     content->_size = {200.0f, 100.0f};
     tree.attachToLayer(WidgetTree::ELayer::Content, viewport);
@@ -335,14 +336,14 @@ TEST(ToolControlsTest, ScrollViewportWheelConsumesWhenScrollableBubblesAtLimit)
     // Wheel down (negative y) scrolls toward the content end.
     EXPECT_EQ(tree.dispatchEvent(MouseScrolledEvent(0.0f, -1.0f), at),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_EQ(viewport->_scrollOffset, 40.0f);
+    EXPECT_EQ(viewport->getScrollOffset(), 40.0f);
     EXPECT_EQ(tree.dispatchEvent(MouseScrolledEvent(0.0f, -1.0f), at),
               EWidgetRouteResult::NotHandled); // at the limit: bubbles out
-    EXPECT_EQ(viewport->_scrollOffset, 40.0f);
+    EXPECT_EQ(viewport->getScrollOffset(), 40.0f);
     // Wheel up scrolls back.
     EXPECT_EQ(tree.dispatchEvent(MouseScrolledEvent(0.0f, 1.0f), at),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_EQ(viewport->_scrollOffset, 0.0f);
+    EXPECT_EQ(viewport->getScrollOffset(), 0.0f);
 }
 
 TEST(ToolControlsTest, ScrollViewportCullsChildHitsOutsideViewport)
@@ -371,7 +372,7 @@ TEST(ToolControlsTest, ScrollViewportNestedInsideSplitKeepsCustomLayout)
     WidgetTree tree({.width = 400, .height = 300});
     auto       split = std::make_shared<UISplitPane>("Split");
     split->_size      = {300.0f, 200.0f};
-    split->_splitRatio = 0.5f;
+    split->setSplitRatio(0.5f);
     auto scroll = std::make_shared<UIScrollViewport>("Scroll");
     scroll->_size = {100.0f, 60.0f};
     auto content = std::make_shared<UIPanel>("Content");
@@ -386,6 +387,37 @@ TEST(ToolControlsTest, ScrollViewportNestedInsideSplitKeepsCustomLayout)
     EXPECT_EQ(scroll->_layoutRect.extent, glm::vec2(147.0f, 200.0f));
     EXPECT_NEAR(scroll->getMaxScrollOffset(), 0.0f, 1e-4f); // content fits after stretch
     EXPECT_EQ(content->_layoutRect.extent, glm::vec2(147.0f, 200.0f));
+}
+
+TEST(ToolControlsTest, SpecializedLayoutsAppearInTreeDump)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto split = std::make_shared<UISplitPane>("Split");
+    split->_size = {300.0f, 200.0f};
+    split->setSplitRatio(0.5f);
+    auto scroll = std::make_shared<UIScrollViewport>("Scroll");
+    auto content = std::make_shared<UIPanel>("Content");
+    content->_size = {100.0f, 300.0f};
+    auto button = std::make_shared<UIButton>("Button");
+    button->setContentPadding({7.0f, 3.0f});
+
+    tree.attachToLayer(WidgetTree::ELayer::Content, split);
+    tree.attach(*split, scroll);
+    tree.attach(*scroll, content);
+    tree.attach(*split, button);
+    tree.layout();
+
+    const nlohmann::json dump = dumpWidgetTree(tree);
+    const auto* splitNode = findWidgetNode(dump, "Split");
+    const auto* scrollNode = findWidgetNode(dump, "Scroll");
+    const auto* buttonNode = findWidgetNode(dump, "Button");
+    ASSERT_NE(splitNode, nullptr);
+    ASSERT_NE(scrollNode, nullptr);
+    ASSERT_NE(buttonNode, nullptr);
+    EXPECT_EQ((*splitNode)["layout"]["type"], "split");
+    EXPECT_EQ((*scrollNode)["layout"]["type"], "scroll");
+    EXPECT_EQ((*buttonNode)["layout"]["type"], "singleChild");
+    EXPECT_EQ((*buttonNode)["layout"]["padding"]["x"], 7.0f);
 }
 
 // === Selectable row ===
@@ -631,6 +663,7 @@ TEST(ToolControlsTest, MenuBarHoverSwitchesOpenMenu)
 
     // Synthetic font: "File" = 32px + 20 -> 52px wide at x 4..56; "Edit"
     // starts at x 58. Click File: its menu opens below the bar.
+    ASSERT_EQ(tree.pickAt({30.0f, 15.0f}), bar->getChildren().front().get());
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(30.0f, 15.0f)),
               EWidgetRouteResult::HandledExclusive);
     // The bar item has no press session: releases are not consumed. The
@@ -660,6 +693,7 @@ TEST(ToolControlsTest, MenuBarHoverSwitchesOpenMenu)
     // A press anywhere outside the menu dismisses it (popup shield).
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(300.0f, 300.0f)),
               EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getLastRouteTrace().policy, EWidgetRoutePolicy::Popup);
     EXPECT_EQ(bar->getOpenMenu(), nullptr);
 }
 

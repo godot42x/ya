@@ -20,19 +20,7 @@ void UIButton::layoutAssigned(const Rect2D& rect)
 {
     _layoutRect = rect;
 
-    // Content-slot arrangement: every visible content child fills the button
-    // rect minus the content padding. Text children align themselves inside
-    // that rect through their own paint h/v alignment; container content
-    // (icon + text box) arranges its own children. Children never use anchor
-    // math against the button (their rect is assigned).
-    Rect2D contentRect = _layoutRect;
-    contentRect.pos += _contentPadding;
-    contentRect.extent -= _contentPadding * 2.0f;
-    for (UIElement* child : getChildrenInPaintOrder()) {
-        if (child->participatesInLayout()) {
-            child->layoutAssigned(contentRect);
-        }
-    }
+    _contentLayout.arrange(*this, _layoutRect);
 }
 
 glm::vec2 UIButton::computeDesiredSize() const
@@ -43,13 +31,7 @@ glm::vec2 UIButton::computeDesiredSize() const
     if (!_bAutoSize) {
         return _size;
     }
-    for (UIElement* child : getChildrenInPaintOrder()) {
-        if (!child->participatesInLayout()) {
-            continue;
-        }
-        return child->computeDesiredSize() + _contentPadding * 2.0f;
-    }
-    return _size;
+    return _contentLayout.measure(*this);
 }
 
 void UIButton::paintSelf(UIFrameBuilder& builder)

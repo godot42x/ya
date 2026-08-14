@@ -8,6 +8,7 @@
 #include "RHI/Core/RenderImage.h"
 
 #include <imgui.h>
+#include <imgui_internal.h> // ImTextCharToUtf8
 
 namespace ya
 {

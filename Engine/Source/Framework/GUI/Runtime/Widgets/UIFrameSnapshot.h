@@ -81,7 +81,7 @@ struct UIFrameSnapshot
 };
 
 /// Accumulates resolved draw items during the pre-graph paint pass.
-class UIFrameBuilder
+class YA_GUI_API UIFrameBuilder
 {
   public:
     explicit UIFrameBuilder(const UIFrameBuildContext& ctx) : _ctx(ctx) {}

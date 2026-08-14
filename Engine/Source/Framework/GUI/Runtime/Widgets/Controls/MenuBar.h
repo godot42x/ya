@@ -10,7 +10,7 @@ namespace ya
 {
 
 /// One menu-bar entry: label button that opens its menu below the bar.
-struct UIMenuBarItem : public UIElement
+struct YA_GUI_API UIMenuBarItem : public UIElement
 {
     YA_REFLECT_BEGIN(UIMenuBarItem, UIElement)
     YA_REFLECT_FIELD(_label, .instanceEditable())
@@ -52,13 +52,13 @@ struct UIMenuBarItem : public UIElement
 /// menu below the bar; only one menu is open at a time (opening another
 /// closes the previous). The bar never owns the menu lifetime (callers keep
 /// the tree-alive menu).
-struct UIMenuBar : public UIContainer
+struct YA_GUI_API UIMenuBar : public UIContainer
 {
     explicit UIMenuBar(std::string name = "MenuBar") : UIContainer(std::move(name))
     {
-        _direction = EWidgetBoxLayout::Horizontal;
-        _spacing   = 2.0f;
-        _padding   = {4.0f, 4.0f};
+        setDirection(EWidgetBoxLayout::Horizontal);
+        setSpacing(2.0f);
+        setPadding({4.0f, 4.0f});
     }
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIMenuBar>; }

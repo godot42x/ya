@@ -8,7 +8,7 @@ namespace ya
 {
 
 /// Flat panel: solid color and/or image, optional 9-slice border.
-struct UIPanel : public UIElement
+struct YA_GUI_API UIPanel : public UIElement
 {
     YA_REFLECT_BEGIN(UIPanel, UIElement)
     YA_REFLECT_FIELD(_color, .instanceEditable())

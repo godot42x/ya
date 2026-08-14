@@ -94,10 +94,22 @@ enum class EWidgetFocusPolicy : uint8_t
 struct WidgetTree;
 struct WidgetAttachment;
 struct UIElement;
+class UISlot;
 
 using UIElementRef = std::shared_ptr<UIElement>;
 
 class UIFrameBuilder;
+
+/// One delivery stage in an explicit WidgetTree route. Existing controls
+/// continue to receive target delivery through handleInputEvent(); preview
+/// and bubble hooks are introduced separately so the route model can grow
+/// without duplicating leaf-control behavior.
+enum class EWidgetEventRoutePhase : uint8_t
+{
+    Preview,
+    Target,
+    Bubble,
+};
 
 /// Event context for widget hit-testing / event dispatch. `logicalPoint` is
 /// in tree-local logical pixels (top-left origin, Y down) — the host converts
@@ -109,9 +121,10 @@ struct WidgetEventContext
     /// widgets may then accept events outside their own rect (and must not
     /// rely on their own hit test).
     bool bViaCapture = false;
+    EWidgetEventRoutePhase phase = EWidgetEventRoutePhase::Target;
 };
 
-struct UIElement : public std::enable_shared_from_this<UIElement>
+struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
 {
     YA_REFLECT_BEGIN(UIElement)
     YA_REFLECT_FIELD(_name)
@@ -188,6 +201,11 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
     [[nodiscard]] const std::vector<UIElementRef>& getChildren() const { return _children; }
     /// Children stably sorted by _zOrder ascending.
     [[nodiscard]] std::vector<UIElement*> getChildrenInPaintOrder() const;
+    /// Active parent-child edge object, or null only for the internal root /
+    /// a detached widget. Slots are owned by the visual parent, never by the
+    /// child, and are recreated on reparent.
+    [[nodiscard]] UISlot* getSlot() const;
+    [[nodiscard]] UISlot* getSlotForChild(const UIElement& child) const;
 
     // === Layout (top-down, called by WidgetTree::layout) ===
     /// Compute this element's rect within `parentRect` (anchor math), store it
@@ -213,6 +231,21 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
     /// Return true to consume the event. `ctx.logicalPoint` is in tree-local
     /// logical pixels; hit-test against _layoutRect.
     virtual bool handleInputEvent(const Event& event, const WidgetEventContext& ctx);
+    /// Root-to-target route hook. The default is deliberately passive:
+    /// existing controls retain their target behavior until they explicitly
+    /// opt into preview semantics.
+    virtual bool previewInputEvent(const Event& event, const WidgetEventContext& ctx)
+    {
+        (void)event;
+        (void)ctx;
+        return false;
+    }
+    /// Target-to-root route hook. The default preserves the established
+    /// parent handling behavior for controls such as nested scroll viewports.
+    virtual bool bubbleInputEvent(const Event& event, const WidgetEventContext& ctx)
+    {
+        return handleInputEvent(event, ctx);
+    }
     /// Clear transient input state (e.g. button hover) before a MouseMoved
     /// hit-test pass.
     virtual void resetHoverState() {}
@@ -283,6 +316,9 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
     void paintChildren(UIFrameBuilder& builder);
     /// Subclasses draw themselves here (base: no-op).
     virtual void paintSelf(UIFrameBuilder& builder) { (void)builder; }
+    /// Factory for one parent-owned child edge. Generic elements create a
+    /// plain UISlot; layout hosts override with a concrete slot type.
+    [[nodiscard]] virtual std::unique_ptr<UISlot> createSlotForChild(UIElement& child);
 
   private:
     friend struct WidgetTree;
@@ -292,6 +328,7 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
     /// Visual parent / tree hold strong references to children; the child
     /// points back with a raw (non-owning) pointer.
     std::vector<UIElementRef> _children;
+    std::vector<std::unique_ptr<UISlot>> _childSlots;
     UIElement*                _parent = nullptr;
     WidgetTree*               _tree   = nullptr;
 
@@ -299,6 +336,10 @@ struct UIElement : public std::enable_shared_from_this<UIElement>
     /// owning module alive and decrements its live-instance count when this
     /// element is destroyed.
     std::shared_ptr<void> _moduleLease;
+
+    void appendChildEdge(const UIElementRef& child);
+    void insertChildEdge(size_t index, const UIElementRef& child);
+    void removeChildEdge(UIElement& child);
 };
 
 } // namespace ya

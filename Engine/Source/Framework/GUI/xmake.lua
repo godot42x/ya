@@ -19,6 +19,9 @@ includes("./App/xmake.lua")
 -- ya-gui-app-host. Executable consumers link that host directly.
 target("ya-gui-framework")
     set_kind(ya_meta_kind())
+    -- Single empty TU so the shared facade has a DLL entry point (the target
+    -- itself carries no real sources; see Module.cpp).
+    add_files("Module.cpp", { unity_ignored = true })
     add_deps(
         "ya-foundation-core",
         "ya-hierarchy",

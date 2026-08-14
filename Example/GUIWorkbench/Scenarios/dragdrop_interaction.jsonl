@@ -1,0 +1,11 @@
+# GUIWorkbench --start-page=DragDrop. Coordinates target the first source row
+# and the center of DropZone at the stable 1280x800 logical extent.
+{"frame":2}
+{"assert":{"widget":"Drag_asset.texture.diffuse","rect":{"w":160.0,"h":30.0}}}
+{"checkpoint":"initial"}
+{"drag":{"from":[96,122],"to":[640,207],"steps":8}}
+{"frame":2}
+{"assert":{"lastRoute":{"policyName":"dragSession","target":"DropZone"}}}
+{"assert":{"layers":{"DragIme":{"children":[]}}}}
+{"checkpoint":"payload_dropped"}
+{"frame":1}

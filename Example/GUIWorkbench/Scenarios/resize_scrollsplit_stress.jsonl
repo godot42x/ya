@@ -1,0 +1,15 @@
+{"checkpoint":"initial"}
+{"frame":2}
+{"window_size":{"width":960,"height":640}}
+{"frame":3}
+{"checkpoint":"after_960x640"}
+{"window_size":{"width":1440,"height":900}}
+{"frame":3}
+{"checkpoint":"after_1440x900"}
+{"window_size":{"width":800,"height":600}}
+{"frame":3}
+{"checkpoint":"after_800x600"}
+{"window_size":{"width":1280,"height":800}}
+{"frame":3}
+{"checkpoint":"after_1280x800"}
+{"frame":1}

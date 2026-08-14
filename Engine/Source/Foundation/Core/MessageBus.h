@@ -16,7 +16,7 @@
 namespace ya
 {
 
-struct MessageBus
+struct YA_CORE_API MessageBus
 {
 
 
@@ -209,6 +209,27 @@ struct MessageBus
             for (const EventSubscriber &subscriber : it->second)
             {
                 subscriber.cb((void *)&event);
+            }
+        }
+    }
+
+    /// Runtime-typed event publication for AppKernel/IAppEventSource bridges.
+    /// The existing template remains the preferred path for concrete event
+    /// callers; this overload preserves the same subscriber map semantics
+    /// when the static type is only the Event base class.
+    void publishEvent(const Event& event)
+    {
+        if (auto it = _eventSubscribers.find(event.getEventType()); it != _eventSubscribers.end())
+        {
+            it->second.erase(
+                std::remove_if(it->second.begin(), it->second.end(), [](const EventSubscriber &subscriber) {
+                    return subscriber.context.has_value() && subscriber.context.value() == nullptr;
+                }),
+                it->second.end());
+
+            for (const EventSubscriber &subscriber : it->second)
+            {
+                subscriber.cb(const_cast<Event*>(&event));
             }
         }
     }

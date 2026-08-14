@@ -32,6 +32,7 @@
 #include "Host/GUI/GameUI/GameUIHost.h"
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "GUI/Compose/Render2DComposePass.h"
+#include "GUI/Compose/GUIRenderSurface.h"
 #include "Editor/Panels/GUIWorkbenchPanel.h"
 #include "Render3D/RenderRuntime.h"
 #include "Scene/Core/Scene.h"
@@ -496,17 +497,17 @@ class EditorViewportCompositor
 class EditorToolSurfaceCompositor
 {
   private:
-    std::shared_ptr<RenderImage> _composedImage = nullptr;
+    std::shared_ptr<GUIRenderSurface> _surface = nullptr;
 
   public:
     void shutdown()
     {
-        _composedImage.reset();
+        _surface.reset();
     }
 
     [[nodiscard]] std::shared_ptr<RenderImage> getOutputImage() const
     {
-        return _composedImage;
+        return _surface ? _surface->getRenderImage() : nullptr;
     }
 
     void compose(IRender& render, ICommandBuffer& commandBuffer, GUIWorkbenchPanel& panel)
@@ -517,31 +518,40 @@ class EditorToolSurfaceCompositor
 
         const Extent2D extent = panel.getLogicalExtent();
         ensureTarget(render, extent);
-        if (!_composedImage || !_composedImage->isValid()) {
+        if (!_surface || !_surface->isValid()) {
             return;
         }
 
         const UIFrameSnapshot snapshot = panel.buildSnapshot();
-        recordRender2DComposePass(&commandBuffer,
-                                  *_composedImage,
-                                  nullptr,
-                                  &snapshot,
-                                  FRender2DComposePassDesc{
-                                      .kind = ERender2DComposePassKind::EditorToolSurface,
-                                      .logicalViewportExtent = extent,
-                                  });
+        _surface->prepare(FRender2DComposePassDesc{
+            .kind = ERender2DComposePassKind::EditorToolSurface,
+        });
+        _surface->record(&commandBuffer,
+                         nullptr,
+                         &snapshot,
+                         FRender2DComposePassDesc{
+                             .kind = ERender2DComposePassKind::EditorToolSurface,
+                             .logicalViewportExtent = extent,
+                         });
     }
 
   private:
     void ensureTarget(IRender& render, const Extent2D& extent)
     {
-        if (_composedImage &&
-            _composedImage->getWidth() == extent.width &&
-            _composedImage->getHeight() == extent.height &&
-            _composedImage->getFormat() == EFormat::R16G16B16A16_SFLOAT) {
+        if (_surface &&
+            _surface->isValid() &&
+            _surface->getRenderImage()->getWidth() == extent.width &&
+            _surface->getRenderImage()->getHeight() == extent.height &&
+            _surface->getRenderImage()->getFormat() == EFormat::R16G16B16A16_SFLOAT) {
             return;
         }
-        _composedImage = createEditorViewportImage(render, extent);
+        _surface = GUIRenderSurface::createOffscreen(
+            *render.getResourceFactory(),
+            FGUIRenderSurfaceDesc{
+                .label       = "EditorToolSurface",
+                .extent      = extent,
+                .colorFormat = EFormat::R16G16B16A16_SFLOAT,
+            });
     }
 };
 

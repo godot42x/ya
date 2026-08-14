@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/UIElement.h"
 
 #include <functional>
@@ -19,14 +20,13 @@ namespace ya
 ///   - detach while pressed clears all transient state (tree + widget).
 /// Click callback is runtime-only (not serialized); hit testing is driven by
 /// the tree walker.
-struct UIButton : public UIElement
+struct YA_GUI_API UIButton : public UIElement
 {
     YA_REFLECT_BEGIN(UIButton, UIElement)
     YA_REFLECT_FIELD(_normalColor, .instanceEditable())
     YA_REFLECT_FIELD(_hoveredColor, .instanceEditable())
     YA_REFLECT_FIELD(_pressedColor, .instanceEditable())
     YA_REFLECT_FIELD(_focusedColor, .instanceEditable())
-    YA_REFLECT_FIELD(_contentPadding, .instanceEditable())
     YA_REFLECT_END()
 
     explicit UIButton(std::string name = "Button") : UIElement(std::move(name))
@@ -34,6 +34,7 @@ struct UIButton : public UIElement
         _hitFilter = EWidgetHitFilter::Stop;
         // Buttons take part in Tab traversal (focus contract, Phase 2).
         _focusPolicy = EWidgetFocusPolicy::Focusable;
+        _contentLayout.setOwner(*this);
     }
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIButton>; }
@@ -43,10 +44,10 @@ struct UIButton : public UIElement
     glm::vec4 _pressedColor = {0.4f, 0.4f, 0.4f, 1.0f};
     glm::vec4 _focusedColor = {0.26f, 0.52f, 0.90f, 1.0f};
 
-    /// Content-slot inset: the content child is arranged inside the button
-    /// rect shrunk by this padding on both sides. Also added to the content
-    /// child's desired size when the button is AutoSize.
-    glm::vec2 _contentPadding = {10.0f, 4.0f};
+    [[nodiscard]] UISingleChildLayout& getContentLayout() { return _contentLayout; }
+    [[nodiscard]] const UISingleChildLayout& getContentLayout() const { return _contentLayout; }
+    void setContentPadding(glm::vec2 value) { _contentLayout.setPadding(value); }
+    [[nodiscard]] const glm::vec2& getContentPadding() const { return _contentLayout.getPadding(); }
 
     // Runtime-only state (not serialized)
     bool                  _bHovered = false;
@@ -62,13 +63,16 @@ struct UIButton : public UIElement
     void onFocusLost() override { _bFocused = false; }
 
     // Content-slot layout (Slate ContentControl model): the button resolves
-    // its own rect (anchor math) and arranges its content children inside the
-    // rect minus _contentPadding via layoutAssigned (no anchor math). With
+    // its own rect (anchor math) and delegates its only child to
+    // UISingleChildLayout. With
     // base _bAutoSize set, desired size = first visible content child's
     // desired size + padding, so a text/image label sizes the button.
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
+
+private:
+    UISingleChildLayout _contentLayout;
 };
 
 } // namespace ya

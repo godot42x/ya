@@ -30,7 +30,7 @@ enum class EWidgetRouteResult : uint8_t;
 namespace guiworkbench
 {
 
-class FWorkbenchSurface
+class YA_GUI_API FWorkbenchSurface
 {
   public:
     /// App-provided demo page builder: builds one page into `parent` (the

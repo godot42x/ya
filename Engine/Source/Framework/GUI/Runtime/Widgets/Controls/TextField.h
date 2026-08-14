@@ -20,7 +20,7 @@ namespace ya
 ///     loss — the workspace owns the text fact source, the field only edits
 ///     its own buffer;
 ///   - detach clears all transient state via the tree contract.
-struct UITextField : public UIElement
+struct YA_GUI_API UITextField : public UIElement
 {
     YA_REFLECT_BEGIN(UITextField, UIElement)
     YA_REFLECT_FIELD(_text, .instanceEditable())

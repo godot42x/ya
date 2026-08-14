@@ -7,6 +7,8 @@
 // FontManager::registerFont (synthetic glyph data, no GPU).
 
 #include "GUI/Widgets/WidgetTree.h"
+#include "GUI/Widgets/WidgetTreeDump.h"
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Panel.h"
@@ -18,6 +20,7 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <memory>
 
 namespace ya
@@ -77,7 +80,7 @@ std::shared_ptr<UIButton> makeAutoButton(const std::string& name, const std::str
 {
     auto button = std::make_shared<UIButton>(name);
     button->_bAutoSize = true;
-    button->_contentPadding = {10.0f, 4.0f};
+    button->setContentPadding({10.0f, 4.0f});
     auto label = makeAutoText(labelText);
     label->_hAlign = EWidgetAlignH::Center;
     label->_vAlign = EWidgetAlignV::Center;
@@ -152,9 +155,9 @@ TEST(WidgetLayoutTest, ButtonAutoSizeInContainerPacksAndFills)
     toolbar->_anchorMin = {0.0f, 0.0f};
     toolbar->_anchorMax = {1.0f, 0.0f};
     toolbar->_size      = {0.0f, 40.0f};
-    toolbar->_direction = EWidgetBoxLayout::Horizontal;
-    toolbar->_spacing   = 8.0f;
-    toolbar->_padding   = {6.0f, 6.0f};
+    toolbar->setDirection(EWidgetBoxLayout::Horizontal);
+    toolbar->setSpacing(8.0f);
+    toolbar->setPadding({6.0f, 6.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, toolbar);
 
     auto addBtn = makeAutoButton("Add", "Add");
@@ -183,7 +186,7 @@ TEST(WidgetLayoutTest, ButtonExplicitSizeInContainerKeepsItsWidth)
     registerSyntheticFont(16, 8.0f);
     WidgetTree tree({.width = 400, .height = 200});
     auto row = std::make_shared<UIContainer>("Row");
-    row->_direction = EWidgetBoxLayout::Horizontal;
+    row->setDirection(EWidgetBoxLayout::Horizontal);
     row->_anchorMin = {0.0f, 0.0f};
     row->_anchorMax = {1.0f, 0.0f};
     row->_size      = {0.0f, 40.0f};
@@ -232,9 +235,9 @@ TEST(WidgetLayoutTest, ContainerAutoSizesToChildrenSum)
     WidgetTree tree({.width = 400, .height = 300});
     auto vbox = std::make_shared<UIContainer>("VBox");
     vbox->_bAutoSize  = true;
-    vbox->_direction  = EWidgetBoxLayout::Vertical;
-    vbox->_spacing    = 4.0f;
-    vbox->_padding    = {8.0f, 8.0f};
+    vbox->setDirection(EWidgetBoxLayout::Vertical);
+    vbox->setSpacing(4.0f);
+    vbox->setPadding({8.0f, 8.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, vbox);
 
     auto btnA = makeAutoButton("A", "One");
@@ -262,16 +265,16 @@ TEST(WidgetLayoutTest, NestedContainersPropagateDesiredSizes)
     WidgetTree tree({.width = 600, .height = 400});
     auto hbox = std::make_shared<UIContainer>("HBox");
     hbox->_bAutoSize = true;
-    hbox->_direction = EWidgetBoxLayout::Horizontal;
-    hbox->_spacing   = 6.0f;
-    hbox->_padding   = {4.0f, 4.0f};
+    hbox->setDirection(EWidgetBoxLayout::Horizontal);
+    hbox->setSpacing(6.0f);
+    hbox->setPadding({4.0f, 4.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, hbox);
 
     auto innerV = std::make_shared<UIContainer>("InnerV");
     innerV->_bAutoSize = true;
-    innerV->_direction = EWidgetBoxLayout::Vertical;
-    innerV->_spacing   = 2.0f;
-    innerV->_padding   = {0.0f, 0.0f};
+    innerV->setDirection(EWidgetBoxLayout::Vertical);
+    innerV->setSpacing(2.0f);
+    innerV->setPadding({0.0f, 0.0f});
     auto t1 = makeAutoText("AB", 16); // 2x8 = 16
     auto t2 = makeAutoText("CDE", 16); // 3x8 = 24
     innerV->addDetachedChild(t1);
@@ -303,8 +306,8 @@ TEST(WidgetLayoutTest, ScrollViewportContentMainUsesAutoSizeChild)
     tree.attachToLayer(WidgetTree::ELayer::Content, scroll);
 
     auto content = std::make_shared<UIContainer>("Content");
-    content->_direction = EWidgetBoxLayout::Vertical;
-    content->_spacing   = 2.0f;
+    content->setDirection(EWidgetBoxLayout::Vertical);
+    content->setSpacing(2.0f);
     for (int i = 0; i < 20; ++i) {
         content->addDetachedChild(makeAutoText("line", 16));
     }
@@ -325,7 +328,7 @@ TEST(WidgetLayoutTest, SplitPaneDesiredSizeAggregatesAutoChildren)
     WidgetTree tree({.width = 400, .height = 300});
     auto split = std::make_shared<UISplitPane>("Split");
     split->_bAutoSize = true;
-    split->_splitRatio = 0.5f;
+    split->setSplitRatio(0.5f);
     tree.attachToLayer(WidgetTree::ELayer::Content, split);
 
     auto left = makeAutoButton("L", "Left");
@@ -338,6 +341,168 @@ TEST(WidgetLayoutTest, SplitPaneDesiredSizeAggregatesAutoChildren)
     // "Left" = 4x8+20 = 52, "Right Side" = 10x8+20 = 100.
     EXPECT_GT(split->_layoutRect.extent.x, 150.0f);
     EXPECT_GT(split->_layoutRect.extent.y, 20.0f);
+}
+
+TEST(WidgetLayoutTest, BoxSlotsAreParentOwnedAndRecreatedOnReparent)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    auto first = std::make_shared<UIContainer>("First");
+    auto second = std::make_shared<UIContainer>("Second");
+    first->_size = {200.0f, 100.0f};
+    second->_position = {200.0f, 0.0f};
+    second->_size = {200.0f, 100.0f};
+    tree.attachToLayer(WidgetTree::ELayer::Content, first);
+    tree.attachToLayer(WidgetTree::ELayer::Content, second);
+
+    auto child = std::make_shared<UIPanel>("Child");
+    child->_size = {20.0f, 20.0f};
+    tree.attach(*first, child);
+
+    auto* firstSlot = first->getBoxSlot(*child);
+    ASSERT_NE(firstSlot, nullptr);
+    EXPECT_EQ(child->getSlot(), firstSlot);
+    tree.layout();
+    EXPECT_TRUE(tree.isLayoutValid());
+    firstSlot->setMargin({3.0f, 2.0f});
+    EXPECT_FALSE(tree.isLayoutValid());
+
+    tree.reparent(*second, child);
+    auto* secondSlot = second->getBoxSlot(*child);
+    ASSERT_NE(secondSlot, nullptr);
+    EXPECT_EQ(child->getSlot(), secondSlot);
+    EXPECT_EQ(&secondSlot->getParent(), second.get());
+    EXPECT_EQ(&secondSlot->getChild(), child.get());
+    EXPECT_EQ(first->getBoxSlot(*child), nullptr);
+
+    tree.detach(*child);
+    EXPECT_EQ(child->getSlot(), nullptr);
+    EXPECT_EQ(second->getBoxSlot(*child), nullptr);
+}
+
+TEST(WidgetLayoutTest, BoxSlotFillMarginAndCrossAlignmentArrangeWithoutContainerFields)
+{
+    WidgetTree tree({.width = 300, .height = 120});
+    auto box = std::make_shared<UIContainer>("Box");
+    box->_size = {300.0f, 120.0f};
+    box->setDirection(EWidgetBoxLayout::Horizontal);
+    box->setPadding({10.0f, 10.0f});
+    box->setSpacing(5.0f);
+    tree.attachToLayer(WidgetTree::ELayer::Content, box);
+
+    auto fixed = std::make_shared<UIPanel>("Fixed");
+    fixed->_size = {50.0f, 20.0f};
+    auto fill = std::make_shared<UIPanel>("Fill");
+    fill->_size = {10.0f, 20.0f};
+    tree.attach(*box, fixed);
+    tree.attach(*box, fill);
+    auto* fillSlot = box->getBoxSlot(*fill);
+    ASSERT_NE(fillSlot, nullptr);
+    fillSlot->setSizeRule(EUIBoxSlotSizeRule::Fill);
+    fillSlot->setMargin({4.0f, 0.0f});
+    fillSlot->setCrossAlignment(EUIBoxSlotCrossAlignment::Center);
+
+    tree.layout();
+    EXPECT_FLOAT_EQ(fixed->_layoutRect.pos.x, 10.0f);
+    EXPECT_FLOAT_EQ(fixed->_layoutRect.extent.x, 50.0f);
+    EXPECT_FLOAT_EQ(fill->_layoutRect.pos.x, 69.0f);
+    EXPECT_FLOAT_EQ(fill->_layoutRect.extent.x, 217.0f);
+    EXPECT_FLOAT_EQ(fill->_layoutRect.extent.y, 20.0f);
+    EXPECT_FLOAT_EQ(fill->_layoutRect.pos.y, 50.0f);
+
+    const auto dump = dumpWidgetTree(tree);
+    const auto* boxNode = findWidgetNode(dump, "Box");
+    const auto* fillNode = findWidgetNode(dump, "Fill");
+    ASSERT_NE(boxNode, nullptr);
+    ASSERT_NE(fillNode, nullptr);
+    EXPECT_EQ((*boxNode)["layout"]["type"], "box");
+    EXPECT_EQ((*boxNode)["layout"]["direction"], "horizontal");
+    EXPECT_EQ((*fillNode)["slot"]["sizeRule"], "fill");
+}
+
+TEST(WidgetLayoutTest, BoxSlotsKeepEdgeStateLocalAcrossNestedReparent)
+{
+    WidgetTree tree({.width = 320, .height = 180});
+    auto outer = std::make_shared<UIContainer>("Outer");
+    outer->_size = {320.0f, 180.0f};
+    outer->setDirection(EWidgetBoxLayout::Vertical);
+    outer->setPadding({10.0f, 10.0f});
+    outer->setSpacing(4.0f);
+    tree.attachToLayer(WidgetTree::ELayer::Content, outer);
+
+    auto inner = std::make_shared<UIContainer>("Inner");
+    inner->setDirection(EWidgetBoxLayout::Horizontal);
+    auto sibling = std::make_shared<UIPanel>("Sibling");
+    sibling->_size = {40.0f, 20.0f};
+    auto child = std::make_shared<UIPanel>("Child");
+    child->_size = {20.0f, 20.0f};
+
+    tree.attach(*outer, inner);
+    tree.attach(*outer, sibling);
+    tree.attach(*inner, child);
+
+    auto* innerSlot = outer->getBoxSlot(*inner);
+    auto* childSlot = inner->getBoxSlot(*child);
+    ASSERT_NE(innerSlot, nullptr);
+    ASSERT_NE(childSlot, nullptr);
+    innerSlot->setSizeRule(EUIBoxSlotSizeRule::Fill);
+    innerSlot->setWeight(2.0f);
+    childSlot->setSizeRule(EUIBoxSlotSizeRule::Fill);
+    childSlot->setMargin({3.0f, 2.0f});
+
+    tree.layout();
+    EXPECT_EQ(child->getSlot(), childSlot);
+    EXPECT_EQ(&childSlot->getParent(), inner.get());
+    EXPECT_EQ(childSlot->getSizeRule(), EUIBoxSlotSizeRule::Fill);
+    EXPECT_EQ(childSlot->getMargin(), glm::vec2(3.0f, 2.0f));
+
+    tree.reparent(*outer, child);
+    auto* reparentedSlot = outer->getBoxSlot(*child);
+    ASSERT_NE(reparentedSlot, nullptr);
+    EXPECT_EQ(child->getSlot(), reparentedSlot);
+    EXPECT_EQ(&reparentedSlot->getParent(), outer.get());
+    EXPECT_EQ(inner->getBoxSlot(*child), nullptr);
+    EXPECT_EQ(reparentedSlot->getSizeRule(), EUIBoxSlotSizeRule::Auto);
+    EXPECT_EQ(reparentedSlot->getMargin(), glm::vec2(0.0f, 0.0f));
+
+    reparentedSlot->setSizeRule(EUIBoxSlotSizeRule::Fill);
+    reparentedSlot->setWeight(1.0f);
+    tree.layout();
+    const auto dump = dumpWidgetTree(tree);
+    const auto* childNode = findWidgetNode(dump, "Child");
+    ASSERT_NE(childNode, nullptr);
+    EXPECT_EQ((*childNode)["slot"]["parent"], "Outer");
+    EXPECT_EQ((*childNode)["slot"]["sizeRule"], "fill");
+}
+
+TEST(WidgetLayoutTest, BoxSlotsControlHiddenParticipationAndFillBounds)
+{
+    WidgetTree tree({.width = 200, .height = 120});
+    auto box = std::make_shared<UIContainer>("Box");
+    box->_size = {200.0f, 120.0f};
+    box->setDirection(EWidgetBoxLayout::Vertical);
+    box->setMainAxisAlignment(EWidgetMainAxisAlignment::End);
+    tree.attachToLayer(WidgetTree::ELayer::Content, box);
+
+    auto hidden = std::make_shared<UIPanel>("Hidden");
+    hidden->_size       = {100.0f, 20.0f};
+    hidden->_visibility = EWidgetVisibility::Hidden;
+    auto fill = std::make_shared<UIPanel>("Fill");
+    fill->_size = {100.0f, 10.0f};
+    tree.attach(*box, hidden);
+    tree.attach(*box, fill);
+
+    auto* hiddenSlot = box->getBoxSlot(*hidden);
+    auto* fillSlot = box->getBoxSlot(*fill);
+    ASSERT_NE(hiddenSlot, nullptr);
+    ASSERT_NE(fillSlot, nullptr);
+    hiddenSlot->setReserveSpaceWhenHidden(false);
+    fillSlot->setSizeRule(EUIBoxSlotSizeRule::Fill);
+    fillSlot->setMinSize({0.0f, 30.0f});
+    fillSlot->setMaxSize({std::numeric_limits<float>::max(), 40.0f});
+
+    tree.layout();
+    EXPECT_FLOAT_EQ(fill->_layoutRect.extent.y, 40.0f);
+    EXPECT_FLOAT_EQ(fill->_layoutRect.pos.y, 80.0f);
 }
 
 } // namespace ya

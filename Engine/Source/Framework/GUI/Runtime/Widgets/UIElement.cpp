@@ -2,6 +2,8 @@
 
 #include "Core/Log.h"
 #include "Core/Reflection/ReflectionSerializer.h"
+#include "GUI/Layout/UILayout.h"
+#include "GUI/Widgets/WidgetTree.h"
 
 #include <algorithm>
 
@@ -38,6 +40,20 @@ std::vector<UIElement*> UIElement::getChildrenInPaintOrder() const
         return a->_zOrder < b->_zOrder;
     });
     return children;
+}
+
+UISlot* UIElement::getSlot() const
+{
+    return _parent ? _parent->getSlotForChild(*this) : nullptr;
+}
+
+UISlot* UIElement::getSlotForChild(const UIElement& child) const
+{
+    const auto it = std::find_if(_childSlots.begin(), _childSlots.end(),
+                                 [&child](const std::unique_ptr<UISlot>& slot) {
+                                     return &slot->getChild() == &child;
+                                 });
+    return it != _childSlots.end() ? it->get() : nullptr;
 }
 
 // === Effective-state queries ===
@@ -181,8 +197,48 @@ void UIElement::addDetachedChild(const UIElementRef& child)
                       child->_name);
         return;
     }
+    appendChildEdge(child);
+}
+
+std::unique_ptr<UISlot> UIElement::createSlotForChild(UIElement& child)
+{
+    return std::make_unique<UISlot>(*this, child);
+}
+
+void UIElement::appendChildEdge(const UIElementRef& child)
+{
     child->_parent = this;
-    _children.push_back(std::move(child));
+    _children.push_back(child);
+    _childSlots.push_back(createSlotForChild(*child));
+    if (_tree) {
+        WidgetTree::markSubtreeMembership(child.get(), _tree);
+    }
+}
+
+void UIElement::insertChildEdge(size_t index, const UIElementRef& child)
+{
+    child->_parent = this;
+    const size_t insertAt = std::min(index, _children.size());
+    _children.insert(_children.begin() + static_cast<std::ptrdiff_t>(insertAt), child);
+    _childSlots.insert(_childSlots.begin() + static_cast<std::ptrdiff_t>(insertAt), createSlotForChild(*child));
+    if (_tree) {
+        WidgetTree::markSubtreeMembership(child.get(), _tree);
+    }
+}
+
+void UIElement::removeChildEdge(UIElement& child)
+{
+    const auto childIt = std::find_if(_children.begin(), _children.end(),
+                                      [&child](const UIElementRef& ref) { return ref.get() == &child; });
+    if (childIt == _children.end()) {
+        return;
+    }
+    const size_t index = static_cast<size_t>(std::distance(_children.begin(), childIt));
+    _children.erase(childIt);
+    if (index < _childSlots.size()) {
+        _childSlots.erase(_childSlots.begin() + static_cast<std::ptrdiff_t>(index));
+    }
+    child._parent = nullptr;
 }
 
 // === Field serialization ===

@@ -12,7 +12,7 @@
 // recreates the whole set at frame boundaries after swapchain recreation.
 // ============================================================================
 
-#include "RHI/Core/RenderImage.h"
+#include "GUI/Compose/GUIRenderSurface.h"
 
 #include <memory>
 #include <vector>
@@ -23,7 +23,7 @@ namespace ya
 struct IRender;
 struct VulkanSwapChain;
 
-/// One imported swapchain image + default view.
+/// One imported swapchain image wrapped as an external GUI render surface.
 struct GUIPresentationTarget final
 {
     /// Rebuild `outTargets` from the current swapchain (clears it first).
@@ -34,7 +34,7 @@ struct GUIPresentationTarget final
                          const char*                                              labelPrefix,
                          std::vector<std::shared_ptr<GUIPresentationTarget>>& outTargets);
 
-    std::shared_ptr<RenderImage> renderImage;
+    std::shared_ptr<GUIRenderSurface> renderSurface;
 };
 
 } // namespace ya

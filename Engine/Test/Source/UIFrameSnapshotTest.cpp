@@ -4,6 +4,7 @@
 // detached right after build without invalidating the packet).
 
 #include "GUI/Widgets/UIFrameSnapshot.h"
+#include "GUI/Widgets/UIFrameSnapshotDump.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
@@ -52,7 +53,7 @@ TEST(UIFrameSnapshotTest, ContainerClipResolvesOnChildren)
     auto       clip = std::make_shared<UIContainer>("Clip");
     clip->_position = {0.0f, 0.0f};
     clip->_size     = {200.0f, 100.0f};
-    clip->_bClipChildren = true;
+    clip->setClipChildren(true);
     auto child = std::make_shared<UIPanel>("Child");
     // Box layout places the child at the content origin with its desired
     // size: 300px wide inside a 200px clip -> the item is half outside.
@@ -123,6 +124,33 @@ TEST(UIFrameSnapshotTest, LayoutRunsWhenDirtyDuringSnapshot)
     ASSERT_EQ(snapshot.items.size(), 1u);
     EXPECT_EQ(snapshot.items[0].pos, glm::vec2(5.0f, 5.0f));
     EXPECT_EQ(snapshot.items[0].size, glm::vec2(50.0f, 25.0f));
+}
+
+TEST(UIFrameSnapshotTest, StructuralDumpAndDigestTrackVisualPacketOnly)
+{
+    UIFrameSnapshot first;
+    first.logicalExtent = {320, 200};
+    first.items.push_back(UIFrameDrawItem{
+        .kind  = UIFrameDrawItem::EKind::Sprite,
+        .pos   = {12.0f, 24.0f},
+        .size  = {48.0f, 36.0f},
+        .color = {0.1f, 0.2f, 0.3f, 1.0f},
+    });
+
+    UIFrameSnapshot sameVisual = first;
+    EXPECT_EQ(digestUIFrameSnapshot(first), digestUIFrameSnapshot(sameVisual));
+    EXPECT_EQ(semanticDigestUIFrameSnapshot(first), semanticDigestUIFrameSnapshot(sameVisual));
+
+    sameVisual.items.front().size.x = 49.0f;
+    EXPECT_NE(digestUIFrameSnapshot(first), digestUIFrameSnapshot(sameVisual));
+    EXPECT_EQ(semanticDigestUIFrameSnapshot(first), semanticDigestUIFrameSnapshot(sameVisual));
+
+    sameVisual.items.front().color.r = 0.2f;
+    EXPECT_NE(semanticDigestUIFrameSnapshot(first), semanticDigestUIFrameSnapshot(sameVisual));
+
+    const auto dump = dumpUIFrameSnapshot(first);
+    EXPECT_EQ(dump["logicalExtent"]["width"], 320u);
+    EXPECT_EQ(dump["items"][0]["kind"], "sprite");
 }
 
 } // namespace ya

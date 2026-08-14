@@ -21,6 +21,7 @@
 #include "GUI/Compose/Render2DComposePass.h"
 #include "GUI/Resources/FontManager.h"
 #include "GUI/Draw2D/Render2D.h"
+#include "GUI/Widgets/UIFrameSnapshotDump.h"
 #include "GUI/Widgets/WidgetTreeDump.h"
 
 #include <SDL3/SDL.h>
@@ -95,7 +96,7 @@ std::shared_ptr<Texture> resolveBuiltinTexture(const std::string& assetPath)
     return nullptr;
 }
 
-void appendDebugRenderOverlay(UIFrameSnapshot& snapshot)
+void appendDebugRenderOverlay(UIFrameSnapshot& snapshot, const WidgetTree& tree)
 {
     const float w = static_cast<float>(snapshot.logicalExtent.width);
     const float h = static_cast<float>(snapshot.logicalExtent.height);
@@ -168,6 +169,131 @@ void appendDebugRenderOverlay(UIFrameSnapshot& snapshot)
 
     addRect({0.0f, 0.0f}, {12.0f, 12.0f}, {1.0f, 0.95f, 0.20f, 0.95f});
     addRect({midX - 3.0f, midY - 3.0f}, {7.0f, 7.0f}, {0.95f, 0.95f, 0.95f, 0.85f});
+
+    const auto addPath = [&addOutline](const std::vector<UIElement*>& path, glm::vec4 color)
+    {
+        for (size_t index = 0; index < path.size(); ++index) {
+            glm::vec4 stepColor = color;
+            stepColor.a *= 0.35f + 0.65f *
+                                        (static_cast<float>(index + 1) /
+                                         static_cast<float>(std::max<size_t>(path.size(), 1)));
+            addOutline(path[index]->_layoutRect, stepColor);
+        }
+    };
+
+    // Route overlay is intentionally derived from tree-owned diagnostics and
+    // converted to snapshot items before command recording. Render2D never
+    // reads the live tree.
+    addPath(tree.getPointerPath(), {1.0f, 0.55f, 0.12f, 0.95f});
+    addPath(tree.getFocusPath(), {0.20f, 0.82f, 1.0f, 0.95f});
+    if (const UIElement* captured = tree.getPointerCapture()) {
+        addOutline(captured->_layoutRect, {1.0f, 0.18f, 0.72f, 0.98f});
+    }
+    if (const UIElement* hovered = tree.getHovered()) {
+        addOutline(hovered->_layoutRect, {0.95f, 0.95f, 0.22f, 0.98f});
+    }
+    if (tree.getPointerState().bKnown) {
+        const glm::vec2 p = tree.getPointerState().logicalPoint;
+        addRect(p - glm::vec2(4.0f, 0.5f), {8.0f, 1.0f}, {1.0f, 0.72f, 0.18f, 0.95f});
+        addRect(p - glm::vec2(0.5f, 4.0f), {1.0f, 8.0f}, {1.0f, 0.72f, 0.18f, 0.95f});
+    }
+}
+
+bool jsonContains(const nlohmann::json& actual,
+                  const nlohmann::json& expected,
+                  std::string_view path,
+                  std::string& error)
+{
+    // Numeric predicates keep resize/drag scenarios semantic: they can
+    // assert that geometry changed without baking one machine's exact float
+    // result into every checkpoint.
+    if (expected.is_object() &&
+        (expected.contains("$gt") || expected.contains("$gte") ||
+         expected.contains("$lt") || expected.contains("$lte"))) {
+        if (!actual.is_number()) {
+            error = std::format("{}: comparison requires a number, got {}", path, actual.type_name());
+            return false;
+        }
+        const double value = actual.get<double>();
+        const auto check = [&](const char* op, const std::function<bool(double, double)>& predicate) {
+            const auto it = expected.find(op);
+            if (it == expected.end()) {
+                return true;
+            }
+            if (!it->is_number()) {
+                error = std::format("{}: {} must be numeric", path, op);
+                return false;
+            }
+            if (!predicate(value, it->get<double>())) {
+                error = std::format("{}: {} {} {} failed", path, value, op, it->dump());
+                return false;
+            }
+            return true;
+        };
+        return check("$gt", [](double lhs, double rhs) { return lhs > rhs; }) &&
+               check("$gte", [](double lhs, double rhs) { return lhs >= rhs; }) &&
+               check("$lt", [](double lhs, double rhs) { return lhs < rhs; }) &&
+               check("$lte", [](double lhs, double rhs) { return lhs <= rhs; });
+    }
+    if (expected.is_object()) {
+        if (!actual.is_object()) {
+            error = std::format("{}: expected object, got {}", path, actual.type_name());
+            return false;
+        }
+        for (const auto& entry : expected.items()) {
+            const auto actualIt = actual.find(entry.key());
+            if (actualIt == actual.end()) {
+                error = std::format("{}: missing field '{}'", path, entry.key());
+                return false;
+            }
+            if (!jsonContains(*actualIt, entry.value(),
+                              std::format("{}.{}", path, entry.key()), error)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    if (expected.is_array()) {
+        if (actual != expected) {
+            error = std::format("{}: expected array {} but got {}", path, expected.dump(), actual.dump());
+            return false;
+        }
+        return true;
+    }
+    if (actual != expected) {
+        error = std::format("{}: expected {} but got {}", path, expected.dump(), actual.dump());
+        return false;
+    }
+    return true;
+}
+
+bool assertScenarioTree(const WidgetTree& tree, std::string_view assertion, std::string& error)
+{
+    nlohmann::json expected;
+    try {
+        expected = nlohmann::json::parse(assertion);
+    }
+    catch (const std::exception& e) {
+        error = std::format("invalid assertion JSON: {}", e.what());
+        return false;
+    }
+
+    const nlohmann::json treeDump = dumpWidgetTree(tree);
+    if (const auto widgetIt = expected.find("widget"); widgetIt != expected.end()) {
+        if (!widgetIt->is_string()) {
+            error = "widget assertion selector must be a string";
+            return false;
+        }
+        const std::string widgetName = widgetIt->get<std::string>();
+        const nlohmann::json* node = findWidgetNode(treeDump, widgetName);
+        if (!node) {
+            error = std::format("widget '{}' not found", widgetName);
+            return false;
+        }
+        expected.erase(widgetIt);
+        return jsonContains(*node, expected, std::format("widget[{}]", widgetName), error);
+    }
+    return jsonContains(treeDump, expected, "tree", error);
 }
 
 /// Debug rasterizer: draws the snapshot items into a 24-bit BMP so the UI
@@ -310,7 +436,6 @@ void writeRGBAtoBMP(const uint8_t* rgba, uint32_t width, uint32_t height,
         }
         file.write(reinterpret_cast<const char*>(row.data()), rowStride);
     }
-    YA_CORE_INFO("GUIAppHost wrote GPU shot to '{}' ({}x{})", path, w, h);
 }
 
 /// Maps SDL events to Core Events. Pointer press/release/scroll carry no
@@ -472,12 +597,24 @@ struct ScenarioEventSource final : IAppEventSource
 {
     std::vector<GuiScenarioStep> steps;
     size_t index = 0;
+    uint32_t remainingFrames = 0;
     bool bPendingDoneAfterLastFrame = false;
     bool bDone = false;
     std::function<void(const std::string&)> onCheckpoint;
+    std::function<bool(std::string_view)> onAssert;
     std::function<void(uint32_t, uint32_t)> onSetWindowSize;
     std::function<void()> onCaptureFinal;
     std::function<void()> onDone;
+
+    void finishLastFrameIfNeeded()
+    {
+        if (remainingFrames == 0 && index == steps.size()) {
+            if (onCaptureFinal) {
+                onCaptureFinal();
+            }
+            bPendingDoneAfterLastFrame = true;
+        }
+    }
 
     void pollEvents(const std::function<void(const Event&)>& emit) override
     {
@@ -492,16 +629,17 @@ struct ScenarioEventSource final : IAppEventSource
             }
             return;
         }
+        if (remainingFrames > 0) {
+            --remainingFrames;
+            finishLastFrameIfNeeded();
+            return;
+        }
         while (index < steps.size()) {
             const GuiScenarioStep& step = steps[index++];
             switch (step.kind) {
             case EGuiScenarioStepKind::Frame:
-                if (index == steps.size() && onCaptureFinal) {
-                    onCaptureFinal();
-                }
-                if (index == steps.size()) {
-                    bPendingDoneAfterLastFrame = true;
-                }
+                remainingFrames = std::max(step.frame, 1u) - 1;
+                finishLastFrameIfNeeded();
                 return;
             case EGuiScenarioStepKind::SetWindowSize:
                 if (onSetWindowSize) {
@@ -511,6 +649,15 @@ struct ScenarioEventSource final : IAppEventSource
             case EGuiScenarioStepKind::Checkpoint:
                 if (onCheckpoint) {
                     onCheckpoint(step.tag);
+                }
+                break;
+            case EGuiScenarioStepKind::Assert:
+                if (onAssert && !onAssert(step.assertion)) {
+                    bDone = true;
+                    if (onDone) {
+                        onDone();
+                    }
+                    return;
                 }
                 break;
             case EGuiScenarioStepKind::MouseMove:
@@ -549,9 +696,9 @@ struct ScenarioEventSource final : IAppEventSource
 
 } // namespace
 
-struct GUIAppHost::FImpl
+struct GUIWindowHost::FImpl
 {
-    const FGUIAppHostConfig* config = nullptr;
+    const FGUIWindowHostConfig* config = nullptr;
     IGUIAppDelegate*         delegate = nullptr;
 
     SDLWindowProvider        window;
@@ -571,33 +718,36 @@ struct GUIAppHost::FImpl
     bool     bWindowMinimized = false;
     bool     bInitialized = false;
     std::shared_ptr<IBuffer> gpuShotBuffer;
+    std::shared_ptr<GUIRenderSurface> offscreenSurface;
+    std::shared_ptr<IBuffer>           offscreenShotBuffer;
 
     std::unique_ptr<IAppEventSource> eventSource;
     std::string captureRequestPath;
     bool    bLoggedFirstSnapshot = false;
     bool    bQuitRequested       = false;
     bool    bScenarioMode        = false;
+    bool    bScenarioFailed      = false;
 };
 
-GUIAppHost::GUIAppHost(const FGUIAppHostConfig& config, IGUIAppDelegate& delegate)
+GUIWindowHost::GUIWindowHost(const FGUIWindowHostConfig& config, IGUIAppDelegate& delegate)
     : _impl(std::make_unique<FImpl>())
 {
     _impl->config   = &config;
     _impl->delegate = &delegate;
 }
 
-GUIAppHost::~GUIAppHost()
+GUIWindowHost::~GUIWindowHost()
 {
     shutdown();
 }
 
-bool GUIAppHost::init()
+bool GUIWindowHost::init()
 {
     if (_impl->bInitialized) {
         return true;
     }
 
-    const FGUIAppHostConfig& config = *_impl->config;
+    const FGUIWindowHostConfig& config = *_impl->config;
 
     // Shared process bootstrap: bundled graphics runtime env and deferred
     // reflection registration. Standalone GUI apps intentionally do not pull
@@ -640,12 +790,12 @@ bool GUIAppHost::init()
     RenderCreateInfo renderCI{
         .renderAPI = ERenderAPI::Vulkan,
         .swapchainCI = SwapchainCreateInfo{
-            .imageFormat   = EFormat::R8G8B8A8_UNORM,
-            .bVsync        = config.bVsync,
+            .imageFormat        = EFormat::R8G8B8A8_UNORM,
+            .bVsync             = config.bVsync,
+            .minImageCount      = 3,
             .bEnableTransferSrc = true,
-            .minImageCount = 3,
-            .width         = config.width != 0 ? config.width : DEFAULT_WINDOW_WIDTH,
-            .height        = config.height != 0 ? config.height : DEFAULT_WINDOW_HEIGHT,
+            .width              = config.width != 0 ? config.width : DEFAULT_WINDOW_WIDTH,
+            .height             = config.height != 0 ? config.height : DEFAULT_WINDOW_HEIGHT,
         },
         .windowProvider = &window,
     };
@@ -703,6 +853,18 @@ bool GUIAppHost::init()
             return false;
         }
         scenario->onCheckpoint = [this](const std::string& tag) { dumpScenarioCheckpoint(tag); };
+        scenario->onAssert = [this](std::string_view assertion) {
+            std::string error;
+            const bool bPass = assertScenarioTree(*_impl->tree, assertion, error);
+            if (!bPass) {
+                YA_CORE_ERROR("GUIAppHost scenario assertion failed: {}", error);
+                _impl->bScenarioFailed = true;
+            }
+            else {
+                YA_CORE_INFO("GUIAppHost scenario assertion passed: {}", assertion);
+            }
+            return bPass;
+        };
         scenario->onSetWindowSize = [this](uint32_t width, uint32_t height) {
             if (!requestWindowSize(width, height, "scenario")) {
                 _impl->bQuitRequested = true;
@@ -735,7 +897,7 @@ bool GUIAppHost::init()
     return true;
 }
 
-void GUIAppHost::dispatchToTree(const Event& event, float mouseX, float mouseY)
+void GUIWindowHost::dispatchToTree(const Event& event, float mouseX, float mouseY)
 {
     WidgetEventContext ctx;
     ctx.logicalPoint = {mouseX, mouseY};
@@ -743,7 +905,7 @@ void GUIAppHost::dispatchToTree(const Event& event, float mouseX, float mouseY)
     _impl->delegate->onRoutedEvent(event, result);
 }
 
-bool GUIAppHost::requestWindowSize(uint32_t width, uint32_t height, std::string_view reason)
+bool GUIWindowHost::requestWindowSize(uint32_t width, uint32_t height, std::string_view reason)
 {
     if (width == 0 || height == 0) {
         YA_CORE_ERROR("GUIAppHost {}: invalid window size {}x{}", reason, width, height);
@@ -758,7 +920,7 @@ bool GUIAppHost::requestWindowSize(uint32_t width, uint32_t height, std::string_
     return true;
 }
 
-void GUIAppHost::rebuildPresentationResources(bool bWaitForGpu)
+void GUIWindowHost::rebuildPresentationResources(bool bWaitForGpu)
 {
     // Frame boundary only: wait for in-flight work, then release command
     // buffers (and their retained resources) and the imported images/views
@@ -768,6 +930,8 @@ void GUIAppHost::rebuildPresentationResources(bool bWaitForGpu)
     }
     _impl->commandBuffers.clear();
     _impl->presentationTargets.clear();
+    _impl->offscreenSurface.reset();
+    _impl->offscreenShotBuffer.reset();
 
     auto* swapchain = _impl->render->getSwapchain()->as<VulkanSwapChain>();
     _impl->render->allocateCommandBuffers(_impl->render->getSwapchainImageCount(), _impl->commandBuffers);
@@ -776,17 +940,34 @@ void GUIAppHost::rebuildPresentationResources(bool bWaitForGpu)
     _impl->cachedSwapchainExtent = swapchain->getExtent();
 }
 
-int GUIAppHost::run()
+int GUIWindowHost::run()
 {
     if (!_impl->bInitialized) {
-        YA_CORE_ERROR("GUIAppHost::run called before a successful init()");
+        YA_CORE_ERROR("GUIWindowHost::run called before a successful init()");
         return 1;
     }
 
     AppKernel kernel({.eventSource = _impl->eventSource.get()}, *this);
-    const int result = kernel.run(_impl->config->automation);
-    if (result != 0) {
-        return result;
+    return finishRun(kernel.run(_impl->config->automation));
+}
+
+IAppEventSource* GUIWindowHost::getEventSource()
+{
+    return _impl->eventSource.get();
+}
+
+const FGUIWindowHostConfig& GUIWindowHost::getConfig() const
+{
+    return *_impl->config;
+}
+
+int GUIWindowHost::finishRun(int kernelResult)
+{
+    if (kernelResult != 0) {
+        return kernelResult;
+    }
+    if (_impl->bScenarioFailed) {
+        return 4;
     }
 
     if (_impl->bScenarioMode &&
@@ -804,13 +985,27 @@ int GUIAppHost::run()
         }
     }
 
+    if (!_impl->config->offscreenDiffPath.empty() &&
+        !_impl->config->gpuShotPath.empty() &&
+        !_impl->config->offscreenShotPath.empty()) {
+        const BmpDiffResult diff = diffBmpFiles(_impl->config->gpuShotPath,
+                                                _impl->config->offscreenShotPath,
+                                                _impl->config->offscreenDiffPath,
+                                                0, 0.0f);
+        YA_CORE_INFO("GUIAppHost offscreen parity diff: pass={} differing={} ratio={:.4f}",
+                     diff.bPass, diff.differingPixels, diff.diffRatio);
+        if (!diff.bPass) {
+            return 3;
+        }
+    }
+
     return 0;
 }
 
-void GUIAppHost::onInit() {}
-void GUIAppHost::onShutdown() {}
+void GUIWindowHost::onInit() {}
+void GUIWindowHost::onShutdown() {}
 
-void GUIAppHost::onEvent(const Event& event)
+void GUIWindowHost::onEvent(const Event& event)
 {
     switch (event.getEventType()) {
     case EEvent::AppQuit:
@@ -861,12 +1056,12 @@ void GUIAppHost::onEvent(const Event& event)
     }
 }
 
-bool GUIAppHost::shouldClose() const
+bool GUIWindowHost::shouldClose() const
 {
     return _impl->bQuitRequested || _impl->delegate->shouldRequestClose();
 }
 
-void GUIAppHost::onTick(float /*dt*/)
+void GUIWindowHost::onTick(float /*dt*/)
 {
     // Events are delivered by the kernel event phase (via onEvent) before
     // this tick; here we only process commands and render one frame.
@@ -956,16 +1151,21 @@ void GUIAppHost::onTick(float /*dt*/)
     }
     _impl->tree->setLogicalExtent(queryWindowLogicalExtent(*_impl->render));
 
-    prepareRender2DComposePassPipeline(
-        FRender2DComposePassDesc{
-            .kind = ERender2DComposePassKind::RuntimeUIComposite,
-        },
-        swapchain->getFormat());
     _impl->delegate->updateUI();
-    const auto&    presentation  = _impl->presentationTargets[static_cast<size_t>(imageIndex)];
-    const Extent2D presentExtent = presentation->renderImage->getExtent();
+    const auto& presentation = _impl->presentationTargets[static_cast<size_t>(imageIndex)];
+    if (!presentation || !presentation->renderSurface || !presentation->renderSurface->isValid()) {
+        YA_CORE_ERROR("GUIAppHost: presentation surface {} is invalid", imageIndex);
+        _impl->render->waitIdle();
+        return;
+    }
+    const auto& renderSurface = presentation->renderSurface;
+    const auto& renderImage   = renderSurface->getRenderImage();
+    const Extent2D presentExtent = renderImage->getExtent();
     const Extent2D logicalExtent = _impl->tree->getLogicalExtent();
-    const UIFrameSnapshot snapshot = _impl->tree->buildSnapshot(UIFrameBuildContext{
+    renderSurface->prepare(FRender2DComposePassDesc{
+        .kind = ERender2DComposePassKind::RuntimeUIComposite,
+    });
+    UIFrameSnapshot snapshot = _impl->tree->buildSnapshot(UIFrameBuildContext{
         .uiScale = {
             static_cast<float>(presentExtent.width) / static_cast<float>(std::max(logicalExtent.width, 1u)),
             static_cast<float>(presentExtent.height) / static_cast<float>(std::max(logicalExtent.height, 1u)),
@@ -983,20 +1183,38 @@ void GUIAppHost::onTick(float /*dt*/)
                      presentExtent.height);
     }
     if (_impl->config && _impl->config->bDebugRenderOverlay) {
-        appendDebugRenderOverlay(const_cast<UIFrameSnapshot&>(snapshot));
+        appendDebugRenderOverlay(snapshot, *_impl->tree);
     }
     if (_impl->config && !_impl->config->dumpSnapshotPath.empty() &&
         _impl->frameCount == _impl->config->dumpFrame) {
         dumpSnapshotToBMP(snapshot, _impl->config->dumpSnapshotPath, _impl->frameCount);
+    }
+    if (_impl->config && !_impl->config->dumpSnapshotJsonPath.empty() &&
+        _impl->frameCount == _impl->config->dumpFrame) {
+        std::ofstream output(_impl->config->dumpSnapshotJsonPath);
+        if (output) {
+            auto dump = dumpUIFrameSnapshot(snapshot);
+            dump["structuralDigest"] = digestUIFrameSnapshot(snapshot);
+            dump["semanticDigest"]   = semanticDigestUIFrameSnapshot(snapshot);
+            output << dump.dump(2);
+            YA_CORE_INFO("GUIAppHost wrote snapshot JSON to '{}' (structuralDigest={} semanticDigest={})",
+                         _impl->config->dumpSnapshotJsonPath,
+                         dump["structuralDigest"].get<uint64_t>(),
+                         dump["semanticDigest"].get<uint64_t>());
+        }
+        else {
+            YA_CORE_ERROR("GUIAppHost: cannot write snapshot JSON '{}'",
+                          _impl->config->dumpSnapshotJsonPath);
+        }
     }
 
     auto cmdBuf = _impl->commandBuffers[static_cast<size_t>(imageIndex)];
     cmdBuf->reset();
     cmdBuf->begin();
 
-    cmdBuf->retainResource(presentation->renderImage->getImageShared());
-    cmdBuf->retainResource(presentation->renderImage->getImageViewShared());
-    cmdBuf->transitionImageLayoutAuto(presentation->renderImage->getImage(), EImageLayout::ColorAttachmentOptimal);
+    cmdBuf->retainResource(renderImage->getImageShared());
+    cmdBuf->retainResource(renderImage->getImageViewShared());
+    cmdBuf->transitionImageLayoutAuto(renderImage->getImage(), EImageLayout::ColorAttachmentOptimal);
     cmdBuf->beginRendering(RenderingInfo{
         .label                         = "GUIApp_Clear",
         .bExternalTransitionManagement = true,
@@ -1008,8 +1226,8 @@ void GUIAppHost::onTick(float /*dt*/)
             .layerCount = 1,
             .colors     = {
                 RenderAttachment{
-                    .image         = presentation->renderImage->getImage(),
-                    .imageView     = presentation->renderImage->getImageView(),
+                    .image         = renderImage->getImage(),
+                    .imageView     = renderImage->getImageView(),
                     .loadOp        = EAttachmentLoadOp::Clear,
                     .storeOp       = EAttachmentStoreOp::Store,
                     .clearValue    = ClearValue(0.05f, 0.06f, 0.07f, 1.0f),
@@ -1022,16 +1240,78 @@ void GUIAppHost::onTick(float /*dt*/)
     });
     cmdBuf->endRendering();
 
-    recordRender2DComposePass(
+    renderSurface->record(
         cmdBuf.get(),
-        *presentation->renderImage,
         /*depthTarget=*/nullptr,
         &snapshot,
         FRender2DComposePassDesc{
             .kind                  = ERender2DComposePassKind::RuntimeUIComposite,
             .logicalViewportExtent = _impl->tree->getLogicalExtent(),
-            .finalLayout           = EImageLayout::PresentSrcKHR,
         });
+
+    const bool bCaptureOffscreen =
+        _impl->config->offscreenShotFrame != 0 &&
+        _impl->frameCount == _impl->config->offscreenShotFrame &&
+        !_impl->config->offscreenShotPath.empty();
+    std::shared_ptr<RenderImage> offscreenImage;
+    if (bCaptureOffscreen) {
+        if (!_impl->offscreenSurface ||
+            !_impl->offscreenSurface->isValid() ||
+            _impl->offscreenSurface->getRenderImage()->getExtent() != presentExtent ||
+            _impl->offscreenSurface->getRenderImage()->getFormat() != renderImage->getFormat()) {
+            _impl->offscreenSurface = GUIRenderSurface::createOffscreen(
+                *_impl->render->getResourceFactory(),
+                FGUIRenderSurfaceDesc{
+                    .label       = "GUIAppHost_OffscreenMirror",
+                    .extent      = presentExtent,
+                    .colorFormat = renderImage->getFormat(),
+                });
+        }
+        if (!_impl->offscreenSurface || !_impl->offscreenSurface->isValid()) {
+            YA_CORE_ERROR("GUIAppHost: unable to create offscreen parity surface");
+        }
+        else {
+            _impl->offscreenSurface->prepare(FRender2DComposePassDesc{
+                .kind = ERender2DComposePassKind::RuntimeUIOffscreen,
+            });
+            _impl->offscreenSurface->record(
+                cmdBuf.get(),
+                nullptr,
+                &snapshot,
+                FRender2DComposePassDesc{
+                    .kind                  = ERender2DComposePassKind::RuntimeUIOffscreen,
+                    .logicalViewportExtent = _impl->tree->getLogicalExtent(),
+                });
+            offscreenImage = _impl->offscreenSurface->getRenderImage();
+
+            const uint32_t requiredReadbackSize = presentExtent.width * presentExtent.height * 4;
+            if (!_impl->offscreenShotBuffer || _impl->offscreenShotBuffer->getSize() != requiredReadbackSize) {
+                _impl->offscreenShotBuffer = _impl->render->getResourceFactory()->createBuffer(
+                    ya::BufferCreateInfo{
+                        .label       = "GUIAppHost_OffscreenShot",
+                        .usage       = EBufferUsage::TransferDst,
+                        .size        = requiredReadbackSize,
+                        .memoryUsage = EMemoryUsage::GpuToCpu,
+                    });
+            }
+            cmdBuf->transitionImageLayoutAuto(offscreenImage->getImage(), EImageLayout::TransferSrc);
+            cmdBuf->copyImageToBuffer(
+                offscreenImage->getImage(),
+                EImageLayout::TransferSrc,
+                _impl->offscreenShotBuffer.get(),
+                {ya::BufferImageCopy{
+                    .imageSubresource  = {.aspectMask = 1, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1},
+                    .imageOffsetX      = 0,
+                    .imageOffsetY      = 0,
+                    .imageOffsetZ      = 0,
+                    .imageExtentWidth  = presentExtent.width,
+                    .imageExtentHeight = presentExtent.height,
+                    .imageExtentDepth  = 1,
+                }});
+            cmdBuf->transitionImageLayoutAuto(offscreenImage->getImage(),
+                                               _impl->offscreenSurface->getFinalLayout());
+        }
+    }
 
     std::string capturePath;
     if (_impl->config->gpuShotFrame != 0 &&
@@ -1054,9 +1334,9 @@ void GUIAppHost::onTick(float /*dt*/)
                     .memoryUsage = EMemoryUsage::GpuToCpu,
                 });
         }
-        cmdBuf->transitionImageLayoutAuto(presentation->renderImage->getImage(), EImageLayout::TransferSrc);
+        cmdBuf->transitionImageLayoutAuto(renderImage->getImage(), EImageLayout::TransferSrc);
         cmdBuf->copyImageToBuffer(
-            presentation->renderImage->getImage(),
+            renderImage->getImage(),
             EImageLayout::TransferSrc,
             _impl->gpuShotBuffer.get(),
             {ya::BufferImageCopy{
@@ -1068,31 +1348,56 @@ void GUIAppHost::onTick(float /*dt*/)
                 .imageExtentHeight = presentExtent.height,
                 .imageExtentDepth  = 1,
             }});
-        cmdBuf->transitionImageLayoutAuto(presentation->renderImage->getImage(), EImageLayout::PresentSrcKHR);
+        cmdBuf->transitionImageLayoutAuto(renderImage->getImage(), renderSurface->getFinalLayout());
     }
 
     cmdBuf->end();
     _impl->render->end(imageIndex, {cmdBuf->getHandle()});
 
-    if (!capturePath.empty()) {
+    if (!capturePath.empty() || bCaptureOffscreen) {
         _impl->render->waitIdle();
-        if (uint8_t* pixels = _impl->gpuShotBuffer->map<uint8_t>()) {
-            writeRGBAtoBMP(pixels,
-                           presentExtent.width,
-                           presentExtent.height,
-                           swapchain->getFormat() == EFormat::B8G8R8A8_UNORM,
-                           capturePath);
-            _impl->gpuShotBuffer->unmap();
+        if (!capturePath.empty() && _impl->gpuShotBuffer) {
+            if (uint8_t* pixels = _impl->gpuShotBuffer->map<uint8_t>()) {
+                writeRGBAtoBMP(pixels,
+                               presentExtent.width,
+                               presentExtent.height,
+                               swapchain->getFormat() == EFormat::B8G8R8A8_UNORM,
+                               capturePath);
+                _impl->gpuShotBuffer->unmap();
+                YA_CORE_INFO("GUIAppHost wrote GPU shot to '{}' ({}x{})",
+                             capturePath,
+                             presentExtent.width,
+                             presentExtent.height);
+            }
+        }
+        if (bCaptureOffscreen && _impl->offscreenShotBuffer) {
+            if (uint8_t* pixels = _impl->offscreenShotBuffer->map<uint8_t>()) {
+                writeRGBAtoBMP(pixels,
+                               presentExtent.width,
+                               presentExtent.height,
+                               false,
+                               _impl->config->offscreenShotPath);
+                _impl->offscreenShotBuffer->unmap();
+                YA_CORE_INFO("GUIAppHost wrote offscreen shot to '{}' ({}x{})",
+                             _impl->config->offscreenShotPath,
+                             presentExtent.width,
+                             presentExtent.height);
+            }
         }
     }
 }
 
-void GUIAppHost::injectEvent(const Event& event, const glm::vec2& logicalPoint)
+void GUIWindowHost::injectEvent(const Event& event, const glm::vec2& logicalPoint)
 {
     dispatchToTree(event, logicalPoint.x, logicalPoint.y);
 }
 
-void GUIAppHost::dumpScenarioCheckpoint(const std::string& tag)
+bool GUIWindowHost::isInitialized() const
+{
+    return _impl->bInitialized;
+}
+
+void GUIWindowHost::dumpScenarioCheckpoint(const std::string& tag)
 {
     if (_impl->config->scenarioDumpDir.empty() || tag.empty()) {
         return;
@@ -1111,12 +1416,12 @@ void GUIAppHost::dumpScenarioCheckpoint(const std::string& tag)
     }
 }
 
-WidgetTree& GUIAppHost::getTree()
+WidgetTree& GUIWindowHost::getTree()
 {
     return *_impl->tree;
 }
 
-void GUIAppHost::shutdown()
+void GUIWindowHost::shutdown()
 {
     if (!_impl->bInitialized) {
         return;
@@ -1131,6 +1436,8 @@ void GUIAppHost::shutdown()
     _impl->commandBuffers.clear();   // releases command-buffer resource retention
     _impl->presentationTargets.clear();
     _impl->gpuShotBuffer.reset();    // readback staging buffer (RHI-owned)
+    _impl->offscreenSurface.reset();
+    _impl->offscreenShotBuffer.reset();
     _impl->shaderStorage.reset();
     _impl->tree.reset();             // widgets hold snapshot/resolver refs only, but stay ordered
     FontManager::get()->clearCache();
@@ -1143,6 +1450,31 @@ void GUIAppHost::shutdown()
     _impl->window.destroy();
 
     _impl->bInitialized = false;
+}
+
+GUIApp::GUIApp(const FGUIWindowHostConfig& config, IGUIAppDelegate& delegate)
+    : _primaryWindow(config, delegate)
+{
+}
+
+bool GUIApp::init()
+{
+    return _primaryWindow.init();
+}
+
+int GUIApp::run()
+{
+    if (!_primaryWindow.isInitialized()) {
+        YA_CORE_ERROR("GUIApp::run called before a successful init()");
+        return 1;
+    }
+    AppKernel kernel({.eventSource = _primaryWindow.getEventSource()}, _primaryWindow);
+    return _primaryWindow.finishRun(kernel.run(_primaryWindow.getConfig().automation));
+}
+
+void GUIApp::shutdown()
+{
+    _primaryWindow.shutdown();
 }
 
 } // namespace ya

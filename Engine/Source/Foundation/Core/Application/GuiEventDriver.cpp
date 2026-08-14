@@ -104,6 +104,18 @@ std::vector<GuiScenarioStep> parseGuiScenario(std::string_view jsonl,
                 steps.push_back(std::move(step));
                 continue;
             }
+            if (obj.contains("assert")) {
+                if (!obj["assert"].is_object()) {
+                    if (errorOut) {
+                        *errorOut = "assert must be an object at line " + std::to_string(lineNo);
+                    }
+                    return steps;
+                }
+                step.kind      = EGuiScenarioStepKind::Assert;
+                step.assertion = obj["assert"].dump();
+                steps.push_back(std::move(step));
+                continue;
+            }
             if (obj.contains("drag")) {
                 const auto& d     = obj["drag"];
                 const auto  from  = d["from"];
@@ -180,10 +192,12 @@ std::vector<GuiScenarioStep> loadGuiScenarioFile(const std::string& path,
 
 GuiScenarioExecutor::GuiScenarioExecutor(IGuiEventSink& sink,
                                          StepFrameFn   stepFrame,
-                                         CheckpointFn  onCheckpoint)
+                                         CheckpointFn  onCheckpoint,
+                                         AssertFn      onAssert)
     : _sink(sink)
     , _stepFrame(std::move(stepFrame))
     , _onCheckpoint(std::move(onCheckpoint))
+    , _onAssert(std::move(onAssert))
 {
 }
 
@@ -243,6 +257,7 @@ void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step)
     case EGuiScenarioStepKind::Frame:
     case EGuiScenarioStepKind::SetWindowSize:
     case EGuiScenarioStepKind::Checkpoint:
+    case EGuiScenarioStepKind::Assert:
         break;
     }
 }
@@ -271,6 +286,11 @@ bool GuiScenarioExecutor::run(const std::vector<GuiScenarioStep>& steps)
         case EGuiScenarioStepKind::Checkpoint:
             if (_onCheckpoint) {
                 _onCheckpoint(step.tag);
+            }
+            break;
+        case EGuiScenarioStepKind::Assert:
+            if (_onAssert && !_onAssert(step.assertion)) {
+                return false;
             }
             break;
         }

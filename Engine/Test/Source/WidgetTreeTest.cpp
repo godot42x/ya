@@ -9,11 +9,13 @@
 #include "GUI/Widgets/WidgetTreeDump.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/Text.h"
 
 #include <gtest/gtest.h>
 
 #include <memory>
+#include <vector>
 
 namespace ya
 {
@@ -54,6 +56,45 @@ struct TestKeyWidget : public UIElement
     }
 };
 
+struct TestRouteWidget final : public UIElement
+{
+    explicit TestRouteWidget(std::string name, std::vector<std::string>& deliveries)
+        : UIElement(std::move(name))
+        , _deliveries(deliveries)
+    {
+    }
+
+    bool bHandleTarget = false;
+    bool bHandleBubble = false;
+
+    bool previewInputEvent(const Event& event, const WidgetEventContext& ctx) override
+    {
+        (void)event;
+        (void)ctx;
+        _deliveries.push_back(_name + ".preview");
+        return false;
+    }
+
+    bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override
+    {
+        (void)event;
+        (void)ctx;
+        _deliveries.push_back(_name + ".target");
+        return bHandleTarget;
+    }
+
+    bool bubbleInputEvent(const Event& event, const WidgetEventContext& ctx) override
+    {
+        (void)event;
+        (void)ctx;
+        _deliveries.push_back(_name + ".bubble");
+        return bHandleBubble;
+    }
+
+  private:
+    std::vector<std::string>& _deliveries;
+};
+
 } // namespace
 
 // === WidgetTreeDump ===
@@ -84,6 +125,137 @@ TEST(WidgetTreeTest, DumpTreeCapturesRectAndTransientState)
     EXPECT_TRUE((*pressedNode)["hovered"]);
     EXPECT_TRUE((*pressedNode)["focused"]);
     EXPECT_TRUE((*pressedNode)["captured"]);
+}
+
+TEST(WidgetTreeTest, RouteStateTracksPointerCaptureAndFocusPaths)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto panel = std::make_shared<UIPanel>("Panel");
+    panel->_position = {100.0f, 80.0f};
+    panel->_size = {160.0f, 80.0f};
+    auto button = makeButton("Button", {20.0f, 10.0f}, {80.0f, 32.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    tree.attach(*panel, button);
+    tree.layout();
+
+    tree.dispatchEvent(MouseMoveEvent(130.0f, 100.0f), pointAt(130.0f, 100.0f));
+    EXPECT_TRUE(tree.getPointerState().bKnown);
+    EXPECT_EQ(tree.getPointerState().logicalPoint, glm::vec2(130.0f, 100.0f));
+    const auto& pointerPath = tree.getPointerPath();
+    ASSERT_EQ(pointerPath.size(), 4u);
+    EXPECT_EQ(pointerPath[0]->_name, "TreeRoot");
+    EXPECT_EQ(pointerPath[1]->_name, "Layer_0");
+    EXPECT_EQ(pointerPath[2]->_name, "Panel");
+    EXPECT_EQ(pointerPath[3]->_name, "Button");
+    EXPECT_EQ(tree.getLastRouteTrace().policy, EWidgetRoutePolicy::HitTest);
+    EXPECT_EQ(tree.getLastRouteTrace().target, "Button");
+
+    tree.setPointerCapture(button.get());
+    tree.dispatchEvent(MouseMoveEvent(700.0f, 500.0f), pointAt(700.0f, 500.0f));
+    EXPECT_EQ(tree.getLastRouteTrace().policy, EWidgetRoutePolicy::PointerCapture);
+    EXPECT_EQ(tree.getLastRouteTrace().target, "Button");
+    EXPECT_EQ(tree.getPointerPath().back(), button.get());
+
+    tree.setFocus(button.get());
+    EXPECT_EQ(tree.getFocusPath().back(), button.get());
+    KeyPressedEvent keyEvent{};
+    keyEvent._keyCode = EKey::K_A;
+    EXPECT_EQ(tree.dispatchEvent(keyEvent, pointAt(0.0f, 0.0f)),
+              EWidgetRouteResult::NotHandled);
+    EXPECT_EQ(tree.getLastRouteTrace().policy, EWidgetRoutePolicy::Focus);
+    EXPECT_EQ(tree.getLastRouteTrace().target, "Button");
+
+    const nlohmann::json dump = dumpWidgetTree(tree);
+    EXPECT_TRUE(dump["pointer"]["known"]);
+    EXPECT_EQ(dump["pointer"]["path"].back(), "Button");
+    EXPECT_EQ(dump["focusPath"].back(), "Button");
+    EXPECT_EQ(dump["lastRoute"]["target"], "Button");
+}
+
+TEST(WidgetTreeTest, ChildAddedToAttachedParentJoinsItsTree)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto parent = std::make_shared<UIPanel>("Parent");
+    parent->_position = {40.0f, 40.0f};
+    parent->_size = {200.0f, 120.0f};
+    tree.attachToLayer(WidgetTree::ELayer::Content, parent);
+
+    auto child = makeButton("LateChild", {20.0f, 20.0f}, {80.0f, 32.0f});
+    parent->addDetachedChild(child);
+    EXPECT_TRUE(child->isAttached());
+    EXPECT_EQ(child->getTree(), &tree);
+    EXPECT_EQ(child->getParent(), parent.get());
+
+    tree.layout();
+    EXPECT_EQ(tree.pickAt({80.0f, 80.0f}), child.get());
+}
+
+TEST(WidgetTreeTest, PointerRouteDeliversPreviewTargetThenBubble)
+{
+    std::vector<std::string> deliveries;
+    WidgetTree tree({.width = 400, .height = 300});
+    auto parent = std::make_shared<TestRouteWidget>("Parent", deliveries);
+    parent->_position = {100.0f, 80.0f};
+    parent->_size = {120.0f, 80.0f};
+    parent->_hitFilter = EWidgetHitFilter::Stop;
+    parent->bHandleBubble = true;
+    auto child = std::make_shared<TestRouteWidget>("Child", deliveries);
+    child->_position = {20.0f, 20.0f};
+    child->_size = {60.0f, 30.0f};
+    child->_hitFilter = EWidgetHitFilter::Pass;
+    child->bHandleTarget = true;
+
+    tree.attachToLayer(WidgetTree::ELayer::Content, parent);
+    tree.attach(*parent, child);
+    tree.layout();
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(140.0f, 120.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(deliveries,
+              (std::vector<std::string>{
+                  "Parent.preview",
+                  "Child.target",
+                  "Parent.bubble",
+              }));
+
+    const auto& trace = tree.getLastRouteTrace();
+    EXPECT_EQ(trace.policy, EWidgetRoutePolicy::HitTest);
+    EXPECT_EQ(trace.target, "Child");
+    ASSERT_EQ(trace.steps.size(), 5u);
+    EXPECT_EQ(trace.steps[2].widget, "Parent");
+    EXPECT_EQ(trace.steps[2].phase, EWidgetEventRoutePhase::Preview);
+    EXPECT_EQ(trace.steps[3].widget, "Child");
+    EXPECT_EQ(trace.steps[3].phase, EWidgetEventRoutePhase::Target);
+    EXPECT_TRUE(trace.steps[3].bHandled);
+    EXPECT_EQ(trace.steps[4].widget, "Parent");
+    EXPECT_EQ(trace.steps[4].phase, EWidgetEventRoutePhase::Bubble);
+    EXPECT_TRUE(trace.steps[4].bHandled);
+
+    const nlohmann::json dump = dumpWidgetTree(tree);
+    EXPECT_EQ(dump["lastRoute"]["steps"][3]["phase"],
+              static_cast<int>(EWidgetEventRoutePhase::Target));
+    EXPECT_TRUE(dump["lastRoute"]["steps"][4]["handled"]);
+    EXPECT_EQ(dump["lastRoute"]["result"], static_cast<int>(EWidgetRouteResult::HandledExclusive));
+}
+
+TEST(WidgetTreeTest, ModalOverlayUsesModalRoutePolicyAndCanDetachDuringTarget)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto overlay = std::make_shared<UIPopupOverlay>("ModalOverlay");
+    overlay->_bModal = true;
+    overlay->open(tree);
+    tree.layout();
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(200.0f, 150.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(overlay->isAttached());
+    EXPECT_EQ(tree.getLastRouteTrace().policy, EWidgetRoutePolicy::Modal);
+    EXPECT_EQ(tree.getLastRouteTrace().target, "ModalOverlay");
+    EXPECT_EQ(tree.getLastRouteTrace().result, EWidgetRouteResult::HandledExclusive);
+
+    const nlohmann::json dump = dumpWidgetTree(tree);
+    EXPECT_EQ(dump["lastRoute"]["policyName"], "modal");
+    EXPECT_EQ(dump["lastRoute"]["resultName"], "handledExclusive");
 }
 
 // === Attach / reparent / detach ===

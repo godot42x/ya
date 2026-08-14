@@ -47,8 +47,8 @@ void logSnapshotItemsOnce(const UIFrameSnapshot* uiFrameSnapshot)
 /// vertex buffers / descriptor sets within one frame.
 Render2DPassSlot composePassSlot(ERender2DComposePassKind kind)
 {
-    static const std::array<Render2DPassSlot, 4> sSlots = []() {
-        std::array<Render2DPassSlot, 4> out{};
+    static const std::array<Render2DPassSlot, 5> sSlots = []() {
+        std::array<Render2DPassSlot, 5> out{};
         for (auto& slot : out) {
             slot = Render2D::acquirePassSlot();
         }
@@ -67,6 +67,9 @@ ClearValue composeClearValue(ERender2DComposePassKind kind)
     if (kind == ERender2DComposePassKind::EditorCanvasPreview) {
         return ClearValue(0.055f, 0.06f, 0.07f, 1.0f);
     }
+    if (kind == ERender2DComposePassKind::RuntimeUIOffscreen) {
+        return ClearValue(0.05f, 0.06f, 0.07f, 1.0f);
+    }
     if (kind == ERender2DComposePassKind::EditorToolSurface) {
         return ClearValue(0.075f, 0.082f, 0.10f, 1.0f);
     }
@@ -77,6 +80,7 @@ const char* composePassLabel(ERender2DComposePassKind kind)
 {
     switch (kind) {
         case ERender2DComposePassKind::RuntimeUIComposite: return "UI Compositor";
+        case ERender2DComposePassKind::RuntimeUIOffscreen: return "UI Offscreen Mirror";
         case ERender2DComposePassKind::EditorCanvasPreview: return "Editor Canvas Preview";
         case ERender2DComposePassKind::EditorViewportCompose: return "EditorViewportComposition";
         case ERender2DComposePassKind::EditorToolSurface: return "EditorToolSurface";

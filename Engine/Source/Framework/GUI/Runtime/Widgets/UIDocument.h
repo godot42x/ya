@@ -30,7 +30,7 @@
 namespace ya
 {
 
-struct UIDocument
+struct YA_GUI_API UIDocument
 {
     static constexpr uint32_t kFormatVersion = 1;
     static constexpr const char* kFileExtension = ".yaui";

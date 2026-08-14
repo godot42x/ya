@@ -48,7 +48,7 @@ std::shared_ptr<ya::UIButton> makeToolButton(const std::string& name, const std:
     else {
         // SizeToContent: the label text sizes the button (toolbar row).
         button->_bAutoSize      = true;
-        button->_contentPadding = {10.0f, 4.0f};
+        button->setContentPadding({10.0f, 4.0f});
     }
     button->_normalColor  = kButtonNormal;
     button->_hoveredColor = kButtonHovered;
@@ -307,11 +307,11 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
     _mainSplit = std::make_shared<ya::UISplitPane>("MainSplit");
     _mainSplit->_anchorMin       = {0.0f, 0.0f};
     _mainSplit->_anchorMax       = {1.0f, 1.0f};
-    _mainSplit->_padding         = {0.0f, 42.0f};
+    _mainSplit->setPadding({0.0f, 42.0f});
     _mainSplit->_size            = {0.0f, 0.0f};
-    _mainSplit->_splitRatio      = 0.24f;
-    _mainSplit->_minFirstExtent  = 180.0f;
-    _mainSplit->_minSecondExtent = 420.0f;
+    _mainSplit->setSplitRatio(0.24f);
+    _mainSplit->setMinFirstExtent(180.0f);
+    _mainSplit->setMinSecondExtent(420.0f);
     tree.attach(*editorPanel, _mainSplit);
 
     buildDocumentList(tree, *_mainSplit);
@@ -319,9 +319,9 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
     _rightSplit = std::make_shared<ya::UISplitPane>("RightSplit");
     _rightSplit->_anchorMin       = {0.0f, 0.0f};
     _rightSplit->_anchorMax       = {1.0f, 1.0f};
-    _rightSplit->_splitRatio      = 0.66f;
-    _rightSplit->_minFirstExtent  = 240.0f;
-    _rightSplit->_minSecondExtent = 220.0f;
+    _rightSplit->setSplitRatio(0.66f);
+    _rightSplit->setMinFirstExtent(240.0f);
+    _rightSplit->setMinSecondExtent(220.0f);
     tree.attach(*_mainSplit, _rightSplit);
 
     buildCanvas(tree, *_rightSplit);
@@ -338,9 +338,9 @@ void FWorkbenchSurface::buildToolbar(ya::WidgetTree& tree, ya::UIElement& parent
     toolbar->_anchorMax = {1.0f, 0.0f};
     toolbar->_position  = {0.0f, 6.0f};
     toolbar->_size      = {0.0f, 32.0f};
-    toolbar->_direction = ya::EWidgetBoxLayout::Horizontal;
-    toolbar->_spacing   = 8.0f;
-    toolbar->_padding   = {8.0f, 4.0f};
+    toolbar->setDirection(ya::EWidgetBoxLayout::Horizontal);
+    toolbar->setSpacing(8.0f);
+    toolbar->setPadding({8.0f, 4.0f});
     tree.attach(parent, toolbar);
 
     _addButton    = makeToolButton("Add", "Add");
@@ -380,9 +380,9 @@ void FWorkbenchSurface::buildDocumentList(ya::WidgetTree& tree, ya::UIElement& p
     _rowList = std::make_shared<ya::UIContainer>("RowList");
     _rowList->_anchorMin = {0.0f, 0.0f};
     _rowList->_anchorMax = {1.0f, 1.0f};
-    _rowList->_padding   = {8.0f, 8.0f};
-    _rowList->_direction = ya::EWidgetBoxLayout::Vertical;
-    _rowList->_spacing   = 2.0f;
+    _rowList->setPadding({8.0f, 8.0f});
+    _rowList->setDirection(ya::EWidgetBoxLayout::Vertical);
+    _rowList->setSpacing(2.0f);
     tree.attach(*scroll, _rowList);
 }
 
@@ -427,10 +427,10 @@ void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& pare
     auto form = std::make_shared<ya::UIContainer>("InspectorForm");
     form->_anchorMin = {0.0f, 0.0f};
     form->_anchorMax = {1.0f, 1.0f};
-    form->_padding   = {10.0f, 8.0f};
+    form->setPadding({10.0f, 8.0f});
     form->_size      = {0.0f, 0.0f};
-    form->_direction = ya::EWidgetBoxLayout::Vertical;
-    form->_spacing   = 4.0f;
+    form->setDirection(ya::EWidgetBoxLayout::Vertical);
+    form->setSpacing(4.0f);
     tree.attach(*inspectorPanel, form);
 
     auto header = makeHeaderText("INSPECTOR");
@@ -479,8 +479,8 @@ void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& pare
     tree.attach(*form, sizeLabel);
 
     auto sizeRow = std::make_shared<ya::UIContainer>("SizeRow");
-    sizeRow->_direction = ya::EWidgetBoxLayout::Horizontal;
-    sizeRow->_spacing   = 6.0f;
+    sizeRow->setDirection(ya::EWidgetBoxLayout::Horizontal);
+    sizeRow->setSpacing(6.0f);
     tree.attach(*form, sizeRow);
 
     _sizeGrow = makeToolButton("SizeGrow", "Grow +20", 90.0f);
@@ -513,9 +513,9 @@ void FWorkbenchSurface::rebuildItemRows()
     _rowList = std::make_shared<ya::UIContainer>("RowList");
     _rowList->_anchorMin = {0.0f, 0.0f};
     _rowList->_anchorMax = {1.0f, 1.0f};
-    _rowList->_padding   = {8.0f, 8.0f};
-    _rowList->_direction = ya::EWidgetBoxLayout::Vertical;
-    _rowList->_spacing   = 2.0f;
+    _rowList->setPadding({8.0f, 8.0f});
+    _rowList->setDirection(ya::EWidgetBoxLayout::Vertical);
+    _rowList->setSpacing(2.0f);
     _tree->attach(*_rowScroll, _rowList);
     _rows.clear();
 

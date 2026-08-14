@@ -1,0 +1,18 @@
+# GUIWorkbench --start-page=Menus at 1280x800.
+# Opens File, hover-switches to Edit, then dismisses the popup shield.
+{"frame":2}
+{"event":"mouse_press","x":30,"y":15,"button":0}
+{"event":"mouse_release","x":30,"y":15,"button":0}
+{"frame":1}
+{"assert":{"widget":"Menu","control":{"type":"popupOverlay","modal":false}}}
+{"checkpoint":"file_menu_open"}
+{"event":"mouse_move","x":84,"y":15}
+{"frame":1}
+{"assert":{"widget":"Menu","control":{"type":"popupOverlay","modal":false}}}
+{"assert":{"lastRoute":{"policyName":"popup","target":"Menu","resultName":"handledExclusive"}}}
+{"checkpoint":"edit_menu_open"}
+{"event":"mouse_press","x":300,"y":300,"button":0}
+{"frame":2}
+{"assert":{"lastRoute":{"policyName":"popup","target":"Menu","resultName":"handledExclusive"}}}
+{"checkpoint":"popup_dismissed"}
+{"frame":1}

@@ -1,55 +1,45 @@
 #pragma once
 
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/UIElement.h"
 
 namespace ya
 {
 
-/// Which axis a scroll viewport scrolls.
-enum class EScrollAxis : uint8_t
-{
-    Vertical,
-    Horizontal,
-};
-
-/// Scroll viewport: one content child scrolled inside the viewport rect
-/// (gui-app-bootstrap Phase 2).
+/// Scroll viewport: clipping/input host for UIScrollLayout.
 ///
 /// Contract:
-///   - exactly one content child; the cross axis stretches to the viewport,
-///     the scroll axis is the content's desired size (clamped to at least
-///     the viewport size);
-///   - `_scrollOffset` is tree-local logical pixels; it is clamped at layout
-///     time against the content desired size, so a shrunken viewport never
-///     leaves blank space past the content end;
+///   - UIScrollLayout owns one-content-child arrangement, the cross-axis
+///     stretch, content desired extent and clamped tree-local offset;
 ///   - the child is laid out in tree-local coordinates (content start is
-///     shifted by `-_scrollOffset`), so the existing hit walk needs no
+///     shifted by UIScrollLayout's offset), so the existing hit walk needs no
 ///     point conversion; `cullsChildHits` rejects events outside the
 ///     viewport rect;
 ///   - paint clips to the viewport rect via the snapshot clip stack;
 ///   - wheel is consumed by the innermost scrollable viewport; when the
 ///     content fits (or the scroll is already at its limit) the event is
 ///     not consumed and bubbles outward through the tree walk.
-struct UIScrollViewport : public UIElement
+struct YA_GUI_API UIScrollViewport : public UIElement
 {
     YA_REFLECT_BEGIN(UIScrollViewport, UIElement)
-    YA_REFLECT_FIELD(_axis, .instanceEditable())
-    YA_REFLECT_FIELD(_scrollOffset, .instanceEditable())
-    YA_REFLECT_FIELD(_scrollStep, .instanceEditable())
     YA_REFLECT_END()
 
     explicit UIScrollViewport(std::string name = "ScrollViewport") : UIElement(std::move(name))
     {
         _hitFilter = EWidgetHitFilter::Stop;
+        _scrollLayout.setOwner(*this);
     }
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIScrollViewport>; }
 
-    EScrollAxis _axis         = EScrollAxis::Vertical;
-    /// Content offset in tree-local logical pixels (0 = content start).
-    float       _scrollOffset = 0.0f;
-    /// Pixels scrolled per wheel notch.
-    float       _scrollStep   = 40.0f;
+    [[nodiscard]] UIScrollLayout& getScrollLayout() { return _scrollLayout; }
+    [[nodiscard]] const UIScrollLayout& getScrollLayout() const { return _scrollLayout; }
+    void setAxis(EScrollAxis value) { _scrollLayout.setAxis(value); }
+    void setScrollOffset(float value) { _scrollLayout.setScrollOffset(value); }
+    void setScrollStep(float value) { _scrollLayout.setScrollStep(value); }
+    [[nodiscard]] EScrollAxis getAxis() const { return _scrollLayout.getAxis(); }
+    [[nodiscard]] float getScrollOffset() const { return _scrollLayout.getScrollOffset(); }
+    [[nodiscard]] float getScrollStep() const { return _scrollLayout.getScrollStep(); }
 
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
@@ -62,12 +52,11 @@ struct UIScrollViewport : public UIElement
     }
 
     /// Whether the content can scroll at all (after the last layout).
-    [[nodiscard]] bool isScrollable() const { return _maxScrollOffset > 0.0f; }
-    [[nodiscard]] float getMaxScrollOffset() const { return _maxScrollOffset; }
+    [[nodiscard]] bool isScrollable() const { return _scrollLayout.isScrollable(); }
+    [[nodiscard]] float getMaxScrollOffset() const { return _scrollLayout.getMaxScrollOffset(); }
 
-  private:
-    /// Clamped content offset computed by the last layout pass.
-    float _maxScrollOffset = 0.0f;
+private:
+    UIScrollLayout _scrollLayout;
 };
 
 } // namespace ya

@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// GUIAppHost - standalone native GUI app host (gui-app-bootstrap Phase 1).
+// GUIWindowHost - standalone native GUI window host.
 //
 // Owns the full presentation lifecycle of a GUI-only binary:
 //   SDL window / shader storage / IRender / builtin textures / fonts /
@@ -24,11 +24,11 @@
 // only.
 // ============================================================================
 
-#include "Core/Event.h"
+#include "Core/Api.h"
 
 #include "Core/Application/AppKernel.h"
 #include "Core/Application/AutomationRun.h"
-#include "GUI/Widgets/WidgetTree.h"
+#include "GUI/App/GUIAppDelegate.h"
 
 #include <cstdint>
 #include <memory>
@@ -39,34 +39,7 @@
 namespace ya
 {
 
-class GUIAppHost;
-
-/// Contract implemented by a standalone GUI app. The delegate owns the tree
-/// content and the app state; the host owns the window and presentation.
-struct IGUIAppDelegate
-{
-    virtual ~IGUIAppDelegate() = default;
-
-    /// Mount the app's widgets. Called once right after the tree and render
-    /// resources exist, before the first frame.
-    virtual void buildUI(WidgetTree& tree) = 0;
-
-    /// Called every frame right before buildSnapshot: sync presentation state
-    /// (labels / selection / dirty layout) from the app state. All widget
-    /// mutation happens here or in event callbacks, never during command
-    /// recording.
-    virtual void updateUI() {}
-
-    /// Optional observation of a routed UI event (smoke logs / diagnostics).
-    virtual void onRoutedEvent(const Event& /*event*/, EWidgetRouteResult /*result*/) {}
-
-    /// App-driven graceful shutdown request observed by the host at frame
-    /// boundaries. Lets tool automation finish on its own terminal state
-    /// instead of relying on an external frame budget.
-    [[nodiscard]] virtual bool shouldRequestClose() const { return false; }
-};
-
-struct FGUIAppHostConfig
+struct FGUIWindowHostConfig
 {
     std::string title      = "YA GUI App";
     uint32_t    width      = 1024;
@@ -85,11 +58,23 @@ struct FGUIAppHostConfig
     /// frame (0 = the first snapshot).
     std::string              dumpSnapshotPath;
     uint32_t                 dumpFrame = 0;
+    /// Structural frame packet dump for cross-path automation comparison.
+    /// Resource pointers are excluded; use alongside the GPU shot when a
+    /// visual diff is also required.
+    std::string              dumpSnapshotJsonPath;
     /// Debug: capture the swapchain image on `gpuShotFrame` (GPU readback)
     /// and write it as a BMP. This validates the real presentation output
     /// (orientation, fonts, compositing) — the CPU dump cannot. 0 disables.
     std::string              gpuShotPath;
     uint32_t                 gpuShotFrame = 0;
+    /// Render the same immutable snapshot to a Framework-owned offscreen
+    /// GUIRenderSurface and capture it. Together with gpuShotPath this proves
+    /// windowed/offscreen compose parity for one frame.
+    std::string              offscreenShotPath;
+    uint32_t                 offscreenShotFrame = 0;
+    /// Optional zero-tolerance BMP diff written after run() when both a
+    /// windowed GPU shot and offscreen shot were requested.
+    std::string              offscreenDiffPath;
     /// Scenario harness: when non-empty, run() drives the tree from a JSONL
     /// scenario (via GuiEventDriver) instead of the SDL event pump. Scenario
     /// scripts end with a frame step so the final state is rendered and
@@ -99,9 +84,10 @@ struct FGUIAppHostConfig
     std::string              scenarioCapturePath;
     std::string              scenarioGoldenPath;
     std::string              scenarioDiffPath;
-    /// Draw a host-injected snapshot overlay showing render bounds / center
-    /// lines / origin marker. Used to debug coordinate and clipping issues
-    /// without touching app widgets or Render2D internals.
+    /// Draw a host-injected snapshot overlay showing render bounds, clip,
+    /// pointer/focus route paths, capture and hover. Used to debug coordinate,
+    /// clipping and event routing without touching app widgets or Render2D
+    /// internals.
     bool                     bDebugRenderOverlay = false;
     std::vector<uint32_t>    fontSizes{16, 20};
     /// Whether Escape (and SDL_QUIT) stops the app loop. Host-level key
@@ -111,22 +97,25 @@ struct FGUIAppHostConfig
     AppAutomationRunOptions automation;
 };
 
-/// Standalone GUI app host. Create, init(), run(), shutdown().
+/// One native GUI window: owns its SDL window, presentation resources,
+/// transient pointer state and exactly one WidgetTree. It is the concrete
+/// single-window owner used by the temporary GUIAppHost compatibility alias.
 /// The delegate must outlive the host.
-class GUIAppHost : public IAppLoopDelegate
+class YA_GUI_API GUIWindowHost : public IAppLoopDelegate
 {
 public:
-    GUIAppHost(const FGUIAppHostConfig& config, IGUIAppDelegate& delegate);
-    ~GUIAppHost();
+    GUIWindowHost(const FGUIWindowHostConfig& config, IGUIAppDelegate& delegate);
+    ~GUIWindowHost();
 
-    GUIAppHost(const GUIAppHost&)            = delete;
-    GUIAppHost& operator=(const GUIAppHost&) = delete;
+    GUIWindowHost(const GUIWindowHost&)            = delete;
+    GUIWindowHost& operator=(const GUIWindowHost&) = delete;
 
     /// Create the window / backend / presentation resources and mount the
     /// delegate content. Returns false on any init failure.
     [[nodiscard]] bool init();
     /// Run the frame loop until quit (SDL_QUIT / Escape / requestClose()) or
-    /// the shared automation policy asks for a graceful stop.
+    /// the shared automation policy asks for a graceful stop. Transitional
+    /// convenience only: new code should let GUIApp own AppKernel.
     [[nodiscard]] int run();
     /// Tear down in reverse order; idempotent (safe to call even after a
     /// failed init).
@@ -137,6 +126,12 @@ public:
     /// Inject one event through the same path SDL uses (scenario driver +
     /// automation inject_event command).
     void injectEvent(const Event& event, const glm::vec2& logicalPoint);
+    [[nodiscard]] bool isInitialized() const;
+    [[nodiscard]] IAppEventSource* getEventSource();
+    [[nodiscard]] const FGUIWindowHostConfig& getConfig() const;
+    /// Complete scenario / surface parity diffs after an externally-owned
+    /// AppKernel run. GUIApp calls this after its kernel exits.
+    [[nodiscard]] int finishRun(int kernelResult);
 
     // === IAppLoopDelegate (driven by AppKernel; init/shutdown stay public) ===
     void onInit() override;
@@ -155,5 +150,37 @@ private:
     struct FImpl;
     std::unique_ptr<FImpl> _impl;
 };
+
+/// GUI assembly/policy layer. v1 owns one primary window but it is deliberately
+/// a composition of GUIWindowHost rather than a second event/render loop; the
+/// next multi-window increment grows a registry here.
+class YA_GUI_API GUIApp final
+{
+public:
+    GUIApp(const FGUIWindowHostConfig& config, IGUIAppDelegate& delegate);
+
+    GUIApp(const GUIApp&)            = delete;
+    GUIApp& operator=(const GUIApp&) = delete;
+
+    [[nodiscard]] bool init();
+    [[nodiscard]] int  run();
+    void               shutdown();
+
+    [[nodiscard]] GUIWindowHost& getPrimaryWindow() { return _primaryWindow; }
+    [[nodiscard]] WidgetTree&    getTree() { return _primaryWindow.getTree(); }
+    void injectEvent(const Event& event, const glm::vec2& logicalPoint)
+    {
+        _primaryWindow.injectEvent(event, logicalPoint);
+    }
+
+private:
+    GUIWindowHost _primaryWindow;
+};
+
+/// Compatibility names for standalone examples while Phase A introduces
+/// GUIApp/window registry composition. New framework code names the app
+/// assembly `GUIApp` and the real one-window owner `GUIWindowHost`.
+using FGUIAppHostConfig = FGUIWindowHostConfig;
+using GUIAppHost         = GUIApp;
 
 } // namespace ya
