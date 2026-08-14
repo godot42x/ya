@@ -29,9 +29,14 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 
 - 层：`Content / Popup / Tooltip / DragIme`（项目内容不能覆盖系统层 zOrder）。
 - 单视觉父契约：`attach`（新成员）/ `reparent`（显式迁移）/ `detach`（递归、清 transient state）。
-- 输入：`dispatchEvent` 顶层优先 + Pass/Stop 路由；focus（Tab 遍历）/ pointer capture / hover
-  是树级状态；drag&drop 会话（`beginDrag/updateDrag/endDrag/cancelDrag`，payload 为 string）由树管理，
-  目标控件实现 `canAcceptDrop/onDrop/setDropHighlight`。
+- 输入：`dispatchEvent` 用显式 route：topmost candidate discovery 后执行 Preview
+  (root -> parent) -> Target -> Bubble (parent -> root)。`Stop` 短路，`Pass` 继续 lower
+  candidate；capture/focus/popup/modal/drag 都是 tree 级 route policy。`WidgetTree` 持有
+  persistent pointer state、pointer path、focus path 和 route trace；`WidgetTreeDump`
+  输出 `pointer`、`focusPath`、`lastRoute`（policy/path/phase/handled/result）。route callback
+  可 detach 自身，executor 会持有 path 并重查 membership。drag&drop 会话
+  （`beginDrag/updateDrag/endDrag/cancelDrag`，payload 为 string）由树管理，目标控件实现
+  `canAcceptDrop/onDrop/setDropHighlight`。
 - 快照：`buildSnapshot`（layout dirty 时才 layout + paint）→ 不可变 `UIFrameSnapshot`；
   录制只消费快照。命令录制期绝不读 live tree。
 
@@ -44,9 +49,24 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
 - `UIButton`（Content-Slot）：`_contentPadding` + 内容子节点填入内缩 rect（`layoutAssigned`，
   非 anchor 数学）；AutoSize 时 desired = 首可见内容子节点 + padding×2；显式 `_size` 在容器内
   也优先（`computeDesiredSize` 返回 `_size`）。
-- 容器（`UIContainer`）：主轴按 desired 排列、cross 轴拉伸到内容区；`computeDesiredSize`
-  聚合子项。scroll/split 读取内容 desired。slot policy（Auto/Fill 每子项）是未来扩展点，
-  v1 cross 统一拉伸。
+- 布局正式分为 `UIElement / UILayout / UISlot`：`UIContainer` 只是第一个 layout host，
+  持有 `UIBoxLayout`；它不再持有 `_direction/_spacing/_padding/...` 这类 box 字段。
+  `UILayout` 只负责 measure/arrange，`UISlot` 是 parent-owned parent-child 边对象。
+- `UIBoxSlot` 承载每 child 的 `Auto/Fill`、weight、margin、cross alignment、
+  min/max/preferred size 与 layout participation；slot setter 会使所属 tree 的 layout 失效。
+  Fill 按权重分配剩余主轴空间且遵守 max size；Hidden 默认保留空间，可由 slot 明确关闭。
+- child 用 `getSlot()` 读取当前边，parent 用 `getSlotForChild()` / `UIContainer::getBoxSlot()`
+  查询；reparent/detach 时旧 parent 销毁旧 slot，新 parent 创建默认 slot。不要缓存 slot
+  裸指针跨越 reparent/detach。
+- `UIBoxLayout` 主轴按 desired/slot 排列，cross 轴默认 stretch；`computeDesiredSize` 聚合
+  child + margin + spacing + padding。scroll/split 仍读取内容 desired，specialized layout
+  已收口为 `UIScrollLayout` / `UISplitLayout`；`UIButton` 使用
+  `UISingleChildLayout`。specialized widget 只保留 paint/input transient state，不能再把
+  ratio/offset/padding 等几何状态塞回 widget 字段。
+- `UISplitLayout` 管 orientation/ratio/min extent/divider/padding + first-two-child arrange；
+  `UIScrollLayout` 管 axis/offset/step/max offset + first-child arrange；scroll 到边界必须
+  返回未处理，以便 route bubble 到外层。tree dump 的 `layout.type` 统一输出
+  `box/singleChild/split/scroll`。
 - 布局 rect 尺寸永远 clamp ≥0（负尺寸会传染进 clip/scissor）。
 
 ## Render2D pass slot
@@ -63,11 +83,39 @@ Example/GUIWorkbench/                    retain-mode demo app（页面注册进 
   容量 `MaxVertexCount × kFrameFlushSlots`，超限 assert（见 memory：multi-flush 覆盖坑）。
 - clip 栈改动必须"先 flush 再改栈"；scissor 防御性 clamp 到窗口边界。
 
+## GUI render surface
+
+- `GUIRenderSurface`（`Runtime/Compose`）是 GUI compose target 的唯一资源边界：
+  `createOffscreen()` 创建 Framework-owned `RenderImage`，`wrapExternal()` 包装
+  imported swapchain image；二者都经同一 `prepare()` / `record()` 调用
+  `Render2DComposePass`。
+- surface 只拥有/保留目标 image、format 与最终 layout；**不** pump event、acquire
+  swapchain image、present 或访问 live WidgetTree。window/present 仍属于 host，
+  tree/snapshot 仍属于 WidgetTree。
+- 最终 layout 是 surface 的不变量：offscreen 默认 `ShaderReadOnlyOptimal`，
+  swapchain surface 为 `PresentSrcKHR`。调用方不能通过 compose desc 把二者留在
+  错误 layout。
+- 替换/销毁 surface 必须发生在 frame boundary，且旧 command buffer 的 submit 已完成；
+  command recording 仅消费不可变 snapshot 与当前 surface。
+- `RuntimeUIOffscreen` 是和 `RuntimeUIComposite` 分离的 compose kind / pass slot：
+  可在同一 command buffer 中把**同一 snapshot**录制到 windowed 和 offscreen target，
+  不复用 vertex/descriptor frame resources。`GUIAppHost` 的
+  `--gpu-shot` + `--offscreen-shot` + `--offscreen-diff` 是零容差 parity 门禁。
+
 ## Host（ya-gui-app-host）
 
+- 顶层命名：`GUIApp` 是 standalone GUI 的装配层（当前一个 primary
+  `GUIWindowHost`）；`GUIWindowHost` 是一窗口一 tree / SDL window / presenter /
+  pointer context 的真实 owner。`GUIAppHost` 仅为旧调用的 compatibility alias，新代码
+  使用前两者。
 - 生命周期：init → run（SDL event → WidgetTree dispatch → snapshot → compose → present）→
   shutdown。resize 只在帧边界重建 presentation 资源。
+- `GUIHeadlessHost` 是同一 AppKernel/WidgetTree/delegate 合同的无窗口变体：只产生
+  immutable `UIFrameSnapshot`（可由 callback 检查/落盘），不创建 SDL window、RHI、
+  swapchain 或第二套 run loop。它用于 automation、结构断言与 windowed/offscreen
+  交叉取证。
 - 诊断：`--dump-snapshot=path --dump-frame=N`（CPU 侧 BMP 光栅化快照）、
+  `--dump-snapshot-json=path --dump-frame=N`（snapshot 几何/clip/text JSON + digest）、
   `--gpu-shot=path --gpu-shot-frame=N`（GPU readback BMP）。内置纹理 resolver
   （`builtin/white|black|multipixel|checkerboard`）供 image 控件在无资产系统时使用。
 - **teardown 铁律**：任何持有 GPU 资源的成员（readback buffer、shader storage、widget tree、

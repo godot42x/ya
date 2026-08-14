@@ -15,78 +15,78 @@
       "items": [
         { "id": "minimal_render_page", "status": "pass", "notes": "GUIWorkbench 已新增 Render 基线页：静态文本 + button + image 占位 + 视觉 marker" },
         { "id": "scrollsplit_clip_snapshot_evidence", "status": "pass", "notes": "ScrollSplit snapshot 证明 CPU 侧布局/clip 基本正确：标题 y=80/107，split 内容从 y=134.125 开始，左侧 clip=(16,134.125,471.24,605.875)" },
-        { "id": "render_debug_overlay", "status": "in_progress", "notes": "已落地坐标轴、render target 标记、clip bounds；batch 边界仍未接入" },
+        { "id": "render_debug_overlay", "status": "pass", "notes": "已落地坐标轴、render target 标记、clip bounds；ScrollSplit GPU shot + snapshot + flush/scissor log 共同证明 batch cursor 与 clip" },
         { "id": "single_frame_smoke", "status": "pass", "notes": "GUIWorkbench smoke 已从 Render 页起跑并断言首个 render probe click" },
-        { "id": "resize_stability", "status": "fail", "notes": "scenario resize 已能跑通且 capture 干净，但长时间交互闪屏/崩溃（含字体渲染与 Render2D 多批次）仍未归因" },
-        { "id": "top_left_coordinate_stability", "status": "fail", "notes": "历史上出现画面倒置与坐标外泄问题" },
-        { "id": "text_baseline_and_clip", "status": "fail", "notes": "历史上存在字体方向/基线/clip 异常" },
-        { "id": "render2d_multi_flush_integrity", "status": "fail", "notes": "怀疑 flush/RT 切换污染后续内容；当前已接入 session/clip/flush 诊断，待 ScrollSplit GPU shot 验证" },
+        { "id": "resize_stability", "status": "pass", "notes": "Render 与 ScrollSplit 已通过 960x640、1440x900、800x600、1280x800；ScrollSplit resize+divider-drag+wheel stress 产出六份 checkpoint/final capture，0 VUID/error/assert" },
+        { "id": "top_left_coordinate_stability", "status": "pass", "notes": "ScrollSplit windowed/headless snapshot JSON 完全相同，windowed/offscreen BMP zero-diff；逻辑坐标保持左上角原点、Y 向下" },
+        { "id": "text_baseline_and_clip", "status": "pass", "notes": "ScrollSplit windowed/headless snapshot JSON 完全相同（82 items / 48 clipped），windowed/offscreen BMP zero-diff；文字、baseline、clip 当前基线正确" },
+        { "id": "render2d_multi_flush_integrity", "status": "pass", "notes": "ScrollSplit 单帧记录 16 个 screen flush；每批 cursorVertex = startVertex + vertexCount，GPU shot 无前序 batch/RT 污染" },
         { "id": "sdl_pointer_state_bootstrap", "status": "pass", "notes": "SdlEventSource 在 mouse-focus 下用 SDL_GetMouseState 注入首条 move；enter/leave 同步 hover，不再依赖脚本先发 move" },
         { "id": "idle_pointer_hover_consistency", "status": "in_progress", "notes": "静止鼠标下的 pointer 状态已在 host 建立，hover 回落/焦点切换仍需交互级断言" },
-        { "id": "windowed_headless_offscreen_consistency", "status": "planned", "notes": "三路径同帧一致性检查" },
-        { "id": "validation_clean", "status": "in_progress", "notes": "capture/readback TRANSFER_SRC 已修复（swapchain bEnableTransferSrc + import usage），resize scenario 0 VUID；全应用 validation 门禁待补" }
+        { "id": "windowed_headless_offscreen_consistency", "status": "pass", "notes": "同一 ScrollSplit 初始帧：windowed/headless snapshot JSON 完全一致（82 items / 48 clipped / structural+semantic digest 相同）；windowed/offscreen BMP SHA-256 相同且 GUIAppHost zero-tolerance diff PASS" },
+        { "id": "validation_clean", "status": "in_progress", "notes": "Vulkan GUIWorkbench 全八个 start page、cross-path parity、resize+interaction stress、capture/readback 均为 0 VUID/error/assert；MoltenVK 与全产品门禁待补" }
       ]
     },
     {
       "id": "phasea_owner_chain",
       "title": "Phase A - AppKernel / GUIApp / GUIWindowHost / WidgetTree",
       "items": [
-        { "id": "responsibility_diagram", "status": "planned", "notes": "主链路职责图" },
-        { "id": "naming_dedup_table", "status": "planned", "notes": "App/Host/Surface/Panel 去重清单" },
-        { "id": "owner_state_split", "status": "planned", "notes": "focus/hover/capture/modal/popup/drag overlay 归属" },
-        { "id": "automation_base_placement", "status": "planned", "notes": "共享 automation 基底挂载层级与扩展点" },
-        { "id": "owner_checklist", "status": "planned", "notes": "创建/销毁/restore/dump 责任表" }
+        { "id": "responsibility_diagram", "status": "pass", "notes": "owner-model.md：AppKernel -> GUIApp -> GUIWindowHost -> WidgetTree 职责图" },
+        { "id": "naming_dedup_table", "status": "pass", "notes": "owner-model.md：App/Host/Surface/Panel 保留/改名/过渡/删除表；GUIAppHost 是 GUIApp compatibility alias" },
+        { "id": "owner_state_split", "status": "pass", "notes": "owner-model.md：app/window/tree state 表与 multi-window default semantics" },
+        { "id": "automation_base_placement", "status": "pass", "notes": "AppKernel + GuiEventDriver + BmpDiff/AutomationControlServer 为 base；GUI/game/editor 在模块层扩展" },
+        { "id": "owner_checklist", "status": "pass", "notes": "owner-model.md 生命周期清单覆盖 create/tick/resize/shutdown/dump" }
       ]
     },
     {
       "id": "phaseb_layout_slot",
       "title": "Phase B - Layout / Slot kernel",
       "items": [
-        { "id": "uilayout_contract", "status": "planned", "notes": "measure/arrange/invalidation 合同" },
-        { "id": "uislot_contract", "status": "planned", "notes": "parent-owned edge object 合同" },
-        { "id": "uiboxlayout_uiboxslot_api", "status": "planned", "notes": "box layout 最小 public API" },
-        { "id": "slot_lifecycle", "status": "planned", "notes": "reparent/detach/destroy 生命周期" },
-        { "id": "slot_invalidation_granularity", "status": "planned", "notes": "slot 改动对应 invalidation 粒度" },
-        { "id": "vertical_box_migration", "status": "planned", "notes": "最小 vertical box 页面迁移" },
-        { "id": "nested_box_migration", "status": "planned", "notes": "横竖组合与 reparent 验证" }
+        { "id": "uilayout_contract", "status": "pass", "notes": "Runtime/Layout 的 UILayout 明确 measure/arrange；layout setter 经 owner tree 使 layout 失效" },
+        { "id": "uislot_contract", "status": "pass", "notes": "UISlot 为 parent-owned edge；child 仅通过 getSlot() 查询当前 active edge" },
+        { "id": "uiboxlayout_uiboxslot_api", "status": "pass", "notes": "UIBoxLayout + UIBoxSlot 覆盖方向/spacing/padding/alignment/clip 与 Auto/Fill/weight/margin/cross/min/max/preferred/participation" },
+        { "id": "slot_lifecycle", "status": "pass", "notes": "WidgetTree attach/reparent/detach 与 detached authoring 均创建/销毁 parent-owned slot；reparent 生成 destination 默认 slot" },
+        { "id": "slot_invalidation_granularity", "status": "pass", "notes": "layout 和 slot setter 统一使 tree layout dirty；measure-affecting 数据在下一 snapshot/layout 重算" },
+        { "id": "vertical_box_migration", "status": "pass", "notes": "UIContainer 已退化为 UIBoxLayout host；GUIWorkbench ScrollSplit 用 UIBoxSlot::Fill，不再使用 UIContainer 旧 box 字段" },
+        { "id": "nested_box_migration", "status": "pass", "notes": "WidgetLayoutTest 覆盖嵌套 horizontal/vertical box、edge-local state、reparent default slot 与 tree dump slot evidence；ScrollSplit resize+drag+wheel stress 6 checkpoints / 0 diagnostics" }
       ]
     },
     {
       "id": "phasec_event_routing",
       "title": "Phase C - Explicit route path / route phase",
       "items": [
-        { "id": "pointer_and_focus_path_types", "status": "planned", "notes": "pointer state / pointer path / focus path 数据结构" },
-        { "id": "hit_test_vs_route_split", "status": "planned", "notes": "拆分求 target/path 与 route 执行" },
-        { "id": "preview_target_bubble_contract", "status": "planned", "notes": "preview -> target -> bubble 合同" },
-        { "id": "route_policy_unification", "status": "planned", "notes": "capture/modal/popup/drag 归为 route policy" },
-        { "id": "persistent_pointer_state", "status": "planned", "notes": "鼠标位置收敛为 tree/window 持续状态" },
-        { "id": "event_semantics_table", "status": "planned", "notes": "menu/button/scroll/split/dragdrop 事件语义表" },
-        { "id": "route_dump_and_assertions", "status": "planned", "notes": "route dump、overlay、路径断言" }
+        { "id": "pointer_and_focus_path_types", "status": "pass", "notes": "WidgetPointerState + pointer/focus path 已由 WidgetTree 持有；attach root/layer/target path 可直接读取" },
+        { "id": "hit_test_vs_route_split", "status": "pass", "notes": "collectHitTargetsSubtree() 只负责 topmost candidate discovery；dispatchRoute() 负责 explicit preview/target/bubble execution" },
+        { "id": "preview_target_bubble_contract", "status": "pass", "notes": "UIElement Preview/Target/Bubble hook 已在真实 dispatcher 中执行；Stop 短路、Pass 继续 lower candidate，route path 保持 shared lifetime" },
+        { "id": "route_policy_unification", "status": "pass", "notes": "trace 分类 HitTest/PointerCapture/Focus/TabTraversal/DragSession/Popup/Modal；PopupOverlay ancestor 决定 popup vs modal policy" },
+        { "id": "persistent_pointer_state", "status": "pass", "notes": "WidgetTree 在每个 pointer event 更新 logicalPoint/known，capture 也维护当前 target path" },
+        { "id": "event_semantics_table", "status": "pass", "notes": "event-routing.md 定义 button/slider/split/row capture、scroll bubble、menu/popup/modal、drag route policy" },
+        { "id": "route_dump_and_assertions", "status": "pass", "notes": "WidgetTreeDump 输出 policy/path/phase/handled/result；unit tests覆盖 pointer/capture/focus/Pass/menu/popup/modal；--debug-render-overlay 绘制 pointer/focus path、hover/capture 和 pointer marker" }
       ]
     },
     {
       "id": "phased_workbench_tests",
       "title": "Phase D - Workbench and tests migration",
       "items": [
-        { "id": "page_taxonomy", "status": "planned", "notes": "基础交互/布局/树属性/overlay 调试页分层" },
-        { "id": "menu_popup_button_pages", "status": "planned", "notes": "优先迁 menu/popup/button" },
-        { "id": "scroll_split_pages", "status": "planned", "notes": "再迁 scroll/split" },
-        { "id": "tree_inspector_pages", "status": "planned", "notes": "最后迁 tree/inspector" },
-        { "id": "scenario_and_golden_per_page", "status": "planned", "notes": "每页至少一条 scenario + 一张 golden" }
+        { "id": "page_taxonomy", "status": "pass", "notes": "workbench-regression-matrix.md 划分 Render/debug、basic interaction、layout、tree/property reference，并绑定每页现有/下一步证据" },
+        { "id": "menu_popup_button_pages", "status": "pass", "notes": "menus_popup_interaction.jsonl 覆盖 File open -> Edit hover switch -> popup dismiss；widgets_interaction.jsonl 覆盖 button release/checkBox/slider/combo/text focus；二者均有 host assert + checkpoints + initial BMP golden" },
+        { "id": "scroll_split_pages", "status": "pass", "notes": "resize_scrollsplit_interaction_stress.jsonl 覆盖 4 resize + divider drag + wheel，并用 split/scroll semantic assertion 和 zero-diff BMP baseline 验证" },
+        { "id": "tree_inspector_pages", "status": "pass", "notes": "editor_inspector_interaction.jsonl 覆盖 row selection、visible toggle、rename、preview 与 row label binding，含 host assertions/checkpoints/zero-diff baseline" },
+        { "id": "scenario_and_golden_per_page", "status": "pass", "notes": "Render/Widgets/Layout/Menus/DragDrop/Modal/ScrollSplit/Editor 共 8 页均有 versioned scenario，host assertions、checkpoint dump、generated baseline 与 zero-tolerance scenario diff PASS" }
       ]
     },
     {
       "id": "phaseef_specialized_and_multiwindow",
       "title": "Phase E/F - Specialized layout and multi-window semantics",
       "items": [
-        { "id": "split_layout", "status": "planned", "notes": "UISplitLayout" },
-        { "id": "scroll_layout", "status": "planned", "notes": "UIScrollLayout" },
-        { "id": "single_child_content_layout", "status": "planned", "notes": "单 child 内容布局抽象" },
-        { "id": "composite_vs_specialized_policy", "status": "planned", "notes": "menu/tree/inspector 组合优先，专用 layout 兜底" },
-        { "id": "multiwindow_owner_doc", "status": "planned", "notes": "多窗口 owner 边界文档" },
-        { "id": "cross_window_dragdrop_semantics", "status": "planned", "notes": "source/target/commit/cancel 语义" },
-        { "id": "modal_scope_semantics", "status": "planned", "notes": "per-window / whole-app modal" },
-        { "id": "active_window_and_focus_switch", "status": "planned", "notes": "active window / activation order / focus path 切换" }
+        { "id": "split_layout", "status": "pass", "notes": "UISplitPane 退化为 drag/paint host；UISplitLayout 拥有 orientation/ratio/min/divider/padding/first-two-child arrange" },
+        { "id": "scroll_layout", "status": "pass", "notes": "UIScrollViewport 退化为 clip/input host；UIScrollLayout 拥有 axis/offset/step/maxOffset/first-child arrange，边界返回未处理供 bubble" },
+        { "id": "single_child_content_layout", "status": "pass", "notes": "UISingleChildLayout 管 content padding/measure/assigned inset rect；UIButton 已迁移" },
+        { "id": "composite_vs_specialized_policy", "status": "pass", "notes": "specialized-layouts.md：menu/popup/tree/inspector 维持 composition-first，出现第二独立 measure/arrange consumer 才提升" },
+        { "id": "multiwindow_owner_doc", "status": "pass", "notes": "multiwindow-semantics.md 定义 GUIApp registry/active-window 与 per-window tree boundary" },
+        { "id": "cross_window_dragdrop_semantics", "status": "pass", "notes": "multiwindow-semantics.md 定义 source/hover/commit/cancel transaction ownership" },
+        { "id": "modal_scope_semantics", "status": "pass", "notes": "multiwindow-semantics.md 区分 per-window PopupOverlay route 与 GUIApp whole-app gate" },
+        { "id": "active_window_and_focus_switch", "status": "pass", "notes": "multiwindow-semantics.md 定义 activation order、per-window focus path 与 close fallback" }
       ]
     }
   ]

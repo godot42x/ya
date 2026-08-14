@@ -1,0 +1,116 @@
+# Phase A Owner Model — AppKernel / GUIApp / GUIWindowHost / WidgetTree
+
+> 状态：Phase A 的规范基线。本文区分**目标对象模型**、**当前落点**与**迁移方向**；
+> 不把过渡实现误写成终局。更新时间：2026-08-13。
+
+## 1. 一句话职责图
+
+```text
+AppKernel                         唯一 loop / event-source / frame-time / base exit policy
+  └─ GUIApp                       GUI 应用装配、window registry、跨窗口策略
+       └─ GUIWindowHost[n]        一窗口一 tree、native window、presenter、pointer context
+            └─ WidgetTree         单窗口 live visual tree + per-tree interaction state
+                 ├─ Content
+                 ├─ Popup
+                 ├─ Tooltip
+                 └─ DragIme
+```
+
+`AppKernel` 不知道 widget、layout、RHI target 或具体产品页面。`GUIApp` 不是第二个
+主循环；它只是作为 `AppKernel` delegate/模块装配 GUI window hosts。`GUIWindowHost`
+不拥有整个 workspace；`WidgetTree` 更不代表整个应用。
+
+## 2. 当前实现与目标映射
+
+| 当前类型 / 位置 | 当前事实 | 目标去向 | 分类 |
+|---|---|---|---|
+| `Foundation/Core/Application/AppKernel` | GUI windowed/headless hosts 与 `Product/Host/AppFrameLoop::run` 都已调用；提供 event source、tick 与基础 exit policy | 保留为唯一共享 loop 内核 | 保留 |
+| `Framework/GUI/App/GUIApp` | standalone GUI entry 的装配层；当前持有一个 primary window 并创建 `AppKernel` | 保留；后续在这里增长 window registry | 保留 |
+| `Framework/GUI/App/GUIWindowHost` | 当前持有 SDL window、Vulkan presenter、WidgetTree、pointer state、automation server | 保留为 concrete one-window owner | 保留 |
+| `Framework/GUI/App/GUIAppHost` | `GUIApp` 的 compatibility alias | 只为旧 include/调用兼容；新代码不再使用 | 过渡 / 删除 |
+| `Framework/GUI/App/GUIHeadlessHost` | 无 SDL/RHI 的 AppKernel + WidgetTree + snapshot host | 保留为 GUIApp/WindowHost 的无 native-surface 验证形态；不成为另一条 product loop | 保留 / 过渡 |
+| `Framework/GUI/App/GUIRenderSurface` | 统一 imported swapchain 与 owned offscreen RenderImage 的 compose/final-layout 边界 | `GUIWindowHost` presenter/target 的底层资源对象 | 保留 |
+| `Product/Host/App` | 游戏/runtime/editor 产品状态、scene/module/render services | 保留为 game/editor application module；经 AppKernel adapter 运行 | 保留 |
+| `Product/Host/Lifecycle/AppFrameLoop` | SDL event source + product frame work（logic/render/callback/advanced automation） | 自有 while 已删除；`run()` 仅装配 AppKernel adapter | 过渡 / 拆分 |
+| `Product/Host/GUI/GameUI/GameUIHost` | 一个 game presentation area 的 WidgetTree + scene/input/snapshot adapter | 保留为 Product Host 的 viewport UI adapter；不是 generic GUIApp | 保留 |
+| `Product/Editor/Panels/GUIWorkbenchPanel` | ImGui panel 内的 workbench tree/extent/input adapter | 保留为 editor embedding adapter；不拥有 native window 或 loop | 保留 |
+| `Product/Editor/EditorToolSurfaceCompositor` | editor panel snapshot -> owned offscreen `GUIRenderSurface` | 保留为 editor caller-side compose policy；不另造 surface resource model | 保留 |
+| `Tooling/Workbench/WorkbenchSurface` | menu/tab/status/workspace shell | 保留为 tooling shell；非 app/host/loop | 保留 |
+| `Example/GUIWorkbench/FWorkbenchApp` | feature gallery 页面与 smoke state | 保留为 example delegate；非 framework app kernel | 保留 |
+
+## 3. 状态归属
+
+| 状态 | 正式 owner | 当前落点 | 迁移约束 |
+|---|---|---|---|
+| native window / swapchain acquire-present / presentation target | `GUIWindowHost` | `GUIAppHost` | 一窗口一组 target；resize 只在 frame boundary rebuild |
+| logical extent / pointer position / pointer buttons | `GUIWindowHost` | `GUIAppHost` 的 last mouse；`GameUIHost` 的 viewport mapping | 上层业务不得反复携带“当前鼠标点”作为隐式状态 |
+| focus / hover / pointer capture / popup / tooltip / drag overlay | `WidgetTree`（per window） | `WidgetTree` | 未来升级为 focus/pointer path，不升级为 app-global widget pointer |
+| per-window modal gating | `GUIWindowHost` + tree route policy | popup/modal 控件局部 + tree layer | Phase C 前必须明确 route policy，不把 modal 状态塞进 leaf |
+| whole-app modal stack / active window / activation order | `GUIApp` | 尚未实现 | 预留 app registry，不在单 tree 中伪造全局状态 |
+| cross-window drag session | `GUIApp` | 尚未实现；tree 有单窗口 drag session | source/target/commit/cancel 由 app 协调，tree 只处理本窗口 hit/path |
+| immutable UI frame snapshot | `WidgetTree` build，surface consumer retain | `WidgetTree::buildSnapshot` / `GUIRenderSurface` | command recording 只消费 snapshot，绝不回读 live tree |
+| app-specific workspace/page state | 产品 / tooling delegate | `FWorkbenchApp` / `FWorkbenchSurface` | 不下沉到 WidgetTree 或 GUIWindowHost |
+
+## 4. 生命周期清单
+
+| Owner | 创建 | 每帧 | resize / restore | shutdown | dump / automation |
+|---|---|---|---|---|---|
+| `AppKernel` | caller 构造，接收 event source + delegate | poll -> delegate tick -> exit policy | 不解释 GUI resize | 调 delegate shutdown | base frame stepping / exit policy |
+| `GUIApp`（目标） | 产品入口装配 GUI services + windows | 选择 active window / 跨窗口 policy | 创建/销毁 window host | 先停止 windows，再释放 app services | window-id 路由、app-scope scenario |
+| `GUIWindowHost`（目标） | 创建 native window、presenter、tree | native event -> tree; snapshot -> surface -> submit/present | wait safe point 后重建 imported targets | 先 release command retention/surface/tree，再 destroy render/window | GPU shot、surface parity、per-window tree/snapshot dump |
+| `WidgetTree` | window host 创建 | layout dirty 时 layout + build snapshot；route event | logical extent 改动导致 layout invalidation | detach clears transient references | tree / route / hover / focus dump |
+| `GUIRenderSurface` | window host 或 editor caller于 frame boundary 创建 | prepare + record immutable snapshot | owner 替换旧 surface 前 wait submit | 在 RHI/VMA teardown 前释放 | offscreen/windowed BMP parity |
+
+## 5. automation 归位
+
+基础能力归 `Foundation/Core/Application`：
+
+- `AppKernel`：event-source sequencing、frame timing、shared exit policy；
+- `AppAutomationRunOptions`：exit-after-frame / control port 基础选项；
+- `GuiEventDriver`：JSONL mouse/key/wheel/drag/resize/checkpoint step 语义；
+- `BmpDiff` / `AutomationControlServer`：通用 capture/diff/RPC 基础。
+
+产品扩展不重写 loop：
+
+- standalone GUI：`GUIAppHost`（过渡期）/ future `GUIApp` 注册 window surface 与
+  GUI-specific RPC；
+- game/editor：`Product/Host/App` 注册 scene/render/screenshot/editor RPC；
+- Workbench：只注册 feature actions/scenarios，不再拥有 timing/event pump。
+
+当前已知迁移缺口：`Product/Host/AppFrameLoop` 已经不再持有 while loop；它保留 SDL
+event source 和 product frame work。高级 screenshot、RenderDoc、scene-stability
+automation 仍属于 Product Host extension，暂不错误下沉到 GUI 或 AppKernel 基础层。
+
+## 6. 多窗口默认语义（先定，不实现）
+
+1. `GUIApp` 维护 window registry 与 active window；每个 `GUIWindowHost` 一棵 tree。
+2. popup / tooltip / drag overlay 默认 per-window。
+3. focus 基础归属 per-window；active-window 切换整体切换/失效 focus path，不保存裸
+   global focused widget。
+4. dragdrop 允许跨窗口：GUIApp 保存 source window + payload，hover target window
+   由 pointer hit window 决定，drop commit 只在目标 tree 接受后发生；cancel 恢复 source
+   window transient state。
+5. modal 明确区分 per-window 与 whole-app。whole-app modal 由 GUIApp gate windows，
+   不能用普通 popup layer 冒充。
+6. automation 注入默认携带 target window id；单窗口 CLI 可以省略，解析为 default
+   window。
+
+## 7. Phase A 实施顺序
+
+1. [x] `Product/Host/AppFrameLoop` 改为 AppKernel-backed adapter，保留已有 frame
+   work / advanced product automation，删除第二个 while/event-pump 主循环。
+2. [x] 把 `GUIAppHost` 的 concrete single-window owner 命名收口到
+   `GUIWindowHost`；旧名是 `GUIApp` compatibility alias。
+3. [x] 新建最小 `GUIApp` primary-window assembly，让 AppKernel 在 GUIApp 层创建；
+   v1 只有一个 primary slot，未来 window registry 在此增长，不在此阶段实现 docking
+   或 cross-window drag。
+4. [ ] 在 Phase C 前把 current pointer/focus/capture 从 host 传参收口为
+   window/tree state。
+
+## 8. 禁止事项
+
+- 不再为 GUI、game、editor 复制新的 `while (running)` 或 SDL poll loop。
+- 不把 app-global modal / drag / active-window 状态藏进 `WidgetTree` 或 leaf widget。
+- 不把 WorkbenchSurface、GUIWorkbenchPanel 或 GameUIHost 重命名成 GUIApp；它们分别是
+  shell、editor embedding、game viewport adapter。
+- 不因“未来多窗口”提前实现 docking/window manager；现在只立 owner boundary。
