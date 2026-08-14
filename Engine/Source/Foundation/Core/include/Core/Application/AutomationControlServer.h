@@ -1,3 +1,2 @@
 #pragma once
-
-#include "../../../Application/AutomationControlServer.h"
+#include "App/Control/AutomationControlServer.h"

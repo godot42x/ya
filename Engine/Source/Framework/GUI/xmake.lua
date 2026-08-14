@@ -16,7 +16,7 @@ includes("./App/xmake.lua")
 -- carries no sources of its own; public deps re-export the full closure
 -- (foundation + RHI backend + the four GUI modules) to consumers. The
 -- standalone native app host (window/SDL/present) is a separate library:
--- ya-gui-app-host. Executable consumers link that host directly.
+-- ya-gui-host. Executable consumers link that host directly.
 target("ya-gui-framework")
     set_kind(ya_meta_kind())
     -- Single empty TU so the shared facade has a DLL entry point (the target
@@ -24,6 +24,8 @@ target("ya-gui-framework")
     add_files("Module.cpp", { unity_ignored = true })
     add_deps(
         "ya-foundation-core",
+        "ya-app-kernel",
+        "ya-app-control",
         "ya-hierarchy",
         "ya-rhi",
         "ya-rhi-backend-common",

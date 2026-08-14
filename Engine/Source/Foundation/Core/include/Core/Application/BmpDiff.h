@@ -1,3 +1,2 @@
 #pragma once
-
-#include "../../../Application/BmpDiff.h"
+#include "App/Control/BmpDiff.h"

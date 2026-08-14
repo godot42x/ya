@@ -7,7 +7,7 @@
 // line, so a CLI or server simply runs with a null sink.
 
 #include "Core/Api.h"
-#include "Core/Application/AutomationRun.h"
+#include "App/Control/AutomationRun.h"
 #include "Core/Common/Types.h"
 #include "Core/Event.h"
 
@@ -45,7 +45,7 @@ struct IAppFrameSink
     virtual Extent2D getExtent() const = 0;
 };
 
-class YA_CORE_API AppKernel
+class YA_APP_KERNEL_API AppKernel
 {
 public:
     struct Config

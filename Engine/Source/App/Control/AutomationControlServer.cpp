@@ -1,4 +1,4 @@
-#include "Core/Application/AutomationControlServer.h"
+#include "App/Control/AutomationControlServer.h"
 
 #include "Core/Log.h"
 

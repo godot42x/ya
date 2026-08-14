@@ -1,4 +1,4 @@
-#include "Core/Application/BmpDiff.h"
+#include "App/Control/BmpDiff.h"
 
 #include "Core/Log.h"
 

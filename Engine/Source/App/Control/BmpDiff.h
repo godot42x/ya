@@ -25,7 +25,7 @@ struct BmpDiffResult
 /// Compare baseline and actual (24-bit BMPs). threshold is the per-channel
 /// absolute tolerance; maxDiffRatio is the allowed fraction of differing
 /// pixels (0 = any difference fails). Always writes diffOut on success.
-YA_CORE_API BmpDiffResult diffBmpFiles(const std::string& baseline,
+YA_APP_CONTROL_API BmpDiffResult diffBmpFiles(const std::string& baseline,
                                        const std::string& actual,
                                        const std::string& diffOut,
                                        uint8_t threshold    = 16,

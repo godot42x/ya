@@ -1,4 +1,4 @@
-#include "Core/Application/AppKernel.h"
+#include "App/Kernel/AppKernel.h"
 
 #include <algorithm>
 #include <chrono>

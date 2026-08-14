@@ -7,7 +7,7 @@
 namespace ya
 {
 
-struct YA_CORE_API AppAutomationRunOptions
+struct YA_APP_CONTROL_API AppAutomationRunOptions
 {
     uint64_t exitAfterFrame = 0;
     uint16_t controlPort    = 0;
@@ -21,15 +21,15 @@ enum class EAppAutomationExitReason : uint8_t
     ExitAfterFrame,
 };
 
-struct YA_CORE_API AppAutomationRunState
+struct YA_APP_CONTROL_API AppAutomationRunState
 {
     uint64_t                 completedFrameCount = 0;
     EAppAutomationExitReason exitReason          = EAppAutomationExitReason::None;
 };
 
-YA_CORE_API void applyAutomationRunArgs(int argc, char** argv, AppAutomationRunOptions& outOptions);
+YA_APP_CONTROL_API void applyAutomationRunArgs(int argc, char** argv, AppAutomationRunOptions& outOptions);
 
-class YA_CORE_API AppAutomationRunController
+class YA_APP_CONTROL_API AppAutomationRunController
 {
 public:
     AppAutomationRunController() = default;
@@ -50,10 +50,10 @@ private:
     AppAutomationRunState   _state{};
 };
 
-[[nodiscard]] YA_CORE_API bool shouldAutomationExitAfterFrame(uint64_t completedFrameCount,
+[[nodiscard]] YA_APP_CONTROL_API bool shouldAutomationExitAfterFrame(uint64_t completedFrameCount,
                                                               uint64_t exitAfterFrame);
-[[nodiscard]] YA_CORE_API EAppAutomationExitReason evaluateAutomationExitReason(uint64_t completedFrameCount,
+[[nodiscard]] YA_APP_CONTROL_API EAppAutomationExitReason evaluateAutomationExitReason(uint64_t completedFrameCount,
                                                                                 const AppAutomationRunOptions& options);
-[[nodiscard]] YA_CORE_API const char* getAutomationExitReasonName(EAppAutomationExitReason reason);
+[[nodiscard]] YA_APP_CONTROL_API const char* getAutomationExitReasonName(EAppAutomationExitReason reason);
 
 } // namespace ya

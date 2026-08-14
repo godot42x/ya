@@ -73,15 +73,21 @@ end
 function ya_engine_defines()
     local macros = {
         "YA_CORE_API", "YA_RHI_API", "YA_RHI_BACKEND_API", "YA_GUI_API",
+        "YA_APP_KERNEL_API", "YA_APP_CONTROL_API",
         "YA_SCENE_CORE_API", "YA_SCENE_RUNTIME_API", "YA_SCENE_SERIALIZATION_API",
         "YA_SCENE_3D_API", "YA_RESOURCE_API", "YA_RENDER_GRAPH_API",
         "YA_RENDER_3D_API", "YA_RENDER_ECS_ADAPTERS_API", "YA_ECS_CORE_API", "YA_GAMEPLAY_ECS_API", "YA_GAMEPLAY_SYSTEMS_API", "YA_COMPONENT_LINKAGE_API", "YA_PHYSICS_API",
-        "YA_HOST_API", "YA_EDITOR_API", "YA_APP_RUNTIME_API", "YA_RESOURCE_CORE_API", "YA_RESOURCE_LOADER_API",
+        "YA_HOST_API", "YA_EDITOR_API", "YA_RESOURCE_CORE_API", "YA_RESOURCE_LOADER_API",
     }
     for _, macro in ipairs(macros) do
         add_defines(macro .. "=YA_API_EXPORT")
     end
 end
+
+-- App tier: the windowless shared application main chain (kernel + control
+-- plane). App must not depend on GUI, window or any app-form semantics.
+includes("./App/Kernel/xmake.lua")
+includes("./App/Control/xmake.lua")
 
 -- Foundation tier: shared infrastructure consumed by every product line.
 includes("./Foundation/Core/xmake.lua")
@@ -94,6 +100,7 @@ includes("./Framework/AppServices/xmake.lua")
 includes("./Framework/AppRuntime/xmake.lua")
 includes("./Framework/Hierarchy/xmake.lua")
 includes("./Framework/GUI/xmake.lua")
+includes("./GUI/Host/xmake.lua")
 
 -- Game product line + product tier: engine profile only. The gui profile
 -- never pulls ECS/Scene3D/Resource/RenderGraph/Render3D/Physics/Host/Editor

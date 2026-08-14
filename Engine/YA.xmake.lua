@@ -184,6 +184,8 @@ do
     -- shared library and receive each module's public include/define config.
     add_deps(
         "ya-foundation-core",
+        "ya-app-kernel",
+        "ya-app-control",
         "ya-rhi",
         "ya-rhi-backend-common",
         "ya-rhi-vulkan",

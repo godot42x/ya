@@ -1,3 +1,2 @@
 #pragma once
-
-#include "../../../Application/AppKernel.h"
+#include "App/Kernel/AppKernel.h"

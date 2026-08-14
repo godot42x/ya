@@ -16,7 +16,7 @@
 namespace ya
 {
 
-class YA_CORE_API AppAutomationControlServer
+class YA_APP_CONTROL_API AppAutomationControlServer
 {
   public:
     struct Request

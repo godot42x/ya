@@ -60,13 +60,13 @@ struct GuiScenarioStep
     std::string assertion;
 };
 
-YA_CORE_API std::vector<GuiScenarioStep> parseGuiScenario(std::string_view jsonl,
+YA_APP_CONTROL_API std::vector<GuiScenarioStep> parseGuiScenario(std::string_view jsonl,
                                                           std::string* errorOut = nullptr);
 
-YA_CORE_API std::vector<GuiScenarioStep> loadGuiScenarioFile(const std::string& path,
+YA_APP_CONTROL_API std::vector<GuiScenarioStep> loadGuiScenarioFile(const std::string& path,
                                                              std::string* errorOut = nullptr);
 
-class YA_CORE_API GuiScenarioExecutor
+class YA_APP_CONTROL_API GuiScenarioExecutor
 {
 public:
     using StepFrameFn  = std::function<void(uint32_t count)>;
@@ -89,12 +89,12 @@ private:
 };
 
 /// Scenario key name to EKey ("Enter", "Space", "Down", "A", ...).
-YA_CORE_API EKey::T keyFromName(std::string_view name);
+YA_APP_CONTROL_API EKey::T keyFromName(std::string_view name);
 
 /// Emit the pointer/key/drag events of a step through the sink. Frame,
 /// Checkpoint, Assert and SetWindowSize are no-ops here: frame stepping,
 /// checkpoint dumps, assertions and native-window control stay at the
 /// host/kernel layer.
-YA_CORE_API void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step);
+YA_APP_CONTROL_API void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step);
 
 } // namespace ya
