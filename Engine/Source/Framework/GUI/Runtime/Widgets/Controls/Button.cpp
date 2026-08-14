@@ -31,7 +31,12 @@ glm::vec2 UIButton::computeDesiredSize() const
     if (!_bAutoSize) {
         return _size;
     }
-    return _contentLayout.measure(*this);
+    for (UIElement* child : getChildrenInPaintOrder()) {
+        if (child->participatesInLayout()) {
+            return _contentLayout.measure(*this);
+        }
+    }
+    return _size;
 }
 
 void UIButton::paintSelf(UIFrameBuilder& builder)

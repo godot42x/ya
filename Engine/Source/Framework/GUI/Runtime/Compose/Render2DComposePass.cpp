@@ -16,7 +16,8 @@ namespace
 void logSnapshotItemsOnce(const UIFrameSnapshot* uiFrameSnapshot)
 {
     static int sLoggedFrames = 0;
-    if (sLoggedFrames >= 3 || !uiFrameSnapshot) {
+    if (!Render2D::debugState().bLogSessionLifecycle ||
+        sLoggedFrames >= 3 || !uiFrameSnapshot) {
         return;
     }
 

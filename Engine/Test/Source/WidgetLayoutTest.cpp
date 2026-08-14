@@ -147,6 +147,20 @@ TEST(WidgetLayoutTest, ButtonSizesToTextContentWithPadding)
     EXPECT_FLOAT_EQ(desired.y, 20.0f + 8.0f);
 }
 
+TEST(WidgetLayoutTest, EmptyAutoButtonKeepsExplicitFallbackSize)
+{
+    WidgetTree tree({.width = 400, .height = 200});
+    auto button = std::make_shared<UIButton>("Empty");
+    button->_bAutoSize = true;
+    button->_size = {91.0f, 37.0f};
+    button->setContentPadding({12.0f, 6.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, button);
+    tree.layout();
+
+    EXPECT_EQ(button->computeDesiredSize(), glm::vec2(91.0f, 37.0f));
+    EXPECT_EQ(button->_layoutRect.extent, glm::vec2(91.0f, 37.0f));
+}
+
 TEST(WidgetLayoutTest, ButtonAutoSizeInContainerPacksAndFills)
 {
     registerSyntheticFont(16, 8.0f);
