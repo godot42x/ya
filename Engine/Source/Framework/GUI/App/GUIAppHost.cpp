@@ -1162,6 +1162,49 @@ void GUIWindowHost::onTick(float /*dt*/)
                 makeAutomationSuccess(*request, {{"width", width}, {"height", height}}));
             continue;
         }
+        // Pointer injection drives hover/click regressions deterministically:
+        // the same core events SDL emits, but scheduled from the control
+        // protocol so a test harness can assert on the hover owner afterward.
+        if (request->method == "mouse_move") {
+            const auto xIt = request->params.find("x");
+            const auto yIt = request->params.find("y");
+            if (xIt == request->params.end() || yIt == request->params.end() ||
+                !xIt->is_number() || !yIt->is_number()) {
+                _impl->automationServer.completeRequest(
+                    request,
+                    makeAutomationError(*request, "mouse_move requires number params {x,y}"));
+                continue;
+            }
+            const float x = xIt->get<float>();
+            const float y = yIt->get<float>();
+            _impl->lastMouseX = x;
+            _impl->lastMouseY = y;
+            dispatchToTree(MouseMoveEvent(x, y), x, y);
+            const UIElement* hovered = _impl->tree->getHovered();
+            _impl->automationServer.completeRequest(
+                request,
+                makeAutomationSuccess(*request,
+                                      {{"hovered", hovered ? hovered->_name : std::string{}}}));
+            continue;
+        }
+        if (request->method == "mouse_press") {
+            const auto buttonIt = request->params.find("button");
+            const int  button   = (buttonIt != request->params.end() && buttonIt->is_number_integer())
+                                      ? buttonIt->get<int>()
+                                      : 1; // SDL_BUTTON_LEFT
+            dispatchToTree(MouseButtonPressedEvent(button), _impl->lastMouseX, _impl->lastMouseY);
+            _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
+            continue;
+        }
+        if (request->method == "mouse_release") {
+            const auto buttonIt = request->params.find("button");
+            const int  button   = (buttonIt != request->params.end() && buttonIt->is_number_integer())
+                                      ? buttonIt->get<int>()
+                                      : 1; // SDL_BUTTON_LEFT
+            dispatchToTree(MouseButtonReleasedEvent(button), _impl->lastMouseX, _impl->lastMouseY);
+            _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
+            continue;
+        }
         _impl->automationServer.completeRequest(
             request,
             makeAutomationError(*request, std::format("unknown method: {}", request->method)));
