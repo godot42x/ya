@@ -5,7 +5,7 @@
 
 ## 当前优先级
 
-当前激活切片：`phase-a2 file-level consumer audit`
+当前激活切片：`phase-a3 batch-1 no-behavior migration`
 
 当前输入工件：
 
@@ -14,6 +14,8 @@
 - `capability-appform-mapping.md`
 - `nativewindow-api-triage.md`
 - `directory-target-include-audit.md`
+- `product-host-file-audit.md`
+- `appservices-file-audit.md`
 
 ## P0 — 输入工件就位
 
@@ -30,11 +32,11 @@
 
 ## P2 — Phase A2 file-level consumer audit
 
-- [ ] 审计 `Foundation/Core/Application/*`：逐文件切到 `App/Kernel` 或 `App/Control`
-- [ ] 审计 `Framework/AppRuntime/*`：确认 GUI bootstrap / native event / window manager 归位
-- [ ] 审计 `Framework/GUI/App/*`：确认 GUI host 装配与 compatibility alias 边界
-- [ ] 审计 `Framework/AppServices/*`：逐文件归回真实 owner，而不是继续挂在泛化 services 桶
-- [ ] 审计 `Product/Host/*`：区分共享能力消费者与 app-form shell
+- [x] 审计 `Foundation/Core/Application/*`：逐文件切到 `App/Kernel` 或 `App/Control`
+- [x] 审计 `Framework/AppRuntime/*`：确认 GUI bootstrap / native event / window manager 归位
+- [x] 审计 `Framework/GUI/App/*`：确认 GUI host 装配与 compatibility alias 边界
+- [x] 审计 `Framework/AppServices/*`：逐文件归回真实 owner，而不是继续挂在泛化 services 桶
+- [x] 审计 `Product/Host/*`：区分共享能力消费者与 app-form shell
 
 ## P3 — Phase A3 Batch 1 no-behavior 迁移
 
@@ -59,6 +61,7 @@
 
 ## 当前下一刀
 
-1. 先做 `Product/Host` 的 file-level consumer audit；
-2. 再做 `Framework/AppServices` 的 file-level consumer audit；
-3. 最后按 `first-batch-move-design.md` 开始 Batch 1 的真实 no-behavior 迁移。
+1. 建立真实 `App/Kernel`、`App/Control`、`GUI/Host` 目录 / target / include root；
+2. 增加最小 forward header 与 compat target 壳，但不保留双份实现；
+3. 先切 GUI-only consumers：`GUIWorkbench`、`ya-gui-minimal-host`、`ya-gui-headless-host-test`；
+4. 再切 `ya-host` 与 `ya-editor`，确认 Product/Host 只是在消费新主线而不是重新夺回 owner。

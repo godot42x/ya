@@ -56,3 +56,30 @@
 - 文档级验证：Batch 1 的目录、target、include root、compat、删除条件、build checkpoints 已落盘；
 - 文档级验证：todo 与活跃切片已切到 file-level audit；
 - 代码级验证：本轮仍未改 `Engine/Source` 行为代码。
+
+## 2026-08-14 — 完成 Product/Host 与 AppServices file-level audit
+
+### 本轮完成
+
+- 新增 `product-host-file-audit.md`，把 `Product/Host/*` 逐文件划分为 app-form shell、consumer façade、branch-local adapter、compat only 与 dead/delete candidate；
+- 新增 `appservices-file-audit.md`，确认 `Framework/AppServices/*` 不是共享 App owner，而是 render/runtime contract 与配置暂存桶；
+- 关闭 Phase A2 file-level audit：`Foundation/Core/Application`、`Framework/AppRuntime`、`Framework/GUI/App`、`Framework/AppServices`、`Product/Host` 现在都有明确的 file-level owner 输入；
+- 将活跃切片切换到 Phase A3 Batch 1 no-behavior migration。
+
+### 当前结论
+
+- Batch 1 现在已经具备真实执行前置：共享 `App/*` 与 `GUI/Host/*` 的迁移表齐全，`Product/Host` 与 `AppServices` 也明确了“只接新主线、不误判 owner”的边界；
+- 下一步不再是继续写审计，而是按 `first-batch-move-design.md` 落目录、target、兼容头与消费者切换顺序；
+- `Product/Host` 与 `Framework/AppServices` 暂不做物理挪动，避免把 Batch 1 的 no-behavior 迁移和 Batch 2 的 owner 拆桶混成一个 patch。
+
+### 下一轮直接接力点
+
+1. 建立 `App/Kernel`、`App/Control`、`GUI/Host` 的真实目录、target、public include root；
+2. 增加最小 forward header / compat target 壳；
+3. 先切 GUI-only consumers，再切 `ya-host` / `ya-editor`。
+
+### 本轮验证
+
+- 文档级验证：新增 `product-host-file-audit.md` 与 `appservices-file-audit.md`；
+- 文档级验证：todo / feature matrix 已切到 Phase A3；
+- 代码级验证：本轮仍未改 `Engine/Source` 行为代码。
