@@ -1,0 +1,31 @@
+{
+  "plan": "gui-capability-gap",
+  "updated_at": "2026-08-15",
+  "legend": {
+    "planned": "尚未开始，但已纳入主线",
+    "in_progress": "当前阶段正在推进",
+    "pass": "已有结构证据或已完成",
+    "fail": "已有明确回归或验证失败",
+    "blocked": "受前置审计、外部条件或上游决定阻塞"
+  },
+  "tracks": [
+    {
+      "id": "reactive_binding",
+      "title": "响应式数据绑定 + 性能管线（最小闭环第一刀）",
+      "items": [
+        { "id": "m0_perf_baseline", "status": "planned", "notes": "性能基线：三段耗时 + rebuild 数 + draw item 数，Workbench 页面基线" },
+        { "id": "m1_reactive_core", "status": "planned", "notes": "Reactive<T> 事件驱动依赖追踪 + 三级 dirty（paint/arrange/measure）+ snapshot 增量复用（双缓冲）+ Text 绑定最小验证" },
+        { "id": "m2_binding_generalize", "status": "planned", "notes": "Button.enabled / split ratio / 文本尺寸三类绑定 + ReactiveList 接口 + computed 接口" },
+        { "id": "m3_perf_seam", "status": "planned", "notes": "性能管线可 scenario 断言 + 声明式 diff 复用接口内嵌（为 immediate API 留口子）" }
+      ]
+    },
+    {
+      "id": "p0_backlog",
+      "title": "P0 后续（本计划之后的独立刀）",
+      "items": [
+        { "id": "styles_styleset", "status": "planned", "notes": "Styles/StyleSet：布局/样式分离，数据驱动样式（参考 Vue SFC / EUI-NEO Rect 样式盒）" },
+        { "id": "treeview", "status": "planned", "notes": "TreeView：hierarchy 面板第一块砖，在响应式 + 样式之上做" }
+      ]
+    }
+  ]
+}
