@@ -7,9 +7,9 @@
 
 当前默认只允许同时推进一个 phase 的一个最小切片。若工作区中已经存在未完成切片，先收口再开新项。
 
-当前激活切片：`phase-a no-behavior move/rename design`
+当前激活切片：`无（活跃迁移已拆到 ../app-gui-boundary-migration/）`
 
-当前审计工件：`owner-model.md` + `plan.md` 目录归位表（macOS/MoltenVK gate 保持外部阻塞，不再占用当前主切片）
+当前说明：本目录保留 GUI 内核与 workbench 收敛历史；App / GUI 边界迁移输入工件与活跃待办已迁到 `../app-gui-boundary-migration/`。
 
 ## P0 — Phase 0 渲染正确性基线
 

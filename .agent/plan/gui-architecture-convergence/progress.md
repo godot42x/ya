@@ -3,6 +3,25 @@
 > 建立日期：2026-08-13
 > 作用：记录每轮已经完成的内容、验证证据、遗留风险与下一步接力点。这个文件应该持续追加，不回写成静态总结。
 
+## 2026-08-14 — 活跃迁移主线拆出到 `app-gui-boundary-migration`
+
+### 本轮完成
+
+- 从本目录拆出新的 `../app-gui-boundary-migration/` 计划，专门承接尚未完成的 App / GUI 目录、target 与 owner 迁移；
+- 将活跃迁移输入工件迁走：`owner-model.md`、`directory-charter.md`、`capability-appform-mapping.md`、`nativewindow-api-triage.md`、`directory-target-include-audit.md`；
+- 本目录从此只保留 GUI 内核、对象模型、route、workbench regression 等历史收敛记录。
+
+### 当前结论
+
+- 后续如果要继续做目录 / target / owner 迁移，应直接进入 `../app-gui-boundary-migration/`；
+- 本目录不再承载活跃迁移待办，避免一份计划同时混着“已收敛的内核”和“未开始的物理迁移”。
+
+### 本轮验证
+
+- 文档级验证：新计划目录已建立并补齐最低工件；
+- 文档级验证：活跃迁移输入工件已从本目录迁出；
+- 代码级验证：本轮未改 `Engine/Source` 行为代码。
+
 ## 2026-08-14 — Phase A 审计工件补齐：能力轴映射、NativeWindow 三分表、target/include 闭包表
 
 ### 本轮完成

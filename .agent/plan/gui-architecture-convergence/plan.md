@@ -1,8 +1,8 @@
 # GUI 架构收敛计划：单主循环、Widget/Layout/Slot、事件路径与多窗口留口
 
 > 建立日期：2026-08-13
-> 状态：正式收敛期。当前主线不是继续堆控件，也不是先做 .yaui / UIDocument，而是先把 GUI 的主链路、布局对象模型、事件路由、control plane 基底与调试闭环做扎实。
-> 关联：本计划是 GUI 框架下一阶段的唯一主线参考，替代此前零散的 host / workbench / minimal host / UIContainer 增量路线。
+> 状态：历史基线。GUI 主链路、布局对象模型、事件路径与 workbench 回归的收敛记录仍保留在这里；剩余的 App / GUI 目录、target 与 owner 迁移，已拆到 `../app-gui-boundary-migration/` 继续推进。
+> 关联：本计划保留为 GUI 内核与对象模型收敛参考；不再作为活跃迁移待办入口。
 
 ## 0. 结论摘要
 
