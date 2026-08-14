@@ -195,7 +195,7 @@ def _build_targets_for(project_path: Path | None, include_editor: bool) -> list[
 
     targets = ["ya-runtime"]
     if include_editor:
-        targets.append("ya-editor")
+        targets.append("ya-game-editor")
     return targets
 
 
@@ -339,7 +339,7 @@ def build_parser() -> argparse.ArgumentParser:
     build = subparsers.add_parser("build", help="Build ya-runtime or a project closure.")
     SUBCOMMAND_PARSERS["build"] = build
     _add_common_build_flags(build)
-    build.add_argument("--editor", action="store_true", help="Also build ya-editor alongside the host runtime.")
+    build.add_argument("--editor", action="store_true", help="Also build ya-game-editor alongside the host runtime.")
     build.set_defaults(func=cmd_build)
 
     run = subparsers.add_parser("run", help="Build and run a project through ya-runtime.")

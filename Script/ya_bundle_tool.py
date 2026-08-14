@@ -15,7 +15,7 @@ from pathlib import Path
 
 
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_EDITOR_PLUGIN = WORKSPACE_ROOT / "Engine/Plugins/ya-editor/ya-editor.yaplugin"
+DEFAULT_EDITOR_PLUGIN = WORKSPACE_ROOT / "Engine/Plugins/ya-game-editor/ya-game-editor.yaplugin"
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 ENGINE_CONTENT_DIR = WORKSPACE_ROOT / "Engine/Content"
 ENGINE_SHADER_GLSL_DIR = WORKSPACE_ROOT / "Engine/Shader" / "GLSL"
@@ -189,7 +189,7 @@ def collect_enabled_module_manifests(project: ProjectDescriptor, include_editor:
 def resolve_build_targets(project: ProjectDescriptor, include_editor: bool) -> list[str]:
     targets = ["ya-runtime"]
     if include_editor:
-        targets.append("ya-editor")
+        targets.append("ya-game-editor")
     for manifest in collect_enabled_module_manifests(project, include_editor):
         if manifest.binary not in targets:
             targets.append(manifest.binary)
@@ -733,7 +733,7 @@ def create_package(project: ProjectDescriptor, include_editor: bool, output: Pat
 
     runtime_targets = ["ya-runtime", "ya-engine"]
     if include_editor:
-        runtime_targets.append("ya-editor")
+        runtime_targets.append("ya-game-editor")
     runtime_targets.extend(manifest.binary for manifest in manifests)
     for target in _collect_target_closure(runtime_targets):
         kind, targetfile, _, linkdirs = _target_info(target)
@@ -775,7 +775,7 @@ def verify_package_contents(project: ProjectDescriptor,
                             project_package_dir: Path,
                             engine_binaries_dir: Path,
                             project_binaries_dir: Path) -> None:
-    editor_binary = engine_binaries_dir / _targetfile_for("ya-editor").name
+    editor_binary = engine_binaries_dir / _targetfile_for("ya-game-editor").name
     required_files = [
         package_root / _targetfile_for("ya-runtime").name,
         engine_binaries_dir / _targetfile_for("ya-engine").name,

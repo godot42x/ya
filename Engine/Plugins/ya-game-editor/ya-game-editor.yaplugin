@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "name": "ya-game-editor",
+  "modules": [
+    "../../Modules/ya-game-editor.yamodule"
+  ]
+}

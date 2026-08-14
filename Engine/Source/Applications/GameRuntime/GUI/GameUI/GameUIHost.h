@@ -1,7 +1,7 @@
 #pragma once
 
 // ============================================================================
-// GameUIHost - Product/Host adapter for the presentation WidgetTree
+// GameUIHost - GameRuntime adapter for the presentation WidgetTree
 // (ui-widget-tree-refactor Phase 3).
 //
 // Owns the single live WidgetTree of the current game presentation area and

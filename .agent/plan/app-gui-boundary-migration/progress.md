@@ -167,3 +167,24 @@
 - 构建：`ya-gui-host` / `ya-gui-closure-test` / `GUIWorkbench` / `ya-host` / `ya-editor` 全部通过；
 - 运行时：`ya-gui-closure-test` 114/114 PASS；
 - 残留：`rg 'Core/Application/|AppRuntime/|GUI/App/|ya-app-runtime|ya-gui-app-host|YA_APP_RUNTIME_API|YA_APP_SERVICES_API'` 零残留。
+
+## 2026-08-15 — 完成 app-form 归位，迁移主线收口
+
+### 本轮完成
+
+- `Product/Host` -> `Applications/GameRuntime`：`ya-host` -> `ya-game-runtime`、`YA_HOST_API` -> `YA_GAME_RUNTIME_API`、include 拼写 `Host/*` -> `GameRuntime/*`（含 Editor/Test/Example 等全部消费者）；
+- `Product/Editor` -> `Applications/GameEditor`：`ya-editor` -> `ya-game-editor`（target、DLL、plugin/manifest 运行时身份）、`YA_EDITOR_API` -> `YA_GAME_EDITOR_API`、`Editor/*` -> `GameEditor/*`；
+- 顶层 `Product/` 桶取消；`Engine/Source/xmake.lua`、`Engine/YA.xmake.lua`、`Script/ya.py`、`Script/ya_bundle_tool.py`、`Script/ya_module_lint.py` 里的 target 名 / 路径硬编码同步更新；
+- 顺带收口：模块系统抽成 opt-in `ya-module-manager`、`IModule` 的 game-runtime 钩子拆到 `IRuntimeModule`（App/Module 不再引用 game 类型）。
+
+### 当前结论
+
+- 迁移主线全部完成，物理树已收口到 charter 目标形状：共享能力轴（Core / App / Render / GUI / Scene / Physics / Scripting / Reflection）与应用形态轴（Applications/GameRuntime / Applications/GameEditor）；
+- GUI app（GUIWorkbench）闭包不链 `ya-module-manager`，保持 GUI-only 干净。
+
+### 本轮验证
+
+- 构建：`ya-game-runtime` / `ya-game-editor` / `ya-runtime` / `ya-engine` / `HelloMaterial` / `GreedySnake` / `ya-testing` / `ya-gui-closure-test` / `GUIWorkbench` 全绿；
+- 运行时：`ya-testing` 477/477、`ya-gui-closure-test` 114/114、`run` 与 `run-editor` 端到端 `EXIT=0`（editor 插件经新路径 `ya-game-editor.yaplugin` 正常加载）；
+- lint：`python3 Script/ya_module_lint.py` ok；
+- 残留：`rg 'ya-host|ya-editor|Product/Host|Product/Editor|"Host/|"Editor/'` 零残留。

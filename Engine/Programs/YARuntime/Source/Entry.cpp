@@ -93,7 +93,7 @@ int main(int argc, char** argv)
 
         if (appDesc.bEditor) {
             std::string error;
-            if (!addPluginDescriptor(moduleManager, roots, "Engine/Plugins/ya-editor/ya-editor.yaplugin", true, error)) {
+            if (!addPluginDescriptor(moduleManager, roots, "Engine/Plugins/ya-game-editor/ya-game-editor.yaplugin", true, error)) {
                 std::fprintf(stderr, "%s\n", error.c_str());
                 return 2;
             }
