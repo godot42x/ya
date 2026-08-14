@@ -1,12 +1,14 @@
 
 #pragma once
 
+#include "Core/Api.h"
+
 #include <cstdint>
 #include <functional>
 namespace ya
 {
 
-struct UUID
+struct YA_CORE_API UUID
 {
     uint64_t value;
 

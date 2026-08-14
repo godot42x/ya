@@ -27,8 +27,12 @@
 namespace ya
 {
 
-extern YA_HOST_API ClearValue colorClearValue;
-extern YA_HOST_API ClearValue depthClearValue;
+// Default clear values. Exposed through accessor functions rather than extern
+// data symbols: a dllexport data symbol cannot be imported from another DLL
+// (the module export macro propagates into every consumer), whereas function
+// symbols resolve cleanly through the import library.
+YA_HOST_API ClearValue& getColorClearValue();
+YA_HOST_API ClearValue& getDepthClearValue();
 
 struct Scene;
 enum class EWidgetRouteResult : uint8_t;
@@ -141,6 +145,16 @@ struct YA_HOST_API App : public IRenderRuntimeHostServices
         }
         return 0;
     }
+    /// Runtime-typed bridge used by AppKernel event sources. SDL/script event
+    /// pumps erase the concrete C++ event type, so publish through the event's
+    /// dynamic type rather than instantiating MessageBus::publish<Event>.
+    int dispatchEvent(const Event& event)
+    {
+        if (0 == onEvent(event)) {
+            MessageBus::get()->publishEvent(event);
+        }
+        return 0;
+    }
 
     void addModule(std::unique_ptr<IModule> module);
     void addModule(IModule& module);
@@ -167,8 +181,12 @@ struct YA_HOST_API App : public IRenderRuntimeHostServices
     virtual void tickLogic(float dt);
     virtual void tickRender(float dt);
 
-    static App* get() { return _instance; }
-    [[nodiscard]] static uint32_t currentFrameIndex() { return _frameIndex; }
+    // Defined in App.cpp. Kept out of the header so consumers resolve the
+    // singleton through the DLL import thunk instead of inlining a direct
+    // read of the static data members `_instance`/`_frameIndex` (a dllexport
+    // data symbol cannot be imported from another DLL and would fail LNK2001).
+    static App* get();
+    [[nodiscard]] static uint32_t currentFrameIndex();
 
     [[nodiscard]] AppRenderServices&       getRenderServices() { return _renderServices; }
     [[nodiscard]] const AppRenderServices& getRenderServices() const { return _renderServices; }
@@ -199,10 +217,12 @@ struct YA_HOST_API App : public IRenderRuntimeHostServices
     [[nodiscard]] TaskManager&                   getTaskManager() { return taskManager; }
     [[nodiscard]] const TaskManager&             getTaskManager() const { return taskManager; }
 
-    [[nodiscard]] uint32_t                getFrameIndex() const { return _frameIndex; }
+    // Defined in App.cpp (see the data-symbol note on get()/currentFrameIndex()).
+    [[nodiscard]] uint32_t                getFrameIndex() const;
     [[nodiscard]] uint64_t                getElapsedTimeMS() const;
 
     [[nodiscard]] AppState getAppState() const { return _appState; }
+    [[nodiscard]] bool     isRunning() const { return bRunning; }
     [[nodiscard]] bool     isStopped() const { return _appState == AppState::Stopped; }
     [[nodiscard]] bool     isSimulationMode() const { return _appState == AppState::Simulation; }
     [[nodiscard]] bool     isRuntimeMode() const { return _appState == AppState::Runtime; }

@@ -3,6 +3,7 @@
 #include "RHI/RenderDefines.h"
 #include "Core/Api.h"
 
+#include <functional>
 #include <unordered_map>
 #include <vector>
 
@@ -42,7 +43,14 @@ class YA_RHI_API ResourceStateTracker
 
     struct ImageSubresourceKeyHash
     {
-        size_t operator()(const ImageSubresourceKey& key) const;
+        size_t operator()(const ImageSubresourceKey& key) const
+        {
+            size_t seed = std::hash<const IImage*>{}(key.image);
+            seed ^= std::hash<uint32_t>{}(key.aspect) + 0x9e3779b9u + (seed << 6u) + (seed >> 2u);
+            seed ^= std::hash<uint32_t>{}(key.mip) + 0x9e3779b9u + (seed << 6u) + (seed >> 2u);
+            seed ^= std::hash<uint32_t>{}(key.layer) + 0x9e3779b9u + (seed << 6u) + (seed >> 2u);
+            return seed;
+        }
     };
 
     std::unordered_map<ImageSubresourceKey, ImageResourceState, ImageSubresourceKeyHash> _imageStates;

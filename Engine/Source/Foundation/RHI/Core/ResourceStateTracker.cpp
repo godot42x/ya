@@ -33,15 +33,6 @@ void forEachAspect(uint32_t aspectMask, Fn&& fn)
 
 } // namespace
 
-size_t ResourceStateTracker::ImageSubresourceKeyHash::operator()(const ImageSubresourceKey& key) const
-{
-    size_t seed = std::hash<const IImage*>{}(key.image);
-    seed ^= std::hash<uint32_t>{}(key.aspect) + 0x9e3779b9u + (seed << 6u) + (seed >> 2u);
-    seed ^= std::hash<uint32_t>{}(key.mip) + 0x9e3779b9u + (seed << 6u) + (seed >> 2u);
-    seed ^= std::hash<uint32_t>{}(key.layer) + 0x9e3779b9u + (seed << 6u) + (seed >> 2u);
-    return seed;
-}
-
 ImageSubresourceRange ResourceStateTracker::normalizeRange(const IImage& image, const ImageSubresourceRange* range)
 {
     ImageSubresourceRange normalized = range ? *range : ImageSubresourceRange{

@@ -12,7 +12,7 @@ namespace ya
 {
 
 
-struct CameraComponent : public IComponent
+struct YA_GAMEPLAY_SYSTEMS_API CameraComponent : public IComponent
 {
     YA_REFLECT_BEGIN(CameraComponent)
     YA_REFLECT_FIELD(bPrimary)

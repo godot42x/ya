@@ -6,7 +6,7 @@
 namespace ya
 {
 
-struct PrimitiveGeometryFactory
+struct YA_RESOURCE_CORE_API PrimitiveGeometryFactory
 {
     [[nodiscard]] static EngineMeshData createEngineMeshData(EPrimitiveGeometry type);
 };

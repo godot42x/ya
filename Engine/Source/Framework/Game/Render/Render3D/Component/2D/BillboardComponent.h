@@ -8,7 +8,7 @@ namespace ya
 
 struct UnlitMaterial;
 
-class BillboardComponent : public IComponent
+class YA_RENDER_3D_API BillboardComponent : public IComponent
 {
     YA_REFLECT_BEGIN(BillboardComponent, IComponent)
     YA_REFLECT_FIELD(bVisible)

@@ -13,6 +13,6 @@ class AssimpImporter final : public IModelImporter
     ImportedModelData import(const std::string& filepath) const override;
 };
 
-const IModelImporter& getAssimpImporter();
+YA_RESOURCE_LOADER_API const IModelImporter& getAssimpImporter();
 
 } // namespace ya::model_importer

@@ -17,7 +17,7 @@ struct Scene;
  * the same entity. This is render-side topology logic; the linkage framework
  * stays generic.
  */
-struct MaterialRenderLinkageRule : public ILinkageRule
+struct YA_RENDER_ECS_ADAPTERS_API MaterialRenderLinkageRule : public ILinkageRule
 {
     explicit MaterialRenderLinkageRule(LinkageFramework* framework);
     ~MaterialRenderLinkageRule() override;

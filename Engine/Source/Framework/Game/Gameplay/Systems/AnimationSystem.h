@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Api.h"
 #include "Core/System/System.h"
 
 #include <functional>
@@ -9,7 +10,7 @@ namespace ya
 
 struct Scene;
 
-struct SkeletonAnimationSystem : public ISystem
+struct YA_GAMEPLAY_SYSTEMS_API SkeletonAnimationSystem : public ISystem
 {
     using SceneProvider = std::function<Scene*()>;
     using TickPolicy    = std::function<bool()>;

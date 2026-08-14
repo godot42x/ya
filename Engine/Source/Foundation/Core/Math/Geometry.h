@@ -101,7 +101,7 @@ struct SkeletonMeshVertex
  * 所有几何体默认生成在原点，使用 ENGINE_COORDINATE_SYSTEM 坐标系
  * 包含位置、法线、UV坐标
  */
-struct PrimitiveGeometry
+struct YA_CORE_API PrimitiveGeometry
 {
     /**
      * @brief 生成单位立方体 (边长为1，中心在原点)

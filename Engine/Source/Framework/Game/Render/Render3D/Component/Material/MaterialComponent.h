@@ -78,21 +78,37 @@ struct MaterialComponent : public MaterialComponentBase
     /**
      * @brief Set a shared material (will not be destroyed by this component)
      */
-    void setSharedMaterial(MaterialType* material)
-    {
-        setSharedMaterialBase(material);
-    }
+    void setSharedMaterial(MaterialType* material);
 
-    [[nodiscard]] MaterialType* getMaterial() const { return static_cast<MaterialType*>(_material); }
+    [[nodiscard]] MaterialType* getMaterial() const;
 
-    void setMaterial(MaterialType* material)
-    {
-        setSharedMaterial(material);
-    }
+    void setMaterial(MaterialType* material);
 
     [[nodiscard]] bool isUsingSharedMaterial() const { return _material != nullptr && _bSharedMaterial; }
 };
 
+// Out-of-line template definitions. The concrete material type (MaterialType)
+// is deliberately incomplete in this header, so the pointer conversions go
+// through `void*`. This is a standard conversion chain and yields the same
+// address: Material is the root base of every MaterialType (single, non-virtual
+// inheritance), so the Material subobject starts at offset zero.
+template <typename MaterialType>
+void MaterialComponent<MaterialType>::setSharedMaterial(MaterialType* material)
+{
+    setSharedMaterialBase(static_cast<Material*>(static_cast<void*>(material)));
+}
+
+template <typename MaterialType>
+MaterialType* MaterialComponent<MaterialType>::getMaterial() const
+{
+    return static_cast<MaterialType*>(static_cast<void*>(_material));
+}
+
+template <typename MaterialType>
+void MaterialComponent<MaterialType>::setMaterial(MaterialType* material)
+{
+    setSharedMaterial(material);
+}
 
 
 } // namespace ya

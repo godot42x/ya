@@ -70,7 +70,7 @@ struct IWindowProvider
 #endif
 };
 
-class SDLWindowProvider final : public IWindowProvider
+class YA_RHI_API SDLWindowProvider final : public IWindowProvider
 {
   public:
     SDLWindowProvider() = default;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Api.h"
 #include "Gameplay/Linkage/LinkageRule.h"
 
 #include <glm/glm.hpp>
@@ -37,7 +38,7 @@ struct LightBillboardPolicy
  * a light-managed BillboardComponent in sync, using the framework's deferred
  * scheduler. This is business logic; the linkage framework stays generic.
  */
-struct LightBillboardLinkageRule : public ILinkageRule
+struct YA_RENDER_ECS_ADAPTERS_API LightBillboardLinkageRule : public ILinkageRule
 {
     explicit LightBillboardLinkageRule(LinkageFramework* framework);
     ~LightBillboardLinkageRule() override;

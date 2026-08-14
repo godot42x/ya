@@ -19,7 +19,7 @@
 namespace ya
 {
 
-struct UIDocumentResolver
+struct YA_HOST_API UIDocumentResolver
 {
     /// Load + cache a `.yaui` document. Returns nullptr with a diagnostic
     /// (path + error) when the file is missing or the document is invalid.

@@ -120,6 +120,6 @@ struct Skeleton
     }
 };
 
-std::shared_ptr<Skeleton> createSkeleton(const ImportedSkeletonData& importedSkeletonData);
+YA_RESOURCE_CORE_API std::shared_ptr<Skeleton> createSkeleton(const ImportedSkeletonData& importedSkeletonData);
 
 } // namespace ya

@@ -13,6 +13,6 @@ class GltfImporter final : public IModelImporter
     ImportedModelData import(const std::string& filepath) const override;
 };
 
-const IModelImporter& getGltfImporter();
+YA_RESOURCE_LOADER_API const IModelImporter& getGltfImporter();
 
 } // namespace ya::model_importer

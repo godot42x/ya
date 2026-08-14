@@ -15,7 +15,7 @@ namespace ya
 enum class CoordinateSystem;
 struct IRender;
 
-struct Mesh
+struct YA_RESOURCE_API Mesh
 {
 
     std::string _name;

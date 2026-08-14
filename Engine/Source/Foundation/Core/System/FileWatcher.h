@@ -16,7 +16,7 @@ namespace ya
  * 
  * 使用 libfswatch 实现跨平台文件监视
  */
-class FileWatcher
+class YA_CORE_API FileWatcher
 {
   public:
     enum class ChangeType

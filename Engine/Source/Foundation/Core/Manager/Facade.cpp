@@ -2,7 +2,14 @@
 
 namespace ya
 {
+namespace
+{
+FacadeMode s_facade;
+} // namespace
 
-FacadeMode Facade;
+YA_CORE_API FacadeMode& facade()
+{
+    return s_facade;
+}
 
 } // namespace ya

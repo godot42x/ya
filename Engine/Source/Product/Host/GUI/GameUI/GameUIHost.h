@@ -37,7 +37,7 @@ namespace ya
 
 struct Scene;
 
-struct GameUIHost
+struct YA_HOST_API GameUIHost
 {
     GameUIHost();
     ~GameUIHost();

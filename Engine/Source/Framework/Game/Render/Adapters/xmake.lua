@@ -19,4 +19,7 @@ target("ya-render-ecs-adapters")
     add_deps("ya-resource-core", "ya-resource-loader", "ya-resource-runtime", "ya-render-3d", "ya-scene-3d", "ya-scene-runtime")
     -- Model instantiation walks the scene tree base (Node) from ya-hierarchy.
     add_deps("ya-hierarchy")
+    if is_plat("windows") then
+        add_cxxflags("/bigobj")
+    end
     add_packages("entt", "glm")

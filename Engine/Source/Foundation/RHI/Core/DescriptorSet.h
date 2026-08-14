@@ -79,7 +79,7 @@ struct CopyDescriptorSet
  * @brief Abstract interface for descriptor set layout
  * Describes the bindings in a descriptor set
  */
-struct IDescriptorSetLayout
+struct YA_RHI_API IDescriptorSetLayout
 {
   public:
     virtual ~IDescriptorSetLayout() = default;
@@ -129,7 +129,7 @@ struct IRender;
  * @brief Abstract interface for descriptor pool
  * Manages allocation of descriptor sets
  */
-struct IDescriptorPool
+struct YA_RHI_API IDescriptorPool
 {
   public:
     virtual ~IDescriptorPool() = default;

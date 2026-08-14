@@ -12,7 +12,12 @@ namespace detail
 template <>
 MaterialFactory *MaterialFactory::_instance = nullptr;
 template <>
-void MaterialFactory::init()
+YA_RENDER_3D_API MaterialFactory *MaterialFactory::get()
+{
+    return _instance;
+}
+template <>
+YA_RENDER_3D_API void MaterialFactory::init()
 {
     YA_CORE_ASSERT(!_instance, "MaterialFactory already initialized!");
     _instance = new MaterialFactory();
@@ -20,7 +25,7 @@ void MaterialFactory::init()
 }
 
 template <>
-void MaterialFactory::destroy()
+YA_RENDER_3D_API void MaterialFactory::destroy()
 {
     _materials.clear();
     delete _instance;

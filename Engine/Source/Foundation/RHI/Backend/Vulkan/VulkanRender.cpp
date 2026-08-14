@@ -21,6 +21,9 @@
 
 
 #ifdef _WIN32
+    #ifndef NOMINMAX
+        #define NOMINMAX
+    #endif
     #include <windows.h>
 #endif
 
@@ -200,6 +203,64 @@ VulkanRender::~VulkanRender()
         delete _descriptorHelper;
         _descriptorHelper = nullptr;
     }
+}
+
+void VulkanRender::destroyInternal()
+{
+    if (m_LogicalDevice) {
+        vkDeviceWaitIdle(m_LogicalDevice);
+    }
+    else {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    }
+
+    releaseSyncResources();
+    releaseFrameGpuTimingResources();
+    VK_DESTROY(PipelineCache, m_LogicalDevice, _pipelineCache);
+
+    if (_swapChain) {
+        // Cleanup swap chain resources
+        // Cast to VulkanSwapChain for Vulkan-specific cleanup
+        auto* vkSwapchain = static_cast<VulkanSwapChain*>(_swapChain);
+        vkSwapchain->cleanup();
+        delete _swapChain;
+    }
+    // m_renderPass.cleanup();
+
+    _graphicsCommandPool->cleanup();
+    if (_presentCommandPool) {
+        _presentCommandPool->cleanup();
+    }
+    // for (auto &[name, sampler] : _samplers) {
+    //     VK_DESTROY_A(Sampler, m_LogicalDevice, sampler, getAllocator());
+    // }
+
+    // MARK: destroy device
+
+    // Release host-provided default resources (e.g. the GUI texture
+    // library) while the device is still alive: their static destructors
+    // would otherwise run after device teardown.
+    if (auto* source = getBuiltinTextureSource()) {
+        source->shutdown();
+    }
+
+    // Force-release every factory-created sampler before the device dies.
+    releaseTrackedSamplers();
+
+    if (_vmaAllocator) {
+        vmaDestroyAllocator(_vmaAllocator);
+        _vmaAllocator = VK_NULL_HANDLE;
+    }
+
+    if (m_LogicalDevice) {
+        vkDestroyDevice(m_LogicalDevice, nullptr);
+    }
+
+    if (m_EnableValidationLayers && bSupportDebugUtils) {
+        _debugUtils->destroy();
+    }
+    onReleaseSurface.executeIfBound(&(*_instance), &_surface);
+    vkDestroyInstance(_instance, getAllocator());
 }
 
 

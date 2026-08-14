@@ -303,7 +303,7 @@ void EditorLayer::viewportWindow()
                         }
                         if (!duplicated.empty()) {
                             YA_CORE_INFO("Duplicated {} entit{}", duplicated.size(), duplicated.size() > 1 ? "ies" : "y");
-                            Facade.timerManager.delayCall(
+                            facade().timerManager.delayCall(
                                 1,
                                 [this, duplicated]() {
                                     _sceneHierarchyPanel.replaceSelection(duplicated, duplicated.front());

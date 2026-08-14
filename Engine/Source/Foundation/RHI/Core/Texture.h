@@ -215,7 +215,7 @@ struct YA_RHI_API Texture
  * Does NOT store bEnable (that belongs in the param UBO).
  * Provides convenience accessors that return GPU Handles with fallback.
  */
-struct TextureBinding
+struct YA_RHI_API TextureBinding
 {
     ya::Ptr<Texture> texture = nullptr;
     ya::Ptr<Sampler> sampler = nullptr;

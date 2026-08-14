@@ -19,7 +19,7 @@ namespace ya::profiling
 
 namespace detail
 {
-extern void refMStartMSVC();
+YA_CORE_API extern void refMStartMSVC();
 } // namespace detail
 
 /**

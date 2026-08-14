@@ -23,8 +23,36 @@ inline const FName kGameRootMount = game::mounts::GameRoot;
 App*     App::_instance        = nullptr;
 uint32_t App::App::_frameIndex = 0;
 
-ClearValue colorClearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);
-ClearValue depthClearValue = ClearValue(1.0f, 0);
+App* App::get()
+{
+    return _instance;
+}
+
+uint32_t App::currentFrameIndex()
+{
+    return _frameIndex;
+}
+
+uint32_t App::getFrameIndex() const
+{
+    return _frameIndex;
+}
+
+namespace
+{
+ClearValue s_colorClearValue = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);
+ClearValue s_depthClearValue = ClearValue(1.0f, 0);
+} // namespace
+
+ClearValue& getColorClearValue()
+{
+    return s_colorClearValue;
+}
+
+ClearValue& getDepthClearValue()
+{
+    return s_depthClearValue;
+}
 
 App::App()
     : _renderState(std::make_unique<AppRenderState>())

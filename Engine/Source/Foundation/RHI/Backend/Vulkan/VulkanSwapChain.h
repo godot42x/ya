@@ -29,7 +29,7 @@ struct VulkanSwapChainSupportDetails
 
 struct VulkanRender;
 
-struct VulkanSwapChain : public ISwapchain
+struct YA_RHI_BACKEND_API VulkanSwapChain : public ISwapchain
 {
     VulkanRender *_render = nullptr;
 

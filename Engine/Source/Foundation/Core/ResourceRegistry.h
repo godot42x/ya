@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Api.h"
 #include "Core/FName.h"
 #include <algorithm>
 #include <functional>
@@ -69,7 +70,7 @@ struct IResourceCache
     virtual bool isValid(const RID &rid) { return true; }
 };
 
-class ResourceRegistry
+class YA_CORE_API ResourceRegistry
 {
     struct CacheEntry
     {
@@ -86,7 +87,7 @@ class ResourceRegistry
     /// Defined in ResourceRegistry.cpp: the singleton must have a single
     /// strong symbol across dylibs (a header-inline static would be copied
     /// per image and split registered caches between modules).
-    static YA_CORE_API ResourceRegistry &get();
+    static ResourceRegistry &get();
 
     void registerCache(IResourceCache *cache, int priority = 0);
     void clearAll();

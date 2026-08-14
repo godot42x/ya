@@ -23,7 +23,10 @@ do
 
     -- add_rules("c++.unity_build", { batchsize = 2 }) -- no need to build multiple times, and sub modules cannot manage recursively dependency
     add_files("./ImGui/*.cpp", "./ImGui/misc/cpp/*.cpp")
-    remove_files("./ImGui/imgui_demo.cpp")
+    -- imgui_demo.cpp stays here (it is part of upstream imgui). It must NOT be
+    -- compiled by ya-engine: that aggregate defines IMGUI_API=dllexport, which
+    -- makes the data symbol ImGuiTextBuffer::EmptyString "export-to-here" and
+    -- breaks linking (LNK2001). In this library the dllexport is consistent.
     remove_files("./ImGui/examples/**")
     -- add_headerfiles("ImGui/", "(./ImGui/misc/cpp/*.h)")
     add_includedirs("./ImGui/", { public = true })
@@ -80,6 +83,13 @@ do
 
     if is_plat("windows") then
         add_defines("IMGUI_API=__declspec(dllexport)")
+        -- imgui_internal.h declares `extern IMGUI_API ImGuiContext* GImGui;`
+        -- guarded by `#ifndef GImGui`.  With IMGUI_API=dllexport that extern
+        -- becomes an "export-to-here" data symbol, which MSVC requires to be
+        -- defined in this DLL (GImGui actually lives in imgui-local.dll).
+        -- Pre-defining GImGui as a macro pointing at the public accessor skips
+        -- the declaration and redirects the single read site in ImGuizmo.cpp.
+        add_defines("GImGui=(ImGui::GetCurrentContext())")
     end
 
     on_test(function(package)

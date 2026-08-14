@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Api.h"
 #include "Core/System/System.h"
 
 #include <cstdint>
@@ -22,7 +23,7 @@ struct SkeletonAnimatorComponent;
  * This system owns scene topology changes caused by ModelComponent.
  * Runtime resource loading for already-existing components stays in GameplayResourceBinding.
  */
-struct ModelInstantiationSystem : public ISystem
+struct YA_RENDER_ECS_ADAPTERS_API ModelInstantiationSystem : public ISystem
 {
     using SceneProvider = std::function<Scene*()>;
 

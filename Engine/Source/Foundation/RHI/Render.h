@@ -45,7 +45,7 @@ struct RenderCapabilities
     bool portabilitySubset   = false;
 };
 
-struct IRender : public plat_base<IRender>
+struct YA_RHI_API IRender : public plat_base<IRender>
 {
     RenderCreateInfo _ci;
     ERenderAPI::T    _renderAPI = ERenderAPI::None;

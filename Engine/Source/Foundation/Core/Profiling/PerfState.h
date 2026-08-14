@@ -96,7 +96,7 @@ struct PerfScopeTimer
     PerfScopeTimer& operator=(PerfScopeTimer&&)      = delete;
 };
 
-struct PerfScopeTimerConditional
+struct YA_CORE_API PerfScopeTimerConditional
 {
   private:
     bool            _bEnabled = false;
@@ -112,7 +112,7 @@ struct PerfScopeTimerConditional
     PerfScopeTimerConditional& operator=(PerfScopeTimerConditional&&)      = delete;
 };
 
-struct PerfFrameScopeTimerConditional
+struct YA_CORE_API PerfFrameScopeTimerConditional
 {
   private:
     bool               _bEnabled = false;

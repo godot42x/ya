@@ -66,6 +66,9 @@ void renderEditorCameraContent(EditorLayer& layer, FreeCameraController& control
 
 void renderClearValuesContent()
 {
+    auto& colorClearValue = getColorClearValue();
+    auto& depthClearValue = getDepthClearValue();
+
     float color[4] = {colorClearValue.color.r, colorClearValue.color.g, colorClearValue.color.b, colorClearValue.color.a};
     if (ImGui::ColorEdit4("Color Clear Value", color)) {
         colorClearValue = ClearValue(color[0], color[1], color[2], color[3]);

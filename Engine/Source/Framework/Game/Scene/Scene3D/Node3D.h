@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Base.h"
 #include "Hierarchy/Node.h"
 
 namespace ya
@@ -16,7 +17,7 @@ struct TransformComponent;
  * - Manages TransformComponent and cached parent TC pointer
  * - Propagates transform dirty flags through hierarchy
  */
-struct Node3D : public Node
+struct YA_SCENE_3D_API Node3D : public Node
 {
 
     YA_REFLECT_BEGIN(Node3D)

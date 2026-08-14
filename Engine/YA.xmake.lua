@@ -167,8 +167,12 @@ do
 
     -- The aggregate carries no engine TU of its own; every engine source
     -- lives in a module target (single-header third-party implementations are
-    -- owned by their consuming modules). The only file here is the ImGui demo.
-    add_files("./ThirdParty/ImGui/imgui_demo.cpp", { unity_ignored = true })
+    -- owned by their consuming modules). The only file here is the aggregate
+    -- anchor TU (Module.cpp) that gives the shared facade a DLL entry point.
+    -- imgui_demo.cpp is compiled by imgui-local (see ThirdParty.xmake.lua):
+    -- compiling it here with IMGUI_API=dllexport would make the data symbol
+    -- ImGuiTextBuffer::EmptyString "export-to-here" and break linking.
+    add_files("./Module.cpp", { unity_ignored = true })
 
     add_headerfiles("./Source/**.h")
     set_pcheader("./Source/Foundation/Core/Common/FWD.h")

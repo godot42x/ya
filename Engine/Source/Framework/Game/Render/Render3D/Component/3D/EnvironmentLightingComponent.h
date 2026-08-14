@@ -109,7 +109,9 @@ struct StateTraits<EEnvironmentLightingPrefilterResolveState>
 
 struct YA_RENDER_3D_API EnvironmentLightingComponent : public IComponent
 {
-    struct CubemapSource
+    // Nested types are not exported by the outer class; they need their own
+    // macro because out-of-line members (hasAllFaces) live in the DLL.
+    struct YA_RENDER_3D_API CubemapSource
     {
         YA_REFLECT_BEGIN(CubemapSource)
         YA_REFLECT_FIELD(files)

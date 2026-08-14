@@ -58,6 +58,12 @@ function ya_std_module(api_macro)
     if get_config("ya_enable_unity-build") then
         add_rules("c++.unity_build", { batchsize = 2 })
     end
+    if is_plat("windows") then
+        -- Unity-build objects of large modules exceed the default COFF
+        -- section limit (C1128); /bigobj is required once sources are
+        -- merged into a single translation unit.
+        add_cxxflags("/bigobj")
+    end
 
 end
 

@@ -142,18 +142,18 @@ struct MergedResources
 /// Merge reflection data from multiple shader stages into a single
 /// pipeline-layout description.  Each element in `stageResources` must
 /// carry a distinct `stage` value.
-MergedResources merge(const std::vector<ShaderResources>& stageResources);
+YA_RHI_API MergedResources merge(const std::vector<ShaderResources>& stageResources);
 
 /// Reflect SPIR-V binary into ShaderResources using SPIRV-Cross.
 /// This is the shared implementation used by all processor backends.
-ShaderResources reflectSpirvCross(EShaderStage::T stage, const std::vector<uint32_t>& spirvData, std::string_view debugName = {});
+YA_RHI_API ShaderResources reflectSpirvCross(EShaderStage::T stage, const std::vector<uint32_t>& spirvData, std::string_view debugName = {});
 
 // Utility functions for shader reflection
-DataType SpirType2DataType(const spirv_cross::SPIRType& type);
-uint32_t getDataTypeSize(DataType type);
+YA_RHI_API DataType SpirType2DataType(const spirv_cross::SPIRType& type);
+YA_RHI_API uint32_t getDataTypeSize(DataType type);
 } // namespace ShaderReflection
 
-struct SPIRVHelper
+struct YA_RHI_API SPIRVHelper
 {
     static uint32_t getVertexAlignedOffset(uint32_t current_offset, const spirv_cross::SPIRType& type);
     static uint32_t getSpirvTypeSize(const spirv_cross::SPIRType& type);
@@ -227,7 +227,7 @@ struct IShaderProcessor
     [[nodiscard]] virtual ShaderReflection::ShaderResources reflect(EShaderStage::T stage, const std::vector<ir_t>& spirvData)                      = 0;
 };
 
-struct GLSLProcessor : public IShaderProcessor
+struct YA_RHI_API GLSLProcessor : public IShaderProcessor
 {
 
     friend class ShaderProcessorFactory;
@@ -267,7 +267,7 @@ struct GLSLProcessor : public IShaderProcessor
 // SPIRV-Cross (same as GLSLProcessor).
 // ============================================================
 // MARK: Slang
-struct SlangProcessor : public IShaderProcessor
+struct YA_RHI_API SlangProcessor : public IShaderProcessor
 {
     friend class ShaderProcessorFactory;
 
@@ -292,7 +292,7 @@ struct SlangProcessor : public IShaderProcessor
 };
 
 
-struct ShaderStorage
+struct YA_RHI_API ShaderStorage
 {
     using stage2spirv_t = IShaderProcessor::stage2spirv_t;
     using cache_value_t = std::shared_ptr<stage2spirv_t>;

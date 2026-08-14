@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Api.h"
 #include "AppServices/ShadowSettings.h"
 #include "AppServices/AppAutomation.h"
 #include "RHI/Core/OffscreenJob.h"
@@ -56,7 +57,7 @@ struct IOffscreenTaskScheduler
 /// Service assembly point: the Host registers the render-runtime host
 /// services once at startup; framework modules query them by contract.
 /// This is the only cross-module service registry (narrow contracts only).
-struct RuntimeServices
+struct YA_APP_SERVICES_API RuntimeServices
 {
     static void setRenderRuntimeHost(IRenderRuntimeHostServices* services);
     [[nodiscard]] static IRenderRuntimeHostServices* getRenderRuntimeHost();

@@ -473,9 +473,9 @@ bool AppScreenshotCapture::tryFinalize(uint64_t currentFrameIndex, AppScreenshot
             return false;
         }
 
-        if (auto* vkBuffer = state.readbackBuffer ? dynamic_cast<VulkanBuffer*>(state.readbackBuffer.get()) : nullptr) {
-            vmaInvalidateAllocation(vkBuffer->_render->getVmaAllocator(), vkBuffer->_allocation, 0, VK_WHOLE_SIZE);
-        }
+        // No explicit VMA invalidate needed here: VulkanBuffer::mapInternal
+        // already invalidates non-coherent readback memory on map (FG-802
+        // readback contract), and writePngFromReadback maps before reading.
 
         state.bCompleted = writePngFromReadback(state);
         state.bFailed    = !state.bCompleted;
@@ -509,10 +509,9 @@ bool AppScreenshotCapture::tryFinalize(uint64_t currentFrameIndex, AppScreenshot
         return true;
     }
 
-    if (auto* vkBuffer = state.readbackBuffer ? dynamic_cast<VulkanBuffer*>(state.readbackBuffer.get()) : nullptr) {
-        vmaInvalidateAllocation(vkBuffer->_render->getVmaAllocator(), vkBuffer->_allocation, 0, VK_WHOLE_SIZE);
-    }
-
+    // No explicit VMA invalidate needed here: VulkanBuffer::mapInternal
+    // invalidates non-coherent readback memory on map (FG-802 readback
+    // contract), and writePngFromReadback maps before reading.
     state.bCompleted = writePngFromReadback(state);
     state.bFailed    = !state.bCompleted;
     if (state.pendingJob->result) {

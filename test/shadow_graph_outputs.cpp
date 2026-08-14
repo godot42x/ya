@@ -1,5 +1,5 @@
-#include "Runtime/Rendering/Common/Shadow/ShadowGraphOutputs.h"
-#include "Runtime/Rendering/Deferred/DeferredFrameGraphResources.h"
+#include "Render3D/Common/Shadow/ShadowGraphOutputs.h"
+#include "Render3D/Deferred/DeferredFrameGraphResources.h"
 
 int main()
 {

@@ -19,7 +19,7 @@ struct VulkanQueue;
 /**
  * @brief Vulkan implementation of ICommandBuffer
  */
-class VulkanCommandBuffer : public ICommandBuffer
+class YA_RHI_BACKEND_API VulkanCommandBuffer : public ICommandBuffer
 {
   private:
     VulkanRender*   _render        = nullptr;
@@ -208,7 +208,7 @@ class VulkanCommandBuffer : public ICommandBuffer
 
 
 
-struct VulkanCommandPool : disable_copy
+struct YA_RHI_BACKEND_API VulkanCommandPool : disable_copy
 {
     VkCommandPool _handle = VK_NULL_HANDLE;
 

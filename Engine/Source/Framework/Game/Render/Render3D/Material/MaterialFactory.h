@@ -19,7 +19,12 @@ namespace detail
 template <template <typename> typename HashFunctor>
 struct MaterialFactoryInternal
 {
-    static YA_RENDER_3D_API MaterialFactoryInternal *_instance;
+    // NOTE: the static data member is deliberately NOT declared dllexport here.
+    // Data symbols cannot be "exported from elsewhere": with the module export
+    // macro propagated into consuming DLLs, MSVC would require _instance to be
+    // defined inside every consumer and linking fails (LNK2001). It is exported
+    // from its single definition site in MaterialFactory.cpp instead.
+    static MaterialFactoryInternal *_instance;
 
     std::unordered_map<uint32_t, std::vector<std::shared_ptr<Material>>> _materials;
     std::unordered_map<FName, Material *>                                _materialNameMap;
@@ -28,7 +33,12 @@ struct MaterialFactoryInternal
 
   public:
     static void                     init();
-    static MaterialFactoryInternal *get() { return _instance; }
+    /// Defined in MaterialFactory.cpp: returns the module-local singleton.
+    /// Routed through a function (not an inline read of _instance) so the
+    /// static data member never crosses the DLL boundary (a dllexport data
+    /// symbol cannot be imported from another DLL while the module export macro
+    /// propagates into consumers).
+    static MaterialFactoryInternal *get();
 
     void destroy();
 

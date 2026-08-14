@@ -26,3 +26,6 @@ target("ya-render-3d")
     add_deps("ya-physics", "ya-rhi-backend-common", "ya-rhi-vulkan", "ya-scene-3d", "ya-scene-core", "ya-scene-runtime")
     add_packages("glm", "entt", "nlohmann_json", { public = true })
     add_packages("cxxopts", "vulkan-memory-allocator", "glad", "lua", "sol2", "quickjs-ng", "vulkansdk", "stb")
+    if is_plat("windows") then
+        add_cxxflags("/bigobj")
+    end

@@ -10,6 +10,7 @@
 #include <thread>
 #include <vector>
 
+#include "Core/Api.h"
 #include "LockFreeQueue.h"
 
 namespace ya
@@ -90,7 +91,7 @@ class TaskHandle
  * - `processMainThreadCallbacks()` must be called from the main thread
  *   each frame to execute deferred GPU-upload or cache-store work.
  */
-class TaskQueue
+class YA_CORE_API TaskQueue
 {
   public:
     static TaskQueue& get();

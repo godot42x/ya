@@ -7,7 +7,7 @@ namespace ya
 
 struct VulkanRender;
 
-class VulkanRenderResourceFactory final : public IRenderResourceFactory
+class YA_RHI_BACKEND_API VulkanRenderResourceFactory final : public IRenderResourceFactory
 {
     VulkanRender* _render = nullptr;
 

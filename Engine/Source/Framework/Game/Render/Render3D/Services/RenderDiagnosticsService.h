@@ -12,7 +12,7 @@ namespace ya
 
 
 struct IRender;
-struct RenderDiagnosticsService
+struct YA_RENDER_3D_API RenderDiagnosticsService
 {
     struct RenderDocState
     {

@@ -16,7 +16,7 @@ namespace ya
 
 struct VulkanRender;
 
-struct VulkanDebugUtils
+struct YA_RHI_BACKEND_API VulkanDebugUtils
 {
     struct ObjectKey
     {

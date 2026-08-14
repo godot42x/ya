@@ -196,7 +196,7 @@ uint64_t StaticInitProfiler::getNowNanoseconds()
 
 std::string StaticInitProfiler::nowTimeString()
 {
-    return Facade.clockManager.nowString();
+    return facade().clockManager.nowString();
 }
 
 // ============================================================================

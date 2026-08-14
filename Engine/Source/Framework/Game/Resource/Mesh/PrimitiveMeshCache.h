@@ -25,7 +25,7 @@ struct IRender;
  * auto mesh = PrimitiveMeshCache::get().getMesh(EPrimitiveGeometry::Cube);
  * @endcode
  */
-class PrimitiveMeshCache : public IResourceCache
+class YA_RESOURCE_API PrimitiveMeshCache : public IResourceCache
 {
   public:
     static PrimitiveMeshCache &get();

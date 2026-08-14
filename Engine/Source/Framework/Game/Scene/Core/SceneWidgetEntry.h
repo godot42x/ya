@@ -27,7 +27,7 @@ namespace ya
 /// Instance-level field overrides for one entry. Only InstanceEditable fields
 /// may be overridden; the metadata filter arrives with the editor phase
 /// (Phase 5). No structural diff (child add/remove/reorder) is supported.
-struct UIInstanceOverrideSet
+struct YA_SCENE_CORE_API UIInstanceOverrideSet
 {
     /// field name -> reflected field value (JSON form, base + own allowed).
     std::unordered_map<std::string, nlohmann::json> fieldOverrides;
@@ -44,7 +44,7 @@ struct UIInstanceOverrideSet
 };
 
 /// One top-level Game UI authoring entry inside a Scene.
-struct SceneWidgetEntry
+struct YA_SCENE_CORE_API SceneWidgetEntry
 {
     /// Stable within a Scene; used by editor selection and overrides.
     std::string entryId;
@@ -92,26 +92,26 @@ enum class EWidgetEntryDropPosition : uint8_t
 /// Returns true on success; mutates `entries` in place. Fails (with a
 /// diagnostic) on unresolvable paths, cycles, non-inline targets, or when a
 /// nested widget would need to become a top-level entry.
-bool moveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
-                             size_t                    srcEntryIndex,
-                             const std::vector<size_t>& srcPath,
-                             size_t                    dstEntryIndex,
-                             const std::vector<size_t>& dstPath,
-                             EWidgetEntryDropPosition  position,
-                             const std::function<std::shared_ptr<UIDocument>(const std::string&)>& resolveFile = {},
-                             std::vector<std::string>* changedFiles = nullptr);
+YA_SCENE_CORE_API bool moveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
+                                               size_t                    srcEntryIndex,
+                                               const std::vector<size_t>& srcPath,
+                                               size_t                    dstEntryIndex,
+                                               const std::vector<size_t>& dstPath,
+                                               EWidgetEntryDropPosition  position,
+                                               const std::function<std::shared_ptr<UIDocument>(const std::string&)>& resolveFile = {},
+                                               std::vector<std::string>* changedFiles = nullptr);
 
 /// Validation-only preview of moveWidgetEntryDocument: runs the same rules
 /// (documents resolvable, not a self-drop, no cycle, nested-into-entry-root
 /// restriction) WITHOUT mutating `entries`. The editor uses it to reject
 /// invalid drops visually (red feedback) before delivery. Unlike the move,
 /// self-drops and no-ops report false (there is nothing meaningful to do).
-bool canMoveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
-                                size_t                    srcEntryIndex,
-                                const std::vector<size_t>& srcPath,
-                                size_t                    dstEntryIndex,
-                                const std::vector<size_t>& dstPath,
-                                EWidgetEntryDropPosition  position,
-                                const std::function<std::shared_ptr<UIDocument>(const std::string&)>& resolveFile = {});
+YA_SCENE_CORE_API bool canMoveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
+                                                  size_t                    srcEntryIndex,
+                                                  const std::vector<size_t>& srcPath,
+                                                  size_t                    dstEntryIndex,
+                                                  const std::vector<size_t>& dstPath,
+                                                  EWidgetEntryDropPosition  position,
+                                                  const std::function<std::shared_ptr<UIDocument>(const std::string&)>& resolveFile = {});
 
 } // namespace ya

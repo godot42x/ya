@@ -24,7 +24,7 @@ struct LuaRuntimeServices
     std::function<Scene*()>     activeScene;
 };
 
-struct LuaScriptingSystem : public ScriptingSystem
+struct YA_GAMEPLAY_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
 {
     /// Injected seam (bound by the Host at startup; no App access from here).
     void setRuntimeServices(LuaRuntimeServices services);

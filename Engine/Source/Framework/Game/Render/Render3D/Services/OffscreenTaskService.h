@@ -14,7 +14,7 @@ struct IOffscreenTaskScheduler;
 struct IRender;
 struct ICommandBuffer;
 
-struct OffscreenTaskService
+struct YA_RENDER_3D_API OffscreenTaskService
 {
     void init(IRender* render);
     void shutdown();

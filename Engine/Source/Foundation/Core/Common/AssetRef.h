@@ -52,7 +52,7 @@ enum class EAssetResolveResult : uint8_t
     Failed,
 };
 
-struct AssetRefBase
+struct YA_CORE_API AssetRefBase
 {
     YA_REFLECT_BEGIN(AssetRefBase)
     YA_REFLECT_FIELD(_path) // Only serialize path
@@ -120,7 +120,7 @@ struct AssetRefBase
 };
 
 
-struct TextureRef : public AssetRefBase
+struct YA_CORE_API TextureRef : public AssetRefBase
 {
     YA_REFLECT_BEGIN(TextureRef, AssetRefBase)
     YA_REFLECT_END()
@@ -166,7 +166,7 @@ struct TextureRef : public AssetRefBase
     void set(const std::string& path, ya::Ptr<Texture> ptr);
 };
 
-struct ModelRef : public AssetRefBase
+struct YA_CORE_API ModelRef : public AssetRefBase
 {
     YA_REFLECT_BEGIN(ModelRef, AssetRefBase)
     YA_REFLECT_END()
@@ -212,7 +212,7 @@ struct ModelRef : public AssetRefBase
     void set(const std::string& path, ya::Ptr<Model> ptr);
 };
 
-struct MeshRef : public AssetRefBase
+struct YA_CORE_API MeshRef : public AssetRefBase
 {
     YA_REFLECT_BEGIN(MeshRef, AssetRefBase)
     YA_REFLECT_END()

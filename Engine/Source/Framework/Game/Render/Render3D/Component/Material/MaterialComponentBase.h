@@ -16,7 +16,7 @@ struct Material;
  * template component header free of Render3D types, so scene/serialization
  * TUs can construct and destroy material components without reaching Render3D.
  */
-struct MaterialComponentBase : public IComponent
+struct YA_RENDER_3D_API MaterialComponentBase : public IComponent
 {
     Material* _material        = nullptr; ///< Pointer to material instance (managed by MaterialFactory)
     bool      _bSharedMaterial = false;   ///< If true, material is shared and should not be destroyed by this component

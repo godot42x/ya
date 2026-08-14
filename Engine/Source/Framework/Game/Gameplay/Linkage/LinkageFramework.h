@@ -27,7 +27,7 @@ class SceneManager;
  * The framework owns no business state; concrete rules (light billboards,
  * material topology, ...) are registered by the Host composition.
  */
-class LinkageFramework : public ISystem
+class YA_COMPONENT_LINKAGE_API LinkageFramework : public ISystem
 {
   public:
     using FrameTaskSink = std::function<void(std::function<void()>)>;

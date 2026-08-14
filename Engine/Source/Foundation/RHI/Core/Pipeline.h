@@ -23,7 +23,7 @@ struct MeshPipelineCreateInfo;
 /**
  * @brief Generic pipeline layout interface
  */
-struct IPipelineLayout : public plat_base<IPipelineLayout>
+struct YA_RHI_API IPipelineLayout : public plat_base<IPipelineLayout>
 {
   public:
     virtual ~IPipelineLayout() = default;
@@ -68,7 +68,7 @@ struct IPipeline
 /**
  * @brief Generic compute pipeline interface
  */
-struct IComputePipeline : public IPipeline
+struct YA_RHI_API IComputePipeline : public IPipeline
 {
   public:
     IComputePipeline()                                   = default;
@@ -112,7 +112,7 @@ struct IMeshPipeline : public IPipeline
 /**
  * @brief Generic graphics pipeline interface
  */
-struct IGraphicsPipeline : public IPipeline
+struct YA_RHI_API IGraphicsPipeline : public IPipeline
 {
   public:
     virtual ~IGraphicsPipeline() = default;
