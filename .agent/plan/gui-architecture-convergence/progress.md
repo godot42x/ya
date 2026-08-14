@@ -7,7 +7,7 @@
 
 ### 本轮完成
 
-- 重写 `plan.md`，把 GUI 主线从“继续堆 feature”收口为：单主循环、Widget/Layout/Slot、事件路径、共享 automation 基底、多窗口留口
+- 重写 `plan.md`，把 GUI 主线从"继续堆 feature"收口为：单主循环、Widget/Layout/Slot、事件路径、共享 automation 基底、多窗口留口
 - 将应用主链路明确为 `AppKernel -> GUIApp -> GUIWindowHost -> WidgetTree`
 - 将 `Slot` 正式定义为 parent-child 边对象，方向参考 UE `GetSlot()`，但明确 parent-owned 生命周期
 - 将 automation 正式上收到共享基底，要求 GUI / game / runtime editor 复用同一套事件注入与回归入口
@@ -112,7 +112,7 @@
 
 ### 当前结论
 
-- Phase 0 现在已经有稳定 smoke 回归入口，不再依赖人工判断是否“看起来没挂”
+- Phase 0 现在已经有稳定 smoke 回归入口，不再依赖人工判断是否"看起来没挂"
 - 对于坐标翻转、逻辑原点、present extent、窗口边界这类问题，现在有了 host 侧观察面
 - clip bounds / batch boundaries 仍未进入 overlay；当前只是先把 render target 与坐标系 marker 固定下来
 
@@ -137,7 +137,7 @@
 
 ### 本轮完成
 
-- 将 host-side debug overlay 从“仅坐标/边界 marker”扩展为“坐标 + clip bounds”观测面
+- 将 host-side debug overlay 从"仅坐标/边界 marker"扩展为"坐标 + clip bounds"观测面
 - overlay 现在会扫描 snapshot 中所有 `bClipped` draw item，并按唯一 clip rect 绘制彩色 outline
 - 同步更新 `todo.md`、`feature_matrix.json`，把 `render_debug_overlay` 从 `planned` 收口到 `in_progress`
 
@@ -148,7 +148,7 @@
 
 ### 当前未完成/风险
 
-- overlay 仍未暴露 Render2D batch flush 边界，因此还不能直接证伪“flush / RT 污染”假设
+- overlay 仍未暴露 Render2D batch flush 边界，因此还不能直接证伪"flush / RT 污染"假设
 - overlay 仍是 snapshot 注入模式，不是独立 debug packet 管线
 - 还未重新跑带 `--debug-render-overlay` 的运行验证来固化本轮证据
 
@@ -291,7 +291,7 @@
 - 在多尺寸 scenario 取证时发现 `GuiScenarioStep::frame` 的计数只在通用
   `GuiScenarioExecutor` 中被消费；`GUIAppHost` 私有的 `ScenarioEventSource`
   每次只渲染一个 tick，错误忽略了 `frame:N` 的 N。
-- 这会让 GUI scenario 和共享 automation 语义分叉，也会使 resize 后的“等待 N 帧”
+- 这会让 GUI scenario 和共享 automation 语义分叉，也会使 resize 后的"等待 N 帧"
   形同虚设。修复放在 GUI host 的共享事件源而非每份 scenario 展开重复 frame 行：
   `remainingFrames` 在后续 poll 中逐 tick 递减，最后一个 frame 才触发 final capture /
   graceful exit。
@@ -306,7 +306,7 @@
 ### 当前限制
 
 - `frame:N` 现在精确表示 N 个 `AppKernel` tick；swapchain recreate / acquire 暂时跳过
-  present 时，该 tick 仍按 kernel 语义推进。若后续需要“至少 N 张已 present 帧”的
+  present 时，该 tick 仍按 kernel 语义推进。若后续需要"至少 N 张已 present 帧"的
   automation 合同，应单独增加 present-ack wait condition，而不是重新解释 `frame`。
 
 ## 2026-08-13 — presentation path 调查结论
@@ -667,13 +667,17 @@
   python3 Script/gui_convergence_macos_validation.py
   ```
 
-  该 harness 会配置 macOS SDK、跑 closure、比较 windowed/headless snapshot、建立
-  macOS-local ScrollSplit baseline 并做第二次 zero-diff 验证。通过条件：exit 0，
-  scenario assertions 与平台本地 zero-diff PASS，日志 0 VUID/error/assert。随后才可
-  把 `validation_clean` 标为 cross-platform PASS。
+  该 harness 会通过 `ya.py cfg` 配置 macOS SDK，并依次跑 `ya-gui-closure-test`、
+  `ya-gui-headless-host-test`、`ya-gui-minimal-host --exit-after-frame=30`、同帧
+  ScrollSplit windowed/headless snapshot SHA-256 对比，以及 8 页 GUIWorkbench
+  scenario/golden matrix（每页先生成 macOS-local baseline，再做第二次 zero-diff
+  验证）。通过条件：exit 0，matrix/scenario assertions 与平台本地 zero-diff PASS，
+  日志 0 VUID/error/assert。随后才可把 `validation_clean` 标为 cross-platform PASS。
+
 
 - `completion-audit.md` 已逐项对照 Phase 0-F 与现有命令证据；除 macOS/MoltenVK
   execution 外，所有计划项均有当前工作树、测试或 runtime artifact 佐证。
-- `Script/gui_convergence_macos_validation.py` 已通过 Python syntax check；在当前
-  Windows runner 上会明确以 exit 2 拒绝执行（`requires macOS/MoltenVK`），避免把
-  Windows Vulkan 结果误标为 MoltenVK 通过。
+- `Script/gui_convergence_macos_validation.py` 已补齐为 GUI-side macOS gate harness，
+  覆盖 closure/headless/minimal/page-matrix/snapshot parity，并已通过 Python syntax
+  check；在当前 Windows runner 上会明确以 exit 2 拒绝执行（`requires macOS/MoltenVK`），
+  避免把 Windows Vulkan 结果误标为 MoltenVK 通过。

@@ -36,7 +36,7 @@
 - [x] 用 GPU shot + flush/scissor 日志判定问题归属：当前 ScrollSplit 样本已排除 scissor / batch cursor / 当前 present 路径污染
 - [x] 建立 windowed/headless/offscreen 三路径同帧一致性检查：ScrollSplit windowed/headless snapshot JSON 完全相同（82 items / 48 clipped / structural+semantic digest 相同），同帧 windowed/offscreen BMP SHA-256 相同且 host zero-tolerance diff PASS
 - [x] 确认当前 Windows Vulkan validation 零错误：8 页 scenario/golden matrix、resize interaction stress、capture/readback、minimal host、runtime/editor smoke 均为 0 VUID/error/assert
-- [~] 运行 macOS / MoltenVK validation gate：当前 Windows runner 无 macOS/MoltenVK runtime；命令与所需证据已记录在 `progress.md`
+- [~] 运行 macOS / MoltenVK validation gate：当前 Windows runner 无 macOS/MoltenVK runtime；`Script/gui_convergence_macos_validation.py` 已补齐 closure/headless/minimal/page-matrix/snapshot parity 覆盖，待 macOS runner 实际执行并把证据回填到 `progress.md`
 
 ### 完成标准
 

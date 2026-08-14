@@ -59,10 +59,12 @@ macOS runner and records:
 python3 Script/gui_convergence_macos_validation.py
 ```
 
-The harness runs closure, exact windowed/headless snapshot identity, a
-macOS-local ScrollSplit baseline capture, and a second
-`--scenario-golden` / `--scenario-diff` pass. Completion evidence is its
-exit 0 plus logs with zero VUID/error/assert.
+The harness runs `ya.py cfg`, `ya-gui-closure-test`,
+`ya-gui-headless-host-test`, `ya-gui-minimal-host --exit-after-frame=30`,
+exact same-frame ScrollSplit windowed/headless snapshot identity, and an
+8-page macOS-local GUIWorkbench scenario/golden matrix (including the
+ScrollSplit stress page). Completion evidence is its exit 0 plus logs with
+zero VUID/error/assert and zero-tolerance diff pass artifacts.
 
 Until then, the implementation and Windows gate are complete, but the
 cross-platform validation requirement is intentionally unproven.
