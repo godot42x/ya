@@ -138,3 +138,10 @@ make run t=HelloMaterial / make run-editor t=HelloMaterial
 xmake b ya-gui-closure-test && xmake r ya-gui-closure-test
 make test-gui                                            # closure + widgets + workspace
 ```
+
+macOS / MoltenVK convergence gate (must be run on macOS, not emulated from a
+Windows runner):
+
+```bash
+python3 Script/gui_convergence_macos_validation.py
+```

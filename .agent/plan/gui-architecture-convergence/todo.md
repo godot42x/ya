@@ -1,13 +1,15 @@
 # GUI 架构收敛 TODO
 
-> 更新时间：2026-08-13
+> 更新时间：2026-08-14
 > 作用：把 `plan.md` 里的阶段目标展开成当前可执行事项。这个文件优先服务日常推进，要求持续收口，不保留已经失效的行动项。
 
 ## 当前优先级
 
 当前默认只允许同时推进一个 phase 的一个最小切片。若工作区中已经存在未完成切片，先收口再开新项。
 
-当前激活切片：`Phase C / explicit_route_path_foundation`
+当前激活切片：`final validation audit / macOS MoltenVK gate`
+
+当前审计工件：`completion-audit.md`（Windows evidence complete; macOS/MoltenVK external gate open）
 
 ## P0 — Phase 0 渲染正确性基线
 
@@ -33,7 +35,8 @@
 - [x] 压稳 Render2D 多批次 flush：ScrollSplit 单帧 16 个 screen flush 的 cursor/scissor 日志与 GPU shot 一致，无断言或污染
 - [x] 用 GPU shot + flush/scissor 日志判定问题归属：当前 ScrollSplit 样本已排除 scissor / batch cursor / 当前 present 路径污染
 - [x] 建立 windowed/headless/offscreen 三路径同帧一致性检查：ScrollSplit windowed/headless snapshot JSON 完全相同（82 items / 48 clipped / structural+semantic digest 相同），同帧 windowed/offscreen BMP SHA-256 相同且 host zero-tolerance diff PASS
-- [~] 确认 Vulkan / MoltenVK validation 零错误：Vulkan GUIWorkbench 八个页面 + resize interaction stress + capture/readback 均为 0 VUID；MoltenVK 与全产品门禁待补
+- [x] 确认当前 Windows Vulkan validation 零错误：8 页 scenario/golden matrix、resize interaction stress、capture/readback、minimal host、runtime/editor smoke 均为 0 VUID/error/assert
+- [~] 运行 macOS / MoltenVK validation gate：当前 Windows runner 无 macOS/MoltenVK runtime；命令与所需证据已记录在 `progress.md`
 
 ### 完成标准
 

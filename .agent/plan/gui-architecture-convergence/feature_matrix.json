@@ -1,6 +1,6 @@
 {
   "plan": "gui-architecture-convergence",
-  "updated_at": "2026-08-13",
+  "updated_at": "2026-08-14",
   "legend": {
     "planned": "尚未开始，但已纳入主线",
     "in_progress": "当前阶段正在推进",
@@ -22,9 +22,9 @@
         { "id": "text_baseline_and_clip", "status": "pass", "notes": "ScrollSplit windowed/headless snapshot JSON 完全相同（82 items / 48 clipped），windowed/offscreen BMP zero-diff；文字、baseline、clip 当前基线正确" },
         { "id": "render2d_multi_flush_integrity", "status": "pass", "notes": "ScrollSplit 单帧记录 16 个 screen flush；每批 cursorVertex = startVertex + vertexCount，GPU shot 无前序 batch/RT 污染" },
         { "id": "sdl_pointer_state_bootstrap", "status": "pass", "notes": "SdlEventSource 在 mouse-focus 下用 SDL_GetMouseState 注入首条 move；enter/leave 同步 hover，不再依赖脚本先发 move" },
-        { "id": "idle_pointer_hover_consistency", "status": "in_progress", "notes": "静止鼠标下的 pointer 状态已在 host 建立，hover 回落/焦点切换仍需交互级断言" },
+        { "id": "idle_pointer_hover_consistency", "status": "pass", "notes": "widgets_interaction.jsonl 在 Counter release 后移动到空白区域，assert Counter hovered=false/pressed=false/focused=false（指针点击不点亮键盘焦点高亮，仅 Tab 遍历点亮）；点击 CheckA 后 assert Counter focus cleared 与 focusPath 切换" },
         { "id": "windowed_headless_offscreen_consistency", "status": "pass", "notes": "同一 ScrollSplit 初始帧：windowed/headless snapshot JSON 完全一致（82 items / 48 clipped / structural+semantic digest 相同）；windowed/offscreen BMP SHA-256 相同且 GUIAppHost zero-tolerance diff PASS" },
-        { "id": "validation_clean", "status": "in_progress", "notes": "Vulkan GUIWorkbench 全八个 start page、cross-path parity、resize+interaction stress、capture/readback 均为 0 VUID/error/assert；MoltenVK 与全产品门禁待补" }
+        { "id": "validation_clean", "status": "in_progress", "notes": "Windows Vulkan：8 页 scenario/golden matrix、cross-path parity、resize+interaction stress、capture/readback、minimal host、runtime/editor smoke 均为 0 VUID/error/assert；macOS/MoltenVK runtime gate requires a macOS runner" }
       ]
     },
     {

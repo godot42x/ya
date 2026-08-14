@@ -632,6 +632,48 @@
 
 ### 验证
 
-- `xmake r ya-gui-closure-test`：103/103 PASS。
+- `xmake r ya-gui-closure-test`：104/104 PASS。
 - `GUIWorkbench ScrollSplit resize + drag + wheel scenario`：exit 0，host assertions
   通过，0 VUID/error/assert；与既有 zero-diff baseline 对比 PASS。
+
+## 2026-08-14 — Final Windows validation audit
+
+### 通过的证据
+
+- `xmake r ya-gui-closure-test`：104/104 PASS。
+- `xmake r ya-gui-headless-host-test`：1/1 PASS。
+- `xmake r ya-gui-minimal-host --exit-after-frame=30`：exit 0，0 VUID/error/assert。
+- 8 页 GUIWorkbench regression matrix 在 specialized-layout refactor 后重新跑完：
+  Render / Widgets / Layout / Menus / DragDrop / Modal / ScrollSplit / Editor 全部
+  host assertion PASS，且都以 `--scenario-golden` / `--scenario-diff` 通过零容差 BMP diff。
+- `xmake b ya-host`、`xmake b ya-editor` 均通过。
+- `python Script/ya.py run --project Example/HelloMaterial/HelloMaterial.yaproject --
+  --exit-after-frame=30 --log-level=warn`：exit 0，0 VUID/error/assert。
+- `python Script/ya.py run-editor --project Example/HelloMaterial/HelloMaterial.yaproject --
+  --exit-after-frame=30 --log-level=warn`：exit 0，0 VUID/error/assert。
+- Specialized-layout refactor 后再次执行 ScrollSplit 同帧 windowed/offscreen capture：
+  GPU BMP、Framework-owned offscreen BMP 与 zero-tolerance diff artifact 均生成，exit 0，
+  0 VUID/error/assert。
+- Specialized-layout refactor 后再次执行 ScrollSplit windowed/headless dump：
+  `--dump-snapshot-json` 的两份 JSON SHA-256 完全相同，两个入口均 exit 0。
+
+### 仍未宣称完成的外部 gate
+
+- 这轮执行机是 Windows 10 / Vulkan（RTX 3080），没有 macOS、Xcode 或 MoltenVK
+  runtime，因此无法把 Windows 证据冒充为 MoltenVK validation。
+- 在 macOS runner 上需要至少执行：
+
+  ```bash
+  python3 Script/gui_convergence_macos_validation.py
+  ```
+
+  该 harness 会配置 macOS SDK、跑 closure、比较 windowed/headless snapshot、建立
+  macOS-local ScrollSplit baseline 并做第二次 zero-diff 验证。通过条件：exit 0，
+  scenario assertions 与平台本地 zero-diff PASS，日志 0 VUID/error/assert。随后才可
+  把 `validation_clean` 标为 cross-platform PASS。
+
+- `completion-audit.md` 已逐项对照 Phase 0-F 与现有命令证据；除 macOS/MoltenVK
+  execution 外，所有计划项均有当前工作树、测试或 runtime artifact 佐证。
+- `Script/gui_convergence_macos_validation.py` 已通过 Python syntax check；在当前
+  Windows runner 上会明确以 exit 2 拒绝执行（`requires macOS/MoltenVK`），避免把
+  Windows Vulkan 结果误标为 MoltenVK 通过。
