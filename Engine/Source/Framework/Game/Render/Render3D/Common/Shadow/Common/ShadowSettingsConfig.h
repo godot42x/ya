@@ -1,6 +1,6 @@
 #pragma once
 
-#include "AppServices/ShadowSettings.h"
+#include "Render3D/Common/ShadowSettings.h"
 
 #include <string>
 

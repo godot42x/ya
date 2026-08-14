@@ -114,3 +114,30 @@
 - 构建 checkpoint C3：`ya-host` / `ya-editor` 构建通过；
 - 构建 checkpoint C4：`rg 'Core/Application/|AppRuntime/|GUI/App/'` 在 Engine/Example/Test 零残留；
 - 运行时：`ya-gui-closure-test` 114/114 PASS、`ya-gui-headless-host-test` 1/1 PASS、`ya-gui-minimal-host --exit-after-frame=30` EXIT=0。
+
+## 2026-08-15 — 推进 Batch 2：Product/Host 减法 + AppServices 拆分
+
+### 本轮完成
+
+- 减法（audit 规定的 Batch 2 第一步）：删除 `Product/Host` 内 14 个 dead/compat 文件——注释掉的 `WindowsDialogWindow.h/.cpp`、空 `Network/NetDriver.h`、空壳 `Switcher.h`、无消费者的 `AppContext.h` / `AppEvent.h`、`Host/NativeWindowManager.h` compat 头、指向不存在文件的 broken `Host/Config/ConfigManager.h` mirror，及各自的 include mirror；
+- AppServices 拆分：确认 `Framework/AppServices` 的 `ShadowSettings` / `PostProcessingState` / `AppAutomationShadowOverrides` / `RuntimeServices`（`IRenderRuntimeHostServices` + `IOffscreenTaskScheduler`）全部是 render/runtime 配置与 host contract，唯一 framework 消费者是 `ya-render-3d`；
+- 把这 4 个源文件迁到 `Framework/Game/Render/Render3D/Common/`（与已有 `IRenderRuntimeServices.h`、`PostProcessingStage.h` 同级），新建 4 个 `Render3D/Common/*` public mirror，删除 `ya-app-services` target 与其 `AppServices/*` include mirror；
+- `RuntimeServices` 导出宏 `YA_APP_SERVICES_API` -> `YA_RENDER_3D_API`；所有消费者 include 拼写 `AppServices/*` -> `Render3D/Common/*`（约 25 处，`rg` 零残留）。
+
+### 当前结论
+
+- `Framework/AppServices` 这个误名桶已彻底消失：它的内容归回了 render/runtime 的物理 home（`Render3D/Common`），`ya-app-services` target 也不再存在；
+- `Product/Host` 的 dead/compat 噪声已清除，剩余的 consumer façade 与 app-form shell 仍按 audit 口径保留（AppRenderServices / AppSceneServices / AppTaskManager / GameUI / ImGui adapter 等），待下一刀归位；
+- `GUIWorkbench` 闭包不受本轮影响（`ya-app-services` 从不属于 GUI 闭包）。
+
+### 下一轮直接接力点
+
+1. 把 `Product/Host` 内剩余 consumer façade 按 app-form shell 口径归位；
+2. 仅把剩余 app-form shell 归到具体 runtime/editor 分支；
+3. 执行 Phase A5 过渡清理：删除 `Core/Application/*`、`AppRuntime/*`、`GUI/App/*` 转发头与 `ya-app-runtime` / `ya-gui-app-host` compat target。
+
+### 本轮验证
+
+- 构建：`ya-render-3d` / `ya-host` / `ya-editor` / `ya-render-3d-test` / `ya-testing` 全部通过；
+- 运行时：`ya-render-3d-test` 104/104 PASS；
+- 残留：`rg 'AppServices|ya-app-services|YA_APP_SERVICES_API'` 在 Engine/Example/Test 零残留。

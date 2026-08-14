@@ -13,7 +13,6 @@ target("ya-render-3d")
     add_includedirs(path.join(os.projectdir(), "Engine/Shader/Slang/Generated/Common"), { public = true })
     add_includedirs(path.join(os.projectdir(), "Engine/Shader/GLSL/Generated/Common"), { public = true })
     add_deps(
-        "ya-app-services",
         "ya-gui-resources",
         "ya-gui-compose",
         "ya-resource-core", "ya-resource-loader", "ya-resource-runtime",

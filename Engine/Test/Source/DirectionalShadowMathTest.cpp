@@ -1,5 +1,5 @@
 #include "Core/Math/Math.h"
-#include "AppServices/ShadowSettings.h"
+#include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Common/Shadow/Common/DirectionalShadowMath.h"
 
 #include <gtest/gtest.h>

@@ -22,7 +22,7 @@
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "Graph/RenderGraphExecutor.h"
 #include "Core/Config/ConfigManager.h"
-#include "AppServices/RuntimeServices.h"
+#include "Render3D/Common/RuntimeServices.h"
 
 #include "Scene/Core/Scene.h"
 #include <algorithm>

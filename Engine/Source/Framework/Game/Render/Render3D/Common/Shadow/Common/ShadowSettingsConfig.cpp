@@ -1,7 +1,7 @@
 #include "ShadowSettingsConfig.h"
 
 #include "Core/Config/ConfigManager.h"
-#include "AppServices/AppAutomation.h"
+#include "Render3D/Common/AppAutomation.h"
 #include "Core/Log.h"
 
 

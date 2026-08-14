@@ -1,7 +1,7 @@
 #pragma once
 
 #include "RHI/RenderDefines.h"
-#include "AppServices/ShadowSettings.h"
+#include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Common/RenderTargetCatalog.h"
 

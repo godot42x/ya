@@ -13,7 +13,7 @@
 #include "Host/Utility/OffscreenJobRunner.h"
 
 #include "Core/Config/ConfigManager.h"
-#include "AppServices/ShadowSettings.h"
+#include "Render3D/Common/ShadowSettings.h"
 
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"

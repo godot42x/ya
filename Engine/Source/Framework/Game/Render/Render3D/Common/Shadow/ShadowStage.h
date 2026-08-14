@@ -3,7 +3,7 @@
 #include "RHI/Core/Image.h"
 #include "Graph/RenderGraph.h"
 #include "Render3D/Shadow/IShadowTechnique.h"
-#include "AppServices/ShadowSettings.h"
+#include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Stage/IRenderStage.h"
 #include "Render3D/Common/Shadow/ShadowGraphOutputs.h"
 

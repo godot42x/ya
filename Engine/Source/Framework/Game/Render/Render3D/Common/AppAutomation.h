@@ -1,7 +1,7 @@
 #pragma once
 
-#include "AppServices/ShadowSettings.h"
-#include "AppServices/PostProcessingState.h"
+#include "Render3D/Common/ShadowSettings.h"
+#include "Render3D/Common/PostProcessingState.h"
 
 #include <array>
 #include <optional>

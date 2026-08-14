@@ -1,5 +1,5 @@
 #include "RenderRuntime.h"
-#include "AppServices/RuntimeServices.h"
+#include "Render3D/Common/RuntimeServices.h"
 
 #include "Render3D/Services/DebugRenderSystem.h"
 #include "Core/Profiling/PerfKeys.h"

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Render3D/RenderFrameData.h"
-#include "AppServices/ShadowSettings.h"
+#include "Render3D/Common/ShadowSettings.h"
 
 #include <unordered_map>
 

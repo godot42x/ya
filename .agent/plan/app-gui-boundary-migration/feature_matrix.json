@@ -37,7 +37,9 @@
       "title": "No-behavior migration batches",
       "items": [
         { "id": "batch1_app_and_gui_host_move", "status": "pass", "notes": "App/Kernel + App/Control + GUI/Host 三个真实 owner target 已建立；旧目录不再 owning 实现源文件；build C1/C2/C3 全绿" },
-        { "id": "batch2_product_host_split", "status": "planned", "notes": "Product/Host 与 AppServices 依据 file-level audit 拆散归位" },
+        { "id": "product_host_subtraction", "status": "pass", "notes": "删除 Product/Host 内 14 个 dead/compat 文件（WindowsDialogWindow/NetDriver/Switcher/AppContext/AppEvent/compat 头/broken mirror）" },
+        { "id": "appservices_split", "status": "pass", "notes": "ShadowSettings/PostProcessingState/AppAutomation/RuntimeServices 迁到 Render3D/Common，删除 ya-app-services target，AppServices 拼写零残留" },
+        { "id": "batch2_product_host_split", "status": "planned", "notes": "Product/Host 内剩余 consumer façade 按 app-form shell 口径归位，再把剩余壳归到 runtime/editor 分支" },
         { "id": "compatibility_header_cleanup", "status": "planned", "notes": "删除已无消费者的过渡头与 target alias（Phase A5）" },
         { "id": "guiworkbench_closure_clean", "status": "pass", "notes": "GUIWorkbench 仅依赖 ya-gui-host + ya-gui-tooling；closure test 114/114、headless 1/1、minimal-host smoke EXIT=0" }
       ]

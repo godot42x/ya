@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Render3D/RenderFrameData.h"
-#include "AppServices/ShadowSettings.h"
+#include "Render3D/Common/ShadowSettings.h"
 #include "Render3D/Stage/IRenderStage.h"
 #include "Host/AppRenderFrameState.h"
 #include "Render3D/Common/RenderOverlay.h"

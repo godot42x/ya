@@ -3,10 +3,10 @@
 #include "Core/Api.h"
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
-#include "AppServices/AppAutomation.h"
+#include "Render3D/Common/AppAutomation.h"
 #include "App/Control/AutomationRun.h"
 #include "Host/Utility/ClLIParams.h"
-#include "AppServices/PostProcessingState.h"
+#include "Render3D/Common/PostProcessingState.h"
 
 #include <array>
 #include <cstdint>

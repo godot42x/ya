@@ -48,20 +48,21 @@
 
 ## P4 — Phase A4 Batch 2 Product/Host 与 AppServices 拆分
 
-- [ ] 拆出 `Product/Host` 内的共享能力消费者
+- [x] 减法：删除 Product/Host 的 dead/compat 噪声（WindowsDialogWindow、NetDriver、Switcher、AppContext、AppEvent、Host/NativeWindowManager compat 头、broken Host/Config/ConfigManager mirror）
+- [x] 按真实 owner 拆分 `Framework/AppServices`：ShadowSettings / PostProcessingState / AppAutomationShadowOverrides / RuntimeServices 迁到 `Render3D/Common`，删除 `ya-app-services` target，消费者拼写 `AppServices/*` -> `Render3D/Common/*`
+- [ ] 拆出 `Product/Host` 内的共享能力消费者 façade（AppRenderServices / AppSceneServices / AppTaskManager 等，按 audit 跟随 app-form shell 归位）
 - [ ] 仅把剩余 app-form shell 归到具体 runtime/editor 分支
-- [ ] 按真实 owner 拆分 `Framework/AppServices`
-- [ ] 验证 `GUIWorkbench` 链接闭包不再受 `Product/Host` / `Game` 语义污染
+- [x] 验证 `GUIWorkbench` 链接闭包不受 `Product/Host` / `Game` 语义污染（Batch 1 已验；本轮删除 `ya-app-services` 不影响 GUI 闭包）
 
 ## P5 — Phase A5 过渡清理
 
-- [ ] 删除已无消费者的 compatibility 头
-- [ ] 删除仅服务旧路径的 target alias
+- [ ] 删除已无消费者的 compatibility 头（`Core/Application/*`、`AppRuntime/*`、`GUI/App/*` 转发头）
+- [ ] 删除仅服务旧路径的 target alias（`ya-app-runtime` / `ya-gui-app-host` compat target）
 - [ ] 更新相关计划工件，关闭本迁移主线
 
 ## 当前下一刀
 
-1. 依据 `product-host-file-audit.md` 拆出 `Product/Host` 内的共享能力消费者；
+1. 依据 `product-host-file-audit.md` 把 `Product/Host` 内剩余 consumer façade（AppRenderServices / AppSceneServices / AppTaskManager / InputRouter / GameUI / ImGui adapter 等）按 app-form shell 口径归位；
 2. 仅把剩余 app-form shell 归到具体 runtime/editor 分支；
-3. 按 `appservices-file-audit.md` 拆回 `Framework/AppServices` 的真实 owner；
+3. 执行 Phase A5 过渡清理：删除 `Core/Application/*`、`AppRuntime/*`、`GUI/App/*` 转发头与 `ya-app-runtime` / `ya-gui-app-host` compat target；
 4. 持续验证 `GUIWorkbench` 闭包不被 `Product/Host` / `Game` 语义污染。

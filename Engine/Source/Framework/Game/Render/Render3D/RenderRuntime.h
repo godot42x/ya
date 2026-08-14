@@ -9,7 +9,7 @@
 #include "RHI/Shader.h"
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Common/IRenderRuntimeServices.h"
-#include "AppServices/PostProcessingState.h"
+#include "Render3D/Common/PostProcessingState.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Services/EnvironmentLightingResultProvider.h"
 #include "Render3D/Common/RenderTargetCatalog.h"

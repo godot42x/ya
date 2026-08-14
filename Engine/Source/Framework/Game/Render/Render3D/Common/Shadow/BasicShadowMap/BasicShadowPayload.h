@@ -2,7 +2,7 @@
 
 #include "RHI/Core/DescriptorSet.h"
 #include "Render3D/RenderFrameData.h"
-#include "AppServices/ShadowSettings.h"
+#include "Render3D/Common/ShadowSettings.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
 #include "Shadow.PointShadowIndirect.slang.h"
