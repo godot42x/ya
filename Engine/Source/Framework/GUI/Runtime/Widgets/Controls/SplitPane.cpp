@@ -34,6 +34,23 @@ void UISplitPane::layoutAssigned(const Rect2D& rect)
     _splitLayout.arrange(*this, _layoutRect);
 }
 
+void UISplitPane::paint(UIFrameBuilder& builder)
+{
+    if (!isVisibleForRender()) {
+        return;
+    }
+    paintSelf(builder);
+    // Each pane is its own clip region: UISplitLayout assigned every arranged
+    // child its pane rect as the child's layout rect, so clip each child to
+    // that rect. Without this a centered/overflowing child (e.g. text wider
+    // than a shrunken pane) bleeds across the divider or outside the split.
+    for (UIElement* child : getChildrenInPaintOrder()) {
+        builder.pushClip(child->_layoutRect);
+        child->paint(builder);
+        builder.popClip();
+    }
+}
+
 void UISplitPane::paintSelf(UIFrameBuilder& builder)
 {
     const glm::vec4 color = _bDraggingDivider

@@ -8,11 +8,14 @@ namespace ya
 
 /// Split pane: interaction/paint host for UISplitLayout. The layout owns
 /// orientation, ratio, limits, padding and child geometry; this widget owns
-/// divider drag transient state and visual styling.
+/// divider drag transient state, per-pane clipping and visual styling.
 ///
 /// Contract:
 ///   - UISplitLayout arranges the first two children and owns all split
 ///     geometry;
+///   - each pane is its own clip region: paint clips every child to its
+///     arranged pane rect so content never bleeds across the divider or
+///     outside the split;
 ///   - the divider drag session owns pointer capture for its whole duration;
 ///   - dragging only invalidates layout: the next snapshot re-lays out both
 ///     panes; GPU state is never touched by the drag;
@@ -56,6 +59,7 @@ struct YA_GUI_API UISplitPane : public UIElement
 
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
+    void paint(UIFrameBuilder& builder) override;
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool isHoverable() const override { return true; }
