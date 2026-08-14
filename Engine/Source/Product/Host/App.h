@@ -7,7 +7,7 @@
 #include "Core/Input/InputMode.h"
 #include "Host/InputRouter.h"
 #include "Core/MessageBus.h"
-#include "Core/Module/Module.h"
+#include "App/Module/Module.h"
 #include "Core/System/System.h"
 #include "Host/AppOptions.h"
 #include "Host/AppRenderServices.h"

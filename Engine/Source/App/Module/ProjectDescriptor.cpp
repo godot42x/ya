@@ -1,4 +1,4 @@
-#include "Core/Module/ProjectDescriptor.h"
+#include "App/Module/ProjectDescriptor.h"
 
 #include <fstream>
 #include <nlohmann/json.hpp>

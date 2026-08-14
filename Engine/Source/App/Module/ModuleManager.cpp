@@ -1,4 +1,4 @@
-#include "Core/Module/ModuleManager.h"
+#include "App/Module/ModuleManager.h"
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_filesystem.h>

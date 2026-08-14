@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Core/Module/Module.h"
+#include "App/Module/Module.h"
 
 struct GreedySnakeModule final : ya::IModule
 {

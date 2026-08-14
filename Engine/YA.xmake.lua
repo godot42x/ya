@@ -186,6 +186,7 @@ do
         "ya-foundation-core",
         "ya-app-kernel",
         "ya-app-control",
+        "ya-module-manager",
         "ya-rhi",
         "ya-rhi-backend-common",
         "ya-rhi-vulkan",

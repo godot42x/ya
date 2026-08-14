@@ -6,6 +6,9 @@ target("ya-host")
     add_headerfiles("./include/**.h", { public = true })
     add_headerfiles("**.h")
     add_deps("ya-gui-host")
+    -- App.h publicly exposes IModule (addModule), so the module-system target
+    -- is a public dependency of the runtime shell.
+    add_deps("ya-module-manager", { public = true })
     add_deps("ya-render-3d", "imgui-local", "imguizmo-local", { public = true })
     -- Host drives GUI fonts directly; Game UI lives in the widgets module.
     add_deps("ya-gui-resources", "ya-gui-widgets")

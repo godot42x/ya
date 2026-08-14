@@ -18,7 +18,7 @@ struct FPluginDescriptor
     std::vector<std::filesystem::path> configFiles;
     std::filesystem::path              sourcePath;
 
-    [[nodiscard]] static YA_CORE_API FPluginDescriptor load(const std::filesystem::path& path);
+    [[nodiscard]] static YA_MODULE_MANAGER_API FPluginDescriptor load(const std::filesystem::path& path);
 };
 
 } // namespace ya

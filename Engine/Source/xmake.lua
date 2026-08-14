@@ -73,7 +73,7 @@ end
 function ya_engine_defines()
     local macros = {
         "YA_CORE_API", "YA_RHI_API", "YA_RHI_BACKEND_API", "YA_GUI_API",
-        "YA_APP_KERNEL_API", "YA_APP_CONTROL_API",
+        "YA_APP_KERNEL_API", "YA_APP_CONTROL_API", "YA_MODULE_MANAGER_API",
         "YA_SCENE_CORE_API", "YA_SCENE_RUNTIME_API", "YA_SCENE_SERIALIZATION_API",
         "YA_SCENE_3D_API", "YA_RESOURCE_API", "YA_RENDER_GRAPH_API",
         "YA_RENDER_3D_API", "YA_RENDER_ECS_ADAPTERS_API", "YA_ECS_CORE_API", "YA_GAMEPLAY_ECS_API", "YA_GAMEPLAY_SYSTEMS_API", "YA_COMPONENT_LINKAGE_API", "YA_PHYSICS_API",
@@ -85,9 +85,12 @@ function ya_engine_defines()
 end
 
 -- App tier: the windowless shared application main chain (kernel + control
--- plane). App must not depend on GUI, window or any app-form semantics.
+-- plane) plus the optional module system. App must not depend on GUI, window
+-- or any app-form semantics; the module system is a separate opt-in target
+-- so windowless/GUI-only apps don't have to link it.
 includes("./App/Kernel/xmake.lua")
 includes("./App/Control/xmake.lua")
+includes("./App/Module/xmake.lua")
 
 -- Foundation tier: shared infrastructure consumed by every product line.
 includes("./Foundation/Core/xmake.lua")

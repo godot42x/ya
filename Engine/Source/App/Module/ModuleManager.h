@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Api.h"
-#include "Core/Module/ModuleManifest.h"
+#include "App/Module/ModuleManifest.h"
 
 #include <filesystem>
 #include <memory>
@@ -28,23 +28,23 @@ class ModuleManager
     bool                                                           _started = false;
 
   public:
-    YA_CORE_API ModuleManager();
-    YA_CORE_API ~ModuleManager();
+    YA_MODULE_MANAGER_API ModuleManager();
+    YA_MODULE_MANAGER_API ~ModuleManager();
 
     ModuleManager(const ModuleManager&)            = delete;
     ModuleManager& operator=(const ModuleManager&) = delete;
 
-    YA_CORE_API bool addManifest(const std::filesystem::path& path);
-    YA_CORE_API bool addManifest(FModuleManifest manifest);
-    YA_CORE_API bool resolve(const std::vector<std::string>& roots);
-    YA_CORE_API bool loadAll();
-    YA_CORE_API bool startAll(const FEngineContext& context);
-    YA_CORE_API void stopAll();
-    YA_CORE_API void unloadAll();
+    YA_MODULE_MANAGER_API bool addManifest(const std::filesystem::path& path);
+    YA_MODULE_MANAGER_API bool addManifest(FModuleManifest manifest);
+    YA_MODULE_MANAGER_API bool resolve(const std::vector<std::string>& roots);
+    YA_MODULE_MANAGER_API bool loadAll();
+    YA_MODULE_MANAGER_API bool startAll(const FEngineContext& context);
+    YA_MODULE_MANAGER_API void stopAll();
+    YA_MODULE_MANAGER_API void unloadAll();
 
-    [[nodiscard]] YA_CORE_API std::vector<IModule*>           getLoadedModules() const;
-    [[nodiscard]] YA_CORE_API void*                           queryInterface(std::string_view moduleName, FInterfaceId interfaceId) const;
-    [[nodiscard]] YA_CORE_API std::vector<void*>              queryInterfaces(FInterfaceId interfaceId) const;
+    [[nodiscard]] YA_MODULE_MANAGER_API std::vector<IModule*>           getLoadedModules() const;
+    [[nodiscard]] YA_MODULE_MANAGER_API void*                           queryInterface(std::string_view moduleName, FInterfaceId interfaceId) const;
+    [[nodiscard]] YA_MODULE_MANAGER_API std::vector<void*>              queryInterfaces(FInterfaceId interfaceId) const;
     [[nodiscard]] const std::vector<std::string>& getResolvedOrder() const { return _resolvedOrder; }
     [[nodiscard]] const std::string&              getLastError() const { return _lastError; }
 

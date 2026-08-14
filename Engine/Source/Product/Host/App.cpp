@@ -5,7 +5,7 @@
 #include "Core/Config/ConfigManager.h"
 #include "Render3D/RenderRuntime.h"
 
-#include "Core/Module/ProjectDescriptor.h"
+#include "App/Module/ProjectDescriptor.h"
 #include "Core/Profiling/Profiling.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "Scene/Core/GameMounts.h"

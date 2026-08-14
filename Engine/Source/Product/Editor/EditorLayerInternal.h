@@ -6,7 +6,7 @@
 #include "Core/KeyCode.h"
 #include "Core/Manager/Facade.h"
 #include "Core/Math/Math.h"
-#include "Core/Module/ProjectDescriptor.h"
+#include "App/Module/ProjectDescriptor.h"
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"

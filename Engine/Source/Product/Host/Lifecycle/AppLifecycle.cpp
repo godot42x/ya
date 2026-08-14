@@ -13,7 +13,7 @@
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
 #include "Core/Profiling/StaticInitProfiler.h"
-#include "Core/Module/ProjectDescriptor.h"
+#include "App/Module/ProjectDescriptor.h"
 #include "Core/System/FileWatcher.h"
 
 #include "Gameplay/Linkage/LinkageFramework.h"

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Api.h"
-#include "Core/Module/Module.h"
+#include "App/Module/Module.h"
 
 #include <filesystem>
 #include <string>
@@ -25,10 +25,10 @@ struct FModuleManifest
     std::vector<FModuleDependency> dependencies;
     std::filesystem::path          sourcePath;
 
-    [[nodiscard]] static YA_CORE_API FModuleManifest load(const std::filesystem::path& path);
+    [[nodiscard]] static YA_MODULE_MANAGER_API FModuleManifest load(const std::filesystem::path& path);
 };
 
-[[nodiscard]] YA_CORE_API const char* moduleKindName(EModuleKind kind);
+[[nodiscard]] YA_MODULE_MANAGER_API const char* moduleKindName(EModuleKind kind);
 
 } // namespace ya
 

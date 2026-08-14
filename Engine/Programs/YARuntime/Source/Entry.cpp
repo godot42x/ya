@@ -1,6 +1,6 @@
-#include "Core/Module/ModuleManager.h"
-#include "Core/Module/PluginDescriptor.h"
-#include "Core/Module/ProjectDescriptor.h"
+#include "App/Module/ModuleManager.h"
+#include "App/Module/PluginDescriptor.h"
+#include "App/Module/ProjectDescriptor.h"
 #include "Host/App.h"
 
 #include <algorithm>

@@ -1,4 +1,4 @@
-#include "Core/Module/ModuleManifest.h"
+#include "App/Module/ModuleManifest.h"
 
 #include <fstream>
 #include <nlohmann/json.hpp>

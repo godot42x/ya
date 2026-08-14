@@ -1,4 +1,4 @@
-#include "Core/Module/PluginDescriptor.h"
+#include "App/Module/PluginDescriptor.h"
 
 #include <fstream>
 #include <nlohmann/json.hpp>
