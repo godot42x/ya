@@ -800,7 +800,11 @@ bool GUIWindowHost::init()
     RenderCreateInfo renderCI{
         .renderAPI = ERenderAPI::Vulkan,
         .swapchainCI = SwapchainCreateInfo{
-            .imageFormat        = EFormat::R8G8B8A8_UNORM,
+            .imageFormat = EFormat::R8G8B8A8_UNORM,
+            // GUI hover is high-frequency interaction: prefer Mailbox (low
+            // latency, no tearing) over the default FIFO present queue. The
+            // backend falls back to FIFO when the driver lacks Mailbox.
+            .presentMode        = EPresentMode::Mailbox,
             .bVsync             = config.bVsync,
             .minImageCount      = 3,
             .bEnableTransferSrc = true,

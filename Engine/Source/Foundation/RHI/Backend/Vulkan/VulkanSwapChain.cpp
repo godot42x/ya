@@ -163,8 +163,13 @@ void VulkanSwapChain::selectSurfaceFormat(const SwapchainCreateInfo &ci)
 // Helper: Select present mode
 void VulkanSwapChain::selectPresentMode(const SwapchainCreateInfo &ci)
 {
-    EPresentMode::T preferredMode{};
-    if (ci.bVsync) {
+    // An explicit non-default present mode (e.g. Mailbox for low-latency GUI)
+    // takes precedence; otherwise keep the legacy vsync-derived mapping.
+    EPresentMode::T preferredMode;
+    if (ci.presentMode != EPresentMode::FIFO) {
+        preferredMode = ci.presentMode;
+    }
+    else if (ci.bVsync) {
         preferredMode = EPresentMode::FIFO; // Override to FIFO if VSync is enabled
     }
     else {
