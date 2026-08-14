@@ -258,7 +258,40 @@ TEST(WidgetTreeTest, ModalOverlayUsesModalRoutePolicyAndCanDetachDuringTarget)
     EXPECT_EQ(dump["lastRoute"]["resultName"], "handledExclusive");
 }
 
+TEST(WidgetTreeTest, ModalOverlayConsumesDismissClickBeforeUnderlyingContent)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       button = makeButton("Content", {150.0f, 120.0f}, {80.0f, 32.0f});
+    int        clicks = 0;
+    button->_onClick = [&] { ++clicks; };
+    tree.attachToLayer(WidgetTree::ELayer::Content, button);
+
+    auto overlay = std::make_shared<UIPopupOverlay>("ModalOverlay");
+    overlay->_bModal = true;
+    overlay->open(tree);
+    tree.layout();
+
+    // The dismissing press belongs to the modal shield, not the content
+    // underneath. Closing the overlay must not leak this click through.
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(170.0f, 130.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_FALSE(overlay->isAttached());
+    EXPECT_EQ(clicks, 0);
+
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(170.0f, 130.0f)),
+              EWidgetRouteResult::NotHandled);
+    EXPECT_EQ(clicks, 0);
+
+    // A fresh click after the modal is gone reaches the underlying content.
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(170.0f, 130.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(170.0f, 130.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(clicks, 1);
+}
+
 // === Attach / reparent / detach ===
+
 
 TEST(WidgetTreeTest, TwoIndependentPanelsAttachToContentLayer)
 {
@@ -656,6 +689,43 @@ TEST(WidgetTreeTest, SystemLayersStackAboveProjectContent)
     tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f));
     tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(120.0f, 110.0f));
     EXPECT_EQ(clicks, 1);
+}
+
+TEST(WidgetTreeTest, SystemLayersOwnHoverBeforeLowerLayers)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       content  = makeButton("Content", {100.0f, 100.0f}, {80.0f, 32.0f});
+    auto       popup    = makeButton("Popup", {100.0f, 100.0f}, {80.0f, 32.0f});
+    auto       tooltip  = makeButton("Tooltip", {100.0f, 100.0f}, {80.0f, 32.0f});
+    auto       dragIme  = makeButton("DragIme", {100.0f, 100.0f}, {80.0f, 32.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, content);
+    tree.attachToLayer(WidgetTree::ELayer::Popup, popup);
+    tree.attachToLayer(WidgetTree::ELayer::Tooltip, tooltip);
+    tree.attachToLayer(WidgetTree::ELayer::DragIme, dragIme);
+    tree.layout();
+
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(120.0f, 110.0f), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getHovered(), dragIme.get());
+    EXPECT_TRUE(dragIme->_bHovered);
+    EXPECT_FALSE(tooltip->_bHovered);
+    EXPECT_FALSE(popup->_bHovered);
+    EXPECT_FALSE(content->_bHovered);
+
+    tree.detach(*dragIme);
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(120.0f, 110.0f), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getHovered(), tooltip.get());
+    EXPECT_TRUE(tooltip->_bHovered);
+    EXPECT_FALSE(popup->_bHovered);
+    EXPECT_FALSE(content->_bHovered);
+
+    tree.detach(*tooltip);
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(120.0f, 110.0f), pointAt(120.0f, 110.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_EQ(tree.getHovered(), popup.get());
+    EXPECT_TRUE(popup->_bHovered);
+    EXPECT_FALSE(content->_bHovered);
 }
 
 TEST(WidgetTreeTest, PassWidgetsRespondButDoNotBlock)

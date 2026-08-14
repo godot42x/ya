@@ -59,7 +59,8 @@ struct YA_GUI_API UISplitPane : public UIElement
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool isHoverable() const override { return true; }
-    void resetHoverState() override { _bHoveredDivider = false; }
+    void onPointerLeave() override { _bHoveredDivider = false; }
+    void resetHoverState() override { onPointerLeave(); }
     [[nodiscard]] ECursorType getCursor() const override
     {
         if (!_bHoveredDivider && !_bDraggingDivider) {

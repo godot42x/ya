@@ -58,7 +58,9 @@ struct YA_GUI_API UIButton : public UIElement
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool isHoverable() const override { return true; }
-    void resetHoverState() override { _bHovered = false; }
+    void onPointerEnter() override { _bHovered = true; }
+    void onPointerLeave() override { _bHovered = false; }
+    void resetHoverState() override { onPointerLeave(); }
     void clearTransientInputState() override;
     void onFocusGained(bool bFromKeyboard) override { _bFocused = bFromKeyboard; }
     void onFocusLost() override { _bFocused = false; }

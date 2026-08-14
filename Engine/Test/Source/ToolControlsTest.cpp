@@ -300,6 +300,58 @@ TEST(ToolControlsTest, SplitPanePressOnPaneFallsThroughToChild)
     EXPECT_NE(tree.getPointerCapture(), split.get());
 }
 
+TEST(ToolControlsTest, SplitPaneDividerHoverRequestsResizeCursor)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       split = std::make_shared<UISplitPane>("Split");
+    split->_size      = {300.0f, 200.0f};
+    split->setSplitRatio(0.5f);
+    tree.attachToLayer(WidgetTree::ELayer::Content, split);
+    tree.attach(*split, std::make_shared<UIPanel>("Left"));
+    tree.attach(*split, std::make_shared<UIPanel>("Right"));
+    tree.layout();
+
+    // Away from the divider: no resize cursor requested.
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(10.0f, 100.0f), pointAt(10.0f, 100.0f)),
+              EWidgetRouteResult::NotHandled);
+    EXPECT_EQ(split->getCursor(), ECursorType::Arrow);
+
+    // Over the divider: hover owned by the splitter, resize cursor requested.
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(150.0f, 100.0f), pointAt(150.0f, 100.0f)),
+              EWidgetRouteResult::NotHandled);
+    EXPECT_TRUE(split->_bHoveredDivider);
+    EXPECT_EQ(tree.getHovered(), split.get());
+    EXPECT_EQ(split->getCursor(), ECursorType::ResizeEastWest);
+
+    // Leaving the divider drops the resize cursor request.
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(10.0f, 100.0f), pointAt(10.0f, 100.0f)),
+              EWidgetRouteResult::NotHandled);
+    EXPECT_FALSE(split->_bHoveredDivider);
+    EXPECT_EQ(split->getCursor(), ECursorType::Arrow);
+}
+
+TEST(ToolControlsTest, ButtonHoverClearsOnPointerLeave)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       button = std::make_shared<UIButton>("Button");
+    button->_position = {10.0f, 10.0f};
+    button->_size     = {60.0f, 24.0f};
+    tree.attachToLayer(WidgetTree::ELayer::Content, button);
+    tree.layout();
+
+    // Hover in: button becomes the hover owner (Stop hit filter).
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(20.0f, 20.0f), pointAt(20.0f, 20.0f)),
+              EWidgetRouteResult::HandledExclusive);
+    EXPECT_TRUE(button->_bHovered);
+    EXPECT_EQ(tree.getHovered(), button.get());
+
+    // Hover out: enter/leave lifecycle clears the button's hover flag.
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(200.0f, 200.0f), pointAt(200.0f, 200.0f)),
+              EWidgetRouteResult::NotHandled);
+    EXPECT_FALSE(button->_bHovered);
+    EXPECT_EQ(tree.getHovered(), nullptr);
+}
+
 // === Scroll viewport ===
 
 TEST(ToolControlsTest, ScrollViewportShiftsContentByOffset)
@@ -681,13 +733,31 @@ TEST(ToolControlsTest, MenuBarHoverSwitchesOpenMenu)
               EWidgetRouteResult::HandledExclusive);
     ASSERT_NE(bar->getOpenMenu(), nullptr);
     EXPECT_EQ(bar->getOpenMenu()->menuItems().front()->_label, "Undo");
+    {
+        const nlohmann::json dump = dumpWidgetTree(tree);
+        const auto* fileItem = findWidgetNode(dump, "MenuBar_File");
+        const auto* editItem = findWidgetNode(dump, "MenuBar_Edit");
+        ASSERT_NE(fileItem, nullptr);
+        ASSERT_NE(editItem, nullptr);
+        EXPECT_FALSE((*fileItem)["hovered"]);
+        EXPECT_TRUE((*editItem)["hovered"]);
+    }
 
     // Hovering back over File switches back (classic menu-bar hover: any
-    // hovered entry owns the open menu).
+    // hovered entry owns the open menu), and the old highlight must retire.
     EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(30.0f, 15.0f), pointAt(30.0f, 15.0f)),
               EWidgetRouteResult::HandledExclusive);
     ASSERT_NE(bar->getOpenMenu(), nullptr);
     EXPECT_EQ(bar->getOpenMenu()->menuItems().front()->_label, "New Document");
+    {
+        const nlohmann::json dump = dumpWidgetTree(tree);
+        const auto* fileItem = findWidgetNode(dump, "MenuBar_File");
+        const auto* editItem = findWidgetNode(dump, "MenuBar_Edit");
+        ASSERT_NE(fileItem, nullptr);
+        ASSERT_NE(editItem, nullptr);
+        EXPECT_TRUE((*fileItem)["hovered"]);
+        EXPECT_FALSE((*editItem)["hovered"]);
+    }
     tree.layout();
 
     // A press anywhere outside the menu dismisses it (popup shield).
@@ -696,5 +766,6 @@ TEST(ToolControlsTest, MenuBarHoverSwitchesOpenMenu)
     EXPECT_EQ(tree.getLastRouteTrace().policy, EWidgetRoutePolicy::Popup);
     EXPECT_EQ(bar->getOpenMenu(), nullptr);
 }
+
 
 } // namespace ya

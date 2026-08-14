@@ -97,7 +97,7 @@ const Rect2D* UIPopupOverlay::contentLayoutRect() const
 
 void UIPopupOverlay::paintSelf(UIFrameBuilder& builder)
 {
-    if (_bModal) {
+    if (isModal()) {
         builder.addSprite(_layoutRect, _modalColor, nullptr);
     }
 }

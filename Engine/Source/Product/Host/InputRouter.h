@@ -124,10 +124,15 @@ class YA_HOST_API InputRouter
     IInputNode*             _defaultNode = nullptr;
     std::vector<FNodeEntry> _nodeStack;
     FPointerCaptureState    _pointerCapture;
+    int                     _activeCursor = -1;
+    SDL_Cursor*             _sdlArrowCursor = nullptr;
+    SDL_Cursor*             _sdlResizeEWCursor = nullptr;
+    SDL_Cursor*             _sdlResizeNSCursor = nullptr;
     uint64_t                _nextNodeId  = 1;
 
   public:
     InputRouter() = default;
+    ~InputRouter();
 
     void setApp(App& app) { _app = &app; }
     void setWindow(void* window) { _window = window; }
@@ -152,6 +157,7 @@ class YA_HOST_API InputRouter
     void applyReply(const FInputReply& reply);
     void applyPointerCapture(const FPointerCaptureRequest& request);
     void handleNodeTransition(IInputNode* previousNode, IInputNode* nextNode);
+    void updateCursor();
     [[nodiscard]] FInputRouteContext makeRouteContext();
     [[nodiscard]] IInputNode*        getActiveNode() const;
     [[nodiscard]] static SDL_Rect    toSDLRect(const Rect2D& rect);

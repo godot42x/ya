@@ -92,6 +92,98 @@ UIElement* WidgetTree::resolveHoverTarget(const std::vector<UIElement*>& targets
     return nullptr;
 }
 
+void WidgetTree::updateHovered(UIElement* widget)
+{
+    if (_hovered == widget) {
+        return;
+    }
+    if (_hovered && _hovered->isAttached()) {
+        _hovered->onPointerLeave();
+    }
+    _hovered = widget;
+    if (_hovered && _hovered->isAttached()) {
+        _hovered->onPointerEnter();
+    }
+}
+
+void WidgetTree::preparePointerState(EEvent::T eventType, const WidgetEventContext& ctx)
+{
+    const bool bPointerEvent = eventType == EEvent::MouseButtonPressed ||
+                               eventType == EEvent::MouseButtonReleased ||
+                               eventType == EEvent::MouseMoved ||
+                               eventType == EEvent::MouseScrolled;
+    if (!bPointerEvent) {
+        return;
+    }
+    _pointerState = {
+        .logicalPoint = ctx.logicalPoint,
+        .bKnown       = true,
+    };
+}
+
+EWidgetRouteResult WidgetTree::dispatchCapturedPointerEvent(const Event& event,
+                                                            const WidgetEventContext& ctx,
+                                                            EEvent::T eventType)
+{
+    if (!_captured) {
+        return EWidgetRouteResult::NotHandled;
+    }
+    if (!_captured->isAttached()) {
+        _captured = nullptr;
+        return EWidgetRouteResult::NotHandled;
+    }
+
+    refreshPointerPath(_captured);
+    if (eventType == EEvent::MouseMoved) {
+        UIElement* newHovered = (_captured->isHoverable() &&
+                                 _captured->hitTestLayoutRect(ctx.logicalPoint))
+                                    ? _captured
+                                    : nullptr;
+        updateHovered(newHovered);
+    }
+
+    WidgetEventContext captureCtx = ctx;
+    captureCtx.bViaCapture         = true;
+    return dispatchRoute(_captured, event, captureCtx,
+                         EWidgetRoutePolicy::PointerCapture, /*bAppendTrace=*/false);
+}
+
+void WidgetTree::resolvePointerTargets(EEvent::T eventType,
+                                       const WidgetEventContext& ctx,
+                                       std::vector<UIElement*>& outTargets)
+{
+    outTargets.clear();
+    collectHitTargetsSubtree(_root.get(), ctx.logicalPoint, outTargets);
+    refreshPointerPath(outTargets.empty() ? nullptr : outTargets.front());
+
+    if (eventType == EEvent::MouseMoved || eventType == EEvent::MouseButtonPressed) {
+        updateHovered(resolveHoverTarget(outTargets));
+    }
+}
+
+EWidgetRouteResult WidgetTree::dispatchResolvedRoute(const Event& event,
+                                                     const WidgetEventContext& ctx,
+                                                     const std::vector<UIElement*>& targets)
+{
+    EWidgetRouteResult result      = EWidgetRouteResult::NotHandled;
+    bool               bFirstRoute = true;
+    for (UIElement* target : targets) {
+        const EWidgetRoutePolicy policy = classifyPointerRoute(buildPath(target));
+        const EWidgetRouteResult routeResult =
+            dispatchRoute(target, event, ctx, policy,
+                          /*bAppendTrace=*/!bFirstRoute);
+        bFirstRoute = false;
+        result      = mergeRouteResult(result, routeResult);
+        if (result == EWidgetRouteResult::HandledExclusive) {
+            return result;
+        }
+    }
+    if (targets.empty()) {
+        setRouteTrace(EWidgetRoutePolicy::HitTest, nullptr);
+    }
+    return result;
+}
+
 void WidgetTree::markSubtreeMembership(UIElement* widget, WidgetTree* tree)
 {
     std::vector<UIElement*> pending{widget};
@@ -359,16 +451,11 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
 EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEventContext& ctx)
 {
     const EEvent::T eventType = event.getEventType();
+    preparePointerState(eventType, ctx);
     const bool bPointerEvent = eventType == EEvent::MouseButtonPressed ||
                                eventType == EEvent::MouseButtonReleased ||
                                eventType == EEvent::MouseMoved ||
                                eventType == EEvent::MouseScrolled;
-    if (bPointerEvent) {
-        _pointerState = {
-            .logicalPoint = ctx.logicalPoint,
-            .bKnown       = true,
-        };
-    }
 
     // Tab / Shift+Tab is handled before ordinary key routing: stable
     // paint-order traversal over attached, visible, focusable widgets with
@@ -454,83 +541,14 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
         return EWidgetRouteResult::HandledExclusive;
     }
 
-    // Pointer capture overrides the hit walk.
-    if (_captured) {
-        if (!_captured->isAttached()) {
-            _captured = nullptr;
-        }
-        else {
-            refreshPointerPath(_captured);
-            // Hover follows the captured widget while capture is active.
-            if (eventType == EEvent::MouseMoved) {
-                UIElement* newHovered = (_captured->isHoverable() &&
-                                         _captured->hitTestLayoutRect(ctx.logicalPoint))
-                                            ? _captured
-                                            : nullptr;
-                if (_hovered != newHovered) {
-                    if (_hovered && _hovered->isAttached()) {
-                        _hovered->resetHoverState();
-                    }
-                    _hovered = newHovered;
-                }
-            }
-            WidgetEventContext captureCtx = ctx;
-            captureCtx.bViaCapture         = true;
-            return dispatchRoute(_captured, event, captureCtx,
-                                 EWidgetRoutePolicy::PointerCapture, /*bAppendTrace=*/false);
-        }
+    if (const EWidgetRouteResult captureResult = dispatchCapturedPointerEvent(event, ctx, eventType);
+        captureResult != EWidgetRouteResult::NotHandled) {
+        return captureResult;
     }
 
     std::vector<UIElement*> pointerTargets;
-    collectHitTargetsSubtree(_root.get(), ctx.logicalPoint, pointerTargets);
-    UIElement* pointerTarget = pointerTargets.empty() ? nullptr : pointerTargets.front();
-    refreshPointerPath(pointerTarget);
-
-    // Hover tracking: refresh the hovered widget on mouse moves. The hover
-    // owner is the deepest hoverable widget under the pointer (not the raw
-    // topmost hit), so text children / popup shields never own hover.
-    if (eventType == EEvent::MouseMoved) {
-        UIElement* newHovered = resolveHoverTarget(pointerTargets);
-        if (_hovered != newHovered) {
-            if (_hovered && _hovered->isAttached()) {
-                _hovered->resetHoverState();
-            }
-            _hovered = newHovered;
-        }
-    }
-
-    // A press moves the interaction to the widget under the pointer even
-    // without an intervening move: hover left on a previously hovered widget
-    // (e.g. a button clicked just before) must clear when a press lands
-    // elsewhere. The pressed widget sets its own hover flag in its press
-    // handler; here we only retire the stale one.
-    if (eventType == EEvent::MouseButtonPressed) {
-        UIElement* newHovered = resolveHoverTarget(pointerTargets);
-        if (_hovered != newHovered) {
-            if (_hovered && _hovered->isAttached()) {
-                _hovered->resetHoverState();
-            }
-            _hovered = newHovered;
-        }
-    }
-
-    EWidgetRouteResult result = EWidgetRouteResult::NotHandled;
-    bool bFirstRoute = true;
-    for (UIElement* target : pointerTargets) {
-        const EWidgetRoutePolicy policy = classifyPointerRoute(buildPath(target));
-        const EWidgetRouteResult routeResult =
-            dispatchRoute(target, event, ctx, policy,
-                          /*bAppendTrace=*/!bFirstRoute);
-        bFirstRoute = false;
-        result = mergeRouteResult(result, routeResult);
-        if (result == EWidgetRouteResult::HandledExclusive) {
-            return result;
-        }
-    }
-    if (pointerTargets.empty()) {
-        setRouteTrace(EWidgetRoutePolicy::HitTest, nullptr);
-    }
-    return result;
+    resolvePointerTargets(eventType, ctx, pointerTargets);
+    return dispatchResolvedRoute(event, ctx, pointerTargets);
 }
 
 // === Focus / capture / hover ===

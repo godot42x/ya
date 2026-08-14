@@ -217,16 +217,27 @@ struct YA_GUI_API WidgetTree final
     void clearTransientState(UIElement& widget);
     [[nodiscard]] UIElement* topmostHit(const glm::vec2& logicalPoint) const;
     [[nodiscard]] static std::vector<UIElement*> buildPath(UIElement* target);
+    void preparePointerState(EEvent::T eventType, const WidgetEventContext& ctx);
+    [[nodiscard]] EWidgetRouteResult dispatchCapturedPointerEvent(const Event& event,
+                                                                  const WidgetEventContext& ctx,
+                                                                  EEvent::T eventType);
+    void resolvePointerTargets(EEvent::T eventType,
+                               const WidgetEventContext& ctx,
+                               std::vector<UIElement*>& outTargets);
+    [[nodiscard]] EWidgetRouteResult dispatchResolvedRoute(const Event& event,
+                                                           const WidgetEventContext& ctx,
+                                                           const std::vector<UIElement*>& targets);
     [[nodiscard]] EWidgetRouteResult dispatchRoute(UIElement* target,
-                                                    const Event& event,
-                                                    const WidgetEventContext& ctx,
-                                                    EWidgetRoutePolicy policy,
-                                                    bool bAppendTrace);
+                                                   const Event& event,
+                                                   const WidgetEventContext& ctx,
+                                                   EWidgetRoutePolicy policy,
+                                                   bool bAppendTrace);
     [[nodiscard]] static EWidgetRouteResult mergeRouteResult(EWidgetRouteResult current,
-                                                              EWidgetRouteResult next);
+                                                             EWidgetRouteResult next);
     [[nodiscard]] static EWidgetRoutePolicy classifyPointerRoute(const std::vector<UIElement*>& path);
     void refreshPointerPath(UIElement* target);
     void refreshFocusPath();
+    void updateHovered(UIElement* widget);
     void beginRouteTrace(EWidgetRoutePolicy policy, UIElement* target);
     void appendRouteTraceStep(const UIElement& widget,
                               EWidgetEventRoutePhase phase,

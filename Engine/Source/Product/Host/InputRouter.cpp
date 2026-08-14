@@ -3,9 +3,20 @@
 #include "Core/Input/InputManager.h"
 #include "Core/Log.h"
 #include "Host/App.h"
+#include "Host/GUI/GameUI/GameUIHost.h"
 
 namespace ya
 {
+
+InputRouter::~InputRouter()
+{
+    SDL_DestroyCursor(_sdlArrowCursor);
+    SDL_DestroyCursor(_sdlResizeEWCursor);
+    SDL_DestroyCursor(_sdlResizeNSCursor);
+    _sdlArrowCursor    = nullptr;
+    _sdlResizeEWCursor = nullptr;
+    _sdlResizeNSCursor = nullptr;
+}
 
 namespace
 {
@@ -120,6 +131,7 @@ bool InputRouter::routeEvent(const FInputEvent& event)
     FInputRouteContext context = makeRouteContext();
     const FInputReply  reply   = node->route(context, event);
     applyReply(reply);
+    updateCursor();
     return reply.handled;
 }
 
@@ -157,11 +169,14 @@ void InputRouter::applyInputMode(EInputMode mode)
         return;
     }
     if (mode == EInputMode::GameOnly) {
+        _activeCursor = -1;
         SDL_HideCursor();
+        return;
     }
-    else {
-        SDL_ShowCursor();
-    }
+
+    SDL_ShowCursor();
+    _activeCursor = -1;
+    updateCursor();
 }
 
 void InputRouter::unregisterNode(uint64_t id)
@@ -232,6 +247,7 @@ void InputRouter::applyPointerCapture(const FPointerCaptureRequest& request)
         else {
             SDL_ShowCursor();
         }
+        _activeCursor = -1;
     }
 
     _pointerCapture = nextState;
@@ -241,6 +257,10 @@ void InputRouter::applyPointerCapture(const FPointerCaptureRequest& request)
             FInputRouteContext context = makeRouteContext();
             node->cancelInput(context, EInputCancelReason::CaptureReleased);
         }
+    }
+
+    if (!_pointerCapture.hideCursor) {
+        updateCursor();
     }
 }
 
@@ -255,6 +275,59 @@ void InputRouter::handleNodeTransition(IInputNode* previousNode, IInputNode* nex
     if (previousNode && _app) {
         FInputRouteContext context = makeRouteContext();
         previousNode->cancelInput(context, EInputCancelReason::NodeChanged);
+    }
+
+    updateCursor();
+}
+
+void InputRouter::updateCursor()
+{
+    // While the game holds the mouse (capture / relative / confine) the
+    // system cursor is not meaningfully shown; skip so a stale hovered widget
+    // never leaks a resize cursor into gameplay look.
+    if (!_window || !_app || _pointerCapture.isCaptured() ||
+        _app->getInputMode() == EInputMode::GameOnly) {
+        return;
+    }
+
+    ECursorType cursor = ECursorType::Arrow;
+    if (GameUIHost* gameUIHost = _app->getGameUIHost();
+        gameUIHost && gameUIHost->getMountedScene()) {
+        if (const UIElement* hovered = gameUIHost->getTree().getHovered()) {
+            cursor = hovered->getCursor();
+        }
+    }
+
+    const int nextCursor = static_cast<int>(cursor);
+    if (_activeCursor == nextCursor) {
+        return;
+    }
+    _activeCursor = nextCursor;
+
+    if (!_sdlArrowCursor) {
+        _sdlArrowCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_DEFAULT);
+    }
+    if (!_sdlResizeEWCursor) {
+        _sdlResizeEWCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_EW_RESIZE);
+    }
+    if (!_sdlResizeNSCursor) {
+        _sdlResizeNSCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_NS_RESIZE);
+    }
+
+    SDL_Cursor* sdlCursor = _sdlArrowCursor;
+    switch (cursor) {
+    case ECursorType::Arrow:
+        sdlCursor = _sdlArrowCursor;
+        break;
+    case ECursorType::ResizeEastWest:
+        sdlCursor = _sdlResizeEWCursor;
+        break;
+    case ECursorType::ResizeNorthSouth:
+        sdlCursor = _sdlResizeNSCursor;
+        break;
+    }
+    if (sdlCursor) {
+        SDL_SetCursor(sdlCursor);
     }
 }
 

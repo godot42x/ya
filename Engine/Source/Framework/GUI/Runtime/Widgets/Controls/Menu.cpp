@@ -135,6 +135,7 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
 
 void UIMenu::openAt(WidgetTree& tree, const glm::vec2& pos)
 {
+    setRole(EOverlayRole::Popup);
     _contentPos = pos;
     open(tree);
 }

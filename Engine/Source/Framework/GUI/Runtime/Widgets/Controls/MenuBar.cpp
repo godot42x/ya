@@ -21,6 +21,14 @@ void UIMenuBarItem::paintSelf(UIFrameBuilder& builder)
     }
 }
 
+void UIMenuBarItem::onPointerEnter()
+{
+    _bHovered = true;
+    if (_onHoveredEnter) {
+        _onHoveredEnter(this);
+    }
+}
+
 bool UIMenuBarItem::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
 {
     const EEvent::T eventType = event.getEventType();
@@ -48,9 +56,6 @@ bool UIMenuBarItem::handleInputEvent(const Event& event, const WidgetEventContex
         }
         return true;
     case EEvent::MouseMoved:
-        if (bPointInside && !_bHovered && _onHoveredEnter) {
-            _onHoveredEnter(this);
-        }
         _bHovered = bPointInside;
         return true;
     default:

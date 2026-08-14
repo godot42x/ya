@@ -267,9 +267,13 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// Cursor to show while this widget is hovered (queried by the host from
     /// the tree's hovered widget). Base: arrow; split panes override it.
     [[nodiscard]] virtual ECursorType getCursor() const { return ECursorType::Arrow; }
-    /// Clear transient hover state before the next hit-test pass. Only the
-    /// hovered widget receives this (the tree drives it), so a widget with a
-    /// hover visual must override it and clear its own hover flag.
+    /// Pointer hover lifecycle. The tree resolves a single hover owner and
+    /// sends enter/leave when that owner changes. Default leave behavior keeps
+    /// the legacy contract alive by clearing the widget's hover visuals.
+    virtual void onPointerEnter() {}
+    virtual void onPointerLeave() { resetHoverState(); }
+    /// Legacy hover-clear hook. Kept as a compatibility layer while controls
+    /// gradually migrate to explicit enter/leave lifecycle handling.
     virtual void resetHoverState() {}
     /// Clear ALL transient input state (hover / press / drag session). Called
     /// by WidgetTree when a subtree is detached while the tree still points

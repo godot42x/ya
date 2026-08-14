@@ -10,11 +10,12 @@ namespace ya
 /// Full-screen popup overlay attached to the tree's Popup layer
 /// (gui-app-bootstrap Phase 4).
 ///
-/// One shared mechanism behind menus, combo-box popups and modal dialogs:
-///   - `_bModal == false` draws a transparent shield: clicks anywhere outside
-///     the content child dismiss the overlay, lower layers never see them;
-///   - `_bModal == true` draws a dimming shield (modal state: the whole app
-///     is blocked until dismissed);
+/// One shared detach-safe mechanism behind popup-like surfaces, with an
+/// explicit role API on top of the legacy `_bModal` storage:
+///   - Popup role draws a transparent shield: clicks outside the content child
+///     dismiss the overlay, lower layers never see them;
+///   - Modal role draws a dimming shield and blocks the whole app until
+///     dismissed;
 ///   - Esc dismisses; opening takes keyboard focus (the overlay owns the
 ///     focus until closed, which matches modal semantics);
 ///   - the first visible content child is laid out at `_contentPos` with its
@@ -37,7 +38,17 @@ struct YA_GUI_API UIPopupOverlay : public UIElement
         _focusPolicy = EWidgetFocusPolicy::Focusable;
     }
 
+    enum class EOverlayRole : uint8_t
+    {
+        Popup,
+        Modal,
+    };
+
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIPopupOverlay>; }
+
+    [[nodiscard]] EOverlayRole getRole() const { return _bModal ? EOverlayRole::Modal : EOverlayRole::Popup; }
+    void setRole(EOverlayRole role) { _bModal = role == EOverlayRole::Modal; }
+    [[nodiscard]] bool isModal() const { return getRole() == EOverlayRole::Modal; }
 
     bool    _bModal     = false;
     /// Dimming shield color (only when _bModal).
