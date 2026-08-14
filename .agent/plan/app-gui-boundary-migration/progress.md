@@ -28,3 +28,31 @@
 - 文档级验证：新目录最低工件已补齐；
 - 文档级验证：活跃迁移输入工件已迁到新目录；
 - 代码级验证：本轮未改 `Engine/Source` 行为代码。
+
+## 2026-08-14 — 完成 Batch 1 no-behavior 迁移设计
+
+### 本轮完成
+
+- 新增 `first-batch-move-design.md`，把 Batch 1 的 move/rename 范围落到文件级；
+- 明确了 `Foundation/Core/Application/*` -> `App/Kernel` + `App/Control` 的迁移表；
+- 明确了 `Framework/AppRuntime/*` + `Framework/GUI/App/*` -> `GUI/Host/*` 的迁移表；
+- 定义了 forward-header / compat-target 的唯一过渡形式、删除条件、build checkpoints 与回退点；
+- 把当前活跃切片从 Phase A1 设计切换到 Phase A2 file-level consumer audit。
+
+### 当前结论
+
+- Batch 1 现在已经不是抽象口号，而是一份可直接转为 patch 的迁移蓝图；
+- 下一步的真实风险不在 `App/*` 和 `GUI/Host/*`，而在 `Product/Host` 与 `Framework/AppServices` 这两个混合桶；
+- 因此继续动代码前，先补 `Product/Host` 与 `Framework/AppServices` 的 file-level audit 是必要前置。
+
+### 下一轮直接接力点
+
+1. 输出 `product-host-file-audit.md`；
+2. 输出 `appservices-file-audit.md`；
+3. 依据两份 audit 开 Batch 1 真实 no-behavior 迁移 patch。
+
+### 本轮验证
+
+- 文档级验证：Batch 1 的目录、target、include root、compat、删除条件、build checkpoints 已落盘；
+- 文档级验证：todo 与活跃切片已切到 file-level audit；
+- 代码级验证：本轮仍未改 `Engine/Source` 行为代码。

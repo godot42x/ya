@@ -5,7 +5,7 @@
 
 ## 当前优先级
 
-当前激活切片：`phase-a1 first move/rename batch design`
+当前激活切片：`phase-a2 file-level consumer audit`
 
 当前输入工件：
 
@@ -22,10 +22,11 @@
 
 ## P1 — Phase A1 move/rename 设计
 
-- [ ] 写出第一轮 no-behavior move/rename batch 表
-- [ ] 写出 forward-header / compatibility alias 过渡策略
-- [ ] 写出 target rename 顺序与 build 断点
-- [ ] 定义每个 batch 的完成条件与回退点
+- [x] 写出第一轮 no-behavior move/rename batch 表
+- [x] 写出 forward-header / compatibility alias 过渡策略
+- [x] 写出 target rename 顺序与 build 断点
+- [x] 定义每个 batch 的完成条件与回退点
+- [x] 落盘 `first-batch-move-design.md`
 
 ## P2 — Phase A2 file-level consumer audit
 
@@ -58,6 +59,6 @@
 
 ## 当前下一刀
 
-1. 先把第一轮 move/rename batch 设计写实；
-2. 紧接着做 `Product/Host` 和 `Framework/AppServices` 的 file-level consumer audit；
-3. 再开始 Batch 1 的真实 no-behavior 迁移。
+1. 先做 `Product/Host` 的 file-level consumer audit；
+2. 再做 `Framework/AppServices` 的 file-level consumer audit；
+3. 最后按 `first-batch-move-design.md` 开始 Batch 1 的真实 no-behavior 迁移。
