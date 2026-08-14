@@ -519,6 +519,48 @@ TEST(WidgetTreeTest, DetachClearsFocusCaptureAndHover)
     EXPECT_EQ(tree.getHovered(), nullptr);
 }
 
+TEST(WidgetTreeTest, ButtonTextChildDoesNotStealHoverOwner)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       button = makeButton("B", {100.0f, 100.0f}, {120.0f, 40.0f});
+    auto       label  = std::make_shared<UIText>("B_Label");
+    label->_text     = "Render Probe";
+    label->_bAutoSize = true;
+    button->addDetachedChild(label);
+    tree.attachToLayer(WidgetTree::ELayer::Content, button);
+    tree.layout();
+
+    // Hovering the button (its text child is the raw hit) must resolve hover
+    // to the button itself, not the text, so leaving clears the button hover.
+    tree.dispatchEvent(MouseMoveEvent(160.0f, 120.0f), pointAt(160.0f, 120.0f));
+    EXPECT_EQ(tree.getHovered(), button.get());
+    EXPECT_TRUE(button->_bHovered);
+
+    tree.dispatchEvent(MouseMoveEvent(400.0f, 120.0f), pointAt(400.0f, 120.0f));
+    EXPECT_EQ(tree.getHovered(), nullptr);
+    EXPECT_FALSE(button->_bHovered);
+}
+
+TEST(WidgetTreeTest, PopupShieldDoesNotStealHoverOwner)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       button = makeButton("B", {100.0f, 100.0f}, {80.0f, 32.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, button);
+    auto overlay = std::make_shared<UIPopupOverlay>("Overlay");
+    tree.attachToLayer(WidgetTree::ELayer::Popup, overlay);
+    tree.layout();
+
+    // A full-screen popup shield is not hoverable: hover under it must still
+    // resolve to the interactive button (menu-bar hover-switch relies on this).
+    tree.dispatchEvent(MouseMoveEvent(120.0f, 110.0f), pointAt(120.0f, 110.0f));
+    EXPECT_EQ(tree.getHovered(), button.get());
+    EXPECT_TRUE(button->_bHovered);
+
+    tree.dispatchEvent(MouseMoveEvent(400.0f, 300.0f), pointAt(400.0f, 300.0f));
+    EXPECT_EQ(tree.getHovered(), nullptr);
+    EXPECT_FALSE(button->_bHovered);
+}
+
 TEST(WidgetTreeTest, TreeDestructionReleasesMembershipSafely)
 {
     auto  button = makeButton("B", {0.0f, 0.0f}, {80.0f, 32.0f});

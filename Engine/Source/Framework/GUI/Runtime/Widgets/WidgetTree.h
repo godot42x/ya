@@ -197,6 +197,12 @@ struct YA_GUI_API WidgetTree final
     static void collectHitTargetsSubtree(UIElement* element,
                                          const glm::vec2& logicalPoint,
                                          std::vector<UIElement*>& outTargets);
+    /// Resolve the single hovered widget from the hit candidates: walk each
+    /// candidate (topmost-first) and its ancestor chain for the first
+    /// isHoverable() widget. This decouples "hover" from "topmost hit" so a
+    /// text child or a transparent popup shield never becomes the hover owner
+    /// in place of the real interactive leaf.
+    [[nodiscard]] static UIElement* resolveHoverTarget(const std::vector<UIElement*>& targets);
     /// Assign tree membership to a widget and its whole subtree (invariant:
     /// attached iff every descendant is a member of the same tree).
     static void markSubtreeMembership(UIElement* widget, WidgetTree* tree);

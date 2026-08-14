@@ -146,6 +146,8 @@ private:
     /// Write a scenario checkpoint tree dump (<scenarioDumpDir>/<tag>.json).
     void dumpScenarioCheckpoint(const std::string& tag);
     void rebuildPresentationResources(bool bWaitForGpu = true);
+    /// Apply the hovered widget's requested cursor (system cursor, deduped).
+    void updateCursor();
 
     struct FImpl;
     std::unique_ptr<FImpl> _impl;

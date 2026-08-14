@@ -727,6 +727,12 @@ struct GUIWindowHost::FImpl
     bool    bQuitRequested       = false;
     bool    bScenarioMode        = false;
     bool    bScenarioFailed      = false;
+
+    // Mouse cursor state (system cursors created lazily in init()).
+    ECursorType activeCursor       = ECursorType::Arrow;
+    SDL_Cursor* sdlArrowCursor     = nullptr;
+    SDL_Cursor* sdlResizeEWCursor  = nullptr;
+    SDL_Cursor* sdlResizeNSCursor  = nullptr;
 };
 
 GUIWindowHost::GUIWindowHost(const FGUIWindowHostConfig& config, IGUIAppDelegate& delegate)
@@ -775,6 +781,10 @@ bool GUIWindowHost::init()
     // focused text fields can edit; the events are routed like every other
     // keyboard event.
     SDL_StartTextInput(static_cast<SDL_Window*>(window.getNativeWindowHandle()));
+    // System cursors for hover feedback (split dividers request resize cursors).
+    _impl->sdlArrowCursor    = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_DEFAULT);
+    _impl->sdlResizeEWCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_EW_RESIZE);
+    _impl->sdlResizeNSCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_NS_RESIZE);
 
     // 2. Shader compile/cache service (Slang processor serves the GUI
     //    Sprite2D shaders; injected into the backend before pipeline build).
@@ -903,6 +913,38 @@ void GUIWindowHost::dispatchToTree(const Event& event, float mouseX, float mouse
     ctx.logicalPoint = {mouseX, mouseY};
     const EWidgetRouteResult result = _impl->tree->dispatchEvent(event, ctx);
     _impl->delegate->onRoutedEvent(event, result);
+    updateCursor();
+}
+
+void GUIWindowHost::updateCursor()
+{
+    if (!_impl->tree) {
+        return;
+    }
+    ECursorType cursor = ECursorType::Arrow;
+    if (const UIElement* hovered = _impl->tree->getHovered()) {
+        cursor = hovered->getCursor();
+    }
+    if (cursor == _impl->activeCursor) {
+        return;
+    }
+    _impl->activeCursor = cursor;
+
+    SDL_Cursor* sdlCursor = _impl->sdlArrowCursor;
+    switch (cursor) {
+    case ECursorType::Arrow:
+        sdlCursor = _impl->sdlArrowCursor;
+        break;
+    case ECursorType::ResizeEastWest:
+        sdlCursor = _impl->sdlResizeEWCursor;
+        break;
+    case ECursorType::ResizeNorthSouth:
+        sdlCursor = _impl->sdlResizeNSCursor;
+        break;
+    }
+    if (sdlCursor) {
+        SDL_SetCursor(sdlCursor);
+    }
 }
 
 bool GUIWindowHost::requestWindowSize(uint32_t width, uint32_t height, std::string_view reason)
@@ -1447,6 +1489,12 @@ void GUIWindowHost::shutdown()
     delete _impl->render;
     _impl->render = nullptr;
     SDL_StopTextInput(static_cast<SDL_Window*>(_impl->window.getNativeWindowHandle()));
+    SDL_DestroyCursor(_impl->sdlArrowCursor);
+    SDL_DestroyCursor(_impl->sdlResizeEWCursor);
+    SDL_DestroyCursor(_impl->sdlResizeNSCursor);
+    _impl->sdlArrowCursor     = nullptr;
+    _impl->sdlResizeEWCursor  = nullptr;
+    _impl->sdlResizeNSCursor  = nullptr;
     _impl->window.destroy();
 
     _impl->bInitialized = false;

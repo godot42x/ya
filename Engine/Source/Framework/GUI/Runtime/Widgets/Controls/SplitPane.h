@@ -58,7 +58,17 @@ struct YA_GUI_API UISplitPane : public UIElement
     void layoutAssigned(const Rect2D& rect) override;
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
+    bool isHoverable() const override { return true; }
     void resetHoverState() override { _bHoveredDivider = false; }
+    [[nodiscard]] ECursorType getCursor() const override
+    {
+        if (!_bHoveredDivider && !_bDraggingDivider) {
+            return ECursorType::Arrow;
+        }
+        return _splitLayout.getOrientation() == ESplitOrientation::Vertical
+                   ? ECursorType::ResizeEastWest
+                   : ECursorType::ResizeNorthSouth;
+    }
     void clearTransientInputState() override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 

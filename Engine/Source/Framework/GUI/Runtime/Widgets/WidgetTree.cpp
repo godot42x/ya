@@ -80,6 +80,18 @@ void WidgetTree::collectHitTargetsSubtree(UIElement* element,
     }
 }
 
+UIElement* WidgetTree::resolveHoverTarget(const std::vector<UIElement*>& targets)
+{
+    for (UIElement* target : targets) {
+        for (UIElement* node = target; node != nullptr; node = node->getParent()) {
+            if (node->isHoverable()) {
+                return node;
+            }
+        }
+    }
+    return nullptr;
+}
+
 void WidgetTree::markSubtreeMembership(UIElement* widget, WidgetTree* tree)
 {
     std::vector<UIElement*> pending{widget};
@@ -451,7 +463,10 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
             refreshPointerPath(_captured);
             // Hover follows the captured widget while capture is active.
             if (eventType == EEvent::MouseMoved) {
-                UIElement* newHovered = _captured->hitTestLayoutRect(ctx.logicalPoint) ? _captured : nullptr;
+                UIElement* newHovered = (_captured->isHoverable() &&
+                                         _captured->hitTestLayoutRect(ctx.logicalPoint))
+                                            ? _captured
+                                            : nullptr;
                 if (_hovered != newHovered) {
                     if (_hovered && _hovered->isAttached()) {
                         _hovered->resetHoverState();
@@ -471,9 +486,11 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
     UIElement* pointerTarget = pointerTargets.empty() ? nullptr : pointerTargets.front();
     refreshPointerPath(pointerTarget);
 
-    // Hover tracking: refresh the hovered widget on mouse moves.
+    // Hover tracking: refresh the hovered widget on mouse moves. The hover
+    // owner is the deepest hoverable widget under the pointer (not the raw
+    // topmost hit), so text children / popup shields never own hover.
     if (eventType == EEvent::MouseMoved) {
-        UIElement* newHovered = pointerTarget;
+        UIElement* newHovered = resolveHoverTarget(pointerTargets);
         if (_hovered != newHovered) {
             if (_hovered && _hovered->isAttached()) {
                 _hovered->resetHoverState();
@@ -488,7 +505,7 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
     // elsewhere. The pressed widget sets its own hover flag in its press
     // handler; here we only retire the stale one.
     if (eventType == EEvent::MouseButtonPressed) {
-        UIElement* newHovered = pointerTarget;
+        UIElement* newHovered = resolveHoverTarget(pointerTargets);
         if (_hovered != newHovered) {
             if (_hovered && _hovered->isAttached()) {
                 _hovered->resetHoverState();

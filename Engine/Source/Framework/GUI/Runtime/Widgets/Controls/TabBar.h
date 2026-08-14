@@ -49,6 +49,7 @@ struct YA_GUI_API UITabButton : public UIElement
 
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
+    bool isHoverable() const override { return true; }
     void resetHoverState() override { _bHovered = false; }
     void clearTransientInputState() override { _bHovered = false; }
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;

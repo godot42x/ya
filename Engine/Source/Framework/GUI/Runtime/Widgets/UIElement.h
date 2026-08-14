@@ -91,6 +91,16 @@ enum class EWidgetFocusPolicy : uint8_t
     Focusable,
 };
 
+/// Mouse cursor the window host should show while this widget is hovered.
+/// Mapped to a system cursor by the host (SDL system cursors); the default
+/// is the arrow and split panes request a resize cursor over their divider.
+enum class ECursorType : uint8_t
+{
+    Arrow,            // default pointer
+    ResizeEastWest,   // vertical divider (left/right panes)
+    ResizeNorthSouth, // horizontal divider (top/bottom panes)
+};
+
 struct WidgetTree;
 struct WidgetAttachment;
 struct UIElement;
@@ -246,8 +256,20 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     {
         return handleInputEvent(event, ctx);
     }
-    /// Clear transient input state (e.g. button hover) before a MouseMoved
-    /// hit-test pass.
+    /// Whether this widget presents hover feedback and is therefore an
+    /// eligible hover target for the tree's hover tracking. Plain text,
+    /// containers and popup shields are NOT hoverable (their children/other
+    /// layers must not steal hover from the real interactive leaf); buttons /
+    /// menu entries / split dividers are. The tree resolves the deepest
+    /// hoverable widget under the pointer from this flag, so a button's text
+    /// child reports the button (not the text) as the hovered widget.
+    [[nodiscard]] virtual bool isHoverable() const { return false; }
+    /// Cursor to show while this widget is hovered (queried by the host from
+    /// the tree's hovered widget). Base: arrow; split panes override it.
+    [[nodiscard]] virtual ECursorType getCursor() const { return ECursorType::Arrow; }
+    /// Clear transient hover state before the next hit-test pass. Only the
+    /// hovered widget receives this (the tree drives it), so a widget with a
+    /// hover visual must override it and clear its own hover flag.
     virtual void resetHoverState() {}
     /// Clear ALL transient input state (hover / press / drag session). Called
     /// by WidgetTree when a subtree is detached while the tree still points
