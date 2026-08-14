@@ -7,7 +7,7 @@
 
 ```text
 AppKernel                         唯一 loop / event-source / frame-time / base exit policy
-  └─ GUIApp                       GUI 应用装配、window registry、跨窗口策略
+  └─ GUIApp                       GUI 应用装配、native window manager、跨窗口策略
        └─ GUIWindowHost[n]        一窗口一 tree、native window、presenter、pointer context
             └─ WidgetTree         单窗口 live visual tree + per-tree interaction state
                  ├─ Content
@@ -25,8 +25,8 @@ AppKernel                         唯一 loop / event-source / frame-time / base
 | 当前类型 / 位置 | 当前事实 | 目标去向 | 分类 |
 |---|---|---|---|
 | `Foundation/Core/Application/AppKernel` | GUI windowed/headless hosts 与 `Product/Host/AppFrameLoop::run` 都已调用；提供 event source、tick 与基础 exit policy | 保留为唯一共享 loop 内核 | 保留 |
-| `Framework/GUI/App/GUIApp` | standalone GUI entry 的装配层；当前持有一个 primary window 并创建 `AppKernel` | 保留；后续在这里增长 window registry | 保留 |
-| `Framework/GUI/App/GUIWindowHost` | 当前持有 SDL window、Vulkan presenter、WidgetTree、pointer state、automation server | 保留为 concrete one-window owner | 保留 |
+| `Framework/GUI/App/GUIApp` | standalone GUI entry 的装配层；当前持有一个 primary window 并创建 `AppKernel` | 保留；后续在这里增长 `NativeWindowManager` 级策略与多窗口编排 | 保留 |
+| `Framework/GUI/App/GUIWindowHost` | 当前持有 SDL window、Vulkan presenter、WidgetTree、pointer state、control server | 保留为 concrete one-window owner | 保留 |
 | `Framework/GUI/App/GUIAppHost` | `GUIApp` 的 compatibility alias | 只为旧 include/调用兼容；新代码不再使用 | 过渡 / 删除 |
 | `Framework/GUI/App/GUIHeadlessHost` | 无 SDL/RHI 的 AppKernel + WidgetTree + snapshot host | 保留为 GUIApp/WindowHost 的无 native-surface 验证形态；不成为另一条 product loop | 保留 / 过渡 |
 | `Framework/GUI/App/GUIRenderSurface` | 统一 imported swapchain 与 owned offscreen RenderImage 的 compose/final-layout 边界 | `GUIWindowHost` presenter/target 的底层资源对象 | 保留 |
@@ -53,7 +53,7 @@ AppKernel                         唯一 loop / event-source / frame-time / base
 
 ## 4. 生命周期清单
 
-| Owner | 创建 | 每帧 | resize / restore | shutdown | dump / automation |
+| Owner | 创建 | 每帧 | resize / restore | shutdown | dump / control |
 |---|---|---|---|---|---|
 | `AppKernel` | caller 构造，接收 event source + delegate | poll -> delegate tick -> exit policy | 不解释 GUI resize | 调 delegate shutdown | base frame stepping / exit policy |
 | `GUIApp`（目标） | 产品入口装配 GUI services + windows | 选择 active window / 跨窗口 policy | 创建/销毁 window host | 先停止 windows，再释放 app services | window-id 路由、app-scope scenario |
@@ -61,14 +61,22 @@ AppKernel                         唯一 loop / event-source / frame-time / base
 | `WidgetTree` | window host 创建 | layout dirty 时 layout + build snapshot；route event | logical extent 改动导致 layout invalidation | detach clears transient references | tree / route / hover / focus dump |
 | `GUIRenderSurface` | window host 或 editor caller于 frame boundary 创建 | prepare + record immutable snapshot | owner 替换旧 surface 前 wait submit | 在 RHI/VMA teardown 前释放 | offscreen/windowed BMP parity |
 
-## 5. automation 归位
+## 5. control plane 归位
 
 基础能力归 `Foundation/Core/Application`：
 
 - `AppKernel`：event-source sequencing、frame timing、shared exit policy；
-- `AppAutomationRunOptions`：exit-after-frame / control port 基础选项；
+- `AppControlRunOptions`：exit-after-frame / control port / stdin 命令入口等基础选项；
 - `GuiEventDriver`：JSONL mouse/key/wheel/drag/resize/checkpoint step 语义；
-- `BmpDiff` / `AutomationControlServer`：通用 capture/diff/RPC 基础。
+- `BmpDiff` / `ControlServer`：通用 capture/diff/RPC 基础。
+
+这里的 automation 现在被降级为 `App/Control` 下的一个子能力；更大的总概念是 control plane：
+
+- CLI / command dispatch；
+- 交互式 stdin / shell 控制；
+- remote / agent control；
+- scenario / replay / frame stepping；
+- capture / diff / inspection。
 
 产品扩展不重写 loop：
 
@@ -79,11 +87,11 @@ AppKernel                         唯一 loop / event-source / frame-time / base
 
 当前已知迁移缺口：`Product/Host/AppFrameLoop` 已经不再持有 while loop；它保留 SDL
 event source 和 product frame work。高级 screenshot、RenderDoc、scene-stability
-automation 仍属于 Product Host extension，暂不错误下沉到 GUI 或 AppKernel 基础层。
+control 扩展仍属于 Product Host extension，暂不错误下沉到 GUI 或 AppKernel 基础层。
 
 ## 6. 多窗口默认语义（先定，不实现）
 
-1. `GUIApp` 维护 window registry 与 active window；每个 `GUIWindowHost` 一棵 tree。
+1. `GUIApp` 维护 `NativeWindowManager` 与 active window；每个 `GUIWindowHost` 一棵 tree。
 2. popup / tooltip / drag overlay 默认 per-window。
 3. focus 基础归属 per-window；active-window 切换整体切换/失效 focus path，不保存裸
    global focused widget。
@@ -92,17 +100,17 @@ automation 仍属于 Product Host extension，暂不错误下沉到 GUI 或 AppK
    window transient state。
 5. modal 明确区分 per-window 与 whole-app。whole-app modal 由 GUIApp gate windows，
    不能用普通 popup layer 冒充。
-6. automation 注入默认携带 target window id；单窗口 CLI 可以省略，解析为 default
+6. control 注入默认携带 target window id；单窗口 CLI 可以省略，解析为 default
    window。
 
 ## 7. Phase A 实施顺序
 
 1. [x] `Product/Host/AppFrameLoop` 改为 AppKernel-backed adapter，保留已有 frame
-   work / advanced product automation，删除第二个 while/event-pump 主循环。
+   work / advanced product control extension，删除第二个 while/event-pump 主循环。
 2. [x] 把 `GUIAppHost` 的 concrete single-window owner 命名收口到
    `GUIWindowHost`；旧名是 `GUIApp` compatibility alias。
 3. [x] 新建最小 `GUIApp` primary-window assembly，让 AppKernel 在 GUIApp 层创建；
-   v1 只有一个 primary slot，未来 window registry 在此增长，不在此阶段实现 docking
+   v1 只有一个 primary slot，未来多窗口编排与 `NativeWindowManager` 策略在此增长，不在此阶段实现 docking
    或 cross-window drag。
 4. [ ] 在 Phase C 前把 current pointer/focus/capture 从 host 传参收口为
    window/tree state。

@@ -36,7 +36,7 @@ bool OpenGLState::initialize()
 
 void OpenGLState::init(const ya::RenderCreateInfo &renderCI)
 {
-    _window = new SDLWindowProvider();
+    _window = new SDLNativeWindow();
     _window->init();
     _window->recreate(WindowCreateInfo{
         .renderAPI = renderCI.renderAPI,

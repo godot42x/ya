@@ -7,9 +7,9 @@
 
 当前默认只允许同时推进一个 phase 的一个最小切片。若工作区中已经存在未完成切片，先收口再开新项。
 
-当前激活切片：`final validation audit / macOS MoltenVK gate`
+当前激活切片：`phase-a physical tree + app subtree split + rename/move design`
 
-当前审计工件：`completion-audit.md`（Windows evidence complete; macOS/MoltenVK external gate open）
+当前审计工件：`owner-model.md` + `plan.md` 目录归位表（macOS/MoltenVK gate 保持外部阻塞，不再占用当前主切片）
 
 ## P0 — Phase 0 渲染正确性基线
 
@@ -51,14 +51,39 @@
 - [x] 产出 `AppKernel -> GUIApp -> GUIWindowHost -> WidgetTree` 职责图（`owner-model.md`）
 - [x] 盘点现有 `App / Host / GUIAppHost / Surface / Panel` 类型，整理成保留/改名/过渡/删除四类表
 - [x] 明确 app/window/tree 各自拥有的状态：focus、hover、capture、modal、popup、drag overlay
-- [x] 明确 automation 基底的最终挂载层级，以及 GUI/game/runtime editor 的扩展点
+- [x] 明确 control plane 基底的最终挂载层级，以及 GUI/game/runtime editor 的扩展点
 - [x] 补一页 owner checklist：谁创建、谁销毁、谁 restore、谁 dump
+- [x] 把动态 visual hierarchy mutation 正式写入计划：attach/detach/reparent/reorder 属于 retain UI 运行时合同，而不是 GUI app 静态拼装例外
+- [x] 产出目录归位表：Foundation/Core、Foundation/Core/Application、Foundation/RHI、Framework/AppRuntime、Framework/GUI/App、Framework/AppServices、Product/Host、Product/Editor、Example/GUIWorkbench 映射到目标结构
+- [x] 写出目录收口 charter：目标物理树改为 Core / App / GUI / Game / Editor / Example，并明确 Foundation / Framework / Product 只代表当前现状（`directory-charter.md`）
+- [x] 决定 App 不能默认带窗口语义：只保留 `App/Kernel`、`App/Control` 两段，支持 CLI / DS / server / render-service 等无窗口形态
+- [x] 决定 Framework/AppRuntime 的唯一去向：`GUI/Host`；窗口/bootstrap/native event source 收回 GUI 宿主链
+- [x] 决定 Framework/GUI/App 的唯一去向：`GUI/Host`；首轮保留 `GUIAppHost` compatibility alias
+- [~] 决定 Product/Host 的唯一去向：必须离开顶层 Product，回收到 `Game/*` 分支；确切 leaf 名待 include/target audit 拍板
+- [x] 定性 `Framework/AppServices`：不属于共享 App 主链，后续单独回收进 `Game` 语义分支
+- [ ] 补目录 -> target -> include 根映射表，作为 Batch 1 闭包审计工件，并显式区分 `App/Kernel`、`App/Control`、`GUI/Host`
+- [ ] 先做一轮不改行为的目录迁移设计：只移动文件/改 include/改 target 名称，不混入逻辑重写
+
+### 下一刀顺序
+
+- [ ] 先补目录 -> target -> include 根映射表：把 `Foundation/Core`、`Foundation/Core/Application`、`Foundation/RHI`、`Framework/AppRuntime`、`Framework/GUI/App`、`Framework/AppServices`、`Product/Host`、`Product/Editor` 映射到实际 target / include 根 / 未来目录
+- [ ] 先盘点 xmake target 依赖线：确认哪些 target 只是目录命名噪声，哪些已经形成真实复用边界
+- [ ] 先做第一轮 rename/move 设计，不动行为：
+  - [ ] `Foundation/Core/Application` -> `App/Kernel` + `App/Control`
+  - [ ] `Framework/AppRuntime` -> `GUI/Host`
+  - [ ] `Framework/GUI/App` -> `GUI/Host`
+  - [ ] `Product/Host` -> `Game/*` branch-local shell（候选先在 `Game/Runtime` 与 `Game/Shell` 中二选一）
+- [ ] 再做第一轮 no-behavior 迁移：文件移动、include 修正、xmake target/name 收口
+- [ ] 迁移后立刻验证 GUIWorkbench 链接闭包，确认不再被 `Product/Host` 语义污染
 
 ### 完成标准
 
 - [x] 文档能直接回答“哪个是真正主循环、哪个拥有窗口、哪个拥有 tree”
 - [x] 同名/近名类型已给出明确去向
-- [x] automation 不再被描述成多个平行入口
+- [x] control plane 不再被描述成多个平行入口
+- [ ] 新开发者能从目录直接读出共同依赖线：Core -> App/Kernel (+ App/Control) -> GUI -> Game -> Editor；并能看出 headless path 可在 App/Kernel 或 Game 截停
+- [ ] GUI example 的链接闭包不再被 Product/Host / Game 分支语义污染
+- [ ] 至少完成一轮目录/命名迁移，且行为验证与迁移前等价
 
 ## P2 — Phase B Layout / Slot 内核
 

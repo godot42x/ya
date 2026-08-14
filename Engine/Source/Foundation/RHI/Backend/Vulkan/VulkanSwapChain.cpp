@@ -48,7 +48,7 @@ VkPresentModeKHR VulkanSwapChainSupportDetails::ChooseSwapPresentMode(const VkPr
     return presentModes[0];
 }
 
-VkExtent2D VulkanSwapChainSupportDetails::ChooseSwapExtent(IWindowProvider *provider, int preferredWidth, int preferredHeight)
+VkExtent2D VulkanSwapChainSupportDetails::ChooseSwapExtent(INativeWindow *window, int preferredWidth, int preferredHeight)
 {
     if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
         return capabilities.currentExtent;
@@ -57,7 +57,7 @@ VkExtent2D VulkanSwapChainSupportDetails::ChooseSwapExtent(IWindowProvider *prov
     VkExtent2D actualExtent;
     if (preferredHeight == 0 && preferredWidth == 0) {
         int width = 0, height = 0;
-        provider->getWindowSize(width, height);
+        window->getWindowSize(width, height);
         actualExtent.width  = static_cast<uint32_t>(width);
         actualExtent.height = static_cast<uint32_t>(height);
     }

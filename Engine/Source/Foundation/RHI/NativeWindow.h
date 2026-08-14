@@ -28,16 +28,19 @@ struct WindowCreateInfo
     bool          bResizable = true;
 };
 
-struct IWindowProvider
+/// One native top-level window plus the backend surface hooks bound to it.
+/// App/window policy belongs to higher-level host code; this interface only
+/// represents the concrete native window object.
+struct INativeWindow
 {
   protected:
     void *nativeWindowHandle = nullptr;
     float dpiScale           = 1.0f; // DPI scale factor, default is 1.0
 
   public:
-    virtual ~IWindowProvider()
+    virtual ~INativeWindow()
     {
-        YA_CORE_TRACE("IWindowProvider::~IWindowProvider()");
+        YA_CORE_TRACE("INativeWindow::~INativeWindow()");
     }
 
     [[nodiscard]] void *getNativeWindowHandle() const { return nativeWindowHandle; }
@@ -59,7 +62,7 @@ struct IWindowProvider
     virtual void getWindowSize(int &width, int &height) = 0;
     virtual bool setWindowSize(int width, int height)
     {
-        YA_CORE_ERROR("setWindowSize not implemented in IWindowProvider");
+        YA_CORE_ERROR("setWindowSize not implemented in INativeWindow");
         return false;
     }
 
@@ -70,11 +73,12 @@ struct IWindowProvider
 #endif
 };
 
-class YA_RHI_API SDLWindowProvider final : public IWindowProvider
+/// SDL-backed concrete native window implementation.
+class YA_RHI_API SDLNativeWindow final : public INativeWindow
 {
   public:
-    SDLWindowProvider() = default;
-    ~SDLWindowProvider() override;
+    SDLNativeWindow() = default;
+    ~SDLNativeWindow() override;
 
     bool init() override;
     void destroy() override;

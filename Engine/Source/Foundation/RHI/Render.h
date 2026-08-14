@@ -12,7 +12,7 @@ struct ISwapchain;
 struct IDescriptorSetHelper;
 struct IRenderResourceFactory;
 struct RenderTargetCreateInfo;
-struct IWindowProvider;
+struct INativeWindow;
 struct ShaderStorage;
 
 
@@ -121,7 +121,7 @@ struct YA_RHI_API IRender : public plat_base<IRender>
      * @tparam T The window type (e.g., SDL_Window*)
      */
     template <typename T>
-    T getNativeWindow() const
+    T getNativeWindowHandleAs() const
     {
         return static_cast<T>(getNativeWindowHandle());
     }
@@ -152,7 +152,7 @@ struct YA_RHI_API IRender : public plat_base<IRender>
      */
     virtual ISwapchain* getSwapchain() = 0;
 
-    virtual IWindowProvider* getWindowProvider() const { return nullptr; }
+    virtual INativeWindow* getNativeWindow() const { return nullptr; }
 
     /**
      * @brief Get the descriptor set helper for updating descriptor sets

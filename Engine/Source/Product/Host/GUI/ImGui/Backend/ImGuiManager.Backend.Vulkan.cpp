@@ -18,7 +18,7 @@ constexpr uint32_t IMGUI_DESCRIPTOR_POOL_SIZE = 512;
 
 } // namespace
 
-void ImGuiManager::initVulkan(IWindowProvider* window, IRender* render, IRenderPass* renderPass)
+void ImGuiManager::initVulkan(INativeWindow* window, IRender* render, IRenderPass* renderPass)
 {
     YA_CORE_ASSERT(!_initialized, "ImGuiManager already initialized");
 
@@ -86,7 +86,7 @@ void ImGuiManager::initVulkan(IWindowProvider* window, IRender* render, IRenderP
 }
 
 #if IMGUI_SDL3_GPU
-void ImGuiManager::initSDLGPU(IWindowProvider* window, SDL_GPUDevice* device)
+void ImGuiManager::initSDLGPU(INativeWindow* window, SDL_GPUDevice* device)
 {
     YA_CORE_ASSERT(!_initialized, "ImGuiManager already initialized");
 

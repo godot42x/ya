@@ -26,7 +26,7 @@ struct OpenGLSwapchain : public ISwapchain
 {
   private:
     OpenGLRender *_render = nullptr;
-    IWindowProvider *_windowProvider = nullptr;
+    INativeWindow *_nativeWindow = nullptr;
 
     // Swapchain configuration
     SwapchainCreateInfo _ci;

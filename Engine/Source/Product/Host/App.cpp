@@ -1,7 +1,7 @@
 #include "Host/App.h"
 #include "Host/AppRenderState.h"
 #include "Host/Automation/AppAutomationControlService.h"
-#include "AppRuntime/WindowManager.h"
+#include "AppRuntime/NativeWindowManager.h"
 #include "Core/Config/ConfigManager.h"
 #include "Render3D/RenderRuntime.h"
 
@@ -318,20 +318,20 @@ void App::notifyModulesSceneDestroyed(Scene* scene)
 }
 
 
-IWindowProvider* App::getMainWindowProvider()
+INativeWindow* App::getMainNativeWindow()
 {
-    return _windowManager ? _windowManager->getMainWindow() : nullptr;
+    return _nativeWindowManager ? _nativeWindowManager->getMainWindow() : nullptr;
 }
 
-IWindowProvider* App::getOrCreateMainWindow(const WindowCreateInfo& ci)
+INativeWindow* App::getOrCreateMainNativeWindow(const WindowCreateInfo& ci)
 {
-    if (!_windowManager) {
+    if (!_nativeWindowManager) {
         return nullptr;
     }
-    if (auto* window = _windowManager->getMainWindow()) {
+    if (auto* window = _nativeWindowManager->getMainWindow()) {
         return window;
     }
-    return _windowManager->createMainWindow(ci);
+    return _nativeWindowManager->createMainWindow(ci);
 }
 
 ShadowSettings* App::getShadowSettings()

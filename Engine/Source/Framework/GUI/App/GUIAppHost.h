@@ -180,7 +180,7 @@ private:
 };
 
 /// Compatibility names for standalone examples while Phase A introduces
-/// GUIApp/window registry composition. New framework code names the app
+/// GUIApp/native-window-manager composition. New framework code names the app
 /// assembly `GUIApp` and the real one-window owner `GUIWindowHost`.
 using FGUIAppHostConfig = FGUIWindowHostConfig;
 using GUIAppHost         = GUIApp;

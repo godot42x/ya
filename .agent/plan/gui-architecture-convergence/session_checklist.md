@@ -29,6 +29,7 @@
 3. 若发现稳定规则已经超出阶段计划范畴，应该考虑把规则上收到 skill / AGENTS，而不是只留在本目录。
 4. 若需要新建验证入口，优先复用现有 GUIWorkbench scenario / dump / gpu-shot / smoke 机制。
 5. 若出现“当前能用就行”的修法，暂停并回到 plan 中检查是否违反架构收口方向。
+6. 若本轮影响目录/target/App 主链，必须额外检查：windowless app 是否仍能只停在 App/Kernel（按需加 App/Control），而不会被 GUI/Host 或窗口假设污染。
 
 ## 每轮收尾前
 

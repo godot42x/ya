@@ -43,7 +43,7 @@ struct LuaScriptingSystem;
 struct JSScriptingSystem;
 struct FProjectDescriptor;
 struct AppRenderState;
-class WindowManager;
+class NativeWindowManager;
 class GameplayResourceBinding;
 struct EnvironmentLightingProcessor;
 struct TerrainProcessor;
@@ -75,7 +75,7 @@ struct YA_HOST_API App : public IRenderRuntimeHostServices
     Deleter _deleter;
 
     SceneManager*                   _sceneManager = nullptr;
-    std::unique_ptr<WindowManager>  _windowManager;
+    std::unique_ptr<NativeWindowManager> _nativeWindowManager;
     std::unique_ptr<AppRenderState> _renderState;
     AppRenderServices                            _renderServices;
     AppSceneServices                             _sceneServices;
@@ -190,8 +190,8 @@ struct YA_HOST_API App : public IRenderRuntimeHostServices
 
     [[nodiscard]] AppRenderServices&       getRenderServices() { return _renderServices; }
     [[nodiscard]] const AppRenderServices& getRenderServices() const { return _renderServices; }
-    [[nodiscard]] WindowManager*           getWindowManager() { return _windowManager.get(); }
-    [[nodiscard]] const WindowManager*     getWindowManager() const { return _windowManager.get(); }
+    [[nodiscard]] NativeWindowManager*       getNativeWindowManager() { return _nativeWindowManager.get(); }
+    [[nodiscard]] const NativeWindowManager* getNativeWindowManager() const { return _nativeWindowManager.get(); }
     [[nodiscard]] AppSceneServices&        getSceneServices() { return _sceneServices; }
     [[nodiscard]] const AppSceneServices&  getSceneServices() const { return _sceneServices; }
     [[nodiscard]] AppAutomationControlService*       getAutomationControlService() { return _automationControlService.get(); }
@@ -205,8 +205,8 @@ struct YA_HOST_API App : public IRenderRuntimeHostServices
     [[nodiscard]] TerrainProcessor*              getTerrainProcessor() const;
 
     // === IRenderRuntimeHostServices implementation ===
-    IWindowProvider* getMainWindowProvider() override;
-    IWindowProvider* getOrCreateMainWindow(const WindowCreateInfo& ci) override;
+    INativeWindow* getMainNativeWindow() override;
+    INativeWindow* getOrCreateMainNativeWindow(const WindowCreateInfo& ci) override;
     ShadowSettings*                        getShadowSettings() override;
     const AppAutomationShadowOverrides*  getAutomationShadowOverrides() const override;
     OffscreenJobQueueService getOffscreenJobQueueService() override;

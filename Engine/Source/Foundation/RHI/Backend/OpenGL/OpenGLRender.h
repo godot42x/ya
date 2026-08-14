@@ -3,7 +3,7 @@
 #include "Core/Base.h"
 #include "Core/Delegate.h"
 #include "RHI/Render.h"
-#include "RHI/WindowProvider.h"
+#include "RHI/NativeWindow.h"
 #include "glad/glad.h"
 
 #include <memory>
@@ -35,7 +35,7 @@ struct OpenGLRender : public IRender
     std::string m_VendorString;
 
     // Window and context
-    IWindowProvider *_windowProvider = nullptr;
+    INativeWindow *_nativeWindow = nullptr;
     void            *nativeWindow    = nullptr;
 
 #if USE_SDL
@@ -88,7 +88,7 @@ struct OpenGLRender : public IRender
     IDescriptorSetHelper *getDescriptorHelper() override;
 
     // OpenGL-specific methods
-    IWindowProvider *getWindowProvider() const override { return _windowProvider; }
+    INativeWindow *getNativeWindow() const override { return _nativeWindow; }
 
     template <typename T>
     T *getNativeWindow()

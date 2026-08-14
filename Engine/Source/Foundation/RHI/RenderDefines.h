@@ -21,7 +21,7 @@
 namespace ya
 {
 
-struct IWindowProvider;
+struct INativeWindow;
 
 /// Maximum number of frames that can be in-flight simultaneously.
 /// UBOs and descriptor sets that change per-frame must be allocated in arrays
@@ -1383,7 +1383,7 @@ struct RenderCreateInfo
 {
     ERenderAPI::T       renderAPI = ERenderAPI::Vulkan;
     SwapchainCreateInfo swapchainCI;
-    IWindowProvider*    windowProvider = nullptr;
+    INativeWindow*      nativeWindow   = nullptr;
 
     /// Graphics cards excluded from physical-device selection by name
     /// (host-provided; consumed by the backend during device picking).

@@ -13,7 +13,7 @@
 #include "RHI/Render.h"
 #include "RHI/RenderDefines.h"
 #include "RHI/Shader.h"
-#include "RHI/WindowProvider.h"
+#include "RHI/NativeWindow.h"
 #include "RHI/Backend/TextureLibrary.h"
 #include "RHI/Backend/Vulkan/VulkanSwapChain.h"
 #include "RHI/Core/CommandBuffer.h"
@@ -701,7 +701,7 @@ struct GUIWindowHost::FImpl
     const FGUIWindowHostConfig* config = nullptr;
     IGUIAppDelegate*         delegate = nullptr;
 
-    SDLWindowProvider        window;
+    SDLNativeWindow          window;
     IRender*                 render  = nullptr;
     AppAutomationControlServer automationServer;
     std::shared_ptr<ShaderStorage> shaderStorage;
@@ -761,7 +761,7 @@ bool GUIWindowHost::init()
     AppBootstrap::initializeProcessCore();
 
     // 1. Window provider (SDL3 + Vulkan surface).
-    SDLWindowProvider& window = _impl->window;
+    SDLNativeWindow& window = _impl->window;
     if (!window.init()) {
         return false;
     }
@@ -811,7 +811,7 @@ bool GUIWindowHost::init()
             .width              = config.width != 0 ? config.width : DEFAULT_WINDOW_WIDTH,
             .height             = config.height != 0 ? config.height : DEFAULT_WINDOW_HEIGHT,
         },
-        .windowProvider = &window,
+        .nativeWindow   = &window,
     };
     IRender* render = IRender::create(renderCI);
     if (!render) {

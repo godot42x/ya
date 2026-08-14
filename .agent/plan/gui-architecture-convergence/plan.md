@@ -1,7 +1,7 @@
 # GUI 架构收敛计划：单主循环、Widget/Layout/Slot、事件路径与多窗口留口
 
 > 建立日期：2026-08-13
-> 状态：正式收敛期。当前主线不是继续堆控件，也不是先做 .yaui / UIDocument，而是先把 GUI 的主链路、布局对象模型、事件路由、自动化基底与调试闭环做扎实。
+> 状态：正式收敛期。当前主线不是继续堆控件，也不是先做 .yaui / UIDocument，而是先把 GUI 的主链路、布局对象模型、事件路由、control plane 基底与调试闭环做扎实。
 > 关联：本计划是 GUI 框架下一阶段的唯一主线参考，替代此前零散的 host / workbench / minimal host / UIContainer 增量路线。
 
 ## 0. 结论摘要
@@ -19,14 +19,16 @@
 7. authoring v1 只支持 imperative retain UI builder；.yaui / UIDocument 暂不绑定新布局对象模型。未来 XML/DSL/document 都只是这套运行时对象模型的 authoring 前端。
 8. Example/GUIWorkbench 的定位是 feature gallery + regression app，不是 app framework 本体，也不是 editor shell 原型；Framework/GUI 只放可复用能力。
 9. 多窗口 / docking 当前不实现，但必须现在预留 owner 边界；dragdrop 允许跨窗口，modal 支持 per-window/whole-app 两种 scope。
-10. automation、事件注入、frame stepping、截图/回放等调试能力要上收为 AppKernel 之上的共享 automation 基底，由 GUI / game / runtime editor 共同复用，不再每条线各写一套 `exit-after-frame` 或私有 smoke 控制。
+10. CLI、命令分发、事件注入、frame stepping、截图/回放等调试能力要上收为 AppKernel 之上的共享 control plane，由 GUI / game / runtime editor 共同复用；automation 只是其中一个子能力，不再每条线各写一套 `exit-after-frame` 或私有 smoke 控制。
 11. 当前事件系统要从“边命中边执行的 DFS hit walk”逐步收敛到“显式 route path + route phase”的模型，即 pointer path / focus path / preview(target 前) / target / bubble。
+12. retain UI 的 visual hierarchy mutation（attach / detach / reparent / reorder）是正式运行时能力，不是只服务 GUI app 固定壳的 authoring 便利接口；game runtime 可以频繁改父子关系，布局与事件模型必须以此为前提。
+13. 下一阶段优先级调整为：先把目录、命名、target 依赖线与 owner 主链路收口，再继续扩张 GUI feature。否则后续所有控件、layout 与多窗口工作都会继续挂在历史壳上增长。
 
 ## 1. 当前问题到底在哪里
 
 ### 1.1 主链路不清晰
 
-目前同时存在多层宿主语义，导致很难回答：谁是真正主循环、谁拥有窗口、谁拥有 WidgetTree、谁负责 automation、谁负责 present。典型噪声来源包括：
+目前同时存在多层宿主语义，导致很难回答：谁是真正主循环、谁拥有窗口、谁拥有 WidgetTree、谁负责 control plane、谁负责 present。典型噪声来源包括：
 
 - `Engine/Source/Product/Host/App.h`
 - `Engine/Source/Framework/GUI/App/GUIAppHost.h`
@@ -36,7 +38,7 @@
 问题不只是“有两个入口”，而是：
 
 - 生命周期所有权难以追踪；
-- automation 控制点分散；
+- CLI / scenario / agent / capture 等控制点分散；
 - 多窗口无法自然长出来；
 - agent 难以判断问题到底在 app kernel、window host、widget tree、layout、compose 还是 render。
 
@@ -62,7 +64,21 @@
 - specialized layout（split / scroll / menu popup / inspector row）没有统一抽象基线；
 - 为 multi-window、popup tree、workspace/docking 留口会越来越别扭。
 
-### 1.3 事件路由不够清晰
+### 1.3 visual hierarchy mutation 还没有被当成正式能力建模
+
+当前虽然已经有 WidgetTree::attach / reparent / detach / reparentBefore / reparentAfter，但在心智模型上仍然容易被误解成“主要给 GUI app 静态拼页面用”。这对 game/editor 是不够的。
+
+retain UI 正式需要支持的不是一次性 attach，而是：
+
+- runtime 中频繁地把 widget 从一个父节点移到另一个父节点；
+- 在 overlay / popup / drag ghost / inspector row / runtime HUD 之间切换挂载点；
+- 在不销毁 widget identity 的情况下改变 visual parent；
+- 让 slot 跟随 parent-child edge 重建，而不是把布局数据残留在 child 本体；
+- 让焦点、capture、hover、drag session 在 detach/reparent 后按 tree 规则正确失效或迁移。
+
+所以当前真正要巩固的是：Widget identity、visual parent、slot edge、layout invalidation、route state 在 runtime mutation 下的合同，而不是把“动态父子关系”当作传统 GUI app 的例外场景。
+
+### 1.4 事件路由不够清晰
 
 当前 `WidgetTree::dispatchEvent()` 更接近“从 root 做整树 DFS hit walk，子先于父处理；部分状态由 tree 特判（focus/capture/drag）”的混合模型。它能处理简单按钮，但在以下场景会越来越难维护：
 
@@ -74,7 +90,7 @@
 
 所以当前问题不是“leaf -> parent bubble 没做完整”这么简单，而是整个 route 模型还没有被正式对象化。
 
-### 1.4 GUI 缺陷不可观测
+### 1.5 GUI 缺陷不可观测
 
 当前很多问题本质上不是“不会修”，而是缺少稳定观察面：
 
@@ -92,11 +108,11 @@
     AppKernel
       ├─ event pump
       ├─ frame loop / timing / exit policy
-      ├─ automation base / CLI / stepping / capture
+      ├─ control plane / CLI / stepping / capture
       ├─ shared services registry
       └─ AppModules[]
            ├─ GUIApp
-           │    ├─ Window registry
+           │    ├─ NativeWindowManager
            │    └─ GUIWindowHost[]
            │         ├─ native window
            │         ├─ input state / pointer state / modal scope
@@ -112,7 +128,7 @@
 
 - AppKernel
   - 是唯一主循环；
-  - 管事件源、frame timing、退出策略、automation 基底、共享服务装配；
+  - 管事件源、frame timing、退出策略、control plane 基底、共享服务装配；
   - 不直接知道 GUI widget、布局或 RHI 细节；
   - 不再允许 GUI 线、game 线、editor 线各自再长一套平行 run loop。
 
@@ -132,14 +148,15 @@
   - 管 focus path / hover path / capture / popup stack 等树级交互状态；
   - 不承担整个 app 工作区模型的概念。
 
-### 2.2 automation 与共享服务归位
+### 2.2 control plane 与共享服务归位
 
-automation 的正式归位：
+control plane 的正式归位：
 
-- AppKernel 层提供共享 automation base：事件注入、frame stepping、等待条件、截图、golden diff、scenario 编排；
+- AppKernel 之上提供共享 control plane：CLI、command dispatch、事件注入、frame stepping、等待条件、截图、golden diff、scenario 编排、remote/agent control；
+- automation 退回成 control plane 下的一个子能力，而不是顶层总名字；
 - GUI / game / runtime editor 都通过模块注册把自己的 surface、window、语义动作挂进去；
 - GUI 不再自己 hardcode `exit-after-frame`、smoke switch 或专用 CLI；game/editor 也不再绕开同一基底另做一套控制服务；
-- 这部分应归 Foundation 或 Framework 级共享层，不能继续留在单一 Product 语义里。
+- 这部分应归共享 App 层，不能继续留在单一 Product 语义里。
 
 ### 2.3 正式布局对象模型
 
@@ -172,6 +189,17 @@ automation 的正式归位：
 - child 可通过 `getSlot()` 取回当前边对象；需要时再 cast 到具体 slot 类型；
 - reparent 时旧 parent 销毁/解绑旧 slot，新 parent 创建新 slot；
 - slot 属性改动至少触发布局 invalidation；影响 desired size 的改动触发 measure + arrange，只影响分配位置的改动可只触发 arrange。
+
+### 2.3.1 runtime mutation 合同
+
+为了让 game runtime 与 GUI app 共用同一套 retain UI 内核，visual hierarchy mutation 明确遵循以下合同：
+
+1. attach、detach、reparent、reorder(before/after) 都是 runtime-safe 的一等操作；它们不是 document/import 专用流程。
+2. widget identity 独立于 visual parent；reparent 默认保留 widget 自身状态，但 tree 级 hover / capture / drag target / focus path 必须按附着性重新验证。
+3. slot 始终属于 parent-child edge：reparent 时销毁旧 edge slot，由新 parent/layout 创建新 slot；child 本体不缓存旧 slot 布局语义。
+4. mutation 至少触发 arrange invalidation；若新旧 layout 或 slot 数据影响 desired size，则升级为 measure + arrange。
+5. route 执行期间允许 detach/reparent，但 path trace 只保留稳定名字/快照，不保留可能悬空的裸指针。
+6. popup、drag ghost、tooltip、modal overlay 也只是不同 layer/owner 下的 subtree mutation，不额外发明第二套 attach 语义。
 
 ### 2.4 第一种正式布局：Box
 
@@ -243,40 +271,109 @@ UIBoxSlot 负责：
 - dragdrop：允许跨窗口，但必须通过 GUIApp 级 drag session 协调 source window、hovered target window、drop commit；
 - modal：支持 per-window 与 whole-app 两种 scope，默认由 GUIApp 统一管理 active modal stack；
 - focus：采用 focus path 模型。基础焦点归属是 per-window，但 active window 由 GUIApp/AppKernel 维护；跨窗口切换时路径整体迁移或失效，而不是只存一个裸 focused widget；
-- automation：所有事件注入默认都要指定目标 window；单窗口 app 允许省略并走默认窗口。
+- control plane：所有事件注入默认都要指定目标 window；单窗口 app 允许省略并走默认窗口。
 
 ## 3. 目录与分层收口
 
-### 3.1 Framework 与 Example 的边界
+### 3.1 目标目录形状：共享主链 + 可拆分叉
 
-Framework/GUI 只放可复用 GUI 库，不放产品化 demo 内容。
+上一版把未来目录写成了 Foundation / Framework / Product，这对职责讨论有帮助，但对真实物理目录不够好。现在正式改成面向未来拆仓的目标树：
+
+    Core
+      -> App
+          -> Kernel
+          -> Control
+      -> GUI
+          -> Host
+      -> Game
+          -> Editor
+    Example/*
+
+判断标准：
+
+- 共同主链只能有一条：Core -> App/Kernel；
+- App 不是一整团；它只保留无窗口内核与共享 control plane，不再承载窗口层；
+- window/bootstrap/native event source 属于 GUI/Host；windowed GUI app、windowed game、runtime editor 都走 GUI bootstrap；
+- Game 与 Editor 仍然是独立分支；headless game / DS 可以停在 App 之上而不被 GUI 强绑；
+- 不能再让 Foundation / Framework / Product 这种抽象词继续作为未来物理目录目标；
+- GUI-only 形态以后必须能看着目录直接知道：至少带走 Core + App/Kernel + App/Control + GUI；
+- CLI / DS / server / render-service 形态以后必须能看着目录直接知道：至少停在 Core + App/Kernel（按需再加 App/Control）；
+- windowed game/editor 形态以后必须能看着目录直接知道：至少带走 Core + App/Kernel + App/Control + GUI + Game + Editor；
+- headless game / DS 形态以后也必须能看着目录直接知道：至少带走 Core + App/Kernel + Game；
+- 不能再让 Product/Host/App、Framework/GUI/App、Foundation/Core/Application 都像真正主入口。
+
+### 3.2 目标归位：当前目录到目标目录的映射
+
+| 当前目录 / 类型 | 当前问题 | 目标归位 |
+|---|---|---|
+| Foundation/Core/*（除 Application） | 底层能力与 Application 主链混放 | 收到 Core/* |
+| Foundation/RHI/* | 共享图形底座，但被 Foundation 这个抽象桶包住 | 收到 Core/RHI/* |
+| Foundation/Core/Application/* | 已经是单 loop / control plane base，但物理位置还像 Core 杂项 | 按职责拆到 App/Kernel/* 与 App/Control/* |
+| Framework/AppRuntime/* | 主要是窗口/bootstrap/native event source；本质上是 GUI bootstrap 的一部分 | 收到 GUI/Host/* |
+| Framework/GUI/App/* | App 命名与唯一 App 主链冲突；读者难以判断它是 GUI 装配还是第二主循环 | 收口为 GUI/Host/*；只表达 GUI window/tree/presenter owner |
+| Framework/AppServices/* | 名字像共享 App 层，实际是 game/render runtime contract | 回收到 Game/*（候选：Game/RuntimeServices/*） |
+| Product/Host/* | Host 过于宽泛，混合 game runtime、control、window、GUI bridge、utility | 顶层 Product 取消；该目录回收到 Game/* 的 branch-local shell |
+| Product/Host/GUI/GameUI/* | 名字容易让人误读成 generic GUI framework | 保留 game 语义，但归到 Game 分支内部，而不是挂在顶层 Product |
+| Product/Editor/* | editor product 语义相对清楚，但放在 Product 下仍模糊 | 直接升格为 Editor/* |
+| Example/GUIWorkbench/* | 当前定位大体正确 | 保留在 Example，不再让 GUI runtime 反向承担 demo/page 内容 |
+
+### 3.3 GUI 与 Example 的边界
+
+GUI 分支只放可复用 GUI 库，不放产品化 demo 内容。
 
 保留与调整建议：
 
-- `Engine/Source/Framework/GUI/`
-  - `Runtime/Widgets`
-  - `Runtime/Layout`（新增）
-  - `Runtime/Compose`
-  - `Runtime/Draw2D`
-  - `Runtime/Resource`
-  - `App`（只放 GUI 相关 host/presenter/automation glue）
-  - `Tooling`（只保留真正可复用的 tooling 基座）
-- `Example/GUIWorkbench/`
+- Engine/Source/GUI/
+  - Runtime/Widgets
+  - Runtime/Layout
+  - Runtime/Compose
+  - Runtime/Draw2D
+  - Runtime/Resource
+  - Host（只放 GUI 相关 window host / presenter / tree glue；不再命名为 App）
+  - Tooling（只保留真正可复用的 tooling 基座）
+- Example/GUIWorkbench/
   - 作为 retain UI feature gallery / regression app；
   - 展示 menu、popup、dragdrop、modal、split、scroll、tree、property inspector 等；
-  - 不再把 demo 页定义为 Framework 的一部分。
+  - 不再把 demo 页定义为 framework 的一部分。
 
-### 3.2 命名收口原则
+### 3.4 命名收口原则
 
 后续命名和职责应尽量收口为：
 
-- `AppKernel`：统一帧循环与 automation 基座；
-- `GUIApp`：GUI 应用装配层；
-- `GUIWindowHost`：单窗口宿主；
-- `Presenter`：窗口/离屏呈现边界；
-- `WidgetTree`：单窗口 live tree。
+- AppKernel：统一帧循环与 control plane 基座；
+- App/Kernel：唯一主循环、module lifecycle、service registry；
+- App/Control：共享控制协议、CLI/command surface、scenario/frame stepping、capture/diff、remote/agent control 抽象；
+- GUI/Host：native window、native window manager、event source、presenter、windowed bootstrap；
+- GUIApp：GUI 应用装配层；
+- GUIWindowHost：单窗口宿主；
+- Presenter：窗口/离屏呈现边界；
+- WidgetTree：单窗口 live tree。
 
-避免继续出现 `App / Host / GUIAppHost / WorkbenchSurface / Panel host` 交叉都像入口的情况。过渡类型允许暂存，但方向必须是收口而不是再加一层新名字。
+避免继续出现 App / Host / GUIAppHost / WorkbenchSurface / Panel host 交叉都像入口的情况。过渡类型允许暂存，但方向必须是收口而不是再加一层新名字。
+
+补充硬约束：
+
+- App 只允许出现在真正应用级 owner / 装配层命名中；
+- 顶层以后只保留一个 App/ 根；但它内部只保留 Kernel / Control；不再新增 GUI/App、Game/App、Editor/App；
+- Host 只允许表达某个被上层 owner 持有的宿主对象，例如 GUIWindowHost；
+- Surface 只表达渲染/呈现表面，不再表示页面壳或应用壳；
+- Panel 只表达 editor/ImGui embedding，不再承担 framework owner 语义。
+
+### 3.5 第一轮目录迁移顺序（不改行为）
+
+第一轮迁移只解决目录、命名、target 依赖线，不顺手改对象模型或交互逻辑。顺序固定为：
+
+1. 先产出目录 charter：逐层写清 allowed / forbidden responsibilities；
+2. 先核对 xmake target 闭包：确认哪些是真边界，哪些只是历史目录名导致的假边界；
+3. 先拆清 App 子树：Foundation/Core/Application/* -> App/Kernel + App/Control；
+4. 再移动 GUI 宿主层：Framework/AppRuntime/* + Framework/GUI/App/* 一起收口到 GUI/Host/*；
+5. 最后取消顶层 Product：Product/Editor/* -> Editor/*，Product/Host/* 回收到 Game/* 分支内；
+6. 每一步都只允许做文件移动、include 修正、target/name 收口；不混入 owner 重写、layout 重构、route 重写；
+7. 每做完一层立即验证：构建目标、GUIWorkbench 链接闭包、owner-model 与目录表达是否一致。
+
+目录收口的正式 allowed/forbidden charter、命名禁用词、唯一去向决策与迁移 batch 定义，统一收敛在 directory-charter.md；后续真实 move/rename 必须以该工件为准，不再靠 review 评论或临时口头约定。
+
+停止线：如果某一步需要引入新的过渡 facade、额外 host 或第二套 app owner 才能完成迁移，说明这一步不是收口，而是在继续制造噪声，应当回退到上一层重新定归属。
 
 ## 4. 设计原则与方法论
 
@@ -305,12 +402,22 @@ Framework/GUI 只放可复用 GUI 库，不放产品化 demo 内容。
 
 - retain UI API 能稳定构建 widget tree；
 - layout 与 event 模型足够清晰；
-- automation 能模拟真实 GUI 交互；
+- control plane 能模拟真实 GUI 交互；
 - 后续无论 XML、DSL、document，最终都只是这套运行时对象模型的 authoring 前端。
 
 ### 4.4 多窗口不现在做，但现在就要留口
 
 未来要支持多窗口、workspace、dock、detached tab，当前就必须把 owner 边界和事件/drag/modal/focus 语义定清，不允许再默认“全局永远只有一棵树”。
+
+### 4.5 先收目录，再继续 feature
+
+后续实现顺序调整为：
+
+1. 先把目录、命名、target 依赖线与 owner 链条收口；
+2. 再继续 layout/route/runtime mutation 的内核深化；
+3. 最后才恢复 Workbench feature 扩张与 editor 迁移。
+
+理由不是目录优先于功能的形式主义，而是当前目录结构已经在制造错误心智模型：一旦目录仍然让人误判谁是 loop、谁是 GUI host、谁是 product glue，后续 feature 每增加一页，噪声都会继续累积。
 
 ## 5. 需要的调试与自动化基建
 
@@ -339,7 +446,7 @@ Framework/GUI 只放可复用 GUI 库，不放产品化 demo 内容。
 
 ### 5.3 自动化事件驱动
 
-automation 要上收成通用 GUI 事件基座，而不是每个 app 自己写 exit-after-frame 或 smoke switch。统一支持：
+control plane 要上收成通用 GUI 事件基座，而不是每个 app 自己写 exit-after-frame 或 smoke switch。统一支持：
 
 - mouse move / press / release；
 - wheel；
@@ -424,29 +531,33 @@ GUI 这种长线架构重构，不允许只写一个 plan 然后靠记忆推进�
 
 ### Phase A — 主链路命名与 owner 收口
 
-目标：先让“谁拥有谁、谁是主循环、谁注入 automation”清楚下来。
+目标：先让“谁拥有谁、谁是主循环、谁注入 control plane”清楚下来。
 
 工作：
 
 1. 文档与代码命名收口到 `AppKernel -> GUIApp -> GUIWindowHost -> WidgetTree`；
 2. 明确 `GUIAppHost` 与 `Product/Host/App` 的边界：统一主循环是 AppKernel；GUI 线自己的类型只能表达装配层或单窗口宿主，不能再制造一个含混总入口；现有 `GUIAppHost` 作为过渡类型处理，最终拆解或重命名到上述结构；
 3. 盘清哪些状态属于 app、哪些属于 window、哪些属于 tree；
-4. automation 基底从多层零散控制服务中上收，定义 kernel/base 与各模块扩展点；
+4. control plane 基底从多层零散控制服务中上收，定义 kernel/base 与各模块扩展点；
 5. 明确 popup/tooltip/drag overlay/modal/focus 的 app/window/tree 归属；
 6. 给每个 owner 边界补一页“职责清单”：谁创建、谁销毁、谁持有、谁做 restore、谁负责 debug dump；
 7. 把现有入口、host、app、panel、surface 的同名/近名类型做一次去重清点，列出保留、改名、过渡、删除四类结果。
+8. 产出目录归位表：把 Foundation/Core/Application、Framework/AppRuntime、Framework/GUI/App、Product/Host、Product/Editor、Example/GUIWorkbench 映射到目标结构。
+9. 先做不改行为的目录/命名收口：让共同依赖线能从目录上直接读出来，再继续内核 feature。
 
 验收：
 
 - 新开发者能从目录与命名上看懂 GUI 主链路；
 - 文档能明确回答“哪个是真正主循环、哪个拥有窗口、哪个拥有 tree”；
-- automation 入口不再散落在多个 app/host 私有实现里。
+- control 入口不再散落在多个 app/host 私有实现里。
+- GUI example 链接闭包不再被 Product/Host 语义污染。
 
 最小切片（建议先做这一刀）：
 
 1. 先把 `AppKernel / GUIApp / GUIWindowHost` 的职责图画清并落文；
 2. 再把现存 `GUIAppHost`、`Product/Host/App` 的关系整理成过渡表；
-3. 最后补一个最小的 window registry / app registry 说明。
+3. 再补目录归位表与命名禁用词规则；
+4. 最后才动真实目录/target 迁移，并保持行为不变。
 
 ### Phase B — Layout/Slot 内核落地
 
@@ -596,7 +707,7 @@ GUI 这种长线架构重构，不允许只写一个 plan 然后靠记忆推进�
 建议执行顺序如下：
 
 1. 先做 Phase 0：把渲染正确性压稳，否则后续 layout/interaction 回归不可信；
-2. 再做 Phase A：主链路命名、职责图、owner、automation 对齐；
+2. 再做 Phase A：主链路命名、职责图、owner、control plane 对齐；
 3. 再做 Phase B：`UILayout / UISlot / UIBoxLayout / UIBoxSlot` 内核；
 4. 再做 Phase C：事件路径与状态模型收口；
 5. 然后做 Phase D：迁 Workbench 与测试，并只修新模型下暴露出的真实框架问题；
@@ -623,7 +734,7 @@ GUI 这种长线架构重构，不允许只写一个 plan 然后靠记忆推进�
 本计划完成时，应当能够满足：
 
 1. 可以清楚讲明 GUI app 的主链路与所有权关系；
-2. AppKernel 成为唯一主循环，automation 基底被 GUI / game / runtime editor 共用；
+2. AppKernel 成为唯一主循环，control plane 基底被 GUI / game / runtime editor 共用；
 3. UIContainer 不再承载大部分布局算法与布局状态；
 4. retain UI builder 能通过正式 Layout / Slot 模型构建常见工具型 GUI；
 5. 事件系统可以用 pointer path / focus path / route phase 来解释，而不是靠局部特判；

@@ -21,7 +21,7 @@
 #include "Gameplay/Systems/LuaScriptingSystem.h"
 
 #include "RHI/Backend/Vulkan//VulkanRender.h"
-#include "RHI/WindowProvider.h"
+#include "RHI/NativeWindow.h"
 
 #include "GUI/Draw2D/Render2D.h"
 #include "Render3D/Material/Material.h"
@@ -347,10 +347,10 @@ void AppFrameLoop::tickLogic(App& app, float dt)
         return;
     }
     auto        vkRender       = render->as<VulkanRender>();
-    auto        windowProvider = vkRender->getWindowProvider();
+    auto        nativeWindow   = vkRender->getNativeWindow();
     std::string title          = std::format("{}({})", app._ci.title, vkRender->_selectedDeviceInfo.deviceName);
-    if (windowProvider) {
-        windowProvider->setTitle(title);
+    if (nativeWindow) {
+        nativeWindow->setTitle(title);
     }
 }
 

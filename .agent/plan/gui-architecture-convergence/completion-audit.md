@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | Phase 0 rendering | top-left coordinates, clip/scissor, resize, multi-flush, window/headless/offscreen parity | ScrollSplit structural/semantic parity, zero-diff window/offscreen BMP, resize+drag+wheel scenario, Render2D diagnostics recorded in `progress.md` | Pass on Windows Vulkan |
 | Phase 0 interaction | stable pointer bootstrap, hover retirement, focus switching | `widgets_interaction.jsonl` asserts release state, hover retirement and focus-path transfer | Pass |
-| Phase A owner chain | one `AppKernel` loop and clear App/Window/Tree ownership | `owner-model.md`; `GUIApp -> GUIWindowHost -> WidgetTree`; Product frame loop uses kernel adapter | Pass |
+| Phase A owner chain | one `AppKernel` loop and clear App / GUI host / WidgetTree ownership | `owner-model.md`; `GUIApp -> GUIWindowHost -> WidgetTree`; Product frame loop uses kernel adapter | Pass |
 | Phase B layout/slot | parent-owned slots, Box layout host, reparent/invalidation/dump | `UILayout`, `UISlot`, `UIBoxLayout`, `UIBoxSlot`; closure tests and layout dump packets | Pass |
 | Phase C routing | path discovery separated from delivery; preview/target/bubble; capture/popup/modal/drag policy; route diagnostics | `event-routing.md`, `WidgetRouteTrace`, `WidgetTreeDump`, route overlay, closure tests | Pass |
 | Phase D Workbench | feature gallery, scenario+structural assertion+golden for each page | `workbench-regression-matrix.md`; 8 page scenarios; post-layout audit ran all eight against zero-tolerance BMP baseline | Pass on Windows Vulkan |

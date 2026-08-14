@@ -152,7 +152,7 @@ void RenderRuntime::initDiagnostics(const InitDesc& desc)
 void RenderRuntime::initRenderBackend(const InitDesc& desc)
 {
     YA_CORE_ASSERT(_hostServices != nullptr, "RenderRuntime requires host services before initializing render backend");
-    auto* windowProvider = _hostServices->getOrCreateMainWindow(WindowCreateInfo{
+    auto* nativeWindow = _hostServices->getOrCreateMainNativeWindow(WindowCreateInfo{
         .index      = 0,
         .renderAPI  = currentRenderAPI,
         .title      = desc.windowTitle,
@@ -161,7 +161,7 @@ void RenderRuntime::initRenderBackend(const InitDesc& desc)
         .scale      = 1.0f,
         .bResizable = true,
     });
-    YA_CORE_ASSERT(windowProvider != nullptr, "Window provider must exist before initializing render backend");
+    YA_CORE_ASSERT(nativeWindow != nullptr, "Native window must exist before initializing render backend");
 
     RenderCreateInfo renderCI{
         .renderAPI   = currentRenderAPI,
@@ -179,7 +179,7 @@ void RenderRuntime::initRenderBackend(const InitDesc& desc)
         .disabledGraphicsCards = {},
     };
 
-    renderCI.windowProvider = windowProvider;
+    renderCI.nativeWindow = nativeWindow;
 
     _render = IRender::create(renderCI);
     YA_CORE_ASSERT(_render, "Failed to create IRender instance");

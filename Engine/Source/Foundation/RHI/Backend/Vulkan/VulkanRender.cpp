@@ -2,7 +2,7 @@
 #include "VulkanCommandBuffer.h"
 #include "VulkanDescriptorSet.h"
 #include "VulkanSampler.h"
-#include "RHI/WindowProvider.h"
+#include "RHI/NativeWindow.h"
 
 #include <Core/Base.h>
 #include <Core/Profiling/PerfKeys.h>
@@ -1573,30 +1573,30 @@ int32_t VulkanRender::getMemoryIndex(VkMemoryPropertyFlags properties, uint32_t 
 
 void VulkanRender::initWindow(const RenderCreateInfo& ci)
 {
-    _windowProvider = ci.windowProvider;
-    if (!_windowProvider) {
+    _nativeWindow = ci.nativeWindow;
+    if (!_nativeWindow) {
 #if USE_SDL
-        _ownedWindowProvider = std::make_unique<SDLWindowProvider>();
-        _windowProvider      = _ownedWindowProvider.get();
-        YA_CORE_ASSERT(_windowProvider->init(), "Failed to initialize fallback SDL window provider");
-        YA_CORE_ASSERT(_windowProvider->recreate(WindowCreateInfo{
+        _ownedNativeWindow = std::make_unique<SDLNativeWindow>();
+        _nativeWindow      = _ownedNativeWindow.get();
+        YA_CORE_ASSERT(_nativeWindow->init(), "Failed to initialize fallback SDL native window");
+        YA_CORE_ASSERT(_nativeWindow->recreate(WindowCreateInfo{
                             .renderAPI = ci.renderAPI,
                             .width     = ci.swapchainCI.width,
                             .height    = ci.swapchainCI.height,
                         }),
-                       "Failed to recreate fallback SDL window provider");
+                       "Failed to recreate fallback SDL native window");
 #endif
     }
-    YA_CORE_ASSERT(_windowProvider != nullptr, "VulkanRender requires a window provider");
+    YA_CORE_ASSERT(_nativeWindow != nullptr, "VulkanRender requires a native window");
 
-    onCreateSurface.set([windowProvider = _windowProvider](VkInstance instance, VkSurfaceKHR* surface)
-                        { return windowProvider->onCreateVkSurface(instance, surface); });
-    onReleaseSurface.set([windowProvider = _windowProvider](VkInstance instance, VkSurfaceKHR* surface)
-                         { windowProvider->onDestroyVkSurface(instance, surface); });
-    onGetRequiredInstanceExtensions.set([windowProvider = _windowProvider]()
+    onCreateSurface.set([nativeWindow = _nativeWindow](VkInstance instance, VkSurfaceKHR* surface)
+                        { return nativeWindow->onCreateVkSurface(instance, surface); });
+    onReleaseSurface.set([nativeWindow = _nativeWindow](VkInstance instance, VkSurfaceKHR* surface)
+                         { nativeWindow->onDestroyVkSurface(instance, surface); });
+    onGetRequiredInstanceExtensions.set([nativeWindow = _nativeWindow]()
                                         {
         std::vector<DeviceFeature> extensions;
-        for (const char* ext : windowProvider->onGetVkInstanceExtensions()) {
+        for (const char* ext : nativeWindow->onGetVkInstanceExtensions()) {
             extensions.push_back({
                 .name      = ext,
                 .bRequired = true,

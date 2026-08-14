@@ -1,4 +1,4 @@
-#include "AppRuntime/WindowManager.h"
+#include "AppRuntime/NativeWindowManager.h"
 
 #include "Core/Log.h"
 
@@ -11,18 +11,18 @@
 namespace ya
 {
 
-WindowManager::~WindowManager()
+NativeWindowManager::~NativeWindowManager()
 {
     shutdown();
 }
 
-bool WindowManager::init()
+bool NativeWindowManager::init()
 {
     _initialized = true;
     return true;
 }
 
-void WindowManager::shutdown()
+void NativeWindowManager::shutdown()
 {
     if (!_initialized) {
         return;
@@ -39,45 +39,45 @@ void WindowManager::shutdown()
     _initialized = false;
 }
 
-IWindowProvider* WindowManager::createWindow(const WindowCreateInfo& ci)
+INativeWindow* NativeWindowManager::createWindow(const WindowCreateInfo& ci)
 {
     if (!_initialized && !init()) {
         return nullptr;
     }
 
 #if USE_SDL
-    auto provider = std::make_unique<SDLWindowProvider>();
+    auto window = std::make_unique<SDLNativeWindow>();
 #else
-    std::unique_ptr<IWindowProvider> provider;
+    std::unique_ptr<INativeWindow> window;
 #endif
-    YA_CORE_ASSERT(provider != nullptr, "No window provider implementation available");
-    YA_CORE_ASSERT(provider->init(), "Failed to initialize window provider");
-    YA_CORE_ASSERT(provider->recreate(ci), "Failed to recreate window");
-    return addWindow(std::move(provider), false);
+    YA_CORE_ASSERT(window != nullptr, "No native window implementation available");
+    YA_CORE_ASSERT(window->init(), "Failed to initialize native window");
+    YA_CORE_ASSERT(window->recreate(ci), "Failed to recreate native window");
+    return addWindow(std::move(window), false);
 }
 
-IWindowProvider* WindowManager::createMainWindow(const WindowCreateInfo& ci)
+INativeWindow* NativeWindowManager::createMainWindow(const WindowCreateInfo& ci)
 {
-    IWindowProvider* window = createWindow(ci);
+    INativeWindow* window = createWindow(ci);
     YA_CORE_ASSERT(window != nullptr, "Failed to create main window");
     _mainWindowID = window->getWindowID();
     return window;
 }
 
-IWindowProvider* WindowManager::getWindow(uint32_t windowID) const
+INativeWindow* NativeWindowManager::getWindow(uint32_t windowID) const
 {
     const auto it = _windowByID.find(windowID);
     return it != _windowByID.end() ? it->second : nullptr;
 }
 
-IWindowProvider* WindowManager::getMainWindow() const
+INativeWindow* NativeWindowManager::getMainWindow() const
 {
     return getWindow(_mainWindowID);
 }
 
-std::vector<IWindowProvider*> WindowManager::getWindows() const
+std::vector<INativeWindow*> NativeWindowManager::getWindows() const
 {
-    std::vector<IWindowProvider*> result;
+    std::vector<INativeWindow*> result;
     result.reserve(_windows.size());
     for (const auto& window : _windows) {
         result.push_back(window.get());
@@ -85,11 +85,11 @@ std::vector<IWindowProvider*> WindowManager::getWindows() const
     return result;
 }
 
-bool WindowManager::destroyWindow(uint32_t windowID)
+bool NativeWindowManager::destroyWindow(uint32_t windowID)
 {
     const auto it = std::find_if(_windows.begin(),
                                  _windows.end(),
-                                 [windowID](const std::unique_ptr<IWindowProvider>& window)
+                                 [windowID](const std::unique_ptr<INativeWindow>& window)
                                  { return window && window->getWindowID() == windowID; });
     if (it == _windows.end()) {
         return false;
@@ -108,19 +108,19 @@ bool WindowManager::destroyWindow(uint32_t windowID)
     return true;
 }
 
-void WindowManager::clear()
+void NativeWindowManager::clear()
 {
     _windowByID.clear();
     _windows.clear();
     _mainWindowID = 0;
 }
 
-IWindowProvider* WindowManager::addWindow(std::unique_ptr<IWindowProvider> provider, bool bSetMainWindow)
+INativeWindow* NativeWindowManager::addWindow(std::unique_ptr<INativeWindow> window, bool bSetMainWindow)
 {
-    YA_CORE_ASSERT(provider != nullptr, "Window provider is null");
+    YA_CORE_ASSERT(window != nullptr, "Native window is null");
 
-    IWindowProvider* raw = provider.get();
-    _windows.push_back(std::move(provider));
+    INativeWindow* raw = window.get();
+    _windows.push_back(std::move(window));
 
     if (bSetMainWindow && raw->getWindowID() != 0) {
         _mainWindowID = raw->getWindowID();
@@ -132,4 +132,3 @@ IWindowProvider* WindowManager::addWindow(std::unique_ptr<IWindowProvider> provi
 }
 
 } // namespace ya
-

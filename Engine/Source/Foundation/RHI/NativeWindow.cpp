@@ -1,4 +1,4 @@
-#include "RHI/WindowProvider.h"
+#include "RHI/NativeWindow.h"
 
 #include "SDL3/SDL.h"
 
@@ -9,15 +9,15 @@
 namespace ya
 {
 
-SDLWindowProvider::~SDLWindowProvider()
+SDLNativeWindow::~SDLNativeWindow()
 {
-    YA_CORE_INFO("SDLWindowProvider::~SDLWindowProvider()");
+    YA_CORE_INFO("SDLNativeWindow::~SDLNativeWindow()");
     destroy();
 }
 
-bool SDLWindowProvider::init()
+bool SDLNativeWindow::init()
 {
-    YA_CORE_INFO("SDLWindowProvider::init()");
+    YA_CORE_INFO("SDLNativeWindow::init()");
     if (SDL_WasInit(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
         return true;
     }
@@ -28,7 +28,7 @@ bool SDLWindowProvider::init()
     return true;
 }
 
-bool SDLWindowProvider::recreate(const WindowCreateInfo &ci)
+bool SDLNativeWindow::recreate(const WindowCreateInfo &ci)
 {
     dpiScale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
     YA_CORE_INFO("system scale: {}, ci scale: {}, input size: {}x{}", dpiScale, ci.scale, ci.width, ci.height);
@@ -52,33 +52,33 @@ bool SDLWindowProvider::recreate(const WindowCreateInfo &ci)
     return true;
 }
 
-void SDLWindowProvider::destroy()
+void SDLNativeWindow::destroy()
 {
-    YA_CORE_INFO("SDLWindowProvider::destroy()");
+    YA_CORE_INFO("SDLNativeWindow::destroy()");
     if (nativeWindowHandle) {
         SDL_DestroyWindow(static_cast<SDL_Window *>(nativeWindowHandle));
         nativeWindowHandle = nullptr;
     }
 }
 
-void SDLWindowProvider::setTitle(const std::string &title)
+void SDLNativeWindow::setTitle(const std::string &title)
 {
     if (nativeWindowHandle) {
         SDL_SetWindowTitle(static_cast<SDL_Window *>(nativeWindowHandle), title.c_str());
     }
 }
 
-uint32_t SDLWindowProvider::getWindowID() const
+uint32_t SDLNativeWindow::getWindowID() const
 {
     return nativeWindowHandle ? SDL_GetWindowID(static_cast<SDL_Window *>(nativeWindowHandle)) : 0;
 }
 
-void SDLWindowProvider::getWindowSize(int &width, int &height)
+void SDLNativeWindow::getWindowSize(int &width, int &height)
 {
     SDL_GetWindowSize(static_cast<SDL_Window *>(nativeWindowHandle), &width, &height);
 }
 
-bool SDLWindowProvider::setWindowSize(int width, int height)
+bool SDLNativeWindow::setWindowSize(int width, int height)
 {
     if (nativeWindowHandle) {
         SDL_SetWindowSize(static_cast<SDL_Window *>(nativeWindowHandle), width, height);
@@ -89,7 +89,7 @@ bool SDLWindowProvider::setWindowSize(int width, int height)
 }
 
 #if USE_VULKAN
-bool SDLWindowProvider::onCreateVkSurface(VkInstance instance, VkSurfaceKHR *surface)
+bool SDLNativeWindow::onCreateVkSurface(VkInstance instance, VkSurfaceKHR *surface)
 {
     if (!SDL_Vulkan_CreateSurface(static_cast<SDL_Window *>(nativeWindowHandle),
                                   instance,
@@ -103,13 +103,13 @@ bool SDLWindowProvider::onCreateVkSurface(VkInstance instance, VkSurfaceKHR *sur
     return true;
 }
 
-void SDLWindowProvider::onDestroyVkSurface(VkInstance instance, VkSurfaceKHR *surface)
+void SDLNativeWindow::onDestroyVkSurface(VkInstance instance, VkSurfaceKHR *surface)
 {
     SDL_Vulkan_DestroySurface(instance, *surface, nullptr);
     YA_CORE_INFO("Vulkan surface destroyed successfully.");
 }
 
-std::vector<const char *> SDLWindowProvider::onGetVkInstanceExtensions()
+std::vector<const char *> SDLNativeWindow::onGetVkInstanceExtensions()
 {
     Uint32 count = 0;
     const char *const *extensions = SDL_Vulkan_GetInstanceExtensions(&count);

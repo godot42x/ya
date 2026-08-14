@@ -41,8 +41,8 @@
 
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
-#include "RHI/WindowProvider.h"
-#include "AppRuntime/WindowManager.h"
+#include "RHI/NativeWindow.h"
+#include "AppRuntime/NativeWindowManager.h"
 #include "Render3D/RenderRuntime.h"
 
 #include <format>
@@ -232,8 +232,8 @@ void AppLifecycle::init(App& app, AppDesc ci)
         }
     }
 
-    app._windowManager = std::make_unique<WindowManager>();
-    YA_CORE_ASSERT(app._windowManager->init(), "Failed to initialize WindowManager");
+    app._nativeWindowManager = std::make_unique<NativeWindowManager>();
+    YA_CORE_ASSERT(app._nativeWindowManager->init(), "Failed to initialize NativeWindowManager");
 
     app._renderState->runtime = std::make_unique<RenderRuntime>();
     app._renderState->runtime->init(RenderRuntime::InitDesc{
@@ -269,7 +269,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
         render->getWindowSize(winW, winH);
         app._windowSize.x = static_cast<float>(winW);
         app._windowSize.y = static_cast<float>(winH);
-        app.inputRouter.setWindow(render->getWindowProvider() ? render->getWindowProvider()->getNativeWindowHandle() : nullptr);
+        app.inputRouter.setWindow(render->getNativeWindow() ? render->getNativeWindow()->getNativeWindowHandle() : nullptr);
     }
 
     app._sceneManager = new SceneManager();
@@ -541,9 +541,9 @@ void AppLifecycle::quit(App& app)
         app._renderState->runtime->shutdown(/*bRenderAlreadyIdle=*/true);
         app._renderState->runtime.reset();
     }
-    if (app._windowManager) {
-        app._windowManager->shutdown();
-        app._windowManager.reset();
+    if (app._nativeWindowManager) {
+        app._nativeWindowManager->shutdown();
+        app._nativeWindowManager.reset();
     }
 
     MaterialFactory::get()->destroy();

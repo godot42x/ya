@@ -74,8 +74,8 @@
 
 // void OpenGLRender::getWindowSize(int &width, int &height) const
 // {
-//     if (_windowProvider) {
-//         _windowProvider->getWindowSize(width, height);
+//     if (_nativeWindow) {
+//         _nativeWindow->getWindowSize(width, height);
 //     }
 // }
 
@@ -156,12 +156,12 @@
 // {
 //     // Initialize window
 //     initWindow(ci);
-//     nativeWindow = _windowProvider->getNativeWindowPtr<void>();
+//     nativeWindow = _nativeWindow->getNativeWindowPtr<void>();
 
 // #if USE_SDL
-//     m_Window = _windowProvider->getNativeWindowPtr<SDL_Window>();
+//     m_Window = _nativeWindow->getNativeWindowPtr<SDL_Window>();
 // #elif USE_GLFW
-//     m_Window = _windowProvider->getNativeWindowPtr<GLFWwindow>();
+//     m_Window = _nativeWindow->getNativeWindowPtr<GLFWwindow>();
 // #endif
 
 //     // Create OpenGL context
@@ -217,15 +217,15 @@
 // void OpenGLRender::initWindow(const RenderCreateInfo &ci)
 // {
 // #if USE_SDL
-//     _windowProvider = new SDLWindowProvider();
+//     _nativeWindow = new SDLNativeWindow();
 // #elif USE_GLFW
-//     _windowProvider = new GLFWWindowProvider();
+//     _nativeWindow = new GLFWNativeWindow();
 // #else
 //     #error "No window provider defined"
 // #endif
 
-//     _windowProvider->init();
-//     _windowProvider->recreate(WindowCreateInfo{
+//     _nativeWindow->init();
+//     _nativeWindow->recreate(WindowCreateInfo{
 //         .renderAPI = ci.renderAPI,
 //         .width     = ci.swapchainCI.width,
 //         .height    = ci.swapchainCI.height,

@@ -3,6 +3,95 @@
 > 建立日期：2026-08-13
 > 作用：记录每轮已经完成的内容、验证证据、遗留风险与下一步接力点。这个文件应该持续追加，不回写成静态总结。
 
+## 2026-08-14 — AppRuntime 窗口 owner 收口为 `NativeWindowManager` + `INativeWindow`
+
+### 本轮完成
+
+- 将 `Framework/AppRuntime/Window/WindowManager.*` 最终收口为 `NativeWindowManager.*`；
+- 将 `Product/Host/App` 内的窗口 owner 同步收口为 `_nativeWindowManager` / `getNativeWindowManager()`；
+- 更新 `AppRuntime` / `Host` 转发头到 `NativeWindowManager`；
+- 将 `RHI/WindowProvider.*` 最终收口为 `NativeWindow.*`，把 `IWindowProvider` / `SDLWindowProvider` 改为 `INativeWindow` / `SDLNativeWindow`；
+- 将 render / host / GUI 链路统一改为 `nativeWindow`、`getNativeWindow()`、`getMainNativeWindow()`、`getOrCreateMainNativeWindow()` 语义。
+
+### 当前结论
+
+- 需要保留 `WindowManager` 这一类 owner 概念：它确实负责拥有并索引一组 native window，这不是错误抽象；
+- 真正越界的是 `Provider` 命名：RHI/Host/App 消费的是“单个 native window 对象”，不是“窗口提供器”；
+- 因此最终口径是：多窗口 owner 叫 `NativeWindowManager`，单窗口对象叫 `INativeWindow`；GUIApp 层未来可以再长 active-window、whole-app modal、cross-window drag 等更高层窗口策略，但不会推翻 manager 概念。
+
+### 本轮验证
+
+- 构建验证：`xmake b ya-app-runtime` 通过；
+- 构建验证：`xmake b ya-host` 通过。
+
+## 2026-08-14 — App 收口为无窗口主链，window 正式归 GUI
+
+### 本轮完成
+
+- 用户补充并最终拍板了两个约束：
+  - App 不能默认带窗口假设，CLI / DS / server / render-service 等未来形态必须能停在无窗口层；
+  - window 不属于 App，而属于 GUI，因为未来 game engine / editor 也走这套 GUI bootstrap；
+- 已把目标物理树进一步收口为：`Core -> App( Kernel / Control ) + GUI(Host) + Game + Editor + Example`；
+- `directory-charter.md` 已明确：App 只保留 `Kernel` 与 `Control`；`Framework/AppRuntime` 与 `Framework/GUI/App` 都归到 `GUI/Host`；
+- `plan.md`、`todo.md`、`feature_matrix.json`、`session_checklist.md` 已同步更新到这一新口径。
+
+### 当前结论
+
+- 现在的主线不只是“去掉 Foundation / Framework / Product”，还要避免把 App 重新做成第二个抽象大桶；
+- 真正共享的应用主链是无窗口的 `App/Kernel + App/Control`；windowed 路径从 `GUI/Host` 开始，而不是在 App 再长一层 `Window`；
+- 后续目录迁移设计必须先回答：哪些代码属于共享 App，哪些代码其实是 GUI bootstrap / native window / presenter。
+
+### 当前未完成 / 风险
+
+- `Product/Host` 离开顶层 Product 已经确定，但落到 `Game/Runtime` 还是 `Game/Shell` 仍需 target/include audit；
+- `Foundation/Core/Application` 内部具体哪些文件应进 `Kernel`，哪些应进 `Control`，还未完成逐文件切图；
+- `Framework/AppRuntime` 与 `Framework/GUI/App` 在收进同一 `GUI/Host` 前，还需要补 file-level move plan，避免再次制造“两个 host 主链”。
+
+### 下一轮直接接力点
+
+1. 产出“当前目录 -> 未来目录 -> target -> include 根”映射表，并把 App/Kernel、App/Control、GUI/Host 三类显式拆开；
+2. 逐文件审计 Foundation/Core/Application、Framework/AppRuntime、Framework/GUI/App，形成 App/GUI 双侧 move plan；
+3. 再决定 Product/Host 在 Game 分支内的具体 leaf 名称。
+
+### 本轮验证
+
+- 文档级验证：已检查 `directory-charter.md`、`plan.md`、`todo.md`、`feature_matrix.json`、`session_checklist.md` 对“App 无窗口、window 归 GUI”口径一致；
+- 代码级验证：本轮未改 `Engine/Source` C++ 行为代码，仅推进目录收口工件。
+
+## 2026-08-14 — 主线切换到目录 / 命名 / 依赖线收口（中间态，已被上方新口径覆盖）
+
+### 本轮完成
+
+- 更新 `plan.md`，把“目录先收口，再继续 feature”提升为正式优先级，而不是 review 备注
+- 将 retain UI 的 visual hierarchy mutation 正式写入主计划：`attach / detach / reparent / reorder` 是运行时一等能力，不是 GUI app 静态页面拼装特例
+- 在 `plan.md` 中补入目标目录形状：`Foundation -> Framework/App -> Framework/GUI|Game -> Product|Example`
+- 在 `plan.md` 中补入当前目录到目标结构的归位表，覆盖 `Foundation/Core/Application`、`Framework/AppRuntime`、`Framework/GUI/App`、`Product/Host`、`Product/Editor`、`Example/GUIWorkbench`
+- 更新 `todo.md`，把当前激活切片切换为 `phase-a directory + naming convergence charter`
+
+### 当前结论
+
+- 当前最需要收口的不是某个单点 GUI bug，而是“谁是主循环、谁是 GUI owner、谁只是 product glue”这条主链路的目录与命名表达
+- 现在 repo 的真实问题不是完全没有能力，而是 `App / Host / GUIAppHost / Product/Host` 这些并列语义正在制造错误心智模型
+- 对 game runtime 来说，动态父子关系不是例外场景；retain UI 内核必须把 visual hierarchy mutation 当作常规能力，而不是把布局变化误解为只能通过静态 attach 建树实现
+
+### 当前未完成 / 风险
+
+- 已完成主计划 / todo / progress / feature matrix 同步；后续若继续调整 Phase A，要保持这四份工件同步推进
+- 目录归位表已经写出，但还没形成第一轮 no-behavior move/rename patch
+- `Framework/AppRuntime`、`Framework/GUI/App`、`Product/Host` 三处最终命名与 target 策略还未拍板
+- macOS / MoltenVK validation 仍然是外部 gate，但当前不应继续占用主切片
+
+### 下一轮直接接力点
+
+1. 产出目录收口 charter：明确每一层允许职责 / 禁止职责
+2. 做第一轮 no-behavior 目录迁移设计，只移动文件 / 修 include / 收口 target 名称，不混入逻辑改写
+3. 为 `Framework/AppRuntime`、`Framework/GUI/App`、`Product/Host` 三处分别给出唯一建议去向，准备开始真实目录迁移
+
+### 本轮验证
+
+- 文档级验证：已检查 `plan.md` 与 `todo.md`，确认目录归位表、runtime mutation 合同、优先级切换已经落盘
+- 代码级验证：本轮未改 C++ 代码，仅推进架构计划工件
+
 ## 2026-08-13 — 计划收口与执行工件补齐
 
 ### 本轮完成

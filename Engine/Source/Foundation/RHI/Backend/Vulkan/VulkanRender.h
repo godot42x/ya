@@ -178,8 +178,8 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
 
 
   public:
-    IWindowProvider*                     _windowProvider = nullptr;
-    std::unique_ptr<IWindowProvider>     _ownedWindowProvider = nullptr;
+    INativeWindow*                       _nativeWindow = nullptr;
+    std::unique_ptr<INativeWindow>       _ownedNativeWindow = nullptr;
 
     Delegate<bool(VkInstance, VkSurfaceKHR* inSurface)> onCreateSurface;
     Delegate<void(VkInstance, VkSurfaceKHR* inSurface)> onReleaseSurface;
@@ -226,8 +226,8 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     // IRender interface implementations
     void getWindowSize(int& width, int& height) const override
     {
-        if (_windowProvider) {
-            _windowProvider->getWindowSize(width, height);
+        if (_nativeWindow) {
+            _nativeWindow->getWindowSize(width, height);
         }
     }
 
@@ -311,7 +311,7 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     bool initInternal(const RenderCreateInfo& ci)
     {
         initWindow(ci);
-        nativeWindow = _windowProvider ? _windowProvider->getNativeWindowHandle() : nullptr;
+        nativeWindow = _nativeWindow ? _nativeWindow->getNativeWindowHandle() : nullptr;
 
         createInstance();
 
@@ -362,7 +362,7 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
   public:
 
     [[nodiscard]] uint32_t         getApiVersion() const { return apiVersion; }
-    [[nodiscard]] IWindowProvider* getWindowProvider() const override { return _windowProvider; }
+    [[nodiscard]] INativeWindow* getNativeWindow() const override { return _nativeWindow; }
     [[nodiscard]] VkInstance       getInstance() const { return _instance; }
     [[nodiscard]] VkSurfaceKHR     getSurface() const { return _surface; }
     [[nodiscard]] VkDevice         getDevice() const { return m_LogicalDevice; }

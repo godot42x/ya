@@ -3,7 +3,7 @@
 #include "Core/Delegate.h"
 #include "RHI/Backend/Vulkan/VulkanUtils.h"
 #include "RHI/Core/Swapchain.h"
-#include "RHI/WindowProvider.h"
+#include "RHI/NativeWindow.h"
 #include <vector>
 
 #include <vulkan/vulkan_core.h>
@@ -22,7 +22,7 @@ struct VulkanSwapChainSupportDetails
 
     VkSurfaceFormatKHR ChooseSwapSurfaceFormat(VkSurfaceFormatKHR preferredSurfaceFormat);
     VkPresentModeKHR   ChooseSwapPresentMode(const VkPresentModeKHR preferredMode) const;
-    VkExtent2D         ChooseSwapExtent(IWindowProvider *provider, int preferredWidth = 0, int preferredHeight = 0);
+    VkExtent2D         ChooseSwapExtent(INativeWindow *window, int preferredWidth = 0, int preferredHeight = 0);
 
     static VulkanSwapChainSupportDetails query(VkPhysicalDevice device, VkSurfaceKHR surface);
 };

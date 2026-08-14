@@ -3,7 +3,7 @@
 #include "Core/Log.h"
 
 #include "RHI/Render.h"
-#include "RHI/WindowProvider.h"
+#include "RHI/NativeWindow.h"
 #include "glad/glad.h"
 #include <string>
 #include <unordered_map>
@@ -36,7 +36,7 @@ class OpenGLState
     // Swapchain configuration
     ya::SwapchainCreateInfo m_SwapchainCI;
 
-    IWindowProvider *_window = nullptr;
+    INativeWindow *_window = nullptr;
 
     // Platform-specific context
 #if USE_SDL

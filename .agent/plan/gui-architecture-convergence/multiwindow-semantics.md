@@ -8,7 +8,7 @@
 ```text
 GUIApp
   ├─ active window id / activation order
-  ├─ window registry
+  ├─ native window manager
   ├─ whole-app modal gate
   └─ cross-window drag coordinator
 

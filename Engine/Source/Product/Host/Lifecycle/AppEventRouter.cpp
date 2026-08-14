@@ -1,7 +1,7 @@
 #include "Host/Lifecycle/AppEventRouter.h"
 
 #include "Host/App.h"
-#include "AppRuntime/WindowManager.h"
+#include "AppRuntime/NativeWindowManager.h"
 
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
@@ -23,8 +23,8 @@ int AppEventRouter::onEvent(App& app, const Event& event)
     YA_PROFILE_FUNCTION()
     YA_PERF_SCOPE(perf::sample::appEventRoute(), perf::metric::cpuTimeMs(), perf::domain::game());
 
-    const auto* windowManager = app.getWindowManager();
-    const uint32_t mainWindowID = windowManager ? windowManager->getMainWindowID() : 0;
+    const auto* nativeWindowManager = app.getNativeWindowManager();
+    const uint32_t mainWindowID = nativeWindowManager ? nativeWindowManager->getMainWindowID() : 0;
 
     auto isMainWindowEvent = [&](const WindowEvent& windowEvent)
     {
@@ -101,8 +101,8 @@ int AppEventRouter::onEvent(App& app, const Event& event)
 
 bool AppEventRouter::onWindowResized(App& app, const WindowResizeEvent& event)
 {
-    const auto* windowManager = app.getWindowManager();
-    if (windowManager && windowManager->getMainWindowID() != 0 && event.getWindowID() != windowManager->getMainWindowID()) {
+    const auto* nativeWindowManager = app.getNativeWindowManager();
+    if (nativeWindowManager && nativeWindowManager->getMainWindowID() != 0 && event.getWindowID() != nativeWindowManager->getMainWindowID()) {
         return false;
     }
 

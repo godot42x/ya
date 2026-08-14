@@ -4,14 +4,14 @@
 #include "AppServices/ShadowSettings.h"
 #include "AppServices/AppAutomation.h"
 #include "RHI/Core/OffscreenJob.h"
-#include "RHI/WindowProvider.h"
+#include "RHI/NativeWindow.h"
 
 #include <string>
 
 namespace ya
 {
 
-struct IWindowProvider;
+struct INativeWindow;
 struct ICommandBuffer;
 struct OffscreenJobState;
 
@@ -27,10 +27,10 @@ struct IRenderRuntimeHostServices
     virtual uint64_t getElapsedTimeMS() const = 0;
 
     // Main presentation window (the backend surface source).
-    virtual IWindowProvider* getMainWindowProvider() = 0;
+    virtual INativeWindow* getMainNativeWindow() = 0;
     // Ensure a main window exists (creates one with the given info when the
     // host has none yet, e.g. headless test bootstrap) and return it.
-    virtual IWindowProvider* getOrCreateMainWindow(const WindowCreateInfo& ci) = 0;
+    virtual INativeWindow* getOrCreateMainNativeWindow(const WindowCreateInfo& ci) = 0;
 
     // Authoritative shadow configuration + automation overrides.
     virtual ShadowSettings*                        getShadowSettings() = 0;
