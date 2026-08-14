@@ -28,6 +28,7 @@
 
 ## 长线计划最低工件要求
 
+参考 @"./Effective harnesses for long-running agents.md"
 以后任何正式的长期重构/架构计划，默认都不能只有一个 `plan.md`。至少需要：
 
 - `plan.md`：目标、边界、phase、验收；
