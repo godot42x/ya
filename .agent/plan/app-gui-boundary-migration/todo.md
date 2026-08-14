@@ -56,13 +56,16 @@
 
 ## P5 — Phase A5 过渡清理
 
-- [ ] 删除已无消费者的 compatibility 头（`Core/Application/*`、`AppRuntime/*`、`GUI/App/*` 转发头）
-- [ ] 删除仅服务旧路径的 target alias（`ya-app-runtime` / `ya-gui-app-host` compat target）
-- [ ] 更新相关计划工件，关闭本迁移主线
+- [x] 删除已无消费者的 compatibility 头（`Core/Application/*`、`AppRuntime/*`、`GUI/App/*` 转发头）
+- [x] 删除仅服务旧路径的 target alias（`ya-app-runtime` / `ya-gui-app-host` compat target）
+- [x] 移除 `Engine/Source/xmake.lua` 与 `Framework/GUI/xmake.lua` 中对已删 compat target 的 includes
+- [ ] 更新相关计划工件，关闭本迁移主线（待 Product/Host app-form shell 归位完成后）
 
 ## 当前下一刀
 
-1. 依据 `product-host-file-audit.md` 把 `Product/Host` 内剩余 consumer façade（AppRenderServices / AppSceneServices / AppTaskManager / InputRouter / GameUI / ImGui adapter 等）按 app-form shell 口径归位；
-2. 仅把剩余 app-form shell 归到具体 runtime/editor 分支；
-3. 执行 Phase A5 过渡清理：删除 `Core/Application/*`、`AppRuntime/*`、`GUI/App/*` 转发头与 `ya-app-runtime` / `ya-gui-app-host` compat target；
+剩余工作只剩 `Product/Host` -> app-form shell 的物理归位，前置是拍板 leaf 名：
+
+1. 拍板 `Product/Host` / `Product/Editor` 的 app-form leaf 名（directory charter 目标为 `Applications/GameRuntime` / `Applications/GameEditor`，但 charter 注明「确切 leaf 名由 target/include audit 决定」）；
+2. 依据拍板结果，把 `Product/Host` 内剩余 consumer façade（AppRenderServices / AppSceneServices / AppTaskManager / InputRouter / GameUI / ImGui adapter 等）跟随 app-form shell 归位；
+3. 仅把剩余 app-form shell 归到具体 runtime/editor 分支；
 4. 持续验证 `GUIWorkbench` 闭包不被 `Product/Host` / `Game` 语义污染。

@@ -141,3 +141,29 @@
 - 构建：`ya-render-3d` / `ya-host` / `ya-editor` / `ya-render-3d-test` / `ya-testing` 全部通过；
 - 运行时：`ya-render-3d-test` 104/104 PASS；
 - 残留：`rg 'AppServices|ya-app-services|YA_APP_SERVICES_API'` 在 Engine/Example/Test 零残留。
+
+## 2026-08-15 — 完成 Phase A5 过渡清理
+
+### 本轮完成
+
+- 删除 Batch 1 留下的 compat 转发头：`Foundation/Core/include/Core/Application/*`（5 个）、`Framework/AppRuntime/include/AppRuntime/*`（2 个）、`Framework/GUI/App/include/GUI/App/*`（6 个）；
+- 删除 compat target：`ya-app-runtime`（`Framework/AppRuntime/xmake.lua`）与 `ya-gui-app-host`（`Framework/GUI/App/xmake.lua`）；
+- 移除 `Engine/Source/xmake.lua` 的 `includes("./Framework/AppRuntime/xmake.lua")` 与 `Framework/GUI/xmake.lua` 的 `includes("./App/xmake.lua")`；
+- 清理文件系统残留的空目录（`Framework/AppRuntime/*`、`Framework/GUI/App/*`）。
+
+### 当前结论
+
+- Batch 1 的过渡壳已全部清除：`Core/Application`、`AppRuntime`、`GUI/App` 三个历史拼写及其 compat target 在仓库中零残留（`rg` 为空）；
+- 迁移主线现在只剩 `Product/Host` -> app-form shell 的物理归位，前置是拍板 leaf 名（charter 目标 `Applications/GameRuntime` / `Applications/GameEditor`，但注明「确切 leaf 名由 target/include audit 决定」）。
+
+### 下一轮直接接力点
+
+1. 拍板 `Product/Host` / `Product/Editor` 的 app-form leaf 名；
+2. 把 `Product/Host` 内剩余 consumer façade 跟随 app-form shell 归位；
+3. 仅把剩余 app-form shell 归到具体 runtime/editor 分支。
+
+### 本轮验证
+
+- 构建：`ya-gui-host` / `ya-gui-closure-test` / `GUIWorkbench` / `ya-host` / `ya-editor` 全部通过；
+- 运行时：`ya-gui-closure-test` 114/114 PASS；
+- 残留：`rg 'Core/Application/|AppRuntime/|GUI/App/|ya-app-runtime|ya-gui-app-host|YA_APP_RUNTIME_API|YA_APP_SERVICES_API'` 零残留。

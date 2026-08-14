@@ -10,7 +10,6 @@ includes("./Runtime/Draw2D/xmake.lua")
 includes("./Runtime/Widgets/xmake.lua")
 includes("./Runtime/Compose/xmake.lua")
 includes("./Tooling/xmake.lua")
-includes("./App/xmake.lua")
 
 -- GUI framework aggregate: the single link target for pure-GUI code. It
 -- carries no sources of its own; public deps re-export the full closure
