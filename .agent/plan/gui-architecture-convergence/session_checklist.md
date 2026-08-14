@@ -1,6 +1,6 @@
 # GUI 架构收敛 Session Checklist
 
-> 更新时间：2026-08-13
+> 更新时间：2026-08-14
 > 作用：后续每次推进 `.agent/plan/gui-architecture-convergence` 时，默认先走这里的开工/收尾步骤，避免长期任务靠记忆推进。
 
 ## 每轮开工前
@@ -23,6 +23,7 @@
    - 完成条件是什么。
 6. 若本轮涉及目录/App/GUI/Game/Editor 命名，先检查是否把“共享能力轴”和“应用形态轴”混成了一层；若混了，先回到 plan 修正语义再动手。
 7. 若本轮涉及 window、present、swapchain、RHI 边界，先检查调用者到底需要的是 `INativeWindow` 还是最小 present bridge；不要默认把完整窗口对象继续透传给 RHI。
+8. 若本轮是 Phase A 的目录/owner 规划，不要只把 capability/app-form 映射、directory/target/include 审计、API triage 埋在 `plan.md` 的 bullet 里；必须保留为独立工件，供后续 move/rename 直接引用。
 
 ## 每轮进行中
 
@@ -61,9 +62,9 @@
 5. `Phase D`：Workbench 与测试迁移
 6. `Phase E/F`：specialized layout 与多窗口留口
 
-## 当前下一刀（建立本 checklist 时的默认接力点）
+## 当前下一刀（当前 Phase A 默认接力点）
 
-1. 固定最小 workbench render correctness 页面：静态文本 + button + image 占位；
-2. 建立最小渲染 debug overlay；
-3. 建立单帧渲染 smoke 入口；
-4. 然后开始压 resize / 坐标 / 文本 / flush 正确性。
+1. 基于三份审计工件，写第一轮 no-behavior move/rename design；
+2. 做 `Product/Host` file-level consumer audit，拆清共享能力消费者与 app-form shell；
+3. 拍板 target rename / forward-header transition 策略；
+4. 持续把 `GUIWorkbench` 当作 GUI-only closure sentinel，不允许迁移后反向依赖 `Product/Host` / `Game` 语义。

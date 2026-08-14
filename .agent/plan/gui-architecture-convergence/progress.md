@@ -3,6 +3,40 @@
 > 建立日期：2026-08-13
 > 作用：记录每轮已经完成的内容、验证证据、遗留风险与下一步接力点。这个文件应该持续追加，不回写成静态总结。
 
+## 2026-08-14 — Phase A 审计工件补齐：能力轴映射、NativeWindow 三分表、target/include 闭包表
+
+### 本轮完成
+
+- 新增 `capability-appform-mapping.md`：把共享能力轴（Core / App / Render / GUI / Scene / Physics / Scripting / Reflection ...）与应用形态轴（GuiWorkbench / GameRuntime / GameEditor / CLI / RenderServer ...）显式拆开；
+- 新增 `nativewindow-api-triage.md`：把 `Foundation/RHI/NativeWindow.h` 现有 API 分成 `INativeWindow`、`IPresentSurfaceSource` 与 host/presenter policy 三类；
+- 新增 `directory-target-include-audit.md`：把 `Foundation/Core`、`Foundation/RHI`、`Framework/AppRuntime`、`Framework/GUI/App`、`Framework/AppServices`、`Product/Host`、`Product/Editor`、`Example/GUIWorkbench` 的目录 / target / include-root 闭包落盘；
+- 明确 `GUIWorkbench` 继续作为 GUI-only closure sentinel：后续任何 move/rename 设计都必须保住它不被 `Product/Host` / `Game` 语义反向污染；
+- 收口当前 Phase A 下一刀：不再继续补概念性审计，而是进入第一轮 no-behavior move/rename 设计。
+
+### 当前结论
+
+- Phase A 的三份缺失审计工件已经补齐，后续目录迁移不需要再靠 `plan.md` 中的零散 bullet 做隐式推理；
+- 真正剩余的不确定点已经收敛到 `Product/Host` file-level consumer audit，以及 target rename / forward-header 过渡策略；
+- 目录迁移的第一批次应坚持 no-behavior：只处理 owner 归位、物理树、include 路径与 target 命名，不混入 runtime 行为改写。
+
+### 当前未完成 / 风险
+
+- `Product/Host` 仍然是当前最模糊的混合区：里面既可能有 app-form shell，也可能有共享能力消费者；如果不先做 file-level audit，迁移很容易再次把语义混回顶层桶；
+- `Framework/AppServices` 还没完成 file-level consumer closure，暂时只能保持“待拆回真实 owner”的计划口径；
+- 这轮仍是文档工件推进，尚未开始实际目录迁移 patch。
+
+### 下一轮直接接力点
+
+1. 先写第一轮 no-behavior move/rename design，基于三份审计工件给出具体 move batch；
+2. 再做 `Product/Host` file-level consumer audit，确认共享能力消费者与 app-form shell 的边界；
+3. 在以上两步基础上，拍板 target rename 与 forward-header transition 策略。
+
+### 本轮验证
+
+- 文档级验证：新增 `capability-appform-mapping.md`、`nativewindow-api-triage.md`、`directory-target-include-audit.md`；
+- 文档级验证：`plan.md` / `todo.md` / `progress.md` / `feature_matrix.json` / `session_checklist.md` 口径已同步指向这三份审计工件；
+- 代码级验证：本轮未改 `Engine/Source` 行为代码，仅补齐 Phase A 计划工件。
+
 ## 2026-08-14 — 补齐能力轴 / 应用形态轴与 Window / Present bridge 口径
 
 ### 本轮完成

@@ -424,6 +424,7 @@ GUI 分支只放可复用 GUI 库，不放产品化 demo 内容。
 7. 每做完一层立即验证：构建目标、GUIWorkbench 链接闭包、owner-model 与目录表达是否一致。
 
 目录收口的正式 allowed/forbidden charter、命名禁用词、唯一去向决策与迁移 batch 定义，统一收敛在 directory-charter.md；后续真实 move/rename 必须以该工件为准，不再靠 review 评论或临时口头约定。
+当前 Phase A 已补齐三份配套审计工件，后续 move/rename 设计必须直接引用它们，而不是把推理重新埋回零散 bullet：`capability-appform-mapping.md`、`nativewindow-api-triage.md`、`directory-target-include-audit.md`。
 
 停止线：如果某一步需要引入新的过渡 facade、额外 host 或第二套 app owner 才能完成迁移，说明这一步不是收口，而是在继续制造噪声，应当回退到上一层重新定归属。
 

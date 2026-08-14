@@ -7,7 +7,7 @@
 
 当前默认只允许同时推进一个 phase 的一个最小切片。若工作区中已经存在未完成切片，先收口再开新项。
 
-当前激活切片：`phase-a physical tree + app subtree split + rename/move design`
+当前激活切片：`phase-a no-behavior move/rename design`
 
 当前审计工件：`owner-model.md` + `plan.md` 目录归位表（macOS/MoltenVK gate 保持外部阻塞，不再占用当前主切片）
 
@@ -63,17 +63,18 @@
 - [x] 把 `NativeWindow` 的未来边界定性为：`INativeWindow`（窗口对象）+ `IPresentSurfaceSource`（RHI present bridge），RHI 不再依赖完整 window 语义
 - [~] 决定 Product/Host 的唯一去向：必须离开顶层 Product；先拆共享能力，再把剩余壳归到具体 app-form shell；确切 leaf 名待 include/target audit 拍板
 - [~] 定性 `Framework/AppServices`：不属于共享 App 主链；下一轮按真实职责拆回 `Render/Runtime`、`Scene`、`Physics`、`Scripting` 或具体 app shell
-- [ ] 补目录 -> target -> include 根映射表，作为 Batch 1 闭包审计工件，并显式区分 `App/Kernel`、`App/Control`、`GUI/Host`
-- [ ] 补“共享能力轴 -> 目录 / target”与“应用形态轴 -> owner / shell”双视图映射表，避免后续 move/rename 又回到单轴思考
-- [ ] 盘点 `Foundation/RHI/NativeWindow*` 的现有 API，形成三分表：留在 `INativeWindow` / 下沉到 `IPresentSurfaceSource` / 改由 presenter or host 持有
+- [x] 补目录 -> target -> include 根映射表，作为 Batch 1 闭包审计工件，并显式区分 `App/Kernel`、`App/Control`、`GUI/Host`（`directory-target-include-audit.md`）
+- [x] 补“共享能力轴 -> 目录 / target”与“应用形态轴 -> owner / shell”双视图映射表，避免后续 move/rename 又回到单轴思考（`capability-appform-mapping.md`）
+- [x] 盘点 `Foundation/RHI/NativeWindow*` 的现有 API，形成三分表：留在 `INativeWindow` / 下沉到 `IPresentSurfaceSource` / 改由 presenter or host 持有（`nativewindow-api-triage.md`）
 - [ ] 先做一轮不改行为的目录迁移设计：只移动文件/改 include/改 target 名称，不混入逻辑重写
 
 ### 下一刀顺序
 
-- [ ] 先补目录 -> target -> include 根映射表：把 `Foundation/Core`、`Foundation/Core/Application`、`Foundation/RHI`、`Framework/AppRuntime`、`Framework/GUI/App`、`Framework/AppServices`、`Product/Host`、`Product/Editor` 映射到实际 target / include 根 / 未来目录
-- [ ] 先补共享能力轴 / 应用形态轴映射：明确 `GameRuntime`、`GameEditor`、`GuiWorkbench` 各自只组合哪些能力，不再把共享系统默认归到 `Game`
-- [ ] 先补 `NativeWindow` API 三分表：窗口身份、窗口管理、present bridge 各自谁拥有，谁允许被 RHI 看见
-- [ ] 先盘点 xmake target 依赖线：确认哪些 target 只是目录命名噪声，哪些已经形成真实复用边界
+- [x] 已补目录 -> target -> include 根映射表：`directory-target-include-audit.md`
+- [x] 已补共享能力轴 / 应用形态轴映射：`capability-appform-mapping.md`
+- [x] 已补 `NativeWindow` API 三分表：`nativewindow-api-triage.md`
+- [ ] 基于三份审计工件，先做第一轮 no-behavior move/rename 设计：明确 move 集、forward-header 过渡与 target rename 顺序
+- [ ] 补 `Product/Host` file-level consumer audit：确认哪些文件其实是共享能力消费者，哪些只是具体 app-form shell
 - [ ] 先做第一轮 rename/move 设计，不动行为：
   - [ ] `Foundation/Core/Application` -> `App/Kernel` + `App/Control`
   - [ ] `Framework/AppRuntime` -> `GUI/Host`

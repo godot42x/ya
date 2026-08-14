@@ -42,6 +42,9 @@
         { "id": "directory_convergence_charter", "status": "pass", "notes": "directory-charter.md 已明确两条轴：共享能力（App/Render/GUI/Scene/Physics/Scripting/Reflection）与应用形态（GameRuntime/GameEditor/...）；并明确 App 只保留 Kernel / Control，window 属于 GUI/Host" },
         { "id": "framework_appruntime_target_decision", "status": "pass", "notes": "唯一去向已改口径：Framework/AppRuntime -> GUI/Host；Foundation/Core/Application 按职责拆到 App/Kernel + App/Control" },
         { "id": "framework_gui_app_rename_decision", "status": "pass", "notes": "唯一去向已拍板：Framework/GUI/App -> Framework/GUI/Host；首轮保留 GUIAppHost compatibility alias" },
+        { "id": "capability_appform_mapping_audit", "status": "pass", "notes": "capability-appform-mapping.md：共享能力轴 vs 应用形态轴双视图已落盘，后续 move/rename 不能再回到单轴思考" },
+        { "id": "nativewindow_api_triage", "status": "pass", "notes": "nativewindow-api-triage.md：`NativeWindow` API 已分成 `INativeWindow` / `IPresentSurfaceSource` / host+presenter policy 三类" },
+        { "id": "directory_target_include_audit", "status": "pass", "notes": "directory-target-include-audit.md：当前目录、target、include-root 闭包与 GUIWorkbench GUI-only closure sentinel 已落盘" },
         { "id": "product_host_semantics_removal", "status": "in_progress", "notes": "已确定必须离开顶层 Product；下一轮要先区分 app-form shell 与共享能力，再决定 GameRuntime/GameEditor 等具体落点" }
       ]
     },
