@@ -552,6 +552,42 @@ TEST(WidgetTreeTest, DetachClearsFocusCaptureAndHover)
     EXPECT_EQ(tree.getHovered(), nullptr);
 }
 
+TEST(WidgetTreeTest, WeakPointerPathsSurviveDetachWithoutDangling)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       panel = std::make_shared<UIPanel>("Panel");
+    panel->_position = {100.0f, 80.0f};
+    panel->_size     = {160.0f, 80.0f};
+    auto       button = makeButton("Button", {20.0f, 10.0f}, {80.0f, 32.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    tree.attach(*panel, button);
+    tree.setFocus(button.get());
+    tree.layout();
+    tree.dispatchEvent(MouseMoveEvent(130.0f, 100.0f), pointAt(130.0f, 100.0f));
+
+    // Paths are live snapshots of the weak-reference path (UE FWeakWidgetPath
+    // semantics): root -> content layer -> panel -> button.
+    EXPECT_EQ(tree.getFocusPath().size(), 4u);
+    EXPECT_EQ(tree.getPointerPath().size(), 4u);
+    EXPECT_EQ(tree.getFocusPath().back(), button.get());
+    EXPECT_EQ(tree.getPointerPath().back(), button.get());
+
+    // Detaching the subtree clears the weak paths; the getters return empty
+    // rather than a dangling pointer into the removed widgets.
+    tree.detach(*panel);
+    EXPECT_TRUE(tree.getFocusPath().empty());
+    EXPECT_TRUE(tree.getPointerPath().empty());
+
+    // The detached widgets are now owned only by these business refs; dropping
+    // them destroys the widgets while the tree no longer references them. The
+    // next dispatch runs pruneTransientState without dereferencing any freed
+    // widget (the weak paths already observed their removal).
+    button.reset();
+    panel.reset();
+    EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(400.0f, 300.0f), pointAt(400.0f, 300.0f)),
+              EWidgetRouteResult::NotHandled);
+}
+
 TEST(WidgetTreeTest, ButtonTextChildDoesNotStealHoverOwner)
 {
     WidgetTree tree({.width = 800, .height = 600});
@@ -733,18 +769,21 @@ TEST(WidgetTreeTest, PassWidgetsRespondButDoNotBlock)
     WidgetTree tree({.width = 800, .height = 600});
     auto       top    = makeButton("Top", {100.0f, 100.0f}, {80.0f, 32.0f});
     auto       bottom = makeButton("Bottom", {100.0f, 100.0f}, {80.0f, 32.0f});
-    top->_hitFilter    = EWidgetHitFilter::Pass; // respond but never block
+    top->_hitFilter    = EWidgetHitFilter::Pass; // respond, report HandledPass
     top->_zOrder       = 10;
     tree.attachToLayer(WidgetTree::ELayer::Content, top);
     tree.attachToLayer(WidgetTree::ELayer::Content, bottom);
     tree.layout();
 
-    // The Pass overlay responds and the walk continues; only the Stop widget
-    // underneath makes the route exclusive.
+    // Single topmost hit: only the Pass overlay responds and it reports
+    // HandledPass (the game layer still sees the event). The Stop widget
+    // underneath is NOT reached — hit-testing no longer walks lower
+    // candidates; a Pass widget must opt into HitTestInvisible to fall
+    // through, not rely on route-time continuation.
     EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f)),
-              EWidgetRouteResult::HandledExclusive);
+              EWidgetRouteResult::HandledPass);
     EXPECT_TRUE(top->_bPressed);
-    EXPECT_TRUE(bottom->_bPressed);
+    EXPECT_FALSE(bottom->_bPressed);
 }
 
 TEST(WidgetTreeTest, HiddenSubtreeCullsHits)

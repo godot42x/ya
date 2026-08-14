@@ -412,12 +412,13 @@ TEST(ToolControlsTest, ToolbarAutoSizeButtonWithLabelHoverClears)
         auto button = std::make_shared<UIButton>(name);
         button->_bAutoSize = true;
         button->setContentPadding({10.0f, 4.0f});
-        auto text       = std::make_shared<UIText>(name + "_Label");
-        text->_bAutoSize = true;
-        text->_fontSize  = 14;
-        text->_text      = label;
-        text->_hAlign    = EWidgetAlignH::Center;
-        text->_vAlign    = EWidgetAlignV::Center;
+        auto text          = std::make_shared<UIText>(name + "_Label");
+        text->_bAutoSize   = true;
+        text->_fontSize    = 14;
+        text->_text        = label;
+        text->_visibility  = EWidgetVisibility::SelfHitTestInvisible;
+        text->_hAlign      = EWidgetAlignH::Center;
+        text->_vAlign      = EWidgetAlignV::Center;
         button->addDetachedChild(text);
         return button;
     };
@@ -454,6 +455,55 @@ TEST(ToolControlsTest, ToolbarAutoSizeButtonWithLabelHoverClears)
     tree.dispatchEvent(MouseMoveEvent(empty.x, empty.y), pointAt(empty.x, empty.y));
     EXPECT_FALSE(remove->_bHovered);
     EXPECT_EQ(tree.getHovered(), nullptr);
+}
+
+TEST(ToolControlsTest, SplitPaneDoesNotStealHoverFromOverlappingButton)
+{
+    // Reproduce the Editor toolbar bug: a full-region hoverable split pane
+    // (top padding reserves the toolbar strip) overlaps a toolbar button. Both
+    // hit the same point; the deeper button must own hover, not the split.
+    WidgetTree tree({.width = 400, .height = 300});
+
+    auto panel = std::make_shared<UIContainer>("Panel");
+    panel->_anchorMin = {0.0f, 0.0f};
+    panel->_anchorMax = {1.0f, 1.0f};
+
+    auto toolbar = std::make_shared<UIContainer>("Toolbar");
+    toolbar->setDirection(EWidgetBoxLayout::Horizontal);
+    toolbar->_anchorMin = {0.0f, 0.0f};
+    toolbar->_anchorMax = {1.0f, 0.0f};
+    toolbar->_position  = {0.0f, 10.0f};
+    toolbar->_size      = {0.0f, 32.0f};
+    toolbar->setSpacing(8.0f);
+    toolbar->setPadding({8.0f, 4.0f});
+
+    auto add    = std::make_shared<UIButton>("Add");
+    add->_size  = {45.0f, 24.0f};
+
+    auto split = std::make_shared<UISplitPane>("Split");
+    split->_anchorMin = {0.0f, 0.0f};
+    split->_anchorMax = {1.0f, 1.0f};
+    split->setPadding({0.0f, 42.0f}); // top padding overlaps the toolbar strip
+
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    tree.attach(*panel, toolbar);
+    tree.attach(*toolbar, add);
+    tree.attach(*panel, split);
+    tree.layout();
+
+    const glm::vec2 addCenter = add->_layoutRect.pos + add->_layoutRect.extent * 0.5f;
+    tree.dispatchEvent(MouseMoveEvent(addCenter.x, addCenter.y), pointAt(addCenter.x, addCenter.y));
+
+    EXPECT_TRUE(add->_bHovered);
+    EXPECT_EQ(tree.getHovered(), add.get());
+
+    // Over the split's divider (not the button): the split owns hover for its
+    // resize cursor as before.
+    const glm::vec2 dividerCenter = split->getDividerRect().pos + split->getDividerRect().extent * 0.5f;
+    tree.dispatchEvent(MouseMoveEvent(dividerCenter.x, dividerCenter.y), pointAt(dividerCenter.x, dividerCenter.y));
+    EXPECT_FALSE(add->_bHovered);
+    EXPECT_TRUE(split->_bHoveredDivider);
+    EXPECT_EQ(tree.getHovered(), split.get());
 }
 
 // === Scroll viewport ===
@@ -835,10 +885,11 @@ TEST(ToolControlsTest, MenuBarHoverSwitchesOpenMenu)
     // Hover over Edit without clicking: the open menu switches to Edit's.
     EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(84.0f, 15.0f), pointAt(84.0f, 15.0f)),
               EWidgetRouteResult::HandledExclusive);
-    // The hover-switch must close the old menu only AFTER routing: during
-    // routing the retired overlay is still alive and classifies the first
-    // (popup) route, so no hit target is ever dereferenced after destruction.
-    EXPECT_EQ(tree.getLastRouteTrace().policy, EWidgetRoutePolicy::Popup);
+    // The move routes through the hover-transparent shield to the Edit item
+    // (HitTest policy, not Popup — the shield only swallows presses). The
+    // hover-switch closes the old menu only AFTER routing, so no hit target
+    // is ever dereferenced after destruction.
+    EXPECT_EQ(tree.getLastRouteTrace().policy, EWidgetRoutePolicy::HitTest);
     ASSERT_NE(bar->getOpenMenu(), nullptr);
     EXPECT_EQ(bar->getOpenMenu()->menuItems().front()->_label, "Undo");
     {
