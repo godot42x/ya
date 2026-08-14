@@ -1,7 +1,7 @@
 #include "App/Module/ModuleManager.h"
 #include "App/Module/PluginDescriptor.h"
 #include "App/Module/ProjectDescriptor.h"
-#include "Host/App.h"
+#include "GameRuntime/App.h"
 
 #include <algorithm>
 #include <cstdio>

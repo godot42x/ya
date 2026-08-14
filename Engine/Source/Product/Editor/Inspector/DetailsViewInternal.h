@@ -4,7 +4,7 @@
 
 #include "RHI/Backend/TextureLibrary.h"
 #include "Resource/AssetManager.h"
-#include "Host/GUI/ImGui/ImGuiSystem.h"
+#include "GameRuntime/GUI/ImGui/ImGuiSystem.h"
 
 #include <algorithm>
 #include <array>

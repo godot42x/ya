@@ -1,7 +1,7 @@
 #include "Editor/EditorPlaySession.h"
 
 #include "Core/Log.h"
-#include "Host/App.h"
+#include "GameRuntime/App.h"
 #include "Scene/Runtime/SceneManager.h"
 
 namespace ya

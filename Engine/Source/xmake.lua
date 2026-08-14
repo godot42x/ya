@@ -77,7 +77,7 @@ function ya_engine_defines()
         "YA_SCENE_CORE_API", "YA_SCENE_RUNTIME_API", "YA_SCENE_SERIALIZATION_API",
         "YA_SCENE_3D_API", "YA_RESOURCE_API", "YA_RENDER_GRAPH_API",
         "YA_RENDER_3D_API", "YA_RENDER_ECS_ADAPTERS_API", "YA_ECS_CORE_API", "YA_GAMEPLAY_ECS_API", "YA_GAMEPLAY_SYSTEMS_API", "YA_COMPONENT_LINKAGE_API", "YA_PHYSICS_API",
-        "YA_HOST_API", "YA_EDITOR_API", "YA_RESOURCE_CORE_API", "YA_RESOURCE_LOADER_API",
+        "YA_GAME_RUNTIME_API", "YA_EDITOR_API", "YA_RESOURCE_CORE_API", "YA_RESOURCE_LOADER_API",
     }
     for _, macro in ipairs(macros) do
         add_defines(macro .. "=YA_API_EXPORT")
@@ -122,7 +122,7 @@ if get_config("ya_profile") ~= "gui" then
     includes("./Framework/Game/Physics/xmake.lua")
     includes("./Framework/Game/Render/Adapters/xmake.lua")
 
-    -- Product tier: assembled runtimes.
-    includes("./Product/Host/xmake.lua")
+    -- App-form tier: assembled runtimes/editor shells.
+    includes("./Applications/GameRuntime/xmake.lua")
     includes("./Product/Editor/xmake.lua")
 end

@@ -1,6 +1,6 @@
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Editor/Inspector/DetailsViewInternal.h"
-#include "Host/App.h"
+#include "GameRuntime/App.h"
 
 namespace ya
 {

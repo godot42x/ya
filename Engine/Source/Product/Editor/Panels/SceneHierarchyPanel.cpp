@@ -19,7 +19,7 @@
 #include "Editor/Services/NodeCreateRegistry.h"
 #include "GUI/Widgets/UIDocument.h"
 #include "GUI/Widgets/UITypeRegistry.h"
-#include "Host/App.h"
+#include "GameRuntime/App.h"
 #include "Hierarchy/Node.h"
 #include "Scene3D/Node3D.h"
 #include "Scene/Core/Scene.h"

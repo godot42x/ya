@@ -44,7 +44,7 @@
 #include "Scene/Runtime/SceneManager.h"
 
 #include "Core/System/VirtualFileSystem.h"
-#include "Host/App.h"
+#include "GameRuntime/App.h"
 
 
 void HelloMaterialModule::onAttach(ya::App& app)

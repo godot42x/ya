@@ -1,8 +1,8 @@
 #include "Editor/Input/EditorInputNode.h"
 
 #include "Editor/EditorLayer.h"
-#include "Host/App.h"
-#include "Host/GUI/GuiSystem.h"
+#include "GameRuntime/App.h"
+#include "GameRuntime/GUI/GuiSystem.h"
 
 namespace ya
 {

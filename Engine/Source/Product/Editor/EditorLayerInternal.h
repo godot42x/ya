@@ -22,7 +22,7 @@
 #include "RHI/Core/RenderResourceFactory.h"
 #include "Resource/AssetManager.h"
 #include "RHI/Backend/TextureLibrary.h"
-#include "Host/App.h"
+#include "GameRuntime/App.h"
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"

@@ -1,7 +1,7 @@
 #include "Editor/EditorRuntimeSettings.h"
 
 #include "Core/Config/ConfigManager.h"
-#include "Host/Utility/FPSCtrl.h"
+#include "GameRuntime/Utility/FPSCtrl.h"
 
 namespace ya::editor_runtime_settings
 {

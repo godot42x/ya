@@ -3,7 +3,7 @@
 #include "Editor/EditorLayer.h"
 
 #include "Editor/Inspector/ContainerPropertyRenderer.h"
-#include "Host/App.h"
+#include "GameRuntime/App.h"
 #include "Core/Common/AssetRef.h"
 #include "Core/Profiling/Instrumentor.h"
 #include "Core/System/VirtualFileSystem.h"

@@ -1,9 +1,9 @@
-#include "Host/Lifecycle/AppLifecycle.h"
+#include "GameRuntime/Lifecycle/AppLifecycle.h"
 
 #include "AppModuleTestAccess.h"
 
-#include "Host/App.h"
-#include "Host/IRuntimeModule.h"
+#include "GameRuntime/App.h"
+#include "GameRuntime/IRuntimeModule.h"
 
 #include "Core/System/VirtualFileSystem.h"
 #include "RHI/Core/CommandBuffer.h"

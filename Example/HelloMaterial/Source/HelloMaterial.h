@@ -1,7 +1,7 @@
 #pragma once
 
 #include "App/Module/Module.h"
-#include "Host/IRuntimeModule.h"
+#include "GameRuntime/IRuntimeModule.h"
 #include "Resource/Mesh.h"
 #include "Core/Common/AppState.h"
 

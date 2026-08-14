@@ -8,11 +8,11 @@
 
 #include "GUI/Widgets/UITypeRegistry.h"
 
-#include "Host/GUI/GameUI/GameUIHost.h"
+#include "GameRuntime/GUI/GameUI/GameUIHost.h"
 
 #include "Scene/Core/Scene.h"
 
-#include "Host/App.h"
+#include "GameRuntime/App.h"
 
 #include <imgui.h>
 

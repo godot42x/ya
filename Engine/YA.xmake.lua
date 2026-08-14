@@ -206,7 +206,7 @@ do
         "ya-render-graph",
         "ya-render-3d",
         "ya-physics",
-        "ya-host",
+        "ya-game-runtime",
         { public = true })
     add_deps("utility.cc", "log.cc", "reflects-core", { public = true })
     add_deps("imgui-local")

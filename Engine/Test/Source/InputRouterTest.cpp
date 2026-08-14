@@ -1,6 +1,6 @@
 #include "Core/Input/InputManager.h"
-#include "Host/InputRouter.h"
-#include "Host/App.h"
+#include "GameRuntime/InputRouter.h"
+#include "GameRuntime/App.h"
 
 #include <gtest/gtest.h>
 

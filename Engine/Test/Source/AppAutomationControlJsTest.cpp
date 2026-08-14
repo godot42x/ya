@@ -5,8 +5,8 @@
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Entity.h"
 #include "Gameplay/Systems/JSScriptingSystem.h"
-#include "Host/App.h"
-#include "Host/Automation/AppAutomationControlService.h"
+#include "GameRuntime/App.h"
+#include "GameRuntime/Automation/AppAutomationControlService.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
 

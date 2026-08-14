@@ -18,10 +18,10 @@
 #include "Render3D/Terrain/TerrainProcessor.h"
 #include "Editor/EditorLayer.h"
 #include "Editor/Inspector/DetailsViewInternal.h"
-#include "Host/GUI/ImGui/ImGuiSystem.h"
+#include "GameRuntime/GUI/ImGui/ImGuiSystem.h"
 #include "Hierarchy/Node.h"
 #include "Scene/Core/Scene.h"
-#include "Host/App.h"
+#include "GameRuntime/App.h"
 #include "GUI/Widgets/UITypeRegistry.h"
 #include "GUI/Widgets/UIDocument.h"
 #include <glm/gtc/type_ptr.hpp>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Host/App.h"
+#include "GameRuntime/App.h"
 #include "Scene/Runtime/SceneManager.h"
 
 namespace ya

@@ -1,6 +1,6 @@
-#include "Host/Utility/AppScreenshotCapture.h"
-#include "Host/Utility/OffscreenJobRunner.h"
-#include "Host/App.h"
+#include "GameRuntime/Utility/AppScreenshotCapture.h"
+#include "GameRuntime/Utility/OffscreenJobRunner.h"
+#include "GameRuntime/App.h"
 
 #include "RHI/Render.h"
 #include "RHI/Core/RenderImage.h"

@@ -16,7 +16,7 @@
 
 #include "Editor/FilePicker.h"
 
-#include "Host/GUI/GameUI/UIDocumentResolver.h"
+#include "GameRuntime/GUI/GameUI/UIDocumentResolver.h"
 
 #include "GUI/Widgets/UIDocument.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"

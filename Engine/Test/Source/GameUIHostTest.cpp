@@ -2,7 +2,7 @@
 // unmounts authoring entries, addToWorld attaches dynamic widgets, input
 // routes into the presentation tree, and presentation mapping is exact.
 
-#include "Host/GUI/GameUI/GameUIHost.h"
+#include "GameRuntime/GUI/GameUI/GameUIHost.h"
 
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Panel.h"
