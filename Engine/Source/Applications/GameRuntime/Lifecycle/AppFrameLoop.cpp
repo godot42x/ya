@@ -16,9 +16,9 @@
 #include "Core/System/FileWatcher.h"
 
 #include "ECS/Component/2D/BillboardComponent.h"
-#include "Gameplay/Systems/Components/CameraComponent.h"
+#include "ECS/Systems/Components/CameraComponent.h"
 #include "Scene3D/TransformComponent.h"
-#include "Gameplay/Systems/LuaScriptingSystem.h"
+#include "ECS/Systems/LuaScriptingSystem.h"
 
 #include "RHI/Backend/Vulkan//VulkanRender.h"
 #include "RHI/NativeWindow.h"

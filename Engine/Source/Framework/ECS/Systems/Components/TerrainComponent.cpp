@@ -1,4 +1,4 @@
-#include "Gameplay/Systems/Components/TerrainComponent.h"
+#include "ECS/Systems/Components/TerrainComponent.h"
 
 namespace ya
 {

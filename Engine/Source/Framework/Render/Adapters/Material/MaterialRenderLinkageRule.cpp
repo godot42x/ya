@@ -5,7 +5,7 @@
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/RenderComponent.h"
-#include "Gameplay/Linkage/LinkageFramework.h"
+#include "ECS/Linkage/LinkageFramework.h"
 #include "Scene/Core/Scene.h"
 
 namespace ya

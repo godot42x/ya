@@ -1,5 +1,5 @@
 #pragma once
-#include "Gameplay/Systems/ScriptingSystem.h"
+#include "ECS/Systems/ScriptingSystem.h"
 #include "Core/Input/InputManager.h"
 #include <functional>
 #include <sol/sol.hpp>
@@ -24,7 +24,7 @@ struct LuaRuntimeServices
     std::function<Scene*()>     activeScene;
 };
 
-struct YA_GAMEPLAY_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
+struct YA_ECS_SYSTEMS_API LuaScriptingSystem : public ScriptingSystem
 {
     /// Injected seam (bound by the Host at startup; no App access from here).
     void setRuntimeServices(LuaRuntimeServices services);

@@ -5,7 +5,7 @@
 #include "Core/Profiling/Profiling.h"
 #include "RHI/Core/RenderingInfoUtils.h"
 #include "RHI/Core/Sampler.h"
-#include "Gameplay/Systems/Components/DirectionComponent.h"
+#include "ECS/Systems/Components/DirectionComponent.h"
 #include "Scene3D/TransformComponent.h"
 #include "Render3D/Forward/ForwardFrameGraphOrchestrator.h"
 #include "Scene/Core/Scene.h"

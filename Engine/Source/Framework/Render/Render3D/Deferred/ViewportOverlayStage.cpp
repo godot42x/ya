@@ -5,7 +5,7 @@
 #include "Core/Math/Geometry.h"
 #include "Core/Math/Math.h"
 #include "RHI/Backend/TextureLibrary.h"
-#include "Gameplay/Systems/Components/DirectionComponent.h"
+#include "ECS/Systems/Components/DirectionComponent.h"
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "Scene3D/TransformComponent.h"

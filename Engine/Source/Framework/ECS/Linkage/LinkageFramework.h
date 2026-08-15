@@ -3,7 +3,7 @@
 #include "Core/Api.h"
 #include "Core/Delegate.h"
 #include "Core/System/System.h"
-#include "Gameplay/Linkage/LinkageRule.h"
+#include "ECS/Linkage/LinkageRule.h"
 
 #include <atomic>
 #include <functional>

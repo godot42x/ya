@@ -1,7 +1,7 @@
 #include "GameRuntime/Automation/AppAutomationControlService.h"
 
 #include "GameRuntime/App.h"
-#include "Gameplay/Systems/JSScriptingSystem.h"
+#include "ECS/Systems/JSScriptingSystem.h"
 #include "GameRuntime/AppSceneServices.h"
 #include "GameRuntime/Automation/EditorAutomationControl.h"
 #include "GameRuntime/Lifecycle/AppAutomation.h"
@@ -14,15 +14,15 @@
 #include "ECS/ECSRegistry.h"
 
 #include "ECS/Component/2D/BillboardComponent.h"
-#include "Gameplay/Systems/Components/DirectionalLightComponent.h"
+#include "ECS/Systems/Components/DirectionalLightComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
-#include "Gameplay/Systems/Components/PointLightComponent.h"
+#include "ECS/Systems/Components/PointLightComponent.h"
 #include "ECS/Component/RenderComponent.h"
 #include "Scene3D/TransformComponent.h"
-#include "Gameplay/Systems/Components/CameraComponent.h"
+#include "ECS/Systems/Components/CameraComponent.h"
 #include "Render/Adapters/LightBillboard/LightBillboardLinkageRule.h"
-#include "Gameplay/Systems/TransformSystem.h"
+#include "ECS/Systems/TransformSystem.h"
 
 #include "Render3D/RenderRuntime.h"
 #include "Scene/Core/Scene.h"

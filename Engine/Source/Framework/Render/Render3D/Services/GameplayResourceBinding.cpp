@@ -1,7 +1,7 @@
 #include "GameplayResourceBinding.h"
 
 #include "ECS/Component/2D/BillboardComponent.h"
-#include "Gameplay/Systems/Components/UIComponent.h"
+#include "ECS/Systems/Components/UIComponent.h"
 #include "ECS/Component/Material/PBRMaterialComponent.h"
 #include "ECS/Component/Material/PhongMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"

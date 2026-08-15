@@ -4,7 +4,7 @@
 #include "Core/Camera/Camera.h"
 #include "Core/Input/InputManager.h"
 #include "Core/KeyCode.h"
-#include "Gameplay/Systems/Components/CameraComponent.h"
+#include "ECS/Systems/Components/CameraComponent.h"
 #include "Scene3D/TransformComponent.h"
 
 
@@ -13,7 +13,7 @@ namespace ya
 {
 
 
-struct YA_GAMEPLAY_SYSTEMS_API FreeCameraController : public CameraController
+struct YA_ECS_SYSTEMS_API FreeCameraController : public CameraController
 {
     float _moveSpeed     = 5.0f;  // Units per second
     float _rotationSpeed = 45.0f; // Degrees per mouse unit

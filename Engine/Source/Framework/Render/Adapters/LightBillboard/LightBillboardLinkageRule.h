@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Api.h"
-#include "Gameplay/Linkage/LinkageRule.h"
+#include "ECS/Linkage/LinkageRule.h"
 
 #include <glm/glm.hpp>
 #include <string>

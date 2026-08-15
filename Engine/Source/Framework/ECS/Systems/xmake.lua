@@ -1,9 +1,9 @@
 -- Gameplay systems: frame-driven gameplay logic on top of the ECS core and
 -- the scene line. Systems never reach Host/Render3D; scene access is injected
 -- through narrow provider seams by the Host composition.
-target("ya-gameplay-systems")
+target("ya-ecs-systems")
     set_kind(ya_target_kind())
-    ya_std_module("YA_GAMEPLAY_SYSTEMS_API")
+    ya_std_module("YA_ECS_SYSTEMS_API")
     add_includedirs("./include", { public = true })
     add_files("**.cpp")
     add_headerfiles("./include/**.h", { public = true })

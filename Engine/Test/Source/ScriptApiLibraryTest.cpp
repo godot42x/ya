@@ -3,7 +3,7 @@
 #include "Core/System/VirtualFileSystem.h"
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Entity.h"
-#include "Gameplay/Systems/JSScriptingSystem.h"
+#include "ECS/Systems/JSScriptingSystem.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
 

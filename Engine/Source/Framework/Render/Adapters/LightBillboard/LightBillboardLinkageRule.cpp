@@ -2,11 +2,11 @@
 
 #include "Core/Base.h"
 #include "ECS/Component/2D/BillboardComponent.h"
-#include "Gameplay/Systems/Components/DirectionalLightComponent.h"
-#include "Gameplay/Systems/Components/PointLightComponent.h"
+#include "ECS/Systems/Components/DirectionalLightComponent.h"
+#include "ECS/Systems/Components/PointLightComponent.h"
 #include "ECS/Entity.h"
-#include "Gameplay/Linkage/LinkageFramework.h"
-#include "Gameplay/Systems/TransformSystem.h"
+#include "ECS/Linkage/LinkageFramework.h"
+#include "ECS/Systems/TransformSystem.h"
 #include "Scene/Core/Scene.h"
 #include "Scene3D/TransformComponent.h"
 

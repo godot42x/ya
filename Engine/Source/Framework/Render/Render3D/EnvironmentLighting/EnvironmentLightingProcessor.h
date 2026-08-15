@@ -12,7 +12,7 @@
 #include "Core/System/System.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
-#include "Gameplay/Systems/Components/TerrainComponent.h"
+#include "ECS/Systems/Components/TerrainComponent.h"
 #include "RHI/Core/OffscreenJob.h"
 #include "RHI/Core/ImageResourceRef.h"
 #include "RHI/Core/OffscreenJob.h"

@@ -1,7 +1,7 @@
 #include "Render3D/Terrain/TerrainProcessor.h"
 
 #include "Core/Log.h"
-#include "Gameplay/Systems/Components/TerrainComponent.h"
+#include "ECS/Systems/Components/TerrainComponent.h"
 #include "RHI/Render.h"
 #include "Render3D/Terrain/TerrainMeshBuilder.h"
 #include "Resource/AssetManager.h"

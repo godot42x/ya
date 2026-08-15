@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Gameplay/Linkage/LinkageRule.h"
+#include "ECS/Linkage/LinkageRule.h"
 
 #include <unordered_set>
 

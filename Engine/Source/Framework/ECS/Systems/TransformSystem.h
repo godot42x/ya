@@ -29,7 +29,7 @@ struct TransformComponent;
  * 1. If using Node Tree: Traverse from root nodes, recursively update world transforms
  * 2. If using flat Entities: Simply copy local to world (no parent)
  */
-struct YA_GAMEPLAY_SYSTEMS_API TransformSystem : public ISystem
+struct YA_ECS_SYSTEMS_API TransformSystem : public ISystem
 {
     using Self = TransformSystem;
     using SceneProvider = std::function<Scene*()>;

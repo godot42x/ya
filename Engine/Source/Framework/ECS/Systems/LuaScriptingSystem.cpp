@@ -6,9 +6,9 @@
 #include "Scene/Core/GameMounts.h"
 #include "Core/System/FileWatcher.h"
 #include "Scene/Core/Scene.h"
-#include "Gameplay/Systems/Components/CameraComponent.h"
-#include "Gameplay/Systems/Components/LuaScriptComponent.h"
-#include "Gameplay/Systems/Components/PointLightComponent.h"
+#include "ECS/Systems/Components/CameraComponent.h"
+#include "ECS/Systems/Components/LuaScriptComponent.h"
+#include "ECS/Systems/Components/PointLightComponent.h"
 #include "Scene3D/TransformComponent.h"
 #include "ECS/Entity.h"
 #include <glm/glm.hpp>

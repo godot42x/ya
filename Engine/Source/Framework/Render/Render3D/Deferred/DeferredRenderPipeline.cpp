@@ -7,7 +7,7 @@
 #include "DeferredAttachmentFormats.h"
 #include "ECS/Component/2D/BillboardComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
-#include "Gameplay/Systems/Components/DirectionComponent.h"
+#include "ECS/Systems/Components/DirectionComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "Scene3D/TransformComponent.h"
 #include "GUI/Resources/TextureSlotBinding.h"

@@ -16,12 +16,12 @@
 #include "App/Module/ProjectDescriptor.h"
 #include "Core/System/FileWatcher.h"
 
-#include "Gameplay/Linkage/LinkageFramework.h"
+#include "ECS/Linkage/LinkageFramework.h"
 #include "Render/Adapters/LightBillboard/LightBillboardLinkageRule.h"
 #include "Render/Adapters/Material/MaterialRenderLinkageRule.h"
-#include "Gameplay/Systems/LuaScriptingSystem.h"
+#include "ECS/Systems/LuaScriptingSystem.h"
 #include "ECS/System/RayCastMousePickingSystem.h"
-#include "Gameplay/Systems/JSScriptingSystem.h"
+#include "ECS/Systems/JSScriptingSystem.h"
 #include "Core/Scripting/ScriptApiRegistry.h"
 #include "Core/Scripting/ScriptApiAsset.h"
 #include "Render/Adapters/ModelInstantiationSystem.h"
@@ -29,7 +29,7 @@
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "Render3D/Services/EnvironmentLightingResultProvider.h"
 #include "Render3D/Terrain/TerrainProcessor.h"
-#include "Gameplay/Systems/TransformSystem.h"
+#include "ECS/Systems/TransformSystem.h"
 #include "Physics/PhysicsSystem.h"
 
 #include "Resource/AssetManager.h"
@@ -37,7 +37,7 @@
 
 #include "Render3D/Material/MaterialFactory.h"
 
-#include "Gameplay/Systems/AnimationSystem.h"
+#include "ECS/Systems/AnimationSystem.h"
 
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"

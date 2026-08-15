@@ -1,4 +1,4 @@
-#include "Gameplay/Systems/SkeletonAnimatorComponent.h"
+#include "ECS/Systems/SkeletonAnimatorComponent.h"
 
 #include <gtest/gtest.h>
 

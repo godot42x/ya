@@ -1,4 +1,4 @@
-#include "Gameplay/Linkage/LinkageFramework.h"
+#include "ECS/Linkage/LinkageFramework.h"
 #include "Render/Adapters/LightBillboard/LightBillboardLinkageRule.h"
 #include "Render/Adapters/Material/MaterialRenderLinkageRule.h"
 
@@ -8,8 +8,8 @@
 #include "ECS/Component/Material/SimpleMaterialComponent.h"
 #include "ECS/Component/Material/UnlitMaterialComponent.h"
 #include "ECS/Component/RenderComponent.h"
-#include "Gameplay/Systems/Components/DirectionalLightComponent.h"
-#include "Gameplay/Systems/Components/PointLightComponent.h"
+#include "ECS/Systems/Components/DirectionalLightComponent.h"
+#include "ECS/Systems/Components/PointLightComponent.h"
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
 #include "Scene3D/TransformComponent.h"

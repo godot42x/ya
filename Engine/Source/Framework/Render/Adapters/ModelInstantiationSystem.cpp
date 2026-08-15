@@ -12,7 +12,7 @@
 #include "ECS/Component/Mesh/SkinnedMeshComponent.h"
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "ECS/Component/ModelComponent.h"
-#include "Gameplay/Systems/SkeletonAnimatorComponent.h"
+#include "ECS/Systems/SkeletonAnimatorComponent.h"
 #include "ECS/Entity.h"
 
 #include "Render3D/Material/MaterialFactory.h"

@@ -12,7 +12,7 @@ target("ya-render-ecs-adapters")
     -- Rules operate on ECS components and schedule through the generic
     -- linkage framework; they never reach Host/App.
     add_deps("ya-foundation-core", "ya-component-linkage", { public = true })
-    add_deps("ya-ecs-core", "ya-gameplay-systems", "ya-scene-core")
+    add_deps("ya-ecs-core", "ya-ecs-systems", "ya-scene-core")
     -- The bridge layer is allowed to reach the resource and Render3D layers
     -- (Phase 2 closure: ecs-core + Resource + Render3D); resolve/binding
     -- services land here as the fat ECS module dissolves.

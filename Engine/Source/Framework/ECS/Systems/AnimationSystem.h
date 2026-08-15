@@ -10,7 +10,7 @@ namespace ya
 
 struct Scene;
 
-struct YA_GAMEPLAY_SYSTEMS_API SkeletonAnimationSystem : public ISystem
+struct YA_ECS_SYSTEMS_API SkeletonAnimationSystem : public ISystem
 {
     using SceneProvider = std::function<Scene*()>;
     using TickPolicy    = std::function<bool()>;

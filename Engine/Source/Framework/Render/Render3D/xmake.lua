@@ -18,7 +18,7 @@ target("ya-render-3d")
         "ya-resource-core", "ya-resource-loader", "ya-resource-runtime",
         "ya-render-graph",
         { public = true })
-    add_deps("ya-ecs-core", "ya-gameplay-systems")
+    add_deps("ya-ecs-core", "ya-ecs-systems")
     -- Implementation-only deps: scene data/lifecycle, physics debug lines and
     -- the backend builtin texture library (GUI resources/compose are already
     -- public above: render-3d public headers expose them).

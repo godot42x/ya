@@ -1,4 +1,4 @@
-#include "Gameplay/Linkage/LinkageFramework.h"
+#include "ECS/Linkage/LinkageFramework.h"
 
 #include "ECS/SceneBus.h"
 #include "Scene/Core/Scene.h"

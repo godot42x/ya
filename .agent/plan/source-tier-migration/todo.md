@@ -42,7 +42,7 @@
 - [x] 删空 `Framework/Game` 目录
 - [x] 更新 `Engine/Source/xmake.lua` includes、`Script/ya_module_lint.py` MODULES 表
 - [x] 构建验证：ya-engine 聚合 + GUIWorkbench 闭包 + module lint（全绿）
-- [ ] 后续批次（Batch 2b，不阻塞）：`Gameplay/` include 拼写 -> `ECS/`（38 处消费者）、Systems 内脚本系统拆归 Scripting、`Framework/Hierarchy` 归宿
+- [x] ECS 语义收口（Batch 2b）：`Gameplay/Systems/`+`Gameplay/Linkage/` -> `ECS/Systems/`+`ECS/Linkage/`（39 文件）、target `ya-gameplay-systems` -> `ya-ecs-systems`、宏 `YA_GAMEPLAY_SYSTEMS_API` -> `YA_ECS_SYSTEMS_API`（已提交见 memory）
 
 ## P3 — Batch 3 清理与脚本同步
 
@@ -53,5 +53,4 @@
 ## 待拍板（不阻塞主线，后续批次）
 
 - [ ] `Framework/Hierarchy` 归宿：Framework/Scene 还是 Framework/Core
-- [ ] `Gameplay/` include 拼写 -> `ECS/`（38 处消费者）
-- [ ] ECS 内部：Systems 内 Lua/JSScriptingSystem 拆归 Scripting，其余 transform/animation/camera 留 ECS/Systems
+- [ ] ECS 内部：Systems 内 Lua/JSScriptingSystem 拆归 Scripting（需先建独立 ya-scripting target，较大）
