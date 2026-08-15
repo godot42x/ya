@@ -34,23 +34,24 @@
 
 ## P2 — Batch 2 引擎能力迁入 Framework
 
-- [ ] `Framework/Game/Render` -> `Framework/Render`
-- [ ] `Framework/Game/Resource` -> `Framework/Resource`
-- [ ] `Framework/Game/Scene` -> `Framework/Scene`
-- [ ] `Framework/Game/Physics` -> `Framework/Physics`
-- [ ] `Framework/Game/Gameplay/ECS + Systems + Linkage` -> `Framework/ECS`
-- [ ] Systems 内脚本系统（Lua/JSScriptingSystem）归 `Framework/Scripting`（先审计再拆）
-- [ ] 拍板 `Framework/Hierarchy` 归宿
-- [ ] 消费者 include 拼写迁移 + 构建验证
+- [x] `Framework/Game/Render` -> `Framework/Render`
+- [x] `Framework/Game/Resource` -> `Framework/Resource`
+- [x] `Framework/Game/Scene` -> `Framework/Scene`
+- [x] `Framework/Game/Physics` -> `Framework/Physics`
+- [x] `Framework/Game/Gameplay/ECS/Core + Systems + Linkage` -> `Framework/ECS/{Core,Systems,Linkage}`
+- [x] 删空 `Framework/Game` 目录
+- [x] 更新 `Engine/Source/xmake.lua` includes、`Script/ya_module_lint.py` MODULES 表
+- [x] 构建验证：ya-engine 聚合 + GUIWorkbench 闭包 + module lint（全绿）
+- [ ] 后续批次（Batch 2b，不阻塞）：`Gameplay/` include 拼写 -> `ECS/`（38 处消费者）、Systems 内脚本系统拆归 Scripting、`Framework/Hierarchy` 归宿
 
 ## P3 — Batch 3 清理与脚本同步
 
-- [ ] 删除无消费者的 compat 转发头 / compat target
-- [ ] 同步 `Script/*.py` 硬编码 target 名 / 路径
-- [ ] 移除 `Engine/Source/xmake.lua` 旧路径 includes
+- [ ] 同步 `Script/*.py` 中其余硬编码 target 名 / 路径（若有）
 - [ ] 全量构建 + GUI-only 闭包 + `ya-testing` 回归
+- [ ] 更新 `directory-charter.md` 中「当前→目标映射」为已落地状态
 
-## 待拍板（不阻塞主线，迁移前需定）
+## 待拍板（不阻塞主线，后续批次）
 
 - [ ] `Framework/Hierarchy` 归宿：Framework/Scene 还是 Framework/Core
-- [ ] ECS 内部结构：Systems（transform/animation/camera）与 Scripting 的边界审计
+- [ ] `Gameplay/` include 拼写 -> `ECS/`（38 处消费者）
+- [ ] ECS 内部：Systems 内 Lua/JSScriptingSystem 拆归 Scripting，其余 transform/animation/camera 留 ECS/Systems

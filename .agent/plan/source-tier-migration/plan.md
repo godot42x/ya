@@ -15,6 +15,8 @@ Applications/ GameRuntime / GameEditor / GuiWorkbench(未来)
 
 核心收益：裁剪问题变成一句话——一切引擎能力都在 `Framework`，游戏只是 `Applications` 下的一种形态（依赖 Framework 的通用能力）。
 
+> 进度：Batch 1（Foundation/App/GUI → Framework）与 Batch 2（Framework/Game/* → Framework/*）已落地，物理树已收口为两层。剩余 Batch 3（清理+脚本同步）与 Batch 2b（Gameplay 拼写收口等非阻塞项）。
+
 ## 2. 已落地 vs 待迁移
 
 已落地（`app-gui-boundary-migration` 主线成果，本轮只物理再分层，不重做 owner 判定）：

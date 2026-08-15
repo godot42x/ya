@@ -98,24 +98,24 @@ includes("./Framework/App/Module/xmake.lua")
 includes("./Framework/Hierarchy/xmake.lua")
 includes("./Framework/GUI/xmake.lua")
 
--- Game product line + product tier: engine profile only. The gui profile
--- never pulls ECS/Scene3D/Resource/RenderGraph/Render3D/Physics/Host/Editor
--- (or their sources/packages/shader groups) into the build graph.
+-- Engine capability modules + app-form tier: engine profile only. The gui
+-- profile never pulls ECS/Scene3D/Resource/RenderGraph/Render3D/Physics/Host/
+-- Editor (or their sources/packages/shader groups) into the build graph.
 if get_config("ya_profile") ~= "gui" then
-    includes("./Framework/Game/Scene/Core/xmake.lua")
-    includes("./Framework/Game/Scene/Runtime/xmake.lua")
-    includes("./Framework/Game/Scene/Serialization/xmake.lua")
-    includes("./Framework/Game/Scene/Scene3D/xmake.lua")
-    includes("./Framework/Game/Resource/Core/xmake.lua")
-    includes("./Framework/Game/Resource/Loader/xmake.lua")
-    includes("./Framework/Game/Resource/xmake.lua")
-    includes("./Framework/Game/Render/Graph/xmake.lua")
-    includes("./Framework/Game/Render/Render3D/xmake.lua")
-    includes("./Framework/Game/Gameplay/ECS/Core/xmake.lua")
-    includes("./Framework/Game/Gameplay/Linkage/xmake.lua")
-    includes("./Framework/Game/Gameplay/Systems/xmake.lua")
-    includes("./Framework/Game/Physics/xmake.lua")
-    includes("./Framework/Game/Render/Adapters/xmake.lua")
+    includes("./Framework/Scene/Core/xmake.lua")
+    includes("./Framework/Scene/Runtime/xmake.lua")
+    includes("./Framework/Scene/Serialization/xmake.lua")
+    includes("./Framework/Scene/Scene3D/xmake.lua")
+    includes("./Framework/Resource/Core/xmake.lua")
+    includes("./Framework/Resource/Loader/xmake.lua")
+    includes("./Framework/Resource/xmake.lua")
+    includes("./Framework/Render/Graph/xmake.lua")
+    includes("./Framework/Render/Render3D/xmake.lua")
+    includes("./Framework/ECS/Core/xmake.lua")
+    includes("./Framework/ECS/Linkage/xmake.lua")
+    includes("./Framework/ECS/Systems/xmake.lua")
+    includes("./Framework/Physics/xmake.lua")
+    includes("./Framework/Render/Adapters/xmake.lua")
 
     -- App-form tier: assembled runtimes/editor shells.
     includes("./Applications/GameRuntime/xmake.lua")
