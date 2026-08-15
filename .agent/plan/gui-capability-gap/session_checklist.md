@@ -27,4 +27,9 @@
 
 ## 当前下一刀
 
-M3 — 性能管线闭环 + 声明式口子内嵌：① **复用 `Core/Profiling` 的 `PerfState`**（方法版 API 始终编译），把 M0 自造的 `std::chrono` 计时替换为 `metrics().beginSample/endSample/setValue`，`GuiPerfStats` 降级为「从 PerfState 读的 per-tree 轻量访问面」，key 用 `gui.tree.*` 命名空间 + domainKey 区分多树；② 性能计数可 scenario 断言；③ 声明式 diff 复用接口内嵌（为 immediate API 留口子）。验收：能用 dump/scenario 回答「改一处数据触发多少 rebuild/draw item/耗时」；`GUIWorkbench` 闭包不被回灌。
+M0-M3 已全部完成，「响应式数据绑定 + 性能管线」主线收口。下一刀进入 P0 后续（独立刀，见 plan/feature_matrix）：
+
+1. **Styles/StyleSet**：布局/样式分离，数据驱动样式（参考 Vue SFC 三段式 / React CSS-in-JS / EUI-NEO Rect 样式盒）。
+2. **TreeView**：hierarchy 面板第一块砖，在响应式（ReactiveList）+ 样式之上做。
+
+注意：PerfState 的 `domainKey` 不参与索引（`_samples` 的 key 是 sampleKey），多树区分需把 tree 标识编码进 sampleKey；当前单树场景用固定 `gui.tree.*` key 聚合即可。

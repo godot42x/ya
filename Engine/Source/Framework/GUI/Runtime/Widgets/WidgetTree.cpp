@@ -1,6 +1,8 @@
 #include "GUI/Widgets/WidgetTree.h"
 
 #include "Core/Log.h"
+#include "Core/Profiling/PerfState.h"
+#include "Core/Profiling/Profiling.h"
 
 #include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Controls/Panel.h"
@@ -412,30 +414,44 @@ void WidgetTree::layout()
 
 UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
 {
+    using clock_t = std::chrono::steady_clock;
+
     _perfStats = GuiPerfStats{};
 
+    std::chrono::steady_clock::duration layoutDur{};
     if (_bLayoutDirty) {
-        const auto layoutStart = std::chrono::steady_clock::now();
+        const auto layoutStart = clock_t::now();
         layout();
-        _perfStats.layoutMS = std::chrono::duration<float, std::milli>(
-                                   std::chrono::steady_clock::now() - layoutStart)
-                                   .count();
+        layoutDur             = clock_t::now() - layoutStart;
+        _perfStats.layoutMS   = std::chrono::duration<float, std::milli>(layoutDur).count();
     }
 
-    const auto paintStart = std::chrono::steady_clock::now();
+    const auto paintStart = clock_t::now();
     _itemCache[_cacheIndex ^ 1].clear();
     UIFrameBuilder builder(ctx);
     builder.bindCache(&_itemCache[_cacheIndex], &_itemCache[_cacheIndex ^ 1]);
     _root->paint(builder);
     _cacheIndex ^= 1;
-    _perfStats.paintMS = std::chrono::duration<float, std::milli>(
-                             std::chrono::steady_clock::now() - paintStart)
-                             .count();
+    const auto paintDur     = clock_t::now() - paintStart;
+    _perfStats.paintMS      = std::chrono::duration<float, std::milli>(paintDur).count();
     _perfStats.paintedWidgets = builder.getWidgetCount();
     _perfStats.rebuiltWidgets = builder.getRebuildCount();
 
     UIFrameSnapshot snapshot = builder.build(_logicalExtent);
     _perfStats.drawItems      = static_cast<uint32_t>(snapshot.items.size());
+
+    // Bridge into the engine-wide perf metrics (aggregated per frame; the
+    // per-tree GuiPerfStats stays the per-instance structural view).
+    using namespace ya::literals;
+    auto& perf = profiling::metrics();
+    if (layoutDur.count() > 0) {
+        perf.setDuration("gui.tree.layout"_name, "ms"_name, layoutDur);
+    }
+    perf.setDuration("gui.tree.paint"_name, "ms"_name, paintDur);
+    perf.setValue("gui.tree.painted"_name, "count"_name, static_cast<float>(_perfStats.paintedWidgets));
+    perf.setValue("gui.tree.rebuilt"_name, "count"_name, static_cast<float>(_perfStats.rebuiltWidgets));
+    perf.setValue("gui.tree.items"_name, "count"_name, static_cast<float>(_perfStats.drawItems));
+
     return snapshot;
 }
 

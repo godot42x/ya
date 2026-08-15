@@ -3,6 +3,9 @@
 // transforms/clips, and the snapshot is widget-independent (widgets may be
 // detached right after build without invalidating the packet).
 
+#include "Core/Profiling/PerfState.h"
+#include "Core/Profiling/Profiling.h"
+
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/UIFrameSnapshotDump.h"
 #include "GUI/Widgets/Reactive.h"
@@ -352,6 +355,22 @@ TEST(UIFrameSnapshotTest, ReactiveListPushNotifiesDependents)
     list->clear();
     tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(probe->lastCount, 0);
+}
+
+TEST(UIFrameSnapshotTest, PerfStateBridgeRecordsTreeMetrics)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       panel = std::make_shared<UIPanel>("P");
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    using namespace ya::literals;
+    auto& perf = profiling::metrics();
+    EXPECT_GT(perf.getLastValue("gui.tree.painted"_name, "count"_name), 0.0f);
+    EXPECT_GT(perf.getLastValue("gui.tree.rebuilt"_name, "count"_name), 0.0f);
+    EXPECT_GT(perf.getLastValue("gui.tree.items"_name, "count"_name), 0.0f);
+    EXPECT_GE(perf.getLastValue("gui.tree.paint"_name, "ms"_name), 0.0f);
 }
 
 } // namespace ya

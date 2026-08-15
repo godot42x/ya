@@ -140,6 +140,7 @@ public:
 ### M3 — 性能管线闭环 + 声明式口子内嵌
 
 - 性能计数可 scenario 断言（结构证据）。
+- **复用 `Core/Profiling` 的 `PerfState`**：把 M0 自造的 `std::chrono` 计时替换为 `metrics().beginSample/endSample/setValue`（方法版 API 始终编译，不受 profiling 开关裁剪），`GuiPerfStats` 降级为「从 PerfState 读的 per-tree 轻量访问面」；key 用 `gui.tree.*` 命名空间隔离 + domainKey 区分多树。白拿平均窗口、summary 导出、多树区分与引擎统一可视化。
 - 「声明式描述片段 → diff 复用」的输入形态在 M1/M2 的复用接口中**内嵌体现**（复用接口接受「描述片段」，而非空口定义），为 immediate API 留口子。
 - **验收**：能用 dump/scenario 回答「改一处数据触发多少 rebuild/draw item/耗时」；`GUIWorkbench` 闭包不被回灌。
 
