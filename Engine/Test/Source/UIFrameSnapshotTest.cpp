@@ -16,6 +16,7 @@
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Text.h"
+#include "GUI/Widgets/Controls/TreeView.h"
 #include "GUI/Resources/FontManager.h"
 
 #include <gtest/gtest.h>
@@ -401,6 +402,69 @@ TEST(UIFrameSnapshotTest, StyleEditRepaintsBoundTexts)
     tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 2u);
     EXPECT_EQ(t1->resolvedStyle().textColor, glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
+}
+
+TEST(UIFrameSnapshotTest, TreeViewExpandCollapseChangesVisibleRows)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       tv = std::make_shared<UITreeView>("Tree");
+    tv->_bAutoSize = true;
+    tree.attachToLayer(WidgetTree::ELayer::Content, tv);
+
+    auto roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
+    roots->push({"root", "Root", {{"c1", "Child 1", {}}, {"c2", "Child 2", {}}}});
+    tv->bindData(roots);
+
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tv->computeDesiredSize().y, tv->_rowHeight * 1.0f); // root only
+
+    tv->setExpanded("root", true);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tv->computeDesiredSize().y, tv->_rowHeight * 3.0f); // root + 2 children
+
+    tv->setExpanded("root", false);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tv->computeDesiredSize().y, tv->_rowHeight * 1.0f); // collapsed again
+}
+
+TEST(UIFrameSnapshotTest, TreeViewSelectionRepaintsOnlyTreeView)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       tv = std::make_shared<UITreeView>("Tree");
+    tree.attachToLayer(WidgetTree::ELayer::Content, tv);
+
+    auto roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
+    roots->push({"a", "A", {}});
+    roots->push({"b", "B", {}});
+    tv->bindData(roots);
+
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    tree.buildSnapshot(UIFrameBuildContext{}); // all reuse
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+
+    // Select "a": only the tree view re-runs its paintSelf.
+    tv->getSelection()->set("a");
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 1u);
+    EXPECT_EQ(tv->getSelection()->value(), "a");
+}
+
+TEST(UIFrameSnapshotTest, TreeViewDataSourcePushInvalidatesLayout)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       tv = std::make_shared<UITreeView>("Tree");
+    tv->_bAutoSize = true;
+    tree.attachToLayer(WidgetTree::ELayer::Content, tv);
+
+    auto roots = std::make_shared<ReactiveList<UITreeView::FNode>>();
+    tv->bindData(roots);
+
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tv->computeDesiredSize().y, 0.0f); // empty
+
+    roots->push({"a", "A", {}});
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tv->computeDesiredSize().y, tv->_rowHeight * 1.0f); // one row
 }
 
 } // namespace ya

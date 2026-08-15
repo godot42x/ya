@@ -27,6 +27,6 @@
 
 ## 当前下一刀
 
-**TreeView**（P0 最后一块砖）：hierarchy 面板的树形列表 + 选中态 + 展开折叠。在已就位的 `ReactiveList`（数据源）+ `UIStyleSet`（样式）之上做；渲染走 `SelectableRow` 或新控件，数据驱动走 `ReactiveList`。
+**P0 收口 + 布局坏掉修复**：响应式绑定 + Styles/StyleSet + TreeView 三块砖已全部落地（closure 126/126）。下一刀是修 GUIWorkBench 布局坏掉的回归（根因见 memory `project_gui_layout_paint_dirty.md`）：`WidgetTree::layout()` 全量重排更新 `_layoutRect` 但不标 paint dirty，增量复用复用了旧像素坐标的 draw items。修复方向：`UIElement::layout()/layoutAssigned()` 对比新旧 rect，变了就 `markPaintDirty()`（注意 `UISplitPane::layoutAssigned` 重写了基类需同样处理）。
 
 注意（样式依赖收集的坑，已解决）：paint 属性的绑定必须走「paint 时 get() 收集」，不能走 bind 时显式注册——后者会被基类 paint 重跑时的 `clearDependencies()` 清掉。layout 属性（如 SplitPane ratio，layout 阶段读、无 paint 上下文）才用显式注册。

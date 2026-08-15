@@ -24,7 +24,7 @@
       "title": "P0 后续（本计划之后的独立刀）",
       "items": [
         { "id": "styles_styleset", "status": "pass", "notes": "FWidgetStyle + UIStyleSet（命名样式 Reactive 集合）+ UIText.bindStyle；改样式批量重绘。closure 123/123" },
-        { "id": "treeview", "status": "planned", "notes": "TreeView：hierarchy 面板第一块砖，在响应式（ReactiveList）+ 样式之上做" }
+        { "id": "treeview", "status": "pass", "notes": "UITreeView：ReactiveList 数据源 + Reactive<bool> 展开(Layout) + Reactive<string> 选中(Paint)；paint 展平可见行(缩进+箭头+label+选中/hover高亮)，input 实时 hit-test 到行(箭头 toggle / 行选中)。closure 126/126" }
       ]
     }
   ]
