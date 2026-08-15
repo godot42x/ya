@@ -68,7 +68,7 @@ void UIPopupOverlay::layout(const Rect2D& parentRect)
 
 void UIPopupOverlay::layoutAssigned(const Rect2D& rect)
 {
-    _layoutRect = rect; // full screen
+    setLayoutRect(rect); // full screen
 
     for (UIElement* child : getChildrenInPaintOrder()) {
         if (!child->participatesInLayout()) {

@@ -142,7 +142,7 @@ void UIMenu::openAt(WidgetTree& tree, const glm::vec2& pos)
 
 void UIMenu::layoutAssigned(const Rect2D& rect)
 {
-    _layoutRect = rect; // full screen
+    setLayoutRect(rect); // full screen
 
     for (UIElement* child : getChildrenInPaintOrder()) {
         if (!child->participatesInLayout()) {

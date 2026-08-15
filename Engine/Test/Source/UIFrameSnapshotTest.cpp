@@ -467,4 +467,26 @@ TEST(UIFrameSnapshotTest, TreeViewDataSourcePushInvalidatesLayout)
     EXPECT_EQ(tv->computeDesiredSize().y, tv->_rowHeight * 1.0f); // one row
 }
 
+TEST(UIFrameSnapshotTest, LayoutChangeRebuildsMovedWidgetDrawItems)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       panel = std::make_shared<UIPanel>("P");
+    panel->_position = {10.0f, 10.0f};
+    panel->_size     = {50.0f, 25.0f};
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+
+    tree.buildSnapshot(UIFrameBuildContext{});
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean: panel reuses its cached items
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+
+    // Move the panel and invalidate layout: the widget's rect changes, so its
+    // cached draw items (old pixel position) must be rebuilt at the new spot.
+    panel->_position = {100.0f, 100.0f};
+    tree.invalidateLayout();
+    const UIFrameSnapshot snapshot = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_EQ(snapshot.items.size(), 1u);
+    EXPECT_EQ(snapshot.items[0].pos, glm::vec2(100.0f, 100.0f));
+    EXPECT_EQ(snapshot.items[0].size, glm::vec2(50.0f, 25.0f));
+}
+
 } // namespace ya

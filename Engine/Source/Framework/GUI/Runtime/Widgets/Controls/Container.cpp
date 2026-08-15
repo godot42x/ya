@@ -19,8 +19,7 @@ void UIContainer::layout(const Rect2D& parentRect)
 
 void UIContainer::layoutAssigned(const Rect2D& rect)
 {
-    _layoutRect = rect;
-    _layoutRect.extent = glm::max(_layoutRect.extent, glm::vec2(0.0f));
+    setLayoutRect(rect);
     _boxLayout.arrange(*this, _layoutRect);
 }
 

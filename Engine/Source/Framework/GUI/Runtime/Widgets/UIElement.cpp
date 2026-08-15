@@ -128,18 +128,13 @@ Rect2D UIElement::computeAnchorRect(const Rect2D& parentRect) const
 
 void UIElement::layout(const Rect2D& parentRect)
 {
-    _layoutRect = computeAnchorRect(parentRect);
-    // A widget can never have a negative extent (tiny parents / over-sized
-    // fixed children would otherwise propagate inverted rects into clips and
-    // scissors). Clamp before children lay out against this rect.
-    _layoutRect.extent = glm::max(_layoutRect.extent, glm::vec2(0.0f));
+    setLayoutRect(computeAnchorRect(parentRect));
     layoutChildren(_layoutRect);
 }
 
 void UIElement::layoutAssigned(const Rect2D& rect)
 {
-    _layoutRect = rect;
-    _layoutRect.extent = glm::max(_layoutRect.extent, glm::vec2(0.0f));
+    setLayoutRect(rect);
     layoutChildren(_layoutRect);
 }
 

@@ -51,7 +51,7 @@ void UICheckBox::layout(const Rect2D& parentRect)
 
 void UICheckBox::layoutAssigned(const Rect2D& rect)
 {
-    _layoutRect = rect;
+    setLayoutRect(rect);
 
     Rect2D boxRect = _layoutRect;
     boxRect.extent = glm::vec2(_boxSize);

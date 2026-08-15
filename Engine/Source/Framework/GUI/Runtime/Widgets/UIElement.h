@@ -374,6 +374,22 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     void addDetachedChild(const UIElementRef& child);
 
   protected:
+    /// Store the widget's final layout rect (clamping negative extents, per
+    /// the layout contract) and mark it paint-dirty when the rect actually
+    /// moved/resized — a changed rect invalidates the draw items cached from
+    /// the previous rect (they carry the old pixel positions). Every
+    /// layout/layoutAssigned override must route its rect assignment through
+    /// here so a layout change propagates to the incremental paint cache.
+    void setLayoutRect(const Rect2D& rect)
+    {
+        Rect2D clamped = rect;
+        clamped.extent = glm::max(clamped.extent, glm::vec2(0.0f));
+        if (clamped.pos != _layoutRect.pos || clamped.extent != _layoutRect.extent) {
+            markPaintDirty();
+        }
+        _layoutRect = clamped;
+    }
+
     /// Anchor math: rect.min = parent.pos + parent.size*anchorMin + _position;
     /// rect.max = parent.pos + parent.size*anchorMax + _position + _size.
     [[nodiscard]] Rect2D computeAnchorRect(const Rect2D& parentRect) const;

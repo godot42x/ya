@@ -27,6 +27,8 @@
 
 ## 当前下一刀
 
-**P0 收口 + 布局坏掉修复**：响应式绑定 + Styles/StyleSet + TreeView 三块砖已全部落地（closure 126/126）。下一刀是修 GUIWorkBench 布局坏掉的回归（根因见 memory `project_gui_layout_paint_dirty.md`）：`WidgetTree::layout()` 全量重排更新 `_layoutRect` 但不标 paint dirty，增量复用复用了旧像素坐标的 draw items。修复方向：`UIElement::layout()/layoutAssigned()` 对比新旧 rect，变了就 `markPaintDirty()`（注意 `UISplitPane::layoutAssigned` 重写了基类需同样处理）。
+**P0 全部收口 + 布局回归已修复**：响应式绑定 + Styles/StyleSet + TreeView 三块砖落地（closure 126/126），GUIWorkBench 布局坏掉的回归也已修复（`UIElement::setLayoutRect` 对比新旧 rect 标 paint dirty，所有 layout/layoutAssigned 收口走 helper）。closure 127/127。
+
+后续方向（未立项）：Editor UI 从 ImGui 迁移到 retain UI、编辑器 undo/redo、immediate API 便捷层、虚拟化列表。
 
 注意（样式依赖收集的坑，已解决）：paint 属性的绑定必须走「paint 时 get() 收集」，不能走 bind 时显式注册——后者会被基类 paint 重跑时的 `clearDependencies()` 清掉。layout 属性（如 SplitPane ratio，layout 阶段读、无 paint 上下文）才用显式注册。

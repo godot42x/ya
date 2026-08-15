@@ -14,8 +14,7 @@ void UIScrollViewport::layout(const Rect2D& parentRect)
 
 void UIScrollViewport::layoutAssigned(const Rect2D& rect)
 {
-    _layoutRect = rect;
-    _layoutRect.extent = glm::max(_layoutRect.extent, glm::vec2(0.0f));
+    setLayoutRect(rect);
     if (getChildren().size() > 1) {
         YA_CORE_WARN("UIScrollViewport '{}': UIScrollLayout only scrolls the first child ({} attached)",
                      _name, getChildren().size());

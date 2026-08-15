@@ -18,7 +18,7 @@ void UIButton::layout(const Rect2D& parentRect)
 
 void UIButton::layoutAssigned(const Rect2D& rect)
 {
-    _layoutRect = rect;
+    setLayoutRect(rect);
 
     _contentLayout.arrange(*this, _layoutRect);
 }
