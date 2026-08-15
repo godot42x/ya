@@ -40,35 +40,35 @@ struct FMinimalUIDemo
 void buildDemoContent(WidgetTree& tree, FMinimalUIDemo& demo)
 {
     demo.panel = std::make_shared<UIPanel>("DemoPanel");
-    demo.panel->_position = {64.0f, 64.0f};
-    demo.panel->_size     = {340.0f, 200.0f};
-    demo.panel->_color    = {0.13f, 0.14f, 0.17f, 0.96f};
+    demo.panel->setPosition({64.0f, 64.0f});
+    demo.panel->setSize({340.0f, 200.0f});
+    demo.panel->setColor({0.13f, 0.14f, 0.17f, 0.96f});
 
     demo.title = std::make_shared<UIText>("Title");
-    demo.title->_position = {16.0f, 14.0f};
-    demo.title->_size     = {308.0f, 30.0f};
+    demo.title->setPosition({16.0f, 14.0f});
+    demo.title->setSize({308.0f, 30.0f});
     demo.title->_fontSize = 20;
-    demo.title->_text     = "YA Minimal GUI Host";
+    demo.title->setText("YA Minimal GUI Host");
     demo.title->_color    = {1.0f, 1.0f, 1.0f, 1.0f};
 
     demo.counter = std::make_shared<UIText>("Counter");
-    demo.counter->_position = {16.0f, 58.0f};
-    demo.counter->_size     = {308.0f, 26.0f};
+    demo.counter->setPosition({16.0f, 58.0f});
+    demo.counter->setSize({308.0f, 26.0f});
     demo.counter->_fontSize = 16;
-    demo.counter->_text     = "Clicked: 0";
+    demo.counter->setText("Clicked: 0");
     demo.counter->_color    = {0.85f, 0.87f, 0.90f, 1.0f};
 
     demo.button = std::make_shared<UIButton>("ClickButton");
-    demo.button->_position = {16.0f, 100.0f};
-    demo.button->_size     = {150.0f, 44.0f};
+    demo.button->setPosition({16.0f, 100.0f});
+    demo.button->setSize({150.0f, 44.0f});
     demo.button->_normalColor  = {0.22f, 0.48f, 0.86f, 1.0f};
     demo.button->_hoveredColor = {0.32f, 0.58f, 0.96f, 1.0f};
     demo.button->_pressedColor = {0.14f, 0.34f, 0.66f, 1.0f};
 
     demo.buttonLabel = std::make_shared<UIText>("ButtonLabel");
-    demo.buttonLabel->_size     = {150.0f, 44.0f};
+    demo.buttonLabel->setSize({150.0f, 44.0f});
     demo.buttonLabel->_fontSize = 16;
-    demo.buttonLabel->_text     = "Click me";
+    demo.buttonLabel->setText("Click me");
     demo.buttonLabel->_color    = {1.0f, 1.0f, 1.0f, 1.0f};
     demo.buttonLabel->_hAlign   = EWidgetAlignH::Center;
     demo.buttonLabel->_vAlign   = EWidgetAlignV::Center;
@@ -78,7 +78,7 @@ void buildDemoContent(WidgetTree& tree, FMinimalUIDemo& demo)
     auto clickCount = std::make_shared<uint32_t>(0);
     demo.button->_onClick = [counter = demo.counter, clickCount]() {
         ++(*clickCount);
-        counter->_text = std::format("Clicked: {}", *clickCount);
+        counter->setText(std::format("Clicked: {}", *clickCount));
         YA_CORE_INFO("Minimal host button clicked (count {})", *clickCount);
     };
 

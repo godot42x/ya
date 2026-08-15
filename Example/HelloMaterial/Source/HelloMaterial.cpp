@@ -78,33 +78,33 @@ void HelloMaterialModule::createUIDemo(ya::App& app, ya::Scene* scene)
 
     auto& registry = ya::UITypeRegistry::instance();
     auto  panel    = registry.createInstance("engine.panel");
-    panel->_position = {20.0f, 20.0f};
-    panel->_size     = {300.0f, 120.0f};
-    static_cast<ya::UIPanel*>(panel.get())->_color = {0.12f, 0.14f, 0.22f, 0.88f};
+    panel->setPosition({20.0f, 20.0f});
+    panel->setSize({300.0f, 120.0f});
+    static_cast<ya::UIPanel*>(panel.get())->setColor({0.12f, 0.14f, 0.22f, 0.88f});
     gameUIHost->addToWorld(*scene, panel);
 
     auto title = registry.createInstance("engine.text");
-    title->_position = {36.0f, 30.0f};
-    title->_size     = {260.0f, 26.0f};
-    static_cast<ya::UIText*>(title.get())->_text     = "Game UI (WidgetTree)";
+    title->setPosition({36.0f, 30.0f});
+    title->setSize({260.0f, 26.0f});
+    static_cast<ya::UIText*>(title.get())->setText("Game UI (WidgetTree)");
     static_cast<ya::UIText*>(title.get())->_fontSize = 16;
     static_cast<ya::UIText*>(title.get())->_color    = {1.0f, 0.85f, 0.4f, 1.0f};
     gameUIHost->addToWorld(*scene, title);
 
     auto label = registry.createInstance("engine.text");
-    label->_position = {36.0f, 66.0f};
-    label->_size     = {260.0f, 20.0f};
-    static_cast<ya::UIText*>(label.get())->_text     = "Click the button below";
+    label->setPosition({36.0f, 66.0f});
+    label->setSize({260.0f, 20.0f});
+    static_cast<ya::UIText*>(label.get())->setText("Click the button below");
     static_cast<ya::UIText*>(label.get())->_fontSize = 16;
     gameUIHost->addToWorld(*scene, label);
 
     auto button = registry.createInstance("engine.button");
-    button->_position = {36.0f, 96.0f};
-    button->_size     = {140.0f, 30.0f};
+    button->setPosition({36.0f, 96.0f});
+    button->setSize({140.0f, 30.0f});
     auto* buttonWidget = static_cast<ya::UIButton*>(button.get());
     buttonWidget->_onClick = [label]() {
         auto* text = static_cast<ya::UIText*>(label.get());
-        text->_text = (text->_text == "Button clicked!") ? "Click the button below" : "Button clicked!";
+        text->setText((text->getText() == "Button clicked!") ? "Click the button below" : "Button clicked!");
     };
     gameUIHost->addToWorld(*scene, button);
 }
