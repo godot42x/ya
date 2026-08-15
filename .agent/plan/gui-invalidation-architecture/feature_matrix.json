@@ -1,0 +1,187 @@
+{
+  "plan": "gui-invalidation-architecture",
+  "updated_at": "2026-08-15",
+  "active_task": "GI-001",
+  "legend": {
+    "planned": "已纳入计划但尚未开始",
+    "in_progress": "当前唯一执行切片",
+    "pass": "已有实现与验证证据",
+    "fail": "已有明确回归或验收失败",
+    "blocked": "受外部条件或前置决策阻塞",
+    "deferred": "只有启动条件满足才实施",
+    "rejected": "评估后明确不实施"
+  },
+  "tracks": [
+    {
+      "id": "research_and_plan",
+      "title": "跨框架调研与执行工件",
+      "items": [
+        {
+          "id": "framework_audit",
+          "status": "pass",
+          "notes": "audit.md 已校正 Slate/Flutter/React/Vue/Qt/Godot/ImGui 类比并补 WPF"
+        },
+        {
+          "id": "framework_lessons",
+          "status": "pass",
+          "notes": "framework-lessons.md 已定义吸收项、拒绝照搬项和阶段映射"
+        },
+        {
+          "id": "execution_harness",
+          "status": "pass",
+          "notes": "plan/todo/process/progress/feature_matrix/session_checklist 已补齐"
+        }
+      ]
+    },
+    {
+      "id": "phase0_baseline",
+      "title": "Phase 0 - Correctness baseline and observability",
+      "items": [
+        {
+          "id": "GI-001",
+          "status": "pass",
+          "notes": "EUIInvalidationReason enum + GuiPerfStats transition counters + ReactiveDiagnostics; tests distinguish paint/layout/no-op"
+        },
+        {
+          "id": "GI-002",
+          "status": "planned",
+          "notes": "build-context/resource-generation cache validity"
+        },
+        {
+          "id": "GI-003",
+          "status": "planned",
+          "notes": "paint-collected/persistent reactive edge lifecycle tests"
+        },
+        {
+          "id": "GI-004",
+          "status": "planned",
+          "notes": "Workbench stable/interaction performance baseline"
+        }
+      ]
+    },
+    {
+      "id": "phase1a_property_binding",
+      "title": "Phase 1A - Property-aware mutation and binding",
+      "items": [
+        {
+          "id": "property_aware_edges",
+          "status": "planned",
+          "notes": "same reactive supports mixed Paint/Layout consumers"
+        },
+        {
+          "id": "persistent_bindings",
+          "status": "planned",
+          "notes": "persistent binding lifetime separated from paint collection"
+        },
+        {
+          "id": "resolved_text_measure",
+          "status": "planned",
+          "notes": "AutoSize bound text/style measure and paint use same resolved values"
+        },
+        {
+          "id": "property_impact",
+          "status": "planned",
+          "notes": "minimal Paint/Layout/SubtreePaintContext contract"
+        },
+        {
+          "id": "workbench_migration",
+          "status": "planned",
+          "notes": "changed-only setters replace presenter volatile/backfill state"
+        },
+        {
+          "id": "inherited_context_audit",
+          "status": "planned",
+          "notes": "decide subtree invalidation versus context generation"
+        }
+      ]
+    },
+    {
+      "id": "phase1b_property_enforcement",
+      "title": "Phase 1B - Enforced property mutation contract",
+      "items": [
+        {
+          "id": "mutation_transaction",
+          "status": "planned",
+          "notes": "reflection/document writes aggregate highest impact at transaction end"
+        },
+        {
+          "id": "property_encapsulation",
+          "status": "planned",
+          "notes": "runtime mutable visual/layout fields become backing fields"
+        },
+        {
+          "id": "direct_write_gate",
+          "status": "planned",
+          "notes": "static grep/lint prevents new runtime direct writes"
+        }
+      ]
+    },
+    {
+      "id": "phase2_pipeline_cache",
+      "title": "Phase 2 - Unified paint pipeline and cache validity",
+      "items": [
+        {
+          "id": "paint_scope",
+          "status": "planned",
+          "notes": "RAII reactive paint collection"
+        },
+        {
+          "id": "paint_template",
+          "status": "planned",
+          "notes": "Container/ScrollViewport/SplitPane only customize child traversal"
+        },
+        {
+          "id": "context_generation",
+          "status": "planned",
+          "notes": "build context/resource generation participates in cache validity"
+        },
+        {
+          "id": "inherited_context",
+          "status": "planned",
+          "notes": "ancestor clip/visibility/context invalidates affected descendants"
+        },
+        {
+          "id": "convergence_gate",
+          "status": "planned",
+          "notes": "closure + Workbench + snapshot + GPU/offscreen parity"
+        }
+      ]
+    },
+    {
+      "id": "conditional_optimizations",
+      "title": "Profile/consumer gated optimizations",
+      "items": [
+        {
+          "id": "batching",
+          "status": "deferred",
+          "notes": "only when notify/dependent traversal is a measured hotspot"
+        },
+        {
+          "id": "subtree_cache",
+          "status": "deferred",
+          "notes": "only when clean subtree traversal is a measured hotspot"
+        },
+        {
+          "id": "keyed_reconciliation",
+          "status": "deferred",
+          "notes": "only after two real dynamic-list identity consumers"
+        },
+        {
+          "id": "dirty_region",
+          "status": "deferred",
+          "notes": "Qt-style region optimization is outside the current mainline"
+        },
+        {
+          "id": "immediate_convenience",
+          "status": "deferred",
+          "notes": "Dear ImGui-inspired tooling layer requires a separate plan"
+        },
+        {
+          "id": "composited_boundary",
+          "status": "rejected",
+          "notes": "Flutter-style composited repaint layer is not part of this plan"
+        }
+      ]
+    }
+  ]
+}

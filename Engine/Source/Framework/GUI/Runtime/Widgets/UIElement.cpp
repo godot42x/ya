@@ -184,10 +184,32 @@ void UIElement::clearDependencies()
     _dependencies.clear();
 }
 
-void UIElement::markLayoutDirty()
+void UIElement::markPaintDirty(EUIInvalidationReason reason)
 {
-    markPaintDirty();
+    if (_bPaintDirty) {
+        return; // already dirty: no transition to count
+    }
+    _bPaintDirty = true;
+    if (reason != EUIInvalidationReason::None) {
+        _lastInvalidationReason = reason;
+    }
     if (_tree) {
+        ++_tree->_paintDirtyTransitions;
+        if (reason != EUIInvalidationReason::None) {
+            _tree->_lastInvalidationReason = reason;
+        }
+    }
+}
+
+void UIElement::markLayoutDirty(EUIInvalidationReason reason)
+{
+    markPaintDirty(reason);
+    if (_tree) {
+        // Count only the clean->dirty layout edge (the tree may already be
+        // layout-dirty from an earlier mark in the same frame).
+        if (!_tree->_bLayoutDirty) {
+            ++_tree->_layoutDirtyTransitions;
+        }
         _tree->invalidateLayout();
     }
 }

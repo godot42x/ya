@@ -136,6 +136,24 @@ struct WidgetEventContext
     EWidgetEventRoutePhase phase = EWidgetEventRoutePhase::Target;
 };
 
+/// Why a widget was invalidated (diagnostics, GI-001). An enum, not a string,
+/// so the hot path never allocates: names resolve only when a trace is dumped.
+/// Recorded on the widget (_lastInvalidationReason) and aggregated by the
+/// owning tree into transition counters.
+enum class EUIInvalidationReason : uint8_t
+{
+    None,                  // no invalidation observed (clean frame)
+    PaintProperty,         // transient/visual property write (e.g. VisualFlag)
+    LayoutProperty,        // layout-affecting property write
+    ReactivePaint,         // ReactiveBase::notifyDependents at Paint granularity
+    ReactiveLayout,        // ReactiveBase::notifyDependents at Layout granularity
+    ChildStructure,        // attach/detach/reparent -> tree layout invalidation
+    GeometryChanged,       // setLayoutRect detected a rect move/resize
+    BuildContextChanged,   // build context (scale/offset) cache invalidation
+    InheritedPaintContext, // inherited paint context (clip/visibility) invalidation
+    Volatile,              // _bVolatile per-frame rebuild (implicit, not a transition)
+};
+
 struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
 {
     YA_REFLECT_BEGIN(UIElement)
@@ -323,17 +341,20 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     // === Reactive dependency tracking ===
     /// Mark this widget paint-dirty (called by ReactiveBase::notifyDependents).
     /// The next buildSnapshot re-runs this widget's paintSelf instead of
-    /// reusing its cached draw-item segment.
-    void markPaintDirty() { _bPaintDirty = true; }
+    /// reusing its cached draw-item segment. `reason` records the invalidation
+    /// origin for diagnostics, but only on the 0->1 dirty transition.
+    void markPaintDirty(EUIInvalidationReason reason = EUIInvalidationReason::None);
     [[nodiscard]] bool isPaintDirty() const { return _bPaintDirty; }
     void clearPaintDirty() { _bPaintDirty = false; }
+    /// Most recent invalidation reason recorded on this widget (diagnostics).
+    [[nodiscard]] EUIInvalidationReason getLastInvalidationReason() const { return _lastInvalidationReason; }
     /// Mark this widget and its whole subtree paint-dirty (Slate dirty-subtree
     /// semantics): used when a change affects the subtree as a batch instead of
     /// a single widget, e.g. a presenter re-selecting every row in a list.
     void invalidateSubtree();
     /// Mark this widget layout-dirty: paint-dirty plus an invalidation of the
     /// owning tree's layout (measure + arrange). Implemented in .cpp.
-    void markLayoutDirty();
+    void markLayoutDirty(EUIInvalidationReason reason = EUIInvalidationReason::None);
     /// Record `ref` as a dependency of this widget (called by Reactive::get
     /// during the paint walk). Cleared before a dirty widget re-runs its paint.
     void trackDependency(ReactiveBase* ref) { _dependencies.insert(ref); }
@@ -397,7 +418,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
         Rect2D clamped = rect;
         clamped.extent = glm::max(clamped.extent, glm::vec2(0.0f));
         if (clamped.pos != _layoutRect.pos || clamped.extent != _layoutRect.extent) {
-            markPaintDirty();
+            markPaintDirty(EUIInvalidationReason::GeometryChanged);
         }
         _layoutRect = clamped;
     }
@@ -438,6 +459,10 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// Paint-dirty flag (reactive invalidation): set by ReactiveBase::notify-
     /// Dependents, cleared after this widget re-runs its paintSelf.
     bool _bPaintDirty = false;
+    /// Most recent invalidation reason recorded on this widget (diagnostics).
+    /// Updated on the 0->1 dirty transition; cleared alongside _bPaintDirty
+    /// after a rebuild so a clean frame reads back as None.
+    EUIInvalidationReason _lastInvalidationReason = EUIInvalidationReason::None;
     /// Reactive refs this widget read during its last paint walk. Cleared
     /// before a dirty widget re-runs its paint.
     std::unordered_set<ReactiveBase*> _dependencies;
@@ -465,7 +490,7 @@ public:
     {
         if (_value != value) {
             _value = value;
-            _owner.markPaintDirty();
+            _owner.markPaintDirty(EUIInvalidationReason::PaintProperty);
         }
         return *this;
     }

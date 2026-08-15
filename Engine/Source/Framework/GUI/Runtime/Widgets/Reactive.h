@@ -38,6 +38,17 @@ YA_GUI_API void pushPaintWidget(UIElement* widget);
 YA_GUI_API void popPaintWidget();
 YA_GUI_API UIElement* currentPaintWidget();
 
+/// Process-wide diagnostics for reactive invalidation (GI-001). Lightweight
+/// counters (no string allocation on the hot path) used to measure notify and
+/// dependent-traversal cost; the Phase 3 batching decision reads these.
+struct ReactiveDiagnostics
+{
+    uint64_t notifyCalls     = 0; // notifyDependents() invocations
+    uint64_t dependentVisits = 0; // total dependents walked by notifyDependents
+};
+
+YA_GUI_API ReactiveDiagnostics getReactiveDiagnostics();
+
 /// Type-erased base so a widget's dependency list can hold heterogeneous
 /// Reactive<T> instances. Dependent bookkeeping lives here; value storage and
 /// the typed accessors live in Reactive<T>.

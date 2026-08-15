@@ -8,6 +8,7 @@ namespace ya
 namespace
 {
 std::vector<UIElement*> s_paintStack;
+ReactiveDiagnostics     s_diagnostics;
 }
 
 void pushPaintWidget(UIElement* widget)
@@ -25,6 +26,11 @@ UIElement* currentPaintWidget()
     return s_paintStack.empty() ? nullptr : s_paintStack.back();
 }
 
+ReactiveDiagnostics getReactiveDiagnostics()
+{
+    return s_diagnostics;
+}
+
 ReactiveBase::~ReactiveBase()
 {
     // Sever every widget that read this ref. A widget may outlive the ref
@@ -37,12 +43,14 @@ ReactiveBase::~ReactiveBase()
 
 void ReactiveBase::notifyDependents()
 {
+    ++s_diagnostics.notifyCalls;
+    s_diagnostics.dependentVisits += _dependents.size();
     for (UIElement* widget : _dependents) {
         if (_dirtyLevel == EDirtyLevel::Paint) {
-            widget->markPaintDirty();
+            widget->markPaintDirty(EUIInvalidationReason::ReactivePaint);
         }
         else {
-            widget->markLayoutDirty();
+            widget->markLayoutDirty(EUIInvalidationReason::ReactiveLayout);
         }
     }
 }

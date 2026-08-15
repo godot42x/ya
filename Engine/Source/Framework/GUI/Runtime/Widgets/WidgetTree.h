@@ -71,6 +71,12 @@ struct GuiPerfStats
     uint32_t paintedWidgets  = 0;    // widgets that participated in the paint walk
     uint32_t rebuiltWidgets  = 0;    // widgets that re-ran paintSelf (dirty)
     uint32_t drawItems       = 0;    // draw items in the resulting snapshot
+    // Invalidation diagnostics (GI-001): cumulative clean->dirty transition
+    // counts observed by this tree. A "transition" is a 0->1 dirty edge, so
+    // repeated marks of an already-dirty widget are not double-counted.
+    uint64_t paintDirtyTransitions  = 0;
+    uint64_t layoutDirtyTransitions = 0;
+    uint64_t cacheInvalidations    = 0; // build/inherited context cache resets (Phase 2)
 };
 
 /// Stable diagnostic record for the most recently resolved event route.
@@ -158,6 +164,9 @@ struct YA_GUI_API WidgetTree final
 
     /// Per-frame counters from the most recent buildSnapshot() call.
     [[nodiscard]] const GuiPerfStats& getPerfStats() const { return _perfStats; }
+    /// Most recent invalidation reason observed by this tree (diagnostics).
+    /// Updated on each dirty transition; None until the first invalidation.
+    [[nodiscard]] EUIInvalidationReason getLastInvalidationReason() const { return _lastInvalidationReason; }
 
     /// Explicit event dispatch. Pointer routes use preview (root -> parent),
     /// target, then bubble (parent -> root); Pass routes continue to lower
@@ -279,6 +288,15 @@ struct YA_GUI_API WidgetTree final
     Extent2D      _logicalExtent{};
     bool          _bLayoutDirty = true;
     GuiPerfStats  _perfStats;
+
+    // Invalidation diagnostics (GI-001): cumulative dirty-transition counters
+    // since tree construction, plus the most recent invalidation reason.
+    // Snapshot into _perfStats at buildSnapshot for per-frame comparison.
+    // Updated by UIElement::markPaintDirty/markLayoutDirty (friend access).
+    uint64_t              _paintDirtyTransitions  = 0;
+    uint64_t              _layoutDirtyTransitions = 0;
+    uint64_t              _cacheInvalidations    = 0;
+    EUIInvalidationReason _lastInvalidationReason = EUIInvalidationReason::None;
 
     /// Double-buffered per-widget draw-item caches for incremental paint:
     /// index [_cacheIndex] is read (previous frame), [_cacheIndex ^ 1] is

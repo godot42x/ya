@@ -518,4 +518,74 @@ TEST(UIFrameSnapshotTest, TransientHoverAndFocusRepaintButton)
     EXPECT_EQ(snap.items[0].color, btn->_focusedColor);
 }
 
+TEST(UIFrameSnapshotTest, ReactivePaintMutationRecordsReasonAndTransition)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       bound = std::make_shared<UIText>("Bound");
+    tree.attachToLayer(WidgetTree::ELayer::Content, bound);
+
+    auto textRef = std::make_shared<Reactive<std::string>>("hello");
+    bound->bindText(textRef);
+
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start (lays out)
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    const uint64_t paintBefore  = tree.getPerfStats().paintDirtyTransitions;
+    const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
+
+    textRef->set("world"); // Paint-level invalidation
+
+    EXPECT_EQ(tree.getLastInvalidationReason(), EUIInvalidationReason::ReactivePaint);
+    EXPECT_EQ(bound->getLastInvalidationReason(), EUIInvalidationReason::ReactivePaint);
+
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore + 1);
+    EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore);
+}
+
+TEST(UIFrameSnapshotTest, ReactiveLayoutMutationRecordsReasonAndTransition)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       probe = std::make_shared<ReactiveListProbeWidget>("ListProbe");
+    tree.attachToLayer(WidgetTree::ELayer::Content, probe);
+
+    // Layout-granularity reactive: a write invalidates the tree's layout.
+    // (SplitPane would also be Layout-level, but it overrides paint() and so
+    // does not yet clear _bPaintDirty — that is the Phase 2 unification work,
+    // not part of this diagnostics baseline.)
+    auto list = std::make_shared<ReactiveList<int>>();
+    list->setDirtyLevel(ReactiveBase::EDirtyLevel::Layout);
+    probe->list = list.get();
+
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start (lays out)
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
+
+    list->push(1); // Layout-level invalidation
+
+    EXPECT_EQ(tree.getLastInvalidationReason(), EUIInvalidationReason::ReactiveLayout);
+
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore + 1);
+}
+
+TEST(UIFrameSnapshotTest, SameValueReactiveSetSkipsInvalidation)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       bound = std::make_shared<UIText>("Bound");
+    tree.attachToLayer(WidgetTree::ELayer::Content, bound);
+
+    auto textRef = std::make_shared<Reactive<std::string>>("hello");
+    bound->bindText(textRef);
+
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    const uint64_t paintBefore = tree.getPerfStats().paintDirtyTransitions;
+
+    textRef->set("hello"); // same value: no notify, no transition
+
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore);
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+}
+
 } // namespace ya

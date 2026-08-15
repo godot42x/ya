@@ -440,6 +440,13 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
     UIFrameSnapshot snapshot = builder.build(_logicalExtent);
     _perfStats.drawItems      = static_cast<uint32_t>(snapshot.items.size());
 
+    // Invalidation diagnostics: snapshot the cumulative dirty-transition
+    // counters so callers can compare frames (and later phases can measure
+    // notify/dirty-traversal deltas against the Phase 0 baseline).
+    _perfStats.paintDirtyTransitions  = _paintDirtyTransitions;
+    _perfStats.layoutDirtyTransitions = _layoutDirtyTransitions;
+    _perfStats.cacheInvalidations     = _cacheInvalidations;
+
     // Bridge into the engine-wide perf metrics (aggregated per frame; the
     // per-tree GuiPerfStats stays the per-instance structural view).
     using namespace ya::literals;
