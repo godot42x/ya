@@ -147,7 +147,7 @@
     （`UIText::_fontSize/_color/_hAlign/_vAlign`、`UIPanel::_image/_bNineSlice/_nineSliceBorder`、
     `UIButton` 颜色）已登记例外清单，待其有 runtime 写路径再迁移。
 
-- [ ] `GI-203` Direct-write 静态门禁
+- [x] `GI-203` Direct-write 静态门禁
   - 依赖：GI-202
   - 修改：增加简单 grep/lint，禁止 GUI owner 外新增 runtime direct write。
   - 验收：门禁能捕获故意添加的违规赋值；不误报初始化/serializer 白名单。

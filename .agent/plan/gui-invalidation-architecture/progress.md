@@ -524,3 +524,40 @@ GI-202 按控件族拆多个小提交；本轮完成**基类 `_position/_size/_v
 - `GI-202`（切片 3，可选收尾）：`UIButton` 颜色字段 + `UIText::_fontSize/_color` 的封装
   决策（这些当前是 authoring-only，若未来有 runtime 写路径再迁移）；或进入 Phase 1B 后续
   切片（`GI-203` 及之后，取决于 todo 顺序）。
+
+## 2026-08-16 — GI-202 收尾 + GI-203 完成：Example 迁移 + Direct-write 门禁
+
+### GI-202 遗漏收尾（`4bb91e8e`）
+
+- 切片 1/2 只构建了 `ya-engine` 和 closure test，编译器驱动没覆盖 Example 外部消费者；
+  `Example/HelloMaterial`、`GUIWorkbench`（WorkbenchDemoPages）、`GUIFrameworkSmoke` 里
+  60+ 处 `->_position/_size/_text` 直接写（现在 protected）导致这三个 target 编译失败；
+- 脚本迁移：`_position/_size/_visibility/_text` 写→setter、读→getter；UIPanel `_color`
+  →setColor（UIText `_color` 保持 public 直接写）；修复脚本误触的 UITextField `getText`
+  （UITextField 不继承 UIText，`_text` 仍 public、无 getText，改回 `->_text` 读）；
+- 三个 Example target 全部构建通过（exit 0）。
+
+### GI-203 完成：Direct-write 静态门禁（`Script/ya_gui_write_guard.py`）
+
+- 门禁规则：GUI owner（`Framework/GUI`）外，禁止 `->_position/_size/_visibility/_text`
+  直接赋值；用 setter 替代；
+- 白名单 / 排除：
+  - GUI owner 目录（派生类 paint/layout/measure/构造直接访问）；
+  - `Framework/ECS` 目录（`TransformComponent::_position` 是 glm::vec3，与 GUI 无关，
+    且 ya_module_lint 禁止 ECS 依赖 GUI）；
+  - `//` 行注释（死代码不触发）；
+- 验证：
+  - 干净仓库返回 0（ok）；
+  - 故意添加 `->_size = ` 违规 → 返回 1 且精确报文件:行；
+  - 注释 / ECS 同名 `_position` 不误报（3 处初始误报已消除）；
+- `_color` 因 UIText(public)/UIPanel(protected) 歧义未纳入，待 UIText::_color 封装后补；
+- 门禁是「过渡门禁」：编译器 C2248 是硬门禁，grep 提供构建前快速反馈（plan §迁移门禁）。
+
+### 验证
+
+- `xmake b GUIWorkbench` / `HelloMaterial` / `GUIFrameworkSmoke` 均 exit 0；
+- `python3 Script/ya_gui_write_guard.py` 干净仓库返回 0。
+
+### 下一接力点
+
+- **Phase 1B 全部完成**（GI-201~203），进入 Phase 2：`GI-301`（Paint scope RAII）。

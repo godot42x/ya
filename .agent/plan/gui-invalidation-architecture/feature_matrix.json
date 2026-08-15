@@ -1,7 +1,7 @@
 {
   "plan": "gui-invalidation-architecture",
   "updated_at": "2026-08-16",
-  "active_task": "GI-202",
+  "active_task": "GI-301",
   "legend": {
     "planned": "已纳入计划但尚未开始",
     "in_progress": "当前唯一执行切片",
@@ -111,8 +111,8 @@
         },
         {
           "id": "direct_write_gate",
-          "status": "planned",
-          "notes": "static grep/lint prevents new runtime direct writes"
+          "status": "pass",
+          "notes": "Script/ya_gui_write_guard.py forbids ->_position/_size/_visibility/_text writes outside GUI owner; excludes comments, ECS (same-named fields), GUI owner; captures deliberate violation, no false positive on init/serializer"
         }
       ]
     },
