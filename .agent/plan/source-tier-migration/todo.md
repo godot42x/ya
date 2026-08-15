@@ -52,5 +52,5 @@
 
 ## 待拍板（不阻塞主线，后续批次）
 
-- [ ] `Framework/Hierarchy` 归宿：Framework/Scene 还是 Framework/Core
-- [ ] ECS 内部：Systems 内 Lua/JSScriptingSystem 拆归 Scripting（需先建独立 ya-scripting target，较大）
+- [x] `Framework/Hierarchy` 归宿：保持独立模块（GUI/Scene3D 共享，不归 Scene/Core，已落 charter）
+- [x] 脚本系统归属：经依赖审计维持现状（脚本运行时是 ECS System 留在 ECS/Systems，ScriptApiRegistry 留在 Core；拆分收益 < 成本，已记录评估结论于 charter 4.1）

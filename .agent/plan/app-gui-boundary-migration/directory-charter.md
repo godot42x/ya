@@ -23,16 +23,16 @@
 
 ```text
 Framework/           可复用能力层（引擎无关）
-  Core/              底座：日志/反射/序列化/容器/数学/线程/平台/VFS
+  Core/              底座：日志/反射/序列化/容器/数学/线程/平台/VFS + 能力注册面(ScriptApiRegistry)
   RHI/               底层图形抽象：Vulkan/OpenGL 后端（独立于 Render，平级）
   App/               无窗口主链：Kernel + Control + Module
   GUI/               retain UI + 窗口宿主：Runtime + Host + Tooling
+  Hierarchy/         renderer-independent 场景树基类(Node)，被 GUI/Scene3D/Editor 共享
   Render/            3D 渲染运行时：RenderGraph / Render3D / Adapters（依赖 RHI）
-  Scripting/         脚本运行时：Lua/sol2 绑定 + 脚本系统
   Resource/          资源加载：Mesh / Texture / Material / Asset
   Scene/             场景图与场景生命周期：Core / Runtime / Serialization / Scene3D
   Physics/           物理模拟
-  ECS/               实体组件系统：Core / Systems / Linkage / Components
+  ECS/               实体组件系统：Core / Systems(含脚本运行时 Lua/JS) / Linkage / Components
 Applications/        应用形态层（可执行壳）
   GameRuntime/
   GameEditor/
@@ -45,16 +45,16 @@ Applications/        应用形态层（可执行壳）
 
 允许职责：
 
-- Core：日志、反射、序列化、容器、数学、线程、平台、VFS、字符串；
+- Core：日志、反射、序列化、容器、数学、线程、平台、VFS、字符串；引擎能力注册面（ScriptApiRegistry，脚本 / 自动化 RPC / agent 的统一入口，纯 JSON 接口不依赖 ECS/Scene 实现）；
 - RHI：图形 API 抽象、shader 契约、backend（Vulkan/OpenGL）；只接受最小 present bridge，不依赖完整窗口对象；
 - App：AppKernel 唯一主循环、无窗口 module lifecycle、service registry、control plane；
 - GUI：widget tree、layout/slot、event route、snapshot、draw2d、compose、resource、window host、native window manager、headless host；
+- Hierarchy：renderer-independent 场景树基类 Node，被 GUI widgets / Scene3D / Editor 共享（只依赖 Core，不得依赖 GUI/Scene/ECS）；
 - Render：RenderGraph、Render3D、ECS adapters（3D 渲染运行时，DCC/查看器也复用）；
-- Scripting：脚本运行时与绑定（Lua/sol2）及脚本系统；
 - Resource：Mesh/Texture/Material/Asset 的加载、resolve、dirty queue；
 - Scene：场景图、scene lifecycle、serialization、scene3D；
 - Physics：物理模拟；
-- ECS：实体组件系统核心、通用 systems（transform/animation/camera 等）、component linkage、通用组件。
+- ECS：实体组件系统核心、通用 systems（transform/animation/camera 等）、脚本运行时（LuaScriptingSystem / JSScriptingSystem，作为 ECS System 实现）、component linkage、通用组件。
 
 禁止职责：
 
@@ -89,17 +89,22 @@ Applications/        应用形态层（可执行壳）
 | Framework/Game/Scene | Framework/Scene | 通用场景 |
 | Framework/Game/Physics | Framework/Physics | 通用物理 |
 | Framework/Game/Gameplay/ECS/Core | Framework/ECS/Core | ECS 核心 |
-| Framework/Game/Gameplay/Systems | Framework/ECS/Systems | 通用系统（含脚本系统，待拆） |
+| Framework/Game/Gameplay/Systems | Framework/ECS/Systems | 通用系统 + 脚本运行时（Lua/JS） |
 | Framework/Game/Gameplay/Linkage | Framework/ECS/Linkage | 组件联动 |
 | Applications/{GameRuntime,GameEditor} | 保留 | |
-| Framework/Hierarchy | 保留原位（归宿待定：Scene 或 Core） | renderer-independent scene-tree base |
+| Framework/Hierarchy | 保留独立模块 | renderer-independent scene-tree base，被 GUI/Scene3D 共享，不归 Scene/Core |
 | Example/GUIWorkbench | 保留 | 未来上提 Applications/GuiWorkbench |
 
-剩余非阻塞项（另立批次）：
+## 4.1 脚本能力的归属结论（2026-08-15 评估）
 
-- `Gameplay/` include 拼写 -> `ECS/`（38 处消费者，语义收口）
-- `Framework/ECS/Systems` 内 Lua/JSScriptingSystem 拆归 `Framework/Scripting`
-- `Framework/Hierarchy` 归宿拍板
+原计划把 `ECS/Systems` 内脚本系统拆归独立 `Framework/Scripting` 模块。经依赖审计后**维持现状**，理由：
+
+1. `LuaScriptingSystem` / `JSScriptingSystem` 继承 `ISystem`/`GameInstanceSystem`，本质就是 ECS System，放在 `ECS/Systems` 语义正确；
+2. `LuaScriptingSystem.cpp` 依赖 `ECS/Systems/Components/{Camera,PointLight}Component.h` 与 `Scene3D/TransformComponent.h`——它是"把引擎组件绑定给 Lua 的应用层系统"，不是可独立成层的"脚本基础设施"；强行拆会让 `Scripting` 反向依赖 `ECS/Systems`，层次反而更乱；
+3. `ScriptApiRegistry`（能力注册面）是纯 JSON 接口、不依赖 ECS/Scene 实现，留在 `Core/Scripting` 合理；其 ECS/Scene 注册实现 `registerCoreScriptApis` 已在 `Applications/GameRuntime/ScriptApiCore.cpp`（app-form 组装层），依赖方向正确；
+4. 拆分成本（约 30 文件 + target 拆分 + 宏改动 + 消费者迁移）与回归风险（脚本 / 自动化 RPC 为核心链路）明显高于收益（仅让 `ya-ecs-systems` 去掉 sol2/quickjs/lua 三个依赖）。
+
+若未来确需"ECS 不依赖脚本运行时"的裁剪能力，再按 `Scripting/{Core,Systems,Components}` 结构独立成 `ya-scripting` target（依赖 `ya-ecs-core` + `ya-ecs-systems` + `ya-scene-*`）。
 
 ## 5. 命名规则
 
@@ -107,7 +112,7 @@ Applications/        应用形态层（可执行壳）
 
 - Framework：引擎无关可复用能力层；
 - Applications：应用形态层；
-- Core/RHI/App/GUI/Render/Scripting/Resource/Scene/Physics/ECS：Framework 子模块。
+- Core/RHI/App/GUI/Hierarchy/Render/Resource/Scene/Physics/ECS：Framework 子模块。
 
 禁用词 / 禁止模式：
 
