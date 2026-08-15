@@ -368,3 +368,50 @@ GI-102（persistent binding 迁移）与 GI-101 是同一改动的不可拆分�
 ### 下一接力点
 
 - `GI-106`：Inherited paint-input audit（决定 subtree invalidation vs context generation）。
+
+## 2026-08-15 — GI-106 完成：Inherited paint-input audit
+
+纯文档审计（无代码改动）。盘点所有会改变 descendants 缓存复用正确性的 inherited paint input，
+并拍板 `invalidateSubtree()` 归宿。
+
+### Inherited paint-input 盘点表
+
+| Input | 影响 descendants 缓存? | 当前失效机制 | 状态 |
+|---|---|---|---|
+| clip（`clipsChildren` toggle） | 是（descendant segment 的 resolved clip rect） | `invalidateSubtree()`（SubtreePaintContext，GI-104 修正） | ✓ 正确 |
+| clip（`_layoutRect` 变化） | 是（clip rect 变化） | 间接：layout re-arrange → child `setLayoutRect` → `markPaintDirty` | ⚠ 边界隐患（Phase 2 修，见下） |
+| visibility（Hidden/Collapsed） | 隐式（ancestor 不可见 → paint 提前 return 不递归） | `setVisibility()`（SubtreePaintContext，GI-105） | ✓ 保守正确 |
+| transform（`_pivot`/rotation/scale） | 未实现（`_pivot` 是 reserved 字段） | 无 | N/A |
+| opacity/theme | 不存在（`FWidgetStyle` 是 per-widget bind，非 inherited） | 无 | N/A |
+| build context（uiScale/offset/generation） | 是（全局 target-pixel + 纹理） | GI-002：`buildSnapshot` 开头比较后清两份缓存 | ✓ 正确 |
+| resource resolver | 是（纹理） | GI-002：host 经 `generation` 声明失效 | ✓ 正确 |
+
+### `invalidateSubtree()` 归宿决策：保留
+
+1. clip 变化是 **per-widget** 的 inherited context 变化，不是全局 build context，**不能用 generation 替代**
+   （generation 是全局的，一次变化清全树缓存，对单个 subtree clip 变化是过度失效）；
+2. 语义清晰：`invalidateSubtree` = 「我的 inherited paint context 变了，子树需要重画以生成
+   带新 context 的 segment」；
+3. 无需重命名，当前名字准确表达意图。
+
+### 审计发现：Phase 2 要修的边界问题
+
+`UIContainer::paint()` / `UIScrollViewport::paint()` / `UISplitPane::paint()` 覆盖了 base paint，
+**无条件重画自己**（`paintSelf` 不检查 dirty），children 则走 base `UIElement::paint()` 的 cache
+复用。由此产生一个边界：
+
+> container 的 `_layoutRect` 变（clip rect 变）但某个 child 的 rect 不变（如 fixed-size 靠左
+> child）→ child 仍 `reuseCachedItems`，复用**旧 clip rect** 的 segment → 新 clip 区域外的内容
+> 丢失/错误。
+
+这是 plan.md 1.2 记录的「host 覆盖完整 paint 绕过 cache 流程」的同类问题，归属 Phase 2
+「统一 paint template」（GI-302）。当前 layout 路径下大多被「re-arrange 会标脏 child rect」
+间接覆盖，但 fixed-size child 的边界仍存在。GI-106 只审计，不修；记录为 Phase 2 的入口证据。
+
+### 验证
+
+- 文档任务，无代码改动；审计表写入本节，`invalidateSubtree` 决策写入 charter 层（保留）。
+
+### 下一接力点
+
+- `GI-201`（Phase 1B）：Authoring/reflection mutation transaction。

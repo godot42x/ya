@@ -1,7 +1,7 @@
 {
   "plan": "gui-invalidation-architecture",
   "updated_at": "2026-08-15",
-  "active_task": "GI-106",
+  "active_task": "GI-201",
   "legend": {
     "planned": "已纳入计划但尚未开始",
     "in_progress": "当前唯一执行切片",
@@ -90,8 +90,8 @@
         },
         {
           "id": "inherited_context_audit",
-          "status": "planned",
-          "notes": "decide subtree invalidation versus context generation"
+          "status": "pass",
+          "notes": "invalidateSubtree KEPT (clip is per-widget, not global generation); audit table: clip/visibility/build-context/resolver covered; transform/opacity N/A; Phase 2 boundary (container layoutRect vs fixed child clip reuse) recorded"
         }
       ]
     },

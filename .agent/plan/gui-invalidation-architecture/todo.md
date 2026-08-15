@@ -6,7 +6,7 @@
 
 ## 当前切片
 
-当前激活切片：`GI-106 Inherited paint-input audit`
+当前激活切片：`GI-201 Authoring/reflection mutation transaction`
 
 执行规则：
 
@@ -115,7 +115,7 @@
     - Editor scenario/golden parity 通过。
   - 提交：`[gui/workbench] route presentation writes through properties`
 
-- [ ] `GI-106` Inherited paint-input audit
+- [x] `GI-106` Inherited paint-input audit
   - 依赖：GI-002、GI-104
   - 修改：盘点 clip、visibility、transform、opacity/theme、build context、resource resolver。
   - 验收：
