@@ -161,7 +161,7 @@ void UIElement::paint(UIFrameBuilder& builder)
     }
     builder.countWidget();
     pushPaintWidget(this);
-    if (_bPaintDirty || !builder.hasCachedItems(this)) {
+    if (_bVolatile || _bPaintDirty || !builder.hasCachedItems(this)) {
         clearDependencies();
         builder.countRebuild();
         const size_t start = builder.getItemCount();
@@ -189,6 +189,14 @@ void UIElement::markLayoutDirty()
     markPaintDirty();
     if (_tree) {
         _tree->invalidateLayout();
+    }
+}
+
+void UIElement::invalidateSubtree()
+{
+    markPaintDirty();
+    for (const auto& child : _children) {
+        child->invalidateSubtree();
     }
 }
 

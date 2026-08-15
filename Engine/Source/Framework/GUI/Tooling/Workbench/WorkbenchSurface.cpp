@@ -400,6 +400,7 @@ void FWorkbenchSurface::buildCanvas(ya::WidgetTree& tree, ya::UIElement& parent)
     tree.attach(*_canvasPanel, header);
 
     _highlightPanel = std::make_shared<ya::UIPanel>("SelectionHighlight");
+    _highlightPanel->_bVolatile = true; // presenter syncs size/pos/color each frame
     _highlightPanel->_anchorMin = {0.5f, 0.5f};
     _highlightPanel->_anchorMax = {0.5f, 0.5f};
     _highlightPanel->_position  = {-70.0f, -45.0f};
@@ -408,6 +409,7 @@ void FWorkbenchSurface::buildCanvas(ya::WidgetTree& tree, ya::UIElement& parent)
     tree.attach(*_canvasPanel, _highlightPanel);
 
     _previewName = std::make_shared<ya::UIText>("PreviewName");
+    _previewName->_bVolatile = true; // presenter syncs the name each frame
     _previewName->_position = {0.0f, 0.0f};
     _previewName->_size     = {400.0f, 24.0f};
     _previewName->_fontSize = 15;
@@ -441,6 +443,7 @@ void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& pare
     tree.attach(*form, nameLabel);
 
     _nameField = std::make_shared<ya::UITextField>("NameField");
+    _nameField->_bVolatile = true; // presenter syncs the text each frame (when not focused)
     _nameField->_size     = {220.0f, 26.0f};
     _nameField->_fontSize = 14;
     _nameField->_onCommit = [this](const std::string& text) {
@@ -470,6 +473,7 @@ void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& pare
     tree.attach(*form, _colorCycle);
 
     _colorValue = std::make_shared<ya::UIText>("ColorValue");
+    _colorValue->_bVolatile = true; // presenter syncs the value each frame
     _colorValue->_size     = {220.0f, 14.0f};
     _colorValue->_fontSize = 12;
     _colorValue->_text     = "";
@@ -499,6 +503,7 @@ void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& pare
     tree.attach(*sizeRow, _sizeShrink);
 
     _sizeValue = std::make_shared<ya::UIText>("SizeValue");
+    _sizeValue->_bVolatile = true; // presenter syncs the value each frame
     _sizeValue->_size     = {220.0f, 14.0f};
     _sizeValue->_fontSize = 12;
     _sizeValue->_text     = "";
@@ -525,6 +530,9 @@ void FWorkbenchSurface::rebuildItemRows()
         auto row = std::make_shared<ya::UISelectableRow>("Row_" + item.id);
         row->_itemId = item.id;
         row->_size   = {240.0f, 22.0f};
+        // The presenter copies _bSelected into the row every frame; mark it
+        // volatile so that copy re-paints without per-row dirty bookkeeping.
+        row->_bVolatile = true;
         row->_onSelect = [this](const std::string& id) {
             workspace.select(id);
             setCommandResult("List: selected '" + id + "'");
@@ -549,6 +557,9 @@ void FWorkbenchSurface::rebuildItemRows()
         auto label = std::make_shared<ya::UIText>("RowLabel_" + item.id);
         label->_size     = {240.0f, 22.0f};
         label->_fontSize = 13;
+        // Presenter copies the label text every frame (visibility suffix);
+        // volatile keeps the copy visible without per-row dirty bookkeeping.
+        label->_bVolatile = true;
         label->_text     = item.bVisible ? item.name : item.name + " (hidden)";
         label->_color    = {0.88f, 0.90f, 0.94f, 1.0f};
         label->_vAlign   = ya::EWidgetAlignV::Center;

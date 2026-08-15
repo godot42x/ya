@@ -199,6 +199,14 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// rect (anchor layout) or when a parent assigns an auto-sized slot.
     bool _bAutoSize = false;
 
+    /// Volatile (Slate-style): re-run this widget's paintSelf every frame,
+    /// bypassing the draw-item cache, regardless of dirty state. The
+    /// consistency backstop for widgets whose presentation state is written
+    /// from outside the invalidation chain (e.g. a presenter that copies
+    /// model state into widget fields each frame). Costs the incremental-reuse
+    /// win for this widget; keeps data/display consistency the invariant.
+    bool _bVolatile = false;
+
     /// Layout cache: final rect in tree-local logical pixels, computed by the
     /// layout pass. Not serialized.
     Rect2D _layoutRect{};
@@ -319,6 +327,10 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     void markPaintDirty() { _bPaintDirty = true; }
     [[nodiscard]] bool isPaintDirty() const { return _bPaintDirty; }
     void clearPaintDirty() { _bPaintDirty = false; }
+    /// Mark this widget and its whole subtree paint-dirty (Slate dirty-subtree
+    /// semantics): used when a change affects the subtree as a batch instead of
+    /// a single widget, e.g. a presenter re-selecting every row in a list.
+    void invalidateSubtree();
     /// Mark this widget layout-dirty: paint-dirty plus an invalidation of the
     /// owning tree's layout (measure + arrange). Implemented in .cpp.
     void markLayoutDirty();
