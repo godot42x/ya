@@ -27,9 +27,6 @@
 
 ## 当前下一刀
 
-M0-M3 已全部完成，「响应式数据绑定 + 性能管线」主线收口。下一刀进入 P0 后续（独立刀，见 plan/feature_matrix）：
+**TreeView**（P0 最后一块砖）：hierarchy 面板的树形列表 + 选中态 + 展开折叠。在已就位的 `ReactiveList`（数据源）+ `UIStyleSet`（样式）之上做；渲染走 `SelectableRow` 或新控件，数据驱动走 `ReactiveList`。
 
-1. **Styles/StyleSet**：布局/样式分离，数据驱动样式（参考 Vue SFC 三段式 / React CSS-in-JS / EUI-NEO Rect 样式盒）。
-2. **TreeView**：hierarchy 面板第一块砖，在响应式（ReactiveList）+ 样式之上做。
-
-注意：PerfState 的 `domainKey` 不参与索引（`_samples` 的 key 是 sampleKey），多树区分需把 tree 标识编码进 sampleKey；当前单树场景用固定 `gui.tree.*` key 聚合即可。
+注意（样式依赖收集的坑，已解决）：paint 属性的绑定必须走「paint 时 get() 收集」，不能走 bind 时显式注册——后者会被基类 paint 重跑时的 `clearDependencies()` 清掉。layout 属性（如 SplitPane ratio，layout 阶段读、无 paint 上下文）才用显式注册。

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GUI/Widgets/Reactive.h"
+#include "GUI/Widgets/Style.h"
 #include "GUI/Widgets/UIElement.h"
 
 #include <memory>
@@ -39,11 +40,17 @@ struct YA_GUI_API UIText : public UIElement
         return _textBinding ? _textBinding->get() : _text;
     }
 
+    /// Style binding: a bound style overrides _color/_fontSize with the
+    /// style's textColor/fontSize. Dependency is registered at bind time.
+    void bindStyle(std::shared_ptr<Reactive<FWidgetStyle>> style);
+    [[nodiscard]] FWidgetStyle resolvedStyle() const;
+
     void paintSelf(UIFrameBuilder& builder) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 
   private:
     std::shared_ptr<Reactive<std::string>> _textBinding;
+    std::shared_ptr<Reactive<FWidgetStyle>> _styleBinding;
 };
 
 } // namespace ya

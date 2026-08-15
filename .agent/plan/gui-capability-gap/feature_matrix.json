@@ -23,8 +23,8 @@
       "id": "p0_backlog",
       "title": "P0 后续（本计划之后的独立刀）",
       "items": [
-        { "id": "styles_styleset", "status": "planned", "notes": "Styles/StyleSet：布局/样式分离，数据驱动样式（参考 Vue SFC / EUI-NEO Rect 样式盒）" },
-        { "id": "treeview", "status": "planned", "notes": "TreeView：hierarchy 面板第一块砖，在响应式 + 样式之上做" }
+        { "id": "styles_styleset", "status": "pass", "notes": "FWidgetStyle + UIStyleSet（命名样式 Reactive 集合）+ UIText.bindStyle；改样式批量重绘。closure 123/123" },
+        { "id": "treeview", "status": "planned", "notes": "TreeView：hierarchy 面板第一块砖，在响应式（ReactiveList）+ 样式之上做" }
       ]
     }
   ]

@@ -9,6 +9,7 @@
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/UIFrameSnapshotDump.h"
 #include "GUI/Widgets/Reactive.h"
+#include "GUI/Widgets/Style.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
@@ -371,6 +372,35 @@ TEST(UIFrameSnapshotTest, PerfStateBridgeRecordsTreeMetrics)
     EXPECT_GT(perf.getLastValue("gui.tree.rebuilt"_name, "count"_name), 0.0f);
     EXPECT_GT(perf.getLastValue("gui.tree.items"_name, "count"_name), 0.0f);
     EXPECT_GE(perf.getLastValue("gui.tree.paint"_name, "ms"_name), 0.0f);
+}
+
+TEST(UIFrameSnapshotTest, StyleEditRepaintsBoundTexts)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       t1 = std::make_shared<UIText>("T1");
+    auto       t2 = std::make_shared<UIText>("T2");
+    tree.attachToLayer(WidgetTree::ELayer::Content, t1);
+    tree.attachToLayer(WidgetTree::ELayer::Content, t2);
+
+    UIStyleSet styleSet;
+    FWidgetStyle title;
+    title.textColor = {1.0f, 0.0f, 0.0f, 1.0f};
+    auto titleStyle = styleSet.define("title", title);
+
+    t1->bindStyle(titleStyle);
+    t2->bindStyle(titleStyle);
+
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    tree.buildSnapshot(UIFrameBuildContext{}); // all reuse
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+
+    // Edit the shared style: both bound texts are dirty and re-run.
+    FWidgetStyle edited = titleStyle->value();
+    edited.textColor    = {0.0f, 1.0f, 0.0f, 1.0f};
+    titleStyle->set(edited);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 2u);
+    EXPECT_EQ(t1->resolvedStyle().textColor, glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
 }
 
 } // namespace ya
