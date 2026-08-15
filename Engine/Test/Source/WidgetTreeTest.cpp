@@ -593,7 +593,7 @@ TEST(WidgetTreeTest, ButtonTextChildDoesNotStealHoverOwner)
     WidgetTree tree({.width = 800, .height = 600});
     auto       button = makeButton("B", {100.0f, 100.0f}, {120.0f, 40.0f});
     auto       label  = std::make_shared<UIText>("B_Label");
-    label->_text     = "Render Probe";
+    label->setText("Render Probe");
     label->_bAutoSize = true;
     button->addDetachedChild(label);
     tree.attachToLayer(WidgetTree::ELayer::Content, button);

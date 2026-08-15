@@ -170,7 +170,7 @@ nlohmann::json serializeNode(const UIElement& element, const WidgetTree& tree)
     else if (const auto* text = dynamic_cast<const UIText*>(&element)) {
         node["control"] = {
             {"type", "text"},
-            {"text", text->_text},
+            {"text", text->getText()},
         };
     }
     else if (const auto* scroll = dynamic_cast<const UIScrollViewport*>(&element)) {

@@ -107,7 +107,7 @@ TEST(UIFrameSnapshotTest, TextItemsCarryFontAndText)
     auto       text = std::make_shared<UIText>("T");
     text->setPosition({30.0f, 40.0f});
     text->setSize({200.0f, 20.0f});
-    text->_text     = "Hello Snapshot";
+    text->setText("Hello Snapshot");
     tree.attachToLayer(WidgetTree::ELayer::Content, text);
 
     // Drop any font cached by earlier suites (the FontManager is process-

@@ -415,7 +415,7 @@ TEST(ToolControlsTest, ToolbarAutoSizeButtonWithLabelHoverClears)
         auto text          = std::make_shared<UIText>(name + "_Label");
         text->_bAutoSize   = true;
         text->_fontSize    = 14;
-        text->_text        = label;
+        text->setText(label);
         text->setVisibility(EWidgetVisibility::SelfHitTestInvisible);
         text->_hAlign      = EWidgetAlignH::Center;
         text->_vAlign      = EWidgetAlignV::Center;

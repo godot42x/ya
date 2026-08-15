@@ -926,13 +926,13 @@ void WidgetTree::beginDrag(UIElement* source, std::string payload, std::string g
 
     // Ghost on the DragIme layer: visible but never hit-testable.
     auto ghost = std::make_shared<UIPanel>("DragGhost");
-    ghost->_color      = {0.24f, 0.46f, 0.82f, 0.75f};
+    ghost->setColor({0.24f, 0.46f, 0.82f, 0.75f});
     ghost->setVisibility(EWidgetVisibility::SelfHitTestInvisible);
     ghost->setPosition({0.0f, 0.0f});
     ghost->setSize({160.0f, 24.0f});
 
     auto label = std::make_shared<UIText>("DragGhostLabel");
-    label->_text     = std::move(ghostLabel);
+    label->setText(std::move(ghostLabel));
     label->_fontSize = 13;
     label->_color    = {0.95f, 0.96f, 0.98f, 1.0f};
     label->_anchorMin = {0.0f, 0.0f};

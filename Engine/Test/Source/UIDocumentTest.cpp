@@ -53,7 +53,7 @@ TEST(UIDocumentTest, FromWidgetRoundtripsFieldsAndChildren)
     auto* titleWidget = dynamic_cast<UIText*>(title.get());
     ASSERT_NE(titleWidget, nullptr);
     titleWidget->setPosition({10.0f, 20.0f});
-    titleWidget->_text     = "Hello Doc";
+    titleWidget->setText("Hello Doc");
     titleWidget->_fontSize = 24;
     titleWidget->_color    = {1.0f, 0.0f, 0.0f, 1.0f};
     ok->setPosition({100.0f, 200.0f});
@@ -81,13 +81,13 @@ TEST(UIDocumentTest, FromWidgetRoundtripsFieldsAndChildren)
     auto* textB = dynamic_cast<UIText*>(instanceB->getChildren()[0].get());
     ASSERT_NE(textA, nullptr);
     ASSERT_NE(textB, nullptr);
-    EXPECT_EQ(textA->_text, "Hello Doc");
+    EXPECT_EQ(textA->getText(), "Hello Doc");
     EXPECT_EQ(textA->_fontSize, 24u);
     EXPECT_EQ(textA->_color, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
 
     // Mutating A must not leak into B.
-    textA->_text = "Changed";
-    EXPECT_EQ(textB->_text, "Hello Doc");
+    textA->setText("Changed");
+    EXPECT_EQ(textB->getText(), "Hello Doc");
 
     // Instances are detached: no tree, no parent chain into a tree.
     EXPECT_FALSE(instanceA->isAttached());
@@ -103,13 +103,13 @@ TEST(UIDocumentTest, JsonRoundtrip)
     auto panel = registry.createInstance("test.doc_panel");
     auto* panelWidget  = dynamic_cast<UIPanel*>(panel.get());
     ASSERT_NE(panelWidget, nullptr);
-    panelWidget->_color    = {0.12f, 0.14f, 0.22f, 0.88f};
+    panelWidget->setColor({0.12f, 0.14f, 0.22f, 0.88f});
     panelWidget->_zOrder   = 5;
     panelWidget->setPosition({20.0f, 20.0f});
     auto label       = registry.createInstance("test.doc_text");
     auto* labelWidget = dynamic_cast<UIText*>(label.get());
     ASSERT_NE(labelWidget, nullptr);
-    labelWidget->_text = "JSON UI";
+    labelWidget->setText("JSON UI");
     panel->addDetachedChild(label);
 
     auto document = UIDocument::fromWidget(*panel);
@@ -128,12 +128,12 @@ TEST(UIDocumentTest, JsonRoundtrip)
     ASSERT_NE(instance, nullptr);
     auto* panelInstance = dynamic_cast<UIPanel*>(instance.get());
     ASSERT_NE(panelInstance, nullptr);
-    EXPECT_EQ(panelInstance->_color, glm::vec4(0.12f, 0.14f, 0.22f, 0.88f));
+    EXPECT_EQ(panelInstance->getColor(), glm::vec4(0.12f, 0.14f, 0.22f, 0.88f));
     EXPECT_EQ(panelInstance->_zOrder, 5);
     ASSERT_EQ(instance->getChildren().size(), 1u);
     auto* textInstance = dynamic_cast<UIText*>(instance->getChildren()[0].get());
     ASSERT_NE(textInstance, nullptr);
-    EXPECT_EQ(textInstance->_text, "JSON UI");
+    EXPECT_EQ(textInstance->getText(), "JSON UI");
 }
 
 TEST(UIDocumentTest, UnknownTypeIdReportsDiagnostic)
@@ -198,7 +198,7 @@ TEST(UIDocumentTest, DeserializeOnAttachedWidgetAggregatesSingleInvalidation)
     auto* sourcePanel = dynamic_cast<UIPanel*>(source.get());
     ASSERT_NE(sourcePanel, nullptr);
     sourcePanel->setSize({300.0f, 120.0f});
-    sourcePanel->_color = {0.5f, 0.5f, 0.5f, 1.0f};
+    sourcePanel->setColor({0.5f, 0.5f, 0.5f, 1.0f});
     auto doc = UIDocument::fromWidget(*source);
     ASSERT_NE(doc, nullptr);
 

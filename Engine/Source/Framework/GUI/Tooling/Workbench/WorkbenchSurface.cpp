@@ -59,7 +59,7 @@ std::shared_ptr<ya::UIButton> makeToolButton(const std::string& name, const std:
     text->_bAutoSize = true;
     text->setVisibility(ya::EWidgetVisibility::SelfHitTestInvisible);
     text->_fontSize  = 14;
-    text->_text      = label;
+    text->setText(label);
     text->_color     = {0.92f, 0.94f, 0.97f, 1.0f};
     text->_hAlign    = ya::EWidgetAlignH::Center;
     text->_vAlign    = ya::EWidgetAlignV::Center;
@@ -72,7 +72,7 @@ std::shared_ptr<ya::UIText> makeHeaderText(const std::string& text)
     auto label = std::make_shared<ya::UIText>(text + "_Header");
     label->setSize({200.0f, 20.0f});
     label->_fontSize = 13;
-    label->_text     = text;
+    label->setText(text);
     label->_color    = kHeaderColor;
     return label;
 }
@@ -102,7 +102,7 @@ void FWorkbenchSurface::buildUI(ya::WidgetTree& tree)
     _root = std::make_shared<ya::UIPanel>("WorkbenchRoot");
     _root->_anchorMin = {0.0f, 0.0f};
     _root->_anchorMax = {1.0f, 1.0f};
-    _root->_color     = kWindowColor;
+    _root->setColor(kWindowColor);
     tree.attachToLayer(ya::WidgetTree::ELayer::Content, _root);
 
     buildMenuBar(tree, *_root);
@@ -211,7 +211,7 @@ void FWorkbenchSurface::buildDemoHost(ya::WidgetTree& tree, ya::UIElement& paren
     _demoHost = std::make_shared<ya::UIPanel>("DemoHost");
     _demoHost->_anchorMin = {0.0f, 0.085f};
     _demoHost->_anchorMax = {1.0f, 0.94f};
-    _demoHost->_color     = kWindowColor;
+    _demoHost->setColor(kWindowColor);
     tree.attach(parent, _demoHost);
 }
 
@@ -223,7 +223,7 @@ void FWorkbenchSurface::buildStatusBar(ya::WidgetTree& tree, ya::UIElement& pare
     _statusText->setPosition({12.0f, -30.0f});
     _statusText->setSize({420.0f, 24.0f});
     _statusText->_fontSize  = 13;
-    _statusText->_text      = "Tab: switch demo | Click / drag / keyboard to explore";
+    _statusText->setText("Tab: switch demo | Click / drag / keyboard to explore");
     _statusText->_color     = kHeaderColor;
     tree.attach(parent, _statusText);
 
@@ -235,7 +235,7 @@ void FWorkbenchSurface::buildStatusBar(ya::WidgetTree& tree, ya::UIElement& pare
     _commandResultText->setPosition({0.0f, -30.0f});
     _commandResultText->setSize({0.0f, 24.0f});
     _commandResultText->_fontSize  = 13;
-    _commandResultText->_text      = "Ready";
+    _commandResultText->setText("Ready");
     _commandResultText->_color     = {0.60f, 0.80f, 0.62f, 1.0f};
     _commandResultText->_hAlign    = ya::EWidgetAlignH::Right;
     tree.attach(parent, _commandResultText);
@@ -283,14 +283,14 @@ void FWorkbenchSurface::clearDemoHost()
 void FWorkbenchSurface::logStatus(const std::string& text)
 {
     if (_commandResultText) {
-        _commandResultText->_text = text;
+        _commandResultText->setText(text);
     }
 }
 
 const std::string& FWorkbenchSurface::getStatusText() const
 {
     static const std::string kEmpty;
-    return _commandResultText ? _commandResultText->_text : kEmpty;
+    return _commandResultText ? _commandResultText->getText() : kEmpty;
 }
 
 // === Editor demo page (the original workbench editor loop) ===
@@ -300,7 +300,7 @@ void FWorkbenchSurface::buildEditorDemo(ya::WidgetTree& tree, ya::UIElement& par
     auto editorPanel = std::make_shared<ya::UIPanel>("EditorDemo");
     editorPanel->_anchorMin = {0.0f, 0.0f};
     editorPanel->_anchorMax = {1.0f, 1.0f};
-    editorPanel->_color     = kWindowColor;
+    editorPanel->setColor(kWindowColor);
     tree.attach(parent, editorPanel);
 
     buildToolbar(tree, *editorPanel);
@@ -363,7 +363,7 @@ void FWorkbenchSurface::buildDocumentList(ya::WidgetTree& tree, ya::UIElement& p
     _listPanel = std::make_shared<ya::UIPanel>("ItemList");
     _listPanel->_anchorMin = {0.0f, 0.0f};
     _listPanel->_anchorMax = {1.0f, 1.0f};
-    _listPanel->_color     = kPanelColor;
+    _listPanel->setColor(kPanelColor);
     tree.attach(parent, _listPanel);
 
     auto header = makeHeaderText("ITEMS");
@@ -392,7 +392,7 @@ void FWorkbenchSurface::buildCanvas(ya::WidgetTree& tree, ya::UIElement& parent)
     _canvasPanel = std::make_shared<ya::UIPanel>("PreviewCanvas");
     _canvasPanel->_anchorMin = {0.0f, 0.0f};
     _canvasPanel->_anchorMax = {1.0f, 1.0f};
-    _canvasPanel->_color     = kCanvasColor;
+    _canvasPanel->setColor(kCanvasColor);
     tree.attach(parent, _canvasPanel);
 
     auto header = makeHeaderText("PREVIEW");
@@ -404,14 +404,14 @@ void FWorkbenchSurface::buildCanvas(ya::WidgetTree& tree, ya::UIElement& parent)
     _highlightPanel->_anchorMax = {0.5f, 0.5f};
     _highlightPanel->setPosition({-70.0f, -45.0f});
     _highlightPanel->setSize({140.0f, 90.0f});
-    _highlightPanel->_color     = {0.35f, 0.55f, 0.90f, 1.0f};
+    _highlightPanel->setColor({0.35f, 0.55f, 0.90f, 1.0f});
     tree.attach(*_canvasPanel, _highlightPanel);
 
     _previewName = std::make_shared<ya::UIText>("PreviewName");
     _previewName->setPosition({0.0f, 0.0f});
     _previewName->setSize({400.0f, 24.0f});
     _previewName->_fontSize = 15;
-    _previewName->_text     = "(no selection)";
+    _previewName->setText("(no selection)");
     _previewName->_color    = {0.95f, 0.96f, 0.98f, 1.0f};
     _previewName->_hAlign   = ya::EWidgetAlignH::Center;
     tree.attach(*_highlightPanel, _previewName);
@@ -422,7 +422,7 @@ void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& pare
     auto inspectorPanel = std::make_shared<ya::UIPanel>("Inspector");
     inspectorPanel->_anchorMin = {0.0f, 0.0f};
     inspectorPanel->_anchorMax = {1.0f, 1.0f};
-    inspectorPanel->_color     = kPanelColor;
+    inspectorPanel->setColor(kPanelColor);
     tree.attach(parent, inspectorPanel);
 
     auto form = std::make_shared<ya::UIContainer>("InspectorForm");
@@ -472,7 +472,7 @@ void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& pare
     _colorValue = std::make_shared<ya::UIText>("ColorValue");
     _colorValue->setSize({220.0f, 14.0f});
     _colorValue->_fontSize = 12;
-    _colorValue->_text     = "";
+    _colorValue->setText("");
     _colorValue->_color    = kHeaderColor;
     tree.attach(*form, _colorValue);
 
@@ -501,7 +501,7 @@ void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& pare
     _sizeValue = std::make_shared<ya::UIText>("SizeValue");
     _sizeValue->setSize({220.0f, 14.0f});
     _sizeValue->_fontSize = 12;
-    _sizeValue->_text     = "";
+    _sizeValue->setText("");
     _sizeValue->_color    = kHeaderColor;
     tree.attach(*form, _sizeValue);
 }
@@ -549,7 +549,7 @@ void FWorkbenchSurface::rebuildItemRows()
         auto label = std::make_shared<ya::UIText>("RowLabel_" + item.id);
         label->setSize({240.0f, 22.0f});
         label->_fontSize = 13;
-        label->_text     = item.bVisible ? item.name : item.name + " (hidden)";
+        label->setText(item.bVisible ? item.name : item.name + " (hidden)");
         label->_color    = {0.88f, 0.90f, 0.94f, 1.0f};
         label->_vAlign   = ya::EWidgetAlignV::Center;
         // Tree indentation: one level per parent depth.

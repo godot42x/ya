@@ -70,7 +70,7 @@ WidgetEventContext pointAt(float x, float y)
 std::shared_ptr<UIText> makeAutoText(const std::string& text, uint32_t fontSize = 16)
 {
     auto label = std::make_shared<UIText>(text + "_Label");
-    label->_text      = text;
+    label->setText(text);
     label->_fontSize  = fontSize;
     label->_bAutoSize = true;
     return label;
@@ -106,7 +106,7 @@ TEST(WidgetLayoutTest, TextWithoutAutoSizeKeepsExplicitSize)
 {
     registerSyntheticFont(16, 8.0f);
     auto label = std::make_shared<UIText>("Fixed");
-    label->_text     = "Hello";
+    label->setText("Hello");
     label->_fontSize = 16;
     label->setSize({120.0f, 24.0f});
     EXPECT_EQ(label->computeDesiredSize(), glm::vec2(120.0f, 24.0f));

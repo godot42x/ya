@@ -24,11 +24,20 @@ struct YA_GUI_API UIText : public UIElement
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIText>; }
 
-    std::string       _text      = "Text";
-    uint32_t          _fontSize  = 16;
-    glm::vec4         _color     = {1.0f, 1.0f, 1.0f, 1.0f};
-    EWidgetAlignH     _hAlign    = EWidgetAlignH::Left;
-    EWidgetAlignV     _vAlign    = EWidgetAlignV::Top;
+    // Runtime mutable text (GI-202): presenters/status log update this per
+    // frame, so it is a protected backing field with a changed-only setter
+    // and a getter.
+  protected:
+    std::string _text = "Text";
+  public:
+    // Authoring-only (GI-202 exception list): base values set once at
+    // construction/deserialization; fontSize/color are overridable at runtime
+    // via bindStyle (which does not write these fields). To be encapsulated
+    // when they gain a setter.
+    uint32_t      _fontSize = 16;
+    glm::vec4     _color    = {1.0f, 1.0f, 1.0f, 1.0f};
+    EWidgetAlignH _hAlign   = EWidgetAlignH::Left;
+    EWidgetAlignV _vAlign   = EWidgetAlignV::Top;
 
     /// Changed-only text setter (GI-105): AutoSize text re-measures (Layout)
     /// on a content change; fixed-size text only repaints.
@@ -40,6 +49,7 @@ struct YA_GUI_API UIText : public UIElement
         _text = value;
         invalidateProperty(_bAutoSize ? EUIPropertyImpact::Layout : EUIPropertyImpact::Paint);
     }
+    [[nodiscard]] const std::string& getText() const { return _text; }
     // SizeToContent: set base UIElement::_bAutoSize to measure the layout
     // rect from the text (desired = text width x lineHeight).
 

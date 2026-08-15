@@ -76,7 +76,7 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
 {
     // Content panel: colored backdrop sized to the items.
     auto panel = std::make_shared<UIPanel>("MenuPanel");
-    panel->_color = _panelColor;
+    panel->setColor(_panelColor);
     addDetachedChild(panel);
 
     auto list = std::make_shared<UIContainer>("MenuList");

@@ -21,7 +21,15 @@ struct YA_GUI_API UIPanel : public UIElement
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIPanel>; }
 
-    glm::vec4  _color           = {0.2f, 0.2f, 0.2f, 0.8f};
+    // Runtime mutable fill color (GI-202): highlight/selection presenters
+    // change this per frame, so it is a protected backing field with a
+    // changed-only setter and a getter.
+  protected:
+    glm::vec4 _color = {0.2f, 0.2f, 0.2f, 0.8f};
+  public:
+    // Authoring-only (GI-202 exception list): set once at construction /
+    // deserialization; no runtime business write path yet. To be encapsulated
+    // when they gain a setter.
     TextureRef _image;
     bool       _bNineSlice      = false;
     glm::vec4  _nineSliceBorder = {8.0f, 8.0f, 8.0f, 8.0f}; // l, t, r, b in pixels
@@ -35,6 +43,7 @@ struct YA_GUI_API UIPanel : public UIElement
         _color = value;
         invalidateProperty(EUIPropertyImpact::Paint);
     }
+    [[nodiscard]] const glm::vec4& getColor() const { return _color; }
 
     void paintSelf(UIFrameBuilder& builder) override;
 };
