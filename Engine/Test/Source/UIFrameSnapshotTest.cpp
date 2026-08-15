@@ -653,4 +653,92 @@ TEST(UIFrameSnapshotTest, CleanTreeGenerationChangeDropsCache)
     EXPECT_EQ(tree.getPerfStats().cacheInvalidations, 1u);
 }
 
+TEST(UIFrameSnapshotTest, ReactiveDestroyedBeforeWidgetSeveresBackReference)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       probe = std::make_shared<ReactiveProbeWidget>("Probe");
+    tree.attachToLayer(WidgetTree::ELayer::Content, probe);
+
+    auto refB = std::make_shared<Reactive<int>>(2);
+    probe->refB = refB.get();
+
+    {
+        auto refA = std::make_shared<Reactive<int>>(1);
+        probe->refA = refA.get();
+        probe->useA = true;
+        tree.buildSnapshot(UIFrameBuildContext{}); // probe reads refA -> dependent
+        // refA destroyed here: ~ReactiveBase must sever the probe's back-ref.
+    }
+
+    // Re-paint reading a live ref. The dirty branch calls clearDependencies(),
+    // which walks probe->_dependencies — that set must no longer contain the
+    // destroyed refA, or the walk hits a dangling pointer.
+    probe->useA = false;
+    probe->markPaintDirty();
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(probe->lastRead, 2);
+}
+
+TEST(UIFrameSnapshotTest, DetachedWidgetSurvivesReactiveSet)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       bound    = std::make_shared<UIText>("Bound");
+    auto       textRef  = std::make_shared<Reactive<std::string>>("hello");
+    bound->bindText(textRef);
+    tree.attachToLayer(WidgetTree::ELayer::Content, bound);
+    tree.buildSnapshot(UIFrameBuildContext{}); // bound reads ref -> dependent
+
+    tree.detach(*bound); // detached but still alive (_tree == nullptr)
+
+    // set() still walks bound as a dependent; markPaintDirty must guard the
+    // null tree so a detached widget is not laid out or painted.
+    textRef->set("world");
+    SUCCEED();
+}
+
+TEST(UIFrameSnapshotTest, RebindSplitRatioKeepsLatestBindingActive)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       split = std::make_shared<UISplitPane>("Split");
+    tree.attachToLayer(WidgetTree::ELayer::Content, split);
+
+    auto ratioA = std::make_shared<Reactive<float>>(0.5f);
+    split->bindSplitRatio(ratioA);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+
+    auto ratioB = std::make_shared<Reactive<float>>(0.3f);
+    split->bindSplitRatio(ratioB);
+    tree.buildSnapshot(UIFrameBuildContext{}); // re-layout pulling ratioB
+
+    // The latest binding drives layout on write.
+    const uint64_t before = tree.getPerfStats().layoutDirtyTransitions;
+    ratioB->set(0.6f);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_GT(tree.getPerfStats().layoutDirtyTransitions, before);
+}
+
+TEST(UIFrameSnapshotTest, SplitRatioBindingPersistsAcrossRepaints)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       split = std::make_shared<UISplitPane>("Split");
+    tree.attachToLayer(WidgetTree::ELayer::Content, split);
+
+    auto ratio = std::make_shared<Reactive<float>>(0.5f);
+    split->bindSplitRatio(ratio);
+
+    // Several snapshots each re-paint the split. The bind-time ratio binding is
+    // persistent: it must stay registered (independent of per-paint dependency
+    // re-collection) so a later write still re-runs layout. This is the
+    // regression guard for GI-102's persistent-edge separation.
+    tree.buildSnapshot(UIFrameBuildContext{});
+    tree.buildSnapshot(UIFrameBuildContext{});
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    const uint64_t before = tree.getPerfStats().layoutDirtyTransitions;
+    ratio->set(0.4f);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_GT(tree.getPerfStats().layoutDirtyTransitions, before);
+}
+
 } // namespace ya

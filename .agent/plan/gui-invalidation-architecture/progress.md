@@ -118,3 +118,37 @@
 ### 下一接力点
 
 - `GI-003`：paint-collected / persistent reactive edge 生命周期回归测试。
+
+## 2026-08-15 — GI-003 完成：reactive edge 生命周期回归测试
+
+### 本轮完成
+
+纯测试任务（无 contract 改动），补全 reactive edge 生命周期回归基线：
+
+- `ReactiveDestroyedBeforeWidgetSeveresBackReference`：reactive 先析构、widget 后析构
+  （反向析构顺序），验证 `~ReactiveBase` 的 `untrackDependency` sever 逻辑——repaint 的
+  `clearDependencies()` 不碰已析构的 ref；
+- `DetachedWidgetSurvivesReactiveSet`：detach（非析构）后 reactive set 安全，
+  验证 `markPaintDirty` 的 `_tree == nullptr` 守卫；
+- `RebindSplitRatioKeepsLatestBindingActive`：rebind 后最新 binding 生效且不 crash；
+- `SplitRatioBindingPersistsAcrossRepaints`：bind-time persistent ratio binding 在多次
+  repaint 后仍触发 layout（GI-102 persistent-edge 分离的回归守卫）。
+
+### 代码/行为结论
+
+- 现有 `ConditionalDependencySwitchRecollects` + `DestroyedDependentDoesNotDangle`
+  已覆盖「条件读取切换移除旧 edge」与「widget 先析构」两个方向；本轮补齐反向析构、
+  detach、rebind、persistent 存活四场景；
+- mixed Paint/Layout consumer 当前**不支持**（`ReactiveBase::_dirtyLevel` 是 value-global
+  单值），这是 GI-101 要改的 edge 模型，本测试任务不越界实现；
+- `bindSplitRatio` rebind 不清理旧 binding 是已知缺陷（GI-102 修复），本测试只断言最新
+  binding 生效，不测旧 binding 清理。
+
+### 验证
+
+- `xmake b ya-gui-closure-test` 通过；
+- `xmake r ya-gui-closure-test` 138 tests PASSED（新增 4 个）。
+
+### 下一接力点
+
+- `GI-004`：Workbench 性能基线（文档任务，固定样本测 layout/paint time 等指标）。

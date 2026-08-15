@@ -1,7 +1,7 @@
 {
   "plan": "gui-invalidation-architecture",
   "updated_at": "2026-08-15",
-  "active_task": "GI-003",
+  "active_task": "GI-004",
   "legend": {
     "planned": "已纳入计划但尚未开始",
     "in_progress": "当前唯一执行切片",
@@ -49,8 +49,8 @@
         },
         {
           "id": "GI-003",
-          "status": "planned",
-          "notes": "paint-collected/persistent reactive edge lifecycle tests"
+          "status": "pass",
+          "notes": "lifecycle tests: reverse destruction, detach-survives-set, rebind, persistent binding across repaints"
         },
         {
           "id": "GI-004",

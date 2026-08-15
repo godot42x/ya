@@ -6,7 +6,7 @@
 
 ## 当前切片
 
-当前激活切片：`GI-003 reactive edge 生命周期回归测试`
+当前激活切片：`GI-004 Workbench 性能基线`
 
 执行规则：
 
@@ -40,7 +40,7 @@
     - context 未变化时仍可复用 cache。
   - 提交：`[gui] validate draw cache build context`
 
-- [ ] `GI-003` Reactive edge 生命周期回归测试
+- [x] `GI-003` Reactive edge 生命周期回归测试
   - 依赖：无
   - 修改：
     - mixed Paint/Layout consumers；
