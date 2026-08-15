@@ -69,6 +69,7 @@ xmake project -k compile_commands
 8. `Render2D` 使用左上角原点坐标系。
 9. 日志只用 `YA_CORE_TRACE/DEBUG/INFO/WARN/ERROR/ASSERT`。
 10. 代码风格倾向成员变量在函数声明之前(data-orient-programming)
+11. 执行plan的时候，需要分批次分类提交代码，plan files 的改动和实际改动一个commit提交
 
 ## Repo Facts
 

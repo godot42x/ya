@@ -106,8 +106,8 @@
         },
         {
           "id": "property_encapsulation",
-          "status": "in_progress",
-          "notes": "slice 1 done (UIElement _position/_size/_visibility protected + getters, commit 70ece56c); remaining per-control fields (_text/_fontSize/_color/_normalColor...)"
+          "status": "pass",
+          "notes": "slice1 base _position/_size/_visibility (70ece56c) + slice2 UIText::_text + UIPanel::_color (1a4765e2); authoring-only fields (_fontSize/_color/_hAlign/_vAlign/_image/_bNineSlice/_nineSliceBorder/UIButton colors) documented as exception list"
         },
         {
           "id": "direct_write_gate",

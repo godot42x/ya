@@ -489,3 +489,38 @@ GI-202 按控件族拆多个小提交；本轮完成**基类 `_position/_size/_v
 
 - `GI-202`（切片 2）：各控件族字段封装（`UIText::_text/_fontSize/_color`、
   `UIPanel::_color`、`UIButton::_normalColor/...` 等），继续按控件族拆小提交。
+
+## 2026-08-16 — GI-202（切片 2）：UIText::_text + UIPanel::_color 封装
+
+### 本轮完成
+
+- `UIText::_text` → protected，补 `getText()`；`UIPanel::_color` → protected，补 `getColor()`；
+  两个字段的 setter 已在 GI-105 就位；
+- **authoring-only 例外清单**（保持 public）：
+  - `UIText::_fontSize/_color/_hAlign/_vAlign`（fontSize/color 经 `bindStyle` runtime 覆盖，
+    不写这些 base value 字段）；
+  - `UIPanel::_image/_bNineSlice/_nineSliceBorder`；
+  - `UIButton::_normalColor/_hoveredColor/_pressedColor/_focusedColor`；
+- 全量迁移外部写/读到 setter/getter：Workbench（含 `logStatus` 的 runtime 直接写——GI-105
+  遗漏点）、WidgetTree drag ghost、WidgetTreeDump、Menu、GUI 测试套件。
+
+### 代码/行为结论
+
+- 改用「**编译器驱动**」迁移（先改 protected，让 `error C2248` 精确列出每个非法访问点，
+  逐个迁移），避免了切片 1 用脚本误触 ECS `TransformComponent::_position` 的风险；
+- authoring 构造写（如 Workbench `makeText`）迁移到 setter 对 detached widget 无害：
+  `invalidateProperty` 里 `markPaintDirty` 只设 flag（`_tree == nullptr` 不标树脏），
+  attach 后第一帧照常重画；
+- 反射不受影响（成员指针类作用域内取地址）。
+
+### 验证
+
+- `xmake b ya-gui-closure-test` 通过；
+- `xmake r ya-gui-closure-test` **151 tests PASSED**（无新增，纯迁移）；
+- `xmake b ya-engine` 聚合通过（exit 0）。
+
+### 下一接力点
+
+- `GI-202`（切片 3，可选收尾）：`UIButton` 颜色字段 + `UIText::_fontSize/_color` 的封装
+  决策（这些当前是 authoring-only，若未来有 runtime 写路径再迁移）；或进入 Phase 1B 后续
+  切片（`GI-203` 及之后，取决于 todo 顺序）。

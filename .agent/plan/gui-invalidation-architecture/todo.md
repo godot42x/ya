@@ -142,8 +142,10 @@
     - authoring-only 例外有清单和删除条件；
     - 现有反射/序列化仍工作。
   - 提交：按控件族拆成多个 `[gui/widgets] encapsulate ... properties` 小提交。
-  - 进度：切片 1（基类 `_position/_size/_visibility`）已提交 `70ece56c`；剩余各控件族字段
-    （`UIText::_text/_fontSize/_color`、`UIPanel::_color`、`UIButton::_normalColor/...`）。
+  - 进度：切片 1（基类 `_position/_size/_visibility`）已提交 `70ece56c`；切片 2（
+    `UIText::_text` + `UIPanel::_color`）已提交 `1a4765e2`；剩余 authoring-only 字段
+    （`UIText::_fontSize/_color/_hAlign/_vAlign`、`UIPanel::_image/_bNineSlice/_nineSliceBorder`、
+    `UIButton` 颜色）已登记例外清单，待其有 runtime 写路径再迁移。
 
 - [ ] `GI-203` Direct-write 静态门禁
   - 依赖：GI-202
