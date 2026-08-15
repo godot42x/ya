@@ -418,6 +418,26 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
 
     _perfStats = GuiPerfStats{};
 
+    // Build-context validity (GI-002): cached draw-item segments hold final
+    // target-pixel coordinates and resolved textures, so a changed mapping
+    // (uiScale/offset) or host generation must drop both cache buffers and
+    // force a full rebuild. First build has no prior context to compare.
+    const bool bContextChanged =
+        _bHasBuildContext &&
+        (ctx.generation != _lastGeneration ||
+         ctx.uiScale != _lastUiScale ||
+         ctx.offset != _lastOffset);
+    if (bContextChanged) {
+        _itemCache[0].clear();
+        _itemCache[1].clear();
+        ++_cacheInvalidations;
+        _lastInvalidationReason = EUIInvalidationReason::BuildContextChanged;
+    }
+    _bHasBuildContext = true;
+    _lastGeneration   = ctx.generation;
+    _lastUiScale      = ctx.uiScale;
+    _lastOffset       = ctx.offset;
+
     std::chrono::steady_clock::duration layoutDur{};
     if (_bLayoutDirty) {
         const auto layoutStart = clock_t::now();

@@ -1,7 +1,7 @@
 {
   "plan": "gui-invalidation-architecture",
   "updated_at": "2026-08-15",
-  "active_task": "GI-001",
+  "active_task": "GI-003",
   "legend": {
     "planned": "已纳入计划但尚未开始",
     "in_progress": "当前唯一执行切片",
@@ -44,8 +44,8 @@
         },
         {
           "id": "GI-002",
-          "status": "planned",
-          "notes": "build-context/resource-generation cache validity"
+          "status": "pass",
+          "notes": "UIFrameBuildContext.generation + WidgetTree context change detection drops both caches; offset/uiScale/generation tests distinguish rebuild vs reuse"
         },
         {
           "id": "GI-003",

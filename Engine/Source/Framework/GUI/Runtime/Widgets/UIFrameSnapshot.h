@@ -39,6 +39,13 @@ struct UIFrameBuildContext
     glm::vec2 uiScale = {1.0f, 1.0f}; // logical px -> render-target px
     glm::vec2 offset  = {0.0f, 0.0f}; // render-target px origin of logical (0,0)
 
+    /// Host-provided monotonic generation token: bump whenever the coordinate
+    /// mapping or the resource resolver changes in a way WidgetTree cannot
+    /// compare itself (e.g. viewport resize, DPI change, asset/texture reload).
+    /// WidgetTree compares this (and uiScale/offset) to drop draw-item caches
+    /// that hold now-stale target-pixel or resolved-texture data.
+    uint64_t generation = 0;
+
     /// Host-provided strong-resource resolver: asset path -> strong texture
     /// reference. The snapshot holds the returned shared_ptr, so draw
     /// resources stay alive through queue submit even if the asset cache

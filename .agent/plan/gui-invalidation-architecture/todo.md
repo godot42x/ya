@@ -6,7 +6,7 @@
 
 ## 当前切片
 
-当前激活切片：`GI-002 build-context cache validity baseline`
+当前激活切片：`GI-003 reactive edge 生命周期回归测试`
 
 执行规则：
 
@@ -29,7 +29,7 @@
     - closure test 通过。
   - 提交：`[gui] trace invalidation reasons and transitions`
 
-- [ ] `GI-002` Build-context cache validity baseline
+- [x] `GI-002` Build-context cache validity baseline
   - 依赖：GI-001
   - 修改：
     - 为连续 build 使用不同 `offset/uiScale` 增加测试；

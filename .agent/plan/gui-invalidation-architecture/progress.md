@@ -88,3 +88,33 @@
 ### 下一接力点
 
 - `GI-002`：build-context/resource-generation cache validity 测试 seam + 保守 cache reset。
+
+## 2026-08-15 — GI-002 完成：build-context cache validity baseline
+
+### 本轮完成
+
+- `UIFrameBuildContext` 新增 `uint64_t generation`（host 提供单调 token，用于 uiScale/offset
+  之外无法自行比较的坐标映射/resource resolver 变化，如 viewport resize / DPI / asset reload）；
+- `WidgetTree` 新增 `_bHasBuildContext`/`_lastGeneration`/`_lastUiScale`/`_lastOffset`，
+  在 `buildSnapshot` 开头比较上下文；变化时清空两份 `_itemCache`、
+  `++_cacheInvalidations`、并记录 `BuildContextChanged` reason（保守、correctness-first）；
+- 首次 build 无前序上下文，不触发失效。
+
+### 代码/行为结论
+
+- 按 plan.md 3.5 决策落地：uiScale/offset 由 WidgetTree 直接比较（数值），
+  resolver 不做 `std::function` 比较，由 host 经 `generation` 显式声明失效；
+- 这是 Phase 2「unified paint template」之前就需要的正确性基线：否则 clean tree
+  在窗口 resize / DPI 切换 / 纹理重载后会复用不兼容的 target-pixel 段。
+
+### 验证
+
+- `xmake b ya-gui-closure-test` 通过（13.6s）；
+- `xmake r ya-gui-closure-test` 134 tests PASSED（新增 3 个：
+  CleanTreeOffsetChangeRebuildsResolvedItems、
+  CleanTreeUiScaleChangeRebuildsResolvedItems、
+  CleanTreeGenerationChangeDropsCache）。
+
+### 下一接力点
+
+- `GI-003`：paint-collected / persistent reactive edge 生命周期回归测试。

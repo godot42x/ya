@@ -303,6 +303,15 @@ struct YA_GUI_API WidgetTree final
     /// written this frame and swapped at the end of buildSnapshot.
     std::array<std::unordered_map<const UIElement*, std::vector<UIFrameDrawItem>>, 2> _itemCache;
     int _cacheIndex = 0;
+
+    // Build-context validity (GI-002): draw-item segments hold final target-
+    // pixel + resolved-texture data, so a changed uiScale/offset/generation
+    // invalidates both cache buffers (conservative, correctness-first). The
+    // last-seen values detect the change across buildSnapshot calls.
+    bool      _bHasBuildContext = false;
+    uint64_t  _lastGeneration   = 0;
+    glm::vec2 _lastUiScale      = {1.0f, 1.0f};
+    glm::vec2 _lastOffset       = {0.0f, 0.0f};
     UIElement*    _focused      = nullptr;
     UIElement*    _captured     = nullptr;
     UIElement*    _hovered      = nullptr;

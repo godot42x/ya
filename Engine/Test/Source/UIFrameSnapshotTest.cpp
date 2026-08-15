@@ -588,4 +588,69 @@ TEST(UIFrameSnapshotTest, SameValueReactiveSetSkipsInvalidation)
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 }
 
+TEST(UIFrameSnapshotTest, CleanTreeOffsetChangeRebuildsResolvedItems)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       panel = std::make_shared<UIPanel>("P");
+    panel->_position = {10.0f, 10.0f};
+    panel->_size     = {100.0f, 50.0f};
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+
+    // Cold start + clean frame under context A (identity mapping).
+    tree.buildSnapshot(UIFrameBuildContext{});
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+
+    // Same clean tree, changed offset: the cached segment holds the old
+    // target-pixel origin, so it must be dropped and re-resolved.
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{
+        .offset = {100.0f, 50.0f},
+    });
+    ASSERT_EQ(snap.items.size(), 1u);
+    EXPECT_EQ(snap.items[0].pos, glm::vec2(110.0f, 60.0f)); // offset + logical
+    EXPECT_EQ(snap.items[0].size, glm::vec2(100.0f, 50.0f));
+    EXPECT_EQ(tree.getPerfStats().cacheInvalidations, 1u);
+}
+
+TEST(UIFrameSnapshotTest, CleanTreeUiScaleChangeRebuildsResolvedItems)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       panel = std::make_shared<UIPanel>("P");
+    panel->_position = {10.0f, 10.0f};
+    panel->_size     = {100.0f, 50.0f};
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+
+    tree.buildSnapshot(UIFrameBuildContext{});
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{
+        .uiScale = {2.0f, 2.0f},
+    });
+    ASSERT_EQ(snap.items.size(), 1u);
+    EXPECT_EQ(snap.items[0].pos, glm::vec2(20.0f, 20.0f));    // logical * scale
+    EXPECT_EQ(snap.items[0].size, glm::vec2(200.0f, 100.0f)); // size * scale
+    EXPECT_EQ(tree.getPerfStats().cacheInvalidations, 1u);
+}
+
+TEST(UIFrameSnapshotTest, CleanTreeGenerationChangeDropsCache)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       panel = std::make_shared<UIPanel>("P");
+    panel->_position = {10.0f, 10.0f};
+    panel->_size     = {100.0f, 50.0f};
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+
+    tree.buildSnapshot(UIFrameBuildContext{.generation = 0});
+    tree.buildSnapshot(UIFrameBuildContext{.generation = 0});
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+
+    // Host bumps generation (e.g. texture/asset reload) while the mapping is
+    // unchanged: cached resolved-texture segments must not be reused.
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{.generation = 1});
+    ASSERT_EQ(snap.items.size(), 1u);
+    EXPECT_GT(tree.getPerfStats().rebuiltWidgets, 0u);
+    EXPECT_EQ(tree.getPerfStats().cacheInvalidations, 1u);
+}
+
 } // namespace ya
