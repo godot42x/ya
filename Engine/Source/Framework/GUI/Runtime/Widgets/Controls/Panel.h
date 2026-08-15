@@ -26,6 +26,16 @@ struct YA_GUI_API UIPanel : public UIElement
     bool       _bNineSlice      = false;
     glm::vec4  _nineSliceBorder = {8.0f, 8.0f, 8.0f, 8.0f}; // l, t, r, b in pixels
 
+    /// Changed-only color setter (GI-105): repaint only on a real change.
+    void setColor(const glm::vec4& value)
+    {
+        if (_color == value) {
+            return;
+        }
+        _color = value;
+        invalidateProperty(EUIPropertyImpact::Paint);
+    }
+
     void paintSelf(UIFrameBuilder& builder) override;
 };
 

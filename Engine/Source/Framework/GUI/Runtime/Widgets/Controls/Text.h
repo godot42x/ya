@@ -29,6 +29,17 @@ struct YA_GUI_API UIText : public UIElement
     glm::vec4         _color     = {1.0f, 1.0f, 1.0f, 1.0f};
     EWidgetAlignH     _hAlign    = EWidgetAlignH::Left;
     EWidgetAlignV     _vAlign    = EWidgetAlignV::Top;
+
+    /// Changed-only text setter (GI-105): AutoSize text re-measures (Layout)
+    /// on a content change; fixed-size text only repaints.
+    void setText(const std::string& value)
+    {
+        if (_text == value) {
+            return;
+        }
+        _text = value;
+        invalidateProperty(_bAutoSize ? EUIPropertyImpact::Layout : EUIPropertyImpact::Paint);
+    }
     // SizeToContent: set base UIElement::_bAutoSize to measure the layout
     // rect from the text (desired = text width x lineHeight).
 

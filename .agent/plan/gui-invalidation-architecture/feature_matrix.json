@@ -1,7 +1,7 @@
 {
   "plan": "gui-invalidation-architecture",
   "updated_at": "2026-08-15",
-  "active_task": "GI-105",
+  "active_task": "GI-106",
   "legend": {
     "planned": "已纳入计划但尚未开始",
     "in_progress": "当前唯一执行切片",
@@ -85,8 +85,8 @@
         },
         {
           "id": "workbench_migration",
-          "status": "planned",
-          "notes": "changed-only setters replace presenter volatile/backfill state"
+          "status": "pass",
+          "notes": "7 changed-only setters (setPosition/setSize/setVisibility/setColor/setText/setSelected); presenter routes through them; _bVolatile and _last*/bGeometryChanged backfill removed; steady frame rebuilt=0"
         },
         {
           "id": "inherited_context_audit",

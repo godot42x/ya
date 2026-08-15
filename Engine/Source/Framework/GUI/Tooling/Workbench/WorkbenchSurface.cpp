@@ -400,7 +400,6 @@ void FWorkbenchSurface::buildCanvas(ya::WidgetTree& tree, ya::UIElement& parent)
     tree.attach(*_canvasPanel, header);
 
     _highlightPanel = std::make_shared<ya::UIPanel>("SelectionHighlight");
-    _highlightPanel->_bVolatile = true; // presenter syncs size/pos/color each frame
     _highlightPanel->_anchorMin = {0.5f, 0.5f};
     _highlightPanel->_anchorMax = {0.5f, 0.5f};
     _highlightPanel->_position  = {-70.0f, -45.0f};
@@ -409,7 +408,6 @@ void FWorkbenchSurface::buildCanvas(ya::WidgetTree& tree, ya::UIElement& parent)
     tree.attach(*_canvasPanel, _highlightPanel);
 
     _previewName = std::make_shared<ya::UIText>("PreviewName");
-    _previewName->_bVolatile = true; // presenter syncs the name each frame
     _previewName->_position = {0.0f, 0.0f};
     _previewName->_size     = {400.0f, 24.0f};
     _previewName->_fontSize = 15;
@@ -443,7 +441,6 @@ void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& pare
     tree.attach(*form, nameLabel);
 
     _nameField = std::make_shared<ya::UITextField>("NameField");
-    _nameField->_bVolatile = true; // presenter syncs the text each frame (when not focused)
     _nameField->_size     = {220.0f, 26.0f};
     _nameField->_fontSize = 14;
     _nameField->_onCommit = [this](const std::string& text) {
@@ -473,7 +470,6 @@ void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& pare
     tree.attach(*form, _colorCycle);
 
     _colorValue = std::make_shared<ya::UIText>("ColorValue");
-    _colorValue->_bVolatile = true; // presenter syncs the value each frame
     _colorValue->_size     = {220.0f, 14.0f};
     _colorValue->_fontSize = 12;
     _colorValue->_text     = "";
@@ -503,7 +499,6 @@ void FWorkbenchSurface::buildInspector(ya::WidgetTree& tree, ya::UIElement& pare
     tree.attach(*sizeRow, _sizeShrink);
 
     _sizeValue = std::make_shared<ya::UIText>("SizeValue");
-    _sizeValue->_bVolatile = true; // presenter syncs the value each frame
     _sizeValue->_size     = {220.0f, 14.0f};
     _sizeValue->_fontSize = 12;
     _sizeValue->_text     = "";
@@ -530,9 +525,6 @@ void FWorkbenchSurface::rebuildItemRows()
         auto row = std::make_shared<ya::UISelectableRow>("Row_" + item.id);
         row->_itemId = item.id;
         row->_size   = {240.0f, 22.0f};
-        // The presenter copies _bSelected into the row every frame; mark it
-        // volatile so that copy re-paints without per-row dirty bookkeeping.
-        row->_bVolatile = true;
         row->_onSelect = [this](const std::string& id) {
             workspace.select(id);
             setCommandResult("List: selected '" + id + "'");
@@ -557,9 +549,6 @@ void FWorkbenchSurface::rebuildItemRows()
         auto label = std::make_shared<ya::UIText>("RowLabel_" + item.id);
         label->_size     = {240.0f, 22.0f};
         label->_fontSize = 13;
-        // Presenter copies the label text every frame (visibility suffix);
-        // volatile keeps the copy visible without per-row dirty bookkeeping.
-        label->_bVolatile = true;
         label->_text     = item.bVisible ? item.name : item.name + " (hidden)";
         label->_color    = {0.88f, 0.90f, 0.94f, 1.0f};
         label->_vAlign   = ya::EWidgetAlignV::Center;
@@ -584,59 +573,44 @@ void FWorkbenchSurface::syncPresentationState()
 
     const FWorkbenchItem* selected = workspace.getSelected();
 
-    bool bGeometryChanged = false;
-
     const auto ordered = workspace.orderedItems();
     for (size_t i = 0; i < _rows.size() && i < ordered.size(); ++i) {
         const FWorkbenchItem& item = *ordered[i];
         if (!_rows[i]->getChildren().empty()) {
             if (auto* label = dynamic_cast<ya::UIText*>(_rows[i]->getChildren()[0].get())) {
-                label->_text = item.bVisible ? item.name : item.name + " (hidden)";
+                label->setText(item.bVisible ? item.name : item.name + " (hidden)");
             }
         }
-        _rows[i]->_bSelected = (selected != nullptr && _rows[i]->_itemId == selected->id);
+        _rows[i]->setSelected(selected != nullptr && _rows[i]->_itemId == selected->id);
     }
 
     if (selected) {
-        _highlightPanel->_visibility = selected->bVisible ? ya::EWidgetVisibility::Visible
-                                                          : ya::EWidgetVisibility::Hidden;
-        _highlightPanel->_size       = selected->size;
-        _highlightPanel->_position   = -selected->size * 0.5f;
-        _highlightPanel->_color      = selected->color;
-        _previewName->_text = selected->bVisible ? selected->name : selected->name + " (hidden)";
-        if (_highlightPanel->_size != _lastHighlightSize || _highlightPanel->_position != _lastHighlightPos) {
-            bGeometryChanged     = true;
-            _lastHighlightSize   = _highlightPanel->_size;
-            _lastHighlightPos    = _highlightPanel->_position;
-        }
+        _highlightPanel->setVisibility(selected->bVisible ? ya::EWidgetVisibility::Visible
+                                                          : ya::EWidgetVisibility::Hidden);
+        _highlightPanel->setSize(selected->size);
+        _highlightPanel->setPosition(-selected->size * 0.5f);
+        _highlightPanel->setColor(selected->color);
+        _previewName->setText(selected->bVisible ? selected->name : selected->name + " (hidden)");
     } else {
-        _highlightPanel->_visibility = ya::EWidgetVisibility::Hidden;
-        _previewName->_text          = "(no selection)";
+        _highlightPanel->setVisibility(ya::EWidgetVisibility::Hidden);
+        _previewName->setText("(no selection)");
     }
 
     if (_tree->getFocused() != _nameField.get()) {
-        _nameField->_text = selected ? selected->name : "";
+        _nameField->setText(selected ? selected->name : "");
         _nameField->clampCursor();
     }
-    _colorValue->_text = selected ? std::format("rgba({:.2f}, {:.2f}, {:.2f})",
+    _colorValue->setText(selected ? std::format("rgba({:.2f}, {:.2f}, {:.2f})",
                                                 selected->color.r, selected->color.g, selected->color.b)
-                                  : "-";
-    _sizeValue->_text  = selected ? std::format("{} x {}",
-                                                static_cast<int>(selected->size.x),
-                                                static_cast<int>(selected->size.y))
-                                  : "-";
+                                  : "-");
+    _sizeValue->setText(selected ? std::format("{} x {}",
+                                               static_cast<int>(selected->size.x),
+                                               static_cast<int>(selected->size.y))
+                                 : "-");
     if (!_visibleToggle->getChildren().empty()) {
         if (auto* label = dynamic_cast<ya::UIText*>(_visibleToggle->getChildren()[0].get())) {
-            label->_text = (selected && selected->bVisible) ? "Visible: on" : "Visible: off";
-            if (label->_text != _lastToggleText) {
-                bGeometryChanged = true;
-                _lastToggleText  = label->_text;
-            }
+            label->setText((selected && selected->bVisible) ? "Visible: on" : "Visible: off");
         }
-    }
-
-    if (bGeometryChanged && _tree) {
-        _tree->invalidateLayout();
     }
 }
 

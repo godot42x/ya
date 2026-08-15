@@ -45,6 +45,17 @@ struct YA_GUI_API UISelectableRow : public UIElement
     /// Presentation state, written by the presenter from the workspace
     /// selection. The row never flips this itself.
     bool _bSelected = false;
+
+    /// Changed-only selection setter (GI-105): repaint on a real change. The
+    /// presenter copies the workspace selection; a same-value sync is a no-op.
+    void setSelected(bool value)
+    {
+        if (_bSelected == value) {
+            return;
+        }
+        _bSelected = value;
+        invalidateProperty(EUIPropertyImpact::Paint);
+    }
     /// Visual drop-target feedback, written by the tree drag session.
     VisualFlag _bDropHighlighted{*this};
 

@@ -6,7 +6,7 @@
 
 ## 当前切片
 
-当前激活切片：`GI-105 Workbench changed-only setter 迁移`
+当前激活切片：`GI-106 Inherited paint-input audit`
 
 执行规则：
 
@@ -102,7 +102,7 @@
   - 验收：属性 impact 表可审计；调用方不能自行降级 dirty reason。
   - 提交：`[gui] define property invalidation impact`
 
-- [ ] `GI-105` Workbench changed-only setter 迁移
+- [x] `GI-105` Workbench changed-only setter 迁移
   - 依赖：GI-103、GI-104
   - 修改：
     - row selected/label；

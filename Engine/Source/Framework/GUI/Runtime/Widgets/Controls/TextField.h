@@ -46,6 +46,17 @@ struct YA_GUI_API UITextField : public UIElement
     glm::vec4   _caretColor      = {0.90f, 0.92f, 0.95f, 1.0f};
     uint32_t    _maxLength       = 256;
 
+    /// Changed-only text setter (GI-105): repaint on a real change. Presenters
+    /// replace the buffer from the workspace; a same-value sync is a no-op.
+    void setText(const std::string& value)
+    {
+        if (_text == value) {
+            return;
+        }
+        _text = value;
+        invalidateProperty(EUIPropertyImpact::Paint);
+    }
+
     /// Fired on every edit (insert / delete / caret-independent text change).
     std::function<void(const std::string& text)> _onTextChanged;
     /// Fired on Enter and on focus loss (commit the buffer).

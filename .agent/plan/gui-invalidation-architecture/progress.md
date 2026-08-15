@@ -327,3 +327,44 @@ GI-102（persistent binding 迁移）与 GI-101 是同一改动的不可拆分�
 
 - `GI-105`：Workbench changed-only setter 迁移（presenter 从 `_bVolatile` 每帧全量重画
   迁移到 changed-only setter + reactive，删除 volatile 兜底）。
+
+## 2026-08-15 — GI-105 完成：Workbench changed-only setter 迁移
+
+### 本轮完成
+
+把 Workbench presenter 的「每帧直接写字段 + `_bVolatile` 兜底」迁移为「changed-only setter」，
+删除了 volatile 兜底与手工补偿：
+
+- 新增 7 个 changed-only setter（同值写入是 no-op，真实变化才 `invalidateProperty`）：
+  - `UIElement::setPosition` / `setSize`（Layout）、`setVisibility`（SubtreePaintContext，
+    且涉及 Collapsed 时升为 Layout）；
+  - `UIPanel::setColor`（Paint）、`UIText::setText`（AutoSize→Layout / fixed→Paint）、
+    `UITextField::setText`（Paint）、`UISelectableRow::setSelected`（Paint）；
+- `syncPresentationState()` 全部改走 setter；
+- 删除 7 处 `_bVolatile` 标记（highlightPanel / previewName / nameField / colorValue /
+  sizeValue / row / label）；
+- 删除 `_lastHighlightSize` / `_lastHighlightPos` / `_lastToggleText` 与 `bGeometryChanged`
+  手工补偿——changed-only 检测由 setter 内置，presenter 不再自己比较。
+
+### 代码/行为结论
+
+- 稳态帧 `rebuilt=0`（GI-004 基线已验证 Render 页稳态 rebuilt=0，但那是 demo 页；本次
+  删除 volatile 后，Editor 页 presenter 同值同步也是 no-op，不再每帧重画）；
+- `setVisibility` 的 Collapsed 判定：`EWidgetVisibility::Hidden` 保留 layout space，
+  `Collapsed` 不保留，只有两者互转时才升 Layout，其余用 SubtreePaintContext；
+- setter 是 GI-202（字段封装为 backing field）的前置：GI-202 只需把字段改 private，
+  setter 已经就位。
+
+### 验证
+
+- `xmake b ya-gui-closure-test` 通过（15.3s）；
+- `xmake r ya-gui-closure-test` **149 tests PASSED**（无新增测试，本轮是 presenter 迁移，
+  由既有 property impact 测试 + smoke 覆盖）；
+- `xmake b GUIWorkbench` 通过（8.0s）；
+- `xmake r GUIWorkbench --headless --smoke-actions --perf-telemetry` smoke **PASS**，
+  稳态帧 `rebuilt=0`；
+- `xmake b ya-engine` 聚合通过（45.8s）。
+
+### 下一接力点
+
+- `GI-106`：Inherited paint-input audit（决定 subtree invalidation vs context generation）。

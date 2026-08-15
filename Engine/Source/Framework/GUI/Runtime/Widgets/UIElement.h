@@ -373,6 +373,44 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// so a property's invalidation scope is a stable contract, not a
     /// per-call-site decision.
     void invalidateProperty(EUIPropertyImpact impact);
+
+    // === Changed-only property setters (GI-105) ===
+    // Presenters call these instead of writing the backing field directly, so
+    // a same-value write is a no-op and only a real change invalidates at the
+    // property's declared impact. `_position`/`_size` are layout inputs
+    // (Layout); `_visibility` is SubtreePaintContext unless the Collapsed
+    // transition changes whether layout space is kept.
+
+    void setPosition(const glm::vec2& value)
+    {
+        if (_position == value) {
+            return;
+        }
+        _position = value;
+        invalidateProperty(EUIPropertyImpact::Layout);
+    }
+
+    void setSize(const glm::vec2& value)
+    {
+        if (_size == value) {
+            return;
+        }
+        _size = value;
+        invalidateProperty(EUIPropertyImpact::Layout);
+    }
+
+    void setVisibility(EWidgetVisibility value)
+    {
+        if (_visibility == value) {
+            return;
+        }
+        const bool bPrevKeepsSpace = (_visibility != EWidgetVisibility::Collapsed);
+        const bool bNextKeepsSpace = (value != EWidgetVisibility::Collapsed);
+        _visibility = value;
+        invalidateProperty(bPrevKeepsSpace != bNextKeepsSpace
+                               ? EUIPropertyImpact::Layout
+                               : EUIPropertyImpact::SubtreePaintContext);
+    }
     /// Record `ref` as a paint-collected dependency (called by Reactive::get
     /// during the paint walk). Cleared before a dirty widget re-runs its paint.
     void trackPaintDependency(ReactiveBase* ref) { _paintDependencies.insert(ref); }
