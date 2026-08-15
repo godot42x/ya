@@ -272,3 +272,58 @@ GI-102（persistent binding 迁移）与 GI-101 是同一改动的不可拆分�
 ### 下一接力点
 
 - `GI-104`：最小 property impact contract（property 分类：Paint / Layout / SubtreePaintContext）。
+
+## 2026-08-15 — GI-104 完成：最小 property impact contract
+
+### 本轮完成
+
+- 定义 `EUIPropertyImpact` 枚举（`None` / `Paint` / `Layout` / `SubtreePaintContext`），
+  放在 `UIElement.h` 紧邻 `EUIInvalidationReason`；
+- `UIElement::invalidateProperty(impact)` 统一失效入口：setter 声明 impact 而不是
+  直接选择 dirty API，三态映射到 `markPaintDirty` / `markLayoutDirty` / `invalidateSubtree`；
+- `invalidateSubtree()` 增加 `reason` 参数（默认 `InheritedPaintContext`），修正它此前
+  标 `None` reason 的问题；
+- 修正 `UIBoxLayout::setClipsChildren` 的 impact 错误：clip 是 inherited paint context
+  （重画子树、不重排），此前误用 `invalidateArrange()`（Layout）。这是当前代码里唯一
+  一处 impact 分类错误，也是 `SubtreePaintContext` 的首个真实 consumer。
+
+### Property impact 审计表（持续维护，process.md 3.2 要求）
+
+| Widget / Layout | Property | Impact |
+|---|---|---|
+| UIButton | `_normalColor`/`_hoveredColor`/`_pressedColor`/`_focusedColor` | Paint（reflection 编辑） |
+| UIButton | `_bHovered`/`_bPressed`/`_bFocused` | Paint（VisualFlag） |
+| UIButton | `_enabledBinding` | Paint（resolved read） |
+| UIButton | `_contentLayout.padding` | Layout（UISingleChildLayout） |
+| UIButton | `_onClick` | None（runtime callback） |
+| UIText | `_text`/`_fontSize` | Layout（AutoSize）/ Paint（fixed-size） |
+| UIText | `_color`/`_hAlign`/`_vAlign` | Paint |
+| UIBoxLayout | `_direction`/`_spacing`/`_padding`/`_mainAxisAlignment`/`_stretchLastChild` | Layout |
+| UIBoxLayout | `_bClipChildren` | **SubtreePaintContext** |
+| UIBoxSlot | `_sizeRule`/`_weight`/`_margin`/`_crossAlignment`/`_minSize`/`_maxSize`/`_preferredSize`/`_bParticipatesInLayout`/`_bReserveSpaceWhenHidden` | Layout |
+| UISingleChildLayout | `_padding` | Layout |
+| UISplitLayout | `_orientation`/`_splitRatio`/`_minFirstExtent`/`_minSecondExtent`/`_dividerThickness`/`_padding` | Layout |
+| UIScrollLayout | `_axis`/`_scrollOffset`/`_scrollStep` | Layout |
+
+### 代码/行为结论
+
+- 未建设通用 variant property system（framework-lessons 的「不照搬」约束）；
+- Layout 层的 setter 已有一套 changed-only `invalidateMeasure/Arrange`，本轮只新增
+  `invalidateSubtreePaint()` 修正 clip，不重写那套机制；
+- 两个枚举正交：`EUIInvalidationReason` 回答「为什么失效」（诊断），`EUIPropertyImpact`
+  回答「影响范围」（契约），setter 声明 impact，reason 由入口内部决定。
+
+### 验证
+
+- `xmake b ya-gui-closure-test` 通过（16.6s）；
+- `xmake r ya-gui-closure-test` **149 tests PASSED**（新增 4 个：
+  PropertyImpactPaintDoesNotInvalidateLayout、
+  PropertyImpactLayoutInvalidatesMeasure、
+  SubtreePaintContextInvalidatesWholeSubtree、
+  SetClipChildrenIsSubtreePaintNotLayout）；
+- `xmake b ya-engine` 聚合通过（50.9s）。
+
+### 下一接力点
+
+- `GI-105`：Workbench changed-only setter 迁移（presenter 从 `_bVolatile` 每帧全量重画
+  迁移到 changed-only setter + reactive，删除 volatile 兜底）。

@@ -223,11 +223,28 @@ void UIElement::markLayoutDirty(EUIInvalidationReason reason)
     }
 }
 
-void UIElement::invalidateSubtree()
+void UIElement::invalidateSubtree(EUIInvalidationReason reason)
 {
-    markPaintDirty();
+    markPaintDirty(reason);
     for (const auto& child : _children) {
-        child->invalidateSubtree();
+        child->invalidateSubtree(reason);
+    }
+}
+
+void UIElement::invalidateProperty(EUIPropertyImpact impact)
+{
+    switch (impact) {
+    case EUIPropertyImpact::None:
+        break;
+    case EUIPropertyImpact::Paint:
+        markPaintDirty(EUIInvalidationReason::PaintProperty);
+        break;
+    case EUIPropertyImpact::Layout:
+        markLayoutDirty(EUIInvalidationReason::LayoutProperty);
+        break;
+    case EUIPropertyImpact::SubtreePaintContext:
+        invalidateSubtree();
+        break;
     }
 }
 

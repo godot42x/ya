@@ -6,7 +6,7 @@
 
 ## 当前切片
 
-当前激活切片：`GI-104 最小 property impact contract`
+当前激活切片：`GI-105 Workbench changed-only setter 迁移`
 
 执行规则：
 
@@ -93,7 +93,7 @@
     - fixed-size color/text 不触发多余 layout。
   - 提交：`[gui/text] align bound measure and paint`
 
-- [ ] `GI-104` 最小 property impact contract
+- [x] `GI-104` 最小 property impact contract
   - 依赖：GI-001
   - 修改：
     - 定义最小 `EUIPropertyImpact` 或等价 contract；

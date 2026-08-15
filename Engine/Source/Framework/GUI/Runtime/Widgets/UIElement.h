@@ -154,6 +154,18 @@ enum class EUIInvalidationReason : uint8_t
     Volatile,              // _bVolatile per-frame rebuild (implicit, not a transition)
 };
 
+/// Declared invalidation scope of a property write (GI-104). Each runtime
+/// property has exactly one stable impact contract: its setter declares the
+/// impact here instead of choosing a dirty API directly, so a caller cannot
+/// silently downgrade a Layout change to a Paint-only repaint.
+enum class EUIPropertyImpact : uint8_t
+{
+    None,                // no invalidation (e.g. runtime-only callback storage)
+    Paint,               // repaint this widget only
+    Layout,              // re-run measure + arrange (implies repaint)
+    SubtreePaintContext, // repaint this widget and its whole subtree (clip/visibility)
+};
+
 struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
 {
     YA_REFLECT_BEGIN(UIElement)
@@ -351,10 +363,16 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// Mark this widget and its whole subtree paint-dirty (Slate dirty-subtree
     /// semantics): used when a change affects the subtree as a batch instead of
     /// a single widget, e.g. a presenter re-selecting every row in a list.
-    void invalidateSubtree();
+    /// `reason` tags the invalidation (default InheritedPaintContext).
+    void invalidateSubtree(EUIInvalidationReason reason = EUIInvalidationReason::InheritedPaintContext);
     /// Mark this widget layout-dirty: paint-dirty plus an invalidation of the
     /// owning tree's layout (measure + arrange). Implemented in .cpp.
     void markLayoutDirty(EUIInvalidationReason reason = EUIInvalidationReason::None);
+    /// Apply a property write's declared impact (GI-104). Setters call this
+    /// instead of markPaintDirty/markLayoutDirty/invalidateSubtree directly,
+    /// so a property's invalidation scope is a stable contract, not a
+    /// per-call-site decision.
+    void invalidateProperty(EUIPropertyImpact impact);
     /// Record `ref` as a paint-collected dependency (called by Reactive::get
     /// during the paint walk). Cleared before a dirty widget re-runs its paint.
     void trackPaintDependency(ReactiveBase* ref) { _paintDependencies.insert(ref); }

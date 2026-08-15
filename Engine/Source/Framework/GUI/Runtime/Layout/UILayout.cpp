@@ -173,6 +173,13 @@ void UILayout::invalidateArrange() const
     invalidateMeasure();
 }
 
+void UILayout::invalidateSubtreePaint() const
+{
+    if (_owner) {
+        _owner->invalidateSubtree();
+    }
+}
+
 void UIBoxLayout::setDirection(EWidgetBoxLayout value)
 {
     if (_direction != value) {
@@ -211,7 +218,9 @@ void UIBoxLayout::setClipsChildren(bool value)
 {
     if (_bClipChildren != value) {
         _bClipChildren = value;
-        invalidateArrange();
+        // Clip is an inherited paint context, not geometry: repaint the whole
+        // subtree without re-running measure/arrange (SubtreePaintContext).
+        invalidateSubtreePaint();
     }
 }
 

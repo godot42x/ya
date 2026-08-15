@@ -102,6 +102,9 @@ public:
 protected:
     void invalidateMeasure() const;
     void invalidateArrange() const;
+    /// Invalidate the owner's whole subtree paint context (clip/visibility),
+    /// without re-running measure/arrange.
+    void invalidateSubtreePaint() const;
 
 private:
     UIElement* _owner = nullptr;

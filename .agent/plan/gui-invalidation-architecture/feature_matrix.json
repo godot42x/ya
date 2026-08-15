@@ -1,7 +1,7 @@
 {
   "plan": "gui-invalidation-architecture",
   "updated_at": "2026-08-15",
-  "active_task": "GI-104",
+  "active_task": "GI-105",
   "legend": {
     "planned": "已纳入计划但尚未开始",
     "in_progress": "当前唯一执行切片",
@@ -80,8 +80,8 @@
         },
         {
           "id": "property_impact",
-          "status": "planned",
-          "notes": "minimal Paint/Layout/SubtreePaintContext contract"
+          "status": "pass",
+          "notes": "EUIPropertyImpact enum + UIElement::invalidateProperty; setClipsChildren corrected to SubtreePaintContext (was Layout); audit table in progress.md"
         },
         {
           "id": "workbench_migration",

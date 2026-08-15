@@ -865,4 +865,76 @@ TEST(UIFrameSnapshotTest, RebindSplitRatioClearsOldBinding)
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, before + 1);
 }
 
+// === GI-104: minimal property impact contract ===
+
+TEST(UIFrameSnapshotTest, PropertyImpactPaintDoesNotInvalidateLayout)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       panel = std::make_shared<UIPanel>("P");
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+
+    const uint64_t paintBefore  = tree.getPerfStats().paintDirtyTransitions;
+    const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
+    panel->invalidateProperty(EUIPropertyImpact::Paint);
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore + 1);
+    EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore);
+}
+
+TEST(UIFrameSnapshotTest, PropertyImpactLayoutInvalidatesMeasure)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       panel = std::make_shared<UIPanel>("P");
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    const uint64_t paintBefore  = tree.getPerfStats().paintDirtyTransitions;
+    const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
+    panel->invalidateProperty(EUIPropertyImpact::Layout);
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    // Layout implies repaint: both a layout transition and a paint transition.
+    EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore + 1);
+    EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore + 1);
+}
+
+TEST(UIFrameSnapshotTest, SubtreePaintContextInvalidatesWholeSubtree)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       parent = std::make_shared<UIPanel>("Parent");
+    auto       child  = std::make_shared<UIPanel>("Child");
+    tree.attachToLayer(WidgetTree::ELayer::Content, parent);
+    tree.attach(*parent, child);
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+
+    const uint64_t paintBefore  = tree.getPerfStats().paintDirtyTransitions;
+    const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
+    parent->invalidateProperty(EUIPropertyImpact::SubtreePaintContext);
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    // Parent and child repaint (subtree), but no re-measure.
+    EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore + 2);
+    EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore);
+}
+
+TEST(UIFrameSnapshotTest, SetClipChildrenIsSubtreePaintNotLayout)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       clip = std::make_shared<UIContainer>("Clip");
+    tree.attachToLayer(WidgetTree::ELayer::Content, clip);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
+    clip->setClipChildren(true); // SubtreePaintContext, not Layout
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore);
+}
+
 } // namespace ya
