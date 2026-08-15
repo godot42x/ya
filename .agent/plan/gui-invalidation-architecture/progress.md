@@ -152,3 +152,47 @@
 ### 下一接力点
 
 - `GI-004`：Workbench 性能基线（文档任务，固定样本测 layout/paint time 等指标）。
+
+## 2026-08-15 — GI-004 完成：Workbench 性能基线
+
+### 本轮完成
+
+- `GUIHeadlessHost` 新增 `bPerfTelemetry` 开关 + `--perf-telemetry` CLI（`GUIWorkbench`），
+  每帧输出一行完整遥测：draw/painted/rebuilt/paintDirty/layoutDirty/cacheInv/notifyCalls/
+  notifyVisits/layout/paint（GI-001 埋点此前无 host 消费，这是其首个消费端）；
+- 跑 headless smoke（40 帧，覆盖 render probe 点击、tab 切换、counter/slider/checkbox/combo、
+  menu、drag-drop、modal、scrollsplit、editor）采集基线。
+
+### 基线数据（`xmake r GUIWorkbench --headless --smoke-actions --exit-after-frame 40 --perf-telemetry`）
+
+| 样本 | draw | painted | rebuilt | paintDirty(累计) | layoutDirty | cacheInv | notify | layout ms | paint ms |
+|---|---|---|---|---|---|---|---|---|---|
+| 首帧（冷启动，Render 页） | 42 | 40 | 35 | 39 | 0 | 0 | 0/0 | 0.106 | 0.166 |
+| 稳态帧（Render 页，无输入） | 42 | 40 | **0** | 39 | 0 | 0 | 0/0 | 0.000 | 0.102 |
+| 单次点击（render probe） | 42 | 40 | 1 | 40 | 0 | 0 | 0/0 | 0.000 | 0.042 |
+| tab 切换（Widgets 页重建） | 58 | 46 | 26 | 71 | 0 | 0 | 0/0 | 0.116 | 0.137 |
+| 稳态帧（Widgets 页） | 58 | 46 | 1 | 72 | 0 | 0 | 0/0 | 0.000 | 0.062 |
+| 交互高峰（drag-drop/modal 段） | 82 | 80 | 61 | 249 | 0 | 0 | 0/0 | 0.162 | 0.223 |
+
+### 关键观察
+
+1. **稳态帧 rebuilt=0**：增量 draw-item cache 复用生效，无输入帧零重建、layout 0ms；
+   首帧冷启动 rebuilt=35/40（88%），之后纯交互帧 rebuilt 只随受影响 widget 增长——正确性基线成立。
+2. **notifyCalls/notifyVisits 全程 0**：Workbench presenter 的每帧同步用的是 `_bVolatile`
+   全量重画兜底（`d0f18f96`），**尚未走 reactive 依赖链**——这直接印证 GI-105
+   （presenter 迁移到 property setter、删除 `_bVolatile`）是本计划 Phase 1 的核心收益点；
+   当前 volatile 兜底导致交互帧 rebuilt 偏高（drag-drop 段 61/80=76%）。
+3. **layoutDirty 全程 0**：smoke 交互不触发 layout 失效（tab 切换是 paint 级重建，
+   无 resize/split 拖动）；resize/scrollsplit 样本留待 Phase 2 统一 paint pipeline 后复测。
+4. **paintDirty 是累计值**（单调递增，本次未做每帧差值归一），Phase 2 若要 per-frame
+   delta 需在 buildSnapshot 里 snapshot 前作差，暂不在本基线引入。
+
+### 验证
+
+- `xmake b GUIWorkbench` 通过；
+- smoke PASS；遥测字段完整覆盖验收要求（layout/paint time、painted/rebuilt、draw items、
+  notify visits）。
+
+### 下一接力点
+
+- Phase 0 完成，进入 `GI-101`（reactive edge 模型重构，区分 paint-collected vs persistent binding）。

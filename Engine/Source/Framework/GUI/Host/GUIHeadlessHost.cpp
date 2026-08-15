@@ -1,9 +1,36 @@
 #include "GUI/Host/GUIHeadlessHost.h"
 
 #include "Core/Log.h"
+#include "GUI/Widgets/Reactive.h"
 
 namespace ya
 {
+
+namespace
+{
+
+// One-line perf telemetry for the Workbench performance baseline (GI-004). Logs
+// the per-frame counters plus the process-wide reactive diagnostics so the
+// baseline can record painted/rebuilt/notify-visits alongside draw items.
+void logPerfTelemetry(const char* tag, const GuiPerfStats& stats)
+{
+    const ReactiveDiagnostics diag = getReactiveDiagnostics();
+    YA_CORE_INFO("GUIHeadlessHost {}: draw={} painted={} rebuilt={} paintDirty={} layoutDirty={} cacheInv={} notifyCalls={} notifyVisits={} layout={:.3f}ms paint={:.3f}ms",
+                 tag,
+                 stats.drawItems,
+                 stats.paintedWidgets,
+                 stats.rebuiltWidgets,
+                 stats.paintDirtyTransitions,
+                 stats.layoutDirtyTransitions,
+                 stats.cacheInvalidations,
+                 diag.notifyCalls,
+                 diag.dependentVisits,
+                 stats.layoutMS,
+                 stats.paintMS);
+}
+
+} // namespace
+
 
 struct GUIHeadlessHost::FImpl
 {
@@ -127,12 +154,10 @@ void GUIHeadlessHost::onTick(float /*dt*/)
     _impl->lastSnapshot = _impl->tree.buildSnapshot(_impl->config.frameBuildContext);
     if (!_impl->bLoggedFirstSnapshot) {
         _impl->bLoggedFirstSnapshot = true;
-        const GuiPerfStats& stats   = _impl->tree.getPerfStats();
-        YA_CORE_INFO("GUIHeadlessHost first snapshot: {} draw items, {} widgets painted, layout {:.3f}ms paint {:.3f}ms",
-                     stats.drawItems,
-                     stats.paintedWidgets,
-                     stats.layoutMS,
-                     stats.paintMS);
+        logPerfTelemetry("first snapshot", _impl->tree.getPerfStats());
+    }
+    if (_impl->config.bPerfTelemetry) {
+        logPerfTelemetry("perf frame", _impl->tree.getPerfStats());
     }
     if (_impl->config.onSnapshot) {
         _impl->config.onSnapshot(_impl->lastSnapshot);

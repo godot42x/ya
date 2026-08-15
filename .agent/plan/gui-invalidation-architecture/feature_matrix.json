@@ -1,7 +1,7 @@
 {
   "plan": "gui-invalidation-architecture",
   "updated_at": "2026-08-15",
-  "active_task": "GI-004",
+  "active_task": "GI-101",
   "legend": {
     "planned": "已纳入计划但尚未开始",
     "in_progress": "当前唯一执行切片",
@@ -54,8 +54,8 @@
         },
         {
           "id": "GI-004",
-          "status": "planned",
-          "notes": "Workbench stable/interaction performance baseline"
+          "status": "pass",
+          "notes": "headless perf telemetry added; baseline: steady frame rebuilt=0, interaction spike rebuilt 61/80 (volatile fallback), notify=0 confirms presenter not yet on reactive path"
         }
       ]
     },

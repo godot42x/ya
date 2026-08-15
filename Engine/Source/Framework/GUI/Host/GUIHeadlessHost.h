@@ -20,6 +20,9 @@ struct FGUIHeadlessHostConfig
     IAppEventSource*        eventSource = nullptr;
     AppAutomationRunOptions automation{};
     std::function<void(const UIFrameSnapshot&)> onSnapshot;
+    /// Emit per-frame perf telemetry (draw/painted/rebuilt/dirty transitions/
+    /// notify visits) for the Workbench performance baseline (GI-004).
+    bool bPerfTelemetry = false;
 };
 
 class YA_GUI_API GUIHeadlessHost final : public IAppLoopDelegate

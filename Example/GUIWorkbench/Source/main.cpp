@@ -98,7 +98,8 @@ int main(int argc, char** argv)
         ("start-page", "Start the workbench on a named page (Render/Widgets/Layout/Menus/DragDrop/Modal/ScrollSplit/Editor)", cxxopts::value<std::string>())
         ("debug-render-overlay", "Inject a host-side render debug overlay into the UI snapshot")
         ("debug-render2d-log", "Enable Render2D session/clip/flush diagnostics in the log")
-        ("debug-render2d-log-limit", "Maximum Render2D clip/flush logs per frame", cxxopts::value<uint32_t>()->default_value("16"));
+        ("debug-render2d-log-limit", "Maximum Render2D clip/flush logs per frame", cxxopts::value<uint32_t>()->default_value("16"))
+        ("perf-telemetry", "Emit per-frame GUI perf telemetry (draw/painted/rebuilt/dirty/notify) for the performance baseline");
 
     try {
         const auto result = options.parse(argc, argv);
@@ -165,8 +166,9 @@ int main(int argc, char** argv)
             registerHeadlessWorkbenchFonts(config.fontSizes);
             ya::GUIHeadlessHost host(
                 ya::FGUIHeadlessHostConfig{
-                    .logicalExtent = {config.width, config.height},
-                    .automation    = config.automation,
+                    .logicalExtent  = {config.width, config.height},
+                    .automation     = config.automation,
+                    .bPerfTelemetry = result.count("perf-telemetry") > 0,
                 },
                 app);
             if (!host.init()) {

@@ -6,7 +6,7 @@
 
 ## 当前切片
 
-当前激活切片：`GI-004 Workbench 性能基线`
+当前激活切片：`GI-101 Reactive dependency edge 模型`
 
 执行规则：
 
@@ -53,11 +53,11 @@
     - 条件读取切换后旧 edge 被移除。
   - 提交：`[test/gui] cover reactive edge lifecycle`
 
-- [ ] `GI-004` Workbench 性能基线
+- [x] `GI-004` Workbench 性能基线
   - 依赖：GI-001
   - 修改：固定稳态帧、selection、rename、visibility、resize、scroll/split 样本。
   - 验收：记录 layout/paint time、painted/rebuilt、draw items、notify visits；证据写入 `progress.md`。
-  - 提交：文档任务，不要求代码提交。
+  - 提交：`[gui] add headless perf telemetry for workbench baseline`（perf 遥测工具）+ 文档。
 
 ## P1A — Property-aware mutation 与 binding
 
