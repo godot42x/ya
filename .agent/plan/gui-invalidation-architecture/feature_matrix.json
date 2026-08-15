@@ -106,8 +106,8 @@
         },
         {
           "id": "property_encapsulation",
-          "status": "planned",
-          "notes": "runtime mutable visual/layout fields become backing fields"
+          "status": "in_progress",
+          "notes": "slice 1 done (UIElement _position/_size/_visibility protected + getters, commit 70ece56c); remaining per-control fields (_text/_fontSize/_color/_normalColor...)"
         },
         {
           "id": "direct_write_gate",

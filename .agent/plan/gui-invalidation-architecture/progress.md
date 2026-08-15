@@ -452,3 +452,40 @@ GI-102（persistent binding 迁移）与 GI-101 是同一改动的不可拆分�
 
 - `GI-202`：Runtime visual/layout 字段封装（把 `_text/_size/_position/_visibility/...`
   按真实写路径收为 backing field，按控件族拆多个小提交）。
+
+## 2026-08-16 — GI-202（切片 1）：UIElement 布局属性封装
+
+GI-202 按控件族拆多个小提交；本轮完成**基类 `_position/_size/_visibility`** 封装。
+
+### 本轮完成
+
+- `UIElement::_position/_size/_visibility` 改为 **protected** backing field；
+- 新增 `getPosition()` / `getSize()` / `getVisibility()` 访问器（外部读）；
+- 保留 `setPosition` / `setSize` / `setVisibility`（GI-105 已加）为唯一外部写入口；
+- `_zOrder/_anchorMin/_anchorMax/_pivot/_hitFilter/_focusPolicy` 保持 public，登记为
+  **authoring-only 例外清单**（暂无 runtime 写路径，待其获得 setter 后再封装）；
+- 全量迁移外部写/读到 setter/getter：Workbench、WidgetTree、UILayout、Menu/MenuBar、
+  SceneWidgetEntry、GameEditor（UIDesignerPanel/DetailsView）、GUI 测试套件（约 200 处，
+  用脚本机械替换 `->_x = v` → `->setX(v)` 与 `->_x` 读 → `->getX()`，再人工修正）。
+
+### 代码/行为结论
+
+- 反射**不受影响**：`YA_REFLECT_FIELD` 在类作用域内取 `&class_t::FieldName` 成员指针，
+  protected 字段仍可序列化；
+- 派生类在 `paint/layout/computeDesiredSize` 里直接读 `_position/_size/_visibility` 合法
+  （protected），无需改；
+- 派生类构造函数里的 `_size = ...` 初始化（未 attach、setter no-op）保持直接写，不迁移；
+- 关键风险与规避：脚本批量替换误触了 **ECS `TransformComponent::_position`（vec3）**
+  与 GameEditor 注释里的 `tc->_position`，已全部 `git checkout` 回退；最终只留 UIElement
+  派生对象的迁移。
+
+### 验证
+
+- `xmake b ya-gui-closure-test` 通过；
+- `xmake r ya-gui-closure-test` **151 tests PASSED**（无新增，纯机械迁移）；
+- `xmake b ya-engine` 聚合通过。
+
+### 下一接力点
+
+- `GI-202`（切片 2）：各控件族字段封装（`UIText::_text/_fontSize/_color`、
+  `UIPanel::_color`、`UIButton::_normalColor/...` 等），继续按控件族拆小提交。

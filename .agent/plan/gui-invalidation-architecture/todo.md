@@ -134,7 +134,7 @@
   - 验收：批量反序列化只在 transaction 末产生必要 invalidation。
   - 提交：`[gui] add property mutation transaction`
 
-- [ ] `GI-202` Runtime visual/layout 字段封装
+- [-] `GI-202` Runtime visual/layout 字段封装
   - 依赖：GI-105、GI-201
   - 修改：按真实写路径将 `_text/_size/_position/_visibility/...` 收为 backing field。
   - 验收：
@@ -142,6 +142,8 @@
     - authoring-only 例外有清单和删除条件；
     - 现有反射/序列化仍工作。
   - 提交：按控件族拆成多个 `[gui/widgets] encapsulate ... properties` 小提交。
+  - 进度：切片 1（基类 `_position/_size/_visibility`）已提交 `70ece56c`；剩余各控件族字段
+    （`UIText::_text/_fontSize/_color`、`UIPanel::_color`、`UIButton::_normalColor/...`）。
 
 - [ ] `GI-203` Direct-write 静态门禁
   - 依赖：GI-202
