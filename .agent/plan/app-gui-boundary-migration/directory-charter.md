@@ -73,25 +73,33 @@ Applications/        应用形态层（可执行壳）
 - 承载引擎能力；
 - 被 Framework 反向依赖。
 
-## 4. 当前 -> 目标映射
+## 4. 当前 -> 目标映射（已落地，2026-08-15）
 
-| 当前目录 | 目标 | 说明 |
+物理树已收口为两层。以下映射全部执行完毕（commit `76112f26` Batch 1、`5f27a9d7` Batch 2）：
+
+| 迁移前目录 | 落地后目录 | 说明 |
 |---|---|---|
 | Foundation/Core（底座 + Reflection） | Framework/Core | Reflection 并入 Core |
-| Foundation/Core/Scripting | Framework/Scripting | 依赖 sol2 |
+| Foundation/Core/Scripting | Framework/Core/Scripting | 随 Core 移动，未拆 target |
 | Foundation/RHI | Framework/RHI | 独立于 Render，平级 |
-| App/{Kernel,Control,Module}（已落地） | Framework/App/{Kernel,Control,Module} | 物理下沉一层 |
-| GUI/Host（已落地）+ Framework/GUI/{Runtime,Tooling} | Framework/GUI/{Host,Runtime,Tooling} | Host 与 Runtime/Tooling 汇合 |
+| App/{Kernel,Control,Module} | Framework/App/{Kernel,Control,Module} | 物理下沉一层 |
+| GUI/Host + Framework/GUI/{Runtime,Tooling} | Framework/GUI/{Host,Runtime,Tooling} | Host 与 Runtime/Tooling 汇合 |
 | Framework/Game/Render | Framework/Render | 通用 3D 渲染 |
 | Framework/Game/Resource | Framework/Resource | 通用资源加载 |
 | Framework/Game/Scene | Framework/Scene | 通用场景 |
 | Framework/Game/Physics | Framework/Physics | 通用物理 |
-| Framework/Game/Gameplay/ECS | Framework/ECS | ECS 核心 |
-| Framework/Game/Gameplay/Systems | Framework/ECS/Systems（脚本系统归 Scripting，待审计） | 通用系统 |
+| Framework/Game/Gameplay/ECS/Core | Framework/ECS/Core | ECS 核心 |
+| Framework/Game/Gameplay/Systems | Framework/ECS/Systems | 通用系统（含脚本系统，待拆） |
 | Framework/Game/Gameplay/Linkage | Framework/ECS/Linkage | 组件联动 |
-| Framework/Hierarchy | 待定：Framework/Scene 或 Framework/Core | renderer-independent scene-tree base |
-| Applications/{GameRuntime,GameEditor}（已落地） | 保留 | |
+| Applications/{GameRuntime,GameEditor} | 保留 | |
+| Framework/Hierarchy | 保留原位（归宿待定：Scene 或 Core） | renderer-independent scene-tree base |
 | Example/GUIWorkbench | 保留 | 未来上提 Applications/GuiWorkbench |
+
+剩余非阻塞项（另立批次）：
+
+- `Gameplay/` include 拼写 -> `ECS/`（38 处消费者，语义收口）
+- `Framework/ECS/Systems` 内 Lua/JSScriptingSystem 拆归 `Framework/Scripting`
+- `Framework/Hierarchy` 归宿拍板
 
 ## 5. 命名规则
 

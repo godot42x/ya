@@ -46,9 +46,9 @@
 
 ## P3 — Batch 3 清理与脚本同步
 
-- [ ] 同步 `Script/*.py` 中其余硬编码 target 名 / 路径（若有）
-- [ ] 全量构建 + GUI-only 闭包 + `ya-testing` 回归
-- [ ] 更新 `directory-charter.md` 中「当前→目标映射」为已落地状态
+- [x] 同步 `Script/*.py` 中其余硬编码 target 名 / 路径（确认零残留，仅 ya_module_lint.py 需改，已在 Batch 1/2 改）
+- [x] 全量构建 + GUI-only 闭包 + `ya-testing` 回归（ya-engine / GUIWorkbench / GameRuntime / GameEditor / ya-testing 全绿）
+- [x] 更新 `directory-charter.md` 中「当前→目标映射」为已落地状态
 
 ## 待拍板（不阻塞主线，后续批次）
 
