@@ -240,3 +240,35 @@ GI-102（persistent binding 迁移）与 GI-101 是同一改动的不可拆分�
 
 - `GI-103`：`UIText::computeDesiredSize()` 使用 resolved text/style，AutoSize binding 注册
   Layout edge（measure 依赖收集）。
+
+## 2026-08-15 — GI-103 完成：UIText resolved measure/paint 一致
+
+### 本轮完成
+
+- `resolvedText()` / `resolvedStyle()` 增加 `EDirtyLevel` 参数（默认 Paint）；
+- `paintSelf()` 按 `_bAutoSize` 决定读取 level：AutoSize 文本的 text/fontSize 是 Layout
+  edge（写会重跑 measure+arrange），fixed-size 是 Paint edge（只重画）；
+- `computeDesiredSize()` 改为读 `resolvedText()` / `resolvedStyle()` 的 resolved 值，
+  修正 AutoSize + binding 时 measure 用裸 `_text`/`_fontSize` 的旧值不一致；
+- 明确 measure 阶段（layout，早于 paint walk）不注册依赖：`currentPaintWidget()` 为空，
+  `get()` 无副作用；Layout edge 由 `paintSelf` 在同一 level 建立。
+
+### 代码/行为结论
+
+- 修复了「bound AutoSize 文本内容/字号变了，measure 用旧值导致 desired size 不更新」
+  的正确性缺口；
+- 复用 GI-101 的 per-edge level 语义：同一 `_textBinding` 在 AutoSize/fixed-size 下自动
+  落到不同 level，无需 bind 时区分。
+
+### 验证
+
+- `xmake b ya-gui-closure-test` 通过（10.5s）；
+- `xmake r ya-gui-closure-test` **145 tests PASSED**（新增 3 个：
+  AutoSizeTextBindingTriggersLayoutOnTextChange、
+  FixedSizeTextBindingTriggersPaintOnly、
+  AutoSizeTextComputeDesiredSizeUsesResolvedText）；
+- `xmake b ya-engine` 聚合通过。
+
+### 下一接力点
+
+- `GI-104`：最小 property impact contract（property 分类：Paint / Layout / SubtreePaintContext）。

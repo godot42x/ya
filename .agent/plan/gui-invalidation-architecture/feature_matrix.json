@@ -1,7 +1,7 @@
 {
   "plan": "gui-invalidation-architecture",
   "updated_at": "2026-08-15",
-  "active_task": "GI-103",
+  "active_task": "GI-104",
   "legend": {
     "planned": "已纳入计划但尚未开始",
     "in_progress": "当前唯一执行切片",
@@ -75,8 +75,8 @@
         },
         {
           "id": "resolved_text_measure",
-          "status": "planned",
-          "notes": "AutoSize bound text/style measure and paint use same resolved values"
+          "status": "pass",
+          "notes": "UIText resolvedText/resolvedStyle take level; AutoSize reads Layout edge, fixed-size reads Paint edge; computeDesiredSize uses resolved values"
         },
         {
           "id": "property_impact",

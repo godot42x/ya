@@ -10,9 +10,15 @@ void UIText::paintSelf(UIFrameBuilder& builder)
 {
     // Resolve the (possibly reactive) text first so the dependency is recorded
     // even when no font is available and the item is skipped.
-    const std::string& text = resolvedText();
-    const FWidgetStyle style = resolvedStyle();
-    auto               font  = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
+    //
+    // AutoSize text: a text/fontSize change alters the desired size, so those
+    // reads are Layout edges (a write must re-run measure+arrange). Fixed-size
+    // text only repaints: Paint edges.
+    const ReactiveBase::EDirtyLevel level = _bAutoSize ? ReactiveBase::EDirtyLevel::Layout
+                                                       : ReactiveBase::EDirtyLevel::Paint;
+    const std::string&               text  = resolvedText(level);
+    const FWidgetStyle               style = resolvedStyle(level);
+    auto                             font  = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
     if (!font) {
         return;
     }
@@ -27,13 +33,13 @@ void UIText::bindStyle(std::shared_ptr<Reactive<FWidgetStyle>> style)
     _styleBinding = std::move(style);
 }
 
-FWidgetStyle UIText::resolvedStyle() const
+FWidgetStyle UIText::resolvedStyle(ReactiveBase::EDirtyLevel level) const
 {
     FWidgetStyle style;
     style.textColor = _color;
     style.fontSize  = _fontSize;
     if (_styleBinding) {
-        const FWidgetStyle& bound = _styleBinding->get(); // records the dependency
+        const FWidgetStyle& bound = _styleBinding->get(level); // records the dependency
         style.textColor          = bound.textColor;
         style.fontSize           = bound.fontSize;
     }
@@ -45,11 +51,16 @@ glm::vec2 UIText::computeDesiredSize() const
     if (!_bAutoSize) {
         return _size;
     }
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+    // Measure from the resolved text/style so the desired size matches paint
+    // exactly when a binding is active. (Measure runs during layout, before
+    // the paint walk, so get() here does not register a dependency; the Layout
+    // edge is instead established by paintSelf at the same level.)
+    const FWidgetStyle style = resolvedStyle(ReactiveBase::EDirtyLevel::Layout);
+    auto               font  = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
     if (!font) {
         return _size;
     }
-    return {font->measureText(_text), font->lineHeight};
+    return {font->measureText(resolvedText(ReactiveBase::EDirtyLevel::Layout)), font->lineHeight};
 }
 
 } // namespace ya

@@ -6,7 +6,7 @@
 
 ## 当前切片
 
-当前激活切片：`GI-103 UIText resolved measure/paint 一致`
+当前激活切片：`GI-104 最小 property impact contract`
 
 执行规则：
 
@@ -82,7 +82,7 @@
   - 验收：GI-003 全部通过；Phase 2 统一 paint 后 binding 仍有效。
   - 提交：随 GI-101 一并完成（edge 模型与 persistent 迁移是同一改动，无法拆分编译）
 
-- [ ] `GI-103` UIText resolved measure/paint 一致
+- [x] `GI-103` UIText resolved measure/paint 一致
   - 依赖：GI-101
   - 修改：
     - `computeDesiredSize()` 使用 resolved text/style；

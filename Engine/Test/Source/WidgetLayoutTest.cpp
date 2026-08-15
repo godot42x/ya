@@ -519,4 +519,69 @@ TEST(WidgetLayoutTest, BoxSlotsControlHiddenParticipationAndFillBounds)
     EXPECT_FLOAT_EQ(fill->_layoutRect.pos.y, 80.0f);
 }
 
+// === GI-103: UIText resolved measure/paint + AutoSize Layout edge ===
+
+TEST(WidgetLayoutTest, AutoSizeTextBindingTriggersLayoutOnTextChange)
+{
+    registerSyntheticFont(16, 8.0f);
+    WidgetTree tree({.width = 400, .height = 200});
+
+    auto ref   = std::make_shared<Reactive<std::string>>("Hi");   // 2x8 = 16
+    auto label = std::make_shared<UIText>("AutoBound");
+    label->_bAutoSize = true;
+    label->bindText(ref);
+    tree.attachToLayer(WidgetTree::ELayer::Content, label);
+
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start (lay out + collect edge)
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    EXPECT_FLOAT_EQ(label->_layoutRect.extent.x, 16.0f);
+
+    const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
+    ref->set("Hello World");                       // 11x8 = 88 -> desired width changes
+    tree.buildSnapshot(UIFrameBuildContext{});     // re-layout + re-paint
+
+    EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore + 1);
+    EXPECT_FLOAT_EQ(label->_layoutRect.extent.x, 88.0f);
+}
+
+TEST(WidgetLayoutTest, FixedSizeTextBindingTriggersPaintOnly)
+{
+    registerSyntheticFont(16, 8.0f);
+    WidgetTree tree({.width = 400, .height = 200});
+
+    auto ref   = std::make_shared<Reactive<std::string>>("Hi");
+    auto label = std::make_shared<UIText>("FixedBound");
+    label->_bAutoSize = false;
+    label->_size      = {100.0f, 24.0f};
+    label->bindText(ref);
+    tree.attachToLayer(WidgetTree::ELayer::Content, label);
+
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+
+    const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
+    const uint64_t paintBefore  = tree.getPerfStats().paintDirtyTransitions;
+    ref->set("Hello World"); // content-only change: fixed size, paint-only
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore + 1);
+    EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore);
+    // Explicit size is untouched (no AutoSize measure).
+    EXPECT_FLOAT_EQ(label->_layoutRect.extent.x, 100.0f);
+}
+
+TEST(WidgetLayoutTest, AutoSizeTextComputeDesiredSizeUsesResolvedText)
+{
+    registerSyntheticFont(16, 8.0f);
+    auto ref   = std::make_shared<Reactive<std::string>>("Hi");
+    auto label = std::make_shared<UIText>("AutoMeasure");
+    label->_bAutoSize = true;
+    label->bindText(ref);
+
+    // No paint walk here: measure must still read the resolved (bound) text,
+    // not the stale _text field.
+    ref->set("Hello World");
+    EXPECT_FLOAT_EQ(label->computeDesiredSize().x, 88.0f);
+}
+
 } // namespace ya

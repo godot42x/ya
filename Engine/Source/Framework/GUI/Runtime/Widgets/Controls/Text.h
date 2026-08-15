@@ -35,15 +35,16 @@ struct YA_GUI_API UIText : public UIElement
     /// Reactive text binding. When set, paint reads the reactive value (and
     /// records the dependency); set() on the reactive marks this text dirty.
     void bindText(std::shared_ptr<Reactive<std::string>> ref) { _textBinding = std::move(ref); }
-    [[nodiscard]] const std::string& resolvedText() const
+    [[nodiscard]] const std::string& resolvedText(ReactiveBase::EDirtyLevel level = ReactiveBase::EDirtyLevel::Paint) const
     {
-        return _textBinding ? _textBinding->get() : _text;
+        return _textBinding ? _textBinding->get(level) : _text;
     }
 
     /// Style binding: a bound style overrides _color/_fontSize with the
-    /// style's textColor/fontSize. Dependency is registered at bind time.
+    /// style's textColor/fontSize. Dependency is recorded during the paint
+    /// walk (not at bind time).
     void bindStyle(std::shared_ptr<Reactive<FWidgetStyle>> style);
-    [[nodiscard]] FWidgetStyle resolvedStyle() const;
+    [[nodiscard]] FWidgetStyle resolvedStyle(ReactiveBase::EDirtyLevel level = ReactiveBase::EDirtyLevel::Paint) const;
 
     void paintSelf(UIFrameBuilder& builder) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
