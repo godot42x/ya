@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Api.h"
+#include "Core/Base.h" // PLATFORM_BREAK() used by YA_CORE_ASSERT/YA_ASSERT/YA_ENSURE
 
 #include "log.cc/helper.h"
 #include "log.cc/log.h"
