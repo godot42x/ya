@@ -1,7 +1,10 @@
 #pragma once
 
 #include "GUI/Layout/UILayout.h"
+#include "GUI/Widgets/Reactive.h"
 #include "GUI/Widgets/UIElement.h"
+
+#include <memory>
 
 namespace ya
 {
@@ -57,6 +60,11 @@ struct YA_GUI_API UISplitPane : public UIElement
     float _dragStartRatio   = 0.0f;
     float _dragStartPointer = 0.0f;
 
+    /// Reactive split-ratio binding (layout-dirty). A write re-runs the tree's
+    /// layout (measure + arrange) and re-paints. Dependency is registered at
+    /// bind time (layout attributes are long-lived, not per-paint reads).
+    void bindSplitRatio(std::shared_ptr<Reactive<float>> ref);
+
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
     void paint(UIFrameBuilder& builder) override;
@@ -89,6 +97,7 @@ struct YA_GUI_API UISplitPane : public UIElement
 
 private:
     UISplitLayout _splitLayout;
+    std::shared_ptr<Reactive<float>> _splitRatioBinding;
 };
 
 } // namespace ya

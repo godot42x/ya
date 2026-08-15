@@ -1,9 +1,11 @@
 #pragma once
 
 #include "GUI/Layout/UILayout.h"
+#include "GUI/Widgets/Reactive.h"
 #include "GUI/Widgets/UIElement.h"
 
 #include <functional>
+#include <memory>
 
 namespace ya
 {
@@ -55,6 +57,10 @@ struct YA_GUI_API UIButton : public UIElement
     bool                  _bFocused = false;
     std::function<void()> _onClick;
 
+    /// Reactive enabled binding (paint-dirty). Disabled dims the fill color.
+    void bindEnabled(std::shared_ptr<Reactive<bool>> ref) { _enabledBinding = std::move(ref); }
+    [[nodiscard]] bool resolvedEnabled() const { return _enabledBinding ? _enabledBinding->get() : true; }
+
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool isHoverable() const override { return true; }
@@ -76,6 +82,7 @@ struct YA_GUI_API UIButton : public UIElement
 
 private:
     UISingleChildLayout _contentLayout;
+    std::shared_ptr<Reactive<bool>> _enabledBinding;
 };
 
 } // namespace ya

@@ -32,7 +32,23 @@ void UISplitPane::layoutAssigned(const Rect2D& rect)
         YA_CORE_WARN("UISplitPane '{}': UISplitLayout only arranges the first two children ({} attached)",
                      _name, getChildren().size());
     }
+    if (_splitRatioBinding) {
+        // Pull the bound ratio into the layout before arranging. value() reads
+        // without recording (the dependency was registered at bind time).
+        const float ratio = _splitRatioBinding->value();
+        if (ratio != _splitLayout.getSplitRatio()) {
+            _splitLayout.setSplitRatio(ratio);
+        }
+    }
     _splitLayout.arrange(*this, _layoutRect);
+}
+
+void UISplitPane::bindSplitRatio(std::shared_ptr<Reactive<float>> ref)
+{
+    _splitRatioBinding = std::move(ref);
+    _splitRatioBinding->setDirtyLevel(ReactiveBase::EDirtyLevel::Layout);
+    _splitRatioBinding->addDependent(this);
+    trackDependency(_splitRatioBinding.get());
 }
 
 void UISplitPane::paint(UIFrameBuilder& builder)

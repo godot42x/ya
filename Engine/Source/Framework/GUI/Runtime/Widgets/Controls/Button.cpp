@@ -41,12 +41,16 @@ glm::vec2 UIButton::computeDesiredSize() const
 
 void UIButton::paintSelf(UIFrameBuilder& builder)
 {
-    const glm::vec4 color = _bPressed
-                                ? _pressedColor
-                                : (_bHovered
-                                       ? _hoveredColor
-                                       : (_bFocused ? _focusedColor : _normalColor));
-    builder.addSprite(_layoutRect, color, nullptr);
+    // Resolve the (possibly reactive) enabled flag first so the dependency is
+    // recorded even when the button has no visible content to draw.
+    const bool      bEnabled = resolvedEnabled();
+    const glm::vec4 color    = _bPressed
+                                   ? _pressedColor
+                                   : (_bHovered
+                                          ? _hoveredColor
+                                          : (_bFocused ? _focusedColor : _normalColor));
+    const glm::vec4 finalColor = bEnabled ? color : glm::vec4(color.r * 0.5f, color.g * 0.5f, color.b * 0.5f, color.a);
+    builder.addSprite(_layoutRect, finalColor, nullptr);
 }
 
 bool UIButton::handleInputEvent(const Event& event, const WidgetEventContext& ctx)

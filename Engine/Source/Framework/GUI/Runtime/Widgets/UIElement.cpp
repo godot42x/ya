@@ -189,6 +189,14 @@ void UIElement::clearDependencies()
     _dependencies.clear();
 }
 
+void UIElement::markLayoutDirty()
+{
+    markPaintDirty();
+    if (_tree) {
+        _tree->invalidateLayout();
+    }
+}
+
 void UIElement::paintChildren(UIFrameBuilder& builder)
 {
     for (UIElement* child : getChildrenInPaintOrder()) {

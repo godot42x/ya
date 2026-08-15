@@ -10,6 +10,7 @@
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Resources/FontManager.h"
 
@@ -240,6 +241,17 @@ struct ReactiveProbeWidget final : UIElement
     void paintSelf(UIFrameBuilder&) override { lastRead = useA ? refA->get() : refB->get(); }
 };
 
+/// Probe widget that reads a ReactiveList's size during paint.
+struct ReactiveListProbeWidget final : UIElement
+{
+    ReactiveList<int>* list = nullptr;
+    int                lastCount = 0;
+
+    explicit ReactiveListProbeWidget(std::string name = "ListProbe") : UIElement(std::move(name)) {}
+
+    void paintSelf(UIFrameBuilder&) override { lastCount = static_cast<int>(list->size()); }
+};
+
 } // namespace
 
 TEST(UIFrameSnapshotTest, ConditionalDependencySwitchRecollects)
@@ -274,6 +286,72 @@ TEST(UIFrameSnapshotTest, ConditionalDependencySwitchRecollects)
     tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 1u);
     EXPECT_EQ(probe->lastRead, 20);
+}
+
+TEST(UIFrameSnapshotTest, ReactiveButtonEnabledOnlyRepaintsButton)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       btn   = std::make_shared<UIButton>("Btn");
+    auto       plain = std::make_shared<UIPanel>("Plain");
+    tree.attachToLayer(WidgetTree::ELayer::Content, btn);
+    tree.attachToLayer(WidgetTree::ELayer::Content, plain);
+
+    auto enabled = std::make_shared<Reactive<bool>>(true);
+    btn->bindEnabled(enabled);
+
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    tree.buildSnapshot(UIFrameBuildContext{}); // all reuse
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+
+    // Disable: only the button re-runs its paintSelf.
+    enabled->set(false);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 1u);
+}
+
+TEST(UIFrameSnapshotTest, ReactiveSplitRatioInvalidatesLayout)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       split = std::make_shared<UISplitPane>("Split");
+    tree.attachToLayer(WidgetTree::ELayer::Content, split);
+
+    auto ratio = std::make_shared<Reactive<float>>(0.5f);
+    split->bindSplitRatio(ratio);
+
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start (lays out)
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean layout: no re-layout
+    EXPECT_EQ(tree.getPerfStats().layoutMS, 0.0f);
+
+    // Write a new ratio: the layout is invalidated and re-run.
+    ratio->set(0.3f);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_GT(tree.getPerfStats().layoutMS, 0.0f);
+}
+
+TEST(UIFrameSnapshotTest, ReactiveListPushNotifiesDependents)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       probe = std::make_shared<ReactiveListProbeWidget>("ListProbe");
+    tree.attachToLayer(WidgetTree::ELayer::Content, probe);
+
+    auto list = std::make_shared<ReactiveList<int>>();
+    probe->list = list.get();
+
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(probe->lastCount, 0);
+
+    list->push(1);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(probe->lastCount, 1);
+
+    list->push(2);
+    list->push(3);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(probe->lastCount, 3);
+
+    list->clear();
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(probe->lastCount, 0);
 }
 
 } // namespace ya

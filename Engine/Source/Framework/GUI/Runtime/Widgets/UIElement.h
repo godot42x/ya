@@ -319,6 +319,9 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     void markPaintDirty() { _bPaintDirty = true; }
     [[nodiscard]] bool isPaintDirty() const { return _bPaintDirty; }
     void clearPaintDirty() { _bPaintDirty = false; }
+    /// Mark this widget layout-dirty: paint-dirty plus an invalidation of the
+    /// owning tree's layout (measure + arrange). Implemented in .cpp.
+    void markLayoutDirty();
     /// Record `ref` as a dependency of this widget (called by Reactive::get
     /// during the paint walk). Cleared before a dirty widget re-runs its paint.
     void trackDependency(ReactiveBase* ref) { _dependencies.insert(ref); }

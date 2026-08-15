@@ -15,6 +15,7 @@
 
 #include "Core/Api.h"
 
+#include <functional>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -43,15 +44,28 @@ YA_GUI_API UIElement* currentPaintWidget();
 class YA_GUI_API ReactiveBase
 {
 public:
+    /// Invalidation granularity. Paint = re-run only the dependent's paintSelf;
+    /// Layout = invalidate the tree's layout (measure + arrange + paint).
+    enum class EDirtyLevel : uint8_t
+    {
+        Paint,
+        Layout,
+    };
+
     virtual ~ReactiveBase();
 
     void addDependent(UIElement* widget) { _dependents.insert(widget); }
     void removeDependent(UIElement* widget) { _dependents.erase(widget); }
-    /// Mark every dependent paint-dirty (event-driven invalidation).
+    /// Mark every dependent dirty at this ref's configured level.
     void notifyDependents();
+
+    /// Set the invalidation granularity (default Paint). Layout-bound refs
+    /// (e.g. split ratio) must opt in so a write re-runs measure/arrange.
+    void setDirtyLevel(EDirtyLevel level) { _dirtyLevel = level; }
 
 private:
     std::unordered_set<UIElement*> _dependents;
+    EDirtyLevel                    _dirtyLevel = EDirtyLevel::Paint;
 };
 
 template <typename T>
@@ -89,6 +103,84 @@ public:
 
 private:
     T _value{};
+};
+
+/// Reactive collection (TreeView data-source precursor). size()/get() record
+/// the painting widget as a dependent; push/removeAt/clear notify dependents.
+/// Minimal by design: no tree rendering, no virtualized list — just the
+/// observable container contract.
+template <typename T>
+class ReactiveList final : public ReactiveBase
+{
+public:
+    [[nodiscard]] size_t size() const
+    {
+        if (UIElement* widget = currentPaintWidget()) {
+            ReactiveList* self = const_cast<ReactiveList*>(this);
+            self->addDependent(widget);
+            trackReactiveDependency(self, widget);
+        }
+        return _items.size();
+    }
+
+    [[nodiscard]] const T& get(size_t index) const
+    {
+        if (UIElement* widget = currentPaintWidget()) {
+            ReactiveList* self = const_cast<ReactiveList*>(this);
+            self->addDependent(widget);
+            trackReactiveDependency(self, widget);
+        }
+        return _items[index];
+    }
+
+    void push(const T& item)
+    {
+        _items.push_back(item);
+        notifyDependents();
+    }
+
+    void removeAt(size_t index)
+    {
+        _items.erase(_items.begin() + static_cast<ptrdiff_t>(index));
+        notifyDependents();
+    }
+
+    void clear()
+    {
+        _items.clear();
+        notifyDependents();
+    }
+
+private:
+    std::vector<T> _items;
+};
+
+/// Derived reactive value (computed/selector). Interface only for now — the
+/// full dependency-aware derived-value engine is a later milestone; declare the
+/// shape so call sites don't hard-code Reactive<T> where a derived value should
+/// eventually plug in.
+template <typename T>
+class Computed final : public ReactiveBase
+{
+public:
+    using Selector = std::function<T()>;
+
+    explicit Computed(Selector selector) : _selector(std::move(selector)) {}
+
+    [[nodiscard]] const T& get() const
+    {
+        if (UIElement* widget = currentPaintWidget()) {
+            Computed* self = const_cast<Computed*>(this);
+            self->addDependent(widget);
+            trackReactiveDependency(self, widget);
+        }
+        _value = _selector();
+        return _value;
+    }
+
+private:
+    Selector       _selector;
+    mutable T      _value{};
 };
 
 } // namespace ya

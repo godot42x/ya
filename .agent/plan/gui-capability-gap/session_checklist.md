@@ -27,4 +27,4 @@
 
 ## 当前下一刀
 
-M2 — 控件绑定泛化 + 布局/样式属性绑定 + 集合接口：Button.enabled（paint-dirty）、split ratio（arrange-dirty）、文本内容变尺寸（measure-dirty）各验一条；`ReactiveList<T>` 最小实现 + 接口（TreeView 前置）；computed 只定义接口。验收：三类绑定各自触发正确 dirty 粒度；性能计数显示 rebuild 数从「整树」降到「依赖子集」；scroll/split 页回归通过。
+M3 — 性能管线闭环 + 声明式口子内嵌：① **复用 `Core/Profiling` 的 `PerfState`**（方法版 API 始终编译），把 M0 自造的 `std::chrono` 计时替换为 `metrics().beginSample/endSample/setValue`，`GuiPerfStats` 降级为「从 PerfState 读的 per-tree 轻量访问面」，key 用 `gui.tree.*` 命名空间 + domainKey 区分多树；② 性能计数可 scenario 断言；③ 声明式 diff 复用接口内嵌（为 immediate API 留口子）。验收：能用 dump/scenario 回答「改一处数据触发多少 rebuild/draw item/耗时」；`GUIWorkbench` 闭包不被回灌。

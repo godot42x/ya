@@ -38,7 +38,12 @@ ReactiveBase::~ReactiveBase()
 void ReactiveBase::notifyDependents()
 {
     for (UIElement* widget : _dependents) {
-        widget->markPaintDirty();
+        if (_dirtyLevel == EDirtyLevel::Paint) {
+            widget->markPaintDirty();
+        }
+        else {
+            widget->markLayoutDirty();
+        }
     }
 }
 
