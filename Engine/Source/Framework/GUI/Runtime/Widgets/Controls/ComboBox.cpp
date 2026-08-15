@@ -18,6 +18,9 @@ void UIComboBox::select(int index)
         return;
     }
     _selectedIndex = index;
+    // _selectedIndex is a reflect-ed int, not a VisualFlag: mark paint-dirty
+    // manually so the field label re-paints.
+    markPaintDirty();
     if (_onSelectionChanged) {
         _onSelectionChanged(index);
     }

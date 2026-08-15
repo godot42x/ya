@@ -35,7 +35,7 @@ struct YA_GUI_API UIMenuItem : public UIElement
     glm::vec4   _textColor   = {0.90f, 0.92f, 0.95f, 1.0f};
     glm::vec4   _normalColor = {0.13f, 0.14f, 0.17f, 1.0f};
     glm::vec4   _hoveredColor = {0.22f, 0.42f, 0.78f, 1.0f};
-    bool        _bHighlighted = false;
+    VisualFlag  _bHighlighted{*this};
 
     /// Fired on click. The owning UIMenu closes itself after the action.
     std::function<void()> _onAction;

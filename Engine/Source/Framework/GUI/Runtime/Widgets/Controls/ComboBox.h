@@ -63,7 +63,7 @@ struct YA_GUI_API UIComboBox : public UIElement
   private:
     /// Open the dropdown menu below the field.
     void openDropdown();
-    bool _bHovered = false;
+    VisualFlag _bHovered{*this};
 };
 
 } // namespace ya

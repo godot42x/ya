@@ -135,9 +135,9 @@ nlohmann::json serializeNode(const UIElement& element, const WidgetTree& tree)
     if (const auto* button = dynamic_cast<const UIButton*>(&element)) {
         node["control"] = {
             {"type", "button"},
-            {"hovered", button->_bHovered},
-            {"pressed", button->_bPressed},
-            {"focused", button->_bFocused},
+            {"hovered", button->_bHovered.get()},
+            {"pressed", button->_bPressed.get()},
+            {"focused", button->_bFocused.get()},
         };
     }
     else if (const auto* checkBox = dynamic_cast<const UICheckBox*>(&element)) {

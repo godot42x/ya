@@ -72,8 +72,8 @@ struct YA_GUI_API UITextField : public UIElement
     /// (tree-local logical px, measured from the field's left edge).
     void placeCaretAt(const glm::vec2& logicalPoint);
 
-    size_t _cursorIndex = 0;
-    bool   _bFocused    = false;
+    size_t     _cursorIndex = 0;
+    VisualFlag _bFocused{*this};
 };
 
 } // namespace ya

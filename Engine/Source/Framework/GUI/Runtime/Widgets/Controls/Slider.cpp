@@ -16,6 +16,9 @@ void UISlider::setValue(float value)
     const float clamped = std::clamp(value, 0.0f, 1.0f);
     if (clamped != _value) {
         _value = clamped;
+        // _value is a reflect-ed float, not a VisualFlag: mark paint-dirty
+        // manually so the fill/thumb re-paint.
+        markPaintDirty();
         if (_onValueChanged) {
             _onValueChanged(_value);
         }

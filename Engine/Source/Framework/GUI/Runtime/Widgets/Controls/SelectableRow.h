@@ -46,7 +46,7 @@ struct YA_GUI_API UISelectableRow : public UIElement
     /// selection. The row never flips this itself.
     bool _bSelected = false;
     /// Visual drop-target feedback, written by the tree drag session.
-    bool _bDropHighlighted = false;
+    VisualFlag _bDropHighlighted{*this};
 
     /// Enable drag initiation: press then move past a threshold starts a
     /// tree drag session with `_dragPayload` (defaults to _itemId) and a
@@ -79,9 +79,9 @@ struct YA_GUI_API UISelectableRow : public UIElement
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 
   private:
-    bool _bPressed = false;
-    bool _bHovered = false;
-    glm::vec2 _pressPoint{};
+    VisualFlag _bPressed{*this};
+    VisualFlag _bHovered{*this};
+    glm::vec2  _pressPoint{};
 };
 
 } // namespace ya

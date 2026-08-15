@@ -117,6 +117,9 @@ void UITabBar::syncSelectedTab(int index)
     _selectedIndex = index;
     for (int i = 0; i < static_cast<int>(_tabs.size()); ++i) {
         _tabs[static_cast<size_t>(i)]->_bSelected = (i == index);
+        // _bSelected is a reflect-ed bool, not a VisualFlag: mark paint-dirty
+        // manually so the tab highlight re-paints.
+        _tabs[static_cast<size_t>(i)]->markPaintDirty();
     }
 }
 

@@ -489,4 +489,33 @@ TEST(UIFrameSnapshotTest, LayoutChangeRebuildsMovedWidgetDrawItems)
     EXPECT_EQ(snapshot.items[0].size, glm::vec2(50.0f, 25.0f));
 }
 
+TEST(UIFrameSnapshotTest, TransientHoverAndFocusRepaintButton)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       btn = std::make_shared<UIButton>("Btn");
+    tree.attachToLayer(WidgetTree::ELayer::Content, btn);
+
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean: all reuse
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+
+    // Hover state change re-paints with the hovered color (VisualFlag marks
+    // the button paint-dirty on assignment).
+    btn->onPointerEnter();
+    UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 1u);
+    ASSERT_EQ(snap.items.size(), 1u);
+    EXPECT_EQ(snap.items[0].color, btn->_hoveredColor);
+
+    // Leave re-paints back to the normal color.
+    btn->onPointerLeave();
+    snap = tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(snap.items[0].color, btn->_normalColor);
+
+    // Focus (keyboard) re-paints to the focused color.
+    btn->onFocusGained(true);
+    snap = tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(snap.items[0].color, btn->_focusedColor);
+}
+
 } // namespace ya

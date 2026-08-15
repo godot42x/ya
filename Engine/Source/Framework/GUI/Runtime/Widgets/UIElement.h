@@ -435,4 +435,35 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     void removeChildEdge(UIElement& child);
 };
 
+/// A paint-affecting boolean flag whose only write path marks the owning
+/// widget paint-dirty. Transient input state (hover / pressed / focused /
+/// dragging / highlight) is a paint attribute: mutating it invalidates the
+/// widget's cached draw items, so a changed state actually re-paints. Wrapping
+/// the flag in this type makes the invalidation impossible to forget — the
+/// assignment operator is the sole write path and it always marks dirty.
+class VisualFlag
+{
+public:
+    explicit VisualFlag(UIElement& owner) : _owner(owner) {}
+
+    VisualFlag(const VisualFlag&)            = delete;
+    VisualFlag& operator=(const VisualFlag&) = delete;
+
+    VisualFlag& operator=(bool value)
+    {
+        if (_value != value) {
+            _value = value;
+            _owner.markPaintDirty();
+        }
+        return *this;
+    }
+
+    [[nodiscard]] operator bool() const { return _value; }
+    [[nodiscard]] bool get() const { return _value; }
+
+  private:
+    UIElement& _owner;
+    bool       _value = false;
+};
+
 } // namespace ya

@@ -56,7 +56,7 @@ struct YA_GUI_API UISlider : public UIElement
   private:
     /// Value from a pointer x inside the layout rect (thumb-aware).
     [[nodiscard]] float valueFromPointer(float localX) const;
-    bool _bDragging = false;
+    VisualFlag _bDragging{*this};
 };
 
 } // namespace ya

@@ -100,6 +100,9 @@ void UICheckBox::paintSelf(UIFrameBuilder& builder)
 void UICheckBox::toggle()
 {
     _bChecked = !_bChecked;
+    // _bChecked is a reflect-ed bool (serialization), not a VisualFlag: mark
+    // paint-dirty manually so the check mark re-paints.
+    markPaintDirty();
     if (_onChanged) {
         _onChanged(_bChecked);
     }

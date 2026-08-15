@@ -60,8 +60,8 @@ struct YA_GUI_API UICheckBox : public UIElement
 
   private:
     void toggle();
-    bool _bHovered = false;
-    bool _bPressed = false;
+    VisualFlag _bHovered{*this};
+    VisualFlag _bPressed{*this};
 };
 
 } // namespace ya

@@ -55,7 +55,7 @@ struct YA_GUI_API UITabButton : public UIElement
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 
   private:
-    bool _bHovered = false;
+    VisualFlag _bHovered{*this};
 };
 
 /// Tab strip (imgui-demo-style page switcher, gui-app-bootstrap Phase 4).

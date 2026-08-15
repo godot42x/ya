@@ -51,10 +51,11 @@ struct YA_GUI_API UIButton : public UIElement
     void setContentPadding(glm::vec2 value) { _contentLayout.setPadding(value); }
     [[nodiscard]] const glm::vec2& getContentPadding() const { return _contentLayout.getPadding(); }
 
-    // Runtime-only state (not serialized)
-    bool                  _bHovered = false;
-    bool                  _bPressed = false;
-    bool                  _bFocused = false;
+    // Runtime-only state (not serialized). VisualFlag auto-marks the button
+    // paint-dirty on change, so hover/pressed/focused re-paint immediately.
+    VisualFlag           _bHovered{*this};
+    VisualFlag           _bPressed{*this};
+    VisualFlag           _bFocused{*this};
     std::function<void()> _onClick;
 
     /// Reactive enabled binding (paint-dirty). Disabled dims the fill color.

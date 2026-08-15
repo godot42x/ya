@@ -55,10 +55,10 @@ struct YA_GUI_API UISplitPane : public UIElement
     glm::vec4 _dividerDraggingColor  = {0.24f, 0.46f, 0.82f, 1.0f};
 
     // Drag session state (runtime only, not serialized)
-    bool  _bDraggingDivider = false;
-    bool  _bHoveredDivider  = false;
-    float _dragStartRatio   = 0.0f;
-    float _dragStartPointer = 0.0f;
+    VisualFlag _bDraggingDivider{*this};
+    VisualFlag _bHoveredDivider{*this};
+    float      _dragStartRatio   = 0.0f;
+    float      _dragStartPointer = 0.0f;
 
     /// Reactive split-ratio binding (layout-dirty). A write re-runs the tree's
     /// layout (measure + arrange) and re-paints. Dependency is registered at
