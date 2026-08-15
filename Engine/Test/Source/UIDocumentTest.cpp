@@ -188,4 +188,51 @@ TEST(UIDocumentTest, InstantiatedSubtreeCanAttachToTree)
     EXPECT_TRUE(instance->getChildren()[0]->isAttached());
 }
 
+TEST(UIDocumentTest, DeserializeOnAttachedWidgetAggregatesSingleInvalidation)
+{
+    ensureTestTypesRegistered();
+    auto& registry = UITypeRegistry::instance();
+
+    // A source widget whose serialized fields become the bulk-restore payload.
+    auto source = registry.createInstance("test.doc_panel");
+    auto* sourcePanel = dynamic_cast<UIPanel*>(source.get());
+    ASSERT_NE(sourcePanel, nullptr);
+    sourcePanel->_size  = {300.0f, 120.0f};
+    sourcePanel->_color = {0.5f, 0.5f, 0.5f, 1.0f};
+    auto doc = UIDocument::fromWidget(*source);
+    ASSERT_NE(doc, nullptr);
+
+    // A live target attached to a tree.
+    auto target = registry.createInstance("test.doc_panel");
+    WidgetTree tree({.width = 800, .height = 600});
+    EXPECT_TRUE(tree.attachToLayer(WidgetTree::ELayer::Content, target).valid());
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
+
+    // Bulk field restore on a live widget: reflection writes bypass setters,
+    // so the transaction must aggregate one Layout invalidation at its end.
+    target->deserializeFields(doc->fields);
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    EXPECT_EQ(target->_size, glm::vec2(300.0f, 120.0f));
+    EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore + 1);
+}
+
+TEST(UIDocumentTest, DeserializeOnDetachedWidgetIsNoOp)
+{
+    ensureTestTypesRegistered();
+    auto& registry = UITypeRegistry::instance();
+
+    auto widget = registry.createInstance("test.doc_panel");
+    auto* panel = dynamic_cast<UIPanel*>(widget.get());
+    ASSERT_NE(panel, nullptr);
+
+    // Detached: no tree, so the transaction's aggregated invalidation is a
+    // no-op (no tree to invalidate). The paint-dirty flag may be set, but the
+    // subsequent attach() invalidates layout and the first paint runs anyway.
+    panel->deserializeFields(nlohmann::json::object());
+    EXPECT_FALSE(panel->isAttached());
+}
+
 } // namespace ya

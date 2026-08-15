@@ -344,6 +344,15 @@ void UIElement::deserializeFields(const nlohmann::json& fields)
         return;
     }
     ReflectionSerializer::deserializeByRuntimeReflection(this, getTypeIndex(), fields, cls->getName());
+
+    // Mutation transaction boundary (GI-201): reflection writes bypass the
+    // changed-only setters (direct memory access), so no per-field invalidation
+    // fires and no binding observer sees an intermediate state. Aggregate the
+    // highest impact once, after the object invariants are complete.
+    // Detached authoring (UIDocument::instantiate) is a no-op here — the tree
+    // is null and attach() invalidates layout on the instantiate->attach path;
+    // a live-tree bulk restore (editor) re-layouts + repaints exactly once.
+    invalidateProperty(EUIPropertyImpact::Layout);
 }
 
 } // namespace ya

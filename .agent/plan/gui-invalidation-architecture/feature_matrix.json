@@ -1,7 +1,7 @@
 {
   "plan": "gui-invalidation-architecture",
-  "updated_at": "2026-08-15",
-  "active_task": "GI-201",
+  "updated_at": "2026-08-16",
+  "active_task": "GI-202",
   "legend": {
     "planned": "已纳入计划但尚未开始",
     "in_progress": "当前唯一执行切片",
@@ -101,8 +101,8 @@
       "items": [
         {
           "id": "mutation_transaction",
-          "status": "planned",
-          "notes": "reflection/document writes aggregate highest impact at transaction end"
+          "status": "pass",
+          "notes": "deserializeFields aggregates one Layout invalidation at its end (invalidateProperty), no per-field notify; detached instantiate is a no-op, live-tree restore invalidates once"
         },
         {
           "id": "property_encapsulation",

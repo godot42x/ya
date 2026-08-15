@@ -6,7 +6,7 @@
 
 ## 当前切片
 
-当前激活切片：`GI-201 Authoring/reflection mutation transaction`
+当前激活切片：`GI-202 Runtime visual/layout 字段封装`
 
 执行规则：
 
@@ -126,7 +126,7 @@
 
 ## P1B — 强制 Property Mutation 契约
 
-- [ ] `GI-201` Authoring/reflection mutation transaction
+- [x] `GI-201` Authoring/reflection mutation transaction
   - 依赖：GI-104
   - 修改：
     - document instantiate/edit transaction 聚合最高 impact；

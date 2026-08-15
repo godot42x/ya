@@ -415,3 +415,40 @@ GI-102（persistent binding 迁移）与 GI-101 是同一改动的不可拆分�
 ### 下一接力点
 
 - `GI-201`（Phase 1B）：Authoring/reflection mutation transaction。
+
+## 2026-08-16 — GI-201 完成：Authoring/reflection mutation transaction
+
+### 本轮完成
+
+在 `UIElement::deserializeFields()` 建立 mutation transaction 边界：
+
+- 反射反序列化**直接写内存、绕过 changed-only setter**（`deserializeScalarValue` → 直接
+  `*ptr = value`），所以逐字段写入既不触发失效、也不向 binding observers 暴露中间值——
+  第二点天然满足；
+- 缺口在「批量 restore 后漏失效」：对 live tree 上的 widget 批量恢复字段，UI 不会刷新。
+  在 `deserializeFields()` 末尾聚合一次最高 impact 失效：`invalidateProperty(Layout)`；
+- 对 detached `UIDocument::instantiate()` 这是 no-op（`_tree == nullptr`），且 attach 路径
+  （`WidgetTree::attach`）本就会 `invalidateLayout()`，行为不变。
+
+### 代码/行为结论
+
+- 最小 transaction：不引入通用 property framework、不加 RAII transaction 对象、不碰反射
+  核心，只把「批量反序列化」这个天然边界点显式化为一次聚合失效；
+- `invalidateProperty(Layout)` 与 GI-104 的 setter 契约一致（内部走
+  `markLayoutDirty(LayoutProperty)`），反射批量写与单个 setter 的失效语义统一；
+- 反射零 notify 是因为绕过 setter；GI-202（字段私有化）会迫使反射改走 setter 或显式
+  transaction，届时本边界是它的正确失效入口。
+
+### 验证
+
+- `xmake b ya-gui-closure-test` 通过（6.7s，仅 pre-existing `buildSnapshot` `[[nodiscard]]`
+  C4834 警告，与既有测试模式一致）；
+- `xmake r ya-gui-closure-test` **151 tests PASSED**（新增 2 个：
+  DeserializeOnAttachedWidgetAggregatesSingleInvalidation、
+  DeserializeOnDetachedWidgetIsNoOp）；
+- `xmake b ya-engine` 聚合通过（1.36s 缓存命中）。
+
+### 下一接力点
+
+- `GI-202`：Runtime visual/layout 字段封装（把 `_text/_size/_position/_visibility/...`
+  按真实写路径收为 backing field，按控件族拆多个小提交）。
