@@ -70,7 +70,7 @@ UIMenuBarItem* UIMenuBar::addItem(const std::string& label, std::function<std::s
     // Size from the same font measurement the menu items use, so bar labels
     // never overflow their button and stay consistent with the menus.
     const auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, item->_fontSize);
-    item->_size     = {(font ? font->measureText(label) : static_cast<float>(label.size()) * 7.0f) + 20.0f, 26.0f};
+    item->setSize({(font ? font->measureText(label) : static_cast<float>(label.size()) * 7.0f) + 20.0f, 26.0f});
     item->_onActivate = [this, item, menuFactory]()
     {
         // A press on a menu-bar item while a menu is open is dismissed by

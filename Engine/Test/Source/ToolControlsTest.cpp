@@ -72,15 +72,15 @@ TEST(ToolControlsTest, StackLaysOutChildrenWithGapAndPadding)
     WidgetTree tree({.width = 400, .height = 300});
     auto       stack = std::make_shared<UIContainer>("Stack");
     stack->setDirection(EWidgetBoxLayout::Vertical);
-    stack->_position  = {20.0f, 20.0f};
-    stack->_size      = {200.0f, 200.0f};
+    stack->setPosition({20.0f, 20.0f});
+    stack->setSize({200.0f, 200.0f});
     stack->setPadding({10.0f, 10.0f});
     stack->setSpacing(8.0f);
 
     auto a = std::make_shared<UIPanel>("A");
-    a->_size = {100.0f, 20.0f};
+    a->setSize({100.0f, 20.0f});
     auto b = std::make_shared<UIPanel>("B");
-    b->_size = {120.0f, 30.0f};
+    b->setSize({120.0f, 30.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, stack);
     tree.attach(*stack, a);
     tree.attach(*stack, b);
@@ -98,17 +98,17 @@ TEST(ToolControlsTest, StackCollapsedSkipsSpaceHiddenKeepsSpace)
     WidgetTree tree({.width = 400, .height = 300});
     auto       stack = std::make_shared<UIContainer>("Stack");
     stack->setDirection(EWidgetBoxLayout::Vertical);
-    stack->_size      = {200.0f, 200.0f};
+    stack->setSize({200.0f, 200.0f});
     stack->setSpacing(4.0f);
 
     auto collapsed = std::make_shared<UIPanel>("Collapsed");
-    collapsed->_size = {100.0f, 20.0f};
-    collapsed->_visibility = EWidgetVisibility::Collapsed;
+    collapsed->setSize({100.0f, 20.0f});
+    collapsed->setVisibility(EWidgetVisibility::Collapsed);
     auto hidden = std::make_shared<UIPanel>("Hidden");
-    hidden->_size = {100.0f, 20.0f};
-    hidden->_visibility = EWidgetVisibility::Hidden;
+    hidden->setSize({100.0f, 20.0f});
+    hidden->setVisibility(EWidgetVisibility::Hidden);
     auto visible = std::make_shared<UIPanel>("Visible");
-    visible->_size = {100.0f, 20.0f};
+    visible->setSize({100.0f, 20.0f});
 
     tree.attachToLayer(WidgetTree::ELayer::Content, stack);
     tree.attach(*stack, collapsed);
@@ -129,12 +129,12 @@ TEST(ToolControlsTest, StackMainAxisAlignmentOffsetsThePack)
     auto makeStack = [&](EWidgetMainAxisAlignment alignment) {
         auto stack = std::make_shared<UIContainer>("Stack");
         stack->setDirection(EWidgetBoxLayout::Horizontal);
-        stack->_size      = {300.0f, 50.0f};
+        stack->setSize({300.0f, 50.0f});
         stack->setMainAxisAlignment(alignment);
         auto a = std::make_shared<UIPanel>("A");
-        a->_size = {100.0f, 20.0f};
+        a->setSize({100.0f, 20.0f});
         auto b = std::make_shared<UIPanel>("B");
-        b->_size = {100.0f, 20.0f};
+        b->setSize({100.0f, 20.0f});
         tree.attachToLayer(WidgetTree::ELayer::Content, stack);
         tree.attach(*stack, a);
         tree.attach(*stack, b);
@@ -170,9 +170,9 @@ TEST(ToolControlsTest, StackDesiredSizeAggregatesChildren)
     stack->setPadding({10.0f, 10.0f});
     stack->setSpacing(4.0f);
     auto a = std::make_shared<UIPanel>("A");
-    a->_size = {100.0f, 20.0f};
+    a->setSize({100.0f, 20.0f});
     auto b = std::make_shared<UIPanel>("B");
-    b->_size = {120.0f, 30.0f};
+    b->setSize({120.0f, 30.0f});
     stack->addDetachedChild(a);
     stack->addDetachedChild(b);
 
@@ -187,14 +187,14 @@ TEST(ToolControlsTest, ContainerStretchLastChildFillsRemainingSpace)
     auto       box = std::make_shared<UIContainer>("Box");
     box->setDirection(EWidgetBoxLayout::Vertical);
     box->setSpacing(4.0f);
-    box->_size              = {200.0f, 200.0f};
+    box->setSize({200.0f, 200.0f});
     box->setStretchLastChild(true);
     tree.attachToLayer(WidgetTree::ELayer::Content, box);
 
     auto header = std::make_shared<UIPanel>("Header");
-    header->_size = {0.0f, 30.0f};
+    header->setSize({0.0f, 30.0f});
     auto content = std::make_shared<UIPanel>("Content");
-    content->_size = {0.0f, 50.0f};
+    content->setSize({0.0f, 50.0f});
     tree.attach(*box, header);
     tree.attach(*box, content);
     tree.layout();
@@ -210,8 +210,8 @@ TEST(ToolControlsTest, SplitPaneLaysOutTwoPanesAroundDivider)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       split = std::make_shared<UISplitPane>("Split");
-    split->_position = {0.0f, 0.0f};
-    split->_size     = {300.0f, 200.0f};
+    split->setPosition({0.0f, 0.0f});
+    split->setSize({300.0f, 200.0f});
     split->setSplitRatio(0.5f);
     split->setDividerThickness(6.0f);
     auto left  = std::make_shared<UIPanel>("Left");
@@ -235,7 +235,7 @@ TEST(ToolControlsTest, SplitPaneDividerDragChangesRatioAndEndsSession)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       split = std::make_shared<UISplitPane>("Split");
-    split->_size      = {300.0f, 200.0f};
+    split->setSize({300.0f, 200.0f});
     split->setSplitRatio(0.5f);
     auto left  = std::make_shared<UIPanel>("Left");
     auto right = std::make_shared<UIPanel>("Right");
@@ -274,12 +274,12 @@ TEST(ToolControlsTest, SplitPanePressOnPaneFallsThroughToChild)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       split = std::make_shared<UISplitPane>("Split");
-    split->_size      = {300.0f, 200.0f};
+    split->setSize({300.0f, 200.0f});
     split->setSplitRatio(0.5f);
     auto left = std::make_shared<UIContainer>("Left");
     auto button = std::make_shared<UIButton>("Button");
-    button->_position = {10.0f, 10.0f};
-    button->_size     = {60.0f, 24.0f};
+    button->setPosition({10.0f, 10.0f});
+    button->setSize({60.0f, 24.0f});
     auto right = std::make_shared<UIPanel>("Right");
     tree.attachToLayer(WidgetTree::ELayer::Content, split);
     tree.attach(*split, left);
@@ -305,7 +305,7 @@ TEST(ToolControlsTest, SplitPaneDividerHoverRequestsResizeCursor)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       split = std::make_shared<UISplitPane>("Split");
-    split->_size      = {300.0f, 200.0f};
+    split->setSize({300.0f, 200.0f});
     split->setSplitRatio(0.5f);
     tree.attachToLayer(WidgetTree::ELayer::Content, split);
     tree.attach(*split, std::make_shared<UIPanel>("Left"));
@@ -335,8 +335,8 @@ TEST(ToolControlsTest, ButtonHoverClearsOnPointerLeave)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       button = std::make_shared<UIButton>("Button");
-    button->_position = {10.0f, 10.0f};
-    button->_size     = {60.0f, 24.0f};
+    button->setPosition({10.0f, 10.0f});
+    button->setSize({60.0f, 24.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, button);
     tree.layout();
 
@@ -360,15 +360,15 @@ TEST(ToolControlsTest, ToolbarSiblingHoverSwitchesAndClears)
     WidgetTree tree({.width = 400, .height = 300});
     auto       toolbar = std::make_shared<UIContainer>("Toolbar");
     toolbar->setDirection(EWidgetBoxLayout::Horizontal);
-    toolbar->_position = {10.0f, 10.0f};
-    toolbar->_size     = {300.0f, 32.0f};
+    toolbar->setPosition({10.0f, 10.0f});
+    toolbar->setSize({300.0f, 32.0f});
     toolbar->setSpacing(8.0f);
     toolbar->setPadding({8.0f, 4.0f});
 
     auto add    = std::make_shared<UIButton>("Add");
-    add->_size  = {44.0f, 24.0f};
+    add->setSize({44.0f, 24.0f});
     auto remove    = std::make_shared<UIButton>("Remove");
-    remove->_size  = {60.0f, 24.0f};
+    remove->setSize({60.0f, 24.0f});
 
     tree.attachToLayer(WidgetTree::ELayer::Content, toolbar);
     tree.attach(*toolbar, add);
@@ -403,8 +403,8 @@ TEST(ToolControlsTest, ToolbarAutoSizeButtonWithLabelHoverClears)
     toolbar->setDirection(EWidgetBoxLayout::Horizontal);
     toolbar->_anchorMin = {0.0f, 0.0f};
     toolbar->_anchorMax = {1.0f, 0.0f};
-    toolbar->_position  = {0.0f, 6.0f};
-    toolbar->_size      = {0.0f, 32.0f};
+    toolbar->setPosition({0.0f, 6.0f});
+    toolbar->setSize({0.0f, 32.0f});
     toolbar->setSpacing(8.0f);
     toolbar->setPadding({8.0f, 4.0f});
 
@@ -416,7 +416,7 @@ TEST(ToolControlsTest, ToolbarAutoSizeButtonWithLabelHoverClears)
         text->_bAutoSize   = true;
         text->_fontSize    = 14;
         text->_text        = label;
-        text->_visibility  = EWidgetVisibility::SelfHitTestInvisible;
+        text->setVisibility(EWidgetVisibility::SelfHitTestInvisible);
         text->_hAlign      = EWidgetAlignH::Center;
         text->_vAlign      = EWidgetAlignV::Center;
         button->addDetachedChild(text);
@@ -472,13 +472,13 @@ TEST(ToolControlsTest, SplitPaneDoesNotStealHoverFromOverlappingButton)
     toolbar->setDirection(EWidgetBoxLayout::Horizontal);
     toolbar->_anchorMin = {0.0f, 0.0f};
     toolbar->_anchorMax = {1.0f, 0.0f};
-    toolbar->_position  = {0.0f, 10.0f};
-    toolbar->_size      = {0.0f, 32.0f};
+    toolbar->setPosition({0.0f, 10.0f});
+    toolbar->setSize({0.0f, 32.0f});
     toolbar->setSpacing(8.0f);
     toolbar->setPadding({8.0f, 4.0f});
 
     auto add    = std::make_shared<UIButton>("Add");
-    add->_size  = {45.0f, 24.0f};
+    add->setSize({45.0f, 24.0f});
 
     auto split = std::make_shared<UISplitPane>("Split");
     split->_anchorMin = {0.0f, 0.0f};
@@ -512,10 +512,10 @@ TEST(ToolControlsTest, ScrollViewportShiftsContentByOffset)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       viewport = std::make_shared<UIScrollViewport>("Scroll");
-    viewport->_size        = {200.0f, 60.0f};
+    viewport->setSize({200.0f, 60.0f});
     viewport->setScrollOffset(30.0f);
     auto content = std::make_shared<UIPanel>("Content");
-    content->_size = {200.0f, 100.0f}; // taller than the viewport
+    content->setSize({200.0f, 100.0f}); // taller than the viewport
     tree.attachToLayer(WidgetTree::ELayer::Content, viewport);
     tree.attach(*viewport, content);
     tree.layout();
@@ -530,10 +530,10 @@ TEST(ToolControlsTest, ScrollViewportWheelConsumesWhenScrollableBubblesAtLimit)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       viewport = std::make_shared<UIScrollViewport>("Scroll");
-    viewport->_size = {200.0f, 60.0f};
+    viewport->setSize({200.0f, 60.0f});
     viewport->setScrollStep(40.0f);
     auto content = std::make_shared<UIPanel>("Content");
-    content->_size = {200.0f, 100.0f};
+    content->setSize({200.0f, 100.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, viewport);
     tree.attach(*viewport, content);
     tree.layout();
@@ -556,9 +556,9 @@ TEST(ToolControlsTest, ScrollViewportCullsChildHitsOutsideViewport)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       viewport = std::make_shared<UIScrollViewport>("Scroll");
-    viewport->_size = {200.0f, 60.0f};
+    viewport->setSize({200.0f, 60.0f});
     auto content = std::make_shared<UIPanel>("Content");
-    content->_size = {200.0f, 100.0f};
+    content->setSize({200.0f, 100.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, viewport);
     tree.attach(*viewport, content);
     tree.layout();
@@ -577,12 +577,12 @@ TEST(ToolControlsTest, ScrollViewportNestedInsideSplitKeepsCustomLayout)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       split = std::make_shared<UISplitPane>("Split");
-    split->_size      = {300.0f, 200.0f};
+    split->setSize({300.0f, 200.0f});
     split->setSplitRatio(0.5f);
     auto scroll = std::make_shared<UIScrollViewport>("Scroll");
-    scroll->_size = {100.0f, 60.0f};
+    scroll->setSize({100.0f, 60.0f});
     auto content = std::make_shared<UIPanel>("Content");
-    content->_size = {100.0f, 120.0f};
+    content->setSize({100.0f, 120.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, split);
     tree.attach(*split, scroll);
     tree.attach(*scroll, content);
@@ -599,11 +599,11 @@ TEST(ToolControlsTest, SpecializedLayoutsAppearInTreeDump)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto split = std::make_shared<UISplitPane>("Split");
-    split->_size = {300.0f, 200.0f};
+    split->setSize({300.0f, 200.0f});
     split->setSplitRatio(0.5f);
     auto scroll = std::make_shared<UIScrollViewport>("Scroll");
     auto content = std::make_shared<UIPanel>("Content");
-    content->_size = {100.0f, 300.0f};
+    content->setSize({100.0f, 300.0f});
     auto button = std::make_shared<UIButton>("Button");
     button->setContentPadding({7.0f, 3.0f});
 
@@ -633,8 +633,8 @@ TEST(ToolControlsTest, SelectableRowPressSelectsReleaseActivates)
     WidgetTree tree({.width = 400, .height = 300});
     auto       row = std::make_shared<UISelectableRow>("Row");
     row->_itemId = "item.1";
-    row->_position = {0.0f, 0.0f};
-    row->_size     = {200.0f, 24.0f};
+    row->setPosition({0.0f, 0.0f});
+    row->setSize({200.0f, 24.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, row);
     tree.layout();
 
@@ -660,8 +660,8 @@ TEST(ToolControlsTest, SelectableRowEnterActivatesFocusedRow)
     WidgetTree tree({.width = 400, .height = 300});
     auto       row = std::make_shared<UISelectableRow>("Row");
     row->_itemId = "item.2";
-    row->_position = {0.0f, 0.0f};
-    row->_size     = {200.0f, 24.0f};
+    row->setPosition({0.0f, 0.0f});
+    row->setSize({200.0f, 24.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, row);
     tree.layout();
 
@@ -684,8 +684,8 @@ TEST(ToolControlsTest, SelectableRowParticipatesInTabTraversal)
     WidgetTree tree({.width = 400, .height = 300});
     auto       first  = std::make_shared<UISelectableRow>("First");
     auto       second = std::make_shared<UISelectableRow>("Second");
-    first->_size  = {200.0f, 24.0f};
-    second->_size = {200.0f, 24.0f};
+    first->setSize({200.0f, 24.0f});
+    second->setSize({200.0f, 24.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, first);
     tree.attachToLayer(WidgetTree::ELayer::Content, second);
     tree.layout();
@@ -704,8 +704,8 @@ TEST(ToolControlsTest, TextFieldTypedTextAppendsAndFiresChanged)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       field = std::make_shared<UITextField>("Name");
-    field->_position = {0.0f, 0.0f};
-    field->_size     = {200.0f, 28.0f};
+    field->setPosition({0.0f, 0.0f});
+    field->setSize({200.0f, 28.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, field);
     tree.layout();
 
@@ -725,8 +725,8 @@ TEST(ToolControlsTest, TextFieldBackspaceAndCursorNavigation)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       field = std::make_shared<UITextField>("Name");
-    field->_position = {0.0f, 0.0f};
-    field->_size     = {200.0f, 28.0f};
+    field->setPosition({0.0f, 0.0f});
+    field->setSize({200.0f, 28.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, field);
     tree.layout();
     tree.setFocus(field.get());
@@ -762,8 +762,8 @@ TEST(ToolControlsTest, TextFieldEnterAndFocusLossCommit)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       field = std::make_shared<UITextField>("Name");
-    field->_position = {0.0f, 0.0f};
-    field->_size     = {200.0f, 28.0f};
+    field->setPosition({0.0f, 0.0f});
+    field->setSize({200.0f, 28.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, field);
     tree.layout();
 
@@ -787,8 +787,8 @@ TEST(ToolControlsTest, TextFieldPressRequestsFocusAndPlacesCaret)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       field = std::make_shared<UITextField>("Name");
-    field->_position = {0.0f, 0.0f};
-    field->_size     = {200.0f, 28.0f};
+    field->setPosition({0.0f, 0.0f});
+    field->setSize({200.0f, 28.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, field);
     tree.layout();
 
@@ -803,8 +803,8 @@ TEST(ToolControlsTest, TextFieldDoesNotConsumeForeignKeys)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto       field = std::make_shared<UITextField>("Name");
-    field->_position = {0.0f, 0.0f};
-    field->_size     = {200.0f, 28.0f};
+    field->setPosition({0.0f, 0.0f});
+    field->setSize({200.0f, 28.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, field);
     tree.layout();
     tree.setFocus(field.get());
@@ -860,7 +860,7 @@ TEST(ToolControlsTest, MenuBarHoverSwitchesOpenMenu)
     auto       bar = std::make_shared<UIMenuBar>("Bar");
     bar->_anchorMin = {0.0f, 0.0f};
     bar->_anchorMax = {1.0f, 0.0f};
-    bar->_size      = {0.0f, 30.0f};
+    bar->setSize({0.0f, 30.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, bar);
 
     bar->addItem("File", [] { return UIMenu::create({{"New Document", [] {}}, {"Save", [] {}}}); });

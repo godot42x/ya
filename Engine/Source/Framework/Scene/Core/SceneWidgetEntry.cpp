@@ -316,7 +316,7 @@ bool moveWidgetEntryDocument(std::vector<SceneWidgetEntry>& entries,
             if (auto dstWidget = dstDoc->instantiate()) {
                 if (srcWidget->_anchorMin == glm::vec2(0.0f) && srcWidget->_anchorMax == glm::vec2(0.0f) &&
                     dstWidget->_anchorMin == glm::vec2(0.0f) && dstWidget->_anchorMax == glm::vec2(0.0f)) {
-                    srcWidget->_position -= dstWidget->_position;
+                    srcWidget->setPosition(srcWidget->getPosition() - dstWidget->getPosition());
                     if (auto adjusted = UIDocument::fromWidget(*srcWidget)) {
                         srcDoc = std::move(adjusted);
                     }

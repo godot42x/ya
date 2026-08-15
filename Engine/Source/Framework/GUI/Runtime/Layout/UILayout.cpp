@@ -40,7 +40,7 @@ bool participatesInBox(const UIElement& parent, const UIElement& child)
     const UIBoxSlot* slot = getBoxSlot(parent, child);
     return !slot ||
            (slot->participatesInLayout() &&
-            (child._visibility != EWidgetVisibility::Hidden || slot->reservesSpaceWhenHidden()));
+            (child.getVisibility() != EWidgetVisibility::Hidden || slot->reservesSpaceWhenHidden()));
 }
 
 glm::vec2 slotMargin(const UIElement& parent, const UIElement& child)
@@ -531,7 +531,7 @@ glm::vec2 UISplitLayout::measure(const UIElement& parent) const
 {
     const auto children = parent.getChildrenInPaintOrder();
     if (children.empty()) {
-        return parent._size;
+        return parent.getSize();
     }
 
     glm::vec2 desired{};
@@ -638,7 +638,7 @@ bool UIScrollLayout::scroll(const glm::vec2& wheelDelta)
 
 glm::vec2 UIScrollLayout::measure(const UIElement& parent) const
 {
-    return parent._size;
+    return parent.getSize();
 }
 
 void UIScrollLayout::arrange(UIElement& parent, const Rect2D& rect) const

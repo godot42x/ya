@@ -108,7 +108,7 @@ TEST(WidgetLayoutTest, TextWithoutAutoSizeKeepsExplicitSize)
     auto label = std::make_shared<UIText>("Fixed");
     label->_text     = "Hello";
     label->_fontSize = 16;
-    label->_size     = {120.0f, 24.0f};
+    label->setSize({120.0f, 24.0f});
     EXPECT_EQ(label->computeDesiredSize(), glm::vec2(120.0f, 24.0f));
 }
 
@@ -118,7 +118,7 @@ TEST(WidgetLayoutTest, AnchorLayoutResolvesStretchOverAutoOverSize)
 
     // AutoSize in anchor layout: size resolves from desired (text measure).
     auto text = makeAutoText("Hello", 16);
-    text->_size = {999.0f, 999.0f}; // must be ignored
+    text->setSize({999.0f, 999.0f}); // must be ignored
     tree.attachToLayer(WidgetTree::ELayer::Content, text);
     tree.layout();
     EXPECT_FLOAT_EQ(text->_layoutRect.extent.x, 40.0f);
@@ -129,7 +129,7 @@ TEST(WidgetLayoutTest, AnchorLayoutResolvesStretchOverAutoOverSize)
     stretch->_bAutoSize = true;
     stretch->_anchorMin = {0.0f, 0.0f};
     stretch->_anchorMax = {1.0f, 0.0f};
-    stretch->_position  = {0.0f, 60.0f};
+    stretch->setPosition({0.0f, 60.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, stretch);
     tree.layout();
     EXPECT_FLOAT_EQ(stretch->_layoutRect.extent.x, 400.0f); // stretched
@@ -152,7 +152,7 @@ TEST(WidgetLayoutTest, EmptyAutoButtonKeepsExplicitFallbackSize)
     WidgetTree tree({.width = 400, .height = 200});
     auto button = std::make_shared<UIButton>("Empty");
     button->_bAutoSize = true;
-    button->_size = {91.0f, 37.0f};
+    button->setSize({91.0f, 37.0f});
     button->setContentPadding({12.0f, 6.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, button);
     tree.layout();
@@ -168,7 +168,7 @@ TEST(WidgetLayoutTest, ButtonAutoSizeInContainerPacksAndFills)
     auto toolbar = std::make_shared<UIContainer>("Toolbar");
     toolbar->_anchorMin = {0.0f, 0.0f};
     toolbar->_anchorMax = {1.0f, 0.0f};
-    toolbar->_size      = {0.0f, 40.0f};
+    toolbar->setSize({0.0f, 40.0f});
     toolbar->setDirection(EWidgetBoxLayout::Horizontal);
     toolbar->setSpacing(8.0f);
     toolbar->setPadding({6.0f, 6.0f});
@@ -203,17 +203,17 @@ TEST(WidgetLayoutTest, ButtonExplicitSizeInContainerKeepsItsWidth)
     row->setDirection(EWidgetBoxLayout::Horizontal);
     row->_anchorMin = {0.0f, 0.0f};
     row->_anchorMax = {1.0f, 0.0f};
-    row->_size      = {0.0f, 40.0f};
+    row->setSize({0.0f, 40.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, row);
 
     // Explicit-size button must NOT be pushed by its text content when
     // AutoSize is off (container packing uses computeDesiredSize).
     auto grow = makeAutoButton("Grow", "Grow +20");
     grow->_bAutoSize = false;
-    grow->_size      = {90.0f, 24.0f};
+    grow->setSize({90.0f, 24.0f});
     auto shrink = makeAutoButton("Shrink", "Shrink -20");
     shrink->_bAutoSize = false;
-    shrink->_size      = {100.0f, 24.0f};
+    shrink->setSize({100.0f, 24.0f});
     tree.attach(*row, grow);
     tree.attach(*row, shrink);
     tree.layout();
@@ -230,7 +230,7 @@ TEST(WidgetLayoutTest, ButtonExplicitSizeIgnoresContentWidth)
     WidgetTree tree({.width = 400, .height = 200});
     auto button = makeAutoButton("Wide", "Hello");
     button->_bAutoSize = false;
-    button->_size      = {200.0f, 32.0f};
+    button->setSize({200.0f, 32.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, button);
     tree.layout();
     EXPECT_FLOAT_EQ(button->_layoutRect.extent.x, 200.0f);
@@ -295,7 +295,7 @@ TEST(WidgetLayoutTest, NestedContainersPropagateDesiredSizes)
     innerV->addDetachedChild(t2);
 
     auto spacer = std::make_shared<UIPanel>("Spacer");
-    spacer->_size = {50.0f, 30.0f};
+    spacer->setSize({50.0f, 30.0f});
 
     tree.attach(*hbox, innerV);
     tree.attach(*hbox, spacer);
@@ -362,14 +362,14 @@ TEST(WidgetLayoutTest, BoxSlotsAreParentOwnedAndRecreatedOnReparent)
     WidgetTree tree({.width = 400, .height = 200});
     auto first = std::make_shared<UIContainer>("First");
     auto second = std::make_shared<UIContainer>("Second");
-    first->_size = {200.0f, 100.0f};
-    second->_position = {200.0f, 0.0f};
-    second->_size = {200.0f, 100.0f};
+    first->setSize({200.0f, 100.0f});
+    second->setPosition({200.0f, 0.0f});
+    second->setSize({200.0f, 100.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, first);
     tree.attachToLayer(WidgetTree::ELayer::Content, second);
 
     auto child = std::make_shared<UIPanel>("Child");
-    child->_size = {20.0f, 20.0f};
+    child->setSize({20.0f, 20.0f});
     tree.attach(*first, child);
 
     auto* firstSlot = first->getBoxSlot(*child);
@@ -397,16 +397,16 @@ TEST(WidgetLayoutTest, BoxSlotFillMarginAndCrossAlignmentArrangeWithoutContainer
 {
     WidgetTree tree({.width = 300, .height = 120});
     auto box = std::make_shared<UIContainer>("Box");
-    box->_size = {300.0f, 120.0f};
+    box->setSize({300.0f, 120.0f});
     box->setDirection(EWidgetBoxLayout::Horizontal);
     box->setPadding({10.0f, 10.0f});
     box->setSpacing(5.0f);
     tree.attachToLayer(WidgetTree::ELayer::Content, box);
 
     auto fixed = std::make_shared<UIPanel>("Fixed");
-    fixed->_size = {50.0f, 20.0f};
+    fixed->setSize({50.0f, 20.0f});
     auto fill = std::make_shared<UIPanel>("Fill");
-    fill->_size = {10.0f, 20.0f};
+    fill->setSize({10.0f, 20.0f});
     tree.attach(*box, fixed);
     tree.attach(*box, fill);
     auto* fillSlot = box->getBoxSlot(*fill);
@@ -437,7 +437,7 @@ TEST(WidgetLayoutTest, BoxSlotsKeepEdgeStateLocalAcrossNestedReparent)
 {
     WidgetTree tree({.width = 320, .height = 180});
     auto outer = std::make_shared<UIContainer>("Outer");
-    outer->_size = {320.0f, 180.0f};
+    outer->setSize({320.0f, 180.0f});
     outer->setDirection(EWidgetBoxLayout::Vertical);
     outer->setPadding({10.0f, 10.0f});
     outer->setSpacing(4.0f);
@@ -446,9 +446,9 @@ TEST(WidgetLayoutTest, BoxSlotsKeepEdgeStateLocalAcrossNestedReparent)
     auto inner = std::make_shared<UIContainer>("Inner");
     inner->setDirection(EWidgetBoxLayout::Horizontal);
     auto sibling = std::make_shared<UIPanel>("Sibling");
-    sibling->_size = {40.0f, 20.0f};
+    sibling->setSize({40.0f, 20.0f});
     auto child = std::make_shared<UIPanel>("Child");
-    child->_size = {20.0f, 20.0f};
+    child->setSize({20.0f, 20.0f});
 
     tree.attach(*outer, inner);
     tree.attach(*outer, sibling);
@@ -492,16 +492,16 @@ TEST(WidgetLayoutTest, BoxSlotsControlHiddenParticipationAndFillBounds)
 {
     WidgetTree tree({.width = 200, .height = 120});
     auto box = std::make_shared<UIContainer>("Box");
-    box->_size = {200.0f, 120.0f};
+    box->setSize({200.0f, 120.0f});
     box->setDirection(EWidgetBoxLayout::Vertical);
     box->setMainAxisAlignment(EWidgetMainAxisAlignment::End);
     tree.attachToLayer(WidgetTree::ELayer::Content, box);
 
     auto hidden = std::make_shared<UIPanel>("Hidden");
-    hidden->_size       = {100.0f, 20.0f};
-    hidden->_visibility = EWidgetVisibility::Hidden;
+    hidden->setSize({100.0f, 20.0f});
+    hidden->setVisibility(EWidgetVisibility::Hidden);
     auto fill = std::make_shared<UIPanel>("Fill");
-    fill->_size = {100.0f, 10.0f};
+    fill->setSize({100.0f, 10.0f});
     tree.attach(*box, hidden);
     tree.attach(*box, fill);
 
@@ -552,7 +552,7 @@ TEST(WidgetLayoutTest, FixedSizeTextBindingTriggersPaintOnly)
     auto ref   = std::make_shared<Reactive<std::string>>("Hi");
     auto label = std::make_shared<UIText>("FixedBound");
     label->_bAutoSize = false;
-    label->_size      = {100.0f, 24.0f};
+    label->setSize({100.0f, 24.0f});
     label->bindText(ref);
     tree.attachToLayer(WidgetTree::ELayer::Content, label);
 

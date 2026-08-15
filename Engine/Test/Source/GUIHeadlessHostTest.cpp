@@ -29,8 +29,8 @@ struct HeadlessDelegate final : IGUIAppDelegate
     void buildUI(WidgetTree& tree) override
     {
         auto panel = std::make_shared<UIPanel>("HeadlessPanel");
-        panel->_position = {8.0f, 12.0f};
-        panel->_size     = {96.0f, 48.0f};
+        panel->setPosition({8.0f, 12.0f});
+        panel->setSize({96.0f, 48.0f});
         tree.attachToLayer(WidgetTree::ELayer::Content, panel);
     }
 

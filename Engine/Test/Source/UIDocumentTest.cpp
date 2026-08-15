@@ -49,15 +49,15 @@ TEST(UIDocumentTest, FromWidgetRoundtripsFieldsAndChildren)
     ASSERT_NE(title, nullptr);
     ASSERT_NE(ok, nullptr);
 
-    container->_size = {300.0f, 120.0f};
+    container->setSize({300.0f, 120.0f});
     auto* titleWidget = dynamic_cast<UIText*>(title.get());
     ASSERT_NE(titleWidget, nullptr);
-    titleWidget->_position = {10.0f, 20.0f};
+    titleWidget->setPosition({10.0f, 20.0f});
     titleWidget->_text     = "Hello Doc";
     titleWidget->_fontSize = 24;
     titleWidget->_color    = {1.0f, 0.0f, 0.0f, 1.0f};
-    ok->_position          = {100.0f, 200.0f};
-    ok->_size              = {80.0f, 32.0f};
+    ok->setPosition({100.0f, 200.0f});
+    ok->setSize({80.0f, 32.0f});
     container->addDetachedChild(title);
     container->addDetachedChild(ok);
 
@@ -72,8 +72,8 @@ TEST(UIDocumentTest, FromWidgetRoundtripsFieldsAndChildren)
     ASSERT_NE(instanceA, nullptr);
     ASSERT_NE(instanceB, nullptr);
 
-    EXPECT_EQ(instanceA->_size, glm::vec2(300.0f, 120.0f));
-    EXPECT_EQ(instanceB->_size, glm::vec2(300.0f, 120.0f));
+    EXPECT_EQ(instanceA->getSize(), glm::vec2(300.0f, 120.0f));
+    EXPECT_EQ(instanceB->getSize(), glm::vec2(300.0f, 120.0f));
     ASSERT_EQ(instanceA->getChildren().size(), 2u);
     ASSERT_EQ(instanceB->getChildren().size(), 2u);
 
@@ -105,7 +105,7 @@ TEST(UIDocumentTest, JsonRoundtrip)
     ASSERT_NE(panelWidget, nullptr);
     panelWidget->_color    = {0.12f, 0.14f, 0.22f, 0.88f};
     panelWidget->_zOrder   = 5;
-    panelWidget->_position = {20.0f, 20.0f};
+    panelWidget->setPosition({20.0f, 20.0f});
     auto label       = registry.createInstance("test.doc_text");
     auto* labelWidget = dynamic_cast<UIText*>(label.get());
     ASSERT_NE(labelWidget, nullptr);
@@ -197,7 +197,7 @@ TEST(UIDocumentTest, DeserializeOnAttachedWidgetAggregatesSingleInvalidation)
     auto source = registry.createInstance("test.doc_panel");
     auto* sourcePanel = dynamic_cast<UIPanel*>(source.get());
     ASSERT_NE(sourcePanel, nullptr);
-    sourcePanel->_size  = {300.0f, 120.0f};
+    sourcePanel->setSize({300.0f, 120.0f});
     sourcePanel->_color = {0.5f, 0.5f, 0.5f, 1.0f};
     auto doc = UIDocument::fromWidget(*source);
     ASSERT_NE(doc, nullptr);
@@ -215,7 +215,7 @@ TEST(UIDocumentTest, DeserializeOnAttachedWidgetAggregatesSingleInvalidation)
     target->deserializeFields(doc->fields);
     tree.buildSnapshot(UIFrameBuildContext{});
 
-    EXPECT_EQ(target->_size, glm::vec2(300.0f, 120.0f));
+    EXPECT_EQ(target->getSize(), glm::vec2(300.0f, 120.0f));
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore + 1);
 }
 

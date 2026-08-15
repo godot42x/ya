@@ -133,11 +133,11 @@ TEST(GuiEventDriverTest, ScenarioDrivesWidgetTreeAndDumpAssertsHoverContract)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       a = std::make_shared<UIButton>("A");
-    a->_position  = {10.0f, 10.0f};
-    a->_size      = {60.0f, 24.0f};
+    a->setPosition({10.0f, 10.0f});
+    a->setSize({60.0f, 24.0f});
     auto b = std::make_shared<UIButton>("B");
-    b->_position  = {120.0f, 10.0f};
-    b->_size      = {60.0f, 24.0f};
+    b->setPosition({120.0f, 10.0f});
+    b->setSize({60.0f, 24.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, a);
     tree.attachToLayer(WidgetTree::ELayer::Content, b);
     tree.layout();

@@ -28,12 +28,12 @@ TEST(UIFrameSnapshotTest, BuildResolvesItemsToRenderPixelsInPaintOrder)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       behind = std::make_shared<UIPanel>("Behind");
-    behind->_position = {10.0f, 10.0f};
-    behind->_size     = {100.0f, 50.0f};
+    behind->setPosition({10.0f, 10.0f});
+    behind->setSize({100.0f, 50.0f});
     behind->_zOrder   = 0;
     auto front = std::make_shared<UIButton>("Front");
-    front->_position  = {200.0f, 100.0f};
-    front->_size      = {80.0f, 32.0f};
+    front->setPosition({200.0f, 100.0f});
+    front->setSize({80.0f, 32.0f});
     front->_zOrder    = 10;
     tree.attachToLayer(WidgetTree::ELayer::Content, behind);
     tree.attachToLayer(WidgetTree::ELayer::Content, front);
@@ -58,13 +58,13 @@ TEST(UIFrameSnapshotTest, ContainerClipResolvesOnChildren)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       clip = std::make_shared<UIContainer>("Clip");
-    clip->_position = {0.0f, 0.0f};
-    clip->_size     = {200.0f, 100.0f};
+    clip->setPosition({0.0f, 0.0f});
+    clip->setSize({200.0f, 100.0f});
     clip->setClipChildren(true);
     auto child = std::make_shared<UIPanel>("Child");
     // Box layout places the child at the content origin with its desired
     // size: 300px wide inside a 200px clip -> the item is half outside.
-    child->_size = {300.0f, 100.0f};
+    child->setSize({300.0f, 100.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, clip);
     tree.attach(*clip, child);
 
@@ -85,8 +85,8 @@ TEST(UIFrameSnapshotTest, SnapshotSurvivesImmediateDetach)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIPanel>("P");
-    panel->_position = {10.0f, 10.0f};
-    panel->_size     = {100.0f, 50.0f};
+    panel->setPosition({10.0f, 10.0f});
+    panel->setSize({100.0f, 50.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, panel);
 
     UIFrameSnapshot snapshot = tree.buildSnapshot({});
@@ -105,8 +105,8 @@ TEST(UIFrameSnapshotTest, TextItemsCarryFontAndText)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       text = std::make_shared<UIText>("T");
-    text->_position = {30.0f, 40.0f};
-    text->_size     = {200.0f, 20.0f};
+    text->setPosition({30.0f, 40.0f});
+    text->setSize({200.0f, 20.0f});
     text->_text     = "Hello Snapshot";
     tree.attachToLayer(WidgetTree::ELayer::Content, text);
 
@@ -122,8 +122,8 @@ TEST(UIFrameSnapshotTest, LayoutRunsWhenDirtyDuringSnapshot)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIPanel>("P");
-    panel->_position = {5.0f, 5.0f};
-    panel->_size     = {50.0f, 25.0f};
+    panel->setPosition({5.0f, 5.0f});
+    panel->setSize({50.0f, 25.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, panel);
 
     // No explicit layout() call: buildSnapshot performs it.
@@ -164,9 +164,9 @@ TEST(UIFrameSnapshotTest, PerfStatsCountPaintWalkAndDrawItems)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       behind = std::make_shared<UIPanel>("Behind");
-    behind->_size     = {100.0f, 50.0f};
+    behind->setSize({100.0f, 50.0f});
     auto front = std::make_shared<UIButton>("Front");
-    front->_size     = {80.0f, 32.0f};
+    front->setSize({80.0f, 32.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, behind);
     tree.attachToLayer(WidgetTree::ELayer::Content, front);
 
@@ -490,8 +490,8 @@ TEST(UIFrameSnapshotTest, LayoutChangeRebuildsMovedWidgetDrawItems)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIPanel>("P");
-    panel->_position = {10.0f, 10.0f};
-    panel->_size     = {50.0f, 25.0f};
+    panel->setPosition({10.0f, 10.0f});
+    panel->setSize({50.0f, 25.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, panel);
 
     tree.buildSnapshot(UIFrameBuildContext{});
@@ -500,7 +500,7 @@ TEST(UIFrameSnapshotTest, LayoutChangeRebuildsMovedWidgetDrawItems)
 
     // Move the panel and invalidate layout: the widget's rect changes, so its
     // cached draw items (old pixel position) must be rebuilt at the new spot.
-    panel->_position = {100.0f, 100.0f};
+    panel->setPosition({100.0f, 100.0f});
     tree.invalidateLayout();
     const UIFrameSnapshot snapshot = tree.buildSnapshot(UIFrameBuildContext{});
     ASSERT_EQ(snapshot.items.size(), 1u);
@@ -611,8 +611,8 @@ TEST(UIFrameSnapshotTest, CleanTreeOffsetChangeRebuildsResolvedItems)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIPanel>("P");
-    panel->_position = {10.0f, 10.0f};
-    panel->_size     = {100.0f, 50.0f};
+    panel->setPosition({10.0f, 10.0f});
+    panel->setSize({100.0f, 50.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, panel);
 
     // Cold start + clean frame under context A (identity mapping).
@@ -635,8 +635,8 @@ TEST(UIFrameSnapshotTest, CleanTreeUiScaleChangeRebuildsResolvedItems)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIPanel>("P");
-    panel->_position = {10.0f, 10.0f};
-    panel->_size     = {100.0f, 50.0f};
+    panel->setPosition({10.0f, 10.0f});
+    panel->setSize({100.0f, 50.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, panel);
 
     tree.buildSnapshot(UIFrameBuildContext{});
@@ -656,8 +656,8 @@ TEST(UIFrameSnapshotTest, CleanTreeGenerationChangeDropsCache)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIPanel>("P");
-    panel->_position = {10.0f, 10.0f};
-    panel->_size     = {100.0f, 50.0f};
+    panel->setPosition({10.0f, 10.0f});
+    panel->setSize({100.0f, 50.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, panel);
 
     tree.buildSnapshot(UIFrameBuildContext{.generation = 0});

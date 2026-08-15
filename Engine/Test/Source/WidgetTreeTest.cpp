@@ -33,8 +33,8 @@ WidgetEventContext pointAt(float x, float y)
 std::shared_ptr<UIButton> makeButton(const std::string& name, glm::vec2 pos, glm::vec2 size)
 {
     auto button        = std::make_shared<UIButton>(name);
-    button->_position  = pos;
-    button->_size      = size;
+    button->setPosition(pos);
+    button->setSize(size);
     return button;
 }
 
@@ -131,8 +131,8 @@ TEST(WidgetTreeTest, RouteStateTracksPointerCaptureAndFocusPaths)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto panel = std::make_shared<UIPanel>("Panel");
-    panel->_position = {100.0f, 80.0f};
-    panel->_size = {160.0f, 80.0f};
+    panel->setPosition({100.0f, 80.0f});
+    panel->setSize({160.0f, 80.0f});
     auto button = makeButton("Button", {20.0f, 10.0f}, {80.0f, 32.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, panel);
     tree.attach(*panel, button);
@@ -176,8 +176,8 @@ TEST(WidgetTreeTest, ChildAddedToAttachedParentJoinsItsTree)
 {
     WidgetTree tree({.width = 400, .height = 300});
     auto parent = std::make_shared<UIPanel>("Parent");
-    parent->_position = {40.0f, 40.0f};
-    parent->_size = {200.0f, 120.0f};
+    parent->setPosition({40.0f, 40.0f});
+    parent->setSize({200.0f, 120.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, parent);
 
     auto child = makeButton("LateChild", {20.0f, 20.0f}, {80.0f, 32.0f});
@@ -195,13 +195,13 @@ TEST(WidgetTreeTest, PointerRouteDeliversPreviewTargetThenBubble)
     std::vector<std::string> deliveries;
     WidgetTree tree({.width = 400, .height = 300});
     auto parent = std::make_shared<TestRouteWidget>("Parent", deliveries);
-    parent->_position = {100.0f, 80.0f};
-    parent->_size = {120.0f, 80.0f};
+    parent->setPosition({100.0f, 80.0f});
+    parent->setSize({120.0f, 80.0f});
     parent->_hitFilter = EWidgetHitFilter::Stop;
     parent->bHandleBubble = true;
     auto child = std::make_shared<TestRouteWidget>("Child", deliveries);
-    child->_position = {20.0f, 20.0f};
-    child->_size = {60.0f, 30.0f};
+    child->setPosition({20.0f, 20.0f});
+    child->setSize({60.0f, 30.0f});
     child->_hitFilter = EWidgetHitFilter::Pass;
     child->bHandleTarget = true;
 
@@ -322,8 +322,8 @@ TEST(WidgetTreeTest, DetachedWidgetDoesNotParticipate)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIPanel>("Detached");
-    panel->_position  = {10.0f, 10.0f};
-    panel->_size      = {100.0f, 50.0f};
+    panel->setPosition({10.0f, 10.0f});
+    panel->setSize({100.0f, 50.0f});
 
     EXPECT_FALSE(panel->isAttached());
     EXPECT_EQ(panel->getTree(), nullptr);
@@ -556,8 +556,8 @@ TEST(WidgetTreeTest, WeakPointerPathsSurviveDetachWithoutDangling)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIPanel>("Panel");
-    panel->_position = {100.0f, 80.0f};
-    panel->_size     = {160.0f, 80.0f};
+    panel->setPosition({100.0f, 80.0f});
+    panel->setSize({160.0f, 80.0f});
     auto       button = makeButton("Button", {20.0f, 10.0f}, {80.0f, 32.0f});
     tree.attachToLayer(WidgetTree::ELayer::Content, panel);
     tree.attach(*panel, button);
@@ -790,7 +790,7 @@ TEST(WidgetTreeTest, HiddenSubtreeCullsHits)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       button = makeButton("B", {100.0f, 100.0f}, {80.0f, 32.0f});
-    button->_visibility = EWidgetVisibility::Hidden;
+    button->setVisibility(EWidgetVisibility::Hidden);
     tree.attachToLayer(WidgetTree::ELayer::Content, button);
     tree.layout();
 
@@ -916,7 +916,7 @@ TEST(WidgetTreeTest, TabSkipsNonFocusableAndHiddenWidgets)
     auto       plain   = std::make_shared<UIPanel>("Plain"); // never focusable
     auto       hidden  = makeButton("Hidden", {0.0f, 0.0f}, {40.0f, 20.0f});
     auto       visible = makeButton("Visible", {0.0f, 0.0f}, {40.0f, 20.0f});
-    hidden->_visibility = EWidgetVisibility::Hidden; // focusable but not visible
+    hidden->setVisibility(EWidgetVisibility::Hidden); // focusable but not visible
     tree.attachToLayer(WidgetTree::ELayer::Content, plain);
     tree.attachToLayer(WidgetTree::ELayer::Content, hidden);
     tree.attachToLayer(WidgetTree::ELayer::Content, visible);

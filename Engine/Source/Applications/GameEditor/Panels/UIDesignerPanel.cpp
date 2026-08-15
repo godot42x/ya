@@ -395,8 +395,8 @@ void UIDesignerPanel::beginMove(UIElement* widget, const glm::vec2& canvasPoint)
     _dragMode        = EDragMode::Move;
     _dragWidget      = widget;
     _resizeMask      = 0;
-    _dragStartPos    = widget->_position;
-    _dragStartSize   = widget->_size;
+    _dragStartPos    = widget->getPosition();
+    _dragStartSize   = widget->getSize();
     _dragStartAnchorMin = widget->_anchorMin;
     _dragStartAnchorMax = widget->_anchorMax;
     _dragStartParentExtent = widget->getParent() ? widget->getParent()->_layoutRect.extent : glm::vec2(0.0f);
@@ -412,8 +412,8 @@ void UIDesignerPanel::beginResize(UIElement* widget, const glm::vec2& canvasPoin
     _dragMode        = EDragMode::Resize;
     _dragWidget      = widget;
     _resizeMask      = resizeMask;
-    _dragStartPos    = widget->_position;
-    _dragStartSize   = widget->_size;
+    _dragStartPos    = widget->getPosition();
+    _dragStartSize   = widget->getSize();
     _dragStartAnchorMin = widget->_anchorMin;
     _dragStartAnchorMax = widget->_anchorMax;
     _dragStartParentExtent = widget->getParent() ? widget->getParent()->_layoutRect.extent : glm::vec2(0.0f);
@@ -437,7 +437,7 @@ bool UIDesignerPanel::applyDragDelta(const glm::vec2& canvasDelta)
     if (_dragMode == EDragMode::Move) {
         // _position is the offset from the anchor point inside the parent;
         // the parent rect does not move, so a canvas delta maps 1:1.
-        _dragWidget->_position = _dragStartPos + canvasDelta;
+        _dragWidget->setPosition(_dragStartPos + canvasDelta);
     }
     else {
         UIElement* widget = _dragWidget;
@@ -502,8 +502,8 @@ bool UIDesignerPanel::applyDragDelta(const glm::vec2& canvasDelta)
         anchorMin = glm::clamp(anchorMin, 0.0f, 1.0f);
         anchorMax = glm::clamp(anchorMax, 0.0f, 1.0f);
 
-        widget->_position   = pos;
-        widget->_size       = size;
+        widget->setPosition(pos);
+        widget->setSize(size);
         widget->_anchorMin  = anchorMin;
         widget->_anchorMax  = anchorMax;
     }

@@ -28,7 +28,7 @@ UIElementRef makeFillElement(std::string name)
     element->_anchorMax = {1.0f, 1.0f};
     // Structural containers (root/layers) are not hit targets themselves;
     // their children are (HitTestInvisible semantics).
-    element->_visibility = EWidgetVisibility::HitTestInvisible;
+    element->setVisibility(EWidgetVisibility::HitTestInvisible);
     return element;
 }
 
@@ -927,9 +927,9 @@ void WidgetTree::beginDrag(UIElement* source, std::string payload, std::string g
     // Ghost on the DragIme layer: visible but never hit-testable.
     auto ghost = std::make_shared<UIPanel>("DragGhost");
     ghost->_color      = {0.24f, 0.46f, 0.82f, 0.75f};
-    ghost->_visibility = EWidgetVisibility::SelfHitTestInvisible;
-    ghost->_position   = {0.0f, 0.0f};
-    ghost->_size       = {160.0f, 24.0f};
+    ghost->setVisibility(EWidgetVisibility::SelfHitTestInvisible);
+    ghost->setPosition({0.0f, 0.0f});
+    ghost->setSize({160.0f, 24.0f});
 
     auto label = std::make_shared<UIText>("DragGhostLabel");
     label->_text     = std::move(ghostLabel);
@@ -937,7 +937,7 @@ void WidgetTree::beginDrag(UIElement* source, std::string payload, std::string g
     label->_color    = {0.95f, 0.96f, 0.98f, 1.0f};
     label->_anchorMin = {0.0f, 0.0f};
     label->_anchorMax = {1.0f, 1.0f};
-    label->_size      = {0.0f, 0.0f};
+    label->setSize({0.0f, 0.0f});
     label->_hAlign    = EWidgetAlignH::Center;
     label->_vAlign    = EWidgetAlignV::Center;
     ghost->addDetachedChild(label);
@@ -964,7 +964,7 @@ void WidgetTree::updateDrag(const glm::vec2& logicalPoint)
     }
     _dragPoint = logicalPoint;
     if (_dragGhost) {
-        _dragGhost->_position = logicalPoint + glm::vec2(10.0f, 10.0f);
+        _dragGhost->setPosition(logicalPoint + glm::vec2(10.0f, 10.0f));
         invalidateLayout();
     }
 

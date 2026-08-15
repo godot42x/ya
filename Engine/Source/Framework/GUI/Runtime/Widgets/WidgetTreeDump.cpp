@@ -66,7 +66,7 @@ nlohmann::json serializeNode(const UIElement& element, const WidgetTree& tree)
         {"w", element._layoutRect.extent.x},
         {"h", element._layoutRect.extent.y},
     };
-    node["visibility"]  = static_cast<int>(element._visibility);
+    node["visibility"]  = static_cast<int>(element.getVisibility());
     node["zOrder"]      = element._zOrder;
     node["hitFilter"]   = static_cast<int>(element._hitFilter);
     node["focusPolicy"] = static_cast<int>(element._focusPolicy);

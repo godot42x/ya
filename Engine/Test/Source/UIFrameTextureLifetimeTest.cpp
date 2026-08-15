@@ -35,8 +35,8 @@ TEST(UIFrameTextureLifetimeTest, SnapshotRetainsTextureAfterCacheClear)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIPanel>("P");
-    panel->_position = {10.0f, 10.0f};
-    panel->_size     = {100.0f, 50.0f};
+    panel->setPosition({10.0f, 10.0f});
+    panel->setSize({100.0f, 50.0f});
 
     // Fake asset cache (AssetManager's textureManager behaves the same:
     // path -> strong ref; unloading/clearing drops the cache's reference).
@@ -72,8 +72,8 @@ TEST(UIFrameTextureLifetimeTest, ResolverMissAndMissingResolverFallBackToWhite)
 {
     WidgetTree tree({.width = 800, .height = 600});
     auto       panel = std::make_shared<UIPanel>("P");
-    panel->_position = {10.0f, 10.0f};
-    panel->_size     = {100.0f, 50.0f};
+    panel->setPosition({10.0f, 10.0f});
+    panel->setSize({100.0f, 50.0f});
     panel->_image    = TextureRef("Engine:Content/TestTextures/face.png",
                                   ya::Ptr<Texture>(makeFakeTexture().get()));
     tree.attachToLayer(WidgetTree::ELayer::Content, panel);

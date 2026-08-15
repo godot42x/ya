@@ -88,8 +88,8 @@ TEST(SceneWidgetEntryReparentTest, NestTopLevelEntryIntoEntryAdjustsPosition)
     // Title was at canvas (36,30); Panel is at (20,20) => parent-relative (16,10).
     auto title = entries[0].inlineDocument->children[0]->instantiate();
     ASSERT_NE(title, nullptr);
-    EXPECT_NEAR(title->_position.x, 16.0, 1e-3);
-    EXPECT_NEAR(title->_position.y, 10.0, 1e-3);
+    EXPECT_NEAR(title->getPosition().x, 16.0, 1e-3);
+    EXPECT_NEAR(title->getPosition().y, 10.0, 1e-3);
 
     // Remaining entries are Label and Click Me (in order).
     EXPECT_EQ(entries[1].entryId, "Label");
@@ -107,8 +107,8 @@ TEST(SceneWidgetEntryReparentTest, NestUnderOriginKeepsPosition)
     ASSERT_TRUE(moveWidgetEntryDocument(entries, 1, {}, 0, {}, EWidgetEntryDropPosition::Into));
     auto title = entries[0].inlineDocument->children[0]->instantiate();
     ASSERT_NE(title, nullptr);
-    EXPECT_NEAR(title->_position.x, 36.0, 1e-3);
-    EXPECT_NEAR(title->_position.y, 30.0, 1e-3);
+    EXPECT_NEAR(title->getPosition().x, 36.0, 1e-3);
+    EXPECT_NEAR(title->getPosition().y, 30.0, 1e-3);
 }
 
 // Entry-level reorder (Before / After on entry rows).
@@ -238,8 +238,8 @@ TEST(SceneWidgetEntryReparentTest, FlattenedHudRebuildsNestingByDragDrop)
     for (size_t i = 0; i < 3; ++i) {
         auto widget = entries[0].inlineDocument->children[i]->instantiate();
         ASSERT_NE(widget, nullptr);
-        EXPECT_NEAR(widget->_position.x, expected[i][0], 1e-3);
-        EXPECT_NEAR(widget->_position.y, expected[i][1], 1e-3);
+        EXPECT_NEAR(widget->getPosition().x, expected[i][0], 1e-3);
+        EXPECT_NEAR(widget->getPosition().y, expected[i][1], 1e-3);
     }
     EXPECT_EQ(entries[0].inlineDocument->children[0]->typeId, "engine.text");
     EXPECT_EQ(entries[0].inlineDocument->children[1]->typeId, "engine.text");

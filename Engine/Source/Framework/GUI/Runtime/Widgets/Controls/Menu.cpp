@@ -88,7 +88,7 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
     // default fixed size) for rows to receive the full menu width.
     list->_anchorMin = {0.0f, 0.0f};
     list->_anchorMax = {1.0f, 1.0f};
-    list->_size      = {0.0f, 0.0f};
+    list->setSize({0.0f, 0.0f});
     panel->addDetachedChild(list);
 
     float maxLabelWidth = 0.0f;
@@ -110,7 +110,7 @@ void UIMenu::rebuildContent(const std::vector<FItem>& items)
         auto menuItem = std::make_shared<UIMenuItem>(std::format("Menu{}", i));
         menuItem->_label    = items[i].label;
         menuItem->_fontSize = _fontSize;
-        menuItem->_size     = {maxLabelWidth + 20.0f, _itemHeight};
+        menuItem->setSize({maxLabelWidth + 20.0f, _itemHeight});
         // Raw `this` capture is safe: the items are owned by the menu
         // (subtree), so the menu outlives every item lambda.
         menuItem->_onAction = [item = items[i].action, menu = this]()

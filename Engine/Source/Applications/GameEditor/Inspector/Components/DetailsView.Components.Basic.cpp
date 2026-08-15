@@ -220,8 +220,8 @@ void DetailsView::drawEntryTransform(SceneWidgetEntry& entry)
         }
         return fallback;
     };
-    glm::vec2 pos  = readVec2("_position", widget->_position);
-    glm::vec2 size = readVec2("_size", widget->_size);
+    glm::vec2 pos  = readVec2("_position", widget->getPosition());
+    glm::vec2 size = readVec2("_size", widget->getSize());
 
     ImGui::SeparatorText("Scene Transform (override)");
     bool bChanged = false;

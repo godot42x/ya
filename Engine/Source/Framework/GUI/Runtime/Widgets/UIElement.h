@@ -208,14 +208,24 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     void deserializeFields(const nlohmann::json& fields);
 
     // === Visual / layout / input properties ===
-    glm::vec2          _position   = {0.0f, 0.0f}; // Offset (px) from the anchor point within the parent rect
-    glm::vec2          _size       = {100.0f, 50.0f};
-    EWidgetVisibility  _visibility = EWidgetVisibility::Visible;
-    int                _zOrder     = 0;
-    glm::vec2          _anchorMin  = {0.0f, 0.0f}; // Fraction of the parent rect (clamped 0..1)
-    glm::vec2          _anchorMax  = {0.0f, 0.0f};
-    glm::vec2          _pivot      = {0.5f, 0.5f}; // Reserved; unused until rotation/scale exists
-    EWidgetHitFilter   _hitFilter  = EWidgetHitFilter::Pass;
+  protected:
+    // Runtime mutable visual/layout properties (GI-202): encapsulated behind
+    // changed-only setters setPosition/setSize/setVisibility. Subclasses read
+    // these freely in paint/layout/computeDesiredSize; external runtime writes
+    // must go through the setters. Authoring/reflection writes go through the
+    // mutation transaction (deserializeFields).
+    glm::vec2         _position   = {0.0f, 0.0f}; // Offset (px) from the anchor point within the parent rect
+    glm::vec2         _size       = {100.0f, 50.0f};
+    EWidgetVisibility _visibility = EWidgetVisibility::Visible;
+  public:
+    // Authoring-only configuration (GI-202 exception list): no runtime
+    // business write path yet; kept public for authoring/reflection. To be
+    // encapsulated when they gain a changed-only setter.
+    int               _zOrder     = 0;
+    glm::vec2         _anchorMin  = {0.0f, 0.0f}; // Fraction of the parent rect (clamped 0..1)
+    glm::vec2         _anchorMax  = {0.0f, 0.0f};
+    glm::vec2         _pivot      = {0.5f, 0.5f}; // Reserved; unused until rotation/scale exists
+    EWidgetHitFilter  _hitFilter  = EWidgetHitFilter::Pass;
     /// Keyboard focus participation (Tab traversal). Default None: plain
     /// widgets never take focus.
     EWidgetFocusPolicy _focusPolicy = EWidgetFocusPolicy::None;
@@ -374,12 +384,16 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// per-call-site decision.
     void invalidateProperty(EUIPropertyImpact impact);
 
-    // === Changed-only property setters (GI-105) ===
+    // === Changed-only property setters / getters (GI-105 / GI-202) ===
     // Presenters call these instead of writing the backing field directly, so
     // a same-value write is a no-op and only a real change invalidates at the
     // property's declared impact. `_position`/`_size` are layout inputs
     // (Layout); `_visibility` is SubtreePaintContext unless the Collapsed
-    // transition changes whether layout space is kept.
+    // transition changes whether layout space is kept. The backing fields are
+    // protected (GI-202): external readers use the getters.
+    [[nodiscard]] const glm::vec2& getPosition() const { return _position; }
+    [[nodiscard]] const glm::vec2& getSize() const { return _size; }
+    [[nodiscard]] EWidgetVisibility getVisibility() const { return _visibility; }
 
     void setPosition(const glm::vec2& value)
     {
