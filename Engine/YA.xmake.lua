@@ -141,11 +141,11 @@ end
 
 -- ==========================================================================
 -- Module libraries (engine modularization).
--- Per-module targets live next to their sources, organized in three product
--- tiers: Foundation/ (core + RHI + backend), Framework/ (GUI, game product
--- line), Product/ (host + editor). Modules are shared libraries themselves;
--- `ya-engine` is the transition-period aggregate that re-exports every module
--- as public deps so editor / examples / tests keep linking one entry point.
+-- Per-module targets live next to their sources, organized in two tiers:
+-- Framework/ (engine-agnostic reusable capabilities) and Applications/
+-- (assembled app forms). Modules are shared libraries themselves; `ya-engine`
+-- is the transition-period aggregate that re-exports every module as public
+-- deps so editor / examples / tests keep linking one entry point.
 -- ==========================================================================
 
 -- The engine aggregate facade is an engine-profile concept; the gui profile
@@ -175,7 +175,7 @@ do
     add_files("./Module.cpp", { unity_ignored = true })
 
     add_headerfiles("./Source/**.h")
-    set_pcheader("./Source/Foundation/Core/Common/FWD.h")
+    set_pcheader("./Source/Framework/Core/Common/FWD.h")
 
     add_includedirs("./Shader/Slang/Generated", { public = true })
     add_includedirs("./Shader/GLSL/Generated", { public = true })

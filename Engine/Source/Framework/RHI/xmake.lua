@@ -3,7 +3,7 @@
 -- ./Backend/xmake.lua) and are never collected through a parent exclusion
 -- glob. Generated shader headers (Common.Limits.*, Sprite2D.*, ...) are
 -- public include inputs consumed through RenderDefines.h; the paths are
--- derived from this file's directory (Engine/Source/Foundation/RHI).
+-- derived from this file's directory (Engine/Source/Framework/RHI).
 target("ya-rhi")
     set_kind(ya_target_kind())
     ya_std_module("YA_RHI_API")

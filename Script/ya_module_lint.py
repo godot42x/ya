@@ -18,10 +18,10 @@ SRC = os.path.join(ROOT, "Engine", "Source")
 
 # module name -> physical directory (relative to Engine/Source)
 MODULES = {
-    "ya-foundation-core": "Foundation/Core",
-    "ya-rhi": "Foundation/RHI",
-    "ya-rhi-backend-common": "Foundation/RHI/Backend",
-    "ya-rhi-vulkan": "Foundation/RHI/Backend/Vulkan",
+    "ya-foundation-core": "Framework/Core",
+    "ya-rhi": "Framework/RHI",
+    "ya-rhi-backend-common": "Framework/RHI/Backend",
+    "ya-rhi-vulkan": "Framework/RHI/Backend/Vulkan",
     "ya-hierarchy": "Framework/Hierarchy",
     "ya-gui-resources": "Framework/GUI/Runtime/Resource",
     "ya-gui-draw2d": "Framework/GUI/Runtime/Draw2D",

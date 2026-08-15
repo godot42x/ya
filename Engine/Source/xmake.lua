@@ -1,13 +1,13 @@
 -- ============================================================================
 -- Engine source root.
 --
--- Source is organized into three product tiers, each module living in its own
+-- Source is organized into two tiers, each module living in its own
 -- directory with a self-describing xmake.lua:
 --
---   Foundation/   shared infrastructure (Core / RHI / RHI+Backend)
---   Framework/    product lines (GUI framework; Game: scene/resource/render/
---                 gameplay/physics)
---   Product/      assembled products (Host runtime shell / Editor)
+--   Framework/     engine-agnostic reusable capability layer (Core / RHI /
+--                  App / GUI / Render / Scripting / Resource / Scene /
+--                  Physics / ECS)
+--   Applications/  assembled app forms (GameRuntime / GameEditor)
 --
 -- This file only provides one thin helper for the genuinely shared parts
 -- (export-macro injection + unity rule) and wires the tier directories up.
@@ -84,24 +84,19 @@ function ya_engine_defines()
     end
 end
 
--- App tier: the windowless shared application main chain (kernel + control
--- plane) plus the optional module system. App must not depend on GUI, window
--- or any app-form semantics; the module system is a separate opt-in target
--- so windowless/GUI-only apps don't have to link it.
-includes("./App/Kernel/xmake.lua")
-includes("./App/Control/xmake.lua")
-includes("./App/Module/xmake.lua")
-
--- Foundation tier: shared infrastructure consumed by every product line.
-includes("./Foundation/Core/xmake.lua")
-includes("./Foundation/RHI/xmake.lua")
-
--- Framework tier: product lines. Hierarchy first (renderer-independent
--- scene-tree base); GUI framework is self-contained; Game depends on
--- Foundation + Hierarchy + GUI.
+-- Framework tier (engine-agnostic reusable capability layer), ordered by
+-- dependency: Core + RHI at the bottom, then the windowless App main chain
+-- (kernel + control plane + optional module system), the renderer-independent
+-- Hierarchy base, and the GUI framework (runtime + tooling + host). App must
+-- not depend on GUI, window or any app-form semantics; the module system is
+-- a separate opt-in target so windowless/GUI-only apps don't have to link it.
+includes("./Framework/Core/xmake.lua")
+includes("./Framework/RHI/xmake.lua")
+includes("./Framework/App/Kernel/xmake.lua")
+includes("./Framework/App/Control/xmake.lua")
+includes("./Framework/App/Module/xmake.lua")
 includes("./Framework/Hierarchy/xmake.lua")
 includes("./Framework/GUI/xmake.lua")
-includes("./GUI/Host/xmake.lua")
 
 -- Game product line + product tier: engine profile only. The gui profile
 -- never pulls ECS/Scene3D/Resource/RenderGraph/Render3D/Physics/Host/Editor
