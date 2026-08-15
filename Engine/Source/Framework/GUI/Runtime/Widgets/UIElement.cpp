@@ -3,6 +3,7 @@
 #include "Core/Log.h"
 #include "Core/Reflection/ReflectionSerializer.h"
 #include "GUI/Layout/UILayout.h"
+#include "GUI/Widgets/Reactive.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <algorithm>
@@ -27,6 +28,10 @@ UIElement::~UIElement()
         child->_tree   = nullptr;
         child->_parent = nullptr;
     }
+
+    // Sever this widget from every reactive ref it read, so a later set() on
+    // a ref never walks a dangling dependent pointer.
+    clearDependencies();
 }
 
 std::vector<UIElement*> UIElement::getChildrenInPaintOrder() const
@@ -160,8 +165,28 @@ void UIElement::paint(UIFrameBuilder& builder)
         return;
     }
     builder.countWidget();
-    paintSelf(builder);
+    pushPaintWidget(this);
+    if (_bPaintDirty || !builder.hasCachedItems(this)) {
+        clearDependencies();
+        builder.countRebuild();
+        const size_t start = builder.getItemCount();
+        paintSelf(builder);
+        builder.cacheItems(this, start);
+        _bPaintDirty = false;
+    }
+    else {
+        builder.reuseCachedItems(this);
+    }
     paintChildren(builder);
+    popPaintWidget();
+}
+
+void UIElement::clearDependencies()
+{
+    for (ReactiveBase* ref : _dependencies) {
+        ref->removeDependent(this);
+    }
+    _dependencies.clear();
 }
 
 void UIElement::paintChildren(UIFrameBuilder& builder)

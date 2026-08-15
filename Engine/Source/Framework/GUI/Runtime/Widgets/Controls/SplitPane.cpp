@@ -1,6 +1,7 @@
 #include "GUI/Widgets/Controls/SplitPane.h"
 
 #include "Core/Log.h"
+#include "GUI/Widgets/Reactive.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 
@@ -39,6 +40,8 @@ void UISplitPane::paint(UIFrameBuilder& builder)
     if (!isVisibleForRender()) {
         return;
     }
+    builder.countWidget();
+    pushPaintWidget(this);
     paintSelf(builder);
     // Each pane is its own clip region: UISplitLayout assigned every arranged
     // child its pane rect as the child's layout rect, so clip each child to
@@ -49,6 +52,7 @@ void UISplitPane::paint(UIFrameBuilder& builder)
         child->paint(builder);
         builder.popClip();
     }
+    popPaintWidget();
 }
 
 void UISplitPane::paintSelf(UIFrameBuilder& builder)

@@ -24,6 +24,7 @@
 #include <array>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace ya
@@ -68,6 +69,7 @@ struct GuiPerfStats
     float    layoutMS        = 0.0f; // layout() wall time (0 when layout was clean)
     float    paintMS         = 0.0f; // paint walk wall time
     uint32_t paintedWidgets  = 0;    // widgets that participated in the paint walk
+    uint32_t rebuiltWidgets  = 0;    // widgets that re-ran paintSelf (dirty)
     uint32_t drawItems       = 0;    // draw items in the resulting snapshot
 };
 
@@ -277,6 +279,12 @@ struct YA_GUI_API WidgetTree final
     Extent2D      _logicalExtent{};
     bool          _bLayoutDirty = true;
     GuiPerfStats  _perfStats;
+
+    /// Double-buffered per-widget draw-item caches for incremental paint:
+    /// index [_cacheIndex] is read (previous frame), [_cacheIndex ^ 1] is
+    /// written this frame and swapped at the end of buildSnapshot.
+    std::array<std::unordered_map<const UIElement*, std::vector<UIFrameDrawItem>>, 2> _itemCache;
+    int _cacheIndex = 0;
     UIElement*    _focused      = nullptr;
     UIElement*    _captured     = nullptr;
     UIElement*    _hovered      = nullptr;

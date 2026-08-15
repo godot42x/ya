@@ -23,6 +23,7 @@
 #include <memory>
 #include <functional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace ya
@@ -109,6 +110,27 @@ class YA_GUI_API UIFrameBuilder
     /// UIElement::paint before painting itself). Feeds GuiPerfStats.
     void countWidget() { ++_widgetCount; }
     [[nodiscard]] uint32_t getWidgetCount() const { return _widgetCount; }
+    /// Count one widget re-running its paintSelf (dirty) instead of reusing.
+    void countRebuild() { ++_rebuildCount; }
+    [[nodiscard]] uint32_t getRebuildCount() const { return _rebuildCount; }
+
+    // === Reactive incremental reuse ===
+    /// Bind the double-buffered per-widget draw-item caches (owned by
+    /// WidgetTree). Unbound builders always re-run every widget.
+    void bindCache(
+        const std::unordered_map<const UIElement*, std::vector<UIFrameDrawItem>>* readCache,
+        std::unordered_map<const UIElement*, std::vector<UIFrameDrawItem>>* writeCache)
+    {
+        _readCache  = readCache;
+        _writeCache = writeCache;
+    }
+    [[nodiscard]] size_t getItemCount() const { return _items.size(); }
+    /// Whether the read cache holds a segment for `widget` (cold-start check).
+    [[nodiscard]] bool hasCachedItems(const UIElement* widget) const;
+    /// Store this widget's newly painted segment into the write cache.
+    void cacheItems(const UIElement* widget, size_t start);
+    /// Append the widget's previous-frame segment from the read cache.
+    void reuseCachedItems(const UIElement* widget);
 
     /// Resolve an asset path to a strong texture reference through the build
     /// context's resolver (null without a resolver or on cache miss).
@@ -124,6 +146,9 @@ class YA_GUI_API UIFrameBuilder
     std::vector<Rect2D>        _clipStack;
     std::vector<UIFrameDrawItem> _items;
     uint32_t                   _widgetCount = 0;
+    uint32_t                   _rebuildCount = 0;
+    const std::unordered_map<const UIElement*, std::vector<UIFrameDrawItem>>* _readCache  = nullptr;
+    std::unordered_map<const UIElement*, std::vector<UIFrameDrawItem>>*       _writeCache = nullptr;
 };
 
 } // namespace ya

@@ -26,6 +26,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace ya
@@ -105,6 +106,7 @@ struct WidgetTree;
 struct WidgetAttachment;
 struct UIElement;
 class UISlot;
+class ReactiveBase;
 
 using UIElementRef = std::shared_ptr<UIElement>;
 
@@ -310,6 +312,20 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// drop / cancel).
     virtual void setDropHighlight(bool /*bHighlight*/) {}
 
+    // === Reactive dependency tracking ===
+    /// Mark this widget paint-dirty (called by ReactiveBase::notifyDependents).
+    /// The next buildSnapshot re-runs this widget's paintSelf instead of
+    /// reusing its cached draw-item segment.
+    void markPaintDirty() { _bPaintDirty = true; }
+    [[nodiscard]] bool isPaintDirty() const { return _bPaintDirty; }
+    void clearPaintDirty() { _bPaintDirty = false; }
+    /// Record `ref` as a dependency of this widget (called by Reactive::get
+    /// during the paint walk). Cleared before a dirty widget re-runs its paint.
+    void trackDependency(ReactiveBase* ref) { _dependencies.insert(ref); }
+    /// Remove `ref` from this widget's dependency list (called by the ref's
+    /// destructor so a destroyed widget never holds a dangling ref pointer).
+    void untrackDependency(ReactiveBase* ref) { _dependencies.erase(ref); }
+
     // === Effective-state queries ===
     [[nodiscard]] bool isVisibleForRender() const
     {
@@ -364,6 +380,9 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     void paintChildren(UIFrameBuilder& builder);
     /// Subclasses draw themselves here (base: no-op).
     virtual void paintSelf(UIFrameBuilder& builder) { (void)builder; }
+    /// Clear this widget's recorded reactive dependencies before re-running
+    /// its paint (dirty widget re-collects from scratch). Implemented in .cpp.
+    void clearDependencies();
     /// Factory for one parent-owned child edge. Generic elements create a
     /// plain UISlot; layout hosts override with a concrete slot type.
     [[nodiscard]] virtual std::unique_ptr<UISlot> createSlotForChild(UIElement& child);
@@ -384,6 +403,13 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// owning module alive and decrements its live-instance count when this
     /// element is destroyed.
     std::shared_ptr<void> _moduleLease;
+
+    /// Paint-dirty flag (reactive invalidation): set by ReactiveBase::notify-
+    /// Dependents, cleared after this widget re-runs its paintSelf.
+    bool _bPaintDirty = false;
+    /// Reactive refs this widget read during its last paint walk. Cleared
+    /// before a dirty widget re-runs its paint.
+    std::unordered_set<ReactiveBase*> _dependencies;
 
     void appendChildEdge(const UIElementRef& child);
     void insertChildEdge(size_t index, const UIElementRef& child);

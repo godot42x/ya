@@ -14,7 +14,7 @@
       "title": "响应式数据绑定 + 性能管线（最小闭环第一刀）",
       "items": [
         { "id": "m0_perf_baseline", "status": "pass", "notes": "GuiPerfStats（layout/paint 耗时 + paintedWidgets + drawItems）已随 buildSnapshot 填充；headless host 打印验证 1 draw items / 6 widgets / 0.007ms layout；closure test 115/115" },
-        { "id": "m1_reactive_core", "status": "planned", "notes": "Reactive<T> 事件驱动依赖追踪 + 三级 dirty（paint/arrange/measure）+ snapshot 增量复用（双缓冲）+ Text 绑定最小验证" },
+        { "id": "m1_reactive_core", "status": "pass", "notes": "Reactive<T> 事件驱动依赖追踪 + 双缓冲 draw-item 段复用 + rebuiltWidgets 计数；UIText.bindText；双向析构清理。closure 118/118（含条件切换/销毁不悬垂）" },
         { "id": "m2_binding_generalize", "status": "planned", "notes": "Button.enabled / split ratio / 文本尺寸三类绑定 + ReactiveList 接口 + computed 接口" },
         { "id": "m3_perf_seam", "status": "planned", "notes": "性能管线可 scenario 断言 + 声明式 diff 复用接口内嵌（为 immediate API 留口子）" }
       ]

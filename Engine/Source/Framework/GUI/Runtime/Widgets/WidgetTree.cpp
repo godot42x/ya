@@ -423,12 +423,16 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
     }
 
     const auto paintStart = std::chrono::steady_clock::now();
+    _itemCache[_cacheIndex ^ 1].clear();
     UIFrameBuilder builder(ctx);
+    builder.bindCache(&_itemCache[_cacheIndex], &_itemCache[_cacheIndex ^ 1]);
     _root->paint(builder);
+    _cacheIndex ^= 1;
     _perfStats.paintMS = std::chrono::duration<float, std::milli>(
                              std::chrono::steady_clock::now() - paintStart)
                              .count();
     _perfStats.paintedWidgets = builder.getWidgetCount();
+    _perfStats.rebuiltWidgets = builder.getRebuildCount();
 
     UIFrameSnapshot snapshot = builder.build(_logicalExtent);
     _perfStats.drawItems      = static_cast<uint32_t>(snapshot.items.size());

@@ -27,4 +27,4 @@
 
 ## 当前下一刀
 
-M1 — 响应式内核 + 最小局部复用：`Reactive<T>`（事件驱动依赖追踪，set 时标记 dependents dirty）+ 三级 dirty 粒度（paint/arrange/measure）+ snapshot 增量复用（双缓冲）。最小验证：Text.text 绑定 Reactive（paint-dirty 路径）。验收：改 ref → 只有依赖 widget 重建（rebuild 计数），非 dirty widget draw item 计数不变；golden 零差异；单测覆盖「条件读取切换 ref」+「widget detach 后 set 不悬垂」。
+M2 — 控件绑定泛化 + 布局/样式属性绑定 + 集合接口：Button.enabled（paint-dirty）、split ratio（arrange-dirty）、文本内容变尺寸（measure-dirty）各验一条；`ReactiveList<T>` 最小实现 + 接口（TreeView 前置）；computed 只定义接口。验收：三类绑定各自触发正确 dirty 粒度；性能计数显示 rebuild 数从「整树」降到「依赖子集」；scroll/split 页回归通过。

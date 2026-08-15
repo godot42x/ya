@@ -1,6 +1,7 @@
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 
 #include "Core/Log.h"
+#include "GUI/Widgets/Reactive.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 
 namespace ya
@@ -27,10 +28,13 @@ void UIScrollViewport::paint(UIFrameBuilder& builder)
     if (!isVisibleForRender()) {
         return;
     }
+    builder.countWidget();
+    pushPaintWidget(this);
     paintSelf(builder);
     builder.pushClip(_layoutRect);
     paintChildren(builder);
     builder.popClip();
+    popPaintWidget();
 }
 
 bool UIScrollViewport::handleInputEvent(const Event& event, const WidgetEventContext&)

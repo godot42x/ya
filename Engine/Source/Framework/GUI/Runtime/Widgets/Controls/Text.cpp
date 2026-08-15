@@ -8,11 +8,14 @@ namespace ya
 
 void UIText::paintSelf(UIFrameBuilder& builder)
 {
-    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
+    // Resolve the (possibly reactive) text first so the dependency is recorded
+    // even when no font is available and the item is skipped.
+    const std::string& text = resolvedText();
+    auto               font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (!font) {
         return;
     }
-    builder.addText(_layoutRect, _text, _color, font, _hAlign, _vAlign);
+    builder.addText(_layoutRect, text, _color, font, _hAlign, _vAlign);
 }
 
 glm::vec2 UIText::computeDesiredSize() const

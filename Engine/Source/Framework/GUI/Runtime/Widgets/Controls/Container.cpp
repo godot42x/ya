@@ -1,5 +1,6 @@
 #include "GUI/Widgets/Controls/Container.h"
 
+#include "GUI/Widgets/Reactive.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 
 namespace ya
@@ -28,6 +29,10 @@ void UIContainer::paint(UIFrameBuilder& builder)
     if (!isVisibleForRender()) {
         return;
     }
+    builder.countWidget();
+    pushPaintWidget(this);
+    // Containers always re-run paintSelf (cheap): they establish the clip
+    // context for their children, whose paint() decides reuse vs re-run.
     paintSelf(builder);
     if (_boxLayout.clipsChildren()) {
         builder.pushClip(_layoutRect);
@@ -36,6 +41,7 @@ void UIContainer::paint(UIFrameBuilder& builder)
     if (_boxLayout.clipsChildren()) {
         builder.popClip();
     }
+    popPaintWidget();
 }
 
 glm::vec2 UIContainer::computeDesiredSize() const
