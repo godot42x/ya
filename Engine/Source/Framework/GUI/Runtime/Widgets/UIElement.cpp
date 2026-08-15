@@ -29,9 +29,10 @@ UIElement::~UIElement()
         child->_parent = nullptr;
     }
 
-    // Sever this widget from every reactive ref it read, so a later set() on
-    // a ref never walks a dangling dependent pointer.
+    // Sever this widget from every reactive ref it read or bound, so a later
+    // set() on a ref never walks a dangling dependent pointer.
     clearDependencies();
+    clearPersistentDependencies();
 }
 
 std::vector<UIElement*> UIElement::getChildrenInPaintOrder() const
@@ -178,10 +179,18 @@ void UIElement::paint(UIFrameBuilder& builder)
 
 void UIElement::clearDependencies()
 {
-    for (ReactiveBase* ref : _dependencies) {
-        ref->removeDependent(this);
+    for (ReactiveBase* ref : _paintDependencies) {
+        ref->removePaintDependent(this);
     }
-    _dependencies.clear();
+    _paintDependencies.clear();
+}
+
+void UIElement::clearPersistentDependencies()
+{
+    for (ReactiveBase* ref : _persistentDependencies) {
+        ref->removePersistentDependent(this);
+    }
+    _persistentDependencies.clear();
 }
 
 void UIElement::markPaintDirty(EUIInvalidationReason reason)

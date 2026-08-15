@@ -355,12 +355,20 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// Mark this widget layout-dirty: paint-dirty plus an invalidation of the
     /// owning tree's layout (measure + arrange). Implemented in .cpp.
     void markLayoutDirty(EUIInvalidationReason reason = EUIInvalidationReason::None);
-    /// Record `ref` as a dependency of this widget (called by Reactive::get
+    /// Record `ref` as a paint-collected dependency (called by Reactive::get
     /// during the paint walk). Cleared before a dirty widget re-runs its paint.
-    void trackDependency(ReactiveBase* ref) { _dependencies.insert(ref); }
-    /// Remove `ref` from this widget's dependency list (called by the ref's
-    /// destructor so a destroyed widget never holds a dangling ref pointer).
-    void untrackDependency(ReactiveBase* ref) { _dependencies.erase(ref); }
+    void trackPaintDependency(ReactiveBase* ref) { _paintDependencies.insert(ref); }
+    /// Record `ref` as a persistent (bind-time) dependency, e.g. split ratio or
+    /// style. Survives paint re-collection; removed only by unbind/rebind or
+    /// destruction.
+    void trackPersistentDependency(ReactiveBase* ref) { _persistentDependencies.insert(ref); }
+    /// Remove `ref` from both dependency lists (called by the ref's destructor
+    /// so a widget never holds a dangling ref pointer).
+    void untrackDependency(ReactiveBase* ref)
+    {
+        _paintDependencies.erase(ref);
+        _persistentDependencies.erase(ref);
+    }
 
     // === Effective-state queries ===
     [[nodiscard]] bool isVisibleForRender() const
@@ -432,9 +440,14 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     void paintChildren(UIFrameBuilder& builder);
     /// Subclasses draw themselves here (base: no-op).
     virtual void paintSelf(UIFrameBuilder& builder) { (void)builder; }
-    /// Clear this widget's recorded reactive dependencies before re-running
-    /// its paint (dirty widget re-collects from scratch). Implemented in .cpp.
+    /// Clear this widget's paint-collected reactive dependencies before
+    /// re-running its paint (dirty widget re-collects from scratch). Does NOT
+    /// touch persistent (bind-time) edges. Implemented in .cpp.
     void clearDependencies();
+    /// Clear this widget's persistent (bind-time) reactive dependencies. Called
+    /// on unbind/rebind/destruction, not on paint re-collection. Implemented in
+    /// .cpp.
+    void clearPersistentDependencies();
     /// Factory for one parent-owned child edge. Generic elements create a
     /// plain UISlot; layout hosts override with a concrete slot type.
     [[nodiscard]] virtual std::unique_ptr<UISlot> createSlotForChild(UIElement& child);
@@ -465,7 +478,10 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     EUIInvalidationReason _lastInvalidationReason = EUIInvalidationReason::None;
     /// Reactive refs this widget read during its last paint walk. Cleared
     /// before a dirty widget re-runs its paint.
-    std::unordered_set<ReactiveBase*> _dependencies;
+    std::unordered_set<ReactiveBase*> _paintDependencies;
+    /// Reactive refs this widget bound at bind time (split ratio, style).
+    /// Cleared only on unbind/rebind/destruction.
+    std::unordered_set<ReactiveBase*> _persistentDependencies;
 
     void appendChildEdge(const UIElementRef& child);
     void insertChildEdge(size_t index, const UIElementRef& child);

@@ -23,8 +23,8 @@ void UIStyleSet::bindTo(std::shared_ptr<Reactive<FWidgetStyle>> style, UIElement
     if (!style) {
         return;
     }
-    style->addDependent(&widget);
-    widget.trackDependency(style.get());
+    style->addPersistentDependent(&widget, ReactiveBase::EDirtyLevel::Paint);
+    widget.trackPersistentDependency(style.get());
 }
 
 } // namespace ya

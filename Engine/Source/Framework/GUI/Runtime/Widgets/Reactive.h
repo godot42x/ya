@@ -65,18 +65,34 @@ public:
 
     virtual ~ReactiveBase();
 
-    void addDependent(UIElement* widget) { _dependents.insert(widget); }
-    void removeDependent(UIElement* widget) { _dependents.erase(widget); }
-    /// Mark every dependent dirty at this ref's configured level.
+    // --- Paint-collected dependents ---
+    // Collected during each paint of a dirty widget (Reactive::get etc.) and
+    // cleared by UIElement::clearDependencies() before that widget re-runs its
+    // paint. Each edge carries its own dirty level, so one ref can serve both
+    // Paint and Layout consumers — the same widget may even consume at two
+    // levels through two properties without one overwriting the other.
+    void addPaintDependent(UIElement* widget, EDirtyLevel level);
+    void removePaintDependent(UIElement* widget);
+
+    // --- Persistent dependents ---
+    // Registered at bind time (split ratio, style set). These survive paint
+    // re-collection and are removed only by explicit unbind/rebind, widget
+    // destruction, or ref destruction.
+    void addPersistentDependent(UIElement* widget, EDirtyLevel level);
+    void removePersistentDependent(UIElement* widget);
+
+    /// Mark every dependent dirty at its own edge's level.
     void notifyDependents();
 
-    /// Set the invalidation granularity (default Paint). Layout-bound refs
-    /// (e.g. split ratio) must opt in so a write re-runs measure/arrange.
-    void setDirtyLevel(EDirtyLevel level) { _dirtyLevel = level; }
-
 private:
-    std::unordered_set<UIElement*> _dependents;
-    EDirtyLevel                    _dirtyLevel = EDirtyLevel::Paint;
+    struct Dependent
+    {
+        UIElement*  widget;
+        EDirtyLevel level;
+    };
+
+    std::vector<Dependent> _paintDependents;
+    std::vector<Dependent> _persistentDependents;
 };
 
 template <typename T>
@@ -86,12 +102,15 @@ public:
     Reactive() = default;
     explicit Reactive(T value) : _value(std::move(value)) {}
 
-    /// Read the value and record the current painting widget as a dependent.
-    const T& get() const
+    /// Read the value and record the current painting widget as a dependent at
+    /// `level` (default Paint). The level is decided by the reading property /
+    /// control's size contract, not by the value itself: a fixed-size text
+    /// reads at Paint, a split-ratio that re-runs layout reads at Layout.
+    const T& get(EDirtyLevel level = EDirtyLevel::Paint) const
     {
         if (UIElement* widget = currentPaintWidget()) {
             Reactive* self = const_cast<Reactive*>(this);
-            self->addDependent(widget);
+            self->addPaintDependent(widget, level);
             trackReactiveDependency(self, widget);
         }
         return _value;
@@ -124,21 +143,21 @@ template <typename T>
 class ReactiveList final : public ReactiveBase
 {
 public:
-    [[nodiscard]] size_t size() const
+    [[nodiscard]] size_t size(EDirtyLevel level = EDirtyLevel::Paint) const
     {
         if (UIElement* widget = currentPaintWidget()) {
             ReactiveList* self = const_cast<ReactiveList*>(this);
-            self->addDependent(widget);
+            self->addPaintDependent(widget, level);
             trackReactiveDependency(self, widget);
         }
         return _items.size();
     }
 
-    [[nodiscard]] const T& get(size_t index) const
+    [[nodiscard]] const T& get(size_t index, EDirtyLevel level = EDirtyLevel::Paint) const
     {
         if (UIElement* widget = currentPaintWidget()) {
             ReactiveList* self = const_cast<ReactiveList*>(this);
-            self->addDependent(widget);
+            self->addPaintDependent(widget, level);
             trackReactiveDependency(self, widget);
         }
         return _items[index];
@@ -178,11 +197,11 @@ public:
 
     explicit Computed(Selector selector) : _selector(std::move(selector)) {}
 
-    [[nodiscard]] const T& get() const
+    [[nodiscard]] const T& get(EDirtyLevel level = EDirtyLevel::Paint) const
     {
         if (UIElement* widget = currentPaintWidget()) {
             Computed* self = const_cast<Computed*>(this);
-            self->addDependent(widget);
+            self->addPaintDependent(widget, level);
             trackReactiveDependency(self, widget);
         }
         _value = _selector();

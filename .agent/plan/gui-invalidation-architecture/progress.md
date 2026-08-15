@@ -196,3 +196,47 @@
 ### 下一接力点
 
 - Phase 0 完成，进入 `GI-101`（reactive edge 模型重构，区分 paint-collected vs persistent binding）。
+
+## 2026-08-15 — GI-101 + GI-102 完成：property-aware edge 模型
+
+### 本轮完成
+
+把 reactive 的 dirty level 从 value-global 单值迁移为 **per-edge (widget, level) + 生命周期分类**：
+
+- `ReactiveBase` 拆 `_paintDependents` / `_persistentDependents` 两组，edge 结构为
+  `{widget, level}`；`setDirtyLevel()` 与 `_dirtyLevel` 删除；
+- `Reactive<T>::get()` / `ReactiveList::size()/get()` / `Computed::get()` 增加
+  `EDirtyLevel` 参数（默认 Paint），由读取 property/控件尺寸契约决定；
+- `UIElement` 反向依赖拆 `_paintDependencies` / `_persistentDependencies` 两组；
+  `clearDependencies()` 只清 paint-collected，新增 `clearPersistentDependencies()`；
+- `notifyDependents()` 按每个 edge 自己的 level 标脏；`~ReactiveBase` 遍历两组 sever；
+- 迁移现有 bind 点到 persistent API：
+  - `UISplitPane::bindSplitRatio` → `addPersistentDependent(Layout)`，并**修复 rebind 不清理
+    旧 edge 的已知缺陷**（GI-003 记录）；
+  - `UIStyleSet::bindTo` → `addPersistentDependent(Paint)`；
+  - `UITreeView` 删掉三处 `setDirtyLevel`，改为读取点传 level（roots/expanded→Layout，
+    selectedId→Paint）。
+
+GI-102（persistent binding 迁移）与 GI-101 是同一改动的不可拆分两半，一并完成。
+
+### 代码/行为结论
+
+- 「同一 reactive 服务 Paint+Layout consumer」「同一 widget 两个 level 不互相覆盖」
+  「clear paint deps 不影响 persistent」三条验收全部有测试覆盖；
+- 测试计数断言需在 `set/push` 后先 `buildSnapshot`（`getPerfStats()` 返回的是最近一次
+  build 的快照，不是实时累计值）——这是 GI-001 埋点时定下的语义。
+
+### 验证
+
+- `xmake b ya-gui-closure-test` 通过（8.9s）；
+- `xmake r ya-gui-closure-test` **142 tests PASSED**（新增 4 个：
+  ReactiveMixedLevelConsumersGetCorrectInvalidation、
+  SameWidgetTwoLevelConsumeBothEdges、
+  PaintRebuildDoesNotDropPersistentStyleBinding、
+  RebindSplitRatioClearsOldBinding）；
+- `xmake b ya-engine` 聚合通过（44s，全模块无旧 API 残留）。
+
+### 下一接力点
+
+- `GI-103`：`UIText::computeDesiredSize()` 使用 resolved text/style，AutoSize binding 注册
+  Layout edge（measure 依赖收集）。

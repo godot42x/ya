@@ -249,12 +249,31 @@ struct ReactiveProbeWidget final : UIElement
 /// Probe widget that reads a ReactiveList's size during paint.
 struct ReactiveListProbeWidget final : UIElement
 {
-    ReactiveList<int>* list = nullptr;
-    int                lastCount = 0;
+    ReactiveList<int>*        list = nullptr;
+    ReactiveBase::EDirtyLevel listLevel = ReactiveBase::EDirtyLevel::Paint;
+    int                       lastCount = 0;
 
     explicit ReactiveListProbeWidget(std::string name = "ListProbe") : UIElement(std::move(name)) {}
 
-    void paintSelf(UIFrameBuilder&) override { lastCount = static_cast<int>(list->size()); }
+    void paintSelf(UIFrameBuilder&) override { lastCount = static_cast<int>(list->size(listLevel)); }
+};
+
+/// Probe widget that reads the same Reactive at both Paint and Layout level in
+/// one paint — two distinct edges on the same widget (GI-101: same widget,
+/// two properties must not overwrite each other).
+struct MixedLevelProbeWidget final : UIElement
+{
+    Reactive<int>* ref = nullptr;
+    int            paintRead  = 0;
+    int            layoutRead = 0;
+
+    explicit MixedLevelProbeWidget(std::string name = "Mixed") : UIElement(std::move(name)) {}
+
+    void paintSelf(UIFrameBuilder&) override
+    {
+        paintRead  = ref->get(ReactiveBase::EDirtyLevel::Paint);
+        layoutRead = ref->get(ReactiveBase::EDirtyLevel::Layout);
+    }
 };
 
 } // namespace
@@ -553,8 +572,8 @@ TEST(UIFrameSnapshotTest, ReactiveLayoutMutationRecordsReasonAndTransition)
     // does not yet clear _bPaintDirty — that is the Phase 2 unification work,
     // not part of this diagnostics baseline.)
     auto list = std::make_shared<ReactiveList<int>>();
-    list->setDirtyLevel(ReactiveBase::EDirtyLevel::Layout);
-    probe->list = list.get();
+    probe->list      = list.get();
+    probe->listLevel = ReactiveBase::EDirtyLevel::Layout;
 
     tree.buildSnapshot(UIFrameBuildContext{}); // cold start (lays out)
     tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
@@ -739,6 +758,111 @@ TEST(UIFrameSnapshotTest, SplitRatioBindingPersistsAcrossRepaints)
     ratio->set(0.4f);
     tree.buildSnapshot(UIFrameBuildContext{});
     EXPECT_GT(tree.getPerfStats().layoutDirtyTransitions, before);
+}
+
+// === GI-101: property-aware edge model ===
+
+TEST(UIFrameSnapshotTest, ReactiveMixedLevelConsumersGetCorrectInvalidation)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       paintProbe = std::make_shared<ReactiveListProbeWidget>("PaintProbe");
+    paintProbe->listLevel = ReactiveBase::EDirtyLevel::Paint;
+    auto layoutProbe      = std::make_shared<ReactiveListProbeWidget>("LayoutProbe");
+    layoutProbe->listLevel = ReactiveBase::EDirtyLevel::Layout;
+    tree.attachToLayer(WidgetTree::ELayer::Content, paintProbe);
+    tree.attachToLayer(WidgetTree::ELayer::Content, layoutProbe);
+
+    auto list = std::make_shared<ReactiveList<int>>();
+    paintProbe->list  = list.get();
+    layoutProbe->list = list.get();
+
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    const uint64_t paintBefore  = tree.getPerfStats().paintDirtyTransitions;
+    const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
+
+    // One ref write fans out to two consumers: the Paint consumer gets a paint
+    // transition, the Layout consumer gets a layout transition (which also
+    // implies paint, so paint total +2).
+    list->push(1);
+    tree.buildSnapshot(UIFrameBuildContext{}); // refresh the perf snapshot
+
+    EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore + 2);
+    EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore + 1);
+}
+
+TEST(UIFrameSnapshotTest, SameWidgetTwoLevelConsumeBothEdges)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       probe = std::make_shared<MixedLevelProbeWidget>("Mixed");
+    tree.attachToLayer(WidgetTree::ELayer::Content, probe);
+
+    auto ref = std::make_shared<Reactive<int>>(0);
+    probe->ref = ref.get();
+
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start (reads at both levels)
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+    const uint64_t paintBefore  = tree.getPerfStats().paintDirtyTransitions;
+    const uint64_t layoutBefore = tree.getPerfStats().layoutDirtyTransitions;
+
+    // The same widget consumed the ref at Paint and Layout: both edges must
+    // survive (not be deduplicated away by widget identity) and fire.
+    ref->set(1);
+    tree.buildSnapshot(UIFrameBuildContext{}); // refresh the perf snapshot
+
+    EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore + 1);
+    EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore + 1);
+}
+
+TEST(UIFrameSnapshotTest, PaintRebuildDoesNotDropPersistentStyleBinding)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       panel = std::make_shared<UIPanel>("P");
+    tree.attachToLayer(WidgetTree::ELayer::Content, panel);
+
+    UIStyleSet styleSet;
+    auto       style = styleSet.define("accent", FWidgetStyle{});
+    styleSet.bindTo(style, *panel); // persistent Paint edge
+
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+
+    // Force a paint rebuild: the base paint runs clearDependencies(), which
+    // must NOT drop the persistent style edge.
+    panel->markPaintDirty();
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    const uint64_t paintBefore = tree.getPerfStats().paintDirtyTransitions;
+    FWidgetStyle    changed;
+    changed.textColor = {1.0f, 0.0f, 0.0f, 1.0f};
+    style->set(changed);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().paintDirtyTransitions, paintBefore + 1);
+}
+
+TEST(UIFrameSnapshotTest, RebindSplitRatioClearsOldBinding)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       split = std::make_shared<UISplitPane>("Split");
+    tree.attachToLayer(WidgetTree::ELayer::Content, split);
+
+    auto ratioA = std::make_shared<Reactive<float>>(0.5f);
+    auto ratioB = std::make_shared<Reactive<float>>(0.3f);
+    split->bindSplitRatio(ratioA);
+
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame
+
+    split->bindSplitRatio(ratioB); // rebind must sever ratioA's persistent edge
+
+    const uint64_t before = tree.getPerfStats().layoutDirtyTransitions;
+    ratioA->set(0.9f); // no longer bound: must not invalidate layout
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, before);
+
+    ratioB->set(0.6f); // still bound: invalidates layout
+    tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, before + 1);
 }
 
 } // namespace ya

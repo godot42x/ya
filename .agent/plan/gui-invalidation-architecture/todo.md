@@ -6,7 +6,7 @@
 
 ## 当前切片
 
-当前激活切片：`GI-101 Reactive dependency edge 模型`
+当前激活切片：`GI-103 UIText resolved measure/paint 一致`
 
 执行规则：
 
@@ -61,7 +61,7 @@
 
 ## P1A — Property-aware mutation 与 binding
 
-- [ ] `GI-101` Reactive dependency edge 模型
+- [x] `GI-101` Reactive dependency edge 模型
   - 依赖：GI-003
   - 修改：
     - edge 保存 dependent + consumer identity + dirty level + lifetime kind；
@@ -73,14 +73,14 @@
     - clear paint dependencies 不影响 persistent edge。
   - 提交：`[gui/reactive] make invalidation property aware`
 
-- [ ] `GI-102` Persistent binding API 与现有 consumer 迁移
+- [x] `GI-102` Persistent binding API 与现有 consumer 迁移
   - 依赖：GI-101
   - 修改：
     - 迁移 `UISplitPane::bindSplitRatio()`；
     - 迁移 `UIStyleSet::bindTo()` 或删除不安全的 bind-time 注册；
     - 明确 unbind/rebind/destructor 清理。
   - 验收：GI-003 全部通过；Phase 2 统一 paint 后 binding 仍有效。
-  - 提交：`[gui/reactive] separate persistent bindings`
+  - 提交：随 GI-101 一并完成（edge 模型与 persistent 迁移是同一改动，无法拆分编译）
 
 - [ ] `GI-103` UIText resolved measure/paint 一致
   - 依赖：GI-101
@@ -228,3 +228,4 @@
 - [~] immediate convenience layer：为工具 UI 独立立项，不混入失效正确性主线。
 - [~] composited repaint layer：当前不做。
 - [~] 局部 layout boundary：当前不做。
+- [~] GUI 动画接入：独立切片，设计见 `animation-integration.md`。动画值建模为 `Reactive<T>`、paint 时解析、tick 挂 host 层；不新增 tree 层/失效通道/不改 snapshot。启动条件：Phase 1A 落地 + 出现首个真实动画需求。

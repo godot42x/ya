@@ -1,7 +1,7 @@
 {
   "plan": "gui-invalidation-architecture",
   "updated_at": "2026-08-15",
-  "active_task": "GI-101",
+  "active_task": "GI-103",
   "legend": {
     "planned": "已纳入计划但尚未开始",
     "in_progress": "当前唯一执行切片",
@@ -65,13 +65,13 @@
       "items": [
         {
           "id": "property_aware_edges",
-          "status": "planned",
-          "notes": "same reactive supports mixed Paint/Layout consumers"
+          "status": "pass",
+          "notes": "per-edge (widget,level) model + paint/persistent split; mixed Paint/Layout consumers and same-widget two-level edges covered by tests"
         },
         {
           "id": "persistent_bindings",
-          "status": "planned",
-          "notes": "persistent binding lifetime separated from paint collection"
+          "status": "pass",
+          "notes": "split-ratio/style migrated to persistent edge; rebind cleans old edge, dtor clears both sets, paint rebuild does not drop persistent"
         },
         {
           "id": "resolved_text_measure",
@@ -180,6 +180,11 @@
           "id": "composited_boundary",
           "status": "rejected",
           "notes": "Flutter-style composited repaint layer is not part of this plan"
+        },
+        {
+          "id": "animation_integration",
+          "status": "deferred",
+          "notes": "independent slice; animation value modeled as Reactive<T>, resolved at paint, ticked on host layer; starts after Phase 1A and first real animation need (see animation-integration.md)"
         }
       ]
     }

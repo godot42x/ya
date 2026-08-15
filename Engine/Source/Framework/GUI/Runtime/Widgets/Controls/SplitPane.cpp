@@ -44,10 +44,17 @@ void UISplitPane::layoutAssigned(const Rect2D& rect)
 
 void UISplitPane::bindSplitRatio(std::shared_ptr<Reactive<float>> ref)
 {
+    // Unbind the previous persistent edge before rebinding, so the old ref no
+    // longer holds this widget as a dependent (rebind cleanup).
+    if (_splitRatioBinding) {
+        _splitRatioBinding->removePersistentDependent(this);
+        untrackDependency(_splitRatioBinding.get());
+    }
     _splitRatioBinding = std::move(ref);
-    _splitRatioBinding->setDirtyLevel(ReactiveBase::EDirtyLevel::Layout);
-    _splitRatioBinding->addDependent(this);
-    trackDependency(_splitRatioBinding.get());
+    if (_splitRatioBinding) {
+        _splitRatioBinding->addPersistentDependent(this, ReactiveBase::EDirtyLevel::Layout);
+        trackPersistentDependency(_splitRatioBinding.get());
+    }
 }
 
 void UISplitPane::paint(UIFrameBuilder& builder)

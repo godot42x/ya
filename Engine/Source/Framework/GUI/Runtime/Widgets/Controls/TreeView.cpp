@@ -14,12 +14,9 @@ UITreeView::UITreeView(std::string name) : UIElement(std::move(name))
 
 void UITreeView::bindData(std::shared_ptr<ReactiveList<FNode>> roots)
 {
+    // The roots list is paint-collected (read via flattenVisible during paint);
+    // its Layout granularity is decided at the read site, not here.
     _roots = std::move(roots);
-    if (_roots) {
-        // A data-source mutation (push/removeAt/clear) changes the visible-row
-        // count, which changes this widget's desired size: Layout granularity.
-        _roots->setDirtyLevel(ReactiveBase::EDirtyLevel::Layout);
-    }
     _expanded.clear();
     _hoveredRow = -1;
     markLayoutDirty();
@@ -27,10 +24,7 @@ void UITreeView::bindData(std::shared_ptr<ReactiveList<FNode>> roots)
 
 void UITreeView::bindSelection(std::shared_ptr<Reactive<std::string>> selectedId)
 {
-    _selectedId = std::move(selectedId);
-    if (_selectedId) {
-        _selectedId->setDirtyLevel(ReactiveBase::EDirtyLevel::Paint);
-    }
+    _selectedId = std::move(selectedId); // paint-collected, Paint granularity (default)
     markPaintDirty();
 }
 
@@ -39,7 +33,6 @@ std::shared_ptr<Reactive<bool>>& UITreeView::expandedRef(const std::string& id)
     auto& ref = _expanded[id];
     if (!ref) {
         ref = std::make_shared<Reactive<bool>>(false);
-        ref->setDirtyLevel(ReactiveBase::EDirtyLevel::Layout);
     }
     return ref;
 }
@@ -58,7 +51,8 @@ void UITreeView::toggleExpanded(const std::string& id)
 bool UITreeView::isExpanded(const std::string& id) const
 {
     const auto it = _expanded.find(id);
-    return it != _expanded.end() ? it->second->get() : false;
+    // Expansion changes the visible-row count -> Layout granularity.
+    return it != _expanded.end() ? it->second->get(ReactiveBase::EDirtyLevel::Layout) : false;
 }
 
 std::vector<UITreeView::VisibleRow> UITreeView::flattenVisible() const
@@ -67,9 +61,11 @@ std::vector<UITreeView::VisibleRow> UITreeView::flattenVisible() const
     if (!_roots) {
         return rows;
     }
-    const size_t count = _roots->size();
+    // A data-source mutation (push/removeAt/clear) changes the visible-row
+    // count and therefore this widget's desired size: Layout granularity.
+    const size_t count = _roots->size(ReactiveBase::EDirtyLevel::Layout);
     for (size_t i = 0; i < count; ++i) {
-        flattenNode(_roots->get(i), 0, rows);
+        flattenNode(_roots->get(i, ReactiveBase::EDirtyLevel::Layout), 0, rows);
     }
     return rows;
 }
