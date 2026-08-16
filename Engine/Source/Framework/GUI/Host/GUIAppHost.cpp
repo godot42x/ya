@@ -30,6 +30,7 @@
 #include <filesystem>
 #include <fstream>
 #include <format>
+#include <optional>
 #include <vector>
 
 namespace ya
@@ -696,6 +697,18 @@ struct ScenarioEventSource final : IAppEventSource
 
 } // namespace
 
+/// Runtime automation screenshot request (GUI offscreen parity). The control
+/// server defers completion until the frame loop has captured the requested
+/// surfaces and (optionally) diffed them, so the request carries its waiter.
+struct PendingGuiCapture
+{
+    AppAutomationControlServer::RequestPtr waiter;
+    std::string gpuPath;       // non-empty = capture the presentation surface
+    std::string offscreenPath; // non-empty = capture the offscreen surface
+    std::string diffPath;      // non-empty = gpu vs offscreen zero-tolerance diff
+    uint64_t    earliestFrame = 0;
+};
+
 struct GUIWindowHost::FImpl
 {
     const FGUIWindowHostConfig* config = nullptr;
@@ -723,6 +736,7 @@ struct GUIWindowHost::FImpl
 
     std::unique_ptr<IAppEventSource> eventSource;
     std::string captureRequestPath;
+    std::optional<PendingGuiCapture> pendingCapture;
     bool    bLoggedFirstSnapshot = false;
     bool    bQuitRequested       = false;
     bool    bScenarioMode        = false;
@@ -1205,6 +1219,56 @@ void GUIWindowHost::onTick(float /*dt*/)
             _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
             continue;
         }
+        // GUI offscreen parity capture: the request is deferred until the
+        // frame loop reaches the warmup frame, captures the requested
+        // surface(s) and (for parity) diffs them, then completes the request.
+        if (request->method == "capture_screenshot") {
+            const auto targetIt = request->params.find("target");
+            const std::string target = (targetIt != request->params.end() && targetIt->is_string())
+                                           ? targetIt->get<std::string>()
+                                           : "parity";
+            if (target != "gpu" && target != "offscreen" && target != "parity") {
+                _impl->automationServer.completeRequest(
+                    request,
+                    makeAutomationError(*request,
+                                        "capture_screenshot params.target must be 'gpu', 'offscreen' or 'parity'"));
+                continue;
+            }
+            const auto pathIt = request->params.find("path");
+            if (pathIt == request->params.end() || !pathIt->is_string() ||
+                pathIt->get<std::string>().empty()) {
+                _impl->automationServer.completeRequest(
+                    request,
+                    makeAutomationError(*request, "capture_screenshot requires non-empty params.path"));
+                continue;
+            }
+            if (_impl->pendingCapture) {
+                _impl->automationServer.completeRequest(
+                    request,
+                    makeAutomationError(*request, "a capture request is already in flight"));
+                continue;
+            }
+
+            const std::string basePath      = pathIt->get<std::string>();
+            const uint64_t    warmupFrames  = request->params.value("warmup_frames", static_cast<uint64_t>(2));
+
+            PendingGuiCapture capture;
+            capture.waiter = request;
+            if (target == "gpu") {
+                capture.gpuPath = basePath;
+            }
+            else if (target == "offscreen") {
+                capture.offscreenPath = basePath;
+            }
+            else { // parity
+                capture.gpuPath       = basePath + ".gpu.bmp";
+                capture.offscreenPath = basePath + ".offscreen.bmp";
+                capture.diffPath      = basePath + ".diff.bmp";
+            }
+            capture.earliestFrame = _impl->frameCount + warmupFrames;
+            _impl->pendingCapture = std::move(capture);
+            continue;
+        }
         _impl->automationServer.completeRequest(
             request,
             makeAutomationError(*request, std::format("unknown method: {}", request->method)));
@@ -1342,10 +1406,22 @@ void GUIWindowHost::onTick(float /*dt*/)
             .logicalViewportExtent = _impl->tree->getLogicalExtent(),
         });
 
+    // Runtime automation capture (GUI offscreen parity): the control server
+    // defers the request until this frame loop reaches its warmup frame.
+    std::optional<PendingGuiCapture> capture;
+    if (_impl->pendingCapture && _impl->frameCount >= _impl->pendingCapture->earliestFrame) {
+        capture = std::move(_impl->pendingCapture);
+        _impl->pendingCapture.reset();
+    }
+
+    const std::string offscreenPath = capture && !capture->offscreenPath.empty()
+                                          ? capture->offscreenPath
+                                          : _impl->config->offscreenShotPath;
     const bool bCaptureOffscreen =
-        _impl->config->offscreenShotFrame != 0 &&
-        _impl->frameCount == _impl->config->offscreenShotFrame &&
-        !_impl->config->offscreenShotPath.empty();
+        (capture && !capture->offscreenPath.empty()) ||
+        (_impl->config->offscreenShotFrame != 0 &&
+         _impl->frameCount == _impl->config->offscreenShotFrame &&
+         !_impl->config->offscreenShotPath.empty());
     std::shared_ptr<RenderImage> offscreenImage;
     if (bCaptureOffscreen) {
         if (!_impl->offscreenSurface ||
@@ -1407,9 +1483,12 @@ void GUIWindowHost::onTick(float /*dt*/)
     }
 
     std::string capturePath;
-    if (_impl->config->gpuShotFrame != 0 &&
-        _impl->frameCount == _impl->config->gpuShotFrame &&
-        !_impl->config->gpuShotPath.empty()) {
+    if (capture && !capture->gpuPath.empty()) {
+        capturePath = capture->gpuPath;
+    }
+    else if (_impl->config->gpuShotFrame != 0 &&
+             _impl->frameCount == _impl->config->gpuShotFrame &&
+             !_impl->config->gpuShotPath.empty()) {
         capturePath = _impl->config->gpuShotPath;
     }
     else if (!_impl->captureRequestPath.empty()) {
@@ -1469,14 +1548,37 @@ void GUIWindowHost::onTick(float /*dt*/)
                                presentExtent.width,
                                presentExtent.height,
                                false,
-                               _impl->config->offscreenShotPath);
+                               offscreenPath);
                 _impl->offscreenShotBuffer->unmap();
                 YA_CORE_INFO("GUIAppHost wrote offscreen shot to '{}' ({}x{})",
-                             _impl->config->offscreenShotPath,
+                             offscreenPath,
                              presentExtent.width,
                              presentExtent.height);
             }
         }
+    }
+
+    // Complete a runtime automation capture after the requested surfaces were
+    // written; parity additionally diffs gpu vs offscreen at zero tolerance.
+    if (capture) {
+        nlohmann::json result = {
+            {"gpu_path", capture->gpuPath},
+            {"offscreen_path", capture->offscreenPath},
+        };
+        if (!capture->diffPath.empty()) {
+            const BmpDiffResult diff = diffBmpFiles(capture->gpuPath,
+                                                    capture->offscreenPath,
+                                                    capture->diffPath,
+                                                    0, 0.0f);
+            result["diff_path"]        = capture->diffPath;
+            result["pass"]             = diff.bPass;
+            result["differing_pixels"] = diff.differingPixels;
+            result["diff_ratio"]       = diff.diffRatio;
+            YA_CORE_INFO("GUIAppHost offscreen parity diff: pass={} differing={} ratio={:.4f}",
+                         diff.bPass, diff.differingPixels, diff.diffRatio);
+        }
+        _impl->automationServer.completeRequest(capture->waiter,
+                                                makeAutomationSuccess(*capture->waiter, std::move(result)));
     }
 }
 
@@ -1524,6 +1626,13 @@ void GUIWindowHost::shutdown()
     // released BEFORE the Vulkan device / VMA allocator is destroyed below
     // (a later ~VulkanBuffer would call vmaDestroyBuffer on a dead allocator).
     _impl->render->waitIdle();
+    if (_impl->pendingCapture) {
+        _impl->automationServer.completeRequest(
+            _impl->pendingCapture->waiter,
+            makeAutomationError(*_impl->pendingCapture->waiter,
+                                "capture request canceled during shutdown"));
+        _impl->pendingCapture.reset();
+    }
     _impl->automationServer.shutdown();
     Render2D::destroy();
     _impl->commandBuffers.clear();   // releases command-buffer resource retention

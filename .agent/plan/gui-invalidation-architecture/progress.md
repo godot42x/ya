@@ -720,11 +720,10 @@ GI-202 按控件族拆多个小提交；本轮完成**基类 `_position/_size/_v
      `notifyCalls=0 notifyVisits=0`（presenter 走 setter 而非 reactive，符合 P1A 设计）。
    - **交互帧重建量显著下降**：volatile 每帧全量重画（61/80）→ 精确失效（2~33）。
 
-### 未完成项（环境受限）
+### 未完成项（已补验）
 
-- **GPU/offscreen zero-diff**：`--offscreen-shot` / `--gpu-shot` 需要真实 GPU 渲染，
-  当前 headless 构建无法执行。CPU 侧 parity 已由 snapshot JSON + digest 测试覆盖；
-  GPU 侧 zero-diff 待有 GPU 环境时用 `--offscreen-shot --offscreen-diff` 补验。
+- **GPU/offscreen zero-diff**（原环境受限，已补验通过）：见下轮
+  「offscreen 截图接入 automation Control」。
 
 ### 阶段结论
 
@@ -742,3 +741,34 @@ GI-202 按控件族拆多个小提交；本轮完成**基类 `_position/_size/_v
   - 有 GPU 环境时补 `--offscreen-diff` 验证；
   - push 本轮全部 commit；
   - 出现第二个真实 reactive 消费者后再启动 Phase 3 batching 评估。
+
+## 2026-08-16 — GUI offscreen 截图接入 Automation Control（补 GI-305 GPU 验证）
+
+### 本轮完成
+
+- `GUIAppHost` 内嵌的 `AppAutomationControlServer` 新增 **`capture_screenshot`** 端点，
+  把 offscreen / gpu shot / parity diff 从「启动期 CLI 参数」扩展为「运行时 JSON-RPC
+  可触发」：
+  - 参数：`target`（`gpu` | `offscreen` | `parity`，默认 parity）、`path`（parity 时为
+    基准路径，衍生 `.gpu.bmp` / `.offscreen.bmp` / `.diff.bmp`）、`warmup_frames`（默认 2）；
+  - 请求**延迟完成**：onTick 构造 `PendingGuiCapture` 存入 `_impl->pendingCapture`，
+    帧循环到达 warmup 帧后复用现有 gpu/offscreen readback 逻辑截图，parity 再
+    `diffBmpFiles(gpu, offscreen, diff, 0, 0.0f)` zero-tolerance diff，最后 completeRequest；
+  - shutdown 时取消未完成请求；
+  - CLI 帧索引路径与 scenario `captureRequestPath` 保持不变，运行时请求是新增独立来源。
+
+### 验证（真机 GPU）
+
+- `GUIWorkbench --automation-control-port=8899`（windowed，Vulkan + SDL）：
+  - `ping` → 返回 `{service: "gui-automation-control", port: 8899}`；
+  - `capture_screenshot{target:"parity", path:"build/automation_parity"}`
+    → **`pass: true, differing_pixels: 0, diff_ratio: 0.0`**，生成 gpu/offscreen/diff 三张 BMP；
+  - `capture_screenshot{target:"gpu", path:...}` → 单 gpu shot 正常；
+  - `quit` 正常退出。
+- **结论：GUI 失效架构的 GPU/offscreen zero-diff parity 通过真机验证**（同一 snapshot
+  的 windowed presentation 与 Framework-owned offscreen surface 渲染逐像素一致），
+  补齐 GI-305 收口时唯一的环境受限遗留项。
+
+### 下一接力点
+
+- 主线 + GPU 验证全部收口。可 push 本轮全部 commit（含此前 5 个 + 本轮 offscreen 接入）。

@@ -143,7 +143,7 @@
         {
           "id": "convergence_gate",
           "status": "pass",
-          "notes": "closure 157 + widgets 123 + headless 1 + workspace 8 all pass; Workbench smoke PASS; snapshot JSON dumped; interaction rebuilt 2~33 vs GI-004 61/80; GPU/offscreen zero-diff pending real-GPU env"
+          "notes": "closure 157 + widgets 123 + headless 1 + workspace 8 all pass; Workbench smoke PASS; snapshot JSON dumped; interaction rebuilt 2~33 vs GI-004 61/80; GPU/offscreen zero-diff verified pass=true/0-pixel via new capture_screenshot JSON-RPC endpoint"
         }
       ]
     },
