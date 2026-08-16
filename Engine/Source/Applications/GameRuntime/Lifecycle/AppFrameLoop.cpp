@@ -127,7 +127,17 @@ class GameRuntimeLoopDelegate final : public IAppLoopDelegate
 
 int App::run()
 {
-    return AppFrameLoop::run(*this);
+    // AppKernel is the only native while-loop. The product automation layer
+    // still owns scene-stability / screenshot / RenderDoc completion and
+    // therefore requests App::requestQuit() itself; do not arm the kernel's
+    // basic exit-after-frame policy in parallel during this transition.
+    _startTime = std::chrono::steady_clock::now();
+    _lastTime  = _startTime;
+
+    HostSdlEventSource      eventSource;
+    GameRuntimeLoopDelegate delegate(*this);
+    AppKernel               kernel({.eventSource = &eventSource}, delegate);
+    return kernel.run();
 }
 
 void App::tickLogic(float dt)
@@ -153,21 +163,6 @@ void App::prepareRenderFrameState(float dt)
 void App::tickRender(float dt)
 {
     AppFrameLoop::tickRender(*this, dt);
-}
-
-int AppFrameLoop::run(App& app)
-{
-    // AppKernel is the only native while-loop. The product automation layer
-    // still owns scene-stability / screenshot / RenderDoc completion and
-    // therefore requests App::requestQuit() itself; do not arm the kernel's
-    // basic exit-after-frame policy in parallel during this transition.
-    app._startTime = std::chrono::steady_clock::now();
-    app._lastTime  = app._startTime;
-
-    HostSdlEventSource    eventSource;
-    GameRuntimeLoopDelegate delegate(app);
-    AppKernel             kernel({.eventSource = &eventSource}, delegate);
-    return kernel.run();
 }
 
 int AppFrameLoop::iterate(App& app, float dt, bool bPumpNativeEvents)

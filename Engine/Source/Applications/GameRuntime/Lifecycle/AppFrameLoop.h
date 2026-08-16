@@ -14,7 +14,6 @@ struct RenderRuntime;
 class AppFrameLoop
 {
   public:
-    static int      run(App& app);
     /// Run one product frame. Direct callers retain the legacy native event
     /// pump; AppKernel-backed run() passes false because its event source has
     /// already delivered the events for this frame.
