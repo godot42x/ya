@@ -2,7 +2,10 @@
 #include "GameRuntime/AppRenderState.h"
 #include "GameRuntime/Automation/AppAutomationControlService.h"
 #include "GameRuntime/IRuntimeModule.h"
+#include "GameRuntime/Lifecycle/GameRuntimeFrameOrchestrator.h"
+#include "GameRuntime/Lifecycle/HostSdlEventSource.h"
 #include "GUI/Host/NativeWindowManager.h"
+#include "App/Kernel/AppKernel.h"
 #include "Core/Config/ConfigManager.h"
 #include "Render3D/RenderRuntime.h"
 
@@ -30,6 +33,39 @@ IRuntimeModule* getRuntimeModule(IModule* module)
     static IRuntimeModule s_default;
     return &s_default;
 }
+
+class GameRuntimeLoopDelegate final : public IAppLoopDelegate
+{
+  public:
+    explicit GameRuntimeLoopDelegate(App& inApp)
+        : app(inApp)
+    {
+    }
+
+    void onInit() override
+    {
+    }
+
+    void onEvent(const Event& event) override
+    {
+        app.dispatchEvent(event);
+    }
+
+    void onTick(float dt) override
+    {
+        GameRuntimeFrameOrchestrator::iterate(app, dt, /*bPumpNativeEvents=*/false);
+    }
+
+    void onShutdown() override {}
+
+    [[nodiscard]] bool shouldClose() const override
+    {
+        return !app.isRunning();
+    }
+
+  private:
+    App& app;
+};
 }
 
 App*     App::_instance        = nullptr;
@@ -83,6 +119,21 @@ App::App()
 }
 
 App::~App() = default;
+
+int App::run()
+{
+    // AppKernel is the only native while-loop. The product automation layer
+    // still owns scene-stability / screenshot / RenderDoc completion and
+    // therefore requests App::requestQuit() itself; do not arm the kernel's
+    // basic exit-after-frame policy in parallel during this transition.
+    _startTime = std::chrono::steady_clock::now();
+    _lastTime  = _startTime;
+
+    HostSdlEventSource      eventSource;
+    GameRuntimeLoopDelegate delegate(*this);
+    AppKernel               kernel({.eventSource = &eventSource}, delegate);
+    return kernel.run();
+}
 
 void App::addModule(std::unique_ptr<IModule> module)
 {

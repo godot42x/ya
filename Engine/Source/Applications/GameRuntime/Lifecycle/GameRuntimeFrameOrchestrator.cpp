@@ -5,11 +5,11 @@
 #include "GameRuntime/AppRenderState.h"
 #include "GameRuntime/Automation/AppAutomationControlService.h"
 #include "GameRuntime/Lifecycle/AppAutomation.h"
+#include "GameRuntime/Lifecycle/HostSdlEventSource.h"
 #include "GameRuntime/Utility/FPSCtrl.h"
 #include "Render3D/Services/RenderDiagnosticsService.h"
 
 #include "Core/Async/TaskQueue.h"
-#include "App/Kernel/AppKernel.h"
 #include "Core/Manager/Facade.h"
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
@@ -27,12 +27,8 @@
 #include "Render3D/Material/Material.h"
 
 #include "GameRuntime/Utility/RenderFrameExtractor.h"
-#include "GameRuntime/Utility/SDLMisc.h"
-
 #include "Scene/Core/Scene.h"
 #include "Scene/Runtime/SceneManager.h"
-
-#include <SDL3/SDL.h>
 
 #include <algorithm>
 #include <format>
@@ -59,77 +55,6 @@ void syncRuntimeCameraAspect(Scene& scene, const Extent2D& viewportExtent)
 }
 
 } // namespace
-
-namespace
-{
-
-class HostSdlEventSource final : public IAppEventSource
-{
-  public:
-    void pollEvents(const std::function<void(const Event&)>& emit) override
-    {
-        SDL_Event event;
-        YA_PROFILE_SCOPE("Frame/EventPump");
-        YA_PERF_SCOPE(perf::sample::frameEventPump(), perf::metric::cpuTimeMs(), perf::domain::game());
-        while (SDL_PollEvent(&event)) {
-            processSDLEvent(
-                event,
-                [&emit](const auto& translated) {
-                    emit(translated);
-                });
-        }
-    }
-};
-
-class GameRuntimeLoopDelegate final : public IAppLoopDelegate
-{
-  public:
-    explicit GameRuntimeLoopDelegate(App& inApp)
-        : app(inApp)
-    {
-    }
-
-    void onInit() override
-    {
-    }
-
-    void onEvent(const Event& event) override
-    {
-        app.dispatchEvent(event);
-    }
-
-    void onTick(float dt) override
-    {
-        GameRuntimeFrameOrchestrator::iterate(app, dt, /*bPumpNativeEvents=*/false);
-    }
-
-    void onShutdown() override {}
-
-    [[nodiscard]] bool shouldClose() const override
-    {
-        return !app.isRunning();
-    }
-
-  private:
-    App& app;
-};
-
-} // namespace
-
-int App::run()
-{
-    // AppKernel is the only native while-loop. The product automation layer
-    // still owns scene-stability / screenshot / RenderDoc completion and
-    // therefore requests App::requestQuit() itself; do not arm the kernel's
-    // basic exit-after-frame policy in parallel during this transition.
-    _startTime = std::chrono::steady_clock::now();
-    _lastTime  = _startTime;
-
-    HostSdlEventSource      eventSource;
-    GameRuntimeLoopDelegate delegate(*this);
-    AppKernel               kernel({.eventSource = &eventSource}, delegate);
-    return kernel.run();
-}
 
 int GameRuntimeFrameOrchestrator::iterate(App& app, float dt, bool bPumpNativeEvents)
 {
