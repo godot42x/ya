@@ -42,15 +42,6 @@ namespace ya
 
 namespace
 {
-
-Extent2D resolveRuntimeViewportExtent(App& app)
-{
-    auto* renderRuntime = app.getRenderServices().getRenderRuntime();
-    return GameRuntimeFrameOrchestrator::resolveViewportExtent(app,
-                                                               renderRuntime,
-                                                               renderRuntime ? renderRuntime->getViewportRect() : Rect2D{});
-}
-
 void syncRuntimeCameraAspect(Scene& scene, const Extent2D& viewportExtent)
 {
     if (viewportExtent.width == 0 || viewportExtent.height == 0) {
@@ -271,7 +262,10 @@ void GameRuntimeFrameOrchestrator::tickLogic(App& app, float dt)
 
     if (auto* scene = app.getSceneServices().getActiveScene()) {
         YA_PROFILE_SCOPE("Logic/RuntimeCamera");
-        const Extent2D viewportExtent = resolveRuntimeViewportExtent(app);
+        auto* renderRuntime = app.getRenderServices().getRenderRuntime();
+        const Extent2D viewportExtent = resolveViewportExtent(app,
+                                                              renderRuntime,
+                                                              renderRuntime ? renderRuntime->getViewportRect() : Rect2D{});
         syncRuntimeCameraAspect(*scene, viewportExtent);
     }
 
