@@ -49,15 +49,7 @@ int AppKernel::iterate(float dt)
             [this](const Event& event) { _delegate.onEvent(event); });
     }
 
-    if (_config.frameSink && !_config.frameSink->beginFrame()) {
-        return 0;
-    }
-
     _delegate.onTick(dt);
-
-    if (_config.frameSink) {
-        _config.frameSink->endFrame();
-    }
 
     _runController.markFrameCompleted();
     if (_delegate.shouldClose()) {

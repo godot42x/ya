@@ -35,23 +35,12 @@ struct IAppLoopDelegate
     virtual bool shouldClose() const { return false; }
 };
 
-/// Optional presentation policy. Null = no presentation (server / CLI).
-/// The kernel never interprets it: it only sequences begin/tick/end.
-struct IAppFrameSink
-{
-    virtual ~IAppFrameSink() = default;
-    virtual bool     beginFrame() = 0;   // false = skip this frame
-    virtual void     endFrame()   = 0;   // present / readback
-    virtual Extent2D getExtent() const = 0;
-};
-
 class YA_APP_KERNEL_API AppKernel
 {
 public:
     struct Config
     {
         IAppEventSource* eventSource = nullptr;
-        IAppFrameSink*   frameSink   = nullptr;
     };
 
     AppKernel(Config config, IAppLoopDelegate& delegate);
@@ -59,10 +48,11 @@ public:
 
     /// Run until delegate close / exit policy. Calls onInit/onShutdown.
     int run(const AppAutomationRunOptions& options = {});
+
+private:
     /// Advance one frame; returns 0 to continue, non-zero to exit.
     int iterate(float dt);
 
-private:
     Config            _config;
     IAppLoopDelegate& _delegate;
     AppAutomationRunController _runController;
