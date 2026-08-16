@@ -58,6 +58,8 @@ struct YA_GUI_API UIScrollViewport : public UIElement
     /// Clip the content traversal to the viewport rect (GI-302: the base paint
     /// owns self rebuild/reuse; this only customizes the children context).
     void paintChildren(UIFrameBuilder& builder) override;
+    /// A changed viewport rect invalidates every descendant's resolved clip (GI-304).
+    void onLayoutRectChanged() override;
 
   private:
     UIScrollLayout _scrollLayout;

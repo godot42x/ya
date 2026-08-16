@@ -6,7 +6,7 @@
 
 ## 当前切片
 
-当前激活切片：`GI-304 Inherited context invalidation`
+当前激活切片：`GI-305 Phase 1/2 convergence gate`
 
 执行规则：
 
@@ -192,11 +192,16 @@
     GI-002 落地。host 侧用 uiScale/offset 值比较覆盖 resize/DPI 场景；generation token 的
     bump 留给未来真实 texture-reload 消费者（YAGNI），无需额外代码。
 
-- [ ] `GI-304` Inherited context invalidation
+- [x] `GI-304` Inherited context invalidation
   - 依赖：GI-106、GI-302
   - 修改：按 audit 结论实现 subtree invalidation 或 context generation。
   - 验收：ancestor clip/visibility/context 改变后 descendants 输出正确。
   - 提交：`[gui] track inherited paint context changes`
+  - 进度：`UIElement` 新增 protected `virtual onLayoutRectChanged()` hook，`setLayoutRect`
+    检测 rect 变化时调用；`UIContainer`（`clipsChildren` 时）/`UIScrollViewport` 覆盖它
+    `invalidateSubtree(InheritedPaintContext)`——clip host 的 rect 即 descendants 的 clip
+    rect，rect 变化必须使整棵子树的 resolved segment 失效（即使 child 自身 rect 未变）。
+    新增 `ContainerClipResizeInvalidatesChildSegments` 测试（157 tests PASSED）。
 
 - [ ] `GI-305` Phase 1/2 convergence gate
   - 依赖：GI-103、GI-105、GI-202、GI-302~GI-304

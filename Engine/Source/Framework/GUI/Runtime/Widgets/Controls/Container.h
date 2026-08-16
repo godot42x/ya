@@ -40,6 +40,8 @@ struct YA_GUI_API UIContainer : public UIElement
     /// set (GI-302: the base paint owns self rebuild/reuse; this only customizes
     /// the children context).
     void paintChildren(UIFrameBuilder& builder) override;
+    /// A changed clip rect invalidates every descendant's resolved clip (GI-304).
+    void onLayoutRectChanged() override;
     [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
 
   private:

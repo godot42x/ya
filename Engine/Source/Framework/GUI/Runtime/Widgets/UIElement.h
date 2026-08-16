@@ -485,6 +485,13 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     void addDetachedChild(const UIElementRef& child);
 
   protected:
+    /// Called when setLayoutRect detects a rect change (GI-304). Clip hosts
+    /// override it to invalidate their subtree's cached draw-item segments: a
+    /// changed clip rect invalidates every descendant's resolved clip even
+    /// when the descendant's own rect is unchanged, so the base GeometryChanged
+    /// mark (self only) is not enough.
+    virtual void onLayoutRectChanged() {}
+
     /// Store the widget's final layout rect (clamping negative extents, per
     /// the layout contract) and mark it paint-dirty when the rect actually
     /// moved/resized — a changed rect invalidates the draw items cached from
@@ -497,6 +504,7 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
         clamped.extent = glm::max(clamped.extent, glm::vec2(0.0f));
         if (clamped.pos != _layoutRect.pos || clamped.extent != _layoutRect.extent) {
             markPaintDirty(EUIInvalidationReason::GeometryChanged);
+            onLayoutRectChanged();
         }
         _layoutRect = clamped;
     }

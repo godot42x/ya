@@ -1,7 +1,7 @@
 {
   "plan": "gui-invalidation-architecture",
   "updated_at": "2026-08-16",
-  "active_task": "GI-304",
+  "active_task": "GI-305",
   "legend": {
     "planned": "已纳入计划但尚未开始",
     "in_progress": "当前唯一执行切片",
@@ -137,8 +137,8 @@
         },
         {
           "id": "inherited_context",
-          "status": "planned",
-          "notes": "ancestor clip/visibility/context invalidates affected descendants"
+          "status": "pass",
+          "notes": "onLayoutRectChanged hook: setLayoutRect calls it on rect change; Container(clipsChildren)/ScrollViewport override to invalidateSubtree(InheritedPaintContext); ContainerClipResizeInvalidatesChildSegments test covers the fixed-child + growing-clip case"
         },
         {
           "id": "convergence_gate",

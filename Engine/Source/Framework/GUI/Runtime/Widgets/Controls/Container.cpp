@@ -34,6 +34,17 @@ void UIContainer::paintChildren(UIFrameBuilder& builder)
     }
 }
 
+void UIContainer::onLayoutRectChanged()
+{
+    // Only a clipping container owns an inherited clip: its rect is the clip
+    // rect for every descendant, so a rect change must invalidate the whole
+    // subtree's resolved segments (a fixed-size child keeps its own rect but
+    // its cached item still holds the old clip).
+    if (_boxLayout.clipsChildren()) {
+        invalidateSubtree(EUIInvalidationReason::InheritedPaintContext);
+    }
+}
+
 glm::vec2 UIContainer::computeDesiredSize() const
 {
     return _boxLayout.measure(*this);

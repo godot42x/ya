@@ -663,3 +663,38 @@ GI-202 按控件族拆多个小提交；本轮完成**基类 `_position/_size/_v
 
 - `GI-304`：Inherited context invalidation（ancestor clip/visibility/context 改变后
   descendants 不复用不兼容 segment——统一 paint 模板后唯一悬而未决的正确性缺口）。
+
+## 2026-08-16 — GI-304 完成：Inherited context invalidation
+
+### 本轮完成
+
+- `UIElement` 新增 protected `virtual onLayoutRectChanged()` hook，`setLayoutRect`
+  检测到 rect 变化时（`GeometryChanged` 标自己之后）调用；
+- `UIContainer::onLayoutRectChanged`：`clipsChildren` 时 `invalidateSubtree`
+  （`InheritedPaintContext`）；`UIScrollViewport::onLayoutRectChanged`：无条件
+  `invalidateSubtree`（视口 rect 就是 content 的 clip rect）；
+- 新增 `ContainerClipResizeInvalidatesChildSegments` 测试。
+
+### 代码/行为结论
+
+- 补齐统一 paint 模板后唯一悬而未决的正确性缺口：**clip host 的 rect 变化必须使整棵
+  子树的 resolved segment 失效**——cached draw-item 保存已解析的 clip，clip 变了而
+  child 自身 rect 不变（box layout 固定 child 不 stretch）时，仅 `GeometryChanged`
+  标 clip host 自己不够，descendants 的旧 clip 段必须被丢弃重跑；
+- `SplitPane` 不需要该 hook：它的 clip 是每个 child 自己的 `_layoutRect`，pane rect
+  变化时 child 自己的 `setLayoutRect` 已标 `GeometryChanged`；
+- `visibility` 变化已在 `setVisibility` 里走 `SubtreePaintContext → invalidateSubtree`
+  （GI-104），无需本 hook 覆盖；
+- `transform/opacity/theme` 当前无实现（GI-106 audit 判定 N/A），未来引入时挂同一 hook。
+
+### 验证
+
+- `xmake b ya-gui-closure-test` 通过；
+- `xmake r ya-gui-closure-test` **157 tests PASSED**（新增 1 个）；
+- `xmake b ya-engine` 聚合通过；
+- `python3 Script/ya_gui_write_guard.py` 返回 0（ok）。
+
+### 下一接力点
+
+- `GI-305`：Phase 1/2 convergence gate（closure/widgets/workspace tests + Workbench
+  smoke + CPU snapshot JSON + GPU/offscreen zero-diff + baseline 对比写入 progress）。

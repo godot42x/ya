@@ -29,6 +29,14 @@ void UIScrollViewport::paintChildren(UIFrameBuilder& builder)
     builder.popClip();
 }
 
+void UIScrollViewport::onLayoutRectChanged()
+{
+    // The viewport rect is the content's clip rect: a changed viewport must
+    // invalidate the content subtree's resolved segments even when the content
+    // keeps its own layout rect.
+    invalidateSubtree(EUIInvalidationReason::InheritedPaintContext);
+}
+
 bool UIScrollViewport::handleInputEvent(const Event& event, const WidgetEventContext&)
 {
     if (event.getEventType() != EEvent::MouseScrolled) {

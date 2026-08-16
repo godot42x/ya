@@ -1042,4 +1042,32 @@ TEST(UIFrameSnapshotTest, LayoutHostsReuseSelfSegmentWhenClean)
     EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 }
 
+// === GI-304: inherited context invalidation ===
+
+TEST(UIFrameSnapshotTest, ContainerClipResizeInvalidatesChildSegments)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       clip = std::make_shared<UIContainer>("Clip");
+    clip->setClipChildren(true);
+    clip->setSize({200.0f, 100.0f});
+    auto child = std::make_shared<UIPanel>("Child");
+    child->setSize({50.0f, 25.0f}); // fixed: box layout does not stretch it
+    tree.attachToLayer(WidgetTree::ELayer::Content, clip);
+    tree.attach(*clip, child);
+
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean: child reuses its segment
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
+
+    // Widen the clip container. The child keeps its own 50x25 rect, but its
+    // cached segment still holds the old 200-wide clip — the clip host's rect
+    // change must invalidate the child's resolved segment (GI-304).
+    clip->setSize({300.0f, 100.0f});
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+
+    ASSERT_EQ(snap.items.size(), 1u);
+    EXPECT_TRUE(snap.items[0].bClipped);
+    EXPECT_EQ(snap.items[0].clip.extent, glm::vec2(300.0f, 100.0f));
+}
+
 } // namespace ya
