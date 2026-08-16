@@ -1,7 +1,7 @@
 {
   "plan": "gui-invalidation-architecture",
   "updated_at": "2026-08-16",
-  "active_task": "GI-303",
+  "active_task": "GI-304",
   "legend": {
     "planned": "已纳入计划但尚未开始",
     "in_progress": "当前唯一执行切片",
@@ -132,8 +132,8 @@
         },
         {
           "id": "context_generation",
-          "status": "planned",
-          "notes": "build context/resource generation participates in cache validity"
+          "status": "pass",
+          "notes": "done via GI-002: UIFrameBuildContext.generation + bContextChanged detection (generation/uiScale/offset) + both-cache clear + _cacheInvalidations count; host uses uiScale/offset value compare for resize/DPI; generation bump deferred until a real texture-reload consumer"
         },
         {
           "id": "inherited_context",

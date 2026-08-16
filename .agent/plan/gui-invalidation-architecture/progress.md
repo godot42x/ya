@@ -633,3 +633,33 @@ GI-202 按控件族拆多个小提交；本轮完成**基类 `_position/_size/_v
 
 - `GI-303`：Build-context generation（host/tree 稳定 context/resource generation
   token；GI-002 已做保守 cache reset，本轮收敛其入口与语义）。
+
+## 2026-08-16 — GI-303 收口：已由 GI-002 实质完成
+
+### 结论
+
+- 核查确认 GI-303 无剩余代码工作，标记完成（纯工件更新）。
+
+### 依据
+
+- **tree 侧完整**：`UIFrameBuildContext.generation` 字段、`WidgetTree::buildSnapshot`
+  的 `bContextChanged` 检测（`generation != _lastGeneration || uiScale != _lastUiScale
+  || offset != _lastOffset`）、清两份 item cache、`++_cacheInvalidations`、记录
+  `BuildContextChanged` reason——全部在 GI-002 落地；
+- **测试齐备**：`CleanTreeOffsetChangeRebuildsResolvedItems`、
+  `CleanTreeUiScaleChangeRebuildsResolvedItems`、`CleanTreeGenerationChangeDropsCache`
+  分别覆盖 offset/uiScale/generation 变化后 clean widget 不复用旧 segment，且同 context
+  clean frame 仍复用（`rebuiltWidgets == 0`）；
+- **host 侧 YAGNI**：`GameUIHost::buildSnapshot` / `GUIAppHost` 用 uiScale/offset **值
+  比较**触发失效（覆盖 viewport resize / DPI change）；`generation` token 的 bump 场景
+  （texture resolver 变化但 uiScale 不变，如 asset reload）当前无真实消费者，等其出现
+  再让 host bump，符合「真实消费者驱动」原则。
+
+### 验证
+
+- 本轮仅更新 `todo.md` / `progress.md` / `feature_matrix.json`，未改行为代码。
+
+### 下一接力点
+
+- `GI-304`：Inherited context invalidation（ancestor clip/visibility/context 改变后
+  descendants 不复用不兼容 segment——统一 paint 模板后唯一悬而未决的正确性缺口）。

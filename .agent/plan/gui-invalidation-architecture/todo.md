@@ -6,7 +6,7 @@
 
 ## 当前切片
 
-当前激活切片：`GI-303 Build-context generation`
+当前激活切片：`GI-304 Inherited context invalidation`
 
 执行规则：
 
@@ -181,11 +181,16 @@
     `ScrollViewportClipsContentToViewportRect`、`SplitPaneClipsChildrenToOwnPaneRect`、
     `LayoutHostsReuseSelfSegmentWhenClean` 三个测试（156 tests PASSED）。
 
-- [ ] `GI-303` Build-context generation
+- [x] `GI-303` Build-context generation
   - 依赖：GI-002
   - 修改：host/tree 建立稳定 context/resource generation token；兼容时复用，不兼容时清两份 cache。
   - 验收：GI-002 通过；同 context clean frame 仍复用。
   - 提交：`[gui] invalidate draw cache on context changes`
+  - 进度：**已由 GI-002 实质完成**——`UIFrameBuildContext.generation` 字段 +
+    `WidgetTree::buildSnapshot` 的 `bContextChanged` 检测（generation/uiScale/offset）+ 清两份
+    cache + `_cacheInvalidations` 计数，以及 `CleanTreeGenerationChangeDropsCache` 等测试都在
+    GI-002 落地。host 侧用 uiScale/offset 值比较覆盖 resize/DPI 场景；generation token 的
+    bump 留给未来真实 texture-reload 消费者（YAGNI），无需额外代码。
 
 - [ ] `GI-304` Inherited context invalidation
   - 依赖：GI-106、GI-302
