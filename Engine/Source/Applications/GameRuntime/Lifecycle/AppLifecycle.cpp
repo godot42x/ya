@@ -191,6 +191,7 @@ void App::init(AppDesc ci)
     app._renderState->runtime->init(RenderRuntime::InitDesc{
         .hostServices = &app,
         .offscreenScheduler = &app.getTaskManager(),
+        .clockState = &app._renderState->frameState.clock,
         // Narrow read-only environment-lighting result provider: Render3D
         // consumes derived-resource handles through this contract instead of
         // locating the processor via the App singleton.

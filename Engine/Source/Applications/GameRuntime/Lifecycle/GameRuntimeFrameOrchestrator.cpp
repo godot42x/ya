@@ -294,6 +294,9 @@ void GameRuntimeFrameOrchestrator::prepareRenderFrameState(App& app, float dt)
         return;
     }
 
+    app._renderState->frameState.clock.frameIndex    = App::_frameIndex;
+    app._renderState->frameState.clock.elapsedTimeMS = app.getElapsedTimeMS();
+
     Rect2D viewportRect = renderRuntime->getViewportRect();
 
     (void)dt;

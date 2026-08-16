@@ -22,10 +22,6 @@ struct IRenderRuntimeHostServices
 {
     virtual ~IRenderRuntimeHostServices() = default;
 
-    // Frame timing
-    virtual uint32_t getFrameIndex() const  = 0;
-    virtual uint64_t getElapsedTimeMS() const = 0;
-
     // Ensure a main window exists (creates one with the given info when the
     // host has none yet, e.g. headless test bootstrap) and return it.
     virtual INativeWindow* getOrCreateMainNativeWindow(const WindowCreateInfo& ci) = 0;

@@ -91,6 +91,7 @@ void RenderRuntime::initRuntimeState(const InitDesc& desc)
 {
     _hostServices       = desc.hostServices;
     _offscreenScheduler = desc.offscreenScheduler;
+    _clockState                 = desc.clockState;
     _environmentLightingProvider = desc.environmentLightingProvider;
     _activeSceneProvider         = desc.activeSceneProvider;
 

@@ -10,6 +10,7 @@
 #include "Render3D/Common/IRenderPipeline.h"
 #include "Render3D/Common/IRenderRuntimeServices.h"
 #include "Render3D/Common/PostProcessingState.h"
+#include "Common/RenderRuntimeClockState.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "Render3D/Services/EnvironmentLightingResultProvider.h"
 #include "Render3D/Common/RenderTargetCatalog.h"
@@ -79,6 +80,7 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
         /// App through globals.
         IRenderRuntimeHostServices*       hostServices = nullptr;
         IOffscreenTaskScheduler*          offscreenScheduler = nullptr;
+        const RenderRuntimeClockState*    clockState = nullptr;
         /// Injected narrow environment-lighting result provider (bound by the
         /// Host; Render3D never locates the processor through App).
         EnvironmentLightingResultProvider environmentLightingProvider;
@@ -142,6 +144,7 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
 
     IRenderRuntimeHostServices* _hostServices = nullptr;
     IOffscreenTaskScheduler*    _offscreenScheduler = nullptr;
+    const RenderRuntimeClockState* _clockState = nullptr;
     EnvironmentLightingResultProvider _environmentLightingProvider;
     std::function<Scene*()>           _activeSceneProvider;
     /// Owned derived-processing systems (gameplay binding / environment

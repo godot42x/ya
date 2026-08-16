@@ -181,12 +181,12 @@ IRenderPipeline* RenderRuntime::getActivePipeline() const
 
 uint64_t RenderRuntime::getFrameIndex() const
 {
-    return _hostServices ? _hostServices->getFrameIndex() : 0;
+    return _clockState ? _clockState->frameIndex : 0;
 }
 
 double RenderRuntime::getElapsedTimeSeconds() const
 {
-    return _hostServices ? _hostServices->getElapsedTimeMS() / 1000.0 : 0.0;
+    return _clockState ? static_cast<double>(_clockState->elapsedTimeMS) / 1000.0 : 0.0;
 }
 
 Scene* RenderRuntime::getActiveScene() const

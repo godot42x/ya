@@ -206,8 +206,8 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     [[nodiscard]] const TaskManager&             getTaskManager() const { return taskManager; }
 
     // Defined in App.cpp (see the data-symbol note on get()/currentFrameIndex()).
-    [[nodiscard]] uint32_t                getFrameIndex() const override;
-    [[nodiscard]] uint64_t                getElapsedTimeMS() const override;
+    [[nodiscard]] uint32_t                getFrameIndex() const;
+    [[nodiscard]] uint64_t                getElapsedTimeMS() const;
 
     [[nodiscard]] AppState getAppState() const { return _appState; }
     [[nodiscard]] bool     isRunning() const { return bRunning; }
