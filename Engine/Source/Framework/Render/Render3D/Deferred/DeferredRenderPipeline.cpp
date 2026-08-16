@@ -22,8 +22,6 @@
 #include "Render3D/Common/Shadow/Common/ShadowSettingsConfig.h"
 #include "Graph/RenderGraphExecutor.h"
 #include "Core/Config/ConfigManager.h"
-#include "Render3D/Common/RuntimeServices.h"
-
 #include "Scene/Core/Scene.h"
 #include <algorithm>
 #include <chrono>
@@ -35,7 +33,7 @@ namespace ya
 namespace
 {
 
-bool shouldRenderBillboard(const BillboardComponent& billboard)
+bool shouldRenderBillboard(const BillboardComponent& billboard, bool bAppStopped)
 {
     if (!billboard.bVisible) {
         return false;
@@ -45,11 +43,7 @@ bool shouldRenderBillboard(const BillboardComponent& billboard)
         return true;
     }
 
-    if (const auto* host = RuntimeServices::getRenderRuntimeHost()) {
-        return host->isStopped();
-    }
-
-    return false;
+    return bAppStopped;
 }
 
 EFormat::T chooseSupportedAttachmentFormat(IRender* render,
@@ -905,7 +899,7 @@ void DeferredRenderPipeline::updateStageFrameInputs(const RenderPipelineFrameCon
             if (viewportHeight > 0.0f) {
                 for (const auto& [entity, billboard, transform] : activeScene->getRegistry().view<BillboardComponent, TransformComponent>().each()) {
                     (void)entity;
-                    if (!shouldRenderBillboard(billboard)) {
+                    if (!shouldRenderBillboard(billboard, frame.bAppStopped)) {
                         continue;
                     }
 

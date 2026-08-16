@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "Render3D/Common/RuntimeServices.h"
+#include "Render3D/Common/RenderRuntimeHostServices.h"
 
 #include <deque>
 #include <functional>

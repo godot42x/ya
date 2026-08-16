@@ -11,7 +11,7 @@
 #include "Core/System/System.h"
 #include "GameRuntime/AppOptions.h"
 #include "GameRuntime/AppRenderServices.h"
-#include "Render3D/Common/RuntimeServices.h"
+#include "Render3D/Common/RenderRuntimeHostServices.h"
 #include "GameRuntime/AppSceneServices.h"
 #include "GameRuntime/GUI/GameUI/GameUIHost.h"
 #include "Core/Common/AppState.h"

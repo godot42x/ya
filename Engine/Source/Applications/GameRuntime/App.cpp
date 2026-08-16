@@ -112,10 +112,6 @@ App::App()
 {
     inputRouter.setApp(*this);
     inputRouter.setDefaultNode(gameInputNode);
-    // Register the render-runtime host services contract once; framework
-    // modules (Render3D) consume it through RuntimeServices, never through
-    // App globals.
-    RuntimeServices::setRenderRuntimeHost(this);
 }
 
 App::~App() = default;

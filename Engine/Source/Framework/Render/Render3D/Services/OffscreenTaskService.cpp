@@ -1,6 +1,6 @@
 #include "OffscreenTaskService.h"
 
-#include "Render3D/Common/RuntimeServices.h"
+#include "Render3D/Common/RenderRuntimeHostServices.h"
 
 #include "RHI/Backend/Vulkan/VulkanRender.h"
 

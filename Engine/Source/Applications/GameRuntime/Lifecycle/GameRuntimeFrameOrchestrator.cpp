@@ -426,6 +426,7 @@ void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
     RenderPipelineFrameContext pipelineFrame{
         .flightIndex              = flightIndex,
         .deltaTime                = dt,
+        .bAppStopped              = app.isStopped(),
         .view                     = app._renderState->frameState.view,
         .projection               = app._renderState->frameState.projection,
         .cameraPos                = app._renderState->frameState.cameraPos,
