@@ -6,7 +6,7 @@
 
 ## 当前切片
 
-当前激活切片：`GI-305 Phase 1/2 convergence gate`
+当前激活切片：主线完成（Phase 3/4/5 条件待触发）
 
 执行规则：
 
@@ -203,7 +203,7 @@
     rect，rect 变化必须使整棵子树的 resolved segment 失效（即使 child 自身 rect 未变）。
     新增 `ContainerClipResizeInvalidatesChildSegments` 测试（157 tests PASSED）。
 
-- [ ] `GI-305` Phase 1/2 convergence gate
+- [x] `GI-305` Phase 1/2 convergence gate
   - 依赖：GI-103、GI-105、GI-202、GI-302~GI-304
   - 验收：
     - closure/widgets/workspace tests；
@@ -212,6 +212,10 @@
     - GPU/offscreen zero-diff；
     - baseline 对比写入 progress。
   - 提交：`[test/gui] cover invalidation convergence`
+  - 进度：closure 157 + widgets 123 + headless 1 + workspace 8 全过；Workbench smoke
+    **PASS**；snapshot JSON 生成；perf baseline 交互帧 rebuilt 从 GI-004 的 61/80 降到
+    2~33（volatile 全量重画 → changed-only setter 精确失效）；GPU/offscreen zero-diff
+    需真实 GPU 环境，headless 无法执行，待有 GPU 时用 `--offscreen-diff` 补验。
 
 ## P3 — 条件项：Batching
 

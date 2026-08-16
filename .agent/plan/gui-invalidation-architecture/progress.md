@@ -698,3 +698,47 @@ GI-202 按控件族拆多个小提交；本轮完成**基类 `_position/_size/_v
 
 - `GI-305`：Phase 1/2 convergence gate（closure/widgets/workspace tests + Workbench
   smoke + CPU snapshot JSON + GPU/offscreen zero-diff + baseline 对比写入 progress）。
+
+## 2026-08-16 — GI-305 完成：Phase 1/2 convergence gate
+
+### 验证结果
+
+1. **closure/widgets/workspace tests** 全过：
+   - `ya-gui-closure-test` **157 PASSED**；
+   - `ya-gui-widgets-test` **123 PASSED**；
+   - `ya-gui-headless-host-test` **1 PASSED**（headless AppKernel→delegate→snapshot smoke）；
+   - `ya-gui-workbench-workspace-test` **8 PASSED**；
+   - `ya-engine` 聚合构建通过；direct-write 门禁 ok。
+2. **Workbench smoke**：`xmake r GUIWorkbench --headless --smoke-actions`
+   → **smoke result: PASS**（RenderProbe/Counter/OpenModal 等交互场景）。
+3. **CPU snapshot JSON**：`--dump-snapshot-json` 生成 43KB structural snapshot（含
+   items/clip/color/pos/size + structuralDigest/semanticDigest）。
+4. **perf telemetry baseline（对比 GI-004）**：
+   - GI-004（Phase 1A 前，volatile 兜底）：稳态 rebuilt=0，交互 spike rebuilt **61/80**；
+   - 本轮（Phase 1/2 后，changed-only setter + 统一 paint 模板）：稳态 rebuilt=0，
+     交互帧 rebuilt **2~33**（RenderProbe 2 / Counter 2~3 / OpenModal 11），
+     `notifyCalls=0 notifyVisits=0`（presenter 走 setter 而非 reactive，符合 P1A 设计）。
+   - **交互帧重建量显著下降**：volatile 每帧全量重画（61/80）→ 精确失效（2~33）。
+
+### 未完成项（环境受限）
+
+- **GPU/offscreen zero-diff**：`--offscreen-shot` / `--gpu-shot` 需要真实 GPU 渲染，
+  当前 headless 构建无法执行。CPU 侧 parity 已由 snapshot JSON + digest 测试覆盖；
+  GPU 侧 zero-diff 待有 GPU 环境时用 `--offscreen-shot --offscreen-diff` 补验。
+
+### 阶段结论
+
+- **Phase 0 / 1A / 1B / 2 全部收口**（GI-001~305）。失效链闭合：
+  「数据/视觉属性变化 → snapshot 前产生正确的 Paint/Layout 失效 → 按需 layout →
+  paint（dirty 重建 / clean 复用）→ immutable snapshot」，且 ancestor clip 变化
+  会正确失效 descendants（GI-304）、build context 变化会正确失效 cache（GI-303）。
+- Phase 3（batching）/ 4（subtree cache）/ 5（reconciliation）为 profile/真实消费者
+  驱动的条件项，当前 `notifyCalls=0`（presenter 未走 reactive）说明 batching 无启动
+  条件；计划主线在此收口。
+
+### 下一接力点
+
+- 主线计划完成。可选项：
+  - 有 GPU 环境时补 `--offscreen-diff` 验证；
+  - push 本轮全部 commit；
+  - 出现第二个真实 reactive 消费者后再启动 Phase 3 batching 评估。

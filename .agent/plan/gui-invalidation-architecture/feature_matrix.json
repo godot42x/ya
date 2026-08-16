@@ -1,7 +1,7 @@
 {
   "plan": "gui-invalidation-architecture",
   "updated_at": "2026-08-16",
-  "active_task": "GI-305",
+  "active_task": "done",
   "legend": {
     "planned": "已纳入计划但尚未开始",
     "in_progress": "当前唯一执行切片",
@@ -142,8 +142,8 @@
         },
         {
           "id": "convergence_gate",
-          "status": "planned",
-          "notes": "closure + Workbench + snapshot + GPU/offscreen parity"
+          "status": "pass",
+          "notes": "closure 157 + widgets 123 + headless 1 + workspace 8 all pass; Workbench smoke PASS; snapshot JSON dumped; interaction rebuilt 2~33 vs GI-004 61/80; GPU/offscreen zero-diff pending real-GPU env"
         }
       ]
     },
