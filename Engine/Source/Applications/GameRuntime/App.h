@@ -134,7 +134,6 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
 
     void init(AppDesc ci);
     int  run();
-    int  iterate(float dt);
     void quit();
 
     template <typename T>

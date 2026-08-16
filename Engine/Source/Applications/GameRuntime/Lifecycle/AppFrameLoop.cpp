@@ -90,10 +90,10 @@ class HostSdlEventSource final : public IAppEventSource
     }
 };
 
-class HostAppKernelDelegate final : public IAppLoopDelegate
+class GameRuntimeLoopDelegate final : public IAppLoopDelegate
 {
   public:
-    explicit HostAppKernelDelegate(App& inApp)
+    explicit GameRuntimeLoopDelegate(App& inApp)
         : app(inApp)
     {
     }
@@ -130,11 +130,6 @@ int App::run()
     return AppFrameLoop::run(*this);
 }
 
-int App::iterate(float dt)
-{
-    return AppFrameLoop::iterate(*this, dt);
-}
-
 void App::tickLogic(float dt)
 {
     AppFrameLoop::tickLogic(*this, dt);
@@ -169,9 +164,9 @@ int AppFrameLoop::run(App& app)
     app._startTime = std::chrono::steady_clock::now();
     app._lastTime  = app._startTime;
 
-    HostSdlEventSource      eventSource;
-    HostAppKernelDelegate   delegate(app);
-    AppKernel               kernel({.eventSource = &eventSource}, delegate);
+    HostSdlEventSource    eventSource;
+    GameRuntimeLoopDelegate delegate(app);
+    AppKernel             kernel({.eventSource = &eventSource}, delegate);
     return kernel.run();
 }
 
