@@ -11,7 +11,7 @@ struct App;
 struct Entity;
 struct RenderRuntime;
 
-class AppFrameLoop
+class GameRuntimeFrameOrchestrator
 {
   public:
     /// Run one product frame. Direct callers retain the legacy native event

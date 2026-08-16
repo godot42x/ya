@@ -48,7 +48,7 @@ struct GameplayResourceBinding;
 struct EnvironmentLightingProcessor;
 class TerrainProcessor;
 class AppLifecycle;
-class AppFrameLoop;
+class GameRuntimeFrameOrchestrator;
 class AppEventRouter;
 class AppModuleTestAccess;
 class AppAutomationControlService;
@@ -63,7 +63,7 @@ enum AppMode : int
 struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
 {
     friend class AppLifecycle;
-    friend class AppFrameLoop;
+    friend class GameRuntimeFrameOrchestrator;
     friend class AppEventRouter;
     friend class AppModuleTestAccess;
     friend class AppSceneServices;
@@ -177,8 +177,6 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     virtual void onQuit() {}
 
     virtual int  onEvent(const Event& event);
-    virtual void tickLogic(float dt);
-    virtual void tickRender(float dt);
 
     // Defined in App.cpp. Kept out of the header so consumers resolve the
     // singleton through the DLL import thunk instead of inlining a direct
@@ -281,10 +279,6 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     void notifyModulesSceneActivated(Scene* scene);
     void notifyModulesSceneDestroyed(Scene* scene);
     [[nodiscard]] const glm::vec2& getWindowSize() const { return _windowSize; }
-    void                              syncViewportState();
-    [[nodiscard]] Extent2D            resolveViewportExtent(RenderRuntime* renderRuntime,
-                                                            const Rect2D& viewportRect) const;
-    void                              prepareRenderFrameState(float dt);
 };
 
 } // namespace ya

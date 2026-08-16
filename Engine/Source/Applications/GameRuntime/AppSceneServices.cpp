@@ -1,7 +1,7 @@
 #include "GameRuntime/AppSceneServices.h"
 
 #include "GameRuntime/App.h"
-#include "GameRuntime/Lifecycle/AppFrameLoop.h"
+#include "GameRuntime/Lifecycle/GameRuntimeFrameOrchestrator.h"
 #include "GameRuntime/Lifecycle/AppLifecycle.h"
 
 #include "Core/Log.h"
@@ -94,7 +94,7 @@ void AppSceneServices::refreshActiveSceneDerivedState()
 
 Entity* AppSceneServices::getPrimaryCamera() const
 {
-    return _app ? AppFrameLoop::getPrimaryCamera(*_app) : nullptr;
+    return _app ? GameRuntimeFrameOrchestrator::getPrimaryCamera(*_app) : nullptr;
 }
 
 } // namespace ya

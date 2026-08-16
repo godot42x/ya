@@ -1,4 +1,4 @@
-#include "GameRuntime/Lifecycle/AppFrameLoop.h"
+#include "GameRuntime/Lifecycle/GameRuntimeFrameOrchestrator.h"
 
 #include "GameRuntime/App.h"
 #include "GameRuntime/AppRenderFrameState.h"
@@ -46,9 +46,9 @@ namespace
 Extent2D resolveRuntimeViewportExtent(App& app)
 {
     auto* renderRuntime = app.getRenderServices().getRenderRuntime();
-    return AppFrameLoop::resolveViewportExtent(app,
-                                               renderRuntime,
-                                               renderRuntime ? renderRuntime->getViewportRect() : Rect2D{});
+    return GameRuntimeFrameOrchestrator::resolveViewportExtent(app,
+                                                               renderRuntime,
+                                                               renderRuntime ? renderRuntime->getViewportRect() : Rect2D{});
 }
 
 void syncRuntimeCameraAspect(Scene& scene, const Extent2D& viewportExtent)
@@ -109,7 +109,7 @@ class GameRuntimeLoopDelegate final : public IAppLoopDelegate
 
     void onTick(float dt) override
     {
-        AppFrameLoop::iterate(app, dt, /*bPumpNativeEvents=*/false);
+        GameRuntimeFrameOrchestrator::iterate(app, dt, /*bPumpNativeEvents=*/false);
     }
 
     void onShutdown() override {}
@@ -140,32 +140,7 @@ int App::run()
     return kernel.run();
 }
 
-void App::tickLogic(float dt)
-{
-    AppFrameLoop::tickLogic(*this, dt);
-}
-
-void App::syncViewportState()
-{
-    AppFrameLoop::syncViewportState(*this);
-}
-
-Extent2D App::resolveViewportExtent(RenderRuntime* renderRuntime, const Rect2D& viewportRect) const
-{
-    return AppFrameLoop::resolveViewportExtent(*this, renderRuntime, viewportRect);
-}
-
-void App::prepareRenderFrameState(float dt)
-{
-    AppFrameLoop::prepareRenderFrameState(*this, dt);
-}
-
-void App::tickRender(float dt)
-{
-    AppFrameLoop::tickRender(*this, dt);
-}
-
-int AppFrameLoop::iterate(App& app, float dt, bool bPumpNativeEvents)
+int GameRuntimeFrameOrchestrator::iterate(App& app, float dt, bool bPumpNativeEvents)
 {
     YA_PROFILE_FUNCTION()
     YA_PERF_FUNCTION(perf::metric::cpuTimeMs(), perf::domain::render());
@@ -266,7 +241,7 @@ int AppFrameLoop::iterate(App& app, float dt, bool bPumpNativeEvents)
     return 0;
 }
 
-void AppFrameLoop::tickLogic(App& app, float dt)
+void GameRuntimeFrameOrchestrator::tickLogic(App& app, float dt)
 {
     YA_PROFILE_FUNCTION()
     {
@@ -344,12 +319,12 @@ void AppFrameLoop::tickLogic(App& app, float dt)
     }
 }
 
-void AppFrameLoop::syncViewportState(App& app)
+void GameRuntimeFrameOrchestrator::syncViewportState(App& app)
 {
     (void)app;
 }
 
-Extent2D AppFrameLoop::resolveViewportExtent(const App& app, RenderRuntime* renderRuntime, const Rect2D& viewportRect)
+Extent2D GameRuntimeFrameOrchestrator::resolveViewportExtent(const App& app, RenderRuntime* renderRuntime, const Rect2D& viewportRect)
 {
     if (renderRuntime) {
         Extent2D extent = renderRuntime->getViewportExtent();
@@ -368,7 +343,7 @@ Extent2D AppFrameLoop::resolveViewportExtent(const App& app, RenderRuntime* rend
     };
 }
 
-Entity* AppFrameLoop::getPrimaryCamera(const App& app)
+Entity* GameRuntimeFrameOrchestrator::getPrimaryCamera(const App& app)
 {
     if (!app._sceneManager) {
         return nullptr;
@@ -392,7 +367,7 @@ Entity* AppFrameLoop::getPrimaryCamera(const App& app)
     return anyCam;
 }
 
-void AppFrameLoop::prepareRenderFrameState(App& app, float dt)
+void GameRuntimeFrameOrchestrator::prepareRenderFrameState(App& app, float dt)
 {
     auto* renderRuntime = app.getRenderServices().getRenderRuntime();
     if (!renderRuntime) {
@@ -431,7 +406,7 @@ void AppFrameLoop::prepareRenderFrameState(App& app, float dt)
     app._renderState->frameState = frameState;
 }
 
-uint32_t AppFrameLoop::resolveFlightIndex(const App& app)
+uint32_t GameRuntimeFrameOrchestrator::resolveFlightIndex(const App& app)
 {
     auto* render = app.getRenderServices().getRender();
     if (!render) {
@@ -441,7 +416,7 @@ uint32_t AppFrameLoop::resolveFlightIndex(const App& app)
     return render->getCurrentFrameIndex() % MAX_FLIGHTS_IN_FLIGHT;
 }
 
-std::vector<RenderOverlaySprite2D> AppFrameLoop::buildScreenOverlaySprites(const App& app)
+std::vector<RenderOverlaySprite2D> GameRuntimeFrameOrchestrator::buildScreenOverlaySprites(const App& app)
 {
     std::vector<RenderOverlaySprite2D> sprites;
     if (app._appMode != AppMode::Drawing || app.clicked.empty()) {
@@ -467,7 +442,7 @@ std::vector<RenderOverlaySprite2D> AppFrameLoop::buildScreenOverlaySprites(const
     return sprites;
 }
 
-void AppFrameLoop::tickRender(App& app, float dt)
+void GameRuntimeFrameOrchestrator::tickRender(App& app, float dt)
 {
     auto* renderRuntime = app.getRenderServices().getRenderRuntime();
     if (!renderRuntime) {
@@ -538,7 +513,7 @@ void AppFrameLoop::tickRender(App& app, float dt)
         .shadowSettings           = &app.getRenderServices().getShadowSettings(),
     };
 
-    auto screenOverlaySprites = AppFrameLoop::buildScreenOverlaySprites(app);
+    auto screenOverlaySprites = GameRuntimeFrameOrchestrator::buildScreenOverlaySprites(app);
 
     // Game UI: build the immutable frame snapshot BEFORE the RenderGraph.
     // Command recording consumes only this packet; the live WidgetTree is
