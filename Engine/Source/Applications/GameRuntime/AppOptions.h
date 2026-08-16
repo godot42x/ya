@@ -3,9 +3,9 @@
 #include "Core/Api.h"
 #include "Core/Log.h"
 #include "Core/Profiling/Profiling.h"
+#include "App/Control/CLIParams.h"
 #include "Render3D/Common/AppAutomation.h"
 #include "App/Control/AutomationRun.h"
-#include "GameRuntime/Utility/ClLIParams.h"
 #include "Render3D/Common/PostProcessingState.h"
 
 #include <array>

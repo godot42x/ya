@@ -6,6 +6,10 @@ target("ya-game-runtime")
     add_headerfiles("./include/**.h", { public = true })
     add_headerfiles("**.h")
     add_deps("ya-gui-host")
+    -- AppOptions.h publicly exposes shared control-plane CLI parsing helpers,
+    -- so runtime consumers must see ya-app-control directly instead of only
+    -- via transitive host dependencies.
+    add_deps("ya-app-control", { public = true })
     -- App.h publicly exposes IModule (addModule), so the module-system target
     -- is a public dependency of the runtime shell.
     add_deps("ya-module-manager", { public = true })
