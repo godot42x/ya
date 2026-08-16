@@ -28,12 +28,11 @@ void UIScrollViewport::paint(UIFrameBuilder& builder)
         return;
     }
     builder.countWidget();
-    pushPaintWidget(this);
+    PaintScope paintScope(this);
     paintSelf(builder);
     builder.pushClip(_layoutRect);
     paintChildren(builder);
     builder.popClip();
-    popPaintWidget();
 }
 
 bool UIScrollViewport::handleInputEvent(const Event& event, const WidgetEventContext&)

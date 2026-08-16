@@ -29,7 +29,7 @@ void UIContainer::paint(UIFrameBuilder& builder)
         return;
     }
     builder.countWidget();
-    pushPaintWidget(this);
+    PaintScope paintScope(this);
     // Containers always re-run paintSelf (cheap): they establish the clip
     // context for their children, whose paint() decides reuse vs re-run.
     paintSelf(builder);
@@ -40,7 +40,6 @@ void UIContainer::paint(UIFrameBuilder& builder)
     if (_boxLayout.clipsChildren()) {
         builder.popClip();
     }
-    popPaintWidget();
 }
 
 glm::vec2 UIContainer::computeDesiredSize() const

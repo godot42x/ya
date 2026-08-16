@@ -63,7 +63,7 @@ void UISplitPane::paint(UIFrameBuilder& builder)
         return;
     }
     builder.countWidget();
-    pushPaintWidget(this);
+    PaintScope paintScope(this);
     paintSelf(builder);
     // Each pane is its own clip region: UISplitLayout assigned every arranged
     // child its pane rect as the child's layout rect, so clip each child to
@@ -74,7 +74,6 @@ void UISplitPane::paint(UIFrameBuilder& builder)
         child->paint(builder);
         builder.popClip();
     }
-    popPaintWidget();
 }
 
 void UISplitPane::paintSelf(UIFrameBuilder& builder)

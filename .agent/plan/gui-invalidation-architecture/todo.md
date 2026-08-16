@@ -6,7 +6,7 @@
 
 ## 当前切片
 
-当前激活切片：`GI-202 Runtime visual/layout 字段封装`
+当前激活切片：`GI-302 统一 Paint Pipeline`
 
 执行规则：
 
@@ -155,11 +155,15 @@
 
 ## P2 — 统一 Paint Pipeline 与 Cache Validity
 
-- [ ] `GI-301` Paint scope RAII
+- [x] `GI-301` Paint scope RAII
   - 依赖：GI-102
   - 修改：收口 push/pop paint widget，保证 early return/未来异常路径成对恢复。
   - 验收：嵌套 paint/current widget 测试通过。
   - 提交：`[gui] scope reactive paint collection`
+  - 进度：`Reactive.h` 新增 `PaintScope` RAII（构造 push / 析构 pop，不可拷贝）；基类
+    `UIElement::paint` 与 Container/ScrollViewport/SplitPane 四处手动 push/pop 全部改为
+    PaintScope；新增 `PaintScopeRestoresStackOnNestedScope` 与
+    `PaintWalkRestoresReactiveStack` 两个测试（153 tests PASSED）。
 
 - [ ] `GI-302` `paintChildren()` customization point
   - 依赖：GI-301

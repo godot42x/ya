@@ -38,6 +38,21 @@ YA_GUI_API void pushPaintWidget(UIElement* widget);
 YA_GUI_API void popPaintWidget();
 YA_GUI_API UIElement* currentPaintWidget();
 
+/// RAII guard for the reactive paint-context stack (GI-301). Constructing
+/// pushes the widget onto the stack; destruction pops it, so the stack is
+/// restored on any early return — including a future exception path. This is
+/// the sole push/pop pairing point: paint call sites hold a PaintScope instead
+/// of pairing pushPaintWidget/popPaintWidget by hand.
+class PaintScope
+{
+public:
+    explicit PaintScope(UIElement* widget) { pushPaintWidget(widget); }
+    ~PaintScope() { popPaintWidget(); }
+
+    PaintScope(const PaintScope&)            = delete;
+    PaintScope& operator=(const PaintScope&) = delete;
+};
+
 /// Process-wide diagnostics for reactive invalidation (GI-001). Lightweight
 /// counters (no string allocation on the hot path) used to measure notify and
 /// dependent-traversal cost; the Phase 3 batching decision reads these.

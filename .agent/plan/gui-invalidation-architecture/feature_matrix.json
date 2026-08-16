@@ -1,7 +1,7 @@
 {
   "plan": "gui-invalidation-architecture",
   "updated_at": "2026-08-16",
-  "active_task": "GI-301",
+  "active_task": "GI-302",
   "legend": {
     "planned": "已纳入计划但尚未开始",
     "in_progress": "当前唯一执行切片",
@@ -122,8 +122,8 @@
       "items": [
         {
           "id": "paint_scope",
-          "status": "planned",
-          "notes": "RAII reactive paint collection"
+          "status": "pass",
+          "notes": "PaintScope RAII (Reactive.h) owns push/pop pairing; base + Container/ScrollViewport/SplitPane paint hold a scope instead of manual push/pop; nested-scope + paint-walk stack-restore tests added"
         },
         {
           "id": "paint_template",

@@ -561,3 +561,38 @@ GI-202 按控件族拆多个小提交；本轮完成**基类 `_position/_size/_v
 ### 下一接力点
 
 - **Phase 1B 全部完成**（GI-201~203），进入 Phase 2：`GI-301`（Paint scope RAII）。
+
+## 2026-08-16 — GI-301 完成：Paint scope RAII
+
+### 本轮完成
+
+- `Reactive.h` 新增 `PaintScope` RAII（构造 `pushPaintWidget` / 析构 `popPaintWidget`，
+  不可拷贝），作为 push/pop 的唯一配对点；
+- 四处手动 `pushPaintWidget`/`popPaintWidget` 全部替换为 `PaintScope`：
+  - 基类 `UIElement::paint`（UIElement.cpp）；
+  - `UIContainer::paint`（Container.cpp）；
+  - `UIScrollViewport::paint`（ScrollViewport.cpp）；
+  - `UISplitPane::paint`（SplitPane.cpp）。
+- 新增两个测试：
+  - `PaintScopeRestoresStackOnNestedScope`：嵌套 scope 的栈顶与逐层恢复；
+  - `PaintWalkRestoresReactiveStack`：真实 buildSnapshot（含 clean 复用帧）后
+    `currentPaintWidget()` 恢复 nullptr，防栈泄漏。
+
+### 代码/行为结论
+
+- 三个 layout host（Container/Scroll/Split）仍覆盖完整 `paint()`（GI-302 的统一模板
+  才是收掉覆盖的步骤）；本轮只把它们的 push/pop 换成 RAII，行为不变；
+- 现有 `pushPaintWidget/popPaintWidget` 导出函数保留（`PaintScope` 内部调用，跨 DLL
+  边界共享 module-local stack），不再有业务 paint 路径手动配对。
+
+### 验证
+
+- `xmake b ya-gui-closure-test` 通过；
+- `xmake r ya-gui-closure-test` **153 tests PASSED**（新增 2 个）；
+- `xmake b ya-engine` 聚合通过；
+- `python3 Script/ya_gui_write_guard.py` 返回 0（ok）。
+
+### 下一接力点
+
+- `GI-302`：统一 paint 模板（基类唯一 self rebuild/reuse pipeline；Container/Scroll/
+  Split 改为覆盖 `paintChildren` 定制 clip/children traversal，不再覆盖完整 `paint()`）。

@@ -161,7 +161,7 @@ void UIElement::paint(UIFrameBuilder& builder)
         return;
     }
     builder.countWidget();
-    pushPaintWidget(this);
+    PaintScope paintScope(this);
     if (_bVolatile || _bPaintDirty || !builder.hasCachedItems(this)) {
         clearDependencies();
         builder.countRebuild();
@@ -174,7 +174,6 @@ void UIElement::paint(UIFrameBuilder& builder)
         builder.reuseCachedItems(this);
     }
     paintChildren(builder);
-    popPaintWidget();
 }
 
 void UIElement::clearDependencies()

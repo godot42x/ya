@@ -937,4 +937,38 @@ TEST(UIFrameSnapshotTest, SetClipChildrenIsSubtreePaintNotLayout)
     EXPECT_EQ(tree.getPerfStats().layoutDirtyTransitions, layoutBefore);
 }
 
+// === GI-301: paint scope RAII ===
+
+TEST(UIFrameSnapshotTest, PaintScopeRestoresStackOnNestedScope)
+{
+    auto outer = std::make_shared<UIElement>("Outer");
+    auto inner = std::make_shared<UIElement>("Inner");
+
+    EXPECT_EQ(currentPaintWidget(), nullptr);
+    {
+        PaintScope outerScope(outer.get());
+        EXPECT_EQ(currentPaintWidget(), outer.get());
+        {
+            PaintScope innerScope(inner.get());
+            EXPECT_EQ(currentPaintWidget(), inner.get());
+        }
+        EXPECT_EQ(currentPaintWidget(), outer.get());
+    }
+    EXPECT_EQ(currentPaintWidget(), nullptr);
+}
+
+TEST(UIFrameSnapshotTest, PaintWalkRestoresReactiveStack)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       parent = std::make_shared<UIContainer>("Parent");
+    auto       child  = std::make_shared<UIPanel>("Child");
+    tree.attachToLayer(WidgetTree::ELayer::Content, parent);
+    tree.attach(*parent, child);
+
+    EXPECT_EQ(currentPaintWidget(), nullptr);
+    tree.buildSnapshot(UIFrameBuildContext{});
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean frame: reuse path
+    EXPECT_EQ(currentPaintWidget(), nullptr);
+}
+
 } // namespace ya
