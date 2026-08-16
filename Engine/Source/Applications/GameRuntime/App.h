@@ -185,12 +185,8 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
 
     [[nodiscard]] AppRenderServices&       getRenderServices() { return _renderServices; }
     [[nodiscard]] const AppRenderServices& getRenderServices() const { return _renderServices; }
-    [[nodiscard]] NativeWindowManager*       getNativeWindowManager() { return _nativeWindowManager.get(); }
-    [[nodiscard]] const NativeWindowManager* getNativeWindowManager() const { return _nativeWindowManager.get(); }
     [[nodiscard]] AppSceneServices&        getSceneServices() { return _sceneServices; }
     [[nodiscard]] const AppSceneServices&  getSceneServices() const { return _sceneServices; }
-    [[nodiscard]] AppAutomationControlService*       getAutomationControlService() { return _automationControlService.get(); }
-    [[nodiscard]] const AppAutomationControlService* getAutomationControlService() const { return _automationControlService.get(); }
     [[nodiscard]] GameUIHost*                        getGameUIHost() { return _gameUIHost.get(); }
     [[nodiscard]] JSScriptingSystem*                  getJSScriptingSystem() const { return _jsScriptingSystem; }
 
@@ -267,6 +263,10 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     void handleSceneInit(Scene* scene);
     void handleSceneDestroy(Scene* scene);
     void handleSceneActivated(Scene* scene);
+    [[nodiscard]] NativeWindowManager* getNativeWindowManager() { return _nativeWindowManager.get(); }
+    [[nodiscard]] const NativeWindowManager* getNativeWindowManager() const { return _nativeWindowManager.get(); }
+    [[nodiscard]] AppAutomationControlService* getAutomationControlService() { return _automationControlService.get(); }
+    [[nodiscard]] const AppAutomationControlService* getAutomationControlService() const { return _automationControlService.get(); }
     void attachModules();
     void detachModules();
     void configureModules();
