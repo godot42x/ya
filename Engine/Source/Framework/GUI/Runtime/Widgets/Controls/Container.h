@@ -33,10 +33,13 @@ struct YA_GUI_API UIContainer : public UIElement
 
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
-    void paint(UIFrameBuilder& builder) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
 
   protected:
+    /// Clip the child traversal to this container's rect when clipChildren is
+    /// set (GI-302: the base paint owns self rebuild/reuse; this only customizes
+    /// the children context).
+    void paintChildren(UIFrameBuilder& builder) override;
     [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
 
   private:

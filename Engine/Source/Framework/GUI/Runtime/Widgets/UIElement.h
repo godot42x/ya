@@ -506,8 +506,11 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     [[nodiscard]] Rect2D computeAnchorRect(const Rect2D& parentRect) const;
     /// Lay out direct children within `layoutRect` (paint order).
     void layoutChildren(const Rect2D& layoutRect);
-    /// Recursively paint children in paint order.
-    void paintChildren(UIFrameBuilder& builder);
+    /// Recursively paint children in paint order. Virtual so layout hosts
+    /// (Container/ScrollViewport/SplitPane) customize the children clip /
+    /// traversal context while the base paint keeps the single self
+    /// rebuild/reuse pipeline (GI-302).
+    virtual void paintChildren(UIFrameBuilder& builder);
     /// Subclasses draw themselves here (base: no-op).
     virtual void paintSelf(UIFrameBuilder& builder) { (void)builder; }
     /// Clear this widget's paint-collected reactive dependencies before

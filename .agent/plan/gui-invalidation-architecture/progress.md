@@ -596,3 +596,40 @@ GI-202 按控件族拆多个小提交；本轮完成**基类 `_position/_size/_v
 
 - `GI-302`：统一 paint 模板（基类唯一 self rebuild/reuse pipeline；Container/Scroll/
   Split 改为覆盖 `paintChildren` 定制 clip/children traversal，不再覆盖完整 `paint()`）。
+
+## 2026-08-16 — GI-302 完成：统一 Paint 模板（paintChildren 定制点）
+
+### 本轮完成
+
+- `UIElement::paintChildren` 改为 **virtual**（此前非虚，子类无法 override——这是
+  plan 里"优先复用现有最小 customization point"缺失的一环）；
+- 基类 `UIElement::paint` 成为唯一 self rebuild/reuse 模板（visibility → countWidget
+  → PaintScope → rebuild/reuse self → paintChildren）；
+- 三个 layout host 删除 `paint` 覆盖，改为覆盖 `paintChildren`：
+  - `UIContainer::paintChildren`：`clipsChildren` 时 pushClip/popClip 包裹默认遍历；
+  - `UIScrollViewport::paintChildren`：视口 rect clip 包裹默认遍历；
+  - `UISplitPane::paintChildren`：per-pane clip（每个 child 用其 `_layoutRect` 裁剪）。
+- 新增三个测试：`ScrollViewportClipsContentToViewportRect`、
+  `SplitPaneClipsChildrenToOwnPaneRect`、`LayoutHostsReuseSelfSegmentWhenClean`。
+
+### 代码/行为结论
+
+- 三个 layout host 的 self segment（Container/Scroll 为空、Split 为 divider）现在
+  走增量复用：cold start 重跑 + `countRebuild`，clean 帧 `reuseCachedItems`；修复了
+  plan 1.2 记录的「覆盖 paint 不清 `_bPaintDirty`」问题；
+- clip 语义不变：children 遍历仍在每帧执行，clip 在 `paintChildren` 内动态 push/pop
+  （不进入缓存），split per-child clip、scroll/container clip parity 保持；
+- ancestor clip 变化后 descendant 缓存复用旧 clip segment 的问题**仍是现状**，属于
+  `GI-304`（inherited context invalidation），本轮未恶化也未解决。
+
+### 验证
+
+- `xmake b ya-gui-closure-test` 通过；
+- `xmake r ya-gui-closure-test` **156 tests PASSED**（新增 3 个）；
+- `xmake b ya-engine` 聚合通过；`xmake b GUIWorkbench` 通过；
+- `python3 Script/ya_gui_write_guard.py` 返回 0（ok）。
+
+### 下一接力点
+
+- `GI-303`：Build-context generation（host/tree 稳定 context/resource generation
+  token；GI-002 已做保守 cache reset，本轮收敛其入口与语义）。

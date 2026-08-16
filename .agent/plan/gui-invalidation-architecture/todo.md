@@ -6,7 +6,7 @@
 
 ## 当前切片
 
-当前激活切片：`GI-302 统一 Paint Pipeline`
+当前激活切片：`GI-303 Build-context generation`
 
 执行规则：
 
@@ -165,7 +165,7 @@
     PaintScope；新增 `PaintScopeRestoresStackOnNestedScope` 与
     `PaintWalkRestoresReactiveStack` 两个测试（153 tests PASSED）。
 
-- [ ] `GI-302` `paintChildren()` customization point
+- [x] `GI-302` `paintChildren()` customization point
   - 依赖：GI-301
   - 修改：
     - 基类拥有唯一 self rebuild/reuse pipeline；
@@ -175,6 +175,11 @@
     - split per-child clip、scroll/container clip parity；
     - perf counter 语义一致。
   - 提交：`[gui] unify widget paint pipeline`
+  - 进度：`UIElement::paintChildren` 改为 virtual；Container/ScrollViewport/SplitPane 删除
+    `paint` 覆盖、改为覆盖 `paintChildren`（Container 条件 clip、Scroll 视口 clip、Split
+    per-pane clip），基类 paint 成为唯一 self rebuild/reuse 模板；新增
+    `ScrollViewportClipsContentToViewportRect`、`SplitPaneClipsChildrenToOwnPaneRect`、
+    `LayoutHostsReuseSelfSegmentWhenClean` 三个测试（156 tests PASSED）。
 
 - [ ] `GI-303` Build-context generation
   - 依赖：GI-002

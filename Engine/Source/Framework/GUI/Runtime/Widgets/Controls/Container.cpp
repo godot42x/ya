@@ -23,20 +23,12 @@ void UIContainer::layoutAssigned(const Rect2D& rect)
     _boxLayout.arrange(*this, _layoutRect);
 }
 
-void UIContainer::paint(UIFrameBuilder& builder)
+void UIContainer::paintChildren(UIFrameBuilder& builder)
 {
-    if (!isVisibleForRender()) {
-        return;
-    }
-    builder.countWidget();
-    PaintScope paintScope(this);
-    // Containers always re-run paintSelf (cheap): they establish the clip
-    // context for their children, whose paint() decides reuse vs re-run.
-    paintSelf(builder);
     if (_boxLayout.clipsChildren()) {
         builder.pushClip(_layoutRect);
     }
-    paintChildren(builder);
+    UIElement::paintChildren(builder);
     if (_boxLayout.clipsChildren()) {
         builder.popClip();
     }

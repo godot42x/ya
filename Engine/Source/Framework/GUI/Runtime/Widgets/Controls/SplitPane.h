@@ -67,7 +67,6 @@ struct YA_GUI_API UISplitPane : public UIElement
 
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
-    void paint(UIFrameBuilder& builder) override;
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool isHoverable() const override { return true; }
@@ -95,7 +94,12 @@ struct YA_GUI_API UISplitPane : public UIElement
     /// last arrangement).
     [[nodiscard]] Rect2D getDividerRect() const { return _splitLayout.getDividerRect(); }
 
-private:
+  protected:
+    /// Clip every pane child to its arranged pane rect (GI-302: the base paint
+    /// owns self rebuild/reuse; this only customizes the children context).
+    void paintChildren(UIFrameBuilder& builder) override;
+
+  private:
     UISplitLayout _splitLayout;
     std::shared_ptr<Reactive<float>> _splitRatioBinding;
 };

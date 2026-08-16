@@ -57,14 +57,8 @@ void UISplitPane::bindSplitRatio(std::shared_ptr<Reactive<float>> ref)
     }
 }
 
-void UISplitPane::paint(UIFrameBuilder& builder)
+void UISplitPane::paintChildren(UIFrameBuilder& builder)
 {
-    if (!isVisibleForRender()) {
-        return;
-    }
-    builder.countWidget();
-    PaintScope paintScope(this);
-    paintSelf(builder);
     // Each pane is its own clip region: UISplitLayout assigned every arranged
     // child its pane rect as the child's layout rect, so clip each child to
     // that rect. Without this a centered/overflowing child (e.g. text wider

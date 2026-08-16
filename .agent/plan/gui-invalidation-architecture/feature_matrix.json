@@ -1,7 +1,7 @@
 {
   "plan": "gui-invalidation-architecture",
   "updated_at": "2026-08-16",
-  "active_task": "GI-302",
+  "active_task": "GI-303",
   "legend": {
     "planned": "已纳入计划但尚未开始",
     "in_progress": "当前唯一执行切片",
@@ -127,8 +127,8 @@
         },
         {
           "id": "paint_template",
-          "status": "planned",
-          "notes": "Container/ScrollViewport/SplitPane only customize child traversal"
+          "status": "pass",
+          "notes": "paintChildren made virtual; Container/ScrollViewport/SplitPane override paintChildren (clip/traversal) instead of full paint; base paint owns single self rebuild/reuse; tests: scroll viewport clip, split per-pane clip, layout hosts clean-frame reuse"
         },
         {
           "id": "context_generation",

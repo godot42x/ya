@@ -14,6 +14,7 @@
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Panel.h"
+#include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TreeView.h"
@@ -969,6 +970,76 @@ TEST(UIFrameSnapshotTest, PaintWalkRestoresReactiveStack)
     tree.buildSnapshot(UIFrameBuildContext{});
     tree.buildSnapshot(UIFrameBuildContext{}); // clean frame: reuse path
     EXPECT_EQ(currentPaintWidget(), nullptr);
+}
+
+// === GI-302: unified paint template (paintChildren customization) ===
+
+TEST(UIFrameSnapshotTest, ScrollViewportClipsContentToViewportRect)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       viewport = std::make_shared<UIScrollViewport>("Scroll");
+    viewport->setSize({200.0f, 60.0f});
+    auto content = std::make_shared<UIPanel>("Content");
+    content->setSize({200.0f, 100.0f}); // taller than the viewport
+    tree.attachToLayer(WidgetTree::ELayer::Content, viewport);
+    tree.attach(*viewport, content);
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+
+    // The content sprite keeps its full 100px extent but is clipped to the
+    // 60px viewport rect (the viewport itself paints no self item).
+    ASSERT_EQ(snap.items.size(), 1u);
+    EXPECT_TRUE(snap.items[0].bClipped);
+    EXPECT_EQ(snap.items[0].size, glm::vec2(200.0f, 100.0f));
+    EXPECT_EQ(snap.items[0].clip.extent, glm::vec2(200.0f, 60.0f));
+}
+
+TEST(UIFrameSnapshotTest, SplitPaneClipsChildrenToOwnPaneRect)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       split = std::make_shared<UISplitPane>("Split");
+    split->setSize({400.0f, 200.0f});
+    split->setSplitRatio(0.5f);
+    auto paneA = std::make_shared<UIPanel>("A");
+    auto paneB = std::make_shared<UIPanel>("B");
+    tree.attachToLayer(WidgetTree::ELayer::Content, split);
+    tree.attach(*split, paneA);
+    tree.attach(*split, paneB);
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+
+    // The two pane children are each clipped to their own pane rect (not the
+    // full split rect). Collect the clipped items: exactly the two panes.
+    std::vector<const UIFrameDrawItem*> clipped;
+    for (const auto& item : snap.items) {
+        if (item.bClipped) {
+            clipped.push_back(&item);
+        }
+    }
+    ASSERT_EQ(clipped.size(), 2u);
+    EXPECT_NE(clipped[0]->clip.pos, clipped[1]->clip.pos); // distinct pane rects
+}
+
+TEST(UIFrameSnapshotTest, LayoutHostsReuseSelfSegmentWhenClean)
+{
+    WidgetTree tree({.width = 800, .height = 600});
+    auto       container = std::make_shared<UIContainer>("C");
+    container->setClipChildren(true);
+    auto child = std::make_shared<UIPanel>("A");
+    child->setSize({40.0f, 20.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, container);
+    tree.attach(*container, child);
+
+    auto split = std::make_shared<UISplitPane>("Split");
+    auto paneA = std::make_shared<UIPanel>("PA");
+    auto paneB = std::make_shared<UIPanel>("PB");
+    tree.attachToLayer(WidgetTree::ELayer::Content, split);
+    tree.attach(*split, paneA);
+    tree.attach(*split, paneB);
+
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start: all re-run
+    tree.buildSnapshot(UIFrameBuildContext{}); // clean: layout hosts reuse self segments
+    EXPECT_EQ(tree.getPerfStats().rebuiltWidgets, 0u);
 }
 
 } // namespace ya

@@ -43,7 +43,6 @@ struct YA_GUI_API UIScrollViewport : public UIElement
 
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
-    void paint(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
     [[nodiscard]] bool cullsChildHits(const glm::vec2& logicalPoint) const override
@@ -55,7 +54,12 @@ struct YA_GUI_API UIScrollViewport : public UIElement
     [[nodiscard]] bool isScrollable() const { return _scrollLayout.isScrollable(); }
     [[nodiscard]] float getMaxScrollOffset() const { return _scrollLayout.getMaxScrollOffset(); }
 
-private:
+  protected:
+    /// Clip the content traversal to the viewport rect (GI-302: the base paint
+    /// owns self rebuild/reuse; this only customizes the children context).
+    void paintChildren(UIFrameBuilder& builder) override;
+
+  private:
     UIScrollLayout _scrollLayout;
 };
 

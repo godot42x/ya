@@ -22,16 +22,10 @@ void UIScrollViewport::layoutAssigned(const Rect2D& rect)
     _scrollLayout.arrange(*this, _layoutRect);
 }
 
-void UIScrollViewport::paint(UIFrameBuilder& builder)
+void UIScrollViewport::paintChildren(UIFrameBuilder& builder)
 {
-    if (!isVisibleForRender()) {
-        return;
-    }
-    builder.countWidget();
-    PaintScope paintScope(this);
-    paintSelf(builder);
     builder.pushClip(_layoutRect);
-    paintChildren(builder);
+    UIElement::paintChildren(builder);
     builder.popClip();
 }
 
