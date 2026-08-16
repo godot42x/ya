@@ -1,4 +1,4 @@
-#include "GameRuntime/Lifecycle/HostSdlEventSource.h"
+#include "HostSdlEventSource.h"
 
 #include "GameRuntime/Utility/SDLMisc.h"
 

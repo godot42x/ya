@@ -47,7 +47,6 @@ class NativeWindowManager;
 struct GameplayResourceBinding;
 struct EnvironmentLightingProcessor;
 class TerrainProcessor;
-class AppLifecycle;
 class GameRuntimeFrameOrchestrator;
 class AppEventRouter;
 class AppModuleTestAccess;
@@ -62,7 +61,6 @@ enum AppMode : int
 
 struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
 {
-    friend class AppLifecycle;
     friend class GameRuntimeFrameOrchestrator;
     friend class AppEventRouter;
     friend class AppModuleTestAccess;
@@ -262,6 +260,13 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     virtual void onSimulationResumed() {}
 
   private:
+    void handleSystemSignals();
+    [[nodiscard]] static std::string resolveStartupScenePath(const AppDesc& appDesc);
+    [[nodiscard]] bool loadSceneInternal(const std::string& path);
+    [[nodiscard]] bool unloadSceneInternal();
+    void handleSceneInit(Scene* scene);
+    void handleSceneDestroy(Scene* scene);
+    void handleSceneActivated(Scene* scene);
     void attachModules();
     void detachModules();
     void configureModules();

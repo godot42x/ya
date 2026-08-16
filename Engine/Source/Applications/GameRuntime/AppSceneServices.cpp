@@ -2,8 +2,6 @@
 
 #include "GameRuntime/App.h"
 #include "GameRuntime/Lifecycle/GameRuntimeFrameOrchestrator.h"
-#include "GameRuntime/Lifecycle/AppLifecycle.h"
-
 #include "Core/Log.h"
 #include "ECS/Component/3D/EnvironmentLightingComponent.h"
 #include "ECS/Component/3D/SkyboxComponent.h"
@@ -32,12 +30,12 @@ bool AppSceneServices::hasScene() const
 
 bool AppSceneServices::loadScene(const std::string& path)
 {
-    return _app ? AppLifecycle::loadScene(*_app, path) : false;
+    return _app ? _app->loadSceneInternal(path) : false;
 }
 
 bool AppSceneServices::unloadScene()
 {
-    return _app ? AppLifecycle::unloadScene(*_app) : false;
+    return _app ? _app->unloadSceneInternal() : false;
 }
 
 bool AppSceneServices::saveScene(const std::string& path)

@@ -88,7 +88,7 @@ int AppEventRouter::onEvent(App& app, const Event& event)
     if (event.isInCategory(EEventCategory::Input)) {
         YA_PROFILE_SCOPE("App/InputEvent");
         YA_PERF_SCOPE(perf::sample::appInputEvent(), perf::metric::cpuTimeMs(), perf::domain::game());
-        app.inputRouter.routeEvent(event);
+        (void)app.inputRouter.routeEvent(event);
         return 0;
     }
 

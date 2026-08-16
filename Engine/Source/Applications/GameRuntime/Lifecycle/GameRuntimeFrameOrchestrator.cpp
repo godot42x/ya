@@ -5,7 +5,7 @@
 #include "GameRuntime/AppRenderState.h"
 #include "GameRuntime/Automation/AppAutomationControlService.h"
 #include "GameRuntime/Lifecycle/AppAutomation.h"
-#include "GameRuntime/Lifecycle/HostSdlEventSource.h"
+#include "HostSdlEventSource.h"
 #include "GameRuntime/Utility/FPSCtrl.h"
 #include "Render3D/Services/RenderDiagnosticsService.h"
 

@@ -3,7 +3,7 @@
 #include "GameRuntime/Automation/AppAutomationControlService.h"
 #include "GameRuntime/IRuntimeModule.h"
 #include "GameRuntime/Lifecycle/GameRuntimeFrameOrchestrator.h"
-#include "GameRuntime/Lifecycle/HostSdlEventSource.h"
+#include "Lifecycle/HostSdlEventSource.h"
 #include "GUI/Host/NativeWindowManager.h"
 #include "App/Kernel/AppKernel.h"
 #include "Core/Config/ConfigManager.h"

@@ -1,5 +1,3 @@
-#include "GameRuntime/Lifecycle/AppLifecycle.h"
-
 #include "GameRuntime/App.h"
 #include "GameRuntime/AppRenderState.h"
 #include "GameRuntime/Lifecycle/AppAutomation.h"
@@ -110,53 +108,7 @@ std::string resolveProjectScenePath(const App& app, const std::string& requested
 }
 } // namespace
 
-void App::init(AppDesc ci)
-{
-    AppLifecycle::init(*this, std::move(ci));
-}
-
-void App::onInit(const AppDesc& ci)
-{
-    AppLifecycle::onInit(*this, ci);
-}
-
-void App::onPostInit()
-{
-    AppLifecycle::onPostInit(*this);
-}
-
-void App::quit()
-{
-    AppLifecycle::quit(*this);
-}
-
-void App::onEnterRuntime()
-{
-    AppLifecycle::onEnterRuntime(*this);
-}
-
-void App::startRuntime()
-{
-    AppLifecycle::startRuntime(*this);
-}
-
-void App::startSimulation()
-{
-    AppLifecycle::startSimulation(*this);
-}
-
-void App::stopRuntime()
-{
-    AppLifecycle::stopRuntime(*this);
-}
-
-void App::stopSimulation()
-{
-    AppLifecycle::stopSimulation(*this);
-}
-
-
-std::string AppLifecycle::resolveStartupScenePath(const AppDesc& appDesc)
+std::string App::resolveStartupScenePath(const AppDesc& appDesc)
 {
     if (appDesc.automation.scenePath) {
         return *appDesc.automation.scenePath;
@@ -164,14 +116,15 @@ std::string AppLifecycle::resolveStartupScenePath(const AppDesc& appDesc)
     return appDesc.defaultScenePath.value_or("");
 }
 
-void AppLifecycle::init(App& app, AppDesc ci)
+void App::init(AppDesc ci)
 {
+    App& app = *this;
     YA_PROFILE_FUNCTION_LOG();
     app._ci = std::move(ci);
     YA_CORE_ASSERT(App::_instance == nullptr, "Only one instance of App is allowed");
     App::_instance = &app;
 
-    handleSystemSignals(app);
+    handleSystemSignals();
     {
         YA_PROFILE_SCOPE_LOG("Init Config");
 
@@ -276,11 +229,11 @@ void AppLifecycle::init(App& app, AppDesc ci)
     // ISceneLifecycleHost seam (scene-core); no App access from Scene.
     Scene::setLifecycleHost(app._sceneManager);
     app._sceneManager->onSceneInit.addLambda(&app, [&app](Scene* scene)
-                                             { AppLifecycle::onSceneInit(app, scene); });
+                                             { app.handleSceneInit(scene); });
     app._sceneManager->onSceneActivated.addLambda(&app, [&app](Scene* scene)
-                                                  { AppLifecycle::onSceneActivated(app, scene); });
+                                                  { app.handleSceneActivated(scene); });
     app._sceneManager->onSceneDestroy.addLambda(&app, [&app](Scene* scene)
-                                                { AppLifecycle::onSceneDestroy(app, scene); });
+                                                { app.handleSceneDestroy(scene); });
     app._deleter.push("SceneManager", [&app](void*)
                       {
         Scene::setLifecycleHost(nullptr);
@@ -390,7 +343,7 @@ void AppLifecycle::init(App& app, AppDesc ci)
         api.setActiveSceneProvider([&app]() -> Scene* { return app.getSceneServices().getActiveScene(); });
         api.setSaveSceneFn([&app](const std::string& path, Scene& scene) -> bool
                            { return app._sceneManager->serializeToFile(path, &scene); });
-        api.setLoadSceneFn([&app](const std::string& path) -> bool { return AppLifecycle::loadScene(app, path); });
+        api.setLoadSceneFn([&app](const std::string& path) -> bool { return app.loadSceneInternal(path); });
 
         // The app layer owns the script API catalog (scene/entity/component
         // authoring + asset APIs); JSScriptingSystem only binds the registry.
@@ -417,15 +370,15 @@ void AppLifecycle::init(App& app, AppDesc ci)
 
     const std::string startupScenePath = resolveStartupScenePath(app._ci);
     if (!startupScenePath.empty()) {
-        const bool bLoadedStartupScene = loadScene(app, startupScenePath);
+        const bool bLoadedStartupScene = app.loadSceneInternal(startupScenePath);
         if (bLoadedStartupScene && !app._ci.bEditor && app._appState == AppState::Stopped) {
-            startRuntime(app);
+            app.startRuntime();
         }
     }
 
 }
 
-void AppLifecycle::handleSystemSignals(App& app)
+void App::handleSystemSignals()
 {
 #if !defined(_WIN32)
     auto handler = [](int signal) {
@@ -448,7 +401,6 @@ void AppLifecycle::handleSystemSignals(App& app)
     std::signal(SIGINT, handler);
     std::signal(SIGTERM, handler);
 #else
-    (void)app;
     SetConsoleCtrlHandler(
         [](DWORD dwCtrlType) -> BOOL {
             switch (dwCtrlType) {
@@ -475,9 +427,9 @@ void AppLifecycle::handleSystemSignals(App& app)
 #endif
 }
 
-void AppLifecycle::onInit(App& app, const AppDesc& ci)
+void App::onInit(const AppDesc& ci)
 {
-    (void)app;
+    App& app = *this;
     (void)ci;
     // Forward font atlas textures produced by the GUI framework into the
     // engine's asset registry (dependency inversion: the GUI stays decoupled
@@ -489,15 +441,14 @@ void AppLifecycle::onInit(App& app, const AppDesc& ci)
         });
     if (const std::string runtimeFontPath = findRuntimeDefaultFontPath(); !runtimeFontPath.empty()) {
         auto* render = app.getRenderServices().getRender();
-        YA_CORE_ASSERT(render, "AppLifecycle::onInit requires a render backend");
+        YA_CORE_ASSERT(render, "App::onInit requires a render backend");
         FontManager::get()->loadFont(*render, runtimeFontPath, DEFAULT_RUNTIME_FONT_NAME, DEFAULT_RUNTIME_FONT_SIZE);
     }
 
 }
 
-void AppLifecycle::onPostInit(App& app)
+void App::onPostInit()
 {
-    (void)app;
     const char* faceTexturePath = "Engine/Content/TestTextures/face.png";
     const char* uv1TexturePath  = "Engine/Content/TestTextures/uv1.png";
 
@@ -505,8 +456,9 @@ void AppLifecycle::onPostInit(App& app)
     ya::AssetManager::get()->loadTextureSync("uv1", uv1TexturePath);
 }
 
-void AppLifecycle::quit(App& app)
+void App::quit()
 {
+    App& app = *this;
     if (app._automationControlService) {
         app._automationControlService->shutdown();
     }
@@ -520,7 +472,7 @@ void AppLifecycle::quit(App& app)
         frameData.clear();
     }
     const bool bHadSceneBeforeUnload = app._sceneManager && app._sceneManager->hasScene();
-    unloadScene(app);
+    (void)app.unloadSceneInternal();
 
     if (!bHadSceneBeforeUnload) {
         if (auto* render = app.getRenderServices().getRender()) {
@@ -550,8 +502,9 @@ void AppLifecycle::quit(App& app)
     ConfigManager::get().shutdown();
 }
 
-bool AppLifecycle::loadScene(App& app, const std::string& path)
+bool App::loadSceneInternal(const std::string& path)
 {
+    App& app = *this;
     if (path.empty()) {
         return false;
     }
@@ -560,11 +513,11 @@ bool AppLifecycle::loadScene(App& app, const std::string& path)
     bool bWaitedForModeTransition = false;
     switch (app._appState) {
     case AppState::Runtime:
-        stopRuntime(app);
+        app.stopRuntime();
         bWaitedForModeTransition = true;
         break;
     case AppState::Simulation:
-        stopSimulation(app);
+        app.stopSimulation();
         bWaitedForModeTransition = true;
         break;
     case AppState::Stopped:
@@ -583,8 +536,9 @@ bool AppLifecycle::loadScene(App& app, const std::string& path)
     return false;
 }
 
-bool AppLifecycle::unloadScene(App& app)
+bool App::unloadSceneInternal()
 {
+    App& app = *this;
     if (app._sceneManager && app._sceneManager->hasScene()) {
     if (auto* render = app.getRenderServices().getRender()) {
         render->waitIdle();
@@ -597,14 +551,14 @@ bool AppLifecycle::unloadScene(App& app)
     return false;
 }
 
-void AppLifecycle::onSceneInit(App& app, Scene* scene)
+void App::handleSceneInit(Scene* scene)
 {
-    (void)app;
     (void)scene;
 }
 
-void AppLifecycle::onSceneDestroy(App& app, Scene* scene)
+void App::handleSceneDestroy(Scene* scene)
 {
+    App& app = *this;
     if (scene && app.getGameUIHost()) {
         app.getGameUIHost()->onSceneDeactivated(*scene);
     }
@@ -621,8 +575,9 @@ void AppLifecycle::onSceneDestroy(App& app, Scene* scene)
     }
 }
 
-void AppLifecycle::onSceneActivated(App& app, Scene* scene)
+void App::handleSceneActivated(Scene* scene)
 {
+    App& app = *this;
     if (scene && app.getGameUIHost()) {
         app.getGameUIHost()->onSceneActivated(*scene);
     }
@@ -630,13 +585,13 @@ void AppLifecycle::onSceneActivated(App& app, Scene* scene)
     app.notifyModulesSceneActivated(scene);
 }
 
-void AppLifecycle::onEnterRuntime(App& app)
+void App::onEnterRuntime()
 {
-    (void)app;
 }
 
-void AppLifecycle::startRuntime(App& app)
+void App::startRuntime()
 {
+    App& app = *this;
     if (app._appState != AppState::Stopped) {
         YA_CORE_WARN("Cannot start runtime: app is not stopped");
         return;
@@ -661,8 +616,9 @@ void AppLifecycle::startRuntime(App& app)
     app.onEnterRuntime();
 }
 
-void AppLifecycle::startSimulation(App& app)
+void App::startSimulation()
 {
+    App& app = *this;
     if (app._appState != AppState::Stopped) {
         YA_CORE_WARN("Cannot start simulation: app is not stopped");
         return;
@@ -687,8 +643,9 @@ void AppLifecycle::startSimulation(App& app)
     app.onEnterSimulation();
 }
 
-void AppLifecycle::stopRuntime(App& app)
+void App::stopRuntime()
 {
+    App& app = *this;
     if (app._appState != AppState::Runtime) {
         YA_CORE_WARN("Cannot stop: not in runtime mode");
         return;
@@ -712,8 +669,9 @@ void AppLifecycle::stopRuntime(App& app)
     app.notifyModulesAfterAppStateChange(previousState);
 }
 
-void AppLifecycle::stopSimulation(App& app)
+void App::stopSimulation()
 {
+    App& app = *this;
     if (app._appState != AppState::Simulation) {
         YA_CORE_WARN("Cannot stop: not in simulation mode");
         return;
