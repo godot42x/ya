@@ -141,7 +141,7 @@ bool InputRouter::routeUnhandledInput(const FInputEvent& event)
         return false;
     }
 
-    if (_app->dispatchInputModuleEvent(event)) {
+    if (_app->dispatchModuleEvent(event)) {
         return true;
     }
     if (_app->dispatchInputFallbackEvent(event)) {

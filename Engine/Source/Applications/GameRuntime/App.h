@@ -266,8 +266,7 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     void detachModules();
     void configureModules();
     void applyProjectDescriptor(const FProjectDescriptor& descriptor);
-    [[nodiscard]] bool dispatchHostModuleEvent(const Event& event);
-    [[nodiscard]] bool dispatchInputModuleEvent(const Event& event);
+    [[nodiscard]] bool dispatchModuleEvent(const Event& event);
     [[nodiscard]] bool dispatchInputFallbackEvent(const Event& event);
     void tickModules(float dt);
     void prepareModulesForRender(float dt);

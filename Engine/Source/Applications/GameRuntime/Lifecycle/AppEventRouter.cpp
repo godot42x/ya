@@ -92,7 +92,7 @@ int AppEventRouter::onEvent(App& app, const Event& event)
         return 0;
     }
 
-    if (app.dispatchHostModuleEvent(event)) {
+    if (app.dispatchModuleEvent(event)) {
         return 0;
     }
 

@@ -149,17 +149,7 @@ void App::detachModules()
     _modulesAttached = false;
 }
 
-bool App::dispatchHostModuleEvent(const Event& event)
-{
-    for (const auto& slot : _modules) {
-        if (getRuntimeModule(slot.module)->onEvent(*this, event)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool App::dispatchInputModuleEvent(const Event& event)
+bool App::dispatchModuleEvent(const Event& event)
 {
     for (const auto& slot : _modules) {
         if (getRuntimeModule(slot.module)->onEvent(*this, event)) {
