@@ -269,7 +269,8 @@ struct Visitor<void>
         }                                                                                                                                         \
         template <typename Visitor>                                                                                                               \
         static void visit_static_fields(Visitor&& visitor)                                                                                        \
-        {
+        {                                                                                                                                         \
+            (void)visitor; // no entry reduce warning
 
 // 支持 1 个参数（无父类）或 2 个参数（有父类）
 #define YA_REFLECT_BEGIN(...) \

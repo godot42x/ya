@@ -55,7 +55,7 @@ public:
     [[nodiscard]] std::shared_ptr<Reactive<FWidgetStyle>> find(const std::string& name) const;
 
     /// Bind a style to a widget. Implemented in .cpp (needs UIElement).
-    void bindTo(std::shared_ptr<Reactive<FWidgetStyle>> style, class UIElement& widget);
+    void bindTo(std::shared_ptr<Reactive<FWidgetStyle>> style, struct UIElement& widget);
 
 private:
     std::unordered_map<std::string, std::shared_ptr<Reactive<FWidgetStyle>>> _styles;

@@ -62,6 +62,7 @@ bool writeHeadlessSnapshotJson(const ya::UIFrameSnapshot& snapshot, const std::s
 
 int main(int argc, char** argv)
 {
+    Logger::init();
     ya::FGUIWindowHostConfig config;
     config.title     = "YA GUI Workbench";
     config.width     = 1280;

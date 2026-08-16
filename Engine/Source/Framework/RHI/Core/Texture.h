@@ -160,7 +160,7 @@ struct YA_RHI_API Texture
 
     // clang-format off
   private: struct dummy {};
-  public: Texture(dummy d) {}
+  public: Texture(dummy d) {(void)d;}
     // clang-format on
 
   private:

@@ -246,7 +246,7 @@ void EnvironmentLightingProcessor::auditResolveWork(Scene* scene)
     _nextResolveAuditFrame = currentFrame + 120;
 
     auto& registry = scene->getRegistry();
-    auto* assets   = AssetManager::get();
+    // auto* assets   = AssetManager::get();
 
     for (auto&& [entity, skybox] : registry.view<SkyboxComponent>().each()) {
         auto& state = _skyboxStates[entity];

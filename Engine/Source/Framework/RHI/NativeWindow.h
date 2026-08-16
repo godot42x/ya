@@ -62,6 +62,8 @@ struct INativeWindow
     virtual void getWindowSize(int &width, int &height) = 0;
     virtual bool setWindowSize(int width, int height)
     {
+        (void) width;
+        (void) height;
         YA_CORE_ERROR("setWindowSize not implemented in INativeWindow");
         return false;
     }

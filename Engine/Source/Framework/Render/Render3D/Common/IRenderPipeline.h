@@ -52,9 +52,9 @@ struct IRenderPipelineRenderTargets
 {
     virtual ~IRenderPipelineRenderTargets() = default;
 
-    virtual void appendRenderTargetEntries(RenderTargetCatalog& catalog) const {}
-    virtual bool setRenderTargetDepthFormat(RenderTargetCatalog::Entry::EOwner owner, EFormat::T format) { return false; }
-    virtual bool setRenderTargetColorFormat(RenderTargetCatalog::Entry::EOwner owner, uint32_t attachmentIndex, EFormat::T format) { return false; }
+    virtual void appendRenderTargetEntries([[maybe_unused]] RenderTargetCatalog& catalog) const {}
+    virtual bool setRenderTargetDepthFormat([[maybe_unused]] RenderTargetCatalog::Entry::EOwner owner, [[maybe_unused]] EFormat::T format) { return false; }
+    virtual bool setRenderTargetColorFormat([[maybe_unused]] RenderTargetCatalog::Entry::EOwner owner, [[maybe_unused]] uint32_t attachmentIndex, [[maybe_unused]] EFormat::T format) { return false; }
 };
 
 struct IRenderPipelineDebugOutputs

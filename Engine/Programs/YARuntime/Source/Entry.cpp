@@ -55,6 +55,7 @@ bool containsRootModule(const std::vector<std::string>& roots, std::string_view 
 
 int main(int argc, char** argv)
 {
+    Logger::init();
     ya::AppDesc appDesc;
     try {
         appDesc.init(argc, argv);

@@ -65,9 +65,13 @@ struct IResourceCache
 
     // path or asset name
     // TODO: replace all to FName
-    virtual void invalidate(const std::string &assetName) {}
+    virtual void invalidate([[maybe_unused]] const std::string &assetName) {}
 
-    virtual bool isValid(const RID &rid) { return true; }
+    virtual bool isValid(const RID& rid)
+    {
+        (void)rid;
+        return true;
+    }
 };
 
 class YA_CORE_API ResourceRegistry

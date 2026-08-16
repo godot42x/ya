@@ -54,6 +54,13 @@ end)
 
 set_policy("build.warning", true)
 set_warnings("all", "extra")
+-- Mismatched class/struct forward declarations are an MSVC ABI hazard
+-- (C4099 / -Wmismatched-tags): promote to errors everywhere.
+if is_plat("windows") then
+    add_cxflags("/we4099")
+else
+    add_cxflags("-Werror=mismatched-tags")
+end
 if is_plat("windows") then
     add_cxxflags(
         "/utf-8"    --  Enable UTF-8 source code support for Unicode characters
@@ -103,7 +110,7 @@ includes("./Engine/YA.xmake.lua")
 -- Legacy standalone test targets (Test/*.cpp) depend on the full engine
 -- aggregate; they are engine-profile only.
 if get_config("ya_profile") ~= "gui" then
-    includes("./Test/xmake.lua")
+    includes("./Test/Test.xmake.lua")
 end
 
 -- add_rules("SourceFiles")
@@ -117,4 +124,4 @@ add_rules("plugin.compile_commands.autoupdate", { outputdir = os.scriptdir() })
 -- Example products: the standalone GUI examples (GUIFrameworkSmoke /
 -- GUIWorkbench) build in both profiles; the 3D project examples are
 -- engine-profile only (guarded inside Example/xmake.lua).
-includes("./Example/xmake.lua")
+includes("./Example/Example.xmake.lua")

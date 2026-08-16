@@ -17,7 +17,7 @@ enum class EAutomationScreenshotTarget : uint8_t;
 struct ICommandBuffer;
 struct OffscreenJobQueueService;
 struct OffscreenJobState;
-struct RenderGraphExecutor;
+class RenderGraphExecutor;
 struct RenderImage;
 struct Texture;
 

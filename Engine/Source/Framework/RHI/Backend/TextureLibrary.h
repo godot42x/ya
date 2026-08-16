@@ -47,7 +47,7 @@ class YA_RHI_BACKEND_API TextureLibrary : public IResourceCache, public IBuiltin
     /**
      * @brief Get a 1x1 white texture (RGBA: 255,255,255,255)
      */
-    std::shared_ptr<Texture> getWhiteTexture();
+    std::shared_ptr<Texture> getWhiteTexture() override;
 
     /**
      * @brief Get a 1x1 black texture (RGBA: 0,0,0,255)
@@ -69,7 +69,7 @@ class YA_RHI_BACKEND_API TextureLibrary : public IResourceCache, public IBuiltin
     /**
      * @brief Get the default sampler (linear filtering)
      */
-    std::shared_ptr<Sampler> getDefaultSampler();
+    std::shared_ptr<Sampler> getDefaultSampler() override;
 
     /**
      * @brief Get a linear filtering sampler

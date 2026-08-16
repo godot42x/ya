@@ -44,9 +44,9 @@ struct JSScriptingSystem;
 struct FProjectDescriptor;
 struct AppRenderState;
 class NativeWindowManager;
-class GameplayResourceBinding;
+struct GameplayResourceBinding;
 struct EnvironmentLightingProcessor;
-struct TerrainProcessor;
+class TerrainProcessor;
 class AppLifecycle;
 class AppFrameLoop;
 class AppEventRouter;
@@ -218,12 +218,12 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     [[nodiscard]] const TaskManager&             getTaskManager() const { return taskManager; }
 
     // Defined in App.cpp (see the data-symbol note on get()/currentFrameIndex()).
-    [[nodiscard]] uint32_t                getFrameIndex() const;
-    [[nodiscard]] uint64_t                getElapsedTimeMS() const;
+    [[nodiscard]] uint32_t                getFrameIndex() const override;
+    [[nodiscard]] uint64_t                getElapsedTimeMS() const override;
 
     [[nodiscard]] AppState getAppState() const { return _appState; }
     [[nodiscard]] bool     isRunning() const { return bRunning; }
-    [[nodiscard]] bool     isStopped() const { return _appState == AppState::Stopped; }
+    [[nodiscard]] bool     isStopped() const override { return _appState == AppState::Stopped; }
     [[nodiscard]] bool     isSimulationMode() const { return _appState == AppState::Simulation; }
     [[nodiscard]] bool     isRuntimeMode() const { return _appState == AppState::Runtime; }
     /// Broadcast after every app mode transition (Runtime / Simulation / Stopped).

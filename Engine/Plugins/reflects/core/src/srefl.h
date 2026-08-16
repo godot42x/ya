@@ -147,7 +147,7 @@ void foreach_in_typelist(Fn func, Arg... args)
 {
     if constexpr (TypeList::size > 0)
     {
-        using CurrentType = head_t<TypeList>;
+        // using CurrentType = head_t<TypeList>;
         func(head_t<TypeList>{}, std::forward<Arg>(args)...);
         foreach_in_typelist<tail_t<TypeList>>(func, std::forward<Arg>(args)...);
     }

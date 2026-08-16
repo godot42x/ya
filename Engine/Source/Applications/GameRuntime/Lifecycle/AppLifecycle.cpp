@@ -205,7 +205,6 @@ void AppLifecycle::init(App& app, AppDesc ci)
         profiling::StaticInitProfiler::recordEnd();
 
         AppAutomation::loadConfig(app._ci);
-        Logger::init();
 
         auto& configManager           = ConfigManager::get();
         app._ci.bEnableRenderDoc      = app._ci.bEnableRenderDoc || configManager.getOr<bool>("engine", "enableRenderDoc", false);

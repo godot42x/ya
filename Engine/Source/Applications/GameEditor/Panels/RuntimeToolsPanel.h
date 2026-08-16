@@ -5,7 +5,7 @@ namespace ya
 
 struct App;
 struct EditorLayer;
-class FreeCameraController;
+struct FreeCameraController;
 
 struct RuntimeToolsPanel
 {

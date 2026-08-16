@@ -31,6 +31,8 @@ end
 --- Kind for aggregate/meta facade targets that carry no sources of their
 --- own: a real shared library in shared mode (compat facade), a pure
 --- dependency group (phony, no archive) in monolith mode.
+-- 根据 `ya_linkage` 配置决定元构建的目标类型。
+-- 当配置为 `monolith`（单体构建）时返回 `phony`（伪目标），否则返回 `shared`（动态库）。
 function ya_meta_kind()
     return (get_config("ya_linkage") or "shared") == "monolith" and "phony" or "shared"
 end
@@ -56,7 +58,7 @@ function ya_std_module(api_macro)
     end
     add_defines(api_macro .. "=YA_API_EXPORT", { public = true })
     if get_config("ya_enable_unity-build") then
-        add_rules("c++.unity_build", { batchsize = 2 })
+        add_rules("c++.unity_build", { batchsize = 6 })
     end
     if is_plat("windows") then
         -- Unity-build objects of large modules exceed the default COFF

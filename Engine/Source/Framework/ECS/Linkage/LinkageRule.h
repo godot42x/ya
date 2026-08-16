@@ -36,7 +36,7 @@ struct ILinkageRule
     /// must disconnect their entt signal connections for this scene's
     /// registry so teardown events never reach a rule that may already be
     /// gone (e.g. framework shut down before the scene).
-    virtual void onSceneUnload(Scene* scene) {}
+    virtual void onSceneUnload([[maybe_unused]] Scene* scene) {}
 };
 
 } // namespace ya

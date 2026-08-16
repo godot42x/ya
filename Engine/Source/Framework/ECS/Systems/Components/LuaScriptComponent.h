@@ -79,7 +79,7 @@ struct LuaScriptComponent : public IComponent
     // Unity-like API
     ScriptInstance *addScript(const std::string &path)
     {
-        scripts.push_back({ScriptInstance::normalizeScriptPath(path)});
+        scripts.push_back({.scriptPath = ScriptInstance::normalizeScriptPath(path)});
         return &scripts.back();
     }
 

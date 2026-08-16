@@ -75,6 +75,7 @@ struct YaFormatterV1
     bool operator()(const logcc::Config &config, std::string &output, logcc::LogLevel::T level, std::string_view msg, const std::source_location &location)
     {
         using namespace logcc;
+        (void)config;
 
         std::string_view levelStr = logcc::LogLevel::toString(level);
 

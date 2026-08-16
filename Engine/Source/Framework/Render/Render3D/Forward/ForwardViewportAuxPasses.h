@@ -17,13 +17,13 @@ namespace ya
 struct RenderStageContext;
 struct RenderDrawItem;
 class ForwardFrameResourceSet;
-class Scene;
-class Mesh;
-class IBuffer;
-class IDescriptorSetLayout;
-class IDescriptorPool;
-class IRenderPass;
-class IRender;
+struct Scene;
+struct Mesh;
+struct IBuffer;
+struct IDescriptorSetLayout;
+struct IDescriptorPool;
+struct IRenderPass;
+struct IRender;
 
 /// Direction gizmo snapshot built before graph execution (FG-704). Mirrors
 /// the Deferred overlay snapshot: the pass draws only from this prebuilt

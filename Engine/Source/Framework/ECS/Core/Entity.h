@@ -56,7 +56,7 @@ struct YA_ECS_CORE_API Entity
     template <typename... Components>
     auto getComponents();
 
-    [[nodiscard]] bool     isValid() const { return this && this->operator bool(); }
+    [[nodiscard]] bool     isValid() const { return  this->operator bool(); }
     [[nodiscard]] uint32_t getId() const { return static_cast<uint32_t>(_entityHandle); }
     entt::entity           getHandle() const { return _entityHandle; }
     Scene*                 getScene() const { return _scene; }

@@ -26,8 +26,10 @@
 #include "glm/glm.hpp"
 #include "stdint.h"
 // warning C4324
-#pragma warning(push)
-#pragma warning(disable : 4324)
+#if _WIN32
+    #pragma warning(push)
+    #pragma warning(disable : 4324)
+#endif
 
 namespace ya::std140
 {
@@ -234,4 +236,6 @@ YA_REFLECT_FIELD_SPEC(mat4, ya::std140::mat4::value)
 YA_REFLECT_END_EXTERNAL()
 
 
-#pragma warning(pop)
+#if _WIN32
+    #pragma warning(pop)
+#endif

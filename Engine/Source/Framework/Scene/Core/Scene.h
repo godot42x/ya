@@ -23,7 +23,7 @@
 
 namespace ya
 {
-struct YA_SCENE_CORE_API [[refl]] Scene
+struct YA_SCENE_CORE_API Scene
 {
     friend struct Entity;
 
@@ -199,9 +199,9 @@ struct YA_SCENE_CORE_API [[refl]] Scene
     void onNodeCreated(stdptr<Node> node, Node* parent);
 
     // Allow internal systems to access createEntity
-    friend class SceneSerializer;
+    friend struct SceneSerializer;
     friend struct ModelInstantiationSystem;
-    friend class GameplayResourceBinding;
+    friend struct GameplayResourceBinding;
 };
 
 } // namespace ya

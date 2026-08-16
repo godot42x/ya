@@ -21,11 +21,11 @@ namespace ya
 
 struct RenderStageContext;
 struct RenderFrameData;
-class IRenderPass;
-class IBuffer;
-class IDescriptorSetLayout;
-class IDescriptorPool;
-class IRender;
+struct IRenderPass;
+struct IBuffer;
+struct IDescriptorSetLayout;
+struct IDescriptorPool;
+struct IRender;
 
 class ForwardViewportLitPasses
 {

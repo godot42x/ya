@@ -14,7 +14,7 @@ namespace ya
 {
 
 struct Scene;
-class SceneManager;
+struct SceneManager;
 
 /**
  * @brief Top-level component-linkage framework.

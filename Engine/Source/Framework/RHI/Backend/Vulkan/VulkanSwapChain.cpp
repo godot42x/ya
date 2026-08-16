@@ -25,9 +25,11 @@ VkSurfaceFormatKHR VulkanSwapChainSupportDetails::ChooseSwapSurfaceFormat(::VkSu
         }
     }
 
-    YA_CORE_WARN("Preferred surface format {} and color space {} not found, using first format",
+    YA_CORE_WARN("Preferred surface format {} and color space {} not found, using first format -> {} and color space {}",
                  std::to_string(preferredSurfaceFormat.format),
-                 std::to_string(preferredSurfaceFormat.colorSpace));
+                 std::to_string(preferredSurfaceFormat.colorSpace),
+                 std::to_string(formats[0].format),
+                 std::to_string(formats[0].colorSpace));
 
     return formats[0];
 }

@@ -51,7 +51,7 @@ struct IRenderStage
 
     /// Upload UBOs, flush material dirty flags, update descriptor sets for this frame.
     /// Called once per frame before execute().
-    virtual void prepare(const RenderStageContext& ctx) {}
+    virtual void prepare([[maybe_unused]] const RenderStageContext& ctx) {}
 
     /// Record draw commands into the command buffer.
     virtual void execute(const RenderStageContext& ctx) = 0;

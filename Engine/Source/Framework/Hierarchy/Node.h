@@ -77,7 +77,7 @@ struct YA_HIERARCHY_API Node : public disable_copy
     /// Called after this node's display name changes. Derived classes that
     /// mirror the name into an external owner (e.g. Node3D syncing the ECS
     /// entity name) override this hook; the base class stays ECS-free.
-    virtual void onNameChanged(const std::string &name) {}
+    virtual void onNameChanged([[maybe_unused]] const std::string &name) {}
 
     /**
      * @brief Called when this node's parent changes

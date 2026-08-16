@@ -131,7 +131,7 @@ void TransformSystem::setWorldPosition(TransformComponent *tc, const glm::vec3 &
 // Frame Update Logic
 // ============================================================================
 
-void TransformSystem::onUpdate(float dt)
+void TransformSystem::onUpdate(float /*dt*/)
 {
     // YA_PROFILE_FUNCTION_LOG();
     if (!_sceneProvider) {

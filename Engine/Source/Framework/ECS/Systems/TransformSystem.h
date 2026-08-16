@@ -37,7 +37,7 @@ struct YA_ECS_SYSTEMS_API TransformSystem : public ISystem
     /// Injected seam (bound by the Host at startup; no App access from here).
     void setSceneProvider(SceneProvider provider);
 
-    void init() {}
+    void init() override {}
 
     /**
      * @brief Update all transforms in the scene

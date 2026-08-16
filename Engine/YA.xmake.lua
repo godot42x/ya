@@ -5,8 +5,8 @@ includes("./Shader/Shader.xmake.lua")
 includes("./ThirdParty/ThirdParty.xmake.lua")
 -- Engine test runner + GUI closure test (engine-only targets are guarded
 -- inside Engine/Test/xmake.lua; the closure test must exist in gui profile).
-includes("./Test/xmake.lua")
-includes("./Source/xmake.lua")
+includes("./Test/Test.xmake.lua")
+includes("./Source/Source.xmake.lua")
 
 -- Engine product line entry points (runtime, examples) are engine-profile
 -- only; the gui profile ships the GUI modules + minimal host.
