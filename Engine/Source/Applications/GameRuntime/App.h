@@ -48,7 +48,6 @@ struct GameplayResourceBinding;
 struct EnvironmentLightingProcessor;
 class TerrainProcessor;
 class GameRuntimeFrameOrchestrator;
-class AppEventRouter;
 class AppModuleTestAccess;
 class AppAutomationControlService;
 class InputRouter;
@@ -62,7 +61,6 @@ enum AppMode : int
 struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
 {
     friend class GameRuntimeFrameOrchestrator;
-    friend class AppEventRouter;
     friend class AppModuleTestAccess;
     friend class AppSceneServices;
     friend class InputRouter;
@@ -263,6 +261,8 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     void handleSceneInit(Scene* scene);
     void handleSceneDestroy(Scene* scene);
     void handleSceneActivated(Scene* scene);
+    bool handleWindowResized(const WindowResizeEvent& event);
+    void handleMouseMoved(const MouseMoveEvent& event);
     [[nodiscard]] NativeWindowManager* getNativeWindowManager() { return _nativeWindowManager.get(); }
     [[nodiscard]] const NativeWindowManager* getNativeWindowManager() const { return _nativeWindowManager.get(); }
     [[nodiscard]] AppAutomationControlService* getAutomationControlService() { return _automationControlService.get(); }

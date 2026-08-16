@@ -1,5 +1,3 @@
-#include "GameRuntime/Lifecycle/AppEventRouter.h"
-
 #include "GameRuntime/App.h"
 #include "GUI/Host/NativeWindowManager.h"
 
@@ -8,22 +6,12 @@
 
 namespace ya
 {
-namespace
-{
-
-} // namespace
-
 int App::onEvent(const Event& event)
-{
-    return AppEventRouter::onEvent(*this, event);
-}
-
-int AppEventRouter::onEvent(App& app, const Event& event)
 {
     YA_PROFILE_FUNCTION()
     YA_PERF_SCOPE(perf::sample::appEventRoute(), perf::metric::cpuTimeMs(), perf::domain::game());
 
-    const auto* nativeWindowManager = app.getNativeWindowManager();
+    const auto* nativeWindowManager = getNativeWindowManager();
     const uint32_t mainWindowID = nativeWindowManager ? nativeWindowManager->getMainWindowID() : 0;
 
     auto isMainWindowEvent = [&](const WindowEvent& windowEvent)
@@ -34,28 +22,28 @@ int AppEventRouter::onEvent(App& app, const Event& event)
     EEvent::T ty       = event.getEventType();
     switch (ty) {
     case EEvent::MouseMoved:
-        onMouseMoved(app, static_cast<const MouseMoveEvent&>(event));
+        handleMouseMoved(static_cast<const MouseMoveEvent&>(event));
         break;
     case EEvent::WindowResize:
         if (isMainWindowEvent(static_cast<const WindowResizeEvent&>(event))) {
-            onWindowResized(app, static_cast<const WindowResizeEvent&>(event));
+            handleWindowResized(static_cast<const WindowResizeEvent&>(event));
         }
         break;
     case EEvent::None:
         break;
     case EEvent::WindowClose:
         if (isMainWindowEvent(static_cast<const WindowCloseEvent&>(event))) {
-            app.requestQuit();
+            requestQuit();
         }
         break;
     case EEvent::WindowRestore:
         if (isMainWindowEvent(static_cast<const WindowRestoreEvent&>(event))) {
-            app._bMinimized = false;
+            _bMinimized = false;
         }
         break;
     case EEvent::WindowMinimize:
         if (isMainWindowEvent(static_cast<const WindowMinimizeEvent&>(event))) {
-            app._bMinimized = true;
+            _bMinimized = true;
         }
         break;
     case EEvent::WindowFocus:
@@ -63,7 +51,7 @@ int AppEventRouter::onEvent(App& app, const Event& event)
     {
         const auto& windowEvent = static_cast<const WindowEvent&>(event);
         if (isMainWindowEvent(windowEvent) && ty == EEvent::WindowFocusLost) {
-            app.inputRouter.cancelInput(EInputCancelReason::WindowFocusLost);
+            inputRouter.cancelInput(EInputCancelReason::WindowFocusLost);
         }
     } break;
     case EEvent::WindowMoved:
@@ -72,7 +60,7 @@ int AppEventRouter::onEvent(App& app, const Event& event)
     case EEvent::AppRender:
         break;
     case EEvent::AppQuit:
-        app.requestQuit();
+        requestQuit();
         break;
     case EEvent::KeyPressed:
     case EEvent::KeyReleased:
@@ -88,20 +76,20 @@ int AppEventRouter::onEvent(App& app, const Event& event)
     if (event.isInCategory(EEventCategory::Input)) {
         YA_PROFILE_SCOPE("App/InputEvent");
         YA_PERF_SCOPE(perf::sample::appInputEvent(), perf::metric::cpuTimeMs(), perf::domain::game());
-        (void)app.inputRouter.routeEvent(event);
+        (void)inputRouter.routeEvent(event);
         return 0;
     }
 
-    if (app.dispatchModuleEvent(event)) {
+    if (dispatchModuleEvent(event)) {
         return 0;
     }
 
     return 0;
 }
 
-bool AppEventRouter::onWindowResized(App& app, const WindowResizeEvent& event)
+bool App::handleWindowResized(const WindowResizeEvent& event)
 {
-    const auto* nativeWindowManager = app.getNativeWindowManager();
+    const auto* nativeWindowManager = getNativeWindowManager();
     if (nativeWindowManager && nativeWindowManager->getMainWindowID() != 0 && event.getWindowID() != nativeWindowManager->getMainWindowID()) {
         return false;
     }
@@ -110,14 +98,13 @@ bool AppEventRouter::onWindowResized(App& app, const WindowResizeEvent& event)
     auto  h           = event.GetHeight();
     float aspectRatio = h > 0 ? static_cast<float>(w) / static_cast<float>(h) : 1.f;
     YA_CORE_DEBUG("Window({}) resized to {}x{}, aspectRatio: {} ",event.getWindowID(), w, h, aspectRatio);
-    app._windowSize = {w, h};
+    _windowSize = {w, h};
     return false;
 }
 
-bool AppEventRouter::onMouseMoved(App& app, const MouseMoveEvent& event)
+void App::handleMouseMoved(const MouseMoveEvent& event)
 {
-    app._lastMousePos = glm::vec2(event.getX(), event.getY());
-    return false;
+    _lastMousePos = glm::vec2(event.getX(), event.getY());
 }
 
 } // namespace ya
