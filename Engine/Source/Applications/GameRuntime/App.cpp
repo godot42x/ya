@@ -371,11 +371,6 @@ void App::notifyModulesSceneDestroyed(Scene* scene)
 }
 
 
-INativeWindow* App::getMainNativeWindow()
-{
-    return _nativeWindowManager ? _nativeWindowManager->getMainWindow() : nullptr;
-}
-
 INativeWindow* App::getOrCreateMainNativeWindow(const WindowCreateInfo& ci)
 {
     if (!_nativeWindowManager) {

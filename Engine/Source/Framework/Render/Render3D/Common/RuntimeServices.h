@@ -26,8 +26,6 @@ struct IRenderRuntimeHostServices
     virtual uint32_t getFrameIndex() const  = 0;
     virtual uint64_t getElapsedTimeMS() const = 0;
 
-    // Main presentation window (the backend surface source).
-    virtual INativeWindow* getMainNativeWindow() = 0;
     // Ensure a main window exists (creates one with the given info when the
     // host has none yet, e.g. headless test bootstrap) and return it.
     virtual INativeWindow* getOrCreateMainNativeWindow(const WindowCreateInfo& ci) = 0;

@@ -194,7 +194,6 @@ struct YA_GAME_RUNTIME_API App : public IRenderRuntimeHostServices
     [[nodiscard]] TerrainProcessor*              getTerrainProcessor() const;
 
     // === IRenderRuntimeHostServices implementation ===
-    INativeWindow* getMainNativeWindow() override;
     INativeWindow* getOrCreateMainNativeWindow(const WindowCreateInfo& ci) override;
     ShadowSettings*                        getShadowSettings() override;
     const AppAutomationShadowOverrides*  getAutomationShadowOverrides() const override;
