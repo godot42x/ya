@@ -16,8 +16,9 @@ struct ICommandBuffer;
 struct OffscreenJobState;
 
 /// Narrow host-service contract injected into framework modules. The Host
-/// implements and registers it; framework code never locates App through
-/// globals. Kept deliberately small: one responsibility per accessor.
+/// implements and passes it into RenderRuntime; framework code never locates
+/// App through globals. Kept deliberately small: one responsibility per
+/// accessor.
 struct IRenderRuntimeHostServices
 {
     virtual ~IRenderRuntimeHostServices() = default;

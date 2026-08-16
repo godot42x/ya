@@ -99,7 +99,7 @@ struct FGUIWindowHostConfig
 
 /// One native GUI window: owns its SDL window, presentation resources,
 /// transient pointer state and exactly one WidgetTree. It is the concrete
-/// single-window owner used by the temporary GUIAppHost compatibility alias.
+/// single-window owner; GUIAppHost remains only as a legacy type alias.
 /// The delegate must outlive the host.
 class YA_GUI_API GUIWindowHost : public IAppLoopDelegate
 {
@@ -179,9 +179,9 @@ private:
     GUIWindowHost _primaryWindow;
 };
 
-/// Compatibility names for standalone examples while Phase A introduces
-/// GUIApp/native-window-manager composition. New framework code names the app
-/// assembly `GUIApp` and the real one-window owner `GUIWindowHost`.
+/// Legacy names kept for existing examples. New framework code should use
+/// GUIApp for the app assembly and GUIWindowHost for the concrete
+/// one-window owner.
 using FGUIAppHostConfig = FGUIWindowHostConfig;
 using GUIAppHost         = GUIApp;
 
