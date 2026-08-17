@@ -21,10 +21,14 @@ UIMenuBarItem::UIMenuBarItem(std::string name)
 
 void UIMenuBarItem::paintSelf(UIFrameBuilder& builder)
 {
+    // Resolve the (possibly reactive) label first so the dependency is
+    // recorded even when the font is unavailable and the text is skipped
+    // (mirrors UIText::resolvedText ordering).
+    const std::string& label = resolvedLabel(ReactiveBase::EDirtyLevel::Paint);
     builder.addSprite(_layoutRect, _bHovered ? _hoveredColor : _normalColor, nullptr);
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (font) {
-        builder.addText(_layoutRect, _label, _textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+        builder.addText(_layoutRect, label, _textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
     }
 }
 

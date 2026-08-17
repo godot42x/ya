@@ -2,8 +2,10 @@
 
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Menu.h"
+#include "GUI/Widgets/Reactive.h"
 
 #include <functional>
+#include <memory>
 #include <string>
 
 namespace ya
@@ -36,6 +38,17 @@ struct YA_GUI_API UIMenuBarItem : public UIElement
 
     explicit UIMenuBarItem(std::string name = "MenuBarItem");
 
+    /// Reactive label binding. When set, paint reads the reactive value (and
+    /// records the dependency); set() on the reactive marks this item dirty.
+    /// Follows the same single-direction (view <- model) contract as
+    /// UIText::bindText — the menu label is a pure display property, the item
+    /// never writes back into the binding.
+    void bindLabel(std::shared_ptr<Reactive<std::string>> ref) { _labelBinding = std::move(ref); }
+    [[nodiscard]] const std::string& resolvedLabel(ReactiveBase::EDirtyLevel level = ReactiveBase::EDirtyLevel::Paint) const
+    {
+        return _labelBinding ? _labelBinding->get(level) : _label;
+    }
+
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool isHoverable() const override { return true; }
@@ -49,6 +62,8 @@ struct YA_GUI_API UIMenuBarItem : public UIElement
     /// mouse-move) marks the item paint-dirty — without it the incremental
     /// paint cache would keep showing the pre-hover color.
     VisualFlag _bHovered{*this};
+    /// Optional reactive label source (see bindLabel / resolvedLabel).
+    std::shared_ptr<Reactive<std::string>> _labelBinding;
 };
 
 /// Horizontal menu bar. addItem() wires a button that opens `menuFactory`'s
