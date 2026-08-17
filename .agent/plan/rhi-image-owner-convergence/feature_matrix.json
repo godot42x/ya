@@ -1,0 +1,46 @@
+{
+  "topic": "rhi-image-owner-convergence",
+  "updated_at": "2026-08-16",
+  "capabilities": [
+    {
+      "name": "ImageResource owner",
+      "status": "done",
+      "notes": "ImageResource 已存在，承载 image/defaultView/retainedResources/desc"
+    },
+    {
+      "name": "Texture owner-first model",
+      "status": "done",
+      "notes": "Texture 已持有 shared_ptr<ImageResource>"
+    },
+    {
+      "name": "RenderTexture type",
+      "status": "planned",
+      "notes": "本轮建立正式 runtime writable owner 语义"
+    },
+    {
+      "name": "RenderGraph import RenderTexture",
+      "status": "planned",
+      "notes": "Phase 1 目标"
+    },
+    {
+      "name": "RenderGraph exported texture uses RenderTexture",
+      "status": "planned",
+      "notes": "Phase 2 目标"
+    },
+    {
+      "name": "Runtime-facing outputs use RenderTexture",
+      "status": "planned",
+      "notes": "Phase 3 目标"
+    },
+    {
+      "name": "RenderImage removed",
+      "status": "planned",
+      "notes": "Phase 4 目标"
+    },
+    {
+      "name": "ImageResourceRef removed",
+      "status": "planned",
+      "notes": "Phase 4 目标"
+    }
+  ]
+}
