@@ -55,6 +55,10 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
     {
         buildScrollSplitDemo(t, p, demoState, status);
     });
+    surface.addPage("Gallery", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    {
+        buildGalleryDemo(t, p, demoState, status);
+    });
 
     applyStartPage();
 

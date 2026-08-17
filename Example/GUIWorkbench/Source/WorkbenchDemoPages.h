@@ -20,6 +20,8 @@ struct UIElement;
 struct UIMenuBar;
 struct UISlider;
 struct UITabBar;
+struct UITreeView;
+class  UIStyleSet;
 struct WidgetTree;
 } // namespace ya
 
@@ -108,5 +110,11 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
                     const std::function<void(const std::string&)>& log);
 void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                           const std::function<void(const std::string&)>& log);
+
+/// Feature gallery: one page that exercises the framework's reactive binding
+/// layer, the style system, and the data-driven TreeView — three capabilities
+/// that the other demo pages do not cover.
+void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+                      const std::function<void(const std::string&)>& log);
 
 } // namespace guiworkbench

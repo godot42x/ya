@@ -18,6 +18,9 @@
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
+#include "GUI/Widgets/Controls/TreeView.h"
+#include "GUI/Widgets/Reactive.h"
+#include "GUI/Widgets/Style.h"
 
 #include <algorithm>
 #include <format>
@@ -691,6 +694,223 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
     rightText->_hAlign    = ya::EWidgetAlignH::Center;
     rightText->_vAlign    = ya::EWidgetAlignV::Center;
     tree.attach(*rightPane, rightText);
+}
+
+void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+                      const std::function<void(const std::string&)>& log)
+{
+    auto panel = std::make_shared<ya::UIPanel>("GalleryDemo");
+    panel->_anchorMin = {0.0f, 0.0f};
+    panel->_anchorMax = {1.0f, 1.0f};
+    panel->setColor(kPanelColor);
+    tree.attach(parent, panel);
+
+    auto form = std::make_shared<ya::UIContainer>("GalleryForm");
+    form->_anchorMin = {0.0f, 0.0f};
+    form->_anchorMax = {1.0f, 1.0f};
+    form->setPadding({16.0f, 12.0f});
+    form->setSize({0.0f, 0.0f});
+    form->setDirection(ya::EWidgetBoxLayout::Vertical);
+    form->setSpacing(12.0f);
+    tree.attach(*panel, form);
+
+    // ---------------------------------------------------------------------
+    // Section 1 — Reactive data binding (model -> view, no manual repaint).
+    // Every widget below is driven by a Reactive<T>; mutating the ref via
+    // set() marks only the dependent widgets dirty through the reactive
+    // invalidation layer.
+    // ---------------------------------------------------------------------
+    tree.attach(*form, makeLabel("1. Reactive binding — model drives view"));
+
+    // Counter: a Reactive<int> feeds a bound label; the button mutates the
+    // ref, not the widget — the text re-paints automatically.
+    auto counterRef = std::make_shared<ya::Reactive<int>>(0);
+    auto boundCounter = std::make_shared<ya::UIText>("GalleryBoundCounter");
+    boundCounter->_bAutoSize = true;
+    boundCounter->_fontSize  = 14;
+    auto counterStrRef = std::make_shared<ya::Reactive<std::string>>("Count: 0");
+    boundCounter->bindText(counterStrRef);
+    tree.attach(*form, boundCounter);
+
+    auto incButton = makeDemoButton("GalleryInc", "Increment (reactive)", 200.0f);
+    incButton->_onClick = [counterRef, counterStrRef, log]
+    {
+        const int next = counterRef->value() + 1;
+        counterRef->set(next);
+        counterStrRef->set(std::format("Count: {}", next));
+        log(std::format("Reactive counter -> {}", next));
+    };
+    tree.attach(*form, incButton);
+
+    // Enabled flag: a Reactive<bool> drives a second button's enabled state
+    // through UIButton::bindEnabled (paint-dirty on change).
+    auto enabledRef = std::make_shared<ya::Reactive<bool>>(true);
+    auto dependentButton = makeDemoButton("GalleryDependent", "Enabled by reactive flag", 220.0f);
+    dependentButton->bindEnabled(enabledRef);
+    tree.attach(*form, dependentButton);
+
+    auto toggleButton = makeDemoButton("GalleryToggle", "Toggle enabled flag", 220.0f);
+    toggleButton->_onClick = [enabledRef, log]
+    {
+        const bool next = !enabledRef->value();
+        enabledRef->set(next);
+        log(std::format("Reactive enabled flag -> {}", next ? "on" : "off"));
+    };
+    tree.attach(*form, toggleButton);
+
+    // Menu-bar item label bound to a Reactive<string> (UIMenuBarItem::bindLabel,
+    // single-direction view <- model). Demonstrates the binding added for the
+    // menu bar alongside the global shell menu.
+    auto menuLabelRef = std::make_shared<ya::Reactive<std::string>>("Dynamic Item");
+    auto localBar = std::make_shared<ya::UIMenuBar>("GalleryMenuBar");
+    localBar->setSize({0.0f, 28.0f});
+    auto dynItem = localBar->addItem("Dynamic Item", nullptr);
+    dynItem->bindLabel(menuLabelRef);
+    tree.attach(*form, localBar);
+
+    auto renameButton = makeDemoButton("GalleryRename", "Rename menu item (reactive)", 260.0f);
+    renameButton->_onClick = [menuLabelRef, log]
+    {
+        const std::string next = menuLabelRef->value() == "Dynamic Item" ? "Renamed!" : "Dynamic Item";
+        menuLabelRef->set(next);
+        log(std::format("Reactive menu label -> '{}'", next));
+    };
+    tree.attach(*form, renameButton);
+
+    // Split ratio driven by a Reactive<float> (UIStyleSplitPane::bindSplitRatio).
+    auto ratioRef = std::make_shared<ya::Reactive<float>>(0.45f);
+    auto split = std::make_shared<ya::UISplitPane>("GallerySplit");
+    split->setSize({0.0f, 120.0f});
+    split->bindSplitRatio(ratioRef);
+    split->setMinFirstExtent(80.0f);
+    split->setMinSecondExtent(80.0f);
+    tree.attach(*form, split);
+    if (auto* slot = form->getBoxSlot(*split)) {
+        slot->setSizeRule(ya::EUIBoxSlotSizeRule::Fill);
+    }
+    auto leftPane = std::make_shared<ya::UIPanel>("GallerySplitLeft");
+    leftPane->setColor({0.20f, 0.24f, 0.32f, 1.0f});
+    auto leftText = makeBodyText("ratio <- reactive");
+    leftText->_anchorMin = {0.0f, 0.0f};
+    leftText->_anchorMax = {1.0f, 1.0f};
+    leftText->setSize({0.0f, 0.0f});
+    leftText->_hAlign = ya::EWidgetAlignH::Center;
+    leftText->_vAlign = ya::EWidgetAlignV::Center;
+    tree.attach(*leftPane, leftText);
+    auto rightPane2 = std::make_shared<ya::UIPanel>("GallerySplitRight");
+    rightPane2->setColor({0.28f, 0.22f, 0.32f, 1.0f});
+    auto rightText2 = makeBodyText("drag divider");
+    rightText2->_anchorMin = {0.0f, 0.0f};
+    rightText2->_anchorMax = {1.0f, 1.0f};
+    rightText2->setSize({0.0f, 0.0f});
+    rightText2->_hAlign = ya::EWidgetAlignH::Center;
+    rightText2->_vAlign = ya::EWidgetAlignV::Center;
+    tree.attach(*rightPane2, rightText2);
+    tree.attach(*split, leftPane);
+    tree.attach(*split, rightPane2);
+
+    auto ratioButton = makeDemoButton("GalleryRatio", "Set ratio 0.25 (reactive)", 240.0f);
+    ratioButton->_onClick = [ratioRef, log]
+    {
+        ratioRef->set(0.25f);
+        log("Reactive split ratio -> 0.25");
+    };
+    tree.attach(*form, ratioButton);
+
+    // ---------------------------------------------------------------------
+    // Section 2 — TreeView (data-driven widget) + selection as a reactive
+    // source. The selected node id is a Reactive<string> that a bound label
+    // subscribes to: selecting a row updates the label with no manual wiring.
+    // ---------------------------------------------------------------------
+    tree.attach(*form, makeLabel("2. TreeView (data-driven widget) + reactive selection"));
+
+    auto roots = std::make_shared<ya::ReactiveList<ya::UITreeView::FNode>>();
+    roots->push({"root", "Scene Root", {
+        {"mesh", "Mesh", {}},
+        {"light", "Light", {
+            {"point", "Point Light", {}},
+            {"spot", "Spot Light", {}},
+        }},
+        {"camera", "Camera", {}},
+    }});
+    roots->push({"ui", "UI", {
+        {"hud", "HUD", {}},
+        {"menu", "Menu", {}},
+    }});
+
+    auto treeView = std::make_shared<ya::UITreeView>("GalleryTree");
+    treeView->setSize({0.0f, 180.0f});
+    treeView->bindData(roots);
+    tree.attach(*form, treeView);
+    if (auto* slot = form->getBoxSlot(*treeView)) {
+        slot->setSizeRule(ya::EUIBoxSlotSizeRule::Fill);
+    }
+
+    // Selected id mirror: a bound label subscribes to the tree's selection ref.
+    auto selectedLabel = std::make_shared<ya::UIText>("GallerySelected");
+    selectedLabel->_bAutoSize = true;
+    selectedLabel->_fontSize  = 13;
+    const auto selRef = treeView->getSelection();
+    auto selStrRef = std::make_shared<ya::Reactive<std::string>>("(none)");
+    // Mirror the tree's selection ref into a string ref the label can bind to.
+    // (TreeView's selection ref is Reactive<string> of the id directly, but the
+    // label demonstrates the subscribe-side; keep a local mirror updated by the
+    // tree's callback to avoid coupling the label to the tree's internals.)
+    selectedLabel->bindText(selStrRef);
+    treeView->_onSelectionChanged = [selStrRef, log](const std::string& id)
+    {
+        selStrRef->set(id.empty() ? "(none)" : id);
+        log(std::format("Tree selection -> '{}'", id));
+    };
+    tree.attach(*form, selectedLabel);
+
+    // ---------------------------------------------------------------------
+    // Section 3 — Style system. A UIStyleSet holds named styles; binding a
+    // widget to a style and then re-defining the style repaints every bound
+    // widget without touching per-widget color fields.
+    // ---------------------------------------------------------------------
+    tree.attach(*form, makeLabel("3. Style system — one edit restyles the group"));
+
+    auto styleSet = std::make_shared<ya::UIStyleSet>();
+    const auto applyTheme = [&](bool bDark)
+    {
+        ya::FWidgetStyle dark{
+            .fillColor = {0.16f, 0.18f, 0.22f, 1.0f},
+            .textColor = {0.82f, 0.86f, 0.92f, 1.0f},
+            .fontSize  = 14,
+        };
+        ya::FWidgetStyle light{
+            .fillColor = {0.86f, 0.88f, 0.92f, 1.0f},
+            .textColor = {0.12f, 0.14f, 0.18f, 1.0f},
+            .fontSize  = 14,
+        };
+        styleSet->define("theme", bDark ? dark : light);
+    };
+    applyTheme(true);
+
+    auto styledText = std::make_shared<ya::UIText>("GalleryStyledText");
+    styledText->_bAutoSize = true;
+    styledText->setText("Styled text (themed)");
+    styledText->bindStyle(styleSet->find("theme"));
+    tree.attach(*form, styledText);
+
+    auto styledButton = makeDemoButton("GalleryStyledBtn", "Styled button (themed)", 220.0f);
+    // UIButton reads fill from a bound style via UIStyleSet::bindTo (persistent
+    // dependent, Paint granularity).
+    styleSet->bindTo(styleSet->find("theme"), *styledButton);
+    tree.attach(*form, styledButton);
+
+    auto themeButton = makeDemoButton("GalleryTheme", "Toggle theme (restyles group)", 260.0f);
+    bool bDark = true;
+    themeButton->_onClick = [applyTheme, &bDark, log]
+    {
+        bDark = !bDark;
+        applyTheme(bDark);
+        log(std::format("Style theme -> {}", bDark ? "dark" : "light"));
+    };
+    tree.attach(*form, themeButton);
+
+    tree.attach(*form, makeBodyText("Expected: incrementing, toggling, renaming, resizing, selecting and theming all update their targets without the page rebuilding."));
 }
 
 } // namespace guiworkbench
