@@ -2,7 +2,7 @@
 
 #include "Core/Log.h"
 
-#include "GUI/Resources/FontManager.h"
+#include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/WidgetTree.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"

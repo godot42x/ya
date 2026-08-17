@@ -1,6 +1,6 @@
 #include "GUI/Widgets/Controls/TreeView.h"
 
-#include "GUI/Resources/FontManager.h"
+#include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 
 namespace ya

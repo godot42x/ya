@@ -34,7 +34,7 @@ using Render2DPassSlot = uint32_t;
 /// Screen/world quad batching used by Render2D: hosts vertex/index buffers,
 /// per-pass pipelines, frame/resource descriptor sets and the texture-array
 /// binding table shared by screen and world batches.
-struct YA_GUI_API FQuadRender
+struct YA_RENDER_2D_API FQuadRender
 {
     struct Vertex
     {

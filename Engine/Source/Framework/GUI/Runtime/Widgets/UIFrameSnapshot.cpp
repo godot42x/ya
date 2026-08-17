@@ -1,6 +1,6 @@
 #include "GUI/Widgets/UIFrameSnapshot.h"
 
-#include "GUI/Resources/FontManager.h"
+#include "Render/Resources/FontManager.h"
 
 #include <algorithm>
 

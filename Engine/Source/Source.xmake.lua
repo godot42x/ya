@@ -74,7 +74,7 @@ end
 --- this; modules get their single macro via ya_std_module().
 function ya_engine_defines()
     local macros = {
-        "YA_CORE_API", "YA_RHI_API", "YA_RHI_BACKEND_API", "YA_GUI_API",
+        "YA_CORE_API", "YA_RHI_API", "YA_RHI_BACKEND_API", "YA_RENDER_RESOURCES_API", "YA_RENDER_2D_API", "YA_GUI_API",
         "YA_APP_KERNEL_API", "YA_APP_CONTROL_API", "YA_MODULE_MANAGER_API",
         "YA_SCENE_CORE_API", "YA_SCENE_RUNTIME_API", "YA_SCENE_SERIALIZATION_API",
         "YA_SCENE_3D_API", "YA_RESOURCE_API", "YA_RENDER_GRAPH_API",
@@ -94,6 +94,8 @@ end
 -- a separate opt-in target so windowless/GUI-only apps don't have to link it.
 includes("./Framework/Core/xmake.lua")
 includes("./Framework/RHI/xmake.lua")
+includes("./Framework/Render/Resources/xmake.lua")
+includes("./Framework/Render/Render2D/xmake.lua")
 includes("./Framework/App/Kernel/xmake.lua")
 includes("./Framework/App/Control/xmake.lua")
 includes("./Framework/App/Module/xmake.lua")

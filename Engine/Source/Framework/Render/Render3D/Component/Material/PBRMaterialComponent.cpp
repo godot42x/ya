@@ -1,7 +1,7 @@
 #include "PBRMaterialComponent.h"
 
 #include "RHI/Backend/TextureLibrary.h"
-#include "GUI/Resources/TextureSlotBinding.h"
+#include "Render/Resources/TextureSlotBinding.h"
 #include "Render3D/Material/MaterialFactory.h"
 #include "Render3D/Material/PBRMaterial.h"
 #include "Resource/Core/Model/MaterialData.h"

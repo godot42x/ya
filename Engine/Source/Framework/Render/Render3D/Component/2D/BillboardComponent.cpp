@@ -4,7 +4,7 @@
 #include "Render3D/Material/MaterialFactory.h"
 #include "Render3D/Material/UnlitMaterial.h"
 #include "RHI/Backend/TextureLibrary.h"
-#include "GUI/Resources/TextureSlotBinding.h"
+#include "Render/Resources/TextureSlotBinding.h"
 
 namespace ya
 

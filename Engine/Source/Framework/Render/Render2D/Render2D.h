@@ -70,7 +70,7 @@ struct FRender2dContext
     glm::mat4        viewProjection = glm::mat4(1.0f);
 };
 
-struct YA_GUI_API Render2D
+struct YA_RENDER_2D_API Render2D
 {
     static FQuadRender*  quadData;
     static FLineRender*  lineData;

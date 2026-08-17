@@ -22,12 +22,12 @@ struct TextureBinding;
 
 /// Resolved texture for the slot (white-texture fallback when the slot is
 /// empty, nullptr while a path is still loading).
-YA_GUI_API ya::Ptr<Texture> resolveSlotTexture(const TextureSlot& slot);
+YA_RENDER_RESOURCES_API ya::Ptr<Texture> resolveSlotTexture(const TextureSlot& slot);
 
 /// Resolved sampler for the slot (default sampler for now).
-YA_GUI_API ya::Ptr<Sampler> resolveSlotSampler(const TextureSlot& slot);
+YA_RENDER_RESOURCES_API ya::Ptr<Sampler> resolveSlotSampler(const TextureSlot& slot);
 
 /// Build a TextureBinding from the slot's resolved resources.
-YA_GUI_API TextureBinding slotToTextureBinding(const TextureSlot& slot);
+YA_RENDER_RESOURCES_API TextureBinding slotToTextureBinding(const TextureSlot& slot);
 
 } // namespace ya

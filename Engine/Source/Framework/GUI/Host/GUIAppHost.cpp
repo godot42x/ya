@@ -19,8 +19,8 @@
 #include "RHI/Core/CommandBuffer.h"
 
 #include "GUI/Compose/Render2DComposePass.h"
-#include "GUI/Resources/FontManager.h"
-#include "GUI/Draw2D/Render2D.h"
+#include "Render/Resources/FontManager.h"
+#include "Render2D/Render2D.h"
 #include "GUI/Widgets/UIFrameSnapshotDump.h"
 #include "GUI/Widgets/WidgetTreeDump.h"
 

@@ -31,7 +31,7 @@
 #include "Physics/PhysicsSystem.h"
 
 #include "Resource/AssetManager.h"
-#include "GUI/Resources/FontManager.h"
+#include "Render/Resources/FontManager.h"
 
 #include "Render3D/Material/MaterialFactory.h"
 

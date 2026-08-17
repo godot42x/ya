@@ -1,12 +1,7 @@
--- GUI framework product line, split by stable responsibility:
---   ya-gui-resources  font/glyph + texture-slot binding
---   ya-gui-draw2d     sprite/text/line batching + 2D pipeline
---   ya-gui-widgets    UIElement/WidgetTree/UITypeRegistry/UIDocument +
---                     snapshot builder + basic controls
+-- GUI framework: layout + widgets + compose + tooling + host.
+-- Rendering (ya-render-resources / ya-render-2d) lives in Framework/Render
 --   ya-gui-compose    viewport/UI compose pass (consumes UIFrameSnapshot)
 
-includes("./Runtime/Resource/xmake.lua")
-includes("./Runtime/Draw2D/xmake.lua")
 includes("./Runtime/Widgets/xmake.lua")
 includes("./Runtime/Compose/xmake.lua")
 includes("./Tooling/xmake.lua")
@@ -30,8 +25,8 @@ target("ya-gui-framework")
         "ya-rhi",
         "ya-rhi-backend-common",
         "ya-rhi-vulkan",
-        "ya-gui-resources",
-        "ya-gui-draw2d",
+        "ya-render-resources",
+        "ya-render-2d",
         "ya-gui-widgets",
         "ya-gui-compose",
         "ya-gui-tooling",

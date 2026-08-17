@@ -9,8 +9,8 @@
 --   Controls/      - the basic widgets (Panel/Text/Button/Container)
 --
 -- Boundary: must never depend on Scene/ECS/Render3D/Host/Editor. Paint
--- records through the GUI Draw2D batch (ya-gui-draw2d) and the font atlas
--- (ya-gui-resources); both are inside the GUI closure.
+-- records through the GUI Draw2D batch (ya-render-2d) and the font atlas
+-- (ya-render-resources); both are inside the GUI closure.
 target("ya-gui-widgets")
     set_kind(ya_target_kind())
     ya_std_module("YA_GUI_API")
@@ -20,5 +20,5 @@ target("ya-gui-widgets")
     add_headerfiles("./include/**.h", { public = true })
     add_headerfiles("*.h", "Controls/*.h", "../Layout/*.h", "../Layout/include/**.h")
     add_deps("ya-foundation-core", { public = true })
-    add_deps("ya-gui-resources")
+    add_deps("ya-render-resources")
     add_packages("glm", { public = true })

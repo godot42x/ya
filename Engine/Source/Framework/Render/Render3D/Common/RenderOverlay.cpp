@@ -5,8 +5,8 @@
 #include "Core/Profiling/PerfState.h"
 #include "RHI/RenderDefines.h"
 #include "RHI/Core/CommandBuffer.h"
-#include "GUI/Draw2D/Render2D.h"
-#include "GUI/Resources/FontManager.h"
+#include "Render2D/Render2D.h"
+#include "Render/Resources/FontManager.h"
 
 namespace ya
 {

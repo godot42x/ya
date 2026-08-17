@@ -10,7 +10,7 @@
 #include "Core/Common/DeferredDeletionQueue.h"
 #include "Core/Log.h"
 #include "Core/Math/GLM.h"
-#include "GUI/Resources/FontManager.h"
+#include "Render/Resources/FontManager.h"
 #include "RHI/Backend/TextureLibrary.h"
 
 #include "utility.cc/ranges.h"

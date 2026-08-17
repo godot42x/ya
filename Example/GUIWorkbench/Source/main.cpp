@@ -7,8 +7,8 @@
 
 #include "GUI/Host/GUIApp.h"
 #include "GUI/Host/GUIHeadlessHost.h"
-#include "GUI/Draw2D/Render2D.h"
-#include "GUI/Resources/FontManager.h"
+#include "Render2D/Render2D.h"
+#include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/UIFrameSnapshotDump.h"
 
 #include "GUIWorkbench.h"

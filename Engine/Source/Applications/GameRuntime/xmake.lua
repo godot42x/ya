@@ -15,7 +15,7 @@ target("ya-game-runtime")
     add_deps("ya-module-manager", { public = true })
     add_deps("ya-render-3d", "imgui-local", "imguizmo-local", { public = true })
     -- Host drives GUI fonts directly; Game UI lives in the widgets module.
-    add_deps("ya-gui-resources", "ya-gui-widgets")
+    add_deps("ya-render-resources", "ya-gui-widgets")
     -- Host binds the scene lifecycle sink and drives Scene/SceneManager from
     -- its own TUs; public headers only forward-declare scene types.
     add_deps("ya-scene-core", "ya-scene-runtime")

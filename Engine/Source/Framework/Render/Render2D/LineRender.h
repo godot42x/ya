@@ -28,7 +28,7 @@ struct IRender;
  * of the world-space sprite pipeline. Used for debug overlays such as
  * physics collision boxes.
  */
-struct YA_GUI_API FLineRender
+struct YA_RENDER_2D_API FLineRender
 {
     struct Vertex
     {

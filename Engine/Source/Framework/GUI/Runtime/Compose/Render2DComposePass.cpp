@@ -1,6 +1,6 @@
 #include "GUI/Compose/Render2DComposePass.h"
 
-#include "GUI/Draw2D/Render2D.h"
+#include "Render2D/Render2D.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Backend/TextureLibrary.h"

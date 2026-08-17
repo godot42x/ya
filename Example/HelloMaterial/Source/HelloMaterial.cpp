@@ -4,7 +4,7 @@
 #include "ECS/Systems/Components/CameraComponent.h"
 #include "ECS/Systems/Components/MirrorComponent.h"
 #include "Resource/AssetManager.h"
-#include "GUI/Resources/FontManager.h"
+#include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/Panel.h"
 #include "GUI/Widgets/Controls/Text.h"

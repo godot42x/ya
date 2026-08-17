@@ -5,7 +5,7 @@
 
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Panel.h"
-#include "GUI/Resources/FontManager.h"
+#include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 

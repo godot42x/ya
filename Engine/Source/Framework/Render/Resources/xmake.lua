@@ -1,9 +1,9 @@
--- GUI resources: font/glyph management and texture-slot binding. Depends on
--- Core/RHI only; public API exposed through the GUI/Resources/ forwarding
+-- Render resources: font/glyph management and texture-slot binding. Depends on
+-- Core/RHI only; public API exposed through the Render/Resources/ forwarding
 -- root.
-target("ya-gui-resources")
+target("ya-render-resources")
     set_kind(ya_target_kind())
-    ya_std_module("YA_GUI_API")
+    ya_std_module("YA_RENDER_RESOURCES_API")
     add_includedirs("./include", { public = true })
     add_files("*.cpp")
     add_headerfiles("./include/**.h", { public = true })

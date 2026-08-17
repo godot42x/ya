@@ -9,7 +9,7 @@
 #include "GUI/Compose/Render2DComposePass.h"
 #include "RHI/Core/RenderTexture.h"
 #include "RHI/Backend/Vulkan/VulkanRender.h"
-#include "GUI/Draw2D/Render2D.h"
+#include "Render2D/Render2D.h"
 #include "Render3D/Forward/ForwardRenderPipeline.h"
 
 #include <limits>

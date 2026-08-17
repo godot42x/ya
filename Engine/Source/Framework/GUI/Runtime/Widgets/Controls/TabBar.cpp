@@ -3,7 +3,7 @@
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
 
-#include "GUI/Resources/FontManager.h"
+#include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 

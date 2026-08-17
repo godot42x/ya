@@ -13,7 +13,7 @@
 #include "GameEditor/EditorModule.h"
 #include "Render3D/Material/Material.h"
 #include "RHI/Backend/TextureLibrary.h"
-#include "GUI/Resources/TextureSlotBinding.h"
+#include "Render/Resources/TextureSlotBinding.h"
 #include "Resource/AssetManager.h"
 #include "reflects-core/lib.h"
 

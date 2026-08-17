@@ -175,7 +175,7 @@ struct Font
     }
 };
 
-struct YA_GUI_API FontManager : public IResourceCache
+struct YA_RENDER_RESOURCES_API FontManager : public IResourceCache
 {
 
     /// Injected sink receiving freshly created font atlas textures. The GUI

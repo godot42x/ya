@@ -23,7 +23,7 @@
 #include "RHI/Backend/Vulkan//VulkanRender.h"
 #include "RHI/NativeWindow.h"
 
-#include "GUI/Draw2D/Render2D.h"
+#include "Render2D/Render2D.h"
 #include "Render3D/Material/Material.h"
 
 #include "GameRuntime/Utility/RenderFrameExtractor.h"
