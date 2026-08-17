@@ -9,7 +9,7 @@
 namespace ya
 {
 
-struct RenderImage;
+struct RenderTexture;
 
 struct RenderViewportDebugCatalog
 {
@@ -61,13 +61,13 @@ struct RenderViewportSnapshot
 {
     bool bForwardPipeline = false;
 
-    std::shared_ptr<RenderImage>              viewportImageOwner = nullptr;
+    std::shared_ptr<RenderTexture>            viewportImageOwner = nullptr;
     IImageView*                               viewportImageView  = nullptr;
     // Scene depth of the same viewport render, exposed so editor overlays
     // (e.g. collision debug wireframes) can depth-test against the world.
-    std::shared_ptr<RenderImage>              viewportDepthOwner = nullptr;
+    std::shared_ptr<RenderTexture>            viewportDepthOwner = nullptr;
     // R32 viewport target holding per-pixel entity ids (editor picking).
-    std::shared_ptr<RenderImage>              entityIdImageOwner = nullptr;
+    std::shared_ptr<RenderTexture>            entityIdImageOwner = nullptr;
     bool                                      bPostprocessingEnabled = false;
     std::shared_ptr<const RenderViewportDebugCatalog> debugCatalog = nullptr;
     std::vector<RenderViewportDebugImageSlot>         debugImages;

@@ -7,6 +7,7 @@
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
 #include "Render3D/Common/RenderOverlay.h"
 #include "GUI/Compose/Render2DComposePass.h"
+#include "RHI/Core/RenderTexture.h"
 #include "RHI/Backend/Vulkan/VulkanRender.h"
 #include "GUI/Draw2D/Render2D.h"
 #include "Render3D/Forward/ForwardRenderPipeline.h"
@@ -212,23 +213,23 @@ bool RenderRuntime::isShadowMappingEnabled() const
     return false;
 }
 
-IImageView* RenderRuntime::getShadowDirectionalDepthIV() const
+std::shared_ptr<ImageResource> RenderRuntime::getShadowDirectionalDepthResource() const
 {
     if (auto* pipeline = getActivePipeline()) {
-        return pipeline->getShadowDirectionalDepthIV();
+        return pipeline->getShadowDirectionalDepthResource();
     }
     return nullptr;
 }
 
-IImageView* RenderRuntime::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
+std::shared_ptr<ImageResource> RenderRuntime::getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const
 {
     if (auto* pipeline = getActivePipeline()) {
-        return pipeline->getShadowPointFaceDepthIV(pointLightIndex, faceIndex);
+        return pipeline->getShadowPointFaceDepthResource(pointLightIndex, faceIndex);
     }
     return nullptr;
 }
 
-std::shared_ptr<RenderImage> RenderRuntime::getPostprocessOutputImageShared() const
+std::shared_ptr<RenderTexture> RenderRuntime::getPostprocessOutputImageShared() const
 {
     if (auto* pipeline = getSelectedForwardPipeline()) {
         return pipeline->getPostprocessOutputImageShared();
@@ -239,12 +240,12 @@ std::shared_ptr<RenderImage> RenderRuntime::getPostprocessOutputImageShared() co
     return nullptr;
 }
 
-std::shared_ptr<RenderImage> RenderRuntime::getPresentationImageShared() const
+std::shared_ptr<RenderTexture> RenderRuntime::getPresentationImageShared() const
 {
     return getCurrentPresentationImageShared();
 }
 
-std::shared_ptr<RenderImage> RenderRuntime::getCurrentPresentationImageShared() const
+std::shared_ptr<RenderTexture> RenderRuntime::getCurrentPresentationImageShared() const
 {
     const auto imageIndex = getCurrentPresentationImageIndex();
     if (imageIndex >= _presentationImages.size()) {
@@ -284,10 +285,9 @@ RenderPipelineDebugOutputCatalog RenderRuntime::buildPipelineDebugOutputCatalog(
         return catalog;
     }
 
-    catalog.bShadowMappingEnabled  = pipeline->isShadowMappingEnabled();
-    catalog.shadowDepthImage       = pipeline->getShadowDepthImage();
+    catalog.bShadowMappingEnabled   = pipeline->isShadowMappingEnabled();
+    catalog.shadowDirectionalDepthResource = pipeline->getShadowDirectionalDepthResource();
     catalog.viewportDepthImageOwner = pipeline->getViewportDepthImageShared();
-    catalog.shadowDirectionalDepth = pipeline->getShadowDirectionalDepthIV();
     catalog.bPostprocessingEnabled = pipeline->isPostprocessingEnabled();
 
     if (auto* selectedForward = getSelectedForwardPipeline()) {

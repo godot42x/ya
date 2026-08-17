@@ -8,6 +8,7 @@
 #include "Render3D/Common/Shadow/ShadowTypes.h"
 
 #include "RHI/Core/Image.h"
+#include "RHI/Core/ImageResource.h"
 #include "Render3D/Shadow/IShadowTechnique.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
@@ -50,7 +51,7 @@ class BasicShadowMapTechnique : public IShadowTechnique
 
     IRender* _render       = nullptr;
     Extent2D _shadowExtent = {.width = 1024, .height = 1024};
-    stdptr<IImage> _depthImage;
+    stdptr<ImageResource> _depthResource;
     stdptr<IImageView> _shadowDepthArrayView;
 
     ShadowSettings _settings;

@@ -20,7 +20,6 @@ namespace ya
 
 struct Scene;
 struct Texture;
-struct RenderImage;
 struct Mesh;
 
 /// Deferred light pass — fullscreen quad that reads GBuffer textures and computes lighting.

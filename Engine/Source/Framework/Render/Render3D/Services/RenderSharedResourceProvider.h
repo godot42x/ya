@@ -10,7 +10,7 @@ namespace ya
 
 struct Scene;
 struct Texture;
-struct RenderImage;
+struct RenderTexture;
 struct Sampler;
 struct IRender;
 struct IImageView;
@@ -49,7 +49,7 @@ struct RenderSharedResourceProvider
 
     struct SharedResources
     {
-        stdptr<RenderImage> pbrLUT = nullptr;
+        stdptr<RenderTexture> pbrLUT = nullptr;
     };
 
     SkyboxResources              _skybox{};
@@ -74,7 +74,7 @@ struct RenderSharedResourceProvider
     [[nodiscard]] Sampler*                     getSkyboxSampler() const { return _cubemapSampler.get(); }
     [[nodiscard]] DescriptorSetHandle          getFallbackSkyboxDescriptorSet() const { return _skybox.fallbackDS; }
     [[nodiscard]] stdptr<IDescriptorSetLayout> getEnvironmentLightingDescriptorSetLayout() const { return _environmentLighting.dsl; }
-    [[nodiscard]] stdptr<RenderImage>          getBrdfLutTextureShared() const { return _sharedResources.pbrLUT; }
+    [[nodiscard]] stdptr<RenderTexture>        getBrdfLutTextureShared() const { return _sharedResources.pbrLUT; }
     [[nodiscard]] DescriptorSetHandle          getSceneSkyboxDescriptorSet(Scene* scene = nullptr);
     [[nodiscard]] DescriptorSetHandle          getSceneEnvironmentLightingDescriptorSet(Scene* scene = nullptr);
     [[nodiscard]] EnvironmentLightingSceneResources resolveSceneEnvironmentLightingResources(Scene* scene = nullptr) const;

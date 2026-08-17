@@ -38,9 +38,8 @@ struct Scene;
 struct EnvironmentLightingProcessor;
 struct ForwardRenderPipeline;
 struct Texture;
-struct RenderImage;
-struct IImage;
-struct IImageView;
+struct RenderTexture;
+struct ImageResource;
 struct BasicPostprocessing;
 struct DeferredRenderPipeline;
 struct Sampler;
@@ -51,15 +50,14 @@ struct Node;
 
 struct RenderPipelineDebugOutputCatalog
 {
-    bool                     bShadowMappingEnabled  = false;
-    std::shared_ptr<IImage> shadowDepthImage = nullptr;
-    std::shared_ptr<RenderImage> viewportOutputImageOwner    = nullptr;
-    std::shared_ptr<RenderImage> viewportDepthImageOwner     = nullptr;
-    IImageView*                  shadowDirectionalDepth      = nullptr;
-    std::shared_ptr<RenderImage> postprocessOutputImageOwner = nullptr;
-    std::shared_ptr<RenderImage> bloomExtractOwner           = nullptr;
-    std::shared_ptr<RenderImage> bloomBlurOwner              = nullptr;
-    std::shared_ptr<RenderImage> bloomCompositeOwner         = nullptr;
+    bool                          bShadowMappingEnabled         = false;
+    std::shared_ptr<ImageResource> shadowDirectionalDepthResource = nullptr;
+    std::shared_ptr<RenderTexture> viewportOutputImageOwner    = nullptr;
+    std::shared_ptr<RenderTexture> viewportDepthImageOwner     = nullptr;
+    std::shared_ptr<RenderTexture> postprocessOutputImageOwner = nullptr;
+    std::shared_ptr<RenderTexture> bloomExtractOwner           = nullptr;
+    std::shared_ptr<RenderTexture> bloomBlurOwner              = nullptr;
+    std::shared_ptr<RenderTexture> bloomCompositeOwner         = nullptr;
     bool                         bPostprocessingEnabled      = false;
 };
 
@@ -176,7 +174,7 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     bool   _bWorldSceneRenderEnabled = true;
 
     std::vector<std::unique_ptr<RenderGraphExecutor>> _presentationGraphExecutors;
-    std::vector<std::shared_ptr<RenderImage>>         _presentationImages;
+    std::vector<std::shared_ptr<RenderTexture>>       _presentationImages;
     stdptr<BasicPostprocessing>                       _presentationPostProcessor = nullptr;
     PostProcessingState                               _presentationPostProcessState{};
 
@@ -206,8 +204,8 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     [[nodiscard]] GameplayResourceBinding*         getGameplayResourceBinding() const override;
     [[nodiscard]] EnvironmentLightingProcessor*  getEnvironmentLightingProcessor() const override;
     [[nodiscard]] bool                           isShadowMappingEnabled() const;
-    [[nodiscard]] IImageView*                    getShadowDirectionalDepthIV() const;
-    [[nodiscard]] IImageView*                    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const;
+    [[nodiscard]] std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const;
+    [[nodiscard]] std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const;
     [[nodiscard]] bool                           isOffscreenPending() const { return _offscreen.isPending(); }
     [[nodiscard]] OffscreenTaskService&          getOffscreenTaskService() { return _offscreen; }
     [[nodiscard]] TerrainProcessor*               getTerrainProcessor() const { return _terrainProcessor.get(); }
@@ -218,20 +216,20 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     // =========================================================================
     // Runtime outputs / debug inspection
     // =========================================================================
-    [[nodiscard]] std::shared_ptr<RenderImage> getPostprocessOutputImageShared() const;
-    [[nodiscard]] std::shared_ptr<RenderImage> getActiveViewportImageShared() const;
+    [[nodiscard]] std::shared_ptr<RenderTexture> getPostprocessOutputImageShared() const;
+    [[nodiscard]] std::shared_ptr<RenderTexture> getActiveViewportImageShared() const;
     /// The image shown as the final viewport result: post-process output when
     /// present, otherwise the raw viewport output. Game UI composition, the
     /// presentation graph and the editor viewport snapshot must all read this
     /// single source so UI never renders into an image that is not presented.
-    [[nodiscard]] std::shared_ptr<RenderImage> getViewportDisplayImageShared() const;
+    [[nodiscard]] std::shared_ptr<RenderTexture> getViewportDisplayImageShared() const;
     /// Color format of the viewport display image, mirrored from
     /// getViewportDisplayImageShared() without needing the image to exist:
     /// the post-process output format when postprocessing is enabled, else the
     /// raw viewport color format. Pipeline-configured and stable per frame, so
     /// pre-recording pipeline prep can use it before the world graph runs.
     [[nodiscard]] EFormat::T getViewportDisplayImageFormat() const;
-    [[nodiscard]] std::shared_ptr<RenderImage> getPresentationImageShared() const;
+    [[nodiscard]] std::shared_ptr<RenderTexture> getPresentationImageShared() const;
     [[nodiscard]] bool     isPostprocessingEnabled() const;
     [[nodiscard]] RenderPipelineDebugOutputCatalog buildPipelineDebugOutputCatalog() const;
     [[nodiscard]] ERenderPipeline getRenderPipeline() const { return _renderPipeline; }
@@ -318,7 +316,7 @@ struct YA_RENDER_3D_API RenderRuntime : IRenderRuntimeServices
     void                   applyPendingRenderTargetFormatCommands();
     [[nodiscard]] ForwardRenderPipeline*         getSelectedForwardPipeline() const;
     [[nodiscard]] DeferredRenderPipeline*        getSelectedDeferredPipeline() const;
-    [[nodiscard]] std::shared_ptr<RenderImage> getCurrentPresentationImageShared() const;
+    [[nodiscard]] std::shared_ptr<RenderTexture> getCurrentPresentationImageShared() const;
     [[nodiscard]] uint32_t                     getCurrentPresentationImageIndex() const;
 };
 

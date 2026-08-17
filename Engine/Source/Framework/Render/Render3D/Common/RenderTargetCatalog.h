@@ -10,7 +10,7 @@ namespace ya
 {
 
 struct IImageView;
-struct RenderImage;
+struct RenderTexture;
 
 struct RenderTargetCatalog
 {
@@ -28,8 +28,8 @@ struct RenderTargetCatalog
         } owner = EOwner::Presentation;
         std::vector<EFormat::T>          colorFormats{};
         std::optional<EFormat::T>        depthFormat{};
-        std::vector<std::shared_ptr<RenderImage>> colorAttachments{};
-        std::shared_ptr<RenderImage>              depthAttachment = nullptr;
+        std::vector<std::shared_ptr<RenderTexture>> colorAttachments{};
+        std::shared_ptr<RenderTexture>              depthAttachment = nullptr;
         std::shared_ptr<IImageView>               depthAttachmentView = nullptr;
         Extent2D                                  extent{};
         uint32_t                                  frameBufferCount = 0;

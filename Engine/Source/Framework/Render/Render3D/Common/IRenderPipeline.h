@@ -15,9 +15,8 @@ namespace ya
 {
 
 struct ICommandBuffer;
-struct IImageView;
-struct IImage;
-struct RenderImage;
+struct ImageResource;
+struct RenderTexture;
 struct Texture;
 struct RenderFrameData;
 
@@ -62,14 +61,13 @@ struct IRenderPipelineDebugOutputs
 {
     virtual ~IRenderPipelineDebugOutputs() = default;
 
-    [[nodiscard]] virtual bool           isShadowMappingEnabled() const = 0;
-    [[nodiscard]] virtual std::shared_ptr<IImage> getShadowDepthImage() const = 0;
-    [[nodiscard]] virtual std::shared_ptr<RenderImage> getViewportDepthImageShared() const = 0;
+    [[nodiscard]] virtual bool isShadowMappingEnabled() const = 0;
+    [[nodiscard]] virtual std::shared_ptr<RenderTexture> getViewportDepthImageShared() const = 0;
     /// R32_UINT viewport target holding per-pixel entity ids (editor picking).
-    [[nodiscard]] virtual std::shared_ptr<RenderImage> getEntityIdImageShared() const { return nullptr; }
-    [[nodiscard]] virtual IImageView*    getShadowDirectionalDepthIV() const = 0;
-    [[nodiscard]] virtual IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const = 0;
-    [[nodiscard]] virtual bool     isPostprocessingEnabled() const     = 0;
+    [[nodiscard]] virtual std::shared_ptr<RenderTexture> getEntityIdImageShared() const { return nullptr; }
+    [[nodiscard]] virtual std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const = 0;
+    [[nodiscard]] virtual std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const = 0;
+    [[nodiscard]] virtual bool isPostprocessingEnabled() const = 0;
     /// Color format of the postprocess output image (stable pipeline config;
     /// queryable before the world graph creates the actual image).
     [[nodiscard]] virtual EFormat::T getPostprocessColorFormat() const = 0;

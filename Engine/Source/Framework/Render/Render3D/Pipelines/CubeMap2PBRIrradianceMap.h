@@ -3,7 +3,8 @@
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/Pipeline.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/ImageResource.h"
+#include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/Sampler.h"
 #include "RHI/Core/Texture.h"
 
@@ -70,9 +71,8 @@ struct CubeMap2PBRIrradianceMap
     struct ExecuteContext
     {
         ICommandBuffer* cmdBuf     = nullptr;
-        RenderImage*   inputImage  = nullptr; // owner-first input cubemap
-        Texture*       inputTexture = nullptr; // fallback sampled cubemap
-        RenderImage*   output      = nullptr; // the irradiance map to render to (must be a cubemap with 6 array layers)
+        ImageResource* input  = nullptr; // owner-first input cubemap (Texture or RenderTexture resource)
+        ImageResource* output = nullptr; // the irradiance map to render to (must be a cubemap with 6 array layers)
         ClearValue     clearColor  = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);
     };
 

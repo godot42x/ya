@@ -1,4 +1,4 @@
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderTexture.h"
 #include "RenderRuntime.h"
 
 namespace ya

@@ -95,7 +95,7 @@ void DirectionalShadowPass::init(IRender* render,
 
 void DirectionalShadowPass::destroy()
 {
-    _depthImage.reset();
+    _depthResource.reset();
     for (auto& depthView : _depthViews) depthView.reset();
     _staticVariant  = {};
     _skinnedVariant = {};
@@ -130,7 +130,7 @@ std::optional<RGPassHandle> DirectionalShadowPass::appendGraphPasses(
     const BasicShadowFramePayload& payload,
     std::optional<RGPassHandle> dependency)
 {
-    if (!_depthImage || !payload.frameData) return std::nullopt;
+    if (!_depthResource || !_depthResource->getImage() || !payload.frameData) return std::nullopt;
 
     std::optional<RGPassHandle> lastPass = dependency;
     for (uint32_t cascadeIndex = 0;
@@ -156,7 +156,7 @@ std::optional<RGPassHandle> DirectionalShadowPass::appendCascadePass(
                    "Directional shadow graph requires frame and skinning buffers");
 
     const auto depth = graph.importTexture(makeImportedTextureDesc(
-        _depthImage,
+        _depthResource,
         _depthViews[cascadeIndex],
         std::format("DirectionalShadow.Depth.{}", cascadeIndex),
         EImageLayout::ShaderReadOnlyOptimal,
@@ -281,10 +281,10 @@ void DirectionalShadowPass::refreshPipeline(EFormat::T depthFormat)
 }
 
 void DirectionalShadowPass::setDepthAttachments(
-    stdptr<IImage> image,
+    stdptr<ImageResource> resource,
     std::array<stdptr<IImageView>, MAX_DIRECTIONAL_CASCADES> views)
 {
-    _depthImage = std::move(image);
+    _depthResource = std::move(resource);
     _depthViews = std::move(views);
 }
 

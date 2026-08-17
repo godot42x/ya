@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Base.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/Texture.h"
 #include "Render3D/Pipelines/BasicPostprocessing.h"
 #include "Render3D/Pipelines/BloomPostprocessing.h"
@@ -42,7 +42,7 @@ struct PostProcessingStage
     PostProcessingState         _state              = {};
     stdptr<BloomPostprocessing> _bloomProcessor     = nullptr;
     stdptr<BasicPostprocessing> _postProcessor      = nullptr;
-    stdptr<RenderImage>         _preparedOutputImage = nullptr;
+    stdptr<RenderTexture>       _preparedOutputImage = nullptr;
 
     void     init(const InitDesc& desc);
     void     shutdown();
@@ -61,9 +61,9 @@ struct PostProcessingStage
                                       glm::vec2     viewportExtent,
                                       FrameContext* ctx);
     RGTextureHandle appendGraphPasses(RenderGraph& graph,
-                                      RenderImage*  inputImage,
-                                      glm::vec2     viewportExtent,
-                                      FrameContext* ctx);
+                                      RenderTexture* inputImage,
+                                      glm::vec2      viewportExtent,
+                                      FrameContext*  ctx);
     RGTextureHandle appendGraphPasses(RenderGraph& graph,
                                       RGTextureHandle input,
                                       Extent2D        inputExtent,
@@ -71,10 +71,10 @@ struct PostProcessingStage
     void     capturePreparedResources(const RenderGraphExecutionResult& result);
     void     clearPreparedResources();
     [[nodiscard]] bool                       isEnabled() const { return bEnabled; }
-    [[nodiscard]] stdptr<RenderImage>        getBloomExtractImageShared() const { return _bloomProcessor ? _bloomProcessor->getExtractImageShared() : nullptr; }
-    [[nodiscard]] stdptr<RenderImage>        getBloomBlurImageShared() const { return _bloomProcessor ? _bloomProcessor->getBlurImageShared() : nullptr; }
-    [[nodiscard]] stdptr<RenderImage>        getBloomCompositeImageShared() const { return _bloomProcessor ? _bloomProcessor->getCompositeImageShared() : nullptr; }
-    [[nodiscard]] stdptr<RenderImage>        getPreparedOutputImageShared() const { return _preparedOutputImage; }
+    [[nodiscard]] stdptr<RenderTexture>      getBloomExtractImageShared() const { return _bloomProcessor ? _bloomProcessor->getExtractImageShared() : nullptr; }
+    [[nodiscard]] stdptr<RenderTexture>      getBloomBlurImageShared() const { return _bloomProcessor ? _bloomProcessor->getBlurImageShared() : nullptr; }
+    [[nodiscard]] stdptr<RenderTexture>      getBloomCompositeImageShared() const { return _bloomProcessor ? _bloomProcessor->getCompositeImageShared() : nullptr; }
+    [[nodiscard]] stdptr<RenderTexture>      getPreparedOutputImageShared() const { return _preparedOutputImage; }
     [[nodiscard]] PostProcessingState&       getState() { return _state; }
     [[nodiscard]] const PostProcessingState& getState() const { return _state; }
 };

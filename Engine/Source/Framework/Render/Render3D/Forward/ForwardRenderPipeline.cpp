@@ -17,6 +17,27 @@ namespace ya
 namespace
 {
 
+std::shared_ptr<ImageResource> makeShadowDebugResource(const std::shared_ptr<IImage>& image,
+                                                       const std::shared_ptr<IImageView>& view,
+                                                       std::string_view label)
+{
+    if (!image || !view) {
+        return nullptr;
+    }
+
+    auto resource         = std::make_shared<ImageResource>();
+    resource->label       = std::string(label);
+    resource->image       = image;
+    resource->defaultView = view;
+    resource->retainedResources = {image, view};
+    return resource;
+}
+
+} // namespace
+
+namespace
+{
+
 ForwardDirectionGizmoInput buildForwardDirectionGizmoInput(const TransformComponent& tc)
 {
     const glm::mat4 worldTransform = glm::translate(glm::mat4(1.0f), tc.getWorldPosition()) *
@@ -685,10 +706,21 @@ Extent2D ForwardRenderPipeline::getViewportExtent() const
     return _viewportResources.extent;
 }
 
-IImageView* ForwardRenderPipeline::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
+std::shared_ptr<ImageResource> ForwardRenderPipeline::getShadowDirectionalDepthResource() const
+{
+    return makeShadowDebugResource(
+        _shadowResources.depthImage,
+        _shadowResources.directionalDepthIV,
+        "Forward.ShadowDirectionalDepth");
+}
+
+std::shared_ptr<ImageResource> ForwardRenderPipeline::getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const
 {
     if (pointLightIndex >= MAX_POINT_LIGHTS || faceIndex >= 6) return nullptr;
-    return _shadowResources.pointFaceIVs[pointLightIndex][faceIndex].get();
+    return makeShadowDebugResource(
+        _shadowResources.depthImage,
+        _shadowResources.pointFaceIVs[pointLightIndex][faceIndex],
+        std::format("Forward.ShadowPointDepth.{}.{}", pointLightIndex, faceIndex));
 }
 
 } // namespace ya

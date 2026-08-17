@@ -9,6 +9,7 @@
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/Pipeline.h"
 #include "RHI/Core/Image.h"
+#include "RHI/Core/ImageResource.h"
 #include "Render3D/Stage/IRenderStage.h"
 
 #include "CombineShadowMappingGenerate.slang.h"
@@ -47,7 +48,7 @@ class DirectionalShadowPass
 
     void setShadowExtent(Extent2D extent) { _shadowExtent = extent; }
     void refreshPipeline(EFormat::T depthFormat);
-    void setDepthAttachments(stdptr<IImage> image,
+    void setDepthAttachments(stdptr<ImageResource> resource,
                              std::array<stdptr<IImageView>, MAX_DIRECTIONAL_CASCADES> views);
     [[nodiscard]] IImageView* getDepthView() const { return _depthViews[0].get(); }
     [[nodiscard]] IGraphicsPipeline* getStaticPipeline() const { return _staticVariant.pipeline.get(); }
@@ -76,7 +77,7 @@ class DirectionalShadowPass
     stdptr<IDescriptorSetLayout> _skinningDSL;
     GraphicsPipelineCreateInfo   _pipelineCI{};
 
-    stdptr<IImage> _depthImage;
+    stdptr<ImageResource> _depthResource;
     std::array<stdptr<IImageView>, MAX_DIRECTIONAL_CASCADES> _depthViews{};
 };
 

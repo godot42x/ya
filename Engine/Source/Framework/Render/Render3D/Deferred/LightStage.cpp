@@ -1,5 +1,4 @@
 #include "LightStage.h"
-#include "RHI/Core/RenderImage.h"
 #include "RHI/Render.h"
 #include "RHI/Backend/TextureLibrary.h"
 

@@ -22,8 +22,8 @@ constexpr std::string_view kTopologyPassSkybox            = "Deferred Skybox";
 constexpr std::string_view kTopologyPassForwardTransparent = "Deferred Forward Transparent";
 constexpr std::string_view kTopologyPassOverlay           = "Deferred Overlay";
 
-RGImportedTextureDesc makeEnvironmentImportedDesc(const ImageResourceRef& resource,
-                                                  std::string_view       label)
+RGImportedTextureDesc makeEnvironmentImportedDesc(const std::shared_ptr<ImageResource>& resource,
+                                                  std::string_view                    label)
 {
     return makeImportedTextureDesc(resource, label, EImageLayout::ShaderReadOnlyOptimal);
 }

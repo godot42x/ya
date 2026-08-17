@@ -10,47 +10,11 @@ namespace ya
 namespace
 {
 
-stdptr<RenderImage> createPostprocessRenderImage(IRender* render,
-                                                 std::string_view label,
-                                                 Extent2D extent,
-                                                 EFormat::T format)
+RGImportedTextureDesc makePostprocessImportedTextureDesc(const std::shared_ptr<ImageResource>& resource,
+                                                         std::string_view                    label,
+                                                         EImageLayout::T                     finalLayout)
 {
-    if (!render || extent.width == 0 || extent.height == 0) {
-        return nullptr;
-    }
-
-    return createRenderImage(
-        *render->getResourceFactory(),
-        RenderImageDesc{
-            .image = ImageCreateInfo{
-                .label         = std::string(label),
-                .format        = format,
-                .extent        = {.width = extent.width, .height = extent.height, .depth = 1},
-                .mipLevels     = 1,
-                .arrayLayers   = 1,
-                .samples       = ESampleCount::Sample_1,
-                .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled | EImageUsage::TransferSrc,
-                .initialLayout = EImageLayout::Undefined,
-            },
-            .defaultView = ImageViewCreateInfo{
-                .label       = std::string(label) + "_DefaultView",
-                .aspectFlags = EImageAspect::Color,
-            },
-        });
-}
-
-RGImportedTextureDesc makePostprocessImportedTextureDesc(const Texture& texture,
-                                                         std::string_view label,
-                                                         EImageLayout::T finalLayout)
-{
-    return makeImportedTextureDesc(texture, label, finalLayout);
-}
-
-RGImportedTextureDesc makePostprocessImportedTextureDesc(const RenderImage& image,
-                                                         std::string_view   label,
-                                                         EImageLayout::T    finalLayout)
-{
-    return makeImportedTextureDesc(image, label, finalLayout);
+    return makeImportedTextureDesc(resource, label, finalLayout);
 }
 
 } // namespace
@@ -144,14 +108,14 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
         return {};
     }
 
-    const auto input = graph.importTexture(makePostprocessImportedTextureDesc(*inputTexture, "Postprocessing.Input", EImageLayout::ShaderReadOnlyOptimal));
+    const auto input = graph.importTexture(makePostprocessImportedTextureDesc(inputTexture ? inputTexture->getResourceShared() : nullptr, "Postprocessing.Input", EImageLayout::ShaderReadOnlyOptimal));
     return appendGraphPasses(graph, input, inputExtent, ctx);
 }
 
 RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
-                                                       RenderImage* inputImage,
-                                                       glm::vec2    viewportExtent,
-                                                       FrameContext* ctx)
+                                                       RenderTexture* inputImage,
+                                                       glm::vec2      viewportExtent,
+                                                       FrameContext*  ctx)
 {
     (void)viewportExtent;
 
@@ -166,7 +130,7 @@ RGTextureHandle PostProcessingStage::appendGraphPasses(RenderGraph& graph,
         return {};
     }
 
-    const auto input = graph.importTexture(makePostprocessImportedTextureDesc(*inputImage, "Postprocessing.Input", EImageLayout::ShaderReadOnlyOptimal));
+    const auto input = graph.importTexture(makePostprocessImportedTextureDesc(inputImage->getResourceShared(), "Postprocessing.Input", EImageLayout::ShaderReadOnlyOptimal));
     return appendGraphPasses(graph, input, inputExtent, ctx);
 }
 

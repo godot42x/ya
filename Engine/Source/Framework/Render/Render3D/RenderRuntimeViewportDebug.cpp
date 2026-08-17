@@ -1,4 +1,4 @@
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderTexture.h"
 #include "RenderRuntime.h"
 
 
@@ -62,21 +62,20 @@ struct ViewportDebugBuilder
 
 template <typename TGetter>
 void appendShadowDebugSlots(ViewportDebugBuilder&          builder,
-                            IImageView*                    directionalDepth,
-                            const std::shared_ptr<IImage>& shadowDepthImage,
+                            const std::shared_ptr<ImageResource>& directionalDepthResource,
                             TGetter&&                      pointFaceGetter,
                             uint32_t                       categoryIndex)
 {
-    if (directionalDepth) {
+    if (directionalDepthResource && directionalDepthResource->getImageView() && directionalDepthResource->getImageShared()) {
         builder.addSlot({
                             .label         = "ShadowDirectionalDepth",
                             .categoryIndex = categoryIndex,
                             .aspectFlags   = EImageAspect::Depth,
                         },
                         {
-                            .defaultView = directionalDepth,
+                            .defaultView = directionalDepthResource->getImageView(),
                             .ownedView   = nullptr,
-                            .image       = shadowDepthImage,
+                            .image       = directionalDepthResource->getImageShared(),
                         });
     }
 
@@ -91,16 +90,16 @@ void appendShadowDebugSlots(ViewportDebugBuilder&          builder,
 
     for (uint32_t pointLightIndex = 0; pointLightIndex < MAX_POINT_LIGHTS; ++pointLightIndex) {
         for (uint32_t faceIndex = 0; faceIndex < 6; ++faceIndex) {
-            if (auto* faceIV = pointFaceGetter(pointLightIndex, faceIndex)) {
+            if (auto faceResource = pointFaceGetter(pointLightIndex, faceIndex); faceResource && faceResource->getImageView() && faceResource->getImageShared()) {
                 builder.addSlot({
                                     .label         = std::format("ShadowPoint{}_Face{}", pointLightIndex, faceIndex),
                                     .categoryIndex = categoryIndex,
                                     .aspectFlags   = EImageAspect::Depth,
                                 },
                                 {
-                                    .defaultView = faceIV,
+                                    .defaultView = faceResource->getImageView(),
                                     .ownedView   = nullptr,
-                                    .image       = shadowDepthImage,
+                                    .image       = faceResource->getImageShared(),
                                 });
             }
         }
@@ -173,10 +172,9 @@ void appendForwardDebugSlots(const RenderRuntime& runtime, ViewportDebugBuilder&
     if (debugOutputs.bShadowMappingEnabled) {
         appendShadowDebugSlots(
             builder,
-            debugOutputs.shadowDirectionalDepth,
-            debugOutputs.shadowDepthImage,
+            debugOutputs.shadowDirectionalDepthResource,
             [&runtime](uint32_t pointLightIndex, uint32_t faceIndex)
-            { return runtime.getShadowPointFaceDepthIV(pointLightIndex, faceIndex); },
+            { return runtime.getShadowPointFaceDepthResource(pointLightIndex, faceIndex); },
             CATEGORY_SHADOW);
     }
 
@@ -346,13 +344,12 @@ void appendDeferredDebugSlots(const RenderRuntime&                    runtime,
                         });
     }
 
-    if (debugOutputs.shadowDepthImage) {
+    if (debugOutputs.shadowDirectionalDepthResource) {
         appendShadowDebugSlots(
             builder,
-            debugOutputs.shadowDirectionalDepth,
-            debugOutputs.shadowDepthImage,
+            debugOutputs.shadowDirectionalDepthResource,
             [&runtime](uint32_t pointLightIndex, uint32_t faceIndex)
-            { return runtime.getShadowPointFaceDepthIV(pointLightIndex, faceIndex); },
+            { return runtime.getShadowPointFaceDepthResource(pointLightIndex, faceIndex); },
             CATEGORY_SHADOW);
     }
 }
@@ -495,7 +492,7 @@ size_t RenderRuntime::buildViewportDebugCatalogSignature() const
     const auto deferredViews = getDeferredPipelineDebugViews();
 
     hashCombineValue(seed, debugOutputs.bShadowMappingEnabled);
-    hashCombineValue(seed, debugOutputs.shadowDirectionalDepth != nullptr);
+    hashCombineValue(seed, debugOutputs.shadowDirectionalDepthResource != nullptr);
     hashCombineValue(seed, debugOutputs.viewportDepthImageOwner != nullptr);
     hashCombineValue(seed, debugOutputs.bloomExtractOwner != nullptr);
     hashCombineValue(seed, debugOutputs.bloomBlurOwner != nullptr);
@@ -510,7 +507,7 @@ size_t RenderRuntime::buildViewportDebugCatalogSignature() const
             if (bitIndex >= 64) {
                 break;
             }
-            if (getShadowPointFaceDepthIV(pointLightIndex, faceIndex)) {
+            if (getShadowPointFaceDepthResource(pointLightIndex, faceIndex)) {
                 pointShadowFaceMask |= (uint64_t{1} << bitIndex);
             }
         }

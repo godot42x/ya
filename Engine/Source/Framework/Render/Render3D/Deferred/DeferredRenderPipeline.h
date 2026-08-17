@@ -12,7 +12,7 @@
 #include "RHI/Core/DescriptorSet.h"
 #include "Graph/RenderGraphExecutor.h"
 #include "RHI/Core/Pipeline.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/RenderTargetCreateInfo.h"
 #include "RHI/Render.h"
 #include "Render3D/RenderFrameData.h"
@@ -90,11 +90,11 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
 
     struct PublishedGraphOutputs
     {
-        std::shared_ptr<RenderImage> ssao{};
-        std::shared_ptr<RenderImage> bloomExtract{};
-        std::shared_ptr<RenderImage> bloomBlur{};
-        std::shared_ptr<RenderImage> bloomComposite{};
-        std::shared_ptr<RenderImage> postprocess{};
+        std::shared_ptr<RenderTexture> ssao{};
+        std::shared_ptr<RenderTexture> bloomExtract{};
+        std::shared_ptr<RenderTexture> bloomBlur{};
+        std::shared_ptr<RenderTexture> bloomComposite{};
+        std::shared_ptr<RenderTexture> postprocess{};
 
         void clear()
         {
@@ -197,11 +197,11 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     IImageView* getDebugSpecularAlphaView() const { return _debugSpecularAlphaView.get(); }
     const DeferredGBufferResources& getCurrentGBufferResources() const { return _currentGBufferResources; }
     const DeferredViewportResources& getCurrentViewportResources() const { return _currentViewportResources; }
-    std::shared_ptr<RenderImage> getViewportOutputImageShared() const { return _currentViewportResources.colorOwner; }
-    std::shared_ptr<RenderImage> getPostprocessOutputImageShared() const { return _publishedGraphOutputs.postprocess; }
-    std::shared_ptr<RenderImage> getBloomExtractImageShared() const { return _publishedGraphOutputs.bloomExtract; }
-    std::shared_ptr<RenderImage> getBloomBlurImageShared() const { return _publishedGraphOutputs.bloomBlur; }
-    std::shared_ptr<RenderImage> getBloomCompositeImageShared() const { return _publishedGraphOutputs.bloomComposite; }
+    std::shared_ptr<RenderTexture> getViewportOutputImageShared() const { return _currentViewportResources.colorOwner; }
+    std::shared_ptr<RenderTexture> getPostprocessOutputImageShared() const { return _publishedGraphOutputs.postprocess; }
+    std::shared_ptr<RenderTexture> getBloomExtractImageShared() const { return _publishedGraphOutputs.bloomExtract; }
+    std::shared_ptr<RenderTexture> getBloomBlurImageShared() const { return _publishedGraphOutputs.bloomBlur; }
+    std::shared_ptr<RenderTexture> getBloomCompositeImageShared() const { return _publishedGraphOutputs.bloomComposite; }
     const RGTopologyDescription& getLastFrameGraphTopology() const { return _lastFrameGraphTopology; }
     void setSSAOEnabled(bool enabled)
     {
@@ -214,18 +214,11 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     bool setRenderTargetDepthFormat(RenderTargetCatalog::Entry::EOwner owner, EFormat::T format) override;
     bool setRenderTargetColorFormat(RenderTargetCatalog::Entry::EOwner owner, uint32_t attachmentIndex, EFormat::T format) override;
 
-    std::shared_ptr<IImage> getShadowDepthImage() const override { return _shadowResources.depthImage; }
-    std::shared_ptr<RenderImage> getViewportDepthImageShared() const override { return _currentViewportResources.depthOwner; }
-    std::shared_ptr<RenderImage> getEntityIdImageShared() const override { return _currentViewportResources.entityIdOwner; }
+    std::shared_ptr<RenderTexture> getViewportDepthImageShared() const override { return _currentViewportResources.depthOwner; }
+    std::shared_ptr<RenderTexture> getEntityIdImageShared() const override { return _currentViewportResources.entityIdOwner; }
     bool           isShadowMappingEnabled() const override;
-    IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
-    IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override
-    {
-        if (pointLightIndex >= MAX_POINT_LIGHTS || faceIndex >= 6) {
-            return nullptr;
-        }
-        return _shadowResources.pointFaceIVs[pointLightIndex][faceIndex].get();
-    }
+    std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const override;
+    std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const override;
     bool     isPostprocessingEnabled() const override { return _postProcessStage.isEnabled(); }
     [[nodiscard]] EFormat::T getPostprocessColorFormat() const override { return POSTPROCESS_COLOR_FORMAT; }
 
@@ -245,7 +238,7 @@ struct YA_RENDER_3D_API DeferredRenderPipeline : public IRenderPipeline
     [[nodiscard]] DeferredGBufferResources buildPublishedGBufferResources(const RenderGraphExecutionResult& result) const;
     [[nodiscard]] DeferredViewportResources buildPublishedViewportResources(
         const RenderGraphExecutionResult& result,
-        const std::shared_ptr<RenderImage>& depthOwner) const;
+        const std::shared_ptr<RenderTexture>& depthOwner) const;
     void publishAttachmentResources(DeferredGBufferResources nextGBuffer,
                                     DeferredViewportResources nextViewport);
     void publishPostprocessOutputs(const RenderGraphExecutionResult& result,

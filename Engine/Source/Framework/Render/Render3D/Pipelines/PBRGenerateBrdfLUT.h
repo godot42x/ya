@@ -3,7 +3,7 @@
 
 #include "Graph/RenderGraphExecutor.h"
 #include "RHI/Core/Pipeline.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderTexture.h"
 #include "RHI/Render.h"
 
 namespace ya
@@ -33,7 +33,7 @@ struct PBRGenerateBrdfLUT
     struct ExecuteContext
     {
         ICommandBuffer* cmdBuf     = nullptr;
-        RenderImage*    output     = nullptr;
+        RenderTexture*  output     = nullptr;
         ClearValue      clearColor = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);
     };
 

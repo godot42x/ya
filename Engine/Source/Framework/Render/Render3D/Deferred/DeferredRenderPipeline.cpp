@@ -14,7 +14,7 @@
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Core/Sampler.h"
 #include "Graph/RenderGraphImportUtils.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/Swapchain.h"
 #include "RHI/Core/Texture.h"
 #include "Resource/Mesh/PrimitiveMeshCache.h"
@@ -29,6 +29,27 @@
 
 namespace ya
 {
+
+namespace
+{
+
+std::shared_ptr<ImageResource> makeShadowDebugResource(const std::shared_ptr<IImage>& image,
+                                                       const std::shared_ptr<IImageView>& view,
+                                                       std::string_view label)
+{
+    if (!image || !view) {
+        return nullptr;
+    }
+
+    auto resource         = std::make_shared<ImageResource>();
+    resource->label       = std::string(label);
+    resource->image       = image;
+    resource->defaultView = view;
+    resource->retainedResources = {image, view};
+    return resource;
+}
+
+} // namespace
 
 namespace
 {
@@ -97,8 +118,8 @@ RenderTargetCreateInfo buildDeferredGBufferRenderTargetSpec(Extent2D extent,
 RenderTargetCreateInfo buildDeferredViewportRenderTargetSpec(Extent2D extent, EFormat::T colorFormat);
 DeferredAttachmentFormats buildDeferredFormatsFromSpec(const RenderTargetCreateInfo& spec);
 
-RGImportedTextureDesc makeDeferredEnvironmentImportedDesc(const ImageResourceRef& resource,
-                                                          std::string_view                    label)
+RGImportedTextureDesc makeDeferredEnvironmentImportedDesc(const std::shared_ptr<ImageResource>& resource,
+                                                          std::string_view                     label)
 {
     return makeImportedTextureDesc(resource, label, EImageLayout::ShaderReadOnlyOptimal);
 }
@@ -349,6 +370,28 @@ void DeferredRenderPipeline::requestSettings(const SettingsSnapshot& settings)
 bool DeferredRenderPipeline::isShadowMappingEnabled() const
 {
     return currentShadowSettings().isEnabled();
+}
+
+std::shared_ptr<ImageResource> DeferredRenderPipeline::getShadowDirectionalDepthResource() const
+{
+    return makeShadowDebugResource(
+        _shadowResources.depthImage,
+        _shadowResources.directionalDepthIV,
+        "Deferred.ShadowDirectionalDepth");
+}
+
+std::shared_ptr<ImageResource> DeferredRenderPipeline::getShadowPointFaceDepthResource(
+    uint32_t pointLightIndex,
+    uint32_t faceIndex) const
+{
+    if (pointLightIndex >= MAX_POINT_LIGHTS || faceIndex >= 6) {
+        return nullptr;
+    }
+
+    return makeShadowDebugResource(
+        _shadowResources.depthImage,
+        _shadowResources.pointFaceIVs[pointLightIndex][faceIndex],
+        std::format("Deferred.ShadowPointDepth.{}.{}", pointLightIndex, faceIndex));
 }
 
 ShadowRuntimeState DeferredRenderPipeline::buildShadowState() const
@@ -979,7 +1022,7 @@ void DeferredRenderPipeline::publishGraphExecutionResult(
 DeferredGBufferResources DeferredRenderPipeline::buildPublishedGBufferResources(
     const RenderGraphExecutionResult& result) const
 {
-    std::array<std::shared_ptr<RenderImage>, 4> nextGBufferColors{};
+    std::array<std::shared_ptr<RenderTexture>, 4> nextGBufferColors{};
     for (uint32_t attachmentIndex = 0; attachmentIndex < std::size(deferred_graph_exports::gBufferColor); ++attachmentIndex) {
         nextGBufferColors[attachmentIndex] = result.getExportedTextureShared(deferred_graph_exports::gBufferColor[attachmentIndex]);
     }
@@ -994,7 +1037,7 @@ DeferredGBufferResources DeferredRenderPipeline::buildPublishedGBufferResources(
 
 DeferredViewportResources DeferredRenderPipeline::buildPublishedViewportResources(
     const RenderGraphExecutionResult& result,
-    const std::shared_ptr<RenderImage>& depthOwner) const
+    const std::shared_ptr<RenderTexture>& depthOwner) const
 {
     DeferredViewportResources resources{};
     resources.publish(

@@ -173,12 +173,12 @@ bool CubeMap2PBRIrradianceMap::ensurePipeline(EFormat::T colorFormat)
 CubeMap2PBRIrradianceMap::ExecuteResult CubeMap2PBRIrradianceMap::execute(const ExecuteContext& ctx)
 {
     ExecuteResult result{};
-    if (!_render || !ctx.cmdBuf || (!ctx.inputImage && !ctx.inputTexture) || !ctx.output) {
+    if (!_render || !ctx.cmdBuf || !ctx.input || !ctx.output) {
         return result;
     }
 
-    auto* const inputImage = ctx.inputImage ? ctx.inputImage->getImage() : (ctx.inputTexture ? ctx.inputTexture->getImage() : nullptr);
-    auto* const inputView  = ctx.inputImage ? ctx.inputImage->getImageView() : (ctx.inputTexture ? ctx.inputTexture->getImageView() : nullptr);
+    auto* const inputImage = ctx.input ? ctx.input->getImage() : nullptr;
+    auto* const inputView  = ctx.input ? ctx.input->getImageView() : nullptr;
 
     YA_CORE_ASSERT(inputView,
                    "CubeMap2PBRIrradianceMap input cubemap must have a valid image view");

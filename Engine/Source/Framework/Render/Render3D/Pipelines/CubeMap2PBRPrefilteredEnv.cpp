@@ -193,12 +193,12 @@ bool CubeMap2PBRPrefilteredEnv::ensurePipeline(EFormat::T colorFormat)
 CubeMap2PBRPrefilteredEnv::ExecuteResult CubeMap2PBRPrefilteredEnv::execute(const ExecuteContext& ctx)
 {
     ExecuteResult result{};
-    if (!_render || !ctx.cmdBuf || (!ctx.inputImage && !ctx.inputTexture) || !ctx.output) {
+    if (!_render || !ctx.cmdBuf || !ctx.input || !ctx.output) {
         return result;
     }
 
-    auto* const inputImage = ctx.inputImage ? ctx.inputImage->getImage() : (ctx.inputTexture ? ctx.inputTexture->getImage() : nullptr);
-    auto* const inputView  = ctx.inputImage ? ctx.inputImage->getImageView() : (ctx.inputTexture ? ctx.inputTexture->getImageView() : nullptr);
+    auto* const inputImage = ctx.input ? ctx.input->getImage() : nullptr;
+    auto* const inputView  = ctx.input ? ctx.input->getImageView() : nullptr;
 
     YA_CORE_ASSERT(inputView, "CubeMap2PBRPrefilterEnv input cubemap must have a valid image view");
     YA_CORE_ASSERT(ctx.output->getImageShared() && ctx.output->getImageView(),

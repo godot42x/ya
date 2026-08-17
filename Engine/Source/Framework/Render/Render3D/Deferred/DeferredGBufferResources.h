@@ -8,14 +8,14 @@
 namespace ya
 {
 
-struct RenderImage;
+struct RenderTexture;
 
 struct DeferredGBufferResources
 {
-    std::array<std::shared_ptr<RenderImage>, 4> colorOwners{};
-    std::shared_ptr<RenderImage>                depthOwner = nullptr;
-    std::array<RenderImage*, 4> color{};
-    RenderImage*                depth = nullptr;
+    std::array<std::shared_ptr<RenderTexture>, 4> colorOwners{};
+    std::shared_ptr<RenderTexture>                depthOwner = nullptr;
+    std::array<RenderTexture*, 4> color{};
+    RenderTexture*                depth = nullptr;
     DeferredAttachmentFormats   formats{};
 
     [[nodiscard]] bool isComplete() const
@@ -36,8 +36,8 @@ struct DeferredGBufferResources
         formats = nextFormats;
     }
 
-    void publish(std::array<std::shared_ptr<RenderImage>, 4> nextColorOwners,
-                 std::shared_ptr<RenderImage>                nextDepthOwner,
+    void publish(std::array<std::shared_ptr<RenderTexture>, 4> nextColorOwners,
+                 std::shared_ptr<RenderTexture>                nextDepthOwner,
                  const DeferredAttachmentFormats&            nextFormats)
     {
         colorOwners = std::move(nextColorOwners);

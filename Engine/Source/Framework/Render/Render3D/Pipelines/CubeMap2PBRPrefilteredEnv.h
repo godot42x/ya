@@ -6,7 +6,8 @@
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/Image.h"
 #include "RHI/Core/Pipeline.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/ImageResource.h"
+#include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/Sampler.h"
 #include "RHI/Core/Texture.h"
 
@@ -65,9 +66,8 @@ struct CubeMap2PBRPrefilteredEnv
     struct ExecuteContext
     {
         ICommandBuffer* cmdBuf     = nullptr;
-        RenderImage*    inputImage = nullptr;
-        Texture*        inputTexture = nullptr;
-        RenderImage*    output     = nullptr;
+        ImageResource*  input  = nullptr;
+        ImageResource*  output = nullptr;
         ClearValue      clearColor = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);
     };
 

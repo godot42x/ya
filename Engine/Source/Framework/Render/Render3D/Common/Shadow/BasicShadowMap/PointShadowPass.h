@@ -8,6 +8,7 @@
 #include "RHI/Core/Buffer.h"
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/Image.h"
+#include "RHI/Core/ImageResource.h"
 #include "RHI/Core/Pipeline.h"
 #include "Render3D/Stage/IRenderStage.h"
 
@@ -56,7 +57,7 @@ class PointShadowPass
     [[nodiscard]] IGraphicsPipeline* getDirectStaticPipeline() const { return _directStaticVariant.pipeline.get(); }
     [[nodiscard]] IGraphicsPipeline* getDirectSkinnedPipeline() const { return _directSkinnedVariant.pipeline.get(); }
 
-    void rebuildFaceTextures(std::shared_ptr<IImage> shadowImage);
+    void rebuildFaceTextures(std::shared_ptr<ImageResource> shadowResource);
 
   private:
     // ─── Rendering helpers ───────────────────────────────
@@ -84,7 +85,7 @@ class PointShadowPass
 
     GraphicsPipelineCreateInfo _directPipelineCI{};
 
-    stdptr<IImage> _shadowImage;
+    stdptr<ImageResource> _shadowResource;
     std::array<std::array<stdptr<IImageView>, 6>, MAX_POINT_LIGHTS> _faceDepthViews{};
 
     PointShadowIndirectRenderer _indirectRenderer;

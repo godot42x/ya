@@ -11,7 +11,7 @@ namespace ya
 namespace
 {
 
-RGImportedTextureDesc makeBrdfLutImportedTextureDesc(const RenderImage& image)
+RGImportedTextureDesc makeBrdfLutImportedTextureDesc(const RenderTexture& image)
 {
     return makeImportedTextureDesc(image, "PBRGenerateBrdfLUT.Output", EImageLayout::ShaderReadOnlyOptimal);
 }

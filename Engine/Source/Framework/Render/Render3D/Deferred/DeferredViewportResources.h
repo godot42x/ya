@@ -7,16 +7,16 @@
 namespace ya
 {
 
-struct RenderImage;
+struct RenderTexture;
 
 struct DeferredViewportResources
 {
-    std::shared_ptr<RenderImage> colorOwner = nullptr;
-    std::shared_ptr<RenderImage> depthOwner = nullptr;
-    std::shared_ptr<RenderImage> entityIdOwner = nullptr;
-    RenderImage*                 color      = nullptr;
-    RenderImage*                 depth      = nullptr;
-    RenderImage*                 entityId   = nullptr;
+    std::shared_ptr<RenderTexture> colorOwner = nullptr;
+    std::shared_ptr<RenderTexture> depthOwner = nullptr;
+    std::shared_ptr<RenderTexture> entityIdOwner = nullptr;
+    RenderTexture*                 color      = nullptr;
+    RenderTexture*                 depth      = nullptr;
+    RenderTexture*                 entityId   = nullptr;
     DeferredAttachmentFormats formats{};
 
     [[nodiscard]] bool isComplete() const
@@ -35,9 +35,9 @@ struct DeferredViewportResources
         formats = nextFormats;
     }
 
-    void publish(std::shared_ptr<RenderImage> nextColorOwner,
-                 std::shared_ptr<RenderImage> nextDepthOwner,
-                 std::shared_ptr<RenderImage> nextEntityIdOwner,
+    void publish(std::shared_ptr<RenderTexture> nextColorOwner,
+                 std::shared_ptr<RenderTexture> nextDepthOwner,
+                 std::shared_ptr<RenderTexture> nextEntityIdOwner,
                  const DeferredAttachmentFormats& nextFormats)
     {
         colorOwner = std::move(nextColorOwner);

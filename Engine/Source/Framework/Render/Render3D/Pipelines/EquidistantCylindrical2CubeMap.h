@@ -4,7 +4,7 @@
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/Image.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/ImageResource.h"
 #include "RHI/Core/Pipeline.h"
 #include "RHI/Core/Sampler.h"
 #include "RHI/Core/Texture.h"
@@ -42,7 +42,7 @@ struct EquidistantCylindrical2CubeMap
     {
         ICommandBuffer* cmdBuf     = nullptr;
         Texture*      input         = nullptr;
-        RenderImage*  output        = nullptr;
+        ImageResource* output       = nullptr;
         bool          bFlipVertical = false;
         ClearValue      clearColor = ClearValue(0.0f, 0.0f, 0.0f, 1.0f);
     };

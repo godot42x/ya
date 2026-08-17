@@ -46,18 +46,11 @@ std::array<ColorRGBA<uint8_t>, 16> buildNoisePixels()
     };
 }
 
-RGImportedTextureDesc makeSSAOImportedTextureDesc(const Texture& texture,
-                                                  std::string_view label,
-                                                  EImageLayout::T finalLayout)
+RGImportedTextureDesc makeSSAOImportedTextureDesc(const std::shared_ptr<ImageResource>& resource,
+                                                  std::string_view                    label,
+                                                  EImageLayout::T                     finalLayout)
 {
-    return makeImportedTextureDesc(texture, label, finalLayout);
-}
-
-RGImportedTextureDesc makeSSAOImportedTextureDesc(const RenderImage& image,
-                                                  std::string_view label,
-                                                  EImageLayout::T finalLayout)
-{
-    return makeImportedTextureDesc(image, label, finalLayout);
+    return makeImportedTextureDesc(resource, label, finalLayout);
 }
 
 } // namespace
@@ -208,7 +201,7 @@ RGTextureHandle SSAOStage::appendGraphPass(RenderGraph& graph,
 {
     YA_CORE_ASSERT(_noiseTexture != nullptr, "SSAOStage requires initialized noise texture before graph pass append");
 
-    const auto  noise = graph.importTexture(makeSSAOImportedTextureDesc(*_noiseTexture, "SSAO.Noise", EImageLayout::ShaderReadOnlyOptimal));
+    const auto  noise = graph.importTexture(makeSSAOImportedTextureDesc(_noiseTexture ? _noiseTexture->getResourceShared() : nullptr, "SSAO.Noise", EImageLayout::ShaderReadOnlyOptimal));
     const auto  output = graph.createPersistentTexture(RGTextureDesc{
          .label  = "SSAO.Output",
          .format = AO_FORMAT,

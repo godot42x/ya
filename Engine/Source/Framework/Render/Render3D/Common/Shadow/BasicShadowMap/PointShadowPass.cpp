@@ -101,7 +101,7 @@ void PointShadowPass::destroy()
 {
     _indirectRenderer.destroy();
 
-    _shadowImage.reset();
+    _shadowResource.reset();
     for (auto& faceViewArr : _faceDepthViews) {
         for (auto& view : faceViewArr) view.reset();
     }
@@ -146,7 +146,7 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
     const BasicShadowFramePayload& payload,
     std::optional<RGPassHandle> dependency)
 {
-    if (!payload.frameData || payload.pointLightCount == 0 || !_shadowImage) return std::nullopt;
+    if (!payload.frameData || payload.pointLightCount == 0 || !_shadowResource || !_shadowResource->getImage()) return std::nullopt;
 
     const bool useIndirect = payload.pointIndirectRequested() && _indirectRenderer.hasRenderableInstances(payload.flightIndex);
 
@@ -207,14 +207,14 @@ std::optional<RGPassHandle> PointShadowPass::appendGraphPasses(
                 .layerIndex      = getShadowPointLightBaseLayer(lightIndex) + faceIndex,
             };
             facePayload.faceDS = binding.pointFaceDS[facePayload.faceGlobalIndex];
-            facePayload.depthImage = _shadowImage.get();
+            facePayload.depthImage = _shadowResource->getImage();
             facePayload.depthView  = _faceDepthViews[lightIndex][faceIndex].get();
             auto faceDepthView = _faceDepthViews[lightIndex][faceIndex];
             const auto& faceAllocation = binding.pointFaces[facePayload.faceGlobalIndex];
             if (!facePayload.depthView || !faceDepthView || !faceAllocation) continue;
 
             const auto depth = graph.importTexture(makeImportedTextureDesc(
-                _shadowImage,
+                _shadowResource,
                 faceDepthView,
                 std::format("PointShadow.Depth.{}.{}", lightIndex, faceIndex),
                 EImageLayout::ShaderReadOnlyOptimal,
@@ -376,11 +376,11 @@ void PointShadowPass::refreshPipeline(EFormat::T depthFormat)
     _indirectRenderer.refreshPipeline(depthFormat);
 }
 
-void PointShadowPass::rebuildFaceTextures(std::shared_ptr<IImage> shadowImage)
+void PointShadowPass::rebuildFaceTextures(std::shared_ptr<ImageResource> shadowResource)
 {
+    _shadowResource = std::move(shadowResource);
+    const auto shadowImage = _shadowResource ? _shadowResource->getImageShared() : nullptr;
     if (!_render || !shadowImage) return;
-
-    _shadowImage = shadowImage;
     auto* resourceFactory = _render->getResourceFactory();
 
     for (uint32_t lightIndex = 0; lightIndex < MAX_POINT_LIGHTS; ++lightIndex) {

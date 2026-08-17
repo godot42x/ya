@@ -3,6 +3,7 @@
 #include "Render3D/Common/RenderRuntimeHostServices.h"
 #include "Render3D/Services/DebugRenderSystem.h"
 #include "RHI/Backend/Vulkan/VulkanSwapChain.h"
+#include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "RHI/Core/Swapchain.h"
 #include "Render3D/Pipelines/BasicPostprocessing.h"
@@ -19,7 +20,7 @@ namespace ya
 namespace
 {
 
-std::shared_ptr<RenderImage> createPresentationRenderImage(IRender& render, VulkanSwapChain& swapchain, uint32_t imageIndex)
+std::shared_ptr<RenderTexture> createPresentationRenderTexture(IRender& render, VulkanSwapChain& swapchain, uint32_t imageIndex)
 {
     const auto& swapchainCI = swapchain.getCreateInfo();
     auto importedImage = render.getResourceFactory()->importImage(ImportedImageDesc{
@@ -47,11 +48,30 @@ std::shared_ptr<RenderImage> createPresentationRenderImage(IRender& render, Vulk
         });
     YA_CORE_ASSERT(imageView != nullptr, "Failed to create presentation image view {}", imageIndex);
 
-    auto renderImage      = std::make_shared<RenderImage>();
-    renderImage->label    = std::format("Presentation_{}", imageIndex);
-    renderImage->image    = std::move(importedImage);
-    renderImage->defaultView = std::move(imageView);
-    return renderImage;
+    auto resource = std::make_shared<ImageResource>();
+    resource->label       = std::format("Presentation_{}", imageIndex);
+    resource->desc.image  = ImageCreateInfo{
+        .label   = resource->label,
+        .usage   = static_cast<EImageUsage::T>(EImageUsage::ColorAttachment |
+                     (swapchainCI.bEnableTransferSrc ? EImageUsage::TransferSrc : EImageUsage::None)),
+        .format  = swapchain.getFormat(),
+        .extent  = {.width = swapchain.getExtent().width, .height = swapchain.getExtent().height, .depth = 1},
+        .mipLevels   = 1,
+        .arrayLayers = 1,
+        .samples     = ESampleCount::Sample_1,
+    };
+    resource->desc.defaultView = ImageViewCreateInfo{
+        .label          = std::format("Presentation_{}_View", imageIndex),
+        .viewType       = EImageViewType::View2D,
+        .aspectFlags    = EImageAspect::Color,
+        .baseMipLevel   = 0,
+        .levelCount     = 1,
+        .baseArrayLayer = 0,
+        .layerCount     = 1,
+    };
+    resource->image       = std::move(importedImage);
+    resource->defaultView = std::move(imageView);
+    return RenderTexture::adopt(std::move(resource));
 }
 
 } // namespace
@@ -277,7 +297,7 @@ void RenderRuntime::rebuildPresentationImages()
     _presentationImages.reserve(swapchain->getImageCount());
     for (uint32_t imageIndex = 0; imageIndex < swapchain->getImageCount(); ++imageIndex) {
         _presentationGraphExecutors.push_back(std::make_unique<RenderGraphExecutor>(*_render->getResourceFactory()));
-        _presentationImages.push_back(createPresentationRenderImage(*_render, *swapchain, imageIndex));
+        _presentationImages.push_back(createPresentationRenderTexture(*_render, *swapchain, imageIndex));
     }
 }
 

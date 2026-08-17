@@ -34,6 +34,8 @@ enum class EForwardPendingResourceRefresh : uint32_t
     AttachmentFormat = 1 << 2,
 };
 
+struct RenderTexture;
+
 struct Texture;
 struct Sampler;
 
@@ -77,7 +79,7 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     RGTopologyDescription        _lastFrameGraphTopology{};
 
     bool                    bMSAA                    = false;
-    std::shared_ptr<RenderImage> _currentPostprocessOutput = nullptr;
+    std::shared_ptr<RenderTexture> _currentPostprocessOutput = nullptr;
 
     Extent2D      _pendingViewportExtent{};
     uint32_t      _pendingResourceRefreshMask = 0;
@@ -105,23 +107,23 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     [[nodiscard]] EFormat::T     getViewportColorFormat() const override;
     [[nodiscard]] EFormat::T     getViewportDepthFormat() const override;
     [[nodiscard]] const ForwardViewportResources& getCurrentViewportResources() const { return _viewportResources; }
-    [[nodiscard]] std::shared_ptr<RenderImage>    getViewportOutputImageShared() const
+    [[nodiscard]] std::shared_ptr<RenderTexture>    getViewportOutputImageShared() const
     {
         return bMSAA ? _viewportResources.resolveOwner : _viewportResources.colorOwner;
     }
-    [[nodiscard]] std::shared_ptr<RenderImage> getPostprocessOutputImageShared() const
+    [[nodiscard]] std::shared_ptr<RenderTexture> getPostprocessOutputImageShared() const
     {
         return _currentPostprocessOutput;
     }
-    [[nodiscard]] std::shared_ptr<RenderImage> getBloomExtractImageShared() const
+    [[nodiscard]] std::shared_ptr<RenderTexture> getBloomExtractImageShared() const
     {
         return _postProcessStage.getBloomExtractImageShared();
     }
-    [[nodiscard]] std::shared_ptr<RenderImage> getBloomBlurImageShared() const
+    [[nodiscard]] std::shared_ptr<RenderTexture> getBloomBlurImageShared() const
     {
         return _postProcessStage.getBloomBlurImageShared();
     }
-    [[nodiscard]] std::shared_ptr<RenderImage> getBloomCompositeImageShared() const
+    [[nodiscard]] std::shared_ptr<RenderTexture> getBloomCompositeImageShared() const
     {
         return _postProcessStage.getBloomCompositeImageShared();
     }
@@ -129,11 +131,10 @@ struct YA_RENDER_3D_API ForwardRenderPipeline : public IRenderPipeline
     void appendRenderTargetEntries(RenderTargetCatalog& catalog) const override;
 
     [[nodiscard]] bool           isShadowMappingEnabled() const override;
-    [[nodiscard]] std::shared_ptr<IImage> getShadowDepthImage() const override { return _shadowResources.depthImage; }
-    [[nodiscard]] std::shared_ptr<RenderImage> getViewportDepthImageShared() const override { return _viewportResources.depthOwner; }
-    [[nodiscard]] std::shared_ptr<RenderImage> getEntityIdImageShared() const override { return _viewportResources.entityIdOwner; }
-    [[nodiscard]] IImageView*    getShadowDirectionalDepthIV() const override { return _shadowResources.directionalDepthIV.get(); }
-    [[nodiscard]] IImageView*    getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const override;
+    [[nodiscard]] std::shared_ptr<RenderTexture> getViewportDepthImageShared() const override { return _viewportResources.depthOwner; }
+    [[nodiscard]] std::shared_ptr<RenderTexture> getEntityIdImageShared() const override { return _viewportResources.entityIdOwner; }
+    [[nodiscard]] std::shared_ptr<ImageResource> getShadowDirectionalDepthResource() const override;
+    [[nodiscard]] std::shared_ptr<ImageResource> getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const override;
     [[nodiscard]] bool           isPostprocessingEnabled() const override { return _postProcessStage.isEnabled(); }
     [[nodiscard]] EFormat::T     getPostprocessColorFormat() const override { return POSTPROCESS_COLOR_FORMAT; }
     [[nodiscard]] ShadowSettings getCurrentShadowSettings() const;

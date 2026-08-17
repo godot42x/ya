@@ -14,7 +14,7 @@ struct Scene;
 /// this contract and never locate the processor via the App singleton.
 struct EnvironmentLightingResultProvider
 {
-    std::function<ImageResourceRef(Scene*)>                            resolveSceneSkyboxResource;
+    std::function<std::shared_ptr<ImageResource>(Scene*)>              resolveSceneSkyboxResource;
     std::function<EnvironmentLightingSceneResources(Scene*)>           resolveSceneEnvironmentLightingResources;
 
     [[nodiscard]] bool isBound() const

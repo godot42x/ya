@@ -16,18 +16,11 @@ namespace ya
 namespace
 {
 
-RGImportedTextureDesc makeBloomImportedTextureDesc(const Texture& texture,
-                                                   std::string_view label,
-                                                   EImageLayout::T finalLayout)
+RGImportedTextureDesc makeBloomImportedTextureDesc(const std::shared_ptr<ImageResource>& resource,
+                                                   std::string_view                    label,
+                                                   EImageLayout::T                     finalLayout)
 {
-    return makeImportedTextureDesc(texture, label, finalLayout);
-}
-
-RGImportedTextureDesc makeBloomImportedTextureDesc(const RenderImage& image,
-                                                   std::string_view label,
-                                                   EImageLayout::T finalLayout)
-{
-    return makeImportedTextureDesc(image, label, finalLayout);
+    return makeImportedTextureDesc(resource, label, finalLayout);
 }
 
 template <typename TPushConstants>
@@ -274,8 +267,8 @@ RGTextureHandle BloomPostprocessing::appendGraphPasses(RenderGraph& graph, const
     const auto scene = desc.sceneHandle.isValid()
         ? desc.sceneHandle
         : desc.sceneImage
-            ? graph.importTexture(makeBloomImportedTextureDesc(*desc.sceneImage, "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal))
-            : graph.importTexture(makeBloomImportedTextureDesc(*desc.sceneTexture, "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal));
+            ? graph.importTexture(makeBloomImportedTextureDesc(desc.sceneImage->getResourceShared(), "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal))
+            : graph.importTexture(makeBloomImportedTextureDesc(desc.sceneTexture->getResourceShared(), "Bloom.Scene", EImageLayout::ShaderReadOnlyOptimal));
     const auto output = graph.createTexture(RGTextureDesc{
          .label  = "Bloom.CompositeOutput",
          .format = BloomPostprocessing::BLOOM_FORMAT,

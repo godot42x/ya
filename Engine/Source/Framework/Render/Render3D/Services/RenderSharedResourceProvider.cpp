@@ -1,6 +1,6 @@
 #include "RenderSharedResourceProvider.h"
 #include "RHI/Core/RenderResourceFactory.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderTexture.h"
 
 #include "Render3D/EnvironmentLighting/EnvironmentLightingProcessor.h"
 #include "RHI/Core/Sampler.h"
@@ -21,7 +21,7 @@ ImageViewHandle getTextureImageViewHandle(const Texture* texture)
     return texture && texture->getImageView() ? texture->getImageView()->getHandle() : ImageViewHandle{};
 }
 
-ImageViewHandle getRenderImageViewHandle(const RenderImage* image)
+ImageViewHandle getRenderTextureViewHandle(const RenderTexture* image)
 {
     return image && image->getImageView() ? image->getImageView()->getHandle() : ImageViewHandle{};
 }
@@ -31,12 +31,17 @@ const char* getTextureLabel(const Texture* texture)
     return texture ? texture->getLabel().c_str() : "<null>";
 }
 
-const char* getRenderImageLabel(const RenderImage* image)
+const char* getRenderTextureLabel(const RenderTexture* image)
 {
     return image ? image->getLabel().c_str() : "<null>";
 }
 
-IImageView* resolveDescriptorImageView(const stdptr<Texture>& texture, const stdptr<RenderImage>& renderImage)
+const char* getImageResourceLabel(const ImageResource* image)
+{
+    return image ? image->getLabel().c_str() : "<null>";
+}
+
+IImageView* resolveDescriptorImageView(const stdptr<Texture>& texture, const stdptr<RenderTexture>& renderImage)
 {
     if (renderImage && renderImage->getImageView()) {
         return renderImage->getImageView();
@@ -141,8 +146,8 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneSkyboxDescriptorSet(Sc
 
     auto skyboxResource = _environmentLightingProvider.resolveSceneSkyboxResource
                               ? _environmentLightingProvider.resolveSceneSkyboxResource(scene)
-                              : ImageResourceRef{};
-    auto* descriptorImageView = skyboxResource.getImageView();
+                              : nullptr;
+    auto* descriptorImageView = skyboxResource ? skyboxResource->getImageView() : nullptr;
     if (!descriptorImageView) {
         _skybox.boundSceneImageView = nullptr;
         return _skybox.fallbackDS;
@@ -166,24 +171,24 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneEnvironmentLightingDes
     auto resources = resolveSceneEnvironmentLightingResources(scene);
     if (!resources.isComplete()) {
         YA_CORE_WARN("Environment lighting DS fallback: incomplete resources cubemapImage='{}' irradianceImage='{}' prefilterImage='{}' brdf='{}'",
-                     getRenderImageLabel(resources.cubemap.renderImage.get()),
-                     getRenderImageLabel(resources.irradiance.renderImage.get()),
-                     getRenderImageLabel(resources.prefilter.renderImage.get()),
-                     getRenderImageLabel(resources.brdfLut.get()));
+                     getImageResourceLabel(resources.cubemap.get()),
+                     getImageResourceLabel(resources.irradiance.get()),
+                     getImageResourceLabel(resources.prefilter.get()),
+                     getRenderTextureLabel(resources.brdfLut.get()));
         return _environmentLighting.fallbackDS;
     }
 
-    auto* cubemapImageView = resources.cubemap.getImageView();
-    auto* irradianceImageView = resources.irradiance.getImageView();
-    auto* prefilterImageView = resources.prefilter.getImageView();
+    auto* cubemapImageView = resources.cubemap ? resources.cubemap->getImageView() : nullptr;
+    auto* irradianceImageView = resources.irradiance ? resources.irradiance->getImageView() : nullptr;
+    auto* prefilterImageView = resources.prefilter ? resources.prefilter->getImageView() : nullptr;
     const auto& brdfLutTexture = resources.brdfLut;
     auto*       brdfLutImageView = brdfLutTexture ? brdfLutTexture->getImageView() : nullptr;
     if (!cubemapImageView || !irradianceImageView || !prefilterImageView || !brdfLutImageView) {
         YA_CORE_WARN("Environment lighting DS fallback after compat resolve: cubemap='{}' irradiance='{}' prefilter='{}' brdf='{}'",
-                     getTextureLabel(resources.cubemap.texture.get()),
-                     getTextureLabel(resources.irradiance.texture.get()),
-                     getTextureLabel(resources.prefilter.texture.get()),
-                     getRenderImageLabel(brdfLutTexture.get()));
+                     getImageResourceLabel(resources.cubemap.get()),
+                     getImageResourceLabel(resources.irradiance.get()),
+                     getImageResourceLabel(resources.prefilter.get()),
+                     getRenderTextureLabel(brdfLutTexture.get()));
         return _environmentLighting.fallbackDS;
     }
 
@@ -206,10 +211,10 @@ DescriptorSetHandle RenderSharedResourceProvider::getSceneEnvironmentLightingDes
         _environmentLighting.boundPrefilterImageView  = prefilterImageViewHandle;
         _environmentLighting.boundBrdfLutImageView    = brdfLutImageViewHandle;
         YA_CORE_INFO("Environment lighting DS update: cubemap='{}' irradiance='{}' prefilter='{}' brdf='{}'",
-                     getTextureLabel(resources.cubemap.texture.get()),
-                     getTextureLabel(resources.irradiance.texture.get()),
-                     getTextureLabel(resources.prefilter.texture.get()),
-                     getRenderImageLabel(brdfLutTexture.get()));
+                     getImageResourceLabel(resources.cubemap.get()),
+                     getImageResourceLabel(resources.irradiance.get()),
+                     getImageResourceLabel(resources.prefilter.get()),
+                     getRenderTextureLabel(brdfLutTexture.get()));
     }
 
     return _environmentLighting.sceneDS;
@@ -227,14 +232,14 @@ EnvironmentLightingSceneResources RenderSharedResourceProvider::resolveSceneEnvi
         resources = _environmentLightingProvider.resolveSceneEnvironmentLightingResources(scene);
     }
     resources.brdfLut = _sharedResources.pbrLUT;
-    if (!resources.cubemap.isValid()) {
-        resources.cubemap.texture = _skybox.fallbackTexture;
+    if (!resources.cubemap || !resources.cubemap->isValid()) {
+        resources.cubemap = _skybox.fallbackTexture ? _skybox.fallbackTexture->getResourceShared() : nullptr;
     }
-    if (!resources.irradiance.isValid()) {
-        resources.irradiance.texture = _environmentLighting.fallbackIrradianceTexture;
+    if (!resources.irradiance || !resources.irradiance->isValid()) {
+        resources.irradiance = _environmentLighting.fallbackIrradianceTexture ? _environmentLighting.fallbackIrradianceTexture->getResourceShared() : nullptr;
     }
-    if (!resources.prefilter.isValid()) {
-        resources.prefilter.texture = _environmentLighting.fallbackPrefilterTexture;
+    if (!resources.prefilter || !resources.prefilter->isValid()) {
+        resources.prefilter = _environmentLighting.fallbackPrefilterTexture ? _environmentLighting.fallbackPrefilterTexture->getResourceShared() : nullptr;
     }
 
     return resources;
@@ -269,23 +274,18 @@ void RenderSharedResourceProvider::initSharedPipelineResources()
     });
 
     _pbrGenerateBrdfLUT.init(_render);
-    _sharedResources.pbrLUT = createRenderImage(
+    _sharedResources.pbrLUT = RenderTexture::create(
         *_render->getResourceFactory(),
-        RenderImageDesc{
-            .image = ImageCreateInfo{
-                .label         = "App_PBR_BRDF_LUT",
-                .format        = EFormat::R16G16B16A16_SFLOAT,
-                .extent        = {.width = 512, .height = 512, .depth = 1},
-                .mipLevels     = 1,
-                .arrayLayers   = 1,
-                .samples       = ESampleCount::Sample_1,
-                .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                .initialLayout = EImageLayout::Undefined,
-            },
-            .defaultView = ImageViewCreateInfo{
-                .label       = "App_PBR_BRDF_LUT_DefaultView",
-                .aspectFlags = EImageAspect::Color,
-            },
+        RenderTextureCreateInfo{
+            .label      = "App_PBR_BRDF_LUT",
+            .width      = 512,
+            .height     = 512,
+            .format     = EFormat::R16G16B16A16_SFLOAT,
+            .usage      = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .samples    = ESampleCount::Sample_1,
+            .isDepth    = false,
+            .layerCount = 1,
+            .mipLevels  = 1,
         });
     YA_CORE_ASSERT(_sharedResources.pbrLUT && _sharedResources.pbrLUT->getImageView(),
                    "Failed to create PBR BRDF LUT render texture");

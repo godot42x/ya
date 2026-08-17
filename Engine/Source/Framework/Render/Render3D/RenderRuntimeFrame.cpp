@@ -3,12 +3,11 @@
 #include "Core/Profiling/PerfKeys.h"
 #include "Core/Profiling/PerfState.h"
 #include "Graph/RenderGraphImportUtils.h"
+#include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/Swapchain.h"
 #include "Render3D/Deferred/DeferredRenderPipeline.h"
 #include "Render3D/Forward/ForwardRenderPipeline.h"
 #include "utility.cc/ranges.h"
-#include <functional>
-
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace ya
@@ -17,7 +16,7 @@ namespace ya
 namespace
 {
 
-RGImportedTextureDesc makePresentationImportedTextureDesc(const RenderImage& image,
+RGImportedTextureDesc makePresentationImportedTextureDesc(const RenderTexture& image,
                                                           std::string_view   label,
                                                           EImageLayout::T    finalLayout)
 {
@@ -119,7 +118,7 @@ void RenderRuntime::beginViewportPassAndTickPipeline(const FrameInput& input, IC
     });
 }
 
-std::shared_ptr<RenderImage> RenderRuntime::getActiveViewportImageShared() const
+std::shared_ptr<RenderTexture> RenderRuntime::getActiveViewportImageShared() const
 {
     if (auto* pipeline = getSelectedForwardPipeline()) {
         return pipeline->getViewportOutputImageShared();
@@ -130,7 +129,7 @@ std::shared_ptr<RenderImage> RenderRuntime::getActiveViewportImageShared() const
     return nullptr;
 }
 
-std::shared_ptr<RenderImage> RenderRuntime::getViewportDisplayImageShared() const
+std::shared_ptr<RenderTexture> RenderRuntime::getViewportDisplayImageShared() const
 {
     if (!_bWorldSceneRenderEnabled) {
         // World output is stale (or absent) while the world scene graph is

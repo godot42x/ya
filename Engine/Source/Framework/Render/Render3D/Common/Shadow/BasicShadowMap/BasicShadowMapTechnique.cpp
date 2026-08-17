@@ -33,7 +33,7 @@ void BasicShadowMapTechnique::destroy()
     _directionalPass.destroy();
     _pointPass.destroy();
     _frameResources.destroy();
-    _depthImage.reset();
+    _depthResource.reset();
     _shadowDepthArrayView.reset();
     _render      = nullptr;
 }
@@ -81,9 +81,9 @@ ShadowGraphOutputs BasicShadowMapTechnique::appendGraphPasses(
     payload.pointLightCount = std::min(_lastPreparedPointLightCount, static_cast<uint32_t>(MAX_POINT_LIGHTS));
     std::optional<RGPassHandle> lastPass;
 
-    if (_depthImage && _shadowDepthArrayView) {
+    if (_depthResource && _shadowDepthArrayView) {
         outputs.shadowDepth = graph.importTexture(makeImportedTextureDesc(
-            _depthImage,
+            _depthResource,
             _shadowDepthArrayView,
             "BasicShadowMap.Depth",
             EImageLayout::ShaderReadOnlyOptimal,
@@ -107,7 +107,6 @@ void BasicShadowMapTechnique::refreshShadowResources(const std::shared_ptr<IImag
 {
     if (!_render || !depthImage) return;
 
-    _depthImage   = depthImage;
     _shadowExtent = shadowExtent;
     _directionalPass.setShadowExtent(_shadowExtent);
     _pointPass.setShadowExtent(_shadowExtent);
@@ -134,6 +133,12 @@ void BasicShadowMapTechnique::rebuildLayerTextures(const std::shared_ptr<IImage>
             .baseArrayLayer = 0,
             .layerCount     = getShadowTotalLayerCount(),
         });
+    _depthResource = std::make_shared<ImageResource>();
+    _depthResource->label             = "BasicShadowMap.Depth";
+    _depthResource->image             = shadowImage;
+    _depthResource->defaultView       = _shadowDepthArrayView;
+    _depthResource->retainedResources = {shadowImage, _shadowDepthArrayView};
+
     std::array<stdptr<IImageView>, MAX_DIRECTIONAL_CASCADES> directionalViews{};
     for (uint32_t cascadeIndex = 0; cascadeIndex < MAX_DIRECTIONAL_CASCADES; ++cascadeIndex) {
         directionalViews[cascadeIndex] = resourceFactory->createImageView(
@@ -148,10 +153,10 @@ void BasicShadowMapTechnique::rebuildLayerTextures(const std::shared_ptr<IImage>
                 .layerCount     = 1,
             });
     }
-    _directionalPass.setDepthAttachments(shadowImage, std::move(directionalViews));
+    _directionalPass.setDepthAttachments(_depthResource, std::move(directionalViews));
 
     // Point faces: layers 6..41.
-    _pointPass.rebuildFaceTextures(shadowImage);
+    _pointPass.rebuildFaceTextures(_depthResource);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

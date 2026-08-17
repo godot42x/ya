@@ -4,7 +4,7 @@
 #include "RHI/Core/DescriptorSet.h"
 #include "RHI/Core/Pipeline.h"
 #include "Graph/RenderGraphExecutor.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderTexture.h"
 #include "Render3D/Common/PostProcessingState.h"
 
 #include "Misc.BloomBlur.slang.h"
@@ -36,10 +36,10 @@ struct BloomPostprocessing
     {
         ICommandBuffer*            cmdBuf            = nullptr;
         Texture*                   sceneTexture      = nullptr;
-        RenderImage*               sceneImage        = nullptr;
+        RenderTexture*             sceneImage        = nullptr;
         RGTextureHandle            sceneHandle{};
         Extent2D                   renderExtent      = {};
-        const PostProcessingState* state            = nullptr;
+        const PostProcessingState* state             = nullptr;
     };
 
     IRender* _render = nullptr;
@@ -68,10 +68,10 @@ struct BloomPostprocessing
     ImageViewHandle              _compositeBloomImageViewHandle = nullptr;
 
     uint32_t _lastBlurPassCount = 0;
-    stdptr<RenderImage> _extractImage;
-    stdptr<RenderImage> _blurPingImage;
-    stdptr<RenderImage> _blurPongImage;
-    stdptr<RenderImage> _compositeImage;
+    stdptr<RenderTexture> _extractImage;
+    stdptr<RenderTexture> _blurPingImage;
+    stdptr<RenderTexture> _blurPongImage;
+    stdptr<RenderTexture> _compositeImage;
     std::unique_ptr<RenderGraphExecutor> _graphExecutor;
 
     void init(const InitDesc& initDesc);
@@ -81,9 +81,9 @@ struct BloomPostprocessing
     void capturePreparedResources(const RenderGraphExecutionResult& result);
     void clearPreparedResources();
     void render(const RenderDesc& desc);
-    [[nodiscard]] stdptr<RenderImage> getExtractImageShared() const { return _extractImage; }
-    [[nodiscard]] stdptr<RenderImage> getBlurImageShared() const { return _blurPongImage ? _blurPongImage : _blurPingImage; }
-    [[nodiscard]] stdptr<RenderImage> getCompositeImageShared() const { return _compositeImage; }
+    [[nodiscard]] stdptr<RenderTexture> getExtractImageShared() const { return _extractImage; }
+    [[nodiscard]] stdptr<RenderTexture> getBlurImageShared() const { return _blurPongImage ? _blurPongImage : _blurPingImage; }
+    [[nodiscard]] stdptr<RenderTexture> getCompositeImageShared() const { return _compositeImage; }
 
   private:
     void initExtractPipeline();
