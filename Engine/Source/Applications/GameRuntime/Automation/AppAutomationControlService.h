@@ -14,7 +14,7 @@ namespace ya
 struct App;
 struct ICommandBuffer;
 struct IRender;
-struct RenderImage;
+struct RenderTexture;
 
 class YA_GAME_RUNTIME_API AppAutomationControlService
 {
@@ -33,9 +33,9 @@ class YA_GAME_RUNTIME_API AppAutomationControlService
     void update(App& app);
     void onFrameCompleted(App& app,
                           IRender* render,
-                          std::shared_ptr<RenderImage> postprocessImage,
-                          std::shared_ptr<RenderImage> viewportImage,
-                          std::shared_ptr<RenderImage> presentationImage,
+                          std::shared_ptr<RenderTexture> postprocessImage,
+                          std::shared_ptr<RenderTexture> viewportImage,
+                          std::shared_ptr<RenderTexture> presentationImage,
                           uint64_t frameIndex);
     bool appendPresentationCapture(uint64_t frameIndex,
                                    RenderGraph&    graph,

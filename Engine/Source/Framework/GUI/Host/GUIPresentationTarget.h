@@ -6,7 +6,7 @@
 // Phase 1).
 //
 // The swapchain images are imported as renderable images with
-// finalLayout = PresentSrcKHR and wrapped in a RenderImage so the compose
+// finalLayout = PresentSrcKHR and wrapped in a RenderTexture so the compose
 // pass consumes the same contract as every other UI target. Ownership stays
 // with the GUI app host; rebuildPresentationResources() releases and
 // recreates the whole set at frame boundaries after swapchain recreation.

@@ -12,7 +12,7 @@ namespace ya
 {
 
 struct ICommandBuffer;
-struct RenderImage;
+struct RenderTexture;
 
 /// Shared 2D compose pass used by every viewport-facing UI/overlay path:
 /// runtime UI presentation/offscreen parity, editor 2D canvas preview, and
@@ -74,8 +74,8 @@ YA_GUI_API void prepareRender2DComposePassPipeline(const FRender2DComposePassDes
 /// `extraContent` runs inside the Render2D recording window for caller-owned
 /// content such as camera overlay text and physics debug lines.
 YA_GUI_API void recordRender2DComposePass(ICommandBuffer*                  cmdBuf,
-                                          RenderImage&                     target,
-                                          RenderImage*                     depthTarget,
+                                          RenderTexture&                   target,
+                                          RenderTexture*                   depthTarget,
                                           const UIFrameSnapshot*           uiFrameSnapshot,
                                           const FRender2DComposePassDesc&  passDesc,
                                           const std::function<void()>&     extraContent = {});

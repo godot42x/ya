@@ -5,7 +5,7 @@
 #include "GUI/Widgets/WidgetTree.h"
 #include "GameRuntime/GUI/ImGui/ImGuiSystem.h"
 #include "RHI/Backend/TextureLibrary.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderTexture.h"
 
 #include <imgui.h>
 #include <imgui_internal.h> // ImTextCharToUtf8

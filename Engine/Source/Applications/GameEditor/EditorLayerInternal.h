@@ -18,7 +18,7 @@
 #include "ECS/Systems/TransformSystem.h"
 #include "GameEditor/EditorCommon.h"
 #include "GameEditor/ImGui/ImGuiHelper.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #include "Resource/AssetManager.h"
 #include "RHI/Backend/TextureLibrary.h"

@@ -18,7 +18,7 @@ struct ICommandBuffer;
 struct OffscreenJobQueueService;
 struct OffscreenJobState;
 class RenderGraphExecutor;
-struct RenderImage;
+struct RenderTexture;
 struct Texture;
 
 struct AppScreenshotCaptureState
@@ -27,7 +27,7 @@ struct AppScreenshotCaptureState
     std::shared_ptr<IBuffer>           readbackBuffer;
     std::shared_ptr<OffscreenJobState> pendingJob;
     std::shared_ptr<RenderGraphExecutor> copyExecutor;
-    std::shared_ptr<RenderImage>       presentationSourceImage;
+    std::shared_ptr<RenderTexture>     presentationSourceImage;
     uint32_t                           width                         = 0;
     uint32_t                           height                        = 0;
     uint64_t                           recordedFrameIndex            = 0;
@@ -44,9 +44,9 @@ class YA_GAME_RUNTIME_API AppScreenshotCapture
   public:
     static bool request(IRender* render,
                         const OffscreenJobQueueService& offscreenQueueService,
-                        std::shared_ptr<RenderImage> postprocessSourceImage,
-                        std::shared_ptr<RenderImage> viewportSourceImage,
-                        std::shared_ptr<RenderImage> presentationSourceImage,
+                        std::shared_ptr<RenderTexture> postprocessSourceImage,
+                        std::shared_ptr<RenderTexture> viewportSourceImage,
+                        std::shared_ptr<RenderTexture> presentationSourceImage,
                         AppScreenshotCaptureState& state,
                         const std::string& outputPath,
                         EAutomationScreenshotTarget target);

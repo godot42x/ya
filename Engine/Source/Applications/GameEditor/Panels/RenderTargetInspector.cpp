@@ -1,7 +1,6 @@
 #include "GameEditor/Panels/RenderTargetInspector.h"
 
 #include "GameEditor/ImGui/ImGuiHelper.h"
-#include "RHI/Core/RenderImage.h"
 #include "RHI/Backend/TextureLibrary.h"
 #include "GameRuntime/App.h"
 #include "Render3D/RenderRuntime.h"

@@ -12,7 +12,7 @@ namespace ya
 {
 
 struct EditorLayer;
-struct RenderImage;
+struct RenderTexture;
 struct WidgetTree;
 struct IImageView;
 struct Sampler;
@@ -23,7 +23,7 @@ struct GUIWorkbenchPanel
     EditorLayer* _owner = nullptr;
     guiworkbench::FWorkbenchSurface _surface;
     std::unique_ptr<WidgetTree>     _tree;
-    std::shared_ptr<RenderImage>    _displayImage;
+    std::shared_ptr<RenderTexture>  _displayImage;
     Extent2D                        _logicalExtent{};
     glm::vec2                       _lastPointerPoint = {-1.0f, -1.0f};
     glm::vec2                       _imageRectMin{};
@@ -40,7 +40,7 @@ struct GUIWorkbenchPanel
     /// ImGui presentation stage would otherwise introduce. `screenPoint` is in
     /// the same coordinate space as `ImGui::GetItemRectMin()`.
     void onPointerMoved(const glm::vec2& screenPoint);
-    void setDisplayImage(std::shared_ptr<RenderImage> image) { _displayImage = std::move(image); }
+    void setDisplayImage(std::shared_ptr<RenderTexture> image) { _displayImage = std::move(image); }
     [[nodiscard]] bool      hasRenderableExtent() const { return _logicalExtent.width > 0 && _logicalExtent.height > 0; }
     [[nodiscard]] Extent2D  getLogicalExtent() const { return _logicalExtent; }
     [[nodiscard]] UIFrameSnapshot buildSnapshot();

@@ -23,7 +23,7 @@
 #include "Render3D/Debug/PhysicsDebugDraw.h"
 #include "GUI/Draw2D/Render2D.h"
 #include "RHI/Core/CommandBuffer.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderTexture.h"
 #include "GUI/Resources/FontManager.h"
 #include "RHI/Backend/TextureLibrary.h"
 #include "GameRuntime/App.h"
@@ -71,33 +71,25 @@ void initializeEditorCamera(App& app, EditorLayer& layer)
                                         resolveInitialEditorCameraRotation(app));
 }
 
-std::shared_ptr<RenderImage> createEditorViewportImage(IRender& render, const Extent2D& extent)
+std::shared_ptr<RenderTexture> createEditorViewportImage(IRender& render, const Extent2D& extent)
 {
     if (extent.width == 0 || extent.height == 0) {
         return nullptr;
     }
 
-    return createRenderImage(
+    return RenderTexture::create(
         *render.getResourceFactory(),
-        RenderImageDesc{
-            .image = ImageCreateInfo{
-                .label         = "EditorViewportComposed",
-                .format        = EFormat::R16G16B16A16_SFLOAT,
-                .extent        = {.width = extent.width, .height = extent.height, .depth = 1},
-                .mipLevels     = 1,
-                .arrayLayers   = 1,
-                .samples       = ESampleCount::Sample_1,
-                .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
-                .initialLayout = EImageLayout::Undefined,
-            },
-            .defaultView = ImageViewCreateInfo{
-                .label       = "EditorViewportComposed_DefaultView",
-                .aspectFlags = EImageAspect::Color,
-            },
+        RenderTextureCreateInfo{
+            .label   = "EditorViewportComposed",
+            .width   = extent.width,
+            .height  = extent.height,
+            .format  = EFormat::R16G16B16A16_SFLOAT,
+            .usage   = EImageUsage::ColorAttachment | EImageUsage::Sampled,
+            .samples = ESampleCount::Sample_1,
         });
 }
 
-std::shared_ptr<RenderImage> createEditorViewportImage(IRender& render, const RenderImage& source)
+std::shared_ptr<RenderTexture> createEditorViewportImage(IRender& render, const RenderTexture& source)
 {
     return createEditorViewportImage(render, source.getExtent());
 }
@@ -215,7 +207,7 @@ void drawSelectedEntityBounds(const EditorLayer& layer)
 class EditorViewportCompositor
 {
   private:
-    std::shared_ptr<RenderImage> _composedViewportImage   = nullptr;
+    std::shared_ptr<RenderTexture> _composedViewportImage = nullptr;
     std::shared_ptr<Texture>     _sourceViewportTexture   = nullptr;
     std::shared_ptr<IImage>      _sourceViewportImage     = nullptr;
     std::shared_ptr<IImageView>  _sourceViewportImageView = nullptr;
@@ -237,7 +229,7 @@ class EditorViewportCompositor
         _scenePreviewErrors.clear();
     }
 
-    [[nodiscard]] std::shared_ptr<RenderImage> getOutputImage() const
+    [[nodiscard]] std::shared_ptr<RenderTexture> getOutputImage() const
     {
         return _composedViewportImage;
     }
@@ -442,7 +434,7 @@ class EditorViewportCompositor
     }
 
   private:
-    std::shared_ptr<Texture> resolveSourceTexture(const RenderImage& source)
+    std::shared_ptr<Texture> resolveSourceTexture(const RenderTexture& source)
     {
         auto sourceImage     = source.getImageShared();
         auto sourceImageView = source.getImageViewShared();
@@ -467,7 +459,7 @@ class EditorViewportCompositor
         return _sourceViewportTexture;
     }
 
-    void ensureTarget(IRender& render, const RenderImage& source)
+    void ensureTarget(IRender& render, const RenderTexture& source)
     {
         const Extent2D sourceExtent = source.getExtent();
         if (_composedViewportImage &&
@@ -506,7 +498,7 @@ class EditorToolSurfaceCompositor
         _surface.reset();
     }
 
-    [[nodiscard]] std::shared_ptr<RenderImage> getOutputImage() const
+    [[nodiscard]] std::shared_ptr<RenderTexture> getOutputImage() const
     {
         return _surface ? _surface->getRenderImage() : nullptr;
     }

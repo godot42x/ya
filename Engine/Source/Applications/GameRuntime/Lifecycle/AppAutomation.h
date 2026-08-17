@@ -17,15 +17,15 @@ struct AppAutomationOptions;
 struct ICommandBuffer;
 struct IRender;
 struct OffscreenJobQueueService;
-struct RenderImage;
+struct RenderTexture;
 struct Texture;
 
 struct AppAutomationFrameContext
 {
     IRender*                                render                            = nullptr;
-    std::shared_ptr<RenderImage>            postprocessImage                  = nullptr;
-    std::shared_ptr<RenderImage>            viewportImage                     = nullptr;
-    std::shared_ptr<RenderImage>            presentationImage                 = nullptr;
+    std::shared_ptr<RenderTexture>          postprocessImage                  = nullptr;
+    std::shared_ptr<RenderTexture>          viewportImage                     = nullptr;
+    std::shared_ptr<RenderTexture>          presentationImage                 = nullptr;
     std::function<bool()>                   requestRenderDocCapture;
     std::function<bool()>                   isRenderDocCapturePending;
     std::function<bool()>                   isRenderDocCaptureTerminal;

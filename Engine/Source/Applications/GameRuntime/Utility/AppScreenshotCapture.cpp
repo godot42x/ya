@@ -12,7 +12,7 @@
 #include "RHI/Core/Buffer.h"
 #include "RHI/Core/CommandBuffer.h"
 #include "RHI/Core/OffscreenJob.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/RenderResourceFactory.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -165,7 +165,7 @@ ScreenshotSourceInfo makeScreenshotSourceInfo(Texture* texture)
     };
 }
 
-ScreenshotSourceInfo makeScreenshotSourceInfo(RenderImage* image)
+ScreenshotSourceInfo makeScreenshotSourceInfo(RenderTexture* image)
 {
     if (!image || !image->getImage()) {
         return {};
@@ -207,7 +207,7 @@ RGImportedBufferDesc makeImportedReadbackBufferDesc(const std::shared_ptr<IBuffe
 
 bool executeScreenshotCopyGraph(RenderGraphExecutor& executor,
                                 ICommandBuffer&      cmdBuf,
-                                const RenderImage&   sourceImage,
+                                const RenderTexture& sourceImage,
                                 EImageLayout::T      initialLayout,
                                 EImageLayout::T      finalLayout,
                                 const std::shared_ptr<IBuffer>& readbackBuffer,
@@ -329,9 +329,9 @@ bool writePngFromReadback(const AppScreenshotCaptureState& state)
 
 bool AppScreenshotCapture::request(IRender*                        render,
                                    const OffscreenJobQueueService& offscreenQueueService,
-                                   std::shared_ptr<RenderImage>    postprocessSourceImage,
-                                   std::shared_ptr<RenderImage>    viewportSourceImage,
-                                   std::shared_ptr<RenderImage>    presentationSourceImage,
+                                   std::shared_ptr<RenderTexture>  postprocessSourceImage,
+                                   std::shared_ptr<RenderTexture>  viewportSourceImage,
+                                   std::shared_ptr<RenderTexture>  presentationSourceImage,
                                    AppScreenshotCaptureState&      state,
                                    const std::string&              outputPath,
                                    EAutomationScreenshotTarget     target)
@@ -347,7 +347,7 @@ bool AppScreenshotCapture::request(IRender*                        render,
         return false;
     }
 
-    const std::shared_ptr<RenderImage> selectedRenderImage =
+    const std::shared_ptr<RenderTexture> selectedRenderTexture =
         target == EAutomationScreenshotTarget::Presentation
             ? presentationSourceImage
             : (postprocessSourceImage ? postprocessSourceImage : viewportSourceImage);
@@ -379,7 +379,7 @@ bool AppScreenshotCapture::request(IRender*                        render,
     state.outputPath                   = outputPath;
     state.readbackBuffer               = std::move(readbackBuffer);
     state.copyExecutor                 = std::make_shared<RenderGraphExecutor>(*render->getResourceFactory());
-    state.presentationSourceImage      = nullptr;
+    state.presentationSourceImage       = nullptr;
     state.width                        = extent.width;
     state.height                       = extent.height;
     state.sourceFormat                 = source.format;
@@ -391,16 +391,16 @@ bool AppScreenshotCapture::request(IRender*                        render,
     state.bPresentationCopyRecorded    = false;
 
     if (target == EAutomationScreenshotTarget::Presentation) {
-        state.presentationSourceImage      = std::move(presentationSourceImage);
+        state.presentationSourceImage     = std::move(presentationSourceImage);
         state.bPendingPresentationCapture = true;
         return true;
     }
 
     auto job       = std::make_shared<OffscreenJobState>();
     job->debugName = "AutomationScreenshotCapture";
-    job->executeFn = [capturedSource = selectedRenderImage,
+    job->executeFn = [capturedSource = selectedRenderTexture,
                       copyExecutor = state.copyExecutor,
-                      readbackBuffer = state.readbackBuffer](ICommandBuffer* cmdBuf, RenderImage*) -> bool
+                      readbackBuffer = state.readbackBuffer](ICommandBuffer* cmdBuf, ImageResource*) -> bool
     {
         if (!cmdBuf || !capturedSource || !copyExecutor || !readbackBuffer) {
             return false;
@@ -435,10 +435,10 @@ bool AppScreenshotCapture::appendPresentationCapture(uint64_t frameIndex,
         return false;
     }
 
-    const auto& sourceRenderImage = state.presentationSourceImage;
-    const Extent2D extent = sourceRenderImage->getExtent();
+    const auto& sourceRenderTexture = state.presentationSourceImage;
+    const Extent2D extent = sourceRenderTexture->getExtent();
     if (extent.width != state.width || extent.height != state.height ||
-        sourceRenderImage->getFormat() != state.sourceFormat ||
+        sourceRenderTexture->getFormat() != state.sourceFormat ||
         presentationExtent.width != extent.width || presentationExtent.height != extent.height) {
         YA_CORE_ERROR("Presentation screenshot source changed before capture recording");
         state.bFailed                     = true;
@@ -458,7 +458,7 @@ bool AppScreenshotCapture::appendPresentationCapture(uint64_t frameIndex,
 
     state.width                       = extent.width;
     state.height                      = extent.height;
-    state.sourceFormat                = sourceRenderImage->getFormat();
+    state.sourceFormat                = sourceRenderTexture->getFormat();
     state.recordedFrameIndex          = frameIndex + 1;
     state.presentationSourceImage.reset();
     state.bPendingPresentationCapture = false;

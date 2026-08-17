@@ -2,7 +2,7 @@
 
 #include "GUI/Draw2D/Render2D.h"
 #include "RHI/Core/CommandBuffer.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderTexture.h"
 #include "RHI/Backend/TextureLibrary.h"
 
 #include <array>
@@ -140,8 +140,8 @@ void prepareRender2DComposePassPipeline(const FRender2DComposePassDesc& passDesc
 }
 
 void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
-                               RenderImage&                    target,
-                               RenderImage*                    depthTarget,
+                               RenderTexture&                  target,
+                               RenderTexture*                  depthTarget,
                                const UIFrameSnapshot*          uiFrameSnapshot,
                                const FRender2DComposePassDesc& passDesc,
                                const std::function<void()>&    extraContent)

@@ -1422,7 +1422,7 @@ void GUIWindowHost::onTick(float /*dt*/)
         (_impl->config->offscreenShotFrame != 0 &&
          _impl->frameCount == _impl->config->offscreenShotFrame &&
          !_impl->config->offscreenShotPath.empty());
-    std::shared_ptr<RenderImage> offscreenImage;
+    std::shared_ptr<RenderTexture> offscreenImage;
     if (bCaptureOffscreen) {
         if (!_impl->offscreenSurface ||
             !_impl->offscreenSurface->isValid() ||

@@ -2,6 +2,7 @@
 
 #include "RHI/Render.h"
 #include "RHI/Backend/Vulkan/VulkanSwapChain.h"
+#include "RHI/Core/RenderTexture.h"
 
 #include <format>
 
@@ -37,12 +38,31 @@ void GUIPresentationTarget::buildAll(IRender&                                   
                 .baseArrayLayer = 0,
                 .layerCount     = 1,
             });
-        auto renderImage = std::make_shared<RenderImage>();
-        renderImage->label       = label;
-        renderImage->image       = std::move(importedImage);
-        renderImage->defaultView = std::move(imageView);
+        auto resource = std::make_shared<ImageResource>();
+        resource->label       = label;
+        resource->desc.image  = ImageCreateInfo{
+            .label       = label,
+            .format      = swapchain.getFormat(),
+            .extent      = {.width = swapchain.getExtent().width, .height = swapchain.getExtent().height, .depth = 1},
+            .mipLevels   = 1,
+            .arrayLayers = 1,
+            .samples     = ESampleCount::Sample_1,
+            .usage       = static_cast<EImageUsage::T>(EImageUsage::ColorAttachment | EImageUsage::TransferSrc),
+            .initialLayout = EImageLayout::Undefined,
+        };
+        resource->desc.defaultView = ImageViewCreateInfo{
+            .label          = std::format("{}_Presentation_{}_View", labelPrefix, i),
+            .viewType       = EImageViewType::View2D,
+            .aspectFlags    = EImageAspect::Color,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1,
+        };
+        resource->image       = std::move(importedImage);
+        resource->defaultView = std::move(imageView);
         outTargets.push_back(std::make_shared<GUIPresentationTarget>(GUIPresentationTarget{
-            .renderSurface = GUIRenderSurface::wrapExternal(std::move(renderImage), EImageLayout::PresentSrcKHR),
+            .renderSurface = GUIRenderSurface::wrapExternal(RenderTexture::adopt(std::move(resource)), EImageLayout::PresentSrcKHR),
         }));
     }
 }

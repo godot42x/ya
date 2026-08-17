@@ -2,7 +2,7 @@
 
 #include "Core/Api.h"
 #include "GUI/Compose/Render2DComposePass.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderTexture.h"
 
 #include <memory>
 #include <string>
@@ -14,7 +14,7 @@ struct ICommandBuffer;
 struct IRenderResourceFactory;
 
 /// Description for a GUI-owned offscreen compose target. The surface owns its
-/// RenderImage; callers must recreate it only at a frame boundary after any
+/// RenderTexture; callers must recreate it only at a frame boundary after any
 /// command buffer that retained the old image has completed.
 struct FGUIRenderSurfaceDesc
 {
@@ -33,7 +33,7 @@ struct FGUIRenderSurfaceDesc
 class YA_GUI_API GUIRenderSurface final
 {
 private:
-    std::shared_ptr<RenderImage> _image;
+    std::shared_ptr<RenderTexture> _image;
     EImageLayout::T              _finalLayout = EImageLayout::Undefined;
 
 public:
@@ -46,11 +46,11 @@ public:
     /// Wrap an image whose lifetime is owned by the caller. Used for imported
     /// swapchain images; the surface only retains it while recording.
     [[nodiscard]] static std::shared_ptr<GUIRenderSurface> wrapExternal(
-        std::shared_ptr<RenderImage> image,
+        std::shared_ptr<RenderTexture> image,
         EImageLayout::T              finalLayout);
 
     [[nodiscard]] bool isValid() const;
-    [[nodiscard]] const std::shared_ptr<RenderImage>& getRenderImage() const { return _image; }
+    [[nodiscard]] const std::shared_ptr<RenderTexture>& getRenderImage() const { return _image; }
     [[nodiscard]] EImageLayout::T getFinalLayout() const { return _finalLayout; }
 
     /// Prepare the exact format variant that record() will use. Must run
@@ -62,13 +62,13 @@ public:
     /// the final layout; callers cannot accidentally leave an offscreen
     /// target in PresentSrcKHR or a swapchain target in ShaderReadOnlyOptimal.
     void record(ICommandBuffer*                 cmdBuf,
-                RenderImage*                    depthTarget,
+                RenderTexture*                  depthTarget,
                 const UIFrameSnapshot*          uiFrameSnapshot,
                 FRender2DComposePassDesc        passDesc,
                 const std::function<void()>&    extraContent = {}) const;
 
 private:
-    GUIRenderSurface(std::shared_ptr<RenderImage> image, EImageLayout::T finalLayout);
+    GUIRenderSurface(std::shared_ptr<RenderTexture> image, EImageLayout::T finalLayout);
 };
 
 } // namespace ya

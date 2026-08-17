@@ -274,9 +274,9 @@ void AppAutomationControlService::update(App& app)
 
 void AppAutomationControlService::onFrameCompleted(App&                         app,
                                                    IRender*                     render,
-                                                   std::shared_ptr<RenderImage> postprocessImage,
-                                                   std::shared_ptr<RenderImage> viewportImage,
-                                                   std::shared_ptr<RenderImage> presentationImage,
+                                                   std::shared_ptr<RenderTexture> postprocessImage,
+                                                   std::shared_ptr<RenderTexture> viewportImage,
+                                                   std::shared_ptr<RenderTexture> presentationImage,
                                                    uint64_t                     frameIndex)
 {
     if (!_pendingScreenshot) {

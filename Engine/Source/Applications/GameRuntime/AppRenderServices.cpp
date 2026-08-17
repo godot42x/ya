@@ -51,15 +51,15 @@ bool AppRenderServices::isShadowMappingEnabled() const
     return _state && _state->runtime && _state->runtime->isShadowMappingEnabled();
 }
 
-IImageView* AppRenderServices::getShadowDirectionalDepthIV() const
+std::shared_ptr<ImageResource> AppRenderServices::getShadowDirectionalDepthResource() const
 {
-    return _state && _state->runtime ? _state->runtime->getShadowDirectionalDepthIV() : nullptr;
+    return _state && _state->runtime ? _state->runtime->getShadowDirectionalDepthResource() : nullptr;
 }
 
-IImageView* AppRenderServices::getShadowPointFaceDepthIV(uint32_t pointLightIndex, uint32_t faceIndex) const
+std::shared_ptr<ImageResource> AppRenderServices::getShadowPointFaceDepthResource(uint32_t pointLightIndex, uint32_t faceIndex) const
 {
     return _state && _state->runtime
-             ? _state->runtime->getShadowPointFaceDepthIV(pointLightIndex, faceIndex)
+             ? _state->runtime->getShadowPointFaceDepthResource(pointLightIndex, faceIndex)
              : nullptr;
 }
 

@@ -196,9 +196,9 @@ void App::init(AppDesc ci)
         // consumes derived-resource handles through this contract instead of
         // locating the processor via the App singleton.
         .environmentLightingProvider = EnvironmentLightingResultProvider{
-            .resolveSceneSkyboxResource = [&app](Scene* scene) -> ImageResourceRef {
+            .resolveSceneSkyboxResource = [&app](Scene* scene) -> std::shared_ptr<ImageResource> {
                 auto* envProcessor = app.getEnvironmentLightingProcessor();
-                return envProcessor ? envProcessor->resolveSceneSkyboxResource(scene) : ImageResourceRef{};
+                return envProcessor ? envProcessor->resolveSceneSkyboxResource(scene) : nullptr;
             },
             .resolveSceneEnvironmentLightingResources = [&app](Scene* scene) -> EnvironmentLightingSceneResources {
                 auto* envProcessor = app.getEnvironmentLightingProcessor();

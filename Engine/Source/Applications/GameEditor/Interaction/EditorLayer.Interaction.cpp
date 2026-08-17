@@ -6,7 +6,7 @@
 #include "ECS/Component/Mesh/StaticMeshComponent.h"
 #include "RHI/Core/Buffer.h"
 #include "RHI/Core/CommandBuffer.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderTexture.h"
 #include "RHI/Render.h"
 
 #include <cmath>
@@ -21,7 +21,7 @@ namespace
 /// Pixel-accurate pick: read the entity id written by the viewport graph's
 /// entity-id pass at the cursor position, then map the id back to an entity.
 Entity* pickEntityFromEntityIdImage(IRender*                             render,
-                                    const std::shared_ptr<RenderImage>& idImage,
+                                    const std::shared_ptr<RenderTexture>& idImage,
                                     Scene*                              scene,
                                     float                               viewportX,
                                     float                               viewportY,
