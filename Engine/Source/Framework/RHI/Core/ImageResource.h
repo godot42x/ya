@@ -5,20 +5,22 @@
 namespace ya
 {
 
-struct RenderImageDesc
+struct ImageResourceDesc
 {
     ImageCreateInfo     image;
     ImageViewCreateInfo defaultView;
 };
 
-struct RenderImage
+struct ImageResource
 {
-    std::string                 label;
-    std::shared_ptr<IImage>     image;
-    std::shared_ptr<IImageView> defaultView;
+    std::string                     label;
+    ImageResourceDesc               desc{};
+    std::shared_ptr<IImage>         image;
+    std::shared_ptr<IImageView>     defaultView;
     std::vector<std::shared_ptr<void>> retainedResources;
 
     [[nodiscard]] const std::string& getLabel() const { return label; }
+    [[nodiscard]] const ImageResourceDesc& getDesc() const { return desc; }
     [[nodiscard]] IImage* getImage() const { return image.get(); }
     [[nodiscard]] IImageView* getImageView() const { return defaultView.get(); }
     [[nodiscard]] std::shared_ptr<IImage> getImageShared() const { return image; }
@@ -34,8 +36,8 @@ struct RenderImage
     [[nodiscard]] bool isValid() const { return image && defaultView; }
 };
 
-[[nodiscard]] YA_RHI_API std::shared_ptr<RenderImage> createRenderImage(
+[[nodiscard]] YA_RHI_API std::shared_ptr<ImageResource> createImageResource(
     IRenderResourceFactory& factory,
-    const RenderImageDesc& desc);
+    const ImageResourceDesc& desc);
 
 } // namespace ya

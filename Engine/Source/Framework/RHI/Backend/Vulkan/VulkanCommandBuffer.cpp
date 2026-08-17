@@ -70,13 +70,6 @@ std::string formatSubresourceRange(const ImageSubresourceRange* range)
         range->baseArrayLayer + range->layerCount);
 }
 
-void retainRenderImageResources(ICommandBuffer& cmdBuf, const RenderImage& image)
-{
-    cmdBuf.retainResource(image.getImageShared());
-    cmdBuf.retainResource(image.getImageViewShared());
-    cmdBuf.retainResources(image.getRetainedResources());
-}
-
 bool hasExplicitRenderAttachments(const RenderAttachmentSet& attachments)
 {
     return !attachments.colors.empty() || attachments.depth.has_value();

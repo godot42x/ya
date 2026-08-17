@@ -3,6 +3,7 @@
 #include "Core/Base.h"
 #include "Core/Delegate.h"
 #include "Image.h"
+#include "ImageResource.h"
 #include "RHI/RenderDefines.h"
 #include "Sampler.h"
 #include "TextureCreateInfo.h"
@@ -114,8 +115,7 @@ struct YA_RHI_API Texture
     std::string _label;
     std::string _filepath;
 
-    std::shared_ptr<IImage>     image;
-    std::shared_ptr<IImageView> imageView;
+    std::shared_ptr<ImageResource> resource;
     std::vector<std::shared_ptr<void>> retainedResources;
 
   public:
@@ -188,10 +188,11 @@ struct YA_RHI_API Texture
     Texture& operator=(Texture&&)      = default;
 
     // Platform-independent accessors
-    IImage*                 getImage() const { return image.get(); }
-    std::shared_ptr<IImage> getImageShared() const { return image; }
-    IImageView*             getImageView() const { return imageView.get(); }
-    std::shared_ptr<IImageView> getImageViewShared() const { return imageView; }
+    [[nodiscard]] std::shared_ptr<ImageResource> getResourceShared() const { return resource; }
+    [[nodiscard]] IImage*                 getImage() const { return resource ? resource->getImage() : nullptr; }
+    [[nodiscard]] std::shared_ptr<IImage> getImageShared() const { return resource ? resource->getImageShared() : nullptr; }
+    [[nodiscard]] IImageView*             getImageView() const { return resource ? resource->getImageView() : nullptr; }
+    [[nodiscard]] std::shared_ptr<IImageView> getImageViewShared() const { return resource ? resource->getImageViewShared() : nullptr; }
     const std::vector<std::shared_ptr<void>>& getRetainedResources() const { return retainedResources; }
 
     uint32_t   getWidth() const { return _width; }
@@ -204,7 +205,7 @@ struct YA_RHI_API Texture
     const std::string& getFilepath() const { return _filepath; }
     Extent2D           getExtent() const { return Extent2D{.width = _width, .height = _height}; }
 
-    bool isValid() const { return image && imageView && _width > 0 && _height > 0; }
+    bool isValid() const { return resource && resource->isValid() && _width > 0 && _height > 0; }
 
 };
 

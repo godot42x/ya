@@ -42,9 +42,9 @@ struct VulkanFrameBuffer : public IFrameBuffer
 
   private:
 
-    std::shared_ptr<RenderImage> createAttachmentResource(const stdptr<IImage>& externalImage,
-                                                          const std::string&    label,
-                                                          VkImageAspectFlags    aspect);
+    std::shared_ptr<ImageResource> createAttachmentResource(const stdptr<IImage>& externalImage,
+                                                            const std::string&    label,
+                                                            VkImageAspectFlags    aspect);
 
     // std::shared_ptr<Texture> createAttachmentTexture(const FrameBufferAttachmentInfo &attachInfo,
     //                                                  const std::string               &label);

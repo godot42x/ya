@@ -10,7 +10,7 @@ namespace ya
 namespace
 {
 
-std::shared_ptr<Texture> makeTextureCompat(const std::shared_ptr<RenderImage>& attachment, const std::string& label)
+std::shared_ptr<Texture> makeTextureCompat(const std::shared_ptr<ImageResource>& attachment, const std::string& label)
 {
     if (!attachment || !attachment->getImageShared() || !attachment->getImageViewShared()) {
         return nullptr;
@@ -63,7 +63,7 @@ void IFrameBuffer::clearAttachments()
     _resolveTexture.reset();
 }
 
-RenderImage* IFrameBuffer::getColorAttachment(uint32_t attachmentIdx) const
+ImageResource* IFrameBuffer::getColorAttachment(uint32_t attachmentIdx) const
 {
     if (attachmentIdx >= _colorAttachments.size()) {
         return nullptr;
@@ -71,7 +71,7 @@ RenderImage* IFrameBuffer::getColorAttachment(uint32_t attachmentIdx) const
     return _colorAttachments[attachmentIdx].get();
 }
 
-std::shared_ptr<RenderImage> IFrameBuffer::getColorAttachmentShared(uint32_t attachmentIdx) const
+std::shared_ptr<ImageResource> IFrameBuffer::getColorAttachmentShared(uint32_t attachmentIdx) const
 {
     if (attachmentIdx >= _colorAttachments.size()) {
         return nullptr;

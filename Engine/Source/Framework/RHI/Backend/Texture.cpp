@@ -123,6 +123,35 @@ IRenderResourceFactory& getResourceFactory(IRender& render)
     YA_CORE_ASSERT(resourceFactory, "Render resource factory is not available");
     return *resourceFactory;
 }
+
+void assignTextureResource(Texture& texture,
+                           std::shared_ptr<IImage> image,
+                           std::shared_ptr<IImageView> imageView)
+{
+    if (!image || !imageView) {
+        texture.resource.reset();
+        return;
+    }
+
+    auto resource         = std::make_shared<ImageResource>();
+    resource->label       = texture.getLabel();
+    resource->image       = std::move(image);
+    resource->defaultView = std::move(imageView);
+    resource->retainedResources = texture.retainedResources;
+    texture.resource      = std::move(resource);
+}
+
+void assignTextureResource(Texture& texture,
+                           std::shared_ptr<IImage> image,
+                           std::shared_ptr<IImageView> imageView,
+                           const ImageResourceDesc& desc)
+{
+    assignTextureResource(texture, std::move(image), std::move(imageView));
+    if (texture.resource) {
+        texture.resource->label = desc.image.label;
+        texture.resource->desc  = desc;
+    }
+}
 } // namespace
 
 std::shared_ptr<Texture> Texture::fromMemory(IRender& render, const TextureMemoryCreateInfo& ci)
@@ -288,25 +317,35 @@ std::shared_ptr<Texture> Texture::createSolidCubeMap(IRender& render, const Colo
         .flags         = EImageCreateFlag::CubeCompatible,
     };
 
-    texture->image = resourceFactory.createImage(imageCI);
-    if (!texture->image || !texture->image->getHandle()) {
+    auto image = resourceFactory.createImage(imageCI);
+    if (!image || !image->getHandle()) {
         YA_CORE_ERROR("Failed to create solid cubemap image: {}", texture->_label);
         return nullptr;
     }
 
-    texture->imageView = resourceFactory.createImageView(
-        texture->image,
+    auto imageView = resourceFactory.createImageView(
+        image,
         ImageViewCreateInfo{
             .label       = std::format("CubeMap_ImageView_{}", texture->_label),
             .viewType    = EImageViewType::ViewCube,
             .aspectFlags = EImageAspect::Color,
             .layerCount  = CubeFace_Count,
         });
-    if (!texture->imageView || !texture->imageView->getHandle()) {
+    if (!imageView || !imageView->getHandle()) {
         YA_CORE_ERROR("Failed to create solid cubemap image view: {}", texture->_label);
-        texture->image.reset();
         return nullptr;
     }
+
+    const ImageResourceDesc resourceDesc{
+        .image = imageCI,
+        .defaultView = ImageViewCreateInfo{
+            .label       = std::format("CubeMap_ImageView_{}", texture->_label),
+            .viewType    = EImageViewType::ViewCube,
+            .aspectFlags = EImageAspect::Color,
+            .layerCount  = CubeFace_Count,
+        },
+    };
+    assignTextureResource(*texture, image, imageView, resourceDesc);
 
     std::shared_ptr<IBuffer> stagingBuffer = resourceFactory.createBuffer(
         BufferCreateInfo{
@@ -329,7 +368,7 @@ std::shared_ptr<Texture> Texture::createSolidCubeMap(IRender& render, const Colo
     if (!uploadService.upload(
             render,
             TextureUploadRequest{
-                .image   = texture->image,
+                .image   = texture->getImageShared(),
                 .staging = stagingBuffer,
                 .regions = {{
                     .bufferOffset      = 0,
@@ -354,8 +393,7 @@ std::shared_ptr<Texture> Texture::createSolidCubeMap(IRender& render, const Colo
                 .label         = std::format("CubeMapUpload:{}:1x1", texture->_label),
             })) {
         YA_CORE_ERROR("Failed to upload solid cubemap: {}", texture->_label);
-        texture->image.reset();
-        texture->imageView.reset();
+        texture->resource.reset();
         return nullptr;
     }
 
@@ -371,8 +409,7 @@ std::shared_ptr<Texture> Texture::wrap(std::shared_ptr<IImage>     img,
     auto texture = createShared();
 
     texture->_label     = label;
-    texture->image      = img;
-    texture->imageView  = view;
+    assignTextureResource(*texture, img, view);
     texture->_width     = img->getWidth();
     texture->_height    = img->getHeight();
     texture->_format    = img->getFormat();
@@ -386,10 +423,10 @@ std::shared_ptr<Texture> Texture::wrap(std::shared_ptr<IImage>     img,
 void Texture::setLabel(const std::string& label)
 {
     _label = label;
-    if (image) {
+    if (auto image = getImage()) {
         image->setDebugName(std::format("Texture_Image_{}", label));
     }
-    if (imageView) {
+    if (auto imageView = getImageView()) {
         imageView->setDebugName(std::format("Texture_ImageView_{}", label));
     }
 }
@@ -442,7 +479,7 @@ void Texture::initFromData(IRender& render,
         .initialLayout = EImageLayout::Undefined,
     };
 
-    image = resourceFactory.createImage(ci);
+    auto image = resourceFactory.createImage(ci);
     if (!image || !image->getHandle()) {
         YA_CORE_ERROR("Failed to create image for texture: {} (format: {}, {}x{})",
                       _filepath.empty() ? _label : _filepath,
@@ -561,7 +598,7 @@ void Texture::initFromData(IRender& render,
                       static_cast<int>(format),
                       texWidth,
                       texHeight);
-        image.reset();
+        resource.reset();
         const auto fallbackPixels = buildMissingTexturePixels();
         initFallbackTexture(render,
                             fallbackPixels.data(),
@@ -577,14 +614,14 @@ void Texture::initFromData(IRender& render,
         .aspectFlags = EImageAspect::Color,
         .levelCount  = _mipLevels,
     };
-    imageView = resourceFactory.createImageView(image, viewCI);
+    auto imageView = resourceFactory.createImageView(image, viewCI);
     if (!imageView || !imageView->getHandle()) {
         YA_CORE_ERROR("Failed to create image view for texture: {} (format: {}, {}x{})",
                       _filepath.empty() ? _label : _filepath,
                       static_cast<int>(format),
                       texWidth,
                       texHeight);
-        image.reset();
+        resource.reset();
         const auto fallbackPixels = buildMissingTexturePixels();
         initFallbackTexture(render,
                             fallbackPixels.data(),
@@ -592,6 +629,11 @@ void Texture::initFromData(IRender& render,
                             8,
                             8);
     }
+    const ImageResourceDesc resourceDesc{
+        .image       = ci,
+        .defaultView = viewCI,
+    };
+    assignTextureResource(*this, image, imageView, resourceDesc);
 }
 
 void Texture::initFallbackTexture(IRender& render, const void* pixels, size_t dataSize, uint32_t texWidth, uint32_t texHeight)
@@ -618,7 +660,7 @@ void Texture::initFallbackTexture(IRender& render, const void* pixels, size_t da
         .initialLayout = EImageLayout::Undefined,
     };
 
-    image = resourceFactory.createImage(ci);
+    auto image = resourceFactory.createImage(ci);
     if (!image || !image->getHandle()) {
         YA_CORE_ERROR("Failed to create fallback texture!");
         return;
@@ -628,10 +670,9 @@ void Texture::initFallbackTexture(IRender& render, const void* pixels, size_t da
         .label       = std::format("Texture_Fallback_ImageView_{}", _label),
         .aspectFlags = EImageAspect::Color,
     };
-    imageView = resourceFactory.createImageView(image, fallbackViewCI);
+    auto imageView = resourceFactory.createImageView(image, fallbackViewCI);
     if (!imageView || !imageView->getHandle()) {
         YA_CORE_ERROR("Failed to create fallback texture image view!");
-        image = nullptr;
         return;
     }
 
@@ -675,10 +716,15 @@ void Texture::initFallbackTexture(IRender& render, const void* pixels, size_t da
                     texHeight),
             })) {
         YA_CORE_ERROR("Failed to upload fallback texture for '{}'!", _filepath.empty() ? _label : _filepath);
-        image = nullptr;
-        imageView = nullptr;
+        resource.reset();
         return;
     }
+
+    const ImageResourceDesc resourceDesc{
+        .image       = ci,
+        .defaultView = fallbackViewCI,
+    };
+    assignTextureResource(*this, image, imageView, resourceDesc);
 
     YA_CORE_WARN("Created fallback texture ({}x{}) for: {}", texWidth, texHeight, _filepath.empty() ? _label : _filepath);
 }
@@ -712,13 +758,13 @@ void Texture::initCubeMapFromMemory(IRender& render, const CubeMapMemoryCreateIn
         .flags         = EImageCreateFlag::CubeCompatible,
     };
 
-    image = resourceFactory.createImage(imageCI);
+    auto image = resourceFactory.createImage(imageCI);
     if (!image || !image->getHandle()) {
         YA_CORE_ERROR("Failed to create cubemap image: {}", _label);
         return;
     }
 
-    imageView = resourceFactory.createImageView(
+    auto imageView = resourceFactory.createImageView(
         image,
         ImageViewCreateInfo{
             .label       = std::format("CubeMap_ImageView_{}", _label),
@@ -728,9 +774,19 @@ void Texture::initCubeMapFromMemory(IRender& render, const CubeMapMemoryCreateIn
         });
     if (!imageView || !imageView->getHandle()) {
         YA_CORE_ERROR("Failed to create cubemap image view: {}", _label);
-        image = nullptr;
         return;
     }
+
+    const ImageResourceDesc resourceDesc{
+        .image = imageCI,
+        .defaultView = ImageViewCreateInfo{
+            .label       = std::format("CubeMap_ImageView_{}", _label),
+            .viewType    = EImageViewType::ViewCube,
+            .aspectFlags = EImageAspect::Color,
+            .layerCount  = CubeFace_Count,
+        },
+    };
+    assignTextureResource(*this, image, imageView, resourceDesc);
 
     std::vector<uint8_t> stagingData(static_cast<size_t>(totalSize));
     for (size_t i = 0; i < CubeFace_Count; ++i) {
@@ -738,8 +794,7 @@ void Texture::initCubeMapFromMemory(IRender& render, const CubeMapMemoryCreateIn
                                ci.faces[i],
                                static_cast<size_t>(faceSize),
                                ci.flipVertical)) {
-            image.reset();
-            imageView.reset();
+            resource.reset();
             return;
         }
     }
@@ -790,8 +845,7 @@ void Texture::initCubeMapFromMemory(IRender& render, const CubeMapMemoryCreateIn
                 .label         = std::format("CubeMapUpload:{}:{}x{}", _label, _width, _height),
             })) {
         YA_CORE_ERROR("Failed to upload cubemap: {}", _label);
-        image.reset();
-        imageView.reset();
+        resource.reset();
         return;
     }
 

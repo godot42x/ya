@@ -3,7 +3,7 @@
 
 #include "CommandBuffer.h"
 #include "Core/Base.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/ImageResource.h"
 #include "RHI/Core/Texture.h"
 #include "RHI/RenderDefines.h"
 
@@ -56,9 +56,9 @@ struct IFrameBuffer
     std::string _label = "None";
 
     // FrameBuffer directly owns attachment images/views.
-    std::vector<std::shared_ptr<RenderImage>> _colorAttachments;
-    std::shared_ptr<RenderImage>              _depthAttachment;
-    std::shared_ptr<RenderImage>              _resolveAttachment;
+    std::vector<std::shared_ptr<ImageResource>> _colorAttachments;
+    std::shared_ptr<ImageResource>              _depthAttachment;
+    std::shared_ptr<ImageResource>              _resolveAttachment;
 
     // Legacy compatibility views for callers that still consume Texture.
     mutable std::vector<std::shared_ptr<Texture>> _colorTextures;
@@ -93,13 +93,13 @@ struct IFrameBuffer
 
     // ===== Direct Texture Access =====
 
-    const std::vector<std::shared_ptr<RenderImage>>& getColorAttachments() const { return _colorAttachments; }
-    RenderImage*                                     getColorAttachment(uint32_t attachmentIdx) const;
-    std::shared_ptr<RenderImage>                     getColorAttachmentShared(uint32_t attachmentIdx) const;
-    RenderImage*                                     getDepthAttachment() const { return _depthAttachment.get(); }
-    RenderImage*                                     getResolveAttachment() const { return _resolveAttachment.get(); }
-    const std::shared_ptr<RenderImage>&              getDepthAttachmentShared() const { return _depthAttachment; }
-    const std::shared_ptr<RenderImage>&              getResolveAttachmentShared() const { return _resolveAttachment; }
+    const std::vector<std::shared_ptr<ImageResource>>& getColorAttachments() const { return _colorAttachments; }
+    ImageResource*                                     getColorAttachment(uint32_t attachmentIdx) const;
+    std::shared_ptr<ImageResource>                     getColorAttachmentShared(uint32_t attachmentIdx) const;
+    ImageResource*                                     getDepthAttachment() const { return _depthAttachment.get(); }
+    ImageResource*                                     getResolveAttachment() const { return _resolveAttachment.get(); }
+    const std::shared_ptr<ImageResource>&              getDepthAttachmentShared() const { return _depthAttachment; }
+    const std::shared_ptr<ImageResource>&              getResolveAttachmentShared() const { return _resolveAttachment; }
 
     const std::vector<std::shared_ptr<Texture>>& getColorTextures() const
     {

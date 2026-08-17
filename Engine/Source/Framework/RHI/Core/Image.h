@@ -140,7 +140,7 @@ struct IImageView : public plat_base<IImageView>
 {
   protected:
     // ImageView is a non-owning subresource projection of an image. The image
-    // lifetime must be owned explicitly by Texture/RenderImage/runtime state.
+    // lifetime must be owned explicitly by Texture/RenderTexture/runtime state.
     IImage*               _image = nullptr;
     ImageSubresourceRange _subresourceRange{};
 

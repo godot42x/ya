@@ -1,6 +1,6 @@
 #pragma once
 
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/ImageResource.h"
 
 #include <functional>
 #include <memory>
@@ -32,7 +32,7 @@ YA_RHI_API void cancelOffscreenJob(std::shared_ptr<OffscreenJobState>& job);
 
 struct OffscreenJobResult
 {
-    std::shared_ptr<RenderImage>        outputImage        = nullptr;
+    std::shared_ptr<ImageResource>      outputImage        = nullptr;
     std::vector<std::shared_ptr<void>>  retainedResources;
 };
 
@@ -48,8 +48,8 @@ enum class EOffscreenJobPhase : uint8_t
 
 struct OffscreenJobState
 {
-    using CreateOutputFn = std::function<std::shared_ptr<RenderImage>(IRender* render)>;
-    using ExecuteFn      = std::function<bool(ICommandBuffer* cmdBuf, RenderImage* output)>;
+    using CreateOutputFn = std::function<std::shared_ptr<ImageResource>(IRender* render)>;
+    using ExecuteFn      = std::function<bool(ICommandBuffer* cmdBuf, ImageResource* output)>;
 
     std::string    debugName;
     CreateOutputFn createOutputFn;

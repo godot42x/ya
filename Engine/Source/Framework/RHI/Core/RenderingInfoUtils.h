@@ -1,7 +1,6 @@
 #pragma once
 
 #include "RHI/Core/Image.h"
-#include "RHI/Core/RenderImage.h"
 #include "RHI/RenderDefines.h"
 
 namespace ya

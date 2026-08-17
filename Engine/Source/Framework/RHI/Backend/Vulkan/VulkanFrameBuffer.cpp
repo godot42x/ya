@@ -4,7 +4,7 @@
 namespace ya
 {
 
-std::shared_ptr<RenderImage> VulkanFrameBuffer::createAttachmentResource(
+std::shared_ptr<ImageResource> VulkanFrameBuffer::createAttachmentResource(
     const stdptr<IImage>& image,
     const std::string&    label,
     VkImageAspectFlags    aspect)
@@ -41,7 +41,7 @@ std::shared_ptr<RenderImage> VulkanFrameBuffer::createAttachmentResource(
         return nullptr;
     }
 
-    auto attachment         = std::make_shared<RenderImage>();
+    auto attachment         = std::make_shared<ImageResource>();
     attachment->image       = vkImage;
     attachment->defaultView = std::move(imageView);
     return attachment;
