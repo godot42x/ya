@@ -12,6 +12,13 @@
 namespace ya
 {
 
+UIMenuBarItem::UIMenuBarItem(std::string name)
+    : UIElement(std::move(name))
+{
+    _hitFilter   = EWidgetHitFilter::Stop;
+    _focusPolicy = EWidgetFocusPolicy::Focusable;
+}
+
 void UIMenuBarItem::paintSelf(UIFrameBuilder& builder)
 {
     builder.addSprite(_layoutRect, _bHovered ? _hoveredColor : _normalColor, nullptr);

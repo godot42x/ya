@@ -20,12 +20,6 @@ struct YA_GUI_API UIMenuBarItem : public UIElement
     YA_REFLECT_FIELD(_hoveredColor, .instanceEditable())
     YA_REFLECT_END()
 
-    explicit UIMenuBarItem(std::string name = "MenuBarItem") : UIElement(std::move(name))
-    {
-        _hitFilter   = EWidgetHitFilter::Stop;
-        _focusPolicy = EWidgetFocusPolicy::Focusable;
-    }
-
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIMenuBarItem>; }
 
     std::string _label;
@@ -40,6 +34,8 @@ struct YA_GUI_API UIMenuBarItem : public UIElement
     /// hover-open / hover-switch while a menu is already open).
     std::function<void(UIMenuBarItem*)> _onHoveredEnter;
 
+    explicit UIMenuBarItem(std::string name = "MenuBarItem");
+
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool isHoverable() const override { return true; }
@@ -49,7 +45,10 @@ struct YA_GUI_API UIMenuBarItem : public UIElement
     void clearTransientInputState() override { _bHovered = false; }
 
   private:
-    bool _bHovered = false;
+    /// Transient hover state. A VisualFlag so every write (enter / leave /
+    /// mouse-move) marks the item paint-dirty — without it the incremental
+    /// paint cache would keep showing the pre-hover color.
+    VisualFlag _bHovered{*this};
 };
 
 /// Horizontal menu bar. addItem() wires a button that opens `menuFactory`'s

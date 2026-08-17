@@ -926,5 +926,56 @@ TEST(ToolControlsTest, MenuBarHoverSwitchesOpenMenu)
     EXPECT_EQ(bar->getOpenMenu(), nullptr);
 }
 
+TEST(ToolControlsTest, SelectableRowHoverRepaintsWithHoveredColor)
+{
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       row = std::make_shared<UISelectableRow>("Row");
+    row->setSize({240.0f, 22.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, row);
+    tree.layout();
+    tree.buildSnapshot(UIFrameBuildContext{}); // cold start: normal color (alpha 0)
+
+    // Hover the row: the MouseMoved route flips the row's hover flag.
+    tree.dispatchEvent(MouseMoveEvent(120.0f, 11.0f), pointAt(120.0f, 11.0f));
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    ASSERT_EQ(snap.items.size(), 1u);
+    EXPECT_EQ(snap.items[0].color, row->_hoveredColor);
+
+    // Leave: the tree hover lifecycle clears the flag, back to transparent.
+    tree.dispatchEvent(MouseMoveEvent(300.0f, 200.0f), pointAt(300.0f, 200.0f));
+    const UIFrameSnapshot snapAfterLeave = tree.buildSnapshot(UIFrameBuildContext{});
+    EXPECT_TRUE(snapAfterLeave.items.empty());
+}
+
+TEST(ToolControlsTest, SelectableRowWithLabelChildHoverStillHighlightsRow)
+{
+    // Reproduce the workbench row shape: a text label child sits on top of the
+    // row. The hover owner must still resolve to the row (not the label), and
+    // the row must re-paint with its hovered color.
+    WidgetTree tree({.width = 400, .height = 300});
+    auto       row = std::make_shared<UISelectableRow>("Row");
+    row->setSize({240.0f, 22.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, row);
+
+    auto label = std::make_shared<UIText>("Label");
+    label->setSize({240.0f, 22.0f});
+    label->_fontSize = 13;
+    label->setText("Item 1");
+    label->_color    = {0.9f, 0.9f, 0.9f, 1.0f};
+    tree.attach(*row, label);
+    tree.layout();
+    tree.buildSnapshot(UIFrameBuildContext{});
+
+    tree.dispatchEvent(MouseMoveEvent(120.0f, 11.0f), pointAt(120.0f, 11.0f));
+    EXPECT_EQ(tree.getHovered(), row.get());
+
+    const UIFrameSnapshot snap = tree.buildSnapshot(UIFrameBuildContext{});
+    // The row sprite must carry the hovered color (the label may add a text
+    // item after it when a font is available).
+    ASSERT_GE(snap.items.size(), 1u);
+    EXPECT_EQ(snap.items[0].color, row->_hoveredColor);
+}
+
 
 } // namespace ya
