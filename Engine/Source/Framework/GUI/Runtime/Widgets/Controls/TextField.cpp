@@ -126,6 +126,9 @@ void UITextField::moveCursorByCodePoint(int direction)
     else {
         _cursorIndex = nextCodePoint(_text, _cursorIndex);
     }
+    // The caret position is a paint attribute — moving it must repaint so the
+    // cached caret draw item tracks the new offset.
+    invalidateProperty(EUIPropertyImpact::Paint);
 }
 
 void UITextField::erasePreviousCodePoint()
@@ -136,6 +139,10 @@ void UITextField::erasePreviousCodePoint()
     }
     _text.erase(start, _cursorIndex - start);
     _cursorIndex = start;
+    // Mark paint-dirty so the incremental paint cache re-emits the text.
+    // Without this the edited buffer would not repaint until a full rebuild
+    // (focus loss / window recreate) — see UITextField::setText.
+    invalidateProperty(EUIPropertyImpact::Paint);
     if (_onTextChanged) {
         _onTextChanged(_text);
     }
@@ -165,6 +172,9 @@ void UITextField::insertText(const std::string& text)
     }
     _text.insert(_cursorIndex, clean);
     _cursorIndex += clean.size();
+    // Mark paint-dirty so the incremental paint cache re-emits the text
+    // immediately on each keystroke (see UITextField::setText).
+    invalidateProperty(EUIPropertyImpact::Paint);
     if (_onTextChanged) {
         _onTextChanged(_text);
     }
@@ -196,6 +206,8 @@ void UITextField::placeCaretAt(const glm::vec2& logicalPoint)
         offset = nextCodePoint(_text, offset);
     }
     _cursorIndex = best;
+    // Repaint so the cached caret draw item jumps to the clicked position.
+    invalidateProperty(EUIPropertyImpact::Paint);
 }
 
 } // namespace ya
