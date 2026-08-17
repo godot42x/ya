@@ -10,7 +10,7 @@
 namespace ya
 {
 
-void RenderGraphExecutionResult::bindExportedTexture(std::string name, std::shared_ptr<RenderImage> texture)
+void RenderGraphExecutionResult::bindExportedTexture(std::string name, std::shared_ptr<RenderTexture> texture)
 {
     if (name.empty()) {
         return;
@@ -23,7 +23,7 @@ bool RenderGraphExecutionResult::hasExportedTexture(std::string_view name) const
     return _exportedTextures.contains(std::string(name));
 }
 
-std::shared_ptr<RenderImage> RenderGraphExecutionResult::getExportedTextureShared(std::string_view name) const
+std::shared_ptr<RenderTexture> RenderGraphExecutionResult::getExportedTextureShared(std::string_view name) const
 {
     if (const auto it = _exportedTextures.find(std::string(name)); it != _exportedTextures.end()) {
         return it->second;
@@ -31,7 +31,7 @@ std::shared_ptr<RenderImage> RenderGraphExecutionResult::getExportedTextureShare
     return nullptr;
 }
 
-RenderImage* RenderGraphExecutionResult::getExportedTexture(std::string_view name) const
+RenderTexture* RenderGraphExecutionResult::getExportedTexture(std::string_view name) const
 {
     if (const auto it = _exportedTextures.find(std::string(name)); it != _exportedTextures.end()) {
         return it->second.get();
@@ -274,8 +274,12 @@ void normalizeImportedTextureDesc(RGImportedTextureDesc& importedDesc)
                        image.getArrayLayers());
     };
 
-    if (importedDesc.image) {
-        const IImage&          image        = *importedDesc.image;
+    if (importedDesc.resource) {
+        YA_CORE_ASSERT(importedDesc.resource->getImage() != nullptr,
+                       "Imported texture '{}' requires a backing image",
+                       importedDesc.desc.label);
+        const IImage&          image        = *importedDesc.resource->getImage();
+        const auto*            imageView    = importedDesc.resource->getImageView();
         const auto             nativeHandle = static_cast<void*>(image.getHandle());
         const std::string_view label        = importedDesc.importDesc.label.empty() ? importedDesc.desc.label : importedDesc.importDesc.label;
 
@@ -296,16 +300,16 @@ void normalizeImportedTextureDesc(RGImportedTextureDesc& importedDesc)
         YA_CORE_ASSERT(importedDesc.importDesc.arrayLayers == 1 || importedDesc.importDesc.arrayLayers == image.getArrayLayers(),
                        "Imported texture image/array-layer mismatch");
 
-        if (importedDesc.imageView) {
-            YA_CORE_ASSERT(importedDesc.imageView->getImage() == &image,
+        if (imageView) {
+            YA_CORE_ASSERT(imageView->getImage() == &image,
                            "Imported texture '{}' image view does not reference the backing image",
                            label);
         }
         if (importedDesc.subresourceRange) {
             validateRange(image, *importedDesc.subresourceRange, label);
         }
-        if (importedDesc.imageView && importedDesc.subresourceRange) {
-            const auto& viewRange = importedDesc.imageView->getSubresourceRange();
+        if (imageView && importedDesc.subresourceRange) {
+            const auto& viewRange = imageView->getSubresourceRange();
             YA_CORE_ASSERT(viewRange.aspectMask == importedDesc.subresourceRange->aspectMask &&
                                viewRange.baseMipLevel == importedDesc.subresourceRange->baseMipLevel &&
                                viewRange.levelCount == importedDesc.subresourceRange->levelCount &&
@@ -356,8 +360,8 @@ void normalizeImportedTextureDesc(RGImportedTextureDesc& importedDesc)
                        importedDesc.subresourceRange->layerCount);
     }
 
-    if (importedDesc.image) {
-        const EImageUsage::T backingUsage = importedDesc.image->getUsage();
+    if (importedDesc.resource && importedDesc.resource->getImage() != nullptr) {
+        const EImageUsage::T backingUsage = importedDesc.resource->getImage()->getUsage();
         YA_CORE_ASSERT(hasImageUsage(backingUsage, desc.usage),
                        "Imported texture '{}' graph usage {} is not supported by backing image usage {}",
                        desc.label,
@@ -595,7 +599,7 @@ std::string formatBufferRange(const RGBufferRange& range)
     return std::format("[{}, {})", range.offset, range.offset + range.size);
 }
 
-void retainResolvedRenderImage(ICommandBuffer& cmdBuf, const RenderImage& image)
+void retainResolvedRenderTexture(ICommandBuffer& cmdBuf, const RenderTexture& image)
 {
     cmdBuf.retainResource(image.getImageShared());
     cmdBuf.retainResource(image.getImageViewShared());
@@ -750,12 +754,12 @@ void RGRenderContext::assertBufferAccess(RGBufferHandle                         
                    toString(usage->access));
 }
 
-const RenderImage* RGRenderContext::resolveTexture(RGTextureHandle handle) const
+const RenderTexture* RGRenderContext::resolveTexture(RGTextureHandle handle) const
 {
     assertTextureDeclared(handle, "resolveTexture");
     const auto* texture = _registry.resolveTexture(handle);
     if (texture) {
-        retainResolvedRenderImage(_cmdBuf, *texture);
+        retainResolvedRenderTexture(_cmdBuf, *texture);
     }
     return texture;
 }
@@ -833,7 +837,7 @@ void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) cons
                        "RGRenderContext pass {} color target {} is missing image/view",
                        _pass.name,
                        colorDesc.color.index);
-        retainResolvedRenderImage(_cmdBuf, *color);
+        retainResolvedRenderTexture(_cmdBuf, *color);
         auto attachment = makeRenderAttachment(
             color->getImageView(),
             colorDesc.loadOp,
@@ -851,7 +855,7 @@ void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) cons
                            "RGRenderContext pass {} color-resolve target {} is missing image/view",
                            _pass.name,
                            colorDesc.resolve.index);
-            retainResolvedRenderImage(_cmdBuf, *resolve);
+            retainResolvedRenderTexture(_cmdBuf, *resolve);
             attachment.resolveImage     = resolve->getImage();
             attachment.resolveImageView = resolve->getImageView();
             attachment.resolveMode      = colorDesc.resolveMode;
@@ -866,7 +870,7 @@ void RGRenderContext::beginRasterRendering(const RasterRenderingDesc& desc) cons
                        "RGRenderContext pass {} depth target {} is missing image/view",
                        _pass.name,
                        desc.depth->depth.index);
-        retainResolvedRenderImage(_cmdBuf, *depth);
+        retainResolvedRenderTexture(_cmdBuf, *depth);
 
         attachments.depth = makeRenderAttachment(
             depth->getImageView(),
@@ -913,7 +917,7 @@ void RGRenderContext::copyTextureToBuffer(
     YA_CORE_ASSERT(srcTexture != nullptr, "RGRenderContext pass {} failed to resolve src texture {}", _pass.name, src.index);
     YA_CORE_ASSERT(dstBuffer != nullptr, "RGRenderContext pass {} failed to resolve dst buffer {}", _pass.name, dst.index);
     YA_CORE_ASSERT(srcTexture->getImage() != nullptr, "RGRenderContext pass {} src texture {} is missing image", _pass.name, src.index);
-    retainResolvedRenderImage(_cmdBuf, *srcTexture);
+    retainResolvedRenderTexture(_cmdBuf, *srcTexture);
 
     _cmdBuf.copyImageToBuffer(
         srcTexture->getImage(),
@@ -932,8 +936,8 @@ void RGRenderContext::copyTexture(RGTextureHandle src, RGTextureHandle dst, cons
     YA_CORE_ASSERT(dstTexture != nullptr, "RGRenderContext pass {} failed to resolve dst texture {}", _pass.name, dst.index);
     YA_CORE_ASSERT(srcTexture->getImage() != nullptr, "RGRenderContext pass {} src texture {} is missing image", _pass.name, src.index);
     YA_CORE_ASSERT(dstTexture->getImage() != nullptr, "RGRenderContext pass {} dst texture {} is missing image", _pass.name, dst.index);
-    retainResolvedRenderImage(_cmdBuf, *srcTexture);
-    retainResolvedRenderImage(_cmdBuf, *dstTexture);
+    retainResolvedRenderTexture(_cmdBuf, *srcTexture);
+    retainResolvedRenderTexture(_cmdBuf, *dstTexture);
 
     _cmdBuf.copyImage(
         srcTexture->getImage(),
@@ -1076,8 +1080,8 @@ RGTextureHandle RenderGraph::createPersistentTexture(const RGTextureDesc& desc, 
 
 RGTextureHandle RenderGraph::importTexture(const RGImportedTextureDesc& importedDesc)
 {
-    YA_CORE_ASSERT(importedDesc.image || importedDesc.importDesc.nativeHandle != nullptr,
-                   "Imported texture requires either shared image or native handle");
+    YA_CORE_ASSERT(importedDesc.resource || importedDesc.importDesc.nativeHandle != nullptr,
+                   "Imported texture requires either image resource or native handle");
 
     auto normalizedImported = importedDesc;
     normalizeImportedTextureDesc(normalizedImported);

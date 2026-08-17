@@ -18,7 +18,8 @@
 namespace ya
 {
 
-struct RenderImage;
+struct ImageResource;
+struct RenderTexture;
 
 template <typename Tag>
 struct RGHandle
@@ -112,8 +113,7 @@ struct RGImportedTextureDesc
 {
     RGTextureDesc     desc;
     ImportedImageDesc importDesc;
-    std::shared_ptr<IImage> image = nullptr;
-    std::shared_ptr<IImageView> imageView = nullptr;
+    std::shared_ptr<ImageResource> resource = nullptr;
     std::optional<ImageSubresourceRange> subresourceRange{};
     std::optional<ImageViewCreateInfo> viewDesc{};
     std::vector<std::shared_ptr<void>> retainedResources{};
@@ -402,14 +402,14 @@ struct RGTopologyDescription
 class YA_RENDER_GRAPH_API RenderGraphExecutionResult
 {
   private:
-    std::unordered_map<std::string, std::shared_ptr<RenderImage>> _exportedTextures;
+    std::unordered_map<std::string, std::shared_ptr<RenderTexture>> _exportedTextures;
 
   public:
     void clear() { _exportedTextures.clear(); }
-    void bindExportedTexture(std::string name, std::shared_ptr<RenderImage> texture);
+    void bindExportedTexture(std::string name, std::shared_ptr<RenderTexture> texture);
     [[nodiscard]] bool hasExportedTexture(std::string_view name) const;
-    [[nodiscard]] std::shared_ptr<RenderImage> getExportedTextureShared(std::string_view name) const;
-    [[nodiscard]] RenderImage* getExportedTexture(std::string_view name) const;
+    [[nodiscard]] std::shared_ptr<RenderTexture> getExportedTextureShared(std::string_view name) const;
+    [[nodiscard]] RenderTexture* getExportedTexture(std::string_view name) const;
 };
 
 class RenderGraph;
@@ -556,7 +556,7 @@ class RGRenderContext
     [[nodiscard]] YA_RENDER_GRAPH_API bool hasDeclaredBufferUsage(RGBufferHandle handle) const;
     [[nodiscard]] YA_RENDER_GRAPH_API bool hasDeclaredTextureAccess(RGTextureHandle handle, ERGPassResourceAccess access) const;
     [[nodiscard]] YA_RENDER_GRAPH_API bool hasDeclaredBufferAccess(RGBufferHandle handle, ERGBufferAccess access) const;
-    [[nodiscard]] YA_RENDER_GRAPH_API const RenderImage* resolveTexture(RGTextureHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API const RenderTexture* resolveTexture(RGTextureHandle handle) const;
     [[nodiscard]] YA_RENDER_GRAPH_API IBuffer* resolveBuffer(RGBufferHandle handle) const;
     [[nodiscard]] YA_RENDER_GRAPH_API const RGRasterPassDesc* getDeclaredRasterPlan() const;
     [[nodiscard]] YA_RENDER_GRAPH_API RasterPassExecutionParams getRasterPassExecutionParams() const;

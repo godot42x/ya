@@ -73,14 +73,15 @@ bool isSameImportedTextureDesc(const RGImportedTextureDesc& lhs, const RGImporte
         lhs.importDesc.finalLayout == rhs.importDesc.finalLayout;
 
     const bool bSameSharedImageBackedImport =
-        lhs.image != nullptr &&
-        rhs.image != nullptr &&
-        lhs.image.get() == rhs.image.get();
+        lhs.resource != nullptr &&
+        rhs.resource != nullptr &&
+        lhs.resource->getImage() != nullptr &&
+        rhs.resource->getImage() != nullptr &&
+        lhs.resource->getImage() == rhs.resource->getImage();
 
     return isSameTextureDesc(lhs.desc, rhs.desc) &&
            bSameImportedImageIdentitySansLayout &&
-           lhs.image.get() == rhs.image.get() &&
-           lhs.imageView.get() == rhs.imageView.get() &&
+           lhs.resource.get() == rhs.resource.get() &&
            bSameSubresourceRange &&
            bSameViewDesc &&
            (bSameSharedImageBackedImport || bSameLayoutContract);
@@ -225,7 +226,7 @@ std::shared_ptr<RenderGraphResourceRegistry::TextureEntry> RenderGraphResourceRe
     }
 
     auto entry = std::make_shared<TextureEntry>(TextureEntry{
-        .resource        = createRenderImage(_factory, makeRenderImageDesc(desc)),
+        .resource        = RenderTexture::adopt(createImageResource(_factory, makeImageResourceDesc(desc))),
         .desc            = desc,
         .allocationDesc  = desc,
         .pooledTransient = true,
@@ -301,9 +302,9 @@ RenderGraphResourceRegistry::~RenderGraphResourceRegistry()
     clear();
 }
 
-RenderImageDesc RenderGraphResourceRegistry::makeRenderImageDesc(const RGTextureDesc& desc)
+ImageResourceDesc RenderGraphResourceRegistry::makeImageResourceDesc(const RGTextureDesc& desc)
 {
-    return RenderImageDesc{
+    return ImageResourceDesc{
         .image = ImageCreateInfo{
             .label       = desc.label,
             .format      = desc.format,
@@ -334,9 +335,9 @@ ImageViewCreateInfo RenderGraphResourceRegistry::makeDefaultViewDesc(const RGTex
     };
 }
 
-std::shared_ptr<RenderImage> RenderGraphResourceRegistry::createImportedTexture(const RGImportedTextureDesc& desc)
+std::shared_ptr<RenderTexture> RenderGraphResourceRegistry::createImportedTexture(const RGImportedTextureDesc& desc)
 {
-    auto image = desc.image;
+    auto image = desc.resource ? desc.resource->getImageShared() : nullptr;
     if (!image) {
         image = _factory.importImage(desc.importDesc);
     }
@@ -345,7 +346,7 @@ std::shared_ptr<RenderImage> RenderGraphResourceRegistry::createImportedTexture(
         return nullptr;
     }
 
-    auto view = desc.imageView;
+    auto view = desc.resource ? desc.resource->getImageViewShared() : nullptr;
     if (view) {
         YA_CORE_ASSERT(view->getImage() == image.get(),
                        "Imported render graph texture '{}' provided an image view that does not reference the imported image",
@@ -359,11 +360,27 @@ std::shared_ptr<RenderImage> RenderGraphResourceRegistry::createImportedTexture(
         return nullptr;
     }
 
-    auto resource         = std::make_shared<RenderImage>();
-    resource->image       = std::move(image);
+    auto resource = std::make_shared<ImageResource>();
+    resource->label = desc.desc.label.empty() ? desc.importDesc.label : desc.desc.label;
+    resource->desc = ImageResourceDesc{
+        .image = ImageCreateInfo{
+            .label       = resource->label,
+            .format      = desc.importDesc.format,
+            .extent      = {
+                .width  = desc.importDesc.extent.width,
+                .height = desc.importDesc.extent.height,
+                .depth  = desc.importDesc.extent.depth,
+            },
+            .mipLevels   = desc.importDesc.mipLevels,
+            .arrayLayers = desc.importDesc.arrayLayers,
+            .usage       = desc.importDesc.usage,
+        },
+        .defaultView = desc.viewDesc.value_or(makeDefaultViewDesc(desc.desc)),
+    };
+    resource->image = std::move(image);
     resource->defaultView = std::move(view);
     resource->retainedResources = desc.retainedResources;
-    return resource;
+    return RenderTexture::adopt(std::move(resource));
 }
 
 void RenderGraphResourceRegistry::pruneUnusedResources(const RenderGraph& graph)
@@ -473,7 +490,7 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompile
                                   key);
                     retireSharedResource(persistentEntry->resource);
                 }
-                persistentEntry->resource = createRenderImage(_factory, makeRenderImageDesc(texture.desc));
+                persistentEntry->resource = RenderTexture::adopt(createImageResource(_factory, makeImageResourceDesc(texture.desc)));
                 persistentEntry->desc = texture.desc;
                 persistentEntry->allocationDesc = texture.desc;
                 persistentEntry->imported.reset();
@@ -499,8 +516,8 @@ void RenderGraphResourceRegistry::sync(const RenderGraph& graph, const RGCompile
                                              texture.imported ? texture.imported->retainedResources : std::vector<std::shared_ptr<void>>{});
                 }
                 existing->second->imported = texture.imported;
-                if (existing->second->resource) {
-                    refreshRetainedResources(existing->second->resource->retainedResources,
+                if (existing->second->resource && existing->second->resource->resource) {
+                    refreshRetainedResources(existing->second->resource->resource->retainedResources,
                                              texture.imported ? texture.imported->retainedResources : std::vector<std::shared_ptr<void>>{});
                 }
             }
@@ -674,13 +691,13 @@ void RenderGraphResourceRegistry::clear()
     _importedBuffers.clear();
 }
 
-const RenderImage* RenderGraphResourceRegistry::resolveTexture(RGTextureHandle handle) const
+const RenderTexture* RenderGraphResourceRegistry::resolveTexture(RGTextureHandle handle) const
 {
     const auto it = _textures.find(handle);
     return it != _textures.end() && it->second ? it->second->resource.get() : nullptr;
 }
 
-std::shared_ptr<RenderImage> RenderGraphResourceRegistry::resolveTextureShared(RGTextureHandle handle) const
+std::shared_ptr<RenderTexture> RenderGraphResourceRegistry::resolveTextureShared(RGTextureHandle handle) const
 {
     const auto it = _textures.find(handle);
     return it != _textures.end() && it->second ? it->second->resource : nullptr;

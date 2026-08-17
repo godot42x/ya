@@ -2,7 +2,7 @@
 
 #include "Graph/RenderGraph.h"
 #include "Core/Api.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/RenderTexture.h"
 
 #include <memory>
 #include <unordered_map>
@@ -16,7 +16,7 @@ class RenderGraphResourceRegistry
   private:
     struct TextureEntry
     {
-        std::shared_ptr<RenderImage> resource;
+        std::shared_ptr<RenderTexture> resource;
         RGTextureDesc                desc{};
         RGTextureDesc                allocationDesc{};
         std::optional<RGPersistentTextureKey> persistentKey{};
@@ -48,9 +48,9 @@ class RenderGraphResourceRegistry
     RGTransientBufferPoolDiagnostics _transientPoolDiagnostics{};
     std::unordered_map<RGBufferHandle, ImportedBufferEntry> _importedBuffers;
 
-    static RenderImageDesc makeRenderImageDesc(const RGTextureDesc& desc);
+    static ImageResourceDesc makeImageResourceDesc(const RGTextureDesc& desc);
     static ImageViewCreateInfo makeDefaultViewDesc(const RGTextureDesc& desc);
-    std::shared_ptr<RenderImage> createImportedTexture(const RGImportedTextureDesc& desc);
+    std::shared_ptr<RenderTexture> createImportedTexture(const RGImportedTextureDesc& desc);
     void pruneUnusedResources(const RenderGraph& graph);
     static bool needsTextureReplacement(const TextureEntry& entry, const RGTextureResource& resource);
     static bool needsOwnedBufferReplacement(const OwnedBufferEntry& entry, const RGBufferResource& resource);
@@ -76,8 +76,8 @@ class RenderGraphResourceRegistry
     YA_RENDER_GRAPH_API void sync(const RenderGraph& graph, const RGCompiledGraph* compiled = nullptr);
     YA_RENDER_GRAPH_API void clear();
 
-    [[nodiscard]] YA_RENDER_GRAPH_API const RenderImage* resolveTexture(RGTextureHandle handle) const;
-    [[nodiscard]] YA_RENDER_GRAPH_API std::shared_ptr<RenderImage> resolveTextureShared(RGTextureHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API const RenderTexture* resolveTexture(RGTextureHandle handle) const;
+    [[nodiscard]] YA_RENDER_GRAPH_API std::shared_ptr<RenderTexture> resolveTextureShared(RGTextureHandle handle) const;
     [[nodiscard]] YA_RENDER_GRAPH_API IBuffer* resolveBuffer(RGBufferHandle handle) const;
     [[nodiscard]] const RGTransientBufferPoolDiagnostics& getTransientBufferPoolDiagnostics() const
     {

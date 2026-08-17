@@ -1,8 +1,8 @@
 #pragma once
 
 #include "RenderGraph.h"
-#include "RHI/Core/ImageResourceRef.h"
-#include "RHI/Core/RenderImage.h"
+#include "RHI/Core/ImageResource.h"
+#include "RHI/Core/RenderTexture.h"
 #include "RHI/Core/Texture.h"
 #include "Core/Api.h"
 
@@ -30,42 +30,40 @@ struct RGBufferCopyParams
     const RGBufferCopyParams& params);
 
 [[nodiscard]] YA_RENDER_GRAPH_API RGImportedTextureDesc makeImportedTextureDesc(
+    const ImageResource& image,
+    std::string_view label,
+    EImageLayout::T finalLayout,
+    EImageUsage::T requiredUsage = EImageUsage::None);
+
+[[nodiscard]] YA_RENDER_GRAPH_API RGImportedTextureDesc makeImportedTextureDesc(
     const Texture& texture,
     std::string_view label,
     EImageLayout::T finalLayout,
     EImageUsage::T requiredUsage = EImageUsage::None);
 
 [[nodiscard]] YA_RENDER_GRAPH_API RGImportedTextureDesc makeImportedTextureDesc(
-    const RenderImage& image,
+    const RenderTexture& texture,
     std::string_view label,
     EImageLayout::T finalLayout,
     EImageUsage::T requiredUsage = EImageUsage::None);
 
 [[nodiscard]] YA_RENDER_GRAPH_API RGImportedTextureDesc makeImportedTextureDesc(
-    const ImageResourceRef& resource,
+    const std::shared_ptr<ImageResource>& resource,
     std::string_view label,
     EImageLayout::T finalLayout,
-    EImageUsage::T requiredUsage = EImageUsage::None);
+    EImageUsage::T requiredUsage = EImageUsage::None,
+    std::optional<Extent3D> logicalExtent = std::nullopt);
 
 [[nodiscard]] YA_RENDER_GRAPH_API RGImportedTextureDesc makeImportedTextureDesc(
-    const std::shared_ptr<IImage>& image,
-    const std::shared_ptr<IImageView>& imageView,
+    const std::shared_ptr<ImageResource>& resource,
+    const std::shared_ptr<IImageView>& view,
     std::string_view label,
     EImageLayout::T finalLayout,
     EImageUsage::T requiredUsage = EImageUsage::None,
     std::optional<Extent3D> logicalExtent = std::nullopt);
 
 [[nodiscard]] YA_RENDER_GRAPH_API RGImportedTextureDesc makeImportedSubresourceTextureDesc(
-    const std::shared_ptr<IImage>& image,
-    const std::shared_ptr<IImageView>& imageView,
-    const ImageViewCreateInfo& viewDesc,
-    Extent3D logicalExtent,
-    std::string_view label,
-    EImageLayout::T finalLayout,
-    EImageUsage::T requiredUsage = EImageUsage::None);
-
-[[nodiscard]] YA_RENDER_GRAPH_API RGImportedTextureDesc makeImportedSubresourceTextureDesc(
-    const std::shared_ptr<IImage>& image,
+    const std::shared_ptr<ImageResource>& resource,
     const ImageViewCreateInfo& viewDesc,
     Extent3D logicalExtent,
     std::string_view label,

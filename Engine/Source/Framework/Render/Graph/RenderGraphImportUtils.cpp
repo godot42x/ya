@@ -50,6 +50,39 @@ RGPassHandle addBufferCopyPass(RenderGraph& graph, const RGBufferCopyParams& par
 namespace
 {
 
+std::shared_ptr<ImageResource> cloneImageResourceWithView(
+    const std::shared_ptr<ImageResource>& resource,
+    const std::shared_ptr<IImageView>& view)
+{
+    YA_CORE_ASSERT(resource != nullptr, "Render graph import requires a backing image resource");
+    YA_CORE_ASSERT(view != nullptr, "Render graph import requires a backing image view");
+
+    auto clone         = std::make_shared<ImageResource>();
+    clone->label       = resource->label;
+    clone->desc        = resource->desc;
+    clone->image       = resource->image;
+    clone->defaultView = view;
+    clone->retainedResources.reserve(resource->retainedResources.size() + 2);
+    clone->retainedResources.push_back(resource);
+    clone->retainedResources.insert(
+        clone->retainedResources.end(),
+        resource->retainedResources.begin(),
+        resource->retainedResources.end());
+    clone->retainedResources.push_back(view);
+    return clone;
+}
+
+std::shared_ptr<ImageResource> cloneImageResourceOwner(const ImageResource& resource)
+{
+    auto clone               = std::make_shared<ImageResource>();
+    clone->label             = resource.label;
+    clone->desc              = resource.desc;
+    clone->image             = resource.image;
+    clone->defaultView       = resource.defaultView;
+    clone->retainedResources = resource.retainedResources;
+    return clone;
+}
+
 EImageUsage::T mergeImportedUsage(EImageUsage::T usage, EImageUsage::T requiredUsage)
 {
     return static_cast<EImageUsage::T>(usage | requiredUsage);
@@ -73,14 +106,17 @@ EImageLayout::T getImportedInitialLayout(const IImage& image, const ImageSubreso
 }
 
 RGImportedTextureDesc makeImportedTextureDesc(
-    const std::shared_ptr<IImage>& image,
-    const std::shared_ptr<IImageView>& imageView,
+    const std::shared_ptr<ImageResource>& resource,
     EFormat::T format,
     Extent3D extent,
     std::string_view label,
     EImageLayout::T finalLayout,
     EImageUsage::T requiredUsage)
 {
+    YA_CORE_ASSERT(resource != nullptr, "Render graph import requires a backing image resource");
+
+    const auto image = resource->getImageShared();
+    const auto imageView = resource->getImageViewShared();
     YA_CORE_ASSERT(image != nullptr, "Render graph import requires a backing image");
     YA_CORE_ASSERT(imageView != nullptr, "Render graph import requires a backing image view");
 
@@ -107,56 +143,13 @@ RGImportedTextureDesc makeImportedTextureDesc(
             .initialLayout = getImportedInitialLayout(*image, imageView ? &imageView->getSubresourceRange() : nullptr),
             .finalLayout   = finalLayout,
         },
-        .image = image,
-        .imageView = imageView,
+        .resource = resource,
         .subresourceRange = imageView->getSubresourceRange(),
     };
 }
 
 RGImportedTextureDesc makeImportedSubresourceTextureDesc(
-    const std::shared_ptr<IImage>& image,
-    EFormat::T format,
-    const std::shared_ptr<IImageView>& imageView,
-    const ImageViewCreateInfo& viewDesc,
-    Extent3D logicalExtent,
-    std::string_view label,
-    EImageLayout::T finalLayout,
-    EImageUsage::T requiredUsage)
-{
-    YA_CORE_ASSERT(image != nullptr, "Render graph subresource import requires a backing image");
-    YA_CORE_ASSERT(imageView != nullptr, "Render graph subresource import requires a backing image view");
-
-    const EImageUsage::T usage = mergeImportedUsage(image->getUsage(), requiredUsage);
-
-    return RGImportedTextureDesc{
-        .desc = RGTextureDesc{
-            .label       = std::string(label),
-            .format      = format,
-            .extent      = logicalExtent,
-            .mipLevels   = viewDesc.levelCount,
-            .arrayLayers = viewDesc.layerCount,
-            .usage       = usage,
-        },
-        .importDesc = ImportedImageDesc{
-            .label         = std::string(label),
-            .nativeHandle  = static_cast<void*>(image->getHandle()),
-            .format        = format,
-            .usage         = usage,
-            .extent        = Extent3D{image->getWidth(), image->getHeight(), 1},
-            .mipLevels     = image->getMipLevels(),
-            .arrayLayers   = image->getArrayLayers(),
-            .initialLayout = getImportedInitialLayout(*image, &imageView->getSubresourceRange()),
-            .finalLayout   = finalLayout,
-        },
-        .image = image,
-        .imageView = imageView,
-        .subresourceRange = imageView->getSubresourceRange(),
-        .viewDesc = viewDesc,
-    };
-}
-
-RGImportedTextureDesc makeImportedSubresourceTextureDesc(
-    const std::shared_ptr<IImage>& image,
+    const std::shared_ptr<ImageResource>& resource,
     EFormat::T format,
     const ImageViewCreateInfo& viewDesc,
     Extent3D logicalExtent,
@@ -164,6 +157,9 @@ RGImportedTextureDesc makeImportedSubresourceTextureDesc(
     EImageLayout::T finalLayout,
     EImageUsage::T requiredUsage)
 {
+    YA_CORE_ASSERT(resource != nullptr, "Render graph subresource import requires a backing image resource");
+
+    const auto image = resource->getImageShared();
     YA_CORE_ASSERT(image != nullptr, "Render graph subresource import requires a backing image");
 
     const EImageUsage::T usage = mergeImportedUsage(image->getUsage(), requiredUsage);
@@ -195,7 +191,7 @@ RGImportedTextureDesc makeImportedSubresourceTextureDesc(
             .initialLayout = getImportedInitialLayout(*image, &subresourceRange),
             .finalLayout   = finalLayout,
         },
-        .image = image,
+        .resource = resource,
         .subresourceRange = subresourceRange,
         .viewDesc = viewDesc,
     };
@@ -263,14 +259,30 @@ RGImportedBufferDesc makeReadbackImportedBufferDesc(const std::shared_ptr<IBuffe
         });
 }
 
+RGImportedTextureDesc makeImportedTextureDesc(const ImageResource& image,
+                                              std::string_view label,
+                                              EImageLayout::T finalLayout,
+                                              EImageUsage::T requiredUsage)
+{
+    auto resource = cloneImageResourceOwner(image);
+    auto desc = makeImportedTextureDesc(
+        resource,
+        image.getFormat(),
+        Extent3D{image.getWidth(), image.getHeight(), 1},
+        label,
+        finalLayout,
+        requiredUsage);
+    desc.retainedResources = resource->getRetainedResources();
+    return desc;
+}
+
 RGImportedTextureDesc makeImportedTextureDesc(const Texture& texture,
                                               std::string_view label,
                                               EImageLayout::T finalLayout,
                                               EImageUsage::T requiredUsage)
 {
     auto desc = makeImportedTextureDesc(
-        texture.getImageShared(),
-        texture.getImageViewShared(),
+        texture.getResourceShared(),
         texture.getFormat(),
         Extent3D{texture.getWidth(), texture.getHeight(), 1},
         label,
@@ -280,51 +292,36 @@ RGImportedTextureDesc makeImportedTextureDesc(const Texture& texture,
     return desc;
 }
 
-RGImportedTextureDesc makeImportedTextureDesc(const RenderImage& image,
+RGImportedTextureDesc makeImportedTextureDesc(const RenderTexture& texture,
                                               std::string_view label,
                                               EImageLayout::T finalLayout,
                                               EImageUsage::T requiredUsage)
 {
     auto desc = makeImportedTextureDesc(
-        image.getImageShared(),
-        image.getImageViewShared(),
-        image.getFormat(),
-        Extent3D{image.getWidth(), image.getHeight(), 1},
+        texture.getResourceShared(),
+        texture.getFormat(),
+        Extent3D{texture.getWidth(), texture.getHeight(), 1},
         label,
         finalLayout,
         requiredUsage);
-    desc.retainedResources = image.getRetainedResources();
+    desc.retainedResources = texture.getRetainedResources();
     return desc;
 }
 
-RGImportedTextureDesc makeImportedTextureDesc(const ImageResourceRef& resource,
-                                              std::string_view label,
-                                              EImageLayout::T finalLayout,
-                                              EImageUsage::T requiredUsage)
-{
-    if (resource.renderImage) {
-        return makeImportedTextureDesc(*resource.renderImage, label, finalLayout, requiredUsage);
-    }
-
-    YA_CORE_ASSERT(resource.texture != nullptr,
-                   "Render graph import '{}' requires a texture or render-image owner",
-                   label);
-    return makeImportedTextureDesc(*resource.texture, label, finalLayout, requiredUsage);
-}
-
-RGImportedTextureDesc makeImportedTextureDesc(const std::shared_ptr<IImage>& image,
-                                              const std::shared_ptr<IImageView>& imageView,
+RGImportedTextureDesc makeImportedTextureDesc(const std::shared_ptr<ImageResource>& resource,
                                               std::string_view label,
                                               EImageLayout::T finalLayout,
                                               EImageUsage::T requiredUsage,
                                               std::optional<Extent3D> logicalExtent)
 {
+    YA_CORE_ASSERT(resource != nullptr, "Render graph import requires a backing image resource");
+
+    const auto image = resource->getImageShared();
     YA_CORE_ASSERT(image != nullptr, "Render graph import requires a backing image");
 
     const Extent3D resolvedExtent = logicalExtent.value_or(Extent3D{image->getWidth(), image->getHeight(), 1});
     return makeImportedTextureDesc(
-        image,
-        imageView,
+        resource,
         image->getFormat(),
         resolvedExtent,
         label,
@@ -332,34 +329,34 @@ RGImportedTextureDesc makeImportedTextureDesc(const std::shared_ptr<IImage>& ima
         requiredUsage);
 }
 
-RGImportedTextureDesc makeImportedSubresourceTextureDesc(const std::shared_ptr<IImage>& image,
-                                                         const std::shared_ptr<IImageView>& imageView,
-                                                         const ImageViewCreateInfo& viewDesc,
-                                                         Extent3D logicalExtent,
-                                                         std::string_view label,
-                                                         EImageLayout::T finalLayout,
-                                                         EImageUsage::T requiredUsage)
+RGImportedTextureDesc makeImportedTextureDesc(const std::shared_ptr<ImageResource>& resource,
+                                              const std::shared_ptr<IImageView>& view,
+                                              std::string_view label,
+                                              EImageLayout::T finalLayout,
+                                              EImageUsage::T requiredUsage,
+                                              std::optional<Extent3D> logicalExtent)
 {
-    return makeImportedSubresourceTextureDesc(
-        image,
-        image ? image->getFormat() : EFormat::Undefined,
-        imageView,
-        viewDesc,
-        logicalExtent,
+    auto importedResource = cloneImageResourceWithView(resource, view);
+    auto desc = makeImportedTextureDesc(
+        importedResource,
         label,
         finalLayout,
-        requiredUsage);
+        requiredUsage,
+        logicalExtent);
+    desc.retainedResources = importedResource->retainedResources;
+    return desc;
 }
 
-RGImportedTextureDesc makeImportedSubresourceTextureDesc(const std::shared_ptr<IImage>& image,
+RGImportedTextureDesc makeImportedSubresourceTextureDesc(const std::shared_ptr<ImageResource>& resource,
                                                          const ImageViewCreateInfo& viewDesc,
                                                          Extent3D logicalExtent,
                                                          std::string_view label,
                                                          EImageLayout::T finalLayout,
                                                          EImageUsage::T requiredUsage)
 {
+    const auto image = resource ? resource->getImageShared() : nullptr;
     return makeImportedSubresourceTextureDesc(
-        image,
+        resource,
         image ? image->getFormat() : EFormat::Undefined,
         viewDesc,
         logicalExtent,
