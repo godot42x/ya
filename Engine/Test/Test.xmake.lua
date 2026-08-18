@@ -120,7 +120,7 @@ do
     add_files("./Source/ToolControlsTest.cpp")
     add_files("./Source/TestEntry.cpp")
 
-    add_deps("ya-gui-widgets")
+    add_deps("ya-gui-widgets", "ya-render-resources")
     add_packages("gtest")
 
     if is_plat("windows") then

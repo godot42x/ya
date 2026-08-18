@@ -18,7 +18,7 @@
 #include "GUI/Widgets/Controls/SplitPane.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TreeView.h"
-#include "GUI/Resources/FontManager.h"
+#include "Render/Resources/FontManager.h"
 
 #include <gtest/gtest.h>
 
