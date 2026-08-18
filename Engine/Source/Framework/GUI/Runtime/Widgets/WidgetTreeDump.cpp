@@ -5,6 +5,7 @@
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
+#include "GUI/Widgets/Controls/InputExtras.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/Slider.h"
@@ -199,6 +200,36 @@ nlohmann::json serializeNode(const UIElement& element, const WidgetTree& tree)
         node["control"] = {
             {"type", "tableGrid"},
             {"selected", table->getSelection() ? table->getSelection()->value() : -1},
+        };
+    }
+    else if (const auto* drag = dynamic_cast<const UIDragFloat*>(&element)) {
+        node["control"] = {
+            {"type", "dragFloat"},
+            {"value", drag->_value},
+        };
+    }
+    else if (const auto* spin = dynamic_cast<const UISpinBox*>(&element)) {
+        node["control"] = {
+            {"type", "spinBox"},
+            {"value", spin->_value},
+        };
+    }
+    else if (const auto* radio = dynamic_cast<const UIRadioButton*>(&element)) {
+        node["control"] = {
+            {"type", "radioButton"},
+            {"checked", radio->_bChecked},
+        };
+    }
+    else if (const auto* colorEdit = dynamic_cast<const UIColorEdit*>(&element)) {
+        node["control"] = {
+            {"type", "colorEdit"},
+            {"color", {colorEdit->_color.r, colorEdit->_color.g, colorEdit->_color.b, colorEdit->_color.a}},
+        };
+    }
+    else if (const auto* searchCombo = dynamic_cast<const UISearchComboBox*>(&element)) {
+        node["control"] = {
+            {"type", "searchComboBox"},
+            {"selectedIndex", searchCombo->_selectedIndex},
         };
     }
     else if (const auto* overlay = dynamic_cast<const UIPopupOverlay*>(&element)) {

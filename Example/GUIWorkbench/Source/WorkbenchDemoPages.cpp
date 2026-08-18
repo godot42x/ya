@@ -9,6 +9,7 @@
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Image.h"
+#include "GUI/Widgets/Controls/InputExtras.h"
 #include "GUI/Widgets/Controls/Menu.h"
 #include "GUI/Widgets/Controls/MenuBar.h"
 #include "GUI/Widgets/Controls/Panel.h"
@@ -1026,6 +1027,72 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
 
     auto tableCaption = makeBodyText("Click a row to select (reactive selection ref); hover highlights.");
     tree.attach(*form, tableCaption);
+
+    // ---------------------------------------------------------------------
+    // Section 6 — Input controls (DragFloat / SpinBox / RadioButton /
+    // ColorEdit / SearchComboBox — the editor's ManipulateSpec-driven
+    // property editors need these).
+    // ---------------------------------------------------------------------
+    tree.attach(*form, makeLabel("6. Input controls — drag, spin, radio, color, search combo"));
+
+    auto dragRow = makeRow(tree, *form);
+    tree.attach(*dragRow, makeBodyText("DragFloat"));
+    auto dragFloat = std::make_shared<ya::UIDragFloat>("GalleryDragFloat");
+    dragFloat->setSize({120.0f, 24.0f});
+    dragFloat->_value = 3.5f;
+    dragFloat->_onValueChanged = [log](float v) { log(std::format("DragFloat -> {:.2f}", v)); };
+    tree.attach(*dragRow, dragFloat);
+
+    auto spinRow = makeRow(tree, *form);
+    tree.attach(*spinRow, makeBodyText("SpinBox"));
+    auto spinBox = std::make_shared<ya::UISpinBox>("GallerySpinBox");
+    spinBox->setSize({120.0f, 24.0f});
+    spinBox->_value = 8.0f;
+    spinBox->_step  = 1.0f;
+    spinBox->_onValueChanged = [log](float v) { log(std::format("SpinBox -> {:.2f}", v)); };
+    tree.attach(*spinRow, spinBox);
+
+    auto radioRow = makeRow(tree, *form);
+    tree.attach(*radioRow, makeBodyText("Radio"));
+    auto groupValue = std::make_shared<int>(0);
+    auto radios = std::make_shared<std::vector<std::shared_ptr<ya::UIRadioButton>>>();
+    const std::vector<std::string> radioLabels = {"Shadow", "CSM", "None"};
+    for (size_t i = 0; i < radioLabels.size(); ++i) {
+        auto radio = std::make_shared<ya::UIRadioButton>(std::format("GalleryRadio{}", i));
+        radio->setSize({90.0f, 22.0f});
+        radio->_label     = radioLabels[i];
+        radio->_bChecked  = static_cast<int>(i) == *groupValue;
+        // Capture shared_ptr by value: the button outlives this builder.
+        radio->_onSelect = [radios, log, label = radioLabels[i]](ya::UIRadioButton* self)
+        {
+            for (auto& r : *radios) {
+                r->setChecked(r.get() == self);
+            }
+            log(std::format("Radio -> {}", label));
+        };
+        radios->push_back(radio);
+        tree.attach(*radioRow, radio);
+    }
+
+    auto colorRow = makeRow(tree, *form);
+    tree.attach(*colorRow, makeBodyText("ColorEdit"));
+    auto colorEdit = std::make_shared<ya::UIColorEdit>("GalleryColorEdit");
+    colorEdit->setSize({170.0f, 28.0f});
+    colorEdit->_color = {0.24f, 0.46f, 0.82f, 1.0f};
+    colorEdit->_onColorChanged = [log](const glm::vec4& c)
+    {
+        log(std::format("Color -> ({:.2f}, {:.2f}, {:.2f}, {:.2f})", c.r, c.g, c.b, c.a));
+    };
+    tree.attach(*colorRow, colorEdit);
+
+    auto searchRow = makeRow(tree, *form);
+    tree.attach(*searchRow, makeBodyText("SearchCombo"));
+    auto searchCombo = std::make_shared<ya::UISearchComboBox>("GallerySearchCombo");
+    searchCombo->setSize({180.0f, 24.0f});
+    searchCombo->_items = {"Cube", "Sphere", "Capsule", "Plane", "Cone", "Torus"};
+    searchCombo->_selectedIndex = 0;
+    searchCombo->_onSelectionChanged = [log](int index) { log(std::format("SearchCombo -> {}", index)); };
+    tree.attach(*searchRow, searchCombo);
 
     tree.attach(*form, makeBodyText("Expected: incrementing, toggling, renaming, resizing, selecting and theming all update their targets without the page rebuilding."));
 }

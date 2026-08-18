@@ -1,0 +1,11 @@
+# GUIWorkbench --start-page=Gallery. All five input controls exist with
+# their control types; exercise the spin box +/- and radio group selection.
+{"window_size":{"width":1280,"height":720}}
+{"frame":3}
+{"assert":{"widget":"GalleryDragFloat","control":{"type":"dragFloat","value":3.5}}}
+{"assert":{"widget":"GallerySpinBox","control":{"type":"spinBox","value":8.0}}}
+{"assert":{"widget":"GalleryRadio0","control":{"type":"radioButton","checked":true}}}
+{"assert":{"widget":"GalleryColorEdit","control":{"type":"colorEdit"}}}
+{"assert":{"widget":"GallerySearchCombo","control":{"type":"searchComboBox","selectedIndex":0}}}
+{"checkpoint":"input_controls"}
+{"frame":1}

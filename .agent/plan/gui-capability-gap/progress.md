@@ -49,3 +49,17 @@
 
 **下一刀**：P3 输入控件补全（UIDragFloat/UISpinBox/UIRadioButton/UIColorEdit/UISearchComboBox）。
 
+## 2026-08-18 — P3 输入控件（收口）
+
+**完成**：
+- `Controls/InputExtras.h/.cpp`（+ include 镜像头）五个精简控件：UIDragFloat（press capture + 水平拖动调值 + 键盘步进）、UISpinBox（-/+ 双区点击步进 + hover）、UIRadioButton（点+label，组互斥由 host `_onSelect` 管理）、UIColorEdit（色块+RGBA 通道条，点击色块循环通道、拖动调值）、UISearchComboBox（焦点 KeyTyped 过滤 + UIMenu 弹出过滤项）。
+- `WidgetTreeDump` 加五个 control 块（scenario 断言）。
+- Gallery section「6. Input controls」全摆五控件（radio 组回调值捕获 shared_ptr 防悬垂）。
+- `gallery_inputs.jsonl` scenario 锁五控件类型+初值。
+
+**验证**：GUIWorkbench 编译通过；gallery_inputs 通过；vector/table 回归通过。
+
+**剩余问题**：无。P3 收口。
+
+**下一刀**：P4 拖拽重排（UIDropTarget/UIDragSource）。
+
