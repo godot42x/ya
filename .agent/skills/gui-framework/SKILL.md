@@ -163,7 +163,11 @@ python3 Script/gui_convergence_macos_validation.py
 4. **弹出刷新 ≠ 真实关闭**：「关旧开新」的刷新路径会触发旧菜单 dismiss 回调；
    回调里的清理逻辑（清 filter 等）必须用刷新标志（_bRefreshingMenu）隔离，
    只在真实关闭时执行。
-5. **demo 的约束性行为要有可见文案**：选择性 accept（drop target 谓词）、禁用
+5. **过滤/搜索的自动展开是一次性的**：过滤变化时自动展开匹配链（记录
+   `_lastFilterApplied` 防重复），之后手动折叠/展开必须仍然生效——过滤
+   不能持续强制展开（TreeView「filter 激活时箭头失效」即此坑）。清空
+   过滤永不收拢任何东西。
+6. **demo 的约束性行为要有可见文案**：选择性 accept（drop target 谓词）、禁用
    条件等「看起来像 bug」的设计，必须在控件 label / 页面说明里写明
    （如 'Zone B: only payload.2'）。
 
