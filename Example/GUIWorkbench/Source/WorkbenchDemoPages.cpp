@@ -591,7 +591,10 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
         auto stack = std::make_shared<ya::UIContainer>("ModalStack");
         stack->_anchorMin = {0.0f, 0.0f};
         stack->_anchorMax = {1.0f, 1.0f};
-        stack->setPosition({16.0f, 14.0f});
+        // Inset via box padding, not position: an anchor span stretches to the
+        // parent's full size, so position offsets on top overflow the dialog's
+        // right/bottom edges. Padding shrinks the content rect instead.
+        stack->setPadding({16.0f, 14.0f});
         stack->setSize({0.0f, 0.0f});
         stack->setDirection(ya::EWidgetBoxLayout::Vertical);
         stack->setSpacing(12.0f);
@@ -606,6 +609,12 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
         nameField->_fontSize = 13;
         nameField->setText(state.modalName);
         stack->addDetachedChild(nameField);
+        // Keep the field at its fixed width instead of stretching it across
+        // the dialog (box cross-axis default is Stretch), so its text never
+        // renders outside the dialog border.
+        if (auto* slot = stack->getBoxSlot(*nameField)) {
+            slot->setCrossAlignment(ya::EUIBoxSlotCrossAlignment::Start);
+        }
 
         auto buttons = std::make_shared<ya::UIContainer>("ModalButtons");
         buttons->setDirection(ya::EWidgetBoxLayout::Horizontal);
