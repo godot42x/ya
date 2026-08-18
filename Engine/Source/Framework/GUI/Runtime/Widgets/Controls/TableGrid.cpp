@@ -77,10 +77,7 @@ int UITableGrid::hitRowIndex(const glm::vec2& point) const
 
 void UITableGrid::paintSelf(UIFrameBuilder& builder)
 {
-    // Clip to our own rect: more rows than the arranged height must never
-    // paint over what sits below (same contract as UITreeView).
-    builder.pushClip(_layoutRect);
-
+    // (Guardrail G1: the base paint template clips this widget's own rect.)
     builder.addSprite(_layoutRect, _backgroundColor, nullptr);
 
     // Resolve the selection first so the dependency is recorded even when no
@@ -90,7 +87,6 @@ void UITableGrid::paintSelf(UIFrameBuilder& builder)
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     const auto colRects = columnRects();
     if (!_rows || colRects.empty()) {
-        builder.popClip();
         return;
     }
 
@@ -137,7 +133,6 @@ void UITableGrid::paintSelf(UIFrameBuilder& builder)
                         _gridColor, 1.0f);
     }
 
-    builder.popClip();
 }
 
 bool UITableGrid::handleInputEvent(const Event& event, const WidgetEventContext& ctx)

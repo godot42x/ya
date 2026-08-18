@@ -118,11 +118,9 @@ Rect2D UITreeView::arrowButtonRect(float x, float rowTopY) const
 
 void UITreeView::paintSelf(UIFrameBuilder& builder)
 {
-    // Clip to our own rect: the visible-row count can exceed the arranged
-    // height (expanded tree inside a fixed/fill slot, or a parent that does
-    // not grow), and without a clip the overflow rows draw over whatever
-    // sits below in the tree — the widget must never paint outside its rect.
-    builder.pushClip(_layoutRect);
+    // (Guardrail G1: the base paint template now clips every widget to its
+    // own rect, so the manual pushClip that used to guard overflow rows is
+    // gone — the framework guarantees it.)
 
     const auto rows = flattenVisible();
     auto       font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
@@ -170,8 +168,6 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
                             EWidgetAlignH::Left, EWidgetAlignV::Center);
         }
     }
-
-    builder.popClip();
 }
 
 bool UITreeView::handleInputEvent(const Event& event, const WidgetEventContext& ctx)

@@ -13,30 +13,102 @@
       "id": "reactive_binding",
       "title": "响应式数据绑定 + 性能管线（第一阶段，已收口）",
       "items": [
-        { "id": "m0_perf_baseline", "status": "pass", "notes": "GuiPerfStats（layout/paint 耗时 + paintedWidgets + drawItems）已随 buildSnapshot 填充；closure test 115/115" },
-        { "id": "m1_reactive_core", "status": "pass", "notes": "Reactive<T> 事件驱动依赖追踪 + 双缓冲 draw-item 段复用 + rebuiltWidgets 计数；UIText.bindText；双向析构清理。closure 118/118" },
-        { "id": "m2_binding_generalize", "status": "pass", "notes": "EDirtyLevel（Paint/Layout 两级）+ Button.bindEnabled + SplitPane.bindSplitRatio + ReactiveList + Computed 接口。closure 121/121" },
-        { "id": "m3_perf_seam", "status": "pass", "notes": "buildSnapshot 桥接 profiling::metrics()（gui.tree.* key）；声明式 diff 口子内嵌（bindCache/cacheItems/reuseCachedItems）。closure 122/122" },
-        { "id": "styles_styleset", "status": "pass", "notes": "FWidgetStyle + UIStyleSet + UIText.bindStyle；closure 123/123" },
-        { "id": "treeview", "status": "pass", "notes": "UITreeView：ReactiveList 数据源 + 展开/选中；paint 展平 + 箭头按钮 hover。closure 126/126" },
-        { "id": "gui_workbench_gallery", "status": "pass", "notes": "Gallery 页覆盖 widget/reactive/style；TextField 滚动/TreeView clip/attach 顺序等修复已收口；modal scenario 更新" }
+        {
+          "id": "m0_perf_baseline",
+          "status": "pass",
+          "notes": "GuiPerfStats（layout/paint 耗时 + paintedWidgets + drawItems）已随 buildSnapshot 填充；closure test 115/115"
+        },
+        {
+          "id": "m1_reactive_core",
+          "status": "pass",
+          "notes": "Reactive<T> 事件驱动依赖追踪 + 双缓冲 draw-item 段复用 + rebuiltWidgets 计数；UIText.bindText；双向析构清理。closure 118/118"
+        },
+        {
+          "id": "m2_binding_generalize",
+          "status": "pass",
+          "notes": "EDirtyLevel（Paint/Layout 两级）+ Button.bindEnabled + SplitPane.bindSplitRatio + ReactiveList + Computed 接口。closure 121/121"
+        },
+        {
+          "id": "m3_perf_seam",
+          "status": "pass",
+          "notes": "buildSnapshot 桥接 profiling::metrics()（gui.tree.* key）；声明式 diff 口子内嵌（bindCache/cacheItems/reuseCachedItems）。closure 122/122"
+        },
+        {
+          "id": "styles_styleset",
+          "status": "pass",
+          "notes": "FWidgetStyle + UIStyleSet + UIText.bindStyle；closure 123/123"
+        },
+        {
+          "id": "treeview",
+          "status": "pass",
+          "notes": "UITreeView：ReactiveList 数据源 + 展开/选中；paint 展平 + 箭头按钮 hover。closure 126/126"
+        },
+        {
+          "id": "gui_workbench_gallery",
+          "status": "pass",
+          "notes": "Gallery 页覆盖 widget/reactive/style；TextField 滚动/TreeView clip/attach 顺序等修复已收口；modal scenario 更新"
+        }
       ]
     },
     {
       "id": "editor_parity",
       "title": "第二阶段：GameEditor ImGui 替换前置（GUI App 线全量补齐）",
       "items": [
-        { "id": "p1_vector_primitives", "status": "pass", "notes": "UIFrameDrawItem::EKind 增 Line（lineFrom/lineTo/lineThickness）；UIFrameBuilder 增 addLine/addRectOutline/addBezierCubic（bezier 客户端细分）；Render2DComposePass Line 分支=旋转细 quad（makeSprite transform 版，零管线改动）；Gallery section 4 + gallery_vector.jsonl 通过；modal 回归通过" },
-        { "id": "p2_table_grid", "status": "pass", "notes": "UITableLayout/UITableSlot（列宽 0=stretch 均分/行高/padding）+ UITableGrid 数据驱动控件（bindData ReactiveList<FTableRow> + bindSelection Reactive<int>，行选中/hover/列分隔线走 P1 addLine）；WidgetTreeDump 加 tableGrid control 块；Gallery section 5 + gallery_table.jsonl 通过；vector 回归通过" },
-        { "id": "p3_input_controls", "status": "pass", "notes": "InputExtras.h/.cpp 五控件：UIDragFloat（capture 拖拽+键盘步进）、UISpinBox（+/- 区）、UIRadioButton（组由 host 管理）、UIColorEdit（色块点击循环通道+拖动调值）、UISearchComboBox（焦点过滤+UIMenu 弹出）；WidgetTreeDump 五 control 块；Gallery section 6 + gallery_inputs.jsonl 通过；vector/table 回归通过" },
-        { "id": "p4_drag_reorder", "status": "pass", "notes": "UIDragSource（press+6px 阈值起 beginDrag）+ UIDropTarget（_accept 谓词 + _onDrop + VisualFlag 高亮 + paint 用 P1 addRectOutline 画高亮框）；WidgetTreeDump dragSource/dropTarget 块；Gallery section 7 + gallery_drop.jsonl 通过；vector/table/inputs/dragdrop_interaction 全回归通过" },
-        { "id": "ga_paint_self_clip", "status": "planned", "notes": "G1：UIElement::paint 默认 pushClip(_layoutRect)（opt-out _bSelfClip）；移除 TreeView 手写 clip 验证；全 scenario 回归" },
-        { "id": "ga_styleset_set_semantics", "status": "planned", "notes": "G4：UIStyleSet::define 同名复用 handle + set（绑定者自动 notify）；scenario 断言 define 同名后绑定控件重绘" },
-        { "id": "gb_event_timestamp", "status": "planned", "notes": "G3：Event 基类加时间戳，SDL 桥接填充，场景驱动帧近似；双击检测改时间戳" },
-        { "id": "gb_debug_validation_frame", "status": "planned", "notes": "G2：debug 构建每 60 帧全量重画 diff 增量结果，不一致告警指明 widget（漏标脏开发期抓）" },
-        { "id": "p5_treeview_editing", "status": "planned", "notes": "TreeView 叠加：_bReorderable + _onContextMenu + bindFilter；Gallery section 8 + gallery_tree_edit.jsonl" },
-        { "id": "p6_interaction_p1", "status": "planned", "notes": "tooltip（UIElement::setTooltip）/ TextWrapped（UIText _bWrap）/ 子树禁用（_bEnabled）/ UIDialog 模态；Gallery section 9 + gallery_p1.jsonl" },
-        { "id": "p7_dockspace", "status": "planned", "notes": "UIDockSpace + UIDockLayout（中央区+边缘停靠+tab 合并+分割条）；独立 Dock 页 + dock.jsonl；smoke tab 索引同步更新" }
+        {
+          "id": "p1_vector_primitives",
+          "status": "pass",
+          "notes": "UIFrameDrawItem::EKind 增 Line（lineFrom/lineTo/lineThickness）；UIFrameBuilder 增 addLine/addRectOutline/addBezierCubic（bezier 客户端细分）；Render2DComposePass Line 分支=旋转细 quad（makeSprite transform 版，零管线改动）；Gallery section 4 + gallery_vector.jsonl 通过；modal 回归通过"
+        },
+        {
+          "id": "p2_table_grid",
+          "status": "pass",
+          "notes": "UITableLayout/UITableSlot（列宽 0=stretch 均分/行高/padding）+ UITableGrid 数据驱动控件（bindData ReactiveList<FTableRow> + bindSelection Reactive<int>，行选中/hover/列分隔线走 P1 addLine）；WidgetTreeDump 加 tableGrid control 块；Gallery section 5 + gallery_table.jsonl 通过；vector 回归通过"
+        },
+        {
+          "id": "p3_input_controls",
+          "status": "pass",
+          "notes": "InputExtras.h/.cpp 五控件：UIDragFloat（capture 拖拽+键盘步进）、UISpinBox（+/- 区）、UIRadioButton（组由 host 管理）、UIColorEdit（色块点击循环通道+拖动调值）、UISearchComboBox（焦点过滤+UIMenu 弹出）；WidgetTreeDump 五 control 块；Gallery section 6 + gallery_inputs.jsonl 通过；vector/table 回归通过"
+        },
+        {
+          "id": "p4_drag_reorder",
+          "status": "pass",
+          "notes": "UIDragSource（press+6px 阈值起 beginDrag）+ UIDropTarget（_accept 谓词 + _onDrop + VisualFlag 高亮 + paint 用 P1 addRectOutline 画高亮框）；WidgetTreeDump dragSource/dropTarget 块；Gallery section 7 + gallery_drop.jsonl 通过；vector/table/inputs/dragdrop_interaction 全回归通过"
+        },
+        {
+          "id": "ga_paint_self_clip",
+          "status": "pass",
+          "notes": "UIElement::paint 模板默认 pushClip(_layoutRect)（_bSelfClip opt-out）；TreeView/TableGrid/TextField 手写 clip 移除验证护栏生效；全 7 场景回归通过"
+        },
+        {
+          "id": "ga_styleset_set_semantics",
+          "status": "pass",
+          "notes": "UIStyleSet::define 同名复用 handle + set（绑定者自动 notify）；全回归通过"
+        },
+        {
+          "id": "gb_event_timestamp",
+          "status": "planned",
+          "notes": "G3：Event 基类加时间戳，SDL 桥接填充，场景驱动帧近似；双击检测改时间戳"
+        },
+        {
+          "id": "gb_debug_validation_frame",
+          "status": "planned",
+          "notes": "G2：debug 构建每 60 帧全量重画 diff 增量结果，不一致告警指明 widget（漏标脏开发期抓）"
+        },
+        {
+          "id": "p5_treeview_editing",
+          "status": "planned",
+          "notes": "TreeView 叠加：_bReorderable + _onContextMenu + bindFilter；Gallery section 8 + gallery_tree_edit.jsonl"
+        },
+        {
+          "id": "p6_interaction_p1",
+          "status": "planned",
+          "notes": "tooltip（UIElement::setTooltip）/ TextWrapped（UIText _bWrap）/ 子树禁用（_bEnabled）/ UIDialog 模态；Gallery section 9 + gallery_p1.jsonl"
+        },
+        {
+          "id": "p7_dockspace",
+          "status": "planned",
+          "notes": "UIDockSpace + UIDockLayout（中央区+边缘停靠+tab 合并+分割条）；独立 Dock 页 + dock.jsonl；smoke tab 索引同步更新"
+        }
       ]
     }
   ]

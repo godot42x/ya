@@ -247,6 +247,12 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// win for this widget; keeps data/display consistency the invariant.
     bool _bVolatile = false;
 
+    /// Guardrail G1: paint() clips this widget's own paint + children to its
+    /// layout rect by default, so a widget can never draw over its siblings.
+    /// Set false only for widgets that legitimately paint outside their rect
+    /// (rare; prefer moving that paint to a layer).
+    bool _bSelfClip = true;
+
     /// Layout cache: final rect in tree-local logical pixels, computed by the
     /// layout pass. Not serialized.
     Rect2D _layoutRect{};

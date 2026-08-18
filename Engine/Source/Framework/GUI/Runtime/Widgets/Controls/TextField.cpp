@@ -67,7 +67,7 @@ void UITextField::paintSelf(UIFrameBuilder& builder)
         _scrollX = caretOffset;
     }
 
-    builder.pushClip(_layoutRect);
+    // (Guardrail G1: the base paint template clips this widget's own rect.)
     Rect2D textRect = _layoutRect;
     textRect.pos.x -= _scrollX;
     builder.addText(textRect, _text, _textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
@@ -77,7 +77,6 @@ void UITextField::paintSelf(UIFrameBuilder& builder)
         builder.addSprite(Rect2D{.pos = {caretX, caretY}, .extent = {1.0f, font->lineHeight}},
                           _caretColor, nullptr);
     }
-    builder.popClip();
 }
 
 void UITextField::onFocusLost()

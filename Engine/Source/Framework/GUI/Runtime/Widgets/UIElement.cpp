@@ -160,6 +160,13 @@ void UIElement::paint(UIFrameBuilder& builder)
     if (!isVisibleForRender()) {
         return;
     }
+    // Guardrail G1: every widget paints inside its own rect by default, so
+    // overflow can never draw over siblings/status bars. Opt out via
+    // _bSelfClip only when a widget legitimately paints outside its rect.
+    const bool bSelfClip = _bSelfClip;
+    if (bSelfClip) {
+        builder.pushClip(_layoutRect);
+    }
     builder.countWidget();
     PaintScope paintScope(this);
     if (_bVolatile || _bPaintDirty || !builder.hasCachedItems(this)) {
@@ -174,6 +181,9 @@ void UIElement::paint(UIFrameBuilder& builder)
         builder.reuseCachedItems(this);
     }
     paintChildren(builder);
+    if (bSelfClip) {
+        builder.popClip();
+    }
 }
 
 void UIElement::clearDependencies()

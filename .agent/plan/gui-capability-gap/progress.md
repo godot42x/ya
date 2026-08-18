@@ -75,7 +75,17 @@
 
 **剩余问题**：无。P4 收口。
 
-**下一刀**：G-A 框架护栏一（G1 paint self-clip + G4 StyleSet set 语义），之后 G-B（Event 时间戳 + debug 校验帧），再进入 P5。
+## 2026-08-18 — G-A 框架护栏一（收口）
+
+**完成**：
+- G1：`UIElement::paint` 模板默认 `pushClip(_layoutRect)`（新 `_bSelfClip=true` opt-out），「widget 不画出自己 rect」成为框架保证；移除 TreeView/TableGrid/TextField 的手写 clip 验证护栏生效。
+- G4：`UIStyleSet::define` 同名复用 handle + `set()`（绑定者自动 notify），不再替换 handle。
+
+**验证**：全 7 场景回归通过（gallery_acceptance 9 checkpoint / vector / table / inputs / drop / modal / dragdrop）。
+
+**剩余问题**：无。G-A 收口。
+
+**下一刀**：G-B 框架护栏二（G3 Event 时间戳 + G2 debug 校验帧），再进入 P5。
 
 ## 2026-08-18 — 护栏补强立项（插入 P5 之前）
 
