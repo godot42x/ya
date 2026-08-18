@@ -702,6 +702,7 @@ void UISearchComboBox::openFilteredMenu()
         entries.push_back({_items[index], [this, index]
                            {
                                _selectedIndex = index;
+                               _filter.clear();
                                invalidateProperty(EUIPropertyImpact::Paint);
                                if (_onSelectionChanged) {
                                    _onSelectionChanged(index);
@@ -710,10 +711,21 @@ void UISearchComboBox::openFilteredMenu()
                            }});
     }
     auto menu = UIMenu::create(std::move(entries));
-    menu->_onDismiss = [this]() { _openMenu.reset(); };
+    menu->_onDismiss = [this]()
+    {
+        _openMenu.reset();
+        // The menu closed (outside click / Esc / pick): stop showing the
+        // filter text and fall back to the selected label.
+        _filter.clear();
+        invalidateProperty(EUIPropertyImpact::Paint);
+    };
     _openMenu = menu;
     if (WidgetTree* tree = getTree()) {
         menu->openAt(*tree, {_layoutRect.pos.x, _layoutRect.pos.y + _layoutRect.extent.y});
+        // The popup steals focus for its own keyboard navigation; take it
+        // back so typed characters keep filtering (menu navigation stays
+        // mouse-driven for this control, Esc is handled here).
+        tree->setFocus(this);
     }
 }
 
@@ -768,6 +780,12 @@ bool UISearchComboBox::handleInputEvent(const Event& event, const WidgetEventCon
 
     if (eventType == EEvent::KeyPressed) {
         const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
+        if (_bFocused && !keyEvent.bRepeat && keyEvent._keyCode == EKey::Escape) {
+            // The menu shield cannot see Esc (focus sits on this control),
+            // so close the menu here.
+            closeMenu();
+            return true;
+        }
         if (_bFocused && !keyEvent.bRepeat && keyEvent._keyCode == EKey::Backspace) {
             if (!_filter.empty()) {
                 _filter.pop_back();

@@ -75,4 +75,18 @@
 {"frame":2}
 {"assert":{"layers":{"Popup":{"children":[]}}}}
 {"checkpoint":"palette_picked"}
+# SearchCombo: click (scrolled position ~ (200, 485)) opens the filtered
+# menu; type 'To' narrows to Torus; pick the first item and the menu closes.
+{"event":"mouse_press","x":200,"y":485,"button":0}
+{"event":"mouse_release","x":200,"y":485,"button":0}
+{"frame":2}
+{"assert":{"widget":"GallerySearchCombo","control":{"type":"searchComboBox"}}}
+{"checkpoint":"search_menu_open"}
+{"event":"key_typed","text":"To"}
+{"frame":2}
+{"event":"mouse_press","x":150,"y":508,"button":0}
+{"event":"mouse_release","x":150,"y":508,"button":0}
+{"frame":2}
+{"assert":{"layers":{"Popup":{"children":[]}}}}
+{"checkpoint":"search_picked"}
 {"frame":1}

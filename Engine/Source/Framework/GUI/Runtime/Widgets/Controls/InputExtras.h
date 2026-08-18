@@ -283,7 +283,8 @@ struct YA_GUI_API UISearchComboBox : public UIElement
 
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
-    void onFocusLost() override { closeMenu(); }
+    void onFocusGained(bool /*bFromKeyboard*/) override { _bFocused = true; }
+    void onFocusLost() override { _bFocused = false; }
     void clearTransientInputState() override;
 
   private:
