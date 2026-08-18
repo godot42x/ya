@@ -106,6 +106,7 @@ struct YA_GUI_API UITreeView : public UIElement
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
     [[nodiscard]] bool isHoverable() const override { return true; }
+    void onPointerLeave() override;
     void clearTransientInputState() override;
 
   private:

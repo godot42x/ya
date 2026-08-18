@@ -453,6 +453,18 @@ bool UITreeView::handleInputEvent(const Event& event, const WidgetEventContext& 
     return false;
 }
 
+void UITreeView::onPointerLeave()
+{
+    // The pointer left the tree entirely (hover moved to a sibling widget):
+    // the per-row hover state must clear, since no further MouseMoved will
+    // reach this widget. This is the same contract Button/RadioButton use.
+    if (_hoveredRow != -1 || !_hoveredArrowId.empty()) {
+        _hoveredRow = -1;
+        _hoveredArrowId.clear();
+        markPaintDirty();
+    }
+}
+
 void UITreeView::clearTransientInputState()
 {
     _hoveredRow = -1;

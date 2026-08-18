@@ -214,6 +214,16 @@ bool UITableGrid::handleInputEvent(const Event& event, const WidgetEventContext&
     return false;
 }
 
+void UITableGrid::onPointerLeave()
+{
+    // Pointer left the grid: clear the row hover (no further MouseMoved
+    // will reach this widget), same contract as UITreeView/UIButton.
+    if (_hoveredRow != -1) {
+        _hoveredRow = -1;
+        markPaintDirty();
+    }
+}
+
 void UITableGrid::clearTransientInputState()
 {
     _hoveredRow = -1;

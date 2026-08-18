@@ -75,6 +75,7 @@ struct YA_GUI_API UITableGrid : public UIElement
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
     [[nodiscard]] bool isHoverable() const override { return true; }
+    void onPointerLeave() override;
     void clearTransientInputState() override;
     [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
 
