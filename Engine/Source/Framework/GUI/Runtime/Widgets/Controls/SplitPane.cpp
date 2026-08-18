@@ -109,9 +109,16 @@ bool UISplitPane::handleInputEvent(const Event& event, const WidgetEventContext&
                                         ? _splitLayout.getContentRect().extent.x
                                         : _splitLayout.getContentRect().extent.y;
         if (contentExtent > 0.0f) {
-            _splitLayout.setSplitRatio(_dragStartRatio +
-                                       (_splitLayout.axisCoordinate(ctx.logicalPoint) - _dragStartPointer) /
-                                           contentExtent);
+            const float newRatio = _dragStartRatio +
+                                   (_splitLayout.axisCoordinate(ctx.logicalPoint) - _dragStartPointer) /
+                                       contentExtent;
+            _splitLayout.setSplitRatio(newRatio);
+            // Write the dragged ratio back into the binding (two-way
+            // semantics): without this the next layout pulls the stale ref
+            // value back into the layout and the drag visibly does nothing.
+            if (_splitRatioBinding) {
+                _splitRatioBinding->set(newRatio);
+            }
         }
         return true;
     }
