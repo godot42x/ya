@@ -65,6 +65,20 @@
 - Gallery section「7. Drag reorder」可拖拽重排列表。
 - scenario：`gallery_drop.jsonl`（dragSession 路由 + 高亮/顺序断言）。
 
+### G-A 框架护栏一（P5 之前插入）：paint self-clip + StyleSet set 语义
+
+> 2026-08-18 用户定调：每开发一个 feature 就出现体验 bug，护栏补强须插入后续计划（P5-P7）之前。
+
+- **G1 `UIElement::paint` 默认 self-clip**：paint 模板自动 `pushClip(_layoutRect)`（opt-out `_bSelfClip=false`），「widget 永不画出自已 rect」从控件自觉变为框架保证——消灭溢出绘制整类 bug（TreeView/Modal field/Gallery 盖 status bar 同根因）。
+- **G4 `UIStyleSet::define` 同名 set 语义**：同名再 define 复用已有 handle 并 `set()` 新值（绑定者自动收到 notify），不再替换 handle 孤立绑定。
+- 验收：移除 TreeView 手写 clip 后全部 scenario 回归通过；define 同名后已绑定控件重绘（scenario 断言）。
+
+### G-B 框架护栏二：Event 时间戳 + debug 校验帧
+
+- **G3 Event 加 timestamp**：Event 基类增时间戳字段，SDL 桥接填充；场景驱动以步进帧近似；双击检测改时间戳（去掉位置近似）。
+- **G2 debug 校验帧**：debug 构建下每 N 帧（默认 60）强制全量重画并与增量缓存结果 diff，不一致时告警指明 widget——漏标脏在开发期被当场抓住，而不是上线后靠肉眼。
+- 验收：双击判定走时间戳且 scenario 通过；人为制造一处漏标脏（临时 patch）触发校验帧告警，修复后告警消失。
+
 ### P5 TreeView 编辑能力
 - 叠加式：`_bReorderable`（行 press 起 drag；canAcceptDrop 判定行间/行内；`_onReorder` 回调）；`_onContextMenu(nodeId)`（右击 UIMenu）；`bindFilter(Reactive<string>)`（flattenVisible 剪枝）。
 - Gallery section「8. TreeView editing」。
@@ -100,7 +114,7 @@
 
 ## 6. 执行顺序
 
-P1 → P2 → P3 → P4 → P5 → P6 → P7。每期 = 1 个自洽 commit（代码 + 工件更新 + scenario 同 commit）。
+P1 → P2 → P3 → P4 → **G-A → G-B** → P5 → P6 → P7。每期 = 1 个自洽 commit（代码 + 工件更新 + scenario 同 commit）。
 
 ## 7. 修订记录
 

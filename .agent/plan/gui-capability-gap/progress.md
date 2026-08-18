@@ -75,5 +75,13 @@
 
 **剩余问题**：无。P4 收口。
 
-**下一刀**：P5 TreeView 编辑能力（_bReorderable + _onContextMenu + bindFilter）。
+**下一刀**：G-A 框架护栏一（G1 paint self-clip + G4 StyleSet set 语义），之后 G-B（Event 时间戳 + debug 校验帧），再进入 P5。
+
+## 2026-08-18 — 护栏补强立项（插入 P5 之前）
+
+用户定调「每开发一个 feature 就出现体验 bug」，要求把框架护栏补强插入后续计划之前。护栏分期（plan.md 已更新）：
+- **G-A**：G1 paint 默认 self-clip（消灭溢出绘制整类 bug）+ G4 UIStyleSet::define 同名 set 语义（消灭绑定孤立）。
+- **G-B**：G3 Event 时间戳（双击统一）+ G2 debug 校验帧（漏标脏开发期抓）。
+
+另：SearchCombo 焦点互锁 + filter 生命周期修复（commit 314075bb）——菜单开抢焦点触发 onFocusLost→closeMenu 互锁、_bFocused 从未设置；菜单生命周期与焦点解耦、打开后焦点拿回、Esc 自处理。acceptance 扩至 9 checkpoint。
 
