@@ -395,6 +395,17 @@ bool UISpinBox::handleInputEvent(const Event& event, const WidgetEventContext& c
                 return true;
             }
         }
+        if (eventType == EEvent::MouseButtonPressed) {
+            // A press on +/- while editing commits the edit first (an
+            // unparseable buffer keeps the previous value), then steps —
+            // the edit mode must never swallow the step buttons.
+            const int zone = zoneFromPointer(ctx.logicalPoint.x - _layoutRect.pos.x);
+            if (zone == 0 || zone == 1) {
+                commitEdit();
+                stepBy(zone == 0 ? -1.0f : 1.0f);
+            }
+            return true;
+        }
         return false;
     }
 
@@ -724,9 +735,15 @@ void UISearchComboBox::openFilteredMenu()
         _openMenu.reset();
         if (!_bRefreshingMenu) {
             // Real close (outside click / Esc / pick): stop showing the
-            // filter text and fall back to the selected label.
+            // filter text and fall back to the selected label, and release
+            // focus so the control does not keep painting '(type to filter)'.
             _filter.clear();
             invalidateProperty(EUIPropertyImpact::Paint);
+            if (WidgetTree* tree = getTree()) {
+                if (tree->getFocused() == this) {
+                    tree->setFocus(nullptr);
+                }
+            }
         }
     };
     _openMenu = menu;

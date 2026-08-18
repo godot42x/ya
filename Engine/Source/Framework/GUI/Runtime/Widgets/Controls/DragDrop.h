@@ -63,6 +63,8 @@ struct YA_GUI_API UIDropTarget : public UIElement
     std::function<bool(const std::string& payload)> _accept;
     /// Fired when a payload is dropped (the tree clears the session first).
     std::function<void(const std::string& payload, const glm::vec2& logicalPoint)> _onDrop;
+    /// Display label (painted centered; shows the accept rule to the user).
+    std::string _label = "Drop target";
 
     uint32_t  _fontSize = 13;
     glm::vec4 _textColor      = {0.90f, 0.92f, 0.95f, 1.0f};

@@ -110,12 +110,17 @@ std::shared_ptr<Reactive<bool>>& UITreeView::expandedRef(const std::string& id)
 void UITreeView::setExpanded(const std::string& id, bool expanded)
 {
     expandedRef(id)->set(expanded);
+    // The visible-row set is a paint attribute too: when the arranged rect
+    // does not change (fixed-height tree), the Layout invalidation alone
+    // would leave the incremental paint cache showing the old rows.
+    markPaintDirty();
 }
 
 void UITreeView::toggleExpanded(const std::string& id)
 {
     auto& ref = expandedRef(id);
     ref->set(!ref->value());
+    markPaintDirty(); // see setExpanded
 }
 
 bool UITreeView::isExpanded(const std::string& id) const

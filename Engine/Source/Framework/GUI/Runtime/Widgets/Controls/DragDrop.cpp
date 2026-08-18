@@ -67,7 +67,7 @@ void UIDropTarget::paintSelf(UIFrameBuilder& builder)
     }
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
     if (font) {
-        builder.addText(_layoutRect, _bHighlighted ? "DROP HERE" : "Drop target",
+        builder.addText(_layoutRect, _bHighlighted ? "DROP HERE" : _label,
                         _textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
     }
 }

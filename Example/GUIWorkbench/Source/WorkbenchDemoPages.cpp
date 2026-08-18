@@ -1231,6 +1231,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
 
     auto dropZoneA = std::make_shared<ya::UIDropTarget>("GalleryDropA");
     dropZoneA->setSize({180.0f, 60.0f});
+    dropZoneA->_label = "Zone A: accepts any";
     dropZoneA->_accept = [](const std::string&) { return true; };
     dropZoneA->_onDrop = [dropResult, log](const std::string& payload, const glm::vec2&)
     {
@@ -1241,9 +1242,10 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
 
     auto dropZoneB = std::make_shared<ya::UIDropTarget>("GalleryDropB");
     dropZoneB->setSize({180.0f, 60.0f});
-    // Both zones accept every payload (the predicate is the extension
-    // point: replace it to filter which payloads may land).
-    dropZoneB->_accept = [](const std::string&) { return true; };
+    dropZoneB->_label = "Zone B: only payload.2";
+    // Zone B demonstrates the accept predicate: it only accepts payload.2
+    // (the hover highlight appears only for the matching item).
+    dropZoneB->_accept = [](const std::string& payload) { return payload == "payload.2"; };
     dropZoneB->_onDrop = [dropResult, log](const std::string& payload, const glm::vec2&)
     {
         dropResult->set(std::format("Zone B <- {}", payload));
