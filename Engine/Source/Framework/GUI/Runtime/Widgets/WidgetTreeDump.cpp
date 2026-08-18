@@ -9,6 +9,7 @@
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/Slider.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
+#include "GUI/Widgets/Controls/TableGrid.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/UIElement.h"
@@ -192,6 +193,12 @@ nlohmann::json serializeNode(const UIElement& element, const WidgetTree& tree)
                  {"w", divider.extent.x},
                  {"h", divider.extent.y},
              }},
+        };
+    }
+    else if (const auto* table = dynamic_cast<const UITableGrid*>(&element)) {
+        node["control"] = {
+            {"type", "tableGrid"},
+            {"selected", table->getSelection() ? table->getSelection()->value() : -1},
         };
     }
     else if (const auto* overlay = dynamic_cast<const UIPopupOverlay*>(&element)) {

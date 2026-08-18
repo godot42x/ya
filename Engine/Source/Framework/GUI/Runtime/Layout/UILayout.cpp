@@ -670,8 +670,151 @@ void UIScrollLayout::arrange(UIElement& parent, const Rect2D& rect) const
     children[0]->layoutAssigned(contentRect);
 }
 
-} // namespace ya
 
+// === UITableLayout ===
+
+UITableSlot::UITableSlot(UIElement& parent, UIElement& child)
+    : UISlot(parent, child)
+{
+}
+
+void UITableSlot::setCell(int row, int column)
+{
+    _row    = row;
+    _column = column;
+    invalidateArrange();
+}
+
+float UITableLayout::getColumnWidth(int column) const
+{
+    return column >= 0 && column < static_cast<int>(_columnWidths.size()) ? _columnWidths[column] : 0.0f;
+}
+
+void UITableLayout::setColumnCount(int value)
+{
+    value = std::max(1, value);
+    if (value == _columnCount) {
+        return;
+    }
+    _columnCount = value;
+    _columnWidths.assign(value, 0.0f);
+    invalidateArrange();
+}
+
+void UITableLayout::setColumnWidth(int column, float value)
+{
+    if (column < 0) {
+        return;
+    }
+    if (column >= static_cast<int>(_columnWidths.size())) {
+        _columnWidths.resize(column + 1, 0.0f);
+    }
+    value = std::max(0.0f, value);
+    if (_columnWidths[column] == value) {
+        return;
+    }
+    _columnWidths[column] = value;
+    invalidateArrange();
+}
+
+void UITableLayout::setRowHeight(float value)
+{
+    value = std::max(1.0f, value);
+    if (_rowHeight == value) {
+        return;
+    }
+    _rowHeight = value;
+    invalidateArrange();
+}
+
+void UITableLayout::setPadding(glm::vec2 value)
+{
+    if (_padding == value) {
+        return;
+    }
+    _padding = value;
+    invalidateArrange();
+}
+
+void UITableLayout::setClipsChildren(bool value)
+{
+    if (_bClipChildren == value) {
+        return;
+    }
+    _bClipChildren = value;
+    invalidateSubtreePaint();
+}
+
+std::unique_ptr<UISlot> UITableLayout::createSlot(UIElement& parent, UIElement& child) const
+{
+    return std::make_unique<UITableSlot>(parent, child);
+}
+
+glm::vec2 UITableLayout::measure(const UIElement& parent) const
+{
+    float totalWidth = _padding.x * 2.0f;
+    for (int col = 0; col < _columnCount; ++col) {
+        totalWidth += getColumnWidth(col);
+    }
+    float totalHeight = _padding.y * 2.0f;
+    int   maxRow      = 0;
+    for (const UIElement* child : parent.getChildrenInPaintOrder()) {
+        if (!child->participatesInLayout() || child->getVisibility() == EWidgetVisibility::Hidden) {
+            continue;
+        }
+        const auto* slot = dynamic_cast<const UITableSlot*>(parent.getSlotForChild(*child));
+        if (slot) {
+            maxRow = std::max(maxRow, slot->getRow() + 1);
+        }
+    }
+    totalHeight += static_cast<float>(maxRow) * _rowHeight;
+    return {totalWidth, totalHeight};
+}
+
+void UITableLayout::arrange(UIElement& parent, const Rect2D& rect) const
+{
+    const glm::vec2 contentPos = rect.pos + _padding;
+    const float     contentW   = std::max(0.0f, rect.extent.x - _padding.x * 2.0f);
+
+    // Resolve column rects: fixed widths first, stretch columns share the rest.
+    _columnRects.clear();
+    _columnRects.reserve(_columnCount);
+    float fixedSum = 0.0f;
+    int   stretchCount = 0;
+    for (int col = 0; col < _columnCount; ++col) {
+        const float w = getColumnWidth(col);
+        if (w > 0.0f) {
+            fixedSum += w;
+        }
+        else {
+            ++stretchCount;
+        }
+    }
+    const float stretchWidth = stretchCount > 0 ? std::max(0.0f, (contentW - fixedSum) / static_cast<float>(stretchCount)) : 0.0f;
+    float       cursorX      = contentPos.x;
+    for (int col = 0; col < _columnCount; ++col) {
+        const float w = getColumnWidth(col) > 0.0f ? getColumnWidth(col) : stretchWidth;
+        _columnRects.push_back(Rect2D{.pos = {cursorX, contentPos.y}, .extent = {w, _rowHeight}});
+        cursorX += w;
+    }
+
+    for (UIElement* child : parent.getChildrenInPaintOrder()) {
+        if (!child->participatesInLayout() || child->getVisibility() == EWidgetVisibility::Hidden) {
+            continue;
+        }
+        const auto* slot = dynamic_cast<const UITableSlot*>(parent.getSlotForChild(*child));
+        if (!slot) {
+            continue;
+        }
+        const int col = std::clamp(slot->getColumn(), 0, _columnCount - 1);
+        const Rect2D cell{
+            .pos    = {_columnRects[col].pos.x, contentPos.y + static_cast<float>(slot->getRow()) * _rowHeight},
+            .extent = {_columnRects[col].extent.x, _rowHeight},
+        };
+        child->layoutAssigned(cell);
+    }
+}
+} // namespace ya
 YA_REFLECT_ENUM_BEGIN(ya::ESplitOrientation)
 YA_REFLECT_ENUM_VALUE(Vertical)
 YA_REFLECT_ENUM_VALUE(Horizontal)
@@ -681,3 +824,4 @@ YA_REFLECT_ENUM_BEGIN(ya::EScrollAxis)
 YA_REFLECT_ENUM_VALUE(Vertical)
 YA_REFLECT_ENUM_VALUE(Horizontal)
 YA_REFLECT_ENUM_END()
+

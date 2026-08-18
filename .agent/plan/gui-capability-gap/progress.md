@@ -34,3 +34,18 @@
 
 **下一刀**：P2 Table/Grid 布局。
 
+## 2026-08-18 — P2 Table/Grid（收口）
+
+**完成**：
+- `UITableLayout` + `UITableSlot`（UILayout.h/.cpp）：格子布局，列宽 0=stretch 均分剩余、固定宽优先，行高统一，padding/clipsChildren；arrange 解析列 rect 后逐 child layoutAssigned。
+- `UITableGrid` 控件（Controls/TableGrid.h/.cpp + include 镜像头）：数据驱动表格（bindData ReactiveList<FTableRow> + bindSelection Reactive<int>），paint 扁平画行（header 行/选中/hover 高亮 + 列/行分隔线走 P1 addLine + 自 clip），input hover/点击选中，autoSize 高度=行数×行高。
+- `WidgetTreeDump` 加 tableGrid control 块（scenario 断言用）。
+- Gallery section「5. Table」：4 列表格（固定宽 + stretch 列混合）+ reactive 选中。
+- `gallery_table.jsonl` scenario：锁 rect.w=400 + control.type=tableGrid。
+
+**验证**：GUIWorkbench 编译通过；gallery_table 通过；gallery_vector 回归通过。
+
+**剩余问题**：无。P2 收口。
+
+**下一刀**：P3 输入控件补全（UIDragFloat/UISpinBox/UIRadioButton/UIColorEdit/UISearchComboBox）。
+

@@ -16,6 +16,7 @@
 #include "GUI/Widgets/Controls/ScrollViewport.h"
 #include "GUI/Widgets/Controls/Slider.h"
 #include "GUI/Widgets/Controls/SplitPane.h"
+#include "GUI/Widgets/Controls/TableGrid.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
 #include "GUI/Widgets/Controls/TreeView.h"
@@ -992,6 +993,39 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     if (auto* slot = form->getBoxSlot(*vectorCanvas)) {
         slot->setCrossAlignment(ya::EUIBoxSlotCrossAlignment::Start);
     }
+
+    // ---------------------------------------------------------------------
+    // Section 5 — Table/Grid (data-driven UITableGrid: reactive row source +
+    // reactive selection, grid separators drawn via the vector primitives).
+    // ---------------------------------------------------------------------
+    tree.attach(*form, makeLabel("5. Table — data-driven grid with reactive selection"));
+
+    auto tableRows = std::make_shared<ya::ReactiveList<ya::UITableGrid::FTableRow>>();
+    tableRows->push({"hdr", {"Name", "Type", "Count", "Visible"}});
+    tableRows->push({"r1", {"Cube", "StaticMesh", "3", "yes"}});
+    tableRows->push({"r2", {"PointLight", "Light", "2", "yes"}});
+    tableRows->push({"r3", {"Camera", "Node", "1", "no"}});
+    tableRows->push({"r4", {"Material", "Asset", "8", "yes"}});
+
+    auto tableGrid = std::make_shared<ya::UITableGrid>("GalleryTableGrid");
+    tableGrid->setSize({400.0f, 0.0f});
+    tableGrid->_bAutoSize = true;
+    tableGrid->_columnWidths = {140.0f, 100.0f, 0.0f, 0.0f}; // last two stretch
+    tableGrid->bindData(tableRows);
+    auto tableSelRef = std::make_shared<ya::Reactive<int>>(1);
+    tableGrid->bindSelection(tableSelRef);
+    tableGrid->_onSelectionChanged = [log](int row)
+    {
+        log(std::format("Table row -> {}", row));
+    };
+    tree.attach(*form, tableGrid);
+    // Keep the grid at its fixed width (box cross-axis default is Stretch).
+    if (auto* slot = form->getBoxSlot(*tableGrid)) {
+        slot->setCrossAlignment(ya::EUIBoxSlotCrossAlignment::Start);
+    }
+
+    auto tableCaption = makeBodyText("Click a row to select (reactive selection ref); hover highlights.");
+    tree.attach(*form, tableCaption);
 
     tree.attach(*form, makeBodyText("Expected: incrementing, toggling, renaming, resizing, selecting and theming all update their targets without the page rebuilding."));
 }

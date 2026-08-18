@@ -1,0 +1,8 @@
+# GUIWorkbench --start-page=Gallery. Table grid exists with its fixed
+# width and auto-sized height (4 data rows + 1 header = 5 rows x 22px).
+{"window_size":{"width":1280,"height":720}}
+{"frame":3}
+{"assert":{"widget":"GalleryTableGrid","rect":{"w":400.0}}}
+{"assert":{"widget":"GalleryTableGrid","control":{"type":"tableGrid"}}}
+{"checkpoint":"table_grid"}
+{"frame":1}
