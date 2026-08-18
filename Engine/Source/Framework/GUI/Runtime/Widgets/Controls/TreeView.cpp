@@ -153,8 +153,20 @@ bool UITreeView::matchesFilter(const FNode& node) const
         node.label.find(filter) != std::string::npos) {
         return true;
     }
+    return matchesFilterDescendants(node, filter, 0);
+}
+
+bool UITreeView::matchesFilterDescendants(const FNode& node, const std::string& filter, int depth) const
+{
+    if (depth > kMaxDepth) {
+        return false; // defensive: cyclic data must never recurse forever
+    }
     for (const FNode& child : node.children) {
-        if (matchesFilter(child)) {
+        if (child.id.find(filter) != std::string::npos ||
+            child.label.find(filter) != std::string::npos) {
+            return true;
+        }
+        if (matchesFilterDescendants(child, filter, depth + 1)) {
             return true;
         }
     }
@@ -163,6 +175,9 @@ bool UITreeView::matchesFilter(const FNode& node) const
 
 void UITreeView::flattenNode(const FNode& node, int depth, std::vector<VisibleRow>& rows) const
 {
+    if (depth > kMaxDepth) {
+        return; // defensive: cyclic data must never recurse forever
+    }
     // A filter hides every node outside the matching chains (a node shows
     // only when it matches or one of its descendants does).
     if (_filterBinding && !_filterBinding->value().empty() && !matchesFilter(node)) {

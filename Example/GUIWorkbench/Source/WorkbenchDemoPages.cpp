@@ -957,6 +957,27 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
             return;
         }
         if (mode == 1) {
+            // Refuse to drop a node into its own descendant (would create
+            // a cycle: the tree flattens recursively and would blow the
+            // stack — the framework caps depth as a backstop, the host
+            // must validate its own data).
+            const std::function<bool(const ya::UITreeView::FNode&, const std::string&)> contains =
+                [&](const ya::UITreeView::FNode& n, const std::string& id) -> bool
+            {
+                if (n.id == id) {
+                    return true;
+                }
+                for (const auto& c : n.children) {
+                    if (contains(c, id)) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            if (contains(moved, toId)) {
+                log(std::format("Tree reorder refused: '{}' cannot move into its own descendant '{}'", fromId, toId));
+                return;
+            }
             // Into: append as the target's child.
             rebuilt[static_cast<size_t>(targetIndex)].children.push_back(moved);
         }
@@ -1220,7 +1241,9 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
 
     auto dropZoneB = std::make_shared<ya::UIDropTarget>("GalleryDropB");
     dropZoneB->setSize({180.0f, 60.0f});
-    dropZoneB->_accept = [](const std::string& payload) { return payload == "payload.2"; };
+    // Both zones accept every payload (the predicate is the extension
+    // point: replace it to filter which payloads may land).
+    dropZoneB->_accept = [](const std::string&) { return true; };
     dropZoneB->_onDrop = [dropResult, log](const std::string& payload, const glm::vec2&)
     {
         dropResult->set(std::format("Zone B <- {}", payload));

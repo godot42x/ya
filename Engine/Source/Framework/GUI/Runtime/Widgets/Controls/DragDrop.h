@@ -39,7 +39,10 @@ struct YA_GUI_API UIDragSource : public UIElement
     void clearTransientInputState() override { _bPressed = false; }
 
 private:
-    bool      _bPressed = false;
+    /// Pressed state drives the source tint: a VisualFlag so every write
+    /// marks the source paint-dirty (the G2 validation frame caught this
+    /// as a missed invalidation when it was a plain bool).
+    VisualFlag _bPressed{*this};
     glm::vec2 _pressPoint{0.0f, 0.0f};
 };
 

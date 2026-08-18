@@ -115,6 +115,9 @@ struct YA_GUI_API UITreeView : public UIElement
 
     /// Payload prefix carried by reorder drag sessions from this tree.
     static constexpr const char* kReorderPayloadPrefix = "tree-node:";
+    /// Hard cap on data depth (defensive: cyclic node data must never
+    /// recurse forever in flatten / filter walks).
+    static constexpr int kMaxDepth = 64;
 
     /// Flatten visible rows under the current expand state. Reads the expand
     /// refs via get() so the paint walk records them as dependencies; when
@@ -123,6 +126,7 @@ struct YA_GUI_API UITreeView : public UIElement
     void flattenNode(const FNode& node, int depth, std::vector<VisibleRow>& rows) const;
     /// Whether `node` or any of its descendants matches the active filter.
     [[nodiscard]] bool matchesFilter(const FNode& node) const;
+    [[nodiscard]] bool matchesFilterDescendants(const FNode& node, const std::string& filter, int depth) const;
     /// Live row index under `point` (re-flattens, no cached state), or -1.
     [[nodiscard]] int hitRowIndex(const glm::vec2& point) const;
     /// Whether `point` is over the expand arrow button of `row` (the row is
