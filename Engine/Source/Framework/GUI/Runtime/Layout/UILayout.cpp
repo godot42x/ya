@@ -655,8 +655,18 @@ void UIScrollLayout::arrange(UIElement& parent, const Rect2D& rect) const
     const float contentMain = bVertical ? std::max(desired.y, rect.extent.y)
                                         : std::max(desired.x, rect.extent.x);
     const float viewportMain = bVertical ? rect.extent.y : rect.extent.x;
-    _maxScrollOffset = std::max(0.0f, contentMain - viewportMain);
-    _scrollOffset = std::clamp(_scrollOffset, 0.0f, _maxScrollOffset);
+    const float newMaxOffset = std::max(0.0f, contentMain - viewportMain);
+    const float newOffset    = std::clamp(_scrollOffset, 0.0f, newMaxOffset);
+
+    // The scrollbar geometry derives from these values: when they change
+    // (content shrank/grew) the owner must re-paint even though its own
+    // layout rect did not change — otherwise the incremental paint cache
+    // keeps the stale thumb/track (the G2 validation frame catches this).
+    if (newMaxOffset != _maxScrollOffset || newOffset != _scrollOffset) {
+        _maxScrollOffset = newMaxOffset;
+        _scrollOffset    = newOffset;
+        invalidateSubtreePaint();
+    }
 
     Rect2D contentRect = rect;
     if (bVertical) {
