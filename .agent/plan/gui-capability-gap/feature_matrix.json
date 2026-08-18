@@ -101,8 +101,8 @@
         },
         {
           "id": "gc_scenario_render",
-          "status": "planned",
-          "notes": "--scenario-render 开关（frame 步骤真实渲染）+ WidgetTree 校验 mismatch 计数 + 场景 assert_validation_clean 断言；gallery_acceptance 渲染变体验证零告警；人为漏标脏注入验证断言失败"
+          "status": "pass",
+          "notes": "--scenario-render（snapshot-only 帧：绕过 swapchain 的 layout+paint+校验帧）+ WidgetTree getValidationMismatches 计数 + assert_validation_clean 步骤（解析补 continue）；acceptance 74 帧渲染零告警 11 checkpoint 通过；全回归通过"
         },
         {
           "id": "p6_interaction_p1",

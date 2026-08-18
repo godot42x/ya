@@ -119,7 +119,20 @@
 
 另：本日沉淀 gui-framework skill 两个新 section（控件交互契约 5 条 + 人肉前验收 6 条，commit 82f95715）；四修复（spin 编辑态 +/-、combo dismiss 失焦、tree toggle 标 Paint、drop 标签，commit e68ecefd）。
 
-**下一刀**：G-C（scenario 渲染帧开关 + 校验断言），之后 P6 交互补全。
+## 2026-08-18 — G-C 验收基础设施（收口）
+
+**完成**：
+- `--scenario-render`：frame 步骤跑 snapshot-only 逻辑帧（layout+paint+G2 校验帧），**不碰 swapchain**——scenario 窗口可能不可 present，render->begin 会崩（实测定位）。
+- WidgetTree 累计校验 mismatch 计数（getValidationMismatches，debug 才有）。
+- 场景新步骤 `{"assert_validation_clean":true}`：渲染帧内任何漏标脏 → 场景失败。
+- acceptance 尾部 70 帧 + 断言：74 帧渲染、校验帧触发、零 mismatch，11 checkpoint 通过。
+- 修了解析 bug（assert_validation_clean 步骤缺 push/continue 落入 event 分支）。
+
+**验证**：acceptance+render 通过；全 8 场景回归通过。
+
+**剩余问题**：无。G-C 收口。
+
+**下一刀**：P6 交互补全（tooltip/TextWrapped/_bEnabled/UIDialog）。
 
 ## 2026-08-18 — 护栏补强立项（插入 P5 之前）
 
