@@ -802,6 +802,14 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     }
     auto leftPane = std::make_shared<ya::UIPanel>("GallerySplitLeft");
     leftPane->setColor({0.20f, 0.24f, 0.32f, 1.0f});
+    auto rightPane2 = std::make_shared<ya::UIPanel>("GallerySplitRight");
+    rightPane2->setColor({0.28f, 0.22f, 0.32f, 1.0f});
+    // Attach panes to the split first so they belong to the tree; only then
+    // can their children be attached. Otherwise WidgetTree::attach rejects
+    // the child with "parent does not belong to this tree".
+    tree.attach(*split, leftPane);
+    tree.attach(*split, rightPane2);
+
     auto leftText = makeBodyText("ratio <- reactive");
     leftText->_anchorMin = {0.0f, 0.0f};
     leftText->_anchorMax = {1.0f, 1.0f};
@@ -809,8 +817,7 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     leftText->_hAlign = ya::EWidgetAlignH::Center;
     leftText->_vAlign = ya::EWidgetAlignV::Center;
     tree.attach(*leftPane, leftText);
-    auto rightPane2 = std::make_shared<ya::UIPanel>("GallerySplitRight");
-    rightPane2->setColor({0.28f, 0.22f, 0.32f, 1.0f});
+
     auto rightText2 = makeBodyText("drag divider");
     rightText2->_anchorMin = {0.0f, 0.0f};
     rightText2->_anchorMax = {1.0f, 1.0f};
@@ -818,8 +825,6 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     rightText2->_hAlign = ya::EWidgetAlignH::Center;
     rightText2->_vAlign = ya::EWidgetAlignV::Center;
     tree.attach(*rightPane2, rightText2);
-    tree.attach(*split, leftPane);
-    tree.attach(*split, rightPane2);
 
     auto ratioButton = makeDemoButton("GalleryRatio", "Set ratio 0.25 (reactive)", 240.0f);
     ratioButton->_onClick = [ratioRef, log]
