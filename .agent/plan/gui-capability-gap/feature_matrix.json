@@ -26,7 +26,7 @@
       "id": "editor_parity",
       "title": "第二阶段：GameEditor ImGui 替换前置（GUI App 线全量补齐）",
       "items": [
-        { "id": "p1_vector_primitives", "status": "planned", "notes": "UIFrameDrawItem::EKind 增 Line；UIFrameBuilder 增 addLine/addRectOutline/addBezierCubic；FLineRender screen 路径（兜底：细四边形）；Gallery section 4 + gallery_vector.jsonl" },
+        { "id": "p1_vector_primitives", "status": "pass", "notes": "UIFrameDrawItem::EKind 增 Line（lineFrom/lineTo/lineThickness）；UIFrameBuilder 增 addLine/addRectOutline/addBezierCubic（bezier 客户端细分）；Render2DComposePass Line 分支=旋转细 quad（makeSprite transform 版，零管线改动）；Gallery section 4 + gallery_vector.jsonl 通过；modal 回归通过" },
         { "id": "p2_table_grid", "status": "planned", "notes": "UITableLayout + UITableSlot + UITableGrid（bindData/bindSelection）；Gallery section 5 + gallery_table.jsonl" },
         { "id": "p3_input_controls", "status": "planned", "notes": "UIDragFloat/UISpinBox/UIRadioButton/UIColorEdit/UISearchComboBox；Gallery section 6 + gallery_inputs.jsonl" },
         { "id": "p4_drag_reorder", "status": "planned", "notes": "UIDropTarget（谓词+回调+高亮 VisualFlag）+ UIDragSource；Gallery section 7 + gallery_drop.jsonl" },

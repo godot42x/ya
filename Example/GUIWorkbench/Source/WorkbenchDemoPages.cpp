@@ -210,6 +210,38 @@ struct FDemoDropZone : public ya::UIElement
     bool _bHighlighted = false;
 };
 
+/// Vector primitives showcase: lines (any angle, any thickness), a rectangle
+/// outline and a cubic bezier, all drawn through the UIFrameBuilder vector
+/// API (addLine/addRectOutline/addBezierCubic) — the same primitives the
+/// editor's RenderGraph topology and drag-insert highlights will use.
+struct FVectorDemoCanvas : public ya::UIElement
+{
+    explicit FVectorDemoCanvas(std::string name) : ya::UIElement(std::move(name)) {}
+
+    void paintSelf(ya::UIFrameBuilder& builder) override
+    {
+        builder.addSprite(_layoutRect, {0.10f, 0.11f, 0.14f, 1.0f}, nullptr);
+
+        const glm::vec2 o = _layoutRect.pos + glm::vec2(12.0f, 12.0f);
+
+        // Horizontal / vertical / diagonal lines, 1px and 2px.
+        builder.addLine(o, o + glm::vec2(120.0f, 0.0f), {0.35f, 0.80f, 0.55f, 1.0f}, 1.0f);
+        builder.addLine(o + glm::vec2(0.0f, 24.0f), o + glm::vec2(120.0f, 24.0f), {0.35f, 0.80f, 0.55f, 1.0f}, 2.0f);
+        builder.addLine(o + glm::vec2(0.0f, 48.0f), o + glm::vec2(120.0f, 72.0f), {0.85f, 0.65f, 0.30f, 1.0f}, 2.0f);
+
+        // Rectangle outline.
+        const ya::Rect2D rect{.pos = o + glm::vec2(150.0f, 0.0f), .extent = {90.0f, 56.0f}};
+        builder.addRectOutline(rect, {0.45f, 0.60f, 0.90f, 1.0f}, 2.0f);
+
+        // Cubic bezier (client-side tessellated into a polyline).
+        builder.addBezierCubic(o + glm::vec2(270.0f, 70.0f),
+                               o + glm::vec2(310.0f, -20.0f),
+                               o + glm::vec2(360.0f, 140.0f),
+                               o + glm::vec2(400.0f, 30.0f),
+                               {0.90f, 0.45f, 0.70f, 1.0f}, 2.0f, 32);
+    }
+};
+
 } // namespace
 
 void buildRenderDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
@@ -945,6 +977,21 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
         log(std::format("Style theme -> {}", *bDarkRef ? "dark" : "white"));
     };
     tree.attach(*form, themeButton);
+
+    // ---------------------------------------------------------------------
+    // Section 4 — Vector primitives (UIFrameBuilder addLine / addRectOutline
+    // / addBezierCubic). The building blocks for RenderGraph topology wires
+    // and drag-insert highlight lines in the editor.
+    // ---------------------------------------------------------------------
+    tree.attach(*form, makeLabel("4. Vector primitives — lines, outline, bezier"));
+
+    auto vectorCanvas = std::make_shared<FVectorDemoCanvas>("GalleryVectorCanvas");
+    vectorCanvas->setSize({430.0f, 110.0f});
+    tree.attach(*form, vectorCanvas);
+    // Keep the canvas at its fixed width (box cross-axis default is Stretch).
+    if (auto* slot = form->getBoxSlot(*vectorCanvas)) {
+        slot->setCrossAlignment(ya::EUIBoxSlotCrossAlignment::Start);
+    }
 
     tree.attach(*form, makeBodyText("Expected: incrementing, toggling, renaming, resizing, selecting and theming all update their targets without the page rebuilding."));
 }

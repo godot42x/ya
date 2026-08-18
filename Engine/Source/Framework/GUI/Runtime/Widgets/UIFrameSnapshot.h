@@ -62,6 +62,7 @@ struct UIFrameDrawItem
     {
         Sprite,
         Text,
+        Line,
     };
 
     EKind     kind;
@@ -78,6 +79,11 @@ struct UIFrameDrawItem
     std::shared_ptr<Font> font;
     std::string           text;
     glm::vec2             textScale = {1.0f, 1.0f};
+    // Line (render-target px endpoints; the compose pass draws a rotated
+    // thin quad of `lineThickness` width along the segment):
+    glm::vec2 lineFrom      = {0.0f, 0.0f};
+    glm::vec2 lineTo        = {0.0f, 0.0f};
+    float     lineThickness = 1.0f;
 };
 
 /// Immutable frame packet consumed by the compose pass.
@@ -109,6 +115,27 @@ class YA_GUI_API UIFrameBuilder
                  const std::shared_ptr<Font>& font,
                  EWidgetAlignH hAlign,
                  EWidgetAlignV vAlign);
+
+    /// Record a line segment (logical px endpoints). Drawn as a thin rotated
+    /// quad of `thickness` width in the compose pass, so any angle works;
+    /// honors the current clip stack like sprites/text.
+    void addLine(const glm::vec2& logicalFrom,
+                 const glm::vec2& logicalTo,
+                 const glm::vec4& color,
+                 float            thickness = 1.0f);
+
+    /// Record a rectangle outline (4 line segments, logical rect).
+    void addRectOutline(const Rect2D& logicalRect, const glm::vec4& color, float thickness = 1.0f);
+
+    /// Record a cubic bezier approximated by `segments` line segments
+    /// (client-side tessellation; the frame only carries the polyline).
+    void addBezierCubic(const glm::vec2& p0,
+                        const glm::vec2& c1,
+                        const glm::vec2& c2,
+                        const glm::vec2& p1,
+                        const glm::vec4& color,
+                        float            thickness = 1.0f,
+                        int              segments  = 24);
 
     /// Move the accumulated items into an immutable snapshot.
     [[nodiscard]] UIFrameSnapshot build(Extent2D logicalExtent);

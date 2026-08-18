@@ -238,6 +238,31 @@ void recordRender2DComposePass(ICommandBuffer*                 cmdBuf,
                                      item.texture,
                                      item.color);
             }
+            else if (item.kind == UIFrameDrawItem::EKind::Line) {
+                // Line = a rotated thin quad along the segment. The unit quad
+                // spans [0,1]^2 with its origin at the top-left, so column 0
+                // maps the x-axis onto the segment direction and column 1 maps
+                // the y-axis onto its normal; the translation column anchors
+                // the origin at `from`.
+                const glm::vec2 delta = item.lineTo - item.lineFrom;
+                const float     len   = glm::length(delta);
+                if (len <= 1e-4f) {
+                    // Degenerate segment: draw a small axis-aligned dot.
+                    const glm::vec2 t = glm::vec2(item.lineThickness);
+                    Render2D::makeSprite(glm::vec3(item.lineFrom - t * 0.5f, 0.0f),
+                                         t, nullptr, item.color);
+                }
+                else {
+                    const glm::vec2 dir = delta / len;
+                    const glm::vec2 nrm = glm::vec2(-dir.y, dir.x);
+                    const glm::mat4 transform(
+                        glm::vec4(dir.x * len, dir.y * len, 0.0f, 0.0f),
+                        glm::vec4(nrm.x * item.lineThickness, nrm.y * item.lineThickness, 0.0f, 0.0f),
+                        glm::vec4(0.0f, 0.0f, 1.0f, 0.0f),
+                        glm::vec4(item.lineFrom.x, item.lineFrom.y, 0.0f, 1.0f));
+                    Render2D::makeSprite(transform, nullptr, item.color);
+                }
+            }
             else {
                 Render2D::makeText(item.text,
                                    glm::vec3(item.pos, 0.0f),

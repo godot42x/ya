@@ -1,0 +1,9 @@
+# GUIWorkbench --start-page=Gallery. Vector primitives canvas exists with
+# its fixed rect (the canvas paints lines/outline/bezier through the
+# UIFrameBuilder vector API; visual verification is the Workbench itself,
+# this scenario locks the widget presence and geometry).
+{"window_size":{"width":1280,"height":720}}
+{"frame":3}
+{"assert":{"widget":"GalleryVectorCanvas","rect":{"w":430.0,"h":110.0}}}
+{"checkpoint":"vector_canvas"}
+{"frame":1}

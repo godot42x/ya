@@ -92,6 +92,56 @@ void UIFrameBuilder::addText(const Rect2D& logicalRect,
     _items.push_back(std::move(item));
 }
 
+void UIFrameBuilder::addLine(const glm::vec2& logicalFrom,
+                             const glm::vec2& logicalTo,
+                             const glm::vec4& color,
+                             float            thickness)
+{
+    UIFrameDrawItem item;
+    item.kind          = UIFrameDrawItem::EKind::Line;
+    item.lineFrom      = toPx(logicalFrom);
+    item.lineTo        = toPx(logicalTo);
+    item.color         = color;
+    item.lineThickness = thickness;
+    if (!_clipStack.empty()) {
+        item.bClipped = true;
+        const Rect2D& clip = _clipStack.back();
+        item.clip.pos     = toPx(clip.pos);
+        item.clip.extent  = clip.extent * _ctx.uiScale;
+    }
+    _items.push_back(std::move(item));
+}
+
+void UIFrameBuilder::addRectOutline(const Rect2D& logicalRect, const glm::vec4& color, float thickness)
+{
+    const glm::vec2 p0 = logicalRect.pos;
+    const glm::vec2 p1 = logicalRect.pos + logicalRect.extent;
+    addLine(p0, {p1.x, p0.y}, color, thickness);
+    addLine({p1.x, p0.y}, p1, color, thickness);
+    addLine(p1, {p0.x, p1.y}, color, thickness);
+    addLine({p0.x, p1.y}, p0, color, thickness);
+}
+
+void UIFrameBuilder::addBezierCubic(const glm::vec2& p0,
+                                    const glm::vec2& c1,
+                                    const glm::vec2& c2,
+                                    const glm::vec2& p1,
+                                    const glm::vec4& color,
+                                    float            thickness,
+                                    int              segments)
+{
+    segments = std::clamp(segments, 1, 64);
+    glm::vec2 prev = p0;
+    for (int i = 1; i <= segments; ++i) {
+        const float   t  = static_cast<float>(i) / static_cast<float>(segments);
+        const float   u  = 1.0f - t;
+        const glm::vec2 pt = u * u * u * p0 + 3.0f * u * u * t * c1 +
+                             3.0f * u * t * t * c2 + t * t * t * p1;
+        addLine(prev, pt, color, thickness);
+        prev = pt;
+    }
+}
+
 UIFrameSnapshot UIFrameBuilder::build(Extent2D logicalExtent)
 {
     UIFrameSnapshot snapshot;
