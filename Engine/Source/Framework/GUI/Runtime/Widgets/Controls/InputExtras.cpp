@@ -41,19 +41,91 @@ void UIDragFloat::adjustValue(float delta)
     setValue(_value + delta * _speed);
 }
 
+void UIDragFloat::beginEdit()
+{
+    _bEditing    = true;
+    _editBuffer  = std::format("{:.{}f}", _value, _decimals);
+    if (WidgetTree* tree = getTree()) {
+        tree->setFocus(this);
+    }
+}
+
+void UIDragFloat::commitEdit()
+{
+    if (!_bEditing) {
+        return;
+    }
+    _bEditing = false;
+    try {
+        const float parsed = std::stof(_editBuffer);
+        setValue(parsed);
+    }
+    catch (...) {
+        // Invalid text: keep the previous value.
+    }
+    _editBuffer.clear();
+}
+
+void UIDragFloat::cancelEdit()
+{
+    _bEditing = false;
+    _editBuffer.clear();
+}
+
+void UIDragFloat::onFocusLost()
+{
+    commitEdit();
+}
+
 void UIDragFloat::paintSelf(UIFrameBuilder& builder)
 {
     builder.addSprite(_layoutRect, _bDragging ? _draggingColor : _backgroundColor, nullptr);
+    builder.addRectOutline(_layoutRect, _borderColor, 1.0f);
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
-    if (font) {
-        builder.addText(_layoutRect, std::format("{:.{}f}", _value, _decimals), _textColor, font,
-                        EWidgetAlignH::Center, EWidgetAlignV::Center);
+    if (!font) {
+        return;
+    }
+    const std::string shown = _bEditing ? _editBuffer : std::format("{:.{}f}", _value, _decimals);
+    builder.addText(_layoutRect, shown, _textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+    if (_bEditing) {
+        const float textW  = font->measureText(shown);
+        const float caretX = _layoutRect.pos.x + (_layoutRect.extent.x + textW) * 0.5f + 1.0f;
+        const float caretY = _layoutRect.pos.y + (_layoutRect.extent.y - font->lineHeight) * 0.5f;
+        builder.addSprite(Rect2D{.pos = {caretX, caretY}, .extent = {1.0f, font->lineHeight}},
+                          _textColor, nullptr);
     }
 }
 
 bool UIDragFloat::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
 {
     const EEvent::T eventType = event.getEventType();
+
+    if (_bEditing) {
+        if (eventType == EEvent::KeyTyped) {
+            _editBuffer += static_cast<const KeyTypedEvent&>(event).getText();
+            invalidateProperty(EUIPropertyImpact::Paint);
+            return true;
+        }
+        if (eventType == EEvent::KeyPressed) {
+            const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
+            if (!keyEvent.bRepeat && keyEvent._keyCode == EKey::Backspace) {
+                if (!_editBuffer.empty()) {
+                    _editBuffer.pop_back();
+                    invalidateProperty(EUIPropertyImpact::Paint);
+                }
+                return true;
+            }
+            if (!keyEvent.bRepeat && keyEvent._keyCode == EKey::Enter) {
+                commitEdit();
+                return true;
+            }
+            if (!keyEvent.bRepeat && keyEvent._keyCode == EKey::Escape) {
+                cancelEdit();
+                return true;
+            }
+        }
+        return false;
+    }
 
     if (eventType == EEvent::KeyPressed) {
         const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
@@ -74,13 +146,24 @@ bool UIDragFloat::handleInputEvent(const Event& event, const WidgetEventContext&
     }
 
     switch (eventType) {
-    case EEvent::MouseButtonPressed:
+    case EEvent::MouseButtonPressed: {
+        // Double-click (no event timestamps: a press near the previous press)
+        // enters text edit mode; a single press starts the capture drag.
+        const bool bDouble = _bHasLastPress && glm::length(ctx.logicalPoint - _lastPressPos) < 6.0f;
+        _lastPressPos   = ctx.logicalPoint;
+        _bHasLastPress  = true;
+        if (bDouble) {
+            _bHasLastPress = false;
+            beginEdit();
+            return true;
+        }
         _bDragging = true;
         _dragStart = ctx.logicalPoint;
         if (WidgetTree* tree = getTree()) {
             tree->setPointerCapture(this);
         }
         return true;
+    }
     case EEvent::MouseMoved:
         if (_bDragging) {
             adjustValue((ctx.logicalPoint.x - _dragStart.x) * 0.1f);
@@ -120,6 +203,41 @@ void UISpinBox::stepBy(float multiplier)
     setValue(_value + _step * multiplier);
 }
 
+void UISpinBox::beginEdit()
+{
+    _bEditing   = true;
+    _editBuffer = std::format("{:.2f}", _value);
+    if (WidgetTree* tree = getTree()) {
+        tree->setFocus(this);
+    }
+}
+
+void UISpinBox::commitEdit()
+{
+    if (!_bEditing) {
+        return;
+    }
+    _bEditing = false;
+    try {
+        setValue(std::stof(_editBuffer));
+    }
+    catch (...) {
+        // Invalid text: keep the previous value.
+    }
+    _editBuffer.clear();
+}
+
+void UISpinBox::cancelEdit()
+{
+    _bEditing = false;
+    _editBuffer.clear();
+}
+
+void UISpinBox::onFocusLost()
+{
+    commitEdit();
+}
+
 int UISpinBox::zoneFromPointer(float localX) const
 {
     const float zoneWidth = 26.0f;
@@ -135,6 +253,7 @@ int UISpinBox::zoneFromPointer(float localX) const
 void UISpinBox::paintSelf(UIFrameBuilder& builder)
 {
     builder.addSprite(_layoutRect, _backgroundColor, nullptr);
+    builder.addRectOutline(_layoutRect, _borderColor, 1.0f);
     const float zoneWidth = 26.0f;
     const Rect2D minusRect{.pos = _layoutRect.pos, .extent = {zoneWidth, _layoutRect.extent.y}};
     const Rect2D plusRect{.pos = {_layoutRect.pos.x + _layoutRect.extent.x - zoneWidth, _layoutRect.pos.y},
@@ -143,17 +262,52 @@ void UISpinBox::paintSelf(UIFrameBuilder& builder)
     builder.addSprite(plusRect, _hoveredZone == 1 ? _buttonHoverColor : _buttonColor, nullptr);
 
     auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
-    if (font) {
-        builder.addText(minusRect, "-", _textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
-        builder.addText(plusRect, "+", _textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
-        builder.addText(_layoutRect, std::format("{:.2f}", _value), _textColor, font,
-                        EWidgetAlignH::Center, EWidgetAlignV::Center);
+    if (!font) {
+        return;
+    }
+    builder.addText(minusRect, "-", _textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+    builder.addText(plusRect, "+", _textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+    const std::string shown = _bEditing ? _editBuffer : std::format("{:.2f}", _value);
+    builder.addText(_layoutRect, shown, _textColor, font, EWidgetAlignH::Center, EWidgetAlignV::Center);
+    if (_bEditing) {
+        const float textW  = font->measureText(shown);
+        const float caretX = _layoutRect.pos.x + (_layoutRect.extent.x + textW) * 0.5f + 1.0f;
+        const float caretY = _layoutRect.pos.y + (_layoutRect.extent.y - font->lineHeight) * 0.5f;
+        builder.addSprite(Rect2D{.pos = {caretX, caretY}, .extent = {1.0f, font->lineHeight}},
+                          _textColor, nullptr);
     }
 }
 
 bool UISpinBox::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
 {
     const EEvent::T eventType = event.getEventType();
+
+    if (_bEditing) {
+        if (eventType == EEvent::KeyTyped) {
+            _editBuffer += static_cast<const KeyTypedEvent&>(event).getText();
+            invalidateProperty(EUIPropertyImpact::Paint);
+            return true;
+        }
+        if (eventType == EEvent::KeyPressed) {
+            const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
+            if (!keyEvent.bRepeat && keyEvent._keyCode == EKey::Backspace) {
+                if (!_editBuffer.empty()) {
+                    _editBuffer.pop_back();
+                    invalidateProperty(EUIPropertyImpact::Paint);
+                }
+                return true;
+            }
+            if (!keyEvent.bRepeat && keyEvent._keyCode == EKey::Enter) {
+                commitEdit();
+                return true;
+            }
+            if (!keyEvent.bRepeat && keyEvent._keyCode == EKey::Escape) {
+                cancelEdit();
+                return true;
+            }
+        }
+        return false;
+    }
 
     if (eventType == EEvent::KeyPressed) {
         const auto& keyEvent = static_cast<const KeyPressedEvent&>(event);
@@ -179,6 +333,16 @@ bool UISpinBox::handleInputEvent(const Event& event, const WidgetEventContext& c
     }
 
     if (eventType == EEvent::MouseButtonPressed) {
+        // Double-click (no event timestamps: a press near the previous press)
+        // enters text edit mode; a single press steps the pressed zone.
+        const bool bDouble = _bHasLastPress && glm::length(ctx.logicalPoint - _lastPressPos) < 6.0f;
+        _lastPressPos  = ctx.logicalPoint;
+        _bHasLastPress = true;
+        if (bDouble) {
+            _bHasLastPress = false;
+            beginEdit();
+            return true;
+        }
         const int zone = zoneFromPointer(ctx.logicalPoint.x - _layoutRect.pos.x);
         if (zone == 0) {
             stepBy(-1.0f);
@@ -325,18 +489,29 @@ bool UIColorEdit::handleInputEvent(const Event& event, const WidgetEventContext&
     }
 
     if (eventType == EEvent::MouseButtonPressed) {
-        const Rect2D swatch = swatchRect();
-        const bool bOnSwatch = ctx.logicalPoint.x >= swatch.pos.x &&
-                                ctx.logicalPoint.x <= swatch.pos.x + swatch.extent.x &&
-                                ctx.logicalPoint.y >= swatch.pos.y &&
-                                ctx.logicalPoint.y <= swatch.pos.y + swatch.extent.y;
-        if (bOnSwatch) {
-            // Click the swatch: cycle the active channel.
-            _activeChannel = (_activeChannel + 1) % 4;
-            markPaintDirty();
-            return true;
+        // Channel strip click: select the active channel (no drag).
+        const float stripX = swatchRect().pos.x + _swatchSize + 8.0f;
+        const float cellW  = 26.0f;
+        const float cellH  = 12.0f;
+        const float cellY  = _layoutRect.pos.y + (_layoutRect.extent.y - cellH) * 0.5f;
+        for (int ch = 0; ch < 4; ++ch) {
+            const Rect2D cell{
+                .pos    = {stripX + static_cast<float>(ch) * (cellW + 2.0f), cellY},
+                .extent = {cellW, cellH},
+            };
+            const bool bInside = ctx.logicalPoint.x >= cell.pos.x &&
+                                 ctx.logicalPoint.x <= cell.pos.x + cell.extent.x &&
+                                 ctx.logicalPoint.y >= cell.pos.y &&
+                                 ctx.logicalPoint.y <= cell.pos.y + cell.extent.y;
+            if (bInside) {
+                if (_activeChannel != ch) {
+                    _activeChannel = ch;
+                    markPaintDirty();
+                }
+                return true;
+            }
         }
-        // Drag on the swatch adjusts the active channel.
+        // Swatch or anywhere else in the control: drag adjusts the active channel.
         if (hitTestLayoutRect(ctx.logicalPoint)) {
             _bDragging = true;
             _dragStart = ctx.logicalPoint;

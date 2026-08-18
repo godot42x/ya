@@ -761,14 +761,23 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     panel->setColor(kPanelColor);
     tree.attach(parent, panel);
 
+    // The gallery content is taller than the viewport: wrap the form in a
+    // scroll viewport so every section stays reachable and nothing paints
+    // over the status bar.
+    auto scroll = std::make_shared<ya::UIScrollViewport>("GalleryScroll");
+    scroll->_anchorMin = {0.0f, 0.0f};
+    scroll->_anchorMax = {1.0f, 1.0f};
+    tree.attach(*panel, scroll);
+
     auto form = std::make_shared<ya::UIContainer>("GalleryForm");
+    form->_bAutoSize = true;
     form->_anchorMin = {0.0f, 0.0f};
-    form->_anchorMax = {1.0f, 1.0f};
+    form->_anchorMax = {1.0f, 0.0f};
     form->setPadding({16.0f, 12.0f});
     form->setSize({0.0f, 0.0f});
     form->setDirection(ya::EWidgetBoxLayout::Vertical);
     form->setSpacing(12.0f);
-    tree.attach(*panel, form);
+    tree.attach(*scroll, form);
 
     // ---------------------------------------------------------------------
     // Section 1 — Reactive data binding (model -> view, no manual repaint).

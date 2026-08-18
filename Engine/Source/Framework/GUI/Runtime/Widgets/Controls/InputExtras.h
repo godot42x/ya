@@ -39,8 +39,9 @@ struct YA_GUI_API UIDragFloat : public UIElement
     int       _decimals = 2;
     uint32_t  _fontSize = 13;
     glm::vec4 _textColor      = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4 _backgroundColor = {0.12f, 0.13f, 0.17f, 1.0f};
+    glm::vec4 _backgroundColor = {0.17f, 0.19f, 0.24f, 1.0f};
     glm::vec4 _draggingColor  = {0.18f, 0.24f, 0.34f, 1.0f};
+    glm::vec4 _borderColor    = {0.30f, 0.33f, 0.40f, 1.0f};
 
     /// Fired on every value change.
     std::function<void(float value)> _onValueChanged;
@@ -50,12 +51,27 @@ struct YA_GUI_API UIDragFloat : public UIElement
 
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
-    void clearTransientInputState() override { _bDragging = false; }
+    void onFocusLost() override;
+    void clearTransientInputState() override
+    {
+        _bDragging = false;
+        _bEditing  = false;
+        _editBuffer.clear();
+    }
 
   private:
     void adjustValue(float delta);
+    void beginEdit();
+    void commitEdit();
+    void cancelEdit();
     VisualFlag _bDragging{*this};
     glm::vec2  _dragStart{0.0f, 0.0f};
+    /// Double-click detection (no event timestamps): the previous press
+    /// position; a press near it enters text edit mode.
+    glm::vec2  _lastPressPos{0.0f, 0.0f};
+    bool       _bHasLastPress = false;
+    VisualFlag _bEditing{*this};
+    std::string _editBuffer;
 };
 
 /// Spin box (ImGui InputInt/InputFloat step equivalent, minimal): three
@@ -84,9 +100,10 @@ struct YA_GUI_API UISpinBox : public UIElement
     float     _max   = 1000000.0f;
     uint32_t  _fontSize = 13;
     glm::vec4 _textColor      = {0.90f, 0.92f, 0.95f, 1.0f};
-    glm::vec4 _backgroundColor = {0.12f, 0.13f, 0.17f, 1.0f};
-    glm::vec4 _buttonColor    = {0.18f, 0.20f, 0.25f, 1.0f};
-    glm::vec4 _buttonHoverColor = {0.26f, 0.28f, 0.34f, 1.0f};
+    glm::vec4 _backgroundColor = {0.17f, 0.19f, 0.24f, 1.0f};
+    glm::vec4 _buttonColor    = {0.22f, 0.24f, 0.30f, 1.0f};
+    glm::vec4 _buttonHoverColor = {0.30f, 0.33f, 0.40f, 1.0f};
+    glm::vec4 _borderColor    = {0.30f, 0.33f, 0.40f, 1.0f};
 
     std::function<void(float value)> _onValueChanged;
 
@@ -94,7 +111,13 @@ struct YA_GUI_API UISpinBox : public UIElement
 
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
-    void clearTransientInputState() override { _hoveredZone = -1; }
+    void onFocusLost() override;
+    void clearTransientInputState() override
+    {
+        _hoveredZone = -1;
+        _bEditing    = false;
+        _editBuffer.clear();
+    }
 
   private:
     enum class EZone : int8_t
@@ -109,6 +132,13 @@ struct YA_GUI_API UISpinBox : public UIElement
     int _pressedZone = -1;
     [[nodiscard]] int zoneFromPointer(float localX) const;
     void stepBy(float multiplier);
+    void beginEdit();
+    void commitEdit();
+    void cancelEdit();
+    glm::vec2  _lastPressPos{0.0f, 0.0f};
+    bool       _bHasLastPress = false;
+    VisualFlag _bEditing{*this};
+    std::string _editBuffer;
 };
 
 /// Radio button (minimal): dot + label; selection is managed by the host
