@@ -5,6 +5,7 @@
 #include "GUI/Widgets/Controls/Button.h"
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
+#include "GUI/Widgets/Controls/DragDrop.h"
 #include "GUI/Widgets/Controls/InputExtras.h"
 #include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/Controls/ScrollViewport.h"
@@ -230,6 +231,17 @@ nlohmann::json serializeNode(const UIElement& element, const WidgetTree& tree)
         node["control"] = {
             {"type", "searchComboBox"},
             {"selectedIndex", searchCombo->_selectedIndex},
+        };
+    }
+    else if (const auto* dragSource = dynamic_cast<const UIDragSource*>(&element)) {
+        node["control"] = {
+            {"type", "dragSource"},
+            {"label", dragSource->_label},
+        };
+    }
+    else if (const auto* dropTarget = dynamic_cast<const UIDropTarget*>(&element)) {
+        node["control"] = {
+            {"type", "dropTarget"},
         };
     }
     else if (const auto* overlay = dynamic_cast<const UIPopupOverlay*>(&element)) {

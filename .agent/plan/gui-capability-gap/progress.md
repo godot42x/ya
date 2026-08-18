@@ -63,3 +63,17 @@
 
 **下一刀**：P4 拖拽重排（UIDropTarget/UIDragSource）。
 
+## 2026-08-18 — P4 拖拽重排（收口）
+
+**完成**：
+- `Controls/DragDrop.h/.cpp`（+ 镜像头）：UIDragSource（press+6px 阈值起 WidgetTree beginDrag，payload/label 回调）+ UIDropTarget（_accept 谓词 + _onDrop + VisualFlag _bHighlighted + paint 用 P1 addRectOutline 画接受高亮框）。
+- `WidgetTreeDump` 加 dragSource/dropTarget control 块。
+- Gallery section「7. Drag & drop」：3 源（不同 payload）+ 2 目标（一个全接受、一个只收 payload.2）+ reactive drop 结果标签。
+- `gallery_drop.jsonl` scenario 锁控件存在/类型（拖拽交互本身由 DragDrop 页既有 scenario 覆盖）。
+
+**验证**：GUIWorkbench 编译通过；gallery_drop 通过；vector/table/inputs + dragdrop_interaction 全回归通过。
+
+**剩余问题**：无。P4 收口。
+
+**下一刀**：P5 TreeView 编辑能力（_bReorderable + _onContextMenu + bindFilter）。
+

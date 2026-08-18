@@ -1,0 +1,10 @@
+# GUIWorkbench --start-page=Gallery. Drag sources and drop targets exist
+# with their control types (the drag interaction itself is covered by the
+# dedicated DragDrop page scenario; this locks the gallery wrappers).
+{"window_size":{"width":1280,"height":720}}
+{"frame":3}
+{"assert":{"widget":"GalleryDragSrc0","control":{"type":"dragSource","label":"Item 1"}}}
+{"assert":{"widget":"GalleryDropA","control":{"type":"dropTarget"}}}
+{"assert":{"widget":"GalleryDropB","control":{"type":"dropTarget"}}}
+{"checkpoint":"drag_wrappers"}
+{"frame":1}

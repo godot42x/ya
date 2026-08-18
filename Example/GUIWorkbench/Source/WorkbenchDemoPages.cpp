@@ -8,6 +8,7 @@
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/DragDrop.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/InputExtras.h"
 #include "GUI/Widgets/Controls/Menu.h"
@@ -1093,6 +1094,49 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     searchCombo->_selectedIndex = 0;
     searchCombo->_onSelectionChanged = [log](int index) { log(std::format("SearchCombo -> {}", index)); };
     tree.attach(*searchRow, searchCombo);
+
+    // ---------------------------------------------------------------------
+    // Section 7 — Drag & drop (UIDragSource / UIDropTarget wrappers over the
+    // WidgetTree drag session; the drop highlight uses the P1 outline).
+    // ---------------------------------------------------------------------
+    tree.attach(*form, makeLabel("7. Drag & drop — sources onto targets"));
+
+    auto dragDemoRow = makeRow(tree, *form);
+    for (int i = 0; i < 3; ++i) {
+        auto source = std::make_shared<ya::UIDragSource>(std::format("GalleryDragSrc{}", i));
+        source->setSize({110.0f, 26.0f});
+        source->_label = std::format("Item {}", i + 1);
+        source->_makePayload = [i] { return std::format("payload.{}", i + 1); };
+        tree.attach(*dragDemoRow, source);
+    }
+
+    auto dropRow = makeRow(tree, *form);
+    auto dropResult = std::make_shared<ya::Reactive<std::string>>("(drop something here)");
+    auto dropLabel = std::make_shared<ya::UIText>("GalleryDropResult");
+    dropLabel->_bAutoSize = true;
+    dropLabel->_fontSize = 13;
+    dropLabel->bindText(dropResult);
+    tree.attach(*dropRow, dropLabel);
+
+    auto dropZoneA = std::make_shared<ya::UIDropTarget>("GalleryDropA");
+    dropZoneA->setSize({180.0f, 60.0f});
+    dropZoneA->_accept = [](const std::string&) { return true; };
+    dropZoneA->_onDrop = [dropResult, log](const std::string& payload, const glm::vec2&)
+    {
+        dropResult->set(std::format("Zone A <- {}", payload));
+        log(std::format("Dropped '{}' on Zone A", payload));
+    };
+    tree.attach(*dropRow, dropZoneA);
+
+    auto dropZoneB = std::make_shared<ya::UIDropTarget>("GalleryDropB");
+    dropZoneB->setSize({180.0f, 60.0f});
+    dropZoneB->_accept = [](const std::string& payload) { return payload == "payload.2"; };
+    dropZoneB->_onDrop = [dropResult, log](const std::string& payload, const glm::vec2&)
+    {
+        dropResult->set(std::format("Zone B <- {}", payload));
+        log(std::format("Dropped '{}' on Zone B", payload));
+    };
+    tree.attach(*dropRow, dropZoneB);
 
     tree.attach(*form, makeBodyText("Expected: incrementing, toggling, renaming, resizing, selecting and theming all update their targets without the page rebuilding."));
 }
