@@ -178,11 +178,20 @@ struct FDemoDropZone : public ya::UIElement
     void onDrop(const std::string& payload, const glm::vec2&) override
     {
         _bHighlighted = false;
+        invalidateProperty(ya::EUIPropertyImpact::Paint);
         if (_onDropped) {
             _onDropped(payload);
         }
     }
-    void setDropHighlight(bool bHighlight) override { _bHighlighted = bHighlight; }
+    void setDropHighlight(bool bHighlight) override
+    {
+        // The highlight is a paint attribute: without marking paint-dirty the
+        // incremental paint cache keeps showing the pre-highlight draw items,
+        // so the zone would never visibly light up (same contract as every
+        // transient visual state in the framework).
+        _bHighlighted = bHighlight;
+        invalidateProperty(ya::EUIPropertyImpact::Paint);
+    }
 
     void paintSelf(ya::UIFrameBuilder& builder) override
     {
@@ -558,9 +567,9 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
     form->setSpacing(10.0f);
     tree.attach(*panel, form);
 
-    tree.attach(*form, makeLabel("Modal — a dimming overlay blocks the whole app until dismissed"));
+    tree.attach(*form, makeLabel("Popup dialog — a transparent shield swallows outside clicks, no dimming"));
 
-    state.openModalButton = makeDemoButton("OpenModal", "Open modal dialog...", 180.0f);
+    state.openModalButton = makeDemoButton("OpenModal", "Open dialog...", 180.0f);
     state.openModalButton->_onClick = [&tree, &state, log]
     {
         if (state.bModalOpen) {
@@ -569,7 +578,9 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
         state.bModalOpen = true;
 
         auto overlay = std::make_shared<ya::UIPopupOverlay>("ModalOverlay");
-        overlay->_bModal     = true;
+        // Popup role: the shield is transparent (the page stays fully visible
+        // behind the dialog) and only swallows presses outside the content.
+        overlay->_bModal     = false;
         overlay->_contentPos = {440.0f, 300.0f};
 
         auto dialog = std::make_shared<ya::UIPanel>("ModalDialog");
@@ -622,7 +633,7 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
     };
     tree.attach(*form, state.openModalButton);
 
-    tree.attach(*form, makeBodyText("Esc or clicking the dimmed area closes the dialog."));
+    tree.attach(*form, makeBodyText("Esc or clicking outside the dialog closes it; the page behind stays visible."));
 }
 
 void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
@@ -839,23 +850,22 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     }});
 
     auto treeView = std::make_shared<ya::UITreeView>("GalleryTree");
-    treeView->setSize({0.0f, 180.0f});
+    // AutoSize: the tree grows/shrinks with the expanded-row count, so
+    // expanding never overflows the widget rect (the framework also clips
+    // the tree's own paint to its rect as a backstop).
+    treeView->_bAutoSize = true;
+    treeView->setSize({0.0f, 0.0f});
     treeView->bindData(roots);
+    treeView->setExpanded("root", true);
     tree.attach(*form, treeView);
-    if (auto* slot = form->getBoxSlot(*treeView)) {
-        slot->setSizeRule(ya::EUIBoxSlotSizeRule::Fill);
-    }
 
     // Selected id mirror: a bound label subscribes to the tree's selection ref.
     auto selectedLabel = std::make_shared<ya::UIText>("GallerySelected");
     selectedLabel->_bAutoSize = true;
     selectedLabel->_fontSize  = 13;
-    const auto selRef = treeView->getSelection();
     auto selStrRef = std::make_shared<ya::Reactive<std::string>>("(none)");
-    // Mirror the tree's selection ref into a string ref the label can bind to.
-    // (TreeView's selection ref is Reactive<string> of the id directly, but the
-    // label demonstrates the subscribe-side; keep a local mirror updated by the
-    // tree's callback to avoid coupling the label to the tree's internals.)
+    // Mirror the tree's selection into a string ref the label binds to, so
+    // the label re-paints through the reactive layer on every selection.
     selectedLabel->bindText(selStrRef);
     treeView->_onSelectionChanged = [selStrRef, log](const std::string& id)
     {
@@ -865,48 +875,55 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     tree.attach(*form, selectedLabel);
 
     // ---------------------------------------------------------------------
-    // Section 3 — Style system. A UIStyleSet holds named styles; binding a
-    // widget to a style and then re-defining the style repaints every bound
-    // widget without touching per-widget color fields.
+    // Section 3 — Style system. A UIStyleSet holds named styles; a style is
+    // a Reactive<FWidgetStyle>, so mutating it via set() repaints every
+    // widget bound to it without touching per-widget color fields.
     // ---------------------------------------------------------------------
     tree.attach(*form, makeLabel("3. Style system — one edit restyles the group"));
 
     auto styleSet = std::make_shared<ya::UIStyleSet>();
-    const auto applyTheme = [&](bool bDark)
-    {
-        ya::FWidgetStyle dark{
-            .fillColor = {0.16f, 0.18f, 0.22f, 1.0f},
-            .textColor = {0.82f, 0.86f, 0.92f, 1.0f},
-            .fontSize  = 14,
-        };
-        ya::FWidgetStyle light{
-            .fillColor = {0.86f, 0.88f, 0.92f, 1.0f},
-            .textColor = {0.12f, 0.14f, 0.18f, 1.0f},
-            .fontSize  = 14,
-        };
-        styleSet->define("theme", bDark ? dark : light);
+    // Define the theme ONCE and mutate the returned handle with set().
+    // Re-defining the same name would replace the handle and orphan every
+    // binding that captured the previous one (they would never repaint).
+    const ya::FWidgetStyle kDarkTheme{
+        .fillColor = {0.16f, 0.18f, 0.22f, 1.0f},
+        .textColor = {0.82f, 0.86f, 0.92f, 1.0f},
+        .fontSize  = 14,
     };
-    applyTheme(true);
+    const ya::FWidgetStyle kLightTheme{
+        .fillColor = {0.86f, 0.88f, 0.92f, 1.0f},
+        .textColor = {0.12f, 0.14f, 0.18f, 1.0f},
+        .fontSize  = 14,
+    };
+    auto themeRef = styleSet->define("theme", kDarkTheme);
+
+    // Buttons outlive this builder function: capture only values/shared_ptrs.
+    // A [&] capture (styleSet / local bool / local FWidgetStyle) would dangle
+    // after the page is built and crash on the first click.
+    auto bDarkRef = std::make_shared<bool>(true);
+    const auto applyTheme = [themeRef, kDarkTheme, kLightTheme](bool bDark)
+    {
+        themeRef->set(bDark ? kDarkTheme : kLightTheme);
+    };
 
     auto styledText = std::make_shared<ya::UIText>("GalleryStyledText");
     styledText->_bAutoSize = true;
     styledText->setText("Styled text (themed)");
-    styledText->bindStyle(styleSet->find("theme"));
+    styledText->bindStyle(themeRef);
     tree.attach(*form, styledText);
 
-    auto styledButton = makeDemoButton("GalleryStyledBtn", "Styled button (themed)", 220.0f);
-    // UIButton reads fill from a bound style via UIStyleSet::bindTo (persistent
-    // dependent, Paint granularity).
-    styleSet->bindTo(styleSet->find("theme"), *styledButton);
-    tree.attach(*form, styledButton);
+    auto styledCaption = std::make_shared<ya::UIText>("GalleryStyledCaption");
+    styledCaption->_bAutoSize = true;
+    styledCaption->setText("Another themed text bound to the same style");
+    styledCaption->bindStyle(themeRef);
+    tree.attach(*form, styledCaption);
 
     auto themeButton = makeDemoButton("GalleryTheme", "Toggle theme (restyles group)", 260.0f);
-    bool bDark = true;
-    themeButton->_onClick = [applyTheme, &bDark, log]
+    themeButton->_onClick = [applyTheme, bDarkRef, log]
     {
-        bDark = !bDark;
-        applyTheme(bDark);
-        log(std::format("Style theme -> {}", bDark ? "dark" : "light"));
+        *bDarkRef = !*bDarkRef;
+        applyTheme(*bDarkRef);
+        log(std::format("Style theme -> {}", *bDarkRef ? "dark" : "light"));
     };
     tree.attach(*form, themeButton);
 
