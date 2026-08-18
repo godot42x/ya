@@ -187,6 +187,19 @@ void FWorkbenchSurface::buildMenuBar(ya::WidgetTree& tree, ya::UIElement& parent
             {"Documentation", [log] { log("Menu: Documentation"); }},
         });
     });
+
+    // Theme the bar items so hover is actually visible: the UIMenuBarItem
+    // default normal color (0.10) sits almost on top of the window background
+    // (0.075), so an un-themed bar reads as a flat dark strip with no hover
+    // feedback. Lift both stops above the background and widen the gap.
+    constexpr glm::vec4 kMenuBarNormal  = {0.16f, 0.18f, 0.22f, 1.0f};
+    constexpr glm::vec4 kMenuBarHovered = {0.30f, 0.33f, 0.40f, 1.0f};
+    for (const auto& child : _menuBar->getChildren()) {
+        if (auto* item = dynamic_cast<ya::UIMenuBarItem*>(child.get())) {
+            item->_normalColor  = kMenuBarNormal;
+            item->_hoveredColor = kMenuBarHovered;
+        }
+    }
 }
 
 void FWorkbenchSurface::buildTabBar(ya::WidgetTree& tree, ya::UIElement& parent)
