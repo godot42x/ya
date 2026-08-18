@@ -85,10 +85,10 @@ enum T : uint32_t
     None        = 0,
     Application = 0x01,
     Window      = 0x02,
-    Input       = 0x10,
-    Keyboard    = 0x20,
-    Mouse       = 0x40,
-    MouseButton = 0x80
+    Input       = 0x04,
+    Keyboard    = 0x08,
+    Mouse       = 0x10,
+    MouseButton = 0x20
 };
 }
 
