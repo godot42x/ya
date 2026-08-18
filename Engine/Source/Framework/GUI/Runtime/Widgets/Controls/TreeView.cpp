@@ -98,9 +98,22 @@ int UITreeView::hitRowIndex(const glm::vec2& point) const
 
 bool UITreeView::onArrow(const glm::vec2& point, const VisibleRow& row) const
 {
+    // The row itself was already resolved by hitRowIndex (y), so only the
+    // horizontal band of the arrow button is tested here.
     const float x0 = _layoutRect.pos.x + static_cast<float>(row.depth) * _indentWidth;
-    const float x1 = x0 + _arrowWidth;
-    return point.x >= x0 && point.x <= x1;
+    return point.x >= x0 && point.x <= x0 + _arrowWidth;
+}
+
+Rect2D UITreeView::arrowButtonRect(float x, float rowTopY) const
+{
+    // A compact button box vertically inset from the row, so the hover
+    // highlight reads as a clickable button rather than a full-row strip.
+    // Paint and hit test share this geometry.
+    const float inset = 2.0f;
+    return Rect2D{
+        .pos    = {x, rowTopY + inset},
+        .extent = {_arrowWidth, _rowHeight - inset * 2.0f},
+    };
 }
 
 void UITreeView::paintSelf(UIFrameBuilder& builder)
@@ -135,8 +148,12 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
         float x = rowRect.pos.x + static_cast<float>(row.depth) * _indentWidth;
 
         if (!row.node->children.empty()) {
-            const bool expanded = isExpanded(row.node->id);
-            const Rect2D arrowRect{.pos = {x, rowRect.pos.y}, .extent = {_arrowWidth, _rowHeight}};
+            const bool     expanded  = isExpanded(row.node->id);
+            const Rect2D   arrowRect = arrowButtonRect(x, rowRect.pos.y);
+            if (row.node->id == _hoveredArrowId) {
+                // Hover highlight signals the arrow is a clickable button.
+                builder.addSprite(arrowRect, _arrowHoveredColor, nullptr);
+            }
             if (font) {
                 builder.addText(arrowRect, expanded ? "v" : ">", _arrowColor, font,
                                 EWidgetAlignH::Center, EWidgetAlignV::Center);
@@ -165,6 +182,20 @@ bool UITreeView::handleInputEvent(const Event& event, const WidgetEventContext& 
         const int row = hitRowIndex(ctx.logicalPoint);
         if (row != _hoveredRow) {
             _hoveredRow = row;
+            markPaintDirty();
+        }
+        // Arrow-button hover: only rows with children show an arrow, and
+        // only the arrow band (not the whole row) counts as hovering it.
+        std::string newArrowHover;
+        if (row >= 0) {
+            const auto        rows = flattenVisible();
+            const VisibleRow& r    = rows[static_cast<size_t>(row)];
+            if (!r.node->children.empty() && onArrow(ctx.logicalPoint, r)) {
+                newArrowHover = r.node->id;
+            }
+        }
+        if (newArrowHover != _hoveredArrowId) {
+            _hoveredArrowId = std::move(newArrowHover);
             markPaintDirty();
         }
         return row >= 0;
@@ -197,6 +228,7 @@ bool UITreeView::handleInputEvent(const Event& event, const WidgetEventContext& 
 void UITreeView::clearTransientInputState()
 {
     _hoveredRow = -1;
+    _hoveredArrowId.clear();
 }
 
 glm::vec2 UITreeView::computeDesiredSize() const
