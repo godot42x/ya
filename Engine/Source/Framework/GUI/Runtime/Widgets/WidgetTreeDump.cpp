@@ -232,6 +232,7 @@ nlohmann::json serializeNode(const UIElement& element, const WidgetTree& tree)
         node["control"] = {
             {"type", "searchComboBox"},
             {"selectedIndex", searchCombo->_selectedIndex},
+            {"filter", searchCombo->_filter},
         };
     }
     else if (const auto* dragSource = dynamic_cast<const UIDragSource*>(&element)) {

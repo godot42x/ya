@@ -294,6 +294,10 @@ struct YA_GUI_API UISearchComboBox : public UIElement
     [[nodiscard]] std::vector<int> filteredIndices() const;
 
     std::shared_ptr<struct UIMenu> _openMenu;
+    /// True while openFilteredMenu refreshes (closing the old menu): the
+    /// old menu's dismiss must not clear the filter, only a real close
+    /// (pick / outside click / Esc) does.
+    bool _bRefreshingMenu = false;
     VisualFlag _bHovered{*this};
     VisualFlag _bFocused{*this};
 };

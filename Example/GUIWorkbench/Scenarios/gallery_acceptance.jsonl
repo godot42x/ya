@@ -84,6 +84,8 @@
 {"checkpoint":"search_menu_open"}
 {"event":"key_typed","text":"To"}
 {"frame":2}
+{"assert":{"widget":"GallerySearchCombo","control":{"type":"searchComboBox","filter":"To"}}}
+{"checkpoint":"search_filtered"}
 {"event":"mouse_press","x":150,"y":508,"button":0}
 {"event":"mouse_release","x":150,"y":508,"button":0}
 {"frame":2}

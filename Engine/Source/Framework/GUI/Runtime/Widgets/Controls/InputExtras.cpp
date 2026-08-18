@@ -694,7 +694,12 @@ std::vector<int> UISearchComboBox::filteredIndices() const
 
 void UISearchComboBox::openFilteredMenu()
 {
+    // Close the OLD menu as a refresh: its dismiss must not clear the
+    // filter that was just typed.
+    _bRefreshingMenu = true;
     closeMenu();
+    _bRefreshingMenu = false;
+
     const auto indices = filteredIndices();
     if (indices.empty()) {
         return;
@@ -717,10 +722,12 @@ void UISearchComboBox::openFilteredMenu()
     menu->_onDismiss = [this]()
     {
         _openMenu.reset();
-        // The menu closed (outside click / Esc / pick): stop showing the
-        // filter text and fall back to the selected label.
-        _filter.clear();
-        invalidateProperty(EUIPropertyImpact::Paint);
+        if (!_bRefreshingMenu) {
+            // Real close (outside click / Esc / pick): stop showing the
+            // filter text and fall back to the selected label.
+            _filter.clear();
+            invalidateProperty(EUIPropertyImpact::Paint);
+        }
     };
     _openMenu = menu;
     if (WidgetTree* tree = getTree()) {
