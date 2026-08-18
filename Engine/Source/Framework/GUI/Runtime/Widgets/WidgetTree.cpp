@@ -460,6 +460,50 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
     UIFrameSnapshot snapshot = builder.build(_logicalExtent);
     _perfStats.drawItems      = static_cast<uint32_t>(snapshot.items.size());
 
+#ifndef NDEBUG
+    // Guardrail G2 validation frame: every 60 frames, force a full repaint
+    // through an UNBOUND builder (no cache: every widget re-runs paintSelf)
+    // and diff it against the incremental result. Any difference means some
+    // widget changed paint-relevant state without marking itself dirty —
+    // caught here in development instead of shipping a stale frame.
+    if ((++_frameCounter % 60) == 0) {
+        UIFrameBuilder fullBuilder(ctx); // unbound: hasCachedItems() == false
+        _root->paint(fullBuilder);
+        const UIFrameSnapshot fullSnapshot = fullBuilder.build(_logicalExtent);
+        const auto& incItems  = snapshot.items;
+        const auto& fullItems = fullSnapshot.items;
+        bool bMismatch = incItems.size() != fullItems.size();
+        if (!bMismatch) {
+            for (size_t i = 0; i < incItems.size(); ++i) {
+                const UIFrameDrawItem& a = incItems[i];
+                const UIFrameDrawItem& b = fullItems[i];
+                if (a.kind != b.kind || a.pos != b.pos || a.size != b.size ||
+                    a.color != b.color || a.text != b.text ||
+                    a.lineFrom != b.lineFrom || a.lineTo != b.lineTo ||
+                    a.lineThickness != b.lineThickness ||
+                    a.bClipped != b.bClipped ||
+                    (a.bClipped && (a.clip.pos != b.clip.pos || a.clip.extent != b.clip.extent))) {
+                    YA_CORE_ERROR(
+                        "GUI validation frame {}: draw item {} differs between incremental "
+                        "(kind {} pos ({}, {}) size ({}, {})) and full repaint (kind {} pos ({}, {}) size ({}, {})) — "
+                        "a widget changed paint state without marking itself paint-dirty",
+                        _frameCounter, i,
+                        static_cast<int>(a.kind), a.pos.x, a.pos.y, a.size.x, a.size.y,
+                        static_cast<int>(b.kind), b.pos.x, b.pos.y, b.size.x, b.size.y);
+                    bMismatch = true;
+                    break;
+                }
+            }
+        }
+        if (bMismatch && incItems.size() != fullItems.size()) {
+            YA_CORE_ERROR(
+                "GUI validation frame {}: incremental paint produced {} items but full repaint produced {} — "
+                "a widget changed paint state without marking itself paint-dirty",
+                _frameCounter, incItems.size(), fullItems.size());
+        }
+    }
+#endif
+
     // Invalidation diagnostics: snapshot the cumulative dirty-transition
     // counters so callers can compare frames (and later phases can measure
     // notify/dirty-traversal deltas against the Phase 0 baseline).

@@ -303,6 +303,8 @@ struct YA_GUI_API WidgetTree final
     /// written this frame and swapped at the end of buildSnapshot.
     std::array<std::unordered_map<const UIElement*, std::vector<UIFrameDrawItem>>, 2> _itemCache;
     int _cacheIndex = 0;
+    /// Frames built since tree creation (drives the debug validation frame).
+    uint32_t _frameCounter = 0;
 
     // Build-context validity (GI-002): draw-item segments hold final target-
     // pixel + resolved-texture data, so a changed uiScale/offset/generation

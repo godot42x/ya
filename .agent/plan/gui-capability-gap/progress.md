@@ -85,7 +85,22 @@
 
 **剩余问题**：无。G-A 收口。
 
-**下一刀**：G-B 框架护栏二（G3 Event 时间戳 + G2 debug 校验帧），再进入 P5。
+## 2026-08-18 — G-B 框架护栏二（收口）
+
+**完成**：
+- G3：`Event` 基类构造自动打 steady_clock 时间戳（inline 时钟读，无共享状态，跨 DLL 安全）；scenario 驱动每步 +10ms 模拟时间（双击判定确定性）；DragFloat/SpinBox 双击从位置近似改为 400ms 时间窗。
+- G2：debug 构建每 60 帧用 unbound builder 强制全量重画，与增量结果逐项 diff（kind/pos/size/color/text/line/clip），不一致告警指明 draw item。
+
+**验证**：
+- 正常代码 2537 次校验帧 0 误报（间隔临时改 3 验证）。
+- 人为制造漏标脏（canvas 不稳定 paint 不标脏）→ 182 次告警精确命中 canvas 背景 item（pos 16,784 尺寸 430x110）；probe 撤销后告警消失。
+- 全 7 场景回归通过。
+
+**重要发现**：scenario 模式不跑 buildSnapshot（不渲染帧），校验帧验证须走真机（--automation-control-port + quit 收集日志）。
+
+**剩余问题**：无。G-B 收口。
+
+**下一刀**：P5 TreeView 编辑能力。
 
 ## 2026-08-18 — 护栏补强立项（插入 P5 之前）
 

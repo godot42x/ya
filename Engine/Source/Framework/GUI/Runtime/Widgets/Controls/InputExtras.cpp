@@ -226,11 +226,13 @@ bool UIDragFloat::handleInputEvent(const Event& event, const WidgetEventContext&
 
     switch (eventType) {
     case EEvent::MouseButtonPressed: {
-        // Double-click (no event timestamps: a press near the previous press)
-        // enters text edit mode; a single press starts the capture drag.
-        const bool bDouble = _bHasLastPress && glm::length(ctx.logicalPoint - _lastPressPos) < 6.0f;
-        _lastPressPos   = ctx.logicalPoint;
-        _bHasLastPress  = true;
+        // Double-click (event timestamps): a press within 400ms of the
+        // previous one enters text edit mode; a single press starts the
+        // capture drag.
+        const uint64_t now     = event.getTimestampMs();
+        const bool     bDouble = _bHasLastPress && (now - _lastPressTimeMs) < 400;
+        _lastPressTimeMs = now;
+        _bHasLastPress   = true;
         if (bDouble) {
             _bHasLastPress = false;
             beginEdit();
@@ -420,12 +422,13 @@ bool UISpinBox::handleInputEvent(const Event& event, const WidgetEventContext& c
     }
 
     if (eventType == EEvent::MouseButtonPressed) {
-        // Double-click (no event timestamps: a press near the previous press)
-        // enters text edit mode; a single press on the middle value area also
-        // enters edit mode, while a press on a +/- zone steps.
-        const bool bDouble = _bHasLastPress && glm::length(ctx.logicalPoint - _lastPressPos) < 6.0f;
-        _lastPressPos  = ctx.logicalPoint;
-        _bHasLastPress = true;
+        // Double-click (event timestamps): a press within 400ms of the
+        // previous one enters text edit mode; a single press on the middle
+        // value area also enters edit mode, while a press on +/- steps.
+        const uint64_t now     = event.getTimestampMs();
+        const bool     bDouble = _bHasLastPress && (now - _lastPressTimeMs) < 400;
+        _lastPressTimeMs = now;
+        _bHasLastPress   = true;
         const int zone = zoneFromPointer(ctx.logicalPoint.x - _layoutRect.pos.x);
         if (bDouble) {
             _bHasLastPress = false;

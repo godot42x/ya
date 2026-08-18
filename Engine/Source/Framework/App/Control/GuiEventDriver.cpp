@@ -203,21 +203,45 @@ GuiScenarioExecutor::GuiScenarioExecutor(IGuiEventSink& sink,
 
 void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step)
 {
+    // Simulated monotonic clock: every emitted event gets a step-based
+    // timestamp (10ms per step), so time-based logic (double-click) is
+    // deterministic in scenario replay instead of depending on wall time.
+    static uint64_t s_simClockMs = 0;
+    s_simClockMs += 10;
+    const uint64_t ts = s_simClockMs;
+    const auto stamp = [ts](Event& ev) { ev.setTimestampMs(ts); };
+
     switch (step.kind) {
-    case EGuiScenarioStepKind::MouseMove:
-        sink.dispatch(MouseMoveEvent(step.point.x, step.point.y), step.point);
+    case EGuiScenarioStepKind::MouseMove: {
+        MouseMoveEvent ev(step.point.x, step.point.y);
+        stamp(ev);
+        sink.dispatch(ev, step.point);
         break;
-    case EGuiScenarioStepKind::MousePress:
-        sink.dispatch(MouseMoveEvent(step.point.x, step.point.y), step.point);
-        sink.dispatch(MouseButtonPressedEvent(step.button), step.point);
+    }
+    case EGuiScenarioStepKind::MousePress: {
+        MouseMoveEvent moveEv(step.point.x, step.point.y);
+        MouseButtonPressedEvent pressEv(step.button);
+        stamp(moveEv);
+        stamp(pressEv);
+        sink.dispatch(moveEv, step.point);
+        sink.dispatch(pressEv, step.point);
         break;
-    case EGuiScenarioStepKind::MouseRelease:
-        sink.dispatch(MouseMoveEvent(step.point.x, step.point.y), step.point);
-        sink.dispatch(MouseButtonReleasedEvent(step.button), step.point);
+    }
+    case EGuiScenarioStepKind::MouseRelease: {
+        MouseMoveEvent moveEv(step.point.x, step.point.y);
+        MouseButtonReleasedEvent releaseEv(step.button);
+        stamp(moveEv);
+        stamp(releaseEv);
+        sink.dispatch(moveEv, step.point);
+        sink.dispatch(releaseEv, step.point);
         break;
+    }
     case EGuiScenarioStepKind::MouseWheel: {
-        sink.dispatch(MouseMoveEvent(step.point.x, step.point.y), step.point);
+        MouseMoveEvent moveEv(step.point.x, step.point.y);
         MouseScrolledEvent ev(step.wheel.x, step.wheel.y);
+        stamp(moveEv);
+        stamp(ev);
+        sink.dispatch(moveEv, step.point);
         sink.dispatch(ev, step.point);
         break;
     }
@@ -226,6 +250,7 @@ void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step)
         ev._keyCode = step.key;
         ev._mod     = 0;
         ev.bRepeat  = false;
+        stamp(ev);
         sink.dispatch(ev, {-1.0f, -1.0f});
         break;
     }
@@ -233,25 +258,35 @@ void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step)
         KeyReleasedEvent ev;
         ev._keyCode = step.key;
         ev._mod     = 0;
+        stamp(ev);
         sink.dispatch(ev, {-1.0f, -1.0f});
         break;
     }
     case EGuiScenarioStepKind::KeyTyped: {
         KeyTypedEvent ev(step.text);
         ev._mod = 0;
+        stamp(ev);
         sink.dispatch(ev, {-1.0f, -1.0f});
         break;
     }
     case EGuiScenarioStepKind::Drag: {
-        sink.dispatch(MouseMoveEvent(step.point.x, step.point.y), step.point);
-        sink.dispatch(MouseButtonPressedEvent(step.button), step.point);
+        MouseMoveEvent moveEv0(step.point.x, step.point.y);
+        MouseButtonPressedEvent pressEv(step.button);
+        stamp(moveEv0);
+        stamp(pressEv);
+        sink.dispatch(moveEv0, step.point);
+        sink.dispatch(pressEv, step.point);
         const int n = std::max(1, step.dragSteps);
         for (int i = 1; i <= n; ++i) {
             const float     t = static_cast<float>(i) / static_cast<float>(n);
             const glm::vec2 p = step.point + (step.dragTo - step.point) * t;
-            sink.dispatch(MouseMoveEvent(p.x, p.y), p);
+            MouseMoveEvent moveEv(p.x, p.y);
+            stamp(moveEv);
+            sink.dispatch(moveEv, p);
         }
-        sink.dispatch(MouseButtonReleasedEvent(step.button), step.dragTo);
+        MouseButtonReleasedEvent releaseEv(step.button);
+        stamp(releaseEv);
+        sink.dispatch(releaseEv, step.dragTo);
         break;
     }
     case EGuiScenarioStepKind::Frame:

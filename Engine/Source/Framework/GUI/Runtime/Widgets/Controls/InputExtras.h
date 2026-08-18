@@ -66,10 +66,10 @@ struct YA_GUI_API UIDragFloat : public UIElement
     void cancelEdit();
     VisualFlag _bDragging{*this};
     glm::vec2  _dragStart{0.0f, 0.0f};
-    /// Double-click detection (no event timestamps): the previous press
-    /// position; a press near it enters text edit mode.
-    glm::vec2  _lastPressPos{0.0f, 0.0f};
-    bool       _bHasLastPress = false;
+    /// Double-click detection (event timestamps, guardrail G3): a press
+    /// within 400ms of the previous one enters text edit mode.
+    uint64_t _lastPressTimeMs = 0;
+    bool     _bHasLastPress   = false;
     VisualFlag _bEditing{*this};
     std::string _editBuffer;
     /// True right after entering edit mode: the next typed character
@@ -138,8 +138,8 @@ struct YA_GUI_API UISpinBox : public UIElement
     void beginEdit();
     void commitEdit();
     void cancelEdit();
-    glm::vec2  _lastPressPos{0.0f, 0.0f};
-    bool       _bHasLastPress = false;
+    uint64_t _lastPressTimeMs = 0;
+    bool     _bHasLastPress   = false;
     VisualFlag _bEditing{*this};
     std::string _editBuffer;
     /// True right after entering edit mode: the next typed character

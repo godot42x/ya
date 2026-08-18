@@ -5,6 +5,8 @@
 
 #include "KeyCode.h"
 
+#include <chrono>
+
 namespace ya
 {
 
@@ -105,6 +107,10 @@ enum T : uint32_t
 class YA_CORE_API Event
 {
   public:
+    /// Base constructor stamps the event with the current monotonic time so
+    /// double-click / long-press style logic needs no external clock. The
+    /// scenario driver overrides it with simulated step time.
+    Event() : _timestampMs(currentTimestampMs()) {}
     virtual ~Event() = default;
 
     [[nodiscard]] virtual EEvent::T   getEventType() const = 0;
@@ -116,7 +122,25 @@ class YA_CORE_API Event
     {
         return getCategory() & category;
     }
+
+    /// Monotonic timestamp in milliseconds (guardrail G3).
+    [[nodiscard]] uint64_t getTimestampMs() const { return _timestampMs; }
+    void setTimestampMs(uint64_t value) { _timestampMs = value; }
+
+  private:
+    static uint64_t currentTimestampMs();
+    uint64_t _timestampMs = 0;
 };
+
+/// Monotonic millisecond clock (header-only; reading the clock needs no
+/// shared state, so an inline definition is safe across DLLs).
+inline uint64_t Event::currentTimestampMs()
+{
+    return static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count());
+}
 
 // class EventDispatcher
 // {

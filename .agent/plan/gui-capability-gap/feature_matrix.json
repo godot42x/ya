@@ -86,13 +86,13 @@
         },
         {
           "id": "gb_event_timestamp",
-          "status": "planned",
-          "notes": "G3：Event 基类加时间戳，SDL 桥接填充，场景驱动帧近似；双击检测改时间戳"
+          "status": "pass",
+          "notes": "Event 基类构造自动打 steady_clock 时间戳（inline 时钟读，跨 DLL 安全）；场景驱动每步 +10ms 模拟时间（确定性双击）；DragFloat/SpinBox 双击改 400ms 时间窗判定；acceptance 9 checkpoint 通过"
         },
         {
           "id": "gb_debug_validation_frame",
-          "status": "planned",
-          "notes": "G2：debug 构建每 60 帧全量重画 diff 增量结果，不一致告警指明 widget（漏标脏开发期抓）"
+          "status": "pass",
+          "notes": "debug 构建每 60 帧 unbound builder 全量重画 diff 增量（draw item 逐项比对）；验证：正常代码 2537 次校验 0 误报；人为漏标脏（canvas 不稳定 paint）182 次告警精确命中 item；probe 已撤销"
         },
         {
           "id": "p5_treeview_editing",
