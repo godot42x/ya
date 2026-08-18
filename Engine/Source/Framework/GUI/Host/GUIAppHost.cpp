@@ -548,14 +548,14 @@ struct SdlEventSource final : IAppEventSource
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
                 if (bHostPointerEvent) {
                     emit(MouseMoveEvent(event.button.x, event.button.y));
-                    emit(MouseButtonPressedEvent(event.button.button));
+                    emit(MouseButtonPressedEvent(static_cast<EMouse::T>(event.button.button)));
                     bPointerKnown = true;
                 }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
                 if (bHostPointerEvent) {
                     emit(MouseMoveEvent(event.button.x, event.button.y));
-                    emit(MouseButtonReleasedEvent(event.button.button));
+                    emit(MouseButtonReleasedEvent(static_cast<EMouse::T>(event.button.button)));
                     bPointerKnown = true;
                 }
                 break;
@@ -1210,18 +1210,18 @@ void GUIWindowHost::onTick(float /*dt*/)
         }
         if (request->method == "mouse_press") {
             const auto buttonIt = request->params.find("button");
-            const int  button   = (buttonIt != request->params.end() && buttonIt->is_number_integer())
-                                      ? buttonIt->get<int>()
-                                      : 0; // ENGINE button code: 0 = left (NOT SDL)
+            const auto button   = (buttonIt != request->params.end() && buttonIt->is_number_integer())
+                                      ? static_cast<EMouse::T>(buttonIt->get<int>())
+                                      : EMouse::Left; // SDL codes: 1 = left, 3 = right
             dispatchToTree(MouseButtonPressedEvent(button), _impl->lastMouseX, _impl->lastMouseY);
             _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
             continue;
         }
         if (request->method == "mouse_release") {
             const auto buttonIt = request->params.find("button");
-            const int  button   = (buttonIt != request->params.end() && buttonIt->is_number_integer())
-                                      ? buttonIt->get<int>()
-                                      : 0; // ENGINE button code: 0 = left (NOT SDL)
+            const auto button   = (buttonIt != request->params.end() && buttonIt->is_number_integer())
+                                      ? static_cast<EMouse::T>(buttonIt->get<int>())
+                                      : EMouse::Left; // SDL codes: 1 = left, 3 = right
             dispatchToTree(MouseButtonReleasedEvent(button), _impl->lastMouseX, _impl->lastMouseY);
             _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
             continue;

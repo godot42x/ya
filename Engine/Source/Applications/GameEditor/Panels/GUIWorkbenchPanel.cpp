@@ -146,12 +146,16 @@ void GUIWorkbenchPanel::routePanelInput(const ImVec2& imageMin, const ImVec2& im
         dispatchPointerEvent(MouseScrolledEvent(0.0f, io.MouseWheel), logicalPoint);
     }
 
+    // ImGui codes 0=left 1=right 2=middle -> engine EMouse (SDL codes).
     for (int button = 0; button < 3; ++button) {
+        const EMouse::T engineButton = button == 0 ? EMouse::Left
+                                     : button == 1 ? EMouse::Right
+                                                   : EMouse::Middle;
         if (bHover && ImGui::IsMouseClicked(button)) {
-            dispatchPointerEvent(MouseButtonPressedEvent(button), logicalPoint);
+            dispatchPointerEvent(MouseButtonPressedEvent(engineButton), logicalPoint);
         }
         if ((_bFocused || bHover) && ImGui::IsMouseReleased(button)) {
-            dispatchPointerEvent(MouseButtonReleasedEvent(button), logicalPoint);
+            dispatchPointerEvent(MouseButtonReleasedEvent(engineButton), logicalPoint);
         }
     }
 

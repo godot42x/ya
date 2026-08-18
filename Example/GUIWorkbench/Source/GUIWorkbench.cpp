@@ -112,8 +112,8 @@ bool FWorkbenchApp::runDemoAutomation(int frame)
     const auto click = [this, &centerOf](const ya::UIElement* element)
     {
         const glm::vec2 center = centerOf(element);
-        dispatchPointer(ya::MouseButtonPressedEvent(0), center);
-        dispatchPointer(ya::MouseButtonReleasedEvent(0), center);
+        dispatchPointer(ya::MouseButtonPressedEvent(ya::EMouse::Left), center);
+        dispatchPointer(ya::MouseButtonReleasedEvent(ya::EMouse::Left), center);
     };
     const auto pressKey = [this](ya::EKey::T key)
     {
@@ -151,8 +151,8 @@ bool FWorkbenchApp::runDemoAutomation(int frame)
     }
     case 6: {
         const auto& rect = demoState.slider->_layoutRect;
-        dispatchPointer(ya::MouseButtonPressedEvent(0), {rect.pos.x + rect.extent.x * 0.8f, rect.pos.y + rect.extent.y * 0.5f});
-        dispatchPointer(ya::MouseButtonReleasedEvent(0), {rect.pos.x + rect.extent.x * 0.8f, rect.pos.y + rect.extent.y * 0.5f});
+        dispatchPointer(ya::MouseButtonPressedEvent(ya::EMouse::Left), {rect.pos.x + rect.extent.x * 0.8f, rect.pos.y + rect.extent.y * 0.5f});
+        dispatchPointer(ya::MouseButtonReleasedEvent(ya::EMouse::Left), {rect.pos.x + rect.extent.x * 0.8f, rect.pos.y + rect.extent.y * 0.5f});
         if (demoState.sliderValue < 0.5f) {
             surface.failSmoke(std::format("Demo automation: slider failed (value={:.2f})", demoState.sliderValue));
         }
@@ -229,9 +229,9 @@ bool FWorkbenchApp::runDemoAutomation(int frame)
     case 15: {
         const glm::vec2 itemCenter = centerOf(demoState.dragItem.get());
         const glm::vec2 zoneCenter = centerOf(demoState.dropZone.get());
-        dispatchPointer(ya::MouseButtonPressedEvent(0), itemCenter);
+        dispatchPointer(ya::MouseButtonPressedEvent(ya::EMouse::Left), itemCenter);
         dispatchPointer(ya::MouseMoveEvent(zoneCenter.x, zoneCenter.y), zoneCenter);
-        dispatchPointer(ya::MouseButtonReleasedEvent(0), zoneCenter);
+        dispatchPointer(ya::MouseButtonReleasedEvent(ya::EMouse::Left), zoneCenter);
         if (demoState.dropLog.empty()) {
             surface.failSmoke("Demo automation: drag & drop failed");
         }

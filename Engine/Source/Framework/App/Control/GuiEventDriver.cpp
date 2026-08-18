@@ -220,7 +220,7 @@ void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step)
     }
     case EGuiScenarioStepKind::MousePress: {
         MouseMoveEvent moveEv(step.point.x, step.point.y);
-        MouseButtonPressedEvent pressEv(step.button);
+        MouseButtonPressedEvent pressEv(step.button == 1 ? EMouse::Right : EMouse::Left);
         stamp(moveEv);
         stamp(pressEv);
         sink.dispatch(moveEv, step.point);
@@ -229,7 +229,7 @@ void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step)
     }
     case EGuiScenarioStepKind::MouseRelease: {
         MouseMoveEvent moveEv(step.point.x, step.point.y);
-        MouseButtonReleasedEvent releaseEv(step.button);
+        MouseButtonReleasedEvent releaseEv(step.button == 1 ? EMouse::Right : EMouse::Left);
         stamp(moveEv);
         stamp(releaseEv);
         sink.dispatch(moveEv, step.point);
@@ -271,7 +271,7 @@ void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step)
     }
     case EGuiScenarioStepKind::Drag: {
         MouseMoveEvent moveEv0(step.point.x, step.point.y);
-        MouseButtonPressedEvent pressEv(step.button);
+        MouseButtonPressedEvent pressEv(step.button == 1 ? EMouse::Right : EMouse::Left);
         stamp(moveEv0);
         stamp(pressEv);
         sink.dispatch(moveEv0, step.point);
@@ -284,7 +284,7 @@ void emitGuiScenarioStep(IGuiEventSink& sink, const GuiScenarioStep& step)
             stamp(moveEv);
             sink.dispatch(moveEv, p);
         }
-        MouseButtonReleasedEvent releaseEv(step.button);
+        MouseButtonReleasedEvent releaseEv(step.button == 1 ? EMouse::Right : EMouse::Left);
         stamp(releaseEv);
         sink.dispatch(releaseEv, step.dragTo);
         break;

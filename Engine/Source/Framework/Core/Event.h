@@ -440,22 +440,21 @@ struct YA_CORE_API MouseScrolledEvent : public Event
 class YA_CORE_API MouseButtonEvent : public Event
 {
   public:
-    inline int GetMouseButton() const { return m_Button; }
-
+    [[nodiscard]] inline EMouse::T GetMouseButton() const { return m_Button; }
 
     EVENT_CLASS_CATEGORY(EEventCategory::MouseButton | EEventCategory::Input)
 
   protected:
-    explicit MouseButtonEvent(int button) : m_Button(button) {};
-    int m_Button;
+    explicit MouseButtonEvent(EMouse::T button) : m_Button(button) {};
+    EMouse::T m_Button;
 };
 
 class YA_CORE_API MouseButtonPressedEvent : public MouseButtonEvent
 {
   public:
-    explicit MouseButtonPressedEvent(int keycode) : MouseButtonEvent(keycode) {};
+    explicit MouseButtonPressedEvent(EMouse::T button) : MouseButtonEvent(button) {};
 
-    [[nodiscard]] std::string toString() const override { return std::format("MousePressedEvent: {} ", m_Button); }
+    [[nodiscard]] std::string toString() const override { return std::format("MousePressedEvent: {} ", static_cast<int>(m_Button)); }
 
     EVENT_CLASS_TYPE(MouseButtonPressed)
 };
@@ -464,9 +463,9 @@ class YA_CORE_API MouseButtonPressedEvent : public MouseButtonEvent
 class YA_CORE_API MouseButtonReleasedEvent : public MouseButtonEvent
 {
   public:
-    explicit MouseButtonReleasedEvent(int keycode) : MouseButtonEvent(keycode) {};
+    explicit MouseButtonReleasedEvent(EMouse::T button) : MouseButtonEvent(button) {};
 
-    [[nodiscard]] std::string toString() const override { return std::format("MouseReleasedEvent: {} ", m_Button); }
+    [[nodiscard]] std::string toString() const override { return std::format("MouseReleasedEvent: {} ", static_cast<int>(m_Button)); }
 
     EVENT_CLASS_TYPE(MouseButtonReleased)
 };

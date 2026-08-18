@@ -731,8 +731,8 @@ void FWorkbenchSurface::runAutomation()
     const auto click = [this, &centerOf](const ya::UIElement* element)
     {
         const glm::vec2 center = centerOf(element);
-        dispatchPointer(ya::MouseButtonPressedEvent(0), center);
-        dispatchPointer(ya::MouseButtonReleasedEvent(0), center);
+        dispatchPointer(ya::MouseButtonPressedEvent(ya::EMouse::Left), center);
+        dispatchPointer(ya::MouseButtonReleasedEvent(ya::EMouse::Left), center);
     };
     switch (_frame) {
     case 21: {
@@ -772,9 +772,9 @@ void FWorkbenchSurface::runAutomation()
         // Editor: drag the first row onto the third -> reparent under it.
         const glm::vec2 from = centerOf(_rows[0].get());
         const glm::vec2 to   = centerOf(_rows[2].get());
-        dispatchPointer(ya::MouseButtonPressedEvent(0), from);
+        dispatchPointer(ya::MouseButtonPressedEvent(ya::EMouse::Left), from);
         dispatchPointer(ya::MouseMoveEvent(to.x, to.y), to);
-        dispatchPointer(ya::MouseButtonReleasedEvent(0), to);
+        dispatchPointer(ya::MouseButtonReleasedEvent(ya::EMouse::Left), to);
         if (workspace.items[0].parentId != "item.light") {
             failAutomation(std::format("Demo automation: drag reparent failed (parent='{}')",
                                        workspace.items[0].parentId));

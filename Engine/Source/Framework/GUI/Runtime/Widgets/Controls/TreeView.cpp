@@ -2,6 +2,7 @@
 
 #include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
+#include "Core/Base.h"  
 
 namespace ya
 {
@@ -411,7 +412,7 @@ bool UITreeView::handleInputEvent(const Event& event, const WidgetEventContext& 
 
         // Right-button press: context menu (host owns the menu).
         const auto& pressEvent = static_cast<const MouseButtonPressedEvent&>(event);
-        if (pressEvent.GetMouseButton() == 1) {
+        if (pressEvent.GetMouseButton() == EMouse::Right) {
             if (_onContextMenu) {
                 _onContextMenu(row.node->id, ctx.logicalPoint);
             }
