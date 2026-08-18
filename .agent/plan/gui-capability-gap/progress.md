@@ -100,7 +100,20 @@
 
 **剩余问题**：无。G-B 收口。
 
-**下一刀**：P5 TreeView 编辑能力。
+## 2026-08-18 — P5 TreeView 编辑 + Table cell widget（收口）
+
+**完成**：
+- TreeView 三能力（叠加式，不破坏现状）：`_bReorderable`（行 press 6px 阈值起 drag，payload 前缀 tree-node:，drop 位置按行高 1/3 判定 before/into/after，`_onReorder(from,to,mode)` 回调由 host 重建 ReactiveList，插入高亮线/框走 P1 矢量）；`_onContextMenu(nodeId, point)`（右键回调 host 开菜单）；`bindFilter(Reactive<string>)`（匹配链过滤——节点自身或后代匹配才显示，过滤时全展开匹配链）。
+- `UITableGrid` 升级：cell 支持任意 child widget（内部 UITableLayout 布局 + UITableSlot 定位 + cellHasWidget 抑制该 cell 文本），文本 cell 保持向后兼容。
+- `WidgetTreeDump` 加 treeView control 块（visibleRows/selected，过滤断言用）+ `getVisibleRowCount()`。
+- Gallery：TreeView demo 开 reorder/右键日志/过滤输入框；Table row3/col2 放真实 UIButton。
+- `gallery_tree_edit.jsonl`：editing_widgets + tree_filtered（键入 "Li" 断言 visibleRows 4）。
+
+**验证**：GUIWorkbench 编译通过；gallery_tree_edit 通过；全 7 回归场景通过。
+
+**剩余问题**：无。P5 收口。
+
+**下一刀**：P6 交互补全（tooltip/TextWrapped/_bEnabled/UIDialog）。
 
 ## 2026-08-18 — 护栏补强立项（插入 P5 之前）
 

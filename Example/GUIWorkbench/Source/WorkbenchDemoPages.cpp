@@ -916,7 +916,80 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     treeView->setSize({0.0f, 0.0f});
     treeView->bindData(roots);
     treeView->setExpanded("root", true);
+    treeView->_bReorderable = true;
+    treeView->_onReorder = [roots, log](const std::string& fromId, const std::string& toId, int mode)
+    {
+        // Minimal demo reorder: move `fromId` within the ROOT list only
+        // (before / after a root, or into a root as its child). The host
+        // owns the data mutation — the tree only reports the intent.
+        if (fromId == toId) {
+            return;
+        }
+        std::vector<ya::UITreeView::FNode> snapshot;
+        for (size_t i = 0; i < roots->size(); ++i) {
+            snapshot.push_back(roots->get(i));
+        }
+        // Find and remove `from` at the root level.
+        ya::UITreeView::FNode moved;
+        bool bFound = false;
+        std::vector<ya::UITreeView::FNode> rebuilt;
+        for (auto& n : snapshot) {
+            if (n.id == fromId) {
+                moved  = n;
+                bFound = true;
+            }
+            else {
+                rebuilt.push_back(n);
+            }
+        }
+        if (!bFound) {
+            return;
+        }
+        // Locate the target index in the rebuilt list.
+        int targetIndex = -1;
+        for (size_t i = 0; i < rebuilt.size(); ++i) {
+            if (rebuilt[i].id == toId) {
+                targetIndex = static_cast<int>(i);
+                break;
+            }
+        }
+        if (targetIndex < 0) {
+            return;
+        }
+        if (mode == 1) {
+            // Into: append as the target's child.
+            rebuilt[static_cast<size_t>(targetIndex)].children.push_back(moved);
+        }
+        else {
+            const int insertIndex = targetIndex + (mode == 2 ? 1 : 0);
+            rebuilt.insert(rebuilt.begin() + insertIndex, moved);
+        }
+        // Rebuild the reactive list in place (clear + push notifies dependents).
+        roots->clear();
+        for (const auto& n : rebuilt) {
+            roots->push(n);
+        }
+        log(std::format("Tree reorder '{}' {} '{}'", fromId, mode == 0 ? "before" : (mode == 1 ? "into" : "after"), toId));
+    };
+    treeView->_onContextMenu = [log](const std::string& nodeId, const glm::vec2&)
+    {
+        log(std::format("Tree context menu -> '{}'", nodeId));
+    };
+    auto treeFilterRef = std::make_shared<ya::Reactive<std::string>>("");
+    treeView->bindFilter(treeFilterRef);
     tree.attach(*form, treeView);
+
+    // Filter box drives the tree's visible set (Reactive<string>).
+    auto filterRow = makeRow(tree, *form);
+    tree.attach(*filterRow, makeBodyText("Filter"));
+    auto filterField = std::make_shared<ya::UITextField>("GalleryTreeFilter");
+    filterField->setSize({160.0f, 24.0f});
+    filterField->_fontSize = 13;
+    filterField->_onTextChanged = [treeFilterRef](const std::string& text)
+    {
+        treeFilterRef->set(text);
+    };
+    tree.attach(*filterRow, filterField);
 
     // Selected id mirror: a bound label subscribes to the tree's selection ref.
     auto selectedLabel = std::make_shared<ya::UIText>("GallerySelected");
@@ -1035,7 +1108,15 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
         slot->setCrossAlignment(ya::EUIBoxSlotCrossAlignment::Start);
     }
 
-    auto tableCaption = makeBodyText("Click a row to select (reactive selection ref); hover highlights.");
+    // A cell can hold an arbitrary widget: put a button into row 3 / column
+    // 2 (it replaces the text cell and paints itself on top of the grid).
+    auto cellButton = makeDemoButton("GalleryCellButton", "Inspect", 0.0f);
+    tree.attach(*tableGrid, cellButton);
+    if (auto* cellSlot = tableGrid->getCellSlot(*cellButton)) {
+        cellSlot->setCell(3, 2);
+    }
+
+    auto tableCaption = makeBodyText("Click a row to select (reactive selection ref); row 3 / col 2 holds a real button widget.");
     tree.attach(*form, tableCaption);
 
     // ---------------------------------------------------------------------

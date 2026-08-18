@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GUI/Layout/UILayout.h"
 #include "GUI/Widgets/Reactive.h"
 #include "GUI/Widgets/UIElement.h"
 
@@ -13,9 +14,13 @@ namespace ya
 /// Data-driven table/grid (editor grid panels: debug image grids, skybox
 /// previews, two-column settings tables). Built on the same reactive
 /// data-source contract as UITreeView: bindData(ReactiveList<FTableRow>) +
-/// bindSelection(Reactive<int> row index). Paints rows flat (no per-cell
-/// child widgets, no virtualization), draws column/row separators through
-/// the vector primitive API, and hit-tests the same flatten at input.
+/// bindSelection(Reactive<int> row index). Paints rows flat with header /
+/// selected / hover states and vector-drawn separators.
+///
+/// Cells may hold EITHER text from the row data OR an arbitrary child
+/// widget: attach a widget and set its UITableSlot cell (row/col) — the
+/// table layout arranges it into the cell rect and the widget paints
+/// itself on top of the cell (the row text for that cell is suppressed).
 struct YA_GUI_API UITableGrid : public UIElement
 {
     /// One table row (value type owned by the data source).
@@ -37,6 +42,16 @@ struct YA_GUI_API UITableGrid : public UIElement
     void bindSelection(std::shared_ptr<Reactive<int>> selectedIndex);
     [[nodiscard]] std::shared_ptr<Reactive<int>> getSelection() const { return _selectedIndex; }
 
+    // === Cell widgets (arbitrary UIElement in a cell) ===
+    /// Configure the column count / row height of the cell layout.
+    void setColumnCount(int count) { _tableLayout.setColumnCount(count); }
+    void setColumnWidth(int column, float width) { _tableLayout.setColumnWidth(column, width); }
+    void setRowHeight(float height);
+    [[nodiscard]] UITableSlot* getCellSlot(const UIElement& child)
+    {
+        return dynamic_cast<UITableSlot*>(getSlotForChild(child));
+    }
+
     // === Visuals ===
     /// Column widths; 0 = stretch (shares the remaining width).
     std::vector<float> _columnWidths;
@@ -54,18 +69,24 @@ struct YA_GUI_API UITableGrid : public UIElement
     /// Fired after a row is selected (with the row index).
     std::function<void(int rowIndex)> _onSelectionChanged;
 
+    void layout(const Rect2D& parentRect) override;
+    void layoutAssigned(const Rect2D& rect) override;
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
     [[nodiscard]] bool isHoverable() const override { return true; }
     void clearTransientInputState() override;
+    [[nodiscard]] std::unique_ptr<UISlot> createSlotForChild(UIElement& child) override;
 
 private:
     /// Live row index under `point` (re-flattens), or -1.
     [[nodiscard]] int hitRowIndex(const glm::vec2& point) const;
     /// Resolved column rects for the current layout rect (content space).
     [[nodiscard]] std::vector<Rect2D> columnRects() const;
+    /// Whether a child widget occupies the given cell (suppresses the text).
+    [[nodiscard]] bool cellHasWidget(int row, int col) const;
 
+    UITableLayout _tableLayout;
     std::shared_ptr<ReactiveList<FTableRow>> _rows;
     std::shared_ptr<Reactive<int>>           _selectedIndex;
     int _hoveredRow = -1;

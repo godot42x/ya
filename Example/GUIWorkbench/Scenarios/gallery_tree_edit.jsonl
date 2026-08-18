@@ -1,0 +1,17 @@
+# GUIWorkbench --start-page=Gallery. TreeView editing capabilities: filter
+# narrows the visible rows; the table grid hosts a real button widget in a
+# cell. Coordinates assume the window size below with the gallery scrolled.
+{"window_size":{"width":1280,"height":720}}
+{"frame":3}
+{"assert":{"widget":"GalleryTree","control":{"type":"treeView"}}}
+{"assert":{"widget":"GalleryCellButton","control":{"type":"button"}}}
+{"checkpoint":"editing_widgets"}
+# Click the filter field (page top, ~ (151, 604)) and type 'Li': only the
+# Light chain stays visible (light + point + spot = 3 rows).
+{"event":"mouse_press","x":151,"y":604,"button":0}
+{"event":"mouse_release","x":151,"y":604,"button":0}
+{"event":"key_typed","text":"Li"}
+{"frame":2}
+{"assert":{"widget":"GalleryTree","control":{"type":"treeView","visibleRows":4}}}
+{"checkpoint":"tree_filtered"}
+{"frame":1}

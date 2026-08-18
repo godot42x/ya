@@ -14,6 +14,7 @@
 #include "GUI/Widgets/Controls/TableGrid.h"
 #include "GUI/Widgets/Controls/Text.h"
 #include "GUI/Widgets/Controls/TextField.h"
+#include "GUI/Widgets/Controls/TreeView.h"
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/WidgetTree.h"
 
@@ -244,6 +245,13 @@ nlohmann::json serializeNode(const UIElement& element, const WidgetTree& tree)
     else if (const auto* dropTarget = dynamic_cast<const UIDropTarget*>(&element)) {
         node["control"] = {
             {"type", "dropTarget"},
+        };
+    }
+    else if (const auto* treeView = dynamic_cast<const UITreeView*>(&element)) {
+        node["control"] = {
+            {"type", "treeView"},
+            {"visibleRows", treeView->getVisibleRowCount()},
+            {"selected", treeView->getSelection() ? treeView->getSelection()->value() : std::string{}},
         };
     }
     else if (const auto* overlay = dynamic_cast<const UIPopupOverlay*>(&element)) {

@@ -12,8 +12,10 @@ namespace ya
 UITableGrid::UITableGrid(std::string name)
     : UIElement(std::move(name))
 {
-    _hitFilter   = EWidgetHitFilter::Stop;
+    _hitFilter     = EWidgetHitFilter::Stop;
     _selectedIndex = std::make_shared<Reactive<int>>(-1);
+    _tableLayout.setOwner(*this);
+    _tableLayout.setColumnCount(1);
 }
 
 void UITableGrid::bindData(std::shared_ptr<ReactiveList<FTableRow>> rows)
@@ -27,6 +29,51 @@ void UITableGrid::bindSelection(std::shared_ptr<Reactive<int>> selectedIndex)
 {
     _selectedIndex = std::move(selectedIndex);
     markPaintDirty();
+}
+
+void UITableGrid::setRowHeight(float height)
+{
+    _rowHeight = std::max(1.0f, height);
+    _tableLayout.setRowHeight(_rowHeight);
+    markLayoutDirty();
+}
+
+std::unique_ptr<UISlot> UITableGrid::createSlotForChild(UIElement& child)
+{
+    return _tableLayout.createSlot(*this, child);
+}
+
+void UITableGrid::layout(const Rect2D& parentRect)
+{
+    layoutAssigned(computeAnchorRect(parentRect));
+}
+
+void UITableGrid::layoutAssigned(const Rect2D& rect)
+{
+    setLayoutRect(rect);
+    // Keep the layout's column widths in sync with the visual column widths.
+    _tableLayout.setColumnCount(static_cast<int>(_columnWidths.empty() ? 1 : _columnWidths.size()));
+    for (size_t col = 0; col < _columnWidths.size(); ++col) {
+        if (_tableLayout.getColumnWidth(static_cast<int>(col)) != _columnWidths[col]) {
+            _tableLayout.setColumnWidth(static_cast<int>(col), _columnWidths[col]);
+        }
+    }
+    _tableLayout.setRowHeight(_rowHeight);
+    _tableLayout.arrange(*this, _layoutRect);
+}
+
+bool UITableGrid::cellHasWidget(int row, int col) const
+{
+    for (const UIElement* child : getChildrenInPaintOrder()) {
+        if (!child->participatesInLayout()) {
+            continue;
+        }
+        const auto* slot = dynamic_cast<const UITableSlot*>(getSlotForChild(*child));
+        if (slot && slot->getRow() == row && slot->getColumn() == col) {
+            return true;
+        }
+    }
+    return false;
 }
 
 std::vector<Rect2D> UITableGrid::columnRects() const
@@ -108,6 +155,9 @@ void UITableGrid::paintSelf(UIFrameBuilder& builder)
         if (font) {
             const glm::vec4 textColor = (_bHeaderRow && row == 0) ? _headerTextColor : _textColor;
             for (size_t col = 0; col < colRects.size() && col < data.cells.size(); ++col) {
+                if (cellHasWidget(static_cast<int>(row), static_cast<int>(col))) {
+                    continue; // a child widget paints this cell
+                }
                 Rect2D cell = colRects[col];
                 cell.pos.y  = rowRect.pos.y;
                 cell.extent.y = _rowHeight;
@@ -132,7 +182,6 @@ void UITableGrid::paintSelf(UIFrameBuilder& builder)
         builder.addLine({_layoutRect.pos.x, y}, {_layoutRect.pos.x + _layoutRect.extent.x, y},
                         _gridColor, 1.0f);
     }
-
 }
 
 bool UITableGrid::handleInputEvent(const Event& event, const WidgetEventContext& ctx)

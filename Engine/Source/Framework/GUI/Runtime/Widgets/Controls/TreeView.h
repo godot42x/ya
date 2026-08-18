@@ -76,6 +76,30 @@ struct YA_GUI_API UITreeView : public UIElement
     /// Fired after a row is selected (with the node id).
     std::function<void(const std::string& id)> _onSelectionChanged;
 
+    /// Visible row count under the current expand/filter state (dump /
+    /// scenario assertions).
+    [[nodiscard]] int getVisibleRowCount() const { return static_cast<int>(flattenVisible().size()); }
+
+    // === Editing (editor-parity P5) ===
+    /// When true a press on a row (not the arrow) starts a tree drag
+    /// session; dropping onto another row fires _onReorder.
+    bool _bReorderable = false;
+    /// Fired when a dragged node is dropped: mode 0 = before the target,
+    /// 1 = into the target (as its child), 2 = after the target. The host
+    /// rebuilds the ReactiveList (the widget never mutates the data).
+    std::function<void(const std::string& fromId, const std::string& toId, int mode)> _onReorder;
+    /// Fired on a right-button press over a row; the host opens its own
+    /// context menu (the widget never owns menus).
+    std::function<void(const std::string& nodeId, const glm::vec2& logicalPoint)> _onContextMenu;
+    /// Filter ref: only nodes whose id/label matches (or that have a
+    /// matching descendant) stay visible; while a filter is active all
+    /// matching chains are shown expanded.
+    void bindFilter(std::shared_ptr<Reactive<std::string>> ref);
+
+    bool canAcceptDrop(const std::string& payload, const glm::vec2& logicalPoint) override;
+    void onDrop(const std::string& payload, const glm::vec2& logicalPoint) override;
+    void setDropHighlight(bool bHighlight) override;
+
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
@@ -89,11 +113,16 @@ struct YA_GUI_API UITreeView : public UIElement
         int          depth = 0;
     };
 
+    /// Payload prefix carried by reorder drag sessions from this tree.
+    static constexpr const char* kReorderPayloadPrefix = "tree-node:";
+
     /// Flatten visible rows under the current expand state. Reads the expand
     /// refs via get() so the paint walk records them as dependencies; when
     /// called outside the paint walk (input / measure) those reads are no-ops.
     [[nodiscard]] std::vector<VisibleRow> flattenVisible() const;
     void flattenNode(const FNode& node, int depth, std::vector<VisibleRow>& rows) const;
+    /// Whether `node` or any of its descendants matches the active filter.
+    [[nodiscard]] bool matchesFilter(const FNode& node) const;
     /// Live row index under `point` (re-flattens, no cached state), or -1.
     [[nodiscard]] int hitRowIndex(const glm::vec2& point) const;
     /// Whether `point` is over the expand arrow button of `row` (the row is
@@ -106,14 +135,25 @@ struct YA_GUI_API UITreeView : public UIElement
     [[nodiscard]] Rect2D arrowButtonRect(float x, float rowTopY) const;
     /// Expand-state ref for `id`, creating it (Layout granularity) on demand.
     [[nodiscard]] std::shared_ptr<Reactive<bool>>& expandedRef(const std::string& id);
+    /// Drop position for `point`: fills `outRowIndex` / `outMode` (0 before,
+    /// 1 into, 2 after). Returns false when not over a row.
+    [[nodiscard]] bool dropPosition(const glm::vec2& point, int& outRowIndex, int& outMode) const;
 
     std::shared_ptr<ReactiveList<FNode>>     _roots;
     std::shared_ptr<Reactive<std::string>>   _selectedId;
+    std::shared_ptr<Reactive<std::string>>   _filterBinding;
     std::unordered_map<std::string, std::shared_ptr<Reactive<bool>>> _expanded;
     int _hoveredRow = -1;
     /// Node id whose arrow button is hovered (empty when none). Drives the
     /// arrow hover highlight.
     std::string _hoveredArrowId;
+    /// Reorder drag state: the row the press started on, the press point
+    /// (threshold), and the current drop row/mode while dragging.
+    std::string _pressRowId;
+    glm::vec2   _pressPoint{0.0f, 0.0f};
+    bool        _bPressArmed = false;
+    int         _dropRowIndex = -1;
+    int         _dropMode     = 0;
 };
 
 } // namespace ya
