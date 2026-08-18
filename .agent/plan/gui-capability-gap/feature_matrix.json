@@ -1,6 +1,6 @@
 {
   "plan": "gui-capability-gap",
-  "updated_at": "2026-08-15",
+  "updated_at": "2026-08-18",
   "legend": {
     "planned": "尚未开始，但已纳入主线",
     "in_progress": "当前阶段正在推进",
@@ -11,20 +11,28 @@
   "tracks": [
     {
       "id": "reactive_binding",
-      "title": "响应式数据绑定 + 性能管线（最小闭环第一刀）",
+      "title": "响应式数据绑定 + 性能管线（第一阶段，已收口）",
       "items": [
-        { "id": "m0_perf_baseline", "status": "pass", "notes": "GuiPerfStats（layout/paint 耗时 + paintedWidgets + drawItems）已随 buildSnapshot 填充；headless host 打印验证 1 draw items / 6 widgets / 0.007ms layout；closure test 115/115" },
-        { "id": "m1_reactive_core", "status": "pass", "notes": "Reactive<T> 事件驱动依赖追踪 + 双缓冲 draw-item 段复用 + rebuiltWidgets 计数；UIText.bindText；双向析构清理。closure 118/118（含条件切换/销毁不悬垂）" },
-        { "id": "m2_binding_generalize", "status": "pass", "notes": "EDirtyLevel（Paint/Layout 两级）+ Button.bindEnabled（paint）+ SplitPane.bindSplitRatio（layout）+ ReactiveList + Computed 接口。closure 121/121" },
-        { "id": "m3_perf_seam", "status": "pass", "notes": "buildSnapshot 桥接到 profiling::metrics()（gui.tree.* key），GuiPerfStats 保留 per-tree 结构视图；声明式 diff 口子已内嵌（bindCache/cacheItems/reuseCachedItems）。closure 122/122" }
+        { "id": "m0_perf_baseline", "status": "pass", "notes": "GuiPerfStats（layout/paint 耗时 + paintedWidgets + drawItems）已随 buildSnapshot 填充；closure test 115/115" },
+        { "id": "m1_reactive_core", "status": "pass", "notes": "Reactive<T> 事件驱动依赖追踪 + 双缓冲 draw-item 段复用 + rebuiltWidgets 计数；UIText.bindText；双向析构清理。closure 118/118" },
+        { "id": "m2_binding_generalize", "status": "pass", "notes": "EDirtyLevel（Paint/Layout 两级）+ Button.bindEnabled + SplitPane.bindSplitRatio + ReactiveList + Computed 接口。closure 121/121" },
+        { "id": "m3_perf_seam", "status": "pass", "notes": "buildSnapshot 桥接 profiling::metrics()（gui.tree.* key）；声明式 diff 口子内嵌（bindCache/cacheItems/reuseCachedItems）。closure 122/122" },
+        { "id": "styles_styleset", "status": "pass", "notes": "FWidgetStyle + UIStyleSet + UIText.bindStyle；closure 123/123" },
+        { "id": "treeview", "status": "pass", "notes": "UITreeView：ReactiveList 数据源 + 展开/选中；paint 展平 + 箭头按钮 hover。closure 126/126" },
+        { "id": "gui_workbench_gallery", "status": "pass", "notes": "Gallery 页覆盖 widget/reactive/style；TextField 滚动/TreeView clip/attach 顺序等修复已收口；modal scenario 更新" }
       ]
     },
     {
-      "id": "p0_backlog",
-      "title": "P0 后续（本计划之后的独立刀）",
+      "id": "editor_parity",
+      "title": "第二阶段：GameEditor ImGui 替换前置（GUI App 线全量补齐）",
       "items": [
-        { "id": "styles_styleset", "status": "pass", "notes": "FWidgetStyle + UIStyleSet（命名样式 Reactive 集合）+ UIText.bindStyle；改样式批量重绘。closure 123/123" },
-        { "id": "treeview", "status": "pass", "notes": "UITreeView：ReactiveList 数据源 + Reactive<bool> 展开(Layout) + Reactive<string> 选中(Paint)；paint 展平可见行(缩进+箭头+label+选中/hover高亮)，input 实时 hit-test 到行(箭头 toggle / 行选中)。closure 126/126" }
+        { "id": "p1_vector_primitives", "status": "planned", "notes": "UIFrameDrawItem::EKind 增 Line；UIFrameBuilder 增 addLine/addRectOutline/addBezierCubic；FLineRender screen 路径（兜底：细四边形）；Gallery section 4 + gallery_vector.jsonl" },
+        { "id": "p2_table_grid", "status": "planned", "notes": "UITableLayout + UITableSlot + UITableGrid（bindData/bindSelection）；Gallery section 5 + gallery_table.jsonl" },
+        { "id": "p3_input_controls", "status": "planned", "notes": "UIDragFloat/UISpinBox/UIRadioButton/UIColorEdit/UISearchComboBox；Gallery section 6 + gallery_inputs.jsonl" },
+        { "id": "p4_drag_reorder", "status": "planned", "notes": "UIDropTarget（谓词+回调+高亮 VisualFlag）+ UIDragSource；Gallery section 7 + gallery_drop.jsonl" },
+        { "id": "p5_treeview_editing", "status": "planned", "notes": "TreeView 叠加：_bReorderable + _onContextMenu + bindFilter；Gallery section 8 + gallery_tree_edit.jsonl" },
+        { "id": "p6_interaction_p1", "status": "planned", "notes": "tooltip（UIElement::setTooltip）/ TextWrapped（UIText _bWrap）/ 子树禁用（_bEnabled）/ UIDialog 模态；Gallery section 9 + gallery_p1.jsonl" },
+        { "id": "p7_dockspace", "status": "planned", "notes": "UIDockSpace + UIDockLayout（中央区+边缘停靠+tab 合并+分割条）；独立 Dock 页 + dock.jsonl；smoke tab 索引同步更新" }
       ]
     }
   ]

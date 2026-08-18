@@ -1,172 +1,107 @@
-# GUI 数据驱动与最小闭环：响应式数据绑定 + 性能管线
+# GUI 能力补齐：GameEditor ImGui 替换前置（第二阶段）
 
-> 建立日期：2026-08-15
-> 输入工件：`audit.md`（能力盘点与差距分析）
-> 状态：调研完成；首版 plan 经独立评审后修订（修订记录见文末 §8）。
+> 建立日期：2026-08-18
+> 输入工件：`audit.md`（含 2026-08-18 全量 ImGui 依赖调研）
+> 状态：调研完成、计划定稿（经 Plan agent 设计，用户拍板范围）
+> 前一阶段（数据绑定主线：Reactive + 增量复用 + P0 三件套）已收口，见 feature_matrix.json 旧 track。
 
 ## 0. 结论摘要
 
-调研收敛出的架构定案：
+自研 GUI 框架在 GUI App 线（GUIWorkbench）**先全量补齐 GameEditor 所需 feature**，每个 feature 在 Gallery 页 demo + scenario 断言验证；**最后**才考虑替换 GameEditor 的 ImGui。
 
-```
-Immediate API（便捷层：ImGui 式，一行一个控件；留口子，本计划不实现）
-      ↓ 「声明式描述片段 → diff 复用」   ← 本计划要立的地基
-Retain UI（性能底座：WidgetTree + UIFrameSnapshot）
-      ↓
-渲染（Render2D）
-```
+调研结论（audit.md §2）：GameEditor 用 32 文件 / 140 API / 1062 次 ImGui 调用。控件大头已有对应，缺口集中在 **DockSpace / 矢量绘制 / Table 布局 / 拖拽重排 / TreeView 编辑 / 输入控件** 六块骨架 + P1 交互补全。
 
-第一刀是 **响应式数据绑定**，采用 **事件驱动（Vue 语义）** 而非「每帧全量收依赖」：数据变 → 只重跑依赖它的 widget，非 dirty widget 的 draw items 复用上一帧。
+范围（用户 2026-08-18 拍板）：上述全部 + DockSpace。**排除**：ImGuizmo（3D 视口，非 GUI App 线）、字体 CJK/emoji 回退链（渲染资源线）、IME 合成（宿主线）、剪贴板。
 
 ## 1. 目标与非目标
 
 ### 1.1 目标
 
-1. 建立**事件驱动的响应式数据绑定**：`Reactive<T>` 的 set → 标记依赖它的 widget dirty → 下一帧只重跑 dirty widget。
-2. snapshot 构建从「每帧全量」改为「增量复用」：非 dirty widget 沿用上一帧 draw items。
-3. dirty 粒度分级：paint（仅重画自身）/ arrange（仅重排）/ measure（重测+重排）。
-4. 设计之初带性能管线；集合 reactive 留接口（TreeView 前置）。
+1. 补齐 7 期 feature（见 §3），每期在 `Example/GUIWorkbench` Gallery 页（或独立 Dock 页）有可交互 demo。
+2. 每个 feature 在 `Example/GUIWorkbench/Scenarios/` 写 jsonl scenario 断言（rect/control/layers 递归子集断言）。
+3. 严守架构契约：retain-mode；瞬态状态 VisualFlag；持久字段 changed-only setter；MVC 受控控件不强塞 Reactive 绑定。
+4. 全部完成后，自有 GUI 具备替换 GameEditor ImGui 的**能力条件**（替换本身是后续独立决策）。
 
-### 1.2 非目标（本计划不做）
+### 1.2 非目标
 
-- 不实现 immediate mode API（留口子）。
-- 不实现 Styles/StyleSet、TreeView、Grid、虚拟化列表。
-- 不实现完整 CSS Flexbox / 声明式动画 / 保留层缓存（离屏纹理）。
-- 不实现 touch / gamepad / 方向键 navigation。
-- computed（派生状态）只留接口，不做完整实现。
+- 不替换 GameEditor 的 ImGui（本阶段不做任何 GameEditor 改动）。
+- 不做 ImGuizmo 等价物、字体回退链、IME、剪贴板。
+- 不做虚拟化列表、保留层缓存、immediate API 便捷层。
+- DockSpace 只做最小可用子集（见 §3 P7），不复刻 ImGui 完整 docking。
 
-## 2. 当前事实（引用 audit.md §1）
+## 2. 关键设计决策（已定）
 
-- `WidgetTree::buildSnapshot()` 每帧全量遍历，无 diff 复用。
-- `UIElement` 属性靠手动 set；`UISlot` 已有 `invalidateMeasure/invalidateArrange` 两级失效，但绘制无复用。
-- 无数据绑定；无集合数据源抽象。
-- 渲染当前为同步消费（command recording 在帧内完成），snapshot 每帧独立重建。
+| # | 决策 | 内容 |
+|---|------|------|
+| 1 | 矢量原语渲染链 | 主选「新 draw item kind `Line` + `FLineRender` 增 screen 路径（screen 顶点 + scissor 走 session.clipStack）」。**兜底**：builder 内细四边形细分（零渲染层改动，牺牲粗线/AA）——若 screen pipeline 卡住即切兜底，bezier 砍成分段直线 |
+| 2 | DockSpace 形态 | 专用 `UIDockSpace` + `UIDockLayout`（内部节点树：叶子=tab 组，中间=分割），复用 UISplitPane/UITabBar/drag 会话/矢量高亮。最小子集=中央区+左右边缘停靠+tab 合并+分割条拖拽；浮动窗/持久化排除 |
+| 3 | DropTarget API | 复用 UIElement 已有 canAcceptDrop/onDrop/setDropHighlight 钩子，`UIDropTarget` = 谓词+回调+高亮 VisualFlag；`UIDragSource` 封装 beginDrag 触发。不新加路由策略 |
+| 4 | 模态对话框 | 扩展复用 `UIPopupOverlay`（Modal 角色已覆盖遮罩/焦点/Esc/自 detach），新增 `UIDialog` 薄壳（标题栏+内容槽+OK/Cancel+`_onClosed`）。不新建层 |
+| 5 | TreeView 扩展 | 三能力叠加式（重排/右键/过滤），重排走 host 回调 `_onReorder(from,to,mode)` 重建 ReactiveList（控件不拥有数据变异）；右键复用 UIMenu |
+| 6 | Table API | `UITableLayout`（布局）+ `UITableGrid`（数据驱动控件，仿 TreeView 扁平 paint 不虚拟化） |
+| 7 | tooltip | 复用既有 Tooltip 层 + `UIElement::setTooltip` 存储 + hover 超时挂载 |
+| 8 | TextWrapped | 控件层分行（UIText 持 `_bWrap/_maxWidth`，分词断行 + 逐行 addText；computeDesiredSize 返回包裹高度）。builder addText 保持单行 |
 
-## 3. 设计：事件驱动响应式数据绑定
+## 3. 分期（7 期，基础设施先行 → DockSpace 收尾）
 
-### 3.1 核心对象：`Reactive<T>`（单值）
+### P1 矢量绘制原语（基石）
+- `UIFrameDrawItem::EKind` 增 `Line`；`UIFrameBuilder` 增 `addLine/addRectOutline/addBezierCubic`（bezier 客户端细分折线）。
+- 消费链：`Render2DComposePass.cpp` 增 Line 分支 → `FLineRender::addScreenLine`（screen pipeline + clipStack scissor）。
+- Gallery section「4. Vector primitives」静态线/框/贝塞尔。
+- scenario：`gallery_vector.jsonl`（断言需扩展 WidgetTreeDump 或借 capture 像素——实施时定）。
 
-```cpp
-template <typename T>
-class Reactive {
-public:
-    Reactive(T value);
-    const T& get() const;      // 读值 + 把「当前构建的 widget」记入 dependents
-    void set(const T& value);  // 写值 + 遍历 dependents 标记 dirty（事件驱动）
-    // operator T() / operator= 便捷转换
-};
-```
+### P2 Table/Grid 布局
+- `UITableLayout` + `UITableSlot`（row/col/span/alignment），仿 UILayout/UIBoxSlot；`UITableGrid` 数据驱动控件（bindData(ReactiveList<FTableRow>) + bindSelection）。
+- Gallery section「5. Table」4 列数据表 + 选中高亮。
+- scenario：`gallery_table.jsonl`（WidgetTreeDump 增 table layout/control 块）。
 
-- **依赖收集发生在 widget 构建时**（只对正在构建的 widget），不是每帧全量遍历。首次构建全量，之后构建是增量的（只重跑 dirty widget）。
-- **事件驱动**：`set()` 直接标记 dependents dirty，加入「待重建集合」，下一帧只重跑这些 widget。不做「每帧全量收依赖」。
-- 线程假设：**GUI 单线程**（与 WidgetTree 现状一致），set/get 不加锁；跨线程 set 不在本计划（留断言）。
+### P3 输入控件补全
+- 新建 `UIDragFloat`/`UISpinBox`/`UIRadioButton`（组）/`UIColorEdit`/`UISearchComboBox`，仿 CheckBox/Slider 骨架。
+- Gallery section「6. Input controls」。
+- scenario：`gallery_inputs.jsonl`（control.type + value/checked 断言，WidgetTreeDump 增块）。
 
-### 3.2 dependents 所有权与悬垂清理
+### P4 拖拽重排 + DropTarget/DragSource
+- `UIDropTarget`（`_accept` 谓词 + `_onDrop` + VisualFlag `_bDropHighlight`，paint 用 P1 高亮边框）；`UIDragSource` 辅助封装。
+- Gallery section「7. Drag reorder」可拖拽重排列表。
+- scenario：`gallery_drop.jsonl`（dragSession 路由 + 高亮/顺序断言）。
 
-- dependents 存 `UIElement*` 裸指针（与现有 `_parent` 一致），但必须配 **detach 清理**：widget 销毁/detach 时，从它读过的所有 ref 的 dependents 里移除自己。
-- 复用现有 `WidgetTree` 的 detach 路径（`clearTransientInputState` 同级的清理钩子），避免 use-after-free。
-- `Reactive` 自身析构时清空 dependents（或断言为空）。
+### P5 TreeView 编辑能力
+- 叠加式：`_bReorderable`（行 press 起 drag；canAcceptDrop 判定行间/行内；`_onReorder` 回调）；`_onContextMenu(nodeId)`（右击 UIMenu）；`bindFilter(Reactive<string>)`（flattenVisible 剪枝）。
+- Gallery section「8. TreeView editing」。
+- scenario：`gallery_tree_edit.jsonl`。
 
-### 3.3 dirty 粒度（三级，沿用引擎已有失效分级）
+### P6 P1 交互补全
+- tooltip（决策 7）；TextWrapped（决策 8）；`UIElement::_bEnabled` 子树禁用（setEnabled changed-only + paint 灰度 + 输入入口拦截）；`UIDialog` 模态对话框（决策 4）。
+- Gallery section「9. Tooltip/Wrap/Disabled/Dialog」。
+- scenario：`gallery_p1.jsonl`。
 
-| 级别 | 触发 | 重做范围 |
-|---|---|---|
-| paint-dirty | 纯绘制属性变（Text.text / color / Button.enabled） | 只重画自身 widget，subtree 不动 |
-| arrange-dirty | 位置/尺寸分配变（split ratio / box padding） | 重 arrange，不 measure |
-| measure-dirty | desired size 变（文本内容变导致尺寸变） | 重 measure + arrange |
+### P7 DockSpace + 窗口管理（收尾，聚合前序）
+- `UIDockSpace`/`UIDockLayout`（决策 2）+ 独立 `Dock` 页（全视口）。
+- Gallery 加指针段指向 Dock 页。
+- scenario：`dock.jsonl`（初始中央区 + 拖拽后 tab 合并/分割结构断言）。
 
-- 对应引擎现有 `UISlot::invalidateMeasure/invalidateArrange`，新增 `invalidatePaint`。
-- `Reactive::set` 由「读它的 widget 声明自己关心哪一级」决定：绑定 paint 属性 → paint-dirty；绑定布局属性 → arrange/measure-dirty。
+## 4. 验收标准
 
-### 3.4 snapshot 增量复用与内存生命周期
+1. 7 期全部落地：Gallery（或 Dock 页）demo 可交互。
+2. 全部新增 scenario 通过：`xmake run GUIWorkbench --start-page <X> --scenario <abs>`。
+3. 既有 8 页（Render/Widgets/Layout/Menus/DragDrop/Modal/ScrollSplit/Editor）无回归；Gallery 原 3 section 不破坏。
+4. GUIWorkbench smoke（runDemoAutomation）不破坏——**新增 Dock 页会移位 Editor tab（case 20 点 tabs[7]），每加页同步更新 tab 索引与 FDemoState**。
+5. 架构契约：VisualFlag/标脏纪律（漏标脏已复发 4 次，新控件零容忍）、changed-only setter、MVC/MVVM 分治。
 
-- 目标：非 dirty widget 的 draw items 沿用上一帧，dirty widget 重算并替换自己的那一段。
-- **内存生命周期（关键修正）**：draw items 段由「本帧 snapshot」持有，非 dirty 段是**上一帧段的引用**。为保 immutable 契约：
-  - 当前渲染为**同步消费**（帧内 command recording 完成），可接受「上一帧段在本帧复用」。
-  - 明确写出假设，并用**双缓冲**（draw items 池按帧轮换）隔离：本帧写入新缓冲，引用上一帧缓冲，渲染完成后上一帧缓冲归还池。
-  - 若未来渲染异步化，双缓冲升级为多缓冲/ref-count。
-- 保留层缓存（离屏纹理）是后续优化，但 dirty 按 widget 分段已能支撑它。
+## 5. 风险与停止线
 
-### 3.5 集合 reactive（TreeView 前置，留接口 + 最小实现）
+| 风险 | 停止线/兜底 |
+|------|------------|
+| P1 渲染层改动（FLineRender screen pipeline）卡住 | 切细四边形兜底；bezier 砍分段直线 |
+| P7 DockSpace 复杂度失控 | 砍到「中央区+左右停靠+tab 合并」，浮动窗/多级嵌套/持久化不做 |
+| smoke 自动化 tab 索引硬编码 | 每加页立即更新 runDemoAutomation case 与索引 |
+| 漏标脏复发 | 新控件瞬态一律 VisualFlag；code review 检查点 |
+| Gallery 页过长 | section 化；Dock 已独立成页 |
 
-```cpp
-template <typename T>
-class ReactiveList {           // 命名可在实现时定
-public:
-    size_t size() const;       // get 记录依赖
-    const T& get(size_t i) const;
-    void push(const T&);       // 通知 dependents dirty
-    void removeAt(size_t);
-    void clear();
-};
-```
+## 6. 执行顺序
 
-- 本计划只做最小实现（size/get/push/removeAt/clear + dirty 通知），**不做 TreeView 渲染**。
-- 这是 TreeView（P0 后续）的数据源地基，避免第一刀把第二块砖的地基挖歪。
+P1 → P2 → P3 → P4 → P5 → P6 → P7。每期 = 1 个自洽 commit（代码 + 工件更新 + scenario 同 commit）。
 
-### 3.6 性能评估管线（设计一等公民）
+## 7. 修订记录
 
-| 指标 | 实现位置 |
-|---|---|
-| update / layout / paint 三段耗时 | WidgetTree 各阶段计时 |
-| 每帧重建的 widget 数（dirty 传播结果） | buildSnapshot 计数 |
-| draw item 数 / Render2D flush 次数 | Render2D 计数 |
-| 帧耗时 vs 帧预算 | host 层已有，接入 |
-
-暴露方式：新增轻量 `GuiPerfStats`，供 dump / scenario 断言读取。
-
-## 4. 里程碑
-
-### M0 — 性能基线（先有测量）
-
-- WidgetTree/Render2D 加最小性能计数（三段耗时 + 重建 widget 数 + draw item 数）。
-- GUIWorkbench 页面建基线。
-- **验收**：`ya-gui-closure-test` 通过；能打印 Workbench 性能计数。
-
-### M1 — 响应式内核 + 最小局部复用（合并原 M1+M2，避免纯负收益中间态）
-
-- `Reactive<T>`：事件驱动依赖追踪（构建时收集 + set 时 dirty 通知）+ 三级 dirty 粒度 + dependents 悬垂清理。
-- snapshot 增量复用：非 dirty 段沿用、dirty 段重算，双缓冲内存生命周期。
-- `Text.text` 绑定 Reactive 做最小验证（覆盖 paint-dirty）。
-- **验收**：改 ref → 只有依赖 widget 重建（rebuild 计数），非 dirty widget 的 draw item 计数不变；golden 与改造前零差异；`ya-gui-closure-test` 无回归；单测覆盖「条件读取切换 ref」+「widget detach 后 set 不悬垂」。
-
-### M2 — 控件绑定泛化 + 布局/样式属性绑定 + 集合接口
-
-- Button.enabled（paint-dirty）、split ratio（arrange-dirty）、文本内容变尺寸（measure-dirty）各验一条。
-- `ReactiveList<T>` 最小实现 + 接口（不做 TreeView 渲染）。
-- computed 只定义接口。
-- **验收**：三类绑定各自触发正确 dirty 粒度；性能计数显示 rebuild 数从「整树」降到「依赖子集」；scroll/split 页回归通过。
-
-### M3 — 性能管线闭环 + 声明式口子内嵌
-
-- 性能计数可 scenario 断言（结构证据）。
-- **复用 `Core/Profiling` 的 `PerfState`**：把 M0 自造的 `std::chrono` 计时替换为 `metrics().beginSample/endSample/setValue`（方法版 API 始终编译，不受 profiling 开关裁剪），`GuiPerfStats` 降级为「从 PerfState 读的 per-tree 轻量访问面」；key 用 `gui.tree.*` 命名空间隔离 + domainKey 区分多树。白拿平均窗口、summary 导出、多树区分与引擎统一可视化。
-- 「声明式描述片段 → diff 复用」的输入形态在 M1/M2 的复用接口中**内嵌体现**（复用接口接受「描述片段」，而非空口定义），为 immediate API 留口子。
-- **验收**：能用 dump/scenario 回答「改一处数据触发多少 rebuild/draw item/耗时」；`GUIWorkbench` 闭包不被回灌。
-
-## 5. 验收标准（完成定义）
-
-1. 改一个 `Reactive` 数据，只有依赖它的 widget 重建（rebuild 计数）。
-2. 非 dirty widget 的 draw items 复用上一帧（draw item 计数不变）。
-3. 三级 dirty 粒度各自正确（paint/arrange/measure）。
-4. 视觉与改造前等价（golden / GPU shot 零差异）。
-5. dependents 无悬垂（detach 清理 + 单测）。
-6. 性能管线可观测；声明式 diff 复用接口已内嵌（留口子）。
-7. `GUIWorkbench` / `ya-gui-closure-test` 全绿。
-
-## 6. 风险与停止线
-
-- **依赖收集开销本身可能比整帧 rebuild 还慢**（最大风险）：事件驱动下，dependents 遍历 + 三级 dirty 判定有常数开销。M0 建基线，M1 后对比「增量复用 vs 整帧 rebuild」的实际耗时，若增量更慢则回退整帧。
-- **依赖收集完整性**：条件读取切换 ref（`if (cond) read(a) else read(b)`）必须在每次构建时重新收集（构建是增量的，dirty widget 重跑时重新收集自己的依赖），否则漏标 dirty。
-- **draw items 复用一致性**：复用段与重算段顺序/数量严格对齐，否则渲染错位。双缓冲 + golden + scroll/split 回归把关。
-- **use-after-free**：dependents 裸指针 + detach 清理必须成对，M1 单测覆盖。
-- **跨线程 set**：本计划 GUI 单线程假设，用断言守住。
-- **停止线**：若增量复用复杂度失控或收益为负，回退「整帧 rebuild + 只留性能计数」，不强行 diff。停止线挂到 M1 验收（M1 后必须拿出「增量 vs 整帧」的耗时对比再决定是否进 M2）。
-
-## 7. 执行顺序（当前下一刀）
-
-M0 性能基线 → M1 响应式内核+局部复用 → M2 绑定泛化+集合 → M3 管线闭环+口子。
-
-## 8. 修订记录
-
-- **2026-08-15 首版评审修订**（独立 agent 评审）：①「每帧全量收依赖」改为「事件驱动 + 增量构建」；② dirty 粒度三级化（paint/arrange/measure）；③ snapshot 分段复用明确双缓冲内存生命周期；④ 补集合 reactive、dependents 悬垂清理、computed 接口、跨线程假设；⑤ M1/M2 合并避免纯负收益中间态；⑥ 口子内嵌 M1/M2 而非独立 M3；⑦ 风险补「依赖收集开销可能比整帧慢」并挂停止线到 M1。
+- **2026-08-18 首版**：ImGui 调研 → 范围拍板（上述全部 + DockSpace）→ Plan agent 设计 → 定稿。

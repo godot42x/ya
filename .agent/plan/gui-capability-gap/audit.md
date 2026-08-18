@@ -272,3 +272,41 @@ Retain UI（性能底座：WidgetTree + UIFrameSnapshot + 脏区/保留层缓存
 - 数据驱动实现参考：**Vue 响应式 + React 单向数据流**提供思想，**EUI-NEO 的 `ui.state<T>(id)` + compose** 提供 C++ 落地形态；样式分离参考 **Vue SFC / CSS-in-JS** + **EUI-NEO 的 Rect 样式盒**。
 - **架构定案**：retain UI（性能底座）+ 声明式 diff 复用（口子）+ 未来 immediate API（SlateIM 式便捷层）。第一刀「响应式数据绑定」同时是「声明式 diff 复用」的地基。
 - 触摸/手柄/方向键 navigation 是手游/主机闭环的前置，但目前引擎连 touch 事件都没有，属于 P3 补齐。
+
+## 5. GameEditor ImGui 依赖全量调研（2026-08-18 追加）
+
+> 目标：用自研 GUI 替换 GameEditor 的 ImGui 前，先摸清「ImGui 实际承载了什么」。扫描 `Engine/Source/Applications/GameEditor/` 全目录：32 文件直接使用 ImGui / 140 API / 1062 次调用。
+
+### 5.1 高频 API（Top 40）
+
+TextDisabled 68、SameLine 64、Text 63、TreePop 52、Button 47、Checkbox 46、TreeNode 40、Separator 37、DragFloat 28、Combo 27、MenuItem 22、PushID 24/PopID 26、TextUnformatted 18、TextWrapped 16、SetNextItemWidth 15、BeginDisabled/EndDisabled 15、InputText 12、IsItemClicked 12、SetTooltip 11、CollapsingHeader 11、IsItemHovered 10、SeparatorText 10、GetContentRegionAvail 17、Begin/End 16/33。
+
+### 5.2 ImGui 实际承载的六层职责（替换成本核心认知）
+
+1. **窗口系统**：Begin/End + 窗口 flags + DockSpace（全编辑器布局根，仅 1 处但决定性）
+2. **ID 作用域**：PushID/PopID/GetID（同名控件隔离，55 次）
+3. **事件抢占仲裁**：ImGuiIO 桥接 + FGuiInputClaim 分层（viewport 相机 vs GUI 输入）
+4. **纹理管理**：ImTextureID = VkDescriptorSet（ImGui_ImplVulkan_AddTexture），ImageCache 全局缓存 + 8 帧延迟 GC
+5. **字体渲染**：TTF + CJK 合并字体 + emoji 彩色字体（freetype LoadColor）
+6. **样式栈**：ImGuiStyleScope RAII + PushStyleColor/Var + StyleColorsDark 全系覆盖
+
+### 5.3 缺口对照（自研 GUI 现状 → 差距）
+
+| 优先级 | ImGui feature（用量） | 自研现状 | 差距 |
+|:---:|---|---|---|
+| P0 | DockSpace（1 处，布局根） | 完全缺失 | 停靠/拆分/tab 合并 |
+| P0 | DragDrop 链路（18 次，Source/TargetCustom/AcceptBeforeDelivery） | WidgetTree 底层 drag 会话已有，无控件封装 | UIDropTarget/UIDragSource |
+| P0 | ImDrawList 矢量（AddRect/AddLine/AddBezierCubic） | 仅 addSprite/addText | 新 draw item kind + FLineRender screen 路径 |
+| P0 | Table（27 次） | 完全缺失 | UITableLayout/UITableGrid |
+| P0 | TreeView 编辑（拖拽重排/右键/搜索） | UITreeView 骨架已有 | 三能力叠加 |
+| P0 | 输入控件（DragFloat 28/SpinBox/RadioButton/ColorEdit） | UISlider+TextField | 5 个新控件 |
+| P1 | 模态对话框（BeginPopupModal, FilePicker） | UIPopupOverlay 有 Modal 角色 | UIDialog 壳 |
+| P1 | tooltip（SetTooltip 11） | Tooltip 层已有，无挂载机制 | UIElement::setTooltip |
+| P1 | TextWrapped（16） | 无自动换行 | UIText _bWrap |
+| P1 | BeginDisabled（30） | 无 | UIElement::_bEnabled |
+| P2 | 样式栈 RAII / ColorPicker / PushID 作用域 / IME / 剪贴板 | 部分有最小样式集 | 后续期 |
+| 排除 | ImGuizmo（24，3D gizmo）/ 字体回退链 / IME | 非 GUI App 线 | 不做 |
+
+### 5.4 嵌合迁移跳板（已验证）
+
+GUIWorkbenchPanel 与 UIDesignerPanel 已实现「retain UI 渲染到 RenderTexture → ImGui 面板内 Image 展示 + 输入转发」——迁移第一步不是换控件，而是把面板内容迁到自有控件、ImGui 继续做壳。
