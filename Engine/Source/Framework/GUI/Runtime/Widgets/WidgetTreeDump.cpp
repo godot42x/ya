@@ -225,6 +225,7 @@ nlohmann::json serializeNode(const UIElement& element, const WidgetTree& tree)
         node["control"] = {
             {"type", "colorEdit"},
             {"color", {colorEdit->_color.r, colorEdit->_color.g, colorEdit->_color.b, colorEdit->_color.a}},
+            {"activeChannel", colorEdit->_activeChannel},
         };
     }
     else if (const auto* searchCombo = dynamic_cast<const UISearchComboBox*>(&element)) {

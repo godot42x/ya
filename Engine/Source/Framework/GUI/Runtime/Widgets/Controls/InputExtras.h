@@ -72,6 +72,9 @@ struct YA_GUI_API UIDragFloat : public UIElement
     bool       _bHasLastPress = false;
     VisualFlag _bEditing{*this};
     std::string _editBuffer;
+    /// True right after entering edit mode: the next typed character
+    /// replaces the pre-filled buffer (select-all semantics).
+    bool _bReplaceNext = false;
 };
 
 /// Spin box (ImGui InputInt/InputFloat step equivalent, minimal): three
@@ -139,6 +142,9 @@ struct YA_GUI_API UISpinBox : public UIElement
     bool       _bHasLastPress = false;
     VisualFlag _bEditing{*this};
     std::string _editBuffer;
+    /// True right after entering edit mode: the next typed character
+    /// replaces the pre-filled buffer (select-all semantics).
+    bool _bReplaceNext = false;
 };
 
 /// Radio button (minimal): dot + label; selection is managed by the host

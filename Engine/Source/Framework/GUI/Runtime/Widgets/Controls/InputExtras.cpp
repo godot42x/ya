@@ -43,8 +43,9 @@ void UIDragFloat::adjustValue(float delta)
 
 void UIDragFloat::beginEdit()
 {
-    _bEditing    = true;
-    _editBuffer  = std::format("{:.{}f}", _value, _decimals);
+    _bEditing     = true;
+    _editBuffer   = std::format("{:.{}f}", _value, _decimals);
+    _bReplaceNext = true;
     if (WidgetTree* tree = getTree()) {
         tree->setFocus(this);
     }
@@ -55,7 +56,8 @@ void UIDragFloat::commitEdit()
     if (!_bEditing) {
         return;
     }
-    _bEditing = false;
+    _bEditing     = false;
+    _bReplaceNext = false;
     try {
         const float parsed = std::stof(_editBuffer);
         setValue(parsed);
@@ -68,7 +70,8 @@ void UIDragFloat::commitEdit()
 
 void UIDragFloat::cancelEdit()
 {
-    _bEditing = false;
+    _bEditing     = false;
+    _bReplaceNext = false;
     _editBuffer.clear();
 }
 
@@ -102,6 +105,10 @@ bool UIDragFloat::handleInputEvent(const Event& event, const WidgetEventContext&
 
     if (_bEditing) {
         if (eventType == EEvent::KeyTyped) {
+            if (_bReplaceNext) {
+                _editBuffer.clear();
+                _bReplaceNext = false;
+            }
             _editBuffer += static_cast<const KeyTypedEvent&>(event).getText();
             invalidateProperty(EUIPropertyImpact::Paint);
             return true;
@@ -205,8 +212,9 @@ void UISpinBox::stepBy(float multiplier)
 
 void UISpinBox::beginEdit()
 {
-    _bEditing   = true;
-    _editBuffer = std::format("{:.2f}", _value);
+    _bEditing     = true;
+    _editBuffer   = std::format("{:.2f}", _value);
+    _bReplaceNext = true;
     if (WidgetTree* tree = getTree()) {
         tree->setFocus(this);
     }
@@ -217,7 +225,8 @@ void UISpinBox::commitEdit()
     if (!_bEditing) {
         return;
     }
-    _bEditing = false;
+    _bEditing     = false;
+    _bReplaceNext = false;
     try {
         setValue(std::stof(_editBuffer));
     }
@@ -229,7 +238,8 @@ void UISpinBox::commitEdit()
 
 void UISpinBox::cancelEdit()
 {
-    _bEditing = false;
+    _bEditing     = false;
+    _bReplaceNext = false;
     _editBuffer.clear();
 }
 
@@ -284,6 +294,10 @@ bool UISpinBox::handleInputEvent(const Event& event, const WidgetEventContext& c
 
     if (_bEditing) {
         if (eventType == EEvent::KeyTyped) {
+            if (_bReplaceNext) {
+                _editBuffer.clear();
+                _bReplaceNext = false;
+            }
             _editBuffer += static_cast<const KeyTypedEvent&>(event).getText();
             invalidateProperty(EUIPropertyImpact::Paint);
             return true;

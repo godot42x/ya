@@ -1,0 +1,65 @@
+# GUIWorkbench --start-page=Gallery. Automated acceptance for the input
+# extras fixes: page scrolling, double-click text entry (DragFloat/SpinBox),
+# and ColorEdit channel selection. Coordinates assume the window size below
+# and scrolling the gallery to the bottom (offset clamps to maxOffset).
+{"window_size":{"width":1280,"height":720}}
+{"frame":3}
+{"assert":{"widget":"GalleryScroll","control":{"type":"scrollViewport"}}}
+{"checkpoint":"scroll_exists"}
+# Scroll to the bottom: 26 wheel steps x 40px >= maxOffset (~782), clamped.
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"event":"mouse_wheel","x":640,"y":300,"dy":-1}
+{"frame":2}
+{"checkpoint":"scrolled_bottom"}
+# Double-click DragFloat (scrolled position ~ (155, 339)) and type 1.5.
+{"event":"mouse_press","x":155,"y":339,"button":0}
+{"event":"mouse_release","x":155,"y":339,"button":0}
+{"event":"mouse_press","x":155,"y":339,"button":0}
+{"event":"mouse_release","x":155,"y":339,"button":0}
+{"event":"key_typed","text":"1.5"}
+{"event":"key_press","key":"Enter"}
+{"frame":2}
+{"assert":{"widget":"GalleryDragFloat","control":{"type":"dragFloat","value":1.5}}}
+{"checkpoint":"dragfloat_edited"}
+# Double-click SpinBox (scrolled position ~ (139, 375)) and type 4.
+{"event":"mouse_press","x":139,"y":375,"button":0}
+{"event":"mouse_release","x":139,"y":375,"button":0}
+{"event":"mouse_press","x":139,"y":375,"button":0}
+{"event":"mouse_release","x":139,"y":375,"button":0}
+{"event":"key_typed","text":"4"}
+{"event":"key_press","key":"Enter"}
+{"frame":2}
+{"assert":{"widget":"GallerySpinBox","control":{"type":"spinBox","value":4.0}}}
+{"checkpoint":"spinbox_edited"}
+# Click the ColorEdit alpha channel cell (scrolled position ~ (222, 447))
+# to select channel 3; the swatch drag path is visually verified by hand.
+{"event":"mouse_press","x":222,"y":447,"button":0}
+{"event":"mouse_release","x":222,"y":447,"button":0}
+{"frame":2}
+{"assert":{"widget":"GalleryColorEdit","control":{"type":"colorEdit","activeChannel":3}}}
+{"checkpoint":"color_channel_selected"}
+{"frame":1}
