@@ -139,6 +139,11 @@ struct YA_GUI_API UITreeView : public UIElement
     [[nodiscard]] Rect2D arrowButtonRect(float x, float rowTopY) const;
     /// Expand-state ref for `id`, creating it (Layout granularity) on demand.
     [[nodiscard]] std::shared_ptr<Reactive<bool>>& expandedRef(const std::string& id);
+    /// One-shot filter expansion: expands every matching chain exactly once
+    /// when the filter text changes (kept in _lastFilterApplied); manual
+    /// toggles stay authoritative afterwards.
+    void applyFilterExpansion();
+    void expandMatchingChain(const FNode& node, const std::string& filter);
     /// Drop position for `point`: fills `outRowIndex` / `outMode` (0 before,
     /// 1 into, 2 after). Returns false when not over a row.
     [[nodiscard]] bool dropPosition(const glm::vec2& point, int& outRowIndex, int& outMode) const;
@@ -146,6 +151,7 @@ struct YA_GUI_API UITreeView : public UIElement
     std::shared_ptr<ReactiveList<FNode>>     _roots;
     std::shared_ptr<Reactive<std::string>>   _selectedId;
     std::shared_ptr<Reactive<std::string>>   _filterBinding;
+    std::string _lastFilterApplied;
     std::unordered_map<std::string, std::shared_ptr<Reactive<bool>>> _expanded;
     int _hoveredRow = -1;
     /// Node id whose arrow button is hovered (empty when none). Drives the

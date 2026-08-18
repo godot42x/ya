@@ -189,14 +189,48 @@ void UITreeView::flattenNode(const FNode& node, int depth, std::vector<VisibleRo
         return;
     }
     rows.push_back({&node, depth});
-    const bool bFiltering = _filterBinding && !_filterBinding->value().empty();
-    const bool bExpanded  = bFiltering || isExpanded(node.id);
-    if (bExpanded) {
+    // Expansion always honors the per-node state. Filtering expands the
+    // matching chains ONCE when the filter text changes (applyFilterExpansion),
+    // then the user's manual collapse/expand works normally — a filter must
+    // never freeze the tree in a forced-expanded state.
+    if (isExpanded(node.id)) {
         for (const FNode& child : node.children) {
             if (!_filterBinding || matchesFilter(child)) {
                 flattenNode(child, depth + 1, rows);
             }
         }
+    }
+}
+
+void UITreeView::applyFilterExpansion()
+{
+    if (!_filterBinding || !_roots) {
+        _lastFilterApplied.clear();
+        return;
+    }
+    const std::string current = _filterBinding->value();
+    if (current == _lastFilterApplied) {
+        return;
+    }
+    _lastFilterApplied = current;
+    if (current.empty()) {
+        return; // clearing the filter never collapses anything
+    }
+    // One-shot: expand every matching chain so the user sees the results.
+    const size_t count = _roots->size();
+    for (size_t i = 0; i < count; ++i) {
+        expandMatchingChain(_roots->get(i), current);
+    }
+}
+
+void UITreeView::expandMatchingChain(const FNode& node, const std::string& filter)
+{
+    if (!matchesFilter(node)) {
+        return;
+    }
+    expandedRef(node.id)->set(true);
+    for (const FNode& child : node.children) {
+        expandMatchingChain(child, filter);
     }
 }
 
@@ -241,6 +275,11 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
     // (Guardrail G1: the base paint template now clips every widget to its
     // own rect, so the manual pushClip that used to guard overflow rows is
     // gone — the framework guarantees it.)
+
+    // One-shot filter expansion: when the filter text changed since the
+    // last paint, expand the matching chains once (manual toggles stay
+    // authoritative afterwards).
+    applyFilterExpansion();
 
     const auto rows = flattenVisible();
     auto       font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);

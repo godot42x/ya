@@ -14,4 +14,11 @@
 {"frame":2}
 {"assert":{"widget":"GalleryTree","control":{"type":"treeView","visibleRows":4}}}
 {"checkpoint":"tree_filtered"}
+# Manual collapse still works while the filter is active (the filter
+# expands matching chains once, then manual toggles stay authoritative).
+{"event":"mouse_press","x":43,"y":495,"button":0}
+{"event":"mouse_release","x":43,"y":495,"button":0}
+{"frame":2}
+{"assert":{"widget":"GalleryTree","control":{"type":"treeView","visibleRows":2}}}
+{"checkpoint":"collapse_while_filtered"}
 {"frame":1}
