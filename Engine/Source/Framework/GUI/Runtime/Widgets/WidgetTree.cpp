@@ -592,6 +592,14 @@ EWidgetRouteResult WidgetTree::dispatchEvent(const Event& event, const WidgetEve
         dispatchRoute(target, event, ctx, classifyPointerRoute(buildPath(target)),
                       /*bAppendTrace=*/false);
 
+    // Pressing a non-focusable widget (or empty space) releases focus, so an
+    // in-place edit never keeps swallowing keys after the user clicked away.
+    if (eventType == EEvent::MouseButtonPressed &&
+        (!target || target->_focusPolicy == EWidgetFocusPolicy::None) &&
+        _focused != nullptr) {
+        setFocus(nullptr);
+    }
+
     // Hover enter/leave may mutate the tree (menu-bar hover-switch closes and
     // reopens overlays, and opening a new overlay destroys the retired one).
     // Resolve/update hover only after routing so the hit target collected

@@ -229,13 +229,20 @@ struct YA_GUI_API UIColorEdit : public UIElement
 
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
-    void clearTransientInputState() override { _bDragging = false; }
+    void clearTransientInputState() override
+    {
+        _bDragging = false;
+        closePalette();
+    }
 
   private:
     [[nodiscard]] Rect2D swatchRect() const;
     void adjustActiveChannel(float delta);
+    void openPalette();
+    void closePalette();
     VisualFlag _bDragging{*this};
     glm::vec2  _dragStart{0.0f, 0.0f};
+    std::shared_ptr<struct UIPopupOverlay> _paletteOverlay;
 };
 
 /// Search combo (minimal): a combo whose popup list is filtered by typed

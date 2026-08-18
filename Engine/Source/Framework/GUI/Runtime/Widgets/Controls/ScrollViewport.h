@@ -35,7 +35,11 @@ struct YA_GUI_API UIScrollViewport : public UIElement
     [[nodiscard]] UIScrollLayout& getScrollLayout() { return _scrollLayout; }
     [[nodiscard]] const UIScrollLayout& getScrollLayout() const { return _scrollLayout; }
     void setAxis(EScrollAxis value) { _scrollLayout.setAxis(value); }
-    void setScrollOffset(float value) { _scrollLayout.setScrollOffset(value); }
+    void setScrollOffset(float value)
+    {
+        _scrollLayout.setScrollOffset(value);
+        markPaintDirty(); // the scrollbar thumb follows the offset
+    }
     void setScrollStep(float value) { _scrollLayout.setScrollStep(value); }
     [[nodiscard]] EScrollAxis getAxis() const { return _scrollLayout.getAxis(); }
     [[nodiscard]] float getScrollOffset() const { return _scrollLayout.getScrollOffset(); }
@@ -43,12 +47,21 @@ struct YA_GUI_API UIScrollViewport : public UIElement
 
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
+    void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
     [[nodiscard]] bool cullsChildHits(const glm::vec2& logicalPoint) const override
     {
         return !hitTestLayoutRect(logicalPoint);
     }
+
+    // === Scrollbar ===
+    /// Draw a vertical scrollbar along the right edge when the content
+    /// overflows (configurable style; set _bShowScrollbar = false to hide).
+    bool      _bShowScrollbar     = true;
+    float     _scrollbarWidth     = 8.0f;
+    glm::vec4 _scrollbarTrackColor = {0.10f, 0.11f, 0.14f, 0.9f};
+    glm::vec4 _scrollbarThumbColor = {0.34f, 0.38f, 0.46f, 1.0f};
 
     /// Whether the content can scroll at all (after the last layout).
     [[nodiscard]] bool isScrollable() const { return _scrollLayout.isScrollable(); }

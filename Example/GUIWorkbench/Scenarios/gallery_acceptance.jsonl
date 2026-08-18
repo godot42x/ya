@@ -45,9 +45,8 @@
 {"frame":2}
 {"assert":{"widget":"GalleryDragFloat","control":{"type":"dragFloat","value":1.5}}}
 {"checkpoint":"dragfloat_edited"}
-# Double-click SpinBox (scrolled position ~ (139, 375)) and type 4.
-{"event":"mouse_press","x":139,"y":375,"button":0}
-{"event":"mouse_release","x":139,"y":375,"button":0}
+# Single-click the SpinBox middle value area (scrolled position ~ (139, 375))
+# enters edit mode directly; type 4.
 {"event":"mouse_press","x":139,"y":375,"button":0}
 {"event":"mouse_release","x":139,"y":375,"button":0}
 {"event":"key_typed","text":"4"}
@@ -62,4 +61,18 @@
 {"frame":2}
 {"assert":{"widget":"GalleryColorEdit","control":{"type":"colorEdit","activeChannel":3}}}
 {"checkpoint":"color_channel_selected"}
+# Click the swatch (scrolled position ~ (107, 446)): the preset palette
+# popup opens below it.
+{"event":"mouse_press","x":107,"y":446,"button":0}
+{"event":"mouse_release","x":107,"y":446,"button":0}
+{"frame":2}
+{"assert":{"widget":"ColorPaletteOverlay","control":{"type":"popupOverlay","modal":false}}}
+{"checkpoint":"palette_open"}
+# Pick the first palette cell (scrolled position ~ (110, 472)): the overlay
+# closes itself after the pick.
+{"event":"mouse_press","x":110,"y":472,"button":0}
+{"event":"mouse_release","x":110,"y":472,"button":0}
+{"frame":2}
+{"assert":{"layers":{"Popup":{"children":[]}}}}
+{"checkpoint":"palette_picked"}
 {"frame":1}

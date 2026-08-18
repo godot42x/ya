@@ -3,10 +3,13 @@
 #include "Core/KeyCode.h"
 #include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/Controls/Menu.h"
+#include "GUI/Widgets/Controls/PopupOverlay.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include <algorithm>
+#include <cmath>
+#include <vector>
 
 namespace ya
 {
@@ -18,6 +21,75 @@ float clampValue(float value, float minValue, float maxValue)
 {
     return std::clamp(value, std::min(minValue, maxValue), std::max(minValue, maxValue));
 }
+
+glm::vec4 hsvToRgb(float h, float s, float v)
+{
+    const float c = v * s;
+    const float x = c * (1.0f - std::abs(std::fmod(h / 60.0f, 2.0f) - 1.0f));
+    const float m = v - c;
+    float       r = 0.0f, g = 0.0f, b = 0.0f;
+    if (h < 60.0f)       { r = c; g = x; }
+    else if (h < 120.0f) { r = x; g = c; }
+    else if (h < 180.0f) { g = c; b = x; }
+    else if (h < 240.0f) { g = x; b = c; }
+    else if (h < 300.0f) { r = x; b = c; }
+    else                 { r = c; b = x; }
+    return {r + m, g + m, b + m, 1.0f};
+}
+
+/// Preset color grid (the ColorEdit popup palette): paints an N-column
+/// swatch grid; a press on a cell reports its color.
+class FColorPalette : public UIElement
+{
+public:
+    explicit FColorPalette(std::string name) : UIElement(std::move(name))
+    {
+        _hitFilter = EWidgetHitFilter::Stop;
+        // 4 rows x 8 columns: hue ring + value steps.
+        for (int row = 0; row < 4; ++row) {
+            const float v = 1.0f - static_cast<float>(row) * 0.22f;
+            for (int col = 0; col < 8; ++col) {
+                _colors.push_back(hsvToRgb(static_cast<float>(col) * 45.0f, 0.75f, v));
+            }
+        }
+    }
+
+    std::function<void(const glm::vec4&)> _onPick;
+    float _cellSize = 22.0f;
+    int   _cols     = 8;
+
+    void paintSelf(UIFrameBuilder& builder) override
+    {
+        builder.addSprite(_layoutRect, {0.10f, 0.11f, 0.14f, 1.0f}, nullptr);
+        for (size_t i = 0; i < _colors.size(); ++i) {
+            const int col = static_cast<int>(i) % _cols;
+            const int row = static_cast<int>(i) / _cols;
+            builder.addSprite(Rect2D{
+                                  .pos    = {_layoutRect.pos.x + static_cast<float>(col) * _cellSize,
+                                             _layoutRect.pos.y + static_cast<float>(row) * _cellSize},
+                                  .extent = {_cellSize, _cellSize}},
+                              _colors[i], nullptr);
+        }
+    }
+
+    bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override
+    {
+        if (event.getEventType() == EEvent::MouseButtonPressed &&
+            hitTestLayoutRect(ctx.logicalPoint)) {
+            const int col = static_cast<int>((ctx.logicalPoint.x - _layoutRect.pos.x) / _cellSize);
+            const int row = static_cast<int>((ctx.logicalPoint.y - _layoutRect.pos.y) / _cellSize);
+            const int index = row * _cols + col;
+            if (index >= 0 && index < static_cast<int>(_colors.size()) && _onPick) {
+                _onPick(_colors[index]);
+            }
+            return true;
+        }
+        return false;
+    }
+
+private:
+    std::vector<glm::vec4> _colors;
+};
 
 } // namespace
 
@@ -167,6 +239,7 @@ bool UIDragFloat::handleInputEvent(const Event& event, const WidgetEventContext&
         _bDragging = true;
         _dragStart = ctx.logicalPoint;
         if (WidgetTree* tree = getTree()) {
+            tree->setFocus(this);
             tree->setPointerCapture(this);
         }
         return true;
@@ -348,25 +421,27 @@ bool UISpinBox::handleInputEvent(const Event& event, const WidgetEventContext& c
 
     if (eventType == EEvent::MouseButtonPressed) {
         // Double-click (no event timestamps: a press near the previous press)
-        // enters text edit mode; a single press steps the pressed zone.
+        // enters text edit mode; a single press on the middle value area also
+        // enters edit mode, while a press on a +/- zone steps.
         const bool bDouble = _bHasLastPress && glm::length(ctx.logicalPoint - _lastPressPos) < 6.0f;
         _lastPressPos  = ctx.logicalPoint;
         _bHasLastPress = true;
+        const int zone = zoneFromPointer(ctx.logicalPoint.x - _layoutRect.pos.x);
         if (bDouble) {
             _bHasLastPress = false;
             beginEdit();
             return true;
         }
-        const int zone = zoneFromPointer(ctx.logicalPoint.x - _layoutRect.pos.x);
-        if (zone == 0) {
-            stepBy(-1.0f);
+        if (zone == 0 || zone == 1) {
+            if (WidgetTree* tree = getTree()) {
+                tree->setFocus(this);
+            }
+            stepBy(zone == 0 ? -1.0f : 1.0f);
             return true;
         }
-        if (zone == 1) {
-            stepBy(1.0f);
-            return true;
-        }
-        return false;
+        // Middle value area: single click enters text edit mode.
+        beginEdit();
+        return true;
     }
 
     return false;
@@ -456,6 +531,39 @@ void UIColorEdit::adjustActiveChannel(float delta)
     setColor(next);
 }
 
+void UIColorEdit::openPalette()
+{
+    closePalette();
+    auto overlay = std::make_shared<UIPopupOverlay>("ColorPaletteOverlay");
+    overlay->_bModal     = false; // transparent shield: click outside closes
+    overlay->_contentPos = {swatchRect().pos.x, swatchRect().pos.y + swatchRect().extent.y + 4.0f};
+
+    auto palette = std::make_shared<FColorPalette>("ColorPaletteGrid");
+    palette->setSize({palette->_cellSize * static_cast<float>(palette->_cols),
+                      palette->_cellSize * 4.0f});
+    palette->_onPick = [this, overlay](const glm::vec4& picked)
+    {
+        setColor(picked);
+        overlay->close();
+    };
+    overlay->addDetachedChild(palette);
+
+    overlay->_onDismiss = [this]() { _paletteOverlay.reset(); };
+    _paletteOverlay = overlay;
+    if (WidgetTree* tree = getTree()) {
+        overlay->open(*tree);
+    }
+}
+
+void UIColorEdit::closePalette()
+{
+    if (_paletteOverlay) {
+        const auto overlay = _paletteOverlay;
+        _paletteOverlay.reset();
+        overlay->close();
+    }
+}
+
 void UIColorEdit::paintSelf(UIFrameBuilder& builder)
 {
     builder.addSprite(_layoutRect, _backgroundColor, nullptr);
@@ -525,7 +633,17 @@ bool UIColorEdit::handleInputEvent(const Event& event, const WidgetEventContext&
                 return true;
             }
         }
-        // Swatch or anywhere else in the control: drag adjusts the active channel.
+        // Swatch click: open the preset palette popup.
+        const Rect2D swatch = swatchRect();
+        const bool bOnSwatch = ctx.logicalPoint.x >= swatch.pos.x &&
+                               ctx.logicalPoint.x <= swatch.pos.x + swatch.extent.x &&
+                               ctx.logicalPoint.y >= swatch.pos.y &&
+                               ctx.logicalPoint.y <= swatch.pos.y + swatch.extent.y;
+        if (bOnSwatch) {
+            openPalette();
+            return true;
+        }
+        // Anywhere else in the control: drag adjusts the active channel.
         if (hitTestLayoutRect(ctx.logicalPoint)) {
             _bDragging = true;
             _dragStart = ctx.logicalPoint;
