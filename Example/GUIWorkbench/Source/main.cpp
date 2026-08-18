@@ -82,6 +82,7 @@ int main(int argc, char** argv)
         ("exit-after-frame", "Quit gracefully after rendering N frames", cxxopts::value<uint64_t>()->default_value("0"))
         ("automation-control-port", "Automation control TCP port; 0 disables the server", cxxopts::value<uint16_t>()->default_value("0"))
         ("smoke-actions", "Run the end-to-end automation smoke")
+        ("scenario-render", "Render full frames during scenario replay (runs the G2 validation frame)")
         ("headless", "Build snapshots through GUIHeadlessHost instead of creating an SDL/Vulkan window")
         ("dump-snapshot", "Dump the frame snapshot BMP to path", cxxopts::value<std::string>())
         ("dump-snapshot-json", "Dump the structural frame snapshot JSON to path", cxxopts::value<std::string>())
@@ -105,6 +106,7 @@ int main(int argc, char** argv)
     try {
         const auto result = options.parse(argc, argv);
         config.automation.exitAfterFrame = result["exit-after-frame"].as<uint64_t>();
+        config.bScenarioRender          = result.count("scenario-render") > 0;
         config.automation.controlPort    = result["automation-control-port"].as<uint16_t>();
         app.bSmokeActions = result.count("smoke-actions") > 0;
         if (result.count("dump-snapshot") > 0) {

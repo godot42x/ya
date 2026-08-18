@@ -491,6 +491,7 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
                         static_cast<int>(a.kind), a.pos.x, a.pos.y, a.size.x, a.size.y,
                         static_cast<int>(b.kind), b.pos.x, b.pos.y, b.size.x, b.size.y);
                     bMismatch = true;
+                    ++_validationMismatches;
                     break;
                 }
             }
@@ -500,6 +501,7 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
                 "GUI validation frame {}: incremental paint produced {} items but full repaint produced {} — "
                 "a widget changed paint state without marking itself paint-dirty",
                 _frameCounter, incItems.size(), fullItems.size());
+            ++_validationMismatches;
         }
     }
 #endif

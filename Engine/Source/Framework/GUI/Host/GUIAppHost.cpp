@@ -603,6 +603,7 @@ struct ScenarioEventSource final : IAppEventSource
     bool bDone = false;
     std::function<void(const std::string&)> onCheckpoint;
     std::function<bool(std::string_view)> onAssert;
+    std::function<bool()> onAssertValidationClean;
     std::function<void(uint32_t, uint32_t)> onSetWindowSize;
     std::function<void()> onCaptureFinal;
     std::function<void()> onDone;
@@ -654,6 +655,15 @@ struct ScenarioEventSource final : IAppEventSource
                 break;
             case EGuiScenarioStepKind::Assert:
                 if (onAssert && !onAssert(step.assertion)) {
+                    bDone = true;
+                    if (onDone) {
+                        onDone();
+                    }
+                    return;
+                }
+                break;
+            case EGuiScenarioStepKind::AssertValidationClean:
+                if (onAssertValidationClean && !onAssertValidationClean()) {
                     bDone = true;
                     if (onDone) {
                         onDone();
@@ -881,6 +891,16 @@ bool GUIWindowHost::init()
             return false;
         }
         scenario->onCheckpoint = [this](const std::string& tag) { dumpScenarioCheckpoint(tag); };
+        scenario->onAssertValidationClean = [this]() {
+            const uint64_t mismatches = _impl->tree->getValidationMismatches();
+            if (mismatches != 0) {
+                YA_CORE_ERROR("GUIAppHost scenario assert_validation_clean failed: {} validation mismatch(es)",
+                              mismatches);
+                _impl->bScenarioFailed = true;
+                return false;
+            }
+            return true;
+        };
         scenario->onAssert = [this](std::string_view assertion) {
             std::string error;
             const bool bPass = assertScenarioTree(*_impl->tree, assertion, error);
@@ -1285,6 +1305,22 @@ void GUIWindowHost::onTick(float /*dt*/)
         auto* swapchain = _impl->render->getSwapchain()->as<VulkanSwapChain>();
         swapchain->requestRecreate();
         _impl->bSwapchainRecreatePending = false;
+    }
+    if (_impl->config->bScenarioRender && _impl->bScenarioMode) {
+        // G-C: scenario-render runs full logical frames WITHOUT touching the
+        // swapchain (scenario windows may never be presentable, and
+        // render->begin can fail or crash on an unpresented surface). The
+        // frame degrades to a snapshot-only pass: buildSnapshot drives
+        // layout + paint + the G2 validation frame, nothing is submitted.
+        _impl->tree->setLogicalExtent(queryWindowLogicalExtent(*_impl->render));
+        _impl->delegate->updateUI();
+        _impl->tree->buildSnapshot(UIFrameBuildContext{
+            .uiScale         = {1.0f, 1.0f},
+            .offset          = {0.0f, 0.0f},
+            .textureResolver = resolveBuiltinTexture,
+        });
+        ++_impl->frameCount;
+        return;
     }
     if (_impl->bWindowMinimized) {
         _impl->render->waitIdle();

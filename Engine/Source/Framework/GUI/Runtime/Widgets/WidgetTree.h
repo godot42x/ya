@@ -164,6 +164,9 @@ struct YA_GUI_API WidgetTree final
 
     /// Per-frame counters from the most recent buildSnapshot() call.
     [[nodiscard]] const GuiPerfStats& getPerfStats() const { return _perfStats; }
+    /// Cumulative G2 validation-frame mismatches since tree creation
+    /// (guardrail G-C; always 0 in release builds).
+    [[nodiscard]] uint64_t getValidationMismatches() const { return _validationMismatches; }
     /// Most recent invalidation reason observed by this tree (diagnostics).
     /// Updated on each dirty transition; None until the first invalidation.
     [[nodiscard]] EUIInvalidationReason getLastInvalidationReason() const { return _lastInvalidationReason; }
@@ -305,6 +308,9 @@ struct YA_GUI_API WidgetTree final
     int _cacheIndex = 0;
     /// Frames built since tree creation (drives the debug validation frame).
     uint32_t _frameCounter = 0;
+    /// Cumulative G2 validation mismatches (debug builds only; scenario
+    /// assert_validation_clean reads this through the public getter).
+    uint64_t _validationMismatches = 0;
 
     // Build-context validity (GI-002): draw-item segments hold final target-
     // pixel + resolved-texture data, so a changed uiScale/offset/generation

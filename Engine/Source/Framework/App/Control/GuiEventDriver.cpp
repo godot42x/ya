@@ -104,6 +104,11 @@ std::vector<GuiScenarioStep> parseGuiScenario(std::string_view jsonl,
                 steps.push_back(std::move(step));
                 continue;
             }
+            if (obj.contains("assert_validation_clean")) {
+                step.kind = EGuiScenarioStepKind::AssertValidationClean;
+                steps.push_back(std::move(step));
+                continue;
+            }
             if (obj.contains("assert")) {
                 if (!obj["assert"].is_object()) {
                     if (errorOut) {

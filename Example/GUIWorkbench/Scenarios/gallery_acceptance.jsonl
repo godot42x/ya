@@ -91,4 +91,7 @@
 {"frame":2}
 {"assert":{"layers":{"Popup":{"children":[]}}}}
 {"checkpoint":"search_picked"}
+{"frame":70}
+{"assert_validation_clean":true}
+{"checkpoint":"validation_clean"}
 {"frame":1}

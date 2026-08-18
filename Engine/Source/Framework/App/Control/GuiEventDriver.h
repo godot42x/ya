@@ -39,6 +39,7 @@ enum class EGuiScenarioStepKind : uint8_t
     SetWindowSize,
     Checkpoint,
     Assert,
+    AssertValidationClean,
 };
 
 struct GuiScenarioStep

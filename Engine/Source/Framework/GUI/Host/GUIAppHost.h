@@ -84,6 +84,11 @@ struct FGUIWindowHostConfig
     std::string              scenarioCapturePath;
     std::string              scenarioGoldenPath;
     std::string              scenarioDiffPath;
+    /// Guardrail G-C: render full frames during scenario replay even while
+    /// the window is minimized, so the G2 validation frame runs inside
+    /// behavior scenarios (assert_validation_clean can catch missed dirty
+    /// marks before manual testing).
+    bool                     bScenarioRender = false;
     /// Draw a host-injected snapshot overlay showing render bounds, clip,
     /// pointer/focus route paths, capture and hover. Used to debug coordinate,
     /// clipping and event routing without touching app widgets or Render2D
