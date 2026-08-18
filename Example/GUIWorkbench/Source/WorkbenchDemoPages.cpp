@@ -595,6 +595,7 @@ void buildModalDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& sta
         stack->setSize({0.0f, 0.0f});
         stack->setDirection(ya::EWidgetBoxLayout::Vertical);
         stack->setSpacing(12.0f);
+        stack->setClipChildren(true);
         dialog->addDetachedChild(stack);
 
         auto title = makeLabel("About / New Project", 14.0f);
@@ -889,11 +890,13 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
         .fillColor = {0.16f, 0.18f, 0.22f, 1.0f},
         .textColor = {0.82f, 0.86f, 0.92f, 1.0f},
         .fontSize  = 14,
+        .padding   = {8.0f, 4.0f},
     };
-    const ya::FWidgetStyle kLightTheme{
-        .fillColor = {0.86f, 0.88f, 0.92f, 1.0f},
-        .textColor = {0.12f, 0.14f, 0.18f, 1.0f},
+    const ya::FWidgetStyle kWhiteTheme{
+        .fillColor = {0.94f, 0.95f, 0.97f, 1.0f},
+        .textColor = {0.10f, 0.12f, 0.16f, 1.0f},
         .fontSize  = 14,
+        .padding   = {8.0f, 4.0f},
     };
     auto themeRef = styleSet->define("theme", kDarkTheme);
 
@@ -901,29 +904,31 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     // A [&] capture (styleSet / local bool / local FWidgetStyle) would dangle
     // after the page is built and crash on the first click.
     auto bDarkRef = std::make_shared<bool>(true);
-    const auto applyTheme = [themeRef, kDarkTheme, kLightTheme](bool bDark)
+    const auto applyTheme = [themeRef, kDarkTheme, kWhiteTheme](bool bDark)
     {
-        themeRef->set(bDark ? kDarkTheme : kLightTheme);
+        themeRef->set(bDark ? kDarkTheme : kWhiteTheme);
     };
 
     auto styledText = std::make_shared<ya::UIText>("GalleryStyledText");
     styledText->_bAutoSize = true;
     styledText->setText("Styled text (themed)");
+    styledText->_bFillBackground = true;
     styledText->bindStyle(themeRef);
     tree.attach(*form, styledText);
 
     auto styledCaption = std::make_shared<ya::UIText>("GalleryStyledCaption");
     styledCaption->_bAutoSize = true;
     styledCaption->setText("Another themed text bound to the same style");
+    styledCaption->_bFillBackground = true;
     styledCaption->bindStyle(themeRef);
     tree.attach(*form, styledCaption);
 
-    auto themeButton = makeDemoButton("GalleryTheme", "Toggle theme (restyles group)", 260.0f);
+    auto themeButton = makeDemoButton("GalleryTheme", "Toggle theme (dark/white)", 260.0f);
     themeButton->_onClick = [applyTheme, bDarkRef, log]
     {
         *bDarkRef = !*bDarkRef;
         applyTheme(*bDarkRef);
-        log(std::format("Style theme -> {}", *bDarkRef ? "dark" : "light"));
+        log(std::format("Style theme -> {}", *bDarkRef ? "dark" : "white"));
     };
     tree.attach(*form, themeButton);
 

@@ -38,6 +38,11 @@ struct YA_GUI_API UIText : public UIElement
     glm::vec4     _color    = {1.0f, 1.0f, 1.0f, 1.0f};
     EWidgetAlignH _hAlign   = EWidgetAlignH::Left;
     EWidgetAlignV _vAlign   = EWidgetAlignV::Top;
+    /// Opt-in: draw the resolved style's fillColor as the text background
+    /// (padded by the style's padding). Off by default — plain labels must
+    /// stay transparent so existing UI is unaffected. Useful for themed
+    /// badge/chip labels driven by a UIStyleSet.
+    bool _bFillBackground = false;
 
     /// Changed-only text setter (GI-105): AutoSize text re-measures (Layout)
     /// on a content change; fixed-size text only repaints.

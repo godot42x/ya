@@ -22,6 +22,14 @@ void UIText::paintSelf(UIFrameBuilder& builder)
     if (!font) {
         return;
     }
+    if (_bFillBackground) {
+        // Background = layout rect expanded by the style padding, so a themed
+        // badge/chip reads as a padded block rather than a tight underline.
+        Rect2D bg = _layoutRect;
+        bg.pos -= style.padding;
+        bg.extent += style.padding * 2.0f;
+        builder.addSprite(bg, style.fillColor, nullptr);
+    }
     builder.addText(_layoutRect, text, style.textColor, font, _hAlign, _vAlign);
 }
 
@@ -36,12 +44,15 @@ void UIText::bindStyle(std::shared_ptr<Reactive<FWidgetStyle>> style)
 FWidgetStyle UIText::resolvedStyle(ReactiveBase::EDirtyLevel level) const
 {
     FWidgetStyle style;
+    style.fillColor = _color;
     style.textColor = _color;
     style.fontSize  = _fontSize;
     if (_styleBinding) {
         const FWidgetStyle& bound = _styleBinding->get(level); // records the dependency
+        style.fillColor          = bound.fillColor;
         style.textColor          = bound.textColor;
         style.fontSize           = bound.fontSize;
+        style.padding            = bound.padding;
     }
     return style;
 }
