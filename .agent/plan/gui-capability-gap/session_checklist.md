@@ -28,6 +28,17 @@
 4. 更新 `feature_matrix.json`（本期 items → pass）+ `progress.md`（本轮内容/验证/剩余）。
 5. 工作区可接力；一期 = 一个自洽 commit。
 
+## 自动化验收流程（人工之前必跑）
+
+GUIWorkbench 的 scenario 回放是「人工验收之前」的第一道闸：
+
+1. **单页验收**：`xmake run GUIWorkbench --start-page <X> --scenario <abs path to jsonl> --scenario-dump-dir <dir>`（exit 0 = 全 checkpoint 过；dump dir 每个 checkpoint 一份 tree JSON）。
+2. **交互驱动**：scenario 事件支持 `mouse_press/release/move`、`drag{from,to,steps,button}`、`mouse_wheel{dx,dy}`、`key_press/key_typed`、`window_size`；断言走 `{"assert":{"widget":..,"control":{..},"rect":{..}}}` 递归子集匹配（依赖 WidgetTreeDump 的 control 块——新控件加断言前先补 dump 块）。
+3. **坐标技巧**：先跑一次只带 checkpoint 的 probe 场景 dump 拿实际 rect，再写死交互坐标（布局确定性依赖固定 `window_size`）；滚动容器内的控件交互，先 `mouse_wheel` 滚到位（offset 会 clamp 到 maxOffset，坐标 = 原 y - maxOffset）。
+4. **双击等复合手势**：事件无时间戳，双击 = 两次 press 位置接近；编辑类控件要支持「首字符替换」语义（select-all）才可确定性断言提交值。
+5. **像素级验收**（视觉项：对比度/颜色/朝向）：scenario 断言不了像素，用 GUIAppHost 的 `--automation-control-port` + `capture_screenshot{target:gpu}` 截 BMP 做脚本检查或人工看——scenario 负责结构与行为，截图负责视觉。
+6. **范例**：`Example/GUIWorkbench/Scenarios/gallery_acceptance.jsonl`（滚动+双击输入+通道选择的完整交互验收，5 checkpoint）。
+
 ## 当前下一刀
 
 **P1 矢量绘制原语**：开工前先读 `Engine/Source/Framework/Render/Render2D/LineRender.h/.cpp` 确认 screen 路径现状，再定「FLineRender 扩展 vs 细四边形兜底」。
