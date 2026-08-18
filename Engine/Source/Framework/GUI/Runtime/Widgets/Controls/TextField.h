@@ -85,6 +85,10 @@ struct YA_GUI_API UITextField : public UIElement
 
     size_t     _cursorIndex = 0;
     VisualFlag _bFocused{*this};
+    /// Horizontal scroll offset so the caret stays visible when the text is
+    /// wider than the field (recomputed during paint; derived from _text and
+    /// _cursorIndex, so it never needs its own invalidation).
+    float _scrollX = 0.0f;
 };
 
 } // namespace ya

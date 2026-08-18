@@ -105,6 +105,12 @@ bool UITreeView::onArrow(const glm::vec2& point, const VisibleRow& row) const
 
 void UITreeView::paintSelf(UIFrameBuilder& builder)
 {
+    // Clip to our own rect: the visible-row count can exceed the arranged
+    // height (expanded tree inside a fixed/fill slot, or a parent that does
+    // not grow), and without a clip the overflow rows draw over whatever
+    // sits below in the tree — the widget must never paint outside its rect.
+    builder.pushClip(_layoutRect);
+
     const auto rows = flattenVisible();
     auto       font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, _fontSize);
 
@@ -147,6 +153,8 @@ void UITreeView::paintSelf(UIFrameBuilder& builder)
                             EWidgetAlignH::Left, EWidgetAlignV::Center);
         }
     }
+
+    builder.popClip();
 }
 
 bool UITreeView::handleInputEvent(const Event& event, const WidgetEventContext& ctx)

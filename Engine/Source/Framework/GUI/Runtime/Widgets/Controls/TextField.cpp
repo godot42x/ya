@@ -51,10 +51,28 @@ void UITextField::paintSelf(UIFrameBuilder& builder)
         return;
     }
 
+    // Keep the caret visible: when the text is wider than the field, scroll
+    // horizontally so the caret never sits outside the visible window
+    // (standard single-line input behavior). Unfocused fields show the start.
+    const float fieldW      = _layoutRect.extent.x;
+    const float caretOffset = font->measureText(_text.substr(0, _cursorIndex));
+    const float margin      = 4.0f;
+    if (!_bFocused) {
+        _scrollX = 0.0f;
+    }
+    else if (caretOffset > _scrollX + fieldW - margin) {
+        _scrollX = caretOffset - fieldW + margin;
+    }
+    else if (caretOffset < _scrollX) {
+        _scrollX = caretOffset;
+    }
+
     builder.pushClip(_layoutRect);
-    builder.addText(_layoutRect, _text, _textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
+    Rect2D textRect = _layoutRect;
+    textRect.pos.x -= _scrollX;
+    builder.addText(textRect, _text, _textColor, font, EWidgetAlignH::Left, EWidgetAlignV::Center);
     if (_bFocused) {
-        const float caretX = _layoutRect.pos.x + font->measureText(_text.substr(0, _cursorIndex));
+        const float caretX = _layoutRect.pos.x + caretOffset - _scrollX;
         const float caretY = _layoutRect.pos.y + (_layoutRect.extent.y - font->lineHeight) * 0.5f;
         builder.addSprite(Rect2D{.pos = {caretX, caretY}, .extent = {1.0f, font->lineHeight}},
                           _caretColor, nullptr);
