@@ -1,17 +1,25 @@
-# GUIWorkbench --start-page=Modal. Open the full-window modal, prove its
-# popup/modal route state, then dismiss it through focused Escape delivery.
+# GUIWorkbench --start-page=Modal. Open the popup dialog (transparent
+# shield, no dimming), prove its route state, type a long value into the
+# name field (must stay inside the dialog border), then dismiss via Escape.
 {"frame":2}
 {"assert":{"widget":"OpenModal","control":{"type":"button","pressed":false}}}
 {"checkpoint":"initial"}
 {"event":"mouse_press","x":640,"y":120,"button":0}
 {"event":"mouse_release","x":640,"y":120,"button":0}
 {"frame":1}
-{"assert":{"widget":"ModalOverlay","control":{"type":"popupOverlay","modal":true}}}
+{"assert":{"widget":"ModalOverlay","control":{"type":"popupOverlay","modal":false}}}
 {"assert":{"focusPath":["TreeRoot","Layer_1","ModalOverlay"]}}
-{"checkpoint":"modal_open"}
+{"checkpoint":"dialog_open"}
+{"event":"mouse_press","x":616,"y":357,"button":0}
+{"event":"mouse_release","x":616,"y":357,"button":0}
+{"event":"key_typed","text":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
+{"frame":2}
+{"assert":{"widget":"ModalName","control":{"type":"textField"}}}
+{"assert":{"widget":"ModalName","rect":{"w":320.0}}}
+{"checkpoint":"long_text_typed"}
 {"event":"key_press","key":"Escape"}
 {"frame":2}
 {"assert":{"layers":{"Popup":{"children":[]}}}}
-{"assert":{"lastRoute":{"policyName":"focus","target":"ModalOverlay","resultName":"handledExclusive"}}}
-{"checkpoint":"modal_dismissed"}
+{"assert":{"lastRoute":{"policyName":"focus","target":"ModalName","resultName":"handledExclusive"}}}
+{"checkpoint":"dialog_dismissed"}
 {"frame":1}
