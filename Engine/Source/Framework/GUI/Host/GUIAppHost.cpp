@@ -1147,6 +1147,13 @@ void GUIWindowHost::onTick(float /*dt*/)
             _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
             continue;
         }
+        if (request->method == "dump_tree") {
+            // Live tree dump for on-device assertions (the scenario dump
+            // equivalent when driving the app through the automation port).
+            _impl->automationServer.completeRequest(
+                request, makeAutomationSuccess(*request, dumpWidgetTree(*_impl->tree)));
+            continue;
+        }
         if (request->method == "set_window_size") {
             const auto widthIt  = request->params.find("width");
             const auto heightIt = request->params.find("height");
@@ -1205,7 +1212,7 @@ void GUIWindowHost::onTick(float /*dt*/)
             const auto buttonIt = request->params.find("button");
             const int  button   = (buttonIt != request->params.end() && buttonIt->is_number_integer())
                                       ? buttonIt->get<int>()
-                                      : 1; // SDL_BUTTON_LEFT
+                                      : 0; // ENGINE button code: 0 = left (NOT SDL)
             dispatchToTree(MouseButtonPressedEvent(button), _impl->lastMouseX, _impl->lastMouseY);
             _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
             continue;
@@ -1214,7 +1221,7 @@ void GUIWindowHost::onTick(float /*dt*/)
             const auto buttonIt = request->params.find("button");
             const int  button   = (buttonIt != request->params.end() && buttonIt->is_number_integer())
                                       ? buttonIt->get<int>()
-                                      : 1; // SDL_BUTTON_LEFT
+                                      : 0; // ENGINE button code: 0 = left (NOT SDL)
             dispatchToTree(MouseButtonReleasedEvent(button), _impl->lastMouseX, _impl->lastMouseY);
             _impl->automationServer.completeRequest(request, makeAutomationSuccess(*request));
             continue;

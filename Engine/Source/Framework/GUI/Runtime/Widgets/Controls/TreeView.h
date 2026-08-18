@@ -75,6 +75,8 @@ struct YA_GUI_API UITreeView : public UIElement
 
     /// Fired after a row is selected (with the node id).
     std::function<void(const std::string& id)> _onSelectionChanged;
+    /// Fired after a node is expanded/collapsed (diagnostics + host sync).
+    std::function<void(const std::string& id, bool bExpanded)> _onToggleExpanded;
 
     /// Visible row count under the current expand/filter state (dump /
     /// scenario assertions).

@@ -119,8 +119,12 @@ void UITreeView::setExpanded(const std::string& id, bool expanded)
 void UITreeView::toggleExpanded(const std::string& id)
 {
     auto& ref = expandedRef(id);
-    ref->set(!ref->value());
+    const bool bNext = !ref->value();
+    ref->set(bNext);
     markPaintDirty(); // see setExpanded
+    if (_onToggleExpanded) {
+        _onToggleExpanded(id, bNext);
+    }
 }
 
 bool UITreeView::isExpanded(const std::string& id) const
@@ -253,9 +257,12 @@ int UITreeView::hitRowIndex(const glm::vec2& point) const
 bool UITreeView::onArrow(const glm::vec2& point, const VisibleRow& row) const
 {
     // The row itself was already resolved by hitRowIndex (y), so only the
-    // horizontal band of the arrow button is tested here.
+    // horizontal band of the arrow button is tested here. The band extends
+    // a few pixels beyond the drawn button so a slightly-off click still
+    // lands — a 22px button is hard to hit precisely on a real display.
+    constexpr float kHitSlack = 4.0f;
     const float x0 = _layoutRect.pos.x + static_cast<float>(row.depth) * _indentWidth;
-    return point.x >= x0 && point.x <= x0 + _arrowWidth;
+    return point.x >= x0 - kHitSlack && point.x <= x0 + _arrowWidth + kHitSlack;
 }
 
 Rect2D UITreeView::arrowButtonRect(float x, float rowTopY) const

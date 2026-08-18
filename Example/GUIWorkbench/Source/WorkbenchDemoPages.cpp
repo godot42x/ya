@@ -992,6 +992,10 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
         }
         log(std::format("Tree reorder '{}' {} '{}'", fromId, mode == 0 ? "before" : (mode == 1 ? "into" : "after"), toId));
     };
+    treeView->_onToggleExpanded = [log](const std::string& id, bool bExpanded)
+    {
+        log(std::format("Tree toggle '{}' -> {}", id, bExpanded ? "expanded" : "collapsed"));
+    };
     treeView->_onContextMenu = [log](const std::string& nodeId, const glm::vec2&)
     {
         log(std::format("Tree context menu -> '{}'", nodeId));
