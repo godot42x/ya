@@ -84,6 +84,14 @@
 - Gallery section「8. TreeView editing」。
 - scenario：`gallery_tree_edit.jsonl`。
 
+### G-C 验收基础设施：scenario 渲染帧开关（P6 之前插入）
+
+> 2026-08-18 用户定调：人肉前验收须覆盖渲染级检查，scenario 模式不渲染帧是结构缺口。
+
+- **`--scenario-render`**：scenario 模式下 `frame` 步骤真实渲染（buildSnapshot + compose 提交），使 G2 校验帧在行为场景内生效。
+- **校验告警断言**：WidgetTree 累计校验 mismatch 计数（`getValidationMismatchCount()`）；场景新增 `{"assert_validation_clean":true}` 步骤断言「渲染帧内零校验告警」（scene dump 或专用断言通道）。
+- 验收：gallery_acceptance 加 `--scenario-render` + 长帧运行零告警；人为注入漏标脏后 `assert_validation_clean` 失败。
+
 ### P6 P1 交互补全
 - tooltip（决策 7）；TextWrapped（决策 8）；`UIElement::_bEnabled` 子树禁用（setEnabled changed-only + paint 灰度 + 输入入口拦截）；`UIDialog` 模态对话框（决策 4）。
 - Gallery section「9. Tooltip/Wrap/Disabled/Dialog」。
@@ -114,7 +122,7 @@
 
 ## 6. 执行顺序
 
-P1 → P2 → P3 → P4 → **G-A → G-B** → P5 → P6 → P7。每期 = 1 个自洽 commit（代码 + 工件更新 + scenario 同 commit）。
+P1 → P2 → P3 → P4 → **G-A → G-B** → P5 → **G-C** → P6 → P7。每期 = 1 个自洽 commit（代码 + 工件更新 + scenario 同 commit）。
 
 ## 7. 修订记录
 

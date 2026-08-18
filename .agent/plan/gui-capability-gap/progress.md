@@ -113,7 +113,13 @@
 
 **剩余问题**：无。P5 收口。
 
-**下一刀**：P6 交互补全（tooltip/TextWrapped/_bEnabled/UIDialog）。
+## 2026-08-18 — G-C 验收基础设施立项（插入 P6 之前）
+
+用户定调「把 scenario 渲染帧开关立项插入排期」——scenario 模式不渲染帧是验收体系的结构缺口（G2 校验帧/像素级检查无法在行为场景内跑）。G-C：`--scenario-render` 开关（frame 步骤真实渲染）+ WidgetTree 校验 mismatch 计数 + 场景 `assert_validation_clean` 断言。排期：P1-P5 → G-A/G-B → G-C → P6 → P7。
+
+另：本日沉淀 gui-framework skill 两个新 section（控件交互契约 5 条 + 人肉前验收 6 条，commit 82f95715）；四修复（spin 编辑态 +/-、combo dismiss 失焦、tree toggle 标 Paint、drop 标签，commit e68ecefd）。
+
+**下一刀**：G-C（scenario 渲染帧开关 + 校验断言），之后 P6 交互补全。
 
 ## 2026-08-18 — 护栏补强立项（插入 P5 之前）
 
