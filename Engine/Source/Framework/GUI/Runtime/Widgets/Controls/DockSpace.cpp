@@ -84,10 +84,10 @@ void UIDockSpace::layoutAssigned(const Rect2D& rect)
             panes[zone]->addDetachedChild(bar);
 
             auto content = std::make_shared<UIContainer>(std::format("DockContent{}", zone));
-            content->_anchorMin = {0.0f, 0.0f};
-            content->_anchorMax = {1.0f, 1.0f};
-            content->setSize({0.0f, 0.0f});
+            // Stretch to fill the zone's remaining height.
+            panes[zone]->setStretchLastChild(true);
             panes[zone]->addDetachedChild(content);
+            content->setStretchLastChild(true);
 
             group.bar     = bar.get();
             group.content = content.get();

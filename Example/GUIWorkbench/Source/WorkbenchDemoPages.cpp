@@ -1363,9 +1363,6 @@ void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& stat
         auto panel = std::make_shared<ya::UIPanel>(name + "_Body");
         panel->setColor({0.12f, 0.13f, 0.17f, 1.0f});
         auto label = std::make_shared<ya::UIText>(name + "_Label");
-        label->_anchorMin = {0.0f, 0.0f};
-        label->_anchorMax = {1.0f, 1.0f};
-        label->setSize({0.0f, 0.0f});
         label->_hAlign = ya::EWidgetAlignH::Center;
         label->_vAlign = ya::EWidgetAlignV::Center;
         label->_fontSize = 14;
