@@ -117,4 +117,9 @@ void buildScrollSplitDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoStat
 void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                       const std::function<void(const std::string&)>& log);
 
+/// Interaction-completion page (editor-parity P6): tooltip, wrapped text,
+/// subtree disable and the modal dialog.
+void buildInteractionsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+                           const std::function<void(const std::string&)>& log);
+
 } // namespace guiworkbench

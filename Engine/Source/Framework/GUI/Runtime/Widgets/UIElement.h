@@ -247,6 +247,12 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// win for this widget; keeps data/display consistency the invariant.
     bool _bVolatile = false;
 
+    /// Tooltip text (editor-parity P6). When non-empty, the tree shows a
+    /// styled tooltip below this widget after a hover dwell delay.
+    std::string _tooltip;
+    void setTooltip(std::string text) { _tooltip = std::move(text); }
+    [[nodiscard]] const std::string& getTooltip() const { return _tooltip; }
+
     /// Guardrail G1: paint() clips this widget's own paint + children to its
     /// layout rect by default, so a widget can never draw over its siblings.
     /// Set false only for widgets that legitimately paint outside their rect

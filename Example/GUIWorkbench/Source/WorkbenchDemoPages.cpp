@@ -1260,4 +1260,49 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
     tree.attach(*form, makeBodyText("Expected: incrementing, toggling, renaming, resizing, selecting and theming all update their targets without the page rebuilding."));
 }
 
+
+
+void buildInteractionsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+                           const std::function<void(const std::string&)>& log)
+{
+    auto panel = std::make_shared<ya::UIPanel>("InteractionsDemo");
+    panel->_anchorMin = {0.0f, 0.0f};
+    panel->_anchorMax = {1.0f, 1.0f};
+    panel->setColor(kPanelColor);
+    tree.attach(parent, panel);
+
+    auto form = std::make_shared<ya::UIContainer>("InteractionsForm");
+    form->_anchorMin = {0.0f, 0.0f};
+    form->_anchorMax = {1.0f, 1.0f};
+    form->setPadding({16.0f, 12.0f});
+    form->setSize({0.0f, 0.0f});
+    form->setDirection(ya::EWidgetBoxLayout::Vertical);
+    form->setSpacing(12.0f);
+    tree.attach(*panel, form);
+
+    tree.attach(*form, makeLabel("Tooltip & wrapped text (editor-parity P6)"));
+
+    auto tipRow = makeRow(tree, *form);
+    auto tooltipButton = makeDemoButton("TooltipBtn", "Hover me (tooltip)", 200.0f);
+    tooltipButton->setTooltip("This tooltip appears after a 0.5s hover dwell.");
+    tree.attach(*tipRow, tooltipButton);
+
+    auto wrappedText = std::make_shared<ya::UIText>("WrappedText");
+    wrappedText->_bWrap = true;
+    wrappedText->_maxWrapWidth = 360.0f;
+    wrappedText->_bAutoSize = true;
+    wrappedText->_fontSize = 13;
+    wrappedText->setText(
+        "This paragraph demonstrates automatic text wrapping. Long content breaks onto "
+        "multiple lines instead of overflowing its box, matching the editor's TextWrapped "
+        "behavior. CJK text also wraps: 中文换行测试中文换行测试。");
+    tree.attach(*form, wrappedText);
+    if (auto* slot = form->getBoxSlot(*wrappedText)) {
+        slot->setCrossAlignment(ya::EUIBoxSlotCrossAlignment::Start);
+    }
+
+    (void)state;
+    (void)log;
+}
+
 } // namespace guiworkbench

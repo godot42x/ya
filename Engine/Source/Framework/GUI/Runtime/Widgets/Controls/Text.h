@@ -9,6 +9,8 @@
 namespace ya
 {
 
+struct Font;
+
 /// Text element rendered through the font atlas.
 struct YA_GUI_API UIText : public UIElement
 {
@@ -43,6 +45,12 @@ struct YA_GUI_API UIText : public UIElement
     /// stay transparent so existing UI is unaffected. Useful for themed
     /// badge/chip labels driven by a UIStyleSet.
     bool _bFillBackground = false;
+    /// Opt-in word/character wrapping (editor-parity P6): when true the
+    /// text breaks onto multiple lines so it never exceeds `_maxWrapWidth`
+    /// (0 = use the arranged rect width). Wrapped text is painted line by
+    /// line and the desired height grows with the line count.
+    bool  _bWrap         = false;
+    float _maxWrapWidth  = 0.0f;
 
     /// Changed-only text setter (GI-105): AutoSize text re-measures (Layout)
     /// on a content change; fixed-size text only repaints.
@@ -74,6 +82,13 @@ struct YA_GUI_API UIText : public UIElement
 
     void paintSelf(UIFrameBuilder& builder) override;
     [[nodiscard]] glm::vec2 computeDesiredSize() const override;
+
+    /// Greedy wrap: break `text` into lines no wider than `maxWidth`
+    /// (measured px). Breaks at whitespace when possible, falls back to
+    /// hard character breaks for long tokens (CJK-safe).
+    [[nodiscard]] static std::vector<std::string> wrapText(const std::string& text,
+                                                           const std::shared_ptr<Font>& font,
+                                                           float maxWidth);
 
   private:
     std::shared_ptr<Reactive<std::string>> _textBinding;

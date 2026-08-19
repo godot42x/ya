@@ -1,3 +1,4 @@
+#include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/WidgetTree.h"
 
 #include "Core/Log.h"
@@ -114,6 +115,54 @@ void WidgetTree::updateHovered(UIElement* widget)
     if (_hovered && _hovered->isAttached()) {
         _hovered->onPointerEnter();
     }
+    // Tooltip dwell restarts on every hover change; a stale tooltip is
+    // removed immediately so it never points at the wrong widget.
+    _hoveredSinceFrame = _frameCounter;
+    removeTooltip();
+}
+
+void WidgetTree::removeTooltip()
+{
+    if (_tooltipHost && _tooltipHost->isAttached()) {
+        detach(*_tooltipHost);
+    }
+    _tooltipHost.reset();
+    _bTooltipShown = false;
+}
+
+void WidgetTree::updateTooltip()
+{
+    // Dwell delay: show the tooltip after ~0.5s of uninterrupted hover
+    // (frame-count based; no wall clock needed).
+    constexpr uint32_t kTooltipDwellFrames = 30;
+    if (_bTooltipShown || !_hovered || _hovered->_tooltip.empty() ||
+        _frameCounter - _hoveredSinceFrame < kTooltipDwellFrames) {
+        return;
+    }
+    auto font = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, 12);
+    const float textW = font ? font->measureText(_hovered->_tooltip) : 80.0f;
+    const float lineH = font ? font->lineHeight : 16.0f;
+
+    auto host = std::make_shared<UIPanel>("TooltipHost");
+    host->setSize({textW + 16.0f, lineH + 8.0f});
+    host->setColor({0.14f, 0.15f, 0.18f, 0.97f});
+
+    auto label = std::make_shared<UIText>("TooltipLabel");
+    label->_anchorMin = {0.0f, 0.0f};
+    label->_anchorMax = {1.0f, 1.0f};
+    label->setSize({0.0f, 0.0f});
+    label->setPosition({8.0f, 4.0f});
+    label->_fontSize  = 12;
+    label->_color     = {0.95f, 0.96f, 0.98f, 1.0f};
+    label->setText(_hovered->_tooltip);
+    host->addDetachedChild(label);
+
+    // Anchor below the hovered widget's rect (clamped into the window).
+    const Rect2D& target = _hovered->_layoutRect;
+    host->setPosition({target.pos.x, target.pos.y + target.extent.y + 4.0f});
+    attachToLayer(ELayer::Tooltip, host);
+    _tooltipHost = host;
+    _bTooltipShown = true;
 }
 
 void WidgetTree::preparePointerState(EEvent::T eventType, const WidgetEventContext& ctx)
@@ -445,6 +494,8 @@ UIFrameSnapshot WidgetTree::buildSnapshot(const UIFrameBuildContext& ctx)
         layoutDur             = clock_t::now() - layoutStart;
         _perfStats.layoutMS   = std::chrono::duration<float, std::milli>(layoutDur).count();
     }
+
+    updateTooltip();
 
     const auto paintStart = clock_t::now();
     _itemCache[_cacheIndex ^ 1].clear();

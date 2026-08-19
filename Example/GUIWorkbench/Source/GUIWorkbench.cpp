@@ -59,6 +59,10 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
     {
         buildGalleryDemo(t, p, demoState, status);
     });
+    surface.addPage("Interactions", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    {
+        buildInteractionsDemo(t, p, demoState, status);
+    });
 
     applyStartPage();
 

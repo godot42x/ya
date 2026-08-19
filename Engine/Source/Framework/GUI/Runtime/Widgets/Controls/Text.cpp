@@ -30,7 +30,52 @@ void UIText::paintSelf(UIFrameBuilder& builder)
         bg.extent += style.padding * 2.0f;
         builder.addSprite(bg, style.fillColor, nullptr);
     }
+    if (_bWrap) {
+        // Wrapped text paints line by line; each line is its own text item
+        // so the incremental cache stays granular.
+        const float maxWidth = _maxWrapWidth > 0.0f ? _maxWrapWidth : _layoutRect.extent.x;
+        const auto lines     = wrapText(text, font, maxWidth);
+        float      lineY     = _layoutRect.pos.y;
+        for (const std::string& line : lines) {
+            builder.addText(Rect2D{.pos = {_layoutRect.pos.x, lineY},
+                                   .extent = {_layoutRect.extent.x, font->lineHeight}},
+                            line, style.textColor, font, _hAlign, EWidgetAlignV::Top);
+            lineY += font->lineHeight;
+        }
+        return;
+    }
     builder.addText(_layoutRect, text, style.textColor, font, _hAlign, _vAlign);
+}
+
+std::vector<std::string> UIText::wrapText(const std::string& text,
+                                          const std::shared_ptr<Font>& font,
+                                          float maxWidth)
+{
+    std::vector<std::string> lines;
+    if (!font || maxWidth <= 0.0f) {
+        lines.push_back(text);
+        return lines;
+    }
+    std::string current;
+    size_t      i = 0;
+    while (i < text.size()) {
+        // Take one UTF-8 code point at a time (CJK-safe).
+        size_t next = i + 1;
+        while (next < text.size() && (static_cast<unsigned char>(text[next]) & 0xC0) == 0x80) {
+            ++next;
+        }
+        const std::string candidate = current + text.substr(i, next - i);
+        if (!current.empty() && font->measureText(candidate) > maxWidth) {
+            lines.push_back(current);
+            current.clear();
+        }
+        current += text.substr(i, next - i);
+        i = next;
+    }
+    if (!current.empty() || lines.empty()) {
+        lines.push_back(current);
+    }
+    return lines;
 }
 
 void UIText::bindStyle(std::shared_ptr<Reactive<FWidgetStyle>> style)
@@ -70,6 +115,11 @@ glm::vec2 UIText::computeDesiredSize() const
     auto               font  = FontManager::get()->getFont(DEFAULT_RUNTIME_FONT_NAME, style.fontSize);
     if (!font) {
         return _size;
+    }
+    if (_bWrap) {
+        const float maxWidth = _maxWrapWidth > 0.0f ? _maxWrapWidth : _size.x;
+        const auto  lines    = wrapText(resolvedText(ReactiveBase::EDirtyLevel::Layout), font, maxWidth);
+        return {maxWidth, static_cast<float>(lines.size()) * font->lineHeight};
     }
     return {font->measureText(resolvedText(ReactiveBase::EDirtyLevel::Layout)), font->lineHeight};
 }

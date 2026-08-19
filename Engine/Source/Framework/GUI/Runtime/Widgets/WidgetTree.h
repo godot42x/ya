@@ -194,6 +194,12 @@ struct YA_GUI_API WidgetTree final
     void releasePointerCapture(UIElement* widget);
     [[nodiscard]] UIElement* getPointerCapture() const { return _captured; }
     [[nodiscard]] UIElement* getHovered() const { return _hovered; }
+
+    /// Remove the active tooltip (hover change / detach / tree teardown).
+    void removeTooltip();
+    /// Mount the tooltip for the hovered widget once the dwell delay elapsed
+    /// (called every frame from buildSnapshot).
+    void updateTooltip();
     [[nodiscard]] const WidgetPointerState& getPointerState() const { return _pointerState; }
     /// Current pointer route path, root to target. For ordinary input it is
     /// the topmost hit path; while captured it terminates at the captor.
@@ -323,6 +329,12 @@ struct YA_GUI_API WidgetTree final
     UIElement*    _focused      = nullptr;
     UIElement*    _captured     = nullptr;
     UIElement*    _hovered      = nullptr;
+    /// Tooltip host widget currently mounted on the Tooltip layer (null
+    /// when no tooltip is shown). Owned by the tree via attachment.
+    std::shared_ptr<UIElement> _tooltipHost;
+    /// Frame at which the current hover began (dwell delay for tooltips).
+    uint32_t _hoveredSinceFrame = 0;
+    bool     _bTooltipShown     = false;
     WidgetPointerState _pointerState;
     // Weak pointer paths (UE FWeakWidgetPath semantics): root-to-target live
     // routes that survive widget destruction without dangling. Read through

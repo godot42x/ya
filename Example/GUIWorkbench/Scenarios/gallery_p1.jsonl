@@ -1,0 +1,16 @@
+# GUIWorkbench --start-page=Interactions --scenario-render. P6: tooltip
+# dwell + wrapped text. (The tooltip dwell counts rendered frames, so this
+# scenario requires the G-C scenario-render flag.)
+{"window_size":{"width":1280,"height":720}}
+{"frame":3}
+{"assert":{"widget":"WrappedText","rect":{"w":360.0,"h":85.3125}}}
+{"checkpoint":"wrapped_text"}
+{"event":"mouse_move","x":100,"y":115}
+{"frame":35}
+{"assert":{"widget":"TooltipHost"}}
+{"checkpoint":"tooltip_shown"}
+{"event":"mouse_move","x":640,"y":400}
+{"frame":2}
+{"assert":{"layers":{"Tooltip":{"children":[]}}}}
+{"checkpoint":"tooltip_cleared"}
+{"frame":1}
