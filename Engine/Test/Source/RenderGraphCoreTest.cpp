@@ -483,8 +483,8 @@ TEST(RenderGraphCoreTest, CompileBuildsStableDependencyOrder)
     EXPECT_EQ(compiled.passPlans[1].kind, ERGPassKind::Compute);
     const auto textureStates = collectTextureStatePlans(compiled);
     ASSERT_EQ(textureStates.size(), 2u);
-    EXPECT_EQ(textureStates[0].requiredState.layout, EImageLayout::ColorAttachmentOptimal);
-    EXPECT_EQ(textureStates[1].requiredState.layout, EImageLayout::ShaderReadOnlyOptimal);
+    EXPECT_EQ(textureStates[0].layout, EImageLayout::ColorAttachmentOptimal);
+    EXPECT_EQ(textureStates[1].layout, EImageLayout::ShaderReadOnlyOptimal);
 }
 
 TEST(RenderGraphCoreTest, CompileTracksTextureReadersBeforeSubsequentWrite)
@@ -1334,9 +1334,7 @@ TEST(RenderGraphCoreTest, CompileBuildsBufferAndDepthStatePlans)
     ASSERT_TRUE(compiled.isValid());
     const auto textureStates = collectTextureStatePlans(compiled);
     ASSERT_EQ(textureStates.size(), 1u);
-    EXPECT_EQ(textureStates[0].requiredState.layout, EImageLayout::DepthStencilAttachmentOptimal);
-    EXPECT_EQ(textureStates[0].requiredState.access,
-              static_cast<EResourceAccess::T>(EResourceAccess::DepthStencilAttachmentRead | EResourceAccess::DepthStencilAttachmentWrite));
+    EXPECT_EQ(textureStates[0].layout, EImageLayout::DepthStencilAttachmentOptimal);
     const auto bufferStates = collectBufferStatePlans(compiled);
     ASSERT_EQ(bufferStates.size(), 1u);
     EXPECT_EQ(bufferStates[0].requiredState.access, EResourceAccess::ShaderWrite);
@@ -1422,9 +1420,9 @@ TEST(RenderGraphCoreTest, CompileUsesImportedViewRangeForTextureStatePlan)
     ASSERT_TRUE(compiled.isValid());
     const auto textureStates = collectTextureStatePlans(compiled);
     ASSERT_EQ(textureStates.size(), 1u);
-    EXPECT_EQ(textureStates[0].requiredState.subresourceRange.baseMipLevel, 1u);
-    EXPECT_EQ(textureStates[0].requiredState.subresourceRange.baseArrayLayer, 3u);
-    EXPECT_EQ(textureStates[0].requiredState.subresourceRange.layerCount, 1u);
+    EXPECT_EQ(textureStates[0].subresourceRange.baseMipLevel, 1u);
+    EXPECT_EQ(textureStates[0].subresourceRange.baseArrayLayer, 3u);
+    EXPECT_EQ(textureStates[0].subresourceRange.layerCount, 1u);
 }
 
 TEST(RenderGraphCoreTest, CompileModelsComputeReadWriteToIndirectReadDependency)
@@ -1572,9 +1570,9 @@ TEST(RenderGraphCoreTest, ImportedSubresourceHelperKeepsProvidedViewAndCompileRa
     ASSERT_TRUE(compiled.isValid());
     const auto textureStates = collectTextureStatePlans(compiled);
     ASSERT_EQ(textureStates.size(), 1u);
-    EXPECT_EQ(textureStates[0].requiredState.subresourceRange.aspectMask, EImageAspect::Depth);
-    EXPECT_EQ(textureStates[0].requiredState.subresourceRange.baseArrayLayer, 0u);
-    EXPECT_EQ(textureStates[0].requiredState.subresourceRange.layerCount, 1u);
+    EXPECT_EQ(textureStates[0].subresourceRange.aspectMask, EImageAspect::Depth);
+    EXPECT_EQ(textureStates[0].subresourceRange.baseArrayLayer, 0u);
+    EXPECT_EQ(textureStates[0].subresourceRange.layerCount, 1u);
 
     RenderGraphResourceRegistry registry(factory);
     registry.sync(graph);

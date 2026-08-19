@@ -108,8 +108,8 @@ bool RenderGraphExecutor::executeCompiled(
 
             cmdBuf.transitionImageLayoutAuto(
                 texture->getImage(),
-                statePlan.requiredState.layout,
-                &statePlan.requiredState.subresourceRange);
+                statePlan.layout,
+                &statePlan.subresourceRange);
         }
 
         for (const auto& statePlan : passPlan.bufferStates) {
@@ -158,6 +158,7 @@ bool RenderGraphExecutor::executeCompiled(
                     barrierSize);
                 if (bAliasBoundary) {
                     aliasBoundaryBarriersEmitted.insert(statePlan.buffer);
+                    _bufferStates[buffer].clear();
                 }
             }
 

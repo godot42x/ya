@@ -3,7 +3,6 @@
 #include "Graph/RenderGraph.h"
 #include "Core/Api.h"
 #include "Graph/RenderGraphResourceRegistry.h"
-#include "RHI/Core/ResourceStateTracker.h"
 
 #include <unordered_map>
 #include <vector>
@@ -16,7 +15,6 @@ class YA_RENDER_GRAPH_API RenderGraphExecutor
   private:
     std::unordered_map<IBuffer*, std::vector<BufferResourceState>> _bufferStates;
     RenderGraphResourceRegistry _registry;
-    ResourceStateTracker        _resourceStateTracker;
 
     [[nodiscard]] static const BufferResourceState* findBufferState(
         const std::vector<BufferResourceState>& states,

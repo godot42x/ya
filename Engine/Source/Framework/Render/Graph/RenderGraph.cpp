@@ -397,47 +397,17 @@ void normalizeImportedBufferDesc(RGImportedBufferDesc& importedDesc)
                    formatBufferUsageFlags(importedDesc.buffer->getUsage()));
 }
 
-ImageResourceState makeTextureState(const RGTextureResource& resource, ERGPassResourceAccess access)
+EImageLayout::T makeTextureLayout(ERGPassResourceAccess access)
 {
-    ImageResourceState state{
-        .subresourceRange = makeImportedViewRange(resource),
-    };
-
     switch (access) {
-    case ERGPassResourceAccess::Read:
-        state.stages = EPipelineStage::FragmentShader;
-        state.access = EResourceAccess::ShaderRead;
-        state.layout = EImageLayout::ShaderReadOnlyOptimal;
-        break;
-    case ERGPassResourceAccess::Write:
-        state.stages = EPipelineStage::ComputeShader;
-        state.access = EResourceAccess::ShaderWrite;
-        state.layout = EImageLayout::General;
-        break;
-    case ERGPassResourceAccess::ColorAttachment:
-        state.stages = EPipelineStage::ColorAttachmentOutput;
-        state.access = EResourceAccess::ColorAttachmentWrite;
-        state.layout = EImageLayout::ColorAttachmentOptimal;
-        break;
-    case ERGPassResourceAccess::DepthAttachment:
-        state.stages = static_cast<EPipelineStage::T>(EPipelineStage::EarlyFragmentTests | EPipelineStage::LateFragmentTests);
-        state.access = static_cast<EResourceAccess::T>(
-            EResourceAccess::DepthStencilAttachmentRead | EResourceAccess::DepthStencilAttachmentWrite);
-        state.layout = EImageLayout::DepthStencilAttachmentOptimal;
-        break;
-    case ERGPassResourceAccess::TransferSrc:
-        state.stages = EPipelineStage::Transfer;
-        state.access = EResourceAccess::TransferRead;
-        state.layout = EImageLayout::TransferSrc;
-        break;
-    case ERGPassResourceAccess::TransferDst:
-        state.stages = EPipelineStage::Transfer;
-        state.access = EResourceAccess::TransferWrite;
-        state.layout = EImageLayout::TransferDst;
-        break;
+    case ERGPassResourceAccess::Read:            return EImageLayout::ShaderReadOnlyOptimal;
+    case ERGPassResourceAccess::Write:           return EImageLayout::General;
+    case ERGPassResourceAccess::ColorAttachment: return EImageLayout::ColorAttachmentOptimal;
+    case ERGPassResourceAccess::DepthAttachment: return EImageLayout::DepthStencilAttachmentOptimal;
+    case ERGPassResourceAccess::TransferSrc:     return EImageLayout::TransferSrc;
+    case ERGPassResourceAccess::TransferDst:     return EImageLayout::TransferDst;
     }
-
-    return state;
+    return EImageLayout::Undefined;
 }
 
 BufferResourceState makeBufferState(ERGPassKind passKind, const RGBufferResource& resource, const RGBufferUsage& usage)
@@ -1403,9 +1373,10 @@ RGCompiledGraph RenderGraph::compile() const
             }
 
             passPlans[pass.handle.index].textureStates.push_back({
-                .pass          = pass.handle,
-                .texture       = usage.handle,
-                .requiredState = makeTextureState(*resource, usage.access),
+                .pass            = pass.handle,
+                .texture         = usage.handle,
+                .layout          = makeTextureLayout(usage.access),
+                .subresourceRange = makeImportedViewRange(*resource),
             });
 
             const bool bWrite =
@@ -1887,7 +1858,7 @@ std::string RenderGraph::debugDump(const RGCompiledGraph& compiled) const
         for (const auto& state : passPlan.textureStates) {
             const auto* texture = getTexture(state.texture);
             oss << "      " << (texture ? texture->desc.label : "<invalid-texture>")
-                << " layout=" << static_cast<uint32_t>(state.requiredState.layout) << "\n";
+                << " layout=" << static_cast<uint32_t>(state.layout) << "\n";
         }
 
         oss << "    bufferStates(" << passPlan.bufferStates.size() << ")\n";

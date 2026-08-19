@@ -238,9 +238,10 @@ struct RGDependencyEdge
 
 struct RGTextureStatePlan
 {
-    RGPassHandle        pass{};
-    RGTextureHandle     texture{};
-    ImageResourceState  requiredState{};
+    RGPassHandle          pass{};
+    RGTextureHandle       texture{};
+    EImageLayout::T       layout = EImageLayout::Undefined;
+    ImageSubresourceRange subresourceRange{};
 };
 
 struct RGBufferStatePlan
