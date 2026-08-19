@@ -5,18 +5,23 @@
 
 #include "Core/Log.h"
 
+#include "App/Control/GuiEventDriver.h"
+#include "App/Kernel/GuiScenarioEventSource.h"
 #include "GUI/Host/GUIApp.h"
 #include "GUI/Host/GUIHeadlessHost.h"
 #include "Render2D/Render2D.h"
 #include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/UIFrameSnapshotDump.h"
+#include "GUI/Widgets/WidgetTreeDump.h"
 
 #include "GUIWorkbench.h"
 
 #include <cxxopts.hpp>
 
 #include <exception>
+#include <filesystem>
 #include <fstream>
+#include <memory>
 #include <string>
 
 namespace
@@ -167,9 +172,27 @@ int main(int argc, char** argv)
                 YA_CORE_WARN("GUIWorkbench headless: --dump-snapshot-json is recommended for cross-path evidence");
             }
             registerHeadlessWorkbenchFonts(config.fontSizes);
+
+            // The scenario source outlives host.run() and is destroyed
+            // before the host; its callbacks capture the host by reference
+            // and are wired once the host exists.
+            std::unique_ptr<ya::GuiScenarioEventSource> scenario;
+            if (!config.scenarioPath.empty()) {
+                scenario       = std::make_unique<ya::GuiScenarioEventSource>();
+                std::string scenarioError;
+                scenario->steps = ya::loadGuiScenarioFile(config.scenarioPath, &scenarioError);
+                if (!scenarioError.empty()) {
+                    YA_CORE_ERROR("GUIWorkbench headless: failed to load scenario '{}': {}",
+                                  config.scenarioPath,
+                                  scenarioError);
+                    return 1;
+                }
+            }
+
             ya::GUIHeadlessHost host(
                 ya::FGUIHeadlessHostConfig{
                     .logicalExtent  = {config.width, config.height},
+                    .eventSource    = scenario.get(),
                     .automation     = config.automation,
                     .bPerfTelemetry = result.count("perf-telemetry") > 0,
                 },
@@ -177,6 +200,55 @@ int main(int argc, char** argv)
             if (!host.init()) {
                 return 1;
             }
+
+            if (scenario) {
+                bool bScenarioFailed = false;
+                scenario->onCheckpoint = [&host, &config](const std::string& tag) {
+                    if (config.scenarioDumpDir.empty() || tag.empty()) {
+                        return;
+                    }
+                    std::error_code ec;
+                    std::filesystem::create_directories(config.scenarioDumpDir, ec);
+                    const std::string path = config.scenarioDumpDir + "/" + tag + ".json";
+                    std::ofstream     file(path);
+                    if (file) {
+                        file << ya::dumpWidgetTree(host.getTree()).dump(2);
+                        YA_CORE_INFO("GUIWorkbench headless checkpoint '{}' -> {}", tag, path);
+                    }
+                    else {
+                        YA_CORE_ERROR("GUIWorkbench headless checkpoint: cannot write '{}'", path);
+                    }
+                };
+                scenario->onAssert = [&host, &bScenarioFailed](std::string_view assertion) {
+                    std::string error;
+                    const bool bPass = ya::assertScenarioTree(host.getTree(), assertion, error);
+                    if (!bPass) {
+                        YA_CORE_ERROR("GUIWorkbench headless scenario assertion failed: {}", error);
+                        bScenarioFailed = true;
+                    }
+                    else {
+                        YA_CORE_INFO("GUIWorkbench headless scenario assertion passed: {}", assertion);
+                    }
+                    return bPass;
+                };
+                scenario->onSetWindowSize = [&host](uint32_t width, uint32_t height) {
+                    host.getTree().setLogicalExtent({width, height});
+                };
+                scenario->onDone = [&host]() { host.requestQuit(); };
+
+                const int runResult = host.run();
+                if (!config.dumpSnapshotJsonPath.empty() &&
+                    !writeHeadlessSnapshotJson(host.getLastSnapshot(), config.dumpSnapshotJsonPath)) {
+                    return 1;
+                }
+                host.shutdown();
+                if (bScenarioFailed) {
+                    YA_CORE_ERROR("GUIWorkbench headless: scenario '{}' failed", config.scenarioPath);
+                    return 1;
+                }
+                return runResult;
+            }
+
             const int runResult = host.run();
             if (!config.dumpSnapshotJsonPath.empty() &&
                 !writeHeadlessSnapshotJson(host.getLastSnapshot(), config.dumpSnapshotJsonPath)) {

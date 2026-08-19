@@ -18,6 +18,9 @@
 #include "GUI/Widgets/UIElement.h"
 #include "GUI/Widgets/WidgetTree.h"
 
+#include <format>
+#include <functional>
+
 namespace ya
 {
 
@@ -358,6 +361,108 @@ const nlohmann::json* findWidgetNode(const nlohmann::json& root,
         }
     }
     return nullptr;
+}
+
+namespace
+{
+
+bool jsonContains(const nlohmann::json& actual,
+                  const nlohmann::json& expected,
+                  std::string_view path,
+                  std::string& error)
+{
+    // Numeric predicates keep resize/drag scenarios semantic: they can
+    // assert that geometry changed without baking one machine's exact float
+    // result into every checkpoint.
+    if (expected.is_object() &&
+        (expected.contains("$gt") || expected.contains("$gte") ||
+         expected.contains("$lt") || expected.contains("$lte"))) {
+        if (!actual.is_number()) {
+            error = std::format("{}: comparison requires a number, got {}", path, actual.type_name());
+            return false;
+        }
+        const double value = actual.get<double>();
+        const auto check = [&](const char* op, const std::function<bool(double, double)>& predicate) {
+            const auto it = expected.find(op);
+            if (it == expected.end()) {
+                return true;
+            }
+            if (!it->is_number()) {
+                error = std::format("{}: {} must be numeric", path, op);
+                return false;
+            }
+            if (!predicate(value, it->get<double>())) {
+                error = std::format("{}: {} {} {} failed", path, value, op, it->dump());
+                return false;
+            }
+            return true;
+        };
+        return check("$gt", [](double lhs, double rhs) { return lhs > rhs; }) &&
+               check("$gte", [](double lhs, double rhs) { return lhs >= rhs; }) &&
+               check("$lt", [](double lhs, double rhs) { return lhs < rhs; }) &&
+               check("$lte", [](double lhs, double rhs) { return lhs <= rhs; });
+    }
+    if (expected.is_object()) {
+        if (!actual.is_object()) {
+            error = std::format("{}: expected object, got {}", path, actual.type_name());
+            return false;
+        }
+        for (const auto& entry : expected.items()) {
+            const auto actualIt = actual.find(entry.key());
+            if (actualIt == actual.end()) {
+                error = std::format("{}: missing field '{}'", path, entry.key());
+                return false;
+            }
+            if (!jsonContains(*actualIt, entry.value(),
+                              std::format("{}.{}", path, entry.key()), error)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    if (expected.is_array()) {
+        if (actual != expected) {
+            error = std::format("{}: expected array {} but got {}", path, expected.dump(), actual.dump());
+            return false;
+        }
+        return true;
+    }
+    if (actual != expected) {
+        error = std::format("{}: expected {} but got {}", path, expected.dump(), actual.dump());
+        return false;
+    }
+    return true;
+}
+
+} // namespace
+
+bool assertScenarioTree(const WidgetTree& tree, std::string_view assertion, std::string& error)
+{
+    nlohmann::json expected;
+    try {
+        expected = nlohmann::json::parse(assertion);
+    }
+    catch (const std::exception& e) {
+        error = std::format("invalid assertion JSON: {}", e.what());
+        return false;
+    }
+
+    const nlohmann::json treeDump = dumpWidgetTree(tree);
+    if (const auto widgetIt = expected.find("widget"); widgetIt != expected.end()) {
+        if (!widgetIt->is_string()) {
+            error = "widget assertion selector must be a string";
+            return false;
+        }
+        const std::string widgetName = widgetIt->get<std::string>();
+        const nlohmann::json* node = findWidgetNode(treeDump, widgetName);
+        if (!node) {
+            error = std::format("widget '{}' not found", widgetName);
+            return false;
+        }
+        expected.erase(widgetIt);
+        return jsonContains(*node, expected, std::format("widget[{}]", widgetName), error);
+    }
+    return jsonContains(treeDump, expected, "tree", error);
 }
 
 } // namespace ya

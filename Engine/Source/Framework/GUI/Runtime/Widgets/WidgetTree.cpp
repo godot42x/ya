@@ -409,7 +409,6 @@ void WidgetTree::reparentAfter(UIElement& sibling, const UIElementRef& widget)
 
 void WidgetTree::detach(UIElement& widget)
 {
-
     if (widget._tree != this) {
         YA_CORE_WARN("WidgetTree::detach: widget '{}' is not attached to this tree", widget._name);
         return;
@@ -421,7 +420,19 @@ void WidgetTree::detach(UIElement& widget)
         }
     }
 
+    // Keep the widget alive through this call: removeChildEdge drops the
+    // parent's strong ref, and when that was the last one the widget would
+    // be destroyed right here — before membership clearing below — so the
+    // destructor's "detached before destroy" assert would fire on freed
+    // memory. The caller may also hold only a raw reference.
+    UIElementRef keepAlive;
     if (UIElement* oldParent = widget._parent) {
+        for (const auto& ref : oldParent->_children) {
+            if (ref.get() == &widget) {
+                keepAlive = ref;
+                break;
+            }
+        }
         oldParent->removeChildEdge(widget);
     }
 

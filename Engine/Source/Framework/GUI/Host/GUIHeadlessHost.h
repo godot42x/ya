@@ -41,6 +41,8 @@ public:
     [[nodiscard]] WidgetTree& getTree();
     [[nodiscard]] const UIFrameSnapshot& getLastSnapshot() const;
     void injectEvent(const Event& event, const glm::vec2& logicalPoint);
+    /// Ask the loop to exit (used by scenario sources at end-of-scenario).
+    void requestQuit();
 
     void onInit() override;
     void onEvent(const Event& event) override;

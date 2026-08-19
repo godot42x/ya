@@ -111,6 +111,11 @@ void GUIHeadlessHost::injectEvent(const Event& event, const glm::vec2& logicalPo
     dispatchToTree(event, logicalPoint);
 }
 
+void GUIHeadlessHost::requestQuit()
+{
+    _impl->bQuitRequested = true;
+}
+
 void GUIHeadlessHost::onInit() {}
 
 void GUIHeadlessHost::onEvent(const Event& event)

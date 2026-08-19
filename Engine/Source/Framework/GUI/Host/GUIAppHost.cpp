@@ -6,6 +6,7 @@
 #include "App/Control/AutomationControlServer.h"
 #include "App/Control/AutomationRun.h"
 #include "App/Control/GuiEventDriver.h"
+#include "App/Kernel/GuiScenarioEventSource.h"
 #include "Core/FName.h"
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
@@ -200,102 +201,6 @@ void appendDebugRenderOverlay(UIFrameSnapshot& snapshot, const WidgetTree& tree)
     }
 }
 
-bool jsonContains(const nlohmann::json& actual,
-                  const nlohmann::json& expected,
-                  std::string_view path,
-                  std::string& error)
-{
-    // Numeric predicates keep resize/drag scenarios semantic: they can
-    // assert that geometry changed without baking one machine's exact float
-    // result into every checkpoint.
-    if (expected.is_object() &&
-        (expected.contains("$gt") || expected.contains("$gte") ||
-         expected.contains("$lt") || expected.contains("$lte"))) {
-        if (!actual.is_number()) {
-            error = std::format("{}: comparison requires a number, got {}", path, actual.type_name());
-            return false;
-        }
-        const double value = actual.get<double>();
-        const auto check = [&](const char* op, const std::function<bool(double, double)>& predicate) {
-            const auto it = expected.find(op);
-            if (it == expected.end()) {
-                return true;
-            }
-            if (!it->is_number()) {
-                error = std::format("{}: {} must be numeric", path, op);
-                return false;
-            }
-            if (!predicate(value, it->get<double>())) {
-                error = std::format("{}: {} {} {} failed", path, value, op, it->dump());
-                return false;
-            }
-            return true;
-        };
-        return check("$gt", [](double lhs, double rhs) { return lhs > rhs; }) &&
-               check("$gte", [](double lhs, double rhs) { return lhs >= rhs; }) &&
-               check("$lt", [](double lhs, double rhs) { return lhs < rhs; }) &&
-               check("$lte", [](double lhs, double rhs) { return lhs <= rhs; });
-    }
-    if (expected.is_object()) {
-        if (!actual.is_object()) {
-            error = std::format("{}: expected object, got {}", path, actual.type_name());
-            return false;
-        }
-        for (const auto& entry : expected.items()) {
-            const auto actualIt = actual.find(entry.key());
-            if (actualIt == actual.end()) {
-                error = std::format("{}: missing field '{}'", path, entry.key());
-                return false;
-            }
-            if (!jsonContains(*actualIt, entry.value(),
-                              std::format("{}.{}", path, entry.key()), error)) {
-                return false;
-            }
-        }
-        return true;
-    }
-    if (expected.is_array()) {
-        if (actual != expected) {
-            error = std::format("{}: expected array {} but got {}", path, expected.dump(), actual.dump());
-            return false;
-        }
-        return true;
-    }
-    if (actual != expected) {
-        error = std::format("{}: expected {} but got {}", path, expected.dump(), actual.dump());
-        return false;
-    }
-    return true;
-}
-
-bool assertScenarioTree(const WidgetTree& tree, std::string_view assertion, std::string& error)
-{
-    nlohmann::json expected;
-    try {
-        expected = nlohmann::json::parse(assertion);
-    }
-    catch (const std::exception& e) {
-        error = std::format("invalid assertion JSON: {}", e.what());
-        return false;
-    }
-
-    const nlohmann::json treeDump = dumpWidgetTree(tree);
-    if (const auto widgetIt = expected.find("widget"); widgetIt != expected.end()) {
-        if (!widgetIt->is_string()) {
-            error = "widget assertion selector must be a string";
-            return false;
-        }
-        const std::string widgetName = widgetIt->get<std::string>();
-        const nlohmann::json* node = findWidgetNode(treeDump, widgetName);
-        if (!node) {
-            error = std::format("widget '{}' not found", widgetName);
-            return false;
-        }
-        expected.erase(widgetIt);
-        return jsonContains(*node, expected, std::format("widget[{}]", widgetName), error);
-    }
-    return jsonContains(treeDump, expected, "tree", error);
-}
 
 /// Debug rasterizer: draws the snapshot items into a 24-bit BMP so the UI
 /// layout (positions, overlaps, bounds) can be inspected without a display.
@@ -591,119 +496,6 @@ struct SdlEventSource final : IAppEventSource
     }
 };
 
-/// Drives a JSONL scenario as an event source. Frame steps return so the
-/// caller renders that frame; checkpoint and resize stay at the host layer,
-/// while pointer/key/drag steps emit the same Core events as SDL.
-struct ScenarioEventSource final : IAppEventSource
-{
-    std::vector<GuiScenarioStep> steps;
-    size_t index = 0;
-    uint32_t remainingFrames = 0;
-    bool bPendingDoneAfterLastFrame = false;
-    bool bDone = false;
-    std::function<void(const std::string&)> onCheckpoint;
-    std::function<bool(std::string_view)> onAssert;
-    std::function<bool()> onAssertValidationClean;
-    std::function<void(uint32_t, uint32_t)> onSetWindowSize;
-    std::function<void()> onCaptureFinal;
-    std::function<void()> onDone;
-
-    void finishLastFrameIfNeeded()
-    {
-        if (remainingFrames == 0 && index == steps.size()) {
-            if (onCaptureFinal) {
-                onCaptureFinal();
-            }
-            bPendingDoneAfterLastFrame = true;
-        }
-    }
-
-    void pollEvents(const std::function<void(const Event&)>& emit) override
-    {
-        if (bDone) {
-            return;
-        }
-        if (bPendingDoneAfterLastFrame) {
-            bPendingDoneAfterLastFrame = false;
-            bDone                      = true;
-            if (onDone) {
-                onDone();
-            }
-            return;
-        }
-        if (remainingFrames > 0) {
-            --remainingFrames;
-            finishLastFrameIfNeeded();
-            return;
-        }
-        while (index < steps.size()) {
-            const GuiScenarioStep& step = steps[index++];
-            switch (step.kind) {
-            case EGuiScenarioStepKind::Frame:
-                remainingFrames = std::max(step.frame, 1u) - 1;
-                finishLastFrameIfNeeded();
-                return;
-            case EGuiScenarioStepKind::SetWindowSize:
-                if (onSetWindowSize) {
-                    onSetWindowSize(step.width, step.height);
-                }
-                break;
-            case EGuiScenarioStepKind::Checkpoint:
-                if (onCheckpoint) {
-                    onCheckpoint(step.tag);
-                }
-                break;
-            case EGuiScenarioStepKind::Assert:
-                if (onAssert && !onAssert(step.assertion)) {
-                    bDone = true;
-                    if (onDone) {
-                        onDone();
-                    }
-                    return;
-                }
-                break;
-            case EGuiScenarioStepKind::AssertValidationClean:
-                if (onAssertValidationClean && !onAssertValidationClean()) {
-                    bDone = true;
-                    if (onDone) {
-                        onDone();
-                    }
-                    return;
-                }
-                break;
-            case EGuiScenarioStepKind::MouseMove:
-            case EGuiScenarioStepKind::MousePress:
-            case EGuiScenarioStepKind::MouseRelease:
-            case EGuiScenarioStepKind::MouseWheel:
-            case EGuiScenarioStepKind::KeyPress:
-            case EGuiScenarioStepKind::KeyRelease:
-            case EGuiScenarioStepKind::KeyTyped:
-            case EGuiScenarioStepKind::Drag: {
-                struct ScenarioSink final : IGuiEventSink
-                {
-                    const std::function<void(const Event&)>& emitFn;
-
-                    explicit ScenarioSink(const std::function<void(const Event&)>& inEmitFn)
-                        : emitFn(inEmitFn)
-                    {
-                    }
-
-                    void dispatch(const Event& event, const glm::vec2& /*logicalPoint*/) override
-                    {
-                        emitFn(event);
-                    }
-                } sink{emit};
-                emitGuiScenarioStep(sink, step);
-                break;
-            }
-            }
-        }
-        bDone = true;
-        if (onDone) {
-            onDone();
-        }
-    }
-};
 
 } // namespace
 
@@ -882,7 +674,7 @@ bool GUIWindowHost::init()
     }
     _impl->delegate->buildUI(*_impl->tree);
     if (!config.scenarioPath.empty()) {
-        auto scenario = std::make_unique<ScenarioEventSource>();
+        auto scenario = std::make_unique<GuiScenarioEventSource>();
         std::string scenarioError;
         scenario->steps = loadGuiScenarioFile(config.scenarioPath, &scenarioError);
         if (!scenarioError.empty()) {
