@@ -26,7 +26,7 @@
         {
           "id": "n2_projection_layout",
           "status": "in_progress",
-          "notes": "首轮 bridge 已完成：UIDockSpace 持有 FDockTreeModel、zone leaf ids 与 stable panel ids；默认三栏由 model 创建，add/move 先改 model 再同步现有 visual groups。递归 FDockNodeView projection 与 _groups[3] 删除留在下一切片。"
+          "notes": "已完成递归 model->WidgetTree materialize：split 映射 UISplitPane，leaf 映射 tab/content host；默认 ratio 0.22/0.78 保持 P7 几何契约，Dock headless 初始/拖拽场景通过。当前仍是 bridge：_groups[3] 仅作为过渡 panel/widget registry，divider ratio 回写与独立 FDockNodeView registry 尚未完成。"
         },
         {
           "id": "n3_cardinal_preview_drop",

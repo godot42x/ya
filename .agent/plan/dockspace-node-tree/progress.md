@@ -116,3 +116,19 @@ widget 指针。
   projection；因此 n2 继续保持 in_progress，下一切片要把 split/leaf view 从 model 递归
   materialize。
 - 验证：`xmake b GUIWorkbench` 通过；Dock headless scenario 通过，初始与拖拽 dump 均生成。
+
+### 2026-08-19 — 阶段 2 递归 projection 切片
+
+- `UIDockSpace::layoutAssigned()` 不再手写固定 `outerSplit/innerSplit` 视觉树，改为从
+  `FDockTreeModel::root()` 递归 materialize：split 节点映射为 `UISplitPane`，leaf 节点
+  映射为 tab bar + content host。
+- 默认模型 ratio 明确写入 `0.22` 与 `0.78`，保持 P7 三栏的既有几何契约；模型仍是布局
+  事实源，视觉树只在首次 attach 时生成。
+- 当前仍保留 `_groups[3]` 作为过渡 panel/widget registry；它不再构造 split 布局，但
+  还承担 leaf view 的 tab/content 绑定。按 stable leaf id 回查 zone，未知 leaf 只生成空容器。
+- 验证：`xmake b GUIWorkbench` 通过；
+  `xmake run GUIWorkbench --start-page Dock --scenario Example/GUIWorkbench/Scenarios/dock.jsonl
+  --headless --scenario-dump-dir build/dock_dump_phase2_recursive2` 通过。
+  `DockZoneLeft` 宽度断言 `278.600006`、center/right、三个 tab、拖拽 checkpoint 均通过。
+- 本切片不宣称 projection 阶段完成：divider ratio 尚未回写 model，`_groups[3]` 尚未替换
+  为按 `DockPanelId` / `DockNodeId` 管理的独立 `FDockNodeView` registry。

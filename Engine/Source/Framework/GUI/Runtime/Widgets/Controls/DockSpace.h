@@ -70,6 +70,8 @@ private:
     /// the zones are identical or the panel is not found).
     void movePanel(int srcZone, int dstZone, const std::string& panelName);
     void ensureModelLayout();
+    std::shared_ptr<UIElement> materializeNode(const FDockNode& node);
+    int zoneForLeaf(DockNodeId leafId) const;
     [[nodiscard]] FPanel* findPanel(int zone, const std::string& name);
     [[nodiscard]] const FPanel* findPanel(int zone, const std::string& name) const;
 

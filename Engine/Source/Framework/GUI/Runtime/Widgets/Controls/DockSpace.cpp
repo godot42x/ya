@@ -27,12 +27,12 @@ void UIDockSpace::ensureModelLayout()
         return;
     }
     const DockNodeId rootId = _model.root()->id;
-    if (!_model.splitEmptyLeaf(rootId, EDockCardinalSide::East) || _model.leafIds().size() != 2) {
+    if (!_model.splitEmptyLeaf(rootId, EDockCardinalSide::East, 0.22f) || _model.leafIds().size() != 2) {
         YA_CORE_ERROR("UIDockSpace '{}': failed to create default dock model", _name);
         return;
     }
     const auto firstLeaves = _model.leafIds();
-    if (!_model.splitEmptyLeaf(firstLeaves[1], EDockCardinalSide::West) || _model.leafIds().size() != 3) {
+    if (!_model.splitEmptyLeaf(firstLeaves[1], EDockCardinalSide::West, 0.78f) || _model.leafIds().size() != 3) {
         YA_CORE_ERROR("UIDockSpace '{}': failed to create center dock leaf", _name);
         return;
     }
@@ -58,6 +58,61 @@ const UIDockSpace::FPanel* UIDockSpace::findPanel(int zone, const std::string& n
     return it == panels.end() ? nullptr : &*it;
 }
 
+int UIDockSpace::zoneForLeaf(DockNodeId leafId) const
+{
+    for (int zone = 0; zone < 3; ++zone) {
+        if (_zoneLeafIds[zone] == leafId) return zone;
+    }
+    return -1;
+}
+
+std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
+{
+    if (node.kind == EDockNodeKind::Split) {
+        auto split = std::make_shared<UISplitPane>(std::format("DockSplit{}", node.id));
+        split->setOrientation(node.orientation == EDockSplitOrientation::Vertical
+                                  ? ESplitOrientation::Vertical : ESplitOrientation::Horizontal);
+        split->setSplitRatio(node.ratio);
+        split->setMinFirstExtent(node.minExtent[0]);
+        split->setMinSecondExtent(node.minExtent[1]);
+        if (node.child[0]) split->addDetachedChild(materializeNode(*node.child[0]));
+        if (node.child[1]) split->addDetachedChild(materializeNode(*node.child[1]));
+        return split;
+    }
+
+    const int zone = zoneForLeaf(node.id);
+    if (zone < 0 || zone >= 3) {
+        auto empty = std::make_shared<UIContainer>(std::format("DockLeaf{}", node.id));
+        empty->setDirection(EWidgetBoxLayout::Vertical);
+        return empty;
+    }
+
+    FTabGroup& group = _groups[zone];
+    auto leaf = std::make_shared<UIContainer>(group.zoneName);
+    leaf->setDirection(EWidgetBoxLayout::Vertical);
+    leaf->setSpacing(0.0f);
+    auto bar = std::make_shared<UITabBar>(std::format("DockTabBar{}", zone));
+    bar->_bDraggableTabs = true;
+    bar->_emptyPlaceholder = std::format("{} (drop tabs here)", group.zoneName);
+    bar->_onTabDragBegin = [this, zone](int index, const std::string& label)
+    {
+        if (index < 0 || index >= static_cast<int>(_groups[zone].panels.size())) return;
+        if (WidgetTree* tree = getTree()) {
+            tree->beginDrag(this, std::string(kDockTabPayload) + std::to_string(zone) + ":" + label, label);
+        }
+    };
+    leaf->addDetachedChild(bar);
+
+    auto content = std::make_shared<UIContainer>(std::format("DockContent{}", zone));
+    leaf->setStretchLastChild(true);
+    leaf->addDetachedChild(content);
+    content->setStretchLastChild(true);
+    group.bar = bar.get();
+    group.content = content.get();
+    if (!group.panels.empty()) rebuildZone(zone, 0);
+    return leaf;
+}
+
 void UIDockSpace::layout(const Rect2D& parentRect)
 {
     layoutAssigned(computeAnchorRect(parentRect));
@@ -70,74 +125,7 @@ void UIDockSpace::layoutAssigned(const Rect2D& rect)
 
     // Build lazily on first layout (needs a tree for attach).
     if (getChildren().empty() && getTree()) {
-        WidgetTree& tree = *getTree();
-
-        auto outerSplit = std::make_shared<UISplitPane>("DockOuterSplit");
-        outerSplit->setSplitRatio(0.22f);
-        outerSplit->setMinFirstExtent(120.0f);
-        outerSplit->setMinSecondExtent(200.0f);
-        addDetachedChild(outerSplit);
-
-        auto innerSplit = std::make_shared<UISplitPane>("DockInnerSplit");
-        innerSplit->setSplitRatio(0.78f);
-        innerSplit->setMinFirstExtent(200.0f);
-        innerSplit->setMinSecondExtent(120.0f);
-
-        // Three panes: left zone, then inner split holding center + right.
-        auto leftPane = std::make_shared<UIContainer>(kZoneLeft);
-        leftPane->setDirection(EWidgetBoxLayout::Vertical);
-        leftPane->setSpacing(0.0f);
-        outerSplit->addDetachedChild(leftPane);
-
-        auto rightPane = std::make_shared<UIContainer>(kZoneRight);
-        rightPane->setDirection(EWidgetBoxLayout::Vertical);
-        rightPane->setSpacing(0.0f);
-
-        auto centerPane = std::make_shared<UIContainer>(kZoneCenter);
-        centerPane->setDirection(EWidgetBoxLayout::Vertical);
-        centerPane->setSpacing(0.0f);
-
-        innerSplit->addDetachedChild(centerPane);
-        innerSplit->addDetachedChild(rightPane);
-        outerSplit->addDetachedChild(innerSplit);
-
-        UIContainer* panes[3] = {leftPane.get(), centerPane.get(), rightPane.get()};
-        for (int zone = 0; zone < 3; ++zone) {
-            FTabGroup& group = _groups[zone];
-
-            auto bar = std::make_shared<UITabBar>(std::format("DockTabBar{}", zone));
-            bar->_bDraggableTabs = true;
-            bar->_emptyPlaceholder = std::format("{} (drop tabs here)", group.zoneName);
-            bar->_onTabDragBegin = [this, zone](int index, const std::string& label)
-            {
-                if (index < 0 || index >= static_cast<int>(_groups[zone].panels.size())) {
-                    return;
-                }
-                if (WidgetTree* tree = getTree()) {
-                    tree->beginDrag(this,
-                                    std::string(kDockTabPayload) + std::to_string(zone) + ":" + label,
-                                    label);
-                }
-            };
-            panes[zone]->addDetachedChild(bar);
-
-            auto content = std::make_shared<UIContainer>(std::format("DockContent{}", zone));
-            // Stretch to fill the zone's remaining height.
-            panes[zone]->setStretchLastChild(true);
-            panes[zone]->addDetachedChild(content);
-            content->setStretchLastChild(true);
-
-            group.bar     = bar.get();
-            group.content = content.get();
-        }
-
-        // Panels added before the first layout (addPanel ran when the bars
-        // did not exist yet) must materialize now.
-        for (int zone = 0; zone < 3; ++zone) {
-            if (!_groups[zone].panels.empty() && _groups[zone].bar->getChildren().empty()) {
-                rebuildZone(zone, 0);
-            }
-        }
+        addDetachedChild(materializeNode(*_model.root()));
     }
 
     for (UIElement* child : getChildrenInPaintOrder()) {
