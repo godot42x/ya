@@ -26,7 +26,7 @@
         {
           "id": "n2_projection_layout",
           "status": "in_progress",
-          "notes": "已完成递归 model->WidgetTree materialize：split 映射 UISplitPane，leaf 映射 tab/content host；默认 ratio 0.22/0.78 保持 P7 几何契约，Dock headless 初始/拖拽场景通过。divider ratio 与 selectedPanel 已按 stable DockNodeId/DockPanelId 回写 FDockTreeModel。当前仍是 bridge：_groups[3] 仅作为过渡 panel/widget registry，局部 subtree rebuild 与独立 FDockNodeView registry尚未完成。"
+          "notes": "已完成递归 model->WidgetTree materialize：split 映射 UISplitPane，leaf 映射 tab/content host；默认 ratio 0.22/0.78 保持 P7 几何契约，Dock headless 初始/拖拽场景通过。divider ratio 与 selectedPanel 已按 stable DockNodeId/DockPanelId 回写 FDockTreeModel；leaf view 改由 DockNodeId registry 管理。当前仍是 bridge：panel registry 仍在 _groups[3]，局部 subtree rebuild、非 zone leaf 与完整 teardown/focus 保护尚未完成。"
         },
         {
           "id": "n3_cardinal_preview_drop",

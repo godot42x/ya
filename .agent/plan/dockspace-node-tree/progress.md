@@ -150,3 +150,14 @@ widget 指针。
 - 增加 model-only selection ownership 测试；DockNode focused suite 8/8 通过。
 - 当前阶段仍不重建整个 subtree；下一步是建立按 `DockNodeId` / `DockPanelId` 索引的
   projection registry，把 view 生命周期从三组 zone 临时数组中分离出来。
+
+### 2026-08-19 — 阶段 2 leaf view registry
+
+- 新增 `FLeafView` 与 `_leafViews: unordered_map<DockNodeId, FLeafView>`；leaf 的
+  `UITabBar/UIContainer` 句柄按稳定 leaf id 管理，不再存放在 `FTabGroup[3]`。
+- `FTabGroup` 现在只保留 zone 过渡数据与 panel/widget registry；materialize、rebuild、tab
+  selection 都通过 leaf id -> view registry 查找视觉对象。
+- 首次 projection 时清理 view registry，避免重复 materialize 后残留旧 leaf view。
+- 验证：`xmake b GUIWorkbench` 通过；Dock headless 初始/拖拽 scenario 全部通过。
+- 仍待下一切片：view registry 的非 zone leaf 支持、局部 subtree rebuild、panel registry 从
+  `FTabGroup[3]` 解耦，以及 model mutation 后的 view teardown/focus 保护。

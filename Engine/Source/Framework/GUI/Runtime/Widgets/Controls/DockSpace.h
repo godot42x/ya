@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 namespace ya
 {
@@ -58,9 +59,12 @@ private:
     struct FTabGroup
     {
         std::string         zoneName;
-        UITabBar*           bar     = nullptr;
-        UIContainer*        content = nullptr;
         std::vector<FPanel> panels;
+    };
+    struct FLeafView
+    {
+        UITabBar* bar = nullptr;
+        UIContainer* content = nullptr;
     };
 
     /// Rebuild a zone's tab bar from its panel list and show the selected
@@ -72,10 +76,12 @@ private:
     void ensureModelLayout();
     std::shared_ptr<UIElement> materializeNode(const FDockNode& node);
     int zoneForLeaf(DockNodeId leafId) const;
+    FLeafView* leafViewForZone(int zone);
     [[nodiscard]] FPanel* findPanel(int zone, const std::string& name);
     [[nodiscard]] const FPanel* findPanel(int zone, const std::string& name) const;
 
     FTabGroup _groups[3];
+    std::unordered_map<DockNodeId, FLeafView> _leafViews;
     FDockTreeModel _model;
     DockNodeId _zoneLeafIds[3] = {kInvalidDockNodeId, kInvalidDockNodeId, kInvalidDockNodeId};
     DockPanelId _nextPanelId = 1;

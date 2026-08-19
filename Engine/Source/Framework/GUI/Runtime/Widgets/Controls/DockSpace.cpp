@@ -66,6 +66,15 @@ int UIDockSpace::zoneForLeaf(DockNodeId leafId) const
     return -1;
 }
 
+UIDockSpace::FLeafView* UIDockSpace::leafViewForZone(int zone)
+{
+    if (zone < 0 || zone >= 3 || _zoneLeafIds[zone] == kInvalidDockNodeId) {
+        return nullptr;
+    }
+    auto it = _leafViews.find(_zoneLeafIds[zone]);
+    return it == _leafViews.end() ? nullptr : &it->second;
+}
+
 std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
 {
     if (node.kind == EDockNodeKind::Split) {
@@ -114,8 +123,7 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
     leaf->setStretchLastChild(true);
     leaf->addDetachedChild(content);
     content->setStretchLastChild(true);
-    group.bar = bar.get();
-    group.content = content.get();
+    _leafViews[node.id] = {bar.get(), content.get()};
     if (!group.panels.empty()) rebuildZone(zone, 0);
     return leaf;
 }
@@ -132,6 +140,7 @@ void UIDockSpace::layoutAssigned(const Rect2D& rect)
 
     // Build lazily on first layout (needs a tree for attach).
     if (getChildren().empty() && getTree()) {
+        _leafViews.clear();
         addDetachedChild(materializeNode(*_model.root()));
     }
 
@@ -165,7 +174,7 @@ void UIDockSpace::addPanel(const std::string& name, std::shared_ptr<UIElement> w
     }
     FTabGroup& group = _groups[zone];
     group.panels.push_back({panelId, name, std::move(widget)});
-    if (group.bar) {
+    if (leafViewForZone(zone)) {
         rebuildZone(zone, static_cast<int>(group.panels.size()) - 1);
     }
 }
@@ -173,12 +182,13 @@ void UIDockSpace::addPanel(const std::string& name, std::shared_ptr<UIElement> w
 void UIDockSpace::rebuildZone(int zoneIndex, int selectIndex)
 {
     FTabGroup& group = _groups[zoneIndex];
-    if (!group.bar || !group.content) {
+    FLeafView* view = leafViewForZone(zoneIndex);
+    if (!view || !view->bar || !view->content) {
         return;
     }
     // Detach the previous content widget (it moves to the tab's panel list).
     if (WidgetTree* tree = getTree()) {
-        for (UIElement* child : group.content->getChildrenInPaintOrder()) {
+        for (UIElement* child : view->content->getChildrenInPaintOrder()) {
             if (child->participatesInLayout()) {
                 tree->detach(*child);
                 break;
@@ -186,12 +196,12 @@ void UIDockSpace::rebuildZone(int zoneIndex, int selectIndex)
         }
     }
     // Clear the bar and re-add tabs.
-    const int tabCount = static_cast<int>(group.bar->getChildren().size());
+    const int tabCount = static_cast<int>(view->bar->getChildren().size());
     for (int i = tabCount - 1; i >= 0; --i) {
-        group.bar->removeTab(i);
+        view->bar->removeTab(i);
     }
     for (const FPanel& panel : group.panels) {
-        group.bar->addTab(panel.name);
+        view->bar->addTab(panel.name);
     }
     int selected = selectIndex;
     if (selected < 0 || selected >= static_cast<int>(group.panels.size())) {
@@ -201,26 +211,27 @@ void UIDockSpace::rebuildZone(int zoneIndex, int selectIndex)
         // syncSelectedTab only moves the highlight; selectTab would fire the
         // previous rebuild's _onTabSelected (double-add / wrong-panel race).
         // The content is attached exactly once, right here.
-        group.bar->syncSelectedTab(selected);
-        group.content->addDetachedChild(group.panels[static_cast<size_t>(selected)].widget);
+        view->bar->syncSelectedTab(selected);
+        view->content->addDetachedChild(group.panels[static_cast<size_t>(selected)].widget);
     }
     // Wire selection: show the selected panel's widget.
-    group.bar->_onTabSelected = [this, zoneIndex](int index)
+    view->bar->_onTabSelected = [this, zoneIndex](int index)
     {
         FTabGroup& g = _groups[zoneIndex];
-        if (!g.content || index < 0 || index >= static_cast<int>(g.panels.size())) {
+        FLeafView* selectedView = leafViewForZone(zoneIndex);
+        if (!selectedView || !selectedView->content || index < 0 || index >= static_cast<int>(g.panels.size())) {
             return;
         }
         _model.selectPanel(g.panels[static_cast<size_t>(index)].id);
         if (WidgetTree* tree = getTree()) {
-            for (UIElement* child : g.content->getChildrenInPaintOrder()) {
+            for (UIElement* child : selectedView->content->getChildrenInPaintOrder()) {
                 if (child->participatesInLayout()) {
                     tree->detach(*child);
                     break;
                 }
             }
         }
-        g.content->addDetachedChild(g.panels[static_cast<size_t>(index)].widget);
+        selectedView->content->addDetachedChild(g.panels[static_cast<size_t>(index)].widget);
     };
     markLayoutDirty();
 }
