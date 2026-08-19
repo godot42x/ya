@@ -155,3 +155,15 @@
 
 另：SearchCombo 焦点互锁 + filter 生命周期修复（commit 314075bb）——菜单开抢焦点触发 onFocusLost→closeMenu 互锁、_bFocused 从未设置；菜单生命周期与焦点解耦、打开后焦点拿回、Esc 自处理。acceptance 扩至 9 checkpoint。
 
+
+## 2026-08-19 — P7 DockSpace 收口（三 commit：2f35be61 / e8bd74a4 / 22941965）
+
+**完成**：
+- UIDockSpace 三 zone（left/center/right 嵌套 UISplitPane）+ UITabBar 拖拽 tab（press 6px 阈值 armed → tree drag session 携带 dock-tab:<zone>:<label>）+ onDrop 按落点 x 阈值（0.25/0.82）选目标 zone + movePanel 重建两区；rebuildZone 用 syncSelectedTab 防旧 _onTabSelected 竞态。
+- **配套引擎修复 1**（WidgetTree::detach keepAlive）：parent 持有最后强引用时 removeChildEdge 的 erase 会当场析构 widget（析构里 _tree 断言失败 + 后续悬垂操作）。这是 drag 崩溃根因（Tab_Console use_count=1）。
+- **配套引擎修复 2**（headless scenario 通路）：GuiScenarioEventSource 公共化到 App/Kernel、assertScenarioTree 移入 WidgetTreeDump、GUIHeadlessHost 支持 scenario（checkpoint dump/断言/quit），--headless 与窗口模式跑同一场景。
+- **配套引擎修复 3**（Vulkan 1.2 设备动态态）：启用 VK_EXT_extended_dynamic_state（CULL_MODE），不支持时 pipeline 回退静态 cull + QuadRender 跳过 vkCmdSetCullMode；顺带实现 MAX_ENUM 过滤。
+- dock.jsonl：初始 6 断言 + dock_initial + drag Inspector center→left + DockTabBar0 断言 + dock_dragged 全通过；dump 验证 Inspector 迁到 left、center 留 Scene/Console。
+- feature_matrix：p7_dockspace → pass。
+
+**验证**：dock.jsonl headless 通过（7 断言 + 2 checkpoint，exit 0）；dump 对比确认面板迁移。**剩余问题**：验证层在 86% 显存（UE4 Debug 编辑器占用）下 vkCreateGraphicsPipelines 崩溃属环境问题（关验证层/集显验证均定位到验证层），代码侧已修复动态态合法性；headless 模式无 GPU 不受影响。
