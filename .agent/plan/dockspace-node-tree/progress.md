@@ -162,3 +162,18 @@ widget 指针。
 - 仍待下一切片：view registry 的非 zone leaf 支持、局部 subtree rebuild、panel registry 从
   `FTabGroup[3]` 解耦，以及 model mutation 后的 view teardown/focus 保护。
 - 增加 `SplitRatioMutationIsClampedAndAtomic` model test；DockNode focused suite 10/10 通过。
+
+### 2026-08-20 — 阶段 3 cardinal preview/drop 首轮
+
+- `UIDockSpace` 现在通过 drag observer 的 `onMove` 维护 immutable preview；`paintChildren`
+  后绘制半透明 preview，避免被 leaf content 盖掉。preview 区域按 target leaf 的 center /+  cardinal 结果计算，不再只是整块 outline。
+- payload 改为稳定 `DockPanelId` 编码（`dock-panel:<id>`）；drop 时先解析 preview，再
+  按 preview 执行 `FDockTreeModel::movePanel / splitLeaf`。same-leaf cardinal split 已
+  回归为真正的 model mutation，而不是 zone swap。
+- 为了保住三栏锚点，`movePanel(..., collapseSource=false)` 让 merge 路径先不塌缩源 leaf；
+  默认 P7 三栏命名仍可稳定通过旧 smoke。`DockTabBar0/1/2` 与 `DockZoneLeft/Center/Right`
+  基线保留。
+- 新增正式 smoke 场景 `Example/GUIWorkbench/Scenarios/dock_cardinal_split.jsonl`；headless
+  验证通过，拖到 leaf 边缘会生成 `DockSplit`，而不是只换 tab。
+- 下一步仍缺：corner compound preview、非 zone leaf 真正投影、以及 panel registry 从
+  过渡 zone 数据结构里完全剥离。

@@ -161,4 +161,20 @@ TEST(DockNodeTest, SplitRatioMutationIsClampedAndAtomic)
     EXPECT_TRUE(model.validateInvariants());
 }
 
+TEST(DockNodeTest, SameLeafSplitKeepsOtherPanelsInPlace)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "scene");
+    registerPanel(model, 2, "inspector");
+    ASSERT_TRUE(model.addPanel(1));
+    ASSERT_TRUE(model.addPanel(2));
+    const DockNodeId rootId = model.root()->id;
+
+    ASSERT_TRUE(model.splitLeaf(rootId, EDockCardinalSide::West, 2));
+    ASSERT_EQ(model.root()->kind, EDockNodeKind::Split);
+    EXPECT_EQ(model.root()->child[0]->panelIds, (std::vector<DockPanelId>{2}));
+    EXPECT_EQ(model.root()->child[1]->panelIds, (std::vector<DockPanelId>{1}));
+    EXPECT_TRUE(model.validateInvariants());
+}
+
 } // namespace ya

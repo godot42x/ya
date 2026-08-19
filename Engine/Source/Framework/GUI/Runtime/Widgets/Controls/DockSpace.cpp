@@ -7,8 +7,28 @@
 #include "GUI/Widgets/UIFrameSnapshot.h"
 #include "GUI/Widgets/WidgetTree.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace ya
 {
+namespace
+{
+bool pointInRect(const glm::vec2& point, const Rect2D& rect)
+{
+    return point.x >= rect.pos.x && point.x <= rect.pos.x + rect.extent.x &&
+           point.y >= rect.pos.y && point.y <= rect.pos.y + rect.extent.y;
+}
+
+DockPanelId parsePanelId(const std::string& payload)
+{
+    const std::string prefix = UIDockSpace::kDockPanelPayload;
+    if (payload.rfind(prefix, 0) != 0) {
+        return kInvalidDockPanelId;
+    }
+    return static_cast<DockPanelId>(std::strtoull(payload.c_str() + prefix.size(), nullptr, 10));
+}
+}
 
 UIDockSpace::UIDockSpace(std::string name)
     : UIElement(std::move(name))
@@ -23,7 +43,11 @@ UIDockSpace::UIDockSpace(std::string name)
 
 void UIDockSpace::ensureModelLayout()
 {
-    if (_zoneLeafIds[0] != kInvalidDockNodeId) {
+    if (_zoneLeafIds[0] != kInvalidDockNodeId && _zoneLeafIds[1] != kInvalidDockNodeId && _zoneLeafIds[2] != kInvalidDockNodeId) {
+        return;
+    }
+    if (_model.leafIds().size() >= 3) {
+        refreshZoneLeafIds();
         return;
     }
     const DockNodeId rootId = _model.root()->id;
@@ -42,37 +66,127 @@ void UIDockSpace::ensureModelLayout()
     }
 }
 
-UIDockSpace::FPanel* UIDockSpace::findPanel(int zone, const std::string& name)
+void UIDockSpace::refreshZoneLeafIds()
 {
-    if (zone < 0 || zone >= 3) return nullptr;
-    auto& panels = _groups[zone].panels;
-    auto it = std::find_if(panels.begin(), panels.end(), [&](const FPanel& panel) { return panel.name == name; });
-    return it == panels.end() ? nullptr : &*it;
-}
-
-const UIDockSpace::FPanel* UIDockSpace::findPanel(int zone, const std::string& name) const
-{
-    if (zone < 0 || zone >= 3) return nullptr;
-    const auto& panels = _groups[zone].panels;
-    auto it = std::find_if(panels.begin(), panels.end(), [&](const FPanel& panel) { return panel.name == name; });
-    return it == panels.end() ? nullptr : &*it;
-}
-
-int UIDockSpace::zoneForLeaf(DockNodeId leafId) const
-{
-    for (int zone = 0; zone < 3; ++zone) {
-        if (_zoneLeafIds[zone] == leafId) return zone;
+    const auto leaves = _model.leafIds();
+    for (size_t i = 0; i < 3; ++i) {
+        _zoneLeafIds[i] = i < leaves.size() ? leaves[i] : kInvalidDockNodeId;
     }
-    return -1;
 }
 
-UIDockSpace::FLeafView* UIDockSpace::leafViewForZone(int zone)
+UIDockSpace::FLeafView* UIDockSpace::leafViewForLeaf(DockNodeId leafId)
 {
-    if (zone < 0 || zone >= 3 || _zoneLeafIds[zone] == kInvalidDockNodeId) {
-        return nullptr;
-    }
-    auto it = _leafViews.find(_zoneLeafIds[zone]);
+    auto it = _leafViews.find(leafId);
     return it == _leafViews.end() ? nullptr : &it->second;
+}
+
+const UIDockSpace::FLeafView* UIDockSpace::leafViewForLeaf(DockNodeId leafId) const
+{
+    auto it = _leafViews.find(leafId);
+    return it == _leafViews.end() ? nullptr : &it->second;
+}
+
+void UIDockSpace::clearPreview()
+{
+    if (_preview) {
+        _preview.reset();
+        markPaintDirty();
+    }
+}
+
+void UIDockSpace::rebuildProjection()
+{
+    if (!getTree()) {
+        return;
+    }
+    refreshZoneLeafIds();
+    clearPreview();
+    auto children = getChildrenInPaintOrder();
+    for (UIElement* child : children) {
+        if (child && child->participatesInLayout()) {
+            getTree()->detach(*child);
+        }
+    }
+    _leafViews.clear();
+    addDetachedChild(materializeNode(*_model.root()));
+    markLayoutDirty();
+    markPaintDirty();
+}
+
+void UIDockSpace::rebuildLeaf(DockNodeId leafId)
+{
+    const FDockNode* leaf = _model.findNode(leafId);
+    FLeafView* view = leafViewForLeaf(leafId);
+    if (!leaf || !view || !view->bar || !view->content) {
+        return;
+    }
+
+    if (WidgetTree* tree = getTree()) {
+        auto contentChildren = view->content->getChildrenInPaintOrder();
+        for (UIElement* child : contentChildren) {
+            if (child && child->participatesInLayout()) {
+                tree->detach(*child);
+                break;
+            }
+        }
+    }
+
+    const int tabCount = static_cast<int>(view->bar->getChildren().size());
+    for (int i = tabCount - 1; i >= 0; --i) {
+        view->bar->removeTab(i);
+    }
+
+    for (DockPanelId panelId : leaf->panelIds) {
+        auto it = _panels.find(panelId);
+        if (it != _panels.end()) {
+            view->bar->addTab(it->second.name);
+        }
+    }
+
+    int selectedIndex = -1;
+    if (leaf->selectedPanel != kInvalidDockPanelId) {
+        auto it = std::find(leaf->panelIds.begin(), leaf->panelIds.end(), leaf->selectedPanel);
+        if (it != leaf->panelIds.end()) {
+            selectedIndex = static_cast<int>(std::distance(leaf->panelIds.begin(), it));
+        }
+    }
+    if (selectedIndex < 0 && !leaf->panelIds.empty()) {
+        selectedIndex = 0;
+    }
+
+    view->bar->_onTabSelected = [this, leafId](int index)
+    {
+        const FDockNode* currentLeaf = _model.findNode(leafId);
+        FLeafView* currentView = leafViewForLeaf(leafId);
+        if (!currentLeaf || !currentView || !currentView->content || index < 0 || index >= static_cast<int>(currentLeaf->panelIds.size())) {
+            return;
+        }
+        const DockPanelId panelId = currentLeaf->panelIds[static_cast<size_t>(index)];
+        _model.selectPanel(panelId);
+        if (WidgetTree* tree = getTree()) {
+            auto contentChildren = currentView->content->getChildrenInPaintOrder();
+            for (UIElement* child : contentChildren) {
+                if (child && child->participatesInLayout()) {
+                    tree->detach(*child);
+                    break;
+                }
+            }
+        }
+        auto panelIt = _panels.find(panelId);
+        if (panelIt != _panels.end()) {
+            currentView->content->addDetachedChild(panelIt->second.widget);
+        }
+    };
+
+    if (selectedIndex >= 0) {
+        view->bar->syncSelectedTab(selectedIndex);
+        DockPanelId selectedPanel = leaf->panelIds[static_cast<size_t>(selectedIndex)];
+        auto it = _panels.find(selectedPanel);
+        if (it != _panels.end()) {
+            view->content->addDetachedChild(it->second.widget);
+        }
+    }
+    markLayoutDirty();
 }
 
 std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
@@ -89,6 +203,7 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
         {
             if (_model.setSplitRatio(splitId, ratio)) {
                 markLayoutDirty();
+                markPaintDirty();
             }
         });
         if (node.child[0]) split->addDetachedChild(materializeNode(*node.child[0]));
@@ -96,35 +211,47 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
         return split;
     }
 
-    const int zone = zoneForLeaf(node.id);
-    if (zone < 0 || zone >= 3) {
-        auto empty = std::make_shared<UIContainer>(std::format("DockLeaf{}", node.id));
-        empty->setDirection(EWidgetBoxLayout::Vertical);
-        return empty;
-    }
-
-    FTabGroup& group = _groups[zone];
-    auto leaf = std::make_shared<UIContainer>(group.zoneName);
+    const int zone = node.id == _zoneLeafIds[0] ? 0 : (node.id == _zoneLeafIds[1] ? 1 : (node.id == _zoneLeafIds[2] ? 2 : -1));
+    auto leaf = std::make_shared<UIContainer>(zone == 0 ? kZoneLeft : zone == 1 ? kZoneCenter : zone == 2 ? kZoneRight : std::format("DockLeaf{}", node.id));
     leaf->setDirection(EWidgetBoxLayout::Vertical);
     leaf->setSpacing(0.0f);
-    auto bar = std::make_shared<UITabBar>(std::format("DockTabBar{}", zone));
+    auto bar = std::make_shared<UITabBar>(zone >= 0 ? std::format("DockTabBar{}", zone) : std::format("DockTabBar{}", node.id));
     bar->_bDraggableTabs = true;
-    bar->_emptyPlaceholder = std::format("{} (drop tabs here)", group.zoneName);
-    bar->_onTabDragBegin = [this, zone](int index, const std::string& label)
+    bar->_emptyPlaceholder = std::format("{} (drop tabs here)", leaf->_name);
+    bar->_onTabDragBegin = [this, leafId = node.id](int index, const std::string& label)
     {
-        if (index < 0 || index >= static_cast<int>(_groups[zone].panels.size())) return;
+        const FDockNode* currentLeaf = _model.findNode(leafId);
+        if (!currentLeaf || index < 0 || index >= static_cast<int>(currentLeaf->panelIds.size())) {
+            return;
+        }
+        const DockPanelId panelId = currentLeaf->panelIds[static_cast<size_t>(index)];
         if (WidgetTree* tree = getTree()) {
-            tree->beginDrag(this, std::string(kDockTabPayload) + std::to_string(zone) + ":" + label, label);
+            DragSessionObserver observer;
+            observer.onMove = [this, panelId](const std::string&, const glm::vec2& logicalPoint, std::string_view)
+            {
+                _preview = resolveDropPreview(logicalPoint, panelId);
+                markPaintDirty();
+            };
+            observer.onTargetChanged = [this](std::string_view, std::string_view)
+            {
+                clearPreview();
+            };
+            observer.onFinished = [this](EDragFinishResult, const glm::vec2&, std::string_view)
+            {
+                clearPreview();
+            };
+            tree->beginDrag(this, std::string(kDockPanelPayload) + std::to_string(panelId), label, std::move(observer));
         }
     };
     leaf->addDetachedChild(bar);
 
-    auto content = std::make_shared<UIContainer>(std::format("DockContent{}", zone));
+    auto content = std::make_shared<UIContainer>(std::format("DockContent{}", node.id));
     leaf->setStretchLastChild(true);
     leaf->addDetachedChild(content);
     content->setStretchLastChild(true);
-    _leafViews[node.id] = {bar.get(), content.get()};
-    if (!group.panels.empty()) rebuildZone(zone, 0);
+
+    _leafViews[node.id] = {node.id, leaf.get(), bar.get(), content.get()};
+    rebuildLeaf(node.id);
     return leaf;
 }
 
@@ -138,10 +265,8 @@ void UIDockSpace::layoutAssigned(const Rect2D& rect)
     setLayoutRect(rect);
     ensureModelLayout();
 
-    // Build lazily on first layout (needs a tree for attach).
     if (getChildren().empty() && getTree()) {
-        _leafViews.clear();
-        addDetachedChild(materializeNode(*_model.root()));
+        rebuildProjection();
     }
 
     for (UIElement* child : getChildrenInPaintOrder()) {
@@ -154,10 +279,20 @@ void UIDockSpace::layoutAssigned(const Rect2D& rect)
 
 void UIDockSpace::paintSelf(UIFrameBuilder& builder)
 {
-    if (_dropZone >= 0) {
-        // Highlight the zone that would receive the dragged tab.
-        builder.addRectOutline(_layoutRect, {0.24f, 0.46f, 0.82f, 1.0f}, 2.0f);
+    (void)builder;
+}
+
+void UIDockSpace::paintChildren(UIFrameBuilder& builder)
+{
+    UIElement::paintChildren(builder);
+    if (!_preview) {
+        return;
     }
+    const glm::vec4 color = _preview->bMerge
+                                ? glm::vec4{0.24f, 0.72f, 0.42f, 0.20f}
+                                : glm::vec4{0.24f, 0.46f, 0.82f, 0.20f};
+    builder.addSprite(_preview->rect, color, nullptr);
+    builder.addRectOutline(_preview->rect, {0.24f, 0.46f, 0.82f, 1.0f}, 2.0f);
 }
 
 void UIDockSpace::addPanel(const std::string& name, std::shared_ptr<UIElement> widget, int zone)
@@ -172,128 +307,128 @@ void UIDockSpace::addPanel(const std::string& name, std::shared_ptr<UIElement> w
         YA_CORE_WARN("UIDockSpace '{}': rejected duplicate or invalid panel '{}'", _name, name);
         return;
     }
-    FTabGroup& group = _groups[zone];
-    group.panels.push_back({panelId, name, std::move(widget)});
-    if (leafViewForZone(zone)) {
-        rebuildZone(zone, static_cast<int>(group.panels.size()) - 1);
+    _panels.emplace(panelId, FPanel{panelId, name, std::move(widget)});
+    if (getTree() && !getChildren().empty()) {
+        rebuildLeaf(_zoneLeafIds[zone]);
     }
 }
 
-void UIDockSpace::rebuildZone(int zoneIndex, int selectIndex)
+std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const glm::vec2& logicalPoint, DockPanelId panelId) const
 {
-    FTabGroup& group = _groups[zoneIndex];
-    FLeafView* view = leafViewForZone(zoneIndex);
-    if (!view || !view->bar || !view->content) {
-        return;
+    if (panelId == kInvalidDockPanelId) {
+        return std::nullopt;
     }
-    // Detach the previous content widget (it moves to the tab's panel list).
-    if (WidgetTree* tree = getTree()) {
-        for (UIElement* child : view->content->getChildrenInPaintOrder()) {
-            if (child->participatesInLayout()) {
-                tree->detach(*child);
-                break;
-            }
+    const FDockNode* sourceLeaf = _model.findLeafForPanel(panelId);
+    if (!sourceLeaf) {
+        return std::nullopt;
+    }
+    const FLeafView* targetView = nullptr;
+    for (const auto& [leafId, view] : _leafViews) {
+        (void)leafId;
+        if (view.root && pointInRect(logicalPoint, view.root->_layoutRect)) {
+            targetView = &view;
+            break;
         }
     }
-    // Clear the bar and re-add tabs.
-    const int tabCount = static_cast<int>(view->bar->getChildren().size());
-    for (int i = tabCount - 1; i >= 0; --i) {
-        view->bar->removeTab(i);
+    if (!targetView || !targetView->root) {
+        return std::nullopt;
     }
-    for (const FPanel& panel : group.panels) {
-        view->bar->addTab(panel.name);
+
+    const Rect2D rect = targetView->root->_layoutRect;
+    if (rect.extent.x <= 0.0f || rect.extent.y <= 0.0f) {
+        return std::nullopt;
     }
-    int selected = selectIndex;
-    if (selected < 0 || selected >= static_cast<int>(group.panels.size())) {
-        selected = group.panels.empty() ? -1 : 0;
-    }
-    if (selected >= 0) {
-        // syncSelectedTab only moves the highlight; selectTab would fire the
-        // previous rebuild's _onTabSelected (double-add / wrong-panel race).
-        // The content is attached exactly once, right here.
-        view->bar->syncSelectedTab(selected);
-        view->content->addDetachedChild(group.panels[static_cast<size_t>(selected)].widget);
-    }
-    // Wire selection: show the selected panel's widget.
-    view->bar->_onTabSelected = [this, zoneIndex](int index)
-    {
-        FTabGroup& g = _groups[zoneIndex];
-        FLeafView* selectedView = leafViewForZone(zoneIndex);
-        if (!selectedView || !selectedView->content || index < 0 || index >= static_cast<int>(g.panels.size())) {
-            return;
+    const glm::vec2 local = (logicalPoint - rect.pos) / rect.extent;
+    const bool bMerge = local.x > 0.25f && local.x < 0.75f && local.y > 0.25f && local.y < 0.75f;
+    EDockCardinalSide side = EDockCardinalSide::West;
+    if (!bMerge) {
+        const float dx = local.x - 0.5f;
+        const float dy = local.y - 0.5f;
+        if (std::abs(dx) > std::abs(dy)) {
+            side = dx < 0.0f ? EDockCardinalSide::West : EDockCardinalSide::East;
         }
-        _model.selectPanel(g.panels[static_cast<size_t>(index)].id);
-        if (WidgetTree* tree = getTree()) {
-            for (UIElement* child : selectedView->content->getChildrenInPaintOrder()) {
-                if (child->participatesInLayout()) {
-                    tree->detach(*child);
-                    break;
-                }
-            }
+        else {
+            side = dy < 0.0f ? EDockCardinalSide::North : EDockCardinalSide::South;
         }
-        selectedView->content->addDetachedChild(g.panels[static_cast<size_t>(index)].widget);
-    };
-    markLayoutDirty();
+    }
+
+    Rect2D previewRect = rect;
+    if (!bMerge) {
+        const float stripX = rect.extent.x * 0.30f;
+        const float stripY = rect.extent.y * 0.30f;
+        switch (side) {
+        case EDockCardinalSide::West: previewRect = Rect2D{glm::vec2{rect.pos.x, rect.pos.y}, glm::vec2{stripX, rect.extent.y}}; break;
+        case EDockCardinalSide::East: previewRect = Rect2D{glm::vec2{rect.pos.x + rect.extent.x - stripX, rect.pos.y}, glm::vec2{stripX, rect.extent.y}}; break;
+        case EDockCardinalSide::North: previewRect = Rect2D{glm::vec2{rect.pos.x, rect.pos.y}, glm::vec2{rect.extent.x, stripY}}; break;
+        case EDockCardinalSide::South: previewRect = Rect2D{glm::vec2{rect.pos.x, rect.pos.y + rect.extent.y - stripY}, glm::vec2{rect.extent.x, stripY}}; break;
+        }
+    }
+
+    return FDropPreview{targetView->leafId, panelId, side, previewRect, bMerge};
 }
 
-void UIDockSpace::movePanel(int srcZone, int dstZone, const std::string& panelName)
+bool UIDockSpace::parsePanelPayload(const std::string& payload, DockPanelId& panelId) const
 {
-    if (srcZone == dstZone || srcZone < 0 || srcZone > 2 || dstZone < 0 || dstZone > 2) {
-        return;
-    }
-    FTabGroup& src = _groups[srcZone];
-    FTabGroup& dst = _groups[dstZone];
-    auto it = std::find_if(src.panels.begin(), src.panels.end(),
-                           [&](const FPanel& p) { return p.name == panelName; });
-    if (it == src.panels.end()) {
-        return;
-    }
-    FPanel moved = *it;
-    if (!_model.movePanel(moved.id, _zoneLeafIds[dstZone])) {
-        return;
-    }
-    src.panels.erase(it);
-    dst.panels.push_back(std::move(moved));
-    rebuildZone(srcZone);
-    rebuildZone(dstZone, static_cast<int>(dst.panels.size()) - 1);
+    panelId = parsePanelId(payload);
+    return panelId != kInvalidDockPanelId;
 }
 
 bool UIDockSpace::canAcceptDrop(const std::string& payload, const glm::vec2& logicalPoint)
 {
-    return payload.rfind(kDockTabPayload, 0) == 0;
+    DockPanelId panelId = kInvalidDockPanelId;
+    return parsePanelPayload(payload, panelId) && resolveDropPreview(logicalPoint, panelId).has_value();
 }
 
 void UIDockSpace::onDrop(const std::string& payload, const glm::vec2& logicalPoint)
 {
-    _dropZone = -1;
-    markPaintDirty();
-    // payload: dock-tab:<srcZone>:<label>
-    const std::string body  = payload.substr(std::char_traits<char>::length(kDockTabPayload));
-    const size_t      sep   = body.find(':');
-    if (sep == std::string::npos) {
+    DockPanelId panelId = kInvalidDockPanelId;
+    if (!parsePanelPayload(payload, panelId)) {
+        clearPreview();
         return;
     }
-    const int         srcZone = std::atoi(body.substr(0, sep).c_str());
-    const std::string label   = body.substr(sep + 1);
-    // Determine the target zone from the drop point's horizontal position.
-    const float t = (logicalPoint.x - _layoutRect.pos.x) / std::max(_layoutRect.extent.x, 1.0f);
-    int dstZone = t < 0.25f ? 0 : (t > 0.82f ? 2 : 1);
-    movePanel(srcZone, dstZone, label);
+    auto preview = resolveDropPreview(logicalPoint, panelId);
+    clearPreview();
+    if (!preview) {
+        return;
+    }
+
+    const FDockNode* sourceLeaf = _model.findLeafForPanel(panelId);
+    if (!sourceLeaf) {
+        return;
+    }
+
+    bool bChanged = false;
+    if (preview->bMerge) {
+        if (sourceLeaf->id != preview->targetLeafId) {
+            bChanged = _model.movePanel(panelId, preview->targetLeafId, SIZE_MAX, false);
+        }
+    }
+    else {
+        bChanged = _model.splitLeaf(preview->targetLeafId, preview->side, panelId);
+    }
+
+    if (bChanged) {
+        rebuildProjection();
+    }
 }
 
 void UIDockSpace::setDropHighlight(bool bHighlight)
 {
-    markPaintDirty();
+    if (!bHighlight) {
+        clearPreview();
+    }
 }
 
 void UIDockSpace::clearTransientInputState()
 {
-    _dropZone = -1;
+    clearPreview();
 }
 
 bool UIDockSpace::handleInputEvent(const Event& event, const WidgetEventContext& ctx)
 {
-    return false; // tabs and splits handle their own input
+    (void)event;
+    (void)ctx;
+    return false;
 }
 
 } // namespace ya

@@ -105,7 +105,7 @@ bool FDockTreeModel::removePanelFromLeaf(DockPanelId panelId, FDockNode*& source
     return true;
 }
 
-bool FDockTreeModel::movePanel(DockPanelId panelId, DockNodeId targetLeafId, size_t insertIndex)
+bool FDockTreeModel::movePanel(DockPanelId panelId, DockNodeId targetLeafId, size_t insertIndex, bool collapseSource)
 {
     FDockNode* target = findNode(targetLeafId);
     FDockNode* source = findLeafForPanel(panelId);
@@ -117,7 +117,7 @@ bool FDockTreeModel::movePanel(DockPanelId panelId, DockNodeId targetLeafId, siz
     if (insertIndex == SIZE_MAX || insertIndex > target->panelIds.size()) insertIndex = target->panelIds.size();
     target->panelIds.insert(target->panelIds.begin() + static_cast<std::ptrdiff_t>(insertIndex), panelId);
     target->selectedPanel = panelId;
-    if (source->panelIds.empty() && !source->persistentEmptyLeaf) collapseEmptyLeaf(source);
+    if (collapseSource && source->panelIds.empty() && !source->persistentEmptyLeaf) collapseEmptyLeaf(source);
     if (validateInvariants()) return true;
     _root = std::move(backup);
     _nextNodeId = nextNodeId;
@@ -145,11 +145,19 @@ bool FDockTreeModel::splitLeaf(DockNodeId targetLeafId, EDockCardinalSide side, 
     const DockNodeId nextNodeId = _nextNodeId;
     FDockNode* target = findNode(targetLeafId);
     FDockNode* source = findLeafForPanel(panelId);
-    if (!findPanel(panelId) || !target || target->kind != EDockNodeKind::Leaf || source == target) return false;
-    if (source && !removePanelFromLeaf(panelId, source)) return false;
-    const auto oldPanels = target->panelIds;
-    const DockPanelId oldSelected = target->selectedPanel;
+    if (!findPanel(panelId) || !target || target->kind != EDockNodeKind::Leaf) return false;
+    if (source && source != target && !removePanelFromLeaf(panelId, source)) return false;
+    auto oldPanels = target->panelIds;
+    DockPanelId oldSelected = target->selectedPanel;
     const bool oldPersistent = target->persistentEmptyLeaf;
+    if (source == target) {
+        auto it = std::find(oldPanels.begin(), oldPanels.end(), panelId);
+        if (it == oldPanels.end()) return false;
+        oldPanels.erase(it);
+        if (oldSelected == panelId) {
+            oldSelected = oldPanels.empty() ? kInvalidDockPanelId : oldPanels.front();
+        }
+    }
     target->kind = EDockNodeKind::Split;
     target->orientation = (side == EDockCardinalSide::West || side == EDockCardinalSide::East)
                               ? EDockSplitOrientation::Vertical : EDockSplitOrientation::Horizontal;
@@ -170,7 +178,7 @@ bool FDockTreeModel::splitLeaf(DockNodeId targetLeafId, EDockCardinalSide side, 
     oldLeaf->panelIds = oldPanels;
     oldLeaf->selectedPanel = oldSelected;
     oldLeaf->persistentEmptyLeaf = oldPersistent;
-    if (source && source->panelIds.empty() && !source->persistentEmptyLeaf) collapseEmptyLeaf(source);
+    if (source != target && source && source->panelIds.empty() && !source->persistentEmptyLeaf) collapseEmptyLeaf(source);
     if (validateInvariants()) return true;
     _root = std::move(backup);
     _nextNodeId = nextNodeId;

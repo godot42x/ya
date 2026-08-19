@@ -4,6 +4,7 @@
 #include "GUI/Widgets/Controls/DockNode.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -38,11 +39,12 @@ struct YA_GUI_API UIDockSpace : public UIElement
     static constexpr const char* kZoneRight  = "DockZoneRight";
 
     /// Payload prefix carried by tab-drag sessions.
-    static constexpr const char* kDockTabPayload = "dock-tab:";
+    static constexpr const char* kDockPanelPayload = "dock-panel:";
 
     void layout(const Rect2D& parentRect) override;
     void layoutAssigned(const Rect2D& rect) override;
     void paintSelf(UIFrameBuilder& builder) override;
+    void paintChildren(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
     bool canAcceptDrop(const std::string& payload, const glm::vec2& logicalPoint) override;
     void onDrop(const std::string& payload, const glm::vec2& logicalPoint) override;
@@ -59,33 +61,42 @@ private:
     struct FTabGroup
     {
         std::string         zoneName;
-        std::vector<FPanel> panels;
     };
     struct FLeafView
     {
+        DockNodeId  leafId = kInvalidDockNodeId;
+        UIContainer* root   = nullptr;
         UITabBar* bar = nullptr;
         UIContainer* content = nullptr;
     };
+    struct FDropPreview
+    {
+        DockNodeId targetLeafId = kInvalidDockNodeId;
+        DockPanelId panelId = kInvalidDockPanelId;
+        EDockCardinalSide side = EDockCardinalSide::West;
+        Rect2D rect{};
+        bool bMerge = false;
+    };
 
-    /// Rebuild a zone's tab bar from its panel list and show the selected
-    /// panel's widget in the content host.
-    void rebuildZone(int zoneIndex, int selectIndex = -1);
-    /// Move the panel `panelName` from `srcZone` to `dstZone` (no-op when
-    /// the zones are identical or the panel is not found).
-    void movePanel(int srcZone, int dstZone, const std::string& panelName);
+    void rebuildProjection();
+    void rebuildLeaf(DockNodeId leafId);
     void ensureModelLayout();
+    void refreshZoneLeafIds();
     std::shared_ptr<UIElement> materializeNode(const FDockNode& node);
-    int zoneForLeaf(DockNodeId leafId) const;
-    FLeafView* leafViewForZone(int zone);
-    [[nodiscard]] FPanel* findPanel(int zone, const std::string& name);
-    [[nodiscard]] const FPanel* findPanel(int zone, const std::string& name) const;
+    FLeafView* leafViewForLeaf(DockNodeId leafId);
+    [[nodiscard]] const FLeafView* leafViewForLeaf(DockNodeId leafId) const;
+    [[nodiscard]] std::optional<FDropPreview> resolveDropPreview(const glm::vec2& logicalPoint,
+                                                                 DockPanelId panelId) const;
+    [[nodiscard]] bool parsePanelPayload(const std::string& payload, DockPanelId& panelId) const;
+    void clearPreview();
 
     FTabGroup _groups[3];
+    std::unordered_map<DockPanelId, FPanel> _panels;
     std::unordered_map<DockNodeId, FLeafView> _leafViews;
+    std::optional<FDropPreview> _preview;
     FDockTreeModel _model;
     DockNodeId _zoneLeafIds[3] = {kInvalidDockNodeId, kInvalidDockNodeId, kInvalidDockNodeId};
     DockPanelId _nextPanelId = 1;
-    int       _dropZone = -1;
 };
 
 } // namespace ya
