@@ -245,7 +245,7 @@ TEST(ToolControlsTest, SplitPaneDividerDragChangesRatioAndEndsSession)
     tree.layout();
 
     // Press on the divider center: drag session owns focus + capture.
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(150.0f, 100.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(150.0f, 100.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_TRUE(split->_bDraggingDivider);
     EXPECT_EQ(tree.getPointerCapture(), split.get());
@@ -263,7 +263,7 @@ TEST(ToolControlsTest, SplitPaneDividerDragChangesRatioAndEndsSession)
     EXPECT_NEAR(split->getSplitRatio(), 40.0f / 300.0f, 1e-4f);
 
     // Release anywhere (capture): session ends, ratio persists.
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(5.0f, 100.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(5.0f, 100.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_FALSE(split->_bDraggingDivider);
     EXPECT_EQ(tree.getPointerCapture(), nullptr);
@@ -292,9 +292,9 @@ TEST(ToolControlsTest, SplitPanePressOnPaneFallsThroughToChild)
 
     // Click inside the left pane over the button: the button consumes it and
     // the split never starts a divider drag.
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(20.0f, 20.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(20.0f, 20.0f)),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(20.0f, 20.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(20.0f, 20.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(clicks, 1);
     EXPECT_FALSE(split->_bDraggingDivider);
@@ -567,7 +567,7 @@ TEST(ToolControlsTest, ScrollViewportCullsChildHitsOutsideViewport)
     // below the viewport must not hit the content even though the content
     // rect contains it.
     EXPECT_EQ(tree.pickAt({100.0f, 80.0f}), nullptr);
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(100.0f, 80.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(100.0f, 80.0f)),
               EWidgetRouteResult::NotHandled);
     // Inside the viewport the content is reachable.
     EXPECT_EQ(tree.pickAt({100.0f, 30.0f}), content.get());
@@ -643,13 +643,13 @@ TEST(ToolControlsTest, SelectableRowPressSelectsReleaseActivates)
     row->_onSelect   = [&](const std::string& id) { selected.push_back(id); };
     row->_onActivate = [&](const std::string& id) { activated.push_back(id); };
 
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(50.0f, 12.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(50.0f, 12.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(selected, std::vector<std::string>{"item.1"});
     EXPECT_EQ(tree.getFocused(), row.get());
     EXPECT_EQ(tree.getPointerCapture(), row.get());
 
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(50.0f, 12.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(50.0f, 12.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(activated, std::vector<std::string>{"item.1"});
     EXPECT_EQ(tree.getPointerCapture(), nullptr);
@@ -792,7 +792,7 @@ TEST(ToolControlsTest, TextFieldPressRequestsFocusAndPlacesCaret)
     tree.attachToLayer(WidgetTree::ELayer::Content, field);
     tree.layout();
 
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(150.0f, 14.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(150.0f, 14.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(tree.getFocused(), field.get());
     // No font atlas in the closure test: the caret falls back to the end.
@@ -870,11 +870,11 @@ TEST(ToolControlsTest, MenuBarHoverSwitchesOpenMenu)
     // Synthetic font: "File" = 32px + 20 -> 52px wide at x 4..56; "Edit"
     // starts at x 58. Click File: its menu opens below the bar.
     ASSERT_EQ(tree.pickAt({30.0f, 15.0f}), bar->getChildren().front().get());
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(30.0f, 15.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(30.0f, 15.0f)),
               EWidgetRouteResult::HandledExclusive);
     // The bar item has no press session: releases are not consumed. The
     // menu opened by the press stays open.
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(30.0f, 15.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(30.0f, 15.0f)),
               EWidgetRouteResult::NotHandled);
     ASSERT_NE(bar->getOpenMenu(), nullptr);
     EXPECT_EQ(bar->getOpenMenu()->menuItems().front()->_label, "New Document");
@@ -920,7 +920,7 @@ TEST(ToolControlsTest, MenuBarHoverSwitchesOpenMenu)
     tree.layout();
 
     // A press anywhere outside the menu dismisses it (popup shield).
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(300.0f, 300.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(300.0f, 300.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(tree.getLastRouteTrace().policy, EWidgetRoutePolicy::Popup);
     EXPECT_EQ(bar->getOpenMenu(), nullptr);

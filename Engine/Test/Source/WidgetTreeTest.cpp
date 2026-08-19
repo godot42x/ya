@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 
 #include <memory>
+#include <string_view>
 #include <vector>
 
 namespace ya
@@ -95,6 +96,33 @@ struct TestRouteWidget final : public UIElement
     std::vector<std::string>& _deliveries;
 };
 
+struct TestDropTarget final : public UIElement
+{
+    explicit TestDropTarget(std::string name) : UIElement(std::move(name)) {}
+
+    bool bAccept = true;
+    int highlightChanges = 0;
+    int drops = 0;
+    std::string lastPayload;
+
+    bool canAcceptDrop(const std::string&, const glm::vec2& point) override
+    {
+        return bAccept && hitTestLayoutRect(point);
+    }
+
+    void onDrop(const std::string& payload, const glm::vec2&) override
+    {
+        ++drops;
+        lastPayload = payload;
+    }
+
+    void setDropHighlight(bool bHighlight) override
+    {
+        (void)bHighlight;
+        ++highlightChanges;
+    }
+};
+
 } // namespace
 
 // === WidgetTreeDump ===
@@ -118,7 +146,7 @@ TEST(WidgetTreeTest, DumpTreeCapturesRectAndTransientState)
 
     // Hover then press: the dump reflects live transient state from the tree.
     tree.dispatchEvent(MouseMoveEvent(120.0f, 96.0f), pointAt(120.0f, 96.0f));
-    tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 96.0f));
+    tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 96.0f));
     const nlohmann::json pressed = dumpWidgetTree(tree);
     const nlohmann::json* pressedNode = findWidgetNode(pressed, "B");
     ASSERT_NE(pressedNode, nullptr);
@@ -209,7 +237,7 @@ TEST(WidgetTreeTest, PointerRouteDeliversPreviewTargetThenBubble)
     tree.attach(*parent, child);
     tree.layout();
 
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(140.0f, 120.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(140.0f, 120.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(deliveries,
               (std::vector<std::string>{
@@ -246,7 +274,7 @@ TEST(WidgetTreeTest, ModalOverlayUsesModalRoutePolicyAndCanDetachDuringTarget)
     overlay->open(tree);
     tree.layout();
 
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(200.0f, 150.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(200.0f, 150.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_FALSE(overlay->isAttached());
     EXPECT_EQ(tree.getLastRouteTrace().policy, EWidgetRoutePolicy::Modal);
@@ -273,19 +301,19 @@ TEST(WidgetTreeTest, ModalOverlayConsumesDismissClickBeforeUnderlyingContent)
 
     // The dismissing press belongs to the modal shield, not the content
     // underneath. Closing the overlay must not leak this click through.
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(170.0f, 130.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(170.0f, 130.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_FALSE(overlay->isAttached());
     EXPECT_EQ(clicks, 0);
 
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(170.0f, 130.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(170.0f, 130.0f)),
               EWidgetRouteResult::NotHandled);
     EXPECT_EQ(clicks, 0);
 
     // A fresh click after the modal is gone reaches the underlying content.
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(170.0f, 130.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(170.0f, 130.0f)),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(170.0f, 130.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(170.0f, 130.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(clicks, 1);
 }
@@ -332,7 +360,7 @@ TEST(WidgetTreeTest, DetachedWidgetDoesNotParticipate)
     tree.layout();
     // Not in the tree: layout never touches it and input never reaches it.
     EXPECT_EQ(panel->_layoutRect.extent, glm::vec2(0.0f, 0.0f));
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(30.0f, 30.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(30.0f, 30.0f)),
               EWidgetRouteResult::NotHandled);
 }
 
@@ -509,7 +537,7 @@ TEST(WidgetTreeTest, DetachKeepsBusinessReferenceAlive)
     EXPECT_EQ(button->getTree(), nullptr);
     EXPECT_EQ(button->getParent(), nullptr);
     // Still alive and detached: no hit, no layout space.
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::NotHandled);
     EXPECT_EQ(tree.getLayer(WidgetTree::ELayer::Content)->getChildren().size(), 0u);
 }
@@ -679,9 +707,9 @@ TEST(WidgetTreeTest, ZOrderDefinesHitOrderWithinLayer)
     EXPECT_TRUE(front->_bHovered);
     EXPECT_FALSE(behind->_bHovered);
 
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(120.0f, 110.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(frontClicks, 1);
     EXPECT_EQ(behindClicks, 0);
@@ -707,23 +735,23 @@ TEST(WidgetTreeTest, SystemLayersStackAboveProjectContent)
     dragIme->_onClick = [&] { clicks = 4; };
 
     // Topmost layer consumes first (drag/ime > tooltip > popup > content).
-    tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f));
-    tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(120.0f, 110.0f));
+    tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
+    tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
     EXPECT_EQ(clicks, 4);
 
     tree.detach(*dragIme);
-    tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f));
-    tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(120.0f, 110.0f));
+    tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
+    tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
     EXPECT_EQ(clicks, 3);
 
     tree.detach(*tooltip);
-    tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f));
-    tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(120.0f, 110.0f));
+    tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
+    tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
     EXPECT_EQ(clicks, 2);
 
     tree.detach(*popup);
-    tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f));
-    tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(120.0f, 110.0f));
+    tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
+    tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f));
     EXPECT_EQ(clicks, 1);
 }
 
@@ -780,7 +808,7 @@ TEST(WidgetTreeTest, PassWidgetsRespondButDoNotBlock)
     // underneath is NOT reached — hit-testing no longer walks lower
     // candidates; a Pass widget must opt into HitTestInvisible to fall
     // through, not rely on route-time continuation.
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::HandledPass);
     EXPECT_TRUE(top->_bPressed);
     EXPECT_FALSE(bottom->_bPressed);
@@ -794,7 +822,7 @@ TEST(WidgetTreeTest, HiddenSubtreeCullsHits)
     tree.attachToLayer(WidgetTree::ELayer::Content, button);
     tree.layout();
 
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::NotHandled);
     EXPECT_FALSE(button->_bPressed);
 }
@@ -836,16 +864,16 @@ TEST(WidgetTreeTest, PointerCaptureOverridesHitWalk)
 
     tree.setPointerCapture(captured.get());
     // Press outside both rects: still routed to the captured widget.
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(10.0f, 10.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(10.0f, 10.0f)),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(10.0f, 10.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(10.0f, 10.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(capturedClicks, 1);
     EXPECT_EQ(otherClicks, 0);
 
     tree.releasePointerCapture(captured.get());
     EXPECT_EQ(tree.getPointerCapture(), nullptr);
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(10.0f, 10.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(10.0f, 10.0f)),
               EWidgetRouteResult::NotHandled);
 }
 
@@ -949,7 +977,7 @@ TEST(WidgetTreeTest, ButtonPressRequestsFocusAndCapture)
     int clicks = 0;
     button->_onClick = [&] { ++clicks; };
 
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_TRUE(button->_bPressed);
     EXPECT_EQ(tree.getFocused(), button.get());
@@ -958,7 +986,7 @@ TEST(WidgetTreeTest, ButtonPressRequestsFocusAndCapture)
     EXPECT_FALSE(button->_bFocused);
     EXPECT_EQ(tree.getPointerCapture(), button.get());
 
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(120.0f, 110.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(clicks, 1);
     EXPECT_FALSE(button->_bPressed);
@@ -981,14 +1009,14 @@ TEST(WidgetTreeTest, ButtonDragOutReleaseFiresClickViaCapture)
 
     // Press inside, drag out, release over the other button: the capture
     // session keeps the press and completes the click on release.
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(260.0f, 260.0f), pointAt(260.0f, 260.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_FALSE(button->_bHovered);
     EXPECT_EQ(tree.getHovered(), nullptr); // hover follows the pointer, not the capture
 
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(260.0f, 260.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(260.0f, 260.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_EQ(buttonClicks, 1);
     EXPECT_EQ(otherClicks, 0);
@@ -1010,22 +1038,22 @@ TEST(WidgetTreeTest, PressRetiresStaleHoverAndReArmsPressedButton)
     EXPECT_EQ(tree.dispatchEvent(MouseMoveEvent(120.0f, 110.0f), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_TRUE(first->_bHovered);
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::HandledExclusive);
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(120.0f, 110.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::HandledExclusive);
 
     // Pressing the second button without an intervening move must retire the
     // stale hover on the first and arm the pressed button's own hover (logical
     // focus moves, but a pointer press does not light the keyboard highlight).
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(280.0f, 110.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(280.0f, 110.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_FALSE(first->_bHovered);
     EXPECT_FALSE(first->_bFocused);
     EXPECT_TRUE(second->_bPressed);
     EXPECT_TRUE(second->_bHovered);
     EXPECT_FALSE(second->_bFocused);
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(280.0f, 110.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(280.0f, 110.0f)),
               EWidgetRouteResult::HandledExclusive);
     EXPECT_FALSE(second->_bPressed);
     EXPECT_TRUE(second->_bHovered);
@@ -1075,7 +1103,7 @@ TEST(WidgetTreeTest, DetachWhilePressedClearsButtonTransientState)
     int clicks = 0;
     button->_onClick = [&] { ++clicks; };
 
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(0), pointAt(120.0f, 110.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonPressedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::HandledExclusive);
     ASSERT_TRUE(button->_bPressed);
     ASSERT_EQ(tree.getPointerCapture(), button.get());
@@ -1093,9 +1121,101 @@ TEST(WidgetTreeTest, DetachWhilePressedClearsButtonTransientState)
     // fire the click.
     tree.attachToLayer(WidgetTree::ELayer::Content, button);
     tree.layout();
-    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(0), pointAt(120.0f, 110.0f)),
+    EXPECT_EQ(tree.dispatchEvent(MouseButtonReleasedEvent(EMouse::Left), pointAt(120.0f, 110.0f)),
               EWidgetRouteResult::NotHandled);
     EXPECT_EQ(clicks, 0);
+}
+
+TEST(WidgetTreeTest, DragObserverReceivesEveryMoveAndTargetChanges)
+{
+    WidgetTree tree({.width = 500, .height = 300});
+    auto source = makeButton("Source", {20.0f, 20.0f}, {80.0f, 30.0f});
+    auto targetA = std::make_shared<TestDropTarget>("TargetA");
+    targetA->setPosition({150.0f, 40.0f});
+    targetA->setSize({100.0f, 80.0f});
+    auto targetB = std::make_shared<TestDropTarget>("TargetB");
+    targetB->setPosition({300.0f, 40.0f});
+    targetB->setSize({100.0f, 80.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, source);
+    tree.attachToLayer(WidgetTree::ELayer::Content, targetA);
+    tree.attachToLayer(WidgetTree::ELayer::Content, targetB);
+    tree.layout();
+
+    std::vector<glm::vec2> moves;
+    std::vector<std::string> observations;
+    DragSessionObserver observer;
+    observer.onMove = [&](const std::string& payload, const glm::vec2& point, std::string_view target) {
+        EXPECT_EQ(payload, "panel");
+        moves.push_back(point);
+        observations.emplace_back(target);
+    };
+    observer.onTargetChanged = [&](std::string_view previous, std::string_view current) {
+        observations.emplace_back(std::string(previous) + "->" + std::string(current));
+    };
+
+    tree.beginDrag(source.get(), "panel", "Panel", std::move(observer));
+    tree.updateDrag({10.0f, 10.0f});
+    tree.updateDrag({170.0f, 60.0f});
+    tree.updateDrag({180.0f, 70.0f});
+    tree.updateDrag({320.0f, 60.0f});
+
+    ASSERT_EQ(moves.size(), 4u);
+    EXPECT_EQ(moves[0], glm::vec2(10.0f, 10.0f));
+    EXPECT_EQ(moves[3], glm::vec2(320.0f, 60.0f));
+    ASSERT_EQ(observations.size(), 6u);
+    EXPECT_EQ(observations[0], "");
+    EXPECT_EQ(observations[1], "->TargetA");
+    EXPECT_EQ(observations[2], "TargetA");
+    EXPECT_EQ(observations[3], "TargetA");
+    EXPECT_EQ(observations[4], "TargetA->TargetB");
+    EXPECT_EQ(observations[5], "TargetB");
+}
+
+TEST(WidgetTreeTest, DragObserverDistinguishesDropNoTargetAndCancel)
+{
+    WidgetTree tree({.width = 500, .height = 300});
+    auto source = makeButton("Source", {20.0f, 20.0f}, {80.0f, 30.0f});
+    auto target = std::make_shared<TestDropTarget>("Target");
+    target->setPosition({150.0f, 40.0f});
+    target->setSize({100.0f, 80.0f});
+    tree.attachToLayer(WidgetTree::ELayer::Content, source);
+    tree.attachToLayer(WidgetTree::ELayer::Content, target);
+    tree.layout();
+
+    std::vector<EDragFinishResult> results;
+    std::vector<std::string> names;
+    auto makeObserver = [&] {
+        DragSessionObserver observer;
+        observer.onFinished = [&](EDragFinishResult result, const glm::vec2&, std::string_view name) {
+            results.push_back(result);
+            names.emplace_back(name);
+        };
+        return observer;
+    };
+
+    tree.beginDrag(source.get(), "drop", "Drop", makeObserver());
+    tree.endDrag({180.0f, 60.0f});
+    EXPECT_FALSE(tree.isDragging());
+    EXPECT_EQ(target->drops, 1);
+    EXPECT_EQ(target->lastPayload, "drop");
+
+    tree.beginDrag(source.get(), "none", "None", makeObserver());
+    tree.endDrag({10.0f, 10.0f});
+
+    tree.beginDrag(source.get(), "cancel", "Cancel", makeObserver());
+    tree.updateDrag({180.0f, 60.0f});
+    tree.cancelDrag();
+
+    ASSERT_EQ(results.size(), 3u);
+    EXPECT_EQ(results[0], EDragFinishResult::Dropped);
+    EXPECT_EQ(results[1], EDragFinishResult::NoTarget);
+    EXPECT_EQ(results[2], EDragFinishResult::Cancelled);
+    EXPECT_EQ(names[0], "Target");
+    EXPECT_TRUE(names[1].empty());
+    EXPECT_TRUE(names[2].empty());
+    EXPECT_FALSE(tree.isDragging());
+    EXPECT_EQ(tree.getDragSource(), nullptr);
+    EXPECT_TRUE(tree.getDragPayload().empty());
 }
 
 // === UITypeRegistry ===

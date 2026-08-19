@@ -6,8 +6,9 @@
 2. 读 `progress.md` 确认上一轮完成内容与剩余风险。
 3. 确认当前 main 上 P7 三栏实现可用：`xmake b GUIWorkbench` 通过；先跑现有
    `dock.jsonl` 取得基线 dump，不在视觉问题未定位时开 DockNode 重构。
-4. 当前阶段必须从 0 开始：先确认 WidgetTree drag 是否能给出 move / target-change /
-   finish(NoTarget) 生命周期；没有这些 hook 不开始 hover-zone 或 floating 实现。
+4. 阶段 0 已完成：WidgetTree 已具备 move / target-change /
+   finish(Dropped/NoTarget/Cancelled) observer。阶段 1 只建立 pure model 与测试，
+   不开始 hover-zone、floating 或现有 DockSpace visual 替换。
 5. 环境确认：关闭验证层干扰（如 86% 显存下 vkCreateGraphicsPipelines 崩溃，属环境问题非代码 bug）；优先用 headless + `--scenario-dump-dir` 验证。
 
 ## 每阶段收尾步骤

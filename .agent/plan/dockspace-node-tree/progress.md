@@ -13,6 +13,10 @@
 
 ### 当前规划状态
 
+- 阶段 0 已完成：WidgetTree 的通用 drag lifecycle observer 与
+  EDragFinishResult（Dropped / NoTarget / Cancelled）已验证；下一切片是纯
+  `FDockTreeModel`，仍不改现有三栏 visual projection。
+
 - 用户确认选 B（完整 ImGui 式 DockNode 嵌套树 + 浮动 + 8向预览）。
 - 三个 Explore agent 已探查：布局系统 / 拖拽+绘制 / 浮动窗口，证据充分。
 - 设计决策已确认：Split 复用 UISplitPane 载体；先单窗口内浮动、预留多 window；payload 保持 string。
@@ -25,7 +29,7 @@
   的通用事件系统小改动先完成。
 - 8 向 corner 语义已明确为 compound two-split + visible persistent empty leaf；不允许
   用视觉 quarter 预览却在 drop 时退化为 cardinal。
-- 当前仍是规划阶段；下一次开工从阶段 0 开始，不直接重写 `DockSpace.cpp`。
+- 当前进入阶段 1；不直接重写 `DockSpace.cpp`，先建立可单测的纯 dock model。
 
 ### 关键探查结论（证据锚点）
 
@@ -51,5 +55,32 @@
 
 ### 下一步
 
-从阶段 0 开始：补 `WidgetTree` generic drag observer/finish result、dock model dump
-schema、P7 基线 scenario；通过后才建无 UI 指针的 `FDockTreeModel` 和 model tests。
+建立无 `UIElement*` / `UITabBar*` / `UIContainer*` 的 `FDockTreeModel`、transaction
+和 invariant validator，并以 model-only 测试覆盖 merge、cardinal split、source collapse
+与 ratio/min-extent 规则。
+
+### 2026-08-19 — 阶段 0 首轮实现
+
+- WidgetTree::beginDrag 接受可选 DragSessionObserver，保持原有三参数调用兼容。
+- onMove 对每次 updateDrag 同步通知；onTargetChanged 只在接受目标切换时通知。
+- endDrag 区分 Dropped 与 NoTarget，cancelDrag 报告 Cancelled；回调在清理会话状态后
+  执行，drop target 通过 shared_ptr 保活到 onDrop 完成。
+- 新增 WidgetTreeTest 覆盖每次 move、目标切换、drop/no-target/cancel 以及会话清理。
+- 将 widgets 测试中遗留的 `MouseButtonPressedEvent(0)` / release 同类调用改为
+  `EMouse::Left`，与当前输入 API 的强类型约束一致。
+- `xmake b ya-gui-widgets-test` 通过；聚焦
+  `WidgetTreeTest.DragObserver*` 的两个新测试通过。
+- `xmake b GUIWorkbench` 通过；headless P7 场景通过，写出
+  `dock_initial.json` 与 `dock_dragged.json`，三栏/三个 tab 的结构断言均通过。
+- 全量 `ya-gui-widgets-test` 当前为 122/127；以下 5 项是本切片外的既有基线失败：
+  `UIFrameSnapshotTest.BuildResolvesItemsToRenderPixelsInPaintOrder`、
+  `UIFrameSnapshotTest.ScrollViewportClipsContentToViewportRect`、
+  `UIFrameSnapshotTest.SplitPaneClipsChildrenToOwnPaneRect`、
+  `UIFrameSnapshotTest.ContainerClipResizeInvalidatesChildSegments`、
+  `ToolControlsTest.SplitPaneDividerDragChangesRatioAndEndsSession`。
+- `xmake b ya-gui-closure-test` 仍被目录迁移残留阻断：
+  `Render2DClipTest.cpp` 引用已不存在的 `GUI/Draw2D/Render2D.h`；这与 observer
+  行为无关，留给 GUI Draw2D include-path 基线修复单独处理。
+
+阶段 0 的 generic drag observer/finish result 与 P7 基线 dump 已收口；接下来建立
+无 UI 指针的 `FDockTreeModel` 和 model tests。

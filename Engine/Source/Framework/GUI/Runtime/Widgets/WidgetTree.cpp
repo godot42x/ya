@@ -1039,7 +1039,10 @@ void WidgetTree::appendRouteTraceStep(const UIElement& widget,
 
 // === Drag & drop session ===
 
-void WidgetTree::beginDrag(UIElement* source, std::string payload, std::string ghostLabel)
+void WidgetTree::beginDrag(UIElement* source,
+                           std::string payload,
+                           std::string ghostLabel,
+                           DragSessionObserver observer)
 {
     if (isDragging()) {
         cancelDrag();
@@ -1047,6 +1050,7 @@ void WidgetTree::beginDrag(UIElement* source, std::string payload, std::string g
     _dragSource  = source;
     _dragPayload = std::move(payload);
     _dragPoint   = {};
+    _dragObserver = std::move(observer);
 
     // Ghost on the DragIme layer: visible but never hit-testable.
     auto ghost = std::make_shared<UIPanel>("DragGhost");
@@ -1093,6 +1097,8 @@ void WidgetTree::updateDrag(const glm::vec2& logicalPoint)
     }
 
     UIElement* target = findDropTarget(logicalPoint);
+    const std::string previousTargetName = _dragDropTarget ? _dragDropTarget->_name : std::string{};
+    const bool bTargetChanged = target != _dragDropTarget;
     if (target != _dragDropTarget) {
         if (_dragDropTarget) {
             _dragDropTarget->setDropHighlight(false);
@@ -1101,6 +1107,14 @@ void WidgetTree::updateDrag(const glm::vec2& logicalPoint)
         if (_dragDropTarget) {
             _dragDropTarget->setDropHighlight(true);
         }
+    }
+
+    const std::string currentTargetName = target ? target->_name : std::string{};
+    if (bTargetChanged && _dragObserver.onTargetChanged) {
+        _dragObserver.onTargetChanged(previousTargetName, currentTargetName);
+    }
+    if (_dragObserver.onMove) {
+        _dragObserver.onMove(_dragPayload, logicalPoint, currentTargetName);
     }
 }
 
@@ -1124,10 +1138,17 @@ void WidgetTree::endDrag(const glm::vec2& logicalPoint)
         return;
     }
     UIElement*       target  = findDropTarget(logicalPoint);
+    UIElementRef      targetKeepAlive = target ? target->shared_from_this() : nullptr;
     const std::string payload = _dragPayload;
+    const std::string targetName = target ? target->_name : std::string{};
+    DragSessionObserver observer = std::move(_dragObserver);
     clearDragSession();
     if (target) {
-        target->onDrop(payload, logicalPoint);
+        targetKeepAlive->onDrop(payload, logicalPoint);
+    }
+    if (observer.onFinished) {
+        observer.onFinished(target ? EDragFinishResult::Dropped : EDragFinishResult::NoTarget,
+                            logicalPoint, targetName);
     }
 }
 
@@ -1136,7 +1157,12 @@ void WidgetTree::cancelDrag()
     if (!isDragging()) {
         return;
     }
+    const glm::vec2 logicalPoint = _dragPoint;
+    DragSessionObserver observer = std::move(_dragObserver);
     clearDragSession();
+    if (observer.onFinished) {
+        observer.onFinished(EDragFinishResult::Cancelled, logicalPoint, {});
+    }
 }
 
 } // namespace ya

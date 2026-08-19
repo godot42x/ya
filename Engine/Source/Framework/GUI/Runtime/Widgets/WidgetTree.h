@@ -22,8 +22,10 @@
 #include "GUI/Widgets/WidgetAttachment.h"
 
 #include <array>
+#include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -58,6 +60,35 @@ struct WidgetPointerState
 {
     glm::vec2 logicalPoint = {0.0f, 0.0f};
     bool      bKnown       = false;
+};
+
+/// Terminal state of a WidgetTree drag session. This is intentionally a
+/// framework-level result: consumers such as DockSpace, TreeView, and
+/// application tooling can interpret the same lifecycle without the tree
+/// knowing their payload semantics.
+enum class EDragFinishResult : uint8_t
+{
+    Dropped,
+    NoTarget,
+    Cancelled,
+};
+
+/// Synchronous observer for a drag session owned by WidgetTree. `onMove` is
+/// called for every pointer move (including moves that remain over the same
+/// target); `onTargetChanged` is called only when the accepting target
+/// changes. Names are copied by the tree and are valid for the duration of
+/// each callback, so observers never retain raw widget pointers across a
+/// callback.
+struct DragSessionObserver
+{
+    std::function<void(const std::string& payload,
+                       const glm::vec2& logicalPoint,
+                       std::string_view targetName)> onMove;
+    std::function<void(std::string_view previousTarget,
+                       std::string_view currentTarget)> onTargetChanged;
+    std::function<void(EDragFinishResult result,
+                       const glm::vec2& logicalPoint,
+                       std::string_view targetName)> onFinished;
 };
 
 /// Per-frame performance counters for the most recent buildSnapshot(). A
@@ -217,7 +248,10 @@ struct YA_GUI_API WidgetTree final
     [[nodiscard]] bool isDragging() const { return !_dragPayload.empty(); }
     /// Start a drag session from `source` with a string payload; a ghost
     /// (Panel + label) follows the pointer on the DragIme layer.
-    void beginDrag(UIElement* source, std::string payload, std::string ghostLabel);
+    void beginDrag(UIElement* source,
+                   std::string payload,
+                   std::string ghostLabel,
+                   DragSessionObserver observer = {});
     /// Move the drag ghost and refresh the highlighted drop target.
     void updateDrag(const glm::vec2& logicalPoint);
     /// Release the drag: deliver `onDrop` to the topmost accepting target.
@@ -348,6 +382,7 @@ struct YA_GUI_API WidgetTree final
     glm::vec2         _dragPoint{};
     UIElement*        _dragDropTarget = nullptr;
     UIElementRef      _dragGhost;
+    DragSessionObserver _dragObserver;
 };
 
 } // namespace ya

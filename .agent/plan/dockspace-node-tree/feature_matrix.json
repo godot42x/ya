@@ -15,8 +15,8 @@
       "items": [
         {
           "id": "n0_drag_lifecycle",
-          "status": "planned",
-          "notes": "WidgetTree 增加 generic drag move/target-change/finished observer；支持 no-target release 给 DockSpace 触发 tear-off，保持 string payload transport 且不泄露 dock 类型"
+          "status": "pass",
+          "notes": "已增加通用 DragSessionObserver 与 EDragFinishResult；覆盖每次 move、target-change、Dropped/NoTarget/Cancelled，保持 string payload 与旧 beginDrag/onDrop 兼容。widgets focused tests、GUIWorkbench 构建与 headless dock baseline 均通过。"
         },
         {
           "id": "n1_dock_model",
