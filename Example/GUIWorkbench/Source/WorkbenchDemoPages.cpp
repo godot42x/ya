@@ -8,6 +8,7 @@
 #include "GUI/Widgets/Controls/CheckBox.h"
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Container.h"
+#include "GUI/Widgets/Controls/Dialog.h"
 #include "GUI/Widgets/Controls/DragDrop.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/InputExtras.h"
@@ -1301,8 +1302,49 @@ void buildInteractionsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoSta
         slot->setCrossAlignment(ya::EUIBoxSlotCrossAlignment::Start);
     }
 
-    (void)state;
-    (void)log;
+    // Subtree disable: the whole group goes input-inert when disabled.
+    tree.attach(*form, makeLabel("Subtree disable"));
+    auto group = std::make_shared<ya::UIContainer>("DisableGroup");
+    group->setDirection(ya::EWidgetBoxLayout::Horizontal);
+    group->setSpacing(8.0f);
+    tree.attach(*form, group);
+    auto groupBtnA = makeDemoButton("GroupBtnA", "Group button A", 140.0f);
+    groupBtnA->_onClick = [log] { log("Group button A clicked"); };
+    tree.attach(*group, groupBtnA);
+    auto groupBtnB = makeDemoButton("GroupBtnB", "Group button B", 140.0f);
+    groupBtnB->_onClick = [log] { log("Group button B clicked"); };
+    tree.attach(*group, groupBtnB);
+
+    auto bGroupEnabled = std::make_shared<bool>(true);
+    auto toggleBtn = makeDemoButton("ToggleGroupBtn", "Toggle group enabled", 200.0f);
+    toggleBtn->_onClick = [group, bGroupEnabled, log]
+    {
+        *bGroupEnabled = !*bGroupEnabled;
+        group->setEnabled(*bGroupEnabled);
+        const std::string groupState = *bGroupEnabled ? "enabled" : "disabled";
+        log(std::format("Group {}", groupState));
+    };
+    tree.attach(*form, toggleBtn);
+
+    // Modal dialog.
+    tree.attach(*form, makeLabel("Modal dialog"));
+    auto openDialogBtn = makeDemoButton("OpenDialogBtn", "Open dialog...", 180.0f);
+    openDialogBtn->_onClick = [&tree, log]
+    {
+        auto content = std::make_shared<ya::UIText>("DialogContent");
+        content->_bAutoSize = true;
+        content->_fontSize  = 13;
+        content->_color     = {0.88f, 0.90f, 0.94f, 1.0f};
+        content->setText("This is a modal dialog built on UIPopupOverlay's modal role.");
+        auto dialog = ya::UIDialog::create("Confirm", content);
+        dialog->_onClosed = [log](bool bConfirmed)
+        {
+            const std::string result = bConfirmed ? "confirmed" : "cancelled";
+            log(std::format("Dialog closed: {}", result));
+        };
+        dialog->open(tree);
+    };
+    tree.attach(*form, openDialogBtn);
 }
 
 } // namespace guiworkbench

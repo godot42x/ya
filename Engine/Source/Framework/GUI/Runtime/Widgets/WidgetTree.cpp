@@ -854,6 +854,14 @@ EWidgetRouteResult WidgetTree::dispatchRoute(UIElement* target,
     std::vector<UIElementRef> retainedPath;
     retainedPath.reserve(path.size());
     for (UIElement* node : path) {
+        // Disabled subtrees are input-inert: every node on the route must
+        // be enabled (P6 subtree-disable contract).
+        if (!node->isEnabledInTree()) {
+            if (!bAppendTrace) {
+                beginRouteTrace(policy, nullptr);
+            }
+            return EWidgetRouteResult::NotHandled;
+        }
         retainedPath.push_back(node->shared_from_this());
     }
 

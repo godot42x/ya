@@ -1,9 +1,10 @@
 #pragma once
 
-// GUIWorkbench feature demo pages (imgui-demo style). This is example content:
-// it lives under Example/, never under Engine/Source/Framework — the framework
-// provides the controls and the workbench shell, apps assemble their own
-// pages.
+// GUIWorkbench feature gallery pages (imgui-demo style). This is example
+// content: it lives under Example/, never under Engine/Source/Framework —
+// the framework provides the controls and the workbench shell, apps assemble
+// their own pages. One builder per gallery section; each section has its own
+// scenario file under Example/GUIWorkbench/Scenarios/.
 
 #include <glm/glm.hpp>
 

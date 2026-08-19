@@ -1,3 +1,23 @@
+// GUIWorkbench — the retain-mode GUI feature gallery.
+//
+// Every page below is one gallery section exercising a framework capability
+// end-to-end (not just unit tests). Pages own their scenario files under
+// Example/GUIWorkbench/Scenarios/ for pre-manual acceptance:
+//
+//   Render       correctness baseline (text/image/clip/first-frame)
+//   Widgets      basic controls (button/checkbox/slider/combo/field)
+//   Layout       box layout (H/V, spacing, padding, alignment, anchors)
+//   Menus        popup menus + the shell menu bar
+//   DragDrop     drag sessions (sources onto targets)
+//   Modal        popup dialog over a transparent shield
+//   ScrollSplit  scroll viewport + split pane
+//   Gallery      reactive bindings, style system, tree view, vector
+//                primitives, table grid, input extras, drag wrappers
+//   Interactions tooltip, wrapped text, subtree disable, modal dialog
+//   Editor       built-in workspace (selectable rows, split, inspector)
+//
+// New framework features go on a dedicated page (never appended to an
+// existing one — inserting content shifts every scenario coordinate).
 #include "GUIWorkbench.h"
 
 #include "Core/KeyCode.h"

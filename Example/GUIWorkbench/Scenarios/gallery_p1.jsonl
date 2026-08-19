@@ -1,6 +1,6 @@
 # GUIWorkbench --start-page=Interactions --scenario-render. P6: tooltip
-# dwell + wrapped text. (The tooltip dwell counts rendered frames, so this
-# scenario requires the G-C scenario-render flag.)
+# dwell, wrapped text, subtree disable and the modal dialog. (The tooltip
+# dwell counts rendered frames, so this scenario needs --scenario-render.)
 {"window_size":{"width":1280,"height":720}}
 {"frame":3}
 {"assert":{"widget":"WrappedText","rect":{"w":360.0,"h":85.3125}}}
@@ -13,4 +13,28 @@
 {"frame":2}
 {"assert":{"layers":{"Tooltip":{"children":[]}}}}
 {"checkpoint":"tooltip_cleared"}
+# Subtree disable: toggle the group off, a press on GroupBtnA must not
+# route anywhere (disabled subtree is input-inert).
+{"event":"mouse_press","x":640,"y":318,"button":0}
+{"event":"mouse_release","x":640,"y":318,"button":0}
+{"frame":2}
+{"event":"mouse_press","x":86,"y":280,"button":0}
+{"event":"mouse_release","x":86,"y":280,"button":0}
+{"frame":2}
+{"assert":{"lastRoute":{"resultName":"notHandled"}}}
+{"checkpoint":"group_disabled"}
+{"event":"mouse_press","x":640,"y":318,"button":0}
+{"event":"mouse_release","x":640,"y":318,"button":0}
+{"frame":2}
+# Modal dialog: open, then confirm through OK; the popup layer empties.
+{"event":"mouse_press","x":640,"y":385,"button":0}
+{"event":"mouse_release","x":640,"y":385,"button":0}
+{"frame":2}
+{"assert":{"widget":"Dialog","control":{"type":"popupOverlay","modal":true}}}
+{"checkpoint":"dialog_open"}
+{"event":"mouse_press","x":705,"y":389,"button":0}
+{"event":"mouse_release","x":705,"y":389,"button":0}
+{"frame":2}
+{"assert":{"layers":{"Popup":{"children":[]}}}}
+{"checkpoint":"dialog_confirmed"}
 {"frame":1}

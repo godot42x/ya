@@ -2,6 +2,7 @@
 
 #include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
+#include "GUI/Widgets/WidgetTree.h"
 #include "Core/Base.h"  
 
 namespace ya

@@ -247,6 +247,33 @@ struct YA_GUI_API UIElement : public std::enable_shared_from_this<UIElement>
     /// win for this widget; keeps data/display consistency the invariant.
     bool _bVolatile = false;
 
+    /// Enabled state (editor-parity P6). A disabled widget (or one inside a
+    /// disabled ancestor) does not receive input; paint graying is left to
+    /// each widget (or the host styles the disabled subtree).
+    bool _bEnabled = true;
+    /// Changed-only setter: disables/enables this widget and repaints its
+    /// subtree (visual state may change for every descendant).
+    void setEnabled(bool value)
+    {
+        if (_bEnabled == value) {
+            return;
+        }
+        _bEnabled = value;
+        invalidateSubtree(EUIInvalidationReason::PaintProperty);
+    }
+    [[nodiscard]] bool isEnabled() const { return _bEnabled; }
+    /// Effective enabled state: false when this widget OR any ancestor is
+    /// disabled. Walked on the input path (cheap parent chain).
+    [[nodiscard]] bool isEnabledInTree() const
+    {
+        for (const UIElement* node = this; node; node = node->getParent()) {
+            if (!node->_bEnabled) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /// Tooltip text (editor-parity P6). When non-empty, the tree shows a
     /// styled tooltip below this widget after a hover dwell delay.
     std::string _tooltip;
