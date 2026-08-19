@@ -146,4 +146,19 @@ TEST(DockNodeTest, SelectionIsOwnedByLeafModel)
     EXPECT_TRUE(model.validateInvariants());
 }
 
+TEST(DockNodeTest, SplitRatioMutationIsClampedAndAtomic)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "scene");
+    ASSERT_TRUE(model.addPanel(1));
+    ASSERT_TRUE(model.splitEmptyLeaf(model.root()->id, EDockCardinalSide::East));
+    const DockNodeId splitId = model.root()->id;
+    ASSERT_TRUE(model.setSplitRatio(splitId, 1.5f));
+    EXPECT_FLOAT_EQ(model.root()->ratio, 1.0f);
+    EXPECT_TRUE(model.setSplitRatio(splitId, 0.25f));
+    EXPECT_FLOAT_EQ(model.root()->ratio, 0.25f);
+    EXPECT_FALSE(model.setSplitRatio(9999, 0.5f));
+    EXPECT_TRUE(model.validateInvariants());
+}
+
 } // namespace ya

@@ -161,3 +161,4 @@ widget 指针。
 - 验证：`xmake b GUIWorkbench` 通过；Dock headless 初始/拖拽 scenario 全部通过。
 - 仍待下一切片：view registry 的非 zone leaf 支持、局部 subtree rebuild、panel registry 从
   `FTabGroup[3]` 解耦，以及 model mutation 后的 view teardown/focus 保护。
+- 增加 `SplitRatioMutationIsClampedAndAtomic` model test；DockNode focused suite 10/10 通过。
