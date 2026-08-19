@@ -30,6 +30,10 @@ struct YA_GUI_API UITabButton : public UIElement
         _focusPolicy = EWidgetFocusPolicy::Focusable;
     }
 
+    ~UITabButton() override
+    {
+    }
+
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UITabButton>; }
 
     std::string _label;
@@ -46,6 +50,9 @@ struct YA_GUI_API UITabButton : public UIElement
     std::function<void()> _onActivated;
     /// Fired on Left / Right (delta -1/+1); the bar moves focus + selection.
     std::function<void(int delta)> _onNavigate;
+    /// DockSpace drag: fired when a press crosses the drag threshold; the
+    /// bar begins the tree drag session carrying dock-tab:<label>.
+    std::function<void()> _onDragArmed;
 
     void paintSelf(UIFrameBuilder& builder) override;
     bool handleInputEvent(const Event& event, const WidgetEventContext& ctx) override;
@@ -56,6 +63,8 @@ struct YA_GUI_API UITabButton : public UIElement
 
   private:
     VisualFlag _bHovered{*this};
+    bool      _bPressed   = false;
+    glm::vec2 _pressPoint{0.0f, 0.0f};
 };
 
 /// Tab strip (imgui-demo-style page switcher, gui-app-bootstrap Phase 4).
@@ -80,6 +89,16 @@ struct YA_GUI_API UITabBar : public UIContainer
     /// Sync selected state without firing `_onTabSelected`.
     void syncSelectedTab(int index);
     [[nodiscard]] int getSelectedIndex() const { return _selectedIndex; }
+
+    /// Remove the tab at `index` (detaches the button, adjusts selection).
+    /// Returns the removed label (empty when out of range).
+    std::string removeTab(int index);
+
+    /// DockSpace-style tab dragging: when true a press on a tab arms a drag
+    /// session (6px threshold); crossing it begins a tree drag carrying the
+    /// payload "dock-tab:<label>" and fires _onTabDragBegin(index).
+    bool _bDraggableTabs = false;
+    std::function<void(int index, const std::string& label)> _onTabDragBegin;
 
     std::function<void(int selectedIndex)> _onTabSelected;
 

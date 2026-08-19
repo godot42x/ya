@@ -111,8 +111,8 @@
         },
         {
           "id": "p7_dockspace",
-          "status": "planned",
-          "notes": "UIDockSpace + UIDockLayout（中央区+边缘停靠+tab 合并+分割条）；独立 Dock 页 + dock.jsonl；smoke tab 索引同步更新"
+          "status": "pass",
+          "notes": "UIDockSpace 最小可用版：三 zone（left/center/right）嵌套 UISplitPane + UITabBar（_bDraggableTabs + 6px 阈值 drag armed + removeTab）+ addPanel/rebuildZone/movePanel + onDrop 按落点 x 阈值（0.25/0.82）选目标 zone；独立 Dock 页 + dock.jsonl（初始 6 断言 + dock_initial checkpoint + drag Inspector 到 left + DockTabBar0 断言 + dock_dragged checkpoint 通过，dump 验证 Inspector 从 center 迁到 left）；配套引擎修复：WidgetTree::detach keepAlive（use_count==1 时 removeChildEdge 提前析构触发 _tree 断言）+ rebuildZone 用 syncSelectedTab 防旧 _onTabSelected 竞态 + headless host 支持 scenario（GuiScenarioEventSource 公共化 + assertScenarioTree 移入 WidgetTreeDump）"
         }
       ]
     }

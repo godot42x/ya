@@ -9,6 +9,7 @@
 #include "GUI/Widgets/Controls/ComboBox.h"
 #include "GUI/Widgets/Controls/Container.h"
 #include "GUI/Widgets/Controls/Dialog.h"
+#include "GUI/Widgets/Controls/DockSpace.h"
 #include "GUI/Widgets/Controls/DragDrop.h"
 #include "GUI/Widgets/Controls/Image.h"
 #include "GUI/Widgets/Controls/InputExtras.h"
@@ -1345,6 +1346,40 @@ void buildInteractionsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoSta
         dialog->open(tree);
     };
     tree.attach(*form, openDialogBtn);
+}
+
+
+
+void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+                   const std::function<void(const std::string&)>& log)
+{
+    auto dock = std::make_shared<ya::UIDockSpace>("DemoDock");
+    dock->_anchorMin = {0.0f, 0.0f};
+    dock->_anchorMax = {1.0f, 1.0f};
+    tree.attach(parent, dock);
+
+    const auto makePanel = [](const std::string& name, const std::string& text)
+    {
+        auto panel = std::make_shared<ya::UIPanel>(name + "_Body");
+        panel->setColor({0.12f, 0.13f, 0.17f, 1.0f});
+        auto label = std::make_shared<ya::UIText>(name + "_Label");
+        label->_anchorMin = {0.0f, 0.0f};
+        label->_anchorMax = {1.0f, 1.0f};
+        label->setSize({0.0f, 0.0f});
+        label->_hAlign = ya::EWidgetAlignH::Center;
+        label->_vAlign = ya::EWidgetAlignV::Center;
+        label->_fontSize = 14;
+        label->setText(text);
+        panel->addDetachedChild(label);
+        return std::shared_ptr<ya::UIElement>(panel);
+    };
+
+    dock->addPanel("Scene", makePanel("Scene", "Scene viewport"));
+    dock->addPanel("Inspector", makePanel("Inspector", "Inspector panel"));
+    dock->addPanel("Console", makePanel("Console", "Console output"));
+
+    (void)state;
+    (void)log;
 }
 
 } // namespace guiworkbench

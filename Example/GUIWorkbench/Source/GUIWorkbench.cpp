@@ -83,6 +83,10 @@ void FWorkbenchApp::buildUI(ya::WidgetTree& tree)
     {
         buildInteractionsDemo(t, p, demoState, status);
     });
+    surface.addPage("Dock", [this](ya::WidgetTree& t, ya::UIElement& p, const std::function<void(const std::string&)>& status)
+    {
+        buildDockDemo(t, p, demoState, status);
+    });
 
     applyStartPage();
 

@@ -1,11 +1,11 @@
 #include "GUI/Widgets/Controls/TabBar.h"
+#include "GUI/Widgets/WidgetTree.h"
 
 #include "Core/KeyCode.h"
 #include "Core/Log.h"
 
 #include "Render/Resources/FontManager.h"
 #include "GUI/Widgets/UIFrameSnapshot.h"
-#include "GUI/Widgets/WidgetTree.h"
 
 #include <algorithm>
 
@@ -68,6 +68,36 @@ bool UITabButton::handleInputEvent(const Event& event, const WidgetEventContext&
         return false;
     }
 
+    if (eventType == EEvent::MouseButtonPressed && _onDragArmed) {
+        _bPressed   = true;
+        _pressPoint = ctx.logicalPoint;
+        if (WidgetTree* tree = getTree()) {
+            tree->setPointerCapture(this);
+        }
+        return true;
+    }
+    if (eventType == EEvent::MouseMoved && _bPressed && _onDragArmed && getTree() && !getTree()->isDragging()) {
+        if (glm::length(ctx.logicalPoint - _pressPoint) > 6.0f) {
+            _bPressed = false;
+            if (WidgetTree* tree = getTree()) {
+                tree->releasePointerCapture(this);
+            }
+            _onDragArmed();
+        }
+        return true;
+    }
+    if (eventType == EEvent::MouseButtonReleased && _bPressed) {
+        _bPressed = false;
+        if (WidgetTree* tree = getTree()) {
+            tree->releasePointerCapture(this);
+        }
+        // A release without crossing the threshold is a normal click.
+        if (_onActivated) {
+            _onActivated();
+        }
+        return true;
+    }
+
     switch (eventType) {
     case EEvent::MouseButtonPressed:
         if (_onActivated) {
@@ -92,9 +122,48 @@ UITabButton* UITabBar::addTab(const std::string& label)
     button->_onActivated = [this, index]() { selectTab(index); };
     button->_onNavigate  = [this](int delta) { navigate(delta); };
 
+    if (_bDraggableTabs) {
+        // DockSpace tab drag: a press on the tab arms a drag; crossing the
+        // threshold starts a tree session carrying dock-tab:<label>.
+        button->_onDragArmed = [this, index]()
+        {
+            if (index >= 0 && index < static_cast<int>(_tabs.size())) {
+                _onTabDragBegin(index, _tabs[static_cast<size_t>(index)]->_label);
+            }
+        };
+    }
+
     addDetachedChild(button);
     _tabs.push_back(button.get());
     return button.get();
+}
+
+std::string UITabBar::removeTab(int index)
+{
+    if (index < 0 || index >= static_cast<int>(_tabs.size())) {
+        return {};
+    }
+    UITabButton* button = _tabs[static_cast<size_t>(index)];
+    const std::string label = button->_label;
+    if (WidgetTree* tree = getTree()) {
+        tree->detach(*button);
+    }
+    _tabs.erase(_tabs.begin() + index);
+    // Re-point the remaining buttons' indices (activation lambdas captured
+    // the old index).
+    for (size_t i = 0; i < _tabs.size(); ++i) {
+        const size_t newIndex = i;
+        _tabs[i]->_onActivated = [this, newIndex]() { selectTab(static_cast<int>(newIndex)); };
+    }
+    if (_selectedIndex >= static_cast<int>(_tabs.size())) {
+        _selectedIndex = static_cast<int>(_tabs.size()) - 1;
+    }
+    else if (index < _selectedIndex) {
+        --_selectedIndex;
+    }
+    syncSelectedTab(_selectedIndex);
+    markLayoutDirty();
+    return label;
 }
 
 void UITabBar::selectTab(int index)

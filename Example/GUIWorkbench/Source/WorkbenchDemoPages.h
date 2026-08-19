@@ -123,4 +123,9 @@ void buildGalleryDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& s
 void buildInteractionsDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
                            const std::function<void(const std::string&)>& log);
 
+/// DockSpace page (editor-parity P7): three docking zones with draggable
+/// tabs.
+void buildDockDemo(ya::WidgetTree& tree, ya::UIElement& parent, FDemoState& state,
+                   const std::function<void(const std::string&)>& log);
+
 } // namespace guiworkbench
