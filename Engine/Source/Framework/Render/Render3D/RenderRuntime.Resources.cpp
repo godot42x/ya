@@ -52,13 +52,13 @@ std::shared_ptr<RenderTexture> createPresentationRenderTexture(IRender& render, 
     resource->label       = std::format("Presentation_{}", imageIndex);
     resource->desc.image  = ImageCreateInfo{
         .label   = resource->label,
-        .usage   = static_cast<EImageUsage::T>(EImageUsage::ColorAttachment |
-                     (swapchainCI.bEnableTransferSrc ? EImageUsage::TransferSrc : EImageUsage::None)),
         .format  = swapchain.getFormat(),
         .extent  = {.width = swapchain.getExtent().width, .height = swapchain.getExtent().height, .depth = 1},
         .mipLevels   = 1,
         .arrayLayers = 1,
         .samples     = ESampleCount::Sample_1,
+        .usage   = static_cast<EImageUsage::T>(EImageUsage::ColorAttachment |
+                     (swapchainCI.bEnableTransferSrc ? EImageUsage::TransferSrc : EImageUsage::None)),
     };
     resource->desc.defaultView = ImageViewCreateInfo{
         .label          = std::format("Presentation_{}_View", imageIndex),
