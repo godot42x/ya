@@ -152,6 +152,43 @@ bool FDockTreeModel::splitLeaf(DockNodeId targetLeafId, EDockCardinalSide side, 
     return false;
 }
 
+bool FDockTreeModel::splitEmptyLeaf(DockNodeId targetLeafId, EDockCardinalSide side,
+                                    float newPanelRatio, bool persistentEmptyLeaf)
+{
+    auto backup = cloneNode(*_root, nullptr);
+    const DockNodeId nextNodeId = _nextNodeId;
+    FDockNode* target = findNode(targetLeafId);
+    if (!target || target->kind != EDockNodeKind::Leaf) return false;
+
+    const auto oldPanels = target->panelIds;
+    const DockPanelId oldSelected = target->selectedPanel;
+    const bool oldPersistent = target->persistentEmptyLeaf;
+    target->kind = EDockNodeKind::Split;
+    target->orientation = (side == EDockCardinalSide::West || side == EDockCardinalSide::East)
+                              ? EDockSplitOrientation::Vertical : EDockSplitOrientation::Horizontal;
+    target->ratio = std::clamp(newPanelRatio, 0.0f, 1.0f);
+    target->panelIds.clear();
+    target->selectedPanel = kInvalidDockPanelId;
+    target->persistentEmptyLeaf = false;
+    target->child[0] = std::make_unique<FDockNode>();
+    target->child[1] = std::make_unique<FDockNode>();
+    target->child[0]->id = _nextNodeId++;
+    target->child[1]->id = _nextNodeId++;
+    target->child[0]->parent = target;
+    target->child[1]->parent = target;
+    FDockNode* newLeaf = (side == EDockCardinalSide::West || side == EDockCardinalSide::North)
+                             ? target->child[0].get() : target->child[1].get();
+    FDockNode* oldLeaf = newLeaf == target->child[0].get() ? target->child[1].get() : target->child[0].get();
+    newLeaf->persistentEmptyLeaf = persistentEmptyLeaf;
+    oldLeaf->panelIds = oldPanels;
+    oldLeaf->selectedPanel = oldSelected;
+    oldLeaf->persistentEmptyLeaf = oldPersistent;
+    if (validateInvariants()) return true;
+    _root = std::move(backup);
+    _nextNodeId = nextNodeId;
+    return false;
+}
+
 void FDockTreeModel::collapseEmptyLeaf(FDockNode* leaf)
 {
     if (!leaf || leaf == _root.get() || leaf->kind != EDockNodeKind::Leaf || !leaf->panelIds.empty() || leaf->persistentEmptyLeaf || !leaf->parent) return;
@@ -167,6 +204,23 @@ void FDockTreeModel::collapseEmptyLeaf(FDockNode* leaf)
     std::unique_ptr<FDockNode>& parentSlot = grand->child[0].get() == parent ? grand->child[0] : grand->child[1];
     parentSlot = std::move(sibling);
     collapseEmptyLeaf(parentSlot.get());
+}
+
+void FDockTreeModel::collectLeafIds(const FDockNode& node, std::vector<DockNodeId>& result) const
+{
+    if (node.kind == EDockNodeKind::Leaf) {
+        result.push_back(node.id);
+        return;
+    }
+    if (node.child[0]) collectLeafIds(*node.child[0], result);
+    if (node.child[1]) collectLeafIds(*node.child[1], result);
+}
+
+std::vector<DockNodeId> FDockTreeModel::leafIds() const
+{
+    std::vector<DockNodeId> result;
+    if (_root) collectLeafIds(*_root, result);
+    return result;
 }
 
 bool FDockTreeModel::removePanel(DockPanelId panelId)

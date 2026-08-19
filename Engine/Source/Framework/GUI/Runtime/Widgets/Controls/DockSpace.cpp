@@ -21,6 +21,43 @@ UIDockSpace::UIDockSpace(std::string name)
     _groups[2].zoneName = kZoneRight;
 }
 
+void UIDockSpace::ensureModelLayout()
+{
+    if (_zoneLeafIds[0] != kInvalidDockNodeId) {
+        return;
+    }
+    const DockNodeId rootId = _model.root()->id;
+    if (!_model.splitEmptyLeaf(rootId, EDockCardinalSide::East) || _model.leafIds().size() != 2) {
+        YA_CORE_ERROR("UIDockSpace '{}': failed to create default dock model", _name);
+        return;
+    }
+    const auto firstLeaves = _model.leafIds();
+    if (!_model.splitEmptyLeaf(firstLeaves[1], EDockCardinalSide::West) || _model.leafIds().size() != 3) {
+        YA_CORE_ERROR("UIDockSpace '{}': failed to create center dock leaf", _name);
+        return;
+    }
+    const auto leaves = _model.leafIds();
+    for (size_t i = 0; i < 3; ++i) {
+        _zoneLeafIds[i] = leaves[i];
+    }
+}
+
+UIDockSpace::FPanel* UIDockSpace::findPanel(int zone, const std::string& name)
+{
+    if (zone < 0 || zone >= 3) return nullptr;
+    auto& panels = _groups[zone].panels;
+    auto it = std::find_if(panels.begin(), panels.end(), [&](const FPanel& panel) { return panel.name == name; });
+    return it == panels.end() ? nullptr : &*it;
+}
+
+const UIDockSpace::FPanel* UIDockSpace::findPanel(int zone, const std::string& name) const
+{
+    if (zone < 0 || zone >= 3) return nullptr;
+    const auto& panels = _groups[zone].panels;
+    auto it = std::find_if(panels.begin(), panels.end(), [&](const FPanel& panel) { return panel.name == name; });
+    return it == panels.end() ? nullptr : &*it;
+}
+
 void UIDockSpace::layout(const Rect2D& parentRect)
 {
     layoutAssigned(computeAnchorRect(parentRect));
@@ -29,6 +66,7 @@ void UIDockSpace::layout(const Rect2D& parentRect)
 void UIDockSpace::layoutAssigned(const Rect2D& rect)
 {
     setLayoutRect(rect);
+    ensureModelLayout();
 
     // Build lazily on first layout (needs a tree for attach).
     if (getChildren().empty() && getTree()) {
@@ -123,8 +161,15 @@ void UIDockSpace::addPanel(const std::string& name, std::shared_ptr<UIElement> w
     if (zone < 0 || zone > 2) {
         zone = 1;
     }
+    ensureModelLayout();
+    const DockPanelId panelId = _nextPanelId++;
+    if (!_model.registerPanel({.id = panelId, .stableKey = name, .title = name}) ||
+        !_model.addPanel(panelId, _zoneLeafIds[zone])) {
+        YA_CORE_WARN("UIDockSpace '{}': rejected duplicate or invalid panel '{}'", _name, name);
+        return;
+    }
     FTabGroup& group = _groups[zone];
-    group.panels.push_back({name, std::move(widget)});
+    group.panels.push_back({panelId, name, std::move(widget)});
     if (group.bar) {
         rebuildZone(zone, static_cast<int>(group.panels.size()) - 1);
     }
@@ -197,6 +242,9 @@ void UIDockSpace::movePanel(int srcZone, int dstZone, const std::string& panelNa
         return;
     }
     FPanel moved = *it;
+    if (!_model.movePanel(moved.id, _zoneLeafIds[dstZone])) {
+        return;
+    }
     src.panels.erase(it);
     dst.panels.push_back(std::move(moved));
     rebuildZone(srcZone);

@@ -58,7 +58,10 @@ struct YA_GUI_API FDockTreeModel
     bool movePanel(DockPanelId panelId, DockNodeId targetLeafId, size_t insertIndex = SIZE_MAX);
     bool splitLeaf(DockNodeId targetLeafId, EDockCardinalSide side, DockPanelId panelId,
                    float newPanelRatio = 0.30f);
+    bool splitEmptyLeaf(DockNodeId targetLeafId, EDockCardinalSide side,
+                        float newPanelRatio = 0.30f, bool persistentEmptyLeaf = true);
     bool removePanel(DockPanelId panelId);
+    [[nodiscard]] std::vector<DockNodeId> leafIds() const;
     [[nodiscard]] bool validateInvariants(std::string* error = nullptr) const;
     [[nodiscard]] size_t panelCount() const { return _panels.size(); }
 
@@ -71,6 +74,7 @@ struct YA_GUI_API FDockTreeModel
     bool validateNode(const FDockNode& node, const FDockNode* expectedParent,
                       std::unordered_map<DockPanelId, size_t>& seen,
                       std::string* error) const;
+    void collectLeafIds(const FDockNode& node, std::vector<DockNodeId>& result) const;
     std::unique_ptr<FDockNode> _root;
     std::unordered_map<DockPanelId, FDockPanelRecord> _panels;
     DockNodeId _nextNodeId = 1;

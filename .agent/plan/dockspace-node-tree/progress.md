@@ -104,3 +104,15 @@
 下一步进入阶段 2：以 `FDockTreeModel` 为唯一事实源建立 `UIDockSpace` 的 WidgetTree
 projection，先复现当前三栏默认布局，再逐步替换 `_groups[3]`，不在 model 中引入视觉
 widget 指针。
+
+### 2026-08-19 — 阶段 2 projection bridge 首轮
+
+- `FDockTreeModel` 增加 `splitEmptyLeaf` 与稳定 leaf preorder 查询；默认三栏布局由模型
+  创建两个嵌套 split 和三个持久 leaf，不再需要虚假 panel 占位。
+- `UIDockSpace` 开始持有 model、zone leaf ids 和 stable panel ids。兼容的 `addPanel` 会先
+  注册/挂载 model panel，再建立现有 tab/content visual projection；跨 zone move 先提交
+  model transaction，成功后才更新视觉 groups。
+- 这是一轮过渡 bridge：当前 `_groups[3]` 视觉结构仍保留，尚未完成递归 `FDockNodeView`
+  projection；因此 n2 继续保持 in_progress，下一切片要把 split/leaf view 从 model 递归
+  materialize。
+- 验证：`xmake b GUIWorkbench` 通过；Dock headless scenario 通过，初始与拖拽 dump 均生成。

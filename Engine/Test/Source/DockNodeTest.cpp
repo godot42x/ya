@@ -105,6 +105,22 @@ TEST(DockNodeTest, SplitClampsRatioAndValidatesGeometry)
     EXPECT_FALSE(error.empty());
 }
 
+TEST(DockNodeTest, SplitEmptyLeafKeepsPersistentPlaceholder)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "scene");
+    ASSERT_TRUE(model.addPanel(1));
+    const DockNodeId rootId = model.root()->id;
+    ASSERT_TRUE(model.splitEmptyLeaf(rootId, EDockCardinalSide::East));
+    const auto leaves = model.leafIds();
+    ASSERT_EQ(leaves.size(), 2u);
+    const auto* empty = model.findNode(leaves.back());
+    ASSERT_NE(empty, nullptr);
+    EXPECT_TRUE(empty->panelIds.empty());
+    EXPECT_TRUE(empty->persistentEmptyLeaf);
+    EXPECT_TRUE(model.validateInvariants());
+}
+
 TEST(DockNodeTest, RemovePanelDeletesRegistryRecord)
 {
     FDockTreeModel model;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GUI/Widgets/UIElement.h"
+#include "GUI/Widgets/Controls/DockNode.h"
 
 #include <memory>
 #include <string>
@@ -50,6 +51,7 @@ struct YA_GUI_API UIDockSpace : public UIElement
 private:
     struct FPanel
     {
+        DockPanelId                   id = kInvalidDockPanelId;
         std::string                   name;
         std::shared_ptr<UIElement>    widget;
     };
@@ -67,8 +69,14 @@ private:
     /// Move the panel `panelName` from `srcZone` to `dstZone` (no-op when
     /// the zones are identical or the panel is not found).
     void movePanel(int srcZone, int dstZone, const std::string& panelName);
+    void ensureModelLayout();
+    [[nodiscard]] FPanel* findPanel(int zone, const std::string& name);
+    [[nodiscard]] const FPanel* findPanel(int zone, const std::string& name) const;
 
     FTabGroup _groups[3];
+    FDockTreeModel _model;
+    DockNodeId _zoneLeafIds[3] = {kInvalidDockNodeId, kInvalidDockNodeId, kInvalidDockNodeId};
+    DockPanelId _nextPanelId = 1;
     int       _dropZone = -1;
 };
 

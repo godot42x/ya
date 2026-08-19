@@ -25,8 +25,8 @@
         },
         {
           "id": "n2_projection_layout",
-          "status": "planned",
-          "notes": "Dock model -> WidgetTree projection：Split 用 UISplitPane，Leaf view 用 tab bar+content；divider ratio 回写 model；删除 _groups[3] / rebuildZone"
+          "status": "in_progress",
+          "notes": "首轮 bridge 已完成：UIDockSpace 持有 FDockTreeModel、zone leaf ids 与 stable panel ids；默认三栏由 model 创建，add/move 先改 model 再同步现有 visual groups。递归 FDockNodeView projection 与 _groups[3] 删除留在下一切片。"
         },
         {
           "id": "n3_cardinal_preview_drop",
