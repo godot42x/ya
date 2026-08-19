@@ -85,6 +85,16 @@ bool FDockTreeModel::addPanel(DockPanelId panelId, DockNodeId leafId)
     return validateInvariants();
 }
 
+bool FDockTreeModel::selectPanel(DockPanelId panelId)
+{
+    FDockNode* leaf = findLeafForPanel(panelId);
+    if (!leaf) {
+        return false;
+    }
+    leaf->selectedPanel = panelId;
+    return true;
+}
+
 bool FDockTreeModel::removePanelFromLeaf(DockPanelId panelId, FDockNode*& source)
 {
     source = findLeafForPanel(panelId);

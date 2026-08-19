@@ -133,4 +133,17 @@ TEST(DockNodeTest, RemovePanelDeletesRegistryRecord)
     EXPECT_TRUE(model.validateInvariants());
 }
 
+TEST(DockNodeTest, SelectionIsOwnedByLeafModel)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "scene");
+    registerPanel(model, 2, "inspector");
+    ASSERT_TRUE(model.addPanel(1));
+    ASSERT_TRUE(model.addPanel(2));
+    ASSERT_TRUE(model.selectPanel(1));
+    EXPECT_EQ(model.findLeafForPanel(1)->selectedPanel, 1);
+    EXPECT_FALSE(model.selectPanel(99));
+    EXPECT_TRUE(model.validateInvariants());
+}
+
 } // namespace ya

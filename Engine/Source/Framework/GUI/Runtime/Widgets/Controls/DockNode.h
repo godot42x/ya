@@ -55,6 +55,7 @@ struct YA_GUI_API FDockTreeModel
     [[nodiscard]] const FDockPanelRecord* findPanel(DockPanelId id) const;
     bool registerPanel(FDockPanelRecord record);
     bool addPanel(DockPanelId panelId, DockNodeId leafId = kInvalidDockNodeId);
+    bool selectPanel(DockPanelId panelId);
     bool movePanel(DockPanelId panelId, DockNodeId targetLeafId, size_t insertIndex = SIZE_MAX);
     bool setSplitRatio(DockNodeId splitId, float ratio);
     bool splitLeaf(DockNodeId targetLeafId, EDockCardinalSide side, DockPanelId panelId,

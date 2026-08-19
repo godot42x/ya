@@ -211,6 +211,7 @@ void UIDockSpace::rebuildZone(int zoneIndex, int selectIndex)
         if (!g.content || index < 0 || index >= static_cast<int>(g.panels.size())) {
             return;
         }
+        _model.selectPanel(g.panels[static_cast<size_t>(index)].id);
         if (WidgetTree* tree = getTree()) {
             for (UIElement* child : g.content->getChildrenInPaintOrder()) {
                 if (child->participatesInLayout()) {

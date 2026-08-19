@@ -142,3 +142,11 @@ widget 指针。
 - 这样 resize / 重新 materialize 时不会因为视觉 split 的瞬时 ratio 丢失而跳回旧值；仍未做
   model mutation 后的局部 subtree rebuild 和独立 view registry。
 - 验证：`xmake b GUIWorkbench` 通过；Dock headless initial/dragged scenario 通过。
+
+### 2026-08-19 — 阶段 2 selection ownership
+
+- 增加 `FDockTreeModel::selectPanel()`，tab selection callback 先更新 model，再做 content
+  widget detach/attach；selected panel 不再只存在于 `UITabBar` 的视觉状态。
+- 增加 model-only selection ownership 测试；DockNode focused suite 8/8 通过。
+- 当前阶段仍不重建整个 subtree；下一步是建立按 `DockNodeId` / `DockPanelId` 索引的
+  projection registry，把 view 生命周期从三组 zone 临时数组中分离出来。
