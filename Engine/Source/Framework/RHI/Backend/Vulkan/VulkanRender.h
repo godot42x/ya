@@ -80,6 +80,7 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
     
     const std::vector<ya::DeviceFeature> _deviceExtensions = {
         {.name = VK_KHR_SWAPCHAIN_EXTENSION_NAME, .bRequired = true},                 // "VK_KHR_swapchain"
+        {.name = VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME, .bRequired = false},   // "VK_EXT_extended_dynamic_state" for cull mode (pre-1.3 devices)
         {.name = VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME, .bRequired = false}, // "VK_EXT_extended_dynamic_state3" for polygon mode
 #ifdef VK_EXT_MESH_SHADER_EXTENSION_NAME
         {.name = VK_EXT_MESH_SHADER_EXTENSION_NAME, .bRequired = false},
@@ -89,6 +90,7 @@ struct YA_RHI_BACKEND_API VulkanRender : public IRender
 
     bool bSupportDebugUtils       = false; // Whether VK_EXT_DEBUG_UTILS_EXTENSION_NAME is supported
     bool bSupportsGeometryShader  = false;
+    bool bSupportsExtendedDynamicState = false; // CULL_MODE dynamic state legal (1.3 core or extension enabled)
     RenderCapabilities _capabilities{};
 
   private:

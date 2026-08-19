@@ -43,6 +43,10 @@ struct RenderCapabilities
     bool taskShader          = false;
     bool dynamicRendering    = false;
     bool portabilitySubset   = false;
+    /// CULL_MODE as a dynamic state: core since Vulkan 1.3; on older devices
+    /// requires the enabled VK_EXT_extended_dynamic_state extension. False
+    /// means callers must bake the cull mode into the pipeline statically.
+    bool dynamicCullMode     = false;
 };
 
 struct YA_RHI_API IRender : public plat_base<IRender>

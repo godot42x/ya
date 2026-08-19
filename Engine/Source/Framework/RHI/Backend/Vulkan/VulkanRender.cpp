@@ -745,6 +745,10 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
                                                             extensionNames.end(),
                                                             [](const char* name)
                                                             { return std::strcmp(name, VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME) == 0; }) != extensionNames.end();
+        const bool bHasExtendedDynamicState = std::find_if(extensionNames.begin(),
+                                                           extensionNames.end(),
+                                                           [](const char* name)
+                                                           { return std::strcmp(name, VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME) == 0; }) != extensionNames.end();
 #ifdef VK_EXT_MESH_SHADER_EXTENSION_NAME
         const bool bHasMeshShaderExtension = std::find_if(extensionNames.begin(),
                                                           extensionNames.end(),
@@ -757,9 +761,13 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
         VkPhysicalDeviceExtendedDynamicState3FeaturesEXT supportedExtendedDynamicState3Features{};
         supportedExtendedDynamicState3Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
 
+        VkPhysicalDeviceExtendedDynamicStateFeaturesEXT supportedExtendedDynamicStateFeatures{};
+        supportedExtendedDynamicStateFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT;
+        supportedExtendedDynamicStateFeatures.pNext = bHasExtendedDynamicState3 ? &supportedExtendedDynamicState3Features : nullptr;
+
         VkPhysicalDeviceDynamicRenderingFeatures supportedDynamicRenderingFeatures{};
         supportedDynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
-        supportedDynamicRenderingFeatures.pNext = bHasExtendedDynamicState3 ? &supportedExtendedDynamicState3Features : nullptr;
+        supportedDynamicRenderingFeatures.pNext = &supportedExtendedDynamicStateFeatures;
 
         VkPhysicalDeviceVulkan12Features supportedVulkan12Features{};
         supportedVulkan12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
@@ -806,12 +814,18 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
             .dynamicRendering = VK_TRUE,
         };
 
+        VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures{
+            .sType               = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT,
+            .pNext               = &dynamicRenderingFeatures,
+            .extendedDynamicState = bHasExtendedDynamicState ? VK_TRUE : VK_FALSE,
+        };
+
         VkPhysicalDeviceExtendedDynamicState3FeaturesEXT extendedDynamicState3Features{
             .sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
-            .pNext                            = &dynamicRenderingFeatures,
+            .pNext                            = &extendedDynamicStateFeatures,
             .extendedDynamicState3PolygonMode = bHasExtendedDynamicState3 && supportedExtendedDynamicState3Features.extendedDynamicState3PolygonMode,
         };
-        void* deviceFeaturesNext = extendedDynamicState3Features.extendedDynamicState3PolygonMode ? static_cast<void*>(&extendedDynamicState3Features) : static_cast<void*>(&dynamicRenderingFeatures);
+        void* deviceFeaturesNext = extendedDynamicState3Features.extendedDynamicState3PolygonMode ? static_cast<void*>(&extendedDynamicState3Features) : static_cast<void*>(&extendedDynamicStateFeatures);
 
 #ifdef VK_EXT_MESH_SHADER_EXTENSION_NAME
         VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{
@@ -865,6 +879,12 @@ bool VulkanRender::createLogicDevice(uint32_t graphicsQueueCount, uint32_t prese
                                                  supportedFeatures.multiDrawIndirect &&
                                                  supportedFeatures.drawIndirectFirstInstance;
         _capabilities.dynamicRendering         = dynamicRenderingFeatures.dynamicRendering == VK_TRUE;
+        bSupportsExtendedDynamicState          = (candidate.properties.apiVersion >= VK_API_VERSION_1_3) ||
+                                                 (bHasExtendedDynamicState && supportedExtendedDynamicStateFeatures.extendedDynamicState == VK_TRUE);
+        _capabilities.dynamicCullMode          = bSupportsExtendedDynamicState;
+        if (!bSupportsExtendedDynamicState) {
+            YA_CORE_WARN("CULL_MODE dynamic state is unavailable on {}; pipelines must bake cull mode statically", candidate.properties.deviceName);
+        }
 #ifdef __APPLE__
         _capabilities.portabilitySubset   = bHasPortabilitySubset;
 #endif

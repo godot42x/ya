@@ -665,7 +665,7 @@ bool VulkanPipeline::createPipelineInternal()
     std::ranges::transform(
         _ci.dynamicFeatures,
         std::back_inserter(dynamicStates),
-        [](EPipelineDynamicFeature::T feature)
+        [this](EPipelineDynamicFeature::T feature)
         {
             switch (feature) {
             case EPipelineDynamicFeature::DepthTest:
@@ -677,7 +677,10 @@ bool VulkanPipeline::createPipelineInternal()
             case EPipelineDynamicFeature::Scissor:
                 return VK_DYNAMIC_STATE_SCISSOR;
             case EPipelineDynamicFeature::CullMode:
-                return VK_DYNAMIC_STATE_CULL_MODE;
+                // Requires Vulkan 1.3 core or the enabled
+                // VK_EXT_extended_dynamic_state extension; otherwise the
+                // static rasterizationState.cullMode stays authoritative.
+                return _render->bSupportsExtendedDynamicState ? VK_DYNAMIC_STATE_CULL_MODE : VK_DYNAMIC_STATE_MAX_ENUM;
             case EPipelineDynamicFeature::PolygonMode:
                 return VK_DYNAMIC_STATE_POLYGON_MODE_EXT;
             case EPipelineDynamicFeature::DepthBias:
@@ -686,6 +689,7 @@ bool VulkanPipeline::createPipelineInternal()
                 return VK_DYNAMIC_STATE_MAX_ENUM; // Invalid, will be filtered out
             }
         });
+    std::erase(dynamicStates, VK_DYNAMIC_STATE_MAX_ENUM);
 
     VkPipelineDynamicStateCreateInfo dynamicStateCI{
         .sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,

@@ -82,6 +82,14 @@ struct OpenGLRender : public IRender
         return !EFormat::isBlockCompressed(format);
     }
 
+    /// Cull mode is a plain glCullFace call in GL: always dynamic, no
+    /// pipeline bake required.
+    const RenderCapabilities& getCapabilities() const override
+    {
+        static const RenderCapabilities caps{ .dynamicCullMode = true };
+        return caps;
+    }
+
     ICommandBuffer       *beginIsolateCommands() override;
     void                  endIsolateCommands(ICommandBuffer *commandBuffer) override;
     ISwapchain           *getSwapchain() override { return _swapChain; }

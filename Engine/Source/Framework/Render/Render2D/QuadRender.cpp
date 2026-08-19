@@ -604,7 +604,9 @@ void FQuadRender::flush(ICommandBuffer* cmdBuf)
     else {
         cmdBuf->setScissor(0, 0, Render2D::session.windowWidth, Render2D::session.windowHeight);
     }
-    cmdBuf->setCullMode(Render2D::debug.screenCullMode);
+    if (_render && _render->getCapabilities().dynamicCullMode) {
+        cmdBuf->setCullMode(Render2D::debug.screenCullMode);
+    }
 
     if (_uploadedScreenResourceVersion != _resourceVersion) {
         resources.activeScreenResourceDS = acquireScreenResourceDS(resources);
@@ -697,7 +699,9 @@ void FQuadRender::flushWorld(ICommandBuffer* cmdBuf)
 
     cmdBuf->bindPipeline(_worldPipeline.get());
     setWorldViewportAndScissor(*cmdBuf, _render, Render2D::session.windowWidth, Render2D::session.windowHeight);
-    cmdBuf->setCullMode(Render2D::debug.worldCullMode);
+    if (_render && _render->getCapabilities().dynamicCullMode) {
+        cmdBuf->setCullMode(Render2D::debug.worldCullMode);
+    }
 
     const uint32_t cursorVertex = static_cast<uint32_t>(worldVertexPtr - worldVertexPtrHead);
     YA_CORE_ASSERT(cursorVertex == worldBatchStartVertex + worldVertexCount,
