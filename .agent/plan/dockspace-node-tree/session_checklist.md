@@ -10,6 +10,7 @@
    finish(Dropped/NoTarget/Cancelled) observer。阶段 1 只建立 pure model 与测试，
    不开始 hover-zone、floating 或现有 DockSpace visual 替换。
 5. 环境确认：关闭验证层干扰（如 86% 显存下 vkCreateGraphicsPipelines 崩溃，属环境问题非代码 bug）；优先用 headless + `--scenario-dump-dir` 验证。
+6. 阶段 1 已完成：纯 `FDockTreeModel` 与 model-only tests 通过；阶段 2 才开始 `UIDockSpace` projection，禁止提前把 visual widget 指针放回 model。
 
 ## 每阶段收尾步骤
 

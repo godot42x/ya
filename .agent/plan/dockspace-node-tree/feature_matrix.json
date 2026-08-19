@@ -20,8 +20,8 @@
         },
         {
           "id": "n1_dock_model",
-          "status": "planned",
-          "notes": "新建纯 DockNode model：unique_ptr 二叉树、stable NodeId/PanelId、panel registry、transaction 与 invariant validator；FDockNode 不持有 UITabBar/UIContainer/UIElement 指针"
+          "status": "pass",
+          "notes": "已建立纯 FDockTreeModel：unique_ptr 二叉树、stable NodeId/PanelId、panel registry、原子 mutation/rollback 与 invariant validator；FDockNode 不持有 UITabBar/UIContainer/UIElement 指针。7 个 model-only tests 通过。"
         },
         {
           "id": "n2_projection_layout",

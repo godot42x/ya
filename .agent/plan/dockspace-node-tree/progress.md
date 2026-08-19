@@ -84,3 +84,23 @@
 
 阶段 0 的 generic drag observer/finish result 与 P7 基线 dump 已收口；接下来建立
 无 UI 指针的 `FDockTreeModel` 和 model tests。
+
+### 2026-08-19 — 阶段 1 pure Dock model 完成
+
+- 新增无 `UIElement*` / `UITabBar*` / `UIContainer*` 依赖的 `FDockTreeModel` 与公开
+  `DockNode` wrapper；模型只持有 binary node tree、panel identity registry、父子关系、
+  split ratio/min extent 与 empty-leaf policy。
+- 实现 register/add、merge move、四方向 cardinal split、source empty collapse、remove
+  以及 invariant validator。注册但尚未放入布局的 panel 被视为合法 detached registry
+  entry，split 可将其作为新 panel 放入目标 leaf；重复 identity、未知 id、同 leaf move
+  等非法 mutation 在修改前拒绝。
+- mutation 采用 precondition → backup → mutate → normalize → validate → rollback 的
+  原子语义；同 leaf move 不再先删除后失败。
+- 新增 `DockNodeTest` 覆盖 identity、cardinal split、merge/order、empty-source collapse、
+  invalid no-mutation、ratio clamp、geometry validation 与 remove registry。
+- 验证：`xmake b ya-gui-widgets-test` 通过；`xmake r ya-gui-widgets-test
+  '--gtest_filter=DockNodeTest.*'`：7/7 通过。
+
+下一步进入阶段 2：以 `FDockTreeModel` 为唯一事实源建立 `UIDockSpace` 的 WidgetTree
+projection，先复现当前三栏默认布局，再逐步替换 `_groups[3]`，不在 model 中引入视觉
+widget 指针。
