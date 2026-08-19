@@ -1,0 +1,59 @@
+{
+  "plan": "dockspace-node-tree",
+  "updated_at": "2026-08-19",
+  "legend": {
+    "planned": "尚未开始，但已纳入主线",
+    "in_progress": "当前阶段正在推进",
+    "pass": "已有结构证据或已完成",
+    "fail": "已有明确回归或验证失败",
+    "blocked": "受前置审计、外部条件或上游决定阻塞"
+  },
+  "tracks": [
+    {
+      "id": "dock_node_tree",
+      "title": "DockSpace → ImGui 风格 DockNode 嵌套停靠树",
+      "items": [
+        {
+          "id": "n1_docknode_struct",
+          "status": "planned",
+          "notes": "新建 DockNode.h：FDockNode 二叉树（Split{orientation,ratio,child[2]} | Leaf{panels,bar,content}）；UIDockSpace 用 _root 替代 _groups[3]"
+        },
+        {
+          "id": "n2_recursive_layout",
+          "status": "planned",
+          "notes": "layoutAssigned 递归分配给 root 节点；Split 用 UISplitPane 载体切分 rect，Leaf 内 bar+content 垂直排（stretchLastChild）"
+        },
+        {
+          "id": "n3_build_tree",
+          "status": "planned",
+          "notes": "懒构建 buildTree：初始 root=Split→[Leaf(left), Split→[Leaf(center),Leaf(right)]]；addPanel(zone) 映射到三 leaf"
+        },
+        {
+          "id": "n4_zone8_preview",
+          "status": "planned",
+          "notes": "computeZone8(rect,point) 纯函数（中心+上下左右+四角）；paintSelf 用 addSprite(nullptr) 半透明预览 + addRectOutline + addLine 箭头；零新 API"
+        },
+        {
+          "id": "n5_drop_split_merge",
+          "status": "planned",
+          "notes": "onDrop 据 zone8 执行：中心=tab 合并、四向=裂变 split、四角=嵌套 split；重建 bar/content + markLayoutDirty"
+        },
+        {
+          "id": "n6_floating_panel",
+          "status": "planned",
+          "notes": "新建 UIFloatingPanel（Popup 层 + _selfHold 自保活 + 标题栏拖拽 + 多实例）；_onTabDragBegin 改为 tear-off 成浮动；拖回 reparent 回 Content 层"
+        },
+        {
+          "id": "n7_multiwindow_reserve",
+          "status": "planned",
+          "notes": "内容归属抽象成 attachPanel/detachPanel 接口，预留多 OS window 扩展点（当前仅单窗口内浮动）"
+        },
+        {
+          "id": "n8_scenario_coverage",
+          "status": "planned",
+          "notes": "dock.jsonl 覆盖 8向 + 浮动场景；headless dump 断言每栏有内容/高度正常/拖拽后分布正确"
+        }
+      ]
+    }
+  ]
+}
