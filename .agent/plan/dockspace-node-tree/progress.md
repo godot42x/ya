@@ -132,3 +132,13 @@ widget 指针。
   `DockZoneLeft` 宽度断言 `278.600006`、center/right、三个 tab、拖拽 checkpoint 均通过。
 - 本切片不宣称 projection 阶段完成：divider ratio 尚未回写 model，`_groups[3]` 尚未替换
   为按 `DockPanelId` / `DockNodeId` 管理的独立 `FDockNodeView` registry。
+
+### 2026-08-19 — 阶段 2 divider model write-back
+
+- `UISplitPane` 增加窄的 ratio-change callback；divider 拖动仍只修改布局状态，但在同一
+  次交互中将最终 ratio 通知宿主。
+- `FDockTreeModel::setSplitRatio()` 作为唯一模型 mutation 入口，负责有限值检查、clamp
+  与 invariant 保证；`UIDockSpace` materialize split 时按 stable `DockNodeId` 绑定回写。
+- 这样 resize / 重新 materialize 时不会因为视觉 split 的瞬时 ratio 丢失而跳回旧值；仍未做
+  model mutation 后的局部 subtree rebuild 和独立 view registry。
+- 验证：`xmake b GUIWorkbench` 通过；Dock headless initial/dragged scenario 通过。

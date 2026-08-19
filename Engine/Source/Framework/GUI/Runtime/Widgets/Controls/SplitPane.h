@@ -5,6 +5,7 @@
 #include "GUI/Widgets/UIElement.h"
 
 #include <memory>
+#include <functional>
 
 namespace ya
 {
@@ -43,6 +44,7 @@ struct YA_GUI_API UISplitPane : public UIElement
     void setMinFirstExtent(float value) { _splitLayout.setMinFirstExtent(value); }
     void setMinSecondExtent(float value) { _splitLayout.setMinSecondExtent(value); }
     void setDividerThickness(float value) { _splitLayout.setDividerThickness(value); }
+    void setSplitRatioChangedCallback(std::function<void(float)> callback) { _onSplitRatioChanged = std::move(callback); }
     void setPadding(glm::vec2 value) { _splitLayout.setPadding(value); }
     [[nodiscard]] ESplitOrientation getOrientation() const { return _splitLayout.getOrientation(); }
     [[nodiscard]] float getSplitRatio() const { return _splitLayout.getSplitRatio(); }
@@ -102,6 +104,7 @@ struct YA_GUI_API UISplitPane : public UIElement
   private:
     UISplitLayout _splitLayout;
     std::shared_ptr<Reactive<float>> _splitRatioBinding;
+    std::function<void(float)> _onSplitRatioChanged;
 };
 
 } // namespace ya

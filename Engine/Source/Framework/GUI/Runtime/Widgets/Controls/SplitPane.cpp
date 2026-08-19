@@ -119,6 +119,9 @@ bool UISplitPane::handleInputEvent(const Event& event, const WidgetEventContext&
             if (_splitRatioBinding) {
                 _splitRatioBinding->set(newRatio);
             }
+            if (_onSplitRatioChanged) {
+                _onSplitRatioChanged(_splitLayout.getSplitRatio());
+            }
         }
         return true;
     }

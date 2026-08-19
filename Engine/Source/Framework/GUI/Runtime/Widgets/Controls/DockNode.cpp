@@ -114,6 +114,21 @@ bool FDockTreeModel::movePanel(DockPanelId panelId, DockNodeId targetLeafId, siz
     return false;
 }
 
+bool FDockTreeModel::setSplitRatio(DockNodeId splitId, float ratio)
+{
+    FDockNode* node = findNode(splitId);
+    if (!node || node->kind != EDockNodeKind::Split || !std::isfinite(ratio)) {
+        return false;
+    }
+    const float previous = node->ratio;
+    node->ratio = std::clamp(ratio, 0.0f, 1.0f);
+    if (!validateInvariants()) {
+        node->ratio = previous;
+        return false;
+    }
+    return true;
+}
+
 bool FDockTreeModel::splitLeaf(DockNodeId targetLeafId, EDockCardinalSide side, DockPanelId panelId, float newPanelRatio)
 {
     auto backup = cloneNode(*_root, nullptr);

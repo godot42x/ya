@@ -75,6 +75,13 @@ std::shared_ptr<UIElement> UIDockSpace::materializeNode(const FDockNode& node)
         split->setSplitRatio(node.ratio);
         split->setMinFirstExtent(node.minExtent[0]);
         split->setMinSecondExtent(node.minExtent[1]);
+        const DockNodeId splitId = node.id;
+        split->setSplitRatioChangedCallback([this, splitId](float ratio)
+        {
+            if (_model.setSplitRatio(splitId, ratio)) {
+                markLayoutDirty();
+            }
+        });
         if (node.child[0]) split->addDetachedChild(materializeNode(*node.child[0]));
         if (node.child[1]) split->addDetachedChild(materializeNode(*node.child[1]));
         return split;
