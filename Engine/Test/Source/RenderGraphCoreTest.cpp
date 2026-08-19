@@ -4,6 +4,7 @@
 #include "Graph/RenderGraphResourceRegistry.h"
 #include "RHI/Core/RenderingInfoUtils.h"
 #include "RHI/Core/FrameUploadArena.h"
+#include "RHI/Core/ResourceStateTracker.h"
 #include "Core/Common/DeferredDeletionQueue.h"
 
 #include <gtest/gtest.h>
@@ -215,6 +216,16 @@ class TestResourceFactory final : public IRenderResourceFactory
     }
 };
 
+std::shared_ptr<ImageResource> makeTestImageResource(
+    std::shared_ptr<IImage>     image,
+    std::shared_ptr<IImageView> view = nullptr)
+{
+    auto resource       = std::make_shared<ImageResource>();
+    resource->image     = std::move(image);
+    resource->defaultView = std::move(view);
+    return resource;
+}
+
 class TestCommandBuffer final : public ICommandBuffer
 {
   public:
@@ -407,7 +418,7 @@ TEST(RenderGraphCoreTest, ImportTextureStoresImportedDescriptor)
     EXPECT_EQ(resource->lifetime, ERGResourceLifetime::Imported);
     EXPECT_EQ(resource->desc.format, EFormat::B8G8R8A8_UNORM);
     EXPECT_EQ(resource->imported->importDesc.initialLayout, EImageLayout::PresentSrcKHR);
-    EXPECT_FALSE(resource->imported->image);
+    EXPECT_FALSE(resource->imported->resource);
     EXPECT_FALSE(resource->imported->viewDesc.has_value());
 }
 
@@ -1269,8 +1280,7 @@ TEST(RenderGraphCoreTest, CompileBuildsImportedFinalizePlans)
             .initialLayout = EImageLayout::Undefined,
             .finalLayout   = EImageLayout::PresentSrcKHR,
         },
-        .image     = sharedImage,
-        .imageView = sharedView,
+        .resource = makeTestImageResource(sharedImage, sharedView),
     });
     const auto importedBuffer = graph.importBuffer(RGImportedBufferDesc{
         .desc = RGBufferDesc{
@@ -1557,7 +1567,7 @@ TEST(RenderGraphCoreTest, ImportedSubresourceHelperKeepsProvidedViewAndCompileRa
 
     RenderGraph graph;
     const auto shadowDepth = graph.importTexture(makeImportedTextureDesc(
-        existingImage,
+        makeTestImageResource(existingImage),
         existingView,
         "shadow.directional",
         EImageLayout::ShaderReadOnlyOptimal));
@@ -1607,7 +1617,7 @@ TEST(RenderGraphCoreTest, ImportTexturePreservesExplicitSubresourceViewDimension
 
     RenderGraph graph;
     const auto  imported = graph.importTexture(makeImportedTextureDesc(
-        existingImage,
+        makeTestImageResource(existingImage),
         existingView,
         "shadow.array.slice0",
         EImageLayout::ShaderReadOnlyOptimal,
@@ -1892,7 +1902,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryCanImportExistingImageWithCustomViewDe
             .mipLevels    = 4,
             .arrayLayers  = 6,
         },
-        .image = existingImage,
+        .resource = makeTestImageResource(existingImage),
         .viewDesc = ImageViewCreateInfo{
             .label          = "existing.cubemap.face2.view",
             .viewType       = EImageViewType::View2D,
@@ -1955,8 +1965,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryUsesProvidedImportedImageViewAndRetain
                 .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 .extent       = Extent3D{128, 128, 1},
             },
-            .image = existingImage,
-            .imageView = existingView,
+            .resource = makeTestImageResource(existingImage, existingView),
             .retainedResources = {owner},
         });
 
@@ -2136,8 +2145,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryRefreshesImportedKeepAliveWithoutRecre
                 .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 .extent       = Extent3D{64, 64, 1},
             },
-            .image = existingImage,
-            .imageView = existingView,
+            .resource = makeTestImageResource(existingImage, existingView),
             .retainedResources = {ownerA},
         });
         registry.sync(graphA);
@@ -2165,8 +2173,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryRefreshesImportedKeepAliveWithoutRecre
                 .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 .extent       = Extent3D{64, 64, 1},
             },
-            .image = existingImage,
-            .imageView = existingView,
+            .resource = makeTestImageResource(existingImage, existingView),
             .retainedResources = {ownerB},
         });
         registry.sync(graphB);
@@ -2227,8 +2234,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryDestructorDefersImportedKeepAliveRelea
                 .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 .extent       = Extent3D{64, 64, 1},
             },
-            .image = existingImage,
-            .imageView = existingView,
+            .resource = makeTestImageResource(existingImage, existingView),
             .retainedResources = {owner},
         });
 
@@ -2285,8 +2291,7 @@ TEST(RenderGraphCoreTest, ExecutorClearDefersImportedTextureKeepAliveReleaseThro
                 .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 .extent       = Extent3D{64, 64, 1},
             },
-            .image = existingImage,
-            .imageView = existingView,
+            .resource = makeTestImageResource(existingImage, existingView),
             .retainedResources = {owner},
         });
         graph.addPass(
@@ -2642,6 +2647,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryKeepsSharedImportedTextureWhenOnlyLayo
         .usage         = EImageUsage::ColorAttachment | EImageUsage::Sampled,
         .initialLayout = EImageLayout::Undefined,
     });
+    const auto sharedResource = makeTestImageResource(image);
 
     RenderGraph graphA;
     const auto importedHandle = graphA.importTexture(RGImportedTextureDesc{
@@ -2660,7 +2666,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryKeepsSharedImportedTextureWhenOnlyLayo
             .initialLayout = EImageLayout::Undefined,
             .finalLayout   = EImageLayout::ColorAttachmentOptimal,
         },
-        .image = image,
+        .resource = sharedResource,
     });
 
     registry.sync(graphA);
@@ -2686,7 +2692,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryKeepsSharedImportedTextureWhenOnlyLayo
             .initialLayout = EImageLayout::PresentSrcKHR,
             .finalLayout   = EImageLayout::PresentSrcKHR,
         },
-        .image = image,
+        .resource = sharedResource,
     });
 
     registry.sync(graphB);
@@ -2721,7 +2727,7 @@ TEST(RenderGraphCoreTest, ImageViewDoesNotOwnImageLifetime)
     EXPECT_EQ(image.use_count(), 1);
 }
 
-TEST(RenderGraphCoreTest, RenderImageDestroysViewBeforeImage)
+TEST(RenderGraphCoreTest, ImageResourceDestroysViewBeforeImage)
 {
     std::vector<std::string> destructionOrder;
 
@@ -2729,7 +2735,7 @@ TEST(RenderGraphCoreTest, RenderImageDestroysViewBeforeImage)
         auto image = std::make_shared<TrackedImage>(&destructionOrder);
         auto view  = std::make_shared<TrackedImageView>(image.get(), &destructionOrder);
 
-        auto renderImage         = std::make_shared<RenderImage>();
+        auto renderImage         = std::make_shared<ImageResource>();
         renderImage->label       = "ordered.render.image";
         renderImage->image       = std::move(image);
         renderImage->defaultView = std::move(view);
@@ -2800,7 +2806,7 @@ TEST(RenderGraphCoreTest, ImportTextureNormalizesSharedImageBackedDescriptors)
             .label       = "normalized.import",
             .finalLayout = EImageLayout::ShaderReadOnlyOptimal,
         },
-        .image = image,
+        .resource = makeTestImageResource(image),
     });
 
     const auto* resource = graph.getTexture(handle);
@@ -2850,7 +2856,7 @@ TEST(RenderGraphCoreTest, ImportTextureAllowsSharedImageUsageSubset)
             .initialLayout = EImageLayout::ColorAttachmentOptimal,
             .finalLayout   = EImageLayout::PresentSrcKHR,
         },
-        .image = image,
+        .resource = makeTestImageResource(image),
     });
 
     const auto* resource = graph.getTexture(handle);
@@ -3450,8 +3456,7 @@ TEST(RenderGraphCoreTest, ResolveTextureRetainsImportedTextureKeepAliveResources
             .usage        = EImageUsage::Sampled | EImageUsage::TransferSrc,
             .extent       = Extent3D{128, 128, 1},
         },
-        .image = existingImage,
-        .imageView = existingView,
+        .resource = makeTestImageResource(existingImage, existingView),
         .retainedResources = {owner},
     });
     graph.addPass(
@@ -3508,8 +3513,7 @@ TEST(RenderGraphCoreTest, PassBindingContextResolvesTextureDescriptorAndRetainsO
             .usage        = EImageUsage::Sampled,
             .extent       = Extent3D{128, 128, 1},
         },
-        .image             = existingImage,
-        .imageView         = existingView,
+        .resource = makeTestImageResource(existingImage, existingView),
         .retainedResources = {owner},
     });
 
@@ -3803,6 +3807,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryDoesNotRetireImportedTextureKeepAliveW
 
     auto owner = std::make_shared<int>(9);
     std::weak_ptr<int> ownerWeak = owner;
+    auto sharedResource = makeTestImageResource(existingImage, existingView);
 
     {
         RenderGraph graphA;
@@ -3820,8 +3825,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryDoesNotRetireImportedTextureKeepAliveW
                 .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 .extent       = Extent3D{128, 128, 1},
             },
-            .image = existingImage,
-            .imageView = existingView,
+            .resource = sharedResource,
             .retainedResources = {owner},
         });
         registry.sync(graphA);
@@ -3842,8 +3846,7 @@ TEST(RenderGraphCoreTest, ResourceRegistryDoesNotRetireImportedTextureKeepAliveW
                 .usage        = EImageUsage::ColorAttachment | EImageUsage::Sampled,
                 .extent       = Extent3D{128, 128, 1},
             },
-            .image = existingImage,
-            .imageView = existingView,
+            .resource = sharedResource,
             .retainedResources = {owner},
         });
         registry.sync(graphB);
@@ -4110,8 +4113,7 @@ TEST(RenderGraphCoreTest, ExecutorRestoresImportedTextureFinalLayoutAfterTransfe
             .initialLayout = EImageLayout::Undefined,
             .finalLayout   = EImageLayout::PresentSrcKHR,
         },
-        .image     = sharedImage,
-        .imageView = sharedView,
+        .resource = makeTestImageResource(sharedImage, sharedView),
     });
 
     graph.addPass(
@@ -4167,8 +4169,7 @@ TEST(RenderGraphCoreTest, DebugDumpIncludesImportedFinalizePlans)
             .initialLayout = EImageLayout::Undefined,
             .finalLayout   = EImageLayout::PresentSrcKHR,
         },
-        .image     = sharedImage,
-        .imageView = sharedView,
+        .resource = makeTestImageResource(sharedImage, sharedView),
     });
     graph.importBuffer(RGImportedBufferDesc{
         .desc = RGBufferDesc{
@@ -4228,8 +4229,7 @@ TEST(RenderGraphCoreTest, ExecuteCompiledRestoresImportedTextureFinalLayoutAfter
             .initialLayout = EImageLayout::Undefined,
             .finalLayout   = EImageLayout::PresentSrcKHR,
         },
-        .image     = sharedImage,
-        .imageView = sharedView,
+        .resource = makeTestImageResource(sharedImage, sharedView),
     });
 
     graph.addPass(
@@ -4284,8 +4284,7 @@ TEST(RenderGraphCoreTest, ExecuteWrapperMatchesPrepareAndExecuteCompiledForImpor
                 .initialLayout = EImageLayout::Undefined,
                 .finalLayout   = EImageLayout::PresentSrcKHR,
             },
-            .image     = sharedImage,
-            .imageView = sharedView,
+            .resource = makeTestImageResource(sharedImage, sharedView),
         });
         const auto importedBuffer = graph.importBuffer(RGImportedBufferDesc{
             .desc = RGBufferDesc{
@@ -4392,8 +4391,7 @@ TEST(RenderGraphCoreTest, RenderContextCanCopyTextureToBuffer)
             .initialLayout = EImageLayout::ShaderReadOnlyOptimal,
             .finalLayout   = EImageLayout::ShaderReadOnlyOptimal,
         },
-        .image     = sharedImage,
-        .imageView = sharedView,
+        .resource = makeTestImageResource(sharedImage, sharedView),
     });
 
     TestBuffer importedDst(BufferCreateInfo{
