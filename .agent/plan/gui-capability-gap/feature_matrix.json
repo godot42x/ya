@@ -106,8 +106,8 @@
         },
         {
           "id": "p6_interaction_p1",
-          "status": "planned",
-          "notes": "tooltip（UIElement::setTooltip）/ TextWrapped（UIText _bWrap）/ 子树禁用（_bEnabled）/ UIDialog 模态；Gallery section 9 + gallery_p1.jsonl"
+          "status": "pass",
+          "notes": "tooltip（UIElement::_tooltip + WidgetTree 30 帧 dwell 挂 Tooltip 层）+ TextWrapped（UIText _bWrap/_maxWrapWidth 贪心码点断行）+ _bEnabled 子树禁用（setEnabled + isEnabledInTree + dispatchRoute 拦截）+ UIDialog（Modal 角色薄壳：标题/内容/OK-Cancel/_onClosed，居中）；独立 Interactions 页（Gallery 插内容会位移所有 scenario 坐标）；gallery_p1 6 checkpoint 通过；全 9 回归通过"
         },
         {
           "id": "p7_dockspace",

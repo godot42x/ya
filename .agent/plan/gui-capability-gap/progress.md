@@ -132,7 +132,20 @@
 
 **剩余问题**：无。G-C 收口。
 
-**下一刀**：P6 交互补全（tooltip/TextWrapped/_bEnabled/UIDialog）。
+## 2026-08-19 — P6 交互补全（收口）
+
+**完成**（两 commit：3aed5ced 前半 + 869e8fb6 后半）：
+- tooltip：UIElement::_tooltip + WidgetTree 30 帧 dwell 挂 Tooltip 层（帧计数，无墙钟），hover 变化即移除。
+- TextWrapped：UIText _bWrap/_maxWrapWidth（贪心码点断行 CJK 安全），paint 逐行 text item，AutoSize 高=行数×行高、宽=包裹宽。
+- _bEnabled 子树禁用：setEnabled（changed-only + invalidateSubtree）+ isEnabledInTree（父链）+ dispatchRoute 路径级拦截（disabled 子树 input-inert）。
+- UIDialog：Modal 角色薄壳（标题/内容槽/OK-Cancel/_onClosed 统一回调/Esc/shield 走 false），覆盖 layoutAssigned 居中。
+- **GUIWorkbench gallery 化**：app 头注释把每个页面定义为 gallery 展区 + 各自 scenario；「新 feature 独立页」规则落文档。
+
+**验证**：gallery_p1 6 checkpoint（wrap 几何/tooltip 开清/禁用组 notHandled/dialog 开+确认清层）；全 9 场景回归通过。
+
+**剩余问题**：无。P6 收口。
+
+**下一刀**：P7 DockSpace + 窗口管理（最后一期）。
 
 ## 2026-08-18 — 护栏补强立项（插入 P5 之前）
 
