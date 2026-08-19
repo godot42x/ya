@@ -25,9 +25,10 @@ struct YA_GUI_API UIDockSpace : public UIElement
 
     [[nodiscard]] type_index_t getTypeIndex() const override { return ya::type_index_v<UIDockSpace>; }
 
-    /// Add a panel to the CENTER zone (its widget becomes the zone's active
-    /// content when its tab is selected).
-    void addPanel(const std::string& name, std::shared_ptr<UIElement> widget);
+    /// Add a panel to a zone (its widget becomes the zone's active content
+    /// when its tab is selected). `zone` is 0=left, 1=center, 2=right.
+    void addPanel(const std::string& name, std::shared_ptr<UIElement> widget, int zone = 1);
+
 
     /// Zone names (scenario assertions / host integration).
     static constexpr const char* kZoneLeft   = "DockZoneLeft";

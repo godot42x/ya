@@ -69,6 +69,7 @@ void UIDockSpace::layoutAssigned(const Rect2D& rect)
 
             auto bar = std::make_shared<UITabBar>(std::format("DockTabBar{}", zone));
             bar->_bDraggableTabs = true;
+            bar->_emptyPlaceholder = std::format("{} (drop tabs here)", group.zoneName);
             bar->_onTabDragBegin = [this, zone](int index, const std::string& label)
             {
                 if (index < 0 || index >= static_cast<int>(_groups[zone].panels.size())) {
@@ -117,11 +118,15 @@ void UIDockSpace::paintSelf(UIFrameBuilder& builder)
     }
 }
 
-void UIDockSpace::addPanel(const std::string& name, std::shared_ptr<UIElement> widget)
+void UIDockSpace::addPanel(const std::string& name, std::shared_ptr<UIElement> widget, int zone)
 {
-    _groups[1].panels.push_back({name, std::move(widget)});
-    if (_groups[1].bar) {
-        rebuildZone(1, static_cast<int>(_groups[1].panels.size()) - 1);
+    if (zone < 0 || zone > 2) {
+        zone = 1;
+    }
+    FTabGroup& group = _groups[zone];
+    group.panels.push_back({name, std::move(widget)});
+    if (group.bar) {
+        rebuildZone(zone, static_cast<int>(group.panels.size()) - 1);
     }
 }
 

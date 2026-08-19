@@ -102,6 +102,14 @@ struct YA_GUI_API UITabBar : public UIContainer
 
     std::function<void(int selectedIndex)> _onTabSelected;
 
+    /// When the bar has no tabs, draw this placeholder text (and keep a
+    /// header-sized height) so an empty zone is still a visible drop target
+    /// rather than a 0-height sliver. Set empty to disable.
+    std::string _emptyPlaceholder;
+
+    void paintSelf(UIFrameBuilder& builder) override;
+    [[nodiscard]] glm::vec2 computeDesiredSize() const override;
+
   private:
     void navigate(int delta);
     std::vector<UITabButton*> _tabs;
