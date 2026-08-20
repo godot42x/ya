@@ -185,6 +185,74 @@ bool FDockTreeModel::splitLeaf(DockNodeId targetLeafId, EDockCardinalSide side, 
     return false;
 }
 
+bool FDockTreeModel::splitLeafCorner(DockNodeId targetLeafId, EDockCorner corner, DockPanelId panelId, float newPanelRatio)
+{
+    auto backup = cloneNode(*_root, nullptr);
+    const DockNodeId nextNodeId = _nextNodeId;
+    FDockNode* target = findNode(targetLeafId);
+    FDockNode* source = findLeafForPanel(panelId);
+    if (!findPanel(panelId) || !target || target->kind != EDockNodeKind::Leaf) return false;
+    if (source && source != target && !removePanelFromLeaf(panelId, source)) return false;
+
+    auto oldPanels = target->panelIds;
+    DockPanelId oldSelected = target->selectedPanel;
+    const bool oldPersistent = target->persistentEmptyLeaf;
+    if (source == target) {
+        auto it = std::find(oldPanels.begin(), oldPanels.end(), panelId);
+        if (it == oldPanels.end()) return false;
+        oldPanels.erase(it);
+        if (oldSelected == panelId) {
+            oldSelected = oldPanels.empty() ? kInvalidDockPanelId : oldPanels.front();
+        }
+    }
+
+    const bool bLeft = corner == EDockCorner::NorthWest || corner == EDockCorner::SouthWest;
+    const bool bTop  = corner == EDockCorner::NorthWest || corner == EDockCorner::NorthEast;
+
+    target->kind = EDockNodeKind::Split;
+    target->orientation = EDockSplitOrientation::Vertical;
+    target->ratio = std::clamp(newPanelRatio, 0.0f, 1.0f);
+    target->panelIds.clear();
+    target->selectedPanel = kInvalidDockPanelId;
+    target->persistentEmptyLeaf = false;
+    target->child[0] = std::make_unique<FDockNode>();
+    target->child[1] = std::make_unique<FDockNode>();
+    target->child[0]->id = _nextNodeId++;
+    target->child[1]->id = _nextNodeId++;
+    target->child[0]->parent = target;
+    target->child[1]->parent = target;
+
+    FDockNode* sideLeaf = bLeft ? target->child[0].get() : target->child[1].get();
+    FDockNode* oldLeaf = bLeft ? target->child[1].get() : target->child[0].get();
+
+    sideLeaf->kind = EDockNodeKind::Split;
+    sideLeaf->orientation = EDockSplitOrientation::Horizontal;
+    sideLeaf->ratio = std::clamp(newPanelRatio, 0.0f, 1.0f);
+    sideLeaf->child[0] = std::make_unique<FDockNode>();
+    sideLeaf->child[1] = std::make_unique<FDockNode>();
+    sideLeaf->child[0]->id = _nextNodeId++;
+    sideLeaf->child[1]->id = _nextNodeId++;
+    sideLeaf->child[0]->parent = sideLeaf;
+    sideLeaf->child[1]->parent = sideLeaf;
+
+    FDockNode* newLeaf = bTop ? sideLeaf->child[0].get() : sideLeaf->child[1].get();
+    FDockNode* emptyLeaf = bTop ? sideLeaf->child[1].get() : sideLeaf->child[0].get();
+
+    newLeaf->panelIds = {panelId};
+    newLeaf->selectedPanel = panelId;
+    emptyLeaf->persistentEmptyLeaf = true;
+
+    oldLeaf->panelIds = oldPanels;
+    oldLeaf->selectedPanel = oldSelected;
+    oldLeaf->persistentEmptyLeaf = oldPersistent;
+
+    if (source && source != target && source->panelIds.empty() && !source->persistentEmptyLeaf) collapseEmptyLeaf(source);
+    if (validateInvariants()) return true;
+    _root = std::move(backup);
+    _nextNodeId = nextNodeId;
+    return false;
+}
+
 bool FDockTreeModel::splitEmptyLeaf(DockNodeId targetLeafId, EDockCardinalSide side,
                                     float newPanelRatio, bool persistentEmptyLeaf)
 {

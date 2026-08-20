@@ -1,6 +1,6 @@
 {
   "plan": "dockspace-node-tree",
-  "updated_at": "2026-08-19",
+  "updated_at": "2026-08-20",
   "legend": {
     "planned": "尚未开始，但已纳入主线",
     "in_progress": "当前阶段正在推进",
@@ -26,17 +26,17 @@
         {
           "id": "n2_projection_layout",
           "status": "in_progress",
-          "notes": "已完成递归 model->WidgetTree materialize：split 映射 UISplitPane，leaf 映射 tab/content host；默认 ratio 0.22/0.78 保持 P7 几何契约，Dock headless 初始/拖拽场景通过。divider ratio 与 selectedPanel 已按 stable DockNodeId/DockPanelId 回写 FDockTreeModel，并有 11 个 model focused tests 覆盖。leaf view 改由 DockNodeId registry 管理。cardinal preview/drop 已接入 drag observer，same-leaf split 会真实改树，并有 dock_cardinal_split smoke。当前仍是 bridge：panel registry 仍在 _groups[3]，局部 subtree rebuild、非 zone leaf 与完整 teardown/focus 保护尚未完成。"
+          "notes": "已完成递归 model->WidgetTree materialize：split 映射 UISplitPane，leaf 映射 tab/content host；默认 ratio 0.22/0.78 保持 P7 几何契约，Dock headless 初始/拖拽场景通过。divider ratio 与 selectedPanel 已按 stable DockNodeId/DockPanelId 回写 FDockTreeModel，并有 12 个 model focused tests 覆盖。leaf view 改由 DockNodeId registry 管理。cardinal preview/drop 已接入 drag observer，same-leaf split 会真实改树，并有 dock_cardinal_split smoke。corner compound split 也已落地并有 dock_corner_split smoke。当前仍是 bridge：panel registry 仍在 _groups[3]，局部 subtree rebuild、非 zone leaf 与完整 teardown/focus 保护尚未完成。"
         },
         {
           "id": "n3_cardinal_preview_drop",
-          "status": "planned",
-          "notes": "center + 上下左右的 resolveDropPlan、preview、transaction；resize/release 时重新解析 plan，禁止依赖旧 hover cache"
+          "status": "pass",
+          "notes": "center + 上下左右的 resolveDropPlan、preview、transaction 已接入；resize/release 会重新解析 plan，DockSpace 通过 drag observer 维护 immutable preview，并有 dock_cardinal_split smoke。"
         },
         {
           "id": "n4_corner_compound",
-          "status": "planned",
-          "notes": "四 corner 的 two-split compound plan + visible persistent empty leaf；extent 不足必须 disabled，不能视觉/行为降级"
+          "status": "in_progress",
+          "notes": "四 corner 的 two-split compound plan + visible persistent empty leaf 已接入 model 与 smoke；extent 不足时的 disabled reason / 更细 preview 语义仍待补齐。"
         },
         {
           "id": "n5_floating_panel",

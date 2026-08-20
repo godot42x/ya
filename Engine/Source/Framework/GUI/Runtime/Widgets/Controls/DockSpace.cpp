@@ -339,8 +339,18 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
         return std::nullopt;
     }
     const glm::vec2 local = (logicalPoint - rect.pos) / rect.extent;
+    const bool bCornerNW = local.x <= 0.25f && local.y <= 0.25f;
+    const bool bCornerNE = local.x >= 0.75f && local.y <= 0.25f;
+    const bool bCornerSW = local.x <= 0.25f && local.y >= 0.75f;
+    const bool bCornerSE = local.x >= 0.75f && local.y >= 0.75f;
     const bool bMerge = local.x > 0.25f && local.x < 0.75f && local.y > 0.25f && local.y < 0.75f;
+    const bool bCorner = bCornerNW || bCornerNE || bCornerSW || bCornerSE;
     EDockCardinalSide side = EDockCardinalSide::West;
+    EDockCorner corner = EDockCorner::NorthWest;
+    if (bCornerNW) corner = EDockCorner::NorthWest;
+    else if (bCornerNE) corner = EDockCorner::NorthEast;
+    else if (bCornerSW) corner = EDockCorner::SouthWest;
+    else if (bCornerSE) corner = EDockCorner::SouthEast;
     if (!bMerge) {
         const float dx = local.x - 0.5f;
         const float dy = local.y - 0.5f;
@@ -353,7 +363,17 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
     }
 
     Rect2D previewRect = rect;
-    if (!bMerge) {
+    if (bCorner) {
+        const float halfX = rect.extent.x * 0.25f;
+        const float halfY = rect.extent.y * 0.25f;
+        switch (corner) {
+        case EDockCorner::NorthWest: previewRect = Rect2D{glm::vec2{rect.pos.x, rect.pos.y}, glm::vec2{halfX, halfY}}; break;
+        case EDockCorner::NorthEast: previewRect = Rect2D{glm::vec2{rect.pos.x + rect.extent.x - halfX, rect.pos.y}, glm::vec2{halfX, halfY}}; break;
+        case EDockCorner::SouthWest: previewRect = Rect2D{glm::vec2{rect.pos.x, rect.pos.y + rect.extent.y - halfY}, glm::vec2{halfX, halfY}}; break;
+        case EDockCorner::SouthEast: previewRect = Rect2D{glm::vec2{rect.pos.x + rect.extent.x - halfX, rect.pos.y + rect.extent.y - halfY}, glm::vec2{halfX, halfY}}; break;
+        }
+    }
+    else if (!bMerge) {
         const float stripX = rect.extent.x * 0.30f;
         const float stripY = rect.extent.y * 0.30f;
         switch (side) {
@@ -364,7 +384,7 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
         }
     }
 
-    return FDropPreview{targetView->leafId, panelId, side, previewRect, bMerge};
+    return FDropPreview{targetView->leafId, panelId, corner, side, previewRect, bCorner, bMerge};
 }
 
 bool UIDockSpace::parsePanelPayload(const std::string& payload, DockPanelId& panelId) const
@@ -402,6 +422,9 @@ void UIDockSpace::onDrop(const std::string& payload, const glm::vec2& logicalPoi
         if (sourceLeaf->id != preview->targetLeafId) {
             bChanged = _model.movePanel(panelId, preview->targetLeafId, SIZE_MAX, false);
         }
+    }
+    else if (preview->bCorner) {
+        bChanged = _model.splitLeafCorner(preview->targetLeafId, preview->corner, panelId);
     }
     else {
         bChanged = _model.splitLeaf(preview->targetLeafId, preview->side, panelId);

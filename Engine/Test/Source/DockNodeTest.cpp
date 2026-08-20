@@ -177,4 +177,23 @@ TEST(DockNodeTest, SameLeafSplitKeepsOtherPanelsInPlace)
     EXPECT_TRUE(model.validateInvariants());
 }
 
+TEST(DockNodeTest, CornerSplitCreatesCompoundTreeWithPersistentEmptyLeaf)
+{
+    FDockTreeModel model;
+    registerPanel(model, 1, "scene");
+    registerPanel(model, 2, "inspector");
+    ASSERT_TRUE(model.addPanel(1));
+    const DockNodeId rootId = model.root()->id;
+
+    ASSERT_TRUE(model.splitLeafCorner(rootId, EDockCorner::NorthWest, 2));
+    ASSERT_EQ(model.root()->kind, EDockNodeKind::Split);
+    ASSERT_EQ(model.root()->orientation, EDockSplitOrientation::Vertical);
+    ASSERT_EQ(model.root()->child[0]->kind, EDockNodeKind::Split);
+    ASSERT_EQ(model.root()->child[0]->orientation, EDockSplitOrientation::Horizontal);
+    EXPECT_EQ(model.root()->child[0]->child[0]->panelIds, (std::vector<DockPanelId>{2}));
+    EXPECT_TRUE(model.root()->child[0]->child[1]->persistentEmptyLeaf);
+    EXPECT_EQ(model.root()->child[1]->panelIds, (std::vector<DockPanelId>{1}));
+    EXPECT_TRUE(model.validateInvariants());
+}
+
 } // namespace ya

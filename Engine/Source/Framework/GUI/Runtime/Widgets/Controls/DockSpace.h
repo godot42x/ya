@@ -73,8 +73,10 @@ private:
     {
         DockNodeId targetLeafId = kInvalidDockNodeId;
         DockPanelId panelId = kInvalidDockPanelId;
+        EDockCorner corner = EDockCorner::NorthWest;
         EDockCardinalSide side = EDockCardinalSide::West;
         Rect2D rect{};
+        bool bCorner = false;
         bool bMerge = false;
     };
 

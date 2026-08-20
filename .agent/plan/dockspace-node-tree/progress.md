@@ -177,3 +177,15 @@ widget 指针。
   验证通过，拖到 leaf 边缘会生成 `DockSplit`，而不是只换 tab。
 - 下一步仍缺：corner compound preview、非 zone leaf 真正投影、以及 panel registry 从
   过渡 zone 数据结构里完全剥离。
+
+### 2026-08-20 — 阶段 4 corner compound docking 首轮
+
+- 新增 `EDockCorner` 与 `FDockTreeModel::splitLeafCorner()`：四角拖放现在会真的生成
+  “外层 vertical split + 内层 horizontal split + persistent empty leaf” 的 compound tree，
+  不再静默退化成 cardinal split。
+- `UIDockSpace::resolveDropPreview()` 识别四角区域并给出角落预览；corner drop 直接走
+  `splitLeafCorner()`，headless smoke 已能在 dump 里观察到 `DockLeaf` 数量上升，说明
+  compound tree 已进入可见投影。
+- 新增 model focused test `CornerSplitCreatesCompoundTreeWithPersistentEmptyLeaf`，以及正式
+  smoke 场景 `Example/GUIWorkbench/Scenarios/dock_corner_split.jsonl`。
+- 当前还缺 corner disabled reason / extent gating，以及 corner preview 的更细致视觉语义。
