@@ -21,7 +21,7 @@ struct UIDockWorkspace;
 /// DockSpace: a full nested dock tree (FDockTreeModel) projected into nested
 /// UISplitPanes with tab groups. There is no fixed zone layout — the initial
 /// model is a single root leaf holding all registered panels, and dragging a
-/// tab splits into cardinal/corner sub-leaves or merges into another leaf.
+/// tab splits into cardinal sub-leaves or merges into another leaf.
 /// No floating windows or persistence yet.
 struct YA_GUI_API UIDockSpace : public UIElement
 {
@@ -53,7 +53,6 @@ struct YA_GUI_API UIDockSpace : public UIElement
     [[nodiscard]] bool isDropPreviewDisabled() const { return _preview.has_value() && _preview->bDisabled; }
     [[nodiscard]] DockNodeId getDropPreviewTargetLeafId() const { return _preview ? _preview->targetLeafId : kInvalidDockNodeId; }
     [[nodiscard]] const std::string& getDropPreviewDisabledReason() const;
-    [[nodiscard]] bool isDropPreviewCorner() const { return _preview.has_value() && _preview->bCorner; }
     [[nodiscard]] bool isDropPreviewMerge() const { return _preview.has_value() && _preview->bMerge; }
 
 private:
@@ -68,11 +67,8 @@ private:
     {
         DockNodeId targetLeafId = kInvalidDockNodeId;
         DockPanelId panelId = kInvalidDockPanelId;
-        EDockCorner corner = EDockCorner::NorthWest;
         EDockCardinalSide side = EDockCardinalSide::West;
         Rect2D rect{};
-        Rect2D emptyLeafRect{};
-        bool bCorner = false;
         bool bMerge = false;
         bool bDisabled = false;
         std::string disabledReason;

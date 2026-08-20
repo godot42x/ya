@@ -35,8 +35,8 @@
         },
         {
           "id": "n4_corner_compound",
-          "status": "in_progress",
-          "notes": "四 corner 的 two-split compound plan + visible persistent empty leaf 已接入 model 与 smoke；extent 不足时现在会进入 disabled preview，不高亮且不接受 drop，tree dump 也会输出 disabled reason。"
+          "status": "removed",
+          "notes": "已拍板移除 8 向 corner compound docking：EDockCorner、splitLeafCorner()、corner preview/ghost、corner gating 与 dock_corner_split.jsonl 全部删除；corner 命中收敛为 4 向 cardinal split，停靠只有 center(merge) 与 4 cardinal(split) 两种结果，不再制造 persistent empty leaf。模型不变量保持：任何 split 不会制造非 persistent 空 leaf。"
         },
         {
           "id": "n5_floating_panel",

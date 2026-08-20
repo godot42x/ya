@@ -242,3 +242,19 @@ widget 指针。
   无意义），但边缘/角落 split 保留（单 root leaf 时这是长出多 leaf 的路径），仅当该 leaf
   只有 1 个 panel 时才禁用（避免留空 half）。
 - 验证：GUIWorkbench 构建、三个 dock smoke、DockNodeTest 13/13 全绿。
+
+### 2026-08-20 — 移除 8 向 corner，收敛为 5 向停靠（消除空 DockLeaf）
+
+- 反复出现的空 DockLeaf 根因之一是 8 向 corner 的 compound two-split：每次停靠都会额外
+  制造一个可见 persistentEmptyLeaf 占位，self-drop 反复操作会堆积空 leaf。
+- 拍板移除 corner：EDockCorner、splitLeafCorner()、corner preview/ghost、corner gating
+  与 dock_corner_split.jsonl 全部删除；corner 命中统一归入对应 cardinal split。
+- DockSpace.h/.cpp：FDropPreview 去掉 corner / emptyLeafRect / bCorner 字段与
+  isDropPreviewCorner；rejectForExtent 去掉 bCorner 分支；resolveDropPreview 精简为
+  center(merge) + 4 cardinal(split)；onDrop 去掉 splitLeafCorner 分支。
+- DockNode.h/.cpp：删除 EDockCorner 与 splitLeafCorner()；保留任何 split 不制造非
+  persistent 空 leaf 的同 leaf 抽空守卫。
+- DockNodeTest：删除 CornerSplitCreatesCompoundTreeWithPersistentEmptyLeaf，更新
+  SinglePanelSameLeafSplitDoesNotCreateEmptyLeaf 不再调用 splitLeafCorner。
+- 现在停靠只产生 center(merge) 或 4 cardinal(split) 两种结果，不再出现因 corner 而生的
+  空 leaf；模型不变量继续成立（source 被拖空才 collapse）。

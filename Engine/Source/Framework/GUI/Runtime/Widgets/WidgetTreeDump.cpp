@@ -263,7 +263,7 @@ nlohmann::json serializeNode(const UIElement& element, const WidgetTree& tree)
             {"active", dockSpace->hasDropPreview()},
             {"disabled", dockSpace->isDropPreviewDisabled()},
             {"targetLeafId", dockSpace->getDropPreviewTargetLeafId()},
-            {"kind", dockSpace->isDropPreviewMerge() ? "merge" : dockSpace->isDropPreviewCorner() ? "corner" : "cardinal"},
+            {"kind", dockSpace->isDropPreviewMerge() ? "merge" : "cardinal"},
             {"disabledReason", dockSpace->getDropPreviewDisabledReason()},
         };
         if (!dockSpace->hasDropPreview()) {

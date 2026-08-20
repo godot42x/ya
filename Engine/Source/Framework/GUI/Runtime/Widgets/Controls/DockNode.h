@@ -18,7 +18,6 @@ inline constexpr DockPanelId kInvalidDockPanelId = 0;
 enum class EDockNodeKind : uint8_t { Split, Leaf };
 enum class EDockSplitOrientation : uint8_t { Vertical, Horizontal };
 enum class EDockCardinalSide : uint8_t { West, East, North, South };
-enum class EDockCorner : uint8_t { NorthWest, NorthEast, SouthWest, SouthEast };
 
 struct FDockPanelRecord
 {
@@ -61,8 +60,6 @@ struct YA_GUI_API FDockTreeModel
     bool setSplitRatio(DockNodeId splitId, float ratio);
     bool splitLeaf(DockNodeId targetLeafId, EDockCardinalSide side, DockPanelId panelId,
                    float newPanelRatio = 0.30f);
-    bool splitLeafCorner(DockNodeId targetLeafId, EDockCorner corner, DockPanelId panelId,
-                         float newPanelRatio = 0.30f);
     bool splitEmptyLeaf(DockNodeId targetLeafId, EDockCardinalSide side,
                         float newPanelRatio = 0.30f, bool persistentEmptyLeaf = true);
     bool removePanel(DockPanelId panelId);

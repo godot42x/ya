@@ -32,20 +32,8 @@ DockPanelId parsePanelId(const std::string& payload)
     return static_cast<DockPanelId>(std::strtoull(payload.c_str() + prefix.size(), nullptr, 10));
 }
 
-std::pair<bool, std::string> rejectForExtent(bool bCorner, const Rect2D& rect, const glm::vec2& local)
+std::pair<bool, std::string> rejectForExtent(const Rect2D& rect, const glm::vec2& local)
 {
-    if (bCorner) {
-        if (rect.extent.x < kSplitMinExtent * 2.0f && rect.extent.y < kSplitMinExtent * 2.0f) {
-            return {true, "corner split requires both width and height >= 240"};
-        }
-        if (rect.extent.x < kSplitMinExtent * 2.0f) {
-            return {true, "corner split requires width >= 240"};
-        }
-        if (rect.extent.y < kSplitMinExtent * 2.0f) {
-            return {true, "corner split requires height >= 240"};
-        }
-        return {false, {}};
-    }
     if (rect.extent.x < kSplitMinExtent * 2.0f && rect.extent.y < kSplitMinExtent * 2.0f) {
         return {true, "cardinal split requires width or height >= 240"};
     }
@@ -294,11 +282,6 @@ void UIDockSpace::paintChildren(UIFrameBuilder& builder)
                                 : glm::vec4{0.28f, 0.52f, 0.90f, 0.28f};
     builder.addSprite(_preview->rect, color, nullptr);
     builder.addRectOutline(_preview->rect, {0.34f, 0.60f, 0.96f, 1.0f}, 1.5f);
-    if (_preview->bCorner && _preview->emptyLeafRect.extent.x > 0.0f) {
-        // Ghost the persistent empty leaf the compound split will leave, so
-        // the user sees the operation keeps a second droppable zone.
-        builder.addRectOutline(_preview->emptyLeafRect, {0.55f, 0.58f, 0.64f, 0.55f}, 1.0f);
-    }
 }
 
 const std::string& UIDockSpace::getDropPreviewDisabledReason() const
@@ -353,34 +336,21 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
     const glm::vec2 local = (logicalPoint - rect.pos) / rect.extent;
     if (bOverTabBar) {
         if (bSameLeaf) {
-            return FDropPreview{targetView->leafId, panelId, EDockCorner::NorthWest, EDockCardinalSide::West,
-                                Rect2D{}, Rect2D{}, false, false, true, "already docked in this leaf"};
+            return FDropPreview{targetView->leafId, panelId, EDockCardinalSide::West, Rect2D{},
+                                false, true, "already docked in this leaf"};
         }
         return FDropPreview{
             targetView->leafId,
             panelId,
-            EDockCorner::NorthWest,
             EDockCardinalSide::West,
             targetView->bar->_layoutRect,
-            Rect2D{},
-            false,
             true,
             false,
             {}}
         ;
     }
-    const bool bCornerNW = local.x <= 0.25f && local.y <= 0.25f;
-    const bool bCornerNE = local.x >= 0.75f && local.y <= 0.25f;
-    const bool bCornerSW = local.x <= 0.25f && local.y >= 0.75f;
-    const bool bCornerSE = local.x >= 0.75f && local.y >= 0.75f;
     const bool bMerge = local.x > 0.25f && local.x < 0.75f && local.y > 0.25f && local.y < 0.75f;
-    const bool bCorner = bCornerNW || bCornerNE || bCornerSW || bCornerSE;
     EDockCardinalSide side = EDockCardinalSide::West;
-    EDockCorner corner = EDockCorner::NorthWest;
-    if (bCornerNW) corner = EDockCorner::NorthWest;
-    else if (bCornerNE) corner = EDockCorner::NorthEast;
-    else if (bCornerSW) corner = EDockCorner::SouthWest;
-    else if (bCornerSE) corner = EDockCorner::SouthEast;
     if (!bMerge) {
         const float dx = local.x - 0.5f;
         const float dy = local.y - 0.5f;
@@ -392,7 +362,7 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
         }
     }
 
-    auto [bDisabled, reason] = rejectForExtent(bCorner, rect, local);
+    auto [bDisabled, reason] = rejectForExtent(rect, local);
     if (bSameLeaf) {
         if (bMerge) {
             bDisabled = true;
@@ -405,17 +375,7 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
     }
 
     Rect2D previewRect = rect;
-    if (bCorner) {
-        const float halfX = rect.extent.x * 0.25f;
-        const float halfY = rect.extent.y * 0.25f;
-        switch (corner) {
-        case EDockCorner::NorthWest: previewRect = Rect2D{glm::vec2{rect.pos.x, rect.pos.y}, glm::vec2{halfX, halfY}}; break;
-        case EDockCorner::NorthEast: previewRect = Rect2D{glm::vec2{rect.pos.x + rect.extent.x - halfX, rect.pos.y}, glm::vec2{halfX, halfY}}; break;
-        case EDockCorner::SouthWest: previewRect = Rect2D{glm::vec2{rect.pos.x, rect.pos.y + rect.extent.y - halfY}, glm::vec2{halfX, halfY}}; break;
-        case EDockCorner::SouthEast: previewRect = Rect2D{glm::vec2{rect.pos.x + rect.extent.x - halfX, rect.pos.y + rect.extent.y - halfY}, glm::vec2{halfX, halfY}}; break;
-        }
-    }
-    else if (!bMerge) {
+    if (!bMerge) {
         const float stripX = rect.extent.x * 0.30f;
         const float stripY = rect.extent.y * 0.30f;
         switch (side) {
@@ -426,21 +386,8 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
         }
     }
 
-    Rect2D emptyLeafRect;
-    if (bCorner) {
-        // Compound plan leaves a persistent empty leaf next to the new panel:
-        // same left/right half as the corner, on the opposite vertical side.
-        const bool bLeft = corner == EDockCorner::NorthWest || corner == EDockCorner::SouthWest;
-        const bool bTop  = corner == EDockCorner::NorthWest || corner == EDockCorner::NorthEast;
-        const float halfX = rect.extent.x * 0.25f;
-        const float halfY = rect.extent.y * 0.25f;
-        const float x = bLeft ? rect.pos.x : rect.pos.x + rect.extent.x - halfX;
-        const float y = bTop ? rect.pos.y + halfY : rect.pos.y;
-        emptyLeafRect = Rect2D{glm::vec2{x, y}, glm::vec2{halfX, halfY}};
-    }
-
-    return FDropPreview{targetView->leafId, panelId, corner, side, previewRect, emptyLeafRect,
-                        bCorner, bMerge, bDisabled, std::move(reason)};
+    return FDropPreview{targetView->leafId, panelId, side, previewRect,
+                        bMerge, bDisabled, std::move(reason)};
 }
 
 bool UIDockSpace::parsePanelPayload(const std::string& payload, DockPanelId& panelId) const
@@ -482,9 +429,6 @@ void UIDockSpace::onDrop(const std::string& payload, const glm::vec2& logicalPoi
         if (sourceLeaf->id != preview->targetLeafId) {
             bChanged = _ws->dockModel().movePanel(panelId, preview->targetLeafId, SIZE_MAX, true);
         }
-    }
-    else if (preview->bCorner) {
-        bChanged = _ws->dockModel().splitLeafCorner(preview->targetLeafId, preview->corner, panelId);
     }
     else {
         bChanged = _ws->dockModel().splitLeaf(preview->targetLeafId, preview->side, panelId);

@@ -1,8 +1,23 @@
-# DockSpace → ImGui 风格 DockNode 嵌套停靠 + 浮动窗口 + 8向 hover 预览
+# DockSpace → ImGui 风格 DockNode 嵌套停靠 + 浮动窗口 + 5向(center+4 cardinal) hover 预览
 
 > 计划线：dockspace-node-tree
 > 创建：2026-08-19
 > 状态：规划已收口；下一实施切片为阶段 0（drag lifecycle + model baseline）
+
+## 重要修订（2026-08-20）：移除 8 向 corner，收敛为 5 向停靠
+
+反复出现的空 DockLeaf 根因之一是 8 向 corner 的 compound two-split：它每次停靠都会
+额外制造一个可见的 persistentEmptyLeaf 占位，并且 self-drop 反复操作会堆积空 leaf。
+已拍板：彻底移除 8 向 corner docking，收敛为 5 向 = center(merge) + 4 cardinal(split)。
+
+- EDockCorner 枚举、splitLeafCorner()、corner preview / ghost、corner 专用 gating 与
+  dock_corner_split.jsonl 全部删除。
+- corner 命中统一归入对应 cardinal split（左/右/上/下），不再有 compound empty leaf。
+- 停靠只产生两种结果：center → 合并进目标 leaf；cardinal → 把目标 leaf 裂成 2 分 split，
+  不会凭空留出第三个（空）leaf。
+- 模型不变量继续成立：任何 split 都不会制造非 persistent 空 leaf；source 被拖空才 collapse。
+- 下文所有 8向 / 四角 / compound / persistent empty leaf 的历史描述仅作设计记录，不再
+  属于当前实现范围。
 
 ## 可行性结论与实施前提
 
@@ -310,21 +325,19 @@ projection 实现且没有业务 widget 重建/丢状态。
 **完成标准**：每次成功 drop 后 panel id 全局唯一、source 不残留、selected panel 与可见
 content 一致；scenario 的 snapshot JSON 能检验 preview 与最终 node tree。
 
-### 阶段 4：4 个 corner compound docking
+### 阶段 4（已移除）：8 向 corner compound docking
 
-- 把 `splitLeafCorner` 接入同一个 `resolveDropPlan` / `FDockTransaction`，严格使用上文
-  的「左右先、上下后」树形与 persistent empty leaf 规则；不要在 input handler 特判。
-- corner preview 画 compound plan 的新 panel rect，以及 persistent empty leaf 的低强调
-  placeholder；用户能够看懂这次操作会保留一个可投放区域。
-- min extent 不够时 corner zone 进入 disabled 状态：不高亮、不接受 drop，并在 dump 里
-  记录 rejected reason。
+已于 2026-08-20 拍板移除 8 向 corner docking。compound two-split + persistent empty leaf
+是“空 DockLeaf”反复出现的根因之一（self-drop 反复操作会堆积空 leaf）。corner 命中统一
+归入 4 向 cardinal split；停靠只有 center(merge) 与 4 cardinal(split) 两种结果，不再
+制造第三个（空）leaf。
 
-**验证**：四角 × {足够窗口、最小窗口}，断言三 leaf tree 的 exact parent/order、empty
-policy 与 preview/drop 一致；随后将另一 tab 放入 placeholder，断言它不再为空且不会被
-自动 collapse。
+对应删除：EDockCorner、splitLeafCorner()、corner preview / ghost、corner gating 与
+dock_corner_split.jsonl；DockNodeTest 移除 corner 用例。模型不变量保持：任何 split 不会
+制造非 persistent 空 leaf；source 被拖空才 collapse。
 
-**完成标准**：8 个 zone 都有确定的 model outcome 或明确的 disabled reason，没有视觉与
-最终布局不一致的 fallback。
+完成标准：5 向停靠（center + 4 cardinal）的每个 zone 有确定 model outcome 或明确
+disabled reason；无 corner、无 compound empty leaf，视觉与最终布局一致。
 
 ### 阶段 5：单窗口浮动 host 和 re-dock
 
@@ -462,7 +475,7 @@ location map、leaf rect、selected PanelId、preview plan/disabled reason、Wid
   lifecycle。
 - 不将 floating window 误建成 `UIPopupOverlay` 或 modal；modal、menu、tooltip 仍走各自
   现有语义。
-- 不为了 corner preview 允许负 extent、隐藏 extra leaf 或未说明的 fallback。
+- 不做 8 向 corner compound 停靠，corner 命中统一归入 4 向 cardinal split，停靠只有 center(merge) 与 4 cardinal(split) 两种结果，绝不制造 compound empty leaf。
 
 ## 风险护栏
 
