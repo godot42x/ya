@@ -372,11 +372,26 @@ std::optional<UIDockSpace::FDropPreview> UIDockSpace::resolveDropPreview(const g
         return std::nullopt;
     }
 
+    const bool bOverTabBar = targetView->bar && pointInRect(logicalPoint, targetView->bar->_layoutRect);
+
     const Rect2D rect = targetView->root->_layoutRect;
     if (rect.extent.x <= 0.0f || rect.extent.y <= 0.0f) {
         return std::nullopt;
     }
     const glm::vec2 local = (logicalPoint - rect.pos) / rect.extent;
+    if (bOverTabBar) {
+        return FDropPreview{
+            targetView->leafId,
+            panelId,
+            EDockCorner::NorthWest,
+            EDockCardinalSide::West,
+            targetView->bar->_layoutRect,
+            false,
+            true,
+            false,
+            {}}
+        ;
+    }
     const bool bCornerNW = local.x <= 0.25f && local.y <= 0.25f;
     const bool bCornerNE = local.x >= 0.75f && local.y <= 0.25f;
     const bool bCornerSW = local.x <= 0.25f && local.y >= 0.75f;
